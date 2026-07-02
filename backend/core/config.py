@@ -59,6 +59,7 @@ class ExpressionOptConfig(BaseModel):
     enabled: bool = True                # 是否启用
     batch_size: int = 3                 # 每批发送给 LLM 的段落数
     default_prompt: str = "请优化以下段落的学术表达..."  # 默认提示词
+    custom_prompts_dir: str = "prompts/expression/"  # 用户自定义提示词存放目录
 
 
 class FormulaOCRConfig(BaseModel):

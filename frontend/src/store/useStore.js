@@ -28,6 +28,8 @@ const useStore = create(
       expressions: [],
       typoParagraphs: [],
       typoResults: [],
+      expressionParagraphs: [],
+      expressionResults: [],
 
       /* ===== PDF 预览（不持久化） ===== */
       pdfUrl: null,
@@ -48,6 +50,8 @@ const useStore = create(
       setExpressions: (expressions) => set({ expressions }),
       setTypoParagraphs: (paras) => set({ typoParagraphs: paras }),
       setTypoResults: (results) => set({ typoResults: results }),
+      setExpressionParagraphs: (paras) => set({ expressionParagraphs: paras }),
+      setExpressionResults: (results) => set({ expressionResults: results }),
       setPdfUrl: (url) => set({ pdfUrl: url }),
 
       setLoading: (key, value) =>

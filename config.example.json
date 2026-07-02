@@ -6,15 +6,15 @@
     "vite_dev_url": "http://localhost:5173"
   },
   "llm": {
-    "api_key": "sk-your-api-key-here",
-    "base_url": "https://api.openai.com/v1",
-    "model": "gpt-4o",
+    "api_key": "tk-iwonttellyou",
+    "base_url": "https://api.deepseek.com",
+    "model": "deepseek-flash",
     "temperature": 0.3,
     "max_tokens": 4096,
     "request_interval": 1.5
   },
   "project": {
-    "default_open_dir": "",
+    "default_open_dir": "C:\\Users\\YourName\\paper",
     "backup_on_modify": true,
     "auto_save_interval": 120
   },
@@ -27,7 +27,8 @@
     "expression_opt": {
       "enabled": true,
       "batch_size": 3,
-      "default_prompt": "请优化以下段落的学术表达，使其更加专业、简洁、逻辑严密。只修改纯文本部分，不要修改任何 marker 标记符和数学公式占位符。"
+      "default_prompt": "请优化以下段落的学术表达，使其更加专业、简洁、逻辑严密。只修改纯文本部分，不要修改任何 marker 标记符和数学公式占位符。",
+      "custom_prompts_dir": "prompts/expression/"
     },
     "formula_ocr": {
       "enabled": true,

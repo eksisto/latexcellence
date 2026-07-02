@@ -99,16 +99,40 @@ export const api = {
 
   /* ---- 表达优化 ---- */
   expressionOpt: {
+    preview: (filePath) =>
+      request(
+        `/expression-opt/preview?file_path=${encodeURIComponent(filePath)}`
+      ),
     optimize: (data) =>
       request("/expression-opt/optimize", {
         method: "POST",
         body: JSON.stringify(data),
       }),
-    apply: (changes) =>
+    apply: (data) =>
       request("/expression-opt/apply", {
         method: "POST",
-        body: JSON.stringify(changes),
+        body: JSON.stringify(data),
       }),
+    stream: (projectId, filePath) =>
+      `${BASE_URL}/expression-opt/stream/${projectId}?file_path=${encodeURIComponent(filePath)}`,
+    prompts: {
+      list: () => request("/expression-opt/prompts"),
+      load: (name) => request(`/expression-opt/prompts/${encodeURIComponent(name)}`),
+      save: (name, content) =>
+        request("/expression-opt/prompts", {
+          method: "POST",
+          body: JSON.stringify({ name, content }),
+        }),
+      delete: (name) =>
+        request(`/expression-opt/prompts/${encodeURIComponent(name)}`, {
+          method: "DELETE",
+        }),
+      setActive: (name) =>
+        request("/expression-opt/prompts/active", {
+          method: "POST",
+          body: JSON.stringify({ name }),
+        }),
+    },
   },
 
   /* ---- 公式识别（图片上传使用 FormData） ---- */
@@ -124,6 +148,11 @@ export const api = {
   templateGen: {
     generate: (data) =>
       request("/template-gen/generate", {
+        method: "POST",
+        body: JSON.stringify(data),
+      }),
+    save: (data) =>
+      request("/template-gen/save", {
         method: "POST",
         body: JSON.stringify(data),
       }),

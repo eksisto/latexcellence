@@ -25,6 +25,8 @@ from backend.core.config import load_config, get_config, update_config_from_dict
 from backend.core.logger import setup_logging, get_logger
 from backend.modules.project_router import router as project_router
 from backend.modules.typo_check.router import router as typo_check_router
+from backend.modules.expression_opt.router import router as expression_opt_router
+from backend.modules.template_gen.router import router as template_gen_router
 
 
 @asynccontextmanager
@@ -97,7 +99,7 @@ async def get_full_config():
     """
     获取完整配置（api_key 脱敏处理）。
 
-    返回所有配置项供前端设置页面使用。LLM api_key 仅展示后4位，
+    返回所有配置项供前端设置页面使用。LLM api_key 仅展示后 4 位，
     前端以掩码形式（***xxxx）显示。
     """
     cfg = get_config()
@@ -121,6 +123,8 @@ async def update_config(payload: dict):
 # 注册各功能模块路由
 app.include_router(project_router)
 app.include_router(typo_check_router)
+app.include_router(expression_opt_router)
+app.include_router(template_gen_router)
 
 
 def main():
