@@ -27,6 +27,7 @@ from backend.modules.project_router import router as project_router
 from backend.modules.typo_check.router import router as typo_check_router
 from backend.modules.expression_opt.router import router as expression_opt_router
 from backend.modules.template_gen.router import router as template_gen_router
+from backend.modules.formula_ocr.router import router as formula_ocr_router
 
 
 @asynccontextmanager
@@ -125,6 +126,7 @@ app.include_router(project_router)
 app.include_router(typo_check_router)
 app.include_router(expression_opt_router)
 app.include_router(template_gen_router)
+app.include_router(formula_ocr_router)
 
 
 def main():

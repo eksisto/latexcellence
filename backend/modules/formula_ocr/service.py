@@ -1,0 +1,184 @@
+"""
+公式识别业务逻辑。
+
+流程：
+    1. 校验图片格式（PNG/JPEG/WebP）和大小
+    2. 预处理：超过 2000px 的边等比缩放到 2000px
+    3. 转为 base64 发送给 LLM Vision API
+    4. 返回 LaTeX 公式 + inline 标记 + 置信度
+"""
+
+import base64
+import io
+from pathlib import Path
+from typing import Any, Optional
+
+from PIL import Image
+from pydantic import BaseModel
+
+from backend.core.logger import get_logger
+from backend.core.llm_client import get_llm_client
+from backend.core.config import get_config
+from backend.utils.json_utils import retry_with_validation
+
+
+class FormulaOCRResult(BaseModel):
+    """公式识别输出——对应 DEVELOPMENT.md §2.1 JSON 协议"""
+    latex: str
+    inline: bool = False
+    confidence: float = 0.0
+
+
+_VISION_SYSTEM_PROMPT = (
+    "You are a LaTeX formula OCR engine. "
+    "Your task is to convert images of mathematical formulas into LaTeX code.\n\n"
+    "Rules:\n"
+    "- Output ONLY the LaTeX expression, no extra text, no formatting\n"
+    "- Use standard LaTeX math commands (\\frac, \\sqrt, \\sum, \\int, etc.)\n"
+    "- For inline formulas (no display style), set inline=true\n"
+    "- For display formulas (large, centered), set inline=false\n"
+    "- Provide a confidence score between 0.0 and 1.0\n\n"
+    "Respond with JSON only, no markdown fences:\n"
+    "{{\n"
+    '  "latex": "<LaTeX code>",\n'
+    '  "inline": <boolean>,\n'
+    '  "confidence": <float between 0 and 1>\n'
+    "}}"
+)
+
+_MAX_DIMENSION = 2000
+_SUPPORTED_FORMATS = {"PNG", "JPEG", "WEBP", "JPG"}
+
+
+class FormulaOCRService:
+    """公式识别服务。"""
+
+    def __init__(self):
+        self._logger = get_logger("formula_ocr")
+
+    async def recognize(self, image_data: bytes, content_type: str) -> dict[str, Any]:
+        """
+        识别图片中的 LaTeX 公式。
+
+        参数：
+            image_data: 图片二进制数据
+            content_type: MIME 类型
+
+        返回：
+            包含 latex / inline / confidence 的 dict
+        """
+        self._validate_content_type(content_type)
+
+        img = self._preprocess(image_data)
+        base64_image = self._to_base64(img)
+
+        cfg = get_config()
+        if not cfg.llm.api_key:
+            self._logger.warning("No API key configured, returning empty result")
+            return {
+                "latex": "",
+                "inline": False,
+                "confidence": 0.0,
+                "low_confidence": True,
+            }
+
+        llm = get_llm_client()
+        return await self._recognize_with_llm(llm, base64_image, content_type)
+
+    async def _recognize_with_llm(
+        self, llm, base64_image: str, content_type: str
+    ) -> dict[str, Any]:
+        messages = [
+            {"role": "system", "content": _VISION_SYSTEM_PROMPT},
+            {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "text",
+                        "text": "Convert this formula image to LaTeX:",
+                    },
+                    {
+                        "type": "image_url",
+                        "image_url": {
+                            "url": f"data:{content_type};base64,{base64_image}",
+                            "detail": "high",
+                        },
+                    },
+                ],
+            },
+        ]
+
+        try:
+            validated: FormulaOCRResult = await retry_with_validation(
+                chat_fn=llm.chat,
+                messages=messages,
+                model_cls=FormulaOCRResult,
+                max_retries=3,
+                logger_name="formula_ocr",
+                temperature=0.1,
+                max_tokens=1024,
+                response_format={"type": "json_object"},
+            )
+
+            result = validated.model_dump()
+
+            # 置信度阈值处理
+            if validated.confidence < 0.7:
+                result["low_confidence"] = True
+
+            return result
+
+        except ValueError as e:
+            self._logger.error(f"Formula OCR failed after retries: {e}")
+            raise RuntimeError(f"Failed to recognize formula: {e}")
+        except Exception as e:
+            self._logger.error(f"Formula OCR error: {e}")
+            raise RuntimeError(f"Formula recognition failed: {e}")
+
+    def _validate_content_type(self, content_type: str) -> None:
+        """校验图片格式。"""
+        if not content_type:
+            raise ValueError("Missing content type")
+        mime_type = content_type.lower()
+        allowed = {"image/png", "image/jpeg", "image/webp"}
+        if mime_type not in allowed:
+            raise ValueError(
+                f"Unsupported image format: {content_type}. "
+                f"Supported: PNG, JPEG, WebP"
+            )
+
+    def _preprocess(self, image_data: bytes) -> Image.Image:
+        """预处理图片：校验大小，超过 MAX_DIMENSION 时等比缩放。"""
+        cfg = get_config()
+        max_size_mb = cfg.features.formula_ocr.max_image_size_mb
+        max_size_bytes = max_size_mb * 1024 * 1024
+
+        if len(image_data) > max_size_bytes:
+            raise ValueError(
+                f"Image too large: {len(image_data) / 1024 / 1024:.1f}MB. "
+                f"Maximum: {max_size_mb}MB"
+            )
+
+        img = Image.open(io.BytesIO(image_data))
+        original_size = img.size
+
+        width, height = img.size
+        if width > _MAX_DIMENSION or height > _MAX_DIMENSION:
+            ratio = min(_MAX_DIMENSION / width, _MAX_DIMENSION / height)
+            new_width = int(width * ratio)
+            new_height = int(height * ratio)
+            img = img.resize((new_width, new_height), Image.LANCZOS)
+            self._logger.info(
+                f"Resized image: {original_size} -> {img.size}"
+            )
+
+        return img
+
+    def _to_base64(self, img: Image.Image) -> str:
+        """将 PIL Image 转为 base64 字符串。"""
+        buffer = io.BytesIO()
+        # 用 JPEG 格式输出以保证兼容性
+        if img.mode in ("RGBA", "LA", "P"):
+            img = img.convert("RGB")
+        img.save(buffer, format="JPEG", quality=85)
+        return base64.b64encode(buffer.getvalue()).decode("utf-8")

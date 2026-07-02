@@ -137,11 +137,17 @@ export const api = {
 
   /* ---- 公式识别（图片上传使用 FormData） ---- */
   formulaOCR: {
-    recognize: (formData) =>
-      fetch(`${BASE_URL}/formula-ocr/recognize`, {
+    recognize: async (formData) => {
+      const res = await fetch(`${BASE_URL}/formula-ocr/recognize`, {
         method: "POST",
         body: formData,
-      }).then((r) => r.json()),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ detail: res.statusText }));
+        throw new Error(err.detail || `HTTP ${res.status}`);
+      }
+      return res.json();
+    },
   },
 
   /* ---- 模板生成 ---- */
