@@ -1,7 +1,10 @@
 # Config with secrets
 config.json
+
+# Development Documentation
 AGENTS.md
 DEVELOPMENT.md
+DESIGN.md
 
 # Python
 __pycache__/

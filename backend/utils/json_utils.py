@@ -13,7 +13,7 @@ LLM JSON 解析/校验/重试模块。
 
 import json
 import re
-from typing import Any, Callable, Optional, Type, TypeVar
+from typing import Any, Callable, Optional, Type, TypeVar, Union
 
 from pydantic import BaseModel, ValidationError
 
@@ -41,6 +41,9 @@ def safe_parse_json(text: str) -> dict[str, Any]:
     异常：
         ValueError: JSON 解析失败
     """
+    if isinstance(text, dict):
+        return text
+
     if not text or not text.strip():
         raise ValueError("Empty response text")
 
@@ -119,7 +122,7 @@ def format_validation_error(errors: list[dict[str, Any]]) -> str:
 
 
 def parse_and_validate(
-    text: str,
+    text: Union[str, dict[str, Any]],
     model_cls: Type[T],
     raise_on_error: bool = True,
 ) -> tuple[Optional[T], Optional[str]]:
@@ -127,7 +130,7 @@ def parse_and_validate(
     一步完成 JSON 解析 + Pydantic 校验。
 
     参数：
-        text: LLM 返回的原始文本
+        text: LLM 返回的原始文本（str）或已解析的 dict
         model_cls: Pydantic BaseModel 子类
         raise_on_error: 是否在校验失败时抛出异常
 
@@ -139,7 +142,10 @@ def parse_and_validate(
         ValidationError: Pydantic 校验失败（raise_on_error=True 时）
     """
     try:
-        data = safe_parse_json(text)
+        if isinstance(text, dict):
+            data = text
+        else:
+            data = safe_parse_json(text)
     except ValueError as e:
         if raise_on_error:
             raise

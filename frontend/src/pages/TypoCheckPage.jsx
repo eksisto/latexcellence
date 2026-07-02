@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useMemo, useEffect, useRef } from "react";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import {
@@ -8,15 +8,39 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { ArrowLeft, CheckCheck, Eye, Loader2 } from "lucide-react";
 import { api } from "@/api/index";
 import useStore from "@/store/useStore";
 
+function flattenTexFiles(tree, prefix = "") {
+  const result = [];
+  for (const node of tree) {
+    if (node.is_dir && node.children) {
+      result.push(...flattenTexFiles(node.children, prefix + node.name + "/"));
+    } else if (node.name.endsWith(".tex")) {
+      result.push({ name: prefix + node.name, path: node.path });
+    }
+  }
+  return result;
+}
+
 export default function TypoCheckPage() {
   const {
     fileTree,
+    projectPath,
     activeFile,
     setActiveFile,
+    setRootPath,
+    setProjectPath,
+    setFileTree,
+    setMainFile,
     typoParagraphs,
     setTypoParagraphs,
     typoResults,
@@ -27,6 +51,37 @@ export default function TypoCheckPage() {
 
   const [error, setError] = useState(null);
   const [message, setMessage] = useState(null);
+  const [restoring, setRestoring] = useState(false);
+  const restoredRef = useRef(false);
+
+  const texFiles = useMemo(() => flattenTexFiles(fileTree), [fileTree]);
+
+  // 挂载时自动恢复项目状态（直接从 TypoCheckPage 刷新）
+  useEffect(() => {
+    if (restoredRef.current) return;
+    if (!projectPath || fileTree.length > 0) return;
+
+    const restore = async () => {
+      restoredRef.current = true;
+      setRestoring(true);
+      try {
+        const data = await api.project.open(projectPath);
+        setRootPath(data.root_path);
+        setProjectPath(projectPath);
+        setFileTree(data.file_tree);
+        setMainFile(data.main_file);
+        if (!activeFile) {
+          setActiveFile(data.main_file);
+        }
+      } catch (_) {
+        // 恢复失败，忽略
+      } finally {
+        setRestoring(false);
+      }
+    };
+
+    restore();
+  }, []);
 
   const handlePreview = useCallback(async () => {
     if (!activeFile) {
@@ -88,6 +143,17 @@ export default function TypoCheckPage() {
     [activeFile, handlePreview]
   );
 
+  const handleFileChange = useCallback(
+    (path) => {
+      setActiveFile(path);
+      setTypoParagraphs([]);
+      setTypoResults([]);
+      setError(null);
+      setMessage(null);
+    },
+    [setActiveFile, setTypoParagraphs, setTypoResults]
+  );
+
   const isLoading = loadingStates.typoCheck;
 
   return (
@@ -104,14 +170,24 @@ export default function TypoCheckPage() {
       </div>
 
       <div className="max-w-4xl mx-auto">
-
-        {!activeFile ? (
+        {restoring ? (
+          <div className="flex justify-center mt-12">
+            <Card className="max-w-md w-full">
+              <CardHeader>
+                <CardTitle>正在恢复项目...</CardTitle>
+              </CardHeader>
+              <CardContent className="flex justify-center">
+                <Loader2 className="animate-spin size-6" />
+              </CardContent>
+            </Card>
+          </div>
+        ) : !projectPath || texFiles.length === 0 ? (
           <div className="flex justify-center mt-12">
             <Card className="max-w-md w-full">
               <CardHeader>
                 <CardTitle>未选择文件</CardTitle>
                 <CardDescription>
-                  先转到项目工作区，打开一个项目，然后先选择一个 .tex 文件
+                  先转到项目工作区，打开一个项目，然后选择要检查的 .tex 文件
                 </CardDescription>
               </CardHeader>
               <CardContent>
@@ -123,16 +199,32 @@ export default function TypoCheckPage() {
           </div>
         ) : (
           <div className="space-y-4">
-            {/* controls */}
+            {/* file selector + controls */}
             <Card>
               <CardHeader className="pb-2">
-                <CardTitle className="text-sm">{activeFile}</CardTitle>
+                <div className="flex items-center gap-3">
+                  <Select
+                    value={activeFile || ""}
+                    onValueChange={handleFileChange}
+                  >
+                    <SelectTrigger className="min-w-60">
+                      <SelectValue placeholder="选择 .tex 文件" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {texFiles.map((f) => (
+                        <SelectItem key={f.path} value={f.path}>
+                          {f.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
               </CardHeader>
               <CardContent>
                 <div className="flex items-center gap-3">
                   <Button
                     onClick={handlePreview}
-                    disabled={isLoading}
+                    disabled={isLoading || !activeFile}
                     variant="outline"
                   >
                     <Eye />
@@ -140,7 +232,9 @@ export default function TypoCheckPage() {
                   </Button>
                   <Button
                     onClick={handleCheck}
-                    disabled={isLoading || typoParagraphs.length === 0}
+                    disabled={
+                      isLoading || typoParagraphs.length === 0
+                    }
                   >
                     {isLoading ? (
                       <Loader2 className="animate-spin" />
@@ -262,9 +356,9 @@ export default function TypoCheckPage() {
                               </Button>
                             </>
                           ) : (
-                              <p className="text-sm text-muted-foreground">
+                            <p className="text-sm text-muted-foreground">
                                 此段落未发现错字。
-                              </p>
+                            </p>
                           )}
                           <details className="text-xs text-muted-foreground">
                             <summary className="cursor-pointer">

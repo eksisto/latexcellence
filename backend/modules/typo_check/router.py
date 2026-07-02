@@ -25,15 +25,24 @@ def get_service() -> TypoCheckService:
     return _service
 
 
+# ── request models ─────────────────────────────────────────────────────────
+
 class TypoCheckRequest(BaseModel):
     file_path: str
     paragraph_indices: Optional[list[int]] = None
 
 
+class ChangeItem(BaseModel):
+    paragraph_index: int
+    new_text: str
+
+
 class TypoApplyRequest(BaseModel):
     file_path: str
-    changes: list[dict]
+    changes: list[ChangeItem]
 
+
+# ── preview ────────────────────────────────────────────────────────────────
 
 @router.get("/preview")
 async def preview_paragraphs(
@@ -54,12 +63,14 @@ async def preview_paragraphs(
         raise HTTPException(status_code=404, detail=str(e))
 
 
+# ── check ──────────────────────────────────────────────────────────────────
+
 @router.post("/check")
 async def check_typos(request: TypoCheckRequest):
     """
     对指定段落的纯文本进行错字检查。
-    调用 LLM 逐段检查拼写和语法错误。
 
+    调用 LLM 逐段检查拼写和语法错误，输出经 Pydantic 校验。
     仅检查 paragraph_indices 中指定的段落；未指定时检查所有段落。
     """
     try:
@@ -74,15 +85,19 @@ async def check_typos(request: TypoCheckRequest):
         raise HTTPException(status_code=404, detail=str(e))
 
 
+# ── apply ──────────────────────────────────────────────────────────────────
+
 @router.post("/apply")
 async def apply_changes(request: TypoApplyRequest):
     """
     将用户审核确认的修改写回源文件。
 
-    changes 格式：[{ "paragraph_index": 0, "new_text": "修正后的文本" }]
+    每个 change 包含 paragraph_index 和 new_text（修正后的纯文本）。
+    后端通过 marker_map 将纯文本还原为完整 LaTeX 后写回。
     """
     try:
-        result = get_service().apply_changes(request.file_path, request.changes)
+        changes = [c.model_dump() for c in request.changes]
+        result = get_service().apply_changes(request.file_path, changes)
         return result
     except RuntimeError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -92,8 +107,13 @@ async def apply_changes(request: TypoApplyRequest):
         raise HTTPException(status_code=404, detail=str(e))
 
 
+# ── stream ─────────────────────────────────────────────────────────────────
+
 @router.get("/stream/{project_id}")
-async def stream_typo_check(project_id: str, file_path: str = Query(...)):
+async def stream_typo_check(
+    project_id: str,
+    file_path: str = Query(..., description="文件路径（相对于项目根目录）"),
+):
     """
     SSE 流式端点：按段落逐批推送错字检查进度和结果。
 

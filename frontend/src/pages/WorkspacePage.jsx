@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,7 +10,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { ArrowLeft, FolderOpen } from "lucide-react";
+import { ArrowLeft, FolderOpen, SpellCheck } from "lucide-react";
 import { api } from "@/api/index";
 import useStore from "@/store/useStore";
 import ProjectExplorer from "@/components/ProjectExplorer";
@@ -35,18 +35,7 @@ export default function WorkspacePage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [lastPath, setLastPath] = useState("");
-
-  // 启动时读取上次保存的项目路径
-  useEffect(() => {
-    let cancelled = false;
-    api.project.lastOpened().then((data) => {
-      if (!cancelled && data.path && data.exists) {
-        setLastPath(data.path);
-        setOpenPath(data.path);
-      }
-    }).catch(() => {});
-    return () => { cancelled = true; };
-  }, []);
+  const restoredRef = useRef(false);
 
   const doOpenProject = useCallback(async (path) => {
     setLoading(true);
@@ -64,6 +53,41 @@ export default function WorkspacePage() {
     } finally {
       setLoading(false);
     }
+  }, []);
+
+  // 启动时：读取上次保存的项目路径 / 自动恢复已打开的项目
+  useEffect(() => {
+    let cancelled = false;
+
+    const restore = async () => {
+      if (restoredRef.current) return;
+
+      // 优先从 Zustand persist 恢复（刷新前已打开的项目）
+      if (projectPath && fileTree.length === 0) {
+        restoredRef.current = true;
+        await doOpenProject(projectPath);
+        return;
+      }
+
+      // 其次从后端 lastOpened 获取路径
+      try {
+        const data = await api.project.lastOpened();
+        if (!cancelled && data.path && data.exists) {
+          setLastPath(data.path);
+          setOpenPath(data.path);
+          // 如果 Zustand 中没有项目状态，则自动打开上次项目
+          if (!projectPath) {
+            restoredRef.current = true;
+            await doOpenProject(data.path);
+          }
+        }
+      } catch (_) {
+        // 忽略错误
+      }
+    };
+
+    restore();
+    return () => { cancelled = true; };
   }, []);
 
   const handleOpenProject = useCallback(async () => {
@@ -180,12 +204,23 @@ export default function WorkspacePage() {
             <div className="col-span-3">
               <Card>
                 <CardHeader className="pb-2">
-                  <CardTitle className="text-sm">
-                    {activeFile || "选择一个文件"}
-                  </CardTitle>
-                  <CardDescription>
-                    {rootPath && <span className="text-xs">{rootPath}</span>}
-                  </CardDescription>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <CardTitle className="text-sm">
+                        {activeFile || "选择一个文件"}
+                      </CardTitle>
+                      <CardDescription>
+                        {rootPath && <span className="text-xs">{rootPath}</span>}
+                      </CardDescription>
+                    </div>
+                    {activeFile && activeFile.endsWith(".tex") && (
+                      <Button variant="outline" size="sm" asChild>
+                        <Link to="/typo-check">
+                          <SpellCheck />
+                        </Link>
+                      </Button>
+                    )}
+                  </div>
                 </CardHeader>
                 <CardContent>
                   {paragraphs.length === 0 ? (
