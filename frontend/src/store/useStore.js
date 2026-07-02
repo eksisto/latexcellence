@@ -81,6 +81,10 @@ const useStore = create(
         rootPath: state.rootPath,
         activeFile: state.activeFile,
         mainFile: state.mainFile,
+        typoResults: state.typoResults,
+        typoParagraphs: state.typoParagraphs,
+        expressionResults: state.expressionResults,
+        expressionParagraphs: state.expressionParagraphs,
       }),
     }
   )

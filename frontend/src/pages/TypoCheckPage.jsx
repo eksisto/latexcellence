@@ -85,13 +85,14 @@ export default function TypoCheckPage() {
 
   const handlePreview = useCallback(async () => {
     if (!activeFile) {
-      setError("请先在项目工作区中选择一个文件");
+      setError("请先选择一个文件");
       return;
     }
     setLoading("typoCheck", true);
     setError(null);
     setMessage(null);
     setTypoResults([]);
+    setTypoParagraphs([]);
     try {
       const data = await api.typoCheck.preview(activeFile);
       setTypoParagraphs(data.paragraphs || []);
@@ -134,13 +135,15 @@ export default function TypoCheckPage() {
           changes: [{ paragraph_index: idx, new_text: corrected }],
         });
         setMessage(`已应用段落 ${idx} 的修改`);
-        // refresh preview
-        handlePreview();
+        // 从结果中移除已应用的段落，保留其余结果
+        setTypoResults((prev) =>
+          prev.filter((r) => r.paragraph_index !== idx)
+        );
       } catch (e) {
         setError(e.message);
       }
     },
-    [activeFile, handlePreview]
+    [activeFile]
   );
 
   const handleFileChange = useCallback(

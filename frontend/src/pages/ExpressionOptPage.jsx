@@ -115,7 +115,7 @@ export default function ExpressionOptPage() {
     try {
       const data = await api.expressionOpt.preview(activeFile);
       setExpressionParagraphs(data.paragraphs || []);
-      setMessage(`Loaded ${data.total} paragraphs`);
+      setMessage(`已加载 ${data.total} 个段落`);
     } catch (e) {
       setError(e.message);
     } finally {
@@ -152,12 +152,14 @@ export default function ExpressionOptPage() {
           changes: [{ paragraph_index: idx, new_text: optimized }],
         });
         setMessage(`Applied optimization for paragraph ${idx}`);
-        handlePreview();
+        setExpressionResults((prev) =>
+          prev.filter((r) => r.paragraph_index !== idx)
+        );
       } catch (e) {
         setError(e.message);
       }
     },
-    [activeFile, handlePreview]
+    [activeFile]
   );
 
   const handleFileChange = useCallback(
