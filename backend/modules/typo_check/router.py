@@ -1,0 +1,121 @@
+"""
+错字查找 API 路由。
+
+提供段落查看（含 LaTeX 剥离后的纯文本）、错字检查和修改生效等接口。
+"""
+
+import json
+from typing import Optional
+
+from fastapi import APIRouter, HTTPException, Query
+from fastapi.responses import StreamingResponse
+from pydantic import BaseModel
+
+from backend.modules.typo_check.service import TypoCheckService
+
+router = APIRouter(prefix="/api/typo-check", tags=["typo_check"])
+
+_service: Optional[TypoCheckService] = None
+
+
+def get_service() -> TypoCheckService:
+    global _service
+    if _service is None:
+        _service = TypoCheckService()
+    return _service
+
+
+class TypoCheckRequest(BaseModel):
+    file_path: str
+    paragraph_indices: Optional[list[int]] = None
+
+
+class TypoApplyRequest(BaseModel):
+    file_path: str
+    changes: list[dict]
+
+
+@router.get("/preview")
+async def preview_paragraphs(
+    file_path: str = Query(..., description="文件路径（相对于项目根目录）"),
+):
+    """
+    预览指定文件的段落（含 LaTeX 剥离后的纯文本）。
+
+    返回每段的原始文本和剥离后的纯文本，供前端展示。
+    LLM 将基于纯文本进行错字检查。
+    """
+    try:
+        result = get_service().preview_paragraphs(file_path)
+        return result
+    except RuntimeError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+@router.post("/check")
+async def check_typos(request: TypoCheckRequest):
+    """
+    对指定段落的纯文本进行错字检查。
+    调用 LLM 逐段检查拼写和语法错误。
+
+    仅检查 paragraph_indices 中指定的段落；未指定时检查所有段落。
+    """
+    try:
+        result = await get_service().check_typos(
+            request.file_path,
+            request.paragraph_indices,
+        )
+        return result
+    except RuntimeError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+@router.post("/apply")
+async def apply_changes(request: TypoApplyRequest):
+    """
+    将用户审核确认的修改写回源文件。
+
+    changes 格式：[{ "paragraph_index": 0, "new_text": "修正后的文本" }]
+    """
+    try:
+        result = get_service().apply_changes(request.file_path, request.changes)
+        return result
+    except RuntimeError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except IndexError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+@router.get("/stream/{project_id}")
+async def stream_typo_check(project_id: str, file_path: str = Query(...)):
+    """
+    SSE 流式端点：按段落逐批推送错字检查进度和结果。
+
+    事件格式：
+        { "type": "progress", "current": 3, "total": 12 }
+        { "type": "result", "paragraph_index": 0, "data": {...} }
+        { "type": "error", "message": "...", "retrying": true }
+        { "type": "done" }
+    """
+    async def event_stream():
+        try:
+            async for event in get_service().check_typos_stream(file_path):
+                yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
+        except Exception as e:
+            yield f"data: {json.dumps({'type': 'error', 'message': str(e)}, ensure_ascii=False)}\n\n"
+
+    return StreamingResponse(
+        event_stream(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )

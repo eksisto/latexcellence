@@ -33,6 +33,16 @@ export const api = {
   health: () => request("/health"),
   configStatus: () => request("/config/status"),
 
+  /* ---- 配置管理 ---- */
+  config: {
+    get: () => request("/config"),
+    update: (data) =>
+      request("/config", {
+        method: "POST",
+        body: JSON.stringify(data),
+      }),
+  },
+
   /* ---- 项目管理 ---- */
   project: {
     open: (path) =>
@@ -40,26 +50,51 @@ export const api = {
         method: "POST",
         body: JSON.stringify({ path }),
       }),
+    lastOpened: () => request("/project/last-opened"),
     fileTree: () => request("/project/file-tree"),
     paragraphs: (filePath) =>
       request(
         `/project/paragraphs?file_path=${encodeURIComponent(filePath)}`
       ),
+    applyChange: (filePath, paragraphIndex, newText) =>
+      request("/project/apply-change", {
+        method: "POST",
+        body: JSON.stringify({
+          file_path: filePath,
+          paragraph_index: paragraphIndex,
+          new_text: newText,
+        }),
+      }),
+    undo: (filePath) =>
+      request("/project/undo", {
+        method: "POST",
+        body: JSON.stringify({ file_path: filePath }),
+      }),
+    redo: (filePath) =>
+      request("/project/redo", {
+        method: "POST",
+        body: JSON.stringify({ file_path: filePath }),
+      }),
   },
 
   /* ---- 错字查找 ---- */
   typoCheck: {
+    preview: (filePath) =>
+      request(
+        `/typo-check/preview?file_path=${encodeURIComponent(filePath)}`
+      ),
     check: (data) =>
       request("/typo-check/check", {
         method: "POST",
         body: JSON.stringify(data),
       }),
-    apply: (changes) =>
+    apply: (data) =>
       request("/typo-check/apply", {
         method: "POST",
-        body: JSON.stringify(changes),
+        body: JSON.stringify(data),
       }),
-    stream: (projectId) => `${BASE_URL}/typo-check/stream/${projectId}`,
+    stream: (projectId, filePath) =>
+      `${BASE_URL}/typo-check/stream/${projectId}?file_path=${encodeURIComponent(filePath)}`,
   },
 
   /* ---- 表达优化 ---- */

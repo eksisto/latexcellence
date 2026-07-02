@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import ThemeToggle from "@/components/ThemeToggle";
+import SettingsDialog from "@/components/SettingsDialog";
 import WelcomePage from "./pages/WelcomePage";
 import WorkspacePage from "./pages/WorkspacePage";
 import FormulaOCRPage from "./pages/FormulaOCRPage";
@@ -12,7 +13,8 @@ export default function App() {
   return (
     <TooltipProvider>
       <BrowserRouter>
-        <div className="fixed top-4 right-4 z-50">
+        <div className="fixed top-4 right-4 z-50 flex items-center gap-1">
+          <SettingsDialog />
           <ThemeToggle />
         </div>
         <Routes>

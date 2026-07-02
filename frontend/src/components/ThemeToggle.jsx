@@ -23,7 +23,7 @@ export default function ThemeToggle() {
         </Button>
       </TooltipTrigger>
       <TooltipContent>
-        {resolved === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+        {resolved === "dark" ? "切换为浅色模式" : "切换为深色模式"}
       </TooltipContent>
     </Tooltip>
   );

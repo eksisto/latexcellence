@@ -13,6 +13,7 @@
     - 环境变量 OPENAI_API_KEY > config.json 中的 api_key
 """
 
+import copy
 import json
 import os
 from pathlib import Path
@@ -154,3 +155,94 @@ def reload_config() -> AppConfig:
     if _config_path is None:
         raise RuntimeError("Config has never been loaded.")
     return load_config(str(_config_path))
+
+
+def save_config() -> None:
+    """
+    将当前缓存的配置对象持久化写回 config.json。
+
+    常用于运行时修改配置（如记录最近打开的项目路径）后保存到磁盘。
+    """
+    global _config, _config_path
+    if _config is None or _config_path is None:
+        raise RuntimeError("Config not loaded. Call load_config() first.")
+    data = _config.model_dump()
+    with open(_config_path, "w", encoding="utf-8") as f:
+        json.dump(data, f, indent=2, ensure_ascii=False)
+
+
+def update_and_save(**kwargs) -> AppConfig:
+    """
+    更新配置字段并持久化到磁盘。
+
+    用法：
+        update_and_save(project__default_open_dir="/path/to/project")
+
+    参数：
+        **kwargs: 使用双下划线分隔嵌套字段路径，
+                  如 llm__temperature=0.5 修改 llm.temperature
+    """
+    global _config
+    if _config is None:
+        raise RuntimeError("Config not loaded. Call load_config() first.")
+
+    for key, value in kwargs.items():
+        parts = key.split("__")
+        target = _config
+        for part in parts[:-1]:
+            target = getattr(target, part)
+        setattr(target, parts[-1], value)
+
+    save_config()
+    return _config
+
+
+def _deep_merge(base: dict, updates: dict) -> dict:
+    """
+    递归深度合并两个字典。
+
+    参数：
+        base: 基础字典（被合并的目标）
+        updates: 要合并的新值
+
+    返回：
+        合并后的新字典（不修改原字典）
+    """
+    result = copy.deepcopy(base)
+    for key, value in updates.items():
+        if key in result and isinstance(result[key], dict) and isinstance(value, dict):
+            result[key] = _deep_merge(result[key], value)
+        else:
+            result[key] = value
+    return result
+
+
+def update_config_from_dict(updates: dict) -> AppConfig:
+    """
+    用字典数据更新配置并持久化。
+
+    支持部分更新：只需传入需要修改的字段即可，未传入的字段保持不变。
+    若传入的 llm.api_key 以 "***" 开头（前端掩码），则保留原值不变。
+
+    参数：
+        updates: 包含要更新字段的字典，支持嵌套结构
+
+    返回：
+        更新后的 AppConfig 对象
+    """
+    global _config, _config_path
+    if _config is None:
+        raise RuntimeError("Config not loaded. Call load_config() first.")
+
+    current = _config.model_dump()
+
+    # 若 api_key 被掩码，保留原值
+    if "llm" in updates and isinstance(updates["llm"], dict):
+        api_key = updates["llm"].get("api_key", "")
+        if api_key.startswith("***") or api_key == "":
+            updates["llm"]["api_key"] = current["llm"]["api_key"]
+
+    merged = _deep_merge(current, updates)
+    _config = AppConfig(**merged)
+    save_config()
+    return _config

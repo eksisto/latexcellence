@@ -21,8 +21,10 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 import uvicorn
 
-from backend.core.config import load_config, get_config
+from backend.core.config import load_config, get_config, update_config_from_dict
 from backend.core.logger import setup_logging, get_logger
+from backend.modules.project_router import router as project_router
+from backend.modules.typo_check.router import router as typo_check_router
 
 
 @asynccontextmanager
@@ -40,7 +42,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="LateXcellence",
-    description="AI-powered LaTeX document assistant",
+    description="AI 驱动的 LaTeX 文档助手",
     version="0.1.0",
     lifespan=lifespan,
 )
@@ -88,6 +90,37 @@ async def config_status():
             for name in ["typo_check", "expression_opt", "formula_ocr", "template_gen"]
         },
     }
+
+
+@app.get("/api/config")
+async def get_full_config():
+    """
+    获取完整配置（api_key 脱敏处理）。
+
+    返回所有配置项供前端设置页面使用。LLM api_key 仅展示后4位，
+    前端以掩码形式（***xxxx）显示。
+    """
+    cfg = get_config()
+    data = cfg.model_dump()
+    key = data["llm"]["api_key"]
+    if key:
+        data["llm"]["api_key"] = "***" + key[-4:] if len(key) > 4 else "****"
+    return data
+
+
+@app.post("/api/config")
+async def update_config(payload: dict):
+    """
+    更新配置并持久化到 config.json。
+    支持部分更新——只需传入需要修改的字段即可。
+    """
+    update_config_from_dict(payload)
+    return {"status": "ok"}
+
+
+# 注册各功能模块路由
+app.include_router(project_router)
+app.include_router(typo_check_router)
 
 
 def main():

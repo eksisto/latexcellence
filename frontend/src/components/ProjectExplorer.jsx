@@ -22,7 +22,7 @@ function TreeNode({ node, depth = 0, onSelect }) {
       <button
         className={cn(
           "flex items-center gap-1.5 w-full rounded-md px-2 py-1 text-sm text-left",
-          "hover:bg-muted transition-colors"
+          "hover:bg-muted"
         )}
         style={{ paddingLeft: `${depth * 16 + 8}px` }}
         onClick={() => onSelect?.(node)}
@@ -56,7 +56,7 @@ export default function ProjectExplorer({ tree = [], onSelect }) {
   return (
     <div className="flex flex-col h-full">
       <h3 className="font-semibold text-sm text-muted-foreground mb-3 px-1">
-        Project Files
+        项目文件
       </h3>
       {tree.length === 0 ? (
         <p className="text-muted-foreground/60 text-sm px-1">
