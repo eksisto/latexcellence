@@ -104,12 +104,12 @@ export default function SettingsDialog() {
         <DialogTrigger asChild>
           <Button variant="ghost" size="icon">
             <Settings className="size-5" />
-            <span className="sr-only">Settings</span>
+            <span className="sr-only">设置</span>
           </Button>
         </DialogTrigger>
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
-            <DialogTitle>Settings</DialogTitle>
+            <DialogTitle>设置</DialogTitle>
           </DialogHeader>
           <div className="flex items-center justify-center py-12">
             <span className="text-sm text-muted-foreground">
@@ -126,26 +126,26 @@ export default function SettingsDialog() {
       <DialogTrigger asChild>
         <Button variant="ghost" size="icon">
           <Settings className="size-5" />
-          <span className="sr-only">Settings</span>
+          <span className="sr-only">设置</span>
         </Button>
       </DialogTrigger>
       <DialogContent className="sm:max-w-lg max-h-[85vh] flex flex-col">
         <DialogHeader>
-          <DialogTitle>Settings</DialogTitle>
+          <DialogTitle>设置</DialogTitle>
         </DialogHeader>
         <div className="flex-1 overflow-y-auto space-y-4 pr-1 -mr-1">
           {/* Server */}
-          <ConfigSection title="Server">
+          <ConfigSection title="服务器">
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <Label className="text-xs">Host</Label>
+                <Label className="text-xs">主机</Label>
                 <Input
                   value={config.server.host}
                   onChange={(e) => set("server.host", e.target.value)}
                 />
               </div>
               <div className="space-y-1.5">
-                <Label className="text-xs">Port</Label>
+                <Label className="text-xs">端口</Label>
                 <Input
                   type="number"
                   value={config.server.port}
@@ -156,14 +156,14 @@ export default function SettingsDialog() {
               </div>
             </div>
             <div className="space-y-1.5">
-              <Label className="text-xs">Vite Dev URL</Label>
+              <Label className="text-xs">Vite 开发服务器地址</Label>
               <Input
                 value={config.server.vite_dev_url}
                 onChange={(e) => set("server.vite_dev_url", e.target.value)}
               />
             </div>
             <CheckboxField
-              label="Development mode"
+              label="开发模式"
               checked={config.server.dev_mode}
               onChange={(v) => set("server.dev_mode", v)}
             />
@@ -172,7 +172,7 @@ export default function SettingsDialog() {
           {/* LLM */}
           <ConfigSection title="LLM">
             <div className="space-y-1.5">
-              <Label className="text-xs">API Key</Label>
+              <Label className="text-xs">API 密钥</Label>
               <Input
                 type="password"
                 placeholder="sk-..."
@@ -185,7 +185,7 @@ export default function SettingsDialog() {
               />
             </div>
             <div className="space-y-1.5">
-              <Label className="text-xs">Base URL</Label>
+              <Label className="text-xs">接口地址</Label>
               <Input
                 value={config.llm.base_url}
                 onChange={(e) => set("llm.base_url", e.target.value)}
@@ -200,7 +200,7 @@ export default function SettingsDialog() {
                 />
               </div>
               <div className="space-y-1.5">
-                <Label className="text-xs">Temperature</Label>
+                <Label className="text-xs">模型温度</Label>
                 <Input
                   type="number"
                   step="0.1"
@@ -243,9 +243,9 @@ export default function SettingsDialog() {
           </ConfigSection>
 
           {/* Project */}
-          <ConfigSection title="Project">
+          <ConfigSection title="项目">
             <div className="space-y-1.5">
-              <Label className="text-xs">Auto Save Interval (s)</Label>
+              <Label className="text-xs">自动保存间隔（秒）</Label>
               <Input
                 type="number"
                 value={config.project.auto_save_interval}
@@ -258,37 +258,37 @@ export default function SettingsDialog() {
               />
             </div>
             <CheckboxField
-              label="Backup on modify"
+              label="修改前自动备份"
               checked={config.project.backup_on_modify}
               onChange={(v) => set("project.backup_on_modify", v)}
             />
           </ConfigSection>
 
           {/* Features */}
-          <ConfigSection title="Features">
+          <ConfigSection title="功能">
             <CheckboxField
-              label="Typo Check"
+              label="错字查找"
               checked={config.features.typo_check.enabled}
               onChange={(v) => set("features.typo_check.enabled", v)}
             />
             <CheckboxField
-              label="Expression Optimization"
+              label="表达优化"
               checked={config.features.expression_opt.enabled}
               onChange={(v) => set("features.expression_opt.enabled", v)}
             />
             <CheckboxField
-              label="Formula OCR"
+              label="公式识别"
               checked={config.features.formula_ocr.enabled}
               onChange={(v) => set("features.formula_ocr.enabled", v)}
             />
             <CheckboxField
-              label="Template Generation"
+              label="模板生成"
               checked={config.features.template_gen.enabled}
               onChange={(v) => set("features.template_gen.enabled", v)}
             />
             <div className="space-y-1.5">
               <Label className="text-xs">
-                Expression Opt Default Prompt
+                 表达优化默认提示词
               </Label>
               <Textarea
                 rows={3}
@@ -301,10 +301,10 @@ export default function SettingsDialog() {
           </ConfigSection>
 
           {/* Logging */}
-          <ConfigSection title="Logging">
+          <ConfigSection title="日志">
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <Label className="text-xs">Level</Label>
+                <Label className="text-xs">级别</Label>
                 <Select
                   value={config.logging.level}
                   onValueChange={(v) => set("logging.level", v)}
@@ -322,7 +322,7 @@ export default function SettingsDialog() {
                 </Select>
               </div>
               <div className="space-y-1.5">
-                <Label className="text-xs">Log Directory</Label>
+                <Label className="text-xs">日志目录</Label>
                 <Input
                   value={config.logging.dir}
                   onChange={(e) => set("logging.dir", e.target.value)}

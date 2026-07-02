@@ -12,21 +12,21 @@ export default function PromptEditor({ prompt, onSave }) {
   return (
     <Card>
       <CardHeader className="pb-3">
-        <CardTitle className="text-sm font-medium">Custom Prompt</CardTitle>
+        <CardTitle className="text-sm font-medium">自定义提示词</CardTitle>
         <CardDescription className="text-xs">
-          Define how the AI should optimize your text
+          定义如何让 AI 优化你的文本
         </CardDescription>
       </CardHeader>
       <CardContent>
         <Label className="sr-only" htmlFor="custom-prompt">
-          Prompt content
+          提示词内容
         </Label>
         <Textarea
           id="custom-prompt"
           className="min-h-28 resize-none text-sm"
           value={prompt || ""}
           onChange={(e) => onSave?.(e.target.value)}
-          placeholder="Enter your custom prompt..."
+          placeholder="输入你的自定义提示词..."
         />
       </CardContent>
     </Card>

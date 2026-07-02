@@ -1,6 +1,7 @@
 # Config with secrets
 config.json
 AGENTS.md
+DEVELOPMENT.md
 
 # Python
 __pycache__/

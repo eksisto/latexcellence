@@ -40,7 +40,7 @@ export default function TypoCheckPage() {
     try {
       const data = await api.typoCheck.preview(activeFile);
       setTypoParagraphs(data.paragraphs || []);
-      setMessage(`Loaded ${data.total} paragraphs`);
+      setMessage(`已加载 ${data.total} 个段落`);
     } catch (e) {
       setError(e.message);
     } finally {
@@ -52,7 +52,7 @@ export default function TypoCheckPage() {
     if (!activeFile) return;
     setLoading("typoCheck", true);
     setError(null);
-    setMessage("Checking typos...");
+    setMessage("正在检查错字...");
     try {
       const data = await api.typoCheck.check({
         file_path: activeFile,
@@ -62,7 +62,7 @@ export default function TypoCheckPage() {
         (r) => r.changes && r.changes.length > 0
       );
       setMessage(
-        `Found ${withIssues.length} paragraph(s) with potential issues`
+        `发现 ${withIssues.length} 个段落可能有错字`
       );
     } catch (e) {
       setError(e.message);
@@ -78,7 +78,7 @@ export default function TypoCheckPage() {
           file_path: activeFile,
           changes: [{ paragraph_index: idx, new_text: corrected }],
         });
-        setMessage(`Applied fix for paragraph ${idx}`);
+        setMessage(`已应用段落 ${idx} 的修改`);
         // refresh preview
         handlePreview();
       } catch (e) {
@@ -136,7 +136,7 @@ export default function TypoCheckPage() {
                     variant="outline"
                   >
                     <Eye />
-                    Preview
+                    预览
                   </Button>
                   <Button
                     onClick={handleCheck}
@@ -147,7 +147,7 @@ export default function TypoCheckPage() {
                     ) : (
                       <CheckCheck />
                     )}
-                    {isLoading ? "Checking..." : "Check Typos"}
+                    {isLoading ? "检查中..." : "检查错字"}
                   </Button>
                 </div>
                 {message && (
@@ -166,10 +166,10 @@ export default function TypoCheckPage() {
               <Card>
                 <CardHeader className="pb-2">
                   <CardTitle className="text-sm">
-                    Paragraphs ({typoParagraphs.length})
+                    段落 ({typoParagraphs.length})
                   </CardTitle>
                   <CardDescription>
-                    Plain text after LaTeX stripping (LLM will check this)
+                    剥离 LaTeX 后的纯文本（将交由 LLM 检查）
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
@@ -183,7 +183,7 @@ export default function TypoCheckPage() {
                           P{p.index}
                         </span>
                         <pre className="whitespace-pre-wrap text-sm text-foreground/80 mt-1 max-h-32 overflow-y-auto">
-                          {p.plain_text || "(empty)"}
+                          {p.plain_text || "（空）"}
                         </pre>
                       </div>
                     ))}
@@ -203,11 +203,11 @@ export default function TypoCheckPage() {
                       <CardHeader className="pb-2">
                         <div className="flex items-center justify-between">
                           <CardTitle className="text-sm">
-                            Paragraph {result.paragraph_index}
+                            段落 {result.paragraph_index}
                           </CardTitle>
                           {hasChanges && (
                             <span className="rounded bg-destructive/10 text-destructive px-1.5 py-0.5 text-xs font-medium">
-                              {result.changes.length} issue(s)
+                              {result.changes.length} 处问题
                             </span>
                           )}
                         </div>
@@ -234,13 +234,13 @@ export default function TypoCheckPage() {
                                     </div>
                                     <div className="grid grid-cols-[auto_1fr] gap-x-2 gap-y-1 text-sm">
                                       <span className="text-muted-foreground">
-                                        From:
+                                        原文：
                                       </span>
                                       <span className="line-through text-foreground/60">
                                         {change.original}
                                       </span>
                                       <span className="text-muted-foreground">
-                                        To:
+                                        修改：
                                       </span>
                                       <span className="font-medium">
                                         {change.corrected}
@@ -258,17 +258,17 @@ export default function TypoCheckPage() {
                                   )
                                 }
                               >
-                                Apply Fix
+                                应用修改
                               </Button>
                             </>
                           ) : (
-                            <p className="text-sm text-muted-foreground">
-                              No issues found in this paragraph.
-                            </p>
+                              <p className="text-sm text-muted-foreground">
+                                此段落未发现错字。
+                              </p>
                           )}
                           <details className="text-xs text-muted-foreground">
                             <summary className="cursor-pointer">
-                              View original
+                              查看原文
                             </summary>
                             <pre className="whitespace-pre-wrap mt-1 p-2 bg-muted rounded text-xs">
                               {result.plain_text || result.original}

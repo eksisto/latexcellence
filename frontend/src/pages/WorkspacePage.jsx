@@ -133,7 +133,7 @@ export default function WorkspacePage() {
                   disabled={loading || !openPath.trim()}
                 >
                   <FolderOpen />
-                  {loading ? "Opening..." : "打开项目"}
+                  {loading ? "打开中..." : "打开项目"}
                 </Button>
                 {lastPath && (
                   <Button
@@ -181,7 +181,7 @@ export default function WorkspacePage() {
               <Card>
                 <CardHeader className="pb-2">
                   <CardTitle className="text-sm">
-                    {activeFile || "Select a file"}
+                    {activeFile || "选择一个文件"}
                   </CardTitle>
                   <CardDescription>
                     {rootPath && <span className="text-xs">{rootPath}</span>}
@@ -206,7 +206,7 @@ export default function WorkspacePage() {
                               P{p.index}
                             </span>
                             <span className="text-xs text-muted-foreground">
-                              Lines {p.line_start}-{p.line_end}
+                              第 {p.line_start}-{p.line_end} 行
                             </span>
                           </div>
                           <pre className="whitespace-pre-wrap text-sm font-mono text-foreground/80">

@@ -19,7 +19,7 @@ export default function ThemeToggle() {
           ) : (
             <Moon className="size-5" />
           )}
-          <span className="sr-only">Toggle theme</span>
+          <span className="sr-only">切换主题</span>
         </Button>
       </TooltipTrigger>
       <TooltipContent>

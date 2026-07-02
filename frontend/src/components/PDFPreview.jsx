@@ -8,7 +8,7 @@ export default function PDFPreview({ url }) {
         <CardContent className="h-full flex flex-col items-center justify-center gap-2">
           <FileWarning className="size-8 text-muted-foreground/40" />
           <p className="text-muted-foreground/60 text-sm">
-            No PDF to preview
+            暂无 PDF 预览
           </p>
         </CardContent>
       </Card>
@@ -19,7 +19,7 @@ export default function PDFPreview({ url }) {
       <iframe
         src={url}
         className="w-full h-full border-0"
-        title="PDF Preview"
+        title="PDF 预览"
       />
     </Card>
   );

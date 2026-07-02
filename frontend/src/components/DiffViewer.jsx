@@ -10,8 +10,8 @@ export default function DiffViewer({ original, modified, changes = [] }) {
       <CardHeader className="pb-3">
         <CardTitle className="text-sm font-medium">
           {hasChanges
-            ? `${changes.length} change${changes.length > 1 ? "s" : ""} found`
-            : "No changes"}
+            ? `发现 ${changes.length} 处修改`
+            : "无修改"}
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-3">
@@ -40,11 +40,11 @@ export default function DiffViewer({ original, modified, changes = [] }) {
                   )}
                 </div>
                 <div className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 mt-1">
-                  <span className="text-muted-foreground text-xs">From:</span>
+                  <span className="text-muted-foreground text-xs">原文：</span>
                   <span className="text-foreground/70 line-through">
                     {change.original}
                   </span>
-                  <span className="text-muted-foreground text-xs">To:</span>
+                  <span className="text-muted-foreground text-xs">修改为：</span>
                   <span className="text-foreground font-medium">
                     {change.corrected || change.optimized}
                   </span>
@@ -55,7 +55,7 @@ export default function DiffViewer({ original, modified, changes = [] }) {
         ) : (
           <div className="flex items-center gap-2 text-muted-foreground text-sm">
             <BadgeInfo className="size-4" />
-            <span>{original || "No content to compare"}</span>
+            <span>{original || "无内容可比较"}</span>
           </div>
         )}
       </CardContent>

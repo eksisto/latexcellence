@@ -60,7 +60,7 @@ export default function ProjectExplorer({ tree = [], onSelect }) {
       </h3>
       {tree.length === 0 ? (
         <p className="text-muted-foreground/60 text-sm px-1">
-          No project opened
+          未打开项目
         </p>
       ) : (
         <ScrollArea className="flex-1">
