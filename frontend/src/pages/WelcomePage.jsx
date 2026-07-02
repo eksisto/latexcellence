@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 export default function WelcomePage() {
   return (
     <div className="min-h-screen flex flex-col items-center justify-center p-8">
-      <h1 className="text-4xl font-bold mb-2">LaTeX Agent</h1>
+      <h1 className="text-4xl font-bold mb-2">LateXcellence</h1>
       <p className="text-gray-500 mb-8 text-lg">
         AI-powered LaTeX document assistant
       </p>

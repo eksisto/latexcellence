@@ -48,7 +48,7 @@ def setup_logging(level: str = "INFO", log_dir: str = "logs/") -> None:
     # 文件处理器：按天旋转，保留 30 天，记录所有级别（DEBUG+）
     # 用于长期存档和问题排查
     file_handler = TimedRotatingFileHandler(
-        filename=log_path / "latex-agent.log",
+        filename=log_path / "latexcellence.log",
         when="midnight",       # 每天午夜切换日志文件
         interval=1,
         backupCount=30,        # 保留最近 30 天的日志

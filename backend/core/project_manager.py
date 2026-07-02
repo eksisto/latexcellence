@@ -10,7 +10,8 @@ LaTeX 项目管理模块。
 关键设计：
     - 段落分割基于空行（LaTeX 段落惯例）
     - 修改时检测原始缩进并保留
-    - 写回前自动创建 .bak 备份文件
+    - 修改前通过 BackupManager 推入撤销栈，支持多步 undo/redo
+    - 修改前校验文件 MD5，防止用户在审核期间手动修改文件导致冲突
 """
 
 from dataclasses import dataclass, field
@@ -18,6 +19,14 @@ from pathlib import Path
 from typing import Optional
 
 from backend.core.logger import get_logger
+from backend.utils.file_ops import (
+    BackupManager,
+    atomic_write,
+    compute_md5,
+    get_backup_manager,
+    safe_read,
+    safe_read_lines,
+)
 
 
 @dataclass
@@ -69,9 +78,12 @@ class LatexProject:
         project.apply_change("main.tex", 0, "修改后的文本")
     """
 
-    def __init__(self):
+    def __init__(self, backup_mgr: Optional[BackupManager] = None):
         self._project_info: Optional[ProjectInfo] = None
         self._logger = get_logger("project_manager")
+        self._backup_mgr = backup_mgr or get_backup_manager()
+        # { file_path_abs: md5_hex }  记录解析时的文件哈希
+        self._file_md5: dict[str, str] = {}
 
     def open(self, path: str) -> ProjectInfo:
         """
@@ -139,8 +151,11 @@ class LatexProject:
         if not full_path.exists():
             raise FileNotFoundError(f"File not found: {full_path}")
 
-        with open(full_path, "r", encoding="utf-8") as f:
-            content = f.read()
+        content = safe_read(full_path)
+
+        # 记录解析时的文件 MD5，供后续 apply_change 校验
+        # 使用 compute_md5（二进制读取）与 apply_change 中保持一致
+        self._file_md5[str(full_path.resolve())] = compute_md5(full_path)
 
         paragraphs = []
         lines = content.split("\n")
@@ -189,10 +204,12 @@ class LatexProject:
         原地修改指定段落的文本。
 
         流程：
-            1. 读取源文件全部行
-            2. 检测原始段落的缩进并应用到新文本
-            3. 用新文本替换源文件中的对应行范围
-            4. 创建 .bak 备份文件（如果 config 启用备份）
+            1. 校验文件 MD5（与解析时一致，防止并发冲突）
+            2. 将文件当前内容推入撤销栈
+            3. 读取源文件全部行
+            4. 检测原始段落缩进并应用到新文本
+            5. 用新文本替换源文件中的对应行范围
+            6. 原子写入文件
 
         参数：
             file_path: 文件路径（相对于项目根目录）
@@ -205,6 +222,19 @@ class LatexProject:
         if not full_path.exists():
             raise FileNotFoundError(f"File not found: {full_path}")
 
+        abs_path = str(full_path.resolve())
+
+        # 校验 MD5：文件未被用户在审核期间手动修改
+        expected_md5 = self._file_md5.get(abs_path)
+        if expected_md5 is not None:
+            current_md5 = compute_md5(full_path)
+            if current_md5 != expected_md5:
+                raise RuntimeError(
+                    f"File {file_path} has been modified since parsing. "
+                    f"Please re-parse and try again. "
+                    f"(expected MD5: {expected_md5[:8]}..., got: {current_md5[:8]}...)"
+                )
+
         paragraphs = self.get_paragraphs(file_path)
         if paragraph_index < 0 or paragraph_index >= len(paragraphs):
             raise IndexError(
@@ -213,36 +243,86 @@ class LatexProject:
 
         para = paragraphs[paragraph_index]
 
+        # 将当前内容推入撤销栈（在读取源文件前）
+        save_md5 = self._backup_mgr.push(full_path)
+
         # 读取源文件全部行
-        with open(full_path, "r", encoding="utf-8") as f:
-            lines = f.readlines()
+        lines = safe_read_lines(full_path)
 
         # 检测并保留原始缩进
         indent = self._detect_indent(para.text)
-        new_lines = [indent + line for line in new_text.split("\n")]
+        new_lines_list = [indent + line for line in new_text.split("\n")]
 
         # 替换指定行范围
         lines[para.line_start - 1 : para.line_end] = [
-            line + "\n" for line in new_lines
+            line + "\n" for line in new_lines_list
         ]
-        if not lines[-1].endswith("\n"):
-            lines[-1] += "\n"
+        content = "".join(lines)
+        if not content.endswith("\n"):
+            content += "\n"
 
-        # 创建备份（在写入新内容之前备份旧内容）
-        if self._project_info:
-            import hashlib
-            backup_path = full_path.with_suffix(full_path.suffix + ".bak")
-            with open(backup_path, "w", encoding="utf-8") as bf:
-                with open(full_path, "r", encoding="utf-8") as rf:
-                    bf.write(rf.read())
+        # 原子写入
+        atomic_write(full_path, content)
 
-        # 写入修改后的内容
-        with open(full_path, "w", encoding="utf-8") as f:
-            f.writelines(lines)
+        # 更新 MD5 缓存
+        self._file_md5[abs_path] = compute_md5(full_path)
 
         self._logger.info(
-            f"Applied change: {file_path} paragraph[{paragraph_index}] lines {para.line_start}-{para.line_end}"
+            f"Applied change: {file_path} paragraph[{paragraph_index}] "
+            f"lines {para.line_start}-{para.line_end}"
         )
+
+    def undo(self, file_path: str) -> bool:
+        """
+        撤销对指定文件最近一次的修改。
+
+        参数：
+            file_path: 文件路径（相对于项目根目录）
+
+        返回：
+            True 表示成功撤销，False 表示无可撤销操作
+        """
+        if self._project_info is None:
+            raise RuntimeError("No project opened")
+        full_path = Path(self._project_info.root_path) / file_path
+        result = self._backup_mgr.undo(full_path)
+        if result:
+            abs_path = str(full_path.resolve())
+            self._file_md5[abs_path] = compute_md5(full_path)
+        return result
+
+    def redo(self, file_path: str) -> bool:
+        """
+        重做对指定文件最近一次撤销的操作。
+
+        参数：
+            file_path: 文件路径（相对于项目根目录）
+
+        返回：
+            True 表示成功重做，False 表示无可重做操作
+        """
+        if self._project_info is None:
+            raise RuntimeError("No project opened")
+        full_path = Path(self._project_info.root_path) / file_path
+        result = self._backup_mgr.redo(full_path)
+        if result:
+            abs_path = str(full_path.resolve())
+            self._file_md5[abs_path] = compute_md5(full_path)
+        return result
+
+    def can_undo(self, file_path: str) -> bool:
+        """检查指定文件是否有可撤销的操作。"""
+        if self._project_info is None:
+            return False
+        full_path = Path(self._project_info.root_path) / file_path
+        return self._backup_mgr.can_undo(full_path)
+
+    def can_redo(self, file_path: str) -> bool:
+        """检查指定文件是否有可重做的操作。"""
+        if self._project_info is None:
+            return False
+        full_path = Path(self._project_info.root_path) / file_path
+        return self._backup_mgr.can_redo(full_path)
 
     @staticmethod
     def _detect_indent(text: str) -> str:

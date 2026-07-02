@@ -1,5 +1,5 @@
 """
-LaTeX Agent — 统一入口文件
+LateXcellence — 统一入口文件
 
 用法：
     python main.py config.json              # 使用指定配置文件启动
@@ -33,13 +33,13 @@ async def lifespan(app: FastAPI):
     - 关闭时：记录服务器关闭日志
     """
     logger = get_logger("main")
-    logger.info("Starting LaTeX Agent server")
+    logger.info("Starting LateXcellence server")
     yield
-    logger.info("Shutting down LaTeX Agent server")
+    logger.info("Shutting down LateXcellence server")
 
 
 app = FastAPI(
-    title="LaTeX Agent",
+    title="LateXcellence",
     description="AI-powered LaTeX document assistant",
     version="0.1.0",
     lifespan=lifespan,
@@ -121,7 +121,8 @@ def main():
     else:
         static_dir = Path("static")
         if static_dir.exists() and any(static_dir.iterdir()):
-            app.mount("/", StaticFiles(directory="static", html=True), name="static")
+            app.mount("/", StaticFiles(directory="static",
+                      html=True), name="static")
             logger.info("Mounted static files from static/")
         else:
             logger.warning(
