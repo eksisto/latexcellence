@@ -127,7 +127,7 @@ export default function ExpressionOptPage() {
     if (!activeFile) return;
     setLoading("expressionOpt", true);
     setError(null);
-    setMessage("Optimizing...");
+    setMessage("正在优化...");
     try {
       const data = await api.expressionOpt.optimize({
         file_path: activeFile,
@@ -136,7 +136,7 @@ export default function ExpressionOptPage() {
       const withChanges = (data.results || []).filter(
         (r) => r.changes && r.changes.length > 0
       );
-      setMessage(`Found ${withChanges.length} paragraph(s) with suggestions`);
+      setMessage(`找到 ${withChanges.length} 个有优化建议的段落`);
     } catch (e) {
       setError(e.message);
     } finally {
@@ -151,7 +151,7 @@ export default function ExpressionOptPage() {
           file_path: activeFile,
           changes: [{ paragraph_index: idx, new_text: optimized }],
         });
-        setMessage(`Applied optimization for paragraph ${idx}`);
+        setMessage(`已应用第 ${idx} 段的优化建议`);
         setExpressionResults((prev) =>
           prev.filter((r) => r.paragraph_index !== idx)
         );
@@ -209,7 +209,7 @@ export default function ExpressionOptPage() {
     try {
       await api.expressionOpt.prompts.setActive(name);
       setActivePrompt(name);
-      setMessage(name ? `Active prompt: ${name}` : "Using default prompt");
+      setMessage(name ? `当前启用提示词：${name}` : "使用默认提示词");
     } catch (e) {
       setError(e.message);
     }
@@ -299,7 +299,7 @@ export default function ExpressionOptPage() {
                     variant="outline"
                   >
                     <Eye />
-                    Preview
+                    预览
                   </Button>
                   <Button
                     onClick={handleOptimize}
@@ -310,7 +310,7 @@ export default function ExpressionOptPage() {
                     ) : (
                       <PencilLine />
                     )}
-                    {isLoading ? "Optimizing..." : "Optimize"}
+                    {isLoading ? "正在优化..." : "开始优化"}
                   </Button>
                 </div>
                 {message && (
@@ -330,7 +330,7 @@ export default function ExpressionOptPage() {
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm">优化提示词</CardTitle>
                 <CardDescription>
-                  选择或自定义 LLM 优化策略
+                  选择或自定义 LLM 的优化策略
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-3">
@@ -369,27 +369,27 @@ export default function ExpressionOptPage() {
                 </div>
                 {prompts.length === 0 && (
                   <p className="text-xs text-muted-foreground">
-                    No custom prompts yet. Create one below.
+                    暂无自定义提示词，请在下方创建一个
                   </p>
                 )}
 
                 {editingPrompt && (
                   <p className="text-xs text-muted-foreground">
-                    Editing: {editingPrompt}
+                    正在编辑：{editingPrompt}
                   </p>
                 )}
 
                 <div className="flex items-end gap-2">
                   <div className="flex-1 space-y-1">
                     <Label htmlFor="prompt-name" className="text-xs">
-                      Name
+                      名称
                     </Label>
                     <Input
                       id="prompt-name"
                       className="h-7 text-sm"
                       value={newPromptName}
                       onChange={(e) => setNewPromptName(e.target.value)}
-                      placeholder="e.g. academic-formal"
+                      placeholder="例如：academic-formal"
                     />
                   </div>
                   <Button
@@ -399,14 +399,14 @@ export default function ExpressionOptPage() {
                     disabled={!newPromptName.trim() || !promptContent.trim()}
                   >
                     <Plus />
-                    Save
+                    保存
                   </Button>
                 </div>
                 <Textarea
                   className="min-h-24 resize-none text-sm"
                   value={promptContent}
                   onChange={(e) => setPromptContent(e.target.value)}
-                  placeholder="Enter custom prompt instructions for the LLM..."
+                  placeholder="输入给 LLM 的自定义提示词说明..."
                 />
               </CardContent>
             </Card>
@@ -416,10 +416,10 @@ export default function ExpressionOptPage() {
               <Card>
                 <CardHeader className="pb-2">
                   <CardTitle className="text-sm">
-                    Paragraphs ({expressionParagraphs.length})
+                    段落（{expressionParagraphs.length}）
                   </CardTitle>
                   <CardDescription>
-                    Plain text after LaTeX stripping
+                    去除 LaTeX 标记后的纯文本
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
@@ -433,7 +433,7 @@ export default function ExpressionOptPage() {
                           P{p.index}
                         </span>
                         <pre className="whitespace-pre-wrap text-sm text-foreground/80 mt-1 max-h-32 overflow-y-auto">
-                          {p.plain_text || "(empty)"}
+                          {p.plain_text || "（空）"}
                         </pre>
                       </div>
                     ))}
@@ -453,11 +453,11 @@ export default function ExpressionOptPage() {
                       <CardHeader className="pb-2">
                         <div className="flex items-center justify-between">
                           <CardTitle className="text-sm">
-                            Paragraph {result.paragraph_index}
+                            第 {result.paragraph_index} 段
                           </CardTitle>
                           {hasChanges && (
                             <span className="rounded bg-destructive/10 text-destructive px-1.5 py-0.5 text-xs font-medium">
-                              {result.changes.length} suggestion(s)
+                              {result.changes.length} 条建议
                             </span>
                           )}
                         </div>
@@ -484,13 +484,13 @@ export default function ExpressionOptPage() {
                                     </div>
                                     <div className="grid grid-cols-[auto_1fr] gap-x-2 gap-y-1 text-sm">
                                       <span className="text-muted-foreground">
-                                        From:
+                                        原文：
                                       </span>
                                       <span className="line-through text-foreground/60">
                                         {change.original}
                                       </span>
                                       <span className="text-muted-foreground">
-                                        To:
+                                        修改后：
                                       </span>
                                       <span className="font-medium">
                                         {change.optimized}
@@ -508,17 +508,17 @@ export default function ExpressionOptPage() {
                                   )
                                 }
                               >
-                                Apply Optimization
+                                应用优化
                               </Button>
                             </>
                           ) : (
                             <p className="text-sm text-muted-foreground">
-                              No improvements suggested for this paragraph.
+                              当前段落没有优化建议
                             </p>
                           )}
                           <details className="text-xs text-muted-foreground">
                             <summary className="cursor-pointer">
-                              View original
+                              查看原文
                             </summary>
                             <pre className="whitespace-pre-wrap mt-1 p-2 bg-muted rounded text-xs">
                               {result.plain_text || result.original}
