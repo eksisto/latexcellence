@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo, useEffect, useRef } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import {
@@ -20,42 +20,42 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { ArrowLeft, PencilLine, Eye, Loader2, Plus, Trash2 } from "lucide-react";
 import { api } from "@/api/index";
-import useStore from "@/store/useStore";
-
-function flattenTexFiles(tree, prefix = "") {
-  const result = [];
-  for (const node of tree) {
-    if (node.is_dir && node.children) {
-      result.push(...flattenTexFiles(node.children, prefix + node.name + "/"));
-    } else if (node.name.endsWith(".tex")) {
-      result.push({ name: prefix + node.name, path: node.path });
-    }
-  }
-  return result;
-}
+import useParagraphCheck from "@/hooks/useParagraphCheck";
 
 export default function ExpressionOptPage() {
   const {
-    fileTree,
     projectPath,
     activeFile,
-    setActiveFile,
-    setRootPath,
-    setProjectPath,
-    setFileTree,
-    setMainFile,
-    expressionParagraphs,
-    setExpressionParagraphs,
-    expressionResults,
-    setExpressionResults,
-    loadingStates,
-    setLoading,
-  } = useStore();
+    texFiles,
+    paragraphs: expressionParagraphs,
+    results: expressionResults,
+    isLoading,
+    restoring,
+    error,
+    message,
+    handlePreview,
+    handleCheck: handleOptimize,
+    handleApplyChange,
+    handleFileChange,
+  } = useParagraphCheck({
+    apiModule: api.expressionOpt,
+    checkMethodName: "optimize",
+    storeSlice: {
+      paragraphsKey: "expressionParagraphs",
+      setParagraphsKey: "setExpressionParagraphs",
+      resultsKey: "expressionResults",
+      setResultsKey: "setExpressionResults",
+      loadingKey: "expressionOpt",
+    },
+    messages: {
+      checkLoading: "正在优化...",
+      checkSuccess: (count) => `找到 ${count} 个有优化建议的段落`,
+      applySuccess: (idx) => `已应用第 ${idx} 段的优化建议`,
+    },
+  });
 
-  const [error, setError] = useState(null);
-  const [message, setMessage] = useState(null);
-  const [restoring, setRestoring] = useState(false);
-  const restoredRef = useRef(false);
+  const [promptError, setPromptError] = useState(null);
+  const [promptMessage, setPromptMessage] = useState(null);
 
   // prompt management
   const [prompts, setPrompts] = useState([]);
@@ -63,36 +63,6 @@ export default function ExpressionOptPage() {
   const [newPromptName, setNewPromptName] = useState("");
   const [editingPrompt, setEditingPrompt] = useState(null);
   const [promptContent, setPromptContent] = useState("");
-
-  const texFiles = useMemo(() => flattenTexFiles(fileTree), [fileTree]);
-
-  // ── auto-restore project on mount ──────────────────────────────────────
-
-  useEffect(() => {
-    if (restoredRef.current) return;
-    if (!projectPath || fileTree.length > 0) return;
-
-    const restore = async () => {
-      restoredRef.current = true;
-      setRestoring(true);
-      try {
-        const data = await api.project.open(projectPath);
-        setRootPath(data.root_path);
-        setProjectPath(projectPath);
-        setFileTree(data.file_tree);
-        setMainFile(data.main_file);
-        if (!activeFile) {
-          setActiveFile(data.main_file);
-        }
-      } catch (_) {
-        // ignore
-      } finally {
-        setRestoring(false);
-      }
-    };
-
-    restore();
-  }, []);
 
   // ── load prompts on mount ──────────────────────────────────────────────
 
@@ -103,82 +73,6 @@ export default function ExpressionOptPage() {
       if (active) setActivePrompt(active.name);
     }).catch(() => {});
   }, []);
-
-  // ── actions ────────────────────────────────────────────────────────────
-
-  const handlePreview = useCallback(async () => {
-    if (!activeFile) return;
-    setLoading("expressionOpt", true);
-    setError(null);
-    setMessage(null);
-    setExpressionResults([]);
-    try {
-      const data = await api.expressionOpt.preview(activeFile);
-      setExpressionParagraphs(data.paragraphs || []);
-      setMessage(`已加载 ${data.total} 个段落`);
-    } catch (e) {
-      setError(e.message);
-    } finally {
-      setLoading("expressionOpt", false);
-    }
-  }, [activeFile]);
-
-  const handleOptimize = useCallback(async () => {
-    if (!activeFile) return;
-    setLoading("expressionOpt", true);
-    setError(null);
-    setMessage("正在优化...");
-    try {
-      const data = await api.expressionOpt.optimize({
-        file_path: activeFile,
-      });
-      setExpressionResults(
-        (data.results || []).slice().sort((a, b) => {
-          const aHas = a.changes && a.changes.length > 0;
-          const bHas = b.changes && b.changes.length > 0;
-          if (aHas !== bHas) return aHas ? -1 : 1;
-          return a.paragraph_index - b.paragraph_index;
-        })
-      );
-      const withChanges = (data.results || []).filter(
-        (r) => r.changes && r.changes.length > 0
-      );
-      setMessage(`找到 ${withChanges.length} 个有优化建议的段落`);
-    } catch (e) {
-      setError(e.message);
-    } finally {
-      setLoading("expressionOpt", false);
-    }
-  }, [activeFile]);
-
-  const handleApplyChange = useCallback(
-    async (idx, optimized) => {
-      try {
-        await api.expressionOpt.apply({
-          file_path: activeFile,
-          changes: [{ paragraph_index: idx, new_text: optimized }],
-        });
-        setMessage(`已应用第 ${idx} 段的优化建议`);
-        setExpressionResults((prev) =>
-          prev.filter((r) => r.paragraph_index !== idx)
-        );
-      } catch (e) {
-        setError(e.message);
-      }
-    },
-    [activeFile]
-  );
-
-  const handleFileChange = useCallback(
-    (path) => {
-      setActiveFile(path);
-      setExpressionParagraphs([]);
-      setExpressionResults([]);
-      setError(null);
-      setMessage(null);
-    },
-    [setActiveFile, setExpressionParagraphs, setExpressionResults]
-  );
 
   // ── prompt actions ─────────────────────────────────────────────────────
 
@@ -192,8 +86,9 @@ export default function ExpressionOptPage() {
       setNewPromptName("");
       setPromptContent("");
       setEditingPrompt(name);
+      setPromptError(null);
     } catch (e) {
-      setError(e.message);
+      setPromptError(e.message);
     }
   }, [newPromptName, promptContent]);
 
@@ -207,8 +102,9 @@ export default function ExpressionOptPage() {
         setPromptContent("");
       }
       if (activePrompt === name) setActivePrompt("");
+      setPromptError(null);
     } catch (e) {
-      setError(e.message);
+      setPromptError(e.message);
     }
   }, [editingPrompt, activePrompt]);
 
@@ -216,9 +112,10 @@ export default function ExpressionOptPage() {
     try {
       await api.expressionOpt.prompts.setActive(name);
       setActivePrompt(name);
-      setMessage(name ? `当前启用提示词：${name}` : "使用默认提示词");
+      setPromptMessage(name ? `当前启用提示词：${name}` : "使用默认提示词");
+      setPromptError(null);
     } catch (e) {
-      setError(e.message);
+      setPromptError(e.message);
     }
   }, []);
 
@@ -227,12 +124,11 @@ export default function ExpressionOptPage() {
       const data = await api.expressionOpt.prompts.load(name);
       setEditingPrompt(name);
       setPromptContent(data.content || "");
+      setPromptError(null);
     } catch (e) {
-      setError(e.message);
+      setPromptError(e.message);
     }
   }, []);
-
-  const isLoading = loadingStates.expressionOpt;
 
   return (
     <div className="min-h-screen p-8">
@@ -415,6 +311,14 @@ export default function ExpressionOptPage() {
                   onChange={(e) => setPromptContent(e.target.value)}
                   placeholder="输入给 LLM 的自定义提示词说明..."
                 />
+                {promptMessage && (
+                  <p className="text-sm text-muted-foreground mt-2">
+                    {promptMessage}
+                  </p>
+                )}
+                {promptError && (
+                  <p className="text-sm text-destructive mt-2">{promptError}</p>
+                )}
               </CardContent>
             </Card>
 

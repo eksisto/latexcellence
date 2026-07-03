@@ -1,4 +1,3 @@
-import { useState, useCallback, useMemo, useEffect, useRef } from "react";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import {
@@ -17,154 +16,39 @@ import {
 } from "@/components/ui/select";
 import { ArrowLeft, CheckCheck, Eye, Loader2 } from "lucide-react";
 import { api } from "@/api/index";
-import useStore from "@/store/useStore";
-
-function flattenTexFiles(tree, prefix = "") {
-  const result = [];
-  for (const node of tree) {
-    if (node.is_dir && node.children) {
-      result.push(...flattenTexFiles(node.children, prefix + node.name + "/"));
-    } else if (node.name.endsWith(".tex")) {
-      result.push({ name: prefix + node.name, path: node.path });
-    }
-  }
-  return result;
-}
+import useParagraphCheck from "@/hooks/useParagraphCheck";
 
 export default function TypoCheckPage() {
   const {
-    fileTree,
     projectPath,
     activeFile,
-    setActiveFile,
-    setRootPath,
-    setProjectPath,
-    setFileTree,
-    setMainFile,
-    typoParagraphs,
-    setTypoParagraphs,
-    typoResults,
-    setTypoResults,
-    loadingStates,
-    setLoading,
-  } = useStore();
-
-  const [error, setError] = useState(null);
-  const [message, setMessage] = useState(null);
-  const [restoring, setRestoring] = useState(false);
-  const restoredRef = useRef(false);
-
-  const texFiles = useMemo(() => flattenTexFiles(fileTree), [fileTree]);
-
-  // 挂载时自动恢复项目状态（直接从 TypoCheckPage 刷新）
-  useEffect(() => {
-    if (restoredRef.current) return;
-    if (!projectPath || fileTree.length > 0) return;
-
-    const restore = async () => {
-      restoredRef.current = true;
-      setRestoring(true);
-      try {
-        const data = await api.project.open(projectPath);
-        setRootPath(data.root_path);
-        setProjectPath(projectPath);
-        setFileTree(data.file_tree);
-        setMainFile(data.main_file);
-        if (!activeFile) {
-          setActiveFile(data.main_file);
-        }
-      } catch (_) {
-        // 恢复失败，忽略
-      } finally {
-        setRestoring(false);
-      }
-    };
-
-    restore();
-  }, []);
-
-  const handlePreview = useCallback(async () => {
-    if (!activeFile) {
-      setError("请先选择一个文件");
-      return;
-    }
-    setLoading("typoCheck", true);
-    setError(null);
-    setMessage(null);
-    setTypoResults([]);
-    setTypoParagraphs([]);
-    try {
-      const data = await api.typoCheck.preview(activeFile);
-      setTypoParagraphs(data.paragraphs || []);
-      setMessage(`已加载 ${data.total} 个段落`);
-    } catch (e) {
-      setError(e.message);
-    } finally {
-      setLoading("typoCheck", false);
-    }
-  }, [activeFile]);
-
-  const handleCheck = useCallback(async () => {
-    if (!activeFile) return;
-    setLoading("typoCheck", true);
-    setError(null);
-    setMessage("正在检查错字...");
-    try {
-      const data = await api.typoCheck.check({
-        file_path: activeFile,
-      });
-      setTypoResults(
-        (data.results || []).slice().sort((a, b) => {
-          const aHas = a.changes && a.changes.length > 0;
-          const bHas = b.changes && b.changes.length > 0;
-          if (aHas !== bHas) return aHas ? -1 : 1;
-          return a.paragraph_index - b.paragraph_index;
-        })
-      );
-      const withIssues = (data.results || []).filter(
-        (r) => r.changes && r.changes.length > 0
-      );
-      setMessage(
-        `发现 ${withIssues.length} 个段落可能有错字`
-      );
-    } catch (e) {
-      setError(e.message);
-    } finally {
-      setLoading("typoCheck", false);
-    }
-  }, [activeFile]);
-
-  const handleApplyChange = useCallback(
-    async (idx, corrected) => {
-      try {
-        await api.typoCheck.apply({
-          file_path: activeFile,
-          changes: [{ paragraph_index: idx, new_text: corrected }],
-        });
-        setMessage(`已应用段落 ${idx} 的修改`);
-        // 从结果中移除已应用的段落，保留其余结果
-        setTypoResults((prev) =>
-          prev.filter((r) => r.paragraph_index !== idx)
-        );
-      } catch (e) {
-        setError(e.message);
-      }
+    texFiles,
+    paragraphs: typoParagraphs,
+    results: typoResults,
+    isLoading,
+    restoring,
+    error,
+    message,
+    handlePreview,
+    handleCheck,
+    handleApplyChange,
+    handleFileChange,
+  } = useParagraphCheck({
+    apiModule: api.typoCheck,
+    checkMethodName: "check",
+    storeSlice: {
+      paragraphsKey: "typoParagraphs",
+      setParagraphsKey: "setTypoParagraphs",
+      resultsKey: "typoResults",
+      setResultsKey: "setTypoResults",
+      loadingKey: "typoCheck",
     },
-    [activeFile]
-  );
-
-  const handleFileChange = useCallback(
-    (path) => {
-      setActiveFile(path);
-      setTypoParagraphs([]);
-      setTypoResults([]);
-      setError(null);
-      setMessage(null);
+    messages: {
+      checkLoading: "正在检查错别字...",
+      checkSuccess: (count) => `发现 ${count} 个段落可能有错字`,
+      applySuccess: (idx) => `已应用段落 ${idx} 的修改`,
     },
-    [setActiveFile, setTypoParagraphs, setTypoResults]
-  );
-
-  const isLoading = loadingStates.typoCheck;
+  });
 
   return (
     <div className="min-h-screen p-8">
