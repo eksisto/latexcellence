@@ -17,6 +17,8 @@ import {
 import { ArrowLeft, CheckCheck, Eye, Loader2 } from "lucide-react";
 import { api } from "@/api/index";
 import useParagraphCheck from "@/hooks/useParagraphCheck";
+import MarkerText from "@/components/MarkerText";
+import ParagraphContext from "@/components/ParagraphContext";
 
 export default function TypoCheckPage() {
   const {
@@ -122,7 +124,7 @@ export default function TypoCheckPage() {
                     variant="outline"
                   >
                     <Eye />
-                    预览
+                    加载并预览
                   </Button>
                   <Button
                     onClick={handleCheck}
@@ -170,9 +172,9 @@ export default function TypoCheckPage() {
                         <span className="rounded bg-muted px-1.5 py-0.5 text-xs font-mono mb-1 inline-block">
                           P{p.index}
                         </span>
-                        <pre className="whitespace-pre-wrap text-sm text-foreground/80 mt-1 max-h-32 overflow-y-auto">
-                          {p.plain_text || "（空）"}
-                        </pre>
+                        <div className="whitespace-pre-wrap text-sm text-foreground/80 mt-1 max-h-32 overflow-y-auto font-sans leading-relaxed">
+                          {p.plain_text ? <MarkerText text={p.plain_text} /> : "（空白）"}
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -221,17 +223,17 @@ export default function TypoCheckPage() {
                                       )}
                                     </div>
                                     <div className="grid grid-cols-[auto_1fr] gap-x-2 gap-y-1 text-sm">
-                                      <span className="text-muted-foreground">
+                                      <span className="text-muted-foreground whitespace-nowrap mt-0.5">
                                         原文：
                                       </span>
-                                      <span className="line-through text-foreground/60">
-                                        {change.original}
+                                      <span className="line-through text-foreground/60 break-all mt-0.5">
+                                        <MarkerText text={change.original} />
                                       </span>
-                                      <span className="text-muted-foreground">
-                                        修改：
+                                      <span className="text-muted-foreground whitespace-nowrap mt-0.5">
+                                        修改后：
                                       </span>
-                                      <span className="font-medium">
-                                        {change.corrected}
+                                      <span className="font-medium break-all mt-0.5">
+                                        <MarkerText text={change.corrected} />
                                       </span>
                                     </div>
                                   </li>
@@ -254,14 +256,7 @@ export default function TypoCheckPage() {
                                 此段落未发现错字。
                             </p>
                           )}
-                          <details className="text-xs text-muted-foreground">
-                            <summary className="cursor-pointer">
-                              查看原文
-                            </summary>
-                            <pre className="whitespace-pre-wrap mt-1 p-2 bg-muted rounded text-xs">
-                              {result.plain_text || result.original}
-                            </pre>
-                          </details>
+                          <ParagraphContext currentIndex={result.paragraph_index} paragraphs={typoParagraphs} currentText={result.plain_text || result.original} />
                         </div>
                       </CardContent>
                     </Card>
