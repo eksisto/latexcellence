@@ -113,7 +113,14 @@ export default function TypoCheckPage() {
       const data = await api.typoCheck.check({
         file_path: activeFile,
       });
-      setTypoResults(data.results || []);
+      setTypoResults(
+        (data.results || []).slice().sort((a, b) => {
+          const aHas = a.changes && a.changes.length > 0;
+          const bHas = b.changes && b.changes.length > 0;
+          if (aHas !== bHas) return aHas ? -1 : 1;
+          return a.paragraph_index - b.paragraph_index;
+        })
+      );
       const withIssues = (data.results || []).filter(
         (r) => r.changes && r.changes.length > 0
       );

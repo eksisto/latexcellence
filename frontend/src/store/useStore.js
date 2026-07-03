@@ -48,10 +48,34 @@ const useStore = create(
       setMainFile: (file) => set({ mainFile: file }),
       setTypos: (typos) => set({ typos }),
       setExpressions: (expressions) => set({ expressions }),
-      setTypoParagraphs: (paras) => set({ typoParagraphs: paras }),
-      setTypoResults: (results) => set({ typoResults: results }),
-      setExpressionParagraphs: (paras) => set({ expressionParagraphs: paras }),
-      setExpressionResults: (results) => set({ expressionResults: results }),
+      setTypoParagraphs: (paras) => {
+        if (typeof paras === "function") {
+          set((state) => ({ typoParagraphs: paras(state.typoParagraphs) }));
+        } else {
+          set({ typoParagraphs: paras });
+        }
+      },
+      setTypoResults: (results) => {
+        if (typeof results === "function") {
+          set((state) => ({ typoResults: results(state.typoResults) }));
+        } else {
+          set({ typoResults: results });
+        }
+      },
+      setExpressionParagraphs: (paras) => {
+        if (typeof paras === "function") {
+          set((state) => ({ expressionParagraphs: paras(state.expressionParagraphs) }));
+        } else {
+          set({ expressionParagraphs: paras });
+        }
+      },
+      setExpressionResults: (results) => {
+        if (typeof results === "function") {
+          set((state) => ({ expressionResults: results(state.expressionResults) }));
+        } else {
+          set({ expressionResults: results });
+        }
+      },
       setPdfUrl: (url) => set({ pdfUrl: url }),
 
       setLoading: (key, value) =>
@@ -71,6 +95,10 @@ const useStore = create(
           fileTree: [],
           activeFile: null,
           mainFile: null,
+          typoResults: [],
+          typoParagraphs: [],
+          expressionResults: [],
+          expressionParagraphs: [],
         });
       },
     }),

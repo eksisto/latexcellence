@@ -132,7 +132,14 @@ export default function ExpressionOptPage() {
       const data = await api.expressionOpt.optimize({
         file_path: activeFile,
       });
-      setExpressionResults(data.results || []);
+      setExpressionResults(
+        (data.results || []).slice().sort((a, b) => {
+          const aHas = a.changes && a.changes.length > 0;
+          const bHas = b.changes && b.changes.length > 0;
+          if (aHas !== bHas) return aHas ? -1 : 1;
+          return a.paragraph_index - b.paragraph_index;
+        })
+      );
       const withChanges = (data.results || []).filter(
         (r) => r.changes && r.changes.length > 0
       );
