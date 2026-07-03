@@ -19,13 +19,31 @@ function getStoredTheme() {
   return null;
 }
 
-function applyTheme(resolved) {
+function setThemeClass(resolved) {
   const root = document.documentElement;
   if (resolved === "dark") {
     root.classList.add("dark");
   } else {
     root.classList.remove("dark");
   }
+}
+
+function applyTheme(resolved) {
+  // 优先使用 View Transitions API：将整页切换作为一次合成层交叉淡入，
+  // 避免逐元素 transition 因主线程忙碌而"慢半拍"，且性能更好。
+  // 若浏览器不支持或用户偏好减少动画，则退回直接切换（由 CSS transition 兜底）。
+  const prefersReducedMotion = window.matchMedia(
+    "(prefers-reduced-motion: reduce)",
+  ).matches;
+
+  if (!document.startViewTransition || prefersReducedMotion) {
+    setThemeClass(resolved);
+    return;
+  }
+
+  document.startViewTransition(() => {
+    setThemeClass(resolved);
+  });
 }
 
 export function useTheme() {

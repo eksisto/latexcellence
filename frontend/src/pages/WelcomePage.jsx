@@ -107,7 +107,7 @@ export default function WelcomePage() {
       <div className="grid grid-cols-2 gap-4 max-w-lg w-full">
         {visibleFeatures.map(({ title, description, to, icon: Icon }) => (
           <Link key={to} to={to}>
-            <Card className="h-full hover:scale-[1.02] hover:shadow-lg transition-all duration-300 cursor-pointer">
+            <Card className="h-full hover:scale-[1.02] hover:shadow-lg cursor-pointer">
               <CardHeader className="pb-2">
                 <Icon className="size-5 text-muted-foreground mb-1" />
                 <CardTitle className="text-base">{title}</CardTitle>

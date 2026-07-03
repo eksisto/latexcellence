@@ -137,7 +137,7 @@
     @apply border-border outline-ring/50;
     }
   *, *::before, *::after {
-    transition-property: color, background-color, border-color, outline-color, text-decoration-color, fill, stroke, box-shadow;
+    transition-property: color, background-color, border-color, outline-color, text-decoration-color, fill, stroke;
     transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
     transition-duration: 300ms;
     }
@@ -150,4 +150,25 @@
   h1, h2, h3, h4, h5, h6 {
     font-family: var(--font-heading);
     }
+}
+
+/*
+ * 主题切换过渡。
+ * 支持 View Transitions API 的浏览器：整页作为一次合成层交叉淡入，
+ * 所有元素严格同步，不会出现某个元素“慢半拍”。此时统一交叉淡入 300ms。
+ */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: 300ms;
+  animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  /* 混合模式设为 normal，避免默认叠加导致的颜色异常 */
+  mix-blend-mode: normal;
+}
+
+/* View Transition 进行期间，关闭逐元素 CSS transition，
+   避免两套动画叠加打架（否则又会出现不同步）。 */
+:root:active-view-transition *,
+:root:active-view-transition *::before,
+:root:active-view-transition *::after {
+  transition: none !important;
 }
