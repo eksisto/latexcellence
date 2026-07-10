@@ -2,14 +2,18 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import ThemeToggle from "@/components/ThemeToggle";
 import SettingsDialog from "@/components/SettingsDialog";
+import useFavicon from "./hooks/useFavicon";
 import WelcomePage from "./pages/WelcomePage";
 import WorkspacePage from "./pages/WorkspacePage";
 import FormulaOCRPage from "./pages/FormulaOCRPage";
 import TemplateGenPage from "./pages/TemplateGenPage";
 import TypoCheckPage from "./pages/TypoCheckPage";
 import ExpressionOptPage from "./pages/ExpressionOptPage";
+import TypesettingPage from "./pages/TypesettingPage";
 
 export default function App() {
+  useFavicon();
+
   return (
     <TooltipProvider>
       <BrowserRouter>
@@ -24,6 +28,7 @@ export default function App() {
           <Route path="/template-gen" element={<TemplateGenPage />} />
           <Route path="/typo-check" element={<TypoCheckPage />} />
           <Route path="/expression-opt" element={<ExpressionOptPage />} />
+          <Route path="/typesetting" element={<TypesettingPage />} />
         </Routes>
       </BrowserRouter>
     </TooltipProvider>
