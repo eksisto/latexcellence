@@ -41,8 +41,8 @@ const featuresList = [
     id: "template_gen",
   },
   {
-    title: "拼写检查",
-    description: "发现并修复文档中的拼写错误",
+    title: "文本校对",
+    description: "发现并修复文档中的错别字、语法错误等",
     to: "/typo-check",
     icon: CheckCheck,
     id: "typo_check",
@@ -100,7 +100,7 @@ export default function WelcomePage() {
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center p-8">
-      <h1 className="text-4xl font-bold mb-2 tracking-tight">LateXcellence</h1>
+      <h1 className="text-4xl font-bold mb-2 tracking-tight">LaTeXcellence</h1>
       <p className="text-muted-foreground mb-8 text-lg">
         AI 驱动的 LaTeX 文档助手
       </p>

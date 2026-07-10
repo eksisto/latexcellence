@@ -1,5 +1,5 @@
 """
-LateXcellence — 统一入口文件
+LaTeXcellence — 统一入口文件
 
 用法：
     python main.py config.json              # 使用指定配置文件启动
@@ -38,13 +38,13 @@ async def lifespan(app: FastAPI):
     - 关闭时：记录服务器关闭日志
     """
     logger = get_logger("main")
-    logger.info("Starting LateXcellence server")
+    logger.info("Starting LaTeXcellence server")
     yield
-    logger.info("Shutting down LateXcellence server")
+    logger.info("Shutting down LaTeXcellence server")
 
 
 app = FastAPI(
-    title="LateXcellence",
+    title="LaTeXcellence",
     description="AI 驱动的 LaTeX 文档助手",
     version="0.1.0",
     lifespan=lifespan,
