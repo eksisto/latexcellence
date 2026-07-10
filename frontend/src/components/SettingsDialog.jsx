@@ -88,6 +88,7 @@ export default function SettingsDialog() {
         template_gen: config.features.template_gen.enabled,
         typo_check: config.features.typo_check.enabled,
         expression_opt: config.features.expression_opt.enabled,
+        formatting: config.features.formatting.enabled,
       });
       setOpen(false);
     } catch (err) {
@@ -267,7 +268,7 @@ export default function SettingsDialog() {
           {/* Features */}
           <ConfigSection title="功能">
             <CheckboxField
-              label="错字查找"
+              label="文本校对"
               checked={config.features.typo_check.enabled}
               onChange={(v) => set("features.typo_check.enabled", v)}
             />
@@ -285,6 +286,11 @@ export default function SettingsDialog() {
               label="模板生成"
               checked={config.features.template_gen.enabled}
               onChange={(v) => set("features.template_gen.enabled", v)}
+            />
+            <CheckboxField
+              label="源码格式化"
+              checked={config.features.formatting.enabled}
+              onChange={(v) => set("features.formatting.enabled", v)}
             />
             <div className="space-y-1.5">
               <Label className="text-xs">

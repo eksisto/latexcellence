@@ -48,7 +48,7 @@ class ProjectConfig(BaseModel):
 
 
 class TypoCheckConfig(BaseModel):
-    """错字查找模块配置"""
+    """文本校对模块配置"""
     enabled: bool = True                # 是否启用
     batch_size: int = 5                 # 每批发送给 LLM 的段落数
     custom_prompts_dir: str = "prompts/typo/"  # 用户自定义提示词存放目录
@@ -74,12 +74,19 @@ class TemplateGenConfig(BaseModel):
     output_dir: str = "templates/"      # 生成模板的输出目录
 
 
+class FormattingConfig(BaseModel):
+    """源码格式化模块配置"""
+    enabled: bool = True                # 是否启用
+    batch_size: int = 5                 # 每批发送给 LLM 的段落数
+
+
 class FeaturesConfig(BaseModel):
     """功能特性总开关"""
     typo_check: TypoCheckConfig = TypoCheckConfig()
     expression_opt: ExpressionOptConfig = ExpressionOptConfig()
     formula_ocr: FormulaOCRConfig = FormulaOCRConfig()
     template_gen: TemplateGenConfig = TemplateGenConfig()
+    formatting: FormattingConfig = FormattingConfig()
 
 
 class LoggingConfig(BaseModel):

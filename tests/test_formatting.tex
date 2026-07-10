@@ -1,0 +1,188 @@
+﻿% ================================================================
+%  test_formatting.tex —— 排版测试文件
+%
+%  这个文件故意包含多种排版不规范的问题，
+%  用于测试 LaTeXcellence 的 formatting（自动排版）模块。
+%
+%  【注意】编译成 PDF 后看不出问题（LaTeX 会自动处理空白），
+%  但 .tex 源码的阅读体验很差。formatting 模块的目标就是
+%  自动修正这些问题，让源码更整洁。
+%
+%  下面用注释标出每个"不规范"之处。
+% ================================================================
+
+\documentclass{article}
+
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{geometry}
+
+\title{Test Document for Formatting}
+\author{Author Name}
+\date{\today}
+
+\begin{document}
+
+\maketitle
+
+% ================================================================
+%  问题 1：标题前后有多余空格
+%  \section{  Title  } 花括号内的首尾空格应去除
+% ================================================================
+\section{  Introduction  }
+%                   ^^       ^^  多余的内部空格
+
+% 问题 2：段落缩进不一致
+%   这里缩进了 4 个空格，下一段可能缩进 2 个或 6 个
+%   规范做法：顶格写或用统一的缩进
+    This is the first paragraph with weird indentation.
+    It has   extra spaces   between words.
+%          ^^^         ^^^  单词间多余空格（应合并为一个）
+     It also has a strange line break here.
+%    ^ 此行前多缩进
+The next sentence should be on the same paragraph.
+
+% 问题 3：章节之间空行不统一
+%   这里只有 1 个空行，其他地方有 2 个甚至 3 个
+  \section{Methodology}
+
+% 问题 4：二级标题也有多余空格
+\subsection{  Subsection  with   spaces  }
+
+We propose a novel approach using machine learning techniques.
+Our method consists of three main steps.
+
+First, we collect data from various sources. Then we preprocess it.
+Finally, we apply our algorithm.
+
+% ================================================================
+%  问题 5：多个独立的 equation 环境应合并为 align
+%  下面三个公式各自独立编号，实际上它们属于同一组
+% ================================================================
+\begin{equation}
+a + b = c
+\end{equation}
+\begin{equation}
+x ^ 2 + y ^ 2 = z ^ 2
+\end{equation}
+\begin{equation}
+E = mc ^ 2
+\end{equation}
+% 推荐写法：
+% \begin{align}
+%   a + b &= c \\
+%   x^2 + y^2 &= z^2 \\
+%   E &= mc^2
+% \end{align}
+% （用 align 共享一个编号，或者用 align* 不编号）
+
+These equations should ideally be in an align environment.
+
+% 问题 6：equation 内嵌 aligned 写法较冗余
+%   如果是单个公式，直接用 equation + split 更简洁
+\begin{equation}
+  \begin{aligned}
+    f(x) &= ax ^ 2 + bx + c \\
+    g(x) &= \sin(x) + \cos(x)
+  \end{aligned}
+\end{equation}
+
+  \subsection{Another subsection}
+%^ 不需要的缩进
+
+Some text here.
+
+% ================================================================
+%  问题 7：itemize 列表中 \item 缩进混乱
+%  每个 \item 前的空格数不同：2 / 7 / 2 / 16 格
+%  规范：所有 \item 在同一列对齐
+% ================================================================
+  \begin{itemize}
+\item First item
+%^--- 没有缩进
+       \item    Second item with spaces
+%     ^^^^^^^  缩进过多，且 item 后也有多余空格
+  \item Third item
+% ^^ 缩进 2 格
+                \item Fourth item with too much indent
+%               ^^^^^^^^^^^^^^^^ 缩进太多
+  \end{itemize}
+
+% ================================================================
+%  问题 8：enumerate 列表同样缩进混乱
+% ================================================================
+\begin{enumerate}
+    \item Step one
+ %^^  缩进 4 格
+ \item  Step two
+%^ 缩进 1 格，且 Step 前多一个空格
+\item Step three
+%^ 没有缩进
+                \item Step four
+%               ^^^^^^^^^^^^^^^^ 缩进太多
+  \end{enumerate}
+% ^^ \end 缩进 2 格，与 \begin 不对齐
+
+  \section{   Results and   Discussion   }
+%         ^^^              ^^^  标题内部多余空格
+
+We present our findings in Table~\ref{tab:results}.
+% ~ 表示"不可断行空格"，确保"Table"和编号不会分到两行
+
+% ================================================================
+%  问题 9：表格中的列对齐不一致
+%  \hline 有的缩进 2 格、有的顶格
+%  数据行的 & 位置不统一，有的在前后有多余空格
+% ================================================================
+\begin{table}[h]
+% [h] = 建议放在当前位置（here）
+\centering
+% 让表格居中
+\begin{tabular}{lcr}
+% {lcr} = 三列：左对齐 / 居中 / 右对齐
+  \hline
+  Method  & Accuracy & Time \\
+  \hline
+   A  &  95.2\%  &  1.3s \\
+%  ^^ 列间距不统一
+    B &   93.8\% &   2.1s \\
+%  ^^^ 对齐方式与上一行不一致
+   C  &   96.1\%  &   0.9s \\
+  \hline
+\end{tabular}
+  \caption{  Experimental results  }
+%         ^^                     ^^  caption 中多余空格
+\label{tab:results}
+\end{table}
+
+  \subsection{Analysis}
+% ^^ 多余缩进
+
+  Our method outperforms baselines by a large margin.
+  We attribute this improvement to our novel architecture.
+
+\begin{equation}
+  \text{Accuracy} = \frac{TP + TN}{TP + TN + FP + FN}
+\end{equation}
+
+  Another equation for reference:
+  \begin{equation}
+    \text{Loss} = -\sum_{i=1}^{n} y_i \log(\hat{y}_i)
+  \end{equation}
+
+  \section{Conclusion}
+% ^^ 多余缩进
+
+    In this paper, we have demonstrated the effectiveness of our approach.
+    Future work includes extending the method to other domains.
+
+% ================================================================
+%  问题 10：thebibliography 缩进不一致
+% ================================================================
+  \begin{thebibliography}{9}
+    \bibitem{ref1} Author A, ``Paper Title,'' Journal, 2024.
+     \bibitem{ref2} Author B, ``Another Paper,'' Conference, 2023.
+%    ^ 两个 \bibitem 缩进不一致
+  \end{thebibliography}
+
+\end{document}

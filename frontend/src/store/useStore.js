@@ -30,6 +30,8 @@ const useStore = create(
       typoResults: [],
       expressionParagraphs: [],
       expressionResults: [],
+      formattingParagraphs: [],
+      formattingResults: [],
 
       /* ===== PDF 预览（不持久化） ===== */
       pdfUrl: null,
@@ -38,6 +40,7 @@ const useStore = create(
       loadingStates: {
         typoCheck: false,
         expressionOpt: false,
+        formatting: false,
       },
 
       /* ===== setter 方法 ===== */
@@ -76,6 +79,20 @@ const useStore = create(
           set({ expressionResults: results });
         }
       },
+      setFormattingParagraphs: (paras) => {
+        if (typeof paras === "function") {
+          set((state) => ({ formattingParagraphs: paras(state.formattingParagraphs) }));
+        } else {
+          set({ formattingParagraphs: paras });
+        }
+      },
+      setFormattingResults: (results) => {
+        if (typeof results === "function") {
+          set((state) => ({ formattingResults: results(state.formattingResults) }));
+        } else {
+          set({ formattingResults: results });
+        }
+      },
       setPdfUrl: (url) => set({ pdfUrl: url }),
 
       setLoading: (key, value) =>
@@ -99,6 +116,8 @@ const useStore = create(
           typoParagraphs: [],
           expressionResults: [],
           expressionParagraphs: [],
+          formattingResults: [],
+          formattingParagraphs: [],
         });
       },
     }),
@@ -113,6 +132,8 @@ const useStore = create(
         typoParagraphs: state.typoParagraphs,
         expressionResults: state.expressionResults,
         expressionParagraphs: state.expressionParagraphs,
+        formattingResults: state.formattingResults,
+        formattingParagraphs: state.formattingParagraphs,
       }),
     }
   )

@@ -77,7 +77,7 @@ export const api = {
       }),
   },
 
-  /* ---- 错字查找 ---- */
+  /* ---- 文本校对 ---- */
   typoCheck: {
     preview: (filePath) =>
       request(
@@ -162,5 +162,25 @@ export const api = {
         method: "POST",
         body: JSON.stringify(data),
       }),
+  },
+
+  /* ---- 源码格式化 ---- */
+  formatting: {
+    preview: (filePath) =>
+      request(
+        `/formatting/preview?file_path=${encodeURIComponent(filePath)}`
+      ),
+    check: (data) =>
+      request("/formatting/check", {
+        method: "POST",
+        body: JSON.stringify(data),
+      }),
+    apply: (data) =>
+      request("/formatting/apply", {
+        method: "POST",
+        body: JSON.stringify(data),
+      }),
+    stream: (projectId, filePath) =>
+      `${BASE_URL}/formatting/stream/${projectId}?file_path=${encodeURIComponent(filePath)}`,
   },
 };

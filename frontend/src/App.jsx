@@ -9,7 +9,7 @@ import FormulaOCRPage from "./pages/FormulaOCRPage";
 import TemplateGenPage from "./pages/TemplateGenPage";
 import TypoCheckPage from "./pages/TypoCheckPage";
 import ExpressionOptPage from "./pages/ExpressionOptPage";
-import TypesettingPage from "./pages/TypesettingPage";
+import FormattingPage from "./pages/FormattingPage";
 
 export default function App() {
   useFavicon();
@@ -28,7 +28,7 @@ export default function App() {
           <Route path="/template-gen" element={<TemplateGenPage />} />
           <Route path="/typo-check" element={<TypoCheckPage />} />
           <Route path="/expression-opt" element={<ExpressionOptPage />} />
-          <Route path="/typesetting" element={<TypesettingPage />} />
+          <Route path="/formatting" element={<FormattingPage />} />
         </Routes>
       </BrowserRouter>
     </TooltipProvider>

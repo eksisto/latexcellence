@@ -28,6 +28,7 @@ from backend.modules.typo_check.router import router as typo_check_router
 from backend.modules.expression_opt.router import router as expression_opt_router
 from backend.modules.template_gen.router import router as template_gen_router
 from backend.modules.formula_ocr.router import router as formula_ocr_router
+from backend.modules.formatting.router import router as formatting_router
 
 
 @asynccontextmanager
@@ -45,7 +46,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="LaTeXcellence",
-    description="AI 驱动的 LaTeX 文档助手",
+    description="让排版隐于无形，让思考回归本身",
     version="0.1.0",
     lifespan=lifespan,
 )
@@ -90,7 +91,7 @@ async def config_status():
         "dev_mode": cfg.server.dev_mode,
         "features": {
             name: getattr(cfg.features, name).enabled
-            for name in ["typo_check", "expression_opt", "formula_ocr", "template_gen"]
+            for name in ["typo_check", "expression_opt", "formula_ocr", "template_gen", "formatting"]
         },
     }
 
@@ -127,6 +128,7 @@ app.include_router(typo_check_router)
 app.include_router(expression_opt_router)
 app.include_router(template_gen_router)
 app.include_router(formula_ocr_router)
+app.include_router(formatting_router)
 
 
 def main():

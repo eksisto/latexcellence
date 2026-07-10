@@ -14,6 +14,7 @@ import {
   FileText,
   CheckCheck,
   PencilLine,
+  AlignLeft,
 } from "lucide-react";
 import { api } from "@/api/index";
 import useStore from "@/store/useStore";
@@ -42,17 +43,24 @@ const featuresList = [
   },
   {
     title: "文本校对",
-    description: "发现并修复文档中的错别字、语法错误等",
+    description: "修复文档中的错别字、语法错误等",
     to: "/typo-check",
     icon: CheckCheck,
     id: "typo_check",
   },
   {
     title: "表达优化",
-    description: "改善学术写作风格",
+    description: "改善写作风格",
     to: "/expression-opt",
     icon: PencilLine,
     id: "expression_opt",
+  },
+  {
+    title: "源码格式化",
+    description: "规范化间距、缩进与环境对齐",
+    to: "/formatting",
+    icon: AlignLeft,
+    id: "formatting",
   },
 ];
 
@@ -72,6 +80,7 @@ export default function WelcomePage() {
               template_gen: data.features.template_gen,
               typo_check: data.features.typo_check,
               expression_opt: data.features.expression_opt,
+              formatting: data.features.formatting,
             });
           }
         })
@@ -84,6 +93,7 @@ export default function WelcomePage() {
               template_gen: true,
               typo_check: true,
               expression_opt: true,
+              formatting: true,
             });
           }
         });
@@ -102,7 +112,7 @@ export default function WelcomePage() {
     <div className="min-h-screen flex flex-col items-center justify-center p-8">
       <h1 className="text-4xl font-bold mb-2 tracking-tight">LaTeXcellence</h1>
       <p className="text-muted-foreground mb-8 text-lg">
-        AI 驱动的 LaTeX 文档助手
+        让排版隐于无形，让思考回归本身
       </p>
       <div className="grid grid-cols-2 gap-4 max-w-lg w-full">
         {visibleFeatures.map(({ title, description, to, icon: Icon }) => (

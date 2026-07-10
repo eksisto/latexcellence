@@ -37,6 +37,10 @@
     "template_gen": {
       "enabled": true,
       "output_dir": "templates/"
+    },
+    "formatting": {
+      "enabled": true,
+      "batch_size": 5
     }
   },
   "logging": {

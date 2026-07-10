@@ -94,7 +94,8 @@ export default function TemplateGenPage() {
           <CardHeader className="pb-2">
             <CardTitle className="text-sm">描述你的需求</CardTitle>
             <CardDescription>
-              描述你需要的 LaTeX 模板类型（如"IEEE 会议论文"、"中文简历"、"学术报告"）
+              描述你需要的 LaTeX 模板类型（如“IEEE 会议论文”、
+              中文简历”、“学术报告”）
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">

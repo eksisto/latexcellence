@@ -27,7 +27,7 @@ class LLMClient:
     """
     LLM API 客户端。
     封装 OpenAI AsyncClient，提供统一的重试和限流逻辑。
-    所有 LLM 调用（错字查找、表达优化、公式 OCR 等）都通过此模块进行。
+    所有 LLM 调用（文本校对、表达优化、公式 OCR 等）都通过此模块进行。
     """
 
     def __init__(self):
