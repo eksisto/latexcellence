@@ -65,6 +65,7 @@ export default function ExpressionOptPage() {
   const [newPromptName, setNewPromptName] = useState("");
   const [editingPrompt, setEditingPrompt] = useState(null);
   const [promptContent, setPromptContent] = useState("");
+  const [previewContent, setPreviewContent] = useState("");
 
   // ── load prompts on mount ──────────────────────────────────────────────
 
@@ -131,6 +132,25 @@ export default function ExpressionOptPage() {
       setPromptError(e.message);
     }
   }, []);
+
+  useEffect(() => {
+    if (!activePrompt) {
+      setPreviewContent("");
+      return;
+    }
+    let cancelled = false;
+    api.expressionOpt.prompts
+      .load(activePrompt)
+      .then((data) => {
+        if (!cancelled) setPreviewContent(data.content || "");
+      })
+      .catch(() => {
+        if (!cancelled) setPreviewContent("");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [activePrompt]);
 
   return (
     <div className="min-h-screen p-8">
@@ -246,9 +266,9 @@ export default function ExpressionOptPage() {
                         variant={activePrompt === p.name ? "default" : "outline"}
                         size="sm"
                         onClick={() =>
-                          activePrompt === p.name
-                            ? handleSetActivePrompt("")
-                            : handleSetActivePrompt(p.name)
+                          handleSetActivePrompt(
+                            activePrompt === p.name ? "" : p.name
+                          )
                         }
                       >
                         {p.name}
@@ -276,6 +296,17 @@ export default function ExpressionOptPage() {
                   <p className="text-xs text-muted-foreground">
                     暂无自定义提示词，请在下方创建一个
                   </p>
+                )}
+
+                {activePrompt && previewContent && (
+                  <div className="rounded-md border border-border bg-muted/30 p-3">
+                    <span className="text-xs font-medium text-muted-foreground">
+                      当前启用提示词：{activePrompt}
+                    </span>
+                    <pre className="whitespace-pre-wrap text-sm text-foreground/80 font-sans leading-relaxed max-h-48 overflow-y-auto mt-2">
+                      {previewContent}
+                    </pre>
+                  </div>
                 )}
 
                 {editingPrompt && (
