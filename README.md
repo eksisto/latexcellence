@@ -12,6 +12,7 @@
 - **源码格式化**：优化 LaTeX 源码的间距、缩进、环境对齐
 - **自动编译**：一键调用 latexmk 编译 TeX，错误信息由 LLM 翻译为通俗解释并给出修复建议
 - **Markdown 转 LaTeX**：粘贴 Markdown 文本，调用 Pandoc 转换为 LaTeX 代码（需系统安装 Pandoc）
+- **LaTeX 样式修改**：粘贴 LaTeX 代码并用自然语言描述修改需求，LLM 自动执行样式调整（表格对齐、文字样式、图片排版等）
 
 ## 技术栈
 
@@ -110,7 +111,8 @@ latexcellence/
 │   │   ├── template_gen/    # 模板生成
 │   │   ├── formatting/      # 源码格式化
 │   │   ├── compile/         # 自动编译
-│   │   └── markdown_converter/  # Markdown 转 LaTeX
+│   │   ├── markdown_converter/  # Markdown 转 LaTeX
+│   │   └── style_modify/    # LaTeX 样式修改
 │   └── utils/               # 文件操作、JSON 校验
 ├── frontend/
 │   └── src/                 # React 应用

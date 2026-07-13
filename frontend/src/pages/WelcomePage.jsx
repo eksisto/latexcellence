@@ -17,6 +17,7 @@ import {
   PencilLine,
   AlignLeft,
   ArrowLeftRight,
+  Wand2,
 } from "lucide-react";
 import { api } from "@/api/index";
 import useStore from "@/store/useStore";
@@ -42,6 +43,13 @@ const featuresList = [
     to: "/table-ocr",
     icon: Table2,
     id: "table_ocr",
+  },
+  {
+    title: "LaTeX 样式修改",
+    description: "用自然语言描述样式修改，LLM 自动调整 LaTeX 代码",
+    to: "/style-modify",
+    icon: Wand2,
+    id: "style_modify",
   },
   {
     title: "模版生成",
@@ -95,6 +103,7 @@ export default function WelcomePage() {
               formula_ocr: data.features.formula_ocr,
               table_ocr: data.features.table_ocr,
               template_gen: data.features.template_gen,
+              style_modify: data.features.style_modify,
               typo_check: data.features.typo_check,
               expression_opt: data.features.expression_opt,
               formatting: data.features.formatting,
@@ -111,6 +120,7 @@ export default function WelcomePage() {
               formula_ocr: true,
               table_ocr: true,
               template_gen: true,
+              style_modify: true,
               typo_check: true,
               expression_opt: true,
               formatting: true,

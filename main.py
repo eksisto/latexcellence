@@ -32,6 +32,7 @@ from backend.modules.table_ocr.router import router as table_ocr_router
 from backend.modules.formatting.router import router as formatting_router
 from backend.modules.compile.router import router as compile_router
 from backend.modules.markdown_converter.router import router as markdown_converter_router
+from backend.modules.style_modify.router import router as style_modify_router
 
 
 @asynccontextmanager
@@ -94,7 +95,7 @@ async def config_status():
         "dev_mode": cfg.server.dev_mode,
         "features": {
             name: getattr(cfg.features, name).enabled
-            for name in ["typo_check", "expression_opt", "formula_ocr", "table_ocr", "template_gen", "formatting", "compile", "markdown_converter"]
+            for name in ["typo_check", "expression_opt", "formula_ocr", "table_ocr", "style_modify", "template_gen", "formatting", "compile", "markdown_converter"]
         },
     }
 
@@ -135,6 +136,7 @@ app.include_router(table_ocr_router)
 app.include_router(formatting_router)
 app.include_router(compile_router)
 app.include_router(markdown_converter_router)
+app.include_router(style_modify_router)
 
 
 def main():

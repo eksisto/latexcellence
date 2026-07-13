@@ -7,6 +7,7 @@ import WelcomePage from "./pages/WelcomePage";
 import WorkspacePage from "./pages/WorkspacePage";
 import FormulaOCRPage from "./pages/FormulaOCRPage";
 import TableOCRPage from "./pages/TableOCRPage";
+import StyleModifyPage from "./pages/StyleModifyPage";
 import TemplateGenPage from "./pages/TemplateGenPage";
 import TypoCheckPage from "./pages/TypoCheckPage";
 import ExpressionOptPage from "./pages/ExpressionOptPage";
@@ -28,6 +29,7 @@ export default function App() {
           <Route path="/workspace" element={<WorkspacePage />} />
           <Route path="/formula-ocr" element={<FormulaOCRPage />} />
           <Route path="/table-ocr" element={<TableOCRPage />} />
+          <Route path="/style-modify" element={<StyleModifyPage />} />
           <Route path="/template-gen" element={<TemplateGenPage />} />
           <Route path="/typo-check" element={<TypoCheckPage />} />
           <Route path="/expression-opt" element={<ExpressionOptPage />} />

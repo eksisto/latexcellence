@@ -170,6 +170,15 @@ export const api = {
     },
   },
 
+  /* ---- LaTeX 样式修改 ---- */
+  styleModify: {
+    modify: (latex, description) =>
+      request("/style-modify/modify", {
+        method: "POST",
+        body: JSON.stringify({ latex, description }),
+      }),
+  },
+
   /* ---- 模板生成 ---- */
   templateGen: {
     generate: (data) =>

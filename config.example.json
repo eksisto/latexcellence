@@ -38,6 +38,9 @@
       "enabled": true,
       "max_image_size_mb": 10
     },
+    "style_modify": {
+      "enabled": true
+    },
     "template_gen": {
       "enabled": true,
       "output_dir": "templates/"

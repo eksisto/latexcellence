@@ -97,6 +97,11 @@ class MarkdownConverterConfig(BaseModel):
     enabled: bool = True                # 是否启用
 
 
+class StyleModifyConfig(BaseModel):
+    """LaTeX 样式修改模块配置"""
+    enabled: bool = True                # 是否启用
+
+
 class FeaturesConfig(BaseModel):
     """功能特性总开关"""
     typo_check: TypoCheckConfig = TypoCheckConfig()
@@ -107,6 +112,7 @@ class FeaturesConfig(BaseModel):
     formatting: FormattingConfig = FormattingConfig()
     compile: CompileConfig = CompileConfig()
     markdown_converter: MarkdownConverterConfig = MarkdownConverterConfig()
+    style_modify: StyleModifyConfig = StyleModifyConfig()
 
 
 class LoggingConfig(BaseModel):
