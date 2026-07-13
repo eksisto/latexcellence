@@ -155,6 +155,21 @@ export const api = {
     },
   },
 
+  /* ---- 表格 OCR 识别（图片上传使用 FormData） ---- */
+  tableOCR: {
+    recognize: async (formData) => {
+      const res = await fetch(`${BASE_URL}/table-ocr/recognize`, {
+        method: "POST",
+        body: formData,
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ detail: res.statusText }));
+        throw new Error(err.detail || `HTTP ${res.status}`);
+      }
+      return res.json();
+    },
+  },
+
   /* ---- 模板生成 ---- */
   templateGen: {
     generate: (data) =>

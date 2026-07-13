@@ -85,6 +85,7 @@ export default function SettingsDialog() {
       useStore.getState().setEnabledFeatures({
         workspace: true,
         formula_ocr: config.features.formula_ocr.enabled,
+        table_ocr: config.features.table_ocr.enabled,
         template_gen: config.features.template_gen.enabled,
         typo_check: config.features.typo_check.enabled,
         expression_opt: config.features.expression_opt.enabled,

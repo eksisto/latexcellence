@@ -34,6 +34,10 @@
       "enabled": true,
       "max_image_size_mb": 10
     },
+    "table_ocr": {
+      "enabled": true,
+      "max_image_size_mb": 10
+    },
     "template_gen": {
       "enabled": true,
       "output_dir": "templates/"

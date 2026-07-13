@@ -242,17 +242,17 @@ export default function WorkspacePage() {
                 </SelectContent>
               </Select>
               {enabledFeatures?.compile && (
-              <Button
-                onClick={handleCompile}
-                disabled={!mainFile || compileLoading}
-                size="sm"
-              >
-                {compileLoading ? (
-                  <><Loader2 className="animate-spin" /> 编译中...</>
-                ) : (
-                  <><Play /> 自动编译</>
-                )}
-              </Button>
+                <Button
+                  onClick={handleCompile}
+                  disabled={!mainFile || compileLoading}
+                  size="sm"
+                >
+                  {compileLoading ? (
+                    <><Loader2 className="animate-spin" /> 编译中...</>
+                  ) : (
+                    <><Play /> 自动编译</>
+                  )}
+                </Button>
               )}
             </div>
 

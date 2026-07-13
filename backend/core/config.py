@@ -68,6 +68,12 @@ class FormulaOCRConfig(BaseModel):
     max_image_size_mb: int = 10         # 上传图片最大尺寸（MB）
 
 
+class TableOCRConfig(BaseModel):
+    """表格 OCR 识别模块配置"""
+    enabled: bool = True                # 是否启用
+    max_image_size_mb: int = 10         # 上传图片最大尺寸（MB）
+
+
 class TemplateGenConfig(BaseModel):
     """模板生成模块配置"""
     enabled: bool = True                # 是否启用
@@ -91,6 +97,7 @@ class FeaturesConfig(BaseModel):
     typo_check: TypoCheckConfig = TypoCheckConfig()
     expression_opt: ExpressionOptConfig = ExpressionOptConfig()
     formula_ocr: FormulaOCRConfig = FormulaOCRConfig()
+    table_ocr: TableOCRConfig = TableOCRConfig()
     template_gen: TemplateGenConfig = TemplateGenConfig()
     formatting: FormattingConfig = FormattingConfig()
     compile: CompileConfig = CompileConfig()

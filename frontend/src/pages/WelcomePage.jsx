@@ -11,6 +11,7 @@ import { Separator } from "@/components/ui/separator";
 import {
   FolderOpen,
   ScanText,
+  Table2,
   FileText,
   CheckCheck,
   PencilLine,
@@ -33,6 +34,13 @@ const featuresList = [
     to: "/formula-ocr",
     icon: ScanText,
     id: "formula_ocr",
+  },
+  {
+    title: "表格 OCR 识别",
+    description: "将图像转换为 LaTeX 表格",
+    to: "/table-ocr",
+    icon: Table2,
+    id: "table_ocr",
   },
   {
     title: "模版生成",
@@ -77,6 +85,7 @@ export default function WelcomePage() {
             setEnabledFeatures({
               workspace: true, // 工作区永远启用
               formula_ocr: data.features.formula_ocr,
+              table_ocr: data.features.table_ocr,
               template_gen: data.features.template_gen,
               typo_check: data.features.typo_check,
               expression_opt: data.features.expression_opt,
@@ -91,6 +100,7 @@ export default function WelcomePage() {
             setEnabledFeatures({
               workspace: true,
               formula_ocr: true,
+              table_ocr: true,
               template_gen: true,
               typo_check: true,
               expression_opt: true,
