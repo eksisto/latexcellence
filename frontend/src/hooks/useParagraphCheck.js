@@ -53,6 +53,8 @@ export default function useParagraphCheck({
   const [message, setMessage] = useState(null);
   const [restoring, setRestoring] = useState(false);
   const restoredRef = useRef(false);
+  const eventSourceRef = useRef(null);
+  const resultsWithChangesRef = useRef(0);
 
   const texFiles = useMemo(() => flattenTexFiles(fileTree), [fileTree]);
 
@@ -113,40 +115,97 @@ export default function useParagraphCheck({
     }
   }, [activeFile, apiModule, storeSlice.loadingKey, setLoading, setResults, setParagraphs]);
 
-  const handleCheck = useCallback(async () => {
-    if (!activeFile) return;
+  const handleCheck = useCallback(() => {
+    if (!activeFile || !projectPath) return;
+
+    if (eventSourceRef.current) {
+      eventSourceRef.current.close();
+      eventSourceRef.current = null;
+    }
+
     setLoading(storeSlice.loadingKey, true);
     setError(null);
     setMessage(messages.checkLoading);
-    try {
-      const data = await apiModule[checkMethodName]({
-        file_path: activeFile,
-      });
-      setResults(
-        (data.results || []).slice().sort((a, b) => {
-          const aHas = a.changes && a.changes.length > 0;
-          const bHas = b.changes && b.changes.length > 0;
-          if (aHas !== bHas) return aHas ? -1 : 1;
-          return a.paragraph_index - b.paragraph_index;
-        })
-      );
-      const withIssues = (data.results || []).filter(
-        (r) => r.changes && r.changes.length > 0
-      );
-      setMessage(messages.checkSuccess(withIssues.length));
-    } catch (e) {
-      setError(e.message);
-    } finally {
+    setResults([]);
+    resultsWithChangesRef.current = 0;
+    store.setCheckProgress({ current: 0, total: paragraphs.length });
+
+    const url = apiModule.stream(
+      encodeURIComponent(projectPath),
+      activeFile
+    );
+
+    const es = new EventSource(url);
+    eventSourceRef.current = es;
+
+    es.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+
+        if (data.type === "progress") {
+          store.setCheckProgress({
+            current: data.current,
+            total: data.total,
+          });
+          return;
+        }
+
+        if (data.type === "result") {
+          const r = data.data;
+          if (r) {
+            if (r.changes && r.changes.length > 0) {
+              resultsWithChangesRef.current += 1;
+            }
+            setResults((prev) => {
+              const next = [...prev, r];
+              next.sort((a, b) => {
+                const aHas = a.changes && a.changes.length > 0;
+                const bHas = b.changes && b.changes.length > 0;
+                if (aHas !== bHas) return aHas ? -1 : 1;
+                return a.paragraph_index - b.paragraph_index;
+              });
+              return next;
+            });
+          }
+          return;
+        }
+
+        if (data.type === "error") {
+          setError(data.message);
+          return;
+        }
+
+        if (data.type === "done") {
+          es.close();
+          eventSourceRef.current = null;
+          setLoading(storeSlice.loadingKey, false);
+          store.setCheckProgress(null);
+          setMessage(messages.checkSuccess(resultsWithChangesRef.current));
+          return;
+        }
+      } catch (_) {
+        // ignore parse errors
+      }
+    };
+
+    es.onerror = () => {
+      es.close();
+      eventSourceRef.current = null;
       setLoading(storeSlice.loadingKey, false);
-    }
+      store.setCheckProgress(null);
+      setError("连接中断，请重试");
+    };
   }, [
     activeFile,
+    projectPath,
     apiModule,
-    checkMethodName,
     storeSlice.loadingKey,
+    paragraphs.length,
     setLoading,
     setResults,
+    setError,
     messages,
+    store,
   ]);
 
   const handleApplyChange = useCallback(
@@ -168,14 +227,29 @@ export default function useParagraphCheck({
 
   const handleFileChange = useCallback(
     (path) => {
+      if (eventSourceRef.current) {
+        eventSourceRef.current.close();
+        eventSourceRef.current = null;
+      }
+      store.setCheckProgress(null);
       setActiveFile(path);
       setParagraphs([]);
       setResults([]);
       setError(null);
       setMessage(null);
     },
-    [setActiveFile, setParagraphs, setResults]
+    [setActiveFile, setParagraphs, setResults, store]
   );
+
+  // 组件卸载时关闭 SSE 连接
+  useEffect(() => {
+    return () => {
+      if (eventSourceRef.current) {
+        eventSourceRef.current.close();
+        eventSourceRef.current = null;
+      }
+    };
+  }, []);
 
   return {
     projectPath,
@@ -184,6 +258,7 @@ export default function useParagraphCheck({
     paragraphs,
     results,
     isLoading: loadingStates[storeSlice.loadingKey],
+    progress: store.checkProgress,
     restoring,
     error,
     message,

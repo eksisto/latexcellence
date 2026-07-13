@@ -23,6 +23,7 @@ import { api } from "@/api/index";
 import useParagraphCheck from "@/hooks/useParagraphCheck";
 import MarkerText from "@/components/MarkerText";
 import ParagraphContext from "@/components/ParagraphContext";
+import ProgressBar from "@/components/ProgressBar";
 
 export default function ExpressionOptPage() {
   const {
@@ -32,6 +33,7 @@ export default function ExpressionOptPage() {
     paragraphs: expressionParagraphs,
     results: expressionResults,
     isLoading,
+    progress,
     restoring,
     error,
     message,
@@ -248,6 +250,10 @@ export default function ExpressionOptPage() {
                 )}
               </CardContent>
             </Card>
+
+            {progress && (
+              <ProgressBar current={progress.current} total={progress.total} />
+            )}
 
             {/* custom prompts */}
 

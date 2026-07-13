@@ -18,6 +18,7 @@ import { ArrowLeft, AlignLeft, Eye, Loader2 } from "lucide-react";
 import { api } from "@/api/index";
 import useParagraphCheck from "@/hooks/useParagraphCheck";
 import ParagraphContext from "@/components/ParagraphContext";
+import ProgressBar from "@/components/ProgressBar";
 
 const CHANGE_TYPE_LABELS = {
   spacing: "间距",
@@ -34,6 +35,7 @@ export default function FormattingPage() {
     paragraphs: formattingParagraphs,
     results: formattingResults,
     isLoading,
+    progress,
     restoring,
     error,
     message,
@@ -156,6 +158,10 @@ export default function FormattingPage() {
                 )}
               </CardContent>
             </Card>
+
+            {progress && (
+              <ProgressBar current={progress.current} total={progress.total} />
+            )}
 
             {/* paragraph preview - raw LaTeX source */}
             {formattingParagraphs.length > 0 &&

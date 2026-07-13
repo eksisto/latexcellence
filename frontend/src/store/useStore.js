@@ -47,6 +47,9 @@ const useStore = create(
         formatting: false,
       },
 
+      /* ===== 逐段检查进度（不持久化） ===== */
+      checkProgress: null,
+
       /* ===== setter 方法 ===== */
       setProjectPath: (path) => set({ projectPath: path }),
       setRootPath: (path) => set({ rootPath: path }),
@@ -106,6 +109,8 @@ const useStore = create(
           loadingStates: { ...state.loadingStates, [key]: value },
         })),
 
+      setCheckProgress: (progress) => set({ checkProgress: progress }),
+
       clearProject: () => {
         try {
           localStorage.removeItem("latexcellence-project");
@@ -124,6 +129,7 @@ const useStore = create(
           expressionParagraphs: [],
           formattingResults: [],
           formattingParagraphs: [],
+          checkProgress: null,
         });
       },
     }),

@@ -19,6 +19,7 @@ import { api } from "@/api/index";
 import useParagraphCheck from "@/hooks/useParagraphCheck";
 import MarkerText from "@/components/MarkerText";
 import ParagraphContext from "@/components/ParagraphContext";
+import ProgressBar from "@/components/ProgressBar";
 
 export default function TypoCheckPage() {
   const {
@@ -28,6 +29,7 @@ export default function TypoCheckPage() {
     paragraphs: typoParagraphs,
     results: typoResults,
     isLoading,
+    progress,
     restoring,
     error,
     message,
@@ -150,6 +152,10 @@ export default function TypoCheckPage() {
                 )}
               </CardContent>
             </Card>
+
+            {progress && (
+              <ProgressBar current={progress.current} total={progress.total} />
+            )}
 
             {/* paragraph preview */}
             {typoParagraphs.length > 0 && typoResults.length === 0 && (
