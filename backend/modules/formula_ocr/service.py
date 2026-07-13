@@ -33,11 +33,16 @@ _VISION_SYSTEM_PROMPT = (
     "You are a LaTeX formula OCR engine. "
     "Your task is to convert images of mathematical formulas into LaTeX code.\n\n"
     "Rules:\n"
-    "- Output ONLY the LaTeX expression, no extra text, no formatting\n"
+    "- Output ONLY the LaTeX expression in the 'latex' field, no extra text\n"
     "- Use standard LaTeX math commands (\\frac, \\sqrt, \\sum, \\int, etc.)\n"
     "- For inline formulas (no display style), set inline=true\n"
     "- For display formulas (large, centered), set inline=false\n"
-    "- Provide a confidence score between 0.0 and 1.0\n\n"
+    "- Set 'confidence' based on recognition quality:\n"
+    "  * 0.9-1.0: Clear, confident recognition\n"
+    "  * 0.7-0.9: Mostly clear, minor uncertainties\n"
+    "  * 0.5-0.7: Partially clear, some guesses\n"
+    "  * Below 0.5: Poor quality, significant uncertainty\n"
+    "If the image is not a formula or unrecognizable, set 'latex' to empty string and 'confidence' to 0.0\n\n"
     "Respond with JSON only, no markdown fences:\n"
     "{{\n"
     '  "latex": "<LaTeX code>",\n'
@@ -47,7 +52,7 @@ _VISION_SYSTEM_PROMPT = (
 )
 
 _MAX_DIMENSION = 2000
-_SUPPORTED_FORMATS = {"PNG", "JPEG", "WEBP", "JPG"}
+_SUPPORTED_FORMATS = {"image/png", "image/jpeg", "image/webp"}
 
 
 class FormulaOCRService:
@@ -74,7 +79,8 @@ class FormulaOCRService:
 
         cfg = get_config()
         if not cfg.llm.api_key:
-            self._logger.warning("No API key configured, returning empty result")
+            self._logger.warning(
+                "No API key configured, returning empty result")
             return {
                 "latex": "",
                 "inline": False,
@@ -140,8 +146,7 @@ class FormulaOCRService:
         if not content_type:
             raise ValueError("Missing content type")
         mime_type = content_type.lower()
-        allowed = {"image/png", "image/jpeg", "image/webp"}
-        if mime_type not in allowed:
+        if mime_type not in _SUPPORTED_FORMATS:
             raise ValueError(
                 f"Unsupported image format: {content_type}. "
                 f"Supported: PNG, JPEG, WebP"
