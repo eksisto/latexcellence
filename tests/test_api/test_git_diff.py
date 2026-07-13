@@ -10,6 +10,7 @@ git_diff 模块纯函数单元测试。
 """
 
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 
@@ -282,3 +283,63 @@ class TestGetPdfPath:
     def test_valid_job_id_format(self):
         with pytest.raises(FileNotFoundError):
             get_pdf_path("a" * 32)
+
+
+# ── /api/git-diff/pdf 端点 ─────────────────────────────────────────────────
+
+
+class TestDownloadPdfEndpoint:
+    """/api/git-diff/pdf/{job_id} 端点测试。
+
+    验证 PDF 以 ``Content-Disposition: inline`` 返回，便于浏览器 iframe
+    内联预览，而不是触发自动下载。
+    """
+
+    @pytest.fixture
+    def client(self):
+        from fastapi.testclient import TestClient
+        from main import app
+        return TestClient(app)
+
+    def test_pdf_served_inline(self, client, tmp_path):
+        """PDF 存在时返回 200 且 Content-Disposition 为 inline。"""
+        import hashlib
+
+        job_id = "a" * 32
+        pdf_dir = tmp_path / "diff_pdfs"
+        pdf_dir.mkdir()
+        pdf_path = pdf_dir / f"{job_id}.pdf"
+        pdf_path.write_bytes(b"%PDF-1.4 fake diff pdf")
+
+        with patch(
+            "backend.modules.git_diff.router.get_pdf_path",
+            return_value=pdf_path,
+        ):
+            response = client.get(f"/api/git-diff/pdf/{job_id}")
+
+        assert response.status_code == 200
+        assert response.headers["content-type"] == "application/pdf"
+        disposition = response.headers.get("content-disposition", "")
+        assert "inline" in disposition
+        assert "attachment" not in disposition
+        assert b"%PDF" in response.content
+
+    def test_pdf_invalid_job_id_returns_400(self, client):
+        """非法 job_id 返回 400。"""
+        with patch(
+            "backend.modules.git_diff.router.get_pdf_path",
+            side_effect=ValueError("invalid job id"),
+        ):
+            response = client.get("/api/git-diff/pdf/not-a-hex-id")
+
+        assert response.status_code == 400
+
+    def test_pdf_not_found_returns_404(self, client):
+        """PDF 不存在时返回 404。"""
+        with patch(
+            "backend.modules.git_diff.router.get_pdf_path",
+            side_effect=FileNotFoundError("missing"),
+        ):
+            response = client.get(f"/api/git-diff/pdf/{'a' * 32}")
+
+        assert response.status_code == 404

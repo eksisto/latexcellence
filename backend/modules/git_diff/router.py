@@ -58,7 +58,13 @@ async def render_pdf(request: DiffRenderRequest):
 
 @router.get("/pdf/{job_id}")
 async def download_pdf(job_id: str):
-    """下载或预览已生成的差异 PDF。"""
+    """
+    返回已生成的差异 PDF。
+
+    使用 ``Content-Disposition: inline`` 以便浏览器在 iframe 中内联预览，
+    而不是触发自动下载。用户如需下载，前端“下载 PDF”按钮通过 ``<a download>``
+    强制下载。
+    """
 
     try:
         pdf_path = get_pdf_path(job_id)
@@ -66,6 +72,7 @@ async def download_pdf(job_id: str):
             path=pdf_path,
             media_type="application/pdf",
             filename="diff-highlight.pdf",
+            content_disposition_type="inline",
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))

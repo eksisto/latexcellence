@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect } from "react";
 import { Link } from "react-router-dom";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -18,12 +19,15 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { ArrowLeft, PencilLine, Eye, Loader2, Plus, Trash2 } from "lucide-react";
+import { ArrowLeft, PencilLine, Eye, Loader2, Plus, Trash2, ListChecks } from "lucide-react";
 import { api } from "@/api/index";
 import useParagraphCheck from "@/hooks/useParagraphCheck";
 import MarkerText from "@/components/MarkerText";
 import ParagraphContext from "@/components/ParagraphContext";
 import ProgressBar from "@/components/ProgressBar";
+import ConfirmDialog from "@/components/ConfirmDialog";
+import ResultFilterBar from "@/components/ResultFilterBar";
+import useResultFilter from "@/hooks/useResultFilter";
 
 export default function ExpressionOptPage() {
   const {
@@ -35,15 +39,18 @@ export default function ExpressionOptPage() {
     isLoading,
     progress,
     restoring,
+    applyingAll,
     error,
     message,
     handlePreview,
     handleCheck: handleOptimize,
     handleApplyChange,
+    handleApplyAll,
     handleFileChange,
   } = useParagraphCheck({
     apiModule: api.expressionOpt,
     checkMethodName: "optimize",
+    correctedTextField: "optimized",
     storeSlice: {
       paragraphsKey: "expressionParagraphs",
       setParagraphsKey: "setExpressionParagraphs",
@@ -55,11 +62,27 @@ export default function ExpressionOptPage() {
       checkLoading: "正在优化...",
       checkSuccess: (count) => `找到 ${count} 个有优化建议的段落`,
       applySuccess: (idx) => `已应用第 ${idx} 段的优化建议`,
+      applyAllSuccess: (count) => `已批量应用 ${count} 个段落的优化`,
+      applyAllEmpty: "没有可应用的优化建议",
     },
   });
 
+  const {
+    filteredResults,
+    searchQuery,
+    setSearchQuery,
+    typeFilter,
+    setTypeFilter,
+    availableTypes,
+    jumpToParagraph,
+    reset,
+    hasFilters,
+  } = useResultFilter(expressionResults, { idPrefix: "expr-result" });
+
   const [promptError, setPromptError] = useState(null);
   const [promptMessage, setPromptMessage] = useState(null);
+  const [confirmDeletePrompt, setConfirmDeletePrompt] = useState(null);
+  const [confirmApplyAllOpen, setConfirmApplyAllOpen] = useState(false);
 
   // prompt management
   const [prompts, setPrompts] = useState([]);
@@ -92,8 +115,10 @@ export default function ExpressionOptPage() {
       setPromptContent("");
       setEditingPrompt(name);
       setPromptError(null);
+      toast.success("提示词已保存", { description: name });
     } catch (e) {
       setPromptError(e.message);
+      toast.error("保存提示词失败", { description: e.message });
     }
   }, [newPromptName, promptContent]);
 
@@ -108,8 +133,10 @@ export default function ExpressionOptPage() {
       }
       if (activePrompt === name) setActivePrompt("");
       setPromptError(null);
+      toast.success("提示词已删除", { description: name });
     } catch (e) {
       setPromptError(e.message);
+      toast.error("删除提示词失败", { description: e.message });
     }
   }, [editingPrompt, activePrompt]);
 
@@ -119,8 +146,10 @@ export default function ExpressionOptPage() {
       setActivePrompt(name);
       setPromptMessage(name ? `当前启用提示词：${name}` : "使用默认提示词");
       setPromptError(null);
+      toast.success(name ? `已启用提示词：${name}` : "已切换为默认提示词");
     } catch (e) {
       setPromptError(e.message);
+      toast.error("切换提示词失败", { description: e.message });
     }
   }, []);
 
@@ -132,6 +161,7 @@ export default function ExpressionOptPage() {
       setPromptError(null);
     } catch (e) {
       setPromptError(e.message);
+      toast.error("加载提示词失败", { description: e.message });
     }
   }, []);
 
@@ -158,10 +188,8 @@ export default function ExpressionOptPage() {
     <div className="min-h-screen p-8">
       <div className="max-w-6xl mx-auto mb-8">
         <div className="flex items-center gap-4">
-          <Button variant="ghost" size="icon" asChild>
-            <Link to="/">
-              <ArrowLeft />
-            </Link>
+          <Button variant="ghost" size="icon" nativeButton={false} render={<Link to="/" />}>
+            <ArrowLeft />
           </Button>
           <h1 className="text-3xl font-bold tracking-tight">表达优化</h1>
         </div>
@@ -189,8 +217,8 @@ export default function ExpressionOptPage() {
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <Button className="w-full" asChild>
-                  <Link to="/workspace">打开工作区</Link>
+                <Button className="w-full" nativeButton={false} render={<Link to="/workspace" />}>
+                  打开工作区
                 </Button>
               </CardContent>
             </Card>
@@ -245,9 +273,6 @@ export default function ExpressionOptPage() {
                     {message}
                   </p>
                 )}
-                {error && (
-                  <p className="text-sm text-destructive mt-2">{error}</p>
-                )}
               </CardContent>
             </Card>
 
@@ -291,7 +316,7 @@ export default function ExpressionOptPage() {
                         variant="ghost"
                         size="icon"
                         className="size-6"
-                        onClick={() => handleDeletePrompt(p.name)}
+                        onClick={() => setConfirmDeletePrompt(p.name)}
                       >
                         <Trash2 className="size-3" />
                       </Button>
@@ -395,11 +420,45 @@ export default function ExpressionOptPage() {
             {/* optimization results */}
             {expressionResults.length > 0 && (
               <div className="space-y-4">
-                {expressionResults.map((result) => {
+                {expressionResults.some(
+                  (r) => r.changes && r.changes.length > 0
+                ) && (
+                  <div className="flex justify-end">
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => setConfirmApplyAllOpen(true)}
+                      disabled={applyingAll || isLoading}
+                    >
+                      {applyingAll ? (
+                        <Loader2 className="animate-spin" />
+                      ) : (
+                        <ListChecks />
+                      )}
+                      全部应用
+                    </Button>
+                  </div>
+                )}
+                <ResultFilterBar
+                  searchQuery={searchQuery}
+                  setSearchQuery={setSearchQuery}
+                  typeFilter={typeFilter}
+                  setTypeFilter={setTypeFilter}
+                  availableTypes={availableTypes}
+                  onJump={jumpToParagraph}
+                  onReset={reset}
+                  hasFilters={hasFilters}
+                />
+                {filteredResults.length === 0 ? (
+                  <p className="text-sm text-muted-foreground text-center py-8">
+                    没有匹配的优化结果
+                  </p>
+                ) : (
+                  filteredResults.map((result) => {
                   const hasChanges =
                     result.changes && result.changes.length > 0;
                   return (
-                    <Card key={result.paragraph_index}>
+                    <Card key={result.paragraph_index} id={`expr-result-P${result.paragraph_index}`}>
                       <CardHeader className="pb-2">
                         <div className="flex items-center justify-between">
                           <CardTitle className="text-sm">
@@ -471,12 +530,41 @@ export default function ExpressionOptPage() {
                       </CardContent>
                     </Card>
                   );
-                })}
+                  })
+                )}
               </div>
             )}
           </div>
         )}
       </div>
+
+      <ConfirmDialog
+        open={confirmDeletePrompt !== null}
+        onOpenChange={(open) => {
+          if (!open) setConfirmDeletePrompt(null);
+        }}
+        title="删除提示词？"
+        description={`将永久删除提示词「${confirmDeletePrompt}」，此操作不可撤销。`}
+        confirmText="删除"
+        variant="destructive"
+        onConfirm={async () => {
+          if (confirmDeletePrompt) {
+            await handleDeletePrompt(confirmDeletePrompt);
+          }
+          setConfirmDeletePrompt(null);
+        }}
+      />
+      <ConfirmDialog
+        open={confirmApplyAllOpen}
+        onOpenChange={setConfirmApplyAllOpen}
+        title="全部应用优化建议？"
+        description="将一次性把所有有建议的段落修改写回源文件。建议在应用前逐段审核。"
+        confirmText="全部应用"
+        onConfirm={async () => {
+          setConfirmApplyAllOpen(false);
+          await handleApplyAll();
+        }}
+      />
     </div>
   );
 }

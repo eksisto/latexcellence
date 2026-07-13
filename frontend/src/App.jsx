@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { Toaster } from "@/components/ui/sonner";
 import ThemeToggle from "@/components/ThemeToggle";
 import SettingsDialog from "@/components/SettingsDialog";
 import useFavicon from "./hooks/useFavicon";
@@ -25,6 +26,7 @@ export default function App() {
           <SettingsDialog />
           <ThemeToggle />
         </div>
+        <Toaster />
         <Routes>
           <Route path="/" element={<WelcomePage />} />
           <Route path="/workspace" element={<WorkspacePage />} />

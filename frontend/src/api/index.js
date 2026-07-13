@@ -75,6 +75,14 @@ export const api = {
         method: "POST",
         body: JSON.stringify({ file_path: filePath }),
       }),
+    canUndo: (filePath) =>
+      request(
+        `/project/can-undo?file_path=${encodeURIComponent(filePath)}`
+      ),
+    canRedo: (filePath) =>
+      request(
+        `/project/can-redo?file_path=${encodeURIComponent(filePath)}`
+      ),
     setMainFile: (filePath) =>
       request("/project/set-main-file", {
         method: "POST",
@@ -220,6 +228,8 @@ export const api = {
         method: "POST",
         body: JSON.stringify({ main_file: mainFile }),
       }),
+    pdfUrl: (mainFile) =>
+      `${BASE_URL}/compile/pdf?main_file=${encodeURIComponent(mainFile)}`,
   },
 
   /* ---- Git 差异高亮 ---- */

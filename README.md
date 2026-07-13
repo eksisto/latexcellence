@@ -15,12 +15,22 @@
 - **Markdown 转 LaTeX**：粘贴 Markdown 文本，调用 Pandoc 转换为 LaTeX 代码（需系统安装 Pandoc）
 - **LaTeX 样式修改**：粘贴 LaTeX 代码并用自然语言描述修改需求，LLM 自动执行样式调整（表格对齐、文字样式、图片排版等）
 
+### 交互体验
+
+- **Toast 通知**：所有操作成功/失败均有即时反馈（Apply、编译、项目打开/关闭、配置保存等）
+- **撤销/重做**：工作区顶栏按钮 + Ctrl+Z / Ctrl+Shift+Z 键盘快捷键，支持多步撤销
+- **全部应用**：检查结果可一键批量写回，带进度提示和二次确认
+- **确认对话框**：关闭项目、删除提示词、全部应用等操作前弹出确认，防止误触
+- **结果搜索过滤**：段落检查结果支持文本搜索、按修改类型过滤、段落编号跳转
+- **编译后 PDF 预览**：编译成功后自动在工作区内联展示 PDF
+- **图片 OCR 统一交互**：公式/表格识别共享拖拽上传、Ctrl+V 粘贴、一键复制
+
 ## 技术栈
 
 | 层   | 技术                                                       |
 | ---- | ---------------------------------------------------------- |
 | 后端 | Python 3.12+, FastAPI, uvicorn, openai, pydantic v2, httpx |
-| 前端 | React 19, Vite 6, Tailwind CSS 4, Zustand 5, shadcn/ui     |
+| 前端 | React 19, Vite 6, Tailwind CSS 4, Zustand 5, shadcn/ui, sonner |
 | 测试 | pytest + pytest-asyncio                                    |
 
 ## 快速开始

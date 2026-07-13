@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { toast } from "sonner";
 import { Settings } from "lucide-react";
 import {
   Dialog,
@@ -96,9 +97,10 @@ export default function SettingsDialog() {
         style_modify: config.features.style_modify.enabled,
       });
       setOpen(false);
+      toast.success("配置已保存");
     } catch (err) {
       console.error("Failed to save config:", err);
-      alert("保存配置失败：" + err.message);
+      toast.error("保存配置失败", { description: err.message });
     } finally {
       setSaving(false);
     }

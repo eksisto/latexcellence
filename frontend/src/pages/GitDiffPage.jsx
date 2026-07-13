@@ -190,10 +190,8 @@ export default function GitDiffPage() {
     return (
       <div className="min-h-screen p-8">
         <div className="max-w-3xl mx-auto">
-          <Button variant="ghost" size="icon" asChild>
-            <Link to="/">
-              <ArrowLeft />
-            </Link>
+          <Button variant="ghost" size="icon" nativeButton={false} render={<Link to="/" />}>
+            <ArrowLeft />
           </Button>
           <Card className="mt-8">
             <CardHeader>
@@ -203,8 +201,8 @@ export default function GitDiffPage() {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <Button asChild>
-                <Link to="/workspace">打开项目工作区</Link>
+              <Button nativeButton={false} render={<Link to="/workspace" />}>
+                打开项目工作区
               </Button>
             </CardContent>
           </Card>
@@ -217,10 +215,8 @@ export default function GitDiffPage() {
     <div className="min-h-screen p-8">
       <div className="max-w-6xl mx-auto mb-8">
         <div className="flex items-center gap-4">
-          <Button variant="ghost" size="icon" asChild>
-            <Link to="/">
-              <ArrowLeft />
-            </Link>
+          <Button variant="ghost" size="icon" nativeButton={false} render={<Link to="/" />}>
+            <ArrowLeft />
           </Button>
           <div>
             <h1 className="text-3xl font-bold tracking-tight">Git 差异高亮</h1>
@@ -461,11 +457,20 @@ export default function GitDiffPage() {
                   </p>
                 )}
                 {result.success && result.pdf_url && (
-                  <Button variant="outline" size="sm" asChild>
-                    <a href={result.pdf_url} target="_blank" rel="noreferrer">
-                      <Download />
-                      下载 PDF
-                    </a>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    nativeButton={false}
+                    render={
+                      <a
+                        href={result.pdf_url}
+                        download="diff-highlight.pdf"
+                        rel="noreferrer"
+                      />
+                    }
+                  >
+                    <Download />
+                    下载 PDF
                   </Button>
                 )}
                 <Button
@@ -487,7 +492,7 @@ export default function GitDiffPage() {
           )}
         </div>
 
-        <div className="min-h-[720px]">
+        <div className="h-[720px]">
           <PDFPreview url={pdfUrl} />
         </div>
       </div>

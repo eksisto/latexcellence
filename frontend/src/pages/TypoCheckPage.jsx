@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import {
@@ -14,14 +15,18 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { ArrowLeft, CheckCheck, Eye, Loader2 } from "lucide-react";
+import { ArrowLeft, CheckCheck, Eye, Loader2, ListChecks } from "lucide-react";
 import { api } from "@/api/index";
 import useParagraphCheck from "@/hooks/useParagraphCheck";
 import MarkerText from "@/components/MarkerText";
 import ParagraphContext from "@/components/ParagraphContext";
 import ProgressBar from "@/components/ProgressBar";
+import ConfirmDialog from "@/components/ConfirmDialog";
+import ResultFilterBar from "@/components/ResultFilterBar";
+import useResultFilter from "@/hooks/useResultFilter";
 
 export default function TypoCheckPage() {
+  const [confirmApplyAllOpen, setConfirmApplyAllOpen] = useState(false);
   const {
     projectPath,
     activeFile,
@@ -31,15 +36,18 @@ export default function TypoCheckPage() {
     isLoading,
     progress,
     restoring,
+    applyingAll,
     error,
     message,
     handlePreview,
     handleCheck,
     handleApplyChange,
+    handleApplyAll,
     handleFileChange,
   } = useParagraphCheck({
     apiModule: api.typoCheck,
     checkMethodName: "check",
+    correctedTextField: "corrected",
     storeSlice: {
       paragraphsKey: "typoParagraphs",
       setParagraphsKey: "setTypoParagraphs",
@@ -51,17 +59,29 @@ export default function TypoCheckPage() {
       checkLoading: "正在检查错别字...",
       checkSuccess: (count) => `发现 ${count} 个段落可能有错字`,
       applySuccess: (idx) => `已应用段落 ${idx} 的修改`,
+      applyAllSuccess: (count) => `已批量应用 ${count} 个段落的修改`,
+      applyAllEmpty: "没有可应用的修改",
     },
   });
+
+  const {
+    filteredResults,
+    searchQuery,
+    setSearchQuery,
+    typeFilter,
+    setTypeFilter,
+    availableTypes,
+    jumpToParagraph,
+    reset,
+    hasFilters,
+  } = useResultFilter(typoResults, { idPrefix: "typo-result" });
 
   return (
     <div className="min-h-screen p-8">
       <div className="max-w-6xl mx-auto mb-8">
         <div className="flex items-center gap-4">
-          <Button variant="ghost" size="icon" asChild>
-            <Link to="/">
-              <ArrowLeft />
-            </Link>
+          <Button variant="ghost" size="icon" nativeButton={false} render={<Link to="/" />}>
+            <ArrowLeft />
           </Button>
           <h1 className="text-3xl font-bold tracking-tight">文本校对</h1>
         </div>
@@ -89,8 +109,8 @@ export default function TypoCheckPage() {
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <Button className="w-full" asChild>
-                  <Link to="/workspace">打开工作区</Link>
+                <Button className="w-full" nativeButton={false} render={<Link to="/workspace" />}>
+                  打开工作区
                 </Button>
               </CardContent>
             </Card>
@@ -147,9 +167,6 @@ export default function TypoCheckPage() {
                     {message}
                   </p>
                 )}
-                {error && (
-                  <p className="text-sm text-destructive mt-2">{error}</p>
-                )}
               </CardContent>
             </Card>
 
@@ -191,11 +208,43 @@ export default function TypoCheckPage() {
             {/* typo check results */}
             {typoResults.length > 0 && (
               <div className="space-y-4">
-                {typoResults.map((result) => {
+                {typoResults.some((r) => r.changes && r.changes.length > 0) && (
+                  <div className="flex justify-end">
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => setConfirmApplyAllOpen(true)}
+                      disabled={applyingAll || isLoading}
+                    >
+                      {applyingAll ? (
+                        <Loader2 className="animate-spin" />
+                      ) : (
+                        <ListChecks />
+                      )}
+                      全部应用
+                    </Button>
+                  </div>
+                )}
+                <ResultFilterBar
+                  searchQuery={searchQuery}
+                  setSearchQuery={setSearchQuery}
+                  typeFilter={typeFilter}
+                  setTypeFilter={setTypeFilter}
+                  availableTypes={availableTypes}
+                  onJump={jumpToParagraph}
+                  onReset={reset}
+                  hasFilters={hasFilters}
+                />
+                {filteredResults.length === 0 ? (
+                  <p className="text-sm text-muted-foreground text-center py-8">
+                    没有匹配的检查结果
+                  </p>
+                ) : (
+                  filteredResults.map((result) => {
                   const hasChanges =
                     result.changes && result.changes.length > 0;
                   return (
-                    <Card key={result.paragraph_index}>
+                    <Card key={result.paragraph_index} id={`typo-result-P${result.paragraph_index}`}>
                       <CardHeader className="pb-2">
                         <div className="flex items-center justify-between">
                           <CardTitle className="text-sm">
@@ -267,12 +316,25 @@ export default function TypoCheckPage() {
                       </CardContent>
                     </Card>
                   );
-                })}
+                  })
+                )}
               </div>
             )}
           </div>
         )}
       </div>
+
+      <ConfirmDialog
+        open={confirmApplyAllOpen}
+        onOpenChange={setConfirmApplyAllOpen}
+        title="全部应用修改？"
+        description="将一次性把所有有错字的段落修改写回源文件。建议在应用前逐段审核。"
+        confirmText="全部应用"
+        onConfirm={async () => {
+          setConfirmApplyAllOpen(false);
+          await handleApplyAll();
+        }}
+      />
     </div>
   );
 }

@@ -80,10 +80,8 @@ export default function TemplateGenPage() {
     <div className="min-h-screen p-8">
       <div className="max-w-6xl mx-auto mb-8">
         <div className="flex items-center gap-4">
-          <Button variant="ghost" size="icon" asChild>
-            <Link to="/">
-              <ArrowLeft />
-            </Link>
+          <Button variant="ghost" size="icon" nativeButton={false} render={<Link to="/" />}>
+            <ArrowLeft />
           </Button>
           <h1 className="text-3xl font-bold tracking-tight">模板生成</h1>
         </div>

@@ -1,4 +1,5 @@
 import { useState, useCallback, useMemo, useEffect, useRef } from "react";
+import { toast } from "sonner";
 import { api } from "@/api/index";
 import useStore from "@/store/useStore";
 
@@ -17,6 +18,7 @@ export function flattenTexFiles(tree, prefix = "") {
 export default function useParagraphCheck({
   apiModule,
   checkMethodName = "check",
+  correctedTextField = "corrected",
   storeSlice = {
     paragraphsKey: "typoParagraphs",
     setParagraphsKey: "setTypoParagraphs",
@@ -28,6 +30,8 @@ export default function useParagraphCheck({
     checkLoading: "正在检查...",
     checkSuccess: (count) => `发现 ${count} 个段落可能有问题`,
     applySuccess: (idx) => `已应用段落 ${idx} 的修改`,
+    applyAllSuccess: (count) => `已批量应用 ${count} 个段落的修改`,
+    applyAllEmpty: "没有可应用的修改",
   },
 }) {
   const store = useStore();
@@ -52,6 +56,7 @@ export default function useParagraphCheck({
   const [error, setError] = useState(null);
   const [message, setMessage] = useState(null);
   const [restoring, setRestoring] = useState(false);
+  const [applyingAll, setApplyingAll] = useState(false);
   const restoredRef = useRef(false);
   const eventSourceRef = useRef(null);
   const resultsWithChangesRef = useRef(0);
@@ -96,7 +101,7 @@ export default function useParagraphCheck({
 
   const handlePreview = useCallback(async () => {
     if (!activeFile) {
-      setError("请先选择一个文件");
+      toast.error("请先选择一个文件");
       return;
     }
     setLoading(storeSlice.loadingKey, true);
@@ -110,6 +115,7 @@ export default function useParagraphCheck({
       setMessage(`已加载 ${data.total} 个段落`);
     } catch (e) {
       setError(e.message);
+      toast.error("加载段落失败", { description: e.message });
     } finally {
       setLoading(storeSlice.loadingKey, false);
     }
@@ -172,6 +178,7 @@ export default function useParagraphCheck({
 
         if (data.type === "error") {
           setError(data.message);
+          toast.error("检查出错", { description: data.message });
           return;
         }
 
@@ -180,7 +187,9 @@ export default function useParagraphCheck({
           eventSourceRef.current = null;
           setLoading(storeSlice.loadingKey, false);
           store.setCheckProgress(null);
-          setMessage(messages.checkSuccess(resultsWithChangesRef.current));
+          const count = resultsWithChangesRef.current;
+          setMessage(messages.checkSuccess(count));
+          toast.success(messages.checkSuccess(count));
           return;
         }
       } catch (_) {
@@ -194,6 +203,7 @@ export default function useParagraphCheck({
       setLoading(storeSlice.loadingKey, false);
       store.setCheckProgress(null);
       setError("连接中断，请重试");
+      toast.error("连接中断，请重试");
     };
   }, [
     activeFile,
@@ -216,13 +226,67 @@ export default function useParagraphCheck({
           changes: [{ paragraph_index: idx, new_text: newText }],
         });
         setMessage(messages.applySuccess(idx));
+        toast.success(messages.applySuccess(idx));
         // 从结果中移除已应用的段落，保留其余结果
         setResults((prev) => prev.filter((r) => r.paragraph_index !== idx));
       } catch (e) {
         setError(e.message);
+        toast.error("应用修改失败", { description: e.message });
       }
     },
     [activeFile, apiModule, setResults, messages]
+  );
+
+  const handleApplyAll = useCallback(
+    async (onConfirm) => {
+      if (typeof onConfirm === "function") {
+        const approved = await onConfirm();
+        if (!approved) return;
+      }
+      const pending = results.filter(
+        (r) => r.changes && r.changes.length > 0
+      );
+      if (pending.length === 0) {
+        toast.info(messages.applyAllEmpty);
+        return;
+      }
+      setApplyingAll(true);
+      const toastId = toast.loading("正在批量应用修改...", {
+        description: `共 ${pending.length} 个段落`,
+      });
+      try {
+        const changes = pending.map((r) => ({
+          paragraph_index: r.paragraph_index,
+          new_text: r[correctedTextField],
+        }));
+        await apiModule.apply({ file_path: activeFile, changes });
+        const appliedIndices = new Set(
+          pending.map((r) => r.paragraph_index)
+        );
+        setResults((prev) =>
+          prev.filter((r) => !appliedIndices.has(r.paragraph_index))
+        );
+        toast.success(messages.applyAllSuccess(pending.length), {
+          id: toastId,
+        });
+      } catch (e) {
+        setError(e.message);
+        toast.error("批量应用失败", {
+          id: toastId,
+          description: e.message,
+        });
+      } finally {
+        setApplyingAll(false);
+      }
+    },
+    [
+      results,
+      activeFile,
+      apiModule,
+      correctedTextField,
+      setResults,
+      messages,
+    ]
   );
 
   const handleFileChange = useCallback(
@@ -260,11 +324,13 @@ export default function useParagraphCheck({
     isLoading: loadingStates[storeSlice.loadingKey],
     progress: store.checkProgress,
     restoring,
+    applyingAll,
     error,
     message,
     handlePreview,
     handleCheck,
     handleApplyChange,
+    handleApplyAll,
     handleFileChange,
   };
 }

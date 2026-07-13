@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect, useRef } from "react";
 import { Link } from "react-router-dom";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -19,10 +20,18 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, FolderOpen, SpellCheck, Play, Loader2, Check, CircleAlert, ChevronDown, ChevronRight, FileDiff } from "lucide-react";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import { ArrowLeft, FolderOpen, SpellCheck, Play, Loader2, Check, CircleAlert, ChevronDown, ChevronRight, FileDiff, Undo2, Redo2 } from "lucide-react";
 import { api } from "@/api/index";
 import useStore from "@/store/useStore";
+import useUndoRedo from "@/hooks/useUndoRedo";
 import ProjectExplorer from "@/components/ProjectExplorer";
+import ConfirmDialog from "@/components/ConfirmDialog";
+import PDFPreview from "@/components/PDFPreview";
 
 function flattenTexFiles(nodes) {
   const result = [];
@@ -55,6 +64,8 @@ export default function WorkspacePage() {
     compileLoading,
     setCompileResult,
     setCompileLoading,
+    pdfUrl,
+    setPdfUrl,
   } = useStore();
 
   const [openPath, setOpenPath] = useState("");
@@ -63,7 +74,17 @@ export default function WorkspacePage() {
   const [error, setError] = useState(null);
   const [lastPath, setLastPath] = useState("");
   const [showRawOutput, setShowRawOutput] = useState(false);
+  const [confirmCloseOpen, setConfirmCloseOpen] = useState(false);
+  const [confirmUndoOpen, setConfirmUndoOpen] = useState(false);
   const restoredRef = useRef(false);
+
+  const handleCloseProject = useCallback(() => {
+    clearProject();
+    setParagraphs([]);
+    setPdfUrl(null);
+    setConfirmCloseOpen(false);
+    toast.success("项目已关闭");
+  }, [clearProject, setPdfUrl]);
 
   const doOpenProject = useCallback(async (path) => {
     setLoading(true);
@@ -76,8 +97,10 @@ export default function WorkspacePage() {
       setMainFile(data.main_file);
       setActiveFile(data.main_file);
       setParagraphs([]);
+      toast.success("项目已打开", { description: data.root_path });
     } catch (e) {
       setError(e.message);
+      toast.error("打开项目失败", { description: e.message });
     } finally {
       setLoading(false);
     }
@@ -141,15 +164,25 @@ export default function WorkspacePage() {
     if (!mainFile) return;
     setCompileLoading(true);
     setCompileResult(null);
+    setPdfUrl(null);
     try {
       const data = await api.compile.run(mainFile);
       setCompileResult(data);
+      if (data.success) {
+        setPdfUrl(`${api.compile.pdfUrl(mainFile)}&t=${Date.now()}`);
+        toast.success("编译成功");
+      } else {
+        toast.error("编译失败", {
+          description: data.explanation || "请查看编译结果详情",
+        });
+      }
     } catch (e) {
       setCompileResult({ success: false, explanation: e.message, fixes: [], stdout: "", stderr: "" });
+      toast.error("编译失败", { description: e.message });
     } finally {
       setCompileLoading(false);
     }
-  }, [mainFile, setCompileLoading, setCompileResult]);
+  }, [mainFile, setCompileLoading, setCompileResult, setPdfUrl]);
 
   const handleSelectFile = useCallback(async (node) => {
     if (node.is_dir) return;
@@ -162,14 +195,51 @@ export default function WorkspacePage() {
     }
   }, []);
 
+  const reloadActiveFileParagraphs = useCallback(async () => {
+    if (!activeFile) return;
+    try {
+      const data = await api.project.paragraphs(activeFile);
+      setParagraphs(data.paragraphs || []);
+    } catch (_) {
+      setParagraphs([]);
+    }
+  }, [activeFile]);
+
+  const { canUndo, canRedo, busy: undoBusy, handleUndo, handleRedo } =
+    useUndoRedo(activeFile, reloadActiveFileParagraphs);
+
+  // 键盘快捷键：Ctrl+Z 撤销、Ctrl+Shift+Z / Ctrl+Y 重做
+  // 输入框/文本域中不拦截，保留原生 undo 行为
+  useEffect(() => {
+    if (!projectPath) return;
+    const onKey = (e) => {
+      const target = e.target;
+      const tag = target?.tagName;
+      const isEditable =
+        tag === "INPUT" ||
+        tag === "TEXTAREA" ||
+        target?.isContentEditable;
+      if (isEditable) return;
+      if (!(e.ctrlKey || e.metaKey)) return;
+      const key = e.key.toLowerCase();
+      if (key === "z" && !e.shiftKey) {
+        e.preventDefault();
+        handleUndo();
+      } else if ((key === "z" && e.shiftKey) || key === "y") {
+        e.preventDefault();
+        handleRedo();
+      }
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [projectPath, handleUndo, handleRedo]);
+
   return (
     <div className="min-h-screen p-8">
       <div className="max-w-6xl mx-auto mb-8">
         <div className="flex items-center gap-4">
-          <Button variant="ghost" size="icon" asChild>
-            <Link to="/">
-              <ArrowLeft />
-            </Link>
+          <Button variant="ghost" size="icon" nativeButton={false} render={<Link to="/" />}>
+            <ArrowLeft />
           </Button>
           <h1 className="text-3xl font-bold tracking-tight">
             项目工作区
@@ -254,12 +324,45 @@ export default function WorkspacePage() {
                   )}
                 </Button>
               )}
+              {activeFile && (
+                <div className="flex items-center gap-1 ml-auto">
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        onClick={() => setConfirmUndoOpen(true)}
+                        disabled={!canUndo || undoBusy}
+                      >
+                        <Undo2 />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>撤销 (Ctrl+Z)</TooltipContent>
+                  </Tooltip>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        onClick={handleRedo}
+                        disabled={!canRedo || undoBusy}
+                      >
+                        <Redo2 />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>重做 (Ctrl+Shift+Z)</TooltipContent>
+                  </Tooltip>
+                </div>
+              )}
               {enabledFeatures?.git_diff !== false && (
-                <Button variant="outline" size="sm" asChild>
-                  <Link to="/git-diff">
-                    <FileDiff />
-                    差异高亮
-                  </Link>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  nativeButton={false}
+                  render={<Link to="/git-diff" />}
+                >
+                  <FileDiff />
+                  差异高亮
                 </Button>
               )}
             </div>
@@ -283,7 +386,7 @@ export default function WorkspacePage() {
                   variant="ghost"
                   size="sm"
                   className="w-full text-xs"
-                  onClick={clearProject}
+                  onClick={() => setConfirmCloseOpen(true)}
                 >
                   关闭项目
                 </Button>
@@ -304,10 +407,13 @@ export default function WorkspacePage() {
                       </CardDescription>
                     </div>
                     {activeFile && activeFile.endsWith(".tex") && (
-                      <Button variant="outline" size="sm" asChild>
-                        <Link to="/typo-check">
-                          <SpellCheck />
-                        </Link>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        nativeButton={false}
+                        render={<Link to="/typo-check" />}
+                      >
+                        <SpellCheck />
                       </Button>
                     )}
                   </div>
@@ -398,9 +504,44 @@ export default function WorkspacePage() {
               </CardContent>
             </Card>
           )}
+
+          {/* 编译成功后内联 PDF 预览 */}
+          {compileResult?.success && pdfUrl && (
+            <Card className="mt-4">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm">PDF 预览</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="h-[70vh]">
+                  <PDFPreview url={pdfUrl} />
+                </div>
+              </CardContent>
+            </Card>
+          )}
           </>
         )}
       </div>
+
+      <ConfirmDialog
+        open={confirmCloseOpen}
+        onOpenChange={setConfirmCloseOpen}
+        title="关闭项目？"
+        description="关闭后将清空当前已加载的段落和检查结果，下次需重新打开。未保存的修改已写回源文件，不会丢失。"
+        confirmText="关闭项目"
+        variant="destructive"
+        onConfirm={handleCloseProject}
+      />
+      <ConfirmDialog
+        open={confirmUndoOpen}
+        onOpenChange={setConfirmUndoOpen}
+        title="撤销最近一次修改？"
+        description="将该文件回退到上一次修改前的状态。撤销后可通过重做恢复。"
+        confirmText="撤销"
+        onConfirm={async () => {
+          await handleUndo();
+          setConfirmUndoOpen(false);
+        }}
+      />
     </div>
   );
 }

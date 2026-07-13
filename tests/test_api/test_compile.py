@@ -6,6 +6,7 @@ compile 模块服务层 + 路由测试。
     - _extract_key_errors 错误过滤
     - compile_latex 编译流程（Mock subprocess + LLM）
     - /api/compile/run HTTP 端点测试
+    - /api/compile/pdf HTTP 端点测试
 """
 
 import asyncio
@@ -303,3 +304,77 @@ class TestCompileRouter:
         data = response.json()
         assert data["success"] is False
         assert data["explanation"] == "编译失败"
+
+
+class TestCompilePdfEndpoint:
+    """/api/compile/pdf 端点测试。"""
+
+    @pytest.fixture
+    def client(self):
+        from fastapi.testclient import TestClient
+        from main import app
+        return TestClient(app)
+
+    def test_pdf_served_when_exists(self, client):
+        """PDF 存在时返回 200 + application/pdf。"""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            (root / "main.tex").write_text(
+                r"\documentclass{article}\begin{document}test\end{document}",
+                encoding="utf-8",
+            )
+            (root / "main.pdf").write_bytes(b"%PDF-1.4 fake pdf content")
+
+            pm = MagicMock()
+            pm._project_info = MagicMock()
+            pm._project_info.root_path = str(root)
+
+            with patch(
+                "backend.modules.compile.router.get_project_manager",
+                return_value=pm,
+            ):
+                response = client.get(
+                    "/api/compile/pdf", params={"main_file": "main.tex"}
+                )
+
+            assert response.status_code == 200
+            assert response.headers["content-type"] == "application/pdf"
+            disposition = response.headers.get("content-disposition", "")
+            assert "inline" in disposition
+            assert "attachment" not in disposition
+            assert b"%PDF" in response.content
+
+    def test_pdf_no_project_returns_400(self, client):
+        """未打开项目时返回 400。"""
+        pm = MagicMock()
+        pm._project_info = None
+
+        with patch(
+            "backend.modules.compile.router.get_project_manager",
+            return_value=pm,
+        ):
+            response = client.get(
+                "/api/compile/pdf", params={"main_file": "main.tex"}
+            )
+
+        assert response.status_code == 400
+
+    def test_pdf_not_found_returns_404(self, client):
+        """PDF 不存在时返回 404。"""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            (root / "main.tex").write_text("dummy", encoding="utf-8")
+
+            pm = MagicMock()
+            pm._project_info = MagicMock()
+            pm._project_info.root_path = str(root)
+
+            with patch(
+                "backend.modules.compile.router.get_project_manager",
+                return_value=pm,
+            ):
+                response = client.get(
+                    "/api/compile/pdf", params={"main_file": "main.tex"}
+                )
+
+        assert response.status_code == 404
