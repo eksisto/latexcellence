@@ -41,6 +41,10 @@
     "formatting": {
       "enabled": true,
       "batch_size": 5
+    },
+    "compile": {
+      "enabled": true,
+      "latexmk_timeout": 120
     }
   },
   "logging": {

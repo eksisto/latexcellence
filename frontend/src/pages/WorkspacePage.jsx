@@ -9,11 +9,33 @@ import {
   CardDescription,
   CardHeader,
   CardTitle,
+  CardAction,
 } from "@/components/ui/card";
-import { ArrowLeft, FolderOpen, SpellCheck } from "lucide-react";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Badge } from "@/components/ui/badge";
+import { ArrowLeft, FolderOpen, SpellCheck, Play, Loader2, Check, CircleAlert, ChevronDown, ChevronRight } from "lucide-react";
 import { api } from "@/api/index";
 import useStore from "@/store/useStore";
 import ProjectExplorer from "@/components/ProjectExplorer";
+
+function flattenTexFiles(nodes) {
+  const result = [];
+  for (const node of nodes) {
+    if (!node.is_dir && node.name.endsWith(".tex")) {
+      result.push(node);
+    }
+    if (node.children) {
+      result.push(...flattenTexFiles(node.children));
+    }
+  }
+  return result;
+}
 
 export default function WorkspacePage() {
   const {
@@ -28,6 +50,10 @@ export default function WorkspacePage() {
     setActiveFile,
     setMainFile,
     clearProject,
+    compileResult,
+    compileLoading,
+    setCompileResult,
+    setCompileLoading,
   } = useStore();
 
   const [openPath, setOpenPath] = useState("");
@@ -35,6 +61,7 @@ export default function WorkspacePage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [lastPath, setLastPath] = useState("");
+  const [showRawOutput, setShowRawOutput] = useState(false);
   const restoredRef = useRef(false);
 
   const doOpenProject = useCallback(async (path) => {
@@ -99,6 +126,29 @@ export default function WorkspacePage() {
     if (!lastPath) return;
     await doOpenProject(lastPath);
   }, [lastPath, doOpenProject]);
+
+  const handleMainFileChange = useCallback(async (path) => {
+    setMainFile(path);
+    try {
+      await api.project.setMainFile(path);
+    } catch (_) {
+      // 忽略
+    }
+  }, [setMainFile]);
+
+  const handleCompile = useCallback(async () => {
+    if (!mainFile) return;
+    setCompileLoading(true);
+    setCompileResult(null);
+    try {
+      const data = await api.compile.run(mainFile);
+      setCompileResult(data);
+    } catch (e) {
+      setCompileResult({ success: false, explanation: e.message, fixes: [], stdout: "", stderr: "" });
+    } finally {
+      setCompileLoading(false);
+    }
+  }, [mainFile, setCompileLoading, setCompileResult]);
 
   const handleSelectFile = useCallback(async (node) => {
     if (node.is_dir) return;
@@ -174,10 +224,39 @@ export default function WorkspacePage() {
             </Card>
           </div>
         ) : (
-          <div className="grid grid-cols-4 gap-6">
+          <>
+            {/* 编译工具栏 */}
+            <div className="flex items-center gap-3 mb-4">
+              <Label className="text-sm whitespace-nowrap">主文件</Label>
+              <Select value={mainFile || ""} onValueChange={handleMainFileChange}>
+                <SelectTrigger className="w-64">
+                  <SelectValue placeholder="选择主 .tex 文件" />
+                </SelectTrigger>
+                <SelectContent>
+                  {flattenTexFiles(fileTree).map((f) => (
+                    <SelectItem key={f.path} value={f.path}>
+                      {f.path}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Button
+                onClick={handleCompile}
+                disabled={!mainFile || compileLoading}
+                size="sm"
+              >
+                {compileLoading ? (
+                  <><Loader2 className="animate-spin" /> 编译中...</>
+                ) : (
+                  <><Play /> 自动编译</>
+                )}
+              </Button>
+            </div>
+
+            <div className="grid grid-cols-4 gap-6">
             {/* file tree */}
             <div className="col-span-1">
-              <Card className="h-full">
+              <Card>
                 <CardHeader className="pb-2">
                   <CardTitle className="text-sm">文件</CardTitle>
                 </CardHeader>
@@ -255,6 +334,60 @@ export default function WorkspacePage() {
               </Card>
             </div>
           </div>
+
+          {/* 编译结果 */}
+          {compileResult && (
+            <Card className="mt-4">
+              <CardHeader>
+                <CardTitle className="text-sm">编译结果</CardTitle>
+                <CardAction>
+                  <Badge variant={compileResult.success ? "secondary" : "destructive"}>
+                    {compileResult.success ? (
+                      <><Check /> 成功</>
+                    ) : (
+                      <><CircleAlert /> 失败</>
+                    )}
+                  </Badge>
+                </CardAction>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {compileResult.explanation && (
+                  <div>
+                    <Label className="text-xs text-muted-foreground">错误解释</Label>
+                    <p className="text-sm mt-1 whitespace-pre-wrap">{compileResult.explanation}</p>
+                  </div>
+                )}
+                {compileResult.fixes && compileResult.fixes.length > 0 && (
+                  <div>
+                    <Label className="text-xs text-muted-foreground">修复建议</Label>
+                    <ul className="text-sm mt-1 list-disc list-inside space-y-1">
+                      {compileResult.fixes.map((fix, i) => (
+                        <li key={i}>{fix}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+                <div>
+                  <Button
+                    variant="ghost"
+                    size="xs"
+                    onClick={() => setShowRawOutput((v) => !v)}
+                  >
+                    {showRawOutput ? <ChevronDown /> : <ChevronRight />}
+                    查看原始输出
+                  </Button>
+                  {showRawOutput && (
+                    <pre className="mt-2 p-2 rounded bg-muted text-xs max-h-48 overflow-auto whitespace-pre-wrap">
+                      {compileResult.stdout || "(无标准输出)"}
+                      {"\n"}
+                      {compileResult.stderr || "(无错误输出)"}
+                    </pre>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+          </>
         )}
       </div>
     </div>

@@ -310,6 +310,21 @@ class LatexProject:
             self._file_md5[abs_path] = compute_md5(full_path)
         return result
 
+    def set_main_file(self, file_path: str) -> None:
+        """
+        手动设置项目主文档路径。
+
+        参数：
+            file_path: 主文件相对路径
+        """
+        if self._project_info is None:
+            raise RuntimeError("No project opened")
+        full_path = Path(self._project_info.root_path) / file_path
+        if not full_path.exists():
+            raise FileNotFoundError(f"File not found: {file_path}")
+        self._project_info.main_file = file_path
+        self._logger.info(f"Main file set to: {file_path}")
+
     def can_undo(self, file_path: str) -> bool:
         """检查指定文件是否有可撤销的操作。"""
         if self._project_info is None:

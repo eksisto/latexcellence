@@ -15,6 +15,7 @@ import {
   CheckCheck,
   PencilLine,
   AlignLeft,
+  Play,
 } from "lucide-react";
 import { api } from "@/api/index";
 import useStore from "@/store/useStore";
@@ -62,6 +63,13 @@ const featuresList = [
     icon: AlignLeft,
     id: "formatting",
   },
+  {
+    title: "自动编译",
+    description: "编译 LaTeX 并将错误翻译为通俗解释",
+    to: "/workspace",
+    icon: Play,
+    id: "compile",
+  },
 ];
 
 export default function WelcomePage() {
@@ -81,6 +89,7 @@ export default function WelcomePage() {
               typo_check: data.features.typo_check,
               expression_opt: data.features.expression_opt,
               formatting: data.features.formatting,
+              compile: data.features.compile,
             });
           }
         })
@@ -94,6 +103,7 @@ export default function WelcomePage() {
               typo_check: true,
               expression_opt: true,
               formatting: true,
+              compile: true,
             });
           }
         });

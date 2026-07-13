@@ -80,6 +80,12 @@ class FormattingConfig(BaseModel):
     batch_size: int = 5                 # 每批发送给 LLM 的段落数
 
 
+class CompileConfig(BaseModel):
+    """自动编译模块配置"""
+    enabled: bool = True                # 是否启用
+    latexmk_timeout: int = 120          # latexmk 编译超时时间（秒）
+
+
 class FeaturesConfig(BaseModel):
     """功能特性总开关"""
     typo_check: TypoCheckConfig = TypoCheckConfig()
@@ -87,6 +93,7 @@ class FeaturesConfig(BaseModel):
     formula_ocr: FormulaOCRConfig = FormulaOCRConfig()
     template_gen: TemplateGenConfig = TemplateGenConfig()
     formatting: FormattingConfig = FormattingConfig()
+    compile: CompileConfig = CompileConfig()
 
 
 class LoggingConfig(BaseModel):

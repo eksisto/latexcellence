@@ -36,6 +36,10 @@ const useStore = create(
       /* ===== PDF 预览（不持久化） ===== */
       pdfUrl: null,
 
+      /* ===== 自动编译（不持久化） ===== */
+      compileResult: null,
+      compileLoading: false,
+
       /* ===== 各模块加载状态（不持久化） ===== */
       loadingStates: {
         typoCheck: false,
@@ -94,6 +98,8 @@ const useStore = create(
         }
       },
       setPdfUrl: (url) => set({ pdfUrl: url }),
+      setCompileResult: (result) => set({ compileResult: result }),
+      setCompileLoading: (loading) => set({ compileLoading: loading }),
 
       setLoading: (key, value) =>
         set((state) => ({

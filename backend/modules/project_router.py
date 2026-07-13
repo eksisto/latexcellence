@@ -81,6 +81,19 @@ async def get_file_tree():
         raise HTTPException(status_code=400, detail=str(e))
 
 
+@router.post("/set-main-file")
+async def set_main_file(request: FileActionRequest):
+    """手动设置项目的主 LaTeX 文件。"""
+    project = get_project_manager()
+    try:
+        project.set_main_file(request.file_path)
+        return {"status": "ok", "main_file": request.file_path}
+    except RuntimeError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
 @router.get("/paragraphs")
 async def get_paragraphs(file_path: str = Query(..., description="文件路径（相对于项目根目录）")):
     """获取指定 .tex 文件的段落列表。"""

@@ -75,6 +75,11 @@ export const api = {
         method: "POST",
         body: JSON.stringify({ file_path: filePath }),
       }),
+    setMainFile: (filePath) =>
+      request("/project/set-main-file", {
+        method: "POST",
+        body: JSON.stringify({ file_path: filePath }),
+      }),
   },
 
   /* ---- 文本校对 ---- */
@@ -182,5 +187,14 @@ export const api = {
       }),
     stream: (projectId, filePath) =>
       `${BASE_URL}/formatting/stream/${projectId}?file_path=${encodeURIComponent(filePath)}`,
+  },
+
+  /* ---- 自动编译 ---- */
+  compile: {
+    run: (mainFile) =>
+      request("/compile/run", {
+        method: "POST",
+        body: JSON.stringify({ main_file: mainFile }),
+      }),
   },
 };

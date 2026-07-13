@@ -9,6 +9,7 @@
 - **公式识别**：上传公式图片，通过 LLM Vision API 识别为 LaTeX 代码
 - **模板生成**：用自然语言描述需求，自动生成 LaTeX 文档模板
 - **源码格式化**：优化 LaTeX 源码的间距、缩进、环境对齐
+- **自动编译**：一键调用 latexmk 编译 TeX，错误信息由 LLM 翻译为通俗解释并给出修复建议
 
 ## 技术栈
 
@@ -24,6 +25,7 @@
 
 - Python 3.12+
 - Node.js 18+
+- texlive（含 xelatex 和 latexmk，编译功能需要）
 - OpenAI API Key（或兼容的 API 端点）
 
 ### 安装
@@ -102,7 +104,8 @@ latexcellence/
 │   │   ├── expression_opt/  # 表达优化
 │   │   ├── formula_ocr/     # 公式识别
 │   │   ├── template_gen/    # 模板生成
-│   │   └── formatting/      # 源码格式化
+│   │   ├── formatting/      # 源码格式化
+│   │   └── compile/         # 自动编译
 │   └── utils/               # 文件操作、JSON 校验
 ├── frontend/
 │   └── src/                 # React 应用

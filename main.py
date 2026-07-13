@@ -29,6 +29,7 @@ from backend.modules.expression_opt.router import router as expression_opt_route
 from backend.modules.template_gen.router import router as template_gen_router
 from backend.modules.formula_ocr.router import router as formula_ocr_router
 from backend.modules.formatting.router import router as formatting_router
+from backend.modules.compile.router import router as compile_router
 
 
 @asynccontextmanager
@@ -91,7 +92,7 @@ async def config_status():
         "dev_mode": cfg.server.dev_mode,
         "features": {
             name: getattr(cfg.features, name).enabled
-            for name in ["typo_check", "expression_opt", "formula_ocr", "template_gen", "formatting"]
+            for name in ["typo_check", "expression_opt", "formula_ocr", "template_gen", "formatting", "compile"]
         },
     }
 
@@ -129,6 +130,7 @@ app.include_router(expression_opt_router)
 app.include_router(template_gen_router)
 app.include_router(formula_ocr_router)
 app.include_router(formatting_router)
+app.include_router(compile_router)
 
 
 def main():
