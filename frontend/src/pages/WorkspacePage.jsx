@@ -50,6 +50,7 @@ export default function WorkspacePage() {
     setActiveFile,
     setMainFile,
     clearProject,
+    enabledFeatures,
     compileResult,
     compileLoading,
     setCompileResult,
@@ -240,6 +241,7 @@ export default function WorkspacePage() {
                   ))}
                 </SelectContent>
               </Select>
+              {enabledFeatures?.compile && (
               <Button
                 onClick={handleCompile}
                 disabled={!mainFile || compileLoading}
@@ -251,6 +253,7 @@ export default function WorkspacePage() {
                   <><Play /> 自动编译</>
                 )}
               </Button>
+              )}
             </div>
 
             <div className="grid grid-cols-4 gap-6">

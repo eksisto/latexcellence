@@ -89,6 +89,7 @@ export default function SettingsDialog() {
         typo_check: config.features.typo_check.enabled,
         expression_opt: config.features.expression_opt.enabled,
         formatting: config.features.formatting.enabled,
+        compile: config.features.compile.enabled,
       });
       setOpen(false);
     } catch (err) {
@@ -291,6 +292,11 @@ export default function SettingsDialog() {
               label="源码格式化"
               checked={config.features.formatting.enabled}
               onChange={(v) => set("features.formatting.enabled", v)}
+            />
+            <CheckboxField
+              label="自动编译"
+              checked={config.features.compile.enabled}
+              onChange={(v) => set("features.compile.enabled", v)}
             />
             <div className="space-y-1.5">
               <Label className="text-xs">

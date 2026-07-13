@@ -15,7 +15,6 @@ import {
   CheckCheck,
   PencilLine,
   AlignLeft,
-  Play,
 } from "lucide-react";
 import { api } from "@/api/index";
 import useStore from "@/store/useStore";
@@ -62,13 +61,6 @@ const featuresList = [
     to: "/formatting",
     icon: AlignLeft,
     id: "formatting",
-  },
-  {
-    title: "自动编译",
-    description: "编译 LaTeX 并将错误翻译为通俗解释",
-    to: "/workspace",
-    icon: Play,
-    id: "compile",
   },
 ];
 
