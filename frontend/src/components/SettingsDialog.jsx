@@ -91,6 +91,9 @@ export default function SettingsDialog() {
         expression_opt: config.features.expression_opt.enabled,
         formatting: config.features.formatting.enabled,
         compile: config.features.compile.enabled,
+        git_diff: config.features.git_diff.enabled,
+        markdown_converter: config.features.markdown_converter.enabled,
+        style_modify: config.features.style_modify.enabled,
       });
       setOpen(false);
     } catch (err) {
@@ -298,6 +301,11 @@ export default function SettingsDialog() {
               label="自动编译"
               checked={config.features.compile.enabled}
               onChange={(v) => set("features.compile.enabled", v)}
+            />
+            <CheckboxField
+              label="Git 差异高亮"
+              checked={config.features.git_diff.enabled}
+              onChange={(v) => set("features.git_diff.enabled", v)}
             />
             <div className="space-y-1.5">
               <Label className="text-xs">

@@ -53,6 +53,9 @@
       "enabled": true,
       "latexmk_timeout": 120
     },
+    "git_diff": {
+      "enabled": true
+    },
     "markdown_converter": {
       "enabled": true
     }

@@ -222,6 +222,20 @@ export const api = {
       }),
   },
 
+  /* ---- Git 差异高亮 ---- */
+  gitDiff: {
+    refs: () => request("/git-diff/refs"),
+    renderPdf: ({ mainFile, baseRef, targetRef }) =>
+      request("/git-diff/render-pdf", {
+        method: "POST",
+        body: JSON.stringify({
+          main_file: mainFile,
+          base_ref: baseRef,
+          target_ref: targetRef,
+        }),
+      }),
+  },
+
   /* ---- Markdown 转 LaTeX ---- */
   markdownConverter: {
     convert: (markdown) =>

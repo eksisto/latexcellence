@@ -92,6 +92,11 @@ class CompileConfig(BaseModel):
     latexmk_timeout: int = 120          # latexmk 编译超时时间（秒）
 
 
+class GitDiffConfig(BaseModel):
+    """Git 差异高亮模块配置"""
+    enabled: bool = True                # 是否启用
+
+
 class MarkdownConverterConfig(BaseModel):
     """Markdown 转 LaTeX 模块配置"""
     enabled: bool = True                # 是否启用
@@ -111,6 +116,7 @@ class FeaturesConfig(BaseModel):
     template_gen: TemplateGenConfig = TemplateGenConfig()
     formatting: FormattingConfig = FormattingConfig()
     compile: CompileConfig = CompileConfig()
+    git_diff: GitDiffConfig = GitDiffConfig()
     markdown_converter: MarkdownConverterConfig = MarkdownConverterConfig()
     style_modify: StyleModifyConfig = StyleModifyConfig()
 

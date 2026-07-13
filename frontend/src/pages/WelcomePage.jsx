@@ -17,6 +17,7 @@ import {
   PencilLine,
   AlignLeft,
   ArrowLeftRight,
+  FileDiff,
   Wand2,
 } from "lucide-react";
 import { api } from "@/api/index";
@@ -80,6 +81,13 @@ const featuresList = [
     id: "formatting",
   },
   {
+    title: "Git 差异高亮",
+    description: "将两个 Git 状态的文档差异编译为红删绿增 PDF",
+    to: "/git-diff",
+    icon: FileDiff,
+    id: "git_diff",
+  },
+  {
     title: "Markdown 转 LaTeX",
     description: "将 Markdown 文本转换为 LaTeX 代码",
     to: "/markdown-convert",
@@ -108,6 +116,7 @@ export default function WelcomePage() {
               expression_opt: data.features.expression_opt,
               formatting: data.features.formatting,
               compile: data.features.compile,
+              git_diff: data.features.git_diff,
               markdown_converter: data.features.markdown_converter,
             });
           }
@@ -125,6 +134,7 @@ export default function WelcomePage() {
               expression_opt: true,
               formatting: true,
               compile: true,
+              git_diff: true,
               markdown_converter: true,
             });
           }

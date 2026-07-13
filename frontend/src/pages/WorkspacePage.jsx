@@ -19,7 +19,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, FolderOpen, SpellCheck, Play, Loader2, Check, CircleAlert, ChevronDown, ChevronRight } from "lucide-react";
+import { ArrowLeft, FolderOpen, SpellCheck, Play, Loader2, Check, CircleAlert, ChevronDown, ChevronRight, FileDiff } from "lucide-react";
 import { api } from "@/api/index";
 import useStore from "@/store/useStore";
 import ProjectExplorer from "@/components/ProjectExplorer";
@@ -252,6 +252,14 @@ export default function WorkspacePage() {
                   ) : (
                     <><Play /> 自动编译</>
                   )}
+                </Button>
+              )}
+              {enabledFeatures?.git_diff !== false && (
+                <Button variant="outline" size="sm" asChild>
+                  <Link to="/git-diff">
+                    <FileDiff />
+                    差异高亮
+                  </Link>
                 </Button>
               )}
             </div>

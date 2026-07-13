@@ -1,0 +1,73 @@
+"""Git 差异高亮 API 路由。"""
+
+from fastapi import APIRouter, HTTPException
+from fastapi.responses import FileResponse
+from pydantic import BaseModel, ConfigDict
+
+from backend.core.logger import get_logger
+from backend.modules.git_diff.service import (
+    get_pdf_path,
+    list_git_revisions,
+    render_diff_pdf,
+)
+
+
+router = APIRouter(prefix="/api/git-diff", tags=["git-diff"])
+logger = get_logger(__name__)
+
+
+class DiffRenderRequest(BaseModel):
+    """差异高亮生成请求。"""
+
+    model_config = ConfigDict(extra="forbid")
+
+    main_file: str
+    base_ref: str
+    target_ref: str
+
+
+@router.get("/refs")
+async def get_refs():
+    """获取当前项目可用于差异比较的 Git revision。"""
+
+    try:
+        result = await list_git_revisions()
+        return result.model_dump()
+    except RuntimeError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.post("/render-pdf")
+async def render_pdf(request: DiffRenderRequest):
+    """生成差异高亮 PDF。"""
+
+    try:
+        result = await render_diff_pdf(
+            request.main_file,
+            request.base_ref,
+            request.target_ref,
+        )
+        return result.model_dump()
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except RuntimeError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+@router.get("/pdf/{job_id}")
+async def download_pdf(job_id: str):
+    """下载或预览已生成的差异 PDF。"""
+
+    try:
+        pdf_path = get_pdf_path(job_id)
+        return FileResponse(
+            path=pdf_path,
+            media_type="application/pdf",
+            filename="diff-highlight.pdf",
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))

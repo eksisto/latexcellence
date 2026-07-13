@@ -13,6 +13,7 @@ import TypoCheckPage from "./pages/TypoCheckPage";
 import ExpressionOptPage from "./pages/ExpressionOptPage";
 import FormattingPage from "./pages/FormattingPage";
 import MarkdownConvertPage from "./pages/MarkdownConvertPage";
+import GitDiffPage from "./pages/GitDiffPage";
 
 export default function App() {
   useFavicon();
@@ -35,6 +36,7 @@ export default function App() {
           <Route path="/expression-opt" element={<ExpressionOptPage />} />
           <Route path="/formatting" element={<FormattingPage />} />
           <Route path="/markdown-convert" element={<MarkdownConvertPage />} />
+          <Route path="/git-diff" element={<GitDiffPage />} />
         </Routes>
       </BrowserRouter>
     </TooltipProvider>
