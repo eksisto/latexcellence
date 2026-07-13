@@ -16,6 +16,7 @@ import {
   CheckCheck,
   PencilLine,
   AlignLeft,
+  ArrowLeftRight,
 } from "lucide-react";
 import { api } from "@/api/index";
 import useStore from "@/store/useStore";
@@ -70,6 +71,13 @@ const featuresList = [
     icon: AlignLeft,
     id: "formatting",
   },
+  {
+    title: "Markdown 转 LaTeX",
+    description: "将 Markdown 文本转换为 LaTeX 代码",
+    to: "/markdown-convert",
+    icon: ArrowLeftRight,
+    id: "markdown_converter",
+  },
 ];
 
 export default function WelcomePage() {
@@ -91,6 +99,7 @@ export default function WelcomePage() {
               expression_opt: data.features.expression_opt,
               formatting: data.features.formatting,
               compile: data.features.compile,
+              markdown_converter: data.features.markdown_converter,
             });
           }
         })
@@ -106,6 +115,7 @@ export default function WelcomePage() {
               expression_opt: true,
               formatting: true,
               compile: true,
+              markdown_converter: true,
             });
           }
         });

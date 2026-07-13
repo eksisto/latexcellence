@@ -92,6 +92,11 @@ class CompileConfig(BaseModel):
     latexmk_timeout: int = 120          # latexmk 编译超时时间（秒）
 
 
+class MarkdownConverterConfig(BaseModel):
+    """Markdown 转 LaTeX 模块配置"""
+    enabled: bool = True                # 是否启用
+
+
 class FeaturesConfig(BaseModel):
     """功能特性总开关"""
     typo_check: TypoCheckConfig = TypoCheckConfig()
@@ -101,6 +106,7 @@ class FeaturesConfig(BaseModel):
     template_gen: TemplateGenConfig = TemplateGenConfig()
     formatting: FormattingConfig = FormattingConfig()
     compile: CompileConfig = CompileConfig()
+    markdown_converter: MarkdownConverterConfig = MarkdownConverterConfig()
 
 
 class LoggingConfig(BaseModel):

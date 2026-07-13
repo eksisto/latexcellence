@@ -212,4 +212,13 @@ export const api = {
         body: JSON.stringify({ main_file: mainFile }),
       }),
   },
+
+  /* ---- Markdown 转 LaTeX ---- */
+  markdownConverter: {
+    convert: (markdown) =>
+      request("/markdown-converter/convert", {
+        method: "POST",
+        body: JSON.stringify({ markdown }),
+      }),
+  },
 };

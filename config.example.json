@@ -49,6 +49,9 @@
     "compile": {
       "enabled": true,
       "latexmk_timeout": 120
+    },
+    "markdown_converter": {
+      "enabled": true
     }
   },
   "logging": {

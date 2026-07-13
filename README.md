@@ -11,6 +11,7 @@
 - **模板生成**：用自然语言描述需求，自动生成 LaTeX 文档模板
 - **源码格式化**：优化 LaTeX 源码的间距、缩进、环境对齐
 - **自动编译**：一键调用 latexmk 编译 TeX，错误信息由 LLM 翻译为通俗解释并给出修复建议
+- **Markdown 转 LaTeX**：粘贴 Markdown 文本，调用 Pandoc 转换为 LaTeX 代码（需系统安装 Pandoc）
 
 ## 技术栈
 
@@ -27,6 +28,7 @@
 - Python 3.12+
 - Node.js 18+
 - texlive（含 xelatex 和 latexmk，编译功能需要）
+- Pandoc（Markdown 转 LaTeX 功能需要，[下载安装](https://pandoc.org/installing.html)）
 - OpenAI API Key（或兼容的 API 端点）
 
 ### 安装
@@ -107,7 +109,8 @@ latexcellence/
 │   │   ├── table_ocr/       # 表格识别
 │   │   ├── template_gen/    # 模板生成
 │   │   ├── formatting/      # 源码格式化
-│   │   └── compile/         # 自动编译
+│   │   ├── compile/         # 自动编译
+│   │   └── markdown_converter/  # Markdown 转 LaTeX
 │   └── utils/               # 文件操作、JSON 校验
 ├── frontend/
 │   └── src/                 # React 应用

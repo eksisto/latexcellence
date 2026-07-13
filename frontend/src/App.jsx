@@ -11,6 +11,7 @@ import TemplateGenPage from "./pages/TemplateGenPage";
 import TypoCheckPage from "./pages/TypoCheckPage";
 import ExpressionOptPage from "./pages/ExpressionOptPage";
 import FormattingPage from "./pages/FormattingPage";
+import MarkdownConvertPage from "./pages/MarkdownConvertPage";
 
 export default function App() {
   useFavicon();
@@ -31,6 +32,7 @@ export default function App() {
           <Route path="/typo-check" element={<TypoCheckPage />} />
           <Route path="/expression-opt" element={<ExpressionOptPage />} />
           <Route path="/formatting" element={<FormattingPage />} />
+          <Route path="/markdown-convert" element={<MarkdownConvertPage />} />
         </Routes>
       </BrowserRouter>
     </TooltipProvider>
