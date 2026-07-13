@@ -157,12 +157,7 @@ def parse_and_validate(
     except ValidationError as e:
         error_msg = format_validation_error(e.errors())
         if raise_on_error:
-            raise ValidationError.from_exception_data(
-                title=e.title,
-                line_errors=e.errors(),
-                input_data=e.input_data,
-                hide_input=e.hide_input,
-            ) from None
+            raise
         return None, error_msg
 
 

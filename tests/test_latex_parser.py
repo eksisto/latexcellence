@@ -15,15 +15,6 @@ latex_parser 单元测试。
     - \\begin/\\end 普通环境处理
 """
 
-import pytest
-from backend.modules.typo_check.latex_parser import LatexParser
-
-
-@pytest.fixture
-def parser():
-    return LatexParser()
-
-
 # ── 辅助函数：验证往返一致性 ──
 
 def assert_roundtrip(parser, source, expected_stripped_contains=None):

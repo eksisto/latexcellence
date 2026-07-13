@@ -14,20 +14,6 @@ from backend.modules.template_gen.service import (
     TemplateGenResult,
     SectionSkeleton,
 )
-from backend.core.config import load_config, get_config
-
-
-@pytest.fixture(autouse=True)
-def _ensure_config():
-    try:
-        get_config()
-    except RuntimeError:
-        project_root = Path(__file__).resolve().parent.parent.parent
-        config_path = project_root / "config.json"
-        if config_path.exists():
-            load_config(str(config_path))
-        else:
-            load_config("config.json")
 
 
 @pytest.fixture

@@ -3,9 +3,6 @@ table_ocr 模块集成测试。
 """
 
 import io
-import struct
-import zlib
-from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -15,36 +12,11 @@ from backend.modules.table_ocr.service import (
     TableOCRService,
     TableOCRResult,
 )
-from backend.core.config import load_config, get_config
-
-
-@pytest.fixture(autouse=True)
-def _ensure_config():
-    try:
-        get_config()
-    except RuntimeError:
-        project_root = Path(__file__).resolve().parent.parent.parent
-        config_path = project_root / "config.json"
-        if config_path.exists():
-            load_config(str(config_path))
-        else:
-            load_config("config.json")
 
 
 @pytest.fixture
 def service():
     return TableOCRService()
-
-
-def _make_minimal_png():
-    """生成最小有效 PNG 图片（1x1 红色像素）。"""
-    def chunk(ctype, data):
-        c = ctype + data
-        return struct.pack(">I", len(data)) + c + struct.pack(">I", zlib.crc32(c) & 0xFFFFFFFF)
-
-    ihdr = struct.pack(">IIBBBBB", 1, 1, 8, 2, 0, 0, 0)
-    idat = zlib.compress(b"\x00\xff\x00\x00")
-    return b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", ihdr) + chunk(b"IDAT", idat) + chunk(b"IEND", b"")
 
 
 class TestTableOCRResultModel:
@@ -101,13 +73,13 @@ class TestImageValidation:
 class TestPreprocess:
     """图片预处理测试。"""
 
-    def test_small_image_unchanged(self, service):
-        png = _make_minimal_png()
+    def test_small_image_unchanged(self, service, minimal_png):
+        png = minimal_png
         img = service._preprocess(png)
         assert img.size == (1, 1)
 
-    def test_to_base64(self, service):
-        png = _make_minimal_png()
+    def test_to_base64(self, service, minimal_png):
+        png = minimal_png
         img = service._preprocess(png)
         b64 = service._to_base64(img)
         assert len(b64) > 0
@@ -138,13 +110,13 @@ class TestRecognize:
         return llm
 
     @pytest.mark.asyncio
-    async def test_successful_recognition(self, mock_llm, service):
+    async def test_successful_recognition(self, mock_llm, service, minimal_png):
         mock_llm.chat.return_value = {
             "latex": r"\begin{table}[htbp]\centering\caption{Results}\begin{tabular}{lr}\toprule Name & Value \\\midrule A & 10 \\\bottomrule\end{tabular}\end{table}",
             "confidence": 0.95,
         }
 
-        png = _make_minimal_png()
+        png = minimal_png
         result = await service._recognize_with_llm(mock_llm, png, "image/png")
 
         assert "table" in result["latex"]
@@ -152,23 +124,23 @@ class TestRecognize:
         assert "low_confidence" not in result
 
     @pytest.mark.asyncio
-    async def test_low_confidence(self, mock_llm, service):
+    async def test_low_confidence(self, mock_llm, service, minimal_png):
         mock_llm.chat.return_value = {
             "latex": r"\begin{table}[htbp]\end{table}",
             "confidence": 0.4,
         }
 
-        png = _make_minimal_png()
+        png = minimal_png
         result = await service._recognize_with_llm(mock_llm, png, "image/png")
 
         assert result["confidence"] == 0.4
         assert result["low_confidence"] is True
 
     @pytest.mark.asyncio
-    async def test_pydantic_retry_exhausted(self, mock_llm, service):
+    async def test_pydantic_retry_exhausted(self, mock_llm, service, minimal_png):
         mock_llm.chat.return_value = {"bad": True}
 
-        png = _make_minimal_png()
+        png = minimal_png
         with pytest.raises(RuntimeError, match="Failed to"):
             await service._recognize_with_llm(mock_llm, png, "image/png")
 

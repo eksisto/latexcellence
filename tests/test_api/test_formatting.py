@@ -20,24 +20,9 @@ from backend.modules.formatting.service import (
     FormattingResult,
     FormattingChangeItem,
 )
-from backend.modules.typo_check.latex_parser import LatexParser
-from backend.core.config import load_config, get_config
 
 
 # ── fixtures ───────────────────────────────────────────────────────────────
-
-
-@pytest.fixture(autouse=True)
-def _ensure_config():
-    try:
-        get_config()
-    except RuntimeError:
-        project_root = Path(__file__).resolve().parent.parent.parent
-        config_path = project_root / "config.json"
-        if config_path.exists():
-            load_config(str(config_path))
-        else:
-            load_config("config.json")
 
 
 @pytest.fixture
@@ -61,11 +46,6 @@ def temp_project():
 @pytest.fixture
 def service():
     return FormattingService()
-
-
-@pytest.fixture
-def parser():
-    return LatexParser()
 
 
 # ── Pydantic model tests ───────────────────────────────────────────────────

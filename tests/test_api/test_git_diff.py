@@ -13,7 +13,6 @@ from pathlib import Path
 
 import pytest
 
-from backend.core.config import load_config, get_config
 from backend.modules.git_diff.service import (
     WORKTREE_REF,
     _build_diff_document,
@@ -22,22 +21,6 @@ from backend.modules.git_diff.service import (
     _split_document,
     get_pdf_path,
 )
-
-
-# ── fixtures ───────────────────────────────────────────────────────────────
-
-
-@pytest.fixture(autouse=True)
-def _ensure_config():
-    try:
-        get_config()
-    except RuntimeError:
-        project_root = Path(__file__).resolve().parent.parent.parent
-        config_path = project_root / "config.json"
-        if config_path.exists():
-            load_config(str(config_path))
-        else:
-            load_config("config.json")
 
 
 # ── _normalize_include_path ────────────────────────────────────────────────
