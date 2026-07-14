@@ -35,3 +35,6 @@ Thumbs.db
 
 # Static files
 static/
+
+# Chat history
+writing_chat_sessions/

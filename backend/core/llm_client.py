@@ -15,12 +15,34 @@ OpenAI API 统一封装模块。
 import asyncio
 import json
 import time
-from typing import Optional, AsyncIterator
+from dataclasses import dataclass
+from typing import AsyncIterator, Optional
 
 from openai import AsyncOpenAI
 
 from backend.core.config import get_config
 from backend.core.logger import get_logger
+
+
+@dataclass
+class UsageInfo:
+    """单次 LLM 调用的 token 用量。"""
+    prompt_tokens: int
+    completion_tokens: int
+    total_tokens: int
+
+
+@dataclass
+class StreamChunk:
+    """
+    chat_stream_with_usage 流式片段。
+
+    content 与 usage 互斥：
+        - 普通流片段：content 为字符串、usage=None
+        - 末尾用量片段：content=None、usage=UsageInfo（若 API 未返回则为 None）
+    """
+    content: Optional[str]
+    usage: Optional[UsageInfo]
 
 
 class LLMClient:
@@ -181,6 +203,76 @@ class LLMClient:
         async for chunk in stream:
             if chunk.choices and chunk.choices[0].delta.content:
                 yield chunk.choices[0].delta.content
+
+    async def chat_stream_with_usage(
+        self,
+        messages: list[dict],
+        temperature: Optional[float] = None,
+        max_tokens: Optional[int] = None,
+    ) -> AsyncIterator["StreamChunk"]:
+        """
+        流式 LLM 对话调用，并在流的末尾附带 token 用量信息。
+
+        与 chat_stream 的区别：
+            - 每个 yield 是 StreamChunk（content 或 usage 二者之一）
+            - 末尾会单独 yield 一个 StreamChunk(content=None, usage=Usage)
+              用于上层累计 token 计数。
+
+        使用 stream_options={"include_usage": True} 让 OpenAI 兼容 API
+        在流末尾推一个仅含 usage 的 chunk。若第三方代理不支持该参数，
+        会捕获异常后降级为 usage=None。
+
+        参数：
+            messages: OpenAI 格式的消息列表
+            temperature: 生成温度（覆盖 config 中的默认值）
+            max_tokens: 最大生成 token 数（覆盖 config 中的默认值）
+
+        生成：
+            每次 yield 一个 StreamChunk 实例。
+        """
+        cfg = get_config().llm
+        temp = temperature if temperature is not None else cfg.temperature
+        max_tok = max_tokens if max_tokens is not None else cfg.max_tokens
+
+        await self._rate_limit()
+
+        self._logger.info(
+            f"LLM stream-with-usage request | model={cfg.model} | tokens={max_tok}")
+
+        kwargs = {
+            "model": cfg.model,
+            "messages": messages,
+            "temperature": temp,
+            "max_tokens": max_tok,
+            "stream": True,
+        }
+        try:
+            stream = await self.client.chat.completions.create(
+                **kwargs, stream_options={"include_usage": True}
+            )
+        except Exception as e:
+            self._logger.warning(
+                f"stream_options unsupported, fallback: {e}"
+            )
+            stream = await self.client.chat.completions.create(**kwargs)
+
+        async for chunk in stream:
+            content = None
+            if chunk.choices and chunk.choices[0].delta.content:
+                content = chunk.choices[0].delta.content
+            usage = getattr(chunk, "usage", None)
+            # 仅在末次 chunk 会有 usage，且此时通常 content 为 None
+            if content is not None:
+                yield StreamChunk(content=content, usage=None)
+            if usage is not None:
+                yield StreamChunk(
+                    content=None,
+                    usage=UsageInfo(
+                        prompt_tokens=getattr(usage, "prompt_tokens", 0) or 0,
+                        completion_tokens=getattr(usage, "completion_tokens", 0) or 0,
+                        total_tokens=getattr(usage, "total_tokens", 0) or 0,
+                    ),
+                )
 
 
 # 全局单例：LLM 客户端实例

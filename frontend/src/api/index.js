@@ -274,4 +274,96 @@ export const api = {
     stream: (projectId, filePath) =>
       `${BASE_URL}/terminology-check/stream/${projectId}?file_path=${encodeURIComponent(filePath)}`,
   },
+
+  /* ---- 写作助手 Chat ---- */
+  writingChat: {
+    // SSE 流式发送消息。返回 read() 接口的标准 ReadableStream
+    send: async ({ sessionId, filePath, paragraphIndex, userMessage, assistantPrompt, onEvent, onError }) => {
+      const res = await fetch(`${BASE_URL}/writing-chat/send`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          session_id: sessionId ?? null,
+          file_path: filePath,
+          paragraph_index: paragraphIndex ?? null,
+          user_message: userMessage,
+          assistant_prompt: assistantPrompt ?? null,
+        }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ detail: res.statusText }));
+        throw new Error(err.detail || `HTTP ${res.status}`);
+      }
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder("utf-8");
+      let buffer = "";
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        // SSE 帧以 \n\n 分隔
+        let idx;
+        while ((idx = buffer.indexOf("\n\n")) !== -1) {
+          const frame = buffer.slice(0, idx);
+          buffer = buffer.slice(idx + 2);
+          if (!frame.startsWith("data:")) continue;
+          const jsonStr = frame.slice(5).trim();
+          if (!jsonStr) continue;
+          try {
+            const event = JSON.parse(jsonStr);
+            if (onEvent) onEvent(event);
+          } catch (e) {
+            if (onError) onError(e);
+          }
+        }
+      }
+    },
+    generateEdit: (data) =>
+      request("/writing-chat/generate-edit", {
+        method: "POST",
+        body: JSON.stringify(data),
+      }),
+    applyEdit: (data) =>
+      request("/writing-chat/apply-edit", {
+        method: "POST",
+        body: JSON.stringify(data),
+      }),
+    deleteMessage: (data) =>
+      request("/writing-chat/message/delete", {
+        method: "POST",
+        body: JSON.stringify(data),
+      }),
+    undoMessage: (data) =>
+      request("/writing-chat/message/undo", {
+        method: "POST",
+        body: JSON.stringify(data),
+      }),
+    listSessions: () => request("/writing-chat/sessions"),
+    loadSession: (id) => request(`/writing-chat/sessions/${id}`),
+    deleteSession: (id) =>
+      request(`/writing-chat/sessions/${id}`, { method: "DELETE" }),
+    renameSession: (id, title) =>
+      request(`/writing-chat/sessions/${id}/rename`, {
+        method: "PATCH",
+        body: JSON.stringify({ session_id: id, title }),
+      }),
+    assistants: {
+      list: () => request("/writing-chat/prompts"),
+      load: (name) => request(`/writing-chat/prompts/${encodeURIComponent(name)}`),
+      save: (name, content) =>
+        request("/writing-chat/prompts", {
+          method: "POST",
+          body: JSON.stringify({ name, content }),
+        }),
+      delete: (name) =>
+        request(`/writing-chat/prompts/${encodeURIComponent(name)}`, {
+          method: "DELETE",
+        }),
+      setActive: (name) =>
+        request("/writing-chat/prompts/active", {
+          method: "POST",
+          body: JSON.stringify({ name }),
+        }),
+    },
+  },
 };

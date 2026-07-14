@@ -16,6 +16,7 @@ import FormattingPage from "./pages/FormattingPage";
 import MarkdownConvertPage from "./pages/MarkdownConvertPage";
 import GitDiffPage from "./pages/GitDiffPage";
 import TerminologyCheckPage from "./pages/TerminologyCheckPage";
+import WritingChatPage from "./pages/WritingChatPage";
 
 export default function App() {
   useFavicon();
@@ -41,6 +42,7 @@ export default function App() {
           <Route path="/markdown-convert" element={<MarkdownConvertPage />} />
           <Route path="/git-diff" element={<GitDiffPage />} />
           <Route path="/terminology-check" element={<TerminologyCheckPage />} />
+          <Route path="/writing-chat" element={<WritingChatPage />} />
         </Routes>
       </BrowserRouter>
     </TooltipProvider>

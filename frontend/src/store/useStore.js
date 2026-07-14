@@ -48,6 +48,7 @@ const useStore = create(
         expressionOpt: false,
         formatting: false,
         terminologyCheck: false,
+        writingChat: false,
       },
 
       /* ===== 逐段检查进度（不持久化） ===== */
@@ -121,6 +122,22 @@ const useStore = create(
       setCompileResult: (result) => set({ compileResult: result }),
       setCompileLoading: (loading) => set({ compileLoading: loading }),
 
+      /* ===== 写作助手 Chat（仅持久化 currentSessionId） ===== */
+      writingChatSessions: [],
+      writingChatCurrentSessionId: null,
+      writingChatMessages: [],
+      writingChatCompressed: false,
+      setWritingChatSessions: (sessions) => set({ writingChatSessions: sessions }),
+      setWritingChatCurrentSessionId: (id) => set({ writingChatCurrentSessionId: id }),
+      setWritingChatMessages: (messages) => {
+        if (typeof messages === "function") {
+          set((state) => ({ writingChatMessages: messages(state.writingChatMessages) }));
+        } else {
+          set({ writingChatMessages: messages });
+        }
+      },
+      setWritingChatCompressed: (c) => set({ writingChatCompressed: c }),
+
       setLoading: (key, value) =>
         set((state) => ({
           loadingStates: { ...state.loadingStates, [key]: value },
@@ -148,9 +165,11 @@ const useStore = create(
           formattingParagraphs: [],
           terminologyResults: [],
           terminologyParagraphs: [],
+          writingChatMessages: [],
+          writingChatCompressed: false,
           checkProgress: null,
-        });
-      },
+      });
+    },
     }),
     {
       name: "latexcellence-project",
@@ -167,6 +186,7 @@ const useStore = create(
         formattingParagraphs: state.formattingParagraphs,
         terminologyResults: state.terminologyResults,
         terminologyParagraphs: state.terminologyParagraphs,
+        writingChatCurrentSessionId: state.writingChatCurrentSessionId,
       }),
     }
   )

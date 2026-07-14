@@ -113,6 +113,16 @@ class TerminologyCheckConfig(BaseModel):
     batch_size: int = 5                 # 每批发送给 LLM 的段落数
 
 
+class WritingChatConfig(BaseModel):
+    """写作助手 Chat 模块配置"""
+    enabled: bool = True                                  # 是否启用
+    compression_threshold_tokens: int = 200000            # 触发上下文压缩的累计 token 阈值
+    sessions_dir: str = "writing_chat_sessions/"         # 会话持久化目录
+    custom_prompts_dir: str = "prompts/writing_chat/"    # 助手提示词存放目录
+    summary_temperature: float = 0.2                     # 生成压缩摘要时的温度
+    summary_max_tokens: int = 1024                       # 压缩摘要最大生成 token 数
+
+
 class FeaturesConfig(BaseModel):
     """功能特性总开关"""
     typo_check: TypoCheckConfig = TypoCheckConfig()
@@ -126,6 +136,7 @@ class FeaturesConfig(BaseModel):
     markdown_converter: MarkdownConverterConfig = MarkdownConverterConfig()
     style_modify: StyleModifyConfig = StyleModifyConfig()
     terminology_check: TerminologyCheckConfig = TerminologyCheckConfig()
+    writing_chat: WritingChatConfig = WritingChatConfig()
 
 
 class LoggingConfig(BaseModel):

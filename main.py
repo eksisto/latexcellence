@@ -35,6 +35,7 @@ from backend.modules.git_diff.router import router as git_diff_router
 from backend.modules.markdown_converter.router import router as markdown_converter_router
 from backend.modules.style_modify.router import router as style_modify_router
 from backend.modules.terminology_check.router import router as terminology_check_router
+from backend.modules.writing_chat.router import router as writing_chat_router
 
 
 @asynccontextmanager
@@ -97,7 +98,7 @@ async def config_status():
         "dev_mode": cfg.server.dev_mode,
         "features": {
             name: getattr(cfg.features, name).enabled
-            for name in ["typo_check", "expression_opt", "formula_ocr", "table_ocr", "style_modify", "template_gen", "formatting", "compile", "git_diff", "markdown_converter", "terminology_check"]
+            for name in ["typo_check", "expression_opt", "formula_ocr", "table_ocr", "style_modify", "template_gen", "formatting", "compile", "git_diff", "markdown_converter", "terminology_check", "writing_chat"]
         },
     }
 
@@ -141,6 +142,7 @@ app.include_router(git_diff_router)
 app.include_router(markdown_converter_router)
 app.include_router(style_modify_router)
 app.include_router(terminology_check_router)
+app.include_router(writing_chat_router)
 
 
 def main():

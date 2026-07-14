@@ -15,6 +15,7 @@
 - **Git 差异高亮**：选择主文件和两个 Git 状态，将文档差异编译为红删绿增底纹的 PDF（不影响项目源码）
 - **Markdown 转 LaTeX**：粘贴 Markdown 文本，调用 Pandoc 转换为 LaTeX 代码（需系统安装 Pandoc）
 - **LaTeX 样式修改**：粘贴 LaTeX 代码并用自然语言描述修改需求，LLM 自动执行样式调整（表格对齐、文字样式、图片排版等）
+- **写作助手 Chat**：上下文感知的多轮对话，能直接修改指定段落；深度思考折叠框、助手提示词预设、会话磁盘持久化与重命名、Markdown + KaTeX 渲染、双轮协议（流式回复 + 结构化编辑建议 diff）、上下文压缩与撤回；编辑建议支持手动微调后一键应用
 
 ### 交互体验
 
@@ -25,13 +26,14 @@
 - **结果搜索过滤**：段落检查结果支持文本搜索、按修改类型过滤、段落编号跳转
 - **编译后 PDF 预览**：编译成功后自动在工作区内联展示 PDF
 - **图片 OCR 统一交互**：公式/表格识别共享拖拽上传、Ctrl+V 粘贴、一键复制
+- **写作助手 Chat 多轮对话**：会话磁盘持久化、会话重命名、助手提示词预设、深度思考折叠框（`<thinking>` 流式解析 + 可折叠 UI）、Markdown + KaTeX 渲染、双轮协议（流式回复 + 结构化编辑建议 diff）、编辑建议手动微调、上下文压缩与撤回
 
 ## 技术栈
 
 | 层   | 技术                                                       |
 | ---- | ---------------------------------------------------------- |
 | 后端 | Python 3.12+, FastAPI, uvicorn, openai, pydantic v2, httpx |
-| 前端 | React 19, Vite 6, Tailwind CSS 4, Zustand 5, shadcn/ui, sonner |
+| 前端 | React 19, Vite 6, Tailwind CSS 4, Zustand 5, shadcn/ui, sonner, react-markdown + remark-gfm + remark-math + rehype-katex |
 | 测试 | pytest + pytest-asyncio                                    |
 
 ## 快速开始
@@ -126,7 +128,8 @@ latexcellence/
 │   │   ├── compile/         # 自动编译
 │   │   ├── git_diff/        # Git 差异高亮
 │   │   ├── markdown_converter/  # Markdown 转 LaTeX
-│   │   └── style_modify/    # LaTeX 样式修改
+│   │   ├── style_modify/    # LaTeX 样式修改
+│   │   └── writing_chat/    # 写作助手聊天
 │   └── utils/               # 文件操作、JSON 校验
 ├── frontend/
 │   └── src/                 # React 应用

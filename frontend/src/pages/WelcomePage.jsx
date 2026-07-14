@@ -20,6 +20,7 @@ import {
   FileDiff,
   Wand2,
   BookOpen,
+  MessagesSquare,
 } from "lucide-react";
 import { api } from "@/api/index";
 import useStore from "@/store/useStore";
@@ -102,6 +103,13 @@ const featuresList = [
     icon: BookOpen,
     id: "terminology_check",
   },
+  {
+    title: "写作助手 Chat",
+    description: "上下文感知的多轮对话，能直接修改指定段落",
+    to: "/writing-chat",
+    icon: MessagesSquare,
+    id: "writing_chat",
+  },
 ];
 
 export default function WelcomePage() {
@@ -127,6 +135,7 @@ export default function WelcomePage() {
               git_diff: data.features.git_diff,
               markdown_converter: data.features.markdown_converter,
               terminology_check: data.features.terminology_check,
+              writing_chat: data.features.writing_chat,
             });
           }
         })
@@ -146,6 +155,7 @@ export default function WelcomePage() {
               git_diff: true,
               markdown_converter: true,
               terminology_check: true,
+              writing_chat: true,
             });
           }
         });
