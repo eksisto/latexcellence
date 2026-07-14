@@ -95,6 +95,8 @@ export default function SettingsDialog() {
         git_diff: config.features.git_diff.enabled,
         markdown_converter: config.features.markdown_converter.enabled,
         style_modify: config.features.style_modify.enabled,
+        terminology_check: config.features.terminology_check.enabled,
+        writing_chat: config.features.writing_chat.enabled,
       });
       setOpen(false);
       toast.success("配置已保存");
@@ -284,6 +286,16 @@ export default function SettingsDialog() {
               checked={config.features.expression_opt.enabled}
               onChange={(v) => set("features.expression_opt.enabled", v)}
             />
+            <div className="space-y-1.5">
+              <Label className="text-xs">表达优化默认提示词</Label>
+              <Textarea
+                rows={3}
+                value={config.features.expression_opt.default_prompt}
+                onChange={(e) =>
+                  set("features.expression_opt.default_prompt", e.target.value)
+                }
+              />
+            </div>
             <CheckboxField
               label="公式识别"
               checked={config.features.formula_ocr.enabled}
@@ -309,18 +321,31 @@ export default function SettingsDialog() {
               checked={config.features.git_diff.enabled}
               onChange={(v) => set("features.git_diff.enabled", v)}
             />
-            <div className="space-y-1.5">
-              <Label className="text-xs">
-                 表达优化默认提示词
-              </Label>
-              <Textarea
-                rows={3}
-                value={config.features.expression_opt.default_prompt}
-                onChange={(e) =>
-                  set("features.expression_opt.default_prompt", e.target.value)
-                }
-              />
-            </div>
+            <CheckboxField
+              label="表格 OCR 识别"
+              checked={config.features.table_ocr.enabled}
+              onChange={(v) => set("features.table_ocr.enabled", v)}
+            />
+            <CheckboxField
+              label="Markdown 转 LaTeX"
+              checked={config.features.markdown_converter.enabled}
+              onChange={(v) => set("features.markdown_converter.enabled", v)}
+            />
+            <CheckboxField
+              label="LaTeX 样式修改"
+              checked={config.features.style_modify.enabled}
+              onChange={(v) => set("features.style_modify.enabled", v)}
+            />
+            <CheckboxField
+              label="术语一致性检查"
+              checked={config.features.terminology_check.enabled}
+              onChange={(v) => set("features.terminology_check.enabled", v)}
+            />
+            <CheckboxField
+              label="写作助手 Chat"
+              checked={config.features.writing_chat.enabled}
+              onChange={(v) => set("features.writing_chat.enabled", v)}
+            />
           </ConfigSection>
 
           {/* Logging */}
