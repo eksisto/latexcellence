@@ -32,6 +32,8 @@ const useStore = create(
       expressionResults: [],
       formattingParagraphs: [],
       formattingResults: [],
+      terminologyParagraphs: [],
+      terminologyResults: [],
 
       /* ===== PDF 预览（不持久化） ===== */
       pdfUrl: null,
@@ -45,6 +47,7 @@ const useStore = create(
         typoCheck: false,
         expressionOpt: false,
         formatting: false,
+        terminologyCheck: false,
       },
 
       /* ===== 逐段检查进度（不持久化） ===== */
@@ -100,6 +103,20 @@ const useStore = create(
           set({ formattingResults: results });
         }
       },
+      setTerminologyParagraphs: (paras) => {
+        if (typeof paras === "function") {
+          set((state) => ({ terminologyParagraphs: paras(state.terminologyParagraphs) }));
+        } else {
+          set({ terminologyParagraphs: paras });
+        }
+      },
+      setTerminologyResults: (results) => {
+        if (typeof results === "function") {
+          set((state) => ({ terminologyResults: results(state.terminologyResults) }));
+        } else {
+          set({ terminologyResults: results });
+        }
+      },
       setPdfUrl: (url) => set({ pdfUrl: url }),
       setCompileResult: (result) => set({ compileResult: result }),
       setCompileLoading: (loading) => set({ compileLoading: loading }),
@@ -129,6 +146,8 @@ const useStore = create(
           expressionParagraphs: [],
           formattingResults: [],
           formattingParagraphs: [],
+          terminologyResults: [],
+          terminologyParagraphs: [],
           checkProgress: null,
         });
       },
@@ -146,6 +165,8 @@ const useStore = create(
         expressionParagraphs: state.expressionParagraphs,
         formattingResults: state.formattingResults,
         formattingParagraphs: state.formattingParagraphs,
+        terminologyResults: state.terminologyResults,
+        terminologyParagraphs: state.terminologyParagraphs,
       }),
     }
   )

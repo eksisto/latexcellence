@@ -46,6 +46,7 @@ export default function ExpressionOptPage() {
     handleCheck: handleOptimize,
     handleApplyChange,
     handleApplyAll,
+    handleIgnoreChange,
     handleFileChange,
   } = useParagraphCheck({
     apiModule: api.expressionOpt,
@@ -508,17 +509,28 @@ export default function ExpressionOptPage() {
                                   </li>
                                 ))}
                               </ul>
-                              <Button
-                                size="sm"
-                                onClick={() =>
-                                  handleApplyChange(
-                                    result.paragraph_index,
-                                    result.optimized
-                                  )
-                                }
-                              >
-                                应用优化
-                              </Button>
+                              <div className="flex items-center gap-2">
+                                <Button
+                                  size="sm"
+                                  onClick={() =>
+                                    handleApplyChange(
+                                      result.paragraph_index,
+                                      result.optimized
+                                    )
+                                  }
+                                >
+                                  应用优化
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() =>
+                                    handleIgnoreChange(result.paragraph_index)
+                                  }
+                                >
+                                  忽略
+                                </Button>
+                              </div>
                             </>
                           ) : (
                             <p className="text-sm text-muted-foreground">

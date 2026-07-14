@@ -62,7 +62,9 @@ export default function ResultFilterBar({
         <Select value={typeFilter} onValueChange={setTypeFilter}>
           <SelectTrigger className="h-7 w-36 text-sm">
             <Filter className="size-3.5" />
-            <SelectValue />
+            <SelectValue>
+              {typeFilter === "all" ? "全部类型" : (typeLabels[typeFilter] || typeFilter)}
+            </SelectValue>
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">全部类型</SelectItem>

@@ -25,7 +25,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { ArrowLeft, FolderOpen, SpellCheck, Play, Loader2, Check, CircleAlert, ChevronDown, ChevronRight, FileDiff, Undo2, Redo2 } from "lucide-react";
+import { ArrowLeft, FolderOpen, SpellCheck, Play, Loader2, Check, CircleAlert, ChevronDown, ChevronRight, FileDiff, Undo2, Redo2, BookOpen } from "lucide-react";
 import { api } from "@/api/index";
 import useStore from "@/store/useStore";
 import useUndoRedo from "@/hooks/useUndoRedo";
@@ -407,14 +407,24 @@ export default function WorkspacePage() {
                       </CardDescription>
                     </div>
                     {activeFile && activeFile.endsWith(".tex") && (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        nativeButton={false}
-                        render={<Link to="/typo-check" />}
-                      >
-                        <SpellCheck />
-                      </Button>
+                      <div className="flex items-center gap-1">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          nativeButton={false}
+                          render={<Link to="/typo-check" />}
+                        >
+                          <SpellCheck />
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          nativeButton={false}
+                          render={<Link to="/terminology-check" />}
+                        >
+                          <BookOpen />
+                        </Button>
+                      </div>
                     )}
                   </div>
                 </CardHeader>

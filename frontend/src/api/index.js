@@ -254,4 +254,24 @@ export const api = {
         body: JSON.stringify({ markdown }),
       }),
   },
+
+  /* ---- 术语一致性检查 ---- */
+  terminologyCheck: {
+    preview: (filePath) =>
+      request(
+        `/terminology-check/preview?file_path=${encodeURIComponent(filePath)}`
+      ),
+    check: (data) =>
+      request("/terminology-check/check", {
+        method: "POST",
+        body: JSON.stringify(data),
+      }),
+    apply: (data) =>
+      request("/terminology-check/apply", {
+        method: "POST",
+        body: JSON.stringify(data),
+      }),
+    stream: (projectId, filePath) =>
+      `${BASE_URL}/terminology-check/stream/${projectId}?file_path=${encodeURIComponent(filePath)}`,
+  },
 };

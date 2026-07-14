@@ -19,6 +19,7 @@ import {
   ArrowLeftRight,
   FileDiff,
   Wand2,
+  BookOpen,
 } from "lucide-react";
 import { api } from "@/api/index";
 import useStore from "@/store/useStore";
@@ -94,6 +95,13 @@ const featuresList = [
     icon: ArrowLeftRight,
     id: "markdown_converter",
   },
+  {
+    title: "术语一致性检查",
+    description: "检测术语大小写、缩写、中英混用等一致性问题",
+    to: "/terminology-check",
+    icon: BookOpen,
+    id: "terminology_check",
+  },
 ];
 
 export default function WelcomePage() {
@@ -118,6 +126,7 @@ export default function WelcomePage() {
               compile: data.features.compile,
               git_diff: data.features.git_diff,
               markdown_converter: data.features.markdown_converter,
+              terminology_check: data.features.terminology_check,
             });
           }
         })
@@ -136,6 +145,7 @@ export default function WelcomePage() {
               compile: true,
               git_diff: true,
               markdown_converter: true,
+              terminology_check: true,
             });
           }
         });

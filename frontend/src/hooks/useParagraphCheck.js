@@ -237,6 +237,13 @@ export default function useParagraphCheck({
     [activeFile, apiModule, setResults, messages]
   );
 
+  const handleIgnoreChange = useCallback(
+    (idx) => {
+      setResults((prev) => prev.filter((r) => r.paragraph_index !== idx));
+    },
+    [setResults]
+  );
+
   const handleApplyAll = useCallback(
     async (onConfirm) => {
       if (typeof onConfirm === "function") {
@@ -331,6 +338,7 @@ export default function useParagraphCheck({
     handleCheck,
     handleApplyChange,
     handleApplyAll,
+    handleIgnoreChange,
     handleFileChange,
   };
 }

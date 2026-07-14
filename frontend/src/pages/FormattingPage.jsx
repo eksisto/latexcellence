@@ -49,6 +49,7 @@ export default function FormattingPage() {
     handleCheck,
     handleApplyChange,
     handleApplyAll,
+    handleIgnoreChange,
     handleFileChange,
   } = useParagraphCheck({
     apiModule: api.formatting,
@@ -304,17 +305,28 @@ export default function FormattingPage() {
                                   </li>
                                 ))}
                               </ul>
-                              <Button
-                                size="sm"
-                                onClick={() =>
-                                  handleApplyChange(
-                                    result.paragraph_index,
-                                    result.corrected
-                                  )
-                                }
-                              >
-                                应用排版
-                              </Button>
+                              <div className="flex items-center gap-2">
+                                <Button
+                                  size="sm"
+                                  onClick={() =>
+                                    handleApplyChange(
+                                      result.paragraph_index,
+                                      result.corrected
+                                    )
+                                  }
+                                >
+                                  应用排版
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() =>
+                                    handleIgnoreChange(result.paragraph_index)
+                                  }
+                                >
+                                  忽略
+                                </Button>
+                              </div>
                             </>
                           ) : (
                             <p className="text-sm text-muted-foreground">

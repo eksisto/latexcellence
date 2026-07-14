@@ -153,7 +153,8 @@ async def load_prompt(name: str):
     pm = get_prompt_manager()
     content = pm.load_prompt(name)
     if content is None:
-        raise HTTPException(status_code=404, detail=f"Prompt not found: {name}")
+        raise HTTPException(
+            status_code=404, detail=f"Prompt not found: {name}")
     return {"name": name, "content": content}
 
 
@@ -170,7 +171,8 @@ async def delete_prompt(name: str):
     """删除指定提示词。"""
     pm = get_prompt_manager()
     if not pm.delete_prompt(name):
-        raise HTTPException(status_code=404, detail=f"Prompt not found: {name}")
+        raise HTTPException(
+            status_code=404, detail=f"Prompt not found: {name}")
     return {"status": "ok"}
 
 

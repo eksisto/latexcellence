@@ -107,6 +107,12 @@ class StyleModifyConfig(BaseModel):
     enabled: bool = True                # 是否启用
 
 
+class TerminologyCheckConfig(BaseModel):
+    """术语一致性检查模块配置"""
+    enabled: bool = True                # 是否启用
+    batch_size: int = 5                 # 每批发送给 LLM 的段落数
+
+
 class FeaturesConfig(BaseModel):
     """功能特性总开关"""
     typo_check: TypoCheckConfig = TypoCheckConfig()
@@ -119,6 +125,7 @@ class FeaturesConfig(BaseModel):
     git_diff: GitDiffConfig = GitDiffConfig()
     markdown_converter: MarkdownConverterConfig = MarkdownConverterConfig()
     style_modify: StyleModifyConfig = StyleModifyConfig()
+    terminology_check: TerminologyCheckConfig = TerminologyCheckConfig()
 
 
 class LoggingConfig(BaseModel):
