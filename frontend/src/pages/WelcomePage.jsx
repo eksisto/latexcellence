@@ -166,7 +166,7 @@ export default function WelcomePage() {
       <p className="text-muted-foreground mb-8 text-lg">
         让排版隐于无形，让思考回归本身
       </p>
-      <div className="grid grid-cols-2 gap-4 max-w-lg w-full">
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 max-w-7xl w-full">
         {visibleFeatures.map(({ title, description, to, icon: Icon }) => (
           <Link key={to} to={to}>
             <Card className="h-full transition-all duration-300 ease-out hover:scale-[1.02] hover:shadow-lg cursor-pointer">
@@ -181,7 +181,7 @@ export default function WelcomePage() {
           </Link>
         ))}
       </div>
-      <Separator className="max-w-lg w-full mt-8" />
+      <Separator className="max-w-7xl w-full mt-8" />
       <div className="mt-4 text-sm text-muted-foreground">v0.1.0</div>
     </div>
   );
