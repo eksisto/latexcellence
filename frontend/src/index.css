@@ -173,6 +173,13 @@
   mix-blend-mode: normal;
 }
 
+/* Toast 关闭按钮位置调整至右上角 */
+[data-sonner-toast][data-styled='true'] [data-close-button] {
+  left: unset;
+  right: 0;
+  transform: translate(35%, -35%);
+}
+
 /* View Transition 进行期间，关闭逐元素 CSS transition，
    避免两套动画叠加打架（否则又会出现不同步）。 */
 :root:active-view-transition *,
