@@ -41,12 +41,15 @@ export default function TypoCheckPage() {
     restoring,
     applyingAll,
     error,
+    isPaused,
     message,
     resolveInput,
     setResolveInput,
     activeFiles,
     handlePreview,
     handleCheck,
+    handlePauseResume,
+    handleStop,
     handleApplyChange,
     handleApplyAll,
     handleIgnoreChange,
@@ -276,7 +279,14 @@ export default function TypoCheckPage() {
             </Card>
 
             {progress && (
-              <ProgressBar current={progress.current} total={progress.total} fileName={progress.file_path} />
+              <ProgressBar
+                current={progress.current}
+                total={progress.total}
+                fileName={progress.file_path}
+                isPaused={isPaused}
+                onPauseToggle={handlePauseResume}
+                onStop={handleStop}
+              />
             )}
 
             {typoParagraphs.length > 0 && typoResults.length === 0 && (

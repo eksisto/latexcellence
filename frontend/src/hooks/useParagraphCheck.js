@@ -87,9 +87,12 @@ export default function useParagraphCheck({
   const [restoring, setRestoring] = useState(false);
   const [applyingAll, setApplyingAll] = useState(false);
   const [resolveInput, setResolveInput] = useState(false);
+  const [isPaused, setIsPaused] = useState(false);
   const restoredRef = useRef(false);
   const eventSourceRef = useRef(null);
   const resultsWithChangesRef = useRef(0);
+  const pausedRef = useRef(false);
+  const bufferRef = useRef([]);
 
   const texFiles = useMemo(() => flattenTexFiles(fileTree), [fileTree]);
 
@@ -159,6 +162,63 @@ export default function useParagraphCheck({
     }
   }, [activeFile, resolveInput, apiModule, storeSlice.loadingKey, setLoading, setResults, setParagraphs]);
 
+  const finalizeCheck = useCallback(
+    (es, progressNull) => {
+      es.close();
+      eventSourceRef.current = null;
+      pausedRef.current = false;
+      bufferRef.current = [];
+      setIsPaused(false);
+      setLoading(storeSlice.loadingKey, false);
+      if (progressNull) store.setCheckProgress(null);
+    },
+    [storeSlice.loadingKey, setLoading, store]
+  );
+
+  const drainBuffer = useCallback(() => {
+    const buf = bufferRef.current;
+    if (buf.length === 0) return;
+    bufferRef.current = [];
+    for (const r of buf) {
+      if (r.changes && r.changes.length > 0) {
+        resultsWithChangesRef.current += 1;
+      }
+      setResults((prev) => {
+        const next = [...prev, r];
+        next.sort((a, b) => {
+          const aHas = a.changes && a.changes.length > 0;
+          const bHas = b.changes && b.changes.length > 0;
+          if (aHas !== bHas) return aHas ? -1 : 1;
+          return a.paragraph_index - b.paragraph_index;
+        });
+        return next;
+      });
+    }
+  }, [setResults]);
+
+  const handlePauseResume = useCallback(() => {
+    setIsPaused((prev) => {
+      const next = !prev;
+      pausedRef.current = next;
+      if (!next) {
+        drainBuffer();
+      }
+      return next;
+    });
+  }, [drainBuffer]);
+
+  const handleStop = useCallback(() => {
+    const es = eventSourceRef.current;
+    if (!es) return;
+    pausedRef.current = false;
+    setIsPaused(false);
+    drainBuffer();
+    finalizeCheck(es, true);
+    const count = resultsWithChangesRef.current;
+    setMessage(messages.checkSuccess(count));
+    toast.success(messages.checkSuccess(count));
+  }, [finalizeCheck, drainBuffer, messages]);
+
   const handleCheck = useCallback(() => {
     if (!activeFile || !projectPath) return;
 
@@ -167,6 +227,9 @@ export default function useParagraphCheck({
       eventSourceRef.current = null;
     }
 
+    pausedRef.current = false;
+    bufferRef.current = [];
+    setIsPaused(false);
     setLoading(storeSlice.loadingKey, true);
     setError(null);
     setMessage(messages.checkLoading);
@@ -199,19 +262,23 @@ export default function useParagraphCheck({
         if (data.type === "result") {
           const r = data.data;
           if (r) {
-            if (r.changes && r.changes.length > 0) {
-              resultsWithChangesRef.current += 1;
-            }
-            setResults((prev) => {
-              const next = [...prev, r];
-              next.sort((a, b) => {
-                const aHas = a.changes && a.changes.length > 0;
-                const bHas = b.changes && b.changes.length > 0;
-                if (aHas !== bHas) return aHas ? -1 : 1;
-                return a.paragraph_index - b.paragraph_index;
+            if (pausedRef.current) {
+              bufferRef.current.push(r);
+            } else {
+              if (r.changes && r.changes.length > 0) {
+                resultsWithChangesRef.current += 1;
+              }
+              setResults((prev) => {
+                const next = [...prev, r];
+                next.sort((a, b) => {
+                  const aHas = a.changes && a.changes.length > 0;
+                  const bHas = b.changes && b.changes.length > 0;
+                  if (aHas !== bHas) return aHas ? -1 : 1;
+                  return a.paragraph_index - b.paragraph_index;
+                });
+                return next;
               });
-              return next;
-            });
+            }
           }
           return;
         }
@@ -223,10 +290,7 @@ export default function useParagraphCheck({
         }
 
         if (data.type === "done") {
-          es.close();
-          eventSourceRef.current = null;
-          setLoading(storeSlice.loadingKey, false);
-          store.setCheckProgress(null);
+          finalizeCheck(es, true);
           const count = resultsWithChangesRef.current;
           setMessage(messages.checkSuccess(count));
           toast.success(messages.checkSuccess(count));
@@ -238,10 +302,7 @@ export default function useParagraphCheck({
     };
 
     es.onerror = () => {
-      es.close();
-      eventSourceRef.current = null;
-      setLoading(storeSlice.loadingKey, false);
-      store.setCheckProgress(null);
+      finalizeCheck(es, true);
       setError("连接中断，请重试");
       toast.error("连接中断，请重试");
     };
@@ -257,6 +318,7 @@ export default function useParagraphCheck({
     setError,
     messages,
     store,
+    finalizeCheck,
   ]);
 
   const handleApplyChange = useCallback(
@@ -355,6 +417,9 @@ export default function useParagraphCheck({
         eventSourceRef.current.close();
         eventSourceRef.current = null;
       }
+      pausedRef.current = false;
+      bufferRef.current = [];
+      setIsPaused(false);
       store.setCheckProgress(null);
       setActiveFile(path);
       setParagraphs([]);
@@ -372,6 +437,8 @@ export default function useParagraphCheck({
         eventSourceRef.current.close();
         eventSourceRef.current = null;
       }
+      pausedRef.current = false;
+      bufferRef.current = [];
     };
   }, []);
 
@@ -385,6 +452,7 @@ export default function useParagraphCheck({
     progress: store.checkProgress,
     restoring,
     applyingAll,
+    isPaused,
     error,
     message,
     resolveInput,
@@ -392,6 +460,8 @@ export default function useParagraphCheck({
     activeFiles,
     handlePreview,
     handleCheck,
+    handlePauseResume,
+    handleStop,
     handleApplyChange,
     handleApplyAll,
     handleIgnoreChange,

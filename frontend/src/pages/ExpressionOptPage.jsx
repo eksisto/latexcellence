@@ -43,9 +43,12 @@ export default function ExpressionOptPage() {
     restoring,
     applyingAll,
     error,
+    isPaused,
     message,
     handlePreview,
     handleCheck: handleOptimize,
+    handlePauseResume,
+    handleStop,
     handleApplyChange,
     handleApplyAll,
     handleIgnoreChange,
@@ -295,7 +298,14 @@ export default function ExpressionOptPage() {
             </Card>
 
             {progress && (
-              <ProgressBar current={progress.current} total={progress.total} fileName={progress.file_path} />
+              <ProgressBar
+                current={progress.current}
+                total={progress.total}
+                fileName={progress.file_path}
+                isPaused={isPaused}
+                onPauseToggle={handlePauseResume}
+                onStop={handleStop}
+              />
             )}
 
             <Card>

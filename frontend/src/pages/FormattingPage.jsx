@@ -58,12 +58,15 @@ export default function FormattingPage() {
     restoring,
     applyingAll,
     error,
+    isPaused,
     message,
     resolveInput,
     setResolveInput,
     activeFiles,
     handlePreview,
     handleCheck,
+    handlePauseResume,
+    handleStop,
     handleApplyChange,
     handleApplyAll,
     handleIgnoreChange,
@@ -224,6 +227,9 @@ export default function FormattingPage() {
                 current={progress.current}
                 total={progress.total}
                 fileName={progress.file_path}
+                isPaused={isPaused}
+                onPauseToggle={handlePauseResume}
+                onStop={handleStop}
               />
             )}
 

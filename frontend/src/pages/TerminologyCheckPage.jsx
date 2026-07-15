@@ -45,12 +45,15 @@ export default function TerminologyCheckPage() {
     restoring,
     applyingAll,
     error,
+    isPaused,
     message,
     resolveInput,
     setResolveInput,
     activeFiles,
     handlePreview,
     handleCheck,
+    handlePauseResume,
+    handleStop,
     handleApplyChange,
     handleApplyAll,
     handleIgnoreChange,
@@ -419,7 +422,14 @@ export default function TerminologyCheckPage() {
             </Card>
 
             {progress && (
-              <ProgressBar current={progress.current} total={progress.total} fileName={progress.file_path} />
+              <ProgressBar
+                current={progress.current}
+                total={progress.total}
+                fileName={progress.file_path}
+                isPaused={isPaused}
+                onPauseToggle={handlePauseResume}
+                onStop={handleStop}
+              />
             )}
 
             {terminologyParagraphs.length > 0 && terminologyResults.length === 0 && (
