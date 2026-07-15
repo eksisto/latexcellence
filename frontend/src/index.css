@@ -64,7 +64,9 @@
 }
 
 :root {
-    color-scheme: light;
+    color-scheme: light dark;
+    scrollbar-width: thin;
+    scrollbar-color: oklch(0.7 0 0) transparent;
     --background: oklch(1 0 0);
     --foreground: oklch(0.145 0 0);
     --card: oklch(1 0 0);
@@ -101,6 +103,7 @@
 
 .dark {
     color-scheme: dark;
+    scrollbar-color: oklch(0.4 0 0) transparent;
     --background: oklch(0 0 0);
     --foreground: oklch(0.985 0 0);
     --card: oklch(0 0 0);
@@ -186,4 +189,20 @@
 :root:active-view-transition *::before,
 :root:active-view-transition *::after {
   transition: none !important;
+}
+
+/* 自定义滚动条样式 */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: oklch(0.7 0 0);
+  border-radius: 3px;
+}
+.dark ::-webkit-scrollbar-thumb {
+  background: oklch(0.4 0 0);
 }

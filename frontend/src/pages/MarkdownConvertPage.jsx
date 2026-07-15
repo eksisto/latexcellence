@@ -64,7 +64,7 @@ export default function MarkdownConvertPage() {
               className="min-h-48 resize-none font-mono text-sm"
               value={markdown}
               onChange={(e) => setMarkdown(e.target.value)}
-              placeholder={"# 标题\n\n这是**粗体**和*斜体*文字。\n\n- 列表项 1\n- 列表项 2\n\n$$E = mc^2$$"}
+              placeholder={"例如：# 标题\n\n这是**粗体**和*斜体*文字。\n\n- 列表项 1\n- 列表项 2\n\n$$E = mc^2$$"}
             />
             <div className="flex items-center gap-2">
               <Button
@@ -79,7 +79,9 @@ export default function MarkdownConvertPage() {
                 {loading ? "转换中..." : "转换为 LaTeX"}
               </Button>
               <span className="text-xs text-muted-foreground">
-                需要安装 Pandoc
+                需要安装 <a href="https://pandoc.org/installing.html" target="_blank" rel="noopener noreferrer" className="relative inline-block no-underline after:content-[''] after:absolute after:left-0 after:bottom-0 after:h-[0.5px] after:w-full after:bg-current after:origin-left after:transition-transform after:duration-300 hover:after:scale-x-0">
+                  Pandoc
+                </a>
               </span>
             </div>
             {error && (

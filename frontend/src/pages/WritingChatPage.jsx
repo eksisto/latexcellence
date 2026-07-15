@@ -561,14 +561,16 @@ export default function WritingChatPage() {
 
               <div className="text-xs text-muted-foreground">
                 <p>提示：</p>
-                <p>
-                  1. 不指定段落时，将以文件全文（最多 12 段）作为对话背景。
-                </p>
-                <p className="mt-1">
-                  2. 选择段落，并在助手回复下方点击
-                  <PencilLine className="inline mx-0.5 size-3" />
-                  才会生成可应用的编辑建议。
-                </p>
+                <div className="mt-2 pl-2 space-y-1">
+                  <p>
+                    1. 不指定段落时，将以文件全文（最多 12 段）作为对话背景。
+                  </p>
+                  <p>
+                    2. 选择段落，并在助手回复下方点击
+                    <PencilLine className="inline mx-0.5 size-3" />
+                    才会生成可应用的编辑建议。
+                  </p>
+                </div>
               </div>
 
               <Separator />

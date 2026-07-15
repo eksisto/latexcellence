@@ -2,7 +2,7 @@
 LaTeX 样式修改 API 路由。
 
 提供 LaTeX 代码样式修改接口：用户粘贴 LaTeX 源码和自然语言修改描述，
-LLM 根据描述修改 LaTeX 代码并返回。
+LLM 根据文字描述修改 LaTeX 代码并返回。
 """
 
 from typing import Optional
