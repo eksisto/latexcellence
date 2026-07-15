@@ -49,6 +49,7 @@ const useStore = create(
         formatting: false,
         terminologyCheck: false,
         writingChat: false,
+        bibManager: false,
       },
 
       /* ===== 逐段检查进度（不持久化） ===== */

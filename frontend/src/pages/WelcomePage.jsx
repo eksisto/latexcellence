@@ -21,6 +21,7 @@ import {
   Wand2,
   BookOpen,
   MessagesSquare,
+  BookMarked,
 } from "lucide-react";
 import { api } from "@/api/index";
 import useStore from "@/store/useStore";
@@ -110,6 +111,13 @@ const featuresList = [
     icon: MessagesSquare,
     id: "writing_chat",
   },
+  {
+    title: "参考文献管理",
+    description: "识别参考文献格式，提取元数据并生成规范 BibTeX 代码",
+    to: "/bib-manager",
+    icon: BookMarked,
+    id: "bib_manager",
+  },
 ];
 
 export default function WelcomePage() {
@@ -136,6 +144,7 @@ export default function WelcomePage() {
               markdown_converter: data.features.markdown_converter,
               terminology_check: data.features.terminology_check,
               writing_chat: data.features.writing_chat,
+              bib_manager: data.features.bib_manager,
             });
           }
         })
@@ -156,6 +165,7 @@ export default function WelcomePage() {
               markdown_converter: true,
               terminology_check: true,
               writing_chat: true,
+              bib_manager: true,
             });
           }
         });

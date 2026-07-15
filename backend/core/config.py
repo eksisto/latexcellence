@@ -123,6 +123,12 @@ class WritingChatConfig(BaseModel):
     summary_max_tokens: int = 1024                       # 压缩摘要最大生成 token 数
 
 
+class BibManagerConfig(BaseModel):
+    """参考文献管理模块配置"""
+    enabled: bool = True                # 是否启用
+    format_configs_dir: str = "formats/"  # 保存的格式配置文件目录
+
+
 class FeaturesConfig(BaseModel):
     """功能特性总开关"""
     typo_check: TypoCheckConfig = TypoCheckConfig()
@@ -137,6 +143,7 @@ class FeaturesConfig(BaseModel):
     style_modify: StyleModifyConfig = StyleModifyConfig()
     terminology_check: TerminologyCheckConfig = TerminologyCheckConfig()
     writing_chat: WritingChatConfig = WritingChatConfig()
+    bib_manager: BibManagerConfig = BibManagerConfig()
 
 
 class LoggingConfig(BaseModel):

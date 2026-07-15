@@ -6,6 +6,7 @@ function Toaster({
   richColors = true,
   closeButton = true,
   duration = 4000,
+  expand = true,
   ...props
 }) {
   const { resolved } = useTheme();
@@ -17,6 +18,7 @@ function Toaster({
       richColors={richColors}
       closeButton={closeButton}
       duration={duration}
+      expand={expand}
       toastOptions={{
         classNames: {
           toast:

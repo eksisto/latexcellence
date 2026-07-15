@@ -97,6 +97,7 @@ export default function SettingsDialog() {
         style_modify: config.features.style_modify.enabled,
         terminology_check: config.features.terminology_check.enabled,
         writing_chat: config.features.writing_chat.enabled,
+        bib_manager: config.features.bib_manager.enabled,
       });
       setOpen(false);
       toast.success("配置已保存");
@@ -345,6 +346,11 @@ export default function SettingsDialog() {
               label="写作助手 Chat"
               checked={config.features.writing_chat.enabled}
               onChange={(v) => set("features.writing_chat.enabled", v)}
+            />
+            <CheckboxField
+              label="参考文献管理"
+              checked={config.features.bib_manager.enabled}
+              onChange={(v) => set("features.bib_manager.enabled", v)}
             />
           </ConfigSection>
 

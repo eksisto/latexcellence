@@ -17,6 +17,7 @@ import MarkdownConvertPage from "./pages/MarkdownConvertPage";
 import GitDiffPage from "./pages/GitDiffPage";
 import TerminologyCheckPage from "./pages/TerminologyCheckPage";
 import WritingChatPage from "./pages/WritingChatPage";
+import BibManagerPage from "./pages/BibManagerPage";
 
 export default function App() {
   useFavicon();
@@ -43,6 +44,7 @@ export default function App() {
           <Route path="/git-diff" element={<GitDiffPage />} />
           <Route path="/terminology-check" element={<TerminologyCheckPage />} />
           <Route path="/writing-chat" element={<WritingChatPage />} />
+          <Route path="/bib-manager" element={<BibManagerPage />} />
         </Routes>
       </BrowserRouter>
     </TooltipProvider>

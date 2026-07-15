@@ -16,8 +16,12 @@
 - **Markdown 转 LaTeX**：粘贴 Markdown 文本，调用 Pandoc 转换为 LaTeX 代码（需系统安装 Pandoc）
 - **LaTeX 样式修改**：粘贴 LaTeX 代码并用自然语言描述修改需求，LLM 自动执行样式调整（表格对齐、文字样式、图片排版等）
 - **写作助手 Chat**：上下文感知的多轮对话，能直接修改指定段落；深度思考折叠框、助手提示词预设、会话磁盘持久化与重命名、Markdown + KaTeX 渲染、双轮协议（流式回复 + 结构化编辑建议 diff）、上下文压缩与撤回；编辑建议支持手动微调后一键应用
+- **参考文献管理**：识别参考文献格式规则，从文本或截图提取结构化元数据，自动生成规范 BibTeX 代码并写入项目 .bib 文件；支持元数据缺失字段告警和 BibTeX 代码编辑
 
 ### 交互体验
+
+- **Toast 通知**：所有操作成功/失败均有即时反馈（Apply、编译、项目打开/关闭、配置保存、格式识别低置信度警告等）
+- **参考文献管理四步向导**：格式识别 → 元数据提取（可编辑表单） → BibTeX 生成（可编辑代码） → 写入 .bib 文件；格式可保存为 JSON 文件复用，LLM 识别结果可手动修正
 
 - **Toast 通知**：所有操作成功/失败均有即时反馈（Apply、编译、项目打开/关闭、配置保存等）
 - **撤销/重做**：工作区顶栏按钮 + Ctrl+Z / Ctrl+Shift+Z 键盘快捷键，支持多步撤销
@@ -129,7 +133,9 @@ latexcellence/
 │   │   ├── git_diff/        # Git 差异高亮
 │   │   ├── markdown_converter/  # Markdown 转 LaTeX
 │   │   ├── style_modify/    # LaTeX 样式修改
-│   │   └── writing_chat/    # 写作助手聊天
+│   │   ├── terminology_check/  # 术语一致性检查
+│   │   ├── writing_chat/    # 写作助手聊天
+│   │   └── bib_manager/     # 参考文献管理
 │   └── utils/               # 文件操作、JSON 校验
 ├── frontend/
 │   └── src/                 # React 应用

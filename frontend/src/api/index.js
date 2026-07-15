@@ -275,6 +275,56 @@ export const api = {
       `${BASE_URL}/terminology-check/stream/${projectId}?file_path=${encodeURIComponent(filePath)}`,
   },
 
+  /* ---- 参考文献管理 ---- */
+  bibManager: {
+    analyzeFormat: (example) =>
+      request("/bib-manager/analyze-format", {
+        method: "POST",
+        body: JSON.stringify({ example }),
+      }),
+    extract: async (formData) => {
+      const res = await fetch(`${BASE_URL}/bib-manager/extract`, {
+        method: "POST",
+        body: formData,
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ detail: res.statusText }));
+        throw new Error(err.detail || `HTTP ${res.status}`);
+      }
+      return res.json();
+    },
+    generate: (data) =>
+      request("/bib-manager/generate", {
+        method: "POST",
+        body: JSON.stringify(data),
+      }),
+    readBib: (filePath) =>
+      request("/bib-manager/read-bib", {
+        method: "POST",
+        body: JSON.stringify({ file_path: filePath }),
+      }),
+    save: (data) =>
+      request("/bib-manager/save", {
+        method: "POST",
+        body: JSON.stringify(data),
+      }),
+    listBibFiles: () => request("/bib-manager/list-bib-files"),
+    formats: {
+      list: () => request("/bib-manager/formats"),
+      load: (name) =>
+        request(`/bib-manager/formats/${encodeURIComponent(name)}`),
+      save: (name, formatInfo) =>
+        request("/bib-manager/formats", {
+          method: "POST",
+          body: JSON.stringify({ name, format_info: formatInfo }),
+        }),
+      delete: (name) =>
+        request(`/bib-manager/formats/${encodeURIComponent(name)}`, {
+          method: "DELETE",
+        }),
+    },
+  },
+
   /* ---- 写作助手 Chat ---- */
   writingChat: {
     // SSE 流式发送消息。返回 read() 接口的标准 ReadableStream
