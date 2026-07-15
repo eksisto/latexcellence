@@ -203,7 +203,7 @@ class TestCheckOneParagraph:
         })
 
         result = await service._check_one_paragraph(
-            mock_llm, 0, 5, plain, original_tex
+            mock_llm, 0, 5, plain, original_tex, "main.tex"
         )
 
         assert result["paragraph_index"] == 5
@@ -227,7 +227,7 @@ class TestCheckOneParagraph:
         })
 
         result = await service._check_one_paragraph(
-            mock_llm, 0, 0, plain, original_tex
+            mock_llm, 0, 0, plain, original_tex, "main.tex"
         )
 
         assert result["paragraph_index"] == 0
@@ -249,7 +249,7 @@ class TestCheckOneParagraph:
         })
 
         result = await service._check_one_paragraph(
-            mock_llm, 0, 0, plain, original_tex
+            mock_llm, 0, 0, plain, original_tex, "main.tex"
         )
 
         assert result["corrected"] == plain  # 回退到原始
@@ -271,7 +271,7 @@ class TestCheckOneParagraph:
         })
 
         result = await service._check_one_paragraph(
-            mock_llm, 0, 0, plain, original_tex
+            mock_llm, 0, 0, plain, original_tex, "main.tex"
         )
 
         assert result["corrected"] == plain
@@ -289,7 +289,7 @@ class TestCheckOneParagraph:
         })
 
         result = await service._check_one_paragraph(
-            mock_llm, 0, 3, plain, original_tex
+            mock_llm, 0, 3, plain, original_tex, "main.tex"
         )
 
         # 重试耗尽后回退
@@ -308,7 +308,7 @@ class TestCheckOneParagraph:
         mock_llm.chat = AsyncMock(side_effect=Exception("Network error"))
 
         result = await service._check_one_paragraph(
-            mock_llm, 0, 7, plain, original_tex
+            mock_llm, 0, 7, plain, original_tex, "main.tex"
         )
 
         assert result["paragraph_index"] == 7
@@ -338,7 +338,7 @@ class TestCheckOneParagraph:
         })
 
         result = await service._check_one_paragraph(
-            mock_llm, 0, 0, plain, original_tex
+            mock_llm, 0, 0, plain, original_tex, "main.tex"
         )
 
         assert result["corrected"] == corrected
@@ -411,7 +411,7 @@ class TestEmptyParagraphHandling:
 
     @pytest.mark.asyncio
     async def test_empty_result(self, service):
-        result = await service._empty_result(0, "", "original tex")
+        result = await service._empty_result(0, "", "original tex", "main.tex")
         assert result["paragraph_index"] == 0
         assert result["original"] == ""
         assert result["corrected"] == ""

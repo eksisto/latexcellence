@@ -15,6 +15,35 @@ export function flattenTexFiles(tree, prefix = "") {
   return result;
 }
 
+/**
+ * 从段落/结果列表中提取去重的文件路径列表（保持出现顺序） */
+export function extractFileList(items) {
+  const seen = new Set();
+  const files = [];
+  for (const item of items) {
+    const fp = item.file_path;
+    if (fp && !seen.has(fp)) {
+      seen.add(fp);
+      files.push(fp);
+    }
+  }
+  return files;
+}
+
+/**
+ * 按 file_path 对结果进行分组
+ * 返回 { [file_path]: result[] }
+ */
+export function groupByFile(items) {
+  const groups = {};
+  for (const item of items) {
+    const fp = item.file_path || "";
+    if (!groups[fp]) groups[fp] = [];
+    groups[fp].push(item);
+  }
+  return groups;
+}
+
 export default function useParagraphCheck({
   apiModule,
   checkMethodName = "check",
@@ -57,11 +86,20 @@ export default function useParagraphCheck({
   const [message, setMessage] = useState(null);
   const [restoring, setRestoring] = useState(false);
   const [applyingAll, setApplyingAll] = useState(false);
+  const [resolveInput, setResolveInput] = useState(false);
   const restoredRef = useRef(false);
   const eventSourceRef = useRef(null);
   const resultsWithChangesRef = useRef(0);
 
   const texFiles = useMemo(() => flattenTexFiles(fileTree), [fileTree]);
+
+  // 从段落和结果中提取文件列表（用于 Tab 展示）
+  const paragraphFiles = useMemo(() => extractFileList(paragraphs), [paragraphs]);
+  const resultFiles = useMemo(() => extractFileList(results), [results]);
+  const activeFiles = useMemo(() => {
+    const src = resultFiles.length > 0 ? resultFiles : paragraphFiles;
+    return src;
+  }, [paragraphFiles, resultFiles]);
 
   // 项目恢复逻辑
   useEffect(() => {
@@ -110,7 +148,7 @@ export default function useParagraphCheck({
     setResults([]);
     setParagraphs([]);
     try {
-      const data = await apiModule.preview(activeFile);
+      const data = await apiModule.preview(activeFile, resolveInput);
       setParagraphs(data.paragraphs || []);
       setMessage(`已加载 ${data.total} 个段落`);
     } catch (e) {
@@ -119,7 +157,7 @@ export default function useParagraphCheck({
     } finally {
       setLoading(storeSlice.loadingKey, false);
     }
-  }, [activeFile, apiModule, storeSlice.loadingKey, setLoading, setResults, setParagraphs]);
+  }, [activeFile, resolveInput, apiModule, storeSlice.loadingKey, setLoading, setResults, setParagraphs]);
 
   const handleCheck = useCallback(() => {
     if (!activeFile || !projectPath) return;
@@ -138,7 +176,8 @@ export default function useParagraphCheck({
 
     const url = apiModule.stream(
       encodeURIComponent(projectPath),
-      activeFile
+      activeFile,
+      resolveInput
     );
 
     const es = new EventSource(url);
@@ -152,6 +191,7 @@ export default function useParagraphCheck({
           store.setCheckProgress({
             current: data.current,
             total: data.total,
+            file_path: data.file_path || null,
           });
           return;
         }
@@ -208,6 +248,7 @@ export default function useParagraphCheck({
   }, [
     activeFile,
     projectPath,
+    resolveInput,
     apiModule,
     storeSlice.loadingKey,
     paragraphs.length,
@@ -219,16 +260,20 @@ export default function useParagraphCheck({
   ]);
 
   const handleApplyChange = useCallback(
-    async (idx, newText) => {
+    async (idx, newText, filePath) => {
       try {
         await apiModule.apply({
           file_path: activeFile,
-          changes: [{ paragraph_index: idx, new_text: newText }],
+          changes: [{ paragraph_index: idx, new_text: newText, file_path: filePath || activeFile }],
         });
         setMessage(messages.applySuccess(idx));
         toast.success(messages.applySuccess(idx));
         // 从结果中移除已应用的段落，保留其余结果
-        setResults((prev) => prev.filter((r) => r.paragraph_index !== idx));
+        setResults((prev) =>
+          prev.filter(
+            (r) => !(r.paragraph_index === idx && (r.file_path || activeFile) === (filePath || activeFile))
+          )
+        );
       } catch (e) {
         setError(e.message);
         toast.error("应用修改失败", { description: e.message });
@@ -238,10 +283,14 @@ export default function useParagraphCheck({
   );
 
   const handleIgnoreChange = useCallback(
-    (idx) => {
-      setResults((prev) => prev.filter((r) => r.paragraph_index !== idx));
+    (idx, filePath) => {
+      setResults((prev) =>
+        prev.filter(
+          (r) => !(r.paragraph_index === idx && (r.file_path || activeFile) === (filePath || activeFile))
+        )
+      );
     },
-    [setResults]
+    [activeFile, setResults]
   );
 
   const handleApplyAll = useCallback(
@@ -265,13 +314,17 @@ export default function useParagraphCheck({
         const changes = pending.map((r) => ({
           paragraph_index: r.paragraph_index,
           new_text: r[correctedTextField],
+          file_path: r.file_path || activeFile,
         }));
         await apiModule.apply({ file_path: activeFile, changes });
-        const appliedIndices = new Set(
-          pending.map((r) => r.paragraph_index)
+        const appliedKeys = new Set(
+          pending.map((r) => `${r.file_path || activeFile}:${r.paragraph_index}`)
         );
         setResults((prev) =>
-          prev.filter((r) => !appliedIndices.has(r.paragraph_index))
+          prev.filter(
+            (r) =>
+              !appliedKeys.has(`${r.file_path || activeFile}:${r.paragraph_index}`)
+          )
         );
         toast.success(messages.applyAllSuccess(pending.length), {
           id: toastId,
@@ -334,6 +387,9 @@ export default function useParagraphCheck({
     applyingAll,
     error,
     message,
+    resolveInput,
+    setResolveInput,
+    activeFiles,
     handlePreview,
     handleCheck,
     handleApplyChange,

@@ -159,7 +159,7 @@ class TestCheckOneParagraph:
             ],
         })
 
-        result = await service._check_one_paragraph(mock_llm, 0, 5, original)
+        result = await service._check_one_paragraph(mock_llm, 0, 5, original, "main.tex")
 
         assert result["paragraph_index"] == 5
         assert result["corrected"] == r"\item poorly indented"
@@ -177,7 +177,7 @@ class TestCheckOneParagraph:
             "changes": [],
         })
 
-        result = await service._check_one_paragraph(mock_llm, 0, 0, original)
+        result = await service._check_one_paragraph(mock_llm, 0, 0, original, "main.tex")
 
         assert result["paragraph_index"] == 0
         assert result["corrected"] == original
@@ -194,7 +194,7 @@ class TestCheckOneParagraph:
             "changes": [],
         })
 
-        result = await service._check_one_paragraph(mock_llm, 0, 0, original)
+        result = await service._check_one_paragraph(mock_llm, 0, 0, original, "main.tex")
 
         assert result["corrected"] == original
         assert result["changes"] == []
@@ -205,7 +205,7 @@ class TestCheckOneParagraph:
 
         mock_llm.chat = AsyncMock(return_value={"bad": "json"})
 
-        result = await service._check_one_paragraph(mock_llm, 0, 3, original)
+        result = await service._check_one_paragraph(mock_llm, 0, 3, original, "main.tex")
 
         assert result["corrected"] == original
         assert result["changes"] == []
@@ -217,7 +217,7 @@ class TestCheckOneParagraph:
 
         mock_llm.chat = AsyncMock(side_effect=Exception("Network error"))
 
-        result = await service._check_one_paragraph(mock_llm, 0, 7, original)
+        result = await service._check_one_paragraph(mock_llm, 0, 7, original, "main.tex")
 
         assert result["paragraph_index"] == 7
         assert result["corrected"] == original
@@ -259,7 +259,7 @@ class TestEmptyResult:
 
     @pytest.mark.asyncio
     async def test_empty_result_for_blank_paragraph(self, service):
-        result = await service._empty_result(2, "   ")
+        result = await service._empty_result(2, "   ", "main.tex")
         assert result["paragraph_index"] == 2
         assert result["original"] == "   "
         assert result["corrected"] == "   "

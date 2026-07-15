@@ -30,11 +30,13 @@ def get_service() -> TypoCheckService:
 class TypoCheckRequest(BaseModel):
     file_path: str
     paragraph_indices: Optional[list[int]] = None
+    resolve_input: bool = False
 
 
 class ChangeItem(BaseModel):
     paragraph_index: int
     new_text: str
+    file_path: Optional[str] = None
 
 
 class TypoApplyRequest(BaseModel):
@@ -47,15 +49,17 @@ class TypoApplyRequest(BaseModel):
 @router.get("/preview")
 async def preview_paragraphs(
     file_path: str = Query(..., description="文件路径（相对于项目根目录）"),
+    resolve_input: bool = Query(False, description="是否递归展开 \\input 引用"),
 ):
     """
     预览指定文件的段落（含 LaTeX 剥离后的纯文本）。
 
     返回每段的原始文本和剥离后的纯文本，供前端展示。
     LLM 将基于纯文本进行错字检查。
+    当 resolve_input=True 时，递归解析 \\input/\\include 引用并返回所有子文件的段落。
     """
     try:
-        result = get_service().preview_paragraphs(file_path)
+        result = get_service().preview_paragraphs(file_path, resolve_input)
         return result
     except RuntimeError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -77,6 +81,7 @@ async def check_typos(request: TypoCheckRequest):
         result = await get_service().check_typos(
             request.file_path,
             request.paragraph_indices,
+            request.resolve_input,
         )
         return result
     except RuntimeError as e:
@@ -113,19 +118,22 @@ async def apply_changes(request: TypoApplyRequest):
 async def stream_typo_check(
     project_id: str,
     file_path: str = Query(..., description="文件路径（相对于项目根目录）"),
+    resolve_input: bool = Query(False, description="是否递归展开 \\input 引用"),
 ):
     """
     SSE 流式端点：按段落逐批推送错字检查进度和结果。
 
     事件格式：
-        { "type": "progress", "current": 3, "total": 12 }
+        { "type": "progress", "current": 3, "total": 12, "file_path": "..." }
         { "type": "result", "paragraph_index": 0, "data": {...} }
         { "type": "error", "message": "...", "retrying": true }
         { "type": "done" }
     """
     async def event_stream():
         try:
-            async for event in get_service().check_typos_stream(file_path):
+            async for event in get_service().check_typos_stream(
+                file_path, resolve_input
+            ):
                 yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
         except Exception as e:
             yield f"data: {json.dumps({'type': 'error', 'message': str(e)}, ensure_ascii=False)}\n\n"

@@ -12,6 +12,11 @@
     5. 程序解析聚类结果，为每个段落生成修正后的文本
        - 将属于同一组的非推荐变体替换为推荐项
        - 供前端逐段审核应用，用户可自定义替换内容
+
+支持 \\input 解析：
+    当 resolve_input=True 时，递归展开主文件中的 \\input/\\include 引用，
+    将所有子文件纳入处理范围。术语提取跨所有文件全局执行（保证一致性），
+    结果按文件分组返回。
 """
 
 import asyncio
@@ -26,6 +31,7 @@ from backend.core.config import get_config
 from backend.modules.typo_check.latex_parser import LatexParser
 from backend.modules.terminology_check.extractor import TermExtractor, TermItem
 from backend.modules.terminology_check.models import TermChange, TermParagraphResult
+from backend.utils.input_resolver import resolve_inputs
 
 
 _MARKER_PATTERN = re.compile(r"__[A-Z]+_\d{4}__")
@@ -57,56 +63,92 @@ class TerminologyCheckService:
         preview = svc.preview_paragraphs("main.tex")
         results = await svc.check_terminology("main.tex")
         svc.apply_changes("main.tex", [{"paragraph_index": 0, "new_text": "..."}])
+
+    支持 \\input 解析：
+        preview = svc.preview_paragraphs("main.tex", resolve_input=True)
+        results = await svc.check_terminology_stream("main.tex", resolve_input=True)
     """
 
     def __init__(self):
         self._logger = get_logger("terminology_check")
         self._parser = LatexParser()
         self._extractor = TermExtractor(logger_name="terminology_check")
-        self._marker_maps: dict[int, dict[str, str]] = {}
+        self._marker_maps: dict[str, dict[int, dict[str, str]]] = {}
         self._file_path: Optional[str] = None
 
-    def preview_paragraphs(self, file_path: str) -> dict[str, Any]:
-        """
-        预览指定文件的段落。
-
-        参数：
-            file_path: 文件路径
-
-        返回：
-            { paragraphs: [...], file_path: "...", total: N }
-        """
+    def _get_files(
+        self, file_path: str, resolve_input: bool
+    ) -> list[str]:
+        """解析 \\input 依赖，返回待处理文件列表。"""
+        if not resolve_input:
+            return [file_path]
         pm = get_project_manager()
-        paragraphs = pm.get_paragraphs(file_path)
+        root = pm._project_info.root_path
+        files = resolve_inputs(file_path, root)
+        self._logger.info(
+            f"Resolved \\input tree from {file_path}: {len(files)} file(s)"
+        )
+        return files
 
-        self._file_path = file_path
-        self._marker_maps = {}
-
+    def _process_paragraphs(
+        self, paragraphs: list, file_path: str
+    ) -> list[dict[str, Any]]:
+        """对单个文件的段落执行 marker 替换，返回结果列表。"""
+        if file_path not in self._marker_maps:
+            self._marker_maps[file_path] = {}
         result = []
         for para in paragraphs:
             stripped, marker_map = self._parser.strip_to_plain_text(para.text)
-            self._marker_maps[para.index] = marker_map
+            self._marker_maps[file_path][para.index] = marker_map
             result.append({
                 "index": para.index,
                 "text": para.text,
                 "plain_text": stripped,
                 "line_start": para.line_start,
                 "line_end": para.line_end,
+                "file_path": file_path,
             })
+        return result
+
+    def preview_paragraphs(
+        self, file_path: str, resolve_input: bool = False
+    ) -> dict[str, Any]:
+        """
+        预览指定文件的段落。
+
+        参数：
+            file_path: 文件路径
+            resolve_input: 是否递归展开 \\input 引用
+
+        返回：
+            { paragraphs: [...], file_path: "...", total: N }
+        """
+        pm = get_project_manager()
+        files = self._get_files(file_path, resolve_input)
+
+        self._file_path = file_path
+        self._marker_maps = {}
+
+        all_paragraphs: list[dict[str, Any]] = []
+        for f in files:
+            paragraphs = pm.get_paragraphs(f)
+            all_paragraphs.extend(self._process_paragraphs(paragraphs, f))
 
         self._logger.info(
-            f"Previewed {len(result)} paragraphs from {file_path}"
+            f"Previewed {len(all_paragraphs)} paragraphs from "
+            f"{len(files)} file(s) starting at {file_path}"
         )
         return {
-            "paragraphs": result,
+            "paragraphs": all_paragraphs,
             "file_path": file_path,
-            "total": len(result),
+            "total": len(all_paragraphs),
         }
 
     async def check_terminology(
         self,
         file_path: str,
         paragraph_indices: Optional[list[int]] = None,
+        resolve_input: bool = False,
     ) -> dict[str, Any]:
         """
         对项目进行术语一致性检查。
@@ -114,42 +156,41 @@ class TerminologyCheckService:
         参数：
             file_path: 主目标文件路径（预览和结果显示用）
             paragraph_indices: 要检查的段落索引列表，None 表示全部
+            resolve_input: 是否递归展开 \\input 引用
 
         返回：
             { results: [...], file_path: "...", total_issues: N }
         """
         pm = get_project_manager()
         cfg = get_config()
+        files = self._get_files(file_path, resolve_input)
 
-        target_paragraphs = pm.get_paragraphs(file_path)
         self._file_path = file_path
         self._marker_maps = {}
 
-        targets = list(
-            paragraph_indices
-            if paragraph_indices is not None
-            else range(len(target_paragraphs))
-        )
+        all_para_data: list[dict[str, Any]] = []
+        for f in files:
+            paragraphs = pm.get_paragraphs(f)
+            for para in paragraphs:
+                stripped, marker_map = self._parser.strip_to_plain_text(para.text)
+                if f not in self._marker_maps:
+                    self._marker_maps[f] = {}
+                self._marker_maps[f][para.index] = marker_map
+                all_para_data.append({
+                    "file_path": f,
+                    "index": para.index,
+                    "text": para.text,
+                    "plain_text": stripped,
+                    "marker_map": marker_map,
+                })
 
         has_api_key = bool(cfg.llm.api_key)
 
         if not has_api_key:
             self._logger.warning("No API key — using fallback term extraction")
-            return self._check_no_llm(file_path, target_paragraphs, targets)
+            return self._check_no_llm(file_path, all_para_data)
 
         llm = get_llm_client()
-
-        all_para_data: list[dict[str, Any]] = []
-        for idx in targets:
-            para = target_paragraphs[idx]
-            stripped, marker_map = self._parser.strip_to_plain_text(para.text)
-            self._marker_maps[idx] = marker_map
-            all_para_data.append({
-                "index": idx,
-                "text": para.text,
-                "plain_text": stripped,
-                "marker_map": marker_map,
-            })
 
         all_terms: list[dict[str, Any]] = []
         batch_size = cfg.features.typo_check.batch_size
@@ -175,7 +216,7 @@ class TerminologyCheckService:
                         "term": t.term,
                         "term_type": t.term_type,
                         "paragraph_index": data["index"],
-                        "file_path": file_path,
+                        "file_path": data["file_path"],
                         "context": t.context,
                     })
 
@@ -201,7 +242,9 @@ class TerminologyCheckService:
             "total_issues": total_issues,
         }
 
-    async def check_terminology_stream(self, file_path: str):
+    async def check_terminology_stream(
+        self, file_path: str, resolve_input: bool = False
+    ):
         """
         术语检查流式版本（SSE）。
 
@@ -209,26 +252,31 @@ class TerminologyCheckService:
         """
         pm = get_project_manager()
         cfg = get_config()
+        files = self._get_files(file_path, resolve_input)
 
-        target_paragraphs = pm.get_paragraphs(file_path)
         self._file_path = file_path
         self._marker_maps = {}
 
-        total = len(target_paragraphs)
+        all_para_data: list[dict[str, Any]] = []
+        for f in files:
+            paragraphs = pm.get_paragraphs(f)
+            for para in paragraphs:
+                stripped, marker_map = self._parser.strip_to_plain_text(para.text)
+                if f not in self._marker_maps:
+                    self._marker_maps[f] = {}
+                self._marker_maps[f][para.index] = marker_map
+                all_para_data.append({
+                    "file_path": f,
+                    "index": para.index,
+                    "text": para.text,
+                    "plain_text": stripped,
+                    "marker_map": marker_map,
+                })
+
+        total = len(all_para_data)
         yield {"type": "progress", "current": 0, "total": total}
 
         has_api_key = bool(cfg.llm.api_key)
-
-        all_para_data: list[dict[str, Any]] = []
-        for para in target_paragraphs:
-            stripped, marker_map = self._parser.strip_to_plain_text(para.text)
-            self._marker_maps[para.index] = marker_map
-            all_para_data.append({
-                "index": para.index,
-                "text": para.text,
-                "plain_text": stripped,
-                "marker_map": marker_map,
-            })
 
         if not has_api_key:
             yield {
@@ -247,9 +295,15 @@ class TerminologyCheckService:
 
         for i, data in enumerate(all_para_data):
             plain = data["plain_text"]
+            f = data["file_path"]
 
             if not plain.strip():
-                yield {"type": "progress", "current": i + 1, "total": total}
+                yield {
+                    "type": "progress",
+                    "current": i + 1,
+                    "total": total,
+                    "file_path": f,
+                }
                 continue
 
             try:
@@ -261,19 +315,29 @@ class TerminologyCheckService:
                         "term": t.term,
                         "term_type": t.term_type,
                         "paragraph_index": data["index"],
-                        "file_path": file_path,
+                        "file_path": data["file_path"],
                         "context": t.context,
                     })
-                yield {"type": "progress", "current": i + 1, "total": total}
+                yield {
+                    "type": "progress",
+                    "current": i + 1,
+                    "total": total,
+                    "file_path": f,
+                }
             except Exception as e:
                 self._logger.error(
-                    f"Error extracting terms from P{data['index']}: {e}")
+                    f"Error extracting terms from {f} P{data['index']}: {e}")
                 yield {
                     "type": "error",
-                    "message": f"Paragraph {data['index']}: {e}",
+                    "message": f"{f} P{data['index']}: {e}",
                     "retrying": False,
                 }
-                yield {"type": "progress", "current": i + 1, "total": total}
+                yield {
+                    "type": "progress",
+                    "current": i + 1,
+                    "total": total,
+                    "file_path": f,
+                }
 
             await asyncio.sleep(cfg.llm.request_interval)
 
@@ -301,8 +365,8 @@ class TerminologyCheckService:
         将用户确认的修改写回源文件。
 
         参数：
-            file_path: 文件路径
-            changes: [{ "paragraph_index": 0, "new_text": "修正后纯文本" }]
+            file_path: 默认文件路径（当 change 中无 file_path 时使用）
+            changes: [{ "paragraph_index": 0, "new_text": "...", "file_path": "..." }]
 
         返回：
             { applied: N, total: M }
@@ -313,15 +377,18 @@ class TerminologyCheckService:
         for change in changes:
             idx = change["paragraph_index"]
             new_plain_text = change["new_text"]
-            marker_map = self._marker_maps.get(idx, {})
+            target_file = change.get("file_path", file_path)
+
+            file_maps = self._marker_maps.get(target_file, {})
+            marker_map = file_maps.get(idx, {})
 
             restored = self._parser.restore_from_markers(
                 new_plain_text, marker_map)
 
-            pm.apply_change(file_path, idx, restored)
+            pm.apply_change(target_file, idx, restored)
             applied += 1
             self._logger.info(
-                f"Applied terminology change to paragraph {idx} in {file_path}")
+                f"Applied terminology change to paragraph {idx} in {target_file}")
 
         return {"applied": applied, "total": len(changes)}
 
@@ -338,8 +405,8 @@ class TerminologyCheckService:
         （将变体替换为推荐项）。
 
         参数：
-            all_para_data: 所有段落数据
-            all_terms: 原始提取的术语列表（含 paragraph_index）
+            all_para_data: 所有段落数据（含 file_path）
+            all_terms: 原始提取的术语列表（含 paragraph_index, file_path）
             clusters: LLM 聚类结果 [{"recommended": str, "variants": [str]}]
         """
         # 构建 variant → recommended 映射
@@ -350,22 +417,23 @@ class TerminologyCheckService:
                 if variant != recommended:
                     replace_map[variant] = recommended
 
-        # 按段落索引收集术语
-        terms_by_para: dict[int, list[str]] = {}
+        # 按 (file_path, 段落索引) 收集术语
+        terms_by_para: dict[tuple[str, int], list[str]] = {}
         for t in all_terms:
-            pi = t["paragraph_index"]
-            if pi not in terms_by_para:
-                terms_by_para[pi] = []
-            terms_by_para[pi].append(t["term"])
+            key = (t.get("file_path", ""), t["paragraph_index"])
+            if key not in terms_by_para:
+                terms_by_para[key] = []
+            terms_by_para[key].append(t["term"])
 
         results: list[dict[str, Any]] = []
         for data in all_para_data:
             idx = data["index"]
+            f = data.get("file_path", "")
             original = data["plain_text"]
             corrected = original
             changes: list[dict[str, Any]] = []
 
-            para_terms = terms_by_para.get(idx, [])
+            para_terms = terms_by_para.get((f, idx), [])
             # 对每个需要替换的变体生成一条 change
             seen_variants: set[str] = set()
             for term_str in para_terms:
@@ -408,6 +476,7 @@ class TerminologyCheckService:
                 "changes": changes,
                 "text": data["text"],
                 "plain_text": data["plain_text"],
+                "file_path": f,
             }
             results.append(result)
 
@@ -434,28 +503,16 @@ class TerminologyCheckService:
                 "changes": [],
                 "text": data["text"],
                 "plain_text": data["plain_text"],
+                "file_path": data.get("file_path", ""),
             })
         return results
 
     def _check_no_llm(
         self,
         file_path: str,
-        target_paragraphs: list,
-        targets: list[int],
+        all_para_data: list[dict[str, Any]],
     ) -> dict[str, Any]:
         """无 API Key 时降级为纯规则检查。"""
-        all_para_data: list[dict[str, Any]] = []
-        for idx in targets:
-            para = target_paragraphs[idx]
-            stripped, marker_map = self._parser.strip_to_plain_text(para.text)
-            self._marker_maps[idx] = marker_map
-            all_para_data.append({
-                "index": idx,
-                "text": para.text,
-                "plain_text": stripped,
-                "marker_map": marker_map,
-            })
-
         results = self._build_results_no_llm(all_para_data)
         total_issues = sum(1 for r in results for c in r.get("changes", []))
         return {

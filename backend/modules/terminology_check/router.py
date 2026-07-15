@@ -28,11 +28,13 @@ def get_service() -> TerminologyCheckService:
 class TerminologyCheckRequest(BaseModel):
     file_path: str
     paragraph_indices: Optional[list[int]] = None
+    resolve_input: bool = False
 
 
 class ChangeItem(BaseModel):
     paragraph_index: int
     new_text: str
+    file_path: Optional[str] = None
 
 
 class TerminologyApplyRequest(BaseModel):
@@ -43,12 +45,14 @@ class TerminologyApplyRequest(BaseModel):
 @router.get("/preview")
 async def preview_paragraphs(
     file_path: str = Query(..., description="文件路径（相对于项目根目录）"),
+    resolve_input: bool = Query(False, description="是否递归展开 \\input 引用"),
 ):
     """
     预览指定文件的段落（含 LaTeX 剥离后的纯文本）。
+    当 resolve_input=True 时，递归解析 \\input/\\include 引用。
     """
     try:
-        result = get_service().preview_paragraphs(file_path)
+        result = get_service().preview_paragraphs(file_path, resolve_input)
         return result
     except RuntimeError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -68,6 +72,7 @@ async def check_terminology(request: TerminologyCheckRequest):
         result = await get_service().check_terminology(
             request.file_path,
             request.paragraph_indices,
+            request.resolve_input,
         )
         return result
     except RuntimeError as e:
@@ -97,13 +102,16 @@ async def apply_changes(request: TerminologyApplyRequest):
 async def stream_terminology_check(
     project_id: str,
     file_path: str = Query(..., description="文件路径（相对于项目根目录）"),
+    resolve_input: bool = Query(False, description="是否递归展开 \\input 引用"),
 ):
     """
     SSE 流式端点：逐段推送术语检查进度和结果。
     """
     async def event_stream():
         try:
-            async for event in get_service().check_terminology_stream(file_path):
+            async for event in get_service().check_terminology_stream(
+                file_path, resolve_input
+            ):
                 yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
         except Exception as e:
             yield f"data: {json.dumps({'type': 'error', 'message': str(e)}, ensure_ascii=False)}\n\n"

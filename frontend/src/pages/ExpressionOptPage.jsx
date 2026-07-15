@@ -19,9 +19,11 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Switch } from "@/components/ui/switch";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { ArrowLeft, PencilLine, Eye, Loader2, Plus, Trash2, ListChecks } from "lucide-react";
 import { api } from "@/api/index";
-import useParagraphCheck from "@/hooks/useParagraphCheck";
+import useParagraphCheck, { groupByFile } from "@/hooks/useParagraphCheck";
 import MarkerText from "@/components/MarkerText";
 import ParagraphContext from "@/components/ParagraphContext";
 import ProgressBar from "@/components/ProgressBar";
@@ -48,6 +50,9 @@ export default function ExpressionOptPage() {
     handleApplyAll,
     handleIgnoreChange,
     handleFileChange,
+    resolveInput,
+    setResolveInput,
+    activeFiles,
   } = useParagraphCheck({
     apiModule: api.expressionOpt,
     checkMethodName: "optimize",
@@ -185,6 +190,9 @@ export default function ExpressionOptPage() {
     };
   }, [activePrompt]);
 
+  const paragraphsByFile = activeFiles.length > 1 ? groupByFile(expressionParagraphs) : [];
+  const resultsByFile = activeFiles.length > 1 ? groupByFile(expressionResults) : [];
+
   return (
     <div className="min-h-screen p-8">
       <div className="max-w-6xl mx-auto mb-8">
@@ -226,7 +234,6 @@ export default function ExpressionOptPage() {
           </div>
         ) : (
           <div className="space-y-4">
-            {/* file selector + controls */}
             <Card>
               <CardHeader className="pb-2">
                 <div className="flex items-center gap-3">
@@ -245,6 +252,16 @@ export default function ExpressionOptPage() {
                       ))}
                     </SelectContent>
                   </Select>
+                  <div className="flex items-center gap-2 ml-auto">
+                    <Switch
+                      id="resolve-input"
+                      checked={resolveInput}
+                      onCheckedChange={setResolveInput}
+                    />
+                    <Label htmlFor="resolve-input" className="text-sm cursor-pointer">
+                      包含子文件（展开 \input）
+                    </Label>
+                  </div>
                 </div>
               </CardHeader>
               <CardContent>
@@ -278,10 +295,8 @@ export default function ExpressionOptPage() {
             </Card>
 
             {progress && (
-              <ProgressBar current={progress.current} total={progress.total} />
+              <ProgressBar current={progress.current} total={progress.total} fileName={progress.file_path} />
             )}
-
-            {/* custom prompts */}
 
             <Card>
               <CardHeader className="pb-2">
@@ -387,7 +402,6 @@ export default function ExpressionOptPage() {
               </CardContent>
             </Card>
 
-            {/* paragraph preview */}
             {expressionParagraphs.length > 0 && expressionResults.length === 0 && (
               <Card>
                 <CardHeader className="pb-2">
@@ -399,26 +413,54 @@ export default function ExpressionOptPage() {
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <div className="space-y-3">
-                    {expressionParagraphs.map((p) => (
-                      <div
-                        key={p.index}
-                        className="rounded-lg border border-border p-3"
-                      >
-                        <span className="rounded bg-muted px-1.5 py-0.5 text-xs font-mono mb-1 inline-block">
-                          P{p.index}
-                        </span>
-                        <div className="whitespace-pre-wrap text-sm text-foreground/80 mt-1 max-h-32 overflow-y-auto font-sans leading-relaxed">
-                          {p.plain_text ? <MarkerText text={p.plain_text} /> : "（空白）"}
+                  {activeFiles.length > 1 ? (
+                    <Tabs defaultValue={activeFiles[0]}>
+                      <TabsList>
+                        {activeFiles.map((f) => (
+                          <TabsTrigger key={f} value={f}>{f.split('/').pop()}</TabsTrigger>
+                        ))}
+                      </TabsList>
+                      {activeFiles.map((f) => (
+                        <TabsContent key={f} value={f}>
+                          <div className="space-y-3">
+                            {(paragraphsByFile[f] || []).map((p) => (
+                              <div
+                                key={p.index}
+                                className="rounded-lg border border-border p-3"
+                              >
+                                <span className="rounded bg-muted px-1.5 py-0.5 text-xs font-mono mb-1 inline-block">
+                                  P{p.index}
+                                </span>
+                                <div className="whitespace-pre-wrap text-sm text-foreground/80 mt-1 max-h-32 overflow-y-auto font-sans leading-relaxed">
+                                  {p.plain_text ? <MarkerText text={p.plain_text} /> : "（空白）"}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </TabsContent>
+                      ))}
+                    </Tabs>
+                  ) : (
+                    <div className="space-y-3">
+                      {expressionParagraphs.map((p) => (
+                        <div
+                          key={p.index}
+                          className="rounded-lg border border-border p-3"
+                        >
+                          <span className="rounded bg-muted px-1.5 py-0.5 text-xs font-mono mb-1 inline-block">
+                            P{p.index}
+                          </span>
+                          <div className="whitespace-pre-wrap text-sm text-foreground/80 mt-1 max-h-32 overflow-y-auto font-sans leading-relaxed">
+                            {p.plain_text ? <MarkerText text={p.plain_text} /> : "（空白）"}
+                          </div>
                         </div>
-                      </div>
-                    ))}
-                  </div>
+                      ))}
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             )}
 
-            {/* optimization results */}
             {expressionResults.length > 0 && (
               <div className="space-y-4">
                 {expressionResults.some(
@@ -455,94 +497,206 @@ export default function ExpressionOptPage() {
                     没有匹配的优化结果
                   </p>
                 ) : (
-                  filteredResults.map((result) => {
-                  const hasChanges =
-                    result.changes && result.changes.length > 0;
-                  return (
-                    <Card key={result.paragraph_index} id={`expr-result-P${result.paragraph_index}`}>
-                      <CardHeader className="pb-2">
-                        <div className="flex items-center justify-between">
-                          <CardTitle className="text-sm">
-                            第 {result.paragraph_index} 段
-                          </CardTitle>
-                          {hasChanges && (
-                            <span className="rounded bg-destructive/10 text-destructive px-1.5 py-0.5 text-xs font-medium">
-                              {result.changes.length} 条建议
-                            </span>
-                          )}
-                        </div>
-                      </CardHeader>
-                      <CardContent>
-                        <div className="space-y-3">
-                          {hasChanges ? (
-                            <>
-                              <ul className="space-y-2">
-                                {result.changes.map((change, i) => (
-                                  <li
-                                    key={i}
-                                    className="rounded border border-border p-2 text-sm"
-                                  >
-                                    <div className="flex items-center gap-2 mb-1">
-                                      <span className="rounded bg-green-500/10 text-green-600 dark:text-green-400 px-1 py-0.5 text-xs font-medium">
-                                        {change.type}
-                                      </span>
-                                      {change.reason && (
-                                        <span className="text-muted-foreground text-xs">
-                                          {change.reason}
-                                        </span>
-                                      )}
-                                    </div>
-                                    <div className="grid grid-cols-[auto_1fr] gap-x-2 gap-y-1 text-sm">
-                                      <span className="text-muted-foreground whitespace-nowrap mt-0.5">
-                                        原文：
-                                      </span>
-                                      <span className="line-through text-foreground/60 break-all mt-0.5">
-                                        <MarkerText text={change.original} />
-                                      </span>
-                                      <span className="text-muted-foreground whitespace-nowrap mt-0.5">
-                                        修改后：
-                                      </span>
-                                      <span className="font-medium break-all mt-0.5">
-                                        <MarkerText text={change.optimized} />
-                                      </span>
-                                    </div>
-                                  </li>
-                                ))}
-                              </ul>
-                              <div className="flex items-center gap-2">
-                                <Button
-                                  size="sm"
-                                  onClick={() =>
-                                    handleApplyChange(
-                                      result.paragraph_index,
-                                      result.optimized
-                                    )
-                                  }
-                                >
-                                  应用优化
-                                </Button>
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  onClick={() =>
-                                    handleIgnoreChange(result.paragraph_index)
-                                  }
-                                >
-                                  忽略
-                                </Button>
-                              </div>
-                            </>
-                          ) : (
-                            <p className="text-sm text-muted-foreground">
-                              当前段落没有优化建议
-                            </p>
-                          )}
-                          <ParagraphContext currentIndex={result.paragraph_index} paragraphs={expressionParagraphs} currentText={result.plain_text || result.original} />
-                        </div>
-                      </CardContent>
-                    </Card>
-                  );
-                  })
+                  activeFiles.length > 1 ? (
+                    <Tabs defaultValue={activeFiles[0]}>
+                      <TabsList>
+                        {activeFiles.map((f) => (
+                          <TabsTrigger key={f} value={f}>{f.split('/').pop()}</TabsTrigger>
+                        ))}
+                      </TabsList>
+                      {activeFiles.map((f) => (
+                        <TabsContent key={f} value={f}>
+                          <div className="space-y-4">
+                            {(resultsByFile[f] || []).length === 0 ? (
+                              <p className="text-sm text-muted-foreground text-center py-8">
+                                该文件没有优化结果
+                              </p>
+                            ) : (
+                              (resultsByFile[f] || []).map((result) => {
+                                const hasChanges =
+                                  result.changes && result.changes.length > 0;
+                                return (
+                                  <Card key={`${result.file_path}-expr-result-P${result.paragraph_index}`} id={`expr-result-P${result.paragraph_index}`}>
+                                    <CardHeader className="pb-2">
+                                      <div className="flex items-center justify-between">
+                                        <CardTitle className="text-sm">
+                                          第 {result.paragraph_index} 段
+                                        </CardTitle>
+                                        {hasChanges && (
+                                          <span className="rounded bg-destructive/10 text-destructive px-1.5 py-0.5 text-xs font-medium">
+                                            {result.changes.length} 条建议
+                                          </span>
+                                        )}
+                                      </div>
+                                    </CardHeader>
+                                    <CardContent>
+                                      <div className="space-y-3">
+                                        {hasChanges ? (
+                                          <>
+                                            <ul className="space-y-2">
+                                              {result.changes.map((change, i) => (
+                                                <li
+                                                  key={i}
+                                                  className="rounded border border-border p-2 text-sm"
+                                                >
+                                                  <div className="flex items-center gap-2 mb-1">
+                                                    <span className="rounded bg-green-500/10 text-green-600 dark:text-green-400 px-1 py-0.5 text-xs font-medium">
+                                                      {change.type}
+                                                    </span>
+                                                    {change.reason && (
+                                                      <span className="text-muted-foreground text-xs">
+                                                        {change.reason}
+                                                      </span>
+                                                    )}
+                                                  </div>
+                                                  <div className="grid grid-cols-[auto_1fr] gap-x-2 gap-y-1 text-sm">
+                                                    <span className="text-muted-foreground whitespace-nowrap mt-0.5">
+                                                      原文：
+                                                    </span>
+                                                    <span className="line-through text-foreground/60 break-all mt-0.5">
+                                                      <MarkerText text={change.original} />
+                                                    </span>
+                                                    <span className="text-muted-foreground whitespace-nowrap mt-0.5">
+                                                      修改后：
+                                                    </span>
+                                                    <span className="font-medium break-all mt-0.5">
+                                                      <MarkerText text={change.optimized} />
+                                                    </span>
+                                                  </div>
+                                                </li>
+                                              ))}
+                                            </ul>
+                                            <div className="flex items-center gap-2">
+                                              <Button
+                                                size="sm"
+                                                onClick={() =>
+                                                  handleApplyChange(
+                                                    result.paragraph_index,
+                                                    result.optimized,
+                                                    result.file_path
+                                                  )
+                                                }
+                                              >
+                                                应用优化
+                                              </Button>
+                                              <Button
+                                                size="sm"
+                                                variant="outline"
+                                                onClick={() =>
+                                                  handleIgnoreChange(result.paragraph_index, result.file_path)
+                                                }
+                                              >
+                                                忽略
+                                              </Button>
+                                            </div>
+                                          </>
+                                        ) : (
+                                          <p className="text-sm text-muted-foreground">
+                                            当前段落没有优化建议
+                                          </p>
+                                        )}
+                                        <ParagraphContext currentIndex={result.paragraph_index} paragraphs={expressionParagraphs} currentText={result.plain_text || result.original} />
+                                      </div>
+                                    </CardContent>
+                                  </Card>
+                                );
+                              })
+                            )}
+                          </div>
+                        </TabsContent>
+                      ))}
+                    </Tabs>
+                  ) : (
+                    filteredResults.map((result) => {
+                      const hasChanges =
+                        result.changes && result.changes.length > 0;
+                      return (
+                        <Card key={result.paragraph_index} id={`expr-result-P${result.paragraph_index}`}>
+                          <CardHeader className="pb-2">
+                            <div className="flex items-center justify-between">
+                              <CardTitle className="text-sm">
+                                第 {result.paragraph_index} 段
+                              </CardTitle>
+                              {hasChanges && (
+                                <span className="rounded bg-destructive/10 text-destructive px-1.5 py-0.5 text-xs font-medium">
+                                  {result.changes.length} 条建议
+                                </span>
+                              )}
+                            </div>
+                          </CardHeader>
+                          <CardContent>
+                            <div className="space-y-3">
+                              {hasChanges ? (
+                                <>
+                                  <ul className="space-y-2">
+                                    {result.changes.map((change, i) => (
+                                      <li
+                                        key={i}
+                                        className="rounded border border-border p-2 text-sm"
+                                      >
+                                        <div className="flex items-center gap-2 mb-1">
+                                          <span className="rounded bg-green-500/10 text-green-600 dark:text-green-400 px-1 py-0.5 text-xs font-medium">
+                                            {change.type}
+                                          </span>
+                                          {change.reason && (
+                                            <span className="text-muted-foreground text-xs">
+                                              {change.reason}
+                                            </span>
+                                          )}
+                                        </div>
+                                        <div className="grid grid-cols-[auto_1fr] gap-x-2 gap-y-1 text-sm">
+                                          <span className="text-muted-foreground whitespace-nowrap mt-0.5">
+                                            原文：
+                                          </span>
+                                          <span className="line-through text-foreground/60 break-all mt-0.5">
+                                            <MarkerText text={change.original} />
+                                          </span>
+                                          <span className="text-muted-foreground whitespace-nowrap mt-0.5">
+                                            修改后：
+                                          </span>
+                                          <span className="font-medium break-all mt-0.5">
+                                            <MarkerText text={change.optimized} />
+                                          </span>
+                                        </div>
+                                      </li>
+                                    ))}
+                                  </ul>
+                                  <div className="flex items-center gap-2">
+                                    <Button
+                                      size="sm"
+                                      onClick={() =>
+                                        handleApplyChange(
+                                          result.paragraph_index,
+                                          result.optimized,
+                                          result.file_path
+                                        )
+                                      }
+                                    >
+                                      应用优化
+                                    </Button>
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      onClick={() =>
+                                        handleIgnoreChange(result.paragraph_index, result.file_path)
+                                      }
+                                    >
+                                      忽略
+                                    </Button>
+                                  </div>
+                                </>
+                              ) : (
+                                <p className="text-sm text-muted-foreground">
+                                  当前段落没有优化建议
+                                </p>
+                              )}
+                              <ParagraphContext currentIndex={result.paragraph_index} paragraphs={expressionParagraphs} currentText={result.plain_text || result.original} />
+                            </div>
+                          </CardContent>
+                        </Card>
+                      );
+                    })
+                  )
                 )}
               </div>
             )}

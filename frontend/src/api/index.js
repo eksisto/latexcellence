@@ -92,9 +92,9 @@ export const api = {
 
   /* ---- 文本校对 ---- */
   typoCheck: {
-    preview: (filePath) =>
+    preview: (filePath, resolveInput = false) =>
       request(
-        `/typo-check/preview?file_path=${encodeURIComponent(filePath)}`
+        `/typo-check/preview?file_path=${encodeURIComponent(filePath)}&resolve_input=${resolveInput}`
       ),
     check: (data) =>
       request("/typo-check/check", {
@@ -106,15 +106,15 @@ export const api = {
         method: "POST",
         body: JSON.stringify(data),
       }),
-    stream: (projectId, filePath) =>
-      `${BASE_URL}/typo-check/stream/${projectId}?file_path=${encodeURIComponent(filePath)}`,
+    stream: (projectId, filePath, resolveInput = false) =>
+      `${BASE_URL}/typo-check/stream/${projectId}?file_path=${encodeURIComponent(filePath)}&resolve_input=${resolveInput}`,
   },
 
   /* ---- 表达优化 ---- */
   expressionOpt: {
-    preview: (filePath) =>
+    preview: (filePath, resolveInput = false) =>
       request(
-        `/expression-opt/preview?file_path=${encodeURIComponent(filePath)}`
+        `/expression-opt/preview?file_path=${encodeURIComponent(filePath)}&resolve_input=${resolveInput}`
       ),
     optimize: (data) =>
       request("/expression-opt/optimize", {
@@ -126,8 +126,8 @@ export const api = {
         method: "POST",
         body: JSON.stringify(data),
       }),
-    stream: (projectId, filePath) =>
-      `${BASE_URL}/expression-opt/stream/${projectId}?file_path=${encodeURIComponent(filePath)}`,
+    stream: (projectId, filePath, resolveInput = false) =>
+      `${BASE_URL}/expression-opt/stream/${projectId}?file_path=${encodeURIComponent(filePath)}&resolve_input=${resolveInput}`,
     prompts: {
       list: () => request("/expression-opt/prompts"),
       load: (name) => request(`/expression-opt/prompts/${encodeURIComponent(name)}`),
@@ -203,9 +203,9 @@ export const api = {
 
   /* ---- 源码格式化 ---- */
   formatting: {
-    preview: (filePath) =>
+    preview: (filePath, resolveInput = false) =>
       request(
-        `/formatting/preview?file_path=${encodeURIComponent(filePath)}`
+        `/formatting/preview?file_path=${encodeURIComponent(filePath)}&resolve_input=${resolveInput}`
       ),
     check: (data) =>
       request("/formatting/check", {
@@ -217,8 +217,8 @@ export const api = {
         method: "POST",
         body: JSON.stringify(data),
       }),
-    stream: (projectId, filePath) =>
-      `${BASE_URL}/formatting/stream/${projectId}?file_path=${encodeURIComponent(filePath)}`,
+    stream: (projectId, filePath, resolveInput = false) =>
+      `${BASE_URL}/formatting/stream/${projectId}?file_path=${encodeURIComponent(filePath)}&resolve_input=${resolveInput}`,
   },
 
   /* ---- 自动编译 ---- */
@@ -257,9 +257,9 @@ export const api = {
 
   /* ---- 术语一致性检查 ---- */
   terminologyCheck: {
-    preview: (filePath) =>
+    preview: (filePath, resolveInput = false) =>
       request(
-        `/terminology-check/preview?file_path=${encodeURIComponent(filePath)}`
+        `/terminology-check/preview?file_path=${encodeURIComponent(filePath)}&resolve_input=${resolveInput}`
       ),
     check: (data) =>
       request("/terminology-check/check", {
@@ -271,8 +271,8 @@ export const api = {
         method: "POST",
         body: JSON.stringify(data),
       }),
-    stream: (projectId, filePath) =>
-      `${BASE_URL}/terminology-check/stream/${projectId}?file_path=${encodeURIComponent(filePath)}`,
+    stream: (projectId, filePath, resolveInput = false) =>
+      `${BASE_URL}/terminology-check/stream/${projectId}?file_path=${encodeURIComponent(filePath)}&resolve_input=${resolveInput}`,
   },
 
   /* ---- 参考文献管理 ---- */

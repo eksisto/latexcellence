@@ -15,9 +15,23 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { ArrowLeft, AlignLeft, Eye, Loader2, ListChecks } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
+import {
+  Tabs,
+  TabsList,
+  TabsTrigger,
+  TabsContent,
+} from "@/components/ui/tabs";
+import {
+  ArrowLeft,
+  AlignLeft,
+  Eye,
+  Loader2,
+  ListChecks,
+} from "lucide-react";
 import { api } from "@/api/index";
-import useParagraphCheck from "@/hooks/useParagraphCheck";
+import useParagraphCheck, { groupByFile } from "@/hooks/useParagraphCheck";
 import ParagraphContext from "@/components/ParagraphContext";
 import ProgressBar from "@/components/ProgressBar";
 import ConfirmDialog from "@/components/ConfirmDialog";
@@ -45,6 +59,9 @@ export default function FormattingPage() {
     applyingAll,
     error,
     message,
+    resolveInput,
+    setResolveInput,
+    activeFiles,
     handlePreview,
     handleCheck,
     handleApplyChange,
@@ -63,11 +80,11 @@ export default function FormattingPage() {
       loadingKey: "formatting",
     },
     messages: {
-        checkLoading: "正在使用 LLM 获取格式化建议...",
-        checkSuccess: (count) => `发现 ${count} 个段落有格式建议`,
-        applySuccess: (idx) => `已应用段落 ${idx} 的格式修改`,
-        applyAllSuccess: (count) => `已批量应用 ${count} 个段落的格式修改`,
-        applyAllEmpty: "没有可应用的格式修改",
+      checkLoading: "正在使用 LLM 获取格式化建议...",
+      checkSuccess: (count) => `发现 ${count} 个段落有格式建议`,
+      applySuccess: (idx) => `已应用段落 ${idx} 的格式修改`,
+      applyAllSuccess: (count) => `已批量应用 ${count} 个段落的格式修改`,
+      applyAllEmpty: "没有可应用的格式修改",
     },
   });
 
@@ -83,11 +100,19 @@ export default function FormattingPage() {
     hasFilters,
   } = useResultFilter(formattingResults, { idPrefix: "fmt-result" });
 
+  const paragraphGroups = groupByFile(formattingParagraphs);
+  const resultGroups = groupByFile(filteredResults);
+
   return (
     <div className="min-h-screen p-8">
       <div className="max-w-6xl mx-auto mb-8">
         <div className="flex items-center gap-4">
-          <Button variant="ghost" size="icon" nativeButton={false} render={<Link to="/" />}>
+          <Button
+            variant="ghost"
+            size="icon"
+            nativeButton={false}
+            render={<Link to="/" />}
+          >
             <ArrowLeft />
           </Button>
           <h1 className="text-3xl font-bold tracking-tight">源码格式化</h1>
@@ -116,7 +141,11 @@ export default function FormattingPage() {
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <Button className="w-full" nativeButton={false} render={<Link to="/workspace" />}>
+                <Button
+                  className="w-full"
+                  nativeButton={false}
+                  render={<Link to="/workspace" />}
+                >
                   打开工作区
                 </Button>
               </CardContent>
@@ -143,6 +172,19 @@ export default function FormattingPage() {
                       ))}
                     </SelectContent>
                   </Select>
+                  <div className="flex items-center gap-2 ml-auto">
+                    <Switch
+                      id="resolve-input"
+                      checked={resolveInput}
+                      onCheckedChange={setResolveInput}
+                    />
+                    <Label
+                      htmlFor="resolve-input"
+                      className="text-sm cursor-pointer"
+                    >
+                      包含子文件（展开 \input）
+                    </Label>
+                  </div>
                 </div>
               </CardHeader>
               <CardContent>
@@ -178,7 +220,11 @@ export default function FormattingPage() {
             </Card>
 
             {progress && (
-              <ProgressBar current={progress.current} total={progress.total} />
+              <ProgressBar
+                current={progress.current}
+                total={progress.total}
+                fileName={progress.file_path}
+              />
             )}
 
             {/* paragraph preview - raw LaTeX source */}
@@ -194,21 +240,52 @@ export default function FormattingPage() {
                     </CardDescription>
                   </CardHeader>
                   <CardContent>
-                    <div className="space-y-3">
-                      {formattingParagraphs.map((p) => (
-                        <div
-                          key={p.index}
-                          className="rounded-lg border border-border p-3"
-                        >
-                          <span className="rounded bg-muted px-1.5 py-0.5 text-xs font-mono mb-1 inline-block">
-                            P{p.index}
-                          </span>
-                          <pre className="text-sm text-foreground/80 mt-1 max-h-40 overflow-auto font-mono leading-relaxed whitespace-pre-wrap break-words bg-muted/30 rounded p-2">
-                            {p.text || "（空白）"}
-                          </pre>
-                        </div>
-                      ))}
-                    </div>
+                    {activeFiles.length > 1 ? (
+                      <Tabs defaultValue={activeFiles[0]}>
+                        <TabsList>
+                          {activeFiles.map((f) => (
+                            <TabsTrigger key={f} value={f}>
+                              {f.split("/").pop()}
+                            </TabsTrigger>
+                          ))}
+                        </TabsList>
+                        {activeFiles.map((f) => (
+                          <TabsContent key={f} value={f}>
+                            <div className="space-y-3">
+                              {(paragraphGroups[f] || []).map((p) => (
+                                <div
+                                  key={p.index}
+                                  className="rounded-lg border border-border p-3"
+                                >
+                                  <span className="rounded bg-muted px-1.5 py-0.5 text-xs font-mono mb-1 inline-block">
+                                    P{p.index}
+                                  </span>
+                                  <pre className="text-sm text-foreground/80 mt-1 max-h-40 overflow-auto font-mono leading-relaxed whitespace-pre-wrap break-words bg-muted/30 rounded p-2">
+                                    {p.text || "（空白）"}
+                                  </pre>
+                                </div>
+                              ))}
+                            </div>
+                          </TabsContent>
+                        ))}
+                      </Tabs>
+                    ) : (
+                      <div className="space-y-3">
+                        {formattingParagraphs.map((p) => (
+                          <div
+                            key={p.index}
+                            className="rounded-lg border border-border p-3"
+                          >
+                            <span className="rounded bg-muted px-1.5 py-0.5 text-xs font-mono mb-1 inline-block">
+                              P{p.index}
+                            </span>
+                            <pre className="text-sm text-foreground/80 mt-1 max-h-40 overflow-auto font-mono leading-relaxed whitespace-pre-wrap break-words bg-muted/30 rounded p-2">
+                              {p.text || "（空白）"}
+                            </pre>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </CardContent>
                 </Card>
               )}
@@ -250,98 +327,226 @@ export default function FormattingPage() {
                   <p className="text-sm text-muted-foreground text-center py-8">
                     没有匹配的格式建议
                   </p>
+                ) : activeFiles.length > 1 ? (
+                  <Tabs defaultValue={activeFiles[0]}>
+                    <TabsList>
+                      {activeFiles.map((f) => (
+                        <TabsTrigger key={f} value={f}>
+                          {f.split("/").pop()}
+                        </TabsTrigger>
+                      ))}
+                    </TabsList>
+                    {activeFiles.map((f) => (
+                      <TabsContent key={f} value={f}>
+                        <div className="space-y-3">
+                          {(resultGroups[f] || []).map((result) => {
+                            const hasChanges =
+                              result.changes && result.changes.length > 0;
+                            return (
+                              <Card
+                                key={`${result.file_path}-fmt-result-P${result.paragraph_index}`}
+                                id={`fmt-result-P${result.paragraph_index}`}
+                              >
+                                <CardHeader className="pb-2">
+                                  <div className="flex items-center justify-between">
+                                    <CardTitle className="text-sm">
+                                      段落 {result.paragraph_index}
+                                    </CardTitle>
+                                    {hasChanges && (
+                                      <span className="rounded bg-primary/10 text-primary px-1.5 py-0.5 text-xs font-medium">
+                                        {result.changes.length} 处排版建议
+                                      </span>
+                                    )}
+                                  </div>
+                                </CardHeader>
+                                <CardContent>
+                                  <div className="space-y-3">
+                                    {hasChanges ? (
+                                      <>
+                                        <ul className="space-y-2">
+                                          {result.changes.map((change, i) => (
+                                            <li
+                                              key={i}
+                                              className="rounded border border-border p-2 text-sm"
+                                            >
+                                              <div className="flex items-center gap-2 mb-1">
+                                                <span className="rounded bg-purple-500/10 text-purple-600 dark:text-purple-400 px-1 py-0.5 text-xs font-medium">
+                                                  {CHANGE_TYPE_LABELS[
+                                                    change.type
+                                                  ] || change.type}
+                                                </span>
+                                                {change.description && (
+                                                  <span className="text-muted-foreground text-xs">
+                                                    {change.description}
+                                                  </span>
+                                                )}
+                                              </div>
+                                              <div className="grid grid-cols-[auto_1fr] gap-x-2 gap-y-1 text-sm">
+                                                <span className="text-muted-foreground whitespace-nowrap mt-0.5">
+                                                  原文：
+                                                </span>
+                                                <pre className="line-through text-foreground/60 break-all mt-0.5 font-mono text-xs whitespace-pre-wrap bg-muted/20 rounded p-1.5">
+                                                  {change.original}
+                                                </pre>
+                                                <span className="text-muted-foreground whitespace-nowrap mt-0.5">
+                                                  排版后：
+                                                </span>
+                                                <pre className="font-medium break-all mt-0.5 font-mono text-xs whitespace-pre-wrap bg-muted/20 rounded p-1.5">
+                                                  {change.corrected}
+                                                </pre>
+                                              </div>
+                                            </li>
+                                          ))}
+                                        </ul>
+                                        <div className="flex items-center gap-2">
+                                          <Button
+                                            size="sm"
+                                            onClick={() =>
+                                              handleApplyChange(
+                                                result.paragraph_index,
+                                                result.corrected,
+                                                result.file_path
+                                              )
+                                            }
+                                          >
+                                            应用排版
+                                          </Button>
+                                          <Button
+                                            size="sm"
+                                            variant="outline"
+                                            onClick={() =>
+                                              handleIgnoreChange(
+                                                result.paragraph_index,
+                                                result.file_path
+                                              )
+                                            }
+                                          >
+                                            忽略
+                                          </Button>
+                                        </div>
+                                      </>
+                                    ) : (
+                                      <p className="text-sm text-muted-foreground">
+                                        此段落无需排版调整。
+                                      </p>
+                                    )}
+                                    <ParagraphContext
+                                      currentIndex={result.paragraph_index}
+                                      paragraphs={formattingParagraphs}
+                                      currentText={
+                                        result.text || result.original
+                                      }
+                                    />
+                                  </div>
+                                </CardContent>
+                              </Card>
+                            );
+                          })}
+                        </div>
+                      </TabsContent>
+                    ))}
+                  </Tabs>
                 ) : (
                   filteredResults.map((result) => {
-                  const hasChanges =
-                    result.changes && result.changes.length > 0;
-                  return (
-                    <Card key={result.paragraph_index} id={`fmt-result-P${result.paragraph_index}`}>
-                      <CardHeader className="pb-2">
-                        <div className="flex items-center justify-between">
-                          <CardTitle className="text-sm">
-                            段落 {result.paragraph_index}
-                          </CardTitle>
-                          {hasChanges && (
-                            <span className="rounded bg-primary/10 text-primary px-1.5 py-0.5 text-xs font-medium">
-                              {result.changes.length} 处排版建议
-                            </span>
-                          )}
-                        </div>
-                      </CardHeader>
-                      <CardContent>
-                        <div className="space-y-3">
-                          {hasChanges ? (
-                            <>
-                              <ul className="space-y-2">
-                                {result.changes.map((change, i) => (
-                                  <li
-                                    key={i}
-                                    className="rounded border border-border p-2 text-sm"
-                                  >
-                                    <div className="flex items-center gap-2 mb-1">
-                                      <span className="rounded bg-purple-500/10 text-purple-600 dark:text-purple-400 px-1 py-0.5 text-xs font-medium">
-                                        {CHANGE_TYPE_LABELS[change.type] || change.type}
-                                      </span>
-                                      {change.description && (
-                                        <span className="text-muted-foreground text-xs">
-                                          {change.description}
+                    const hasChanges =
+                      result.changes && result.changes.length > 0;
+                    return (
+                      <Card
+                        key={`${result.file_path}-fmt-result-P${result.paragraph_index}`}
+                        id={`fmt-result-P${result.paragraph_index}`}
+                      >
+                        <CardHeader className="pb-2">
+                          <div className="flex items-center justify-between">
+                            <CardTitle className="text-sm">
+                              段落 {result.paragraph_index}
+                            </CardTitle>
+                            {hasChanges && (
+                              <span className="rounded bg-primary/10 text-primary px-1.5 py-0.5 text-xs font-medium">
+                                {result.changes.length} 处排版建议
+                              </span>
+                            )}
+                          </div>
+                        </CardHeader>
+                        <CardContent>
+                          <div className="space-y-3">
+                            {hasChanges ? (
+                              <>
+                                <ul className="space-y-2">
+                                  {result.changes.map((change, i) => (
+                                    <li
+                                      key={i}
+                                      className="rounded border border-border p-2 text-sm"
+                                    >
+                                      <div className="flex items-center gap-2 mb-1">
+                                        <span className="rounded bg-purple-500/10 text-purple-600 dark:text-purple-400 px-1 py-0.5 text-xs font-medium">
+                                          {CHANGE_TYPE_LABELS[
+                                            change.type
+                                          ] || change.type}
                                         </span>
-                                      )}
-                                    </div>
-                                    <div className="grid grid-cols-[auto_1fr] gap-x-2 gap-y-1 text-sm">
-                                      <span className="text-muted-foreground whitespace-nowrap mt-0.5">
-                                        原文：
-                                      </span>
-                                      <pre className="line-through text-foreground/60 break-all mt-0.5 font-mono text-xs whitespace-pre-wrap bg-muted/20 rounded p-1.5">
-                                        {change.original}
-                                      </pre>
-                                      <span className="text-muted-foreground whitespace-nowrap mt-0.5">
-                                        排版后：
-                                      </span>
-                                      <pre className="font-medium break-all mt-0.5 font-mono text-xs whitespace-pre-wrap bg-muted/20 rounded p-1.5">
-                                        {change.corrected}
-                                      </pre>
-                                    </div>
-                                  </li>
-                                ))}
-                              </ul>
-                              <div className="flex items-center gap-2">
-                                <Button
-                                  size="sm"
-                                  onClick={() =>
-                                    handleApplyChange(
-                                      result.paragraph_index,
-                                      result.corrected
-                                    )
-                                  }
-                                >
-                                  应用排版
-                                </Button>
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  onClick={() =>
-                                    handleIgnoreChange(result.paragraph_index)
-                                  }
-                                >
-                                  忽略
-                                </Button>
-                              </div>
-                            </>
-                          ) : (
-                            <p className="text-sm text-muted-foreground">
-                              此段落无需排版调整。
-                            </p>
-                          )}
-                          <ParagraphContext
-                            currentIndex={result.paragraph_index}
-                            paragraphs={formattingParagraphs}
-                            currentText={result.text || result.original}
-                          />
-                        </div>
-                      </CardContent>
-                    </Card>
-                  );
+                                        {change.description && (
+                                          <span className="text-muted-foreground text-xs">
+                                            {change.description}
+                                          </span>
+                                        )}
+                                      </div>
+                                      <div className="grid grid-cols-[auto_1fr] gap-x-2 gap-y-1 text-sm">
+                                        <span className="text-muted-foreground whitespace-nowrap mt-0.5">
+                                          原文：
+                                        </span>
+                                        <pre className="line-through text-foreground/60 break-all mt-0.5 font-mono text-xs whitespace-pre-wrap bg-muted/20 rounded p-1.5">
+                                          {change.original}
+                                        </pre>
+                                        <span className="text-muted-foreground whitespace-nowrap mt-0.5">
+                                          排版后：
+                                        </span>
+                                        <pre className="font-medium break-all mt-0.5 font-mono text-xs whitespace-pre-wrap bg-muted/20 rounded p-1.5">
+                                          {change.corrected}
+                                        </pre>
+                                      </div>
+                                    </li>
+                                  ))}
+                                </ul>
+                                <div className="flex items-center gap-2">
+                                  <Button
+                                    size="sm"
+                                    onClick={() =>
+                                      handleApplyChange(
+                                        result.paragraph_index,
+                                        result.corrected,
+                                        result.file_path
+                                      )
+                                    }
+                                  >
+                                    应用排版
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() =>
+                                      handleIgnoreChange(
+                                        result.paragraph_index,
+                                        result.file_path
+                                      )
+                                    }
+                                  >
+                                    忽略
+                                  </Button>
+                                </div>
+                              </>
+                            ) : (
+                              <p className="text-sm text-muted-foreground">
+                                此段落无需排版调整。
+                              </p>
+                            )}
+                            <ParagraphContext
+                              currentIndex={result.paragraph_index}
+                              paragraphs={formattingParagraphs}
+                              currentText={result.text || result.original}
+                            />
+                          </div>
+                        </CardContent>
+                      </Card>
+                    );
                   })
                 )}
               </div>

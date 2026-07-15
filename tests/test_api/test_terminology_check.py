@@ -205,9 +205,9 @@ class TestBuildResults:
     def test_build_results_with_cluster(self, service):
         para_data = [
             {"index": 0, "plain_text": "use machine learning here",
-                "text": "tex0", "marker_map": {}},
+                "text": "tex0", "marker_map": {}, "file_path": "main.tex"},
             {"index": 1, "plain_text": "use Machine Learning here",
-                "text": "tex1", "marker_map": {}},
+                "text": "tex1", "marker_map": {}, "file_path": "main.tex"},
         ]
         all_terms = [
             {"term": "machine learning", "term_type": "concept", "paragraph_index": 0,
@@ -236,9 +236,9 @@ class TestBuildResults:
         """推荐项本身在 variants 中不被替换。"""
         para_data = [
             {"index": 0, "plain_text": "深度学习 is great",
-                "text": "tex0", "marker_map": {}},
+                "text": "tex0", "marker_map": {}, "file_path": "main.tex"},
             {"index": 1, "plain_text": "deep learning is great",
-                "text": "tex1", "marker_map": {}},
+                "text": "tex1", "marker_map": {}, "file_path": "main.tex"},
         ]
         all_terms = [
             {"term": "深度学习", "term_type": "concept", "paragraph_index": 0,
@@ -269,7 +269,7 @@ class TestBuildResults:
         """提取的术语不在段落文本中时不生成 change（安全处理）。"""
         para_data = [
             {"index": 0, "plain_text": "some text",
-                "text": "tex0", "marker_map": {}},
+                "text": "tex0", "marker_map": {}, "file_path": "main.tex"},
         ]
         all_terms = [
             {"term": "missing_term", "term_type": "concept", "paragraph_index": 0,
@@ -465,11 +465,17 @@ class TestCheckNoLLM:
         pm.open(str(temp_project))
 
         paragraphs = pm.get_paragraphs("main.tex")
-        result = service._check_no_llm(
-            "main.tex",
-            paragraphs,
-            list(range(len(paragraphs))),
-        )
+        all_para_data = []
+        for p in paragraphs:
+            stripped, marker_map = service._parser.strip_to_plain_text(p.text)
+            all_para_data.append({
+                "file_path": "main.tex",
+                "index": p.index,
+                "text": p.text,
+                "plain_text": stripped,
+                "marker_map": marker_map,
+            })
+        result = service._check_no_llm("main.tex", all_para_data)
         assert result["file_path"] == "main.tex"
         assert "results" in result
         assert len(result["results"]) == len(paragraphs)

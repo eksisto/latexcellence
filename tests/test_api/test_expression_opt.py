@@ -163,7 +163,7 @@ class TestOptimizeOneParagraph:
         })
 
         result = await service._optimize_one_paragraph(
-            mock_llm, 0, 5, plain, original_tex
+            mock_llm, 0, 5, plain, original_tex, "main.tex"
         )
 
         assert result["paragraph_index"] == 5
@@ -185,7 +185,7 @@ class TestOptimizeOneParagraph:
         })
 
         result = await service._optimize_one_paragraph(
-            mock_llm, 0, 0, plain, original_tex
+            mock_llm, 0, 0, plain, original_tex, "main.tex"
         )
 
         assert result["paragraph_index"] == 0
@@ -205,7 +205,7 @@ class TestOptimizeOneParagraph:
         })
 
         result = await service._optimize_one_paragraph(
-            mock_llm, 0, 0, plain, original_tex
+            mock_llm, 0, 0, plain, original_tex, "main.tex"
         )
 
         assert result["optimized"] == plain
@@ -219,7 +219,7 @@ class TestOptimizeOneParagraph:
         mock_llm.chat = AsyncMock(return_value={"bad": "json"})
 
         result = await service._optimize_one_paragraph(
-            mock_llm, 0, 3, plain, original_tex
+            mock_llm, 0, 3, plain, original_tex, "main.tex"
         )
 
         assert result["optimized"] == plain
@@ -234,7 +234,7 @@ class TestOptimizeOneParagraph:
         mock_llm.chat = AsyncMock(side_effect=Exception("Network error"))
 
         result = await service._optimize_one_paragraph(
-            mock_llm, 0, 7, plain, original_tex
+            mock_llm, 0, 7, plain, original_tex, "main.tex"
         )
 
         assert result["paragraph_index"] == 7

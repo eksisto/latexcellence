@@ -16,9 +16,12 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { ArrowLeft, CheckCheck, Eye, Loader2, ListChecks } from "lucide-react";
 import { api } from "@/api/index";
-import useParagraphCheck from "@/hooks/useParagraphCheck";
+import useParagraphCheck, { groupByFile } from "@/hooks/useParagraphCheck";
 import MarkerText from "@/components/MarkerText";
 import ParagraphContext from "@/components/ParagraphContext";
 import ProgressBar from "@/components/ProgressBar";
@@ -43,6 +46,9 @@ export default function TerminologyCheckPage() {
     applyingAll,
     error,
     message,
+    resolveInput,
+    setResolveInput,
+    activeFiles,
     handlePreview,
     handleCheck,
     handleApplyChange,
@@ -99,7 +105,7 @@ export default function TerminologyCheckPage() {
   const handleApplyWithCustom = useCallback(
     (result) => {
       const corrected = buildCorrectedText(result, customReplacements);
-      handleApplyChange(result.paragraph_index, corrected);
+      handleApplyChange(result.paragraph_index, corrected, result.file_path);
     },
     [customReplacements, buildCorrectedText, handleApplyChange]
   );
@@ -119,6 +125,7 @@ export default function TerminologyCheckPage() {
       const changes = pending.map((r) => ({
         paragraph_index: r.paragraph_index,
         new_text: buildCorrectedText(r, customReplacements),
+        file_path: r.file_path || activeFile,
       }));
       await api.terminologyCheck.apply({ file_path: activeFile, changes });
       const appliedIndices = new Set(pending.map((r) => r.paragraph_index));
@@ -137,6 +144,176 @@ export default function TerminologyCheckPage() {
       });
     }
   }, [terminologyResults, customReplacements, buildCorrectedText, activeFile]);
+
+  const renderParagraphsByFile = (paragraphs) => {
+    if (activeFiles.length > 1) {
+      const groups = groupByFile(paragraphs);
+      return (
+        <Tabs defaultValue={activeFiles[0]}>
+          <TabsList>
+            {activeFiles.map((f) => (
+              <TabsTrigger key={f} value={f}>
+                {f.split("/").pop()}
+              </TabsTrigger>
+            ))}
+          </TabsList>
+          {activeFiles.map((f) => (
+            <TabsContent key={f} value={f}>
+              <div className="space-y-3">
+                {(groups[f] || []).map((p) => (
+                  <div
+                    key={p.index}
+                    className="rounded-lg border border-border p-3"
+                  >
+                    <span className="rounded bg-muted px-1.5 py-0.5 text-xs font-mono mb-1 inline-block">
+                      P{p.index}
+                    </span>
+                    <div className="whitespace-pre-wrap text-sm text-foreground/80 mt-1 max-h-32 overflow-y-auto font-sans leading-relaxed">
+                      {p.plain_text ? <MarkerText text={p.plain_text} /> : "（空白）"}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </TabsContent>
+          ))}
+        </Tabs>
+      );
+    }
+    return (
+      <div className="space-y-3">
+        {paragraphs.map((p) => (
+          <div
+            key={p.index}
+            className="rounded-lg border border-border p-3"
+          >
+            <span className="rounded bg-muted px-1.5 py-0.5 text-xs font-mono mb-1 inline-block">
+              P{p.index}
+            </span>
+            <div className="whitespace-pre-wrap text-sm text-foreground/80 mt-1 max-h-32 overflow-y-auto font-sans leading-relaxed">
+              {p.plain_text ? <MarkerText text={p.plain_text} /> : "（空白）"}
+            </div>
+          </div>
+        ))}
+      </div>
+    );
+  };
+
+  const renderResultCard = (result) => {
+    const hasChanges =
+      result.changes && result.changes.length > 0;
+    return (
+      <Card key={`${result.file_path}-term-result-P${result.paragraph_index}`} id={`term-result-P${result.paragraph_index}`}>
+        <CardHeader className="pb-2">
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-sm">
+              段落 {result.paragraph_index}
+            </CardTitle>
+            {hasChanges && (
+              <span className="rounded bg-destructive/10 text-destructive px-1.5 py-0.5 text-xs font-medium">
+                {result.changes.length} 处问题
+              </span>
+            )}
+          </div>
+          {result.terms && result.terms.length > 0 && (
+            <div className="flex flex-wrap gap-1 mt-1">
+              {result.terms.map((t, i) => (
+                <span
+                  key={i}
+                  className="rounded bg-muted px-1.5 py-0.5 text-xs text-muted-foreground"
+                >
+                  {t}
+                </span>
+              ))}
+            </div>
+          )}
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-3">
+            {hasChanges ? (
+              <>
+                <ul className="space-y-2">
+                  {result.changes.map((change, i) => {
+                    const cKey = `${result.paragraph_index}:${change.original}`;
+                    return (
+                      <li
+                        key={i}
+                        className="rounded border border-border p-2 text-sm"
+                      >
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="rounded bg-orange-500/10 text-orange-600 dark:text-orange-400 px-1 py-0.5 text-xs font-medium">
+                            术语不一致
+                          </span>
+                          {change.concept && (
+                            <span className="text-muted-foreground text-xs font-mono">
+                              → {change.concept}
+                            </span>
+                          )}
+                        </div>
+                        {change.explanation && (
+                          <p className="text-xs text-muted-foreground mb-2">
+                            {change.explanation}
+                          </p>
+                        )}
+                        <div className="grid grid-cols-[auto_1fr] gap-x-2 gap-y-1 text-sm">
+                          <span className="text-muted-foreground whitespace-nowrap mt-0.5">
+                            原文：
+                          </span>
+                          <span className="line-through text-foreground/60 break-all mt-0.5">
+                            <MarkerText text={change.original} />
+                          </span>
+                          <span className="text-muted-foreground whitespace-nowrap mt-0.5">
+                            替换为：
+                          </span>
+                          <div className="mt-0.5 flex items-center gap-2">
+                            <Input
+                              type="text"
+                              value={
+                                customReplacements[cKey] ??
+                                change.corrected
+                              }
+                              onChange={(e) =>
+                                setCustomReplacements((prev) => ({
+                                  ...prev,
+                                  [cKey]: e.target.value,
+                                }))
+                              }
+                              className="h-7 text-sm font-medium"
+                            />
+                          </div>
+                        </div>
+                      </li>
+                    );
+                  })}
+                </ul>
+                <div className="flex items-center gap-2">
+                  <Button
+                    size="sm"
+                    onClick={() => handleApplyWithCustom(result)}
+                  >
+                    应用修改
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() =>
+                      handleIgnoreChange(result.paragraph_index, result.file_path)
+                    }
+                  >
+                    忽略
+                  </Button>
+                </div>
+              </>
+            ) : (
+              <p className="text-sm text-muted-foreground">
+                此段落术语使用一致。
+              </p>
+            )}
+            <ParagraphContext currentIndex={result.paragraph_index} paragraphs={terminologyParagraphs} currentText={result.plain_text || result.original} />
+          </div>
+        </CardContent>
+      </Card>
+    );
+  };
 
   return (
     <div className="min-h-screen p-8">
@@ -197,6 +374,16 @@ export default function TerminologyCheckPage() {
                       ))}
                     </SelectContent>
                   </Select>
+                  <div className="flex items-center gap-2 ml-auto">
+                    <Switch
+                      id="resolve-input"
+                      checked={resolveInput}
+                      onCheckedChange={setResolveInput}
+                    />
+                    <Label htmlFor="resolve-input" className="text-sm cursor-pointer">
+                      包含子文件（展开 \input）
+                    </Label>
+                  </div>
                 </div>
               </CardHeader>
               <CardContent>
@@ -232,7 +419,7 @@ export default function TerminologyCheckPage() {
             </Card>
 
             {progress && (
-              <ProgressBar current={progress.current} total={progress.total} />
+              <ProgressBar current={progress.current} total={progress.total} fileName={progress.file_path} />
             )}
 
             {terminologyParagraphs.length > 0 && terminologyResults.length === 0 && (
@@ -246,21 +433,7 @@ export default function TerminologyCheckPage() {
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <div className="space-y-3">
-                    {terminologyParagraphs.map((p) => (
-                      <div
-                        key={p.index}
-                        className="rounded-lg border border-border p-3"
-                      >
-                        <span className="rounded bg-muted px-1.5 py-0.5 text-xs font-mono mb-1 inline-block">
-                          P{p.index}
-                        </span>
-                        <div className="whitespace-pre-wrap text-sm text-foreground/80 mt-1 max-h-32 overflow-y-auto font-sans leading-relaxed">
-                          {p.plain_text ? <MarkerText text={p.plain_text} /> : "（空白）"}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
+                  {renderParagraphsByFile(terminologyParagraphs)}
                 </CardContent>
               </Card>
             )}
@@ -299,123 +472,29 @@ export default function TerminologyCheckPage() {
                   <p className="text-sm text-muted-foreground text-center py-8">
                     没有匹配的检查结果
                   </p>
+                ) : activeFiles.length > 1 ? (
+                  <Tabs defaultValue={activeFiles[0]}>
+                    <TabsList>
+                      {activeFiles.map((f) => (
+                        <TabsTrigger key={f} value={f}>
+                          {f.split("/").pop()}
+                        </TabsTrigger>
+                      ))}
+                    </TabsList>
+                    {activeFiles.map((f) => (
+                      <TabsContent key={f} value={f}>
+                        <div className="space-y-4">
+                          {filteredResults
+                            .filter((r) => (r.file_path || "") === f)
+                            .map((result) => renderResultCard(result))}
+                        </div>
+                      </TabsContent>
+                    ))}
+                  </Tabs>
                 ) : (
-                  filteredResults.map((result) => {
-                  const hasChanges =
-                    result.changes && result.changes.length > 0;
-                  return (
-                    <Card key={result.paragraph_index} id={`term-result-P${result.paragraph_index}`}>
-                      <CardHeader className="pb-2">
-                        <div className="flex items-center justify-between">
-                          <CardTitle className="text-sm">
-                            段落 {result.paragraph_index}
-                          </CardTitle>
-                          {hasChanges && (
-                            <span className="rounded bg-destructive/10 text-destructive px-1.5 py-0.5 text-xs font-medium">
-                              {result.changes.length} 处问题
-                            </span>
-                          )}
-                        </div>
-                        {result.terms && result.terms.length > 0 && (
-                          <div className="flex flex-wrap gap-1 mt-1">
-                            {result.terms.map((t, i) => (
-                              <span
-                                key={i}
-                                className="rounded bg-muted px-1.5 py-0.5 text-xs text-muted-foreground"
-                              >
-                                {t}
-                              </span>
-                            ))}
-                          </div>
-                        )}
-                      </CardHeader>
-                      <CardContent>
-                        <div className="space-y-3">
-                          {hasChanges ? (
-                            <>
-                              <ul className="space-y-2">
-                                {result.changes.map((change, i) => {
-                                  const cKey = `${result.paragraph_index}:${change.original}`;
-                                  return (
-                                    <li
-                                      key={i}
-                                      className="rounded border border-border p-2 text-sm"
-                                    >
-                                      <div className="flex items-center gap-2 mb-1">
-                                        <span className="rounded bg-orange-500/10 text-orange-600 dark:text-orange-400 px-1 py-0.5 text-xs font-medium">
-                                          术语不一致
-                                        </span>
-                                        {change.concept && (
-                                          <span className="text-muted-foreground text-xs font-mono">
-                                            → {change.concept}
-                                          </span>
-                                        )}
-                                      </div>
-                                      {change.explanation && (
-                                        <p className="text-xs text-muted-foreground mb-2">
-                                          {change.explanation}
-                                        </p>
-                                      )}
-                                      <div className="grid grid-cols-[auto_1fr] gap-x-2 gap-y-1 text-sm">
-                                        <span className="text-muted-foreground whitespace-nowrap mt-0.5">
-                                          原文：
-                                        </span>
-                                        <span className="line-through text-foreground/60 break-all mt-0.5">
-                                          <MarkerText text={change.original} />
-                                        </span>
-                                        <span className="text-muted-foreground whitespace-nowrap mt-0.5">
-                                          替换为：
-                                        </span>
-                                        <div className="mt-0.5 flex items-center gap-2">
-                                          <Input
-                                            type="text"
-                                            value={
-                                              customReplacements[cKey] ??
-                                              change.corrected
-                                            }
-                                            onChange={(e) =>
-                                              setCustomReplacements((prev) => ({
-                                                ...prev,
-                                                [cKey]: e.target.value,
-                                              }))
-                                            }
-                                            className="h-7 text-sm font-medium"
-                                          />
-                                        </div>
-                                      </div>
-                                    </li>
-                                  );
-                                })}
-                              </ul>
-                              <div className="flex items-center gap-2">
-                                <Button
-                                  size="sm"
-                                  onClick={() => handleApplyWithCustom(result)}
-                                >
-                                  应用修改
-                                </Button>
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  onClick={() =>
-                                    handleIgnoreChange(result.paragraph_index)
-                                  }
-                                >
-                                  忽略
-                                </Button>
-                              </div>
-                            </>
-                          ) : (
-                            <p className="text-sm text-muted-foreground">
-                              此段落术语使用一致。
-                            </p>
-                          )}
-                          <ParagraphContext currentIndex={result.paragraph_index} paragraphs={terminologyParagraphs} currentText={result.plain_text || result.original} />
-                        </div>
-                      </CardContent>
-                    </Card>
-                  );
-                  })
+                  <div className="space-y-4">
+                    {filteredResults.map((result) => renderResultCard(result))}
+                  </div>
                 )}
               </div>
             )}
