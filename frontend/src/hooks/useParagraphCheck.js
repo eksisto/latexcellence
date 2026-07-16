@@ -63,24 +63,23 @@ export default function useParagraphCheck({
     applyAllEmpty: "没有可应用的修改",
   },
 }) {
-  const store = useStore();
-  const {
-    fileTree,
-    projectPath,
-    activeFile,
-    setActiveFile,
-    setRootPath,
-    setProjectPath,
-    setFileTree,
-    setMainFile,
-    loadingStates,
-    setLoading,
-  } = store;
+  const fileTree = useStore((s) => s.fileTree);
+  const projectPath = useStore((s) => s.projectPath);
+  const activeFile = useStore((s) => s.activeFile);
+  const setActiveFile = useStore((s) => s.setActiveFile);
+  const setRootPath = useStore((s) => s.setRootPath);
+  const setProjectPath = useStore((s) => s.setProjectPath);
+  const setFileTree = useStore((s) => s.setFileTree);
+  const setMainFile = useStore((s) => s.setMainFile);
+  const setLoading = useStore((s) => s.setLoading);
+  const setCheckProgress = useStore((s) => s.setCheckProgress);
+  const checkProgress = useStore((s) => s.checkProgress);
+  const isLoading = useStore((s) => s.loadingStates[storeSlice.loadingKey]);
 
-  const paragraphs = store[storeSlice.paragraphsKey];
-  const setParagraphs = store[storeSlice.setParagraphsKey];
-  const results = store[storeSlice.resultsKey];
-  const setResults = store[storeSlice.setResultsKey];
+  const paragraphs = useStore((s) => s[storeSlice.paragraphsKey]);
+  const setParagraphs = useStore((s) => s[storeSlice.setParagraphsKey]);
+  const results = useStore((s) => s[storeSlice.resultsKey]);
+  const setResults = useStore((s) => s[storeSlice.setResultsKey]);
 
   const [error, setError] = useState(null);
   const [message, setMessage] = useState(null);
@@ -99,10 +98,7 @@ export default function useParagraphCheck({
   // 从段落和结果中提取文件列表（用于 Tab 展示）
   const paragraphFiles = useMemo(() => extractFileList(paragraphs), [paragraphs]);
   const resultFiles = useMemo(() => extractFileList(results), [results]);
-  const activeFiles = useMemo(() => {
-    const src = resultFiles.length > 0 ? resultFiles : paragraphFiles;
-    return src;
-  }, [paragraphFiles, resultFiles]);
+  const activeFiles = resultFiles.length > 0 ? resultFiles : paragraphFiles;
 
   // 项目恢复逻辑
   useEffect(() => {
@@ -170,9 +166,9 @@ export default function useParagraphCheck({
       bufferRef.current = [];
       setIsPaused(false);
       setLoading(storeSlice.loadingKey, false);
-      if (progressNull) store.setCheckProgress(null);
+      if (progressNull) setCheckProgress(null);
     },
-    [storeSlice.loadingKey, setLoading, store]
+    [storeSlice.loadingKey, setLoading, setCheckProgress]
   );
 
   const drainBuffer = useCallback(() => {
@@ -235,7 +231,7 @@ export default function useParagraphCheck({
     setMessage(messages.checkLoading);
     setResults([]);
     resultsWithChangesRef.current = 0;
-    store.setCheckProgress({ current: 0, total: paragraphs.length });
+    setCheckProgress({ current: 0, total: paragraphs.length });
 
     const url = apiModule.stream(
       encodeURIComponent(projectPath),
@@ -251,7 +247,7 @@ export default function useParagraphCheck({
         const data = JSON.parse(event.data);
 
         if (data.type === "progress") {
-          store.setCheckProgress({
+          setCheckProgress({
             current: data.current,
             total: data.total,
             file_path: data.file_path || null,
@@ -314,10 +310,10 @@ export default function useParagraphCheck({
     storeSlice.loadingKey,
     paragraphs.length,
     setLoading,
+    setCheckProgress,
     setResults,
     setError,
     messages,
-    store,
     finalizeCheck,
   ]);
 
@@ -420,14 +416,14 @@ export default function useParagraphCheck({
       pausedRef.current = false;
       bufferRef.current = [];
       setIsPaused(false);
-      store.setCheckProgress(null);
+      setCheckProgress(null);
       setActiveFile(path);
       setParagraphs([]);
       setResults([]);
       setError(null);
       setMessage(null);
     },
-    [setActiveFile, setParagraphs, setResults, store]
+    [setActiveFile, setParagraphs, setResults, setCheckProgress]
   );
 
   // 组件卸载时关闭 SSE 连接
@@ -448,8 +444,8 @@ export default function useParagraphCheck({
     texFiles,
     paragraphs,
     results,
-    isLoading: loadingStates[storeSlice.loadingKey],
-    progress: store.checkProgress,
+    isLoading,
+    progress: checkProgress,
     restoring,
     applyingAll,
     isPaused,

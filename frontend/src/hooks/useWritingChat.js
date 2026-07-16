@@ -49,29 +49,24 @@ function processLoadedMessages(messages) {
 }
 
 export default function useWritingChat() {
-  const store = useStore();
-  const {
-    projectPath,
-    fileTree,
-    activeFile,
-    setActiveFile,
-    rootPath,
-    setRootPath,
-    setProjectPath,
-    setFileTree,
-    setMainFile,
-    loadingStates,
-    setLoading,
-    // writing chat store slice
-    writingChatSessions,
-    writingChatMessages,
-    writingChatCurrentSessionId,
-    writingChatCompressed,
-    setWritingChatSessions,
-    setWritingChatMessages,
-    setWritingChatCurrentSessionId,
-    setWritingChatCompressed,
-  } = store;
+  const projectPath = useStore((s) => s.projectPath);
+  const fileTree = useStore((s) => s.fileTree);
+  const activeFile = useStore((s) => s.activeFile);
+  const setActiveFile = useStore((s) => s.setActiveFile);
+  const setRootPath = useStore((s) => s.setRootPath);
+  const setProjectPath = useStore((s) => s.setProjectPath);
+  const setFileTree = useStore((s) => s.setFileTree);
+  const setMainFile = useStore((s) => s.setMainFile);
+  const setLoading = useStore((s) => s.setLoading);
+  const writingChatLoading = useStore((s) => s.loadingStates.writingChat);
+  const writingChatSessions = useStore((s) => s.writingChatSessions);
+  const writingChatMessages = useStore((s) => s.writingChatMessages);
+  const writingChatCurrentSessionId = useStore((s) => s.writingChatCurrentSessionId);
+  const writingChatCompressed = useStore((s) => s.writingChatCompressed);
+  const setWritingChatSessions = useStore((s) => s.setWritingChatSessions);
+  const setWritingChatMessages = useStore((s) => s.setWritingChatMessages);
+  const setWritingChatCurrentSessionId = useStore((s) => s.setWritingChatCurrentSessionId);
+  const setWritingChatCompressed = useStore((s) => s.setWritingChatCompressed);
 
   const [paragraphIndex, setParagraphIndex] = useState(null);
   const [paragraphs, setParagraphs] = useState([]);
@@ -579,7 +574,7 @@ export default function useWritingChat() {
     input,
     setInput,
     streaming,
-    loading: loadingStates.writingChat,
+    loading: writingChatLoading,
     error,
     editingMessageId,
     applyingMessageId,

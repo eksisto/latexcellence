@@ -48,26 +48,24 @@ function flattenTexFiles(nodes) {
 }
 
 export default function WorkspacePage() {
-  const {
-    projectPath,
-    rootPath,
-    fileTree,
-    activeFile,
-    mainFile,
-    setProjectPath,
-    setRootPath,
-    setFileTree,
-    setActiveFile,
-    setMainFile,
-    clearProject,
-    enabledFeatures,
-    compileResult,
-    compileLoading,
-    setCompileResult,
-    setCompileLoading,
-    pdfUrl,
-    setPdfUrl,
-  } = useStore();
+  const projectPath = useStore((s) => s.projectPath);
+  const rootPath = useStore((s) => s.rootPath);
+  const fileTree = useStore((s) => s.fileTree);
+  const activeFile = useStore((s) => s.activeFile);
+  const mainFile = useStore((s) => s.mainFile);
+  const setProjectPath = useStore((s) => s.setProjectPath);
+  const setRootPath = useStore((s) => s.setRootPath);
+  const setFileTree = useStore((s) => s.setFileTree);
+  const setActiveFile = useStore((s) => s.setActiveFile);
+  const setMainFile = useStore((s) => s.setMainFile);
+  const clearProject = useStore((s) => s.clearProject);
+  const enabledFeatures = useStore((s) => s.enabledFeatures);
+  const compileResult = useStore((s) => s.compileResult);
+  const compileLoading = useStore((s) => s.compileLoading);
+  const setCompileResult = useStore((s) => s.setCompileResult);
+  const setCompileLoading = useStore((s) => s.setCompileLoading);
+  const pdfUrl = useStore((s) => s.pdfUrl);
+  const setPdfUrl = useStore((s) => s.setPdfUrl);
 
   const [openPath, setOpenPath] = useState("");
   const [paragraphs, setParagraphs] = useState([]);

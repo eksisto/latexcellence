@@ -38,7 +38,8 @@ import { api } from "@/api/index";
 import useStore from "@/store/useStore";
 
 export default function BibManagerPage() {
-  const { projectPath, rootPath } = useStore();
+  const projectPath = useStore((s) => s.projectPath);
+  const rootPath = useStore((s) => s.rootPath);
 
   // Step 1: format analysis
   const [example, setExample] = useState("");

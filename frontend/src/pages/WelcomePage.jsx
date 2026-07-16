@@ -156,7 +156,8 @@ const featureGroups = [
 ];
 
 export default function WelcomePage() {
-  const { enabledFeatures, setEnabledFeatures } = useStore();
+  const enabledFeatures = useStore((s) => s.enabledFeatures);
+  const setEnabledFeatures = useStore((s) => s.setEnabledFeatures);
 
   useEffect(() => {
     // 只有在未加载过时才获取（保存配置后会更新全局状态）

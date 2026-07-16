@@ -67,17 +67,15 @@ function revisionLabel(revision) {
 }
 
 export default function GitDiffPage() {
-  const {
-    projectPath,
-    rootPath,
-    fileTree,
-    mainFile,
-    setProjectPath,
-    setRootPath,
-    setFileTree,
-    setMainFile,
-    setActiveFile,
-  } = useStore();
+  const projectPath = useStore((s) => s.projectPath);
+  const rootPath = useStore((s) => s.rootPath);
+  const fileTree = useStore((s) => s.fileTree);
+  const mainFile = useStore((s) => s.mainFile);
+  const setProjectPath = useStore((s) => s.setProjectPath);
+  const setRootPath = useStore((s) => s.setRootPath);
+  const setFileTree = useStore((s) => s.setFileTree);
+  const setMainFile = useStore((s) => s.setMainFile);
+  const setActiveFile = useStore((s) => s.setActiveFile);
 
   const [refs, setRefs] = useState([]);
   const [gitRoot, setGitRoot] = useState("");

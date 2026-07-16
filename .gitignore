@@ -9,6 +9,10 @@ TODO.md
 PROJECT_SUMMARY.md
 docs/
 
+# Skill
+.opencode/
+skills-lock.json
+
 # Python
 __pycache__/
 *.py[cod]
