@@ -349,28 +349,14 @@ export default function WorkspacePage() {
               {activeFile && (
                 <div className="flex items-center gap-1 ml-auto">
                   <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button
-                        variant="outline"
-                        size="icon"
-                        onClick={() => setConfirmUndoOpen(true)}
-                        disabled={!canUndo || undoBusy}
-                      >
-                        <Undo2 />
-                      </Button>
+                    <TooltipTrigger render={<Button variant="outline" size="icon" onClick={() => setConfirmUndoOpen(true)} disabled={!canUndo || undoBusy} />}>
+                      <Undo2 />
                     </TooltipTrigger>
                     <TooltipContent>撤销 (Ctrl+Z)</TooltipContent>
                   </Tooltip>
                   <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button
-                        variant="outline"
-                        size="icon"
-                        onClick={handleRedo}
-                        disabled={!canRedo || undoBusy}
-                      >
-                        <Redo2 />
-                      </Button>
+                    <TooltipTrigger render={<Button variant="outline" size="icon" onClick={handleRedo} disabled={!canRedo || undoBusy} />}>
+                      <Redo2 />
                     </TooltipTrigger>
                     <TooltipContent>重做 (Ctrl+Shift+Z)</TooltipContent>
                   </Tooltip>
@@ -431,28 +417,14 @@ export default function WorkspacePage() {
                     {activeFile && activeFile.endsWith(".tex") && (
                       <div className="flex items-center gap-1">
                         <Tooltip>
-                          <TooltipTrigger asChild>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              nativeButton={false}
-                              render={<Link to="/typo-check" />}
-                            >
-                              <SpellCheck />
-                            </Button>
+                          <TooltipTrigger render={<Button variant="outline" size="sm" nativeButton={false} render={<Link to="/typo-check" />} />}>
+                            <SpellCheck />
                           </TooltipTrigger>
                           <TooltipContent>文本校对</TooltipContent>
                         </Tooltip>
                         <Tooltip>
-                          <TooltipTrigger asChild>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              nativeButton={false}
-                              render={<Link to="/terminology-check" />}
-                            >
-                              <BookOpen />
-                            </Button>
+                          <TooltipTrigger render={<Button variant="outline" size="sm" nativeButton={false} render={<Link to="/terminology-check" />} />}>
+                            <BookOpen />
                           </TooltipTrigger>
                           <TooltipContent>术语一致性检查</TooltipContent>
                         </Tooltip>

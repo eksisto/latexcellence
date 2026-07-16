@@ -112,11 +112,9 @@ export default function SettingsDialog() {
   if (!config) {
     return (
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogTrigger asChild>
-          <Button variant="ghost" size="icon">
-            <Settings className="size-5" />
-            <span className="sr-only">设置</span>
-          </Button>
+        <DialogTrigger render={<Button variant="ghost" size="icon" />}>
+          <Settings className="size-5" />
+          <span className="sr-only">设置</span>
         </DialogTrigger>
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
@@ -134,11 +132,9 @@ export default function SettingsDialog() {
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button variant="ghost" size="icon">
-          <Settings className="size-5" />
-          <span className="sr-only">设置</span>
-        </Button>
+      <DialogTrigger render={<Button variant="ghost" size="icon" />}>
+        <Settings className="size-5" />
+        <span className="sr-only">设置</span>
       </DialogTrigger>
       <DialogContent className="sm:max-w-lg max-h-[85vh] flex flex-col">
         <DialogHeader>
