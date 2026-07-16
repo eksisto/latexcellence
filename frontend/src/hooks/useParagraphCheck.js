@@ -95,6 +95,18 @@ export default function useParagraphCheck({
 
   const texFiles = useMemo(() => flattenTexFiles(fileTree), [fileTree]);
 
+  // 从段落中提取 DFS 文件顺序，用于结果排序时保持文件分组
+  const fileOrderRef = useRef(new Map());
+  useEffect(() => {
+    const map = new Map();
+    for (const p of paragraphs) {
+      if (p.file_path && !map.has(p.file_path)) {
+        map.set(p.file_path, map.size);
+      }
+    }
+    fileOrderRef.current = map;
+  }, [paragraphs]);
+
   // 从段落和结果中提取文件列表（用于 Tab 展示）
   const paragraphFiles = useMemo(() => extractFileList(paragraphs), [paragraphs]);
   const resultFiles = useMemo(() => extractFileList(results), [results]);
@@ -175,6 +187,7 @@ export default function useParagraphCheck({
     const buf = bufferRef.current;
     if (buf.length === 0) return;
     bufferRef.current = [];
+    const fileOrder = fileOrderRef.current;
     for (const r of buf) {
       if (r.changes && r.changes.length > 0) {
         resultsWithChangesRef.current += 1;
@@ -185,6 +198,9 @@ export default function useParagraphCheck({
           const aHas = a.changes && a.changes.length > 0;
           const bHas = b.changes && b.changes.length > 0;
           if (aHas !== bHas) return aHas ? -1 : 1;
+          const aOrder = fileOrder.get(a.file_path) ?? Infinity;
+          const bOrder = fileOrder.get(b.file_path) ?? Infinity;
+          if (aOrder !== bOrder) return aOrder - bOrder;
           return a.paragraph_index - b.paragraph_index;
         });
         return next;
@@ -266,10 +282,14 @@ export default function useParagraphCheck({
               }
               setResults((prev) => {
                 const next = [...prev, r];
+                const fileOrder = fileOrderRef.current;
                 next.sort((a, b) => {
                   const aHas = a.changes && a.changes.length > 0;
                   const bHas = b.changes && b.changes.length > 0;
                   if (aHas !== bHas) return aHas ? -1 : 1;
+                  const aOrder = fileOrder.get(a.file_path) ?? Infinity;
+                  const bOrder = fileOrder.get(b.file_path) ?? Infinity;
+                  if (aOrder !== bOrder) return aOrder - bOrder;
                   return a.paragraph_index - b.paragraph_index;
                 });
                 return next;

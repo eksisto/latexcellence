@@ -430,22 +430,32 @@ export default function WorkspacePage() {
                     </div>
                     {activeFile && activeFile.endsWith(".tex") && (
                       <div className="flex items-center gap-1">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          nativeButton={false}
-                          render={<Link to="/typo-check" />}
-                        >
-                          <SpellCheck />
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          nativeButton={false}
-                          render={<Link to="/terminology-check" />}
-                        >
-                          <BookOpen />
-                        </Button>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              nativeButton={false}
+                              render={<Link to="/typo-check" />}
+                            >
+                              <SpellCheck />
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent>文本校对</TooltipContent>
+                        </Tooltip>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              nativeButton={false}
+                              render={<Link to="/terminology-check" />}
+                            >
+                              <BookOpen />
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent>术语一致性检查</TooltipContent>
+                        </Tooltip>
                       </div>
                     )}
                   </div>
