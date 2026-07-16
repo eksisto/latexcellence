@@ -552,11 +552,14 @@ export default function useWritingChat() {
 
   const handleFileChange = useCallback(
     (path) => {
+      // 选择当前已选中的文件时直接返回，否则 setActiveFile 同值不触发 re-render，
+      // 导致后续 setParagraphs([]) 清空段落却不会重新加载
+      if (path === activeFile) return;
       setActiveFile(path);
       setParagraphIndex(null);
       setParagraphs([]);
     },
-    [setActiveFile]
+    [setActiveFile, activeFile]
   );
 
   return {
