@@ -31,6 +31,7 @@ import useStore from "@/store/useStore";
 import useUndoRedo from "@/hooks/useUndoRedo";
 import ProjectExplorer from "@/components/ProjectExplorer";
 import ConfirmDialog from "@/components/ConfirmDialog";
+import FolderPickerDialog from "@/components/FolderPickerDialog";
 import PDFPreview from "@/components/PDFPreview";
 
 function flattenTexFiles(nodes) {
@@ -76,6 +77,7 @@ export default function WorkspacePage() {
   const [showRawOutput, setShowRawOutput] = useState(false);
   const [confirmCloseOpen, setConfirmCloseOpen] = useState(false);
   const [confirmUndoOpen, setConfirmUndoOpen] = useState(false);
+  const [folderPickerOpen, setFolderPickerOpen] = useState(false);
   const restoredRef = useRef(false);
 
   const handleCloseProject = useCallback(() => {
@@ -145,6 +147,15 @@ export default function WorkspacePage() {
     if (!openPath.trim()) return;
     await doOpenProject(openPath.trim());
   }, [openPath, doOpenProject]);
+
+  const handleBrowseFolder = useCallback(async () => {
+    setFolderPickerOpen(true);
+  }, []);
+
+  const handleFolderSelected = useCallback(async (path) => {
+    setOpenPath(path);
+    await doOpenProject(path);
+  }, [doOpenProject]);
 
   const handleOpenLastProject = useCallback(async () => {
     if (!lastPath) return;
@@ -254,20 +265,31 @@ export default function WorkspacePage() {
             <Card className="max-w-lg w-full">
               <CardHeader>
                 <CardTitle>打开一个 LaTeX 项目</CardTitle>
-                <CardDescription>
-                  输入 LaTeX 项目目录路径
-                </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="space-y-2">
                   <Label htmlFor="project-path">项目目录路径</Label>
-                  <Input
-                    id="project-path"
-                    value={openPath}
-                    onChange={(e) => setOpenPath(e.target.value)}
-                    placeholder="例如：C:\Users\YourName\paper"
-                    onKeyDown={(e) => e.key === "Enter" && handleOpenProject()}
-                  />
+                  <div className="flex gap-2">
+                    <Input
+                      id="project-path"
+                      className="flex-1"
+                      value={openPath}
+                      onChange={(e) => setOpenPath(e.target.value)}
+                      placeholder="例如：C:\Users\YourName\paper"
+                      onKeyDown={(e) => e.key === "Enter" && handleOpenProject()}
+                    />
+                    <Button
+                      variant="outline"
+                      onClick={handleBrowseFolder}
+                      disabled={loading}
+                      type="button"
+                    >
+                      浏览
+                    </Button>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    输入项目路径，或点击「浏览」进行选择
+                  </p>
                 </div>
                 {error && (
                   <p className="text-destructive text-sm">{error}</p>
@@ -551,6 +573,12 @@ export default function WorkspacePage() {
           await handleUndo();
           setConfirmUndoOpen(false);
         }}
+      />
+      <FolderPickerDialog
+        open={folderPickerOpen}
+        onOpenChange={setFolderPickerOpen}
+        onSelect={handleFolderSelected}
+        initialPath={openPath || ""}
       />
     </div>
   );

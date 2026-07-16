@@ -50,6 +50,8 @@ export const api = {
         method: "POST",
         body: JSON.stringify({ path }),
       }),
+    browse: (path = "") =>
+      request(`/project/browse?path=${encodeURIComponent(path)}`),
     lastOpened: () => request("/project/last-opened"),
     fileTree: () => request("/project/file-tree"),
     paragraphs: (filePath) =>

@@ -57,6 +57,40 @@ async def open_project(request: OpenProjectRequest):
         raise HTTPException(status_code=400, detail=str(e))
 
 
+@router.get("/browse")
+async def browse_directory(path: str = Query(default="", description="目录路径，默认为磁盘根目录")):
+    """
+    浏览指定路径下的子目录列表。
+    供前端文件夹选择器使用，返回子目录名称和完整路径。
+    """
+    target = Path(path) if path else Path.cwd()
+    try:
+        if not target.exists():
+            raise HTTPException(status_code=400, detail=f"路径不存在: {path}")
+        if not target.is_dir():
+            raise HTTPException(status_code=400, detail=f"不是目录: {path}")
+        entries = []
+        for entry in sorted(target.iterdir()):
+            if entry.name.startswith("."):
+                continue
+            if entry.is_dir():
+                entries.append({
+                    "name": entry.name,
+                    "path": str(entry.resolve()),
+                })
+        return {
+            "current": str(target.resolve()),
+            "parent": str(target.parent.resolve()) if target.parent != target else None,
+            "directories": entries,
+        }
+    except PermissionError:
+        raise HTTPException(status_code=403, detail=f"无权访问目录: {path}")
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
 @router.get("/last-opened")
 async def get_last_opened():
     """
