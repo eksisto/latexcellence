@@ -636,10 +636,10 @@ export default function WritingChatPage() {
 
           {/* 右：聊天区 */}
           <Card className="h-[calc(100vh-160px)] min-h-[400px] flex flex-col">
-            <CardContent className="flex-1 flex flex-col p-2 overflow-hidden">
+            <CardContent className="flex-1 flex flex-col p-2 overflow-hidden rounded-t-xl">
               <div
                 ref={scrollRef}
-                className="flex-1 overflow-y-auto space-y-4 pr-1"
+                className="flex-1 overflow-y-auto space-y-4 pr-1 rounded-t-xl"
               >
                 {messages.length === 0 && !streaming && (
                   <div className="h-full flex items-center justify-center text-muted-foreground text-sm">
