@@ -51,13 +51,15 @@ function flattenTexFiles(nodes) {
   return result;
 }
 
+const REVISION_KIND_TO_GROUP = { worktree: "worktree", commit: "commits", branch: "branches", tag: "tags" };
+
 function groupRevisions(revisions) {
-  return {
-    worktree: revisions.filter((r) => r.kind === "worktree"),
-    commits: revisions.filter((r) => r.kind === "commit"),
-    branches: revisions.filter((r) => r.kind === "branch"),
-    tags: revisions.filter((r) => r.kind === "tag"),
-  };
+  const groups = { worktree: [], commits: [], branches: [], tags: [] };
+  for (const r of revisions) {
+    const key = REVISION_KIND_TO_GROUP[r.kind];
+    if (key) groups[key].push(r);
+  }
+  return groups;
 }
 
 function revisionLabel(revision) {

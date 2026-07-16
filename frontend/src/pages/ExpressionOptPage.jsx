@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useMemo } from "react";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -193,8 +193,14 @@ export default function ExpressionOptPage() {
     };
   }, [activePrompt]);
 
-  const paragraphsByFile = activeFiles.length > 1 ? groupByFile(expressionParagraphs) : [];
-  const resultsByFile = activeFiles.length > 1 ? groupByFile(expressionResults) : [];
+  const paragraphsByFile = useMemo(
+    () => activeFiles.length > 1 ? groupByFile(expressionParagraphs) : [],
+    [activeFiles.length, expressionParagraphs]
+  );
+  const resultsByFile = useMemo(
+    () => activeFiles.length > 1 ? groupByFile(expressionResults) : [],
+    [activeFiles.length, expressionResults]
+  );
 
   return (
     <div className="min-h-screen p-8">

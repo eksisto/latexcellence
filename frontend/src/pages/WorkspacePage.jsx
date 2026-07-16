@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useRef } from "react";
+import { useState, useCallback, useEffect, useRef, useMemo } from "react";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -66,6 +66,8 @@ export default function WorkspacePage() {
   const setCompileLoading = useStore((s) => s.setCompileLoading);
   const pdfUrl = useStore((s) => s.pdfUrl);
   const setPdfUrl = useStore((s) => s.setPdfUrl);
+
+  const texFiles = useMemo(() => flattenTexFiles(fileTree), [fileTree]);
 
   const [openPath, setOpenPath] = useState("");
   const [paragraphs, setParagraphs] = useState([]);
@@ -324,7 +326,7 @@ export default function WorkspacePage() {
                   <SelectValue placeholder="选择主 .tex 文件" />
                 </SelectTrigger>
                 <SelectContent>
-                  {flattenTexFiles(fileTree).map((f) => (
+                  {texFiles.map((f) => (
                     <SelectItem key={f.path} value={f.path}>
                       {f.path}
                     </SelectItem>

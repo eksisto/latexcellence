@@ -375,7 +375,7 @@ export default function WritingChatPage() {
 
   const canEdit = paragraphIndex != null && !!activeFile;
 
-  const messageActions = {
+  const messageActions = useMemo(() => ({
     generateEdit,
     applyEdit,
     deleteMessage,
@@ -383,7 +383,7 @@ export default function WritingChatPage() {
     editingMessageId,
     applyingMessageId,
     canEdit,
-  };
+  }), [generateEdit, applyEdit, deleteMessage, undoMessage, editingMessageId, applyingMessageId, canEdit]);
 
   return (
     <div className="min-h-screen p-4 md:p-8">

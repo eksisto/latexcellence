@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useMemo } from "react";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import {
@@ -48,9 +48,9 @@ export default function TemplateGenPage() {
     }
   }, [result]);
 
-  const handleCopy = useCallback(() => {
-    if (!result) return;
-    const content = [
+  const fullTemplate = useMemo(() => {
+    if (!result) return "";
+    return [
       result.preamble || "",
       "",
       "\\begin{document}",
@@ -60,21 +60,12 @@ export default function TemplateGenPage() {
       ),
       "\\end{document}",
     ].join("\n");
-    navigator.clipboard.writeText(content).catch(() => {});
   }, [result]);
 
-  const fullTemplate = result
-    ? [
-        result.preamble || "",
-        "",
-        "\\begin{document}",
-        "",
-        ...(result.body_structure || []).map(
-          (s) => `\\section{${s.section}}\n% ${s.suggested_content || ""}\n`
-        ),
-        "\\end{document}",
-      ].join("\n")
-    : "";
+  const handleCopy = useCallback(() => {
+    if (!fullTemplate) return;
+    navigator.clipboard.writeText(fullTemplate).catch(() => {});
+  }, [fullTemplate]);
 
   return (
     <div className="min-h-screen p-8">
