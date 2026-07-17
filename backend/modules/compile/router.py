@@ -8,11 +8,11 @@ from pathlib import Path
 
 from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import FileResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 
 from backend.core.logger import get_logger
 from backend.core.project_manager import get_project_manager
-from backend.modules.compile.service import compile_latex
+from backend.modules.compile.service import compile_latex, _validate_main_file
 
 router = APIRouter(prefix="/api/compile", tags=["compile"])
 logger = get_logger(__name__)
@@ -20,6 +20,20 @@ logger = get_logger(__name__)
 
 class CompileRequest(BaseModel):
     main_file: str
+
+    @field_validator("main_file")
+    @classmethod
+    def sanitize_main_file(cls, v: str) -> str:
+        v = v.strip()
+        if not v:
+            raise ValueError("main_file 不能为空")
+        if v.startswith("-"):
+            raise ValueError("main_file 不能以 '-' 开头")
+        if ".." in v:
+            raise ValueError("main_file 不能包含 '..' 路径段")
+        if not v.lower().endswith(".tex"):
+            raise ValueError("main_file 必须以 .tex 结尾")
+        return v
 
 
 @router.post("/run")
@@ -55,6 +69,12 @@ async def get_compiled_pdf(
         raise HTTPException(status_code=400, detail="No project opened")
 
     root = Path(project.root_path)
+
+    try:
+        _validate_main_file(main_file, root)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
     pdf_path = root / Path(main_file).with_suffix(".pdf")
 
     if not pdf_path.exists():
