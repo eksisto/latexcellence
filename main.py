@@ -94,7 +94,6 @@ async def config_status():
     has_api_key = bool(cfg.llm.api_key)
     return {
         "model": cfg.llm.model,
-        "base_url": cfg.llm.base_url,
         "has_api_key": has_api_key,  # 前端据此决定是否显示 LLM 功能入口
         "dev_mode": cfg.server.dev_mode,
         "features": {
