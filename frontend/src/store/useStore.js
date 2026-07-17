@@ -15,6 +15,8 @@ const useStore = create(
       /* ===== 系统状态 ===== */
       enabledFeatures: null,
       setEnabledFeatures: (features) => set({ enabledFeatures: features }),
+      currentTheme: "vercel",
+      setCurrentTheme: (theme) => set({ currentTheme: theme }),
 
       /* ===== 项目状态（持久化） ===== */
       projectPath: null,
@@ -179,6 +181,7 @@ const useStore = create(
         rootPath: state.rootPath,
         activeFile: state.activeFile,
         mainFile: state.mainFile,
+        currentTheme: state.currentTheme,
         typoResults: state.typoResults,
         typoParagraphs: state.typoParagraphs,
         expressionResults: state.expressionResults,

@@ -18,10 +18,10 @@ export default function ThemeToggle() {
         ) : (
           <Moon className="size-5" />
         )}
-        <span className="sr-only">切换主题</span>
+        <span className="sr-only">切换亮暗模式</span>
       </TooltipTrigger>
       <TooltipContent>
-        {resolved === "dark" ? "切换为浅色模式" : "切换为深色模式"}
+        {resolved === "dark" ? "切换为亮色模式" : "切换为暗色模式"}
       </TooltipContent>
     </Tooltip>
   );

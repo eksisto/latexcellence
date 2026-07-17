@@ -4,6 +4,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { Toaster } from "@/components/ui/sonner";
 import { Loader2 } from "lucide-react";
 import ThemeToggle from "@/components/ThemeToggle";
+import ThemeSwitcher from "@/components/ThemeSwitcher";
 import SettingsDialog from "@/components/SettingsDialog";
 import useFavicon from "./hooks/useFavicon";
 
@@ -29,8 +30,9 @@ export default function App() {
     <TooltipProvider>
       <BrowserRouter>
         <div className="fixed top-4 right-4 z-50 flex items-center gap-1">
-          <SettingsDialog />
+          <ThemeSwitcher />
           <ThemeToggle />
+          <SettingsDialog />
         </div>
         <Toaster />
         <Suspense
