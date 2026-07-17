@@ -192,7 +192,7 @@ class TestBuildResults:
     """基于 LLM 聚类的结果构建测试。"""
 
     def test_build_results_no_clusters(self, service):
-        para_data = [{"index": 0, "plain_text": "hello",
+        para_data = [{"para_index": 0, "plain_text": "hello",
                       "text": "hello", "marker_map": {}}]
         all_terms = [{"term": "hello", "term_type": "concept", "paragraph_index": 0,
                       "file_path": "main.tex", "context": ""}]
@@ -204,9 +204,9 @@ class TestBuildResults:
 
     def test_build_results_with_cluster(self, service):
         para_data = [
-            {"index": 0, "plain_text": "use machine learning here",
+            {"para_index": 0, "plain_text": "use machine learning here",
                 "text": "tex0", "marker_map": {}, "file_path": "main.tex"},
-            {"index": 1, "plain_text": "use Machine Learning here",
+            {"para_index": 1, "plain_text": "use Machine Learning here",
                 "text": "tex1", "marker_map": {}, "file_path": "main.tex"},
         ]
         all_terms = [
@@ -235,9 +235,9 @@ class TestBuildResults:
     def test_build_results_recommended_in_variants(self, service):
         """推荐项本身在 variants 中不被替换。"""
         para_data = [
-            {"index": 0, "plain_text": "深度学习 is great",
+            {"para_index": 0, "plain_text": "深度学习 is great",
                 "text": "tex0", "marker_map": {}, "file_path": "main.tex"},
-            {"index": 1, "plain_text": "deep learning is great",
+            {"para_index": 1, "plain_text": "deep learning is great",
                 "text": "tex1", "marker_map": {}, "file_path": "main.tex"},
         ]
         all_terms = [
@@ -268,7 +268,7 @@ class TestBuildResults:
     def test_build_results_term_not_in_text(self, service):
         """提取的术语不在段落文本中时不生成 change（安全处理）。"""
         para_data = [
-            {"index": 0, "plain_text": "some text",
+            {"para_index": 0, "plain_text": "some text",
                 "text": "tex0", "marker_map": {}, "file_path": "main.tex"},
         ]
         all_terms = [
@@ -470,7 +470,7 @@ class TestCheckNoLLM:
             stripped, marker_map = service._parser.strip_to_plain_text(p.text)
             all_para_data.append({
                 "file_path": "main.tex",
-                "index": p.index,
+                "para_index": p.index,
                 "text": p.text,
                 "plain_text": stripped,
                 "marker_map": marker_map,
@@ -494,7 +494,7 @@ class TestEmptyResult:
 
     def test_empty_result(self, service):
         result = service._empty_result({
-            "index": 5,
+            "para_index": 5,
             "plain_text": "",
             "text": "original tex",
             "marker_map": {},

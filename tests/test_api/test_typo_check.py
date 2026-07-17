@@ -411,7 +411,7 @@ class TestEmptyParagraphHandling:
 
     @pytest.mark.asyncio
     async def test_empty_result(self, service):
-        result = await service._empty_result(0, "", "original tex", "main.tex")
+        result = service._make_fallback(0, "", "original tex", "main.tex")
         assert result["paragraph_index"] == 0
         assert result["original"] == ""
         assert result["corrected"] == ""

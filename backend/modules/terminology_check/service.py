@@ -20,21 +20,12 @@
 """
 
 import asyncio
-import re
-from pathlib import Path
 from typing import Any, Optional
 
-from backend.core.logger import get_logger
-from backend.core.project_manager import get_project_manager
-from backend.core.llm_client import get_llm_client
 from backend.core.config import get_config
-from backend.utils.latex_parser import LatexParser
+from backend.core.llm_client import get_llm_client
+from backend.core.base_paragraph_check import BaseParagraphCheckService
 from backend.modules.terminology_check.extractor import TermExtractor, TermItem
-from backend.modules.terminology_check.models import TermChange, TermParagraphResult
-from backend.utils.input_resolver import resolve_inputs
-
-
-_MARKER_PATTERN = re.compile(r"__[A-Z]+_\d{4}__")
 
 
 def _deduplicate_terms(all_terms: list[dict[str, Any]]) -> list[str]:
@@ -54,7 +45,7 @@ def _deduplicate_terms(all_terms: list[dict[str, Any]]) -> list[str]:
     return unique
 
 
-class TerminologyCheckService:
+class TerminologyCheckService(BaseParagraphCheckService):
     """
     术语一致性检查服务。
 
@@ -70,79 +61,10 @@ class TerminologyCheckService:
     """
 
     def __init__(self):
-        self._logger = get_logger("terminology_check")
-        self._parser = LatexParser()
+        super().__init__("terminology_check")
         self._extractor = TermExtractor(logger_name="terminology_check")
-        self._marker_maps: dict[str, dict[int, dict[str, str]]] = {}
-        self._file_path: Optional[str] = None
 
-    def _get_files(
-        self, file_path: str, resolve_input: bool
-    ) -> list[str]:
-        """解析 \\input 依赖，返回待处理文件列表。"""
-        if not resolve_input:
-            return [file_path]
-        pm = get_project_manager()
-        root = pm._project_info.root_path
-        files = resolve_inputs(file_path, root)
-        self._logger.info(
-            f"Resolved \\input tree from {file_path}: {len(files)} file(s)"
-        )
-        return files
-
-    def _process_paragraphs(
-        self, paragraphs: list, file_path: str
-    ) -> list[dict[str, Any]]:
-        """对单个文件的段落执行 marker 替换，返回结果列表。"""
-        if file_path not in self._marker_maps:
-            self._marker_maps[file_path] = {}
-        result = []
-        for para in paragraphs:
-            stripped, marker_map = self._parser.strip_to_plain_text(para.text)
-            self._marker_maps[file_path][para.index] = marker_map
-            result.append({
-                "index": para.index,
-                "text": para.text,
-                "plain_text": stripped,
-                "line_start": para.line_start,
-                "line_end": para.line_end,
-                "file_path": file_path,
-            })
-        return result
-
-    def preview_paragraphs(
-        self, file_path: str, resolve_input: bool = False
-    ) -> dict[str, Any]:
-        """
-        预览指定文件的段落。
-
-        参数：
-            file_path: 文件路径
-            resolve_input: 是否递归展开 \\input 引用
-
-        返回：
-            { paragraphs: [...], file_path: "...", total: N }
-        """
-        pm = get_project_manager()
-        files = self._get_files(file_path, resolve_input)
-
-        self._file_path = file_path
-        self._marker_maps = {}
-
-        all_paragraphs: list[dict[str, Any]] = []
-        for f in files:
-            paragraphs = pm.get_paragraphs(f)
-            all_paragraphs.extend(self._process_paragraphs(paragraphs, f))
-
-        self._logger.info(
-            f"Previewed {len(all_paragraphs)} paragraphs from "
-            f"{len(files)} file(s) starting at {file_path}"
-        )
-        return {
-            "paragraphs": all_paragraphs,
-            "file_path": file_path,
-            "total": len(all_paragraphs),
-        }
+    # ── 核心检查逻辑（术语提取 → 聚类 → 生成结果）─────────────────────────
 
     async def check_terminology(
         self,
@@ -161,33 +83,20 @@ class TerminologyCheckService:
         返回：
             { results: [...], file_path: "...", total_issues: N }
         """
-        pm = get_project_manager()
         cfg = get_config()
         files = self._get_files(file_path, resolve_input)
 
         self._file_path = file_path
         self._marker_maps = {}
 
-        all_para_data: list[dict[str, Any]] = []
-        for f in files:
-            paragraphs = pm.get_paragraphs(f)
-            for para in paragraphs:
-                stripped, marker_map = self._parser.strip_to_plain_text(para.text)
-                if f not in self._marker_maps:
-                    self._marker_maps[f] = {}
-                self._marker_maps[f][para.index] = marker_map
-                all_para_data.append({
-                    "file_path": f,
-                    "index": para.index,
-                    "text": para.text,
-                    "plain_text": stripped,
-                    "marker_map": marker_map,
-                })
+        all_para_data = self._collect_para_data(files)
 
         has_api_key = bool(cfg.llm.api_key)
 
         if not has_api_key:
-            self._logger.warning("No API key — using fallback term extraction")
+            self._logger.warning(
+                "No API key — using fallback term extraction"
+            )
             return self._check_no_llm(file_path, all_para_data)
 
         llm = get_llm_client()
@@ -201,16 +110,16 @@ class TerminologyCheckService:
         batch_size = cfg.features.typo_check.batch_size
 
         for batch_start in range(0, len(all_para_data), batch_size):
-            batch = all_para_data[batch_start: batch_start + batch_size]
+            batch = all_para_data[batch_start : batch_start + batch_size]
             tasks = []
             for data in batch:
                 plain = data["plain_text"]
                 if not plain.strip():
-                    tasks.append(self._empty_terms(data["index"]))
+                    tasks.append(self._empty_terms(data["para_index"]))
                 else:
                     tasks.append(
                         self._extractor.extract_terms(
-                            data["index"], plain,
+                            data["para_index"], plain,
                             batch_label=f"B{batch_start // batch_size}/",
                         )
                     )
@@ -222,7 +131,7 @@ class TerminologyCheckService:
                     all_terms.append({
                         "term": t.term,
                         "term_type": t.term_type,
-                        "paragraph_index": data["index"],
+                        "paragraph_index": data["para_index"],
                         "file_path": data["file_path"],
                         "context": t.context,
                     })
@@ -233,7 +142,8 @@ class TerminologyCheckService:
         # 程序去重：仅当字符完全匹配时视为重复
         unique_terms = _deduplicate_terms(all_terms)
         self._logger.info(
-            f"Deduplicated {len(all_terms)} terms to {len(unique_terms)} unique"
+            f"Deduplicated {len(all_terms)} terms to "
+            f"{len(unique_terms)} unique"
         )
 
         # LLM 语义聚类：识别语义相同的术语组并选定推荐项
@@ -257,28 +167,13 @@ class TerminologyCheckService:
 
         逐段 yield 事件：progress / result / done。
         """
-        pm = get_project_manager()
         cfg = get_config()
         files = self._get_files(file_path, resolve_input)
 
         self._file_path = file_path
         self._marker_maps = {}
 
-        all_para_data: list[dict[str, Any]] = []
-        for f in files:
-            paragraphs = pm.get_paragraphs(f)
-            for para in paragraphs:
-                stripped, marker_map = self._parser.strip_to_plain_text(para.text)
-                if f not in self._marker_maps:
-                    self._marker_maps[f] = {}
-                self._marker_maps[f][para.index] = marker_map
-                all_para_data.append({
-                    "file_path": f,
-                    "index": para.index,
-                    "text": para.text,
-                    "plain_text": stripped,
-                    "marker_map": marker_map,
-                })
+        all_para_data = self._collect_para_data(files)
 
         total = len(all_para_data)
         yield {"type": "progress", "current": 0, "total": total}
@@ -288,13 +183,24 @@ class TerminologyCheckService:
         if not has_api_key:
             yield {
                 "type": "error",
-                "message": "No API key configured — terminology clustering requires LLM",
+                "message": (
+                    "No API key configured — "
+                    "terminology clustering requires LLM"
+                ),
                 "retrying": False,
             }
             results = self._build_results_no_llm(all_para_data)
             for r in results:
-                yield {"type": "result", "paragraph_index": r["paragraph_index"], "data": r}
-                yield {"type": "progress", "current": r["paragraph_index"] + 1, "total": total}
+                yield {
+                    "type": "result",
+                    "paragraph_index": r["paragraph_index"],
+                    "data": r,
+                }
+                yield {
+                    "type": "progress",
+                    "current": r["paragraph_index"] + 1,
+                    "total": total,
+                }
             yield {"type": "done"}
             return
 
@@ -315,13 +221,13 @@ class TerminologyCheckService:
 
             try:
                 terms = await self._extractor.extract_terms(
-                    data["index"], plain, batch_label="",
+                    data["para_index"], plain, batch_label="",
                 )
                 for t in terms:
                     all_terms.append({
                         "term": t.term,
                         "term_type": t.term_type,
-                        "paragraph_index": data["index"],
+                        "paragraph_index": data["para_index"],
                         "file_path": data["file_path"],
                         "context": t.context,
                     })
@@ -333,10 +239,12 @@ class TerminologyCheckService:
                 }
             except Exception as e:
                 self._logger.error(
-                    f"Error extracting terms from {f} P{data['index']}: {e}")
+                    f"Error extracting terms from "
+                    f"{f} P{data['para_index']}: {e}"
+                )
                 yield {
                     "type": "error",
-                    "message": f"{f} P{data['index']}: {e}",
+                    "message": f"{f} P{data['para_index']}: {e}",
                     "retrying": False,
                 }
                 yield {
@@ -351,7 +259,8 @@ class TerminologyCheckService:
         # 程序去重：仅当字符完全匹配时视为重复
         unique_terms = _deduplicate_terms(all_terms)
         self._logger.info(
-            f"Deduplicated {len(all_terms)} terms to {len(unique_terms)} unique"
+            f"Deduplicated {len(all_terms)} terms to "
+            f"{len(unique_terms)} unique"
         )
 
         # LLM 语义聚类
@@ -361,43 +270,15 @@ class TerminologyCheckService:
         results = self._build_results(all_para_data, all_terms, clusters)
 
         for r in results:
-            yield {"type": "result", "paragraph_index": r["paragraph_index"], "data": r}
+            yield {
+                "type": "result",
+                "paragraph_index": r["paragraph_index"],
+                "data": r,
+            }
 
         yield {"type": "done"}
 
-    def apply_changes(
-        self, file_path: str, changes: list[dict[str, Any]]
-    ) -> dict[str, Any]:
-        """
-        将用户确认的修改写回源文件。
-
-        参数：
-            file_path: 默认文件路径（当 change 中无 file_path 时使用）
-            changes: [{ "paragraph_index": 0, "new_text": "...", "file_path": "..." }]
-
-        返回：
-            { applied: N, total: M }
-        """
-        pm = get_project_manager()
-        applied = 0
-
-        for change in changes:
-            idx = change["paragraph_index"]
-            new_plain_text = change["new_text"]
-            target_file = change.get("file_path", file_path)
-
-            file_maps = self._marker_maps.get(target_file, {})
-            marker_map = file_maps.get(idx, {})
-
-            restored = self._parser.restore_from_markers(
-                new_plain_text, marker_map)
-
-            pm.apply_change(target_file, idx, restored)
-            applied += 1
-            self._logger.info(
-                f"Applied terminology change to paragraph {idx} in {target_file}")
-
-        return {"applied": applied, "total": len(changes)}
+    # ── 结果构建 ────────────────────────────────────────────────────────────
 
     def _build_results(
         self,
@@ -434,7 +315,7 @@ class TerminologyCheckService:
 
         results: list[dict[str, Any]] = []
         for data in all_para_data:
-            idx = data["index"]
+            idx = data["para_index"]
             f = data.get("file_path", "")
             original = data["plain_text"]
             corrected = original
@@ -495,7 +376,8 @@ class TerminologyCheckService:
     ) -> list[dict[str, Any]]:
         """
         无 LLM 时生成基础结果。
-        无法进行语义聚类，仅返回段落术语标签（来自规则降级提取），不生成 changes。
+        无法进行语义聚类，仅返回段落术语标签（来自规则降级提取），
+        不生成 changes。
         """
         extractor = TermExtractor()
         results: list[dict[str, Any]] = []
@@ -503,7 +385,7 @@ class TerminologyCheckService:
             terms = extractor.extract_terms_fallback(data["plain_text"])
             terms_found = list(dict.fromkeys(t.term for t in terms))
             results.append({
-                "paragraph_index": data["index"],
+                "paragraph_index": data["para_index"],
                 "original": data["plain_text"],
                 "corrected": data["plain_text"],
                 "terms": terms_found,
@@ -533,7 +415,7 @@ class TerminologyCheckService:
 
     def _empty_result(self, data: dict[str, Any]) -> dict[str, Any]:
         return {
-            "paragraph_index": data["index"],
+            "paragraph_index": data["para_index"],
             "original": data["plain_text"],
             "corrected": data["plain_text"],
             "terms": [],

@@ -14,6 +14,7 @@ OpenAI API 统一封装模块。
 
 import asyncio
 import json
+import threading
 import time
 from dataclasses import dataclass
 from typing import AsyncIterator, Optional
@@ -53,22 +54,25 @@ class LLMClient:
     """
 
     def __init__(self):
-        self._client: Optional[AsyncOpenAI] = None       # OpenAI 客户端（懒加载）
-        self._last_request_time: float = 0                # 上次请求的时间戳，用于限流
+        self._client: Optional[AsyncOpenAI] = None
+        self._client_lock = threading.Lock()
+        self._last_request_time: float = 0
         self._logger = get_logger("llm_client")
 
     @property
     def client(self) -> AsyncOpenAI:
         """
-        获取或创建 AsyncOpenAI 实例（懒加载单例）。
-        使用 config 中的 api_key 和 base_url 初始化。
+        获取或创建 AsyncOpenAI 实例（懒加载 + 双检锁）。
+        每次创建时实时读取 config，支持运行时热重载 api_key / base_url。
         """
         if self._client is None:
-            cfg = get_config().llm
-            self._client = AsyncOpenAI(
-                api_key=cfg.api_key,
-                base_url=cfg.base_url,
-            )
+            with self._client_lock:
+                if self._client is None:
+                    cfg = get_config().llm
+                    self._client = AsyncOpenAI(
+                        api_key=cfg.api_key,
+                        base_url=cfg.base_url,
+                    )
         return self._client
 
     async def _rate_limit(self) -> None:
@@ -277,6 +281,7 @@ class LLMClient:
 
 # 全局单例：LLM 客户端实例
 _llm_client: Optional[LLMClient] = None
+_llm_client_lock = threading.Lock()
 
 
 def get_llm_client() -> LLMClient:
@@ -285,5 +290,7 @@ def get_llm_client() -> LLMClient:
     """
     global _llm_client
     if _llm_client is None:
-        _llm_client = LLMClient()
+        with _llm_client_lock:
+            if _llm_client is None:
+                _llm_client = LLMClient()
     return _llm_client
