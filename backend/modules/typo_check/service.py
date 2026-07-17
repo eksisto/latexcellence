@@ -23,7 +23,7 @@ from backend.core.logger import get_logger
 from backend.core.project_manager import get_project_manager
 from backend.core.llm_client import get_llm_client
 from backend.core.config import get_config
-from backend.modules.typo_check.latex_parser import LatexParser
+from backend.utils.latex_parser import LatexParser
 from backend.utils.input_resolver import resolve_inputs
 from backend.utils.json_utils import retry_with_validation
 

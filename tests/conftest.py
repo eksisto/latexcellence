@@ -9,7 +9,7 @@ from pathlib import Path
 import pytest
 
 from backend.core.config import get_config, load_config
-from backend.modules.typo_check.latex_parser import LatexParser
+from backend.utils.latex_parser import LatexParser
 
 
 @pytest.fixture(autouse=True)
