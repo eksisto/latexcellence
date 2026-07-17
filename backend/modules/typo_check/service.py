@@ -13,7 +13,6 @@
 """
 
 import asyncio
-import re
 from pathlib import Path
 from typing import Any, Optional
 
@@ -23,7 +22,7 @@ from backend.core.logger import get_logger
 from backend.core.project_manager import get_project_manager
 from backend.core.llm_client import get_llm_client
 from backend.core.config import get_config
-from backend.utils.latex_parser import LatexParser
+from backend.utils.latex_parser import LatexParser, MARKER_PATTERN
 from backend.utils.input_resolver import resolve_inputs
 from backend.utils.json_utils import retry_with_validation
 
@@ -79,10 +78,6 @@ _SYSTEM_PROMPT = (
     '  ]\n'
     "}"
 )
-
-# regex for extracting markers from plain text
-_MARKER_PATTERN = re.compile(r"__[A-Z]+_\d{4}__")
-
 
 class TypoCheckService:
     """
@@ -393,7 +388,7 @@ class TypoCheckService:
         返回：
             包含 paragraph_index / original / corrected / changes / file_path 的 dict
         """
-        input_markers = set(_MARKER_PATTERN.findall(plain_text))
+        input_markers = set(MARKER_PATTERN.findall(plain_text))
 
         messages = [
             {"role": "system", "content": _SYSTEM_PROMPT},
@@ -421,7 +416,7 @@ class TypoCheckService:
             corrected = validated.corrected
 
             # marker 保护验证
-            output_markers = set(_MARKER_PATTERN.findall(corrected))
+            output_markers = set(MARKER_PATTERN.findall(corrected))
             missing = input_markers - output_markers
             extra = output_markers - input_markers
 

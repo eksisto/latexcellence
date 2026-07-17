@@ -14,7 +14,6 @@
 """
 
 import asyncio
-import re
 from pathlib import Path
 from typing import Any, Optional
 
@@ -24,7 +23,7 @@ from backend.core.logger import get_logger
 from backend.core.project_manager import get_project_manager
 from backend.core.llm_client import get_llm_client
 from backend.core.config import get_config
-from backend.utils.latex_parser import LatexParser
+from backend.utils.latex_parser import LatexParser, MARKER_PATTERN
 from backend.modules.expression_opt.prompt_manager import get_prompt_manager
 from backend.utils.input_resolver import resolve_inputs
 from backend.utils.json_utils import retry_with_validation
@@ -88,9 +87,6 @@ _BASE_SYSTEM_PROMPT = (
     "{custom_prompt}\n"
     "Above custom instructions take priority over the general guidelines."
 )
-
-_MARKER_PATTERN = re.compile(r"__[A-Z]+_\d{4}__")
-
 
 class ExpressionOptService:
     """
@@ -392,7 +388,7 @@ class ExpressionOptService:
         """
         调用 LLM 优化单个段落的表达，含 Pydantic 校验 + 重试 + marker 保护验证。
         """
-        input_markers = set(_MARKER_PATTERN.findall(plain_text))
+        input_markers = set(MARKER_PATTERN.findall(plain_text))
 
         system_prompt = self._build_system_prompt()
         messages = [
@@ -420,7 +416,7 @@ class ExpressionOptService:
 
             optimized = validated.optimized
 
-            output_markers = set(_MARKER_PATTERN.findall(optimized))
+            output_markers = set(MARKER_PATTERN.findall(optimized))
             missing = input_markers - output_markers
             extra = output_markers - input_markers
 

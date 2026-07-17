@@ -22,8 +22,8 @@ from backend.modules.typo_check.service import (
     TypoCheckService,
     TypoCheckResult,
     ChangeItem,
-    _MARKER_PATTERN,
 )
+from backend.utils.latex_parser import MARKER_PATTERN
 
 
 # ── fixtures ───────────────────────────────────────────────────────────────
@@ -426,30 +426,30 @@ class TestMarkerPattern:
     """marker 正则表达式测试。"""
 
     def test_match_cmd_marker(self):
-        markers = _MARKER_PATTERN.findall("text __CMD_0001__ more")
+        markers = MARKER_PATTERN.findall("text __CMD_0001__ more")
         assert markers == ["__CMD_0001__"]
 
     def test_match_math_marker(self):
-        markers = _MARKER_PATTERN.findall("text __MATH_0002__ more")
+        markers = MARKER_PATTERN.findall("text __MATH_0002__ more")
         assert markers == ["__MATH_0002__"]
 
     def test_match_env_marker(self):
-        markers = _MARKER_PATTERN.findall("text __ENV_0015__ more")
+        markers = MARKER_PATTERN.findall("text __ENV_0015__ more")
         assert markers == ["__ENV_0015__"]
 
     def test_match_verb_marker(self):
-        markers = _MARKER_PATTERN.findall("text __VERB_0003__ more")
+        markers = MARKER_PATTERN.findall("text __VERB_0003__ more")
         assert markers == ["__VERB_0003__"]
 
     def test_match_multiple(self):
         text = "__CMD_0001__ hello __MATH_0002__ world __CMD_0003__"
-        markers = _MARKER_PATTERN.findall(text)
+        markers = MARKER_PATTERN.findall(text)
         assert markers == ["__CMD_0001__", "__MATH_0002__", "__CMD_0003__"]
 
     def test_ignore_partial_marker(self):
-        markers = _MARKER_PATTERN.findall("__CMD_001__ and __CMD_00001__")
+        markers = MARKER_PATTERN.findall("__CMD_001__ and __CMD_00001__")
         assert markers == []
 
     def test_marker_extraction_empty_text(self):
-        markers = _MARKER_PATTERN.findall("")
+        markers = MARKER_PATTERN.findall("")
         assert markers == []
