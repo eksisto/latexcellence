@@ -11,6 +11,7 @@ from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
+from backend.core.base_paragraph_check import ApplyChangeItem
 from backend.modules.expression_opt.service import ExpressionOptService
 from backend.modules.expression_opt.prompt_manager import get_prompt_manager
 
@@ -34,15 +35,9 @@ class ExpressionOptRequest(BaseModel):
     resolve_input: bool = False
 
 
-class OptChangeItem(BaseModel):
-    paragraph_index: int
-    new_text: str
-    file_path: Optional[str] = None
-
-
 class ExpressionApplyRequest(BaseModel):
     file_path: str
-    changes: list[OptChangeItem]
+    changes: list[ApplyChangeItem]
 
 
 # ── preview ────────────────────────────────────────────────────────────────

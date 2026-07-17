@@ -11,6 +11,7 @@ from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
+from backend.core.base_paragraph_check import ApplyChangeItem
 from backend.modules.typo_check.service import TypoCheckService
 
 router = APIRouter(prefix="/api/typo-check", tags=["typo_check"])
@@ -33,15 +34,9 @@ class TypoCheckRequest(BaseModel):
     resolve_input: bool = False
 
 
-class ChangeItem(BaseModel):
-    paragraph_index: int
-    new_text: str
-    file_path: Optional[str] = None
-
-
 class TypoApplyRequest(BaseModel):
     file_path: str
-    changes: list[ChangeItem]
+    changes: list[ApplyChangeItem]
 
 
 # ── preview ────────────────────────────────────────────────────────────────

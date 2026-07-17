@@ -11,6 +11,7 @@ from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
+from backend.core.base_paragraph_check import ApplyChangeItem
 from backend.modules.terminology_check.service import TerminologyCheckService
 
 router = APIRouter(prefix="/api/terminology-check", tags=["terminology_check"])
@@ -31,15 +32,9 @@ class TerminologyCheckRequest(BaseModel):
     resolve_input: bool = False
 
 
-class ChangeItem(BaseModel):
-    paragraph_index: int
-    new_text: str
-    file_path: Optional[str] = None
-
-
 class TerminologyApplyRequest(BaseModel):
     file_path: str
-    changes: list[ChangeItem]
+    changes: list[ApplyChangeItem]
 
 
 @router.get("/preview")

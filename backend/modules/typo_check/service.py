@@ -22,8 +22,8 @@ from backend.core.base_paragraph_check import BaseParagraphCheckService
 
 # ── Pydantic models for LLM response schema ────────────────────────────────
 
-class ChangeItem(BaseModel):
-    """单条修改建议"""
+class TypoChangeItem(BaseModel):
+    """LLM 返回的单条修改建议"""
     type: str = "typo"
     original: str
     corrected: str
@@ -36,7 +36,7 @@ class TypoCheckResult(BaseModel):
     paragraph_index: int
     original: str
     corrected: str
-    changes: list[ChangeItem] = []
+    changes: list[TypoChangeItem] = []
 
 
 # ── system prompt template ─────────────────────────────────────────────────

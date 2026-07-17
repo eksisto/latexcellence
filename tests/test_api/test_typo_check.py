@@ -2,7 +2,7 @@
 typo_check 模块集成测试。
 
 覆盖内容：
-    - Pydantic 模型校验（TypoCheckResult / ChangeItem）
+    - Pydantic 模型校验（TypoCheckResult / TypoChangeItem）
     - preview_paragraphs LaTeX 剥离
     - _check_one_paragraph 的 LLM 响应处理（含 mock）
     - marker 保护验证（缺失 marker → 回退）
@@ -21,7 +21,7 @@ from pydantic import ValidationError
 from backend.modules.typo_check.service import (
     TypoCheckService,
     TypoCheckResult,
-    ChangeItem,
+    TypoChangeItem,
 )
 from backend.utils.latex_parser import MARKER_PATTERN
 
@@ -57,7 +57,7 @@ def service():
 
 
 class TestTypoCheckResultModel:
-    """TypoCheckResult / ChangeItem 模型校验测试。"""
+    """TypoCheckResult / TypoChangeItem 模型校验测试。"""
 
     def test_valid_minimal(self):
         data = {
@@ -103,7 +103,7 @@ class TestTypoCheckResultModel:
             "original": "a",
             "corrected": "b",
         }
-        change = ChangeItem.model_validate(data)
+        change = TypoChangeItem.model_validate(data)
         assert change.type == "typo"
         assert change.explanation == ""
         assert change.position is None

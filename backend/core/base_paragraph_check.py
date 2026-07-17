@@ -21,6 +21,8 @@ terminology_check）的共享逻辑：
 import asyncio
 from typing import Any, ClassVar, Optional
 
+from pydantic import BaseModel
+
 from backend.core.logger import get_logger
 from backend.core.project_manager import get_project_manager
 from backend.core.llm_client import get_llm_client
@@ -28,6 +30,13 @@ from backend.core.config import get_config
 from backend.utils.latex_parser import LatexParser, MARKER_PATTERN
 from backend.utils.input_resolver import resolve_inputs
 from backend.utils.json_utils import retry_with_validation
+
+
+class ApplyChangeItem(BaseModel):
+    """逐段检查共享：用户确认的修改项请求模型。"""
+    paragraph_index: int
+    new_text: str
+    file_path: Optional[str] = None
 
 
 class BaseParagraphCheckService:

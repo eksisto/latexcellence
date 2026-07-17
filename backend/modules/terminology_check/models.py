@@ -27,7 +27,7 @@ class TermExtractionResult(BaseModel):
 
 
 class TermChange(BaseModel):
-    """单条术语修改建议，与 typo_check 的 ChangeItem 格式兼容"""
+    """单条术语修改建议，与 typo_check 的 TypoChangeItem 格式兼容"""
     model_config = ConfigDict(extra="forbid")
 
     type: str = "inconsistency"

@@ -11,6 +11,7 @@ from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
+from backend.core.base_paragraph_check import ApplyChangeItem
 from backend.modules.formatting.service import FormattingService
 
 router = APIRouter(prefix="/api/formatting", tags=["formatting"])
@@ -33,15 +34,9 @@ class FormattingRequest(BaseModel):
     resolve_input: bool = False
 
 
-class FormattingChangeItem(BaseModel):
-    paragraph_index: int
-    new_text: str
-    file_path: Optional[str] = None
-
-
 class FormattingApplyRequest(BaseModel):
     file_path: str
-    changes: list[FormattingChangeItem]
+    changes: list[ApplyChangeItem]
 
 
 # ── preview ────────────────────────────────────────────────────────────────
