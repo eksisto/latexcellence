@@ -220,7 +220,7 @@ export default function SettingsDialog() {
                 />
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-3 gap-3">
               <div className="space-y-1.5">
                 <Label className="text-xs">最大 Token 数</Label>
                 <Input
@@ -242,6 +242,20 @@ export default function SettingsDialog() {
                     set(
                       "llm.request_interval",
                       parseFloat(e.target.value) || 1.5
+                    )
+                  }
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs">最大并发数</Label>
+                <Input
+                  type="number"
+                  min="1"
+                  value={config.llm.max_concurrency}
+                  onChange={(e) =>
+                    set(
+                      "llm.max_concurrency",
+                      parseInt(e.target.value, 10) || 5
                     )
                   }
                 />

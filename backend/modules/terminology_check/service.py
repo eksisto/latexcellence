@@ -191,6 +191,11 @@ class TerminologyCheckService:
             return self._check_no_llm(file_path, all_para_data)
 
         llm = get_llm_client()
+        sem = asyncio.Semaphore(cfg.llm.max_concurrency)
+
+        async def _limited(coro):
+            async with sem:
+                return await coro
 
         all_terms: list[dict[str, Any]] = []
         batch_size = cfg.features.typo_check.batch_size
@@ -209,7 +214,9 @@ class TerminologyCheckService:
                             batch_label=f"B{batch_start // batch_size}/",
                         )
                     )
-            batch_terms = await asyncio.gather(*tasks)
+            batch_terms = await asyncio.gather(
+                *(_limited(t) for t in tasks)
+            )
             for i, data in enumerate(batch):
                 for t in batch_terms[i]:
                     all_terms.append({

@@ -38,9 +38,6 @@
       "enabled": true,
       "max_image_size_mb": 10
     },
-    "style_modify": {
-      "enabled": true
-    },
     "template_gen": {
       "enabled": true,
       "output_dir": "templates/"
@@ -58,6 +55,25 @@
     },
     "markdown_converter": {
       "enabled": true
+    },
+    "style_modify": {
+      "enabled": true
+    },
+    "terminology_check": {
+      "enabled": true,
+      "batch_size": 5
+    },
+    "writing_chat": {
+      "enabled": true,
+      "compression_threshold_tokens": 200000,
+      "sessions_dir": "writing_chat_sessions/",
+      "custom_prompts_dir": "prompts/writing_chat/",
+      "summary_temperature": 0.2,
+      "summary_max_tokens": 1024
+    },
+    "bib_manager": {
+      "enabled": true,
+      "format_configs_dir": "formats/"
     }
   },
   "logging": {

@@ -232,8 +232,13 @@ class FormattingService:
 
         llm = get_llm_client()
         batch_size = cfg.features.formatting.batch_size
+        sem = asyncio.Semaphore(cfg.llm.max_concurrency)
         results: list[dict[str, Any]] = [None] * \
             len(targets)  # type: ignore[list-item]
+
+        async def _limited(coro):
+            async with sem:
+                return await coro
 
         for batch_start in range(0, len(targets), batch_size):
             batch = targets[batch_start: batch_start + batch_size]
@@ -252,7 +257,9 @@ class FormattingService:
                         )
                     )
 
-            batch_results = await asyncio.gather(*tasks)
+            batch_results = await asyncio.gather(
+                *(_limited(t) for t in tasks)
+            )
             for slot, d in enumerate(batch):
                 results[batch_start + slot] = batch_results[slot]
 

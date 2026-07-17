@@ -38,6 +38,7 @@ class LLMConfig(BaseModel):
     temperature: float = 0.3            # 生成温度（越低越确定，越高越创意）
     max_tokens: int = 4096              # 单次生成最大 token 数
     request_interval: float = 1.5       # 请求间隔（秒），避免触发 rate limit
+    max_concurrency: int = 5            # 最大并发 LLM 请求数（Semaphore）
 
 
 class ProjectConfig(BaseModel):
