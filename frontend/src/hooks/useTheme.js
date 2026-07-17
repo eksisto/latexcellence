@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useEffect, useCallback, useSyncExternalStore } from "react";
 
 const STORAGE_KEY = "latexcellence-theme";
 
@@ -46,23 +46,47 @@ function applyTheme(resolved) {
   });
 }
 
-export function useTheme() {
-  const [resolved, setResolved] = useState(() => {
-    const stored = getStoredTheme();
-    const theme = stored ?? getSystemTheme();
-    return theme;
-  });
+/* ---------- 共享外部存储：所有 useTheme() 消费者共享同一份状态 ---------- */
 
-  useEffect(() => {
-    applyTheme(resolved);
-  }, [resolved]);
+let themeState = getStoredTheme() ?? getSystemTheme();
+let listeners = new Set();
+
+function emitChange() {
+  applyTheme(themeState);
+  listeners.forEach((l) => l());
+}
+
+function subscribe(listener) {
+  listeners.add(listener);
+  return () => listeners.delete(listener);
+}
+
+function getSnapshot() {
+  return themeState;
+}
+
+function setThemeValue(next) {
+  if (next === themeState) return;
+  themeState = next;
+  try {
+    localStorage.setItem(STORAGE_KEY, next);
+  } catch {
+    /* localStorage unavailable */
+  }
+  emitChange();
+}
+
+/* 初始化：确保 DOM 在首次加载时也同步 */
+applyTheme(themeState);
+
+export function useTheme() {
+  const resolved = useSyncExternalStore(subscribe, getSnapshot);
 
   useEffect(() => {
     const mq = window.matchMedia("(prefers-color-scheme: dark)");
     const handler = (e) => {
       if (!getStoredTheme()) {
-        const next = e.matches ? "dark" : "light";
-        setResolved(next);
+        setThemeValue(e.matches ? "dark" : "light");
       }
     };
     mq.addEventListener("change", handler);
@@ -70,24 +94,11 @@ export function useTheme() {
   }, []);
 
   const setTheme = useCallback((theme) => {
-    setResolved(theme);
-    try {
-      localStorage.setItem(STORAGE_KEY, theme);
-    } catch {
-      /* localStorage unavailable */
-    }
+    setThemeValue(theme);
   }, []);
 
   const toggleTheme = useCallback(() => {
-    setResolved((prev) => {
-      const next = prev === "dark" ? "light" : "dark";
-      try {
-        localStorage.setItem(STORAGE_KEY, next);
-      } catch {
-        /* localStorage unavailable */
-      }
-      return next;
-    });
+    setThemeValue(themeState === "dark" ? "light" : "dark");
   }, []);
 
   return { resolved, setTheme, toggleTheme };
