@@ -64,7 +64,7 @@
 }
 
 :root {
-    color-scheme: light dark;
+    color-scheme: light;
     scrollbar-width: thin;
     scrollbar-color: oklch(0.7 0 0) transparent;
     --background: oklch(1 0 0);
@@ -205,4 +205,32 @@
 }
 .dark ::-webkit-scrollbar-thumb {
   background: oklch(0.4 0 0);
+}
+
+/* 数字输入框 color-scheme 显式声明（Firefox 从元素自身读取以渲染 spin button） */
+input[type="number"] {
+  color-scheme: light;
+}
+.dark input[type="number"] {
+  color-scheme: dark;
+}
+
+/* Chromium spin buttons */
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
+  opacity: 0.45;
+}
+.dark input[type="number"]::-webkit-inner-spin-button,
+.dark input[type="number"]::-webkit-outer-spin-button {
+  opacity: 0.7;
+}
+
+/* Firefox spin buttons */
+input[type="number"]::-moz-number-spinbox {
+  background: oklch(0.85 0 0);
+  color: oklch(0.45 0 0);
+}
+.dark input[type="number"]::-moz-number-spinbox {
+  background: oklch(0.25 0 0);
+  color: oklch(0.7 0 0);
 }
