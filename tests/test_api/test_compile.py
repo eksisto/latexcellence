@@ -38,8 +38,8 @@ def mock_project():
             encoding="utf-8",
         )
         pm = MagicMock()
-        pm._project_info = MagicMock()
-        pm._project_info.root_path = str(root)
+        pm.is_open = True
+        pm.root_path = str(root)
         yield pm
 
 
@@ -172,7 +172,7 @@ class TestCompileLatex:
     async def test_no_project_raises(self):
         """未打开项目时抛出 RuntimeError。"""
         with patch("backend.modules.compile.service.get_project_manager") as mock_pm:
-            mock_pm.return_value = MagicMock(_project_info=None)
+            mock_pm.return_value = MagicMock(is_open=False)
             with pytest.raises(RuntimeError, match="No project opened"):
                 await compile_latex("main.tex")
 
@@ -326,8 +326,8 @@ class TestCompilePdfEndpoint:
             (root / "main.pdf").write_bytes(b"%PDF-1.4 fake pdf content")
 
             pm = MagicMock()
-            pm._project_info = MagicMock()
-            pm._project_info.root_path = str(root)
+            pm.is_open = True
+            pm.root_path = str(root)
 
             with patch(
                 "backend.modules.compile.router.get_project_manager",
@@ -347,7 +347,7 @@ class TestCompilePdfEndpoint:
     def test_pdf_no_project_returns_400(self, client):
         """未打开项目时返回 400。"""
         pm = MagicMock()
-        pm._project_info = None
+        pm.is_open = False
 
         with patch(
             "backend.modules.compile.router.get_project_manager",
@@ -366,8 +366,8 @@ class TestCompilePdfEndpoint:
             (root / "main.tex").write_text("dummy", encoding="utf-8")
 
             pm = MagicMock()
-            pm._project_info = MagicMock()
-            pm._project_info.root_path = str(root)
+            pm.is_open = True
+            pm.root_path = str(root)
 
             with patch(
                 "backend.modules.compile.router.get_project_manager",

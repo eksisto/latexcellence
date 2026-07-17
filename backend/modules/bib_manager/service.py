@@ -366,10 +366,10 @@ class BibManagerService:
     def read_bib_file(self, file_path: str) -> dict[str, Any]:
         """读取 .bib 文件内容。"""
         pm = get_project_manager()
-        if pm._project_info is None:
+        if not pm.is_open:
             raise RuntimeError("No project opened")
 
-        root = Path(pm._project_info.root_path)
+        root = Path(pm.root_path)
         full_path = root / file_path
         if not full_path.exists():
             raise FileNotFoundError(f"File not found: {file_path}")
@@ -383,10 +383,10 @@ class BibManagerService:
     ) -> dict[str, Any]:
         """追加或更新 BibTeX 条目到 .bib 文件。"""
         pm = get_project_manager()
-        if pm._project_info is None:
+        if not pm.is_open:
             raise RuntimeError("No project opened")
 
-        root = Path(pm._project_info.root_path)
+        root = Path(pm.root_path)
         full_path = root / file_path
         if not full_path.exists():
             raise FileNotFoundError(f"File not found: {file_path}")
@@ -413,10 +413,10 @@ class BibManagerService:
     def list_bib_files(self) -> dict[str, Any]:
         """列出项目中的 .bib 文件。"""
         pm = get_project_manager()
-        if pm._project_info is None:
+        if not pm.is_open:
             raise RuntimeError("No project opened")
 
-        root = Path(pm._project_info.root_path)
+        root = Path(pm.root_path)
         bib_files = []
         for f in root.rglob("*.bib"):
             rel_path = f.relative_to(root).as_posix()

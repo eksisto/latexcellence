@@ -66,7 +66,7 @@ class BaseParagraphCheckService:
         if not resolve_input:
             return [file_path]
         pm = get_project_manager()
-        root = pm._project_info.root_path
+        root = pm.root_path
         files = resolve_inputs(file_path, root)
         self._logger.info(
             f"Resolved \\input tree from {file_path}: {len(files)} file(s)"

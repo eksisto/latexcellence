@@ -396,7 +396,7 @@ class TestServiceEdit:
         result = service.apply_edit(req)
         assert result["applied"] is True
 
-        root_path = Path(open_project._project_info.root_path)
+        root_path = Path(open_project.root_path)
         content = (root_path / "main.tex").read_text(encoding="utf-8")
         assert "not very good" not in content
         assert "suboptimal" in content

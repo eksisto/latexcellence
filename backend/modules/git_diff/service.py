@@ -268,10 +268,10 @@ def get_pdf_path(job_id: str) -> Path:
 
 async def _get_project_context() -> ProjectContext:
     project = get_project_manager()
-    if project._project_info is None:
+    if not project.is_open:
         raise RuntimeError("No project opened")
 
-    root = Path(project._project_info.root_path).resolve()
+    root = Path(project.root_path).resolve()
     git_root_output = await _run_git_checked(root, ["rev-parse", "--show-toplevel"])
     git_root = Path(git_root_output.stdout.strip()).resolve()
 

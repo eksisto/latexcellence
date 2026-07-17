@@ -96,10 +96,10 @@ async def compile_latex(main_file: str) -> CompileResult:
         CompileResult 对象（含编译状态、输出日志、LLM 翻译的解释和建议）
     """
     project = get_project_manager()
-    if project._project_info is None:
+    if not project.is_open:
         raise RuntimeError("No project opened")
 
-    root = Path(project._project_info.root_path)
+    root = Path(project.root_path)
     main_path = root / main_file
     if not main_path.exists():
         raise FileNotFoundError(f"Main file not found: {main_file}")

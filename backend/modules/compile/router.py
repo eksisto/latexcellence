@@ -51,10 +51,10 @@ async def get_compiled_pdf(
     前端可在编译成功后通过此端点内联预览。
     """
     project = get_project_manager()
-    if project._project_info is None:
+    if not project.is_open:
         raise HTTPException(status_code=400, detail="No project opened")
 
-    root = Path(project._project_info.root_path)
+    root = Path(project.root_path)
     pdf_path = root / Path(main_file).with_suffix(".pdf")
 
     if not pdf_path.exists():

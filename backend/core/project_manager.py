@@ -124,6 +124,18 @@ class LatexProject:
         self._logger.info(f"Opened project: {root} | main_file={main_file}")
         return self._project_info
 
+    @property
+    def is_open(self) -> bool:
+        """检查是否已打开项目。"""
+        return self._project_info is not None
+
+    @property
+    def root_path(self) -> str:
+        """返回项目根目录的绝对路径。"""
+        if self._project_info is None:
+            raise RuntimeError("No project opened")
+        return self._project_info.root_path
+
     def get_file_tree(self) -> list[FileNode]:
         """返回当前项目的文件树。"""
         if self._project_info is None:
