@@ -62,6 +62,14 @@ function MessageBubble({ message, actions }) {
   const isSummary = message.role === "summary" && message.compressed;
   const isStreaming = message.streaming;
   const [copied, setCopied] = useState(false);
+  const [thinkingExpanded, setThinkingExpanded] = useState(() => !message.thinkingClosed);
+
+  // 在流式更新 thinkingClosed 时同步展开状态
+  useEffect(() => {
+    if (!message.thinkingClosed) {
+      setThinkingExpanded(true);
+    }
+  }, [message.thinkingClosed]);
 
   const handleCopy = async () => {
     try {
@@ -86,7 +94,7 @@ function MessageBubble({ message, actions }) {
   return (
     <div
       className={`group flex flex-col gap-1 ${
-        isUser ? "items-end" : "items-start"
+        isUser ? "items-end pr-2" : "items-start"
       }`}
     >
       <div className="flex items-center gap-1 text-xs text-muted-foreground">
@@ -125,24 +133,34 @@ function MessageBubble({ message, actions }) {
           <div className="text-sm">
             {/* 深度思考折叠框 */}
             {message.thinkingContent && (
-              <details
-                className="mb-2 rounded bg-background/30 border border-border p-2 group/think"
-                open={!message.thinkingClosed}
-              >
-                <summary className="cursor-pointer text-xs font-medium text-amber-600 dark:text-amber-400 flex items-center gap-1 select-none [&::-webkit-details-marker]:hidden list-none">
-                  <Lightbulb className="size-3" />
+              <div className="mb-2 rounded bg-background/30 border border-border p-2">
+                <button
+                  type="button"
+                  className="cursor-pointer text-xs font-medium text-amber-600 dark:text-amber-400 flex items-center gap-1 select-none w-full text-left"
+                  onClick={() => setThinkingExpanded((v) => !v)}
+                >
+                  <Lightbulb className="size-3 shrink-0" />
                   深度思考
                   {!message.thinkingClosed && (
                     <span className="inline-flex items-center gap-1 ml-1 text-muted-foreground font-normal">
                       <Loader2 className="size-2.5 animate-spin" />
                     </span>
                   )}
-                  <ChevronDown className="size-3 ml-auto transition-transform group-open/think:rotate-180" />
-                </summary>
-                <div className="mt-2 whitespace-pre-wrap text-xs leading-relaxed text-muted-foreground">
-                  {message.thinkingContent}
+                  <ChevronDown className={`size-3 ml-auto transition-transform duration-300 ${thinkingExpanded ? "rotate-180" : ""}`} />
+                </button>
+                <div
+                  className="grid transition-[grid-template-rows] duration-300 ease-in-out"
+                  style={{ gridTemplateRows: thinkingExpanded ? "1fr" : "0fr" }}
+                >
+                  <div className="overflow-hidden">
+                    <div className="mt-2 text-xs leading-relaxed text-muted-foreground">
+                      <MarkdownRenderer>
+                        {message.thinkingContent}
+                      </MarkdownRenderer>
+                    </div>
+                  </div>
                 </div>
-              </details>
+              </div>
             )}
             {/* 显示内容 */}
             {isStreaming && !message.displayContent && !message.thinkingOpen ? (
