@@ -32,8 +32,11 @@ def compute_md5(file_path: str | Path) -> str:
     path = Path(file_path)
     if not path.exists():
         raise FileNotFoundError(f"File not found: {file_path}")
+    h = hashlib.md5()
     with open(path, "rb") as f:
-        return hashlib.md5(f.read()).hexdigest()
+        while chunk := f.read(8192):
+            h.update(chunk)
+    return h.hexdigest()
 
 
 def safe_read(file_path: str | Path, encoding: str = "utf-8") -> str:
