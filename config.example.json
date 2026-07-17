@@ -21,8 +21,7 @@
   "features": {
     "typo_check": {
       "enabled": true,
-      "batch_size": 5,
-      "custom_prompts_dir": "prompts/typo/"
+      "batch_size": 5
     },
     "expression_opt": {
       "enabled": true,

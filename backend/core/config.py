@@ -52,7 +52,6 @@ class TypoCheckConfig(BaseModel):
     """文本校对模块配置"""
     enabled: bool = True                # 是否启用
     batch_size: int = 5                 # 每批发送给 LLM 的段落数
-    custom_prompts_dir: str = "prompts/typo/"  # 用户自定义提示词存放目录
 
 
 class ExpressionOptConfig(BaseModel):
