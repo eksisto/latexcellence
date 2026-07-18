@@ -8,9 +8,10 @@
     4. 运行时热重载支持
 
 安全策略：
-    - config.json 包含 API Key，必须加入 .gitignore
+    - config.json 可包含 API Key（首次安装时方便），但必须加入 .gitignore
     - 提供 config.example.json 作为脱敏模板，可安全提交 Git
-    - 环境变量 OPENAI_API_KEY > config.json 中的 api_key
+    - 环境变量 OPENAI_API_KEY 优先级最高，且从环境变量注入的 Key **禁止写回磁盘**
+    - save_config() 自动识别 Key 来源，环境变量 Key 永不落盘
 """
 
 import copy
@@ -156,6 +157,7 @@ class AppConfig(BaseModel):
 # 模块级全局变量：单例模式存储配置对象和路径
 _config: Optional[AppConfig] = None
 _config_path: Optional[Path] = None
+_api_key_from_env: bool = False  # 标记当前 api_key 是否来自环境变量（防落盘）
 
 
 def load_config(config_path: str = "config.json") -> AppConfig:
@@ -174,7 +176,7 @@ def load_config(config_path: str = "config.json") -> AppConfig:
     返回：
         校验后的 AppConfig 对象
     """
-    global _config, _config_path
+    global _config, _config_path, _api_key_from_env
     path = Path(config_path)
     if not path.exists():
         raise FileNotFoundError(f"Config file not found: {config_path}")
@@ -182,11 +184,15 @@ def load_config(config_path: str = "config.json") -> AppConfig:
     with open(path, "r", encoding="utf-8") as f:
         data = json.load(f)
 
-    # 安全策略：环境变量优先级高于配置文件
-    if "llm" in data and "api_key" in data["llm"]:
-        env_key = os.environ.get("OPENAI_API_KEY", "")
-        if env_key:
-            data["llm"]["api_key"] = env_key
+    # 安全策略：环境变量优先级高于配置文件，且标记来源防止落盘
+    env_key = os.environ.get("OPENAI_API_KEY", "")
+    if env_key:
+        if "llm" not in data:
+            data["llm"] = {}
+        data["llm"]["api_key"] = env_key
+        _api_key_from_env = True
+    else:
+        _api_key_from_env = False
 
     # Pydantic 自动校验类型+填充默认值
     _config = AppConfig(**data)
@@ -208,12 +214,18 @@ def save_config() -> None:
     """
     将当前缓存的配置对象持久化写回 config.json。
 
-    常用于运行时修改配置（如记录最近打开的项目路径）后保存到磁盘。
+    安全策略：
+        - 若 api_key 来自环境变量（_api_key_from_env = True），
+          落盘前将其清空，防止泄漏到磁盘。
+        - 若 api_key 由用户通过 UI 手动设置，则正常持久化。
     """
     global _config, _config_path
     if _config is None or _config_path is None:
         raise RuntimeError("Config not loaded. Call load_config() first.")
     data = _config.model_dump()
+    # 环境变量来源的 API Key 不得写入磁盘
+    if _api_key_from_env:
+        data["llm"]["api_key"] = ""
     with open(_config_path, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=2, ensure_ascii=False)
 
@@ -244,6 +256,8 @@ def update_config_from_dict(updates: dict) -> AppConfig:
 
     支持部分更新：只需传入需要修改的字段即可，未传入的字段保持不变。
     若传入的 llm.api_key 以 "***" 开头（前端掩码），则保留原值不变。
+    若传入完整的真实 Key，则视为用户手动设置，更新内存状态并允许持久化。
+    来自环境变量的 Key 不会因本次操作而写回磁盘（由 save_config() 保障）。
 
     参数：
         updates: 包含要更新字段的字典，支持嵌套结构
@@ -251,17 +265,20 @@ def update_config_from_dict(updates: dict) -> AppConfig:
     返回：
         更新后的 AppConfig 对象
     """
-    global _config, _config_path
+    global _config, _config_path, _api_key_from_env
     if _config is None:
         raise RuntimeError("Config not loaded. Call load_config() first.")
 
     current = _config.model_dump()
 
-    # 若 api_key 被掩码，保留原值
+    # 处理 api_key：掩码/空 → 保留原值；真实 Key → 更新并标记为用户设置
     if "llm" in updates and isinstance(updates["llm"], dict):
         api_key = updates["llm"].get("api_key", "")
         if api_key.startswith("***") or api_key == "":
             updates["llm"]["api_key"] = current["llm"]["api_key"]
+        else:
+            # 用户提供了真实 Key，更新内存并解除环境变量标记
+            _api_key_from_env = False
 
     merged = _deep_merge(current, updates)
     _config = AppConfig(**merged)
