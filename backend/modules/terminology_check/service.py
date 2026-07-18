@@ -71,6 +71,7 @@ class TerminologyCheckService(BaseParagraphCheckService):
         file_path: str,
         paragraph_indices: Optional[list[int]] = None,
         resolve_input: bool = False,
+        workspace_id: str = "",
     ) -> dict[str, Any]:
         """
         对项目进行术语一致性检查。
@@ -79,17 +80,18 @@ class TerminologyCheckService(BaseParagraphCheckService):
             file_path: 主目标文件路径（预览和结果显示用）
             paragraph_indices: 要检查的段落索引列表，None 表示全部
             resolve_input: 是否递归展开 \\input 引用
+            workspace_id: 工作区唯一标识符
 
         返回：
             { results: [...], file_path: "...", total_issues: N }
         """
         cfg = get_config()
-        files = self._get_files(file_path, resolve_input)
+        files = self._get_files(file_path, resolve_input, workspace_id)
 
         self._file_path = file_path
         self._marker_maps = {}
 
-        all_para_data = self._collect_para_data(files)
+        all_para_data = self._collect_para_data(files, workspace_id)
 
         has_api_key = bool(cfg.llm.api_key)
 
@@ -160,7 +162,7 @@ class TerminologyCheckService(BaseParagraphCheckService):
         }
 
     async def check_terminology_stream(
-        self, file_path: str, resolve_input: bool = False
+        self, file_path: str, resolve_input: bool = False, workspace_id: str = ""
     ):
         """
         术语检查流式版本（SSE）。
@@ -168,12 +170,12 @@ class TerminologyCheckService(BaseParagraphCheckService):
         逐段 yield 事件：progress / result / done。
         """
         cfg = get_config()
-        files = self._get_files(file_path, resolve_input)
+        files = self._get_files(file_path, resolve_input, workspace_id)
 
         self._file_path = file_path
         self._marker_maps = {}
 
-        all_para_data = self._collect_para_data(files)
+        all_para_data = self._collect_para_data(files, workspace_id)
 
         total = len(all_para_data)
         yield {"type": "progress", "current": 0, "total": total}

@@ -358,16 +358,16 @@ class ConversationContext:
     # ── 上下文锚点 ─────────────────────────────────────────────────────────
 
     @staticmethod
-    def build_file_context_text(file_path: str, paragraph_index: Optional[int]) -> str:
+    def build_file_context_text(file_path: str, paragraph_index: Optional[int], workspace_id: str = "") -> str:
         """
         构造文件段落上下文文本（原始 LaTeX 源码，无 marker 剥离）。
 
         若 paragraph_index 为 None，加载全文段落拼接（最多 12 段，超过则截断并标注省略）。
         若指定 paragraph_index，则只返回该段及其上下文相邻段。
         """
-        from backend.core.project_manager import get_project_manager
+        from backend.core.workspace_manager import get_project_manager_for_workspace
 
-        pm = get_project_manager()
+        pm = get_project_manager_for_workspace(workspace_id)
         try:
             paragraphs = pm.get_paragraphs(file_path)
         except Exception as e:

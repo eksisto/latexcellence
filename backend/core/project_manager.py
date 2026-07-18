@@ -474,17 +474,3 @@ class LatexProject:
             except Exception:
                 pass  # 单个文件解析失败不影响整体
         return deps
-
-
-# 全局单例：项目管理器实例
-_latex_project: Optional[LatexProject] = None
-
-
-def get_project_manager() -> LatexProject:
-    """
-    获取全局唯一的 LatexProject 实例（单例模式）。
-    """
-    global _latex_project
-    if _latex_project is None:
-        _latex_project = LatexProject()
-    return _latex_project

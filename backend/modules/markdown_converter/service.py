@@ -11,7 +11,6 @@ import asyncio
 from typing import Any
 
 from backend.core.logger import get_logger
-from backend.core.config import get_config
 
 
 class MarkdownConverterService:

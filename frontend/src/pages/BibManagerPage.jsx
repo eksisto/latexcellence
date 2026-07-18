@@ -39,6 +39,7 @@ import useStore from "@/store/useStore";
 
 export default function BibManagerPage() {
   const projectPath = useStore((s) => s.projectPath);
+  const workspaceId = useStore((s) => s.workspaceId);
   const rootPath = useStore((s) => s.rootPath);
 
   // Step 1: format analysis
@@ -304,7 +305,7 @@ export default function BibManagerPage() {
         file_path: selectedBibFile,
         bibtex_code: editedBibtex.trim(),
         cite_key: editedCiteKey,
-      });
+      }, workspaceId);
       const actionText = data.action === "updated" ? "已更新" : "已追加";
       toast.success(`${actionText}到 ${selectedBibFile}`);
     } catch (e) {

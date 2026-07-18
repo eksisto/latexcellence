@@ -50,6 +50,7 @@ export default function TerminologyCheckPage() {
     resolveInput,
     setResolveInput,
     activeFiles,
+    workspaceId,
     handlePreview,
     handleCheck,
     handlePauseResume,
@@ -130,7 +131,11 @@ export default function TerminologyCheckPage() {
         new_text: buildCorrectedText(r, customReplacements),
         file_path: r.file_path || activeFile,
       }));
-      await api.terminologyCheck.apply({ file_path: activeFile, changes });
+      await api.terminologyCheck.apply({
+        file_path: activeFile,
+        changes,
+        operation_id: operationId?.current || null,
+      }, workspaceId);
       const appliedIndices = new Set(pending.map((r) => r.paragraph_index));
       useStore.setState((state) => ({
         terminologyResults: state.terminologyResults.filter(

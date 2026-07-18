@@ -118,12 +118,13 @@ class TestPreviewParagraphs:
     """预览段落测试。"""
 
     def test_returns_raw_latex_and_plain_text(self, temp_project, service):
-        from backend.core.project_manager import get_project_manager
+        from backend.core.workspace_manager import get_project_manager_for_workspace
 
-        pm = get_project_manager()
+        ws_id = "test-ws"
+        pm = get_project_manager_for_workspace(ws_id)
         pm.open(str(temp_project))
 
-        result = service.preview_paragraphs("main.tex")
+        result = service.preview_paragraphs("main.tex", workspace_id=ws_id)
         assert result["total"] >= 1
         assert result["file_path"] == "main.tex"
 
@@ -238,12 +239,13 @@ class TestApplyChanges:
     """修改写回测试——无需 marker 还原，直接写回。"""
 
     def test_apply_writes_corrected_latex(self, temp_project, service):
-        from backend.core.project_manager import get_project_manager
+        from backend.core.workspace_manager import get_project_manager_for_workspace
 
-        pm = get_project_manager()
+        ws_id = "test-ws"
+        pm = get_project_manager_for_workspace(ws_id)
         pm.open(str(temp_project))
 
-        service.preview_paragraphs("main.tex")
+        service.preview_paragraphs("main.tex", workspace_id=ws_id)
 
         paragraphs = pm.get_paragraphs("main.tex")
         for para in paragraphs:
@@ -255,6 +257,7 @@ class TestApplyChanges:
                 result = service.apply_changes(
                     "main.tex",
                     [{"paragraph_index": para.index, "new_text": new_text}],
+                    workspace_id=ws_id,
                 )
                 assert result["applied"] == 1
                 break

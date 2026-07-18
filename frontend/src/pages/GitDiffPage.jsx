@@ -70,6 +70,7 @@ function revisionLabel(revision) {
 
 export default function GitDiffPage() {
   const projectPath = useStore((s) => s.projectPath);
+  const workspaceId = useStore((s) => s.workspaceId);
   const rootPath = useStore((s) => s.rootPath);
   const fileTree = useStore((s) => s.fileTree);
   const mainFile = useStore((s) => s.mainFile);
@@ -140,7 +141,7 @@ export default function GitDiffPage() {
     setLoadingRefs(true);
     setError("");
     try {
-      const data = await api.gitDiff.refs();
+      const data = await api.gitDiff.refs(workspaceId);
       const revisions = data.revisions || [];
       setRefs(revisions);
       setGitRoot(data.git_root || "");
@@ -174,7 +175,7 @@ export default function GitDiffPage() {
         mainFile: selectedMainFile,
         baseRef,
         targetRef,
-      });
+      }, workspaceId);
       setResult(data);
       if (data.success && data.pdf_url) {
         setPdfUrl(`${data.pdf_url}?t=${Date.now()}`);

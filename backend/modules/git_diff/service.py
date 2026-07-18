@@ -21,7 +21,7 @@ from pydantic import BaseModel, ConfigDict
 
 from backend.core.config import get_config
 from backend.core.logger import get_logger
-from backend.core.project_manager import get_project_manager
+from backend.core.workspace_manager import get_project_manager_for_workspace
 
 
 logger = get_logger(__name__)
@@ -143,10 +143,10 @@ class DiffDocument:
     deleted_lines: int
 
 
-async def list_git_revisions() -> GitRefsResult:
+async def list_git_revisions(workspace_id: str = "") -> GitRefsResult:
     """列出当前项目可选的 Git revision。"""
 
-    context = await _get_project_context()
+    context = await _get_project_context(workspace_id)
     current_branch = await _get_optional_git_output(
         context.git_root,
         ["branch", "--show-current"],
@@ -189,10 +189,11 @@ async def render_diff_pdf(
     main_file: str,
     base_ref: str,
     target_ref: str,
+    workspace_id: str = "",
 ) -> DiffHighlightResult:
     """生成两个 Git 状态之间的差异高亮 PDF。"""
 
-    context = await _get_project_context()
+    context = await _get_project_context(workspace_id)
     main_rel = _validate_project_path(main_file, require_tex=True)
 
     await _validate_revision(context.git_root, base_ref)
@@ -266,8 +267,8 @@ def get_pdf_path(job_id: str) -> Path:
     return pdf_path
 
 
-async def _get_project_context() -> ProjectContext:
-    project = get_project_manager()
+async def _get_project_context(workspace_id: str = "") -> ProjectContext:
+    project = get_project_manager_for_workspace(workspace_id)
     if not project.is_open:
         raise RuntimeError("No project opened")
 

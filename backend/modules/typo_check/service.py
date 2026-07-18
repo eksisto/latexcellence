@@ -98,17 +98,18 @@ class TypoCheckService(BaseParagraphCheckService):
         file_path: str,
         paragraph_indices: Optional[list[int]] = None,
         resolve_input: bool = False,
+        workspace_id: str = "",
     ) -> dict[str, Any]:
         """对段落进行错字检查（非流式）。"""
         return await self._run_batch_check(
-            file_path, paragraph_indices, resolve_input
+            file_path, paragraph_indices, resolve_input, workspace_id
         )
 
     async def check_typos_stream(
-        self, file_path: str, resolve_input: bool = False
+        self, file_path: str, resolve_input: bool = False, workspace_id: str = ""
     ):
         """错字检查流式版本（SSE）。"""
-        async for event in self._run_stream_check(file_path, resolve_input):
+        async for event in self._run_stream_check(file_path, resolve_input, workspace_id):
             yield event
 
     # ── Hook 实现 ───────────────────────────────────────────────────────────

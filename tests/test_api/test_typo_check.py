@@ -134,12 +134,13 @@ class TestPreviewParagraphs:
     """预览段落测试。"""
 
     def test_strips_latex_commands(self, temp_project, service):
-        from backend.core.project_manager import get_project_manager
+        from backend.core.workspace_manager import get_project_manager_for_workspace
 
-        pm = get_project_manager()
+        ws_id = "test-ws"
+        pm = get_project_manager_for_workspace(ws_id)
         pm.open(str(temp_project))
 
-        result = service.preview_paragraphs("main.tex")
+        result = service.preview_paragraphs("main.tex", workspace_id=ws_id)
         assert result["total"] >= 1
         assert result["file_path"] == "main.tex"
 
@@ -154,12 +155,13 @@ class TestPreviewParagraphs:
             assert r"\section" not in p["plain_text"]
 
     def test_preserves_plain_text_content(self, temp_project, service):
-        from backend.core.project_manager import get_project_manager
+        from backend.core.workspace_manager import get_project_manager_for_workspace
 
-        pm = get_project_manager()
+        ws_id = "test-ws"
+        pm = get_project_manager_for_workspace(ws_id)
         pm.open(str(temp_project))
 
-        result = service.preview_paragraphs("main.tex")
+        result = service.preview_paragraphs("main.tex", workspace_id=ws_id)
         all_plain = " ".join(p["plain_text"] for p in result["paragraphs"])
         assert "test paragrafh" in all_plain.lower()
         assert "speling" in all_plain.lower()
@@ -350,13 +352,14 @@ class TestApplyChanges:
     """修改写回测试。"""
 
     def test_apply_restores_markers(self, temp_project, service):
-        from backend.core.project_manager import get_project_manager
+        from backend.core.workspace_manager import get_project_manager_for_workspace
 
-        pm = get_project_manager()
+        ws_id = "test-ws"
+        pm = get_project_manager_for_workspace(ws_id)
         pm.open(str(temp_project))
 
         # 先预览以填充 marker_maps
-        service.preview_paragraphs("main.tex")
+        service.preview_paragraphs("main.tex", workspace_id=ws_id)
 
         # 构造一个 changes：把 "paragrafh" 改成 "paragraph"
         # 但是由于 plain_text 包含 marker，这里直接使用原始文本作简化测试
@@ -367,6 +370,7 @@ class TestApplyChanges:
                 result = service.apply_changes(
                     "main.tex",
                     [{"paragraph_index": para.index, "new_text": new_text}],
+                    workspace_id=ws_id,
                 )
                 assert result["applied"] == 1
                 break
@@ -377,12 +381,13 @@ class TestApplyChanges:
         assert "paragraph" in content
 
     def test_apply_multiple_changes(self, temp_project, service):
-        from backend.core.project_manager import get_project_manager
+        from backend.core.workspace_manager import get_project_manager_for_workspace
 
-        pm = get_project_manager()
+        ws_id = "test-ws"
+        pm = get_project_manager_for_workspace(ws_id)
         pm.open(str(temp_project))
 
-        service.preview_paragraphs("main.tex")
+        service.preview_paragraphs("main.tex", workspace_id=ws_id)
 
         paragraphs = pm.get_paragraphs("main.tex")
         # 两个错字在同一段内：需要合并为一个 change
@@ -397,7 +402,7 @@ class TestApplyChanges:
                 })
                 break
 
-        result = service.apply_changes("main.tex", changes)
+        result = service.apply_changes("main.tex", changes, workspace_id=ws_id)
         assert result["applied"] == 1
         assert result["total"] == 1
 

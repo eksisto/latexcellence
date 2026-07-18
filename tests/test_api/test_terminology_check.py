@@ -291,11 +291,13 @@ class TestPreviewParagraphs:
     """预览段落测试。"""
 
     def test_preview_strips_latex(self, temp_project, service):
-        from backend.core.project_manager import get_project_manager
-        pm = get_project_manager()
+        from backend.core.workspace_manager import get_project_manager_for_workspace
+
+        ws_id = "test-ws"
+        pm = get_project_manager_for_workspace(ws_id)
         pm.open(str(temp_project))
 
-        result = service.preview_paragraphs("main.tex")
+        result = service.preview_paragraphs("main.tex", workspace_id=ws_id)
         assert result["total"] >= 1
         assert result["file_path"] == "main.tex"
 
@@ -310,11 +312,13 @@ class TestApplyChanges:
     """修改写回测试。"""
 
     def test_apply_restores_markers(self, temp_project, service):
-        from backend.core.project_manager import get_project_manager
-        pm = get_project_manager()
+        from backend.core.workspace_manager import get_project_manager_for_workspace
+
+        ws_id = "test-ws"
+        pm = get_project_manager_for_workspace(ws_id)
         pm.open(str(temp_project))
 
-        preview = service.preview_paragraphs("main.tex")
+        preview = service.preview_paragraphs("main.tex", workspace_id=ws_id)
 
         applied = False
         for p in preview["paragraphs"]:
@@ -325,6 +329,7 @@ class TestApplyChanges:
                 result = service.apply_changes(
                     "main.tex",
                     [{"paragraph_index": p["index"], "new_text": corrected_plain}],
+                    workspace_id=ws_id,
                 )
                 assert result["applied"] == 1
                 applied = True
@@ -460,8 +465,10 @@ class TestCheckNoLLM:
     """无 API Key 降级路径测试。"""
 
     def test_no_llm_path_returns_results_without_changes(self, temp_project, service):
-        from backend.core.project_manager import get_project_manager
-        pm = get_project_manager()
+        from backend.core.workspace_manager import get_project_manager_for_workspace
+
+        ws_id = "test-ws"
+        pm = get_project_manager_for_workspace(ws_id)
         pm.open(str(temp_project))
 
         paragraphs = pm.get_paragraphs("main.tex")

@@ -13,11 +13,6 @@
     "max_tokens": 4096,
     "request_interval": 1.5
   },
-  "project": {
-    "default_open_dir": "C:\\Users\\YourName\\paper",
-    "backup_on_modify": true,
-    "auto_save_interval": 120
-  },
   "features": {
     "typo_check": {
       "enabled": true,

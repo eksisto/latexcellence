@@ -23,7 +23,7 @@ from typing import Any, Optional
 from pydantic import BaseModel
 
 from backend.core.config import get_config
-from backend.core.project_manager import get_project_manager
+from backend.core.workspace_manager import get_project_manager_for_workspace
 from backend.core.base_paragraph_check import BaseParagraphCheckService
 from backend.utils.json_utils import retry_with_validation
 
@@ -116,17 +116,18 @@ class FormattingService(BaseParagraphCheckService):
         file_path: str,
         paragraph_indices: Optional[list[int]] = None,
         resolve_input: bool = False,
+        workspace_id: str = "",
     ) -> dict[str, Any]:
         """对段落进行源码格式化检查（非流式）。"""
         return await self._run_batch_check(
-            file_path, paragraph_indices, resolve_input
+            file_path, paragraph_indices, resolve_input, workspace_id
         )
 
     async def check_formatting_stream(
-        self, file_path: str, resolve_input: bool = False
+        self, file_path: str, resolve_input: bool = False, workspace_id: str = ""
     ):
         """源码格式化流式版本（SSE）。"""
-        async for event in self._run_stream_check(file_path, resolve_input):
+        async for event in self._run_stream_check(file_path, resolve_input, workspace_id):
             yield event
 
     # ── 覆写：无 marker 保护 + 空输出检查 ──────────────────────────────────
@@ -194,7 +195,7 @@ class FormattingService(BaseParagraphCheckService):
     # ── 覆写：无需 marker 还原 ─────────────────────────────────────────────
 
     def apply_changes(
-        self, file_path: str, changes: list[dict[str, Any]]
+        self, file_path: str, changes: list[dict[str, Any]], workspace_id: str = ""
     ) -> dict[str, Any]:
         """
         将用户确认的格式修改写回源文件。
@@ -202,7 +203,7 @@ class FormattingService(BaseParagraphCheckService):
         与 typo_check/expression_opt 不同：无需还原 marker，
         corrected 字段即为完整的 LaTeX 源码，直接写回即可。
         """
-        pm = get_project_manager()
+        pm = get_project_manager_for_workspace(workspace_id)
         applied = 0
 
         for change in changes:

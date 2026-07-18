@@ -263,28 +263,6 @@ export default function SettingsDialog() {
             </div>
           </ConfigSection>
 
-          {/* Project */}
-          <ConfigSection title="项目">
-            <div className="space-y-1.5">
-              <Label className="text-xs">自动保存间隔（秒）</Label>
-              <Input
-                type="number"
-                value={config.project.auto_save_interval}
-                onChange={(e) =>
-                  set(
-                    "project.auto_save_interval",
-                    parseInt(e.target.value, 10) || 120
-                  )
-                }
-              />
-            </div>
-            <CheckboxField
-              label="修改前自动备份"
-              checked={config.project.backup_on_modify}
-              onChange={(v) => set("project.backup_on_modify", v)}
-            />
-          </ConfigSection>
-
           {/* Features */}
           <ConfigSection title="功能">
             <CheckboxField

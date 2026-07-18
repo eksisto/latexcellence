@@ -45,6 +45,7 @@ class TypoApplyRequest(BaseModel):
 async def preview_paragraphs(
     file_path: str = Query(..., description="文件路径（相对于项目根目录）"),
     resolve_input: bool = Query(False, description="是否递归展开 \\input 引用"),
+    workspace_id: str = Query(..., description="工作区唯一标识符"),
 ):
     """
     预览指定文件的段落（含 LaTeX 剥离后的纯文本）。
@@ -54,7 +55,7 @@ async def preview_paragraphs(
     当 resolve_input=True 时，递归解析 \\input/\\include 引用并返回所有子文件的段落。
     """
     try:
-        result = get_service().preview_paragraphs(file_path, resolve_input)
+        result = get_service().preview_paragraphs(file_path, resolve_input, workspace_id)
         return result
     except RuntimeError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -65,7 +66,7 @@ async def preview_paragraphs(
 # ── check ──────────────────────────────────────────────────────────────────
 
 @router.post("/check")
-async def check_typos(request: TypoCheckRequest):
+async def check_typos(request: TypoCheckRequest, workspace_id: str = Query(..., description="工作区唯一标识符")):
     """
     对指定段落的纯文本进行错字检查。
 
@@ -77,6 +78,7 @@ async def check_typos(request: TypoCheckRequest):
             request.file_path,
             request.paragraph_indices,
             request.resolve_input,
+            workspace_id,
         )
         return result
     except RuntimeError as e:
@@ -88,7 +90,7 @@ async def check_typos(request: TypoCheckRequest):
 # ── apply ──────────────────────────────────────────────────────────────────
 
 @router.post("/apply")
-async def apply_changes(request: TypoApplyRequest):
+async def apply_changes(request: TypoApplyRequest, workspace_id: str = Query(..., description="工作区唯一标识符")):
     """
     将用户审核确认的修改写回源文件。
 
@@ -97,7 +99,7 @@ async def apply_changes(request: TypoApplyRequest):
     """
     try:
         changes = [c.model_dump() for c in request.changes]
-        result = get_service().apply_changes(request.file_path, changes)
+        result = get_service().apply_changes(request.file_path, changes, workspace_id)
         return result
     except RuntimeError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -109,9 +111,9 @@ async def apply_changes(request: TypoApplyRequest):
 
 # ── stream ─────────────────────────────────────────────────────────────────
 
-@router.get("/stream/{project_id}")
+@router.get("/stream/{workspace_id}")
 async def stream_typo_check(
-    project_id: str,
+    workspace_id: str,
     file_path: str = Query(..., description="文件路径（相对于项目根目录）"),
     resolve_input: bool = Query(False, description="是否递归展开 \\input 引用"),
 ):
@@ -127,7 +129,7 @@ async def stream_typo_check(
     async def event_stream():
         try:
             async for event in get_service().check_typos_stream(
-                file_path, resolve_input
+                file_path, resolve_input, workspace_id
             ):
                 yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
         except Exception as e:

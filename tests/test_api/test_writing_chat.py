@@ -20,7 +20,7 @@ import pytest
 
 from backend.core.config import get_config
 from backend.core.llm_client import StreamChunk, UsageInfo
-from backend.core import project_manager as pm_mod
+from backend.core import workspace_manager as wm_mod
 from backend.modules.writing_chat.context import ConversationContext
 from backend.modules.writing_chat.models import (
     ChatMessage,
@@ -74,7 +74,7 @@ def temp_project(tmp_path):
 
 @pytest.fixture
 def open_project(temp_project):
-    pm = pm_mod.get_project_manager()
+    pm = wm_mod.get_project_manager_for_workspace("test-ws")
     pm.open(str(temp_project))
     yield pm
     pm._project_info = None
@@ -318,11 +318,14 @@ class TestServiceSend:
 class TestServiceEdit:
     @pytest.mark.asyncio
     async def test_generate_edit_raw_latex(
-        self, temp_session_dir, open_project, service
+        self, temp_session_dir, temp_project, open_project, service
     ):
         # 选取含 LaTeX 命令的段落，直接发送原始 LaTeX 源码
-        from backend.core.project_manager import get_project_manager
-        pm = get_project_manager()
+        from backend.core.workspace_manager import get_project_manager_for_workspace
+
+        ws_id = "test-ws"
+        pm = get_project_manager_for_workspace(ws_id)
+        pm.open(str(temp_project))
         paragraphs = pm.get_paragraphs("main.tex")
         para = next(p for p in paragraphs if "Bold claim" in p.text)
 
@@ -351,7 +354,7 @@ class TestServiceEdit:
                 paragraph_index=para.index,
                 instruction="把这段改得更学术",
             )
-            result = await service.generate_edit(req)
+            result = await service.generate_edit(req, workspace_id="test-ws")
 
         assert result["session_id"] == ctx.session_id
         op = EditOp.model_validate(result["edit_op"])
@@ -368,14 +371,19 @@ class TestServiceEdit:
         assert attached.edit_op.applied is False
 
     def test_apply_edit_writes_back_to_file(
-        self, temp_session_dir, open_project, service
+        self, temp_session_dir, temp_project, open_project, service
     ):
         # 准备 session + 一条带 edit_op 的 assistant 消息
+        from backend.core.workspace_manager import get_project_manager_for_workspace
+
+        ws_id = "test-ws"
+        pm = get_project_manager_for_workspace(ws_id)
+        pm.open(str(temp_project))
         ctx = ConversationContext.create_session(file_path="main.tex")
         ctx.append_user_message("instruction")
         am = ctx.append_assistant_message("ok", tokens=5)
 
-        paragraphs = open_project.get_paragraphs("main.tex")
+        paragraphs = pm.get_paragraphs("main.tex")
         para = next(p for p in paragraphs if "not very good" in p.text)
         new_text = para.text.replace("not very good", "suboptimal")
         ctx.attach_edit_op(
@@ -393,11 +401,10 @@ class TestServiceEdit:
             session_id=ctx.session_id,
             edit_message_id=am.id,
         )
-        result = service.apply_edit(req)
+        result = service.apply_edit(req, workspace_id="test-ws")
         assert result["applied"] is True
 
-        root_path = Path(open_project.root_path)
-        content = (root_path / "main.tex").read_text(encoding="utf-8")
+        content = (temp_project / "main.tex").read_text(encoding="utf-8")
         assert "not very good" not in content
         assert "suboptimal" in content
 

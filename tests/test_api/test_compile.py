@@ -232,7 +232,7 @@ class TestCompileLatex:
     @pytest.mark.asyncio
     async def test_no_project_raises(self):
         """未打开项目时抛出 RuntimeError。"""
-        with patch("backend.modules.compile.service.get_project_manager") as mock_pm:
+        with patch("backend.modules.compile.service.get_project_manager_for_workspace") as mock_pm:
             mock_pm.return_value = MagicMock(is_open=False)
             with pytest.raises(RuntimeError, match="No project opened"):
                 await compile_latex("main.tex")
@@ -240,14 +240,14 @@ class TestCompileLatex:
     @pytest.mark.asyncio
     async def test_file_not_found(self, mock_project):
         """主文件不存在时抛出 FileNotFoundError。"""
-        with patch("backend.modules.compile.service.get_project_manager", return_value=mock_project):
+        with patch("backend.modules.compile.service.get_project_manager_for_workspace", return_value=mock_project):
             with pytest.raises(FileNotFoundError, match="not found"):
                 await compile_latex("nonexistent.tex")
 
     @pytest.mark.asyncio
     async def test_compile_success(self, mock_project, mock_subprocess_success):
         """编译成功场景。"""
-        with patch("backend.modules.compile.service.get_project_manager", return_value=mock_project):
+        with patch("backend.modules.compile.service.get_project_manager_for_workspace", return_value=mock_project):
             with patch("asyncio.create_subprocess_exec", return_value=mock_subprocess_success):
                 result = await compile_latex("main.tex")
 
@@ -259,7 +259,7 @@ class TestCompileLatex:
         """编译超时场景。"""
         timeout_error = asyncio.TimeoutError()
 
-        with patch("backend.modules.compile.service.get_project_manager", return_value=mock_project):
+        with patch("backend.modules.compile.service.get_project_manager_for_workspace", return_value=mock_project):
             with patch("asyncio.create_subprocess_exec", new_callable=AsyncMock) as mock_create:
                 mock_process = MagicMock()
                 mock_create.return_value = mock_process
@@ -277,7 +277,7 @@ class TestCompileLatex:
         mock_llm = MagicMock()
         mock_llm.chat = AsyncMock(return_value='{"explanation": "未定义命令", "fixes": ["检查拼写"]}')
 
-        with patch("backend.modules.compile.service.get_project_manager", return_value=mock_project):
+        with patch("backend.modules.compile.service.get_project_manager_for_workspace", return_value=mock_project):
             with patch("asyncio.create_subprocess_exec", return_value=mock_subprocess_failure):
                 with patch("backend.modules.compile.service.get_llm_client", return_value=mock_llm):
                     result = await compile_latex("main.tex")
@@ -294,7 +294,7 @@ class TestCompileLatex:
         mock_llm = MagicMock()
         mock_llm.chat = AsyncMock(side_effect=RuntimeError("LLM offline"))
 
-        with patch("backend.modules.compile.service.get_project_manager", return_value=mock_project):
+        with patch("backend.modules.compile.service.get_project_manager_for_workspace", return_value=mock_project):
             with patch("asyncio.create_subprocess_exec", return_value=mock_subprocess_failure):
                 with patch("backend.modules.compile.service.get_llm_client", return_value=mock_llm):
                     result = await compile_latex("main.tex")
@@ -325,7 +325,7 @@ class TestCompileRouter:
 
         with patch("backend.modules.compile.router.compile_latex", new_callable=AsyncMock) as mock_compile:
             mock_compile.return_value = mock_result
-            response = client.post("/api/compile/run", json={"main_file": "main.tex"})
+            response = client.post("/api/compile/run?workspace_id=test", json={"main_file": "main.tex"})
 
         assert response.status_code == 200
         data = response.json()
@@ -335,7 +335,7 @@ class TestCompileRouter:
         """无项目时返回 400。"""
         with patch("backend.modules.compile.router.compile_latex", new_callable=AsyncMock) as mock_compile:
             mock_compile.side_effect = RuntimeError("No project opened")
-            response = client.post("/api/compile/run", json={"main_file": "main.tex"})
+            response = client.post("/api/compile/run?workspace_id=test", json={"main_file": "main.tex"})
 
         assert response.status_code == 400
         assert "No project opened" in response.json()["detail"]
@@ -344,7 +344,7 @@ class TestCompileRouter:
         """文件不存在时返回 404。"""
         with patch("backend.modules.compile.router.compile_latex", new_callable=AsyncMock) as mock_compile:
             mock_compile.side_effect = FileNotFoundError("not found")
-            response = client.post("/api/compile/run", json={"main_file": "missing.tex"})
+            response = client.post("/api/compile/run?workspace_id=test", json={"main_file": "missing.tex"})
 
         assert response.status_code == 404
 
@@ -359,7 +359,7 @@ class TestCompileRouter:
 
         with patch("backend.modules.compile.router.compile_latex", new_callable=AsyncMock) as mock_compile:
             mock_compile.return_value = mock_result
-            response = client.post("/api/compile/run", json={"main_file": "main.tex"})
+            response = client.post("/api/compile/run?workspace_id=test", json={"main_file": "main.tex"})
 
         assert response.status_code == 200
         data = response.json()
@@ -391,11 +391,11 @@ class TestCompilePdfEndpoint:
             pm.root_path = str(root)
 
             with patch(
-                "backend.modules.compile.router.get_project_manager",
+                "backend.modules.compile.router.get_project_manager_for_workspace",
                 return_value=pm,
             ):
                 response = client.get(
-                    "/api/compile/pdf", params={"main_file": "main.tex"}
+                    "/api/compile/pdf", params={"main_file": "main.tex", "workspace_id": "test"}
                 )
 
             assert response.status_code == 200
@@ -411,11 +411,11 @@ class TestCompilePdfEndpoint:
         pm.is_open = False
 
         with patch(
-            "backend.modules.compile.router.get_project_manager",
+            "backend.modules.compile.router.get_project_manager_for_workspace",
             return_value=pm,
         ):
             response = client.get(
-                "/api/compile/pdf", params={"main_file": "main.tex"}
+                "/api/compile/pdf", params={"main_file": "main.tex", "workspace_id": "test"}
             )
 
         assert response.status_code == 400
@@ -431,11 +431,11 @@ class TestCompilePdfEndpoint:
             pm.root_path = str(root)
 
             with patch(
-                "backend.modules.compile.router.get_project_manager",
+                "backend.modules.compile.router.get_project_manager_for_workspace",
                 return_value=pm,
             ):
                 response = client.get(
-                    "/api/compile/pdf", params={"main_file": "main.tex"}
+                    "/api/compile/pdf", params={"main_file": "main.tex", "workspace_id": "test"}
                 )
 
             assert response.status_code == 404
@@ -496,12 +496,12 @@ class TestCompilePdfEndpointValidation:
             pm.root_path = tmpdir
 
             with patch(
-                "backend.modules.compile.router.get_project_manager",
+                "backend.modules.compile.router.get_project_manager_for_workspace",
                 return_value=pm,
             ):
                 response = client.get(
                     "/api/compile/pdf",
-                    params={"main_file": "--output-directory=/tmp"},
+                    params={"main_file": "--output-directory=/tmp", "workspace_id": "test"},
                 )
 
             assert response.status_code == 400
@@ -515,12 +515,12 @@ class TestCompilePdfEndpointValidation:
             pm.root_path = tmpdir
 
             with patch(
-                "backend.modules.compile.router.get_project_manager",
+                "backend.modules.compile.router.get_project_manager_for_workspace",
                 return_value=pm,
             ):
                 response = client.get(
                     "/api/compile/pdf",
-                    params={"main_file": "../../escape.tex"},
+                    params={"main_file": "../../escape.tex", "workspace_id": "test"},
                 )
 
             assert response.status_code == 400

@@ -50,6 +50,7 @@ function processLoadedMessages(messages) {
 
 export default function useWritingChat() {
   const projectPath = useStore((s) => s.projectPath);
+  const workspaceId = useStore((s) => s.workspaceId);
   const fileTree = useStore((s) => s.fileTree);
   const activeFile = useStore((s) => s.activeFile);
   const setActiveFile = useStore((s) => s.setActiveFile);
@@ -90,7 +91,7 @@ export default function useWritingChat() {
     restoringRef.current = true;
     (async () => {
       try {
-        const data = await api.project.open(projectPath);
+        const data = await api.project.open(projectPath, workspaceId);
         setRootPath(data.root_path);
         setProjectPath(projectPath);
         setFileTree(data.file_tree);
@@ -155,7 +156,7 @@ export default function useWritingChat() {
       return;
     }
     try {
-      const data = await api.project.paragraphs(activeFile);
+      const data = await api.project.paragraphs(activeFile, workspaceId);
       setParagraphs(data.paragraphs || []);
     } catch (e) {
       setParagraphs([]);
@@ -393,6 +394,7 @@ export default function useWritingChat() {
           paragraphIndex: paragraphIndex,
           userMessage: content,
           assistantPrompt: activeAssistant && assistantContent ? assistantContent : null,
+          workspaceId,
           onEvent,
         });
       } catch (e) {
@@ -439,7 +441,7 @@ export default function useWritingChat() {
           instruction:
             instruction ||
             "请基于刚才的对话内容修改此段落，使其更符合学术写作规范",
-        });
+        }, workspaceId);
         // 把 edit_op 附挂到对应 assistant 消息
         setWritingChatMessages((prev) =>
           prev.map((m) =>
@@ -484,7 +486,7 @@ export default function useWritingChat() {
         await api.writingChat.applyEdit({
           session_id: writingChatCurrentSessionId,
           edit_message_id: messageId,
-        });
+        }, workspaceId);
         setWritingChatMessages((prev) =>
           prev.map((m) =>
             m.id === messageId && m.edit_op

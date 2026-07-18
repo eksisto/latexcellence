@@ -49,6 +49,7 @@ function flattenTexFiles(nodes) {
 
 export default function WorkspacePage() {
   const projectPath = useStore((s) => s.projectPath);
+  const workspaceId = useStore((s) => s.workspaceId);
   const rootPath = useStore((s) => s.rootPath);
   const fileTree = useStore((s) => s.fileTree);
   const activeFile = useStore((s) => s.activeFile);
@@ -73,7 +74,6 @@ export default function WorkspacePage() {
   const [paragraphs, setParagraphs] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-  const [lastPath, setLastPath] = useState("");
   const [showRawOutput, setShowRawOutput] = useState(false);
   const [confirmCloseOpen, setConfirmCloseOpen] = useState(false);
   const [confirmUndoOpen, setConfirmUndoOpen] = useState(false);
@@ -92,7 +92,7 @@ export default function WorkspacePage() {
     setLoading(true);
     setError(null);
     try {
-      const data = await api.project.open(path);
+      const data = await api.project.open(path, workspaceId);
       setRootPath(data.root_path);
       setProjectPath(path);
       setFileTree(data.file_tree);
@@ -108,39 +108,16 @@ export default function WorkspacePage() {
     }
   }, []);
 
-  // 启动时：读取上次保存的项目路径 / 自动恢复已打开的项目
+  // 启动时：从 Zustand persist 恢复项目
   useEffect(() => {
-    let cancelled = false;
-
     const restore = async () => {
       if (restoredRef.current) return;
-
-      // 优先从 Zustand persist 恢复（刷新前已打开的项目）
       if (projectPath && fileTree.length === 0) {
         restoredRef.current = true;
         await doOpenProject(projectPath);
-        return;
-      }
-
-      // 其次从后端 lastOpened 获取路径
-      try {
-        const data = await api.project.lastOpened();
-        if (!cancelled && data.path && data.exists) {
-          setLastPath(data.path);
-          setOpenPath(data.path);
-          // 如果 Zustand 中没有项目状态，则自动打开上次项目
-          if (!projectPath) {
-            restoredRef.current = true;
-            await doOpenProject(data.path);
-          }
-        }
-      } catch (_) {
-        // 忽略错误
       }
     };
-
     restore();
-    return () => { cancelled = true; };
   }, []);
 
   const handleOpenProject = useCallback(async () => {
@@ -157,15 +134,10 @@ export default function WorkspacePage() {
     await doOpenProject(path);
   }, [doOpenProject]);
 
-  const handleOpenLastProject = useCallback(async () => {
-    if (!lastPath) return;
-    await doOpenProject(lastPath);
-  }, [lastPath, doOpenProject]);
-
   const handleMainFileChange = useCallback(async (path) => {
     setMainFile(path);
     try {
-      await api.project.setMainFile(path);
+      await api.project.setMainFile(path, workspaceId);
     } catch (_) {
       // 忽略
     }
@@ -177,10 +149,10 @@ export default function WorkspacePage() {
     setCompileResult(null);
     setPdfUrl(null);
     try {
-      const data = await api.compile.run(mainFile);
+      const data = await api.compile.run(mainFile, workspaceId);
       setCompileResult(data);
       if (data.success) {
-        setPdfUrl(`${api.compile.pdfUrl(mainFile)}&t=${Date.now()}`);
+        setPdfUrl(`${api.compile.pdfUrl(mainFile, workspaceId)}&t=${Date.now()}`);
         toast.success("编译成功");
       } else {
         toast.error("编译失败", {
@@ -199,7 +171,7 @@ export default function WorkspacePage() {
     if (node.is_dir) return;
     setActiveFile(node.path);
     try {
-      const data = await api.project.paragraphs(node.path);
+      const data = await api.project.paragraphs(node.path, workspaceId);
       setParagraphs(data.paragraphs || []);
     } catch (e) {
       setParagraphs([]);
@@ -209,7 +181,7 @@ export default function WorkspacePage() {
   const reloadActiveFileParagraphs = useCallback(async () => {
     if (!activeFile) return;
     try {
-      const data = await api.project.paragraphs(activeFile);
+      const data = await api.project.paragraphs(activeFile, workspaceId);
       setParagraphs(data.paragraphs || []);
     } catch (_) {
       setParagraphs([]);
@@ -217,7 +189,7 @@ export default function WorkspacePage() {
   }, [activeFile]);
 
   const { canUndo, canRedo, busy: undoBusy, handleUndo, handleRedo } =
-    useUndoRedo(activeFile, reloadActiveFileParagraphs);
+    useUndoRedo(activeFile, workspaceId, reloadActiveFileParagraphs);
 
   // 键盘快捷键：Ctrl+Z 撤销、Ctrl+Shift+Z / Ctrl+Y 重做
   // 输入框/文本域中不拦截，保留原生 undo 行为
@@ -302,17 +274,6 @@ export default function WorkspacePage() {
                   <FolderOpen />
                   {loading ? "打开中..." : "打开项目"}
                 </Button>
-                {lastPath && (
-                  <Button
-                    variant="outline"
-                    className="w-full"
-                    onClick={handleOpenLastProject}
-                    disabled={loading}
-                  >
-                    <FolderOpen />
-                    打开上次项目
-                  </Button>
-                )}
               </CardContent>
             </Card>
           </div>

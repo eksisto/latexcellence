@@ -6,9 +6,21 @@
  * - request() 自动处理 JSON 序列化/反序列化和错误提取
  * - formulaOCR 模块使用 FormData（图片上传），不走 JSON 请求
  * - typoCheck 的 stream() 返回 SSE URL 字符串，供 EventSource 消费
+ * - 所有需要工作区隔离的端点均携带 workspace_id 查询参数
  */
 
 const BASE_URL = "/api";
+
+/**
+ * 拼接 workspace_id 到 URL 查询参数
+ * @param {string} url    含现有查询参数的 URL
+ * @param {string} workspaceId   工作区标识
+ * @returns {string}
+ */
+function appendWs(url, workspaceId) {
+  const sep = url.includes("?") ? "&" : "?";
+  return `${url}${sep}workspace_id=${encodeURIComponent(workspaceId)}`;
+}
 
 /**
  * 通用请求函数
@@ -45,21 +57,24 @@ export const api = {
 
   /* ---- 项目管理 ---- */
   project: {
-    open: (path) =>
-      request("/project/open", {
+    open: (path, workspaceId) =>
+      request(appendWs("/project/open", workspaceId), {
         method: "POST",
         body: JSON.stringify({ path }),
       }),
     browse: (path = "") =>
       request(`/project/browse?path=${encodeURIComponent(path)}`),
-    lastOpened: () => request("/project/last-opened"),
-    fileTree: () => request("/project/file-tree"),
-    paragraphs: (filePath) =>
+    fileTree: (workspaceId) =>
+      request(appendWs("/project/file-tree", workspaceId)),
+    paragraphs: (filePath, workspaceId) =>
       request(
-        `/project/paragraphs?file_path=${encodeURIComponent(filePath)}`
+        appendWs(
+          `/project/paragraphs?file_path=${encodeURIComponent(filePath)}`,
+          workspaceId
+        )
       ),
-    applyChange: (filePath, paragraphIndex, newText) =>
-      request("/project/apply-change", {
+    applyChange: (filePath, paragraphIndex, newText, workspaceId) =>
+      request(appendWs("/project/apply-change", workspaceId), {
         method: "POST",
         body: JSON.stringify({
           file_path: filePath,
@@ -67,69 +82,85 @@ export const api = {
           new_text: newText,
         }),
       }),
-    undo: (filePath) =>
-      request("/project/undo", {
+    undo: (filePath, workspaceId) =>
+      request(appendWs("/project/undo", workspaceId), {
         method: "POST",
         body: JSON.stringify({ file_path: filePath }),
       }),
-    redo: (filePath) =>
-      request("/project/redo", {
+    redo: (filePath, workspaceId) =>
+      request(appendWs("/project/redo", workspaceId), {
         method: "POST",
         body: JSON.stringify({ file_path: filePath }),
       }),
-    canUndo: (filePath) =>
+    canUndo: (filePath, workspaceId) =>
       request(
-        `/project/can-undo?file_path=${encodeURIComponent(filePath)}`
+        appendWs(
+          `/project/can-undo?file_path=${encodeURIComponent(filePath)}`,
+          workspaceId
+        )
       ),
-    canRedo: (filePath) =>
+    canRedo: (filePath, workspaceId) =>
       request(
-        `/project/can-redo?file_path=${encodeURIComponent(filePath)}`
+        appendWs(
+          `/project/can-redo?file_path=${encodeURIComponent(filePath)}`,
+          workspaceId
+        )
       ),
-    setMainFile: (filePath) =>
-      request("/project/set-main-file", {
+    setMainFile: (filePath, workspaceId) =>
+      request(appendWs("/project/set-main-file", workspaceId), {
         method: "POST",
         body: JSON.stringify({ file_path: filePath }),
+      }),
+    closeWorkspace: (workspaceId) =>
+      request(`/project/workspace/${encodeURIComponent(workspaceId)}`, {
+        method: "DELETE",
       }),
   },
 
   /* ---- 文本校对 ---- */
   typoCheck: {
-    preview: (filePath, resolveInput = false) =>
+    preview: (filePath, workspaceId, resolveInput = false) =>
       request(
-        `/typo-check/preview?file_path=${encodeURIComponent(filePath)}&resolve_input=${resolveInput}`
+        appendWs(
+          `/typo-check/preview?file_path=${encodeURIComponent(filePath)}&resolve_input=${resolveInput}`,
+          workspaceId
+        )
       ),
-    check: (data) =>
-      request("/typo-check/check", {
+    check: (data, workspaceId) =>
+      request(appendWs("/typo-check/check", workspaceId), {
         method: "POST",
         body: JSON.stringify(data),
       }),
-    apply: (data) =>
-      request("/typo-check/apply", {
+    apply: (data, workspaceId) =>
+      request(appendWs("/typo-check/apply", workspaceId), {
         method: "POST",
         body: JSON.stringify(data),
       }),
-    stream: (projectId, filePath, resolveInput = false) =>
-      `${BASE_URL}/typo-check/stream/${projectId}?file_path=${encodeURIComponent(filePath)}&resolve_input=${resolveInput}`,
+    stream: (workspaceId, filePath, resolveInput = false) =>
+      `${BASE_URL}/typo-check/stream/${encodeURIComponent(workspaceId)}?file_path=${encodeURIComponent(filePath)}&resolve_input=${resolveInput}`,
   },
 
   /* ---- 表达优化 ---- */
   expressionOpt: {
-    preview: (filePath, resolveInput = false) =>
+    preview: (filePath, workspaceId, resolveInput = false) =>
       request(
-        `/expression-opt/preview?file_path=${encodeURIComponent(filePath)}&resolve_input=${resolveInput}`
+        appendWs(
+          `/expression-opt/preview?file_path=${encodeURIComponent(filePath)}&resolve_input=${resolveInput}`,
+          workspaceId
+        )
       ),
-    optimize: (data) =>
-      request("/expression-opt/optimize", {
+    optimize: (data, workspaceId) =>
+      request(appendWs("/expression-opt/optimize", workspaceId), {
         method: "POST",
         body: JSON.stringify(data),
       }),
-    apply: (data) =>
-      request("/expression-opt/apply", {
+    apply: (data, workspaceId) =>
+      request(appendWs("/expression-opt/apply", workspaceId), {
         method: "POST",
         body: JSON.stringify(data),
       }),
-    stream: (projectId, filePath, resolveInput = false) =>
-      `${BASE_URL}/expression-opt/stream/${projectId}?file_path=${encodeURIComponent(filePath)}&resolve_input=${resolveInput}`,
+    stream: (workspaceId, filePath, resolveInput = false) =>
+      `${BASE_URL}/expression-opt/stream/${encodeURIComponent(workspaceId)}?file_path=${encodeURIComponent(filePath)}&resolve_input=${resolveInput}`,
     prompts: {
       list: () => request("/expression-opt/prompts"),
       load: (name) => request(`/expression-opt/prompts/${encodeURIComponent(name)}`),
@@ -205,40 +236,47 @@ export const api = {
 
   /* ---- 源码格式化 ---- */
   formatting: {
-    preview: (filePath, resolveInput = false) =>
+    preview: (filePath, workspaceId, resolveInput = false) =>
       request(
-        `/formatting/preview?file_path=${encodeURIComponent(filePath)}&resolve_input=${resolveInput}`
+        appendWs(
+          `/formatting/preview?file_path=${encodeURIComponent(filePath)}&resolve_input=${resolveInput}`,
+          workspaceId
+        )
       ),
-    check: (data) =>
-      request("/formatting/check", {
+    check: (data, workspaceId) =>
+      request(appendWs("/formatting/check", workspaceId), {
         method: "POST",
         body: JSON.stringify(data),
       }),
-    apply: (data) =>
-      request("/formatting/apply", {
+    apply: (data, workspaceId) =>
+      request(appendWs("/formatting/apply", workspaceId), {
         method: "POST",
         body: JSON.stringify(data),
       }),
-    stream: (projectId, filePath, resolveInput = false) =>
-      `${BASE_URL}/formatting/stream/${projectId}?file_path=${encodeURIComponent(filePath)}&resolve_input=${resolveInput}`,
+    stream: (workspaceId, filePath, resolveInput = false) =>
+      `${BASE_URL}/formatting/stream/${encodeURIComponent(workspaceId)}?file_path=${encodeURIComponent(filePath)}&resolve_input=${resolveInput}`,
   },
 
   /* ---- 自动编译 ---- */
   compile: {
-    run: (mainFile) =>
-      request("/compile/run", {
+    run: (mainFile, workspaceId) =>
+      request(appendWs("/compile/run", workspaceId), {
         method: "POST",
         body: JSON.stringify({ main_file: mainFile }),
       }),
-    pdfUrl: (mainFile) =>
-      `${BASE_URL}/compile/pdf?main_file=${encodeURIComponent(mainFile)}`,
+    pdfUrl: (mainFile, workspaceId) =>
+      appendWs(
+        `/compile/pdf?main_file=${encodeURIComponent(mainFile)}`,
+        workspaceId
+      ),
   },
 
   /* ---- Git 差异高亮 ---- */
   gitDiff: {
-    refs: () => request("/git-diff/refs"),
-    renderPdf: ({ mainFile, baseRef, targetRef }) =>
-      request("/git-diff/render-pdf", {
+    refs: (workspaceId) =>
+      request(appendWs("/git-diff/refs", workspaceId)),
+    renderPdf: ({ mainFile, baseRef, targetRef }, workspaceId) =>
+      request(appendWs("/git-diff/render-pdf", workspaceId), {
         method: "POST",
         body: JSON.stringify({
           main_file: mainFile,
@@ -259,22 +297,25 @@ export const api = {
 
   /* ---- 术语一致性检查 ---- */
   terminologyCheck: {
-    preview: (filePath, resolveInput = false) =>
+    preview: (filePath, workspaceId, resolveInput = false) =>
       request(
-        `/terminology-check/preview?file_path=${encodeURIComponent(filePath)}&resolve_input=${resolveInput}`
+        appendWs(
+          `/terminology-check/preview?file_path=${encodeURIComponent(filePath)}&resolve_input=${resolveInput}`,
+          workspaceId
+        )
       ),
-    check: (data) =>
-      request("/terminology-check/check", {
+    check: (data, workspaceId) =>
+      request(appendWs("/terminology-check/check", workspaceId), {
         method: "POST",
         body: JSON.stringify(data),
       }),
-    apply: (data) =>
-      request("/terminology-check/apply", {
+    apply: (data, workspaceId) =>
+      request(appendWs("/terminology-check/apply", workspaceId), {
         method: "POST",
         body: JSON.stringify(data),
       }),
-    stream: (projectId, filePath, resolveInput = false) =>
-      `${BASE_URL}/terminology-check/stream/${projectId}?file_path=${encodeURIComponent(filePath)}&resolve_input=${resolveInput}`,
+    stream: (workspaceId, filePath, resolveInput = false) =>
+      `${BASE_URL}/terminology-check/stream/${encodeURIComponent(workspaceId)}?file_path=${encodeURIComponent(filePath)}&resolve_input=${resolveInput}`,
   },
 
   /* ---- 参考文献管理 ---- */
@@ -300,17 +341,18 @@ export const api = {
         method: "POST",
         body: JSON.stringify(data),
       }),
-    readBib: (filePath) =>
-      request("/bib-manager/read-bib", {
+    readBib: (filePath, workspaceId) =>
+      request(appendWs("/bib-manager/read-bib", workspaceId), {
         method: "POST",
         body: JSON.stringify({ file_path: filePath }),
       }),
-    save: (data) =>
-      request("/bib-manager/save", {
+    save: (data, workspaceId) =>
+      request(appendWs("/bib-manager/save", workspaceId), {
         method: "POST",
         body: JSON.stringify(data),
       }),
-    listBibFiles: () => request("/bib-manager/list-bib-files"),
+    listBibFiles: (workspaceId) =>
+      request(appendWs("/bib-manager/list-bib-files", workspaceId)),
     formats: {
       list: () => request("/bib-manager/formats"),
       load: (name) =>
@@ -329,9 +371,9 @@ export const api = {
 
   /* ---- 写作助手 Chat ---- */
   writingChat: {
-    // SSE 流式发送消息。返回 read() 接口的标准 ReadableStream
-    send: async ({ sessionId, filePath, paragraphIndex, userMessage, assistantPrompt, onEvent, onError }) => {
-      const res = await fetch(`${BASE_URL}/writing-chat/send`, {
+    send: async ({ sessionId, filePath, paragraphIndex, userMessage, assistantPrompt, workspaceId, onEvent, onError }) => {
+      const url = appendWs(`${BASE_URL}/writing-chat/send`, workspaceId);
+      const res = await fetch(url, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -353,7 +395,6 @@ export const api = {
         const { value, done } = await reader.read();
         if (done) break;
         buffer += decoder.decode(value, { stream: true });
-        // SSE 帧以 \n\n 分隔
         let idx;
         while ((idx = buffer.indexOf("\n\n")) !== -1) {
           const frame = buffer.slice(0, idx);
@@ -370,13 +411,13 @@ export const api = {
         }
       }
     },
-    generateEdit: (data) =>
-      request("/writing-chat/generate-edit", {
+    generateEdit: (data, workspaceId) =>
+      request(appendWs("/writing-chat/generate-edit", workspaceId), {
         method: "POST",
         body: JSON.stringify(data),
       }),
-    applyEdit: (data) =>
-      request("/writing-chat/apply-edit", {
+    applyEdit: (data, workspaceId) =>
+      request(appendWs("/writing-chat/apply-edit", workspaceId), {
         method: "POST",
         body: JSON.stringify(data),
       }),

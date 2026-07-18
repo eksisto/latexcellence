@@ -46,13 +46,14 @@ class ExpressionApplyRequest(BaseModel):
 async def preview_paragraphs(
     file_path: str = Query(..., description="文件路径（相对于项目根目录）"),
     resolve_input: bool = Query(False, description="是否递归展开 \\input 引用"),
+    workspace_id: str = Query(..., description="工作区唯一标识符"),
 ):
     """
     预览指定文件的段落（含 LaTeX 剥离后的纯文本）。
     当 resolve_input=True 时，递归解析 \\input/\\include 引用。
     """
     try:
-        result = get_service().preview_paragraphs(file_path, resolve_input)
+        result = get_service().preview_paragraphs(file_path, resolve_input, workspace_id)
         return result
     except RuntimeError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -63,7 +64,7 @@ async def preview_paragraphs(
 # ── optimize ───────────────────────────────────────────────────────────────
 
 @router.post("/optimize")
-async def optimize_expression(request: ExpressionOptRequest):
+async def optimize_expression(request: ExpressionOptRequest, workspace_id: str = Query(..., description="工作区唯一标识符")):
     """
     对指定段落的纯文本进行表达优化。
 
@@ -74,6 +75,7 @@ async def optimize_expression(request: ExpressionOptRequest):
             request.file_path,
             request.paragraph_indices,
             request.resolve_input,
+            workspace_id,
         )
         return result
     except RuntimeError as e:
@@ -85,7 +87,7 @@ async def optimize_expression(request: ExpressionOptRequest):
 # ── apply ──────────────────────────────────────────────────────────────────
 
 @router.post("/apply")
-async def apply_changes(request: ExpressionApplyRequest):
+async def apply_changes(request: ExpressionApplyRequest, workspace_id: str = Query(..., description="工作区唯一标识符")):
     """
     将用户审核确认的修改写回源文件。
 
@@ -93,7 +95,7 @@ async def apply_changes(request: ExpressionApplyRequest):
     """
     try:
         changes = [c.model_dump() for c in request.changes]
-        result = get_service().apply_changes(request.file_path, changes)
+        result = get_service().apply_changes(request.file_path, changes, workspace_id)
         return result
     except RuntimeError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -105,9 +107,9 @@ async def apply_changes(request: ExpressionApplyRequest):
 
 # ── stream ─────────────────────────────────────────────────────────────────
 
-@router.get("/stream/{project_id}")
+@router.get("/stream/{workspace_id}")
 async def stream_optimize(
-    project_id: str,
+    workspace_id: str,
     file_path: str = Query(..., description="文件路径（相对于项目根目录）"),
     resolve_input: bool = Query(False, description="是否递归展开 \\input 引用"),
 ):
@@ -115,7 +117,7 @@ async def stream_optimize(
     async def event_stream():
         try:
             async for event in get_service().optimize_stream(
-                file_path, resolve_input
+                file_path, resolve_input, workspace_id
             ):
                 yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
         except Exception as e:

@@ -66,6 +66,7 @@ export default function useParagraphCheck({
   const fileTree = useStore((s) => s.fileTree);
   const projectPath = useStore((s) => s.projectPath);
   const activeFile = useStore((s) => s.activeFile);
+  const workspaceId = useStore((s) => s.workspaceId);
   const setActiveFile = useStore((s) => s.setActiveFile);
   const setRootPath = useStore((s) => s.setRootPath);
   const setProjectPath = useStore((s) => s.setProjectPath);
@@ -121,7 +122,7 @@ export default function useParagraphCheck({
       restoredRef.current = true;
       setRestoring(true);
       try {
-        const data = await api.project.open(projectPath);
+        const data = await api.project.open(projectPath, workspaceId);
         setRootPath(data.root_path);
         setProjectPath(projectPath);
         setFileTree(data.file_tree);
@@ -159,7 +160,7 @@ export default function useParagraphCheck({
     setResults([]);
     setParagraphs([]);
     try {
-      const data = await apiModule.preview(activeFile, resolveInput);
+      const data = await apiModule.preview(activeFile, workspaceId, resolveInput);
       setParagraphs(data.paragraphs || []);
       setMessage(`已加载 ${data.total} 个段落`);
     } catch (e) {
@@ -250,7 +251,7 @@ export default function useParagraphCheck({
     setCheckProgress({ current: 0, total: paragraphs.length });
 
     const url = apiModule.stream(
-      encodeURIComponent(projectPath),
+      workspaceId,
       activeFile,
       resolveInput
     );
@@ -343,7 +344,7 @@ export default function useParagraphCheck({
         await apiModule.apply({
           file_path: activeFile,
           changes: [{ paragraph_index: idx, new_text: newText, file_path: filePath || activeFile }],
-        });
+        }, workspaceId);
         setMessage(messages.applySuccess(idx));
         toast.success(messages.applySuccess(idx));
         // 从结果中移除已应用的段落，保留其余结果
@@ -394,7 +395,7 @@ export default function useParagraphCheck({
           new_text: r[correctedTextField],
           file_path: r.file_path || activeFile,
         }));
-        await apiModule.apply({ file_path: activeFile, changes });
+        await apiModule.apply({ file_path: activeFile, changes }, workspaceId);
         const appliedKeys = new Set(
           pending.map((r) => `${r.file_path || activeFile}:${r.paragraph_index}`)
         );
@@ -461,6 +462,7 @@ export default function useParagraphCheck({
   return {
     projectPath,
     activeFile,
+    workspaceId,
     texFiles,
     paragraphs,
     results,

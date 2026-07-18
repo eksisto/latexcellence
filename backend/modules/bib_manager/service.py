@@ -19,7 +19,7 @@ from PIL import Image
 from pydantic import BaseModel
 
 from backend.core.logger import get_logger
-from backend.core.project_manager import get_project_manager
+from backend.core.workspace_manager import get_project_manager_for_workspace
 from backend.core.llm_client import get_llm_client
 from backend.core.config import get_config
 from backend.modules.bib_manager.models import (
@@ -363,9 +363,9 @@ class BibManagerService:
             self._logger.error(f"BibTeX generation error: {e}")
             raise RuntimeError(f"BibTeX generation failed: {e}")
 
-    def read_bib_file(self, file_path: str) -> dict[str, Any]:
+    def read_bib_file(self, file_path: str, workspace_id: str = "") -> dict[str, Any]:
         """读取 .bib 文件内容。"""
-        pm = get_project_manager()
+        pm = get_project_manager_for_workspace(workspace_id)
         if not pm.is_open:
             raise RuntimeError("No project opened")
 
@@ -379,10 +379,10 @@ class BibManagerService:
         return {"file_path": file_path, "content": content}
 
     def save_bib_entry(
-        self, file_path: str, bibtex_code: str, cite_key: str
+        self, file_path: str, bibtex_code: str, cite_key: str, workspace_id: str = ""
     ) -> dict[str, Any]:
         """追加或更新 BibTeX 条目到 .bib 文件。"""
-        pm = get_project_manager()
+        pm = get_project_manager_for_workspace(workspace_id)
         if not pm.is_open:
             raise RuntimeError("No project opened")
 
@@ -410,9 +410,9 @@ class BibManagerService:
         )
         return {"status": "ok", "action": action, "cite_key": cite_key}
 
-    def list_bib_files(self) -> dict[str, Any]:
+    def list_bib_files(self, workspace_id: str = "") -> dict[str, Any]:
         """列出项目中的 .bib 文件。"""
-        pm = get_project_manager()
+        pm = get_project_manager_for_workspace(workspace_id)
         if not pm.is_open:
             raise RuntimeError("No project opened")
 

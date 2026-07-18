@@ -11,7 +11,7 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel, field_validator
 
 from backend.core.logger import get_logger
-from backend.core.project_manager import get_project_manager
+from backend.core.workspace_manager import get_project_manager_for_workspace
 from backend.modules.compile.service import compile_latex, _validate_main_file
 
 router = APIRouter(prefix="/api/compile", tags=["compile"])
@@ -37,7 +37,7 @@ class CompileRequest(BaseModel):
 
 
 @router.post("/run")
-async def run_compile(request: CompileRequest):
+async def run_compile(request: CompileRequest, workspace_id: str = Query(..., description="工作区唯一标识符")):
     """
     编译 LaTeX 项目。
 
@@ -45,7 +45,7 @@ async def run_compile(request: CompileRequest):
     若编译失败，使用 LLM 将错误信息翻译为通俗易懂的解释和修复建议。
     """
     try:
-        result = await compile_latex(request.main_file)
+        result = await compile_latex(request.main_file, workspace_id)
         return result.model_dump()
     except RuntimeError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -56,6 +56,7 @@ async def run_compile(request: CompileRequest):
 @router.get("/pdf")
 async def get_compiled_pdf(
     main_file: str = Query(..., description="主 .tex 文件相对路径"),
+    workspace_id: str = Query(..., description="工作区唯一标识符"),
 ):
     """
     返回最近一次编译产出的 PDF 文件。
@@ -64,7 +65,7 @@ async def get_compiled_pdf(
     使用 ``Content-Disposition: inline`` 以便浏览器在 iframe 中内联预览，
     前端可在编译成功后通过此端点内联预览。
     """
-    project = get_project_manager()
+    project = get_project_manager_for_workspace(workspace_id)
     if not project.is_open:
         raise HTTPException(status_code=400, detail="No project opened")
 

@@ -121,7 +121,7 @@ latexcellence/
 ├── main.py                  # 统一入口
 ├── config.json              # 配置文件
 ├── backend/
-│   ├── core/                # 配置、LLM 客户端、日志、项目管理
+│   ├── core/                # 配置、LLM 客户端、日志、工作区管理、项目管理
 │   ├── modules/             # 功能模块（路由 + 服务）
 │   │   ├── typo_check/      # 文本校对
 │   │   ├── expression_opt/  # 表达优化
@@ -136,7 +136,7 @@ latexcellence/
 │   │   ├── style_modify/    # LaTeX 样式修改
 │   │   ├── writing_chat/    # 写作助手聊天
 │   │   └── bib_manager/     # 参考文献管理
-│   └── utils/               # 文件操作、JSON 校验、\input 递归解析
+│   └── utils/               # 文件操作、JSON 校验、\input 递归解析、LaTeX 文本提取与位置映射
 ├── frontend/
 │   └── src/                 # React 应用
 ├── prompts/                 # 自定义提示词

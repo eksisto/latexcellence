@@ -15,7 +15,7 @@
 import json
 from typing import Any
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import StreamingResponse
 
 from backend.modules.writing_chat.models import (
@@ -38,13 +38,13 @@ router = APIRouter(prefix="/api/writing-chat", tags=["writing_chat"])
 
 
 @router.post("/send")
-async def send_message(request: ChatSendRequest):
+async def send_message(request: ChatSendRequest, workspace_id: str = Query(default="", description="工作区唯一标识符")):
     """流式发送对话消息。返回 SSE，事件为 data: {json}\\n\\n。"""
     service = get_writing_chat_service()
 
     async def event_stream():
         try:
-            async for event in service.send(request):
+            async for event in service.send(request, workspace_id):
                 yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
         except Exception as e:
             yield (
@@ -66,11 +66,11 @@ async def send_message(request: ChatSendRequest):
 
 
 @router.post("/generate-edit")
-async def generate_edit(request: GenerateEditRequest):
+async def generate_edit(request: GenerateEditRequest, workspace_id: str = Query(..., description="工作区唯一标识符")):
     """基于对话指令生成段落编辑建议。"""
     service = get_writing_chat_service()
     try:
-        result = await service.generate_edit(request)
+        result = await service.generate_edit(request, workspace_id)
         return result
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -84,11 +84,11 @@ async def generate_edit(request: GenerateEditRequest):
 
 
 @router.post("/apply-edit")
-async def apply_edit(request: ApplyEditRequest):
+async def apply_edit(request: ApplyEditRequest, workspace_id: str = Query(..., description="工作区唯一标识符")):
     """把某条 assistant 消息附带的编辑操作写回源文件。"""
     service = get_writing_chat_service()
     try:
-        return service.apply_edit(request)
+        return service.apply_edit(request, workspace_id)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except FileNotFoundError as e:

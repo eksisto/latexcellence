@@ -9,9 +9,10 @@ import { api } from "@/api/index";
  * 暴露 handleUndo / handleRedo 操作，并在操作后回调通知调用方刷新段落。
  *
  * @param {string|null} activeFile  当前激活的文件路径（相对项目根）
+ * @param {string} workspaceId       工作区唯一标识符
  * @param {() => Promise<void>|void} onAfterUndoRedo  撤销/重做成功后回调（如重新加载段落）
  */
-export default function useUndoRedo(activeFile, onAfterUndoRedo) {
+export default function useUndoRedo(activeFile, workspaceId, onAfterUndoRedo) {
   const [canUndo, setCanUndo] = useState(false);
   const [canRedo, setCanRedo] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -24,8 +25,8 @@ export default function useUndoRedo(activeFile, onAfterUndoRedo) {
     }
     try {
       const [u, r] = await Promise.all([
-        api.project.canUndo(activeFile),
-        api.project.canRedo(activeFile),
+        api.project.canUndo(activeFile, workspaceId),
+        api.project.canRedo(activeFile, workspaceId),
       ]);
       setCanUndo(Boolean(u.can_undo));
       setCanRedo(Boolean(r.can_redo));
@@ -34,7 +35,7 @@ export default function useUndoRedo(activeFile, onAfterUndoRedo) {
       setCanUndo(false);
       setCanRedo(false);
     }
-  }, [activeFile]);
+  }, [activeFile, workspaceId]);
 
   useEffect(() => {
     refresh();
@@ -44,7 +45,7 @@ export default function useUndoRedo(activeFile, onAfterUndoRedo) {
     if (!activeFile || busy || !canUndo) return;
     setBusy(true);
     try {
-      const res = await api.project.undo(activeFile);
+      const res = await api.project.undo(activeFile, workspaceId);
       if (res.undone) {
         toast.success("已撤销");
         await refresh();
@@ -63,7 +64,7 @@ export default function useUndoRedo(activeFile, onAfterUndoRedo) {
     if (!activeFile || busy || !canRedo) return;
     setBusy(true);
     try {
-      const res = await api.project.redo(activeFile);
+      const res = await api.project.redo(activeFile, workspaceId);
       if (res.redone) {
         toast.success("已重做");
         await refresh();

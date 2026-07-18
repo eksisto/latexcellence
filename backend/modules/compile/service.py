@@ -15,7 +15,7 @@ from typing import Optional
 from pydantic import BaseModel, ConfigDict
 
 from backend.core.logger import get_logger
-from backend.core.project_manager import get_project_manager
+from backend.core.workspace_manager import get_project_manager_for_workspace
 from backend.core.llm_client import get_llm_client
 from backend.core.config import get_config
 from backend.utils.json_utils import retry_with_validation
@@ -121,17 +121,18 @@ def _extract_key_errors(log_text: str, max_chars: int = 3000) -> str:
     return log_text[-max_chars:]
 
 
-async def compile_latex(main_file: str) -> CompileResult:
+async def compile_latex(main_file: str, workspace_id: str = "") -> CompileResult:
     """
     编译 LaTeX 项目的主文件。
 
     参数：
         main_file: 主 .tex 文件相对于项目根目录的路径
+        workspace_id: 工作区唯一标识符
 
     返回：
         CompileResult 对象（含编译状态、输出日志、LLM 翻译的解释和建议）
     """
-    project = get_project_manager()
+    project = get_project_manager_for_workspace(workspace_id)
     if not project.is_open:
         raise RuntimeError("No project opened")
 

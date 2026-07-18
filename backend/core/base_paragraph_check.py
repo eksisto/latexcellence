@@ -24,7 +24,7 @@ from typing import Any, ClassVar, Optional
 from pydantic import BaseModel
 
 from backend.core.logger import get_logger
-from backend.core.project_manager import get_project_manager
+from backend.core.workspace_manager import get_project_manager_for_workspace
 from backend.core.llm_client import get_llm_client
 from backend.core.config import get_config
 from backend.utils.latex_parser import LatexParser, MARKER_PATTERN
@@ -60,12 +60,12 @@ class BaseParagraphCheckService:
     # ── 文件与段落 ──────────────────────────────────────────────────────────
 
     def _get_files(
-        self, file_path: str, resolve_input: bool
+        self, file_path: str, resolve_input: bool, workspace_id: str
     ) -> list[str]:
         """解析 \\input 依赖，返回待处理文件列表。"""
         if not resolve_input:
             return [file_path]
-        pm = get_project_manager()
+        pm = get_project_manager_for_workspace(workspace_id)
         root = pm.root_path
         files = resolve_inputs(file_path, root)
         self._logger.info(
@@ -94,7 +94,7 @@ class BaseParagraphCheckService:
         return result
 
     def preview_paragraphs(
-        self, file_path: str, resolve_input: bool = False
+        self, file_path: str, resolve_input: bool = False, workspace_id: str = ""
     ) -> dict[str, Any]:
         """
         预览段落：返回每段的原始文本和剥离后的纯文本。
@@ -102,12 +102,13 @@ class BaseParagraphCheckService:
         参数：
             file_path: 文件路径
             resolve_input: 是否递归展开 \\input 引用
+            workspace_id: 工作区唯一标识符
 
         返回：
             { paragraphs: [...], file_path: "...", total: N }
         """
-        pm = get_project_manager()
-        files = self._get_files(file_path, resolve_input)
+        pm = get_project_manager_for_workspace(workspace_id)
+        files = self._get_files(file_path, resolve_input, workspace_id)
 
         self._file_path = file_path
         self._marker_maps = {}
@@ -128,7 +129,7 @@ class BaseParagraphCheckService:
         }
 
     def _collect_para_data(
-        self, files: list[str]
+        self, files: list[str], workspace_id: str
     ) -> list[dict[str, Any]]:
         """
         收集所有段落数据，统一字段名。
@@ -138,7 +139,7 @@ class BaseParagraphCheckService:
 
         当 use_marker_protection=True 时，同时填充 _marker_maps。
         """
-        pm = get_project_manager()
+        pm = get_project_manager_for_workspace(workspace_id)
         all_data: list[dict[str, Any]] = []
         for f in files:
             paragraphs = pm.get_paragraphs(f)
@@ -289,6 +290,7 @@ class BaseParagraphCheckService:
         file_path: str,
         paragraph_indices: Optional[list[int]] = None,
         resolve_input: bool = False,
+        workspace_id: str = "",
     ) -> dict[str, Any]:
         """
         批量逐段检查（非流式）。
@@ -296,13 +298,13 @@ class BaseParagraphCheckService:
         共享编排骨架：文件解析 → 段落收集 → 过滤 → 分批 LLM → 汇总结果。
         """
         cfg = get_config()
-        files = self._get_files(file_path, resolve_input)
+        files = self._get_files(file_path, resolve_input, workspace_id)
 
         self._file_path = file_path
         if self.use_marker_protection:
             self._marker_maps = {}
 
-        all_para_data = self._collect_para_data(files)
+        all_para_data = self._collect_para_data(files, workspace_id)
         targets = self._filter_targets(
             all_para_data, file_path, paragraph_indices)
 
@@ -352,6 +354,7 @@ class BaseParagraphCheckService:
         self,
         file_path: str,
         resolve_input: bool = False,
+        workspace_id: str = "",
     ):
         """
         流式逐段检查（SSE）。
@@ -359,13 +362,13 @@ class BaseParagraphCheckService:
         逐段 yield 事件：progress / result / error / done。
         """
         cfg = get_config()
-        files = self._get_files(file_path, resolve_input)
+        files = self._get_files(file_path, resolve_input, workspace_id)
 
         self._file_path = file_path
         if self.use_marker_protection:
             self._marker_maps = {}
 
-        all_para_data = self._collect_para_data(files)
+        all_para_data = self._collect_para_data(files, workspace_id)
 
         total = len(all_para_data)
         yield {"type": "progress", "current": 0, "total": total}
@@ -443,7 +446,7 @@ class BaseParagraphCheckService:
     # ── 写回 ────────────────────────────────────────────────────────────────
 
     def apply_changes(
-        self, file_path: str, changes: list[dict[str, Any]]
+        self, file_path: str, changes: list[dict[str, Any]], workspace_id: str = ""
     ) -> dict[str, Any]:
         """
         将用户确认的修改写回源文件。
@@ -454,11 +457,12 @@ class BaseParagraphCheckService:
         参数：
             file_path: 默认文件路径（当 change 中无 file_path 时使用）
             changes: [{ "paragraph_index": 0, "new_text": "...", "file_path": "..." }]
+            workspace_id: 工作区唯一标识符
 
         返回：
             { applied: N, total: M }
         """
-        pm = get_project_manager()
+        pm = get_project_manager_for_workspace(workspace_id)
         applied = 0
 
         for change in changes:

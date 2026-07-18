@@ -2,10 +2,38 @@
  * 全局状态管理（Zustand + persist 持久化）
  *
  * 持久化策略：
- *     - 仅持久化项目身份信息（projectPath、rootPath、activeFile、mainFile）
+ *     - 仅持久化项目身份信息（projectPath、rootPath、activeFile、mainFile、workspaceId）
  *     - 不持久化段落数据、检查结果等临时数据
  *     - 刷新页面后自动恢复项目状态
+ *     - workspaceId 用于多浏览器多工作区隔离
  */
+
+/**
+ * 获取或生成当前浏览器的工作区唯一标识符。
+ * 每个浏览器生成独立的 workspaceId（通过 localStorage 隔离），
+ * 多浏览器可同时处理不同工作区而互不干扰。
+ */
+function getOrCreateWorkspaceId() {
+  const key = "latexcellence-workspace-id";
+  let id = null;
+  try {
+    id = localStorage.getItem(key);
+  } catch (_) {
+    // 忽略
+  }
+  if (!id) {
+    id = crypto.randomUUID ? crypto.randomUUID() : (
+      "ws-" + Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 10)
+    );
+    try {
+      localStorage.setItem(key, id);
+    } catch (_) {
+      // 忽略
+    }
+  }
+  return id;
+}
+
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 
@@ -17,6 +45,10 @@ const useStore = create(
       setEnabledFeatures: (features) => set({ enabledFeatures: features }),
       currentTheme: "youminghei",
       setCurrentTheme: (theme) => set({ currentTheme: theme }),
+
+      /* ===== 工作区标识（持久化） ===== */
+      workspaceId: getOrCreateWorkspaceId(),
+      setWorkspaceId: (id) => set({ workspaceId: id }),
 
       /* ===== 项目状态（持久化） ===== */
       projectPath: null,
@@ -177,6 +209,7 @@ const useStore = create(
     {
       name: "latexcellence-project",
       partialize: (state) => ({
+        workspaceId: state.workspaceId,
         projectPath: state.projectPath,
         rootPath: state.rootPath,
         activeFile: state.activeFile,

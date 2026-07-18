@@ -28,7 +28,7 @@ from typing import Any, AsyncIterator, Optional
 from backend.core.config import get_config
 from backend.core.logger import get_logger
 from backend.core.llm_client import get_llm_client
-from backend.core.project_manager import get_project_manager
+from backend.core.workspace_manager import get_project_manager_for_workspace
 from backend.utils.json_utils import retry_with_validation
 from backend.modules.writing_chat.context import ConversationContext
 from backend.modules.writing_chat.models import (
@@ -143,7 +143,7 @@ class WritingChatService:
 
     # ── 发送消息（RS1，SSE 流式） ────────────────────────────────────────
 
-    async def send(self, req: ChatSendRequest) -> AsyncIterator[dict]:
+    async def send(self, req: ChatSendRequest, workspace_id: str = "") -> AsyncIterator[dict]:
         """
         主对话流：发送用户消息、流式接收 LLM 回复、必要时执行压缩。
 
@@ -165,7 +165,7 @@ class WritingChatService:
         # 2. 构造上下文锚点文本 + 追加 user 消息
         ctx.file_path = req.file_path or ctx.file_path
         ctx.save_to_disk()
-        context_block = self._build_context_block(req.file_path, req.paragraph_index)
+        context_block = self._build_context_block(req.file_path, req.paragraph_index, workspace_id)
         user_msg = ctx.append_user_message(
             req.user_message,
             referenced_file=req.file_path,
@@ -234,7 +234,7 @@ class WritingChatService:
 
     # ── 生成编辑（RS2，结构化 JSON） ───────────────────────────────────
 
-    async def generate_edit(self, req: GenerateEditRequest) -> dict:
+    async def generate_edit(self, req: GenerateEditRequest, workspace_id: str = "") -> dict:
         """
         基于用户对话指令，对指定段落生成编辑操作建议。
 
@@ -248,7 +248,7 @@ class WritingChatService:
         if ctx is None:
             raise ValueError(f"Session not found: {req.session_id}")
 
-        pm = get_project_manager()
+        pm = get_project_manager_for_workspace(workspace_id)
         paragraphs = pm.get_paragraphs(req.file_path)
         if req.paragraph_index < 0 or req.paragraph_index >= len(paragraphs):
             raise IndexError(
@@ -331,7 +331,7 @@ class WritingChatService:
 
     # ── 应用编辑 ──────────────────────────────────────────────────────
 
-    def apply_edit(self, req: ApplyEditRequest) -> dict:
+    def apply_edit(self, req: ApplyEditRequest, workspace_id: str = "") -> dict:
         ctx = ConversationContext.load_from_disk(req.session_id)
         if ctx is None:
             raise ValueError(f"Session not found: {req.session_id}")
@@ -346,7 +346,7 @@ class WritingChatService:
         if edit_op.applied:
             return {"applied": True, "already_applied": True}
 
-        pm = get_project_manager()
+        pm = get_project_manager_for_workspace(workspace_id)
         pm.apply_change(edit_op.file_path, edit_op.paragraph_index, edit_op.new_latex)
 
         ctx.mark_edit_applied(req.edit_message_id)
@@ -378,12 +378,12 @@ class WritingChatService:
 
     # ── 内部辅助 ────────────────────────────────────────────────────────────
 
-    def _build_context_block(self, file_path: str, paragraph_index: Optional[int]) -> str:
+    def _build_context_block(self, file_path: str, paragraph_index: Optional[int], workspace_id: str = "") -> str:
         """构造塞给 chat system prompt 的文件段落上下文（原始 LaTeX 源码）。"""
         if not file_path:
             return "(no file selected)"
         try:
-            text = ConversationContext.build_file_context_text(file_path, paragraph_index)
+            text = ConversationContext.build_file_context_text(file_path, paragraph_index, workspace_id)
         except Exception as e:
             return f"(failed to load file context: {e})"
         return text or "(file has no readable paragraphs)"

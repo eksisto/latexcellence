@@ -41,13 +41,14 @@ class TerminologyApplyRequest(BaseModel):
 async def preview_paragraphs(
     file_path: str = Query(..., description="文件路径（相对于项目根目录）"),
     resolve_input: bool = Query(False, description="是否递归展开 \\input 引用"),
+    workspace_id: str = Query(..., description="工作区唯一标识符"),
 ):
     """
     预览指定文件的段落（含 LaTeX 剥离后的纯文本）。
     当 resolve_input=True 时，递归解析 \\input/\\include 引用。
     """
     try:
-        result = get_service().preview_paragraphs(file_path, resolve_input)
+        result = get_service().preview_paragraphs(file_path, resolve_input, workspace_id)
         return result
     except RuntimeError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -56,7 +57,7 @@ async def preview_paragraphs(
 
 
 @router.post("/check")
-async def check_terminology(request: TerminologyCheckRequest):
+async def check_terminology(request: TerminologyCheckRequest, workspace_id: str = Query(..., description="工作区唯一标识符")):
     """
     对项目进行术语一致性检查。
 
@@ -68,6 +69,7 @@ async def check_terminology(request: TerminologyCheckRequest):
             request.file_path,
             request.paragraph_indices,
             request.resolve_input,
+            workspace_id,
         )
         return result
     except RuntimeError as e:
@@ -77,13 +79,13 @@ async def check_terminology(request: TerminologyCheckRequest):
 
 
 @router.post("/apply")
-async def apply_changes(request: TerminologyApplyRequest):
+async def apply_changes(request: TerminologyApplyRequest, workspace_id: str = Query(..., description="工作区唯一标识符")):
     """
     将用户审核确认的术语修改写回源文件。
     """
     try:
         changes = [c.model_dump() for c in request.changes]
-        result = get_service().apply_changes(request.file_path, changes)
+        result = get_service().apply_changes(request.file_path, changes, workspace_id)
         return result
     except RuntimeError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -93,9 +95,9 @@ async def apply_changes(request: TerminologyApplyRequest):
         raise HTTPException(status_code=404, detail=str(e))
 
 
-@router.get("/stream/{project_id}")
+@router.get("/stream/{workspace_id}")
 async def stream_terminology_check(
-    project_id: str,
+    workspace_id: str,
     file_path: str = Query(..., description="文件路径（相对于项目根目录）"),
     resolve_input: bool = Query(False, description="是否递归展开 \\input 引用"),
 ):
@@ -105,7 +107,7 @@ async def stream_terminology_check(
     async def event_stream():
         try:
             async for event in get_service().check_terminology_stream(
-                file_path, resolve_input
+                file_path, resolve_input, workspace_id
             ):
                 yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
         except Exception as e:

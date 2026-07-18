@@ -41,13 +41,6 @@ class LLMConfig(BaseModel):
     max_concurrency: int = 5            # 最大并发 LLM 请求数（Semaphore）
 
 
-class ProjectConfig(BaseModel):
-    """LaTeX 项目管理配置"""
-    default_open_dir: str = ""          # 默认项目目录（留空则每次手动选择）
-    backup_on_modify: bool = True       # 修改前是否自动创建 .bak 备份
-    auto_save_interval: int = 120       # 自动保存间隔（秒）
-
-
 class TypoCheckConfig(BaseModel):
     """文本校对模块配置"""
     enabled: bool = True                # 是否启用
@@ -156,7 +149,6 @@ class AppConfig(BaseModel):
     """应用总配置——顶层模型，包含所有子配置"""
     server: ServerConfig = ServerConfig()
     llm: LLMConfig = LLMConfig()
-    project: ProjectConfig = ProjectConfig()
     features: FeaturesConfig = FeaturesConfig()
     logging: LoggingConfig = LoggingConfig()
 
@@ -212,16 +204,6 @@ def get_config() -> AppConfig:
     return _config
 
 
-def reload_config() -> AppConfig:
-    """
-    热重载配置：从上次加载的路径重新读取并解析配置文件。
-    适用于运行时修改 config.json 后在不重启服务的情况下刷新配置。
-    """
-    if _config_path is None:
-        raise RuntimeError("Config has never been loaded.")
-    return load_config(str(_config_path))
-
-
 def save_config() -> None:
     """
     将当前缓存的配置对象持久化写回 config.json。
@@ -234,32 +216,6 @@ def save_config() -> None:
     data = _config.model_dump()
     with open(_config_path, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=2, ensure_ascii=False)
-
-
-def update_and_save(**kwargs) -> AppConfig:
-    """
-    更新配置字段并持久化到磁盘。
-
-    用法：
-        update_and_save(project__default_open_dir="/path/to/project")
-
-    参数：
-        **kwargs: 使用双下划线分隔嵌套字段路径，
-                  如 llm__temperature=0.5 修改 llm.temperature
-    """
-    global _config
-    if _config is None:
-        raise RuntimeError("Config not loaded. Call load_config() first.")
-
-    for key, value in kwargs.items():
-        parts = key.split("__")
-        target = _config
-        for part in parts[:-1]:
-            target = getattr(target, part)
-        setattr(target, parts[-1], value)
-
-    save_config()
-    return _config
 
 
 def _deep_merge(base: dict, updates: dict) -> dict:

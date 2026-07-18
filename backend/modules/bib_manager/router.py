@@ -7,7 +7,7 @@
 import json
 from typing import Optional
 
-from fastapi import APIRouter, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, File, Form, HTTPException, Query, UploadFile
 from pydantic import BaseModel
 
 from backend.modules.bib_manager.models import (
@@ -117,10 +117,10 @@ async def generate_bibtex(request: GenerateBibtexRequest):
 
 
 @router.post("/read-bib")
-async def read_bib_file(request: ReadBibRequest):
+async def read_bib_file(request: ReadBibRequest, workspace_id: str = Query(..., description="工作区唯一标识符")):
     """读取项目中的 .bib 文件内容。"""
     try:
-        result = get_service().read_bib_file(request.file_path)
+        result = get_service().read_bib_file(request.file_path, workspace_id)
         return result
     except RuntimeError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -129,13 +129,13 @@ async def read_bib_file(request: ReadBibRequest):
 
 
 @router.post("/save")
-async def save_bib_entry(request: SaveBibRequest):
+async def save_bib_entry(request: SaveBibRequest, workspace_id: str = Query(..., description="工作区唯一标识符")):
     """将 BibTeX 条目写入或更新到 .bib 文件。"""
     if not request.bibtex_code.strip():
         raise HTTPException(status_code=400, detail="Empty BibTeX code")
     try:
         result = get_service().save_bib_entry(
-            request.file_path, request.bibtex_code, request.cite_key
+            request.file_path, request.bibtex_code, request.cite_key, workspace_id
         )
         return result
     except RuntimeError as e:
@@ -147,10 +147,10 @@ async def save_bib_entry(request: SaveBibRequest):
 
 
 @router.get("/list-bib-files")
-async def list_bib_files():
+async def list_bib_files(workspace_id: str = Query(..., description="工作区唯一标识符")):
     """列出当前项目中的所有 .bib 文件。"""
     try:
-        result = get_service().list_bib_files()
+        result = get_service().list_bib_files(workspace_id)
         return result
     except RuntimeError as e:
         raise HTTPException(status_code=400, detail=str(e))
