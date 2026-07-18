@@ -7,13 +7,12 @@ OpenAI API 统一封装模块。
     3. 请求频率控制（rate limiting），避免触发 API 限流
 
 重试策略：
-    - JSON 解析失败 → 重试（最多 3 次，间隔 2^n 秒指数退避）
     - 网络/API 异常 → 重试（最多 3 次，间隔 2^n 秒指数退避）
     - 3 次均失败 → 抛出异常，由上层处理
+    - JSON 解析与 schema 校验由 json_utils.retry_with_validation 统一负责
 """
 
 import asyncio
-import json
 import threading
 import time
 from dataclasses import dataclass
@@ -94,9 +93,9 @@ class LLMClient:
         max_tokens: Optional[int] = None,
         response_format: Optional[dict] = None,
         max_retries: int = 3,
-    ) -> dict:
+    ) -> str:
         """
-        非流式 LLM 对话调用。
+        非流式 LLM 对话调用，返回原始文本。
 
         参数：
             messages: OpenAI 格式的消息列表 [{"role": "...", "content": "..."}]
@@ -106,7 +105,7 @@ class LLMClient:
             max_retries: 最大重试次数（默认 3）
 
         返回：
-            LLM 返回的 JSON 解析结果（dict）
+            LLM 返回的原始文本（str），由调用方负责 JSON 解析和校验
 
         异常：
             重试耗尽后抛出最后一次异常的原始类型
@@ -143,18 +142,7 @@ class LLMClient:
                         f"total_tokens={usage.total_tokens}"
                     )
 
-                # 强制 JSON 输出模式下，将字符串解析为 Python dict
-                return json.loads(content)
-
-            except json.JSONDecodeError as e:
-                # JSON 解析失败：LLM 输出不符合 JSON 格式
-                self._logger.warning(
-                    f"JSON parse failed (attempt {attempt + 1}/{max_retries}): {e}"
-                )
-                if attempt == max_retries - 1:
-                    raise
-                # 指数退避：第一次重试前等待 2^0 = 1 秒，第二次 2^1 = 2 秒，第三次 2^2 = 4 秒
-                await asyncio.sleep(2 ** attempt)
+                return content
 
             except Exception as e:
                 # 其他异常（网络错误、API 错误、认证失败等）
