@@ -78,7 +78,7 @@ _NO_ARG_COMMANDS = {
 }
 
 # 匹配 LaTeX marker（如 __CMD_0001__、__MATH_0002__）
-MARKER_PATTERN = re.compile(r"__[A-Z]+_\d{4}__")
+MARKER_PATTERN = re.compile(r"__[A-Z]+_\d{4,}__")
 
 
 class LatexParser:
