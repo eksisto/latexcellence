@@ -61,10 +61,10 @@
 
 ## 四、内联字体文件 (bundled)
 
-| 字体名称 | 文件 | 许可证 | 来源 |
-|----------|------|--------|------|
-| 霞鹜文楷 GB (LXGW WenKai GB) | `frontend/src/assets/fonts/LXGWWenKaiGB-Regular.ttf` | OFL-1.1 license | [lxgw/LXGW WenKai](https://github.com/lxgw/LxgwWenKai) |
-| 思源黑体 (Source Han Sans SC) | `frontend/src/assets/fonts/SourceHanSansSC-Medium.ttf` | SIL Open Font License 1.1 | [Adobe Fonts](https://github.com/adobe-fonts/source-han-sans) |
+| 字体名称 | 许可证 | 来源 |
+|---|---|---|
+| 霞鹜文楷 | OFL-1.1 license | [lxgw/LXGW WenKai](https://github.com/lxgw/LxgwWenKai) |
+| Noto Sans SC | SIL Open Font License 1.1 | [Google Fonts](https://fonts.adobe.com/fonts/noto-sans-sc) |
 
 ## 五、系统级外部依赖
 
