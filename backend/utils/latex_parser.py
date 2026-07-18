@@ -2,7 +2,7 @@
 LaTeX 文本提取与位置映射模块。
 
 职责：
-    1. 将 LaTeX 源码转为纯文本（剥离命令、数学公式、注释）
+    1. 将 LaTeX 源码转为纯文本（剥离命令、数学公式；注释替换为 marker）
     2. marker（标记符）+ 反向还原策略：先替换再还原，确保精确写回
     3. 段落级提取：按空行分割，记录行号范围
 
@@ -57,7 +57,8 @@ _SINGLE_TOKEN_COMMANDS = {
     r"\,", r"\:", r"\;", r"\!", r"\-",
     r"\\",         # line break
     r"\ ",         # explicit space
-    r"\~", r"\^",  # accents that don't take args (but \~{n} does; handled later)
+    # accents that don't take args (but \~{n} does; handled later)
+    r"\~", r"\^",
 }
 
 # 内置命令名（无参数，无需读取 {arg}）
@@ -103,12 +104,13 @@ class LatexParser:
         将 LaTeX 源码转换为带 marker 的纯文本。
 
         流程：
-            1. 移除注释
-            2. 替换 \\verb|...| 内联逐字
-            3. 替换受保护环境（verbatim, equation 等）
-            4. 替换展示数学模式（$$...$$, \\[...\\]）
-            5. 替换行内数学模式（$...$, \\(...\\)）
-            6. 替换剩余 LaTeX 命令
+            1. 替换 \\verb|...| 内联逐字
+            2. 替换受保护环境（verbatim, equation 等）
+            3. 替换展示数学模式（$$...$$, \\[...\\]）
+            4. 替换行内数学模式（$...$, \\(...\\)）
+            5. 替换剩余 LaTeX 命令
+            6. 将注释替换为 marker（在保护之后，避免 \\verb|100%| 等误处理）
+            7. 规范化空白
 
         参数：
             source: LaTeX 源码
@@ -121,12 +123,12 @@ class LatexParser:
 
         text = source
 
-        text = self._strip_comments(text)
         text = self._replace_verb_inline(text)
         text = self._replace_protected_envs(text)
         text = self._replace_display_math(text)
         text = self._replace_inline_math(text)
         text = self._replace_commands(text)
+        text = self._replace_comments(text)
         text = self._normalize_whitespace(text)
 
         return text, dict(self._marker_map)
@@ -156,15 +158,15 @@ class LatexParser:
 
     # ── comment stripping ─────────────────────────────────────────────────
 
-    def _strip_comments(self, text: str) -> str:
+    def _replace_comments(self, text: str) -> str:
         """
-        移除 LaTeX 注释（% 至行尾）。
+        将 LaTeX 注释（% 至行尾）替换为 marker。
         保留被转义的百分号（\\%）。
         """
-        lines = []
+        result_lines = []
         for line in text.split("\n"):
             in_comment = False
-            result: list[str] = []
+            parts: list[str] = []
             for i, ch in enumerate(line):
                 if ch == "%" and not in_comment:
                     # 检查前方反斜杠数量，偶数 = 注释开始
@@ -175,11 +177,15 @@ class LatexParser:
                         j -= 1
                     if bs % 2 == 0:
                         in_comment = True
+                        # 注释前的内容保留；注释内容替换为 marker
+                        marker = self._gen_marker("COM")
+                        self._marker_map[marker] = line[i:]
+                        parts.append(marker)
                         continue
                 if not in_comment:
-                    result.append(ch)
-            lines.append("".join(result))
-        return "\n".join(lines)
+                    parts.append(ch)
+            result_lines.append("".join(parts))
+        return "\n".join(result_lines)
 
     # ── inline verb ───────────────────────────────────────────────────────
 
@@ -194,7 +200,7 @@ class LatexParser:
         for m in pattern.finditer(text):
             marker = self._gen_marker("VERB")
             self._marker_map[marker] = m.group(0)
-            result.append(text[last_end : m.start()])
+            result.append(text[last_end: m.start()])
             result.append(marker)
             last_end = m.end()
         result.append(text[last_end:])
@@ -246,7 +252,8 @@ class LatexParser:
             self._marker_map[marker] = m.group(0)
             return f"\n{marker}\n"
 
-        text = re.sub(r"\\\[(.+?)\\\]", bracket_replacer, text, flags=re.DOTALL)
+        text = re.sub(r"\\\[(.+?)\\\]", bracket_replacer,
+                      text, flags=re.DOTALL)
 
         return text
 
@@ -265,7 +272,8 @@ class LatexParser:
             return marker
 
         # 匹配 $...$ 但不能是 $$
-        text = re.sub(r"(?<!\$)\$(?!\$)(.+?)(?<!\$)\$(?!\$)", dollar_replacer, text)
+        text = re.sub(r"(?<!\$)\$(?!\$)(.+?)(?<!\$)\$(?!\$)",
+                      dollar_replacer, text)
 
         # \(...\)
         def paren_replacer(m):
@@ -305,7 +313,7 @@ class LatexParser:
 
             # ── 转义字符 ──
             if i + 1 < n and text[i + 1] in _ESCAPED_CHARS:
-                token = text[i : i + 2]
+                token = text[i: i + 2]
                 marker = self._gen_marker("CMD")
                 self._marker_map[marker] = token
                 result.append(marker)
@@ -330,7 +338,7 @@ class LatexParser:
             while j < n and (text[j].isalpha() or text[j] in "*@"):
                 j += 1
 
-            cmd_name = text[i + 1 : j]  # 不含反斜杠
+            cmd_name = text[i + 1: j]  # 不含反斜杠
 
             # ── 无参数命令（\LaTeX, \today, \hline 等）──
             if (

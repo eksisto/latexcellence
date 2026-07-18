@@ -334,6 +334,7 @@ class TestRoundtrip:
         assert r"\end{equation}" in restored
         assert "这是引言" in restored
         assert "结论段落" in restored
+        assert "% 这是注释" in restored
 
     def test_marker_stability_after_llm_modification(self, parser):
         """模拟 LLM 只修改纯文本、不修改 marker 的场景。"""
