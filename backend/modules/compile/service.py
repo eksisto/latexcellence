@@ -162,9 +162,11 @@ async def compile_latex(main_file: str, workspace_id: str = "") -> CompileResult
             process.communicate(), timeout=timeout
         )
     except asyncio.TimeoutError:
+        process.kill()
+        stdout, stderr = await process.communicate()
         return CompileResult(
             success=False,
-            stderr=f"Compilation timed out after {timeout} seconds.",
+            stderr=stderr.decode("utf-8", errors="replace") + f"\nCompilation timed out after {timeout} seconds.",
             explanation="编译超时。可能原因：文档过大、有无限循环的 LaTeX 命令、或 latexmk 卡住。",
             fixes=[
                 "检查是否缺少 \\end{document} 或类似的环境闭合语句",
