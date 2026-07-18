@@ -115,12 +115,12 @@ export default function useWritingChat() {
   // ── 首次挂载：加载会话列表 ───────────────────────────────────────
   const refreshSessions = useCallback(async () => {
     try {
-      const data = await api.writingChat.listSessions();
+      const data = await api.writingChat.listSessions(workspaceId);
       setWritingChatSessions(data.sessions || []);
     } catch (e) {
       setError(e.message);
     }
-  }, [setWritingChatSessions]);
+  }, [workspaceId, setWritingChatSessions]);
 
   useEffect(() => {
     refreshSessions();

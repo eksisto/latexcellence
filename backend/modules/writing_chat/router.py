@@ -125,9 +125,9 @@ async def undo_message(request: UndoMessageRequest):
 
 
 @router.get("/sessions")
-async def list_sessions():
+async def list_sessions(workspace_id: str = Query(default="", description="工作区唯一标识符，用于按项目隔离会话")):
     service = get_writing_chat_service()
-    return {"sessions": service.list_sessions()}
+    return {"sessions": service.list_sessions(workspace_id)}
 
 
 @router.get("/sessions/{session_id}")

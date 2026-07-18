@@ -2,7 +2,7 @@
 写作助手 Chat 的会话上下文管理器。
 
 职责：
-    1. 在磁盘上持久化每个会话（一个 session_id 一个 JSON 文件，复用 atomic_write）
+    1. 在磁盘上持久化每个会话，按项目路径隔离（相同项目 = 共享会话）
     2. 维护会话中的 messages 列表与累计 token 计数（cumulative_tokens）
     3. 提供 to_llm_messages()：将本会话转为发送给 LLM 的 messages 数组
     4. 触发上下文压缩：累计 token 超阈值时把旧消息打包给 LLM 生成摘要并替换
@@ -11,11 +11,13 @@
 
 设计约定：
     - 会话文件存于 config.features.writing_chat.sessions_dir
-    - 文件名：{session_id}.json
+    - 按项目路径 hash 隔离：{sessions_dir}/{scope}/{uuid}.json
+    - session_id 格式：{scope}:{uuid}，嵌入 scope 信息便于路由
     - 不在 __init__ 中缓存配置；方法内实时 get_config()（AGENTS.md）
     - 使用 pathlib 与 encoding="utf-8"（AGENTS.md）
 """
 
+import hashlib
 import json
 import time
 import uuid
@@ -31,12 +33,39 @@ from backend.modules.writing_chat.models import (
 )
 
 
+_SCOPE_SEPARATOR = ":"
+_NOPROJECT_SCOPE = "_noproject"
+
+
+def compute_scope(project_root_path: str) -> str:
+    """将项目根路径哈希为稳定的 scope 标识符。"""
+    if not project_root_path:
+        return _NOPROJECT_SCOPE
+    resolved = str(Path(project_root_path).resolve())
+    return hashlib.sha256(resolved.encode("utf-8")).hexdigest()[:16]
+
+
+def parse_scoped_session_id(session_id: str) -> tuple[str, str]:
+    """解析 scoped session_id，返回 (scope, id_part)。"""
+    scope, _, id_part = session_id.partition(_SCOPE_SEPARATOR)
+    if not scope or not id_part:
+        raise ValueError(f"Invalid scoped session_id: {session_id!r}")
+    return scope, id_part
+
+
+def build_scoped_session_id(scope: str, id_part: Optional[str] = None) -> str:
+    """构造 scoped session_id。"""
+    if id_part is None:
+        id_part = uuid.uuid4().hex
+    return f"{scope}{_SCOPE_SEPARATOR}{id_part}"
+
+
 class ConversationContext:
     """
     单次会话的上下文。
 
     用法：
-        ctx = ConversationContext.create_session(file_path="main.tex")
+        ctx = ConversationContext.create_session(file_path="main.tex", scope=scope)
         ctx.append_user_message("帮我分析第三段")
         ctx.append_assistant_message("...")
         ctx.save_to_disk()
@@ -66,8 +95,13 @@ class ConversationContext:
     # ── 工厂方法 ─────────────────────────────────────────────────────────────
 
     @classmethod
-    def create_session(cls, file_path: Optional[str] = None) -> "ConversationContext":
-        session_id = uuid.uuid4().hex
+    def create_session(
+        cls,
+        file_path: Optional[str] = None,
+        scope: str = "",
+    ) -> "ConversationContext":
+        uuid_part = uuid.uuid4().hex
+        session_id = build_scoped_session_id(scope, uuid_part)
         now = time.time()
         return cls(
             session_id=session_id,
@@ -107,17 +141,20 @@ class ConversationContext:
     # ── 磁盘持久化 ──────────────────────────────────────────────────────────
 
     @staticmethod
-    def _sessions_dir() -> Path:
+    def _sessions_dir(scope: str = "") -> Path:
         cfg = get_config()
         d = Path(cfg.features.writing_chat.sessions_dir)
         if not d.is_absolute():
             d = Path.cwd() / d
+        if scope:
+            d = d / scope
         d.mkdir(parents=True, exist_ok=True)
         return d
 
     @classmethod
     def _session_path(cls, session_id: str) -> Path:
-        return cls._sessions_dir() / f"{session_id}.json"
+        scope, id_part = parse_scoped_session_id(session_id)
+        return cls._sessions_dir(scope) / f"{id_part}.json"
 
     def save_to_disk(self) -> None:
         self.last_updated_at = time.time()
@@ -141,24 +178,38 @@ class ConversationContext:
         return False
 
     @classmethod
-    def list_sessions(cls) -> list[dict[str, Any]]:
-        """列出所有持久化会话的元信息，按 last_updated_at 降序。"""
-        d = cls._sessions_dir()
+    def list_sessions(cls, scope: str = "") -> list[dict[str, Any]]:
+        """
+        列出持久化会话的元信息，按 last_updated_at 降序。
+
+        参数：
+            scope: 为 "" 时列出所有 scope 下的会话；
+                   非空时仅列出该 scope 下的会话。
+        """
         metas: list[dict[str, Any]] = []
-        for f in d.glob("*.json"):
-            try:
-                data = json.loads(safe_read(f))
-                metas.append({
-                    "id": data["id"],
-                    "created_at": data.get("created_at", 0.0),
-                    "last_updated_at": data.get("last_updated_at", 0.0),
-                    "message_count": len(data.get("messages", [])),
-                    "cumulative_tokens": data.get("cumulative_tokens", 0),
-                    "file_path": data.get("file_path"),
-                    "title": data.get("title") or _derive_title(data.get("messages", [])),
-                })
-            except Exception:
-                continue
+
+        if scope:
+            dirs_to_scan = [cls._sessions_dir(scope)]
+        else:
+            d = cls._sessions_dir()
+            dirs_to_scan = [entry for entry in d.iterdir() if entry.is_dir()]
+
+        for d in dirs_to_scan:
+            for f in d.glob("*.json"):
+                try:
+                    data = json.loads(safe_read(f))
+                    session_id = data.get("id", "")
+                    metas.append({
+                        "id": session_id,
+                        "created_at": data.get("created_at", 0.0),
+                        "last_updated_at": data.get("last_updated_at", 0.0),
+                        "message_count": len(data.get("messages", [])),
+                        "cumulative_tokens": data.get("cumulative_tokens", 0),
+                        "file_path": data.get("file_path"),
+                        "title": data.get("title") or _derive_title(data.get("messages", [])),
+                    })
+                except Exception:
+                    continue
         metas.sort(key=lambda m: m["last_updated_at"], reverse=True)
         return metas
 

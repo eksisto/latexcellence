@@ -431,7 +431,8 @@ export const api = {
         method: "POST",
         body: JSON.stringify(data),
       }),
-    listSessions: () => request("/writing-chat/sessions"),
+    listSessions: (workspaceId) =>
+      request(appendWs("/writing-chat/sessions", workspaceId)),
     loadSession: (id) => request(`/writing-chat/sessions/${id}`),
     deleteSession: (id) =>
       request(`/writing-chat/sessions/${id}`, { method: "DELETE" }),

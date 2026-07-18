@@ -30,7 +30,7 @@ from backend.core.logger import get_logger
 from backend.core.llm_client import get_llm_client
 from backend.core.workspace_manager import get_project_manager_for_workspace
 from backend.utils.json_utils import retry_with_validation
-from backend.modules.writing_chat.context import ConversationContext
+from backend.modules.writing_chat.context import ConversationContext, _NOPROJECT_SCOPE, compute_scope
 from backend.modules.writing_chat.models import (
     ApplyEditRequest,
     ChatMessage,
@@ -120,10 +120,24 @@ class WritingChatService:
     def _no_api_key() -> bool:
         return not bool(get_config().llm.api_key)
 
+    @staticmethod
+    def _get_scope(workspace_id: str) -> str:
+        """从 workspace_id 获取项目路径的 hash，作为会话 scope。无项目时返回 _noproject。"""
+        if not workspace_id:
+            return _NOPROJECT_SCOPE
+        try:
+            pm = get_project_manager_for_workspace(workspace_id)
+            if pm.is_open:
+                return compute_scope(pm.root_path)
+        except Exception:
+            pass
+        return _NOPROJECT_SCOPE
+
     # ── 会话管理 ──────────────────────────────────────────────────────────
 
-    def list_sessions(self) -> list[dict[str, Any]]:
-        return ConversationContext.list_sessions()
+    def list_sessions(self, workspace_id: str = "") -> list[dict[str, Any]]:
+        scope = self._get_scope(workspace_id) if workspace_id else ""
+        return ConversationContext.list_sessions(scope)
 
     def load_session(self, session_id: str) -> Optional[ConversationContext]:
         return ConversationContext.load_from_disk(session_id)
@@ -154,13 +168,14 @@ class WritingChatService:
             return
 
         # 1. 加载或创建会话
+        scope = self._get_scope(workspace_id)
         ctx = (
             ConversationContext.load_from_disk(req.session_id)
             if req.session_id
             else None
         )
         if ctx is None:
-            ctx = ConversationContext.create_session(file_path=req.file_path)
+            ctx = ConversationContext.create_session(file_path=req.file_path, scope=scope)
 
         # 2. 构造上下文锚点文本 + 追加 user 消息
         ctx.file_path = req.file_path or ctx.file_path

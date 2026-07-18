@@ -137,7 +137,7 @@ class TestModels:
 
 class TestContext:
     def test_create_and_persist_roundtrip(self, temp_session_dir, open_project):
-        ctx = ConversationContext.create_session(file_path="main.tex")
+        ctx = ConversationContext.create_session(file_path="main.tex", scope="test")
         ctx.append_user_message("帮我分析第三段的引言")
         ctx.append_assistant_message("好的，第三段主要讨论...", tokens=120)
         ctx.save_to_disk()
@@ -150,9 +150,9 @@ class TestContext:
         assert loaded.messages[1].role == "assistant"
 
     def test_list_sessions_ordered(self, temp_session_dir, open_project):
-        ctx1 = ConversationContext.create_session()
+        ctx1 = ConversationContext.create_session(scope="test")
         time.sleep(0.01)
-        ctx2 = ConversationContext.create_session()
+        ctx2 = ConversationContext.create_session(scope="test")
         ctx1.append_user_message("a")
         ctx1.save_to_disk()
         ctx2.append_user_message("bb")
@@ -163,7 +163,7 @@ class TestContext:
         assert metas[0]["id"] == ctx2.session_id
 
     def test_delete_message_reduces_tokens(self, temp_session_dir, open_project):
-        ctx = ConversationContext.create_session()
+        ctx = ConversationContext.create_session(scope="test")
         u = ctx.append_user_message("q")
         u.tokens = 50
         ctx.append_assistant_message("a", tokens=20)
@@ -177,7 +177,7 @@ class TestContext:
         assert len(ctx.messages) == 1
 
     def test_undo_summary_restores_snapshot(self, temp_session_dir, open_project):
-        ctx = ConversationContext.create_session()
+        ctx = ConversationContext.create_session(scope="test")
         ctx.append_user_message("hello")
         ctx.append_assistant_message("hi", tokens=10)
         ctx.append_user_message("more")
@@ -196,7 +196,7 @@ class TestContext:
         assert ctx.messages[0].content == "hello"
 
     def test_undo_regular_message_equivalent_to_delete(self, temp_session_dir, open_project):
-        ctx = ConversationContext.create_session()
+        ctx = ConversationContext.create_session(scope="test")
         ctx.append_user_message("q")
         ctx.append_assistant_message("a", tokens=20)
         assert ctx.cumulative_tokens == 20
@@ -206,7 +206,7 @@ class TestContext:
         assert ctx.cumulative_tokens == 0
 
     def test_should_compress_threshold(self, temp_session_dir, open_project):
-        ctx = ConversationContext.create_session()
+        ctx = ConversationContext.create_session(scope="test")
         ctx.cumulative_tokens = 10
         assert not ctx.should_compress()
         ctx.cumulative_tokens = 10_000_000
@@ -260,7 +260,7 @@ class TestServiceSend:
         cfg = get_config().features.writing_chat
         monkeypatch.setattr(cfg, "compression_threshold_tokens", 100)
 
-        ctx = ConversationContext.create_session(file_path="main.tex")
+        ctx = ConversationContext.create_session(file_path="main.tex", scope="test")
         for i in range(4):
             ctx.append_user_message(f"q{i}")
             ctx.append_assistant_message(f"a{i}", tokens=20)
@@ -329,7 +329,7 @@ class TestServiceEdit:
         paragraphs = pm.get_paragraphs("main.tex")
         para = next(p for p in paragraphs if "Bold claim" in p.text)
 
-        ctx = ConversationContext.create_session(file_path="main.tex")
+        ctx = ConversationContext.create_session(file_path="main.tex", scope="test")
         ctx.append_user_message("把这段改得更学术")
         ctx.append_assistant_message("好的，建议...", tokens=10)
         ctx.save_to_disk()
@@ -379,7 +379,7 @@ class TestServiceEdit:
         ws_id = "test-ws"
         pm = get_project_manager_for_workspace(ws_id)
         pm.open(str(temp_project))
-        ctx = ConversationContext.create_session(file_path="main.tex")
+        ctx = ConversationContext.create_session(file_path="main.tex", scope="test")
         ctx.append_user_message("instruction")
         am = ctx.append_assistant_message("ok", tokens=5)
 
@@ -416,7 +416,7 @@ class TestServiceEdit:
     def test_apply_edit_already_applied_returns_idempotent(
         self, temp_session_dir, open_project, service
     ):
-        ctx = ConversationContext.create_session(file_path="main.tex")
+        ctx = ConversationContext.create_session(file_path="main.tex", scope="test")
         ctx.append_user_message("q")
         am = ctx.append_assistant_message("a", tokens=3)
         paragraphs = open_project.get_paragraphs("main.tex")
@@ -443,7 +443,7 @@ class TestServiceEdit:
 
 class TestServiceMessageOps:
     def test_delete_message(self, temp_session_dir, open_project, service):
-        ctx = ConversationContext.create_session()
+        ctx = ConversationContext.create_session(scope="test")
         u = ctx.append_user_message("q")
         ctx.append_assistant_message("a", tokens=10)
         ctx.save_to_disk()
@@ -458,7 +458,7 @@ class TestServiceMessageOps:
         assert loaded.cumulative_tokens == 10
 
     def test_undo_summary_message(self, temp_session_dir, open_project, service):
-        ctx = ConversationContext.create_session()
+        ctx = ConversationContext.create_session(scope="test")
         ctx.append_user_message("q1")
         ctx.append_assistant_message("a1", tokens=20)
         ctx.replace_with_summary("sum", summary_tokens=5)
