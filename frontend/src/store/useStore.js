@@ -162,7 +162,13 @@ const useStore = create(
       writingChatCurrentSessionId: null,
       writingChatMessages: [],
       writingChatCompressed: false,
-      setWritingChatSessions: (sessions) => set({ writingChatSessions: sessions }),
+      setWritingChatSessions: (sessions) => {
+        if (typeof sessions === "function") {
+          set((state) => ({ writingChatSessions: sessions(state.writingChatSessions) }));
+        } else {
+          set({ writingChatSessions: sessions });
+        }
+      },
       setWritingChatCurrentSessionId: (id) => set({ writingChatCurrentSessionId: id }),
       setWritingChatMessages: (messages) => {
         if (typeof messages === "function") {

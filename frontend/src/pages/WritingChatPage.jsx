@@ -455,7 +455,7 @@ export default function WritingChatPage() {
                 <div className="space-y-1 pr-2">
                   {sessions.length === 0 && (
                     <p className="text-xs text-muted-foreground text-center py-4">
-                      暂无会话，发送消息即可新建
+                      暂无会话，点击 + 新建
                     </p>
                   )}
                   {sessions.map((s) => (
@@ -663,7 +663,7 @@ export default function WritingChatPage() {
                   <div className="h-full flex items-center justify-center text-muted-foreground text-sm">
                     {currentSessionId
                       ? "（空会话）"
-                      : "发送消息开始一次新的对话"}
+                      : "点击左侧 + 按钮新建会话"}
                   </div>
                 )}
                 {messages.map((m) => (

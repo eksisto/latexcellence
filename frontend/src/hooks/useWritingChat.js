@@ -9,6 +9,9 @@ const uid = () =>
     ? crypto.randomUUID()
     : Math.random().toString(36).slice(2) + Date.now().toString(36));
 
+const DRAFT_PREFIX = "__draft__";
+const isDraftSession = (id) => typeof id === "string" && id.startsWith(DRAFT_PREFIX);
+
 function parseThinking(rawText) {
   const thinkOpen = rawText.indexOf("<thinking>");
   if (thinkOpen === -1) {
@@ -183,6 +186,12 @@ export default function useWritingChat() {
         setWritingChatCompressed(false);
         return;
       }
+      if (isDraftSession(sessionId)) {
+        setWritingChatCurrentSessionId(sessionId);
+        setWritingChatMessages([]);
+        setWritingChatCompressed(false);
+        return;
+      }
       try {
         const data = await api.writingChat.loadSession(sessionId);
         setWritingChatCurrentSessionId(sessionId);
@@ -210,10 +219,22 @@ export default function useWritingChat() {
 
   // ── 新建会话 ─────────────────────────────────────────────────────
   const newSession = useCallback(() => {
-    setWritingChatCurrentSessionId(null);
+    const existingDraft = writingChatSessions.find((s) => isDraftSession(s.id));
+    if (existingDraft) {
+      setWritingChatCurrentSessionId(existingDraft.id);
+      setWritingChatMessages([]);
+      setWritingChatCompressed(false);
+      return;
+    }
+    const draftId = DRAFT_PREFIX + uid();
+    const draftSession = { id: draftId, title: "" };
+    setWritingChatSessions([draftSession, ...writingChatSessions]);
+    setWritingChatCurrentSessionId(draftId);
     setWritingChatMessages([]);
     setWritingChatCompressed(false);
   }, [
+    writingChatSessions,
+    setWritingChatSessions,
     setWritingChatCurrentSessionId,
     setWritingChatMessages,
     setWritingChatCompressed,
@@ -223,6 +244,15 @@ export default function useWritingChat() {
   const deleteSession = useCallback(
     async (sessionId) => {
       try {
+        if (isDraftSession(sessionId)) {
+          setWritingChatSessions((prev) => prev.filter((s) => s.id !== sessionId));
+          if (writingChatCurrentSessionId === sessionId) {
+            setWritingChatCurrentSessionId(null);
+            setWritingChatMessages([]);
+            setWritingChatCompressed(false);
+          }
+          return;
+        }
         await api.writingChat.deleteSession(sessionId);
         if (writingChatCurrentSessionId === sessionId) {
           newSession();
@@ -233,19 +263,25 @@ export default function useWritingChat() {
         toast.error("删除会话失败", { description: e.message });
       }
     },
-    [writingChatCurrentSessionId, newSession, refreshSessions]
+    [writingChatCurrentSessionId, newSession, refreshSessions, setWritingChatSessions, setWritingChatCurrentSessionId, setWritingChatMessages, setWritingChatCompressed]
   );
 
   const renameSession = useCallback(
     async (sessionId, title) => {
       try {
+        if (isDraftSession(sessionId)) {
+          setWritingChatSessions((prev) =>
+            prev.map((s) => (s.id === sessionId ? { ...s, title } : s))
+          );
+          return;
+        }
         await api.writingChat.renameSession(sessionId, title);
         await refreshSessions();
       } catch (e) {
         toast.error("重命名会话失败", { description: e.message });
       }
     },
-    [refreshSessions]
+    [refreshSessions, setWritingChatSessions]
   );
 
   // ── 助手提示词管理 ─────────────────────────────────────────────────
@@ -374,8 +410,19 @@ export default function useWritingChat() {
                 : m
             )
           );
-          if (event.session_id && event.session_id !== writingChatCurrentSessionId) {
-            setWritingChatCurrentSessionId(event.session_id);
+          if (event.session_id) {
+            if (isDraftSession(writingChatCurrentSessionId)) {
+              setWritingChatSessions((prev) =>
+                prev.map((s) =>
+                  s.id === writingChatCurrentSessionId
+                    ? { id: event.session_id, title: s.title }
+                    : s
+                )
+              );
+            }
+            if (event.session_id !== writingChatCurrentSessionId) {
+              setWritingChatCurrentSessionId(event.session_id);
+            }
           }
         } else if (event.type === "error") {
           setError(event.message);
@@ -389,7 +436,7 @@ export default function useWritingChat() {
 
       try {
         await api.writingChat.send({
-          sessionId: writingChatCurrentSessionId,
+          sessionId: isDraftSession(writingChatCurrentSessionId) ? null : writingChatCurrentSessionId,
           filePath: activeFile,
           paragraphIndex: paragraphIndex,
           userMessage: content,
