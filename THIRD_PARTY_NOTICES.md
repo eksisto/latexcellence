@@ -83,12 +83,13 @@ TeX Live 包含多个组件（xelatex、latexmk 等），整体以 GPL-2.0-or-la
 
 ## 六、主题资源
 
-以下配色主题来源于 [ShadcnThemer.com](https://shadcnthemer.com)（作者 [Mike Tromba](https://github.com/miketromba)），感谢 Mike 提供便捷的主题创作与分享平台。特此致谢。
+以下配色主题来源于 [ShadcnThemer.com](https://shadcnthemer.com)（作者 [Mike Tromba](https://github.com/miketromba)），部分主题做了些许修改，特此致谢。
 
 | 中文名 | 英文原名 | 作者 | 来源 URL |
 |--------|----------|------|----------|
 | 海螺橙 | Tangerine | @mike (tweakcn) | [shadcnthemer.com/themes/44dec9b0...](https://shadcnthemer.com/themes/44dec9b0-4404-4ded-9c7f-8f2a74a18efb) |
 | 琥珀黄 | Amber Minimal | @mike (tweakcn) | [shadcnthemer.com/themes/1bf014bc...](https://shadcnthemer.com/themes/1bf014bc-3163-4d1f-98a6-2788cc66f569) |
+| 樱桃红 | Sabbir shadcn theme | @sabbirhossendev | [shadcnthemer.com/themes/a00a22e6...](https://shadcnthemer.com/themes/a00a22e6-f853-474d-a332-f861626fbd5e) |
 | 庭芜绿 | Northern Lights | @mike (tweakcn) | [shadcnthemer.com/themes/4bd47006...](https://shadcnthemer.com/themes/4bd47006-412c-4464-aa5a-83283e26b92c) |
 | 景泰蓝 | Twitter | @mike | [shadcnthemer.com/themes/abb2128e...](https://shadcnthemer.com/themes/abb2128e-7392-4ec7-880c-ef68a0051da3) |
 | 凝夜紫 | Violet Bloom | @mike (tweakcn) | [shadcnthemer.com/themes/240c9813...](https://shadcnthemer.com/themes/240c9813-0123-4128-b128-c54519c12a4e) |

@@ -1,4 +1,4 @@
-[data-theme="twitter"]:root {
+[data-theme="jingtailan"]:root {
     --background: oklch(1.0000 0 0);
     --foreground: oklch(0.1884 0.0128 248.5103);
     --card: oklch(0.9784 0.0011 197.1387);
@@ -7,6 +7,7 @@
     --popover-foreground: oklch(0.1884 0.0128 248.5103);
     --primary: oklch(0.6723 0.1606 244.9955);
     --primary-foreground: oklch(1.0000 0 0);
+    --primary-foreground-inverse: oklch(0 0 0);
     --secondary: oklch(0.1884 0.0128 248.5103);
     --secondary-foreground: oklch(1.0000 0 0);
     --muted: oklch(0.9222 0.0013 286.3737);
@@ -32,7 +33,7 @@
     --sidebar-ring: oklch(0.6818 0.1584 243.3540);
 }
 
-[data-theme="twitter"].dark {
+[data-theme="jingtailan"].dark {
     --background: oklch(0 0 0);
     --foreground: oklch(0.9328 0.0025 228.7857);
     --card: oklch(0.2097 0.0080 274.5332);
@@ -41,6 +42,7 @@
     --popover-foreground: oklch(0.9328 0.0025 228.7857);
     --primary: oklch(0.6692 0.1607 245.0110);
     --primary-foreground: oklch(1.0000 0 0);
+    --primary-foreground-inverse: oklch(0 0 0);
     --secondary: oklch(0.9622 0.0035 219.5331);
     --secondary-foreground: oklch(0.1884 0.0128 248.5103);
     --muted: oklch(0.2090 0 0);

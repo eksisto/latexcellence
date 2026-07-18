@@ -144,3 +144,7 @@ latexcellence/
 ├── tests/                   # 测试
 └── docs/                    # 项目文档
 ```
+
+## 第三方开源项目声明
+
+[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)，感谢这些项目的贡献者。

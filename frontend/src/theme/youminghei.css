@@ -1,4 +1,4 @@
-[data-theme="vercel"]:root {
+[data-theme="youminghei"]:root {
     --background: oklch(0.9900 0 0);
     --foreground: oklch(0 0 0);
     --card: oklch(1 0 0);
@@ -7,6 +7,7 @@
     --popover-foreground: oklch(0 0 0);
     --primary: oklch(0 0 0);
     --primary-foreground: oklch(1 0 0);
+    --primary-foreground-inverse: oklch(0 0 0);
     --secondary: oklch(0.9400 0 0);
     --secondary-foreground: oklch(0 0 0);
     --muted: oklch(0.9700 0 0);
@@ -32,7 +33,7 @@
     --sidebar-ring: oklch(0 0 0);
 }
 
-[data-theme="vercel"].dark {
+[data-theme="youminghei"].dark {
     --background: oklch(0 0 0);
     --foreground: oklch(1 0 0);
     --card: oklch(0.1400 0 0);
@@ -41,6 +42,7 @@
     --popover-foreground: oklch(1 0 0);
     --primary: oklch(1 0 0);
     --primary-foreground: oklch(0 0 0);
+    --primary-foreground-inverse: oklch(1 0 0);
     --secondary: oklch(0.2500 0 0);
     --secondary-foreground: oklch(1 0 0);
     --muted: oklch(0.2300 0 0);

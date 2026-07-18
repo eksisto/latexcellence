@@ -15,7 +15,7 @@ const useStore = create(
       /* ===== 系统状态 ===== */
       enabledFeatures: null,
       setEnabledFeatures: (features) => set({ enabledFeatures: features }),
-      currentTheme: "vercel",
+      currentTheme: "youminghei",
       setCurrentTheme: (theme) => set({ currentTheme: theme }),
 
       /* ===== 项目状态（持久化） ===== */
