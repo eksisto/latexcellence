@@ -17,6 +17,8 @@ import {
   Sparkles,
   Lightbulb,
   ChevronDown,
+  User,
+  Bot,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -93,27 +95,39 @@ function MessageBubble({ message, actions }) {
 
   return (
     <div
-      className={`group flex flex-col gap-1 ${
-        isUser ? "items-end pr-2" : "items-start"
+      className={`group flex gap-2 ${
+        isUser ? "flex-row-reverse pr-2" : "pl-2"
       }`}
     >
-      <div className="flex items-center gap-1 text-xs text-muted-foreground">
-        <span>
-          {isUser ? "用户" : isSummary ? "会话摘要" : "助手"}
-        </span>
-        {message.created_at && (
-          <span>· {formatTime(message.created_at)}</span>
-        )}
-      </div>
+      {/* 头像 */}
       <div
-        className={`rounded-lg px-3 py-2 max-w-[85%] ${
+        className={`shrink-0 size-7 rounded-full flex items-center justify-center text-xs mt-2 ${
           isUser
             ? "bg-primary text-primary-foreground"
-            : isSummary
-              ? "bg-amber-500/10 border border-amber-500/30 dark:border-amber-400/30"
-              : "bg-muted"
+            : "bg-muted text-muted-foreground"
         }`}
       >
+        {isUser ? <User className="size-3.5" /> : <Bot className="size-3.5" />}
+      </div>
+
+      <div className={`flex flex-col gap-1 ${isUser ? "items-end" : "items-start"} min-w-0 flex-1`}>
+        <div className="flex items-center gap-1 text-xs text-muted-foreground">
+          <span>
+            {isUser ? "用户" : isSummary ? "会话摘要" : "助手"}
+          </span>
+          {message.created_at && (
+            <span>· {formatTime(message.created_at)}</span>
+          )}
+        </div>
+        <div
+          className={`rounded-lg px-3 py-2 max-w-[85%] ${
+            isUser
+              ? "bg-primary text-primary-foreground"
+              : isSummary
+                ? "bg-amber-500/10 border border-amber-500/30 dark:border-amber-400/30"
+                : "bg-muted"
+          }`}
+        >
         {isSummary && (
           <div className="text-xs font-medium text-amber-600 dark:text-amber-400 mb-1 flex items-center gap-1">
             <History className="size-3" />
@@ -233,6 +247,7 @@ function MessageBubble({ message, actions }) {
             <Trash2 className="size-3" />
           </Button>
         )}
+      </div>
       </div>
     </div>
   );
