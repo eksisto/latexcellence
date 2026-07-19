@@ -1,4 +1,3 @@
-import { useEffect } from "react";
 import { Link } from "react-router-dom";
 import {
   Card,
@@ -23,8 +22,7 @@ import {
   MessagesSquare,
   BookMarked,
 } from "lucide-react";
-import { api } from "@/api/index";
-import useStore from "@/store/useStore";
+import useEnabledFeatures from "@/hooks/useEnabledFeatures";
 
 const featureGroups = [
   {
@@ -156,61 +154,7 @@ const featureGroups = [
 ];
 
 export default function WelcomePage() {
-  const enabledFeatures = useStore((s) => s.enabledFeatures);
-  const setEnabledFeatures = useStore((s) => s.setEnabledFeatures);
-
-  useEffect(() => {
-    // 只有在未加载过时才获取（保存配置后会更新全局状态）
-    if (enabledFeatures === null) {
-      let mounted = true;
-      api.configStatus()
-        .then((data) => {
-          if (mounted && data.features) {
-            setEnabledFeatures({
-              workspace: true, // 工作区永远启用
-              formula_ocr: data.features.formula_ocr,
-              table_ocr: data.features.table_ocr,
-              template_gen: data.features.template_gen,
-              style_modify: data.features.style_modify,
-              typo_check: data.features.typo_check,
-              expression_opt: data.features.expression_opt,
-              formatting: data.features.formatting,
-              compile: data.features.compile,
-              git_diff: data.features.git_diff,
-              markdown_converter: data.features.markdown_converter,
-              terminology_check: data.features.terminology_check,
-              writing_chat: data.features.writing_chat,
-              bib_manager: data.features.bib_manager,
-            });
-          }
-        })
-        .catch(() => {
-          if (mounted) {
-            // 如果请求失败，默认全部显示
-            setEnabledFeatures({
-              workspace: true,
-              formula_ocr: true,
-              table_ocr: true,
-              template_gen: true,
-              style_modify: true,
-              typo_check: true,
-              expression_opt: true,
-              formatting: true,
-              compile: true,
-              git_diff: true,
-              markdown_converter: true,
-              terminology_check: true,
-              writing_chat: true,
-              bib_manager: true,
-            });
-          }
-        });
-
-      return () => {
-        mounted = false;
-      };
-    }
-  }, [enabledFeatures, setEnabledFeatures]);
+  const enabledFeatures = useEnabledFeatures();
 
   const visibleGroups = featureGroups
     .map((group) => ({

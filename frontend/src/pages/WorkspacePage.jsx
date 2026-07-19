@@ -28,6 +28,7 @@ import {
 import { ArrowLeft, FolderOpen, SpellCheck, Play, Loader2, Check, CircleAlert, ChevronDown, ChevronRight, FileDiff, Undo2, Redo2, BookOpen } from "lucide-react";
 import { api } from "@/api/index";
 import useStore from "@/store/useStore";
+import useEnabledFeatures from "@/hooks/useEnabledFeatures";
 import useUndoRedo from "@/hooks/useUndoRedo";
 import ProjectExplorer from "@/components/ProjectExplorer";
 import ConfirmDialog from "@/components/ConfirmDialog";
@@ -60,7 +61,7 @@ export default function WorkspacePage() {
   const setActiveFile = useStore((s) => s.setActiveFile);
   const setMainFile = useStore((s) => s.setMainFile);
   const clearProject = useStore((s) => s.clearProject);
-  const enabledFeatures = useStore((s) => s.enabledFeatures);
+  const enabledFeatures = useEnabledFeatures();
   const compileResult = useStore((s) => s.compileResult);
   const compileLoading = useStore((s) => s.compileLoading);
   const setCompileResult = useStore((s) => s.setCompileResult);

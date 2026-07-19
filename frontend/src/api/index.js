@@ -266,7 +266,7 @@ export const api = {
       }),
     pdfUrl: (mainFile, workspaceId) =>
       appendWs(
-        `/compile/pdf?main_file=${encodeURIComponent(mainFile)}`,
+        `${BASE_URL}/compile/pdf?main_file=${encodeURIComponent(mainFile)}`,
         workspaceId
       ),
   },
