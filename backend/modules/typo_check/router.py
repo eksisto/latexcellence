@@ -5,7 +5,7 @@
 """
 
 import json
-from typing import Optional
+
 
 from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import StreamingResponse
@@ -16,7 +16,7 @@ from backend.modules.typo_check.service import TypoCheckService
 
 router = APIRouter(prefix="/api/typo-check", tags=["typo_check"])
 
-_service: Optional[TypoCheckService] = None
+_service: TypoCheckService | None = None
 
 
 def get_service() -> TypoCheckService:
@@ -30,14 +30,14 @@ def get_service() -> TypoCheckService:
 
 class TypoCheckRequest(BaseModel):
     file_path: str
-    paragraph_indices: Optional[list[int]] = None
+    paragraph_indices: list[int] | None = None
     resolve_input: bool = False
 
 
 class TypoApplyRequest(BaseModel):
     file_path: str
     changes: list[ApplyChangeItem]
-    operation_id: Optional[str] = None
+    operation_id: str | None = None
 
 
 # ── preview ────────────────────────────────────────────────────────────────

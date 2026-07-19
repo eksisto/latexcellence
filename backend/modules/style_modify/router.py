@@ -5,7 +5,7 @@ LaTeX 样式修改 API 路由。
 LLM 根据文字描述修改 LaTeX 代码并返回。
 """
 
-from typing import Optional
+
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, field_validator
@@ -14,7 +14,7 @@ from backend.modules.style_modify.service import StyleModifyService
 
 router = APIRouter(prefix="/api/style-modify", tags=["style_modify"])
 
-_service: Optional[StyleModifyService] = None
+_service: StyleModifyService | None = None
 
 
 def get_service() -> StyleModifyService:

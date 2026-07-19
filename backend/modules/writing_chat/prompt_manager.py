@@ -10,7 +10,7 @@
 """
 
 from pathlib import Path
-from typing import Optional
+
 
 from backend.core.config import get_config
 from backend.core.logger import get_logger
@@ -42,7 +42,7 @@ class WritingChatPromptManager:
                 result.append({"name": name, "active": name == active_name})
         return result
 
-    def load_prompt(self, name: str) -> Optional[str]:
+    def load_prompt(self, name: str) -> str | None:
         prompt_dir = self._get_dir()
         file_path = prompt_dir / f"{name}.txt"
         if not file_path.exists():
@@ -69,16 +69,16 @@ class WritingChatPromptManager:
         active_file.write_text(name, encoding="utf-8")
         self._logger.info(f"Set active writing_chat prompt: {name or 'default'}")
 
-    def get_active_prompt_content(self) -> Optional[str]:
+    def get_active_prompt_content(self) -> str | None:
         active_name = self._read_active()
         if not active_name:
             return None
         return self.load_prompt(active_name)
 
-    def get_active_name(self) -> Optional[str]:
+    def get_active_name(self) -> str | None:
         return self._read_active()
 
-    def _read_active(self) -> Optional[str]:
+    def _read_active(self) -> str | None:
         prompt_dir = self._get_dir()
         active_file = prompt_dir / self._ACTIVE_FILE
         if not active_file.exists():
@@ -86,7 +86,7 @@ class WritingChatPromptManager:
         return active_file.read_text(encoding="utf-8").strip()
 
 
-_instance: Optional[WritingChatPromptManager] = None
+_instance: WritingChatPromptManager | None = None
 
 
 def get_prompt_manager() -> WritingChatPromptManager:

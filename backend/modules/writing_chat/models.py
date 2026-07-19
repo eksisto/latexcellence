@@ -11,7 +11,7 @@
     2. API 请求/响应模型——router 层使用，校验入参
 """
 
-from typing import Any, Optional
+from typing import Any
 
 from pydantic import BaseModel, Field
 
@@ -57,11 +57,11 @@ class ChatMessage(BaseModel):
     role: str
     content: str = ""
     tokens: int = 0
-    edit_op: Optional[EditOp] = None
+    edit_op: EditOp | None = None
     compressed: bool = False
-    snapshot: Optional[list["ChatMessage"]] = None
-    referenced_file: Optional[str] = None
-    referenced_paragraph: Optional[int] = None
+    snapshot: list["ChatMessage"] | None = None
+    referenced_file: str | None = None
+    referenced_paragraph: int | None = None
     created_at: float = 0.0
 
 
@@ -89,11 +89,11 @@ class LlmEditResult(BaseModel):
 
 class ChatSendRequest(BaseModel):
     """发起一次流式对话请求。"""
-    session_id: Optional[str] = None
+    session_id: str | None = None
     file_path: str
-    paragraph_index: Optional[int] = None
+    paragraph_index: int | None = None
     user_message: str
-    assistant_prompt: Optional[str] = None
+    assistant_prompt: str | None = None
 
 
 class GenerateEditRequest(BaseModel):
@@ -129,7 +129,7 @@ class SessionMeta(BaseModel):
     last_updated_at: float
     message_count: int
     cumulative_tokens: int
-    file_path: Optional[str] = None
+    file_path: str | None = None
     title: str = ""
 
 
@@ -140,7 +140,7 @@ class SessionFull(BaseModel):
     last_updated_at: float
     messages: list[ChatMessage]
     cumulative_tokens: int
-    file_path: Optional[str] = None
+    file_path: str | None = None
 
 
 # ── LLM 压缩摘要输出 schema ─────────────────────────────────────────────────
@@ -157,7 +157,7 @@ class LlmSummaryResult(BaseModel):
 class SSEEvent(BaseModel):
     """前端的 SSE 事件载荷。type 决定前端如何处理该事件。"""
     type: str
-    data: Optional[Any] = None
+    data: Any | None = None
 
 
 # ── 助手提示词管理 ────────────────────────────────────────────────────────

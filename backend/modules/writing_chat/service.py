@@ -23,7 +23,7 @@
 
 import difflib
 import uuid
-from typing import Any, AsyncIterator, Optional
+from typing import Any, AsyncIterator
 
 from backend.core.config import get_config
 from backend.core.logger import get_logger
@@ -139,7 +139,7 @@ class WritingChatService:
         scope = self._get_scope(workspace_id) if workspace_id else ""
         return ConversationContext.list_sessions(scope)
 
-    def load_session(self, session_id: str) -> Optional[ConversationContext]:
+    def load_session(self, session_id: str) -> ConversationContext | None:
         return ConversationContext.load_from_disk(session_id)
 
     def delete_session(self, session_id: str) -> bool:
@@ -351,7 +351,7 @@ class WritingChatService:
         if ctx is None:
             raise ValueError(f"Session not found: {req.session_id}")
 
-        edit_op: Optional[EditOp] = None
+        edit_op: EditOp | None = None
         for m in ctx.messages:
             if m.id == req.edit_message_id and m.edit_op is not None:
                 edit_op = m.edit_op
@@ -393,7 +393,7 @@ class WritingChatService:
 
     # ── 内部辅助 ────────────────────────────────────────────────────────────
 
-    def _build_context_block(self, file_path: str, paragraph_index: Optional[int], workspace_id: str = "") -> str:
+    def _build_context_block(self, file_path: str, paragraph_index: int | None, workspace_id: str = "") -> str:
         """构造塞给 chat system prompt 的文件段落上下文（原始 LaTeX 源码）。"""
         if not file_path:
             return "(no file selected)"
@@ -450,7 +450,7 @@ class WritingChatService:
 # ── 单例 ─────────────────────────────────────────────────────────────────
 
 
-_service: Optional[WritingChatService] = None
+_service: WritingChatService | None = None
 
 
 def get_writing_chat_service() -> WritingChatService:

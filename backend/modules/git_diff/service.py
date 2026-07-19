@@ -15,7 +15,7 @@ import uuid
 import zipfile
 from dataclasses import dataclass, field
 from pathlib import Path, PurePosixPath
-from typing import Optional
+
 
 from pydantic import BaseModel, ConfigDict
 
@@ -418,7 +418,7 @@ async def _resolve_include_path(
     context: FlattenContext,
     current_file: str,
     include_path: str,
-) -> Optional[str]:
+) -> str | None:
     normalized = _normalize_include_path(include_path)
     if normalized is None:
         return None
@@ -456,7 +456,7 @@ async def _read_revision_file(
     ref: str,
     project_rel: str,
     required: bool,
-) -> Optional[str]:
+) -> str | None:
     if ref == WORKTREE_REF:
         path = project.root / Path(project_rel)
         if not path.exists() or not path.is_file():
@@ -736,7 +736,7 @@ def _validate_project_path(value: str, require_tex: bool = False) -> str:
     return normalized
 
 
-def _normalize_include_path(value: str) -> Optional[str]:
+def _normalize_include_path(value: str) -> str | None:
     normalized = value.strip().replace("\\", "/")
     if not normalized:
         return None

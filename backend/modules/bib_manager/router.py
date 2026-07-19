@@ -5,7 +5,7 @@
 """
 
 import json
-from typing import Optional
+
 
 from fastapi import APIRouter, File, Form, HTTPException, Query, UploadFile
 from pydantic import BaseModel
@@ -20,7 +20,7 @@ from backend.modules.bib_manager.service import BibManagerService
 
 router = APIRouter(prefix="/api/bib-manager", tags=["bib_manager"])
 
-_service: Optional[BibManagerService] = None
+_service: BibManagerService | None = None
 
 
 def get_service() -> BibManagerService:
@@ -55,9 +55,9 @@ async def analyze_format(request: FormatAnalysisRequest):
 
 @router.post("/extract")
 async def extract_metadata(
-    text: Optional[str] = Form(None),
-    image: Optional[UploadFile] = File(None),
-    format_info: Optional[str] = Form(None),
+    text: str | None = Form(None),
+    image: UploadFile | None = File(None),
+    format_info: str | None = Form(None),
 ):
     """从文本或图片中提取文献元数据。"""
     try:

@@ -15,7 +15,7 @@ LaTeX \\input / \\include / \\subfile 递归解析器。
 
 import re
 from pathlib import Path
-from typing import Optional
+
 
 from backend.core.logger import get_logger
 
@@ -96,7 +96,7 @@ def _normalize_ref(ref: str, current_dir: str) -> str:
 def resolve_inputs(
     file_path: str,
     root_path: str,
-    _visited: Optional[set[str]] = None,
+    _visited: set[str] | None = None,
 ) -> list[str]:
     """
     递归解析 LaTeX 文件中的 \\input / \\include / \\subfile 引用。

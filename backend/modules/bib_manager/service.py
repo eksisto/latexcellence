@@ -13,7 +13,7 @@ import io
 import json
 import os
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 from PIL import Image
 from pydantic import BaseModel
@@ -166,7 +166,7 @@ class BibManagerService:
             raise RuntimeError(f"Format analysis failed: {e}")
 
     def _build_extract_user_message(
-        self, text: str, format_info: Optional[dict]
+        self, text: str, format_info: dict | None
     ) -> str:
         """构建元数据提取的用户消息，列出要提取的具体字段名。"""
         all_fields = []
@@ -186,7 +186,7 @@ class BibManagerService:
         )
 
     async def extract_from_text(
-        self, text: str, format_info: Optional[dict] = None
+        self, text: str, format_info: dict | None = None
     ) -> dict[str, Any]:
         """从文本提取文献元数据。"""
         cfg = get_config()
@@ -229,7 +229,7 @@ class BibManagerService:
         self,
         image_data: bytes,
         content_type: str,
-        format_info: Optional[dict] = None,
+        format_info: dict | None = None,
     ) -> dict[str, Any]:
         """从图片（截图）提取文献元数据。"""
         cfg = get_config()
@@ -306,8 +306,8 @@ class BibManagerService:
     async def generate_bibtex(
         self,
         metadata: dict[str, Any],
-        format_info: Optional[dict] = None,
-        existing_keys: Optional[list[str]] = None,
+        format_info: dict | None = None,
+        existing_keys: list[str] | None = None,
     ) -> dict[str, Any]:
         """将元数据生成为 BibTeX 代码。"""
         cfg = get_config()
@@ -426,7 +426,7 @@ class BibManagerService:
         return {"bib_files": bib_files}
 
     def _check_missing_fields(
-        self, fields: dict[str, str], format_info: Optional[dict]
+        self, fields: dict[str, str], format_info: dict | None
     ) -> list[str]:
         """只报告在 raw_observed_fields 中但值为空的必填字段。"""
         if not format_info:
@@ -516,7 +516,7 @@ class BibManagerService:
                     {"name": name, "format_name": name, "entry_type": ""})
         return {"formats": formats}
 
-    def load_format(self, name: str) -> Optional[dict[str, Any]]:
+    def load_format(self, name: str) -> dict[str, Any] | None:
         """加载指定格式配置。"""
         fmt_dir = self._get_format_dir()
         file_path = fmt_dir / f"{name}.json"

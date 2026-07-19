@@ -20,7 +20,7 @@
 """
 
 import asyncio
-from typing import Any, Optional
+from typing import Any
 
 from backend.core.config import get_config
 from backend.core.llm_client import get_llm_client
@@ -69,7 +69,7 @@ class TerminologyCheckService(BaseParagraphCheckService):
     async def check_terminology(
         self,
         file_path: str,
-        paragraph_indices: Optional[list[int]] = None,
+        paragraph_indices: list[int] | None = None,
         resolve_input: bool = False,
         workspace_id: str = "",
     ) -> dict[str, Any]:

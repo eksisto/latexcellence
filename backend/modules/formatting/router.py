@@ -5,7 +5,7 @@
 """
 
 import json
-from typing import Optional
+
 
 from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import StreamingResponse
@@ -16,7 +16,7 @@ from backend.modules.formatting.service import FormattingService
 
 router = APIRouter(prefix="/api/formatting", tags=["formatting"])
 
-_service: Optional[FormattingService] = None
+_service: FormattingService | None = None
 
 
 def get_service() -> FormattingService:
@@ -30,14 +30,14 @@ def get_service() -> FormattingService:
 
 class FormattingRequest(BaseModel):
     file_path: str
-    paragraph_indices: Optional[list[int]] = None
+    paragraph_indices: list[int] | None = None
     resolve_input: bool = False
 
 
 class FormattingApplyRequest(BaseModel):
     file_path: str
     changes: list[ApplyChangeItem]
-    operation_id: Optional[str] = None
+    operation_id: str | None = None
 
 
 # ── preview ────────────────────────────────────────────────────────────────

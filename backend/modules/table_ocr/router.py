@@ -4,7 +4,7 @@
 提供图片上传和 LaTeX 表格识别接口。
 """
 
-from typing import Optional
+
 
 from fastapi import APIRouter, HTTPException, UploadFile, File
 
@@ -12,7 +12,7 @@ from backend.modules.table_ocr.service import TableOCRService
 
 router = APIRouter(prefix="/api/table-ocr", tags=["table_ocr"])
 
-_service: "Optional[TableOCRService]" = None
+_service: "TableOCRService | None" = None
 
 
 def get_service() -> TableOCRService:

@@ -13,7 +13,7 @@ import shutil
 import tempfile
 from collections import deque
 from pathlib import Path
-from typing import Optional
+
 
 from backend.core.logger import get_logger
 
@@ -308,7 +308,7 @@ class BackupManager:
         abs_path = str(Path(file_path).resolve())
         return abs_path in self._redo_stacks and len(self._redo_stacks[abs_path]) > 0
 
-    def clear(self, file_path: Optional[str | Path] = None) -> None:
+    def clear(self, file_path: str | Path | None = None) -> None:
         """
         清空备份历史。
         如果指定文件路径，则只清空该文件的记录；否则清空所有。
@@ -326,7 +326,7 @@ class BackupManager:
 
 
 # 全局单例
-_backup_manager: Optional[BackupManager] = None
+_backup_manager: BackupManager | None = None
 
 
 def get_backup_manager() -> BackupManager:

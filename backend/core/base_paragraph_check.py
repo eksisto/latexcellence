@@ -25,7 +25,7 @@ import uuid
 from collections import Counter
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, ClassVar, Optional
+from typing import Any, ClassVar
 
 from pydantic import BaseModel
 
@@ -60,7 +60,7 @@ class ApplyChangeItem(BaseModel):
     """逐段检查共享：用户确认的修改项请求模型。"""
     paragraph_index: int
     new_text: str
-    file_path: Optional[str] = None
+    file_path: str | None = None
 
 
 class BaseParagraphCheckService:
@@ -79,7 +79,7 @@ class BaseParagraphCheckService:
         self._logger = get_logger(logger_name)
         self._parser = LatexParser()
         self._marker_maps: dict[str, dict[int, dict[str, str]]] = {}
-        self._file_path: Optional[str] = None
+        self._file_path: str | None = None
         self._operation_contexts: dict[str, CheckOperationContext] = {}
 
     # ── 操作上下文管理 ──────────────────────────────────────────────────────
@@ -119,7 +119,7 @@ class BaseParagraphCheckService:
 
     def _get_context(
         self, operation_id: str
-    ) -> Optional[CheckOperationContext]:
+    ) -> CheckOperationContext | None:
         """按 operation_id 查找操作上下文。"""
         return self._operation_contexts.get(operation_id)
 
@@ -251,7 +251,7 @@ class BaseParagraphCheckService:
         self,
         all_para_data: list[dict[str, Any]],
         file_path: str,
-        paragraph_indices: Optional[list[int]],
+        paragraph_indices: list[int] | None,
     ) -> list[dict[str, Any]]:
         """按段落索引过滤目标段落。"""
         if paragraph_indices is not None:
@@ -388,7 +388,7 @@ class BaseParagraphCheckService:
     async def _run_batch_check(
         self,
         file_path: str,
-        paragraph_indices: Optional[list[int]] = None,
+        paragraph_indices: list[int] | None = None,
         resolve_input: bool = False,
         workspace_id: str = "",
     ) -> dict[str, Any]:
@@ -424,7 +424,7 @@ class BaseParagraphCheckService:
         llm = get_llm_client()
         batch_size = self._get_batch_size()
         sem = asyncio.Semaphore(cfg.llm.max_concurrency)
-        results: list[Optional[dict[str, Any]]] = [None] * len(targets)
+        results: list[dict[str, Any] | None] = [None] * len(targets)
 
         async def _limited(coro):
             async with sem:
@@ -578,7 +578,7 @@ class BaseParagraphCheckService:
         file_path: str,
         changes: list[dict[str, Any]],
         workspace_id: str = "",
-        operation_id: Optional[str] = None,
+        operation_id: str | None = None,
     ) -> dict[str, Any]:
         """
         将用户确认的修改写回源文件。

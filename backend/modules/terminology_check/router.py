@@ -5,7 +5,7 @@
 """
 
 import json
-from typing import Optional
+
 
 from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import StreamingResponse
@@ -16,7 +16,7 @@ from backend.modules.terminology_check.service import TerminologyCheckService
 
 router = APIRouter(prefix="/api/terminology-check", tags=["terminology_check"])
 
-_service: Optional[TerminologyCheckService] = None
+_service: TerminologyCheckService | None = None
 
 
 def get_service() -> TerminologyCheckService:
@@ -28,14 +28,14 @@ def get_service() -> TerminologyCheckService:
 
 class TerminologyCheckRequest(BaseModel):
     file_path: str
-    paragraph_indices: Optional[list[int]] = None
+    paragraph_indices: list[int] | None = None
     resolve_input: bool = False
 
 
 class TerminologyApplyRequest(BaseModel):
     file_path: str
     changes: list[ApplyChangeItem]
-    operation_id: Optional[str] = None
+    operation_id: str | None = None
 
 
 @router.get("/preview")

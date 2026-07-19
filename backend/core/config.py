@@ -18,7 +18,7 @@ import copy
 import json
 import os
 from pathlib import Path
-from typing import Optional
+
 
 from pydantic import BaseModel
 
@@ -155,8 +155,8 @@ class AppConfig(BaseModel):
 
 
 # 模块级全局变量：单例模式存储配置对象和路径
-_config: Optional[AppConfig] = None
-_config_path: Optional[Path] = None
+_config: AppConfig | None = None
+_config_path: Path | None = None
 _api_key_from_env: bool = False  # 标记当前 api_key 是否来自环境变量（防落盘）
 
 

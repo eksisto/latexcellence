@@ -16,7 +16,7 @@ LaTeX 项目管理模块。
 
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Optional
+
 
 from backend.core.logger import get_logger
 from backend.utils.file_ops import (
@@ -62,7 +62,7 @@ class ProjectInfo:
     open() 方法返回的完整项目元数据。
     """
     root_path: str                          # 项目根目录绝对路径
-    main_file: Optional[str]                # 主文档路径（如 main.tex）
+    main_file: str | None                # 主文档路径（如 main.tex）
     file_tree: list[FileNode]               # 文件树
     dependency_graph: dict[str, list[str]] = field(default_factory=dict)  # 文件依赖图
 
@@ -78,8 +78,8 @@ class LatexProject:
         project.apply_change("main.tex", 0, "修改后的文本")
     """
 
-    def __init__(self, backup_mgr: Optional[BackupManager] = None):
-        self._project_info: Optional[ProjectInfo] = None
+    def __init__(self, backup_mgr: BackupManager | None = None):
+        self._project_info: ProjectInfo | None = None
         self._logger = get_logger("project_manager")
         self._backup_mgr = backup_mgr or get_backup_manager()
         # { file_path_abs: md5_hex }  记录解析时的文件哈希
@@ -397,7 +397,7 @@ class LatexProject:
 
     def _find_main_file(
         self, root: Path, file_tree: list[FileNode]
-    ) -> Optional[str]:
+    ) -> str | None:
         """
         自动识别项目主文档。
 
@@ -413,7 +413,7 @@ class LatexProject:
         返回：
             主文件的相对路径，未找到则返回 None
         """
-        def find_tex(nodes: list[FileNode], depth: int = 0) -> Optional[str]:
+        def find_tex(nodes: list[FileNode], depth: int = 0) -> str | None:
             for node in nodes:
                 if not node.is_dir and node.name.endswith(".tex"):
                     if node.name.lower() == "main.tex":

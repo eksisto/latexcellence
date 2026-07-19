@@ -10,7 +10,7 @@ from backend.modules.formula_ocr.service import FormulaOCRService
 
 router = APIRouter(prefix="/api/formula-ocr", tags=["formula_ocr"])
 
-_service: "Optional[FormulaOCRService]" = None
+_service: "FormulaOCRService | None" = None
 
 
 def get_service() -> FormulaOCRService:

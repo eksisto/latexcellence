@@ -11,7 +11,7 @@ from backend.modules.template_gen.service import TemplateGenService
 
 router = APIRouter(prefix="/api/template-gen", tags=["template_gen"])
 
-_service: "Optional[TemplateGenService]" = None
+_service: "TemplateGenService | None" = None
 
 
 def get_service() -> TemplateGenService:

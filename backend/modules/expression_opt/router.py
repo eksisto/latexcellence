@@ -5,7 +5,7 @@
 """
 
 import json
-from typing import Optional
+
 
 from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import StreamingResponse
@@ -17,7 +17,7 @@ from backend.modules.expression_opt.prompt_manager import get_prompt_manager
 
 router = APIRouter(prefix="/api/expression-opt", tags=["expression_opt"])
 
-_service: Optional[ExpressionOptService] = None
+_service: ExpressionOptService | None = None
 
 
 def get_service() -> ExpressionOptService:
@@ -31,14 +31,14 @@ def get_service() -> ExpressionOptService:
 
 class ExpressionOptRequest(BaseModel):
     file_path: str
-    paragraph_indices: Optional[list[int]] = None
+    paragraph_indices: list[int] | None = None
     resolve_input: bool = False
 
 
 class ExpressionApplyRequest(BaseModel):
     file_path: str
     changes: list[ApplyChangeItem]
-    operation_id: Optional[str] = None
+    operation_id: str | None = None
 
 
 # ── preview ────────────────────────────────────────────────────────────────

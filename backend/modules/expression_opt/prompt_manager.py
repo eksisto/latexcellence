@@ -14,7 +14,7 @@
 
 import os
 from pathlib import Path
-from typing import Optional
+
 
 from backend.core.config import get_config
 from backend.core.logger import get_logger
@@ -69,7 +69,7 @@ class PromptManager:
 
         return result
 
-    def load_prompt(self, name: str) -> Optional[str]:
+    def load_prompt(self, name: str) -> str | None:
         """
         加载指定提示词内容。
 
@@ -130,7 +130,7 @@ class PromptManager:
         active_file.write_text(name, encoding="utf-8")
         self._logger.info(f"Set active prompt: {name or 'default'}")
 
-    def get_active_prompt_content(self) -> Optional[str]:
+    def get_active_prompt_content(self) -> str | None:
         """
         获取当前激活的提示词内容。
 
@@ -142,7 +142,7 @@ class PromptManager:
             return None
         return self.load_prompt(active_name)
 
-    def _read_active(self) -> Optional[str]:
+    def _read_active(self) -> str | None:
         """读取 _active.txt 中的激活提示词名称。"""
         prompt_dir = self._get_dir()
         active_file = prompt_dir / self._ACTIVE_FILE
@@ -152,7 +152,7 @@ class PromptManager:
 
 
 # 全局单例
-_instance: Optional[PromptManager] = None
+_instance: PromptManager | None = None
 
 
 def get_prompt_manager() -> PromptManager:

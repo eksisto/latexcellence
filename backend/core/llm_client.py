@@ -16,7 +16,7 @@ import asyncio
 import threading
 import time
 from dataclasses import dataclass
-from typing import AsyncIterator, Optional
+from typing import AsyncIterator
 
 from openai import AsyncOpenAI
 
@@ -41,8 +41,8 @@ class StreamChunk:
         - 普通流片段：content 为字符串、usage=None
         - 末尾用量片段：content=None、usage=UsageInfo（若 API 未返回则为 None）
     """
-    content: Optional[str]
-    usage: Optional[UsageInfo]
+    content: str | None
+    usage: UsageInfo | None
 
 
 class LLMClient:
@@ -53,7 +53,7 @@ class LLMClient:
     """
 
     def __init__(self):
-        self._client: Optional[AsyncOpenAI] = None
+        self._client: AsyncOpenAI | None = None
         self._client_lock = threading.Lock()
         self._last_request_time: float = 0
         self._logger = get_logger("llm_client")
@@ -89,9 +89,9 @@ class LLMClient:
     async def chat(
         self,
         messages: list[dict],
-        temperature: Optional[float] = None,
-        max_tokens: Optional[int] = None,
-        response_format: Optional[dict] = None,
+        temperature: float | None = None,
+        max_tokens: int | None = None,
+        response_format: dict | None = None,
         max_retries: int = 3,
     ) -> str:
         """
@@ -158,8 +158,8 @@ class LLMClient:
     async def chat_stream(
         self,
         messages: list[dict],
-        temperature: Optional[float] = None,
-        max_tokens: Optional[int] = None,
+        temperature: float | None = None,
+        max_tokens: int | None = None,
     ) -> AsyncIterator[str]:
         """
         流式 LLM 对话调用（Server-Sent Events）。
@@ -199,8 +199,8 @@ class LLMClient:
     async def chat_stream_with_usage(
         self,
         messages: list[dict],
-        temperature: Optional[float] = None,
-        max_tokens: Optional[int] = None,
+        temperature: float | None = None,
+        max_tokens: int | None = None,
     ) -> AsyncIterator["StreamChunk"]:
         """
         流式 LLM 对话调用，并在流的末尾附带 token 用量信息。
@@ -268,7 +268,7 @@ class LLMClient:
 
 
 # 全局单例：LLM 客户端实例
-_llm_client: Optional[LLMClient] = None
+_llm_client: LLMClient | None = None
 _llm_client_lock = threading.Lock()
 
 

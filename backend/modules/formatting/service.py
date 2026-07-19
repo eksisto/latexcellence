@@ -18,7 +18,7 @@
     将所有子文件纳入处理范围，段落按文件分组返回。
 """
 
-from typing import Any, Optional
+from typing import Any
 
 from pydantic import BaseModel
 
@@ -114,7 +114,7 @@ class FormattingService(BaseParagraphCheckService):
     async def check_formatting(
         self,
         file_path: str,
-        paragraph_indices: Optional[list[int]] = None,
+        paragraph_indices: list[int] | None = None,
         resolve_input: bool = False,
         workspace_id: str = "",
     ) -> dict[str, Any]:
@@ -199,7 +199,7 @@ class FormattingService(BaseParagraphCheckService):
         file_path: str,
         changes: list[dict[str, Any]],
         workspace_id: str = "",
-        operation_id: Optional[str] = None,
+        operation_id: str | None = None,
     ) -> dict[str, Any]:
         """
         将用户确认的格式修改写回源文件。

@@ -13,7 +13,7 @@ LLM JSON 解析/校验/重试模块。
 
 import json
 import re
-from typing import Any, Callable, Optional, Type, TypeVar, Union
+from typing import Any, Callable, Type, TypeVar, Union
 
 from pydantic import BaseModel, ValidationError
 
@@ -125,7 +125,7 @@ def parse_and_validate(
     text: Union[str, dict[str, Any]],
     model_cls: Type[T],
     raise_on_error: bool = True,
-) -> tuple[Optional[T], Optional[str]]:
+) -> tuple[T | None, str | None]:
     """
     一步完成 JSON 解析 + Pydantic 校验。
 

@@ -4,7 +4,7 @@
 定义 API 请求体和 LLM 响应 schema。
 """
 
-from typing import Optional
+
 
 from pydantic import BaseModel
 
@@ -19,7 +19,7 @@ class ReferenceFormatResult(BaseModel):
     format_name: str
     confidence: str = "high"
     entry_type: str
-    document_type_marker: Optional[str] = None
+    document_type_marker: str | None = None
     required_fields: list[str] = []
     optional_fields: list[str] = []
     field_descriptions: dict[str, str] = {}
@@ -29,9 +29,9 @@ class ReferenceFormatResult(BaseModel):
 
 class ExtractRequest(BaseModel):
     """元数据提取请求"""
-    text: Optional[str] = None
-    image_base64: Optional[str] = None
-    format_info: Optional[dict] = None
+    text: str | None = None
+    image_base64: str | None = None
+    format_info: dict | None = None
 
 
 class ExtractedMetadata(BaseModel):
@@ -42,7 +42,7 @@ class ExtractedMetadata(BaseModel):
 class GenerateBibtexRequest(BaseModel):
     """BibTeX 生成请求"""
     metadata: dict
-    format_info: Optional[dict] = None
+    format_info: dict | None = None
     existing_keys: list[str] = []
 
 

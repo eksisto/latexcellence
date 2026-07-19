@@ -22,7 +22,7 @@ import json
 import time
 import uuid
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 from backend.core.config import get_config
 from backend.core.logger import get_logger
@@ -53,7 +53,7 @@ def parse_scoped_session_id(session_id: str) -> tuple[str, str]:
     return scope, id_part
 
 
-def build_scoped_session_id(scope: str, id_part: Optional[str] = None) -> str:
+def build_scoped_session_id(scope: str, id_part: str | None = None) -> str:
     """构造 scoped session_id。"""
     if id_part is None:
         id_part = uuid.uuid4().hex
@@ -80,7 +80,7 @@ class ConversationContext:
         last_updated_at: float,
         messages: list[ChatMessage],
         cumulative_tokens: int,
-        file_path: Optional[str],
+        file_path: str | None,
         title: str = "",
     ):
         self.session_id = session_id
@@ -97,7 +97,7 @@ class ConversationContext:
     @classmethod
     def create_session(
         cls,
-        file_path: Optional[str] = None,
+        file_path: str | None = None,
         scope: str = "",
     ) -> "ConversationContext":
         uuid_part = uuid.uuid4().hex
@@ -114,7 +114,7 @@ class ConversationContext:
         )
 
     @classmethod
-    def load_from_disk(cls, session_id: str) -> Optional["ConversationContext"]:
+    def load_from_disk(cls, session_id: str) -> "ConversationContext" | None:
         """加载已有会话。不存在返回 None。"""
         path = cls._session_path(session_id)
         if not path.exists():
@@ -223,8 +223,8 @@ class ConversationContext:
     def append_user_message(
         self,
         content: str,
-        referenced_file: Optional[str] = None,
-        referenced_paragraph: Optional[int] = None,
+        referenced_file: str | None = None,
+        referenced_paragraph: int | None = None,
     ) -> ChatMessage:
         msg = ChatMessage(
             id=uuid.uuid4().hex,
@@ -243,7 +243,7 @@ class ConversationContext:
         self,
         content: str,
         tokens: int = 0,
-        edit_op: Optional[Any] = None,
+        edit_op: Any | None = None,
     ) -> ChatMessage:
         """
         追加 assistant 回复消息。
@@ -409,7 +409,7 @@ class ConversationContext:
     # ── 上下文锚点 ─────────────────────────────────────────────────────────
 
     @staticmethod
-    def build_file_context_text(file_path: str, paragraph_index: Optional[int], workspace_id: str = "") -> str:
+    def build_file_context_text(file_path: str, paragraph_index: int | None, workspace_id: str = "") -> str:
         """
         构造文件段落上下文文本（原始 LaTeX 源码，无 marker 剥离）。
 

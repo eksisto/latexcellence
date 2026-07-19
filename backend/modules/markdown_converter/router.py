@@ -4,7 +4,7 @@ Markdown 转 LaTeX API 路由。
 提供 Markdown 文本到 LaTeX 代码的转换接口。
 """
 
-from typing import Optional
+
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
@@ -13,7 +13,7 @@ from backend.modules.markdown_converter.service import MarkdownConverterService
 
 router = APIRouter(prefix="/api/markdown-converter", tags=["markdown_converter"])
 
-_service: Optional[MarkdownConverterService] = None
+_service: MarkdownConverterService | None = None
 
 
 def get_service() -> MarkdownConverterService:

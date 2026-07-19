@@ -12,7 +12,7 @@
     project.open("/path/to/project")
 """
 
-from typing import Optional
+
 
 from backend.core.logger import get_logger
 from backend.core.project_manager import LatexProject
@@ -51,7 +51,7 @@ class WorkspaceManager:
             )
         return self._workspaces[workspace_id]
 
-    def get(self, workspace_id: str) -> Optional[LatexProject]:
+    def get(self, workspace_id: str) -> LatexProject | None:
         """
         获取指定工作区的 LatexProject 实例（不创建新实例）。
 
@@ -101,7 +101,7 @@ class WorkspaceManager:
         return result
 
 
-_workspace_manager: Optional[WorkspaceManager] = None
+_workspace_manager: WorkspaceManager | None = None
 
 
 def get_workspace_manager() -> WorkspaceManager:
