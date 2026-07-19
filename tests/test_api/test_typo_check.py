@@ -453,7 +453,13 @@ class TestMarkerPattern:
 
     def test_ignore_partial_marker(self):
         markers = MARKER_PATTERN.findall("__CMD_001__ and __CMD_00001__")
-        assert markers == []
+        # 3 位数不匹配，5 位数匹配
+        assert markers == ["__CMD_00001__"]
+
+    def test_match_five_digit_marker(self):
+        """超过 9999 的 marker（5 位）仍能匹配。"""
+        markers = MARKER_PATTERN.findall("text __CMD_10000__ end")
+        assert markers == ["__CMD_10000__"]
 
     def test_marker_extraction_empty_text(self):
         markers = MARKER_PATTERN.findall("")

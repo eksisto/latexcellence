@@ -262,11 +262,14 @@ class TestCompileLatex:
         with patch("backend.modules.compile.service.get_project_manager_for_workspace", return_value=mock_project):
             with patch("asyncio.create_subprocess_exec", new_callable=AsyncMock) as mock_create:
                 mock_process = MagicMock()
+                mock_process.kill = MagicMock()
+                mock_process.communicate = AsyncMock(return_value=(b"", b"partial log"))
                 mock_create.return_value = mock_process
 
                 with patch("asyncio.wait_for", side_effect=timeout_error):
                     result = await compile_latex("main.tex")
 
+        mock_process.kill.assert_called_once()
         assert result.success is False
         assert "timed out" in result.stderr.lower()
         assert len(result.fixes) > 0
