@@ -2,6 +2,7 @@ import { useState, useCallback, useMemo, useEffect, useRef } from "react";
 import { toast } from "sonner";
 import { api } from "@/api/index";
 import useStore from "@/store/useStore";
+import { translateError } from "@/utils/errorMessages";
 
 export function flattenTexFiles(tree, prefix = "") {
   const result = [];
@@ -303,8 +304,9 @@ export default function useParagraphCheck({
         }
 
         if (data.type === "error") {
-          setError(data.message);
-          toast.error("检查出错", { description: data.message });
+          const msg = translateError(data.message);
+          setError(msg);
+          toast.error("检查出错", { description: msg });
           return;
         }
 

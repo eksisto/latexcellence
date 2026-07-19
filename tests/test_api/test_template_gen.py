@@ -104,7 +104,7 @@ class TestGenerateTemplate:
     async def test_pydantic_retry_exhausted(self, mock_llm, service):
         mock_llm.chat.return_value = {"bad": True}
 
-        with pytest.raises(RuntimeError, match="Failed to generate"):
+        with pytest.raises(RuntimeError, match="Template generation failed"):
             await service.generate_template("CVPR paper", llm=mock_llm)
         assert mock_llm.chat.call_count == 3
 

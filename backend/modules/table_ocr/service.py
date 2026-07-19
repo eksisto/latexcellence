@@ -142,7 +142,7 @@ class TableOCRService:
 
         except ValueError as e:
             self._logger.error(f"Table OCR failed after retries: {e}")
-            raise RuntimeError(f"Failed to recognize table: {e}")
+            raise RuntimeError(f"Table recognition failed: {e}")
         except Exception as e:
             self._logger.error(f"Table OCR error: {e}")
             raise RuntimeError(f"Table recognition failed: {e}")

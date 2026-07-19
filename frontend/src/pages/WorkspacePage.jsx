@@ -27,6 +27,7 @@ import {
 } from "@/components/ui/tooltip";
 import { ArrowLeft, FolderOpen, SpellCheck, Play, Loader2, Check, CircleAlert, ChevronDown, ChevronRight, FileDiff, Undo2, Redo2, BookOpen } from "lucide-react";
 import { api } from "@/api/index";
+import { translateError } from "@/utils/errorMessages";
 import useStore from "@/store/useStore";
 import useEnabledFeatures from "@/hooks/useEnabledFeatures";
 import useUndoRedo from "@/hooks/useUndoRedo";
@@ -107,8 +108,9 @@ export default function WorkspacePage() {
       }
       toast.success("项目已打开", { description: data.root_path });
     } catch (e) {
-      setError(e.message);
-      toast.error("打开项目失败", { description: e.message });
+      const msg = translateError(e.message);
+      setError(msg);
+      toast.error("打开项目失败", { description: msg });
     } finally {
       setLoading(false);
     }
@@ -166,8 +168,9 @@ export default function WorkspacePage() {
         });
       }
     } catch (e) {
-      setCompileResult({ success: false, explanation: e.message, fixes: [], stdout: "", stderr: "" });
-      toast.error("编译失败", { description: e.message });
+      const msg = translateError(e.message);
+      setCompileResult({ success: false, explanation: msg, fixes: [], stdout: "", stderr: "" });
+      toast.error("编译失败", { description: msg });
     } finally {
       setCompileLoading(false);
     }

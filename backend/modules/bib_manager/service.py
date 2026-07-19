@@ -160,7 +160,7 @@ class BibManagerService:
             return validated.model_dump()
         except ValueError as e:
             self._logger.error(f"Format analysis failed: {e}")
-            raise RuntimeError(f"Failed to analyze format: {e}")
+            raise RuntimeError(f"Format analysis failed: {e}")
         except Exception as e:
             self._logger.error(f"Format analysis error: {e}")
             raise RuntimeError(f"Format analysis failed: {e}")
@@ -220,7 +220,7 @@ class BibManagerService:
             return {"fields": fields, "missing_fields": missing}
         except ValueError as e:
             self._logger.error(f"Metadata extraction failed: {e}")
-            raise RuntimeError(f"Failed to extract metadata: {e}")
+            raise RuntimeError(f"Metadata extraction failed: {e}")
         except Exception as e:
             self._logger.error(f"Metadata extraction error: {e}")
             raise RuntimeError(f"Metadata extraction failed: {e}")
@@ -298,10 +298,10 @@ class BibManagerService:
             return {"fields": fields, "missing_fields": missing}
         except ValueError as e:
             self._logger.error(f"Image metadata extraction failed: {e}")
-            raise RuntimeError(f"Failed to extract metadata from image: {e}")
+            raise RuntimeError(f"Image metadata extraction failed: {e}")
         except Exception as e:
             self._logger.error(f"Image metadata extraction error: {e}")
-            raise RuntimeError(f"Metadata extraction from image failed: {e}")
+            raise RuntimeError(f"Image metadata extraction failed: {e}")
 
     async def generate_bibtex(
         self,
@@ -358,7 +358,7 @@ class BibManagerService:
             return validated.model_dump()
         except ValueError as e:
             self._logger.error(f"BibTeX generation failed: {e}")
-            raise RuntimeError(f"Failed to generate BibTeX: {e}")
+            raise RuntimeError(f"BibTeX generation failed: {e}")
         except Exception as e:
             self._logger.error(f"BibTeX generation error: {e}")
             raise RuntimeError(f"BibTeX generation failed: {e}")

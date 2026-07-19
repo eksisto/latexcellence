@@ -129,7 +129,7 @@ class TemplateGenService:
 
         except ValueError as e:
             self._logger.error(f"Template generation failed: {e}")
-            raise RuntimeError(f"Failed to generate template after retries: {e}")
+            raise RuntimeError(f"Template generation failed: {e}")
         except Exception as e:
             self._logger.error(f"Template generation error: {e}")
             raise RuntimeError(f"Template generation failed: {e}")

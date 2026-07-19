@@ -257,7 +257,7 @@ class WritingChatService:
         无需 marker pipeline（writing_chat 是特例，不用 marker 保护）。
         """
         if self._no_api_key():
-            raise RuntimeError("No API key configured — LLM features unavailable")
+            raise RuntimeError("No API key configured")
 
         ctx = ConversationContext.load_from_disk(req.session_id)
         if ctx is None:
@@ -300,7 +300,7 @@ class WritingChatService:
             )
         except ValueError as e:
             self._logger.warning(f"generate_edit validation exhausted: {e}")
-            raise RuntimeError(f"LLM failed to produce valid edit: {e}")
+            raise RuntimeError(f"Edit generation failed: {e}")
         except Exception as e:
             self._logger.error(f"generate_edit LLM call failed: {e}")
             raise RuntimeError(f"Edit generation failed: {e}")

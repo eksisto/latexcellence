@@ -136,7 +136,7 @@ class FormulaOCRService:
 
         except ValueError as e:
             self._logger.error(f"Formula OCR failed after retries: {e}")
-            raise RuntimeError(f"Failed to recognize formula: {e}")
+            raise RuntimeError(f"Formula recognition failed: {e}")
         except Exception as e:
             self._logger.error(f"Formula OCR error: {e}")
             raise RuntimeError(f"Formula recognition failed: {e}")

@@ -147,7 +147,7 @@ class TestRecognize:
         mock_llm.chat.return_value = {"bad": True}
 
         png = minimal_png
-        with pytest.raises(RuntimeError, match="Failed to"):
+        with pytest.raises(RuntimeError, match="Formula recognition failed"):
             await service._recognize_with_llm(mock_llm, png, "image/png")
 
         assert mock_llm.chat.call_count == 3

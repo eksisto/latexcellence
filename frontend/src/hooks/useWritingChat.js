@@ -3,6 +3,7 @@ import { toast } from "sonner";
 import { api } from "@/api/index";
 import useStore from "@/store/useStore";
 import { flattenTexFiles } from "@/hooks/useParagraphCheck";
+import { translateError } from "@/utils/errorMessages";
 
 const uid = () =>
   (typeof crypto !== "undefined" && crypto.randomUUID
@@ -425,12 +426,13 @@ export default function useWritingChat() {
             }
           }
         } else if (event.type === "error") {
-          setError(event.message);
+          const msg = translateError(event.message);
+          setError(msg);
           // 移除占位的 assistant 消息
           setWritingChatMessages((prev) =>
             prev.filter((m) => m.id !== tmpAssistantId)
           );
-          toast.error("对话出错", { description: event.message });
+          toast.error("对话出错", { description: msg });
         }
       };
 

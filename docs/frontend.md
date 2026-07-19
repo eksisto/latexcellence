@@ -121,7 +121,11 @@ setter 支持 function updater 模式（`typeof value === "function"` 检测）�
 所有请求通过 `request(url, options)` 函数，自动处理：
 - 添加 `Content-Type: application/json` 头
 - `BASE_URL = "/api"` 前缀
-- 非 OK 响应 → 提取 `detail` 字段 → 抛出 Error
+- 非 OK 响应 → 提取 `detail` 字段 → `translateError()` 翻译为中文 → 抛出 Error
+
+FormData 请求（文件上传）通过 `requestForm(url, formData, method)` 函数处理：
+- 不设置 `Content-Type`（由浏览器自动设置 multipart boundary）
+- 同样经过 `translateError()` 翻译错误消息
 
 需要工作区隔离的端点通过 `appendWs(url, workspaceId)` 拼接 `workspace_id` 查询参数。
 
@@ -148,6 +152,22 @@ api.writingChat.send({...data, workspaceId}) / .generateEdit(data, workspaceId) 
 api.writingChat.listSessions(workspaceId) / .loadSession(id) / .deleteSession(id) / .renameSession(id, title)
 api.writingChat.assistants.list() / .load(name) / .save(name, content) / .delete(name) / .setActive(name)
 ```
+
+## 工具模块 `utils/errorMessages.js`
+
+后端英文错误消息 → 中文翻译模块，在 API 层统一调用，确保用户看到的始终是中文。
+
+**设计**：
+- `EXACT_MAP`：静态精确匹配（如 `"No API key configured"` → `"未配置 API 密钥，LLM 功能不可用"`）
+- `PATTERN_MAP`：正则模式匹配，支持捕获组替换（如 `/^File not found:\s*(.+)/` → `"文件不存在：$1"`）
+- `translateError(msg)` 函数：先精确匹配，再模式匹配，均无匹配则原样返回
+- 已经是中文的消息（如 `"main_file 不能为空"`）无匹配项，原样透传
+
+**调用点**：
+- `request()` — 通用 JSON 请求的错误处理
+- `requestForm()` — FormData 请求的错误处理
+- `useParagraphCheck.js` — SSE 流式错误事件翻译
+- `useWritingChat.js` — SSE 流式错误事件翻译
 
 ## 核心组件
 

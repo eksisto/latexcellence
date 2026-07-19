@@ -60,21 +60,6 @@ class TestStyleModifyService:
         )
 
     @pytest.mark.asyncio
-    async def test_empty_latex_raises(self, service):
-        with pytest.raises(ValueError, match="empty"):
-            await service.modify("", "make it bold")
-
-    @pytest.mark.asyncio
-    async def test_whitespace_latex_raises(self, service):
-        with pytest.raises(ValueError, match="empty"):
-            await service.modify("   \n  ", "make it bold")
-
-    @pytest.mark.asyncio
-    async def test_empty_description_raises(self, service, sample_latex):
-        with pytest.raises(ValueError, match="empty"):
-            await service.modify(sample_latex, "")
-
-    @pytest.mark.asyncio
     async def test_no_api_key_raises(self, service, sample_latex):
         mock_cfg = MagicMock()
         mock_cfg.llm.api_key = ""
@@ -133,7 +118,7 @@ class TestStyleModifyService:
 
         with patch("backend.modules.style_modify.service.get_config", return_value=mock_cfg):
             with patch("backend.modules.style_modify.service.get_llm_client", return_value=mock_llm):
-                with pytest.raises(RuntimeError, match="LLM failed"):
+                with pytest.raises(RuntimeError, match="Style modification failed"):
                     await service.modify(sample_latex, "bold")
 
         assert mock_llm.chat.call_count == 3

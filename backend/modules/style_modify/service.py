@@ -67,15 +67,10 @@ class StyleModifyService:
         返回：
             { latex: "修改后的 LaTeX 源码" }
         """
-        if not latex.strip():
-            raise ValueError("LaTeX code is empty")
-        if not description.strip():
-            raise ValueError("Description is empty")
-
         cfg = get_config()
         if not cfg.llm.api_key:
             self._logger.warning("No API key configured")
-            raise RuntimeError("No API key configured — LLM features unavailable")
+            raise RuntimeError("No API key configured")
 
         llm = get_llm_client()
         return await self._modify_with_llm(llm, latex, description)
@@ -119,7 +114,7 @@ class StyleModifyService:
 
         except ValueError as e:
             self._logger.error(f"Style modify failed after retries: {e}")
-            raise RuntimeError(f"LLM failed to produce valid output: {e}")
+            raise RuntimeError(f"Style modification failed: {e}")
         except Exception as e:
             self._logger.error(f"Style modify error: {e}")
             raise RuntimeError(f"Style modification failed: {e}")

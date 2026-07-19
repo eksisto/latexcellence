@@ -4,12 +4,31 @@
  * 设计说明：
  * - BASE_URL 固定为 "/api"，开发时由 Vite 代理到后端，生产时同域访问
  * - request() 自动处理 JSON 序列化/反序列化和错误提取
+ * - 后端英文错误经 translateError() 统一翻译为中文后抛出
  * - formulaOCR 模块使用 FormData（图片上传），不走 JSON 请求
  * - typoCheck 的 stream() 返回 SSE URL 字符串，供 EventSource 消费
  * - 所有需要工作区隔离的端点均携带 workspace_id 查询参数
  */
 
+import { translateError } from "@/utils/errorMessages";
+
 const BASE_URL = "/api";
+
+/**
+ * 通用 FormData 请求函数（用于文件上传场景）
+ * @param {string} url      API 路径
+ * @param {FormData} formData  表单数据
+ * @param {string} method   HTTP 方法
+ * @returns {Promise<object>} 解析后的 JSON 响应
+ */
+async function requestForm(url, formData, method = "POST") {
+  const res = await fetch(`${BASE_URL}${url}`, { method, body: formData });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }));
+    throw new Error(translateError(err.detail || `HTTP ${res.status}`));
+  }
+  return res.json();
+}
 
 /**
  * 拼接 workspace_id 到 URL 查询参数
@@ -35,7 +54,7 @@ async function request(url, options = {}) {
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: res.statusText }));
-    throw new Error(err.detail || `HTTP ${res.status}`);
+    throw new Error(translateError(err.detail || `HTTP ${res.status}`));
   }
   return res.json();
 }
@@ -183,32 +202,12 @@ export const api = {
 
   /* ---- 公式识别（图片上传使用 FormData） ---- */
   formulaOCR: {
-    recognize: async (formData) => {
-      const res = await fetch(`${BASE_URL}/formula-ocr/recognize`, {
-        method: "POST",
-        body: formData,
-      });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({ detail: res.statusText }));
-        throw new Error(err.detail || `HTTP ${res.status}`);
-      }
-      return res.json();
-    },
+    recognize: (formData) => requestForm("/formula-ocr/recognize", formData),
   },
 
   /* ---- 表格 OCR 识别（图片上传使用 FormData） ---- */
   tableOCR: {
-    recognize: async (formData) => {
-      const res = await fetch(`${BASE_URL}/table-ocr/recognize`, {
-        method: "POST",
-        body: formData,
-      });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({ detail: res.statusText }));
-        throw new Error(err.detail || `HTTP ${res.status}`);
-      }
-      return res.json();
-    },
+    recognize: (formData) => requestForm("/table-ocr/recognize", formData),
   },
 
   /* ---- LaTeX 样式修改 ---- */
@@ -325,17 +324,7 @@ export const api = {
         method: "POST",
         body: JSON.stringify({ example }),
       }),
-    extract: async (formData) => {
-      const res = await fetch(`${BASE_URL}/bib-manager/extract`, {
-        method: "POST",
-        body: formData,
-      });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({ detail: res.statusText }));
-        throw new Error(err.detail || `HTTP ${res.status}`);
-      }
-      return res.json();
-    },
+    extract: (formData) => requestForm("/bib-manager/extract", formData),
     generate: (data) =>
       request("/bib-manager/generate", {
         method: "POST",
@@ -386,7 +375,7 @@ export const api = {
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({ detail: res.statusText }));
-        throw new Error(err.detail || `HTTP ${res.status}`);
+        throw new Error(translateError(err.detail || `HTTP ${res.status}`));
       }
       const reader = res.body.getReader();
       const decoder = new TextDecoder("utf-8");
