@@ -93,13 +93,19 @@ class TerminologyCheckService(BaseParagraphCheckService):
 
         all_para_data = self._collect_para_data(files, workspace_id)
 
+        operation_id = self._generate_operation_id()
+        file_md5s = self._capture_file_md5s(files, workspace_id)
+        self._store_context(
+            operation_id, self._marker_maps, file_path, file_md5s
+        )
+
         has_api_key = bool(cfg.llm.api_key)
 
         if not has_api_key:
             self._logger.warning(
                 "No API key — using fallback term extraction"
             )
-            return self._check_no_llm(file_path, all_para_data)
+            return self._check_no_llm(file_path, all_para_data, operation_id)
 
         llm = get_llm_client()
         sem = asyncio.Semaphore(cfg.llm.max_concurrency)
@@ -155,10 +161,15 @@ class TerminologyCheckService(BaseParagraphCheckService):
         results = self._build_results(all_para_data, all_terms, clusters)
 
         total_issues = sum(1 for r in results for c in r["changes"])
+        self._logger.info(
+            f"Terminology check completed for {file_path} "
+            f"[op={operation_id}]"
+        )
         return {
             "results": results,
             "file_path": file_path,
             "total_issues": total_issues,
+            "operation_id": operation_id,
         }
 
     async def check_terminology_stream(
@@ -168,6 +179,7 @@ class TerminologyCheckService(BaseParagraphCheckService):
         术语检查流式版本（SSE）。
 
         逐段 yield 事件：progress / result / done。
+        done 事件包含 operation_id，前端 apply 时需回传。
         """
         cfg = get_config()
         files = self._get_files(file_path, resolve_input, workspace_id)
@@ -176,6 +188,12 @@ class TerminologyCheckService(BaseParagraphCheckService):
         self._marker_maps = {}
 
         all_para_data = self._collect_para_data(files, workspace_id)
+
+        operation_id = self._generate_operation_id()
+        file_md5s = self._capture_file_md5s(files, workspace_id)
+        self._store_context(
+            operation_id, self._marker_maps, file_path, file_md5s
+        )
 
         total = len(all_para_data)
         yield {"type": "progress", "current": 0, "total": total}
@@ -203,7 +221,7 @@ class TerminologyCheckService(BaseParagraphCheckService):
                     "current": r["paragraph_index"] + 1,
                     "total": total,
                 }
-            yield {"type": "done"}
+            yield {"type": "done", "operation_id": operation_id}
             return
 
         all_terms: list[dict[str, Any]] = []
@@ -278,7 +296,11 @@ class TerminologyCheckService(BaseParagraphCheckService):
                 "data": r,
             }
 
-        yield {"type": "done"}
+        self._logger.info(
+            f"Terminology stream check completed for {file_path} "
+            f"[op={operation_id}]"
+        )
+        yield {"type": "done", "operation_id": operation_id}
 
     # ── 结果构建 ────────────────────────────────────────────────────────────
 
@@ -402,6 +424,7 @@ class TerminologyCheckService(BaseParagraphCheckService):
         self,
         file_path: str,
         all_para_data: list[dict[str, Any]],
+        operation_id: str = "",
     ) -> dict[str, Any]:
         """无 API Key 时降级为纯规则检查。"""
         results = self._build_results_no_llm(all_para_data)
@@ -410,6 +433,7 @@ class TerminologyCheckService(BaseParagraphCheckService):
             "results": results,
             "file_path": file_path,
             "total_issues": total_issues,
+            "operation_id": operation_id,
         }
 
     async def _empty_terms(self, paragraph_index: int) -> list:

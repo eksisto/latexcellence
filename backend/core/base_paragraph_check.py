@@ -19,6 +19,11 @@ terminology_check）的共享逻辑：
 """
 
 import asyncio
+import copy
+import time
+import uuid
+from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any, ClassVar, Optional
 
 from pydantic import BaseModel
@@ -30,6 +35,24 @@ from backend.core.config import get_config
 from backend.utils.latex_parser import LatexParser, MARKER_PATTERN
 from backend.utils.input_resolver import resolve_inputs
 from backend.utils.json_utils import retry_with_validation
+from backend.utils.file_ops import compute_md5
+
+
+@dataclass
+class CheckOperationContext:
+    """
+    一次检查操作的完整上下文。
+
+    保存 marker 映射、文件 MD5 和项目上下文，避免将请求相关状态
+    保存在服务单例字段中。apply 时通过 operation_id 查找对应上下文，
+    确保 marker 还原正确。
+    """
+
+    operation_id: str
+    marker_maps: dict[str, dict[int, dict[str, str]]]
+    file_path: str
+    file_md5s: dict[str, str]
+    created_at: float = field(default_factory=time.time)
 
 
 class ApplyChangeItem(BaseModel):
@@ -56,6 +79,60 @@ class BaseParagraphCheckService:
         self._parser = LatexParser()
         self._marker_maps: dict[str, dict[int, dict[str, str]]] = {}
         self._file_path: Optional[str] = None
+        self._operation_contexts: dict[str, CheckOperationContext] = {}
+
+    # ── 操作上下文管理 ──────────────────────────────────────────────────────
+
+    def _generate_operation_id(self) -> str:
+        """生成唯一操作 ID。"""
+        return uuid.uuid4().hex[:12]
+
+    def _capture_file_md5s(
+        self, files: list[str], workspace_id: str
+    ) -> dict[str, str]:
+        """收集所有文件当前的 MD5 快照。"""
+        pm = get_project_manager_for_workspace(workspace_id)
+        root = Path(pm.root_path)
+        md5s: dict[str, str] = {}
+        for f in files:
+            full_path = root / f
+            if full_path.exists():
+                md5s[f] = compute_md5(full_path)
+        return md5s
+
+    def _store_context(
+        self,
+        operation_id: str,
+        marker_maps: dict[str, dict[int, dict[str, str]]],
+        file_path: str,
+        file_md5s: dict[str, str],
+    ) -> None:
+        """保存操作上下文（深拷贝 marker_maps），并清理过期上下文。"""
+        self._operation_contexts[operation_id] = CheckOperationContext(
+            operation_id=operation_id,
+            marker_maps=copy.deepcopy(marker_maps),
+            file_path=file_path,
+            file_md5s=file_md5s,
+        )
+        self._cleanup_old_contexts()
+
+    def _get_context(
+        self, operation_id: str
+    ) -> Optional[CheckOperationContext]:
+        """按 operation_id 查找操作上下文。"""
+        return self._operation_contexts.get(operation_id)
+
+    def _cleanup_old_contexts(self, max_age_seconds: int = 3600) -> None:
+        """清理超过 TTL 的过期上下文。"""
+        now = time.time()
+        expired = [
+            oid
+            for oid, ctx in self._operation_contexts.items()
+            if now - ctx.created_at > max_age_seconds
+        ]
+        for oid in expired:
+            del self._operation_contexts[oid]
+            self._logger.debug(f"Cleaned up expired operation context: {oid}")
 
     # ── 文件与段落 ──────────────────────────────────────────────────────────
 
@@ -105,7 +182,7 @@ class BaseParagraphCheckService:
             workspace_id: 工作区唯一标识符
 
         返回：
-            { paragraphs: [...], file_path: "...", total: N }
+            { paragraphs: [...], file_path: "...", total: N, operation_id: "..." }
         """
         pm = get_project_manager_for_workspace(workspace_id)
         files = self._get_files(file_path, resolve_input, workspace_id)
@@ -118,14 +195,22 @@ class BaseParagraphCheckService:
             paragraphs = pm.get_paragraphs(f)
             all_paragraphs.extend(self._process_paragraphs(paragraphs, f))
 
+        operation_id = self._generate_operation_id()
+        file_md5s = self._capture_file_md5s(files, workspace_id)
+        self._store_context(
+            operation_id, self._marker_maps, file_path, file_md5s
+        )
+
         self._logger.info(
             f"Previewed {len(all_paragraphs)} paragraphs from "
-            f"{len(files)} file(s) starting at {file_path}"
+            f"{len(files)} file(s) starting at {file_path} "
+            f"[op={operation_id}]"
         )
         return {
             "paragraphs": all_paragraphs,
             "file_path": file_path,
             "total": len(all_paragraphs),
+            "operation_id": operation_id,
         }
 
     def _collect_para_data(
@@ -308,11 +393,18 @@ class BaseParagraphCheckService:
         targets = self._filter_targets(
             all_para_data, file_path, paragraph_indices)
 
+        operation_id = self._generate_operation_id()
+        if self.use_marker_protection:
+            file_md5s = self._capture_file_md5s(files, workspace_id)
+            self._store_context(
+                operation_id, self._marker_maps, file_path, file_md5s
+            )
+
         if not cfg.llm.api_key:
             self._logger.warning(
                 "No API key configured, returning plain text only"
             )
-            return self._no_api_key_batch_fallback(targets, file_path)
+            return self._no_api_key_batch_fallback(targets, file_path, operation_id)
 
         llm = get_llm_client()
         batch_size = self._get_batch_size()
@@ -348,7 +440,15 @@ class BaseParagraphCheckService:
             if batch_start + batch_size < len(targets):
                 await asyncio.sleep(cfg.llm.request_interval)
 
-        return {"results": results, "file_path": file_path}
+        self._logger.info(
+            f"Batch check completed for {file_path} "
+            f"[op={operation_id}]"
+        )
+        return {
+            "results": results,
+            "file_path": file_path,
+            "operation_id": operation_id,
+        }
 
     async def _run_stream_check(
         self,
@@ -360,6 +460,7 @@ class BaseParagraphCheckService:
         流式逐段检查（SSE）。
 
         逐段 yield 事件：progress / result / error / done。
+        done 事件包含 operation_id，前端 apply 时需回传。
         """
         cfg = get_config()
         files = self._get_files(file_path, resolve_input, workspace_id)
@@ -370,6 +471,13 @@ class BaseParagraphCheckService:
 
         all_para_data = self._collect_para_data(files, workspace_id)
 
+        operation_id = self._generate_operation_id()
+        if self.use_marker_protection:
+            file_md5s = self._capture_file_md5s(files, workspace_id)
+            self._store_context(
+                operation_id, self._marker_maps, file_path, file_md5s
+            )
+
         total = len(all_para_data)
         yield {"type": "progress", "current": 0, "total": total}
 
@@ -379,7 +487,7 @@ class BaseParagraphCheckService:
                 "message": "No API key configured",
                 "retrying": False,
             }
-            yield {"type": "done"}
+            yield {"type": "done", "operation_id": operation_id}
             return
 
         llm = get_llm_client()
@@ -425,12 +533,17 @@ class BaseParagraphCheckService:
             }
             await asyncio.sleep(cfg.llm.request_interval)
 
-        yield {"type": "done"}
+        self._logger.info(
+            f"Stream check completed for {file_path} "
+            f"[op={operation_id}]"
+        )
+        yield {"type": "done", "operation_id": operation_id}
 
     def _no_api_key_batch_fallback(
         self,
         targets: list[dict[str, Any]],
         file_path: str,
+        operation_id: str = "",
     ) -> dict[str, Any]:
         """无 API Key 时返回纯文本结果。"""
         results = []
@@ -441,23 +554,29 @@ class BaseParagraphCheckService:
                 d["text"],
                 d["file_path"],
             ))
-        return {"results": results, "file_path": file_path}
+        return {"results": results, "file_path": file_path, "operation_id": operation_id}
 
     # ── 写回 ────────────────────────────────────────────────────────────────
 
     def apply_changes(
-        self, file_path: str, changes: list[dict[str, Any]], workspace_id: str = ""
+        self,
+        file_path: str,
+        changes: list[dict[str, Any]],
+        workspace_id: str = "",
+        operation_id: Optional[str] = None,
     ) -> dict[str, Any]:
         """
         将用户确认的修改写回源文件。
 
-        当 use_marker_protection=True 时，通过 marker_map 将纯文本还原为
-        完整 LaTeX 后写回；否则直接写回。
+        当 use_marker_protection=True 时，通过 operation_id 查找操作上下文，
+        使用对应的 marker_map 将纯文本还原为完整 LaTeX 后写回；
+        否则直接写回。
 
         参数：
             file_path: 默认文件路径（当 change 中无 file_path 时使用）
             changes: [{ "paragraph_index": 0, "new_text": "...", "file_path": "..." }]
             workspace_id: 工作区唯一标识符
+            operation_id: 检查操作 ID，用于查找对应的 marker 映射
 
         返回：
             { applied: N, total: M }
@@ -465,13 +584,25 @@ class BaseParagraphCheckService:
         pm = get_project_manager_for_workspace(workspace_id)
         applied = 0
 
+        context = None
+        if operation_id:
+            context = self._get_context(operation_id)
+            if context is None:
+                self._logger.warning(
+                    f"Operation context not found for {operation_id}, "
+                    f"falling back to instance marker_maps"
+                )
+
         for change in changes:
             idx = change["paragraph_index"]
             new_text = change["new_text"]
             target_file = change.get("file_path", file_path)
 
             if self.use_marker_protection:
-                file_maps = self._marker_maps.get(target_file, {})
+                if context is not None:
+                    file_maps = context.marker_maps.get(target_file, {})
+                else:
+                    file_maps = self._marker_maps.get(target_file, {})
                 marker_map = file_maps.get(idx, {})
                 restored = self._parser.restore_from_markers(
                     new_text, marker_map
@@ -483,6 +614,7 @@ class BaseParagraphCheckService:
             applied += 1
             self._logger.info(
                 f"Applied change to paragraph {idx} in {target_file}"
+                f" [op={operation_id or 'legacy'}]"
             )
 
         return {"applied": applied, "total": len(changes)}

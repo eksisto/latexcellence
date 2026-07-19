@@ -51,6 +51,7 @@ export default function TerminologyCheckPage() {
     setResolveInput,
     activeFiles,
     workspaceId,
+    operationId,
     handlePreview,
     handleCheck,
     handlePauseResume,
@@ -151,7 +152,7 @@ export default function TerminologyCheckPage() {
         description: e.message,
       });
     }
-  }, [terminologyResults, customReplacements, buildCorrectedText, activeFile]);
+  }, [terminologyResults, customReplacements, buildCorrectedText, activeFile, operationId]);
 
   const renderParagraphsByFile = (paragraphs) => {
     if (activeFiles.length > 1) {

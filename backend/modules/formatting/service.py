@@ -195,13 +195,18 @@ class FormattingService(BaseParagraphCheckService):
     # ── 覆写：无需 marker 还原 ─────────────────────────────────────────────
 
     def apply_changes(
-        self, file_path: str, changes: list[dict[str, Any]], workspace_id: str = ""
+        self,
+        file_path: str,
+        changes: list[dict[str, Any]],
+        workspace_id: str = "",
+        operation_id: Optional[str] = None,
     ) -> dict[str, Any]:
         """
         将用户确认的格式修改写回源文件。
 
         与 typo_check/expression_opt 不同：无需还原 marker，
         corrected 字段即为完整的 LaTeX 源码，直接写回即可。
+        operation_id 参数保留以保持签名一致，但不使用。
         """
         pm = get_project_manager_for_workspace(workspace_id)
         applied = 0

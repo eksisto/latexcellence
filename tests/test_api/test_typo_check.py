@@ -358,8 +358,9 @@ class TestApplyChanges:
         pm = get_project_manager_for_workspace(ws_id)
         pm.open(str(temp_project))
 
-        # 先预览以填充 marker_maps
-        service.preview_paragraphs("main.tex", workspace_id=ws_id)
+        # 先预览以填充 marker_maps 并获取 operation_id
+        preview = service.preview_paragraphs("main.tex", workspace_id=ws_id)
+        operation_id = preview["operation_id"]
 
         # 构造一个 changes：把 "paragrafh" 改成 "paragraph"
         # 但是由于 plain_text 包含 marker，这里直接使用原始文本作简化测试
@@ -371,6 +372,7 @@ class TestApplyChanges:
                     "main.tex",
                     [{"paragraph_index": para.index, "new_text": new_text}],
                     workspace_id=ws_id,
+                    operation_id=operation_id,
                 )
                 assert result["applied"] == 1
                 break
@@ -387,7 +389,8 @@ class TestApplyChanges:
         pm = get_project_manager_for_workspace(ws_id)
         pm.open(str(temp_project))
 
-        service.preview_paragraphs("main.tex", workspace_id=ws_id)
+        preview = service.preview_paragraphs("main.tex", workspace_id=ws_id)
+        operation_id = preview["operation_id"]
 
         paragraphs = pm.get_paragraphs("main.tex")
         # 两个错字在同一段内：需要合并为一个 change
@@ -402,7 +405,9 @@ class TestApplyChanges:
                 })
                 break
 
-        result = service.apply_changes("main.tex", changes, workspace_id=ws_id)
+        result = service.apply_changes(
+            "main.tex", changes, workspace_id=ws_id, operation_id=operation_id
+        )
         assert result["applied"] == 1
         assert result["total"] == 1
 

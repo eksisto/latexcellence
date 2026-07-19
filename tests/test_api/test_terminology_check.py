@@ -319,6 +319,7 @@ class TestApplyChanges:
         pm.open(str(temp_project))
 
         preview = service.preview_paragraphs("main.tex", workspace_id=ws_id)
+        operation_id = preview["operation_id"]
 
         applied = False
         for p in preview["paragraphs"]:
@@ -330,6 +331,7 @@ class TestApplyChanges:
                     "main.tex",
                     [{"paragraph_index": p["index"], "new_text": corrected_plain}],
                     workspace_id=ws_id,
+                    operation_id=operation_id,
                 )
                 assert result["applied"] == 1
                 applied = True

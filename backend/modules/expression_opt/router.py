@@ -38,6 +38,7 @@ class ExpressionOptRequest(BaseModel):
 class ExpressionApplyRequest(BaseModel):
     file_path: str
     changes: list[ApplyChangeItem]
+    operation_id: Optional[str] = None
 
 
 # ── preview ────────────────────────────────────────────────────────────────
@@ -95,7 +96,9 @@ async def apply_changes(request: ExpressionApplyRequest, workspace_id: str = Que
     """
     try:
         changes = [c.model_dump() for c in request.changes]
-        result = get_service().apply_changes(request.file_path, changes, workspace_id)
+        result = get_service().apply_changes(
+            request.file_path, changes, workspace_id, request.operation_id
+        )
         return result
     except RuntimeError as e:
         raise HTTPException(status_code=400, detail=str(e))

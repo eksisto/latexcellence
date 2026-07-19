@@ -93,6 +93,7 @@ export default function useParagraphCheck({
   const resultsWithChangesRef = useRef(0);
   const pausedRef = useRef(false);
   const bufferRef = useRef([]);
+  const operationIdRef = useRef(null);
 
   const texFiles = useMemo(() => flattenTexFiles(fileTree), [fileTree]);
 
@@ -162,6 +163,7 @@ export default function useParagraphCheck({
     try {
       const data = await apiModule.preview(activeFile, workspaceId, resolveInput);
       setParagraphs(data.paragraphs || []);
+      operationIdRef.current = data.operation_id || null;
       setMessage(`已加载 ${data.total} 个段落`);
     } catch (e) {
       setError(e.message);
@@ -307,6 +309,7 @@ export default function useParagraphCheck({
         }
 
         if (data.type === "done") {
+          operationIdRef.current = data.operation_id || null;
           finalizeCheck(es, true);
           const count = resultsWithChangesRef.current;
           setMessage(messages.checkSuccess(count));
@@ -344,6 +347,7 @@ export default function useParagraphCheck({
         await apiModule.apply({
           file_path: activeFile,
           changes: [{ paragraph_index: idx, new_text: newText, file_path: filePath || activeFile }],
+          operation_id: operationIdRef.current,
         }, workspaceId);
         setMessage(messages.applySuccess(idx));
         toast.success(messages.applySuccess(idx));
@@ -395,7 +399,7 @@ export default function useParagraphCheck({
           new_text: r[correctedTextField],
           file_path: r.file_path || activeFile,
         }));
-        await apiModule.apply({ file_path: activeFile, changes }, workspaceId);
+        await apiModule.apply({ file_path: activeFile, changes, operation_id: operationIdRef.current }, workspaceId);
         const appliedKeys = new Set(
           pending.map((r) => `${r.file_path || activeFile}:${r.paragraph_index}`)
         );
@@ -476,6 +480,7 @@ export default function useParagraphCheck({
     resolveInput,
     setResolveInput,
     activeFiles,
+    operationId: operationIdRef,
     handlePreview,
     handleCheck,
     handlePauseResume,

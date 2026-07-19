@@ -245,7 +245,8 @@ class TestApplyChanges:
         pm = get_project_manager_for_workspace(ws_id)
         pm.open(str(temp_project))
 
-        service.preview_paragraphs("main.tex", workspace_id=ws_id)
+        preview = service.preview_paragraphs("main.tex", workspace_id=ws_id)
+        operation_id = preview["operation_id"]
 
         paragraphs = pm.get_paragraphs("main.tex")
         for para in paragraphs:
@@ -258,6 +259,7 @@ class TestApplyChanges:
                     "main.tex",
                     [{"paragraph_index": para.index, "new_text": new_text}],
                     workspace_id=ws_id,
+                    operation_id=operation_id,
                 )
                 assert result["applied"] == 1
                 break
