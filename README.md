@@ -69,9 +69,9 @@ cd ..
 ```bash
 # 复制配置模板
 cp config.example.json config.json
-
-# 编辑 config.json，填入你的 API Key
 ```
+
+可以在 `config.json` 中填入 `api_key`，也可以使用环境变量 `OPENAI_API_KEY`（推荐）。
 
 环境变量 `OPENAI_API_KEY` 优先级高于配置文件中的 `api_key`。
 

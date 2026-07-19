@@ -1,0 +1,110 @@
+# LateXcellence — Project Summary
+
+> 项目概要文件。项目结构变更时（新增/删除模块），必须同步更新此文件。
+
+---
+
+## Directory Tree
+
+```
+latexcellence/
+├── main.py                          # FastAPI 入口 + 静态文件挂载
+├── config.json                      # 配置文件
+├── config.example.json              # 配置文件模板
+├── AGENTS.md                        # AI 编程助手规范
+├── DEVELOPMENT.md                   # 开发文档索引（指向 docs/ 目录）
+├── DESIGN.md                        # 设计文档
+├── PROJECT_SUMMARY.md               # ← 本文件：项目概要（供 AI 快速读取）
+├── README.md                        # 项目简介
+├── THIRD_PARTY_NOTICES.md           # 第三方许可
+├── clean-cache.sh                   # 缓存清理脚本
+├── backend/
+│   ├── core/
+│   │   ├── config.py                # Pydantic 配置模型 + 热重载
+│   │   ├── llm_client.py            # AsyncOpenAI 封装（流式 + 重试 + 限流）
+│   │   ├── logger.py                # TimedRotatingFileHandler 日志
+│   │   ├── workspace_manager.py     # 多工作区管理（workspace_id → LatexProject）
+│   │   ├── project_manager.py       # LaTeX 项目管理（文件树/段落/撤销）
+│   │   └── base_paragraph_check.py  # 逐段检查服务基类（typo/expression/formatting/terminology 共享）
+│   ├── utils/
+│   │   ├── json_utils.py            # LLM JSON 解析/校验/重试
+│   │   ├── file_ops.py              # 原子写入/备份/MD5
+│   │   ├── input_resolver.py        # \input/\include 递归解析
+│   │   └── latex_parser.py          # LaTeX 源码↔纯文本转换（Marker 保护）
+│   └── modules/                     # 功能模块目录
+│       ├── typo_check/              # 错字查找
+│       ├── expression_opt/          # 表达优化
+│       ├── terminology_check/       # 术语一致性
+│       ├── formatting/              # 源码格式化
+│       ├── compile/                 # 自动编译
+│       ├── git_diff/                # Git 差异高亮
+│       ├── template_gen/            # 模板生成
+│       ├── formula_ocr/             # 公式 OCR
+│       ├── table_ocr/               # 表格 OCR
+│       ├── markdown_converter/      # Markdown→LaTeX
+│       ├── style_modify/            # 样式修改
+│       ├── writing_chat/            # 写作助手聊天
+│       ├── bib_manager/             # 参考文献管理
+│       └── project_router.py        # 项目管理路由
+│
+├── frontend/
+│   └── src/
+│       ├── App.jsx                  # 根路由
+│       ├── pages/                   # 页面组件
+│       ├── hooks/                   # 自定义 hook
+│       ├── components/              # 共享组件 + ui 基座组件
+│       ├── theme/                   # 主题 CSS + useThemeManager.js
+│       ├── api/index.js             # 统一 API 层
+│       └── store/useStore.js        # Zustand 全局状态
+│
+├── docs/                            # 开发文档
+│   ├── development.md               # 项目概述/技术栈/启动
+│   ├── backend-core.md              # 后端核心模块
+│   ├── modules.md                   # 模块索引
+│   ├── frontend.md                  # 前端架构
+│   ├── testing.md                   # 测试规范
+│   ├── multi-user-migration-plan.md # 多用户改造计划
+│   └── modules/                     # 模块文档
+├── tests/                           # 测试用例
+├── prompts/                         # 自定义提示词 
+├── formats/                         # 参考文献格式定义
+├── templates/                       # 生成的 LaTeX 模板
+├── writing_chat_sessions/           # 写作助手聊天持久化数据
+├── logs/                            # 运行时日志
+└── static/                          # Vite 构建产物
+```
+
+## Feature Modules Quick Reference
+
+| # | Module | 目的 | 关键文件 | 依赖 LLM | Marker |
+|---|--------|------|----------|---------|--------|
+| 1 | typo_check | 错字/拼写检查 | router.py, service.py | ✓ | ✓ |
+| 2 | expression_opt | 学术表达优化 | router.py, service.py, prompt_manager.py | ✓ | ✓ |
+| 3 | formatting | LaTeX 源码排版 | router.py, service.py | ✓ | ✗ |
+| 4 | terminology_check | 术语一致性检查 | router.py, service.py, extractor.py, models.py | ✓ | ✓ |
+| 5 | compile | 编译 + 错误翻译 | router.py, service.py | ✓(错误翻译) | ✗ |
+| 6 | git_diff | Git 版本差异 PDF | router.py, service.py | ✗ | ✗ |
+| 7 | template_gen | 模板生成 | router.py, service.py | ✓ | ✗ |
+| 8 | formula_ocr | 图片→LaTeX 公式 | router.py, service.py | ✓(Vision) | ✗ |
+| 9 | table_ocr | 图片→LaTeX 表格 | router.py, service.py | ✓(Vision) | ✗ |
+| 10 | markdown_converter | MD→LaTeX(pandoc) | router.py, service.py | ✗ | ✗ |
+| 11 | style_modify | 自然语言修改样式 | router.py, service.py | ✓ | ✗ |
+| 12 | writing_chat | 写作助手对话 | router.py, service.py, context.py, models.py, prompt_manager.py | ✓ | ✗ |
+| 13 | bib_manager | 参考文献管理 | router.py, service.py, models.py | ✓ | ✗ |
+
+## Core Architecture Concepts
+
+- **BaseParagraphCheckService**: 四个逐段检查模块（typo_check / expression_opt / formatting / terminology_check）共享的基类，封装文件解析、marker 替换、LLM 编排（批量+流式）、结果写回等流程。子类通过 6 个 hooks（_get_system_prompt / _build_user_content / _get_model_cls / _get_llm_params / _get_batch_size / _build_success_result）定制行为
+- **WorkspaceManager**: 多浏览器多工作区隔离，每个 workspace_id 拥有独立的 `LatexProject` 实例（项目状态、文件树、MD5 缓存、撤销栈完全隔离）
+- **Marker Protection**: LaTeX 结构 → `__CMD_NNNN__` / `__MATH_NNNN__` / `__ENV_NNNN__` / `__VERB_NNNN__` marker → LLM 只改纯文本 → 按长度降序还原
+- **JSON Validation Pipeline**: `safe_parse_json()` → Pydantic `.model_validate()` → `retry_with_validation()` (最多 3 次重试 + 错误反馈)
+- **SSE Streaming**: 所有段落检查模块通过 Server-Sent Events 推送 `progress`/`result`/`error`/`done` 事件
+- **useParagraphCheck Hook**: TypoCheck/ExpressionOpt/Formatting/TerminologyCheck 4 页共享同一 hook 封装流程
+- **useEnabledFeatures Hook**: 从后端 `/api/config/status` 加载功能开关到 Zustand store，幂等（已加载则跳过）。WelcomePage 和 WorkspacePage 均调用此 hook，确保直接刷新任一页面时功能开关均可用
+- **Zustand Persist**: `partialize` 选择性持久化检查结果，支持刷新保留
+- **Multi-Theme**: `theme/` 目录下每个 CSS 文件定义一组完整配色（`[data-theme="xxx"]` light + dark），通过 `import.meta.glob` 自动发现，用户可在设置或顶栏下拉菜单中实时切换
+- **CheckOperationContext**: 每次 preview/check 生成唯一 `operation_id`，将 marker 映射和 MD5 快照深拷贝存入上下文（TTL 1 小时），apply 时通过 operation_id 精确还原。避免并发请求或重启后 marker 映射丢失导致字面 marker 写入 `.tex` 文件
+- **useUndoRedo Hook**: 基于后端每文件独立 undo/redo deque（最大 50 层）的撤销/重做状态管理，与 project_manager 同步
+- **useResultFilter Hook**: 检查结果排序与过滤逻辑封装——changes 非空优先、无建议在后、同类按 paragraph_index 升序
+- **useWritingChat Hook**: 写作助手聊天的完整生命周期管理（消息流式、thinking 标签解析、上下文压缩、会话持久化）
+- **MarkerText / ParagraphContext 组件**: `MarkerText` 将含 marker 的文本渲染为友好标签（如 `__MATH_0001__` → 公式图标）；`ParagraphContext` 展示当前段落前后文，用于逐段检查结果页面

@@ -1,17 +1,18 @@
 {
   "server": {
-    "host": "0.0.0.0",
+    "host": "127.0.0.1",
     "port": 8000,
     "dev_mode": true,
     "vite_dev_url": "http://localhost:5173"
   },
   "llm": {
-    "api_key": "tk-iwonttellyou",
+    "api_key": "",
     "base_url": "https://api.deepseek.com",
     "model": "deepseek-flash",
     "temperature": 0.3,
     "max_tokens": 4096,
-    "request_interval": 1.5
+    "request_interval": 1.5,
+    "max_concurrency": 5
   },
   "features": {
     "typo_check": {

@@ -1,14 +1,6 @@
 # Config with secrets
 config.json
 
-# Development Documentation
-AGENTS.md
-DEVELOPMENT.md
-DESIGN.md
-TODO.md
-PROJECT_SUMMARY.md
-docs/
-
 # Skill
 .opencode/
 opencode.json
