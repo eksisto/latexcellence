@@ -22,6 +22,7 @@ import asyncio
 import copy
 import time
 import uuid
+from collections import Counter
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, ClassVar, Optional
@@ -313,9 +314,9 @@ class BaseParagraphCheckService:
 
         子类可覆写此方法以自定义单段检查逻辑（如 formatting 无 marker 保护）。
         """
-        input_markers: set[str] = set()
+        input_markers: list[str] = []
         if self.use_marker_protection:
-            input_markers = set(MARKER_PATTERN.findall(text))
+            input_markers = MARKER_PATTERN.findall(text)
 
         messages = [
             {"role": "system", "content": self._get_system_prompt()},
@@ -339,15 +340,29 @@ class BaseParagraphCheckService:
             output_text = getattr(validated, self._output_field)
 
             if self.use_marker_protection:
-                output_markers = set(MARKER_PATTERN.findall(output_text))
-                missing = input_markers - output_markers
-                extra = output_markers - input_markers
+                output_markers = MARKER_PATTERN.findall(output_text)
+                in_cnt = Counter(input_markers)
+                out_cnt = Counter(output_markers)
 
-                if missing or extra:
+                # 1) 计数校验：拦截 marker 缺失、多余、重复
+                if in_cnt != out_cnt:
                     self._logger.warning(
-                        f"Paragraph {idx} in {file_path}: marker mismatch — "
-                        f"missing={len(missing)}, extra={len(extra)}. "
+                        f"Paragraph {idx} in {file_path}: marker count/multiplicity "
+                        f"mismatch (input={len(input_markers)}, "
+                        f"output={len(output_markers)}). "
                         f"Falling back to original text."
+                    )
+                    return self._make_fallback(
+                        idx, text, original_text, file_path,
+                        marker_error=True,
+                    )
+
+                # 2) 顺序校验：拦截 marker 重排/错位
+                #    （纯文本被移动但 marker 序列不变属合法编辑，不应误伤）
+                if input_markers != output_markers:
+                    self._logger.warning(
+                        f"Paragraph {idx} in {file_path}: marker order mismatch "
+                        f"(reordered markers). Falling back to original text."
                     )
                     return self._make_fallback(
                         idx, text, original_text, file_path,

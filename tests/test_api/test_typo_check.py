@@ -280,6 +280,69 @@ class TestCheckOneParagraph:
         assert result.get("marker_error") is True
 
     @pytest.mark.asyncio
+    async def test_duplicated_marker_falls_back(self, mock_llm, service):
+        """LLM 重复同一个 marker（计数不一致）→ 回退。"""
+        plain = r"Text __CMD_0001__ and __CMD_0002__ end."
+        original_tex = r"Text \textbf{and} \textit{end.}"
+
+        # marker __CMD_0001__ 在输出中出现两次
+        mock_llm.chat = AsyncMock(return_value={
+            "paragraph_index": 0,
+            "original": plain,
+            "corrected": r"Text __CMD_0001__ and __CMD_0001__ end.",
+            "changes": [],
+        })
+
+        result = await service._check_one_paragraph(
+            mock_llm, 0, 0, plain, original_tex, "main.tex"
+        )
+
+        assert result["corrected"] == plain
+        assert result.get("marker_error") is True
+
+    @pytest.mark.asyncio
+    async def test_reordered_markers_falls_back(self, mock_llm, service):
+        """LLM 交换两个 marker 的顺序（重排）→ 回退。"""
+        plain = r"__CMD_0001__ before __CMD_0002__ after."
+        original_tex = r"\textbf{before} \textit{after.}"
+
+        # 输出中两个 marker 顺序互换
+        mock_llm.chat = AsyncMock(return_value={
+            "paragraph_index": 0,
+            "original": plain,
+            "corrected": r"__CMD_0002__ before __CMD_0001__ after.",
+            "changes": [],
+        })
+
+        result = await service._check_one_paragraph(
+            mock_llm, 0, 0, plain, original_tex, "main.tex"
+        )
+
+        assert result["corrected"] == plain
+        assert result.get("marker_error") is True
+
+    @pytest.mark.asyncio
+    async def test_pure_text_move_preserves_markers_passes(self, mock_llm, service):
+        """纯文本被移动但 marker 序列不变（合法编辑）→ 正常通过。"""
+        plain = r"__CMD_0001__ word1 __CMD_0002__ word2."
+        original_tex = r"\textbf{word1} \textit{word2.}"
+
+        # 纯文本 word1/word2 互换，marker 序列保持原顺序
+        mock_llm.chat = AsyncMock(return_value={
+            "paragraph_index": 0,
+            "original": plain,
+            "corrected": r"__CMD_0001__ word2 __CMD_0002__ word1.",
+            "changes": [],
+        })
+
+        result = await service._check_one_paragraph(
+            mock_llm, 0, 0, plain, original_tex, "main.tex"
+        )
+
+        assert result.get("marker_error") is not True
+        assert result["corrected"] == r"__CMD_0001__ word2 __CMD_0002__ word1."
+
+    @pytest.mark.asyncio
     async def test_pydantic_validation_retry_exhausted(self, mock_llm, service):
         """LLM 连续返回不合规 JSON → 最终回退到原始文本。"""
         plain = "Some text."
