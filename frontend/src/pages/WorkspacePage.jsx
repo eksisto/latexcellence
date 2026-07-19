@@ -99,7 +99,12 @@ export default function WorkspacePage() {
       setFileTree(data.file_tree);
       setMainFile(data.main_file);
       setActiveFile(data.main_file);
-      setParagraphs([]);
+      try {
+        const p = await api.project.paragraphs(data.main_file, workspaceId);
+        setParagraphs(p.paragraphs || []);
+      } catch {
+        setParagraphs([]);
+      }
       toast.success("项目已打开", { description: data.root_path });
     } catch (e) {
       setError(e.message);
