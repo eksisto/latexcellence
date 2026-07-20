@@ -147,11 +147,15 @@ function MessageBubble({ message, actions }) {
           <div className="text-sm">
             {/* 深度思考折叠框 */}
             {message.thinkingContent && (
-              <div className="mb-2 rounded bg-background/30 border border-border p-2">
+              <div
+                className="mb-2 rounded bg-background/30 border p-2"
+                style={{ borderColor: "color-mix(in oklch, var(--primary) 20%, transparent)" }}
+              >
                 <button
                   type="button"
-                  className="cursor-pointer text-xs font-medium text-amber-600 dark:text-amber-400 flex items-center gap-1 select-none w-full text-left"
+                  className="cursor-pointer text-xs font-medium flex items-center gap-1 select-none w-full text-left"
                   onClick={() => setThinkingExpanded((v) => !v)}
+                  style={{ color: "color-mix(in oklch, var(--primary) 75%, transparent)" }}
                 >
                   <Lightbulb className="size-3 shrink-0" />
                   深度思考
