@@ -65,6 +65,7 @@
 |---|---|---|
 | 霞鹜文楷 | OFL-1.1 license | [lxgw/LXGW WenKai](https://github.com/lxgw/LxgwWenKai) |
 | Noto Sans SC | SIL Open Font License 1.1 | [Google Fonts](https://fonts.adobe.com/fonts/noto-sans-sc) |
+| JetBrains Mono | SIL Open Font License 1.1 | [JetBrains](https://www.jetbrains.com/lp/mono) |
 
 ## 五、系统级外部依赖
 
