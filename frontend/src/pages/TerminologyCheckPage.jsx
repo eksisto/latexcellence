@@ -98,7 +98,7 @@ export default function TerminologyCheckPage() {
       (a, b) => b.original.length - a.original.length
     );
     for (const change of sorted) {
-      const key = `${result.paragraph_index}:${change.original}`;
+      const key = `${result.file_path || activeFile}:${result.paragraph_index}:${change.original}`;
       const replacement = overrides?.[key] ?? change.corrected;
       if (replacement && change.original !== replacement) {
         corrected = corrected.split(change.original).join(replacement);
@@ -137,10 +137,10 @@ export default function TerminologyCheckPage() {
         changes,
         operation_id: operationId?.current || null,
       }, workspaceId);
-      const appliedIndices = new Set(pending.map((r) => r.paragraph_index));
+      const appliedKeys = new Set(pending.map((r) => `${r.file_path || activeFile}:${r.paragraph_index}`));
       useStore.setState((state) => ({
         terminologyResults: state.terminologyResults.filter(
-          (r) => !appliedIndices.has(r.paragraph_index)
+          (r) => !appliedKeys.has(`${r.file_path || activeFile}:${r.paragraph_index}`)
         ),
       }));
       toast.success(`已批量应用 ${pending.length} 个段落的修改`, {
@@ -242,7 +242,7 @@ export default function TerminologyCheckPage() {
               <>
                 <ul className="space-y-2">
                   {result.changes.map((change, i) => {
-                    const cKey = `${result.paragraph_index}:${change.original}`;
+                    const cKey = `${result.file_path || activeFile}:${result.paragraph_index}:${change.original}`;
                     return (
                       <li
                         key={i}
