@@ -289,6 +289,26 @@ raise ValueError("Validation failed after N attempts")        # ❌ 耗尽
 
 详细解析流水线、受保护环境列表、命令解析策略参见 [DESIGN.md §2](../DESIGN.md#23-解析流水线)。
 
+### `latex_package_analyzer.py` — LaTeX 宏包分析器
+
+**设计理念**：独立于具体业务模块的通用组件，分析 LaTeX 代码所使用的命令/环境，判断需要哪些额外宏包支持。目前被表格 OCR 模块在第二次 LLM 调用中使用，其他需要自动检测宏包依赖的场景也可复用。
+
+**核心接口**：
+
+| 函数 | 功能 |
+|---|---|
+| `analyze_latex_packages(latex_code, llm)` | 异步调用 LLM 分析 LaTeX 代码，返回宏包名称列表（`list[str]`）。LLM 调用失败时优雅降级，返回空列表 |
+| `packages_to_comments(packages)` | 将宏包名称列表转换为 LaTeX 注释格式，每行形如 `% \usepackage{booktabs}` |
+
+**Pydantic 模型**：
+
+```python
+class LatexPackageAnalysis(BaseModel):
+    packages: list[str]  # 空列表表示不需要特定宏包
+```
+
+**降级策略**：LLM 调用或 JSON 校验失败 → 记录 `warning` 日志 → 返回空列表，不影响主流程。
+
 ### `input_resolver.py` — \input/\include 递归解析器
 
 **设计理念**：许多 LaTeX 项目使用 `\input{}` / `\include{}` / `\subfile{}` 将文档拆分为多个 `.tex` 文件。段落处理模块默认只分析用户选中的单个文件，开启 `resolve_input` 后，系统会递归展开所有引用的子文件，将它们的段落一并送入 LLM 处理。

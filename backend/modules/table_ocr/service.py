@@ -4,8 +4,9 @@
 流程：
     1. 校验图片格式（PNG/JPEG/WebP）和大小
     2. 预处理：超过 2000px 的边等比缩放到 2000px
-    3. 转为 base64 发送给 LLM Vision API
-    4. 返回 LaTeX 表格浮动体代码 + 置信度
+    3. 转为 base64 发送给 LLM Vision API（第一次 LLM 调用）
+    4. 获取返回的 LaTeX 表格代码后，调用 LaTeX 宏包分析器（第二次 LLM 调用）
+    5. 将宏包注释前置到 LaTeX 代码中，返回合并结果
 """
 
 import base64
@@ -19,6 +20,7 @@ from backend.core.logger import get_logger
 from backend.core.llm_client import get_llm_client
 from backend.core.config import get_config
 from backend.utils.json_utils import retry_with_validation
+from backend.utils.latex_package_analyzer import analyze_latex_packages, packages_to_comments
 
 
 class TableOCRResult(BaseModel):
@@ -44,9 +46,7 @@ _TABLE_OCR_SYSTEM_PROMPT = (
     "No fabrication or omission of any text or data. "
     "Mathematical formulas, superscripts/subscripts, Greek letters in text must use correct LaTeX math mode.\n"
     "5. Special symbols (%, &, _, #, ~, etc.) must be properly escaped.\n"
-    "6. Include required packages as LaTeX comments at the top "
-    "(e.g., % \\usepackage{booktabs}, % \\usepackage{multirow}, % \\usepackage{makecell}).\n"
-    "7. Set 'confidence' based on recognition quality:\n"
+    "6. Set 'confidence' based on recognition quality:\n"
     "  * 0.9-1.0: Clear, confident recognition\n"
     "  * 0.7-0.9: Mostly clear, minor uncertainties\n"
     "  * 0.5-0.7: Partially clear, some guesses\n"
@@ -96,7 +96,21 @@ class TableOCRService:
             }
 
         llm = get_llm_client()
-        return await self._recognize_with_llm(llm, base64_image, content_type)
+        result = await self._recognize_with_llm(llm, base64_image, content_type)
+
+        # 第二步：分析 LaTeX 代码所需的宏包
+        if result.get("latex"):
+            packages = await analyze_latex_packages(result["latex"], llm)
+            if packages:
+                package_comments = packages_to_comments(packages)
+                result["latex"] = package_comments + "\n" + result["latex"]
+                self._logger.info(
+                    f"Detected packages: {packages} for table OCR result"
+                )
+            else:
+                self._logger.debug("No special packages detected for table OCR result")
+
+        return result
 
     async def _recognize_with_llm(
         self, llm, base64_image: str, content_type: str

@@ -3,7 +3,7 @@ table_ocr 模块集成测试。
 """
 
 import io
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from pydantic import ValidationError
@@ -19,11 +19,19 @@ def service():
     return TableOCRService()
 
 
+@pytest.fixture
+def mock_llm():
+    llm = MagicMock()
+    llm.chat = AsyncMock()
+    return llm
+
+
 class TestTableOCRResultModel:
     """TableOCRResult 模型校验测试。"""
 
     def test_valid(self):
-        data = {"latex": r"\begin{table}[htbp]\centering\begin{tabular}{cc}\toprule A & B \\\midrule 1 & 2 \\\bottomrule\end{tabular}\end{table}", "confidence": 0.95}
+        data = {
+            "latex": r"\begin{table}[htbp]\centering\begin{tabular}{cc}\toprule A & B \\\midrule 1 & 2 \\\bottomrule\end{tabular}\end{table}", "confidence": 0.95}
         result = TableOCRResult.model_validate(data)
         assert result.confidence == 0.95
 
@@ -101,13 +109,7 @@ class TestPreprocess:
 
 
 class TestRecognize:
-    """LLM 调用测试。"""
-
-    @pytest.fixture
-    def mock_llm(self):
-        llm = MagicMock()
-        llm.chat = AsyncMock()
-        return llm
+    """第一次 LLM 调用测试。"""
 
     @pytest.mark.asyncio
     async def test_successful_recognition(self, mock_llm, service, minimal_png):
@@ -145,3 +147,109 @@ class TestRecognize:
             await service._recognize_with_llm(mock_llm, png, "image/png")
 
         assert mock_llm.chat.call_count == 3
+
+
+class TestRecognizeWithPackageAnalysis:
+    """完整流水线测试（第一次 LLM 识别 + 第二次宏包分析）。"""
+
+    @pytest.fixture(autouse=True)
+    def _mock_get_llm_client(self, mock_llm, monkeypatch):
+        """将 get_llm_client() 返回 mock_llm，避免调用真实 LLM。"""
+        monkeypatch.setattr(
+            "backend.modules.table_ocr.service.get_llm_client",
+            lambda: mock_llm,
+        )
+
+    @pytest.mark.asyncio
+    async def test_with_packages_detected(self, mock_llm, service, monkeypatch):
+        """第一次返回表格代码，第二次返回宏包列表 → 结果含注释。"""
+        mock_llm.chat.side_effect = [
+            {
+                "latex": (
+                    r"\begin{table}[htbp]\centering"
+                    r"\begin{tabular}{lr}\toprule Name & Value \\"
+                    r"\midrule A & 10 \\\bottomrule\end{tabular}\end{table}"
+                ),
+                "confidence": 0.95,
+            },
+            {"packages": ["booktabs"]},
+        ]
+
+        import backend.core.config as cfg_mod
+        cfg = cfg_mod.get_config()
+        monkeypatch.setattr(cfg.features.table_ocr, "max_image_size_mb", 100)
+
+        from PIL import Image
+        img = Image.new("RGB", (100, 50), (255, 255, 255))
+        buf = io.BytesIO()
+        img.save(buf, format="PNG")
+        buf.seek(0)
+
+        result = await service.recognize(buf.read(), "image/png")
+
+        assert result["confidence"] == 0.95
+        assert r"% \usepackage{booktabs}" in result["latex"]
+        assert r"\toprule" in result["latex"]
+        latex_part = result["latex"].split("\n")
+        assert latex_part[0] == r"% \usepackage{booktabs}"
+
+    @pytest.mark.asyncio
+    async def test_without_packages(self, mock_llm, service, monkeypatch):
+        """第一次返回表格代码，第二次返回空列表 → 无注释。"""
+        mock_llm.chat.side_effect = [
+            {
+                "latex": (
+                    r"\begin{table}[htbp]\centering"
+                    r"\begin{tabular}{lr}\hline Name & Value \\"
+                    r"\hline A & 10 \\\hline\end{tabular}\end{table}"
+                ),
+                "confidence": 0.90,
+            },
+            {"packages": []},
+        ]
+
+        import backend.core.config as cfg_mod
+        cfg = cfg_mod.get_config()
+        monkeypatch.setattr(cfg.features.table_ocr, "max_image_size_mb", 100)
+
+        from PIL import Image
+        img = Image.new("RGB", (100, 50), (255, 255, 255))
+        buf = io.BytesIO()
+        img.save(buf, format="PNG")
+        buf.seek(0)
+
+        result = await service.recognize(buf.read(), "image/png")
+
+        assert result["confidence"] == 0.90
+        assert not result["latex"].startswith(r"%")
+
+    @pytest.mark.asyncio
+    async def test_package_analysis_fails_gracefully(self, mock_llm, service, monkeypatch):
+        """第二次 LLM 调用失败 → 返回原始表格代码（优雅降级）。"""
+        mock_llm.chat.side_effect = [
+            {
+                "latex": (
+                    r"\begin{table}[htbp]\centering"
+                    r"\begin{tabular}{lr}\toprule A & B \\"
+                    r"\midrule 1 & 2 \\\bottomrule\end{tabular}\end{table}"
+                ),
+                "confidence": 0.92,
+            },
+            RuntimeError("API error"),
+        ]
+
+        import backend.core.config as cfg_mod
+        cfg = cfg_mod.get_config()
+        monkeypatch.setattr(cfg.features.table_ocr, "max_image_size_mb", 100)
+
+        from PIL import Image
+        img = Image.new("RGB", (100, 50), (255, 255, 255))
+        buf = io.BytesIO()
+        img.save(buf, format="PNG")
+        buf.seek(0)
+
+        result = await service.recognize(buf.read(), "image/png")
+
+        assert result["confidence"] == 0.92
+        assert r"\toprule" in result["latex"]
+        assert not result["latex"].startswith(r"%")
