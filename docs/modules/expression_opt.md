@@ -37,7 +37,7 @@ class ExpressionOptResult(BaseModel):
 | `preview_paragraphs(file_path, resolve_input, workspace_id)` | 提取段落 + 剥离 LaTeX + 缓存 marker_map |
 | `optimize(file_path, paragraph_indices, resolve_input, workspace_id)` | 异步：分批并发调用 LLM 优化表达，返回所有结果 |
 | `optimize_stream(file_path, resolve_input, workspace_id)` | 异步生成器：逐段 yield SSE 事件 |
-| `apply_changes(file_path, changes, workspace_id, operation_id)` | 还原 marker + 原子写回源文件 |
+| `apply_changes(file_path, changes, workspace_id, operation_id)` | 还原 marker + 原子写回源文件；marker_map 缺失时跳过该段并返回 `errors` |
 | `_build_system_prompt()` | 合并基础 prompt + 激活的自定义 prompt |
 
 ## System Prompt 核心约束

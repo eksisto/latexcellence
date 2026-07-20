@@ -346,11 +346,19 @@ export default function useParagraphCheck({
   const handleApplyChange = useCallback(
     async (idx, newText, filePath) => {
       try {
-        await apiModule.apply({
+        const result = await apiModule.apply({
           file_path: activeFile,
           changes: [{ paragraph_index: idx, new_text: newText, file_path: filePath || activeFile }],
           operation_id: operationIdRef.current,
         }, workspaceId);
+        const hadErrors = result.errors && result.errors.length > 0;
+        if (hadErrors) {
+          const reasons = result.errors.map((e) => translateError(e.reason)).join("、");
+          const msg = `建议重新执行检查后再次应用（原因：${reasons}）`;
+          setError(msg);
+          toast.error("修改未能应用", { description: msg });
+          return;
+        }
         setMessage(messages.applySuccess(idx));
         toast.success(messages.applySuccess(idx));
         // 从结果中移除已应用的段落，保留其余结果
@@ -401,19 +409,40 @@ export default function useParagraphCheck({
           new_text: r[correctedTextField],
           file_path: r.file_path || activeFile,
         }));
-        await apiModule.apply({ file_path: activeFile, changes, operation_id: operationIdRef.current }, workspaceId);
+        const result = await apiModule.apply({ file_path: activeFile, changes, operation_id: operationIdRef.current }, workspaceId);
+
+        const skippedIndices = new Set();
+        if (result.errors && result.errors.length > 0) {
+          for (const e of result.errors) {
+            skippedIndices.add(`${e.file_path || activeFile}:${e.paragraph_index}`);
+          }
+        }
+
         const appliedKeys = new Set(
           pending.map((r) => `${r.file_path || activeFile}:${r.paragraph_index}`)
         );
+        for (const key of skippedIndices) {
+          appliedKeys.delete(key);
+        }
         setResults((prev) =>
           prev.filter(
             (r) =>
               !appliedKeys.has(`${r.file_path || activeFile}:${r.paragraph_index}`)
           )
         );
-        toast.success(messages.applyAllSuccess(pending.length), {
-          id: toastId,
-        });
+
+        const appliedCount = appliedKeys.size;
+        const skippedCount = skippedIndices.size;
+
+        if (skippedCount > 0) {
+          const msg = `已应用 ${appliedCount} 个段落，${skippedCount} 个跳过（建议重新检查）`;
+          setError(msg);
+          toast.warning(msg, { id: toastId });
+        } else {
+          toast.success(messages.applyAllSuccess(appliedCount), {
+            id: toastId,
+          });
+        }
       } catch (e) {
         setError(e.message);
         toast.error("批量应用失败", {

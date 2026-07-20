@@ -20,6 +20,9 @@ const EXACT_MAP = {
   "No API key configured": "未配置 API 密钥，LLM 功能不可用",
   "Max retries exceeded": "请求次数超限，请稍后重试",
 
+  // 段落应用错误
+  "marker_map_missing": "标记映射丢失",
+
   // 参数校验
   "Empty reference example": "参考文献示例不能为空",
   "Empty metadata": "元数据不能为空",

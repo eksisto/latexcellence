@@ -155,12 +155,12 @@ class ProjectInfo:
 | `_build_success_result(idx, validated, original_text, file_path, plain_text)` | 构建成功结果对象 |
 | `preview_paragraphs(file_path, resolve_input)` | 预览段落：提取 → marker 替换 → 返回纯文本 |
 | `_run_batch_check()` / `_run_stream_check()` | 执行检查：批量发送给 LLM → SSE 流式返回 → 校验 |
-| `apply_changes(file_path, changes, workspace_id, operation_id)` | 应用修改：还原 marker → MD5 校验 → 原子写入 |
+| `apply_changes(file_path, changes, workspace_id, operation_id)` | 应用修改：还原 marker → MD5 校验 → 原子写入；marker_map 缺失时跳过该段并返回 `errors` |
 
 **关键设计**：
 
 - **ApplyChangeItem 共享模型**（`paragraph_index`, `new_text`, `file_path`）：四个模块 router 层 apply 接口统一使用
-- **CheckOperationContext 操作上下文**：每次 preview/check 生成唯一 `operation_id`，深拷贝 `marker_maps` 存入 `_operation_contexts` 字典；apply 时通过 `operation_id` 取回上下文还原 marker，避免并发请求或重启导致 marker 映射丢失
+- **CheckOperationContext 操作上下文**：每次 preview/check 生成唯一 `operation_id`，深拷贝 `marker_maps` 存入 `_operation_contexts` 字典；apply 时通过 `operation_id` 取回上下文还原 marker。若 context 丢失（过期/重启/新操作覆盖），逐段检测 `marker_map` 缺失时跳过写入并返回 `errors`，防止字面 marker 污染文件
 - **类变量控制差异**：
   - `_output_field`: 结果字段名（`"corrected"` 或 `"optimized"`）
   - `use_marker_protection`: 是否启用 marker 保护（formatting 为 `False`）

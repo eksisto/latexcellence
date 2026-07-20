@@ -594,10 +594,11 @@ class BaseParagraphCheckService:
             operation_id: 检查操作 ID，用于查找对应的 marker 映射
 
         返回：
-            { applied: N, total: M }
+            { applied: N, total: M, errors: [...] }
         """
         pm = get_project_manager_for_workspace(workspace_id)
         applied = 0
+        errors: list[dict[str, Any]] = []
 
         context = None
         if operation_id:
@@ -618,7 +619,19 @@ class BaseParagraphCheckService:
                     file_maps = context.marker_maps.get(target_file, {})
                 else:
                     file_maps = self._marker_maps.get(target_file, {})
-                marker_map = file_maps.get(idx, {})
+                marker_map = file_maps.get(idx)
+                if marker_map is None:
+                    self._logger.error(
+                        f"Marker map lost for paragraph {idx} in "
+                        f"{target_file} [op={operation_id or 'legacy'}], "
+                        f"skipping to prevent literal marker corruption"
+                    )
+                    errors.append({
+                        "paragraph_index": idx,
+                        "file_path": target_file,
+                        "reason": "marker_map_missing",
+                    })
+                    continue
                 restored = self._parser.restore_from_markers(
                     new_text, marker_map
                 )
@@ -632,7 +645,7 @@ class BaseParagraphCheckService:
                 f" [op={operation_id or 'legacy'}]"
             )
 
-        return {"applied": applied, "total": len(changes)}
+        return {"applied": applied, "total": len(changes), "errors": errors}
 
     # ── Hook 方法（子类必须实现）───────────────────────────────────────────
 

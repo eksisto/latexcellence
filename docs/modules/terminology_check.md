@@ -102,7 +102,7 @@ You are a terminology consistency analyzer for academic documents.
 | `preview_paragraphs(file_path, resolve_input, workspace_id)` | 同步：提取段落 + 剥离 LaTeX + 缓存 marker_map |
 | `check_terminology(file_path, paragraph_indices, resolve_input, workspace_id)` | 异步：三步走流程（提取 → 聚类 → 生成结果） |
 | `check_terminology_stream(file_path, resolve_input, workspace_id)` | 异步生成器：提取阶段逐段 yield progress，聚类后 yield 所有 result |
-| `apply_changes(file_path, changes, workspace_id, operation_id)` | 同步：还原 marker + 原子写回 |
+| `apply_changes(file_path, changes, workspace_id, operation_id)` | 同步：还原 marker + 原子写回；marker_map 缺失时跳过该段并返回 `errors` |
 | `_build_results(all_para_data, all_terms, clusters)` | 程序解析聚类结果，为每个段落生成修正文本 |
 | `_build_results_no_llm(all_para_data)` | 无 LLM 降级：返回段落术语标签，不生成 changes |
 

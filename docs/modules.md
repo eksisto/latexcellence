@@ -74,7 +74,7 @@
 2. Apply 时：前端回传 `operation_id` → 查找对应上下文 → 使用上下文中的 `marker_maps` 还原 marker → 写回文件
 3. 上下文过期后自动清理（TTL 1 小时）
 
-此机制将请求相关状态从服务单例字段（`_marker_maps`）中解耦，避免并发请求或重启后 marker 映射丢失导致字面 marker 写入 `.tex` 文件。
+此机制将请求相关状态从服务单例字段（`_marker_maps`）中解耦，避免并发请求或重启后 marker 映射丢失导致字面 marker 写入 `.tex` 文件。即使 context 丢失，apply_changes 也会逐段检测 `marker_map`，缺失时跳过写入并返回 `errors`，前端据此保留未应用项并提示重新检查。
 
 ### Marker 保护策略
 

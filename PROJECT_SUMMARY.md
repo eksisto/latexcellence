@@ -96,14 +96,14 @@ latexcellence/
 
 - **BaseParagraphCheckService**: 四个逐段检查模块（typo_check / expression_opt / formatting / terminology_check）共享的基类，封装文件解析、marker 替换、LLM 编排（批量+流式）、结果写回等流程。子类通过 6 个 hooks（_get_system_prompt / _build_user_content / _get_model_cls / _get_llm_params / _get_batch_size / _build_success_result）定制行为
 - **WorkspaceManager**: 多浏览器多工作区隔离，每个 workspace_id 拥有独立的 `LatexProject` 实例（项目状态、文件树、MD5 缓存、撤销栈完全隔离）
-- **Marker Protection**: LaTeX 结构 → `__CMD_NNNN__` / `__MATH_NNNN__` / `__ENV_NNNN__` / `__VERB_NNNN__` marker → LLM 只改纯文本 → 按长度降序还原
+- **Marker Protection**: LaTeX 结构 → `__CMD_NNNN__` / `__MATH_NNNN__` / `__ENV_NNNN__` / `__VERB_NNNN__` marker → LLM 只改纯文本 → 按长度降序还原。apply 时若 marker_map 缺失（context 过期/重启/新操作覆盖），跳过该段写入并返回 `errors`，防止字面 marker 污染 `.tex` 文件；前端据此保留未应用项并提示用户重新检查
 - **JSON Validation Pipeline**: `safe_parse_json()` → Pydantic `.model_validate()` → `retry_with_validation()` (最多 3 次重试 + 错误反馈)
 - **SSE Streaming**: 所有段落检查模块通过 Server-Sent Events 推送 `progress`/`result`/`error`/`done` 事件
 - **useParagraphCheck Hook**: TypoCheck/ExpressionOpt/Formatting/TerminologyCheck 4 页共享同一 hook 封装流程
 - **useEnabledFeatures Hook**: 从后端 `/api/config/status` 加载功能开关到 Zustand store，幂等（已加载则跳过）。WelcomePage 和 WorkspacePage 均调用此 hook，确保直接刷新任一页面时功能开关均可用
 - **Zustand Persist**: `partialize` 选择性持久化检查结果，支持刷新保留
 - **Multi-Theme**: `theme/` 目录下每个 CSS 文件定义一组完整配色（`[data-theme="xxx"]` light + dark），通过 `import.meta.glob` 自动发现，用户可在设置或顶栏下拉菜单中实时切换
-- **CheckOperationContext**: 每次 preview/check 生成唯一 `operation_id`，将 marker 映射和 MD5 快照深拷贝存入上下文（TTL 1 小时），apply 时通过 operation_id 精确还原。避免并发请求或重启后 marker 映射丢失导致字面 marker 写入 `.tex` 文件
+- **CheckOperationContext**: 每次 preview/check 生成唯一 `operation_id`，将 marker 映射和 MD5 快照深拷贝存入上下文（TTL 1 小时），apply 时通过 operation_id 精确还原。若 context 丢失（过期/重启/新操作覆盖），apply_changes 逐段检测 marker_map，缺失时跳过写入并返回 `errors` 列表，前端据此保留结果项并提示重新检查
 - **useUndoRedo Hook**: 基于后端每文件独立 undo/redo deque（最大 50 层）的撤销/重做状态管理，与 project_manager 同步
 - **useResultFilter Hook**: 检查结果排序与过滤逻辑封装——changes 非空优先、无建议在后、同类按 paragraph_index 升序
 - **useWritingChat Hook**: 写作助手聊天的完整生命周期管理（消息流式、thinking 标签解析、上下文压缩、会话持久化）

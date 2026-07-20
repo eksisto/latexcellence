@@ -478,6 +478,34 @@ class TestApplyChanges:
         assert "paragrafh" not in content
         assert "speling" not in content
 
+    def test_apply_skips_when_marker_map_missing(self, temp_project, service):
+        """marker_map 丢失时应跳过写入并返回 errors，而非静默写入字面 marker。"""
+        from backend.core.workspace_manager import get_project_manager_for_workspace
+
+        ws_id = "test-ws"
+        pm = get_project_manager_for_workspace(ws_id)
+        pm.open(str(temp_project))
+
+        # 不做 preview，直接用一个不存在的 operation_id 调 apply
+        fake_operation_id = "nonexistent-op-id"
+        result = service.apply_changes(
+            "main.tex",
+            [{"paragraph_index": 0, "new_text": r"__CMD_0001__ literal marker"}],
+            workspace_id=ws_id,
+            operation_id=fake_operation_id,
+        )
+
+        # 应用数为 0，errors 中有记录
+        assert result["applied"] == 0
+        assert result["total"] == 1
+        assert len(result["errors"]) == 1
+        assert result["errors"][0]["reason"] == "marker_map_missing"
+        assert result["errors"][0]["paragraph_index"] == 0
+
+        # 文件内容未被修改：字面 marker 不应出现在文件中
+        content = (temp_project / "main.tex").read_text(encoding="utf-8")
+        assert "__CMD_0001__" not in content
+
 
 class TestEmptyParagraphHandling:
     """空段落边界处理。"""

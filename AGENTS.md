@@ -151,3 +151,12 @@ LLM 输出**必须**经 `json_utils.py` 的 `retry_with_validation()` 处理：
 | 逐段检查结果显示顺序 | `changes` 非空优先；无建议在后；同类内部按 `paragraph_index` 升序；排序完成后再做过滤，保持有序 |
 | 逐段检查功能实现模式 | 必须用 `useParagraphCheck` hook 封装：恢复/文件选择/预览/检查优化/排序/应用/refresh 持久化；页面只传 API 模块与 store slice 配置；禁止在页面重复实现 |
 | 逐段检查前端交互约束 | 1）结果页用 `<MarkerText>` 渲染含 Marker（如 `__MATH_0001__`）的字符串展示友好标签；2）展开“查看原文”用 `<ParagraphContext>`（显示当前段落前后上下文） |
+
+### 前端错误消息翻译规范
+
+前端**必须**将所有后端返回的英文错误消息翻译为中文后再展示给用户：
+- **HTTP 请求层**：`api/index.js` 的 `request()` 已统一通过 `translateError()` 翻译错误。
+- **SSE 流**：`useParagraphCheck` / `useWritingChat` 等 hook 中 SSE 返回的 `data.message` 必须手动调用 `translateError()` 翻译。
+- **响应体字段**：API 响应 JSON 中嵌套的错误字段（如 `result.errors[].reason`）**不经过 `request()` 拦截**，必须在消费处手动调用 `translateError()` 翻译。
+- **新增后端错误时**：必须同步在 `frontend/src/utils/errorMessages.js` 中添加对应的翻译条目（`EXACT_MAP` 或 `PATTERN_MAP`）。
+- **禁止硬编码中文兜底**：不要在组件中写 `e.reason === "xxx" ? "中文" : e.reason` 这样的条件翻译，统一走 `errorMessages.js` 维护。
