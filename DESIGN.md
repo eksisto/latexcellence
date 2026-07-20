@@ -379,7 +379,7 @@ RS2（结构化编辑）:
        ↓ restore_from_markers()
   还原完整 LaTeX → 构造 unified diff → 附挂 EditOp
        ↓
-  用户点击"应用到 .tex"
+  用户点击"应用到 .tex"（可选：手动编辑后传递 new_latex）
        ↓ project_manager.apply_change()
   MD5 校验 → 原子写入
 ```

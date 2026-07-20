@@ -532,10 +532,15 @@ export default function useWritingChat() {
       }
       setApplyingMessageId(messageId);
       try {
-        await api.writingChat.applyEdit({
+        // 若有自定义文本（用户手动编辑），将其传递给后端
+        const payload = {
           session_id: writingChatCurrentSessionId,
           edit_message_id: messageId,
-        }, workspaceId);
+        };
+        if (customText.trim()) {
+          payload.new_latex = customText;
+        }
+        await api.writingChat.applyEdit(payload, workspaceId);
         setWritingChatMessages((prev) =>
           prev.map((m) =>
             m.id === messageId && m.edit_op

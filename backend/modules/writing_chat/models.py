@@ -108,6 +108,7 @@ class ApplyEditRequest(BaseModel):
     """应用某条 assistant 消息携带的 edit_op。"""
     session_id: str
     edit_message_id: str
+    new_latex: str | None = None
 
 
 class DeleteMessageRequest(BaseModel):

@@ -225,7 +225,8 @@ def _stream(chunks: list[StreamChunk]):
 
 class TestServiceSend:
     @pytest.mark.asyncio
-    async def test_send_streams_tokens_and_persists(self, temp_session_dir, open_project, service):
+    async def test_send_streams_tokens_and_persists(self, temp_session_dir, open_project, service, monkeypatch):
+        monkeypatch.setattr(get_config().llm, "api_key", "test-key")
         chunks = [
             StreamChunk(content="Hello", usage=None),
             StreamChunk(content=" world", usage=None),
@@ -256,6 +257,7 @@ class TestServiceSend:
 
     @pytest.mark.asyncio
     async def test_send_triggers_compression(self, temp_session_dir, open_project, service, monkeypatch):
+        monkeypatch.setattr(get_config().llm, "api_key", "test-key")
         # 先准备一条已超阈值的会话（含多条历史消息以便通过压缩最小消息数阈值）
         cfg = get_config().features.writing_chat
         monkeypatch.setattr(cfg, "compression_threshold_tokens", 100)
@@ -318,8 +320,9 @@ class TestServiceSend:
 class TestServiceEdit:
     @pytest.mark.asyncio
     async def test_generate_edit_raw_latex(
-        self, temp_session_dir, temp_project, open_project, service
+        self, temp_session_dir, temp_project, open_project, service, monkeypatch
     ):
+        monkeypatch.setattr(get_config().llm, "api_key", "test-key")
         # 选取含 LaTeX 命令的段落，直接发送原始 LaTeX 源码
         from backend.core.workspace_manager import get_project_manager_for_workspace
 
@@ -436,6 +439,93 @@ class TestServiceEdit:
         req = ApplyEditRequest(session_id=ctx.session_id, edit_message_id=am.id)
         result = service.apply_edit(req)
         assert result == {"applied": True, "already_applied": True}
+
+    def test_apply_edit_with_custom_latex_uses_custom_value(
+        self, temp_session_dir, temp_project, open_project, service
+    ):
+        # 测试当请求携带 new_latex（用户手动编辑内容）时，应优先使用该值
+        from backend.core.workspace_manager import get_project_manager_for_workspace
+
+        ws_id = "test-ws"
+        pm = get_project_manager_for_workspace(ws_id)
+        pm.open(str(temp_project))
+        ctx = ConversationContext.create_session(file_path="main.tex", scope="test")
+        ctx.append_user_message("instruction")
+        am = ctx.append_assistant_message("ok", tokens=5)
+
+        paragraphs = pm.get_paragraphs("main.tex")
+        para = next(p for p in paragraphs if "not very good" in p.text)
+        # edit_op.new_latex 是 LLM 建议的内容
+        llm_suggested_text = para.text.replace("not very good", "suboptimal")
+        # 用户手动编辑后的内容
+        user_custom_text = para.text.replace("not very good", "unsatisfactory")
+
+        ctx.attach_edit_op(
+            am.id,
+            EditOp(
+                file_path="main.tex",
+                paragraph_index=para.index,
+                original_latex=para.text,
+                new_latex=llm_suggested_text,
+            ),
+        )
+        ctx.save_to_disk()
+
+        # 请求中携带用户手动编辑的内容
+        req = ApplyEditRequest(
+            session_id=ctx.session_id,
+            edit_message_id=am.id,
+            new_latex=user_custom_text,
+        )
+        result = service.apply_edit(req, workspace_id="test-ws")
+        assert result["applied"] is True
+
+        content = (temp_project / "main.tex").read_text(encoding="utf-8")
+        # 应写入用户手动编辑的内容，而非 LLM 建议的内容
+        assert "not very good" not in content
+        assert "unsatisfactory" in content
+        assert "suboptimal" not in content
+
+    def test_apply_edit_without_custom_latex_falls_back_to_edit_op(
+        self, temp_session_dir, temp_project, open_project, service
+    ):
+        # 测试当请求不携带 new_latex 时，应使用 edit_op.new_latex（LLM 建议内容）
+        from backend.core.workspace_manager import get_project_manager_for_workspace
+
+        ws_id = "test-ws"
+        pm = get_project_manager_for_workspace(ws_id)
+        pm.open(str(temp_project))
+        ctx = ConversationContext.create_session(file_path="main.tex", scope="test")
+        ctx.append_user_message("instruction")
+        am = ctx.append_assistant_message("ok", tokens=5)
+
+        paragraphs = pm.get_paragraphs("main.tex")
+        para = next(p for p in paragraphs if "not very good" in p.text)
+        llm_suggested_text = para.text.replace("not very good", "suboptimal")
+
+        ctx.attach_edit_op(
+            am.id,
+            EditOp(
+                file_path="main.tex",
+                paragraph_index=para.index,
+                original_latex=para.text,
+                new_latex=llm_suggested_text,
+            ),
+        )
+        ctx.save_to_disk()
+
+        # 请求中不携带 new_latex
+        req = ApplyEditRequest(
+            session_id=ctx.session_id,
+            edit_message_id=am.id,
+        )
+        result = service.apply_edit(req, workspace_id="test-ws")
+        assert result["applied"] is True
+
+        content = (temp_project / "main.tex").read_text(encoding="utf-8")
+        # 应写入 LLM 建议的内容
+        assert "not very good" not in content
+        assert "suboptimal" in content
 
 
 # ── Delete / undo message via service ─────────────────────────────────────

@@ -73,6 +73,11 @@ class GenerateEditRequest(BaseModel): # RS2 请求
     paragraph_index: int
     instruction: str
 
+class ApplyEditRequest(BaseModel):     # 应用编辑请求
+    session_id: str
+    edit_message_id: str
+    new_latex: Optional[str] = None   # 用户手动编辑后的内容（可选，优先级高于 edit_op.new_latex）
+
 class RenameSessionRequest(BaseModel): # 会话重命名
     session_id: str
     title: str
@@ -121,7 +126,7 @@ class LlmSummaryResult(BaseModel):    # 压缩摘要 LLM JSON 输出
 | ---- | ---- |
 | `send(req, workspace_id)` (async iterator) | RS1 主聊天流：加载/创建会话（新会话自动绑定当前项目 scope）→ 追加 user 消息 → 压缩判定 → `chat_stream_with_usage` → SSE 推送 `token`/`compressed`/`done`/`error` 事件 → 落盘 assistant 消息（含 usage tokens）；`assistant_prompt` 注入系统提示词，不写入用户消息体 |
 | `generate_edit(req, workspace_id)` (awaitable) | RS2 编辑流：`strip_to_plain_text` → marker 一致性校验通过则 `restore_from_markers` 还原 → 构造 unified diff → 附挂 `EditOp` 到最近一条 assistant 消息 → 落盘 |
-| `apply_edit(req, workspace_id)` | 调用 `get_project_manager_for_workspace(workspace_id).apply_change(...)` → 把消息的 `edit_op.applied` 置 True 持久化 |
+| `apply_edit(req, workspace_id)` | 调用 `get_project_manager_for_workspace(workspace_id).apply_change(...)` → 把消息的 `edit_op.applied` 置 True 持久化；若请求携带 `new_latex`（用户手动编辑内容），优先使用该值而非 `edit_op.new_latex` |
 | `delete_message(req)` | 委托给 `ConversationContext.delete_message` 并落盘 |
 | `undo_message(req)` | 委托给 `ConversationContext.undo_message` 并落盘 |
 | `rename_session(session_id, title)` | 委托给 `ConversationContext.rename(title)` 并落盘 |
@@ -210,7 +215,7 @@ Prefix: `/api/writing-chat`, Tag: `writing_chat`
 - 深度思考折叠框：LLM 输出 `<thinking>...</thinking>` 标签时，前端 `parseThinking()` 解析为 `thinkingContent` + `displayContent`，渲染为可折叠的"深度思考"框（`<details>` 元素）；流式接收时保持展开并显示 spinner，收到 `</thinking>` 后自动折叠；页面刷新时 `processLoadedMessages()` 从 `content` 字段重新提取，保证刷新后思考框不丢失
 - 助手消息 hover 出现"生成编辑建议"按钮（需选了段落且该消息无 edit_op）和"撤回"按钮（summary 消息为"撤回还原"）；复制按钮 hover 显示
 - 用户消息 hover 出现"撤回"按钮
-- 编辑建议卡片：左原文右新文本（LaTeX 源码）+ 可展开的 unified diff + "手动编辑"切换（替换新文本为 textarea）+ "应用到 .tex"按钮（手动编辑时传递编辑后的 customText）
+- 编辑建议卡片：左原文右新文本（LaTeX 源码）+ 可展开的 unified diff + "手动编辑"切换（替换新文本为 textarea）+ "应用到 .tex"按钮（手动编辑时通过 `new_latex` 字段传递编辑后的 customText 给后端）
 - 支持任意消息"删除"精简上下文
 - 会话列表：双击会话名或点击 pencil 图标重命名（`PATCH /sessions/{id}/rename`）；hover 显示 pencil + trash 图标
 - 助手选择器：选择/新建/删除助手提示词（`/assistants` CRUD）；激活助手的提示词通过 `assistant_prompt` 字段注入系统提示词，不写入用户消息体
@@ -219,7 +224,7 @@ Prefix: `/api/writing-chat`, Tag: `writing_chat`
 
 ## 前端 `useWritingChat` hook
 
-封装：项目恢复、会话切换/新建/删除/重命名、文件段落切换、消息发送（fetch streaming + 手动 SSE 解析）、深度思考解析（`parseThinking` + `processLoadedMessages`）、生成编辑、应用编辑（支持手动微调 customText）、删除/撤回消息、助手管理（列表/新建/删除/激活）、压缩提示与状态同步。页面只传 store slice 配置，禁止在页面重复实现（遵循 AGENTS.md）。
+封装：项目恢复、会话切换/新建/删除/重命名、文件段落切换、消息发送（fetch streaming + 手动 SSE 解析）、深度思考解析（`parseThinking` + `processLoadedMessages`）、生成编辑、应用编辑（支持手动微调 customText，通过 `new_latex` 字段传递给后端确保写入用户编辑内容）、删除/撤回消息、助手管理（列表/新建/删除/激活）、压缩提示与状态同步。页面只传 store slice 配置，禁止在页面重复实现（遵循 AGENTS.md）。
 
 ### `parseThinking()` 流式解析
 
