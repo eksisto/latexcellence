@@ -164,10 +164,10 @@ function MessageBubble({ message, actions }) {
                       <Loader2 className="size-2.5 animate-spin" />
                     </span>
                   )}
-                  <ChevronDown className={`size-3 ml-auto transition-transform duration-300 ${thinkingExpanded ? "rotate-180" : ""}`} />
+                  <ChevronDown className={`size-3 ml-auto transition-transform duration-400 ${thinkingExpanded ? "rotate-180" : ""}`} />
                 </button>
                 <div
-                  className="grid transition-[grid-template-rows] duration-300 ease-in-out"
+                  className="grid transition-[grid-template-rows] duration-400 ease-in-out"
                   style={{ gridTemplateRows: thinkingExpanded ? "1fr" : "0fr" }}
                 >
                   <div className="overflow-hidden">
