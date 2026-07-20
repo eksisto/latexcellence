@@ -40,6 +40,9 @@ import { persist } from "zustand/middleware";
 const useStore = create(
   persist(
     (set) => ({
+      /* ===== 水合状态（不持久化） ===== */
+      hydrated: false,
+
       /* ===== 系统状态 ===== */
       enabledFeatures: null,
       setEnabledFeatures: (features) => set({ enabledFeatures: features }),
@@ -214,6 +217,11 @@ const useStore = create(
     }),
     {
       name: "latexcellence-project",
+      onRehydrateStorage: () => (state, error) => {
+        if (!error) {
+          useStore.setState({ hydrated: true });
+        }
+      },
       partialize: (state) => ({
         workspaceId: state.workspaceId,
         projectPath: state.projectPath,

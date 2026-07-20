@@ -171,13 +171,6 @@ export default function useWritingChat() {
     loadParagraphs();
   }, [loadParagraphs]);
 
-  // ── 页面刷新：自动加载上次选中的会话 ──────────────────────────
-  useEffect(() => {
-    if (writingChatCurrentSessionId && writingChatMessages.length === 0) {
-      selectSession(writingChatCurrentSessionId);
-    }
-  }, []); // 仅挂载时执行
-
   // ── 切换会话 ─────────────────────────────────────────────────────
   const selectSession = useCallback(
     async (sessionId) => {
@@ -217,6 +210,14 @@ export default function useWritingChat() {
       setWritingChatCompressed,
     ]
   );
+
+  // ── 页面刷新：水合完成后自动加载上次选中的会话 ──────────────────
+  const hydrated = useStore((s) => s.hydrated);
+  useEffect(() => {
+    if (hydrated && writingChatCurrentSessionId && writingChatMessages.length === 0) {
+      selectSession(writingChatCurrentSessionId);
+    }
+  }, [hydrated, writingChatCurrentSessionId, writingChatMessages.length, selectSession]);
 
   // ── 新建会话 ─────────────────────────────────────────────────────
   const newSession = useCallback(() => {

@@ -30,8 +30,13 @@
 使用 Zustand 5 + `persist` 中间件管理全局状态，持久化键为 `"latexcellence-project"`。
 setter 支持 function updater 模式（`typeof value === "function"` 检测），兼容 `set(prev => ...)` 写法。
 
+持久化水合是异步的。store 通过 `onRehydrateStorage` 回调设置 `hydrated: true`，组件可订阅该状态以确保在水合完成后再读取持久化值（如 `writingChatCurrentSessionId`）。
+
 ```javascript
 {
+  // 水合状态（不持久化）
+  hydrated: false,                // persist 水合是否完成
+
   // 功能开关（从 config 读取）
   enabledFeatures: null,         // { workspace, typo_check, expression_opt, formula_ocr, table_ocr, template_gen, formatting, compile, git_diff, markdown_converter, style_modify, terminology_check, writing_chat, bib_manager }
 
@@ -227,7 +232,7 @@ api.writingChat.assistants.list() / .load(name) / .save(name, content) / .delete
 | ---------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `useParagraphCheck.js` | 封装逐段 LLM 检查功能的公共逻辑（项目恢复、文件选择、预览、检查/优化、排序、暂停/继续/停止、应用、refresh 持久化）。支持 `resolveInput` 多文件模式（展开 `\input`）。供 `TypoCheckPage`、`ExpressionOptPage`、`FormattingPage` 和 `TerminologyCheckPage` 共享调用。 |
 | `useEnabledFeatures.js` | 从后端 `/api/config/status` 加载功能开关（`enabledFeatures`）到 Zustand store。幂等：已加载则跳过请求。供 `WelcomePage` 和 `WorkspacePage` 共享调用，确保直接刷新任一页面时功能开关均可用。 |
-| `useWritingChat.js`    | 封装写作助手 Chat 全部逻辑：会话管理（CRUD + 重命名）、SSE 流式发送、深度思考解析（`parseThinking` + `processLoadedMessages`）、生成编辑、应用编辑、助手提示词管理。供 `WritingChatPage` 调用。 |
+| `useWritingChat.js`    | 封装写作助手 Chat 全部逻辑：会话管理（CRUD + 重命名）、SSE 流式发送、深度思考解析（`parseThinking` + `processLoadedMessages`）、生成编辑、应用编辑、助手提示词管理。页面刷新时通过 store 的 `hydrated` 状态感知水合完成，再恢复上次会话。供 `WritingChatPage` 调用。 |
 | `useFavicon.js`        | 动态 favicon 切换：通过 `MutationObserver` 监听 `document.documentElement` 的 `class` 变化，在亮/暗模式间切换 `/favicon.svg` 和 `/favicon-dark.svg`。                       |
 | `useThemeManager.js`   | 多主题自发现 hook：通过 `import.meta.glob` 自动发现 `theme/` 目录下 CSS 主题文件，管理 `data-theme` 属性，提供 `getAvailableThemes()` 和 `useThemeManager()`。位于 `src/theme/` 目录。 |
 | `useTheme.js`          | 暗/亮主题切换 hook：读取 localStorage + 系统偏好，使用 View Transitions API 平滑切换 `<html>` 上的 `.dark` class。 |
