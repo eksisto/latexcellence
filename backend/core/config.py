@@ -20,12 +20,12 @@ import os
 from pathlib import Path
 
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class ServerConfig(BaseModel):
     """服务器配置"""
-    host: str = "0.0.0.0"              # 监听地址（0.0.0.0 表示所有网卡）
+    host: str = "0.0.0.0"               # 监听地址（0.0.0.0 表示所有网卡）
     port: int = 8000                    # HTTP 端口
     dev_mode: bool = True               # 是否开发模式（影响前端挂载方式）
     vite_dev_url: str = "http://localhost:5173"  # Vite dev server 地址
@@ -33,13 +33,13 @@ class ServerConfig(BaseModel):
 
 class LLMConfig(BaseModel):
     """大语言模型 API 配置"""
-    api_key: str = ""                   # OpenAI API Key（也可通过环境变量提供）
-    base_url: str = "https://api.openai.com/v1"  # API 端点（兼容第三方代理）
-    model: str = "gpt-4o"               # 模型名称
-    temperature: float = 0.3            # 生成温度（越低越确定，越高越创意）
-    max_tokens: int = 4096              # 单次生成最大 token 数
-    request_interval: float = 1.5       # 请求间隔（秒），避免触发 rate limit
-    max_concurrency: int = 5            # 最大并发 LLM 请求数（Semaphore）
+    api_key: str = ""                               # OpenAI API Key（也可通过环境变量提供）
+    base_url: str = "https://api.deepseek.com"  # API 端点（兼容第三方代理）
+    model: str = "deepseek-flash"                          # 模型名称
+    temperature: float = Field(0.3, le=2)           # 生成温度（越低越确定，越高越创意）
+    max_tokens: int = Field(4096, ge=1)             # 单次生成最大 token 数
+    request_interval: float = Field(1.5, ge=0)      # 请求间隔（秒），避免触发 rate limit
+    max_concurrency: int = Field(5, ge=1)           # 最大并发 LLM 请求数（Semaphore）
 
 
 class TypoCheckConfig(BaseModel):
