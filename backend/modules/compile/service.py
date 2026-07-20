@@ -19,44 +19,28 @@ from backend.core.workspace_manager import get_project_manager_for_workspace
 from backend.core.llm_client import get_llm_client
 from backend.core.config import get_config
 from backend.utils.json_utils import retry_with_validation
+from backend.utils.path_guard import resolve_project_path
 
 logger = get_logger(__name__)
-
-_VALID_FILE_EXTENSIONS = (".tex",)
 
 
 def _validate_main_file(main_file: str, project_root: Path) -> None:
     """
     校验 main_file 参数的合法性，防止参数注入和路径穿越。
 
-    校验规则：
-        1. 不为空 / 纯空白
-        2. 不以 '-' 开头（防止被 latexmk 解析为命令行 flag）
-        3. 不含 null 字节
-        4. 不含 '..' 路径段（防止路径穿越）
-        5. 必须以合法扩展名（.tex）结尾
-        6. 规范化后必须落在项目 root 目录内
+    使用 resolve_project_path 执行通用路径安全校验，
+    额外检查不以 '-' 开头（防止被 latexmk 解析为命令行 flag）。
     """
     if not main_file or not main_file.strip():
         raise ValueError("main_file 不能为空")
 
-    if "\x00" in main_file:
-        raise ValueError("main_file 包含非法字符")
-
     if main_file.lstrip().startswith("-"):
         raise ValueError("main_file 不能以 '-' 开头")
 
-    if ".." in Path(main_file).parts:
-        raise ValueError("main_file 不能包含 '..' 路径段")
-
-    if not any(main_file.lower().endswith(ext) for ext in _VALID_FILE_EXTENSIONS):
-        raise ValueError(
-            f"main_file 必须以 {'/'.join(_VALID_FILE_EXTENSIONS)} 结尾"
-        )
-
-    resolved = (project_root / main_file).resolve()
-    if not str(resolved).startswith(str(project_root.resolve())):
-        raise ValueError("main_file 解析后超出项目根目录范围")
+    resolve_project_path(
+        project_root, main_file,
+        allowed_suffixes=(".tex",),
+    )
 
 
 class CompileResult(BaseModel):

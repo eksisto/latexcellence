@@ -89,6 +89,14 @@ LLM 输出**必须**经 `json_utils.py` 的 `retry_with_validation()` 处理：
 - **错误处理**：快速失败 → 指数退避重试 → 日志后重抛。复用标准异常（`ValueError`/`RuntimeError`），**禁止自定义异常类**。
 - **日志**：使用 `get_logger(__name__)`。LLM 调用、文件读写、API 边界必须记录日志。
 
+### 路径安全（强制）
+
+- **唯一入口**：所有需要根据项目根目录拼接 `file_path` 的代码，**必须**调用 `backend/utils/path_guard.py` 的 `resolve_project_path(root, file_path, ...)` 函数。
+- **禁止绕过**：不得直接使用 `root / file_path`、`os.path.join(root, file_path)` 或手动 `resolve()` + `is_relative_to()` 拼接。
+- **可选参数**：`allowed_suffixes`（扩展名白名单，如 `(".tex",)`）和 `allow_symlink`（是否允许符号链接，默认 `False`）。
+- **符号链接检测**：使用 `os.path.islink()`（非 `Path.is_symlink()`）逐组件遍历检测，兼容路径不存在的情况。
+- **禁止行为**：不得在 `__init__` 中缓存路径结果，每次操作必须重新调用 `resolve_project_path()`。
+
 ### LaTeX 解析与正则
 
 - 编写 LaTeX 正则时，注意转义特殊字符（如 `%`, `&`, `_`, `#`）。

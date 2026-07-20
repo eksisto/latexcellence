@@ -22,6 +22,7 @@ from pydantic import BaseModel, ConfigDict
 from backend.core.config import get_config
 from backend.core.logger import get_logger
 from backend.core.workspace_manager import get_project_manager_for_workspace
+from backend.utils.path_guard import resolve_project_path
 
 
 logger = get_logger(__name__)
@@ -194,7 +195,7 @@ async def render_diff_pdf(
     """生成两个 Git 状态之间的差异高亮 PDF。"""
 
     context = await _get_project_context(workspace_id)
-    main_rel = _validate_project_path(main_file, require_tex=True)
+    main_rel = _validate_project_path(context.root, main_file, require_tex=True)
 
     await _validate_revision(context.git_root, base_ref)
     await _validate_revision(context.git_root, target_ref)
@@ -727,12 +728,14 @@ async def _get_optional_git_output(cwd: Path, args: list[str]) -> str:
     return result.stdout
 
 
-def _validate_project_path(value: str, require_tex: bool = False) -> str:
+def _validate_project_path(root: Path, value: str, *, require_tex: bool = False) -> str:
     normalized = _normalize_include_path(value)
     if normalized is None:
         raise ValueError("Invalid project-relative path")
-    if require_tex and not normalized.endswith(".tex"):
-        raise ValueError("Main file must be a .tex file")
+    kwargs: dict = {}
+    if require_tex:
+        kwargs["allowed_suffixes"] = (".tex",)
+    resolve_project_path(root, normalized, **kwargs)
     return normalized
 
 
@@ -740,13 +743,7 @@ def _normalize_include_path(value: str) -> str | None:
     normalized = value.strip().replace("\\", "/")
     if not normalized:
         return None
-    path = PurePosixPath(normalized)
-    if path.is_absolute():
-        return None
-    parts = path.parts
-    if any(part in ("..", "") for part in parts):
-        return None
-    return path.as_posix()
+    return normalized
 
 
 def _repo_path(project: ProjectContext, project_rel: str) -> str:

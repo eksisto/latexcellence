@@ -322,3 +322,45 @@ class TestGenerateBibtexRequest:
         }
         result = GenerateBibtexRequest.model_validate(data)
         assert result.existing_keys == ["key1"]
+
+
+class TestPathTraversal:
+    """bib_manager 路径穿越防护测试。"""
+
+    def test_read_bib_dotdot_rejected(self, temp_project, service):
+        from backend.core.workspace_manager import get_workspace_manager
+        wm = get_workspace_manager()
+        ws_id = "test_path_traversal"
+        pm = wm.get_or_create(ws_id)
+        pm.open(str(temp_project))
+        try:
+            with pytest.raises(ValueError, match="不能包含"):
+                service.read_bib_file("../../secret.tex", ws_id)
+        finally:
+            wm.remove(ws_id)
+
+    def test_save_bib_dotdot_rejected(self, temp_project, service):
+        from backend.core.workspace_manager import get_workspace_manager
+        wm = get_workspace_manager()
+        ws_id = "test_path_traversal_save"
+        pm = wm.get_or_create(ws_id)
+        pm.open(str(temp_project))
+        try:
+            with pytest.raises(ValueError, match="不能包含"):
+                service.save_bib_entry(
+                    "../../evil.bib", "@article{k}", "k", ws_id
+                )
+        finally:
+            wm.remove(ws_id)
+
+    def test_read_bib_non_bib_rejected(self, temp_project, service):
+        from backend.core.workspace_manager import get_workspace_manager
+        wm = get_workspace_manager()
+        ws_id = "test_path_traversal_ext"
+        pm = wm.get_or_create(ws_id)
+        pm.open(str(temp_project))
+        try:
+            with pytest.raises(ValueError, match="必须以"):
+                service.read_bib_file("main.tex", ws_id)
+        finally:
+            wm.remove(ws_id)

@@ -27,6 +27,7 @@ from backend.utils.file_ops import (
     safe_read,
     safe_read_lines,
 )
+from backend.utils.path_guard import resolve_project_path
 
 
 @dataclass
@@ -159,7 +160,10 @@ class LatexProject:
         """
         if self._project_info is None:
             raise RuntimeError("No project opened")
-        full_path = Path(self._project_info.root_path) / file_path
+        full_path = resolve_project_path(
+            Path(self._project_info.root_path), file_path,
+            allowed_suffixes=(".tex",),
+        )
         if not full_path.exists():
             raise FileNotFoundError(f"File not found: {full_path}")
 
@@ -167,7 +171,7 @@ class LatexProject:
 
         # 记录解析时的文件 MD5，供后续 apply_change 校验
         # 使用 compute_md5（二进制读取）与 apply_change 中保持一致
-        self._file_md5[str(full_path.resolve())] = compute_md5(full_path)
+        self._file_md5[str(full_path)] = compute_md5(full_path)
 
         paragraphs = []
         lines = content.split("\n")
@@ -230,11 +234,13 @@ class LatexProject:
         """
         if self._project_info is None:
             raise RuntimeError("No project opened")
-        full_path = Path(self._project_info.root_path) / file_path
+        full_path = resolve_project_path(
+            Path(self._project_info.root_path), file_path,
+        )
         if not full_path.exists():
             raise FileNotFoundError(f"File not found: {full_path}")
 
-        abs_path = str(full_path.resolve())
+        abs_path = str(full_path)
 
         # 校验 MD5：文件未被用户在审核期间手动修改
         expected_md5 = self._file_md5.get(abs_path)
@@ -296,10 +302,12 @@ class LatexProject:
         """
         if self._project_info is None:
             raise RuntimeError("No project opened")
-        full_path = Path(self._project_info.root_path) / file_path
+        full_path = resolve_project_path(
+            Path(self._project_info.root_path), file_path,
+        )
         result = self._backup_mgr.undo(full_path)
         if result:
-            abs_path = str(full_path.resolve())
+            abs_path = str(full_path)
             self._file_md5[abs_path] = compute_md5(full_path)
         return result
 
@@ -315,10 +323,12 @@ class LatexProject:
         """
         if self._project_info is None:
             raise RuntimeError("No project opened")
-        full_path = Path(self._project_info.root_path) / file_path
+        full_path = resolve_project_path(
+            Path(self._project_info.root_path), file_path,
+        )
         result = self._backup_mgr.redo(full_path)
         if result:
-            abs_path = str(full_path.resolve())
+            abs_path = str(full_path)
             self._file_md5[abs_path] = compute_md5(full_path)
         return result
 
@@ -331,7 +341,10 @@ class LatexProject:
         """
         if self._project_info is None:
             raise RuntimeError("No project opened")
-        full_path = Path(self._project_info.root_path) / file_path
+        full_path = resolve_project_path(
+            Path(self._project_info.root_path), file_path,
+            allowed_suffixes=(".tex",),
+        )
         if not full_path.exists():
             raise FileNotFoundError(f"File not found: {file_path}")
         self._project_info.main_file = file_path
@@ -341,14 +354,18 @@ class LatexProject:
         """检查指定文件是否有可撤销的操作。"""
         if self._project_info is None:
             return False
-        full_path = Path(self._project_info.root_path) / file_path
+        full_path = resolve_project_path(
+            Path(self._project_info.root_path), file_path,
+        )
         return self._backup_mgr.can_undo(full_path)
 
     def can_redo(self, file_path: str) -> bool:
         """检查指定文件是否有可重做的操作。"""
         if self._project_info is None:
             return False
-        full_path = Path(self._project_info.root_path) / file_path
+        full_path = resolve_project_path(
+            Path(self._project_info.root_path), file_path,
+        )
         return self._backup_mgr.can_redo(full_path)
 
     @staticmethod

@@ -379,3 +379,49 @@ class TestProjectWithoutOpen:
     def test_can_undo_without_project(self):
         project = LatexProject()
         assert not project.can_undo("file.tex")
+
+
+class TestPathTraversal:
+    """路径穿越防护测试。"""
+
+    def test_get_paragraphs_dotdot_rejected(self, temp_project):
+        project = LatexProject()
+        project.open(str(temp_project))
+        with pytest.raises(ValueError, match="不能包含"):
+            project.get_paragraphs("../../secret.tex")
+
+    def test_apply_change_dotdot_rejected(self, temp_project):
+        project = LatexProject()
+        project.open(str(temp_project))
+        with pytest.raises(ValueError, match="不能包含"):
+            project.apply_change("../../secret.tex", 0, "text")
+
+    def test_undo_dotdot_rejected(self, temp_project):
+        project = LatexProject()
+        project.open(str(temp_project))
+        with pytest.raises(ValueError, match="不能包含"):
+            project.undo("../../secret.tex")
+
+    def test_redo_dotdot_rejected(self, temp_project):
+        project = LatexProject()
+        project.open(str(temp_project))
+        with pytest.raises(ValueError, match="不能包含"):
+            project.redo("../../secret.tex")
+
+    def test_set_main_file_dotdot_rejected(self, temp_project):
+        project = LatexProject()
+        project.open(str(temp_project))
+        with pytest.raises(ValueError, match="不能包含"):
+            project.set_main_file("../../evil.tex")
+
+    def test_get_paragraphs_absolute_rejected(self, temp_project):
+        project = LatexProject()
+        project.open(str(temp_project))
+        with pytest.raises(ValueError, match="不能是绝对路径"):
+            project.get_paragraphs("C:/secret.tex")
+
+    def test_get_paragraphs_non_tex_rejected(self, temp_project):
+        project = LatexProject()
+        project.open(str(temp_project))
+        with pytest.raises(ValueError, match="必须以"):
+            project.get_paragraphs("main.bib")

@@ -29,6 +29,7 @@ from backend.modules.bib_manager.models import (
 )
 from backend.utils.json_utils import retry_with_validation
 from backend.utils.file_ops import atomic_write, safe_read
+from backend.utils.path_guard import resolve_project_path
 
 
 _FORMAT_ANALYSIS_PROMPT = (
@@ -370,7 +371,7 @@ class BibManagerService:
             raise RuntimeError("No project opened")
 
         root = Path(pm.root_path)
-        full_path = root / file_path
+        full_path = resolve_project_path(root, file_path, allowed_suffixes=(".bib",))
         if not full_path.exists():
             raise FileNotFoundError(f"File not found: {file_path}")
 
@@ -387,7 +388,7 @@ class BibManagerService:
             raise RuntimeError("No project opened")
 
         root = Path(pm.root_path)
-        full_path = root / file_path
+        full_path = resolve_project_path(root, file_path, allowed_suffixes=(".bib",))
         if not full_path.exists():
             raise FileNotFoundError(f"File not found: {file_path}")
 

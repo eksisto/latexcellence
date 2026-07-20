@@ -2,7 +2,8 @@
 git_diff 模块纯函数单元测试。
 
 覆盖内容：
-    - _normalize_include_path 路径安全校验
+    - _normalize_include_path 格式规范化
+    - _validate_project_path 路径安全校验（委托 path_guard）
     - _split_document 文档分块（preamble / body / end）
     - _diff_lines 行级差异标记
     - _build_diff_document 完整差异文档生成
@@ -20,6 +21,7 @@ from backend.modules.git_diff.service import (
     _diff_lines,
     _normalize_include_path,
     _split_document,
+    _validate_project_path,
     get_pdf_path,
 )
 
@@ -28,7 +30,7 @@ from backend.modules.git_diff.service import (
 
 
 class TestNormalizeIncludePath:
-    """路径安全校验测试。"""
+    """路径格式规范化测试。"""
 
     def test_simple_relative(self):
         assert _normalize_include_path("main.tex") == "main.tex"
@@ -46,12 +48,64 @@ class TestNormalizeIncludePath:
         assert _normalize_include_path("") is None
         assert _normalize_include_path("   ") is None
 
-    def test_absolute_returns_none(self):
-        assert _normalize_include_path("/etc/passwd") is None
+    def test_absolute_preserved(self):
+        assert _normalize_include_path("/etc/passwd") == "/etc/passwd"
 
-    def test_parent_traversal_returns_none(self):
-        assert _normalize_include_path("../secret.tex") is None
-        assert _normalize_include_path("chapters/../secret.tex") is None
+    def test_parent_traversal_preserved(self):
+        assert _normalize_include_path("../secret.tex") == "../secret.tex"
+        assert _normalize_include_path("chapters/../secret.tex") == "chapters/../secret.tex"
+
+
+# ── _validate_project_path ─────────────────────────────────────────────────
+
+
+class TestValidateProjectPath:
+    """路径安全校验测试（委托 path_guard）。"""
+
+    @pytest.fixture
+    def project_root(self, tmp_path):
+        (tmp_path / "main.tex").write_text("test", encoding="utf-8")
+        subdir = tmp_path / "chapters"
+        subdir.mkdir()
+        (subdir / "intro.tex").write_text("intro", encoding="utf-8")
+        return tmp_path
+
+    def test_valid_relative(self, project_root):
+        result = _validate_project_path(project_root, "main.tex")
+        assert result == "main.tex"
+
+    def test_valid_subdir(self, project_root):
+        result = _validate_project_path(project_root, "chapters/intro.tex")
+        assert result == "chapters/intro.tex"
+
+    def test_require_tex_pass(self, project_root):
+        result = _validate_project_path(project_root, "main.tex", require_tex=True)
+        assert result == "main.tex"
+
+    def test_require_tex_reject(self, project_root):
+        with pytest.raises(ValueError, match="必须以"):
+            _validate_project_path(project_root, "refs.bib", require_tex=True)
+
+    def test_empty_rejected(self, project_root):
+        with pytest.raises(ValueError):
+            _validate_project_path(project_root, "")
+
+    def test_absolute_rejected(self, project_root):
+        import os
+        # 使用 os.path.isabs 一致的平台绝对路径
+        abs_path = "C:/secret.tex" if os.name == "nt" else "/etc/passwd"
+        with pytest.raises(ValueError, match="不能是绝对路径"):
+            _validate_project_path(project_root, abs_path)
+
+    def test_dotdot_rejected(self, project_root):
+        with pytest.raises(ValueError, match="不能包含"):
+            _validate_project_path(project_root, "../secret.tex")
+
+    def test_escape_root_rejected(self, project_root):
+        outside = project_root.parent / "outside.tex"
+        outside.write_text("secret", encoding="utf-8")
+        with pytest.raises(ValueError, match="不能包含"):
+            _validate_project_path(project_root, "../outside.tex")
 
 
 # ── _split_document ────────────────────────────────────────────────────────

@@ -18,6 +18,7 @@ from pathlib import Path
 
 
 from backend.core.logger import get_logger
+from backend.utils.path_guard import resolve_project_path
 
 _logger = get_logger("input_resolver")
 
@@ -117,14 +118,17 @@ def resolve_inputs(
         _visited = set()
 
     root = Path(root_path)
-    full_path = root / file_path
 
-    # 规范化绝对路径用于循环检测
     try:
-        abs_path = str(full_path.resolve())
-    except (OSError, ValueError):
-        _logger.warning(f"Cannot resolve path: {full_path}")
+        resolved_file = resolve_project_path(root, file_path)
+    except ValueError as e:
+        _logger.warning(f"Path traversal rejected for entry file: {file_path} — {e}")
         return []
+
+    full_path = resolved_file
+
+    # 使用 resolved 路径进行循环检测
+    abs_path = str(full_path)
 
     if abs_path in _visited:
         _logger.debug(f"Circular reference detected, skipping: {file_path}")
@@ -147,6 +151,11 @@ def resolve_inputs(
     result = [file_path]
     for ref in refs:
         ref_path = _normalize_ref(ref, current_dir)
+        try:
+            resolve_project_path(root, ref_path)
+        except ValueError as e:
+            _logger.warning(f"Path traversal rejected in \\input: {ref} — {e}")
+            continue
         sub_files = resolve_inputs(ref_path, root_path, _visited)
         result.extend(sub_files)
 

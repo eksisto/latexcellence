@@ -29,10 +29,6 @@ class CompileRequest(BaseModel):
             raise ValueError("main_file 不能为空")
         if v.startswith("-"):
             raise ValueError("main_file 不能以 '-' 开头")
-        if ".." in v:
-            raise ValueError("main_file 不能包含 '..' 路径段")
-        if not v.lower().endswith(".tex"):
-            raise ValueError("main_file 必须以 .tex 结尾")
         return v
 
 

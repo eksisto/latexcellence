@@ -213,6 +213,36 @@ class ProjectInfo:
 | `can_redo(file_path)` | redo 栈是否非空 |
 | `clear(file_path=None)` | 清空指定文件或所有文件的历史 |
 
+### `path_guard.py` — 项目路径安全校验
+
+**设计理念**：所有需要根据项目根目录拼接 `file_path` 的调用方**必须**经过此模块的 `resolve_project_path()` 函数，作为防止路径穿越（path traversal）的唯一入口。该函数在 `project_manager`、`input_resolver`、`bib_manager`、`compile`、`git_diff` 等模块中统一使用。
+
+**校验规则（六层防御）**：
+
+1. 不为空 / 不含 null 字节
+2. 不是绝对路径（`os.path.isabs()`）
+3. 不含 `..` 路径段（快速拦截）
+4. `resolve()` 后 `is_relative_to(root.resolve())`（精确拦截符号链接逃逸）
+5. 可选：拒绝符号链接（遍历路径组件检查 `os.path.islink()`）
+6. 可选：扩展名白名单
+
+**核心接口**：
+
+| 函数 | 功能 |
+|---|---|
+| `resolve_project_path(root, file_path, *, allowed_suffixes, allow_symlink)` | 唯一路径解析入口：校验 + resolve → 返回安全的绝对路径 |
+
+**调用方约定**：
+
+| 模块 | 调用处 | allowed_suffixes |
+|---|---|---|
+| `project_manager` | `get_paragraphs` / `set_main_file` | `(".tex",)` |
+| `project_manager` | `apply_change` / `undo` / `redo` / `can_undo` / `can_redo` | `None`（不限） |
+| `input_resolver` | `resolve_inputs` 入口 + 递归引用 | `None` |
+| `bib_manager` | `read_bib_file` / `save_bib_entry` | `(".bib",)` |
+| `compile` | `_validate_main_file` | `(".tex",)` |
+| `git_diff` | `_validate_project_path`（`render_diff_pdf` + `\input` 展开） | `require_tex` 可选 |
+
 ### `json_utils.py` — LLM JSON 输出校验与重试
 
 **设计理念**：OpenAI 的 `response_format={"type": "json_object"}` 只保证输出是合法 JSON，**不保证字段符合预期 schema**。因此必须在收到回复后执行 Pydantic 校验。`safe_parse_json()` 是整个系统**唯一的 JSON 解析入口**，负责处理 LLM 输出中的各种格式问题（Markdown 围栏、尾逗号、单引号等）。

@@ -222,6 +222,10 @@ class TestValidateMainFile:
         with pytest.raises(ValueError, match="不能包含"):
             _validate_main_file("../evil.tex", project_root)
 
+    def test_non_tex_extension_rejected_by_validate(self, project_root):
+        with pytest.raises(ValueError, match="必须以 .tex 结尾"):
+            _validate_main_file("main.pdf", project_root)
+
 
 # ── compile_latex ──────────────────────────────────────────────────────────
 
@@ -469,17 +473,15 @@ class TestCompileRequestValidation:
         with pytest.raises(ValidationError):
             CompileRequest(main_file="--output=/tmp")
 
-    def test_path_traversal_rejected(self):
+    def test_path_traversal_accepted_at_pydantic_level(self):
         from backend.modules.compile.router import CompileRequest
-        from pydantic import ValidationError
-        with pytest.raises(ValidationError):
-            CompileRequest(main_file="../evil.tex")
+        req = CompileRequest(main_file="../evil.tex")
+        assert req.main_file == "../evil.tex"
 
-    def test_non_tex_rejected(self):
+    def test_non_tex_accepted_at_pydantic_level(self):
         from backend.modules.compile.router import CompileRequest
-        from pydantic import ValidationError
-        with pytest.raises(ValidationError):
-            CompileRequest(main_file="main.pdf")
+        req = CompileRequest(main_file="main.pdf")
+        assert req.main_file == "main.pdf"
 
 
 class TestCompilePdfEndpointValidation:
