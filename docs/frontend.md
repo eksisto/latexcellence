@@ -230,7 +230,7 @@ api.writingChat.assistants.list() / .load(name) / .save(name, content) / .delete
 
 | Hook                   | 功能                                                                                                                                                                        |
 | ---------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `useParagraphCheck.js` | 封装逐段 LLM 检查功能的公共逻辑（项目恢复、文件选择、预览、检查/优化、排序、暂停/继续/停止、应用、refresh 持久化）。支持 `resolveInput` 多文件模式（展开 `\input`）。供 `TypoCheckPage`、`ExpressionOptPage`、`FormattingPage` 和 `TerminologyCheckPage` 共享调用。 |
+| `useParagraphCheck.js` | 封装逐段 LLM 检查功能的公共逻辑（项目恢复、文件选择、预览、检查/优化、排序、暂停/继续/停止、应用、refresh 持久化）。支持 `resolveInput` 多文件模式（展开 `\input`）。供 `TypoCheckPage`、`ExpressionOptPage`、`FormattingPage` 和 `TerminologyCheckPage` 共享调用。SSE 结果采用 `requestAnimationFrame` 微批次合并：同一帧内到达的多条结果合并为一次 `setResults`，全量排序只执行一次，将大文档场景下的排序开销从 O(n² log n) 降至 O(n log n)。 |
 | `useEnabledFeatures.js` | 从后端 `/api/config/status` 加载功能开关（`enabledFeatures`）到 Zustand store。幂等：已加载则跳过请求。供 `WelcomePage` 和 `WorkspacePage` 共享调用，确保直接刷新任一页面时功能开关均可用。 |
 | `useWritingChat.js`    | 封装写作助手 Chat 全部逻辑：会话管理（CRUD + 重命名）、SSE 流式发送、深度思考解析（`parseThinking` + `processLoadedMessages`）、生成编辑、应用编辑、助手提示词管理。页面刷新时通过 store 的 `hydrated` 状态感知水合完成，再恢复上次会话。供 `WritingChatPage` 调用。 |
 | `useFavicon.js`        | 动态 favicon 切换：通过 `MutationObserver` 监听 `document.documentElement` 的 `class` 变化，在亮/暗模式间切换 `/favicon.svg` 和 `/favicon-dark.svg`。                       |
@@ -273,7 +273,7 @@ useParagraphCheck({
   activeFiles,        // 当前生效文件列表（resolveInput 时为所有解析到的文件）
   operationId,        // 当前检查操作的 ID（ref 对象）
   handlePreview,      // 加载预览
-  handleCheck,        // 执行检查/优化（自动排序：有修改的在前，同段落按 index 升序）
+  handleCheck,        // 执行检查/优化（SSE 结果通过 rAF 微批次合并，自动排序：有修改的在前，同段落按 index 升序）
   handlePauseResume,  // 暂停/继续流式检查
   handleStop,         // 停止流式检查
   handleApplyChange,  // 应用单段修改 (idx, newText, filePath?)

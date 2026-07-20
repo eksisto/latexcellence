@@ -95,6 +95,7 @@ export default function useParagraphCheck({
   const pausedRef = useRef(false);
   const bufferRef = useRef([]);
   const operationIdRef = useRef(null);
+  const flushScheduledRef = useRef(false);
 
   const texFiles = useMemo(() => flattenTexFiles(fileTree), [fileTree]);
 
@@ -179,6 +180,7 @@ export default function useParagraphCheck({
       es.close();
       eventSourceRef.current = null;
       pausedRef.current = false;
+      flushScheduledRef.current = false;
       bufferRef.current = [];
       setIsPaused(false);
       setLoading(storeSlice.loadingKey, false);
@@ -187,17 +189,12 @@ export default function useParagraphCheck({
     [storeSlice.loadingKey, setLoading, setCheckProgress]
   );
 
-  const drainBuffer = useCallback(() => {
-    const buf = bufferRef.current;
-    if (buf.length === 0) return;
-    bufferRef.current = [];
-    const fileOrder = fileOrderRef.current;
-    for (const r of buf) {
-      if (r.changes && r.changes.length > 0) {
-        resultsWithChangesRef.current += 1;
-      }
+  const flushResults = useCallback(
+    (batch) => {
+      if (batch.length === 0) return;
+      const fileOrder = fileOrderRef.current;
       setResults((prev) => {
-        const next = [...prev, r];
+        const next = [...prev, ...batch];
         next.sort((a, b) => {
           const aHas = a.changes && a.changes.length > 0;
           const bHas = b.changes && b.changes.length > 0;
@@ -209,8 +206,28 @@ export default function useParagraphCheck({
         });
         return next;
       });
-    }
-  }, [setResults]);
+    },
+    [setResults]
+  );
+
+  const scheduleFlush = useCallback(() => {
+    if (flushScheduledRef.current) return;
+    flushScheduledRef.current = true;
+    requestAnimationFrame(() => {
+      flushScheduledRef.current = false;
+      const buf = bufferRef.current;
+      if (buf.length === 0) return;
+      bufferRef.current = [];
+      flushResults(buf);
+    });
+  }, [flushResults]);
+
+  const drainBuffer = useCallback(() => {
+    const buf = bufferRef.current;
+    if (buf.length === 0) return;
+    bufferRef.current = [];
+    flushResults(buf);
+  }, [flushResults]);
 
   const handlePauseResume = useCallback(() => {
     setIsPaused((prev) => {
@@ -278,26 +295,12 @@ export default function useParagraphCheck({
         if (data.type === "result") {
           const r = data.data;
           if (r) {
-            if (pausedRef.current) {
-              bufferRef.current.push(r);
-            } else {
-              if (r.changes && r.changes.length > 0) {
-                resultsWithChangesRef.current += 1;
-              }
-              setResults((prev) => {
-                const next = [...prev, r];
-                const fileOrder = fileOrderRef.current;
-                next.sort((a, b) => {
-                  const aHas = a.changes && a.changes.length > 0;
-                  const bHas = b.changes && b.changes.length > 0;
-                  if (aHas !== bHas) return aHas ? -1 : 1;
-                  const aOrder = fileOrder.get(a.file_path) ?? Infinity;
-                  const bOrder = fileOrder.get(b.file_path) ?? Infinity;
-                  if (aOrder !== bOrder) return aOrder - bOrder;
-                  return a.paragraph_index - b.paragraph_index;
-                });
-                return next;
-              });
+            if (r.changes && r.changes.length > 0) {
+              resultsWithChangesRef.current += 1;
+            }
+            bufferRef.current.push(r);
+            if (!pausedRef.current) {
+              scheduleFlush();
             }
           }
           return;
@@ -341,6 +344,7 @@ export default function useParagraphCheck({
     setError,
     messages,
     finalizeCheck,
+    scheduleFlush,
   ]);
 
   const handleApplyChange = useCallback(
@@ -490,6 +494,7 @@ export default function useParagraphCheck({
         eventSourceRef.current = null;
       }
       pausedRef.current = false;
+      flushScheduledRef.current = false;
       bufferRef.current = [];
     };
   }, []);
