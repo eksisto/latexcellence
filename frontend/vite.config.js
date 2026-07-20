@@ -31,6 +31,20 @@ export default defineConfig({
           }
           return "assets/[name]-[hash][extname]";
         },
+        manualChunks(id) {
+          if (id.includes("node_modules")) {
+            if (/react-dom|\/react\/|scheduler\//.test(id)) return "vendor-react";
+            if (/react-router|@remix-run\/router/.test(id)) return "vendor-router";
+            if (/@base-ui|@radix-ui/.test(id)) return "vendor-ui";
+            if (/lucide-react/.test(id)) return "vendor-icons";
+            if (/sonner/.test(id)) return "vendor-sonner";
+            if (/lxgwwenkai-regular/.test(id)) return "font-wenkai";
+            if (/lxgwwenkaimono-regular/.test(id)) return "font-wenkai-mono";
+            if (/noto-sans-sc/.test(id)) return "font-noto-sans-sc";
+            if (/jetbrains-mono/.test(id)) return "font-jetbrains-mono";
+            return "vendor";
+          }
+        },
       },
     },
   },

@@ -2,11 +2,6 @@
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 
-@import "@callmebill/lxgw-wenkai-web/lxgwwenkai-regular/result.css";
-@import "@callmebill/lxgw-wenkai-web/lxgwwenkaimono-regular/result.css";
-@import "@fontsource/noto-sans-sc/500.css";
-@import "@fontsource/jetbrains-mono/400.css";
-
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
