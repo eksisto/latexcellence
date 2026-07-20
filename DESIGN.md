@@ -695,7 +695,7 @@ def get_config() -> AppConfig:
 
 ### 7.2 安全策略
 
-- 环境变量 `OPENAI_API_KEY` 优先级高于配置文件
+- 环境变量 `LX_LLM_KEY` 优先级高于配置文件
 - 前端提交的 `api_key` 以 `***` 开头时保留原值（掩码保护）
 - `config.json` 加入 `.gitignore`，提供 `config.example.json` 作为模板
 

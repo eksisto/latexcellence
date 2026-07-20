@@ -31,13 +31,13 @@ AppConfig    → server, llm, features, logging  # 顶层聚合
 
 | 函数 | 功能 |
 |---|---|
-| `load_config(path)` | 加载 JSON + 环境变量覆盖 `OPENAI_API_KEY` + Pydantic 校验 |
+| `load_config(path)` | 加载 JSON + 环境变量覆盖 `LX_LLM_KEY` + Pydantic 校验 |
 | `get_config()` | 获取缓存的 AppConfig 单例（**禁止在 `__init__` 中缓存**） |
 | `save_config()` | 将当前配置 `model_dump()` 写回磁盘；**环境变量来源的 `api_key` 会自动清空，不会落盘** |
 | `update_config_from_dict(updates)` | 用字典部分更新配置（前端 SettingsDialog 使用）；用户手动输入新 Key 时更新内存并允许持久化 |
 
 **安全策略**：
-- 环境变量 `OPENAI_API_KEY` 优先级高于 `config.json` 中的 `api_key`
+- 环境变量 `LX_LLM_KEY` 优先级高于 `config.json` 中的 `api_key`
 - 从环境变量注入的 API Key **禁止写回磁盘**：`save_config()` 内部通过 `_api_key_from_env` 标记自动识别 Key 来源，落盘前清空 `api_key` 字段
 - 用户通过 UI 手动输入的新 Key 解除环境变量标记，正常持久化到磁盘
 - 前端提交的 `api_key` 若以 `***` 开头（掩码），保留原值不变

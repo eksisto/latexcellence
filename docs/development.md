@@ -408,7 +408,7 @@ app.include_router(bib_manager_router)            # /api/bib-manager/*
 ```
 
 - 所有字段有 Pydantic 默认值，可部分配置
-- `OPENAI_API_KEY` 环境变量优先于 `api_key`
+- `LX_LLM_KEY` 环境变量优先于 `api_key`
 - 前端提交的 `api_key` 以 `***` 开头时保留原值
 
 ---
@@ -571,7 +571,7 @@ class MyClass:
 | LLM JSON 输出不符 schema | `retry_with_validation()` 反馈错误给 LLM 重试（最多 3 次） |
 | 用户在审核期间手动修改了文件 | 执行原地修改前检查文件 MD5 是否与解析时一致，不一致则拒绝写入 |
 | 撤销/重做 | `BackupManager` 维护操作撤销栈（最多 50 层），而非简单 `.bak` 备份 |
-| `config.json` 含 API 密钥 | 加入 `.gitignore`；提供 `config.example.json` 作为脱敏模板；环境变量 `OPENAI_API_KEY` 优先 |
+| `config.json` 含 API 密钥 | 加入 `.gitignore`；提供 `config.example.json` 作为脱敏模板；环境变量 `LX_LLM_KEY` 优先 |
 
 ---
 

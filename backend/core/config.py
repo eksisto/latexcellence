@@ -4,13 +4,13 @@
 职责：
     1. 定义 config.json 对应的 Pydantic 模型（带默认值和类型校验）
     2. 加载 JSON 配置文件并校验
-    3. 支持环境变量 OPENAI_API_KEY 覆盖配置中的 API Key（安全优先）
+    3. 支持环境变量 LX_LLM_KEY 覆盖配置中的 API Key（安全优先）
     4. 运行时热重载支持
 
 安全策略：
     - config.json 可包含 API Key（首次安装时方便），但必须加入 .gitignore
     - 提供 config.example.json 作为脱敏模板，可安全提交 Git
-    - 环境变量 OPENAI_API_KEY 优先级最高，且从环境变量注入的 Key **禁止写回磁盘**
+    - 环境变量 LX_LLM_KEY 优先级最高，且从环境变量注入的 Key **禁止写回磁盘**
     - save_config() 自动识别 Key 来源，环境变量 Key 永不落盘
 """
 
@@ -166,7 +166,7 @@ def load_config(config_path: str = "config.json") -> AppConfig:
 
     流程：
         1. 读取 JSON 文件
-        2. 检查环境变量 OPENAI_API_KEY，若存在则覆盖配置中的 key
+        2. 检查环境变量 LX_LLM_KEY，若存在则覆盖配置中的 key
         3. 通过 Pydantic 进行类型校验和默认值填充
         4. 缓存到全局变量供后续调用
 
@@ -185,7 +185,7 @@ def load_config(config_path: str = "config.json") -> AppConfig:
         data = json.load(f)
 
     # 安全策略：环境变量优先级高于配置文件，且标记来源防止落盘
-    env_key = os.environ.get("OPENAI_API_KEY", "")
+    env_key = os.environ.get("LX_LLM_KEY", "")
     if env_key:
         if "llm" not in data:
             data["llm"] = {}

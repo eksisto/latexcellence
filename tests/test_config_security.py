@@ -73,7 +73,7 @@ class TestEnvVarKeyNotLeakedToDisk:
     def test_save_config_strips_env_var_key(self, tmp_path):
         """环境变量 Key → save_config() 后磁盘文件 api_key 为空"""
         config_path = _write_config(tmp_path, overrides={"llm": {"api_key": "file-key-123"}})
-        with mock.patch.dict(os.environ, {"OPENAI_API_KEY": "env-key-456"}, clear=True):
+        with mock.patch.dict(os.environ, {"LX_LLM_KEY": "env-key-456"}, clear=True):
             cfg_module.load_config(config_path)
             assert cfg_module._api_key_from_env is True
             assert cfg_module.get_config().llm.api_key == "env-key-456"
@@ -94,7 +94,7 @@ class TestEnvVarKeyNotLeakedToDisk:
     def test_env_var_no_file_key(self, tmp_path):
         """环境变量 Key + 文件无 Key → save_config() 不写入"""
         config_path = _write_config(tmp_path, overrides={"llm": {"api_key": ""}})
-        with mock.patch.dict(os.environ, {"OPENAI_API_KEY": "env-only-key"}, clear=True):
+        with mock.patch.dict(os.environ, {"LX_LLM_KEY": "env-only-key"}, clear=True):
             cfg_module.load_config(config_path)
             assert cfg_module._api_key_from_env is True
             cfg_module.save_config()
@@ -108,7 +108,7 @@ class TestUpdateConfigFromDict:
     def test_masked_key_keeps_existing_env_key_no_leak(self, tmp_path):
         """前端传掩码 Key + 环境变量 → 保存后磁盘无 Key"""
         config_path = _write_config(tmp_path)
-        with mock.patch.dict(os.environ, {"OPENAI_API_KEY": "env-key-789"}, clear=True):
+        with mock.patch.dict(os.environ, {"LX_LLM_KEY": "env-key-789"}, clear=True):
             cfg_module.load_config(config_path)
             assert cfg_module._api_key_from_env is True
             cfg_module.update_config_from_dict({"llm": {"api_key": "***6789"}})
@@ -129,7 +129,7 @@ class TestUpdateConfigFromDict:
     def test_new_key_overrides_env_var_marking(self, tmp_path):
         """用户手动输入 Key 覆盖环境变量 → 持久化新 Key"""
         config_path = _write_config(tmp_path)
-        with mock.patch.dict(os.environ, {"OPENAI_API_KEY": "env-key"}, clear=True):
+        with mock.patch.dict(os.environ, {"LX_LLM_KEY": "env-key"}, clear=True):
             cfg_module.load_config(config_path)
             assert cfg_module._api_key_from_env is True
             cfg_module.update_config_from_dict({"llm": {"api_key": "user-override-key"}})

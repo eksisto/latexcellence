@@ -71,9 +71,9 @@ cd ..
 cp config.example.json config.json
 ```
 
-可以在 `config.json` 中填入 `api_key`，也可以使用环境变量 `OPENAI_API_KEY`（推荐）。
+可以在 `config.json` 中填入 `api_key`，也可以使用环境变量 `LX_LLM_KEY`（推荐）。
 
-环境变量 `OPENAI_API_KEY` 优先级高于配置文件中的 `api_key`。
+环境变量 `LX_LLM_KEY` 优先级高于配置文件中的 `api_key`。
 
 ### 启动
 
