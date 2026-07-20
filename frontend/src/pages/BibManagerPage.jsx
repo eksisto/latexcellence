@@ -77,7 +77,7 @@ export default function BibManagerPage() {
   useEffect(() => {
     if (projectPath) {
       api.bibManager
-        .listBibFiles()
+        .listBibFiles(workspaceId)
         .then((data) => {
           setBibFiles(data.bib_files || []);
           if (data.bib_files?.length > 0) {
