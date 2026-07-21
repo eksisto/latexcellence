@@ -20,7 +20,7 @@ from backend.core.logger import get_logger
 from backend.core.llm_client import get_llm_client
 from backend.core.config import get_config
 from backend.utils.json_utils import retry_with_validation
-from backend.utils.latex_package_analyzer import analyze_latex_packages, packages_to_comments
+from backend.utils.latex_package_analyzer import prepend_package_comments
 
 
 class TableOCRResult(BaseModel):
@@ -100,15 +100,7 @@ class TableOCRService:
 
         # 第二步：分析 LaTeX 代码所需的宏包
         if result.get("latex"):
-            packages = await analyze_latex_packages(result["latex"], llm)
-            if packages:
-                package_comments = packages_to_comments(packages)
-                result["latex"] = package_comments + "\n" + result["latex"]
-                self._logger.info(
-                    f"Detected packages: {packages} for table OCR result"
-                )
-            else:
-                self._logger.debug("No special packages detected for table OCR result")
+            result["latex"] = await prepend_package_comments(llm, result["latex"])
 
         return result
 

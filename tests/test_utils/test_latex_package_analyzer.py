@@ -7,6 +7,7 @@ latex_package_analyzer 单元测试。
     - analyze_latex_packages 正常流程（mock LLM）
     - analyze_latex_packages 空输入处理
     - analyze_latex_packages LLM 调用失败降级
+    - prepend_package_comments 拼接与降级
 """
 
 from unittest.mock import AsyncMock, MagicMock
@@ -18,6 +19,7 @@ from backend.utils.latex_package_analyzer import (
     LatexPackageAnalysis,
     analyze_latex_packages,
     packages_to_comments,
+    prepend_package_comments,
 )
 
 
@@ -126,3 +128,40 @@ class TestAnalyzeLatexPackages:
         mock_llm.chat.return_value = {"bad_field": True}
         packages = await analyze_latex_packages(latex_code, mock_llm)
         assert packages == []
+
+
+class TestPrependPackageComments:
+    """prepend_package_comments 集成测试（Mock LLM）。"""
+
+    @pytest.fixture
+    def mock_llm(self):
+        llm = MagicMock()
+        llm.chat = AsyncMock()
+        return llm
+
+    @pytest.mark.asyncio
+    async def test_with_packages_detected(self, mock_llm):
+        mock_llm.chat.return_value = {"packages": ["booktabs"]}
+        result = await prepend_package_comments(mock_llm, r"\toprule A \\\bottomrule")
+        assert result.startswith(r"% \usepackage{booktabs}")
+        assert r"\toprule A \\\bottomrule" in result
+
+    @pytest.mark.asyncio
+    async def test_without_packages(self, mock_llm):
+        mock_llm.chat.return_value = {"packages": []}
+        latex = r"\hline A \hline"
+        result = await prepend_package_comments(mock_llm, latex)
+        assert result == latex
+
+    @pytest.mark.asyncio
+    async def test_llm_failure_returns_original(self, mock_llm):
+        mock_llm.chat.side_effect = RuntimeError("API error")
+        latex = r"\toprule test"
+        result = await prepend_package_comments(mock_llm, latex)
+        assert result == latex
+
+    @pytest.mark.asyncio
+    async def test_empty_latex_returns_original(self, mock_llm):
+        result = await prepend_package_comments(mock_llm, "")
+        assert result == ""
+        mock_llm.chat.assert_not_called()

@@ -2,8 +2,9 @@
 markdown_converter 模块服务层 + 路由测试。
 
 覆盖内容：
-    - MarkdownConverterService.convert 业务逻辑（Mock pandoc）
+    - MarkdownConverterService.convert 业务逻辑（Mock pandoc + Mock LLM）
     - Pandoc 不可用时的错误处理
+    - 宏包分析集成测试
     - /api/markdown-converter/convert HTTP 端点测试
 """
 
@@ -24,6 +25,12 @@ class TestMarkdownConverterService:
     def service(self):
         return MarkdownConverterService()
 
+    @pytest.fixture
+    def mock_llm(self):
+        llm = MagicMock()
+        llm.chat = AsyncMock()
+        return llm
+
     @pytest.mark.asyncio
     async def test_empty_markdown_raises(self, service):
         with pytest.raises(ValueError, match="empty"):
@@ -40,8 +47,72 @@ class TestMarkdownConverterService:
             with pytest.raises(RuntimeError, match="not installed"):
                 await service.convert("# Hello")
 
+
+class TestMarkdownConverterWithPandoc:
+    """Pandoc 转换 + 宏包分析集成测试（Mock pandoc + Mock LLM）。"""
+
+    @pytest.fixture
+    def service(self):
+        return MarkdownConverterService()
+
+    @pytest.fixture
+    def mock_llm(self):
+        llm = MagicMock()
+        llm.chat = AsyncMock()
+        return llm
+
+    def _patch_pandoc(self, stdout: str):
+        """辅助函数：mock pandoc 调用返回指定 stdout。"""
+        mock_proc = MagicMock()
+        mock_proc.returncode = 0
+        mock_proc.stdout = stdout
+        mock_proc.stderr = ""
+        return patch("shutil.which", return_value="/usr/bin/pandoc"), \
+               patch("subprocess.run", return_value=mock_proc)
+
     @pytest.mark.asyncio
-    async def test_successful_conversion(self, service):
+    async def test_successful_conversion_with_packages(self, service, mock_llm):
+        """Pandoc 转换后，宏包分析检测到 booktabs。"""
+        mock_llm.chat.return_value = {"packages": ["booktabs"]}
+
+        with patch(
+            "backend.modules.markdown_converter.service.get_llm_client",
+            return_value=mock_llm,
+        ):
+            pandoc_patches = self._patch_pandoc(
+                r"\begin{table}\centering\begin{tabular}{lr}\toprule A & B \\\midrule 1 & 2 \\\bottomrule\end{tabular}\end{table}"
+            )
+            with pandoc_patches[0], pandoc_patches[1]:
+                result = await service.convert("# Table")
+
+        assert "latex" in result
+        assert r"% \usepackage{booktabs}" in result["latex"]
+        assert r"\toprule" in result["latex"]
+
+    @pytest.mark.asyncio
+    async def test_successful_conversion_no_packages(self, service, mock_llm):
+        """Pandoc 转换后，宏包分析返回空列表 → 无注释。"""
+        mock_llm.chat.return_value = {"packages": []}
+
+        with patch(
+            "backend.modules.markdown_converter.service.get_llm_client",
+            return_value=mock_llm,
+        ):
+            pandoc_patches = self._patch_pandoc(r"\section{Hello}")
+            with pandoc_patches[0], pandoc_patches[1]:
+                result = await service.convert("# Hello")
+
+        assert "latex" in result
+        assert result["latex"] == r"\section{Hello}"
+        assert not result["latex"].startswith(r"%")
+
+    @pytest.mark.asyncio
+    async def test_no_api_key_skips_analysis(self, service, monkeypatch):
+        """无 API Key 时跳过宏包分析，直接返回 Pandoc 结果。"""
+        import backend.core.config as cfg_mod
+        cfg = cfg_mod.get_config()
+        monkeypatch.setattr(cfg.llm, "api_key", "")
+
         mock_proc = MagicMock()
         mock_proc.returncode = 0
         mock_proc.stdout = r"\section{Hello}"
@@ -51,8 +122,33 @@ class TestMarkdownConverterService:
             with patch("subprocess.run", return_value=mock_proc):
                 result = await service.convert("# Hello")
 
-        assert "latex" in result
         assert result["latex"] == r"\section{Hello}"
+
+    @pytest.mark.asyncio
+    async def test_llm_failure_graceful_degradation(self, service, mock_llm):
+        """LLM 宏包分析失败 → 返回原始 Pandoc 结果。"""
+        mock_llm.chat.side_effect = RuntimeError("API error")
+
+        with patch(
+            "backend.modules.markdown_converter.service.get_llm_client",
+            return_value=mock_llm,
+        ):
+            pandoc_patches = self._patch_pandoc(r"\section{Hello}")
+            with pandoc_patches[0], pandoc_patches[1]:
+                result = await service.convert("# Hello")
+
+        assert result["latex"] == r"\section{Hello}"
+
+
+# ── Pandoc 错误/边界条件 ────────────────────────────────────────────────
+
+
+class TestPandocErrors:
+    """Pandoc 自身错误处理测试（不涉及宏包分析）。"""
+
+    @pytest.fixture
+    def service(self):
+        return MarkdownConverterService()
 
     @pytest.mark.asyncio
     async def test_pandoc_error_raises(self, service):

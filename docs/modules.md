@@ -88,8 +88,8 @@
 | --- | --- |
 | 逐段检查 + SSE 流式 | typo_check, expression_opt, terminology_check, formatting |
 | 多轮对话 | writing_chat |
-| 单次请求-响应 | formula_ocr, table_ocr, template_gen, style_modify, compile (错误翻译) |
-| 无 LLM | markdown_converter, git_diff, compile (编译本身) |
+| 单次请求-响应 | formula_ocr, table_ocr, template_gen, style_modify, compile (错误翻译), markdown_converter (宏包分析) |
+| 无 LLM | git_diff, compile (编译本身) |
 
 ### 外部依赖
 

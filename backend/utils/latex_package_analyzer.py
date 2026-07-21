@@ -123,6 +123,26 @@ async def analyze_latex_packages(latex_code: str, llm) -> list[str]:
         return []
 
 
+async def prepend_package_comments(llm, latex_code: str) -> str:
+    """
+    分析 LaTeX 代码所需的宏包，将注释前置到代码前。
+
+    参数：
+        llm: LLMClient 实例
+        latex_code: LaTeX 代码
+
+    返回：
+        带宏包注释前缀的 LaTeX 代码（若无需要或失败则原样返回）
+    """
+    packages = await analyze_latex_packages(latex_code, llm)
+    if packages:
+        package_comments = packages_to_comments(packages)
+        logger.info(f"Detected packages: {packages}")
+        return package_comments + "\n" + latex_code
+    logger.debug("No special packages detected")
+    return latex_code
+
+
 def packages_to_comments(packages: list[str]) -> str:
     """
     将宏包名称列表转换为 LaTeX 注释格式。

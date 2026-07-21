@@ -4,8 +4,9 @@
 流程：
     1. 校验图片格式（PNG/JPEG/WebP）和大小
     2. 预处理：超过 2000px 的边等比缩放到 2000px
-    3. 转为 base64 发送给 LLM Vision API
-    4. 返回 LaTeX 公式 + inline 标记 + 置信度
+    3. 转为 base64 发送给 LLM Vision API（第一次 LLM 调用）
+    4. 获取返回的 LaTeX 公式代码后，调用 LaTeX 宏包分析器（第二次 LLM 调用）
+    5. 将宏包注释前置到 LaTeX 代码中，返回合并结果
 """
 
 import base64
@@ -20,6 +21,7 @@ from backend.core.logger import get_logger
 from backend.core.llm_client import get_llm_client
 from backend.core.config import get_config
 from backend.utils.json_utils import retry_with_validation
+from backend.utils.latex_package_analyzer import prepend_package_comments
 
 
 class FormulaOCRResult(BaseModel):
@@ -89,7 +91,13 @@ class FormulaOCRService:
             }
 
         llm = get_llm_client()
-        return await self._recognize_with_llm(llm, base64_image, content_type)
+        result = await self._recognize_with_llm(llm, base64_image, content_type)
+
+        # 第二步：分析 LaTeX 代码所需的宏包
+        if result.get("latex"):
+            result["latex"] = await prepend_package_comments(llm, result["latex"])
+
+        return result
 
     async def _recognize_with_llm(
         self, llm, base64_image: str, content_type: str

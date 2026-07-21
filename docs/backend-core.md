@@ -291,13 +291,14 @@ raise ValueError("Validation failed after N attempts")        # ❌ 耗尽
 
 ### `latex_package_analyzer.py` — LaTeX 宏包分析器
 
-**设计理念**：独立于具体业务模块的通用组件，分析 LaTeX 代码所使用的命令/环境，判断需要哪些额外宏包支持。目前被表格 OCR 模块在第二次 LLM 调用中使用，其他需要自动检测宏包依赖的场景也可复用。
+**设计理念**：独立于具体业务模块的通用组件，分析 LaTeX 代码所使用的命令/环境，判断需要哪些额外宏包支持。目前被公式 OCR、表格 OCR、Markdown 转换等模块在 LLM 调用中使用。
 
 **核心接口**：
 
 | 函数 | 功能 |
 |---|---|
 | `analyze_latex_packages(latex_code, llm)` | 异步调用 LLM 分析 LaTeX 代码，返回宏包名称列表（`list[str]`）。LLM 调用失败时优雅降级，返回空列表 |
+| `prepend_package_comments(llm, latex_code)` | 异步分析 LaTeX 代码所需宏包，将注释前置到代码前。若无宏包需要或 LLM 失败，原样返回 |
 | `packages_to_comments(packages)` | 将宏包名称列表转换为 LaTeX 注释格式，每行形如 `% \usepackage{booktabs}` |
 
 **Pydantic 模型**：

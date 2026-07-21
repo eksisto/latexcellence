@@ -4,13 +4,17 @@ Markdown 转 LaTeX 业务逻辑。
 流程：
     1. 检查 Pandoc 是否可用
     2. 调用 Pandoc 将 Markdown 文本转换为 LaTeX
-    3. 返回转换后的 LaTeX 代码
+    3. 调用 LaTeX 宏包分析器分析转换后的代码
+    4. 将宏包注释前置到 LaTeX 代码中，返回合并结果
 """
 
 import asyncio
 from typing import Any
 
 from backend.core.logger import get_logger
+from backend.core.llm_client import get_llm_client
+from backend.core.config import get_config
+from backend.utils.latex_package_analyzer import prepend_package_comments
 
 
 class MarkdownConverterService:
@@ -35,6 +39,13 @@ class MarkdownConverterService:
         self._check_pandoc()
 
         latex = await asyncio.to_thread(self._run_pandoc, markdown_text)
+
+        # 第二步：分析 LaTeX 代码所需的宏包
+        cfg = get_config()
+        if cfg.llm.api_key:
+            llm = get_llm_client()
+            latex = await prepend_package_comments(llm, latex)
+
         return {"latex": latex}
 
     @staticmethod

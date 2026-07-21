@@ -87,7 +87,7 @@ latexcellence/
 | 7 | template_gen | 模板生成 | router.py, service.py | ✓ | ✗ |
 | 8 | formula_ocr | 图片→LaTeX 公式 | router.py, service.py | ✓(Vision) | ✗ |
 | 9 | table_ocr | 图片→LaTeX 表格 | router.py, service.py | ✓(Vision) | ✗ |
-| 10 | markdown_converter | MD→LaTeX(pandoc) | router.py, service.py | ✗ | ✗ |
+| 10 | markdown_converter | MD→LaTeX(pandoc) | router.py, service.py | ✓(宏包分析) | ✗ |
 | 11 | style_modify | 自然语言修改样式 | router.py, service.py | ✓ | ✗ |
 | 12 | writing_chat | 写作助手对话 | router.py, service.py, context.py, models.py, prompt_manager.py | ✓ | ✗ |
 | 13 | bib_manager | 参考文献管理 | router.py, service.py, models.py | ✓ | ✗ |
