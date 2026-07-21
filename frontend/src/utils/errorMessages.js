@@ -11,6 +11,7 @@
 const EXACT_MAP = {
   // 网络 / 服务不可达
   "Failed to fetch": "获取失败",
+  "Request timed out": "请求超时",
   "Internal Server Error": "内部服务器错误",
 
   // 项目管理
@@ -54,6 +55,10 @@ const EXACT_MAP = {
 
 // ── 模式消息（正则匹配，$1/$2 引用捕获组）──────────────────────────
 const PATTERN_MAP = [
+  // 超时
+  [/^Compilation timed out after (\d+) seconds/, "编译超时（已等待 $1 秒）"],
+  [/^Command timed out after (\d+) seconds/, "命令执行超时（已等待 $1 秒）"],
+  [/timed out/, "超时"],
   // 项目管理
   [/^Project path not found:\s*(.+)/, "项目路径不存在：$1"],
   [/^Not a directory:\s*(.+)/, "不是目录：$1"],

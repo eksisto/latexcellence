@@ -22,7 +22,12 @@ const BASE_URL = "/api";
  * @returns {Promise<object>} 解析后的 JSON 响应
  */
 async function requestForm(url, formData, method = "POST") {
-  const res = await fetch(`${BASE_URL}${url}`, { method, body: formData });
+  let res;
+  try {
+    res = await fetch(`${BASE_URL}${url}`, { method, body: formData });
+  } catch (e) {
+    throw new Error(translateError(e.message || "Request timed out"));
+  }
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: res.statusText }));
     throw new Error(translateError(err.detail || `HTTP ${res.status}`));
@@ -48,10 +53,15 @@ function appendWs(url, workspaceId) {
  * @returns {Promise<object>} 解析后的 JSON 响应
  */
 async function request(url, options = {}) {
-  const res = await fetch(`${BASE_URL}${url}`, {
-    headers: { "Content-Type": "application/json", ...options.headers },
-    ...options,
-  });
+  let res;
+  try {
+    res = await fetch(`${BASE_URL}${url}`, {
+      headers: { "Content-Type": "application/json", ...options.headers },
+      ...options,
+    });
+  } catch (e) {
+    throw new Error(translateError(e.message || "Request timed out"));
+  }
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: res.statusText }));
     throw new Error(translateError(err.detail || `HTTP ${res.status}`));
@@ -362,17 +372,22 @@ export const api = {
   writingChat: {
     send: async ({ sessionId, filePath, paragraphIndex, userMessage, assistantPrompt, workspaceId, onEvent, onError }) => {
       const url = appendWs(`${BASE_URL}/writing-chat/send`, workspaceId);
-      const res = await fetch(url, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          session_id: sessionId ?? null,
-          file_path: filePath,
-          paragraph_index: paragraphIndex ?? null,
-          user_message: userMessage,
-          assistant_prompt: assistantPrompt ?? null,
-        }),
-      });
+      let res;
+      try {
+        res = await fetch(url, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            session_id: sessionId ?? null,
+            file_path: filePath,
+            paragraph_index: paragraphIndex ?? null,
+            user_message: userMessage,
+            assistant_prompt: assistantPrompt ?? null,
+          }),
+        });
+      } catch (e) {
+        throw new Error(translateError(e.message || "Request timed out"));
+      }
       if (!res.ok) {
         const err = await res.json().catch(() => ({ detail: res.statusText }));
         throw new Error(translateError(err.detail || `HTTP ${res.status}`));
