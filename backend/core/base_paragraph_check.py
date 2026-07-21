@@ -314,6 +314,12 @@ class BaseParagraphCheckService:
 
         子类可覆写此方法以自定义单段检查逻辑（如 formatting 无 marker 保护）。
         """
+        # 若段落仅含 marker（纯注释/命令块），跳过 LLM 请求
+        if self.use_marker_protection:
+            plain_without_markers = MARKER_PATTERN.sub("", text).strip()
+            if not plain_without_markers:
+                return self._make_fallback(idx, text, original_text, file_path)
+
         input_markers: list[str] = []
         if self.use_marker_protection:
             input_markers = MARKER_PATTERN.findall(text)
