@@ -16,17 +16,20 @@
 还原 LaTeX:      \textbf{这是一各错字} $x^2$ 更多内容
 ```
 
-**解析流水线**（7 步顺序执行）：
+**解析流水线**（8 步顺序执行）：
 
 | 步骤 | 方法 | 操作 | 示例 |
 |---|---|---|---|
 | 1 | `_replace_verb_inline()` | 内联逐字替换 | `\verb\|c\|` → `__VERB_0001__` |
-| 2 | `_replace_protected_envs()` | 受保护环境整体替换 | `\begin{equation}...` → `\n__ENV_0001__\n` |
-| 3 | `_replace_display_math()` | 展示公式替换 | `$$x^2$$` → `\n__MATH_0001__\n` |
-| 4 | `_replace_inline_math()` | 行内公式替换 | `$x^2$` → `__MATH_0002__` |
-| 5 | `_replace_commands()` | LaTeX 命令替换（字符扫描+深度计数） | `\textbf{hello}` → `__CMD_0001__` |
-| 6 | `_replace_comments()` | 注释替换为 marker（保留 `\%` 转义） | `Hello % comment` → `Hello __COM_0001__` |
-| 7 | `_normalize_whitespace()` | 空白规范化 | 连续 3+ 空行压缩为 2 空行 |
+| 2 | `_replace_protected_envs(envs=_VERBATIM_ENVS)` | 逐字类环境替换（可含字面 `%`） | `\begin{verbatim}...` → `\n__ENV_0001__\n` |
+| 3 | `_replace_comments()` | 注释替换为 marker（保留 `\%` 转义） | `Hello % comment` → `Hello __COM_0001__` |
+| 4 | `_replace_protected_envs()` | 受保护环境整体替换（非逐字类） | `\begin{equation}...` → `\n__ENV_0002__\n` |
+| 5 | `_replace_display_math()` | 展示公式替换 | `$$x^2$$` → `\n__MATH_0001__\n` |
+| 6 | `_replace_inline_math()` | 行内公式替换 | `$x^2$` → `__MATH_0002__` |
+| 7 | `_replace_commands()` | LaTeX 命令替换（字符扫描+深度计数） | `\textbf{hello}` → `__CMD_0001__` |
+| 8 | `_normalize_whitespace()` | 空白规范化 | 连续 3+ 空行压缩为 2 空行 |
+
+> **设计要点**：注释替换（第 3 步）在环境/数学/命令（第 4-7 步）之前，确保注释内的 `\command{}`、`$math$`、`\begin{env}` 不被单独提取。逐字类环境（第 2 步，即 `verbatim`/`lstlisting`）在注释之前，因其内部可含字面 `%`。
 
 **命令解析（第 5 步）核心技术**：
 - **花括号深度计数**：正确处理 `\textbf{\textit{nested}}`
@@ -39,7 +42,7 @@
 `verbatim`, `lstlisting`, `table`, `table*`, `tabular`, `tabular*`, `longtable`, `tikzpicture`, `equation`, `equation*`, `align`, `align*`, `alignat`, `alignat*`, `eqnarray`, `eqnarray*`, `gather`, `gather*`, `multline`, `multline*`, `flalign`, `flalign*`, `subequations`
 
 **Marker 格式**：`__{PREFIX}_{COUNTER:04d}__`
-- PREFIX：`CMD`（命令）、`MATH`（公式）、`ENV`（环境）、`VERB`（逐字）
+- PREFIX：`CMD`（命令）、`MATH`（公式）、`ENV`（环境）、`VERB`（逐字）、`COM`（注释）
 - 全局自增计数器，每次 `strip_to_plain_text()` 重置为 0
 
 **核心接口**：

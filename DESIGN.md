@@ -135,19 +135,22 @@ BaseParagraphCheckService
 
 ### 2.3 解析流水线
 
-7 步顺序执行，每步替换一类 LaTeX 结构。
+8 步顺序执行，每步替换一类 LaTeX 结构。所有前缀共享同一个全局计数器，每次 `strip_to_plain_text()` 重置为 0。
 
-**关键约束**：注释替换（第 6 步）放在所有保护步骤之后，确保 `\verb|100%|` 和 `verbatim` 中的 `%` 不会被误处理。注释不再是直接删除，而是替换为 marker（`__COM_NNNN__`），LLM 无法修改，还原时完整恢复。
+**关键约束**：注释替换（第 3 步）在环境/数学/命令（第 4-7 步）之前，确保注释内的 `\command{}`、`$math$`、`\begin{env}` 不被单独提取。逐字类环境（第 2 步）在注释之前，因其内部可含字面 `%`。
 
 | 步骤 | 目标 | 替换为 |
 |------|------|--------|
 | 1. `_replace_verb_inline()` | `\verb\|...\|` | `__VERB_NNNN__` |
-| 2. `_replace_protected_envs()` | `verbatim`/`table`/`equation` 等环境 | `__ENV_NNNN__` |
-| 3. `_replace_display_math()` | `$$...$$` / `\[...\]` | `__MATH_NNNN__` |
-| 4. `_replace_inline_math()` | `$...$` / `\(...\)` | `__MATH_NNNN__` |
-| 5. `_replace_commands()` | 所有 `\command` | `__CMD_NNNN__` |
-| 6. `_replace_comments()` | `%` 注释（在保护步骤之后执行） | `__COM_NNNN__` |
-| 7. `_normalize_whitespace()` | 连续空行 | 压缩为 2 行 |
+| 2. `_replace_protected_envs(envs=_VERBATIM_ENVS)` | 逐字类环境 `verbatim`/`lstlisting`（可含 `%`） | `__ENV_NNNN__` |
+| 3. `_replace_comments()` | `%` 注释 | `__COM_NNNN__` |
+| 4. `_replace_protected_envs()` | `table`/`equation`/`tikzpicture` 等环境 | `__ENV_NNNN__` |
+| 5. `_replace_display_math()` | `$$...$$` / `\[...\]` | `__MATH_NNNN__` |
+| 6. `_replace_inline_math()` | `$...$` / `\(...\)` | `__MATH_NNNN__` |
+| 7. `_replace_commands()` | 所有 `\command` | `__CMD_NNNN__` |
+| 8. `_normalize_whitespace()` | 连续空行 | 压缩为 2 行 |
+
+**Marker 前缀**：`CMD`（命令）、`MATH`（公式）、`ENV`（环境）、`VERB`（逐字）、`COM`（注释）
 
 ### 2.4 命令解析（第 5 步）的难点
 

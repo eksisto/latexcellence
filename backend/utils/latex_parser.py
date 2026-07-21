@@ -34,6 +34,9 @@ from backend.core.logger import get_logger
 
 # ── protected environments: entire block → single marker ──────────────────
 
+# 仅能含字面 % 的逐字类环境（必须在注释替换之前保护）
+_VERBATIM_ENVS = ["verbatim", "lstlisting"]
+
 _PROTECTED_ENVS = [
     "verbatim", "lstlisting",
     "table", "table*", "tabular", "tabular*", "longtable",
@@ -105,12 +108,17 @@ class LatexParser:
 
         流程：
             1. 替换 \\verb|...| 内联逐字
-            2. 替换受保护环境（verbatim, equation 等）
-            3. 替换展示数学模式（$$...$$, \\[...\\]）
-            4. 替换行内数学模式（$...$, \\(...\\)）
-            5. 替换剩余 LaTeX 命令
-            6. 将注释替换为 marker（在保护之后，避免 \\verb|100%| 等误处理）
-            7. 规范化空白
+            2. 替换逐字类环境（verbatim / lstlisting，可含字面 %）
+            3. 将注释替换为 marker（原子化捕获注释内所有内容）
+            4. 替换受保护环境（equation, table, tikzpicture 等）
+            5. 替换展示数学模式（$$...$$, \\[...\\]）
+            6. 替换行内数学模式（$...$, \\(...\\)）
+            7. 替换剩余 LaTeX 命令
+            8. 规范化空白
+
+        注意：注释替换（第 3 步）在环境/数学/命令（第 4-7 步）之前，
+        确保注释内的 LaTeX 结构不被单独提取。逐字类环境（第 2 步）
+        在注释之前，因其内部可含字面 %。
 
         参数：
             source: LaTeX 源码
@@ -124,11 +132,12 @@ class LatexParser:
         text = source
 
         text = self._replace_verb_inline(text)
+        text = self._replace_protected_envs(text, _VERBATIM_ENVS)
+        text = self._replace_comments(text)
         text = self._replace_protected_envs(text)
         text = self._replace_display_math(text)
         text = self._replace_inline_math(text)
         text = self._replace_commands(text)
-        text = self._replace_comments(text)
         text = self._normalize_whitespace(text)
 
         return text, dict(self._marker_map)
@@ -208,12 +217,19 @@ class LatexParser:
 
     # ── protected environments ────────────────────────────────────────────
 
-    def _replace_protected_envs(self, text: str) -> str:
+    def _replace_protected_envs(
+        self, text: str, envs: list[str] | None = None
+    ) -> str:
         """
-        将受保护环境（verbatim / table / equation / tikzpicture 等）
+        将受保护环境（table / equation / tikzpicture 等）
         整体替换为单个 marker。环境内的内容 LLM 不可见。
+
+        参数：
+            envs: 要替换的环境名列表。默认使用 _PROTECTED_ENVS。
         """
-        for env in _PROTECTED_ENVS:
+        if envs is None:
+            envs = _PROTECTED_ENVS
+        for env in envs:
             escaped = re.escape(env)
             pattern = re.compile(
                 r"(\\begin\{" + escaped + r"\})(.*?)(\\end\{" + escaped + r"\})",

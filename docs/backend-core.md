@@ -309,7 +309,9 @@ raise ValueError("Validation failed after N attempts")        # ❌ 耗尽
 
 **Marker 格式**：`__{PREFIX}_{COUNTER:04d}__`（PREFIX: `CMD`/`MATH`/`ENV`/`VERB`/`COM`）
 
-**注释保护策略**：注释替换（`%` →行尾 → `__COM_NNNN__`）放在 verb、protected envs、数学公式、命令等所有保护步骤之后执行，避免 `\verb|100%|` 或 `verbatim` 中的 `%` 被误处理。注释不再是直接删除，而是 marker 化，LLM 无法修改，还原时完整恢复。`restore_from_markers()` 也支持对 `__COM_NNNN__` marker 的还原。
+**注释保护策略**：注释替换（`%` →行尾 → `__COM_NNNN__`）放在逐字类环境（`verbatim`/`lstlisting`）之后、其他环境/数学/命令之前执行，确保注释内的 `\command{}`、`$math$`、`\begin{env}` 不被单独提取。逐字类环境（`_VERBATIM_ENVS`）在注释之前，因其内部可含字面 `%`。注释不再是直接删除，而是 marker 化，LLM 无法修改，还原时完整恢复。`restore_from_markers()` 也支持对 `__COM_NNNN__` marker 的还原。
+
+替换顺序：VERB → VERBATIM_ENVS → COM → ENV → MATH → CMD
 
 详细解析流水线、受保护环境列表、命令解析策略参见 [DESIGN.md §2](../DESIGN.md#23-解析流水线)。
 
