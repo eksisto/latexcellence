@@ -271,6 +271,30 @@ for attempt in range(max_retries):
 raise ValueError("Validation failed after N attempts")        # ❌ 耗尽
 ```
 
+### `compile_error_translator.py` — LaTeX 编译错误 LLM 翻译
+
+**设计理念**：将 LaTeX 编译失败日志翻译为中文解释和修复建议的逻辑提取为独立工具，供 `compile`（自动编译）和 `git_diff`（差异高亮）两个模块复用。避免在不同模块中重复实现相同的 LLM 调用、错误提取和重试逻辑。
+
+**核心接口**：
+
+| 函数 | 功能 |
+|---|---|
+| `extract_key_errors(log_text, max_chars=3000)` | 从 latexmk/xelatex 日志中提取关键错误行（`! ...`、`Emergency stop`、`LaTeX Error:` 等），避免全文过长 |
+| `translate_compile_errors(stdout, stderr)` | 异步调用 LLM 将编译错误翻译为 `(explanation, fixes)` 元组。LLM 失败时返回兜底提示 |
+
+**Pydantic 模型**：
+
+| 模型 | 字段 |
+|---|---|
+| `ErrorTranslation` | `explanation: str`（中文解释）、`fixes: list[str]`（修复建议列表） |
+
+**调用方**：
+
+| 模块 | 场景 |
+|---|---|
+| `compile/service.py` | `compile_latex()` 编译失败时调用 |
+| `git_diff/service.py` | `render_diff_pdf()` 编译失败时调用 |
+
 ### `latex_parser.py` — LaTeX 文本提取与 Marker 保护
 
 **设计理念**：将 LaTeX 源码转为纯文本供 LLM 处理，同时通过 marker（标记符）+ 反向映射策略确保修改后能精确写回源文件。所有使用 Marker 保护的模块（typo_check、expression_opt、terminology_check）共享此模块。

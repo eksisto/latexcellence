@@ -34,7 +34,7 @@
 | 模块 | 文档 | 说明 |
 | --- | --- | --- |
 | 自动编译 | [compile.md](modules/compile.md) | LaTeX 项目编译与错误翻译 |
-| Git 差异高亮 | [git_diff.md](modules/git_diff.md) | Git 版本差异可视化高亮 PDF |
+| Git 差异高亮 | [git_diff.md](modules/git_diff.md) | Git 版本差异可视化高亮 PDF（含编译错误 LLM 翻译） |
 | 参考文献管理 | [bib_manager.md](modules/bib_manager.md) | BibTeX 参考文献格式识别与管理 |
 
 ---
@@ -88,8 +88,8 @@
 | --- | --- |
 | 逐段检查 + SSE 流式 | typo_check, expression_opt, terminology_check, formatting |
 | 多轮对话 | writing_chat |
-| 单次请求-响应 | formula_ocr, table_ocr, template_gen, style_modify, compile (错误翻译), markdown_converter (宏包分析) |
-| 无 LLM | git_diff, compile (编译本身) |
+| 单次请求-响应 | formula_ocr, table_ocr, template_gen, style_modify, compile (错误翻译), git_diff (错误翻译), markdown_converter (宏包分析) |
+| 无 LLM | compile (编译本身) |
 
 ### 外部依赖
 

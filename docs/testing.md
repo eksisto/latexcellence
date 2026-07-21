@@ -11,6 +11,7 @@
 | `test_config_security.py` | 环境变量 API Key 防落盘、手动 Key 持久化、掩码保持 |
 | `test_utils/test_path_guard.py` | resolve_project_path 六层校验（空值、绝对路径、..、resolve逃逸、符号链接、扩展名） |
 | `test_utils/test_input_resolver.py` | 递归展开路径穿越检测（引用外部文件时拒绝） |
+| `test_utils/test_compile_error_translator.py` | ErrorTranslation 模型、extract_key_errors 过滤、translate_compile_errors LLM 流程（Mock） |
 | `test_api/test_typo_check.py` | Pydantic 模型、LLM mock、marker 保护、写回 |
 | `test_api/test_expression_opt.py` | Pydantic 模型、LLM mock、marker 保护、prompt CRUD |
 | `test_api/test_terminology_check.py` | Pydantic 模型、LLM mock、聚类逻辑、去重、写回 |

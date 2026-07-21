@@ -22,6 +22,7 @@ from pydantic import BaseModel, ConfigDict
 from backend.core.config import get_config
 from backend.core.logger import get_logger
 from backend.core.workspace_manager import get_project_manager_for_workspace
+from backend.utils.compile_error_translator import translate_compile_errors
 from backend.utils.path_guard import resolve_project_path
 
 
@@ -97,6 +98,7 @@ class DiffHighlightResult(BaseModel):
     stdout: str = ""
     stderr: str = ""
     explanation: str = ""
+    fixes: list[str] = []
 
 
 @dataclass
@@ -225,6 +227,11 @@ async def render_diff_pdf(
         logger.warning(
             f"Git diff PDF compilation failed for job={job_id}: {compile_result.returncode}"
         )
+        explanation, fixes = await translate_compile_errors(
+            compile_result.stdout, compile_result.stderr,
+        )
+        if not explanation:
+            explanation = "差异 LaTeX 已生成，但 PDF 编译失败。请查看原始输出定位问题。"
         return DiffHighlightResult(
             success=False,
             job_id=job_id,
@@ -236,7 +243,8 @@ async def render_diff_pdf(
             included_files=included_files,
             stdout=compile_result.stdout,
             stderr=compile_result.stderr,
-            explanation="差异 LaTeX 已生成，但 PDF 编译失败。请查看原始输出定位问题。",
+            explanation=explanation,
+            fixes=fixes,
         )
 
     public_pdf = job_dir / "diff-highlight.pdf"

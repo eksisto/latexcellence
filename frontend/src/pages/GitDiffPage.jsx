@@ -453,9 +453,22 @@ export default function GitDiffPage() {
                   已展开 {result.included_files?.length || 0} 个 LaTeX 文件
                 </div>
                 {result.explanation && (
-                  <p className="text-sm text-destructive whitespace-pre-wrap">
-                    {result.explanation}
-                  </p>
+                  <div>
+                    <Label className="text-xs text-muted-foreground">错误解释</Label>
+                    <p className="text-sm mt-1 whitespace-pre-wrap text-destructive">
+                      {result.explanation}
+                    </p>
+                  </div>
+                )}
+                {result.fixes && result.fixes.length > 0 && (
+                  <div>
+                    <Label className="text-xs text-muted-foreground">修复建议</Label>
+                    <ul className="text-sm mt-1 list-disc list-inside space-y-1">
+                      {result.fixes.map((fix, i) => (
+                        <li key={i}>{fix}</li>
+                      ))}
+                    </ul>
+                  </div>
                 )}
                 {result.success && result.pdf_url && (
                   <Button

@@ -19,10 +19,12 @@ from pydantic import ValidationError
 
 from backend.modules.compile.service import (
     CompileResult,
-    ErrorTranslation,
-    _extract_key_errors,
     _validate_main_file,
     compile_latex,
+)
+from backend.utils.compile_error_translator import (
+    ErrorTranslation,
+    extract_key_errors,
 )
 
 
@@ -134,32 +136,32 @@ class TestErrorTranslationModel:
 
 
 class TestExtractKeyErrors:
-    """_extract_key_errors 错误日志过滤测试。"""
+    """extract_key_errors 错误日志过滤测试。"""
 
     def test_extracts_undefined_control_sequence(self):
         log = "Some preamble\n! Undefined control sequence.\nl.42 \\badcommand\nMore text"
-        result = _extract_key_errors(log)
+        result = extract_key_errors(log)
         assert "Undefined control sequence" in result
         assert "\\badcommand" in result
 
     def test_extracts_latex_error(self):
         log = "Header\n! LaTeX Error: File `missing.sty' not found.\nTrailer"
-        result = _extract_key_errors(log)
+        result = extract_key_errors(log)
         assert "LaTeX Error" in result
         assert "missing.sty" in result
 
     def test_extracts_emergency_stop(self):
         log = "Text\n! Emergency stop.\nl.10 \\end{document}\n"
-        result = _extract_key_errors(log)
+        result = extract_key_errors(log)
         assert "Emergency stop" in result
 
     def test_no_error_patterns_returns_tail(self):
         log = "a" * 4000
-        result = _extract_key_errors(log)
+        result = extract_key_errors(log)
         assert len(result) <= 3000
 
     def test_empty_log(self):
-        result = _extract_key_errors("")
+        result = extract_key_errors("")
         assert result == ""
 
 
@@ -286,7 +288,7 @@ class TestCompileLatex:
 
         with patch("backend.modules.compile.service.get_project_manager_for_workspace", return_value=mock_project):
             with patch("asyncio.create_subprocess_exec", return_value=mock_subprocess_failure):
-                with patch("backend.modules.compile.service.get_llm_client", return_value=mock_llm):
+                with patch("backend.utils.compile_error_translator.get_llm_client", return_value=mock_llm):
                     result = await compile_latex("main.tex")
 
         assert result.success is False
@@ -303,7 +305,7 @@ class TestCompileLatex:
 
         with patch("backend.modules.compile.service.get_project_manager_for_workspace", return_value=mock_project):
             with patch("asyncio.create_subprocess_exec", return_value=mock_subprocess_failure):
-                with patch("backend.modules.compile.service.get_llm_client", return_value=mock_llm):
+                with patch("backend.utils.compile_error_translator.get_llm_client", return_value=mock_llm):
                     result = await compile_latex("main.tex")
 
         assert result.success is False

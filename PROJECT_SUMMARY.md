@@ -30,7 +30,8 @@ latexcellence/
 │   │   ├── json_utils.py            # LLM JSON 解析/校验/重试
 │   │   ├── file_ops.py              # 原子写入/备份/MD5
 │   │   ├── input_resolver.py        # \input/\include 递归解析
-│   │   └── latex_parser.py          # LaTeX 源码↔纯文本转换（Marker 保护）
+│   │   ├── latex_parser.py          # LaTeX 源码↔纯文本转换（Marker 保护）
+│   │   └── compile_error_translator.py  # LaTeX 编译错误 LLM 翻译（compile + git_diff 复用）
 │   └── modules/                     # 功能模块目录
 │       ├── typo_check/              # 错字查找
 │       ├── expression_opt/          # 表达优化
