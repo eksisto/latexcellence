@@ -40,6 +40,7 @@
     --color-foreground: var(--foreground);
     --color-background: var(--background);
     --color-primary-foreground-inverse: var(--primary-foreground-inverse, oklch(0 0 0));
+    --color-selection: var(--selection);
     --radius-sm: calc(var(--radius) * 0.6);
     --radius-md: calc(var(--radius) * 0.8);
     --radius-lg: var(--radius);
@@ -81,10 +82,10 @@
     font-family: var(--font-heading);
     }
   ::selection {
-    background-color: rgba(0, 0, 0, 0.2);
+    background-color: var(--selection);
     }
   .dark ::selection {
-    background-color: rgba(255, 255, 255, 0.2);
+    background-color: var(--selection);
     }
 }
 

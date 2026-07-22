@@ -8,6 +8,7 @@
     --primary: oklch(0 0 0);
     --primary-foreground: oklch(1 0 0);
     --primary-foreground-inverse: oklch(0 0 0);
+    --selection: oklch(0.7 0.08 250 / 0.5);
     --secondary: oklch(0.9400 0 0);
     --secondary-foreground: oklch(0 0 0);
     --muted: oklch(0.9700 0 0);
@@ -43,6 +44,7 @@
     --primary: oklch(1 0 0);
     --primary-foreground: oklch(0 0 0);
     --primary-foreground-inverse: oklch(1 0 0);
+    --selection: oklch(0.4 0.08 250 / 0.6);
     --secondary: oklch(0.2500 0 0);
     --secondary-foreground: oklch(1 0 0);
     --muted: oklch(0.2300 0 0);

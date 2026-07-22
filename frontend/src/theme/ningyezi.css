@@ -8,6 +8,7 @@
     --primary: oklch(0.5393 0.2713 286.7462);
     --primary-foreground: oklch(1.0000 0 0);
     --primary-foreground-inverse: oklch(0 0 0);
+    --selection: oklch(0.7 0.15 260 / 0.4);
     --secondary: oklch(0.9540 0.0063 255.4755);
     --secondary-foreground: oklch(0.1344 0 0);
     --muted: oklch(0.9702 0 0);
@@ -43,6 +44,7 @@
     --primary: oklch(0.6132 0.2294 291.7437);
     --primary-foreground: oklch(1.0000 0 0);
     --primary-foreground-inverse: oklch(0 0 0);
+    --selection: oklch(0.45 0.15 270 / 0.5);
     --secondary: oklch(0.2940 0.0130 272.9312);
     --secondary-foreground: oklch(0.9551 0 0);
     --muted: oklch(0.2940 0.0130 272.9312);
