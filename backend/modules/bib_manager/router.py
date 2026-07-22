@@ -13,10 +13,12 @@ from pydantic import BaseModel
 from backend.modules.bib_manager.models import (
     FormatAnalysisRequest,
     GenerateBibtexRequest,
+    GenerateLatexRequest,
     ReadBibRequest,
     SaveBibRequest,
 )
 from backend.modules.bib_manager.service import BibManagerService
+from backend.modules.bib_manager.style_registry import list_all_styles
 
 router = APIRouter(prefix="/api/bib-manager", tags=["bib_manager"])
 
@@ -202,3 +204,27 @@ async def delete_format(name: str):
     if not get_service().delete_format(name):
         raise HTTPException(status_code=404, detail=f"Format not found: {name}")
     return {"status": "ok"}
+
+
+# ── LaTeX 样式相关 ─────────────────────────────────────────────────────────
+
+@router.get("/latex-styles")
+async def get_latex_styles():
+    """列出所有内置的 LaTeX 样式映射。"""
+    return {"styles": list_all_styles()}
+
+
+@router.post("/generate-latex")
+async def generate_latex_code(request: GenerateLatexRequest):
+    """根据格式信息生成包含正确样式的 LaTeX 参考文献代码。"""
+    if not request.metadata:
+        raise HTTPException(status_code=400, detail="Empty metadata")
+    try:
+        result = get_service().generate_latex_code(
+            request.metadata,
+            request.format_info,
+            request.bib_file_path,
+        )
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))

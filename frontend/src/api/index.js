@@ -340,6 +340,12 @@ export const api = {
         method: "POST",
         body: JSON.stringify(data),
       }),
+    generateLatex: (data) =>
+      request("/bib-manager/generate-latex", {
+        method: "POST",
+        body: JSON.stringify(data),
+      }),
+    latexStyles: () => request("/bib-manager/latex-styles"),
     readBib: (filePath, workspaceId) =>
       request(appendWs("/bib-manager/read-bib", workspaceId), {
         method: "POST",

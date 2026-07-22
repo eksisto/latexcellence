@@ -25,8 +25,10 @@ from backend.core.config import get_config
 from backend.modules.bib_manager.models import (
     BibEntry,
     ExtractedMetadata,
+    LatexCodeResult,
     ReferenceFormatResult,
 )
+from backend.modules.bib_manager.style_registry import get_style_for_format
 from backend.utils.json_utils import retry_with_validation
 from backend.utils.file_ops import atomic_write, safe_read
 from backend.utils.path_guard import resolve_project_path
@@ -43,7 +45,8 @@ _FORMAT_ANALYSIS_PROMPT = (
     "2. Map it to the most appropriate BibTeX entry type "
     "(article, book, inproceedings, incollection, phdthesis, mastersthesis, "
     "techreport, misc, etc.).\n"
-    "3. Extract the formatting rules observed in this entry.\n\n"
+    "3. Extract the formatting rules observed in this entry.\n"
+    "4. Suggest the most appropriate LaTeX bibliography rendering style.\n\n"
     "## Guidelines\n"
     "- If the format cannot be determined with confidence, set format_name to "
     '"unknown" and confidence to "low".\n'
@@ -54,11 +57,25 @@ _FORMAT_ANALYSIS_PROMPT = (
     "example keys.\n"
     "- format_description should cover: field ordering, punctuation between "
     "fields, author name style, title capitalization, and any special markers "
-    "(e.g., [J], [M], DOI placement).\n\n"
+    "(e.g., [J], [M], DOI placement).\n"
+    "- For the LaTeX style fields, use these known mappings as reference:\n"
+    "  * GB/T 7714-2015 → latex_backend='bibtex', latex_package='gbt7714', "
+    "latex_bibliographystyle='gbt7714-numerical'\n"
+    "  * APA 7th → latex_backend='biblatex', latex_package='biblatex', "
+    "latex_bibliographystyle='apa'\n"
+    "  * IEEE → latex_backend='bibtex', latex_package='IEEEtran', "
+    "latex_bibliographystyle='IEEEtran'\n"
+    "  * Vancouver → latex_backend='bibtex', latex_package='', "
+    "latex_bibliographystyle='vancouver'\n"
+    "  * Chicago → latex_backend='bibtex', latex_package='chicago', "
+    "latex_bibliographystyle='chicago'\n"
+    "  * MLA 9th → latex_backend='bibtex', latex_package='mla13', "
+    "latex_bibliographystyle='mla'\n"
+    "- If unsure about LaTeX style, set all latex_* fields to null.\n\n"
     "## Output\n"
     "Respond with JSON only. No markdown fences, no commentary.\n\n"
     "{{\n"
-    '  "format_name": "GB/T 7714-2015 | APA 7th | IEEE | MLA 9th | Chicago | unknown",\n'
+    '  "format_name": "GB/T 7714-2015 | APA 7th | IEEE | MLA 9th | Chicago | Vancouver | unknown",\n'
     '  "confidence": "high | medium | low",\n'
     '  "entry_type": "article | book | inproceedings | ...",\n'
     '  "document_type_marker": "[J] | [M] | [C] | [D] | null (for non-GB/T formats)",\n'
@@ -69,7 +86,11 @@ _FORMAT_ANALYSIS_PROMPT = (
     '    ...\n'
     '  }},\n'
     '  "format_description": "Describe in order: author format → title → document type marker → journal/publication information → year/volume/issue/pages → DOI/URL, etc.",\n'
-    '  "raw_observed_fields": ["the list of fields that actually appear in the entry, for validation"]\n'
+    '  "raw_observed_fields": ["the list of fields that actually appear in the entry, for validation"],\n'
+    '  "latex_backend": "bibtex | biblatex | null",\n'
+    '  "latex_package": "the LaTeX package name needed, or null",\n'
+    '  "latex_bibliographystyle": "the .bst style name or biblatex style, or null",\n'
+    '  "latex_preamble": "the exact LaTeX preamble line(s) needed, or null"\n'
     "}}"
 )
 
@@ -157,8 +178,23 @@ class BibManagerService:
                 max_tokens=2048,
                 response_format={"type": "json_object"},
             )
+            result = validated.model_dump()
+
+            # 如果 LLM 未提供 LaTeX 样式字段，从注册表补全
+            if not result.get("latex_bibliographystyle"):
+                style_info = get_style_for_format(result.get("format_name", ""))
+                if style_info:
+                    result["latex_backend"] = style_info.backend
+                    result["latex_package"] = style_info.package
+                    result["latex_bibliographystyle"] = style_info.bibliographystyle
+                    result["latex_preamble"] = style_info.preamble
+                    self._logger.info(
+                        f"LaTeX style filled from registry: "
+                        f"{style_info.bibliographystyle}"
+                    )
+
             self._logger.info(f"Format identified: {validated.format_name}")
-            return validated.model_dump()
+            return result
         except ValueError as e:
             self._logger.error(f"Format analysis failed: {e}")
             raise RuntimeError(f"Format analysis failed: {e}")
@@ -363,6 +399,92 @@ class BibManagerService:
         except Exception as e:
             self._logger.error(f"BibTeX generation error: {e}")
             raise RuntimeError(f"BibTeX generation failed: {e}")
+
+    def generate_latex_code(
+        self,
+        metadata: dict[str, Any],
+        format_info: dict | None = None,
+        bib_file_path: str | None = None,
+    ) -> dict[str, Any]:
+        """根据格式信息生成包含正确样式的 LaTeX 参考文献代码。"""
+        # 从 format_info 或注册表获取 LaTeX 样式
+        backend = None
+        preamble = ""
+        bibliographystyle = ""
+        bib_path = bib_file_path or "references"
+
+        if format_info:
+            backend = format_info.get("latex_backend")
+            preamble = format_info.get("latex_preamble") or ""
+            bibliographystyle = format_info.get("latex_bibliographystyle") or ""
+            fmt_name = format_info.get("format_name", "")
+        else:
+            fmt_name = ""
+
+        # 注册表兜底
+        if not bibliographystyle and fmt_name:
+            style_info = get_style_for_format(fmt_name)
+            if style_info:
+                backend = backend or style_info.backend
+                preamble = preamble or style_info.preamble
+                bibliographystyle = style_info.bibliographystyle or ""
+
+        # 如果仍然没有，从元数据中提取 cite_key 生成引用命令
+        cite_key = metadata.get("cite_key", "")
+
+        # 构建完整代码
+        lines: list[str] = []
+
+        if preamble:
+            lines.append(f"% 需要添加到导言区的宏包配置")
+            lines.append(preamble)
+            lines.append("")
+
+        if backend == "biblatex":
+            # biblatex 工作流
+            print_cmd = format_info.get(
+                "print_command", "\\printbibliography"
+            ) if format_info else "\\printbibliography"
+            lines.append(f"% 在文档末尾使用以下命令生成参考文献列表")
+            lines.append(print_cmd)
+            if cite_key:
+                cite_cmd = format_info.get(
+                    "citation_command", "\\cite"
+                ) if format_info else "\\cite"
+                lines.append("")
+                lines.append(f"% 引用示例：{cite_cmd}{{{cite_key}}}")
+        else:
+            # BibTeX 工作流
+            if bibliographystyle:
+                lines.append(f"% 在 \\begin{{document}} 之后、\\end{{document}} 之前添加：")
+                lines.append(f"\\bibliographystyle{{{bibliographystyle}}}")
+            lines.append(f"\\bibliography{{{bib_path}}}")
+            if cite_key:
+                lines.append("")
+                lines.append(f"% 引用示例：\\cite{{{cite_key}}}")
+
+        full_code = "\n".join(lines)
+
+        self._logger.info(
+            f"LaTeX code generated: backend={backend}, "
+            f"style={bibliographystyle}"
+        )
+
+        return {
+            "preamble": preamble,
+            "bibliographystyle": (
+                f"\\bibliographystyle{{{bibliographystyle}}}"
+                if bibliographystyle and backend != "biblatex" else ""
+            ),
+            "bibliography": (
+                f"\\bibliography{{{bib_path}}}"
+                if backend != "biblatex" else ""
+            ),
+            "cite_command": (
+                f"\\cite{{{cite_key}}}" if cite_key else ""
+            ),
+            "full_code": full_code,
+        }
 
     def read_bib_file(self, file_path: str, workspace_id: str = "") -> dict[str, Any]:
         """读取 .bib 文件内容。"""

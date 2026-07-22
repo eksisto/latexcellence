@@ -91,7 +91,7 @@ latexcellence/
 | 10 | markdown_converter | MD→LaTeX(pandoc) | router.py, service.py | ✓(宏包分析) | ✗ |
 | 11 | style_modify | 自然语言修改样式 | router.py, service.py | ✓ | ✗ |
 | 12 | writing_chat | 写作助手对话 | router.py, service.py, context.py, models.py, prompt_manager.py | ✓ | ✗ |
-| 13 | bib_manager | 参考文献管理 | router.py, service.py, models.py | ✓ | ✗ |
+| 13 | bib_manager | 参考文献管理 | router.py, service.py, models.py, style_registry.py | ✓ | ✗ |
 
 ## Core Architecture Concepts
 

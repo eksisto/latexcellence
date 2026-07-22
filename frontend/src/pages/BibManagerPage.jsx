@@ -67,11 +67,17 @@ export default function BibManagerPage() {
   const [editedBibtex, setEditedBibtex] = useState("");
   const [editedCiteKey, setEditedCiteKey] = useState("");
   const [step3Loading, setStep3Loading] = useState(false);
+  const prevCiteKeyRef = useRef("");
 
   // Step 4: save
   const [bibFiles, setBibFiles] = useState([]);
   const [selectedBibFile, setSelectedBibFile] = useState("");
   const [saving, setSaving] = useState(false);
+
+  // Step 5: LaTeX code generation
+  const [latexResult, setLatexResult] = useState(null);
+  const [step5Loading, setStep5Loading] = useState(false);
+  const [bibFilePath, setBibFilePath] = useState("references");
 
   // Load .bib files when project is open
   useEffect(() => {
@@ -270,6 +276,7 @@ export default function BibManagerPage() {
     setBibtexResult(null);
     setEditedBibtex("");
     setEditedCiteKey("");
+    prevCiteKeyRef.current = "";
 
     try {
       const data = await api.bibManager.generate({
@@ -280,6 +287,7 @@ export default function BibManagerPage() {
       setBibtexResult(data);
       setEditedBibtex(data.raw_bibtex);
       setEditedCiteKey(data.cite_key);
+      prevCiteKeyRef.current = data.cite_key;
       toast.success("BibTeX 生成完成");
     } catch (e) {
       toast.error("BibTeX 生成失败", { description: e.message });
@@ -288,6 +296,17 @@ export default function BibManagerPage() {
     }
   }, [editedMetadata, formatResult]);
 
+  // Sync cite_key change to BibTeX code
+  useEffect(() => {
+    const prevKey = prevCiteKeyRef.current;
+    const newKey = editedCiteKey.trim();
+    if (!editedBibtex || !newKey || !prevKey || newKey === prevKey) return;
+    setEditedBibtex((prev) =>
+      prev.replace(new RegExp(`@(\\w+)\\{${prevKey.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")},`), `@$1{${newKey},`),
+    );
+    prevCiteKeyRef.current = newKey;
+  }, [editedCiteKey]);
+
   const handleCopyBibtex = useCallback(() => {
     if (!editedBibtex) return;
     navigator.clipboard.writeText(editedBibtex).then(
@@ -295,6 +314,38 @@ export default function BibManagerPage() {
       () => toast.error("复制失败"),
     );
   }, [editedBibtex]);
+
+  // Step 5: generate LaTeX reference code
+  const handleGenerateLatex = useCallback(async () => {
+    if (!formatResult) {
+      toast.error("请先完成格式识别（步骤 1）");
+      return;
+    }
+    setStep5Loading(true);
+    setLatexResult(null);
+
+    try {
+      const data = await api.bibManager.generateLatex({
+        metadata: { ...editedMetadata, cite_key: editedCiteKey },
+        format_info: formatResult,
+        bib_file_path: bibFilePath || "references",
+      });
+      setLatexResult(data);
+      toast.success("LaTeX 代码生成完成");
+    } catch (e) {
+      toast.error("LaTeX 代码生成失败", { description: e.message });
+    } finally {
+      setStep5Loading(false);
+    }
+  }, [formatResult, editedMetadata, editedCiteKey, bibFilePath]);
+
+  const handleCopyLatex = useCallback(() => {
+    if (!latexResult?.full_code) return;
+    navigator.clipboard.writeText(latexResult.full_code).then(
+      () => toast.success("已复制到剪贴板"),
+      () => toast.error("复制失败"),
+    );
+  }, [latexResult]);
 
   // Step 4: save to .bib file
   const handleSaveBib = useCallback(async () => {
@@ -315,7 +366,7 @@ export default function BibManagerPage() {
     }
   }, [editedBibtex, editedCiteKey, selectedBibFile]);
 
-  const hasResult = formatResult || metadataResult || bibtexResult;
+  const hasResult = formatResult || metadataResult || bibtexResult || latexResult;
 
   return (
     <div className="min-h-screen p-8">
@@ -547,6 +598,34 @@ export default function BibManagerPage() {
                         <p className="text-xs text-muted-foreground">
                           {formatResult.format_description}
                         </p>
+                      )}
+                      {formatResult.latex_bibliographystyle && (
+                        <div className="rounded bg-muted/50 p-2 mt-1">
+                          <span className="text-xs text-muted-foreground">
+                            推荐 LaTeX 样式：
+                          </span>
+                          <span className="ml-1 text-xs font-mono font-semibold">
+                            {formatResult.latex_bibliographystyle}
+                          </span>
+                          {formatResult.latex_package && (
+                            <>
+                              <span className="text-xs text-muted-foreground ml-2">
+                                （需宏包
+                              </span>
+                              <span className="text-xs font-mono">
+                                {" "}{formatResult.latex_package}
+                              </span>
+                              <span className="text-xs text-muted-foreground">
+                                ）
+                              </span>
+                            </>
+                          )}
+                          {formatResult.latex_backend && (
+                            <span className="text-xs text-muted-foreground ml-2">
+                              [{formatResult.latex_backend}]
+                            </span>
+                          )}
+                        </div>
                       )}
                       <div className="flex items-center gap-2 pt-1">
                         <Button
@@ -797,6 +876,76 @@ export default function BibManagerPage() {
                       )}
                       {saving ? "保存中..." : "应用到文件"}
                     </Button>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Step 5: Generate LaTeX reference code */}
+          {formatResult && (
+            <Card>
+              <CardHeader className="pb-2">
+                <div className="flex items-center gap-2">
+                  <span className="text-primary text-sm font-bold mr-1">
+                    5
+                  </span>
+                  <CardTitle className="text-base">生成 LaTeX 参考文献代码</CardTitle>
+                </div>
+                <CardDescription>
+                  生成包含正确 \bibliographystyle 和 \bibliography 命令的 LaTeX 代码片段
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">.bib 文件路径（不含扩展名）</Label>
+                    <Input
+                      className="h-8 text-xs font-mono"
+                      value={bibFilePath}
+                      onChange={(e) => setBibFilePath(e.target.value)}
+                      placeholder="references"
+                    />
+                  </div>
+                  {formatResult.latex_bibliographystyle && (
+                    <div className="space-y-1.5">
+                      <Label className="text-xs">推荐样式</Label>
+                      <div className="h-8 flex items-center text-xs font-mono bg-muted/50 rounded px-2">
+                        {formatResult.latex_bibliographystyle}
+                      </div>
+                    </div>
+                  )}
+                </div>
+                <Button
+                  onClick={handleGenerateLatex}
+                  disabled={step5Loading}
+                >
+                  {step5Loading ? (
+                    <Loader2 className="animate-spin" />
+                  ) : (
+                    <FileText />
+                  )}
+                  {step5Loading ? "生成中..." : "生成 LaTeX 代码"}
+                </Button>
+
+                {latexResult && (
+                  <div className="rounded-lg border border-border p-4 space-y-3 mt-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-medium">LaTeX 参考文献代码</span>
+                      <Button variant="outline" size="sm" onClick={handleCopyLatex}>
+                        <Copy />
+                        复制
+                      </Button>
+                    </div>
+                    <Textarea
+                      className="min-h-32 resize-none font-mono text-xs"
+                      value={latexResult.full_code}
+                      readOnly
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      将上述代码添加到你的 LaTeX 文档中。导言区配置已包含在内，
+                      参考文献列表命令需放在文档末尾。
+                    </p>
                   </div>
                 )}
               </CardContent>
