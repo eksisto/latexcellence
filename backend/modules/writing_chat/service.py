@@ -270,7 +270,8 @@ class WritingChatService:
                         else:
                             result_text = str(tool_result)
 
-                        yield {
+                        # 构建搜索结果事件
+                        tool_event = {
                             "type": "tool_result",
                             "tool": tool_name,
                             "result_count": (
@@ -278,6 +279,20 @@ class WritingChatService:
                                 if hasattr(tool_result, "results") else 0
                             ),
                         }
+                        # 搜索结果摘要（供前端折叠框展示）
+                        if tool_name == "web_search" and hasattr(tool_result, "results"):
+                            search_results = tool_result.results[:5]  # 限制最多5条
+                            tool_event["search_results"] = [
+                                {
+                                    "index": i,
+                                    "title": r.title,
+                                    "snippet": r.snippet,
+                                    "url": r.url,
+                                }
+                                for i, r in enumerate(search_results, 1)
+                            ]
+                            tool_event["query"] = tool_args.get("query", "")
+                        yield tool_event
                     except DDGChallengeError as ce:
                         # DDG Challenge：推送 captcha 到前端，终止本轮搜索
                         self._logger.info(

@@ -74,6 +74,7 @@ function MessageBubble({ message, actions }) {
   const isStreaming = message.streaming;
   const [copied, setCopied] = useState(false);
   const [thinkingExpanded, setThinkingExpanded] = useState(() => !message.thinkingClosed);
+  const [searchExpanded, setSearchExpanded] = useState(true);
 
   // 在流式更新 thinkingClosed 时同步展开状态
   useEffect(() => {
@@ -184,6 +185,58 @@ function MessageBubble({ message, actions }) {
                       <MarkdownRenderer>
                         {message.thinkingContent}
                       </MarkdownRenderer>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+            {/* 搜索结果折叠框 */}
+            {message.searchResults && message.searchResults.length > 0 && (
+              <div
+                className="mb-2 rounded bg-background/30 border p-2"
+                style={{ borderColor: "color-mix(in oklch, #3b82f6 20%, transparent)" }}
+              >
+                <button
+                  type="button"
+                  className="cursor-pointer text-xs font-medium flex items-center gap-1 select-none w-full text-left"
+                  onClick={() => setSearchExpanded((v) => !v)}
+                  style={{ color: "color-mix(in oklch, #3b82f6 75%, transparent)" }}
+                >
+                  <Globe className="size-3 shrink-0" />
+                  搜索结果
+                  <span className="text-muted-foreground font-normal">
+                    {message.searchQuery && ` — ${message.searchQuery}`}
+                  </span>
+                  <ChevronDown className={`size-3 ml-auto transition-transform duration-400 ${searchExpanded ? "rotate-180" : ""}`} />
+                </button>
+                <div
+                  className="grid transition-[grid-template-rows] duration-400 ease-in-out"
+                  style={{ gridTemplateRows: searchExpanded ? "1fr" : "0fr" }}
+                >
+                  <div className="overflow-hidden">
+                    <div className="mt-2 text-xs leading-relaxed">
+                      <ul className="space-y-2">
+                        {message.searchResults.map((result) => (
+                          <li key={result.index} className="flex flex-col gap-0.5">
+                            <span className="font-medium text-foreground">
+                              [{result.index}] {result.title}
+                            </span>
+                            {result.snippet && (
+                              <span className="text-muted-foreground">{result.snippet}</span>
+                            )}
+                            {result.url && (
+                              <a
+                                href={result.url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-blue-500 hover:underline truncate"
+                              >
+                                {result.url}
+                              </a>
+                            )}
+                          </li>
+                        ))}
+                      </ul>
                     </div>
                   </div>
                 </div>

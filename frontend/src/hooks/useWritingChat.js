@@ -403,6 +403,19 @@ export default function useWritingChat() {
           setSearchStatus({ query: event.query, engine: event.engine });
         } else if (event.type === "tool_result") {
           setSearchStatus(null);
+          // 存储搜索结果到 assistant 消息
+          if (event.search_results && event.search_results.length > 0) {
+            setWritingChatMessages((prev) =>
+              prev.map((m) => {
+                if (m.id !== tmpAssistantId) return m;
+                return {
+                  ...m,
+                  searchResults: event.search_results,
+                  searchQuery: event.query || "",
+                };
+              })
+            );
+          }
         } else if (event.type === "captcha_challenge") {
           setSearchStatus(null);
           setCaptchaChallenge({

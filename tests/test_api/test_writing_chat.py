@@ -14,7 +14,7 @@
 import time
 from pathlib import Path
 from typing import AsyncIterator
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -587,3 +587,193 @@ class TestServiceMessageOps:
         assert len(loaded.messages) == 2
         # snapshot 还原后 user(0) + assistant(20)，累计 = 20
         assert loaded.cumulative_tokens == 20
+
+
+# ── Web search tool integration tests ─────────────────────────────────────
+
+
+_TOOL_REGISTRY_PATH = "backend.modules.writing_chat.service.get_tool_registry"
+
+
+def _make_tool_call(call_id: str = "call_ws", query: str = "latex tutorial"):
+    """构造 openai tool_call 对象。"""
+    import json
+    from openai.types.chat.chat_completion_message_tool_call import (
+        ChatCompletionMessageToolCall,
+        Function,
+    )
+
+    return ChatCompletionMessageToolCall(
+        id=call_id,
+        function=Function(name="web_search", arguments=json.dumps({"query": query})),
+        type="function",
+    )
+
+
+def _make_search_response(query: str = "latex tutorial"):
+    """构造 SearchResponse 测试数据。"""
+    from backend.utils.web_search import SearchResponse, SearchResult
+
+    return SearchResponse(
+        query=query,
+        results=[
+            SearchResult(
+                title="LaTeX 入门教程",
+                snippet="LaTeX 是一个高质量的排版系统。",
+                url="https://example.com/latex-intro",
+            ),
+            SearchResult(
+                title="Overleaf 文档",
+                snippet="Overleaf 是在线 LaTeX 编辑器。",
+                url="https://overleaf.com",
+            ),
+        ],
+        engine="duckduckgo",
+        total_results=2,
+    )
+
+
+class TestWebSearchToolEvent:
+    """验证 web_search 工具结果事件（tool_result 含 search_results）的构造逻辑。"""
+
+    @pytest.mark.asyncio
+    async def test_send_web_search_emits_search_results(
+        self, temp_session_dir, open_project, service, monkeypatch
+    ):
+        monkeypatch.setattr(get_config().llm, "api_key", "test-key")
+        search_resp = _make_search_response("latex 公式写法")
+
+        # 第一次 chat_with_tools：返回 web_search tool_call
+        first_response = _make_chat_completion_with_tools(
+            tool_calls=[_make_tool_call(query="latex 公式写法")]
+        )
+        # 第二次 chat_with_tools：无 tool_call，进入流式输出
+        second_response = _make_chat_completion_with_tools(tool_calls=None, content="搜索完成")
+
+        call_count = 0
+
+        async def fake_chat_with_tools(**kwargs):
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                return first_response
+            return second_response
+
+        chunks = [
+            StreamChunk(content="结果如下", usage=None),
+            StreamChunk(
+                content=None,
+                usage=UsageInfo(prompt_tokens=10, completion_tokens=2, total_tokens=12),
+            ),
+        ]
+
+        mock_registry = MagicMock()
+        mock_registry.execute = AsyncMock(return_value=search_resp)
+
+        with patch(_LLM_CLIENT_PATH) as m_llm, patch(
+            _TOOL_REGISTRY_PATH, return_value=mock_registry
+        ):
+            client = MagicMock()
+            client.chat_with_tools = fake_chat_with_tools
+            client.chat_stream_with_usage = MagicMock(return_value=_stream(chunks))
+            m_llm.return_value = client
+
+            req = ChatSendRequest(
+                file_path="main.tex",
+                user_message="latex 公式怎么写",
+                web_search_enabled=True,
+            )
+            events = [e async for e in service.send(req)]
+
+        # 验证事件流包含 searching → tool_result（含 search_results）→ token → done
+        types = [e["type"] for e in events]
+        assert "searching" in types
+        assert "tool_result" in types
+        assert "token" in types
+        assert types[-1] == "done"
+
+        # 验证 tool_result 事件结构
+        tool_event = next(e for e in events if e["type"] == "tool_result")
+        assert tool_event["tool"] == "web_search"
+        assert tool_event["result_count"] == 2
+        assert "search_results" in tool_event
+        assert len(tool_event["search_results"]) == 2
+        assert tool_event["query"] == "latex 公式写法"
+
+        # 验证每条搜索结果的字段
+        first = tool_event["search_results"][0]
+        assert first["index"] == 1
+        assert first["title"] == "LaTeX 入门教程"
+        assert first["snippet"] == "LaTeX 是一个高质量的排版系统。"
+        assert first["url"] == "https://example.com/latex-intro"
+
+        # 验证 tool_messages 中的 content 仍为 format_for_llm 格式化文本
+        ctx = ConversationContext.load_from_disk(events[-1]["session_id"])
+        assert ctx is not None
+
+    @pytest.mark.asyncio
+    async def test_send_web_search_no_results(
+        self, temp_session_dir, open_project, service, monkeypatch
+    ):
+        """搜索无结果时，tool_result 不应包含 search_results 字段。"""
+        monkeypatch.setattr(get_config().llm, "api_key", "test-key")
+
+        from backend.utils.web_search import SearchResponse
+
+        empty_resp = SearchResponse(query="不存在的内容", results=[], engine="duckduckgo")
+
+        first_response = _make_chat_completion_with_tools(
+            tool_calls=[_make_tool_call(query="不存在的内容")]
+        )
+        second_response = _make_chat_completion_with_tools(
+            tool_calls=None, content="未找到结果"
+        )
+
+        call_count = 0
+
+        async def fake_chat_with_tools(**kwargs):
+            nonlocal call_count
+            call_count += 1
+            return first_response if call_count == 1 else second_response
+
+        chunks = [
+            StreamChunk(content="无结果", usage=None),
+            StreamChunk(
+                content=None,
+                usage=UsageInfo(prompt_tokens=5, completion_tokens=1, total_tokens=6),
+            ),
+        ]
+
+        mock_registry = MagicMock()
+        mock_registry.execute = AsyncMock(return_value=empty_resp)
+
+        with patch(_LLM_CLIENT_PATH) as m_llm, patch(
+            _TOOL_REGISTRY_PATH, return_value=mock_registry
+        ):
+            client = MagicMock()
+            client.chat_with_tools = fake_chat_with_tools
+            client.chat_stream_with_usage = MagicMock(return_value=_stream(chunks))
+            m_llm.return_value = client
+
+            req = ChatSendRequest(
+                file_path="main.tex",
+                user_message="不存在的内容",
+                web_search_enabled=True,
+            )
+            events = [e async for e in service.send(req)]
+
+        tool_event = next(e for e in events if e["type"] == "tool_result")
+        assert tool_event["result_count"] == 0
+        # search_results 字段存在但为空列表，前端靠 .length > 0 过滤
+        assert tool_event["search_results"] == []
+
+
+def _make_chat_completion_with_tools(tool_calls=None, content=None):
+    """构造 ChatCompletion 响应对象。"""
+    from openai.types.chat import ChatCompletion
+    from openai.types.chat.chat_completion import Choice
+    from openai.types.chat.chat_completion_message import ChatCompletionMessage
+
+    msg = ChatCompletionMessage(role="assistant", content=content, tool_calls=tool_calls)
+    choice = Choice(finish_reason="stop" if not tool_calls else "tool_calls", index=0, message=msg)
+    return ChatCompletion(id="test", choices=[choice], created=0, model="test", object="chat.completion")

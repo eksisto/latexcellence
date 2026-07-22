@@ -794,7 +794,7 @@ class SearchManager:
 _search_manager: SearchManager | None = None
 
 
-async def _web_search_executor(tool_name: str, arguments: dict[str, Any]) -> Any:
+async def _web_search_executor(tool_name: str, arguments: dict[str, Any]) -> SearchResponse:
     """web_search 工具执行函数，供 ToolRegistry 调用。"""
     manager = get_search_manager()
     cfg = get_config()
@@ -802,7 +802,7 @@ async def _web_search_executor(tool_name: str, arguments: dict[str, Any]) -> Any
         query=arguments["query"],
         max_results=arguments.get("max_results", cfg.features.web_search.max_results),
     )
-    return result.format_for_llm()
+    return result
 
 
 def reset_search_manager() -> None:
