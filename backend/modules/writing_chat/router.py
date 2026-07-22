@@ -207,3 +207,4 @@ async def set_active_prompt(request: AssistantSetActiveRequest):
     pm = get_prompt_manager()
     pm.set_active(request.name)
     return {"status": "ok", "name": request.name}
+

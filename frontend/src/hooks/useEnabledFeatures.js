@@ -7,7 +7,7 @@ const ALL_ENABLED = {
   template_gen: true, style_modify: true, typo_check: true,
   expression_opt: true, formatting: true, compile: true,
   git_diff: true, markdown_converter: true, terminology_check: true,
-  writing_chat: true, bib_manager: true,
+  writing_chat: true, bib_manager: true, web_search: true,
 };
 
 export default function useEnabledFeatures() {

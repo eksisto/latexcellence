@@ -80,6 +80,11 @@ export default function useWritingChat() {
   const [error, setError] = useState(null);
   const [editingMessageId, setEditingMessageId] = useState(null); // generate-edit 进行中
   const [applyingMessageId, setApplyingMessageId] = useState(null);
+  // 联网搜索状态
+  const [searchStatus, setSearchStatus] = useState(null); // { query, engine } | null
+  // DDG 验证码状态
+  const [captchaChallenge, setCaptchaChallenge] = useState(null); // { challenge_id, images, query, instruction } | null
+  const [captchaSubmitting, setCaptchaSubmitting] = useState(false);
   // 助手（提示词）状态
   const [assistants, setAssistants] = useState([]);
   const [activeAssistant, setActiveAssistant] = useState("");
@@ -394,6 +399,19 @@ export default function useWritingChat() {
               };
             })
           );
+        } else if (event.type === "searching") {
+          setSearchStatus({ query: event.query, engine: event.engine });
+        } else if (event.type === "tool_result") {
+          setSearchStatus(null);
+        } else if (event.type === "captcha_challenge") {
+          setSearchStatus(null);
+          setCaptchaChallenge({
+            challenge_id: event.challenge_id,
+            images: event.images || [],
+            query: event.query || "",
+            engine_name: event.engine_name || "",
+            instruction: event.instruction || "",
+          });
         } else if (event.type === "compressed") {
           setWritingChatCompressed(true);
           toast.info("会话已压缩", {
@@ -456,6 +474,7 @@ export default function useWritingChat() {
       } finally {
         setStreaming(false);
         setLoading("writingChat", false);
+        setSearchStatus(null);
         // 后端 send 后可能新建会话或更新现有，刷新 session 列表
         refreshSessions();
       }
@@ -607,6 +626,40 @@ export default function useWritingChat() {
     [writingChatCurrentSessionId, setWritingChatMessages, setWritingChatCompressed]
   );
 
+  // ── DDG 验证码提交 ─────────────────────────────────────────────
+  const submitCaptcha = useCallback(
+    async (selectedHashes) => {
+      if (!captchaChallenge || captchaSubmitting) return;
+      setCaptchaSubmitting(true);
+      try {
+        const result = await api.writingChat.submitDDGChallenge(
+          captchaChallenge.challenge_id,
+          selectedHashes,
+        );
+        if (result.success) {
+          toast.success("验证成功", {
+            description: "搜索引擎已解锁，请重新提问以获取搜索结果",
+          });
+        } else {
+          toast.error("验证失败", {
+            description: translateError(result.message) || "请重新提问",
+          });
+        }
+        setCaptchaChallenge(null);
+      } catch (e) {
+        setError(e.message);
+        toast.error("提交验证失败", { description: e.message });
+      } finally {
+        setCaptchaSubmitting(false);
+      }
+    },
+    [captchaChallenge, captchaSubmitting]
+  );
+
+  const dismissCaptcha = useCallback(() => {
+    setCaptchaChallenge(null);
+  }, []);
+
   const handleFileChange = useCallback(
     (path) => {
       // 选择当前已选中的文件时直接返回，否则 setActiveFile 同值不触发 re-render，
@@ -638,6 +691,12 @@ export default function useWritingChat() {
     error,
     editingMessageId,
     applyingMessageId,
+    searchStatus,
+    // DDG 验证码
+    captchaChallenge,
+    captchaSubmitting,
+    submitCaptcha,
+    dismissCaptcha,
     // 助手
     assistants,
     activeAssistant,

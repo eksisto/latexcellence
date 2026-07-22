@@ -98,6 +98,7 @@ export default function SettingsDialog() {
         terminology_check: config.features.terminology_check.enabled,
         writing_chat: config.features.writing_chat.enabled,
         bib_manager: config.features.bib_manager.enabled,
+        web_search: config.features.web_search.enabled,
       });
       setOpen(false);
       toast.success("配置已保存");
@@ -335,11 +336,84 @@ export default function SettingsDialog() {
               checked={config.features.writing_chat.enabled}
               onChange={(v) => set("features.writing_chat.enabled", v)}
             />
+            {config.features.writing_chat.enabled && (
+              <div className="pl-6">
+                <CheckboxField
+                  label="写作助手允许联网搜索"
+                  checked={config.features.writing_chat.web_search_enabled}
+                  onChange={(v) => set("features.writing_chat.web_search_enabled", v)}
+                />
+              </div>
+            )}
             <CheckboxField
               label="参考文献管理"
               checked={config.features.bib_manager.enabled}
               onChange={(v) => set("features.bib_manager.enabled", v)}
             />
+            <CheckboxField
+              label="联网搜索"
+              checked={config.features.web_search.enabled}
+              onChange={(v) => set("features.web_search.enabled", v)}
+            />
+            {config.features.web_search.enabled && (
+              <div className="pl-6 space-y-3">
+                <div className="space-y-1.5">
+                  <Label className="text-xs">默认搜索引擎</Label>
+                  <Select
+                    value={config.features.web_search.primary_engine}
+                    onValueChange={(v) => set("features.web_search.primary_engine", v)}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="duckduckgo">DuckDuckGo</SelectItem>
+                      <SelectItem value="searxng">SearXNG</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* DuckDuckGo */}
+                <fieldset className="rounded border p-2.5 space-y-2">
+                  <legend className="px-1 text-xs font-medium">DuckDuckGo</legend>
+                  <CheckboxField
+                    label="启用"
+                    checked={config.features.web_search.engines.duckduckgo.enabled}
+                    onChange={(v) => set("features.web_search.engines.duckduckgo.enabled", v)}
+                  />
+                </fieldset>
+
+                {/* SearXNG */}
+                <fieldset className="rounded border p-2.5 space-y-2">
+                  <legend className="px-1 text-xs font-medium">SearXNG</legend>
+                  <CheckboxField
+                    label="启用"
+                    checked={config.features.web_search.engines.searxng.enabled}
+                    onChange={(v) => set("features.web_search.engines.searxng.enabled", v)}
+                  />
+                  {config.features.web_search.engines.searxng.enabled && (
+                    <div className="space-y-1.5">
+                      <Label className="text-xs">实例地址</Label>
+                      <Input
+                        placeholder="http://localhost:8080"
+                        value={config.features.web_search.engines.searxng.base_url}
+                        onChange={(e) => set("features.web_search.engines.searxng.base_url", e.target.value)}
+                      />
+                    </div>
+                  )}
+                </fieldset>
+
+                {/* User-Agent */}
+                <div className="space-y-1.5">
+                  <Label className="text-xs">User-Agent</Label>
+                  <Input
+                    placeholder="建议使用最新 Chrome 的 UA"
+                    value={config.features.web_search.user_agent}
+                    onChange={(e) => set("features.web_search.user_agent", e.target.value)}
+                  />
+                </div>
+              </div>
+            )}
           </ConfigSection>
 
           {/* Logging */}

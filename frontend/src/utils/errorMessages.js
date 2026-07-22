@@ -110,6 +110,13 @@ const PATTERN_MAP = [
   [/^Edit generation failed:\s*(.+)/, "编辑生成失败：$1"],
   [/^Pandoc conversion failed:\s*(.+)/, "Pandoc 转换失败：$1"],
   [/^Image metadata extraction failed:\s*(.+)/, "图片元数据提取失败：$1"],
+
+  // 联网搜索
+  // DDG
+  [/^DDG challenge for query:\s*(.+)/, "搜索引擎需要验证：$1"],
+  ["Challenge expired or not found", "验证已过期或不存在，请重新提问"],
+  ["Verification failed, please retry", "验证失败，请重试"],
+  ["IP has been blocked, please try again later", "IP 已被封禁，请稍后重试"],
 ];
 
 /**

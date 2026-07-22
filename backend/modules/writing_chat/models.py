@@ -94,6 +94,7 @@ class ChatSendRequest(BaseModel):
     paragraph_index: int | None = None
     user_message: str
     assistant_prompt: str | None = None
+    web_search_enabled: bool | None = None  # None=跟随配置，True=强制启用，False=强制禁用
 
 
 class GenerateEditRequest(BaseModel):
@@ -179,3 +180,4 @@ class RenameSessionRequest(BaseModel):
     """重命名会话。"""
     session_id: str
     title: str
+

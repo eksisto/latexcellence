@@ -22,14 +22,17 @@
 """
 
 import difflib
+import json
 import uuid
 from typing import Any, AsyncIterator
 
 from backend.core.config import get_config
 from backend.core.logger import get_logger
 from backend.core.llm_client import get_llm_client
+from backend.core.tool_registry import get_tool_registry
 from backend.core.workspace_manager import get_project_manager_for_workspace
 from backend.utils.json_utils import retry_with_validation
+from backend.utils.web_search import DDGChallengeError, get_search_manager
 from backend.modules.writing_chat.context import ConversationContext, _NOPROJECT_SCOPE, compute_scope
 from backend.modules.writing_chat.models import (
     ApplyEditRequest,
@@ -196,7 +199,7 @@ class WritingChatService:
             ctx.save_to_disk()
             yield {"type": "compressed", "session_id": ctx.session_id}
 
-        # 4. 调用 LLM 流式
+        # 4. 调用 LLM 流式（支持 Function Calling 工具调用）
         llm = get_llm_client()
         system_prompt = _CHAT_SYSTEM_PROMPT.format(context_block=context_block)
         # 助手指令注入 system prompt（不写入 user message，界面上不可见）
@@ -204,34 +207,159 @@ class WritingChatService:
             system_prompt = req.assistant_prompt + "\n\n" + system_prompt
         messages = [{"role": "system", "content": system_prompt}] + ctx.to_llm_messages()
         assistant_id = uuid.uuid4().hex
-        # 预占空 assistant 消息位置，便于失败回滚
-        # 但实际入库放在流结束后
 
-        full_content_parts: list[str] = []
-        last_usage_tokens = 0
-        try:
-            async for chunk in llm.chat_stream_with_usage(
-                messages=messages,
-                temperature=get_config().llm.temperature,
-            ):
-                if chunk.content:
-                    full_content_parts.append(chunk.content)
-                    yield {"type": "token", "content": chunk.content}
-                if chunk.usage is not None:
-                    last_usage_tokens = chunk.usage.total_tokens
-        except Exception as e:
-            self._logger.error(f"chat_stream_with_usage failed: {e}")
-            yield {"type": "error", "message": str(e)}
-            # 把未完成的 user 消息从会话移除，避免污染
-            ctx.delete_message(user_msg.id)
-            ctx.save_to_disk()
-            return
+        # 检查是否启用联网搜索工具
+        tools = self._get_enabled_tools(req.web_search_enabled)
+
+        # 工具调用循环：先非流式检测 tool_call，再流式输出最终回复
+        if tools:
+            tool_messages = list(messages)  # 拷贝用于工具调用的 messages
+            max_rounds = 3  # 防止无限工具调用循环
+
+            for round_idx in range(max_rounds):
+                try:
+                    first_response = await llm.chat_with_tools(
+                        messages=tool_messages,
+                        tools=tools,
+                        temperature=get_config().llm.temperature,
+                    )
+                except Exception as e:
+                    self._logger.error(f"chat_with_tools failed: {e}")
+                    yield {"type": "error", "message": str(e)}
+                    ctx.delete_message(user_msg.id)
+                    ctx.save_to_disk()
+                    return
+
+                choice = first_response.choices[0]
+                tool_calls = choice.message.tool_calls
+
+                if not tool_calls:
+                    # 无 tool_call，退化为普通流式（用非流式返回的内容直接输出）
+                    content = choice.message.content or ""
+                    if content:
+                        full_content_parts_t: list[str] = [content]
+                        yield {"type": "token", "content": content}
+                    break
+
+                # 有 tool_call：执行工具，将结果追加到 messages
+                # 将 assistant message（含 tool_calls）转为 dict 追加
+                tool_messages.append(choice.message.model_dump())
+
+                for tc in tool_calls:
+                    tool_name = tc.function.name
+                    try:
+                        tool_args = json.loads(tc.function.arguments)
+                    except Exception:
+                        tool_args = {}
+
+                    # 推送搜索状态事件
+                    if tool_name == "web_search":
+                        yield {
+                            "type": "searching",
+                            "query": tool_args.get("query", ""),
+                            "engine": "",
+                        }
+
+                    try:
+                        tool_result = await get_tool_registry().execute(
+                            tool_name, tool_args
+                        )
+                        # 将搜索结果格式化为文本
+                        if hasattr(tool_result, "format_for_llm"):
+                            result_text = tool_result.format_for_llm()
+                        else:
+                            result_text = str(tool_result)
+
+                        yield {
+                            "type": "tool_result",
+                            "tool": tool_name,
+                            "result_count": (
+                                len(tool_result.results)
+                                if hasattr(tool_result, "results") else 0
+                            ),
+                        }
+                    except DDGChallengeError as ce:
+                        # DDG Challenge：推送 captcha 到前端，终止本轮搜索
+                        self._logger.info(
+                            f"DDG challenge | query={ce.query[:40]} | "
+                            f"images={len(ce.images)} | cid={ce.challenge_id}"
+                        )
+                        yield {
+                            "type": "captcha_challenge",
+                            "challenge_id": ce.challenge_id,
+                            "images": ce.images,
+                            "query": ce.query,
+                            "engine_name": ce.engine_name,
+                            "instruction": ce.instruction,
+                        }
+                        # 终止工具调用循环，通知前端等待用户解决验证码
+                        yield {
+                            "type": "done",
+                            "session_id": ctx.session_id,
+                            "message_id": "",
+                            "tokens": 0,
+                            "captcha_pending": True,
+                        }
+                        ctx.save_to_disk()
+                        return
+                    except Exception as e:
+                        self._logger.warning(f"工具执行失败 {tool_name}: {e}")
+                        result_text = f"工具执行失败：{e}"
+
+                    # 追加 tool result 消息
+                    tool_messages.append({
+                        "role": "tool",
+                        "tool_call_id": tc.id,
+                        "content": result_text,
+                    })
+
+                # 继续下一轮工具调用检测
+                continue
+
+            # 工具调用结束后，流式输出最终回复
+            full_content_parts: list[str] = []
+            last_usage_tokens = 0
+            try:
+                async for chunk in llm.chat_stream_with_usage(
+                    messages=tool_messages,
+                    temperature=get_config().llm.temperature,
+                ):
+                    if chunk.content:
+                        full_content_parts.append(chunk.content)
+                        yield {"type": "token", "content": chunk.content}
+                    if chunk.usage is not None:
+                        last_usage_tokens = chunk.usage.total_tokens
+            except Exception as e:
+                self._logger.error(f"post-tool chat_stream_with_usage failed: {e}")
+                yield {"type": "error", "message": str(e)}
+                ctx.delete_message(user_msg.id)
+                ctx.save_to_disk()
+                return
+
+        else:
+            # 无工具：原有纯流式逻辑
+            full_content_parts = []
+            last_usage_tokens = 0
+            try:
+                async for chunk in llm.chat_stream_with_usage(
+                    messages=messages,
+                    temperature=get_config().llm.temperature,
+                ):
+                    if chunk.content:
+                        full_content_parts.append(chunk.content)
+                        yield {"type": "token", "content": chunk.content}
+                    if chunk.usage is not None:
+                        last_usage_tokens = chunk.usage.total_tokens
+            except Exception as e:
+                self._logger.error(f"chat_stream_with_usage failed: {e}")
+                yield {"type": "error", "message": str(e)}
+                ctx.delete_message(user_msg.id)
+                ctx.save_to_disk()
+                return
 
         # 5. 写入 assistant 消息并落盘
         assistant_tokens = 0
         if last_usage_tokens > 0:
-            # completion_tokens 占整体的份额记给 assistant，
-            # 此处简化为把整次 total_tokens 都计入 assistant，由 update_last_message_tokens 分摊
             assistant_tokens = last_usage_tokens
         assistant_msg = ctx.append_assistant_message(
             content="".join(full_content_parts),
@@ -404,6 +532,34 @@ class WritingChatService:
         except Exception as e:
             return f"(failed to load file context: {e})"
         return text or "(file has no readable paragraphs)"
+
+    def _get_enabled_tools(self, web_search_enabled: bool | None = None) -> list[dict]:
+        """
+        获取当前可用的 Function Calling 工具列表。
+
+        参数：
+            web_search_enabled: 请求级别的搜索开关覆盖
+                - None: 跟随全局配置
+                - True: 强制启用（即使全局关闭）
+                - False: 强制禁用（即使全局开启）
+        """
+        cfg = get_config()
+
+        # 全局搜索功能未启用时，不提供工具
+        if not cfg.features.web_search.enabled:
+            return []
+
+        # writing_chat 模块级开关
+        if not cfg.features.writing_chat.web_search_enabled:
+            return []
+
+        # 请求级别覆盖
+        if web_search_enabled is False:
+            return []
+
+        # 获取搜索工具 schema
+        search_manager = get_search_manager()
+        return search_manager.get_tools_schema()
 
     async def _maybe_compress(self, ctx: ConversationContext) -> bool:
         """

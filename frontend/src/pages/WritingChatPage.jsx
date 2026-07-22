@@ -19,11 +19,20 @@ import {
   ChevronDown,
   User,
   Bot,
+  Globe,
+  ShieldCheck,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
 import {
   Card,
   CardContent,
@@ -350,6 +359,94 @@ function EditOpCard({ edit_op, reason, onApply, applying }) {
   );
 }
 
+function CaptchaDialog({ challenge, submitting, onSubmit, onDismiss }) {
+  const [selected, setSelected] = useState(new Set());
+
+  const toggle = (hash) => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(hash)) next.delete(hash);
+      else next.add(hash);
+      return next;
+    });
+  };
+
+  if (!challenge) return null;
+
+  const gridSize = challenge.images.length <= 4 ? 2 : 3;
+
+  return (
+    <Dialog open={!!challenge} onOpenChange={(open) => { if (!open) onDismiss(); }}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <ShieldCheck className="size-4 text-amber-500" />
+            验证码{challenge.instruction ? ` — ${challenge.instruction}` : ""}
+          </DialogTitle>
+        </DialogHeader>
+
+        <div className="space-y-3">
+          <p className="text-xs text-muted-foreground">
+            搜索引擎 {challenge.engine_name ? `（"${challenge.engine_name}"）` : ""} 触发了验证，
+            {challenge.instruction || "请完成以下验证以继续。"}
+          </p>
+
+          <div
+            className="grid gap-2 mx-auto"
+            style={{ gridTemplateColumns: `repeat(${gridSize}, minmax(0, 1fr))` }}
+          >
+            {challenge.images.map((img) => {
+              const isSelected = selected.has(img.hash);
+              return (
+                <button
+                  key={img.hash}
+                  type="button"
+                  onClick={() => toggle(img.hash)}
+                  className={`relative rounded-lg overflow-hidden border-2 transition-all cursor-pointer ${
+                    isSelected
+                      ? "border-primary ring-2 ring-primary/30"
+                      : "border-border hover:border-muted-foreground/50"
+                  }`}
+                >
+                  <img
+                    src={`data:image/jpeg;base64,${img.base64}`}
+                    alt="验证图片"
+                    className="w-full aspect-square object-cover"
+                    draggable={false}
+                  />
+                  {isSelected && (
+                    <div className="absolute inset-0 bg-primary/20 flex items-center justify-center">
+                      <Check className="size-6 text-primary drop-shadow-md" />
+                    </div>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+
+          <p className="text-xs text-muted-foreground text-center">
+            已选择 {selected.size} 张图片
+          </p>
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={onDismiss} disabled={submitting}>
+            跳过
+          </Button>
+          <Button
+            onClick={() => onSubmit(Array.from(selected))}
+            disabled={submitting || selected.size === 0}
+          >
+            {submitting && <Loader2 className="size-3 animate-spin mr-1" />}
+            提交验证
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+
 export default function WritingChatPage() {
   const {
     projectPath,
@@ -369,6 +466,11 @@ export default function WritingChatPage() {
     error,
     editingMessageId,
     applyingMessageId,
+    searchStatus,
+    captchaChallenge,
+    captchaSubmitting,
+    submitCaptcha,
+    dismissCaptcha,
     sendMessage,
     selectSession,
     newSession,
@@ -694,6 +796,15 @@ export default function WritingChatPage() {
                 <p className="text-xs text-destructive py-1">{error}</p>
               )}
 
+              {searchStatus && (
+                <div className="flex items-center gap-2 text-xs text-muted-foreground py-1 px-2 rounded bg-blue-500/5 border border-blue-500/20">
+                  <Globe className="size-3 animate-pulse text-blue-500" />
+                  <span>
+                    正在搜索：{searchStatus.query || "..."}
+                  </span>
+                </div>
+              )}
+
               <div className="border-t border-border pt-2 flex items-end gap-2">
                 <Textarea
                   value={input}
@@ -723,6 +834,14 @@ export default function WritingChatPage() {
           </Card>
         </div>
       )}
+
+      {/* 验证码弹窗 */}
+      <CaptchaDialog
+        challenge={captchaChallenge}
+        submitting={captchaSubmitting}
+        onSubmit={submitCaptcha}
+        onDismiss={dismissCaptcha}
+      />
     </div>
   );
 }

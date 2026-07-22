@@ -235,6 +235,18 @@ class TestServiceSend:
         with patch(_LLM_CLIENT_PATH) as m_llm:
             m_client = MagicMock()
             m_client.chat_stream_with_usage = MagicMock(return_value=_stream(chunks))
+
+            async def fake_chat_with_tools(**kwargs):
+                from openai.types.chat import ChatCompletion
+                from openai.types.chat.chat_completion import Choice
+                from openai.types.chat.chat_completion_message import ChatCompletionMessage
+                msg = ChatCompletionMessage(role="assistant", content=None, tool_calls=None)
+                choice = Choice(finish_reason="stop", index=0, message=msg)
+                return ChatCompletion(
+                    id="test", choices=[choice], created=0, model="test", object="chat.completion"
+                )
+            m_client.chat_with_tools = fake_chat_with_tools
+
             m_llm.return_value = m_client
 
             req = ChatSendRequest(
@@ -283,6 +295,18 @@ class TestServiceSend:
             client = MagicMock()
             client.chat = fake_chat
             client.chat_stream_with_usage = MagicMock(return_value=_stream(chunks))
+
+            async def fake_chat_with_tools(**kwargs):
+                from openai.types.chat import ChatCompletion
+                from openai.types.chat.chat_completion import Choice
+                from openai.types.chat.chat_completion_message import ChatCompletionMessage
+                msg = ChatCompletionMessage(role="assistant", content=None, tool_calls=None)
+                choice = Choice(finish_reason="stop", index=0, message=msg)
+                return ChatCompletion(
+                    id="test", choices=[choice], created=0, model="test", object="chat.completion"
+                )
+            client.chat_with_tools = fake_chat_with_tools
+
             m_llm.return_value = client
 
             req = ChatSendRequest(

@@ -115,6 +115,34 @@ class WritingChatConfig(BaseModel):
     custom_prompts_dir: str = "prompts/writing_chat/"    # 助手提示词存放目录
     summary_temperature: float = 0.2                     # 生成压缩摘要时的温度
     summary_max_tokens: int = 1024                       # 压缩摘要最大生成 token 数
+    web_search_enabled: bool = True                      # 是否在聊天中启用联网搜索（受全局 web_search.enabled 约束）
+
+
+class DuckDuckGoConfig(BaseModel):
+    """DuckDuckGo 搜索引擎配置"""
+    enabled: bool = True
+
+
+class SearXNGConfig(BaseModel):
+    """SearXNG 搜索引擎配置"""
+    enabled: bool = True
+    base_url: str = ""              # SearXNG 实例地址（如 http://localhost:8080）
+
+
+class WebSearchEnginesConfig(BaseModel):
+    """联网搜索引擎集合 — 每个引擎独立开关和参数"""
+    duckduckgo: DuckDuckGoConfig = DuckDuckGoConfig()
+    searxng: SearXNGConfig = SearXNGConfig()
+
+
+class WebSearchConfig(BaseModel):
+    """联网搜索模块配置"""
+    enabled: bool = False               # 是否启用（默认关闭，用户手动开启）
+    primary_engine: str = "duckduckgo"  # 主搜索引擎标识（duckduckgo / searxng）
+    max_results: int = Field(5, ge=1, le=20)   # 默认返回结果数上限
+    timeout_seconds: int = Field(10, ge=1)      # 单次搜索超时（秒）
+    user_agent: str = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36"  # 浏览器 User-Agent
+    engines: WebSearchEnginesConfig = WebSearchEnginesConfig()
 
 
 class BibManagerConfig(BaseModel):
@@ -138,6 +166,7 @@ class FeaturesConfig(BaseModel):
     terminology_check: TerminologyCheckConfig = TerminologyCheckConfig()
     writing_chat: WritingChatConfig = WritingChatConfig()
     bib_manager: BibManagerConfig = BibManagerConfig()
+    web_search: WebSearchConfig = WebSearchConfig()
 
 
 class LoggingConfig(BaseModel):
@@ -283,4 +312,10 @@ def update_config_from_dict(updates: dict) -> AppConfig:
     merged = _deep_merge(current, updates)
     _config = AppConfig(**merged)
     save_config()
+
+    # 联网搜索配置变更时，重置 SearchManager 单例使新配置立即生效
+    if "features" in updates and "web_search" in updates.get("features", {}):
+        from backend.utils.web_search import reset_search_manager
+        reset_search_manager()
+
     return _config

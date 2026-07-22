@@ -21,17 +21,20 @@ latexcellence/
 ├── backend/
 │   ├── core/
 │   │   ├── config.py                # Pydantic 配置模型 + 热重载
-│   │   ├── llm_client.py            # AsyncOpenAI 封装（流式 + 重试 + 限流）
+│   │   ├── llm_client.py            # AsyncOpenAI 封装（流式 + 重试 + 限流 + Function Calling）
 │   │   ├── logger.py                # TimedRotatingFileHandler 日志
 │   │   ├── workspace_manager.py     # 多工作区管理（workspace_id → LatexProject）
 │   │   ├── project_manager.py       # LaTeX 项目管理（文件树/段落/撤销）
+│   │   ├── tool_registry.py         # Function Calling 工具注册表
 │   │   └── base_paragraph_check.py  # 逐段检查服务基类（typo/expression/formatting/terminology 共享）
 │   ├── utils/
 │   │   ├── json_utils.py            # LLM JSON 解析/校验/重试
 │   │   ├── file_ops.py              # 原子写入/备份/MD5
 │   │   ├── input_resolver.py        # \input/\include 递归解析
 │   │   ├── latex_parser.py          # LaTeX 源码↔纯文本转换（Marker 保护）
-│   │   └── compile_error_translator.py  # LaTeX 编译错误 LLM 翻译（compile + git_diff 复用）
+│   │   ├── compile_error_translator.py  # LaTeX 编译错误 LLM 翻译（compile + git_diff 复用）
+│   │   ├── web_search.py            # 联网搜索模块（DuckDuckGo + SearXNG 多引擎抽象 + SearchManager + Function Calling schema + DDG Challenge 处理）
+│   │   └── search_router.py         # 通用搜索 API 路由（/api/search/ddg-challenge）
 │   └── modules/                     # 功能模块目录
 │       ├── typo_check/              # 错字查找
 │       ├── expression_opt/          # 表达优化
@@ -100,6 +103,7 @@ latexcellence/
 - **Marker Protection**: LaTeX 结构 → `__CMD_NNNN__` / `__MATH_NNNN__` / `__ENV_NNNN__` / `__VERB_NNNN__` marker → LLM 只改纯文本 → 按长度降序还原。apply 时若 marker_map 缺失（context 过期/重启/新操作覆盖），跳过该段写入并返回 `errors`，防止字面 marker 污染 `.tex` 文件；前端据此保留未应用项并提示用户重新检查
 - **JSON Validation Pipeline**: `safe_parse_json()` → Pydantic `.model_validate()` → `retry_with_validation()` (最多 3 次重试 + 错误反馈)
 - **SSE Streaming**: 所有段落检查模块通过 Server-Sent Events 推送 `progress`/`result`/`error`/`done` 事件
+- **Function Calling 工具体系**: `ToolRegistry`（工具注册表）管理所有可用工具的 schema 和执行函数；`SearchManager`（搜索管理器）提供 `web_search` 工具的 schema 和执行，统一封装 `DuckDuckGoHtmlEngine`（模拟浏览器请求，遇 HTTP 202 Challenge 时抛出 `DDGChallengeError`，由 service 捕获并以 `captcha_challenge` SSE 事件推送到前端）和 `SearXNGEngine`（通过 `/search?format=json` 获取结果，无验证码）；DDG Challenge 验证码提交通过通用路由 `/api/search/ddg-challenge` 处理，不绑定特定业务模块；Writing Chat 的 `send()` 方法在检测到 LLM 返回 `tool_call` 时自动执行工具、将结果回传 LLM，再流式输出最终回复（"先工具调用再流式"模式）
 - **useParagraphCheck Hook**: TypoCheck/ExpressionOpt/Formatting/TerminologyCheck 4 页共享同一 hook 封装流程
 - **useEnabledFeatures Hook**: 从后端 `/api/config/status` 加载功能开关到 Zustand store，幂等（已加载则跳过）。WelcomePage 和 WorkspacePage 均调用此 hook，确保直接刷新任一页面时功能开关均可用
 - **Zustand Persist**: `partialize` 选择性持久化检查结果，支持刷新保留

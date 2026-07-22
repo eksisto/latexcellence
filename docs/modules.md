@@ -37,6 +37,12 @@
 | Git 差异高亮 | [git_diff.md](modules/git_diff.md) | Git 版本差异可视化高亮 PDF（含编译错误 LLM 翻译） |
 | 参考文献管理 | [bib_manager.md](modules/bib_manager.md) | BibTeX 参考文献格式识别与管理 |
 
+### 工具模块
+
+| 模块 | 文档 | 说明 |
+| --- | --- | --- |
+| 联网搜索 | [web_search.md](modules/web_search.md) | 多引擎联网搜索 + Function Calling 工具集成 |
+
 ---
 
 ## 架构概览

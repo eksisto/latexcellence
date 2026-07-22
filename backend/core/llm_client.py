@@ -16,9 +16,10 @@ import asyncio
 import threading
 import time
 from dataclasses import dataclass
-from typing import AsyncIterator
+from typing import Any, AsyncIterator
 
 from openai import AsyncOpenAI
+from openai.types.chat import ChatCompletion
 
 from backend.core.config import get_config
 from backend.core.logger import get_logger
@@ -195,6 +196,78 @@ class LLMClient:
         async for chunk in stream:
             if chunk.choices and chunk.choices[0].delta.content:
                 yield chunk.choices[0].delta.content
+
+    async def chat_with_tools(
+        self,
+        messages: list[dict],
+        tools: list[dict] | None = None,
+        temperature: float | None = None,
+        max_tokens: int | None = None,
+        max_retries: int = 3,
+    ) -> ChatCompletion:
+        """
+        带 Function Calling 的非流式 LLM 调用。
+
+        返回完整的 ChatCompletion 对象（含 tool_calls），
+        由调用方决定如何处理 tool_call 循环。
+
+        参数：
+            messages: OpenAI 格式的消息列表
+            tools: Function Calling 工具定义列表
+            temperature: 生成温度（覆盖 config 中的默认值）
+            max_tokens: 最大生成 token 数（覆盖 config 中的默认值）
+            max_retries: 最大重试次数（默认 3）
+
+        返回：
+            openai.ChatCompletion 对象
+
+        异常：
+            重试耗尽后抛出最后一次异常的原始类型
+        """
+        cfg = get_config().llm
+        temp = temperature if temperature is not None else cfg.temperature
+        max_tok = max_tokens if max_tokens is not None else cfg.max_tokens
+
+        for attempt in range(max_retries):
+            try:
+                await self._rate_limit()
+
+                self._logger.info(
+                    f"LLM request (with tools) | model={cfg.model} | "
+                    f"tools={len(tools) if tools else 0} | attempt={attempt + 1}"
+                )
+
+                kwargs: dict[str, Any] = {
+                    "model": cfg.model,
+                    "messages": messages,
+                    "temperature": temp,
+                    "max_tokens": max_tok,
+                }
+                if tools:
+                    kwargs["tools"] = tools
+
+                response = await self.client.chat.completions.create(**kwargs)
+
+                usage = response.usage
+                if usage:
+                    self._logger.info(
+                        f"LLM response (with tools) | prompt_tokens={usage.prompt_tokens} "
+                        f"completion_tokens={usage.completion_tokens} "
+                        f"total_tokens={usage.total_tokens}"
+                    )
+
+                return response
+
+            except Exception as e:
+                self._logger.error(
+                    f"LLM request with tools failed "
+                    f"(attempt {attempt + 1}/{max_retries}): {e}"
+                )
+                if attempt == max_retries - 1:
+                    raise
+                await asyncio.sleep(2 ** attempt)
+
+        raise RuntimeError("Max retries exceeded")
 
     async def chat_stream_with_usage(
         self,

@@ -22,15 +22,16 @@
 │  ├─ expression_opt/          ├─ llm_client.py            │
 │  ├─ formatting/              ├─ workspace_manager.py     │
 │  ├─ terminology_check/       ├─ project_manager.py       │
-│  ├─ compile/                 └─ base_paragraph_check.py  │
-│  ├─ writing_chat/                                        │
+│  ├─ compile/                 ├─ tool_registry.py         │
+│  ├─ writing_chat/            └─ base_paragraph_check.py  │
 │  ├─ bib_manager/            utils/                       │
 │  ├─ ... (多个模块)        ├─ json_utils.py             │
 │  └─ project_router.py       ├─ file_ops.py               │
 │                             ├─ input_resolver.py          │
-│  ┌──────────┐               └─ latex_parser.py            │
-│  │ router.py │→ service.py ────────────────────────────→ │
-│  │  (薄层)   │  (厚层)         (按需) Marker 替换/还原   │
+│  ┌──────────┐               ├─ latex_parser.py            │
+│  │ router.py │→ service.py  ├─ web_search.py              │
+│  │  (薄层)   │  (厚层)      ├─ search_router.py           │
+│  └──────────┘               └─ (按需) Marker 替换/还原    │
 │  └──────────┘                                            │
 └─────────────────────────────────────────────────────────┘
                            │
@@ -60,6 +61,7 @@
 | 术语一致性是语义问题而非文本匹配 | LLM 语义聚类替代固定算法 |
 | LaTeX 项目通常拆分为多个 \input 文件 | `input_resolver.py` 递归展开，按文件分组结果 |
 | 多浏览器同时处理不同项目 | `workspace_manager.py` 隔离各工作区 LatexProject 实例 |
+| 联网搜索无需 API Key | DuckDuckGo HTML 引擎 + 验证码转发；SearXNG 自建实例 JSON API；工具通过 `ToolRegistry` 注册，LLM 自动调用 |
 
 ### 1.3 核心架构组件：BaseParagraphCheckService
 
@@ -408,6 +410,37 @@ LLM 输出中可能包含 `<thinking>...</thinking>` 标签，包裹推理过程
 2. 原始消息深拷贝到 `summary.snapshot` 字段
 3. 用一条 `role="summary"` 消息替换全部历史
 4. 用户可通过"撤回压缩消息"一键还原
+
+**Function Calling 工具调用（联网搜索）**：
+
+LLM 在流式输出过程中可发起 tool_call，触发联网搜索等工具。支持两个引擎——DuckDuckGo HTML 和 SearXNG JSON API——根据前端配置动态选择：
+
+```
+RS1 流式对话中 tool_call:
+  LLM 输出 tool_call（function.name="web_search"）
+       ↓ SSE event: tool_call（前端停止打字机显示）
+  ToolRegistry.execute("web_search", arguments)
+       ↓
+  ┌─ 引擎选择（根据配置）────────────────────────────┐
+  │ DDG: https POST https://html.duckduckgo.com/html/  │
+  │ SearXNG: httpx GET {base_url}/search?format=json    │
+  └────────────────────────────────────────────────────┘
+       ↓
+  ┌─ DDG 路径 ────────────────────────────────────────┐
+  │ 二次验证（HTTP 202 + captcha_challenge）           │
+  │   → SSE event: captcha_challenge                   │
+  │   → 前端 CaptchaDialog → POST /api/search/ddg-challenge  │
+  │   → done(captcha_pending=true)，用户需重新发送     │
+  └───────────────────────────────────────────────────┘
+       ↓ 正常结果
+  ┌─ SearXNG 路径（无验证码） ───────────────────────┐
+  │ 直接解析 JSON 结果                                 │
+  └───────────────────────────────────────────────────┘
+       ↓
+  提取 snippet/title/url → SSE event: search_results
+  → 工具结果注入 LLM 继续对话（SSE event: message）
+  → 前端显示搜索结果 + 引用链接
+```
 
 ### 5.5 参考文献管理数据流
 
@@ -777,3 +810,4 @@ Mock 返回值必须符合 Pydantic schema，确保测试的可重复性。
 | 参考文献元数据结构 | 动态 dict（非固定 Pydantic 字段） | 不同格式（GB/T、APA、IEEE）字段集不同，固定模型无法覆盖；`fields: dict[str, str]` 避免字段映射 |
 | 缺失字段检测 | 基于 `raw_observed_fields` 过滤 | 只报告输入中实际出现的必填字段缺失，不报输入中没有的字段（如 abstract），减少误报 |
 | 格式配置持久化 | JSON 文件，文件名由 `format_name` 自动生成 | 无需用户手动命名；合法字符替换为 `-`；支持 CRUD 加载复用 |
+| 联网搜索引擎 | DuckDuckGo HTML + SearXNG JSON API | DDG 免费无 API Key，HTTP 202 验证码转发；SearXNG 自建实例通过 `/search?format=json` 获取结果，无验证码；工具通过 ToolRegistry 注册，LLM 可自动调用；前端设置页面可切换引擎 |

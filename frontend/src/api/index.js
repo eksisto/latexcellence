@@ -469,5 +469,13 @@ export const api = {
           body: JSON.stringify({ name }),
         }),
     },
+    submitDDGChallenge: (challengeId, selectedHashes) =>
+      request("/search/ddg-challenge", {
+        method: "POST",
+        body: JSON.stringify({
+          challenge_id: challengeId,
+          selected_hashes: selectedHashes,
+        }),
+      }),
   },
 };

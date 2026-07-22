@@ -10,6 +10,7 @@
 | [docs/backend-core.md](docs/backend-core.md) | 后端核心模块：config、llm_client、logger、workspace_manager、project_manager、工具模块、项目管理路由 |
 | [docs/modules.md](docs/modules.md) | 所有功能模块文档索引 |
 | [docs/modules/](docs/modules/) | 各模块详细文档（typo_check、expression_opt 等多个模块） |
+| [docs/modules/web_search.md](docs/modules/web_search.md) | 联网搜索模块：多引擎抽象 + Function Calling 工具集成 |
 | [docs/frontend.md](docs/frontend.md) | 前端开发文档：路由、状态管理、API 层、核心组件、Hook、暗色模式、样式架构 |
 | [docs/testing.md](docs/testing.md) | 测试规范与用例覆盖 |
 | [docs/multi-user-migration-plan.md](docs/multi-user-migration-plan.md) | 已确认的多用户服务化改造计划：登录、用户私有上传工作区、管理员边界、统一 LLM 密钥、30 天资源保留与分阶段迁移 |
