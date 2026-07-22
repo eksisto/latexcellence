@@ -4,7 +4,55 @@ import { Select as SelectPrimitive } from "@base-ui/react/select"
 import { cn } from "@/lib/utils"
 import { ChevronDownIcon, CheckIcon, ChevronUpIcon } from "lucide-react"
 
-const Select = SelectPrimitive.Root
+const LabelMapContext = React.createContext(null);
+if (process.env.NODE_ENV !== "production") {
+  LabelMapContext.displayName = "SelectLabelMapContext";
+}
+
+function extractChildText(node) {
+  if (typeof node === "string" || typeof node === "number") return String(node);
+  if (Array.isArray(node)) return node.map(extractChildText).join("");
+  if (React.isValidElement(node)) return extractChildText(node.props.children);
+  return "";
+}
+
+function extractItemLabels(children) {
+  const map = new Map();
+  const walk = (node) => {
+    React.Children.forEach(node, child => {
+      if (!React.isValidElement(child)) return;
+      const c = child.props?.children;
+      if (child.type === SelectItem) {
+        const v = child.props.value;
+        if (v !== undefined) {
+          const label = c != null ? extractChildText(c) : v;
+          map.set(v, label || v);
+        }
+      }
+      if (c) walk(c);
+    });
+  };
+  walk(children);
+  return map;
+}
+
+function Select({ children, ...props }) {
+  const labelMapRef = React.useRef(null);
+  if (!labelMapRef.current) {
+    labelMapRef.current = extractItemLabels(children);
+  }
+  React.useMemo(() => {
+    labelMapRef.current = extractItemLabels(children);
+  }, [children]);
+
+  return (
+    <SelectPrimitive.Root {...props}>
+      <LabelMapContext.Provider value={labelMapRef}>
+        {children}
+      </LabelMapContext.Provider>
+    </SelectPrimitive.Root>
+  );
+}
 
 function SelectGroup({
   className,
@@ -20,13 +68,19 @@ function SelectGroup({
 
 function SelectValue({
   className,
+  children,
   ...props
 }) {
+  const labelMapRef = React.useContext(LabelMapContext);
   return (
     <SelectPrimitive.Value
       data-slot="select-value"
       className={cn("flex flex-1 text-left", className)}
-      {...props} />
+      {...props}>
+      {children ?? (labelMapRef
+        ? (value) => labelMapRef.current.get(value) ?? value
+        : undefined)}
+    </SelectPrimitive.Value>
   );
 }
 
@@ -105,11 +159,13 @@ function SelectLabel({
 function SelectItem({
   className,
   children,
+  value,
   ...props
 }) {
   return (
     <SelectPrimitive.Item
       data-slot="select-item"
+      value={value}
       className={cn(
         "relative flex w-full cursor-default items-center gap-1.5 rounded-md py-1 pr-8 pl-1.5 text-sm outline-hidden select-none focus:bg-accent focus:text-accent-foreground not-data-[variant=destructive]:focus:**:text-accent-foreground data-disabled:pointer-events-none data-disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 *:[span]:last:flex *:[span]:last:items-center *:[span]:last:gap-2",
         className
