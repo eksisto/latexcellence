@@ -32,6 +32,7 @@ from backend.core.llm_client import get_llm_client
 from backend.core.tool_registry import get_tool_registry
 from backend.core.workspace_manager import get_project_manager_for_workspace
 from backend.utils.json_utils import retry_with_validation
+from backend.utils.time_utils import get_current_time_context
 from backend.utils.web_search import DDGChallengeError, get_search_manager
 from backend.modules.writing_chat.context import ConversationContext, _NOPROJECT_SCOPE, compute_scope
 from backend.modules.writing_chat.models import (
@@ -202,6 +203,17 @@ class WritingChatService:
         # 4. 调用 LLM 流式（支持 Function Calling 工具调用）
         llm = get_llm_client()
         system_prompt = _CHAT_SYSTEM_PROMPT.format(context_block=context_block)
+
+        # 注入当前时间上下文，帮助 LLM 理解相对时间概念
+        t = get_current_time_context()
+        time_context = (
+            f"\n\nCURRENT TIME CONTEXT:\n"
+            f"当前日期：{t['date']}（{t['weekday']}），时间：{t['time']}\n"
+            f"当用户提示词中出现与时间相关的词汇（如：最近、今天、本周、本月、过去N天等）时，"
+            f"请基于此时间信息进行理解，并生成合适的时间范围搜索词。"
+        )
+        system_prompt += time_context
+
         # 助手指令注入 system prompt（不写入 user message，界面上不可见）
         if req.assistant_prompt:
             system_prompt = req.assistant_prompt + "\n\n" + system_prompt

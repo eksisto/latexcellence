@@ -28,6 +28,7 @@ from pydantic import BaseModel
 
 from backend.core.config import get_config
 from backend.core.logger import get_logger
+from backend.utils.time_utils import get_current_time_context
 
 # ── UA ─────────────────────────────────────────────────────────────────────
 
@@ -759,16 +760,22 @@ class SearchManager:
         返回可注入 LLM tools 参数的 Function Calling schema。
 
         供 ToolRegistry 或直接在 LLM 调用中使用。
+        动态注入当前日期时间，帮助 LLM 理解相对时间概念。
         """
+        t = get_current_time_context()
+
+        description = (
+            f"搜索互联网获取最新信息。当前日期：{t['date']}（{t['weekday']}），"
+            f"时间：{t['time']}。当用户询问实时信息、最新数据、"
+            f"或你不确定的事实时使用此工具。"
+        )
+
         return [
             {
                 "type": "function",
                 "function": {
                     "name": "web_search",
-                    "description": (
-                        "搜索互联网获取最新信息。当用户询问实时信息、"
-                        "最新数据、或你不确定的事实时使用此工具。"
-                    ),
+                    "description": description,
                     "parameters": {
                         "type": "object",
                         "properties": {

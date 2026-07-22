@@ -295,6 +295,18 @@ raise ValueError("Validation failed after N attempts")        # ❌ 耗尽
 | `compile/service.py` | `compile_latex()` 编译失败时调用 |
 | `git_diff/service.py` | `render_diff_pdf()` 编译失败时调用 |
 
+### `time_utils.py` — 时间工具函数
+
+**设计理念**：为 LLM prompt 注入当前日期/时间/星期信息，帮助模型理解“最近”、“今天”、“本周”等相对时间概念。由 `writing_chat`（对话 system prompt）和 `web_search`（工具描述）两个模块共享，避免时间格式化逻辑重复。
+
+**核心接口**：
+
+| 函数 | 功能 |
+|---|---|
+| `get_current_time_context()` | 返回 `{"date": "2026-07-22", "time": "20:20", "weekday": "周三"}` 格式的当前时间信息 |
+
+---
+
 ### `latex_parser.py` — LaTeX 文本提取与 Marker 保护
 
 **设计理念**：将 LaTeX 源码转为纯文本供 LLM 处理，同时通过 marker（标记符）+ 反向映射策略确保修改后能精确写回源文件。所有使用 Marker 保护的模块（typo_check、expression_opt、terminology_check）共享此模块。

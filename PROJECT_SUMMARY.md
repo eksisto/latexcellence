@@ -31,6 +31,7 @@ latexcellence/
 │   │   ├── json_utils.py            # LLM JSON 解析/校验/重试
 │   │   ├── file_ops.py              # 原子写入/备份/MD5
 │   │   ├── input_resolver.py        # \input/\include 递归解析
+│   │   ├── time_utils.py            # 时间工具：当前日期/时间/星期格式化
 │   │   ├── latex_parser.py          # LaTeX 源码↔纯文本转换（Marker 保护）
 │   │   ├── compile_error_translator.py  # LaTeX 编译错误 LLM 翻译（compile + git_diff 复用）
 │   │   ├── web_search.py            # 联网搜索模块（DuckDuckGo + SearXNG 多引擎抽象 + SearchManager + Function Calling schema + DDG Challenge 处理）
