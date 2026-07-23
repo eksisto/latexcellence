@@ -7,6 +7,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { useTranslation } from "react-i18next";
 
 /**
  * 通用确认对话框。
@@ -30,13 +31,17 @@ export default function ConfirmDialog({
   onOpenChange,
   title,
   description,
-  confirmText = "确认",
-  cancelText = "取消",
+  confirmText: confirmTextProp,
+  cancelText: cancelTextProp,
   onConfirm,
   variant = "default",
   confirmLoading = false,
   disableDismiss = true,
 }) {
+  const { t } = useTranslation("components");
+  const confirmText = confirmTextProp ?? t("confirmDialog.confirm");
+  const cancelText = cancelTextProp ?? t("confirmDialog.cancel");
+
   const handleConfirm = async () => {
     if (onConfirm) await onConfirm();
   };
@@ -65,7 +70,7 @@ export default function ConfirmDialog({
             onClick={handleConfirm}
             disabled={confirmLoading}
           >
-            {confirmLoading ? "处理中..." : confirmText}
+            {confirmLoading ? t("confirmDialog.processing") : confirmText}
           </Button>
         </DialogFooter>
       </DialogContent>

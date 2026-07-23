@@ -160,19 +160,48 @@ api.writingChat.assistants.list() / .load(name) / .save(name, content) / .delete
 
 ## 工具模块 `utils/errorMessages.js`
 
-后端英文错误消息 → 中文翻译模块，在 API 层统一调用，确保用户看到的始终是中文。
+后端英文错误消息 → 当前语言翻译模块，通过 `i18n.t()` 实现多语言支持。
 
 **设计**：
-- `EXACT_MAP`：静态精确匹配（如 `"No API key configured"` → `"未配置 API 密钥，LLM 功能不可用"`）
-- `PATTERN_MAP`：正则模式匹配，支持捕获组替换（如 `/^File not found:\s*(.+)/` → `"文件不存在：$1"`）
+- `EXACT_MAP`：静态精确匹配，值为 i18n 键（如 `"No API key configured"` → `"noApiKeyConfigured"`）
+- `PATTERN_MAP`：正则模式匹配，支持捕获组参数提取（如 `/^File not found:\s*(.+)/` → `"fileNotFound"` + `{ path: m[1] }`）
 - `translateError(msg)` 函数：先精确匹配，再模式匹配，均无匹配则原样返回
-- 已经是中文的消息（如 `"main_file 不能为空"`）无匹配项，原样透传
+- 翻译资源位于 `errors` 命名空间（`zh.json` / `en.json`），切换语言后错误消息自动跟随切换
 
 **调用点**：
 - `request()` — 通用 JSON 请求的错误处理
 - `requestForm()` — FormData 请求的错误处理
 - `useParagraphCheck.js` — SSE 流式错误事件翻译
 - `useWritingChat.js` — SSE 流式错误事件翻译
+
+## 国际化 `i18n/`
+
+基于 `i18next` + `react-i18next` + `i18next-browser-languagedetector` 实现中/英双语。
+
+**初始化**：`src/i18n/index.js` 在 `main.jsx` 中最先导入，确保组件树挂载前 i18next 已就绪。
+
+**翻译资源**：按命名空间拆分为 5 个 JSON 文件（`zh.json` / `en.json` 内各含 5 个 key 层级）：
+
+| 命名空间 | 覆盖范围 | 示例 key |
+|----------|---------|----------|
+| `common` | 跨页面复用的通用文案 | `loading`, `save`, `cancel`, `applyAll` |
+| `pages` | 各页面专属文案 | `typoCheck.checkButton`, `workspace.compileBtn` |
+| `components` | 各组件专属文案 | `settings.apiKey`, `markerText.math`, `themeNames.youminghei` |
+| `hooks` | 各 hook 的默认消息 | `paragraphCheck.defaultCheckLoading` |
+| `errors` | 后端错误消息翻译 | `noProjectOpened`, `requestTimedOut`, `compilationTimeout` |
+
+**组件使用方式**：
+- React 组件：`const { t } = useTranslation("namespace")` → `t("key")`
+- Hook / 非 React 上下文：`import i18n from "@/i18n"` → `i18n.t("namespace:key")`
+
+**语言切换**：`SettingsDialog.jsx` 提供语言下拉（中文 / English），调用 `i18n.changeLanguage(v)` 实时切换，持久化到 `localStorage` 键 `i18nLng`。
+
+**Fallback 策略**：`fallbackLng: "zh"`，缺失 key 原样返回英文 key 路径。
+
+**设计约束**：
+- `useParagraphCheck` 的默认 `messages` 参数使用 getter 属性，确保语言切换后默认文案实时更新
+- `MarkerText` 的 `MARKER_LABELS` 在组件内部构建（需 `t()` 函数），体积极小，无性能影响
+- `errorMessages.js` 通过 `i18n.t()` 翻译后端英文错误消息，与 UI 文案统一使用同一套翻译资源
 
 ## 核心组件
 
@@ -188,7 +217,7 @@ api.writingChat.assistants.list() / .load(name) / .save(name, content) / .delete
 | `FolderPickerDialog.jsx` | 文件夹选择对话框：通过后端 /api/project/browse 浏览本地目录，逐级进入子文件夹 |
 | `MarkdownRenderer.jsx` | Markdown 渲染组件：react-markdown + remark-gfm + remark-math + rehype-katex，支持 GitHub 风格 Markdown + KaTeX 数学公式 |
 | `ThemeToggle.jsx`      | 亮/暗模式切换，带 tooltip                                                            |
-| `ThemeSwitcher.jsx`    | 配色主题切换下拉，自动发现 `theme/` 目录下所有 CSS 主题文件                            |
+| `ThemeSwitcher.jsx`    | 配色主题切换下拉，自动发现 `theme/` 目录下所有 CSS 主题文件，显示名通过 i18n 翻译 |
 | `ConfirmDialog.jsx`    | 通用确认对话框：基于 shadcn/ui Dialog，支持 destructive 样式 + 禁止遮罩关闭           |
 | `ImageOCRPage.jsx`     | 通用图片 OCR 页面组件：拖拽上传、Ctrl+V 粘贴、识别、复制，FormulaOCR/TableOCR 共享    |
 | `ResultFilterBar.jsx`  | 结果过滤工具栏：搜索框 + 类型下拉 + 段落跳转 + 重置按钮                              |
@@ -234,7 +263,7 @@ api.writingChat.assistants.list() / .load(name) / .save(name, content) / .delete
 | `useEnabledFeatures.js` | 从后端 `/api/config/status` 加载功能开关（`enabledFeatures`）到 Zustand store。幂等：已加载则跳过请求。供 `WelcomePage` 和 `WorkspacePage` 共享调用，确保直接刷新任一页面时功能开关均可用。 |
 | `useWritingChat.js`    | 封装写作助手 Chat 全部逻辑：会话管理（CRUD + 重命名）、SSE 流式发送、深度思考解析（`parseThinking` + `processLoadedMessages`）、生成编辑、应用编辑、助手提示词管理。页面刷新时通过 store 的 `hydrated` 状态感知水合完成，再恢复上次会话。供 `WritingChatPage` 调用。 |
 | `useFavicon.js`        | 动态 favicon 切换：通过 `MutationObserver` 监听 `document.documentElement` 的 `class` 变化，在亮/暗模式间切换 `/favicon.svg` 和 `/favicon-dark.svg`。                       |
-| `useThemeManager.js`   | 多主题自发现 hook：通过 `import.meta.glob` 自动发现 `theme/` 目录下 CSS 主题文件，管理 `data-theme` 属性，提供 `getAvailableThemes()` 和 `useThemeManager()`。位于 `src/theme/` 目录。 |
+| `useThemeManager.js`   | 多主题自发现 hook：通过 `import.meta.glob` 自动发现 `theme/` 目录下 CSS 主题文件，管理 `data-theme` 属性，提供 `getAvailableThemes()` 和 `useThemeManager()`。主题显示名通过 i18n 翻译。位于 `src/theme/` 目录。 |
 | `useTheme.js`          | 暗/亮主题切换 hook：读取 localStorage + 系统偏好，使用 View Transitions API 平滑切换 `<html>` 上的 `.dark` class。 |
 | `useUndoRedo.js`       | 撤销/重做状态管理 hook：轮询 `/api/project/can-undo`、`/can-redo` 端点维护 `canUndo`/`canRedo` 状态；暴露 `handleUndo`/`handleRedo`，操作后自动刷新状态并回调通知调用方重新加载段落。 |
 | `useResultFilter.js`   | 段落检查结果搜索/过滤/跳转 hook：提供 `searchQuery`、`typeFilter`、`jumpToParagraph`、`availableTypes`、`reset`、`hasFilters`。与 `ResultFilterBar` 组件配套使用。 |
@@ -403,10 +432,9 @@ useUndoRedo({
 | `hailuocheng.css`         | 海螺橙配色：暖橙调                                                   |
 | `yingtaohong.css`         | 樱桃红配色：亮红调                                                   |
 | `useThemeManager.js`      | 通过 `import.meta.glob` 自动发现主题文件，`getAvailableThemes()` 返回有序 ID 列表，`useThemeManager()` hook 管理 `data-theme` 属性 |
-| `THEME_NAMES` 映射表      | `useThemeManager.js` 内置 ID → 中文显示名映射（如 `youminghei` → `幽冥黑`）                  |
 
 
-新增主题只需在 `theme/` 目录下添加 `<name>.css` 文件，按 `[data-theme="<name>"]:root` / `[data-theme="<name>"].dark` 格式定义颜色变量即可。`ThemeSwitcher` 组件和 `useThemeManager` hook 会自动发现并显示。
+新增主题只需在 `theme/` 目录下添加 `<name>.css` 文件，按 `[data-theme="<name>"]:root` / `[data-theme="<name>"].dark` 格式定义颜色变量，并在 `zh.json` / `en.json` 的 `components.themeNames` 中添加对应翻译键。`ThemeSwitcher` 组件会自动发现并显示。
 
 ### 7. Base Layer
 
@@ -454,12 +482,12 @@ export function cn(...inputs) {
 ### 配色主题（`src/theme/useThemeManager.js`）
 
 1. 通过 `import.meta.glob("./*.css")` 自动发现 `theme/` 目录下所有主题文件
-2. 主题 ID 从文件名提取（如 `youminghei.css` → `youminghei`），通过 `THEME_NAMES` 映射获取中文显示名（如 `幽冥黑`）
+2. 主题 ID 从文件名提取（如 `youminghei.css` → `youminghei`），显示名通过 `i18n.t('themeNames.${id}')` 从翻译资源获取
 3. Zustand store 中 `currentTheme` 状态持久化到 localStorage
 4. `useThemeManager()` hook 设置 `<html data-theme="...">` 属性
 5. CSS 选择器 `[data-theme="youminghei"]:root` / `[data-theme="youminghei"].dark` 根据属性生效对应颜色变量
-6. `ThemeSwitcher` 组件提供下拉菜单，列出所有可用主题的中文名称，点击即可切换
-7. 新增主题只需在 `theme/` 下添加 `<id>.css` 文件，并在 `THEME_NAMES` 中添加映射条目
+6. `ThemeSwitcher` 组件提供下拉菜单，列出所有可用主题的多语言名称，点击即可切换
+7. 新增主题只需在 `theme/` 下添加 `<id>.css` 文件，并在 `zh.json` / `en.json` 的 `components.themeNames` 中添加对应翻译键
 
 亮/暗模式（Sun/Moon 图标）与配色主题（Palette 图标）完全独立，互不干扰。
 

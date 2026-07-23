@@ -1,4 +1,5 @@
 import { useState, useCallback, useMemo } from "react";
+import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import {
@@ -13,6 +14,7 @@ import { ArrowLeft, FileText, Loader2, Copy, Download } from "lucide-react";
 import { api } from "@/api/index";
 
 export default function TemplateGenPage() {
+  const { t } = useTranslation(["pages", "common"]);
   const [description, setDescription] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -74,17 +76,16 @@ export default function TemplateGenPage() {
           <Button variant="ghost" size="icon" nativeButton={false} render={<Link to="/" />}>
             <ArrowLeft />
           </Button>
-          <h1 className="text-3xl font-bold tracking-tight">模板生成</h1>
+          <h1 className="text-3xl font-bold tracking-tight">{t("pages:templateGen.title")}</h1>
         </div>
       </div>
 
       <div className="max-w-3xl mx-auto space-y-4">
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm">描述你的需求</CardTitle>
+            <CardTitle className="text-sm">{t("pages:templateGen.descLabel")}</CardTitle>
             <CardDescription>
-              描述你需要的 LaTeX 模板类型（如“IEEE 会议论文”、
-              中文简历”、“学术报告”）
+              {t("pages:templateGen.descPlaceholder")}
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
@@ -92,7 +93,7 @@ export default function TemplateGenPage() {
               className="min-h-24 resize-none"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              placeholder="例如：一篇用于投稿 CVPR 的论文模板，包含摘要、引言、方法、实验、结论..."
+              placeholder={t("pages:templateGen.descDetailPlaceholder")}
               onKeyDown={(e) => {
                 if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
                   handleGenerate();
@@ -109,10 +110,10 @@ export default function TemplateGenPage() {
                 ) : (
                   <FileText />
                 )}
-                {loading ? "生成中..." : "生成模板"}
+                {loading ? t("pages:templateGen.generateBtnLoading") : t("pages:templateGen.generateBtn")}
               </Button>
               <span className="text-xs text-muted-foreground">
-                Ctrl+Enter 快速生成
+                {t("pages:templateGen.submitHint")}
               </span>
             </div>
             {error && (
@@ -127,7 +128,7 @@ export default function TemplateGenPage() {
               <div className="flex items-center justify-between">
                 <div>
                   <CardTitle className="text-sm">
-                    {result.template_name || "生成的模板"}
+                    {result.template_name || t("pages:templateGen.resultTitle")}
                   </CardTitle>
                   <CardDescription>
                     {result.explanation}
@@ -136,7 +137,7 @@ export default function TemplateGenPage() {
                 <div className="flex items-center gap-2">
                   <Button variant="outline" size="sm" onClick={handleCopy}>
                     <Copy />
-                    复制
+                    {t("common:copy")}
                   </Button>
                   <Button
                     variant="outline"
@@ -145,7 +146,7 @@ export default function TemplateGenPage() {
                     disabled={saved}
                   >
                     <Download />
-                    {saved ? "已保存" : "保存 .tex 文件"}
+                    {saved ? t("pages:templateGen.saved") : t("pages:templateGen.saveBtn")}
                   </Button>
                 </div>
               </div>
@@ -154,7 +155,7 @@ export default function TemplateGenPage() {
               {result.packages && result.packages.length > 0 && (
                 <div>
                   <h4 className="text-xs font-medium text-muted-foreground mb-1">
-                    宏包
+                    {t("pages:templateGen.packages")}
                   </h4>
                   <div className="flex flex-wrap gap-1">
                     {result.packages.map((pkg) => (
@@ -172,7 +173,7 @@ export default function TemplateGenPage() {
               {result.body_structure && result.body_structure.length > 0 && (
                 <div>
                   <h4 className="text-xs font-medium text-muted-foreground mb-1">
-                    结构
+                    {t("pages:templateGen.structure")}
                   </h4>
                   <ul className="space-y-1">
                     {result.body_structure.map((sec, i) => (
@@ -194,7 +195,7 @@ export default function TemplateGenPage() {
 
               <details>
                 <summary className="cursor-pointer text-xs text-muted-foreground">
-                  查看完整的 LaTeX 源代码
+                  {t("pages:templateGen.viewSource")}
                 </summary>
                 <pre className="whitespace-pre-wrap mt-2 p-3 bg-muted rounded text-xs font-mono max-h-80 overflow-y-auto">
                   {fullTemplate}

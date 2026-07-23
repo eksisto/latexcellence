@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect, useRef, useMemo } from "react";
 import { Link } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -50,6 +51,7 @@ function flattenTexFiles(nodes) {
 }
 
 export default function WorkspacePage() {
+  const { t } = useTranslation(["pages", "common"]);
   const projectPath = useStore((s) => s.projectPath);
   const workspaceId = useStore((s) => s.workspaceId);
   const rootPath = useStore((s) => s.rootPath);
@@ -87,8 +89,8 @@ export default function WorkspacePage() {
     setParagraphs([]);
     setPdfUrl(null);
     setConfirmCloseOpen(false);
-    toast.success("项目已关闭");
-  }, [clearProject, setPdfUrl]);
+    toast.success(t("pages:workspace.projectClosed"));
+  }, [clearProject, setPdfUrl, t]);
 
   const doOpenProject = useCallback(async (path) => {
     setLoading(true);
@@ -106,15 +108,15 @@ export default function WorkspacePage() {
       } catch {
         setParagraphs([]);
       }
-      toast.success("项目已打开", { description: data.root_path });
+      toast.success(t("pages:workspace.projectOpened"), { description: data.root_path });
     } catch (e) {
       const msg = translateError(e.message);
       setError(msg);
-      toast.error("打开项目失败", { description: msg });
+      toast.error(t("pages:workspace.openFailed"), { description: msg });
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [t, workspaceId, setRootPath, setProjectPath, setFileTree, setMainFile, setActiveFile]);
 
   // 启动时：从 Zustand persist 恢复项目
   useEffect(() => {
@@ -161,20 +163,20 @@ export default function WorkspacePage() {
       setCompileResult(data);
       if (data.success) {
         setPdfUrl(`${api.compile.pdfUrl(mainFile, workspaceId)}&t=${Date.now()}`);
-        toast.success("编译成功");
+        toast.success(t("pages:workspace.compileSuccessToast"));
       } else {
-        toast.error("编译失败", {
-          description: data.explanation || "请查看编译结果详情",
+        toast.error(t("pages:workspace.compileFailedToast"), {
+          description: data.explanation || t("pages:workspace.compileFailedToast"),
         });
       }
     } catch (e) {
       const msg = translateError(e.message);
       setCompileResult({ success: false, explanation: msg, fixes: [], stdout: "", stderr: "" });
-      toast.error("编译失败", { description: msg });
+      toast.error(t("pages:workspace.compileFailedToast"), { description: msg });
     } finally {
       setCompileLoading(false);
     }
-  }, [mainFile, setCompileLoading, setCompileResult, setPdfUrl]);
+  }, [mainFile, setCompileLoading, setCompileResult, setPdfUrl, t, workspaceId]);
 
   const handleSelectFile = useCallback(async (node) => {
     if (node.is_dir) return;
@@ -234,7 +236,7 @@ export default function WorkspacePage() {
             <ArrowLeft />
           </Button>
           <h1 className="text-3xl font-bold tracking-tight">
-            项目工作区
+            {t("pages:workspace.title")}
           </h1>
         </div>
       </div>
@@ -245,18 +247,18 @@ export default function WorkspacePage() {
           <div className="flex justify-center mt-12">
             <Card className="max-w-lg w-full">
               <CardHeader>
-                <CardTitle>打开一个 LaTeX 项目</CardTitle>
+                <CardTitle>{t("pages:workspace.openProject")}</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="space-y-2">
-                  <Label htmlFor="project-path">项目目录路径</Label>
+                  <Label htmlFor="project-path">{t("pages:workspace.projectPath")}</Label>
                   <div className="flex gap-2">
                     <Input
                       id="project-path"
                       className="flex-1"
                       value={openPath}
                       onChange={(e) => setOpenPath(e.target.value)}
-                      placeholder="例如：C:\Users\YourName\paper"
+                      placeholder={t("pages:workspace.pathPlaceholder")}
                       onKeyDown={(e) => e.key === "Enter" && handleOpenProject()}
                     />
                     <Button
@@ -265,11 +267,11 @@ export default function WorkspacePage() {
                       disabled={loading}
                       type="button"
                     >
-                      浏览
+                      {t("pages:workspace.browse")}
                     </Button>
                   </div>
                   <p className="text-xs text-muted-foreground">
-                    输入项目路径，或点击「浏览」进行选择
+                    {t("pages:workspace.pathHint")}
                   </p>
                 </div>
                 {error && (
@@ -281,7 +283,7 @@ export default function WorkspacePage() {
                   disabled={loading || !openPath.trim()}
                 >
                   <FolderOpen />
-                  {loading ? "打开中..." : "打开项目"}
+                  {loading ? t("pages:workspace.openBtnLoading") : t("pages:workspace.openBtn")}
                 </Button>
               </CardContent>
             </Card>
@@ -290,10 +292,10 @@ export default function WorkspacePage() {
           <>
             {/* 编译工具栏 */}
             <div className="flex items-center gap-3 mb-4">
-              <Label className="text-sm whitespace-nowrap">主文件</Label>
+              <Label className="text-sm whitespace-nowrap">{t("pages:workspace.mainFile")}</Label>
               <Select value={mainFile || ""} onValueChange={handleMainFileChange}>
                 <SelectTrigger className="w-64">
-                  <SelectValue placeholder="选择主 .tex 文件" />
+                  <SelectValue placeholder={t("pages:workspace.selectMainFile")} />
                 </SelectTrigger>
                 <SelectContent>
                   {texFiles.map((f) => (
@@ -310,9 +312,9 @@ export default function WorkspacePage() {
                   size="sm"
                 >
                   {compileLoading ? (
-                    <><Loader2 className="animate-spin" /> 编译中...</>
+                    <><Loader2 className="animate-spin" /> {t("pages:workspace.compileBtnLoading")}</>
                   ) : (
-                    <><Play /> 自动编译</>
+                    <><Play /> {t("pages:workspace.compileBtn")}</>
                   )}
                 </Button>
               )}
@@ -322,13 +324,13 @@ export default function WorkspacePage() {
                     <TooltipTrigger render={<Button variant="outline" size="icon" onClick={() => setConfirmUndoOpen(true)} disabled={!canUndo || undoBusy} />}>
                       <Undo2 />
                     </TooltipTrigger>
-                    <TooltipContent>撤销 (Ctrl+Z)</TooltipContent>
+                    <TooltipContent>{t("pages:workspace.undo")}</TooltipContent>
                   </Tooltip>
                   <Tooltip>
                     <TooltipTrigger render={<Button variant="outline" size="icon" onClick={handleRedo} disabled={!canRedo || undoBusy} />}>
                       <Redo2 />
                     </TooltipTrigger>
-                    <TooltipContent>重做 (Ctrl+Shift+Z)</TooltipContent>
+                    <TooltipContent>{t("pages:workspace.redo")}</TooltipContent>
                   </Tooltip>
                 </div>
               )}
@@ -340,7 +342,7 @@ export default function WorkspacePage() {
                   render={<Link to="/git-diff" />}
                 >
                   <FileDiff />
-                  差异高亮
+                  {t("pages:workspace.diffHighlight")}
                 </Button>
               )}
             </div>
@@ -350,7 +352,7 @@ export default function WorkspacePage() {
             <div className="col-span-1">
               <Card>
                 <CardHeader className="pb-2">
-                  <CardTitle className="text-sm">文件</CardTitle>
+                  <CardTitle className="text-sm">{t("pages:workspace.files")}</CardTitle>
                 </CardHeader>
                 <CardContent className="p-2">
                   <ProjectExplorer
@@ -366,7 +368,7 @@ export default function WorkspacePage() {
                   className="w-full text-xs"
                   onClick={() => setConfirmCloseOpen(true)}
                 >
-                  关闭项目
+                  {t("pages:workspace.closeProject")}
                 </Button>
               </div>
             </div>
@@ -378,7 +380,7 @@ export default function WorkspacePage() {
                   <div className="flex items-center justify-between">
                     <div>
                       <CardTitle className="text-sm">
-                        {activeFile || "选择一个文件"}
+                        {activeFile || t("pages:workspace.selectFile")}
                       </CardTitle>
                       <CardDescription>
                         {rootPath && <span className="text-xs">{rootPath}</span>}
@@ -390,13 +392,13 @@ export default function WorkspacePage() {
                           <TooltipTrigger render={<Button variant="outline" size="sm" nativeButton={false} render={<Link to="/typo-check" />} />}>
                             <SpellCheck />
                           </TooltipTrigger>
-                          <TooltipContent>文本校对</TooltipContent>
+                          <TooltipContent>{t("pages:workspace.typoCheck")}</TooltipContent>
                         </Tooltip>
                         <Tooltip>
                           <TooltipTrigger render={<Button variant="outline" size="sm" nativeButton={false} render={<Link to="/terminology-check" />} />}>
                             <BookOpen />
                           </TooltipTrigger>
-                          <TooltipContent>术语一致性检查</TooltipContent>
+                          <TooltipContent>{t("pages:workspace.terminologyCheck")}</TooltipContent>
                         </Tooltip>
                       </div>
                     )}
@@ -406,8 +408,8 @@ export default function WorkspacePage() {
                   {paragraphs.length === 0 ? (
                     <p className="text-muted-foreground text-sm">
                       {activeFile
-                        ? "未找到段落或文件为空"
-                        : "在文件目录中点击一个 .tex 文件以查看其段落"}
+                        ? t("pages:workspace.noParagraphs")
+                        : t("pages:workspace.noParagraphsHint")}
                     </p>
                   ) : (
                     <div className="space-y-4">
@@ -421,7 +423,7 @@ export default function WorkspacePage() {
                               P{p.index}
                             </span>
                             <span className="text-xs text-muted-foreground">
-                              第 {p.line_start}-{p.line_end} 行
+                              {t("pages:workspace.lines", { start: p.line_start, end: p.line_end })}
                             </span>
                           </div>
                           <pre className="whitespace-pre-wrap text-sm font-mono text-foreground/80">
@@ -440,13 +442,13 @@ export default function WorkspacePage() {
           {compileResult && (
             <Card className="mt-4">
               <CardHeader>
-                <CardTitle className="text-sm">编译结果</CardTitle>
+                <CardTitle className="text-sm">{t("pages:workspace.compileResult")}</CardTitle>
                 <CardAction>
                   <Badge variant={compileResult.success ? "secondary" : "destructive"}>
                     {compileResult.success ? (
-                      <><Check /> 成功</>
+                      <><Check /> {t("pages:workspace.compileSuccess")}</>
                     ) : (
-                      <><CircleAlert /> 失败</>
+                      <><CircleAlert /> {t("pages:workspace.compileFailed")}</>
                     )}
                   </Badge>
                 </CardAction>
@@ -454,13 +456,13 @@ export default function WorkspacePage() {
               <CardContent className="space-y-3">
                 {compileResult.explanation && (
                   <div>
-                    <Label className="text-xs text-muted-foreground">错误解释</Label>
+                    <Label className="text-xs text-muted-foreground">{t("pages:workspace.errorExplanation")}</Label>
                     <p className="text-sm mt-1 whitespace-pre-wrap">{compileResult.explanation}</p>
                   </div>
                 )}
                 {compileResult.fixes && compileResult.fixes.length > 0 && (
                   <div>
-                    <Label className="text-xs text-muted-foreground">修复建议</Label>
+                    <Label className="text-xs text-muted-foreground">{t("pages:workspace.fixSuggestion")}</Label>
                     <ul className="text-sm mt-1 list-disc list-inside space-y-1">
                       {compileResult.fixes.map((fix, i) => (
                         <li key={i}>{fix}</li>
@@ -475,13 +477,13 @@ export default function WorkspacePage() {
                     onClick={() => setShowRawOutput((v) => !v)}
                   >
                     {showRawOutput ? <ChevronDown /> : <ChevronRight />}
-                    查看原始输出
+                    {t("pages:workspace.viewRawOutput")}
                   </Button>
                   {showRawOutput && (
                     <pre className="mt-2 p-2 rounded bg-muted text-xs max-h-48 overflow-auto whitespace-pre-wrap">
-                      {compileResult.stdout || "(无标准输出)"}
+                      {compileResult.stdout || t("pages:workspace.noStdout")}
                       {"\n"}
-                      {compileResult.stderr || "(无错误输出)"}
+                      {compileResult.stderr || t("pages:workspace.noStderr")}
                     </pre>
                   )}
                 </div>
@@ -493,7 +495,7 @@ export default function WorkspacePage() {
           {compileResult?.success && pdfUrl && (
             <Card className="mt-4">
               <CardHeader className="pb-2">
-                <CardTitle className="text-sm">PDF 预览</CardTitle>
+                <CardTitle className="text-sm">{t("pages:workspace.pdfPreview")}</CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="h-[70vh]">
@@ -509,18 +511,18 @@ export default function WorkspacePage() {
       <ConfirmDialog
         open={confirmCloseOpen}
         onOpenChange={setConfirmCloseOpen}
-        title="关闭项目？"
-        description="关闭后将清空当前已加载的段落和检查结果，下次需重新打开。未保存的修改已写回源文件，不会丢失。"
-        confirmText="关闭项目"
+        title={t("pages:workspace.closeConfirmTitle")}
+        description={t("pages:workspace.closeConfirmDesc")}
+        confirmText={t("pages:workspace.closeConfirmBtn")}
         variant="destructive"
         onConfirm={handleCloseProject}
       />
       <ConfirmDialog
         open={confirmUndoOpen}
         onOpenChange={setConfirmUndoOpen}
-        title="撤销最近一次修改？"
-        description="将该文件回退到上一次修改前的状态。撤销后可通过重做恢复。"
-        confirmText="撤销"
+        title={t("pages:workspace.undoConfirmTitle")}
+        description={t("pages:workspace.undoConfirmDesc")}
+        confirmText={t("pages:workspace.undoConfirmBtn")}
         onConfirm={async () => {
           await handleUndo();
           setConfirmUndoOpen(false);

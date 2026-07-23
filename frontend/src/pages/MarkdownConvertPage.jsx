@@ -1,4 +1,5 @@
 import { useState, useCallback } from "react";
+import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import {
@@ -13,6 +14,7 @@ import { ArrowLeft, FileText, Loader2, Copy } from "lucide-react";
 import { api } from "@/api/index";
 
 export default function MarkdownConvertPage() {
+  const { t } = useTranslation(["pages", "common"]);
   const [markdown, setMarkdown] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -46,7 +48,7 @@ export default function MarkdownConvertPage() {
             <ArrowLeft />
           </Button>
           <h1 className="text-3xl font-bold tracking-tight">
-            Markdown 转 LaTeX
+            {t("pages:markdownConvert.title")}
           </h1>
         </div>
       </div>
@@ -54,9 +56,9 @@ export default function MarkdownConvertPage() {
       <div className="max-w-3xl mx-auto space-y-4">
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm">粘贴 Markdown 内容</CardTitle>
+            <CardTitle className="text-sm">{t("pages:markdownConvert.inputLabel")}</CardTitle>
             <CardDescription>
-              将 Markdown 文本转换为 LaTeX 代码，基于 Pandoc 引擎
+              {t("pages:markdownConvert.inputDesc")}
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
@@ -64,7 +66,7 @@ export default function MarkdownConvertPage() {
               className="min-h-48 resize-none font-mono text-sm"
               value={markdown}
               onChange={(e) => setMarkdown(e.target.value)}
-              placeholder={"例如：# 标题\n\n这是**粗体**和*斜体*文字。\n\n- 列表项 1\n- 列表项 2\n\n$$E = mc^2$$"}
+              placeholder={t("pages:markdownConvert.inputPlaceholder")}
             />
             <div className="flex items-center gap-2">
               <Button
@@ -76,10 +78,10 @@ export default function MarkdownConvertPage() {
                 ) : (
                   <FileText />
                 )}
-                {loading ? "转换中..." : "转换为 LaTeX"}
+                {loading ? t("pages:markdownConvert.convertBtnLoading") : t("pages:markdownConvert.convertBtn")}
               </Button>
               <span className="text-xs text-muted-foreground">
-                需要安装 <a href="https://pandoc.org/installing.html" target="_blank" rel="noopener noreferrer" className="relative inline-block no-underline after:content-[''] after:absolute after:left-0 after:bottom-0 after:h-[0.5px] after:w-full after:bg-current after:origin-left after:transition-transform after:duration-300 hover:after:scale-x-0">
+                {t("pages:markdownConvert.needPandoc")}<a href="https://pandoc.org/installing.html" target="_blank" rel="noopener noreferrer" className="relative inline-block no-underline after:content-[''] after:absolute after:left-0 after:bottom-0 after:h-[0.5px] after:w-full after:bg-current after:origin-left after:transition-transform after:duration-300 hover:after:scale-x-0">
                   Pandoc
                 </a>
               </span>
@@ -95,11 +97,11 @@ export default function MarkdownConvertPage() {
             <CardHeader className="pb-2">
               <div className="flex items-center justify-between">
                 <CardTitle className="text-sm">
-                  转换结果
+                  {t("pages:markdownConvert.resultTitle")}
                 </CardTitle>
                 <Button variant="outline" size="sm" onClick={handleCopy}>
                   <Copy />
-                  复制
+                  {t("common:copy")}
                 </Button>
               </div>
             </CardHeader>

@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect, useMemo } from "react";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
+import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -32,6 +33,7 @@ import ResultFilterBar from "@/components/ResultFilterBar";
 import useResultFilter from "@/hooks/useResultFilter";
 
 export default function ExpressionOptPage() {
+  const { t } = useTranslation(["pages", "common"]);
   const {
     projectPath,
     activeFile,
@@ -68,11 +70,11 @@ export default function ExpressionOptPage() {
       loadingKey: "expressionOpt",
     },
     messages: {
-      checkLoading: "正在优化...",
-      checkSuccess: (count) => `找到 ${count} 个有优化建议的段落`,
-      applySuccess: (idx) => `已应用第 ${idx} 段的优化建议`,
-      applyAllSuccess: (count) => `已批量应用 ${count} 个段落的优化`,
-      applyAllEmpty: "没有可应用的优化建议",
+      checkLoading: t("pages:expressionOpt.checkLoading"),
+      checkSuccess: (count) => t("pages:expressionOpt.checkSuccess", { count }),
+      applySuccess: (idx) => t("pages:expressionOpt.applySuccess", { idx }),
+      applyAllSuccess: (count) => t("pages:expressionOpt.applyAllSuccess", { count }),
+      applyAllEmpty: t("pages:expressionOpt.applyAllEmpty"),
     },
   });
 
@@ -124,12 +126,12 @@ export default function ExpressionOptPage() {
       setPromptContent("");
       setEditingPrompt(name);
       setPromptError(null);
-      toast.success("提示词已保存", { description: name });
+      toast.success(t("pages:expressionOpt.promptSaved"), { description: name });
     } catch (e) {
       setPromptError(e.message);
-      toast.error("保存提示词失败", { description: e.message });
+      toast.error(t("pages:expressionOpt.promptSaveFailed"), { description: e.message });
     }
-  }, [newPromptName, promptContent]);
+  }, [newPromptName, promptContent, t]);
 
   const handleDeletePrompt = useCallback(async (name) => {
     try {
@@ -142,25 +144,25 @@ export default function ExpressionOptPage() {
       }
       if (activePrompt === name) setActivePrompt("");
       setPromptError(null);
-      toast.success("提示词已删除", { description: name });
+      toast.success(t("pages:expressionOpt.promptDeleted"), { description: name });
     } catch (e) {
       setPromptError(e.message);
-      toast.error("删除提示词失败", { description: e.message });
+      toast.error(t("pages:expressionOpt.promptDeleteFailed"), { description: e.message });
     }
-  }, [editingPrompt, activePrompt]);
+  }, [editingPrompt, activePrompt, t]);
 
   const handleSetActivePrompt = useCallback(async (name) => {
     try {
       await api.expressionOpt.prompts.setActive(name);
       setActivePrompt(name);
-      setPromptMessage(name ? `当前启用提示词：${name}` : "使用默认提示词");
+      setPromptMessage(name ? t("pages:expressionOpt.activePromptEnabled", { name }) : t("pages:expressionOpt.usingDefaultPrompt"));
       setPromptError(null);
-      toast.success(name ? `已启用提示词：${name}` : "已切换为默认提示词");
+      toast.success(name ? t("pages:expressionOpt.promptEnabled", { name }) : t("pages:expressionOpt.switchedToDefault"));
     } catch (e) {
       setPromptError(e.message);
-      toast.error("切换提示词失败", { description: e.message });
+      toast.error(t("pages:expressionOpt.promptSwitchFailed"), { description: e.message });
     }
-  }, []);
+  }, [t]);
 
   const handleEditPrompt = useCallback(async (name) => {
     try {
@@ -170,9 +172,9 @@ export default function ExpressionOptPage() {
       setPromptError(null);
     } catch (e) {
       setPromptError(e.message);
-      toast.error("加载提示词失败", { description: e.message });
+      toast.error(t("pages:expressionOpt.promptLoadFailed"), { description: e.message });
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     if (!activePrompt) {
@@ -209,7 +211,7 @@ export default function ExpressionOptPage() {
           <Button variant="ghost" size="icon" nativeButton={false} render={<Link to="/" />}>
             <ArrowLeft />
           </Button>
-          <h1 className="text-3xl font-bold tracking-tight">表达优化</h1>
+          <h1 className="text-3xl font-bold tracking-tight">{t("pages:expressionOpt.title")}</h1>
         </div>
       </div>
 
@@ -218,7 +220,7 @@ export default function ExpressionOptPage() {
           <div className="flex justify-center mt-12">
             <Card className="max-w-md w-full">
               <CardHeader>
-                <CardTitle>正在恢复项目...</CardTitle>
+                <CardTitle>{t("common:restoring")}</CardTitle>
               </CardHeader>
               <CardContent className="flex justify-center">
                 <Loader2 className="animate-spin size-6" />
@@ -229,14 +231,14 @@ export default function ExpressionOptPage() {
           <div className="flex justify-center mt-12">
             <Card className="max-w-md w-full">
               <CardHeader>
-                <CardTitle>未选择文件</CardTitle>
+                <CardTitle>{t("pages:expressionOpt.noProjectTitle")}</CardTitle>
                 <CardDescription>
-                  先转到项目工作区，打开一个项目，然后选择要优化的 .tex 文件
+                  {t("pages:expressionOpt.noProjectDesc")}
                 </CardDescription>
               </CardHeader>
               <CardContent>
                 <Button className="w-full" nativeButton={false} render={<Link to="/workspace" />}>
-                  打开工作区
+                  {t("common:openWorkspace")}
                 </Button>
               </CardContent>
             </Card>
@@ -251,7 +253,7 @@ export default function ExpressionOptPage() {
                     onValueChange={handleFileChange}
                   >
                     <SelectTrigger className="min-w-60">
-                      <SelectValue placeholder="选择 .tex 文件" />
+                      <SelectValue placeholder={t("common:selectTexFile")} />
                     </SelectTrigger>
                     <SelectContent>
                       {texFiles.map((f) => (
@@ -269,7 +271,7 @@ export default function ExpressionOptPage() {
                       onCheckedChange={setResolveInput}
                     />
                     <Label htmlFor="resolve-input" className="text-sm cursor-pointer">
-                      包含子文件（展开 \input）
+                      {t("common:includeSubfiles")}
                     </Label>
                   </div>
                 </div>
@@ -282,7 +284,7 @@ export default function ExpressionOptPage() {
                     variant="outline"
                   >
                     <Eye />
-                    加载并预览
+                    {t("common:loadAndPreview")}
                   </Button>
                   <Button
                     onClick={handleOptimize}
@@ -293,7 +295,7 @@ export default function ExpressionOptPage() {
                     ) : (
                       <PencilLine />
                     )}
-                    {isLoading ? "正在优化..." : "开始优化"}
+                    {isLoading ? t("pages:expressionOpt.optimizing") : t("pages:expressionOpt.startOptimize")}
                   </Button>
                 </div>
                 {message && (
@@ -317,9 +319,9 @@ export default function ExpressionOptPage() {
 
             <Card>
               <CardHeader className="pb-2">
-                <CardTitle className="text-sm">优化提示词</CardTitle>
+                <CardTitle className="text-sm">{t("pages:expressionOpt.promptSectionTitle")}</CardTitle>
                 <CardDescription>
-                  选择或自定义 LLM 的优化策略
+                  {t("pages:expressionOpt.promptSectionDesc")}
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-3">
@@ -358,14 +360,14 @@ export default function ExpressionOptPage() {
                 </div>
                 {prompts.length === 0 && (
                   <p className="text-xs text-muted-foreground">
-                    暂无自定义提示词，请在下方创建一个
+                    {t("pages:expressionOpt.noPrompts")}
                   </p>
                 )}
 
                 {activePrompt && previewContent && (
                   <div className="rounded-md border border-border bg-muted/30 p-3">
                     <span className="text-xs font-medium text-muted-foreground">
-                      当前启用提示词：{activePrompt}
+                      {t("pages:expressionOpt.activePromptLabel")}{activePrompt}
                     </span>
                     <pre className="whitespace-pre-wrap text-sm text-foreground/80 font-sans leading-relaxed max-h-48 overflow-y-auto mt-2">
                       {previewContent}
@@ -375,21 +377,21 @@ export default function ExpressionOptPage() {
 
                 {editingPrompt && (
                   <p className="text-xs text-muted-foreground">
-                    正在编辑：{editingPrompt}
+                    {t("pages:expressionOpt.editingLabel")}{editingPrompt}
                   </p>
                 )}
 
                 <div className="flex items-end gap-2">
                   <div className="flex-1 space-y-1">
                     <Label htmlFor="prompt-name" className="text-xs">
-                      名称
+                      {t("pages:expressionOpt.nameLabel")}
                     </Label>
                     <Input
                       id="prompt-name"
                       className="h-7 text-sm"
                       value={newPromptName}
                       onChange={(e) => setNewPromptName(e.target.value)}
-                      placeholder="例如：academic-formal"
+                      placeholder={t("pages:expressionOpt.promptNamePlaceholder")}
                     />
                   </div>
                   <Button
@@ -399,14 +401,14 @@ export default function ExpressionOptPage() {
                     disabled={!newPromptName.trim() || !promptContent.trim()}
                   >
                     <Plus />
-                    保存
+                    {t("pages:expressionOpt.save")}
                   </Button>
                 </div>
                 <Textarea
                   className="min-h-24 resize-none text-sm"
                   value={promptContent}
                   onChange={(e) => setPromptContent(e.target.value)}
-                  placeholder="输入给 LLM 的自定义提示词说明..."
+                  placeholder={t("pages:expressionOpt.promptPlaceholder")}
                 />
                 {promptMessage && (
                   <p className="text-sm text-muted-foreground mt-2">
@@ -423,10 +425,10 @@ export default function ExpressionOptPage() {
               <Card>
                 <CardHeader className="pb-2">
                   <CardTitle className="text-sm">
-                    段落（{expressionParagraphs.length}）
+                    {t("pages:expressionOpt.paragraphPreviewTitle", { count: expressionParagraphs.length })}
                   </CardTitle>
                   <CardDescription>
-                    去除 LaTeX 标记后的纯文本
+                    {t("pages:expressionOpt.paragraphPreviewDesc")}
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
@@ -449,7 +451,7 @@ export default function ExpressionOptPage() {
                                   P{p.index}
                                 </span>
                                 <div className="whitespace-pre-wrap text-sm text-foreground/80 mt-1 max-h-32 overflow-y-auto font-sans leading-relaxed">
-                                  {p.plain_text ? <MarkerText text={p.plain_text} /> : "（空白）"}
+                                  {p.plain_text ? <MarkerText text={p.plain_text} /> : t("common:blank")}
                                 </div>
                               </div>
                             ))}
@@ -468,7 +470,7 @@ export default function ExpressionOptPage() {
                             P{p.index}
                           </span>
                           <div className="whitespace-pre-wrap text-sm text-foreground/80 mt-1 max-h-32 overflow-y-auto font-sans leading-relaxed">
-                            {p.plain_text ? <MarkerText text={p.plain_text} /> : "（空白）"}
+                            {p.plain_text ? <MarkerText text={p.plain_text} /> : t("common:blank")}
                           </div>
                         </div>
                       ))}
@@ -495,7 +497,7 @@ export default function ExpressionOptPage() {
                       ) : (
                         <ListChecks />
                       )}
-                      全部应用
+                      {t("common:applyAll")}
                     </Button>
                   </div>
                 )}
@@ -511,7 +513,7 @@ export default function ExpressionOptPage() {
                 />
                 {filteredResults.length === 0 ? (
                   <p className="text-sm text-muted-foreground text-center py-8">
-                    没有匹配的优化结果
+                    {t("pages:expressionOpt.noMatchResult")}
                   </p>
                 ) : (
                   activeFiles.length > 1 ? (
@@ -526,7 +528,7 @@ export default function ExpressionOptPage() {
                           <div className="space-y-4">
                             {(resultsByFile[f] || []).length === 0 ? (
                               <p className="text-sm text-muted-foreground text-center py-8">
-                                该文件没有优化结果
+                                {t("pages:expressionOpt.noFileResult")}
                               </p>
                             ) : (
                               (resultsByFile[f] || []).map((result) => {
@@ -537,11 +539,11 @@ export default function ExpressionOptPage() {
                                     <CardHeader className="pb-2">
                                       <div className="flex items-center justify-between">
                                         <CardTitle className="text-sm">
-                                          第 {result.paragraph_index} 段
+                                          {t("pages:expressionOpt.paragraphLabel", { index: result.paragraph_index })}
                                         </CardTitle>
                                         {hasChanges && (
                                           <span className="rounded bg-destructive/10 text-destructive px-1.5 py-0.5 text-xs font-medium">
-                                            {result.changes.length} 条建议
+                                            {result.changes.length} {t("pages:expressionOpt.suggestions")}
                                           </span>
                                         )}
                                       </div>
@@ -568,13 +570,13 @@ export default function ExpressionOptPage() {
                                                   </div>
                                                   <div className="grid grid-cols-[auto_1fr] gap-x-2 gap-y-1 text-sm">
                                                     <span className="text-muted-foreground whitespace-nowrap mt-0.5">
-                                                      原文：
+                                                      {t("common:original")}
                                                     </span>
                                                     <span className="line-through text-foreground/60 break-all mt-0.5">
                                                       <MarkerText text={change.original} />
                                                     </span>
                                                     <span className="text-muted-foreground whitespace-nowrap mt-0.5">
-                                                      修改后：
+                                                      {t("common:modified")}
                                                     </span>
                                                     <span className="font-medium break-all mt-0.5">
                                                       <MarkerText text={change.optimized} />
@@ -594,7 +596,7 @@ export default function ExpressionOptPage() {
                                                   )
                                                 }
                                               >
-                                                应用优化
+                                                {t("pages:expressionOpt.applyOptimization")}
                                               </Button>
                                               <Button
                                                 size="sm"
@@ -603,13 +605,13 @@ export default function ExpressionOptPage() {
                                                   handleIgnoreChange(result.paragraph_index, result.file_path)
                                                 }
                                               >
-                                                忽略
+                                                {t("common:ignore")}
                                               </Button>
                                             </div>
                                           </>
                                         ) : (
                                           <p className="text-sm text-muted-foreground">
-                                            当前段落没有优化建议
+                                            {t("pages:expressionOpt.noSuggestions")}
                                           </p>
                                         )}
                                         <ParagraphContext currentIndex={result.paragraph_index} paragraphs={expressionParagraphs} currentText={result.plain_text || result.original} />
@@ -632,11 +634,11 @@ export default function ExpressionOptPage() {
                           <CardHeader className="pb-2">
                             <div className="flex items-center justify-between">
                               <CardTitle className="text-sm">
-                                第 {result.paragraph_index} 段
+                                {t("pages:expressionOpt.paragraphLabel", { index: result.paragraph_index })}
                               </CardTitle>
                               {hasChanges && (
                                 <span className="rounded bg-destructive/10 text-destructive px-1.5 py-0.5 text-xs font-medium">
-                                  {result.changes.length} 条建议
+                                  {result.changes.length} {t("pages:expressionOpt.suggestions")}
                                 </span>
                               )}
                             </div>
@@ -663,13 +665,13 @@ export default function ExpressionOptPage() {
                                         </div>
                                         <div className="grid grid-cols-[auto_1fr] gap-x-2 gap-y-1 text-sm">
                                           <span className="text-muted-foreground whitespace-nowrap mt-0.5">
-                                            原文：
+                                            {t("common:original")}
                                           </span>
                                           <span className="line-through text-foreground/60 break-all mt-0.5">
                                             <MarkerText text={change.original} />
                                           </span>
                                           <span className="text-muted-foreground whitespace-nowrap mt-0.5">
-                                            修改后：
+                                            {t("common:modified")}
                                           </span>
                                           <span className="font-medium break-all mt-0.5">
                                             <MarkerText text={change.optimized} />
@@ -689,7 +691,7 @@ export default function ExpressionOptPage() {
                                         )
                                       }
                                     >
-                                      应用优化
+                                      {t("pages:expressionOpt.applyOptimization")}
                                     </Button>
                                     <Button
                                       size="sm"
@@ -698,13 +700,13 @@ export default function ExpressionOptPage() {
                                         handleIgnoreChange(result.paragraph_index, result.file_path)
                                       }
                                     >
-                                      忽略
+                                      {t("common:ignore")}
                                     </Button>
                                   </div>
                                 </>
                               ) : (
                                 <p className="text-sm text-muted-foreground">
-                                  当前段落没有优化建议
+                                  {t("pages:expressionOpt.noSuggestions")}
                                 </p>
                               )}
                               <ParagraphContext currentIndex={result.paragraph_index} paragraphs={expressionParagraphs} currentText={result.plain_text || result.original} />
@@ -726,9 +728,9 @@ export default function ExpressionOptPage() {
         onOpenChange={(open) => {
           if (!open) setConfirmDeletePrompt(null);
         }}
-        title="删除提示词？"
-        description={`将永久删除提示词「${confirmDeletePrompt}」，此操作不可撤销。`}
-        confirmText="删除"
+        title={t("pages:expressionOpt.deletePromptTitle")}
+        description={t("pages:expressionOpt.deletePromptDesc", { name: confirmDeletePrompt })}
+        confirmText={t("pages:expressionOpt.delete")}
         variant="destructive"
         onConfirm={async () => {
           if (confirmDeletePrompt) {
@@ -740,9 +742,9 @@ export default function ExpressionOptPage() {
       <ConfirmDialog
         open={confirmApplyAllOpen}
         onOpenChange={setConfirmApplyAllOpen}
-        title="全部应用优化建议？"
-        description="将一次性把所有有建议的段落修改写回源文件。建议在应用前逐段审核。"
-        confirmText="全部应用"
+        title={t("pages:expressionOpt.applyAllConfirmTitle")}
+        description={t("pages:expressionOpt.applyAllConfirmDesc")}
+        confirmText={t("common:applyAll")}
         onConfirm={async () => {
           setConfirmApplyAllOpen(false);
           await handleApplyAll();

@@ -1,6 +1,7 @@
 import { useState, useCallback, useRef, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
+import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -34,6 +35,7 @@ export default function ImageOCRPage({
   renderResultMeta,
   resultEmptyText = "(empty)",
 }) {
+  const { t } = useTranslation(["components", "common"]);
   const [file, setFile] = useState(null);
   const [preview, setPreview] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -44,8 +46,8 @@ export default function ImageOCRPage({
   const handleFile = useCallback((f) => {
     if (!f) return;
     if (!ACCEPTED_TYPES.includes(f.type)) {
-      toast.error("不支持的文件格式", {
-        description: "请上传 PNG、JPEG 或 WebP",
+      toast.error(t("imageOcr.unsupportedFormat"), {
+        description: t("imageOcr.unsupportedFormatDesc"),
       });
       return;
     }
@@ -115,9 +117,9 @@ export default function ImageOCRPage({
       formData.append("file", file);
       const data = await recognize(formData);
       setResult(data);
-      toast.success("识别完成");
+      toast.success(t("imageOcr.recognizeComplete"));
     } catch (e) {
-      toast.error("识别失败", { description: e.message });
+      toast.error(t("imageOcr.recognizeFailed"), { description: e.message });
     } finally {
       setLoading(false);
     }
@@ -127,8 +129,8 @@ export default function ImageOCRPage({
     if (!result?.latex) return;
     navigator.clipboard
       .writeText(result.latex)
-      .then(() => toast.success("已复制到剪贴板"))
-      .catch(() => toast.error("复制失败"));
+      .then(() => toast.success(t("imageOcr.copySuccess")))
+      .catch(() => toast.error(t("imageOcr.copyFailed")));
   }, [result]);
 
   const handleClear = useCallback(() => {
@@ -181,9 +183,9 @@ export default function ImageOCRPage({
               ) : (
                 <div className="flex flex-col items-center gap-2">
                   <Upload className="size-8 text-muted-foreground" />
-                  <span className="text-sm">点击、拖拽 或 Ctrl+V 粘贴图片</span>
+                  <span className="text-sm">{t("imageOcr.dropHint")}</span>
                   <span className="text-xs text-muted-foreground">
-                    支持 PNG、JPEG、WebP，最大 10MB
+                    {t("imageOcr.formatHint")}
                   </span>
                 </div>
               )}
@@ -201,14 +203,14 @@ export default function ImageOCRPage({
                   ) : (
                     <Icon />
                   )}
-                  {loading ? "识别中..." : recognizeButtonText}
+                  {loading ? t("imageOcr.recognizing") : recognizeButtonText}
                 </Button>
                 <Button
                   variant="outline"
                   size="sm"
                   onClick={handleClear}
                 >
-                  清除
+                  {t("imageOcr.clear")}
                 </Button>
               </div>
             )}
@@ -220,11 +222,11 @@ export default function ImageOCRPage({
           <Card>
             <CardHeader className="pb-2">
               <div className="flex items-center justify-between">
-                <CardTitle className="text-sm">识别结果</CardTitle>
+                <CardTitle className="text-sm">{t("imageOcr.resultTitle")}</CardTitle>
                 <div className="flex items-center gap-2">
                   {result.low_confidence && (
                     <span className="rounded bg-yellow-500/10 text-yellow-600 dark:text-yellow-400 px-1.5 py-0.5 text-xs font-medium">
-                      低置信度
+                      {t("imageOcr.lowConfidence")}
                     </span>
                   )}
                   {renderResultMeta && renderResultMeta(result)}

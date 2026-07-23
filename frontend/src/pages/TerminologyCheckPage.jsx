@@ -1,5 +1,6 @@
 import { useState, useCallback } from "react";
 import { Link } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -32,6 +33,7 @@ import useStore from "@/store/useStore";
 import { toast } from "sonner";
 
 export default function TerminologyCheckPage() {
+  const { t } = useTranslation(["pages", "common"]);
   const [confirmApplyAllOpen, setConfirmApplyAllOpen] = useState(false);
   const [customReplacements, setCustomReplacements] = useState({});
   const {
@@ -72,11 +74,11 @@ export default function TerminologyCheckPage() {
       loadingKey: "terminologyCheck",
     },
     messages: {
-      checkLoading: "正在检查术语一致性...",
-      checkSuccess: (count) => `发现 ${count} 个段落存在术语问题`,
-      applySuccess: (idx) => `已应用段落 ${idx} 的修改`,
-      applyAllSuccess: (count) => `已批量应用 ${count} 个段落的修改`,
-      applyAllEmpty: "没有可应用的修改",
+      checkLoading: t("pages:terminologyCheck.checkLoading"),
+      checkSuccess: (count) => t("pages:terminologyCheck.checkSuccess", { count }),
+      applySuccess: (idx) => t("pages:terminologyCheck.applySuccess", { idx }),
+      applyAllSuccess: (count) => t("pages:terminologyCheck.applyAllSuccess", { count }),
+      applyAllEmpty: t("pages:terminologyCheck.applyAllEmpty"),
     },
   });
 
@@ -120,11 +122,11 @@ export default function TerminologyCheckPage() {
       (r) => r.changes && r.changes.length > 0
     );
     if (pending.length === 0) {
-      toast.info("没有可应用的修改");
+      toast.info(t("pages:terminologyCheck.applyAllEmpty"));
       return;
     }
-    const toastId = toast.loading("正在批量应用修改...", {
-      description: `共 ${pending.length} 个段落`,
+    const toastId = toast.loading(t("pages:terminologyCheck.applying"), {
+      description: t("pages:terminologyCheck.applyingDescription", { count: pending.length }),
     });
     try {
       const changes = pending.map((r) => ({
@@ -143,16 +145,16 @@ export default function TerminologyCheckPage() {
           (r) => !appliedKeys.has(`${r.file_path || activeFile}:${r.paragraph_index}`)
         ),
       }));
-      toast.success(`已批量应用 ${pending.length} 个段落的修改`, {
+      toast.success(t("pages:terminologyCheck.applyAllSuccess", { count: pending.length }), {
         id: toastId,
       });
     } catch (e) {
-      toast.error("批量应用失败", {
+      toast.error(t("pages:terminologyCheck.applyAllFailed"), {
         id: toastId,
         description: e.message,
       });
     }
-  }, [terminologyResults, customReplacements, buildCorrectedText, activeFile, operationId]);
+  }, [terminologyResults, customReplacements, buildCorrectedText, activeFile, operationId, t]);
 
   const renderParagraphsByFile = (paragraphs) => {
     if (activeFiles.length > 1) {
@@ -178,7 +180,7 @@ export default function TerminologyCheckPage() {
                       P{p.index}
                     </span>
                     <div className="whitespace-pre-wrap text-sm text-foreground/80 mt-1 max-h-32 overflow-y-auto font-sans leading-relaxed">
-                      {p.plain_text ? <MarkerText text={p.plain_text} /> : "（空白）"}
+                      {p.plain_text ? <MarkerText text={p.plain_text} /> : t("common:blank")}
                     </div>
                   </div>
                 ))}
@@ -199,7 +201,7 @@ export default function TerminologyCheckPage() {
               P{p.index}
             </span>
             <div className="whitespace-pre-wrap text-sm text-foreground/80 mt-1 max-h-32 overflow-y-auto font-sans leading-relaxed">
-              {p.plain_text ? <MarkerText text={p.plain_text} /> : "（空白）"}
+              {p.plain_text ? <MarkerText text={p.plain_text} /> : t("common:blank")}
             </div>
           </div>
         ))}
@@ -215,22 +217,22 @@ export default function TerminologyCheckPage() {
         <CardHeader className="pb-2">
           <div className="flex items-center justify-between">
             <CardTitle className="text-sm">
-              段落 {result.paragraph_index}
+              {t("pages:terminologyCheck.paragraph", { index: result.paragraph_index })}
             </CardTitle>
             {hasChanges && (
               <span className="rounded bg-destructive/10 text-destructive px-1.5 py-0.5 text-xs font-medium">
-                {result.changes.length} 处问题
+                {t("pages:terminologyCheck.issuesCount", { count: result.changes.length })}
               </span>
             )}
           </div>
           {result.terms && result.terms.length > 0 && (
             <div className="flex flex-wrap gap-1 mt-1">
-              {result.terms.map((t, i) => (
+              {result.terms.map((term, i) => (
                 <span
                   key={i}
                   className="rounded bg-muted px-1.5 py-0.5 text-xs text-muted-foreground"
                 >
-                  {t}
+                  {term}
                 </span>
               ))}
             </div>
@@ -250,7 +252,7 @@ export default function TerminologyCheckPage() {
                       >
                         <div className="flex items-center gap-2 mb-1">
                           <span className="rounded bg-orange-500/10 text-orange-600 dark:text-orange-400 px-1 py-0.5 text-xs font-medium">
-                            术语不一致
+                            {t("pages:terminologyCheck.inconsistency")}
                           </span>
                           {change.concept && (
                             <span className="text-muted-foreground text-xs font-mono">
@@ -265,13 +267,13 @@ export default function TerminologyCheckPage() {
                         )}
                         <div className="grid grid-cols-[auto_1fr] gap-x-2 gap-y-1 text-sm">
                           <span className="text-muted-foreground whitespace-nowrap mt-0.5">
-                            原文：
+                            {t("common:original")}
                           </span>
                           <span className="line-through text-foreground/60 break-all mt-0.5">
                             <MarkerText text={change.original} />
                           </span>
                           <span className="text-muted-foreground whitespace-nowrap mt-0.5">
-                            替换为：
+                            {t("pages:terminologyCheck.replacedWith")}
                           </span>
                           <div className="mt-0.5 flex items-center gap-2">
                             <Input
@@ -299,7 +301,7 @@ export default function TerminologyCheckPage() {
                     size="sm"
                     onClick={() => handleApplyWithCustom(result)}
                   >
-                    应用修改
+                    {t("common:applyChange")}
                   </Button>
                   <Button
                     size="sm"
@@ -308,13 +310,13 @@ export default function TerminologyCheckPage() {
                       handleIgnoreChange(result.paragraph_index, result.file_path)
                     }
                   >
-                    忽略
+                    {t("common:ignore")}
                   </Button>
                 </div>
               </>
             ) : (
               <p className="text-sm text-muted-foreground">
-                此段落术语使用一致。
+                {t("pages:terminologyCheck.noIssues")}
               </p>
             )}
             <ParagraphContext currentIndex={result.paragraph_index} paragraphs={terminologyParagraphs} currentText={result.plain_text || result.original} />
@@ -331,7 +333,7 @@ export default function TerminologyCheckPage() {
           <Button variant="ghost" size="icon" nativeButton={false} render={<Link to="/" />}>
             <ArrowLeft />
           </Button>
-          <h1 className="text-3xl font-bold tracking-tight">术语一致性检查</h1>
+          <h1 className="text-3xl font-bold tracking-tight">{t("pages:terminologyCheck.title")}</h1>
         </div>
       </div>
 
@@ -340,7 +342,7 @@ export default function TerminologyCheckPage() {
           <div className="flex justify-center mt-12">
             <Card className="max-w-md w-full">
               <CardHeader>
-                <CardTitle>正在恢复项目...</CardTitle>
+                <CardTitle>{t("common:restoring")}</CardTitle>
               </CardHeader>
               <CardContent className="flex justify-center">
                 <Loader2 className="animate-spin size-6" />
@@ -351,14 +353,14 @@ export default function TerminologyCheckPage() {
           <div className="flex justify-center mt-12">
             <Card className="max-w-md w-full">
               <CardHeader>
-                <CardTitle>未选择文件</CardTitle>
+                <CardTitle>{t("pages:terminologyCheck.noProjectTitle")}</CardTitle>
                 <CardDescription>
-                  先转到项目工作区，打开一个项目，然后选择要检查的 .tex 文件
+                  {t("pages:terminologyCheck.noProjectDesc")}
                 </CardDescription>
               </CardHeader>
               <CardContent>
                 <Button className="w-full" nativeButton={false} render={<Link to="/workspace" />}>
-                  打开工作区
+                  {t("common:openWorkspace")}
                 </Button>
               </CardContent>
             </Card>
@@ -373,7 +375,7 @@ export default function TerminologyCheckPage() {
                     onValueChange={handleFileChange}
                   >
                     <SelectTrigger className="min-w-60">
-                      <SelectValue placeholder="选择 .tex 文件" />
+                      <SelectValue placeholder={t("common:selectTexFile")} />
                     </SelectTrigger>
                     <SelectContent>
                       {texFiles.map((f) => (
@@ -391,7 +393,7 @@ export default function TerminologyCheckPage() {
                       onCheckedChange={setResolveInput}
                     />
                     <Label htmlFor="resolve-input" className="text-sm cursor-pointer">
-                      包含子文件（展开 \input）
+                      {t("common:includeSubfiles")}
                     </Label>
                   </div>
                 </div>
@@ -404,7 +406,7 @@ export default function TerminologyCheckPage() {
                     variant="outline"
                   >
                     <Eye />
-                    加载并预览
+                    {t("common:loadAndPreview")}
                   </Button>
                   <Button
                     onClick={handleCheck}
@@ -417,7 +419,7 @@ export default function TerminologyCheckPage() {
                     ) : (
                       <CheckCheck />
                     )}
-                    {isLoading ? "检查中..." : "检查术语一致性"}
+                    {isLoading ? t("common:checking") : t("pages:terminologyCheck.checkButton")}
                   </Button>
                 </div>
                 {message && (
@@ -443,10 +445,10 @@ export default function TerminologyCheckPage() {
               <Card>
                 <CardHeader className="pb-2">
                   <CardTitle className="text-sm">
-                    段落 ({terminologyParagraphs.length})
+                    {t("pages:terminologyCheck.paragraphs", { count: terminologyParagraphs.length })}
                   </CardTitle>
                   <CardDescription>
-                    剥离 LaTeX 后的纯文本（将交由 LLM 提取术语并检查一致性）
+                    {t("pages:terminologyCheck.paragraphsDescription")}
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
@@ -470,7 +472,7 @@ export default function TerminologyCheckPage() {
                       ) : (
                         <ListChecks />
                       )}
-                      全部应用
+                      {t("common:applyAll")}
                     </Button>
                   </div>
                 )}
@@ -483,11 +485,11 @@ export default function TerminologyCheckPage() {
                   onJump={jumpToParagraph}
                   onReset={reset}
                   hasFilters={hasFilters}
-                  typeLabels={{ inconsistency: "术语不一致" }}
+                  typeLabels={{ inconsistency: t("pages:terminologyCheck.inconsistency") }}
                 />
                 {filteredResults.length === 0 ? (
                   <p className="text-sm text-muted-foreground text-center py-8">
-                    没有匹配的检查结果
+                    {t("common:noResults")}
                   </p>
                 ) : activeFiles.length > 1 ? (
                   <Tabs defaultValue={activeFiles[0]}>
@@ -522,9 +524,9 @@ export default function TerminologyCheckPage() {
       <ConfirmDialog
         open={confirmApplyAllOpen}
         onOpenChange={setConfirmApplyAllOpen}
-        title="全部应用修改？"
-        description="将一次性把所有术语问题的段落修改写回源文件。建议在应用前逐段审核。"
-        confirmText="全部应用"
+        title={t("common:applyAllConfirmTitle")}
+        description={t("pages:terminologyCheck.applyAllDescription")}
+        confirmText={t("common:applyAll")}
         onConfirm={async () => {
           setConfirmApplyAllOpen(false);
           await handleApplyAllWithCustom();

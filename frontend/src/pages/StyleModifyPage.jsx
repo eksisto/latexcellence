@@ -1,4 +1,5 @@
 import { useState, useCallback } from "react";
+import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import {
@@ -13,6 +14,7 @@ import { ArrowLeft, Wand2, Loader2, Copy } from "lucide-react";
 import { api } from "@/api/index";
 
 export default function StyleModifyPage() {
+  const { t } = useTranslation(["pages", "common"]);
   const [latex, setLatex] = useState("");
   const [description, setDescription] = useState("");
   const [loading, setLoading] = useState(false);
@@ -47,7 +49,7 @@ export default function StyleModifyPage() {
             <ArrowLeft />
           </Button>
           <h1 className="text-3xl font-bold tracking-tight">
-            LaTeX 样式修改
+            {t("pages:styleModify.title")}
           </h1>
         </div>
       </div>
@@ -56,9 +58,9 @@ export default function StyleModifyPage() {
         <div className="space-y-4">
           <Card>
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm">LaTeX 源码</CardTitle>
+              <CardTitle className="text-sm">{t("pages:styleModify.sourceCode")}</CardTitle>
               <CardDescription>
-                粘贴需要修改的 LaTeX 代码
+                {t("pages:styleModify.sourcePlaceholder")}
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -66,24 +68,7 @@ export default function StyleModifyPage() {
                 className="min-h-80 resize-none font-mono text-sm"
                 value={latex}
                 onChange={(e) => setLatex(e.target.value)}
-                placeholder={`例如：
-
-\\documentclass{article}
-\\begin{document}
-
-\\begin{table}[h]
-\\centering
-\\begin{tabular}{|c|c|c|}
-\\hline
-Name & Value & Note \\\\
-\\hline
-A & 1 & First \\\\
-B & 2 & Second \\\\
-\\hline
-\\end{tabular}
-\\end{table}
-
-\\end{document}`}
+                placeholder={t("pages:styleModify.sourcePlaceholder")}
               />
             </CardContent>
           </Card>
@@ -92,9 +77,9 @@ B & 2 & Second \\\\
         <div className="space-y-4">
           <Card>
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm">修改要求</CardTitle>
+              <CardTitle className="text-sm">{t("pages:styleModify.requirement")}</CardTitle>
               <CardDescription>
-                用自然语言描述你想做的样式修改
+                {t("pages:styleModify.requirementPlaceholder")}
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
@@ -102,7 +87,7 @@ B & 2 & Second \\\\
                 className="min-h-32 resize-none"
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
-                placeholder="例如：&#10;&#10;- 表格第一列改为居中对齐&#10;- 将 Name 加粗&#10;- 将两张图片并排放置&#10;- 调整表格位置到页面顶部"
+                placeholder={t("pages:styleModify.requirementExamples")}
               />
               <div className="flex items-center gap-2">
                 <Button
@@ -114,10 +99,10 @@ B & 2 & Second \\\\
                   ) : (
                     <Wand2 />
                   )}
-                  {loading ? "修改中..." : "开始修改"}
+                  {loading ? t("pages:styleModify.modifyBtnLoading") : t("pages:styleModify.modifyBtn")}
                 </Button>
                 <span className="text-xs text-muted-foreground">
-                  Ctrl+Enter 快速提交
+                  {t("pages:styleModify.submitHint")}
                 </span>
               </div>
               {error && (
@@ -131,7 +116,7 @@ B & 2 & Second \\\\
               <CardHeader className="pb-2">
                 <div className="flex items-center justify-between">
                   <CardTitle className="text-sm">
-                    修改结果
+                    {t("pages:styleModify.resultTitle")}
                   </CardTitle>
                   <Button
                     variant="outline"
@@ -139,7 +124,7 @@ B & 2 & Second \\\\
                     onClick={handleCopy}
                   >
                     <Copy />
-                    复制
+                    {t("common:copy")}
                   </Button>
                 </div>
               </CardHeader>

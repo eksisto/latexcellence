@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import {
   ArrowLeft,
   Check,
@@ -62,13 +63,14 @@ function groupRevisions(revisions) {
   return groups;
 }
 
-function revisionLabel(revision) {
+function revisionLabel(revision, t) {
   if (!revision) return "";
-  if (revision.kind === "worktree") return "当前工作区";
+  if (revision.kind === "worktree") return t("pages:gitDiff.currentWorkspace");
   return revision.label || revision.value;
 }
 
 export default function GitDiffPage() {
+  const { t } = useTranslation(["pages", "common"]);
   const projectPath = useStore((s) => s.projectPath);
   const workspaceId = useStore((s) => s.workspaceId);
   const rootPath = useStore((s) => s.rootPath);
@@ -98,10 +100,10 @@ export default function GitDiffPage() {
   const labelMap = useMemo(() => {
     const map = {};
     for (const r of refs) {
-      map[r.value] = revisionLabel(r);
+      map[r.value] = revisionLabel(r, t);
     }
     return map;
-  }, [refs]);
+  }, [refs, t]);
 
   const formatRefValue = useCallback(
     (val) => labelMap[val] || val,
@@ -196,14 +198,14 @@ export default function GitDiffPage() {
           </Button>
           <Card className="mt-8">
             <CardHeader>
-              <CardTitle>请先打开项目</CardTitle>
+              <CardTitle>{t("pages:gitDiff.noProjectTitle")}</CardTitle>
               <CardDescription>
-                差异高亮需要一个已打开且受 Git 管理的 LaTeX 项目。
+                {t("pages:gitDiff.noProjectDesc")}
               </CardDescription>
             </CardHeader>
             <CardContent>
               <Button nativeButton={false} render={<Link to="/workspace" />}>
-                打开项目工作区
+                {t("pages:gitDiff.openProjectWorkspace")}
               </Button>
             </CardContent>
           </Card>
@@ -220,9 +222,9 @@ export default function GitDiffPage() {
             <ArrowLeft />
           </Button>
           <div>
-            <h1 className="text-3xl font-bold tracking-tight">Git 差异高亮</h1>
+            <h1 className="text-3xl font-bold tracking-tight">{t("pages:gitDiff.title")}</h1>
             <p className="text-sm text-muted-foreground mt-1">
-              选择主文件和两个 Git 状态，生成红删绿增的差异 PDF。源项目文件不会被修改。
+              {t("pages:gitDiff.description")}
             </p>
           </div>
         </div>
@@ -234,10 +236,10 @@ export default function GitDiffPage() {
             <CardHeader>
               <CardTitle className="text-base flex items-center gap-2">
                 <FileDiff className="size-4" />
-                差异设置
+                {t("pages:gitDiff.diffSettings")}
               </CardTitle>
               <CardDescription>
-                多文件项目只需选择入口主文件，系统会展开常见的 input/include 依赖。
+                {t("pages:gitDiff.multiFileDescription")}
               </CardDescription>
               <CardAction>
                 <Button
@@ -252,13 +254,13 @@ export default function GitDiffPage() {
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-2">
-                <Label>主文件</Label>
+                <Label>{t("pages:gitDiff.mainFile")}</Label>
                 <Select
                   value={selectedMainFile}
                   onValueChange={setSelectedMainFile}
                 >
                   <SelectTrigger className="w-full">
-                    <SelectValue className="min-w-0 truncate" placeholder="选择主 .tex 文件" />
+                    <SelectValue className="min-w-0 truncate" placeholder={t("pages:gitDiff.selectMainFile")} />
                   </SelectTrigger>
                   <SelectContent>
                     {texFiles.map((file) => (
@@ -271,16 +273,16 @@ export default function GitDiffPage() {
               </div>
 
               <div className="space-y-2">
-                <Label>初始状态（旧版本）</Label>
+                <Label>{t("pages:gitDiff.baseState")}</Label>
                 <Select value={baseRef} onValueChange={setBaseRef}>
                   <SelectTrigger className="w-full">
-                    <SelectValue className="min-w-0 truncate" placeholder="选择初始 Git 状态">
+                    <SelectValue className="min-w-0 truncate" placeholder={t("pages:gitDiff.selectBaseState")}>
                       {formatRefValue}
                     </SelectValue>
                   </SelectTrigger>
                   <SelectContent>
                     <SelectGroup>
-                      <SelectLabel>工作区</SelectLabel>
+                      <SelectLabel>{t("pages:gitDiff.workspace")}</SelectLabel>
                       {grouped.worktree.map((r) => (
                         <SelectItem key={r.value} value={r.value}>
                           {r.label}
@@ -291,7 +293,7 @@ export default function GitDiffPage() {
                       <SelectGroup>
                         <SelectLabel className="flex items-center gap-1">
                           <GitCommit className="size-3" />
-                          提交（最近 {grouped.commits.length} 条）
+                          {t("pages:gitDiff.commits", { count: grouped.commits.length })}
                         </SelectLabel>
                         {grouped.commits.map((r) => (
                           <SelectItem key={r.value} value={r.value}>
@@ -304,7 +306,7 @@ export default function GitDiffPage() {
                       <SelectGroup>
                         <SelectLabel className="flex items-center gap-1">
                           <GitBranch className="size-3" />
-                          分支
+                          {t("pages:gitDiff.branches")}
                         </SelectLabel>
                         {grouped.branches.map((r) => (
                           <SelectItem key={r.value} value={r.value}>
@@ -317,7 +319,7 @@ export default function GitDiffPage() {
                       <SelectGroup>
                         <SelectLabel className="flex items-center gap-1">
                           <Tag className="size-3" />
-                          标签
+                          {t("pages:gitDiff.tags")}
                         </SelectLabel>
                         {grouped.tags.map((r) => (
                           <SelectItem key={r.value} value={r.value}>
@@ -331,16 +333,16 @@ export default function GitDiffPage() {
               </div>
 
               <div className="space-y-2">
-                <Label>结束状态（新版本）</Label>
+                <Label>{t("pages:gitDiff.targetState")}</Label>
                 <Select value={targetRef} onValueChange={setTargetRef}>
                   <SelectTrigger className="w-full">
-                    <SelectValue className="min-w-0 truncate" placeholder="选择结束 Git 状态">
+                    <SelectValue className="min-w-0 truncate" placeholder={t("pages:gitDiff.selectTargetState")}>
                       {formatRefValue}
                     </SelectValue>
                   </SelectTrigger>
                   <SelectContent>
                     <SelectGroup>
-                      <SelectLabel>工作区</SelectLabel>
+                      <SelectLabel>{t("pages:gitDiff.workspace")}</SelectLabel>
                       {grouped.worktree.map((r) => (
                         <SelectItem key={r.value} value={r.value}>
                           {r.label}
@@ -351,7 +353,7 @@ export default function GitDiffPage() {
                       <SelectGroup>
                         <SelectLabel className="flex items-center gap-1">
                           <GitCommit className="size-3" />
-                          提交（最近 {grouped.commits.length} 条）
+                          {t("pages:gitDiff.commits", { count: grouped.commits.length })}
                         </SelectLabel>
                         {grouped.commits.map((r) => (
                           <SelectItem key={r.value} value={r.value}>
@@ -364,7 +366,7 @@ export default function GitDiffPage() {
                       <SelectGroup>
                         <SelectLabel className="flex items-center gap-1">
                           <GitBranch className="size-3" />
-                          分支
+                          {t("pages:gitDiff.branches")}
                         </SelectLabel>
                         {grouped.branches.map((r) => (
                           <SelectItem key={r.value} value={r.value}>
@@ -377,7 +379,7 @@ export default function GitDiffPage() {
                       <SelectGroup>
                         <SelectLabel className="flex items-center gap-1">
                           <Tag className="size-3" />
-                          标签
+                          {t("pages:gitDiff.tags")}
                         </SelectLabel>
                         {grouped.tags.map((r) => (
                           <SelectItem key={r.value} value={r.value}>
@@ -391,11 +393,11 @@ export default function GitDiffPage() {
               </div>
 
               <div className="rounded-lg border bg-muted/30 p-3 text-xs text-muted-foreground space-y-1">
-                <div>Git 根目录：{gitRoot || "未加载"}</div>
+                <div>{t("pages:gitDiff.gitRoot")}: {gitRoot || t("pages:gitDiff.notLoaded")}</div>
                 <div>
-                  工作区状态：{isDirty ? "有未提交修改" : "干净或未检测到修改"}
+                  {t("pages:gitDiff.workspaceStatus")}: {isDirty ? t("pages:gitDiff.hasUncommittedChanges") : t("pages:gitDiff.cleanOrNoChanges")}
                 </div>
-                <div>项目目录：{rootPath}</div>
+                <div>{t("pages:gitDiff.projectDirectory")}: {rootPath}</div>
               </div>
 
               {error && <p className="text-sm text-destructive">{error}</p>}
@@ -408,12 +410,12 @@ export default function GitDiffPage() {
                 {rendering ? (
                   <>
                     <Loader2 className="animate-spin" />
-                    生成中...
+                    {t("pages:gitDiff.generating")}
                   </>
                 ) : (
                   <>
                     <FileDiff />
-                    生成差异 PDF
+                    {t("pages:gitDiff.generateDiffPdf")}
                   </>
                 )}
               </Button>
@@ -423,18 +425,18 @@ export default function GitDiffPage() {
           {result && (
             <Card>
               <CardHeader>
-                <CardTitle className="text-base">生成结果</CardTitle>
+                <CardTitle className="text-base">{t("pages:gitDiff.generationResult")}</CardTitle>
                 <CardAction>
                   <Badge variant={result.success ? "secondary" : "destructive"}>
                     {result.success ? (
                       <>
                         <Check />
-                        成功
+                        {t("pages:gitDiff.success")}
                       </>
                     ) : (
                       <>
                         <CircleAlert />
-                        失败
+                        {t("pages:gitDiff.failed")}
                       </>
                     )}
                   </Badge>
@@ -443,18 +445,18 @@ export default function GitDiffPage() {
               <CardContent className="space-y-3 text-sm">
                 <div className="grid grid-cols-2 gap-2">
                   <div className="rounded bg-green-500/10 px-3 py-2 text-green-700 dark:text-green-300">
-                    增加 {result.added_lines || 0} 行
+                    {t("pages:gitDiff.addedLines", { count: result.added_lines || 0 })}
                   </div>
                   <div className="rounded bg-red-500/10 px-3 py-2 text-red-700 dark:text-red-300">
-                    删除 {result.deleted_lines || 0} 行
+                    {t("pages:gitDiff.deletedLines", { count: result.deleted_lines || 0 })}
                   </div>
                 </div>
                 <div className="text-xs text-muted-foreground">
-                  已展开 {result.included_files?.length || 0} 个 LaTeX 文件
+                  {t("pages:gitDiff.expandedFiles", { count: result.included_files?.length || 0 })}
                 </div>
                 {result.explanation && (
                   <div>
-                    <Label className="text-xs text-muted-foreground">错误解释</Label>
+                    <Label className="text-xs text-muted-foreground">{t("pages:gitDiff.errorExplanation")}</Label>
                     <p className="text-sm mt-1 whitespace-pre-wrap text-destructive">
                       {result.explanation}
                     </p>
@@ -462,7 +464,7 @@ export default function GitDiffPage() {
                 )}
                 {result.fixes && result.fixes.length > 0 && (
                   <div>
-                    <Label className="text-xs text-muted-foreground">修复建议</Label>
+                    <Label className="text-xs text-muted-foreground">{t("pages:gitDiff.fixSuggestions")}</Label>
                     <ul className="text-sm mt-1 list-disc list-inside space-y-1">
                       {result.fixes.map((fix, i) => (
                         <li key={i}>{fix}</li>
@@ -484,7 +486,7 @@ export default function GitDiffPage() {
                     }
                   >
                     <Download />
-                    下载 PDF
+                    {t("pages:gitDiff.downloadPdf")}
                   </Button>
                 )}
                 <Button
@@ -492,13 +494,13 @@ export default function GitDiffPage() {
                   size="sm"
                   onClick={() => setShowRawOutput((value) => !value)}
                 >
-                  {showRawOutput ? "隐藏原始输出" : "查看原始输出"}
+                  {showRawOutput ? t("pages:gitDiff.hideRawOutput") : t("pages:gitDiff.viewRawOutput")}
                 </Button>
                 {showRawOutput && (
                   <pre className="max-h-48 overflow-auto rounded bg-muted p-2 text-xs whitespace-pre-wrap">
-                    {result.stdout || "(无标准输出)"}
+                    {result.stdout || t("pages:gitDiff.noStdout")}
                     {"\n"}
-                    {result.stderr || "(无错误输出)"}
+                    {result.stderr || t("pages:gitDiff.noStderr")}
                   </pre>
                 )}
               </CardContent>

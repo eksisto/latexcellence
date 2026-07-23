@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect } from "react";
 import { toast } from "sonner";
 import { api } from "@/api/index";
+import i18n from "@/i18n";
 
 /**
  * 撤销/重做状态管理 hook。
@@ -47,14 +48,14 @@ export default function useUndoRedo(activeFile, workspaceId, onAfterUndoRedo) {
     try {
       const res = await api.project.undo(activeFile, workspaceId);
       if (res.undone) {
-        toast.success("已撤销");
+        toast.success(i18n.t("hooks:undoRedo.undone"));
         await refresh();
         if (onAfterUndoRedo) await onAfterUndoRedo();
       } else {
-        toast.info("没有可撤销的操作");
+        toast.info(i18n.t("hooks:undoRedo.nothingToUndo"));
       }
     } catch (e) {
-      toast.error("撤销失败", { description: e.message });
+      toast.error(i18n.t("hooks:undoRedo.undoFailed"), { description: e.message });
     } finally {
       setBusy(false);
     }
@@ -66,14 +67,14 @@ export default function useUndoRedo(activeFile, workspaceId, onAfterUndoRedo) {
     try {
       const res = await api.project.redo(activeFile, workspaceId);
       if (res.redone) {
-        toast.success("已重做");
+        toast.success(i18n.t("hooks:undoRedo.redone"));
         await refresh();
         if (onAfterUndoRedo) await onAfterUndoRedo();
       } else {
-        toast.info("没有可重做的操作");
+        toast.info(i18n.t("hooks:undoRedo.nothingToRedo"));
       }
     } catch (e) {
-      toast.error("重做失败", { description: e.message });
+      toast.error(i18n.t("hooks:undoRedo.redoFailed"), { description: e.message });
     } finally {
       setBusy(false);
     }

@@ -1,4 +1,5 @@
 import { useState, useCallback, useEffect } from "react";
+import { useTranslation } from "react-i18next";
 import {
   Dialog,
   DialogContent,
@@ -29,6 +30,7 @@ export default function FolderPickerDialog({
   onSelect,
   initialPath = "",
 }) {
+  const { t } = useTranslation("components");
   const [currentPath, setCurrentPath] = useState(initialPath);
   const [inputValue, setInputValue] = useState(initialPath);
   const [directories, setDirectories] = useState([]);
@@ -87,9 +89,9 @@ export default function FolderPickerDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-lg" showCloseButton={false}>
         <DialogHeader>
-          <DialogTitle>选择文件夹</DialogTitle>
+          <DialogTitle>{t("folderPicker.title")}</DialogTitle>
           <DialogDescription>
-            浏览并选择一个 LaTeX 项目目录
+            {t("folderPicker.description")}
           </DialogDescription>
         </DialogHeader>
 
@@ -98,7 +100,7 @@ export default function FolderPickerDialog({
             <Input
               value={inputValue}
               onChange={(e) => setInputValue(e.target.value)}
-              placeholder="输入路径后回车跳转"
+              placeholder={t("folderPicker.enterPath")}
               onKeyDown={(e) => e.key === "Enter" && handleInputConfirm()}
             />
             <Button
@@ -106,7 +108,7 @@ export default function FolderPickerDialog({
               onClick={handleInputConfirm}
               disabled={loading}
             >
-              跳转
+              {t("folderPicker.jump")}
             </Button>
           </div>
 
@@ -114,7 +116,7 @@ export default function FolderPickerDialog({
             {loading ? (
               <div className="flex items-center justify-center py-8 text-muted-foreground text-sm">
                 <Loader2 className="animate-spin mr-2 size-4" />
-                加载中...
+                {t("folderPicker.loading")}
               </div>
             ) : error ? (
               <div className="py-8 text-center text-destructive text-sm">
@@ -122,7 +124,7 @@ export default function FolderPickerDialog({
               </div>
             ) : directories.length === 0 ? (
               <div className="py-8 text-center text-muted-foreground text-sm">
-                此目录下没有子文件夹
+                {t("folderPicker.noSubfolders")}
               </div>
             ) : (
               <div className="divide-y divide-border">
@@ -153,11 +155,11 @@ export default function FolderPickerDialog({
 
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>
-            取消
+            {t("folderPicker.cancel")}
           </Button>
           <Button onClick={handleSelect} disabled={loading || !currentPath}>
             <FolderOpen />
-            选择此文件夹
+            {t("folderPicker.select")}
           </Button>
         </DialogFooter>
       </DialogContent>

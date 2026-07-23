@@ -1,5 +1,6 @@
 import { useState, useMemo } from "react";
 import { Link } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -40,19 +41,14 @@ import useResultFilter from "@/hooks/useResultFilter";
 
 import React from "react";
 
-const CHANGE_TYPE_LABELS = {
-  spacing: "间距",
-  environment_alignment: "环境对齐",
-  code_formatting: "代码格式",
-  consistency: "一致性",
-};
-
 const FormattingResultCard = React.memo(function FormattingResultCard({
   result,
   onApply,
   onIgnore,
   paragraphs,
+  typeLabels,
 }) {
+  const { t } = useTranslation(["pages", "common"]);
   const hasChanges = result.changes && result.changes.length > 0;
   return (
     <Card
@@ -62,11 +58,11 @@ const FormattingResultCard = React.memo(function FormattingResultCard({
       <CardHeader className="pb-2">
         <div className="flex items-center justify-between">
           <CardTitle className="text-sm">
-            段落 {result.paragraph_index}
+            {t("pages:formatting.paragraph", { index: result.paragraph_index })}
           </CardTitle>
           {hasChanges && (
             <span className="rounded bg-primary/10 text-primary px-1.5 py-0.5 text-xs font-medium">
-              {result.changes.length} 处排版建议
+              {t("pages:formatting.suggestionsCount", { count: result.changes.length })}
             </span>
           )}
         </div>
@@ -83,7 +79,7 @@ const FormattingResultCard = React.memo(function FormattingResultCard({
                   >
                     <div className="flex items-center gap-2 mb-1">
                       <span className="rounded bg-purple-500/10 text-purple-600 dark:text-purple-400 px-1 py-0.5 text-xs font-medium">
-                        {CHANGE_TYPE_LABELS[change.type] || change.type}
+                        {typeLabels?.[change.type] || change.type}
                       </span>
                       {change.description && (
                         <span className="text-muted-foreground text-xs">
@@ -93,13 +89,13 @@ const FormattingResultCard = React.memo(function FormattingResultCard({
                     </div>
                     <div className="grid grid-cols-[auto_1fr] gap-x-2 gap-y-1 text-sm">
                       <span className="text-muted-foreground whitespace-nowrap mt-0.5">
-                        原文：
+                        {t("common:original")}
                       </span>
                       <pre className="line-through text-foreground/60 break-all mt-0.5 font-mono text-xs whitespace-pre-wrap bg-muted/20 rounded p-1.5">
                         {change.original}
                       </pre>
                       <span className="text-muted-foreground whitespace-nowrap mt-0.5">
-                        排版后：
+                        {t("pages:formatting.formatted")}
                       </span>
                       <pre className="font-medium break-all mt-0.5 font-mono text-xs whitespace-pre-wrap bg-muted/20 rounded p-1.5">
                         {change.corrected}
@@ -115,7 +111,7 @@ const FormattingResultCard = React.memo(function FormattingResultCard({
                     onApply(result.paragraph_index, result.corrected, result.file_path)
                   }
                 >
-                  应用排版
+                  {t("pages:formatting.applyFormatting")}
                 </Button>
                 <Button
                   size="sm"
@@ -124,13 +120,13 @@ const FormattingResultCard = React.memo(function FormattingResultCard({
                     onIgnore(result.paragraph_index, result.file_path)
                   }
                 >
-                  忽略
+                  {t("common:ignore")}
                 </Button>
               </div>
             </>
           ) : (
             <p className="text-sm text-muted-foreground">
-              此段落无需排版调整。
+              {t("pages:formatting.noIssues")}
             </p>
           )}
           <ParagraphContext
@@ -145,6 +141,7 @@ const FormattingResultCard = React.memo(function FormattingResultCard({
 });
 
 export default function FormattingPage() {
+  const { t } = useTranslation(["pages", "common"]);
   const [confirmApplyAllOpen, setConfirmApplyAllOpen] = useState(false);
   const {
     projectPath,
@@ -182,11 +179,11 @@ export default function FormattingPage() {
       loadingKey: "formatting",
     },
     messages: {
-      checkLoading: "正在使用 LLM 获取格式化建议...",
-      checkSuccess: (count) => `发现 ${count} 个段落有格式建议`,
-      applySuccess: (idx) => `已应用段落 ${idx} 的格式修改`,
-      applyAllSuccess: (count) => `已批量应用 ${count} 个段落的格式修改`,
-      applyAllEmpty: "没有可应用的格式修改",
+      checkLoading: t("pages:formatting.checkLoading"),
+      checkSuccess: (count) => t("pages:formatting.checkSuccess", { count }),
+      applySuccess: (idx) => t("pages:formatting.applySuccess", { idx }),
+      applyAllSuccess: (count) => t("pages:formatting.applyAllSuccess", { count }),
+      applyAllEmpty: t("pages:formatting.applyAllEmpty"),
     },
   });
 
@@ -205,6 +202,13 @@ export default function FormattingPage() {
   const paragraphGroups = useMemo(() => groupByFile(formattingParagraphs), [formattingParagraphs]);
   const resultGroups = useMemo(() => groupByFile(filteredResults), [filteredResults]);
 
+  const changeTypeLabels = useMemo(() => ({
+    spacing: t("pages:formatting.changeTypes.spacing"),
+    environment_alignment: t("pages:formatting.changeTypes.environmentAlignment"),
+    code_formatting: t("pages:formatting.changeTypes.codeFormatting"),
+    consistency: t("pages:formatting.changeTypes.consistency"),
+  }), [t]);
+
   return (
     <div className="min-h-screen p-8">
       <div className="max-w-6xl mx-auto mb-8">
@@ -217,7 +221,7 @@ export default function FormattingPage() {
           >
             <ArrowLeft />
           </Button>
-          <h1 className="text-3xl font-bold tracking-tight">源码格式化</h1>
+          <h1 className="text-3xl font-bold tracking-tight">{t("pages:formatting.title")}</h1>
         </div>
       </div>
 
@@ -226,7 +230,7 @@ export default function FormattingPage() {
           <div className="flex justify-center mt-12">
             <Card className="max-w-md w-full">
               <CardHeader>
-                <CardTitle>正在恢复项目...</CardTitle>
+                <CardTitle>{t("common:restoring")}</CardTitle>
               </CardHeader>
               <CardContent className="flex justify-center">
                 <Loader2 className="animate-spin size-6" />
@@ -237,9 +241,9 @@ export default function FormattingPage() {
           <div className="flex justify-center mt-12">
             <Card className="max-w-md w-full">
               <CardHeader>
-                <CardTitle>未选择文件</CardTitle>
+                <CardTitle>{t("pages:formatting.noProjectTitle")}</CardTitle>
                 <CardDescription>
-                  先转到项目工作区，打开一个项目，然后选择要排版的 .tex 文件
+                  {t("pages:formatting.noProjectDesc")}
                 </CardDescription>
               </CardHeader>
               <CardContent>
@@ -248,7 +252,7 @@ export default function FormattingPage() {
                   nativeButton={false}
                   render={<Link to="/workspace" />}
                 >
-                  打开工作区
+                  {t("common:openWorkspace")}
                 </Button>
               </CardContent>
             </Card>
@@ -264,7 +268,7 @@ export default function FormattingPage() {
                     onValueChange={handleFileChange}
                   >
                     <SelectTrigger className="min-w-60">
-                      <SelectValue placeholder="选择 .tex 文件" />
+                      <SelectValue placeholder={t("common:selectTexFile")} />
                     </SelectTrigger>
                     <SelectContent>
                       {texFiles.map((f) => (
@@ -285,7 +289,7 @@ export default function FormattingPage() {
                       htmlFor="resolve-input"
                       className="text-sm cursor-pointer"
                     >
-                      包含子文件（展开 \input）
+                      {t("common:includeSubfiles")}
                     </Label>
                   </div>
                 </div>
@@ -298,7 +302,7 @@ export default function FormattingPage() {
                     variant="outline"
                   >
                     <Eye />
-                    加载并预览
+                    {t("common:loadAndPreview")}
                   </Button>
                   <Button
                     onClick={handleCheck}
@@ -311,7 +315,7 @@ export default function FormattingPage() {
                     ) : (
                       <AlignLeft />
                     )}
-                    {isLoading ? "LLM 请求中..." : "开始"}
+                    {isLoading ? t("pages:formatting.llmRequesting") : t("pages:formatting.start")}
                   </Button>
                 </div>
                 {message && (
@@ -339,10 +343,10 @@ export default function FormattingPage() {
                 <Card>
                   <CardHeader className="pb-2">
                     <CardTitle className="text-sm">
-                      段落（{formattingParagraphs.length}）
+                      {t("pages:formatting.paragraphs", { count: formattingParagraphs.length })}
                     </CardTitle>
                     <CardDescription>
-                      原始 LaTeX 源码（将交由 LLM 排版优化）
+                      {t("pages:formatting.paragraphsDescription")}
                     </CardDescription>
                   </CardHeader>
                   <CardContent>
@@ -367,7 +371,7 @@ export default function FormattingPage() {
                                     P{p.index}
                                   </span>
                                   <pre className="text-sm text-foreground/80 mt-1 max-h-40 overflow-auto font-mono leading-relaxed whitespace-pre-wrap break-words bg-muted/30 rounded p-2">
-                                    {p.text || "（空白）"}
+                                    {p.text || t("common:blank")}
                                   </pre>
                                 </div>
                               ))}
@@ -386,7 +390,7 @@ export default function FormattingPage() {
                               P{p.index}
                             </span>
                             <pre className="text-sm text-foreground/80 mt-1 max-h-40 overflow-auto font-mono leading-relaxed whitespace-pre-wrap break-words bg-muted/30 rounded p-2">
-                              {p.text || "（空白）"}
+                              {p.text || t("common:blank")}
                             </pre>
                           </div>
                         ))}
@@ -414,7 +418,7 @@ export default function FormattingPage() {
                       ) : (
                         <ListChecks />
                       )}
-                      全部应用
+                      {t("common:applyAll")}
                     </Button>
                   </div>
                 )}
@@ -427,11 +431,11 @@ export default function FormattingPage() {
                   onJump={jumpToParagraph}
                   onReset={reset}
                   hasFilters={hasFilters}
-                  typeLabels={CHANGE_TYPE_LABELS}
+                  typeLabels={changeTypeLabels}
                 />
                 {filteredResults.length === 0 ? (
                   <p className="text-sm text-muted-foreground text-center py-8">
-                    没有匹配的格式建议
+                    {t("pages:formatting.noResults")}
                   </p>
                 ) : activeFiles.length > 1 ? (
                   <Tabs defaultValue={activeFiles[0]}>
@@ -452,6 +456,7 @@ export default function FormattingPage() {
                               onApply={handleApplyChange}
                               onIgnore={handleIgnoreChange}
                               paragraphs={formattingParagraphs}
+                              typeLabels={changeTypeLabels}
                             />
                           ))}
                         </div>
@@ -466,6 +471,7 @@ export default function FormattingPage() {
                       onApply={handleApplyChange}
                       onIgnore={handleIgnoreChange}
                       paragraphs={formattingParagraphs}
+                      typeLabels={changeTypeLabels}
                     />
                   ))
                 )}
@@ -478,9 +484,9 @@ export default function FormattingPage() {
       <ConfirmDialog
         open={confirmApplyAllOpen}
         onOpenChange={setConfirmApplyAllOpen}
-        title="全部应用格式修改？"
-        description="将一次性把所有有格式建议的段落修改写回源文件。建议在应用前逐段审核。"
-        confirmText="全部应用"
+        title={t("common:applyAllConfirmTitle")}
+        description={t("pages:formatting.applyAllDesc")}
+        confirmText={t("common:applyAll")}
         onConfirm={async () => {
           setConfirmApplyAllOpen(false);
           await handleApplyAll();

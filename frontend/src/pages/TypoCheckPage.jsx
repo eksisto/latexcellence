@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -29,6 +30,7 @@ import ResultFilterBar from "@/components/ResultFilterBar";
 import useResultFilter from "@/hooks/useResultFilter";
 
 export default function TypoCheckPage() {
+  const { t } = useTranslation(["pages", "common"]);
   const [confirmApplyAllOpen, setConfirmApplyAllOpen] = useState(false);
   const {
     projectPath,
@@ -66,11 +68,11 @@ export default function TypoCheckPage() {
       loadingKey: "typoCheck",
     },
     messages: {
-      checkLoading: "正在检查错别字...",
-      checkSuccess: (count) => `发现 ${count} 个段落可能有错字`,
-      applySuccess: (idx) => `已应用段落 ${idx} 的修改`,
-      applyAllSuccess: (count) => `已批量应用 ${count} 个段落的修改`,
-      applyAllEmpty: "没有可应用的修改",
+      checkLoading: t("pages:typoCheck.checkLoading"),
+      checkSuccess: (count) => t("pages:typoCheck.checkSuccess", { count }),
+      applySuccess: (idx) => t("pages:typoCheck.applySuccess", { idx }),
+      applyAllSuccess: (count) => t("pages:typoCheck.applyAllSuccess", { count }),
+      applyAllEmpty: t("pages:typoCheck.applyAllEmpty"),
     },
   });
 
@@ -93,11 +95,11 @@ export default function TypoCheckPage() {
         <CardHeader className="pb-2">
           <div className="flex items-center justify-between">
             <CardTitle className="text-sm">
-              段落 {result.paragraph_index}
+              {t("common:paragraph")} {result.paragraph_index}
             </CardTitle>
             {hasChanges && (
               <span className="rounded bg-destructive/10 text-destructive px-1.5 py-0.5 text-xs font-medium">
-                {result.changes.length} 处问题
+                {result.changes.length} {t("common:issues")}
               </span>
             )}
           </div>
@@ -124,13 +126,13 @@ export default function TypoCheckPage() {
                       </div>
                       <div className="grid grid-cols-[auto_1fr] gap-x-2 gap-y-1 text-sm">
                         <span className="text-muted-foreground whitespace-nowrap mt-0.5">
-                          原文：
+                          {t("common:original")}
                         </span>
                         <span className="line-through text-foreground/60 break-all mt-0.5">
                           <MarkerText text={change.original} />
                         </span>
                         <span className="text-muted-foreground whitespace-nowrap mt-0.5">
-                          修改后：
+                          {t("common:modified")}
                         </span>
                         <span className="font-medium break-all mt-0.5">
                           <MarkerText text={change.corrected} />
@@ -150,7 +152,7 @@ export default function TypoCheckPage() {
                       )
                     }
                   >
-                    应用修改
+                    {t("common:applyChange")}
                   </Button>
                   <Button
                     size="sm"
@@ -159,13 +161,13 @@ export default function TypoCheckPage() {
                       handleIgnoreChange(result.paragraph_index, result.file_path)
                     }
                   >
-                    忽略
+                    {t("common:ignore")}
                   </Button>
                 </div>
               </>
             ) : (
               <p className="text-sm text-muted-foreground">
-                  此段落未发现错字。
+                  {t("pages:typoCheck.noIssues")}
               </p>
             )}
             <ParagraphContext currentIndex={result.paragraph_index} paragraphs={typoParagraphs} currentText={result.plain_text || result.original} />
@@ -182,7 +184,7 @@ export default function TypoCheckPage() {
           <Button variant="ghost" size="icon" nativeButton={false} render={<Link to="/" />}>
             <ArrowLeft />
           </Button>
-          <h1 className="text-3xl font-bold tracking-tight">文本校对</h1>
+          <h1 className="text-3xl font-bold tracking-tight">{t("pages:typoCheck.title")}</h1>
         </div>
       </div>
 
@@ -191,7 +193,7 @@ export default function TypoCheckPage() {
           <div className="flex justify-center mt-12">
             <Card className="max-w-md w-full">
               <CardHeader>
-                <CardTitle>正在恢复项目...</CardTitle>
+                <CardTitle>{t("common:restoring")}</CardTitle>
               </CardHeader>
               <CardContent className="flex justify-center">
                 <Loader2 className="animate-spin size-6" />
@@ -202,14 +204,14 @@ export default function TypoCheckPage() {
           <div className="flex justify-center mt-12">
             <Card className="max-w-md w-full">
               <CardHeader>
-                <CardTitle>未选择文件</CardTitle>
+                <CardTitle>{t("pages:typoCheck.noProjectTitle")}</CardTitle>
                 <CardDescription>
-                  先转到项目工作区，打开一个项目，然后选择要检查的 .tex 文件
+                  {t("pages:typoCheck.noProjectDesc")}
                 </CardDescription>
               </CardHeader>
               <CardContent>
                 <Button className="w-full" nativeButton={false} render={<Link to="/workspace" />}>
-                  打开工作区
+                  {t("common:openWorkspace")}
                 </Button>
               </CardContent>
             </Card>
@@ -224,7 +226,7 @@ export default function TypoCheckPage() {
                     onValueChange={handleFileChange}
                   >
                     <SelectTrigger className="min-w-60">
-                      <SelectValue placeholder="选择 .tex 文件" />
+                      <SelectValue placeholder={t("common:selectTexFile")} />
                     </SelectTrigger>
                     <SelectContent>
                       {texFiles.map((f) => (
@@ -242,7 +244,7 @@ export default function TypoCheckPage() {
                       onCheckedChange={setResolveInput}
                     />
                     <Label htmlFor="resolve-input" className="text-sm cursor-pointer">
-                      包含子文件（展开 \input）
+                      {t("common:includeSubfiles")}
                     </Label>
                   </div>
                 </div>
@@ -255,7 +257,7 @@ export default function TypoCheckPage() {
                     variant="outline"
                   >
                     <Eye />
-                    加载并预览
+                    {t("common:loadAndPreview")}
                   </Button>
                   <Button
                     onClick={handleCheck}
@@ -268,7 +270,7 @@ export default function TypoCheckPage() {
                     ) : (
                       <CheckCheck />
                     )}
-                    {isLoading ? "检查中..." : "检查错字"}
+                    {isLoading ? t("common:checking") : t("pages:typoCheck.checkButton")}
                   </Button>
                 </div>
                 {message && (
@@ -294,10 +296,10 @@ export default function TypoCheckPage() {
               <Card>
                 <CardHeader className="pb-2">
                   <CardTitle className="text-sm">
-                    段落 ({typoParagraphs.length})
+                    {t("pages:typoCheck.paragraphPreviewTitle", { count: typoParagraphs.length })}
                   </CardTitle>
                   <CardDescription>
-                    剥离 LaTeX 后的纯文本（将交由 LLM 检查）
+                    {t("pages:typoCheck.paragraphPreviewDesc")}
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
@@ -322,7 +324,7 @@ export default function TypoCheckPage() {
                                     P{p.index}
                                   </span>
                                   <div className="whitespace-pre-wrap text-sm text-foreground/80 mt-1 max-h-32 overflow-y-auto font-sans leading-relaxed">
-                                    {p.plain_text ? <MarkerText text={p.plain_text} /> : "（空白）"}
+                                    {p.plain_text ? <MarkerText text={p.plain_text} /> : t("common:blank")}
                                   </div>
                                 </div>
                               ))}
@@ -342,7 +344,7 @@ export default function TypoCheckPage() {
                             P{p.index}
                           </span>
                           <div className="whitespace-pre-wrap text-sm text-foreground/80 mt-1 max-h-32 overflow-y-auto font-sans leading-relaxed">
-                            {p.plain_text ? <MarkerText text={p.plain_text} /> : "（空白）"}
+                            {p.plain_text ? <MarkerText text={p.plain_text} /> : t("common:blank")}
                           </div>
                         </div>
                       ))}
@@ -367,7 +369,7 @@ export default function TypoCheckPage() {
                       ) : (
                         <ListChecks />
                       )}
-                      全部应用
+                      {t("common:applyAll")}
                     </Button>
                   </div>
                 )}
@@ -383,7 +385,7 @@ export default function TypoCheckPage() {
                 />
                 {filteredResults.length === 0 ? (
                   <p className="text-sm text-muted-foreground text-center py-8">
-                    没有匹配的检查结果
+                    {t("common:noMatchResult")}
                   </p>
                 ) : activeFiles.length > 1 ? (
                   <Tabs defaultValue={activeFiles[0]}>
@@ -399,7 +401,7 @@ export default function TypoCheckPage() {
                           <div className="space-y-4">
                             {fileResults.length === 0 ? (
                               <p className="text-sm text-muted-foreground text-center py-8">
-                                此文件没有匹配的检查结果
+                                {t("common:noFileResult")}
                               </p>
                             ) : (
                               fileResults.map((result) => renderResultCard(result))
@@ -421,9 +423,9 @@ export default function TypoCheckPage() {
       <ConfirmDialog
         open={confirmApplyAllOpen}
         onOpenChange={setConfirmApplyAllOpen}
-        title="全部应用修改？"
-        description="将一次性把所有有错字的段落修改写回源文件。建议在应用前逐段审核。"
-        confirmText="全部应用"
+        title={t("common:applyAllConfirmTitle")}
+        description={t("common:applyAllConfirmDesc")}
+        confirmText={t("common:applyAll")}
         onConfirm={async () => {
           setConfirmApplyAllOpen(false);
           await handleApplyAll();

@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect, useRef } from "react";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
+import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -38,6 +39,7 @@ import { api } from "@/api/index";
 import useStore from "@/store/useStore";
 
 export default function BibManagerPage() {
+  const { t } = useTranslation(["pages", "common"]);
   const projectPath = useStore((s) => s.projectPath);
   const workspaceId = useStore((s) => s.workspaceId);
   const rootPath = useStore((s) => s.rootPath);
@@ -110,18 +112,18 @@ export default function BibManagerPage() {
       const data = await api.bibManager.analyzeFormat(example.trim());
       setFormatResult(data);
       if (data.confidence === "low") {
-        toast.warning(`格式置信度较低：${data.format_name}`, {
-          description: "建议检查识别结果或尝试更清晰的示例",
+        toast.warning(t("pages:bibManager.lowConfidence", { name: data.format_name }), {
+          description: t("pages:bibManager.lowConfidenceHint"),
         });
       } else {
-        toast.success(`已识别格式：${data.format_name}`);
+        toast.success(t("pages:bibManager.analyzeFormatSuccess", { name: data.format_name }));
       }
     } catch (e) {
-      toast.error("格式识别失败", { description: e.message });
+      toast.error(t("pages:bibManager.analyzeFormatFailed"), { description: e.message });
     } finally {
       setStep1Loading(false);
     }
-  }, [example]);
+  }, [example, t]);
 
   // Format loading / editing / saving
   const handleLoadSavedFormat = useCallback(async (name) => {
@@ -131,11 +133,11 @@ export default function BibManagerPage() {
       setFormatResult(data);
       setEditedFormatInfo(data);
       setSelectedFormatName(name);
-      toast.success(`已加载格式：${data.format_name}`);
+      toast.success(t("pages:bibManager.loadFormatSuccess", { name: data.format_name }));
     } catch (e) {
-      toast.error("加载格式失败", { description: e.message });
+      toast.error(t("pages:bibManager.loadFormatFailed"), { description: e.message });
     }
-  }, []);
+  }, [t]);
 
   const handleStartEditFormat = useCallback(() => {
     if (formatResult) {
@@ -179,32 +181,32 @@ export default function BibManagerPage() {
     setSavingFormat(true);
     try {
       const result = await api.bibManager.formats.save(safeName, formatResult);
-      toast.success(`格式已保存：${result.name}`);
+      toast.success(t("pages:bibManager.saveFormatSuccess", { name: result.name }));
       const listData = await api.bibManager.formats.list();
       setSavedFormats(listData.formats || []);
     } catch (e) {
-      toast.error("保存格式失败", { description: e.message });
+      toast.error(t("pages:bibManager.saveFormatFailed"), { description: e.message });
     } finally {
       setSavingFormat(false);
     }
-  }, [formatResult]);
+  }, [formatResult, t]);
 
   const handleDeleteFormat = useCallback(async (name) => {
     try {
       await api.bibManager.formats.delete(name);
-      toast.success(`已删除格式：${name}`);
+      toast.success(t("pages:bibManager.deleteFormatSuccess", { name }));
       if (selectedFormatName === name) setSelectedFormatName("");
       const listData = await api.bibManager.formats.list();
       setSavedFormats(listData.formats || []);
     } catch (e) {
-      toast.error("删除格式失败", { description: e.message });
+      toast.error(t("pages:bibManager.deleteFormatFailed"), { description: e.message });
     }
-  }, [selectedFormatName]);
+  }, [selectedFormatName, t]);
 
   // Step 2: extract metadata
   const handleExtractMetadata = useCallback(async () => {
     if (!metadataText.trim() && !metadataImage) {
-      toast.error("请输入文本或上传图片");
+      toast.error(t("pages:bibManager.step2NoInput"));
       return;
     }
     setStep2Loading(true);
@@ -229,10 +231,10 @@ export default function BibManagerPage() {
         for (const field of data.missing_fields) {
           const fieldInfo = formatResult?.field_descriptions?.[field];
           const label = fieldInfo
-            ? fieldInfo.split("（")[0]
+            ? fieldInfo.split("\uFF08")[0]
             : field;
-          toast.warning(`缺少必填字段：${label}`, {
-            description: "该字段将保留为空",
+          toast.warning(t("pages:bibManager.step2MissingFieldWarning", { field: label }), {
+            description: t("pages:bibManager.step2MissingFieldDesc"),
           });
         }
         setMissingFields(data.missing_fields);
@@ -240,13 +242,13 @@ export default function BibManagerPage() {
 
       setMetadataResult(data);
       setEditedMetadata({ ...data.fields });
-      toast.success("元数据提取完成");
+      toast.success(t("pages:bibManager.step2Success"));
     } catch (e) {
-      toast.error("元数据提取失败", { description: e.message });
+      toast.error(t("pages:bibManager.step2Failed"), { description: e.message });
     } finally {
       setStep2Loading(false);
     }
-  }, [metadataText, metadataImage, formatResult]);
+  }, [metadataText, metadataImage, formatResult, t]);
 
   const handleClearImage = useCallback(() => {
     setMetadataImage(null);
@@ -288,13 +290,13 @@ export default function BibManagerPage() {
       setEditedBibtex(data.raw_bibtex);
       setEditedCiteKey(data.cite_key);
       prevCiteKeyRef.current = data.cite_key;
-      toast.success("BibTeX 生成完成");
+      toast.success(t("pages:bibManager.step3Success"));
     } catch (e) {
-      toast.error("BibTeX 生成失败", { description: e.message });
+      toast.error(t("pages:bibManager.step3Failed"), { description: e.message });
     } finally {
       setStep3Loading(false);
     }
-  }, [editedMetadata, formatResult]);
+  }, [editedMetadata, formatResult, t]);
 
   // Sync cite_key change to BibTeX code
   useEffect(() => {
@@ -310,15 +312,15 @@ export default function BibManagerPage() {
   const handleCopyBibtex = useCallback(() => {
     if (!editedBibtex) return;
     navigator.clipboard.writeText(editedBibtex).then(
-      () => toast.success("已复制到剪贴板"),
-      () => toast.error("复制失败"),
+      () => toast.success(t("pages:bibManager.copySuccess")),
+      () => toast.error(t("pages:bibManager.copyFailed")),
     );
-  }, [editedBibtex]);
+  }, [editedBibtex, t]);
 
   // Step 5: generate LaTeX reference code
   const handleGenerateLatex = useCallback(async () => {
     if (!formatResult) {
-      toast.error("请先完成格式识别（步骤 1）");
+      toast.error(t("pages:bibManager.step5NeedFormat"));
       return;
     }
     setStep5Loading(true);
@@ -331,21 +333,21 @@ export default function BibManagerPage() {
         bib_file_path: bibFilePath || "references",
       });
       setLatexResult(data);
-      toast.success("LaTeX 代码生成完成");
+      toast.success(t("pages:bibManager.step5Success"));
     } catch (e) {
-      toast.error("LaTeX 代码生成失败", { description: e.message });
+      toast.error(t("pages:bibManager.step5Failed"), { description: e.message });
     } finally {
       setStep5Loading(false);
     }
-  }, [formatResult, editedMetadata, editedCiteKey, bibFilePath]);
+  }, [formatResult, editedMetadata, editedCiteKey, bibFilePath, t]);
 
   const handleCopyLatex = useCallback(() => {
     if (!latexResult?.full_code) return;
     navigator.clipboard.writeText(latexResult.full_code).then(
-      () => toast.success("已复制到剪贴板"),
-      () => toast.error("复制失败"),
+      () => toast.success(t("pages:bibManager.copySuccess")),
+      () => toast.error(t("pages:bibManager.copyFailed")),
     );
-  }, [latexResult]);
+  }, [latexResult, t]);
 
   // Step 4: save to .bib file
   const handleSaveBib = useCallback(async () => {
@@ -357,14 +359,14 @@ export default function BibManagerPage() {
         bibtex_code: editedBibtex.trim(),
         cite_key: editedCiteKey,
       }, workspaceId);
-      const actionText = data.action === "updated" ? "已更新" : "已追加";
-      toast.success(`${actionText}到 ${selectedBibFile}`);
+      const actionKey = data.action === "updated" ? "step4Updated" : "step4Appended";
+      toast.success(t("pages:bibManager.step4SaveSuccess", { action: t(`pages:bibManager.${actionKey}`), file: selectedBibFile }));
     } catch (e) {
-      toast.error("保存失败", { description: e.message });
+      toast.error(t("pages:bibManager.step4SaveFailed"), { description: e.message });
     } finally {
       setSaving(false);
     }
-  }, [editedBibtex, editedCiteKey, selectedBibFile]);
+  }, [editedBibtex, editedCiteKey, selectedBibFile, t]);
 
   const hasResult = formatResult || metadataResult || bibtexResult || latexResult;
 
@@ -375,7 +377,7 @@ export default function BibManagerPage() {
           <Button variant="ghost" size="icon" nativeButton={false} render={<Link to="/" />}>
             <ArrowLeft />
           </Button>
-          <h1 className="text-3xl font-bold tracking-tight">参考文献管理</h1>
+          <h1 className="text-3xl font-bold tracking-tight">{t("pages:bibManager.title")}</h1>
         </div>
       </div>
 
@@ -383,14 +385,14 @@ export default function BibManagerPage() {
         <div className="max-w-4xl mx-auto">
           <Card>
             <CardHeader>
-              <CardTitle>未打开项目</CardTitle>
+              <CardTitle>{t("pages:bibManager.noProjectTitle")}</CardTitle>
               <CardDescription>
-                先转到项目工作区，打开一个项目后即可使用参考文献管理
+                {t("pages:bibManager.noProjectDesc")}
               </CardDescription>
             </CardHeader>
             <CardContent>
               <Button className="w-full" nativeButton={false} render={<Link to="/workspace" />}>
-                打开工作区
+                {t("common:openWorkspace")}
               </Button>
             </CardContent>
           </Card>
@@ -404,20 +406,20 @@ export default function BibManagerPage() {
                 <span className="text-primary text-sm font-bold mr-1">
                   1
                 </span>
-                <CardTitle className="text-base">识别参考文献格式</CardTitle>
+                <CardTitle className="text-base">{t("pages:bibManager.step1Title")}</CardTitle>
               </div>
               <CardDescription>
-                输入一条参考文献示例，LLM 将自动识别其格式规则和所需字段
+                {t("pages:bibManager.step1Desc")}
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
               {savedFormats.length > 0 && (
                 <div className="space-y-1.5">
-                  <Label className="text-xs">加载已保存的格式</Label>
+                  <Label className="text-xs">{t("pages:bibManager.loadSavedFormat")}</Label>
                   <div className="flex items-center gap-2">
                     <Select value={selectedFormatName} onValueChange={handleLoadSavedFormat}>
                       <SelectTrigger className="min-w-48">
-                        <SelectValue placeholder="选择已保存的格式...">
+                        <SelectValue placeholder={t("pages:bibManager.selectSavedFormat")}>
                           {selectedFormatName
                             ? (savedFormats.find((f) => f.name === selectedFormatName)
                                 ?.format_name || selectedFormatName)
@@ -455,7 +457,7 @@ export default function BibManagerPage() {
                 className="min-h-24 resize-none"
                 value={example}
                 onChange={(e) => setExample(e.target.value)}
-                placeholder="例如：Vaswani, Ashish and Shazeer, Noam and Parmar, Niki and Uszkoreit, Jakob and Jones, Llion and Gomez, Aidan N. and Kaiser, Łukasz and Polosukhin, Illia.Attention Is All You Need[J].arXiv preprint arXiv:1706.03762,2017."
+                placeholder={t("pages:bibManager.step1Placeholder")}
               />
               <Button
                 onClick={handleAnalyzeFormat}
@@ -466,7 +468,7 @@ export default function BibManagerPage() {
                 ) : (
                   <Search />
                 )}
-                {step1Loading ? "识别中..." : "识别格式"}
+                {step1Loading ? t("pages:bibManager.step1BtnLoading") : t("pages:bibManager.step1Btn")}
               </Button>
 
               {formatResult && (
@@ -475,7 +477,7 @@ export default function BibManagerPage() {
                     <>
                       <div className="grid grid-cols-2 gap-3">
                         <div className="space-y-1">
-                          <Label className="text-xs">格式名称</Label>
+                          <Label className="text-xs">{t("pages:bibManager.formatName")}</Label>
                           <Input
                             className="h-8 text-xs"
                             value={editedFormatInfo.format_name || ""}
@@ -488,7 +490,7 @@ export default function BibManagerPage() {
                           />
                         </div>
                         <div className="space-y-1">
-                          <Label className="text-xs">BibTeX 类型</Label>
+                          <Label className="text-xs">{t("pages:bibManager.bibtexType")}</Label>
                           <Input
                             className="h-8 text-xs"
                             value={editedFormatInfo.entry_type || ""}
@@ -502,7 +504,7 @@ export default function BibManagerPage() {
                         </div>
                       </div>
                       <div className="space-y-1">
-                        <Label className="text-xs">必填字段（逗号分隔）</Label>
+                        <Label className="text-xs">{t("pages:bibManager.requiredFields")}</Label>
                         <Input
                           className="h-8 text-xs"
                           value={
@@ -519,7 +521,7 @@ export default function BibManagerPage() {
                         />
                       </div>
                       <div className="space-y-1">
-                        <Label className="text-xs">可选字段（逗号分隔）</Label>
+                        <Label className="text-xs">{t("pages:bibManager.optionalFields")}</Label>
                         <Input
                           className="h-8 text-xs"
                           value={
@@ -538,14 +540,14 @@ export default function BibManagerPage() {
                       <div className="flex items-center gap-2">
                         <Button size="sm" onClick={handleSaveEditFormat}>
                           <Check />
-                          确认修改
+                          {t("pages:bibManager.confirmEdit")}
                         </Button>
                         <Button
                           size="sm"
                           variant="outline"
                           onClick={handleCancelEditFormat}
                         >
-                          取消
+                          {t("pages:bibManager.cancelEdit")}
                         </Button>
                       </div>
                     </>
@@ -553,7 +555,7 @@ export default function BibManagerPage() {
                     <>
                       <div>
                         <span className="text-xs text-muted-foreground">
-                          识别格式：
+                          {t("pages:bibManager.identifiedFormat")}
                         </span>
                         <span className="ml-1 text-sm font-semibold">
                           {formatResult.format_name}
@@ -564,7 +566,7 @@ export default function BibManagerPage() {
                       </div>
                       <div>
                         <span className="text-xs text-muted-foreground">
-                          必填字段：
+                          {t("pages:bibManager.requiredFieldsLabel")}
                         </span>
                         <div className="flex flex-wrap gap-1 mt-1">
                           {formatResult.required_fields?.map((f) => (
@@ -580,7 +582,7 @@ export default function BibManagerPage() {
                       {formatResult.optional_fields?.length > 0 && (
                         <div>
                           <span className="text-xs text-muted-foreground">
-                            可选字段：
+                            {t("pages:bibManager.optionalFieldsLabel")}
                           </span>
                           <div className="flex flex-wrap gap-1 mt-1">
                             {formatResult.optional_fields.map((f) => (
@@ -602,7 +604,7 @@ export default function BibManagerPage() {
                       {formatResult.latex_bibliographystyle && (
                         <div className="rounded bg-muted/50 p-2 mt-1">
                           <span className="text-xs text-muted-foreground">
-                            推荐 LaTeX 样式：
+                            {t("pages:bibManager.recommendedStyle")}
                           </span>
                           <span className="ml-1 text-xs font-mono font-semibold">
                             {formatResult.latex_bibliographystyle}
@@ -610,7 +612,7 @@ export default function BibManagerPage() {
                           {formatResult.latex_package && (
                             <>
                               <span className="text-xs text-muted-foreground ml-2">
-                                （需宏包
+                                {t("pages:bibManager.withPackage")}
                               </span>
                               <span className="text-xs font-mono">
                                 {" "}{formatResult.latex_package}
@@ -634,7 +636,7 @@ export default function BibManagerPage() {
                           onClick={handleStartEditFormat}
                         >
                           <Edit3 />
-                          编辑格式
+                          {t("pages:bibManager.editFormat")}
                         </Button>
                         <Button
                           variant="outline"
@@ -647,7 +649,7 @@ export default function BibManagerPage() {
                           ) : (
                             <Save />
                           )}
-                          保存格式
+                          {t("pages:bibManager.saveFormat")}
                         </Button>
                       </div>
                     </>
@@ -664,10 +666,10 @@ export default function BibManagerPage() {
                 <span className="text-primary text-sm font-bold mr-1">
                   2
                 </span>
-                <CardTitle className="text-base">提取文献元数据</CardTitle>
+                <CardTitle className="text-base">{t("pages:bibManager.step2Title")}</CardTitle>
               </div>
               <CardDescription>
-                输入文献元数据文本，或上传包含文献信息的截图
+                {t("pages:bibManager.step2Desc")}
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
@@ -675,14 +677,14 @@ export default function BibManagerPage() {
                 className="min-h-20 resize-none"
                 value={metadataText}
                 onChange={(e) => setMetadataText(e.target.value)}
-                placeholder="粘贴 Google Scholar、知网或其他来源的文献信息..."
+                placeholder={t("pages:bibManager.step2Placeholder")}
               />
 
               <div className="flex items-center gap-3">
-                <span className="text-xs text-muted-foreground">或</span>
+                <span className="text-xs text-muted-foreground">{t("pages:bibManager.step2Or")}</span>
                 <label className="cursor-pointer inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors">
                   <Upload className="size-4" />
-                  上传截图
+                  {t("pages:bibManager.step2Upload")}
                   <input
                     ref={imageInputRef}
                     type="file"
@@ -717,16 +719,16 @@ export default function BibManagerPage() {
                 ) : (
                   <FileText />
                 )}
-                {step2Loading ? "提取中..." : "提取元数据"}
+                {step2Loading ? t("pages:bibManager.step2BtnLoading") : t("pages:bibManager.step2Btn")}
               </Button>
 
               {editedMetadata && (
                 <div className="rounded-lg border border-border p-4 space-y-3 mt-2">
                   <div className="flex items-center justify-between">
-                    <span className="text-sm font-medium">提取结果（可编辑）</span>
+                    <span className="text-sm font-medium">{t("pages:bibManager.step2ResultTitle")}</span>
                     {missingFields.length > 0 && (
                       <span className="text-xs text-destructive">
-                        {missingFields.length} 个必填字段缺失
+                        {t("pages:bibManager.step2MissingFields", { count: missingFields.length })}
                       </span>
                     )}
                   </div>
@@ -736,7 +738,7 @@ export default function BibManagerPage() {
                       const desc = formatResult?.field_descriptions?.[fieldKey];
                       const label = desc || fieldKey;
                       const value = editedMetadata[fieldKey] || "";
-                      const isLong = value.length > 80 || fieldKey.includes("abstract") || (desc && (desc.includes("摘要") || desc.includes("说明")));
+                      const isLong = value.length > 80 || fieldKey.includes("abstract") || (desc && (desc.includes("\u6458\u8981") || desc.includes("\u8BF4\u660E")));
                       return (
                         <div key={fieldKey} className="space-y-1">
                           <Label className={`text-xs ${isMissing ? "text-destructive" : ""}`}>
@@ -761,7 +763,7 @@ export default function BibManagerPage() {
                                 handleMetadataEdit(fieldKey, e.target.value)
                               }
                               placeholder={
-                                isMissing ? "必填字段为空" : ""
+                                isMissing ? t("pages:bibManager.step2FieldMissing") : ""
                               }
                             />
                           )}
@@ -781,10 +783,10 @@ export default function BibManagerPage() {
                 <span className="text-primary text-sm font-bold mr-1">
                   3
                 </span>
-                <CardTitle className="text-base">生成 BibTeX</CardTitle>
+                <CardTitle className="text-base">{t("pages:bibManager.step3Title")}</CardTitle>
               </div>
               <CardDescription>
-                基于提取的元数据生成规范的 BibTeX 代码
+                {t("pages:bibManager.step3Desc")}
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
@@ -797,22 +799,22 @@ export default function BibManagerPage() {
                 ) : (
                   <BookOpen />
                 )}
-                {step3Loading ? "生成中..." : "生成 BibTeX"}
+                {step3Loading ? t("pages:bibManager.step3BtnLoading") : t("pages:bibManager.step3Btn")}
               </Button>
 
               {editedBibtex && (
                 <div className="rounded-lg border border-border p-4 space-y-3 mt-2">
                   <div className="flex items-center justify-between">
-                    <span className="text-sm font-medium">BibTeX 代码（可编辑）</span>
+                    <span className="text-sm font-medium">{t("pages:bibManager.step3ResultTitle")}</span>
                     <div className="flex items-center gap-2">
                       <Button variant="outline" size="sm" onClick={handleCopyBibtex}>
                         <Copy />
-                        复制
+                        {t("common:copy")}
                       </Button>
                     </div>
                   </div>
                   <div className="space-y-1.5">
-                    <Label className="text-xs">引用键 (cite_key)</Label>
+                    <Label className="text-xs">{t("pages:bibManager.step3CiteKeyLabel")}</Label>
                     <Input
                       className="h-8 text-xs font-mono"
                       value={editedCiteKey}
@@ -837,24 +839,24 @@ export default function BibManagerPage() {
                   <span className="text-primary text-sm font-bold mr-1">
                     4
                   </span>
-                  <CardTitle className="text-base">应用到 .bib 文件</CardTitle>
+                  <CardTitle className="text-base">{t("pages:bibManager.step4Title")}</CardTitle>
                 </div>
                 <CardDescription>
-                  选择项目中的 .bib 文件，将生成的条目写入或更新
+                  {t("pages:bibManager.step4Desc")}
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-3">
                 {bibFiles.length === 0 ? (
                   <p className="text-sm text-muted-foreground">
-                    当前项目中未找到 .bib 文件。你可以将 BibTeX 代码复制后手动添加。
+                    {t("pages:bibManager.step4NoBibFiles")}
                   </p>
                 ) : (
                   <div className="space-y-3">
                     <div className="space-y-1.5">
-                      <Label className="text-xs">选择 .bib 文件</Label>
+                      <Label className="text-xs">{t("pages:bibManager.step4SelectBibFile")}</Label>
                       <Select value={selectedBibFile} onValueChange={setSelectedBibFile}>
                         <SelectTrigger className="min-w-60">
-                          <SelectValue placeholder="选择 .bib 文件" />
+                          <SelectValue placeholder={t("pages:bibManager.step4SelectBibFile")} />
                         </SelectTrigger>
                         <SelectContent>
                           {bibFiles.map((f) => (
@@ -874,7 +876,7 @@ export default function BibManagerPage() {
                       ) : (
                         <Save />
                       )}
-                      {saving ? "保存中..." : "应用到文件"}
+                      {saving ? t("pages:bibManager.step4BtnLoading") : t("pages:bibManager.step4Btn")}
                     </Button>
                   </div>
                 )}
@@ -890,16 +892,16 @@ export default function BibManagerPage() {
                   <span className="text-primary text-sm font-bold mr-1">
                     5
                   </span>
-                  <CardTitle className="text-base">生成 LaTeX 参考文献代码</CardTitle>
+                  <CardTitle className="text-base">{t("pages:bibManager.step5Title")}</CardTitle>
                 </div>
                 <CardDescription>
-                  生成包含正确 \bibliographystyle 和 \bibliography 命令的 LaTeX 代码片段
+                  {t("pages:bibManager.step5Desc")}
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-3">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div className="space-y-1.5">
-                    <Label className="text-xs">.bib 文件路径（不含扩展名）</Label>
+                    <Label className="text-xs">{t("pages:bibManager.step5BibFilePath")}</Label>
                     <Input
                       className="h-8 text-xs font-mono"
                       value={bibFilePath}
@@ -909,7 +911,7 @@ export default function BibManagerPage() {
                   </div>
                   {formatResult.latex_bibliographystyle && (
                     <div className="space-y-1.5">
-                      <Label className="text-xs">推荐样式</Label>
+                      <Label className="text-xs">{t("pages:bibManager.step5RecommendedStyle")}</Label>
                       <div className="h-8 flex items-center text-xs font-mono bg-muted/50 rounded px-2">
                         {formatResult.latex_bibliographystyle}
                       </div>
@@ -925,16 +927,16 @@ export default function BibManagerPage() {
                   ) : (
                     <FileText />
                   )}
-                  {step5Loading ? "生成中..." : "生成 LaTeX 代码"}
+                  {step5Loading ? t("pages:bibManager.step5BtnLoading") : t("pages:bibManager.step5Btn")}
                 </Button>
 
                 {latexResult && (
                   <div className="rounded-lg border border-border p-4 space-y-3 mt-2">
                     <div className="flex items-center justify-between">
-                      <span className="text-sm font-medium">LaTeX 参考文献代码</span>
+                      <span className="text-sm font-medium">{t("pages:bibManager.step5ResultTitle")}</span>
                       <Button variant="outline" size="sm" onClick={handleCopyLatex}>
                         <Copy />
-                        复制
+                        {t("common:copy")}
                       </Button>
                     </div>
                     <Textarea
@@ -943,8 +945,7 @@ export default function BibManagerPage() {
                       readOnly
                     />
                     <p className="text-xs text-muted-foreground">
-                      将上述代码添加到你的 LaTeX 文档中。导言区配置已包含在内，
-                      参考文献列表命令需放在文档末尾。
+                      {t("pages:bibManager.step5Hint")}
                     </p>
                   </div>
                 )}

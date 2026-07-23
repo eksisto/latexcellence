@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import { Sun, Moon } from "lucide-react";
 import {
@@ -8,6 +9,7 @@ import {
 import { useTheme } from "@/hooks/useTheme";
 
 export default function ThemeToggle() {
+  const { t } = useTranslation("components");
   const { resolved, toggleTheme } = useTheme();
 
   return (
@@ -18,10 +20,10 @@ export default function ThemeToggle() {
         ) : (
           <Moon className="size-5" />
         )}
-        <span className="sr-only">切换亮暗模式</span>
+        <span className="sr-only">{t("themeToggle.switchDarkLight")}</span>
       </TooltipTrigger>
       <TooltipContent>
-        {resolved === "dark" ? "切换为亮色模式" : "切换为暗色模式"}
+        {resolved === "dark" ? t("themeToggle.switchToLight") : t("themeToggle.switchToDark")}
       </TooltipContent>
     </Tooltip>
   );

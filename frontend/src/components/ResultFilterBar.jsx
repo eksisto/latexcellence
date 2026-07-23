@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import {
@@ -38,6 +39,7 @@ export default function ResultFilterBar({
   hasFilters,
   typeLabels = {},
 }) {
+  const { t } = useTranslation("components");
   const [jumpInput, setJumpInput] = useState("");
 
   const handleJump = (e) => {
@@ -54,7 +56,7 @@ export default function ResultFilterBar({
         <Input
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
-          placeholder="搜索原文、修改后或解释..."
+          placeholder={t("resultFilterBar.searchPlaceholder")}
           className="pl-7 h-7 text-sm"
         />
       </div>
@@ -63,14 +65,14 @@ export default function ResultFilterBar({
           <SelectTrigger className="h-7 w-36 text-sm">
             <Filter className="size-3.5" />
             <SelectValue>
-              {typeFilter === "all" ? "全部类型" : (typeLabels[typeFilter] || typeFilter)}
+              {typeFilter === "all" ? t("resultFilterBar.allTypes") : (typeLabels[typeFilter] || typeFilter)}
             </SelectValue>
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">全部类型</SelectItem>
-            {availableTypes.map((t) => (
-              <SelectItem key={t} value={t}>
-                {typeLabels[t] || t}
+            <SelectItem value="all">{t("resultFilterBar.allTypes")}</SelectItem>
+            {availableTypes.map((type) => (
+              <SelectItem key={type} value={type}>
+                {typeLabels[type] || type}
               </SelectItem>
             ))}
           </SelectContent>
@@ -80,18 +82,18 @@ export default function ResultFilterBar({
         <Input
           value={jumpInput}
           onChange={(e) => setJumpInput(e.target.value)}
-          placeholder="跳转段落"
+          placeholder={t("resultFilterBar.jumpTo")}
           className="h-7 w-24 text-sm"
           inputMode="numeric"
         />
-        <Button type="submit" variant="ghost" size="icon-sm" title="跳转">
+        <Button type="submit" variant="ghost" size="icon-sm" title={t("resultFilterBar.jump")}>
           <CornerDownRight className="size-3.5" />
         </Button>
       </form>
       {hasFilters && (
-        <Button variant="ghost" size="sm" onClick={onReset} title="清除过滤">
+        <Button variant="ghost" size="sm" onClick={onReset} title={t("resultFilterBar.clearFilter")}>
           <X className="size-3.5" />
-          清除
+          {t("resultFilterBar.clear")}
         </Button>
       )}
     </div>

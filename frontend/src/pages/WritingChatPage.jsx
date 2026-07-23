@@ -1,5 +1,6 @@
 import { useEffect, useRef, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import {
   Loader2,
   ArrowLeft,
@@ -59,6 +60,7 @@ function formatTime(ts) {
 }
 
 function MessageBubble({ message, actions }) {
+  const { t } = useTranslation(["pages", "common"]);
   const {
     generateEdit,
     applyEdit,
@@ -123,7 +125,7 @@ function MessageBubble({ message, actions }) {
       <div className={`flex flex-col gap-1 ${isUser ? "items-end" : "items-start"} min-w-0 flex-1`}>
         <div className="flex items-center gap-1 text-xs text-muted-foreground">
           <span>
-            {isUser ? "用户" : isSummary ? "会话摘要" : "助手"}
+            {isUser ? t("pages:writingChat.roleUser") : isSummary ? t("pages:writingChat.roleSummary") : t("pages:writingChat.roleAssistant")}
           </span>
           {message.created_at && (
             <span>· {formatTime(message.created_at)}</span>
@@ -141,14 +143,14 @@ function MessageBubble({ message, actions }) {
         {isSummary && (
           <div className="text-xs font-medium text-amber-600 dark:text-amber-400 mb-1 flex items-center gap-1">
             <History className="size-3" />
-            会话已压缩 — 可撤回还原原始消息
+            {t("pages:writingChat.compressedHint")}
           </div>
         )}
         {isUser ? (
           <div className="whitespace-pre-wrap text-sm">
             {message.referenced_paragraph != null && (
               <span className="block text-xs opacity-75 mb-1">
-                锚点段落：P{message.referenced_paragraph}
+                {t("pages:writingChat.anchorParagraph", { index: message.referenced_paragraph })}
               </span>
             )}
             {message.content}
@@ -168,7 +170,7 @@ function MessageBubble({ message, actions }) {
                   style={{ color: "color-mix(in oklch, var(--primary) 75%, transparent)" }}
                 >
                   <Lightbulb className="size-3 shrink-0" />
-                  深度思考
+                  {t("pages:writingChat.deepThinking")}
                   {!message.thinkingClosed && (
                     <span className="inline-flex items-center gap-1 ml-1 text-muted-foreground font-normal">
                       <Loader2 className="size-2.5 animate-spin" />
@@ -203,7 +205,7 @@ function MessageBubble({ message, actions }) {
                   style={{ color: "color-mix(in oklch, #3b82f6 75%, transparent)" }}
                 >
                   <Globe className="size-3 shrink-0" />
-                  搜索结果
+                  {t("pages:writingChat.searchResults")}
                   <span className="text-muted-foreground font-normal">
                     {message.searchQuery && ` — ${message.searchQuery}`}
                   </span>
@@ -246,7 +248,7 @@ function MessageBubble({ message, actions }) {
             {isStreaming && !message.displayContent && !message.thinkingOpen ? (
               <span className="flex items-center gap-1 text-muted-foreground">
                 <Loader2 className="size-3 animate-spin" />
-                思考中...
+                {t("pages:writingChat.thinking")}
               </span>
             ) : message.displayContent || (!message.thinkingOpen && message.content) ? (
               <MarkdownRenderer>
@@ -273,7 +275,7 @@ function MessageBubble({ message, actions }) {
           <Button
             size="icon-xs"
             variant="ghost"
-            title="复制原始文本"
+            title={t("pages:writingChat.copyRaw")}
             onClick={handleCopy}
           >
             {copied ? <CopyCheck className="size-3 text-green-500" /> : <Copy className="size-3" />}
@@ -283,7 +285,7 @@ function MessageBubble({ message, actions }) {
           <Button
             size="icon-xs"
             variant="ghost"
-            title="生成编辑建议"
+            title={t("pages:writingChat.generateEdit")}
             onClick={() => generateEdit(message.id, "")}
             disabled={editingMessageId === message.id}
           >
@@ -298,7 +300,7 @@ function MessageBubble({ message, actions }) {
           <Button
             size="icon-xs"
             variant="ghost"
-            title="撤回压缩消息（恢复原始对话）"
+            title={t("pages:writingChat.undoCompressed")}
             onClick={() => undoMessage(message.id)}
           >
             <Undo2 className="size-3" />
@@ -307,7 +309,7 @@ function MessageBubble({ message, actions }) {
           <Button
             size="icon-xs"
             variant="ghost"
-            title="撤回消息"
+            title={t("pages:writingChat.undoMessage")}
             onClick={() => deleteMessage(message.id)}
           >
             <Trash2 className="size-3" />
@@ -320,6 +322,7 @@ function MessageBubble({ message, actions }) {
 }
 
 function EditOpCard({ edit_op, reason, onApply, applying }) {
+  const { t } = useTranslation(["pages", "common"]);
   const [isEditing, setIsEditing] = useState(false);
   const [editedText, setEditedText] = useState(edit_op.new_latex);
 
@@ -336,7 +339,7 @@ function EditOpCard({ edit_op, reason, onApply, applying }) {
       <CardHeader className="pb-2">
         <CardTitle className="text-xs flex items-center gap-2">
           <PencilLine className="size-3.5" />
-          编辑建议 · 段落 {edit_op.paragraph_index} ({edit_op.file_path})
+          {t("pages:writingChat.editSuggestion", { paragraphIndex: edit_op.paragraph_index, filePath: edit_op.file_path })}
         </CardTitle>
       </CardHeader>
       <CardContent className="pt-1 space-y-2">
@@ -345,13 +348,13 @@ function EditOpCard({ edit_op, reason, onApply, applying }) {
         )}
         <div className={`grid grid-cols-1 ${isEditing ? '' : 'md:grid-cols-2'} gap-2`}>
           <div>
-            <div className="text-xs text-muted-foreground mb-1">原文</div>
+            <div className="text-xs text-muted-foreground mb-1">{t("common:original")}</div>
             <pre className="text-xs font-mono bg-muted rounded p-2 max-h-48 overflow-y-auto whitespace-pre-wrap break-all">
               {edit_op.original_latex}
             </pre>
           </div>
           <div>
-            <div className="text-xs text-muted-foreground mb-1">新文本</div>
+            <div className="text-xs text-muted-foreground mb-1">{t("pages:writingChat.newText")}</div>
             {isEditing ? (
               <textarea
                 autoFocus
@@ -369,7 +372,7 @@ function EditOpCard({ edit_op, reason, onApply, applying }) {
         {edit_op.diff_text && !isEditing && (
           <details className="text-xs">
             <summary className="cursor-pointer text-muted-foreground">
-              查看 unified diff
+              {t("pages:writingChat.viewUnifiedDiff")}
             </summary>
             <pre className="font-mono bg-muted rounded p-2 mt-1 max-h-64 overflow-y-auto whitespace-pre">
               {edit_op.diff_text}
@@ -380,7 +383,7 @@ function EditOpCard({ edit_op, reason, onApply, applying }) {
           {edit_op.applied ? (
             <span className="text-xs text-green-600 dark:text-green-400 flex items-center gap-1">
               <Check className="size-3.5" />
-              已应用
+              {t("pages:writingChat.applied")}
             </span>
           ) : (
             <>
@@ -398,11 +401,11 @@ function EditOpCard({ edit_op, reason, onApply, applying }) {
                 }}
               >
                 <PencilLine className="size-3" />
-                {isEditing ? "取消编辑" : "手动编辑"}
+                {isEditing ? t("pages:writingChat.cancelEdit") : t("pages:writingChat.manualEdit")}
               </Button>
               <Button size="sm" onClick={handleApply} disabled={applying}>
                 {applying && <Loader2 className="size-3 animate-spin" />}
-                应用到 .tex
+                {t("pages:writingChat.applyToTex")}
               </Button>
             </>
           )}
@@ -413,6 +416,7 @@ function EditOpCard({ edit_op, reason, onApply, applying }) {
 }
 
 function CaptchaDialog({ challenge, submitting, onSubmit, onDismiss }) {
+  const { t } = useTranslation(["pages", "common"]);
   const [selected, setSelected] = useState(new Set());
 
   const toggle = (hash) => {
@@ -434,14 +438,13 @@ function CaptchaDialog({ challenge, submitting, onSubmit, onDismiss }) {
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <ShieldCheck className="size-4 text-amber-500" />
-            验证码{challenge.instruction ? ` — ${challenge.instruction}` : ""}
+            {t("pages:writingChat.captchaTitle", { instruction: challenge.instruction ? ` — ${challenge.instruction}` : "" })}
           </DialogTitle>
         </DialogHeader>
 
         <div className="space-y-3">
           <p className="text-xs text-muted-foreground">
-            搜索引擎 {challenge.engine_name ? `（"${challenge.engine_name}"）` : ""} 触发了验证，
-            {challenge.instruction || "请完成以下验证以继续。"}
+            {t("pages:writingChat.captchaDesc", { engine: challenge.engine_name ? `("${challenge.engine_name}")` : "" })}
           </p>
 
           <div
@@ -463,7 +466,7 @@ function CaptchaDialog({ challenge, submitting, onSubmit, onDismiss }) {
                 >
                   <img
                     src={`data:image/jpeg;base64,${img.base64}`}
-                    alt="验证图片"
+                    alt={t("pages:writingChat.captchaImage")}
                     className="w-full aspect-square object-cover"
                     draggable={false}
                   />
@@ -478,20 +481,20 @@ function CaptchaDialog({ challenge, submitting, onSubmit, onDismiss }) {
           </div>
 
           <p className="text-xs text-muted-foreground text-center">
-            已选择 {selected.size} 张图片
+            {t("pages:writingChat.captchaSelected", { count: selected.size })}
           </p>
         </div>
 
         <DialogFooter>
           <Button variant="outline" onClick={onDismiss} disabled={submitting}>
-            跳过
+            {t("pages:writingChat.captchaSkip")}
           </Button>
           <Button
             onClick={() => onSubmit(Array.from(selected))}
             disabled={submitting || selected.size === 0}
           >
             {submitting && <Loader2 className="size-3 animate-spin mr-1" />}
-            提交验证
+            {t("pages:writingChat.captchaSubmit")}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -501,6 +504,7 @@ function CaptchaDialog({ challenge, submitting, onSubmit, onDismiss }) {
 
 
 export default function WritingChatPage() {
+  const { t } = useTranslation(["pages", "common"]);
   const {
     projectPath,
     activeFile,
@@ -586,11 +590,11 @@ export default function WritingChatPage() {
           </Button>
           <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
             <MessagesSquare className="size-5" />
-            写作助手 Chat
+            {t("pages:writingChat.title")}
           </h1>
           {compressed && (
             <span className="ml-2 text-xs px-2 py-0.5 rounded bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-500/30">
-              会话已压缩
+              {t("pages:writingChat.compressedToast")}
             </span>
           )}
         </div>
@@ -600,12 +604,12 @@ export default function WritingChatPage() {
         <div className="max-w-7xl mx-auto">
           <Card className="max-w-md mx-auto mt-12">
             <CardHeader>
-              <CardTitle>未选择项目</CardTitle>
+              <CardTitle>{t("pages:writingChat.noProjectTitle")}</CardTitle>
             </CardHeader>
             <CardContent>
-              <Button nativeButton={false} render={<Link to="/workspace" />}>
-                打开工作区
-              </Button>
+                <Button nativeButton={false} render={<Link to="/workspace" />}>
+                  {t("common:openWorkspace")}
+                </Button>
             </CardContent>
           </Card>
         </div>
@@ -614,11 +618,11 @@ export default function WritingChatPage() {
           {/* 左：会话列表 */}
           <Card className="h-[calc(100vh-160px)] min-h-[400px] flex flex-col">
             <CardHeader className="pb-2 flex items-center justify-between">
-              <CardTitle className="text-sm">会话</CardTitle>
+              <CardTitle className="text-sm">{t("pages:writingChat.sessions")}</CardTitle>
               <Button
                 size="icon-xs"
                 variant="ghost"
-                title="新建会话"
+                title={t("pages:writingChat.newSession")}
                 onClick={newSession}
               >
                 <Plus className="size-3" />
@@ -629,7 +633,7 @@ export default function WritingChatPage() {
                 <div className="space-y-1 pr-2">
                   {sessions.length === 0 && (
                     <p className="text-xs text-muted-foreground text-center py-4">
-                      暂无会话，点击 + 新建
+                      {t("pages:writingChat.noSessions")}
                     </p>
                   )}
                   {sessions.map((s) => (
@@ -669,16 +673,16 @@ export default function WritingChatPage() {
                             setRenamingId(s.id);
                             setRenameTitle(s.title || "");
                           }}
-                          title="双击重命名"
+                          title={t("pages:writingChat.renameHint")}
                         >
-                          {s.title || "(无标题)"}
+                          {s.title || t("pages:writingChat.noTitle")}
                         </span>
                       )}
                       <div className="absolute right-1 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity duration-150 flex items-center gap-0.5 bg-inherit pl-2">
                         <Button
                           size="icon-xs"
                           variant="ghost"
-                          title="重命名"
+                          title={t("pages:writingChat.rename")}
                           onClick={(e) => {
                             e.stopPropagation();
                             setRenamingId(s.id);
@@ -690,7 +694,7 @@ export default function WritingChatPage() {
                         <Button
                           size="icon-xs"
                           variant="ghost"
-                          title="删除会话"
+                          title={t("pages:writingChat.deleteSession")}
                           onClick={(e) => {
                             e.stopPropagation();
                             deleteSession(s.id);
@@ -711,7 +715,7 @@ export default function WritingChatPage() {
             <CardHeader className="pb-2">
               <CardTitle className="text-sm flex items-center gap-1">
                 <FileText className="size-3.5" />
-                上下文锚点
+                {t("pages:writingChat.contextAnchor")}
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-3 flex-1 min-h-0 overflow-y-auto">
@@ -720,7 +724,7 @@ export default function WritingChatPage() {
                 onValueChange={handleFileChange}
               >
                 <SelectTrigger className="w-full">
-                  <SelectValue placeholder="选择 .tex 文件" />
+                  <SelectValue placeholder={t("pages:writingChat.selectFile")} />
                 </SelectTrigger>
                 <SelectContent>
                   {texFiles.map((f) => (
@@ -738,10 +742,10 @@ export default function WritingChatPage() {
                 }
               >
                 <SelectTrigger className="w-full">
-                  <SelectValue placeholder="选择段落（可选）" />
+                  <SelectValue placeholder={t("pages:writingChat.selectParagraph")} />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">（不指定段落）</SelectItem>
+                  <SelectItem value="all">{t("pages:writingChat.noParagraph")}</SelectItem>
                   {paragraphs.map((p) => (
                     <SelectItem key={p.index} value={String(p.index)}>
                       P{p.index} · {(p.text || "").slice(0, 30).replace(/\n/g, " ")}
@@ -752,15 +756,15 @@ export default function WritingChatPage() {
               </Select>
 
               <div className="text-xs text-muted-foreground">
-                <p>提示：</p>
+                <p>{t("pages:writingChat.assistantHintTitle")}</p>
                 <div className="mt-2 pl-2 space-y-1">
                   <p>
-                    1. 不指定段落时，将以文件全文（最多 12 段）作为对话背景。
+                    {t("pages:writingChat.assistantHint1")}
                   </p>
                   <p>
-                    2. 选择段落，并在助手回复下方点击
+                    {t("pages:writingChat.assistantHint2")}
                     <PencilLine className="inline mx-0.5 size-3" />
-                    才会生成可应用的编辑建议。
+                    {t("pages:writingChat.assistantHint3")}
                   </p>
                 </div>
               </div>
@@ -771,7 +775,7 @@ export default function WritingChatPage() {
               <div className="space-y-2">
                 <div className="text-xs font-medium flex items-center gap-1">
                   <Sparkles className="size-3" />
-                  助手
+                  {t("pages:writingChat.assistants")}
                 </div>
                 <div className="flex items-center gap-1 flex-wrap">
                   {assistants.map((a) => (
@@ -790,13 +794,13 @@ export default function WritingChatPage() {
                 <div className="space-y-1">
                   <Input
                     className="h-7 text-xs"
-                    placeholder="助手名称"
+                    placeholder={t("pages:writingChat.assistantName")}
                     value={newAssistantName}
                     onChange={(e) => setNewAssistantName(e.target.value)}
                   />
                   <Textarea
                     className="min-h-16 resize-none text-xs"
-                    placeholder="输入提示词..."
+                    placeholder={t("pages:writingChat.assistantPlaceholder")}
                     value={newAssistantContent}
                     onChange={(e) => setNewAssistantContent(e.target.value)}
                   />
@@ -813,11 +817,11 @@ export default function WritingChatPage() {
                       disabled={!newAssistantName.trim() || !newAssistantContent.trim()}
                     >
                       <Plus className="size-3" />
-                      保存
+                      {t("pages:writingChat.saveAssistant")}
                     </Button>
                     {activeAssistant && (
                       <span className="text-xs text-muted-foreground">
-                        当前：{activeAssistant}
+                        {t("pages:writingChat.activeAssistant", { name: activeAssistant })}
                       </span>
                     )}
                   </div>
@@ -836,8 +840,8 @@ export default function WritingChatPage() {
                 {messages.length === 0 && !streaming && (
                   <div className="h-full flex items-center justify-center text-muted-foreground text-sm">
                     {currentSessionId
-                      ? "（空会话）"
-                      : "点击左侧 + 按钮新建会话"}
+                      ? t("pages:writingChat.emptySession")
+                      : t("pages:writingChat.emptySessionHint")}
                   </div>
                 )}
                 {messages.map((m) => (
@@ -853,7 +857,7 @@ export default function WritingChatPage() {
                 <div className="flex items-center gap-2 text-xs text-muted-foreground py-1 px-2 rounded bg-blue-500/5 border border-blue-500/20">
                   <Globe className="size-3 animate-pulse text-blue-500" />
                   <span>
-                    正在搜索：{searchStatus.query || "..."}
+                    {t("pages:writingChat.searching", { query: searchStatus.query || "..." })}
                   </span>
                 </div>
               )}
@@ -865,8 +869,8 @@ export default function WritingChatPage() {
                   onKeyDown={onKeyDown}
                   placeholder={
                     activeFile
-                      ? "向助手提问，Shift+Enter 换行"
-                      : "请先选择文件..."
+                      ? t("pages:writingChat.inputPlaceholder")
+                      : t("pages:writingChat.inputPlaceholderNoFile")
                   }
                   disabled={!activeFile || streaming}
                   className="min-h-[40px] max-h-40 resize-none text-sm"

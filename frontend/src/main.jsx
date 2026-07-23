@@ -6,6 +6,7 @@ import "./fonts/wenkai";
 import "./fonts/wenkai-mono";
 import "./fonts/noto-sans-sc";
 import "./fonts/jetbrains-mono";
+import "./i18n";
 
 import.meta.glob("./theme/*.css", { eager: true });
 

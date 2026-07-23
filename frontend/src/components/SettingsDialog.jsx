@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { toast } from "sonner";
 import { Settings } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import {
   Dialog,
   DialogContent,
@@ -53,6 +54,7 @@ export default function SettingsDialog() {
   const [config, setConfig] = useState(null);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const { t, i18n } = useTranslation("components");
 
   useEffect(() => {
     if (open) {
@@ -101,10 +103,10 @@ export default function SettingsDialog() {
         web_search: config.features.web_search.enabled,
       });
       setOpen(false);
-      toast.success("配置已保存");
+      toast.success(t("settings.configSaved"));
     } catch (err) {
       console.error("Failed to save config:", err);
-      toast.error("保存配置失败", { description: err.message });
+      toast.error(t("settings.configSaveFailed"), { description: err.message });
     } finally {
       setSaving(false);
     }
@@ -115,15 +117,15 @@ export default function SettingsDialog() {
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogTrigger render={<Button variant="ghost" size="icon" />}>
           <Settings className="size-5" />
-          <span className="sr-only">设置</span>
+          <span className="sr-only">{t("settings.title")}</span>
         </DialogTrigger>
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
-            <DialogTitle>设置</DialogTitle>
+            <DialogTitle>{t("settings.title")}</DialogTitle>
           </DialogHeader>
           <div className="flex items-center justify-center py-12">
             <span className="text-sm text-muted-foreground">
-              {loading ? "加载中..." : "点击以加载配置"}
+              {loading ? t("settings.loading") : t("settings.clickToLoad")}
             </span>
           </div>
         </DialogContent>
@@ -135,25 +137,25 @@ export default function SettingsDialog() {
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger render={<Button variant="ghost" size="icon" />}>
         <Settings className="size-5" />
-        <span className="sr-only">设置</span>
+        <span className="sr-only">{t("settings.title")}</span>
       </DialogTrigger>
       <DialogContent className="sm:max-w-lg max-h-[85vh] flex flex-col">
         <DialogHeader>
-          <DialogTitle>设置</DialogTitle>
+          <DialogTitle>{t("settings.title")}</DialogTitle>
         </DialogHeader>
         <div className="flex-1 overflow-y-auto space-y-4 pr-1 -mr-1">
           {/* Server */}
-          <ConfigSection title="服务器">
+          <ConfigSection title={t("settings.server")}>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <Label className="text-xs">主机</Label>
+                <Label className="text-xs">{t("settings.host")}</Label>
                 <Input
                   value={config.server.host}
                   onChange={(e) => set("server.host", e.target.value)}
                 />
               </div>
               <div className="space-y-1.5">
-                <Label className="text-xs">端口</Label>
+                <Label className="text-xs">{t("settings.port")}</Label>
                 <Input
                   type="number"
                   value={config.server.port}
@@ -164,23 +166,23 @@ export default function SettingsDialog() {
               </div>
             </div>
             <div className="space-y-1.5">
-              <Label className="text-xs">Vite 开发服务器地址</Label>
+              <Label className="text-xs">{t("settings.viteDevUrl")}</Label>
               <Input
                 value={config.server.vite_dev_url}
                 onChange={(e) => set("server.vite_dev_url", e.target.value)}
               />
             </div>
             <CheckboxField
-              label="开发模式"
+              label={t("settings.devMode")}
               checked={config.server.dev_mode}
               onChange={(v) => set("server.dev_mode", v)}
             />
           </ConfigSection>
 
           {/* LLM */}
-          <ConfigSection title="LLM">
+          <ConfigSection title={t("settings.llm")}>
             <div className="space-y-1.5">
-              <Label className="text-xs">API 密钥</Label>
+              <Label className="text-xs">{t("settings.apiKey")}</Label>
               <Input
                 type="password"
                 placeholder="sk-..."
@@ -193,7 +195,7 @@ export default function SettingsDialog() {
               />
             </div>
             <div className="space-y-1.5">
-              <Label className="text-xs">接口地址</Label>
+              <Label className="text-xs">{t("settings.baseUrl")}</Label>
               <Input
                 value={config.llm.base_url}
                 onChange={(e) => set("llm.base_url", e.target.value)}
@@ -201,14 +203,14 @@ export default function SettingsDialog() {
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <Label className="text-xs">模型</Label>
+                <Label className="text-xs">{t("settings.model")}</Label>
                 <Input
                   value={config.llm.model}
                   onChange={(e) => set("llm.model", e.target.value)}
                 />
               </div>
               <div className="space-y-1.5">
-                <Label className="text-xs">模型温度</Label>
+                <Label className="text-xs">{t("settings.temperature")}</Label>
                 <Input
                   type="number"
                   step="0.1"
@@ -223,7 +225,7 @@ export default function SettingsDialog() {
             </div>
             <div className="grid grid-cols-3 gap-3">
               <div className="space-y-1.5">
-                <Label className="text-xs">最大 Token 数</Label>
+                <Label className="text-xs">{t("settings.maxTokens")}</Label>
                 <Input
                   type="number"
                   value={config.llm.max_tokens}
@@ -233,7 +235,7 @@ export default function SettingsDialog() {
                 />
               </div>
               <div className="space-y-1.5">
-                <Label className="text-xs">请求间隔 (s)</Label>
+                <Label className="text-xs">{t("settings.requestInterval")}</Label>
                 <Input
                   type="number"
                   step="0.5"
@@ -248,7 +250,7 @@ export default function SettingsDialog() {
                 />
               </div>
               <div className="space-y-1.5">
-                <Label className="text-xs">最大并发数</Label>
+                <Label className="text-xs">{t("settings.maxConcurrency")}</Label>
                 <Input
                   type="number"
                   min="1"
@@ -265,19 +267,19 @@ export default function SettingsDialog() {
           </ConfigSection>
 
           {/* Features */}
-          <ConfigSection title="功能">
+          <ConfigSection title={t("settings.features")}>
             <CheckboxField
-              label="文本校对"
+              label={t("settings.featureTypoCheck")}
               checked={config.features.typo_check.enabled}
               onChange={(v) => set("features.typo_check.enabled", v)}
             />
             <CheckboxField
-              label="表达优化"
+              label={t("settings.featureExpressionOpt")}
               checked={config.features.expression_opt.enabled}
               onChange={(v) => set("features.expression_opt.enabled", v)}
             />
             <div className="space-y-1.5">
-              <Label className="text-xs">表达优化默认提示词</Label>
+              <Label className="text-xs">{t("settings.featureExpressionOptDefaultPrompt")}</Label>
               <Textarea
                 rows={3}
                 value={config.features.expression_opt.default_prompt}
@@ -287,78 +289,78 @@ export default function SettingsDialog() {
               />
             </div>
             <CheckboxField
-              label="公式识别"
+              label={t("settings.featureFormulaOcr")}
               checked={config.features.formula_ocr.enabled}
               onChange={(v) => set("features.formula_ocr.enabled", v)}
             />
             <CheckboxField
-              label="模板生成"
+              label={t("settings.featureTemplateGen")}
               checked={config.features.template_gen.enabled}
               onChange={(v) => set("features.template_gen.enabled", v)}
             />
             <CheckboxField
-              label="源码格式化"
+              label={t("settings.featureFormatting")}
               checked={config.features.formatting.enabled}
               onChange={(v) => set("features.formatting.enabled", v)}
             />
             <CheckboxField
-              label="自动编译"
+              label={t("settings.featureCompile")}
               checked={config.features.compile.enabled}
               onChange={(v) => set("features.compile.enabled", v)}
             />
             <CheckboxField
-              label="Git 差异高亮"
+              label={t("settings.featureGitDiff")}
               checked={config.features.git_diff.enabled}
               onChange={(v) => set("features.git_diff.enabled", v)}
             />
             <CheckboxField
-              label="表格 OCR 识别"
+              label={t("settings.featureTableOcr")}
               checked={config.features.table_ocr.enabled}
               onChange={(v) => set("features.table_ocr.enabled", v)}
             />
             <CheckboxField
-              label="Markdown 转 LaTeX"
+              label={t("settings.featureMarkdownConvert")}
               checked={config.features.markdown_converter.enabled}
               onChange={(v) => set("features.markdown_converter.enabled", v)}
             />
             <CheckboxField
-              label="LaTeX 样式修改"
+              label={t("settings.featureStyleModify")}
               checked={config.features.style_modify.enabled}
               onChange={(v) => set("features.style_modify.enabled", v)}
             />
             <CheckboxField
-              label="术语一致性检查"
+              label={t("settings.featureTerminologyCheck")}
               checked={config.features.terminology_check.enabled}
               onChange={(v) => set("features.terminology_check.enabled", v)}
             />
             <CheckboxField
-              label="写作助手 Chat"
+              label={t("settings.featureWritingChat")}
               checked={config.features.writing_chat.enabled}
               onChange={(v) => set("features.writing_chat.enabled", v)}
             />
             {config.features.writing_chat.enabled && (
               <div className="pl-6">
                 <CheckboxField
-                  label="写作助手允许联网搜索"
+                  label={t("settings.featureWritingChatWebSearch")}
                   checked={config.features.writing_chat.web_search_enabled}
                   onChange={(v) => set("features.writing_chat.web_search_enabled", v)}
                 />
               </div>
             )}
             <CheckboxField
-              label="参考文献管理"
+              label={t("settings.featureBibManager")}
               checked={config.features.bib_manager.enabled}
               onChange={(v) => set("features.bib_manager.enabled", v)}
             />
             <CheckboxField
-              label="联网搜索"
+              label={t("settings.featureWebSearch")}
               checked={config.features.web_search.enabled}
               onChange={(v) => set("features.web_search.enabled", v)}
             />
             {config.features.web_search.enabled && (
               <div className="pl-6 space-y-3">
                 <div className="space-y-1.5">
-                  <Label className="text-xs">默认搜索引擎</Label>
+                  <Label className="text-xs">{t("settings.defaultEngine")}</Label>
                   <Select
                     value={config.features.web_search.primary_engine}
                     onValueChange={(v) => set("features.web_search.primary_engine", v)}
@@ -377,7 +379,7 @@ export default function SettingsDialog() {
                 <fieldset className="rounded border p-2.5 space-y-2">
                   <legend className="px-1 text-xs font-medium">DuckDuckGo</legend>
                   <CheckboxField
-                    label="启用"
+                    label={t("settings.enabled")}
                     checked={config.features.web_search.engines.duckduckgo.enabled}
                     onChange={(v) => set("features.web_search.engines.duckduckgo.enabled", v)}
                   />
@@ -387,13 +389,13 @@ export default function SettingsDialog() {
                 <fieldset className="rounded border p-2.5 space-y-2">
                   <legend className="px-1 text-xs font-medium">SearXNG</legend>
                   <CheckboxField
-                    label="启用"
+                    label={t("settings.enabled")}
                     checked={config.features.web_search.engines.searxng.enabled}
                     onChange={(v) => set("features.web_search.engines.searxng.enabled", v)}
                   />
                   {config.features.web_search.engines.searxng.enabled && (
                     <div className="space-y-1.5">
-                      <Label className="text-xs">实例地址</Label>
+                      <Label className="text-xs">{t("settings.instanceUrl")}</Label>
                       <Input
                         placeholder="http://localhost:8080"
                         value={config.features.web_search.engines.searxng.base_url}
@@ -407,7 +409,7 @@ export default function SettingsDialog() {
                 <div className="space-y-1.5">
                   <Label className="text-xs">User-Agent</Label>
                   <Input
-                    placeholder="建议使用最新 Chrome 的 UA"
+                    placeholder={t("settings.userAgentHint")}
                     value={config.features.web_search.user_agent}
                     onChange={(e) => set("features.web_search.user_agent", e.target.value)}
                   />
@@ -417,10 +419,10 @@ export default function SettingsDialog() {
           </ConfigSection>
 
           {/* Logging */}
-          <ConfigSection title="日志">
+          <ConfigSection title={t("settings.logging")}>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <Label className="text-xs">级别</Label>
+                <Label className="text-xs">{t("settings.logLevel")}</Label>
                 <Select
                   value={config.logging.level}
                   onValueChange={(v) => set("logging.level", v)}
@@ -438,7 +440,7 @@ export default function SettingsDialog() {
                 </Select>
               </div>
               <div className="space-y-1.5">
-                <Label className="text-xs">日志目录</Label>
+                <Label className="text-xs">{t("settings.logDir")}</Label>
                 <Input
                   value={config.logging.dir}
                   onChange={(e) => set("logging.dir", e.target.value)}
@@ -446,10 +448,29 @@ export default function SettingsDialog() {
               </div>
             </div>
           </ConfigSection>
+
+          {/* Language */}
+          <ConfigSection title={t("settings.language")}>
+            <div className="space-y-1.5">
+              <Label className="text-xs">{t("settings.language")}</Label>
+              <Select
+                value={i18n.language}
+                onValueChange={(v) => i18n.changeLanguage(v)}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="zh">中文</SelectItem>
+                  <SelectItem value="en">English</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </ConfigSection>
         </div>
         <DialogFooter className="mt-4">
           <Button onClick={handleSave} disabled={saving}>
-            {saving ? "保存中..." : "保存配置"}
+            {saving ? t("settings.saving") : t("settings.saveConfig")}
           </Button>
         </DialogFooter>
       </DialogContent>

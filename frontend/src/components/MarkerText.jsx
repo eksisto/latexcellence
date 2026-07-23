@@ -1,12 +1,5 @@
 import React from 'react';
-
-const MARKER_LABELS = {
-  MATH: "公式",
-  CMD: "命令",
-  ENV: "环境",
-  VERB: "代码",
-  COM: "注释"
-};
+import { useTranslation } from "react-i18next";
 
 const MARKER_COLORS = {
   MATH: "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200 border-blue-200 dark:border-blue-800",
@@ -17,8 +10,18 @@ const MARKER_COLORS = {
 };
 
 export default function MarkerText({ text }) {
+  const { t } = useTranslation("components");
+
   if (!text) return null;
-  
+
+  const MARKER_LABELS = {
+    MATH: t("markerText.math"),
+    CMD: t("markerText.cmd"),
+    ENV: t("markerText.env"),
+    VERB: t("markerText.verb"),
+    COM: t("markerText.com"),
+  };
+
   const tokens = text.split(/(__(?:MATH|CMD|ENV|VERB|COM)_\d{4,}__)/g);
   
   return (

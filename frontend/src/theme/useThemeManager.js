@@ -3,20 +3,6 @@ import useStore from "@/store/useStore";
 
 const themeModules = import.meta.glob("./*.css", { eager: true });
 
-const THEME_NAMES = {
-  youminghei: "幽冥黑",
-  jingtailan: "景泰蓝",
-  hupohuang: "琥珀黄",
-  ningyezi: "凝夜紫",
-  tingwulv: "庭芜绿",
-  hailuocheng: "海螺橙",
-  yingtaohong: "樱桃红",
-};
-
-export function getThemeDisplayName(key) {
-  return THEME_NAMES[key] || key;
-}
-
 const THEME_ORDER = [ "yingtaohong", "hailuocheng", "hupohuang", "tingwulv", "jingtailan", "ningyezi", "youminghei"];
 
 export function getAvailableThemes() {

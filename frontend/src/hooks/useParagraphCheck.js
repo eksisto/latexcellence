@@ -3,6 +3,7 @@ import { toast } from "sonner";
 import { api } from "@/api/index";
 import useStore from "@/store/useStore";
 import { translateError } from "@/utils/errorMessages";
+import i18n from "@/i18n";
 
 export function flattenTexFiles(tree, prefix = "") {
   const result = [];
@@ -57,11 +58,11 @@ export default function useParagraphCheck({
     loadingKey: "typoCheck",
   },
   messages = {
-    checkLoading: "正在检查...",
-    checkSuccess: (count) => `发现 ${count} 个段落可能有问题`,
-    applySuccess: (idx) => `已应用段落 ${idx} 的修改`,
-    applyAllSuccess: (count) => `已批量应用 ${count} 个段落的修改`,
-    applyAllEmpty: "没有可应用的修改",
+    get checkLoading() { return i18n.t("hooks:paragraphCheck.defaultCheckLoading") },
+    checkSuccess: (count) => i18n.t("hooks:paragraphCheck.defaultCheckSuccess", { count }),
+    applySuccess: (idx) => i18n.t("hooks:paragraphCheck.defaultApplySuccess", { idx }),
+    applyAllSuccess: (count) => i18n.t("hooks:paragraphCheck.defaultApplyAllSuccess", { count }),
+    get applyAllEmpty() { return i18n.t("hooks:paragraphCheck.defaultApplyAllEmpty") },
   },
 }) {
   const fileTree = useStore((s) => s.fileTree);
@@ -154,7 +155,7 @@ export default function useParagraphCheck({
 
   const handlePreview = useCallback(async () => {
     if (!activeFile) {
-      toast.error("请先选择一个文件");
+      toast.error(i18n.t("hooks:paragraphCheck.selectFileFirst"));
       return;
     }
     setLoading(storeSlice.loadingKey, true);
@@ -166,10 +167,10 @@ export default function useParagraphCheck({
       const data = await apiModule.preview(activeFile, workspaceId, resolveInput);
       setParagraphs(data.paragraphs || []);
       operationIdRef.current = data.operation_id || null;
-      setMessage(`已加载 ${data.total} 个段落`);
+      setMessage(i18n.t("hooks:paragraphCheck.loadedParagraphs", { count: data.total }));
     } catch (e) {
       setError(e.message);
-      toast.error("加载段落失败", { description: e.message });
+      toast.error(i18n.t("hooks:paragraphCheck.loadParagraphsFailed"), { description: e.message });
     } finally {
       setLoading(storeSlice.loadingKey, false);
     }
@@ -309,7 +310,7 @@ export default function useParagraphCheck({
         if (data.type === "error") {
           const msg = translateError(data.message);
           setError(msg);
-          toast.error("检查出错", { description: msg });
+          toast.error(i18n.t("hooks:paragraphCheck.checkError"), { description: msg });
           return;
         }
 
@@ -328,8 +329,8 @@ export default function useParagraphCheck({
 
     es.onerror = () => {
       finalizeCheck(es, true);
-      setError("连接中断，请重试");
-      toast.error("连接中断，请重试");
+      setError(i18n.t("hooks:paragraphCheck.connectionLost"));
+      toast.error(i18n.t("hooks:paragraphCheck.connectionLost"));
     };
   }, [
     activeFile,
@@ -358,9 +359,9 @@ export default function useParagraphCheck({
         const hadErrors = result.errors && result.errors.length > 0;
         if (hadErrors) {
           const reasons = result.errors.map((e) => translateError(e.reason)).join("、");
-          const msg = `建议重新执行检查后再次应用（原因：${reasons}）`;
+          const msg = i18n.t("hooks:paragraphCheck.applyFailedHint", { reasons });
           setError(msg);
-          toast.error("修改未能应用", { description: msg });
+          toast.error(i18n.t("hooks:paragraphCheck.applyFailed"), { description: msg });
           return;
         }
         setMessage(messages.applySuccess(idx));
@@ -373,7 +374,7 @@ export default function useParagraphCheck({
         );
       } catch (e) {
         setError(e.message);
-        toast.error("应用修改失败", { description: e.message });
+        toast.error(i18n.t("hooks:paragraphCheck.applyChangeFailed"), { description: e.message });
       }
     },
     [activeFile, apiModule, setResults, messages]
@@ -404,8 +405,8 @@ export default function useParagraphCheck({
         return;
       }
       setApplyingAll(true);
-      const toastId = toast.loading("正在批量应用修改...", {
-        description: `共 ${pending.length} 个段落`,
+      const toastId = toast.loading(i18n.t("hooks:paragraphCheck.applyingAll"), {
+        description: i18n.t("hooks:paragraphCheck.applyingAllDesc", { count: pending.length }),
       });
       try {
         const changes = pending.map((r) => ({
@@ -439,7 +440,7 @@ export default function useParagraphCheck({
         const skippedCount = skippedIndices.size;
 
         if (skippedCount > 0) {
-          const msg = `已应用 ${appliedCount} 个段落，${skippedCount} 个跳过（建议重新检查）`;
+          const msg = i18n.t("hooks:paragraphCheck.applyAllPartial", { applied: appliedCount, skipped: skippedCount });
           setError(msg);
           toast.warning(msg, { id: toastId });
         } else {
@@ -449,7 +450,7 @@ export default function useParagraphCheck({
         }
       } catch (e) {
         setError(e.message);
-        toast.error("批量应用失败", {
+        toast.error(i18n.t("hooks:paragraphCheck.batchApplyFailed"), {
           id: toastId,
           description: e.message,
         });

@@ -1,4 +1,5 @@
 import { useState, useCallback } from "react";
+import { useTranslation } from "react-i18next";
 import { cn } from "@/lib/utils";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
@@ -75,6 +76,7 @@ function TreeNode({ node, depth = 0, expandedDirs, onToggleDir, onSelect }) {
 }
 
 export default function ProjectExplorer({ tree = [], onSelect }) {
+  const { t } = useTranslation("components");
   const [expandedDirs, setExpandedDirs] = useState(() => new Set());
 
   const toggleDir = useCallback((path) => {
@@ -92,11 +94,11 @@ export default function ProjectExplorer({ tree = [], onSelect }) {
   return (
     <div className="flex flex-col h-full">
       <h3 className="font-semibold text-sm text-muted-foreground mb-3 px-1">
-        项目文件
+        {t("projectExplorer.title")}
       </h3>
       {tree.length === 0 ? (
         <p className="text-muted-foreground/60 text-sm px-1">
-          未打开项目
+          {t("projectExplorer.noProject")}
         </p>
       ) : (
         <ScrollArea className="flex-1">

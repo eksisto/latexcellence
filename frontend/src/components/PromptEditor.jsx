@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -9,24 +10,25 @@ import {
 } from "@/components/ui/card";
 
 export default function PromptEditor({ prompt, onSave }) {
+  const { t } = useTranslation("components");
   return (
     <Card>
       <CardHeader className="pb-3">
-        <CardTitle className="text-sm font-medium">自定义提示词</CardTitle>
+        <CardTitle className="text-sm font-medium">{t("promptEditor.title")}</CardTitle>
         <CardDescription className="text-xs">
-          定义如何让 AI 优化你的文本
+          {t("promptEditor.description")}
         </CardDescription>
       </CardHeader>
       <CardContent>
         <Label className="sr-only" htmlFor="custom-prompt">
-          提示词内容
+          {t("promptEditor.contentLabel")}
         </Label>
         <Textarea
           id="custom-prompt"
           className="min-h-28 resize-none text-sm"
           value={prompt || ""}
           onChange={(e) => onSave?.(e.target.value)}
-          placeholder="输入你的自定义提示词..."
+          placeholder={t("promptEditor.placeholder")}
         />
       </CardContent>
     </Card>

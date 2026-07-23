@@ -1,8 +1,10 @@
+import { useTranslation } from "react-i18next";
 import { cn } from "@/lib/utils";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { BadgeInfo } from "lucide-react";
 
 export default function DiffViewer({ original, modified, changes = [] }) {
+  const { t } = useTranslation("components");
   const hasChanges = changes.length > 0;
 
   return (
@@ -10,8 +12,8 @@ export default function DiffViewer({ original, modified, changes = [] }) {
       <CardHeader className="pb-3">
         <CardTitle className="text-sm font-medium">
           {hasChanges
-            ? `发现 ${changes.length} 处修改`
-            : "无修改"}
+            ? t("diffViewer.changesFound", { count: changes.length })
+            : t("diffViewer.noChanges")}
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-3">
@@ -40,11 +42,11 @@ export default function DiffViewer({ original, modified, changes = [] }) {
                   )}
                 </div>
                 <div className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 mt-1">
-                  <span className="text-muted-foreground text-xs">原文：</span>
+                  <span className="text-muted-foreground text-xs">{t("common:original")}</span>
                   <span className="text-foreground/70 line-through">
                     {change.original}
                   </span>
-                  <span className="text-muted-foreground text-xs">修改为：</span>
+                  <span className="text-muted-foreground text-xs">{t("diffViewer.modified")}</span>
                   <span className="text-foreground font-medium">
                     {change.corrected || change.optimized}
                   </span>
@@ -55,7 +57,7 @@ export default function DiffViewer({ original, modified, changes = [] }) {
         ) : (
           <div className="flex items-center gap-2 text-muted-foreground text-sm">
             <BadgeInfo className="size-4" />
-            <span>{original || "无内容可比较"}</span>
+            <span>{original || t("diffViewer.noContent")}</span>
           </div>
         )}
       </CardContent>

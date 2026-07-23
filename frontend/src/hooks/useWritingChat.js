@@ -4,6 +4,7 @@ import { api } from "@/api/index";
 import useStore from "@/store/useStore";
 import { flattenTexFiles } from "@/hooks/useParagraphCheck";
 import { translateError } from "@/utils/errorMessages";
+import i18n from "@/i18n";
 
 const uid = () =>
   (typeof crypto !== "undefined" && crypto.randomUUID
@@ -204,7 +205,7 @@ export default function useWritingChat() {
         }
       } catch (e) {
         setError(e.message);
-        toast.error("加载会话失败", { description: e.message });
+        toast.error(i18n.t("hooks:writingChat.loadSessionFailed"), { description: e.message });
       }
     },
     [
@@ -267,7 +268,7 @@ export default function useWritingChat() {
         await refreshSessions();
       } catch (e) {
         setError(e.message);
-        toast.error("删除会话失败", { description: e.message });
+        toast.error(i18n.t("hooks:writingChat.deleteSessionFailed"), { description: e.message });
       }
     },
     [writingChatCurrentSessionId, newSession, refreshSessions, setWritingChatSessions, setWritingChatCurrentSessionId, setWritingChatMessages, setWritingChatCompressed]
@@ -285,7 +286,7 @@ export default function useWritingChat() {
         await api.writingChat.renameSession(sessionId, title);
         await refreshSessions();
       } catch (e) {
-        toast.error("重命名会话失败", { description: e.message });
+        toast.error(i18n.t("hooks:writingChat.renameSessionFailed"), { description: e.message });
       }
     },
     [refreshSessions, setWritingChatSessions]
@@ -307,7 +308,7 @@ export default function useWritingChat() {
         const d = await api.writingChat.assistants.load(name);
         setAssistantContent(d.content || "");
       } catch (e) {
-        toast.error("切换助手失败", { description: e.message });
+        toast.error(i18n.t("hooks:writingChat.switchAssistantFailed"), { description: e.message });
       }
     },
     [activeAssistant]
@@ -319,9 +320,9 @@ export default function useWritingChat() {
       try {
         await api.writingChat.assistants.save(name, content);
         await refreshAssistants();
-        toast.success("助手已保存");
+        toast.success(i18n.t("hooks:writingChat.assistantSaved"));
       } catch (e) {
-        toast.error("保存助手失败", { description: e.message });
+        toast.error(i18n.t("hooks:writingChat.saveAssistantFailed"), { description: e.message });
       }
     },
     [refreshAssistants]
@@ -337,7 +338,7 @@ export default function useWritingChat() {
         }
         await refreshAssistants();
       } catch (e) {
-        toast.error("删除助手失败", { description: e.message });
+        toast.error(i18n.t("hooks:writingChat.deleteAssistantFailed"), { description: e.message });
       }
     },
     [activeAssistant, refreshAssistants]
@@ -427,8 +428,8 @@ export default function useWritingChat() {
           });
         } else if (event.type === "compressed") {
           setWritingChatCompressed(true);
-          toast.info("会话已压缩", {
-            description: "上下文累计 token 超阈值，已生成历史摘要",
+          toast.info(i18n.t("hooks:writingChat.toastCompressed"), {
+            description: i18n.t("hooks:writingChat.toastCompressedDesc"),
           });
         } else if (event.type === "done") {
           setWritingChatMessages((prev) =>
@@ -464,7 +465,7 @@ export default function useWritingChat() {
           setWritingChatMessages((prev) =>
             prev.filter((m) => m.id !== tmpAssistantId)
           );
-          toast.error("对话出错", { description: msg });
+          toast.error(i18n.t("hooks:writingChat.chatError"), { description: msg });
         }
       };
 
@@ -483,7 +484,7 @@ export default function useWritingChat() {
         setWritingChatMessages((prev) =>
           prev.filter((m) => m.id !== tmpAssistantId)
         );
-        toast.error("发送失败", { description: e.message });
+        toast.error(i18n.t("hooks:writingChat.sendFailed"), { description: e.message });
       } finally {
         setStreaming(false);
         setLoading("writingChat", false);
@@ -511,7 +512,7 @@ export default function useWritingChat() {
   const generateEdit = useCallback(
     async (messageId, instruction) => {
       if (!activeFile || !writingChatCurrentSessionId || paragraphIndex == null) {
-        toast.error("请先选择文件和段落");
+        toast.error(i18n.t("hooks:writingChat.selectFileAndParagraph"));
         return null;
       }
       setEditingMessageId(messageId);
@@ -535,7 +536,7 @@ export default function useWritingChat() {
         return data;
       } catch (e) {
         setError(e.message);
-        toast.error("生成编辑失败", { description: e.message });
+        toast.error(i18n.t("hooks:writingChat.generateEditFailed"), { description: e.message });
         return null;
       } finally {
         setEditingMessageId(null);
@@ -581,10 +582,10 @@ export default function useWritingChat() {
               : m
           )
         );
-        toast.success("已应用编辑");
+        toast.success(i18n.t("hooks:writingChat.editApplied"));
       } catch (e) {
         setError(e.message);
-        toast.error("应用编辑失败", { description: e.message });
+        toast.error(i18n.t("hooks:writingChat.applyEditFailed"), { description: e.message });
       } finally {
         setApplyingMessageId(null);
       }
@@ -604,7 +605,7 @@ export default function useWritingChat() {
         setWritingChatMessages((prev) => prev.filter((m) => m.id !== messageId));
       } catch (e) {
         setError(e.message);
-        toast.error("删除消息失败", { description: e.message });
+        toast.error(i18n.t("hooks:writingChat.deleteMessageFailed"), { description: e.message });
       }
     },
     [writingChatCurrentSessionId, setWritingChatMessages]
@@ -627,13 +628,13 @@ export default function useWritingChat() {
         );
         setWritingChatCompressed(hasCompressed);
         if (result?.restored) {
-          toast.success("已撤回压缩消息，原消息已还原");
+          toast.success(i18n.t("hooks:writingChat.undoCompressedSuccess"));
         } else if (result?.removed) {
-          toast.success("已撤回消息");
+          toast.success(i18n.t("hooks:writingChat.undoSuccess"));
         }
       } catch (e) {
         setError(e.message);
-        toast.error("撤回消息失败", { description: e.message });
+        toast.error(i18n.t("hooks:writingChat.undoFailed"), { description: e.message });
       }
     },
     [writingChatCurrentSessionId, setWritingChatMessages, setWritingChatCompressed]
@@ -650,18 +651,18 @@ export default function useWritingChat() {
           selectedHashes,
         );
         if (result.success) {
-          toast.success("验证成功", {
-            description: "搜索引擎已解锁，请重新提问以获取搜索结果",
+          toast.success(i18n.t("hooks:writingChat.captchaSuccess"), {
+            description: i18n.t("hooks:writingChat.captchaSuccessDesc"),
           });
         } else {
-          toast.error("验证失败", {
-            description: translateError(result.message) || "请重新提问",
+          toast.error(i18n.t("hooks:writingChat.captchaFailed"), {
+            description: translateError(result.message) || i18n.t("hooks:writingChat.captchaFailedHint"),
           });
         }
         setCaptchaChallenge(null);
       } catch (e) {
         setError(e.message);
-        toast.error("提交验证失败", { description: e.message });
+        toast.error(i18n.t("hooks:writingChat.submitCaptchaFailed"), { description: e.message });
       } finally {
         setCaptchaSubmitting(false);
       }

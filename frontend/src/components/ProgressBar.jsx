@@ -1,6 +1,7 @@
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Pause, Play, Square } from "lucide-react";
+import { useTranslation } from "react-i18next";
 
 export default function ProgressBar({
   current,
@@ -10,6 +11,7 @@ export default function ProgressBar({
   onPauseToggle,
   onStop,
 }) {
+  const { t } = useTranslation("components");
   const pct = total > 0 ? Math.round((current / total) * 100) : 0;
   const basename = fileName ? fileName.split("/").pop() : null;
 
@@ -19,7 +21,7 @@ export default function ProgressBar({
         <div className="flex items-center gap-3">
           <span className="text-xs text-muted-foreground whitespace-nowrap">
             {basename ? `${basename} ` : ""}
-            段落 {current} / {total}
+            {t("progressBar.paragraphProgress", { current, total })}
           </span>
           <div className="flex-1 h-2 bg-muted rounded-full overflow-hidden">
             <div
@@ -38,7 +40,7 @@ export default function ProgressBar({
                   size="icon"
                   className="size-7"
                   onClick={onPauseToggle}
-                  title={isPaused ? "恢复" : "暂停"}
+                  title={isPaused ? t("progressBar.resume") : t("progressBar.pause")}
                 >
                   {isPaused ? <Play className="size-3.5" /> : <Pause className="size-3.5" />}
                 </Button>
@@ -49,7 +51,7 @@ export default function ProgressBar({
                   size="icon"
                   className="size-7 text-destructive hover:text-destructive"
                   onClick={onStop}
-                  title="停止"
+                  title={t("progressBar.stop")}
                 >
                   <Square className="size-3.5" />
                 </Button>
@@ -58,7 +60,7 @@ export default function ProgressBar({
           )}
         </div>
         {isPaused && (
-          <p className="text-xs text-muted-foreground mt-1.5">已暂停，恢复后继续检查</p>
+          <p className="text-xs text-muted-foreground mt-1.5">{t("progressBar.paused")}</p>
         )}
       </CardContent>
     </Card>
