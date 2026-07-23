@@ -129,11 +129,11 @@ BaseParagraphCheckService
 ```
 原始 LaTeX:      \textbf{这是一个错字} $x^2$ 更多内容
         ↓ strip_to_plain_text()
-纯文本:         __CMD_0001__这是一个错字 __MATH_0001__ 更多内容
+纯文本:         __CMD_0000__这是一各错字 __MATH_0000__ 更多内容
         ↓ LLM 检查修改（不碰任何 marker）
-修正后:         __CMD_0001__这是一各错字 __MATH_0001__ 更多内容
+修正后:         __CMD_0000__这是一个错字 __MATH_0000__ 更多内容
         ↓ restore_from_markers()
-还原 LaTeX:      \textbf{这是一各错字} $x^2$ 更多内容
+还原 LaTeX:      \textbf{这是一个错字} $x^2$ 更多内容
 ```
 
 ### 2.3 解析流水线

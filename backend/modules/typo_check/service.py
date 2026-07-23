@@ -46,7 +46,7 @@ _SYSTEM_PROMPT = (
     "Your task is to find and fix typos, spelling errors, and grammar mistakes "
     "in the given text.\n\n"
     "CRITICAL RULES — VIOLATING THESE MAKES THE OUTPUT UNUSABLE:\n"
-    "1. The text contains markers like __CMD_0001__ or __MATH_0001__ "
+    "1. The text contains markers like __CMD_0000__ or __MATH_0000__ "
     "which represent LaTeX commands and math formulas. "
     "These markers are NOT part of human-readable text.\n"
     "2. ABSOLUTELY DO NOT modify, delete, split, merge, or reorder any marker. "

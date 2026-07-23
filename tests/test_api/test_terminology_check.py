@@ -361,9 +361,9 @@ class TestExtractor:
 
     def test_extract_terms_fallback_filters_markers(self):
         extractor = TermExtractor()
-        text = "__CMD_0001__ The NLP model works well."
+        text = "__CMD_0000__ The NLP model works well."
         terms = extractor.extract_terms_fallback(text)
-        assert "__CMD_0001__" not in [t.term for t in terms]
+        assert "__CMD_0000__" not in [t.term for t in terms]
         assert "NLP" in [t.term for t in terms]
 
     @pytest.mark.asyncio

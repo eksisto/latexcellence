@@ -81,18 +81,18 @@ def test_marker_numbering_demo():
             ])
     print("【全局编号连续性检查】")
     missing_global = []
-    for n in range(1, max(all_nums) + 1):
+    for n in range(0, max(all_nums) + 1):
         if n not in all_nums:
             missing_global.append(f"_{n:04d}")
     if missing_global:
         print(f"  缺失编号: {', '.join(missing_global)}（说明编号不连续，被其他前缀占用）")
     else:
-        print(f"  编号 0001~{max(all_nums):04d} 全部连续（无缺失）")
+        print(f"  编号 0000~{max(all_nums):04d} 全部连续（无缺失）")
     print(f"  最后一个编号: {max(all_nums):04d}")
 
 
 def test_marker_numbering_gap_demo():
-    """演示：为什么 CMD 编号不连续 + 为什么 COM 不从 0001 开始。"""
+    """演示：为什么 CMD 编号不连续 + 为什么 COM 不从 0000 开始。"""
     parser = LatexParser()
     stripped, marker_map = parser.strip_to_plain_text(latex_paragraph)
 
@@ -130,16 +130,16 @@ def test_marker_numbering_gap_demo():
                         print(f"      {ex} = {v!r}")
 
     print("-" * 70)
-    print("【Q2 分析：COM 编号为什么不是从 0001 开始的？】")
+    print("【Q2 分析：COM 编号为什么不是从 0000 开始的？】")
     if coms:
         first_com = coms[0][1]
         first_com_num = int(_parse_marker(first_com)[1])
         print(f"  第一个 COM marker 编号是 {first_com_num:04d}")
-        if first_com_num > 1:
-            for n in range(1, first_com_num):
+        if first_com_num > 0:
+            for n in range(0, first_com_num):
                 for m in marker_map:
                     if int(_parse_marker(m)[1]) == n:
                         print(f"  编号 {n:04d} 被 {m} 占用 → {marker_map[m][:60]!r}")
                         break
-            print(f"  → COM 不从 0001 开始的原因是前 {first_com_num - 1} 个编号被其他前缀占用")
+            print(f"  → COM 不从 0000 开始的原因是前 {first_com_num} 个编号被其他前缀占用")
     print("-" * 70)

@@ -116,5 +116,5 @@ latexcellence/
 - **useUndoRedo Hook**: 基于后端每文件独立 undo/redo deque（最大 50 层）的撤销/重做状态管理，与 project_manager 同步
 - **useResultFilter Hook**: 检查结果排序与过滤逻辑封装——changes 非空优先、无建议在后、同类按 paragraph_index 升序
 - **useWritingChat Hook**: 写作助手聊天的完整生命周期管理（消息流式、thinking 标签解析、上下文压缩、会话持久化）
-- **MarkerText / ParagraphContext 组件**: `MarkerText` 将含 marker 的文本渲染为友好标签（如 `__MATH_0001__` → 公式图标）；`ParagraphContext` 展示当前段落前后文，用于逐段检查结果页面
+- **MarkerText / ParagraphContext 组件**: `MarkerText` 将含 marker 的文本渲染为友好标签（如 `__MATH_0000__` → 公式图标）；`ParagraphContext` 展示当前段落前后文，用于逐段检查结果页面
 - **i18n 多语言**: 基于 `i18next` + `react-i18next` + `i18next-browser-languagedetector`，支持中文/英文双语。翻译文件按命名空间拆分（`common` / `pages` / `components` / `hooks`），组件通过 `useTranslation()` hook 或 `i18n.t()` 调用。语言选择持久化到 localStorage，用户可在设置弹窗中切换

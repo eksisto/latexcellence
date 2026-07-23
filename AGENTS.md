@@ -55,7 +55,7 @@ refactor: 消除外部模块对私有属性的直接访问
 ## 核心业务约束（最高优先级）
 
 ### 1. Marker 保护策略（LaTeX 结构防篡改）
-与 LLM 交互时，LaTeX 结构必须替换为 marker（`__CMD_0001__` / `__MATH_0001__` 等）。
+与 LLM 交互时，LaTeX 结构必须替换为 marker（`__CMD_0000__` / `__MATH_0000__` 等）。
 - **Prompt 约束**：必须在 System Prompt 中强约束 LLM：“**绝对禁止修改、删除或拆分任何 marker，只能修改纯文本**”。
 - **还原逻辑**：调用 `LatexParser.restore_from_markers()` 时，**必须按 marker 长度降序还原**，防止短 marker 误匹配长 marker 的子串。
 
@@ -158,7 +158,7 @@ LLM 输出**必须**经 `json_utils.py` 的 `retry_with_validation()` 处理：
 | 逐段检查后刷新全部预览 | 应用单段修改后**不得**调用刷新全部预览（会清空）；从结果列表过滤掉已应用段落；检查结果需纳入 Zustand persist `partialize` 以支持刷新保留 |
 | 逐段检查结果显示顺序 | `changes` 非空优先；无建议在后；同类内部按 `paragraph_index` 升序；排序完成后再做过滤，保持有序 |
 | 逐段检查功能实现模式 | 必须用 `useParagraphCheck` hook 封装：恢复/文件选择/预览/检查优化/排序/应用/refresh 持久化；页面只传 API 模块与 store slice 配置；禁止在页面重复实现 |
-| 逐段检查前端交互约束 | 1）结果页用 `<MarkerText>` 渲染含 Marker（如 `__MATH_0001__`）的字符串展示友好标签；2）展开“查看原文”用 `<ParagraphContext>`（显示当前段落前后上下文） |
+| 逐段检查前端交互约束 | 1）结果页用 `<MarkerText>` 渲染含 Marker（如 `__MATH_0000__`）的字符串展示友好标签；2）展开“查看原文”用 `<ParagraphContext>`（显示当前段落前后上下文） |
 
 ### 前端错误消息翻译规范
 

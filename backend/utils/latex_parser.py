@@ -7,7 +7,7 @@ LaTeX 文本提取与位置映射模块。
     3. 段落级提取：按空行分割，记录行号范围
 
 核心设计——反向映射策略：
-    - 剥离阶段：将 LaTeX 命令/公式/环境替换为唯一 marker（如 __CMD_0001__），
+    - 剥离阶段：将 LaTeX 命令/公式/环境替换为唯一 marker（如 __CMD_0000__），
       记录 marker → 原始字符串的映射表
     - LLM 处理阶段：LLM 只看到 marker + 纯文本，不修改任何 marker
     - 还原阶段：将 LLM 输出中的 marker 反向替换回原始 LaTeX 内容
@@ -80,7 +80,7 @@ _NO_ARG_COMMANDS = {
     "centering", "raggedright", "raggedleft",
 }
 
-# 匹配 LaTeX marker（如 __CMD_0001__、__MATH_0002__）
+# 匹配 LaTeX marker（如 __CMD_0000__、__MATH_0001__）
 MARKER_PATTERN = re.compile(r"__[A-Z]+_\d{4,}__")
 
 
@@ -507,5 +507,6 @@ class LatexParser:
 
     def _gen_marker(self, prefix: str = "CMD") -> str:
         """生成全局唯一的 marker。"""
+        marker = f"__{prefix}_{self._counter:04d}__"
         self._counter += 1
-        return f"__{prefix}_{self._counter:04d}__"
+        return marker

@@ -146,13 +146,13 @@ class TestOptimizeOneParagraph:
 
     @pytest.mark.asyncio
     async def test_successful_optimization(self, mock_llm, service):
-        plain = r"__CMD_0001__ This method is not very good."
+        plain = r"__CMD_0000__ This method is not very good."
         original_tex = r"\textbf{This method is not very good.}"
 
         mock_llm.chat = AsyncMock(return_value={
             "paragraph_index": 0,
             "original": plain,
-            "optimized": r"__CMD_0001__ This approach is suboptimal.",
+            "optimized": r"__CMD_0000__ This approach is suboptimal.",
             "changes": [
                 {
                     "type": "rewrite",
@@ -168,14 +168,14 @@ class TestOptimizeOneParagraph:
         )
 
         assert result["paragraph_index"] == 5
-        assert result["optimized"] == r"__CMD_0001__ This approach is suboptimal."
+        assert result["optimized"] == r"__CMD_0000__ This approach is suboptimal."
         assert len(result["changes"]) == 1
         assert result["changes"][0]["type"] == "rewrite"
         assert result["changes"][0]["reason"] == "more concise"
 
     @pytest.mark.asyncio
     async def test_no_changes_needed(self, mock_llm, service):
-        plain = r"Text with __MATH_0001__ formula."
+        plain = r"Text with __MATH_0000__ formula."
         original_tex = r"Text with $x^2$ formula."
 
         mock_llm.chat = AsyncMock(return_value={
@@ -195,7 +195,7 @@ class TestOptimizeOneParagraph:
 
     @pytest.mark.asyncio
     async def test_marker_mismatch_falls_back(self, mock_llm, service):
-        plain = r"Text with __CMD_0001__ marker."
+        plain = r"Text with __CMD_0000__ marker."
         original_tex = r"Text with \textbf{marker.}"
 
         mock_llm.chat = AsyncMock(return_value={

@@ -187,13 +187,13 @@ class TestCheckOneParagraph:
     @pytest.mark.asyncio
     async def test_successful_typo_fix(self, mock_llm, service):
         """LLM 返回正确的修改建议。"""
-        plain = r"This is __CMD_0001__ a test paragrafh."
+        plain = r"This is __CMD_0000__ a test paragrafh."
         original_tex = r"This is \textbf{a test paragrafh.}"
 
         mock_llm.chat = AsyncMock(return_value={
             "paragraph_index": 0,
             "original": plain,
-            "corrected": r"This is __CMD_0001__ a test paragraph.",
+            "corrected": r"This is __CMD_0000__ a test paragraph.",
             "changes": [
                 {
                     "type": "typo",
@@ -209,7 +209,7 @@ class TestCheckOneParagraph:
         )
 
         assert result["paragraph_index"] == 5
-        assert result["corrected"] == r"This is __CMD_0001__ a test paragraph."
+        assert result["corrected"] == r"This is __CMD_0000__ a test paragraph."
         assert len(result["changes"]) == 1
         assert result["changes"][0]["original"] == "paragrafh"
         assert result["changes"][0]["corrected"] == "paragraph"
@@ -218,7 +218,7 @@ class TestCheckOneParagraph:
     @pytest.mark.asyncio
     async def test_no_errors_found(self, mock_llm, service):
         """LLM 认为没有错误，返回原始文本。"""
-        plain = r"Correct text with __MATH_0001__ formula."
+        plain = r"Correct text with __MATH_0000__ formula."
         original_tex = r"Correct text with $x^2$ formula."
 
         mock_llm.chat = AsyncMock(return_value={
@@ -239,14 +239,14 @@ class TestCheckOneParagraph:
     @pytest.mark.asyncio
     async def test_marker_mismatch_falls_back(self, mock_llm, service):
         """LLM 修改了 marker → 回退到原始文本。"""
-        plain = r"Text with __CMD_0001__ marker."
+        plain = r"Text with __CMD_0000__ marker."
         original_tex = r"Text with \textbf{marker.}"
 
         # LLM 返回的 corrected 缺少 marker
         mock_llm.chat = AsyncMock(return_value={
             "paragraph_index": 0,
             "original": plain,
-            "corrected": "Text with marker.",  # 缺少 __CMD_0001__
+            "corrected": "Text with marker.",  # 缺少 __CMD_0000__
             "changes": [],
         })
 
@@ -282,14 +282,14 @@ class TestCheckOneParagraph:
     @pytest.mark.asyncio
     async def test_duplicated_marker_falls_back(self, mock_llm, service):
         """LLM 重复同一个 marker（计数不一致）→ 回退。"""
-        plain = r"Text __CMD_0001__ and __CMD_0002__ end."
+        plain = r"Text __CMD_0000__ and __CMD_0001__ end."
         original_tex = r"Text \textbf{and} \textit{end.}"
 
-        # marker __CMD_0001__ 在输出中出现两次
+        # marker __CMD_0000__ 在输出中出现两次
         mock_llm.chat = AsyncMock(return_value={
             "paragraph_index": 0,
             "original": plain,
-            "corrected": r"Text __CMD_0001__ and __CMD_0001__ end.",
+            "corrected": r"Text __CMD_0000__ and __CMD_0000__ end.",
             "changes": [],
         })
 
@@ -303,14 +303,14 @@ class TestCheckOneParagraph:
     @pytest.mark.asyncio
     async def test_reordered_markers_falls_back(self, mock_llm, service):
         """LLM 交换两个 marker 的顺序（重排）→ 回退。"""
-        plain = r"__CMD_0001__ before __CMD_0002__ after."
+        plain = r"__CMD_0000__ before __CMD_0001__ after."
         original_tex = r"\textbf{before} \textit{after.}"
 
         # 输出中两个 marker 顺序互换
         mock_llm.chat = AsyncMock(return_value={
             "paragraph_index": 0,
             "original": plain,
-            "corrected": r"__CMD_0002__ before __CMD_0001__ after.",
+            "corrected": r"__CMD_0001__ before __CMD_0000__ after.",
             "changes": [],
         })
 
@@ -324,14 +324,14 @@ class TestCheckOneParagraph:
     @pytest.mark.asyncio
     async def test_pure_text_move_preserves_markers_passes(self, mock_llm, service):
         """纯文本被移动但 marker 序列不变（合法编辑）→ 正常通过。"""
-        plain = r"__CMD_0001__ word1 __CMD_0002__ word2."
+        plain = r"__CMD_0000__ word1 __CMD_0001__ word2."
         original_tex = r"\textbf{word1} \textit{word2.}"
 
         # 纯文本 word1/word2 互换，marker 序列保持原顺序
         mock_llm.chat = AsyncMock(return_value={
             "paragraph_index": 0,
             "original": plain,
-            "corrected": r"__CMD_0001__ word2 __CMD_0002__ word1.",
+            "corrected": r"__CMD_0000__ word2 __CMD_0001__ word1.",
             "changes": [],
         })
 
@@ -340,7 +340,7 @@ class TestCheckOneParagraph:
         )
 
         assert result.get("marker_error") is not True
-        assert result["corrected"] == r"__CMD_0001__ word2 __CMD_0002__ word1."
+        assert result["corrected"] == r"__CMD_0000__ word2 __CMD_0001__ word1."
 
     @pytest.mark.asyncio
     async def test_pydantic_validation_retry_exhausted(self, mock_llm, service):
@@ -383,10 +383,10 @@ class TestCheckOneParagraph:
     @pytest.mark.asyncio
     async def test_marker_stability_after_llm_roundtrip(self, mock_llm, service):
         """验证 LLM 不改动任何 marker 时，marker 完整保留。"""
-        plain = r"__CMD_0001__ hello __MATH_0002__ world __CMD_0003__"
+        plain = r"__CMD_0000__ hello __MATH_0001__ world __CMD_0002__"
         original_tex = r"\textbf{hello} $x^2$ world \textit{}"
 
-        corrected = r"__CMD_0001__ Hello __MATH_0002__ world __CMD_0003__"
+        corrected = r"__CMD_0000__ Hello __MATH_0001__ world __CMD_0002__"
 
         mock_llm.chat = AsyncMock(return_value={
             "paragraph_index": 0,
@@ -490,7 +490,7 @@ class TestApplyChanges:
         fake_operation_id = "nonexistent-op-id"
         result = service.apply_changes(
             "main.tex",
-            [{"paragraph_index": 0, "new_text": r"__CMD_0001__ literal marker"}],
+            [{"paragraph_index": 0, "new_text": r"__CMD_0000__ literal marker"}],
             workspace_id=ws_id,
             operation_id=fake_operation_id,
         )
@@ -504,7 +504,7 @@ class TestApplyChanges:
 
         # 文件内容未被修改：字面 marker 不应出现在文件中
         content = (temp_project / "main.tex").read_text(encoding="utf-8")
-        assert "__CMD_0001__" not in content
+        assert "__CMD_0000__" not in content
 
 
 class TestEmptyParagraphHandling:
@@ -527,25 +527,25 @@ class TestMarkerPattern:
     """marker 正则表达式测试。"""
 
     def test_match_cmd_marker(self):
-        markers = MARKER_PATTERN.findall("text __CMD_0001__ more")
-        assert markers == ["__CMD_0001__"]
+        markers = MARKER_PATTERN.findall("text __CMD_0000__ more")
+        assert markers == ["__CMD_0000__"]
 
     def test_match_math_marker(self):
-        markers = MARKER_PATTERN.findall("text __MATH_0002__ more")
-        assert markers == ["__MATH_0002__"]
+        markers = MARKER_PATTERN.findall("text __MATH_0001__ more")
+        assert markers == ["__MATH_0001__"]
 
     def test_match_env_marker(self):
         markers = MARKER_PATTERN.findall("text __ENV_0015__ more")
         assert markers == ["__ENV_0015__"]
 
     def test_match_verb_marker(self):
-        markers = MARKER_PATTERN.findall("text __VERB_0003__ more")
-        assert markers == ["__VERB_0003__"]
+        markers = MARKER_PATTERN.findall("text __VERB_0002__ more")
+        assert markers == ["__VERB_0002__"]
 
     def test_match_multiple(self):
-        text = "__CMD_0001__ hello __MATH_0002__ world __CMD_0003__"
+        text = "__CMD_0000__ hello __MATH_0001__ world __CMD_0002__"
         markers = MARKER_PATTERN.findall(text)
-        assert markers == ["__CMD_0001__", "__MATH_0002__", "__CMD_0003__"]
+        assert markers == ["__CMD_0000__", "__MATH_0001__", "__CMD_0002__"]
 
     def test_ignore_partial_marker(self):
         markers = MARKER_PATTERN.findall("__CMD_001__ and __CMD_00001__")

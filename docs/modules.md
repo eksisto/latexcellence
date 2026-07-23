@@ -84,7 +84,7 @@
 
 ### Marker 保护策略
 
-与 LLM 交互时，LaTeX 结构必须替换为 marker（`__CMD_0001__` / `__MATH_0001__` 等）。
+与 LLM 交互时，LaTeX 结构必须替换为 marker（`__CMD_0000__` / `__MATH_0000__` 等）。
 - **使用 Marker 保护的模块**：typo_check, expression_opt, terminology_check, writing_chat (编辑操作)
 - **不使用 Marker 保护的模块**：formatting (直接操作 LaTeX 源码), formula_ocr, table_ocr, compile, markdown_converter, style_modify, git_diff, template_gen
 

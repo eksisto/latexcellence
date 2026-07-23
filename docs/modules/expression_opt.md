@@ -44,7 +44,7 @@ class ExpressionOptResult(BaseModel):
 
 ```
 CRITICAL RULES — VIOLATING THESE MAKES THE OUTPUT UNUSABLE:
-1. Markers like __CMD_0001__ represent LaTeX commands. They are NOT text.
+1. Markers like __CMD_0000__ represent LaTeX commands. They are NOT text.
 2. ABSOLUTELY DO NOT modify, delete, split, merge, or reorder any marker.
 3. Every marker must appear in corrected text EXACTLY as in original.
 4. Only optimize plain text for clarity, conciseness, and academic tone.

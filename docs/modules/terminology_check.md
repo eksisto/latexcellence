@@ -69,7 +69,7 @@ class TermParagraphResult(BaseModel):
 ```
 You are a terminology extractor for academic LaTeX documents.
 CRITICAL RULES:
-1. Markers like __CMD_0001__ represent LaTeX commands. Do NOT extract them.
+1. Markers like __CMD_0000__ represent LaTeX commands. Do NOT extract them.
 2. Only extract terms meaningful for consistency checking.
 3. Preserve exact wording as it appears in the text.
 ```

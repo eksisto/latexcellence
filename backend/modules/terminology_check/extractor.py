@@ -41,7 +41,7 @@ _TERM_EXTRACT_PROMPT = (
     '- "proper_noun": A named entity such as a person name, institution, '
     "algorithm name, dataset name, or trademark.\n\n"
     "CRITICAL RULES:\n"
-    "1. The text contains markers like __CMD_0001__ or __MATH_0001__ "
+    "1. The text contains markers like __CMD_0000__ or __MATH_0000__ "
     "which represent LaTeX commands. These are NOT text and must NOT be "
     "extracted as terms.\n"
     "2. Only extract terms that are meaningful for cross-paragraph "
