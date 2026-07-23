@@ -525,7 +525,7 @@ export default function TerminologyCheckPage() {
         open={confirmApplyAllOpen}
         onOpenChange={setConfirmApplyAllOpen}
         title={t("common:applyAllConfirmTitle")}
-        description={t("pages:terminologyCheck.applyAllDescription")}
+        description={t("common:applyAllDescription")}
         confirmText={t("common:applyAll")}
         onConfirm={async () => {
           setConfirmApplyAllOpen(false);

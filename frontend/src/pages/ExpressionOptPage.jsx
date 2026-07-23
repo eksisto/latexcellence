@@ -742,8 +742,8 @@ export default function ExpressionOptPage() {
       <ConfirmDialog
         open={confirmApplyAllOpen}
         onOpenChange={setConfirmApplyAllOpen}
-        title={t("pages:expressionOpt.applyAllConfirmTitle")}
-        description={t("pages:expressionOpt.applyAllConfirmDesc")}
+        title={t("common:applyAllConfirmTitle")}
+        description={t("common:applyAllConfirmDesc")}
         confirmText={t("common:applyAll")}
         onConfirm={async () => {
           setConfirmApplyAllOpen(false);
