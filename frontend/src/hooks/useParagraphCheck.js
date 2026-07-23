@@ -296,7 +296,7 @@ export default function useParagraphCheck({
         if (data.type === "result") {
           const r = data.data;
           if (r) {
-            if (r.changes && r.changes.length > 0) {
+            if ((r.changes && r.changes.length > 0) || (r.suggestions && r.suggestions.length > 0)) {
               resultsWithChangesRef.current += 1;
             }
             bufferRef.current.push(r);

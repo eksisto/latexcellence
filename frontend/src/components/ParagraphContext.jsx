@@ -10,7 +10,7 @@ export default function ParagraphContext({ currentIndex, paragraphs, currentText
   return (
     <details className="text-xs text-muted-foreground group">
       <summary className="cursor-pointer hover:text-foreground transition-colors select-none">
-        {t("common.viewContext", { ns: "common" })}
+        {t("common:viewContext", { ns: "common" })}
       </summary>
       <div className="mt-2 space-y-2 bg-muted/50 p-3 rounded-md border border-border/50">
         {prevPara && (
@@ -22,7 +22,7 @@ export default function ParagraphContext({ currentIndex, paragraphs, currentText
           </div>
         )}
         <div className="bg-background p-2.5 rounded border border-border text-foreground shadow-sm">
-          <div className="text-[10px] font-mono text-primary mb-1 select-none">P{currentIndex} {t("common.currentParagraph", { ns: "common" })}</div>
+          <div className="text-[10px] font-mono text-primary mb-1 select-none">P{currentIndex} {t("common:currentParagraph", { ns: "common" })}</div>
           <div className="whitespace-pre-wrap font-sans leading-relaxed">
             <MarkerText text={currentText} />
           </div>
