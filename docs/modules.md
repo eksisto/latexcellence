@@ -11,7 +11,7 @@
 | 错字查找 | [typo_check.md](modules/typo_check.md) | LaTeX 源码错字检查与修正 |
 | 表达优化 | [expression_opt.md](modules/expression_opt.md) | 学术英语表达优化（清晰度、简洁性、学术语气） |
 | 术语一致性检查 | [terminology_check.md](modules/terminology_check.md) | 术语一致性检查与统一建议 |
-| 源码格式化 | [formatting.md](modules/formatting.md) | LaTeX 源码结构格式优化（间距、对齐、缩进） |
+| LaTeX 代码审查 | [code_review.md](modules/code_review.md) | 工具格式化 + LLM 智能审查（坏味道、最佳实践） |
 | LaTeX 样式修改 | [style_modify.md](modules/style_modify.md) | 基于自然语言描述修改 LaTeX 样式 |
 | 写作助手聊天 | [writing_chat.md](modules/writing_chat.md) | 多轮对话式写作辅助与段落编辑 |
 
@@ -61,7 +61,7 @@
 
 类变量控制差异：
 - `_output_field`：结果字段名（`"corrected"` 或 `"optimized"`）
-- `use_marker_protection`：是否启用 marker 保护（formatting 为 `False`）
+- `use_marker_protection`：是否启用 marker 保护（code_review / typo_check / expression_opt / terminology_check 为 `True`）
 
 ### CheckOperationContext 操作上下文
 
@@ -86,13 +86,14 @@
 
 与 LLM 交互时，LaTeX 结构必须替换为 marker（`__CMD_0000__` / `__MATH_0000__` 等）。
 - **使用 Marker 保护的模块**：typo_check, expression_opt, terminology_check, writing_chat (编辑操作)
-- **不使用 Marker 保护的模块**：formatting (直接操作 LaTeX 源码), formula_ocr, table_ocr, compile, markdown_converter, style_modify, git_diff, template_gen
+- **使用 Marker 保护的模块**：typo_check, expression_opt, terminology_check, code_review
+- **不使用 Marker 保护的模块**：formula_ocr, table_ocr, compile, markdown_converter, style_modify, git_diff, template_gen
 
 ### LLM 调用模式
 
 | 模式 | 模块 |
 | --- | --- |
-| 逐段检查 + SSE 流式 | typo_check, expression_opt, terminology_check, formatting |
+| 逐段检查 + SSE 流式 | typo_check, expression_opt, terminology_check, code_review |
 | 多轮对话 | writing_chat |
 | 单次请求-响应 | formula_ocr, table_ocr, template_gen, style_modify, compile (错误翻译), git_diff (错误翻译), markdown_converter (宏包分析) |
 | 无 LLM | compile (编译本身) |

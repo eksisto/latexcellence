@@ -1,7 +1,7 @@
 """
 逐段检查服务基类。
 
-封装四个逐段检查模块（typo_check / expression_opt / formatting /
+封装四个逐段检查模块（typo_check / expression_opt / code_review /
 terminology_check）的共享逻辑：
 
     1. 文件解析与段落提取（含 \\input 展开）
@@ -312,7 +312,7 @@ class BaseParagraphCheckService:
         """
         默认实现：marker 保护 + LLM 调用 + Pydantic 校验 + 异常回退。
 
-        子类可覆写此方法以自定义单段检查逻辑（如 formatting 无 marker 保护）。
+        子类可覆写此方法以自定义单段检查逻辑（如 code_review 的双数据线架构）。
         """
         # 若段落仅含 marker（纯注释/命令块），跳过 LLM 请求
         if self.use_marker_protection:

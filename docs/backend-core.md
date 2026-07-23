@@ -15,14 +15,14 @@ TerminologyCheckConfig → enabled, batch_size
 FormulaOCRConfig → enabled, max_image_size_mb
 TableOCRConfig → enabled, max_image_size_mb
 TemplateGenConfig → enabled, output_dir
-FormattingConfig → enabled, batch_size
+CodeReviewConfig → enabled, batch_size
 CompileConfig → enabled, latexmk_timeout
 GitDiffConfig → enabled
 MarkdownConverterConfig → enabled
 StyleModifyConfig → enabled
 WritingChatConfig → enabled, compression_threshold_tokens, sessions_dir, custom_prompts_dir, summary_temperature, summary_max_tokens
 BibManagerConfig → enabled, format_configs_dir
-FeaturesConfig → typo_check, expression_opt, terminology_check, formula_ocr, table_ocr, template_gen, formatting, compile, git_diff, markdown_converter, style_modify, writing_chat, bib_manager
+FeaturesConfig → typo_check, expression_opt, terminology_check, formula_ocr, table_ocr, template_gen, code_review, compile, git_diff, markdown_converter, style_modify, writing_chat, bib_manager
 LoggingConfig → level, dir
 AppConfig    → server, llm, features, logging  # 顶层聚合
 ```
@@ -140,7 +140,7 @@ class ProjectInfo:
 
 ### `backend/core/base_paragraph_check.py` — 逐段检查服务基类
 
-四个逐段检查模块（typo_check、expression_opt、formatting、terminology_check）共享的基类，封装了通用的段落检查流程。
+四个逐段检查模块（typo_check、expression_opt、code_review、terminology_check）共享的基类，封装了通用的段落检查流程。
 
 **核心接口**：
 
@@ -163,7 +163,7 @@ class ProjectInfo:
 - **CheckOperationContext 操作上下文**：每次 preview/check 生成唯一 `operation_id`，深拷贝 `marker_maps` 存入 `_operation_contexts` 字典；apply 时通过 `operation_id` 取回上下文还原 marker。若 context 丢失（过期/重启/新操作覆盖），逐段检测 `marker_map` 缺失时跳过写入并返回 `errors`，防止字面 marker 污染文件
 - **类变量控制差异**：
   - `_output_field`: 结果字段名（`"corrected"` 或 `"optimized"`）
-  - `use_marker_protection`: 是否启用 marker 保护（formatting 为 `False`）
+  - `use_marker_protection`: 是否启用 marker 保护（code_review / typo_check / expression_opt / terminology_check 为 `True`）
 - **上下文 TTL 清理**：默认 1 小时后自动过期
 
 ---

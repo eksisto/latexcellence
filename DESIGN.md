@@ -20,7 +20,7 @@
 │  modules/                    core/                       │
 │  ├─ typo_check/              ├─ config.py                │
 │  ├─ expression_opt/          ├─ llm_client.py            │
-│  ├─ formatting/              ├─ workspace_manager.py     │
+│  ├─ code_review/              ├─ workspace_manager.py     │
 │  ├─ terminology_check/       ├─ project_manager.py       │
 │  ├─ compile/                 ├─ tool_registry.py         │
 │  ├─ writing_chat/            └─ base_paragraph_check.py  │
@@ -66,7 +66,7 @@
 
 ### 1.3 核心架构组件：BaseParagraphCheckService
 
-四个段落处理模块（typo_check、expression_opt、formatting、terminology_check）共享相同的业务流程：文件解析 → marker 替换 → LLM 编排 → 结果写回。为避免重复代码，抽取 `BaseParagraphCheckService` 基类：
+四个段落处理模块（typo_check、expression_opt、code_review、terminology_check）共享相同的业务流程：文件解析 → marker 替换 → LLM 编排 → 结果写回。为避免重复代码，抽取 `BaseParagraphCheckService` 基类：
 
 ```
 BaseParagraphCheckService
@@ -335,10 +335,10 @@ typo_check / expression_opt:
   LLM 输出 = 修正后纯文本（含 marker）
   apply = restore_from_markers() → 写入
 
-formatting:
-  LLM 输入 = 原始 LaTeX 源码
-  LLM 输出 = 排版后 LaTeX 源码
-  apply = 直接写入 corrected 字段
+code_review:
+  LLM 输入 = 工具格式化后的含 marker 纯文本
+  LLM 输出 = 审查建议列表（含 original / suggested 片段）
+  apply = 直接写入工具格式化结果（原始 LaTeX），建议仅展示
 ```
 
 ### 5.3 术语一致性检查的数据流
@@ -521,7 +521,7 @@ Step 4: 写入 .bib 文件
 
 ### 5.7 多文件 \input 展开数据流
 
-四个段落处理模块（typo_check、expression_opt、formatting、terminology_check）共享相同的多文件展开机制：
+四个段落处理模块（typo_check、expression_opt、code_review、terminology_check）共享相同的多文件展开机制：
 
 ```
 用户点击「包含子文件」开关
@@ -686,7 +686,7 @@ GET /api/git-diff/pdf/{job_id} → FileResponse 内联预览
 
 ### 6.2 useParagraphCheck hook
 
-四个页面（TypoCheck、ExpressionOpt、Formatting、TerminologyCheck）共享相同的段落检查流程。通过 `useParagraphCheck` hook 抽象：
+四个页面（TypoCheck、ExpressionOpt、CodeReview、TerminologyCheck）共享相同的段落检查流程。通过 `useParagraphCheck` hook 抽象：
 
 ```javascript
 useParagraphCheck({

@@ -111,14 +111,14 @@ const featureGroups = [
     ],
   },
   {
-    category: "groups.formatting",
+    category: "groups.code_review",
     features: [
       {
-        titleKey: "formatting.title",
-        descKey: "formatting.desc",
-        to: "/formatting",
+        titleKey: "code_review.title",
+        descKey: "code_review.desc",
+        to: "/code-review",
         icon: AlignLeft,
-        id: "formatting",
+        id: "code_review",
       },
       {
         titleKey: "styleModify.title",

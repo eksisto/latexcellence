@@ -1,5 +1,5 @@
 import { lazy, Suspense } from "react";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Toaster } from "@/components/ui/sonner";
 import { Loader2 } from "lucide-react";
@@ -16,7 +16,7 @@ const StyleModifyPage = lazy(() => import("./pages/StyleModifyPage"));
 const TemplateGenPage = lazy(() => import("./pages/TemplateGenPage"));
 const TypoCheckPage = lazy(() => import("./pages/TypoCheckPage"));
 const ExpressionOptPage = lazy(() => import("./pages/ExpressionOptPage"));
-const FormattingPage = lazy(() => import("./pages/FormattingPage"));
+const CodeReviewPage = lazy(() => import("./pages/CodeReviewPage"));
 const MarkdownConvertPage = lazy(() => import("./pages/MarkdownConvertPage"));
 const GitDiffPage = lazy(() => import("./pages/GitDiffPage"));
 const TerminologyCheckPage = lazy(() => import("./pages/TerminologyCheckPage"));
@@ -67,7 +67,7 @@ export default function App() {
             <Route path="/template-gen" element={<TemplateGenPage />} />
             <Route path="/typo-check" element={<TypoCheckPage />} />
             <Route path="/expression-opt" element={<ExpressionOptPage />} />
-            <Route path="/formatting" element={<FormattingPage />} />
+            <Route path="/code-review" element={<CodeReviewPage />} />
             <Route path="/markdown-convert" element={<MarkdownConvertPage />} />
             <Route path="/git-diff" element={<GitDiffPage />} />
             <Route path="/terminology-check" element={<TerminologyCheckPage />} />

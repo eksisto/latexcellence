@@ -243,27 +243,27 @@ export const api = {
       }),
   },
 
-  /* ---- 源码格式化 ---- */
-  formatting: {
+  /* ---- LaTeX 代码审查 ---- */
+  codeReview: {
     preview: (filePath, workspaceId, resolveInput = false) =>
       request(
         appendWs(
-          `/formatting/preview?file_path=${encodeURIComponent(filePath)}&resolve_input=${resolveInput}`,
+          `/code-review/preview?file_path=${encodeURIComponent(filePath)}&resolve_input=${resolveInput}`,
           workspaceId
         )
       ),
     check: (data, workspaceId) =>
-      request(appendWs("/formatting/check", workspaceId), {
+      request(appendWs("/code-review/check", workspaceId), {
         method: "POST",
         body: JSON.stringify(data),
       }),
     apply: (data, workspaceId) =>
-      request(appendWs("/formatting/apply", workspaceId), {
+      request(appendWs("/code-review/apply", workspaceId), {
         method: "POST",
         body: JSON.stringify(data),
       }),
     stream: (workspaceId, filePath, resolveInput = false) =>
-      `${BASE_URL}/formatting/stream/${encodeURIComponent(workspaceId)}?file_path=${encodeURIComponent(filePath)}&resolve_input=${resolveInput}`,
+      `${BASE_URL}/code-review/stream/${encodeURIComponent(workspaceId)}?file_path=${encodeURIComponent(filePath)}&resolve_input=${resolveInput}`,
   },
 
   /* ---- 自动编译 ---- */

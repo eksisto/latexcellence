@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
@@ -18,19 +18,12 @@ import {
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
-import {
-  Tabs,
-  TabsList,
-  TabsTrigger,
-  TabsContent,
-} from "@/components/ui/tabs";
-import {
-  ArrowLeft,
-  AlignLeft,
-  Eye,
-  Loader2,
-  ListChecks,
-} from "lucide-react";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { Badge } from "@/components/ui/badge";
+import { ArrowLeft, Eye, Loader2, ListChecks, Search } from "lucide-react";
+import React from "react";
+import { diffLines } from "diff";
+import { cn } from "@/lib/utils";
 import { api } from "@/api/index";
 import useParagraphCheck, { groupByFile } from "@/hooks/useParagraphCheck";
 import ParagraphContext from "@/components/ParagraphContext";
@@ -38,52 +31,95 @@ import ProgressBar from "@/components/ProgressBar";
 import ConfirmDialog from "@/components/ConfirmDialog";
 import ResultFilterBar from "@/components/ResultFilterBar";
 import useResultFilter from "@/hooks/useResultFilter";
+import MarkerText from "@/components/MarkerText";
 
-import React from "react";
+const severityBadgeClass = {
+  info: "bg-blue-500/10 text-blue-600 dark:text-blue-400",
+  warning: "bg-yellow-500/10 text-yellow-600 dark:text-yellow-400",
+  error: "bg-red-500/10 text-red-600 dark:text-red-400",
+};
 
-const FormattingResultCard = React.memo(function FormattingResultCard({
+const CodeReviewResultCard = React.memo(function CodeReviewResultCard({
   result,
   onApply,
   onIgnore,
   paragraphs,
   typeLabels,
+  severityLabels,
 }) {
   const { t } = useTranslation(["pages", "common"]);
-  const hasChanges = result.changes && result.changes.length > 0;
+  const hasSuggestions = result.suggestions && result.suggestions.length > 0;
+  const hasFormattingDiff =
+    result.new_text && result.new_text !== (result.text || result.original);
+  const [showFormatted, setShowFormatted] = useState(
+    hasFormattingDiff && !hasSuggestions,
+  );
+  const toggleFormatted = useCallback(() => setShowFormatted((v) => !v), []);
+  const diffParts = useMemo(() => {
+    const orig = result.text || result.original;
+    const mod = result.new_text;
+    if (!mod) return null;
+    return diffLines(orig, mod);
+  }, [result.text, result.original, result.new_text]);
+  const [editedText, setEditedText] = useState(result.new_text || "");
+  useEffect(() => {
+    setEditedText(result.new_text || "");
+  }, [result.new_text]);
+  const handleApplySuggestion = useCallback((original, suggested) => {
+    setEditedText((prev) => {
+      const idx = prev.indexOf(original);
+      if (idx === -1) return prev;
+      return prev.slice(0, idx) + suggested + prev.slice(idx + original.length);
+    });
+  }, []);
+  const handleResetEdit = useCallback(() => {
+    setEditedText(result.new_text || "");
+  }, [result.new_text]);
   return (
     <Card
-      key={`${result.file_path}-fmt-result-P${result.paragraph_index}`}
-      id={`fmt-result-P${result.paragraph_index}`}
+      key={`${result.file_path}-cr-result-P${result.paragraph_index}`}
+      id={`cr-result-P${result.paragraph_index}`}
     >
       <CardHeader className="pb-2">
         <div className="flex items-center justify-between">
           <CardTitle className="text-sm">
-            {t("pages:formatting.paragraph", { index: result.paragraph_index })}
+            {t("pages:code_review.paragraph", {
+              index: result.paragraph_index,
+            })}
           </CardTitle>
-          {hasChanges && (
+          {hasSuggestions && (
             <span className="rounded bg-primary/10 text-primary px-1.5 py-0.5 text-xs font-medium">
-              {t("pages:formatting.suggestionsCount", { count: result.changes.length })}
+              {t("pages:code_review.suggestionsCount", {
+                count: result.suggestions.length,
+              })}
             </span>
           )}
         </div>
       </CardHeader>
       <CardContent>
         <div className="space-y-3">
-          {hasChanges ? (
+          {hasSuggestions ? (
             <>
               <ul className="space-y-2">
-                {result.changes.map((change, i) => (
+                {result.suggestions.map((suggestion, i) => (
                   <li
                     key={i}
                     className="rounded border border-border p-2 text-sm"
                   >
-                    <div className="flex items-center gap-2 mb-1">
+                    <div className="flex items-center gap-2 mb-1 flex-wrap">
                       <span className="rounded bg-purple-500/10 text-purple-600 dark:text-purple-400 px-1 py-0.5 text-xs font-medium">
-                        {typeLabels?.[change.type] || change.type}
+                        {typeLabels?.[suggestion.type] || suggestion.type}
                       </span>
-                      {change.description && (
+                      <Badge
+                        variant="outline"
+                        className={`text-xs py-0 ${severityBadgeClass[suggestion.severity] || ""}`}
+                      >
+                        {severityLabels?.[suggestion.severity] ||
+                          suggestion.severity}
+                      </Badge>
+                      {suggestion.description && (
                         <span className="text-muted-foreground text-xs">
-                          {change.description}
+                          {suggestion.description}
                         </span>
                       )}
                     </div>
@@ -92,42 +128,159 @@ const FormattingResultCard = React.memo(function FormattingResultCard({
                         {t("common:original")}
                       </span>
                       <pre className="line-through text-foreground/60 break-all mt-0.5 font-mono text-xs whitespace-pre-wrap bg-muted/20 rounded p-1.5">
-                        {change.original}
+                        <MarkerText text={result.text || result.original} />
                       </pre>
                       <span className="text-muted-foreground whitespace-nowrap mt-0.5">
-                        {t("pages:formatting.formatted")}
+                        {t("pages:code_review.suggested")}
                       </span>
                       <pre className="font-medium break-all mt-0.5 font-mono text-xs whitespace-pre-wrap bg-muted/20 rounded p-1.5">
-                        {change.corrected}
+                        <MarkerText text={suggestion.suggested} />
                       </pre>
+                    </div>
+                    <div className="mt-2 flex justify-end">
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="h-7 text-xs"
+                        onClick={() =>
+                          handleApplySuggestion(
+                            suggestion.original,
+                            suggestion.suggested,
+                          )
+                        }
+                      >
+                        {t("pages:code_review.applySuggestion")}
+                      </Button>
                     </div>
                   </li>
                 ))}
               </ul>
-              <div className="flex items-center gap-2">
-                <Button
-                  size="sm"
-                  onClick={() =>
-                    onApply(result.paragraph_index, result.corrected, result.file_path)
-                  }
-                >
-                  {t("pages:formatting.applyFormatting")}
-                </Button>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() =>
-                    onIgnore(result.paragraph_index, result.file_path)
-                  }
-                >
-                  {t("common:ignore")}
-                </Button>
-              </div>
             </>
           ) : (
             <p className="text-sm text-muted-foreground">
-              {t("pages:formatting.noIssues")}
+              {hasFormattingDiff
+                ? t("pages:code_review.formattingAvailable")
+                : t("pages:code_review.noIssues")}
             </p>
+          )}
+          {result.new_text && (
+            <div className="rounded border border-border">
+              <button
+                type="button"
+                onClick={toggleFormatted}
+                className="flex w-full items-center gap-2 px-3 py-2 text-sm font-medium hover:bg-muted/50 cursor-pointer"
+              >
+                <svg
+                  className={`size-4 shrink-0 transition-transform duration-300 ${showFormatted ? "rotate-90" : ""}`}
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                >
+                  <path d="M9 18l6-6-6-6" />
+                </svg>
+                {showFormatted
+                  ? t("pages:code_review.hideFormattedDiff")
+                  : t("pages:code_review.showFormattedDiff")}
+              </button>
+              <div
+                className={cn(
+                  "grid transition-all duration-300 ease-in-out",
+                  showFormatted && diffParts
+                    ? "grid-rows-[1fr]"
+                    : "grid-rows-[0fr]",
+                )}
+              >
+                <div className="overflow-hidden">
+                  <div className="border-t border-border">
+                    {diffParts?.map((part, i) => {
+                      const lines = part.value.split("\n");
+                      return lines.map((line, j) => {
+                        if (j === lines.length - 1 && line === "") return null;
+                        return (
+                          <div
+                            key={`${i}-${j}`}
+                            className={cn(
+                              "flex px-3 py-px font-mono text-xs leading-relaxed",
+                              part.added && "bg-green-500/10",
+                              part.removed && "bg-red-500/10",
+                            )}
+                          >
+                            <span
+                              className={cn(
+                                "w-5 shrink-0 select-none",
+                                part.added &&
+                                  "text-green-600 dark:text-green-400",
+                                part.removed &&
+                                  "text-red-600 dark:text-red-400",
+                                !part.added &&
+                                  !part.removed &&
+                                  "text-muted-foreground/40",
+                              )}
+                            >
+                              {part.added ? "+" : part.removed ? "−" : " "}
+                            </span>
+                            <span
+                              className={cn(
+                                "whitespace-pre-wrap break-all",
+                                part.added &&
+                                  "text-green-800 dark:text-green-200",
+                                part.removed &&
+                                  "text-red-800 dark:text-red-200",
+                              )}
+                            >
+                              <MarkerText text={line} />
+                            </span>
+                          </div>
+                        );
+                      });
+                    })}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+          {result.new_text && (
+            <div className="space-y-2">
+              <label className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
+                {t("pages:code_review.editFormatted")}
+                <button
+                  type="button"
+                  onClick={handleResetEdit}
+                  className="text-xs text-muted-foreground/60 hover:text-foreground underline cursor-pointer"
+                >
+                  {t("pages:code_review.resetEdit")}
+                </button>
+              </label>
+              <textarea
+                value={editedText}
+                onChange={(e) => setEditedText(e.target.value)}
+                className="w-full min-h-[120px] rounded border border-border bg-muted/20 p-2 font-mono text-xs leading-relaxed whitespace-pre-wrap resize-y focus:outline-none focus:ring-1 focus:ring-ring"
+                placeholder={t("pages:code_review.editPlaceholder")}
+                spellCheck={false}
+              />
+            </div>
+          )}
+          {result.new_text && editedText !== result.new_text && (
+            <div className="flex items-center gap-2">
+              <Button
+                size="sm"
+                onClick={() =>
+                  onApply(result.paragraph_index, editedText, result.file_path)
+                }
+              >
+                {t("pages:code_review.applyFormatting")}
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() =>
+                  onIgnore(result.paragraph_index, result.file_path)
+                }
+              >
+                {t("common:ignore")}
+              </Button>
+            </div>
           )}
           <ParagraphContext
             currentIndex={result.paragraph_index}
@@ -140,15 +293,15 @@ const FormattingResultCard = React.memo(function FormattingResultCard({
   );
 });
 
-export default function FormattingPage() {
-  const { t } = useTranslation(["pages", "common"]);
+export default function CodeReviewPage() {
+  const { t } = useTranslation(["pages"]);
   const [confirmApplyAllOpen, setConfirmApplyAllOpen] = useState(false);
   const {
     projectPath,
     activeFile,
     texFiles,
-    paragraphs: formattingParagraphs,
-    results: formattingResults,
+    paragraphs: codeReviewParagraphs,
+    results: codeReviewResults,
     isLoading,
     progress,
     restoring,
@@ -168,22 +321,23 @@ export default function FormattingPage() {
     handleIgnoreChange,
     handleFileChange,
   } = useParagraphCheck({
-    apiModule: api.formatting,
+    apiModule: api.codeReview,
     checkMethodName: "check",
-    correctedTextField: "corrected",
+    correctedTextField: "new_text",
     storeSlice: {
-      paragraphsKey: "formattingParagraphs",
-      setParagraphsKey: "setFormattingParagraphs",
-      resultsKey: "formattingResults",
-      setResultsKey: "setFormattingResults",
-      loadingKey: "formatting",
+      paragraphsKey: "codeReviewParagraphs",
+      setParagraphsKey: "setCodeReviewParagraphs",
+      resultsKey: "codeReviewResults",
+      setResultsKey: "setCodeReviewResults",
+      loadingKey: "codeReview",
     },
     messages: {
-      checkLoading: t("pages:formatting.checkLoading"),
-      checkSuccess: (count) => t("pages:formatting.checkSuccess", { count }),
-      applySuccess: (idx) => t("pages:formatting.applySuccess", { idx }),
-      applyAllSuccess: (count) => t("pages:formatting.applyAllSuccess", { count }),
-      applyAllEmpty: t("pages:formatting.applyAllEmpty"),
+      checkLoading: t("pages:code_review.checkLoading"),
+      checkSuccess: (count) => t("pages:code_review.checkSuccess", { count }),
+      applySuccess: (idx) => t("pages:code_review.applySuccess", { idx }),
+      applyAllSuccess: (count) =>
+        t("pages:code_review.applyAllSuccess", { count }),
+      applyAllEmpty: t("pages:code_review.applyAllEmpty"),
     },
   });
 
@@ -197,17 +351,36 @@ export default function FormattingPage() {
     jumpToParagraph,
     reset,
     hasFilters,
-  } = useResultFilter(formattingResults, { idPrefix: "fmt-result" });
+  } = useResultFilter(codeReviewResults, { idPrefix: "cr-result" });
 
-  const paragraphGroups = useMemo(() => groupByFile(formattingParagraphs), [formattingParagraphs]);
-  const resultGroups = useMemo(() => groupByFile(filteredResults), [filteredResults]);
+  const paragraphGroups = useMemo(
+    () => groupByFile(codeReviewParagraphs),
+    [codeReviewParagraphs],
+  );
+  const resultGroups = useMemo(
+    () => groupByFile(filteredResults),
+    [filteredResults],
+  );
 
-  const changeTypeLabels = useMemo(() => ({
-    spacing: t("pages:formatting.changeTypes.spacing"),
-    environment_alignment: t("pages:formatting.changeTypes.environmentAlignment"),
-    code_formatting: t("pages:formatting.changeTypes.codeFormatting"),
-    consistency: t("pages:formatting.changeTypes.consistency"),
-  }), [t]);
+  const suggestionTypeLabels = useMemo(
+    () => ({
+      code_smell: t("pages:code_review.suggestionTypes.codeSmell"),
+      modernization: t("pages:code_review.suggestionTypes.modernization"),
+      best_practice: t("pages:code_review.suggestionTypes.bestPractice"),
+      portability: t("pages:code_review.suggestionTypes.portability"),
+      consistency: t("pages:code_review.suggestionTypes.consistency"),
+    }),
+    [t],
+  );
+
+  const severityLabels = useMemo(
+    () => ({
+      info: t("pages:code_review.severity.info"),
+      warning: t("pages:code_review.severity.warning"),
+      error: t("pages:code_review.severity.error"),
+    }),
+    [t],
+  );
 
   return (
     <div className="min-h-screen p-8">
@@ -221,7 +394,9 @@ export default function FormattingPage() {
           >
             <ArrowLeft />
           </Button>
-          <h1 className="text-3xl font-bold tracking-tight">{t("pages:formatting.title")}</h1>
+          <h1 className="text-3xl font-bold tracking-tight">
+            {t("pages:code_review.title")}
+          </h1>
         </div>
       </div>
 
@@ -241,9 +416,9 @@ export default function FormattingPage() {
           <div className="flex justify-center mt-12">
             <Card className="max-w-md w-full">
               <CardHeader>
-                <CardTitle>{t("pages:formatting.noProjectTitle")}</CardTitle>
+                <CardTitle>{t("pages:code_review.noProjectTitle")}</CardTitle>
                 <CardDescription>
-                  {t("pages:formatting.noProjectDesc")}
+                  {t("pages:code_review.noProjectDesc")}
                 </CardDescription>
               </CardHeader>
               <CardContent>
@@ -306,16 +481,16 @@ export default function FormattingPage() {
                   </Button>
                   <Button
                     onClick={handleCheck}
-                    disabled={
-                      isLoading || formattingParagraphs.length === 0
-                    }
+                    disabled={isLoading || codeReviewParagraphs.length === 0}
                   >
                     {isLoading ? (
                       <Loader2 className="animate-spin" />
                     ) : (
-                      <AlignLeft />
+                      <Search />
                     )}
-                    {isLoading ? t("pages:formatting.llmRequesting") : t("pages:formatting.start")}
+                    {isLoading
+                      ? t("pages:code_review.llmRequesting")
+                      : t("pages:code_review.start")}
                   </Button>
                 </div>
                 {message && (
@@ -337,16 +512,18 @@ export default function FormattingPage() {
               />
             )}
 
-            {/* paragraph preview - raw LaTeX source */}
-            {formattingParagraphs.length > 0 &&
-              formattingResults.length === 0 && (
+            {/* paragraph preview */}
+            {codeReviewParagraphs.length > 0 &&
+              codeReviewResults.length === 0 && (
                 <Card>
                   <CardHeader className="pb-2">
                     <CardTitle className="text-sm">
-                      {t("pages:formatting.paragraphs", { count: formattingParagraphs.length })}
+                      {t("pages:code_review.paragraphs", {
+                        count: codeReviewParagraphs.length,
+                      })}
                     </CardTitle>
                     <CardDescription>
-                      {t("pages:formatting.paragraphsDescription")}
+                      {t("pages:code_review.paragraphsDescription")}
                     </CardDescription>
                   </CardHeader>
                   <CardContent>
@@ -381,7 +558,7 @@ export default function FormattingPage() {
                       </Tabs>
                     ) : (
                       <div className="space-y-3">
-                        {formattingParagraphs.map((p) => (
+                        {codeReviewParagraphs.map((p) => (
                           <div
                             key={p.index}
                             className="rounded-lg border border-border p-3"
@@ -400,11 +577,13 @@ export default function FormattingPage() {
                 </Card>
               )}
 
-            {/* formatting results */}
-            {formattingResults.length > 0 && (
+            {/* code review results */}
+            {codeReviewResults.length > 0 && (
               <div className="space-y-4">
-                {formattingResults.some(
-                  (r) => r.changes && r.changes.length > 0
+                {codeReviewResults.some(
+                  (r) =>
+                    (r.suggestions && r.suggestions.length > 0) ||
+                    (r.new_text && r.new_text !== (r.text || r.original)),
                 ) && (
                   <div className="flex justify-end">
                     <Button
@@ -431,11 +610,11 @@ export default function FormattingPage() {
                   onJump={jumpToParagraph}
                   onReset={reset}
                   hasFilters={hasFilters}
-                  typeLabels={changeTypeLabels}
+                  typeLabels={suggestionTypeLabels}
                 />
                 {filteredResults.length === 0 ? (
                   <p className="text-sm text-muted-foreground text-center py-8">
-                    {t("pages:formatting.noResults")}
+                    {t("pages:code_review.noResults")}
                   </p>
                 ) : activeFiles.length > 1 ? (
                   <Tabs defaultValue={activeFiles[0]}>
@@ -450,13 +629,14 @@ export default function FormattingPage() {
                       <TabsContent key={f} value={f}>
                         <div className="space-y-3">
                           {(resultGroups[f] || []).map((result) => (
-                            <FormattingResultCard
-                              key={`${result.file_path}-fmt-result-P${result.paragraph_index}`}
+                            <CodeReviewResultCard
+                              key={`${result.file_path}-cr-result-P${result.paragraph_index}`}
                               result={result}
                               onApply={handleApplyChange}
                               onIgnore={handleIgnoreChange}
-                              paragraphs={formattingParagraphs}
-                              typeLabels={changeTypeLabels}
+                              paragraphs={codeReviewParagraphs}
+                              typeLabels={suggestionTypeLabels}
+                              severityLabels={severityLabels}
                             />
                           ))}
                         </div>
@@ -465,13 +645,14 @@ export default function FormattingPage() {
                   </Tabs>
                 ) : (
                   filteredResults.map((result) => (
-                    <FormattingResultCard
-                      key={`${result.file_path}-fmt-result-P${result.paragraph_index}`}
+                    <CodeReviewResultCard
+                      key={`${result.file_path}-cr-result-P${result.paragraph_index}`}
                       result={result}
                       onApply={handleApplyChange}
                       onIgnore={handleIgnoreChange}
-                      paragraphs={formattingParagraphs}
-                      typeLabels={changeTypeLabels}
+                      paragraphs={codeReviewParagraphs}
+                      typeLabels={suggestionTypeLabels}
+                      severityLabels={severityLabels}
                     />
                   ))
                 )}
@@ -485,7 +666,7 @@ export default function FormattingPage() {
         open={confirmApplyAllOpen}
         onOpenChange={setConfirmApplyAllOpen}
         title={t("common:applyAllConfirmTitle")}
-        description={t("pages:formatting.applyAllDesc")}
+        description={t("common:applyAllConfirmDesc")}
         confirmText={t("common:applyAll")}
         onConfirm={async () => {
           setConfirmApplyAllOpen(false);

@@ -17,7 +17,7 @@
     "blank": "（空白）",
     "original": "原文：",
     "modified": "修改后：",
-    "applyAllConfirmTitle": "全部应用修改？",
+    "applyAllConfirmDesc": "全部应用修改？",
     "paragraph": "段落",
     "issues": "处问题",
     "viewContext": "查看上下文",
@@ -36,24 +36,60 @@
         "contentImport": "内容导入",
         "contentGeneration": "内容生成",
         "textReview": "文本审查与优化",
-        "formatting": "格式化与排版",
+        "code_review": "代码审查与排版",
         "versionControl": "版本控制",
         "aiAssist": "AI 辅助"
       },
       "features": {
         "workspace": { "title": "项目工作区", "desc": "打开和编辑 LaTeX 项目" },
-        "formulaOcr": { "title": "公式 OCR 识别", "desc": "将图像转换为 LaTeX 公式" },
-        "tableOcr": { "title": "表格 OCR 识别", "desc": "将图像转换为 LaTeX 表格" },
-        "markdownConvert": { "title": "Markdown 转 LaTeX", "desc": "将 Markdown 文本转换为 LaTeX 代码" },
-        "templateGen": { "title": "模版生成", "desc": "根据文字描述生成 LaTeX 模板" },
-        "bibManager": { "title": "参考文献管理", "desc": "识别参考文献格式，提取元数据并生成规范的 BibTeX 代码" },
-        "typoCheck": { "title": "文本校对", "desc": "修复文档中的错别字、语法错误等" },
-        "expressionOpt": { "title": "表达优化", "desc": "快速优化文本表达，提升文章质量" },
-        "terminologyCheck": { "title": "术语一致性检查", "desc": "检测术语大小写、缩写、中英混用等一致性问题" },
-        "formatting": { "title": "源码格式化", "desc": "规范化间距、缩进与环境对齐，让 LaTeX 代码更易读" },
-        "styleModify": { "title": "LaTeX 样式修改", "desc": "用自然语言描述样式修改，LLM 自动调整 LaTeX 代码" },
-        "gitDiff": { "title": "Git 差异高亮", "desc": "将两个 Git 状态的文档差异编译为红删绿增 PDF" },
-        "writingChat": { "title": "写作助手 Chat", "desc": "上下文感知的多轮对话，能直接修改指定段落" }
+        "formulaOcr": {
+          "title": "公式 OCR 识别",
+          "desc": "将图像转换为 LaTeX 公式"
+        },
+        "tableOcr": {
+          "title": "表格 OCR 识别",
+          "desc": "将图像转换为 LaTeX 表格"
+        },
+        "markdownConvert": {
+          "title": "Markdown 转 LaTeX",
+          "desc": "将 Markdown 文本转换为 LaTeX 代码"
+        },
+        "templateGen": {
+          "title": "模版生成",
+          "desc": "根据文字描述生成 LaTeX 模板"
+        },
+        "bibManager": {
+          "title": "参考文献管理",
+          "desc": "识别参考文献格式，提取元数据并生成规范的 BibTeX 代码"
+        },
+        "typoCheck": {
+          "title": "文本校对",
+          "desc": "修复文档中的错别字、语法错误等"
+        },
+        "expressionOpt": {
+          "title": "表达优化",
+          "desc": "快速优化文本表达，提升文章质量"
+        },
+        "terminologyCheck": {
+          "title": "术语一致性检查",
+          "desc": "检测术语大小写、缩写、中英混用等一致性问题"
+        },
+        "code_review": {
+          "title": "LaTeX 代码审查",
+          "desc": "格式化源码，消除坏味道，贴近最佳实践"
+        },
+        "styleModify": {
+          "title": "LaTeX 样式修改",
+          "desc": "用自然语言描述样式修改，LLM 自动调整 LaTeX 代码"
+        },
+        "gitDiff": {
+          "title": "Git 差异高亮",
+          "desc": "将两个 Git 状态的文档差异编译为红删绿增 PDF"
+        },
+        "writingChat": {
+          "title": "写作助手 Chat",
+          "desc": "上下文感知的多轮对话，能直接修改指定段落"
+        }
       }
     },
     "typoCheck": {
@@ -135,32 +171,45 @@
       "applyingDescription": "共 {{count}} 个段落",
       "applyAllFailed": "批量应用失败"
     },
-    "formatting": {
-      "title": "源码格式化",
+    "code_review": {
+      "title": "LaTeX 代码审查",
       "noProjectTitle": "未打开项目",
-      "noProjectDesc": "转到项目工作区，打开一个项目后即可使用源码格式化",
-      "checkLoading": "正在使用 LLM 获取格式化建议...",
-      "checkSuccess": "发现 {{count}} 个段落有格式建议",
+      "noProjectDesc": "转到项目工作区，打开一个项目后即可使用代码审查",
+      "checkLoading": "正在使用工具格式化并请求 LLM 审查...",
+      "checkSuccess": "发现 {{count}} 个段落有代码审查建议",
       "applySuccess": "已应用段落 {{idx}} 的格式修改",
       "applyAllSuccess": "已批量应用 {{count}} 个段落的格式修改",
       "applyAllEmpty": "没有可应用的格式修改",
-      "noIssues": "此段落无需排版调整。",
-      "formatted": "排版后：",
-      "changeTypes": {
-        "spacing": "间距",
-        "environmentAlignment": "环境对齐",
-        "codeFormatting": "代码格式",
+      "noIssues": "此段落代码质量良好，无改进建议。",
+      "formattingAvailable": "此段落可应用代码格式化更改。",
+      "suggestionTypes": {
+        "codeSmell": "代码坏味道",
+        "modernization": "现代化建议",
+        "bestPractice": "最佳实践",
+        "portability": "可移植性",
         "consistency": "一致性"
       },
-      "applyAllDesc": "将一次性把所有有格式建议的段落修改写回源文件。建议在应用前逐段审核。",
+      "severity": {
+        "info": "提示",
+        "warning": "警告",
+        "error": "建议修改"
+      },
+      "applyAllDesc": "将一次性把所有段落的格式化结果写回源文件。LLM 代码审查建议仅作参考，不自动修改源码。",
       "paragraph": "段落 {{index}}",
-      "suggestionsCount": "{{count}} 处排版建议",
-      "applyFormatting": "应用排版",
+      "suggestionsCount": "{{count}} 条审查建议",
+      "applyFormatting": "应用格式化",
       "paragraphs": "段落（{{count}}）",
-      "paragraphsDescription": "原始 LaTeX 源码（将交由 LLM 排版优化）",
-      "noResults": "没有匹配的格式化结果",
+      "paragraphsDescription": "原始 LaTeX 源码（将由工具格式化后交 LLM 审查）",
+      "noResults": "没有匹配的审查结果",
       "llmRequesting": "正在请求 LLM...",
-      "start": "开始"
+      "start": "开始审查",
+      "suggested": "建议：",
+      "showFormattedDiff": "查看格式化对比",
+      "hideFormattedDiff": "隐藏格式化对比",
+      "applySuggestion": "应用此建议",
+      "editFormatted": "编辑格式化文本",
+      "resetEdit": "恢复默认",
+      "editPlaceholder": "在此编辑格式化后的 LaTeX 源码..."
     },
     "bibManager": {
       "title": "参考文献管理",
@@ -464,7 +513,7 @@
       "featureExpressionOptDefaultPrompt": "表达优化默认提示词",
       "featureFormulaOcr": "公式识别",
       "featureTemplateGen": "模板生成",
-      "featureFormatting": "源码格式化",
+      "featureCodeReview": "LaTeX 代码审查",
       "featureCompile": "自动编译",
       "featureGitDiff": "Git 差异高亮",
       "featureTableOcr": "表格 OCR 识别",
@@ -553,8 +602,8 @@
       "changesFound": "发现 {{count}} 处修改",
       "noChanges": "无修改",
       "modified": "修改为：",
-    "noContent": "无内容可比较"
-  },
+      "noContent": "无内容可比较"
+    },
     "themeToggle": {
       "switchDarkLight": "切换亮暗模式",
       "switchToLight": "切换为亮色模式",

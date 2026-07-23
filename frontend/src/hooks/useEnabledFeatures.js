@@ -5,7 +5,7 @@ import useStore from "@/store/useStore";
 const ALL_ENABLED = {
   workspace: true, formula_ocr: true, table_ocr: true,
   template_gen: true, style_modify: true, typo_check: true,
-  expression_opt: true, formatting: true, compile: true,
+  expression_opt: true, code_review: true, compile: true,
   git_diff: true, markdown_converter: true, terminology_check: true,
   writing_chat: true, bib_manager: true, web_search: true,
 };

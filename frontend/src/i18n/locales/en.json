@@ -36,24 +36,63 @@
         "contentImport": "Content Import",
         "contentGeneration": "Content Generation",
         "textReview": "Text Review & Optimization",
-        "formatting": "Formatting & Typesetting",
+        "code_review": "Code Review & Formatting",
         "versionControl": "Version Control",
         "aiAssist": "AI Assistance"
       },
       "features": {
-        "workspace": { "title": "Project Workspace", "desc": "Open and edit LaTeX projects" },
-        "formulaOcr": { "title": "Formula OCR", "desc": "Convert images to LaTeX formulas" },
-        "tableOcr": { "title": "Table OCR", "desc": "Convert images to LaTeX tables" },
-        "markdownConvert": { "title": "Markdown to LaTeX", "desc": "Convert Markdown text to LaTeX code" },
-        "templateGen": { "title": "Template Generator", "desc": "Generate LaTeX templates from descriptions" },
-        "bibManager": { "title": "Bib Manager", "desc": "Identify bibliography formats, extract metadata and generate BibTeX code" },
-        "typoCheck": { "title": "Typo Check", "desc": "Fix typos and grammar errors in documents" },
-        "expressionOpt": { "title": "Expression Opt", "desc": "Quickly optimize text expression for better quality" },
-        "terminologyCheck": { "title": "Terminology Check", "desc": "Check terminology consistency in capitalization, abbreviations, etc." },
-        "formatting": { "title": "Source Formatting", "desc": "Normalize spacing, indentation and environment alignment" },
-        "styleModify": { "title": "Style Modifier", "desc": "Describe style changes in natural language, LLM adjusts LaTeX code" },
-        "gitDiff": { "title": "Git Diff Highlight", "desc": "Compile document differences between Git states into a red/green PDF" },
-        "writingChat": { "title": "Writing Assistant Chat", "desc": "Context-aware multi-turn conversation that can modify specific paragraphs" }
+        "workspace": {
+          "title": "Project Workspace",
+          "desc": "Open and edit LaTeX projects"
+        },
+        "formulaOcr": {
+          "title": "Formula OCR",
+          "desc": "Convert images to LaTeX formulas"
+        },
+        "tableOcr": {
+          "title": "Table OCR",
+          "desc": "Convert images to LaTeX tables"
+        },
+        "markdownConvert": {
+          "title": "Markdown to LaTeX",
+          "desc": "Convert Markdown text to LaTeX code"
+        },
+        "templateGen": {
+          "title": "Template Generator",
+          "desc": "Generate LaTeX templates from descriptions"
+        },
+        "bibManager": {
+          "title": "Bib Manager",
+          "desc": "Identify bibliography formats, extract metadata and generate BibTeX code"
+        },
+        "typoCheck": {
+          "title": "Typo Check",
+          "desc": "Fix typos and grammar errors in documents"
+        },
+        "expressionOpt": {
+          "title": "Expression Opt",
+          "desc": "Quickly optimize text expression for better quality"
+        },
+        "terminologyCheck": {
+          "title": "Terminology Check",
+          "desc": "Check terminology consistency in capitalization, abbreviations, etc."
+        },
+        "code_review": {
+          "title": "LaTeX Code Review",
+          "desc": "Format source code, eliminate code smells, and align with best practices"
+        },
+        "styleModify": {
+          "title": "Style Modifier",
+          "desc": "Describe style changes in natural language, LLM adjusts LaTeX code"
+        },
+        "gitDiff": {
+          "title": "Git Diff Highlight",
+          "desc": "Compile document differences between Git states into a red/green PDF"
+        },
+        "writingChat": {
+          "title": "Writing Assistant Chat",
+          "desc": "Context-aware multi-turn conversation that can modify specific paragraphs"
+        }
       }
     },
     "typoCheck": {
@@ -135,32 +174,45 @@
       "applyingDescription": "{{count}} paragraphs total",
       "applyAllFailed": "Batch apply failed"
     },
-    "formatting": {
-      "title": "Source Formatting",
+    "code_review": {
+      "title": "LaTeX Code Review",
       "noProjectTitle": "No project opened",
-      "noProjectDesc": "Open a project in the workspace first to use Source Formatting",
-      "checkLoading": "Getting formatting suggestions from LLM...",
-      "checkSuccess": "Found {{count}} paragraphs with formatting suggestions",
+      "noProjectDesc": "Open a project in the workspace first to use Code Review",
+      "checkLoading": "Formatting with tool and requesting LLM review...",
+      "checkSuccess": "Found {{count}} paragraphs with review suggestions",
       "applySuccess": "Applied formatting changes to paragraph {{idx}}",
       "applyAllSuccess": "Applied formatting changes to {{count}} paragraphs",
       "applyAllEmpty": "No formatting changes to apply",
-      "noIssues": "No formatting adjustments needed for this paragraph.",
-      "formatted": "Formatted: ",
-      "changeTypes": {
-        "spacing": "Spacing",
-        "environmentAlignment": "Environment Alignment",
-        "codeFormatting": "Code Formatting",
+      "noIssues": "Code quality is good, no suggestions needed.",
+      "formattingAvailable": "Code formatting changes available for this paragraph.",
+      "suggestionTypes": {
+        "codeSmell": "Code Smell",
+        "modernization": "Modernization",
+        "bestPractice": "Best Practice",
+        "portability": "Portability",
         "consistency": "Consistency"
       },
-      "applyAllDesc": "All formatting suggestions will be written back to the source file at once. Review each change before applying.",
+      "severity": {
+        "info": "Info",
+        "warning": "Warning",
+        "error": "Fix Recommended"
+      },
+      "applyAllDesc": "All formatting results will be written back to the source file. Review suggestions are for reference only and will not modify source code.",
       "paragraph": "Paragraph {{index}}",
       "suggestionsCount": "{{count}} suggestions",
       "applyFormatting": "Apply Formatting",
       "paragraphs": "Paragraphs ({{count}})",
-      "paragraphsDescription": "Original LaTeX source (will be formatted by LLM)",
-      "noResults": "No matching formatting results",
+      "paragraphsDescription": "Original LaTeX source (will be formatted then reviewed by LLM)",
+      "noResults": "No matching review results",
       "llmRequesting": "Requesting LLM...",
-      "start": "Start"
+      "start": "Start Review",
+      "suggested": "Suggested: ",
+      "showFormattedDiff": "Show formatted diff",
+      "hideFormattedDiff": "Hide formatted diff",
+      "applySuggestion": "Apply suggestion",
+      "editFormatted": "Edit formatted text",
+      "resetEdit": "Reset",
+      "editPlaceholder": "Edit formatted LaTeX source here..."
     },
     "bibManager": {
       "title": "Bib Manager",
@@ -464,7 +516,7 @@
       "featureExpressionOptDefaultPrompt": "Expression Optimization Default Prompt",
       "featureFormulaOcr": "Formula Recognition",
       "featureTemplateGen": "Template Generator",
-      "featureFormatting": "Source Formatting",
+      "featureCodeReview": "LaTeX Code Review",
       "featureCompile": "Auto Compile",
       "featureGitDiff": "Git Diff Highlight",
       "featureTableOcr": "Table OCR",
@@ -553,8 +605,8 @@
       "changesFound": "Found {{count}} changes",
       "noChanges": "No changes",
       "modified": "Modified to: ",
-    "noContent": "No content to compare"
-  },
+      "noContent": "No content to compare"
+    },
     "themeToggle": {
       "switchDarkLight": "Toggle dark/light mode",
       "switchToLight": "Switch to light mode",

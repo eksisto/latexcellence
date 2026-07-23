@@ -21,7 +21,7 @@ SAMPLE_CONFIG = {
         "formula_ocr": {"enabled": True, "max_image_size_mb": 10},
         "table_ocr": {"enabled": True, "max_image_size_mb": 10},
         "template_gen": {"enabled": True, "output_dir": "templates/"},
-        "formatting": {"enabled": True, "batch_size": 5},
+        "code_review": {"enabled": True, "batch_size": 5},
         "compile": {"enabled": True, "latexmk_timeout": 120},
         "git_diff": {"enabled": True},
         "markdown_converter": {"enabled": True},

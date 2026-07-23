@@ -92,7 +92,7 @@ export default function SettingsDialog() {
         template_gen: config.features.template_gen.enabled,
         typo_check: config.features.typo_check.enabled,
         expression_opt: config.features.expression_opt.enabled,
-        formatting: config.features.formatting.enabled,
+        code_review: config.features.code_review.enabled,
         compile: config.features.compile.enabled,
         git_diff: config.features.git_diff.enabled,
         markdown_converter: config.features.markdown_converter.enabled,
@@ -299,9 +299,9 @@ export default function SettingsDialog() {
               onChange={(v) => set("features.template_gen.enabled", v)}
             />
             <CheckboxField
-              label={t("settings.featureFormatting")}
-              checked={config.features.formatting.enabled}
-              onChange={(v) => set("features.formatting.enabled", v)}
+              label={t("settings.featureCodeReview")}
+              checked={config.features.code_review.enabled}
+              onChange={(v) => set("features.code_review.enabled", v)}
             />
             <CheckboxField
               label={t("settings.featureCompile")}

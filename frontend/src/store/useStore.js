@@ -67,8 +67,8 @@ const useStore = create(
       typoResults: [],
       expressionParagraphs: [],
       expressionResults: [],
-      formattingParagraphs: [],
-      formattingResults: [],
+      codeReviewParagraphs: [],
+      codeReviewResults: [],
       terminologyParagraphs: [],
       terminologyResults: [],
 
@@ -83,7 +83,7 @@ const useStore = create(
       loadingStates: {
         typoCheck: false,
         expressionOpt: false,
-        formatting: false,
+        codeReview: false,
         terminologyCheck: false,
         writingChat: false,
         bibManager: false,
@@ -128,18 +128,18 @@ const useStore = create(
           set({ expressionResults: results });
         }
       },
-      setFormattingParagraphs: (paras) => {
+      setCodeReviewParagraphs: (paras) => {
         if (typeof paras === "function") {
-          set((state) => ({ formattingParagraphs: paras(state.formattingParagraphs) }));
+          set((state) => ({ codeReviewParagraphs: paras(state.codeReviewParagraphs) }));
         } else {
-          set({ formattingParagraphs: paras });
+          set({ codeReviewParagraphs: paras });
         }
       },
-      setFormattingResults: (results) => {
+      setCodeReviewResults: (results) => {
         if (typeof results === "function") {
-          set((state) => ({ formattingResults: results(state.formattingResults) }));
+          set((state) => ({ codeReviewResults: results(state.codeReviewResults) }));
         } else {
-          set({ formattingResults: results });
+          set({ codeReviewResults: results });
         }
       },
       setTerminologyParagraphs: (paras) => {
@@ -205,8 +205,8 @@ const useStore = create(
           typoParagraphs: [],
           expressionResults: [],
           expressionParagraphs: [],
-          formattingResults: [],
-          formattingParagraphs: [],
+          codeReviewResults: [],
+          codeReviewParagraphs: [],
           terminologyResults: [],
           terminologyParagraphs: [],
           writingChatMessages: [],
@@ -233,8 +233,8 @@ const useStore = create(
         typoParagraphs: state.typoParagraphs,
         expressionResults: state.expressionResults,
         expressionParagraphs: state.expressionParagraphs,
-        formattingResults: state.formattingResults,
-        formattingParagraphs: state.formattingParagraphs,
+        codeReviewResults: state.codeReviewResults,
+        codeReviewParagraphs: state.codeReviewParagraphs,
         terminologyResults: state.terminologyResults,
         terminologyParagraphs: state.terminologyParagraphs,
         writingChatCurrentSessionId: state.writingChatCurrentSessionId,

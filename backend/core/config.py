@@ -74,8 +74,8 @@ class TemplateGenConfig(BaseModel):
     output_dir: str = "templates/"      # 生成模板的输出目录
 
 
-class FormattingConfig(BaseModel):
-    """源码格式化模块配置"""
+class CodeReviewConfig(BaseModel):
+    """LaTeX 代码审查模块配置"""
     enabled: bool = True                # 是否启用
     batch_size: int = 5                 # 每批发送给 LLM 的段落数
 
@@ -158,7 +158,7 @@ class FeaturesConfig(BaseModel):
     formula_ocr: FormulaOCRConfig = FormulaOCRConfig()
     table_ocr: TableOCRConfig = TableOCRConfig()
     template_gen: TemplateGenConfig = TemplateGenConfig()
-    formatting: FormattingConfig = FormattingConfig()
+    code_review: CodeReviewConfig = CodeReviewConfig()
     compile: CompileConfig = CompileConfig()
     git_diff: GitDiffConfig = GitDiffConfig()
     markdown_converter: MarkdownConverterConfig = MarkdownConverterConfig()

@@ -7,7 +7,7 @@ LaTeX 样式修改模块接收用户粘贴的 LaTeX 源码和自然语言修改�
 | 维度 | 样式修改 | 其他 LLM 模块 |
 |------|---------|--------------|
 | 输入 | 原始 LaTeX 源码 + 自然语言描述 | LaTeX 项目文件 / 图片 |
-| 是否使用 Marker | 否（LLM 需要理解 LaTeX 结构来执行修改） | 是（typo_check/expression_opt）/ 否（formatting） |
+| 是否使用 Marker | 否（LLM 需要理解 LaTeX 结构来执行修改） | 是（typo_check/expression_opt/code_review/terminology_check）
 | 是否修改源文件 | 否（仅返回修改结果，用户手动复制） | 是 / 否 |
 | 典型场景 | 表格对齐、文字样式、图片排版、位置调整 | 文本校对、表达优化、源码格式化 |
 

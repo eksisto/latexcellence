@@ -29,7 +29,7 @@ from backend.modules.expression_opt.router import router as expression_opt_route
 from backend.modules.template_gen.router import router as template_gen_router
 from backend.modules.formula_ocr.router import router as formula_ocr_router
 from backend.modules.table_ocr.router import router as table_ocr_router
-from backend.modules.formatting.router import router as formatting_router
+from backend.modules.code_review.router import router as code_review_router
 from backend.modules.compile.router import router as compile_router
 from backend.modules.git_diff.router import router as git_diff_router
 from backend.modules.markdown_converter.router import router as markdown_converter_router
@@ -99,7 +99,7 @@ async def config_status():
         "dev_mode": cfg.server.dev_mode,
         "features": {
             name: getattr(cfg.features, name).enabled
-            for name in ["typo_check", "expression_opt", "formula_ocr", "table_ocr", "style_modify", "template_gen", "formatting", "compile", "git_diff", "markdown_converter", "terminology_check", "writing_chat", "bib_manager", "web_search"]
+            for name in ["typo_check", "expression_opt", "formula_ocr", "table_ocr", "style_modify", "template_gen", "code_review", "compile", "git_diff", "markdown_converter", "terminology_check", "writing_chat", "bib_manager", "web_search"]
         },
     }
 
@@ -137,7 +137,7 @@ app.include_router(expression_opt_router)
 app.include_router(template_gen_router)
 app.include_router(formula_ocr_router)
 app.include_router(table_ocr_router)
-app.include_router(formatting_router)
+app.include_router(code_review_router)
 app.include_router(compile_router)
 app.include_router(git_diff_router)
 app.include_router(markdown_converter_router)

@@ -16,7 +16,7 @@
 | `/formula-ocr`    | FormulaOCRPage    | ✅ 完成 |
 | `/table-ocr`      | TableOCRPage      | ✅ 完成 |
 | `/template-gen`   | TemplateGenPage   | ✅ 完成 |
-| `/formatting`     | FormattingPage    | ✅ 完成 |
+| `/code-review`   | CodeReviewPage    | ✅ 完成 |
 | `/style-modify`   | StyleModifyPage   | ✅ 完成 |
 | `/markdown-convert` | MarkdownConvertPage | ✅ 完成 |
 | `/git-diff`       | GitDiffPage       | ✅ 完成 |
@@ -38,7 +38,7 @@ setter 支持 function updater 模式（`typeof value === "function"` 检测）�
   hydrated: false,                // persist 水合是否完成
 
   // 功能开关（从 config 读取）
-  enabledFeatures: null,         // { workspace, typo_check, expression_opt, formula_ocr, table_ocr, template_gen, formatting, compile, git_diff, markdown_converter, style_modify, terminology_check, writing_chat, bib_manager }
+  enabledFeatures: null,         // { workspace, typo_check, expression_opt, formula_ocr, table_ocr, template_gen, code_review, compile, git_diff, markdown_converter, style_modify, terminology_check, writing_chat, bib_manager }
 
   // 系统状态
   currentTheme: "youminghei",    // 当前配色主题 ID（持久化）
@@ -72,8 +72,8 @@ setter 支持 function updater 模式（`typeof value === "function"` 检测）�
   terminologyResults: [],        // LLM 检查结果（持久化）
 
   // 自动排版
-  formattingParagraphs: [],     // 预览段落（持久化）
-  formattingResults: [],        // LLM 格式化结果（持久化）
+  codeReviewParagraphs: [],     // 预览段落（持久化）
+  codeReviewResults: [],        // LLM 审查结果（持久化）
 
   // 自动编译
   compileResult: null,          // 编译结果（不持久化）
@@ -85,7 +85,7 @@ setter 支持 function updater 模式（`typeof value === "function"` 检测）�
   loadingStates: {               // 各模块加载状态
     typoCheck: false,
     expressionOpt: false,
-    formatting: false,
+    codeReview: false,
     terminologyCheck: false,
     writingChat: false,
     bibManager: false,
@@ -147,7 +147,7 @@ api.terminologyCheck.preview(file, workspaceId) / .check(data, workspaceId) / .a
 api.formulaOCR.recognize(formData)  // FormData 上传，不走 JSON
 api.tableOCR.recognize(formData)   // FormData 上传，不走 JSON
 api.templateGen.generate(data) / .save(data)
-api.formatting.preview(file, workspaceId) / .check(data, workspaceId) / .apply(data, workspaceId) / .stream(workspaceId, file)
+api.codeReview.preview(file, workspaceId) / .check(data, workspaceId) / .apply(data, workspaceId) / .stream(workspaceId, file)
 api.compile.run(mainFile, workspaceId) / .pdfUrl(mainFile, workspaceId)
 api.gitDiff.refs(workspaceId) / .generate(data, workspaceId)
 api.styleModify.modify(data)
@@ -259,7 +259,7 @@ api.writingChat.assistants.list() / .load(name) / .save(name, content) / .delete
 
 | Hook                   | 功能                                                                                                                                                                        |
 | ---------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `useParagraphCheck.js` | 封装逐段 LLM 检查功能的公共逻辑（项目恢复、文件选择、预览、检查/优化、排序、暂停/继续/停止、应用、refresh 持久化）。支持 `resolveInput` 多文件模式（展开 `\input`）。供 `TypoCheckPage`、`ExpressionOptPage`、`FormattingPage` 和 `TerminologyCheckPage` 共享调用。SSE 结果采用 `requestAnimationFrame` 微批次合并：同一帧内到达的多条结果合并为一次 `setResults`，全量排序只执行一次，将大文档场景下的排序开销从 O(n² log n) 降至 O(n log n)。 |
+| `useParagraphCheck.js` | 封装逐段 LLM 检查功能的公共逻辑（项目恢复、文件选择、预览、检查/优化、排序、暂停/继续/停止、应用、refresh 持久化）。支持 `resolveInput` 多文件模式（展开 `\input`）。供 `TypoCheckPage`、`ExpressionOptPage`、`CodeReviewPage` 和 `TerminologyCheckPage` 共享调用。SSE 结果采用 `requestAnimationFrame` 微批次合并：同一帧内到达的多条结果合并为一次 `setResults`，全量排序只执行一次，将大文档场景下的排序开销从 O(n² log n) 降至 O(n log n)。排序规则通过 `hasResultIssue` 统一判定：有 `changes`、`suggestions` 或格式化差异的段落优先排列（code_review 模块中，仅有格式化差异但无 LLM 建议的段落也会被优先排列并计入报告）。 |
 | `useEnabledFeatures.js` | 从后端 `/api/config/status` 加载功能开关（`enabledFeatures`）到 Zustand store。幂等：已加载则跳过请求。供 `WelcomePage` 和 `WorkspacePage` 共享调用，确保直接刷新任一页面时功能开关均可用。 |
 | `useWritingChat.js`    | 封装写作助手 Chat 全部逻辑：会话管理（CRUD + 重命名）、SSE 流式发送、深度思考解析（`parseThinking` + `processLoadedMessages`）、生成编辑、应用编辑、助手提示词管理。页面刷新时通过 store 的 `hydrated` 状态感知水合完成，再恢复上次会话。内部使用子 hooks 结构：`writing-chat/sessions.js`（会话管理）、`writing-chat/assistants.js`（助手管理）、`writing-chat/captcha.js`（验证码处理）、`writing-chat/sse.js`（SSE 事件处理）、`writing-chat/utils.js`（工具函数）。供 `WritingChatPage` 调用。 |
 | `useFavicon.js`        | 动态 favicon 切换：通过 `MutationObserver` 监听 `document.documentElement` 的 `class` 变化，在亮/暗模式间切换 `/favicon.svg` 和 `/favicon-dark.svg`。                       |
@@ -272,7 +272,7 @@ api.writingChat.assistants.list() / .load(name) / .save(name, content) / .delete
 
 ```javascript
 useParagraphCheck({
-  apiModule,          // 必填：API 模块（api.typoCheck / api.expressionOpt / api.formatting / api.terminologyCheck）
+  apiModule,          // 必填：API 模块（api.typoCheck / api.expressionOpt / api.codeReview / api.terminologyCheck）
   checkMethodName,    // 默认 "check"：调用 apiModule 的方法名
   correctedTextField, // 默认 "corrected"：结果中修正文本的字段名（expressionOpt 用 "optimized"）
   storeSlice,         // Zustand store 切片键（paragraphs, results, loading）
@@ -302,11 +302,11 @@ useParagraphCheck({
   activeFiles,        // 当前生效文件列表（resolveInput 时为所有解析到的文件）
   operationId,        // 当前检查操作的 ID（ref 对象）
   handlePreview,      // 加载预览
-  handleCheck,        // 执行检查/优化（SSE 结果通过 rAF 微批次合并，自动排序：有修改的在前，同段落按 index 升序）
+  handleCheck,        // 执行检查/优化（SSE 结果通过 rAF 微批次合并，自动排序：有问题的在前，同段落按 index 升序）
   handlePauseResume,  // 暂停/继续流式检查
   handleStop,         // 停止流式检查
   handleApplyChange,  // 应用单段修改 (idx, newText, filePath?)
-  handleApplyAll,     // 批量应用所有有修改的段落
+  handleApplyAll,     // 批量应用所有有问题的段落
   handleIgnoreChange, // 忽略单段修改并从结果列表移除
   handleFileChange,   // 切换文件并清空结果/段落
 }

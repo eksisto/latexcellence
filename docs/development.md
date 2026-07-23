@@ -64,7 +64,7 @@ latexcellence/
 │   │   ├── logger.py               # 统一日志（TimedRotatingFileHandler，按日期旋转）
 │   │   ├── workspace_manager.py    # 多工作区管理：workspace_id → LatexProject
 │   │   ├── project_manager.py      # LaTeX 项目目录管理：打开、文件树、段落提取、原地修改、撤销栈
-│   │   └── base_paragraph_check.py # 逐段检查服务基类（typo/expression/formatting/terminology 共享）
+│   │   └── base_paragraph_check.py # 逐段检查服务基类（typo/expression/code_review/terminology 共享）
 │   │
 │   ├── utils/                      # 工具模块
 │   │   ├── __init__.py
@@ -124,7 +124,7 @@ latexcellence/
 │       │   ├── router.py           # API 路由：generate / save
 │       │   └── service.py          # 业务逻辑：LLM 生成 + 模板组装 + 文件保存
 │       │
-│       ├── formatting/             # 源码格式化
+│       ├── code_review/            # LaTeX 代码审查
 │       │   ├── __init__.py
 │       │   ├── router.py           # API 路由：preview / check / apply / stream
 │       │   └── service.py          # 业务逻辑：LLM 编排 + Pydantic 校验（原始 LaTeX 排版）
@@ -171,7 +171,7 @@ latexcellence/
 │       │   ├── useTheme.js         # 暗/亮主题切换 hook（localStorage + 系统偏好 + View Transitions API）
 │       │   ├── useFavicon.js       # 动态 favicon 切换 hook（MutationObserver 监听 dark class）
 │       │   ├── useEnabledFeatures.js # 功能开关加载 hook（从后端 /api/config/status 加载，幂等）
-│       │   ├── useParagraphCheck.js # 逐段 LLM 检查公共逻辑 hook（供 TypoCheck/ExpressionOpt/Formatting 页面共享）
+│       │   ├── useParagraphCheck.js # 逐段 LLM 检查公共逻辑 hook（供 TypoCheck/ExpressionOpt/CodeReview 页面共享）
 │       │   ├── useUndoRedo.js      # 撤销/重做状态管理 hook（轮询 can-undo/can-redo 端点 + 键盘快捷键支持）
 │       │   ├── useResultFilter.js  # 段落检查结果搜索/过滤/跳转 hook（文本搜索 + 类型过滤 + 段落跳转）
 │       │   ├── useWritingChat.js   # 写作助手 Chat hook：会话/文件/段落、SSE 流式发送、深度思考解析、生成编辑、应用、删除/撤回、会话重命名、助手管理（内部使用 writing-chat/ 子 hooks）
@@ -220,7 +220,7 @@ latexcellence/
 │           ├── FormulaOCRPage.jsx   # 公式识别页：通过 ImageOCRPage 组件配置图标/API/结果元信息
 │           ├── TableOCRPage.jsx     # 表格识别页：通过 ImageOCRPage 组件配置图标/API/结果元信息
 │           ├── TemplateGenPage.jsx  # 模板生成页：自然语言描述 → LaTeX 模板
-│           ├── FormattingPage.jsx   # 源码格式化页：预览源码、LLM 格式化、diff 审核（使用 useParagraphCheck + useResultFilter）
+│           ├── CodeReviewPage.jsx   # 源码格式化页：预览源码、LLM 格式化、diff 审核（使用 useParagraphCheck + useResultFilter）
 │           ├── StyleModifyPage.jsx  # 样式修改页：粘贴 LaTeX + 自然语言描述 → LLM 修改
 │           ├── MarkdownConvertPage.jsx # Markdown 转 LaTeX 页：粘贴 Markdown → pandoc 转换
 │           ├── GitDiffPage.jsx      # Git 差异高亮页：选择 Git 版本 → 生成红删绿增差异 PDF
@@ -262,13 +262,13 @@ latexcellence/
     ├── test_project_manager.py      # project_manager 单元测试
     ├── test_json_utils.py           # json_utils 单元测试
     ├── test_llm_client.py           # llm_client 单元测试
-    ├── test_formatting.tex          # 测试用 LaTeX 数据文件
+    ├── test_code_review.tex          # 测试用 LaTeX 数据文件
     └── test_api/
         ├── __init__.py
         ├── test_typo_check.py       # typo_check 集成测试
         ├── test_expression_opt.py   # expression_opt 集成测试
         ├── test_terminology_check.py # terminology_check 集成测试
-        ├── test_formatting.py       # formatting 集成测试
+        ├── test_code_review.py       # code_review 集成测试
         ├── test_template_gen.py     # template_gen 集成测试
         ├── test_formula_ocr.py      # formula_ocr 集成测试
         ├── test_table_ocr.py        # table_ocr 集成测试
@@ -310,7 +310,7 @@ app.include_router(expression_opt_router) # /api/expression-opt/*
 app.include_router(terminology_check_router) # /api/terminology-check/*
 app.include_router(template_gen_router)   # /api/template-gen/*
 app.include_router(formula_ocr_router)    # /api/formula-ocr/*
-app.include_router(formatting_router)     # /api/formatting/*
+app.include_router(code_review_router)     # /api/code-review/*
 app.include_router(compile_router)              # /api/compile/*
 app.include_router(git_diff_router)              # /api/git-diff/*
 app.include_router(markdown_converter_router)     # /api/markdown-converter/*
@@ -366,7 +366,7 @@ app.include_router(bib_manager_router)            # /api/bib-manager/*
       "enabled": true,
       "output_dir": "templates/"
     },
-    "formatting": {
+    "code_review": {
       "enabled": true,
       "batch_size": 5
     },
@@ -487,7 +487,7 @@ def get_instance() -> Type:
 - `expression_opt/router.py`: `get_service()`
 - `expression_opt/prompt_manager.py`: `get_prompt_manager()`
 - `terminology_check/router.py`: `get_service()`
-- `formatting/router.py`: `get_service()`
+- `code_review/router.py`: `get_service()`
 - `table_ocr/router.py`: `get_service()`
 - `bib_manager/router.py`: `get_service()`
 
@@ -607,13 +607,15 @@ Phase 1 在不改变后端核心业务逻辑的前提下，对前端交互体验
 
 在 `useParagraphCheck` hook 中新增 `handleApplyAll`：
 
-- 收集所有 `changes.length > 0` 的结果，组装 `changes` 数组
+- 通过 `hasResultIssue` 收集所有有问题的结果（`changes` 非空、`suggestions` 非空、或格式化文本与原文有差异），组装 `changes` 数组
+
+> **code_review 适配**：code_review 的结果结构与其他模块不同——使用 `suggestions`（LLM 建议）而非 `changes`（修正列表），且格式化差异（`new_text` vs `original`）也是需要用户关注的变更。此前 `handleApplyAll` 仅按 `changes.length > 0` 过滤，导致 code_review 的全部应用功能始终为空。`hasResultIssue` 统一了各模块的"是否有问题"判定逻辑。
 - 单次 API 调用批量写回（后端 apply 端点已支持 `list[ApplyChangeItem]`）
 - 用 `toast.loading` → `toast.success` 展示进度
 - 应用后从 `results` 中移除已应用段落（保持与单段应用一致的 UX）
-- 新增 `correctedTextField` 配置项（TypoCheck/Formatting 用 `"corrected"`，ExpressionOpt 用 `"optimized"`）
+- 新增 `correctedTextField` 配置项（TypoCheck/CodeReview 用 `"corrected"`，ExpressionOpt 用 `"optimized"`）
 
-三个页面（TypoCheck/ExpressionOpt/Formatting）在结果列表顶部渲染"全部应用"按钮，点击后经 ConfirmDialog 二次确认。
+三个页面（TypoCheck/ExpressionOpt/CodeReview）在结果列表顶部渲染"全部应用"按钮，点击后经 ConfirmDialog 二次确认。
 
 ### 确认对话框
 
@@ -628,7 +630,7 @@ Phase 1 在不改变后端核心业务逻辑的前提下，对前端交互体验
 | 关闭项目 | WorkspacePage | destructive |
 | 撤销操作 | WorkspacePage | default |
 | 删除提示词 | ExpressionOptPage | destructive |
-| 全部应用 | TypoCheck/ExpressionOpt/Formatting | default |
+| 全部应用 | TypoCheck/ExpressionOpt/CodeReview | default |
 
 ### 结果搜索/过滤
 
@@ -637,7 +639,7 @@ Phase 1 在不改变后端核心业务逻辑的前提下，对前端交互体验
 | `hooks/useResultFilter.js` | 提供 `searchQuery`（文本搜索）、`typeFilter`（按 change.type 过滤）、`jumpToParagraph`（scrollIntoView 跳转）、`availableTypes`（从 results 自动提取去重）、`reset`、`hasFilters` |
 | `components/ResultFilterBar.jsx` | 搜索框 + 类型下拉 + 段落跳转输入 + 重置按钮，与 `useResultFilter` 配套使用 |
 
-三个段落检查页面在结果列表顶部渲染 `ResultFilterBar`，列表改为遍历 `filteredResults`；每个结果 Card 添加 `id={`${idPrefix}-P${idx}`}` 供跳转定位。FormattingPage 传入 `CHANGE_TYPE_LABELS` 作为 `typeLabels` 显示中文类型名。
+三个段落检查页面在结果列表顶部渲染 `ResultFilterBar`，列表改为遍历 `filteredResults`；每个结果 Card 添加 `id={`${idPrefix}-P${idx}`}` 供跳转定位。CodeReviewPage 传入 `CHANGE_TYPE_LABELS` 作为 `typeLabels` 显示中文类型名。
 
 ### 编译后内联 PDF 预览
 

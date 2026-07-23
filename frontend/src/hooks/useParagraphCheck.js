@@ -58,11 +58,18 @@ export default function useParagraphCheck({
     loadingKey: "typoCheck",
   },
   messages = {
-    get checkLoading() { return i18n.t("hooks:paragraphCheck.defaultCheckLoading") },
-    checkSuccess: (count) => i18n.t("hooks:paragraphCheck.defaultCheckSuccess", { count }),
-    applySuccess: (idx) => i18n.t("hooks:paragraphCheck.defaultApplySuccess", { idx }),
-    applyAllSuccess: (count) => i18n.t("hooks:paragraphCheck.defaultApplyAllSuccess", { count }),
-    get applyAllEmpty() { return i18n.t("hooks:paragraphCheck.defaultApplyAllEmpty") },
+    get checkLoading() {
+      return i18n.t("hooks:paragraphCheck.defaultCheckLoading");
+    },
+    checkSuccess: (count) =>
+      i18n.t("hooks:paragraphCheck.defaultCheckSuccess", { count }),
+    applySuccess: (idx) =>
+      i18n.t("hooks:paragraphCheck.defaultApplySuccess", { idx }),
+    applyAllSuccess: (count) =>
+      i18n.t("hooks:paragraphCheck.defaultApplyAllSuccess", { count }),
+    get applyAllEmpty() {
+      return i18n.t("hooks:paragraphCheck.defaultApplyAllEmpty");
+    },
   },
 }) {
   const fileTree = useStore((s) => s.fileTree);
@@ -97,6 +104,19 @@ export default function useParagraphCheck({
   const bufferRef = useRef([]);
   const operationIdRef = useRef(null);
   const flushScheduledRef = useRef(false);
+  const correctedFieldRef = useRef(correctedTextField);
+  useEffect(() => {
+    correctedFieldRef.current = correctedTextField;
+  }, [correctedTextField]);
+
+  const hasResultIssue = useCallback((r) => {
+    const hasChanges = r.changes && r.changes.length > 0;
+    const hasSuggestions = r.suggestions && r.suggestions.length > 0;
+    const corrected = r[correctedFieldRef.current];
+    const original = r.text || r.original;
+    const hasFormatDiff = corrected && original && corrected !== original;
+    return hasChanges || hasSuggestions || hasFormatDiff;
+  }, []);
 
   const texFiles = useMemo(() => flattenTexFiles(fileTree), [fileTree]);
 
@@ -113,7 +133,10 @@ export default function useParagraphCheck({
   }, [paragraphs]);
 
   // 从段落和结果中提取文件列表（用于 Tab 展示）
-  const paragraphFiles = useMemo(() => extractFileList(paragraphs), [paragraphs]);
+  const paragraphFiles = useMemo(
+    () => extractFileList(paragraphs),
+    [paragraphs],
+  );
   const resultFiles = useMemo(() => extractFileList(results), [results]);
   const activeFiles = resultFiles.length > 0 ? resultFiles : paragraphFiles;
 
@@ -164,17 +187,33 @@ export default function useParagraphCheck({
     setResults([]);
     setParagraphs([]);
     try {
-      const data = await apiModule.preview(activeFile, workspaceId, resolveInput);
+      const data = await apiModule.preview(
+        activeFile,
+        workspaceId,
+        resolveInput,
+      );
       setParagraphs(data.paragraphs || []);
       operationIdRef.current = data.operation_id || null;
-      setMessage(i18n.t("hooks:paragraphCheck.loadedParagraphs", { count: data.total }));
+      setMessage(
+        i18n.t("hooks:paragraphCheck.loadedParagraphs", { count: data.total }),
+      );
     } catch (e) {
       setError(e.message);
-      toast.error(i18n.t("hooks:paragraphCheck.loadParagraphsFailed"), { description: e.message });
+      toast.error(i18n.t("hooks:paragraphCheck.loadParagraphsFailed"), {
+        description: e.message,
+      });
     } finally {
       setLoading(storeSlice.loadingKey, false);
     }
-  }, [activeFile, resolveInput, apiModule, storeSlice.loadingKey, setLoading, setResults, setParagraphs]);
+  }, [
+    activeFile,
+    resolveInput,
+    apiModule,
+    storeSlice.loadingKey,
+    setLoading,
+    setResults,
+    setParagraphs,
+  ]);
 
   const finalizeCheck = useCallback(
     (es, progressNull) => {
@@ -187,7 +226,7 @@ export default function useParagraphCheck({
       setLoading(storeSlice.loadingKey, false);
       if (progressNull) setCheckProgress(null);
     },
-    [storeSlice.loadingKey, setLoading, setCheckProgress]
+    [storeSlice.loadingKey, setLoading, setCheckProgress],
   );
 
   const flushResults = useCallback(
@@ -197,8 +236,8 @@ export default function useParagraphCheck({
       setResults((prev) => {
         const next = [...prev, ...batch];
         next.sort((a, b) => {
-          const aHas = a.changes && a.changes.length > 0;
-          const bHas = b.changes && b.changes.length > 0;
+          const aHas = hasResultIssue(a);
+          const bHas = hasResultIssue(b);
           if (aHas !== bHas) return aHas ? -1 : 1;
           const aOrder = fileOrder.get(a.file_path) ?? Infinity;
           const bOrder = fileOrder.get(b.file_path) ?? Infinity;
@@ -208,7 +247,7 @@ export default function useParagraphCheck({
         return next;
       });
     },
-    [setResults]
+    [setResults, hasResultIssue],
   );
 
   const scheduleFlush = useCallback(() => {
@@ -271,11 +310,7 @@ export default function useParagraphCheck({
     resultsWithChangesRef.current = 0;
     setCheckProgress({ current: 0, total: paragraphs.length });
 
-    const url = apiModule.stream(
-      workspaceId,
-      activeFile,
-      resolveInput
-    );
+    const url = apiModule.stream(workspaceId, activeFile, resolveInput);
 
     const es = new EventSource(url);
     eventSourceRef.current = es;
@@ -296,7 +331,7 @@ export default function useParagraphCheck({
         if (data.type === "result") {
           const r = data.data;
           if (r) {
-            if ((r.changes && r.changes.length > 0) || (r.suggestions && r.suggestions.length > 0)) {
+            if (hasResultIssue(r)) {
               resultsWithChangesRef.current += 1;
             }
             bufferRef.current.push(r);
@@ -310,7 +345,9 @@ export default function useParagraphCheck({
         if (data.type === "error") {
           const msg = translateError(data.message);
           setError(msg);
-          toast.error(i18n.t("hooks:paragraphCheck.checkError"), { description: msg });
+          toast.error(i18n.t("hooks:paragraphCheck.checkError"), {
+            description: msg,
+          });
           return;
         }
 
@@ -351,17 +388,32 @@ export default function useParagraphCheck({
   const handleApplyChange = useCallback(
     async (idx, newText, filePath) => {
       try {
-        const result = await apiModule.apply({
-          file_path: activeFile,
-          changes: [{ paragraph_index: idx, new_text: newText, file_path: filePath || activeFile }],
-          operation_id: operationIdRef.current,
-        }, workspaceId);
+        const result = await apiModule.apply(
+          {
+            file_path: activeFile,
+            changes: [
+              {
+                paragraph_index: idx,
+                new_text: newText,
+                file_path: filePath || activeFile,
+              },
+            ],
+            operation_id: operationIdRef.current,
+          },
+          workspaceId,
+        );
         const hadErrors = result.errors && result.errors.length > 0;
         if (hadErrors) {
-          const reasons = result.errors.map((e) => translateError(e.reason)).join("、");
-          const msg = i18n.t("hooks:paragraphCheck.applyFailedHint", { reasons });
+          const reasons = result.errors
+            .map((e) => translateError(e.reason))
+            .join("、");
+          const msg = i18n.t("hooks:paragraphCheck.applyFailedHint", {
+            reasons,
+          });
           setError(msg);
-          toast.error(i18n.t("hooks:paragraphCheck.applyFailed"), { description: msg });
+          toast.error(i18n.t("hooks:paragraphCheck.applyFailed"), {
+            description: msg,
+          });
           return;
         }
         setMessage(messages.applySuccess(idx));
@@ -369,26 +421,36 @@ export default function useParagraphCheck({
         // 从结果中移除已应用的段落，保留其余结果
         setResults((prev) =>
           prev.filter(
-            (r) => !(r.paragraph_index === idx && (r.file_path || activeFile) === (filePath || activeFile))
-          )
+            (r) =>
+              !(
+                r.paragraph_index === idx &&
+                (r.file_path || activeFile) === (filePath || activeFile)
+              ),
+          ),
         );
       } catch (e) {
         setError(e.message);
-        toast.error(i18n.t("hooks:paragraphCheck.applyChangeFailed"), { description: e.message });
+        toast.error(i18n.t("hooks:paragraphCheck.applyChangeFailed"), {
+          description: e.message,
+        });
       }
     },
-    [activeFile, apiModule, setResults, messages]
+    [activeFile, apiModule, setResults, messages],
   );
 
   const handleIgnoreChange = useCallback(
     (idx, filePath) => {
       setResults((prev) =>
         prev.filter(
-          (r) => !(r.paragraph_index === idx && (r.file_path || activeFile) === (filePath || activeFile))
-        )
+          (r) =>
+            !(
+              r.paragraph_index === idx &&
+              (r.file_path || activeFile) === (filePath || activeFile)
+            ),
+        ),
       );
     },
-    [activeFile, setResults]
+    [activeFile, setResults],
   );
 
   const handleApplyAll = useCallback(
@@ -397,34 +459,48 @@ export default function useParagraphCheck({
         const approved = await onConfirm();
         if (!approved) return;
       }
-      const pending = results.filter(
-        (r) => r.changes && r.changes.length > 0
-      );
+      const pending = results.filter(hasResultIssue);
       if (pending.length === 0) {
         toast.info(messages.applyAllEmpty);
         return;
       }
       setApplyingAll(true);
-      const toastId = toast.loading(i18n.t("hooks:paragraphCheck.applyingAll"), {
-        description: i18n.t("hooks:paragraphCheck.applyingAllDesc", { count: pending.length }),
-      });
+      const toastId = toast.loading(
+        i18n.t("hooks:paragraphCheck.applyingAll"),
+        {
+          description: i18n.t("hooks:paragraphCheck.applyingAllDesc", {
+            count: pending.length,
+          }),
+        },
+      );
       try {
         const changes = pending.map((r) => ({
           paragraph_index: r.paragraph_index,
           new_text: r[correctedTextField],
           file_path: r.file_path || activeFile,
         }));
-        const result = await apiModule.apply({ file_path: activeFile, changes, operation_id: operationIdRef.current }, workspaceId);
+        const result = await apiModule.apply(
+          {
+            file_path: activeFile,
+            changes,
+            operation_id: operationIdRef.current,
+          },
+          workspaceId,
+        );
 
         const skippedIndices = new Set();
         if (result.errors && result.errors.length > 0) {
           for (const e of result.errors) {
-            skippedIndices.add(`${e.file_path || activeFile}:${e.paragraph_index}`);
+            skippedIndices.add(
+              `${e.file_path || activeFile}:${e.paragraph_index}`,
+            );
           }
         }
 
         const appliedKeys = new Set(
-          pending.map((r) => `${r.file_path || activeFile}:${r.paragraph_index}`)
+          pending.map(
+            (r) => `${r.file_path || activeFile}:${r.paragraph_index}`,
+          ),
         );
         for (const key of skippedIndices) {
           appliedKeys.delete(key);
@@ -432,15 +508,20 @@ export default function useParagraphCheck({
         setResults((prev) =>
           prev.filter(
             (r) =>
-              !appliedKeys.has(`${r.file_path || activeFile}:${r.paragraph_index}`)
-          )
+              !appliedKeys.has(
+                `${r.file_path || activeFile}:${r.paragraph_index}`,
+              ),
+          ),
         );
 
         const appliedCount = appliedKeys.size;
         const skippedCount = skippedIndices.size;
 
         if (skippedCount > 0) {
-          const msg = i18n.t("hooks:paragraphCheck.applyAllPartial", { applied: appliedCount, skipped: skippedCount });
+          const msg = i18n.t("hooks:paragraphCheck.applyAllPartial", {
+            applied: appliedCount,
+            skipped: skippedCount,
+          });
           setError(msg);
           toast.warning(msg, { id: toastId });
         } else {
@@ -465,7 +546,8 @@ export default function useParagraphCheck({
       correctedTextField,
       setResults,
       messages,
-    ]
+      hasResultIssue,
+    ],
   );
 
   const handleFileChange = useCallback(
@@ -484,7 +566,7 @@ export default function useParagraphCheck({
       setError(null);
       setMessage(null);
     },
-    [setActiveFile, setParagraphs, setResults, setCheckProgress]
+    [setActiveFile, setParagraphs, setResults, setCheckProgress],
   );
 
   // 组件卸载时关闭 SSE 连接

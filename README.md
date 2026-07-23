@@ -129,7 +129,7 @@ latexcellence/
 │   │   ├── formula_ocr/     # 公式识别
 │   │   ├── table_ocr/       # 表格识别
 │   │   ├── template_gen/    # 模板生成
-│   │   ├── formatting/      # 源码格式化
+│   │   ├── code_review/      # LaTeX 代码审查
 │   │   ├── compile/         # 自动编译
 │   │   ├── git_diff/        # Git 差异高亮
 │   │   ├── markdown_converter/  # Markdown 转 LaTeX

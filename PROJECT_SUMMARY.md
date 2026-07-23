@@ -26,7 +26,7 @@ latexcellence/
 │   │   ├── workspace_manager.py     # 多工作区管理（workspace_id → LatexProject）
 │   │   ├── project_manager.py       # LaTeX 项目管理（文件树/段落/撤销）
 │   │   ├── tool_registry.py         # Function Calling 工具注册表
-│   │   └── base_paragraph_check.py  # 逐段检查服务基类（typo/expression/formatting/terminology 共享）
+│   │   └── base_paragraph_check.py  # 逐段检查服务基类（typo/expression/code_review/terminology 共享）
 │   ├── utils/
 │   │   ├── json_utils.py            # LLM JSON 解析/校验/重试
 │   │   ├── file_ops.py              # 原子写入/备份/MD5
@@ -48,7 +48,7 @@ latexcellence/
 │       ├── typo_check/              # 错字查找
 │       ├── expression_opt/          # 表达优化
 │       ├── terminology_check/       # 术语一致性
-│       ├── formatting/              # 源码格式化
+│       ├── code_review/              # LaTeX 代码审查
 │       ├── compile/                 # 自动编译
 │       ├── git_diff/                # Git 差异高亮
 │       ├── template_gen/            # 模板生成
@@ -98,7 +98,7 @@ latexcellence/
 |---|--------|------|----------|---------|--------|
 | 1 | typo_check | 错字/拼写检查 | router.py, service.py | ✓ | ✓ |
 | 2 | expression_opt | 学术表达优化 | router.py, service.py, prompt_manager.py | ✓ | ✓ |
-| 3 | formatting | LaTeX 源码排版 | router.py, service.py | ✓ | ✗ |
+| 3 | code_review | LaTeX 代码审查（工具格式化 + LLM 质量审查） | router.py, service.py | ✓ | ✓ |
 | 4 | terminology_check | 术语一致性检查 | router.py, service.py, extractor.py, models.py | ✓ | ✓ |
 | 5 | compile | 编译 + 错误翻译 | router.py, service.py | ✓(错误翻译) | ✗ |
 | 6 | git_diff | Git 版本差异 PDF | router.py, service.py | ✗ | ✗ |
@@ -112,13 +112,13 @@ latexcellence/
 
 ## Core Architecture Concepts
 
-- **BaseParagraphCheckService**: 四个逐段检查模块（typo_check / expression_opt / formatting / terminology_check）共享的基类，封装文件解析、marker 替换、LLM 编排（批量+流式）、结果写回等流程。子类通过 6 个 hooks（_get_system_prompt / _build_user_content / _get_model_cls / _get_llm_params / _get_batch_size / _build_success_result）定制行为
+- **BaseParagraphCheckService**: 四个逐段检查模块（typo_check / expression_opt / code_review / terminology_check）共享的基类，封装文件解析、marker 替换、LLM 编排（批量+流式）、结果写回等流程。子类通过 6 个 hooks（_get_system_prompt / _build_user_content / _get_model_cls / _get_llm_params / _get_batch_size / _build_success_result）定制行为
 - **WorkspaceManager**: 多浏览器多工作区隔离，每个 workspace_id 拥有独立的 `LatexProject` 实例（项目状态、文件树、MD5 缓存、撤销栈完全隔离）
 - **Marker Protection**: LaTeX 结构 → `__CMD_NNNN__` / `__MATH_NNNN__` / `__ENV_NNNN__` / `__VERB_NNNN__` marker → LLM 只改纯文本 → 按长度降序还原。apply 时若 marker_map 缺失（context 过期/重启/新操作覆盖），跳过该段写入并返回 `errors`，防止字面 marker 污染 `.tex` 文件；前端据此保留未应用项并提示用户重新检查
 - **JSON Validation Pipeline**: `safe_parse_json()` → Pydantic `.model_validate()` → `retry_with_validation()` (最多 3 次重试 + 错误反馈)
 - **SSE Streaming**: 所有段落检查模块通过 Server-Sent Events 推送 `progress`/`result`/`error`/`done` 事件
 - **Function Calling 工具体系**: `ToolRegistry`（工具注册表）管理所有可用工具的 schema 和执行函数；`SearchManager`（搜索管理器）提供 `web_search` 工具的 schema 和执行，统一封装 `DuckDuckGoHtmlEngine`（模拟浏览器请求，遇 HTTP 202 Challenge 时抛出 `DDGChallengeError`，由 service 捕获并以 `captcha_challenge` SSE 事件推送到前端）和 `SearXNGEngine`（通过 `/search?format=json` 获取结果，无验证码）；DDG Challenge 验证码提交通过通用路由 `/api/search/ddg-challenge` 处理，不绑定特定业务模块；Writing Chat 的 `send()` 方法在检测到 LLM 返回 `tool_call` 时自动执行工具、将结果回传 LLM，再流式输出最终回复（"先工具调用再流式"模式）
-- **useParagraphCheck Hook**: TypoCheck/ExpressionOpt/Formatting/TerminologyCheck 4 页共享同一 hook 封装流程
+- **useParagraphCheck Hook**: TypoCheck/ExpressionOpt/CodeReview/TerminologyCheck 4 页共享同一 hook 封装流程
 - **useEnabledFeatures Hook**: 从后端 `/api/config/status` 加载功能开关到 Zustand store，幂等（已加载则跳过）。WelcomePage 和 WorkspacePage 均调用此 hook，确保直接刷新任一页面时功能开关均可用
 - **Zustand Persist**: `partialize` 选择性持久化检查结果，支持刷新保留
 - **Multi-Theme**: `theme/` 目录下每个 CSS 文件定义一组完整配色（`[data-theme="xxx"]` light + dark），通过 `import.meta.glob` 自动发现，用户可在设置或顶栏下拉菜单中实时切换
