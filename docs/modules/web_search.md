@@ -57,6 +57,8 @@ class BaseSearchEngine(ABC):
 9. 后端调用 `DuckDuckGoHtmlEngine.submit_challenge()` 提交解答
 10. 验证成功后引导用户重新提问
 
+关于 DuckDuckGo HTML 端点 Challenge 验证的细节，可查看 [duckduckgo-challenge.md](../duckduckgo-challenge.md)。
+
 ### SearXNG 引擎
 
 通过 SearXNG 实例的 JSON API 执行搜索（`GET /search?q=...&format=json`），无需验证码，适合自建 SearXNG 实例。
