@@ -226,6 +226,13 @@ Prefix: `/api/writing-chat`, Tag: `writing_chat`
 
 封装：项目恢复、会话切换/新建/删除/重命名、文件段落切换、消息发送（fetch streaming + 手动 SSE 解析）、深度思考解析（`parseThinking` + `processLoadedMessages`）、生成编辑、应用编辑（支持手动微调 customText，通过 `new_latex` 字段传递给后端确保写入用户编辑内容）、删除/撤回消息、助手管理（列表/新建/删除/激活）、压缩提示与状态同步。页面只传 store slice 配置，禁止在页面重复实现（遵循 AGENTS.md）。
 
+**子 hooks 结构**：
+- `writing-chat/sessions.js` — 会话管理逻辑（selectSession / newSession / deleteSession / renameSession / refreshSessions）
+- `writing-chat/assistants.js` — 助手管理逻辑（setAssistantActive / saveAssistant / deleteAssistant）
+- `writing-chat/captcha.js` — DDG 验证码处理（submitCaptcha / dismissCaptcha）
+- `writing-chat/sse.js` — SSE 事件处理器工厂函数（createSSEEventHandler）
+- `writing-chat/utils.js` — 工具函数（parseThinking / processLoadedMessages / isDraftSession / uid）
+
 ### `parseThinking()` 流式解析
 
 LLM 流式输出中可能包含 `<thinking>...</thinking>` 标签。`parseThinking(rawText)` 每收到一个 token chunk 即对累积文本做正则匹配：

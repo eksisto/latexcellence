@@ -1,57 +1,15 @@
 import { useState, useCallback, useEffect, useRef, useMemo } from "react";
-import { toast } from "sonner";
 import { api } from "@/api/index";
 import useStore from "@/store/useStore";
 import { flattenTexFiles } from "@/hooks/useParagraphCheck";
-import { translateError } from "@/utils/errorMessages";
-import i18n from "@/i18n";
-
-const uid = () =>
-  (typeof crypto !== "undefined" && crypto.randomUUID
-    ? crypto.randomUUID()
-    : Math.random().toString(36).slice(2) + Date.now().toString(36));
-
-const DRAFT_PREFIX = "__draft__";
-const isDraftSession = (id) => typeof id === "string" && id.startsWith(DRAFT_PREFIX);
-
-function parseThinking(rawText) {
-  const thinkOpen = rawText.indexOf("<thinking>");
-  if (thinkOpen === -1) {
-    return { thinking: "", display: rawText, thinkingOpen: false, thinkingClosed: true };
-  }
-  const thinkClose = rawText.indexOf("</thinking>", thinkOpen + 10);
-  const thinking = rawText.slice(
-    thinkOpen + 10,
-    thinkClose !== -1 ? thinkClose : undefined
-  );
-  const beforeThink = rawText.slice(0, thinkOpen);
-  const afterThink = thinkClose !== -1 ? rawText.slice(thinkClose + 11) : "";
-  const display = (beforeThink + afterThink).trim();
-  return {
-    thinking,
-    display,
-    thinkingOpen: true,
-    thinkingClosed: thinkClose !== -1,
-  };
-}
-
-/** Process loaded messages to extract thinking content from raw content field */
-function processLoadedMessages(messages) {
-  return messages.map((msg) => {
-    if (msg.role !== "assistant" || !msg.content) return msg;
-    if (!/<thinking>[\s\S]*?<\/thinking>/.test(msg.content)) return msg;
-    // Already has parsed thinking fields
-    if (msg.thinkingContent !== undefined) return msg;
-    const parsed = parseThinking(msg.content);
-    return {
-      ...msg,
-      thinkingContent: parsed.thinking,
-      displayContent: parsed.display,
-      thinkingOpen: false,
-      thinkingClosed: parsed.thinkingClosed,
-    };
-  });
-}
+import {
+  useWritingChatSessions,
+  useWritingChatAssistants,
+  useWritingChatCaptcha,
+  createSSEEventHandler,
+  isDraftSession,
+  uid,
+} from "./writing-chat";
 
 export default function useWritingChat() {
   const projectPath = useStore((s) => s.projectPath);
@@ -83,16 +41,47 @@ export default function useWritingChat() {
   const [applyingMessageId, setApplyingMessageId] = useState(null);
   // 联网搜索状态
   const [searchStatus, setSearchStatus] = useState(null); // { query, engine } | null
-  // DDG 验证码状态
-  const [captchaChallenge, setCaptchaChallenge] = useState(null); // { challenge_id, images, query, instruction } | null
-  const [captchaSubmitting, setCaptchaSubmitting] = useState(false);
-  // 助手（提示词）状态
-  const [assistants, setAssistants] = useState([]);
-  const [activeAssistant, setActiveAssistant] = useState("");
-  const [assistantContent, setAssistantContent] = useState(null);
   const restoringRef = useRef(false);
 
   const texFiles = useMemo(() => flattenTexFiles(fileTree), [fileTree]);
+
+  // ── 使用子 hooks ──────────────────────────────────────────────────
+
+  const {
+    refreshSessions,
+    selectSession,
+    newSession,
+    deleteSession,
+    renameSession,
+  } = useWritingChatSessions({
+    workspaceId,
+    activeFile,
+    setActiveFile,
+    setWritingChatSessions,
+    setWritingChatMessages,
+    setWritingChatCurrentSessionId,
+    setWritingChatCompressed,
+    writingChatSessions,
+    writingChatCurrentSessionId,
+    writingChatMessages,
+  });
+
+  const {
+    assistants,
+    activeAssistant,
+    assistantContent,
+    setAssistantActive,
+    saveAssistant,
+    deleteAssistant,
+  } = useWritingChatAssistants();
+
+  const {
+    captchaChallenge,
+    setCaptchaChallenge,
+    captchaSubmitting,
+    submitCaptcha,
+    dismissCaptcha,
+  } = useWritingChatCaptcha({ setError });
 
   // ── 项目恢复 ──────────────────────────────────────────────────────
   useEffect(() => {
@@ -122,42 +111,13 @@ export default function useWritingChat() {
     setActiveFile,
   ]);
 
-  // ── 首次挂载：加载会话列表 ───────────────────────────────────────
-  const refreshSessions = useCallback(async () => {
-    try {
-      const data = await api.writingChat.listSessions(workspaceId);
-      setWritingChatSessions(data.sessions || []);
-    } catch (e) {
-      setError(e.message);
+  // ── 页面刷新：水合完成后自动加载上次选中的会话 ──────────────────
+  const hydrated = useStore((s) => s.hydrated);
+  useEffect(() => {
+    if (hydrated && writingChatCurrentSessionId && writingChatMessages.length === 0) {
+      selectSession(writingChatCurrentSessionId);
     }
-  }, [workspaceId, setWritingChatSessions]);
-
-  useEffect(() => {
-    refreshSessions();
-  }, [refreshSessions]);
-
-  // ── 加载助手列表 ─────────────────────────────────────────────────
-  const refreshAssistants = useCallback(async () => {
-    try {
-      const data = await api.writingChat.assistants.list();
-      setAssistants(data.prompts || []);
-      const active = (data.prompts || []).find((p) => p.active);
-      if (active) {
-        setActiveAssistant(active.name);
-        try {
-          const d = await api.writingChat.assistants.load(active.name);
-          setAssistantContent(d.content || "");
-        } catch { setAssistantContent(""); }
-      } else {
-        setActiveAssistant("");
-        setAssistantContent(null);
-      }
-    } catch { /* silent */ }
-  }, []);
-
-  useEffect(() => {
-    refreshAssistants();
-  }, [refreshAssistants]);
+  }, [hydrated, writingChatCurrentSessionId, writingChatMessages.length, selectSession]);
 
   // ── 加载段落预览（供段落选择 dropdown 使用） ─────────────────────
   const loadParagraphs = useCallback(async () => {
@@ -176,173 +136,6 @@ export default function useWritingChat() {
   useEffect(() => {
     loadParagraphs();
   }, [loadParagraphs]);
-
-  // ── 切换会话 ─────────────────────────────────────────────────────
-  const selectSession = useCallback(
-    async (sessionId) => {
-      if (!sessionId) {
-        setWritingChatCurrentSessionId(null);
-        setWritingChatMessages([]);
-        setWritingChatCompressed(false);
-        return;
-      }
-      if (isDraftSession(sessionId)) {
-        setWritingChatCurrentSessionId(sessionId);
-        setWritingChatMessages([]);
-        setWritingChatCompressed(false);
-        return;
-      }
-      try {
-        const data = await api.writingChat.loadSession(sessionId);
-        setWritingChatCurrentSessionId(sessionId);
-        setWritingChatMessages(processLoadedMessages(data.messages || []));
-        const hasCompressed = (data.messages || []).some(
-          (m) => m.compressed && m.role === "summary"
-        );
-        setWritingChatCompressed(hasCompressed);
-        if (data.file_path && data.file_path !== activeFile) {
-          setActiveFile(data.file_path);
-        }
-      } catch (e) {
-        setError(e.message);
-        toast.error(i18n.t("hooks:writingChat.loadSessionFailed"), { description: e.message });
-      }
-    },
-    [
-      activeFile,
-      setActiveFile,
-      setWritingChatCurrentSessionId,
-      setWritingChatMessages,
-      setWritingChatCompressed,
-    ]
-  );
-
-  // ── 页面刷新：水合完成后自动加载上次选中的会话 ──────────────────
-  const hydrated = useStore((s) => s.hydrated);
-  useEffect(() => {
-    if (hydrated && writingChatCurrentSessionId && writingChatMessages.length === 0) {
-      selectSession(writingChatCurrentSessionId);
-    }
-  }, [hydrated, writingChatCurrentSessionId, writingChatMessages.length, selectSession]);
-
-  // ── 新建会话 ─────────────────────────────────────────────────────
-  const newSession = useCallback(() => {
-    const existingDraft = writingChatSessions.find((s) => isDraftSession(s.id));
-    if (existingDraft) {
-      setWritingChatCurrentSessionId(existingDraft.id);
-      setWritingChatMessages([]);
-      setWritingChatCompressed(false);
-      return;
-    }
-    const draftId = DRAFT_PREFIX + uid();
-    const draftSession = { id: draftId, title: "" };
-    setWritingChatSessions([draftSession, ...writingChatSessions]);
-    setWritingChatCurrentSessionId(draftId);
-    setWritingChatMessages([]);
-    setWritingChatCompressed(false);
-  }, [
-    writingChatSessions,
-    setWritingChatSessions,
-    setWritingChatCurrentSessionId,
-    setWritingChatMessages,
-    setWritingChatCompressed,
-  ]);
-
-  // ── 删除会话 ─────────────────────────────────────────────────────
-  const deleteSession = useCallback(
-    async (sessionId) => {
-      try {
-        if (isDraftSession(sessionId)) {
-          setWritingChatSessions((prev) => prev.filter((s) => s.id !== sessionId));
-          if (writingChatCurrentSessionId === sessionId) {
-            setWritingChatCurrentSessionId(null);
-            setWritingChatMessages([]);
-            setWritingChatCompressed(false);
-          }
-          return;
-        }
-        await api.writingChat.deleteSession(sessionId);
-        if (writingChatCurrentSessionId === sessionId) {
-          newSession();
-        }
-        await refreshSessions();
-      } catch (e) {
-        setError(e.message);
-        toast.error(i18n.t("hooks:writingChat.deleteSessionFailed"), { description: e.message });
-      }
-    },
-    [writingChatCurrentSessionId, newSession, refreshSessions, setWritingChatSessions, setWritingChatCurrentSessionId, setWritingChatMessages, setWritingChatCompressed]
-  );
-
-  const renameSession = useCallback(
-    async (sessionId, title) => {
-      try {
-        if (isDraftSession(sessionId)) {
-          setWritingChatSessions((prev) =>
-            prev.map((s) => (s.id === sessionId ? { ...s, title } : s))
-          );
-          return;
-        }
-        await api.writingChat.renameSession(sessionId, title);
-        await refreshSessions();
-      } catch (e) {
-        toast.error(i18n.t("hooks:writingChat.renameSessionFailed"), { description: e.message });
-      }
-    },
-    [refreshSessions, setWritingChatSessions]
-  );
-
-  // ── 助手提示词管理 ─────────────────────────────────────────────────
-  const setAssistantActive = useCallback(
-    async (name) => {
-      if (name === activeAssistant) {
-        // 取消激活
-        try { await api.writingChat.assistants.setActive(""); } catch {}
-        setActiveAssistant("");
-        setAssistantContent(null);
-        return;
-      }
-      try {
-        await api.writingChat.assistants.setActive(name);
-        setActiveAssistant(name);
-        const d = await api.writingChat.assistants.load(name);
-        setAssistantContent(d.content || "");
-      } catch (e) {
-        toast.error(i18n.t("hooks:writingChat.switchAssistantFailed"), { description: e.message });
-      }
-    },
-    [activeAssistant]
-  );
-
-  const saveAssistant = useCallback(
-    async (name, content) => {
-      if (!name?.trim() || !content?.trim()) return;
-      try {
-        await api.writingChat.assistants.save(name, content);
-        await refreshAssistants();
-        toast.success(i18n.t("hooks:writingChat.assistantSaved"));
-      } catch (e) {
-        toast.error(i18n.t("hooks:writingChat.saveAssistantFailed"), { description: e.message });
-      }
-    },
-    [refreshAssistants]
-  );
-
-  const deleteAssistant = useCallback(
-    async (name) => {
-      try {
-        await api.writingChat.assistants.delete(name);
-        if (activeAssistant === name) {
-          setActiveAssistant("");
-          setAssistantContent(null);
-        }
-        await refreshAssistants();
-      } catch (e) {
-        toast.error(i18n.t("hooks:writingChat.deleteAssistantFailed"), { description: e.message });
-      }
-    },
-    [activeAssistant, refreshAssistants]
-  );
 
   // ── 发送消息（流式） ────────────────────────────────────────────
   const sendMessage = useCallback(
@@ -382,92 +175,17 @@ export default function useWritingChat() {
         },
       ]);
 
-      const onEvent = (event) => {
-        if (event.type === "token") {
-          setWritingChatMessages((prev) =>
-            prev.map((m) => {
-              if (m.id !== tmpAssistantId) return m;
-              const raw = (m.rawContent || "") + event.content;
-              const parsed = parseThinking(raw);
-              return {
-                ...m,
-                rawContent: raw,
-                content: raw,
-                thinkingContent: parsed.thinking,
-                displayContent: parsed.display,
-                thinkingOpen: parsed.thinkingOpen,
-                thinkingClosed: parsed.thinkingClosed,
-              };
-            })
-          );
-        } else if (event.type === "searching") {
-          setSearchStatus({ query: event.query, engine: event.engine });
-        } else if (event.type === "tool_result") {
-          setSearchStatus(null);
-          // 存储搜索结果到 assistant 消息
-          if (event.search_results && event.search_results.length > 0) {
-            setWritingChatMessages((prev) =>
-              prev.map((m) => {
-                if (m.id !== tmpAssistantId) return m;
-                return {
-                  ...m,
-                  searchResults: event.search_results,
-                  searchQuery: event.query || "",
-                };
-              })
-            );
-          }
-        } else if (event.type === "captcha_challenge") {
-          setSearchStatus(null);
-          setCaptchaChallenge({
-            challenge_id: event.challenge_id,
-            images: event.images || [],
-            query: event.query || "",
-            engine_name: event.engine_name || "",
-            instruction: event.instruction || "",
-          });
-        } else if (event.type === "compressed") {
-          setWritingChatCompressed(true);
-          toast.info(i18n.t("hooks:writingChat.toastCompressed"), {
-            description: i18n.t("hooks:writingChat.toastCompressedDesc"),
-          });
-        } else if (event.type === "done") {
-          setWritingChatMessages((prev) =>
-            prev.map((m) =>
-              m.id === tmpAssistantId
-                ? {
-                    ...m,
-                    id: event.message_id || m.id,
-                    streaming: false,
-                    tokens: event.tokens || 0,
-                  }
-                : m
-            )
-          );
-          if (event.session_id) {
-            if (isDraftSession(writingChatCurrentSessionId)) {
-              setWritingChatSessions((prev) =>
-                prev.map((s) =>
-                  s.id === writingChatCurrentSessionId
-                    ? { id: event.session_id, title: s.title }
-                    : s
-                )
-              );
-            }
-            if (event.session_id !== writingChatCurrentSessionId) {
-              setWritingChatCurrentSessionId(event.session_id);
-            }
-          }
-        } else if (event.type === "error") {
-          const msg = translateError(event.message);
-          setError(msg);
-          // 移除占位的 assistant 消息
-          setWritingChatMessages((prev) =>
-            prev.filter((m) => m.id !== tmpAssistantId)
-          );
-          toast.error(i18n.t("hooks:writingChat.chatError"), { description: msg });
-        }
-      };
+      const onEvent = createSSEEventHandler({
+        tmpAssistantId,
+        setWritingChatMessages,
+        setSearchStatus,
+        setCaptchaChallenge,
+        setWritingChatCompressed,
+        setWritingChatSessions,
+        setWritingChatCurrentSessionId,
+        setError,
+        writingChatCurrentSessionId,
+      });
 
       try {
         await api.writingChat.send({
@@ -484,7 +202,9 @@ export default function useWritingChat() {
         setWritingChatMessages((prev) =>
           prev.filter((m) => m.id !== tmpAssistantId)
         );
-        toast.error(i18n.t("hooks:writingChat.sendFailed"), { description: e.message });
+        const { translateError } = await import("@/utils/errorMessages");
+        const msg = translateError(e.message);
+        toast.error(msg, { description: e.message });
       } finally {
         setStreaming(false);
         setLoading("writingChat", false);
@@ -512,6 +232,8 @@ export default function useWritingChat() {
   const generateEdit = useCallback(
     async (messageId, instruction) => {
       if (!activeFile || !writingChatCurrentSessionId || paragraphIndex == null) {
+        const { toast } = await import("sonner");
+        const { default: i18n } = await import("@/i18n");
         toast.error(i18n.t("hooks:writingChat.selectFileAndParagraph"));
         return null;
       }
@@ -536,6 +258,8 @@ export default function useWritingChat() {
         return data;
       } catch (e) {
         setError(e.message);
+        const { toast } = await import("sonner");
+        const { default: i18n } = await import("@/i18n");
         toast.error(i18n.t("hooks:writingChat.generateEditFailed"), { description: e.message });
         return null;
       } finally {
@@ -582,9 +306,13 @@ export default function useWritingChat() {
               : m
           )
         );
+        const { toast } = await import("sonner");
+        const { default: i18n } = await import("@/i18n");
         toast.success(i18n.t("hooks:writingChat.editApplied"));
       } catch (e) {
         setError(e.message);
+        const { toast } = await import("sonner");
+        const { default: i18n } = await import("@/i18n");
         toast.error(i18n.t("hooks:writingChat.applyEditFailed"), { description: e.message });
       } finally {
         setApplyingMessageId(null);
@@ -605,6 +333,8 @@ export default function useWritingChat() {
         setWritingChatMessages((prev) => prev.filter((m) => m.id !== messageId));
       } catch (e) {
         setError(e.message);
+        const { toast } = await import("sonner");
+        const { default: i18n } = await import("@/i18n");
         toast.error(i18n.t("hooks:writingChat.deleteMessageFailed"), { description: e.message });
       }
     },
@@ -627,6 +357,8 @@ export default function useWritingChat() {
           (m) => m.compressed && m.role === "summary"
         );
         setWritingChatCompressed(hasCompressed);
+        const { toast } = await import("sonner");
+        const { default: i18n } = await import("@/i18n");
         if (result?.restored) {
           toast.success(i18n.t("hooks:writingChat.undoCompressedSuccess"));
         } else if (result?.removed) {
@@ -634,45 +366,13 @@ export default function useWritingChat() {
         }
       } catch (e) {
         setError(e.message);
+        const { toast } = await import("sonner");
+        const { default: i18n } = await import("@/i18n");
         toast.error(i18n.t("hooks:writingChat.undoFailed"), { description: e.message });
       }
     },
     [writingChatCurrentSessionId, setWritingChatMessages, setWritingChatCompressed]
   );
-
-  // ── DDG 验证码提交 ─────────────────────────────────────────────
-  const submitCaptcha = useCallback(
-    async (selectedHashes) => {
-      if (!captchaChallenge || captchaSubmitting) return;
-      setCaptchaSubmitting(true);
-      try {
-        const result = await api.writingChat.submitDDGChallenge(
-          captchaChallenge.challenge_id,
-          selectedHashes,
-        );
-        if (result.success) {
-          toast.success(i18n.t("hooks:writingChat.captchaSuccess"), {
-            description: i18n.t("hooks:writingChat.captchaSuccessDesc"),
-          });
-        } else {
-          toast.error(i18n.t("hooks:writingChat.captchaFailed"), {
-            description: translateError(result.message) || i18n.t("hooks:writingChat.captchaFailedHint"),
-          });
-        }
-        setCaptchaChallenge(null);
-      } catch (e) {
-        setError(e.message);
-        toast.error(i18n.t("hooks:writingChat.submitCaptchaFailed"), { description: e.message });
-      } finally {
-        setCaptchaSubmitting(false);
-      }
-    },
-    [captchaChallenge, captchaSubmitting]
-  );
-
-  const dismissCaptcha = useCallback(() => {
-    setCaptchaChallenge(null);
-  }, []);
 
   const handleFileChange = useCallback(
     (path) => {

@@ -174,7 +174,7 @@ latexcellence/
 │       │   ├── useParagraphCheck.js # 逐段 LLM 检查公共逻辑 hook（供 TypoCheck/ExpressionOpt/Formatting 页面共享）
 │       │   ├── useUndoRedo.js      # 撤销/重做状态管理 hook（轮询 can-undo/can-redo 端点 + 键盘快捷键支持）
 │       │   ├── useResultFilter.js  # 段落检查结果搜索/过滤/跳转 hook（文本搜索 + 类型过滤 + 段落跳转）
-│       │   └── useWritingChat.js   # 写作助手 Chat hook：会话/文件/段落、SSE 流式发送、深度思考解析、生成编辑、应用、删除/撤回、会话重命名、助手管理
+│       │   ├── useWritingChat.js   # 写作助手 Chat hook：会话/文件/段落、SSE 流式发送、深度思考解析、生成编辑、应用、删除/撤回、会话重命名、助手管理（内部使用 writing-chat/ 子 hooks）
 │       │
 │       ├── lib/
 │       │   └── utils.js            # cn() 工具函数（clsx + tailwind-merge）

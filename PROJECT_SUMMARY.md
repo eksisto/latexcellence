@@ -34,7 +34,15 @@ latexcellence/
 │   │   ├── time_utils.py            # 时间工具：当前日期/时间/星期格式化
 │   │   ├── latex_parser.py          # LaTeX 源码↔纯文本转换（Marker 保护）
 │   │   ├── compile_error_translator.py  # LaTeX 编译错误 LLM 翻译（compile + git_diff 复用）
-│   │   ├── web_search.py            # 联网搜索模块（DuckDuckGo + SearXNG 多引擎抽象 + SearchManager + Function Calling schema + DDG Challenge 处理）
+│   │   ├── web_search/               # 联网搜索模块（多引擎抽象包）
+│   │   │   ├── __init__.py           # 模块入口，向后兼容导出
+│   │   │   ├── models.py             # SearchResult / SearchResponse 数据模型
+│   │   │   ├── base.py               # BaseSearchEngine 抽象基类
+│   │   │   ├── manager.py            # SearchManager + 全局单例 + Function Calling schema
+│   │   │   └── engines/              # 具体搜索引擎实现
+│   │   │       ├── ddg.py            # DuckDuckGo HTML 引擎 + DDG Challenge 处理
+│   │   │       ├── searxng.py        # SearXNG 引擎
+│   │   │       └── mock.py           # Mock 引擎（测试/降级）
 │   │   └── search_router.py         # 通用搜索 API 路由（/api/search/ddg-challenge）
 │   └── modules/                     # 功能模块目录
 │       ├── typo_check/              # 错字查找
@@ -59,7 +67,9 @@ latexcellence/
 │       │   ├── index.js             # i18next 初始化（含语言检测）
 │       │   └── locales/             # 翻译 JSON 文件
 │       ├── pages/                   # 页面组件
+│       │   └── writing-chat/        # 写作聊天子组件（MessageBubble/EditOpCard/CaptchaDialog）
 │       ├── hooks/                   # 自定义 hook
+│       │   └── writing-chat/        # 写作聊天子 hooks（sessions/assistants/captcha/sse/utils）
 │       ├── components/              # 共享组件 + ui 基座组件
 │       ├── theme/                   # 主题 CSS + useThemeManager.js
 │       ├── api/index.js             # 统一 API 层

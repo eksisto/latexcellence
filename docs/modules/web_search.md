@@ -10,7 +10,14 @@
 
 | 文件 | 职责 |
 |------|------|
-| `backend/utils/web_search.py` | 搜索模块核心：数据模型、引擎抽象、SearchManager、DDG 引擎与 Challenge 处理 |
+| `backend/utils/web_search/` | 搜索模块包 |
+| `backend/utils/web_search/__init__.py` | 模块入口，向后兼容导出所有公共接口 |
+| `backend/utils/web_search/models.py` | SearchResult / SearchResponse 数据模型 |
+| `backend/utils/web_search/base.py` | BaseSearchEngine 抽象基类 |
+| `backend/utils/web_search/manager.py` | SearchManager + 全局单例 + Function Calling schema |
+| `backend/utils/web_search/engines/ddg.py` | DuckDuckGo HTML 引擎 + DDG Challenge 处理 |
+| `backend/utils/web_search/engines/searxng.py` | SearXNG 引擎 |
+| `backend/utils/web_search/engines/mock.py` | Mock 引擎（测试/降级） |
 | `backend/core/tool_registry.py` | Function Calling 工具注册表 |
 
 ## 架构设计
@@ -177,8 +184,9 @@ Response: { "success": true/false, "message": "...", "results": [...] }
 ### 新增搜索引擎
 
 1. 在 `backend/core/config.py` 中新增引擎配置模型，并加入 `WebSearchEnginesConfig`
-2. 在 `backend/utils/web_search.py` 中实现 `BaseSearchEngine` 子类
-3. 在 `get_search_manager()` 中根据 `engines.<name>.enabled` 注册
+2. 在 `backend/utils/web_search/engines/` 中创建新引擎文件，实现 `BaseSearchEngine` 子类
+3. 在 `backend/utils/web_search/engines/__init__.py` 中导出新引擎
+4. 在 `backend/utils/web_search/manager.py` 的 `get_search_manager()` 中根据 `engines.<name>.enabled` 注册
 
 ```python
 def get_search_manager() -> SearchManager:
