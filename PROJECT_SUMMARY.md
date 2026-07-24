@@ -26,6 +26,7 @@ latexcellence/
 │   │   ├── workspace_manager.py     # 多工作区管理（workspace_id → LatexProject）
 │   │   ├── project_manager.py       # LaTeX 项目管理（文件树/段落/撤销）
 │   │   ├── tool_registry.py         # Function Calling 工具注册表
+│   │   ├── prompts.py               # 中央提示词管理模块（集中存储所有 LLM 提示词）
 │   │   └── base_paragraph_check.py  # 逐段检查服务基类（typo/expression/code_review/terminology 共享）
 │   ├── utils/
 │   │   ├── json_utils.py            # LLM JSON 解析/校验/重试
@@ -112,6 +113,7 @@ latexcellence/
 
 ## 核心设计思路
 
+- **集中式提示词管理**: 所有 LLM 提示词集中存储在 `backend/core/prompts.py` 中，按模块和功能分类。提供 `get_prompt(module, key, **kwargs)` 函数获取提示词，支持参数化模板。各模块通过 `from backend.core.prompts import get_prompt` 导入使用，便于统一维护和版本控制
 - **BaseParagraphCheckService**: 四个逐段检查模块（typo_check / expression_opt / code_review / terminology_check）共享的基类，封装文件解析、marker 替换、LLM 编排（批量+流式）、结果写回等流程。子类通过 6 个 hooks（_get_system_prompt / _build_user_content / _get_model_cls / _get_llm_params / _get_batch_size / _build_success_result）定制行为
 - **WorkspaceManager**: 多浏览器多工作区隔离，每个 workspace_id 拥有独立的 `LatexProject` 实例（项目状态、文件树、MD5 缓存、撤销栈完全隔离）
 - **Marker Protection**: LaTeX 结构 → `__CMD_NNNN__` / `__MATH_NNNN__` / `__ENV_NNNN__` / `__VERB_NNNN__` marker → LLM 只改纯文本 → 按长度降序还原。apply 时若 marker_map 缺失（context 过期/重启/新操作覆盖），跳过该段写入并返回 `errors`，防止字面 marker 污染 `.tex` 文件；前端据此保留未应用项并提示用户重新检查

@@ -15,6 +15,7 @@ from pydantic import BaseModel
 from backend.core.logger import get_logger
 from backend.core.llm_client import get_llm_client
 from backend.core.config import get_config
+from backend.core.prompts import get_prompt
 from backend.utils.json_utils import retry_with_validation
 
 
@@ -31,35 +32,6 @@ class TemplateGenResult(BaseModel):
     body_structure: list[SectionSkeleton] = []
     packages: list[str] = []
     explanation: str = ""
-
-
-_TEMPLATE_SYSTEM_PROMPT = (
-    "You are a LaTeX template designer. "
-    "The user will describe the type of document they need.\n\n"
-    "Your task is to generate a complete LaTeX template skeleton with:\n"
-    "- Appropriate \\documentclass and preamble (packages, styling)\n"
-    "- A body structure with suggested section titles and brief content hints\n"
-    "- Any essential packages for the document type\n\n"
-    "Guidelines:\n"
-    "- Use standard LaTeX packages (amsmath, graphicx, hyperref, etc.)\n"
-    "- For academic papers, include title/author/abstract scaffolding\n"
-    "- Keep the template clean and well-commented\n"
-    "- Adapt to the user's specific requirements\n\n"
-    "Respond with JSON only, no markdown fences, no extra text.\n\n"
-    "JSON format:\n"
-    "{{\n"
-    '  "template_name": "<short descriptive name>",\n'
-    '  "preamble": "<complete LaTeX preamble including \\\\documentclass>",\n'
-    '  "body_structure": [\n'
-    '    {{\n'
-    '      "section": "<section title>",\n'
-    '      "suggested_content": "<brief hint of what to write here>"\n'
-    '    }}\n'
-    '  ],\n'
-    '  "packages": ["<package1>", "<package2>"],\n'
-    '  "explanation": "<brief explanation of the template design>"\n'
-    "}}"
-)
 
 
 class TemplateGenService:
@@ -90,7 +62,8 @@ class TemplateGenService:
         cfg = get_config()
 
         if not cfg.llm.api_key:
-            self._logger.warning("No API key configured, returning empty template")
+            self._logger.warning(
+                "No API key configured, returning empty template")
             return {
                 "template_name": "empty",
                 "preamble": r"\documentclass{article}",
@@ -102,7 +75,8 @@ class TemplateGenService:
         if llm is None:
             llm = get_llm_client()
         messages = [
-            {"role": "system", "content": _TEMPLATE_SYSTEM_PROMPT},
+            {"role": "system", "content": get_prompt(
+                "template_gen", "system")},
             {
                 "role": "user",
                 "content": (
@@ -151,7 +125,8 @@ class TemplateGenService:
         output_dir.mkdir(parents=True, exist_ok=True)
 
         name = template.get("template_name", "untitled")
-        safe_name = "".join(c if c.isalnum() or c in "-_" else "_" for c in name)
+        safe_name = "".join(
+            c if c.isalnum() or c in "-_" else "_" for c in name)
         file_path = output_dir / f"{safe_name}.tex"
 
         content = self._assemble_template(template)

@@ -23,6 +23,7 @@ from pydantic import BaseModel, model_validator
 from backend.core.config import get_config
 from backend.core.workspace_manager import get_project_manager_for_workspace
 from backend.core.base_paragraph_check import BaseParagraphCheckService
+from backend.core.prompts import get_prompt
 from backend.utils.json_utils import retry_with_validation
 from backend.utils.latex_parser import MARKER_PATTERN
 from backend.utils.latexindent_utils import (
@@ -62,53 +63,6 @@ class CodeReviewResult(BaseModel):
                 "needs_review is false but suggestions is non-empty"
             )
         return self
-
-
-# ── system prompt ──────────────────────────────────────────────────────────
-
-_SYSTEM_PROMPT = (
-    "You are a LaTeX code quality reviewer. "
-    "The following LaTeX source has already been mechanically formatted by a rule-based formatter "
-    "(whitespace, indentation, alignment).\n\n"
-    "Your task is to review it for issues that a rule-based formatter cannot detect:\n\n"
-    "OUTPUT\n"
-    "- Output ONLY one valid JSON object.\n"
-    "- No markdown fences, no extra text.\n\n"
-    "IGNORE\n"
-    "- DO NOT review whitespace, indentation, line breaks, alignment, spacing, or wrapping.\n"
-    "- DO NOT infer, modify, delete, split, or reorder hidden markers such as __CMD_XXXX__, __MATH_XXXX__, __ENV_XXXX__.\n"
-    "- Markers are read-only. If an issue can only be fixed by changing a marker, ignore it.\n\n"
-    "ISSUE TYPES\n"
-    "- code_smell: clearly obsolete/unsafe commands or packages, redundant packages.\n"
-    "- modernization: deprecated constructs with safe modern LaTeX replacements.\n"
-    "- best_practice: labels, refs, citations, sectioning, package choices.\n"
-    "- portability: engine-specific features, encoding/compiler compatibility.\n"
-    "- consistency: mixed conventions visible inside the given fragment.\n\n"
-    "CRITICAL RULES:\n"
-    "1. Focus ONLY on issues that a rule-based formatter cannot fix.\n"
-    "2. DO NOT suggest whitespace, indentation, or alignment changes.\n"
-    "3. If the code is already well-written, return needs_review: false.\n"
-    "4. When needs_review is false, suggestions MUST be an empty list [].\n"
-    "5. Each suggestion must include the original fragment and your suggested replacement.\n"
-    "6. Respond with JSON only, no markdown fences, no extra text.\n"
-    "7. DO NOT modify, delete, or split any marker "
-    "(__CMD_XXXX__, __MATH_XXXX__, __ENV_XXXX__, etc.). "
-    "They are invisible structural placeholders — treat them as read-only.\n\n"
-    "JSON format (strictly follow this schema):\n"
-    "{\n"
-    '  "paragraph_index": <int>,\n'
-    '  "needs_review": true | false,\n'
-    '  "suggestions": [\n'
-    '    {\n'
-    '      "type": "code_smell|modernization|best_practice|portability|consistency",\n'
-    '      "severity": "info|warning|error",\n'
-    '      "description": "<brief description of the issue>",\n'
-    '      "original": "<the problematic code fragment>",\n'
-    '      "suggested": "<the suggested replacement>"\n'
-    '    }\n'
-    '  ]\n'
-    "}"
-)
 
 
 class CodeReviewService(BaseParagraphCheckService):
@@ -330,14 +284,10 @@ class CodeReviewService(BaseParagraphCheckService):
     # ── Hook 实现 ───────────────────────────────────────────────────────────
 
     def _get_system_prompt(self) -> str:
-        return _SYSTEM_PROMPT
+        return get_prompt("code_review", "system")
 
     def _build_user_content(self, text: str) -> str:
-        return (
-            "Please review the following LaTeX code for quality issues "
-            "that a rule-based formatter cannot detect.\n\n"
-            "LATEX SOURCE:\n" + text
-        )
+        return get_prompt("code_review", "user", text=text)
 
     def _get_model_cls(self):
         return CodeReviewResult

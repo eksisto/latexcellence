@@ -19,6 +19,7 @@ from pydantic import BaseModel
 from backend.core.logger import get_logger
 from backend.core.llm_client import get_llm_client
 from backend.core.config import get_config
+from backend.core.prompts import get_prompt
 from backend.utils.json_utils import retry_with_validation
 from backend.utils.latex_package_analyzer import prepend_package_comments
 
@@ -28,36 +29,6 @@ class TableOCRResult(BaseModel):
     latex: str
     confidence: float = 0.0
 
-
-_TABLE_OCR_SYSTEM_PROMPT = (
-    "You are a senior academic paper typesetting expert and OCR data extraction specialist, "
-    "proficient in LaTeX syntax, skilled at perfectly restoring complex image tables into "
-    "high-quality, directly compilable LaTeX float code.\n\n"
-    "Rules & Guidelines:\n"
-    "1. Float structure: Must use the `table` environment wrapping a `tabular` environment. "
-    "Include \\begin{table}[htbp], \\centering, \\caption{...}, \\label{tab:xxx}, tabular, \\end{table}.\n"
-    "2. Table style: Default to the academic three-line table style using \\toprule, \\midrule, \\bottomrule "
-    "from the booktabs package instead of \\hline.\n"
-    "3. Structure restoration: Accurately determine column count and alignment (l/c/r). "
-    "Number columns are recommended right-aligned, text columns left-aligned or centered. "
-    "Accurately handle \\multicolumn and \\multirow cells. "
-    "If a cell is empty, preserve the empty slot (do not omit & separators).\n"
-    "4. Content extraction: 100% faithful to the original image content. "
-    "No fabrication or omission of any text or data. "
-    "Mathematical formulas, superscripts/subscripts, Greek letters in text must use correct LaTeX math mode.\n"
-    "5. Special symbols (%, &, _, #, ~, etc.) must be properly escaped.\n"
-    "6. Set 'confidence' based on recognition quality:\n"
-    "  * 0.9-1.0: Clear, confident recognition\n"
-    "  * 0.7-0.9: Mostly clear, minor uncertainties\n"
-    "  * 0.5-0.7: Partially clear, some guesses\n"
-    "  * Below 0.5: Poor quality, significant uncertainty\n"
-    "If the image is not a table or unrecognizable, set 'latex' to empty string and 'confidence' to 0.0\n\n"
-    "Respond with JSON only, no markdown fences:\n"
-    "{{\n"
-    '  "latex": "<LaTeX table float code>",\n'
-    '  "confidence": <float between 0 and 1>\n'
-    "}}"
-)
 
 _MAX_DIMENSION = 2000
 _SUPPORTED_FORMATS = {"image/png", "image/jpeg", "image/webp"}
@@ -108,7 +79,7 @@ class TableOCRService:
         self, llm, base64_image: str, content_type: str
     ) -> dict[str, Any]:
         messages = [
-            {"role": "system", "content": _TABLE_OCR_SYSTEM_PROMPT},
+            {"role": "system", "content": get_prompt("table_ocr", "system")},
             {
                 "role": "user",
                 "content": [

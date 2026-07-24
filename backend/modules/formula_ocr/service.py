@@ -20,6 +20,7 @@ from pydantic import BaseModel
 from backend.core.logger import get_logger
 from backend.core.llm_client import get_llm_client
 from backend.core.config import get_config
+from backend.core.prompts import get_prompt
 from backend.utils.json_utils import retry_with_validation
 from backend.utils.latex_package_analyzer import prepend_package_comments
 
@@ -30,28 +31,6 @@ class FormulaOCRResult(BaseModel):
     inline: bool = False
     confidence: float = 0.0
 
-
-_VISION_SYSTEM_PROMPT = (
-    "You are a LaTeX formula OCR engine. "
-    "Your task is to convert images of mathematical formulas into LaTeX code.\n\n"
-    "Rules:\n"
-    "- Output ONLY the LaTeX expression in the 'latex' field, no extra text\n"
-    "- Use standard LaTeX math commands (\\frac, \\sqrt, \\sum, \\int, etc.)\n"
-    "- For inline formulas (no display style), set inline=true\n"
-    "- For display formulas (large, centered), set inline=false\n"
-    "- Set 'confidence' based on recognition quality:\n"
-    "  * 0.9-1.0: Clear, confident recognition\n"
-    "  * 0.7-0.9: Mostly clear, minor uncertainties\n"
-    "  * 0.5-0.7: Partially clear, some guesses\n"
-    "  * Below 0.5: Poor quality, significant uncertainty\n"
-    "If the image is not a formula or unrecognizable, set 'latex' to empty string and 'confidence' to 0.0\n\n"
-    "Respond with JSON only, no markdown fences:\n"
-    "{{\n"
-    '  "latex": "<LaTeX code>",\n'
-    '  "inline": <boolean>,\n'
-    '  "confidence": <float between 0 and 1>\n'
-    "}}"
-)
 
 _MAX_DIMENSION = 2000
 _SUPPORTED_FORMATS = {"image/png", "image/jpeg", "image/webp"}
@@ -103,7 +82,8 @@ class FormulaOCRService:
         self, llm, base64_image: str, content_type: str
     ) -> dict[str, Any]:
         messages = [
-            {"role": "system", "content": _VISION_SYSTEM_PROMPT},
+            {"role": "system", "content": get_prompt(
+                "formula_ocr", "vision_system")},
             {
                 "role": "user",
                 "content": [

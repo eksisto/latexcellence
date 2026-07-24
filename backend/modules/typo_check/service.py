@@ -18,6 +18,7 @@ from pydantic import BaseModel
 
 from backend.core.config import get_config
 from backend.core.base_paragraph_check import BaseParagraphCheckService
+from backend.core.prompts import get_prompt
 
 
 # ── Pydantic models for LLM response schema ────────────────────────────────
@@ -37,40 +38,6 @@ class TypoCheckResult(BaseModel):
     original: str
     corrected: str
     changes: list[TypoChangeItem] = []
-
-
-# ── system prompt template ─────────────────────────────────────────────────
-
-_SYSTEM_PROMPT = (
-    "You are a LaTeX document proofreader. "
-    "Your task is to find and fix typos, spelling errors, and grammar mistakes "
-    "in the given text.\n\n"
-    "CRITICAL RULES — VIOLATING THESE MAKES THE OUTPUT UNUSABLE:\n"
-    "1. The text contains markers like __CMD_0000__ or __MATH_0000__ "
-    "which represent LaTeX commands and math formulas. "
-    "These markers are NOT part of human-readable text.\n"
-    "2. ABSOLUTELY DO NOT modify, delete, split, merge, or reorder any marker. "
-    "Every marker must appear in the corrected text EXACTLY as in the original.\n"
-    "3. Only modify plain text portions (words, sentences, punctuation).\n"
-    "4. If there are no errors, the corrected field must be byte-identical "
-    "to the original field.\n"
-    "5. Respond with JSON only, no markdown fences, no extra text.\n\n"
-    "JSON format (strictly follow this schema):\n"
-    "{\n"
-    '  "paragraph_index": <int>,\n'
-    '  "original": "<the exact original text with all markers unchanged>",\n'
-    '  "corrected": "<the corrected text with all markers unchanged>",\n'
-    '  "changes": [\n'
-    '    {\n'
-    '      "type": "typo",\n'
-    '      "original": "<incorrect text fragment>",\n'
-    '      "corrected": "<correct text fragment>",\n'
-    '      "position": <optional int, char offset in original>,\n'
-    '      "explanation": "<brief reason in English>"\n'
-    '    }\n'
-    '  ]\n'
-    "}"
-)
 
 
 class TypoCheckService(BaseParagraphCheckService):
@@ -115,13 +82,10 @@ class TypoCheckService(BaseParagraphCheckService):
     # ── Hook 实现 ───────────────────────────────────────────────────────────
 
     def _get_system_prompt(self) -> str:
-        return _SYSTEM_PROMPT
+        return get_prompt("typo_check", "system")
 
     def _build_user_content(self, text: str) -> str:
-        return (
-            f"Please check the following text for typos and errors.\n\n"
-            f"TEXT:\n{text}"
-        )
+        return get_prompt("typo_check", "user", text=text)
 
     def _get_model_cls(self):
         return TypoCheckResult

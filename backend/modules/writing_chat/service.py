@@ -31,6 +31,7 @@ from backend.core.logger import get_logger
 from backend.core.llm_client import get_llm_client
 from backend.core.tool_registry import get_tool_registry
 from backend.core.workspace_manager import get_project_manager_for_workspace
+from backend.core.prompts import get_prompt
 from backend.utils.json_utils import retry_with_validation
 from backend.utils.time_utils import get_current_time_context
 from backend.utils.web_search import DDGChallengeError, get_search_manager
@@ -45,65 +46,6 @@ from backend.modules.writing_chat.models import (
     LlmEditResult,
     LlmSummaryResult,
     UndoMessageRequest,
-)
-
-
-# ── System prompts ──────────────────────────────────────────────────────────
-
-
-_CHAT_SYSTEM_PROMPT = (
-    "You are a LaTeX academic writing assistant integrated into a writing tool. "
-    "The user is currently working on a LaTeX paper and may ask questions, request "
-    "discussion, or ask you to perform edits later.\n\n"
-    "RESPONSE STYLE:\n"
-    "- Reply in the user's language (typically Chinese unless they ask in English)\n"
-    "- Use Markdown formatting where helpful (headings, lists, code blocks)\n"
-    "- If the conversation involves LaTeX, you may show LaTeX snippets in fenced "
-    "```latex blocks; do NOT attempt to actually modify the user's source file in "
-    "this response — modifications happen as a separate explicit step.\n"
-    "- Be concise but thorough; prefer structured answers over long prose.\n\n"
-    "CONTEXT:\n"
-    "The user has provided the following file context (raw LaTeX source of their "
-    "paper) for reference. Treat it as background — do not assume you can edit it "
-    "directly from your reply.\n\n"
-    "{context_block}"
-)
-
-
-_EDIT_SYSTEM_PROMPT = (
-    "You are a LaTeX document editing agent. Rewrite the specified paragraph of the "
-    "user's paper based on their instruction.\n\n"
-    "CRITICAL RULES — VIOLATING THESE MAKES THE OUTPUT UNUSABLE:\n"
-    "1. You are working with RAW LaTeX source code. Preserve ALL LaTeX commands, "
-    "environments, math formulas, citations, labels, and cross-references unchanged "
-    "unless the user explicitly asks to modify specific ones.\n"
-    "2. Only modify the textual content (words, sentences, phrasing) as instructed.\n"
-    "3. The optimized field MUST contain the COMPLETE paragraph, not just the changed "
-    "portion. It must be valid, compilable LaTeX code.\n"
-    "4. If no change is needed, the optimized field must be identical to the original.\n"
-    "5. Respond with JSON only, no markdown fences, no extra text.\n\n"
-    "JSON format (strictly follow this schema):\n"
-    "{{\n"
-    '  "paragraph_index": <int>,\n'
-    '  "original": "<the exact original paragraph as raw LaTeX>",\n'
-    '  "optimized": "<the rewritten paragraph as raw LaTeX>",\n'
-    '  "reason": "<brief explanation of the edit>"\n'
-    "}}\n\n"
-    "USER INSTRUCTION:\n"
-    "{instruction}"
-)
-
-
-_SUMMARY_SYSTEM_PROMPT = (
-    "You are a conversation summarizer. Summarize the following chat conversation "
-    "between a user and a writing assistant. The summary will replace the original "
-    "conversation in the assistant's context window to keep the dialogue going.\n\n"
-    "GUIDELINES:\n"
-    "- Capture key decisions, the user's intent, questions answered, references to "
-    "specific paragraphs or files, and any pending edits\n"
-    "- Keep it concise — usually under 300 words\n"
-    "- Write in the user's language\n"
-    "- Return JSON only: {\"summary\": \"<your summary>\"}"
 )
 
 
@@ -179,12 +121,14 @@ class WritingChatService:
             else None
         )
         if ctx is None:
-            ctx = ConversationContext.create_session(file_path=req.file_path, scope=scope)
+            ctx = ConversationContext.create_session(
+                file_path=req.file_path, scope=scope)
 
         # 2. 构造上下文锚点文本 + 追加 user 消息
         ctx.file_path = req.file_path or ctx.file_path
         ctx.save_to_disk()
-        context_block = self._build_context_block(req.file_path, req.paragraph_index, workspace_id)
+        context_block = self._build_context_block(
+            req.file_path, req.paragraph_index, workspace_id)
         user_msg = ctx.append_user_message(
             req.user_message,
             referenced_file=req.file_path,
@@ -202,22 +146,21 @@ class WritingChatService:
 
         # 4. 调用 LLM 流式（支持 Function Calling 工具调用）
         llm = get_llm_client()
-        system_prompt = _CHAT_SYSTEM_PROMPT.format(context_block=context_block)
+        system_prompt = get_prompt(
+            "writing_chat", "chat_system", context_block=context_block)
 
         # 注入当前时间上下文，帮助 LLM 理解相对时间概念
         t = get_current_time_context()
-        time_context = (
-            f"\n\nCURRENT TIME CONTEXT:\n"
-            f"当前日期：{t['date']}（{t['weekday']}），时间：{t['time']}\n"
-            f"当用户提示词中出现与时间相关的词汇（如：最近、今天、本周、本月、过去N天等）时，"
-            f"请基于此时间信息进行理解，并生成合适的时间范围搜索词。"
+        system_prompt += get_prompt(
+            "writing_chat", "chat_system_time_context",
+            date=t["date"], weekday=t["weekday"], time=t["time"],
         )
-        system_prompt += time_context
 
         # 助手指令注入 system prompt（不写入 user message，界面上不可见）
         if req.assistant_prompt:
             system_prompt = req.assistant_prompt + "\n\n" + system_prompt
-        messages = [{"role": "system", "content": system_prompt}] + ctx.to_llm_messages()
+        messages = [{"role": "system", "content": system_prompt}
+                    ] + ctx.to_llm_messages()
         assistant_id = uuid.uuid4().hex
 
         # 检查是否启用联网搜索工具
@@ -357,7 +300,8 @@ class WritingChatService:
                     if chunk.usage is not None:
                         last_usage_tokens = chunk.usage.total_tokens
             except Exception as e:
-                self._logger.error(f"post-tool chat_stream_with_usage failed: {e}")
+                self._logger.error(
+                    f"post-tool chat_stream_with_usage failed: {e}")
                 yield {"type": "error", "message": str(e)}
                 ctx.delete_message(user_msg.id)
                 ctx.save_to_disk()
@@ -430,7 +374,8 @@ class WritingChatService:
             raise ValueError("Target paragraph is empty")
 
         llm = get_llm_client()
-        system_prompt = _EDIT_SYSTEM_PROMPT.format(instruction=req.instruction)
+        system_prompt = get_prompt(
+            "writing_chat", "edit_system", instruction=req.instruction)
         messages = [
             {"role": "system", "content": system_prompt},
             {
@@ -512,14 +457,16 @@ class WritingChatService:
                 edit_op = m.edit_op
                 break
         if edit_op is None:
-            raise ValueError(f"No edit op attached to message {req.edit_message_id}")
+            raise ValueError(
+                f"No edit op attached to message {req.edit_message_id}")
         if edit_op.applied:
             return {"applied": True, "already_applied": True}
 
         # 优先使用请求中携带的 new_latex（用户手动编辑的内容）
         target_latex = req.new_latex if req.new_latex is not None else edit_op.new_latex
         pm = get_project_manager_for_workspace(workspace_id)
-        pm.apply_change(edit_op.file_path, edit_op.paragraph_index, target_latex)
+        pm.apply_change(edit_op.file_path,
+                        edit_op.paragraph_index, target_latex)
 
         ctx.mark_edit_applied(req.edit_message_id)
         ctx.save_to_disk()
@@ -555,7 +502,8 @@ class WritingChatService:
         if not file_path:
             return "(no file selected)"
         try:
-            text = ConversationContext.build_file_context_text(file_path, paragraph_index, workspace_id)
+            text = ConversationContext.build_file_context_text(
+                file_path, paragraph_index, workspace_id)
         except Exception as e:
             return f"(failed to load file context: {e})"
         return text or "(file has no readable paragraphs)"
@@ -604,7 +552,8 @@ class WritingChatService:
             f"[{m['role'].upper()}]\n{m['content']}" for m in messages_to_summarize
         )
         messages = [
-            {"role": "system", "content": _SUMMARY_SYSTEM_PROMPT},
+            {"role": "system", "content": get_prompt(
+                "writing_chat", "summary_system")},
             {"role": "user", "content": f"CONVERSATION:\n{transcript}"},
         ]
         try:

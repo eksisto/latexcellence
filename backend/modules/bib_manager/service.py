@@ -22,6 +22,7 @@ from backend.core.logger import get_logger
 from backend.core.workspace_manager import get_project_manager_for_workspace
 from backend.core.llm_client import get_llm_client
 from backend.core.config import get_config
+from backend.core.prompts import get_prompt
 from backend.modules.bib_manager.models import (
     BibEntry,
     ExtractedMetadata,
@@ -33,119 +34,6 @@ from backend.utils.json_utils import retry_with_validation
 from backend.utils.file_ops import atomic_write, safe_read
 from backend.utils.path_guard import resolve_project_path
 
-
-_FORMAT_ANALYSIS_PROMPT = (
-    "You are a bibliography format analyzer.\n\n"
-    "## Input\n"
-    "A single formatted reference entry:\n"
-    "<reference>\n{reference_entry}\n</reference>\n\n"
-    "## Task\n"
-    "1. Identify the citation format (GB/T 7714-2015, APA 7th, IEEE, MLA 9th, "
-    "Chicago, Vancouver, or unknown).\n"
-    "2. Map it to the most appropriate BibTeX entry type "
-    "(article, book, inproceedings, incollection, phdthesis, mastersthesis, "
-    "techreport, misc, etc.).\n"
-    "3. Extract the formatting rules observed in this entry.\n"
-    "4. Suggest the most appropriate LaTeX bibliography rendering style.\n\n"
-    "## Guidelines\n"
-    "- If the format cannot be determined with confidence, set format_name to "
-    '"unknown" and confidence to "low".\n'
-    "- required_fields / optional_fields must be specific to the inferred "
-    "entry_type, not generic.\n"
-    "- field_descriptions should cover ALL fields actually present in the "
-    "entry (e.g., editor, address, isbn, edition, language), not just the "
-    "example keys.\n"
-    "- format_description should cover: field ordering, punctuation between "
-    "fields, author name style, title capitalization, and any special markers "
-    "(e.g., [J], [M], DOI placement).\n"
-    "- For the LaTeX style fields, use these known mappings as reference:\n"
-    "  * GB/T 7714-2015 → latex_backend='bibtex', latex_package='gbt7714', "
-    "latex_bibliographystyle='gbt7714-numerical'\n"
-    "  * APA 7th → latex_backend='biblatex', latex_package='biblatex', "
-    "latex_bibliographystyle='apa'\n"
-    "  * IEEE → latex_backend='bibtex', latex_package='IEEEtran', "
-    "latex_bibliographystyle='IEEEtran'\n"
-    "  * Vancouver → latex_backend='bibtex', latex_package='', "
-    "latex_bibliographystyle='vancouver'\n"
-    "  * Chicago → latex_backend='bibtex', latex_package='chicago', "
-    "latex_bibliographystyle='chicago'\n"
-    "  * MLA 9th → latex_backend='bibtex', latex_package='mla13', "
-    "latex_bibliographystyle='mla'\n"
-    "- If unsure about LaTeX style, set all latex_* fields to null.\n\n"
-    "## Output\n"
-    "Respond with JSON only. No markdown fences, no commentary.\n\n"
-    "{{\n"
-    '  "format_name": "GB/T 7714-2015 | APA 7th | IEEE | MLA 9th | Chicago | Vancouver | unknown",\n'
-    '  "confidence": "high | medium | low",\n'
-    '  "entry_type": "article | book | inproceedings | ...",\n'
-    '  "document_type_marker": "[J] | [M] | [C] | [D] | null (for non-GB/T formats)",\n'
-    '  "required_fields": ["author", "title", ...],\n'
-    '  "optional_fields": ["doi", "url", ...],\n'
-    '  "field_descriptions": {{\n'
-    '    "<field_name>": "<the meaning of this field in this entry and its formatting requirements>",\n'
-    '    ...\n'
-    '  }},\n'
-    '  "format_description": "Describe in order: author format → title → document type marker → journal/publication information → year/volume/issue/pages → DOI/URL, etc.",\n'
-    '  "raw_observed_fields": ["the list of fields that actually appear in the entry, for validation"],\n'
-    '  "latex_backend": "bibtex | biblatex | null",\n'
-    '  "latex_package": "the LaTeX package name needed, or null",\n'
-    '  "latex_bibliographystyle": "the .bst style name or biblatex style, or null",\n'
-    '  "latex_preamble": "the exact LaTeX preamble line(s) needed, or null"\n'
-    "}}"
-)
-
-_METADATA_EXTRACTION_PROMPT = (
-    "You are a bibliography metadata extractor. "
-    "The user will provide a block of text (or an image) containing publication metadata, "
-    "along with a list of specific fields to extract.\n\n"
-    "Your task is to extract the values for each requested field from the input.\n\n"
-    "Guidelines:\n"
-    "- Extract ONLY the fields listed in the FIELD NAMES section of the user message\n"
-    "- Clean author names: use 'and' to separate authors, remove extra spaces\n"
-    "- Standardize the title: capitalize only proper nouns if in English\n"
-    "- For year fields, output only digits as a string\n"
-    "- Leave a field as empty string if not found, do NOT guess or fabricate\n"
-    "- Output each value as a plain string\n\n"
-    "Respond with JSON only, no markdown fences, no extra text.\n\n"
-    "JSON format:\n"
-    "{{\n"
-    '  "fields": {{\n'
-    '    "<field_name_1>": "<extracted value>",\n'
-    '    "<field_name_2>": "<extracted value>"\n'
-    '  }}\n'
-    "}}"
-)
-
-_BIBTEX_GENERATION_PROMPT = (
-    "You are a BibTeX code generator. "
-    "The user will provide structured publication metadata and format requirements.\n\n"
-    "Your task is to generate a correct, well-formatted BibTeX entry.\n\n"
-    "Guidelines:\n"
-    "- Use the specified entry_type (article, inproceedings, book, etc.)\n"
-    "- Generate an appropriate cite_key in the format: "
-    "firstAuthorLastName + year + firstMeaningfulKeyword (all lowercase)\n"
-    "  Example: devlin2018bert, krizhevsky2012imagenet\n"
-    "- Include all available fields, use empty string for missing required fields\n"
-    "- Each field should be properly quoted with curly braces: title = {{...}},\n"
-    "- Preserve LaTeX special characters in titles (escape % & _ # if needed)\n"
-    "- Format output as clean, indented BibTeX code\n"
-    "- Do NOT include fields that have no value (empty string) as optional fields\n"
-    "- But DO include required fields even if empty\n"
-    "- Avoid duplicate cite_keys: if existing_keys is provided, adjust the cite_key\n\n"
-    "Respond with JSON only, no markdown fences, no extra text.\n\n"
-    "JSON format:\n"
-    "{{\n"
-    '  "cite_key": "<generated cite key>",\n'
-    '  "entry_type": "<BibTeX entry type>",\n'
-    '  "fields": {{\n'
-    '    "author": "<author1 and author2>",\n'
-    '    "title": "<title>",\n'
-    '    "journal": "<journal>",\n'
-    '    "year": "<year>"\n'
-    '  }},\n'
-    '  "raw_bibtex": "<complete formatted BibTeX code as a single string with \\\\n line breaks>"\n'
-    "}}"
-)
 
 _MAX_DIMENSION = 2000
 _SUPPORTED_FORMATS = {"image/png", "image/jpeg", "image/webp"}
@@ -162,7 +50,7 @@ class BibManagerService:
             raise RuntimeError("No API key configured")
 
         llm = get_llm_client()
-        system_prompt = _FORMAT_ANALYSIS_PROMPT.format(reference_entry=example)
+        system_prompt = get_prompt("bib_manager", "format_analysis", reference_entry=example)
         messages = [
             {"role": "system", "content": system_prompt},
         ]
@@ -234,7 +122,7 @@ class BibManagerService:
         user_content = self._build_extract_user_message(text, format_info)
 
         messages = [
-            {"role": "system", "content": _METADATA_EXTRACTION_PROMPT},
+            {"role": "system", "content": get_prompt("bib_manager", "metadata_extraction")},
             {"role": "user", "content": user_content},
         ]
 
@@ -293,7 +181,7 @@ class BibManagerService:
 
         llm = get_llm_client()
         messages = [
-            {"role": "system", "content": _METADATA_EXTRACTION_PROMPT},
+            {"role": "system", "content": get_prompt("bib_manager", "metadata_extraction")},
             {
                 "role": "user",
                 "content": [
@@ -368,7 +256,7 @@ class BibManagerService:
         metadata_str = _json.dumps(metadata, ensure_ascii=False, indent=2)
 
         messages = [
-            {"role": "system", "content": _BIBTEX_GENERATION_PROMPT},
+            {"role": "system", "content": get_prompt("bib_manager", "bibtex_generation")},
             {
                 "role": "user",
                 "content": (

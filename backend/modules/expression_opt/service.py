@@ -19,6 +19,7 @@ from pydantic import BaseModel
 
 from backend.core.config import get_config
 from backend.core.base_paragraph_check import BaseParagraphCheckService
+from backend.core.prompts import get_prompt
 from backend.modules.expression_opt.prompt_manager import get_prompt_manager
 
 
@@ -38,48 +39,6 @@ class ExpressionOptResult(BaseModel):
     original: str
     optimized: str
     changes: list[ExpressionChangeItem] = []
-
-
-# ── base system prompt ─────────────────────────────────────────────────────
-
-_BASE_SYSTEM_PROMPT = (
-    "You are a LaTeX document writing coach specializing in academic English. "
-    "Your task is to improve the clarity, conciseness, and academic tone of "
-    "the given text.\n\n"
-    "GUIDELINES:\n"
-    "- Make sentences more concise without losing meaning\n"
-    "- Use precise academic vocabulary\n"
-    "- Improve logical flow and transitions\n"
-    "- Fix awkward or unnatural phrasing\n"
-    "- Preserve the original author's intent and key terminology\n\n"
-    "CRITICAL RULES — VIOLATING THESE MAKES THE OUTPUT UNUSABLE:\n"
-    "1. The text contains markers like __CMD_0000__ or __MATH_0000__ "
-    "which represent LaTeX commands and math formulas. "
-    "These markers are NOT part of human-readable text.\n"
-    "2. ABSOLUTELY DO NOT modify, delete, split, merge, or reorder any marker. "
-    "Every marker must appear in the optimized text EXACTLY as in the original.\n"
-    "3. Only modify plain text portions (words, sentences, punctuation).\n"
-    "4. If no improvement is needed, the optimized field must be identical "
-    "to the original field.\n"
-    "5. Respond with JSON only, no markdown fences, no extra text.\n\n"
-    "JSON format (strictly follow this schema):\n"
-    "{{\n"
-    '  "paragraph_index": <int>,\n'
-    '  "original": "<the exact original text with all markers unchanged>",\n'
-    '  "optimized": "<the improved text with all markers unchanged>",\n'
-    '  "changes": [\n'
-    '    {{\n'
-    '      "type": "rewrite",\n'
-    '      "original": "<the original text fragment>",\n'
-    '      "optimized": "<the improved text fragment>",\n'
-    '      "reason": "<brief explanation of the improvement>"\n'
-    '    }}\n'
-    '  ]\n'
-    "}}\n\n"
-    "CUSTOM INSTRUCTIONS FROM USER:\n"
-    "{custom_prompt}\n"
-    "Above custom instructions take priority over the general guidelines."
-)
 
 
 class ExpressionOptService(BaseParagraphCheckService):
@@ -109,10 +68,11 @@ class ExpressionOptService(BaseParagraphCheckService):
         pm = get_prompt_manager()
         custom = pm.get_active_prompt_content()
         if custom:
-            return _BASE_SYSTEM_PROMPT.format(custom_prompt=custom)
+            return get_prompt("expression_opt", "base_system", custom_prompt=custom)
         cfg = get_config()
         default = cfg.features.expression_opt.default_prompt
-        return _BASE_SYSTEM_PROMPT.format(
+        return get_prompt(
+            "expression_opt", "base_system",
             custom_prompt=default or "No specific instructions."
         )
 
@@ -143,10 +103,7 @@ class ExpressionOptService(BaseParagraphCheckService):
         return self._build_system_prompt_with_custom()
 
     def _build_user_content(self, text: str) -> str:
-        return (
-            f"Please improve the academic expression of the following text.\n\n"
-            f"TEXT:\n{text}"
-        )
+        return get_prompt("expression_opt", "user", text=text)
 
     def _get_model_cls(self):
         return ExpressionOptResult

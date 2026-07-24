@@ -19,35 +19,13 @@ from pydantic import BaseModel
 from backend.core.logger import get_logger
 from backend.core.llm_client import get_llm_client
 from backend.core.config import get_config
+from backend.core.prompts import get_prompt
 from backend.utils.json_utils import retry_with_validation
 
 
 class StyleModifyResult(BaseModel):
     """LLM 样式修改输出"""
     latex: str
-
-
-_SYSTEM_PROMPT = (
-    "You are a LaTeX expert and code editor. "
-    "Your task is to modify the user's LaTeX code according to their natural language instruction.\n\n"
-    "GUIDELINES:\n"
-    "- Make ONLY the changes requested by the user, nothing more\n"
-    "- Preserve all content that the user did not ask to change\n"
-    "- Preserve the overall document structure, packages, and preamble\n"
-    "- If the user asks for something ambiguous, make the most reasonable interpretation\n"
-    "- If the request cannot be fulfilled (e.g., asking to modify something that doesn't exist), "
-    "explain briefly and return the original code unchanged\n"
-    "- Return the COMPLETE modified LaTeX code, not just the changed portion\n\n"
-    "CRITICAL RULES:\n"
-    "1. Return the FULL LaTeX source, not just a diff or excerpt\n"
-    "2. The 'latex' field must contain the complete modified LaTeX code\n"
-    "3. Do NOT add markdown fences or extra commentary in the JSON response\n"
-    "4. Respond with JSON only, following the schema exactly\n\n"
-    "JSON format:\n"
-    "{{\n"
-    '  "latex": "<the complete modified LaTeX code>"\n'
-    "}}"
-)
 
 
 class StyleModifyService:
@@ -85,7 +63,8 @@ class StyleModifyService:
         )
 
         messages = [
-            {"role": "system", "content": _SYSTEM_PROMPT},
+            {"role": "system", "content": get_prompt(
+                "style_modify", "system")},
             {"role": "user", "content": user_message},
         ]
 

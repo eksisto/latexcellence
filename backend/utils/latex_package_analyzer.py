@@ -16,6 +16,7 @@ LaTeX 宏包分析器。
 from pydantic import BaseModel
 
 from backend.core.logger import get_logger
+from backend.core.prompts import get_prompt
 from backend.utils.json_utils import retry_with_validation
 
 logger = get_logger("latex_package_analyzer")
@@ -23,63 +24,6 @@ logger = get_logger("latex_package_analyzer")
 
 class LatexPackageAnalysis(BaseModel):
     packages: list[str]
-
-
-_PACKAGE_ANALYSIS_PROMPT = (
-    "You are an expert LaTeX package dependency analyzer. "
-    "Your task is to examine a LaTeX table code snippet and identify ALL "
-    "external packages required for it to compile successfully.\n\n"
-
-    "## Analysis Process\n"
-    "1. Scan the code for every command, environment, and column specifier.\n"
-    "2. Map each feature to its required package using the reference below.\n"
-    "3. Exclude features that belong to the LaTeX kernel (loaded by default).\n"
-    "4. Return a deduplicated, alphabetically sorted list of required packages.\n\n"
-
-    "## Feature → Package Mapping\n"
-    "- \\toprule, \\midrule, \\bottomrule, \\cmidrule, \\addlinespace → booktabs\n"
-    "- \\multirow, \\multirowcell → multirow\n"
-    "- \\makecell, \\thead, \\makecellbox → makecell\n"
-    "- \\diagbox → diagbox\n"
-    "- \\resizebox, \\includegraphics, \\rotatebox, \\scalebox → graphicx\n"
-    "- >{...}, <{...}, p{{}}, m{{}}, b{{}} column specifiers → array\n"
-    "- X column specifier → tabularx\n"
-    "- S column specifier, \\num, \\SI, \\tablenum → siunitx\n"
-    "- D column specifier → dcolumn\n"
-    "- \\cellcolor, \\rowcolor, \\columncolor → colortbl\n"
-    "- \\hhline → hhline\n"
-    "- {{NiceTabular}}, \\Block, \\CodeBefore → nicematrix\n"
-    "- {{tblr}}, \\SetRow, \\SetCell → tabularray\n"
-    "- {{longtable}}, \\endhead, \\endfoot, \\longtable → longtable\n"
-    "- {{threeparttable}}, \\tablenotes, \\tnote → threeparttable\n"
-    "- \\ding, \\Pifont → pifont\n"
-    "- Non-trivial math (\\frac, \\sum, \\begin{{equation}}, etc.) → amsmath\n\n"
-
-    "## Rules\n"
-    "1. Only include packages that are REQUIRED by features actually present.\n"
-    "2. Do NOT include kernel-level commands/environments: tabular, "
-    "\\multicolumn, \\cline, \\hline, \\begin{{tabular}}, standard math mode.\n"
-    "3. If no extra packages are needed, return an empty list.\n"
-    "4. Package names must be lowercase, without the '.sty' extension.\n"
-    "5. Deduplicate the list and sort alphabetically.\n"
-    "6. When a package is ambiguous (e.g., xcolor vs colortbl), prefer the "
-    "one that directly provides the used command.\n\n"
-
-    "## Examples\n"
-    "Input: \\begin{{tabular}}{{lcr}}\\toprule A & B & C\\\\\\midrule 1 & 2 & 3\\\\"
-    "\\bottomrule\\end{{tabular}}\n"
-    "Output: {{\"packages\": [\"booktabs\"]}}\n\n"
-    "Input: \\begin{{tabular}}{{>{{\\bfseries}}l p{{3cm}}}}\\makecell{{A\\\\B}} & "
-    "\\multirow{{2}}{{*}}{{text}}\\\\\\end{{tabular}}\n"
-    "Output: {{\"packages\": [\"array\", \"makecell\", \"multirow\"]}}\n\n"
-    "Input: \\begin{{tabular}}{{ll}}a & b\\end{{tabular}}\n"
-    "Output: {{\"packages\": []}}\n\n"
-
-    "## Output Format\n"
-    "Respond with valid JSON only. No markdown fences, no explanations, "
-    "no trailing commas.\n"
-    '{{\"packages\": [\"package1\", \"package2\"]}}'
-)
 
 
 async def analyze_latex_packages(latex_code: str, llm) -> list[str]:
@@ -98,7 +42,8 @@ async def analyze_latex_packages(latex_code: str, llm) -> list[str]:
         return []
 
     messages = [
-        {"role": "system", "content": _PACKAGE_ANALYSIS_PROMPT},
+        {"role": "system", "content": get_prompt(
+            "latex_package_analyzer", "system")},
         {
             "role": "user",
             "content": f"Analyze this LaTeX code and list required packages:\n\n{latex_code}",
