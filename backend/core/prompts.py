@@ -173,7 +173,10 @@ _PROMPTS: dict[str, dict[str, str]] = {
             "paper) for reference. Treat it as background — do not assume you can edit it "
             "directly from your reply.\n\n"
             "{context_block}\n\n"
-            "Respond in {language}."
+            "Respond in {language}.\n\n"
+            "When information obtained using the `web_search` tool is used in an answer, "
+            "the source must be cited at the end of the relevant sentence or paragraph "
+            "with a Markdown hyperlink in the format: [source title](source URL)."
         ),
         "edit_system": (
             "You are a LaTeX document editing agent. Rewrite the specified paragraph of the "

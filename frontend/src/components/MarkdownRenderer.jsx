@@ -25,7 +25,12 @@ const components = {
     );
   },
   a: ({ node, ...props }) => (
-    <a {...props} target="_blank" rel="noopener noreferrer" />
+    <a
+      className="text-primary relative inline-block no-underline after:content-[''] after:absolute after:left-0 after:bottom-0.5 after:h-[0.7px] after:w-full after:bg-primary after:origin-left after:transition-transform after:duration-300 hover:after:scale-x-0"
+      {...props}
+      target="_blank"
+      rel="noopener noreferrer"
+    />
   ),
   ul: ({ node, ...props }) => (
     <ul className="list-disc pl-5 space-y-1 my-1" {...props} />

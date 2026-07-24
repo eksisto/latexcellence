@@ -124,9 +124,9 @@ class SearchManager:
         t = get_current_time_context()
 
         description = (
-            f"搜索互联网获取最新信息。当前日期：{t['date']}（{t['weekday']}），"
-            f"时间：{t['time']}。当用户询问实时信息、最新数据、"
-            f"或你不确定的事实时使用此工具。"
+            f"Search the internet for the latest information. Current date: {t['date']} ({t['weekday']}), "
+            f"time: {t['time']}. Use this tool when the user asks for real-time information, "
+            f"the latest data, or facts you are unsure of."
         )
 
         return [
@@ -140,11 +140,11 @@ class SearchManager:
                         "properties": {
                             "query": {
                                 "type": "string",
-                                "description": "搜索查询词，应简洁精准",
+                                "description": "Search query terms; keep them concise and precise.",
                             },
                             "max_results": {
                                 "type": "integer",
-                                "description": "返回结果数量上限，默认 5",
+                                "description": "Maximum number of results to return; default is 5.",
                                 "default": 5,
                             },
                         },
@@ -166,7 +166,8 @@ async def _web_search_executor(tool_name: str, arguments: dict[str, Any]) -> Sea
     cfg = get_config()
     result = await manager.search(
         query=arguments["query"],
-        max_results=arguments.get("max_results", cfg.features.web_search.max_results),
+        max_results=arguments.get(
+            "max_results", cfg.features.web_search.max_results),
     )
     return result
 
