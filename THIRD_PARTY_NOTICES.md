@@ -17,6 +17,9 @@
 | [remark-math](https://github.com/remarkjs/remark-math) | ^6.0.0 | MIT | 数学公式解析 |
 | [zustand](https://github.com/pmndrs/zustand) | ^5.0.0 | MIT | 状态管理 |
 | [KaTeX](https://katex.org) | ^0.17.0 | MIT | 数学公式渲染引擎（含内置字体） |
+| [@callmebill/lxgw-wenkai-web](https://github.com/lxgw/LxgwWenKai) | ^1.522.0 | OFL-1.1 | 霞鹜文楷中文字体（Web 字体包） |
+| [@fontsource/jetbrains-mono](https://fontsource.org/fonts/jetbrains-mono) | ^5.3.0 | OFL-1.1 | JetBrains Mono 等宽字体 |
+| [@fontsource/noto-sans-sc](https://fontsource.org/fonts/noto-sans-sc) | ^5.2.9 | OFL-1.1 | Noto Sans SC 中文字体 |
 | [sonner](https://sonner.emilkowal.ski) | ^2.0.7 | MIT | Toast 通知组件 |
 | [lucide-react](https://lucide.dev) | ^1.23.0 | ISC and MIT | 图标库 |
 | [@base-ui/react](https://base-ui.com) | ^1.6.0 | MIT | 无头 UI Button 组件 |
@@ -30,6 +33,9 @@
 | [@radix-ui/react-tooltip](https://radix-ui.com) | ^1.2.11 | MIT | 工具提示原语 |
 | [class-variance-authority](https://cva.style) | ^0.7.1 | Apache-2.0 | 组件变体定义 |
 | [clsx](https://github.com/lukeed/clsx) | ^2.1.1 | MIT | 条件类名字符串 |
+| [i18next](https://www.i18next.com) | ^26.3.6 | MIT | 国际化核心库 |
+| [i18next-browser-languagedetector](https://github.com/i18next/i18next-browser-languagedetector) | ^8.2.1 | MIT | 浏览器语言自动检测 |
+| [react-i18next](https://github.com/i18next/react-i18next) | ^17.0.11 | MIT | React i18next 集成 |
 | [tailwind-merge](https://github.com/dcastil/tailwind-merge) | ^3.6.0 | MIT | Tailwind 类名合并 |
 | [tw-animate-css](https://github.com/Wombosvideo/tw-animate-css) | ^1.4.0 | MIT | CSS 动画工具 |
 | [shadcn](https://ui.shadcn.com) | ^4.12.0 | MIT | UI 组件系统 (CLI) |

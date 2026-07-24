@@ -643,7 +643,7 @@ retry_with_validation(StyleModifyResult)
 
 ### 5.13 Git 差异高亮数据流
 
-Git 差异模块生成两个 Git revision 间的差异高亮 PDF，不涉及 LLM：
+Git 差异模块生成两个 Git revision 间的差异高亮 PDF：
 
 ```
 GET /api/git-diff/refs
@@ -669,7 +669,7 @@ latexmk -xelatex 编译差异高亮文档
 GET /api/git-diff/pdf/{job_id} → FileResponse 内联预览
 ```
 
-**关键差异**：零 LLM 调用（编译错误翻译在 compile 模块处理，本模块不涉及）；通过 `difflib.SequenceMatcher` 纯算法对比差异；生成 PDF 涉及完整 LaTeX 编译链；通过 `git show` 和 `git archive` 读取历史版本文件。
+**关键差异**：差异对比阶段零 LLM 调用，纯算法通过 `difflib.SequenceMatcher` 生成；生成 PDF 涉及完整 LaTeX 编译链；通过 `git show` 和 `git archive` 读取历史版本文件。当编译失败时，会调用 `compile_error_translator.translate_compile_errors()` 将错误日志翻译为中文解释和修复建议（复用 compile 模块的 LLM 能力），因此在失败场景下会涉及 LLM。
 
 ---
 

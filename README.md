@@ -93,13 +93,21 @@ npm run dev
 **生产模式**：
 
 ```bash
-# 构建前端
+# 1. 将后端切换到生产模式（关闭 dev_mode 才会挂载 static/ 目录）
+# 编辑 config.json，将 server.dev_mode 设为 false
+
+# 2. 构建前端
 cd frontend
 npm run build
 cd ..
+
+# 3. 启动后端
+python main.py config.json
 ```
 
 打开 http://localhost:8000。
+
+> 说明：前端依赖与脚本位于 `frontend/package.json`，根目录无 `package.json`。
 
 ## 基本用法
 
@@ -117,6 +125,7 @@ cd ..
 latexcellence/
 ├── main.py                  # 统一入口
 ├── config.json              # 配置文件
+├── config.example.json      # 配置模板
 ├── backend/
 │   ├── core/                # 核心：配置、LLM 客户端、日志、工作区管理、项目管理
 │   ├── modules/             # 各功能模块（路由 + 业务逻辑）
@@ -126,8 +135,13 @@ latexcellence/
 ├── prompts/                 # 自定义提示词
 ├── templates/               # 生成的模板
 ├── tests/                   # 测试
-└── docs/                    # 项目文档
+├── docs/                    # 项目文档
+└── clean-cache.sh          # 清理缓存脚本（Python/前端缓存）
 ```
+
+## 维护
+
+- `clean-cache.sh`：清理 `__pycache__`、`.pytest_cache`、前端 `node_modules/.cache` 等缓存。
 
 ## 鸣谢
 

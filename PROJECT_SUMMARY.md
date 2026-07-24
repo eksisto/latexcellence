@@ -35,6 +35,8 @@ latexcellence/
 │   │   ├── time_utils.py            # 时间工具：当前日期/时间/星期格式化
 │   │   ├── latex_parser.py          # LaTeX 源码↔纯文本转换（Marker 保护）
 │   │   ├── compile_error_translator.py  # LaTeX 编译错误 LLM 翻译（compile + git_diff 复用）
+│   │   ├── latexindent_utils.py     # latexindent.pl 调用封装（code_review 使用）
+│   │   ├── builtin_formatter.py     # 内置轻量 LaTeX 格式化器（latexindent 不可用时兜底）
 │   │   ├── web_search/               # 联网搜索模块（多引擎抽象包）
 │   │   │   ├── __init__.py           # 模块入口，向后兼容导出
 │   │   │   ├── models.py             # SearchResult / SearchResponse 数据模型
@@ -95,25 +97,26 @@ latexcellence/
 
 ## Feature Modules Quick Reference
 
-| # | Module | 目的 | 关键文件 | 依赖 LLM | Marker |
-| --- | --- | --- | --- | --- | --- |
-| 1 | typo_check | 错字/拼写检查 | router.py, service.py | ✓ | ✓ |
-| 2 | expression_opt | 学术表达优化 | router.py, service.py, prompt_manager.py | ✓ | ✓ |
-| 3 | code_review | LaTeX 代码审查（工具格式化 + LLM 质量审查） | router.py, service.py | ✓ | ✓ |
-| 4 | terminology_check | 术语一致性检查 | router.py, service.py, extractor.py, models.py | ✓ | ✓ |
-| 5 | compile | 编译 + 错误翻译 | router.py, service.py | ✓(错误翻译) | ✗ |
-| 6 | git_diff | Git 版本差异 PDF | router.py, service.py | ✗ | ✗ |
-| 7 | template_gen | 模板生成 | router.py, service.py | ✓ | ✗ |
-| 8 | formula_ocr | 图片→LaTeX 公式 | router.py, service.py | ✓(Vision) | ✗ |
-| 9 | table_ocr | 图片→LaTeX 表格 | router.py, service.py | ✓(Vision) | ✗ |
-| 10 | markdown_converter | MD→LaTeX(pandoc) | router.py, service.py | ✓(宏包分析) | ✗ |
-| 11 | style_modify | 自然语言修改样式 | router.py, service.py | ✓ | ✗ |
-| 12 | writing_chat | 写作助手对话 | router.py, service.py, context.py, models.py, prompt_manager.py | ✓ | ✗ |
-| 13 | bib_manager | 参考文献管理 | router.py, service.py, models.py, style_registry.py | ✓ | ✗ |
+| Module | 目的 | 关键文件 | 依赖 LLM | Marker |
+| --- | --- | --- | --- | --- |
+| typo_check | 错字/拼写检查 | router.py, service.py | ✓ | ✓ |
+| expression_opt | 学术表达优化 | router.py, service.py, prompt_manager.py | ✓ | ✓ |
+| code_review | LaTeX 代码审查（工具格式化 + LLM 质量审查） | router.py, service.py | ✓ | ✓ |
+| terminology_check | 术语一致性检查 | router.py, service.py, extractor.py, models.py | ✓ | ✓ |
+| compile | 编译 + 错误翻译 | router.py, service.py | ✓(错误翻译) | ✗ |
+| git_diff | Git 版本差异 PDF | router.py, service.py | ✓(编译失败时翻译错误) | ✗ |
+| template_gen | 模板生成 | router.py, service.py | ✓ | ✗ |
+| formula_ocr | 图片→LaTeX 公式 | router.py, service.py | ✓(Vision) | ✗ |
+| table_ocr | 图片→LaTeX 表格 | router.py, service.py | ✓(Vision) | ✗ |
+| markdown_converter | MD→LaTeX(pandoc) | router.py, service.py | ✓(宏包分析) | ✗ |
+| style_modify | 自然语言修改样式 | router.py, service.py | ✓ | ✗ |
+| writing_chat | 写作助手对话 | router.py, service.py, context.py, models.py, prompt_manager.py | ✓ | ✗ |
+| bib_manager | 参考文献管理 | router.py, service.py, models.py, style_registry.py | ✓ | ✗ |
 
 ## 核心设计思路
 
 - **集中式提示词管理**: 所有 LLM 提示词集中存储在 `backend/core/prompts.py` 中，按模块和功能分类。提供 `get_prompt(module, key, **kwargs)` 函数获取提示词，支持参数化模板。各模块通过 `from backend.core.prompts import get_prompt` 导入使用，便于统一维护和版本控制
+- **LLM 输出语言注入**: 所有调用 LLM 的模块在 system prompt 中通过 `{language}` 占位符指定输出语言。前端 `getUiLanguage()` 将 i18n 语言代码（`"zh"`/`"en"`）转为完整名称（`"Chinese"`/`"English"`），通过 `language` 参数传入后端并注入 prompt 模板。无需额外的 `_general.language_context` 拼接
 - **BaseParagraphCheckService**: 四个逐段检查模块（typo_check / expression_opt / code_review / terminology_check）共享的基类，封装文件解析、marker 替换、LLM 编排（批量+流式）、结果写回等流程。子类通过 6 个 hooks（_get_system_prompt / _build_user_content / _get_model_cls / _get_llm_params / _get_batch_size / _build_success_result）定制行为
 - **WorkspaceManager**: 多浏览器多工作区隔离，每个 workspace_id 拥有独立的 `LatexProject` 实例（项目状态、文件树、MD5 缓存、撤销栈完全隔离）
 - **Marker Protection**: LaTeX 结构 → `__CMD_NNNN__` / `__MATH_NNNN__` / `__ENV_NNNN__` / `__VERB_NNNN__` marker → LLM 只改纯文本 → 按长度降序还原。apply 时若 marker_map 缺失（context 过期/重启/新操作覆盖），跳过该段写入并返回 `errors`，防止字面 marker 污染 `.tex` 文件；前端据此保留未应用项并提示用户重新检查
