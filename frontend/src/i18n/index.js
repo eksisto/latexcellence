@@ -23,7 +23,7 @@ i18n
       en: en,
     },
     fallbackLng: "zh",
-    ns: ["common", "pages", "components", "hooks"],
+    ns: ["common", "pages", "components", "hooks", "errors"],
     defaultNS: "common",
     interpolation: {
       escapeValue: false,

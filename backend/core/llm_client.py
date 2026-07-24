@@ -59,6 +59,11 @@ class LLMClient:
         self._last_request_time: float = 0
         self._logger = get_logger("llm_client")
 
+    def reset(self) -> None:
+        """重置缓存的 AsyncOpenAI 实例，使下次访问 client 时重新读取配置。"""
+        with self._client_lock:
+            self._client = None
+
     @property
     def client(self) -> AsyncOpenAI:
         """
