@@ -61,6 +61,7 @@ def extract_key_errors(log_text: str, max_chars: int = 3000) -> str:
 async def translate_compile_errors(
     stdout: str,
     stderr: str,
+    language: str = "zh",
 ) -> tuple[str, list[str]]:
     """
     将 LaTeX 编译失败的日志翻译为中文解释和修复建议。
@@ -86,11 +87,11 @@ async def translate_compile_errors(
 
         messages = [
             {"role": "system", "content": get_prompt(
-                "compile_error_translator", "system")},
+                "compile_error_translator", "system", language=language)},
             {
                 "role": "user",
                 "content": (
-                    f"请分析以下 LaTeX 编译错误日志，提供通俗易懂的中文解释和具体的修复建议：\n\n"
+                    f"Please analyze the following LaTeX compilation error log and provide a plain-English explanation along with specific repair suggestions:\n\n"
                     f"{key_errors}"
                 ),
             },

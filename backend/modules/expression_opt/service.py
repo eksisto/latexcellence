@@ -64,17 +64,22 @@ class ExpressionOptService(BaseParagraphCheckService):
     # ── 自定义提示词 ────────────────────────────────────────────────────────
 
     def _build_system_prompt_with_custom(self) -> str:
-        """构建完整的 system prompt（含用户自定义提示词）。"""
+        """构建完整的 system prompt（含用户自定义提示词和语言上下文）。"""
         pm = get_prompt_manager()
         custom = pm.get_active_prompt_content()
+        language = getattr(self, "_language", "zh")
         if custom:
-            return get_prompt("expression_opt", "base_system", custom_prompt=custom)
-        cfg = get_config()
-        default = cfg.features.expression_opt.default_prompt
-        return get_prompt(
-            "expression_opt", "base_system",
-            custom_prompt=default or "No specific instructions."
-        )
+            prompt = get_prompt("expression_opt", "base_system",
+                                custom_prompt=custom, language=language)
+        else:
+            cfg = get_config()
+            default = cfg.features.expression_opt.default_prompt
+            prompt = get_prompt(
+                "expression_opt", "base_system",
+                custom_prompt=default or "No specific instructions.",
+                language=language,
+            )
+        return prompt
 
     # ── 公共 API（保持 router.py 兼容）─────────────────────────────────────
 
@@ -84,16 +89,20 @@ class ExpressionOptService(BaseParagraphCheckService):
         paragraph_indices: list[int] | None = None,
         resolve_input: bool = False,
         workspace_id: str = "",
+        language: str = "zh",
     ) -> dict[str, Any]:
         """对段落进行表达优化（非流式）。"""
+        self._language = language
         return await self._run_batch_check(
             file_path, paragraph_indices, resolve_input, workspace_id
         )
 
     async def optimize_stream(
-        self, file_path: str, resolve_input: bool = False, workspace_id: str = ""
+        self, file_path: str, resolve_input: bool = False, workspace_id: str = "",
+        language: str = "zh",
     ):
         """表达优化流式版本（SSE）。"""
+        self._language = language
         async for event in self._run_stream_check(file_path, resolve_input, workspace_id):
             yield event
 

@@ -5,6 +5,15 @@ import LanguageDetector from "i18next-browser-languagedetector";
 import zh from "./locales/zh.json";
 import en from "./locales/en.json";
 
+const LANGUAGE_NAMES = {
+  zh: "Chinese",
+  en: "English",
+};
+
+export function getUiLanguage() {
+  return LANGUAGE_NAMES[i18n.language] || i18n.language;
+}
+
 i18n
   .use(LanguageDetector)
   .use(initReactI18next)

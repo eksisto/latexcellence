@@ -47,7 +47,7 @@ class TemplateGenService:
         self._logger = get_logger("template_gen")
 
     async def generate_template(
-        self, description: str, llm=None
+        self, description: str, language: str = "zh", llm=None
     ) -> dict[str, Any]:
         """
         根据用户描述生成 LaTeX 模板。
@@ -74,9 +74,9 @@ class TemplateGenService:
 
         if llm is None:
             llm = get_llm_client()
+        system_prompt = get_prompt("template_gen", "system", language=language)
         messages = [
-            {"role": "system", "content": get_prompt(
-                "template_gen", "system")},
+            {"role": "system", "content": system_prompt},
             {
                 "role": "user",
                 "content": (

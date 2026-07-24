@@ -43,11 +43,11 @@ _PROMPTS: dict[str, dict[str, str]] = {
             '  "corrected": "<the corrected text with all markers unchanged>",\n'
             '  "changes": [\n'
             '    {\n'
-            '      "type": "typo",\n'
+            '      "type": "typo in {language}",\n'
             '      "original": "<incorrect text fragment>",\n'
             '      "corrected": "<correct text fragment>",\n'
             '      "position": <optional int, char offset in original>,\n'
-            '      "explanation": "<brief reason in English>"\n'
+            '      "explanation": "<brief reason in {language}>"\n'
             '    }\n'
             '  ]\n'
             "}"
@@ -90,7 +90,7 @@ _PROMPTS: dict[str, dict[str, str]] = {
             '      "type": "rewrite",\n'
             '      "original": "<the original text fragment>",\n'
             '      "optimized": "<the improved text fragment>",\n'
-            '      "reason": "<brief explanation of the improvement>"\n'
+            '      "reason": "<brief explanation of the improvement in {language}>"\n'
             '    }}\n'
             '  ]\n'
             "}}\n\n"
@@ -142,7 +142,7 @@ _PROMPTS: dict[str, dict[str, str]] = {
             '    {\n'
             '      "type": "code_smell|modernization|best_practice|portability|consistency",\n'
             '      "severity": "info|warning|error",\n'
-            '      "description": "<brief description of the issue>",\n'
+            '      "description": "<brief description of the issue in {language}>",\n'
             '      "original": "<the problematic code fragment>",\n'
             '      "suggested": "<the suggested replacement>"\n'
             '    }\n'
@@ -172,7 +172,8 @@ _PROMPTS: dict[str, dict[str, str]] = {
             "The user has provided the following file context (raw LaTeX source of their "
             "paper) for reference. Treat it as background — do not assume you can edit it "
             "directly from your reply.\n\n"
-            "{context_block}"
+            "{context_block}\n\n"
+            "Respond in {language}."
         ),
         "edit_system": (
             "You are a LaTeX document editing agent. Rewrite the specified paragraph of the "
@@ -191,7 +192,7 @@ _PROMPTS: dict[str, dict[str, str]] = {
             '  "paragraph_index": <int>,\n'
             '  "original": "<the exact original paragraph as raw LaTeX>",\n'
             '  "optimized": "<the rewritten paragraph as raw LaTeX>",\n'
-            '  "reason": "<brief explanation of the edit>"\n'
+            '  "reason": "<brief explanation of the edit in {language}>"\n'
             "}}\n\n"
             "USER INSTRUCTION:\n"
             "{instruction}"
@@ -208,10 +209,7 @@ _PROMPTS: dict[str, dict[str, str]] = {
             "- Return JSON only: {{\"summary\": \"<your summary>\"}}"
         ),
         "chat_system_time_context": (
-            "\n\nCURRENT TIME CONTEXT:\n"
-            "Current date: {date} ({weekday}), time: {time}\n"
-            "When time-related words appear in the user prompt (e.g., recently, today, this week, this month, past N days, etc.), "
-            "please interpret them based on this time information and generate appropriate time-range search terms."
+            "\n\nCurrent date: {date} ({weekday}), time: {time}\n"
         ),
     },
 
@@ -241,7 +239,7 @@ _PROMPTS: dict[str, dict[str, str]] = {
             '    }}\n'
             '  ],\n'
             '  "packages": ["<package1>", "<package2>"],\n'
-            '  "explanation": "<brief explanation of the template design>"\n'
+            '  "explanation": "<brief explanation of the template design in {language}>"\n'
             "}}"
         ),
     },
@@ -456,7 +454,7 @@ _PROMPTS: dict[str, dict[str, str]] = {
             "5. Output JSON only: strictly return valid JSON format, and do not include Markdown code blocks or any other irrelevant text.\n\n"
             "JSON Format Requirements:\n"
             "{\n"
-            '  \"explanation\": \"<string: a comprehensive explanation of the file, line number, and root cause of the error. The tone should be gentle and easy to understand.>\",\n'
+            '  \"explanation\": \"<string: a comprehensive explanation of the file, line number, and root cause of the error. Write in {language} and the tone should be gentle and easy to understand.>\",\n'
             '  \"fixes\": [\n'
             '    \"<string: specific fix suggestion 1>\",\n'
             '    \"<string: specific fix suggestion 2>\"\n'

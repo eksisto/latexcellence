@@ -147,7 +147,8 @@ class WritingChatService:
         # 4. 调用 LLM 流式（支持 Function Calling 工具调用）
         llm = get_llm_client()
         system_prompt = get_prompt(
-            "writing_chat", "chat_system", context_block=context_block)
+            "writing_chat", "chat_system",
+            context_block=context_block, language=req.language)
 
         # 注入当前时间上下文，帮助 LLM 理解相对时间概念
         t = get_current_time_context()
@@ -375,7 +376,8 @@ class WritingChatService:
 
         llm = get_llm_client()
         system_prompt = get_prompt(
-            "writing_chat", "edit_system", instruction=req.instruction)
+            "writing_chat", "edit_system",
+            instruction=req.instruction, language=req.language)
         messages = [
             {"role": "system", "content": system_prompt},
             {

@@ -23,6 +23,7 @@ def get_service() -> TemplateGenService:
 
 class TemplateGenRequest(BaseModel):
     description: str
+    language: str = "zh"
 
 
 class TemplateSaveRequest(BaseModel):
@@ -37,7 +38,7 @@ async def generate_template(request: TemplateGenRequest):
     返回 LaTeX preamble、body 骨架、推荐包列表和说明。
     """
     try:
-        result = await get_service().generate_template(request.description)
+        result = await get_service().generate_template(request.description, request.language)
         return result
     except RuntimeError as e:
         raise HTTPException(status_code=500, detail=str(e))

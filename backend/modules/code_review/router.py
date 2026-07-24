@@ -32,6 +32,7 @@ class CodeReviewRequest(BaseModel):
     file_path: str
     paragraph_indices: list[int] | None = None
     resolve_input: bool = False
+    language: str = "zh"
 
 
 class CodeReviewApplyRequest(BaseModel):
@@ -79,6 +80,7 @@ async def check_code_review(request: CodeReviewRequest, workspace_id: str = Quer
             request.paragraph_indices,
             request.resolve_input,
             workspace_id,
+            request.language,
         )
         return result
     except RuntimeError as e:
@@ -118,6 +120,7 @@ async def stream_code_review(
     workspace_id: str,
     file_path: str = Query(..., description="文件路径（相对于项目根目录）"),
     resolve_input: bool = Query(False, description="是否递归展开 \\input 引用"),
+    language: str = Query("zh", description="前端 UI 语言"),
 ):
     """
     SSE 流式端点：按段落逐批推送代码审查进度和结果。
@@ -131,7 +134,7 @@ async def stream_code_review(
     async def event_stream():
         try:
             async for event in get_service().check_code_review_stream(
-                file_path, resolve_input, workspace_id
+                file_path, resolve_input, workspace_id, language
             ):
                 yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
         except Exception as e:

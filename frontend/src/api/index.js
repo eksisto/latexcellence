@@ -11,6 +11,7 @@
  */
 
 import { translateError } from "@/utils/errorMessages";
+import { getUiLanguage } from "@/i18n";
 
 const BASE_URL = "/api";
 
@@ -99,8 +100,8 @@ export const api = {
       request(
         appendWs(
           `/project/paragraphs?file_path=${encodeURIComponent(filePath)}`,
-          workspaceId
-        )
+          workspaceId,
+        ),
       ),
     applyChange: (filePath, paragraphIndex, newText, workspaceId) =>
       request(appendWs("/project/apply-change", workspaceId), {
@@ -125,15 +126,15 @@ export const api = {
       request(
         appendWs(
           `/project/can-undo?file_path=${encodeURIComponent(filePath)}`,
-          workspaceId
-        )
+          workspaceId,
+        ),
       ),
     canRedo: (filePath, workspaceId) =>
       request(
         appendWs(
           `/project/can-redo?file_path=${encodeURIComponent(filePath)}`,
-          workspaceId
-        )
+          workspaceId,
+        ),
       ),
     setMainFile: (filePath, workspaceId) =>
       request(appendWs("/project/set-main-file", workspaceId), {
@@ -152,13 +153,13 @@ export const api = {
       request(
         appendWs(
           `/typo-check/preview?file_path=${encodeURIComponent(filePath)}&resolve_input=${resolveInput}`,
-          workspaceId
-        )
+          workspaceId,
+        ),
       ),
     check: (data, workspaceId) =>
       request(appendWs("/typo-check/check", workspaceId), {
         method: "POST",
-        body: JSON.stringify(data),
+        body: JSON.stringify({ ...data, language: getUiLanguage() }),
       }),
     apply: (data, workspaceId) =>
       request(appendWs("/typo-check/apply", workspaceId), {
@@ -166,7 +167,7 @@ export const api = {
         body: JSON.stringify(data),
       }),
     stream: (workspaceId, filePath, resolveInput = false) =>
-      `${BASE_URL}/typo-check/stream/${encodeURIComponent(workspaceId)}?file_path=${encodeURIComponent(filePath)}&resolve_input=${resolveInput}`,
+      `${BASE_URL}/typo-check/stream/${encodeURIComponent(workspaceId)}?file_path=${encodeURIComponent(filePath)}&resolve_input=${resolveInput}&language=${getUiLanguage()}`,
   },
 
   /* ---- 表达优化 ---- */
@@ -175,13 +176,13 @@ export const api = {
       request(
         appendWs(
           `/expression-opt/preview?file_path=${encodeURIComponent(filePath)}&resolve_input=${resolveInput}`,
-          workspaceId
-        )
+          workspaceId,
+        ),
       ),
     optimize: (data, workspaceId) =>
       request(appendWs("/expression-opt/optimize", workspaceId), {
         method: "POST",
-        body: JSON.stringify(data),
+        body: JSON.stringify({ ...data, language: getUiLanguage() }),
       }),
     apply: (data, workspaceId) =>
       request(appendWs("/expression-opt/apply", workspaceId), {
@@ -189,10 +190,11 @@ export const api = {
         body: JSON.stringify(data),
       }),
     stream: (workspaceId, filePath, resolveInput = false) =>
-      `${BASE_URL}/expression-opt/stream/${encodeURIComponent(workspaceId)}?file_path=${encodeURIComponent(filePath)}&resolve_input=${resolveInput}`,
+      `${BASE_URL}/expression-opt/stream/${encodeURIComponent(workspaceId)}?file_path=${encodeURIComponent(filePath)}&resolve_input=${resolveInput}&language=${getUiLanguage()}`,
     prompts: {
       list: () => request("/expression-opt/prompts"),
-      load: (name) => request(`/expression-opt/prompts/${encodeURIComponent(name)}`),
+      load: (name) =>
+        request(`/expression-opt/prompts/${encodeURIComponent(name)}`),
       save: (name, content) =>
         request("/expression-opt/prompts", {
           method: "POST",
@@ -234,7 +236,7 @@ export const api = {
     generate: (data) =>
       request("/template-gen/generate", {
         method: "POST",
-        body: JSON.stringify(data),
+        body: JSON.stringify({ ...data, language: getUiLanguage() }),
       }),
     save: (data) =>
       request("/template-gen/save", {
@@ -249,13 +251,13 @@ export const api = {
       request(
         appendWs(
           `/code-review/preview?file_path=${encodeURIComponent(filePath)}&resolve_input=${resolveInput}`,
-          workspaceId
-        )
+          workspaceId,
+        ),
       ),
     check: (data, workspaceId) =>
       request(appendWs("/code-review/check", workspaceId), {
         method: "POST",
-        body: JSON.stringify(data),
+        body: JSON.stringify({ ...data, language: getUiLanguage() }),
       }),
     apply: (data, workspaceId) =>
       request(appendWs("/code-review/apply", workspaceId), {
@@ -263,7 +265,7 @@ export const api = {
         body: JSON.stringify(data),
       }),
     stream: (workspaceId, filePath, resolveInput = false) =>
-      `${BASE_URL}/code-review/stream/${encodeURIComponent(workspaceId)}?file_path=${encodeURIComponent(filePath)}&resolve_input=${resolveInput}`,
+      `${BASE_URL}/code-review/stream/${encodeURIComponent(workspaceId)}?file_path=${encodeURIComponent(filePath)}&resolve_input=${resolveInput}&language=${getUiLanguage()}`,
   },
 
   /* ---- 自动编译 ---- */
@@ -271,19 +273,18 @@ export const api = {
     run: (mainFile, workspaceId) =>
       request(appendWs("/compile/run", workspaceId), {
         method: "POST",
-        body: JSON.stringify({ main_file: mainFile }),
+        body: JSON.stringify({ main_file: mainFile, language: getUiLanguage() }),
       }),
     pdfUrl: (mainFile, workspaceId) =>
       appendWs(
         `${BASE_URL}/compile/pdf?main_file=${encodeURIComponent(mainFile)}`,
-        workspaceId
+        workspaceId,
       ),
   },
 
   /* ---- Git 差异高亮 ---- */
   gitDiff: {
-    refs: (workspaceId) =>
-      request(appendWs("/git-diff/refs", workspaceId)),
+    refs: (workspaceId) => request(appendWs("/git-diff/refs", workspaceId)),
     renderPdf: ({ mainFile, baseRef, targetRef }, workspaceId) =>
       request(appendWs("/git-diff/render-pdf", workspaceId), {
         method: "POST",
@@ -310,8 +311,8 @@ export const api = {
       request(
         appendWs(
           `/terminology-check/preview?file_path=${encodeURIComponent(filePath)}&resolve_input=${resolveInput}`,
-          workspaceId
-        )
+          workspaceId,
+        ),
       ),
     check: (data, workspaceId) =>
       request(appendWs("/terminology-check/check", workspaceId), {
@@ -376,7 +377,16 @@ export const api = {
 
   /* ---- 写作助手 Chat ---- */
   writingChat: {
-    send: async ({ sessionId, filePath, paragraphIndex, userMessage, assistantPrompt, workspaceId, onEvent, onError }) => {
+    send: async ({
+      sessionId,
+      filePath,
+      paragraphIndex,
+      userMessage,
+      assistantPrompt,
+      workspaceId,
+      onEvent,
+      onError,
+    }) => {
       const url = appendWs(`${BASE_URL}/writing-chat/send`, workspaceId);
       let res;
       try {
@@ -389,6 +399,7 @@ export const api = {
             paragraph_index: paragraphIndex ?? null,
             user_message: userMessage,
             assistant_prompt: assistantPrompt ?? null,
+            language: getUiLanguage(),
           }),
         });
       } catch (e) {
@@ -453,7 +464,8 @@ export const api = {
       }),
     assistants: {
       list: () => request("/writing-chat/prompts"),
-      load: (name) => request(`/writing-chat/prompts/${encodeURIComponent(name)}`),
+      load: (name) =>
+        request(`/writing-chat/prompts/${encodeURIComponent(name)}`),
       save: (name, content) =>
         request("/writing-chat/prompts", {
           method: "POST",

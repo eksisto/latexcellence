@@ -66,23 +66,28 @@ class TypoCheckService(BaseParagraphCheckService):
         paragraph_indices: list[int] | None = None,
         resolve_input: bool = False,
         workspace_id: str = "",
+        language: str = "zh",
     ) -> dict[str, Any]:
         """对段落进行错字检查（非流式）。"""
+        self._language = language
         return await self._run_batch_check(
             file_path, paragraph_indices, resolve_input, workspace_id
         )
 
     async def check_typos_stream(
-        self, file_path: str, resolve_input: bool = False, workspace_id: str = ""
+        self, file_path: str, resolve_input: bool = False, workspace_id: str = "",
+        language: str = "zh",
     ):
         """错字检查流式版本（SSE）。"""
+        self._language = language
         async for event in self._run_stream_check(file_path, resolve_input, workspace_id):
             yield event
 
     # ── Hook 实现 ───────────────────────────────────────────────────────────
 
     def _get_system_prompt(self) -> str:
-        return get_prompt("typo_check", "system")
+        return get_prompt("typo_check", "system",
+                          language=getattr(self, "_language", "zh"))
 
     def _build_user_content(self, text: str) -> str:
         return get_prompt("typo_check", "user", text=text)

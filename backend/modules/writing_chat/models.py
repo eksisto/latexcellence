@@ -95,6 +95,7 @@ class ChatSendRequest(BaseModel):
     user_message: str
     assistant_prompt: str | None = None
     web_search_enabled: bool | None = None  # None=跟随配置，True=强制启用，False=强制禁用
+    language: str = "zh"  # 前端 UI 语言，用于引导 LLM 回复语言
 
 
 class GenerateEditRequest(BaseModel):
@@ -103,6 +104,7 @@ class GenerateEditRequest(BaseModel):
     file_path: str
     paragraph_index: int
     instruction: str = Field(..., description="编辑指令原文（通常取最新 user 消息）")
+    language: str = "zh"
 
 
 class ApplyEditRequest(BaseModel):

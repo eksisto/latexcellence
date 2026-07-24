@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect, useRef, useMemo } from "react";
 import { api } from "@/api/index";
 import useStore from "@/store/useStore";
+import i18n, { getUiLanguage } from "@/i18n";
 import { flattenTexFiles } from "@/hooks/useParagraphCheck";
 import {
   useWritingChatSessions,
@@ -246,6 +247,7 @@ export default function useWritingChat() {
           instruction:
             instruction ||
             "请基于刚才的对话内容修改此段落，使其更符合学术写作规范",
+          language: getUiLanguage(),
         }, workspaceId);
         // 把 edit_op 附挂到对应 assistant 消息
         setWritingChatMessages((prev) =>

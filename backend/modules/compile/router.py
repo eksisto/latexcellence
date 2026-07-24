@@ -20,6 +20,7 @@ logger = get_logger(__name__)
 
 class CompileRequest(BaseModel):
     main_file: str
+    language: str = "zh"
 
     @field_validator("main_file")
     @classmethod
@@ -41,7 +42,7 @@ async def run_compile(request: CompileRequest, workspace_id: str = Query(..., de
     若编译失败，使用 LLM 将错误信息翻译为通俗易懂的解释和修复建议。
     """
     try:
-        result = await compile_latex(request.main_file, workspace_id)
+        result = await compile_latex(request.main_file, workspace_id, request.language)
         return result.model_dump()
     except RuntimeError as e:
         raise HTTPException(status_code=400, detail=str(e))

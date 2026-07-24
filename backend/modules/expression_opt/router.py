@@ -33,6 +33,7 @@ class ExpressionOptRequest(BaseModel):
     file_path: str
     paragraph_indices: list[int] | None = None
     resolve_input: bool = False
+    language: str = "zh"
 
 
 class ExpressionApplyRequest(BaseModel):
@@ -54,7 +55,8 @@ async def preview_paragraphs(
     当 resolve_input=True 时，递归解析 \\input/\\include 引用。
     """
     try:
-        result = get_service().preview_paragraphs(file_path, resolve_input, workspace_id)
+        result = get_service().preview_paragraphs(
+            file_path, resolve_input, workspace_id)
         return result
     except RuntimeError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -77,6 +79,7 @@ async def optimize_expression(request: ExpressionOptRequest, workspace_id: str =
             request.paragraph_indices,
             request.resolve_input,
             workspace_id,
+            request.language,
         )
         return result
     except RuntimeError as e:
@@ -115,12 +118,13 @@ async def stream_optimize(
     workspace_id: str,
     file_path: str = Query(..., description="文件路径（相对于项目根目录）"),
     resolve_input: bool = Query(False, description="是否递归展开 \\input 引用"),
+    language: str = Query("zh", description="前端 UI 语言"),
 ):
     """SSE 流式端点：按段落逐批推送优化进度和结果。"""
     async def event_stream():
         try:
             async for event in get_service().optimize_stream(
-                file_path, resolve_input, workspace_id
+                file_path, resolve_input, workspace_id, language
             ):
                 yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
         except Exception as e:

@@ -50,7 +50,7 @@ class CompileResult(BaseModel):
     fixes: list[str] = []
 
 
-async def compile_latex(main_file: str, workspace_id: str = "") -> CompileResult:
+async def compile_latex(main_file: str, workspace_id: str = "", language: str = "zh") -> CompileResult:
     """
     编译 LaTeX 项目的主文件。
 
@@ -95,7 +95,8 @@ async def compile_latex(main_file: str, workspace_id: str = "") -> CompileResult
         stdout, stderr = await process.communicate()
         return CompileResult(
             success=False,
-            stderr=stderr.decode("utf-8", errors="replace") + f"\nCompilation timed out after {timeout} seconds.",
+            stderr=stderr.decode("utf-8", errors="replace") +
+            f"\nCompilation timed out after {timeout} seconds.",
             explanation="编译超时。可能原因：文档过大、有无限循环的 LaTeX 命令、或 latexmk 卡住。",
             fixes=[
                 "检查是否缺少 \\end{document} 或类似的环境闭合语句",
@@ -115,7 +116,7 @@ async def compile_latex(main_file: str, workspace_id: str = "") -> CompileResult
 
     logger.warning(f"Compilation failed for {main_file}, translating errors")
 
-    explanation, fixes = await translate_compile_errors(stdout_str, stderr_str)
+    explanation, fixes = await translate_compile_errors(stdout_str, stderr_str, language)
 
     return CompileResult(
         success=False,
