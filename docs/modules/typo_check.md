@@ -19,7 +19,7 @@
 **解析流水线**（8 步顺序执行）：
 
 | 步骤 | 方法 | 操作 | 示例 |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | 1 | `_replace_verb_inline()` | 内联逐字替换 | `\verb\|c\|` → `__VERB_0000__` |
 | 2 | `_replace_protected_envs(envs=_VERBATIM_ENVS)` | 逐字类环境替换（可含字面 `%`） | `\begin{verbatim}...` → `\n__ENV_0000__\n` |
 | 3 | `_replace_comments()` | 注释替换为 marker（保留 `\%` 转义） | `Hello % comment` → `Hello __COM_0000__` |
@@ -48,7 +48,7 @@
 **核心接口**：
 
 | 方法 | 功能 |
-|-|-|
+| --- | --- |
 | `strip_to_plain_text(source) -> (str, dict)` | 返回 `(带 marker 的纯文本, marker→原始内容映射表)` |
 | `restore_from_markers(processed, marker_map)` | 按 marker 长度降序还原，防止短 marker 误匹配长 marker 前缀 |
 
@@ -86,7 +86,7 @@ class TypoCheckResult(BaseModel):
 **核心方法**：
 
 | 方法 | 功能 |
-|-|-|
+| --- | --- |
 | `preview_paragraphs(file_path, resolve_input, workspace_id)` | 同步：提取段落 + 剥离 LaTeX + 缓存 marker_map，返回预览数据 |
 | `check_typos(file_path, paragraph_indices, resolve_input, workspace_id)` | 异步：分批并发调用 LLM 检查每个段落，返回所有结果 |
 | `check_typos_stream(file_path, resolve_input, workspace_id)` | 异步生成器：逐段 yield `progress` / `result` / `error` / `done` 事件（SSE） |
@@ -101,7 +101,7 @@ class TypoCheckResult(BaseModel):
 **三层防护**：
 
 | 层级 | 防护内容 | 失败处理 |
-|------|---------|---------|
+| --- | --- | --- |
 | 第 1 层 | `retry_with_validation()`（最多 3 次） | LLM 输出不符 JSON 规范或 Pydantic schema 时，将错误反馈给 LLM 修正 |
 | 第 2 层 | Marker 匹配验证 | 检查 `corrected` 中的 marker 是否与 `original` 完全一致（无缺失、无新增），不一致时回退到原始文本 |
 | 第 3 层 | 异常兜底 | LLM 调用抛出异常时，返回原始文本 + 空 changes |
@@ -120,11 +120,11 @@ CRITICAL RULES — VIOLATING THESE MAKES THE OUTPUT UNUSABLE:
 Prefix: `/api/typo-check`, Tag: `typo_check`
 
 | 方法 | 路径 | 功能 |
-|---|---|---|
-| `GET` | `/preview` | 预览段落（剥离 LaTeX 后的纯文本） |
-| `POST` | `/check` | LLM 逐段检查错字（返回 JSON） |
-| `POST` | `/apply` | 将审核通过的修改还原 marker 并写回源文件 |
-| `GET` | `/stream/{workspace_id}` | SSE 流式推送检查进度 |
+| --- | --- | --- |
+| GET | `/preview` | 预览段落（剥离 LaTeX 后的纯文本） |
+| POST | `/check` | LLM 逐段检查错字（返回 JSON） |
+| POST | `/apply` | 将审核通过的修改还原 marker 并写回源文件 |
+| GET | `/stream/{workspace_id}` | SSE 流式推送检查进度 |
 
 **请求模型**：
 

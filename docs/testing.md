@@ -2,8 +2,10 @@
 
 运行方式：`pytest tests/ -v`
 
+## 测试文件一览
+
 | 测试文件 | 覆盖内容 |
-|---|---|
+| --- | --- |
 | `test_latex_parser.py` | 注释、verb、环境、数学模式、命令替换、往返一致性 |
 | `test_marker_numbering_demo.py` | marker 编号机制演示：用带注释的 LaTeX 段落展示编号范围、连续性分析和按前缀分类统计。运行：`pytest tests/test_marker_numbering_demo.py -v -s`，可修改 `latex_paragraph` 变量测试自定义段落 |
 | `test_project_manager.py` | 项目打开、段落定位、原地修改、MD5 校验、撤销、路径穿越防御 |

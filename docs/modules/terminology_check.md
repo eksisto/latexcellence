@@ -7,7 +7,7 @@
 在文本层面完全不同，但语义上是同一概念。
 
 | 维度 | 术语检查 | typo_check / expression_opt |
-|------|---------|---------------------------|
+| --- | --- | --- |
 | LLM 调用次数 | N+1（N 段提取 + 1 次聚类） | N（逐段检查） |
 | 跨段落分析 | 是（聚类基于全文术语） | 否（逐段独立） |
 | 检测方式 | LLM 语义聚类 | LLM 逐段文本修改 |
@@ -140,11 +140,11 @@ Phase 3: 生成修正结果
 Prefix: `/api/terminology-check`, Tag: `terminology_check`
 
 | 方法 | 路径 | 功能 |
-|---|---|---|
-| `GET` | `/preview` | 预览段落（剥离 LaTeX 后的纯文本） |
-| `POST` | `/check` | LLM 逐段提取术语 + 语义聚类检查一致性 |
-| `POST` | `/apply` | 将审核通过的术语修改还原 marker 并写回文件 |
-| `GET` | `/stream/{workspace_id}` | SSE 流式推送：提取进度 → 聚类 → 结果 |
+| --- | --- | --- |
+| GET | `/preview` | 预览段落（剥离 LaTeX 后的纯文本） |
+| POST | `/check` | LLM 逐段提取术语 + 语义聚类检查一致性 |
+| POST | `/apply` | 将审核通过的术语修改还原 marker 并写回文件 |
+| GET | `/stream/{workspace_id}` | SSE 流式推送：提取进度 → 聚类 → 结果 |
 
 ### 请求模型
 

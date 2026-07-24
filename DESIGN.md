@@ -49,10 +49,10 @@
 - **基础设施层**：配置管理、LLM 客户端、项目管理、日志、文件操作。
 - **工具层**：JSON 解析/校验、原子写入、备份管理、`\input` 递归解析。
 
-### 1.2 为什么选择这种架构
+### 1.2 为什么这么设计
 
 | 问题 | 解决方案 |
-|------|---------|
+| --- | --- |
 | LLM 输出不可靠（格式错误、字段缺失） | `retry_with_validation()` 闭环重试 |
 | LaTeX 结构必须保护，LLM 只能改纯文本 | Marker 替换-还原策略 |
 | 用户可能在审核期间修改文件 | MD5 校验 + 原子写入 |
@@ -91,7 +91,7 @@ BaseParagraphCheckService
 每次 preview/check 操作生成唯一 `operation_id`（12 位 hex），关联的上下文（`CheckOperationContext`）保存在服务实例的 `_operation_contexts` 字典中：
 
 | 字段 | 含义 |
-|---|---|
+| --- | --- |
 | `operation_id` | 唯一标识 |
 | `marker_maps` | 深拷贝的 marker 映射（`file_path → para_index → {marker: original}`） |
 | `file_path` | 主文件路径 |
@@ -143,7 +143,7 @@ BaseParagraphCheckService
 **关键约束**：注释替换（第 3 步）在环境/数学/命令（第 4-7 步）之前，确保注释内的 `\command{}`、`$math$`、`\begin{env}` 不被单独提取。逐字类环境（第 2 步）在注释之前，因其内部可含字面 `%`。
 
 | 步骤 | 目标 | 替换为 |
-|------|------|--------|
+| --- | --- | --- |
 | 1. `_replace_verb_inline()` | `\verb\|...\|` | `__VERB_NNNN__` |
 | 2. `_replace_protected_envs(envs=_VERBATIM_ENVS)` | 逐字类环境 `verbatim`/`lstlisting`（可含 `%`） | `__ENV_NNNN__` |
 | 3. `_replace_comments()` | `%` 注释 | `__COM_NNNN__` |
@@ -486,7 +486,7 @@ Step 4: 写入 .bib 文件
 **关键差异（与其他模块对比）**：
 
 | 特性 | typo_check / writing_chat | bib_manager |
-|------|--------------------------|-------------|
+| --- | --- | --- |
 | 交互模式 | 逐段 + SSE 流式 | 四步逐步提交 |
 | Marker 保护 | 必须 | 不需要（不操作 .tex 文件） |
 | 元数据字段 | 固定 Pydantic schema | 动态：由格式分析阶段决定 |
@@ -544,7 +544,7 @@ apply 时携带 file_path → 精确写回对应文件
 **关键设计决策**：
 
 | 决策 | 选择 | 理由 |
-|------|------|------|
+| --- | --- | --- |
 | 展开时机 | marker 替换之前 | `\input{}` 命令必须在原始文本中可见，marker 替换后无法识别 |
 | 段落索引 | 文件内局部索引 | 避免跨文件索引冲突，简化 apply 逻辑 |
 | 循环引用 | `visited` 集合 | `\input{a}` → `\input{b}` → `\input{a}` 时终止 |
@@ -776,7 +776,7 @@ def get_config() -> AppConfig:
 ### 9.1 分层测试
 
 | 层级 | 测试内容 | Mock 策略 |
-|------|---------|----------|
+| --- | --- | --- |
 | 单元测试 | latex_parser、project_manager | 无需 Mock |
 | 集成测试 | 各模块的 service + router | Mock LLM 调用 |
 
@@ -795,7 +795,7 @@ Mock 返回值必须符合 Pydantic schema，确保测试的可重复性。
 ## 10. 关键设计决策总结
 
 | 决策 | 选择 | 理由 |
-|------|------|------|
+| --- | --- | --- |
 | 后端框架 | FastAPI | 原生 async/await，自动 OpenAPI 文档 |
 | 前端框架 | React 19 | 生态成熟，shadcn/ui 组件丰富 |
 | 状态管理 | Zustand 5 | 轻量，支持 persist 中间件 |

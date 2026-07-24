@@ -1,11 +1,11 @@
 # LateXcellence — 项目开发文档（概览）
 
-> 本文档为项目开发主文档。各模块详细文档见同目录下其他文件。
+> 本文档是开发文档的主入口。各模块的详细文档在同目录下。
 
 **文档索引**：
 
 | 文档 | 内容 |
-|------|------|
+| --- | --- |
 | [development.md](./development.md) | 本文件：项目概述、技术栈、目录结构、启动入口、配置、架构、编码规范 |
 | [backend-core.md](./backend-core.md) | 后端核心模块：config、llm_client、logger、project_manager、工具模块 |
 | [modules.md](./modules.md) | 所有功能模块 |
@@ -18,8 +18,7 @@
 
 LateXcellence 是一个 AI 驱动的 LaTeX 文档助手。后端 FastAPI + 前端 React/Vite，通过 LLM 对 `.tex` 文件进行错字查找、表达优化、公式识别、模板生成等操作。
 
-核心工作流：
-
+基本流程：
 1. 打开一个本地 LaTeX 项目目录
 2. 选择 `.tex` 文件，系统解析段落并剥离 LaTeX 结构为纯文本
 3. LLM 在纯文本上执行校对/优化（LaTeX 结构被替换为不可见的 marker，LLM 不能修改它们）
@@ -31,25 +30,25 @@ LateXcellence 是一个 AI 驱动的 LaTeX 文档助手。后端 FastAPI + 前�
 ## 技术栈
 
 | 层 | 语言 | 框架/关键库 |
-|---|---|---|
-| 后端 | Python 3.12+ | FastAPI, uvicorn, openai, pydantic **v2**, httpx |
-| 前端 | JavaScript (JSX) | React 19, Vite 6, Tailwind CSS 4, Zustand 5, shadcn/ui (style: base-nova) |
+| --- | --- | --- |
+| 后端 | Python 3.12+ | FastAPI, uvicorn, openai, pydantic v2, httpx |
+| 前端 | JavaScript (JSX) | React 19, Vite 6, Tailwind CSS 4, Zustand 5, shadcn/ui |
 | 测试 | Python | pytest + pytest-asyncio + httpx |
 
 ---
 
-## 完整目录结构
+## 目录结构
 
 ```
 latexcellence/
-├── main.py                         # 统一入口，启动 FastAPI + 挂载前端
-├── config.json                     # 运行时配置文件
-├── config.example.json             # 配置文件模板（不含密钥，可提交 Git）
+├── main.py                         # 启动入口
+├── config.json                     # 配置文件
+├── config.example.json             # 配置模板（不含密钥，可提交 Git）
 ├── requirements.txt                # Python 依赖
 ├── .gitignore                      # Git 忽略规则
 ├── AGENTS.md                       # AI 编程助手规范
-├── DEVELOPMENT.md                  # 项目开发文档
-├── DESIGN.md                       # 设计技术文档
+├── DEVELOPMENT.md                  # 开发文档入口
+├── DESIGN.md                       # 设计文档
 ├── PROJECT_SUMMARY.md              # 项目概要（供 AI 快速读取）
 ├── README.md                       # 项目简介
 ├── clean-cache.sh                  # 清理缓存脚本
@@ -416,7 +415,7 @@ app.include_router(bib_manager_router)            # /api/bib-manager/*
 ## 前端开发/生产模式区分
 
 | 模式 | 配置 | 行为 |
-|---|---|---|
+| --- | --- | --- |
 | 开发模式 | `dev_mode: true` | FastAPI 不挂载静态文件；`vite.config.js` 代理 `/api` → `localhost:8000` |
 | 生产模式 | `dev_mode: false` | FastAPI 挂载 `static/` 目录；前端无独立 dev server |
 
@@ -524,7 +523,7 @@ class MyClass:
 ### Python
 
 | 规范项 | 要求 |
-|---|---|
+| --- | --- |
 | 导入顺序 | 标准库 → 第三方 → 应用内部（**禁止相对导入**） |
 | 类型注解 | 强制注解。使用 `list[X]` / `dict[K, V]` / `X | None` |
 | 联合类型 | 使用 `Optional[X]`，**禁止** `X \| None` |
@@ -540,7 +539,7 @@ class MyClass:
 ### JavaScript/JSX
 
 | 规范项 | 要求 |
-|---|---|
+| --- | --- |
 | 导入 | ESM `import`，相对路径带 `./` |
 | 字符串 | 双引号 |
 | 分号 | 无 |
@@ -562,7 +561,7 @@ class MyClass:
 ## 安全与边界处理
 
 | 场景 | 处理策略 |
-|---|---|
+| --- | --- |
 | `.tex` 文件包含 `\include`/`\input` | `project_manager` 递归解析，记录文件依赖图 |
 | `verbatim`/`lstlisting`/`table` | 整体替换为 marker，LLM 不可见，不可修改 |
 | 中文 + LaTeX 混合（UTF-8） | 统一按 UTF-8 读写 |
@@ -584,7 +583,7 @@ Phase 1 在不改变后端核心业务逻辑的前提下，对前端交互体验
 引入 [`sonner`](https://sonner.emilkowal.ski/) 作为全局 toast 库。
 
 | 文件 | 职责 |
-|---|---|
+| --- | --- |
 | `components/ui/sonner.jsx` | `<Toaster>` 包装：读取 `useTheme` 同步暗/亮模式，配置 `richColors + closeButton` |
 | `App.jsx` | 全局挂载 `<Toaster />` |
 | `hooks/useParagraphCheck.js` | 在 apply 成功/失败、check 完成、SSE 错误时触发 toast |
@@ -598,7 +597,7 @@ Phase 1 在不改变后端核心业务逻辑的前提下，对前端交互体验
 ### 撤销/重做 UI
 
 | 文件 | 职责 |
-|---|---|
+| --- | --- |
 | `hooks/useUndoRedo.js` | 轮询 `/api/project/can-undo`、`/can-redo` 端点维护 `canUndo`/`canRedo` 状态；暴露 `handleUndo`/`handleRedo`，操作后自动刷新状态并回调通知调用方重新加载段落 |
 | `api/index.js` | 新增 `api.project.canUndo(filePath, workspaceId)` / `canRedo(filePath, workspaceId)`（GET 请求） |
 | `pages/WorkspacePage.jsx` | 顶栏添加 Undo/Redo 图标按钮（带 Tooltip），根据状态动态启用/禁用；键盘快捷键 `Ctrl+Z` 撤销、`Ctrl+Shift+Z` / `Ctrl+Y` 重做；输入框/文本域中不拦截，保留原生 undo |
@@ -620,7 +619,7 @@ Phase 1 在不改变后端核心业务逻辑的前提下，对前端交互体验
 ### 确认对话框
 
 | 文件 | 职责 |
-|---|---|
+| --- | --- |
 | `components/ConfirmDialog.jsx` | 通用确认对话框：基于 shadcn/ui `Dialog`（`disablePointerDismissal` 禁止遮罩关闭），支持 `variant="destructive"` 红色确认按钮、`confirmLoading` 加载态 |
 
 覆盖场景：
@@ -644,7 +643,7 @@ Phase 1 在不改变后端核心业务逻辑的前提下，对前端交互体验
 ### 编译后内联 PDF 预览
 
 | 层 | 文件 | 改动 |
-|---|---|---|
+| --- | --- | --- |
 | 后端 | `modules/compile/router.py` | 新增 `GET /api/compile/pdf?main_file=...` 端点，返回 `FileResponse`（latexmk 产出的 `{stem}.pdf`） |
 | 前端 | `api/index.js` | 新增 `api.compile.pdfUrl(mainFile)` 返回 URL 字符串 |
 | 前端 | `pages/WorkspacePage.jsx` | 编译成功后 `setPdfUrl(compile.pdfUrl + "&t=timestamp")`（cache-busting）；在编译结果 Card 下方渲染 `PDFPreview` 组件（70vh iframe）；关闭项目时清空 `pdfUrl` |
@@ -652,7 +651,7 @@ Phase 1 在不改变后端核心业务逻辑的前提下，对前端交互体验
 ### 公式/表格 OCR 组件抽取
 
 | 文件 | 职责 |
-|---|---|
+| --- | --- |
 | `components/ImageOCRPage.jsx` | 通用图片 OCR 页面：拖拽上传、Ctrl+V 粘贴、FormData 识别、结果展示、复制。通过 props 配置差异化部分 |
 | `pages/FormulaOCRPage.jsx` | 精简为少量代码：传入 `title`/`icon`/`recognize`/`recognizeButtonText`/`renderResultMeta` |
 | `pages/TableOCRPage.jsx` | 同上 |

@@ -5,19 +5,16 @@ LateXcellence 是一个 AI 驱动的 LaTeX 文档助手。后端 FastAPI + 前�
 ## 全局规则
 
 - **使用中文回复**：所有与用户的交流、代码注释、文档、commit 信息等，均使用中文。
-
-## 工作流程
-
-- **每次开始新对话时，先读取 PROJECT_SUMMARY.md 获取项目结构概要和功能速查。**
-- **项目结构变更时（新增/删除模块、核心文件路径变更），必须同步更新 PROJECT_SUMMARY.md 中的相关内容。**
+- **每次开始新对话**，先读 PROJECT_SUMMARY.md 了解项目结构和功能。
+- **项目结构变更**（新增/删除模块、核心文件路径变更），必须同步更新 PROJECT_SUMMARY.md。
 
 ## 技术栈速查
 
-|层|语言|框架/关键库|
-|---|---|---|
-|后端|Python 3.12+|FastAPI, uvicorn, openai, pydantic v2|
-|前端|JavaScript (JSX)|React 19, Vite 6, Tailwind CSS 4, Zustand, shadcn/ui|
-|测试|Python|pytest + pytest-asyncio + httpx|
+| 层 | 语言 | 框架/主要库 |
+| --- | --- | --- |
+| 后端 | Python 3.12+ | FastAPI, uvicorn, openai, pydantic v2 |
+| 前端 | JavaScript (JSX) | React 19, Vite 6, Tailwind CSS 4, Zustand, shadcn/ui |
+| 测试 | Python | pytest + pytest-asyncio + httpx |
 
 ## 常用命令
 
@@ -25,7 +22,7 @@ LateXcellence 是一个 AI 驱动的 LaTeX 文档助手。后端 FastAPI + 前�
 # 后端启动
 python main.py config.json
 
-# 前端开发/构建 (在 frontend/ 目录下)
+# 前端开发/构建（在 frontend/ 目录下）
 npm run dev
 npm run build
 
@@ -39,9 +36,9 @@ pytest tests/ -v
 
 格式：`<type>: <中文描述>` 或 `<type>(<scope>): <中文描述>`
 
-- **type**：`feat`（新功能）、`fix`（修复）、`refactor`（重构）、`docs`（文档）等。
-- **scope**（可选）：括号内注明影响范围，如 `frontend`、`backend`、`config`、`compile`、`fonts`、`test` 等。
-- **描述**：使用中文，简明扼要说明做了什么。
+- **type**：`feat`（新功能）、`fix`（修 bug）、`refactor`（重构）、`docs`（文档）等
+- **scope**（可选）：影响范围，如 `frontend`、`backend`、`config`、`compile`
+- **描述**：用中文，简洁明了
 
 示例：
 ```
@@ -54,22 +51,24 @@ refactor: 消除外部模块对私有属性的直接访问
 
 ## 核心业务约束（最高优先级）
 
-### 1. Marker 保护策略（LaTeX 结构防篡改）
+### 1. Marker 保护（防止 AI 改坏 LaTeX）
+
 与 LLM 交互时，LaTeX 结构必须替换为 marker（`__CMD_0000__` / `__MATH_0000__` 等）。
 - **Prompt 约束**：必须在 System Prompt 中强约束 LLM：“**绝对禁止修改、删除或拆分任何 marker，只能修改纯文本**”。
-- **还原逻辑**：调用 `LatexParser.restore_from_markers()` 时，**必须按 marker 长度降序还原**，防止短 marker 误匹配长 marker 的子串。
+- **还原逻辑**：调用 `LatexParser.restore_from_markers()` 时，**必须按 marker 长度从长到短还原**，防止短的误匹配长的
 
 ### 2. JSON 输出校验流程
-LLM 输出**必须**经 `json_utils.py` 的 `retry_with_validation()` 处理：
-1. `safe_parse_json()` 容错解析（去 markdown 围栏、尾逗号、单引号）。
-2. Pydantic `.model_validate()` 严格校验。
-3. 失败时，用 `format_validation_error()` 将错误格式化后反馈给 LLM 重试（最多 3 次）。
+
+LLM 输出**必须**经过 `json_utils.py` 的 `retry_with_validation()` 处理：
+1. `safe_parse_json()` 容错解析（去 markdown 围栏、尾逗号、单引号）
+2. Pydantic `.model_validate()` 严格校验
+3. 失败时，用 `format_validation_error()` 将错误格式化后反馈给 LLM 重试（最多 3 次）
 
 ---
 
 ## Python 后端规范
 
-### 类型与 Pydantic v2（极易出错）
+### 类型和 Pydantic v2（容易出错）
 
 - **类型注解**：强制注解。使用 `list[str]` / `dict[str, Any]`，**`X | None`**。
 - **Pydantic v2 专属**：
@@ -89,7 +88,7 @@ LLM 输出**必须**经 `json_utils.py` 的 `retry_with_validation()` 处理：
 - **错误处理**：快速失败 → 指数退避重试 → 日志后重抛。复用标准异常（`ValueError`/`RuntimeError`），**禁止自定义异常类**。
 - **日志**：使用 `get_logger(__name__)`。LLM 调用、文件读写、API 边界必须记录日志。
 
-### 路径安全（强制）
+### 路径安全（必须遵守）
 
 - **唯一入口**：所有需要根据项目根目录拼接 `file_path` 的代码，**必须**调用 `backend/utils/path_guard.py` 的 `resolve_project_path(root, file_path, ...)` 函数。
 - **禁止绕过**：不得直接使用 `root / file_path`、`os.path.join(root, file_path)` 或手动 `resolve()` + `is_relative_to()` 拼接。
@@ -125,6 +124,8 @@ LLM 输出**必须**经 `json_utils.py` 的 `retry_with_validation()` 处理：
 - **Mock 策略**：测试 Service 层时，**必须 Mock LLM 调用**（使用 `pytest-mock` 或 `unittest.mock`），严禁在单元测试中发起真实网络请求。
 - **LaTeX 数据**：测试用的 LaTeX 字符串必须使用原始字符串 `r"..."`。
 
+---
+
 ## 文档编写
 
 - DEVELOPMENT.md 是开发文档。编码完成新的模块，必须在 DEVELOPMENT.md 文档中添加对模块功能、用途、设计的记录。对已有模块逻辑进行修改，DEVELOPMENT.md 中描述同步更新。
@@ -147,7 +148,7 @@ LLM 输出**必须**经 `json_utils.py` 的 `retry_with_validation()` 处理：
 ## 绝对禁止事项 (Negative Constraints)
 
 | 禁止行为 | 替代/说明 |
-|---|---|
+| --- | --- |
 | 使用 `os.path` | 用 `pathlib.Path`（文件操作显式 `encoding="utf-8"`） |
 | 使用 `print()` 调试 | 用 `logger.debug()` 或 `logger.info()` |
 | Prompt 要求 LLM 修改 Marker | 用 Marker 保护策略，Prompt 强调不可见/不可改 |
@@ -160,7 +161,7 @@ LLM 输出**必须**经 `json_utils.py` 的 `retry_with_validation()` 处理：
 | 逐段检查功能实现模式 | 必须用 `useParagraphCheck` hook 封装：恢复/文件选择/预览/检查优化/排序/应用/refresh 持久化；页面只传 API 模块与 store slice 配置；禁止在页面重复实现 |
 | 逐段检查前端交互约束 | 1）结果页用 `<MarkerText>` 渲染含 Marker（如 `__MATH_0000__`）的字符串展示友好标签；2）展开“查看原文”用 `<ParagraphContext>`（显示当前段落前后上下文） |
 
-### 前端错误消息翻译规范
+### 前端错误消息翻译规则
 
 前端**必须**将所有后端返回的英文错误消息翻译为当前语言后再展示给用户：
 - **HTTP 请求层**：`api/index.js` 的 `request()` 已统一通过 `translateError()` 翻译错误。

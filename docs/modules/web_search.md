@@ -1,4 +1,4 @@
-# 联网搜索模块（Web Search）
+# 联网搜索模块
 
 > 后端工具模块，提供多引擎联网搜索能力，支持 Function Calling 集成。
 
@@ -9,7 +9,7 @@
 ## 核心文件
 
 | 文件 | 职责 |
-|------|------|
+| --- | --- |
 | `backend/utils/web_search/` | 搜索模块包 |
 | `backend/utils/web_search/__init__.py` | 模块入口，向后兼容导出所有公共接口 |
 | `backend/utils/web_search/models.py` | SearchResult / SearchResponse 数据模型 |
@@ -159,7 +159,7 @@ result = await registry.execute("web_search", {"query": "..."})
 ### SSE 事件扩展
 
 | 事件类型 | 字段 | 说明 |
-|----------|------|------|
+| --- | --- | --- |
 | `searching` | `query`, `engine` | LLM 决定搜索，开始执行 |
 | `tool_result` | `tool`, `result_count` | 搜索完成，返回结果数量 |
 | `captcha_challenge` | `challenge_id`, `images`, `query`, `engine` | DDG 触发 Challenge，推送图片到前端 |

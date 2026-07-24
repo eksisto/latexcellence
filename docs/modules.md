@@ -1,6 +1,6 @@
 # LateXcellence — 功能模块文档
 
-本目录包含 LateXcellence 各功能模块的详细文档。
+本目录包含各个功能模块的详细文档。
 
 ## 模块列表
 
@@ -8,19 +8,19 @@
 
 | 模块 | 文档 | 说明 |
 | --- | --- | --- |
-| 错字查找 | [typo_check.md](modules/typo_check.md) | LaTeX 源码错字检查与修正 |
-| 表达优化 | [expression_opt.md](modules/expression_opt.md) | 学术英语表达优化（清晰度、简洁性、学术语气） |
-| 术语一致性检查 | [terminology_check.md](modules/terminology_check.md) | 术语一致性检查与统一建议 |
+| 错字查找 | [typo_check.md](modules/typo_check.md) | LaTeX 源码的错字检查与修正 |
+| 表达优化 | [expression_opt.md](modules/expression_opt.md) | 学术语言表达润色 |
+| 术语一致性检查 | [terminology_check.md](modules/terminology_check.md) | 术语一致性检查 |
 | LaTeX 代码审查 | [code_review.md](modules/code_review.md) | 工具格式化 + LLM 智能审查（坏味道、最佳实践） |
-| LaTeX 样式修改 | [style_modify.md](modules/style_modify.md) | 基于自然语言描述修改 LaTeX 样式 |
-| 写作助手聊天 | [writing_chat.md](modules/writing_chat.md) | 多轮对话式写作辅助与段落编辑 |
+| LaTeX 样式修改 | [style_modify.md](modules/style_modify.md) | 用自然语言描述修改 LaTeX 样式 |
+| 写作助手 | [writing_chat.md](modules/writing_chat.md) | 多轮对话式写作辅助与段落编辑 |
 
 ### OCR 识别模块
 
 | 模块 | 文档 | 说明 |
 | --- | --- | --- |
-| 公式识别 | [formula_ocr.md](modules/formula_ocr.md) | 图片 LaTeX 公式识别 |
-| 表格识别 | [table_ocr.md](modules/table_ocr.md) | 图片表格识别与 LaTeX 代码生成 |
+| 公式识别 | [formula_ocr.md](modules/formula_ocr.md) | 图片转 LaTeX 公式 |
+| 表格识别 | [table_ocr.md](modules/table_ocr.md) | 图片表格转 LaTeX 代码 |
 
 ### 文档生成模块
 
@@ -68,7 +68,7 @@
 每次 preview/check 操作生成唯一 `operation_id`，关联的上下文（`CheckOperationContext`）保存在服务实例的 `_operation_contexts` 字典中：
 
 | 字段 | 含义 |
-|---|---|
+| --- | --- |
 | `operation_id` | 12 位 hex 唯一标识 |
 | `marker_maps` | 深拷贝的 marker 映射（`file_path → para_index → {marker: original}`） |
 | `file_path` | 主文件路径 |

@@ -4,13 +4,13 @@
 
 ---
 
-## Directory Tree
+## 目录结构
 
 ```
 latexcellence/
 ├── main.py                          # FastAPI 入口 + 静态文件挂载
 ├── config.json                      # 配置文件
-├── config.example.json              # 配置文件模板
+├── config.example.json              # 配置模板
 ├── AGENTS.md                        # AI 编程助手规范
 ├── DEVELOPMENT.md                   # 开发文档索引（指向 docs/ 目录）
 ├── DESIGN.md                        # 设计文档
@@ -95,7 +95,7 @@ latexcellence/
 ## Feature Modules Quick Reference
 
 | # | Module | 目的 | 关键文件 | 依赖 LLM | Marker |
-|---|--------|------|----------|---------|--------|
+| --- | --- | --- | --- | --- | --- |
 | 1 | typo_check | 错字/拼写检查 | router.py, service.py | ✓ | ✓ |
 | 2 | expression_opt | 学术表达优化 | router.py, service.py, prompt_manager.py | ✓ | ✓ |
 | 3 | code_review | LaTeX 代码审查（工具格式化 + LLM 质量审查） | router.py, service.py | ✓ | ✓ |
@@ -110,7 +110,7 @@ latexcellence/
 | 12 | writing_chat | 写作助手对话 | router.py, service.py, context.py, models.py, prompt_manager.py | ✓ | ✗ |
 | 13 | bib_manager | 参考文献管理 | router.py, service.py, models.py, style_registry.py | ✓ | ✗ |
 
-## Core Architecture Concepts
+## 核心设计思路
 
 - **BaseParagraphCheckService**: 四个逐段检查模块（typo_check / expression_opt / code_review / terminology_check）共享的基类，封装文件解析、marker 替换、LLM 编排（批量+流式）、结果写回等流程。子类通过 6 个 hooks（_get_system_prompt / _build_user_content / _get_model_cls / _get_llm_params / _get_batch_size / _build_success_result）定制行为
 - **WorkspaceManager**: 多浏览器多工作区隔离，每个 workspace_id 拥有独立的 `LatexProject` 实例（项目状态、文件树、MD5 缓存、撤销栈完全隔离）

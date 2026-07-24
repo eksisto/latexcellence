@@ -183,7 +183,7 @@ api.writingChat.assistants.list() / .load(name) / .save(name, content) / .delete
 **翻译资源**：按命名空间拆分为 5 个 JSON 文件（`zh.json` / `en.json` 内各含 5 个 key 层级）：
 
 | 命名空间 | 覆盖范围 | 示例 key |
-|----------|---------|----------|
+| --- | --- | --- |
 | `common` | 跨页面复用的通用文案 | `loading`, `save`, `cancel`, `applyAll` |
 | `pages` | 各页面专属文案 | `typoCheck.checkButton`, `workspace.compileBtn` |
 | `components` | 各组件专属文案 | `settings.apiKey`, `markerText.math`, `themeNames.youminghei` |

@@ -3,7 +3,7 @@
 ## 1. 触发条件
 
 | 触发因素 | 详情 |
-|---|---|
+| --- | --- |
 | **User-Agent** | 已知 bot UA（如 `python-requests`、`curl`、`Go-http-client`、`HeadlessChrome` 等）立即触发 |
 | **频率** | 同 IP 短时间内大量请求触发 |
 | **缺少 Sec-Fetch 头** | `Sec-Fetch-Mode` / `Sec-Fetch-Dest` / `Sec-Fetch-Site` / `Sec-Fetch-User` 缺失或值不正确 |
@@ -40,7 +40,7 @@ method: POST
 ## 4. 参数详解
 
 | 参数 | 说明 | 示例 |
-|---|---|---|
+| --- | --- | --- |
 | `sv` | 服务类型 | `html` |
 | `cc` | Challenge code / 区域标识 | `sre` |
 | `st` | Submit timestamp（提交时间戳，秒级） | `1784686309` |
@@ -72,7 +72,7 @@ challenge-submit={gk}&image-check_{hash1}={hash1}&image-check_{hash2}={hash2}&..
 ## 7. 响应结果
 
 | 场景 | HTTP | 页面内容 |
-|---|---|---|
+| --- | --- | --- |
 | **正确** | 200 | 搜索结果页（含 vqd） |
 | **错误（还有重试）** | 200 | "Please try again" + "You have N attempt(s) left" + Try again 按钮 |
 | **耗尽重试** | 200 | 纯文本错误页 + `error-lite@duckduckgo.com` + code |

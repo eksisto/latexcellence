@@ -5,7 +5,7 @@
 LaTeX 样式修改模块接收用户粘贴的 LaTeX 源码和自然语言修改描述，调用 LLM 直接修改 LaTeX 源码后返回。
 
 | 维度 | 样式修改 | 其他 LLM 模块 |
-|------|---------|--------------|
+| --- | --- | --- |
 | 输入 | 原始 LaTeX 源码 + 自然语言描述 | LaTeX 项目文件 / 图片 |
 | 是否使用 Marker | 否（LLM 需要理解 LaTeX 结构来执行修改） | 是（typo_check/expression_opt/code_review/terminology_check）
 | 是否修改源文件 | 否（仅返回修改结果，用户手动复制） | 是 / 否 |
@@ -23,7 +23,7 @@ class StyleModifyResult(BaseModel):
 ### 核心方法
 
 | 方法 | 功能 |
-|----|----|
+| --- | --- |
 | `modify(latex, description)` | 异步：校验非空 → 调用 LLM 修改 → 返回结果 |
 | `_modify_with_llm(llm, latex, description)` | 构建 user message（latex 源码 + 描述）→ retry_with_validation → 返回 StyleModifyResult |
 
@@ -41,8 +41,8 @@ class StyleModifyResult(BaseModel):
 Prefix: `/api/style-modify`, Tag: `style_modify`
 
 | 方法 | 路径 | 功能 |
-|---|---|---|
-| `POST` | `/modify` | 根据描述修改 LaTeX 代码 |
+| --- | --- | --- |
+| POST | `/modify` | 根据描述修改 LaTeX 代码 |
 
 ### 请求体
 

@@ -30,7 +30,7 @@ AppConfig    → server, llm, features, logging  # 顶层聚合
 **核心接口**：
 
 | 函数 | 功能 |
-|---|---|
+| --- | --- |
 | `load_config(path)` | 加载 JSON + 环境变量覆盖 `LX_LLM_KEY` + Pydantic 校验 |
 | `get_config()` | 获取缓存的 AppConfig 单例（**禁止在 `__init__` 中缓存**） |
 | `save_config()` | 将当前配置 `model_dump()` 写回磁盘；**环境变量来源的 `api_key` 会自动清空，不会落盘** |
@@ -51,7 +51,7 @@ AppConfig    → server, llm, features, logging  # 顶层聚合
 **核心接口**：
 
 | 方法 | 功能 |
-|---|---|
+| --- | --- |
 | `client` (property) | 懒加载获取 `AsyncOpenAI` 实例，使用 `threading.Lock` 双检锁保护并发创建（支持 `asyncio.to_thread()` 多线程场景） |
 | `chat()` | 非流式对话：调用 `chat.completions.create`，返回原始 `str`，由调用方负责 JSON 解析 |
 | `chat_stream()` | 流式对话：返回 `AsyncIterator[str]`，逐 token 产出，用于 SSE 推送 |
@@ -119,7 +119,7 @@ class ProjectInfo:
 **核心接口**：
 
 | 方法 | 功能 |
-|---|---|
+| --- | --- |
 | `open(path)` | 打开项目目录，扫描文件树，检测主文档，构建依赖图 |
 | `get_file_tree()` | 返回文件树（仅展示 `.tex`/`.bib`/`.cls`/`.sty`/`.pdf` 文件） |
 | `get_paragraphs(file_path)` | 按空行分割文件为段落，记录行号范围，缓存 MD5 |
@@ -145,7 +145,7 @@ class ProjectInfo:
 **核心接口**：
 
 | 方法/属性 | 功能 |
-|---|---|
+| --- | --- |
 | `BaseParagraphCheckService` | 抽象基类，定义 6 个 hooks 供子类实现 |
 | `_get_system_prompt()` | 返回 System Prompt（含 marker 保护约束） |
 | `_build_user_content(text)` | 构建发给 LLM 的 User 内容 |
@@ -175,7 +175,7 @@ class ProjectInfo:
 **核心接口**：
 
 | 函数/方法 | 功能 |
-|---|---|
+| --- | --- |
 | `get_workspace_manager()`（模块级函数） | 获取全局单例 |
 | `get_project_manager_for_workspace(workspace_id)`（模块级函数） | 获取指定工作区的 `LatexProject` 实例（不存在则创建） |
 | `WorkspaceManager.remove(workspace_id)` | 移除工作区，释放资源 |
@@ -192,7 +192,7 @@ class ProjectInfo:
 **核心接口**：
 
 | 函数 | 功能 |
-|---|---|
+| --- | --- |
 | `compute_md5(file_path)` | 二进制 MD5 哈希（避免 Windows `\r\n` 差异导致文本模式不一致） |
 | `safe_read(file_path)` | UTF-8 读取，含 UnicodeDecodeError 详细报告 |
 | `safe_read_lines(file_path)` | 逐行读取，保留换行符 |
@@ -204,7 +204,7 @@ class ProjectInfo:
 每文件维护 `undo: deque` 和 `redo: deque`，最大 50 层历史。
 
 | 方法 | 功能 |
-|---|---|
+| --- | --- |
 | `push(file_path)` | 当前内容入 undo 栈 → 清空 redo 栈 → 返回 MD5 |
 | `verify_md5(file_path, expected_md5)` | 检查文件是否被外部修改 |
 | `undo(file_path)` | 当前入 redo → 从 undo 恢复 → 返回恢复后的内容 |
@@ -229,13 +229,13 @@ class ProjectInfo:
 **核心接口**：
 
 | 函数 | 功能 |
-|---|---|
+| --- | --- |
 | `resolve_project_path(root, file_path, *, allowed_suffixes, allow_symlink)` | 唯一路径解析入口：校验 + resolve → 返回安全的绝对路径 |
 
 **调用方约定**：
 
 | 模块 | 调用处 | allowed_suffixes |
-|---|---|---|
+| --- | --- | --- |
 | `project_manager` | `get_paragraphs` / `set_main_file` | `(".tex",)` |
 | `project_manager` | `apply_change` / `undo` / `redo` / `can_undo` / `can_redo` | `None`（不限） |
 | `input_resolver` | `resolve_inputs` 入口 + 递归引用 | `None` |
@@ -250,7 +250,7 @@ class ProjectInfo:
 **核心接口**：
 
 | 函数 | 功能 |
-|---|---|
+| --- | --- |
 | `safe_parse_json(text)` | 容错解析：去除 markdown 围栏、尾逗号、单引号替换，支持 `str` 和 `dict` 输入 |
 | `validate_model(data, model_cls)` | Pydantic `.model_validate()` 严格校验 |
 | `format_validation_error(errors)` | 将 Pydantic ValidationError 格式化为 LLM 可读的中文错误信息 |
@@ -278,20 +278,20 @@ raise ValueError("Validation failed after N attempts")        # ❌ 耗尽
 **核心接口**：
 
 | 函数 | 功能 |
-|---|---|
+| --- | --- |
 | `extract_key_errors(log_text, max_chars=3000)` | 从 latexmk/xelatex 日志中提取关键错误行（`! ...`、`Emergency stop`、`LaTeX Error:` 等），避免全文过长 |
 | `translate_compile_errors(stdout, stderr)` | 异步调用 LLM 将编译错误翻译为 `(explanation, fixes)` 元组。LLM 失败时返回兜底提示 |
 
 **Pydantic 模型**：
 
 | 模型 | 字段 |
-|---|---|
+| --- | --- |
 | `ErrorTranslation` | `explanation: str`（中文解释）、`fixes: list[str]`（修复建议列表） |
 
 **调用方**：
 
 | 模块 | 场景 |
-|---|---|
+| --- | --- |
 | `compile/service.py` | `compile_latex()` 编译失败时调用 |
 | `git_diff/service.py` | `render_diff_pdf()` 编译失败时调用 |
 
@@ -302,7 +302,7 @@ raise ValueError("Validation failed after N attempts")        # ❌ 耗尽
 **核心接口**：
 
 | 函数 | 功能 |
-|---|---|
+| --- | --- |
 | `get_current_time_context()` | 返回 `{"date": "2026-07-22", "time": "20:20", "weekday": "周三"}` 格式的当前时间信息 |
 
 ---
@@ -314,7 +314,7 @@ raise ValueError("Validation failed after N attempts")        # ❌ 耗尽
 **核心接口**：
 
 | 接口 | 功能 |
-|---|---|
+| --- | --- |
 | `MARKER_PATTERN` | 模块级常量：`re.compile(r"__[A-Z]+_\d{4}__")`，用于从文本中提取 marker。各 service 从此处统一导入，避免重复定义 |
 | `LatexParser.strip_to_plain_text(source)` | 将 LaTeX 源码转为带 marker 的纯文本，返回 `(plain_text, marker_map)` |
 | `LatexParser.restore_from_markers(processed, marker_map)` | 按 marker 长度降序还原，防止短 marker 误匹配长 marker 前缀 |
@@ -334,7 +334,7 @@ raise ValueError("Validation failed after N attempts")        # ❌ 耗尽
 **核心接口**：
 
 | 函数 | 功能 |
-|---|---|
+| --- | --- |
 | `analyze_latex_packages(latex_code, llm)` | 异步调用 LLM 分析 LaTeX 代码，返回宏包名称列表（`list[str]`）。LLM 调用失败时优雅降级，返回空列表 |
 | `prepend_package_comments(llm, latex_code)` | 异步分析 LaTeX 代码所需宏包，将注释前置到代码前。若无宏包需要或 LLM 失败，原样返回 |
 | `packages_to_comments(packages)` | 将宏包名称列表转换为 LaTeX 注释格式，每行形如 `% \usepackage{booktabs}` |
@@ -355,7 +355,7 @@ class LatexPackageAnalysis(BaseModel):
 **核心接口**：
 
 | 函数 | 功能 |
-|---|---|
+| --- | --- |
 | `resolve_inputs(main_file, project_root, pm)` | 递归解析 `\input` / `\include` / `\subfile`，返回有序文件列表（含主文件） |
 | `_strip_line_comment(line)` | 在匹配 `\input` 前先去除行尾 `%` 注释，避免注释中的 `\input` 被误识别（私有辅助函数） |
 
@@ -382,18 +382,18 @@ else:
 Prefix: `/api/project`, Tag: `project`
 
 | 方法 | 路径 | 功能 |
-|---|---|---|
-| `POST` | `/open` | 打开 LaTeX 项目目录，返回 ProjectInfo |
-| `GET` | `/browse` | 浏览目录下的子文件夹列表（供前端文件夹选择器使用） |
-| `GET` | `/file-tree` | 获取文件树 |
-| `GET` | `/paragraphs` | 获取指定文件的段落列表（含行号） |
-| `POST` | `/apply-change` | 原地修改段落（含 MD5 校验） |
-| `POST` | `/set-main-file` | 手动设置项目主文件 |
-| `POST` | `/undo` | 撤销上一次修改 |
-| `POST` | `/redo` | 重做上一次撤销 |
-| `GET` | `/can-undo` | 检查能否撤销 |
-| `GET` | `/can-redo` | 检查能否重做 |
+| --- | --- | --- |
+| POST | `/open` | 打开 LaTeX 项目目录，返回 ProjectInfo |
+| GET | `/browse` | 浏览目录下的子文件夹列表（供前端文件夹选择器使用） |
+| GET | `/file-tree` | 获取文件树 |
+| GET | `/paragraphs` | 获取指定文件的段落列表（含行号） |
+| POST | `/apply-change` | 原地修改段落（含 MD5 校验） |
+| POST | `/set-main-file` | 手动设置项目主文件 |
+| POST | `/undo` | 撤销上一次修改 |
+| POST | `/redo` | 重做上一次撤销 |
+| GET | `/can-undo` | 检查能否撤销 |
+| GET | `/can-redo` | 检查能否重做 |
 | `DELETE` | `/workspace/{workspace_id}` | 关闭工作区，释放资源 |
-| `GET` | `/workspaces` | 列出所有活跃工作区 |
+| GET | `/workspaces` | 列出所有活跃工作区 |
 
 所有端点均需携带 `workspace_id` 查询参数。

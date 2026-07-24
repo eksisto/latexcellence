@@ -7,7 +7,7 @@
 ## 一、前端运行时依赖 (npm)
 
 | 项目 | 版本 | 许可证 | 用途 |
-|------|------|--------|------|
+| --- | --- | --- | --- |
 | [React](https://react.dev) | ^19.1.0 | MIT | 前端 UI 框架 |
 | [React DOM](https://react.dev) | ^19.1.0 | MIT | DOM 渲染 |
 | [React Router DOM](https://reactrouter.com) | ^7.5.0 | MIT | 客户端路由 |
@@ -37,7 +37,7 @@
 ## 二、前端开发依赖 (npm devDependencies)
 
 | 项目 | 版本 | 许可证 | 用途 |
-|------|------|--------|------|
+| --- | --- | --- | --- |
 | [Vite](https://vitejs.dev) | ^6.3.0 | MIT | 构建工具 |
 | [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react) | ^4.4.0 | MIT | React 编译插件 |
 | [Tailwind CSS](https://tailwindcss.com) | ^4.1.0 | MIT | CSS 框架 |
@@ -46,7 +46,7 @@
 ## 三、后端依赖 (Python pip)
 
 | 项目 | 版本约束 | 许可证 | 用途 |
-|------|----------|--------|------|
+| --- | --- | --- | --- |
 | [FastAPI](https://fastapi.tiangolo.com) | >=0.115.0 | MIT | Web 框架 |
 | [uvicorn](https://uvicorn.dev) | >=0.30.0 | BSD-3-Clause | ASGI 服务器 |
 | [httpx](https://www.python-httpx.org) | >=0.27.0 | BSD-3-Clause | HTTP 客户端 |
@@ -62,7 +62,7 @@
 ## 四、内联字体文件 (bundled)
 
 | 字体名称 | 许可证 | 来源 |
-|---|---|---|
+| --- | --- | --- |
 | 霞鹜文楷 | OFL-1.1 license | [lxgw/LXGW WenKai](https://github.com/lxgw/LxgwWenKai) |
 | Noto Sans SC | SIL Open Font License 1.1 | [Google Fonts](https://fonts.adobe.com/fonts/noto-sans-sc) |
 | JetBrains Mono | SIL Open Font License 1.1 | [JetBrains](https://www.jetbrains.com/lp/mono) |
@@ -70,7 +70,7 @@
 ## 五、系统级外部依赖
 
 | 项目 | 版本 | 许可证 | 用途 |
-|------|------|--------|------|
+| --- | --- | --- | --- |
 | [TeX Live](https://tug.org/texlive) | 2026 (xelatex/latexmk/latexindent.pl) | GPL-2.0-or-later | LaTeX 编译 |
 | [Pandoc](https://pandoc.org) | 3.8.2 | GPL-2.0-or-later | 格式转换 |
 
@@ -87,7 +87,7 @@ TeX Live 包含多个组件（xelatex、latexmk、latexindent.pl 等），整体
 以下配色主题来源于 [ShadcnThemer.com](https://shadcnthemer.com)（作者 [Mike Tromba](https://github.com/miketromba)），部分主题做了些许修改，特此致谢。
 
 | 中文名 | 英文原名 | 作者 | 来源 URL |
-|--------|----------|------|----------|
+| --- | --- | --- | --- |
 | 海螺橙 | Tangerine | @mike (tweakcn) | [shadcnthemer.com/themes/44dec9b0...](https://shadcnthemer.com/themes/44dec9b0-4404-4ded-9c7f-8f2a74a18efb) |
 | 琥珀黄 | Amber Minimal | @mike (tweakcn) | [shadcnthemer.com/themes/1bf014bc...](https://shadcnthemer.com/themes/1bf014bc-3163-4d1f-98a6-2788cc66f569) |
 | 樱桃红 | Sabbir shadcn theme | @sabbirhossendev | [shadcnthemer.com/themes/a00a22e6...](https://shadcnthemer.com/themes/a00a22e6-f853-474d-a332-f861626fbd5e) |

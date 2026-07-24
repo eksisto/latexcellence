@@ -8,7 +8,7 @@ LaTeX 源码，递归展开 `\input` / `\include` / `\subfile` 依赖后用 `dif
 `latexmk -xelatex` 编译为 PDF。**不写回用户项目文件**。
 
 | 维度 | 差异高亮 | 其他模块 |
-|------|---------|---------|
+| --- | --- | --- |
 | 核心工具 | git + difflib + latexmk | latexmk / pandoc / LLM API |
 | 输入 | Git revision（commit/branch/tag/工作区）+ 主文件路径 | LaTeX 源码 / 图片 / Markdown |
 | 输出 | 高亮差异 PDF | 修改后文本 / 编译结果 / LaTeX 公式 |
@@ -122,10 +122,10 @@ class DiffHighlightResult(BaseModel):
 Prefix: `/api/git-diff`, Tag: `git-diff`
 
 | 方法 | 路径 | 功能 |
-| ---- | ---- | ---- |
-| `GET` | `/refs` | 获取当前项目的 Git revision 列表（工作区 + 提交 + 分支 + 标签） |
-| `POST` | `/render-pdf` | 生成差异高亮 PDF（接受 `main_file`, `base_ref`, `target_ref`） |
-| `GET` | `/pdf/{job_id}` | 下载/预览生成的 PDF 文件 |
+| --- | --- | --- |
+| GET | `/refs` | 获取当前项目的 Git revision 列表（工作区 + 提交 + 分支 + 标签） |
+| POST | `/render-pdf` | 生成差异高亮 PDF（接受 `main_file`, `base_ref`, `target_ref`） |
+| GET | `/pdf/{job_id}` | 下载/预览生成的 PDF 文件 |
 
 ### 请求体 (`/render-pdf`)
 

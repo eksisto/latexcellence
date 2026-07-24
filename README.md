@@ -34,11 +34,11 @@
 
 ## 技术栈
 
-| 层   | 技术                                                       |
-| ---- | ---------------------------------------------------------- |
+| 层 | 技术 |
+| --- | --- |
 | 后端 | Python 3.12+, FastAPI, uvicorn, openai, pydantic v2, httpx |
-| 前端 | React 19, Vite 6, Tailwind CSS 4, Zustand 5, shadcn/ui, sonner, react-markdown + remark-gfm + remark-math + rehype-katex |
-| 测试 | pytest + pytest-asyncio                                    |
+| 前端 | React 19, Vite 6, Tailwind CSS 4, Zustand 5, shadcn/ui, sonner, react-markdown + KaTeX |
+| 测试 | pytest + pytest-asyncio |
 
 ## 快速开始
 
@@ -46,7 +46,7 @@
 
 - Python 3.12+
 - Node.js 18+
-- texlive（含 xelatex 和 latexmk，编译功能需要）
+- texlive（含 xelatex、latexmk、latexindent，编译功能、LaTeX 代码审查功能需要）
 - Pandoc（Markdown 转 LaTeX 功能需要，[下载安装](https://pandoc.org/installing.html)）
 - OpenAI API Key（或兼容的 API 端点）
 
@@ -97,14 +97,11 @@ npm run dev
 cd frontend
 npm run build
 cd ..
-
-# 启动（自动挂载构建产物）
-python main.py config.json
 ```
 
-打开 http://localhost:8000
+打开 http://localhost:8000。
 
-## 核心工作流
+## 基本用法
 
 1. 打开本地 LaTeX 项目目录
 2. 选择 .tex 文件，系统解析段落
@@ -121,22 +118,9 @@ latexcellence/
 ├── main.py                  # 统一入口
 ├── config.json              # 配置文件
 ├── backend/
-│   ├── core/                # 配置、LLM 客户端、日志、工作区管理、项目管理
-│   ├── modules/             # 功能模块（路由 + 服务）
-│   │   ├── typo_check/      # 文本校对
-│   │   ├── expression_opt/  # 表达优化
-│   │   ├── terminology_check/  # 术语一致性检查
-│   │   ├── formula_ocr/     # 公式识别
-│   │   ├── table_ocr/       # 表格识别
-│   │   ├── template_gen/    # 模板生成
-│   │   ├── code_review/      # LaTeX 代码审查
-│   │   ├── compile/         # 自动编译
-│   │   ├── git_diff/        # Git 差异高亮
-│   │   ├── markdown_converter/  # Markdown 转 LaTeX
-│   │   ├── style_modify/    # LaTeX 样式修改
-│   │   ├── writing_chat/    # 写作助手聊天
-│   │   └── bib_manager/     # 参考文献管理
-│   └── utils/               # 文件操作、JSON 校验、\input 递归解析、LaTeX 文本提取与位置映射
+│   ├── core/                # 核心：配置、LLM 客户端、日志、工作区管理、项目管理
+│   ├── modules/             # 各功能模块（路由 + 业务逻辑）
+│   └── utils/               # 工具：文件操作、JSON 校验、LaTeX 解析等
 ├── frontend/
 │   └── src/                 # React 应用
 ├── prompts/                 # 自定义提示词
@@ -145,6 +129,6 @@ latexcellence/
 └── docs/                    # 项目文档
 ```
 
-## 第三方开源项目声明
+## 鸣谢
 
-[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)，感谢这些项目的贡献者。
+[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)，感谢这些开源项目的贡献者。

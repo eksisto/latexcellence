@@ -14,7 +14,7 @@ class FormulaOCRResult(BaseModel):
 ## 核心方法
 
 | 方法 | 功能 |
-|---|---|
+| --- | --- |
 | `recognize(image_data, content_type)` | 主入口：校验格式 → 图片预处理 → base64 编码 → LLM Vision 调用 → 宏包分析 → 返回合并结果 |
 | `_preprocess(image_data)` | 检查文件大小，超 2000px 时等比缩放（LANCZOS 重采样） |
 | `_to_base64(img)` | PIL Image → JPEG base64（quality=85），处理 RGBA/LA/P 模式 |
@@ -35,5 +35,5 @@ You are a LaTeX formula OCR engine. Rules:
 Prefix: `/api/formula-ocr`, Tag: `formula_ocr`
 
 | 方法 | 路径 | 功能 |
-|---|---|---|
-| `POST` | `/recognize` | 上传图片（PNG/JPEG/WebP），返回 LaTeX 公式 |
+| --- | --- | --- |
+| POST | `/recognize` | 上传图片（PNG/JPEG/WebP），返回 LaTeX 公式 |

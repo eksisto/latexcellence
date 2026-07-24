@@ -6,7 +6,7 @@ Markdown 转 LaTeX 模块通过 `subprocess` 调用 `pandoc` 命令行工具将 
 并在转换后自动分析所需宏包（通过 LLM 宏包分析器）。
 
 | 维度 | Markdown 转换 | 其他模块 |
-|------|--------------|---------|
+| --- | --- | --- |
 | 外部依赖 | pandoc（需用户自行安装） + LLM API（宏包分析） | latexmk / LLM API |
 | 输入 | 纯 Markdown 文本 | LaTeX 源码 / 图片 |
 | 输出 | LaTeX 代码（含宏包注释） | 修改后的文本 / 编译结果 |
@@ -17,7 +17,7 @@ Markdown 转 LaTeX 模块通过 `subprocess` 调用 `pandoc` 命令行工具将 
 ### 核心方法
 
 | 方法 | 功能 |
-|----|----|
+| --- | --- |
 | `convert(markdown_text)` | 异步：检查 pandoc → 调用 asyncio.to_thread 执行 pandoc → 宏包分析 → 返回 LaTeX |
 | `_check_pandoc()` | 静态方法：检查 pandoc 是否可用（`shutil.which`） |
 | `_run_pandoc(markdown_text)` | 同步：subprocess.run 调用 `pandoc -f markdown -t latex --wrap=preserve` |
@@ -49,8 +49,8 @@ pandoc -f markdown -t latex --wrap=preserve
 Prefix: `/api/markdown-converter`, Tag: `markdown_converter`
 
 | 方法 | 路径 | 功能 |
-|----|---|----|
-| `POST` | `/convert` | 将 Markdown 文本转换为 LaTeX（接受 `markdown` 字段） |
+| --- | --- | --- |
+| POST | `/convert` | 将 Markdown 文本转换为 LaTeX（接受 `markdown` 字段） |
 
 ### 请求体
 

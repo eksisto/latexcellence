@@ -6,7 +6,7 @@
 调用 `latexmk -xelatex` 编译主文件，仅在编译失败时使用 LLM 翻译 stderr 错误信息。
 
 | 维度 | 编译模块 | 其他 LLM 模块 |
-|------|---------|--------------|
+| --- | --- | --- |
 | LLM 角色 | 仅用于翻译错误信息（非文本修改） | 用于修改/优化 LaTeX 文本 |
 | 输入 | latexmk stderr 输出 | LaTeX 源码或纯文本 |
 | 是否修改源文件 | 否（编译生成 PDF） | 是（修改 .tex 文件） |
@@ -32,7 +32,7 @@ class ErrorTranslation(BaseModel):
 ### 核心方法
 
 | 方法 | 功能 |
-|---|---|
+| --- | --- |
 | `compile_latex(main_file, workspace_id)` | 异步：调用 latexmk → 捕获 stderr → 失败时 LLM 翻译错误 → 返回 CompileResult |
 | `_extract_key_errors(stderr_text)` | 从 stderr 中提取关键错误行（正则匹配 `! `, `l.\d+`, `LaTeX Error:` 等），避免全文过长 |
 
@@ -65,6 +65,6 @@ You are a LaTeX compilation error translator.
 
 Prefix: `/api/compile`, Tag: `compile`
 
-| 方法   | 路径  | 功能                                         |
-|------|-----|--------------------------------------------|
-| `POST` | `/run` | 编译 LaTeX 项目（接受 `main_file` 相对路径） |
+| 方法 | 路径 | 功能 |
+| --- | --- | --- |
+| POST | `/run` | 编译 LaTeX 项目（接受 `main_file` 相对路径） |

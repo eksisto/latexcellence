@@ -66,7 +66,7 @@ class CodeReviewResult(BaseModel):
 ## Service API
 
 | 方法 | 说明 |
-|---|---|
+| --- | --- |
 | `check_code_review(file_path, paragraph_indices, resolve_input, workspace_id)` | 批量代码审查 |
 | `check_code_review_stream(file_path, resolve_input, workspace_id)` | SSE 流式代码审查 |
 | `apply_changes(file_path, changes, workspace_id, operation_id)` | 写回格式化后的原始 LaTeX |
@@ -80,7 +80,7 @@ class CodeReviewResult(BaseModel):
 Prefix: `/api/code-review`, Tag: `code_review`
 
 | 方法 | 路径 | 说明 |
-|---|---|---|
+| --- | --- | --- |
 | GET | `/preview` | 预览段落（含原始 LaTeX 和纯文本） |
 | POST | `/check` | 代码审查（工具格式化 + LLM 审查） |
 | POST | `/apply` | 写回格式化结果 |
@@ -96,3 +96,16 @@ Prefix: `/api/code-review`, Tag: `code_review`
 - 去除行尾多余空白
 
 不做 latexindent.pl 的高级功能（如 `&` 列宽对齐、`\` 断行对齐），高级对齐场景交给 LLM 审查指出。
+
+---
+
+## API 路由
+
+前缀 `/api/code-review`
+
+| 方法 | 路径 | 功能 |
+| --- | --- | --- |
+| GET | `/preview` | 预览段落 |
+| POST | `/check` | 工具格式化 + AI 审查 |
+| POST | `/apply` | 写回格式化结果 |
+| GET | `/stream/{workspace_id}` | SSE 流式推送 |

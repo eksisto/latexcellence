@@ -30,7 +30,7 @@ class TableOCRResult(BaseModel):
 ## 核心方法
 
 | 方法 | 功能 |
-|---|---|
+| --- | --- |
 | `recognize(image_data, content_type)` | 主入口：校验格式 → 图片预处理 → base64 编码 → 第一次 LLM 调用 → 第二次 LLM 宏包分析 → 合并结果 |
 | `_recognize_with_llm(llm, base64_image, content_type)` | 第一次 LLM 调用：Vision API 识别表格内容 |
 | `_preprocess(image_data)` | 检查文件大小，超 2000px 时等比缩放（LANCZOS 重采样） |
@@ -75,5 +75,5 @@ You are a senior academic paper typesetting expert and OCR data extraction speci
 Prefix: `/api/table-ocr`, Tag: `table_ocr`
 
 | 方法 | 路径 | 功能 |
-|---|---|---|
-| `POST` | `/recognize` | 上传图片（PNG/JPEG/WebP），返回 LaTeX 表格（含宏包注释） |
+| --- | --- | --- |
+| POST | `/recognize` | 上传图片（PNG/JPEG/WebP），返回 LaTeX 表格（含宏包注释） |

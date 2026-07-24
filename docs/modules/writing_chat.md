@@ -1,4 +1,4 @@
-# 写作助手聊天模块 `writing_chat/`
+# 写作助手模块 `writing_chat/`
 
 ## 设计概述
 
@@ -153,20 +153,20 @@ Prefix: `/api/writing-chat`, Tag: `writing_chat`
 
 | 方法 | 路径 | 功能 |
 | ---- | ---- | ---- |
-| `POST` | `/send` | SSE 流式发送消息，逐 token 推送；`assistant_prompt` 注入系统提示词 |
-| `POST` | `/generate-edit` | 基于 RS1 指令生成 RS2 结构化编辑建议（含 diff） |
-| `POST` | `/apply-edit` | 把某条 assistant 消息附带的 edit_op 写回 .tex |
-| `POST` | `/message/delete` | 删除指定消息 |
-| `POST` | `/message/undo` | 撤回消息（summary 还原 snapshot；普通等同删除） |
+| POST | `/send` | SSE 流式发送消息，逐 token 推送；`assistant_prompt` 注入系统提示词 |
+| POST | `/generate-edit` | 基于 RS1 指令生成 RS2 结构化编辑建议（含 diff） |
+| POST | `/apply-edit` | 把某条 assistant 消息附带的 edit_op 写回 .tex |
+| POST | `/message/delete` | 删除指定消息 |
+| POST | `/message/undo` | 撤回消息（summary 还原 snapshot；普通等同删除） |
 | `PATCH` | `/sessions/{session_id}/rename` | 重命名会话标题 |
-| `GET` | `/sessions` | 列出当前项目 scope 下的会话（需 `workspace_id`） |
-| `GET` | `/sessions/{id}` | 加载单个会话完整 messages |
+| GET | `/sessions` | 列出当前项目 scope 下的会话（需 `workspace_id`） |
+| GET | `/sessions/{id}` | 加载单个会话完整 messages |
 | `DELETE` | `/sessions/{id}` | 删除会话文件 |
-| `GET` | `/assistants` | 列出所有助手提示词 |
-| `GET` | `/assistants/{name}` | 加载指定助手提示词内容 |
-| `POST` | `/assistants` | 创建或更新助手提示词 |
+| GET | `/assistants` | 列出所有助手提示词 |
+| GET | `/assistants/{name}` | 加载指定助手提示词内容 |
+| POST | `/assistants` | 创建或更新助手提示词 |
 | `DELETE` | `/assistants/{name}` | 删除助手提示词 |
-| `POST` | `/assistants/active` | 设置当前激活的助手提示词 |
+| POST | `/assistants/active` | 设置当前激活的助手提示词 |
 
 ## `prompt_manager.py` — 助手提示词管理
 
