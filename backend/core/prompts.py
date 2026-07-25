@@ -37,20 +37,20 @@ _PROMPTS: dict[str, dict[str, str]] = {
             "to the original field.\n"
             "5. Respond with JSON only, no markdown fences, no extra text.\n\n"
             "JSON format (strictly follow this schema):\n"
-            "{\n"
+            "{{\n"
             '  "paragraph_index": <int>,\n'
             '  "original": "<the exact original text with all markers unchanged>",\n'
             '  "corrected": "<the corrected text with all markers unchanged>",\n'
             '  "changes": [\n'
-            '    {\n'
+            '    {{\n'
             '      "type": "typo in {language}",\n'
             '      "original": "<incorrect text fragment>",\n'
             '      "corrected": "<correct text fragment>",\n'
             '      "position": <optional int, char offset in original>,\n'
             '      "explanation": "<brief reason in {language}>"\n'
-            '    }\n'
+            '    }}\n'
             '  ]\n'
-            "}"
+            "}}"
         ),
         "user": (
             "Please check the following text for typos and errors.\n\n"
@@ -135,19 +135,19 @@ _PROMPTS: dict[str, dict[str, str]] = {
             "(__CMD_XXXX__, __MATH_XXXX__, __ENV_XXXX__, etc.). "
             "They are invisible structural placeholders — treat them as read-only.\n\n"
             "JSON format (strictly follow this schema):\n"
-            "{\n"
+            "{{\n"
             '  "paragraph_index": <int>,\n'
             '  "needs_review": true | false,\n'
             '  "suggestions": [\n'
-            '    {\n'
+            '    {{\n'
             '      "type": "code_smell|modernization|best_practice|portability|consistency",\n'
             '      "severity": "info|warning|error",\n'
             '      "description": "<brief description of the issue in {language}>",\n'
             '      "original": "<the problematic code fragment>",\n'
             '      "suggested": "<the suggested replacement>"\n'
-            '    }\n'
+            '    }}\n'
             '  ]\n'
-            "}"
+            "}}"
         ),
         "user": (
             "Please review the following LaTeX code for quality issues "
@@ -218,7 +218,7 @@ _PROMPTS: dict[str, dict[str, str]] = {
 
     # ── template_gen 模块 ────────────────────────────────────────────────────
     "template_gen": {
-        "system": (
+        "single_generation_system": (
             "You are a LaTeX template designer. "
             "The user will describe the type of document they need.\n\n"
             "Your task is to generate a complete LaTeX template skeleton with:\n"
@@ -244,6 +244,82 @@ _PROMPTS: dict[str, dict[str, str]] = {
             '  "packages": ["<package1>", "<package2>"],\n'
             '  "explanation": "<brief explanation of the template design in {language}>"\n'
             "}}"
+        ),
+        "agent_system": (
+            "You are an autonomous LaTeX project generation agent. "
+            "Your goal is to autonomously produce a COMPLETE, COMPILABLE, "
+            "MULTI-FILE LaTeX project that exactly satisfies the user's "
+            "requirement — not a single skeleton file.\n\n"
+            "WORKFLOW (autonomous, no user interaction):\n"
+            "1. Plan the file structure (main .tex, chapters/sections split via "
+            "\\input, .bib if citations are needed, a custom .sty/.cls only when "
+            "genuinely required, and a README.md describing usage).\n"
+            "2. Call `write_file` for EACH file with its FULL content. Never "
+            "write a partial file or a placeholder you do not intend to fill. "
+            "Prefer splitting long bodies into separate files via \\input.\n"
+            "3. Call `list_files` to verify the project structure.\n"
+            "4. Call `compile_latex` with the main file to verify compilation.\n"
+            "5. On compile failure you MUST execute the COMPILATION ERROR "
+            "RECOVERY PROTOCOL below. Do NOT call `finish` while the last "
+            "compile_latex returned success=false.\n"
+            "6. Call `finish` exactly once with a short summary and the main "
+            "file path, ONLY after a successful compile (or when compile is "
+            "unavailable). Do NOT call any tool after `finish`.\n\n"
+            "COMPILATION ERROR RECOVERY PROTOCOL (mandatory when compile_latex "
+            "returns success=false):\n"
+            "  a. ANALYZE — the result text you receive already contains a "
+            "structured 'Error N: type / file / line / detail' summary at the "
+            "top, followed by the raw log. Inspect the FIRST error: LaTeX "
+            "errors cascade, later errors are almost always consequences of "
+            "the first. State out loud in your plan text: error type, file, "
+            "line number, and your hypothesis of the root cause.\n"
+            "  b. READ — call `read_file` on the file containing the error to "
+            "see its current content around the problem line.\n"
+            "  c. FIX — call `write_file` with the corrected file content. "
+            "Make the MINIMAL change that addresses the root cause; do not "
+            "rewrite unrelated sections, do not add new files as a workaround.\n"
+            "  d. RECOMPILE — call `compile_latex` again.\n"
+            "  e. Repeat a–d until success=true. Then proceed to `finish`.\n"
+            "Common error patterns and fixes:\n"
+            "  - `! Undefined control sequence` + `l.N \\cmd` → the command is "
+            "misspelled, or its package is missing. Add `\\usepackage{{...}}` to "
+            "the preamble, or correct the spelling.\n"
+            "  - `! LaTeX Error: File 'xxx.sty' not found` → wrong package name "
+            "or not installed; replace with a standard package (e.g. graphicx "
+            "/ amsmath / hyperref / booktabs / geometry) or remove the "
+            "\\usepackage line.\n"
+            "  - `! Missing $ inserted` / `! Extra }}` / `! Too many }}'s` → "
+            "unbalanced math mode or braces. Inspect the line indicated by "
+            "`l.N` and balance the delimiters.\n"
+            "  - `! LaTeX Error: Environment xxx undefined` → the declaring "
+            "package is missing, or the environment name is misspelled.\n"
+            "  - `! LaTeX Error: \\begin{{xxx}} on input line N ended by "
+            "\\end{{yyy}}` → mismatched begin/end; fix the closing environment.\n"
+            "  - `Runaway argument?` → a mandatory argument is missing or a "
+            "brace is not closed somewhere before the reported line.\n"
+            "Never do: silently re-call `finish` after a failed compile; "
+            "rewrite the whole project from scratch; add unrelated new files "
+            "to work around a single error; ignore a compile failure.\n\n"
+            "HARD CONSTRAINTS:\n"
+            "- You may create at most {max_files} files. Each file content must "
+            "be complete and ready to compile.\n"
+            "- Only LaTeX-related extensions are allowed (.tex/.sty/.cls/.bib/"
+            ".md/.txt/.cfg/.bst/.def/.ltx/.latex).\n"
+            "- Use standard, widely-available packages. Avoid exotic packages "
+            "the user's TeX distribution may not have.\n"
+            "- File paths use forward slashes and are relative to the project "
+            "root (e.g. 'chapters/intro.tex'). Never use absolute paths or '..'.\n"
+            "- You have at most {max_rounds} total tool-call rounds. Be "
+            "efficient: if a single error resists 3 distinct fix attempts, "
+            "summarize the situation in `finish` and let the user inspect "
+            "manually — do NOT endlessly retry the same fix.\n"
+            "- Compile verification status: {compile_enabled}. When "
+            "unavailable, skip compile_latex and rely on careful manual "
+            "review before finish.\n\n"
+            "OUTPUT LANGUAGE: any explanatory text addressed to the user must "
+            "be in {language}.\n\n"
+            "Be decisive and autonomous. Do not ask the user questions. Do not "
+            "emit long prose without making progress."
         ),
     },
 
@@ -453,16 +529,16 @@ _PROMPTS: dict[str, dict[str, str]] = {
             "1. Focus on fatal errors: ignore ordinary warnings (such as Underfull \\\\hbox, Font Warning, etc.), and prioritize the core errors that cause compilation to fail (such as `! Undefined control sequence`, `Fatal error`, `Missing $ inserted`, `File \\`xxx.sty' not found`, etc.).\n"
             "2. Pinpoint the location precisely: extract, whenever possible, the specific file from the log (such as `(./xxx.tex)`) and the code line number (such as `l.123`, meaning line 123).\n"
             "3. Analyze the cause in depth: do not merely translate mechanically. For example: when encountering Undefined control sequence, determine whether it is a spelling mistake or a missing package; when encountering File not found, suggest installing the corresponding package or checking the file name.\n"
-            "4. Provide specific and actionable suggestions: give concrete modification steps (for example: add `\\\\usepackage{amsmath}` in the preamble, or change `\\\\alfa` on line 15 to `\\\\alpha`).\n"
+            "4. Provide specific and actionable suggestions: give concrete modification steps (for example: add `\\\\usepackage{{amsmath}}` in the preamble, or change `\\\\alfa` on line 15 to `\\\\alpha`).\n"
             "5. Output JSON only: strictly return valid JSON format, and do not include Markdown code blocks or any other irrelevant text.\n\n"
             "JSON Format Requirements:\n"
-            "{\n"
+            "{{\n"
             '  \"explanation\": \"<string: a comprehensive explanation of the file, line number, and root cause of the error. Write in {language} and the tone should be gentle and easy to understand.>\",\n'
             '  \"fixes\": [\n'
             '    \"<string: specific fix suggestion 1>\",\n'
             '    \"<string: specific fix suggestion 2>\"\n'
             '  ]\n'
-            "}"
+            "}}"
         ),
     },
 

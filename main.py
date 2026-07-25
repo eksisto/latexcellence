@@ -44,12 +44,22 @@ from backend.utils.search_router import router as search_router
 async def lifespan(app: FastAPI):
     """
     FastAPI 生命周期钩子。
-    - 启动时：记录服务器启动日志
-    - 关闭时：记录服务器关闭日志
+    - 启动时：记录服务器启动日志，启动沙箱清理后台任务
+    - 关闭时：取消清理任务，记录服务器关闭日志
     """
     logger = get_logger("main")
     logger.info("Starting LaTeXcellence server")
+
+    from backend.modules.template_gen.cleanup import cleanup_loop
+    cleanup_task = asyncio.create_task(cleanup_loop())
+
     yield
+
+    cleanup_task.cancel()
+    try:
+        await cleanup_task
+    except asyncio.CancelledError:
+        pass
     logger.info("Shutting down LaTeXcellence server")
 
 

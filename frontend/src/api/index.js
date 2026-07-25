@@ -243,6 +243,70 @@ export const api = {
         method: "POST",
         body: JSON.stringify(data),
       }),
+    /* 自主 Agent 生成（SSE 流式） */
+    agentGenerate: async ({ description, language, onEvent, onError }) => {
+      const res = await fetch(`${BASE_URL}/template-gen/agent/generate`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          description,
+          language: language ?? getUiLanguage(),
+        }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ detail: res.statusText }));
+        throw new Error(translateError(err.detail || `HTTP ${res.status}`));
+      }
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder("utf-8");
+      let buffer = "";
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        let idx;
+        while ((idx = buffer.indexOf("\n\n")) !== -1) {
+          const frame = buffer.slice(0, idx);
+          buffer = buffer.slice(idx + 2);
+          if (!frame.startsWith("data:")) continue;
+          const jsonStr = frame.slice(5).trim();
+          if (!jsonStr) continue;
+          try {
+            const event = JSON.parse(jsonStr);
+            if (onEvent) onEvent(event);
+          } catch (e) {
+            if (onError) onError(e);
+          }
+        }
+      }
+      if (buffer.startsWith("data:")) {
+        const jsonStr = buffer.slice(5).trim();
+        if (jsonStr) {
+          try {
+            if (onEvent) onEvent(JSON.parse(jsonStr));
+          } catch (e) {
+            if (onError) onError(e);
+          }
+        }
+      }
+    },
+    agentFiles: (sessionId) =>
+      request(
+        `/template-gen/agent/files?session_id=${encodeURIComponent(sessionId)}`,
+      ),
+    agentFile: (sessionId, path) =>
+      request(
+        `/template-gen/agent/file?session_id=${encodeURIComponent(sessionId)}&path=${encodeURIComponent(path)}`,
+      ),
+    agentDownload: (sessionId) => {
+      const url = `${BASE_URL}/template-gen/agent/download?session_id=${encodeURIComponent(sessionId)}`;
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "";
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+    },
   },
 
   /* ---- LaTeX 代码审查 ---- */
@@ -273,7 +337,10 @@ export const api = {
     run: (mainFile, workspaceId) =>
       request(appendWs("/compile/run", workspaceId), {
         method: "POST",
-        body: JSON.stringify({ main_file: mainFile, language: getUiLanguage() }),
+        body: JSON.stringify({
+          main_file: mainFile,
+          language: getUiLanguage(),
+        }),
       }),
     pdfUrl: (mainFile, workspaceId) =>
       appendWs(

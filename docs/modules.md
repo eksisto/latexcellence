@@ -26,7 +26,7 @@
 
 | 模块 | 文档 | 说明 |
 | --- | --- | --- |
-| 模板生成 | [template_gen.md](modules/template_gen.md) | 描述生成 LaTeX 模板 |
+| 模板生成 | [template_gen.md](modules/template_gen.md) | 自主 Agent 规划并编译验证，生成可编译的多文件 LaTeX 工程 |
 | Markdown 转 LaTeX | [markdown_converter.md](modules/markdown_converter.md) | Markdown 转 LaTeX |
 
 ### 项目管理模块

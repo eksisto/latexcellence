@@ -152,7 +152,7 @@ LLM 输出**必须**经过 `json_utils.py` 的 `retry_with_validation()` 处理�
 | 使用 `os.path` | 用 `pathlib.Path`（文件操作显式 `encoding="utf-8"`） |
 | 使用 `print()` 调试 | 用 `logger.debug()` 或 `logger.info()` |
 | Prompt 要求 LLM 修改 Marker | 用 Marker 保护策略，Prompt 强调不可见/不可改 |
-| 相对导入 (`from ..core`) | 用绝对导入 (`from backend.core`) |
+| 同包内使用绝对导入 | **同包内**用相对导入（如 `from . import service`），**跨包**用绝对导入（如 `from backend.core import get_config`） |
 | `__init__` 缓存配置 | 方法内实时 `get_config()` |
 | 前端 `prop drilling` | 用 Zustand 或 React Context 传深层状态 |
 | Zustand setter 直接存函数值 | `set()` 不支持函数 updater 透传；若需 `setResult(prev=>...)`：setter 检测 `typeof value==="function"` 并转 `set(state=>({key:value(state.key)}))`；否则函数会被当值存，渲染 `.map()`/`.length` 对函数类型会崩溃 |

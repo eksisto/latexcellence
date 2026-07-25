@@ -74,7 +74,8 @@ class TemplateGenService:
 
         if llm is None:
             llm = get_llm_client()
-        system_prompt = get_prompt("template_gen", "system", language=language)
+        system_prompt = get_prompt(
+            "template_gen", "single_generation_system", language=language)
         messages = [
             {"role": "system", "content": system_prompt},
             {

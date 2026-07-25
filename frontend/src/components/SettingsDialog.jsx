@@ -235,7 +235,9 @@ export default function SettingsDialog() {
                 />
               </div>
               <div className="space-y-1.5">
-                <Label className="text-xs">{t("settings.requestInterval")}</Label>
+                <Label className="text-xs">
+                  {t("settings.requestInterval")}
+                </Label>
                 <Input
                   type="number"
                   step="0.5"
@@ -244,13 +246,15 @@ export default function SettingsDialog() {
                   onChange={(e) =>
                     set(
                       "llm.request_interval",
-                      parseFloat(e.target.value) || 1.5
+                      parseFloat(e.target.value) || 1.5,
                     )
                   }
                 />
               </div>
               <div className="space-y-1.5">
-                <Label className="text-xs">{t("settings.maxConcurrency")}</Label>
+                <Label className="text-xs">
+                  {t("settings.maxConcurrency")}
+                </Label>
                 <Input
                   type="number"
                   min="1"
@@ -258,7 +262,7 @@ export default function SettingsDialog() {
                   onChange={(e) =>
                     set(
                       "llm.max_concurrency",
-                      parseInt(e.target.value, 10) || 5
+                      parseInt(e.target.value, 10) || 5,
                     )
                   }
                 />
@@ -279,7 +283,9 @@ export default function SettingsDialog() {
               onChange={(v) => set("features.expression_opt.enabled", v)}
             />
             <div className="space-y-1.5">
-              <Label className="text-xs">{t("settings.featureExpressionOptDefaultPrompt")}</Label>
+              <Label className="text-xs">
+                {t("settings.featureExpressionOptDefaultPrompt")}
+              </Label>
               <Textarea
                 rows={3}
                 value={config.features.expression_opt.default_prompt}
@@ -298,6 +304,112 @@ export default function SettingsDialog() {
               checked={config.features.template_gen.enabled}
               onChange={(v) => set("features.template_gen.enabled", v)}
             />
+            {config.features.template_gen.enabled && (
+              <div className="ml-6 space-y-2 rounded-md border p-2.5 bg-muted/40">
+                <CheckboxField
+                  label={t("settings.templateGenAgentEnabled")}
+                  checked={config.features.template_gen.agent_enabled}
+                  onChange={(v) =>
+                    set("features.template_gen.agent_enabled", v)
+                  }
+                />
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="space-y-1">
+                    <Label className="text-xs">
+                      {t("settings.templateGenAgentMaxRounds")}
+                    </Label>
+                    <Input
+                      type="number"
+                      min="1"
+                      max="40"
+                      value={config.features.template_gen.agent_max_rounds}
+                      onChange={(e) =>
+                        set(
+                          "features.template_gen.agent_max_rounds",
+                          parseInt(e.target.value, 10) || 12,
+                        )
+                      }
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs">
+                      {t("settings.templateGenAgentMaxFiles")}
+                    </Label>
+                    <Input
+                      type="number"
+                      min="1"
+                      max="200"
+                      value={config.features.template_gen.agent_max_files}
+                      onChange={(e) =>
+                        set(
+                          "features.template_gen.agent_max_files",
+                          parseInt(e.target.value, 10) || 30,
+                        )
+                      }
+                    />
+                  </div>
+                </div>
+                <CheckboxField
+                  label={t("settings.templateGenAgentCompileEnabled")}
+                  checked={config.features.template_gen.agent_compile_enabled}
+                  onChange={(v) =>
+                    set("features.template_gen.agent_compile_enabled", v)
+                  }
+                />
+                <div className="border-t pt-2 mt-1 space-y-2">
+                  <CheckboxField
+                    label={t("settings.templateGenCleanupEnabled")}
+                    checked={config.features.template_gen.cleanup_enabled}
+                    onChange={(v) =>
+                      set("features.template_gen.cleanup_enabled", v)
+                    }
+                  />
+                  {config.features.template_gen.cleanup_enabled && (
+                    <div className="grid grid-cols-2 gap-2">
+                      <div className="space-y-1">
+                        <Label className="text-xs">
+                          {t("settings.templateGenCleanupRetentionDays")}
+                        </Label>
+                        <Input
+                          type="number"
+                          min="1"
+                          max="365"
+                          value={
+                            config.features.template_gen.cleanup_retention_days
+                          }
+                          onChange={(e) =>
+                            set(
+                              "features.template_gen.cleanup_retention_days",
+                              parseInt(e.target.value, 10) || 7,
+                            )
+                          }
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-xs">
+                          {t("settings.templateGenCleanupIntervalSeconds")}
+                        </Label>
+                        <Input
+                          type="number"
+                          min="60"
+                          max="86400"
+                          value={
+                            config.features.template_gen
+                              .cleanup_interval_seconds
+                          }
+                          onChange={(e) =>
+                            set(
+                              "features.template_gen.cleanup_interval_seconds",
+                              parseInt(e.target.value, 10) || 3600,
+                            )
+                          }
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
             <CheckboxField
               label={t("settings.featureCodeReview")}
               checked={config.features.code_review.enabled}
@@ -343,7 +455,9 @@ export default function SettingsDialog() {
                 <CheckboxField
                   label={t("settings.featureWritingChatWebSearch")}
                   checked={config.features.writing_chat.web_search_enabled}
-                  onChange={(v) => set("features.writing_chat.web_search_enabled", v)}
+                  onChange={(v) =>
+                    set("features.writing_chat.web_search_enabled", v)
+                  }
                 />
               </div>
             )}
@@ -360,10 +474,14 @@ export default function SettingsDialog() {
             {config.features.web_search.enabled && (
               <div className="pl-6 space-y-3">
                 <div className="space-y-1.5">
-                  <Label className="text-xs">{t("settings.defaultEngine")}</Label>
+                  <Label className="text-xs">
+                    {t("settings.defaultEngine")}
+                  </Label>
                   <Select
                     value={config.features.web_search.primary_engine}
-                    onValueChange={(v) => set("features.web_search.primary_engine", v)}
+                    onValueChange={(v) =>
+                      set("features.web_search.primary_engine", v)
+                    }
                   >
                     <SelectTrigger>
                       <SelectValue />
@@ -377,11 +495,17 @@ export default function SettingsDialog() {
 
                 {/* DuckDuckGo */}
                 <fieldset className="rounded border p-2.5 space-y-2">
-                  <legend className="px-1 text-xs font-medium">DuckDuckGo</legend>
+                  <legend className="px-1 text-xs font-medium">
+                    DuckDuckGo
+                  </legend>
                   <CheckboxField
                     label={t("settings.enabled")}
-                    checked={config.features.web_search.engines.duckduckgo.enabled}
-                    onChange={(v) => set("features.web_search.engines.duckduckgo.enabled", v)}
+                    checked={
+                      config.features.web_search.engines.duckduckgo.enabled
+                    }
+                    onChange={(v) =>
+                      set("features.web_search.engines.duckduckgo.enabled", v)
+                    }
                   />
                 </fieldset>
 
@@ -391,15 +515,26 @@ export default function SettingsDialog() {
                   <CheckboxField
                     label={t("settings.enabled")}
                     checked={config.features.web_search.engines.searxng.enabled}
-                    onChange={(v) => set("features.web_search.engines.searxng.enabled", v)}
+                    onChange={(v) =>
+                      set("features.web_search.engines.searxng.enabled", v)
+                    }
                   />
                   {config.features.web_search.engines.searxng.enabled && (
                     <div className="space-y-1.5">
-                      <Label className="text-xs">{t("settings.instanceUrl")}</Label>
+                      <Label className="text-xs">
+                        {t("settings.instanceUrl")}
+                      </Label>
                       <Input
                         placeholder="http://localhost:8080"
-                        value={config.features.web_search.engines.searxng.base_url}
-                        onChange={(e) => set("features.web_search.engines.searxng.base_url", e.target.value)}
+                        value={
+                          config.features.web_search.engines.searxng.base_url
+                        }
+                        onChange={(e) =>
+                          set(
+                            "features.web_search.engines.searxng.base_url",
+                            e.target.value,
+                          )
+                        }
                       />
                     </div>
                   )}
@@ -411,7 +546,9 @@ export default function SettingsDialog() {
                   <Input
                     placeholder={t("settings.userAgentHint")}
                     value={config.features.web_search.user_agent}
-                    onChange={(e) => set("features.web_search.user_agent", e.target.value)}
+                    onChange={(e) =>
+                      set("features.web_search.user_agent", e.target.value)
+                    }
                   />
                 </div>
               </div>

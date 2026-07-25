@@ -54,7 +54,7 @@ latexcellence/
 │       ├── code_review/              # LaTeX 代码审查
 │       ├── compile/                 # 自动编译
 │       ├── git_diff/                # Git 差异高亮
-│       ├── template_gen/            # 模板生成
+│       ├── template_gen/            # 模板生成（含自主 Agent）
 │       ├── formula_ocr/             # 公式 OCR
 │       ├── table_ocr/               # 表格 OCR
 │       ├── markdown_converter/      # Markdown→LaTeX
@@ -105,7 +105,7 @@ latexcellence/
 | terminology_check | 术语一致性检查 | router.py, service.py, extractor.py, models.py | ✓ | ✓ |
 | compile | 编译 + 错误翻译 | router.py, service.py | ✓(错误翻译) | ✗ |
 | git_diff | Git 版本差异 PDF | router.py, service.py | ✓(编译失败时翻译错误) | ✗ |
-| template_gen | 模板生成 | router.py, service.py | ✓ | ✗ |
+| template_gen | 模板生成（自主 Agent） | router.py, service.py, agent.py, cleanup.py | ✓ | ✗ |
 | formula_ocr | 图片→LaTeX 公式 | router.py, service.py | ✓(Vision) | ✗ |
 | table_ocr | 图片→LaTeX 表格 | router.py, service.py | ✓(Vision) | ✗ |
 | markdown_converter | MD→LaTeX(pandoc) | router.py, service.py | ✓(宏包分析) | ✗ |
@@ -117,12 +117,17 @@ latexcellence/
 
 - **集中式提示词管理**: 所有 LLM 提示词集中存储在 `backend/core/prompts.py` 中，按模块和功能分类。提供 `get_prompt(module, key, **kwargs)` 函数获取提示词，支持参数化模板。各模块通过 `from backend.core.prompts import get_prompt` 导入使用，便于统一维护和版本控制
 - **LLM 输出语言注入**: 所有调用 LLM 的模块在 system prompt 中通过 `{language}` 占位符指定输出语言。前端 `getUiLanguage()` 将 i18n 语言代码（`"zh"`/`"en"`）转为完整名称（`"Chinese"`/`"English"`），通过 `language` 参数传入后端并注入 prompt 模板。无需额外的 `_general.language_context` 拼接
-- **BaseParagraphCheckService**: 四个逐段检查模块（typo_check / expression_opt / code_review / terminology_check）共享的基类，封装文件解析、marker 替换、LLM 编排（批量+流式）、结果写回等流程。子类通过 6 个 hooks（_get_system_prompt / _build_user_content / _get_model_cls / _get_llm_params / _get_batch_size / _build_success_result）定制行为
+- **BaseParagraphCheckService**: 四个逐段检查模块（typo_check / expression_opt / code_review / terminology_check）共享的基类，封装文件解析、marker 替换、LLM 编排（批量+流式）、结果写回等流程。子类通过多个 hooks（_get_system_prompt / _build_user_content / _get_model_cls / _get_llm_params / _get_batch_size / _build_success_result）定制行为
 - **WorkspaceManager**: 多浏览器多工作区隔离，每个 workspace_id 拥有独立的 `LatexProject` 实例（项目状态、文件树、MD5 缓存、撤销栈完全隔离）
 - **Marker Protection**: LaTeX 结构 → `__CMD_NNNN__` / `__MATH_NNNN__` / `__ENV_NNNN__` / `__VERB_NNNN__` marker → LLM 只改纯文本 → 按长度降序还原。apply 时若 marker_map 缺失（context 过期/重启/新操作覆盖），跳过该段写入并返回 `errors`，防止字面 marker 污染 `.tex` 文件；前端据此保留未应用项并提示用户重新检查
 - **JSON Validation Pipeline**: `safe_parse_json()` → Pydantic `.model_validate()` → `retry_with_validation()` (最多 3 次重试 + 错误反馈)
 - **SSE Streaming**: 所有段落检查模块通过 Server-Sent Events 推送 `progress`/`result`/`error`/`done` 事件
 - **Function Calling 工具体系**: `ToolRegistry`（工具注册表）管理所有可用工具的 schema 和执行函数；`SearchManager`（搜索管理器）提供 `web_search` 工具的 schema 和执行，统一封装 `DuckDuckGoHtmlEngine`（模拟浏览器请求，遇 HTTP 202 Challenge 时抛出 `DDGChallengeError`，由 service 捕获并以 `captcha_challenge` SSE 事件推送到前端）和 `SearXNGEngine`（通过 `/search?format=json` 获取结果，无验证码）；DDG Challenge 验证码提交通过通用路由 `/api/search/ddg-challenge` 处理，不绑定特定业务模块；Writing Chat 的 `send()` 方法在检测到 LLM 返回 `tool_call` 时自动执行工具、将结果回传 LLM，再流式输出最终回复（"先工具调用再流式"模式）
+- **模板生成自主 Agent**: `TemplateAgentService` 基于 Function Calling 实现"写文件 → 编译验证 → 读日志 → 修错 → 再编译"的自主循环，产出完整可编译的多文件 LaTeX 工程。
+    - 工具（`write_file`/`read_file`/`list_files`/`compile_latex`/`finish`）为 session 级私有，schema 由 service 动态构建并经 `chat_with_tools` 注入，不注册到全局 `ToolRegistry` 避免污染其他模块工具集。
+    - 每次生成在 `output_dir/agent/<session_id>/` 创建独立沙箱，路径经 `_resolve_sandbox_path` 校验（禁绝对路径 / `..` / 非白名单扩展名 / 越界）。SSE 推送 `plan`/`tool_call`/`tool_result`/`compile`（含结构化 `errors` 列表）/`warning`（编译未过却 finish）/`done`/`error` 事件。
+    - 编译失败时 `_extract_errors` 从日志中提取类型/文件/行号，`_format_error_analysis` 拼接聚焦摘要回传 LLM；prompt 中 COMPILATION ERROR RECOVERY PROTOCOL 强制 LLM 走 ANALYZE→READ→FIX→RECOMPILE 循环，禁止编译未过时调用 finish。
+    - 沙箱自动清理由 `cleanup.py` 实现：`cleanup_expired_sandboxes()` 按目录内最新文件 mtime 与 `cleanup_retention_days` 比较判定过期，`cleanup_loop()` 作为 `asyncio` 后台任务在 FastAPI lifespan 中启动并按 `cleanup_interval_seconds` 周期扫描，删除过期目录，服务关闭时优雅取消。
 - **useParagraphCheck Hook**: TypoCheck/ExpressionOpt/CodeReview/TerminologyCheck 4 页共享同一 hook 封装流程
 - **useEnabledFeatures Hook**: 从后端 `/api/config/status` 加载功能开关到 Zustand store，幂等（已加载则跳过）。WelcomePage 和 WorkspacePage 均调用此 hook，确保直接刷新任一页面时功能开关均可用
 - **Zustand Persist**: `partialize` 选择性持久化检查结果，支持刷新保留

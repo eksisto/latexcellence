@@ -72,6 +72,17 @@ class TemplateGenConfig(BaseModel):
     """模板生成模块配置"""
     enabled: bool = True                # 是否启用
     output_dir: str = "templates/"      # 生成模板的输出目录
+    # ── 自主生成 Agent 配置 ──
+    agent_enabled: bool = True                     # 是否启用自主 Agent（关闭则回退到旧的单次生成）
+    agent_max_rounds: int = Field(30, ge=1, le=50)    # Agent 最大工具调用轮数（防发散）
+    agent_max_files: int = Field(30, ge=1, le=200)    # 单次生成的最大文件数
+    agent_max_file_size_kb: int = Field(512, ge=1)    # 单个文件大小上限（KB）
+    agent_compile_enabled: bool = True             # Agent 是否调用 latexmk 做编译验证
+    agent_compile_timeout: int = Field(120, ge=1)    # Agent 编译超时（秒）
+    # ── 沙箱自动清理配置 ──
+    cleanup_enabled: bool = True                   # 是否启用过期沙箱自动清理
+    cleanup_interval_seconds: int = Field(3600, ge=60)  # 清理检查间隔（秒），默认 1 小时
+    cleanup_retention_days: int = Field(7, ge=1)    # 沙箱保留天数，超过则删除
 
 
 class CodeReviewConfig(BaseModel):
@@ -115,7 +126,8 @@ class WritingChatConfig(BaseModel):
     custom_prompts_dir: str = "prompts/writing_chat/"    # 助手提示词存放目录
     summary_temperature: float = 0.2                     # 生成压缩摘要时的温度
     summary_max_tokens: int = 1024                       # 压缩摘要最大生成 token 数
-    web_search_enabled: bool = True                      # 是否在聊天中启用联网搜索（受全局 web_search.enabled 约束）
+    # 是否在聊天中启用联网搜索（受全局 web_search.enabled 约束）
+    web_search_enabled: bool = True
 
 
 class DuckDuckGoConfig(BaseModel):
@@ -141,7 +153,8 @@ class WebSearchConfig(BaseModel):
     primary_engine: str = "duckduckgo"  # 主搜索引擎标识（duckduckgo / searxng）
     max_results: int = Field(5, ge=1, le=20)   # 默认返回结果数上限
     timeout_seconds: int = Field(10, ge=1)      # 单次搜索超时（秒）
-    user_agent: str = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36"  # 浏览器 User-Agent
+    # 浏览器 User-Agent
+    user_agent: str = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36"
     engines: WebSearchEnginesConfig = WebSearchEnginesConfig()
 
 

@@ -35,7 +35,16 @@
     },
     "template_gen": {
       "enabled": true,
-      "output_dir": "templates/"
+      "output_dir": "templates/",
+      "agent_enabled": true,
+      "agent_max_rounds": 30,
+      "agent_max_files": 30,
+      "agent_max_file_size_kb": 512,
+      "agent_compile_enabled": true,
+      "agent_compile_timeout": 120,
+      "cleanup_enabled": true,
+      "cleanup_interval_seconds": 3600,
+      "cleanup_retention_days": 7
     },
     "code_review": {
       "enabled": true,
