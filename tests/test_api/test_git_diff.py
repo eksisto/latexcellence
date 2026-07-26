@@ -27,6 +27,7 @@ from backend.modules.git_diff.service import (
     _normalize_include_path,
     _resolve_color_hex,
     _split_document,
+    _strip_blank_lines,
     _validate_project_path,
     get_pdf_path,
 )
@@ -462,6 +463,81 @@ class TestCountLatexdiffChanges:
         added, deleted = _count_latexdiff_changes(content)
         assert added == 1
         assert deleted == 2
+
+
+# ── _strip_blank_lines ───────────────────────────────────────────────────
+
+
+class TestStripBlankLines:
+    """空白行清理测试。"""
+
+    def test_empty_content(self):
+        assert _strip_blank_lines("") == ""
+
+    def test_no_blank_lines(self):
+        content = "line1\nline2\nline3"
+        assert _strip_blank_lines(content) == content
+
+    def test_single_blank_line_removed(self):
+        assert _strip_blank_lines("a\n\nb") == "a\nb"
+
+    def test_consecutive_blank_lines_removed(self):
+        assert _strip_blank_lines("a\n\n\n\nb") == "a\nb"
+
+    def test_blank_lines_with_whitespace_only(self):
+        assert _strip_blank_lines("a\n   \n  \t\nb") == "a\nb"
+
+    def test_blank_lines_inside_math_mode(self):
+        content = "$$\n\nE = mc^2\n\n$$"
+        assert _strip_blank_lines(content) == "$$\nE = mc^2\n$$"
+
+    def test_blank_lines_inside_textbf(self):
+        content = "\\textbf{hello\n\nworld}"
+        assert _strip_blank_lines(content) == "\\textbf{hello\nworld}"
+
+    def test_blank_lines_inside_lstdefinelanguage(self):
+        content = (
+            r"\lstdefinelanguage{DIFcode}{" + "\n"
+            "  moredelim=...\n"
+            "\n"
+            "  moredelim=...\n"
+            "\n"
+            "}"
+        )
+        expected = (
+            r"\lstdefinelanguage{DIFcode}{" + "\n"
+            "  moredelim=...\n"
+            "  moredelim=...\n"
+            "}"
+        )
+        assert _strip_blank_lines(content) == expected
+
+    def test_latexdiff_output_with_blank_lines(self):
+        content = (
+            r"\DIFadd{" + "\n"
+            "new line\n"
+            "\n"
+            "}\n"
+            "unchanged\n"
+            r"\DIFdel{" + "\n"
+            "old line\n"
+            "\n"
+            "}"
+        )
+        expected = (
+            r"\DIFadd{" + "\n"
+            "new line\n"
+            "}\n"
+            "unchanged\n"
+            r"\DIFdel{" + "\n"
+            "old line\n"
+            "}"
+        )
+        assert _strip_blank_lines(content) == expected
+
+    def test_preserves_normal_content(self):
+        content = "\\begin{document}\nHello world.\n\\end{document}"
+        assert _strip_blank_lines(content) == content
 
 
 # ── /api/git-diff/pdf 端点 ─────────────────────────────────────────────────

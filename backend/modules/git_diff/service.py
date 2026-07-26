@@ -57,16 +57,16 @@ _DIFF_PREAMBLE_TEMPLATE = r"""
 \usepackage{{framed}}
 \definecolor{{LXDiffAddBg}}{{HTML}}{{{color_add}}}
 \definecolor{{LXDiffDelBg}}{{HTML}}{{{color_del}}}
-\newenvironment{{LXDiffAdded}}{{%
-  \def\\FrameCommand{{\setlength{{\fboxsep}}{{3pt}}\colorbox{{LXDiffAddBg}}}}%
+\newenvironment{{LXDiffAdded}}{{
+  \def\FrameCommand{{\setlength{{\fboxsep}}{{3pt}}\colorbox{{LXDiffAddBg}}}}%
   \MakeFramed{{\advance\hsize-\width\FrameRestore}}%
-}}{{%
+}}{{
   \endMakeFramed%
 }}
-\newenvironment{{LXDiffDeleted}}{{%
-  \def\\FrameCommand{{\setlength{{\fboxsep}}{{3pt}}\colorbox{{LXDiffDelBg}}}}%
+\newenvironment{{LXDiffDeleted}}{{
+  \def\FrameCommand{{\setlength{{\fboxsep}}{{3pt}}\colorbox{{LXDiffDelBg}}}}%
   \MakeFramed{{\advance\hsize-\width\FrameRestore}}%
-}}{{%
+}}{{
   \endMakeFramed%
 }}
 """
@@ -573,6 +573,21 @@ def _build_diff_preamble(color_add: str = "", color_del: str = "") -> str:
     return _DIFF_PREAMBLE_TEMPLATE.format(color_add=add_hex, color_del=del_hex)
 
 
+def _strip_blank_lines(content: str) -> str:
+    """删除 LaTeX 内容中的所有空白行。
+
+    latexdiff 在差异合并时会向受限上下文（数学模式、\\lstdefinelanguage、
+    \\textbf{} 等 braced argument）内插入空白行。空白行在 TeX 中等价于
+    ``\\par``，而在受限上下文中 ``\\par`` 是非法的，会导致
+    ``Paragraph ended before...`` 等编译错误。
+
+    删除全部空白行可彻底消除此类问题，同时保留所有 diff 标记
+    （\\DIFadd / \\DIFdel）和文档结构。段落间距会略有变化，
+    但对差异预览 PDF 的可读性影响极小。
+    """
+    return "\n".join(line for line in content.splitlines() if line.strip() != "")
+
+
 async def _build_latexdiff_document(
     base_content: str,
     target_content: str,
@@ -594,21 +609,30 @@ async def _build_latexdiff_document(
         old_file.write_text(base_content, encoding="utf-8")
         new_file.write_text(target_content, encoding="utf-8")
 
-        result = await _run_latexdiff(
-            old_file,
-            new_file,
-            markup_type=markup_type,
-            math_markup=math_markup,
-            exclude_safecmd=exclude_safecmd,
-            exclude_textcmd=exclude_textcmd,
-        )
-
-        if result.returncode != 0 and not result.stdout.strip():
+        try:
+            result = await _run_latexdiff(
+                old_file,
+                new_file,
+                markup_type=markup_type,
+                math_markup=math_markup,
+                exclude_safecmd=exclude_safecmd,
+                exclude_textcmd=exclude_textcmd,
+            )
+        except FileNotFoundError as exc:
             raise RuntimeError(
-                f"latexdiff failed: {result.stderr.strip() or 'empty output'}"
+                f"latexdiff command not found. Please confirm that TeX Live is installed and that latexdiff is in your PATH: {exc}"
+            ) from exc
+
+        if result.returncode != 0:
+            stderr = result.stderr.strip()
+            msg = stderr or "latexdiff exited with a non-zero exit code, but no error output was produced"
+            if not result.stdout.strip():
+                raise RuntimeError(f"latexdiff failed: {msg}")
+            logger.warning(
+                f"latexdiff exited with a non-zero exit code, but there is still some output, which may be incomplete: {msg}"
             )
 
-        diff_content = result.stdout
+        diff_content = _strip_blank_lines(result.stdout)
         added, deleted = _count_latexdiff_changes(diff_content)
         return diff_content, added, deleted
 
