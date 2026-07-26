@@ -43,19 +43,6 @@ import useStore from "@/store/useStore";
 
 const WORKTREE_REF = "__WORKTREE__";
 
-const MARKUP_TYPES = [
-  "UNDERLINE",
-  "CTRADITIONAL",
-  "CFONT",
-  "CHANGEBAR",
-  "CCHANGEBAR",
-  "CULINECHBAR",
-  "FONTSTRIKE",
-  "INVISIBLE",
-];
-
-const MATH_MARKUP_OPTIONS = ["fine", "coarse", "off", "whole"];
-
 function flattenTexFiles(nodes) {
   const result = [];
   for (const node of nodes) {
@@ -124,6 +111,10 @@ export default function GitDiffPage() {
   const [colorDel, setColorDel] = useState("");
   const [excludeSafecmd, setExcludeSafecmd] = useState("");
   const [excludeTextcmd, setExcludeTextcmd] = useState("");
+  const [diffOptions, setDiffOptions] = useState({
+    markupTypes: [],
+    mathMarkups: [],
+  });
 
   const texFiles = useMemo(() => flattenTexFiles(fileTree), [fileTree]);
   const grouped = useMemo(() => groupRevisions(refs), [refs]);
@@ -191,6 +182,15 @@ export default function GitDiffPage() {
 
   useEffect(() => {
     loadRefs();
+    api.gitDiff
+      .getOptions()
+      .then((data) => {
+        setDiffOptions({
+          markupTypes: data.markup_types || [],
+          mathMarkups: data.math_markups || [],
+        });
+      })
+      .catch(() => {});
   }, [loadRefs]);
 
   const handleRender = useCallback(async () => {
@@ -541,7 +541,7 @@ export default function GitDiffPage() {
                                 <SelectValue />
                               </SelectTrigger>
                               <SelectContent>
-                                {MARKUP_TYPES.map((type) => (
+                                {diffOptions.markupTypes.map((type) => (
                                   <SelectItem key={type} value={type}>
                                     {type}
                                   </SelectItem>
@@ -560,7 +560,7 @@ export default function GitDiffPage() {
                                 <SelectValue />
                               </SelectTrigger>
                               <SelectContent>
-                                {MATH_MARKUP_OPTIONS.map((opt) => (
+                                {diffOptions.mathMarkups.map((opt) => (
                                   <SelectItem key={opt} value={opt}>
                                     {t(
                                       `pages:gitDiff.mathMarkup${opt.charAt(0).toUpperCase() + opt.slice(1)}`,

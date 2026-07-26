@@ -70,6 +70,7 @@ Prefix: `/api/git-diff`, Tag: `git-diff`
 | 方法 | 路径 | 功能 |
 | --- | --- | --- |
 | GET | `/refs` | 获取 Git revision 列表 |
+| GET | `/options` | 获取差异引擎支持的选项（标记类型、数学标记粒度） |
 | POST | `/render-pdf` | 生成差异高亮 PDF |
 | GET | `/pdf/{job_id}` | 下载/预览 PDF |
 

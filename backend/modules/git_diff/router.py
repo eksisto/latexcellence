@@ -6,6 +6,8 @@ from pydantic import BaseModel, ConfigDict
 
 from backend.core.logger import get_logger
 from backend.modules.git_diff.service import (
+    LATEXDIFF_MATH_MARKUPS,
+    LATEXDIFF_TYPES,
     get_pdf_path,
     list_git_revisions,
     render_diff_pdf,
@@ -13,6 +15,19 @@ from backend.modules.git_diff.service import (
 
 router = APIRouter(prefix="/api/git-diff", tags=["git-diff"])
 logger = get_logger(__name__)
+
+
+class DiffOptions(BaseModel):
+    """差异引擎可选项。"""
+
+    markup_types: list[str] = LATEXDIFF_TYPES
+    math_markups: list[str] = LATEXDIFF_MATH_MARKUPS
+
+
+@router.get("/options")
+async def get_options():
+    """获取差异引擎支持的选项（标记类型、数学标记粒度）。"""
+    return DiffOptions().model_dump()
 
 
 class DiffRenderRequest(BaseModel):

@@ -382,6 +382,7 @@ export const api = {
           exclude_textcmd: excludeTextcmd,
         }),
       }),
+    getOptions: () => request(appendWs("/git-diff/options")),
   },
 
   /* ---- Markdown 转 LaTeX ---- */

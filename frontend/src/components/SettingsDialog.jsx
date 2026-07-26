@@ -25,19 +25,6 @@ import { Textarea } from "@/components/ui/textarea";
 import { api } from "@/api";
 import useStore from "@/store/useStore";
 
-const GIT_DIFF_MARKUP_TYPES = [
-  "UNDERLINE",
-  "CTRADITIONAL",
-  "CFONT",
-  "CHANGEBAR",
-  "CCHANGEBAR",
-  "CULINECHBAR",
-  "FONTSTRIKE",
-  "INVISIBLE",
-];
-
-const GIT_DIFF_MATH_MARKUPS = ["fine", "coarse", "off", "whole"];
-
 function CheckboxField({ label, checked, onChange }) {
   return (
     <label className="flex items-center gap-2 cursor-pointer select-none">
@@ -68,14 +55,28 @@ export default function SettingsDialog() {
   const [config, setConfig] = useState(null);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [diffOptions, setDiffOptions] = useState({
+    markupTypes: [],
+    mathMarkups: [],
+  });
   const { t, i18n } = useTranslation("components");
 
   useEffect(() => {
     if (open) {
       setLoading(true);
-      api.config
-        .get()
-        .then(setConfig)
+      Promise.all([
+        api.config.get(),
+        api.gitDiff
+          .getOptions()
+          .catch(() => ({ markup_types: [], math_markups: [] })),
+      ])
+        .then(([configData, optionsData]) => {
+          setConfig(configData);
+          setDiffOptions({
+            markupTypes: optionsData.markup_types || [],
+            mathMarkups: optionsData.math_markups || [],
+          });
+        })
         .catch((err) => console.error("Failed to load config:", err))
         .finally(() => setLoading(false));
     }
@@ -480,7 +481,7 @@ export default function SettingsDialog() {
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          {GIT_DIFF_MARKUP_TYPES.map((type) => (
+                          {diffOptions.markupTypes.map((type) => (
                             <SelectItem key={type} value={type}>
                               {type}
                             </SelectItem>
@@ -502,7 +503,7 @@ export default function SettingsDialog() {
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          {GIT_DIFF_MATH_MARKUPS.map((opt) => (
+                          {diffOptions.mathMarkups.map((opt) => (
                             <SelectItem key={opt} value={opt}>
                               {opt}
                             </SelectItem>
