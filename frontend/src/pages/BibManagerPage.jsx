@@ -56,8 +56,8 @@ export default function BibManagerPage() {
 
   // Step 2: metadata extraction
   const [metadataText, setMetadataText] = useState("");
-  const [metadataImage, setMetadataImage] = useState(null);
-  const [metadataImagePreview, setMetadataImagePreview] = useState(null);
+  const [metadataImages, setMetadataImages] = useState([]);
+  const [metadataImagePreviews, setMetadataImagePreviews] = useState([]);
   const [metadataResult, setMetadataResult] = useState(null);
   const [editedMetadata, setEditedMetadata] = useState(null);
   const [missingFields, setMissingFields] = useState([]);
@@ -236,7 +236,7 @@ export default function BibManagerPage() {
 
   // Step 2: extract metadata
   const handleExtractMetadata = useCallback(async () => {
-    if (!metadataText.trim() && !metadataImage) {
+    if (!metadataText.trim() && metadataImages.length === 0) {
       toast.error(t("pages:bibManager.step2NoInput"));
       return;
     }
@@ -248,8 +248,8 @@ export default function BibManagerPage() {
     if (metadataText.trim()) {
       formData.append("text", metadataText.trim());
     }
-    if (metadataImage) {
-      formData.append("image", metadataImage);
+    for (const file of metadataImages) {
+      formData.append("images", file);
     }
     if (formatResult) {
       formData.append("format_info", JSON.stringify(formatResult));
@@ -282,23 +282,31 @@ export default function BibManagerPage() {
     } finally {
       setStep2Loading(false);
     }
-  }, [metadataText, metadataImage, formatResult, t]);
+  }, [metadataText, metadataImages, formatResult, t]);
 
-  const handleClearImage = useCallback(() => {
-    setMetadataImage(null);
-    setMetadataImagePreview(null);
+  const handleClearImage = useCallback((index) => {
+    setMetadataImages((prev) => prev.filter((_, i) => i !== index));
+    setMetadataImagePreviews((prev) => prev.filter((_, i) => i !== index));
+  }, []);
+
+  const handleClearAllImages = useCallback(() => {
+    setMetadataImages([]);
+    setMetadataImagePreviews([]);
     if (imageInputRef.current) {
       imageInputRef.current.value = "";
     }
   }, []);
 
   const handleImageChange = useCallback((e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setMetadataImage(file);
-    const reader = new FileReader();
-    reader.onload = () => setMetadataImagePreview(reader.result);
-    reader.readAsDataURL(file);
+    const files = Array.from(e.target.files || []);
+    if (files.length === 0) return;
+    setMetadataImages((prev) => [...prev, ...files]);
+    for (const file of files) {
+      const reader = new FileReader();
+      reader.onload = () =>
+        setMetadataImagePreviews((prev) => [...prev, reader.result]);
+      reader.readAsDataURL(file);
+    }
   }, []);
 
   const handleMetadataEdit = useCallback((field, value) => {
@@ -776,28 +784,43 @@ export default function BibManagerPage() {
                     ref={imageInputRef}
                     type="file"
                     accept="image/png,image/jpeg,image/webp"
+                    multiple
                     onChange={handleImageChange}
                     className="hidden"
                   />
                 </label>
-                {metadataImagePreview && (
-                  <div className="flex items-center gap-2">
-                    <img
-                      src={metadataImagePreview}
-                      alt="preview"
-                      className="h-8 w-auto rounded border border-border object-contain"
-                    />
-                    <span className="text-xs text-muted-foreground truncate max-w-40">
-                      {metadataImage?.name}
-                    </span>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="size-6"
-                      onClick={handleClearImage}
-                    >
-                      <X className="size-3" />
-                    </Button>
+                {metadataImagePreviews.length > 0 && (
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {metadataImagePreviews.map((preview, idx) => (
+                      <div key={idx} className="flex items-center gap-2">
+                        <img
+                          src={preview}
+                          alt={`preview ${idx + 1}`}
+                          className="h-8 w-auto rounded border border-border object-contain"
+                        />
+                        <span className="text-xs text-muted-foreground truncate max-w-40">
+                          {metadataImages[idx]?.name}
+                        </span>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="size-6"
+                          onClick={() => handleClearImage(idx)}
+                        >
+                          <X className="size-3" />
+                        </Button>
+                      </div>
+                    ))}
+                    {metadataImagePreviews.length > 1 && (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="size-6 text-muted-foreground hover:text-destructive"
+                        onClick={handleClearAllImages}
+                      >
+                        <X className="size-3" />
+                      </Button>
+                    )}
                   </div>
                 )}
               </div>
@@ -805,7 +828,8 @@ export default function BibManagerPage() {
               <Button
                 onClick={handleExtractMetadata}
                 disabled={
-                  step2Loading || (!metadataText.trim() && !metadataImage)
+                  step2Loading ||
+                  (!metadataText.trim() && metadataImages.length === 0)
                 }
               >
                 {step2Loading ? (
@@ -838,7 +862,7 @@ export default function BibManagerPage() {
                         const isMissing = missingFields.includes(fieldKey);
                         const desc =
                           formatResult?.field_descriptions?.[fieldKey];
-                        const label = desc || fieldKey;
+                        const label = fieldKey;
                         const value = editedMetadata[fieldKey] || "";
                         const isLong =
                           value.length > 80 ||

@@ -58,7 +58,7 @@ async def analyze_format(request: FormatAnalysisRequest):
 @router.post("/extract")
 async def extract_metadata(
     text: str | None = Form(None),
-    image: UploadFile | None = File(None),
+    images: list[UploadFile] = File(default=[]),
     format_info: str | None = Form(None),
 ):
     """从文本或图片中提取文献元数据。"""
@@ -72,15 +72,19 @@ async def extract_metadata(
 
         svc = get_service()
 
-        if image and image.filename:
-            image_data = await image.read()
-            if not image_data:
-                raise HTTPException(status_code=400, detail="Empty image file")
-            content_type = image.content_type or "image/png"
+        valid_images = [img for img in images if img.filename]
+        if valid_images:
+            image_items: list[tuple[bytes, str]] = []
+            for img in valid_images:
+                image_data = await img.read()
+                if not image_data:
+                    continue
+                content_type = img.content_type or "image/png"
+                image_items.append((image_data, content_type))
+            if not image_items:
+                raise HTTPException(status_code=400, detail="Empty image files")
             try:
-                result = await svc.extract_from_image(
-                    image_data, content_type, parsed_format_info
-                )
+                result = await svc.extract_from_images(image_items, parsed_format_info)
                 return result
             except ValueError as e:
                 raise HTTPException(status_code=400, detail=str(e))

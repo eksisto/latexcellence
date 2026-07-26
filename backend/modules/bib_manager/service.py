@@ -153,18 +153,18 @@ class BibManagerService:
         content_type: str,
         format_info: dict | None = None,
     ) -> dict[str, Any]:
-        """从图片（截图）提取文献元数据。"""
+        """从单张图片（截图）提取文献元数据。"""
+        return await self.extract_from_images([(image_data, content_type)], format_info)
+
+    async def extract_from_images(
+        self,
+        image_items: list[tuple[bytes, str]],
+        format_info: dict | None = None,
+    ) -> dict[str, Any]:
+        """从多张图片（截图）提取文献元数据。"""
         cfg = get_config()
         if not cfg.llm.api_key:
             raise RuntimeError("No API key configured")
-
-        if content_type not in _SUPPORTED_FORMATS:
-            raise ValueError(
-                f"Unsupported image format: {content_type}. Supported: PNG, JPEG, WebP"
-            )
-
-        img = self._preprocess_image(image_data)
-        base64_image = self._to_base64(img)
 
         all_fields = []
         if format_info:
@@ -177,32 +177,45 @@ class BibManagerService:
         fmt_name = format_info.get("format_name", "") if format_info else ""
         fmt_hint = f"This should follow the {fmt_name} format. " if fmt_name else ""
 
+        image_parts: list[dict[str, Any]] = []
+        for image_data, content_type in image_items:
+            if content_type not in _SUPPORTED_FORMATS:
+                raise ValueError(
+                    f"Unsupported image format: {content_type}. "
+                    f"Supported: PNG, JPEG, WebP"
+                )
+            img = self._preprocess_image(image_data)
+            base64_image = self._to_base64(img)
+            image_parts.append(
+                {
+                    "type": "image_url",
+                    "image_url": {
+                        "url": f"data:image/jpeg;base64,{base64_image}",
+                        "detail": "high",
+                    },
+                }
+            )
+
         llm = get_llm_client()
+        user_content: list[dict[str, Any]] = [
+            {
+                "type": "text",
+                "text": (
+                    f"{fmt_hint}"
+                    f"FIELD NAMES: {field_names}\n\n"
+                    f"Extract the values for each field from the "
+                    f"following {len(image_parts)} screenshot(s)."
+                ),
+            },
+            *image_parts,
+        ]
+
         messages = [
             {
                 "role": "system",
                 "content": get_prompt("bib_manager", "metadata_extraction"),
             },
-            {
-                "role": "user",
-                "content": [
-                    {
-                        "type": "text",
-                        "text": (
-                            f"{fmt_hint}"
-                            f"FIELD NAMES: {field_names}\n\n"
-                            f"Extract the values for each field from this screenshot."
-                        ),
-                    },
-                    {
-                        "type": "image_url",
-                        "image_url": {
-                            "url": f"data:image/jpeg;base64,{base64_image}",
-                            "detail": "high",
-                        },
-                    },
-                ],
-            },
+            {"role": "user", "content": user_content},
         ]
 
         try:
@@ -217,7 +230,10 @@ class BibManagerService:
                 response_format={"type": "json_object"},
             )
             fields = validated.fields
-            self._logger.info(f"Metadata extracted: {len(fields)} fields from image")
+            self._logger.info(
+                f"Metadata extracted: {len(fields)} fields "
+                f"from {len(image_parts)} image(s)"
+            )
             missing = self._check_missing_fields(fields, format_info)
             return {"fields": fields, "missing_fields": missing}
         except ValueError as e:
