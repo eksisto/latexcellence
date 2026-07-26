@@ -7,6 +7,9 @@ git_diff 模块纯函数单元测试。
     - _split_document 文档分块（preamble / body / end）
     - _diff_lines 行级差异标记
     - _build_diff_document 完整差异文档生成
+    - _resolve_color_hex 颜色格式转换
+    - _build_diff_preamble 自定义颜色注入
+    - _count_latexdiff_changes latexdiff 输出统计
     - get_pdf_path job_id 校验
 """
 
@@ -18,8 +21,11 @@ import pytest
 from backend.modules.git_diff.service import (
     WORKTREE_REF,
     _build_diff_document,
+    _build_diff_preamble,
+    _count_latexdiff_changes,
     _diff_lines,
     _normalize_include_path,
+    _resolve_color_hex,
     _split_document,
     _validate_project_path,
     get_pdf_path,
@@ -337,6 +343,122 @@ class TestGetPdfPath:
     def test_valid_job_id_format(self):
         with pytest.raises(FileNotFoundError):
             get_pdf_path("a" * 32)
+
+
+# ── _resolve_color_hex ──────────────────────────────────────────────────────
+
+
+class TestResolveColorHex:
+    """颜色格式转换测试。"""
+
+    def test_empty_uses_fallback(self):
+        assert _resolve_color_hex("", "DFF6DD") == "DFF6DD"
+
+    def test_hash_prefix_stripped(self):
+        assert _resolve_color_hex("#FF0000", "DFF6DD") == "FF0000"
+
+    def test_three_char_expanded(self):
+        assert _resolve_color_hex("#F00", "DFF6DD") == "FF0000"
+
+    def test_six_char_plain(self):
+        assert _resolve_color_hex("00FF00", "DFF6DD") == "00FF00"
+
+    def test_lowercase_uppercased(self):
+        assert _resolve_color_hex("#abcdef", "DFF6DD") == "ABCDEF"
+
+    def test_invalid_hex_uses_fallback(self):
+        assert _resolve_color_hex("ZZZZZZ", "DFF6DD") == "DFF6DD"
+
+    def test_wrong_length_uses_fallback(self):
+        assert _resolve_color_hex("FF00", "DFF6DD") == "DFF6DD"
+
+
+# ── _build_diff_preamble ────────────────────────────────────────────────────
+
+
+class TestBuildDiffPreamble:
+    """差异 preamble 构建测试。"""
+
+    def test_default_colors(self):
+        preamble = _build_diff_preamble()
+        assert "DFF6DD" in preamble
+        assert "FFE3E3" in preamble
+        assert r"\usepackage{xcolor}" in preamble
+        assert r"\usepackage{framed}" in preamble
+
+    def test_custom_colors(self):
+        preamble = _build_diff_preamble("FF0000", "00FF00")
+        assert "FF0000" in preamble
+        assert "00FF00" in preamble
+        assert "DFF6DD" not in preamble
+        assert "FFE3E3" not in preamble
+
+
+# ── _build_diff_document with colors ────────────────────────────────────────
+
+
+class TestBuildDiffDocumentColors:
+    """差异文档自定义颜色测试。"""
+
+    def test_custom_colors_propagated(self):
+        base = (
+            r"\documentclass{article}" + "\n"
+            r"\begin{document}" + "\n"
+            r"Old." + "\n"
+            r"\end{document}" + "\n"
+        )
+        target = (
+            r"\documentclass{article}" + "\n"
+            r"\begin{document}" + "\n"
+            r"New." + "\n"
+            r"\end{document}" + "\n"
+        )
+        diff = _build_diff_document(
+            base, target, color_add="FF0000", color_del="00FF00"
+        )
+        assert "FF0000" in diff.content
+        assert "00FF00" in diff.content
+        assert "LXDiffAdded" in diff.content
+        assert "LXDiffDeleted" in diff.content
+
+
+# ── _count_latexdiff_changes ────────────────────────────────────────────────
+
+
+class TestCountLatexdiffChanges:
+    """latexdiff 输出变更统计测试。"""
+
+    def test_no_changes(self):
+        added, deleted = _count_latexdiff_changes("just plain text")
+        assert added == 0
+        assert deleted == 0
+
+    def test_count_additions(self):
+        content = (
+            r"normal line" + "\n"
+            r"\DIFadd{new content}" + "\n"
+            r"\DIFadd{another addition}" + "\n"
+        )
+        added, deleted = _count_latexdiff_changes(content)
+        assert added == 2
+        assert deleted == 0
+
+    def test_count_deletions(self):
+        content = r"normal line" + "\n" r"\DIFdel{old content}" + "\n"
+        added, deleted = _count_latexdiff_changes(content)
+        assert added == 0
+        assert deleted == 1
+
+    def test_count_mixed(self):
+        content = (
+            r"\DIFdel{removed}" + "\n"
+            r"kept line" + "\n"
+            r"\DIFadd{added}" + "\n"
+            r"\DIFDELTAMARK" + "\n"
+        )
+        added, deleted = _count_latexdiff_changes(content)
+        assert added == 1
+        assert deleted == 2
 
 
 # ── /api/git-diff/pdf 端点 ─────────────────────────────────────────────────

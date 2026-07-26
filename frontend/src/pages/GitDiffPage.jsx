@@ -11,6 +11,7 @@ import {
   GitCommit,
   Loader2,
   RefreshCw,
+  Settings2,
   Tag,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -22,6 +23,8 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import ColorField from "@/components/ColorField";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -35,9 +38,23 @@ import {
 } from "@/components/ui/select";
 import PDFPreview from "@/components/PDFPreview";
 import { api } from "@/api/index";
+import { cn } from "@/lib/utils";
 import useStore from "@/store/useStore";
 
 const WORKTREE_REF = "__WORKTREE__";
+
+const MARKUP_TYPES = [
+  "UNDERLINE",
+  "CTRADITIONAL",
+  "CFONT",
+  "CHANGEBAR",
+  "CCHANGEBAR",
+  "CULINECHBAR",
+  "FONTSTRIKE",
+  "INVISIBLE",
+];
+
+const MATH_MARKUP_OPTIONS = ["fine", "coarse", "off", "whole"];
 
 function flattenTexFiles(nodes) {
   const result = [];
@@ -99,6 +116,14 @@ export default function GitDiffPage() {
   const [result, setResult] = useState(null);
   const [pdfUrl, setPdfUrl] = useState("");
   const [showRawOutput, setShowRawOutput] = useState(false);
+  const [showAdvanced, setShowAdvanced] = useState(false);
+  const [diffEngine, setDiffEngine] = useState("difflib");
+  const [markupType, setMarkupType] = useState("UNDERLINE");
+  const [mathMarkup, setMathMarkup] = useState("fine");
+  const [colorAdd, setColorAdd] = useState("");
+  const [colorDel, setColorDel] = useState("");
+  const [excludeSafecmd, setExcludeSafecmd] = useState("");
+  const [excludeTextcmd, setExcludeTextcmd] = useState("");
 
   const texFiles = useMemo(() => flattenTexFiles(fileTree), [fileTree]);
   const grouped = useMemo(() => groupRevisions(refs), [refs]);
@@ -180,6 +205,13 @@ export default function GitDiffPage() {
           mainFile: selectedMainFile,
           baseRef,
           targetRef,
+          diffEngine,
+          markupType,
+          mathMarkup,
+          colorAdd,
+          colorDel,
+          excludeSafecmd,
+          excludeTextcmd,
         },
         workspaceId,
       );
@@ -192,7 +224,18 @@ export default function GitDiffPage() {
     } finally {
       setRendering(false);
     }
-  }, [baseRef, selectedMainFile, targetRef]);
+  }, [
+    baseRef,
+    selectedMainFile,
+    targetRef,
+    diffEngine,
+    markupType,
+    mathMarkup,
+    colorAdd,
+    colorDel,
+    excludeSafecmd,
+    excludeTextcmd,
+  ]);
 
   if (!projectPath) {
     return (
@@ -438,6 +481,146 @@ export default function GitDiffPage() {
                 </div>
               </div>
 
+              <div className="rounded-lg border">
+                <button
+                  type="button"
+                  className="flex w-full items-center justify-between px-3 py-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+                  onClick={() => setShowAdvanced((v) => !v)}
+                >
+                  <span className="flex items-center gap-2">
+                    <Settings2 className="size-4" />
+                    {t("pages:gitDiff.advancedOptions")}
+                  </span>
+                  <svg
+                    className={`size-4 shrink-0 transition-transform duration-300 ${showAdvanced ? "rotate-90" : ""}`}
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                  >
+                    <path d="M9 18l6-6-6-6" />
+                  </svg>
+                </button>
+                <div
+                  className={cn(
+                    "grid transition-all duration-300 ease-in-out",
+                    showAdvanced ? "grid-rows-[1fr]" : "grid-rows-[0fr]",
+                  )}
+                >
+                  <div className="overflow-hidden">
+                    <div className="border-t px-3 py-3 space-y-3">
+                      <div className="space-y-2">
+                        <Label>{t("pages:gitDiff.diffEngine")}</Label>
+                        <Select
+                          value={diffEngine}
+                          onValueChange={setDiffEngine}
+                        >
+                          <SelectTrigger className="w-full">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="difflib">
+                              {t("pages:gitDiff.diffEngineDifflib")}
+                            </SelectItem>
+                            <SelectItem value="latexdiff">
+                              {t("pages:gitDiff.diffEngineLatexdiff")}
+                            </SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      {diffEngine === "latexdiff" && (
+                        <>
+                          <div className="space-y-2">
+                            <Label>{t("pages:gitDiff.markupType")}</Label>
+                            <Select
+                              value={markupType}
+                              onValueChange={setMarkupType}
+                            >
+                              <SelectTrigger className="w-full">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {MARKUP_TYPES.map((type) => (
+                                  <SelectItem key={type} value={type}>
+                                    {type}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+
+                          <div className="space-y-2">
+                            <Label>{t("pages:gitDiff.mathMarkup")}</Label>
+                            <Select
+                              value={mathMarkup}
+                              onValueChange={setMathMarkup}
+                            >
+                              <SelectTrigger className="w-full">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {MATH_MARKUP_OPTIONS.map((opt) => (
+                                  <SelectItem key={opt} value={opt}>
+                                    {t(
+                                      `pages:gitDiff.mathMarkup${opt.charAt(0).toUpperCase() + opt.slice(1)}`,
+                                    )}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+
+                          <div className="grid grid-cols-2 gap-2">
+                            <div className="space-y-2">
+                              <Label>{t("pages:gitDiff.excludeSafecmd")}</Label>
+                              <Input
+                                value={excludeSafecmd}
+                                onChange={(e) =>
+                                  setExcludeSafecmd(e.target.value)
+                                }
+                                placeholder={t(
+                                  "pages:gitDiff.excludeSafecmdPlaceholder",
+                                )}
+                              />
+                            </div>
+                            <div className="space-y-2">
+                              <Label>{t("pages:gitDiff.excludeTextcmd")}</Label>
+                              <Input
+                                value={excludeTextcmd}
+                                onChange={(e) =>
+                                  setExcludeTextcmd(e.target.value)
+                                }
+                                placeholder={t(
+                                  "pages:gitDiff.excludeTextcmdPlaceholder",
+                                )}
+                              />
+                            </div>
+                          </div>
+                        </>
+                      )}
+
+                      {diffEngine === "difflib" && (
+                        <div className="grid grid-cols-2 gap-2">
+                          <ColorField
+                            label={t("pages:gitDiff.colorAdd")}
+                            value={colorAdd}
+                            onChange={setColorAdd}
+                            fallback="#D7E8B1"
+                          />
+                          <ColorField
+                            label={t("pages:gitDiff.colorDel")}
+                            value={colorDel}
+                            onChange={setColorDel}
+                            fallback="#FFA3A3"
+                          />
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
               {error && <p className="text-sm text-destructive">{error}</p>}
 
               <Button
@@ -485,6 +668,13 @@ export default function GitDiffPage() {
                 </CardAction>
               </CardHeader>
               <CardContent className="space-y-3 text-sm">
+                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <Badge variant="outline" className="font-mono">
+                    {result.diff_engine === "latexdiff"
+                      ? "latexdiff"
+                      : "difflib"}
+                  </Badge>
+                </div>
                 <div className="grid grid-cols-2 gap-2">
                   <div className="rounded bg-green-500/10 px-3 py-2 text-green-700 dark:text-green-300">
                     {t("pages:gitDiff.addedLines", {

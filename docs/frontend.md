@@ -68,6 +68,7 @@ API 按功能分组暴露（health、config、project、typoCheck、expressionOp
 | `ImageOCRPage.jsx` | 通用图片 OCR 页面组件（拖拽/粘贴/识别/复制） |
 | `ResultFilterBar.jsx` | 结果过滤工具栏（搜索框 + 类型下拉 + 段落跳转 + 重置） |
 | `ProgressBar.jsx` | 检查进度条组件 |
+| `ColorField.jsx` | 颜色选择器组件 |
 
 ## 核心 Hook
 

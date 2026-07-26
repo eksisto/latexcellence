@@ -86,7 +86,7 @@ Pandoc 的版权归属 John MacFarlane，使用 GPL-2.0-or-later 许可证。本
 
 ### TeX Live 许可证说明
 
-TeX Live 包含多个组件（xelatex、latexmk、latexindent.pl 等），整体以 GPL-2.0-or-later 发布。本项目通过子进程调用 TeX 引擎编译 LaTeX 文档，不包含或修改其源代码。
+TeX Live 包含多个组件（xelatex、latexmk、latexindent.pl、latexdiff 等），整体以 GPL-2.0-or-later 发布。本项目通过子进程调用 TeX 引擎编译 LaTeX 文档，不包含或修改其源代码。
 
 ## 六、主题资源
 

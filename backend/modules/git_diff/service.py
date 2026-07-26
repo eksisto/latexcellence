@@ -37,25 +37,43 @@ _INPUT_PATTERN = re.compile(
 _BEGIN_DOCUMENT = r"\begin{document}"
 _END_DOCUMENT = r"\end{document}"
 
-_DIFF_PREAMBLE = r"""
+# latexdiff 支持的标记类型
+LATEXDIFF_TYPES = [
+    "UNDERLINE",
+    "CTRADITIONAL",
+    "CFONT",
+    "CHANGEBAR",
+    "CCHANGEBAR",
+    "CULINECHBAR",
+    "FONTSTRIKE",
+    "INVISIBLE",
+]
+
+# latexdiff 支持的数学公式标记粒度
+LATEXDIFF_MATH_MARKUPS = ["fine", "coarse", "off", "whole"]
+
+_DIFF_PREAMBLE_TEMPLATE = r"""
 % LaTeXcellence Git diff highlight support.
-\usepackage{xcolor}
-\usepackage{framed}
-\definecolor{LXDiffAddBg}{HTML}{DFF6DD}
-\definecolor{LXDiffDelBg}{HTML}{FFE3E3}
-\newenvironment{LXDiffAdded}{%
-  \def\FrameCommand{\setlength{\fboxsep}{3pt}\colorbox{LXDiffAddBg}}%
-  \MakeFramed{\advance\hsize-\width\FrameRestore}%
-}{%
+\usepackage{{xcolor}}
+\usepackage{{framed}}
+\definecolor{{LXDiffAddBg}}{{HTML}}{{{color_add}}}
+\definecolor{{LXDiffDelBg}}{{HTML}}{{{color_del}}}
+\newenvironment{{LXDiffAdded}}{{%
+  \def\\FrameCommand{{\setlength{{\fboxsep}}{{3pt}}\colorbox{{LXDiffAddBg}}}}%
+  \MakeFramed{{\advance\hsize-\width\FrameRestore}}%
+}}{{%
   \endMakeFramed%
-}
-\newenvironment{LXDiffDeleted}{%
-  \def\FrameCommand{\setlength{\fboxsep}{3pt}\colorbox{LXDiffDelBg}}%
-  \MakeFramed{\advance\hsize-\width\FrameRestore}%
-}{%
+}}
+\newenvironment{{LXDiffDeleted}}{{%
+  \def\\FrameCommand{{\setlength{{\fboxsep}}{{3pt}}\colorbox{{LXDiffDelBg}}}}%
+  \MakeFramed{{\advance\hsize-\width\FrameRestore}}%
+}}{{%
   \endMakeFramed%
-}
+}}
 """
+
+_DEFAULT_COLOR_ADD_HEX = "DFF6DD"
+_DEFAULT_COLOR_DEL_HEX = "FFE3E3"
 
 
 class GitRevision(BaseModel):
@@ -92,6 +110,7 @@ class DiffHighlightResult(BaseModel):
     main_file: str = ""
     base_ref: str = ""
     target_ref: str = ""
+    diff_engine: str = "difflib"
     added_lines: int = 0
     deleted_lines: int = 0
     included_files: list[str] = []
@@ -193,6 +212,14 @@ async def render_diff_pdf(
     base_ref: str,
     target_ref: str,
     workspace_id: str = "",
+    *,
+    diff_engine: str = "difflib",
+    markup_type: str = "UNDERLINE",
+    math_markup: str = "fine",
+    color_add: str = "",
+    color_del: str = "",
+    exclude_safecmd: str = "",
+    exclude_textcmd: str = "",
 ) -> DiffHighlightResult:
     """生成两个 Git 状态之间的差异高亮 PDF。"""
 
@@ -204,7 +231,34 @@ async def render_diff_pdf(
 
     base_flattened = await _flatten_main_document(base_ref, context, main_rel)
     target_flattened = await _flatten_main_document(target_ref, context, main_rel)
-    diff_document = _build_diff_document(base_flattened.content, target_flattened.content)
+
+    cfg = get_config()
+    if not color_add:
+        color_add = cfg.features.git_diff.default_color_add
+    if not color_del:
+        color_del = cfg.features.git_diff.default_color_del
+
+    use_latexdiff = diff_engine == "latexdiff"
+
+    if use_latexdiff:
+        diff_content, added_lines, deleted_lines = await _build_latexdiff_document(
+            base_flattened.content,
+            target_flattened.content,
+            markup_type=markup_type,
+            math_markup=math_markup,
+            exclude_safecmd=exclude_safecmd,
+            exclude_textcmd=exclude_textcmd,
+        )
+    else:
+        diff_doc = _build_diff_document(
+            base_flattened.content,
+            target_flattened.content,
+            color_add=color_add,
+            color_del=color_del,
+        )
+        diff_content = diff_doc.content
+        added_lines = diff_doc.added_lines
+        deleted_lines = diff_doc.deleted_lines
 
     job_id = uuid.uuid4().hex
     job_dir = PDF_OUTPUT_ROOT / job_id
@@ -212,10 +266,11 @@ async def render_diff_pdf(
     diff_rel = _diff_main_path(main_rel, job_id)
     diff_path = project_dir / Path(diff_rel)
     diff_path.parent.mkdir(parents=True, exist_ok=True)
-    diff_path.write_text(diff_document.content, encoding="utf-8")
+    diff_path.write_text(diff_content, encoding="utf-8")
 
     logger.info(
-        f"Rendering Git diff PDF: {base_ref}..{target_ref} main={main_rel} job={job_id}"
+        f"Rendering Git diff PDF: {base_ref}..{target_ref} main={main_rel} job={job_id} "
+        f"engine={diff_engine}"
     )
 
     compile_result = await _compile_diff(project_dir, diff_rel)
@@ -238,8 +293,9 @@ async def render_diff_pdf(
             main_file=main_rel,
             base_ref=base_ref,
             target_ref=target_ref,
-            added_lines=diff_document.added_lines,
-            deleted_lines=diff_document.deleted_lines,
+            diff_engine=diff_engine,
+            added_lines=added_lines,
+            deleted_lines=deleted_lines,
             included_files=included_files,
             stdout=compile_result.stdout,
             stderr=compile_result.stderr,
@@ -257,8 +313,9 @@ async def render_diff_pdf(
         main_file=main_rel,
         base_ref=base_ref,
         target_ref=target_ref,
-        added_lines=diff_document.added_lines,
-        deleted_lines=diff_document.deleted_lines,
+        diff_engine=diff_engine,
+        added_lines=added_lines,
+        deleted_lines=deleted_lines,
         included_files=included_files,
         stdout=compile_result.stdout,
         stderr=compile_result.stderr,
@@ -489,9 +546,77 @@ async def _read_revision_file(
     return result.stdout
 
 
-def _build_diff_document(base_content: str, target_content: str) -> DiffDocument:
-    target_preamble, _target_begin, target_body, target_end, target_tail = _split_document(
-        target_content
+def _resolve_color_hex(color: str, fallback: str) -> str:
+    """将用户颜色输入（HEX #xxx / #xxxxxx 或直接 hex）统一为 6 位大写 HEX。"""
+    if not color:
+        return fallback
+    c = color.strip().lstrip("#")
+    if len(c) == 3:
+        c = c[0] * 2 + c[1] * 2 + c[2] * 2
+    if len(c) != 6:
+        return fallback
+    try:
+        int(c, 16)
+    except ValueError:
+        return fallback
+    return c.upper()
+
+
+def _build_diff_preamble(color_add: str = "", color_del: str = "") -> str:
+    """用指定颜色构建差异标记 LaTeX preamble。"""
+    add_hex = _resolve_color_hex(color_add, _DEFAULT_COLOR_ADD_HEX)
+    del_hex = _resolve_color_hex(color_del, _DEFAULT_COLOR_DEL_HEX)
+    return _DIFF_PREAMBLE_TEMPLATE.format(color_add=add_hex, color_del=del_hex)
+
+
+async def _build_latexdiff_document(
+    base_content: str,
+    target_content: str,
+    *,
+    markup_type: str = "UNDERLINE",
+    math_markup: str = "fine",
+    exclude_safecmd: str = "",
+    exclude_textcmd: str = "",
+) -> tuple[str, int, int]:
+    """使用 latexdiff 引擎生成语义级差异文档。
+
+    Returns:
+        (diff_content, added_lines, deleted_lines)
+    """
+    with tempfile.TemporaryDirectory(prefix="latexcellence_latexdiff_") as tmp_dir:
+        tmp = Path(tmp_dir)
+        old_file = tmp / "old.tex"
+        new_file = tmp / "new.tex"
+        old_file.write_text(base_content, encoding="utf-8")
+        new_file.write_text(target_content, encoding="utf-8")
+
+        result = await _run_latexdiff(
+            old_file,
+            new_file,
+            markup_type=markup_type,
+            math_markup=math_markup,
+            exclude_safecmd=exclude_safecmd,
+            exclude_textcmd=exclude_textcmd,
+        )
+
+        if result.returncode != 0 and not result.stdout.strip():
+            raise RuntimeError(
+                f"latexdiff failed: {result.stderr.strip() or 'empty output'}"
+            )
+
+        diff_content = result.stdout
+        added, deleted = _count_latexdiff_changes(diff_content)
+        return diff_content, added, deleted
+
+
+def _build_diff_document(
+    base_content: str,
+    target_content: str,
+    color_add: str = "",
+    color_del: str = "",
+) -> DiffDocument:
+    target_preamble, _target_begin, target_body, target_end, target_tail = (
+        _split_document(target_content)
     )
     _base_preamble, _base_begin, base_body, _base_end, _base_tail = _split_document(
         base_content
@@ -502,17 +627,20 @@ def _build_diff_document(base_content: str, target_content: str) -> DiffDocument
         target_body.splitlines(),
     )
 
-    preamble = _inject_diff_preamble(target_preamble)
+    preamble = _inject_diff_preamble(target_preamble, color_add, color_del)
     end_document = target_end or _END_DOCUMENT
-    content = "\n".join(
-        [
-            preamble.rstrip(),
-            _BEGIN_DOCUMENT,
-            *body_lines,
-            end_document,
-            target_tail.lstrip("\n"),
-        ]
-    ).rstrip() + "\n"
+    content = (
+        "\n".join(
+            [
+                preamble.rstrip(),
+                _BEGIN_DOCUMENT,
+                *body_lines,
+                end_document,
+                target_tail.lstrip("\n"),
+            ]
+        ).rstrip()
+        + "\n"
+    )
 
     return DiffDocument(
         content=content,
@@ -598,8 +726,13 @@ def _wrap_diff_block(environment: str, lines: list[str]) -> list[str]:
     return [f"\\begin{{{environment}}}", *content, f"\\end{{{environment}}}"]
 
 
-def _inject_diff_preamble(preamble: str) -> str:
-    return preamble.rstrip() + "\n" + _DIFF_PREAMBLE.strip() + "\n"
+def _inject_diff_preamble(
+    preamble: str,
+    color_add: str = "",
+    color_del: str = "",
+) -> str:
+    diff_preamble = _build_diff_preamble(color_add, color_del)
+    return preamble.rstrip() + "\n" + diff_preamble.strip() + "\n"
 
 
 async def _prepare_target_project(
@@ -665,6 +798,48 @@ def _ignore_copy_names(_directory: str, names: list[str]) -> set[str]:
         if any(name.endswith(suffix) for suffix in generated_suffixes):
             ignored.add(name)
     return ignored
+
+
+async def _run_latexdiff(
+    old_path: Path,
+    new_path: Path,
+    markup_type: str = "UNDERLINE",
+    math_markup: str = "fine",
+    exclude_safecmd: str = "",
+    exclude_textcmd: str = "",
+) -> ProcessResult:
+    """调用 latexdiff 生成语义级差异文档。"""
+    cmd = [
+        "latexdiff",
+        f"--type={markup_type}",
+        f"--math-markup={math_markup}",
+        "--allow-spaces",
+    ]
+    if exclude_safecmd:
+        cmd.append(f"--exclude-safecmd={exclude_safecmd}")
+    if exclude_textcmd:
+        cmd.append(f"--exclude-textcmd={exclude_textcmd}")
+    cmd.extend([str(old_path), str(new_path)])
+    return await _run_process(cmd, cwd=old_path.parent, timeout=120)
+
+
+def _count_latexdiff_changes(diff_content: str) -> tuple[int, int]:
+    """统计 latexdiff 输出中的新增和删除行数。
+
+    latexdiff 用 ``\\DIFdel`` / ``\\DIFadd`` 等命令标记变更，
+    这里按行统计含这些标记的行数。
+    """
+    added = 0
+    deleted = 0
+    for line in diff_content.splitlines():
+        stripped = line.strip()
+        if not stripped:
+            continue
+        if r"\DIFdel" in stripped or r"\DIFDELTAMARK" in stripped:
+            deleted += 1
+        if r"\DIFadd" in stripped:
+            added += 1
+    return added, deleted
 
 
 async def _compile_diff(project_dir: Path, diff_rel: str) -> ProcessResult:

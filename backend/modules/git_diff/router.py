@@ -24,6 +24,14 @@ class DiffRenderRequest(BaseModel):
     main_file: str
     base_ref: str
     target_ref: str
+    # 高级选项
+    diff_engine: str = "difflib"  # difflib / latexdiff
+    markup_type: str = "UNDERLINE"  # latexdiff 标记类型
+    math_markup: str = "fine"  # latexdiff 数学标记粒度
+    color_add: str = ""  # 新增内容颜色（HEX，空则用配置默认值）
+    color_del: str = ""  # 删除内容颜色（HEX，空则用配置默认值）
+    exclude_safecmd: str = ""  # 排除的安全命令列表（逗号分隔）
+    exclude_textcmd: str = ""  # 排除的文本命令列表（逗号分隔）
 
 
 @router.get("/refs")
@@ -47,6 +55,13 @@ async def render_pdf(request: DiffRenderRequest, workspace_id: str = Query(..., 
             request.base_ref,
             request.target_ref,
             workspace_id,
+            diff_engine=request.diff_engine,
+            markup_type=request.markup_type,
+            math_markup=request.math_markup,
+            color_add=request.color_add,
+            color_del=request.color_del,
+            exclude_safecmd=request.exclude_safecmd,
+            exclude_textcmd=request.exclude_textcmd,
         )
         return result.model_dump()
     except ValueError as e:

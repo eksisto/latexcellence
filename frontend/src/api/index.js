@@ -352,13 +352,34 @@ export const api = {
   /* ---- Git 差异高亮 ---- */
   gitDiff: {
     refs: (workspaceId) => request(appendWs("/git-diff/refs", workspaceId)),
-    renderPdf: ({ mainFile, baseRef, targetRef }, workspaceId) =>
+    renderPdf: (
+      {
+        mainFile,
+        baseRef,
+        targetRef,
+        diffEngine = "difflib",
+        markupType = "UNDERLINE",
+        mathMarkup = "fine",
+        colorAdd = "",
+        colorDel = "",
+        excludeSafecmd = "",
+        excludeTextcmd = "",
+      },
+      workspaceId,
+    ) =>
       request(appendWs("/git-diff/render-pdf", workspaceId), {
         method: "POST",
         body: JSON.stringify({
           main_file: mainFile,
           base_ref: baseRef,
           target_ref: targetRef,
+          diff_engine: diffEngine,
+          markup_type: markupType,
+          math_markup: mathMarkup,
+          color_add: colorAdd,
+          color_del: colorDel,
+          exclude_safecmd: excludeSafecmd,
+          exclude_textcmd: excludeTextcmd,
         }),
       }),
   },

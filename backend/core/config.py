@@ -99,7 +99,15 @@ class CompileConfig(BaseModel):
 
 class GitDiffConfig(BaseModel):
     """Git 差异高亮模块配置"""
-    enabled: bool = True                # 是否启用
+
+    enabled: bool = True                    # 是否启用
+    default_engine: str = "difflib"         # 默认 diff 引擎：difflib / latexdiff
+    default_markup_type: str = "UNDERLINE"  # latexdiff 默认标记类型
+    default_math_markup: str = (
+        "fine"                              # latexdiff 数学公式标记粒度：fine/coarse/off/whole
+    )
+    default_color_add: str = "#D7E8B1"    # 新增内容颜色（HEX）
+    default_color_del: str = "#FFA3A3"    # 删除内容颜色（HEX）
 
 
 class MarkdownConverterConfig(BaseModel):

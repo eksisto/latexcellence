@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { toast } from "sonner";
 import { Settings } from "lucide-react";
 import { useTranslation } from "react-i18next";
+import ColorField from "@/components/ColorField";
 import {
   Dialog,
   DialogContent,
@@ -23,6 +24,19 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { api } from "@/api";
 import useStore from "@/store/useStore";
+
+const GIT_DIFF_MARKUP_TYPES = [
+  "UNDERLINE",
+  "CTRADITIONAL",
+  "CFONT",
+  "CHANGEBAR",
+  "CCHANGEBAR",
+  "CULINECHBAR",
+  "FONTSTRIKE",
+  "INVISIBLE",
+];
+
+const GIT_DIFF_MATH_MARKUPS = ["fine", "coarse", "off", "whole"];
 
 function CheckboxField({ label, checked, onChange }) {
   return (
@@ -425,6 +439,99 @@ export default function SettingsDialog() {
               checked={config.features.git_diff.enabled}
               onChange={(v) => set("features.git_diff.enabled", v)}
             />
+            {config.features.git_diff.enabled && (
+              <div className="ml-6 space-y-3 rounded-md border p-2.5 bg-muted/40">
+                <div className="space-y-1.5">
+                  <Label className="text-xs">
+                    {t("settings.gitDiffDefaultEngine")}
+                  </Label>
+                  <Select
+                    value={config.features.git_diff.default_engine}
+                    onValueChange={(v) =>
+                      set("features.git_diff.default_engine", v)
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="difflib">
+                        {t("settings.gitDiffDefaultEngineDifflib")}
+                      </SelectItem>
+                      <SelectItem value="latexdiff">
+                        {t("settings.gitDiffDefaultEngineLatexdiff")}
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                {config.features.git_diff.default_engine === "latexdiff" && (
+                  <>
+                    <div className="space-y-1.5">
+                      <Label className="text-xs">
+                        {t("settings.gitDiffDefaultMarkupType")}
+                      </Label>
+                      <Select
+                        value={config.features.git_diff.default_markup_type}
+                        onValueChange={(v) =>
+                          set("features.git_diff.default_markup_type", v)
+                        }
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {GIT_DIFF_MARKUP_TYPES.map((type) => (
+                            <SelectItem key={type} value={type}>
+                              {type}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-xs">
+                        {t("settings.gitDiffDefaultMathMarkup")}
+                      </Label>
+                      <Select
+                        value={config.features.git_diff.default_math_markup}
+                        onValueChange={(v) =>
+                          set("features.git_diff.default_math_markup", v)
+                        }
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {GIT_DIFF_MATH_MARKUPS.map((opt) => (
+                            <SelectItem key={opt} value={opt}>
+                              {opt}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </>
+                )}
+                <div className="grid grid-cols-2 gap-3">
+                  <ColorField
+                    label={t("settings.gitDiffDefaultColorAdd")}
+                    value={config.features.git_diff.default_color_add}
+                    onChange={(v) =>
+                      set("features.git_diff.default_color_add", v)
+                    }
+                    fallback="#D7E8B1"
+                  />
+                  <ColorField
+                    label={t("settings.gitDiffDefaultColorDel")}
+                    value={config.features.git_diff.default_color_del}
+                    onChange={(v) =>
+                      set("features.git_diff.default_color_del", v)
+                    }
+                    fallback="#FFA3A3"
+                  />
+                </div>
+              </div>
+            )}
             <CheckboxField
               label={t("settings.featureTableOcr")}
               checked={config.features.table_ocr.enabled}

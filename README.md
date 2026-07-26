@@ -46,7 +46,7 @@
 
 - Python 3.12+
 - Node.js 18+
-- texlive（含 xelatex、latexmk、latexindent，编译功能、LaTeX 代码审查功能需要）
+- texlive（含 xelatex、latexmk、latexindent、latexdiff，编译功能、LaTeX 代码审查功能、git diff 功能需要）
 - Pandoc（Markdown 转 LaTeX 功能需要，[下载安装](https://pandoc.org/installing.html)）
 - OpenAI API Key（或兼容的 API 端点）
 

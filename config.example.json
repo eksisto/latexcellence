@@ -55,7 +55,12 @@
       "latexmk_timeout": 120
     },
     "git_diff": {
-      "enabled": true
+      "enabled": true,
+      "default_engine": "difflib",
+      "default_markup_type": "UNDERLINE",
+      "default_math_markup": "fine",
+      "default_color_add": "#D7E8B1",
+      "default_color_del": "#FFA3A3"
     },
     "markdown_converter": {
       "enabled": true
