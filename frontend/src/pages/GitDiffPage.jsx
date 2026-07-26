@@ -52,7 +52,12 @@ function flattenTexFiles(nodes) {
   return result;
 }
 
-const REVISION_KIND_TO_GROUP = { worktree: "worktree", commit: "commits", branch: "branches", tag: "tags" };
+const REVISION_KIND_TO_GROUP = {
+  worktree: "worktree",
+  commit: "commits",
+  branch: "branches",
+  tag: "tags",
+};
 
 function groupRevisions(revisions) {
   const groups = { worktree: [], commits: [], branches: [], tags: [] };
@@ -105,17 +110,14 @@ export default function GitDiffPage() {
     return map;
   }, [refs, t]);
 
-  const formatRefValue = useCallback(
-    (val) => labelMap[val] || val,
-    [labelMap]
-  );
+  const formatRefValue = useCallback((val) => labelMap[val] || val, [labelMap]);
 
   useEffect(() => {
     if (!projectPath || fileTree.length > 0) return;
 
     let cancelled = false;
     api.project
-      .open(projectPath)
+      .open(projectPath, workspaceId)
       .then((data) => {
         if (cancelled) return;
         setRootPath(data.root_path);
@@ -173,11 +175,14 @@ export default function GitDiffPage() {
     setResult(null);
     setPdfUrl("");
     try {
-      const data = await api.gitDiff.renderPdf({
-        mainFile: selectedMainFile,
-        baseRef,
-        targetRef,
-      }, workspaceId);
+      const data = await api.gitDiff.renderPdf(
+        {
+          mainFile: selectedMainFile,
+          baseRef,
+          targetRef,
+        },
+        workspaceId,
+      );
       setResult(data);
       if (data.success && data.pdf_url) {
         setPdfUrl(`${data.pdf_url}?t=${Date.now()}`);
@@ -193,7 +198,12 @@ export default function GitDiffPage() {
     return (
       <div className="min-h-screen p-8">
         <div className="max-w-3xl mx-auto">
-          <Button variant="ghost" size="icon" nativeButton={false} render={<Link to="/" />}>
+          <Button
+            variant="ghost"
+            size="icon"
+            nativeButton={false}
+            render={<Link to="/" />}
+          >
             <ArrowLeft />
           </Button>
           <Card className="mt-8">
@@ -218,11 +228,18 @@ export default function GitDiffPage() {
     <div className="min-h-screen p-8">
       <div className="max-w-6xl mx-auto mb-8">
         <div className="flex items-center gap-4">
-          <Button variant="ghost" size="icon" nativeButton={false} render={<Link to="/" />}>
+          <Button
+            variant="ghost"
+            size="icon"
+            nativeButton={false}
+            render={<Link to="/" />}
+          >
             <ArrowLeft />
           </Button>
           <div>
-            <h1 className="text-3xl font-bold tracking-tight">{t("pages:gitDiff.title")}</h1>
+            <h1 className="text-3xl font-bold tracking-tight">
+              {t("pages:gitDiff.title")}
+            </h1>
             <p className="text-sm text-muted-foreground mt-1">
               {t("pages:gitDiff.description")}
             </p>
@@ -260,7 +277,10 @@ export default function GitDiffPage() {
                   onValueChange={setSelectedMainFile}
                 >
                   <SelectTrigger className="w-full">
-                    <SelectValue className="min-w-0 truncate" placeholder={t("pages:gitDiff.selectMainFile")} />
+                    <SelectValue
+                      className="min-w-0 truncate"
+                      placeholder={t("pages:gitDiff.selectMainFile")}
+                    />
                   </SelectTrigger>
                   <SelectContent>
                     {texFiles.map((file) => (
@@ -276,7 +296,10 @@ export default function GitDiffPage() {
                 <Label>{t("pages:gitDiff.baseState")}</Label>
                 <Select value={baseRef} onValueChange={setBaseRef}>
                   <SelectTrigger className="w-full">
-                    <SelectValue className="min-w-0 truncate" placeholder={t("pages:gitDiff.selectBaseState")}>
+                    <SelectValue
+                      className="min-w-0 truncate"
+                      placeholder={t("pages:gitDiff.selectBaseState")}
+                    >
                       {formatRefValue}
                     </SelectValue>
                   </SelectTrigger>
@@ -293,7 +316,9 @@ export default function GitDiffPage() {
                       <SelectGroup>
                         <SelectLabel className="flex items-center gap-1">
                           <GitCommit className="size-3" />
-                          {t("pages:gitDiff.commits", { count: grouped.commits.length })}
+                          {t("pages:gitDiff.commits", {
+                            count: grouped.commits.length,
+                          })}
                         </SelectLabel>
                         {grouped.commits.map((r) => (
                           <SelectItem key={r.value} value={r.value}>
@@ -336,7 +361,10 @@ export default function GitDiffPage() {
                 <Label>{t("pages:gitDiff.targetState")}</Label>
                 <Select value={targetRef} onValueChange={setTargetRef}>
                   <SelectTrigger className="w-full">
-                    <SelectValue className="min-w-0 truncate" placeholder={t("pages:gitDiff.selectTargetState")}>
+                    <SelectValue
+                      className="min-w-0 truncate"
+                      placeholder={t("pages:gitDiff.selectTargetState")}
+                    >
                       {formatRefValue}
                     </SelectValue>
                   </SelectTrigger>
@@ -353,7 +381,9 @@ export default function GitDiffPage() {
                       <SelectGroup>
                         <SelectLabel className="flex items-center gap-1">
                           <GitCommit className="size-3" />
-                          {t("pages:gitDiff.commits", { count: grouped.commits.length })}
+                          {t("pages:gitDiff.commits", {
+                            count: grouped.commits.length,
+                          })}
                         </SelectLabel>
                         {grouped.commits.map((r) => (
                           <SelectItem key={r.value} value={r.value}>
@@ -393,11 +423,19 @@ export default function GitDiffPage() {
               </div>
 
               <div className="rounded-lg border bg-muted/30 p-3 text-xs text-muted-foreground space-y-1">
-                <div>{t("pages:gitDiff.gitRoot")}: {gitRoot || t("pages:gitDiff.notLoaded")}</div>
                 <div>
-                  {t("pages:gitDiff.workspaceStatus")}: {isDirty ? t("pages:gitDiff.hasUncommittedChanges") : t("pages:gitDiff.cleanOrNoChanges")}
+                  {t("pages:gitDiff.gitRoot")}:{" "}
+                  {gitRoot || t("pages:gitDiff.notLoaded")}
                 </div>
-                <div>{t("pages:gitDiff.projectDirectory")}: {rootPath}</div>
+                <div>
+                  {t("pages:gitDiff.workspaceStatus")}:{" "}
+                  {isDirty
+                    ? t("pages:gitDiff.hasUncommittedChanges")
+                    : t("pages:gitDiff.cleanOrNoChanges")}
+                </div>
+                <div>
+                  {t("pages:gitDiff.projectDirectory")}: {rootPath}
+                </div>
               </div>
 
               {error && <p className="text-sm text-destructive">{error}</p>}
@@ -405,7 +443,9 @@ export default function GitDiffPage() {
               <Button
                 className="w-full"
                 onClick={handleRender}
-                disabled={rendering || !selectedMainFile || !baseRef || !targetRef}
+                disabled={
+                  rendering || !selectedMainFile || !baseRef || !targetRef
+                }
               >
                 {rendering ? (
                   <>
@@ -425,7 +465,9 @@ export default function GitDiffPage() {
           {result && (
             <Card>
               <CardHeader>
-                <CardTitle className="text-base">{t("pages:gitDiff.generationResult")}</CardTitle>
+                <CardTitle className="text-base">
+                  {t("pages:gitDiff.generationResult")}
+                </CardTitle>
                 <CardAction>
                   <Badge variant={result.success ? "secondary" : "destructive"}>
                     {result.success ? (
@@ -445,18 +487,26 @@ export default function GitDiffPage() {
               <CardContent className="space-y-3 text-sm">
                 <div className="grid grid-cols-2 gap-2">
                   <div className="rounded bg-green-500/10 px-3 py-2 text-green-700 dark:text-green-300">
-                    {t("pages:gitDiff.addedLines", { count: result.added_lines || 0 })}
+                    {t("pages:gitDiff.addedLines", {
+                      count: result.added_lines || 0,
+                    })}
                   </div>
                   <div className="rounded bg-red-500/10 px-3 py-2 text-red-700 dark:text-red-300">
-                    {t("pages:gitDiff.deletedLines", { count: result.deleted_lines || 0 })}
+                    {t("pages:gitDiff.deletedLines", {
+                      count: result.deleted_lines || 0,
+                    })}
                   </div>
                 </div>
                 <div className="text-xs text-muted-foreground">
-                  {t("pages:gitDiff.expandedFiles", { count: result.included_files?.length || 0 })}
+                  {t("pages:gitDiff.expandedFiles", {
+                    count: result.included_files?.length || 0,
+                  })}
                 </div>
                 {result.explanation && (
                   <div>
-                    <Label className="text-xs text-muted-foreground">{t("pages:gitDiff.errorExplanation")}</Label>
+                    <Label className="text-xs text-muted-foreground">
+                      {t("pages:gitDiff.errorExplanation")}
+                    </Label>
                     <p className="text-sm mt-1 whitespace-pre-wrap text-destructive">
                       {result.explanation}
                     </p>
@@ -464,7 +514,9 @@ export default function GitDiffPage() {
                 )}
                 {result.fixes && result.fixes.length > 0 && (
                   <div>
-                    <Label className="text-xs text-muted-foreground">{t("pages:gitDiff.fixSuggestions")}</Label>
+                    <Label className="text-xs text-muted-foreground">
+                      {t("pages:gitDiff.fixSuggestions")}
+                    </Label>
                     <ul className="text-sm mt-1 list-disc list-inside space-y-1">
                       {result.fixes.map((fix, i) => (
                         <li key={i}>{fix}</li>
@@ -494,7 +546,9 @@ export default function GitDiffPage() {
                   size="sm"
                   onClick={() => setShowRawOutput((value) => !value)}
                 >
-                  {showRawOutput ? t("pages:gitDiff.hideRawOutput") : t("pages:gitDiff.viewRawOutput")}
+                  {showRawOutput
+                    ? t("pages:gitDiff.hideRawOutput")
+                    : t("pages:gitDiff.viewRawOutput")}
                 </Button>
                 {showRawOutput && (
                   <pre className="max-h-48 overflow-auto rounded bg-muted p-2 text-xs whitespace-pre-wrap">
