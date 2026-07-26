@@ -5,6 +5,7 @@ from pydantic import BaseModel
 
 class SearchResult(BaseModel):
     """单条搜索结果。"""
+
     title: str
     snippet: str
     url: str
@@ -13,6 +14,7 @@ class SearchResult(BaseModel):
 
 class SearchResponse(BaseModel):
     """一次搜索的完整响应。"""
+
     query: str
     results: list[SearchResult] = []
     engine: str = ""
@@ -23,8 +25,8 @@ class SearchResponse(BaseModel):
         """将搜索结果格式化为适合注入 LLM 上下文的纯文本。"""
         items = self.results[:max_results]
         if not items:
-            return f"搜索 \"{self.query}\" 未找到相关结果。"
-        lines = [f"搜索 \"{self.query}\" 返回 {len(items)} 条结果：\n"]
+            return f'搜索 "{self.query}" 未找到相关结果。'
+        lines = [f'搜索 "{self.query}" 返回 {len(items)} 条结果：\n']
         for i, r in enumerate(items, 1):
             lines.append(f"[{i}] {r.title}")
             if r.snippet:

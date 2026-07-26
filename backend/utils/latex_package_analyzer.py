@@ -42,8 +42,7 @@ async def analyze_latex_packages(latex_code: str, llm) -> list[str]:
         return []
 
     messages = [
-        {"role": "system", "content": get_prompt(
-            "latex_package_analyzer", "system")},
+        {"role": "system", "content": get_prompt("latex_package_analyzer", "system")},
         {
             "role": "user",
             "content": f"Analyze this LaTeX code and list required packages:\n\n{latex_code}",
@@ -63,8 +62,7 @@ async def analyze_latex_packages(latex_code: str, llm) -> list[str]:
         )
         return validated.packages
     except Exception as e:
-        logger.warning(
-            f"Package analysis failed, falling back to empty list: {e}")
+        logger.warning(f"Package analysis failed, falling back to empty list: {e}")
         return []
 
 

@@ -14,7 +14,6 @@ import pytest
 
 from backend.modules.markdown_converter.service import MarkdownConverterService
 
-
 # ── MarkdownConverterService ───────────────────────────────────────────────
 
 
@@ -67,8 +66,9 @@ class TestMarkdownConverterWithPandoc:
         mock_proc.returncode = 0
         mock_proc.stdout = stdout
         mock_proc.stderr = ""
-        return patch("shutil.which", return_value="/usr/bin/pandoc"), \
-               patch("subprocess.run", return_value=mock_proc)
+        return patch("shutil.which", return_value="/usr/bin/pandoc"), patch(
+            "subprocess.run", return_value=mock_proc
+        )
 
     @pytest.mark.asyncio
     async def test_successful_conversion_with_packages(self, service, mock_llm):
@@ -110,6 +110,7 @@ class TestMarkdownConverterWithPandoc:
     async def test_no_api_key_skips_analysis(self, service, monkeypatch):
         """无 API Key 时跳过宏包分析，直接返回 Pandoc 结果。"""
         import backend.core.config as cfg_mod
+
         cfg = cfg_mod.get_config()
         monkeypatch.setattr(cfg.llm, "api_key", "")
 
@@ -198,11 +199,14 @@ class TestMarkdownConverterRouter:
     def client(self):
         from fastapi.testclient import TestClient
         from main import app
+
         return TestClient(app)
 
     def test_convert_success(self, client):
         result = {"latex": r"\section{Hello}"}
-        with patch.object(MarkdownConverterService, "convert", new_callable=AsyncMock) as mock_convert:
+        with patch.object(
+            MarkdownConverterService, "convert", new_callable=AsyncMock
+        ) as mock_convert:
             mock_convert.return_value = result
             response = client.post(
                 "/api/markdown-converter/convert",
@@ -214,7 +218,9 @@ class TestMarkdownConverterRouter:
 
     def test_convert_empty_markdown_returns_400(self, client):
         """空 markdown 由路由层转发 400。"""
-        with patch.object(MarkdownConverterService, "convert", new_callable=AsyncMock) as mock_convert:
+        with patch.object(
+            MarkdownConverterService, "convert", new_callable=AsyncMock
+        ) as mock_convert:
             mock_convert.side_effect = ValueError("Markdown text is empty")
             response = client.post(
                 "/api/markdown-converter/convert",
@@ -223,7 +229,9 @@ class TestMarkdownConverterRouter:
         assert response.status_code == 400
 
     def test_convert_pandoc_not_found_returns_500(self, client):
-        with patch.object(MarkdownConverterService, "convert", new_callable=AsyncMock) as mock_convert:
+        with patch.object(
+            MarkdownConverterService, "convert", new_callable=AsyncMock
+        ) as mock_convert:
             mock_convert.side_effect = RuntimeError("Pandoc is not installed")
             response = client.post(
                 "/api/markdown-converter/convert",
@@ -232,7 +240,9 @@ class TestMarkdownConverterRouter:
         assert response.status_code == 500
 
     def test_convert_internal_error_returns_500(self, client):
-        with patch.object(MarkdownConverterService, "convert", new_callable=AsyncMock) as mock_convert:
+        with patch.object(
+            MarkdownConverterService, "convert", new_callable=AsyncMock
+        ) as mock_convert:
             mock_convert.side_effect = RuntimeError("Something went wrong")
             response = client.post(
                 "/api/markdown-converter/convert",

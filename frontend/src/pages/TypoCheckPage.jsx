@@ -71,7 +71,8 @@ export default function TypoCheckPage() {
       checkLoading: t("pages:typoCheck.checkLoading"),
       checkSuccess: (count) => t("pages:typoCheck.checkSuccess", { count }),
       applySuccess: (idx) => t("pages:typoCheck.applySuccess", { idx }),
-      applyAllSuccess: (count) => t("pages:typoCheck.applyAllSuccess", { count }),
+      applyAllSuccess: (count) =>
+        t("pages:typoCheck.applyAllSuccess", { count }),
       applyAllEmpty: t("pages:typoCheck.applyAllEmpty"),
     },
   });
@@ -91,7 +92,10 @@ export default function TypoCheckPage() {
   const renderResultCard = (result) => {
     const hasChanges = result.changes && result.changes.length > 0;
     return (
-      <Card key={`${result.file_path}-${result.paragraph_index}`} id={`${result.file_path}-P${result.paragraph_index}`}>
+      <Card
+        key={`${result.file_path}-${result.paragraph_index}`}
+        id={`${result.file_path}-P${result.paragraph_index}`}
+      >
         <CardHeader className="pb-2">
           <div className="flex items-center justify-between">
             <CardTitle className="text-sm">
@@ -148,7 +152,7 @@ export default function TypoCheckPage() {
                       handleApplyChange(
                         result.paragraph_index,
                         result.corrected,
-                        result.file_path
+                        result.file_path,
                       )
                     }
                   >
@@ -158,7 +162,10 @@ export default function TypoCheckPage() {
                     size="sm"
                     variant="outline"
                     onClick={() =>
-                      handleIgnoreChange(result.paragraph_index, result.file_path)
+                      handleIgnoreChange(
+                        result.paragraph_index,
+                        result.file_path,
+                      )
                     }
                   >
                     {t("common:ignore")}
@@ -167,10 +174,14 @@ export default function TypoCheckPage() {
               </>
             ) : (
               <p className="text-sm text-muted-foreground">
-                  {t("pages:typoCheck.noIssues")}
+                {t("pages:typoCheck.noIssues")}
               </p>
             )}
-            <ParagraphContext currentIndex={result.paragraph_index} paragraphs={typoParagraphs} currentText={result.plain_text || result.original} />
+            <ParagraphContext
+              currentIndex={result.paragraph_index}
+              paragraphs={typoParagraphs}
+              currentText={result.plain_text || result.original}
+            />
           </div>
         </CardContent>
       </Card>
@@ -181,10 +192,17 @@ export default function TypoCheckPage() {
     <div className="min-h-screen p-8">
       <div className="max-w-6xl mx-auto mb-8">
         <div className="flex items-center gap-4">
-          <Button variant="ghost" size="icon" nativeButton={false} render={<Link to="/" />}>
+          <Button
+            variant="ghost"
+            size="icon"
+            nativeButton={false}
+            render={<Link to="/" />}
+          >
             <ArrowLeft />
           </Button>
-          <h1 className="text-3xl font-bold tracking-tight">{t("pages:typoCheck.title")}</h1>
+          <h1 className="text-3xl font-bold tracking-tight">
+            {t("pages:typoCheck.title")}
+          </h1>
         </div>
       </div>
 
@@ -210,7 +228,11 @@ export default function TypoCheckPage() {
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <Button className="w-full" nativeButton={false} render={<Link to="/workspace" />}>
+                <Button
+                  className="w-full"
+                  nativeButton={false}
+                  render={<Link to="/workspace" />}
+                >
                   {t("common:openWorkspace")}
                 </Button>
               </CardContent>
@@ -243,7 +265,10 @@ export default function TypoCheckPage() {
                       checked={resolveInput}
                       onCheckedChange={setResolveInput}
                     />
-                    <Label htmlFor="resolve-input" className="text-sm cursor-pointer">
+                    <Label
+                      htmlFor="resolve-input"
+                      className="text-sm cursor-pointer"
+                    >
                       {t("common:includeSubfiles")}
                     </Label>
                   </div>
@@ -261,16 +286,16 @@ export default function TypoCheckPage() {
                   </Button>
                   <Button
                     onClick={handleCheck}
-                    disabled={
-                      isLoading || typoParagraphs.length === 0
-                    }
+                    disabled={isLoading || typoParagraphs.length === 0}
                   >
                     {isLoading ? (
                       <Loader2 className="animate-spin" />
                     ) : (
                       <CheckCheck />
                     )}
-                    {isLoading ? t("common:checking") : t("pages:typoCheck.checkButton")}
+                    {isLoading
+                      ? t("common:checking")
+                      : t("pages:typoCheck.checkButton")}
                   </Button>
                 </div>
                 {message && (
@@ -296,7 +321,9 @@ export default function TypoCheckPage() {
               <Card>
                 <CardHeader className="pb-2">
                   <CardTitle className="text-sm">
-                    {t("pages:typoCheck.paragraphPreviewTitle", { count: typoParagraphs.length })}
+                    {t("pages:typoCheck.paragraphPreviewTitle", {
+                      count: typoParagraphs.length,
+                    })}
                   </CardTitle>
                   <CardDescription>
                     {t("pages:typoCheck.paragraphPreviewDesc")}
@@ -307,11 +334,14 @@ export default function TypoCheckPage() {
                     <Tabs defaultValue={activeFiles[0]}>
                       <TabsList>
                         {activeFiles.map((f) => (
-                          <TabsTrigger key={f} value={f}>{f.split('/').pop()}</TabsTrigger>
+                          <TabsTrigger key={f} value={f}>
+                            {f.split("/").pop()}
+                          </TabsTrigger>
                         ))}
                       </TabsList>
                       {activeFiles.map((f) => {
-                        const fileParagraphs = groupByFile(typoParagraphs)[f] || [];
+                        const fileParagraphs =
+                          groupByFile(typoParagraphs)[f] || [];
                         return (
                           <TabsContent key={f} value={f}>
                             <div className="space-y-3">
@@ -324,7 +354,11 @@ export default function TypoCheckPage() {
                                     P{p.index}
                                   </span>
                                   <div className="whitespace-pre-wrap text-sm text-foreground/80 mt-1 max-h-32 overflow-y-auto font-sans leading-relaxed">
-                                    {p.plain_text ? <MarkerText text={p.plain_text} /> : t("common:blank")}
+                                    {p.plain_text ? (
+                                      <MarkerText text={p.plain_text} />
+                                    ) : (
+                                      t("common:blank")
+                                    )}
                                   </div>
                                 </div>
                               ))}
@@ -344,7 +378,11 @@ export default function TypoCheckPage() {
                             P{p.index}
                           </span>
                           <div className="whitespace-pre-wrap text-sm text-foreground/80 mt-1 max-h-32 overflow-y-auto font-sans leading-relaxed">
-                            {p.plain_text ? <MarkerText text={p.plain_text} /> : t("common:blank")}
+                            {p.plain_text ? (
+                              <MarkerText text={p.plain_text} />
+                            ) : (
+                              t("common:blank")
+                            )}
                           </div>
                         </div>
                       ))}
@@ -391,7 +429,9 @@ export default function TypoCheckPage() {
                   <Tabs defaultValue={activeFiles[0]}>
                     <TabsList>
                       {activeFiles.map((f) => (
-                        <TabsTrigger key={f} value={f}>{f.split('/').pop()}</TabsTrigger>
+                        <TabsTrigger key={f} value={f}>
+                          {f.split("/").pop()}
+                        </TabsTrigger>
                       ))}
                     </TabsList>
                     {activeFiles.map((f) => {
@@ -404,7 +444,9 @@ export default function TypoCheckPage() {
                                 {t("common:noFileResult")}
                               </p>
                             ) : (
-                              fileResults.map((result) => renderResultCard(result))
+                              fileResults.map((result) =>
+                                renderResultCard(result),
+                              )
                             )}
                           </div>
                         </TabsContent>

@@ -113,22 +113,26 @@ class TestAssembleTemplate:
     """模板组装测试。"""
 
     def test_minimal_template(self, service):
-        result = service._assemble_template({
-            "preamble": r"\documentclass{article}",
-            "body_structure": [],
-        })
+        result = service._assemble_template(
+            {
+                "preamble": r"\documentclass{article}",
+                "body_structure": [],
+            }
+        )
         assert r"\documentclass{article}" in result
         assert r"\begin{document}" in result
         assert r"\end{document}" in result
 
     def test_with_sections(self, service):
-        result = service._assemble_template({
-            "preamble": r"\documentclass{article}",
-            "body_structure": [
-                {"section": "Intro", "suggested_content": "Background"},
-                {"section": "Method", "suggested_content": "Details"},
-            ],
-        })
+        result = service._assemble_template(
+            {
+                "preamble": r"\documentclass{article}",
+                "body_structure": [
+                    {"section": "Intro", "suggested_content": "Background"},
+                    {"section": "Method", "suggested_content": "Details"},
+                ],
+            }
+        )
         assert r"\section{Intro}" in result
         assert r"\section{Method}" in result
         assert "% Background" in result

@@ -15,7 +15,6 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
-
 # ── 持久化的消息数据 ────────────────────────────────────────────────────────
 
 
@@ -27,6 +26,7 @@ class EditOp(BaseModel):
     会被封装为 EditOp 存储到该 assistant 消息上；前端待用户点击"应用"
     后才调用 project_manager.apply_change 写回源文件。
     """
+
     file_path: str
     paragraph_index: int
     original_latex: str
@@ -53,6 +53,7 @@ class ChatMessage(BaseModel):
                   用于撤回该 summary 时还原上下文
         referenced_file / referenced_paragraph: 用户在该消息中选择的上下文锚点
     """
+
     id: str
     role: str
     content: str = ""
@@ -78,6 +79,7 @@ class LlmEditResult(BaseModel):
     LLM 直接操作原始 LaTeX 源码（writing_chat 为特例，不用 marker 剥离），
     optimized 字段返回修改后的完整 LaTeX 段落。
     """
+
     paragraph_index: int
     original: str
     optimized: str
@@ -89,17 +91,21 @@ class LlmEditResult(BaseModel):
 
 class ChatSendRequest(BaseModel):
     """发起一次流式对话请求。"""
+
     session_id: str | None = None
     file_path: str
     paragraph_index: int | None = None
     user_message: str
     assistant_prompt: str | None = None
-    web_search_enabled: bool | None = None  # None=跟随配置，True=强制启用，False=强制禁用
+    web_search_enabled: bool | None = (
+        None  # None=跟随配置，True=强制启用，False=强制禁用
+    )
     language: str = "zh"  # 前端 UI 语言，用于引导 LLM 回复语言
 
 
 class GenerateEditRequest(BaseModel):
     """基于已有对话中的某条 user 消息生成"编辑操作"建议。"""
+
     session_id: str
     file_path: str
     paragraph_index: int
@@ -109,6 +115,7 @@ class GenerateEditRequest(BaseModel):
 
 class ApplyEditRequest(BaseModel):
     """应用某条 assistant 消息携带的 edit_op。"""
+
     session_id: str
     edit_message_id: str
     new_latex: str | None = None
@@ -116,18 +123,21 @@ class ApplyEditRequest(BaseModel):
 
 class DeleteMessageRequest(BaseModel):
     """删除会话中的某条消息。"""
+
     session_id: str
     message_id: str
 
 
 class UndoMessageRequest(BaseModel):
     """撤回某条消息（summary 消息则还原快照）。"""
+
     session_id: str
     message_id: str
 
 
 class SessionMeta(BaseModel):
     """会话元信息（列表用）。"""
+
     id: str
     created_at: float
     last_updated_at: float
@@ -139,6 +149,7 @@ class SessionMeta(BaseModel):
 
 class SessionFull(BaseModel):
     """完整会话数据（含全部 messages）。"""
+
     id: str
     created_at: float
     last_updated_at: float
@@ -152,6 +163,7 @@ class SessionFull(BaseModel):
 
 class LlmSummaryResult(BaseModel):
     """压缩摘要 LLM JSON 输出 schema。"""
+
     summary: str
 
 
@@ -160,6 +172,7 @@ class LlmSummaryResult(BaseModel):
 
 class SSEEvent(BaseModel):
     """前端的 SSE 事件载荷。type 决定前端如何处理该事件。"""
+
     type: str
     data: Any | None = None
 
@@ -169,17 +182,19 @@ class SSEEvent(BaseModel):
 
 class AssistantSaveRequest(BaseModel):
     """保存（创建或更新）助手提示词。"""
+
     name: str
     content: str
 
 
 class AssistantSetActiveRequest(BaseModel):
     """设置当前激活的助手。"""
+
     name: str = Field(default="", description="空字符串表示取消激活")
 
 
 class RenameSessionRequest(BaseModel):
     """重命名会话。"""
+
     session_id: str
     title: str
-

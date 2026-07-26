@@ -5,8 +5,6 @@ LaTeX 样式修改 API 路由。
 LLM 根据文字描述修改 LaTeX 代码并返回。
 """
 
-
-
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, field_validator
 
@@ -26,6 +24,7 @@ def get_service() -> StyleModifyService:
 
 class ModifyRequest(BaseModel):
     """样式修改请求体"""
+
     latex: str
     description: str
 

@@ -34,7 +34,6 @@ from backend.utils.json_utils import retry_with_validation
 from backend.utils.file_ops import atomic_write, safe_read
 from backend.utils.path_guard import resolve_project_path
 
-
 _MAX_DIMENSION = 2000
 _SUPPORTED_FORMATS = {"image/png", "image/jpeg", "image/webp"}
 
@@ -50,7 +49,9 @@ class BibManagerService:
             raise RuntimeError("No API key configured")
 
         llm = get_llm_client()
-        system_prompt = get_prompt("bib_manager", "format_analysis", reference_entry=example)
+        system_prompt = get_prompt(
+            "bib_manager", "format_analysis", reference_entry=example
+        )
         messages = [
             {"role": "system", "content": system_prompt},
         ]
@@ -90,25 +91,20 @@ class BibManagerService:
             self._logger.error(f"Format analysis error: {e}")
             raise RuntimeError(f"Format analysis failed: {e}")
 
-    def _build_extract_user_message(
-        self, text: str, format_info: dict | None
-    ) -> str:
+    def _build_extract_user_message(self, text: str, format_info: dict | None) -> str:
         """构建元数据提取的用户消息，列出要提取的具体字段名。"""
         all_fields = []
         if format_info:
             all_fields.extend(format_info.get("required_fields", []))
             all_fields.extend(format_info.get("optional_fields", []))
-        field_names = ", ".join(
-            all_fields) if all_fields else "title, authors, year, journal"
+        field_names = (
+            ", ".join(all_fields) if all_fields else "title, authors, year, journal"
+        )
 
         fmt_name = format_info.get("format_name", "") if format_info else ""
         fmt_hint = f"This should follow the {fmt_name} format. " if fmt_name else ""
 
-        return (
-            f"{fmt_hint}"
-            f"FIELD NAMES: {field_names}\n\n"
-            f"TEXT:\n{text}"
-        )
+        return f"{fmt_hint}" f"FIELD NAMES: {field_names}\n\n" f"TEXT:\n{text}"
 
     async def extract_from_text(
         self, text: str, format_info: dict | None = None
@@ -122,7 +118,10 @@ class BibManagerService:
         user_content = self._build_extract_user_message(text, format_info)
 
         messages = [
-            {"role": "system", "content": get_prompt("bib_manager", "metadata_extraction")},
+            {
+                "role": "system",
+                "content": get_prompt("bib_manager", "metadata_extraction"),
+            },
             {"role": "user", "content": user_content},
         ]
 
@@ -138,9 +137,7 @@ class BibManagerService:
                 response_format={"type": "json_object"},
             )
             fields = validated.fields
-            self._logger.info(
-                f"Metadata extracted: {len(fields)} fields from text"
-            )
+            self._logger.info(f"Metadata extracted: {len(fields)} fields from text")
             missing = self._check_missing_fields(fields, format_info)
             return {"fields": fields, "missing_fields": missing}
         except ValueError as e:
@@ -173,15 +170,19 @@ class BibManagerService:
         if format_info:
             all_fields.extend(format_info.get("required_fields", []))
             all_fields.extend(format_info.get("optional_fields", []))
-        field_names = ", ".join(
-            all_fields) if all_fields else "title, authors, year, journal"
+        field_names = (
+            ", ".join(all_fields) if all_fields else "title, authors, year, journal"
+        )
 
         fmt_name = format_info.get("format_name", "") if format_info else ""
         fmt_hint = f"This should follow the {fmt_name} format. " if fmt_name else ""
 
         llm = get_llm_client()
         messages = [
-            {"role": "system", "content": get_prompt("bib_manager", "metadata_extraction")},
+            {
+                "role": "system",
+                "content": get_prompt("bib_manager", "metadata_extraction"),
+            },
             {
                 "role": "user",
                 "content": [
@@ -216,9 +217,7 @@ class BibManagerService:
                 response_format={"type": "json_object"},
             )
             fields = validated.fields
-            self._logger.info(
-                f"Metadata extracted: {len(fields)} fields from image"
-            )
+            self._logger.info(f"Metadata extracted: {len(fields)} fields from image")
             missing = self._check_missing_fields(fields, format_info)
             return {"fields": fields, "missing_fields": missing}
         except ValueError as e:
@@ -256,11 +255,14 @@ class BibManagerService:
         metadata_str = _json.dumps(metadata, ensure_ascii=False, indent=2)
 
         messages = [
-            {"role": "system", "content": get_prompt("bib_manager", "bibtex_generation")},
+            {
+                "role": "system",
+                "content": get_prompt("bib_manager", "bibtex_generation"),
+            },
             {
                 "role": "user",
                 "content": (
-                    f"Generate a BibTeX entry with entry_type=\"{entry_type}\" "
+                    f'Generate a BibTeX entry with entry_type="{entry_type}" '
                     f"for the following metadata:{existing_str}\n\n"
                     f"METADATA:\n{metadata_str}"
                 ),
@@ -278,8 +280,7 @@ class BibManagerService:
                 max_tokens=2048,
                 response_format={"type": "json_object"},
             )
-            self._logger.info(
-                f"BibTeX generated: cite_key={validated.cite_key}")
+            self._logger.info(f"BibTeX generated: cite_key={validated.cite_key}")
             return validated.model_dump()
         except ValueError as e:
             self._logger.error(f"BibTeX generation failed: {e}")
@@ -330,21 +331,27 @@ class BibManagerService:
 
         if backend == "biblatex":
             # biblatex 工作流
-            print_cmd = format_info.get(
-                "print_command", "\\printbibliography"
-            ) if format_info else "\\printbibliography"
+            print_cmd = (
+                format_info.get("print_command", "\\printbibliography")
+                if format_info
+                else "\\printbibliography"
+            )
             lines.append(f"% 在文档末尾使用以下命令生成参考文献列表")
             lines.append(print_cmd)
             if cite_key:
-                cite_cmd = format_info.get(
-                    "citation_command", "\\cite"
-                ) if format_info else "\\cite"
+                cite_cmd = (
+                    format_info.get("citation_command", "\\cite")
+                    if format_info
+                    else "\\cite"
+                )
                 lines.append("")
                 lines.append(f"% 引用示例：{cite_cmd}{{{cite_key}}}")
         else:
             # BibTeX 工作流
             if bibliographystyle:
-                lines.append(f"% 在 \\begin{{document}} 之后、\\end{{document}} 之前添加：")
+                lines.append(
+                    f"% 在 \\begin{{document}} 之后、\\end{{document}} 之前添加："
+                )
                 lines.append(f"\\bibliographystyle{{{bibliographystyle}}}")
             lines.append(f"\\bibliography{{{bib_path}}}")
             if cite_key:
@@ -354,23 +361,20 @@ class BibManagerService:
         full_code = "\n".join(lines)
 
         self._logger.info(
-            f"LaTeX code generated: backend={backend}, "
-            f"style={bibliographystyle}"
+            f"LaTeX code generated: backend={backend}, " f"style={bibliographystyle}"
         )
 
         return {
             "preamble": preamble,
             "bibliographystyle": (
                 f"\\bibliographystyle{{{bibliographystyle}}}"
-                if bibliographystyle and backend != "biblatex" else ""
+                if bibliographystyle and backend != "biblatex"
+                else ""
             ),
             "bibliography": (
-                f"\\bibliography{{{bib_path}}}"
-                if backend != "biblatex" else ""
+                f"\\bibliography{{{bib_path}}}" if backend != "biblatex" else ""
             ),
-            "cite_command": (
-                f"\\cite{{{cite_key}}}" if cite_key else ""
-            ),
+            "cite_command": (f"\\cite{{{cite_key}}}" if cite_key else ""),
             "full_code": full_code,
         }
 
@@ -405,8 +409,7 @@ class BibManagerService:
         content = safe_read(full_path)
 
         if cite_key in content:
-            new_content = self._replace_bib_entry(
-                content, cite_key, bibtex_code)
+            new_content = self._replace_bib_entry(content, cite_key, bibtex_code)
             action = "updated"
         else:
             content_stripped = content.rstrip()
@@ -416,9 +419,7 @@ class BibManagerService:
             action = "appended"
 
         atomic_write(full_path, new_content)
-        self._logger.info(
-            f"BibTeX entry {action} in {file_path}: cite_key={cite_key}"
-        )
+        self._logger.info(f"BibTeX entry {action} in {file_path}: cite_key={cite_key}")
         return {"status": "ok", "action": action, "cite_key": cite_key}
 
     def list_bib_files(self, workspace_id: str = "") -> dict[str, Any]:
@@ -458,9 +459,7 @@ class BibManagerService:
 
         return missing
 
-    def _replace_bib_entry(
-        self, content: str, cite_key: str, new_bibtex: str
-    ) -> str:
+    def _replace_bib_entry(self, content: str, cite_key: str, new_bibtex: str) -> str:
         """在 .bib 文件中替换指定 cite_key 的条目。"""
         in_entry = False
         brace_count = 0
@@ -517,14 +516,15 @@ class BibManagerService:
             try:
                 with open(f, "r", encoding="utf-8") as fh:
                     data = json.load(fh)
-                formats.append({
-                    "name": name,
-                    "format_name": data.get("format_name", name),
-                    "entry_type": data.get("entry_type", ""),
-                })
-            except Exception:
                 formats.append(
-                    {"name": name, "format_name": name, "entry_type": ""})
+                    {
+                        "name": name,
+                        "format_name": data.get("format_name", name),
+                        "entry_type": data.get("entry_type", ""),
+                    }
+                )
+            except Exception:
+                formats.append({"name": name, "format_name": name, "entry_type": ""})
         return {"formats": formats}
 
     def load_format(self, name: str) -> dict[str, Any] | None:
@@ -578,8 +578,7 @@ class BibManagerService:
             new_width = int(width * ratio)
             new_height = int(height * ratio)
             img = img.resize((new_width, new_height), Image.LANCZOS)
-            self._logger.info(
-                f"Resized image: {(width, height)} -> {img.size}")
+            self._logger.info(f"Resized image: {(width, height)} -> {img.size}")
 
         return img
 

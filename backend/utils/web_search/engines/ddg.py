@@ -53,10 +53,10 @@ class DDGChallengeError(Exception):
         attempts_left: int = 3,
     ):
         self.challenge_id = challenge_id
-        self.images = images          # [{"hash": "...", "base64": "..."}]
+        self.images = images  # [{"hash": "...", "base64": "..."}]
         self.query = query
         self.submission_url = submission_url
-        self.form_data = form_data    # 额外的隐藏表单字段
+        self.form_data = form_data  # 额外的隐藏表单字段
         self.engine_name = engine_name  # 引擎显示名称（如 DuckDuckGo）
         self.instruction = instruction  # 引擎特定的验证提示文字
         self.attempts_left = attempts_left
@@ -95,7 +95,11 @@ def remove_challenge(challenge_id: str) -> None:
 def _cleanup_challenge_store() -> None:
     """清理过期 challenge。"""
     now = time.monotonic()
-    expired = [k for k, v in _challenge_store.items() if now - v["created_at"] > _DD_CHALLENGE_TTL]
+    expired = [
+        k
+        for k, v in _challenge_store.items()
+        if now - v["created_at"] > _DD_CHALLENGE_TTL
+    ]
     for k in expired:
         _challenge_store.pop(k, None)
 
@@ -189,7 +193,9 @@ class DuckDuckGoHtmlEngine(BaseSearchEngine):
 
     # ── 结果解析 ──────────────────────────────────────────────────────
 
-    def _parse_results(self, html: str, query: str, max_results: int = 5) -> SearchResponse:
+    def _parse_results(
+        self, html: str, query: str, max_results: int = 5
+    ) -> SearchResponse:
         """从 DDG HTML 页面提取搜索结果。"""
         soup = BeautifulSoup(html, "lxml")
         results: list[SearchResult] = []
@@ -204,11 +210,13 @@ class DuckDuckGoHtmlEngine(BaseSearchEngine):
             if url.startswith("//duckduckgo.com/l/"):
                 # 跳过广告等重定向链接
                 continue
-            results.append(SearchResult(
-                title=title_el.get_text(strip=True),
-                url=url,
-                snippet=snippet_el.get_text(strip=True) if snippet_el else "",
-            ))
+            results.append(
+                SearchResult(
+                    title=title_el.get_text(strip=True),
+                    url=url,
+                    snippet=snippet_el.get_text(strip=True) if snippet_el else "",
+                )
+            )
 
         self._logger.info(f"DDG parsed {len(results)} results for: {query[:40]}")
         return SearchResponse(
@@ -287,18 +295,20 @@ class DuckDuckGoHtmlEngine(BaseSearchEngine):
             if name and name not in ("gk", "challenge-submit"):
                 form_data[name] = val
 
-        challenge_id = _store_challenge({
-            "query": query,
-            "gk": gk,
-            "image_hashes": image_hashes,
-            "encoded_state": encoded_state,
-            "region": region,
-            "cc": cc,
-            "p": p_str,
-            "q_param": q_param,
-            "base_params": base_params,
-            "form_data": form_data,
-        })
+        challenge_id = _store_challenge(
+            {
+                "query": query,
+                "gk": gk,
+                "image_hashes": image_hashes,
+                "encoded_state": encoded_state,
+                "region": region,
+                "cc": cc,
+                "p": p_str,
+                "q_param": q_param,
+                "base_params": base_params,
+                "form_data": form_data,
+            }
+        )
 
         return DDGChallengeError(
             challenge_id=challenge_id,
@@ -326,7 +336,9 @@ class DuckDuckGoHtmlEngine(BaseSearchEngine):
                     b64 = base64.b64encode(resp.content).decode("ascii")
                     images.append({"hash": h, "base64": b64})
                 else:
-                    self._logger.warning(f"DDG image fetch failed: {h} status={resp.status_code}")
+                    self._logger.warning(
+                        f"DDG image fetch failed: {h} status={resp.status_code}"
+                    )
             except Exception as e:
                 self._logger.warning(f"DDG image fetch error: {h} {e}")
         return images
@@ -396,7 +408,10 @@ class DuckDuckGoHtmlEngine(BaseSearchEngine):
             await client.aclose()
 
         if resp.status_code != 200:
-            return {"success": False, "message": f"DDG returned HTTP {resp.status_code}"}
+            return {
+                "success": False,
+                "message": f"DDG returned HTTP {resp.status_code}",
+            }
 
         text = resp.text
 
@@ -431,11 +446,13 @@ class DuckDuckGoHtmlEngine(BaseSearchEngine):
             url = title_el.get("href", "")
             if url.startswith("//duckduckgo.com/l/"):
                 continue
-            results.append({
-                "title": title_el.get_text(strip=True),
-                "url": url,
-                "snippet": snippet_el.get_text(strip=True) if snippet_el else "",
-            })
+            results.append(
+                {
+                    "title": title_el.get_text(strip=True),
+                    "url": url,
+                    "snippet": snippet_el.get_text(strip=True) if snippet_el else "",
+                }
+            )
 
         return {"success": True, "results": results}
 
@@ -445,5 +462,6 @@ class DuckDuckGoHtmlEngine(BaseSearchEngine):
 
 class DDGChallengeSubmitRequest(BaseModel):
     """提交 DDG 验证码解答。"""
+
     challenge_id: str
     selected_hashes: list[str]

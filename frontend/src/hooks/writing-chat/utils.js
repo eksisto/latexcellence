@@ -8,12 +8,17 @@
 export function parseThinking(rawText) {
   const thinkOpen = rawText.indexOf("<thinking>");
   if (thinkOpen === -1) {
-    return { thinking: "", display: rawText, thinkingOpen: false, thinkingClosed: true };
+    return {
+      thinking: "",
+      display: rawText,
+      thinkingOpen: false,
+      thinkingClosed: true,
+    };
   }
   const thinkClose = rawText.indexOf("</thinking>", thinkOpen + 10);
   const thinking = rawText.slice(
     thinkOpen + 10,
-    thinkClose !== -1 ? thinkClose : undefined
+    thinkClose !== -1 ? thinkClose : undefined,
   );
   const beforeThink = rawText.slice(0, thinkOpen);
   const afterThink = thinkClose !== -1 ? rawText.slice(thinkClose + 11) : "";
@@ -54,12 +59,13 @@ export const DRAFT_PREFIX = "__draft__";
 /**
  * 判断是否为草稿会话。
  */
-export const isDraftSession = (id) => typeof id === "string" && id.startsWith(DRAFT_PREFIX);
+export const isDraftSession = (id) =>
+  typeof id === "string" && id.startsWith(DRAFT_PREFIX);
 
 /**
  * 生成唯一 ID。
  */
 export const uid = () =>
-  (typeof crypto !== "undefined" && crypto.randomUUID
+  typeof crypto !== "undefined" && crypto.randomUUID
     ? crypto.randomUUID()
-    : Math.random().toString(36).slice(2) + Date.now().toString(36));
+    : Math.random().toString(36).slice(2) + Date.now().toString(36);

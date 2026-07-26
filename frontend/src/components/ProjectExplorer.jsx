@@ -16,7 +16,8 @@ function getFileIcon(name, isDir, isExpanded) {
     const Icon = isExpanded ? FolderOpen : Folder;
     return <Icon className="size-4 text-muted-foreground" />;
   }
-  if (name.endsWith(".tex")) return <FileText className="size-4 text-muted-foreground" />;
+  if (name.endsWith(".tex"))
+    return <FileText className="size-4 text-muted-foreground" />;
   if (/\.(png|jpg|jpeg|webp|pdf)$/i.test(name))
     return <Image className="size-4 text-muted-foreground" />;
   return <File className="size-4 text-muted-foreground" />;
@@ -32,7 +33,7 @@ function TreeNode({ node, depth = 0, expandedDirs, onToggleDir, onSelect }) {
       <button
         className={cn(
           "flex items-center gap-1.5 w-full rounded-md px-2 py-1 text-sm text-left",
-          "hover:bg-muted"
+          "hover:bg-muted",
         )}
         style={{ paddingLeft: `${depth * 16 + 8}px` }}
         onClick={() => {
@@ -46,7 +47,7 @@ function TreeNode({ node, depth = 0, expandedDirs, onToggleDir, onSelect }) {
         <ChevronRight
           className={cn(
             "size-3 text-muted-foreground shrink-0 transition-transform duration-200 ease-out",
-            isDir ? (isExpanded && "rotate-90") : "invisible"
+            isDir ? isExpanded && "rotate-90" : "invisible",
           )}
         />
         {getFileIcon(node.name, isDir, isExpanded)}

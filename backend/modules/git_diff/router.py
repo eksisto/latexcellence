@@ -11,7 +11,6 @@ from backend.modules.git_diff.service import (
     render_diff_pdf,
 )
 
-
 router = APIRouter(prefix="/api/git-diff", tags=["git-diff"])
 logger = get_logger(__name__)
 
@@ -46,7 +45,10 @@ async def get_refs(workspace_id: str = Query(..., description="工作区唯一�
 
 
 @router.post("/render-pdf")
-async def render_pdf(request: DiffRenderRequest, workspace_id: str = Query(..., description="工作区唯一标识符")):
+async def render_pdf(
+    request: DiffRenderRequest,
+    workspace_id: str = Query(..., description="工作区唯一标识符"),
+):
     """生成差异高亮 PDF。"""
 
     try:

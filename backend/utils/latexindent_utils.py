@@ -22,7 +22,9 @@ def is_latexindent_available() -> bool:
     try:
         result = subprocess.run(
             ["latexindent", "--version"],
-            capture_output=True, text=True, timeout=5,
+            capture_output=True,
+            text=True,
+            timeout=5,
         )
         return result.returncode == 0
     except (FileNotFoundError, subprocess.TimeoutExpired):
@@ -57,7 +59,8 @@ async def format_with_latexindent(
         def _run() -> str:
             result = subprocess.run(
                 cmd,
-                capture_output=True, text=True,
+                capture_output=True,
+                text=True,
                 timeout=_LATEXINDENT_TIMEOUT,
             )
             if result.returncode != 0:

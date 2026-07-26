@@ -112,32 +112,48 @@ export default function BibManagerPage() {
       const data = await api.bibManager.analyzeFormat(example.trim());
       setFormatResult(data);
       if (data.confidence === "low") {
-        toast.warning(t("pages:bibManager.lowConfidence", { name: data.format_name }), {
-          description: t("pages:bibManager.lowConfidenceHint"),
-        });
+        toast.warning(
+          t("pages:bibManager.lowConfidence", { name: data.format_name }),
+          {
+            description: t("pages:bibManager.lowConfidenceHint"),
+          },
+        );
       } else {
-        toast.success(t("pages:bibManager.analyzeFormatSuccess", { name: data.format_name }));
+        toast.success(
+          t("pages:bibManager.analyzeFormatSuccess", {
+            name: data.format_name,
+          }),
+        );
       }
     } catch (e) {
-      toast.error(t("pages:bibManager.analyzeFormatFailed"), { description: e.message });
+      toast.error(t("pages:bibManager.analyzeFormatFailed"), {
+        description: e.message,
+      });
     } finally {
       setStep1Loading(false);
     }
   }, [example, t]);
 
   // Format loading / editing / saving
-  const handleLoadSavedFormat = useCallback(async (name) => {
-    if (!name) return;
-    try {
-      const data = await api.bibManager.formats.load(name);
-      setFormatResult(data);
-      setEditedFormatInfo(data);
-      setSelectedFormatName(name);
-      toast.success(t("pages:bibManager.loadFormatSuccess", { name: data.format_name }));
-    } catch (e) {
-      toast.error(t("pages:bibManager.loadFormatFailed"), { description: e.message });
-    }
-  }, [t]);
+  const handleLoadSavedFormat = useCallback(
+    async (name) => {
+      if (!name) return;
+      try {
+        const data = await api.bibManager.formats.load(name);
+        setFormatResult(data);
+        setEditedFormatInfo(data);
+        setSelectedFormatName(name);
+        toast.success(
+          t("pages:bibManager.loadFormatSuccess", { name: data.format_name }),
+        );
+      } catch (e) {
+        toast.error(t("pages:bibManager.loadFormatFailed"), {
+          description: e.message,
+        });
+      }
+    },
+    [t],
+  );
 
   const handleStartEditFormat = useCallback(() => {
     if (formatResult) {
@@ -167,7 +183,9 @@ export default function BibManagerPage() {
         .filter(Boolean);
     }
     if (typeof parsed.field_descriptions === "string") {
-      try { parsed.field_descriptions = JSON.parse(parsed.field_descriptions); } catch {}
+      try {
+        parsed.field_descriptions = JSON.parse(parsed.field_descriptions);
+      } catch {}
     }
     setFormatResult(parsed);
     setIsEditingFormat(false);
@@ -177,31 +195,44 @@ export default function BibManagerPage() {
   const handleSaveFormatAs = useCallback(async () => {
     if (!formatResult) return;
     const rawName = (formatResult.format_name || "unnamed").trim();
-    const safeName = rawName.replace(/[<>:"/\\|?*\x00-\x1f]/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "") || "unnamed";
+    const safeName =
+      rawName
+        .replace(/[<>:"/\\|?*\x00-\x1f]/g, "-")
+        .replace(/-+/g, "-")
+        .replace(/^-|-$/g, "") || "unnamed";
     setSavingFormat(true);
     try {
       const result = await api.bibManager.formats.save(safeName, formatResult);
-      toast.success(t("pages:bibManager.saveFormatSuccess", { name: result.name }));
+      toast.success(
+        t("pages:bibManager.saveFormatSuccess", { name: result.name }),
+      );
       const listData = await api.bibManager.formats.list();
       setSavedFormats(listData.formats || []);
     } catch (e) {
-      toast.error(t("pages:bibManager.saveFormatFailed"), { description: e.message });
+      toast.error(t("pages:bibManager.saveFormatFailed"), {
+        description: e.message,
+      });
     } finally {
       setSavingFormat(false);
     }
   }, [formatResult, t]);
 
-  const handleDeleteFormat = useCallback(async (name) => {
-    try {
-      await api.bibManager.formats.delete(name);
-      toast.success(t("pages:bibManager.deleteFormatSuccess", { name }));
-      if (selectedFormatName === name) setSelectedFormatName("");
-      const listData = await api.bibManager.formats.list();
-      setSavedFormats(listData.formats || []);
-    } catch (e) {
-      toast.error(t("pages:bibManager.deleteFormatFailed"), { description: e.message });
-    }
-  }, [selectedFormatName, t]);
+  const handleDeleteFormat = useCallback(
+    async (name) => {
+      try {
+        await api.bibManager.formats.delete(name);
+        toast.success(t("pages:bibManager.deleteFormatSuccess", { name }));
+        if (selectedFormatName === name) setSelectedFormatName("");
+        const listData = await api.bibManager.formats.list();
+        setSavedFormats(listData.formats || []);
+      } catch (e) {
+        toast.error(t("pages:bibManager.deleteFormatFailed"), {
+          description: e.message,
+        });
+      }
+    },
+    [selectedFormatName, t],
+  );
 
   // Step 2: extract metadata
   const handleExtractMetadata = useCallback(async () => {
@@ -230,12 +261,13 @@ export default function BibManagerPage() {
       if (data.missing_fields?.length > 0) {
         for (const field of data.missing_fields) {
           const fieldInfo = formatResult?.field_descriptions?.[field];
-          const label = fieldInfo
-            ? fieldInfo.split("\uFF08")[0]
-            : field;
-          toast.warning(t("pages:bibManager.step2MissingFieldWarning", { field: label }), {
-            description: t("pages:bibManager.step2MissingFieldDesc"),
-          });
+          const label = fieldInfo ? fieldInfo.split("\uFF08")[0] : field;
+          toast.warning(
+            t("pages:bibManager.step2MissingFieldWarning", { field: label }),
+            {
+              description: t("pages:bibManager.step2MissingFieldDesc"),
+            },
+          );
         }
         setMissingFields(data.missing_fields);
       }
@@ -244,7 +276,9 @@ export default function BibManagerPage() {
       setEditedMetadata({ ...data.fields });
       toast.success(t("pages:bibManager.step2Success"));
     } catch (e) {
-      toast.error(t("pages:bibManager.step2Failed"), { description: e.message });
+      toast.error(t("pages:bibManager.step2Failed"), {
+        description: e.message,
+      });
     } finally {
       setStep2Loading(false);
     }
@@ -292,7 +326,9 @@ export default function BibManagerPage() {
       prevCiteKeyRef.current = data.cite_key;
       toast.success(t("pages:bibManager.step3Success"));
     } catch (e) {
-      toast.error(t("pages:bibManager.step3Failed"), { description: e.message });
+      toast.error(t("pages:bibManager.step3Failed"), {
+        description: e.message,
+      });
     } finally {
       setStep3Loading(false);
     }
@@ -304,7 +340,12 @@ export default function BibManagerPage() {
     const newKey = editedCiteKey.trim();
     if (!editedBibtex || !newKey || !prevKey || newKey === prevKey) return;
     setEditedBibtex((prev) =>
-      prev.replace(new RegExp(`@(\\w+)\\{${prevKey.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")},`), `@$1{${newKey},`),
+      prev.replace(
+        new RegExp(
+          `@(\\w+)\\{${prevKey.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")},`,
+        ),
+        `@$1{${newKey},`,
+      ),
     );
     prevCiteKeyRef.current = newKey;
   }, [editedCiteKey]);
@@ -335,7 +376,9 @@ export default function BibManagerPage() {
       setLatexResult(data);
       toast.success(t("pages:bibManager.step5Success"));
     } catch (e) {
-      toast.error(t("pages:bibManager.step5Failed"), { description: e.message });
+      toast.error(t("pages:bibManager.step5Failed"), {
+        description: e.message,
+      });
     } finally {
       setStep5Loading(false);
     }
@@ -354,30 +397,49 @@ export default function BibManagerPage() {
     if (!editedBibtex.trim() || !selectedBibFile) return;
     setSaving(true);
     try {
-      const data = await api.bibManager.save({
-        file_path: selectedBibFile,
-        bibtex_code: editedBibtex.trim(),
-        cite_key: editedCiteKey,
-      }, workspaceId);
-      const actionKey = data.action === "updated" ? "step4Updated" : "step4Appended";
-      toast.success(t("pages:bibManager.step4SaveSuccess", { action: t(`pages:bibManager.${actionKey}`), file: selectedBibFile }));
+      const data = await api.bibManager.save(
+        {
+          file_path: selectedBibFile,
+          bibtex_code: editedBibtex.trim(),
+          cite_key: editedCiteKey,
+        },
+        workspaceId,
+      );
+      const actionKey =
+        data.action === "updated" ? "step4Updated" : "step4Appended";
+      toast.success(
+        t("pages:bibManager.step4SaveSuccess", {
+          action: t(`pages:bibManager.${actionKey}`),
+          file: selectedBibFile,
+        }),
+      );
     } catch (e) {
-      toast.error(t("pages:bibManager.step4SaveFailed"), { description: e.message });
+      toast.error(t("pages:bibManager.step4SaveFailed"), {
+        description: e.message,
+      });
     } finally {
       setSaving(false);
     }
   }, [editedBibtex, editedCiteKey, selectedBibFile, t]);
 
-  const hasResult = formatResult || metadataResult || bibtexResult || latexResult;
+  const hasResult =
+    formatResult || metadataResult || bibtexResult || latexResult;
 
   return (
     <div className="min-h-screen p-8">
       <div className="max-w-6xl mx-auto mb-8">
         <div className="flex items-center gap-4">
-          <Button variant="ghost" size="icon" nativeButton={false} render={<Link to="/" />}>
+          <Button
+            variant="ghost"
+            size="icon"
+            nativeButton={false}
+            render={<Link to="/" />}
+          >
             <ArrowLeft />
           </Button>
-          <h1 className="text-3xl font-bold tracking-tight">{t("pages:bibManager.title")}</h1>
+          <h1 className="text-3xl font-bold tracking-tight">
+            {t("pages:bibManager.title")}
+          </h1>
         </div>
       </div>
 
@@ -391,7 +453,11 @@ export default function BibManagerPage() {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <Button className="w-full" nativeButton={false} render={<Link to="/workspace" />}>
+              <Button
+                className="w-full"
+                nativeButton={false}
+                render={<Link to="/workspace" />}
+              >
                 {t("common:openWorkspace")}
               </Button>
             </CardContent>
@@ -403,10 +469,10 @@ export default function BibManagerPage() {
           <Card>
             <CardHeader className="pb-2">
               <div className="flex items-center gap-2">
-                <span className="text-primary text-sm font-bold mr-1">
-                  1
-                </span>
-                <CardTitle className="text-base">{t("pages:bibManager.step1Title")}</CardTitle>
+                <span className="text-primary text-sm font-bold mr-1">1</span>
+                <CardTitle className="text-base">
+                  {t("pages:bibManager.step1Title")}
+                </CardTitle>
               </div>
               <CardDescription>
                 {t("pages:bibManager.step1Desc")}
@@ -415,14 +481,22 @@ export default function BibManagerPage() {
             <CardContent className="space-y-3">
               {savedFormats.length > 0 && (
                 <div className="space-y-1.5">
-                  <Label className="text-xs">{t("pages:bibManager.loadSavedFormat")}</Label>
+                  <Label className="text-xs">
+                    {t("pages:bibManager.loadSavedFormat")}
+                  </Label>
                   <div className="flex items-center gap-2">
-                    <Select value={selectedFormatName} onValueChange={handleLoadSavedFormat}>
+                    <Select
+                      value={selectedFormatName}
+                      onValueChange={handleLoadSavedFormat}
+                    >
                       <SelectTrigger className="min-w-48">
-                        <SelectValue placeholder={t("pages:bibManager.selectSavedFormat")}>
+                        <SelectValue
+                          placeholder={t("pages:bibManager.selectSavedFormat")}
+                        >
                           {selectedFormatName
-                            ? (savedFormats.find((f) => f.name === selectedFormatName)
-                                ?.format_name || selectedFormatName)
+                            ? savedFormats.find(
+                                (f) => f.name === selectedFormatName,
+                              )?.format_name || selectedFormatName
                             : null}
                         </SelectValue>
                       </SelectTrigger>
@@ -468,7 +542,9 @@ export default function BibManagerPage() {
                 ) : (
                   <Search />
                 )}
-                {step1Loading ? t("pages:bibManager.step1BtnLoading") : t("pages:bibManager.step1Btn")}
+                {step1Loading
+                  ? t("pages:bibManager.step1BtnLoading")
+                  : t("pages:bibManager.step1Btn")}
               </Button>
 
               {formatResult && (
@@ -477,7 +553,9 @@ export default function BibManagerPage() {
                     <>
                       <div className="grid grid-cols-2 gap-3">
                         <div className="space-y-1">
-                          <Label className="text-xs">{t("pages:bibManager.formatName")}</Label>
+                          <Label className="text-xs">
+                            {t("pages:bibManager.formatName")}
+                          </Label>
                           <Input
                             className="h-8 text-xs"
                             value={editedFormatInfo.format_name || ""}
@@ -490,7 +568,9 @@ export default function BibManagerPage() {
                           />
                         </div>
                         <div className="space-y-1">
-                          <Label className="text-xs">{t("pages:bibManager.bibtexType")}</Label>
+                          <Label className="text-xs">
+                            {t("pages:bibManager.bibtexType")}
+                          </Label>
                           <Input
                             className="h-8 text-xs"
                             value={editedFormatInfo.entry_type || ""}
@@ -504,7 +584,9 @@ export default function BibManagerPage() {
                         </div>
                       </div>
                       <div className="space-y-1">
-                        <Label className="text-xs">{t("pages:bibManager.requiredFields")}</Label>
+                        <Label className="text-xs">
+                          {t("pages:bibManager.requiredFields")}
+                        </Label>
                         <Input
                           className="h-8 text-xs"
                           value={
@@ -521,7 +603,9 @@ export default function BibManagerPage() {
                         />
                       </div>
                       <div className="space-y-1">
-                        <Label className="text-xs">{t("pages:bibManager.optionalFields")}</Label>
+                        <Label className="text-xs">
+                          {t("pages:bibManager.optionalFields")}
+                        </Label>
                         <Input
                           className="h-8 text-xs"
                           value={
@@ -615,7 +699,8 @@ export default function BibManagerPage() {
                                 {t("pages:bibManager.withPackage")}
                               </span>
                               <span className="text-xs font-mono">
-                                {" "}{formatResult.latex_package}
+                                {" "}
+                                {formatResult.latex_package}
                               </span>
                               <span className="text-xs text-muted-foreground">
                                 ）
@@ -663,10 +748,10 @@ export default function BibManagerPage() {
           <Card>
             <CardHeader className="pb-2">
               <div className="flex items-center gap-2">
-                <span className="text-primary text-sm font-bold mr-1">
-                  2
-                </span>
-                <CardTitle className="text-base">{t("pages:bibManager.step2Title")}</CardTitle>
+                <span className="text-primary text-sm font-bold mr-1">2</span>
+                <CardTitle className="text-base">
+                  {t("pages:bibManager.step2Title")}
+                </CardTitle>
               </div>
               <CardDescription>
                 {t("pages:bibManager.step2Desc")}
@@ -681,7 +766,9 @@ export default function BibManagerPage() {
               />
 
               <div className="flex items-center gap-3">
-                <span className="text-xs text-muted-foreground">{t("pages:bibManager.step2Or")}</span>
+                <span className="text-xs text-muted-foreground">
+                  {t("pages:bibManager.step2Or")}
+                </span>
                 <label className="cursor-pointer inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors">
                   <Upload className="size-4" />
                   {t("pages:bibManager.step2Upload")}
@@ -703,7 +790,12 @@ export default function BibManagerPage() {
                     <span className="text-xs text-muted-foreground truncate max-w-40">
                       {metadataImage?.name}
                     </span>
-                    <Button variant="ghost" size="icon" className="size-6" onClick={handleClearImage}>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="size-6"
+                      onClick={handleClearImage}
+                    >
                       <X className="size-3" />
                     </Button>
                   </div>
@@ -712,64 +804,83 @@ export default function BibManagerPage() {
 
               <Button
                 onClick={handleExtractMetadata}
-                disabled={step2Loading || (!metadataText.trim() && !metadataImage)}
+                disabled={
+                  step2Loading || (!metadataText.trim() && !metadataImage)
+                }
               >
                 {step2Loading ? (
                   <Loader2 className="animate-spin" />
                 ) : (
                   <FileText />
                 )}
-                {step2Loading ? t("pages:bibManager.step2BtnLoading") : t("pages:bibManager.step2Btn")}
+                {step2Loading
+                  ? t("pages:bibManager.step2BtnLoading")
+                  : t("pages:bibManager.step2Btn")}
               </Button>
 
               {editedMetadata && (
                 <div className="rounded-lg border border-border p-4 space-y-3 mt-2">
                   <div className="flex items-center justify-between">
-                    <span className="text-sm font-medium">{t("pages:bibManager.step2ResultTitle")}</span>
+                    <span className="text-sm font-medium">
+                      {t("pages:bibManager.step2ResultTitle")}
+                    </span>
                     {missingFields.length > 0 && (
                       <span className="text-xs text-destructive">
-                        {t("pages:bibManager.step2MissingFields", { count: missingFields.length })}
+                        {t("pages:bibManager.step2MissingFields", {
+                          count: missingFields.length,
+                        })}
                       </span>
                     )}
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    {editedMetadata && Object.keys(editedMetadata).map((fieldKey) => {
-                      const isMissing = missingFields.includes(fieldKey);
-                      const desc = formatResult?.field_descriptions?.[fieldKey];
-                      const label = desc || fieldKey;
-                      const value = editedMetadata[fieldKey] || "";
-                      const isLong = value.length > 80 || fieldKey.includes("abstract") || (desc && (desc.includes("\u6458\u8981") || desc.includes("\u8BF4\u660E")));
-                      return (
-                        <div key={fieldKey} className="space-y-1">
-                          <Label className={`text-xs ${isMissing ? "text-destructive" : ""}`}>
-                            {label}
-                            {isMissing && (
-                              <span className="ml-1 text-destructive">*</span>
+                    {editedMetadata &&
+                      Object.keys(editedMetadata).map((fieldKey) => {
+                        const isMissing = missingFields.includes(fieldKey);
+                        const desc =
+                          formatResult?.field_descriptions?.[fieldKey];
+                        const label = desc || fieldKey;
+                        const value = editedMetadata[fieldKey] || "";
+                        const isLong =
+                          value.length > 80 ||
+                          fieldKey.includes("abstract") ||
+                          (desc &&
+                            (desc.includes("\u6458\u8981") ||
+                              desc.includes("\u8BF4\u660E")));
+                        return (
+                          <div key={fieldKey} className="space-y-1">
+                            <Label
+                              className={`text-xs ${isMissing ? "text-destructive" : ""}`}
+                            >
+                              {label}
+                              {isMissing && (
+                                <span className="ml-1 text-destructive">*</span>
+                              )}
+                            </Label>
+                            {isLong ? (
+                              <Textarea
+                                className="min-h-16 resize-none text-xs"
+                                value={value}
+                                onChange={(e) =>
+                                  handleMetadataEdit(fieldKey, e.target.value)
+                                }
+                              />
+                            ) : (
+                              <Input
+                                className={`h-8 text-xs ${isMissing ? "border-destructive" : ""}`}
+                                value={value}
+                                onChange={(e) =>
+                                  handleMetadataEdit(fieldKey, e.target.value)
+                                }
+                                placeholder={
+                                  isMissing
+                                    ? t("pages:bibManager.step2FieldMissing")
+                                    : ""
+                                }
+                              />
                             )}
-                          </Label>
-                          {isLong ? (
-                            <Textarea
-                              className="min-h-16 resize-none text-xs"
-                              value={value}
-                              onChange={(e) =>
-                                handleMetadataEdit(fieldKey, e.target.value)
-                              }
-                            />
-                          ) : (
-                            <Input
-                              className={`h-8 text-xs ${isMissing ? "border-destructive" : ""}`}
-                              value={value}
-                              onChange={(e) =>
-                                handleMetadataEdit(fieldKey, e.target.value)
-                              }
-                              placeholder={
-                                isMissing ? t("pages:bibManager.step2FieldMissing") : ""
-                              }
-                            />
-                          )}
-                        </div>
-                      );
-                    })}
+                          </div>
+                        );
+                      })}
                   </div>
                 </div>
               )}
@@ -780,10 +891,10 @@ export default function BibManagerPage() {
           <Card>
             <CardHeader className="pb-2">
               <div className="flex items-center gap-2">
-                <span className="text-primary text-sm font-bold mr-1">
-                  3
-                </span>
-                <CardTitle className="text-base">{t("pages:bibManager.step3Title")}</CardTitle>
+                <span className="text-primary text-sm font-bold mr-1">3</span>
+                <CardTitle className="text-base">
+                  {t("pages:bibManager.step3Title")}
+                </CardTitle>
               </div>
               <CardDescription>
                 {t("pages:bibManager.step3Desc")}
@@ -799,22 +910,32 @@ export default function BibManagerPage() {
                 ) : (
                   <BookOpen />
                 )}
-                {step3Loading ? t("pages:bibManager.step3BtnLoading") : t("pages:bibManager.step3Btn")}
+                {step3Loading
+                  ? t("pages:bibManager.step3BtnLoading")
+                  : t("pages:bibManager.step3Btn")}
               </Button>
 
               {editedBibtex && (
                 <div className="rounded-lg border border-border p-4 space-y-3 mt-2">
                   <div className="flex items-center justify-between">
-                    <span className="text-sm font-medium">{t("pages:bibManager.step3ResultTitle")}</span>
+                    <span className="text-sm font-medium">
+                      {t("pages:bibManager.step3ResultTitle")}
+                    </span>
                     <div className="flex items-center gap-2">
-                      <Button variant="outline" size="sm" onClick={handleCopyBibtex}>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={handleCopyBibtex}
+                      >
                         <Copy />
                         {t("common:copy")}
                       </Button>
                     </div>
                   </div>
                   <div className="space-y-1.5">
-                    <Label className="text-xs">{t("pages:bibManager.step3CiteKeyLabel")}</Label>
+                    <Label className="text-xs">
+                      {t("pages:bibManager.step3CiteKeyLabel")}
+                    </Label>
                     <Input
                       className="h-8 text-xs font-mono"
                       value={editedCiteKey}
@@ -836,10 +957,10 @@ export default function BibManagerPage() {
             <Card>
               <CardHeader className="pb-2">
                 <div className="flex items-center gap-2">
-                  <span className="text-primary text-sm font-bold mr-1">
-                    4
-                  </span>
-                  <CardTitle className="text-base">{t("pages:bibManager.step4Title")}</CardTitle>
+                  <span className="text-primary text-sm font-bold mr-1">4</span>
+                  <CardTitle className="text-base">
+                    {t("pages:bibManager.step4Title")}
+                  </CardTitle>
                 </div>
                 <CardDescription>
                   {t("pages:bibManager.step4Desc")}
@@ -853,10 +974,19 @@ export default function BibManagerPage() {
                 ) : (
                   <div className="space-y-3">
                     <div className="space-y-1.5">
-                      <Label className="text-xs">{t("pages:bibManager.step4SelectBibFile")}</Label>
-                      <Select value={selectedBibFile} onValueChange={setSelectedBibFile}>
+                      <Label className="text-xs">
+                        {t("pages:bibManager.step4SelectBibFile")}
+                      </Label>
+                      <Select
+                        value={selectedBibFile}
+                        onValueChange={setSelectedBibFile}
+                      >
                         <SelectTrigger className="min-w-60">
-                          <SelectValue placeholder={t("pages:bibManager.step4SelectBibFile")} />
+                          <SelectValue
+                            placeholder={t(
+                              "pages:bibManager.step4SelectBibFile",
+                            )}
+                          />
                         </SelectTrigger>
                         <SelectContent>
                           {bibFiles.map((f) => (
@@ -869,14 +999,14 @@ export default function BibManagerPage() {
                     </div>
                     <Button
                       onClick={handleSaveBib}
-                      disabled={saving || !selectedBibFile || !editedBibtex.trim()}
+                      disabled={
+                        saving || !selectedBibFile || !editedBibtex.trim()
+                      }
                     >
-                      {saving ? (
-                        <Loader2 className="animate-spin" />
-                      ) : (
-                        <Save />
-                      )}
-                      {saving ? t("pages:bibManager.step4BtnLoading") : t("pages:bibManager.step4Btn")}
+                      {saving ? <Loader2 className="animate-spin" /> : <Save />}
+                      {saving
+                        ? t("pages:bibManager.step4BtnLoading")
+                        : t("pages:bibManager.step4Btn")}
                     </Button>
                   </div>
                 )}
@@ -889,10 +1019,10 @@ export default function BibManagerPage() {
             <Card>
               <CardHeader className="pb-2">
                 <div className="flex items-center gap-2">
-                  <span className="text-primary text-sm font-bold mr-1">
-                    5
-                  </span>
-                  <CardTitle className="text-base">{t("pages:bibManager.step5Title")}</CardTitle>
+                  <span className="text-primary text-sm font-bold mr-1">5</span>
+                  <CardTitle className="text-base">
+                    {t("pages:bibManager.step5Title")}
+                  </CardTitle>
                 </div>
                 <CardDescription>
                   {t("pages:bibManager.step5Desc")}
@@ -901,7 +1031,9 @@ export default function BibManagerPage() {
               <CardContent className="space-y-3">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div className="space-y-1.5">
-                    <Label className="text-xs">{t("pages:bibManager.step5BibFilePath")}</Label>
+                    <Label className="text-xs">
+                      {t("pages:bibManager.step5BibFilePath")}
+                    </Label>
                     <Input
                       className="h-8 text-xs font-mono"
                       value={bibFilePath}
@@ -911,30 +1043,37 @@ export default function BibManagerPage() {
                   </div>
                   {formatResult.latex_bibliographystyle && (
                     <div className="space-y-1.5">
-                      <Label className="text-xs">{t("pages:bibManager.step5RecommendedStyle")}</Label>
+                      <Label className="text-xs">
+                        {t("pages:bibManager.step5RecommendedStyle")}
+                      </Label>
                       <div className="h-8 flex items-center text-xs font-mono bg-muted/50 rounded px-2">
                         {formatResult.latex_bibliographystyle}
                       </div>
                     </div>
                   )}
                 </div>
-                <Button
-                  onClick={handleGenerateLatex}
-                  disabled={step5Loading}
-                >
+                <Button onClick={handleGenerateLatex} disabled={step5Loading}>
                   {step5Loading ? (
                     <Loader2 className="animate-spin" />
                   ) : (
                     <FileText />
                   )}
-                  {step5Loading ? t("pages:bibManager.step5BtnLoading") : t("pages:bibManager.step5Btn")}
+                  {step5Loading
+                    ? t("pages:bibManager.step5BtnLoading")
+                    : t("pages:bibManager.step5Btn")}
                 </Button>
 
                 {latexResult && (
                   <div className="rounded-lg border border-border p-4 space-y-3 mt-2">
                     <div className="flex items-center justify-between">
-                      <span className="text-sm font-medium">{t("pages:bibManager.step5ResultTitle")}</span>
-                      <Button variant="outline" size="sm" onClick={handleCopyLatex}>
+                      <span className="text-sm font-medium">
+                        {t("pages:bibManager.step5ResultTitle")}
+                      </span>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={handleCopyLatex}
+                      >
                         <Copy />
                         {t("common:copy")}
                       </Button>

@@ -27,7 +27,6 @@ from backend.utils.compile_error_translator import (
     extract_key_errors,
 )
 
-
 # ── fixtures ───────────────────────────────────────────────────────────────
 
 
@@ -139,7 +138,9 @@ class TestExtractKeyErrors:
     """extract_key_errors 错误日志过滤测试。"""
 
     def test_extracts_undefined_control_sequence(self):
-        log = "Some preamble\n! Undefined control sequence.\nl.42 \\badcommand\nMore text"
+        log = (
+            "Some preamble\n! Undefined control sequence.\nl.42 \\badcommand\nMore text"
+        )
         result = extract_key_errors(log)
         assert "Undefined control sequence" in result
         assert "\\badcommand" in result
@@ -238,7 +239,9 @@ class TestCompileLatex:
     @pytest.mark.asyncio
     async def test_no_project_raises(self):
         """未打开项目时抛出 RuntimeError。"""
-        with patch("backend.modules.compile.service.get_project_manager_for_workspace") as mock_pm:
+        with patch(
+            "backend.modules.compile.service.get_project_manager_for_workspace"
+        ) as mock_pm:
             mock_pm.return_value = MagicMock(is_open=False)
             with pytest.raises(RuntimeError, match="No project opened"):
                 await compile_latex("main.tex")
@@ -246,15 +249,23 @@ class TestCompileLatex:
     @pytest.mark.asyncio
     async def test_file_not_found(self, mock_project):
         """主文件不存在时抛出 FileNotFoundError。"""
-        with patch("backend.modules.compile.service.get_project_manager_for_workspace", return_value=mock_project):
+        with patch(
+            "backend.modules.compile.service.get_project_manager_for_workspace",
+            return_value=mock_project,
+        ):
             with pytest.raises(FileNotFoundError, match="not found"):
                 await compile_latex("nonexistent.tex")
 
     @pytest.mark.asyncio
     async def test_compile_success(self, mock_project, mock_subprocess_success):
         """编译成功场景。"""
-        with patch("backend.modules.compile.service.get_project_manager_for_workspace", return_value=mock_project):
-            with patch("asyncio.create_subprocess_exec", return_value=mock_subprocess_success):
+        with patch(
+            "backend.modules.compile.service.get_project_manager_for_workspace",
+            return_value=mock_project,
+        ):
+            with patch(
+                "asyncio.create_subprocess_exec", return_value=mock_subprocess_success
+            ):
                 result = await compile_latex("main.tex")
 
         assert result.success is True
@@ -265,8 +276,13 @@ class TestCompileLatex:
         """编译超时场景。"""
         timeout_error = asyncio.TimeoutError()
 
-        with patch("backend.modules.compile.service.get_project_manager_for_workspace", return_value=mock_project):
-            with patch("asyncio.create_subprocess_exec", new_callable=AsyncMock) as mock_create:
+        with patch(
+            "backend.modules.compile.service.get_project_manager_for_workspace",
+            return_value=mock_project,
+        ):
+            with patch(
+                "asyncio.create_subprocess_exec", new_callable=AsyncMock
+            ) as mock_create:
                 mock_process = MagicMock()
                 mock_process.kill = MagicMock()
                 mock_process.communicate = AsyncMock(return_value=(b"", b"partial log"))
@@ -281,14 +297,26 @@ class TestCompileLatex:
         assert len(result.fixes) > 0
 
     @pytest.mark.asyncio
-    async def test_compile_failure_with_llm_translation(self, mock_project, mock_subprocess_failure):
+    async def test_compile_failure_with_llm_translation(
+        self, mock_project, mock_subprocess_failure
+    ):
         """编译失败 → LLM 翻译错误信息。"""
         mock_llm = MagicMock()
-        mock_llm.chat = AsyncMock(return_value='{"explanation": "未定义命令", "fixes": ["检查拼写"]}')
+        mock_llm.chat = AsyncMock(
+            return_value='{"explanation": "未定义命令", "fixes": ["检查拼写"]}'
+        )
 
-        with patch("backend.modules.compile.service.get_project_manager_for_workspace", return_value=mock_project):
-            with patch("asyncio.create_subprocess_exec", return_value=mock_subprocess_failure):
-                with patch("backend.utils.compile_error_translator.get_llm_client", return_value=mock_llm):
+        with patch(
+            "backend.modules.compile.service.get_project_manager_for_workspace",
+            return_value=mock_project,
+        ):
+            with patch(
+                "asyncio.create_subprocess_exec", return_value=mock_subprocess_failure
+            ):
+                with patch(
+                    "backend.utils.compile_error_translator.get_llm_client",
+                    return_value=mock_llm,
+                ):
                     result = await compile_latex("main.tex")
 
         assert result.success is False
@@ -298,14 +326,24 @@ class TestCompileLatex:
         mock_llm.chat.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_compile_failure_llm_translation_fails(self, mock_project, mock_subprocess_failure):
+    async def test_compile_failure_llm_translation_fails(
+        self, mock_project, mock_subprocess_failure
+    ):
         """编译失败 + LLM 翻译也失败时的回退。"""
         mock_llm = MagicMock()
         mock_llm.chat = AsyncMock(side_effect=RuntimeError("LLM offline"))
 
-        with patch("backend.modules.compile.service.get_project_manager_for_workspace", return_value=mock_project):
-            with patch("asyncio.create_subprocess_exec", return_value=mock_subprocess_failure):
-                with patch("backend.utils.compile_error_translator.get_llm_client", return_value=mock_llm):
+        with patch(
+            "backend.modules.compile.service.get_project_manager_for_workspace",
+            return_value=mock_project,
+        ):
+            with patch(
+                "asyncio.create_subprocess_exec", return_value=mock_subprocess_failure
+            ):
+                with patch(
+                    "backend.utils.compile_error_translator.get_llm_client",
+                    return_value=mock_llm,
+                ):
                     result = await compile_latex("main.tex")
 
         assert result.success is False
@@ -322,6 +360,7 @@ class TestCompileRouter:
     def client(self):
         from fastapi.testclient import TestClient
         from main import app
+
         return TestClient(app)
 
     def test_run_success(self, client):
@@ -332,9 +371,13 @@ class TestCompileRouter:
             stderr="",
         )
 
-        with patch("backend.modules.compile.router.compile_latex", new_callable=AsyncMock) as mock_compile:
+        with patch(
+            "backend.modules.compile.router.compile_latex", new_callable=AsyncMock
+        ) as mock_compile:
             mock_compile.return_value = mock_result
-            response = client.post("/api/compile/run?workspace_id=test", json={"main_file": "main.tex"})
+            response = client.post(
+                "/api/compile/run?workspace_id=test", json={"main_file": "main.tex"}
+            )
 
         assert response.status_code == 200
         data = response.json()
@@ -342,18 +385,26 @@ class TestCompileRouter:
 
     def test_run_no_project_returns_400(self, client):
         """无项目时返回 400。"""
-        with patch("backend.modules.compile.router.compile_latex", new_callable=AsyncMock) as mock_compile:
+        with patch(
+            "backend.modules.compile.router.compile_latex", new_callable=AsyncMock
+        ) as mock_compile:
             mock_compile.side_effect = RuntimeError("No project opened")
-            response = client.post("/api/compile/run?workspace_id=test", json={"main_file": "main.tex"})
+            response = client.post(
+                "/api/compile/run?workspace_id=test", json={"main_file": "main.tex"}
+            )
 
         assert response.status_code == 400
         assert "No project opened" in response.json()["detail"]
 
     def test_run_file_not_found_returns_404(self, client):
         """文件不存在时返回 404。"""
-        with patch("backend.modules.compile.router.compile_latex", new_callable=AsyncMock) as mock_compile:
+        with patch(
+            "backend.modules.compile.router.compile_latex", new_callable=AsyncMock
+        ) as mock_compile:
             mock_compile.side_effect = FileNotFoundError("not found")
-            response = client.post("/api/compile/run?workspace_id=test", json={"main_file": "missing.tex"})
+            response = client.post(
+                "/api/compile/run?workspace_id=test", json={"main_file": "missing.tex"}
+            )
 
         assert response.status_code == 404
 
@@ -366,9 +417,13 @@ class TestCompileRouter:
             fixes=["检查代码"],
         )
 
-        with patch("backend.modules.compile.router.compile_latex", new_callable=AsyncMock) as mock_compile:
+        with patch(
+            "backend.modules.compile.router.compile_latex", new_callable=AsyncMock
+        ) as mock_compile:
             mock_compile.return_value = mock_result
-            response = client.post("/api/compile/run?workspace_id=test", json={"main_file": "main.tex"})
+            response = client.post(
+                "/api/compile/run?workspace_id=test", json={"main_file": "main.tex"}
+            )
 
         assert response.status_code == 200
         data = response.json()
@@ -383,6 +438,7 @@ class TestCompilePdfEndpoint:
     def client(self):
         from fastapi.testclient import TestClient
         from main import app
+
         return TestClient(app)
 
     def test_pdf_served_when_exists(self, client):
@@ -404,7 +460,8 @@ class TestCompilePdfEndpoint:
                 return_value=pm,
             ):
                 response = client.get(
-                    "/api/compile/pdf", params={"main_file": "main.tex", "workspace_id": "test"}
+                    "/api/compile/pdf",
+                    params={"main_file": "main.tex", "workspace_id": "test"},
                 )
 
             assert response.status_code == 200
@@ -424,7 +481,8 @@ class TestCompilePdfEndpoint:
             return_value=pm,
         ):
             response = client.get(
-                "/api/compile/pdf", params={"main_file": "main.tex", "workspace_id": "test"}
+                "/api/compile/pdf",
+                params={"main_file": "main.tex", "workspace_id": "test"},
             )
 
         assert response.status_code == 400
@@ -444,7 +502,8 @@ class TestCompilePdfEndpoint:
                 return_value=pm,
             ):
                 response = client.get(
-                    "/api/compile/pdf", params={"main_file": "main.tex", "workspace_id": "test"}
+                    "/api/compile/pdf",
+                    params={"main_file": "main.tex", "workspace_id": "test"},
                 )
 
             assert response.status_code == 404
@@ -455,33 +514,39 @@ class TestCompileRequestValidation:
 
     def test_valid_request(self):
         from backend.modules.compile.router import CompileRequest
+
         req = CompileRequest(main_file="main.tex")
         assert req.main_file == "main.tex"
 
     def test_strips_whitespace(self):
         from backend.modules.compile.router import CompileRequest
+
         req = CompileRequest(main_file="  main.tex  ")
         assert req.main_file == "main.tex"
 
     def test_empty_rejected(self):
         from backend.modules.compile.router import CompileRequest
         from pydantic import ValidationError
+
         with pytest.raises(ValidationError):
             CompileRequest(main_file="")
 
     def test_starts_with_dash_rejected(self):
         from backend.modules.compile.router import CompileRequest
         from pydantic import ValidationError
+
         with pytest.raises(ValidationError):
             CompileRequest(main_file="--output=/tmp")
 
     def test_path_traversal_accepted_at_pydantic_level(self):
         from backend.modules.compile.router import CompileRequest
+
         req = CompileRequest(main_file="../evil.tex")
         assert req.main_file == "../evil.tex"
 
     def test_non_tex_accepted_at_pydantic_level(self):
         from backend.modules.compile.router import CompileRequest
+
         req = CompileRequest(main_file="main.pdf")
         assert req.main_file == "main.pdf"
 
@@ -493,6 +558,7 @@ class TestCompilePdfEndpointValidation:
     def client(self):
         from fastapi.testclient import TestClient
         from main import app
+
         return TestClient(app)
 
     def test_pdf_dangerous_main_file_rejected(self, client):
@@ -508,7 +574,10 @@ class TestCompilePdfEndpointValidation:
             ):
                 response = client.get(
                     "/api/compile/pdf",
-                    params={"main_file": "--output-directory=/tmp", "workspace_id": "test"},
+                    params={
+                        "main_file": "--output-directory=/tmp",
+                        "workspace_id": "test",
+                    },
                 )
 
             assert response.status_code == 400

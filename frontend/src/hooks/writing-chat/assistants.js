@@ -26,12 +26,16 @@ export function useWritingChatAssistants() {
         try {
           const d = await api.writingChat.assistants.load(active.name);
           setAssistantContent(d.content || "");
-        } catch { setAssistantContent(""); }
+        } catch {
+          setAssistantContent("");
+        }
       } else {
         setActiveAssistant("");
         setAssistantContent(null);
       }
-    } catch { /* silent */ }
+    } catch {
+      /* silent */
+    }
   }, []);
 
   useEffect(() => {
@@ -43,7 +47,9 @@ export function useWritingChatAssistants() {
     async (name) => {
       if (name === activeAssistant) {
         // 取消激活
-        try { await api.writingChat.assistants.setActive(""); } catch {}
+        try {
+          await api.writingChat.assistants.setActive("");
+        } catch {}
         setActiveAssistant("");
         setAssistantContent(null);
         return;
@@ -54,10 +60,12 @@ export function useWritingChatAssistants() {
         const d = await api.writingChat.assistants.load(name);
         setAssistantContent(d.content || "");
       } catch (e) {
-        toast.error(i18n.t("hooks:writingChat.switchAssistantFailed"), { description: e.message });
+        toast.error(i18n.t("hooks:writingChat.switchAssistantFailed"), {
+          description: e.message,
+        });
       }
     },
-    [activeAssistant]
+    [activeAssistant],
   );
 
   const saveAssistant = useCallback(
@@ -68,10 +76,12 @@ export function useWritingChatAssistants() {
         await refreshAssistants();
         toast.success(i18n.t("hooks:writingChat.assistantSaved"));
       } catch (e) {
-        toast.error(i18n.t("hooks:writingChat.saveAssistantFailed"), { description: e.message });
+        toast.error(i18n.t("hooks:writingChat.saveAssistantFailed"), {
+          description: e.message,
+        });
       }
     },
-    [refreshAssistants]
+    [refreshAssistants],
   );
 
   const deleteAssistant = useCallback(
@@ -84,10 +94,12 @@ export function useWritingChatAssistants() {
         }
         await refreshAssistants();
       } catch (e) {
-        toast.error(i18n.t("hooks:writingChat.deleteAssistantFailed"), { description: e.message });
+        toast.error(i18n.t("hooks:writingChat.deleteAssistantFailed"), {
+          description: e.message,
+        });
       }
     },
-    [activeAssistant, refreshAssistants]
+    [activeAssistant, refreshAssistants],
   );
 
   return {

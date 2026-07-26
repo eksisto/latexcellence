@@ -12,8 +12,6 @@
     project.open("/path/to/project")
 """
 
-
-
 from backend.core.logger import get_logger
 from backend.core.project_manager import LatexProject
 from backend.utils.file_ops import BackupManager

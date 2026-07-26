@@ -2,12 +2,7 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Loader2, PencilLine, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 export default function EditOpCard({ edit_op, reason, onApply, applying }) {
   const { t } = useTranslation(["pages", "common"]);
@@ -27,22 +22,29 @@ export default function EditOpCard({ edit_op, reason, onApply, applying }) {
       <CardHeader className="pb-2">
         <CardTitle className="text-xs flex items-center gap-2">
           <PencilLine className="size-3.5" />
-          {t("pages:writingChat.editSuggestion", { paragraphIndex: edit_op.paragraph_index, filePath: edit_op.file_path })}
+          {t("pages:writingChat.editSuggestion", {
+            paragraphIndex: edit_op.paragraph_index,
+            filePath: edit_op.file_path,
+          })}
         </CardTitle>
       </CardHeader>
       <CardContent className="pt-1 space-y-2">
-        {reason && (
-          <p className="text-xs text-muted-foreground">{reason}</p>
-        )}
-        <div className={`grid grid-cols-1 ${isEditing ? '' : 'md:grid-cols-2'} gap-2`}>
+        {reason && <p className="text-xs text-muted-foreground">{reason}</p>}
+        <div
+          className={`grid grid-cols-1 ${isEditing ? "" : "md:grid-cols-2"} gap-2`}
+        >
           <div>
-            <div className="text-xs text-muted-foreground mb-1">{t("common:original")}</div>
+            <div className="text-xs text-muted-foreground mb-1">
+              {t("common:original")}
+            </div>
             <pre className="text-xs font-mono bg-muted rounded p-2 max-h-48 overflow-y-auto whitespace-pre-wrap break-all">
               {edit_op.original_latex}
             </pre>
           </div>
           <div>
-            <div className="text-xs text-muted-foreground mb-1">{t("pages:writingChat.newText")}</div>
+            <div className="text-xs text-muted-foreground mb-1">
+              {t("pages:writingChat.newText")}
+            </div>
             {isEditing ? (
               <textarea
                 autoFocus
@@ -89,7 +91,9 @@ export default function EditOpCard({ edit_op, reason, onApply, applying }) {
                 }}
               >
                 <PencilLine className="size-3" />
-                {isEditing ? t("pages:writingChat.cancelEdit") : t("pages:writingChat.manualEdit")}
+                {isEditing
+                  ? t("pages:writingChat.cancelEdit")
+                  : t("pages:writingChat.manualEdit")}
               </Button>
               <Button size="sm" onClick={handleApply} disabled={applying}>
                 {applying && <Loader2 className="size-3 animate-spin" />}

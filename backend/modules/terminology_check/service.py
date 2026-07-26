@@ -95,16 +95,12 @@ class TerminologyCheckService(BaseParagraphCheckService):
 
         operation_id = self._generate_operation_id()
         file_md5s = self._capture_file_md5s(files, workspace_id)
-        self._store_context(
-            operation_id, self._marker_maps, file_path, file_md5s
-        )
+        self._store_context(operation_id, self._marker_maps, file_path, file_md5s)
 
         has_api_key = bool(cfg.llm.api_key)
 
         if not has_api_key:
-            self._logger.warning(
-                "No API key — using fallback term extraction"
-            )
+            self._logger.warning("No API key — using fallback term extraction")
             return self._check_no_llm(file_path, all_para_data, operation_id)
 
         llm = get_llm_client()
@@ -127,22 +123,23 @@ class TerminologyCheckService(BaseParagraphCheckService):
                 else:
                     tasks.append(
                         self._extractor.extract_terms(
-                            data["para_index"], plain,
+                            data["para_index"],
+                            plain,
                             batch_label=f"B{batch_start // batch_size}/",
                         )
                     )
-            batch_terms = await asyncio.gather(
-                *(_limited(t) for t in tasks)
-            )
+            batch_terms = await asyncio.gather(*(_limited(t) for t in tasks))
             for i, data in enumerate(batch):
                 for t in batch_terms[i]:
-                    all_terms.append({
-                        "term": t.term,
-                        "term_type": t.term_type,
-                        "paragraph_index": data["para_index"],
-                        "file_path": data["file_path"],
-                        "context": t.context,
-                    })
+                    all_terms.append(
+                        {
+                            "term": t.term,
+                            "term_type": t.term_type,
+                            "paragraph_index": data["para_index"],
+                            "file_path": data["file_path"],
+                            "context": t.context,
+                        }
+                    )
 
             if batch_start + batch_size < len(all_para_data):
                 await asyncio.sleep(cfg.llm.request_interval)
@@ -150,8 +147,7 @@ class TerminologyCheckService(BaseParagraphCheckService):
         # 程序去重：仅当字符完全匹配时视为重复
         unique_terms = _deduplicate_terms(all_terms)
         self._logger.info(
-            f"Deduplicated {len(all_terms)} terms to "
-            f"{len(unique_terms)} unique"
+            f"Deduplicated {len(all_terms)} terms to " f"{len(unique_terms)} unique"
         )
 
         # LLM 语义聚类：识别语义相同的术语组并选定推荐项
@@ -162,8 +158,7 @@ class TerminologyCheckService(BaseParagraphCheckService):
 
         total_issues = sum(1 for r in results for c in r["changes"])
         self._logger.info(
-            f"Terminology check completed for {file_path} "
-            f"[op={operation_id}]"
+            f"Terminology check completed for {file_path} " f"[op={operation_id}]"
         )
         return {
             "results": results,
@@ -191,9 +186,7 @@ class TerminologyCheckService(BaseParagraphCheckService):
 
         operation_id = self._generate_operation_id()
         file_md5s = self._capture_file_md5s(files, workspace_id)
-        self._store_context(
-            operation_id, self._marker_maps, file_path, file_md5s
-        )
+        self._store_context(operation_id, self._marker_maps, file_path, file_md5s)
 
         total = len(all_para_data)
         yield {"type": "progress", "current": 0, "total": total}
@@ -204,8 +197,7 @@ class TerminologyCheckService(BaseParagraphCheckService):
             yield {
                 "type": "error",
                 "message": (
-                    "No API key configured — "
-                    "terminology clustering requires LLM"
+                    "No API key configured — " "terminology clustering requires LLM"
                 ),
                 "retrying": False,
             }
@@ -241,16 +233,20 @@ class TerminologyCheckService(BaseParagraphCheckService):
 
             try:
                 terms = await self._extractor.extract_terms(
-                    data["para_index"], plain, batch_label="",
+                    data["para_index"],
+                    plain,
+                    batch_label="",
                 )
                 for t in terms:
-                    all_terms.append({
-                        "term": t.term,
-                        "term_type": t.term_type,
-                        "paragraph_index": data["para_index"],
-                        "file_path": data["file_path"],
-                        "context": t.context,
-                    })
+                    all_terms.append(
+                        {
+                            "term": t.term,
+                            "term_type": t.term_type,
+                            "paragraph_index": data["para_index"],
+                            "file_path": data["file_path"],
+                            "context": t.context,
+                        }
+                    )
                 yield {
                     "type": "progress",
                     "current": i + 1,
@@ -259,8 +255,7 @@ class TerminologyCheckService(BaseParagraphCheckService):
                 }
             except Exception as e:
                 self._logger.error(
-                    f"Error extracting terms from "
-                    f"{f} P{data['para_index']}: {e}"
+                    f"Error extracting terms from " f"{f} P{data['para_index']}: {e}"
                 )
                 yield {
                     "type": "error",
@@ -279,8 +274,7 @@ class TerminologyCheckService(BaseParagraphCheckService):
         # 程序去重：仅当字符完全匹配时视为重复
         unique_terms = _deduplicate_terms(all_terms)
         self._logger.info(
-            f"Deduplicated {len(all_terms)} terms to "
-            f"{len(unique_terms)} unique"
+            f"Deduplicated {len(all_terms)} terms to " f"{len(unique_terms)} unique"
         )
 
         # LLM 语义聚类
@@ -358,8 +352,7 @@ class TerminologyCheckService(BaseParagraphCheckService):
                         "original": term_str,
                         "corrected": recommended,
                         "explanation": (
-                            f"术语 \"{term_str}\" 建议统一为 "
-                            f"\"{recommended}\""
+                            f'术语 "{term_str}" 建议统一为 ' f'"{recommended}"'
                         ),
                     }
                     changes.append(change)
@@ -408,16 +401,18 @@ class TerminologyCheckService(BaseParagraphCheckService):
         for data in all_para_data:
             terms = extractor.extract_terms_fallback(data["plain_text"])
             terms_found = list(dict.fromkeys(t.term for t in terms))
-            results.append({
-                "paragraph_index": data["para_index"],
-                "original": data["plain_text"],
-                "corrected": data["plain_text"],
-                "terms": terms_found,
-                "changes": [],
-                "text": data["text"],
-                "plain_text": data["plain_text"],
-                "file_path": data.get("file_path", ""),
-            })
+            results.append(
+                {
+                    "paragraph_index": data["para_index"],
+                    "original": data["plain_text"],
+                    "corrected": data["plain_text"],
+                    "terms": terms_found,
+                    "changes": [],
+                    "text": data["text"],
+                    "plain_text": data["plain_text"],
+                    "file_path": data.get("file_path", ""),
+                }
+            )
         return results
 
     def _check_no_llm(

@@ -28,25 +28,35 @@ def temp_project():
 
         # main.tex
         main_content = (
-            r"\documentclass{article}" + "\n"
-            + r"\begin{document}" + "\n"
-            + r"\section{Introduction}" + "\n"
-            + r"This is the first paragraph." + "\n"
-            + r"It has multiple lines." + "\n"
+            r"\documentclass{article}"
             + "\n"
-            + r"This is the second paragraph." + "\n"
+            + r"\begin{document}"
             + "\n"
-            + r"\include{chapter1}" + "\n"
+            + r"\section{Introduction}"
+            + "\n"
+            + r"This is the first paragraph."
+            + "\n"
+            + r"It has multiple lines."
+            + "\n"
+            + "\n"
+            + r"This is the second paragraph."
+            + "\n"
+            + "\n"
+            + r"\include{chapter1}"
+            + "\n"
             + r"\end{document}"
         )
         (root / "main.tex").write_text(main_content, encoding="utf-8")
 
         # chapter1.tex
         ch1_content = (
-            r"\section{Chapter One}" + "\n"
-            + r"Content of chapter one." + "\n"
+            r"\section{Chapter One}"
             + "\n"
-            + r"Another paragraph here." + "\n"
+            + r"Content of chapter one."
+            + "\n"
+            + "\n"
+            + r"Another paragraph here."
+            + "\n"
         )
         (root / "chapter1.tex").write_text(ch1_content, encoding="utf-8")
 
@@ -54,18 +64,25 @@ def temp_project():
         subdir = root / "chapters"
         subdir.mkdir()
         intro_content = (
-            r"\section{Synopsis}" + "\n"
-            + r"This is the synopsis." + "\n"
+            r"\section{Synopsis}"
             + "\n"
-            + r"Another paragraph." + "\n"
+            + r"This is the synopsis."
+            + "\n"
+            + "\n"
+            + r"Another paragraph."
+            + "\n"
         )
         (subdir / "intro.tex").write_text(intro_content, encoding="utf-8")
 
         # a .bib file
-        (root / "references.bib").write_text("@article{key, title={Test}}", encoding="utf-8")
+        (root / "references.bib").write_text(
+            "@article{key, title={Test}}", encoding="utf-8"
+        )
 
         # a .sty file
-        (root / "mystyle.sty").write_text(r"\ProvidesPackage{mystyle}", encoding="utf-8")
+        (root / "mystyle.sty").write_text(
+            r"\ProvidesPackage{mystyle}", encoding="utf-8"
+        )
 
         # hidden files (should be ignored)
         (root / ".hidden.tex").write_text("hidden", encoding="utf-8")
@@ -105,7 +122,9 @@ class TestProjectOpen:
                     result.append(n)
             return result
 
-        tex_files = find_files(info.file_tree, {"main.tex", "chapter1.tex", "intro.tex"})
+        tex_files = find_files(
+            info.file_tree, {"main.tex", "chapter1.tex", "intro.tex"}
+        )
         assert len(tex_files) == 3
 
         bib_files = find_files(info.file_tree, {"references.bib"})
@@ -298,11 +317,15 @@ class TestUndoRedo:
         assert "Version A" in modified
 
         project.undo("chapter1.tex")
-        assert "Version A" not in (temp_project / "chapter1.tex").read_text(encoding="utf-8")
+        assert "Version A" not in (temp_project / "chapter1.tex").read_text(
+            encoding="utf-8"
+        )
 
         assert project.can_redo("chapter1.tex")
         project.redo("chapter1.tex")
-        assert "Version A" in (temp_project / "chapter1.tex").read_text(encoding="utf-8")
+        assert "Version A" in (temp_project / "chapter1.tex").read_text(
+            encoding="utf-8"
+        )
 
     def test_cannot_undo_without_changes(self, temp_project):
         project = LatexProject()
@@ -341,7 +364,9 @@ class TestMD5Verification:
         project.get_paragraphs("chapter1.tex")  # 记录 MD5
 
         # 模拟外部修改
-        (temp_project / "chapter1.tex").write_text("externally modified", encoding="utf-8")
+        (temp_project / "chapter1.tex").write_text(
+            "externally modified", encoding="utf-8"
+        )
 
         with pytest.raises(RuntimeError, match="has been modified since parsing"):
             project.apply_change("chapter1.tex", 0, "new text")

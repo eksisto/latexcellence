@@ -65,7 +65,9 @@ export default function ResultFilterBar({
           <SelectTrigger className="h-7 w-36 text-sm">
             <Filter className="size-3.5" />
             <SelectValue>
-              {typeFilter === "all" ? t("resultFilterBar.allTypes") : (typeLabels[typeFilter] || typeFilter)}
+              {typeFilter === "all"
+                ? t("resultFilterBar.allTypes")
+                : typeLabels[typeFilter] || typeFilter}
             </SelectValue>
           </SelectTrigger>
           <SelectContent>
@@ -86,12 +88,22 @@ export default function ResultFilterBar({
           className="h-7 w-24 text-sm"
           inputMode="numeric"
         />
-        <Button type="submit" variant="ghost" size="icon-sm" title={t("resultFilterBar.jump")}>
+        <Button
+          type="submit"
+          variant="ghost"
+          size="icon-sm"
+          title={t("resultFilterBar.jump")}
+        >
           <CornerDownRight className="size-3.5" />
         </Button>
       </form>
       {hasFilters && (
-        <Button variant="ghost" size="sm" onClick={onReset} title={t("resultFilterBar.clearFilter")}>
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={onReset}
+          title={t("resultFilterBar.clearFilter")}
+        >
           <X className="size-3.5" />
           {t("resultFilterBar.clear")}
         </Button>

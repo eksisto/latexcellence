@@ -101,8 +101,7 @@ class TestModels:
         assert result.terms == ["ML", "CNN"]
 
     def test_extracted_term_valid(self):
-        data = {"term": "Machine Learning",
-                "term_type": "concept", "context": "is a"}
+        data = {"term": "Machine Learning", "term_type": "concept", "context": "is a"}
         term = ExtractedTerm.model_validate(data)
         assert term.term == "Machine Learning"
         assert term.term_type == "concept"
@@ -113,8 +112,10 @@ class TestModels:
         assert result.terms == []
 
     def test_term_cluster_valid(self):
-        data = {"recommended": "Deep Learning", "variants": [
-            "Deep Learning", "deep learning", "DL"]}
+        data = {
+            "recommended": "Deep Learning",
+            "variants": ["Deep Learning", "deep learning", "DL"],
+        }
         cluster = TermCluster.model_validate(data)
         assert cluster.recommended == "Deep Learning"
         assert len(cluster.variants) == 3
@@ -127,10 +128,14 @@ class TestModels:
     def test_term_cluster_result_with_clusters(self):
         data = {
             "clusters": [
-                {"recommended": "深度学习", "variants": [
-                    "Deep Learning", "deep learning", "深度学习", "DL"]},
-                {"recommended": "Machine Learning", "variants": [
-                    "Machine Learning", "machine learning"]},
+                {
+                    "recommended": "深度学习",
+                    "variants": ["Deep Learning", "deep learning", "深度学习", "DL"],
+                },
+                {
+                    "recommended": "Machine Learning",
+                    "variants": ["Machine Learning", "machine learning"],
+                },
             ]
         }
         result = TermClusterResult.model_validate(data)
@@ -192,10 +197,18 @@ class TestBuildResults:
     """基于 LLM 聚类的结果构建测试。"""
 
     def test_build_results_no_clusters(self, service):
-        para_data = [{"para_index": 0, "plain_text": "hello",
-                      "text": "hello", "marker_map": {}}]
-        all_terms = [{"term": "hello", "term_type": "concept", "paragraph_index": 0,
-                      "file_path": "main.tex", "context": ""}]
+        para_data = [
+            {"para_index": 0, "plain_text": "hello", "text": "hello", "marker_map": {}}
+        ]
+        all_terms = [
+            {
+                "term": "hello",
+                "term_type": "concept",
+                "paragraph_index": 0,
+                "file_path": "main.tex",
+                "context": "",
+            }
+        ]
         results = service._build_results(para_data, all_terms, [])
         assert len(results) == 1
         assert results[0]["changes"] == []
@@ -204,20 +217,42 @@ class TestBuildResults:
 
     def test_build_results_with_cluster(self, service):
         para_data = [
-            {"para_index": 0, "plain_text": "use machine learning here",
-                "text": "tex0", "marker_map": {}, "file_path": "main.tex"},
-            {"para_index": 1, "plain_text": "use Machine Learning here",
-                "text": "tex1", "marker_map": {}, "file_path": "main.tex"},
+            {
+                "para_index": 0,
+                "plain_text": "use machine learning here",
+                "text": "tex0",
+                "marker_map": {},
+                "file_path": "main.tex",
+            },
+            {
+                "para_index": 1,
+                "plain_text": "use Machine Learning here",
+                "text": "tex1",
+                "marker_map": {},
+                "file_path": "main.tex",
+            },
         ]
         all_terms = [
-            {"term": "machine learning", "term_type": "concept", "paragraph_index": 0,
-             "file_path": "main.tex", "context": "use"},
-            {"term": "Machine Learning", "term_type": "concept", "paragraph_index": 1,
-             "file_path": "main.tex", "context": "use"},
+            {
+                "term": "machine learning",
+                "term_type": "concept",
+                "paragraph_index": 0,
+                "file_path": "main.tex",
+                "context": "use",
+            },
+            {
+                "term": "Machine Learning",
+                "term_type": "concept",
+                "paragraph_index": 1,
+                "file_path": "main.tex",
+                "context": "use",
+            },
         ]
         clusters = [
-            {"recommended": "Machine Learning",
-             "variants": ["machine learning", "Machine Learning"]},
+            {
+                "recommended": "Machine Learning",
+                "variants": ["machine learning", "Machine Learning"],
+            },
         ]
         results = service._build_results(para_data, all_terms, clusters)
 
@@ -235,20 +270,42 @@ class TestBuildResults:
     def test_build_results_recommended_in_variants(self, service):
         """推荐项本身在 variants 中不被替换。"""
         para_data = [
-            {"para_index": 0, "plain_text": "深度学习 is great",
-                "text": "tex0", "marker_map": {}, "file_path": "main.tex"},
-            {"para_index": 1, "plain_text": "deep learning is great",
-                "text": "tex1", "marker_map": {}, "file_path": "main.tex"},
+            {
+                "para_index": 0,
+                "plain_text": "深度学习 is great",
+                "text": "tex0",
+                "marker_map": {},
+                "file_path": "main.tex",
+            },
+            {
+                "para_index": 1,
+                "plain_text": "deep learning is great",
+                "text": "tex1",
+                "marker_map": {},
+                "file_path": "main.tex",
+            },
         ]
         all_terms = [
-            {"term": "深度学习", "term_type": "concept", "paragraph_index": 0,
-             "file_path": "main.tex", "context": "is great"},
-            {"term": "deep learning", "term_type": "concept", "paragraph_index": 1,
-             "file_path": "main.tex", "context": "is great"},
+            {
+                "term": "深度学习",
+                "term_type": "concept",
+                "paragraph_index": 0,
+                "file_path": "main.tex",
+                "context": "is great",
+            },
+            {
+                "term": "deep learning",
+                "term_type": "concept",
+                "paragraph_index": 1,
+                "file_path": "main.tex",
+                "context": "is great",
+            },
         ]
         clusters = [
-            {"recommended": "深度学习",
-             "variants": ["深度学习", "deep learning", "Deep Learning"]},
+            {
+                "recommended": "深度学习",
+                "variants": ["深度学习", "deep learning", "Deep Learning"],
+            },
         ]
         results = service._build_results(para_data, all_terms, clusters)
 
@@ -268,16 +325,25 @@ class TestBuildResults:
     def test_build_results_term_not_in_text(self, service):
         """提取的术语不在段落文本中时不生成 change（安全处理）。"""
         para_data = [
-            {"para_index": 0, "plain_text": "some text",
-                "text": "tex0", "marker_map": {}, "file_path": "main.tex"},
+            {
+                "para_index": 0,
+                "plain_text": "some text",
+                "text": "tex0",
+                "marker_map": {},
+                "file_path": "main.tex",
+            },
         ]
         all_terms = [
-            {"term": "missing_term", "term_type": "concept", "paragraph_index": 0,
-             "file_path": "main.tex", "context": ""},
+            {
+                "term": "missing_term",
+                "term_type": "concept",
+                "paragraph_index": 0,
+                "file_path": "main.tex",
+                "context": "",
+            },
         ]
         clusters = [
-            {"recommended": "standard", "variants": [
-                "missing_term", "standard"]},
+            {"recommended": "standard", "variants": ["missing_term", "standard"]},
         ]
         results = service._build_results(para_data, all_terms, clusters)
         # change 被创建（基于提取的术语），但 corrected 中无实际替换发生
@@ -371,19 +437,28 @@ class TestExtractor:
         extractor = TermExtractor()
         text = "Machine Learning (ML) is widely used in AI."
 
-        with patch("backend.modules.terminology_check.extractor.get_llm_client") as mock_get:
+        with patch(
+            "backend.modules.terminology_check.extractor.get_llm_client"
+        ) as mock_get:
             mock_llm = MagicMock()
-            mock_llm.chat = AsyncMock(return_value={
-                "paragraph_index": 0,
-                "terms": [
-                    {"term": "Machine Learning", "term_type": "concept",
-                     "context": "is widely used"},
-                    {"term": "ML", "term_type": "abbreviation",
-                     "context": "(ML) is"},
-                    {"term": "AI", "term_type": "abbreviation",
-                     "context": "in AI"},
-                ],
-            })
+            mock_llm.chat = AsyncMock(
+                return_value={
+                    "paragraph_index": 0,
+                    "terms": [
+                        {
+                            "term": "Machine Learning",
+                            "term_type": "concept",
+                            "context": "is widely used",
+                        },
+                        {
+                            "term": "ML",
+                            "term_type": "abbreviation",
+                            "context": "(ML) is",
+                        },
+                        {"term": "AI", "term_type": "abbreviation", "context": "in AI"},
+                    ],
+                }
+            )
             mock_get.return_value = mock_llm
 
             terms = await extractor.extract_terms(0, text)
@@ -397,7 +472,9 @@ class TestExtractor:
         extractor = TermExtractor()
         text = "Some text."
 
-        with patch("backend.modules.terminology_check.extractor.get_llm_client") as mock_get:
+        with patch(
+            "backend.modules.terminology_check.extractor.get_llm_client"
+        ) as mock_get:
             mock_llm = MagicMock()
             mock_llm.chat = AsyncMock(side_effect=Exception("Network error"))
             mock_get.return_value = mock_llm
@@ -414,14 +491,25 @@ class TestClusterTerms:
         extractor = TermExtractor()
         unique_terms = ["Deep Learning", "deep learning", "深度学习", "DL", "CNN"]
 
-        with patch("backend.modules.terminology_check.extractor.get_llm_client") as mock_get:
+        with patch(
+            "backend.modules.terminology_check.extractor.get_llm_client"
+        ) as mock_get:
             mock_llm = MagicMock()
-            mock_llm.chat = AsyncMock(return_value={
-                "clusters": [
-                    {"recommended": "深度学习",
-                     "variants": ["Deep Learning", "deep learning", "深度学习", "DL"]},
-                ],
-            })
+            mock_llm.chat = AsyncMock(
+                return_value={
+                    "clusters": [
+                        {
+                            "recommended": "深度学习",
+                            "variants": [
+                                "Deep Learning",
+                                "deep learning",
+                                "深度学习",
+                                "DL",
+                            ],
+                        },
+                    ],
+                }
+            )
             mock_get.return_value = mock_llm
 
             clusters = await extractor.cluster_terms(unique_terms)
@@ -441,7 +529,9 @@ class TestClusterTerms:
         extractor = TermExtractor()
         unique_terms = ["Python", "Java", "C++"]
 
-        with patch("backend.modules.terminology_check.extractor.get_llm_client") as mock_get:
+        with patch(
+            "backend.modules.terminology_check.extractor.get_llm_client"
+        ) as mock_get:
             mock_llm = MagicMock()
             mock_llm.chat = AsyncMock(return_value={"clusters": []})
             mock_get.return_value = mock_llm
@@ -454,7 +544,9 @@ class TestClusterTerms:
         extractor = TermExtractor()
         unique_terms = ["ML", "machine learning"]
 
-        with patch("backend.modules.terminology_check.extractor.get_llm_client") as mock_get:
+        with patch(
+            "backend.modules.terminology_check.extractor.get_llm_client"
+        ) as mock_get:
             mock_llm = MagicMock()
             mock_llm.chat = AsyncMock(side_effect=Exception("Network error"))
             mock_get.return_value = mock_llm
@@ -477,13 +569,15 @@ class TestCheckNoLLM:
         all_para_data = []
         for p in paragraphs:
             stripped, marker_map = service._parser.strip_to_plain_text(p.text)
-            all_para_data.append({
-                "file_path": "main.tex",
-                "para_index": p.index,
-                "text": p.text,
-                "plain_text": stripped,
-                "marker_map": marker_map,
-            })
+            all_para_data.append(
+                {
+                    "file_path": "main.tex",
+                    "para_index": p.index,
+                    "text": p.text,
+                    "plain_text": stripped,
+                    "marker_map": marker_map,
+                }
+            )
         result = service._check_no_llm("main.tex", all_para_data)
         assert result["file_path"] == "main.tex"
         assert "results" in result
@@ -502,12 +596,14 @@ class TestEmptyResult:
     """空段落处理。"""
 
     def test_empty_result(self, service):
-        result = service._empty_result({
-            "para_index": 5,
-            "plain_text": "",
-            "text": "original tex",
-            "marker_map": {},
-        })
+        result = service._empty_result(
+            {
+                "para_index": 5,
+                "plain_text": "",
+                "text": "original tex",
+                "marker_map": {},
+            }
+        )
         assert result["paragraph_index"] == 5
         assert result["original"] == ""
         assert result["corrected"] == ""

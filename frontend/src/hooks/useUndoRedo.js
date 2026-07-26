@@ -55,7 +55,9 @@ export default function useUndoRedo(activeFile, workspaceId, onAfterUndoRedo) {
         toast.info(i18n.t("hooks:undoRedo.nothingToUndo"));
       }
     } catch (e) {
-      toast.error(i18n.t("hooks:undoRedo.undoFailed"), { description: e.message });
+      toast.error(i18n.t("hooks:undoRedo.undoFailed"), {
+        description: e.message,
+      });
     } finally {
       setBusy(false);
     }
@@ -74,7 +76,9 @@ export default function useUndoRedo(activeFile, workspaceId, onAfterUndoRedo) {
         toast.info(i18n.t("hooks:undoRedo.nothingToRedo"));
       }
     } catch (e) {
-      toast.error(i18n.t("hooks:undoRedo.redoFailed"), { description: e.message });
+      toast.error(i18n.t("hooks:undoRedo.redoFailed"), {
+        description: e.message,
+      });
     } finally {
       setBusy(false);
     }

@@ -34,7 +34,10 @@ class CompileRequest(BaseModel):
 
 
 @router.post("/run")
-async def run_compile(request: CompileRequest, workspace_id: str = Query(..., description="工作区唯一标识符")):
+async def run_compile(
+    request: CompileRequest,
+    workspace_id: str = Query(..., description="工作区唯一标识符"),
+):
     """
     编译 LaTeX 项目。
 

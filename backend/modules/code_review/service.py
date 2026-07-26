@@ -27,18 +27,23 @@ from backend.core.prompts import get_prompt
 from backend.utils.json_utils import retry_with_validation
 from backend.utils.latex_parser import MARKER_PATTERN
 from backend.utils.latexindent_utils import (
-    is_latexindent_available, format_with_latexindent,
+    is_latexindent_available,
+    format_with_latexindent,
 )
 from backend.utils.builtin_formatter import format_latex
 
-
 # ── Pydantic models for LLM response schema ────────────────────────────────
+
 
 class CodeReviewSuggestion(BaseModel):
     """单条代码审查建议"""
+
     type: Literal[
-        "code_smell", "modernization", "best_practice",
-        "portability", "consistency",
+        "code_smell",
+        "modernization",
+        "best_practice",
+        "portability",
+        "consistency",
     ]
     severity: Literal["info", "warning", "error"] = "info"
     description: str
@@ -48,6 +53,7 @@ class CodeReviewSuggestion(BaseModel):
 
 class CodeReviewResult(BaseModel):
     """LLM 代码审查输出（不再输出 corrected 字段，源码修改由工具完成）"""
+
     paragraph_index: int
     needs_review: bool = True
     suggestions: list[CodeReviewSuggestion] = []
@@ -55,13 +61,9 @@ class CodeReviewResult(BaseModel):
     @model_validator(mode="after")
     def _check_suggestions_consistency(self):
         if self.needs_review and not self.suggestions:
-            raise ValueError(
-                "needs_review is true but suggestions is empty"
-            )
+            raise ValueError("needs_review is true but suggestions is empty")
         if not self.needs_review and self.suggestions:
-            raise ValueError(
-                "needs_review is false but suggestions is non-empty"
-            )
+            raise ValueError("needs_review is false but suggestions is non-empty")
         return self
 
 
@@ -99,12 +101,17 @@ class CodeReviewService(BaseParagraphCheckService):
         )
 
     async def check_code_review_stream(
-        self, file_path: str, resolve_input: bool = False, workspace_id: str = "",
+        self,
+        file_path: str,
+        resolve_input: bool = False,
+        workspace_id: str = "",
         language: str = "zh",
     ):
         """代码审查流式版本（SSE）。"""
         self._language = language
-        async for event in self._run_stream_check(file_path, resolve_input, workspace_id):
+        async for event in self._run_stream_check(
+            file_path, resolve_input, workspace_id
+        ):
             yield event
 
     # ── 工具格式化入口 ──────────────────────────────────────────────────────
@@ -153,8 +160,7 @@ class CodeReviewService(BaseParagraphCheckService):
         # Step 3: Marker 回贴 → 对格式化后的原始 LaTeX 重新提取 marker
         marker_map = self._marker_maps.get(file_path, {}).get(idx, {})
         if marker_map:
-            formatted_with_markers = self._parser.strip_to_plain_text(formatted)[
-                0]
+            formatted_with_markers = self._parser.strip_to_plain_text(formatted)[0]
         else:
             formatted_with_markers = text
 
@@ -194,9 +200,7 @@ class CodeReviewService(BaseParagraphCheckService):
             )
             return self._make_fallback(idx, formatted, original_text, file_path)
         except Exception as e:
-            self._logger.error(
-                f"Paragraph {idx} in {file_path}: LLM call failed — {e}"
-            )
+            self._logger.error(f"Paragraph {idx} in {file_path}: LLM call failed — {e}")
             return self._make_fallback(idx, formatted, original_text, file_path)
 
     # ── 结果构建 ────────────────────────────────────────────────────────────
@@ -288,8 +292,9 @@ class CodeReviewService(BaseParagraphCheckService):
     # ── Hook 实现 ───────────────────────────────────────────────────────────
 
     def _get_system_prompt(self) -> str:
-        return get_prompt("code_review", "system",
-                          language=getattr(self, "_language", "zh"))
+        return get_prompt(
+            "code_review", "system", language=getattr(self, "_language", "zh")
+        )
 
     def _build_user_content(self, text: str) -> str:
         return get_prompt("code_review", "user", text=text)

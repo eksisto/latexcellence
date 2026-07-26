@@ -22,7 +22,15 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { ArrowLeft, PencilLine, Eye, Loader2, Plus, Trash2, ListChecks } from "lucide-react";
+import {
+  ArrowLeft,
+  PencilLine,
+  Eye,
+  Loader2,
+  Plus,
+  Trash2,
+  ListChecks,
+} from "lucide-react";
 import { api } from "@/api/index";
 import useParagraphCheck, { groupByFile } from "@/hooks/useParagraphCheck";
 import MarkerText from "@/components/MarkerText";
@@ -73,7 +81,8 @@ export default function ExpressionOptPage() {
       checkLoading: t("pages:expressionOpt.checkLoading"),
       checkSuccess: (count) => t("pages:expressionOpt.checkSuccess", { count }),
       applySuccess: (idx) => t("pages:expressionOpt.applySuccess", { idx }),
-      applyAllSuccess: (count) => t("pages:expressionOpt.applyAllSuccess", { count }),
+      applyAllSuccess: (count) =>
+        t("pages:expressionOpt.applyAllSuccess", { count }),
       applyAllEmpty: t("pages:expressionOpt.applyAllEmpty"),
     },
   });
@@ -106,11 +115,14 @@ export default function ExpressionOptPage() {
   // ── load prompts on mount ──────────────────────────────────────────────
 
   useEffect(() => {
-    api.expressionOpt.prompts.list().then((data) => {
-      setPrompts(data.prompts || []);
-      const active = (data.prompts || []).find((p) => p.active);
-      if (active) setActivePrompt(active.name);
-    }).catch(() => {});
+    api.expressionOpt.prompts
+      .list()
+      .then((data) => {
+        setPrompts(data.prompts || []);
+        const active = (data.prompts || []).find((p) => p.active);
+        if (active) setActivePrompt(active.name);
+      })
+      .catch(() => {});
   }, []);
 
   // ── prompt actions ─────────────────────────────────────────────────────
@@ -126,55 +138,84 @@ export default function ExpressionOptPage() {
       setPromptContent("");
       setEditingPrompt(name);
       setPromptError(null);
-      toast.success(t("pages:expressionOpt.promptSaved"), { description: name });
+      toast.success(t("pages:expressionOpt.promptSaved"), {
+        description: name,
+      });
     } catch (e) {
       setPromptError(e.message);
-      toast.error(t("pages:expressionOpt.promptSaveFailed"), { description: e.message });
+      toast.error(t("pages:expressionOpt.promptSaveFailed"), {
+        description: e.message,
+      });
     }
   }, [newPromptName, promptContent, t]);
 
-  const handleDeletePrompt = useCallback(async (name) => {
-    try {
-      await api.expressionOpt.prompts.delete(name);
-      const data = await api.expressionOpt.prompts.list();
-      setPrompts(data.prompts || []);
-      if (editingPrompt === name) {
-        setEditingPrompt(null);
-        setPromptContent("");
+  const handleDeletePrompt = useCallback(
+    async (name) => {
+      try {
+        await api.expressionOpt.prompts.delete(name);
+        const data = await api.expressionOpt.prompts.list();
+        setPrompts(data.prompts || []);
+        if (editingPrompt === name) {
+          setEditingPrompt(null);
+          setPromptContent("");
+        }
+        if (activePrompt === name) setActivePrompt("");
+        setPromptError(null);
+        toast.success(t("pages:expressionOpt.promptDeleted"), {
+          description: name,
+        });
+      } catch (e) {
+        setPromptError(e.message);
+        toast.error(t("pages:expressionOpt.promptDeleteFailed"), {
+          description: e.message,
+        });
       }
-      if (activePrompt === name) setActivePrompt("");
-      setPromptError(null);
-      toast.success(t("pages:expressionOpt.promptDeleted"), { description: name });
-    } catch (e) {
-      setPromptError(e.message);
-      toast.error(t("pages:expressionOpt.promptDeleteFailed"), { description: e.message });
-    }
-  }, [editingPrompt, activePrompt, t]);
+    },
+    [editingPrompt, activePrompt, t],
+  );
 
-  const handleSetActivePrompt = useCallback(async (name) => {
-    try {
-      await api.expressionOpt.prompts.setActive(name);
-      setActivePrompt(name);
-      setPromptMessage(name ? t("pages:expressionOpt.activePromptEnabled", { name }) : t("pages:expressionOpt.usingDefaultPrompt"));
-      setPromptError(null);
-      toast.success(name ? t("pages:expressionOpt.promptEnabled", { name }) : t("pages:expressionOpt.switchedToDefault"));
-    } catch (e) {
-      setPromptError(e.message);
-      toast.error(t("pages:expressionOpt.promptSwitchFailed"), { description: e.message });
-    }
-  }, [t]);
+  const handleSetActivePrompt = useCallback(
+    async (name) => {
+      try {
+        await api.expressionOpt.prompts.setActive(name);
+        setActivePrompt(name);
+        setPromptMessage(
+          name
+            ? t("pages:expressionOpt.activePromptEnabled", { name })
+            : t("pages:expressionOpt.usingDefaultPrompt"),
+        );
+        setPromptError(null);
+        toast.success(
+          name
+            ? t("pages:expressionOpt.promptEnabled", { name })
+            : t("pages:expressionOpt.switchedToDefault"),
+        );
+      } catch (e) {
+        setPromptError(e.message);
+        toast.error(t("pages:expressionOpt.promptSwitchFailed"), {
+          description: e.message,
+        });
+      }
+    },
+    [t],
+  );
 
-  const handleEditPrompt = useCallback(async (name) => {
-    try {
-      const data = await api.expressionOpt.prompts.load(name);
-      setEditingPrompt(name);
-      setPromptContent(data.content || "");
-      setPromptError(null);
-    } catch (e) {
-      setPromptError(e.message);
-      toast.error(t("pages:expressionOpt.promptLoadFailed"), { description: e.message });
-    }
-  }, [t]);
+  const handleEditPrompt = useCallback(
+    async (name) => {
+      try {
+        const data = await api.expressionOpt.prompts.load(name);
+        setEditingPrompt(name);
+        setPromptContent(data.content || "");
+        setPromptError(null);
+      } catch (e) {
+        setPromptError(e.message);
+        toast.error(t("pages:expressionOpt.promptLoadFailed"), {
+          description: e.message,
+        });
+      }
+    },
+    [t],
+  );
 
   useEffect(() => {
     if (!activePrompt) {
@@ -196,22 +237,29 @@ export default function ExpressionOptPage() {
   }, [activePrompt]);
 
   const paragraphsByFile = useMemo(
-    () => activeFiles.length > 1 ? groupByFile(expressionParagraphs) : [],
-    [activeFiles.length, expressionParagraphs]
+    () => (activeFiles.length > 1 ? groupByFile(expressionParagraphs) : []),
+    [activeFiles.length, expressionParagraphs],
   );
   const resultsByFile = useMemo(
-    () => activeFiles.length > 1 ? groupByFile(expressionResults) : [],
-    [activeFiles.length, expressionResults]
+    () => (activeFiles.length > 1 ? groupByFile(expressionResults) : []),
+    [activeFiles.length, expressionResults],
   );
 
   return (
     <div className="min-h-screen p-8">
       <div className="max-w-6xl mx-auto mb-8">
         <div className="flex items-center gap-4">
-          <Button variant="ghost" size="icon" nativeButton={false} render={<Link to="/" />}>
+          <Button
+            variant="ghost"
+            size="icon"
+            nativeButton={false}
+            render={<Link to="/" />}
+          >
             <ArrowLeft />
           </Button>
-          <h1 className="text-3xl font-bold tracking-tight">{t("pages:expressionOpt.title")}</h1>
+          <h1 className="text-3xl font-bold tracking-tight">
+            {t("pages:expressionOpt.title")}
+          </h1>
         </div>
       </div>
 
@@ -237,7 +285,11 @@ export default function ExpressionOptPage() {
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <Button className="w-full" nativeButton={false} render={<Link to="/workspace" />}>
+                <Button
+                  className="w-full"
+                  nativeButton={false}
+                  render={<Link to="/workspace" />}
+                >
                   {t("common:openWorkspace")}
                 </Button>
               </CardContent>
@@ -270,7 +322,10 @@ export default function ExpressionOptPage() {
                       checked={resolveInput}
                       onCheckedChange={setResolveInput}
                     />
-                    <Label htmlFor="resolve-input" className="text-sm cursor-pointer">
+                    <Label
+                      htmlFor="resolve-input"
+                      className="text-sm cursor-pointer"
+                    >
                       {t("common:includeSubfiles")}
                     </Label>
                   </div>
@@ -295,7 +350,9 @@ export default function ExpressionOptPage() {
                     ) : (
                       <PencilLine />
                     )}
-                    {isLoading ? t("pages:expressionOpt.optimizing") : t("pages:expressionOpt.startOptimize")}
+                    {isLoading
+                      ? t("pages:expressionOpt.optimizing")
+                      : t("pages:expressionOpt.startOptimize")}
                   </Button>
                 </div>
                 {message && (
@@ -319,7 +376,9 @@ export default function ExpressionOptPage() {
 
             <Card>
               <CardHeader className="pb-2">
-                <CardTitle className="text-sm">{t("pages:expressionOpt.promptSectionTitle")}</CardTitle>
+                <CardTitle className="text-sm">
+                  {t("pages:expressionOpt.promptSectionTitle")}
+                </CardTitle>
                 <CardDescription>
                   {t("pages:expressionOpt.promptSectionDesc")}
                 </CardDescription>
@@ -329,11 +388,13 @@ export default function ExpressionOptPage() {
                   {prompts.map((p) => (
                     <div key={p.name} className="flex items-center gap-1">
                       <Button
-                        variant={activePrompt === p.name ? "default" : "outline"}
+                        variant={
+                          activePrompt === p.name ? "default" : "outline"
+                        }
                         size="sm"
                         onClick={() =>
                           handleSetActivePrompt(
-                            activePrompt === p.name ? "" : p.name
+                            activePrompt === p.name ? "" : p.name,
                           )
                         }
                       >
@@ -367,7 +428,8 @@ export default function ExpressionOptPage() {
                 {activePrompt && previewContent && (
                   <div className="rounded-md border border-border bg-muted/30 p-3">
                     <span className="text-xs font-medium text-muted-foreground">
-                      {t("pages:expressionOpt.activePromptLabel")}{activePrompt}
+                      {t("pages:expressionOpt.activePromptLabel")}
+                      {activePrompt}
                     </span>
                     <pre className="whitespace-pre-wrap text-sm text-foreground/80 font-sans leading-relaxed max-h-48 overflow-y-auto mt-2">
                       {previewContent}
@@ -377,7 +439,8 @@ export default function ExpressionOptPage() {
 
                 {editingPrompt && (
                   <p className="text-xs text-muted-foreground">
-                    {t("pages:expressionOpt.editingLabel")}{editingPrompt}
+                    {t("pages:expressionOpt.editingLabel")}
+                    {editingPrompt}
                   </p>
                 )}
 
@@ -391,7 +454,9 @@ export default function ExpressionOptPage() {
                       className="h-7 text-sm"
                       value={newPromptName}
                       onChange={(e) => setNewPromptName(e.target.value)}
-                      placeholder={t("pages:expressionOpt.promptNamePlaceholder")}
+                      placeholder={t(
+                        "pages:expressionOpt.promptNamePlaceholder",
+                      )}
                     />
                   </div>
                   <Button
@@ -421,69 +486,82 @@ export default function ExpressionOptPage() {
               </CardContent>
             </Card>
 
-            {expressionParagraphs.length > 0 && expressionResults.length === 0 && (
-              <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm">
-                    {t("pages:expressionOpt.paragraphPreviewTitle", { count: expressionParagraphs.length })}
-                  </CardTitle>
-                  <CardDescription>
-                    {t("pages:expressionOpt.paragraphPreviewDesc")}
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  {activeFiles.length > 1 ? (
-                    <Tabs defaultValue={activeFiles[0]}>
-                      <TabsList>
+            {expressionParagraphs.length > 0 &&
+              expressionResults.length === 0 && (
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm">
+                      {t("pages:expressionOpt.paragraphPreviewTitle", {
+                        count: expressionParagraphs.length,
+                      })}
+                    </CardTitle>
+                    <CardDescription>
+                      {t("pages:expressionOpt.paragraphPreviewDesc")}
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    {activeFiles.length > 1 ? (
+                      <Tabs defaultValue={activeFiles[0]}>
+                        <TabsList>
+                          {activeFiles.map((f) => (
+                            <TabsTrigger key={f} value={f}>
+                              {f.split("/").pop()}
+                            </TabsTrigger>
+                          ))}
+                        </TabsList>
                         {activeFiles.map((f) => (
-                          <TabsTrigger key={f} value={f}>{f.split('/').pop()}</TabsTrigger>
-                        ))}
-                      </TabsList>
-                      {activeFiles.map((f) => (
-                        <TabsContent key={f} value={f}>
-                          <div className="space-y-3">
-                            {(paragraphsByFile[f] || []).map((p) => (
-                              <div
-                                key={p.index}
-                                className="rounded-lg border border-border p-3"
-                              >
-                                <span className="rounded bg-muted px-1.5 py-0.5 text-xs font-mono mb-1 inline-block">
-                                  P{p.index}
-                                </span>
-                                <div className="whitespace-pre-wrap text-sm text-foreground/80 mt-1 max-h-32 overflow-y-auto font-sans leading-relaxed">
-                                  {p.plain_text ? <MarkerText text={p.plain_text} /> : t("common:blank")}
+                          <TabsContent key={f} value={f}>
+                            <div className="space-y-3">
+                              {(paragraphsByFile[f] || []).map((p) => (
+                                <div
+                                  key={p.index}
+                                  className="rounded-lg border border-border p-3"
+                                >
+                                  <span className="rounded bg-muted px-1.5 py-0.5 text-xs font-mono mb-1 inline-block">
+                                    P{p.index}
+                                  </span>
+                                  <div className="whitespace-pre-wrap text-sm text-foreground/80 mt-1 max-h-32 overflow-y-auto font-sans leading-relaxed">
+                                    {p.plain_text ? (
+                                      <MarkerText text={p.plain_text} />
+                                    ) : (
+                                      t("common:blank")
+                                    )}
+                                  </div>
                                 </div>
-                              </div>
-                            ))}
+                              ))}
+                            </div>
+                          </TabsContent>
+                        ))}
+                      </Tabs>
+                    ) : (
+                      <div className="space-y-3">
+                        {expressionParagraphs.map((p) => (
+                          <div
+                            key={p.index}
+                            className="rounded-lg border border-border p-3"
+                          >
+                            <span className="rounded bg-muted px-1.5 py-0.5 text-xs font-mono mb-1 inline-block">
+                              P{p.index}
+                            </span>
+                            <div className="whitespace-pre-wrap text-sm text-foreground/80 mt-1 max-h-32 overflow-y-auto font-sans leading-relaxed">
+                              {p.plain_text ? (
+                                <MarkerText text={p.plain_text} />
+                              ) : (
+                                t("common:blank")
+                              )}
+                            </div>
                           </div>
-                        </TabsContent>
-                      ))}
-                    </Tabs>
-                  ) : (
-                    <div className="space-y-3">
-                      {expressionParagraphs.map((p) => (
-                        <div
-                          key={p.index}
-                          className="rounded-lg border border-border p-3"
-                        >
-                          <span className="rounded bg-muted px-1.5 py-0.5 text-xs font-mono mb-1 inline-block">
-                            P{p.index}
-                          </span>
-                          <div className="whitespace-pre-wrap text-sm text-foreground/80 mt-1 max-h-32 overflow-y-auto font-sans leading-relaxed">
-                            {p.plain_text ? <MarkerText text={p.plain_text} /> : t("common:blank")}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            )}
+                        ))}
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              )}
 
             {expressionResults.length > 0 && (
               <div className="space-y-4">
                 {expressionResults.some(
-                  (r) => r.changes && r.changes.length > 0
+                  (r) => r.changes && r.changes.length > 0,
                 ) && (
                   <div className="flex justify-end">
                     <Button
@@ -515,207 +593,244 @@ export default function ExpressionOptPage() {
                   <p className="text-sm text-muted-foreground text-center py-8">
                     {t("pages:expressionOpt.noMatchResult")}
                   </p>
-                ) : (
-                  activeFiles.length > 1 ? (
-                    <Tabs defaultValue={activeFiles[0]}>
-                      <TabsList>
-                        {activeFiles.map((f) => (
-                          <TabsTrigger key={f} value={f}>{f.split('/').pop()}</TabsTrigger>
-                        ))}
-                      </TabsList>
+                ) : activeFiles.length > 1 ? (
+                  <Tabs defaultValue={activeFiles[0]}>
+                    <TabsList>
                       {activeFiles.map((f) => (
-                        <TabsContent key={f} value={f}>
-                          <div className="space-y-4">
-                            {(resultsByFile[f] || []).length === 0 ? (
-                              <p className="text-sm text-muted-foreground text-center py-8">
-                                {t("pages:expressionOpt.noFileResult")}
-                              </p>
-                            ) : (
-                              (resultsByFile[f] || []).map((result) => {
-                                const hasChanges =
-                                  result.changes && result.changes.length > 0;
-                                return (
-                                  <Card key={`${result.file_path}-expr-result-P${result.paragraph_index}`} id={`expr-result-P${result.paragraph_index}`}>
-                                    <CardHeader className="pb-2">
-                                      <div className="flex items-center justify-between">
-                                        <CardTitle className="text-sm">
-                                          {t("pages:expressionOpt.paragraphLabel", { index: result.paragraph_index })}
-                                        </CardTitle>
-                                        {hasChanges && (
-                                          <span className="rounded bg-destructive/10 text-destructive px-1.5 py-0.5 text-xs font-medium">
-                                            {result.changes.length} {t("pages:expressionOpt.suggestions")}
-                                          </span>
+                        <TabsTrigger key={f} value={f}>
+                          {f.split("/").pop()}
+                        </TabsTrigger>
+                      ))}
+                    </TabsList>
+                    {activeFiles.map((f) => (
+                      <TabsContent key={f} value={f}>
+                        <div className="space-y-4">
+                          {(resultsByFile[f] || []).length === 0 ? (
+                            <p className="text-sm text-muted-foreground text-center py-8">
+                              {t("pages:expressionOpt.noFileResult")}
+                            </p>
+                          ) : (
+                            (resultsByFile[f] || []).map((result) => {
+                              const hasChanges =
+                                result.changes && result.changes.length > 0;
+                              return (
+                                <Card
+                                  key={`${result.file_path}-expr-result-P${result.paragraph_index}`}
+                                  id={`expr-result-P${result.paragraph_index}`}
+                                >
+                                  <CardHeader className="pb-2">
+                                    <div className="flex items-center justify-between">
+                                      <CardTitle className="text-sm">
+                                        {t(
+                                          "pages:expressionOpt.paragraphLabel",
+                                          { index: result.paragraph_index },
                                         )}
-                                      </div>
-                                    </CardHeader>
-                                    <CardContent>
-                                      <div className="space-y-3">
-                                        {hasChanges ? (
-                                          <>
-                                            <ul className="space-y-2">
-                                              {result.changes.map((change, i) => (
-                                                <li
-                                                  key={i}
-                                                  className="rounded border border-border p-2 text-sm"
-                                                >
-                                                  <div className="flex items-center gap-2 mb-1">
-                                                    <span className="rounded bg-green-500/10 text-green-600 dark:text-green-400 px-1 py-0.5 text-xs font-medium">
-                                                      {change.type}
-                                                    </span>
-                                                    {change.reason && (
-                                                      <span className="text-muted-foreground text-xs">
-                                                        {change.reason}
-                                                      </span>
-                                                    )}
-                                                  </div>
-                                                  <div className="grid grid-cols-[auto_1fr] gap-x-2 gap-y-1 text-sm">
-                                                    <span className="text-muted-foreground whitespace-nowrap mt-0.5">
-                                                      {t("common:original")}
-                                                    </span>
-                                                    <span className="line-through text-foreground/60 break-all mt-0.5">
-                                                      <MarkerText text={change.original} />
-                                                    </span>
-                                                    <span className="text-muted-foreground whitespace-nowrap mt-0.5">
-                                                      {t("common:modified")}
-                                                    </span>
-                                                    <span className="font-medium break-all mt-0.5">
-                                                      <MarkerText text={change.optimized} />
-                                                    </span>
-                                                  </div>
-                                                </li>
-                                              ))}
-                                            </ul>
-                                            <div className="flex items-center gap-2">
-                                              <Button
-                                                size="sm"
-                                                onClick={() =>
-                                                  handleApplyChange(
-                                                    result.paragraph_index,
-                                                    result.optimized,
-                                                    result.file_path
-                                                  )
-                                                }
+                                      </CardTitle>
+                                      {hasChanges && (
+                                        <span className="rounded bg-destructive/10 text-destructive px-1.5 py-0.5 text-xs font-medium">
+                                          {result.changes.length}{" "}
+                                          {t("pages:expressionOpt.suggestions")}
+                                        </span>
+                                      )}
+                                    </div>
+                                  </CardHeader>
+                                  <CardContent>
+                                    <div className="space-y-3">
+                                      {hasChanges ? (
+                                        <>
+                                          <ul className="space-y-2">
+                                            {result.changes.map((change, i) => (
+                                              <li
+                                                key={i}
+                                                className="rounded border border-border p-2 text-sm"
                                               >
-                                                {t("pages:expressionOpt.applyOptimization")}
-                                              </Button>
-                                              <Button
-                                                size="sm"
-                                                variant="outline"
-                                                onClick={() =>
-                                                  handleIgnoreChange(result.paragraph_index, result.file_path)
-                                                }
-                                              >
-                                                {t("common:ignore")}
-                                              </Button>
-                                            </div>
-                                          </>
-                                        ) : (
-                                          <p className="text-sm text-muted-foreground">
-                                            {t("pages:expressionOpt.noSuggestions")}
-                                          </p>
-                                        )}
-                                        <ParagraphContext currentIndex={result.paragraph_index} paragraphs={expressionParagraphs} currentText={result.plain_text || result.original} />
-                                      </div>
-                                    </CardContent>
-                                  </Card>
-                                );
-                              })
+                                                <div className="flex items-center gap-2 mb-1">
+                                                  <span className="rounded bg-green-500/10 text-green-600 dark:text-green-400 px-1 py-0.5 text-xs font-medium">
+                                                    {change.type}
+                                                  </span>
+                                                  {change.reason && (
+                                                    <span className="text-muted-foreground text-xs">
+                                                      {change.reason}
+                                                    </span>
+                                                  )}
+                                                </div>
+                                                <div className="grid grid-cols-[auto_1fr] gap-x-2 gap-y-1 text-sm">
+                                                  <span className="text-muted-foreground whitespace-nowrap mt-0.5">
+                                                    {t("common:original")}
+                                                  </span>
+                                                  <span className="line-through text-foreground/60 break-all mt-0.5">
+                                                    <MarkerText
+                                                      text={change.original}
+                                                    />
+                                                  </span>
+                                                  <span className="text-muted-foreground whitespace-nowrap mt-0.5">
+                                                    {t("common:modified")}
+                                                  </span>
+                                                  <span className="font-medium break-all mt-0.5">
+                                                    <MarkerText
+                                                      text={change.optimized}
+                                                    />
+                                                  </span>
+                                                </div>
+                                              </li>
+                                            ))}
+                                          </ul>
+                                          <div className="flex items-center gap-2">
+                                            <Button
+                                              size="sm"
+                                              onClick={() =>
+                                                handleApplyChange(
+                                                  result.paragraph_index,
+                                                  result.optimized,
+                                                  result.file_path,
+                                                )
+                                              }
+                                            >
+                                              {t(
+                                                "pages:expressionOpt.applyOptimization",
+                                              )}
+                                            </Button>
+                                            <Button
+                                              size="sm"
+                                              variant="outline"
+                                              onClick={() =>
+                                                handleIgnoreChange(
+                                                  result.paragraph_index,
+                                                  result.file_path,
+                                                )
+                                              }
+                                            >
+                                              {t("common:ignore")}
+                                            </Button>
+                                          </div>
+                                        </>
+                                      ) : (
+                                        <p className="text-sm text-muted-foreground">
+                                          {t(
+                                            "pages:expressionOpt.noSuggestions",
+                                          )}
+                                        </p>
+                                      )}
+                                      <ParagraphContext
+                                        currentIndex={result.paragraph_index}
+                                        paragraphs={expressionParagraphs}
+                                        currentText={
+                                          result.plain_text || result.original
+                                        }
+                                      />
+                                    </div>
+                                  </CardContent>
+                                </Card>
+                              );
+                            })
+                          )}
+                        </div>
+                      </TabsContent>
+                    ))}
+                  </Tabs>
+                ) : (
+                  filteredResults.map((result) => {
+                    const hasChanges =
+                      result.changes && result.changes.length > 0;
+                    return (
+                      <Card
+                        key={result.paragraph_index}
+                        id={`expr-result-P${result.paragraph_index}`}
+                      >
+                        <CardHeader className="pb-2">
+                          <div className="flex items-center justify-between">
+                            <CardTitle className="text-sm">
+                              {t("pages:expressionOpt.paragraphLabel", {
+                                index: result.paragraph_index,
+                              })}
+                            </CardTitle>
+                            {hasChanges && (
+                              <span className="rounded bg-destructive/10 text-destructive px-1.5 py-0.5 text-xs font-medium">
+                                {result.changes.length}{" "}
+                                {t("pages:expressionOpt.suggestions")}
+                              </span>
                             )}
                           </div>
-                        </TabsContent>
-                      ))}
-                    </Tabs>
-                  ) : (
-                    filteredResults.map((result) => {
-                      const hasChanges =
-                        result.changes && result.changes.length > 0;
-                      return (
-                        <Card key={result.paragraph_index} id={`expr-result-P${result.paragraph_index}`}>
-                          <CardHeader className="pb-2">
-                            <div className="flex items-center justify-between">
-                              <CardTitle className="text-sm">
-                                {t("pages:expressionOpt.paragraphLabel", { index: result.paragraph_index })}
-                              </CardTitle>
-                              {hasChanges && (
-                                <span className="rounded bg-destructive/10 text-destructive px-1.5 py-0.5 text-xs font-medium">
-                                  {result.changes.length} {t("pages:expressionOpt.suggestions")}
-                                </span>
-                              )}
-                            </div>
-                          </CardHeader>
-                          <CardContent>
-                            <div className="space-y-3">
-                              {hasChanges ? (
-                                <>
-                                  <ul className="space-y-2">
-                                    {result.changes.map((change, i) => (
-                                      <li
-                                        key={i}
-                                        className="rounded border border-border p-2 text-sm"
-                                      >
-                                        <div className="flex items-center gap-2 mb-1">
-                                          <span className="rounded bg-green-500/10 text-green-600 dark:text-green-400 px-1 py-0.5 text-xs font-medium">
-                                            {change.type}
-                                          </span>
-                                          {change.reason && (
-                                            <span className="text-muted-foreground text-xs">
-                                              {change.reason}
-                                            </span>
-                                          )}
-                                        </div>
-                                        <div className="grid grid-cols-[auto_1fr] gap-x-2 gap-y-1 text-sm">
-                                          <span className="text-muted-foreground whitespace-nowrap mt-0.5">
-                                            {t("common:original")}
-                                          </span>
-                                          <span className="line-through text-foreground/60 break-all mt-0.5">
-                                            <MarkerText text={change.original} />
-                                          </span>
-                                          <span className="text-muted-foreground whitespace-nowrap mt-0.5">
-                                            {t("common:modified")}
-                                          </span>
-                                          <span className="font-medium break-all mt-0.5">
-                                            <MarkerText text={change.optimized} />
-                                          </span>
-                                        </div>
-                                      </li>
-                                    ))}
-                                  </ul>
-                                  <div className="flex items-center gap-2">
-                                    <Button
-                                      size="sm"
-                                      onClick={() =>
-                                        handleApplyChange(
-                                          result.paragraph_index,
-                                          result.optimized,
-                                          result.file_path
-                                        )
-                                      }
+                        </CardHeader>
+                        <CardContent>
+                          <div className="space-y-3">
+                            {hasChanges ? (
+                              <>
+                                <ul className="space-y-2">
+                                  {result.changes.map((change, i) => (
+                                    <li
+                                      key={i}
+                                      className="rounded border border-border p-2 text-sm"
                                     >
-                                      {t("pages:expressionOpt.applyOptimization")}
-                                    </Button>
-                                    <Button
-                                      size="sm"
-                                      variant="outline"
-                                      onClick={() =>
-                                        handleIgnoreChange(result.paragraph_index, result.file_path)
-                                      }
-                                    >
-                                      {t("common:ignore")}
-                                    </Button>
-                                  </div>
-                                </>
-                              ) : (
-                                <p className="text-sm text-muted-foreground">
-                                  {t("pages:expressionOpt.noSuggestions")}
-                                </p>
-                              )}
-                              <ParagraphContext currentIndex={result.paragraph_index} paragraphs={expressionParagraphs} currentText={result.plain_text || result.original} />
-                            </div>
-                          </CardContent>
-                        </Card>
-                      );
-                    })
-                  )
+                                      <div className="flex items-center gap-2 mb-1">
+                                        <span className="rounded bg-green-500/10 text-green-600 dark:text-green-400 px-1 py-0.5 text-xs font-medium">
+                                          {change.type}
+                                        </span>
+                                        {change.reason && (
+                                          <span className="text-muted-foreground text-xs">
+                                            {change.reason}
+                                          </span>
+                                        )}
+                                      </div>
+                                      <div className="grid grid-cols-[auto_1fr] gap-x-2 gap-y-1 text-sm">
+                                        <span className="text-muted-foreground whitespace-nowrap mt-0.5">
+                                          {t("common:original")}
+                                        </span>
+                                        <span className="line-through text-foreground/60 break-all mt-0.5">
+                                          <MarkerText text={change.original} />
+                                        </span>
+                                        <span className="text-muted-foreground whitespace-nowrap mt-0.5">
+                                          {t("common:modified")}
+                                        </span>
+                                        <span className="font-medium break-all mt-0.5">
+                                          <MarkerText text={change.optimized} />
+                                        </span>
+                                      </div>
+                                    </li>
+                                  ))}
+                                </ul>
+                                <div className="flex items-center gap-2">
+                                  <Button
+                                    size="sm"
+                                    onClick={() =>
+                                      handleApplyChange(
+                                        result.paragraph_index,
+                                        result.optimized,
+                                        result.file_path,
+                                      )
+                                    }
+                                  >
+                                    {t("pages:expressionOpt.applyOptimization")}
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() =>
+                                      handleIgnoreChange(
+                                        result.paragraph_index,
+                                        result.file_path,
+                                      )
+                                    }
+                                  >
+                                    {t("common:ignore")}
+                                  </Button>
+                                </div>
+                              </>
+                            ) : (
+                              <p className="text-sm text-muted-foreground">
+                                {t("pages:expressionOpt.noSuggestions")}
+                              </p>
+                            )}
+                            <ParagraphContext
+                              currentIndex={result.paragraph_index}
+                              paragraphs={expressionParagraphs}
+                              currentText={result.plain_text || result.original}
+                            />
+                          </div>
+                        </CardContent>
+                      </Card>
+                    );
+                  })
                 )}
               </div>
             )}
@@ -729,7 +844,9 @@ export default function ExpressionOptPage() {
           if (!open) setConfirmDeletePrompt(null);
         }}
         title={t("pages:expressionOpt.deletePromptTitle")}
-        description={t("pages:expressionOpt.deletePromptDesc", { name: confirmDeletePrompt })}
+        description={t("pages:expressionOpt.deletePromptDesc", {
+          name: confirmDeletePrompt,
+        })}
         confirmText={t("pages:expressionOpt.delete")}
         variant="destructive"
         onConfirm={async () => {

@@ -24,7 +24,7 @@ const EXACT_MAP = {
   "Max retries exceeded": "maxRetriesExceeded",
 
   // 段落应用错误
-  "marker_map_missing": "markerMapMissing",
+  "Marker map missing": "markerMapMissing",
 
   // 参数校验
   "Empty reference example": "emptyReferenceExample",
@@ -47,7 +47,8 @@ const EXACT_MAP = {
   "Main file must be a .tex file": "mainFileMustBeTex",
   "Git revision must not be empty or padded with spaces": "gitRevisionEmpty",
   "Invalid project-relative path": "invalidProjectRelativePath",
-  "Project directory not found in target revision": "projectDirNotFoundInRevision",
+  "Project directory not found in target revision":
+    "projectDirNotFoundInRevision",
   "Pandoc produced empty output": "pandocEmptyOutput",
 
   // Pandoc
@@ -76,21 +77,9 @@ const PATTERN_MAP = [
     "projectPathNotFound",
     (m) => ({ path: m[1] }),
   ],
-  [
-    /^Not a directory:\s*(.+)/,
-    "notADirectory",
-    (m) => ({ path: m[1] }),
-  ],
-  [
-    /^File not found:\s*(.+)/,
-    "fileNotFound",
-    (m) => ({ path: m[1] }),
-  ],
-  [
-    /^Main file not found:\s*(.+)/,
-    "mainFileNotFound",
-    (m) => ({ path: m[1] }),
-  ],
+  [/^Not a directory:\s*(.+)/, "notADirectory", (m) => ({ path: m[1] })],
+  [/^File not found:\s*(.+)/, "fileNotFound", (m) => ({ path: m[1] })],
+  [/^Main file not found:\s*(.+)/, "mainFileNotFound", (m) => ({ path: m[1] })],
 
   // 会话 / 提示词 / 格式
   [
@@ -98,16 +87,8 @@ const PATTERN_MAP = [
     "sessionNotFoundDetail",
     (m) => ({ name: m[1] }),
   ],
-  [
-    /^Prompt not found:\s*(.+)/,
-    "promptNotFound",
-    (m) => ({ name: m[1] }),
-  ],
-  [
-    /^Format not found:\s*(.+)/,
-    "formatNotFound",
-    (m) => ({ name: m[1] }),
-  ],
+  [/^Prompt not found:\s*(.+)/, "promptNotFound", (m) => ({ name: m[1] })],
+  [/^Format not found:\s*(.+)/, "formatNotFound", (m) => ({ name: m[1] })],
 
   // Git
   [
@@ -148,11 +129,7 @@ const PATTERN_MAP = [
   ],
 
   // PDF
-  [
-    /^PDF not found:\s*(.+)/,
-    "pdfNotFound",
-    (m) => ({ path: m[1] }),
-  ],
+  [/^PDF not found:\s*(.+)/, "pdfNotFound", (m) => ({ path: m[1] })],
 
   // 服务层通用失败（带 {e} 参数）
   [
@@ -213,21 +190,9 @@ const PATTERN_MAP = [
     "ddgChallenge",
     (m) => ({ query: m[1] }),
   ],
-  [
-    /Challenge expired or not found/,
-    "challengeExpired",
-    () => ({}),
-  ],
-  [
-    /Verification failed, please retry/,
-    "verificationFailed",
-    () => ({}),
-  ],
-  [
-    /IP has been blocked, please try again later/,
-    "ipBlocked",
-    () => ({}),
-  ],
+  [/Challenge expired or not found/, "challengeExpired", () => ({})],
+  [/Verification failed, please retry/, "verificationFailed", () => ({})],
+  [/IP has been blocked, please try again later/, "ipBlocked", () => ({})],
 ];
 
 /**

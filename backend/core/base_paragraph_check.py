@@ -58,6 +58,7 @@ class CheckOperationContext:
 
 class ApplyChangeItem(BaseModel):
     """逐段检查共享：用户确认的修改项请求模型。"""
+
     paragraph_index: int
     new_text: str
     file_path: str | None = None
@@ -88,9 +89,7 @@ class BaseParagraphCheckService:
         """生成唯一操作 ID。"""
         return uuid.uuid4().hex[:12]
 
-    def _capture_file_md5s(
-        self, files: list[str], workspace_id: str
-    ) -> dict[str, str]:
+    def _capture_file_md5s(self, files: list[str], workspace_id: str) -> dict[str, str]:
         """收集所有文件当前的 MD5 快照。"""
         pm = get_project_manager_for_workspace(workspace_id)
         root = Path(pm.root_path)
@@ -117,9 +116,7 @@ class BaseParagraphCheckService:
         )
         self._cleanup_old_contexts()
 
-    def _get_context(
-        self, operation_id: str
-    ) -> CheckOperationContext | None:
+    def _get_context(self, operation_id: str) -> CheckOperationContext | None:
         """按 operation_id 查找操作上下文。"""
         return self._operation_contexts.get(operation_id)
 
@@ -161,14 +158,16 @@ class BaseParagraphCheckService:
         for para in paragraphs:
             stripped, marker_map = self._parser.strip_to_plain_text(para.text)
             self._marker_maps[file_path][para.index] = marker_map
-            result.append({
-                "index": para.index,
-                "text": para.text,
-                "plain_text": stripped,
-                "line_start": para.line_start,
-                "line_end": para.line_end,
-                "file_path": file_path,
-            })
+            result.append(
+                {
+                    "index": para.index,
+                    "text": para.text,
+                    "plain_text": stripped,
+                    "line_start": para.line_start,
+                    "line_end": para.line_end,
+                    "file_path": file_path,
+                }
+            )
         return result
 
     def preview_paragraphs(
@@ -198,9 +197,7 @@ class BaseParagraphCheckService:
 
         operation_id = self._generate_operation_id()
         file_md5s = self._capture_file_md5s(files, workspace_id)
-        self._store_context(
-            operation_id, self._marker_maps, file_path, file_md5s
-        )
+        self._store_context(operation_id, self._marker_maps, file_path, file_md5s)
 
         self._logger.info(
             f"Previewed {len(all_paragraphs)} paragraphs from "
@@ -231,20 +228,20 @@ class BaseParagraphCheckService:
             paragraphs = pm.get_paragraphs(f)
             for para in paragraphs:
                 if self.use_marker_protection:
-                    stripped, marker_map = self._parser.strip_to_plain_text(
-                        para.text
-                    )
+                    stripped, marker_map = self._parser.strip_to_plain_text(para.text)
                     if f not in self._marker_maps:
                         self._marker_maps[f] = {}
                     self._marker_maps[f][para.index] = marker_map
                 else:
                     stripped = self._parser.strip_to_plain_text(para.text)[0]
-                all_data.append({
-                    "file_path": f,
-                    "para_index": para.index,
-                    "text": para.text,
-                    "plain_text": stripped,
-                })
+                all_data.append(
+                    {
+                        "file_path": f,
+                        "para_index": para.index,
+                        "text": para.text,
+                        "plain_text": stripped,
+                    }
+                )
         return all_data
 
     def _filter_targets(
@@ -257,9 +254,9 @@ class BaseParagraphCheckService:
         if paragraph_indices is not None:
             index_set = set(paragraph_indices)
             return [
-                d for d in all_para_data
-                if d["file_path"] == file_path
-                and d["para_index"] in index_set
+                d
+                for d in all_para_data
+                if d["file_path"] == file_path and d["para_index"] in index_set
             ]
         return all_para_data
 
@@ -359,7 +356,10 @@ class BaseParagraphCheckService:
                         f"Falling back to original text."
                     )
                     return self._make_fallback(
-                        idx, text, original_text, file_path,
+                        idx,
+                        text,
+                        original_text,
+                        file_path,
                         marker_error=True,
                     )
 
@@ -371,7 +371,10 @@ class BaseParagraphCheckService:
                         f"(reordered markers). Falling back to original text."
                     )
                     return self._make_fallback(
-                        idx, text, original_text, file_path,
+                        idx,
+                        text,
+                        original_text,
+                        file_path,
                         marker_error=True,
                     )
 
@@ -386,9 +389,7 @@ class BaseParagraphCheckService:
             )
             return self._make_fallback(idx, text, original_text, file_path)
         except Exception as e:
-            self._logger.error(
-                f"Paragraph {idx} in {file_path}: LLM call failed — {e}"
-            )
+            self._logger.error(f"Paragraph {idx} in {file_path}: LLM call failed — {e}")
             return self._make_fallback(idx, text, original_text, file_path)
 
     async def _run_batch_check(
@@ -411,20 +412,15 @@ class BaseParagraphCheckService:
             self._marker_maps = {}
 
         all_para_data = self._collect_para_data(files, workspace_id)
-        targets = self._filter_targets(
-            all_para_data, file_path, paragraph_indices)
+        targets = self._filter_targets(all_para_data, file_path, paragraph_indices)
 
         operation_id = self._generate_operation_id()
         if self.use_marker_protection:
             file_md5s = self._capture_file_md5s(files, workspace_id)
-            self._store_context(
-                operation_id, self._marker_maps, file_path, file_md5s
-            )
+            self._store_context(operation_id, self._marker_maps, file_path, file_md5s)
 
         if not cfg.llm.api_key:
-            self._logger.warning(
-                "No API key configured, returning plain text only"
-            )
+            self._logger.warning("No API key configured, returning plain text only")
             return self._no_api_key_batch_fallback(targets, file_path, operation_id)
 
         llm = get_llm_client()
@@ -437,24 +433,28 @@ class BaseParagraphCheckService:
                 return await coro
 
         for batch_start in range(0, len(targets), batch_size):
-            batch = targets[batch_start: batch_start + batch_size]
+            batch = targets[batch_start : batch_start + batch_size]
             tasks = []
 
             for d in batch:
-                check_text = d["plain_text"] if self.use_marker_protection else d["text"]
+                check_text = (
+                    d["plain_text"] if self.use_marker_protection else d["text"]
+                )
                 if not check_text.strip():
                     tasks.append(self._make_empty_from_data(d))
                 else:
                     tasks.append(
                         self._check_one_paragraph(
-                            llm, len(tasks), d["para_index"],
-                            check_text, d["text"], d["file_path"],
+                            llm,
+                            len(tasks),
+                            d["para_index"],
+                            check_text,
+                            d["text"],
+                            d["file_path"],
                         )
                     )
 
-            batch_results = await asyncio.gather(
-                *(_limited(t) for t in tasks)
-            )
+            batch_results = await asyncio.gather(*(_limited(t) for t in tasks))
             for slot, d in enumerate(batch):
                 results[batch_start + slot] = batch_results[slot]
 
@@ -462,8 +462,7 @@ class BaseParagraphCheckService:
                 await asyncio.sleep(cfg.llm.request_interval)
 
         self._logger.info(
-            f"Batch check completed for {file_path} "
-            f"[op={operation_id}]"
+            f"Batch check completed for {file_path} " f"[op={operation_id}]"
         )
         return {
             "results": results,
@@ -495,9 +494,7 @@ class BaseParagraphCheckService:
         operation_id = self._generate_operation_id()
         if self.use_marker_protection:
             file_md5s = self._capture_file_md5s(files, workspace_id)
-            self._store_context(
-                operation_id, self._marker_maps, file_path, file_md5s
-            )
+            self._store_context(operation_id, self._marker_maps, file_path, file_md5s)
 
         total = len(all_para_data)
         yield {"type": "progress", "current": 0, "total": total}
@@ -520,7 +517,10 @@ class BaseParagraphCheckService:
 
             if not check_text.strip():
                 empty = self._make_fallback(
-                    idx, check_text, d["text"], f,
+                    idx,
+                    check_text,
+                    d["text"],
+                    f,
                 )
                 yield {"type": "result", "paragraph_index": idx, "data": empty}
                 yield {
@@ -537,9 +537,7 @@ class BaseParagraphCheckService:
                 )
                 yield {"type": "result", "paragraph_index": idx, "data": result}
             except Exception as e:
-                self._logger.error(
-                    f"Error checking paragraph {idx} in {f}: {e}"
-                )
+                self._logger.error(f"Error checking paragraph {idx} in {f}: {e}")
                 yield {
                     "type": "error",
                     "message": f"{f} P{idx}: {e}",
@@ -555,8 +553,7 @@ class BaseParagraphCheckService:
             await asyncio.sleep(cfg.llm.request_interval)
 
         self._logger.info(
-            f"Stream check completed for {file_path} "
-            f"[op={operation_id}]"
+            f"Stream check completed for {file_path} " f"[op={operation_id}]"
         )
         yield {"type": "done", "operation_id": operation_id}
 
@@ -569,13 +566,19 @@ class BaseParagraphCheckService:
         """无 API Key 时返回纯文本结果。"""
         results = []
         for d in targets:
-            results.append(self._make_fallback(
-                d["para_index"],
-                d["plain_text"] if self.use_marker_protection else d["text"],
-                d["text"],
-                d["file_path"],
-            ))
-        return {"results": results, "file_path": file_path, "operation_id": operation_id}
+            results.append(
+                self._make_fallback(
+                    d["para_index"],
+                    d["plain_text"] if self.use_marker_protection else d["text"],
+                    d["text"],
+                    d["file_path"],
+                )
+            )
+        return {
+            "results": results,
+            "file_path": file_path,
+            "operation_id": operation_id,
+        }
 
     # ── 写回 ────────────────────────────────────────────────────────────────
 
@@ -632,15 +635,15 @@ class BaseParagraphCheckService:
                         f"{target_file} [op={operation_id or 'legacy'}], "
                         f"skipping to prevent literal marker corruption"
                     )
-                    errors.append({
-                        "paragraph_index": idx,
-                        "file_path": target_file,
-                        "reason": "marker_map_missing",
-                    })
+                    errors.append(
+                        {
+                            "paragraph_index": idx,
+                            "file_path": target_file,
+                            "reason": "Marker map missing",
+                        }
+                    )
                     continue
-                restored = self._parser.restore_from_markers(
-                    new_text, marker_map
-                )
+                restored = self._parser.restore_from_markers(new_text, marker_map)
             else:
                 restored = new_text
 

@@ -61,9 +61,12 @@ export default function FolderPickerDialog({
     }
   }, [open, initialPath, fetchDirectories]);
 
-  const handleNavigate = useCallback((dirPath) => {
-    fetchDirectories(dirPath);
-  }, [fetchDirectories]);
+  const handleNavigate = useCallback(
+    (dirPath) => {
+      fetchDirectories(dirPath);
+    },
+    [fetchDirectories],
+  );
 
   const handleGoUp = useCallback(() => {
     if (parentPath) {
@@ -90,9 +93,7 @@ export default function FolderPickerDialog({
       <DialogContent className="sm:max-w-lg" showCloseButton={false}>
         <DialogHeader>
           <DialogTitle>{t("folderPicker.title")}</DialogTitle>
-          <DialogDescription>
-            {t("folderPicker.description")}
-          </DialogDescription>
+          <DialogDescription>{t("folderPicker.description")}</DialogDescription>
         </DialogHeader>
 
         <div className="space-y-3">

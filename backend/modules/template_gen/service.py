@@ -21,12 +21,14 @@ from backend.utils.json_utils import retry_with_validation
 
 class SectionSkeleton(BaseModel):
     """模板节骨架"""
+
     section: str
     suggested_content: str = ""
 
 
 class TemplateGenResult(BaseModel):
     """LLM 模板生成输出——对应 DEVELOPMENT.md §2.1 JSON 协议"""
+
     template_name: str
     preamble: str = ""
     body_structure: list[SectionSkeleton] = []
@@ -62,8 +64,7 @@ class TemplateGenService:
         cfg = get_config()
 
         if not cfg.llm.api_key:
-            self._logger.warning(
-                "No API key configured, returning empty template")
+            self._logger.warning("No API key configured, returning empty template")
             return {
                 "template_name": "empty",
                 "preamble": r"\documentclass{article}",
@@ -75,7 +76,8 @@ class TemplateGenService:
         if llm is None:
             llm = get_llm_client()
         system_prompt = get_prompt(
-            "template_gen", "single_generation_system", language=language)
+            "template_gen", "single_generation_system", language=language
+        )
         messages = [
             {"role": "system", "content": system_prompt},
             {
@@ -126,8 +128,7 @@ class TemplateGenService:
         output_dir.mkdir(parents=True, exist_ok=True)
 
         name = template.get("template_name", "untitled")
-        safe_name = "".join(
-            c if c.isalnum() or c in "-_" else "_" for c in name)
+        safe_name = "".join(c if c.isalnum() or c in "-_" else "_" for c in name)
         file_path = output_dir / f"{safe_name}.tex"
 
         content = self._assemble_template(template)

@@ -38,7 +38,10 @@ router = APIRouter(prefix="/api/writing-chat", tags=["writing_chat"])
 
 
 @router.post("/send")
-async def send_message(request: ChatSendRequest, workspace_id: str = Query(default="", description="工作区唯一标识符")):
+async def send_message(
+    request: ChatSendRequest,
+    workspace_id: str = Query(default="", description="工作区唯一标识符"),
+):
     """流式发送对话消息。返回 SSE，事件为 data: {json}\\n\\n。"""
     service = get_writing_chat_service()
 
@@ -66,7 +69,10 @@ async def send_message(request: ChatSendRequest, workspace_id: str = Query(defau
 
 
 @router.post("/generate-edit")
-async def generate_edit(request: GenerateEditRequest, workspace_id: str = Query(..., description="工作区唯一标识符")):
+async def generate_edit(
+    request: GenerateEditRequest,
+    workspace_id: str = Query(..., description="工作区唯一标识符"),
+):
     """基于对话指令生成段落编辑建议。"""
     service = get_writing_chat_service()
     try:
@@ -84,7 +90,10 @@ async def generate_edit(request: GenerateEditRequest, workspace_id: str = Query(
 
 
 @router.post("/apply-edit")
-async def apply_edit(request: ApplyEditRequest, workspace_id: str = Query(..., description="工作区唯一标识符")):
+async def apply_edit(
+    request: ApplyEditRequest,
+    workspace_id: str = Query(..., description="工作区唯一标识符"),
+):
     """把某条 assistant 消息附带的编辑操作写回源文件。"""
     service = get_writing_chat_service()
     try:
@@ -125,7 +134,11 @@ async def undo_message(request: UndoMessageRequest):
 
 
 @router.get("/sessions")
-async def list_sessions(workspace_id: str = Query(default="", description="工作区唯一标识符，用于按项目隔离会话")):
+async def list_sessions(
+    workspace_id: str = Query(
+        default="", description="工作区唯一标识符，用于按项目隔离会话"
+    )
+):
     service = get_writing_chat_service()
     return {"sessions": service.list_sessions(workspace_id)}
 
@@ -207,4 +220,3 @@ async def set_active_prompt(request: AssistantSetActiveRequest):
     pm = get_prompt_manager()
     pm.set_active(request.name)
     return {"status": "ok", "name": request.name}
-

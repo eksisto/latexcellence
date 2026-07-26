@@ -52,6 +52,7 @@ class MarkdownConverterService:
     def _check_pandoc() -> None:
         """检查 Pandoc 是否已安装。"""
         import shutil
+
         if shutil.which("pandoc") is None:
             raise RuntimeError(
                 "Pandoc is not installed. "
@@ -73,8 +74,10 @@ class MarkdownConverterService:
         proc = subprocess.run(
             [
                 "pandoc",
-                "-f", "markdown",
-                "-t", "latex",
+                "-f",
+                "markdown",
+                "-t",
+                "latex",
                 "--wrap=preserve",
             ],
             input=markdown_text,
@@ -86,8 +89,7 @@ class MarkdownConverterService:
 
         if proc.returncode != 0:
             self._logger.error(f"Pandoc error: {proc.stderr}")
-            raise RuntimeError(
-                f"Pandoc conversion failed: {proc.stderr.strip()}")
+            raise RuntimeError(f"Pandoc conversion failed: {proc.stderr.strip()}")
 
         if proc.stderr:
             self._logger.warning(f"Pandoc stderr: {proc.stderr}")

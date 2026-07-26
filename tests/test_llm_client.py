@@ -91,7 +91,9 @@ async def test_chat_stream_with_usage_yields_tokens_then_usage(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_chat_stream_with_usage_fallback_when_stream_options_unsupported(monkeypatch):
+async def test_chat_stream_with_usage_fallback_when_stream_options_unsupported(
+    monkeypatch,
+):
     client = LLMClient()
     client._rate_limit = AsyncMock()
 

@@ -40,9 +40,15 @@ export default function ProgressBar({
                   size="icon"
                   className="size-7"
                   onClick={onPauseToggle}
-                  title={isPaused ? t("progressBar.resume") : t("progressBar.pause")}
+                  title={
+                    isPaused ? t("progressBar.resume") : t("progressBar.pause")
+                  }
                 >
-                  {isPaused ? <Play className="size-3.5" /> : <Pause className="size-3.5" />}
+                  {isPaused ? (
+                    <Play className="size-3.5" />
+                  ) : (
+                    <Pause className="size-3.5" />
+                  )}
                 </Button>
               )}
               {onStop && (
@@ -60,7 +66,9 @@ export default function ProgressBar({
           )}
         </div>
         {isPaused && (
-          <p className="text-xs text-muted-foreground mt-1.5">{t("progressBar.paused")}</p>
+          <p className="text-xs text-muted-foreground mt-1.5">
+            {t("progressBar.paused")}
+          </p>
         )}
       </CardContent>
     </Card>

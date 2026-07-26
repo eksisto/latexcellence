@@ -200,7 +200,9 @@ async def retry_with_validation(
     for attempt in range(max_retries):
         try:
             response_text = await chat_fn(current_messages, **chat_kwargs)
-            result, error = parse_and_validate(response_text, model_cls, raise_on_error=False)
+            result, error = parse_and_validate(
+                response_text, model_cls, raise_on_error=False
+            )
             if error is None:
                 logger.debug(
                     f"Validation succeeded on attempt {attempt + 1}/{max_retries}"
@@ -234,6 +236,5 @@ async def retry_with_validation(
             raise
 
     raise ValueError(
-        f"Validation failed after {max_retries} attempts. "
-        f"Last error: {last_error}"
+        f"Validation failed after {max_retries} attempts. " f"Last error: {last_error}"
     )

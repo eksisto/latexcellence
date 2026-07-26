@@ -32,7 +32,6 @@ from backend.modules.writing_chat.models import (
     LlmSummaryResult,
 )
 
-
 _SCOPE_SEPARATOR = ":"
 _NOPROJECT_SCOPE = "_noproject"
 
@@ -199,15 +198,18 @@ class ConversationContext:
                 try:
                     data = json.loads(safe_read(f))
                     session_id = data.get("id", "")
-                    metas.append({
-                        "id": session_id,
-                        "created_at": data.get("created_at", 0.0),
-                        "last_updated_at": data.get("last_updated_at", 0.0),
-                        "message_count": len(data.get("messages", [])),
-                        "cumulative_tokens": data.get("cumulative_tokens", 0),
-                        "file_path": data.get("file_path"),
-                        "title": data.get("title") or _derive_title(data.get("messages", [])),
-                    })
+                    metas.append(
+                        {
+                            "id": session_id,
+                            "created_at": data.get("created_at", 0.0),
+                            "last_updated_at": data.get("last_updated_at", 0.0),
+                            "message_count": len(data.get("messages", [])),
+                            "cumulative_tokens": data.get("cumulative_tokens", 0),
+                            "file_path": data.get("file_path"),
+                            "title": data.get("title")
+                            or _derive_title(data.get("messages", [])),
+                        }
+                    )
                 except Exception:
                     continue
         metas.sort(key=lambda m: m["last_updated_at"], reverse=True)
@@ -351,7 +353,10 @@ class ConversationContext:
 
     def should_compress(self) -> bool:
         cfg = get_config()
-        return self.cumulative_tokens >= cfg.features.writing_chat.compression_threshold_tokens
+        return (
+            self.cumulative_tokens
+            >= cfg.features.writing_chat.compression_threshold_tokens
+        )
 
     def to_llm_messages(self) -> list[dict]:
         """
@@ -367,10 +372,12 @@ class ConversationContext:
         for m in self.messages:
             role = m.role
             if role == "summary":
-                result.append({
-                    "role": "assistant",
-                    "content": f"[Conversation Summary]\n{m.content}",
-                })
+                result.append(
+                    {
+                        "role": "assistant",
+                        "content": f"[Conversation Summary]\n{m.content}",
+                    }
+                )
             else:
                 result.append({"role": role, "content": m.content or ""})
         return result
@@ -380,6 +387,7 @@ class ConversationContext:
         对当前 messages 做深拷贝，作为压缩前的快照保存。
         """
         import copy
+
         return copy.deepcopy(self.messages)
 
     def replace_with_summary(
@@ -409,7 +417,9 @@ class ConversationContext:
     # ── 上下文锚点 ─────────────────────────────────────────────────────────
 
     @staticmethod
-    def build_file_context_text(file_path: str, paragraph_index: int | None, workspace_id: str = "") -> str:
+    def build_file_context_text(
+        file_path: str, paragraph_index: int | None, workspace_id: str = ""
+    ) -> str:
         """
         构造文件段落上下文文本（原始 LaTeX 源码，无 marker 剥离）。
 
@@ -423,13 +433,12 @@ class ConversationContext:
             paragraphs = pm.get_paragraphs(file_path)
         except Exception as e:
             return f"(failed to load paragraphs: {e})"
-        raw_paras: list[tuple[int, str]] = [
-            (p.index, p.text) for p in paragraphs
-        ]
+        raw_paras: list[tuple[int, str]] = [(p.index, p.text) for p in paragraphs]
 
         if paragraph_index is not None:
             selected = [
-                (i, t) for (i, t) in raw_paras
+                (i, t)
+                for (i, t) in raw_paras
                 if i == paragraph_index
                 or i == paragraph_index - 1
                 or i == paragraph_index + 1

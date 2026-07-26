@@ -16,7 +16,6 @@
 
 from typing import Any
 
-
 # ── 提示词存储 ──────────────────────────────────────────────────────────────
 
 _PROMPTS: dict[str, dict[str, str]] = {
@@ -42,22 +41,20 @@ _PROMPTS: dict[str, dict[str, str]] = {
             '  "original": "<the exact original text with all markers unchanged>",\n'
             '  "corrected": "<the corrected text with all markers unchanged>",\n'
             '  "changes": [\n'
-            '    {{\n'
+            "    {{\n"
             '      "type": "typo in {language}",\n'
             '      "original": "<incorrect text fragment>",\n'
             '      "corrected": "<correct text fragment>",\n'
             '      "position": <optional int, char offset in original>,\n'
             '      "explanation": "<brief reason in {language}>"\n'
-            '    }}\n'
-            '  ]\n'
+            "    }}\n"
+            "  ]\n"
             "}}"
         ),
         "user": (
-            "Please check the following text for typos and errors.\n\n"
-            "TEXT:\n{text}"
+            "Please check the following text for typos and errors.\n\n" "TEXT:\n{text}"
         ),
     },
-
     # ── expression_opt 模块 ──────────────────────────────────────────────────
     "expression_opt": {
         "base_system": (
@@ -86,13 +83,13 @@ _PROMPTS: dict[str, dict[str, str]] = {
             '  "original": "<the exact original text with all markers unchanged>",\n'
             '  "optimized": "<the improved text with all markers unchanged>",\n'
             '  "changes": [\n'
-            '    {{\n'
+            "    {{\n"
             '      "type": "rewrite",\n'
             '      "original": "<the original text fragment>",\n'
             '      "optimized": "<the improved text fragment>",\n'
             '      "reason": "<brief explanation of the improvement in {language}>"\n'
-            '    }}\n'
-            '  ]\n'
+            "    }}\n"
+            "  ]\n"
             "}}\n\n"
             "CUSTOM INSTRUCTIONS FROM USER:\n"
             "{custom_prompt}\n"
@@ -103,7 +100,6 @@ _PROMPTS: dict[str, dict[str, str]] = {
             "TEXT:\n{text}"
         ),
     },
-
     # ── code_review 模块 ─────────────────────────────────────────────────────
     "code_review": {
         "system": (
@@ -139,14 +135,14 @@ _PROMPTS: dict[str, dict[str, str]] = {
             '  "paragraph_index": <int>,\n'
             '  "needs_review": true | false,\n'
             '  "suggestions": [\n'
-            '    {{\n'
+            "    {{\n"
             '      "type": "code_smell|modernization|best_practice|portability|consistency",\n'
             '      "severity": "info|warning|error",\n'
             '      "description": "<brief description of the issue in {language}>",\n'
             '      "original": "<the problematic code fragment>",\n'
             '      "suggested": "<the suggested replacement>"\n'
-            '    }}\n'
-            '  ]\n'
+            "    }}\n"
+            "  ]\n"
             "}}"
         ),
         "user": (
@@ -155,7 +151,6 @@ _PROMPTS: dict[str, dict[str, str]] = {
             "LATEX SOURCE:\n{text}"
         ),
     },
-
     # ── writing_chat 模块 ────────────────────────────────────────────────────
     "writing_chat": {
         "chat_system": (
@@ -209,13 +204,12 @@ _PROMPTS: dict[str, dict[str, str]] = {
             "specific paragraphs or files, and any pending edits\n"
             "- Keep it concise — usually under 300 words\n"
             "- Write in the user's language\n"
-            "- Return JSON only: {{\"summary\": \"<your summary>\"}}"
+            '- Return JSON only: {{"summary": "<your summary>"}}'
         ),
         "chat_system_time_context": (
             "\n\nCurrent date: {date} ({weekday}), time: {time}\n"
         ),
     },
-
     # ── template_gen 模块 ────────────────────────────────────────────────────
     "template_gen": {
         "single_generation_system": (
@@ -236,11 +230,11 @@ _PROMPTS: dict[str, dict[str, str]] = {
             '  "template_name": "<short descriptive name>",\n'
             '  "preamble": "<complete LaTeX preamble including \\\\documentclass>",\n'
             '  "body_structure": [\n'
-            '    {{\n'
+            "    {{\n"
             '      "section": "<section title>",\n'
             '      "suggested_content": "<brief hint of what to write here>"\n'
-            '    }}\n'
-            '  ],\n'
+            "    }}\n"
+            "  ],\n"
             '  "packages": ["<package1>", "<package2>"],\n'
             '  "explanation": "<brief explanation of the template design in {language}>"\n'
             "}}"
@@ -322,7 +316,6 @@ _PROMPTS: dict[str, dict[str, str]] = {
             "emit long prose without making progress."
         ),
     },
-
     # ── formula_ocr 模块 ─────────────────────────────────────────────────────
     "formula_ocr": {
         "vision_system": (
@@ -347,7 +340,6 @@ _PROMPTS: dict[str, dict[str, str]] = {
             "}}"
         ),
     },
-
     # ── table_ocr 模块 ───────────────────────────────────────────────────────
     "table_ocr": {
         "system": (
@@ -380,7 +372,6 @@ _PROMPTS: dict[str, dict[str, str]] = {
             "}}"
         ),
     },
-
     # ── style_modify 模块 ────────────────────────────────────────────────────
     "style_modify": {
         "system": (
@@ -405,7 +396,6 @@ _PROMPTS: dict[str, dict[str, str]] = {
             "}}"
         ),
     },
-
     # ── bib_manager 模块 ──────────────────────────────────────────────────────
     "bib_manager": {
         "format_analysis": (
@@ -457,8 +447,8 @@ _PROMPTS: dict[str, dict[str, str]] = {
             '  "optional_fields": ["doi", "url", ...],\n'
             '  "field_descriptions": {{\n'
             '    "<field_name>": "<the meaning of this field in this entry and its formatting requirements>",\n'
-            '    ...\n'
-            '  }},\n'
+            "    ...\n"
+            "  }},\n"
             '  "format_description": "Describe in order: author format → title → document type marker → journal/publication information → year/volume/issue/pages → DOI/URL, etc.",\n'
             '  "raw_observed_fields": ["the list of fields that actually appear in the entry, for validation"],\n'
             '  "latex_backend": "bibtex | biblatex | null",\n'
@@ -485,7 +475,7 @@ _PROMPTS: dict[str, dict[str, str]] = {
             '  "fields": {{\n'
             '    "<field_name_1>": "<extracted value>",\n'
             '    "<field_name_2>": "<extracted value>"\n'
-            '  }}\n'
+            "  }}\n"
             "}}"
         ),
         "bibtex_generation": (
@@ -514,12 +504,11 @@ _PROMPTS: dict[str, dict[str, str]] = {
             '    "title": "<title>",\n'
             '    "journal": "<journal>",\n'
             '    "year": "<year>"\n'
-            '  }},\n'
+            "  }},\n"
             '  "raw_bibtex": "<complete formatted BibTeX code as a single string with \\\\n line breaks>"\n'
             "}}"
         ),
     },
-
     # ── compile_error_translator 模块 ─────────────────────────────────────────
     "compile_error_translator": {
         "system": (
@@ -533,15 +522,14 @@ _PROMPTS: dict[str, dict[str, str]] = {
             "5. Output JSON only: strictly return valid JSON format, and do not include Markdown code blocks or any other irrelevant text.\n\n"
             "JSON Format Requirements:\n"
             "{{\n"
-            '  \"explanation\": \"<string: a comprehensive explanation of the file, line number, and root cause of the error. Write in {language} and the tone should be gentle and easy to understand.>\",\n'
-            '  \"fixes\": [\n'
-            '    \"<string: specific fix suggestion 1>\",\n'
-            '    \"<string: specific fix suggestion 2>\"\n'
-            '  ]\n'
+            '  "explanation": "<string: a comprehensive explanation of the file, line number, and root cause of the error. Write in {language} and the tone should be gentle and easy to understand.>",\n'
+            '  "fixes": [\n'
+            '    "<string: specific fix suggestion 1>",\n'
+            '    "<string: specific fix suggestion 2>"\n'
+            "  ]\n"
             "}}"
         ),
     },
-
     # ── latex_package_analyzer 模块 ───────────────────────────────────────────
     "latex_package_analyzer": {
         "system": (
@@ -583,16 +571,16 @@ _PROMPTS: dict[str, dict[str, str]] = {
             "## Examples\n"
             "Input: \\begin{{tabular}}{{lcr}}\\toprule A & B & C\\\\\\midrule 1 & 2 & 3\\\\"
             "\\bottomrule\\end{{tabular}}\n"
-            "Output: {{\"packages\": [\"booktabs\"]}}\n\n"
+            'Output: {{"packages": ["booktabs"]}}\n\n'
             "Input: \\begin{{tabular}}{{>{{\\bfseries}}l p{{3cm}}}}\\makecell{{A\\\\B}} & "
             "\\multirow{{2}}{{*}}{{text}}\\\\\\end{{tabular}}\n"
-            "Output: {{\"packages\": [\"array\", \"makecell\", \"multirow\"]}}\n\n"
+            'Output: {{"packages": ["array", "makecell", "multirow"]}}\n\n'
             "Input: \\begin{{tabular}}{{ll}}a & b\\end{{tabular}}\n"
-            "Output: {{\"packages\": []}}\n\n"
+            'Output: {{"packages": []}}\n\n'
             "## Output Format\n"
             "Respond with valid JSON only. No markdown fences, no explanations, "
             "no trailing commas.\n"
-            '{{\"packages\": [\"package1\", \"package2\"]}}'
+            '{{"packages": ["package1", "package2"]}}'
         ),
     },
 }
@@ -624,9 +612,7 @@ def get_prompt(module: str, key: str, **kwargs: Any) -> str:
     """
     if module not in _PROMPTS:
         available = ", ".join(_PROMPTS.keys())
-        raise KeyError(
-            f"Unknown module: '{module}'. Available modules: {available}"
-        )
+        raise KeyError(f"Unknown module: '{module}'. Available modules: {available}")
 
     module_prompts = _PROMPTS[module]
     if key not in module_prompts:

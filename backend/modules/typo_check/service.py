@@ -20,11 +20,12 @@ from backend.core.config import get_config
 from backend.core.base_paragraph_check import BaseParagraphCheckService
 from backend.core.prompts import get_prompt
 
-
 # ── Pydantic models for LLM response schema ────────────────────────────────
+
 
 class TypoChangeItem(BaseModel):
     """LLM 返回的单条修改建议"""
+
     type: str = "typo"
     original: str
     corrected: str
@@ -34,6 +35,7 @@ class TypoChangeItem(BaseModel):
 
 class TypoCheckResult(BaseModel):
     """LLM 错字检查输出——对应 DEVELOPMENT.md §2.1 JSON 协议"""
+
     paragraph_index: int
     original: str
     corrected: str
@@ -75,19 +77,25 @@ class TypoCheckService(BaseParagraphCheckService):
         )
 
     async def check_typos_stream(
-        self, file_path: str, resolve_input: bool = False, workspace_id: str = "",
+        self,
+        file_path: str,
+        resolve_input: bool = False,
+        workspace_id: str = "",
         language: str = "zh",
     ):
         """错字检查流式版本（SSE）。"""
         self._language = language
-        async for event in self._run_stream_check(file_path, resolve_input, workspace_id):
+        async for event in self._run_stream_check(
+            file_path, resolve_input, workspace_id
+        ):
             yield event
 
     # ── Hook 实现 ───────────────────────────────────────────────────────────
 
     def _get_system_prompt(self) -> str:
-        return get_prompt("typo_check", "system",
-                          language=getattr(self, "_language", "zh"))
+        return get_prompt(
+            "typo_check", "system", language=getattr(self, "_language", "zh")
+        )
 
     def _build_user_content(self, text: str) -> str:
         return get_prompt("typo_check", "user", text=text)

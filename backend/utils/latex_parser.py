@@ -31,22 +31,34 @@ import re
 
 from backend.core.logger import get_logger
 
-
 # ── protected environments: entire block → single marker ──────────────────
 
 # 仅能含字面 % 的逐字类环境（必须在注释替换之前保护）
 _VERBATIM_ENVS = ["verbatim", "lstlisting"]
 
 _PROTECTED_ENVS = [
-    "verbatim", "lstlisting",
-    "table", "table*", "tabular", "tabular*", "longtable",
+    "verbatim",
+    "lstlisting",
+    "table",
+    "table*",
+    "tabular",
+    "tabular*",
+    "longtable",
     "tikzpicture",
-    "equation", "equation*",
-    "align", "align*", "alignat", "alignat*",
-    "eqnarray", "eqnarray*",
-    "gather", "gather*",
-    "multline", "multline*",
-    "flalign", "flalign*",
+    "equation",
+    "equation*",
+    "align",
+    "align*",
+    "alignat",
+    "alignat*",
+    "eqnarray",
+    "eqnarray*",
+    "gather",
+    "gather*",
+    "multline",
+    "multline*",
+    "flalign",
+    "flalign*",
     "subequations",
 ]
 
@@ -57,27 +69,51 @@ _ESCAPED_CHARS = set("#$%&_{}")
 # ── symbols that look like commands but are single tokens ─────────────────
 
 _SINGLE_TOKEN_COMMANDS = {
-    r"\,", r"\:", r"\;", r"\!", r"\-",
-    r"\\",         # line break
-    r"\ ",         # explicit space
+    r"\,",
+    r"\:",
+    r"\;",
+    r"\!",
+    r"\-",
+    r"\\",  # line break
+    r"\ ",  # explicit space
     # accents that don't take args (but \~{n} does; handled later)
-    r"\~", r"\^",
+    r"\~",
+    r"\^",
 }
 
 # 内置命令名（无参数，无需读取 {arg}）
 _NO_ARG_COMMANDS = {
-    "LaTeX", "LaTeXe", "TeX",
+    "LaTeX",
+    "LaTeXe",
+    "TeX",
     "today",
-    "newpage", "clearpage", "pagebreak",
-    "linebreak", "newline",
-    "tableofcontents", "listoffigures", "listoftables",
+    "newpage",
+    "clearpage",
+    "pagebreak",
+    "linebreak",
+    "newline",
+    "tableofcontents",
+    "listoffigures",
+    "listoftables",
     "maketitle",
     "appendix",
-    "hline", "cline", "toprule", "midrule", "bottomrule",
-    "hfill", "vfill", "dotfill", "hrulefill",
-    "smallskip", "medskip", "bigskip",
-    "noindent", "indent",
-    "centering", "raggedright", "raggedleft",
+    "hline",
+    "cline",
+    "toprule",
+    "midrule",
+    "bottomrule",
+    "hfill",
+    "vfill",
+    "dotfill",
+    "hrulefill",
+    "smallskip",
+    "medskip",
+    "bigskip",
+    "noindent",
+    "indent",
+    "centering",
+    "raggedright",
+    "raggedleft",
 }
 
 # 匹配 LaTeX marker（如 __CMD_0000__、__MATH_0001__）
@@ -209,7 +245,7 @@ class LatexParser:
         for m in pattern.finditer(text):
             marker = self._gen_marker("VERB")
             self._marker_map[marker] = m.group(0)
-            result.append(text[last_end: m.start()])
+            result.append(text[last_end : m.start()])
             result.append(marker)
             last_end = m.end()
         result.append(text[last_end:])
@@ -217,9 +253,7 @@ class LatexParser:
 
     # ── protected environments ────────────────────────────────────────────
 
-    def _replace_protected_envs(
-        self, text: str, envs: list[str] | None = None
-    ) -> str:
+    def _replace_protected_envs(self, text: str, envs: list[str] | None = None) -> str:
         """
         将受保护环境（table / equation / tikzpicture 等）
         整体替换为单个 marker。环境内的内容 LLM 不可见。
@@ -241,6 +275,7 @@ class LatexParser:
                     marker = self._gen_marker("ENV")
                     self._marker_map[marker] = m.group(0)
                     return f"\n{marker}\n"
+
                 return replacer
 
             text = pattern.sub(make_replacer(), text)
@@ -254,6 +289,7 @@ class LatexParser:
             $$ ... $$  → marker
             \\[ ... \\] → marker
         """
+
         # $$ ... $$ (non-greedy, DOTALL for multi-line)
         def dollar_replacer(m):
             marker = self._gen_marker("MATH")
@@ -268,8 +304,7 @@ class LatexParser:
             self._marker_map[marker] = m.group(0)
             return f"\n{marker}\n"
 
-        text = re.sub(r"\\\[(.+?)\\\]", bracket_replacer,
-                      text, flags=re.DOTALL)
+        text = re.sub(r"\\\[(.+?)\\\]", bracket_replacer, text, flags=re.DOTALL)
 
         return text
 
@@ -281,6 +316,7 @@ class LatexParser:
             $...$   → marker（排除 $$）
             \\(...\\) → marker
         """
+
         # $...$  — 使用负向断言排除 $$
         def dollar_replacer(m):
             marker = self._gen_marker("MATH")
@@ -288,8 +324,7 @@ class LatexParser:
             return marker
 
         # 匹配 $...$ 但不能是 $$
-        text = re.sub(r"(?<!\$)\$(?!\$)(.+?)(?<!\$)\$(?!\$)",
-                      dollar_replacer, text)
+        text = re.sub(r"(?<!\$)\$(?!\$)(.+?)(?<!\$)\$(?!\$)", dollar_replacer, text)
 
         # \(...\)
         def paren_replacer(m):
@@ -329,7 +364,7 @@ class LatexParser:
 
             # ── 转义字符 ──
             if i + 1 < n and text[i + 1] in _ESCAPED_CHARS:
-                token = text[i: i + 2]
+                token = text[i : i + 2]
                 marker = self._gen_marker("CMD")
                 self._marker_map[marker] = token
                 result.append(marker)
@@ -354,7 +389,7 @@ class LatexParser:
             while j < n and (text[j].isalpha() or text[j] in "*@"):
                 j += 1
 
-            cmd_name = text[i + 1: j]  # 不含反斜杠
+            cmd_name = text[i + 1 : j]  # 不含反斜杠
 
             # ── 无参数命令（\LaTeX, \today, \hline 等）──
             if (

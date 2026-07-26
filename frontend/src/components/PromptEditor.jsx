@@ -14,7 +14,9 @@ export default function PromptEditor({ prompt, onSave }) {
   return (
     <Card>
       <CardHeader className="pb-3">
-        <CardTitle className="text-sm font-medium">{t("promptEditor.title")}</CardTitle>
+        <CardTitle className="text-sm font-medium">
+          {t("promptEditor.title")}
+        </CardTitle>
         <CardDescription className="text-xs">
           {t("promptEditor.description")}
         </CardDescription>

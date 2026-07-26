@@ -19,6 +19,7 @@ from backend.modules.terminology_check.models import TermClusterResult
 
 class TermItem(BaseModel):
     """LLM 返回的单个术语"""
+
     term: str
     term_type: str = "concept"
     context: str = ""
@@ -26,6 +27,7 @@ class TermItem(BaseModel):
 
 class TermExtractOutput(BaseModel):
     """LLM 术语抽取响应"""
+
     paragraph_index: int
     terms: list[TermItem] = []
 
@@ -57,7 +59,7 @@ _TERM_EXTRACT_PROMPT = (
     '  "paragraph_index": <int>,\n'
     '  "terms": [\n'
     '    {"term": "<exact term>", "term_type": "<concept|abbreviation|proper_noun>", "context": "<surrounding text>"}\n'
-    '  ]\n'
+    "  ]\n"
     "}"
 )
 
@@ -74,7 +76,7 @@ _CLUSTER_SYSTEM_PROMPT = (
     "2. For each group, select the most standard and appropriate term as "
     'the "recommended" value — prefer the form most commonly used in '
     "academic writing for the document's language.\n"
-    "3. List ALL terms in the group as \"variants\", INCLUDING the "
+    '3. List ALL terms in the group as "variants", INCLUDING the '
     "recommended term itself if it was one of the extracted terms.\n\n"
     "RULES:\n"
     "- Only group terms that are truly semantically IDENTICAL.\n"
@@ -143,7 +145,8 @@ class TermExtractor:
             validated.paragraph_index = paragraph_index
 
             filtered = [
-                t for t in validated.terms
+                t
+                for t in validated.terms
                 if not _MARKER_PATTERN.fullmatch(t.term.strip())
             ]
 
@@ -239,10 +242,12 @@ class TermExtractor:
                 start = max(0, m.start() - 15)
                 end = min(len(plain_text), m.end() + 15)
                 context = plain_text[start:end]
-                terms.append(TermItem(
-                    term=term,
-                    term_type="abbreviation",
-                    context=context.strip(),
-                ))
+                terms.append(
+                    TermItem(
+                        term=term,
+                        term_type="abbreviation",
+                        context=context.strip(),
+                    )
+                )
 
         return terms

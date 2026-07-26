@@ -26,6 +26,7 @@ from backend.utils.latex_package_analyzer import prepend_package_comments
 
 class TableOCRResult(BaseModel):
     """表格 OCR 识别输出"""
+
     latex: str
     confidence: float = 0.0
 
@@ -58,8 +59,7 @@ class TableOCRService:
 
         cfg = get_config()
         if not cfg.llm.api_key:
-            self._logger.warning(
-                "No API key configured, returning empty result")
+            self._logger.warning("No API key configured, returning empty result")
             return {
                 "latex": "",
                 "confidence": 0.0,
@@ -156,9 +156,7 @@ class TableOCRService:
             new_width = int(width * ratio)
             new_height = int(height * ratio)
             img = img.resize((new_width, new_height), Image.LANCZOS)
-            self._logger.info(
-                f"Resized image: {original_size} -> {img.size}"
-            )
+            self._logger.info(f"Resized image: {original_size} -> {img.size}")
 
         return img
 

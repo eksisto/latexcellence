@@ -10,7 +10,12 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 
-export default function CaptchaDialog({ challenge, submitting, onSubmit, onDismiss }) {
+export default function CaptchaDialog({
+  challenge,
+  submitting,
+  onSubmit,
+  onDismiss,
+}) {
   const { t } = useTranslation(["pages", "common"]);
   const [selected, setSelected] = useState(new Set());
 
@@ -28,23 +33,38 @@ export default function CaptchaDialog({ challenge, submitting, onSubmit, onDismi
   const gridSize = challenge.images.length <= 4 ? 2 : 3;
 
   return (
-    <Dialog open={!!challenge} onOpenChange={(open) => { if (!open) onDismiss(); }}>
+    <Dialog
+      open={!!challenge}
+      onOpenChange={(open) => {
+        if (!open) onDismiss();
+      }}
+    >
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <ShieldCheck className="size-4 text-amber-500" />
-            {t("pages:writingChat.captchaTitle", { instruction: challenge.instruction ? ` — ${challenge.instruction}` : "" })}
+            {t("pages:writingChat.captchaTitle", {
+              instruction: challenge.instruction
+                ? ` — ${challenge.instruction}`
+                : "",
+            })}
           </DialogTitle>
         </DialogHeader>
 
         <div className="space-y-3">
           <p className="text-xs text-muted-foreground">
-            {t("pages:writingChat.captchaDesc", { engine: challenge.engine_name ? `("${challenge.engine_name}")` : "" })}
+            {t("pages:writingChat.captchaDesc", {
+              engine: challenge.engine_name
+                ? `("${challenge.engine_name}")`
+                : "",
+            })}
           </p>
 
           <div
             className="grid gap-2 mx-auto"
-            style={{ gridTemplateColumns: `repeat(${gridSize}, minmax(0, 1fr))` }}
+            style={{
+              gridTemplateColumns: `repeat(${gridSize}, minmax(0, 1fr))`,
+            }}
           >
             {challenge.images.map((img) => {
               const isSelected = selected.has(img.hash);

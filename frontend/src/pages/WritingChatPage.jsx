@@ -16,12 +16,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Select,
   SelectContent,
@@ -102,21 +97,37 @@ export default function WritingChatPage() {
 
   const canEdit = paragraphIndex != null && !!activeFile;
 
-  const messageActions = useMemo(() => ({
-    generateEdit,
-    applyEdit,
-    deleteMessage,
-    undoMessage,
-    editingMessageId,
-    applyingMessageId,
-    canEdit,
-  }), [generateEdit, applyEdit, deleteMessage, undoMessage, editingMessageId, applyingMessageId, canEdit]);
+  const messageActions = useMemo(
+    () => ({
+      generateEdit,
+      applyEdit,
+      deleteMessage,
+      undoMessage,
+      editingMessageId,
+      applyingMessageId,
+      canEdit,
+    }),
+    [
+      generateEdit,
+      applyEdit,
+      deleteMessage,
+      undoMessage,
+      editingMessageId,
+      applyingMessageId,
+      canEdit,
+    ],
+  );
 
   return (
     <div className="min-h-screen p-4 md:p-8">
       <div className="max-w-7xl mx-auto mb-4">
         <div className="flex items-center gap-3">
-          <Button variant="ghost" size="icon" nativeButton={false} render={<Link to="/" />}>
+          <Button
+            variant="ghost"
+            size="icon"
+            nativeButton={false}
+            render={<Link to="/" />}
+          >
             <ArrowLeft />
           </Button>
           <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
@@ -138,9 +149,9 @@ export default function WritingChatPage() {
               <CardTitle>{t("pages:writingChat.noProjectTitle")}</CardTitle>
             </CardHeader>
             <CardContent>
-                <Button nativeButton={false} render={<Link to="/workspace" />}>
-                  {t("common:openWorkspace")}
-                </Button>
+              <Button nativeButton={false} render={<Link to="/workspace" />}>
+                {t("common:openWorkspace")}
+              </Button>
             </CardContent>
           </Card>
         </div>
@@ -149,7 +160,9 @@ export default function WritingChatPage() {
           {/* 左：会话列表 */}
           <Card className="h-[calc(100vh-160px)] min-h-[400px] flex flex-col">
             <CardHeader className="pb-2 flex items-center justify-between">
-              <CardTitle className="text-sm">{t("pages:writingChat.sessions")}</CardTitle>
+              <CardTitle className="text-sm">
+                {t("pages:writingChat.sessions")}
+              </CardTitle>
               <Button
                 size="icon-xs"
                 variant="ghost"
@@ -171,9 +184,7 @@ export default function WritingChatPage() {
                     <div
                       key={s.id}
                       className={`group flex items-center rounded px-2 py-1.5 cursor-pointer text-xs hover:bg-muted relative ${
-                        s.id === currentSessionId
-                          ? "bg-muted font-medium"
-                          : ""
+                        s.id === currentSessionId ? "bg-muted font-medium" : ""
                       }`}
                     >
                       {renamingId === s.id ? (
@@ -185,13 +196,15 @@ export default function WritingChatPage() {
                           onKeyDown={(e) => {
                             if (e.key === "Enter") {
                               e.preventDefault();
-                              if (renameTitle.trim()) renameSession(s.id, renameTitle.trim());
+                              if (renameTitle.trim())
+                                renameSession(s.id, renameTitle.trim());
                               setRenamingId(null);
                             }
                             if (e.key === "Escape") setRenamingId(null);
                           }}
                           onBlur={() => {
-                            if (renameTitle.trim()) renameSession(s.id, renameTitle.trim());
+                            if (renameTitle.trim())
+                              renameSession(s.id, renameTitle.trim());
                             setRenamingId(null);
                           }}
                         />
@@ -250,12 +263,11 @@ export default function WritingChatPage() {
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-3 flex-1 min-h-0 overflow-y-auto">
-              <Select
-                value={activeFile || ""}
-                onValueChange={handleFileChange}
-              >
+              <Select value={activeFile || ""} onValueChange={handleFileChange}>
                 <SelectTrigger className="w-full">
-                  <SelectValue placeholder={t("pages:writingChat.selectFile")} />
+                  <SelectValue
+                    placeholder={t("pages:writingChat.selectFile")}
+                  />
                 </SelectTrigger>
                 <SelectContent>
                   {texFiles.map((f) => (
@@ -273,13 +285,18 @@ export default function WritingChatPage() {
                 }
               >
                 <SelectTrigger className="w-full">
-                  <SelectValue placeholder={t("pages:writingChat.selectParagraph")} />
+                  <SelectValue
+                    placeholder={t("pages:writingChat.selectParagraph")}
+                  />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">{t("pages:writingChat.noParagraph")}</SelectItem>
+                  <SelectItem value="all">
+                    {t("pages:writingChat.noParagraph")}
+                  </SelectItem>
                   {paragraphs.map((p) => (
                     <SelectItem key={p.index} value={String(p.index)}>
-                      P{p.index} · {(p.text || "").slice(0, 30).replace(/\n/g, " ")}
+                      P{p.index} ·{" "}
+                      {(p.text || "").slice(0, 30).replace(/\n/g, " ")}
                       {(p.text || "").length > 30 ? "..." : ""}
                     </SelectItem>
                   ))}
@@ -289,9 +306,7 @@ export default function WritingChatPage() {
               <div className="text-xs text-muted-foreground">
                 <p>{t("pages:writingChat.assistantHintTitle")}</p>
                 <div className="mt-2 pl-2 space-y-1">
-                  <p>
-                    {t("pages:writingChat.assistantHint1")}
-                  </p>
+                  <p>{t("pages:writingChat.assistantHint1")}</p>
                   <p>
                     {t("pages:writingChat.assistantHint2")}
                     <PencilLine className="inline mx-0.5 size-3" />
@@ -312,7 +327,9 @@ export default function WritingChatPage() {
                   {assistants.map((a) => (
                     <Button
                       key={a.name}
-                      variant={activeAssistant === a.name ? "default" : "outline"}
+                      variant={
+                        activeAssistant === a.name ? "default" : "outline"
+                      }
                       size="xs"
                       onClick={() => setAssistantActive(a.name)}
                     >
@@ -340,19 +357,30 @@ export default function WritingChatPage() {
                       size="xs"
                       variant="outline"
                       onClick={() => {
-                        if (!newAssistantName.trim() || !newAssistantContent.trim()) return;
-                        saveAssistant(newAssistantName.trim(), newAssistantContent.trim());
+                        if (
+                          !newAssistantName.trim() ||
+                          !newAssistantContent.trim()
+                        )
+                          return;
+                        saveAssistant(
+                          newAssistantName.trim(),
+                          newAssistantContent.trim(),
+                        );
                         setNewAssistantName("");
                         setNewAssistantContent("");
                       }}
-                      disabled={!newAssistantName.trim() || !newAssistantContent.trim()}
+                      disabled={
+                        !newAssistantName.trim() || !newAssistantContent.trim()
+                      }
                     >
                       <Plus className="size-3" />
                       {t("pages:writingChat.saveAssistant")}
                     </Button>
                     {activeAssistant && (
                       <span className="text-xs text-muted-foreground">
-                        {t("pages:writingChat.activeAssistant", { name: activeAssistant })}
+                        {t("pages:writingChat.activeAssistant", {
+                          name: activeAssistant,
+                        })}
                       </span>
                     )}
                   </div>
@@ -376,7 +404,11 @@ export default function WritingChatPage() {
                   </div>
                 )}
                 {messages.map((m) => (
-                  <MessageBubble key={m.id} message={m} actions={messageActions} />
+                  <MessageBubble
+                    key={m.id}
+                    message={m}
+                    actions={messageActions}
+                  />
                 ))}
               </div>
 
@@ -388,7 +420,9 @@ export default function WritingChatPage() {
                 <div className="flex items-center gap-2 text-xs text-muted-foreground py-1 px-2 rounded bg-blue-500/5 border border-blue-500/20">
                   <Globe className="size-3 animate-pulse text-blue-500" />
                   <span>
-                    {t("pages:writingChat.searching", { query: searchStatus.query || "..." })}
+                    {t("pages:writingChat.searching", {
+                      query: searchStatus.query || "...",
+                    })}
                   </span>
                 </div>
               )}

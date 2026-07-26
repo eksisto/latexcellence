@@ -10,14 +10,30 @@ import pytest
 
 from backend.core import config as cfg_module
 
-
 SAMPLE_CONFIG = {
-    "server": {"host": "0.0.0.0", "port": 8000, "dev_mode": True, "vite_dev_url": "http://localhost:5173"},
-    "llm": {"api_key": "file-key-123", "base_url": "https://api.openai.com/v1", "model": "gpt-4o",
-            "temperature": 0.3, "max_tokens": 4096, "request_interval": 1.5, "max_concurrency": 5},
+    "server": {
+        "host": "0.0.0.0",
+        "port": 8000,
+        "dev_mode": True,
+        "vite_dev_url": "http://localhost:5173",
+    },
+    "llm": {
+        "api_key": "file-key-123",
+        "base_url": "https://api.openai.com/v1",
+        "model": "gpt-4o",
+        "temperature": 0.3,
+        "max_tokens": 4096,
+        "request_interval": 1.5,
+        "max_concurrency": 5,
+    },
     "features": {
         "typo_check": {"enabled": True, "batch_size": 5},
-        "expression_opt": {"enabled": True, "batch_size": 3, "default_prompt": "...", "custom_prompts_dir": "prompts/expression/"},
+        "expression_opt": {
+            "enabled": True,
+            "batch_size": 3,
+            "default_prompt": "...",
+            "custom_prompts_dir": "prompts/expression/",
+        },
         "formula_ocr": {"enabled": True, "max_image_size_mb": 10},
         "table_ocr": {"enabled": True, "max_image_size_mb": 10},
         "template_gen": {"enabled": True, "output_dir": "templates/"},
@@ -27,8 +43,14 @@ SAMPLE_CONFIG = {
         "markdown_converter": {"enabled": True},
         "style_modify": {"enabled": True},
         "terminology_check": {"enabled": True, "batch_size": 5},
-        "writing_chat": {"enabled": True, "compression_threshold_tokens": 200000, "sessions_dir": "sessions/",
-                         "custom_prompts_dir": "prompts/writing_chat/", "summary_temperature": 0.2, "summary_max_tokens": 1024},
+        "writing_chat": {
+            "enabled": True,
+            "compression_threshold_tokens": 200000,
+            "sessions_dir": "sessions/",
+            "custom_prompts_dir": "prompts/writing_chat/",
+            "summary_temperature": 0.2,
+            "summary_max_tokens": 1024,
+        },
         "bib_manager": {"enabled": True, "format_configs_dir": "formats/"},
     },
     "logging": {"level": "INFO", "dir": "logs/"},
@@ -72,7 +94,9 @@ class TestEnvVarKeyNotLeakedToDisk:
 
     def test_save_config_strips_env_var_key(self, tmp_path):
         """环境变量 Key → save_config() 后磁盘文件 api_key 为空"""
-        config_path = _write_config(tmp_path, overrides={"llm": {"api_key": "file-key-123"}})
+        config_path = _write_config(
+            tmp_path, overrides={"llm": {"api_key": "file-key-123"}}
+        )
         with mock.patch.dict(os.environ, {"LX_LLM_KEY": "env-key-456"}, clear=True):
             cfg_module.load_config(config_path)
             assert cfg_module._api_key_from_env is True
@@ -83,7 +107,9 @@ class TestEnvVarKeyNotLeakedToDisk:
 
     def test_file_key_still_persisted(self, tmp_path):
         """无环境变量 → 文件中的 api_key 正常持久化"""
-        config_path = _write_config(tmp_path, overrides={"llm": {"api_key": "file-key-123"}})
+        config_path = _write_config(
+            tmp_path, overrides={"llm": {"api_key": "file-key-123"}}
+        )
         with mock.patch.dict(os.environ, {}, clear=True):
             cfg_module.load_config(config_path)
             assert cfg_module._api_key_from_env is False
@@ -132,7 +158,9 @@ class TestUpdateConfigFromDict:
         with mock.patch.dict(os.environ, {"LX_LLM_KEY": "env-key"}, clear=True):
             cfg_module.load_config(config_path)
             assert cfg_module._api_key_from_env is True
-            cfg_module.update_config_from_dict({"llm": {"api_key": "user-override-key"}})
+            cfg_module.update_config_from_dict(
+                {"llm": {"api_key": "user-override-key"}}
+            )
         result = _read_config(config_path)
         assert result["llm"]["api_key"] == "user-override-key", "手动输入应持久化"
         assert not cfg_module._api_key_from_env
@@ -140,7 +168,9 @@ class TestUpdateConfigFromDict:
 
     def test_empty_key_from_frontend_keeps_existing(self, tmp_path):
         """前端传空 Key → 保留原 Key 不变"""
-        config_path = _write_config(tmp_path, overrides={"llm": {"api_key": "existing-key"}})
+        config_path = _write_config(
+            tmp_path, overrides={"llm": {"api_key": "existing-key"}}
+        )
         with mock.patch.dict(os.environ, {}, clear=True):
             cfg_module.load_config(config_path)
             cfg_module.update_config_from_dict({"llm": {"api_key": ""}})
@@ -148,7 +178,9 @@ class TestUpdateConfigFromDict:
 
     def test_update_other_fields_no_key_impact(self, tmp_path):
         """修改非 Key 字段时 Key 不受影响"""
-        config_path = _write_config(tmp_path, overrides={"llm": {"api_key": "stable-key"}})
+        config_path = _write_config(
+            tmp_path, overrides={"llm": {"api_key": "stable-key"}}
+        )
         with mock.patch.dict(os.environ, {}, clear=True):
             cfg_module.load_config(config_path)
             cfg_module.update_config_from_dict({"server": {"port": 9999}})

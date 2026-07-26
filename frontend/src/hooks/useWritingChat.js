@@ -26,11 +26,15 @@ export default function useWritingChat() {
   const writingChatLoading = useStore((s) => s.loadingStates.writingChat);
   const writingChatSessions = useStore((s) => s.writingChatSessions);
   const writingChatMessages = useStore((s) => s.writingChatMessages);
-  const writingChatCurrentSessionId = useStore((s) => s.writingChatCurrentSessionId);
+  const writingChatCurrentSessionId = useStore(
+    (s) => s.writingChatCurrentSessionId,
+  );
   const writingChatCompressed = useStore((s) => s.writingChatCompressed);
   const setWritingChatSessions = useStore((s) => s.setWritingChatSessions);
   const setWritingChatMessages = useStore((s) => s.setWritingChatMessages);
-  const setWritingChatCurrentSessionId = useStore((s) => s.setWritingChatCurrentSessionId);
+  const setWritingChatCurrentSessionId = useStore(
+    (s) => s.setWritingChatCurrentSessionId,
+  );
   const setWritingChatCompressed = useStore((s) => s.setWritingChatCompressed);
 
   const [paragraphIndex, setParagraphIndex] = useState(null);
@@ -115,10 +119,19 @@ export default function useWritingChat() {
   // ── 页面刷新：水合完成后自动加载上次选中的会话 ──────────────────
   const hydrated = useStore((s) => s.hydrated);
   useEffect(() => {
-    if (hydrated && writingChatCurrentSessionId && writingChatMessages.length === 0) {
+    if (
+      hydrated &&
+      writingChatCurrentSessionId &&
+      writingChatMessages.length === 0
+    ) {
       selectSession(writingChatCurrentSessionId);
     }
-  }, [hydrated, writingChatCurrentSessionId, writingChatMessages.length, selectSession]);
+  }, [
+    hydrated,
+    writingChatCurrentSessionId,
+    writingChatMessages.length,
+    selectSession,
+  ]);
 
   // ── 加载段落预览（供段落选择 dropdown 使用） ─────────────────────
   const loadParagraphs = useCallback(async () => {
@@ -190,18 +203,21 @@ export default function useWritingChat() {
 
       try {
         await api.writingChat.send({
-          sessionId: isDraftSession(writingChatCurrentSessionId) ? null : writingChatCurrentSessionId,
+          sessionId: isDraftSession(writingChatCurrentSessionId)
+            ? null
+            : writingChatCurrentSessionId,
           filePath: activeFile,
           paragraphIndex: paragraphIndex,
           userMessage: content,
-          assistantPrompt: activeAssistant && assistantContent ? assistantContent : null,
+          assistantPrompt:
+            activeAssistant && assistantContent ? assistantContent : null,
           workspaceId,
           onEvent,
         });
       } catch (e) {
         setError(e.message);
         setWritingChatMessages((prev) =>
-          prev.filter((m) => m.id !== tmpAssistantId)
+          prev.filter((m) => m.id !== tmpAssistantId),
         );
         const { translateError } = await import("@/utils/errorMessages");
         const msg = translateError(e.message);
@@ -226,13 +242,17 @@ export default function useWritingChat() {
       setWritingChatCurrentSessionId,
       setLoading,
       refreshSessions,
-    ]
+    ],
   );
 
   // ── 生成编辑（第二轮） ──────────────────────────────────────────
   const generateEdit = useCallback(
     async (messageId, instruction) => {
-      if (!activeFile || !writingChatCurrentSessionId || paragraphIndex == null) {
+      if (
+        !activeFile ||
+        !writingChatCurrentSessionId ||
+        paragraphIndex == null
+      ) {
         const { toast } = await import("sonner");
         const { default: i18n } = await import("@/i18n");
         toast.error(i18n.t("hooks:writingChat.selectFileAndParagraph"));
@@ -240,29 +260,34 @@ export default function useWritingChat() {
       }
       setEditingMessageId(messageId);
       try {
-        const data = await api.writingChat.generateEdit({
-          session_id: writingChatCurrentSessionId,
-          file_path: activeFile,
-          paragraph_index: paragraphIndex,
-          instruction:
-            instruction ||
-            "请基于刚才的对话内容修改此段落，使其更符合学术写作规范",
-          language: getUiLanguage(),
-        }, workspaceId);
+        const data = await api.writingChat.generateEdit(
+          {
+            session_id: writingChatCurrentSessionId,
+            file_path: activeFile,
+            paragraph_index: paragraphIndex,
+            instruction:
+              instruction ||
+              "请基于刚才的对话内容修改此段落，使其更符合学术写作规范",
+            language: getUiLanguage(),
+          },
+          workspaceId,
+        );
         // 把 edit_op 附挂到对应 assistant 消息
         setWritingChatMessages((prev) =>
           prev.map((m) =>
             m.id === messageId
               ? { ...m, edit_op: data.edit_op, edit_reason: data.reason }
-              : m
-          )
+              : m,
+          ),
         );
         return data;
       } catch (e) {
         setError(e.message);
         const { toast } = await import("sonner");
         const { default: i18n } = await import("@/i18n");
-        toast.error(i18n.t("hooks:writingChat.generateEditFailed"), { description: e.message });
+        toast.error(i18n.t("hooks:writingChat.generateEditFailed"), {
+          description: e.message,
+        });
         return null;
       } finally {
         setEditingMessageId(null);
@@ -273,7 +298,7 @@ export default function useWritingChat() {
       paragraphIndex,
       writingChatCurrentSessionId,
       setWritingChatMessages,
-    ]
+    ],
   );
 
   // ── 应用编辑 ────────────────────────────────────────────────────
@@ -286,8 +311,8 @@ export default function useWritingChat() {
           prev.map((m) =>
             m.id === messageId && m.edit_op
               ? { ...m, edit_op: { ...m.edit_op, new_latex: customText } }
-              : m
-          )
+              : m,
+          ),
         );
       }
       setApplyingMessageId(messageId);
@@ -305,8 +330,8 @@ export default function useWritingChat() {
           prev.map((m) =>
             m.id === messageId && m.edit_op
               ? { ...m, edit_op: { ...m.edit_op, applied: true } }
-              : m
-          )
+              : m,
+          ),
         );
         const { toast } = await import("sonner");
         const { default: i18n } = await import("@/i18n");
@@ -315,12 +340,14 @@ export default function useWritingChat() {
         setError(e.message);
         const { toast } = await import("sonner");
         const { default: i18n } = await import("@/i18n");
-        toast.error(i18n.t("hooks:writingChat.applyEditFailed"), { description: e.message });
+        toast.error(i18n.t("hooks:writingChat.applyEditFailed"), {
+          description: e.message,
+        });
       } finally {
         setApplyingMessageId(null);
       }
     },
-    [writingChatCurrentSessionId, setWritingChatMessages]
+    [writingChatCurrentSessionId, setWritingChatMessages],
   );
 
   // ── 删除消息 ────────────────────────────────────────────────────
@@ -332,15 +359,19 @@ export default function useWritingChat() {
           session_id: writingChatCurrentSessionId,
           message_id: messageId,
         });
-        setWritingChatMessages((prev) => prev.filter((m) => m.id !== messageId));
+        setWritingChatMessages((prev) =>
+          prev.filter((m) => m.id !== messageId),
+        );
       } catch (e) {
         setError(e.message);
         const { toast } = await import("sonner");
         const { default: i18n } = await import("@/i18n");
-        toast.error(i18n.t("hooks:writingChat.deleteMessageFailed"), { description: e.message });
+        toast.error(i18n.t("hooks:writingChat.deleteMessageFailed"), {
+          description: e.message,
+        });
       }
     },
-    [writingChatCurrentSessionId, setWritingChatMessages]
+    [writingChatCurrentSessionId, setWritingChatMessages],
   );
 
   // ── 撤回消息（summary 消息会还原快照） ────────────────────────
@@ -353,10 +384,12 @@ export default function useWritingChat() {
           message_id: messageId,
         });
         // 重新拉取会话完整数据以同步 snapshot 还原结构
-        const fresh = await api.writingChat.loadSession(writingChatCurrentSessionId);
+        const fresh = await api.writingChat.loadSession(
+          writingChatCurrentSessionId,
+        );
         setWritingChatMessages(fresh.messages || []);
         const hasCompressed = (fresh.messages || []).some(
-          (m) => m.compressed && m.role === "summary"
+          (m) => m.compressed && m.role === "summary",
         );
         setWritingChatCompressed(hasCompressed);
         const { toast } = await import("sonner");
@@ -370,10 +403,16 @@ export default function useWritingChat() {
         setError(e.message);
         const { toast } = await import("sonner");
         const { default: i18n } = await import("@/i18n");
-        toast.error(i18n.t("hooks:writingChat.undoFailed"), { description: e.message });
+        toast.error(i18n.t("hooks:writingChat.undoFailed"), {
+          description: e.message,
+        });
       }
     },
-    [writingChatCurrentSessionId, setWritingChatMessages, setWritingChatCompressed]
+    [
+      writingChatCurrentSessionId,
+      setWritingChatMessages,
+      setWritingChatCompressed,
+    ],
   );
 
   const handleFileChange = useCallback(
@@ -385,7 +424,7 @@ export default function useWritingChat() {
       setParagraphIndex(null);
       setParagraphs([]);
     },
-    [setActiveFile, activeFile]
+    [setActiveFile, activeFile],
   );
 
   return {

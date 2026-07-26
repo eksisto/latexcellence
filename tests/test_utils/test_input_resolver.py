@@ -24,10 +24,14 @@ def project_with_inputs():
         root = Path(tmpdir)
 
         main_content = (
-            r"\documentclass{article}" + "\n"
-            + r"\begin{document}" + "\n"
-            + r"\input{chapters/intro}" + "\n"
-            + r"\include{chapters/summary}" + "\n"
+            r"\documentclass{article}"
+            + "\n"
+            + r"\begin{document}"
+            + "\n"
+            + r"\input{chapters/intro}"
+            + "\n"
+            + r"\include{chapters/summary}"
+            + "\n"
             + r"\end{document}"
         )
         (root / "main.tex").write_text(main_content, encoding="utf-8")
@@ -51,9 +55,12 @@ def project_with_traversal():
         outside.write_text(r"\section{Secret}", encoding="utf-8")
 
         main_content = (
-            r"\documentclass{article}" + "\n"
-            + r"\begin{document}" + "\n"
-            + r"\input{../outside}" + "\n"
+            r"\documentclass{article}"
+            + "\n"
+            + r"\begin{document}"
+            + "\n"
+            + r"\input{../outside}"
+            + "\n"
             + r"\end{document}"
         )
         (root / "main.tex").write_text(main_content, encoding="utf-8")
@@ -99,9 +106,7 @@ class TestResolveInputs:
             root = Path(tmpdir)
             subdir = root / "chapters"
             subdir.mkdir()
-            (subdir / "main.tex").write_text(
-                r"\input{../../secret}", encoding="utf-8"
-            )
+            (subdir / "main.tex").write_text(r"\input{../../secret}", encoding="utf-8")
             (root / "secret.tex").write_text("secret", encoding="utf-8")
 
             result = resolve_inputs("chapters/main.tex", str(root))

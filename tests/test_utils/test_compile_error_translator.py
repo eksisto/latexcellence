@@ -18,7 +18,6 @@ from backend.utils.compile_error_translator import (
     translate_compile_errors,
 )
 
-
 # ── ErrorTranslation 模型测试 ─────────────────────────────────────────────
 
 
@@ -48,7 +47,9 @@ class TestExtractKeyErrors:
     """extract_key_errors 错误日志过滤测试。"""
 
     def test_extracts_undefined_control_sequence(self):
-        log = "Some preamble\n! Undefined control sequence.\nl.42 \\badcommand\nMore text"
+        log = (
+            "Some preamble\n! Undefined control sequence.\nl.42 \\badcommand\nMore text"
+        )
         result = extract_key_errors(log)
         assert "Undefined control sequence" in result
         assert "\\badcommand" in result
@@ -120,7 +121,10 @@ class TestTranslateCompileErrors:
         )
 
         stdout = "! LaTeX Error: File `amsmath.sty' not found.\n"
-        with patch("backend.utils.compile_error_translator.get_llm_client", return_value=mock_llm):
+        with patch(
+            "backend.utils.compile_error_translator.get_llm_client",
+            return_value=mock_llm,
+        ):
             explanation, fixes = await translate_compile_errors(stdout, "")
 
         assert explanation == "缺少宏包 amsmath"
@@ -134,7 +138,10 @@ class TestTranslateCompileErrors:
         mock_llm.chat = AsyncMock(side_effect=RuntimeError("LLM offline"))
 
         stdout = "! Undefined control sequence.\nl.42 \\bad\n"
-        with patch("backend.utils.compile_error_translator.get_llm_client", return_value=mock_llm):
+        with patch(
+            "backend.utils.compile_error_translator.get_llm_client",
+            return_value=mock_llm,
+        ):
             explanation, fixes = await translate_compile_errors(stdout, "")
 
         assert "LLM" in explanation
@@ -152,7 +159,10 @@ class TestTranslateCompileErrors:
         )
 
         stdout = "! Emergency stop.\n"
-        with patch("backend.utils.compile_error_translator.get_llm_client", return_value=mock_llm):
+        with patch(
+            "backend.utils.compile_error_translator.get_llm_client",
+            return_value=mock_llm,
+        ):
             explanation, fixes = await translate_compile_errors(stdout, "")
 
         assert explanation == "OK"

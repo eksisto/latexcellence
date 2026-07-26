@@ -14,7 +14,9 @@ export default function ThemeToggle() {
 
   return (
     <Tooltip>
-      <TooltipTrigger render={<Button variant="ghost" size="icon" onClick={toggleTheme} />}>
+      <TooltipTrigger
+        render={<Button variant="ghost" size="icon" onClick={toggleTheme} />}
+      >
         {resolved === "dark" ? (
           <Sun className="size-5" />
         ) : (
@@ -23,7 +25,9 @@ export default function ThemeToggle() {
         <span className="sr-only">{t("themeToggle.switchDarkLight")}</span>
       </TooltipTrigger>
       <TooltipContent>
-        {resolved === "dark" ? t("themeToggle.switchToLight") : t("themeToggle.switchToDark")}
+        {resolved === "dark"
+          ? t("themeToggle.switchToLight")
+          : t("themeToggle.switchToDark")}
       </TooltipContent>
     </Tooltip>
   );

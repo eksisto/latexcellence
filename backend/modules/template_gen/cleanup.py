@@ -45,6 +45,7 @@ def cleanup_expired_sandboxes() -> int:
         return 0
 
     import time
+
     now = time.time()
     cutoff = now - tg.cleanup_retention_days * 86400
     removed = 0
@@ -93,6 +94,7 @@ def _latest_mtime(directory: Path) -> float:
 def _format_mtime(ts: float) -> str:
     """将 Unix 时间戳格式化为可读日期字符串。"""
     import datetime
+
     return datetime.datetime.fromtimestamp(ts).strftime("%Y-%m-%d %H:%M:%S")
 
 
@@ -114,7 +116,9 @@ async def cleanup_loop() -> None:
         try:
             removed = await asyncio.to_thread(cleanup_expired_sandboxes)
             if removed > 0:
-                logger.info("Periodic cleanup completed, deleted %d expired sandboxes", removed)
+                logger.info(
+                    "Periodic cleanup completed, deleted %d expired sandboxes", removed
+                )
         except Exception:
             logger.exception("Sandbox cleanup execution error")
 

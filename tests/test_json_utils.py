@@ -59,9 +59,7 @@ class TestSafeParseJson:
         assert result == {"x": 42}
 
     def test_markdown_with_surrounding_text(self):
-        result = safe_parse_json(
-            'Here is the result:\n```json\n{"x": 1}\n```\nDone.'
-        )
+        result = safe_parse_json('Here is the result:\n```json\n{"x": 1}\n```\nDone.')
         assert result == {"x": 1}
 
     def test_trailing_comma_in_object(self):
@@ -102,9 +100,7 @@ class TestSafeParseJson:
         assert result == []
 
     def test_json_with_text_before_and_after(self):
-        result = safe_parse_json(
-            'Some text {"key": "value"} more text'
-        )
+        result = safe_parse_json('Some text {"key": "value"} more text')
         assert result == {"key": "value"}
 
     def test_numbers_floats_bools(self):
@@ -147,7 +143,9 @@ class TestFormatValidationError:
         assert result.count("Field") == 2
 
     def test_nested_loc(self):
-        errors = [{"loc": ["items", 0, "sub"], "msg": "wrong type", "type": "type_error"}]
+        errors = [
+            {"loc": ["items", 0, "sub"], "msg": "wrong type", "type": "type_error"}
+        ]
         result = format_validation_error(errors)
         assert "items -> 0 -> sub" in result
 
@@ -183,12 +181,16 @@ class TestParseAndValidate:
             parse_and_validate('{"name": "test"}', SampleItem, raise_on_error=True)
 
     def test_validation_failure_no_raise(self):
-        model, error = parse_and_validate('{"name": "test"}', SampleItem, raise_on_error=False)
+        model, error = parse_and_validate(
+            '{"name": "test"}', SampleItem, raise_on_error=False
+        )
         assert model is None
         assert "value" in error
 
     def test_missing_field(self):
-        model, error = parse_and_validate('{"value": 1}', SampleItem, raise_on_error=False)
+        model, error = parse_and_validate(
+            '{"value": 1}', SampleItem, raise_on_error=False
+        )
         assert model is None
         assert "name" in error
 
@@ -224,10 +226,12 @@ class TestRetryWithValidation:
 
     @pytest.mark.asyncio
     async def test_success_after_one_retry(self):
-        chat_fn = AsyncMock(side_effect=[
-            '{"name": "test"}',  # missing value → validation fails
-            '{"name": "test", "value": 42}',
-        ])
+        chat_fn = AsyncMock(
+            side_effect=[
+                '{"name": "test"}',  # missing value → validation fails
+                '{"name": "test", "value": 42}',
+            ]
+        )
         messages = [{"role": "user", "content": "test"}]
 
         result = await retry_with_validation(
@@ -274,10 +278,12 @@ class TestRetryWithValidation:
 
     @pytest.mark.asyncio
     async def test_retry_passes_correction_prompt(self):
-        chat_fn = AsyncMock(side_effect=[
-            '{"name": "test"}',  # missing value
-            '{"name": "test", "value": 42}',
-        ])
+        chat_fn = AsyncMock(
+            side_effect=[
+                '{"name": "test"}',  # missing value
+                '{"name": "test", "value": 42}',
+            ]
+        )
         messages = [{"role": "user", "content": "test"}]
 
         await retry_with_validation(

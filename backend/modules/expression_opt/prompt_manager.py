@@ -62,10 +62,12 @@ class PromptManager:
                 if f.name == self._ACTIVE_FILE:
                     continue
                 name = f.stem
-                result.append({
-                    "name": name,
-                    "active": name == active_name,
-                })
+                result.append(
+                    {
+                        "name": name,
+                        "active": name == active_name,
+                    }
+                )
 
         return result
 

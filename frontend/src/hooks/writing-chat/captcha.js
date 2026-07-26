@@ -30,18 +30,22 @@ export function useWritingChatCaptcha({ setError }) {
           });
         } else {
           toast.error(i18n.t("hooks:writingChat.captchaFailed"), {
-            description: translateError(result.message) || i18n.t("hooks:writingChat.captchaFailedHint"),
+            description:
+              translateError(result.message) ||
+              i18n.t("hooks:writingChat.captchaFailedHint"),
           });
         }
         setCaptchaChallenge(null);
       } catch (e) {
         setError(e.message);
-        toast.error(i18n.t("hooks:writingChat.submitCaptchaFailed"), { description: e.message });
+        toast.error(i18n.t("hooks:writingChat.submitCaptchaFailed"), {
+          description: e.message,
+        });
       } finally {
         setCaptchaSubmitting(false);
       }
     },
-    [captchaChallenge, captchaSubmitting, setError]
+    [captchaChallenge, captchaSubmitting, setError],
   );
 
   const dismissCaptcha = useCallback(() => {

@@ -17,7 +17,6 @@ from backend.modules.style_modify.service import (
     StyleModifyService,
 )
 
-
 # ── Pydantic model tests ───────────────────────────────────────────────────
 
 
@@ -64,7 +63,9 @@ class TestStyleModifyService:
         mock_cfg = MagicMock()
         mock_cfg.llm.api_key = ""
 
-        with patch("backend.modules.style_modify.service.get_config", return_value=mock_cfg):
+        with patch(
+            "backend.modules.style_modify.service.get_config", return_value=mock_cfg
+        ):
             with pytest.raises(RuntimeError, match="No API key"):
                 await service.modify(sample_latex, "bold")
 
@@ -85,8 +86,13 @@ class TestStyleModifyService:
         mock_cfg = MagicMock()
         mock_cfg.llm.api_key = "sk-test"
 
-        with patch("backend.modules.style_modify.service.get_config", return_value=mock_cfg):
-            with patch("backend.modules.style_modify.service.get_llm_client", return_value=mock_llm):
+        with patch(
+            "backend.modules.style_modify.service.get_config", return_value=mock_cfg
+        ):
+            with patch(
+                "backend.modules.style_modify.service.get_llm_client",
+                return_value=mock_llm,
+            ):
                 result = await service.modify(sample_latex, "make it bold")
 
         assert "latex" in result
@@ -101,8 +107,13 @@ class TestStyleModifyService:
         mock_cfg = MagicMock()
         mock_cfg.llm.api_key = "sk-test"
 
-        with patch("backend.modules.style_modify.service.get_config", return_value=mock_cfg):
-            with patch("backend.modules.style_modify.service.get_llm_client", return_value=mock_llm):
+        with patch(
+            "backend.modules.style_modify.service.get_config", return_value=mock_cfg
+        ):
+            with patch(
+                "backend.modules.style_modify.service.get_llm_client",
+                return_value=mock_llm,
+            ):
                 result = await service.modify(sample_latex, "bold")
 
         assert result["latex"] == sample_latex
@@ -116,8 +127,13 @@ class TestStyleModifyService:
         mock_cfg = MagicMock()
         mock_cfg.llm.api_key = "sk-test"
 
-        with patch("backend.modules.style_modify.service.get_config", return_value=mock_cfg):
-            with patch("backend.modules.style_modify.service.get_llm_client", return_value=mock_llm):
+        with patch(
+            "backend.modules.style_modify.service.get_config", return_value=mock_cfg
+        ):
+            with patch(
+                "backend.modules.style_modify.service.get_llm_client",
+                return_value=mock_llm,
+            ):
                 with pytest.raises(RuntimeError, match="Style modification failed"):
                     await service.modify(sample_latex, "bold")
 
@@ -132,8 +148,13 @@ class TestStyleModifyService:
         mock_cfg = MagicMock()
         mock_cfg.llm.api_key = "sk-test"
 
-        with patch("backend.modules.style_modify.service.get_config", return_value=mock_cfg):
-            with patch("backend.modules.style_modify.service.get_llm_client", return_value=mock_llm):
+        with patch(
+            "backend.modules.style_modify.service.get_config", return_value=mock_cfg
+        ):
+            with patch(
+                "backend.modules.style_modify.service.get_llm_client",
+                return_value=mock_llm,
+            ):
                 with pytest.raises(RuntimeError, match="Style modification failed"):
                     await service.modify(sample_latex, "bold")
 
@@ -148,11 +169,14 @@ class TestStyleModifyRouter:
     def client(self):
         from fastapi.testclient import TestClient
         from main import app
+
         return TestClient(app)
 
     def test_modify_success(self, client):
         result = {"latex": r"\textbf{Hello}"}
-        with patch.object(StyleModifyService, "modify", new_callable=AsyncMock) as mock_modify:
+        with patch.object(
+            StyleModifyService, "modify", new_callable=AsyncMock
+        ) as mock_modify:
             mock_modify.return_value = result
             response = client.post(
                 "/api/style-modify/modify",
@@ -167,7 +191,8 @@ class TestStyleModifyRouter:
             "/api/style-modify/modify",
             json={"latex": "", "description": "bold"},
         )
-        assert response.status_code == 422  # Pydantic field_validator rejects at request level
+        # Pydantic field_validator rejects at request level
+        assert response.status_code == 422
 
     def test_modify_empty_description_returns_400(self, client):
         response = client.post(
@@ -177,7 +202,9 @@ class TestStyleModifyRouter:
         assert response.status_code == 422
 
     def test_modify_service_value_error_returns_400(self, client):
-        with patch.object(StyleModifyService, "modify", new_callable=AsyncMock) as mock_modify:
+        with patch.object(
+            StyleModifyService, "modify", new_callable=AsyncMock
+        ) as mock_modify:
             mock_modify.side_effect = ValueError("Markdown text is empty")
             response = client.post(
                 "/api/style-modify/modify",
@@ -186,7 +213,9 @@ class TestStyleModifyRouter:
         assert response.status_code == 400
 
     def test_modify_service_runtime_error_returns_500(self, client):
-        with patch.object(StyleModifyService, "modify", new_callable=AsyncMock) as mock_modify:
+        with patch.object(
+            StyleModifyService, "modify", new_callable=AsyncMock
+        ) as mock_modify:
             mock_modify.side_effect = RuntimeError("Internal error")
             response = client.post(
                 "/api/style-modify/modify",

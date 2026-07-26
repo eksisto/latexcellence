@@ -33,7 +33,6 @@ from backend.modules.writing_chat.models import (
 )
 from backend.modules.writing_chat.service import WritingChatService
 
-
 _LLM_CLIENT_PATH = "backend.modules.writing_chat.service.get_llm_client"
 
 
@@ -59,13 +58,18 @@ def temp_project(tmp_path):
     main_content = (
         r"\documentclass{article}" + "\n"
         r"\begin{document}" + "\n"
-        r"\section{Introduction}" + "\n"
+        r"\section{Introduction}"
         + "\n"
-        + r"This method is not very good for the purpose." + "\n"
-        + r"It has many weaknesses in practical application." + "\n"
         + "\n"
-        + r"\section{Method}" + "\n"
-        + r"\textbf{Bold claim} verified by $x^2$." + "\n"
+        + r"This method is not very good for the purpose."
+        + "\n"
+        + r"It has many weaknesses in practical application."
+        + "\n"
+        + "\n"
+        + r"\section{Method}"
+        + "\n"
+        + r"\textbf{Bold claim} verified by $x^2$."
+        + "\n"
         + r"\end{document}"
     )
     (root / "main.tex").write_text(main_content, encoding="utf-8")
@@ -195,7 +199,9 @@ class TestContext:
         assert len(ctx.messages) == 4
         assert ctx.messages[0].content == "hello"
 
-    def test_undo_regular_message_equivalent_to_delete(self, temp_session_dir, open_project):
+    def test_undo_regular_message_equivalent_to_delete(
+        self, temp_session_dir, open_project
+    ):
         ctx = ConversationContext.create_session(scope="test")
         ctx.append_user_message("q")
         ctx.append_assistant_message("a", tokens=20)
@@ -220,17 +226,23 @@ def _stream(chunks: list[StreamChunk]):
     async def gen() -> AsyncIterator[StreamChunk]:
         for c in chunks:
             yield c
+
     return gen()
 
 
 class TestServiceSend:
     @pytest.mark.asyncio
-    async def test_send_streams_tokens_and_persists(self, temp_session_dir, open_project, service, monkeypatch):
+    async def test_send_streams_tokens_and_persists(
+        self, temp_session_dir, open_project, service, monkeypatch
+    ):
         monkeypatch.setattr(get_config().llm, "api_key", "test-key")
         chunks = [
             StreamChunk(content="Hello", usage=None),
             StreamChunk(content=" world", usage=None),
-            StreamChunk(content=None, usage=UsageInfo(prompt_tokens=12, completion_tokens=3, total_tokens=15)),
+            StreamChunk(
+                content=None,
+                usage=UsageInfo(prompt_tokens=12, completion_tokens=3, total_tokens=15),
+            ),
         ]
         with patch(_LLM_CLIENT_PATH) as m_llm:
             m_client = MagicMock()
@@ -239,12 +251,22 @@ class TestServiceSend:
             async def fake_chat_with_tools(**kwargs):
                 from openai.types.chat import ChatCompletion
                 from openai.types.chat.chat_completion import Choice
-                from openai.types.chat.chat_completion_message import ChatCompletionMessage
-                msg = ChatCompletionMessage(role="assistant", content=None, tool_calls=None)
+                from openai.types.chat.chat_completion_message import (
+                    ChatCompletionMessage,
+                )
+
+                msg = ChatCompletionMessage(
+                    role="assistant", content=None, tool_calls=None
+                )
                 choice = Choice(finish_reason="stop", index=0, message=msg)
                 return ChatCompletion(
-                    id="test", choices=[choice], created=0, model="test", object="chat.completion"
+                    id="test",
+                    choices=[choice],
+                    created=0,
+                    model="test",
+                    object="chat.completion",
                 )
+
             m_client.chat_with_tools = fake_chat_with_tools
 
             m_llm.return_value = m_client
@@ -268,7 +290,9 @@ class TestServiceSend:
         assert ctx.cumulative_tokens == 15
 
     @pytest.mark.asyncio
-    async def test_send_triggers_compression(self, temp_session_dir, open_project, service, monkeypatch):
+    async def test_send_triggers_compression(
+        self, temp_session_dir, open_project, service, monkeypatch
+    ):
         monkeypatch.setattr(get_config().llm, "api_key", "test-key")
         # 先准备一条已超阈值的会话（含多条历史消息以便通过压缩最小消息数阈值）
         cfg = get_config().features.writing_chat
@@ -289,7 +313,10 @@ class TestServiceSend:
 
         chunks = [
             StreamChunk(content="reply", usage=None),
-            StreamChunk(content=None, usage=UsageInfo(prompt_tokens=10, completion_tokens=2, total_tokens=12)),
+            StreamChunk(
+                content=None,
+                usage=UsageInfo(prompt_tokens=10, completion_tokens=2, total_tokens=12),
+            ),
         ]
         with patch(_LLM_CLIENT_PATH) as m_llm:
             client = MagicMock()
@@ -299,12 +326,22 @@ class TestServiceSend:
             async def fake_chat_with_tools(**kwargs):
                 from openai.types.chat import ChatCompletion
                 from openai.types.chat.chat_completion import Choice
-                from openai.types.chat.chat_completion_message import ChatCompletionMessage
-                msg = ChatCompletionMessage(role="assistant", content=None, tool_calls=None)
+                from openai.types.chat.chat_completion_message import (
+                    ChatCompletionMessage,
+                )
+
+                msg = ChatCompletionMessage(
+                    role="assistant", content=None, tool_calls=None
+                )
                 choice = Choice(finish_reason="stop", index=0, message=msg)
                 return ChatCompletion(
-                    id="test", choices=[choice], created=0, model="test", object="chat.completion"
+                    id="test",
+                    choices=[choice],
+                    created=0,
+                    model="test",
+                    object="chat.completion",
                 )
+
             client.chat_with_tools = fake_chat_with_tools
 
             m_llm.return_value = client
@@ -323,14 +360,18 @@ class TestServiceSend:
         assert types[-1] == "done"
         loaded = ConversationContext.load_from_disk(ctx.session_id)
         # 压缩后应至少存在 1 条 summary 消息 + 本轮 user + assistant
-        summary_msgs = [m for m in loaded.messages if m.role == "summary" and m.compressed]
+        summary_msgs = [
+            m for m in loaded.messages if m.role == "summary" and m.compressed
+        ]
         assert len(summary_msgs) == 1
         assert summary_msgs[0].snapshot is not None
         # 压缩前有 4 组 user/assistant 消息 (8) + 本轮新追加的 user 消息 = 9 条
         assert len(summary_msgs[0].snapshot) == 9
 
     @pytest.mark.asyncio
-    async def test_send_no_api_key_emits_error(self, temp_session_dir, open_project, service, monkeypatch):
+    async def test_send_no_api_key_emits_error(
+        self, temp_session_dir, open_project, service, monkeypatch
+    ):
         cfg = get_config()
         monkeypatch.setattr(cfg.llm, "api_key", "")
         req = ChatSendRequest(file_path="main.tex", user_message="x")
@@ -363,6 +404,7 @@ class TestServiceEdit:
 
         # mock LLM：输出改写了 plain 文本但保留了 LaTeX 结构的 raw LaTeX
         new_latex = para.text.replace("verified", "verified (empirically)")
+
         async def fake_chat(messages, **kwargs):
             return {
                 "paragraph_index": para.index,
@@ -370,6 +412,7 @@ class TestServiceEdit:
                 "optimized": new_latex,
                 "reason": "more precise",
             }
+
         with patch(_LLM_CLIENT_PATH) as m_llm:
             client = MagicMock()
             client.chat = fake_chat
@@ -648,7 +691,9 @@ class TestWebSearchToolEvent:
             tool_calls=[_make_tool_call(query="latex 公式写法")]
         )
         # 第二次 chat_with_tools：无 tool_call，进入流式输出
-        second_response = _make_chat_completion_with_tools(tool_calls=None, content="搜索完成")
+        second_response = _make_chat_completion_with_tools(
+            tool_calls=None, content="搜索完成"
+        )
 
         call_count = 0
 
@@ -720,7 +765,9 @@ class TestWebSearchToolEvent:
 
         from backend.utils.web_search import SearchResponse
 
-        empty_resp = SearchResponse(query="不存在的内容", results=[], engine="duckduckgo")
+        empty_resp = SearchResponse(
+            query="不存在的内容", results=[], engine="duckduckgo"
+        )
 
         first_response = _make_chat_completion_with_tools(
             tool_calls=[_make_tool_call(query="不存在的内容")]
@@ -774,6 +821,12 @@ def _make_chat_completion_with_tools(tool_calls=None, content=None):
     from openai.types.chat.chat_completion import Choice
     from openai.types.chat.chat_completion_message import ChatCompletionMessage
 
-    msg = ChatCompletionMessage(role="assistant", content=content, tool_calls=tool_calls)
-    choice = Choice(finish_reason="stop" if not tool_calls else "tool_calls", index=0, message=msg)
-    return ChatCompletion(id="test", choices=[choice], created=0, model="test", object="chat.completion")
+    msg = ChatCompletionMessage(
+        role="assistant", content=content, tool_calls=tool_calls
+    )
+    choice = Choice(
+        finish_reason="stop" if not tool_calls else "tool_calls", index=0, message=msg
+    )
+    return ChatCompletion(
+        id="test", choices=[choice], created=0, model="test", object="chat.completion"
+    )

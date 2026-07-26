@@ -36,7 +36,8 @@ def _validate_main_file(main_file: str, project_root: Path) -> None:
         raise ValueError("main_file 不能以 '-' 开头")
 
     resolve_project_path(
-        project_root, main_file,
+        project_root,
+        main_file,
         allowed_suffixes=(".tex",),
     )
 
@@ -50,7 +51,9 @@ class CompileResult(BaseModel):
     fixes: list[str] = []
 
 
-async def compile_latex(main_file: str, workspace_id: str = "", language: str = "zh") -> CompileResult:
+async def compile_latex(
+    main_file: str, workspace_id: str = "", language: str = "zh"
+) -> CompileResult:
     """
     编译 LaTeX 项目的主文件。
 
@@ -87,16 +90,14 @@ async def compile_latex(main_file: str, workspace_id: str = "", language: str = 
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
-        stdout, stderr = await asyncio.wait_for(
-            process.communicate(), timeout=timeout
-        )
+        stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=timeout)
     except asyncio.TimeoutError:
         process.kill()
         stdout, stderr = await process.communicate()
         return CompileResult(
             success=False,
-            stderr=stderr.decode("utf-8", errors="replace") +
-            f"\nCompilation timed out after {timeout} seconds.",
+            stderr=stderr.decode("utf-8", errors="replace")
+            + f"\nCompilation timed out after {timeout} seconds.",
             explanation="编译超时。可能原因：文档过大、有无限循环的 LaTeX 命令、或 latexmk 卡住。",
             fixes=[
                 "检查是否缺少 \\end{document} 或类似的环境闭合语句",
@@ -116,7 +117,9 @@ async def compile_latex(main_file: str, workspace_id: str = "", language: str = 
 
     logger.warning(f"Compilation failed for {main_file}, translating errors")
 
-    explanation, fixes = await translate_compile_errors(stdout_str, stderr_str, language)
+    explanation, fixes = await translate_compile_errors(
+        stdout_str, stderr_str, language
+    )
 
     return CompileResult(
         success=False,

@@ -35,7 +35,11 @@ from backend.core.prompts import get_prompt
 from backend.utils.json_utils import retry_with_validation
 from backend.utils.time_utils import get_current_time_context
 from backend.utils.web_search import DDGChallengeError, get_search_manager
-from backend.modules.writing_chat.context import ConversationContext, _NOPROJECT_SCOPE, compute_scope
+from backend.modules.writing_chat.context import (
+    ConversationContext,
+    _NOPROJECT_SCOPE,
+    compute_scope,
+)
 from backend.modules.writing_chat.models import (
     ApplyEditRequest,
     ChatMessage,
@@ -47,7 +51,6 @@ from backend.modules.writing_chat.models import (
     LlmSummaryResult,
     UndoMessageRequest,
 )
-
 
 # ── Service ────────────────────────────────────────────────────────────────
 
@@ -103,7 +106,9 @@ class WritingChatService:
 
     # ── 发送消息（RS1，SSE 流式） ────────────────────────────────────────
 
-    async def send(self, req: ChatSendRequest, workspace_id: str = "") -> AsyncIterator[dict]:
+    async def send(
+        self, req: ChatSendRequest, workspace_id: str = ""
+    ) -> AsyncIterator[dict]:
         """
         主对话流：发送用户消息、流式接收 LLM 回复、必要时执行压缩。
 
@@ -122,13 +127,15 @@ class WritingChatService:
         )
         if ctx is None:
             ctx = ConversationContext.create_session(
-                file_path=req.file_path, scope=scope)
+                file_path=req.file_path, scope=scope
+            )
 
         # 2. 构造上下文锚点文本 + 追加 user 消息
         ctx.file_path = req.file_path or ctx.file_path
         ctx.save_to_disk()
         context_block = self._build_context_block(
-            req.file_path, req.paragraph_index, workspace_id)
+            req.file_path, req.paragraph_index, workspace_id
+        )
         user_msg = ctx.append_user_message(
             req.user_message,
             referenced_file=req.file_path,
@@ -147,21 +154,28 @@ class WritingChatService:
         # 4. 调用 LLM 流式（支持 Function Calling 工具调用）
         llm = get_llm_client()
         system_prompt = get_prompt(
-            "writing_chat", "chat_system",
-            context_block=context_block, language=req.language)
+            "writing_chat",
+            "chat_system",
+            context_block=context_block,
+            language=req.language,
+        )
 
         # 注入当前时间上下文，帮助 LLM 理解相对时间概念
         t = get_current_time_context()
         system_prompt += get_prompt(
-            "writing_chat", "chat_system_time_context",
-            date=t["date"], weekday=t["weekday"], time=t["time"],
+            "writing_chat",
+            "chat_system_time_context",
+            date=t["date"],
+            weekday=t["weekday"],
+            time=t["time"],
         )
 
         # 助手指令注入 system prompt（不写入 user message，界面上不可见）
         if req.assistant_prompt:
             system_prompt = req.assistant_prompt + "\n\n" + system_prompt
-        messages = [{"role": "system", "content": system_prompt}
-                    ] + ctx.to_llm_messages()
+        messages = [
+            {"role": "system", "content": system_prompt}
+        ] + ctx.to_llm_messages()
         assistant_id = uuid.uuid4().hex
 
         # 检查是否启用联网搜索工具
@@ -232,11 +246,14 @@ class WritingChatService:
                             "tool": tool_name,
                             "result_count": (
                                 len(tool_result.results)
-                                if hasattr(tool_result, "results") else 0
+                                if hasattr(tool_result, "results")
+                                else 0
                             ),
                         }
                         # 搜索结果摘要（供前端折叠框展示）
-                        if tool_name == "web_search" and hasattr(tool_result, "results"):
+                        if tool_name == "web_search" and hasattr(
+                            tool_result, "results"
+                        ):
                             search_results = tool_result.results[:5]  # 限制最多5条
                             tool_event["search_results"] = [
                                 {
@@ -278,11 +295,13 @@ class WritingChatService:
                         result_text = f"工具执行失败：{e}"
 
                     # 追加 tool result 消息
-                    tool_messages.append({
-                        "role": "tool",
-                        "tool_call_id": tc.id,
-                        "content": result_text,
-                    })
+                    tool_messages.append(
+                        {
+                            "role": "tool",
+                            "tool_call_id": tc.id,
+                            "content": result_text,
+                        }
+                    )
 
                 # 继续下一轮工具调用检测
                 continue
@@ -301,8 +320,7 @@ class WritingChatService:
                     if chunk.usage is not None:
                         last_usage_tokens = chunk.usage.total_tokens
             except Exception as e:
-                self._logger.error(
-                    f"post-tool chat_stream_with_usage failed: {e}")
+                self._logger.error(f"post-tool chat_stream_with_usage failed: {e}")
                 yield {"type": "error", "message": str(e)}
                 ctx.delete_message(user_msg.id)
                 ctx.save_to_disk()
@@ -349,7 +367,9 @@ class WritingChatService:
 
     # ── 生成编辑（RS2，结构化 JSON） ───────────────────────────────────
 
-    async def generate_edit(self, req: GenerateEditRequest, workspace_id: str = "") -> dict:
+    async def generate_edit(
+        self, req: GenerateEditRequest, workspace_id: str = ""
+    ) -> dict:
         """
         基于用户对话指令，对指定段落生成编辑操作建议。
 
@@ -376,8 +396,11 @@ class WritingChatService:
 
         llm = get_llm_client()
         system_prompt = get_prompt(
-            "writing_chat", "edit_system",
-            instruction=req.instruction, language=req.language)
+            "writing_chat",
+            "edit_system",
+            instruction=req.instruction,
+            language=req.language,
+        )
         messages = [
             {"role": "system", "content": system_prompt},
             {
@@ -459,16 +482,14 @@ class WritingChatService:
                 edit_op = m.edit_op
                 break
         if edit_op is None:
-            raise ValueError(
-                f"No edit op attached to message {req.edit_message_id}")
+            raise ValueError(f"No edit op attached to message {req.edit_message_id}")
         if edit_op.applied:
             return {"applied": True, "already_applied": True}
 
         # 优先使用请求中携带的 new_latex（用户手动编辑的内容）
         target_latex = req.new_latex if req.new_latex is not None else edit_op.new_latex
         pm = get_project_manager_for_workspace(workspace_id)
-        pm.apply_change(edit_op.file_path,
-                        edit_op.paragraph_index, target_latex)
+        pm.apply_change(edit_op.file_path, edit_op.paragraph_index, target_latex)
 
         ctx.mark_edit_applied(req.edit_message_id)
         ctx.save_to_disk()
@@ -499,13 +520,16 @@ class WritingChatService:
 
     # ── 内部辅助 ────────────────────────────────────────────────────────────
 
-    def _build_context_block(self, file_path: str, paragraph_index: int | None, workspace_id: str = "") -> str:
+    def _build_context_block(
+        self, file_path: str, paragraph_index: int | None, workspace_id: str = ""
+    ) -> str:
         """构造塞给 chat system prompt 的文件段落上下文（原始 LaTeX 源码）。"""
         if not file_path:
             return "(no file selected)"
         try:
             text = ConversationContext.build_file_context_text(
-                file_path, paragraph_index, workspace_id)
+                file_path, paragraph_index, workspace_id
+            )
         except Exception as e:
             return f"(failed to load file context: {e})"
         return text or "(file has no readable paragraphs)"
@@ -554,8 +578,7 @@ class WritingChatService:
             f"[{m['role'].upper()}]\n{m['content']}" for m in messages_to_summarize
         )
         messages = [
-            {"role": "system", "content": get_prompt(
-                "writing_chat", "summary_system")},
+            {"role": "system", "content": get_prompt("writing_chat", "summary_system")},
             {"role": "user", "content": f"CONVERSATION:\n{transcript}"},
         ]
         try:

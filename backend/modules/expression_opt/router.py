@@ -29,6 +29,7 @@ def get_service() -> ExpressionOptService:
 
 # ── request models ─────────────────────────────────────────────────────────
 
+
 class ExpressionOptRequest(BaseModel):
     file_path: str
     paragraph_indices: list[int] | None = None
@@ -44,6 +45,7 @@ class ExpressionApplyRequest(BaseModel):
 
 # ── preview ────────────────────────────────────────────────────────────────
 
+
 @router.get("/preview")
 async def preview_paragraphs(
     file_path: str = Query(..., description="文件路径（相对于项目根目录）"),
@@ -56,7 +58,8 @@ async def preview_paragraphs(
     """
     try:
         result = get_service().preview_paragraphs(
-            file_path, resolve_input, workspace_id)
+            file_path, resolve_input, workspace_id
+        )
         return result
     except RuntimeError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -66,8 +69,12 @@ async def preview_paragraphs(
 
 # ── optimize ───────────────────────────────────────────────────────────────
 
+
 @router.post("/optimize")
-async def optimize_expression(request: ExpressionOptRequest, workspace_id: str = Query(..., description="工作区唯一标识符")):
+async def optimize_expression(
+    request: ExpressionOptRequest,
+    workspace_id: str = Query(..., description="工作区唯一标识符"),
+):
     """
     对指定段落的纯文本进行表达优化。
 
@@ -90,8 +97,12 @@ async def optimize_expression(request: ExpressionOptRequest, workspace_id: str =
 
 # ── apply ──────────────────────────────────────────────────────────────────
 
+
 @router.post("/apply")
-async def apply_changes(request: ExpressionApplyRequest, workspace_id: str = Query(..., description="工作区唯一标识符")):
+async def apply_changes(
+    request: ExpressionApplyRequest,
+    workspace_id: str = Query(..., description="工作区唯一标识符"),
+):
     """
     将用户审核确认的修改写回源文件。
 
@@ -113,6 +124,7 @@ async def apply_changes(request: ExpressionApplyRequest, workspace_id: str = Que
 
 # ── stream ─────────────────────────────────────────────────────────────────
 
+
 @router.get("/stream/{workspace_id}")
 async def stream_optimize(
     workspace_id: str,
@@ -121,6 +133,7 @@ async def stream_optimize(
     language: str = Query("zh", description="前端 UI 语言"),
 ):
     """SSE 流式端点：按段落逐批推送优化进度和结果。"""
+
     async def event_stream():
         try:
             async for event in get_service().optimize_stream(
@@ -142,6 +155,7 @@ async def stream_optimize(
 
 
 # ── prompt management ─────────────────────────────────────────────────────
+
 
 class PromptSaveRequest(BaseModel):
     name: str
@@ -165,8 +179,7 @@ async def load_prompt(name: str):
     pm = get_prompt_manager()
     content = pm.load_prompt(name)
     if content is None:
-        raise HTTPException(
-            status_code=404, detail=f"Prompt not found: {name}")
+        raise HTTPException(status_code=404, detail=f"Prompt not found: {name}")
     return {"name": name, "content": content}
 
 
@@ -183,8 +196,7 @@ async def delete_prompt(name: str):
     """删除指定提示词。"""
     pm = get_prompt_manager()
     if not pm.delete_prompt(name):
-        raise HTTPException(
-            status_code=404, detail=f"Prompt not found: {name}")
+        raise HTTPException(status_code=404, detail=f"Prompt not found: {name}")
     return {"status": "ok"}
 
 

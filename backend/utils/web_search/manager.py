@@ -27,16 +27,12 @@ class SearchManager:
         self._primary: BaseSearchEngine | None = None
         self._logger = get_logger("web_search")
 
-    def register_engine(
-        self, engine: BaseSearchEngine, primary: bool = False
-    ) -> None:
+    def register_engine(self, engine: BaseSearchEngine, primary: bool = False) -> None:
         """注册搜索引擎。primary=True 时设为主引擎。"""
         self._engines.append(engine)
         if primary:
             self._primary = engine
-        self._logger.info(
-            f"搜索引擎已注册：{engine.name} (primary={primary})"
-        )
+        self._logger.info(f"搜索引擎已注册：{engine.name} (primary={primary})")
 
     def get_engine(self, name: str) -> BaseSearchEngine | None:
         """按名称获取已注册的引擎。"""
@@ -74,9 +70,7 @@ class SearchManager:
         # 使用主引擎 + 降级
         if self._primary:
             try:
-                return await self._search_with_engine(
-                    self._primary, query, max_results
-                )
+                return await self._search_with_engine(self._primary, query, max_results)
             except DDGChallengeError:
                 raise  # challenge 不降级，直接向上传播
             except Exception as e:
@@ -89,9 +83,7 @@ class SearchManager:
             if engine is self._primary:
                 continue
             try:
-                return await self._search_with_engine(
-                    engine, query, max_results
-                )
+                return await self._search_with_engine(engine, query, max_results)
             except Exception as e:
                 self._logger.warning(f"引擎 {engine.name} 搜索失败：{e}")
 
@@ -160,14 +152,15 @@ class SearchManager:
 _search_manager: SearchManager | None = None
 
 
-async def _web_search_executor(tool_name: str, arguments: dict[str, Any]) -> SearchResponse:
+async def _web_search_executor(
+    tool_name: str, arguments: dict[str, Any]
+) -> SearchResponse:
     """web_search 工具执行函数，供 ToolRegistry 调用。"""
     manager = get_search_manager()
     cfg = get_config()
     result = await manager.search(
         query=arguments["query"],
-        max_results=arguments.get(
-            "max_results", cfg.features.web_search.max_results),
+        max_results=arguments.get("max_results", cfg.features.web_search.max_results),
     )
     return result
 
@@ -199,6 +192,7 @@ def get_search_manager() -> SearchManager:
 
         # 将搜索工具注册到 ToolRegistry，使 LLM tool_call 能正确分发
         from backend.core.tool_registry import get_tool_registry
+
         registry = get_tool_registry()
         schema = _search_manager.get_tools_schema()
         if schema:

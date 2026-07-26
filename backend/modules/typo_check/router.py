@@ -28,6 +28,7 @@ def get_service() -> TypoCheckService:
 
 # ── request models ─────────────────────────────────────────────────────────
 
+
 class TypoCheckRequest(BaseModel):
     file_path: str
     paragraph_indices: list[int] | None = None
@@ -42,6 +43,7 @@ class TypoApplyRequest(BaseModel):
 
 
 # ── preview ────────────────────────────────────────────────────────────────
+
 
 @router.get("/preview")
 async def preview_paragraphs(
@@ -58,7 +60,8 @@ async def preview_paragraphs(
     """
     try:
         result = get_service().preview_paragraphs(
-            file_path, resolve_input, workspace_id)
+            file_path, resolve_input, workspace_id
+        )
         return result
     except RuntimeError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -68,8 +71,12 @@ async def preview_paragraphs(
 
 # ── check ──────────────────────────────────────────────────────────────────
 
+
 @router.post("/check")
-async def check_typos(request: TypoCheckRequest, workspace_id: str = Query(..., description="工作区唯一标识符")):
+async def check_typos(
+    request: TypoCheckRequest,
+    workspace_id: str = Query(..., description="工作区唯一标识符"),
+):
     """
     对指定段落的纯文本进行错字检查。
 
@@ -93,8 +100,12 @@ async def check_typos(request: TypoCheckRequest, workspace_id: str = Query(..., 
 
 # ── apply ──────────────────────────────────────────────────────────────────
 
+
 @router.post("/apply")
-async def apply_changes(request: TypoApplyRequest, workspace_id: str = Query(..., description="工作区唯一标识符")):
+async def apply_changes(
+    request: TypoApplyRequest,
+    workspace_id: str = Query(..., description="工作区唯一标识符"),
+):
     """
     将用户审核确认的修改写回源文件。
 
@@ -117,6 +128,7 @@ async def apply_changes(request: TypoApplyRequest, workspace_id: str = Query(...
 
 # ── stream ─────────────────────────────────────────────────────────────────
 
+
 @router.get("/stream/{workspace_id}")
 async def stream_typo_check(
     workspace_id: str,
@@ -133,6 +145,7 @@ async def stream_typo_check(
         { "type": "error", "message": "...", "retrying": true }
         { "type": "done" }
     """
+
     async def event_stream():
         try:
             async for event in get_service().check_typos_stream(

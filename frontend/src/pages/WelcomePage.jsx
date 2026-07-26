@@ -196,7 +196,9 @@ export default function WelcomePage() {
                       <CardTitle className="text-base">{title}</CardTitle>
                     </CardHeader>
                     <CardContent>
-                      <CardDescription className="mx-0.5">{description}</CardDescription>
+                      <CardDescription className="mx-0.5">
+                        {description}
+                      </CardDescription>
                     </CardContent>
                   </Card>
                 </Link>
@@ -206,7 +208,9 @@ export default function WelcomePage() {
         ))}
       </div>
       <Separator className="max-w-7xl w-full mt-8" />
-      <div className="mt-4 text-sm text-muted-foreground">{t("pages:welcome.version")}</div>
+      <div className="mt-4 text-sm text-muted-foreground">
+        {t("pages:welcome.version")}
+      </div>
     </div>
   );
 }

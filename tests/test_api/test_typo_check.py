@@ -25,7 +25,6 @@ from backend.modules.typo_check.service import (
 )
 from backend.utils.latex_parser import MARKER_PATTERN
 
-
 # ── fixtures ───────────────────────────────────────────────────────────────
 
 
@@ -190,19 +189,21 @@ class TestCheckOneParagraph:
         plain = r"This is __CMD_0000__ a test paragrafh."
         original_tex = r"This is \textbf{a test paragrafh.}"
 
-        mock_llm.chat = AsyncMock(return_value={
-            "paragraph_index": 0,
-            "original": plain,
-            "corrected": r"This is __CMD_0000__ a test paragraph.",
-            "changes": [
-                {
-                    "type": "typo",
-                    "original": "paragrafh",
-                    "corrected": "paragraph",
-                    "explanation": "spelling error",
-                }
-            ],
-        })
+        mock_llm.chat = AsyncMock(
+            return_value={
+                "paragraph_index": 0,
+                "original": plain,
+                "corrected": r"This is __CMD_0000__ a test paragraph.",
+                "changes": [
+                    {
+                        "type": "typo",
+                        "original": "paragrafh",
+                        "corrected": "paragraph",
+                        "explanation": "spelling error",
+                    }
+                ],
+            }
+        )
 
         result = await service._check_one_paragraph(
             mock_llm, 0, 5, plain, original_tex, "main.tex"
@@ -221,12 +222,14 @@ class TestCheckOneParagraph:
         plain = r"Correct text with __MATH_0000__ formula."
         original_tex = r"Correct text with $x^2$ formula."
 
-        mock_llm.chat = AsyncMock(return_value={
-            "paragraph_index": 0,
-            "original": plain,
-            "corrected": plain,
-            "changes": [],
-        })
+        mock_llm.chat = AsyncMock(
+            return_value={
+                "paragraph_index": 0,
+                "original": plain,
+                "corrected": plain,
+                "changes": [],
+            }
+        )
 
         result = await service._check_one_paragraph(
             mock_llm, 0, 0, plain, original_tex, "main.tex"
@@ -243,12 +246,14 @@ class TestCheckOneParagraph:
         original_tex = r"Text with \textbf{marker.}"
 
         # LLM 返回的 corrected 缺少 marker
-        mock_llm.chat = AsyncMock(return_value={
-            "paragraph_index": 0,
-            "original": plain,
-            "corrected": "Text with marker.",  # 缺少 __CMD_0000__
-            "changes": [],
-        })
+        mock_llm.chat = AsyncMock(
+            return_value={
+                "paragraph_index": 0,
+                "original": plain,
+                "corrected": "Text with marker.",  # 缺少 __CMD_0000__
+                "changes": [],
+            }
+        )
 
         result = await service._check_one_paragraph(
             mock_llm, 0, 0, plain, original_tex, "main.tex"
@@ -265,12 +270,14 @@ class TestCheckOneParagraph:
         original_tex = "Plain text only."
 
         # LLM 凭空添加 marker
-        mock_llm.chat = AsyncMock(return_value={
-            "paragraph_index": 0,
-            "original": plain,
-            "corrected": r"Plain __CMD_0099__ text only.",
-            "changes": [],
-        })
+        mock_llm.chat = AsyncMock(
+            return_value={
+                "paragraph_index": 0,
+                "original": plain,
+                "corrected": r"Plain __CMD_0099__ text only.",
+                "changes": [],
+            }
+        )
 
         result = await service._check_one_paragraph(
             mock_llm, 0, 0, plain, original_tex, "main.tex"
@@ -286,12 +293,14 @@ class TestCheckOneParagraph:
         original_tex = r"Text \textbf{and} \textit{end.}"
 
         # marker __CMD_0000__ 在输出中出现两次
-        mock_llm.chat = AsyncMock(return_value={
-            "paragraph_index": 0,
-            "original": plain,
-            "corrected": r"Text __CMD_0000__ and __CMD_0000__ end.",
-            "changes": [],
-        })
+        mock_llm.chat = AsyncMock(
+            return_value={
+                "paragraph_index": 0,
+                "original": plain,
+                "corrected": r"Text __CMD_0000__ and __CMD_0000__ end.",
+                "changes": [],
+            }
+        )
 
         result = await service._check_one_paragraph(
             mock_llm, 0, 0, plain, original_tex, "main.tex"
@@ -307,12 +316,14 @@ class TestCheckOneParagraph:
         original_tex = r"\textbf{before} \textit{after.}"
 
         # 输出中两个 marker 顺序互换
-        mock_llm.chat = AsyncMock(return_value={
-            "paragraph_index": 0,
-            "original": plain,
-            "corrected": r"__CMD_0001__ before __CMD_0000__ after.",
-            "changes": [],
-        })
+        mock_llm.chat = AsyncMock(
+            return_value={
+                "paragraph_index": 0,
+                "original": plain,
+                "corrected": r"__CMD_0001__ before __CMD_0000__ after.",
+                "changes": [],
+            }
+        )
 
         result = await service._check_one_paragraph(
             mock_llm, 0, 0, plain, original_tex, "main.tex"
@@ -328,12 +339,14 @@ class TestCheckOneParagraph:
         original_tex = r"\textbf{word1} \textit{word2.}"
 
         # 纯文本 word1/word2 互换，marker 序列保持原顺序
-        mock_llm.chat = AsyncMock(return_value={
-            "paragraph_index": 0,
-            "original": plain,
-            "corrected": r"__CMD_0000__ word2 __CMD_0001__ word1.",
-            "changes": [],
-        })
+        mock_llm.chat = AsyncMock(
+            return_value={
+                "paragraph_index": 0,
+                "original": plain,
+                "corrected": r"__CMD_0000__ word2 __CMD_0001__ word1.",
+                "changes": [],
+            }
+        )
 
         result = await service._check_one_paragraph(
             mock_llm, 0, 0, plain, original_tex, "main.tex"
@@ -349,9 +362,11 @@ class TestCheckOneParagraph:
         original_tex = "Some text."
 
         # LLM 始终返回不合法 JSON（缺少 required fields）
-        mock_llm.chat = AsyncMock(return_value={
-            "wrong_field": True,
-        })
+        mock_llm.chat = AsyncMock(
+            return_value={
+                "wrong_field": True,
+            }
+        )
 
         result = await service._check_one_paragraph(
             mock_llm, 0, 3, plain, original_tex, "main.tex"
@@ -388,19 +403,21 @@ class TestCheckOneParagraph:
 
         corrected = r"__CMD_0000__ Hello __MATH_0001__ world __CMD_0002__"
 
-        mock_llm.chat = AsyncMock(return_value={
-            "paragraph_index": 0,
-            "original": plain,
-            "corrected": corrected,
-            "changes": [
-                {
-                    "type": "typo",
-                    "original": "hello",
-                    "corrected": "Hello",
-                    "explanation": "capitalization",
-                }
-            ],
-        })
+        mock_llm.chat = AsyncMock(
+            return_value={
+                "paragraph_index": 0,
+                "original": plain,
+                "corrected": corrected,
+                "changes": [
+                    {
+                        "type": "typo",
+                        "original": "hello",
+                        "corrected": "Hello",
+                        "explanation": "capitalization",
+                    }
+                ],
+            }
+        )
 
         result = await service._check_one_paragraph(
             mock_llm, 0, 0, plain, original_tex, "main.tex"
@@ -462,10 +479,12 @@ class TestApplyChanges:
             if "paragrafh" in para.text and "speling" in para.text:
                 new_text = para.text.replace("paragrafh", "paragraph")
                 new_text = new_text.replace("speling", "spelling")
-                changes.append({
-                    "paragraph_index": para.index,
-                    "new_text": new_text,
-                })
+                changes.append(
+                    {
+                        "paragraph_index": para.index,
+                        "new_text": new_text,
+                    }
+                )
                 break
 
         result = service.apply_changes(
@@ -499,7 +518,7 @@ class TestApplyChanges:
         assert result["applied"] == 0
         assert result["total"] == 1
         assert len(result["errors"]) == 1
-        assert result["errors"][0]["reason"] == "marker_map_missing"
+        assert result["errors"][0]["reason"] == "Marker map missing"
         assert result["errors"][0]["paragraph_index"] == 0
 
         # 文件内容未被修改：字面 marker 不应出现在文件中

@@ -37,7 +37,7 @@ export function createSSEEventHandler({
             thinkingOpen: parsed.thinkingOpen,
             thinkingClosed: parsed.thinkingClosed,
           };
-        })
+        }),
       );
     } else if (event.type === "searching") {
       setSearchStatus({ query: event.query, engine: event.engine });
@@ -53,7 +53,7 @@ export function createSSEEventHandler({
               searchResults: event.search_results,
               searchQuery: event.query || "",
             };
-          })
+          }),
         );
       }
     } else if (event.type === "captcha_challenge") {
@@ -80,8 +80,8 @@ export function createSSEEventHandler({
                 streaming: false,
                 tokens: event.tokens || 0,
               }
-            : m
-        )
+            : m,
+        ),
       );
       if (event.session_id) {
         if (isDraftSession(writingChatCurrentSessionId)) {
@@ -89,8 +89,8 @@ export function createSSEEventHandler({
             prev.map((s) =>
               s.id === writingChatCurrentSessionId
                 ? { id: event.session_id, title: s.title }
-                : s
-            )
+                : s,
+            ),
           );
         }
         if (event.session_id !== writingChatCurrentSessionId) {
@@ -102,7 +102,7 @@ export function createSSEEventHandler({
       setError(msg);
       // 移除占位的 assistant 消息
       setWritingChatMessages((prev) =>
-        prev.filter((m) => m.id !== tmpAssistantId)
+        prev.filter((m) => m.id !== tmpAssistantId),
       );
       toast.error(i18n.t("hooks:writingChat.chatError"), { description: msg });
     }

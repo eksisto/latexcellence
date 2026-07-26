@@ -740,7 +740,7 @@
     "noProjectOpened": "No project opened",
     "noApiKeyConfigured": "No API key configured",
     "maxRetriesExceeded": "Max retries exceeded",
-    "markerMapMissing": "marker_map_missing",
+    "markerMapMissing": "Marker map missing",
     "emptyReferenceExample": "Empty reference example",
     "emptyMetadata": "Empty metadata",
     "emptyBibtexCode": "Empty BibTeX code",

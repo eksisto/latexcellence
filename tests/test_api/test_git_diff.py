@@ -31,7 +31,6 @@ from backend.modules.git_diff.service import (
     get_pdf_path,
 )
 
-
 # ── _normalize_include_path ────────────────────────────────────────────────
 
 
@@ -59,7 +58,10 @@ class TestNormalizeIncludePath:
 
     def test_parent_traversal_preserved(self):
         assert _normalize_include_path("../secret.tex") == "../secret.tex"
-        assert _normalize_include_path("chapters/../secret.tex") == "chapters/../secret.tex"
+        assert (
+            _normalize_include_path("chapters/../secret.tex")
+            == "chapters/../secret.tex"
+        )
 
 
 # ── _validate_project_path ─────────────────────────────────────────────────
@@ -98,6 +100,7 @@ class TestValidateProjectPath:
 
     def test_absolute_rejected(self, project_root):
         import os
+
         # 使用 os.path.isabs 一致的平台绝对路径
         abs_path = "C:/secret.tex" if os.name == "nt" else "/etc/passwd"
         with pytest.raises(ValueError, match="不能是绝对路径"):
@@ -475,6 +478,7 @@ class TestDownloadPdfEndpoint:
     def client(self):
         from fastapi.testclient import TestClient
         from main import app
+
         return TestClient(app)
 
     def test_pdf_served_inline(self, client, tmp_path):

@@ -75,9 +75,11 @@ export default function TerminologyCheckPage() {
     },
     messages: {
       checkLoading: t("pages:terminologyCheck.checkLoading"),
-      checkSuccess: (count) => t("pages:terminologyCheck.checkSuccess", { count }),
+      checkSuccess: (count) =>
+        t("pages:terminologyCheck.checkSuccess", { count }),
       applySuccess: (idx) => t("pages:terminologyCheck.applySuccess", { idx }),
-      applyAllSuccess: (count) => t("pages:terminologyCheck.applyAllSuccess", { count }),
+      applyAllSuccess: (count) =>
+        t("pages:terminologyCheck.applyAllSuccess", { count }),
       applyAllEmpty: t("pages:terminologyCheck.applyAllEmpty"),
     },
   });
@@ -97,7 +99,7 @@ export default function TerminologyCheckPage() {
   const buildCorrectedText = useCallback((result, overrides) => {
     let corrected = result.original;
     const sorted = [...(result.changes || [])].sort(
-      (a, b) => b.original.length - a.original.length
+      (a, b) => b.original.length - a.original.length,
     );
     for (const change of sorted) {
       const key = `${result.file_path || activeFile}:${result.paragraph_index}:${change.original}`;
@@ -114,19 +116,21 @@ export default function TerminologyCheckPage() {
       const corrected = buildCorrectedText(result, customReplacements);
       handleApplyChange(result.paragraph_index, corrected, result.file_path);
     },
-    [customReplacements, buildCorrectedText, handleApplyChange]
+    [customReplacements, buildCorrectedText, handleApplyChange],
   );
 
   const handleApplyAllWithCustom = useCallback(async () => {
     const pending = terminologyResults.filter(
-      (r) => r.changes && r.changes.length > 0
+      (r) => r.changes && r.changes.length > 0,
     );
     if (pending.length === 0) {
       toast.info(t("pages:terminologyCheck.applyAllEmpty"));
       return;
     }
     const toastId = toast.loading(t("pages:terminologyCheck.applying"), {
-      description: t("pages:terminologyCheck.applyingDescription", { count: pending.length }),
+      description: t("pages:terminologyCheck.applyingDescription", {
+        count: pending.length,
+      }),
     });
     try {
       const changes = pending.map((r) => ({
@@ -134,27 +138,45 @@ export default function TerminologyCheckPage() {
         new_text: buildCorrectedText(r, customReplacements),
         file_path: r.file_path || activeFile,
       }));
-      await api.terminologyCheck.apply({
-        file_path: activeFile,
-        changes,
-        operation_id: operationId?.current || null,
-      }, workspaceId);
-      const appliedKeys = new Set(pending.map((r) => `${r.file_path || activeFile}:${r.paragraph_index}`));
+      await api.terminologyCheck.apply(
+        {
+          file_path: activeFile,
+          changes,
+          operation_id: operationId?.current || null,
+        },
+        workspaceId,
+      );
+      const appliedKeys = new Set(
+        pending.map((r) => `${r.file_path || activeFile}:${r.paragraph_index}`),
+      );
       useStore.setState((state) => ({
         terminologyResults: state.terminologyResults.filter(
-          (r) => !appliedKeys.has(`${r.file_path || activeFile}:${r.paragraph_index}`)
+          (r) =>
+            !appliedKeys.has(
+              `${r.file_path || activeFile}:${r.paragraph_index}`,
+            ),
         ),
       }));
-      toast.success(t("pages:terminologyCheck.applyAllSuccess", { count: pending.length }), {
-        id: toastId,
-      });
+      toast.success(
+        t("pages:terminologyCheck.applyAllSuccess", { count: pending.length }),
+        {
+          id: toastId,
+        },
+      );
     } catch (e) {
       toast.error(t("pages:terminologyCheck.applyAllFailed"), {
         id: toastId,
         description: e.message,
       });
     }
-  }, [terminologyResults, customReplacements, buildCorrectedText, activeFile, operationId, t]);
+  }, [
+    terminologyResults,
+    customReplacements,
+    buildCorrectedText,
+    activeFile,
+    operationId,
+    t,
+  ]);
 
   const renderParagraphsByFile = (paragraphs) => {
     if (activeFiles.length > 1) {
@@ -180,7 +202,11 @@ export default function TerminologyCheckPage() {
                       P{p.index}
                     </span>
                     <div className="whitespace-pre-wrap text-sm text-foreground/80 mt-1 max-h-32 overflow-y-auto font-sans leading-relaxed">
-                      {p.plain_text ? <MarkerText text={p.plain_text} /> : t("common:blank")}
+                      {p.plain_text ? (
+                        <MarkerText text={p.plain_text} />
+                      ) : (
+                        t("common:blank")
+                      )}
                     </div>
                   </div>
                 ))}
@@ -193,15 +219,16 @@ export default function TerminologyCheckPage() {
     return (
       <div className="space-y-3">
         {paragraphs.map((p) => (
-          <div
-            key={p.index}
-            className="rounded-lg border border-border p-3"
-          >
+          <div key={p.index} className="rounded-lg border border-border p-3">
             <span className="rounded bg-muted px-1.5 py-0.5 text-xs font-mono mb-1 inline-block">
               P{p.index}
             </span>
             <div className="whitespace-pre-wrap text-sm text-foreground/80 mt-1 max-h-32 overflow-y-auto font-sans leading-relaxed">
-              {p.plain_text ? <MarkerText text={p.plain_text} /> : t("common:blank")}
+              {p.plain_text ? (
+                <MarkerText text={p.plain_text} />
+              ) : (
+                t("common:blank")
+              )}
             </div>
           </div>
         ))}
@@ -210,18 +237,24 @@ export default function TerminologyCheckPage() {
   };
 
   const renderResultCard = (result) => {
-    const hasChanges =
-      result.changes && result.changes.length > 0;
+    const hasChanges = result.changes && result.changes.length > 0;
     return (
-      <Card key={`${result.file_path}-term-result-P${result.paragraph_index}`} id={`term-result-P${result.paragraph_index}`}>
+      <Card
+        key={`${result.file_path}-term-result-P${result.paragraph_index}`}
+        id={`term-result-P${result.paragraph_index}`}
+      >
         <CardHeader className="pb-2">
           <div className="flex items-center justify-between">
             <CardTitle className="text-sm">
-              {t("pages:terminologyCheck.paragraph", { index: result.paragraph_index })}
+              {t("pages:terminologyCheck.paragraph", {
+                index: result.paragraph_index,
+              })}
             </CardTitle>
             {hasChanges && (
               <span className="rounded bg-destructive/10 text-destructive px-1.5 py-0.5 text-xs font-medium">
-                {t("pages:terminologyCheck.issuesCount", { count: result.changes.length })}
+                {t("pages:terminologyCheck.issuesCount", {
+                  count: result.changes.length,
+                })}
               </span>
             )}
           </div>
@@ -279,8 +312,7 @@ export default function TerminologyCheckPage() {
                             <Input
                               type="text"
                               value={
-                                customReplacements[cKey] ??
-                                change.corrected
+                                customReplacements[cKey] ?? change.corrected
                               }
                               onChange={(e) =>
                                 setCustomReplacements((prev) => ({
@@ -307,7 +339,10 @@ export default function TerminologyCheckPage() {
                     size="sm"
                     variant="outline"
                     onClick={() =>
-                      handleIgnoreChange(result.paragraph_index, result.file_path)
+                      handleIgnoreChange(
+                        result.paragraph_index,
+                        result.file_path,
+                      )
                     }
                   >
                     {t("common:ignore")}
@@ -319,7 +354,11 @@ export default function TerminologyCheckPage() {
                 {t("pages:terminologyCheck.noIssues")}
               </p>
             )}
-            <ParagraphContext currentIndex={result.paragraph_index} paragraphs={terminologyParagraphs} currentText={result.plain_text || result.original} />
+            <ParagraphContext
+              currentIndex={result.paragraph_index}
+              paragraphs={terminologyParagraphs}
+              currentText={result.plain_text || result.original}
+            />
           </div>
         </CardContent>
       </Card>
@@ -330,10 +369,17 @@ export default function TerminologyCheckPage() {
     <div className="min-h-screen p-8">
       <div className="max-w-6xl mx-auto mb-8">
         <div className="flex items-center gap-4">
-          <Button variant="ghost" size="icon" nativeButton={false} render={<Link to="/" />}>
+          <Button
+            variant="ghost"
+            size="icon"
+            nativeButton={false}
+            render={<Link to="/" />}
+          >
             <ArrowLeft />
           </Button>
-          <h1 className="text-3xl font-bold tracking-tight">{t("pages:terminologyCheck.title")}</h1>
+          <h1 className="text-3xl font-bold tracking-tight">
+            {t("pages:terminologyCheck.title")}
+          </h1>
         </div>
       </div>
 
@@ -353,13 +399,19 @@ export default function TerminologyCheckPage() {
           <div className="flex justify-center mt-12">
             <Card className="max-w-md w-full">
               <CardHeader>
-                <CardTitle>{t("pages:terminologyCheck.noProjectTitle")}</CardTitle>
+                <CardTitle>
+                  {t("pages:terminologyCheck.noProjectTitle")}
+                </CardTitle>
                 <CardDescription>
                   {t("pages:terminologyCheck.noProjectDesc")}
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <Button className="w-full" nativeButton={false} render={<Link to="/workspace" />}>
+                <Button
+                  className="w-full"
+                  nativeButton={false}
+                  render={<Link to="/workspace" />}
+                >
                   {t("common:openWorkspace")}
                 </Button>
               </CardContent>
@@ -392,7 +444,10 @@ export default function TerminologyCheckPage() {
                       checked={resolveInput}
                       onCheckedChange={setResolveInput}
                     />
-                    <Label htmlFor="resolve-input" className="text-sm cursor-pointer">
+                    <Label
+                      htmlFor="resolve-input"
+                      className="text-sm cursor-pointer"
+                    >
                       {t("common:includeSubfiles")}
                     </Label>
                   </div>
@@ -410,16 +465,16 @@ export default function TerminologyCheckPage() {
                   </Button>
                   <Button
                     onClick={handleCheck}
-                    disabled={
-                      isLoading || terminologyParagraphs.length === 0
-                    }
+                    disabled={isLoading || terminologyParagraphs.length === 0}
                   >
                     {isLoading ? (
                       <Loader2 className="animate-spin" />
                     ) : (
                       <CheckCheck />
                     )}
-                    {isLoading ? t("common:checking") : t("pages:terminologyCheck.checkButton")}
+                    {isLoading
+                      ? t("common:checking")
+                      : t("pages:terminologyCheck.checkButton")}
                   </Button>
                 </div>
                 {message && (
@@ -441,25 +496,30 @@ export default function TerminologyCheckPage() {
               />
             )}
 
-            {terminologyParagraphs.length > 0 && terminologyResults.length === 0 && (
-              <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm">
-                    {t("pages:terminologyCheck.paragraphs", { count: terminologyParagraphs.length })}
-                  </CardTitle>
-                  <CardDescription>
-                    {t("pages:terminologyCheck.paragraphsDescription")}
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  {renderParagraphsByFile(terminologyParagraphs)}
-                </CardContent>
-              </Card>
-            )}
+            {terminologyParagraphs.length > 0 &&
+              terminologyResults.length === 0 && (
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm">
+                      {t("pages:terminologyCheck.paragraphs", {
+                        count: terminologyParagraphs.length,
+                      })}
+                    </CardTitle>
+                    <CardDescription>
+                      {t("pages:terminologyCheck.paragraphsDescription")}
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    {renderParagraphsByFile(terminologyParagraphs)}
+                  </CardContent>
+                </Card>
+              )}
 
             {terminologyResults.length > 0 && (
               <div className="space-y-4">
-                {terminologyResults.some((r) => r.changes && r.changes.length > 0) && (
+                {terminologyResults.some(
+                  (r) => r.changes && r.changes.length > 0,
+                ) && (
                   <div className="flex justify-end">
                     <Button
                       variant="secondary"
@@ -485,7 +545,9 @@ export default function TerminologyCheckPage() {
                   onJump={jumpToParagraph}
                   onReset={reset}
                   hasFilters={hasFilters}
-                  typeLabels={{ inconsistency: t("pages:terminologyCheck.inconsistency") }}
+                  typeLabels={{
+                    inconsistency: t("pages:terminologyCheck.inconsistency"),
+                  }}
                 />
                 {filteredResults.length === 0 ? (
                   <p className="text-sm text-muted-foreground text-center py-8">

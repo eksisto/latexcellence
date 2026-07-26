@@ -37,11 +37,12 @@ class Paragraph:
     每个段落对应 .tex 文件中的一个 LaTeX 段落（以空行分隔）。
     index 和 line_start/line_end 用于精确的原地修改。
     """
-    index: int              # 段落序号（从 0 开始）
-    text: str               # 段落纯文本内容（去除了 LaTeX 命令）
-    file_path: str          # 源文件路径（相对于项目根目录）
-    line_start: int         # 起始行号（1-indexed）
-    line_end: int           # 结束行号（1-indexed）
+
+    index: int  # 段落序号（从 0 开始）
+    text: str  # 段落纯文本内容（去除了 LaTeX 命令）
+    file_path: str  # 源文件路径（相对于项目根目录）
+    line_start: int  # 起始行号（1-indexed）
+    line_end: int  # 结束行号（1-indexed）
 
 
 @dataclass
@@ -50,9 +51,10 @@ class FileNode:
     文件树节点。
     用于展示项目文件结构，支持目录嵌套。
     """
-    name: str               # 文件名
-    path: str               # 相对路径（相对于项目根目录）
-    is_dir: bool            # 是否为目录
+
+    name: str  # 文件名
+    path: str  # 相对路径（相对于项目根目录）
+    is_dir: bool  # 是否为目录
     children: list["FileNode"] = field(default_factory=list)  # 子节点
 
 
@@ -62,9 +64,10 @@ class ProjectInfo:
     项目信息。
     open() 方法返回的完整项目元数据。
     """
-    root_path: str                          # 项目根目录绝对路径
-    main_file: str | None                # 主文档路径（如 main.tex）
-    file_tree: list[FileNode]               # 文件树
+
+    root_path: str  # 项目根目录绝对路径
+    main_file: str | None  # 主文档路径（如 main.tex）
+    file_tree: list[FileNode]  # 文件树
     dependency_graph: dict[str, list[str]] = field(default_factory=dict)  # 文件依赖图
 
 
@@ -161,7 +164,8 @@ class LatexProject:
         if self._project_info is None:
             raise RuntimeError("No project opened")
         full_path = resolve_project_path(
-            Path(self._project_info.root_path), file_path,
+            Path(self._project_info.root_path),
+            file_path,
             allowed_suffixes=(".tex",),
         )
         if not full_path.exists():
@@ -176,7 +180,7 @@ class LatexProject:
         paragraphs = []
         lines = content.split("\n")
         current_paragraph = []
-        current_start = 1   # 1-indexed 行号
+        current_start = 1  # 1-indexed 行号
 
         for i, line in enumerate(lines, 1):
             stripped = line.strip()
@@ -213,9 +217,7 @@ class LatexProject:
 
         return paragraphs
 
-    def apply_change(
-        self, file_path: str, paragraph_index: int, new_text: str
-    ) -> None:
+    def apply_change(self, file_path: str, paragraph_index: int, new_text: str) -> None:
         """
         原地修改指定段落的文本。
 
@@ -235,7 +237,8 @@ class LatexProject:
         if self._project_info is None:
             raise RuntimeError("No project opened")
         full_path = resolve_project_path(
-            Path(self._project_info.root_path), file_path,
+            Path(self._project_info.root_path),
+            file_path,
         )
         if not full_path.exists():
             raise FileNotFoundError(f"File not found: {full_path}")
@@ -303,7 +306,8 @@ class LatexProject:
         if self._project_info is None:
             raise RuntimeError("No project opened")
         full_path = resolve_project_path(
-            Path(self._project_info.root_path), file_path,
+            Path(self._project_info.root_path),
+            file_path,
         )
         result = self._backup_mgr.undo(full_path)
         if result:
@@ -324,7 +328,8 @@ class LatexProject:
         if self._project_info is None:
             raise RuntimeError("No project opened")
         full_path = resolve_project_path(
-            Path(self._project_info.root_path), file_path,
+            Path(self._project_info.root_path),
+            file_path,
         )
         result = self._backup_mgr.redo(full_path)
         if result:
@@ -342,7 +347,8 @@ class LatexProject:
         if self._project_info is None:
             raise RuntimeError("No project opened")
         full_path = resolve_project_path(
-            Path(self._project_info.root_path), file_path,
+            Path(self._project_info.root_path),
+            file_path,
             allowed_suffixes=(".tex",),
         )
         if not full_path.exists():
@@ -355,7 +361,8 @@ class LatexProject:
         if self._project_info is None:
             return False
         full_path = resolve_project_path(
-            Path(self._project_info.root_path), file_path,
+            Path(self._project_info.root_path),
+            file_path,
         )
         return self._backup_mgr.can_undo(full_path)
 
@@ -364,7 +371,8 @@ class LatexProject:
         if self._project_info is None:
             return False
         full_path = resolve_project_path(
-            Path(self._project_info.root_path), file_path,
+            Path(self._project_info.root_path),
+            file_path,
         )
         return self._backup_mgr.can_redo(full_path)
 
@@ -412,9 +420,7 @@ class LatexProject:
             pass  # 跳过无权限的目录
         return nodes
 
-    def _find_main_file(
-        self, root: Path, file_tree: list[FileNode]
-    ) -> str | None:
+    def _find_main_file(self, root: Path, file_tree: list[FileNode]) -> str | None:
         """
         自动识别项目主文档。
 
@@ -430,6 +436,7 @@ class LatexProject:
         返回：
             主文件的相对路径，未找到则返回 None
         """
+
         def find_tex(nodes: list[FileNode], depth: int = 0) -> str | None:
             for node in nodes:
                 if not node.is_dir and node.name.endswith(".tex"):

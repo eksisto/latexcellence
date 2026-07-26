@@ -3,12 +3,7 @@ import { Link } from "react-router-dom";
 import { toast } from "sonner";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ArrowLeft, Upload, Loader2, Copy } from "lucide-react";
 
 const ACCEPTED_TYPES = ["image/png", "image/jpeg", "image/webp"];
@@ -63,7 +58,7 @@ export default function ImageOCRPage({
     (e) => {
       handleFile(e.target.files?.[0]);
     },
-    [handleFile]
+    [handleFile],
   );
 
   const handleDrop = useCallback(
@@ -72,7 +67,7 @@ export default function ImageOCRPage({
       setDragging(false);
       handleFile(e.dataTransfer.files?.[0]);
     },
-    [handleFile]
+    [handleFile],
   );
 
   const handleDragOver = useCallback((e) => {
@@ -143,7 +138,12 @@ export default function ImageOCRPage({
     <div className="min-h-screen p-8">
       <div className="max-w-6xl mx-auto mb-8">
         <div className="flex items-center gap-4">
-          <Button variant="ghost" size="icon" nativeButton={false} render={<Link to="/" />}>
+          <Button
+            variant="ghost"
+            size="icon"
+            nativeButton={false}
+            render={<Link to="/" />}
+          >
             <ArrowLeft />
           </Button>
           <h1 className="text-3xl font-bold tracking-tight">{title}</h1>
@@ -198,18 +198,10 @@ export default function ImageOCRPage({
                   disabled={loading}
                   className="flex-1"
                 >
-                  {loading ? (
-                    <Loader2 className="animate-spin" />
-                  ) : (
-                    <Icon />
-                  )}
+                  {loading ? <Loader2 className="animate-spin" /> : <Icon />}
                   {loading ? t("imageOcr.recognizing") : recognizeButtonText}
                 </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleClear}
-                >
+                <Button variant="outline" size="sm" onClick={handleClear}>
                   {t("imageOcr.clear")}
                 </Button>
               </div>
@@ -222,7 +214,9 @@ export default function ImageOCRPage({
           <Card>
             <CardHeader className="pb-2">
               <div className="flex items-center justify-between">
-                <CardTitle className="text-sm">{t("imageOcr.resultTitle")}</CardTitle>
+                <CardTitle className="text-sm">
+                  {t("imageOcr.resultTitle")}
+                </CardTitle>
                 <div className="flex items-center gap-2">
                   {result.low_confidence && (
                     <span className="rounded bg-yellow-500/10 text-yellow-600 dark:text-yellow-400 px-1.5 py-0.5 text-xs font-medium">

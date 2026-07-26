@@ -22,11 +22,12 @@ from backend.core.base_paragraph_check import BaseParagraphCheckService
 from backend.core.prompts import get_prompt
 from backend.modules.expression_opt.prompt_manager import get_prompt_manager
 
-
 # ── Pydantic models for LLM response schema ────────────────────────────────
+
 
 class ExpressionChangeItem(BaseModel):
     """单条表达优化建议"""
+
     type: str = "rewrite"
     original: str
     optimized: str
@@ -35,6 +36,7 @@ class ExpressionChangeItem(BaseModel):
 
 class ExpressionOptResult(BaseModel):
     """LLM 表达优化输出——对应 DEVELOPMENT.md §2.1 JSON 协议"""
+
     paragraph_index: int
     original: str
     optimized: str
@@ -69,13 +71,15 @@ class ExpressionOptService(BaseParagraphCheckService):
         custom = pm.get_active_prompt_content()
         language = getattr(self, "_language", "zh")
         if custom:
-            prompt = get_prompt("expression_opt", "base_system",
-                                custom_prompt=custom, language=language)
+            prompt = get_prompt(
+                "expression_opt", "base_system", custom_prompt=custom, language=language
+            )
         else:
             cfg = get_config()
             default = cfg.features.expression_opt.default_prompt
             prompt = get_prompt(
-                "expression_opt", "base_system",
+                "expression_opt",
+                "base_system",
                 custom_prompt=default or "No specific instructions.",
                 language=language,
             )
@@ -98,12 +102,17 @@ class ExpressionOptService(BaseParagraphCheckService):
         )
 
     async def optimize_stream(
-        self, file_path: str, resolve_input: bool = False, workspace_id: str = "",
+        self,
+        file_path: str,
+        resolve_input: bool = False,
+        workspace_id: str = "",
         language: str = "zh",
     ):
         """表达优化流式版本（SSE）。"""
         self._language = language
-        async for event in self._run_stream_check(file_path, resolve_input, workspace_id):
+        async for event in self._run_stream_check(
+            file_path, resolve_input, workspace_id
+        ):
             yield event
 
     # ── Hook 实现 ───────────────────────────────────────────────────────────

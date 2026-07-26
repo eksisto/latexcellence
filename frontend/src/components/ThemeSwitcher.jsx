@@ -24,7 +24,8 @@ export default function ThemeSwitcher() {
   useEffect(() => {
     if (open) {
       document.addEventListener("mousedown", handleClickOutside);
-      return () => document.removeEventListener("mousedown", handleClickOutside);
+      return () =>
+        document.removeEventListener("mousedown", handleClickOutside);
     }
   }, [open, handleClickOutside]);
 
@@ -60,8 +61,12 @@ export default function ThemeSwitcher() {
               }}
               className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors hover:bg-accent hover:text-accent-foreground"
             >
-              <span className="flex-1 text-left">{t(`themeNames.${name}`, { defaultValue: name })}</span>
-              {currentTheme === name && <Check className="size-4 text-primary" />}
+              <span className="flex-1 text-left">
+                {t(`themeNames.${name}`, { defaultValue: name })}
+              </span>
+              {currentTheme === name && (
+                <Check className="size-4 text-primary" />
+              )}
             </button>
           ))}
         </div>

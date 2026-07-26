@@ -25,6 +25,7 @@ from backend.utils.json_utils import retry_with_validation
 
 class StyleModifyResult(BaseModel):
     """LLM 样式修改输出"""
+
     latex: str
 
 
@@ -63,8 +64,7 @@ class StyleModifyService:
         )
 
         messages = [
-            {"role": "system", "content": get_prompt(
-                "style_modify", "system")},
+            {"role": "system", "content": get_prompt("style_modify", "system")},
             {"role": "user", "content": user_message},
         ]
 

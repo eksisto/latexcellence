@@ -30,7 +30,7 @@ export default function DiffViewer({ original, modified, changes = [] }) {
                       "rounded px-1.5 py-0.5 text-xs font-medium",
                       change.type === "typo"
                         ? "bg-destructive/10 text-destructive"
-                        : "bg-blue-500/10 text-blue-600 dark:text-blue-400"
+                        : "bg-blue-500/10 text-blue-600 dark:text-blue-400",
                     )}
                   >
                     {change.type}
@@ -42,11 +42,15 @@ export default function DiffViewer({ original, modified, changes = [] }) {
                   )}
                 </div>
                 <div className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 mt-1">
-                  <span className="text-muted-foreground text-xs">{t("common:original")}</span>
+                  <span className="text-muted-foreground text-xs">
+                    {t("common:original")}
+                  </span>
                   <span className="text-foreground/70 line-through">
                     {change.original}
                   </span>
-                  <span className="text-muted-foreground text-xs">{t("diffViewer.modified")}</span>
+                  <span className="text-muted-foreground text-xs">
+                    {t("diffViewer.modified")}
+                  </span>
                   <span className="text-foreground font-medium">
                     {change.corrected || change.optimized}
                   </span>

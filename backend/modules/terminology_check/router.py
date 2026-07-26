@@ -49,7 +49,9 @@ async def preview_paragraphs(
     当 resolve_input=True 时，递归解析 \\input/\\include 引用。
     """
     try:
-        result = get_service().preview_paragraphs(file_path, resolve_input, workspace_id)
+        result = get_service().preview_paragraphs(
+            file_path, resolve_input, workspace_id
+        )
         return result
     except RuntimeError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -58,7 +60,10 @@ async def preview_paragraphs(
 
 
 @router.post("/check")
-async def check_terminology(request: TerminologyCheckRequest, workspace_id: str = Query(..., description="工作区唯一标识符")):
+async def check_terminology(
+    request: TerminologyCheckRequest,
+    workspace_id: str = Query(..., description="工作区唯一标识符"),
+):
     """
     对项目进行术语一致性检查。
 
@@ -80,7 +85,10 @@ async def check_terminology(request: TerminologyCheckRequest, workspace_id: str 
 
 
 @router.post("/apply")
-async def apply_changes(request: TerminologyApplyRequest, workspace_id: str = Query(..., description="工作区唯一标识符")):
+async def apply_changes(
+    request: TerminologyApplyRequest,
+    workspace_id: str = Query(..., description="工作区唯一标识符"),
+):
     """
     将用户审核确认的术语修改写回源文件。
     """
@@ -107,6 +115,7 @@ async def stream_terminology_check(
     """
     SSE 流式端点：逐段推送术语检查进度和结果。
     """
+
     async def event_stream():
         try:
             async for event in get_service().check_terminology_stream(

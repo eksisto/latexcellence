@@ -17,6 +17,7 @@ latex_parser 单元测试。
 
 # ── 辅助函数：验证往返一致性 ──
 
+
 def assert_roundtrip(parser, source, expected_stripped_contains=None):
     """验证 strip + restore 往返：修改纯文本后能正确还原。"""
     stripped, marker_map = parser.strip_to_plain_text(source)
@@ -26,15 +27,18 @@ def assert_roundtrip(parser, source, expected_stripped_contains=None):
     # 还原：用原始内容替换 marker（模拟 LLM 不改动任何 marker 的情况）
     restored = parser.restore_from_markers(stripped, marker_map)
     # 还原后应与原始源码语义一致（忽略空白差异）
-    assert restored.replace("\n", "") == source.replace("\n", ""), (
-        f"Roundtrip failed.\nSource: {source!r}\nRestored: {restored!r}"
-    )
+    assert restored.replace("\n", "") == source.replace(
+        "\n", ""
+    ), f"Roundtrip failed.\nSource: {source!r}\nRestored: {restored!r}"
     if expected_stripped_contains is not None:
         for substring in expected_stripped_contains:
-            assert substring in stripped, f"Expected '{substring}' in stripped text:\n{stripped}"
+            assert (
+                substring in stripped
+            ), f"Expected '{substring}' in stripped text:\n{stripped}"
 
 
 # ── 注释移除 ──
+
 
 class TestComments:
     def test_single_line_comment(self, parser):
@@ -66,6 +70,7 @@ class TestComments:
 
 # ── 内联逐字 ──
 
+
 class TestInlineVerb:
     def test_verb_pipe(self, parser):
         source = r"Use \verb|foo{bar}| here"
@@ -81,6 +86,7 @@ class TestInlineVerb:
 
 
 # ── 受保护环境 ──
+
 
 class TestProtectedEnvironments:
     def test_verbatim_environment(self, parser):
@@ -102,21 +108,12 @@ class TestProtectedEnvironments:
         assert "code" not in stripped
 
     def test_equation_environment(self, parser):
-        source = (
-            "\\begin{equation}\n"
-            "  E = mc^2\n"
-            "\\end{equation}"
-        )
+        source = "\\begin{equation}\n" "  E = mc^2\n" "\\end{equation}"
         stripped, _ = parser.strip_to_plain_text(source)
         assert "E = mc^2" not in stripped
 
     def test_align_environment(self, parser):
-        source = (
-            "\\begin{align}\n"
-            "  x &= 1 \\\\\n"
-            "  y &= 2\n"
-            "\\end{align}"
-        )
+        source = "\\begin{align}\n" "  x &= 1 \\\\\n" "  y &= 2\n" "\\end{align}"
         stripped, _ = parser.strip_to_plain_text(source)
         assert "x &= 1" not in stripped
 
@@ -139,6 +136,7 @@ class TestProtectedEnvironments:
 
 
 # ── 展示数学模式 ──
+
 
 class TestDisplayMath:
     def test_double_dollar(self, parser):
@@ -164,12 +162,15 @@ class TestDisplayMath:
 
 # ── 行内数学模式 ──
 
+
 class TestInlineMath:
     def test_single_dollar(self, parser):
         source = "The formula $x^2 + y^2 = z^2$ is known"
         stripped, _ = parser.strip_to_plain_text(source)
         assert "x^2" not in stripped
-        assert "The formula" in stripped.lower() if "The formula" not in stripped else True
+        assert (
+            "The formula" in stripped.lower() if "The formula" not in stripped else True
+        )
         assert "is known" in stripped.lower() if "is known" not in stripped else True
 
     def test_single_dollar_not_matching_double(self, parser):
@@ -185,6 +186,7 @@ class TestInlineMath:
 
 
 # ── 命令替换 ──
+
 
 class TestCommandReplacement:
     def test_simple_command_with_arg(self, parser):
@@ -235,6 +237,7 @@ class TestCommandReplacement:
 
 # ── 自定义命令 ──
 
+
 class TestCustomCommands:
     def test_newcommand_replaced(self, parser):
         source = r"\newcommand{\R}{\mathbb{R}} \R\ is real"
@@ -251,6 +254,7 @@ class TestCustomCommands:
 
 
 # ── 中英文混合 ──
+
 
 class TestChineseEnglish:
     def test_chinese_english_mixed(self, parser):
@@ -275,6 +279,7 @@ class TestChineseEnglish:
 
 
 # ── 往返一致性 ──
+
 
 class TestRoundtrip:
     def test_plain_text_only(self, parser):
@@ -352,6 +357,7 @@ class TestRoundtrip:
 
 
 # ── 边界情况 ──
+
 
 class TestEdgeCases:
     def test_empty_string(self, parser):

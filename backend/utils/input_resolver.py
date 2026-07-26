@@ -23,9 +23,7 @@ from backend.utils.path_guard import resolve_project_path
 _logger = get_logger("input_resolver")
 
 # 匹配 \input{...}、\include{...}、\subfile{...}
-_INPUT_CMD_PATTERN = re.compile(
-    r"\\(?:input|include|subfile)\{([^}]+)\}"
-)
+_INPUT_CMD_PATTERN = re.compile(r"\\(?:input|include|subfile)\{([^}]+)\}")
 
 
 def _strip_line_comment(line: str) -> str:

@@ -10,7 +10,10 @@ from typing import Optional
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 
-from backend.core.workspace_manager import get_project_manager_for_workspace, get_workspace_manager
+from backend.core.workspace_manager import (
+    get_project_manager_for_workspace,
+    get_workspace_manager,
+)
 
 router = APIRouter(prefix="/api/project", tags=["project"])
 
@@ -30,7 +33,10 @@ class FileActionRequest(BaseModel):
 
 
 @router.post("/open")
-async def open_project(request: OpenProjectRequest, workspace_id: str = Query(..., description="工作区唯一标识符")):
+async def open_project(
+    request: OpenProjectRequest,
+    workspace_id: str = Query(..., description="工作区唯一标识符"),
+):
     """
     打开一个 LaTeX 项目目录。
     返回项目信息（文件树、主文档、依赖图）。
@@ -51,7 +57,9 @@ async def open_project(request: OpenProjectRequest, workspace_id: str = Query(..
 
 
 @router.get("/browse")
-async def browse_directory(path: str = Query(default="", description="目录路径，默认为磁盘根目录")):
+async def browse_directory(
+    path: str = Query(default="", description="目录路径，默认为磁盘根目录")
+):
     """
     浏览指定路径下的子目录列表。
     供前端文件夹选择器使用，返回子目录名称和完整路径。
@@ -67,10 +75,12 @@ async def browse_directory(path: str = Query(default="", description="目录路�
             if entry.name.startswith("."):
                 continue
             if entry.is_dir():
-                entries.append({
-                    "name": entry.name,
-                    "path": str(entry.resolve()),
-                })
+                entries.append(
+                    {
+                        "name": entry.name,
+                        "path": str(entry.resolve()),
+                    }
+                )
         return {
             "current": str(target.resolve()),
             "parent": str(target.parent.resolve()) if target.parent != target else None,
@@ -96,7 +106,10 @@ async def get_file_tree(workspace_id: str = Query(..., description="工作区唯
 
 
 @router.post("/set-main-file")
-async def set_main_file(request: FileActionRequest, workspace_id: str = Query(..., description="工作区唯一标识符")):
+async def set_main_file(
+    request: FileActionRequest,
+    workspace_id: str = Query(..., description="工作区唯一标识符"),
+):
     """手动设置项目的主 LaTeX 文件。"""
     project = get_project_manager_for_workspace(workspace_id)
     try:
@@ -138,7 +151,10 @@ async def get_paragraphs(
 
 
 @router.post("/apply-change")
-async def apply_change(request: ApplyChangeRequest, workspace_id: str = Query(..., description="工作区唯一标识符")):
+async def apply_change(
+    request: ApplyChangeRequest,
+    workspace_id: str = Query(..., description="工作区唯一标识符"),
+):
     """原地修改指定段落的文本。"""
     project = get_project_manager_for_workspace(workspace_id)
     try:
@@ -155,7 +171,10 @@ async def apply_change(request: ApplyChangeRequest, workspace_id: str = Query(..
 
 
 @router.post("/undo")
-async def undo_change(request: FileActionRequest, workspace_id: str = Query(..., description="工作区唯一标识符")):
+async def undo_change(
+    request: FileActionRequest,
+    workspace_id: str = Query(..., description="工作区唯一标识符"),
+):
     """撤销对指定文件最近一次的修改。"""
     project = get_project_manager_for_workspace(workspace_id)
     try:
@@ -166,7 +185,10 @@ async def undo_change(request: FileActionRequest, workspace_id: str = Query(...,
 
 
 @router.post("/redo")
-async def redo_change(request: FileActionRequest, workspace_id: str = Query(..., description="工作区唯一标识符")):
+async def redo_change(
+    request: FileActionRequest,
+    workspace_id: str = Query(..., description="工作区唯一标识符"),
+):
     """重做对指定文件最近一次撤销的操作。"""
     project = get_project_manager_for_workspace(workspace_id)
     try:
@@ -177,14 +199,20 @@ async def redo_change(request: FileActionRequest, workspace_id: str = Query(...,
 
 
 @router.get("/can-undo")
-async def can_undo(file_path: str = Query(...), workspace_id: str = Query(..., description="工作区唯一标识符")):
+async def can_undo(
+    file_path: str = Query(...),
+    workspace_id: str = Query(..., description="工作区唯一标识符"),
+):
     """检查指定文件是否有可撤销的操作。"""
     project = get_project_manager_for_workspace(workspace_id)
     return {"can_undo": project.can_undo(file_path)}
 
 
 @router.get("/can-redo")
-async def can_redo(file_path: str = Query(...), workspace_id: str = Query(..., description="工作区唯一标识符")):
+async def can_redo(
+    file_path: str = Query(...),
+    workspace_id: str = Query(..., description="工作区唯一标识符"),
+):
     """检查指定文件是否有可重做的操作。"""
     project = get_project_manager_for_workspace(workspace_id)
     return {"can_redo": project.can_redo(file_path)}

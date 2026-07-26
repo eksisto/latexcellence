@@ -6,7 +6,12 @@ import { useCallback, useEffect } from "react";
 import { toast } from "sonner";
 import { api } from "@/api/index";
 import i18n from "@/i18n";
-import { isDraftSession, processLoadedMessages, uid, DRAFT_PREFIX } from "./utils";
+import {
+  isDraftSession,
+  processLoadedMessages,
+  uid,
+  DRAFT_PREFIX,
+} from "./utils";
 
 /**
  * 创建会话管理相关的 hooks 和回调。
@@ -53,14 +58,16 @@ export function useWritingChatSessions({
         setWritingChatCurrentSessionId(sessionId);
         setWritingChatMessages(processLoadedMessages(data.messages || []));
         const hasCompressed = (data.messages || []).some(
-          (m) => m.compressed && m.role === "summary"
+          (m) => m.compressed && m.role === "summary",
         );
         setWritingChatCompressed(hasCompressed);
         if (data.file_path && data.file_path !== activeFile) {
           setActiveFile(data.file_path);
         }
       } catch (e) {
-        toast.error(i18n.t("hooks:writingChat.loadSessionFailed"), { description: e.message });
+        toast.error(i18n.t("hooks:writingChat.loadSessionFailed"), {
+          description: e.message,
+        });
       }
     },
     [
@@ -69,7 +76,7 @@ export function useWritingChatSessions({
       setWritingChatCurrentSessionId,
       setWritingChatMessages,
       setWritingChatCompressed,
-    ]
+    ],
   );
 
   // ── 新建会话 ─────────────────────────────────────────────────────
@@ -100,7 +107,9 @@ export function useWritingChatSessions({
     async (sessionId) => {
       try {
         if (isDraftSession(sessionId)) {
-          setWritingChatSessions((prev) => prev.filter((s) => s.id !== sessionId));
+          setWritingChatSessions((prev) =>
+            prev.filter((s) => s.id !== sessionId),
+          );
           if (writingChatCurrentSessionId === sessionId) {
             setWritingChatCurrentSessionId(null);
             setWritingChatMessages([]);
@@ -114,10 +123,20 @@ export function useWritingChatSessions({
         }
         await refreshSessions();
       } catch (e) {
-        toast.error(i18n.t("hooks:writingChat.deleteSessionFailed"), { description: e.message });
+        toast.error(i18n.t("hooks:writingChat.deleteSessionFailed"), {
+          description: e.message,
+        });
       }
     },
-    [writingChatCurrentSessionId, newSession, refreshSessions, setWritingChatSessions, setWritingChatCurrentSessionId, setWritingChatMessages, setWritingChatCompressed]
+    [
+      writingChatCurrentSessionId,
+      newSession,
+      refreshSessions,
+      setWritingChatSessions,
+      setWritingChatCurrentSessionId,
+      setWritingChatMessages,
+      setWritingChatCompressed,
+    ],
   );
 
   const renameSession = useCallback(
@@ -125,17 +144,19 @@ export function useWritingChatSessions({
       try {
         if (isDraftSession(sessionId)) {
           setWritingChatSessions((prev) =>
-            prev.map((s) => (s.id === sessionId ? { ...s, title } : s))
+            prev.map((s) => (s.id === sessionId ? { ...s, title } : s)),
           );
           return;
         }
         await api.writingChat.renameSession(sessionId, title);
         await refreshSessions();
       } catch (e) {
-        toast.error(i18n.t("hooks:writingChat.renameSessionFailed"), { description: e.message });
+        toast.error(i18n.t("hooks:writingChat.renameSessionFailed"), {
+          description: e.message,
+        });
       }
     },
-    [refreshSessions, setWritingChatSessions]
+    [refreshSessions, setWritingChatSessions],
   );
 
   return {

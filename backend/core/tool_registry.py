@@ -19,7 +19,6 @@ from typing import Any, Callable, Awaitable
 from backend.core.config import get_config
 from backend.core.logger import get_logger
 
-
 # 工具执行函数类型：接收工具名和参数，返回结果
 ToolExecutor = Callable[[str, dict[str, Any]], Awaitable[Any]]
 

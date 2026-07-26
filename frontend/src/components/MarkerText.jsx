@@ -1,4 +1,4 @@
-import React from 'react';
+import React from "react";
 import { useTranslation } from "react-i18next";
 
 const MARKER_COLORS = {
@@ -6,7 +6,7 @@ const MARKER_COLORS = {
   CMD: "bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200 border-purple-200 dark:border-purple-800",
   ENV: "bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200 border-orange-200 dark:border-orange-800",
   VERB: "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200 border-gray-200 dark:border-gray-700",
-  COM: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200 border-yellow-200 dark:border-yellow-800"
+  COM: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200 border-yellow-200 dark:border-yellow-800",
 };
 
 export default function MarkerText({ text }) {
@@ -23,7 +23,7 @@ export default function MarkerText({ text }) {
   };
 
   const tokens = text.split(/(__(?:MATH|CMD|ENV|VERB|COM)_\d{4,}__)/g);
-  
+
   return (
     <>
       {tokens.map((token, index) => {
@@ -32,8 +32,8 @@ export default function MarkerText({ text }) {
           const type = m[1];
           const num = m[2];
           return (
-            <span 
-              key={index} 
+            <span
+              key={index}
               className={`inline-flex items-center px-1 py-0.5 rounded text-[10px] font-medium mx-0.5 border ${MARKER_COLORS[type]} align-middle shadow-sm`}
               title={token}
             >

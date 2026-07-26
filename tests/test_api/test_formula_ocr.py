@@ -41,10 +41,12 @@ class TestFormulaOCRResultModel:
 
     def test_wrong_confidence_type(self):
         with pytest.raises(ValidationError):
-            FormulaOCRResult.model_validate({
-                "latex": "x",
-                "confidence": "high",
-            })
+            FormulaOCRResult.model_validate(
+                {
+                    "latex": "x",
+                    "confidence": "high",
+                }
+            )
 
 
 class TestImageValidation:
@@ -90,10 +92,12 @@ class TestPreprocess:
 
     def test_large_image_resized(self, service, monkeypatch):
         import backend.core.config as cfg_mod
+
         cfg = cfg_mod.get_config()
         monkeypatch.setattr(cfg.features.formula_ocr, "max_image_size_mb", 100)
 
         from PIL import Image
+
         img = Image.new("RGB", (3000, 100), (255, 0, 0))
         buf = io.BytesIO()
         img.save(buf, format="PNG")
@@ -182,10 +186,12 @@ class TestRecognizeWithPackageAnalysis:
         ]
 
         import backend.core.config as cfg_mod
+
         cfg = cfg_mod.get_config()
         monkeypatch.setattr(cfg.features.formula_ocr, "max_image_size_mb", 100)
 
         from PIL import Image
+
         img = Image.new("RGB", (100, 50), (255, 255, 255))
         buf = io.BytesIO()
         img.save(buf, format="PNG")
@@ -212,10 +218,12 @@ class TestRecognizeWithPackageAnalysis:
         ]
 
         import backend.core.config as cfg_mod
+
         cfg = cfg_mod.get_config()
         monkeypatch.setattr(cfg.features.formula_ocr, "max_image_size_mb", 100)
 
         from PIL import Image
+
         img = Image.new("RGB", (100, 50), (255, 255, 255))
         buf = io.BytesIO()
         img.save(buf, format="PNG")
@@ -227,7 +235,9 @@ class TestRecognizeWithPackageAnalysis:
         assert not result["latex"].startswith(r"%")
 
     @pytest.mark.asyncio
-    async def test_package_analysis_fails_gracefully(self, mock_llm, service, monkeypatch):
+    async def test_package_analysis_fails_gracefully(
+        self, mock_llm, service, monkeypatch
+    ):
         """第二次 LLM 调用失败 → 返回原始公式代码（优雅降级）。"""
         mock_llm.chat.side_effect = [
             {
@@ -239,10 +249,12 @@ class TestRecognizeWithPackageAnalysis:
         ]
 
         import backend.core.config as cfg_mod
+
         cfg = cfg_mod.get_config()
         monkeypatch.setattr(cfg.features.formula_ocr, "max_image_size_mb", 100)
 
         from PIL import Image
+
         img = Image.new("RGB", (100, 50), (255, 255, 255))
         buf = io.BytesIO()
         img.save(buf, format="PNG")

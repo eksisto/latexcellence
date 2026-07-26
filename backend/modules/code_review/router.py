@@ -28,6 +28,7 @@ def get_service() -> CodeReviewService:
 
 # ── request models ─────────────────────────────────────────────────────────
 
+
 class CodeReviewRequest(BaseModel):
     file_path: str
     paragraph_indices: list[int] | None = None
@@ -43,6 +44,7 @@ class CodeReviewApplyRequest(BaseModel):
 
 # ── preview ────────────────────────────────────────────────────────────────
 
+
 @router.get("/preview")
 async def preview_paragraphs(
     file_path: str = Query(..., description="文件路径（相对于项目根目录）"),
@@ -56,7 +58,8 @@ async def preview_paragraphs(
     """
     try:
         result = get_service().preview_paragraphs(
-            file_path, resolve_input, workspace_id)
+            file_path, resolve_input, workspace_id
+        )
         return result
     except RuntimeError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -66,8 +69,12 @@ async def preview_paragraphs(
 
 # ── check ──────────────────────────────────────────────────────────────────
 
+
 @router.post("/check")
-async def check_code_review(request: CodeReviewRequest, workspace_id: str = Query(..., description="工作区唯一标识符")):
+async def check_code_review(
+    request: CodeReviewRequest,
+    workspace_id: str = Query(..., description="工作区唯一标识符"),
+):
     """
     对指定段落进行 LaTeX 代码审查。
 
@@ -91,8 +98,12 @@ async def check_code_review(request: CodeReviewRequest, workspace_id: str = Quer
 
 # ── apply ──────────────────────────────────────────────────────────────────
 
+
 @router.post("/apply")
-async def apply_changes(request: CodeReviewApplyRequest, workspace_id: str = Query(..., description="工作区唯一标识符")):
+async def apply_changes(
+    request: CodeReviewApplyRequest,
+    workspace_id: str = Query(..., description="工作区唯一标识符"),
+):
     """
     将格式化后的 LaTeX 源码写回源文件。
 
@@ -115,6 +126,7 @@ async def apply_changes(request: CodeReviewApplyRequest, workspace_id: str = Que
 
 # ── stream ─────────────────────────────────────────────────────────────────
 
+
 @router.get("/stream/{workspace_id}")
 async def stream_code_review(
     workspace_id: str,
@@ -131,6 +143,7 @@ async def stream_code_review(
         { "type": "error", "message": "...", "retrying": true }
         { "type": "done" }
     """
+
     async def event_stream():
         try:
             async for event in get_service().check_code_review_stream(

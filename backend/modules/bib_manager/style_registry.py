@@ -12,9 +12,14 @@ class LatexStyleInfo:
     """单条 LaTeX 样式映射"""
 
     __slots__ = (
-        "backend", "package", "bibliographystyle",
-        "preamble", "citation_command", "print_command",
-        "description", "aliases",
+        "backend",
+        "package",
+        "bibliographystyle",
+        "preamble",
+        "citation_command",
+        "print_command",
+        "description",
+        "aliases",
     )
 
     def __init__(

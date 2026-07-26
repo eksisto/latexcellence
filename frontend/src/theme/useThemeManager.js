@@ -3,7 +3,15 @@ import useStore from "@/store/useStore";
 
 const themeModules = import.meta.glob("./*.css", { eager: true });
 
-const THEME_ORDER = [ "yingtaohong", "hailuocheng", "hupohuang", "tingwulv", "jingtailan", "ningyezi", "youminghei"];
+const THEME_ORDER = [
+  "yingtaohong",
+  "hailuocheng",
+  "hupohuang",
+  "tingwulv",
+  "jingtailan",
+  "ningyezi",
+  "youminghei",
+];
 
 export function getAvailableThemes() {
   const keys = Object.keys(themeModules).map((path) => {

@@ -45,7 +45,12 @@ export default function StyleModifyPage() {
     <div className="min-h-screen p-8">
       <div className="max-w-6xl mx-auto mb-8">
         <div className="flex items-center gap-4">
-          <Button variant="ghost" size="icon" nativeButton={false} render={<Link to="/" />}>
+          <Button
+            variant="ghost"
+            size="icon"
+            nativeButton={false}
+            render={<Link to="/" />}
+          >
             <ArrowLeft />
           </Button>
           <h1 className="text-3xl font-bold tracking-tight">
@@ -58,7 +63,9 @@ export default function StyleModifyPage() {
         <div className="space-y-4">
           <Card>
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm">{t("pages:styleModify.sourceCode")}</CardTitle>
+              <CardTitle className="text-sm">
+                {t("pages:styleModify.sourceCode")}
+              </CardTitle>
               <CardDescription>
                 {t("pages:styleModify.sourcePlaceholder")}
               </CardDescription>
@@ -77,7 +84,9 @@ export default function StyleModifyPage() {
         <div className="space-y-4">
           <Card>
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm">{t("pages:styleModify.requirement")}</CardTitle>
+              <CardTitle className="text-sm">
+                {t("pages:styleModify.requirement")}
+              </CardTitle>
               <CardDescription>
                 {t("pages:styleModify.requirementPlaceholder")}
               </CardDescription>
@@ -94,20 +103,16 @@ export default function StyleModifyPage() {
                   onClick={handleModify}
                   disabled={loading || !latex.trim() || !description.trim()}
                 >
-                  {loading ? (
-                    <Loader2 className="animate-spin" />
-                  ) : (
-                    <Wand2 />
-                  )}
-                  {loading ? t("pages:styleModify.modifyBtnLoading") : t("pages:styleModify.modifyBtn")}
+                  {loading ? <Loader2 className="animate-spin" /> : <Wand2 />}
+                  {loading
+                    ? t("pages:styleModify.modifyBtnLoading")
+                    : t("pages:styleModify.modifyBtn")}
                 </Button>
                 <span className="text-xs text-muted-foreground">
                   {t("pages:styleModify.submitHint")}
                 </span>
               </div>
-              {error && (
-                <p className="text-sm text-destructive">{error}</p>
-              )}
+              {error && <p className="text-sm text-destructive">{error}</p>}
             </CardContent>
           </Card>
 
@@ -118,11 +123,7 @@ export default function StyleModifyPage() {
                   <CardTitle className="text-sm">
                     {t("pages:styleModify.resultTitle")}
                   </CardTitle>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={handleCopy}
-                  >
+                  <Button variant="outline" size="sm" onClick={handleCopy}>
                     <Copy />
                     {t("common:copy")}
                   </Button>

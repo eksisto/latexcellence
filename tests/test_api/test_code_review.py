@@ -24,7 +24,6 @@ from backend.modules.code_review.service import (
     CodeReviewSuggestion,
 )
 
-
 # ── fixtures ───────────────────────────────────────────────────────────────
 
 
@@ -197,19 +196,21 @@ class TestCheckOneParagraph:
         original = r"\centerline{Hello World}"
         text_with_markers = "Hello World"  # assume markers already stripped
 
-        mock_llm.chat = AsyncMock(return_value={
-            "paragraph_index": 0,
-            "needs_review": True,
-            "suggestions": [
-                {
-                    "type": "code_smell",
-                    "severity": "warning",
-                    "description": r"Use \centering instead of \centerline",
-                    "original": r"\centerline{Hello World}",
-                    "suggested": r"\begin{center}Hello World\end{center}",
-                }
-            ],
-        })
+        mock_llm.chat = AsyncMock(
+            return_value={
+                "paragraph_index": 0,
+                "needs_review": True,
+                "suggestions": [
+                    {
+                        "type": "code_smell",
+                        "severity": "warning",
+                        "description": r"Use \centering instead of \centerline",
+                        "original": r"\centerline{Hello World}",
+                        "suggested": r"\begin{center}Hello World\end{center}",
+                    }
+                ],
+            }
+        )
 
         result = await service._check_one_paragraph(
             mock_llm, 0, 5, text_with_markers, original, "main.tex"
@@ -225,11 +226,13 @@ class TestCheckOneParagraph:
         original = r"\section{Introduction}"
         text_with_markers = r"\section{Introduction}"
 
-        mock_llm.chat = AsyncMock(return_value={
-            "paragraph_index": 0,
-            "needs_review": False,
-            "suggestions": [],
-        })
+        mock_llm.chat = AsyncMock(
+            return_value={
+                "paragraph_index": 0,
+                "needs_review": False,
+                "suggestions": [],
+            }
+        )
 
         result = await service._check_one_paragraph(
             mock_llm, 0, 0, text_with_markers, original, "main.tex"

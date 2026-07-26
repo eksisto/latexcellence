@@ -22,9 +22,12 @@ function getOrCreateWorkspaceId() {
     // 忽略
   }
   if (!id) {
-    id = crypto.randomUUID ? crypto.randomUUID() : (
-      "ws-" + Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 10)
-    );
+    id = crypto.randomUUID
+      ? crypto.randomUUID()
+      : "ws-" +
+        Date.now().toString(36) +
+        "-" +
+        Math.random().toString(36).slice(2, 10);
     try {
       localStorage.setItem(key, id);
     } catch (_) {
@@ -116,42 +119,54 @@ const useStore = create(
       },
       setExpressionParagraphs: (paras) => {
         if (typeof paras === "function") {
-          set((state) => ({ expressionParagraphs: paras(state.expressionParagraphs) }));
+          set((state) => ({
+            expressionParagraphs: paras(state.expressionParagraphs),
+          }));
         } else {
           set({ expressionParagraphs: paras });
         }
       },
       setExpressionResults: (results) => {
         if (typeof results === "function") {
-          set((state) => ({ expressionResults: results(state.expressionResults) }));
+          set((state) => ({
+            expressionResults: results(state.expressionResults),
+          }));
         } else {
           set({ expressionResults: results });
         }
       },
       setCodeReviewParagraphs: (paras) => {
         if (typeof paras === "function") {
-          set((state) => ({ codeReviewParagraphs: paras(state.codeReviewParagraphs) }));
+          set((state) => ({
+            codeReviewParagraphs: paras(state.codeReviewParagraphs),
+          }));
         } else {
           set({ codeReviewParagraphs: paras });
         }
       },
       setCodeReviewResults: (results) => {
         if (typeof results === "function") {
-          set((state) => ({ codeReviewResults: results(state.codeReviewResults) }));
+          set((state) => ({
+            codeReviewResults: results(state.codeReviewResults),
+          }));
         } else {
           set({ codeReviewResults: results });
         }
       },
       setTerminologyParagraphs: (paras) => {
         if (typeof paras === "function") {
-          set((state) => ({ terminologyParagraphs: paras(state.terminologyParagraphs) }));
+          set((state) => ({
+            terminologyParagraphs: paras(state.terminologyParagraphs),
+          }));
         } else {
           set({ terminologyParagraphs: paras });
         }
       },
       setTerminologyResults: (results) => {
         if (typeof results === "function") {
-          set((state) => ({ terminologyResults: results(state.terminologyResults) }));
+          set((state) => ({
+            terminologyResults: results(state.terminologyResults),
+          }));
         } else {
           set({ terminologyResults: results });
         }
@@ -167,15 +182,20 @@ const useStore = create(
       writingChatCompressed: false,
       setWritingChatSessions: (sessions) => {
         if (typeof sessions === "function") {
-          set((state) => ({ writingChatSessions: sessions(state.writingChatSessions) }));
+          set((state) => ({
+            writingChatSessions: sessions(state.writingChatSessions),
+          }));
         } else {
           set({ writingChatSessions: sessions });
         }
       },
-      setWritingChatCurrentSessionId: (id) => set({ writingChatCurrentSessionId: id }),
+      setWritingChatCurrentSessionId: (id) =>
+        set({ writingChatCurrentSessionId: id }),
       setWritingChatMessages: (messages) => {
         if (typeof messages === "function") {
-          set((state) => ({ writingChatMessages: messages(state.writingChatMessages) }));
+          set((state) => ({
+            writingChatMessages: messages(state.writingChatMessages),
+          }));
         } else {
           set({ writingChatMessages: messages });
         }
@@ -212,8 +232,8 @@ const useStore = create(
           writingChatMessages: [],
           writingChatCompressed: false,
           checkProgress: null,
-      });
-    },
+        });
+      },
     }),
     {
       name: "latexcellence-project",
@@ -239,8 +259,8 @@ const useStore = create(
         terminologyParagraphs: state.terminologyParagraphs,
         writingChatCurrentSessionId: state.writingChatCurrentSessionId,
       }),
-    }
-  )
+    },
+  ),
 );
 
 export default useStore;

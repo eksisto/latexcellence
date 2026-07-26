@@ -28,6 +28,7 @@ from backend.core.logger import get_logger
 @dataclass
 class UsageInfo:
     """单次 LLM 调用的 token 用量。"""
+
     prompt_tokens: int
     completion_tokens: int
     total_tokens: int
@@ -42,6 +43,7 @@ class StreamChunk:
         - 普通流片段：content 为字符串、usage=None
         - 末尾用量片段：content=None、usage=UsageInfo（若 API 未返回则为 None）
     """
+
     content: str | None
     usage: UsageInfo | None
 
@@ -157,7 +159,7 @@ class LLMClient:
                 )
                 if attempt == max_retries - 1:
                     raise
-                await asyncio.sleep(2 ** attempt)
+                await asyncio.sleep(2**attempt)
 
         raise RuntimeError("Max retries exceeded")
 
@@ -187,8 +189,7 @@ class LLMClient:
 
         await self._rate_limit()
 
-        self._logger.info(
-            f"LLM stream request | model={cfg.model} | tokens={max_tok}")
+        self._logger.info(f"LLM stream request | model={cfg.model} | tokens={max_tok}")
 
         stream = await self.client.chat.completions.create(
             model=cfg.model,
@@ -270,7 +271,7 @@ class LLMClient:
                 )
                 if attempt == max_retries - 1:
                     raise
-                await asyncio.sleep(2 ** attempt)
+                await asyncio.sleep(2**attempt)
 
         raise RuntimeError("Max retries exceeded")
 
@@ -307,7 +308,8 @@ class LLMClient:
         await self._rate_limit()
 
         self._logger.info(
-            f"LLM stream-with-usage request | model={cfg.model} | tokens={max_tok}")
+            f"LLM stream-with-usage request | model={cfg.model} | tokens={max_tok}"
+        )
 
         kwargs = {
             "model": cfg.model,
@@ -321,9 +323,7 @@ class LLMClient:
                 **kwargs, stream_options={"include_usage": True}
             )
         except Exception as e:
-            self._logger.warning(
-                f"stream_options unsupported, fallback: {e}"
-            )
+            self._logger.warning(f"stream_options unsupported, fallback: {e}")
             stream = await self.client.chat.completions.create(**kwargs)
 
         async for chunk in stream:

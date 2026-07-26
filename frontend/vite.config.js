@@ -33,10 +33,14 @@ export default defineConfig({
         },
         manualChunks(id) {
           if (id.includes("node_modules")) {
-            if (/\/node_modules\/react(-dom)?\//.test(id) || /\/node_modules\/scheduler\//.test(id))
+            if (
+              /\/node_modules\/react(-dom)?\//.test(id) ||
+              /\/node_modules\/scheduler\//.test(id)
+            )
               return "vendor-react";
             if (/@base-ui|@radix-ui/.test(id)) return "vendor-ui";
-            if (/react-router|@remix-run\/router/.test(id)) return "vendor-router";
+            if (/react-router|@remix-run\/router/.test(id))
+              return "vendor-router";
             if (/lucide-react/.test(id)) return "vendor-icons";
             if (/sonner/.test(id)) return "vendor-sonner";
             if (/katex/.test(id)) return "vendor-katex";

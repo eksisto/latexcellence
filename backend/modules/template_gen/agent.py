@@ -203,8 +203,7 @@ class TemplateAgentService:
                         tool_args,
                     )
                 except Exception as e:
-                    self._logger.warning(
-                        f"Tool execution exception {tool_name}: {e}")
+                    self._logger.warning(f"Tool execution exception {tool_name}: {e}")
                     result_text = f"Tool execution failed: {e}"
                     result_event = {
                         "tool": tool_name,
@@ -486,8 +485,7 @@ class _ToolExecutor:
         resolved.parent.mkdir(parents=True, exist_ok=True)
         resolved.write_bytes(content_bytes)
         self._file_count += 1
-        self._logger.info(
-            f"write_file: {file_path} ({len(content_bytes)} bytes)")
+        self._logger.info(f"write_file: {file_path} ({len(content_bytes)} bytes)")
 
         summary = f"Wrote {file_path} ({len(content_bytes)} bytes)"
         return summary, {
@@ -518,8 +516,7 @@ class _ToolExecutor:
         content = resolved.read_text(encoding="utf-8")
         # 截断超长内容回传 LLM
         truncated = (
-            content if len(content) <= 8000 else (
-                content[:8000] + "\n...[truncated]")
+            content if len(content) <= 8000 else (content[:8000] + "\n...[truncated]")
         )
         event = {"tool": "read_file", "ok": True, "summary": file_path}
         return truncated, event
@@ -582,8 +579,7 @@ class _ToolExecutor:
             }
 
         timeout = fcfg.agent_compile_timeout
-        self._logger.info(
-            f"agent compile | main={main_file} | cwd={self._sandbox}")
+        self._logger.info(f"agent compile | main={main_file} | cwd={self._sandbox}")
 
         try:
             process = await asyncio.create_subprocess_exec(
@@ -865,8 +861,7 @@ def safe_read_sandbox_file(
 ) -> tuple[str | None, str | None]:
     """安全读取沙箱内文件，返回 (content, error)。"""
     try:
-        resolved = TemplateAgentService._resolve_sandbox_path(
-            sandbox, rel_path)
+        resolved = TemplateAgentService._resolve_sandbox_path(sandbox, rel_path)
     except ValueError as e:
         return None, str(e)
     if not resolved.exists() or not resolved.is_file():

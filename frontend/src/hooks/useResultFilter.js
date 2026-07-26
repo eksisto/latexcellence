@@ -70,16 +70,14 @@ export default function useResultFilter(results, options = {}) {
 
   const jumpToParagraph = useCallback(
     (paragraphIndex) => {
-      const el = document.getElementById(
-        `${idPrefix}-P${paragraphIndex}`
-      );
+      const el = document.getElementById(`${idPrefix}-P${paragraphIndex}`);
       if (el) {
         el.scrollIntoView({ behavior: "smooth", block: "center" });
         return true;
       }
       return false;
     },
-    [idPrefix]
+    [idPrefix],
   );
 
   const reset = useCallback(() => {

@@ -37,17 +37,21 @@ def _make_response(content=None, tool_calls=None):
     msg.model_dump = lambda: {
         "role": "assistant",
         "content": content,
-        "tool_calls": [
-            {
-                "id": tc.id,
-                "type": "function",
-                "function": {
-                    "name": tc.function.name,
-                    "arguments": tc.function.arguments,
-                },
-            }
-            for tc in (tool_calls or [])
-        ] if tool_calls else None,
+        "tool_calls": (
+            [
+                {
+                    "id": tc.id,
+                    "type": "function",
+                    "function": {
+                        "name": tc.function.name,
+                        "arguments": tc.function.arguments,
+                    },
+                }
+                for tc in (tool_calls or [])
+            ]
+            if tool_calls
+            else None
+        ),
     }
     return SimpleNamespace(choices=[SimpleNamespace(message=msg)])
 
@@ -79,12 +83,9 @@ class TestAgentLoop:
         )
         monkeypatch.setattr(cfg.features.template_gen, "agent_max_rounds", 8)
         monkeypatch.setattr(cfg.features.template_gen, "agent_max_files", 10)
-        monkeypatch.setattr(cfg.features.template_gen,
-                            "agent_max_file_size_kb", 64)
-        monkeypatch.setattr(cfg.features.template_gen,
-                            "agent_compile_enabled", True)
-        monkeypatch.setattr(cfg.features.template_gen,
-                            "agent_compile_timeout", 30)
+        monkeypatch.setattr(cfg.features.template_gen, "agent_max_file_size_kb", 64)
+        monkeypatch.setattr(cfg.features.template_gen, "agent_compile_enabled", True)
+        monkeypatch.setattr(cfg.features.template_gen, "agent_compile_timeout", 30)
 
     def test_write_and_finish(self, tmp_path):
         svc = TemplateAgentService()
@@ -92,17 +93,29 @@ class TestAgentLoop:
         responses = [
             _make_response(
                 content="Write the main file first",
-                tool_calls=[_make_tool_call("write_file", {
-                    "file_path": "main.tex",
-                    "content": r"\documentclass{article}\begin{document}hi\end{document}",
-                }, "t1")],
+                tool_calls=[
+                    _make_tool_call(
+                        "write_file",
+                        {
+                            "file_path": "main.tex",
+                            "content": r"\documentclass{article}\begin{document}hi\end{document}",
+                        },
+                        "t1",
+                    )
+                ],
             ),
             _make_response(
                 content="Finish",
-                tool_calls=[_make_tool_call("finish", {
-                    "summary": "Completed",
-                    "main_file": "main.tex",
-                }, "t2")],
+                tool_calls=[
+                    _make_tool_call(
+                        "finish",
+                        {
+                            "summary": "Completed",
+                            "main_file": "main.tex",
+                        },
+                        "t2",
+                    )
+                ],
             ),
         ]
         llm.chat_with_tools = AsyncMock(side_effect=responses)
@@ -118,22 +131,37 @@ class TestAgentLoop:
         # 沙箱内确实写入了文件
         sandbox = Path(done["sandbox"])
         assert (sandbox / "main.tex").exists()
-        assert (sandbox / "main.tex").read_text(encoding="utf-8").startswith(
-            r"\documentclass")
+        assert (
+            (sandbox / "main.tex")
+            .read_text(encoding="utf-8")
+            .startswith(r"\documentclass")
+        )
 
     def test_path_traversal_rejected(self, tmp_path):
         svc = TemplateAgentService()
         llm = MagicMock()
         responses = [
-            _make_response(tool_calls=[
-                _make_tool_call("write_file", {
-                    "file_path": "../escape.tex", "content": "x",
-                }, "e1"),
-                _make_tool_call("write_file", {
-                    "file_path": "okay.tex", "content": "ok",
-                }, "e2"),
-                _make_tool_call("finish", {"summary": "ok"}, "e3"),
-            ]),
+            _make_response(
+                tool_calls=[
+                    _make_tool_call(
+                        "write_file",
+                        {
+                            "file_path": "../escape.tex",
+                            "content": "x",
+                        },
+                        "e1",
+                    ),
+                    _make_tool_call(
+                        "write_file",
+                        {
+                            "file_path": "okay.tex",
+                            "content": "ok",
+                        },
+                        "e2",
+                    ),
+                    _make_tool_call("finish", {"summary": "ok"}, "e3"),
+                ]
+            ),
         ]
         llm.chat_with_tools = AsyncMock(side_effect=responses)
         # 一次响应里三个 tool_call，循环结束后 finish 触发跳出
@@ -147,9 +175,11 @@ class TestAgentLoop:
         svc = TemplateAgentService()
         llm = MagicMock()
         responses = [
-            _make_response(tool_calls=[
-                _make_tool_call("finish", {"summary": "stop early"}, "f1"),
-            ]),
+            _make_response(
+                tool_calls=[
+                    _make_tool_call("finish", {"summary": "stop early"}, "f1"),
+                ]
+            ),
         ]
         llm.chat_with_tools = AsyncMock(side_effect=responses)
         events = _collect(svc, "early stop", llm)
@@ -184,7 +214,8 @@ class TestSandboxPath:
 
     def test_accepts_subdir(self, tmp_path):
         resolved = TemplateAgentService._resolve_sandbox_path(
-            tmp_path, "chapters/intro.tex")
+            tmp_path, "chapters/intro.tex"
+        )
         assert resolved.is_relative_to(tmp_path.resolve())
 
 
@@ -207,12 +238,13 @@ class TestToolExecutorCompile:
 
     def test_main_file_missing(self, tmp_path):
         from types import SimpleNamespace
+
         cfg = get_config()
         cfg.features.template_gen.output_dir = str(tmp_path)
         executor = _ToolExecutor(tmp_path, cfg, MagicMock())
         import asyncio
-        text, ev = asyncio.run(
-            executor._compile_latex({"main_file": "nope.tex"}))
+
+        text, ev = asyncio.run(executor._compile_latex({"main_file": "nope.tex"}))
         assert ev["ok"] is False
         assert "not found" in ev["summary"].lower()
 
@@ -259,8 +291,12 @@ class TestErrorAnalysis:
 
     def test_format_analysis_lists_first_error(self):
         errors = [
-            {"type": "Undefined control sequence.",
-             "file": "main.tex", "line": 45, "detail": "\\bad"},
+            {
+                "type": "Undefined control sequence.",
+                "file": "main.tex",
+                "line": 45,
+                "detail": "\\bad",
+            },
             {"type": "Other.", "file": None, "line": None, "detail": ""},
         ]
         text = _format_error_analysis(errors)
@@ -281,58 +317,75 @@ class TestCompileFailureWarning:
     """编译失败但 Agent 仍调用 finish 时，应推送 warning 事件。"""
 
     def test_warning_emitted_when_finish_after_failed_compile(
-            self, tmp_path, monkeypatch):
+        self, tmp_path, monkeypatch
+    ):
         """LLM：write → compile(失败) → finish，应 emit compile(success=False)
         和 warning 事件，仍以 done 收尾。"""
         load_config("config.json")
         cfg = get_config()
         monkeypatch.setattr(
-            cfg.features.template_gen, "output_dir",
-            str(tmp_path / "templates"))
+            cfg.features.template_gen, "output_dir", str(tmp_path / "templates")
+        )
         monkeypatch.setattr(cfg.features.template_gen, "agent_max_rounds", 8)
         monkeypatch.setattr(cfg.features.template_gen, "agent_max_files", 10)
-        monkeypatch.setattr(cfg.features.template_gen,
-                            "agent_max_file_size_kb", 64)
-        monkeypatch.setattr(cfg.features.template_gen,
-                            "agent_compile_enabled", True)
-        monkeypatch.setattr(cfg.features.template_gen,
-                            "agent_compile_timeout", 30)
+        monkeypatch.setattr(cfg.features.template_gen, "agent_max_file_size_kb", 64)
+        monkeypatch.setattr(cfg.features.template_gen, "agent_compile_enabled", True)
+        monkeypatch.setattr(cfg.features.template_gen, "agent_compile_timeout", 30)
 
         svc = TemplateAgentService()
         llm = MagicMock()
         responses = [
-            _make_response(tool_calls=[
-                _make_tool_call("write_file", {
-                    "file_path": "main.tex",
-                    "content": r"\documentclass{article}\begin{doc}\bad\end{doc}",
-                }, "w1"),
-            ]),
-            _make_response(tool_calls=[
-                _make_tool_call("compile_latex",
-                                {"main_file": "main.tex"}, "c1"),
-            ]),
-            _make_response(tool_calls=[
-                _make_tool_call("finish", {"summary": "done",
-                                           "main_file": "main.tex"}, "f1"),
-            ]),
+            _make_response(
+                tool_calls=[
+                    _make_tool_call(
+                        "write_file",
+                        {
+                            "file_path": "main.tex",
+                            "content": r"\documentclass{article}\begin{doc}\bad\end{doc}",
+                        },
+                        "w1",
+                    ),
+                ]
+            ),
+            _make_response(
+                tool_calls=[
+                    _make_tool_call("compile_latex", {"main_file": "main.tex"}, "c1"),
+                ]
+            ),
+            _make_response(
+                tool_calls=[
+                    _make_tool_call(
+                        "finish", {"summary": "done", "main_file": "main.tex"}, "f1"
+                    ),
+                ]
+            ),
         ]
         llm.chat_with_tools = AsyncMock(side_effect=responses)
 
         # 直接桩掉 _compile_latex，避免依赖真实 latexmk，确保稳定且快速
         async def _fake_compile(self_exec, args):
             errors = [
-                {"type": "Undefined control sequence.",
-                 "file": "main.tex", "line": 1, "detail": "\\bad"},
+                {
+                    "type": "Undefined control sequence.",
+                    "file": "main.tex",
+                    "line": 1,
+                    "detail": "\\bad",
+                },
             ]
             analysis = _format_error_analysis(errors)
             llm_text = analysis + "\n\n--- Raw log ---\nCompilation FAILED."
-            event = {"tool": "compile_latex", "ok": True,
-                     "success": False, "log": "Compilation FAILED.",
-                     "errors": errors,
-                     "summary": "Compilation failed (1 error)"}
+            event = {
+                "tool": "compile_latex",
+                "ok": True,
+                "success": False,
+                "log": "Compilation FAILED.",
+                "errors": errors,
+                "summary": "Compilation failed (1 error)",
+            }
             return llm_text, event
 
         import backend.modules.template_gen.agent as agent_mod
+
         monkeypatch.setattr(_ToolExecutor, "_compile_latex", _fake_compile)
 
         events = _collect(svc, "test warning", llm)

@@ -49,9 +49,9 @@ def setup_logging(level: str = "INFO", log_dir: str = "logs/") -> None:
     # 用于长期存档和问题排查
     file_handler = TimedRotatingFileHandler(
         filename=log_path / "latexcellence.log",
-        when="midnight",       # 每天午夜切换日志文件
+        when="midnight",  # 每天午夜切换日志文件
         interval=1,
-        backupCount=30,        # 保留最近 30 天的日志
+        backupCount=30,  # 保留最近 30 天的日志
         encoding="utf-8",
     )
     file_handler.setLevel(logging.DEBUG)

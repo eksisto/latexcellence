@@ -44,7 +44,12 @@ export default function MarkdownConvertPage() {
     <div className="min-h-screen p-8">
       <div className="max-w-6xl mx-auto mb-8">
         <div className="flex items-center gap-4">
-          <Button variant="ghost" size="icon" nativeButton={false} render={<Link to="/" />}>
+          <Button
+            variant="ghost"
+            size="icon"
+            nativeButton={false}
+            render={<Link to="/" />}
+          >
             <ArrowLeft />
           </Button>
           <h1 className="text-3xl font-bold tracking-tight">
@@ -56,7 +61,9 @@ export default function MarkdownConvertPage() {
       <div className="max-w-3xl mx-auto space-y-4">
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm">{t("pages:markdownConvert.inputLabel")}</CardTitle>
+            <CardTitle className="text-sm">
+              {t("pages:markdownConvert.inputLabel")}
+            </CardTitle>
             <CardDescription>
               {t("pages:markdownConvert.inputDesc")}
             </CardDescription>
@@ -73,22 +80,24 @@ export default function MarkdownConvertPage() {
                 onClick={handleConvert}
                 disabled={loading || !markdown.trim()}
               >
-                {loading ? (
-                  <Loader2 className="animate-spin" />
-                ) : (
-                  <FileText />
-                )}
-                {loading ? t("pages:markdownConvert.convertBtnLoading") : t("pages:markdownConvert.convertBtn")}
+                {loading ? <Loader2 className="animate-spin" /> : <FileText />}
+                {loading
+                  ? t("pages:markdownConvert.convertBtnLoading")
+                  : t("pages:markdownConvert.convertBtn")}
               </Button>
               <span className="text-xs text-muted-foreground">
-                {t("pages:markdownConvert.needPandoc")}<a href="https://pandoc.org/installing.html" target="_blank" rel="noopener noreferrer" className="relative inline-block no-underline after:content-[''] after:absolute after:left-0 after:bottom-0 after:h-[0.5px] after:w-full after:bg-current after:origin-left after:transition-transform after:duration-300 hover:after:scale-x-0">
+                {t("pages:markdownConvert.needPandoc")}
+                <a
+                  href="https://pandoc.org/installing.html"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="relative inline-block no-underline after:content-[''] after:absolute after:left-0 after:bottom-0 after:h-[0.5px] after:w-full after:bg-current after:origin-left after:transition-transform after:duration-300 hover:after:scale-x-0"
+                >
                   Pandoc
                 </a>
               </span>
             </div>
-            {error && (
-              <p className="text-sm text-destructive">{error}</p>
-            )}
+            {error && <p className="text-sm text-destructive">{error}</p>}
           </CardContent>
         </Card>
 

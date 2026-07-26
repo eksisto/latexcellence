@@ -25,7 +25,6 @@ from backend.core.workspace_manager import get_project_manager_for_workspace
 from backend.utils.compile_error_translator import translate_compile_errors
 from backend.utils.path_guard import resolve_project_path
 
-
 logger = get_logger(__name__)
 
 WORKTREE_REF = "__WORKTREE__"
@@ -187,7 +186,9 @@ async def list_git_revisions(workspace_id: str = "") -> GitRefsResult:
         )
     ]
     revisions.extend(await _list_commit_revisions(context.git_root))
-    revisions.extend(await _list_ref_revisions(context.git_root, "refs/heads", "branch"))
+    revisions.extend(
+        await _list_ref_revisions(context.git_root, "refs/heads", "branch")
+    )
     revisions.extend(await _list_ref_revisions(context.git_root, "refs/tags", "tag"))
 
     deduped = []
@@ -283,7 +284,8 @@ async def render_diff_pdf(
             f"Git diff PDF compilation failed for job={job_id}: {compile_result.returncode}"
         )
         explanation, fixes = await translate_compile_errors(
-            compile_result.stdout, compile_result.stderr,
+            compile_result.stdout,
+            compile_result.stderr,
         )
         if not explanation:
             explanation = "差异 LaTeX 已生成，但 PDF 编译失败。请查看原始输出定位问题。"
@@ -377,7 +379,9 @@ async def _list_commit_revisions(git_root: Path) -> list[GitRevision]:
     return revisions
 
 
-async def _list_ref_revisions(git_root: Path, ref_prefix: str, kind: str) -> list[GitRevision]:
+async def _list_ref_revisions(
+    git_root: Path, ref_prefix: str, kind: str
+) -> list[GitRevision]:
     result = await _run_git_checked(
         git_root,
         [
@@ -450,7 +454,9 @@ async def _flatten_file(context: FlattenContext, file_rel: str) -> str:
     return "\n".join(expanded_lines)
 
 
-async def _expand_input_line(context: FlattenContext, current_file: str, line: str) -> str:
+async def _expand_input_line(
+    context: FlattenContext, current_file: str, line: str
+) -> str:
     stripped = line.lstrip()
     if stripped.startswith("%") or "\\" not in line:
         return line
@@ -466,7 +472,7 @@ async def _expand_input_line(context: FlattenContext, current_file: str, line: s
             continue
 
         matched = True
-        result_parts.append(line[cursor:match.start()])
+        result_parts.append(line[cursor : match.start()])
         nested = await _flatten_file(context, resolved)
         if match.group("cmd") == "include":
             nested = f"\\clearpage\n{nested}\n\\clearpage"
@@ -539,9 +545,7 @@ async def _read_revision_file(
     )
     if result.returncode != 0:
         if required:
-            raise FileNotFoundError(
-                f"File not found in revision {ref}: {project_rel}"
-            )
+            raise FileNotFoundError(f"File not found in revision {ref}: {project_rel}")
         return None
     return result.stdout
 
@@ -665,7 +669,13 @@ def _split_document(content: str) -> tuple[str, str, str, str, str]:
             content[end_index + len(_END_DOCUMENT) :],
         )
 
-    return content[:begin_index], content[begin_index:begin_end], content[begin_end:], "", ""
+    return (
+        content[:begin_index],
+        content[begin_index:begin_end],
+        content[begin_end:],
+        "",
+        "",
+    )
 
 
 def _find_document_boundary(content: str, boundary: str, find_last: bool) -> int:
@@ -697,7 +707,9 @@ def _find_document_boundary(content: str, boundary: str, find_last: bool) -> int
     return found
 
 
-def _diff_lines(base_lines: list[str], target_lines: list[str]) -> tuple[list[str], int, int]:
+def _diff_lines(
+    base_lines: list[str], target_lines: list[str]
+) -> tuple[list[str], int, int]:
     matcher = difflib.SequenceMatcher(None, base_lines, target_lines, autojunk=False)
     output = []
     added_lines = 0
@@ -864,7 +876,9 @@ async def _run_git_checked(
 ) -> ProcessResult:
     result = await _run_git(cwd, args, timeout=timeout)
     if result.returncode != 0:
-        raise RuntimeError(result.stderr.strip() or result.stdout.strip() or "Git command failed")
+        raise RuntimeError(
+            result.stderr.strip() or result.stdout.strip() or "Git command failed"
+        )
     return result
 
 

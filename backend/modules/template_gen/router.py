@@ -59,7 +59,9 @@ async def generate_template(request: TemplateGenRequest):
     返回 LaTeX preamble、body 骨架、推荐包列表和说明。
     """
     try:
-        result = await get_service().generate_template(request.description, request.language)
+        result = await get_service().generate_template(
+            request.description, request.language
+        )
         return result
     except RuntimeError as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -96,8 +98,7 @@ async def agent_generate(request: AgentGenerateRequest):
 
     async def event_stream():
         try:
-            async for event in service.generate(request.description,
-                                                request.language):
+            async for event in service.generate(request.description, request.language):
                 yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
         except Exception as e:
             yield (
@@ -120,8 +121,7 @@ async def agent_list_files(session_id: str = Query(..., description="Agent 会�
     """列出某次 Agent 生成产出的文件树。"""
     cfg = get_config()
     try:
-        sandbox = load_sandbox(
-            cfg.features.template_gen.output_dir, session_id)
+        sandbox = load_sandbox(cfg.features.template_gen.output_dir, session_id)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     if not sandbox.exists():
@@ -145,8 +145,7 @@ async def agent_read_file(
     """读取沙箱内单个文件内容。"""
     cfg = get_config()
     try:
-        sandbox = load_sandbox(
-            cfg.features.template_gen.output_dir, session_id)
+        sandbox = load_sandbox(cfg.features.template_gen.output_dir, session_id)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     if not sandbox.exists():
@@ -163,8 +162,7 @@ async def agent_download_zip(session_id: str = Query(..., description="Agent 会
     """将沙箱内所有文件打包为 ZIP 下载。"""
     cfg = get_config()
     try:
-        sandbox = load_sandbox(
-            cfg.features.template_gen.output_dir, session_id)
+        sandbox = load_sandbox(cfg.features.template_gen.output_dir, session_id)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     if not sandbox.exists():

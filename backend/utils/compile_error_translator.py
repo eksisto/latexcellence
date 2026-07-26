@@ -86,8 +86,12 @@ async def translate_compile_errors(
         llm_client = get_llm_client()
 
         messages = [
-            {"role": "system", "content": get_prompt(
-                "compile_error_translator", "system", language=language)},
+            {
+                "role": "system",
+                "content": get_prompt(
+                    "compile_error_translator", "system", language=language
+                ),
+            },
             {
                 "role": "user",
                 "content": (

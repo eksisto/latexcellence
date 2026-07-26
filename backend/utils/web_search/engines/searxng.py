@@ -76,19 +76,23 @@ class SearXNGEngine(BaseSearchEngine):
             return SearchResponse(query=query, engine=self.name, results=[])
 
         if resp.status_code != 200:
-            self._logger.warning(f"SearXNG HTTP {resp.status_code} | body={resp.text[:200]}")
+            self._logger.warning(
+                f"SearXNG HTTP {resp.status_code} | body={resp.text[:200]}"
+            )
             return SearchResponse(query=query, engine=self.name, results=[])
 
         data = resp.json()
         raw_results = data.get("results", [])
         results: list[SearchResult] = []
         for item in raw_results[:max_results]:
-            results.append(SearchResult(
-                title=item.get("title", ""),
-                url=item.get("url", ""),
-                snippet=item.get("content", ""),
-                source=item.get("engine", ""),
-            ))
+            results.append(
+                SearchResult(
+                    title=item.get("title", ""),
+                    url=item.get("url", ""),
+                    snippet=item.get("content", ""),
+                    source=item.get("engine", ""),
+                )
+            )
 
         self._logger.info(f"SearXNG parsed {len(results)} results for: {query[:40]}")
         return SearchResponse(

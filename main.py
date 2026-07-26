@@ -32,7 +32,9 @@ from backend.modules.table_ocr.router import router as table_ocr_router
 from backend.modules.code_review.router import router as code_review_router
 from backend.modules.compile.router import router as compile_router
 from backend.modules.git_diff.router import router as git_diff_router
-from backend.modules.markdown_converter.router import router as markdown_converter_router
+from backend.modules.markdown_converter.router import (
+    router as markdown_converter_router,
+)
 from backend.modules.style_modify.router import router as style_modify_router
 from backend.modules.terminology_check.router import router as terminology_check_router
 from backend.modules.writing_chat.router import router as writing_chat_router
@@ -51,6 +53,7 @@ async def lifespan(app: FastAPI):
     logger.info("Starting LaTeXcellence server")
 
     from backend.modules.template_gen.cleanup import cleanup_loop
+
     cleanup_task = asyncio.create_task(cleanup_loop())
 
     yield
@@ -109,7 +112,22 @@ async def config_status():
         "dev_mode": cfg.server.dev_mode,
         "features": {
             name: getattr(cfg.features, name).enabled
-            for name in ["typo_check", "expression_opt", "formula_ocr", "table_ocr", "style_modify", "template_gen", "code_review", "compile", "git_diff", "markdown_converter", "terminology_check", "writing_chat", "bib_manager", "web_search"]
+            for name in [
+                "typo_check",
+                "expression_opt",
+                "formula_ocr",
+                "table_ocr",
+                "style_modify",
+                "template_gen",
+                "code_review",
+                "compile",
+                "git_diff",
+                "markdown_converter",
+                "terminology_check",
+                "writing_chat",
+                "bib_manager",
+                "web_search",
+            ]
         },
     }
 
@@ -189,8 +207,7 @@ def main():
     else:
         static_dir = Path("static")
         if static_dir.exists() and any(static_dir.iterdir()):
-            app.mount("/", StaticFiles(directory="static",
-                      html=True), name="static")
+            app.mount("/", StaticFiles(directory="static", html=True), name="static")
             logger.info("Mounted static files from static/")
         else:
             logger.warning(

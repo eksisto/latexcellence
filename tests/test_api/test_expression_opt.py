@@ -25,7 +25,6 @@ from backend.modules.expression_opt.service import (
 )
 from backend.modules.expression_opt.prompt_manager import PromptManager
 
-
 # ── fixtures ───────────────────────────────────────────────────────────────
 
 
@@ -149,19 +148,21 @@ class TestOptimizeOneParagraph:
         plain = r"__CMD_0000__ This method is not very good."
         original_tex = r"\textbf{This method is not very good.}"
 
-        mock_llm.chat = AsyncMock(return_value={
-            "paragraph_index": 0,
-            "original": plain,
-            "optimized": r"__CMD_0000__ This approach is suboptimal.",
-            "changes": [
-                {
-                    "type": "rewrite",
-                    "original": "is not very good",
-                    "optimized": "is suboptimal",
-                    "reason": "more concise",
-                }
-            ],
-        })
+        mock_llm.chat = AsyncMock(
+            return_value={
+                "paragraph_index": 0,
+                "original": plain,
+                "optimized": r"__CMD_0000__ This approach is suboptimal.",
+                "changes": [
+                    {
+                        "type": "rewrite",
+                        "original": "is not very good",
+                        "optimized": "is suboptimal",
+                        "reason": "more concise",
+                    }
+                ],
+            }
+        )
 
         result = await service._check_one_paragraph(
             mock_llm, 0, 5, plain, original_tex, "main.tex"
@@ -178,12 +179,14 @@ class TestOptimizeOneParagraph:
         plain = r"Text with __MATH_0000__ formula."
         original_tex = r"Text with $x^2$ formula."
 
-        mock_llm.chat = AsyncMock(return_value={
-            "paragraph_index": 0,
-            "original": plain,
-            "optimized": plain,
-            "changes": [],
-        })
+        mock_llm.chat = AsyncMock(
+            return_value={
+                "paragraph_index": 0,
+                "original": plain,
+                "optimized": plain,
+                "changes": [],
+            }
+        )
 
         result = await service._check_one_paragraph(
             mock_llm, 0, 0, plain, original_tex, "main.tex"
@@ -198,12 +201,14 @@ class TestOptimizeOneParagraph:
         plain = r"Text with __CMD_0000__ marker."
         original_tex = r"Text with \textbf{marker.}"
 
-        mock_llm.chat = AsyncMock(return_value={
-            "paragraph_index": 0,
-            "original": plain,
-            "optimized": "Text with marker.",
-            "changes": [],
-        })
+        mock_llm.chat = AsyncMock(
+            return_value={
+                "paragraph_index": 0,
+                "original": plain,
+                "optimized": "Text with marker.",
+                "changes": [],
+            }
+        )
 
         result = await service._check_one_paragraph(
             mock_llm, 0, 0, plain, original_tex, "main.tex"
@@ -286,6 +291,7 @@ class TestPromptManager:
         prompts_dir.mkdir(parents=True)
 
         import backend.core.config as config_mod
+
         # Patch get_config to return a config with our temp dir
         monkeypatch.setattr(
             "backend.modules.expression_opt.prompt_manager.get_config",
@@ -355,6 +361,7 @@ class TestPromptManager:
 
 class _MockConfig:
     """Mock config for prompt manager tests."""
+
     def __init__(self, prompts_dir):
         self.features = _MockFeatures(prompts_dir)
 

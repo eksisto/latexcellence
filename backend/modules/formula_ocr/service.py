@@ -27,6 +27,7 @@ from backend.utils.latex_package_analyzer import prepend_package_comments
 
 class FormulaOCRResult(BaseModel):
     """公式识别输出——对应 DEVELOPMENT.md §2.1 JSON 协议"""
+
     latex: str
     inline: bool = False
     confidence: float = 0.0
@@ -60,8 +61,7 @@ class FormulaOCRService:
 
         cfg = get_config()
         if not cfg.llm.api_key:
-            self._logger.warning(
-                "No API key configured, returning empty result")
+            self._logger.warning("No API key configured, returning empty result")
             return {
                 "latex": "",
                 "inline": False,
@@ -82,8 +82,7 @@ class FormulaOCRService:
         self, llm, base64_image: str, content_type: str
     ) -> dict[str, Any]:
         messages = [
-            {"role": "system", "content": get_prompt(
-                "formula_ocr", "vision_system")},
+            {"role": "system", "content": get_prompt("formula_ocr", "vision_system")},
             {
                 "role": "user",
                 "content": [
@@ -161,9 +160,7 @@ class FormulaOCRService:
             new_width = int(width * ratio)
             new_height = int(height * ratio)
             img = img.resize((new_width, new_height), Image.LANCZOS)
-            self._logger.info(
-                f"Resized image: {original_size} -> {img.size}"
-            )
+            self._logger.info(f"Resized image: {original_size} -> {img.size}")
 
         return img
 

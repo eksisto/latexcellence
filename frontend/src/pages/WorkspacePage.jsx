@@ -26,7 +26,21 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { ArrowLeft, FolderOpen, SpellCheck, Play, Loader2, Check, CircleAlert, ChevronDown, ChevronRight, FileDiff, Undo2, Redo2, BookOpen } from "lucide-react";
+import {
+  ArrowLeft,
+  FolderOpen,
+  SpellCheck,
+  Play,
+  Loader2,
+  Check,
+  CircleAlert,
+  ChevronDown,
+  ChevronRight,
+  FileDiff,
+  Undo2,
+  Redo2,
+  BookOpen,
+} from "lucide-react";
 import { api } from "@/api/index";
 import { translateError } from "@/utils/errorMessages";
 import useStore from "@/store/useStore";
@@ -92,31 +106,44 @@ export default function WorkspacePage() {
     toast.success(t("pages:workspace.projectClosed"));
   }, [clearProject, setPdfUrl, t]);
 
-  const doOpenProject = useCallback(async (path) => {
-    setLoading(true);
-    setError(null);
-    try {
-      const data = await api.project.open(path, workspaceId);
-      setRootPath(data.root_path);
-      setProjectPath(path);
-      setFileTree(data.file_tree);
-      setMainFile(data.main_file);
-      setActiveFile(data.main_file);
+  const doOpenProject = useCallback(
+    async (path) => {
+      setLoading(true);
+      setError(null);
       try {
-        const p = await api.project.paragraphs(data.main_file, workspaceId);
-        setParagraphs(p.paragraphs || []);
-      } catch {
-        setParagraphs([]);
+        const data = await api.project.open(path, workspaceId);
+        setRootPath(data.root_path);
+        setProjectPath(path);
+        setFileTree(data.file_tree);
+        setMainFile(data.main_file);
+        setActiveFile(data.main_file);
+        try {
+          const p = await api.project.paragraphs(data.main_file, workspaceId);
+          setParagraphs(p.paragraphs || []);
+        } catch {
+          setParagraphs([]);
+        }
+        toast.success(t("pages:workspace.projectOpened"), {
+          description: data.root_path,
+        });
+      } catch (e) {
+        const msg = translateError(e.message);
+        setError(msg);
+        toast.error(t("pages:workspace.openFailed"), { description: msg });
+      } finally {
+        setLoading(false);
       }
-      toast.success(t("pages:workspace.projectOpened"), { description: data.root_path });
-    } catch (e) {
-      const msg = translateError(e.message);
-      setError(msg);
-      toast.error(t("pages:workspace.openFailed"), { description: msg });
-    } finally {
-      setLoading(false);
-    }
-  }, [t, workspaceId, setRootPath, setProjectPath, setFileTree, setMainFile, setActiveFile]);
+    },
+    [
+      t,
+      workspaceId,
+      setRootPath,
+      setProjectPath,
+      setFileTree,
+      setMainFile,
+      setActiveFile,
+    ],
+  );
 
   // 启动时：从 Zustand persist 恢复项目
   useEffect(() => {
@@ -139,19 +166,25 @@ export default function WorkspacePage() {
     setFolderPickerOpen(true);
   }, []);
 
-  const handleFolderSelected = useCallback(async (path) => {
-    setOpenPath(path);
-    await doOpenProject(path);
-  }, [doOpenProject]);
+  const handleFolderSelected = useCallback(
+    async (path) => {
+      setOpenPath(path);
+      await doOpenProject(path);
+    },
+    [doOpenProject],
+  );
 
-  const handleMainFileChange = useCallback(async (path) => {
-    setMainFile(path);
-    try {
-      await api.project.setMainFile(path, workspaceId);
-    } catch (_) {
-      // 忽略
-    }
-  }, [setMainFile]);
+  const handleMainFileChange = useCallback(
+    async (path) => {
+      setMainFile(path);
+      try {
+        await api.project.setMainFile(path, workspaceId);
+      } catch (_) {
+        // 忽略
+      }
+    },
+    [setMainFile],
+  );
 
   const handleCompile = useCallback(async () => {
     if (!mainFile) return;
@@ -162,21 +195,39 @@ export default function WorkspacePage() {
       const data = await api.compile.run(mainFile, workspaceId);
       setCompileResult(data);
       if (data.success) {
-        setPdfUrl(`${api.compile.pdfUrl(mainFile, workspaceId)}&t=${Date.now()}`);
+        setPdfUrl(
+          `${api.compile.pdfUrl(mainFile, workspaceId)}&t=${Date.now()}`,
+        );
         toast.success(t("pages:workspace.compileSuccessToast"));
       } else {
         toast.error(t("pages:workspace.compileFailedToast"), {
-          description: data.explanation || t("pages:workspace.compileFailedToast"),
+          description:
+            data.explanation || t("pages:workspace.compileFailedToast"),
         });
       }
     } catch (e) {
       const msg = translateError(e.message);
-      setCompileResult({ success: false, explanation: msg, fixes: [], stdout: "", stderr: "" });
-      toast.error(t("pages:workspace.compileFailedToast"), { description: msg });
+      setCompileResult({
+        success: false,
+        explanation: msg,
+        fixes: [],
+        stdout: "",
+        stderr: "",
+      });
+      toast.error(t("pages:workspace.compileFailedToast"), {
+        description: msg,
+      });
     } finally {
       setCompileLoading(false);
     }
-  }, [mainFile, setCompileLoading, setCompileResult, setPdfUrl, t, workspaceId]);
+  }, [
+    mainFile,
+    setCompileLoading,
+    setCompileResult,
+    setPdfUrl,
+    t,
+    workspaceId,
+  ]);
 
   const handleSelectFile = useCallback(async (node) => {
     if (node.is_dir) return;
@@ -199,8 +250,13 @@ export default function WorkspacePage() {
     }
   }, [activeFile]);
 
-  const { canUndo, canRedo, busy: undoBusy, handleUndo, handleRedo } =
-    useUndoRedo(activeFile, workspaceId, reloadActiveFileParagraphs);
+  const {
+    canUndo,
+    canRedo,
+    busy: undoBusy,
+    handleUndo,
+    handleRedo,
+  } = useUndoRedo(activeFile, workspaceId, reloadActiveFileParagraphs);
 
   // 键盘快捷键：Ctrl+Z 撤销、Ctrl+Shift+Z / Ctrl+Y 重做
   // 输入框/文本域中不拦截，保留原生 undo 行为
@@ -210,9 +266,7 @@ export default function WorkspacePage() {
       const target = e.target;
       const tag = target?.tagName;
       const isEditable =
-        tag === "INPUT" ||
-        tag === "TEXTAREA" ||
-        target?.isContentEditable;
+        tag === "INPUT" || tag === "TEXTAREA" || target?.isContentEditable;
       if (isEditable) return;
       if (!(e.ctrlKey || e.metaKey)) return;
       const key = e.key.toLowerCase();
@@ -232,7 +286,12 @@ export default function WorkspacePage() {
     <div className="min-h-screen p-8">
       <div className="max-w-6xl mx-auto mb-8">
         <div className="flex items-center gap-4">
-          <Button variant="ghost" size="icon" nativeButton={false} render={<Link to="/" />}>
+          <Button
+            variant="ghost"
+            size="icon"
+            nativeButton={false}
+            render={<Link to="/" />}
+          >
             <ArrowLeft />
           </Button>
           <h1 className="text-3xl font-bold tracking-tight">
@@ -242,7 +301,6 @@ export default function WorkspacePage() {
       </div>
 
       <div className="max-w-6xl mx-auto">
-
         {!projectPath ? (
           <div className="flex justify-center mt-12">
             <Card className="max-w-lg w-full">
@@ -251,7 +309,9 @@ export default function WorkspacePage() {
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="space-y-2">
-                  <Label htmlFor="project-path">{t("pages:workspace.projectPath")}</Label>
+                  <Label htmlFor="project-path">
+                    {t("pages:workspace.projectPath")}
+                  </Label>
                   <div className="flex gap-2">
                     <Input
                       id="project-path"
@@ -259,7 +319,9 @@ export default function WorkspacePage() {
                       value={openPath}
                       onChange={(e) => setOpenPath(e.target.value)}
                       placeholder={t("pages:workspace.pathPlaceholder")}
-                      onKeyDown={(e) => e.key === "Enter" && handleOpenProject()}
+                      onKeyDown={(e) =>
+                        e.key === "Enter" && handleOpenProject()
+                      }
                     />
                     <Button
                       variant="outline"
@@ -274,16 +336,16 @@ export default function WorkspacePage() {
                     {t("pages:workspace.pathHint")}
                   </p>
                 </div>
-                {error && (
-                  <p className="text-destructive text-sm">{error}</p>
-                )}
+                {error && <p className="text-destructive text-sm">{error}</p>}
                 <Button
                   className="w-full"
                   onClick={handleOpenProject}
                   disabled={loading || !openPath.trim()}
                 >
                   <FolderOpen />
-                  {loading ? t("pages:workspace.openBtnLoading") : t("pages:workspace.openBtn")}
+                  {loading
+                    ? t("pages:workspace.openBtnLoading")
+                    : t("pages:workspace.openBtn")}
                 </Button>
               </CardContent>
             </Card>
@@ -292,10 +354,17 @@ export default function WorkspacePage() {
           <>
             {/* 编译工具栏 */}
             <div className="flex items-center gap-3 mb-4">
-              <Label className="text-sm whitespace-nowrap">{t("pages:workspace.mainFile")}</Label>
-              <Select value={mainFile || ""} onValueChange={handleMainFileChange}>
+              <Label className="text-sm whitespace-nowrap">
+                {t("pages:workspace.mainFile")}
+              </Label>
+              <Select
+                value={mainFile || ""}
+                onValueChange={handleMainFileChange}
+              >
                 <SelectTrigger className="w-64">
-                  <SelectValue placeholder={t("pages:workspace.selectMainFile")} />
+                  <SelectValue
+                    placeholder={t("pages:workspace.selectMainFile")}
+                  />
                 </SelectTrigger>
                 <SelectContent>
                   {texFiles.map((f) => (
@@ -312,22 +381,45 @@ export default function WorkspacePage() {
                   size="sm"
                 >
                   {compileLoading ? (
-                    <><Loader2 className="animate-spin" /> {t("pages:workspace.compileBtnLoading")}</>
+                    <>
+                      <Loader2 className="animate-spin" />{" "}
+                      {t("pages:workspace.compileBtnLoading")}
+                    </>
                   ) : (
-                    <><Play /> {t("pages:workspace.compileBtn")}</>
+                    <>
+                      <Play /> {t("pages:workspace.compileBtn")}
+                    </>
                   )}
                 </Button>
               )}
               {activeFile && (
                 <div className="flex items-center gap-1 ml-auto">
                   <Tooltip>
-                    <TooltipTrigger render={<Button variant="outline" size="icon" onClick={() => setConfirmUndoOpen(true)} disabled={!canUndo || undoBusy} />}>
+                    <TooltipTrigger
+                      render={
+                        <Button
+                          variant="outline"
+                          size="icon"
+                          onClick={() => setConfirmUndoOpen(true)}
+                          disabled={!canUndo || undoBusy}
+                        />
+                      }
+                    >
                       <Undo2 />
                     </TooltipTrigger>
                     <TooltipContent>{t("pages:workspace.undo")}</TooltipContent>
                   </Tooltip>
                   <Tooltip>
-                    <TooltipTrigger render={<Button variant="outline" size="icon" onClick={handleRedo} disabled={!canRedo || undoBusy} />}>
+                    <TooltipTrigger
+                      render={
+                        <Button
+                          variant="outline"
+                          size="icon"
+                          onClick={handleRedo}
+                          disabled={!canRedo || undoBusy}
+                        />
+                      }
+                    >
                       <Redo2 />
                     </TooltipTrigger>
                     <TooltipContent>{t("pages:workspace.redo")}</TooltipContent>
@@ -348,162 +440,209 @@ export default function WorkspacePage() {
             </div>
 
             <div className="grid grid-cols-4 gap-6">
-            {/* file tree */}
-            <div className="col-span-1">
-              <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm">{t("pages:workspace.files")}</CardTitle>
-                </CardHeader>
-                <CardContent className="p-2">
-                  <ProjectExplorer
-                    tree={fileTree}
-                    onSelect={handleSelectFile}
-                  />
-                </CardContent>
-              </Card>
-              <div className="mt-2 space-y-1">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="w-full text-xs"
-                  onClick={() => setConfirmCloseOpen(true)}
-                >
-                  {t("pages:workspace.closeProject")}
-                </Button>
+              {/* file tree */}
+              <div className="col-span-1">
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm">
+                      {t("pages:workspace.files")}
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="p-2">
+                    <ProjectExplorer
+                      tree={fileTree}
+                      onSelect={handleSelectFile}
+                    />
+                  </CardContent>
+                </Card>
+                <div className="mt-2 space-y-1">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="w-full text-xs"
+                    onClick={() => setConfirmCloseOpen(true)}
+                  >
+                    {t("pages:workspace.closeProject")}
+                  </Button>
+                </div>
+              </div>
+
+              {/* paragraph viewer */}
+              <div className="col-span-3">
+                <Card>
+                  <CardHeader className="pb-2">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <CardTitle className="text-sm">
+                          {activeFile || t("pages:workspace.selectFile")}
+                        </CardTitle>
+                        <CardDescription>
+                          {rootPath && (
+                            <span className="text-xs">{rootPath}</span>
+                          )}
+                        </CardDescription>
+                      </div>
+                      {activeFile && activeFile.endsWith(".tex") && (
+                        <div className="flex items-center gap-1">
+                          <Tooltip>
+                            <TooltipTrigger
+                              render={
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  nativeButton={false}
+                                  render={<Link to="/typo-check" />}
+                                />
+                              }
+                            >
+                              <SpellCheck />
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              {t("pages:workspace.typoCheck")}
+                            </TooltipContent>
+                          </Tooltip>
+                          <Tooltip>
+                            <TooltipTrigger
+                              render={
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  nativeButton={false}
+                                  render={<Link to="/terminology-check" />}
+                                />
+                              }
+                            >
+                              <BookOpen />
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              {t("pages:workspace.terminologyCheck")}
+                            </TooltipContent>
+                          </Tooltip>
+                        </div>
+                      )}
+                    </div>
+                  </CardHeader>
+                  <CardContent>
+                    {paragraphs.length === 0 ? (
+                      <p className="text-muted-foreground text-sm">
+                        {activeFile
+                          ? t("pages:workspace.noParagraphs")
+                          : t("pages:workspace.noParagraphsHint")}
+                      </p>
+                    ) : (
+                      <div className="space-y-4">
+                        {paragraphs.map((p) => (
+                          <div
+                            key={p.index}
+                            className="rounded-lg border border-border p-3"
+                          >
+                            <div className="flex items-center gap-2 mb-2">
+                              <span className="rounded bg-muted px-1.5 py-0.5 text-xs font-mono">
+                                P{p.index}
+                              </span>
+                              <span className="text-xs text-muted-foreground">
+                                {t("pages:workspace.lines", {
+                                  start: p.line_start,
+                                  end: p.line_end,
+                                })}
+                              </span>
+                            </div>
+                            <pre className="whitespace-pre-wrap text-sm font-mono text-foreground/80">
+                              {p.text}
+                            </pre>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
               </div>
             </div>
 
-            {/* paragraph viewer */}
-            <div className="col-span-3">
-              <Card>
-                <CardHeader className="pb-2">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <CardTitle className="text-sm">
-                        {activeFile || t("pages:workspace.selectFile")}
-                      </CardTitle>
-                      <CardDescription>
-                        {rootPath && <span className="text-xs">{rootPath}</span>}
-                      </CardDescription>
-                    </div>
-                    {activeFile && activeFile.endsWith(".tex") && (
-                      <div className="flex items-center gap-1">
-                        <Tooltip>
-                          <TooltipTrigger render={<Button variant="outline" size="sm" nativeButton={false} render={<Link to="/typo-check" />} />}>
-                            <SpellCheck />
-                          </TooltipTrigger>
-                          <TooltipContent>{t("pages:workspace.typoCheck")}</TooltipContent>
-                        </Tooltip>
-                        <Tooltip>
-                          <TooltipTrigger render={<Button variant="outline" size="sm" nativeButton={false} render={<Link to="/terminology-check" />} />}>
-                            <BookOpen />
-                          </TooltipTrigger>
-                          <TooltipContent>{t("pages:workspace.terminologyCheck")}</TooltipContent>
-                        </Tooltip>
-                      </div>
-                    )}
-                  </div>
+            {/* 编译结果 */}
+            {compileResult && (
+              <Card className="mt-4">
+                <CardHeader>
+                  <CardTitle className="text-sm">
+                    {t("pages:workspace.compileResult")}
+                  </CardTitle>
+                  <CardAction>
+                    <Badge
+                      variant={
+                        compileResult.success ? "secondary" : "destructive"
+                      }
+                    >
+                      {compileResult.success ? (
+                        <>
+                          <Check /> {t("pages:workspace.compileSuccess")}
+                        </>
+                      ) : (
+                        <>
+                          <CircleAlert /> {t("pages:workspace.compileFailed")}
+                        </>
+                      )}
+                    </Badge>
+                  </CardAction>
                 </CardHeader>
-                <CardContent>
-                  {paragraphs.length === 0 ? (
-                    <p className="text-muted-foreground text-sm">
-                      {activeFile
-                        ? t("pages:workspace.noParagraphs")
-                        : t("pages:workspace.noParagraphsHint")}
-                    </p>
-                  ) : (
-                    <div className="space-y-4">
-                      {paragraphs.map((p) => (
-                        <div
-                          key={p.index}
-                          className="rounded-lg border border-border p-3"
-                        >
-                          <div className="flex items-center gap-2 mb-2">
-                            <span className="rounded bg-muted px-1.5 py-0.5 text-xs font-mono">
-                              P{p.index}
-                            </span>
-                            <span className="text-xs text-muted-foreground">
-                              {t("pages:workspace.lines", { start: p.line_start, end: p.line_end })}
-                            </span>
-                          </div>
-                          <pre className="whitespace-pre-wrap text-sm font-mono text-foreground/80">
-                            {p.text}
-                          </pre>
-                        </div>
-                      ))}
+                <CardContent className="space-y-3">
+                  {compileResult.explanation && (
+                    <div>
+                      <Label className="text-xs text-muted-foreground">
+                        {t("pages:workspace.errorExplanation")}
+                      </Label>
+                      <p className="text-sm mt-1 whitespace-pre-wrap">
+                        {compileResult.explanation}
+                      </p>
                     </div>
                   )}
+                  {compileResult.fixes && compileResult.fixes.length > 0 && (
+                    <div>
+                      <Label className="text-xs text-muted-foreground">
+                        {t("pages:workspace.fixSuggestion")}
+                      </Label>
+                      <ul className="text-sm mt-1 list-disc list-inside space-y-1">
+                        {compileResult.fixes.map((fix, i) => (
+                          <li key={i}>{fix}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                  <div>
+                    <Button
+                      variant="ghost"
+                      size="xs"
+                      onClick={() => setShowRawOutput((v) => !v)}
+                    >
+                      {showRawOutput ? <ChevronDown /> : <ChevronRight />}
+                      {t("pages:workspace.viewRawOutput")}
+                    </Button>
+                    {showRawOutput && (
+                      <pre className="mt-2 p-2 rounded bg-muted text-xs max-h-48 overflow-auto whitespace-pre-wrap">
+                        {compileResult.stdout || t("pages:workspace.noStdout")}
+                        {"\n"}
+                        {compileResult.stderr || t("pages:workspace.noStderr")}
+                      </pre>
+                    )}
+                  </div>
                 </CardContent>
               </Card>
-            </div>
-          </div>
+            )}
 
-          {/* 编译结果 */}
-          {compileResult && (
-            <Card className="mt-4">
-              <CardHeader>
-                <CardTitle className="text-sm">{t("pages:workspace.compileResult")}</CardTitle>
-                <CardAction>
-                  <Badge variant={compileResult.success ? "secondary" : "destructive"}>
-                    {compileResult.success ? (
-                      <><Check /> {t("pages:workspace.compileSuccess")}</>
-                    ) : (
-                      <><CircleAlert /> {t("pages:workspace.compileFailed")}</>
-                    )}
-                  </Badge>
-                </CardAction>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                {compileResult.explanation && (
-                  <div>
-                    <Label className="text-xs text-muted-foreground">{t("pages:workspace.errorExplanation")}</Label>
-                    <p className="text-sm mt-1 whitespace-pre-wrap">{compileResult.explanation}</p>
+            {/* 编译成功后内联 PDF 预览 */}
+            {compileResult?.success && pdfUrl && (
+              <Card className="mt-4">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm">
+                    {t("pages:workspace.pdfPreview")}
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="h-[70vh]">
+                    <PDFPreview url={pdfUrl} />
                   </div>
-                )}
-                {compileResult.fixes && compileResult.fixes.length > 0 && (
-                  <div>
-                    <Label className="text-xs text-muted-foreground">{t("pages:workspace.fixSuggestion")}</Label>
-                    <ul className="text-sm mt-1 list-disc list-inside space-y-1">
-                      {compileResult.fixes.map((fix, i) => (
-                        <li key={i}>{fix}</li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-                <div>
-                  <Button
-                    variant="ghost"
-                    size="xs"
-                    onClick={() => setShowRawOutput((v) => !v)}
-                  >
-                    {showRawOutput ? <ChevronDown /> : <ChevronRight />}
-                    {t("pages:workspace.viewRawOutput")}
-                  </Button>
-                  {showRawOutput && (
-                    <pre className="mt-2 p-2 rounded bg-muted text-xs max-h-48 overflow-auto whitespace-pre-wrap">
-                      {compileResult.stdout || t("pages:workspace.noStdout")}
-                      {"\n"}
-                      {compileResult.stderr || t("pages:workspace.noStderr")}
-                    </pre>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-          )}
-
-          {/* 编译成功后内联 PDF 预览 */}
-          {compileResult?.success && pdfUrl && (
-            <Card className="mt-4">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm">{t("pages:workspace.pdfPreview")}</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="h-[70vh]">
-                  <PDFPreview url={pdfUrl} />
-                </div>
-              </CardContent>
-            </Card>
-          )}
+                </CardContent>
+              </Card>
+            )}
           </>
         )}
       </div>

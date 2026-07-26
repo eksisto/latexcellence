@@ -119,7 +119,10 @@ async def generate_bibtex(request: GenerateBibtexRequest):
 
 
 @router.post("/read-bib")
-async def read_bib_file(request: ReadBibRequest, workspace_id: str = Query(..., description="工作区唯一标识符")):
+async def read_bib_file(
+    request: ReadBibRequest,
+    workspace_id: str = Query(..., description="工作区唯一标识符"),
+):
     """读取项目中的 .bib 文件内容。"""
     try:
         result = get_service().read_bib_file(request.file_path, workspace_id)
@@ -131,7 +134,10 @@ async def read_bib_file(request: ReadBibRequest, workspace_id: str = Query(..., 
 
 
 @router.post("/save")
-async def save_bib_entry(request: SaveBibRequest, workspace_id: str = Query(..., description="工作区唯一标识符")):
+async def save_bib_entry(
+    request: SaveBibRequest,
+    workspace_id: str = Query(..., description="工作区唯一标识符"),
+):
     """将 BibTeX 条目写入或更新到 .bib 文件。"""
     if not request.bibtex_code.strip():
         raise HTTPException(status_code=400, detail="Empty BibTeX code")
@@ -149,7 +155,9 @@ async def save_bib_entry(request: SaveBibRequest, workspace_id: str = Query(...,
 
 
 @router.get("/list-bib-files")
-async def list_bib_files(workspace_id: str = Query(..., description="工作区唯一标识符")):
+async def list_bib_files(
+    workspace_id: str = Query(..., description="工作区唯一标识符")
+):
     """列出当前项目中的所有 .bib 文件。"""
     try:
         result = get_service().list_bib_files(workspace_id)
@@ -161,6 +169,7 @@ async def list_bib_files(workspace_id: str = Query(..., description="工作区�
 
 
 # ── format CRUD ────────────────────────────────────────────────────────────
+
 
 class FormatSaveRequest(BaseModel):
     name: str
@@ -207,6 +216,7 @@ async def delete_format(name: str):
 
 
 # ── LaTeX 样式相关 ─────────────────────────────────────────────────────────
+
 
 @router.get("/latex-styles")
 async def get_latex_styles():

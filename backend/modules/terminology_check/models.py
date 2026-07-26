@@ -11,6 +11,7 @@ from pydantic import BaseModel, ConfigDict
 
 class ExtractedTerm(BaseModel):
     """LLM 从段落中抽取的单个术语"""
+
     model_config = ConfigDict(extra="forbid")
 
     term: str
@@ -20,6 +21,7 @@ class ExtractedTerm(BaseModel):
 
 class TermExtractionResult(BaseModel):
     """LLM 术语抽取的响应格式"""
+
     model_config = ConfigDict(extra="forbid")
 
     paragraph_index: int
@@ -28,6 +30,7 @@ class TermExtractionResult(BaseModel):
 
 class TermChange(BaseModel):
     """单条术语修改建议，与 typo_check 的 TypoChangeItem 格式兼容"""
+
     model_config = ConfigDict(extra="forbid")
 
     type: str = "inconsistency"
@@ -39,6 +42,7 @@ class TermChange(BaseModel):
 
 class TermParagraphResult(BaseModel):
     """逐段检查结果，兼容 useParagraphCheck 前端模式"""
+
     model_config = ConfigDict(extra="forbid")
 
     paragraph_index: int
@@ -50,6 +54,7 @@ class TermParagraphResult(BaseModel):
 
 class TermCluster(BaseModel):
     """LLM 语义聚类结果中的单组同义术语"""
+
     model_config = ConfigDict(extra="forbid")
 
     recommended: str
@@ -58,6 +63,7 @@ class TermCluster(BaseModel):
 
 class TermClusterResult(BaseModel):
     """LLM 语义聚类响应"""
+
     model_config = ConfigDict(extra="forbid")
 
     clusters: list[TermCluster] = []

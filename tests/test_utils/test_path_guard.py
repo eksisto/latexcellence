@@ -85,9 +85,7 @@ class TestResolveProjectPath:
 
     def test_allowed_suffixes_reject(self, project_root):
         with pytest.raises(ValueError, match="必须以"):
-            resolve_project_path(
-                project_root, "refs.bib", allowed_suffixes=(".tex",)
-            )
+            resolve_project_path(project_root, "refs.bib", allowed_suffixes=(".tex",))
 
     def test_no_suffix_restriction(self, project_root):
         result = resolve_project_path(project_root, "refs.bib")

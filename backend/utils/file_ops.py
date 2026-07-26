@@ -148,7 +148,9 @@ def replace_lines_in_place(
     if line_start < 1 or line_start > len(lines):
         raise IndexError(f"line_start {line_start} out of range (1-{len(lines)})")
     if line_end < line_start or line_end > len(lines):
-        raise IndexError(f"line_end {line_end} out of range ({line_start}-{len(lines)})")
+        raise IndexError(
+            f"line_end {line_end} out of range ({line_start}-{len(lines)})"
+        )
 
     # 替换行
     replacement = [ln + "\n" for ln in new_lines]
