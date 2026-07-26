@@ -2,10 +2,13 @@
 LaTeX 编译错误 LLM 翻译工具。
 
 职责：
-    1. 从 latexmk/xelatex 原始日志中提取关键错误行
+    1. 将已过滤（如 texfot）或原始的编译日志发送给 LLM 分析
     2. 调用 LLM 将英文错误信息翻译为通俗易懂的中文解释和修复建议
 
 供 compile 模块（自动编译）和 git_diff 模块（差异高亮）复用。
+
+当调用方已通过 tex_compile 获取了 texfot 过滤后的输出时，
+通过 filtered_output 参数直接传入，可跳过 extract_key_errors 正则过滤。
 """
 
 import re
@@ -60,8 +63,10 @@ def extract_key_errors(log_text: str, max_chars: int = 3000) -> str:
 
 async def translate_compile_errors(
     stdout: str,
-    stderr: str,
+    stderr: str = "",
     language: str = "zh",
+    *,
+    filtered_output: str | None = None,
 ) -> tuple[str, list[str]]:
     """
     将 LaTeX 编译失败的日志翻译为中文解释和修复建议。
@@ -69,6 +74,9 @@ async def translate_compile_errors(
     参数：
         stdout: 编译进程的标准输出
         stderr: 编译进程的标准错误
+        language: 输出语言（"zh" 或 "en"）
+        filtered_output: texfot 过滤后的干净输出（可选）。
+            若提供则直接用于 LLM 分析，跳过 extract_key_errors 正则过滤。
 
     返回：
         (explanation, fixes) 元组：
@@ -77,12 +85,21 @@ async def translate_compile_errors(
 
     若 LLM 调用失败，返回兜底提示。
     """
-    combined_output = stdout + "\n" + stderr
-    if not combined_output.strip():
+    if filtered_output is not None:
+        input_for_llm = filtered_output
+    else:
+        combined_output = stdout + "\n" + stderr
+        input_for_llm = combined_output
+
+    if not input_for_llm.strip():
         return ("", [])
 
     try:
-        key_errors = extract_key_errors(combined_output)
+        key_errors = (
+            input_for_llm
+            if filtered_output is not None
+            else extract_key_errors(input_for_llm)
+        )
         llm_client = get_llm_client()
 
         messages = [

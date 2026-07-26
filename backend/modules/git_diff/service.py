@@ -24,6 +24,7 @@ from backend.core.logger import get_logger
 from backend.core.workspace_manager import get_project_manager_for_workspace
 from backend.utils.compile_error_translator import translate_compile_errors
 from backend.utils.path_guard import resolve_project_path
+from backend.utils.tex_compile import run_tex_compile, TexCompileResult
 
 logger = get_logger(__name__)
 
@@ -279,13 +280,11 @@ async def render_diff_pdf(
 
     included_files = sorted(set(base_flattened.files) | set(target_flattened.files))
 
-    if compile_result.returncode != 0 or not pdf_source.exists():
-        logger.warning(
-            f"Git diff PDF compilation failed for job={job_id}: {compile_result.returncode}"
-        )
+    if not compile_result.success or not pdf_source.exists():
+        logger.warning(f"Git diff PDF compilation failed for job={job_id}")
         explanation, fixes = await translate_compile_errors(
-            compile_result.stdout,
-            compile_result.stderr,
+            compile_result.raw_output,
+            filtered_output=compile_result.filtered_output,
         )
         if not explanation:
             explanation = "差异 LaTeX 已生成，但 PDF 编译失败。请查看原始输出定位问题。"
@@ -299,8 +298,8 @@ async def render_diff_pdf(
             added_lines=added_lines,
             deleted_lines=deleted_lines,
             included_files=included_files,
-            stdout=compile_result.stdout,
-            stderr=compile_result.stderr,
+            stdout=compile_result.raw_output,
+            stderr=compile_result.filtered_output,
             explanation=explanation,
             fixes=fixes,
         )
@@ -625,7 +624,10 @@ async def _build_latexdiff_document(
 
         if result.returncode != 0:
             stderr = result.stderr.strip()
-            msg = stderr or "latexdiff exited with a non-zero exit code, but no error output was produced"
+            msg = (
+                stderr
+                or "latexdiff exited with a non-zero exit code, but no error output was produced"
+            )
             if not result.stdout.strip():
                 raise RuntimeError(f"latexdiff failed: {msg}")
             logger.warning(
@@ -878,19 +880,10 @@ def _count_latexdiff_changes(diff_content: str) -> tuple[int, int]:
     return added, deleted
 
 
-async def _compile_diff(project_dir: Path, diff_rel: str) -> ProcessResult:
+async def _compile_diff(project_dir: Path, diff_rel: str) -> TexCompileResult:
     cfg = get_config()
     timeout = cfg.features.compile.latexmk_timeout
-    return await _run_process(
-        [
-            "latexmk",
-            "-xelatex",
-            "-interaction=nonstopmode",
-            str(Path(diff_rel)),
-        ],
-        cwd=project_dir,
-        timeout=timeout,
-    )
+    return await run_tex_compile(diff_rel, project_dir, timeout)
 
 
 async def _run_git_checked(

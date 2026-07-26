@@ -46,6 +46,7 @@ from backend.core.config import get_config
 from backend.core.logger import get_logger
 from backend.core.llm_client import get_llm_client
 from backend.core.prompts import get_prompt
+from backend.utils.tex_compile import run_tex_compile
 
 # 允许在沙箱内创建的文件扩展名白名单
 _ALLOWED_SUFFIXES = (
@@ -582,18 +583,11 @@ class _ToolExecutor:
         self._logger.info(f"agent compile | main={main_file} | cwd={self._sandbox}")
 
         try:
-            process = await asyncio.create_subprocess_exec(
-                "latexmk",
-                "-xelatex",
-                "-interaction=nonstopmode",
-                "-halt-on-error",
+            tex_result = await run_tex_compile(
                 main_file,
-                cwd=str(self._sandbox),
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
-            )
-            stdout_b, stderr_b = await asyncio.wait_for(
-                process.communicate(), timeout=timeout
+                self._sandbox,
+                timeout,
+                extra_args=["-halt-on-error"],
             )
         except FileNotFoundError:
             msg = "latexmk is not installed or is not on PATH"
@@ -604,9 +598,8 @@ class _ToolExecutor:
                 "log": msg,
                 "summary": msg,
             }
-        except asyncio.TimeoutError:
-            process.kill()
-            await process.communicate()
+
+        if tex_result.timed_out:
             msg = f"Compilation timed out ({timeout}s)"
             return msg, {
                 "tool": "compile_latex",
@@ -616,22 +609,17 @@ class _ToolExecutor:
                 "summary": msg,
             }
 
-        stdout = stdout_b.decode("utf-8", errors="replace")
-        stderr = stderr_b.decode("utf-8", errors="replace")
-        full_log = stdout + "\n" + stderr
-        success = process.returncode == 0
+        full_log = tex_result.raw_output
+        success = tex_result.success
 
         trimmed = _trim_log(full_log, success)
         self._logger.info(f"agent compile done | success={success}")
 
         if success:
-            # 给 LLM 回传的内容就足以表明成功，无需额外结构化
             llm_text = trimmed
             errors: list[dict[str, Any]] = []
             summary = "Compilation succeeded"
         else:
-            # 失败时提取结构化错误列表，并构造聚焦错误摘要回传 LLM，
-            # 帮助 LLM 走 ANALYZE→READ→FIX→RECOMPILE 循环
             errors = _extract_errors(full_log)
             analysis = _format_error_analysis(errors)
             llm_text = analysis + "\n\n--- Raw log (trimmed) ---\n" + trimmed

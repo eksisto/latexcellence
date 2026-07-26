@@ -167,3 +167,33 @@ class TestTranslateCompileErrors:
 
         assert explanation == "OK"
         assert mock_llm.chat.call_count == 2
+
+    @pytest.mark.asyncio
+    async def test_with_filtered_output_skips_regex(self):
+        """传入 filtered_output 时跳过 extract_key_errors 正则。"""
+        mock_llm = MagicMock()
+        mock_llm.chat = AsyncMock(
+            return_value='{"explanation": "已过滤的错误", "fixes": ["修复"]}'
+        )
+
+        filtered = "! Undefined control sequence.\nl.42 \\bad\n"
+        with patch(
+            "backend.utils.compile_error_translator.get_llm_client",
+            return_value=mock_llm,
+        ):
+            with patch(
+                "backend.utils.compile_error_translator.extract_key_errors"
+            ) as mock_extract:
+                explanation, fixes = await translate_compile_errors(
+                    "raw stdout", "raw stderr", filtered_output=filtered
+                )
+
+        # extract_key_errors 不应被调用
+        mock_extract.assert_not_called()
+        assert explanation == "已过滤的错误"
+        # LLM prompt 中应包含 filtered 而非 raw
+        call_args = mock_llm.chat.call_args
+        messages = call_args[0][0]
+        user_msg = messages[1]["content"]
+        assert "Undefined control sequence" in user_msg
+        assert "raw stdout" not in user_msg

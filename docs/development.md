@@ -63,6 +63,7 @@ latexcellence/
 │   │   ├── input_resolver.py       # \input/\include 递归解析器
 │   │   ├── json_utils.py           # LLM JSON 输出解析/校验/重试
 │   │   ├── latex_parser.py         # LaTeX → 纯文本（Marker 保护）
+│   │   ├── tex_compile.py          # 统一 TeX 编译执行（texfot 过滤 + 降级）
 │   │   ├── compile_error_translator.py  # 编译错误 LLM 翻译（compile + git_diff 复用）
 │   │   ├── latexindent_utils.py    # latexindent.pl 调用封装
 │   │   ├── builtin_formatter.py    # 内置轻量 LaTeX 格式化器

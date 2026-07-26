@@ -243,11 +243,35 @@ for attempt in range(max_retries):
 raise ValueError("Validation failed after N attempts")        # ❌ 耗尽
 ```
 
+### `tex_compile.py` — 统一 TeX 编译执行模块
+
+**设计理念**：将 LaTeX 编译执行（latexmk 调用）和日志过滤（texfot）统一封装，供 `compile`（自动编译）、`git_diff`（差异高亮）、`template_gen`（模板生成 Agent）三个模块复用。texfot 是 TeX Live 自带的 Perl 工具，能从海量编译日志中自动提取错误、警告等关键信息，比自写正则更可靠。当 texfot 不可用时，静默降级为原始 latexmk 输出 + 正则 fallback。
+
+**核心接口**：
+
+| 函数 | 功能 |
+| --- | --- |
+| `run_tex_compile(main_file, cwd, timeout, extra_args=None)` | 通过 texfot 包装 latexmk 执行编译，返回过滤后的输出 |
+| `_check_texfot_available()` | 检测 texfot 是否在 PATH 中可用（模块级缓存） |
+| `_filter_with_regex(raw_output)` | 降级路径：用正则从原始日志中提取关键错误行 |
+
+**Pydantic 模型**：`TexCompileResult`（success, filtered_output, raw_output, timed_out, used_texfot）
+
+**调用方**：
+
+| 模块 | 场景 |
+| --- | --- |
+| `compile/service.py` | `compile_latex()` 调用 |
+| `git_diff/service.py` | `_compile_diff()` 调用 |
+| `template_gen/agent.py` | `_ToolExecutor._compile_latex()` 调用 |
+
 ### `compile_error_translator.py` — LaTeX 编译错误 LLM 翻译
 
 **设计理念**：将 LaTeX 编译失败日志翻译为中文解释和修复建议的逻辑提取为独立工具，供 `compile`（自动编译）和 `git_diff`（差异高亮）两个模块复用。避免在不同模块中重复实现相同的 LLM 调用、错误提取和重试逻辑。
 
-**核心接口**：`extract_key_errors(log_text, max_chars=3000)` / `translate_compile_errors(stdout, stderr, language="zh")`
+**核心接口**：`extract_key_errors(log_text, max_chars=3000)` / `translate_compile_errors(stdout, stderr, language="zh", *, filtered_output=None)`
+
+当调用方已通过 `tex_compile` 获取了 texfot 过滤后的输出时，通过 `filtered_output` 参数直接传入，可跳过 `extract_key_errors` 正则过滤。
 
 **Pydantic 模型**：`ErrorTranslation`（explanation, fixes）
 

@@ -4,12 +4,11 @@ compile 模块服务层 + 路由测试。
 覆盖内容：
     - CompileResult / ErrorTranslation Pydantic 模型校验
     - _extract_key_errors 错误过滤
-    - compile_latex 编译流程（Mock subprocess + LLM）
+    - compile_latex 编译流程（Mock run_tex_compile + LLM）
     - /api/compile/run HTTP 端点测试
     - /api/compile/pdf HTTP 端点测试
 """
 
-import asyncio
 import tempfile
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -26,6 +25,7 @@ from backend.utils.compile_error_translator import (
     ErrorTranslation,
     extract_key_errors,
 )
+from backend.utils.tex_compile import TexCompileResult
 
 # ── fixtures ───────────────────────────────────────────────────────────────
 
@@ -46,34 +46,23 @@ def mock_project():
 
 
 @pytest.fixture
-def mock_subprocess_success():
-    """Mock 成功编译的 subprocess。"""
-    process = MagicMock()
-    process.returncode = 0
-
-    async def communicate():
-        return (b"Output file: main.pdf\nTranscript written.", b"")
-
-    process.communicate = communicate
-    return process
+def mock_tex_success():
+    """Mock 成功编译的 TexCompileResult。"""
+    return TexCompileResult(
+        success=True,
+        filtered_output="Output file: main.pdf\nTranscript written.",
+        raw_output="Output file: main.pdf\nTranscript written.",
+    )
 
 
 @pytest.fixture
-def mock_subprocess_failure():
-    """Mock 失败编译的 subprocess。"""
-    process = MagicMock()
-    process.returncode = 1
-
-    async def communicate():
-        stdout = (
-            b"! Undefined control sequence.\n"
-            b"l.42 \\badcommand\n"
-            b"! Emergency stop.\n"
-        )
-        return (stdout, b"")
-
-    process.communicate = communicate
-    return process
+def mock_tex_failure():
+    """Mock 失败编译的 TexCompileResult。"""
+    return TexCompileResult(
+        success=False,
+        filtered_output="! Undefined control sequence.\nl.42 \\badcommand\n! Emergency stop.\n",
+        raw_output="! Undefined control sequence.\nl.42 \\badcommand\n! Emergency stop.\n",
+    )
 
 
 # ── Pydantic model tests ───────────────────────────────────────────────────
@@ -257,14 +246,16 @@ class TestCompileLatex:
                 await compile_latex("nonexistent.tex")
 
     @pytest.mark.asyncio
-    async def test_compile_success(self, mock_project, mock_subprocess_success):
+    async def test_compile_success(self, mock_project, mock_tex_success):
         """编译成功场景。"""
         with patch(
             "backend.modules.compile.service.get_project_manager_for_workspace",
             return_value=mock_project,
         ):
             with patch(
-                "asyncio.create_subprocess_exec", return_value=mock_subprocess_success
+                "backend.modules.compile.service.run_tex_compile",
+                new_callable=AsyncMock,
+                return_value=mock_tex_success,
             ):
                 result = await compile_latex("main.tex")
 
@@ -274,31 +265,31 @@ class TestCompileLatex:
     @pytest.mark.asyncio
     async def test_compile_timeout(self, mock_project):
         """编译超时场景。"""
-        timeout_error = asyncio.TimeoutError()
+        tex_timeout = TexCompileResult(
+            success=False,
+            filtered_output="",
+            raw_output="partial log",
+            timed_out=True,
+        )
 
         with patch(
             "backend.modules.compile.service.get_project_manager_for_workspace",
             return_value=mock_project,
         ):
             with patch(
-                "asyncio.create_subprocess_exec", new_callable=AsyncMock
-            ) as mock_create:
-                mock_process = MagicMock()
-                mock_process.kill = MagicMock()
-                mock_process.communicate = AsyncMock(return_value=(b"", b"partial log"))
-                mock_create.return_value = mock_process
+                "backend.modules.compile.service.run_tex_compile",
+                new_callable=AsyncMock,
+                return_value=tex_timeout,
+            ):
+                result = await compile_latex("main.tex")
 
-                with patch("asyncio.wait_for", side_effect=timeout_error):
-                    result = await compile_latex("main.tex")
-
-        mock_process.kill.assert_called_once()
         assert result.success is False
-        assert "timed out" in result.stderr.lower()
+        assert "超时" in result.explanation
         assert len(result.fixes) > 0
 
     @pytest.mark.asyncio
     async def test_compile_failure_with_llm_translation(
-        self, mock_project, mock_subprocess_failure
+        self, mock_project, mock_tex_failure
     ):
         """编译失败 → LLM 翻译错误信息。"""
         mock_llm = MagicMock()
@@ -311,7 +302,9 @@ class TestCompileLatex:
             return_value=mock_project,
         ):
             with patch(
-                "asyncio.create_subprocess_exec", return_value=mock_subprocess_failure
+                "backend.modules.compile.service.run_tex_compile",
+                new_callable=AsyncMock,
+                return_value=mock_tex_failure,
             ):
                 with patch(
                     "backend.utils.compile_error_translator.get_llm_client",
@@ -327,7 +320,7 @@ class TestCompileLatex:
 
     @pytest.mark.asyncio
     async def test_compile_failure_llm_translation_fails(
-        self, mock_project, mock_subprocess_failure
+        self, mock_project, mock_tex_failure
     ):
         """编译失败 + LLM 翻译也失败时的回退。"""
         mock_llm = MagicMock()
@@ -338,7 +331,9 @@ class TestCompileLatex:
             return_value=mock_project,
         ):
             with patch(
-                "asyncio.create_subprocess_exec", return_value=mock_subprocess_failure
+                "backend.modules.compile.service.run_tex_compile",
+                new_callable=AsyncMock,
+                return_value=mock_tex_failure,
             ):
                 with patch(
                     "backend.utils.compile_error_translator.get_llm_client",

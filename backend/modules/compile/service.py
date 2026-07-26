@@ -3,12 +3,10 @@
 
 负责编排以下流程：
     1. 通过 project_manager 获取项目根目录
-    2. 调用 latexmk -xelatex 编译主文件
-    3. 拦截 stderr 和 stdout 输出
-    4. 编译失败时调用 LLM 翻译错误信息为“人话”
+    2. 调用 tex_compile（texfot 包装 latexmk）执行编译
+    3. 编译失败时调用 LLM 翻译错误信息为“人话”
 """
 
-import asyncio
 from pathlib import Path
 
 from pydantic import BaseModel, ConfigDict
@@ -18,6 +16,7 @@ from backend.core.workspace_manager import get_project_manager_for_workspace
 from backend.core.config import get_config
 from backend.utils.compile_error_translator import translate_compile_errors
 from backend.utils.path_guard import resolve_project_path
+from backend.utils.tex_compile import run_tex_compile
 
 logger = get_logger(__name__)
 
@@ -80,24 +79,13 @@ async def compile_latex(
 
     logger.info(f"Compiling {main_file} in {root}")
 
-    try:
-        process = await asyncio.create_subprocess_exec(
-            "latexmk",
-            "-xelatex",
-            "-interaction=nonstopmode",
-            str(main_file),
-            cwd=str(root),
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-        )
-        stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=timeout)
-    except asyncio.TimeoutError:
-        process.kill()
-        stdout, stderr = await process.communicate()
+    tex_result = await run_tex_compile(main_file, root, timeout)
+
+    if tex_result.timed_out:
+        logger.warning(f"Compilation timed out for {main_file}")
         return CompileResult(
             success=False,
-            stderr=stderr.decode("utf-8", errors="replace")
-            + f"\nCompilation timed out after {timeout} seconds.",
+            stderr=tex_result.raw_output,
             explanation="编译超时。可能原因：文档过大、有无限循环的 LaTeX 命令、或 latexmk 卡住。",
             fixes=[
                 "检查是否缺少 \\end{document} 或类似的环境闭合语句",
@@ -106,25 +94,26 @@ async def compile_latex(
             ],
         )
 
-    stdout_str = stdout.decode("utf-8", errors="replace")
-    stderr_str = stderr.decode("utf-8", errors="replace")
-
-    success = process.returncode == 0
-
-    if success:
+    if tex_result.success:
         logger.info(f"Compilation succeeded for {main_file}")
-        return CompileResult(success=True, stdout=stdout_str, stderr=stderr_str)
+        return CompileResult(
+            success=True,
+            stdout=tex_result.raw_output,
+            stderr=tex_result.filtered_output,
+        )
 
     logger.warning(f"Compilation failed for {main_file}, translating errors")
 
     explanation, fixes = await translate_compile_errors(
-        stdout_str, stderr_str, language
+        tex_result.raw_output,
+        language=language,
+        filtered_output=tex_result.filtered_output,
     )
 
     return CompileResult(
         success=False,
-        stdout=stdout_str,
-        stderr=stderr_str,
+        stdout=tex_result.raw_output,
+        stderr=tex_result.filtered_output,
         explanation=explanation,
         fixes=fixes,
     )
