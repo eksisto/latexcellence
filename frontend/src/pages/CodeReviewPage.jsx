@@ -324,6 +324,15 @@ export default function CodeReviewPage() {
     apiModule: api.codeReview,
     checkMethodName: "check",
     correctedTextField: "new_text",
+    /** code_review 额外将工具格式化差异视为"有问题"，使这些段落在结果中置顶并纳入统计 */
+    hasResultIssue: (r) => {
+      const hasChanges = r.changes && r.changes.length > 0;
+      const hasSuggestions = r.suggestions && r.suggestions.length > 0;
+      const corrected = r.new_text;
+      const original = r.text || r.original;
+      const hasFormatDiff = corrected && original && corrected !== original;
+      return hasChanges || hasSuggestions || hasFormatDiff;
+    },
     storeSlice: {
       paragraphsKey: "codeReviewParagraphs",
       setParagraphsKey: "setCodeReviewParagraphs",

@@ -50,7 +50,8 @@ export default function useParagraphCheck({
   apiModule,
   checkMethodName = "check",
   correctedTextField = "corrected",
-  checkFormatDiff = false,
+  /** 自定义"是否有问题"判断函数，覆盖默认的 changes/suggestions 检查 */
+  hasResultIssue: customHasResultIssue,
   storeSlice = {
     paragraphsKey: "typoParagraphs",
     setParagraphsKey: "setTypoParagraphs",
@@ -105,20 +106,24 @@ export default function useParagraphCheck({
   const bufferRef = useRef([]);
   const operationIdRef = useRef(null);
   const flushScheduledRef = useRef(false);
-  const correctedFieldRef = useRef(correctedTextField);
   const fileMd5sRef = useRef({});
-  useEffect(() => {
-    correctedFieldRef.current = correctedTextField;
-  }, [correctedTextField]);
 
-  const hasResultIssue = useCallback((r) => {
-    const hasChanges = r.changes && r.changes.length > 0;
-    const hasSuggestions = r.suggestions && r.suggestions.length > 0;
-    const corrected = r[correctedFieldRef.current];
-    const original = r.text || r.original;
-    const hasFormatDiff = corrected && original && corrected !== original;
-    return hasChanges || hasSuggestions || hasFormatDiff;
+  /**
+   * 判断单条检查结果是否包含实质性问题（错字/术语修改、LLM 审查建议等）。
+   * 用于：排序时将有问题的结果置顶、统计"发现 x 个段落有问题"、
+   * "全部应用"时筛选出需要批量写回的结果。
+   *
+   * 各功能对"有问题"的定义不同（code_review 额外将工具格式化差异视为问题），
+   * 因此允许调用方通过 hasResultIssue 参数传入自定义实现。
+   */
+  const defaultHasResultIssue = useCallback((r) => {
+    return (
+      (r.changes && r.changes.length > 0) ||
+      (r.suggestions && r.suggestions.length > 0)
+    );
   }, []);
+
+  const hasResultIssue = customHasResultIssue || defaultHasResultIssue;
 
   const texFiles = useMemo(() => flattenTexFiles(fileTree), [fileTree]);
 
