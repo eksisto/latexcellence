@@ -348,12 +348,14 @@ export const api = {
 
   /* ---- 自动编译 ---- */
   compile: {
-    run: (mainFile, workspaceId) =>
+    run: (mainFile, workspaceId, options = {}) =>
       request(appendWs("/compile/run", workspaceId), {
         method: "POST",
         body: JSON.stringify({
           main_file: mainFile,
           language: getUiLanguage(),
+          engine: options.engine || "auto",
+          pdfa: options.pdfa || false,
         }),
       }),
     pdfUrl: (mainFile, workspaceId) =>

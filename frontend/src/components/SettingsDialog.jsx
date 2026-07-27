@@ -435,6 +435,36 @@ export default function SettingsDialog() {
               checked={config.features.compile.enabled}
               onChange={(v) => set("features.compile.enabled", v)}
             />
+            {config.features.compile.enabled && (
+              <div className="ml-6 space-y-3 rounded-md border p-2.5 bg-muted/40">
+                <div className="space-y-1.5">
+                  <Label className="text-xs">
+                    {t("settings.compileEngine")}
+                  </Label>
+                  <Select
+                    value={config.features.compile.engine}
+                    onValueChange={(v) => set("features.compile.engine", v)}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="auto">
+                        {t("settings.compileEngineAuto")}
+                      </SelectItem>
+                      <SelectItem value="pdflatex">pdfLaTeX</SelectItem>
+                      <SelectItem value="xelatex">XeLaTeX</SelectItem>
+                      <SelectItem value="lualatex">LuaLaTeX</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <CheckboxField
+                  label={t("settings.compilePdfa")}
+                  checked={config.features.compile.pdfa}
+                  onChange={(v) => set("features.compile.pdfa", v)}
+                />
+              </div>
+            )}
             <CheckboxField
               label={t("settings.featureGitDiff")}
               checked={config.features.git_diff.enabled}

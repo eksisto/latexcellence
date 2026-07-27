@@ -52,7 +52,9 @@
     },
     "compile": {
       "enabled": true,
-      "latexmk_timeout": 120
+      "latexmk_timeout": 120,
+      "engine": "pdflatex",
+      "pdfa": true
     },
     "git_diff": {
       "enabled": true,

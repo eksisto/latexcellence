@@ -51,7 +51,11 @@ class CompileResult(BaseModel):
 
 
 async def compile_latex(
-    main_file: str, workspace_id: str = "", language: str = "zh"
+    main_file: str,
+    workspace_id: str = "",
+    language: str = "zh",
+    engine: str = "auto",
+    pdfa: bool = False,
 ) -> CompileResult:
     """
     编译 LaTeX 项目的主文件。
@@ -59,6 +63,9 @@ async def compile_latex(
     参数：
         main_file: 主 .tex 文件相对于项目根目录的路径
         workspace_id: 工作区唯一标识符
+        language: 用户语言（用于错误翻译）
+        engine: 编译引擎（auto/pdflatex/xelatex/lualatex）
+        pdfa: 是否启用 PDF/A-2b 归档格式输出
 
     返回：
         CompileResult 对象（含编译状态、输出日志、LLM 翻译的解释和建议）
@@ -77,9 +84,17 @@ async def compile_latex(
     cfg = get_config()
     timeout = cfg.features.compile.latexmk_timeout
 
-    logger.info(f"Compiling {main_file} in {root}")
+    # 使用配置默认值（如果参数为默认值）
+    if engine == "auto":
+        engine = cfg.features.compile.engine
+    if not pdfa:
+        pdfa = cfg.features.compile.pdfa
 
-    tex_result = await run_tex_compile(main_file, root, timeout)
+    logger.info(f"Compiling {main_file} in {root} (engine={engine}, pdfa={pdfa})")
+
+    tex_result = await run_tex_compile(
+        main_file, root, timeout, engine=engine, pdfa=pdfa
+    )
 
     if tex_result.timed_out:
         logger.warning(f"Compilation timed out for {main_file}")

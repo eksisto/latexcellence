@@ -21,6 +21,8 @@ logger = get_logger(__name__)
 class CompileRequest(BaseModel):
     main_file: str
     language: str = "zh"
+    engine: str = "auto"  # auto/pdflatex/xelatex/lualatex
+    pdfa: bool = False  # PDF/A-2b 归档格式输出
 
     @field_validator("main_file")
     @classmethod
@@ -32,6 +34,16 @@ class CompileRequest(BaseModel):
             raise ValueError("main_file 不能以 '-' 开头")
         return v
 
+    @field_validator("engine")
+    @classmethod
+    def validate_engine(cls, v: str) -> str:
+        valid_engines = ("auto", "pdflatex", "xelatex", "lualatex")
+        if v not in valid_engines:
+            raise ValueError(
+                f"Invalid engine: {v}. Must be one of: {', '.join(valid_engines)}"
+            )
+        return v
+
 
 @router.post("/run")
 async def run_compile(
@@ -41,11 +53,17 @@ async def run_compile(
     """
     编译 LaTeX 项目。
 
-    使用 latexmk -xelatex 编译主文件，拦截 stderr 输出。
+    使用 latexmk 编译主文件，支持自动引擎检测和 PDF/A 输出。
     若编译失败，使用 LLM 将错误信息翻译为通俗易懂的解释和修复建议。
     """
     try:
-        result = await compile_latex(request.main_file, workspace_id, request.language)
+        result = await compile_latex(
+            request.main_file,
+            workspace_id,
+            request.language,
+            engine=request.engine,
+            pdfa=request.pdfa,
+        )
         return result.model_dump()
     except RuntimeError as e:
         raise HTTPException(status_code=400, detail=str(e))

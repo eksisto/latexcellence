@@ -15,7 +15,7 @@
 | `test_utils/test_path_guard.py` | resolve_project_path 六层校验 |
 | `test_utils/test_input_resolver.py` | 递归展开路径穿越检测 |
 | `test_utils/test_compile_error_translator.py` | ErrorTranslation 模型、错误提取、LLM 流程、filtered_output |
-| `test_utils/test_tex_compile.py` | TexCompileResult 模型、texfot 成功/失败/超时、降级路径 |
+| `test_utils/test_tex_compile.py` | TexCompileResult 模型、texfot 成功/失败/超时、引擎自动检测、PDF/A 注入 |
 | `test_api/test_typo_check.py` | 模型校验、LLM mock、marker 保护、写回 |
 | `test_api/test_expression_opt.py` | 模型校验、LLM mock、marker 保护、prompt CRUD |
 | `test_api/test_terminology_check.py` | 模型校验、LLM mock、聚类逻辑、写回 |

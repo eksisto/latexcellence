@@ -9,6 +9,7 @@
 - `ServerConfig` — 服务配置（host, port, dev_mode, vite_dev_url）
 - `LLMConfig` — LLM 配置（api_key, base_url, model, temperature 等）
 - `TypoCheckConfig` / `ExpressionOptConfig` / `TerminologyCheckConfig` / `FormulaOCRConfig` / `TableOCRConfig` / `TemplateGenConfig` / `CodeReviewConfig` / `CompileConfig` / `GitDiffConfig` / `MarkdownConverterConfig` / `StyleModifyConfig` / `WritingChatConfig` / `BibManagerConfig` — 各功能模块配置
+    - `CompileConfig` 包含 `engine`（编译引擎：auto/pdflatex/xelatex/lualatex）和 `pdfa`（PDF/A-2b 归档格式输出）配置
     - `TemplateGenConfig` 包含 `cleanup_enabled`/`cleanup_interval_seconds`/`cleanup_retention_days` 沙箱清理配置
 - `FeaturesConfig` — 功能聚合
 - `LoggingConfig` — 日志配置
@@ -260,11 +261,18 @@ raise ValueError("Validation failed after N attempts")        # ❌ 耗尽
 
 **设计理念**：将 LaTeX 编译执行（latexmk 调用）和日志过滤（texfot）统一封装，供 `compile`（自动编译）、`git_diff`（差异高亮）、`template_gen`（模板生成 Agent）三个模块复用。texfot 是 TeX Live 自带的 Perl 工具，能从海量编译日志中自动提取错误、警告等关键信息，比自写正则更可靠。当 texfot 不可用时，静默降级为原始 latexmk 输出 + 正则 fallback。
 
+**核心功能**：
+- **引擎自动检测**：根据 `.tex` 文件内容自动选择编译引擎（pdflatex/xelatex/lualatex）
+- **PDF/A 归档输出**：在 `\documentclass` 之后注入 `\usepackage[a-2b]{pdfx}` 以支持 PDF/A-2b 归档格式
+- **临时目录管理**：编译在临时目录中进行，完成后自动清理并复制 PDF 回原目录
+
 **核心接口**：
 
 | 函数 | 功能 |
 | --- | --- |
-| `run_tex_compile(main_file, cwd, timeout, extra_args=None)` | 通过 texfot 包装 latexmk 执行编译，返回过滤后的输出 |
+| `run_tex_compile(main_file, cwd, timeout, engine="auto", pdfa=False)` | 通过 texfot 包装 latexmk 执行编译，返回过滤后的输出 |
+| `detect_engine_from_file(tex_path)` | 根据 .tex 文件内容自动检测编译引擎 |
+| `inject_pdfx_for_pdfa(tex_path, output_path)` | 注入 PDF/A 支持包 |
 | `_check_texfot_available()` | 检测 texfot 是否在 PATH 中可用（模块级缓存） |
 | `_filter_with_regex(raw_output)` | 降级路径：用正则从原始日志中提取关键错误行 |
 

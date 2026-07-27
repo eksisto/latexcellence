@@ -103,7 +103,7 @@ latexcellence/
 | expression_opt | 学术表达优化 | router.py, service.py, prompt_manager.py | ✓ | ✓ |
 | code_review | LaTeX 代码审查（工具格式化 + LLM 质量审查） | router.py, service.py | ✓ | ✓ |
 | terminology_check | 术语一致性检查 | router.py, service.py, extractor.py, models.py | ✓ | ✓ |
-| compile | 编译 + 错误翻译 | router.py, service.py | ✓(错误翻译) | ✗ |
+| compile | 编译 + 错误翻译 + 引擎自动检测 + PDF/A 支持 | router.py, service.py | ✓(错误翻译) | ✗ |
 | git_diff | Git 版本差异 PDF | router.py, service.py | ✓(编译失败时翻译错误) | ✗ |
 | template_gen | 模板生成（自主 Agent） | router.py, service.py, agent.py, cleanup.py | ✓ | ✗ |
 | formula_ocr | 图片→LaTeX 公式 | router.py, service.py | ✓(Vision) | ✗ |

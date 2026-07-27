@@ -33,7 +33,7 @@
 
 | 模块 | 文档 | 说明 |
 | --- | --- | --- |
-| 自动编译 | [compile.md](modules/compile.md) | LaTeX 编译与错误翻译 |
+| 自动编译 | [compile.md](modules/compile.md) | LaTeX 编译、引擎自动检测、PDF/A 支持与错误翻译 |
 | Git 差异高亮 | [git_diff.md](modules/git_diff.md) | 版本差异可视化高亮 PDF |
 | 参考文献管理 | [bib_manager.md](modules/bib_manager.md) | BibTeX 格式识别与管理 |
 
