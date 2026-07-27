@@ -55,6 +55,10 @@
 
 每次 preview/check 生成唯一 `operation_id`，关联的上下文（marker_maps、file_md5s、TTL 1 小时）保存在服务实例中。apply 时通过 operation_id 取回上下文，避免并发或重启后 marker 映射丢失。
 
+### 乐观锁
+
+多工作区并发编辑同一文件时，通过 MD5 哈希检测冲突。读取段落时后端返回 `file_md5`，应用修改时前端传回 `expected_md5`，后端校验失败时抛出 `FileConflictError`（HTTP 409）。前端自动刷新 MD5 并提示用户重试。`inject_expected_md5s()` 辅助函数统一为各模块 router 注入预期 MD5。
+
 ### Marker 保护策略
 
 - **使用 Marker 保护**：typo_check, expression_opt, terminology_check, code_review

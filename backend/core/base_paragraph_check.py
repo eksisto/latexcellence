@@ -30,6 +30,7 @@ from typing import Any, ClassVar
 from pydantic import BaseModel
 
 from backend.core.logger import get_logger
+from backend.core.project_manager import FileConflictError
 from backend.core.workspace_manager import get_project_manager_for_workspace
 from backend.core.llm_client import get_llm_client
 from backend.core.config import get_config
@@ -62,6 +63,26 @@ class ApplyChangeItem(BaseModel):
     paragraph_index: int
     new_text: str
     file_path: str | None = None
+    expected_md5: str | None = None
+
+
+def inject_expected_md5s(
+    changes: list[dict[str, Any]],
+    fallback_file: str,
+    md5s_map: dict[str, str] | None,
+) -> None:
+    """为每个 change 补充 expected_md5（如果提供且未设置）。
+
+    参数：
+        changes: 序列化后的 change 字典列表（in-place 修改）
+        fallback_file: 文件路径兜底值（request.file_path）
+        md5s_map: 文件级 MD5 映射（request.expected_md5s）
+    """
+    if md5s_map:
+        for change in changes:
+            target_file = change.get("file_path", fallback_file)
+            if "expected_md5" not in change or change["expected_md5"] is None:
+                change["expected_md5"] = md5s_map.get(target_file)
 
 
 class BaseParagraphCheckService:
@@ -622,6 +643,7 @@ class BaseParagraphCheckService:
             idx = change["paragraph_index"]
             new_text = change["new_text"]
             target_file = change.get("file_path", file_path)
+            expected_md5 = change.get("expected_md5")
 
             if self.use_marker_protection:
                 if context is not None:
@@ -647,12 +669,27 @@ class BaseParagraphCheckService:
             else:
                 restored = new_text
 
-            pm.apply_change(target_file, idx, restored)
-            applied += 1
-            self._logger.info(
-                f"Applied change to paragraph {idx} in {target_file}"
-                f" [op={operation_id or 'legacy'}]"
-            )
+            try:
+                pm.apply_change(target_file, idx, restored, expected_md5=expected_md5)
+                applied += 1
+                self._logger.info(
+                    f"Applied change to paragraph {idx} in {target_file}"
+                    f" [op={operation_id or 'legacy'}]"
+                )
+            except FileConflictError as e:
+                self._logger.warning(
+                    f"File conflict for paragraph {idx} in {target_file}: {e}"
+                )
+                errors.append(
+                    {
+                        "paragraph_index": idx,
+                        "file_path": target_file,
+                        "reason": "file_conflict",
+                        "detail": str(e),
+                        "expected_md5": e.expected_md5,
+                        "current_md5": e.current_md5,
+                    }
+                )
 
         return {"applied": applied, "total": len(changes), "errors": errors}
 

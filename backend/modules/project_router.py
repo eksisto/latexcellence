@@ -10,6 +10,7 @@ from typing import Optional
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 
+from backend.core.project_manager import FileConflictError
 from backend.core.workspace_manager import (
     get_project_manager_for_workspace,
     get_workspace_manager,
@@ -26,6 +27,7 @@ class ApplyChangeRequest(BaseModel):
     file_path: str
     paragraph_index: int
     new_text: str
+    expected_md5: str | None = None
 
 
 class FileActionRequest(BaseModel):
@@ -130,6 +132,8 @@ async def get_paragraphs(
     project = get_project_manager_for_workspace(workspace_id)
     try:
         paragraphs = project.get_paragraphs(file_path)
+        # 同时返回文件 MD5，供前端乐观锁使用
+        file_md5 = project.get_file_md5(file_path)
         return {
             "paragraphs": [
                 {
@@ -143,7 +147,24 @@ async def get_paragraphs(
             ],
             "file_path": file_path,
             "total": len(paragraphs),
+            "file_md5": file_md5,
         }
+    except RuntimeError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+@router.get("/file-md5")
+async def get_file_md5(
+    file_path: str = Query(..., description="文件路径（相对于项目根目录）"),
+    workspace_id: str = Query(..., description="工作区唯一标识符"),
+):
+    """获取指定文件的当前 MD5 哈希值（用于乐观锁版本校验）。"""
+    project = get_project_manager_for_workspace(workspace_id)
+    try:
+        md5 = project.get_file_md5(file_path)
+        return {"file_path": file_path, "md5": md5}
     except RuntimeError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except FileNotFoundError as e:
@@ -159,9 +180,23 @@ async def apply_change(
     project = get_project_manager_for_workspace(workspace_id)
     try:
         project.apply_change(
-            request.file_path, request.paragraph_index, request.new_text
+            request.file_path,
+            request.paragraph_index,
+            request.new_text,
+            expected_md5=request.expected_md5,
         )
         return {"status": "ok"}
+    except FileConflictError as e:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "error": "file_conflict",
+                "message": str(e),
+                "file_path": e.file_path,
+                "expected_md5": e.expected_md5,
+                "current_md5": e.current_md5,
+            },
+        )
     except RuntimeError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except IndexError as e:

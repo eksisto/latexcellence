@@ -791,6 +791,7 @@
     "ddgChallenge": "搜索引擎需要验证：{{query}}",
     "challengeExpired": "验证已过期或不存在，请重新提问",
     "verificationFailed": "验证失败，请重试",
-    "ipBlocked": "IP 已被封禁，请稍后重试"
+    "ipBlocked": "IP 已被封禁，请稍后重试",
+    "fileConflict": "文件已被其他浏览器修改，请刷新后重试"
   }
 }

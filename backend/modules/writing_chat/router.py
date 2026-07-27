@@ -95,9 +95,22 @@ async def apply_edit(
     workspace_id: str = Query(..., description="工作区唯一标识符"),
 ):
     """把某条 assistant 消息附带的编辑操作写回源文件。"""
+    from backend.core.project_manager import FileConflictError
+
     service = get_writing_chat_service()
     try:
         return service.apply_edit(request, workspace_id)
+    except FileConflictError as e:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "error": "file_conflict",
+                "message": str(e),
+                "file_path": e.file_path,
+                "expected_md5": e.expected_md5,
+                "current_md5": e.current_md5,
+            },
+        )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except FileNotFoundError as e:

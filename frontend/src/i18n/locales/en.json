@@ -794,6 +794,7 @@
     "ddgChallenge": "DDG challenge for query: {{query}}",
     "challengeExpired": "Challenge expired or not found",
     "verificationFailed": "Verification failed, please retry",
-    "ipBlocked": "IP has been blocked, please try again later"
+    "ipBlocked": "IP has been blocked, please try again later",
+    "fileConflict": "File has been modified by another browser, please refresh and try again"
   }
 }

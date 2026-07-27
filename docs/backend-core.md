@@ -72,6 +72,10 @@
 
 管理 LaTeX 项目目录的生命周期：打开、文件树、段落提取、原地修改、撤销/重做。
 
+**异常类**：
+
+- `FileConflictError` — 乐观锁冲突异常。当 `apply_change()` 检测到文件 MD5 与预期不符时抛出，携带 `file_path`、`expected_md5`、`current_md5` 三个属性，供上层路由返回 HTTP 409。
+
 **数据类**：
 
 ```python
@@ -104,11 +108,14 @@ class ProjectInfo:
 | --- | --- |
 | `open(path)` | 打开项目目录，扫描文件树，检测主文档，构建依赖图 |
 | `get_file_tree()` | 返回文件树（仅展示 `.tex`/`.bib`/`.cls`/`.sty`/`.pdf` 文件） |
-| `get_paragraphs(file_path)` | 按空行分割文件为段落，记录行号范围，缓存 MD5 |
-| `apply_change(file_path, idx, text)` | 原地修改段落：MD5 校验 → 备份 → 替换行范围 → 原子写入 |
+| `get_file_md5(file_path)` | 返回指定文件的当前 MD5 哈希值（乐观锁版本号），同时更新内部缓存 |
+| `get_paragraphs(file_path)` | 按空行分割文件为段落，记录行号范围 |
+| `apply_change(file_path, idx, text, expected_md5=None)` | 原地修改段落：乐观锁校验 → 备份 → 替换行范围 → 原子写入 → 更新 MD5 缓存 |
 | `set_main_file(file_path)` | 手动设置主文档路径 |
 | `undo(file_path)` / `redo(file_path)` | 撤销 / 重做（委托给 `BackupManager`） |
 | `can_undo(file_path)` / `can_redo(file_path)` | 检查撤销/重做栈是否有记录 |
+
+**乐观锁机制**：`apply_change()` 支持 `expected_md5` 参数。优先使用调用方传入的 MD5（跨工作区乐观锁），否则退回到实例内部缓存的 MD5（单工作区内校验）。两者均不为 `None` 时，若当前文件 MD5 与预期不符，抛出 `FileConflictError`。
 
 **主文档检测逻辑**（递归深度限制 2 层）：
 1. 精确匹配文件名为 `main.tex`（不区分大小写） → 使用
@@ -135,7 +142,13 @@ class ProjectInfo:
 | `_build_success_result(idx, validated, original_text, file_path, plain_text)` | 构建成功结果对象 |
 | `preview_paragraphs(file_path, resolve_input)` | 预览段落：提取 + marker 替换 → 返回纯文本 |
 | `_run_batch_check()` / `_run_stream_check()` | 执行检查：批量发送给 LLM 或 SSE 流式返回 + 校验 |
-| `apply_changes(file_path, changes, workspace_id, operation_id)` | 应用修改：还原 marker → MD5 校验 → 原子写入；marker_map 缺失时跳过该段并返回 `errors` |
+| `apply_changes(file_path, changes, workspace_id, operation_id)` | 应用修改：还原 marker → 乐观锁校验 → 原子写入；冲突或 marker_map 缺失时跳过该段并返回 `errors` |
+
+**模块级辅助函数**：
+
+| 函数 | 功能 |
+| --- | --- |
+| `inject_expected_md5s(changes, fallback_file, md5s_map)` | 为 change 列表补充 `expected_md5`：从文件级 `md5s_map` 中查找并注入，供 4 个模块的 router 统一调用 |
 
 **关键设计**：
 - `ApplyChangeItem` 共享模型（`paragraph_index`, `new_text`, `file_path`）：四个模块 router 的 apply 接口统一使用
@@ -369,8 +382,9 @@ Prefix: `/api/project`, Tag: `project`
 | POST | `/open` | 打开 LaTeX 项目目录，返回 ProjectInfo |
 | GET | `/browse` | 浏览目录下的子文件夹列表 |
 | GET | `/file-tree` | 获取文件树 |
-| GET | `/paragraphs` | 获取指定文件的段落列表 |
-| POST | `/apply-change` | 原地修改段落（MD5 校验） |
+| GET | `/paragraphs` | 获取指定文件的段落列表（同时返回 `file_md5`） |
+| GET | `/file-md5` | 获取指定文件的当前 MD5（乐观锁版本校验） |
+| POST | `/apply-change` | 原地修改段落（乐观锁校验，冲突返回 409） |
 | POST | `/set-main-file` | 手动设置项目主文件 |
 | POST | `/undo` / `/redo` | 撤销/重做 |
 | GET | `/can-undo` / `/can-redo` | 检查撤销/重做状态 |

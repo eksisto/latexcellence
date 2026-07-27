@@ -119,6 +119,7 @@ class ApplyEditRequest(BaseModel):
     session_id: str
     edit_message_id: str
     new_latex: str | None = None
+    expected_md5: str | None = None
 
 
 class DeleteMessageRequest(BaseModel):

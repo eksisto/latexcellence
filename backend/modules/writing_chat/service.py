@@ -489,7 +489,12 @@ class WritingChatService:
         # 优先使用请求中携带的 new_latex（用户手动编辑的内容）
         target_latex = req.new_latex if req.new_latex is not None else edit_op.new_latex
         pm = get_project_manager_for_workspace(workspace_id)
-        pm.apply_change(edit_op.file_path, edit_op.paragraph_index, target_latex)
+        pm.apply_change(
+            edit_op.file_path,
+            edit_op.paragraph_index,
+            target_latex,
+            expected_md5=req.expected_md5,
+        )
 
         ctx.mark_edit_applied(req.edit_message_id)
         ctx.save_to_disk()

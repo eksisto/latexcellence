@@ -50,6 +50,7 @@ export default function useParagraphCheck({
   apiModule,
   checkMethodName = "check",
   correctedTextField = "corrected",
+  checkFormatDiff = false,
   storeSlice = {
     paragraphsKey: "typoParagraphs",
     setParagraphsKey: "setTypoParagraphs",
@@ -105,6 +106,7 @@ export default function useParagraphCheck({
   const operationIdRef = useRef(null);
   const flushScheduledRef = useRef(false);
   const correctedFieldRef = useRef(correctedTextField);
+  const fileMd5sRef = useRef({});
   useEffect(() => {
     correctedFieldRef.current = correctedTextField;
   }, [correctedTextField]);
@@ -194,6 +196,13 @@ export default function useParagraphCheck({
       );
       setParagraphs(data.paragraphs || []);
       operationIdRef.current = data.operation_id || null;
+      // 存储文件 MD5，用于乐观锁
+      if (data.file_md5) {
+        fileMd5sRef.current = {
+          ...fileMd5sRef.current,
+          [activeFile]: data.file_md5,
+        };
+      }
       setMessage(
         i18n.t("hooks:paragraphCheck.loadedParagraphs", { count: data.total }),
       );
@@ -385,9 +394,32 @@ export default function useParagraphCheck({
     scheduleFlush,
   ]);
 
+  const refreshConflictMd5s = useCallback(
+    async (errors) => {
+      const conflictFiles = new Set(
+        errors
+          .filter((e) => e.reason === "file_conflict")
+          .map((e) => e.file_path || activeFile),
+      );
+      for (const f of conflictFiles) {
+        try {
+          const md5Data = await api.project.fileMd5(f, workspaceId);
+          fileMd5sRef.current = {
+            ...fileMd5sRef.current,
+            [f]: md5Data.md5,
+          };
+        } catch (_) {
+          // 忽略 MD5 获取失败
+        }
+      }
+    },
+    [activeFile, workspaceId],
+  );
+
   const handleApplyChange = useCallback(
     async (idx, newText, filePath) => {
       try {
+        const targetFile = filePath || activeFile;
         const result = await apiModule.apply(
           {
             file_path: activeFile,
@@ -395,7 +427,8 @@ export default function useParagraphCheck({
               {
                 paragraph_index: idx,
                 new_text: newText,
-                file_path: filePath || activeFile,
+                file_path: targetFile,
+                expected_md5: fileMd5sRef.current[targetFile] || null,
               },
             ],
             operation_id: operationIdRef.current,
@@ -405,7 +438,7 @@ export default function useParagraphCheck({
         const hadErrors = result.errors && result.errors.length > 0;
         if (hadErrors) {
           const reasons = result.errors
-            .map((e) => translateError(e.reason))
+            .map((e) => translateError(e.reason || e.detail))
             .join("、");
           const msg = i18n.t("hooks:paragraphCheck.applyFailedHint", {
             reasons,
@@ -414,6 +447,10 @@ export default function useParagraphCheck({
           toast.error(i18n.t("hooks:paragraphCheck.applyFailed"), {
             description: msg,
           });
+          // 如果是文件冲突，刷新 MD5 供下次重试
+          if (result.errors.some((e) => e.reason === "file_conflict")) {
+            await refreshConflictMd5s(result.errors);
+          }
           return;
         }
         setMessage(messages.applySuccess(idx));
@@ -435,7 +472,14 @@ export default function useParagraphCheck({
         });
       }
     },
-    [activeFile, apiModule, setResults, messages],
+    [
+      activeFile,
+      workspaceId,
+      apiModule,
+      setResults,
+      messages,
+      refreshConflictMd5s,
+    ],
   );
 
   const handleIgnoreChange = useCallback(
@@ -478,6 +522,7 @@ export default function useParagraphCheck({
           paragraph_index: r.paragraph_index,
           new_text: r[correctedTextField],
           file_path: r.file_path || activeFile,
+          expected_md5: fileMd5sRef.current[r.file_path || activeFile] || null,
         }));
         const result = await apiModule.apply(
           {
@@ -494,6 +539,10 @@ export default function useParagraphCheck({
             skippedIndices.add(
               `${e.file_path || activeFile}:${e.paragraph_index}`,
             );
+          }
+          // 刷新冲突文件的 MD5，供下次重试
+          if (result.errors.some((e) => e.reason === "file_conflict")) {
+            await refreshConflictMd5s(result.errors);
           }
         }
 
@@ -542,11 +591,13 @@ export default function useParagraphCheck({
     [
       results,
       activeFile,
+      workspaceId,
       apiModule,
       correctedTextField,
       setResults,
       messages,
       hasResultIssue,
+      refreshConflictMd5s,
     ],
   );
 

@@ -25,6 +25,7 @@ const EXACT_MAP = {
 
   // 段落应用错误
   "Marker map missing": "markerMapMissing",
+  file_conflict: "fileConflict",
 
   // 参数校验
   "Empty reference example": "emptyReferenceExample",
@@ -126,6 +127,13 @@ const PATTERN_MAP = [
     /^File (.+) has been modified since parsing/,
     "fileModifiedSinceParsing",
     (m) => ({ file: m[1] }),
+  ],
+
+  // 文件冲突（乐观锁）
+  [
+    /^File (.+) has been modified by another workspace/,
+    "fileConflict",
+    () => ({}),
   ],
 
   // PDF

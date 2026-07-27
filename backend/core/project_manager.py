@@ -30,6 +30,24 @@ from backend.utils.file_ops import (
 from backend.utils.path_guard import resolve_project_path
 
 
+class FileConflictError(Exception):
+    """
+    文件冲突异常。
+
+    当乐观锁校验失败时抛出，表示文件在读取后被其他工作区修改。
+    """
+
+    def __init__(self, file_path: str, expected_md5: str, current_md5: str):
+        self.file_path = file_path
+        self.expected_md5 = expected_md5
+        self.current_md5 = current_md5
+        super().__init__(
+            f"File {file_path} has been modified by another workspace. "
+            f"Expected MD5: {expected_md5[:8]}..., got: {current_md5[:8]}... "
+            f"Please refresh and try again."
+        )
+
+
 @dataclass
 class Paragraph:
     """
@@ -146,6 +164,33 @@ class LatexProject:
             raise RuntimeError("No project opened")
         return self._project_info.file_tree
 
+    def get_file_md5(self, file_path: str) -> str:
+        """
+        获取指定文件的当前 MD5 哈希值。
+
+        用于乐观锁：前端在读取段落时获取 MD5，应用修改时传递回来。
+        如果文件在两次操作之间被其他工作区修改，apply_change 会检测到冲突。
+
+        参数：
+            file_path: 文件路径（相对于项目根目录）
+
+        返回：
+            文件的 MD5 十六进制字符串
+        """
+        if self._project_info is None:
+            raise RuntimeError("No project opened")
+        full_path = resolve_project_path(
+            Path(self._project_info.root_path),
+            file_path,
+        )
+        if not full_path.exists():
+            raise FileNotFoundError(f"File not found: {full_path}")
+
+        md5 = compute_md5(full_path)
+        abs_path = str(full_path)
+        self._file_md5[abs_path] = md5
+        return md5
+
     def get_paragraphs(self, file_path: str) -> list[Paragraph]:
         """
         提取指定 .tex 文件的段落列表。
@@ -217,12 +262,18 @@ class LatexProject:
 
         return paragraphs
 
-    def apply_change(self, file_path: str, paragraph_index: int, new_text: str) -> None:
+    def apply_change(
+        self,
+        file_path: str,
+        paragraph_index: int,
+        new_text: str,
+        expected_md5: str | None = None,
+    ) -> None:
         """
         原地修改指定段落的文本。
 
         流程：
-            1. 校验文件 MD5（与解析时一致，防止并发冲突）
+            1. 校验文件 MD5（与预期一致，防止并发冲突）
             2. 将文件当前内容推入撤销栈
             3. 读取源文件全部行
             4. 检测原始段落缩进并应用到新文本
@@ -233,6 +284,7 @@ class LatexProject:
             file_path: 文件路径（相对于项目根目录）
             paragraph_index: 段落索引（get_paragraphs 返回的列表中的位置）
             new_text: 修改后的新文本内容
+            expected_md5: 期望的文件 MD5（乐观锁版本号），为 None 时跳过校验
         """
         if self._project_info is None:
             raise RuntimeError("No project opened")
@@ -245,15 +297,19 @@ class LatexProject:
 
         abs_path = str(full_path)
 
-        # 校验 MD5：文件未被用户在审核期间手动修改
-        expected_md5 = self._file_md5.get(abs_path)
-        if expected_md5 is not None:
+        # 乐观锁校验：比较预期 MD5 与文件当前 MD5
+        # 优先使用调用方传入的 expected_md5（跨工作区乐观锁）
+        # 否则退回到实例内部缓存的 MD5（单工作区内校验）
+        md5_to_check = (
+            expected_md5 if expected_md5 is not None else self._file_md5.get(abs_path)
+        )
+        if md5_to_check is not None:
             current_md5 = compute_md5(full_path)
-            if current_md5 != expected_md5:
-                raise RuntimeError(
-                    f"File {file_path} has been modified since parsing. "
-                    f"Please re-parse and try again. "
-                    f"(expected MD5: {expected_md5[:8]}..., got: {current_md5[:8]}...)"
+            if current_md5 != md5_to_check:
+                raise FileConflictError(
+                    file_path=file_path,
+                    expected_md5=md5_to_check,
+                    current_md5=current_md5,
                 )
 
         paragraphs = self.get_paragraphs(file_path)

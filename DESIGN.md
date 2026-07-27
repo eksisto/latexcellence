@@ -55,7 +55,7 @@
 | --- | --- |
 | LLM 输出不可靠（格式错误、字段缺失） | `retry_with_validation()` 闭环重试 |
 | LaTeX 结构必须保护，LLM 只能改纯文本 | Marker 替换-还原策略 |
-| 用户可能在审核期间修改文件 | MD5 校验 + 原子写入 |
+| 用户可能在审核期间修改文件 | 乐观锁：读取时获取 MD5，写回时校验，冲突返回 409 |
 | 多模块共享相同的段落检查流程 | `useParagraphCheck` hook 抽象 |
 | 配置需要运行时热重载 | 单例 + 方法内实时 `get_config()` |
 | 编译错误信息难以理解 | 提取 stderr 和 stdout → LLM 翻译为中文解释 |
@@ -262,15 +262,39 @@ LLM 收到错误后，有机会修正输出。这比简单的"请重新生成"�
 
 这防止了写入中断（断电、崩溃）导致文件损坏。
 
-### 4.2 MD5 校验
+### 4.2 乐观锁
 
-修改文件前校验 MD5，防止用户在审核期间手动修改文件导致冲突：
+多浏览器/多工作区场景下，两个用户可能同时编辑同一个 `.tex` 文件。乐观锁通过 MD5 哈希检测冲突：
 
 ```
-1. 解析时缓存文件 MD5
-2. 修改前重新计算当前 MD5
-3. 不一致 → 拒绝写入，要求用户重新解析
+1. 读取阶段（get_paragraphs / get_file_md5）：
+   计算文件 MD5 → 返回给前端保存
+
+2. 写回阶段（apply_change）：
+   前端传回期望的 MD5（expected_md5）
+      ↓
+   重新计算当前文件 MD5
+      ↓
+   MD5 一致 → 继续写入（原子写入 + 更新内部缓存）
+   MD5 不一致 → 抛出 FileConflictError（HTTP 409）
+      ↓
+   前端收到 409 → 刷新文件 MD5 → 提示用户重试
 ```
+
+**校验优先级**：`apply_change()` 的 `expected_md5` 参数优先于实例内部缓存的 MD5。前者用于跨工作区乐观锁（前端传入），后者用于单工作区内校验（兜底）。
+
+**冲突响应格式**：
+```json
+{
+  "error": "file_conflict",
+  "message": "File chapter1.tex has been modified by another workspace...",
+  "file_path": "chapter1.tex",
+  "expected_md5": "a1b2c3d4...",
+  "current_md5": "e5f6a7b8..."
+}
+```
+
+**批量应用冲突处理**：`BaseParagraphCheckService.apply_changes()` 逐段校验，冲突段收集到 `errors` 列表（含 `paragraph_index`、`file_path`、`reason="file_conflict"`、`expected_md5`、`current_md5`），成功段正常写入，前端据此区分已应用和冲突项。
 
 ### 4.3 撤销/重做栈
 
@@ -765,9 +789,9 @@ def get_config() -> AppConfig:
        raise
    ```
 
-### 8.2 禁止自定义异常类
+### 8.2 异常体系
 
-复用标准异常（`ValueError`, `RuntimeError`, `FileNotFoundError`, `IndexError`），保持异常体系简洁。
+复用标准异常（`ValueError`, `RuntimeError`, `FileNotFoundError`, `IndexError`），保持异常体系简洁。仅当异常需要携带结构化数据供 API 层使用时（如 `FileConflictError` 携带 `file_path`/`expected_md5`/`current_md5`），允许定义专用异常类。
 
 ---
 

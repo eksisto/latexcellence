@@ -103,13 +103,20 @@ export const api = {
           workspaceId,
         ),
       ),
-    applyChange: (filePath, paragraphIndex, newText, workspaceId) =>
+    applyChange: (
+      filePath,
+      paragraphIndex,
+      newText,
+      workspaceId,
+      expectedMd5 = null,
+    ) =>
       request(appendWs("/project/apply-change", workspaceId), {
         method: "POST",
         body: JSON.stringify({
           file_path: filePath,
           paragraph_index: paragraphIndex,
           new_text: newText,
+          expected_md5: expectedMd5,
         }),
       }),
     undo: (filePath, workspaceId) =>
@@ -141,6 +148,13 @@ export const api = {
         method: "POST",
         body: JSON.stringify({ file_path: filePath }),
       }),
+    fileMd5: (filePath, workspaceId) =>
+      request(
+        appendWs(
+          `/project/file-md5?file_path=${encodeURIComponent(filePath)}`,
+          workspaceId,
+        ),
+      ),
     closeWorkspace: (workspaceId) =>
       request(`/project/workspace/${encodeURIComponent(workspaceId)}`, {
         method: "DELETE",

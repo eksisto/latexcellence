@@ -359,6 +359,8 @@ class TestUndoRedo:
 
 class TestMD5Verification:
     def test_md5_mismatch_detected(self, temp_project):
+        from backend.core.project_manager import FileConflictError
+
         project = LatexProject()
         project.open(str(temp_project))
         project.get_paragraphs("chapter1.tex")  # 记录 MD5
@@ -368,7 +370,9 @@ class TestMD5Verification:
             "externally modified", encoding="utf-8"
         )
 
-        with pytest.raises(RuntimeError, match="has been modified since parsing"):
+        with pytest.raises(
+            FileConflictError, match="has been modified by another workspace"
+        ):
             project.apply_change("chapter1.tex", 0, "new text")
 
     def test_md5_updated_after_apply(self, temp_project):

@@ -11,7 +11,7 @@ from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
-from backend.core.base_paragraph_check import ApplyChangeItem
+from backend.core.base_paragraph_check import ApplyChangeItem, inject_expected_md5s
 from backend.modules.typo_check.service import TypoCheckService
 
 router = APIRouter(prefix="/api/typo-check", tags=["typo_check"])
@@ -40,6 +40,7 @@ class TypoApplyRequest(BaseModel):
     file_path: str
     changes: list[ApplyChangeItem]
     operation_id: str | None = None
+    expected_md5s: dict[str, str] | None = None
 
 
 # ── preview ────────────────────────────────────────────────────────────────
@@ -114,6 +115,7 @@ async def apply_changes(
     """
     try:
         changes = [c.model_dump() for c in request.changes]
+        inject_expected_md5s(changes, request.file_path, request.expected_md5s)
         result = get_service().apply_changes(
             request.file_path, changes, workspace_id, request.operation_id
         )

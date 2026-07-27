@@ -272,22 +272,41 @@ class CodeReviewService(BaseParagraphCheckService):
         new_text 已是原始 LaTeX（无 marker），直接写回。
         LLM 建议仅在前端展示，不自动写回源码。
         """
+        from backend.core.project_manager import FileConflictError
+
         pm = get_project_manager_for_workspace(workspace_id)
         applied = 0
+        errors: list[dict[str, Any]] = []
 
         for change in changes:
             idx = change["paragraph_index"]
             new_text = change["new_text"]
             target_file = change.get("file_path", file_path)
+            expected_md5 = change.get("expected_md5")
 
-            pm.apply_change(target_file, idx, new_text)
-            applied += 1
-            self._logger.info(
-                f"Applied code review change to paragraph {idx} in {target_file}"
-                f" [op={operation_id or 'legacy'}]"
-            )
+            try:
+                pm.apply_change(target_file, idx, new_text, expected_md5=expected_md5)
+                applied += 1
+                self._logger.info(
+                    f"Applied code review change to paragraph {idx} in {target_file}"
+                    f" [op={operation_id or 'legacy'}]"
+                )
+            except FileConflictError as e:
+                self._logger.warning(
+                    f"File conflict for paragraph {idx} in {target_file}: {e}"
+                )
+                errors.append(
+                    {
+                        "paragraph_index": idx,
+                        "file_path": target_file,
+                        "reason": "file_conflict",
+                        "detail": str(e),
+                        "expected_md5": e.expected_md5,
+                        "current_md5": e.current_md5,
+                    }
+                )
 
-        return {"applied": applied, "total": len(changes)}
+        return {"applied": applied, "total": len(changes), "errors": errors}
 
     # ── Hook 实现 ───────────────────────────────────────────────────────────
 

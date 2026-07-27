@@ -74,7 +74,7 @@ API 按功能分组暴露（health、config、project、typoCheck、expressionOp
 
 | Hook | 功能 |
 | --- | --- |
-| `useParagraphCheck.js` | 封装逐段 LLM 检查公共逻辑（预览、检查/优化、排序、暂停/继续/停止、应用、refresh 持久化）。支持 `resolveInput` 多文件模式。SSE 结果通过 rAF 微批次合并。 |
+| `useParagraphCheck.js` | 封装逐段 LLM 检查公共逻辑（预览、检查/优化、排序、暂停/继续/停止、应用、refresh 持久化）。支持 `resolveInput` 多文件模式。内置乐观锁：读取段落时缓存文件 MD5，应用修改时传回，冲突（409）后自动刷新 MD5 并提示重试。SSE 结果通过 rAF 微批次合并。 |
 | `useEnabledFeatures.js` | 从后端加载功能开关到 Zustand store，幂等。 |
 | `useWritingChat.js` | 封装写作助手 Chat 全部逻辑（会话管理、SSE 流式、深度思考解析、生成编辑、应用编辑、助手管理）。内部使用子 hooks。 |
 | `useThemeManager.js` | 多主题自发现 hook，自动发现 `theme/` 目录下 CSS 文件。 |
