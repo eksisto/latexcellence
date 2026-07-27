@@ -27,7 +27,7 @@
 | 模块 | 文档 | 说明 |
 | --- | --- | --- |
 | 模板生成 | [template_gen.md](modules/template_gen.md) | 自主 Agent 规划并编译验证，生成可编译的多文件 LaTeX 工程 |
-| Markdown 转 LaTeX | [markdown_converter.md](modules/markdown_converter.md) | Markdown 转 LaTeX |
+| 文档格式转换 | [format_converter.md](modules/format_converter.md) | Markdown/DOCX/HTML 与 LaTeX 互转 |
 
 ### 项目管理模块
 
@@ -62,7 +62,7 @@
 ### Marker 保护策略
 
 - **使用 Marker 保护**：typo_check, expression_opt, terminology_check, code_review
-- **不使用**：formula_ocr, table_ocr, compile, markdown_converter, style_modify, git_diff, template_gen
+- **不使用**：formula_ocr, table_ocr, compile, format_converter, style_modify, git_diff, template_gen
 
 ### LLM 调用模式
 
@@ -70,7 +70,7 @@
 | --- | --- |
 | 逐段检查 + SSE 流式 | typo_check, expression_opt, terminology_check, code_review |
 | 多轮对话 | writing_chat |
-| 单次请求-响应 | formula_ocr, table_ocr, template_gen, style_modify, compile, git_diff, markdown_converter |
+| 单次请求-响应 | formula_ocr, table_ocr, template_gen, style_modify, compile, git_diff, format_converter |
 | 无 LLM | compile（编译本身） |
 
 ### 外部依赖
@@ -78,6 +78,6 @@
 | 依赖 | 模块 |
 | --- | --- |
 | latexmk + xelatex | compile, git_diff |
-| pandoc | markdown_converter |
+| pandoc | format_converter |
 | git | git_diff |
 | OpenAI 兼容 API | 大部分 LLM 模块 |

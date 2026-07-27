@@ -110,7 +110,7 @@ export default function SettingsDialog() {
         code_review: config.features.code_review.enabled,
         compile: config.features.compile.enabled,
         git_diff: config.features.git_diff.enabled,
-        markdown_converter: config.features.markdown_converter.enabled,
+        format_converter: config.features.format_converter.enabled,
         style_modify: config.features.style_modify.enabled,
         terminology_check: config.features.terminology_check.enabled,
         writing_chat: config.features.writing_chat.enabled,
@@ -569,9 +569,9 @@ export default function SettingsDialog() {
               onChange={(v) => set("features.table_ocr.enabled", v)}
             />
             <CheckboxField
-              label={t("settings.featureMarkdownConvert")}
-              checked={config.features.markdown_converter.enabled}
-              onChange={(v) => set("features.markdown_converter.enabled", v)}
+              label={t("settings.featureFormatConvert")}
+              checked={config.features.format_converter.enabled}
+              onChange={(v) => set("features.format_converter.enabled", v)}
             />
             <CheckboxField
               label={t("settings.featureStyleModify")}

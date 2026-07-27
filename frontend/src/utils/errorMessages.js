@@ -39,6 +39,9 @@ const EXACT_MAP = {
   "LaTeX code cannot be empty": "latexCodeEmpty",
   "Description cannot be empty": "descriptionEmpty",
   "Markdown text is empty": "markdownEmpty",
+  "Input text is empty": "inputEmpty",
+  "Uploaded file is empty": "emptyFile",
+  "Source and target formats must be different": "formatsMustDiffer",
   "Target paragraph is empty": "targetParagraphEmpty",
   "Message not found": "messageNotFound",
   "Session not found": "sessionNotFound",
@@ -120,6 +123,18 @@ const PATTERN_MAP = [
     /^Image too large:\s*([\d.]+)MB\. Maximum:\s*([\d.]+)MB/,
     "imageTooLarge",
     (m) => ({ size: m[1], max: m[2] }),
+  ],
+
+  // 文件上传
+  [
+    /^File too large:\s*([\d.]+)MB\. Maximum:\s*([\d.]+)MB/,
+    "fileTooLarge",
+    (m) => ({ size: m[1], max: m[2] }),
+  ],
+  [
+    /^Unsupported file type:\s*'(.+?)'/,
+    "unsupportedFileType",
+    (m) => ({ type: m[1] }),
   ],
 
   // 文件修改冲突

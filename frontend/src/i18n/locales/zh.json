@@ -50,9 +50,9 @@
           "title": "表格 OCR 识别",
           "desc": "将图像转换为 LaTeX 表格"
         },
-        "markdownConvert": {
-          "title": "Markdown 转 LaTeX",
-          "desc": "将 Markdown 文本转换为 LaTeX 代码"
+        "formatConvert": {
+          "title": "格式转换",
+          "desc": "Markdown/DOCX/HTML 与 LaTeX 互转"
         },
         "templateGen": {
           "title": "模板生成",
@@ -511,15 +511,26 @@
       "step_error": "错误",
       "step_warning": "警告"
     },
-    "markdownConvert": {
-      "title": "Markdown 转 LaTeX",
-      "inputLabel": "粘贴 Markdown 内容",
-      "inputDesc": "将 Markdown 文本转换为 LaTeX 代码，基于 Pandoc 引擎",
+    "formatConvert": {
+      "title": "格式转换",
+      "subtitle": "Markdown/DOCX/HTML 与 LaTeX 互转",
+      "sourceFormat": "源格式",
+      "targetFormat": "目标格式",
+      "swapFormats": "互换",
+      "textTab": "文本输入",
+      "fileTab": "文件上传",
+      "inputLabel": "粘贴内容",
+      "inputDesc": "粘贴文本内容进行格式转换，基于 Pandoc 引擎",
       "inputPlaceholder": "例如：# 标题\n\n这是**粗体**和*斜体*文字。\n\n- 列表项 1\n- 列表项 2\n\n$$E = mc^2$$",
-      "convertBtn": "转换为 LaTeX",
+      "fileUploadDesc": "拖拽文件到此处，或点击选择文件",
+      "fileUploadHint": "支持 .md、.html、.docx 格式",
+      "convertBtn": "转换",
       "convertBtnLoading": "转换中...",
       "needPandoc": "需要安装 ",
-      "resultTitle": "转换结果"
+      "resultTitle": "转换结果",
+      "downloadBtn": "下载",
+      "copyBtn": "复制",
+      "binaryResultHint": "文件已就绪，点击「下载」保存"
     }
   },
   "components": {
@@ -571,7 +582,7 @@
       "gitDiffDefaultColorAdd": "默认新增颜色",
       "gitDiffDefaultColorDel": "默认删除颜色",
       "featureTableOcr": "表格 OCR 识别",
-      "featureMarkdownConvert": "Markdown 转 LaTeX",
+      "featureFormatConvert": "格式转换",
       "featureStyleModify": "LaTeX 样式修改",
       "featureTerminologyCheck": "术语一致性检查",
       "featureWritingChat": "写作助手 Chat",
@@ -764,6 +775,10 @@
     "projectDirNotFoundInRevision": "目标版本中找不到项目目录",
     "pandocEmptyOutput": "Pandoc 输出为空",
     "pandocNotInstalled": "未安装 Pandoc，请从 https://pandoc.org/installing.html 安装",
+    "fileTooLarge": "文件过大：{{size}}MB，最大：{{max}}MB",
+    "unsupportedFileType": "不支持的文件类型：{{type}}",
+    "inputEmpty": "输入内容为空",
+    "formatsMustDiffer": "源格式和目标格式不能相同",
     "compilationTimeout": "编译超时（已等待 {{seconds}} 秒）",
     "commandTimeout": "命令执行超时（已等待 {{seconds}} 秒）",
     "timeout": "超时",

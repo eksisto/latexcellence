@@ -401,13 +401,46 @@ export const api = {
     getOptions: () => request(appendWs("/git-diff/options")),
   },
 
-  /* ---- Markdown 转 LaTeX ---- */
-  markdownConverter: {
+  /* ---- 文档格式转换（Markdown/DOCX/HTML ↔ LaTeX） ---- */
+  formatConverter: {
     convert: (markdown) =>
-      request("/markdown-converter/convert", {
+      request("/format-converter/convert", {
         method: "POST",
         body: JSON.stringify({ markdown }),
       }),
+    convertText: (text, sourceFormat, targetFormat) =>
+      request("/format-converter/convert-text", {
+        method: "POST",
+        body: JSON.stringify({
+          text,
+          source_format: sourceFormat,
+          target_format: targetFormat,
+        }),
+      }).then((data) => {
+        if (data.is_binary && typeof data.result === "string") {
+          const bytes = Uint8Array.from(atob(data.result), (c) =>
+            c.charCodeAt(0),
+          );
+          data.result = new Blob([bytes]);
+        }
+        return data;
+      }),
+    convertFile: (file, sourceFormat, targetFormat) => {
+      const formData = new FormData();
+      formData.append("file", file);
+      return requestForm(
+        `/format-converter/convert-file?source_format=${encodeURIComponent(sourceFormat)}&target_format=${encodeURIComponent(targetFormat)}`,
+        formData,
+      ).then((data) => {
+        if (data.is_binary && typeof data.result === "string") {
+          const bytes = Uint8Array.from(atob(data.result), (c) =>
+            c.charCodeAt(0),
+          );
+          data.result = new Blob([bytes]);
+        }
+        return data;
+      });
+    },
   },
 
   /* ---- 术语一致性检查 ---- */

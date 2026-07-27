@@ -8,7 +8,7 @@
 
 - `ServerConfig` — 服务配置（host, port, dev_mode, vite_dev_url）
 - `LLMConfig` — LLM 配置（api_key, base_url, model, temperature 等）
-- `TypoCheckConfig` / `ExpressionOptConfig` / `TerminologyCheckConfig` / `FormulaOCRConfig` / `TableOCRConfig` / `TemplateGenConfig` / `CodeReviewConfig` / `CompileConfig` / `GitDiffConfig` / `MarkdownConverterConfig` / `StyleModifyConfig` / `WritingChatConfig` / `BibManagerConfig` — 各功能模块配置
+- `TypoCheckConfig` / `ExpressionOptConfig` / `TerminologyCheckConfig` / `FormulaOCRConfig` / `TableOCRConfig` / `TemplateGenConfig` / `CodeReviewConfig` / `CompileConfig` / `GitDiffConfig` / `FormatConverterConfig` / `StyleModifyConfig` / `WritingChatConfig` / `BibManagerConfig` — 各功能模块配置
     - `CompileConfig` 包含 `engine`（编译引擎：auto/pdflatex/xelatex/lualatex）和 `pdfa`（PDF/A-2b 归档格式输出）配置
     - `TemplateGenConfig` 包含 `cleanup_enabled`/`cleanup_interval_seconds`/`cleanup_retention_days` 沙箱清理配置
 - `FeaturesConfig` — 功能聚合

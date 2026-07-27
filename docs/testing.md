@@ -25,7 +25,7 @@
 | `test_api/test_code_review.py` | 模型校验、preview 原始 LaTeX、LLM mock、写回 |
 | `test_api/test_compile.py` | 编译成功/失败/超时、LLM 错误翻译、PDF 端点、路径穿越防御 |
 | `test_api/test_git_diff.py` | Git revision、差异 PDF 渲染、路径安全校验 |
-| `test_api/test_markdown_converter.py` | Markdown 转换、pandoc mock |
+| `test_api/test_format_converter.py` | 格式转换、pandoc mock |
 | `test_api/test_style_modify.py` | 模型校验、LLM mock、样式修改 |
 | `test_api/test_writing_chat.py` | 模型、会话管理、发送/编辑/应用、助手提示词、搜索工具 |
 | `test_api/test_bib_manager.py` | 格式分析、元数据提取、BibTeX 生成、.bib 操作、路径穿越防御 |

@@ -53,9 +53,9 @@
           "title": "Table OCR",
           "desc": "Convert images to LaTeX tables"
         },
-        "markdownConvert": {
-          "title": "Markdown to LaTeX",
-          "desc": "Convert Markdown text to LaTeX code"
+        "formatConvert": {
+          "title": "Format Converter",
+          "desc": "Convert between Markdown/DOCX/HTML and LaTeX"
         },
         "templateGen": {
           "title": "Template Generator",
@@ -514,15 +514,26 @@
       "step_error": "Error",
       "step_warning": "Warning"
     },
-    "markdownConvert": {
-      "title": "Markdown to LaTeX",
-      "inputLabel": "Paste Markdown content",
-      "inputDesc": "Convert Markdown text to LaTeX code, powered by Pandoc",
+    "formatConvert": {
+      "title": "Format Converter",
+      "subtitle": "Convert between Markdown/DOCX/HTML and LaTeX",
+      "sourceFormat": "Source Format",
+      "targetFormat": "Target Format",
+      "swapFormats": "Swap",
+      "textTab": "Text Input",
+      "fileTab": "File Upload",
+      "inputLabel": "Paste Content",
+      "inputDesc": "Paste text content for format conversion, powered by Pandoc",
       "inputPlaceholder": "e.g., # Heading\n\nThis is **bold** and *italic* text.\n\n- List item 1\n- List item 2\n\n$$E = mc^2$$",
-      "convertBtn": "Convert to LaTeX",
+      "fileUploadDesc": "Drag and drop a file here, or click to select",
+      "fileUploadHint": "Supports .md, .html, .docx formats",
+      "convertBtn": "Convert",
       "convertBtnLoading": "Converting...",
       "needPandoc": "Requires installation of ",
-      "resultTitle": "Conversion Result"
+      "resultTitle": "Conversion Result",
+      "downloadBtn": "Download",
+      "copyBtn": "Copy",
+      "binaryResultHint": "File is ready, click «Download» to save"
     }
   },
   "components": {
@@ -574,7 +585,7 @@
       "gitDiffDefaultColorAdd": "Default Addition Color",
       "gitDiffDefaultColorDel": "Default Deletion Color",
       "featureTableOcr": "Table OCR",
-      "featureMarkdownConvert": "Markdown to LaTeX",
+      "featureFormatConvert": "Format Converter",
       "featureStyleModify": "LaTeX Style Modifier",
       "featureTerminologyCheck": "Terminology Consistency Check",
       "featureWritingChat": "Writing Assistant Chat",
@@ -767,6 +778,10 @@
     "projectDirNotFoundInRevision": "Project directory not found in target revision",
     "pandocEmptyOutput": "Pandoc produced empty output",
     "pandocNotInstalled": "Pandoc is not installed. Install it from https://pandoc.org/installing.html",
+    "fileTooLarge": "File too large: {{size}}MB, maximum: {{max}}MB",
+    "unsupportedFileType": "Unsupported file type: {{type}}",
+    "inputEmpty": "Input content is empty",
+    "formatsMustDiffer": "Source and target formats must be different",
     "compilationTimeout": "Compilation timed out after {{seconds}} seconds",
     "commandTimeout": "Command timed out after {{seconds}} seconds",
     "timeout": "Timed out",

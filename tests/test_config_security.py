@@ -40,7 +40,7 @@ SAMPLE_CONFIG = {
         "code_review": {"enabled": True, "batch_size": 5},
         "compile": {"enabled": True, "latexmk_timeout": 120},
         "git_diff": {"enabled": True},
-        "markdown_converter": {"enabled": True},
+        "format_converter": {"enabled": True},
         "style_modify": {"enabled": True},
         "terminology_check": {"enabled": True, "batch_size": 5},
         "writing_chat": {

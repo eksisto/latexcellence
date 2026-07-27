@@ -635,7 +635,7 @@ retry_with_validation(TableOCRResult)
 本模块不调用 LLM，完全依赖外部 Pandoc 进程：
 
 ```
-POST /api/markdown-converter/convert { markdown: "..." }
+POST /api/format-converter/convert { markdown: "..." }
         ↓
 _check_pandoc() → shutil.which("pandoc")
   未安装则抛 RuntimeError

@@ -123,10 +123,18 @@ class GitDiffConfig(BaseModel):
     default_color_del: str = "#FFA3A3"  # 删除内容颜色（HEX）
 
 
-class MarkdownConverterConfig(BaseModel):
-    """Markdown 转 LaTeX 模块配置"""
+class FormatConverterConfig(BaseModel):
+    """文档格式转换模块配置（Markdown/DOCX/HTML ↔ LaTeX）"""
 
     enabled: bool = True  # 是否启用
+    allowed_extensions: list[str] = [
+        ".md",
+        ".markdown",
+        ".html",
+        ".htm",
+        ".docx",
+    ]  # 允许上传的文件扩展名
+    max_file_size_mb: int = 20  # 上传文件最大尺寸（MB）
 
 
 class StyleModifyConfig(BaseModel):
@@ -207,7 +215,7 @@ class FeaturesConfig(BaseModel):
     code_review: CodeReviewConfig = CodeReviewConfig()
     compile: CompileConfig = CompileConfig()
     git_diff: GitDiffConfig = GitDiffConfig()
-    markdown_converter: MarkdownConverterConfig = MarkdownConverterConfig()
+    format_converter: FormatConverterConfig = FormatConverterConfig()
     style_modify: StyleModifyConfig = StyleModifyConfig()
     terminology_check: TerminologyCheckConfig = TerminologyCheckConfig()
     writing_chat: WritingChatConfig = WritingChatConfig()

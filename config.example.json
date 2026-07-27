@@ -64,8 +64,10 @@
       "default_color_add": "#D7E8B1",
       "default_color_del": "#FFA3A3"
     },
-    "markdown_converter": {
-      "enabled": true
+    "format_converter": {
+      "enabled": true,
+      "allowed_extensions": [".md", ".markdown", ".html", ".htm", ".docx"],
+      "max_file_size_mb": 20
     },
     "style_modify": {
       "enabled": true
@@ -98,7 +100,7 @@
           "enabled": true
         },
         "searxng": {
-          "enabled": true,
+          "enabled": false,
           "base_url": "http://localhost:8080"
         }
       }

@@ -18,7 +18,7 @@
 | `/template-gen` | TemplateGenPage | **SSE Agent 流**（手写 fetch reader，无 hook） |
 | `/code-review` | CodeReviewPage | SSE（useParagraphCheck） |
 | `/style-modify` | StyleModifyPage | JSON request |
-| `/markdown-convert` | MarkdownConvertPage | JSON request |
+| `/format-convert` | FormatConvertPage | JSON request |
 | `/git-diff` | GitDiffPage | JSON request |
 | `/writing-chat` | WritingChatPage | SSE（useWritingChat） |
 | `/bib-manager` | BibManagerPage | JSON request |
@@ -37,7 +37,7 @@
 
 所有请求通过 `request(url, options)`，自动处理 Content-Type、BASE_URL 前缀、错误翻译。FormData 请求通过 `requestForm(url, formData, method)`。需要工作区隔离的端点通过 `appendWs(url, workspaceId)` 拼接 `workspace_id` 参数。
 
-API 按功能分组暴露（health、config、project、typoCheck、expressionOpt、terminologyCheck、formulaOCR、tableOCR、templateGen、codeReview、compile、gitDiff、styleModify、markdownConverter、bibManager、writingChat），LLM 相关接口自动注入 `language` 参数。`templateGen.agentGenerate` 通过 `fetch` reader 解析 SSE 流（与 `writingChat.send` 同模式），实时推送 `plan`/`tool_call`/`tool_result`/`compile`/`warning`/`done`/`error` 事件；`templateGen.agentDownload` 支持下载整个沙箱为 ZIP 文件。
+API 按功能分组暴露（health、config、project、typoCheck、expressionOpt、terminologyCheck、formulaOCR、tableOCR、templateGen、codeReview、compile、gitDiff、styleModify、formatConverter、bibManager、writingChat），LLM 相关接口自动注入 `language` 参数。`templateGen.agentGenerate` 通过 `fetch` reader 解析 SSE 流（与 `writingChat.send` 同模式），实时推送 `plan`/`tool_call`/`tool_result`/`compile`/`warning`/`done`/`error` 事件；`templateGen.agentDownload` 支持下载整个沙箱为 ZIP 文件。
 
 ## 工具模块 `utils/errorMessages.js`
 

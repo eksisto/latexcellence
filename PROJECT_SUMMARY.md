@@ -57,7 +57,7 @@ latexcellence/
 │       ├── template_gen/            # 模板生成（含自主 Agent）
 │       ├── formula_ocr/             # 公式 OCR
 │       ├── table_ocr/               # 表格 OCR
-│       ├── markdown_converter/      # Markdown→LaTeX
+│       ├── format_converter/        # 格式转换
 │       ├── style_modify/            # 样式修改
 │       ├── writing_chat/            # 写作助手聊天
 │       ├── bib_manager/             # 参考文献管理
@@ -108,7 +108,7 @@ latexcellence/
 | template_gen | 模板生成（自主 Agent） | router.py, service.py, agent.py, cleanup.py | ✓ | ✗ |
 | formula_ocr | 图片→LaTeX 公式 | router.py, service.py | ✓(Vision) | ✗ |
 | table_ocr | 图片→LaTeX 表格 | router.py, service.py | ✓(Vision) | ✗ |
-| markdown_converter | MD→LaTeX(pandoc) | router.py, service.py | ✓(宏包分析) | ✗ |
+| format_converter | 格式转换(pandoc) | router.py, service.py | ✓(宏包分析) | ✗ |
 | style_modify | 自然语言修改样式 | router.py, service.py | ✓ | ✗ |
 | writing_chat | 写作助手对话 | router.py, service.py, context.py, models.py, prompt_manager.py | ✓ | ✗ |
 | bib_manager | 参考文献管理 | router.py, service.py, models.py, style_registry.py | ✓ | ✗ |

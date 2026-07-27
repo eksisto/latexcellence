@@ -13,7 +13,7 @@ const ALL_ENABLED = {
   code_review: true,
   compile: true,
   git_diff: true,
-  markdown_converter: true,
+  format_converter: true,
   terminology_check: true,
   writing_chat: true,
   bib_manager: true,

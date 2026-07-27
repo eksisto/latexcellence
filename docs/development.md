@@ -81,7 +81,7 @@ latexcellence/
 │       ├── template_gen/           # 模板生成
 │       ├── code_review/            # LaTeX 代码审查
 │       ├── compile/                # 自动编译
-│       ├── markdown_converter/     # Markdown 转 LaTeX
+│       ├── format_converter/       # 文档格式转换
 │       ├── style_modify/           # 样式修改
 │       └── git_diff/               # Git 差异高亮
 │
