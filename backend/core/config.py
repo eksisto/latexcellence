@@ -106,6 +106,8 @@ class CompileConfig(BaseModel):
 
     enabled: bool = True  # 是否启用
     latexmk_timeout: int = 120  # latexmk 编译超时时间（秒）
+    engine: str = "auto"  # 编译引擎：auto/pdflatex/xelatex/lualatex
+    pdfa: bool = False  # 是否启用 PDF/A-2b 归档格式输出
 
 
 class GitDiffConfig(BaseModel):
