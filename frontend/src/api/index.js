@@ -466,6 +466,34 @@ export const api = {
       `${BASE_URL}/terminology-check/stream/${encodeURIComponent(workspaceId)}?file_path=${encodeURIComponent(filePath)}&resolve_input=${resolveInput}`,
   },
 
+  /* ---- 逐段翻译 ---- */
+  paragraphTranslate: {
+    preview: (filePath, workspaceId, resolveInput = false) =>
+      request(
+        appendWs(
+          `/paragraph-translate/preview?file_path=${encodeURIComponent(filePath)}&resolve_input=${resolveInput}`,
+          workspaceId,
+        ),
+      ),
+    translate: (data, workspaceId) =>
+      request(appendWs("/paragraph-translate/translate", workspaceId), {
+        method: "POST",
+        body: JSON.stringify({ ...data, language: getUiLanguage() }),
+      }),
+    apply: (data, workspaceId) =>
+      request(appendWs("/paragraph-translate/apply", workspaceId), {
+        method: "POST",
+        body: JSON.stringify(data),
+      }),
+    stream: (
+      workspaceId,
+      filePath,
+      resolveInput = false,
+      targetLanguage = "English",
+    ) =>
+      `${BASE_URL}/paragraph-translate/stream/${encodeURIComponent(workspaceId)}?file_path=${encodeURIComponent(filePath)}&resolve_input=${resolveInput}&language=${getUiLanguage()}&target_language=${encodeURIComponent(targetLanguage)}`,
+  },
+
   /* ---- 参考文献管理 ---- */
   bibManager: {
     analyzeFormat: (example) =>

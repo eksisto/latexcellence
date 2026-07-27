@@ -15,6 +15,7 @@ const ALL_ENABLED = {
   git_diff: true,
   format_converter: true,
   terminology_check: true,
+  paragraph_translate: true,
   writing_chat: true,
   bib_manager: true,
   web_search: true,

@@ -77,6 +77,10 @@
           "title": "Terminology Check",
           "desc": "Check terminology consistency in capitalization, abbreviations, etc."
         },
+        "paragraphTranslate": {
+          "title": "Paragraph Translation",
+          "desc": "Translate paragraphs one by one while preserving LaTeX structure"
+        },
         "code_review": {
           "title": "LaTeX Code Review",
           "desc": "Format source code, eliminate code smells, and align with best practices"
@@ -173,6 +177,30 @@
       "applying": "Applying changes in batch...",
       "applyingDescription": "{{count}} paragraphs total",
       "applyAllFailed": "Batch apply failed"
+    },
+    "paragraphTranslate": {
+      "title": "Paragraph Translation",
+      "noProjectTitle": "No project opened",
+      "noProjectDesc": "Open a project in the workspace first to use Paragraph Translation",
+      "checkLoading": "Translating...",
+      "checkSuccess": "Completed translation of {{count}} paragraphs",
+      "applySuccess": "Applied translation to paragraph {{idx}}",
+      "applyAllSuccess": "Applied translation to {{count}} paragraphs",
+      "applyAllEmpty": "No translations to apply",
+      "noTranslation": "No translation needed for this paragraph",
+      "translated": "Translated",
+      "translation": "Translation",
+      "targetLanguage": "Target Language",
+      "otherLanguage": "Other",
+      "customLanguagePlaceholder": "Enter language name",
+      "translateButton": "Start Translation",
+      "translating": "Translating...",
+      "paragraphPreviewTitle": "Paragraph Preview ({{count}})",
+      "paragraphPreviewDesc": "These paragraphs will be translated. Click \"Start Translation\" to begin",
+      "features": {
+        "title": "Paragraph Translation",
+        "desc": "Translate paragraphs one by one while preserving LaTeX structure"
+      }
     },
     "code_review": {
       "title": "LaTeX Code Review",
@@ -588,6 +616,7 @@
       "featureFormatConvert": "Format Converter",
       "featureStyleModify": "LaTeX Style Modifier",
       "featureTerminologyCheck": "Terminology Consistency Check",
+      "featureParagraphTranslate": "Paragraph Translation",
       "featureWritingChat": "Writing Assistant Chat",
       "featureWritingChatWebSearch": "Writing Assistant Web Search",
       "featureBibManager": "Bib Manager",

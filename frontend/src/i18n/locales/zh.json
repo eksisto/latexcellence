@@ -74,6 +74,10 @@
           "title": "术语一致性检查",
           "desc": "检测术语大小写、缩写、中英混用等一致性问题"
         },
+        "paragraphTranslate": {
+          "title": "逐段翻译",
+          "desc": "按段落逐一翻译，保留 LaTeX 结构不被破坏"
+        },
         "code_review": {
           "title": "LaTeX 代码审查",
           "desc": "格式化源码，消除坏味道，贴近最佳实践"
@@ -170,6 +174,30 @@
       "applying": "正在批量应用修改...",
       "applyingDescription": "共 {{count}} 个段落",
       "applyAllFailed": "批量应用失败"
+    },
+    "paragraphTranslate": {
+      "title": "逐段翻译",
+      "noProjectTitle": "未打开项目",
+      "noProjectDesc": "转到项目工作区，打开一个项目后即可使用逐段翻译功能",
+      "checkLoading": "正在翻译...",
+      "checkSuccess": "完成翻译 {{count}} 个段落",
+      "applySuccess": "已应用段落 {{idx}} 的翻译",
+      "applyAllSuccess": "已批量应用 {{count}} 个段落的翻译",
+      "applyAllEmpty": "没有可应用的翻译",
+      "noTranslation": "此段落无需翻译",
+      "translated": "已翻译",
+      "translation": "翻译",
+      "targetLanguage": "目标语言",
+      "otherLanguage": "其他",
+      "customLanguagePlaceholder": "输入语言名称",
+      "translateButton": "开始翻译",
+      "translating": "翻译中...",
+      "paragraphPreviewTitle": "段落预览（{{count}}）",
+      "paragraphPreviewDesc": "以下是即将翻译的段落，点击「开始翻译」以执行",
+      "features": {
+        "title": "逐段翻译",
+        "desc": "按段落逐一翻译，保留 LaTeX 结构不被破坏"
+      }
     },
     "code_review": {
       "title": "LaTeX 代码审查",
@@ -585,6 +613,7 @@
       "featureFormatConvert": "格式转换",
       "featureStyleModify": "LaTeX 样式修改",
       "featureTerminologyCheck": "术语一致性检查",
+      "featureParagraphTranslate": "逐段翻译",
       "featureWritingChat": "写作助手 Chat",
       "featureWritingChatWebSearch": "写作助手允许联网搜索",
       "featureBibManager": "参考文献管理",

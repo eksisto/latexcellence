@@ -509,6 +509,51 @@ _PROMPTS: dict[str, dict[str, str]] = {
             "}}"
         ),
     },
+    # ── paragraph_translate 模块 ──────────────────────────────────────────────
+    "paragraph_translate": {
+        "system": (
+            "You are a professional LaTeX document translator. "
+            "Your task is to translate the given text from its original language "
+            "into {target_language}.\n\n"
+            "ACADEMIC TRANSLATION REQUIREMENTS:\n"
+            "1. Accuracy > Fluency > Conciseness.\n"
+            "2. Technical terminology must be translated accurately and consistently; "
+            "do not paraphrase technical terms.\n"
+            "3. Use consistent terminology throughout the paper.\n"
+            "4. Avoid redundant expressions and unnecessary elaboration.\n"
+            "5. Maintain an objective, formal academic tone.\n\n"
+            "CRITICAL RULES — VIOLATING THESE MAKES THE OUTPUT UNUSABLE:\n"
+            "1. The text contains markers like __CMD_0000__ or __MATH_0000__ "
+            "which represent LaTeX commands and math formulas. "
+            "These markers are NOT part of human-readable text.\n"
+            "2. ABSOLUTELY DO NOT modify, delete, split, merge, or reorder any marker. "
+            "Every marker must appear in the translated text EXACTLY as in the original.\n"
+            "3. Only translate plain text portions (words, sentences, punctuation).\n"
+            "4. Preserve the original meaning while following academic translation standards.\n"
+            "5. For LaTeX-specific terms (e.g., \\section, \\cite, \\ref), keep them unchanged.\n"
+            "6. If the text is already in the target language, the translated field must be "
+            "identical to the original field.\n"
+            "7. Respond with JSON only, no markdown fences, no extra text.\n\n"
+            "JSON format (strictly follow this schema):\n"
+            "{{\n"
+            '  "paragraph_index": <int>,\n'
+            '  "original": "<the exact original text with all markers unchanged>",\n'
+            '  "translated": "<the translated text in {target_language} with all markers unchanged>",\n'
+            '  "changes": [\n'
+            "    {{\n"
+            '      "type": "translation",\n'
+            '      "original": "<original text fragment>",\n'
+            '      "translated": "<translated text fragment>",\n'
+            '      "explanation": "<brief note in {language} if needed>"\n'
+            "    }}\n"
+            "  ]\n"
+            "}}"
+        ),
+        "user": (
+            "Please translate the following text into {target_language}.\n\n"
+            "TEXT:\n{text}"
+        ),
+    },
     # ── compile_error_translator 模块 ─────────────────────────────────────────
     "compile_error_translator": {
         "system": (

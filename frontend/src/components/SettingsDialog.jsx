@@ -113,6 +113,7 @@ export default function SettingsDialog() {
         format_converter: config.features.format_converter.enabled,
         style_modify: config.features.style_modify.enabled,
         terminology_check: config.features.terminology_check.enabled,
+        paragraph_translate: config.features.paragraph_translate.enabled,
         writing_chat: config.features.writing_chat.enabled,
         bib_manager: config.features.bib_manager.enabled,
         web_search: config.features.web_search.enabled,
@@ -582,6 +583,11 @@ export default function SettingsDialog() {
               label={t("settings.featureTerminologyCheck")}
               checked={config.features.terminology_check.enabled}
               onChange={(v) => set("features.terminology_check.enabled", v)}
+            />
+            <CheckboxField
+              label={t("settings.featureParagraphTranslate")}
+              checked={config.features.paragraph_translate.enabled}
+              onChange={(v) => set("features.paragraph_translate.enabled", v)}
             />
             <CheckboxField
               label={t("settings.featureWritingChat")}

@@ -11,6 +11,7 @@
 | 错字查找 | [typo_check.md](modules/typo_check.md) | LaTeX 源码的错字检查与修正 |
 | 表达优化 | [expression_opt.md](modules/expression_opt.md) | 学术语言表达润色 |
 | 术语一致性检查 | [terminology_check.md](modules/terminology_check.md) | 术语一致性检查 |
+| 逐段翻译 | [paragraph_translate.md](modules/paragraph_translate.md) | 按段落翻译为目标语言，保留 LaTeX 结构 |
 | LaTeX 代码审查 | [code_review.md](modules/code_review.md) | 工具格式化 + LLM 智能审查 |
 | LaTeX 样式修改 | [style_modify.md](modules/style_modify.md) | 自然语言描述修改样式 |
 | 写作助手 | [writing_chat.md](modules/writing_chat.md) | 多轮对话式写作辅助 |
@@ -49,7 +50,7 @@
 
 ### BaseParagraphCheckService 基类
 
-四个逐段检查模块（typo_check / expression_opt / code_review / terminology_check）共享 `BaseParagraphCheckService` 基类和 `ApplyChangeItem` 共享模型。子类通过 6 个 hooks 定制行为。
+多个逐段检查模块（typo_check / expression_opt / code_review / terminology_check / paragraph_translate）共享 `BaseParagraphCheckService` 基类和 `ApplyChangeItem` 共享模型。子类通过多个 hooks 定制行为。
 
 ### CheckOperationContext
 
@@ -61,14 +62,14 @@
 
 ### Marker 保护策略
 
-- **使用 Marker 保护**：typo_check, expression_opt, terminology_check, code_review
+- **使用 Marker 保护**：typo_check, expression_opt, terminology_check, code_review, paragraph_translate
 - **不使用**：formula_ocr, table_ocr, compile, format_converter, style_modify, git_diff, template_gen
 
 ### LLM 调用模式
 
 | 模式 | 模块 |
 | --- | --- |
-| 逐段检查 + SSE 流式 | typo_check, expression_opt, terminology_check, code_review |
+| 逐段检查 + SSE 流式 | typo_check, expression_opt, terminology_check, code_review, paragraph_translate |
 | 多轮对话 | writing_chat |
 | 单次请求-响应 | formula_ocr, table_ocr, template_gen, style_modify, compile, git_diff, format_converter |
 | 无 LLM | compile（编译本身） |

@@ -150,6 +150,13 @@ class TerminologyCheckConfig(BaseModel):
     batch_size: int = 5  # 每批发送给 LLM 的段落数
 
 
+class ParagraphTranslateConfig(BaseModel):
+    """逐段翻译模块配置"""
+
+    enabled: bool = True  # 是否启用
+    batch_size: int = 5  # 每批发送给 LLM 的段落数
+
+
 class WritingChatConfig(BaseModel):
     """写作助手 Chat 模块配置"""
 
@@ -218,6 +225,7 @@ class FeaturesConfig(BaseModel):
     format_converter: FormatConverterConfig = FormatConverterConfig()
     style_modify: StyleModifyConfig = StyleModifyConfig()
     terminology_check: TerminologyCheckConfig = TerminologyCheckConfig()
+    paragraph_translate: ParagraphTranslateConfig = ParagraphTranslateConfig()
     writing_chat: WritingChatConfig = WritingChatConfig()
     bib_manager: BibManagerConfig = BibManagerConfig()
     web_search: WebSearchConfig = WebSearchConfig()

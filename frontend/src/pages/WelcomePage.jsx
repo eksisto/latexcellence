@@ -23,6 +23,7 @@ import {
   BookOpen,
   MessagesSquare,
   BookMarked,
+  Languages,
 } from "lucide-react";
 import useEnabledFeatures from "@/hooks/useEnabledFeatures";
 
@@ -107,6 +108,13 @@ const featureGroups = [
         to: "/terminology-check",
         icon: BookOpen,
         id: "terminology_check",
+      },
+      {
+        titleKey: "paragraphTranslate.title",
+        descKey: "paragraphTranslate.desc",
+        to: "/paragraph-translate",
+        icon: Languages,
+        id: "paragraph_translate",
       },
     ],
   },

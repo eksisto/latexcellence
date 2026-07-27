@@ -74,6 +74,8 @@ const useStore = create(
       codeReviewResults: [],
       terminologyParagraphs: [],
       terminologyResults: [],
+      paragraphTranslateParagraphs: [],
+      paragraphTranslateResults: [],
 
       /* ===== PDF 预览（不持久化） ===== */
       pdfUrl: null,
@@ -88,6 +90,7 @@ const useStore = create(
         expressionOpt: false,
         codeReview: false,
         terminologyCheck: false,
+        paragraphTranslate: false,
         writingChat: false,
         bibManager: false,
       },
@@ -171,6 +174,26 @@ const useStore = create(
           set({ terminologyResults: results });
         }
       },
+      setParagraphTranslateParagraphs: (paras) => {
+        if (typeof paras === "function") {
+          set((state) => ({
+            paragraphTranslateParagraphs: paras(
+              state.paragraphTranslateParagraphs,
+            ),
+          }));
+        } else {
+          set({ paragraphTranslateParagraphs: paras });
+        }
+      },
+      setParagraphTranslateResults: (results) => {
+        if (typeof results === "function") {
+          set((state) => ({
+            paragraphTranslateResults: results(state.paragraphTranslateResults),
+          }));
+        } else {
+          set({ paragraphTranslateResults: results });
+        }
+      },
       setPdfUrl: (url) => set({ pdfUrl: url }),
       setCompileResult: (result) => set({ compileResult: result }),
       setCompileLoading: (loading) => set({ compileLoading: loading }),
@@ -229,6 +252,8 @@ const useStore = create(
           codeReviewParagraphs: [],
           terminologyResults: [],
           terminologyParagraphs: [],
+          paragraphTranslateResults: [],
+          paragraphTranslateParagraphs: [],
           writingChatMessages: [],
           writingChatCompressed: false,
           checkProgress: null,
@@ -257,6 +282,8 @@ const useStore = create(
         codeReviewParagraphs: state.codeReviewParagraphs,
         terminologyResults: state.terminologyResults,
         terminologyParagraphs: state.terminologyParagraphs,
+        paragraphTranslateResults: state.paragraphTranslateResults,
+        paragraphTranslateParagraphs: state.paragraphTranslateParagraphs,
         writingChatCurrentSessionId: state.writingChatCurrentSessionId,
       }),
     },

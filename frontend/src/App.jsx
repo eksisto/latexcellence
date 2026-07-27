@@ -20,6 +20,9 @@ const CodeReviewPage = lazy(() => import("./pages/CodeReviewPage"));
 const FormatConvertPage = lazy(() => import("./pages/FormatConvertPage"));
 const GitDiffPage = lazy(() => import("./pages/GitDiffPage"));
 const TerminologyCheckPage = lazy(() => import("./pages/TerminologyCheckPage"));
+const ParagraphTranslatePage = lazy(
+  () => import("./pages/ParagraphTranslatePage"),
+);
 const WritingChatPage = lazy(() => import("./pages/WritingChatPage"));
 const BibManagerPage = lazy(() => import("./pages/BibManagerPage"));
 
@@ -87,6 +90,10 @@ export default function App() {
             <Route path="/template-gen" element={<TemplateGenPage />} />
             <Route path="/typo-check" element={<TypoCheckPage />} />
             <Route path="/expression-opt" element={<ExpressionOptPage />} />
+            <Route
+              path="/paragraph-translate"
+              element={<ParagraphTranslatePage />}
+            />
             <Route path="/code-review" element={<CodeReviewPage />} />
             <Route path="/format-convert" element={<FormatConvertPage />} />
             <Route path="/git-diff" element={<GitDiffPage />} />

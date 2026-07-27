@@ -74,6 +74,7 @@ latexcellence/
 │       ├── typo_check/             # 错字查找
 │       ├── expression_opt/         # 表达优化
 │       ├── terminology_check/      # 术语一致性检查
+│       ├── paragraph_translate/    # 逐段翻译
 │       ├── writing_chat/           # 写作助手聊天
 │       ├── bib_manager/            # 参考文献管理
 │       ├── formula_ocr/            # 公式识别

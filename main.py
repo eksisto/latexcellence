@@ -37,6 +37,9 @@ from backend.modules.format_converter.router import (
 )
 from backend.modules.style_modify.router import router as style_modify_router
 from backend.modules.terminology_check.router import router as terminology_check_router
+from backend.modules.paragraph_translate.router import (
+    router as paragraph_translate_router,
+)
 from backend.modules.writing_chat.router import router as writing_chat_router
 from backend.modules.bib_manager.router import router as bib_manager_router
 from backend.utils.search_router import router as search_router
@@ -124,6 +127,7 @@ async def config_status():
                 "git_diff",
                 "format_converter",
                 "terminology_check",
+                "paragraph_translate",
                 "writing_chat",
                 "bib_manager",
                 "web_search",
@@ -171,6 +175,7 @@ app.include_router(git_diff_router)
 app.include_router(format_converter_router)
 app.include_router(style_modify_router)
 app.include_router(terminology_check_router)
+app.include_router(paragraph_translate_router)
 app.include_router(search_router)
 app.include_router(writing_chat_router)
 app.include_router(bib_manager_router)

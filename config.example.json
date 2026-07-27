@@ -76,6 +76,10 @@
       "enabled": true,
       "batch_size": 5
     },
+    "paragraph_translate": {
+      "enabled": true,
+      "batch_size": 5
+    },
     "writing_chat": {
       "enabled": true,
       "compression_threshold_tokens": 200000,
