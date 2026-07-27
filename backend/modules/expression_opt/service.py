@@ -38,7 +38,6 @@ class ExpressionOptResult(BaseModel):
     """LLM 表达优化输出——对应 DEVELOPMENT.md §2.1 JSON 协议"""
 
     paragraph_index: int
-    original: str
     optimized: str
     changes: list[ExpressionChangeItem] = []
 
@@ -140,11 +139,19 @@ class ExpressionOptService(BaseParagraphCheckService):
         file_path: str,
         plain_text: str,
     ) -> dict[str, Any]:
+        # changes[] 的 original/optimized 还原 marker → 前端干净展示
+        # optimized 字段保留 marker → apply_changes 依赖 marker_map 写回
+        changes, _ = self._restore_change_markers(
+            [c.model_dump() for c in validated.changes],
+            file_path,
+            idx,
+            ("original", "optimized"),
+        )
         return {
             "paragraph_index": idx,
-            "original": validated.original,
+            "original": original_text,
             "optimized": validated.optimized,
-            "changes": [c.model_dump() for c in validated.changes],
+            "changes": changes,
             "text": original_text,
             "plain_text": plain_text,
             "file_path": file_path,

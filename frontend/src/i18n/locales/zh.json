@@ -186,7 +186,7 @@
       "applyAllEmpty": "没有可应用的翻译",
       "noTranslation": "此段落无需翻译",
       "translated": "已翻译",
-      "translation": "翻译",
+      "translation": "翻译：",
       "targetLanguage": "目标语言",
       "otherLanguage": "其他",
       "customLanguagePlaceholder": "输入语言名称",

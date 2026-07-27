@@ -75,13 +75,14 @@ BaseParagraphCheckService
 ├── LLM 编排：批量处理 + 流式进度推送（SSE）
 ├── 结果写回：MD5 校验 → 原子写入
 │
-└── 6 个 Hook（子类定制点）：
-    ├── _get_system_prompt()       → 系统提示词（含 marker 保护约束）
-    ├── _build_user_content(text)  → 构建 LLM User 内容
-    ├── _get_model_cls()           → 返回 Pydantic 响应模型类
-    ├── _get_llm_params()          → LLM 调用参数（temperature 等）
-    ├── _get_batch_size()          → 批处理大小
-    └── _build_success_result(...) → 从 validated model 构建成功结果 dict
+└── 多个 Hook（子类定制点）：
+    ├── _get_system_prompt()              → 系统提示词（含 marker 保护约束）
+    ├── _build_user_content(text)         → 构建 LLM User 内容
+    ├── _get_model_cls()                  → 返回 Pydantic 响应模型类
+    ├── _get_llm_params()                 → LLM 调用参数（temperature 等）
+    ├── _get_batch_size()                 → 批处理大小
+    ├── _build_success_result(...)        → 从 validated model 构建成功结果 dict
+    └── _restore_change_markers(...)      → 将 changes 中的 marker 还原为 LaTeX（供展示）
 ```
 
 子类只需实现 Hook 方法即可获得完整的段落检查能力，无需重复实现文件操作、marker 管理、重试逻辑等基础设施。
@@ -184,6 +185,19 @@ for marker, original in sorted(
 ```
 
 如果没有这个排序，`__CMD_001__` 会错误地匹配 `__CMD_0010__` 的前 10 个字符。
+
+### 2.6 结果展示时的双通道设计
+
+逐段检查结果中的文本走两条数据通道，服务于不同消费者：
+
+| 字段 | 内容 | 消费者 |
+| --- | --- | --- |
+| `corrected` / `optimized` / `translated` | 含 marker 的原始 LLM 输出 | `apply_changes()`：依赖 marker_map 将 marker 还原后再写入 `.tex` 文件 |
+| `changes[].original` / `changes[].corrected` | 已还原 marker 的干净 LaTeX | 前端结果卡片：用户直接阅读的"原文 vs 修改后"对比 |
+
+**设计动机**：`corrected` 字段必须保留 marker，因为 `apply_changes()` 在写回文件前会调用 `restore_from_markers()` 统一还原。若在 `_build_success_result` 中提前还原，apply 链路会因找不到 marker 而误判或跳过写入。而 `changes[]` 仅用于前端展示，还原后用户看到的是 LaTeX 命令（如 `\textbf{}`）而非 marker（如 `__CMD_0000__`），便于直观对比。
+
+**统一入口**：基类提供 `_restore_change_markers(changes, file_path, para_index, fields)` 方法，内部通过 `self._marker_maps` 查询对应的 marker_map 并执行还原。该方法同时返回 `(restored_changes, marker_map)`，让需要额外还原顶层字段的服务（如 paragraph_translate）可直接复用 marker_map，避免对 `self._marker_maps` 重复查询。
 
 ---
 

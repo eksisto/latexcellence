@@ -265,7 +265,8 @@ class TestBuildResults:
 
         r1 = results[1]
         assert len(r1["changes"]) == 0
-        assert r1["corrected"] == r1["original"]
+        assert r1["corrected"] == r1["plain_text"]
+        assert r1["original"] == "tex1"
 
     def test_build_results_recommended_in_variants(self, service):
         """推荐项本身在 variants 中不被替换。"""

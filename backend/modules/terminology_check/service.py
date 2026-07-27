@@ -335,8 +335,8 @@ class TerminologyCheckService(BaseParagraphCheckService):
         for data in all_para_data:
             idx = data["para_index"]
             f = data.get("file_path", "")
-            original = data["plain_text"]
-            corrected = original
+            original = data["text"]
+            corrected = data["plain_text"]
             changes: list[dict[str, Any]] = []
 
             para_terms = terms_by_para.get((f, idx), [])
@@ -367,15 +367,14 @@ class TerminologyCheckService(BaseParagraphCheckService):
                         change["original"], change["corrected"]
                     )
 
-            mark_original = original
-            mark_corrected = corrected if changes else mark_original
+            mark_corrected = corrected if changes else data["plain_text"]
 
             # 收集此段落的所有术语（去重）
             terms_found = list(dict.fromkeys(para_terms))
 
             result = {
                 "paragraph_index": idx,
-                "original": mark_original,
+                "original": original,
                 "corrected": mark_corrected,
                 "terms": terms_found,
                 "changes": changes,
@@ -404,7 +403,7 @@ class TerminologyCheckService(BaseParagraphCheckService):
             results.append(
                 {
                     "paragraph_index": data["para_index"],
-                    "original": data["plain_text"],
+                    "original": data["text"],
                     "corrected": data["plain_text"],
                     "terms": terms_found,
                     "changes": [],

@@ -107,10 +107,9 @@ class TestTypoCheckResultModel:
         assert change.explanation == ""
         assert change.position is None
 
-    def test_missing_required_field(self):
+    def test_missing_corrected_field(self):
         data = {
             "paragraph_index": 0,
-            "corrected": "text",
         }
         with pytest.raises(ValidationError):
             TypoCheckResult.model_validate(data)
@@ -118,7 +117,6 @@ class TestTypoCheckResultModel:
     def test_wrong_type(self):
         data = {
             "paragraph_index": "not_a_number",
-            "original": "text",
             "corrected": "text",
             "changes": [],
         }
@@ -533,7 +531,7 @@ class TestEmptyParagraphHandling:
     async def test_empty_result(self, service):
         result = service._make_fallback(0, "", "original tex", "main.tex")
         assert result["paragraph_index"] == 0
-        assert result["original"] == ""
+        assert result["original"] == "original tex"
         assert result["corrected"] == ""
         assert result["changes"] == []
         assert result["text"] == "original tex"

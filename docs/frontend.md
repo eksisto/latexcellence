@@ -55,7 +55,7 @@ API 按功能分组暴露（health、config、project、typoCheck、expressionOp
 | 组件 | 功能 |
 | --- | --- |
 | `DiffViewer.jsx` | 显示 LLM 检测到的修改（type 标签、原文/修正文、解释） |
-| `MarkerText.jsx` | 将 `__CMD_NNNN__` 等 marker 解析为彩色内联标签 |
+| `MarkerText.jsx` | 将 `__CMD_NNNN__` 等 marker 解析为彩色内联标签。仅用于段落预览等含 marker 的展示场景。**结果卡片中**的 `change.original`/`change.corrected` 等字段因后端已还原 marker，直接以文本渲染，无需 `MarkerText` 包裹 |
 | `ParagraphContext.jsx` | 展开显示当前段落前后上下文 |
 | `ProjectExplorer.jsx` | 递归文件树：目录展开/折叠，文件选择 |
 | `PDFPreview.jsx` | iframe 嵌入 PDF 预览 |

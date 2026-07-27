@@ -53,3 +53,7 @@ Prefix: `/api/typo-check`, Tag: `typo_check`
 | GET | `/stream/{workspace_id}` | SSE 流式推送检查进度 |
 
 请求模型：`TypoCheckRequest`（file_path, paragraph_indices, resolve_input）、`TypoApplyRequest`（file_path, changes, operation_id）
+
+## 结果展示
+
+后端返回的 `changes[]` 中，`original` 和 `corrected` 字段已由 `_build_success_result` 调用 `_restore_change_markers()` 预先将 marker 还原为原始 LaTeX（如 `\textbf{}`）。前端直接展示还原后的文本，无需额外处理 marker。`corrected` 顶层字段则保留 marker，供 apply 流程使用。

@@ -189,7 +189,7 @@
       "applyAllEmpty": "No translations to apply",
       "noTranslation": "No translation needed for this paragraph",
       "translated": "Translated",
-      "translation": "Translation",
+      "translation": "Translation: ",
       "targetLanguage": "Target Language",
       "otherLanguage": "Other",
       "customLanguagePlaceholder": "Enter language name",

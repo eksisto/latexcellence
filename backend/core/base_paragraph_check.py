@@ -298,7 +298,7 @@ class BaseParagraphCheckService:
         """
         return {
             "paragraph_index": idx,
-            "original": text,
+            "original": original_text,
             self._output_field: text,
             "changes": [],
             "text": original_text,
@@ -714,6 +714,53 @@ class BaseParagraphCheckService:
     def _get_batch_size(self) -> int:
         """返回批次大小。"""
         raise NotImplementedError
+
+    def _restore_change_markers(
+        self,
+        changes: list[dict[str, Any]],
+        file_path: str,
+        para_index: int,
+        fields: tuple[str, ...] = ("original", "corrected", "optimized", "translated"),
+    ) -> tuple[list[dict[str, Any]], dict[str, str]]:
+        r"""
+        将 changes 中指定字段的 marker（如 __MATH_0001__）还原为原始 LaTeX。
+
+        ── 设计背景 ───────────────────────────────────────────────
+        逐段检查结果中的文本走两条数据通道，服务于不同消费者：
+
+        │ 字段          │ 内容             │ 消费者               │
+        │──────────────│─────────────────│──────────────────────│
+        │ corrected     │ 含 marker 的文本 │ handleApplyChange    │
+        │ changes[].original │ 还原后的 LaTeX │ 前端结果卡片（只读展示） │
+        │ changes[].corrected│ 还原后的 LaTeX │ 前端结果卡片（只读展示） │
+
+        corrected 字段必须保留 marker，因为 apply_changes() 依赖
+        marker_map 将 marker 还原后再写入 .tex 文件。若预先还原，
+        apply 链路会因找不到 marker 而误判或跳过写入。
+        而 changes[] 仅用于前端展示，还原后用户看到干净的 LaTeX，
+        便于"原文 vs 修正后"对比阅读。
+
+        ── 返回 tuple 的原因 ─────────────────────────────────────
+        某些服务的 _build_success_result 不仅需要还原 changes，
+        还需还原顶层字段（如 paragraph_translate 的 original/translated
+        因为该页面展示整段文本而非 change 片段）。返回 marker_map
+        让调用方无需再次 self._marker_maps.get().get() 重复查询，
+        避免代码重复和潜在不一致。
+
+        无 marker_map 时（如 context 过期），原样返回 changes 和空 dict，
+        调用方应据此跳过顶层还原，保持降级行为一致。
+        """
+        marker_map = self._marker_maps.get(file_path, {}).get(para_index, {})
+        if not marker_map:
+            return changes, marker_map
+        restored = []
+        for change in changes:
+            d = dict(change)
+            for field in fields:
+                if field in d and isinstance(d[field], str):
+                    d[field] = self._parser.restore_from_markers(d[field], marker_map)
+            restored.append(d)
+        return restored, marker_map
 
     def _build_success_result(
         self,

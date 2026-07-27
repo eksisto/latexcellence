@@ -38,7 +38,6 @@ _PROMPTS: dict[str, dict[str, str]] = {
             "JSON format (strictly follow this schema):\n"
             "{{\n"
             '  "paragraph_index": <int>,\n'
-            '  "original": "<the exact original text with all markers unchanged>",\n'
             '  "corrected": "<the corrected text with all markers unchanged>",\n'
             '  "changes": [\n'
             "    {{\n"
@@ -80,7 +79,6 @@ _PROMPTS: dict[str, dict[str, str]] = {
             "JSON format (strictly follow this schema):\n"
             "{{\n"
             '  "paragraph_index": <int>,\n'
-            '  "original": "<the exact original text with all markers unchanged>",\n'
             '  "optimized": "<the improved text with all markers unchanged>",\n'
             '  "changes": [\n'
             "    {{\n"
@@ -537,7 +535,6 @@ _PROMPTS: dict[str, dict[str, str]] = {
             "JSON format (strictly follow this schema):\n"
             "{{\n"
             '  "paragraph_index": <int>,\n'
-            '  "original": "<the exact original text with all markers unchanged>",\n'
             '  "translated": "<the translated text in {target_language} with all markers unchanged>",\n'
             '  "changes": [\n'
             "    {{\n"

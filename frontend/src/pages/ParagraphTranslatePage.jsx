@@ -133,6 +133,10 @@ export default function ParagraphTranslatePage() {
   };
 
   const renderResultCard = (result) => {
+    // 比较 translated 与 original 而非 plain_text：
+    // translated 和 original 均已还原 marker（由后端 _build_success_result 处理），
+    // 而 plain_text 仍含 marker。若用 plain_text 比较，"__CMD_0001__" ≠ "\\textbf"，
+    // 任何含 LaTeX 命令的段落都会被误判为 hasTranslation=true
     const hasTranslation = result.translated !== result.original;
     return (
       <Card
@@ -160,16 +164,16 @@ export default function ParagraphTranslatePage() {
                     <span className="text-muted-foreground text-xs">
                       {t("common:original")}
                     </span>
-                    <div className="mt-0.5 break-all text-foreground/60">
-                      <MarkerText text={result.original} />
+                    <div className="mt-0.5 whitespace-pre-wrap break-all text-foreground/60">
+                      {result.original}
                     </div>
                   </div>
                   <div>
                     <span className="text-muted-foreground text-xs">
                       {t("pages:paragraphTranslate.translation")}
                     </span>
-                    <div className="mt-0.5 break-all font-medium">
-                      <MarkerText text={result.translated} />
+                    <div className="mt-0.5 whitespace-pre-wrap break-all font-medium">
+                      {result.translated}
                     </div>
                   </div>
                 </div>

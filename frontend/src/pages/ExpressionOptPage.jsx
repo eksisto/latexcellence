@@ -658,18 +658,14 @@ export default function ExpressionOptPage() {
                                                   <span className="text-muted-foreground whitespace-nowrap mt-0.5">
                                                     {t("common:original")}
                                                   </span>
-                                                  <span className="line-through text-foreground/60 break-all mt-0.5">
-                                                    <MarkerText
-                                                      text={change.original}
-                                                    />
+                                                  <span className="line-through text-foreground/60 whitespace-pre-wrap break-all mt-0.5">
+                                                    {change.original}
                                                   </span>
                                                   <span className="text-muted-foreground whitespace-nowrap mt-0.5">
                                                     {t("common:modified")}
                                                   </span>
-                                                  <span className="font-medium break-all mt-0.5">
-                                                    <MarkerText
-                                                      text={change.optimized}
-                                                    />
+                                                  <span className="font-medium whitespace-pre-wrap break-all mt-0.5">
+                                                    {change.optimized}
                                                   </span>
                                                 </div>
                                               </li>
@@ -776,14 +772,14 @@ export default function ExpressionOptPage() {
                                         <span className="text-muted-foreground whitespace-nowrap mt-0.5">
                                           {t("common:original")}
                                         </span>
-                                        <span className="line-through text-foreground/60 break-all mt-0.5">
-                                          <MarkerText text={change.original} />
+                                        <span className="line-through text-foreground/60 whitespace-pre-wrap break-all mt-0.5">
+                                          {change.original}
                                         </span>
                                         <span className="text-muted-foreground whitespace-nowrap mt-0.5">
                                           {t("common:modified")}
                                         </span>
-                                        <span className="font-medium break-all mt-0.5">
-                                          <MarkerText text={change.optimized} />
+                                        <span className="font-medium whitespace-pre-wrap break-all mt-0.5">
+                                          {change.optimized}
                                         </span>
                                       </div>
                                     </li>

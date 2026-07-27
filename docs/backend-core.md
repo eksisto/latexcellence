@@ -134,13 +134,14 @@ class ProjectInfo:
 
 | 方法/属性 | 功能 |
 | --- | --- |
-| `BaseParagraphCheckService` | 抽象基类，定义 6 个 hooks 供子类实现 |
+| `BaseParagraphCheckService` | 抽象基类，定义多个 hooks 供子类实现 |
 | `_get_system_prompt()` | 返回 System Prompt（含 marker 保护约束） |
 | `_build_user_content(text)` | 构建发给 LLM 的 User 内容 |
 | `_get_model_cls()` | 返回结果 Pydantic 模型类 |
 | `_get_llm_params()` | 返回 LLM 调用参数（temperature 等） |
 | `_get_batch_size()` | 返回批处理大小（从配置读取） |
 | `_build_success_result(idx, validated, original_text, file_path, plain_text)` | 构建成功结果对象 |
+| `_restore_change_markers(changes, file_path, para_index, fields)` | 将 changes 中的 marker 还原为 LaTeX（供前端展示）；返回 `(restored_changes, marker_map)`，调用方可复用 marker_map |
 | `preview_paragraphs(file_path, resolve_input)` | 预览段落：提取 + marker 替换 → 返回纯文本 |
 | `_run_batch_check()` / `_run_stream_check()` | 执行检查：批量发送给 LLM 或 SSE 流式返回 + 校验 |
 | `apply_changes(file_path, changes, workspace_id, operation_id)` | 应用修改：还原 marker → 乐观锁校验 → 原子写入；冲突或 marker_map 缺失时跳过该段并返回 `errors` |

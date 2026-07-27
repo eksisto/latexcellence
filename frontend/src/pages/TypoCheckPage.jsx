@@ -132,14 +132,14 @@ export default function TypoCheckPage() {
                         <span className="text-muted-foreground whitespace-nowrap mt-0.5">
                           {t("common:original")}
                         </span>
-                        <span className="line-through text-foreground/60 break-all mt-0.5">
-                          <MarkerText text={change.original} />
+                        <span className="line-through text-foreground/60 whitespace-pre-wrap break-all mt-0.5">
+                          {change.original}
                         </span>
                         <span className="text-muted-foreground whitespace-nowrap mt-0.5">
                           {t("common:modified")}
                         </span>
-                        <span className="font-medium break-all mt-0.5">
-                          <MarkerText text={change.corrected} />
+                        <span className="font-medium whitespace-pre-wrap break-all mt-0.5">
+                          {change.corrected}
                         </span>
                       </div>
                     </li>

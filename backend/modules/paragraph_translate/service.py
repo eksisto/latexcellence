@@ -36,7 +36,6 @@ class ParagraphTranslateResult(BaseModel):
     """LLM 翻译输出"""
 
     paragraph_index: int
-    original: str
     translated: str
     changes: list[TranslateChangeItem] = []
 
@@ -130,12 +129,33 @@ class ParagraphTranslateService(BaseParagraphCheckService):
         file_path: str,
         plain_text: str,
     ) -> dict[str, Any]:
+        # 与 typo_check / expression_opt 不同，本页面展示的是整段原文和译文
+        # （而非 change 片段），因此除 changes[] 外还需还原顶层 original 和
+        # translated 字段的 marker。marker_map 由 _restore_change_markers 返回，
+        # 避免对 self._marker_maps 重复 get().get() 查询。
+        changes, marker_map = self._restore_change_markers(
+            [c.model_dump() for c in validated.changes],
+            file_path,
+            idx,
+            ("original", "translated"),
+        )
         return {
             "paragraph_index": idx,
-            "original": validated.original,
-            "translated": validated.translated,
-            "changes": [c.model_dump() for c in validated.changes],
+            "original": (
+                self._parser.restore_from_markers(original_text, marker_map)
+                if marker_map
+                else original_text
+            ),
+            "translated": (
+                self._parser.restore_from_markers(validated.translated, marker_map)
+                if marker_map
+                else validated.translated
+            ),
+            "changes": changes,
             "text": original_text,
+            # plain_text 保留 marker（不再用于前端对比），
+            # 前端 hasTranslation 改为比较 translated !== original
+            # 因为两者均已还原为干净的 LaTeX
             "plain_text": plain_text,
             "file_path": file_path,
         }
