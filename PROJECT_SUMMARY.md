@@ -61,7 +61,7 @@ latexcellence/
 │       ├── format_converter/        # 格式转换
 │       ├── style_modify/            # 样式修改
 │       ├── writing_chat/            # 写作助手聊天
-│       ├── bib_manager/             # 参考文献管理（含 DOI 多数据源查询）
+│       ├── bib_manager/             # 参考文献管理（含 DOI 多数据源查询、重复检测、文献库管理）
 │       │   └── providers/           # 可插拔 DOI 数据源提供者
 │       └── project_router.py        # 项目管理路由
 │
@@ -74,7 +74,8 @@ latexcellence/
 │       ├── pages/                   # 页面组件
 │       │   └── writing-chat/        # 写作聊天子组件（MessageBubble/EditOpCard/CaptchaDialog）
 │       ├── hooks/                   # 自定义 hook
-│       │   └── writing-chat/        # 写作聊天子 hooks（sessions/assistants/captcha/sse/utils）
+│       │   ├── writing-chat/        # 写作聊天子 hooks（sessions/assistants/captcha/sse/utils）
+│       │   └── bib-manager/         # 参考文献管理子 hooks（format_analysis/metadata_extraction/bibtex_generation/bib_file_save/latex_generation）
 │       ├── components/              # 共享组件 + ui 基座组件
 │       ├── theme/                   # 主题 CSS + useThemeManager.js
 │       ├── api/index.js             # 统一 API 层
@@ -114,7 +115,7 @@ latexcellence/
 | format_converter | 格式转换(pandoc) | router.py, service.py | ✓(宏包分析) | ✗ |
 | style_modify | 自然语言修改样式 | router.py, service.py | ✓ | ✗ |
 | writing_chat | 写作助手对话 | router.py, service.py, context.py, models.py, prompt_manager.py | ✓ | ✗ |
-| bib_manager | 参考文献管理 + DOI 多数据源查询 | router.py, service.py, provider_manager.py, providers/ | ✓(DOI 查询不依赖 LLM) | ✗ |
+| bib_manager | 参考文献管理 + DOI 多数据源查询 + 重复检测 + 文献库 | router.py, service.py, models.py, bib_parser.py, provider_manager.py, providers/ | ✓(DOI 查询不依赖 LLM) | ✗ |
 
 ## 核心设计思路
 

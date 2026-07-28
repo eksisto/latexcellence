@@ -21,6 +21,7 @@ bib_manager/
 ├── models.py                # Pydantic 请求/响应模型
 ├── router.py                # FastAPI 路由
 ├── service.py               # 业务逻辑编排
+├── bib_parser.py            # BibTeX 解析器（条目解析、规范化、重复检测工具函数）
 ├── style_registry.py        # 内置样式映射注册表
 ├── provider_manager.py      # DOI 数据源管理器（全局单例）
 └── providers/               # 可插拔数据源提供者
@@ -43,6 +44,7 @@ bib_manager/
 - `DoiLookupResult`（title, authors, year, journal, volume, issue, pages, doi, publisher, abstract, url, isbn, issn, keywords, data_source — 标识数据来源）
 - `DoiLookupRequest`（doi: str）
 - 各类请求体：`FormatAnalysisRequest`、`ExtractRequest`、`GenerateBibtexRequest`、`SaveBibRequest`
+- **文献库管理模型**：`ParseBibRequest`、`ParseBibResponse`、`DetectDuplicatesRequest`、`DetectDuplicatesResponse`、`DuplicateGroup`、`DeleteEntryRequest`、`UpdateEntryRequest`、`EntryStatsResponse`
 
 ## 多数据源架构（DOI 查询）
 
@@ -105,6 +107,11 @@ bib_manager/
 | `save_bib_entry(file_path, bibtex_code, cite_key)` | 写入 .bib（已存在则替换） |
 | `list_bib_files` | 列出项目中所有 .bib 文件 |
 | `list_formats` / `load_format` / `save_format` / `delete_format` | 格式配置 CRUD |
+| `parse_entries(file_path, workspace_id)` | 解析 .bib 文件为结构化条目列表 |
+| `detect_duplicates(file_path, workspace_id)` | 检测 .bib 文件中的重复条目（多策略：DOI/标题相似度/cite_key） |
+| `delete_entry(file_path, cite_key, workspace_id)` | 从 .bib 文件中删除指定条目 |
+| `update_entry(file_path, cite_key, bibtex_code, workspace_id)` | 更新 .bib 文件中的指定条目 |
+| `get_entry_stats(file_path, workspace_id)` | 获取 .bib 文件的条目统计信息（按类型/年份/DOI 覆盖率） |
 
 ## 样式注册表 `style_registry.py`
 
@@ -127,6 +134,11 @@ Prefix: `/api/bib-manager`
 | POST | `/save` | 写入 .bib 文件 |
 | GET | `/list-bib-files` | 列出 .bib 文件 |
 | GET/POST/DELETE | `/formats[/{name}]` | 格式配置 CRUD |
+| POST | `/parse-entries` | 解析 .bib 文件为结构化条目列表 |
+| POST | `/detect-duplicates` | 检测 .bib 文件中的重复条目 |
+| POST | `/delete-entry` | 从 .bib 文件中删除指定条目 |
+| POST | `/update-entry` | 更新 .bib 文件中的指定条目 |
+| GET | `/entry-stats` | 获取 .bib 文件的条目统计信息 |
 
 ## Provider 配置
 

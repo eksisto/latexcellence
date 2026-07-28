@@ -535,6 +535,37 @@ export const api = {
         method: "POST",
         body: JSON.stringify(data),
       }),
+    parseEntries: (filePath, workspaceId) =>
+      request(appendWs("/bib-manager/parse-entries", workspaceId), {
+        method: "POST",
+        body: JSON.stringify({ file_path: filePath }),
+      }),
+    detectDuplicates: (filePath, workspaceId) =>
+      request(appendWs("/bib-manager/detect-duplicates", workspaceId), {
+        method: "POST",
+        body: JSON.stringify(filePath ? { file_path: filePath } : {}),
+      }),
+    deleteEntry: (filePath, citeKey, workspaceId) =>
+      request(appendWs("/bib-manager/delete-entry", workspaceId), {
+        method: "POST",
+        body: JSON.stringify({ file_path: filePath, cite_key: citeKey }),
+      }),
+    updateEntry: (filePath, citeKey, bibtexCode, workspaceId) =>
+      request(appendWs("/bib-manager/update-entry", workspaceId), {
+        method: "POST",
+        body: JSON.stringify({
+          file_path: filePath,
+          cite_key: citeKey,
+          bibtex_code: bibtexCode,
+        }),
+      }),
+    entryStats: (filePath, workspaceId) =>
+      request(
+        appendWs(
+          `/bib-manager/entry-stats?file_path=${encodeURIComponent(filePath)}`,
+          workspaceId,
+        ),
+      ),
     formats: {
       list: () => request("/bib-manager/formats"),
       load: (name) =>

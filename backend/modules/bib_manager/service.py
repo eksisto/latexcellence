@@ -31,6 +31,14 @@ from backend.modules.bib_manager.models import (
     LatexCodeResult,
     ReferenceFormatResult,
 )
+from backend.modules.bib_manager.bib_parser import (
+    parse_bib_file,
+    remove_entry_from_content,
+    normalize_title,
+    normalize_doi,
+    BibParserError,
+    extract_cite_key,
+)
 from backend.modules.bib_manager.style_registry import get_style_for_format
 from backend.modules.bib_manager.provider_manager import get_provider_manager
 from backend.utils.json_utils import retry_with_validation
@@ -493,15 +501,13 @@ class BibManagerService:
             stripped = line.strip()
             if not in_entry:
                 if stripped.startswith("@"):
-                    match_key = stripped.split("{", 1)
-                    if len(match_key) > 1:
-                        key = match_key[1].rstrip(",").strip()
-                        if key == cite_key:
-                            in_entry = True
-                            brace_count = line.count("{") - line.count("}")
-                            entry_start = i
-                            entry_lines = [line]
-                            continue
+                    key = extract_cite_key(stripped)
+                    if key == cite_key:
+                        in_entry = True
+                        brace_count = line.count("{") - line.count("}")
+                        entry_start = i
+                        entry_lines = [line]
+                        continue
                 result.append(line)
             else:
                 entry_lines.append(line)
@@ -634,3 +640,244 @@ class BibManagerService:
 
         # 2. 调用 LLM 生成 BibTeX
         return await self.generate_bibtex(metadata, format_info, existing_keys)
+
+    # ── 文献库管理 ──────────────────────────────────────────────────────────
+
+    def parse_entries(self, file_path: str, workspace_id: str = "") -> dict[str, Any]:
+        """解析 .bib 文件为结构化条目列表。"""
+        pm = get_project_manager_for_workspace(workspace_id)
+        if not pm.is_open:
+            raise RuntimeError("No project opened")
+
+        root = Path(pm.root_path)
+        full_path = resolve_project_path(root, file_path, allowed_suffixes=(".bib",))
+        if not full_path.exists():
+            raise FileNotFoundError(f"File not found: {file_path}")
+
+        content = safe_read(full_path)
+        entries = parse_bib_file(content)
+        result = [
+            {k: v for k, v in e.items() if not k.startswith("_")} for e in entries
+        ]
+        self._logger.info(f"Parsed {len(result)} entries from {file_path}")
+        return {"file_path": file_path, "entries": result, "total": len(result)}
+
+    def detect_duplicates(
+        self, file_path: str | None = None, workspace_id: str = ""
+    ) -> dict[str, Any]:
+        """检测 .bib 文件中的重复条目。"""
+        pm = get_project_manager_for_workspace(workspace_id)
+        if not pm.is_open:
+            raise RuntimeError("No project opened")
+
+        root = Path(pm.root_path)
+
+        # 收集所有条目
+        all_entries: list[dict[str, Any]] = []
+        if file_path:
+            bib_files = [file_path]
+        else:
+            bib_result = self.list_bib_files(workspace_id)
+            bib_files = bib_result["bib_files"]
+
+        for bf in bib_files:
+            try:
+                parsed = self.parse_entries(bf, workspace_id)
+                for entry in parsed["entries"]:
+                    entry["_file_path"] = bf
+                    all_entries.append(entry)
+            except Exception:
+                continue
+
+        if len(all_entries) < 2:
+            return {
+                "duplicates": [],
+                "total_duplicates": 0,
+                "total_entries": len(all_entries),
+            }
+
+        duplicates = self._find_duplicates(all_entries)
+        self._logger.info(
+            f"Duplicate detection: {len(duplicates)} groups found "
+            f"in {len(all_entries)} entries"
+        )
+        return {
+            "duplicates": duplicates,
+            "total_duplicates": len(duplicates),
+            "total_entries": len(all_entries),
+        }
+
+    def _find_duplicates(self, entries: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        """多策略重复检测（并查集合并传递重复组）。"""
+        n = len(entries)
+
+        # 并查集
+        parent = list(range(n))
+
+        def find(x: int) -> int:
+            while parent[x] != x:
+                parent[x] = parent[parent[x]]
+                x = parent[x]
+            return x
+
+        def union(x: int, y: int) -> None:
+            px, py = find(x), find(y)
+            if px < py:
+                parent[py] = px
+            elif py < px:
+                parent[px] = py
+
+        for i in range(n):
+            for j in range(i + 1, n):
+                reason = self._classify_duplicate(entries[i], entries[j])
+                if reason:
+                    union(i, j)
+
+        # 按根节点分组
+        root_entries: dict[int, list[int]] = {}
+        for i in range(n):
+            root = find(i)
+            if root not in root_entries:
+                root_entries[root] = []
+            root_entries[root].append(i)
+
+        # 构建结果（仅保留 ≥2 个成员的组）
+        groups: list[dict[str, Any]] = []
+        for root, indices in root_entries.items():
+            if len(indices) < 2:
+                continue
+            a = entries[indices[0]]
+            b = entries[indices[1]]
+            reason = self._classify_duplicate(a, b) or {
+                "reason": "unknown",
+                "confidence": "medium",
+            }
+
+            groups.append(
+                {
+                    "reason": reason["reason"],
+                    "confidence": reason["confidence"],
+                    "entries": [
+                        {
+                            "cite_key": entries[i]["cite_key"],
+                            "file_path": entries[i].get("_file_path", ""),
+                            "title": entries[i].get("fields", {}).get("title", ""),
+                            "doi": entries[i].get("fields", {}).get("doi", ""),
+                            "year": entries[i].get("fields", {}).get("year", ""),
+                        }
+                        for i in sorted(indices, key=lambda i: entries[i]["cite_key"])
+                    ],
+                }
+            )
+
+        groups.sort(key=lambda g: g["entries"][0]["cite_key"])
+
+        return groups
+
+    def _classify_duplicate(
+        self, a: dict[str, Any], b: dict[str, Any]
+    ) -> dict[str, str] | None:
+        """判断两个条目是否为重复。"""
+        from difflib import SequenceMatcher
+
+        fields_a = a.get("fields", {})
+        fields_b = b.get("fields", {})
+
+        # 策略 1：DOI 严格匹配
+        doi_a = normalize_doi(fields_a.get("doi", ""))
+        doi_b = normalize_doi(fields_b.get("doi", ""))
+        if doi_a and doi_b and doi_a == doi_b:
+            return {"reason": "doi", "confidence": "high"}
+
+        # 策略 2：标题相似度
+        title_a = normalize_title(fields_a.get("title", ""))
+        title_b = normalize_title(fields_b.get("title", ""))
+        if title_a and title_b and len(title_a) > 10 and len(title_b) > 10:
+            ratio = SequenceMatcher(None, title_a, title_b).ratio()
+            if ratio >= 0.85:
+                return {
+                    "reason": "title",
+                    "confidence": "high" if ratio >= 0.95 else "medium",
+                }
+
+        # 策略 3：cite_key 完全相同
+        if a["cite_key"] == b["cite_key"]:
+            return {"reason": "cite_key", "confidence": "high"}
+
+        return None
+
+    def delete_entry(
+        self, file_path: str, cite_key: str, workspace_id: str = ""
+    ) -> dict[str, Any]:
+        """从 .bib 文件中删除指定条目。"""
+        pm = get_project_manager_for_workspace(workspace_id)
+        if not pm.is_open:
+            raise RuntimeError("No project opened")
+
+        root = Path(pm.root_path)
+        full_path = resolve_project_path(root, file_path, allowed_suffixes=(".bib",))
+        if not full_path.exists():
+            raise FileNotFoundError(f"File not found: {file_path}")
+
+        content = safe_read(full_path)
+        new_content = remove_entry_from_content(content, cite_key)
+        atomic_write(full_path, new_content)
+        self._logger.info(f"Deleted entry {cite_key} from {file_path}")
+        return {"status": "ok", "cite_key": cite_key}
+
+    def update_entry(
+        self, file_path: str, cite_key: str, bibtex_code: str, workspace_id: str = ""
+    ) -> dict[str, Any]:
+        """更新 .bib 文件中的指定条目。"""
+        pm = get_project_manager_for_workspace(workspace_id)
+        if not pm.is_open:
+            raise RuntimeError("No project opened")
+
+        root = Path(pm.root_path)
+        full_path = resolve_project_path(root, file_path, allowed_suffixes=(".bib",))
+        if not full_path.exists():
+            raise FileNotFoundError(f"File not found: {file_path}")
+
+        content = safe_read(full_path)
+        new_content = self._replace_bib_entry(content, cite_key, bibtex_code.strip())
+        atomic_write(full_path, new_content)
+        self._logger.info(f"Updated entry {cite_key} in {file_path}")
+        return {"status": "ok", "cite_key": cite_key}
+
+    def get_entry_stats(self, file_path: str, workspace_id: str = "") -> dict[str, Any]:
+        """获取 .bib 文件的条目统计信息。"""
+        parsed = self.parse_entries(file_path, workspace_id)
+        entries = parsed["entries"]
+        by_type: dict[str, int] = {}
+        by_year: dict[str, int] = {}
+        with_doi = 0
+        without_doi = 0
+
+        for entry in entries:
+            et = entry.get("entry_type", "misc")
+            by_type[et] = by_type.get(et, 0) + 1
+
+            yr = entry.get("fields", {}).get("year", "")
+            yr_clean = yr.strip()[:4]
+            if yr_clean and yr_clean.isdigit():
+                by_year[yr_clean] = by_year.get(yr_clean, 0) + 1
+            else:
+                by_year["unknown"] = by_year.get("unknown", 0) + 1
+
+            doi_val = normalize_doi(entry.get("fields", {}).get("doi", ""))
+            if doi_val:
+                with_doi += 1
+            else:
+                without_doi += 1
+
+        self._logger.info(
+            f"Stats for {file_path}: {len(entries)} entries, "
+            f"{len(by_type)} types, {len(by_year)} years"
+        )
+        return {
+            "total": len(entries),
+            "by_type": by_type,
+            "by_year": by_year,
+            "with_doi": with_doi,
+            "without_doi": without_doi,
+        }

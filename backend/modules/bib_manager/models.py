@@ -120,3 +120,67 @@ class DoiLookupResult(BaseModel):
     issn: str = ""
     keywords: list[str] = []
     data_source: str = ""  # 数据来源标识（如 crossref / arxiv / datacite）
+
+
+# ── 文献库管理模型 ──────────────────────────────────────────────────────────
+
+
+class ParseBibRequest(BaseModel):
+    """.bib 文件解析请求"""
+
+    file_path: str
+
+
+class ParseBibResponse(BaseModel):
+    """.bib 文件解析响应"""
+
+    file_path: str
+    entries: list[dict] = []
+    total: int = 0
+
+
+class DetectDuplicatesRequest(BaseModel):
+    """重复条目检测请求"""
+
+    file_path: str | None = None
+
+
+class DuplicateGroup(BaseModel):
+    """一组重复条目"""
+
+    reason: str  # "doi" / "title" / "cite_key"
+    confidence: str = "medium"  # "high" / "medium"
+    entries: list[dict[str, str]] = []
+
+
+class DetectDuplicatesResponse(BaseModel):
+    """重复条目检测响应"""
+
+    duplicates: list[dict] = []
+    total_duplicates: int = 0
+    total_entries: int = 0
+
+
+class DeleteEntryRequest(BaseModel):
+    """删除条目请求"""
+
+    file_path: str
+    cite_key: str
+
+
+class UpdateEntryRequest(BaseModel):
+    """更新条目请求"""
+
+    file_path: str
+    cite_key: str
+    bibtex_code: str
+
+
+class EntryStatsResponse(BaseModel):
+    """条目统计响应"""
+
+    total: int = 0
+    by_type: dict[str, int] = {}
+    by_year: dict[str, int] = {}
+    with_doi: int = 0
+    without_doi: int = 0

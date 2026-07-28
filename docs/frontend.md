@@ -70,6 +70,8 @@ API 按功能分组暴露（health、config、project、typoCheck、expressionOp
 | `ResultFilterBar.jsx` | 结果过滤工具栏（搜索框 + 类型下拉 + 段落跳转 + 重置） |
 | `ProgressBar.jsx` | 检查进度条组件 |
 | `ColorField.jsx` | 颜色选择器组件 |
+| `BibManagerLibrary.jsx` | 参考文献库管理面板（文件列表、条目 CRUD、重复检测、统计） |
+| `FormatResultCard` | 格式识别结果展示卡片（`React.memo` 组件，展示格式名称、置信度、字段列表、LaTeX 样式推荐） |
 
 ## 核心 Hook
 
@@ -82,6 +84,11 @@ API 按功能分组暴露（health、config、project、typoCheck、expressionOp
 | `useTheme.js` | 暗/亮主题切换，支持 View Transitions API 平滑过渡。 |
 | `useUndoRedo.js` | 撤销/重做状态管理，轮询后端端点，支持键盘快捷键。 |
 | `useResultFilter.js` | 段落检查结果搜索/过滤/跳转，与 ResultFilterBar 配套使用。 |
+| `useFormatAnalysis.js` | BibManager Step 1：格式识别状态与处理器 |
+| `useMetadataExtraction.js` | BibManager Step 2：元数据提取状态与处理器（含 DOI 查询） |
+| `useBibtexGeneration.js` | BibManager Step 3：BibTeX 生成与编辑状态 |
+| `useBibFileSave.js` | BibManager Step 4：Bib 文件写入与条目管理 |
+| `useLatexGeneration.js` | BibManager Step 5：LaTeX 代码生成 |
 
 ### `useParagraphCheck` 配置接口
 

@@ -30,6 +30,13 @@ from backend.modules.bib_manager.models import (
     SaveBibRequest,
 )
 from backend.modules.bib_manager.service import BibManagerService
+from backend.modules.bib_manager.bib_parser import (
+    parse_bib_file,
+    remove_entry_from_content,
+    normalize_title,
+    normalize_doi,
+    BibParserError,
+)
 from backend.modules.bib_manager.providers.base import (
     clean_doi,
     is_arxiv_doi,
@@ -37,6 +44,7 @@ from backend.modules.bib_manager.providers.base import (
 )
 from backend.modules.bib_manager.providers.crossref import CrossrefProvider
 from backend.modules.bib_manager.providers.arxiv import ArxivProvider
+from backend.utils.file_ops import safe_read
 
 
 @pytest.fixture
@@ -743,3 +751,261 @@ class TestProviderManager:
         r = await mgr.lookup_doi("10.48550/arXiv.2501.00001")
         assert r.title == "ArXiv Paper"
         assert r.data_source == "arxiv"
+
+
+# ── 文献库管理测试 ──────────────────────────────────────────────────────────
+
+
+class TestBibParser:
+    def test_single_entry(self):
+        content = """@article{test2023,
+  author = {Test, Author},
+  title = {A Test Article},
+  journal = {Journal of Testing},
+  year = {2023}
+}"""
+        entries = parse_bib_file(content)
+        assert len(entries) == 1
+        assert entries[0]["cite_key"] == "test2023"
+        assert entries[0]["entry_type"] == "article"
+        assert entries[0]["fields"]["author"] == "Test, Author"
+        assert entries[0]["fields"]["title"] == "A Test Article"
+        assert entries[0]["fields"]["journal"] == "Journal of Testing"
+        assert entries[0]["fields"]["year"] == "2023"
+
+    def test_multiple_entries(self):
+        content = """@article{key1,
+  title = {First},
+  year = {2020}
+}
+
+@inproceedings{key2,
+  title = {Second},
+  booktitle = {Some Conference},
+  year = {2021}
+}
+
+@book{key3,
+  title = {Third},
+  publisher = {Press},
+  year = {2022}
+}"""
+        entries = parse_bib_file(content)
+        assert len(entries) == 3
+        assert entries[0]["cite_key"] == "key1"
+        assert entries[1]["cite_key"] == "key2"
+        assert entries[2]["cite_key"] == "key3"
+
+    def test_nested_braces_in_field(self):
+        content = """@article{nested,
+  title = {{BERT: Pre-training of Deep Bidirectional Transformers}},
+  year = {2018}
+}"""
+        entries = parse_bib_file(content)
+        assert len(entries) == 1
+        assert (
+            entries[0]["fields"]["title"]
+            == "{BERT: Pre-training of Deep Bidirectional Transformers}"
+        )
+
+    def test_empty_file(self):
+        entries = parse_bib_file("")
+        assert len(entries) == 0
+
+    def test_remove_entry(self):
+        content = """@article{keep,
+  title = {Keep Me},
+  year = {2020}
+}
+
+@article{remove,
+  title = {Remove Me},
+  year = {2021}
+}
+
+@article{keep2,
+  title = {Keep Me Too},
+  year = {2022}
+}"""
+        result = remove_entry_from_content(content, "remove")
+        assert "Remove Me" not in result
+        assert "Keep Me" in result
+        assert "Keep Me Too" in result
+
+    def test_remove_entry_not_found(self):
+        content = "@article{exists, title={Test}}"
+        with pytest.raises(BibParserError, match="not found"):
+            remove_entry_from_content(content, "nonexistent")
+
+    def test_normalize_title(self):
+        assert (
+            normalize_title("BERT: Pre-training of Deep Bidirectional Transformers")
+            == "bert pretraining of deep bidirectional transformers"
+        )
+        assert (
+            normalize_title(r"\textbf{Attention} Is All You Need")
+            == "attention is all you need"
+        )
+
+    def test_normalize_doi(self):
+        assert normalize_doi("10.1000/test") == "10.1000/test"
+        assert normalize_doi("https://doi.org/10.1000/test") == "10.1000/test"
+        assert normalize_doi("doi:10.1000/test") == "10.1000/test"
+
+
+class TestServiceDuplicates:
+    """重复检测测试。"""
+
+    def test_doi_duplicate(self, service):
+        entries = [
+            {
+                "cite_key": "a",
+                "entry_type": "article",
+                "fields": {"doi": "10.1000/test", "title": "Paper A", "year": "2020"},
+                "_file_path": "refs.bib",
+            },
+            {
+                "cite_key": "b",
+                "entry_type": "article",
+                "fields": {
+                    "doi": "10.1000/test",
+                    "title": "Paper A Dup",
+                    "year": "2020",
+                },
+                "_file_path": "refs.bib",
+            },
+        ]
+        groups = service._find_duplicates(entries)
+        assert len(groups) == 1
+        assert groups[0]["reason"] == "doi"
+        assert groups[0]["confidence"] == "high"
+
+    def test_title_duplicate(self, service):
+        entries = [
+            {
+                "cite_key": "a",
+                "entry_type": "article",
+                "fields": {"title": "Attention Is All You Need", "year": "2017"},
+                "_file_path": "refs.bib",
+            },
+            {
+                "cite_key": "b",
+                "entry_type": "article",
+                "fields": {"title": "Attention Is All You Need.", "year": "2017"},
+                "_file_path": "refs.bib",
+            },
+        ]
+        groups = service._find_duplicates(entries)
+        assert len(groups) >= 1
+        g = next(g for g in groups if g["reason"] == "title")
+        assert g["confidence"] in ("high", "medium")
+
+    def test_cite_key_duplicate(self, service):
+        entries = [
+            {
+                "cite_key": "same_key",
+                "entry_type": "article",
+                "fields": {"title": "Paper A", "year": "2020"},
+                "_file_path": "refs.bib",
+            },
+            {
+                "cite_key": "same_key",
+                "entry_type": "article",
+                "fields": {"title": "Paper B", "year": "2021"},
+                "_file_path": "refs2.bib",
+            },
+        ]
+        groups = service._find_duplicates(entries)
+        assert len(groups) == 1
+        assert groups[0]["reason"] == "cite_key"
+
+    def test_no_duplicates(self, service):
+        entries = [
+            {
+                "cite_key": "a",
+                "entry_type": "article",
+                "fields": {"doi": "10.1000/a", "title": "Paper A", "year": "2020"},
+                "_file_path": "refs.bib",
+            },
+            {
+                "cite_key": "b",
+                "entry_type": "article",
+                "fields": {"doi": "10.1000/b", "title": "Paper B", "year": "2021"},
+                "_file_path": "refs.bib",
+            },
+        ]
+        groups = service._find_duplicates(entries)
+        assert len(groups) == 0
+
+
+class TestServiceEntryStats:
+    """条目统计测试。"""
+
+    def test_stats(self, service):
+        entries = [
+            {
+                "cite_key": "a",
+                "entry_type": "article",
+                "fields": {"doi": "10.1000/a", "title": "A", "year": "2020"},
+            },
+            {
+                "cite_key": "b",
+                "entry_type": "article",
+                "fields": {"doi": "10.1000/b", "title": "B", "year": "2020"},
+            },
+            {
+                "cite_key": "c",
+                "entry_type": "inproceedings",
+                "fields": {"title": "C", "year": "2021"},
+            },
+        ]
+        with patch.object(
+            service,
+            "parse_entries",
+            return_value={"file_path": "refs.bib", "entries": entries, "total": 3},
+        ):
+            result = service.get_entry_stats("refs.bib", "test_ws")
+            assert result["total"] == 3
+            assert result["by_type"]["article"] == 2
+            assert result["by_type"]["inproceedings"] == 1
+            assert result["by_year"]["2020"] == 2
+            assert result["by_year"]["2021"] == 1
+            assert result["with_doi"] == 2
+            assert result["without_doi"] == 1
+
+
+class TestServiceDeleteEntry:
+    """删除条目测试。"""
+
+    def test_delete_success(self, temp_project, service):
+        from backend.core.workspace_manager import get_workspace_manager
+
+        wm = get_workspace_manager()
+        ws_id = "test_delete_entry"
+        pm = wm.get_or_create(ws_id)
+        pm.open(str(temp_project))
+        try:
+            result = service.delete_entry("refs.bib", "test2023", ws_id)
+            assert result["status"] == "ok"
+            content = safe_read(temp_project / "refs.bib")
+            assert "test2023" not in content
+        finally:
+            wm.remove(ws_id)
+
+
+class TestServiceParseEntries:
+    """解析条目测试。"""
+
+    def test_parse_success(self, temp_project, service):
+        from backend.core.workspace_manager import get_workspace_manager
+
+        wm = get_workspace_manager()
+        ws_id = "test_parse_entries"
+        pm = wm.get_or_create(ws_id)
+        pm.open(str(temp_project))
+        try:
+            result = service.parse_entries("refs.bib", ws_id)
+            assert result["total"] == 1
+            assert result["entries"][0]["cite_key"] == "test2023"
+        finally:
+            wm.remove(ws_id)

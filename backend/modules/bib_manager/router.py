@@ -11,12 +11,16 @@ from fastapi import APIRouter, File, Form, HTTPException, Query, UploadFile
 from pydantic import BaseModel
 
 from backend.modules.bib_manager.models import (
+    DeleteEntryRequest,
+    DetectDuplicatesRequest,
     DoiLookupRequest,
     FormatAnalysisRequest,
     GenerateBibtexRequest,
     GenerateLatexRequest,
+    ParseBibRequest,
     ReadBibRequest,
     SaveBibRequest,
+    UpdateEntryRequest,
 )
 from backend.modules.bib_manager.service import BibManagerService
 from backend.modules.bib_manager.style_registry import list_all_styles
@@ -275,5 +279,97 @@ async def generate_latex_code(request: GenerateLatexRequest):
             request.bib_file_path,
         )
         return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ── 文献库管理 ──────────────────────────────────────────────────────────────
+
+
+@router.post("/parse-entries")
+async def parse_entries(
+    request: ParseBibRequest,
+    workspace_id: str = Query(..., description="工作区唯一标识符"),
+):
+    """解析 .bib 文件为结构化条目列表。"""
+    try:
+        result = get_service().parse_entries(request.file_path, workspace_id)
+        return result
+    except RuntimeError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/detect-duplicates")
+async def detect_duplicates(
+    request: DetectDuplicatesRequest,
+    workspace_id: str = Query(..., description="工作区唯一标识符"),
+):
+    """检测 .bib 文件中的重复条目。"""
+    try:
+        result = get_service().detect_duplicates(request.file_path, workspace_id)
+        return result
+    except RuntimeError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/delete-entry")
+async def delete_entry(
+    request: DeleteEntryRequest,
+    workspace_id: str = Query(..., description="工作区唯一标识符"),
+):
+    """从 .bib 文件中删除指定条目。"""
+    try:
+        result = get_service().delete_entry(
+            request.file_path, request.cite_key, workspace_id
+        )
+        return result
+    except RuntimeError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/update-entry")
+async def update_entry(
+    request: UpdateEntryRequest,
+    workspace_id: str = Query(..., description="工作区唯一标识符"),
+):
+    """更新 .bib 文件中的指定条目。"""
+    if not request.bibtex_code.strip():
+        raise HTTPException(status_code=400, detail="Empty BibTeX code")
+    try:
+        result = get_service().update_entry(
+            request.file_path, request.cite_key, request.bibtex_code, workspace_id
+        )
+        return result
+    except RuntimeError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/entry-stats")
+async def get_entry_stats(
+    file_path: str = Query(..., description=".bib 文件路径"),
+    workspace_id: str = Query(..., description="工作区唯一标识符"),
+):
+    """获取 .bib 文件的条目统计信息。"""
+    try:
+        result = get_service().get_entry_stats(file_path, workspace_id)
+        return result
+    except RuntimeError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
