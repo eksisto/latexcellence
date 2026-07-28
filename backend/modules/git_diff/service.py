@@ -181,9 +181,9 @@ async def list_git_revisions(workspace_id: str = "") -> GitRefsResult:
     revisions = [
         GitRevision(
             value=WORKTREE_REF,
-            label="当前工作区",
+            label="Current worktree",
             kind="worktree",
-            subject="包含尚未提交的修改和未跟踪文件",
+            subject="Contains uncommitted changes and untracked files",
         )
     ]
     revisions.extend(await _list_commit_revisions(context.git_root))
@@ -287,7 +287,7 @@ async def render_diff_pdf(
             filtered_output=compile_result.filtered_output,
         )
         if not explanation:
-            explanation = "差异 LaTeX 已生成，但 PDF 编译失败。请查看原始输出定位问题。"
+            explanation = "Diff PDF generated but compilation failed. Please refer to the raw output to diagnose the issue."
         return DiffHighlightResult(
             success=False,
             job_id=job_id,

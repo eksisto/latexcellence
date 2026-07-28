@@ -416,41 +416,41 @@ class TestPathTraversal:
     def test_get_paragraphs_dotdot_rejected(self, temp_project):
         project = LatexProject()
         project.open(str(temp_project))
-        with pytest.raises(ValueError, match="不能包含"):
+        with pytest.raises(ValueError, match="must not contain"):
             project.get_paragraphs("../../secret.tex")
 
     def test_apply_change_dotdot_rejected(self, temp_project):
         project = LatexProject()
         project.open(str(temp_project))
-        with pytest.raises(ValueError, match="不能包含"):
+        with pytest.raises(ValueError, match="must not contain"):
             project.apply_change("../../secret.tex", 0, "text")
 
     def test_undo_dotdot_rejected(self, temp_project):
         project = LatexProject()
         project.open(str(temp_project))
-        with pytest.raises(ValueError, match="不能包含"):
+        with pytest.raises(ValueError, match="must not contain"):
             project.undo("../../secret.tex")
 
     def test_redo_dotdot_rejected(self, temp_project):
         project = LatexProject()
         project.open(str(temp_project))
-        with pytest.raises(ValueError, match="不能包含"):
+        with pytest.raises(ValueError, match="must not contain"):
             project.redo("../../secret.tex")
 
     def test_set_main_file_dotdot_rejected(self, temp_project):
         project = LatexProject()
         project.open(str(temp_project))
-        with pytest.raises(ValueError, match="不能包含"):
+        with pytest.raises(ValueError, match="must not contain"):
             project.set_main_file("../../evil.tex")
 
     def test_get_paragraphs_absolute_rejected(self, temp_project):
         project = LatexProject()
         project.open(str(temp_project))
-        with pytest.raises(ValueError, match="不能是绝对路径"):
+        with pytest.raises(ValueError, match="must not be an absolute path"):
             project.get_paragraphs("C:/secret.tex")
 
     def test_get_paragraphs_non_tex_rejected(self, temp_project):
         project = LatexProject()
         project.open(str(temp_project))
-        with pytest.raises(ValueError, match="必须以"):
+        with pytest.raises(ValueError, match="must end with"):
             project.get_paragraphs("main.bib")

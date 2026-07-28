@@ -176,46 +176,46 @@ class TestValidateMainFile:
         _validate_main_file("chapters/ch1.tex", project_root)
 
     def test_empty_string_rejected(self, project_root):
-        with pytest.raises(ValueError, match="不能为空"):
+        with pytest.raises(ValueError, match="must not be empty"):
             _validate_main_file("", project_root)
 
     def test_whitespace_only_rejected(self, project_root):
-        with pytest.raises(ValueError, match="不能为空"):
+        with pytest.raises(ValueError, match="must not be empty"):
             _validate_main_file("   ", project_root)
 
     def test_starts_with_dash_rejected(self, project_root):
-        with pytest.raises(ValueError, match="不能以 '-' 开头"):
+        with pytest.raises(ValueError, match="must not start with '-'"):
             _validate_main_file("-output-directory=/tmp/evil", project_root)
 
-        with pytest.raises(ValueError, match="不能以 '-' 开头"):
+        with pytest.raises(ValueError, match="must not start with '-'"):
             _validate_main_file("--xelatex", project_root)
 
     def test_path_traversal_rejected(self, project_root):
-        with pytest.raises(ValueError, match="不能包含"):
+        with pytest.raises(ValueError, match="must not contain"):
             _validate_main_file("../../etc/passwd.tex", project_root)
 
-        with pytest.raises(ValueError, match="不能包含"):
+        with pytest.raises(ValueError, match="must not contain"):
             _validate_main_file("sub/../../../escape.tex", project_root)
 
     def test_non_tex_extension_rejected(self, project_root):
-        with pytest.raises(ValueError, match="必须以 .tex 结尾"):
+        with pytest.raises(ValueError, match="must end with one of: .tex"):
             _validate_main_file("main.pdf", project_root)
 
-        with pytest.raises(ValueError, match="必须以 .tex 结尾"):
+        with pytest.raises(ValueError, match="must end with one of: .tex"):
             _validate_main_file("main.bib", project_root)
 
     def test_null_byte_rejected(self, project_root):
-        with pytest.raises(ValueError, match="非法字符"):
+        with pytest.raises(ValueError, match="illegal characters"):
             _validate_main_file("main\x00.tex", project_root)
 
     def test_escape_root_rejected(self, project_root):
         outside = project_root.parent / "evil.tex"
         outside.write_text("evil", encoding="utf-8")
-        with pytest.raises(ValueError, match="不能包含"):
+        with pytest.raises(ValueError, match="must not contain"):
             _validate_main_file("../evil.tex", project_root)
 
     def test_non_tex_extension_rejected_by_validate(self, project_root):
-        with pytest.raises(ValueError, match="必须以 .tex 结尾"):
+        with pytest.raises(ValueError, match="must end with one of: .tex"):
             _validate_main_file("main.pdf", project_root)
 
 
@@ -284,7 +284,7 @@ class TestCompileLatex:
                 result = await compile_latex("main.tex")
 
         assert result.success is False
-        assert "超时" in result.explanation
+        assert "timed out" in result.explanation.lower()
         assert len(result.fixes) > 0
 
     @pytest.mark.asyncio
@@ -576,7 +576,7 @@ class TestCompilePdfEndpointValidation:
                 )
 
             assert response.status_code == 400
-            assert "不能以 '-'" in response.json()["detail"]
+            assert "must not start with '-'" in response.json()["detail"]
 
     def test_pdf_path_traversal_rejected(self, client):
         """pdf 端点拒绝路径穿越。"""

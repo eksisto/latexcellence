@@ -29,9 +29,9 @@ class CompileRequest(BaseModel):
     def sanitize_main_file(cls, v: str) -> str:
         v = v.strip()
         if not v:
-            raise ValueError("main_file 不能为空")
+            raise ValueError("main_file must not be empty")
         if v.startswith("-"):
-            raise ValueError("main_file 不能以 '-' 开头")
+            raise ValueError("main_file must not start with '-'")
         return v
 
     @field_validator("engine")
@@ -99,7 +99,7 @@ async def get_compiled_pdf(
     if not pdf_path.exists():
         raise HTTPException(
             status_code=404,
-            detail=f"PDF not found: {pdf_path.name}. 请先编译项目。",
+            detail=f"PDF not found: {pdf_path.name}. Please compile the project first.",
         )
 
     return FileResponse(

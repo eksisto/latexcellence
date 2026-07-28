@@ -352,7 +352,8 @@ class TerminologyCheckService(BaseParagraphCheckService):
                         "original": term_str,
                         "corrected": recommended,
                         "explanation": (
-                            f'术语 "{term_str}" 建议统一为 ' f'"{recommended}"'
+                            f'Term "{term_str}" is recommended to be unified as '
+                            f'"{recommended}"'
                         ),
                     }
                     changes.append(change)

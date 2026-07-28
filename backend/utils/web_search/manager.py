@@ -32,7 +32,9 @@ class SearchManager:
         self._engines.append(engine)
         if primary:
             self._primary = engine
-        self._logger.info(f"搜索引擎已注册：{engine.name} (primary={primary})")
+        self._logger.info(
+            f"Search engine registered: {engine.name} (primary={primary})"
+        )
 
     def get_engine(self, name: str) -> BaseSearchEngine | None:
         """按名称获取已注册的引擎。"""
@@ -75,7 +77,7 @@ class SearchManager:
                 raise  # challenge 不降级，直接向上传播
             except Exception as e:
                 self._logger.warning(
-                    f"主引擎 {self._primary.name} 搜索失败：{e}，尝试降级"
+                    f"Primary engine {self._primary.name} search failed: {e}, attempting fallback"
                 )
 
         # 降级到其他引擎
@@ -85,10 +87,10 @@ class SearchManager:
             try:
                 return await self._search_with_engine(engine, query, max_results)
             except Exception as e:
-                self._logger.warning(f"引擎 {engine.name} 搜索失败：{e}")
+                self._logger.warning(f"Engine {engine.name} search failed: {e}")
 
         # 所有引擎均失败
-        self._logger.error("所有搜索引擎均不可用")
+        self._logger.error("All search engines are unavailable")
         return SearchResponse(query=query, engine="none")
 
     async def _search_with_engine(
@@ -101,7 +103,7 @@ class SearchManager:
         result.search_time_ms = elapsed_ms
         result.engine = engine.name
         self._logger.info(
-            f"搜索完成 | engine={engine.name} | query={query[:50]} | "
+            f"Search completed | engine={engine.name} | query={query[:50]} | "
             f"results={result.total_results} | time={elapsed_ms:.0f}ms"
         )
         return result

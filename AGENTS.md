@@ -4,7 +4,6 @@ LateXcellence 是一个 AI 驱动的 LaTeX 文档助手。后端 FastAPI + 前�
 
 ## 全局规则
 
-- **使用中文回复**：所有与用户的交流、代码注释、文档、commit 信息等，均使用中文。
 - **每次开始新对话**，先读 PROJECT_SUMMARY.md 了解项目结构和功能。
 - **项目结构变更**（新增/删除模块、核心文件路径变更），必须同步更新 PROJECT_SUMMARY.md。
 

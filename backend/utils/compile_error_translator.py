@@ -135,6 +135,6 @@ async def translate_compile_errors(
     except Exception as e:
         logger.error(f"LLM error translation failed: {e}")
         return (
-            "（LLM 错误翻译失败，请查看下方原始编译输出来排查问题）",
+            "LLM error translation failed, please refer to the raw compilation output below",
             [],
         )

@@ -92,7 +92,7 @@ class TestValidateProjectPath:
         assert result == "main.tex"
 
     def test_require_tex_reject(self, project_root):
-        with pytest.raises(ValueError, match="必须以"):
+        with pytest.raises(ValueError, match="must end with"):
             _validate_project_path(project_root, "refs.bib", require_tex=True)
 
     def test_empty_rejected(self, project_root):
@@ -104,17 +104,17 @@ class TestValidateProjectPath:
 
         # 使用 os.path.isabs 一致的平台绝对路径
         abs_path = "C:/secret.tex" if os.name == "nt" else "/etc/passwd"
-        with pytest.raises(ValueError, match="不能是绝对路径"):
+        with pytest.raises(ValueError, match="must not be an absolute path"):
             _validate_project_path(project_root, abs_path)
 
     def test_dotdot_rejected(self, project_root):
-        with pytest.raises(ValueError, match="不能包含"):
+        with pytest.raises(ValueError, match="must not contain"):
             _validate_project_path(project_root, "../secret.tex")
 
     def test_escape_root_rejected(self, project_root):
         outside = project_root.parent / "outside.tex"
         outside.write_text("secret", encoding="utf-8")
-        with pytest.raises(ValueError, match="不能包含"):
+        with pytest.raises(ValueError, match="must not contain"):
             _validate_project_path(project_root, "../outside.tex")
 
 

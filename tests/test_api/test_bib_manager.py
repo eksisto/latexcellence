@@ -365,7 +365,7 @@ class TestPathTraversal:
         pm = wm.get_or_create(ws_id)
         pm.open(str(temp_project))
         try:
-            with pytest.raises(ValueError, match="不能包含"):
+            with pytest.raises(ValueError, match="must not contain"):
                 service.read_bib_file("../../secret.tex", ws_id)
         finally:
             wm.remove(ws_id)
@@ -378,7 +378,7 @@ class TestPathTraversal:
         pm = wm.get_or_create(ws_id)
         pm.open(str(temp_project))
         try:
-            with pytest.raises(ValueError, match="不能包含"):
+            with pytest.raises(ValueError, match="must not contain"):
                 service.save_bib_entry("../../evil.bib", "@article{k}", "k", ws_id)
         finally:
             wm.remove(ws_id)
@@ -391,7 +391,7 @@ class TestPathTraversal:
         pm = wm.get_or_create(ws_id)
         pm.open(str(temp_project))
         try:
-            with pytest.raises(ValueError, match="必须以"):
+            with pytest.raises(ValueError, match="must end with"):
                 service.read_bib_file("main.tex", ws_id)
         finally:
             wm.remove(ws_id)

@@ -44,7 +44,9 @@ def format_latex(source: str) -> str:
                 if env_stack:
                     env_stack.pop()
                 else:
-                    _logger.warning("发现多余的 \\end，环境栈为空: %s", stripped)
+                    _logger.warning(
+                        "Unexpected \\end with empty environment stack: %s", stripped
+                    )
 
         indent_level = len(env_stack)
         indented = "  " * indent_level + stripped

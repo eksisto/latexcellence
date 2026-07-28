@@ -291,8 +291,8 @@ class WritingChatService:
                         ctx.save_to_disk()
                         return
                     except Exception as e:
-                        self._logger.warning(f"工具执行失败 {tool_name}: {e}")
-                        result_text = f"工具执行失败：{e}"
+                        self._logger.warning(f"Tool execution failed {tool_name}: {e}")
+                        result_text = f"Tool execution failed: {e}"
 
                     # 追加 tool result 消息
                     tool_messages.append(

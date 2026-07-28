@@ -47,34 +47,34 @@ class TestResolveProjectPath:
         assert result == project_root / "chapters" / "intro.tex"
 
     def test_empty_string_rejected(self, project_root):
-        with pytest.raises(ValueError, match="不能为空"):
+        with pytest.raises(ValueError, match="must not be empty"):
             resolve_project_path(project_root, "")
 
     def test_whitespace_only_rejected(self, project_root):
-        with pytest.raises(ValueError, match="不能为空"):
+        with pytest.raises(ValueError, match="must not be empty"):
             resolve_project_path(project_root, "   ")
 
     def test_null_byte_rejected(self, project_root):
-        with pytest.raises(ValueError, match="非法字符"):
+        with pytest.raises(ValueError, match="illegal characters"):
             resolve_project_path(project_root, "main\x00.tex")
 
     def test_absolute_path_rejected(self, project_root):
-        with pytest.raises(ValueError, match="不能是绝对路径"):
+        with pytest.raises(ValueError, match="must not be an absolute path"):
             resolve_project_path(project_root, "C:/secret.tex")
 
     def test_dotdot_rejected(self, project_root):
-        with pytest.raises(ValueError, match="不能包含"):
+        with pytest.raises(ValueError, match="must not contain"):
             resolve_project_path(project_root, "../secret.tex")
 
     def test_dotdot_in_middle_rejected(self, project_root):
-        with pytest.raises(ValueError, match="不能包含"):
+        with pytest.raises(ValueError, match="must not contain"):
             resolve_project_path(project_root, "sub/../../../escape.tex")
 
     def test_escape_root_rejected(self, project_root):
         """创建指向项目外的符号链接，验证 resolve 后 is_relative_to 拦截。"""
         outside = project_root.parent / "outside.tex"
         outside.write_text("secret", encoding="utf-8")
-        with pytest.raises(ValueError, match="不能包含"):
+        with pytest.raises(ValueError, match="must not contain"):
             resolve_project_path(project_root, "../outside.tex")
 
     def test_allowed_suffixes_pass(self, project_root):
@@ -84,7 +84,7 @@ class TestResolveProjectPath:
         assert result.suffix == ".tex"
 
     def test_allowed_suffixes_reject(self, project_root):
-        with pytest.raises(ValueError, match="必须以"):
+        with pytest.raises(ValueError, match="must end with"):
             resolve_project_path(project_root, "refs.bib", allowed_suffixes=(".tex",))
 
     def test_no_suffix_restriction(self, project_root):
@@ -104,13 +104,13 @@ class TestSymlinkRejection:
         outside.write_text("secret data", encoding="utf-8")
         link = project_root / "link.tex"
         os.symlink(str(outside), str(link))
-        with pytest.raises(ValueError, match="不能包含"):
+        with pytest.raises(ValueError, match="symbolic link"):
             resolve_project_path(project_root, "link.tex")
 
     def test_symlink_within_project_rejected(self, project_root):
         link = project_root / "link.tex"
         os.symlink(str(project_root / "main.tex"), str(link))
-        with pytest.raises(ValueError, match="符号链接"):
+        with pytest.raises(ValueError, match="symbolic link"):
             resolve_project_path(project_root, "link.tex")
 
     def test_allow_symlink_true(self, project_root):
@@ -123,5 +123,5 @@ class TestSymlinkRejection:
         """子目录中的符号链接也应被检测。"""
         link = project_root / "chapters" / "link.tex"
         os.symlink(str(project_root / "main.tex"), str(link))
-        with pytest.raises(ValueError, match="符号链接"):
+        with pytest.raises(ValueError, match="symbolic link"):
             resolve_project_path(project_root, "chapters/link.tex")

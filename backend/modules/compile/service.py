@@ -29,10 +29,10 @@ def _validate_main_file(main_file: str, project_root: Path) -> None:
     额外检查不以 '-' 开头（防止被 latexmk 解析为命令行 flag）。
     """
     if not main_file or not main_file.strip():
-        raise ValueError("main_file 不能为空")
+        raise ValueError("main_file must not be empty")
 
     if main_file.lstrip().startswith("-"):
-        raise ValueError("main_file 不能以 '-' 开头")
+        raise ValueError("main_file must not start with '-'")
 
     resolve_project_path(
         project_root,
@@ -101,11 +101,11 @@ async def compile_latex(
         return CompileResult(
             success=False,
             stderr=tex_result.raw_output,
-            explanation="编译超时。可能原因：文档过大、有无限循环的 LaTeX 命令、或 latexmk 卡住。",
+            explanation="Compilation timed out. Possible causes: document too large, infinite LaTeX loop, or latexmk stuck.",
             fixes=[
-                "检查是否缺少 \\end{document} 或类似的环境闭合语句",
-                "增加 config.json 中 features.compile.latexmk_timeout 的值",
-                "在终端手动运行 latexmk -xelatex 排除环境问题",
+                "Check for missing \\end{document} or unclosed environments",
+                "Increase features.compile.latexmk_timeout in config.json",
+                "Run latexmk -xelatex manually in a terminal to diagnose",
             ],
         )
 

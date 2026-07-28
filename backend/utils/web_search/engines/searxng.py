@@ -37,7 +37,7 @@ class SearXNGEngine(BaseSearchEngine):
         """执行搜索，返回标准化结果。"""
         base_url = self._get_base_url()
         if not base_url:
-            self._logger.warning("SearXNG 实例地址未配置")
+            self._logger.warning("SearXNG instance URL not configured")
             return SearchResponse(query=query, engine=self.name, results=[])
 
         cfg = get_config()
@@ -72,7 +72,7 @@ class SearXNGEngine(BaseSearchEngine):
         try:
             resp = await client.get(url, params=params, headers=headers)
         except httpx.ConnectError as e:
-            self._logger.error(f"SearXNG 连接失败：{e}")
+            self._logger.error(f"SearXNG connection failed: {e}")
             return SearchResponse(query=query, engine=self.name, results=[])
 
         if resp.status_code != 200:

@@ -287,23 +287,23 @@ class TemplateAgentService:
     def _resolve_sandbox_path(sandbox: Path, file_path: str) -> Path:
         """校验并解析沙箱内相对路径，拒绝绝对路径 / '..' / 越界 / 非白名单扩展名。"""
         if not file_path or not file_path.strip():
-            raise ValueError("file_path 不能为空")
+            raise ValueError("file_path must not be empty")
         if "\x00" in file_path:
-            raise ValueError("file_path 包含非法字符")
+            raise ValueError("file_path contains illegal characters")
         # 统一用正斜杠处理，再判绝对路径
         fp = file_path.replace("\\", "/")
         if fp.startswith("/"):
-            raise ValueError("file_path 不能是绝对路径")
+            raise ValueError("file_path must not be an absolute path")
         if ".." in Path(fp).parts:
-            raise ValueError("file_path 不能包含 '..' 路径段")
+            raise ValueError("file_path must not contain '..' segments")
 
         resolved = (sandbox / fp).resolve()
         if not resolved.is_relative_to(sandbox.resolve()):
-            raise ValueError("file_path 解析后超出沙箱范围")
+            raise ValueError("file_path resolves outside the sandbox")
 
         if resolved.suffix.lower() not in _ALLOWED_SUFFIXES:
             raise ValueError(
-                f"file_path 扩展名不允许：{resolved.suffix}（仅允许 {_ALLOWED_SUFFIXES}）"
+                f"file_path has disallowed extension: {resolved.suffix} (allowed: {_ALLOWED_SUFFIXES})"
             )
         return resolved
 
@@ -450,7 +450,7 @@ class _ToolExecutor:
             return await self._compile_latex(args)
         if tool_name == "finish":
             return self._finish(args)
-        raise ValueError(f"未知工具：{tool_name}")
+        raise ValueError(f"Unknown tool: {tool_name}")
 
     # ── write_file ────────────────────────────────────────────────────
 

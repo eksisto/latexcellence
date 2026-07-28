@@ -67,7 +67,7 @@ class ToolRegistry:
         self._tools[name] = ToolEntry(
             name=name, schema=schema, executor=executor, enabled=enabled
         )
-        self._logger.info(f"工具已注册：{name} (enabled={enabled})")
+        self._logger.info(f"Tool registered: {name} (enabled={enabled})")
 
     def get_enabled_tools(self) -> list[dict[str, Any]]:
         """
@@ -94,20 +94,20 @@ class ToolRegistry:
         """
         entry = self._tools.get(tool_name)
         if entry is None:
-            raise ValueError(f"未知工具：{tool_name}")
+            raise ValueError(f"Unknown tool: {tool_name}")
         if not entry.enabled:
-            raise ValueError(f"工具已禁用：{tool_name}")
+            raise ValueError(f"Tool is disabled: {tool_name}")
 
-        self._logger.info(f"执行工具：{tool_name} | args={arguments}")
+        self._logger.info(f"Executing tool: {tool_name} | args={arguments}")
         result = await entry.executor(tool_name, arguments)
-        self._logger.info(f"工具执行完成：{tool_name}")
+        self._logger.info(f"Tool execution completed: {tool_name}")
         return result
 
     def set_enabled(self, name: str, enabled: bool) -> None:
         """运行时启用/禁用某工具。"""
         if name in self._tools:
             self._tools[name].enabled = enabled
-            self._logger.info(f"工具 {name} {'启用' if enabled else '禁用'}")
+            self._logger.info(f"Tool {name} {'enabled' if enabled else 'disabled'}")
 
     @staticmethod
     def _is_feature_enabled(tool_name: str, cfg: Any) -> bool:

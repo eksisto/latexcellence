@@ -69,9 +69,9 @@ async def browse_directory(
     target = Path(path) if path else Path.cwd()
     try:
         if not target.exists():
-            raise HTTPException(status_code=400, detail=f"路径不存在: {path}")
+            raise HTTPException(status_code=400, detail=f"Path does not exist: {path}")
         if not target.is_dir():
-            raise HTTPException(status_code=400, detail=f"不是目录: {path}")
+            raise HTTPException(status_code=400, detail=f"Not a directory: {path}")
         entries = []
         for entry in sorted(target.iterdir()):
             if entry.name.startswith("."):
@@ -89,7 +89,7 @@ async def browse_directory(
             "directories": entries,
         }
     except PermissionError:
-        raise HTTPException(status_code=403, detail=f"无权访问目录: {path}")
+        raise HTTPException(status_code=403, detail=f"Permission denied: {path}")
     except HTTPException:
         raise
     except Exception as e:

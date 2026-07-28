@@ -317,7 +317,7 @@ class DuckDuckGoHtmlEngine(BaseSearchEngine):
             submission_url=action,
             form_data=form_data,
             engine_name="DuckDuckGo",
-            instruction="选择所有包含鸭子的图片",
+            instruction="Select all images containing ducks",
         )
 
     async def _fetch_challenge_images(

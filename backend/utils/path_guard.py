@@ -48,28 +48,28 @@ def resolve_project_path(
         ValueError: 路径不合法或超出项目根目录
     """
     if not file_path or not file_path.strip():
-        raise ValueError("file_path 不能为空")
+        raise ValueError("file_path must not be empty")
 
     if "\x00" in file_path:
-        raise ValueError("file_path 包含非法字符")
+        raise ValueError("file_path contains illegal characters")
 
     if os.path.isabs(file_path):
-        raise ValueError("file_path 不能是绝对路径")
+        raise ValueError("file_path must not be an absolute path")
 
     if ".." in Path(file_path).parts:
-        raise ValueError("file_path 不能包含 '..' 路径段")
+        raise ValueError("file_path must not contain '..' segments")
 
     resolved = (root / file_path).resolve()
 
     if not resolved.is_relative_to(root.resolve()):
-        raise ValueError("file_path 解析后超出项目根目录范围")
+        raise ValueError("file_path resolves outside the project root")
 
     if not allow_symlink:
         check = Path(root / file_path)
         while check != root and check != check.parent:
             try:
                 if os.path.islink(check):
-                    raise ValueError("file_path 包含符号链接")
+                    raise ValueError("file_path contains a symbolic link")
             except ValueError:
                 raise
             except OSError:
@@ -78,6 +78,6 @@ def resolve_project_path(
 
     if allowed_suffixes is not None and resolved.suffix.lower() not in allowed_suffixes:
         allowed = "/".join(allowed_suffixes)
-        raise ValueError(f"file_path 必须以 {allowed} 结尾")
+        raise ValueError(f"file_path must end with one of: {allowed}")
 
     return resolved
