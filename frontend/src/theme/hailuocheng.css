@@ -1,5 +1,5 @@
 [data-theme="hailuocheng"]:root {
-  --background: oklch(0.9383 0.0042 236.4993);
+  --background: oklch(0.98 0.0042 236.4993);
   --foreground: oklch(0.3211 0 0);
   --card: oklch(1 0 0);
   --card-foreground: oklch(0.3211 0 0);
