@@ -38,13 +38,11 @@ import {
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import BibManagerLibrary from "@/components/BibManagerLibrary";
 import useStore from "@/store/useStore";
-import {
-  useFormatAnalysis,
-  useMetadataExtraction,
-  useBibtexGeneration,
-  useLatexGeneration,
-  useBibFileSave,
-} from "@/hooks/bib-manager";
+import useFormatAnalysis from "@/hooks/bib-manager/useFormatAnalysis";
+import useMetadataExtraction from "@/hooks/bib-manager/useMetadataExtraction";
+import useBibtexGeneration from "@/hooks/bib-manager/useBibtexGeneration";
+import useLatexGeneration from "@/hooks/bib-manager/useLatexGeneration";
+import useBibFileSave from "@/hooks/bib-manager/useBibFileSave";
 
 const FormatResultCard = React.memo(function FormatResultCard({
   formatResult,

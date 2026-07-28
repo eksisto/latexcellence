@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
@@ -88,6 +88,15 @@ export default function TypoCheckPage() {
     reset,
     hasFilters,
   } = useResultFilter(typoResults, { idPrefix: "typo-result" });
+
+  const groupedParagraphs = useMemo(
+    () => groupByFile(typoParagraphs),
+    [typoParagraphs],
+  );
+  const groupedResults = useMemo(
+    () => groupByFile(filteredResults),
+    [filteredResults],
+  );
 
   const renderResultCard = (result) => {
     const hasChanges = result.changes && result.changes.length > 0;
@@ -340,8 +349,7 @@ export default function TypoCheckPage() {
                         ))}
                       </TabsList>
                       {activeFiles.map((f) => {
-                        const fileParagraphs =
-                          groupByFile(typoParagraphs)[f] || [];
+                        const fileParagraphs = groupedParagraphs[f] || [];
                         return (
                           <TabsContent key={f} value={f}>
                             <div className="space-y-3">
@@ -435,7 +443,7 @@ export default function TypoCheckPage() {
                       ))}
                     </TabsList>
                     {activeFiles.map((f) => {
-                      const fileResults = groupByFile(filteredResults)[f] || [];
+                      const fileResults = groupedResults[f] || [];
                       return (
                         <TabsContent key={f} value={f}>
                           <div className="space-y-4">

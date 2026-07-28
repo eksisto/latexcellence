@@ -4,6 +4,10 @@ import remarkMath from "remark-math";
 import rehypeKatex from "rehype-katex";
 import "katex/dist/katex.min.css";
 
+// 模块级常量，减少重复解析
+const remarkPlugins = [remarkGfm, remarkMath];
+const rehypePlugins = [rehypeKatex];
+
 const components = {
   code({ inline, className, children, ...props }) {
     if (inline) {
@@ -59,8 +63,8 @@ export default function MarkdownRenderer({ children }) {
   return (
     <div className="prose dark:prose-invert max-w-none text-sm leading-relaxed break-words">
       <Markdown
-        remarkPlugins={[remarkGfm, remarkMath]}
-        rehypePlugins={[rehypeKatex]}
+        remarkPlugins={remarkPlugins}
+        rehypePlugins={rehypePlugins}
         components={components}
       >
         {children}

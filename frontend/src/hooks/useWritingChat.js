@@ -1,16 +1,15 @@
 import { useState, useCallback, useEffect, useRef, useMemo } from "react";
+import { toast } from "sonner";
 import { api } from "@/api/index";
 import useStore from "@/store/useStore";
 import i18n, { getUiLanguage } from "@/i18n";
 import { flattenTexFiles } from "@/hooks/useParagraphCheck";
-import {
-  useWritingChatSessions,
-  useWritingChatAssistants,
-  useWritingChatCaptcha,
-  createSSEEventHandler,
-  isDraftSession,
-  uid,
-} from "./writing-chat";
+import { translateError } from "@/utils/errorMessages";
+import { useWritingChatSessions } from "./writing-chat/sessions";
+import { useWritingChatAssistants } from "./writing-chat/assistants";
+import { useWritingChatCaptcha } from "./writing-chat/captcha";
+import { createSSEEventHandler } from "./writing-chat/sse";
+import { isDraftSession, uid } from "./writing-chat/utils";
 
 export default function useWritingChat() {
   const projectPath = useStore((s) => s.projectPath);
@@ -219,7 +218,6 @@ export default function useWritingChat() {
         setWritingChatMessages((prev) =>
           prev.filter((m) => m.id !== tmpAssistantId),
         );
-        const { translateError } = await import("@/utils/errorMessages");
         const msg = translateError(e.message);
         toast.error(msg, { description: e.message });
       } finally {
@@ -253,8 +251,6 @@ export default function useWritingChat() {
         !writingChatCurrentSessionId ||
         paragraphIndex == null
       ) {
-        const { toast } = await import("sonner");
-        const { default: i18n } = await import("@/i18n");
         toast.error(i18n.t("hooks:writingChat.selectFileAndParagraph"));
         return null;
       }
@@ -283,8 +279,6 @@ export default function useWritingChat() {
         return data;
       } catch (e) {
         setError(e.message);
-        const { toast } = await import("sonner");
-        const { default: i18n } = await import("@/i18n");
         toast.error(i18n.t("hooks:writingChat.generateEditFailed"), {
           description: e.message,
         });
@@ -333,13 +327,9 @@ export default function useWritingChat() {
               : m,
           ),
         );
-        const { toast } = await import("sonner");
-        const { default: i18n } = await import("@/i18n");
         toast.success(i18n.t("hooks:writingChat.editApplied"));
       } catch (e) {
         setError(e.message);
-        const { toast } = await import("sonner");
-        const { default: i18n } = await import("@/i18n");
         toast.error(i18n.t("hooks:writingChat.applyEditFailed"), {
           description: e.message,
         });
@@ -364,8 +354,6 @@ export default function useWritingChat() {
         );
       } catch (e) {
         setError(e.message);
-        const { toast } = await import("sonner");
-        const { default: i18n } = await import("@/i18n");
         toast.error(i18n.t("hooks:writingChat.deleteMessageFailed"), {
           description: e.message,
         });
@@ -392,8 +380,6 @@ export default function useWritingChat() {
           (m) => m.compressed && m.role === "summary",
         );
         setWritingChatCompressed(hasCompressed);
-        const { toast } = await import("sonner");
-        const { default: i18n } = await import("@/i18n");
         if (result?.restored) {
           toast.success(i18n.t("hooks:writingChat.undoCompressedSuccess"));
         } else if (result?.removed) {
@@ -401,8 +387,6 @@ export default function useWritingChat() {
         }
       } catch (e) {
         setError(e.message);
-        const { toast } = await import("sonner");
-        const { default: i18n } = await import("@/i18n");
         toast.error(i18n.t("hooks:writingChat.undoFailed"), {
           description: e.message,
         });

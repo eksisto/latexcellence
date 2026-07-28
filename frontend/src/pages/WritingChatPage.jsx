@@ -27,7 +27,8 @@ import {
 import { Separator } from "@/components/ui/separator";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import useWritingChat from "@/hooks/useWritingChat";
-import { MessageBubble, CaptchaDialog } from "./writing-chat";
+import MessageBubble from "./writing-chat/MessageBubble";
+import CaptchaDialog from "./writing-chat/CaptchaDialog";
 
 export default function WritingChatPage() {
   const { t } = useTranslation(["pages", "common"]);

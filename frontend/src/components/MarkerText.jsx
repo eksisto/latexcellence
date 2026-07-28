@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useMemo } from "react";
 import { useTranslation } from "react-i18next";
 
 const MARKER_COLORS = {
@@ -9,20 +9,25 @@ const MARKER_COLORS = {
   COM: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200 border-yellow-200 dark:border-yellow-800",
 };
 
+const MARKER_REGEX = /(__(?:MATH|CMD|ENV|VERB|COM)_\d{4,}__)/g;
+
 export default function MarkerText({ text }) {
   const { t } = useTranslation("components");
 
+  const markerLabels = useMemo(
+    () => ({
+      MATH: t("markerText.math"),
+      CMD: t("markerText.cmd"),
+      ENV: t("markerText.env"),
+      VERB: t("markerText.verb"),
+      COM: t("markerText.com"),
+    }),
+    [t],
+  );
+
+  const tokens = useMemo(() => (text ? text.split(MARKER_REGEX) : []), [text]);
+
   if (!text) return null;
-
-  const MARKER_LABELS = {
-    MATH: t("markerText.math"),
-    CMD: t("markerText.cmd"),
-    ENV: t("markerText.env"),
-    VERB: t("markerText.verb"),
-    COM: t("markerText.com"),
-  };
-
-  const tokens = text.split(/(__(?:MATH|CMD|ENV|VERB|COM)_\d{4,}__)/g);
 
   return (
     <>
@@ -37,7 +42,7 @@ export default function MarkerText({ text }) {
               className={`inline-flex items-center px-1 py-0.5 rounded text-[10px] font-medium mx-0.5 border ${MARKER_COLORS[type]} align-middle shadow-sm`}
               title={token}
             >
-              {MARKER_LABELS[type]}-{num}
+              {markerLabels[type]}-{num}
             </span>
           );
         }

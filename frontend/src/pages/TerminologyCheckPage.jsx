@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useMemo } from "react";
 import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
@@ -178,9 +178,14 @@ export default function TerminologyCheckPage() {
     t,
   ]);
 
+  const groupedTerminologyParagraphs = useMemo(
+    () => groupByFile(terminologyParagraphs),
+    [terminologyParagraphs],
+  );
+
   const renderParagraphsByFile = (paragraphs) => {
     if (activeFiles.length > 1) {
-      const groups = groupByFile(paragraphs);
+      const groups = groupedTerminologyParagraphs;
       return (
         <Tabs defaultValue={activeFiles[0]}>
           <TabsList>

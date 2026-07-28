@@ -77,7 +77,7 @@ export default function SettingsDialog() {
             mathMarkups: optionsData.math_markups || [],
           });
         })
-        .catch((err) => console.error("Failed to load config:", err))
+        .catch(() => {})
         .finally(() => setLoading(false));
     }
   }, [open]);
@@ -121,7 +121,6 @@ export default function SettingsDialog() {
       setOpen(false);
       toast.success(t("settings.configSaved"));
     } catch (err) {
-      console.error("Failed to save config:", err);
       toast.error(t("settings.configSaveFailed"), { description: err.message });
     } finally {
       setSaving(false);

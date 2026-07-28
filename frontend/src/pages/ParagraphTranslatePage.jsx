@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
@@ -127,6 +127,15 @@ export default function ParagraphTranslatePage() {
     reset,
     hasFilters,
   } = useResultFilter(translateResults, { idPrefix: "translate-result" });
+
+  const groupedParagraphs = useMemo(
+    () => groupByFile(translateParagraphs),
+    [translateParagraphs],
+  );
+  const groupedResults = useMemo(
+    () => groupByFile(filteredResults),
+    [filteredResults],
+  );
 
   const handleTranslate = () => {
     handleCheck();
@@ -413,8 +422,7 @@ export default function ParagraphTranslatePage() {
                           ))}
                         </TabsList>
                         {activeFiles.map((f) => {
-                          const fileParagraphs =
-                            groupByFile(translateParagraphs)[f] || [];
+                          const fileParagraphs = groupedParagraphs[f] || [];
                           return (
                             <TabsContent key={f} value={f}>
                               <div className="space-y-3">
@@ -508,7 +516,7 @@ export default function ParagraphTranslatePage() {
                       ))}
                     </TabsList>
                     {activeFiles.map((f) => {
-                      const fileResults = groupByFile(filteredResults)[f] || [];
+                      const fileResults = groupedResults[f] || [];
                       return (
                         <TabsContent key={f} value={f}>
                           <div className="space-y-4">
