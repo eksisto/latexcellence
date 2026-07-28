@@ -14,6 +14,9 @@
     "request_interval": 1.5,
     "max_concurrency": 5
   },
+  "http": {
+    "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36"
+  },
   "features": {
     "typo_check": {
       "enabled": true,
@@ -91,14 +94,21 @@
     },
     "bib_manager": {
       "enabled": true,
-      "format_configs_dir": "formats/"
+      "format_configs_dir": "formats/",
+      "providers": {
+        "crossref": { "enabled": true },
+        "arxiv": { "enabled": true },
+        "datacite": { "enabled": true },
+        "openalex": { "enabled": false },
+        "europepmc": { "enabled": false },
+        "semantic_scholar": { "enabled": false }
+      }
     },
     "web_search": {
       "enabled": true,
       "primary_engine": "duckduckgo",
       "max_results": 5,
       "timeout_seconds": 10,
-      "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36",
       "engines": {
         "duckduckgo": {
           "enabled": true

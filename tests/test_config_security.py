@@ -51,7 +51,18 @@ SAMPLE_CONFIG = {
             "summary_temperature": 0.2,
             "summary_max_tokens": 1024,
         },
-        "bib_manager": {"enabled": True, "format_configs_dir": "formats/"},
+        "bib_manager": {
+            "enabled": True,
+            "format_configs_dir": "formats/",
+            "providers": {
+                "crossref": {"enabled": True},
+                "arxiv": {"enabled": True},
+                "datacite": {"enabled": True},
+                "openalex": {"enabled": False},
+                "europepmc": {"enabled": False},
+                "semantic_scholar": {"enabled": False},
+            },
+        },
     },
     "logging": {"level": "INFO", "dir": "logs/"},
 }

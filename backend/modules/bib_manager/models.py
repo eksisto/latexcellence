@@ -49,9 +49,10 @@ class ExtractedMetadata(BaseModel):
 class GenerateBibtexRequest(BaseModel):
     """BibTeX 生成请求"""
 
-    metadata: dict
+    metadata: dict = {}
     format_info: dict | None = None
     existing_keys: list[str] = []
+    doi: str | None = None  # 用于 DOI 查询生成 BibTeX
 
 
 class BibEntry(BaseModel):
@@ -93,3 +94,29 @@ class LatexCodeResult(BaseModel):
     bibliography: str = ""
     cite_command: str = ""
     full_code: str = ""
+
+
+class DoiLookupRequest(BaseModel):
+    """DOI 查询请求"""
+
+    doi: str
+
+
+class DoiLookupResult(BaseModel):
+    """DOI 查询结果（多数据源聚合后的论文元数据）"""
+
+    title: str = ""
+    authors: list[str] = []
+    year: str = ""
+    journal: str = ""
+    volume: str = ""
+    issue: str = ""
+    pages: str = ""
+    doi: str = ""
+    publisher: str = ""
+    abstract: str = ""
+    url: str = ""
+    isbn: str = ""
+    issn: str = ""
+    keywords: list[str] = []
+    data_source: str = ""  # 数据来源标识（如 crossref / arxiv / datacite）

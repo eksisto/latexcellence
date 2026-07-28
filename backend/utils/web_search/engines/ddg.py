@@ -27,7 +27,7 @@ _DD_CHALLENGE_TTL = 300  # 5 分钟过期
 
 def _get_user_agent() -> str:
     """从配置获取 User-Agent。"""
-    return get_config().features.web_search.user_agent
+    return get_config().http.user_agent
 
 
 # ── 验证码异常 ────────────────────────────────────────────────────────────────

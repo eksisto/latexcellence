@@ -6,6 +6,7 @@
     2. 从文本或图片中提取结构化元数据
     3. 将元数据生成为规范的 BibTeX 代码
     4. 读写项目中的 .bib 文件
+    5. 通过 DOI 查询获取论文元数据
 """
 
 import base64
@@ -25,11 +26,13 @@ from backend.core.config import get_config
 from backend.core.prompts import get_prompt
 from backend.modules.bib_manager.models import (
     BibEntry,
+    DoiLookupResult,
     ExtractedMetadata,
     LatexCodeResult,
     ReferenceFormatResult,
 )
 from backend.modules.bib_manager.style_registry import get_style_for_format
+from backend.modules.bib_manager.provider_manager import get_provider_manager
 from backend.utils.json_utils import retry_with_validation
 from backend.utils.file_ops import atomic_write, safe_read
 from backend.utils.path_guard import resolve_project_path
@@ -341,7 +344,7 @@ class BibManagerService:
         lines: list[str] = []
 
         if preamble:
-            lines.append(f"% 需要添加到导言区的宏包配置")
+            lines.append(f"% Preamble package configuration to add in the preamble")
             lines.append(preamble)
             lines.append("")
 
@@ -352,7 +355,9 @@ class BibManagerService:
                 if format_info
                 else "\\printbibliography"
             )
-            lines.append(f"% 在文档末尾使用以下命令生成参考文献列表")
+            lines.append(
+                f"% Use the following command at the end of your document to generate the bibliography list"
+            )
             lines.append(print_cmd)
             if cite_key:
                 cite_cmd = (
@@ -361,18 +366,18 @@ class BibManagerService:
                     else "\\cite"
                 )
                 lines.append("")
-                lines.append(f"% 引用示例：{cite_cmd}{{{cite_key}}}")
+                lines.append(f"% Citation example: {cite_cmd}{{{cite_key}}}")
         else:
             # BibTeX 工作流
             if bibliographystyle:
                 lines.append(
-                    f"% 在 \\begin{{document}} 之后、\\end{{document}} 之前添加："
+                    f"% Add the following after \\begin{{document}} and before \\end{{document}}:"
                 )
                 lines.append(f"\\bibliographystyle{{{bibliographystyle}}}")
             lines.append(f"\\bibliography{{{bib_path}}}")
             if cite_key:
                 lines.append("")
-                lines.append(f"% 引用示例：\\cite{{{cite_key}}}")
+                lines.append(f"% Citation example: \\cite{{{cite_key}}}")
 
         full_code = "\n".join(lines)
 
@@ -605,3 +610,27 @@ class BibManagerService:
             img = img.convert("RGB")
         img.save(buffer, format="JPEG", quality=85)
         return base64.b64encode(buffer.getvalue()).decode("utf-8")
+
+    async def lookup_doi(self, doi: str) -> dict[str, Any]:
+        """通过 DOI 查询多数据源聚合元数据。
+
+        路由策略：
+        - arXiv DOI（10.48550/arXiv.*）→ ArxivProvider
+        - 普通 DOI → Crossref（主索引）→ 补全层按优先级降级
+        """
+        manager = get_provider_manager()
+        result = await manager.lookup_doi(doi)
+        return result.model_dump()
+
+    async def generate_bibtex_from_doi(
+        self,
+        doi: str,
+        format_info: dict | None = None,
+        existing_keys: list[str] | None = None,
+    ) -> dict[str, Any]:
+        """通过 DOI 查询元数据并生成 BibTeX 代码。"""
+        # 1. 查询 Crossref API 获取元数据
+        metadata = await self.lookup_doi(doi)
+
+        # 2. 调用 LLM 生成 BibTeX
+        return await self.generate_bibtex(metadata, format_info, existing_keys)

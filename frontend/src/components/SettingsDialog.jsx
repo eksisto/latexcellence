@@ -683,20 +683,20 @@ export default function SettingsDialog() {
                     </div>
                   )}
                 </fieldset>
-
-                {/* User-Agent */}
-                <div className="space-y-1.5">
-                  <Label className="text-xs">User-Agent</Label>
-                  <Input
-                    placeholder={t("settings.userAgentHint")}
-                    value={config.features.web_search.user_agent}
-                    onChange={(e) =>
-                      set("features.web_search.user_agent", e.target.value)
-                    }
-                  />
-                </div>
               </div>
             )}
+          </ConfigSection>
+
+          {/* HTTP */}
+          <ConfigSection title={t("settings.http")}>
+            <div className="space-y-1.5">
+              <Label className="text-xs">User-Agent</Label>
+              <Input
+                placeholder={t("settings.userAgentHint")}
+                value={config.http?.user_agent ?? ""}
+                onChange={(e) => set("http.user_agent", e.target.value)}
+              />
+            </div>
           </ConfigSection>
 
           {/* Logging */}

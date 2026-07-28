@@ -61,7 +61,8 @@ latexcellence/
 │       ├── format_converter/        # 格式转换
 │       ├── style_modify/            # 样式修改
 │       ├── writing_chat/            # 写作助手聊天
-│       ├── bib_manager/             # 参考文献管理
+│       ├── bib_manager/             # 参考文献管理（含 DOI 多数据源查询）
+│       │   └── providers/           # 可插拔 DOI 数据源提供者
 │       └── project_router.py        # 项目管理路由
 │
 ├── frontend/
@@ -113,7 +114,7 @@ latexcellence/
 | format_converter | 格式转换(pandoc) | router.py, service.py | ✓(宏包分析) | ✗ |
 | style_modify | 自然语言修改样式 | router.py, service.py | ✓ | ✗ |
 | writing_chat | 写作助手对话 | router.py, service.py, context.py, models.py, prompt_manager.py | ✓ | ✗ |
-| bib_manager | 参考文献管理 | router.py, service.py, models.py, style_registry.py | ✓ | ✗ |
+| bib_manager | 参考文献管理 + DOI 多数据源查询 | router.py, service.py, provider_manager.py, providers/ | ✓(DOI 查询不依赖 LLM) | ✗ |
 
 ## 核心设计思路
 
@@ -126,6 +127,12 @@ latexcellence/
 - **JSON Validation Pipeline**: `safe_parse_json()` → Pydantic `.model_validate()` → `retry_with_validation()` (最多 3 次重试 + 错误反馈)
 - **SSE Streaming**: 所有段落检查模块通过 Server-Sent Events 推送 `progress`/`result`/`error`/`done` 事件
 - **Function Calling 工具体系**: `ToolRegistry`（工具注册表）管理所有可用工具的 schema 和执行函数；`SearchManager`（搜索管理器）提供 `web_search` 工具的 schema 和执行，统一封装 `DuckDuckGoHtmlEngine`（模拟浏览器请求，遇 HTTP 202 Challenge 时抛出 `DDGChallengeError`，由 service 捕获并以 `captcha_challenge` SSE 事件推送到前端）和 `SearXNGEngine`（通过 `/search?format=json` 获取结果，无验证码）；DDG Challenge 验证码提交通过通用路由 `/api/search/ddg-challenge` 处理，不绑定特定业务模块；Writing Chat 的 `send()` 方法在检测到 LLM 返回 `tool_call` 时自动执行工具、将结果回传 LLM，再流式输出最终回复（"先工具调用再流式"模式）
+- **DOI 多数据源查询**: `ProviderManager`（全局单例）管理多个可插拔 `BaseMetadataProvider`
+    - Crossref 主索引 + arXiv 预印本专用 + 补全层
+    - arXiv DOI（`10.48550/arXiv.*`）自动路由到 ArxivProvider
+    - 普通 DOI 先查 Crossref 成功后用补全层合并空字段（`_merge()`），失败则串行降级
+    - 配置通过 `config.json → features.bib_manager.providers` 独立开关每个数据源
+- **HTTP 全局配置**: `AppConfig.http.user_agent` 统一管理所有外部 HTTP 请求的 User-Agent，供 web_search 引擎和 bib_manager Provider 共用
 - **模板生成自主 Agent**: `TemplateAgentService` 基于 Function Calling 实现"写文件 → 编译验证 → 读日志 → 修错 → 再编译"的自主循环，产出完整可编译的多文件 LaTeX 工程。
     - 工具（`write_file`/`read_file`/`list_files`/`compile_latex`/`finish`）为 session 级私有，schema 由 service 动态构建并经 `chat_with_tools` 注入，不注册到全局 `ToolRegistry` 避免污染其他模块工具集。
     - 每次生成在 `output_dir/agent/<session_id>/` 创建独立沙箱，路径经 `_resolve_sandbox_path` 校验（禁绝对路径 / `..` / 非白名单扩展名 / 越界）。SSE 推送 `plan`/`tool_call`/`tool_result`/`compile`（含结构化 `errors` 列表）/`warning`（编译未过却 finish）/`done`/`error` 事件。

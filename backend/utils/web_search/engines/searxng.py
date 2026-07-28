@@ -10,7 +10,7 @@ from backend.utils.web_search.models import SearchResponse, SearchResult
 
 def _get_user_agent() -> str:
     """从配置获取 User-Agent。"""
-    return get_config().features.web_search.user_agent
+    return get_config().http.user_agent
 
 
 class SearXNGEngine(BaseSearchEngine):

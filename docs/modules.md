@@ -36,7 +36,7 @@
 | --- | --- | --- |
 | 自动编译 | [compile.md](modules/compile.md) | LaTeX 编译、引擎自动检测、PDF/A 支持与错误翻译 |
 | Git 差异高亮 | [git_diff.md](modules/git_diff.md) | 版本差异可视化高亮 PDF |
-| 参考文献管理 | [bib_manager.md](modules/bib_manager.md) | BibTeX 格式识别与管理 |
+| 参考文献管理 | [bib_manager.md](modules/bib_manager.md) | BibTeX 格式识别、DOI 多数据源查询 |
 
 ### 工具模块
 
@@ -65,6 +65,17 @@
 - **使用 Marker 保护**：typo_check, expression_opt, terminology_check, code_review, paragraph_translate
 - **不使用**：formula_ocr, table_ocr, compile, format_converter, style_modify, git_diff, template_gen
 
+### Provider 架构（多数据源抽象）
+
+bib_manager 的 DOI 查询模块和 web_search 模块共享类似的**可插拔 Provider** 架构模式：
+
+- 抽象基类（`BaseSearchEngine` / `BaseMetadataProvider`）定义统一接口
+- 多个具体实现各自包装一个外部 API
+- 管理器（`SearchManager` / `ProviderManager`）统筹注册、优先级和降级
+- 全局单例按配置初始化
+
+两个模块的区别在于：web_search 的 fallback 是自动降级，bib_manager 的 Provider 使用"主索引 + 补全层串行降级"策略。
+
 ### LLM 调用模式
 
 | 模式 | 模块 |
@@ -82,3 +93,6 @@
 | pandoc | format_converter |
 | git | git_diff |
 | OpenAI 兼容 API | 大部分 LLM 模块 |
+| Crossref / DataCite / OpenAlex / Europe PMC / Semantic Scholar API | bib_manager（DOI 查询数据源） |
+| arXiv API | bib_manager（预印本查询） |
+| DuckDuckGo HTML / SearXNG API | web_search（联网搜索） |

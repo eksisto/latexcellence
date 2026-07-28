@@ -197,11 +197,24 @@ class WebSearchConfig(BaseModel):
     primary_engine: str = "duckduckgo"  # 主搜索引擎标识（duckduckgo / searxng）
     max_results: int = Field(5, ge=1, le=20)  # 默认返回结果数上限
     timeout_seconds: int = Field(10, ge=1)  # 单次搜索超时（秒）
-    # 浏览器 User-Agent
-    user_agent: str = (
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36"
-    )
     engines: WebSearchEnginesConfig = WebSearchEnginesConfig()
+
+
+class BibProviderConfig(BaseModel):
+    """单个 DOI 数据源配置"""
+
+    enabled: bool = True
+
+
+class BibProvidersConfig(BaseModel):
+    """DOI 数据源集合配置"""
+
+    crossref: BibProviderConfig = BibProviderConfig()
+    arxiv: BibProviderConfig = BibProviderConfig()
+    datacite: BibProviderConfig = BibProviderConfig()
+    openalex: BibProviderConfig = BibProviderConfig(enabled=False)
+    europepmc: BibProviderConfig = BibProviderConfig(enabled=False)
+    semantic_scholar: BibProviderConfig = BibProviderConfig(enabled=False)
 
 
 class BibManagerConfig(BaseModel):
@@ -209,6 +222,7 @@ class BibManagerConfig(BaseModel):
 
     enabled: bool = True  # 是否启用
     format_configs_dir: str = "formats/"  # 保存的格式配置文件目录
+    providers: BibProvidersConfig = BibProvidersConfig()  # DOI 数据源配置
 
 
 class FeaturesConfig(BaseModel):
@@ -238,11 +252,21 @@ class LoggingConfig(BaseModel):
     dir: str = "logs/"  # 日志文件输出目录
 
 
+class HttpConfig(BaseModel):
+    """HTTP 请求全局配置"""
+
+    user_agent: str = (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+        "(KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36"
+    )
+
+
 class AppConfig(BaseModel):
     """应用总配置——顶层模型，包含所有子配置"""
 
     server: ServerConfig = ServerConfig()
     llm: LLMConfig = LLMConfig()
+    http: HttpConfig = HttpConfig()
     features: FeaturesConfig = FeaturesConfig()
     logging: LoggingConfig = LoggingConfig()
 

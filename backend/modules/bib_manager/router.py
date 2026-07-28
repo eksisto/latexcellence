@@ -11,6 +11,7 @@ from fastapi import APIRouter, File, Form, HTTPException, Query, UploadFile
 from pydantic import BaseModel
 
 from backend.modules.bib_manager.models import (
+    DoiLookupRequest,
     FormatAnalysisRequest,
     GenerateBibtexRequest,
     GenerateLatexRequest,
@@ -120,6 +121,40 @@ async def generate_bibtex(request: GenerateBibtexRequest):
         raise HTTPException(status_code=500, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+async def _doi_exception_wrap(coro):
+    """DOI 查询异常统一映射：ValueError→404, RuntimeError→502, 其它→500。"""
+    try:
+        return await coro
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except RuntimeError as e:
+        raise HTTPException(status_code=502, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/doi-lookup")
+async def doi_lookup(request: DoiLookupRequest):
+    """通过 DOI 查询多数据源聚合元数据。"""
+    if not request.doi.strip():
+        raise HTTPException(status_code=400, detail="Empty DOI")
+    return await _doi_exception_wrap(get_service().lookup_doi(request.doi))
+
+
+@router.post("/generate-from-doi")
+async def generate_from_doi(request: GenerateBibtexRequest):
+    """通过 DOI 查询元数据并生成 BibTeX 代码。"""
+    if not request.doi:
+        raise HTTPException(status_code=400, detail="DOI is required")
+    return await _doi_exception_wrap(
+        get_service().generate_bibtex_from_doi(
+            request.doi,
+            request.format_info,
+            request.existing_keys,
+        )
+    )
 
 
 @router.post("/read-bib")

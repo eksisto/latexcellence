@@ -64,6 +64,11 @@ export default function BibManagerPage() {
   const [step2Loading, setStep2Loading] = useState(false);
   const imageInputRef = useRef(null);
 
+  // DOI lookup
+  const [doiInput, setDoiInput] = useState("");
+  const [doiLoading, setDoiLoading] = useState(false);
+  const [doiResult, setDoiResult] = useState(null);
+
   // Step 3: BibTeX generation
   const [bibtexResult, setBibtexResult] = useState(null);
   const [editedBibtex, setEditedBibtex] = useState("");
@@ -308,6 +313,40 @@ export default function BibManagerPage() {
       reader.readAsDataURL(file);
     }
   }, []);
+
+  // DOI lookup handler
+  const handleDoiLookup = useCallback(async () => {
+    if (!doiInput.trim()) {
+      toast.error(t("pages:bibManager.doiEmpty"));
+      return;
+    }
+    setDoiLoading(true);
+    setDoiResult(null);
+    try {
+      const data = await api.bibManager.doiLookup(doiInput.trim());
+      setDoiResult(data);
+      // 将 DOI 查询结果填充到元数据字段
+      const fields = {};
+      if (data.title) fields.title = data.title;
+      if (data.authors?.length) fields.author = data.authors.join(" and ");
+      if (data.year) fields.year = data.year;
+      if (data.journal) fields.journal = data.journal;
+      if (data.volume) fields.volume = data.volume;
+      if (data.issue) fields.issue = data.issue;
+      if (data.pages) fields.pages = data.pages;
+      if (data.doi) fields.doi = data.doi;
+      if (data.publisher) fields.publisher = data.publisher;
+      if (data.abstract) fields.abstract = data.abstract;
+      setEditedMetadata(fields);
+      toast.success(t("pages:bibManager.doiLookupSuccess"));
+    } catch (e) {
+      toast.error(t("pages:bibManager.doiLookupFailed"), {
+        description: e.message,
+      });
+    } finally {
+      setDoiLoading(false);
+    }
+  }, [doiInput, t]);
 
   const handleMetadataEdit = useCallback((field, value) => {
     setEditedMetadata((prev) => ({ ...prev, [field]: value }));
@@ -766,6 +805,58 @@ export default function BibManagerPage() {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
+              {/* DOI Lookup Section */}
+              <div className="rounded-lg border border-dashed border-primary/30 bg-primary/5 p-4 space-y-3">
+                <div className="flex items-center gap-2">
+                  <BookOpen className="size-4 text-primary" />
+                  <span className="text-sm font-medium">
+                    {t("pages:bibManager.doiLookupTitle")}
+                  </span>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  {t("pages:bibManager.doiLookupDesc")}
+                </p>
+                <div className="flex items-center gap-2">
+                  <Input
+                    className="flex-1 h-8 text-xs font-mono"
+                    value={doiInput}
+                    onChange={(e) => setDoiInput(e.target.value)}
+                    placeholder={t("pages:bibManager.doiLookupPlaceholder")}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") handleDoiLookup();
+                    }}
+                  />
+                  <Button
+                    size="sm"
+                    onClick={handleDoiLookup}
+                    disabled={doiLoading || !doiInput.trim()}
+                  >
+                    {doiLoading ? (
+                      <Loader2 className="animate-spin" />
+                    ) : (
+                      <Search />
+                    )}
+                    {doiLoading
+                      ? t("pages:bibManager.doiLookupBtnLoading")
+                      : t("pages:bibManager.doiLookupBtn")}
+                  </Button>
+                </div>
+                {doiResult && (
+                  <div className="rounded bg-muted/50 p-2 text-xs">
+                    <span className="text-muted-foreground">
+                      {t("pages:bibManager.doiLookupFound")}:
+                    </span>
+                    <span className="ml-1 font-medium">{doiResult.title}</span>
+                  </div>
+                )}
+              </div>
+
+              <div className="flex items-center gap-3">
+                <span className="text-xs text-muted-foreground">
+                  {t("pages:bibManager.step2OrManual")}
+                </span>
+              </div>
+
               <Textarea
                 className="min-h-20 resize-none"
                 value={metadataText}

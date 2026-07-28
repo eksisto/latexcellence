@@ -525,6 +525,16 @@ export const api = {
       }),
     listBibFiles: (workspaceId) =>
       request(appendWs("/bib-manager/list-bib-files", workspaceId)),
+    doiLookup: (doi) =>
+      request("/bib-manager/doi-lookup", {
+        method: "POST",
+        body: JSON.stringify({ doi }),
+      }),
+    generateFromDoi: (data) =>
+      request("/bib-manager/generate-from-doi", {
+        method: "POST",
+        body: JSON.stringify(data),
+      }),
     formats: {
       list: () => request("/bib-manager/formats"),
       load: (name) =>
