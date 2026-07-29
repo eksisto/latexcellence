@@ -1,8 +1,21 @@
-import { lazy, Suspense } from "react";
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
-import { TooltipProvider } from "@/components/ui/tooltip";
+import { lazy, Suspense, memo, useCallback } from "react";
+import {
+  BrowserRouter,
+  Routes,
+  Route,
+  Navigate,
+  useNavigate,
+} from "react-router-dom";
+import {
+  TooltipProvider,
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import { Button } from "@/components/ui/button";
 import { Toaster } from "@/components/ui/sonner";
-import { Loader2 } from "lucide-react";
+import { Loader2, Archive } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import ThemeToggle from "@/components/ThemeToggle";
 import ThemeSwitcher from "@/components/ThemeSwitcher";
 import SettingsDialog from "@/components/SettingsDialog";
@@ -61,6 +74,31 @@ const bgSvg = (
   </svg>
 );
 
+const AppToolbar = memo(function AppToolbar() {
+  const navigate = useNavigate();
+  const { t } = useTranslation("components");
+  const handleNavigate = useCallback(() => navigate("/workspace"), [navigate]);
+
+  return (
+    <div className="fixed top-4 right-4 z-50 flex items-center gap-1">
+      <ThemeSwitcher />
+      <ThemeToggle />
+      <Tooltip>
+        <TooltipTrigger
+          render={
+            <Button variant="ghost" size="icon" onClick={handleNavigate} />
+          }
+        >
+          <Archive className="size-5" />
+          <span className="sr-only">{t("workspace")}</span>
+        </TooltipTrigger>
+        <TooltipContent>{t("workspace")}</TooltipContent>
+      </Tooltip>
+      <SettingsDialog />
+    </div>
+  );
+});
+
 export default function App() {
   useFavicon();
 
@@ -68,11 +106,7 @@ export default function App() {
     <TooltipProvider>
       <BrowserRouter>
         {bgSvg}
-        <div className="fixed top-4 right-4 z-50 flex items-center gap-1">
-          <ThemeSwitcher />
-          <ThemeToggle />
-          <SettingsDialog />
-        </div>
+        <AppToolbar />
         <Toaster />
         <Suspense
           fallback={

@@ -10,7 +10,6 @@ import {
 } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import {
-  FolderOpen,
   ScanText,
   Table2,
   FileText,
@@ -28,18 +27,6 @@ import {
 import useEnabledFeatures from "@/hooks/useEnabledFeatures";
 
 const featureGroups = [
-  {
-    category: "groups.projectManagement",
-    features: [
-      {
-        titleKey: "workspace.title",
-        descKey: "workspace.desc",
-        to: "/workspace",
-        icon: FolderOpen,
-        id: "workspace",
-      },
-    ],
-  },
   {
     category: "groups.contentImport",
     features: [

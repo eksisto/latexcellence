@@ -34,7 +34,6 @@
       "slogan": "Let typesetting fade into silence, and let thinking return to itself",
       "version": "v0.1.0",
       "groups": {
-        "projectManagement": "Project Management",
         "contentImport": "Content Import",
         "contentGeneration": "Content Generation",
         "textReview": "Text Review & Optimization",
@@ -43,10 +42,6 @@
         "aiAssist": "AI Assistance"
       },
       "features": {
-        "workspace": {
-          "title": "Project Workspace",
-          "desc": "Open and edit LaTeX projects"
-        },
         "formulaOcr": {
           "title": "Formula OCR",
           "desc": "Convert images to LaTeX formulas"
@@ -758,6 +753,7 @@
       "switchTheme": "Switch Theme",
       "themeLabel": "Theme"
     },
+    "workspace": "Project Workspace",
     "themeNames": {
       "youminghei": "Black",
       "jingtailan": "Blue",
