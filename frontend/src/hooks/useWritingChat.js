@@ -44,7 +44,31 @@ export default function useWritingChat() {
   const [editingMessageId, setEditingMessageId] = useState(null); // generate-edit 进行中
   const [applyingMessageId, setApplyingMessageId] = useState(null);
   // 工具调用状态（{ tool, label, args }），SSE tool_status/tool_result 事件控制
-  const [toolStatus, setToolStatus] = useState(null);
+  const [toolStatus, _setToolStatus] = useState(null);
+  const toolStatusStartRef = useRef(null);
+  const clearToolTimeoutRef = useRef(null);
+  const MIN_TOOL_STATUS_DISPLAY_TIME = 1500; // ms，工具状态指示器最短显示时间
+  const setToolStatus = useCallback((value) => {
+    if (value !== null) {
+      toolStatusStartRef.current = Date.now();
+      if (clearToolTimeoutRef.current) {
+        clearTimeout(clearToolTimeoutRef.current);
+        clearToolTimeoutRef.current = null;
+      }
+      _setToolStatus(value);
+    } else {
+      const elapsed = Date.now() - (toolStatusStartRef.current || 0);
+      const remaining = MIN_TOOL_STATUS_DISPLAY_TIME - elapsed;
+      if (remaining > 0) {
+        clearToolTimeoutRef.current = setTimeout(
+          () => _setToolStatus(null),
+          remaining,
+        );
+      } else {
+        _setToolStatus(null);
+      }
+    }
+  }, []);
   const restoringRef = useRef(false);
 
   const texFiles = useMemo(() => flattenTexFiles(fileTree), [fileTree]);
