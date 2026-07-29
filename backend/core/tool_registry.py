@@ -26,7 +26,7 @@ ToolExecutor = Callable[[str, dict[str, Any]], Awaitable[Any]]
 class ToolEntry:
     """单个工具的注册条目。"""
 
-    __slots__ = ("name", "schema", "executor", "enabled")
+    __slots__ = ("name", "schema", "executor", "enabled", "config_path")
 
     def __init__(
         self,
@@ -34,11 +34,13 @@ class ToolEntry:
         schema: dict[str, Any],
         executor: ToolExecutor,
         enabled: bool = True,
+        config_path: str | None = None,
     ) -> None:
         self.name = name
         self.schema = schema
         self.executor = executor
         self.enabled = enabled
+        self.config_path = config_path
 
 
 class ToolRegistry:
@@ -62,10 +64,15 @@ class ToolRegistry:
         schema: dict[str, Any],
         executor: ToolExecutor,
         enabled: bool = True,
+        config_path: str | None = None,
     ) -> None:
         """注册一个工具。若同名工具已存在则覆盖。"""
         self._tools[name] = ToolEntry(
-            name=name, schema=schema, executor=executor, enabled=enabled
+            name=name,
+            schema=schema,
+            executor=executor,
+            enabled=enabled,
+            config_path=config_path,
         )
         self._logger.info(f"Tool registered: {name} (enabled={enabled})")
 
@@ -79,7 +86,7 @@ class ToolRegistry:
         result: list[dict[str, Any]] = []
         for name, entry in self._tools.items():
             # 检查全局配置中对应功能是否启用
-            if not self._is_feature_enabled(name, cfg):
+            if not self._is_feature_enabled(name, cfg, self._tools):
                 continue
             if entry.enabled:
                 result.append(entry.schema)
@@ -110,13 +117,17 @@ class ToolRegistry:
             self._logger.info(f"Tool {name} {'enabled' if enabled else 'disabled'}")
 
     @staticmethod
-    def _is_feature_enabled(tool_name: str, cfg: Any) -> bool:
+    def _is_feature_enabled(
+        tool_name: str, cfg: Any, tools: dict[str, ToolEntry]
+    ) -> bool:
         """检查工具对应的全局功能开关。"""
-        features = cfg.features
-        if tool_name == "web_search":
-            return features.web_search.enabled
-        # 未知工具默认启用（由 entry.enabled 控制）
-        return True
+        entry = tools.get(tool_name)
+        if entry is None or entry.config_path is None:
+            return True
+        value = cfg
+        for part in entry.config_path.split("."):
+            value = getattr(value, part)
+        return bool(value)
 
 
 # ── 全局单例 ────────────────────────────────────────────────────────────────

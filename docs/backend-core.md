@@ -166,9 +166,121 @@ class ProjectInfo:
 
 ### `backend/core/tool_registry.py` — Function Calling 工具注册表
 
-统一管理所有可暴露给 LLM 的工具 schema 和执行函数。负责注册工具、校验参数、分发调用。当前主要承载 `web_search` 工具，供 Writing Chat 模块在流式对话中按需调用。
+全局工具注册表，所有可暴露给 LLM 的工具统一管理。通过 `get_tool_registry()` 获取单例。
 
-**核心接口**：`register_tool(name, schema, fn)` / `get_tool_schema(name)` / `execute(name, arguments)` / `list_tools()`
+**核心接口**：
+
+| 方法 | 功能 |
+| --- | --- |
+| `register(name, schema, executor, enabled, config_path)` | 注册工具。`config_path` 声明该工具受哪个配置字段控制 |
+| `get_enabled_tools()` | 返回当前可用的工具 schema 列表（注入 LLM `tools` 参数） |
+| `execute(tool_name, arguments)` | 根据 tool_call.name 分发到对应执行函数 |
+| `set_enabled(name, enabled)` | 运行时动态启用/禁用 |
+
+#### 如何添加新工具
+
+工具注册分为两步：**① 实现执行函数** → **② 在合适的初始化时机注册**。以下以添加 `get_current_time` 工具为例。
+
+**1. 实现执行函数**
+
+```python
+# backend/utils/time_utils.py 中新增
+async def _get_time_executor(tool_name: str, arguments: dict) -> str:
+    """返回当前日期时间。"""
+    from backend.utils.time_utils import get_current_time_context
+    ctx = get_current_time_context()
+    return f"Current date: {ctx['date']} ({ctx['weekday']}), time: {ctx['time']}"
+```
+
+执行函数签名必须为 `async (tool_name: str, arguments: dict[str, Any]) -> Any`。返回类型不限（会被 LLM 以 JSON 形式接收）。
+
+**2. 注册到 ToolRegistry**
+
+将注册代码放在所依赖模块的初始化位置。例如工具依赖 `web_search` 模块，就放在 `SearchManager` 初始化末尾：
+
+```python
+# backend/utils/web_search/manager.py — get_search_manager() 末尾
+registry.register(
+    name="web_search",
+    schema=schema[0],        # OpenAI function schema（不含 tools wrapper）
+    executor=_web_search_executor,
+    config_path="features.web_search.enabled",  # ← 声明配置路径
+)
+```
+
+`config_path` 参数将工具和 `config.json` 中的功能开关绑定：
+- `config_path="features.web_search.enabled"` → 当 `config.json` 中 `features.web_search.enabled = false` 时，`get_enabled_tools()` 自动排除此工具
+- `config_path=None`（默认）→ 不受配置控制，仅受 `enabled` 参数或 `set_enabled()` 控制
+
+**3. 在消费端启用**
+
+已在用 `chat_with_tools()` 的模块（如 `writing_chat/service.py`）中：
+
+```python
+# writing_chat 的 _get_enabled_tools()
+from backend.core.tool_registry import get_tool_registry
+tools = get_tool_registry().get_enabled_tools()
+```
+
+`get_enabled_tools()` 会自动过滤：同时满足 `config_path` 指向的配置开关为 `true` 且 `entry.enabled = true`。
+
+**完整示例：注册 `compile_latex` 编译工具**
+
+```python
+# backend/modules/compile/service.py（或模块初始化点）
+from backend.core.tool_registry import get_tool_registry
+from backend.core.logger import get_logger
+
+_logger = get_logger("compile")
+
+COMPILE_SCHEMA = {
+    "type": "function",
+    "function": {
+        "name": "compile_latex",
+        "description": "编译当前 LaTeX 项目并返回错误列表",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "main_file": {
+                    "type": "string",
+                    "description": "主文档路径（相对于项目根目录）",
+                },
+            },
+            "required": ["main_file"],
+        },
+    },
+}
+
+async def _compile_executor(tool_name: str, arguments: dict) -> str:
+    """执行编译，返回结构化结果。"""
+    from backend.core.config import get_config
+    from backend.utils.tex_compile import run_tex_compile
+    from pathlib import Path
+
+    cfg = get_config()
+    main_file = arguments["main_file"]
+    result = await run_tex_compile(
+        main_file=main_file,
+        cwd=Path.cwd(),
+        timeout=cfg.features.compile.latexmk_timeout,
+        engine=cfg.features.compile.engine,
+    )
+    return result.model_dump_json()
+
+# 注册（通常在模块首次初始化时调用）
+get_tool_registry().register(
+    name="compile_latex",
+    schema=COMPILE_SCHEMA,
+    executor=_compile_executor,
+    config_path="features.compile.enabled",
+)
+```
+
+**注意事项**：
+- `schema` 是整个 OpenAI function schema（包含 `type` 和 `function`），不含外层 `tools` 数组
+- 注册时机避免在模块 `__init__` 中执行，宜在首次调用时或 FastAPI `lifespan` 中注册
+- 敏感工具（如写文件）建议添加用户确认环节：工具执行前推 SSE `confirmation_required` 事件
+- 若工具需要私有不暴露给其他模块，可在模块内部维护私有 executor（如 `template_gen/agent.py` 的 `_ToolExecutor`），不注册到全局 `ToolRegistry`
 
 ### `backend/core/workspace_manager.py` — 多工作区管理器
 

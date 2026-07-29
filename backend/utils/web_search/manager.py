@@ -202,6 +202,7 @@ def get_search_manager() -> SearchManager:
                 name="web_search",
                 schema=schema[0],
                 executor=_web_search_executor,
+                config_path="features.web_search.enabled",
             )
 
     return _search_manager

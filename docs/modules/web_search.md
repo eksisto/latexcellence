@@ -32,7 +32,7 @@
 
 ### ToolRegistry
 
-Function Calling 工具注册表，统一管理所有可用工具。
+Function Calling 工具注册表，统一管理所有可用工具。`web_search` 工具在 `get_search_manager()` 初始化时通过 `registry.register(name="web_search", ..., config_path="features.web_search.enabled")` 注册，与配置中的功能开关绑定。
 
 ## 配置
 
