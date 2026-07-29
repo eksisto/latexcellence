@@ -202,7 +202,7 @@ _PROMPTS: dict[str, dict[str, str]] = {
             "specific paragraphs or files, and any pending edits\n"
             "- Keep it concise — usually under 300 words\n"
             "- Write in the user's language\n"
-            '- Return JSON only: {{"summary": "<your summary>"}}'
+            '- Return JSON only: {"summary": "<your summary>"}'
         ),
         "chat_system_time_context": (
             "\n\nCurrent date: {date} ({weekday}), time: {time}\n"
@@ -331,11 +331,11 @@ _PROMPTS: dict[str, dict[str, str]] = {
             "  * Below 0.5: Poor quality, significant uncertainty\n"
             "If the image is not a formula or unrecognizable, set 'latex' to empty string and 'confidence' to 0.0\n\n"
             "Respond with JSON only, no markdown fences:\n"
-            "{{\n"
+            "{\n"
             '  "latex": "<LaTeX code>",\n'
             '  "inline": <boolean>,\n'
             '  "confidence": <float between 0 and 1>\n'
-            "}}"
+            "}"
         ),
     },
     # ── table_ocr 模块 ───────────────────────────────────────────────────────
@@ -364,10 +364,10 @@ _PROMPTS: dict[str, dict[str, str]] = {
             "  * Below 0.5: Poor quality, significant uncertainty\n"
             "If the image is not a table or unrecognizable, set 'latex' to empty string and 'confidence' to 0.0\n\n"
             "Respond with JSON only, no markdown fences:\n"
-            "{{\n"
+            "{\n"
             '  "latex": "<LaTeX table float code>",\n'
             '  "confidence": <float between 0 and 1>\n'
-            "}}"
+            "}"
         ),
     },
     # ── style_modify 模块 ────────────────────────────────────────────────────
@@ -389,9 +389,9 @@ _PROMPTS: dict[str, dict[str, str]] = {
             "3. Do NOT add markdown fences or extra commentary in the JSON response\n"
             "4. Respond with JSON only, following the schema exactly\n\n"
             "JSON format:\n"
-            "{{\n"
+            "{\n"
             '  "latex": "<the complete modified LaTeX code>"\n'
-            "}}"
+            "}"
         ),
     },
     # ── bib_manager 模块 ──────────────────────────────────────────────────────
@@ -469,12 +469,12 @@ _PROMPTS: dict[str, dict[str, str]] = {
             "- Output each value as a plain string\n\n"
             "Respond with JSON only, no markdown fences, no extra text.\n\n"
             "JSON format:\n"
-            "{{\n"
-            '  "fields": {{\n'
+            "{\n"
+            '  "fields": {\n'
             '    "<field_name_1>": "<extracted value>",\n'
             '    "<field_name_2>": "<extracted value>"\n'
-            "  }}\n"
-            "}}"
+            "  }\n"
+            "}"
         ),
         "bibtex_generation": (
             "You are a BibTeX code generator. "
@@ -486,7 +486,7 @@ _PROMPTS: dict[str, dict[str, str]] = {
             "firstAuthorLastName + year + firstMeaningfulKeyword (all lowercase)\n"
             "  Example: devlin2018bert, krizhevsky2012imagenet\n"
             "- Include all available fields, use empty string for missing required fields\n"
-            "- Each field should be properly quoted with curly braces: title = {{...}},\n"
+            "- Each field should be properly quoted with curly braces: title = {...},\n"
             "- Preserve LaTeX special characters in titles (escape % & _ # if needed)\n"
             "- Format output as clean, indented BibTeX code\n"
             "- Do NOT include fields that have no value (empty string) as optional fields\n"
@@ -494,17 +494,17 @@ _PROMPTS: dict[str, dict[str, str]] = {
             "- Avoid duplicate cite_keys: if existing_keys is provided, adjust the cite_key\n\n"
             "Respond with JSON only, no markdown fences, no extra text.\n\n"
             "JSON format:\n"
-            "{{\n"
+            "{\n"
             '  "cite_key": "<generated cite key>",\n'
             '  "entry_type": "<BibTeX entry type>",\n'
-            '  "fields": {{\n'
+            '  "fields": {\n'
             '    "author": "<author1 and author2>",\n'
             '    "title": "<title>",\n'
             '    "journal": "<journal>",\n'
             '    "year": "<year>"\n'
-            "  }},\n"
+            "  },\n"
             '  "raw_bibtex": "<complete formatted BibTeX code as a single string with \\\\n line breaks>"\n'
-            "}}"
+            "}"
         ),
     },
     # ── paragraph_translate 模块 ──────────────────────────────────────────────
@@ -635,40 +635,40 @@ _PROMPTS: dict[str, dict[str, str]] = {
             "- \\makecell, \\thead, \\makecellbox → makecell\n"
             "- \\diagbox → diagbox\n"
             "- \\resizebox, \\includegraphics, \\rotatebox, \\scalebox → graphicx\n"
-            "- >{...}, <{...}, p{{}}, m{{}}, b{{}} column specifiers → array\n"
+            "- >{...}, <{...}, p{}, m{}, b{} column specifiers → array\n"
             "- X column specifier → tabularx\n"
             "- S column specifier, \\num, \\SI, \\tablenum → siunitx\n"
             "- D column specifier → dcolumn\n"
             "- \\cellcolor, \\rowcolor, \\columncolor → colortbl\n"
             "- \\hhline → hhline\n"
-            "- {{NiceTabular}}, \\Block, \\CodeBefore → nicematrix\n"
-            "- {{tblr}}, \\SetRow, \\SetCell → tabularray\n"
-            "- {{longtable}}, \\endhead, \\endfoot, \\longtable → longtable\n"
-            "- {{threeparttable}}, \\tablenotes, \\tnote → threeparttable\n"
+            "- {NiceTabular}, \\Block, \\CodeBefore → nicematrix\n"
+            "- {tblr}, \\SetRow, \\SetCell → tabularray\n"
+            "- {longtable}, \\endhead, \\endfoot, \\longtable → longtable\n"
+            "- {threeparttable}, \\tablenotes, \\tnote → threeparttable\n"
             "- \\ding, \\Pifont → pifont\n"
-            "- Non-trivial math (\\frac, \\sum, \\begin{{equation}}, etc.) → amsmath\n\n"
+            "- Non-trivial math (\\frac, \\sum, \\begin{equation}, etc.) → amsmath\n\n"
             "## Rules\n"
             "1. Only include packages that are REQUIRED by features actually present.\n"
             "2. Do NOT include kernel-level commands/environments: tabular, "
-            "\\multicolumn, \\cline, \\hline, \\begin{{tabular}}, standard math mode.\n"
+            "\\multicolumn, \\cline, \\hline, \\begin{tabular}, standard math mode.\n"
             "3. If no extra packages are needed, return an empty list.\n"
             "4. Package names must be lowercase, without the '.sty' extension.\n"
             "5. Deduplicate the list and sort alphabetically.\n"
             "6. When a package is ambiguous (e.g., xcolor vs colortbl), prefer the "
             "one that directly provides the used command.\n\n"
             "## Examples\n"
-            "Input: \\begin{{tabular}}{{lcr}}\\toprule A & B & C\\\\\\midrule 1 & 2 & 3\\\\"
-            "\\bottomrule\\end{{tabular}}\n"
-            'Output: {{"packages": ["booktabs"]}}\n\n'
-            "Input: \\begin{{tabular}}{{>{{\\bfseries}}l p{{3cm}}}}\\makecell{{A\\\\B}} & "
-            "\\multirow{{2}}{{*}}{{text}}\\\\\\end{{tabular}}\n"
-            'Output: {{"packages": ["array", "makecell", "multirow"]}}\n\n'
-            "Input: \\begin{{tabular}}{{ll}}a & b\\end{{tabular}}\n"
-            'Output: {{"packages": []}}\n\n'
+            "Input: \\begin{tabular}{lcr}\\toprule A & B & C\\\\\\midrule 1 & 2 & 3\\\\"
+            "\\bottomrule\\end{tabular}\n"
+            'Output: {"packages": ["booktabs"]}\n\n'
+            "Input: \\begin{tabular}{>{\\bfseries}l p{3cm}}\\makecell{A\\\\B} & "
+            "\\multirow{2}{*}{text}\\\\\\end{tabular}\n"
+            'Output: {"packages": ["array", "makecell", "multirow"]}\n\n'
+            "Input: \\begin{tabular}{ll}a & b\\end{tabular}\n"
+            'Output: {"packages": []}\n\n'
             "## Output Format\n"
             "Respond with valid JSON only. No markdown fences, no explanations, "
             "no trailing commas.\n"
-            '{{"packages": ["package1", "package2"]}}'
+            '{"packages": ["package1", "package2"]}'
         ),
     },
 }
