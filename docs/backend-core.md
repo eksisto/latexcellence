@@ -204,12 +204,12 @@ registry.register(
     name="web_search",
     schema=schema[0],        # OpenAI function schema（不含 tools wrapper）
     executor=_web_search_executor,
-    config_path="features.web_search.enabled",  # ← 声明配置路径
+    config_path="features.function_calling.web_search.enabled",  # ← 声明配置路径
 )
 ```
 
 `config_path` 参数将工具和 `config.json` 中的功能开关绑定：
-- `config_path="features.web_search.enabled"` → 当 `config.json` 中 `features.web_search.enabled = false` 时，`get_enabled_tools()` 自动排除此工具
+- `config_path="features.function_calling.web_search.enabled"` → 当 `config.json` 中 `features.function_calling.web_search.enabled = false` 时，`get_enabled_tools()` 自动排除此工具
 - `config_path=None`（默认）→ 不受配置控制，仅受 `enabled` 参数或 `set_enabled()` 控制
 
 **3. 在消费端启用**

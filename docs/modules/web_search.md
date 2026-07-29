@@ -34,7 +34,7 @@
 
 ### ToolRegistry
 
-Function Calling 工具注册表，统一管理所有可用工具。`web_search` 工具在 `get_search_manager()` 初始化时通过 `registry.register(name="web_search", ..., config_path="features.web_search.enabled")` 注册，与配置中的功能开关绑定。
+Function Calling 工具注册表，统一管理所有可用工具。`web_search` 工具在 `get_search_manager()` 初始化时通过 `registry.register(name="web_search", ..., config_path="features.function_calling.web_search.enabled")` 注册，与配置中的功能开关绑定。
 
 ### Deep Read
 
@@ -55,7 +55,7 @@ Function Calling 工具注册表，统一管理所有可用工具。`web_search`
 
 ## 配置
 
-`features.web_search`：
+`features.function_calling.web_search`（位于 `function_calling` 配置组下）：
 
 | 字段 | 类型 | 默认值 | 说明 |
 | --- | --- | --- | --- |
@@ -67,7 +67,7 @@ Function Calling 工具注册表，统一管理所有可用工具。`web_search`
 | `deep_read_max_chars` | int | 4000 | 每页最大抓取字符数 |
 | `query_rewriting.enabled` | bool | true | 是否启用 LLM 查询重写 |
 
-两级开关（`web_search.enabled` + `writing_chat.web_search_enabled`）需同时开启才会在聊天中注入搜索工具。
+两级开关（`function_calling.web_search.enabled` + `writing_chat.web_search_enabled`）需同时开启才会在聊天中注入搜索工具。
 
 ## 与 Writing Chat 集成
 

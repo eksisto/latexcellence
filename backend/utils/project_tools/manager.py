@@ -406,7 +406,7 @@ def get_project_tools_manager() -> ProjectToolsManager:
                     name=name,
                     schema=schema,
                     executor=executor,
-                    config_path="features.project_tools.enabled",
+                    config_path="features.function_calling.project_tools.enabled",
                 )
                 logger = get_logger("project_tools")
                 logger.info(f"Project tool registered: {name}")

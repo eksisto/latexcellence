@@ -48,6 +48,9 @@ latexcellence/
 │   │   │       ├── ddg.py            # DuckDuckGo HTML 引擎 + DDG Challenge 处理
 │   │   │       ├── searxng.py        # SearXNG 引擎
 │   │   │       └── mock.py           # Mock 引擎（测试/降级）
+│   │   ├── project_tools/            # 项目文件浏览工具集（LLM Function Calling 工具）
+│   │   │   ├── __init__.py
+│   │   │   └── manager.py            # ProjectToolsManager + 4 个工具执行器（list_files/read_file_content/get_section_structure/search_across_files）
 │   │   └── search_router.py         # 通用搜索 API 路由（/api/search/ddg-challenge）
 │   └── modules/                     # 功能模块目录
 │       ├── typo_check/              # 错字查找
@@ -116,7 +119,7 @@ latexcellence/
 | table_ocr | 图片→LaTeX 表格 | router.py, service.py | ✓(Vision) | ✗ |
 | format_converter | 格式转换(pandoc) | router.py, service.py | ✓(宏包分析) | ✗ |
 | style_modify | 自然语言修改样式 | router.py, service.py | ✓ | ✗ |
-| writing_chat | 写作助手对话（含联网搜索 + Deep Read + 查询重写） | router.py, service.py, context.py, models.py, prompt_manager.py | ✓ | ✗ |
+| writing_chat | 写作助手对话（含联网搜索 + Deep Read + 查询重写 + 项目文件浏览） | router.py, service.py, context.py, models.py, prompt_manager.py | ✓ | ✗ |
 | bib_manager | 参考文献管理 + DOI 多数据源查询 + 重复检测 + 文献库 | router.py, service.py, models.py, bib_parser.py, provider_manager.py, providers/ | ✓(DOI 查询不依赖 LLM) | ✗ |
 
 ## 核心设计思路
@@ -130,8 +133,11 @@ latexcellence/
 - **JSON Validation Pipeline**: `safe_parse_json()` → Pydantic `.model_validate()` → `retry_with_validation()` (最多 3 次重试 + 错误反馈)
 - **SSE Streaming**: 所有段落检查模块通过 Server-Sent Events 推送 `progress`/`result`/`error`/`done` 事件
 - **Function Calling 工具体系**
-    - `ToolRegistry`（工具注册表）管理所有可用工具的 schema 和执行函数
+    - `features.function_calling` 配置组将全局 LLM 工具归入嵌套结构（替代原先扁平的 `features.function_calling.web_search` / `features.project_tools`），支持旧配置自动迁移
+    - `ToolRegistry`（工具注册表）管理所有可用工具的 schema 和执行函数，基于 `config_path` 动态检查功能开关
+    - 自注册模式：每个工具管理器在首次初始化时自动注册自身工具
     - `SearchManager`（搜索管理器）提供 `web_search` 工具的 schema 和执行，统一封装 `DuckDuckGoHtmlEngine`（模拟浏览器请求，遇 HTTP 202 Challenge 时抛出 `DDGChallengeError`，由 service 捕获并以 `captcha_challenge` SSE 事件推送到前端）和 `SearXNGEngine`（通过 `/search?format=json` 获取结果，无验证码）
+    - `ProjectToolsManager`（项目工具管理器）提供 4 个工具（`list_files` / `read_file_content` / `get_section_structure` / `search_across_files`），允许 LLM 浏览项目文件和目录结构
     - DDG Challenge 验证码提交通过通用路由 `/api/search/ddg-challenge` 处理，不绑定特定业务模块
     - 搜索流程可串联 **Query Rewriting**（将用户查询拆解为多条并行查询，去重合并）和 **Deep Read**（并发抓取搜索结果前 N 条页面正文，通过 `format_for_llm()` 注入 LLM 上下文）
     - Writing Chat 的 `send()` 方法在检测到 LLM 返回 `tool_call` 时自动执行工具、将结果回传 LLM，再流式输出最终回复（"先工具调用再流式"模式）

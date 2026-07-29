@@ -577,7 +577,7 @@ class WritingChatService:
 
         # ── 联网搜索工具 ──────────────────────────────────────────────
         if (
-            cfg.features.web_search.enabled
+            cfg.features.function_calling.web_search.enabled
             and cfg.features.writing_chat.web_search_enabled
             and web_search_enabled is not False
         ):
@@ -585,7 +585,7 @@ class WritingChatService:
             tools.extend(search_manager.get_tools_schema())
 
         # ── 项目文件浏览工具 ──────────────────────────────────────────
-        if cfg.features.project_tools.enabled and workspace_id:
+        if cfg.features.function_calling.project_tools.enabled and workspace_id:
             try:
                 pm = get_project_manager_for_workspace(workspace_id)
                 if pm.is_open:

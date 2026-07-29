@@ -264,8 +264,7 @@ class FeaturesConfig(BaseModel):
     paragraph_translate: ParagraphTranslateConfig = ParagraphTranslateConfig()
     writing_chat: WritingChatConfig = WritingChatConfig()
     bib_manager: BibManagerConfig = BibManagerConfig()
-    web_search: WebSearchConfig = WebSearchConfig()
-    project_tools: ProjectToolsConfig = ProjectToolsConfig()
+    function_calling: FunctionCallingConfig = FunctionCallingConfig()
 
 
 class LoggingConfig(BaseModel):
@@ -431,7 +430,7 @@ def update_config_from_dict(updates: dict) -> AppConfig:
         get_llm_client().reset()
 
     # 联网搜索配置变更时，重置 SearchManager 单例使新配置立即生效
-    if "features" in updates and "web_search" in updates.get("features", {}):
+    if "features" in updates and "function_calling" in updates.get("features", {}):
         from backend.utils.web_search import reset_search_manager
 
         reset_search_manager()

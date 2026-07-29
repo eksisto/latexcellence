@@ -116,8 +116,8 @@ export default function SettingsDialog() {
         paragraph_translate: config.features.paragraph_translate.enabled,
         writing_chat: config.features.writing_chat.enabled,
         bib_manager: config.features.bib_manager.enabled,
-        project_tools: config.features.project_tools.enabled,
-        web_search: config.features.web_search.enabled,
+        project_tools: config.features.function_calling.project_tools.enabled,
+        web_search: config.features.function_calling.web_search.enabled,
       });
       setOpen(false);
       toast.success(t("settings.configSaved"));
@@ -616,15 +616,19 @@ export default function SettingsDialog() {
           <ConfigSection title={t("settings.functionCallingTools")}>
             <CheckboxField
               label={t("settings.featureProjectTools")}
-              checked={config.features.project_tools.enabled}
-              onChange={(v) => set("features.project_tools.enabled", v)}
+              checked={config.features.function_calling.project_tools.enabled}
+              onChange={(v) =>
+                set("features.function_calling.project_tools.enabled", v)
+              }
             />
             <CheckboxField
               label={t("settings.featureWebSearch")}
-              checked={config.features.web_search.enabled}
-              onChange={(v) => set("features.web_search.enabled", v)}
+              checked={config.features.function_calling.web_search.enabled}
+              onChange={(v) =>
+                set("features.function_calling.web_search.enabled", v)
+              }
             />
-            {config.features.web_search.enabled && (
+            {config.features.function_calling.web_search.enabled && (
               <div className="ml-6 space-y-3">
                 {/* 搜索引擎配置 */}
                 <fieldset className="rounded border p-2.5 space-y-3">
@@ -637,9 +641,15 @@ export default function SettingsDialog() {
                       {t("settings.defaultEngine")}
                     </Label>
                     <Select
-                      value={config.features.web_search.primary_engine}
+                      value={
+                        config.features.function_calling.web_search
+                          .primary_engine
+                      }
                       onValueChange={(v) =>
-                        set("features.web_search.primary_engine", v)
+                        set(
+                          "features.function_calling.web_search.primary_engine",
+                          v,
+                        )
                       }
                     >
                       <SelectTrigger>
@@ -660,10 +670,14 @@ export default function SettingsDialog() {
                     <CheckboxField
                       label={t("settings.enabled")}
                       checked={
-                        config.features.web_search.engines.duckduckgo.enabled
+                        config.features.function_calling.web_search.engines
+                          .duckduckgo.enabled
                       }
                       onChange={(v) =>
-                        set("features.web_search.engines.duckduckgo.enabled", v)
+                        set(
+                          "features.function_calling.web_search.engines.duckduckgo.enabled",
+                          v,
+                        )
                       }
                     />
                   </fieldset>
@@ -676,13 +690,18 @@ export default function SettingsDialog() {
                     <CheckboxField
                       label={t("settings.enabled")}
                       checked={
-                        config.features.web_search.engines.searxng.enabled
+                        config.features.function_calling.web_search.engines
+                          .searxng.enabled
                       }
                       onChange={(v) =>
-                        set("features.web_search.engines.searxng.enabled", v)
+                        set(
+                          "features.function_calling.web_search.engines.searxng.enabled",
+                          v,
+                        )
                       }
                     />
-                    {config.features.web_search.engines.searxng.enabled && (
+                    {config.features.function_calling.web_search.engines.searxng
+                      .enabled && (
                       <div className="space-y-1.5">
                         <Label className="text-xs">
                           {t("settings.instanceUrl")}
@@ -690,11 +709,12 @@ export default function SettingsDialog() {
                         <Input
                           placeholder="http://localhost:8080"
                           value={
-                            config.features.web_search.engines.searxng.base_url
+                            config.features.function_calling.web_search.engines
+                              .searxng.base_url
                           }
                           onChange={(e) =>
                             set(
-                              "features.web_search.engines.searxng.base_url",
+                              "features.function_calling.web_search.engines.searxng.base_url",
                               e.target.value,
                             )
                           }
@@ -718,10 +738,13 @@ export default function SettingsDialog() {
                         type="number"
                         min="0"
                         max="5"
-                        value={config.features.web_search.deep_read_pages}
+                        value={
+                          config.features.function_calling.web_search
+                            .deep_read_pages
+                        }
                         onChange={(e) =>
                           set(
-                            "features.web_search.deep_read_pages",
+                            "features.function_calling.web_search.deep_read_pages",
                             parseInt(e.target.value, 10) || 0,
                           )
                         }
@@ -736,10 +759,13 @@ export default function SettingsDialog() {
                         min="500"
                         max="20000"
                         step="500"
-                        value={config.features.web_search.deep_read_max_chars}
+                        value={
+                          config.features.function_calling.web_search
+                            .deep_read_max_chars
+                        }
                         onChange={(e) =>
                           set(
-                            "features.web_search.deep_read_max_chars",
+                            "features.function_calling.web_search.deep_read_max_chars",
                             parseInt(e.target.value, 10) || 4000,
                           )
                         }
@@ -751,9 +777,15 @@ export default function SettingsDialog() {
                 {/* Query Rewriting */}
                 <CheckboxField
                   label={t("settings.queryRewriting")}
-                  checked={config.features.web_search.query_rewriting.enabled}
+                  checked={
+                    config.features.function_calling.web_search.query_rewriting
+                      .enabled
+                  }
                   onChange={(v) =>
-                    set("features.web_search.query_rewriting.enabled", v)
+                    set(
+                      "features.function_calling.web_search.query_rewriting.enabled",
+                      v,
+                    )
                   }
                 />
               </div>

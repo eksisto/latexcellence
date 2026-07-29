@@ -61,7 +61,7 @@ class SearchManager:
         """
         cfg = get_config()
         if max_results is None:
-            max_results = cfg.features.web_search.max_results
+            max_results = cfg.features.function_calling.web_search.max_results
 
         # 指定引擎
         if engine_name:
@@ -105,7 +105,7 @@ class SearchManager:
         """并行执行多条查询，合并结果去重后返回。"""
         cfg = get_config()
         if max_results is None:
-            max_results = cfg.features.web_search.max_results
+            max_results = cfg.features.function_calling.web_search.max_results
 
         tasks = [self.search(q, max_results) for q in queries]
         responses = await asyncio.gather(*tasks, return_exceptions=True)
@@ -204,7 +204,7 @@ async def _web_search_executor(
 
     # ── 查询重写 ──────────────────────────────────────────────────────────
     variants: list[str] = []
-    if cfg.features.web_search.query_rewriting.enabled:
+    if cfg.features.function_calling.web_search.query_rewriting.enabled:
         try:
             rewriter = QueryRewriter()
             variants = await rewriter.rewrite(original_query)
@@ -213,7 +213,7 @@ async def _web_search_executor(
             logger.warning(f"Query rewriting failed: {e}")
 
     # ── 执行搜索 ──────────────────────────────────────────────────────────
-    cfg_max = cfg.features.web_search.max_results
+    cfg_max = cfg.features.function_calling.web_search.max_results
     user_max = arguments.get("max_results", cfg_max)
 
     if len(variants) > 1:
@@ -230,13 +230,13 @@ async def _web_search_executor(
         )
 
     # ── Deep Read ─────────────────────────────────────────────────────────
-    if cfg.features.web_search.deep_read_pages > 0 and result.results:
+    if cfg.features.function_calling.web_search.deep_read_pages > 0 and result.results:
         reader = DeepReader()
         await reader.fetch_top_results(
             result.results,
-            max_pages=cfg.features.web_search.deep_read_pages,
-            max_chars_per_page=cfg.features.web_search.deep_read_max_chars,
-            timeout=cfg.features.web_search.timeout_seconds,
+            max_pages=cfg.features.function_calling.web_search.deep_read_pages,
+            max_chars_per_page=cfg.features.function_calling.web_search.deep_read_max_chars,
+            timeout=cfg.features.function_calling.web_search.timeout_seconds,
         )
 
     return result
@@ -254,7 +254,7 @@ def get_search_manager() -> SearchManager:
     if _search_manager is None:
         _search_manager = SearchManager()
         cfg = get_config()
-        engines_cfg = cfg.features.web_search.engines
+        engines_cfg = cfg.features.function_calling.web_search.engines
 
         # 根据每个引擎的 enabled 标志决定是否注册
         engine_registry: dict[str, BaseSearchEngine] = {}
@@ -263,7 +263,7 @@ def get_search_manager() -> SearchManager:
         if engines_cfg.searxng.enabled:
             engine_registry["searxng"] = SearXNGEngine()
 
-        primary = cfg.features.web_search.primary_engine
+        primary = cfg.features.function_calling.web_search.primary_engine
         for name, engine in engine_registry.items():
             _search_manager.register_engine(engine, primary=(name == primary))
 
@@ -277,7 +277,7 @@ def get_search_manager() -> SearchManager:
                 name="web_search",
                 schema=schema[0],
                 executor=_web_search_executor,
-                config_path="features.web_search.enabled",
+                config_path="features.function_calling.web_search.enabled",
             )
 
     return _search_manager

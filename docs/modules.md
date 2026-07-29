@@ -66,6 +66,15 @@
 - **使用 Marker 保护**：typo_check, expression_opt, terminology_check, code_review, paragraph_translate
 - **不使用**：formula_ocr, table_ocr, compile, format_converter, style_modify, git_diff, template_gen
 
+### 工具管理器自注册模式
+
+遵循相同的**全局单例 + 自注册**模式：
+
+- 静态 `get_tools_schema()` 定义工具 schema，供 LLM Function Calling 注入
+- 每个 executor 函数是独立的异步函数，接收 `tool_name` 和 `arguments`
+- 管理器首次初始化时自动调用 `ToolRegistry.register()` 注册全部工具
+- 配置通过 `features.function_calling.*.enabled` 统一控制开关
+
 ### Provider 架构（多数据源抽象）
 
 bib_manager 的 DOI 查询模块和 web_search 模块共享类似的**可插拔 Provider** 架构模式：

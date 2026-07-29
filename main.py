@@ -130,8 +130,11 @@ async def config_status():
                 "paragraph_translate",
                 "writing_chat",
                 "bib_manager",
-                "web_search",
             ]
+        }
+        | {
+            "web_search": cfg.features.function_calling.web_search.enabled,
+            "project_tools": cfg.features.function_calling.project_tools.enabled,
         },
     }
 

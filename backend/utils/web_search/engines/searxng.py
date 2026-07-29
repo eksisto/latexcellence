@@ -30,7 +30,10 @@ class SearXNGEngine(BaseSearchEngine):
     def _get_base_url(self) -> str:
         """获取 SearXNG 实例地址，优先使用运行时配置。"""
         cfg = get_config()
-        url = cfg.features.web_search.engines.searxng.base_url or self._base_url
+        url = (
+            cfg.features.function_calling.web_search.engines.searxng.base_url
+            or self._base_url
+        )
         return url.rstrip("/")
 
     async def search(self, query: str, max_results: int = 5) -> SearchResponse:
@@ -42,7 +45,7 @@ class SearXNGEngine(BaseSearchEngine):
 
         cfg = get_config()
         client = httpx.AsyncClient(
-            timeout=cfg.features.web_search.timeout_seconds,
+            timeout=cfg.features.function_calling.web_search.timeout_seconds,
             follow_redirects=True,
         )
         try:

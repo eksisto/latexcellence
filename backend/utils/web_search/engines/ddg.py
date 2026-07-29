@@ -137,7 +137,7 @@ class DuckDuckGoHtmlEngine(BaseSearchEngine):
         """获取 httpx 异步客户端。"""
         cfg = get_config()
         return httpx.AsyncClient(
-            timeout=cfg.features.web_search.timeout_seconds,
+            timeout=cfg.features.function_calling.web_search.timeout_seconds,
             follow_redirects=True,
             headers={
                 "User-Agent": _get_user_agent(),
@@ -390,7 +390,7 @@ class DuckDuckGoHtmlEngine(BaseSearchEngine):
 
         cfg = get_config()
         client = httpx.AsyncClient(
-            timeout=cfg.features.web_search.timeout_seconds,
+            timeout=cfg.features.function_calling.web_search.timeout_seconds,
             follow_redirects=True,
             headers={
                 "User-Agent": _get_user_agent(),
