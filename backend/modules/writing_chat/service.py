@@ -35,6 +35,7 @@ from backend.core.prompts import get_prompt
 from backend.utils.json_utils import retry_with_validation
 from backend.utils.time_utils import get_current_time_context
 from backend.utils.web_search import DDGChallengeError, get_search_manager
+from backend.utils.project_tools import get_project_tools_manager
 from backend.modules.writing_chat.context import (
     ConversationContext,
     _NOPROJECT_SCOPE,
@@ -178,8 +179,8 @@ class WritingChatService:
         ] + ctx.to_llm_messages()
         assistant_id = uuid.uuid4().hex
 
-        # 检查是否启用联网搜索工具
-        tools = self._get_enabled_tools(req.web_search_enabled)
+        # 获取可用的 Function Calling 工具（搜索 + 项目浏览）
+        tools = self._get_enabled_tools(workspace_id, req.web_search_enabled)
 
         # 工具调用循环：先非流式检测 tool_call，再流式输出最终回复
         if tools:
@@ -230,6 +231,8 @@ class WritingChatService:
                             "engine": "",
                         }
 
+                    # 注入工作区上下文（project_tools executor 使用）
+                    tool_args["_workspace_id"] = workspace_id
                     try:
                         tool_result = await get_tool_registry().execute(
                             tool_name, tool_args
@@ -554,33 +557,48 @@ class WritingChatService:
             return f"(failed to load file context: {e})"
         return text or "(file has no readable paragraphs)"
 
-    def _get_enabled_tools(self, web_search_enabled: bool | None = None) -> list[dict]:
+    def _get_enabled_tools(
+        self, workspace_id: str = "", web_search_enabled: bool | None = None
+    ) -> list[dict]:
         """
         获取当前可用的 Function Calling 工具列表。
 
+        包含联网搜索工具 + 项目文件浏览工具（项目已打开时）。
+
         参数：
+            workspace_id: 工作区 ID，用于检查项目是否已打开
             web_search_enabled: 请求级别的搜索开关覆盖
                 - None: 跟随全局配置
                 - True: 强制启用（即使全局关闭）
                 - False: 强制禁用（即使全局开启）
         """
         cfg = get_config()
+        tools: list[dict] = []
 
-        # 全局搜索功能未启用时，不提供工具
-        if not cfg.features.web_search.enabled:
-            return []
+        # ── 联网搜索工具 ──────────────────────────────────────────────
+        if (
+            cfg.features.web_search.enabled
+            and cfg.features.writing_chat.web_search_enabled
+            and web_search_enabled is not False
+        ):
+            search_manager = get_search_manager()
+            tools.extend(search_manager.get_tools_schema())
 
-        # writing_chat 模块级开关
-        if not cfg.features.writing_chat.web_search_enabled:
-            return []
+        # ── 项目文件浏览工具 ──────────────────────────────────────────
+        if cfg.features.project_tools.enabled and workspace_id:
+            try:
+                pm = get_project_manager_for_workspace(workspace_id)
+                if pm.is_open:
+                    pt_mgr = get_project_tools_manager()
+                    tools.extend(pt_mgr.get_tools_schema())
+            except Exception as e:
+                self._logger.warning(
+                    "Failed to load project tools for workspace %s: %s",
+                    workspace_id,
+                    e,
+                )
 
-        # 请求级别覆盖
-        if web_search_enabled is False:
-            return []
-
-        # 获取搜索工具 schema
-        search_manager = get_search_manager()
-        return search_manager.get_tools_schema()
+        return tools
 
     async def _maybe_compress(self, ctx: ConversationContext) -> bool:
         """

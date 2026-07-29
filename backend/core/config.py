@@ -157,6 +157,12 @@ class ParagraphTranslateConfig(BaseModel):
     batch_size: int = 5  # 每批发送给 LLM 的段落数
 
 
+class ProjectToolsConfig(BaseModel):
+    """项目文件浏览工具集配置（Function Calling 全局工具）"""
+
+    enabled: bool = True  # 是否启用
+
+
 class WritingChatConfig(BaseModel):
     """写作助手 Chat 模块配置"""
 
@@ -234,6 +240,13 @@ class BibManagerConfig(BaseModel):
     providers: BibProvidersConfig = BibProvidersConfig()  # DOI 数据源配置
 
 
+class FunctionCallingConfig(BaseModel):
+    """Function Calling 工具配置（全局工具，LLM 自主调用）"""
+
+    web_search: WebSearchConfig = WebSearchConfig()
+    project_tools: ProjectToolsConfig = ProjectToolsConfig()
+
+
 class FeaturesConfig(BaseModel):
     """功能特性总开关"""
 
@@ -252,6 +265,7 @@ class FeaturesConfig(BaseModel):
     writing_chat: WritingChatConfig = WritingChatConfig()
     bib_manager: BibManagerConfig = BibManagerConfig()
     web_search: WebSearchConfig = WebSearchConfig()
+    project_tools: ProjectToolsConfig = ProjectToolsConfig()
 
 
 class LoggingConfig(BaseModel):

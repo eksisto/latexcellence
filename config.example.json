@@ -104,16 +104,11 @@
         "semantic_scholar": { "enabled": false }
       }
     },
+    "project_tools": {
+      "enabled": true
+    },
     "web_search": {
       "enabled": true,
-      "primary_engine": "duckduckgo",
-      "max_results": 5,
-      "timeout_seconds": 10,
-      "deep_read_pages": 2,
-      "deep_read_max_chars": 4000,
-      "query_rewriting": {
-        "enabled": true
-      },
       "engines": {
         "duckduckgo": {
           "enabled": true
@@ -122,6 +117,14 @@
           "enabled": false,
           "base_url": "http://localhost:8080"
         }
+      },
+      "primary_engine": "duckduckgo",
+      "max_results": 5,
+      "timeout_seconds": 10,
+      "deep_read_pages": 2,
+      "deep_read_max_chars": 4000,
+      "query_rewriting": {
+        "enabled": true
       }
     }
   },

@@ -43,6 +43,7 @@
 | 模块 | 文档 | 说明 |
 | --- | --- | --- |
 | 联网搜索 | [web_search.md](modules/web_search.md) | 多引擎搜索 + Function Calling |
+| 项目文件浏览 | 无（自解释） | 4 个 LLM 工具（list_files / read_file_content / get_section_structure / search_across_files），让 LLM 浏览项目结构和文件内容 |
 
 ---
 

@@ -116,6 +116,7 @@ export default function SettingsDialog() {
         paragraph_translate: config.features.paragraph_translate.enabled,
         writing_chat: config.features.writing_chat.enabled,
         bib_manager: config.features.bib_manager.enabled,
+        project_tools: config.features.project_tools.enabled,
         web_search: config.features.web_search.enabled,
       });
       setOpen(false);
@@ -609,78 +610,98 @@ export default function SettingsDialog() {
               checked={config.features.bib_manager.enabled}
               onChange={(v) => set("features.bib_manager.enabled", v)}
             />
+          </ConfigSection>
+
+          {/* Function Calling 工具 */}
+          <ConfigSection title={t("settings.functionCallingTools")}>
+            <CheckboxField
+              label={t("settings.featureProjectTools")}
+              checked={config.features.project_tools.enabled}
+              onChange={(v) => set("features.project_tools.enabled", v)}
+            />
             <CheckboxField
               label={t("settings.featureWebSearch")}
               checked={config.features.web_search.enabled}
               onChange={(v) => set("features.web_search.enabled", v)}
             />
             {config.features.web_search.enabled && (
-              <div className="pl-6 space-y-3">
-                <div className="space-y-1.5">
-                  <Label className="text-xs">
-                    {t("settings.defaultEngine")}
-                  </Label>
-                  <Select
-                    value={config.features.web_search.primary_engine}
-                    onValueChange={(v) =>
-                      set("features.web_search.primary_engine", v)
-                    }
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="duckduckgo">DuckDuckGo</SelectItem>
-                      <SelectItem value="searxng">SearXNG</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                {/* DuckDuckGo */}
-                <fieldset className="rounded border p-2.5 space-y-2">
+              <div className="ml-6 space-y-3">
+                {/* 搜索引擎配置 */}
+                <fieldset className="rounded border p-2.5 space-y-3">
                   <legend className="px-1 text-xs font-medium">
-                    DuckDuckGo
+                    {t("settings.searchEngineConfig")}
                   </legend>
-                  <CheckboxField
-                    label={t("settings.enabled")}
-                    checked={
-                      config.features.web_search.engines.duckduckgo.enabled
-                    }
-                    onChange={(v) =>
-                      set("features.web_search.engines.duckduckgo.enabled", v)
-                    }
-                  />
-                </fieldset>
 
-                {/* SearXNG */}
-                <fieldset className="rounded border p-2.5 space-y-2">
-                  <legend className="px-1 text-xs font-medium">SearXNG</legend>
-                  <CheckboxField
-                    label={t("settings.enabled")}
-                    checked={config.features.web_search.engines.searxng.enabled}
-                    onChange={(v) =>
-                      set("features.web_search.engines.searxng.enabled", v)
-                    }
-                  />
-                  {config.features.web_search.engines.searxng.enabled && (
-                    <div className="space-y-1.5">
-                      <Label className="text-xs">
-                        {t("settings.instanceUrl")}
-                      </Label>
-                      <Input
-                        placeholder="http://localhost:8080"
-                        value={
-                          config.features.web_search.engines.searxng.base_url
-                        }
-                        onChange={(e) =>
-                          set(
-                            "features.web_search.engines.searxng.base_url",
-                            e.target.value,
-                          )
-                        }
-                      />
-                    </div>
-                  )}
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">
+                      {t("settings.defaultEngine")}
+                    </Label>
+                    <Select
+                      value={config.features.web_search.primary_engine}
+                      onValueChange={(v) =>
+                        set("features.web_search.primary_engine", v)
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="duckduckgo">DuckDuckGo</SelectItem>
+                        <SelectItem value="searxng">SearXNG</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* DuckDuckGo */}
+                  <fieldset className="rounded border p-2.5 space-y-2">
+                    <legend className="px-1 text-xs font-medium">
+                      DuckDuckGo
+                    </legend>
+                    <CheckboxField
+                      label={t("settings.enabled")}
+                      checked={
+                        config.features.web_search.engines.duckduckgo.enabled
+                      }
+                      onChange={(v) =>
+                        set("features.web_search.engines.duckduckgo.enabled", v)
+                      }
+                    />
+                  </fieldset>
+
+                  {/* SearXNG */}
+                  <fieldset className="rounded border p-2.5 space-y-2">
+                    <legend className="px-1 text-xs font-medium">
+                      SearXNG
+                    </legend>
+                    <CheckboxField
+                      label={t("settings.enabled")}
+                      checked={
+                        config.features.web_search.engines.searxng.enabled
+                      }
+                      onChange={(v) =>
+                        set("features.web_search.engines.searxng.enabled", v)
+                      }
+                    />
+                    {config.features.web_search.engines.searxng.enabled && (
+                      <div className="space-y-1.5">
+                        <Label className="text-xs">
+                          {t("settings.instanceUrl")}
+                        </Label>
+                        <Input
+                          placeholder="http://localhost:8080"
+                          value={
+                            config.features.web_search.engines.searxng.base_url
+                          }
+                          onChange={(e) =>
+                            set(
+                              "features.web_search.engines.searxng.base_url",
+                              e.target.value,
+                            )
+                          }
+                        />
+                      </div>
+                    )}
+                  </fieldset>
                 </fieldset>
 
                 {/* Deep Read */}
