@@ -10,7 +10,8 @@ const rehypePlugins = [rehypeKatex];
 
 const components = {
   code({ inline, className, children, ...props }) {
-    if (inline) {
+    const isInline = inline ?? !String(children).includes("\n");
+    if (isInline) {
       return (
         <code
           className="rounded bg-muted px-1 py-0.5 font-mono text-xs"
