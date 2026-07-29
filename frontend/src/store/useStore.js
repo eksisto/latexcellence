@@ -198,7 +198,7 @@ const useStore = create(
       setCompileResult: (result) => set({ compileResult: result }),
       setCompileLoading: (loading) => set({ compileLoading: loading }),
 
-      /* ===== 写作助手 Chat（仅持久化 currentSessionId） ===== */
+      /* ===== 写作助手 Chat ===== */
       writingChatSessions: [],
       writingChatCurrentSessionId: null,
       writingChatMessages: [],
@@ -254,6 +254,8 @@ const useStore = create(
           terminologyParagraphs: [],
           paragraphTranslateResults: [],
           paragraphTranslateParagraphs: [],
+          writingChatSessions: [],
+          writingChatCurrentSessionId: null,
           writingChatMessages: [],
           writingChatCompressed: false,
           checkProgress: null,
@@ -284,7 +286,10 @@ const useStore = create(
         terminologyParagraphs: state.terminologyParagraphs,
         paragraphTranslateResults: state.paragraphTranslateResults,
         paragraphTranslateParagraphs: state.paragraphTranslateParagraphs,
+        writingChatSessions: state.writingChatSessions,
         writingChatCurrentSessionId: state.writingChatCurrentSessionId,
+        writingChatMessages: state.writingChatMessages,
+        writingChatCompressed: state.writingChatCompressed,
       }),
     },
   ),

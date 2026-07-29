@@ -28,7 +28,7 @@ export function useWritingChatSessions({
   writingChatCurrentSessionId,
   writingChatMessages,
 }) {
-  // ── 首次挂载：加载会话列表 ───────────────────────────────────────
+  // ── 刷新会话列表 ─────────────────────────────────────────────────
   const refreshSessions = useCallback(async () => {
     try {
       const data = await api.writingChat.listSessions(workspaceId);
@@ -37,6 +37,11 @@ export function useWritingChatSessions({
       // Error handled by parent
     }
   }, [workspaceId, setWritingChatSessions]);
+
+  // ── 首次挂载：加载会话列表 ───────────────────────────────────────
+  useEffect(() => {
+    refreshSessions();
+  }, [refreshSessions]);
 
   // ── 切换会话 ─────────────────────────────────────────────────────
   const selectSession = useCallback(
