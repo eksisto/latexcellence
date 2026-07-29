@@ -397,7 +397,14 @@
       "activeAssistant": "当前：{{name}}",
       "emptySession": "（空会话）",
       "emptySessionHint": "点击左侧 + 按钮新建会话",
-      "searching": "正在搜索：{{query}}",
+      "toolStatus": {
+        "searching": "正在搜索：{{query}}",
+        "browsing_files": "正在浏览项目目录...",
+        "reading_file": "正在读取文件...",
+        "parsing_structure": "正在解析文档结构...",
+        "searching_files": "正在检索项目文件...",
+        "running_tool": "正在调用工具..."
+      },
       "inputPlaceholder": "向助手提问，Shift+Enter 换行",
       "inputPlaceholderNoFile": "请先选择文件...",
       "roleUser": "用户",

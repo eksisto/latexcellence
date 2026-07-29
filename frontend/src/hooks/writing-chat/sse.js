@@ -13,7 +13,7 @@ import { translateError } from "@/utils/errorMessages";
 export function createSSEEventHandler({
   tmpAssistantId,
   setWritingChatMessages,
-  setSearchStatus,
+  setToolStatus,
   setCaptchaChallenge,
   setWritingChatCompressed,
   setWritingChatSessions,
@@ -39,10 +39,12 @@ export function createSSEEventHandler({
           };
         }),
       );
-    } else if (event.type === "searching") {
-      setSearchStatus({ query: event.query, engine: event.engine });
+    } else if (event.type === "tool_status") {
+      // web_search / project_tools 调用中 → 显示工具状态指示器
+      setToolStatus(event);
     } else if (event.type === "tool_result") {
-      setSearchStatus(null);
+      // 工具执行完毕 → 隐藏指示器
+      setToolStatus(null);
       // 存储搜索结果到 assistant 消息
       if (event.search_results && event.search_results.length > 0) {
         setWritingChatMessages((prev) =>
@@ -59,7 +61,7 @@ export function createSSEEventHandler({
         );
       }
     } else if (event.type === "captcha_challenge") {
-      setSearchStatus(null);
+      setToolStatus(null);
       setCaptchaChallenge({
         challenge_id: event.challenge_id,
         images: event.images || [],

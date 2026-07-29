@@ -43,8 +43,8 @@ export default function useWritingChat() {
   const [error, setError] = useState(null);
   const [editingMessageId, setEditingMessageId] = useState(null); // generate-edit 进行中
   const [applyingMessageId, setApplyingMessageId] = useState(null);
-  // 联网搜索状态
-  const [searchStatus, setSearchStatus] = useState(null); // { query, engine } | null
+  // 工具调用状态（{ tool, label, args }），SSE tool_status/tool_result 事件控制
+  const [toolStatus, setToolStatus] = useState(null);
   const restoringRef = useRef(false);
 
   const texFiles = useMemo(() => flattenTexFiles(fileTree), [fileTree]);
@@ -191,7 +191,7 @@ export default function useWritingChat() {
       const onEvent = createSSEEventHandler({
         tmpAssistantId,
         setWritingChatMessages,
-        setSearchStatus,
+        setToolStatus,
         setCaptchaChallenge,
         setWritingChatCompressed,
         setWritingChatSessions,
@@ -223,7 +223,7 @@ export default function useWritingChat() {
       } finally {
         setStreaming(false);
         setLoading("writingChat", false);
-        setSearchStatus(null);
+        setToolStatus(null);
         // 后端 send 后可能新建会话或更新现有，刷新 session 列表
         refreshSessions();
       }
@@ -431,7 +431,7 @@ export default function useWritingChat() {
     error,
     editingMessageId,
     applyingMessageId,
-    searchStatus,
+    toolStatus,
     // DDG 验证码
     captchaChallenge,
     captchaSubmitting,

@@ -730,9 +730,9 @@ class TestWebSearchToolEvent:
             )
             events = [e async for e in service.send(req)]
 
-        # 验证事件流包含 searching → tool_result（含 search_results）→ token → done
+        # 验证事件流包含 tool_status → tool_result（含 search_results）→ token → done
         types = [e["type"] for e in events]
-        assert "searching" in types
+        assert "tool_status" in types
         assert "tool_result" in types
         assert "token" in types
         assert types[-1] == "done"

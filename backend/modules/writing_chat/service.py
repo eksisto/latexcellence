@@ -61,8 +61,21 @@ class WritingChatService:
     写作助手 Chat 服务（单例）。
     """
 
+    # 工具名 → i18n label 映射，前端通过 label 查找 toolStatus 翻译
+    _TOOL_LABELS: dict[str, str] = {
+        "web_search": "searching",
+        "list_files": "browsing_files",
+        "read_file_content": "reading_file",
+        "get_section_structure": "parsing_structure",
+        "search_across_files": "searching_files",
+    }
+
     def __init__(self):
         self._logger = get_logger("writing_chat.service")
+
+    @staticmethod
+    def _get_tool_label(tool_name: str, _tool_args: dict) -> str:
+        return WritingChatService._TOOL_LABELS.get(tool_name, "running_tool")
 
     # ── 工具方法 ──────────────────────────────────────────────────────────
 
@@ -223,13 +236,13 @@ class WritingChatService:
                     except Exception:
                         tool_args = {}
 
-                    # 推送搜索状态事件
-                    if tool_name == "web_search":
-                        yield {
-                            "type": "searching",
-                            "query": tool_args.get("query", ""),
-                            "engine": "",
-                        }
+                    # 推送工具状态事件（前端用于显示工具调用指示器 + 搜索词）
+                    yield {
+                        "type": "tool_status",
+                        "tool": tool_name,
+                        "label": self._get_tool_label(tool_name, tool_args),
+                        "args": tool_args,
+                    }
 
                     # 注入工作区上下文（project_tools executor 使用）
                     tool_args["_workspace_id"] = workspace_id

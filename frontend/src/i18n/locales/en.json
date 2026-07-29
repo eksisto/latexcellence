@@ -397,7 +397,14 @@
       "activeAssistant": "Current: {{name}}",
       "emptySession": "(Empty session)",
       "emptySessionHint": "Click the + button on the left to create a new session",
-      "searching": "Searching: {{query}}",
+      "toolStatus": {
+        "searching": "Searching: {{query}}",
+        "browsing_files": "Browsing project files...",
+        "reading_file": "Reading file...",
+        "parsing_structure": "Parsing document structure...",
+        "searching_files": "Searching project files...",
+        "running_tool": "Running tool..."
+      },
       "inputPlaceholder": "Ask the assistant, Shift+Enter for new line",
       "inputPlaceholderNoFile": "Select a file first...",
       "roleUser": "User",
