@@ -52,6 +52,8 @@ export function createSSEEventHandler({
               ...m,
               searchResults: event.search_results,
               searchQuery: event.query || "",
+              deepReadPages: event.deep_read_pages || 0,
+              rewrittenQueries: event.rewritten_queries || [],
             };
           }),
         );

@@ -15,6 +15,7 @@
 """
 
 from backend.utils.web_search.base import BaseSearchEngine
+from backend.utils.web_search.deep_read import DeepReader
 from backend.utils.web_search.engines.ddg import (
     DDGChallengeError,
     DDGChallengeSubmitRequest,
@@ -30,11 +31,17 @@ from backend.utils.web_search.manager import (
     reset_search_manager,
 )
 from backend.utils.web_search.models import SearchResponse, SearchResult
+from backend.utils.web_search.query_rewriter import QueryRewriter, SearchIntent
 
 __all__ = [
     # 数据模型
     "SearchResult",
     "SearchResponse",
+    "SearchIntent",
+    # Deep Read
+    "DeepReader",
+    # 查询重写
+    "QueryRewriter",
     # 引擎基类
     "BaseSearchEngine",
     # 具体引擎

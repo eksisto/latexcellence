@@ -190,6 +190,12 @@ class WebSearchEnginesConfig(BaseModel):
     searxng: SearXNGConfig = SearXNGConfig()
 
 
+class QueryRewritingConfig(BaseModel):
+    """查询重写模块配置"""
+
+    enabled: bool = True  # 是否启用 LLM 查询重写
+
+
 class WebSearchConfig(BaseModel):
     """联网搜索模块配置"""
 
@@ -198,6 +204,9 @@ class WebSearchConfig(BaseModel):
     max_results: int = Field(5, ge=1, le=20)  # 默认返回结果数上限
     timeout_seconds: int = Field(10, ge=1)  # 单次搜索超时（秒）
     engines: WebSearchEnginesConfig = WebSearchEnginesConfig()
+    deep_read_pages: int = Field(2, ge=0, le=5)  # Deep Read 抓取前 N 条正文（0=禁用）
+    deep_read_max_chars: int = Field(4000, ge=500, le=20000)  # 每页最大抓取字符数
+    query_rewriting: QueryRewritingConfig = QueryRewritingConfig()
 
 
 class BibProviderConfig(BaseModel):

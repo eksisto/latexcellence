@@ -682,6 +682,59 @@ export default function SettingsDialog() {
                     </div>
                   )}
                 </fieldset>
+
+                {/* Deep Read */}
+                <fieldset className="rounded border p-2.5 space-y-2">
+                  <legend className="px-1 text-xs font-medium">
+                    Deep Read
+                  </legend>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1.5">
+                      <Label className="text-xs">
+                        {t("settings.deepReadPages")}
+                      </Label>
+                      <Input
+                        type="number"
+                        min="0"
+                        max="5"
+                        value={config.features.web_search.deep_read_pages}
+                        onChange={(e) =>
+                          set(
+                            "features.web_search.deep_read_pages",
+                            parseInt(e.target.value, 10) || 0,
+                          )
+                        }
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-xs">
+                        {t("settings.deepReadMaxChars")}
+                      </Label>
+                      <Input
+                        type="number"
+                        min="500"
+                        max="20000"
+                        step="500"
+                        value={config.features.web_search.deep_read_max_chars}
+                        onChange={(e) =>
+                          set(
+                            "features.web_search.deep_read_max_chars",
+                            parseInt(e.target.value, 10) || 4000,
+                          )
+                        }
+                      />
+                    </div>
+                  </div>
+                </fieldset>
+
+                {/* Query Rewriting */}
+                <CheckboxField
+                  label={t("settings.queryRewriting")}
+                  checked={config.features.web_search.query_rewriting.enabled}
+                  onChange={(v) =>
+                    set("features.web_search.query_rewriting.enabled", v)
+                  }
+                />
               </div>
             )}
           </ConfigSection>

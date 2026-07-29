@@ -208,6 +208,22 @@ export default function MessageBubble({ message, actions }) {
                   >
                     <div className="overflow-hidden">
                       <div className="mt-2 text-xs leading-relaxed">
+                        <div className="flex items-center gap-1.5 mb-2 flex-wrap">
+                          {message.rewrittenQueries?.length > 0 && (
+                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-purple-500/10 text-purple-600 dark:text-purple-400 font-medium">
+                              {t("pages:writingChat.multiQuery", {
+                                n: message.rewrittenQueries.length,
+                              })}
+                            </span>
+                          )}
+                          {message.deepReadPages > 0 && (
+                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-green-500/10 text-green-600 dark:text-green-400 font-medium">
+                              {t("pages:writingChat.deepRead", {
+                                n: message.deepReadPages,
+                              })}
+                            </span>
+                          )}
+                        </div>
                         <ul className="space-y-2">
                           {message.searchResults.map((result) => (
                             <li

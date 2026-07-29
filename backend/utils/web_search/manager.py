@@ -3,13 +3,17 @@
 import time
 from typing import Any
 
+import asyncio
+
 from backend.core.config import get_config
 from backend.core.logger import get_logger
 from backend.utils.time_utils import get_current_time_context
 from backend.utils.web_search.base import BaseSearchEngine
+from backend.utils.web_search.deep_read import DeepReader
 from backend.utils.web_search.engines.ddg import DDGChallengeError, DuckDuckGoHtmlEngine
 from backend.utils.web_search.engines.searxng import SearXNGEngine
-from backend.utils.web_search.models import SearchResponse
+from backend.utils.web_search.models import SearchResponse, SearchResult
+from backend.utils.web_search.query_rewriter import QueryRewriter
 
 
 class SearchManager:
@@ -93,6 +97,42 @@ class SearchManager:
         self._logger.error("All search engines are unavailable")
         return SearchResponse(query=query, engine="none")
 
+    async def search_multi(
+        self,
+        queries: list[str],
+        max_results: int | None = None,
+    ) -> SearchResponse:
+        """并行执行多条查询，合并结果去重后返回。"""
+        cfg = get_config()
+        if max_results is None:
+            max_results = cfg.features.web_search.max_results
+
+        tasks = [self.search(q, max_results) for q in queries]
+        responses = await asyncio.gather(*tasks, return_exceptions=True)
+
+        seen_urls: set[str] = set()
+        merged: list[SearchResponse] = []
+        for resp in responses:
+            if isinstance(resp, Exception):
+                self._logger.warning(f"Multi-query sub-search failed: {resp}")
+                continue
+            merged.append(resp)
+
+        all_results: list[SearchResult] = []
+        for resp in merged:
+            for r in resp.results:
+                if r.url not in seen_urls:
+                    seen_urls.add(r.url)
+                    all_results.append(r)
+
+        engine_names = {r.engine for r in merged if r.engine}
+        return SearchResponse(
+            query=" | ".join(queries),
+            results=all_results[:max_results],
+            engine=",".join(sorted(engine_names)),
+            total_results=len(all_results),
+        )
+
     async def _search_with_engine(
         self, engine: BaseSearchEngine, query: str, max_results: int
     ) -> SearchResponse:
@@ -160,10 +200,45 @@ async def _web_search_executor(
     """web_search 工具执行函数，供 ToolRegistry 调用。"""
     manager = get_search_manager()
     cfg = get_config()
-    result = await manager.search(
-        query=arguments["query"],
-        max_results=arguments.get("max_results", cfg.features.web_search.max_results),
-    )
+    original_query = arguments["query"]
+
+    # ── 查询重写 ──────────────────────────────────────────────────────────
+    variants: list[str] = []
+    if cfg.features.web_search.query_rewriting.enabled:
+        try:
+            rewriter = QueryRewriter()
+            variants = await rewriter.rewrite(original_query)
+        except Exception as e:
+            logger = get_logger("web_search")
+            logger.warning(f"Query rewriting failed: {e}")
+
+    # ── 执行搜索 ──────────────────────────────────────────────────────────
+    cfg_max = cfg.features.web_search.max_results
+    user_max = arguments.get("max_results", cfg_max)
+
+    if len(variants) > 1:
+        result = await manager.search_multi(
+            queries=variants,
+            max_results=user_max,
+        )
+        result.original_query = original_query
+        result.rewritten_queries = variants
+    else:
+        result = await manager.search(
+            query=original_query,
+            max_results=user_max,
+        )
+
+    # ── Deep Read ─────────────────────────────────────────────────────────
+    if cfg.features.web_search.deep_read_pages > 0 and result.results:
+        reader = DeepReader()
+        await reader.fetch_top_results(
+            result.results,
+            max_pages=cfg.features.web_search.deep_read_pages,
+            max_chars_per_page=cfg.features.web_search.deep_read_max_chars,
+            timeout=cfg.features.web_search.timeout_seconds,
+        )
+
     return result
 
 

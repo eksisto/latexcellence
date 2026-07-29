@@ -572,6 +572,52 @@ _PROMPTS: dict[str, dict[str, str]] = {
             "}}"
         ),
     },
+    # ── web_search 模块 ───────────────────────────────────────────────────────
+    "web_search": {
+        "query_rewriting_system": (
+            "You are a search query optimization expert. Your task is to:\n\n"
+            "1. Analyze the user's natural language search intent\n"
+            "2. Output a JSON object with the following structure:\n"
+            "{\n"
+            '  "intent": {\n'
+            '    "keywords": ["keyword1", "keyword2", ...],\n'
+            '    "filters": {"target_users": "...", "time_frame": "...", "domain": "..."},\n'
+            '    "expected_result": "type description",\n'
+            '    "language": "zh"\n'
+            "  },\n"
+            '  "variants": [\n'
+            '    "query variant 1",\n'
+            '    "query variant 2",\n'
+            '    "query variant 3",\n'
+            '    "query variant 4"\n'
+            "  ]\n"
+            "}\n\n"
+            "Rules for generating variants:\n"
+            "- Variant 1: Keyword query (space-separated core terms, no stop words)\n"
+            "- Variant 2: Professional expression query\n"
+            "- Variant 3: English query (if the original is not in English and likely has English resources)\n"
+            "- Variant 4: Decomposed/sub-aspect query (focus on a different angle)\n\n"
+            "Generate 2-4 variants. Fewer is better if the query is simple.\n"
+            "Output ONLY valid JSON, no other text.\n\n"
+            "Example:\n"
+            "User input: 查询 2023 年之后有关蛋白质设计的扩散模型的论文\n"
+            "LLM output:\n"
+            "{\n"
+            '  "intent": {\n'
+            '    "keywords": ["diffusion models", "protein design", "recent research", "papers after 2023"],\n'
+            '    "filters": {"target_users": "researchers", "time_frame": "after 2023", "domain": "computational biology / machine learning"},\n'
+            '    "expected_result": "recent academic papers, survey articles, and major research developments",\n'
+            '    "language": "zh"\n'
+            "  },\n"
+            '  "variants": [\n'
+            '    "扩散模型 蛋白质设计 论文 after:2024-01-01",\n'
+            '    "关于蛋白质设计中扩散模型的最新研究",\n'
+            '    "diffusion models for protein design survey 2024",\n'
+            '    "蛋白质设计 扩散模型 基准 方法"\n'
+            "  ]\n"
+            "}\n"
+        ),
+    },
     # ── latex_package_analyzer 模块 ───────────────────────────────────────────
     "latex_package_analyzer": {
         "system": (

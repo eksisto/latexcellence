@@ -265,6 +265,18 @@ class WritingChatService:
                                 for i, r in enumerate(search_results, 1)
                             ]
                             tool_event["query"] = tool_args.get("query", "")
+                            deep_read_pages = sum(
+                                1 for r in search_results if r.full_content
+                            )
+                            if deep_read_pages > 0:
+                                tool_event["deep_read_pages"] = deep_read_pages
+                            if (
+                                hasattr(tool_result, "rewritten_queries")
+                                and tool_result.rewritten_queries
+                            ):
+                                tool_event["rewritten_queries"] = (
+                                    tool_result.rewritten_queries
+                                )
                         yield tool_event
                     except DDGChallengeError as ce:
                         # DDG Challenge：推送 captcha 到前端，终止本轮搜索

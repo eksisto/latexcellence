@@ -41,7 +41,9 @@ latexcellence/
 │   │   │   ├── __init__.py           # 模块入口，向后兼容导出
 │   │   │   ├── models.py             # SearchResult / SearchResponse 数据模型
 │   │   │   ├── base.py               # BaseSearchEngine 抽象基类
-│   │   │   ├── manager.py            # SearchManager + 全局单例 + Function Calling schema
+│   │   │   ├── manager.py            # SearchManager + 全局单例 + 查询重写/Deep Read 编排
+│   │   │   ├── deep_read.py          # DeepReader — 搜索结果页面正文抓取
+│   │   │   ├── query_rewriter.py     # QueryRewriter — LLM 搜索查询重写
 │   │   │   └── engines/              # 具体搜索引擎实现
 │   │   │       ├── ddg.py            # DuckDuckGo HTML 引擎 + DDG Challenge 处理
 │   │   │       ├── searxng.py        # SearXNG 引擎
@@ -114,7 +116,7 @@ latexcellence/
 | table_ocr | 图片→LaTeX 表格 | router.py, service.py | ✓(Vision) | ✗ |
 | format_converter | 格式转换(pandoc) | router.py, service.py | ✓(宏包分析) | ✗ |
 | style_modify | 自然语言修改样式 | router.py, service.py | ✓ | ✗ |
-| writing_chat | 写作助手对话 | router.py, service.py, context.py, models.py, prompt_manager.py | ✓ | ✗ |
+| writing_chat | 写作助手对话（含联网搜索 + Deep Read + 查询重写） | router.py, service.py, context.py, models.py, prompt_manager.py | ✓ | ✗ |
 | bib_manager | 参考文献管理 + DOI 多数据源查询 + 重复检测 + 文献库 | router.py, service.py, models.py, bib_parser.py, provider_manager.py, providers/ | ✓(DOI 查询不依赖 LLM) | ✗ |
 
 ## 核心设计思路
@@ -127,7 +129,12 @@ latexcellence/
 - **Marker Protection**: LaTeX 结构 → `__CMD_NNNN__` / `__MATH_NNNN__` / `__ENV_NNNN__` / `__VERB_NNNN__` marker → LLM 只改纯文本 → 按长度降序还原。apply 时若 marker_map 缺失（context 过期/重启/新操作覆盖），跳过该段写入并返回 `errors`，防止字面 marker 污染 `.tex` 文件；前端据此保留未应用项并提示用户重新检查。返回给前端展示的 `changes[]` 中的 `original`/`corrected` 会在 `_build_success_result` 中预先还原 marker，确保用户看到的是干净的 LaTeX 文本而非 `__CMD_NNNN__` 占位符
 - **JSON Validation Pipeline**: `safe_parse_json()` → Pydantic `.model_validate()` → `retry_with_validation()` (最多 3 次重试 + 错误反馈)
 - **SSE Streaming**: 所有段落检查模块通过 Server-Sent Events 推送 `progress`/`result`/`error`/`done` 事件
-- **Function Calling 工具体系**: `ToolRegistry`（工具注册表）管理所有可用工具的 schema 和执行函数；`SearchManager`（搜索管理器）提供 `web_search` 工具的 schema 和执行，统一封装 `DuckDuckGoHtmlEngine`（模拟浏览器请求，遇 HTTP 202 Challenge 时抛出 `DDGChallengeError`，由 service 捕获并以 `captcha_challenge` SSE 事件推送到前端）和 `SearXNGEngine`（通过 `/search?format=json` 获取结果，无验证码）；DDG Challenge 验证码提交通过通用路由 `/api/search/ddg-challenge` 处理，不绑定特定业务模块；Writing Chat 的 `send()` 方法在检测到 LLM 返回 `tool_call` 时自动执行工具、将结果回传 LLM，再流式输出最终回复（"先工具调用再流式"模式）
+- **Function Calling 工具体系**
+    - `ToolRegistry`（工具注册表）管理所有可用工具的 schema 和执行函数
+    - `SearchManager`（搜索管理器）提供 `web_search` 工具的 schema 和执行，统一封装 `DuckDuckGoHtmlEngine`（模拟浏览器请求，遇 HTTP 202 Challenge 时抛出 `DDGChallengeError`，由 service 捕获并以 `captcha_challenge` SSE 事件推送到前端）和 `SearXNGEngine`（通过 `/search?format=json` 获取结果，无验证码）
+    - DDG Challenge 验证码提交通过通用路由 `/api/search/ddg-challenge` 处理，不绑定特定业务模块
+    - 搜索流程可串联 **Query Rewriting**（将用户查询拆解为多条并行查询，去重合并）和 **Deep Read**（并发抓取搜索结果前 N 条页面正文，通过 `format_for_llm()` 注入 LLM 上下文）
+    - Writing Chat 的 `send()` 方法在检测到 LLM 返回 `tool_call` 时自动执行工具、将结果回传 LLM，再流式输出最终回复（"先工具调用再流式"模式）
 - **DOI 多数据源查询**: `ProviderManager`（全局单例）管理多个可插拔 `BaseMetadataProvider`
     - Crossref 主索引 + arXiv 预印本专用 + 补全层
     - arXiv DOI（`10.48550/arXiv.*`）自动路由到 ArxivProvider
