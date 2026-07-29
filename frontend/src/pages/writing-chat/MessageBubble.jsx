@@ -120,13 +120,14 @@ export default function MessageBubble({ message, actions }) {
           )}
           {isUser ? (
             <div className="whitespace-pre-wrap text-sm">
-              {message.referenced_paragraph != null && (
-                <span className="block text-xs opacity-75 mb-1">
-                  {t("pages:writingChat.anchorParagraph", {
-                    index: message.referenced_paragraph,
-                  })}
-                </span>
-              )}
+              {message.referenced_paragraph != null &&
+                message.referenced_paragraph >= 0 && (
+                  <span className="block text-xs opacity-75 mb-1">
+                    {t("pages:writingChat.anchorParagraph", {
+                      index: message.referenced_paragraph,
+                    })}
+                  </span>
+                )}
               {message.content}
             </div>
           ) : (

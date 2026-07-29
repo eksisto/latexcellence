@@ -249,7 +249,8 @@ export default function useWritingChat() {
       if (
         !activeFile ||
         !writingChatCurrentSessionId ||
-        paragraphIndex == null
+        paragraphIndex == null ||
+        paragraphIndex < 0
       ) {
         toast.error(i18n.t("hooks:writingChat.selectFileAndParagraph"));
         return null;

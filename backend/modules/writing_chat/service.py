@@ -543,6 +543,9 @@ class WritingChatService:
         """构造塞给 chat system prompt 的文件段落上下文（原始 LaTeX 源码）。"""
         if not file_path:
             return "(no file selected)"
+        # -1 表示显式关闭上下文锚点
+        if paragraph_index == -1:
+            return ""
         try:
             text = ConversationContext.build_file_context_text(
                 file_path, paragraph_index, workspace_id

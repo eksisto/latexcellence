@@ -425,7 +425,12 @@ class ConversationContext:
 
         若 paragraph_index 为 None，加载全文段落拼接（最多 12 段，超过则截断并标注省略）。
         若指定 paragraph_index，则只返回该段及其上下文相邻段。
+        若 paragraph_index 为 -1，返回空字符串（表示不注入上下文内容）。
         """
+        # -1 表示显式关闭上下文锚点，不注入任何文件内容
+        if paragraph_index == -1:
+            return ""
+
         from backend.core.workspace_manager import get_project_manager_for_workspace
 
         pm = get_project_manager_for_workspace(workspace_id)

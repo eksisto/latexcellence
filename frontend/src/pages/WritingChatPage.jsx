@@ -12,6 +12,7 @@ import {
   MessagesSquare,
   Sparkles,
   Globe,
+  X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -279,11 +280,49 @@ export default function WritingChatPage() {
                 </SelectContent>
               </Select>
 
+              {/* 上下文锚点状态指示 + 关闭按钮 */}
+              {activeFile && (
+                <div className="flex items-center gap-1 text-xs">
+                  {paragraphIndex === -1 ? (
+                    <span className="text-muted-foreground italic">
+                      {t("pages:writingChat.contextClosed")}
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded bg-primary/10 text-primary border border-primary/20">
+                      <FileText className="size-3 shrink-0" />
+                      <span className="truncate max-w-[120px]">
+                        {paragraphIndex == null
+                          ? t("pages:writingChat.anchorFullText")
+                          : t("pages:writingChat.anchorParagraph", {
+                              index: paragraphIndex,
+                            })}
+                      </span>
+                      <button
+                        type="button"
+                        className="ml-0.5 rounded-full hover:bg-primary/20 p-0.5 transition-colors"
+                        title={t("pages:writingChat.dismissAnchor")}
+                        onClick={() => setParagraphIndex(-1)}
+                      >
+                        <X className="size-3" />
+                      </button>
+                    </span>
+                  )}
+                </div>
+              )}
+
               <Select
-                value={paragraphIndex == null ? "all" : String(paragraphIndex)}
-                onValueChange={(v) =>
-                  setParagraphIndex(v === "all" ? null : parseInt(v, 10))
+                value={
+                  paragraphIndex === null
+                    ? "all"
+                    : paragraphIndex === -1
+                      ? "none"
+                      : String(paragraphIndex)
                 }
+                onValueChange={(v) => {
+                  if (v === "none") setParagraphIndex(-1);
+                  else if (v === "all") setParagraphIndex(null);
+                  else setParagraphIndex(parseInt(v, 10));
+                }}
               >
                 <SelectTrigger className="w-full">
                   <SelectValue
@@ -291,8 +330,11 @@ export default function WritingChatPage() {
                   />
                 </SelectTrigger>
                 <SelectContent>
+                  <SelectItem value="none">
+                    {t("pages:writingChat.noContext")}
+                  </SelectItem>
                   <SelectItem value="all">
-                    {t("pages:writingChat.noParagraph")}
+                    {t("pages:writingChat.allParagraphs")}
                   </SelectItem>
                   {paragraphs.map((p) => (
                     <SelectItem key={p.index} value={String(p.index)}>
@@ -308,6 +350,7 @@ export default function WritingChatPage() {
                 <p>{t("pages:writingChat.assistantHintTitle")}</p>
                 <div className="mt-2 pl-2 space-y-1">
                   <p>{t("pages:writingChat.assistantHint1")}</p>
+                  <p>{t("pages:writingChat.assistantHint4")}</p>
                   <p>
                     {t("pages:writingChat.assistantHint2")}
                     <PencilLine className="inline mx-0.5 size-3" />
