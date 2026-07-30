@@ -72,9 +72,7 @@ export default function useWritingChat() {
 
   // 待用户确认的工具调用（写操作：edit_paragraph / undo_last_edit）
   const [pendingTool, _setPendingTool] = useState(null);
-  const setPendingTool = useCallback((value) => {
-    _setPendingTool(value);
-  }, []);
+  const setPendingTool = (value) => _setPendingTool(value);
   const pendingToolRef = useRef(null);
   useEffect(() => {
     pendingToolRef.current = pendingTool;
@@ -104,6 +102,38 @@ export default function useWritingChat() {
     }
     _setPendingTool(null);
   }, []);
+
+  // 待用户回复的澄清请求（request_clarification）
+  const [pendingClarification, _setPendingClarification] = useState(null);
+  const setPendingClarification = (value) => _setPendingClarification(value);
+  const pendingClarificationRef = useRef(null);
+  useEffect(() => {
+    pendingClarificationRef.current = pendingClarification;
+  }, [pendingClarification]);
+
+  const submitClarification = useCallback(async (answer) => {
+    const c = pendingClarificationRef.current;
+    if (!c || !c.clarify_id) return;
+    try {
+      await api.writingChat.clarify(c.clarify_id, answer);
+    } catch (e) {
+      // silent
+    }
+    _setPendingClarification(null);
+  }, []);
+
+  const cancelClarification = useCallback(async () => {
+    const c = pendingClarificationRef.current;
+    if (c && c.clarify_id) {
+      try {
+        await api.writingChat.cancelClarify(c.clarify_id);
+      } catch (e) {
+        // silent
+      }
+    }
+    _setPendingClarification(null);
+  }, []);
+
   const restoringRef = useRef(false);
 
   const texFiles = useMemo(() => flattenTexFiles(fileTree), [fileTree]);
@@ -252,6 +282,7 @@ export default function useWritingChat() {
         setWritingChatMessages,
         setToolStatus,
         setPendingTool,
+        setPendingClarification,
         setCaptchaChallenge,
         setWritingChatCompressed,
         setWritingChatSessions,
@@ -495,6 +526,9 @@ export default function useWritingChat() {
     pendingTool,
     confirmPendingTool,
     cancelPendingTool,
+    pendingClarification,
+    submitClarification,
+    cancelClarification,
     // DDG 验证码
     captchaChallenge,
     captchaSubmitting,

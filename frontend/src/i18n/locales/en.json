@@ -405,7 +405,8 @@
         "searching_files": "Searching project files...",
         "editing_paragraph": "Editing paragraph...",
         "undoing_edit": "Undoing edit...",
-        "running_tool": "Running tool..."
+        "running_tool": "Running tool...",
+        "requesting_clarification": "Asking for clarification..."
       },
       "inputPlaceholder": "Ask the assistant, Shift+Enter for new line",
       "inputPlaceholderNoFile": "Select a file first...",
@@ -440,7 +441,10 @@
       "captchaSelected": "{{count}} images selected",
       "captchaSkip": "Skip",
       "captchaSubmit": "Submit verification",
-      "compressedToast": "Session compressed"
+      "compressedToast": "Session compressed",
+      "clarifyTitle": "LLM Needs Clarification",
+      "clarifyInputPlaceholder": "Type your answer...",
+      "clarifySubmit": "Submit Answer"
     },
     "workspace": {
       "title": "Project Workspace",

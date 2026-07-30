@@ -15,7 +15,7 @@
 
 ### 双轮协议 + Function Calling
 
-- **RS1**：用户发送消息 → SSE 流式 `chat_stream_with_usage` → Markdown 自由回复。RS1 中 LLM 可发起 Function Calling 调用工具（联网搜索、项目文件浏览、段落编辑），工具结果回传 LLM 后继续流式输出最终回复
+- **RS1**：用户发送消息 → SSE 流式 `chat_stream_with_usage` → Markdown 自由回复。RS1 中 LLM 可发起 Function Calling 调用工具（联网搜索、项目文件浏览、段落编辑、请求澄清），工具结果回传 LLM 后继续流式输出最终回复
 - **RS2**：用户在 RS1 回复上点击"生成编辑建议" → 结构化 JSON → `LlmEditResult` → `EditOp`
 
 RS2 不直接写回 `.tex`，用户再点"应用到 .tex"才调用 `project_manager.apply_change`。
@@ -28,7 +28,7 @@ RS2 不直接写回 `.tex`，用户再点"应用到 .tex"才调用 `project_mana
     - `tool_calls`（仅 assistant 角色）：LLM 请求调用的工具列表（OpenAI tool_calls 格式）
     - `tool_call_id`（仅 tool 角色）：关联到触发该结果的工具调用 ID
 - `LlmEditResult` — RS2 LLM 输出（paragraph_index, original, optimized, reason）
-- `ChatSendRequest` / `GenerateEditRequest` / `ApplyEditRequest` / `RenameSessionRequest` / `ConfirmToolRequest` / `CancelToolRequest` — 请求体
+- `ChatSendRequest` / `GenerateEditRequest` / `ApplyEditRequest` / `RenameSessionRequest` / `ConfirmToolRequest` / `CancelToolRequest` / `ClarifyRequest` / `CancelClarifyRequest` — 请求体
 - `LlmSummaryResult` — 压缩摘要 LLM 输出（summary）
 
 ## 会话上下文管理 `context.py`
@@ -54,6 +54,8 @@ RS2 不直接写回 `.tex`，用户再点"应用到 .tex"才调用 `project_mana
 | `apply_edit(req, workspace_id)` | 调用 apply_change 写回 .tex，标记 edit_op.applied |
 | `confirm_pending_tool(pending_id, modified_args)` | 前端确认敏感工具调用（如 edit_paragraph），可选修改参数 |
 | `cancel_pending_tool(pending_id)` | 前端取消待定工具调用 |
+| `submit_clarification(clarify_id, answer)` | 前端回复 LLM 的澄清请求 |
+| `cancel_clarification(clarify_id)` | 前端取消待定的澄清请求 |
 | `delete_message` / `undo_message` / `rename_session` | 消息操作 |
 | `list_sessions` / `load_session` / `delete_session` | 会话 CRUD |
 
@@ -63,23 +65,38 @@ System Prompt 分三类：聊天角色、编辑操作、压缩摘要。
 
 `send()` 方法在 RS1 中通过 `_get_enabled_tools()` 动态注入工具 schema：
 
-1. **联网搜索**（`SearchManager`）：`web_search` — 搜索互联网
-2. **项目浏览**（`ProjectToolsManager`）：`list_files` / `read_file_content` / `get_section_structure` / `search_across_files` — 浏览项目文件
-3. **段落编辑**（`EditToolsManager`）：`edit_paragraph` / `undo_last_edit` — 直接修改 .tex 文件
+1. **请求澄清**（内置）：`request_clarification` — 向用户提问以补充信息或做出选择（始终可用，无条件注入）
+2. **联网搜索**（`SearchManager`）：`web_search` — 搜索互联网
+3. **项目浏览**（`ProjectToolsManager`）：`list_files` / `read_file_content` / `get_section_structure` / `search_across_files` — 浏览项目文件
+4. **段落编辑**（`EditToolsManager`）：`edit_paragraph` / `undo_last_edit` — 直接修改 .tex 文件
 
 LLM 返回 `tool_call` 时，service 执行以下流程：
 
 ```
 LLM 输出 tool_call
     ↓ 推送 SSE tool_status
-执行工具（ToolRegistry.execute）
-    ↓
-敏感操作检查 → 推送 SSE tool_pending → 等待前端确认/取消
-    ↓ (确认后)
-工具结果回传 LLM
-    ↓ 继续流式
+┌─ 若为 request_clarification:
+│    ↓ 推送 SSE clarification_request（含 question + 可选 options）
+│   等待前端用户回复（asyncio.Event, 120s 超时）
+│    ↓ 用户提交回答
+│  回答作为 tool result 回传 LLM
+│    ↓ 继续流式
+└─ 其他工具:
+    执行工具（ToolRegistry.execute）
+       ↓
+    敏感操作检查 → 推送 SSE tool_pending → 等待前端确认/取消
+       ↓ (确认后)
+    工具结果回传 LLM
+       ↓ 继续流式
 LLM 最终回复
 ```
+
+**`request_clarification` 工具参数**：
+
+| 参数 | 类型 | 必需 | 说明 |
+| --- | --- | --- | --- |
+| `question` | string | 是 | 向用户提出的问题，需清晰具体 |
+| `options` | string[] | 否 | 候选项列表，提供时用户可选择或自由输入 |
 
 **敏感操作保护**：`edit_paragraph` 和 `undo_last_edit` 被视为敏感操作。当 `features.function_calling.edit_tools.require_confirmation = true` 时，执行前推送 `tool_pending` SSE 事件，等待前端弹窗确认（超时 120 秒）。用户确认或取消后，结果回传 LLM 继续对话。
 
@@ -96,13 +113,15 @@ Prefix: `/api/writing-chat`, Tag: `writing_chat`
 | POST | `/apply-edit` | 编辑写回 .tex |
 | POST | `/confirm-tool` | 确认待定工具调用（可选修改参数） |
 | POST | `/cancel-tool` | 取消待定工具调用 |
+| POST | `/clarify` | 提交对 LLM 澄清请求的回复 |
+| POST | `/cancel-clarify` | 取消待定的澄清请求 |
 | POST | `/message/delete` / `/message/undo` | 消息操作 |
 | PATCH | `/sessions/{id}/rename` | 重命名会话 |
 | GET | `/sessions` | 列出会话 |
 | GET | `/sessions/{id}` | 加载会话 |
 | DELETE | `/sessions/{id}` | 删除会话 |
-| GET/POST/DELETE | `/assistants[/{name}]` | 助手提示词 CRUD |
-| POST | `/assistants/active` | 设置激活助手 |
+| GET/POST/DELETE | `/prompts[/{name}]` | 助手提示词 CRUD |
+| POST | `/prompts/active` | 设置激活助手 |
 
 ## 助手提示词管理 `prompt_manager.py`
 
@@ -123,6 +142,7 @@ Prefix: `/api/writing-chat`, Tag: `writing_chat`
 | `tool_status` | 工具执行中状态指示 |
 | `tool_pending` | 敏感工具等待用户确认（含 pending_id、tool、args） |
 | `tool_cancelled` | 工具被用户取消 |
+| `clarification_request` | LLM 向用户提问，等待回复（含 clarify_id、question、options） |
 | `tool_result` | 工具执行结果 |
 | `captcha_challenge` | DDG 验证码挑战 |
 | `search_results` | 联网搜索结果 |
@@ -141,15 +161,22 @@ Prefix: `/api/writing-chat`, Tag: `writing_chat`
 
 ## 前端 `useWritingChat` hook
 
-封装：项目恢复、会话管理、SSE 流式发送、深度思考解析（parseThinking + processLoadedMessages）、生成编辑、应用编辑（支持手动微调 customText）、删除/撤回消息、工具调用确认、助手管理。
+封装：项目恢复、会话管理、SSE 流式发送、深度思考解析（parseThinking + processLoadedMessages）、生成编辑、应用编辑（支持手动微调 customText）、删除/撤回消息、工具调用确认、澄清请求、助手管理。
 
 **工具确认流程**：
 - `pendingTool` state 存储待确认的工具调用
 - `confirmPendingTool(modifiedArgs)` 调用 `/confirm-tool` 接口，可选修改工具参数后确认
 - `cancelPendingTool()` 调用 `/cancel-tool` 接口取消
 
-SSE 事件处理器新增 `tool_pending`（触发确认弹窗）和 `tool_cancelled`（显示 toast 提示）处理。
+**澄清请求流程**：
+- `pendingClarification` state 存储 LLM 的待回复问题（含 clarify_id、question、options）
+- `submitClarification(answer)` 调用 `/clarify` 接口提交用户回答
+- `cancelClarification()` 调用 `/cancel-clarify` 接口取消
 
-**WritingChatPage 工具确认弹窗**：使用 shadcn/ui Dialog，根据工具类型（edit_paragraph / undo_last_edit）显示对应图标和文案，用户点击允许/取消后结果回传 LLM。
+SSE 事件处理器新增 `tool_pending`（触发确认弹窗）、`tool_cancelled`（显示 toast 提示）和 `clarification_request`（触发澄清弹窗）处理。
+
+**WritingChatPage 工具弹窗**：
+- `ToolConfirmDialog` — 敏感工具确认，使用 shadcn/ui Dialog，根据工具类型显示对应图标和文案
+- `ClarifyDialog` — 澄清请求弹窗，展示问题、可选项 pill 按钮和自由输入文本框
 
 **子 hooks**：`writing-chat/sessions.js`（会话管理）、`writing-chat/assistants.js`（助手管理）、`writing-chat/captcha.js`（验证码处理）、`writing-chat/sse.js`（SSE 事件处理）、`writing-chat/utils.js`（工具函数）。

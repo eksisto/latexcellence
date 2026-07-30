@@ -73,6 +73,7 @@ class WritingChatService:
         "search_across_files": "searching_files",
         "edit_paragraph": "editing_paragraph",
         "undo_last_edit": "undoing_edit",
+        "request_clarification": "requesting_clarification",
     }
 
     def __init__(self):
@@ -80,6 +81,9 @@ class WritingChatService:
         # 待用户确认的工具调用（写操作：edit_paragraph / undo_last_edit）
         # key: pending_id, value: {event: asyncio.Event, confirmed: bool | None, tool_name: str, ...}
         self._pending_confirms: dict[str, dict[str, Any]] = {}
+        # 待用户回复的澄清请求（request_clarification）
+        # key: clarify_id, value: {event: asyncio.Event, answered: bool, answer: str, created_at: float}
+        self._pending_clarifications: dict[str, dict[str, Any]] = {}
 
     @staticmethod
     def _get_tool_label(tool_name: str, _tool_args: dict) -> str:
@@ -158,6 +162,70 @@ class WritingChatService:
         pending["confirmed"] = False
         pending["event"].set()
         return True
+
+    # ── 澄清请求（request_clarification） ─────────────────────────────
+
+    async def _request_clarification(
+        self,
+        clarify_id: str,
+    ) -> str:
+        """
+        发出澄清请求，等待前端用户回复。
+
+        返回：
+            - str: 用户的回复内容。超时或取消时返回提示文本。
+        """
+        self._cleanup_stale_clarifications()
+        event = asyncio.Event()
+        self._pending_clarifications[clarify_id] = {
+            "event": event,
+            "answered": False,
+            "answer": "",
+            "created_at": time.time(),
+        }
+        try:
+            await asyncio.wait_for(event.wait(), timeout=120)
+        except asyncio.TimeoutError:
+            self._pending_clarifications.pop(clarify_id, None)
+            return "（用户未在时限内回复，请根据已有信息自行判断并继续）"
+
+        pending = self._pending_clarifications.pop(clarify_id, {})
+        if not pending.get("answered"):
+            return "（用户已取消此澄清请求，请根据已有信息自行判断并继续）"
+        return pending.get("answer", "")
+
+    def submit_clarification(self, clarify_id: str, answer: str) -> bool:
+        """提交澄清请求的回复。"""
+        pending = self._pending_clarifications.get(clarify_id)
+        if not pending or pending["event"].is_set():
+            return False
+        pending["answer"] = answer
+        pending["answered"] = True
+        pending["event"].set()
+        return True
+
+    def cancel_clarification(self, clarify_id: str) -> bool:
+        """取消待定的澄清请求。"""
+        pending = self._pending_clarifications.get(clarify_id)
+        if not pending or pending["event"].is_set():
+            return False
+        pending["answered"] = False
+        pending["event"].set()
+        return True
+
+    def _cleanup_stale_clarifications(self, max_age: float = 120) -> None:
+        """清理超过 TTL 的待定澄清请求。"""
+        now = time.time()
+        stale = [
+            cid
+            for cid, c in self._pending_clarifications.items()
+            if now - c.get("created_at", 0) > max_age
+        ]
+        for cid in stale:
+            c = self._pending_clarifications.pop(cid, None)
+            if c and not c.get("event").is_set():
+                c["answered"] = False
+                c["event"].set()
 
     # ── 工具方法 ──────────────────────────────────────────────────────────
 
@@ -326,6 +394,32 @@ class WritingChatService:
                         "label": self._get_tool_label(tool_name, tool_args),
                         "args": tool_args,
                     }
+
+                    # ── request_clarification：向用户提问 ──────────────
+                    if tool_name == "request_clarification":
+                        clarify_id = uuid.uuid4().hex[:12]
+                        yield {
+                            "type": "clarification_request",
+                            "clarify_id": clarify_id,
+                            "tool": tool_name,
+                            "question": tool_args.get("question", ""),
+                            "options": tool_args.get("options"),
+                        }
+                        self._logger.info(
+                            f"Clarification requested [clarify_id={clarify_id}]"
+                        )
+                        answer = await self._request_clarification(clarify_id)
+                        self._logger.info(
+                            f"Clarification answered [clarify_id={clarify_id}]"
+                        )
+                        tool_messages.append(
+                            {
+                                "role": "tool",
+                                "tool_call_id": tc.id,
+                                "content": answer,
+                            }
+                        )
+                        continue
 
                     # 敏感操作（edit_paragraph / undo_last_edit）检查是否需要用户确认
                     if (
@@ -717,6 +811,43 @@ class WritingChatService:
         """
         cfg = get_config()
         tools: list[dict] = []
+
+        # ── 澄清请求工具（始终可用） ─────────────────────────────────
+        tools.append(
+            {
+                "type": "function",
+                "function": {
+                    "name": "request_clarification",
+                    "description": (
+                        "向用户提问以补充信息或做出选择。"
+                        "当关键参数缺失、需求存在歧义、需要执行高风险操作前确认，"
+                        "或多个合理方案会导致明显不同结果时使用。"
+                        "用户回答将作为工具结果返回。"
+                    ),
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "question": {
+                                "type": "string",
+                                "description": (
+                                    "你需要向用户提出的问题。必须清晰、具体，"
+                                    "包含必要的上下文说明，让用户无需回忆对话历史就能理解。"
+                                ),
+                            },
+                            "options": {
+                                "type": "array",
+                                "items": {"type": "string"},
+                                "description": (
+                                    "可选的候选项列表。当问题可以通过有限选项回答时提供，"
+                                    "用户必须从中选择一项。不提供此字段时用户可自由输入。"
+                                ),
+                            },
+                        },
+                        "required": ["question"],
+                    },
+                },
+            }
+        )
 
         # ── 联网搜索工具 ──────────────────────────────────────────────
         if (

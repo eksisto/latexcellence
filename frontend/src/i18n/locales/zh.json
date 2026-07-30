@@ -405,7 +405,8 @@
         "searching_files": "正在检索项目文件...",
         "editing_paragraph": "正在修改段落...",
         "undoing_edit": "正在撤销修改...",
-        "running_tool": "正在调用工具..."
+        "running_tool": "正在调用工具...",
+        "requesting_clarification": "正在向您提问..."
       },
       "inputPlaceholder": "向助手提问，Shift+Enter 换行",
       "inputPlaceholderNoFile": "请先选择文件...",
@@ -440,7 +441,10 @@
       "captchaSelected": "已选择 {{count}} 张图片",
       "captchaSkip": "跳过",
       "captchaSubmit": "提交验证",
-      "compressedToast": "会话已压缩"
+      "compressedToast": "会话已压缩",
+      "clarifyTitle": "LLM 需要确认",
+      "clarifyInputPlaceholder": "输入你的回答...",
+      "clarifySubmit": "提交回答"
     },
     "workspace": {
       "title": "项目工作区",

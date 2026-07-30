@@ -219,3 +219,16 @@ class CancelToolRequest(BaseModel):
     """取消待定的工具调用。"""
 
     pending_id: str
+
+
+class ClarifyRequest(BaseModel):
+    """用户对 LLM 澄清请求的回复。"""
+
+    clarify_id: str
+    answer: str
+
+
+class CancelClarifyRequest(BaseModel):
+    """用户取消澄清请求。"""
+
+    clarify_id: str

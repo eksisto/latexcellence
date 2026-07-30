@@ -22,8 +22,10 @@ from backend.modules.writing_chat.models import (
     ApplyEditRequest,
     AssistantSaveRequest,
     AssistantSetActiveRequest,
+    CancelClarifyRequest,
     CancelToolRequest,
     ChatSendRequest,
+    ClarifyRequest,
     ConfirmToolRequest,
     DeleteMessageRequest,
     GenerateEditRequest,
@@ -146,6 +148,35 @@ async def cancel_tool(request: CancelToolRequest):
             status_code=404, detail="Pending tool not found or already resolved"
         )
     return {"status": "ok", "pending_id": request.pending_id}
+
+
+# ── 澄清请求 ──────────────────────────────────────────────────────
+
+
+@router.post("/clarify")
+async def submit_clarification(request: ClarifyRequest):
+    """提交对 LLM 澄清请求的回复。"""
+    service = get_writing_chat_service()
+    ok = service.submit_clarification(request.clarify_id, request.answer)
+    if not ok:
+        raise HTTPException(
+            status_code=404,
+            detail="Clarification request not found or already resolved",
+        )
+    return {"status": "ok", "clarify_id": request.clarify_id}
+
+
+@router.post("/cancel-clarify")
+async def cancel_clarification(request: CancelClarifyRequest):
+    """取消一个待定的澄清请求。"""
+    service = get_writing_chat_service()
+    ok = service.cancel_clarification(request.clarify_id)
+    if not ok:
+        raise HTTPException(
+            status_code=404,
+            detail="Clarification request not found or already resolved",
+        )
+    return {"status": "ok", "clarify_id": request.clarify_id}
 
 
 # ── 删除 / 撤回 ──────────────────────────────────────────────────────

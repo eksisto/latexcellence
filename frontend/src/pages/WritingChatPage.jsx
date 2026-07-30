@@ -8,14 +8,10 @@ import {
   Plus,
   Trash2,
   PencilLine,
-  Globe,
   FileText,
-  Search,
-  FolderOpen,
   MessagesSquare,
   Sparkles,
   X,
-  Undo2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -33,32 +29,11 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import useWritingChat from "@/hooks/useWritingChat";
 import MessageBubble from "./writing-chat/MessageBubble";
 import CaptchaDialog from "./writing-chat/CaptchaDialog";
+import ToolStatusBar from "./writing-chat/ToolStatusBar";
 const ToolConfirmDialog = lazy(
   () => import("./writing-chat/ToolConfirmDialog"),
 );
-
-// 工具调用状态指示器 — 图标与配色（与后端 _TOOL_LABELS / tool_status 联动）
-const toolIconMap = {
-  web_search: Globe,
-  list_files: FolderOpen,
-  read_file_content: FileText,
-  get_section_structure: FileText,
-  search_across_files: Search,
-  edit_paragraph: PencilLine,
-  undo_last_edit: Undo2,
-};
-
-const toolColorMap = {
-  web_search: "text-blue-500 bg-blue-500/5 border-blue-500/20",
-  list_files: "text-emerald-500 bg-emerald-500/5 border-emerald-500/20",
-  read_file_content: "text-emerald-500 bg-emerald-500/5 border-emerald-500/20",
-  get_section_structure:
-    "text-emerald-500 bg-emerald-500/5 border-emerald-500/20",
-  search_across_files:
-    "text-emerald-500 bg-emerald-500/5 border-emerald-500/20",
-  edit_paragraph: "text-amber-500 bg-amber-500/5 border-amber-500/20",
-  undo_last_edit: "text-purple-500 bg-purple-500/5 border-purple-500/20",
-};
+const ClarifyDialog = lazy(() => import("./writing-chat/ClarifyDialog"));
 
 export default function WritingChatPage() {
   const { t } = useTranslation(["pages", "common"]);
@@ -84,6 +59,9 @@ export default function WritingChatPage() {
     pendingTool,
     confirmPendingTool,
     cancelPendingTool,
+    pendingClarification,
+    submitClarification,
+    cancelClarification,
     captchaChallenge,
     captchaSubmitting,
     submitCaptcha,
@@ -492,29 +470,7 @@ export default function WritingChatPage() {
                 <p className="text-xs text-destructive py-1">{error}</p>
               )}
 
-              {toolStatus &&
-                (() => {
-                  const ToolIcon = toolIconMap[toolStatus.tool] || FileText;
-                  const colors =
-                    toolColorMap[toolStatus.tool] ||
-                    "text-emerald-500 bg-emerald-500/5 border-emerald-500/20";
-                  return (
-                    <div
-                      className={`flex items-center gap-2 text-xs text-muted-foreground py-1 px-2 rounded ${colors}`}
-                    >
-                      <ToolIcon className="size-3 animate-pulse" />
-                      <span>
-                        {toolStatus.tool === "web_search"
-                          ? t("pages:writingChat.toolStatus.searching", {
-                              query: toolStatus.args?.query || "...",
-                            })
-                          : t(
-                              `pages:writingChat.toolStatus.${toolStatus.label}`,
-                            )}
-                      </span>
-                    </div>
-                  );
-                })()}
+              <ToolStatusBar toolStatus={toolStatus} />
 
               <div className="border-t border-border pt-2 flex items-end gap-2">
                 <Textarea
@@ -562,6 +518,15 @@ export default function WritingChatPage() {
         onSubmit={submitCaptcha}
         onDismiss={dismissCaptcha}
       />
+
+      {/* 澄清请求弹窗（LLM 向用户提问） */}
+      <Suspense fallback={null}>
+        <ClarifyDialog
+          pendingClarification={pendingClarification}
+          onSubmit={submitClarification}
+          onCancel={cancelClarification}
+        />
+      </Suspense>
     </div>
   );
 }

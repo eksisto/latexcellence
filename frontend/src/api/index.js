@@ -669,6 +669,16 @@ export const api = {
         method: "PATCH",
         body: JSON.stringify({ session_id: id, title }),
       }),
+    clarify: (clarifyId, answer) =>
+      request("/writing-chat/clarify", {
+        method: "POST",
+        body: JSON.stringify({ clarify_id: clarifyId, answer }),
+      }),
+    cancelClarify: (clarifyId) =>
+      request("/writing-chat/cancel-clarify", {
+        method: "POST",
+        body: JSON.stringify({ clarify_id: clarifyId }),
+      }),
     assistants: {
       list: () => request("/writing-chat/prompts"),
       load: (name) =>
