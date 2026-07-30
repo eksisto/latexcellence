@@ -4,7 +4,7 @@
 覆盖：
     - Pydantic 模型校验（ChatMessage / EditOp / LlmEditResult）
     - ConversationContext：创建/追加/删除/撤回/压缩
-    - WritingChatService.send（mock chat_stream_with_usage）：token 累计、压缩触发、user 删除回滚
+    - WritingChatService.send（mock chat_stream_with_tools / chat_stream_with_usage）：token 累计、压缩触发、user 删除回滚
     - WritingChatService.generate_edit（mock chat）：marker 一致性、还原、附挂
     - WritingChatService.apply_edit：写回 .tex
     - 删除/撤回消息在父子组件中保持 token 计数一致
@@ -262,28 +262,7 @@ class TestServiceSend:
         ]
         with patch(_LLM_CLIENT_PATH) as m_llm:
             m_client = MagicMock()
-            m_client.chat_stream_with_usage = MagicMock(return_value=_stream(chunks))
-
-            async def fake_chat_with_tools(**kwargs):
-                from openai.types.chat import ChatCompletion
-                from openai.types.chat.chat_completion import Choice
-                from openai.types.chat.chat_completion_message import (
-                    ChatCompletionMessage,
-                )
-
-                msg = ChatCompletionMessage(
-                    role="assistant", content=None, tool_calls=None
-                )
-                choice = Choice(finish_reason="stop", index=0, message=msg)
-                return ChatCompletion(
-                    id="test",
-                    choices=[choice],
-                    created=0,
-                    model="test",
-                    object="chat.completion",
-                )
-
-            m_client.chat_with_tools = fake_chat_with_tools
+            m_client.chat_stream_with_tools = MagicMock(return_value=_stream(chunks))
 
             m_llm.return_value = m_client
 
@@ -337,28 +316,7 @@ class TestServiceSend:
         with patch(_LLM_CLIENT_PATH) as m_llm:
             client = MagicMock()
             client.chat = fake_chat
-            client.chat_stream_with_usage = MagicMock(return_value=_stream(chunks))
-
-            async def fake_chat_with_tools(**kwargs):
-                from openai.types.chat import ChatCompletion
-                from openai.types.chat.chat_completion import Choice
-                from openai.types.chat.chat_completion_message import (
-                    ChatCompletionMessage,
-                )
-
-                msg = ChatCompletionMessage(
-                    role="assistant", content=None, tool_calls=None
-                )
-                choice = Choice(finish_reason="stop", index=0, message=msg)
-                return ChatCompletion(
-                    id="test",
-                    choices=[choice],
-                    created=0,
-                    model="test",
-                    object="chat.completion",
-                )
-
-            client.chat_with_tools = fake_chat_with_tools
+            client.chat_stream_with_tools = MagicMock(return_value=_stream(chunks))
 
             m_llm.return_value = client
 
@@ -702,24 +660,6 @@ class TestWebSearchToolEvent:
         monkeypatch.setattr(get_config().llm, "api_key", "test-key")
         search_resp = _make_search_response("latex 公式写法")
 
-        # 第一次 chat_with_tools：返回 web_search tool_call
-        first_response = _make_chat_completion_with_tools(
-            tool_calls=[_make_tool_call(query="latex 公式写法")]
-        )
-        # 第二次 chat_with_tools：无 tool_call，进入流式输出
-        second_response = _make_chat_completion_with_tools(
-            tool_calls=None, content="搜索完成"
-        )
-
-        call_count = 0
-
-        async def fake_chat_with_tools(**kwargs):
-            nonlocal call_count
-            call_count += 1
-            if call_count == 1:
-                return first_response
-            return second_response
-
         chunks = [
             StreamChunk(content="结果如下", usage=None),
             StreamChunk(
@@ -735,7 +675,23 @@ class TestWebSearchToolEvent:
             _TOOL_REGISTRY_PATH, return_value=mock_registry
         ):
             client = MagicMock()
-            client.chat_with_tools = fake_chat_with_tools
+            client.chat_stream_with_tools = MagicMock(
+                return_value=_stream(
+                    [
+                        StreamChunk(
+                            content=None,
+                            usage=None,
+                            tool_calls=[_make_tool_call(query="latex 公式写法")],
+                        ),
+                        StreamChunk(
+                            content=None,
+                            usage=UsageInfo(
+                                prompt_tokens=15, completion_tokens=5, total_tokens=20
+                            ),
+                        ),
+                    ]
+                )
+            )
             client.chat_stream_with_usage = MagicMock(return_value=_stream(chunks))
             m_llm.return_value = client
 
@@ -785,20 +741,6 @@ class TestWebSearchToolEvent:
             query="不存在的内容", results=[], engine="duckduckgo"
         )
 
-        first_response = _make_chat_completion_with_tools(
-            tool_calls=[_make_tool_call(query="不存在的内容")]
-        )
-        second_response = _make_chat_completion_with_tools(
-            tool_calls=None, content="未找到结果"
-        )
-
-        call_count = 0
-
-        async def fake_chat_with_tools(**kwargs):
-            nonlocal call_count
-            call_count += 1
-            return first_response if call_count == 1 else second_response
-
         chunks = [
             StreamChunk(content="无结果", usage=None),
             StreamChunk(
@@ -814,7 +756,23 @@ class TestWebSearchToolEvent:
             _TOOL_REGISTRY_PATH, return_value=mock_registry
         ):
             client = MagicMock()
-            client.chat_with_tools = fake_chat_with_tools
+            client.chat_stream_with_tools = MagicMock(
+                return_value=_stream(
+                    [
+                        StreamChunk(
+                            content=None,
+                            usage=None,
+                            tool_calls=[_make_tool_call(query="不存在的内容")],
+                        ),
+                        StreamChunk(
+                            content=None,
+                            usage=UsageInfo(
+                                prompt_tokens=5, completion_tokens=1, total_tokens=6
+                            ),
+                        ),
+                    ]
+                )
+            )
             client.chat_stream_with_usage = MagicMock(return_value=_stream(chunks))
             m_llm.return_value = client
 
@@ -888,16 +846,6 @@ class TestScholarlyResearchToolEvent:
         tool_call.function.arguments = json.dumps(
             {"query": "retrieval augmented generation"}
         )
-        first_response = _make_chat_completion_with_tools(tool_calls=[tool_call])
-        second_response = _make_chat_completion_with_tools(
-            tool_calls=None, content="检索完成"
-        )
-        call_count = 0
-
-        async def fake_chat_with_tools(**kwargs):
-            nonlocal call_count
-            call_count += 1
-            return first_response if call_count == 1 else second_response
 
         mock_registry = MagicMock()
         mock_registry.execute = AsyncMock(return_value=scholarly_response)
@@ -913,7 +861,23 @@ class TestScholarlyResearchToolEvent:
             _TOOL_REGISTRY_PATH, return_value=mock_registry
         ):
             client = MagicMock()
-            client.chat_with_tools = fake_chat_with_tools
+            client.chat_stream_with_tools = MagicMock(
+                return_value=_stream(
+                    [
+                        StreamChunk(
+                            content=None,
+                            usage=None,
+                            tool_calls=[tool_call],
+                        ),
+                        StreamChunk(
+                            content=None,
+                            usage=UsageInfo(
+                                prompt_tokens=15, completion_tokens=5, total_tokens=20
+                            ),
+                        ),
+                    ]
+                )
+            )
             client.chat_stream_with_usage = MagicMock(return_value=_stream(chunks))
             m_llm.return_value = client
             events = [
@@ -952,20 +916,3 @@ class TestScholarlyResearchToolEvent:
         )
         assert assistant.scholarly_results[0].id == "W123"
         assert assistant.scholarly_total == 37
-
-
-def _make_chat_completion_with_tools(tool_calls=None, content=None):
-    """构造 ChatCompletion 响应对象。"""
-    from openai.types.chat import ChatCompletion
-    from openai.types.chat.chat_completion import Choice
-    from openai.types.chat.chat_completion_message import ChatCompletionMessage
-
-    msg = ChatCompletionMessage(
-        role="assistant", content=content, tool_calls=tool_calls
-    )
-    choice = Choice(
-        finish_reason="stop" if not tool_calls else "tool_calls", index=0, message=msg
-    )
-    return ChatCompletion(
-        id="test", choices=[choice], created=0, model="test", object="chat.completion"
-    )

@@ -15,7 +15,7 @@
 
 ### 双轮协议 + Function Calling
 
-- **RS1**：用户发送消息 → SSE 流式 `chat_stream_with_usage` → Markdown 自由回复。RS1 中 LLM 可发起 Function Calling 调用联网搜索、学术研究、项目文件浏览、段落编辑和请求澄清工具，工具结果回传 LLM 后继续流式输出最终回复
+- **RS1**：用户发送消息 → SSE 流式 `chat_stream_with_tools` → 实时输出文本 + 检测工具调用。RS1 中 LLM 可发起 Function Calling 调用联网搜索、学术研究、项目文件浏览、段落编辑和请求澄清工具，工具结果回传 LLM 后继续流式输出最终回复
 - **RS2**：用户在 RS1 回复上点击"生成编辑建议" → 结构化 JSON → `LlmEditResult` → `EditOp`
 
 RS2 不直接写回 `.tex`，用户再点"应用到 .tex"才调用 `project_manager.apply_change`。
@@ -49,7 +49,7 @@ RS2 不直接写回 `.tex`，用户再点"应用到 .tex"才调用 `project_mana
 
 | 方法 | 功能 |
 | --- | --- |
-| `send(req, workspace_id)` | RS1 主聊天流：加载/创建会话 → 追加消息 → 压缩判定 → 注入 Function Calling 工具 → chat_stream_with_usage → 工具调用循环 → SSE 推送 |
+| `send(req, workspace_id)` | RS1 主聊天流：加载/创建会话 → 追加消息 → 压缩判定 → 注入 Function Calling 工具 → chat_stream_with_tools（实时产出文本 + 检测工具调用）→ 工具调用循环 → 后置流式 → SSE 推送 |
 | `generate_edit(req, workspace_id)` | RS2 编辑流：把原始 LaTeX 交给 LLM → 校验结构化结果 → diff → 附挂 EditOp |
 | `apply_edit(req, workspace_id)` | 调用 apply_change 写回 .tex，标记 edit_op.applied |
 | `confirm_pending_tool(pending_id, modified_args)` | 前端确认敏感工具调用（如 edit_paragraph），可选修改参数 |
@@ -71,24 +71,26 @@ System Prompt 分三类：聊天角色、编辑操作、压缩摘要。
 4. **段落编辑**（`EditToolsManager`）：`edit_paragraph` / `undo_last_edit` — 直接修改 .tex 文件
 5. **学术研究**（`ResearchManager`）：`search_scholarly_works` / `get_work_details` / `find_related_works` / `get_full_text_or_sections` / `search_research_data_resources` — OpenAlex 论文检索、详情、引文追踪和 OA 定位
 
-LLM 返回 `tool_call` 时，service 执行以下流程：
+`send()` 全程使用 `chat_stream_with_tools` 流式调用 LLM。文本 token 一到即推送给前端，工具调用在流末尾累积完整后一并解析。当检测到 `tool_call` 时，service 执行以下流程：
 
 ```
-LLM 输出 tool_call
-    ↓ 推送 SSE tool_status
+chat_stream_with_tools（实时流式文本 + 末尾 tool_calls）
+    ↓ 推送 SSE token（文本实时显示）
+    ↓ 检测 tool_calls
 ┌─ 若为 request_clarification:
 │    ↓ 推送 SSE clarification_request（含 question + 可选 options）
 │   等待前端用户回复（asyncio.Event, 120s 超时）
 │    ↓ 用户提交回答
 │  回答作为 tool result 回传 LLM
-│    ↓ 继续流式
+│    ↓ 新一轮 chat_stream_with_tools
 └─ 其他工具:
-    执行工具（ToolRegistry.execute）
+     推送 SSE tool_status
+     执行工具（ToolRegistry.execute）
        ↓
-    敏感操作检查 → 推送 SSE tool_pending → 等待前端确认/取消
+     敏感操作检查 → 推送 SSE tool_pending → 等待前端确认/取消
        ↓ (确认后)
-    工具结果回传 LLM
-       ↓ 继续流式
+     工具结果回传 LLM
+       ↓ 新一轮 chat_stream_with_tools（可再次检测工具或直接输出）
 LLM 最终回复
 ```
 
@@ -130,7 +132,9 @@ Prefix: `/api/writing-chat`, Tag: `writing_chat`
 
 ## `llm_client.py` 扩展
 
-新增 `chat_stream_with_usage`：返回 `AsyncIterator[StreamChunk]`（content / usage 互斥），末次 chunk 携带 `UsageInfo`。
+writing_chat 是 `chat_stream_with_tools` 方法的主要消费者。该方法继承 `chat_stream_with_usage` 的流式协议，额外支持 Function Calling 工具检测：
+- 流中同时产出 `content`（实时文本）和 `tool_calls`（末尾累积完整后 yield）
+- `StreamChunk` 新增 `tool_calls` 字段
 
 ## SSE 事件
 

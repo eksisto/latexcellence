@@ -37,15 +37,17 @@ class UsageInfo:
 @dataclass
 class StreamChunk:
     """
-    chat_stream_with_usage 流式片段。
+    chat_stream_with_usage / chat_stream_with_tools 流式片段。
 
-    content 与 usage 互斥：
-        - 普通流片段：content 为字符串、usage=None
+    content / usage / tool_calls 互斥：
+        - 普通流片段：content 为字符串、usage=None、tool_calls=None
         - 末尾用量片段：content=None、usage=UsageInfo（若 API 未返回则为 None）
+        - 工具调用片段：content=None、usage=None、tool_calls=[ChatCompletionMessageToolCall, ...]
     """
 
     content: str | None
     usage: UsageInfo | None
+    tool_calls: list | None = None
 
 
 class LLMClient:
@@ -343,6 +345,116 @@ class LLMClient:
                         total_tokens=getattr(usage, "total_tokens", 0) or 0,
                     ),
                 )
+
+    async def chat_stream_with_tools(
+        self,
+        messages: list[dict],
+        tools: list[dict],
+        temperature: float | None = None,
+        max_tokens: int | None = None,
+    ) -> AsyncIterator["StreamChunk"]:
+        """
+        流式 LLM 对话调用，支持 Function Calling 工具检测。
+
+        与 chat_stream_with_usage 的区别：
+            - 传入 tools 参数用于 LLM 工具调用
+            - 流中同时产出 content（文本）和 tool_calls（工具调用）
+            - 文本 token 一到就 yield，前端可立即显示
+            - 工具调用在流末尾累积完整后，以一条 tool_calls 片段 yield
+
+        参数：
+            messages: OpenAI 格式的消息列表
+            tools: OpenAI 格式的 Function Calling 工具定义列表
+            temperature: 生成温度（覆盖 config 中的默认值）
+            max_tokens: 最大生成 token 数（覆盖 config 中的默认值）
+
+        生成：
+            每次 yield 一个 StreamChunk 实例。
+        """
+        cfg = get_config().llm
+        temp = temperature if temperature is not None else cfg.temperature
+        max_tok = max_tokens if max_tokens is not None else cfg.max_tokens
+
+        await self._rate_limit()
+
+        self._logger.info(
+            f"LLM stream-with-tools request | model={cfg.model} | tokens={max_tok} | tools={len(tools)}"
+        )
+
+        kwargs = {
+            "model": cfg.model,
+            "messages": messages,
+            "temperature": temp,
+            "max_tokens": max_tok,
+            "stream": True,
+            "tools": tools,
+        }
+        try:
+            stream = await self.client.chat.completions.create(
+                **kwargs, stream_options={"include_usage": True}
+            )
+        except Exception as e:
+            self._logger.warning(f"stream_options unsupported, fallback: {e}")
+            stream = await self.client.chat.completions.create(**kwargs)
+
+        tool_calls_acc: dict[int, dict[str, Any]] = {}
+
+        async for chunk in stream:
+            content = None
+            if chunk.choices and chunk.choices[0].delta.content:
+                content = chunk.choices[0].delta.content
+
+            if chunk.choices and chunk.choices[0].delta.tool_calls:
+                for tc in chunk.choices[0].delta.tool_calls:
+                    idx = tc.index
+                    if idx not in tool_calls_acc:
+                        tool_calls_acc[idx] = {
+                            "id": "",
+                            "function": {"name": "", "arguments": ""},
+                        }
+                    if tc.id:
+                        tool_calls_acc[idx]["id"] = tc.id
+                    if tc.function:
+                        if tc.function.name:
+                            tool_calls_acc[idx]["function"]["name"] = tc.function.name
+                        if tc.function.arguments:
+                            tool_calls_acc[idx]["function"][
+                                "arguments"
+                            ] += tc.function.arguments
+
+            usage = getattr(chunk, "usage", None)
+            if content is not None:
+                yield StreamChunk(content=content, usage=None)
+            if usage is not None:
+                yield StreamChunk(
+                    content=None,
+                    usage=UsageInfo(
+                        prompt_tokens=getattr(usage, "prompt_tokens", 0) or 0,
+                        completion_tokens=getattr(usage, "completion_tokens", 0) or 0,
+                        total_tokens=getattr(usage, "total_tokens", 0) or 0,
+                    ),
+                )
+
+        if tool_calls_acc:
+            from openai.types.chat.chat_completion_message_tool_call import (
+                ChatCompletionMessageToolCall,
+                Function,
+            )
+
+            collected: list[ChatCompletionMessageToolCall] = []
+            for idx in sorted(tool_calls_acc.keys()):
+                tc = tool_calls_acc[idx]
+                collected.append(
+                    ChatCompletionMessageToolCall(
+                        id=tc["id"],
+                        function=Function(
+                            name=tc["function"]["name"],
+                            arguments=tc["function"]["arguments"],
+                        ),
+                        type="function",
+                    )
+                )
+            yield StreamChunk(content=None, usage=None, tool_calls=collected)
 
 
 # 全局单例：LLM 客户端实例

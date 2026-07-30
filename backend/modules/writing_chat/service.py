@@ -358,42 +358,65 @@ class WritingChatService:
         persisted_scholarly_query = ""
         persisted_scholarly_total = 0
 
-        # 工具调用循环：先非流式检测 tool_call，再流式输出最终回复
+        # 工具调用循环：流式检测 tool_call，实时输出文本
         if tools:
             tool_messages = list(messages)  # 拷贝用于工具调用的 messages
             initial_msg_count = len(tool_messages)
             max_rounds = 3  # 防止无限工具调用循环
+            _has_tool_calls = False  # 标记是否实际执行过工具调用
+            full_content_parts: list[str] = []
+            last_usage_tokens = 0
 
             for round_idx in range(max_rounds):
+                round_content: list[str] = []
+                round_tool_calls = None
+
                 try:
-                    first_response = await llm.chat_with_tools(
+                    async for chunk in llm.chat_stream_with_tools(
                         messages=tool_messages,
                         tools=tools,
                         temperature=get_config().llm.temperature,
-                    )
+                    ):
+                        if chunk.content:
+                            round_content.append(chunk.content)
+                            yield {"type": "token", "content": chunk.content}
+                        if chunk.tool_calls:
+                            round_tool_calls = chunk.tool_calls
+                        if chunk.usage is not None:
+                            last_usage_tokens = chunk.usage.total_tokens
                 except Exception as e:
-                    self._logger.error(f"chat_with_tools failed: {e}")
+                    self._logger.error(f"chat_stream_with_tools failed: {e}")
                     yield {"type": "error", "message": str(e)}
                     ctx.delete_message(user_msg.id)
                     ctx.save_to_disk()
                     return
 
-                choice = first_response.choices[0]
-                tool_calls = choice.message.tool_calls
-
-                if not tool_calls:
-                    # 无 tool_call，退化为普通流式（用非流式返回的内容直接输出）
-                    content = choice.message.content or ""
-                    if content:
-                        full_content_parts_t: list[str] = [content]
-                        yield {"type": "token", "content": content}
+                if not round_tool_calls:
+                    # 无 tool_call，内容已在流中实时输出到前端
+                    full_content_parts = round_content
                     break
 
-                # 有 tool_call：执行工具，将结果追加到 messages
-                # 将 assistant message（含 tool_calls）转为 dict 追加
-                tool_messages.append(choice.message.model_dump())
+                _has_tool_calls = True
 
-                for tc in tool_calls:
+                # 重建 assistant message（含 tool_calls）追加到 messages
+                assistant_msg: dict[str, Any] = {
+                    "role": "assistant",
+                    "content": None,
+                    "tool_calls": [
+                        {
+                            "id": tc.id,
+                            "type": "function",
+                            "function": {
+                                "name": tc.function.name,
+                                "arguments": tc.function.arguments,
+                            },
+                        }
+                        for tc in round_tool_calls
+                    ],
+                }
+                tool_messages.append(assistant_msg)
+
+                for tc in round_tool_calls:
                     tool_name = tc.function.name
                     try:
                         tool_args = json.loads(tc.function.arguments)
@@ -616,30 +639,31 @@ class WritingChatService:
                 # 继续下一轮工具调用检测
                 continue
 
-            # 工具调用结束后，流式输出最终回复
-            full_content_parts: list[str] = []
-            last_usage_tokens = 0
-            try:
-                async for chunk in llm.chat_stream_with_usage(
-                    messages=tool_messages,
-                    temperature=get_config().llm.temperature,
-                ):
-                    if chunk.content:
-                        full_content_parts.append(chunk.content)
-                        yield {"type": "token", "content": chunk.content}
-                    if chunk.usage is not None:
-                        last_usage_tokens = chunk.usage.total_tokens
-            except Exception as e:
-                self._logger.error(f"post-tool chat_stream_with_usage failed: {e}")
-                yield {"type": "error", "message": str(e)}
-                ctx.delete_message(user_msg.id)
-                ctx.save_to_disk()
-                return
+            if _has_tool_calls:
+                # 有工具调用：流式输出最终回复（不再传递工具，防止继续调用）
+                full_content_parts = []
+                last_usage_tokens = 0
+                try:
+                    async for chunk in llm.chat_stream_with_usage(
+                        messages=tool_messages,
+                        temperature=get_config().llm.temperature,
+                    ):
+                        if chunk.content:
+                            full_content_parts.append(chunk.content)
+                            yield {"type": "token", "content": chunk.content}
+                        if chunk.usage is not None:
+                            last_usage_tokens = chunk.usage.total_tokens
+                except Exception as e:
+                    self._logger.error(f"post-tool chat_stream_with_usage failed: {e}")
+                    yield {"type": "error", "message": str(e)}
+                    ctx.delete_message(user_msg.id)
+                    ctx.save_to_disk()
+                    return
 
-            # 将工具调用/结果消息持久化到会话上下文
-            new_tool_msgs = tool_messages[initial_msg_count:]
-            if new_tool_msgs:
-                ctx.append_tool_messages(new_tool_msgs)
+                # 将工具调用/结果消息持久化到会话上下文
+                new_tool_msgs = tool_messages[initial_msg_count:]
+                if new_tool_msgs:
+                    ctx.append_tool_messages(new_tool_msgs)
 
         else:
             # 无工具：原有纯流式逻辑

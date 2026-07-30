@@ -48,13 +48,14 @@
 | `chat()` | 非流式对话：调用 `chat.completions.create`，返回原始 `str`，由调用方负责 JSON 解析 |
 | `chat_stream()` | 流式对话：返回 `AsyncIterator[str]`，按 token 产出，用于 SSE 推送 |
 | `chat_stream_with_usage()` | 流式对话 + 末尾携带 UsageInfo：返回 `AsyncIterator[StreamChunk]`，`StreamChunk.content` 为文本片段、`StreamChunk.usage` 为末次 LLM token 用量（用 `stream_options={"include_usage": True}` 透传，第三方不支持时降级为 `None`） |
+| `chat_stream_with_tools()` | 流式对话 + Function Calling：与 `chat_stream_with_usage` 类似，但额外接受 `tools` 参数。流中同时 yield content（文本 token 实时推送）和 tool_calls（末次 yield 完整 `ChatCompletionMessageToolCall` 列表） |
 | `_rate_limit()` | 内部限流器：确保两次请求间隔 ≥ `config.llm.request_interval` |
 
 **数据类**：
 
 ```python
 @dataclass class UsageInfo: prompt_tokens, completion_tokens, total_tokens
-@dataclass class StreamChunk: content: Optional[str], usage: Optional[UsageInfo]
+@dataclass class StreamChunk: content: str | None, usage: UsageInfo | None, tool_calls: list | None = None
 ```
 
 **重试策略**（`chat()` 内部）：
