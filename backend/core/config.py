@@ -163,6 +163,13 @@ class ProjectToolsConfig(BaseModel):
     enabled: bool = True  # 是否启用
 
 
+class EditToolsConfig(BaseModel):
+    """段落编辑工具集配置（Function Calling 全局工具）"""
+
+    enabled: bool = True
+    require_confirmation: bool = True  # 敏感操作是否需要前端确认弹窗
+
+
 class WritingChatConfig(BaseModel):
     """写作助手 Chat 模块配置"""
 
@@ -245,6 +252,7 @@ class FunctionCallingConfig(BaseModel):
 
     web_search: WebSearchConfig = WebSearchConfig()
     project_tools: ProjectToolsConfig = ProjectToolsConfig()
+    edit_tools: EditToolsConfig = EditToolsConfig()
 
 
 class FeaturesConfig(BaseModel):

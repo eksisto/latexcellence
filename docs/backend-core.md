@@ -8,9 +8,11 @@
 
 - `ServerConfig` — 服务配置（host, port, dev_mode, vite_dev_url）
 - `LLMConfig` — LLM 配置（api_key, base_url, model, temperature 等）
-- `TypoCheckConfig` / `ExpressionOptConfig` / `TerminologyCheckConfig` / `FormulaOCRConfig` / `TableOCRConfig` / `TemplateGenConfig` / `CodeReviewConfig` / `CompileConfig` / `GitDiffConfig` / `FormatConverterConfig` / `StyleModifyConfig` / `WritingChatConfig` / `BibManagerConfig` — 各功能模块配置
+- `TypoCheckConfig` / `ExpressionOptConfig` / `TerminologyCheckConfig` / `FormulaOCRConfig` / `TableOCRConfig` / `TemplateGenConfig` / `CodeReviewConfig` / `CompileConfig` / `GitDiffConfig` / `FormatConverterConfig` / `StyleModifyConfig` / `WritingChatConfig` / `BibManagerConfig` / `ParagraphTranslateConfig` — 各功能模块配置
     - `CompileConfig` 包含 `engine`（编译引擎：auto/pdflatex/xelatex/lualatex）和 `pdfa`（PDF/A-2b 归档格式输出）配置
     - `TemplateGenConfig` 包含 `cleanup_enabled`/`cleanup_interval_seconds`/`cleanup_retention_days` 沙箱清理配置
+- `ProjectToolsConfig` / `EditToolsConfig` / `WebSearchConfig` — Function Calling 工具配置
+    - `EditToolsConfig` 包含 `require_confirmation`（敏感操作是否需要前端确认弹窗）
 - `FeaturesConfig` — 功能聚合
 - `LoggingConfig` — 日志配置
 - `AppConfig` — 顶层聚合（server, llm, features, logging）
@@ -275,6 +277,14 @@ get_tool_registry().register(
     config_path="features.compile.enabled",
 )
 ```
+
+### 目前已注册的全局工具
+
+| 管理器 | 工具 | 配置路径 | 说明 |
+| --- | --- | --- | --- |
+| `SearchManager` | `web_search` | `features.function_calling.web_search.enabled` | 联网搜索 |
+| `ProjectToolsManager` | `list_files` / `read_file_content` / `get_section_structure` / `search_across_files` | `features.function_calling.project_tools.enabled` | 项目文件浏览 |
+| `EditToolsManager` | `edit_paragraph` / `undo_last_edit` | `features.function_calling.edit_tools.enabled` | 段落编辑（敏感操作需用户确认） |
 
 **注意事项**：
 - `schema` 是整个 OpenAI function schema（包含 `type` 和 `function`），不含外层 `tools` 数组

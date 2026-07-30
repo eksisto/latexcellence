@@ -268,6 +268,38 @@ class ConversationContext:
         self.last_updated_at = time.time()
         return msg
 
+    def append_tool_messages(self, tool_msg_dicts: list[dict]) -> None:
+        """
+        将 LLM 工具调用循环产生的 tool 相关消息持久化到上下文。
+
+        tool_msg_dicts 中的每条 dict 应为以下两种格式之一：
+            - assistant 含 tool_calls: {"role": "assistant", "content": ..., "tool_calls": [...]}
+            - tool 结果:           {"role": "tool", "tool_call_id": "...", "content": "..."}
+        """
+        for msg_dict in tool_msg_dicts:
+            role = msg_dict.get("role", "")
+            if role == "tool":
+                msg = ChatMessage(
+                    id=uuid.uuid4().hex,
+                    role="tool",
+                    content=msg_dict.get("content", ""),
+                    tool_call_id=msg_dict.get("tool_call_id", ""),
+                    tokens=0,
+                    created_at=time.time(),
+                )
+                self.messages.append(msg)
+            elif role == "assistant" and "tool_calls" in msg_dict:
+                msg = ChatMessage(
+                    id=uuid.uuid4().hex,
+                    role="assistant",
+                    content=msg_dict.get("content") or "",
+                    tool_calls=msg_dict["tool_calls"],
+                    tokens=0,
+                    created_at=time.time(),
+                )
+                self.messages.append(msg)
+        self.last_updated_at = time.time()
+
     def update_last_message_tokens(self, tokens: int) -> None:
         """按 LLM usage 反推上条 user + assistant 共消耗的 tokens，平均分配到两条消息上用于记账。"""
         if not self.messages or tokens <= 0:
@@ -363,10 +395,10 @@ class ConversationContext:
         将本会话转为 OpenAI messages 数组。
 
         转换规则：
-            - 跳过 compressed summary 之外的 compressed 消息（理论上 summary 自身应该展示）
             - summary 消息以 assistant role 出现，content 为摘要内容前缀
-            - 携带 edit_op 但未 apply 的 assistant 消息：仅保留 reply 文本（不暴露内部结构）
-            - 已 apply 的 edit_op 对应的消息保留原文
+            - assistant 消息携带 tool_calls 时，注入 tool_calls 字段
+            - tool 角色消息注入 tool_call_id
+            - 其他消息按 role/content 原样传递
         """
         result: list[dict] = []
         for m in self.messages:
@@ -376,6 +408,22 @@ class ConversationContext:
                     {
                         "role": "assistant",
                         "content": f"[Conversation Summary]\n{m.content}",
+                    }
+                )
+            elif role == "tool":
+                result.append(
+                    {
+                        "role": "tool",
+                        "tool_call_id": m.tool_call_id or "",
+                        "content": m.content or "",
+                    }
+                )
+            elif role == "assistant" and m.tool_calls:
+                result.append(
+                    {
+                        "role": "assistant",
+                        "content": m.content or "",
+                        "tool_calls": m.tool_calls,
                     }
                 )
             else:

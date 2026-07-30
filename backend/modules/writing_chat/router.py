@@ -22,7 +22,9 @@ from backend.modules.writing_chat.models import (
     ApplyEditRequest,
     AssistantSaveRequest,
     AssistantSetActiveRequest,
+    CancelToolRequest,
     ChatSendRequest,
+    ConfirmToolRequest,
     DeleteMessageRequest,
     GenerateEditRequest,
     RenameSessionRequest,
@@ -117,6 +119,33 @@ async def apply_edit(
         raise HTTPException(status_code=404, detail=str(e))
     except RuntimeError as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ── 工具调用确认 ─────────────────────────────────────────────────────
+
+
+@router.post("/confirm-tool")
+async def confirm_tool(request: ConfirmToolRequest):
+    """确认一个待定的工具调用（如 edit_paragraph），允许 LLM 继续执行。"""
+    service = get_writing_chat_service()
+    ok = service.confirm_pending_tool(request.pending_id, request.modified_args)
+    if not ok:
+        raise HTTPException(
+            status_code=404, detail="Pending tool not found or already resolved"
+        )
+    return {"status": "ok", "pending_id": request.pending_id}
+
+
+@router.post("/cancel-tool")
+async def cancel_tool(request: CancelToolRequest):
+    """取消一个待定的工具调用（如 edit_paragraph），阻止 LLM 执行。"""
+    service = get_writing_chat_service()
+    ok = service.cancel_pending_tool(request.pending_id)
+    if not ok:
+        raise HTTPException(
+            status_code=404, detail="Pending tool not found or already resolved"
+        )
+    return {"status": "ok", "pending_id": request.pending_id}
 
 
 # ── 删除 / 撤回 ──────────────────────────────────────────────────────

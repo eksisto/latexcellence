@@ -14,6 +14,7 @@ export function createSSEEventHandler({
   tmpAssistantId,
   setWritingChatMessages,
   setToolStatus,
+  setPendingTool,
   setCaptchaChallenge,
   setWritingChatCompressed,
   setWritingChatSessions,
@@ -42,6 +43,17 @@ export function createSSEEventHandler({
     } else if (event.type === "tool_status") {
       // web_search / project_tools 调用中 → 显示工具状态指示器
       setToolStatus(event);
+    } else if (event.type === "tool_pending") {
+      // 敏感工具等待用户确认
+      setToolStatus(null);
+      if (setPendingTool) setPendingTool(event);
+    } else if (event.type === "tool_cancelled") {
+      // 工具被用户取消
+      setToolStatus(null);
+      if (setPendingTool) setPendingTool(null);
+      toast.info(i18n.t("hooks:writingChat.toolCancelled"), {
+        description: event.tool,
+      });
     } else if (event.type === "tool_result") {
       // 工具执行完毕 → 隐藏指示器
       setToolStatus(null);

@@ -67,7 +67,7 @@ latexcellence/
 │   │   ├── compile_error_translator.py  # 编译错误 LLM 翻译（compile + git_diff 复用）
 │   │   ├── latexindent_utils.py    # latexindent.pl 调用封装
 │   │   ├── builtin_formatter.py    # 内置轻量 LaTeX 格式化器
-│   │   ├── project_tools/          # 项目文件浏览工具集（list_files / read_file_content / ...）
+│   │   ├── project_tools/          # LLM Function Calling 工具集（浏览 + 编辑）
 │   │   └── web_search/             # 联网搜索多引擎抽象
 │   │
 │   └── modules/                    # 各功能模块（router + service）
@@ -138,7 +138,7 @@ latexcellence/
 | `server` | host, port, dev_mode, vite_dev_url | 服务监听配置 |
 | `llm` | api_key, base_url, model, temperature, max_tokens, request_interval, max_concurrency | LLM 连接与调用参数 |
 | `features` | 各模块的 `enabled` + 特有配置（batch_size, output_dir, timeout 等） | 功能开关与模块级参数 |
-| `features.function_calling` | `web_search.*`（搜索参数）、`project_tools.*`（项目浏览开关） | 全局 LLM Function Calling 工具集（替代原先扁平的 `features.function_calling.web_search` / `features.project_tools`） |
+| `features.function_calling` | `web_search.*`（搜索参数）、`project_tools.*`（项目浏览开关）、`edit_tools.*`（段落编辑开关 + 确认弹窗开关） | 全局 LLM Function Calling 工具集（替代原先扁平的 `features.function_calling.web_search` / `features.project_tools`） |
 | `logging` | level, dir | 日志级别与存储路径 |
 
 所有字段有 Pydantic 默认值，可部分配置。`LX_LLM_KEY` 环境变量优先于 `config.json` 中的 `api_key`。

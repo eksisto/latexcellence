@@ -40,11 +40,13 @@ class ChatMessage(BaseModel):
     单条对话消息。
 
     字段说明：
-        role: "user"/"assistant"/"summary"
+        role: "user"/"assistant"/"summary"/"tool"
             - user: 用户输入
-            - assistant: LLM 回复
+            - assistant: LLM 回复（可能带有 tool_calls）
             - summary: 上下文压缩生成的摘要消息（compressed=True）
-        content: 消息文本（user/assistant 为 Markdown，summary 为压缩后摘要）
+            - tool: 工具调用结果
+        content: 消息文本（user/assistant 为 Markdown，summary 为压缩后摘要，
+                 tool 为工具执行结果文本）
         tokens: 该消息贡献给累计 token 计数的近似值（首次发送时填入；
                 summary 的 tokens = 原压缩快照的 tokens 总和的替代估计）
         edit_op: 仅 assistant 消息可能携带；表示该回复附带的编辑操作建议
@@ -52,6 +54,9 @@ class ChatMessage(BaseModel):
         snapshot: 若 compressed=True，保存压缩前被替换的原始消息列表，
                   用于撤回该 summary 时还原上下文
         referenced_file / referenced_paragraph: 用户在该消息中选择的上下文锚点
+        tool_calls: 仅 assistant 消息携带，LLM 请求调用的工具列表
+                    （OpenAI tool_calls 格式，list[dict]）
+        tool_call_id: 仅 tool 角色消息携带，关联到触发该结果的工具调用 ID
     """
 
     id: str
@@ -64,6 +69,8 @@ class ChatMessage(BaseModel):
     referenced_file: str | None = None
     referenced_paragraph: int | None = None
     created_at: float = 0.0
+    tool_calls: list[dict] | None = None
+    tool_call_id: str | None = None
 
 
 ChatMessage.model_rebuild()
@@ -199,3 +206,16 @@ class RenameSessionRequest(BaseModel):
 
     session_id: str
     title: str
+
+
+class ConfirmToolRequest(BaseModel):
+    """确认待定的工具调用。"""
+
+    pending_id: str
+    modified_args: dict[str, Any] | None = None
+
+
+class CancelToolRequest(BaseModel):
+    """取消待定的工具调用。"""
+
+    pending_id: str

@@ -696,5 +696,20 @@ export const api = {
           selected_hashes: selectedHashes,
         }),
       }),
+    confirmTool: (pendingId, modifiedArgs) =>
+      request("/writing-chat/confirm-tool", {
+        method: "POST",
+        body: JSON.stringify({
+          pending_id: pendingId,
+          modified_args: modifiedArgs || null,
+        }),
+      }),
+    cancelTool: (pendingId) =>
+      request("/writing-chat/cancel-tool", {
+        method: "POST",
+        body: JSON.stringify({
+          pending_id: pendingId,
+        }),
+      }),
   },
 };

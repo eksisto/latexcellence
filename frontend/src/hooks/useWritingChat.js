@@ -69,6 +69,41 @@ export default function useWritingChat() {
       }
     }
   }, []);
+
+  // 待用户确认的工具调用（写操作：edit_paragraph / undo_last_edit）
+  const [pendingTool, _setPendingTool] = useState(null);
+  const setPendingTool = useCallback((value) => {
+    _setPendingTool(value);
+  }, []);
+  const pendingToolRef = useRef(null);
+  useEffect(() => {
+    pendingToolRef.current = pendingTool;
+  }, [pendingTool]);
+
+  const confirmPendingTool = useCallback(async (modifiedArgs) => {
+    const tool = pendingToolRef.current;
+    if (!tool || !tool.pending_id) return;
+    try {
+      await api.writingChat.confirmTool(
+        tool.pending_id,
+        modifiedArgs ?? undefined,
+      );
+    } catch (e) {
+      // silent
+    }
+    _setPendingTool(null);
+  }, []);
+
+  const cancelPendingTool = useCallback(async () => {
+    const tool = pendingToolRef.current;
+    if (!tool || !tool.pending_id) return;
+    try {
+      await api.writingChat.cancelTool(tool.pending_id);
+    } catch (e) {
+      // silent
+    }
+    _setPendingTool(null);
+  }, []);
   const restoringRef = useRef(false);
 
   const texFiles = useMemo(() => flattenTexFiles(fileTree), [fileTree]);
@@ -216,6 +251,7 @@ export default function useWritingChat() {
         tmpAssistantId,
         setWritingChatMessages,
         setToolStatus,
+        setPendingTool,
         setCaptchaChallenge,
         setWritingChatCompressed,
         setWritingChatSessions,
@@ -456,6 +492,9 @@ export default function useWritingChat() {
     editingMessageId,
     applyingMessageId,
     toolStatus,
+    pendingTool,
+    confirmPendingTool,
+    cancelPendingTool,
     // DDG 验证码
     captchaChallenge,
     captchaSubmitting,

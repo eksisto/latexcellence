@@ -402,30 +402,51 @@ Phase 3: 程序生成修正结果
 
 ### 5.4 写作助手聊天的数据流
 
-写作助手 Chat 采用**双轮协议**，每轮走不同路径：
+写作助手 Chat 采用**双轮协议 + Function Calling**，每轮走不同路径：
 
 ```
-RS1（流式对话）:
-  用户消息 + 文件上下文（纯文本，无 marker）
-       ↓ SSE fetch streaming
-  chat_stream_with_usage() → LLM 流式回复
-       ↓
-  parseThinking() 逐 token 解析 <thinking> 标签
-       ↓ streaming 结束
-  落盘 assistant 消息（含 thinkingContent / displayContent / tokens）
-
+RS1（流式对话 + Function Calling）:
+   用户消息 + 文件上下文（纯文本，无 marker）
+        ↓
+   _get_enabled_tools() 动态注入三类工具：
+       SearchManager    → web_search
+       ProjectToolsManager → list_files / read_file_content / ...
+       EditToolsManager → edit_paragraph / undo_last_edit
+        ↓ SSE fetch streaming
+   chat_stream_with_usage(tools=...) → LLM 流式回复
+        ↓
+   LLM 可能返回 tool_call（非流式检测）
+        ↓
+   ┌─ 工具调用循环（最多 3 轮）───────────────┐
+   │ ToolRegistry.execute(tool_name, args)   │
+   │    ↓                                     │
+   │ 敏感检查（edit_paragraph / undo_last_edit）│
+   │   ↓ SSE: tool_pending                    │
+   │   用户确认/取消（超时 120s）               │
+   │   ↓ SSE: tool_cancelled 或 继续执行       │
+   │ 结果回传 LLM                              │
+   │    ↓                                     │
+   │ LLM 继续生成回复或发起新的 tool_call       │
+   └──────────────────────────────────────────┘
+        ↓
+   工具消息通过 append_tool_messages() 持久化
+        ↓
+   parseThinking() 逐 token 解析 <thinking> 标签
+        ↓ streaming 结束
+   落盘 assistant 消息（含 thinkingContent / displayContent / tokens）
+   
 RS2（结构化编辑）:
-  用户点击"生成编辑建议" → instruction 发送
-       ↓
-  strip_to_plain_text() 剥离 LaTeX → marker 保护校验
-       ↓
-  retry_with_validation() → LLM 结构化 JSON
-       ↓ restore_from_markers()
-  还原完整 LaTeX → 构造 unified diff → 附挂 EditOp
-       ↓
-  用户点击"应用到 .tex"（可选：手动编辑后传递 new_latex）
-       ↓ project_manager.apply_change()
-  MD5 校验 → 原子写入
+   用户点击"生成编辑建议" → instruction 发送
+        ↓
+   strip_to_plain_text() 剥离 LaTeX → marker 保护校验
+        ↓
+   retry_with_validation() → LLM 结构化 JSON
+        ↓ restore_from_markers()
+   还原完整 LaTeX → 构造 unified diff → 附挂 EditOp
+        ↓
+   用户点击"应用到 .tex"（可选：手动编辑后传递 new_latex）
+        ↓ project_manager.apply_change()
+   MD5 校验 → 原子写入
 ```
 
 **深度思考（Thinking Block）流式解析**：
@@ -450,16 +471,22 @@ LLM 输出中可能包含 `<thinking>...</thinking>` 标签，包裹推理过程
 3. 用一条 `role="summary"` 消息替换全部历史
 4. 用户可通过"撤回压缩消息"一键还原
 
-**Function Calling 工具调用（联网搜索）**：
+**Function Calling 工具调用（联网搜索 + 项目浏览 + 段落编辑）**：
 
-LLM 在流式输出过程中可发起 tool_call，触发联网搜索等工具。支持两个引擎——DuckDuckGo HTML 和 SearXNG JSON API——根据前端配置动态选择：
+LLM 在流式输出过程中可发起 tool_call，触发三类工具调用。支持自动化工具调度和敏感操作确认：
 
 ```
 RS1 流式对话中 tool_call:
-  LLM 输出 tool_call（function.name="web_search"）
+  LLM 输出 tool_call（function.name="web_search" / "edit_paragraph" 等）
        ↓ SSE event: tool_call（前端停止打字机显示）
-  ToolRegistry.execute("web_search", arguments)
+  ToolRegistry.execute(tool_name, arguments)
        ↓
+  ┌─ 工具分发 ───────────────────────────────────┐
+  │ SearchManager   → web_search (联网搜索)       │
+  │ ProjectToolsManager → list_files / ... (浏览) │
+  │ EditToolsManager → edit_paragraph / ... (编辑) │
+  └──────────────────────────────────────────────┘
+       ↓ 搜索工具走引擎路由
   ┌─ 引擎选择（根据配置）────────────────────────────┐
   │ DDG: https POST https://html.duckduckgo.com/html/  │
   │ SearXNG: httpx GET {base_url}/search?format=json    │
@@ -476,9 +503,16 @@ RS1 流式对话中 tool_call:
   │ 直接解析 JSON 结果                                 │
   └───────────────────────────────────────────────────┘
        ↓
-  提取 snippet/title/url → SSE event: search_results
+  ┌─ 敏感操作检查（edit_paragraph / undo_last_edit）─┐
+  │ require_confirmation=true → SSE: tool_pending     │
+  │   → 前端确认弹窗 → confirm-tool / cancel-tool     │
+  │   用户确认后继续执行，取消后回传 LLM "用户跳过"   │
+  └──────────────────────────────────────────────────┘
+       ↓
+  提取结果 → SSE event: tool_result / search_results
   → 工具结果注入 LLM 继续对话（SSE event: message）
-  → 前端显示搜索结果 + 引用链接
+  → 工具消息通过 append_tool_messages() 持久化到上下文
+  → 前端显示结果引用
 ```
 
 ### 5.5 参考文献管理数据流

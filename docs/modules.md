@@ -43,7 +43,8 @@
 | 模块 | 文档 | 说明 |
 | --- | --- | --- |
 | 联网搜索 | [web_search.md](modules/web_search.md) | 多引擎搜索 + Function Calling |
-| 项目文件浏览 | 无（自解释） | 4 个 LLM 工具（list_files / read_file_content / get_section_structure / search_across_files），让 LLM 浏览项目结构和文件内容 |
+| 项目文件浏览 | 无（自解释） | 4 个 LLM 浏览工具（list_files / read_file_content / get_section_structure / search_across_files），让 LLM 浏览项目结构和文件内容 |
+| 段落编辑 | 无（自解释） | 2 个 LLM 编辑工具（edit_paragraph / undo_last_edit），允许 LLM 直接修改 .tex 文件内容 |
 
 ---
 
@@ -68,7 +69,7 @@
 
 ### 工具管理器自注册模式
 
-遵循相同的**全局单例 + 自注册**模式：
+所有全局工具管理器（`SearchManager` / `ProjectToolsManager` / `EditToolsManager`）遵循相同的**全局单例 + 自注册**模式：
 
 - 静态 `get_tools_schema()` 定义工具 schema，供 LLM Function Calling 注入
 - 每个 executor 函数是独立的异步函数，接收 `tool_name` 和 `arguments`

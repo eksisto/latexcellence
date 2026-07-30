@@ -1,4 +1,4 @@
-import { useEffect, useRef, useMemo, useState } from "react";
+import { useEffect, useRef, useMemo, useState, lazy, Suspense } from "react";
 import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import {
@@ -15,6 +15,7 @@ import {
   MessagesSquare,
   Sparkles,
   X,
+  Undo2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -32,6 +33,9 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import useWritingChat from "@/hooks/useWritingChat";
 import MessageBubble from "./writing-chat/MessageBubble";
 import CaptchaDialog from "./writing-chat/CaptchaDialog";
+const ToolConfirmDialog = lazy(
+  () => import("./writing-chat/ToolConfirmDialog"),
+);
 
 // 工具调用状态指示器 — 图标与配色（与后端 _TOOL_LABELS / tool_status 联动）
 const toolIconMap = {
@@ -40,6 +44,8 @@ const toolIconMap = {
   read_file_content: FileText,
   get_section_structure: FileText,
   search_across_files: Search,
+  edit_paragraph: PencilLine,
+  undo_last_edit: Undo2,
 };
 
 const toolColorMap = {
@@ -50,6 +56,8 @@ const toolColorMap = {
     "text-emerald-500 bg-emerald-500/5 border-emerald-500/20",
   search_across_files:
     "text-emerald-500 bg-emerald-500/5 border-emerald-500/20",
+  edit_paragraph: "text-amber-500 bg-amber-500/5 border-amber-500/20",
+  undo_last_edit: "text-purple-500 bg-purple-500/5 border-purple-500/20",
 };
 
 export default function WritingChatPage() {
@@ -73,6 +81,9 @@ export default function WritingChatPage() {
     editingMessageId,
     applyingMessageId,
     toolStatus,
+    pendingTool,
+    confirmPendingTool,
+    cancelPendingTool,
     captchaChallenge,
     captchaSubmitting,
     submitCaptcha,
@@ -534,6 +545,15 @@ export default function WritingChatPage() {
           </Card>
         </div>
       )}
+
+      {/* 工具确认弹窗（写操作：edit_paragraph / undo_last_edit） */}
+      <Suspense fallback={null}>
+        <ToolConfirmDialog
+          pendingTool={pendingTool}
+          onConfirm={confirmPendingTool}
+          onCancel={cancelPendingTool}
+        />
+      </Suspense>
 
       {/* 验证码弹窗 */}
       <CaptchaDialog

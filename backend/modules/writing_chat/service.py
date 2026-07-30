@@ -21,8 +21,10 @@
     { type: "error", message: "..." }
 """
 
+import asyncio
 import difflib
 import json
+import time
 import uuid
 from typing import Any, AsyncIterator
 
@@ -36,6 +38,7 @@ from backend.utils.json_utils import retry_with_validation
 from backend.utils.time_utils import get_current_time_context
 from backend.utils.web_search import DDGChallengeError, get_search_manager
 from backend.utils.project_tools import get_project_tools_manager
+from backend.utils.project_tools.edit_tools_manager import get_edit_tools_manager
 from backend.modules.writing_chat.context import (
     ConversationContext,
     _NOPROJECT_SCOPE,
@@ -68,14 +71,93 @@ class WritingChatService:
         "read_file_content": "reading_file",
         "get_section_structure": "parsing_structure",
         "search_across_files": "searching_files",
+        "edit_paragraph": "editing_paragraph",
+        "undo_last_edit": "undoing_edit",
     }
 
     def __init__(self):
         self._logger = get_logger("writing_chat.service")
+        # 待用户确认的工具调用（写操作：edit_paragraph / undo_last_edit）
+        # key: pending_id, value: {event: asyncio.Event, confirmed: bool | None, tool_name: str, ...}
+        self._pending_confirms: dict[str, dict[str, Any]] = {}
 
     @staticmethod
     def _get_tool_label(tool_name: str, _tool_args: dict) -> str:
         return WritingChatService._TOOL_LABELS.get(tool_name, "running_tool")
+
+    @staticmethod
+    def _is_sensitive_tool(tool_name: str) -> bool:
+        """判断工具是否属于敏感操作（需要用户确认）。"""
+        return tool_name in ("edit_paragraph", "undo_last_edit")
+
+    async def _request_tool_confirmation(
+        self,
+        pending_id: str,
+        tool_name: str,
+        tool_args: dict,
+    ) -> dict | None:
+        """
+        发出工具确认请求，等待前端用户确认。
+
+        返回：
+            - None: 超时或被拒绝
+            - dict: 确认后的参数（可能已被前端修改）
+        """
+        self._cleanup_stale_pending()
+        event = asyncio.Event()
+        self._pending_confirms[pending_id] = {
+            "event": event,
+            "confirmed": None,
+            "tool_name": tool_name,
+            "tool_args": dict(tool_args),
+            "created_at": time.time(),
+        }
+        try:
+            await asyncio.wait_for(event.wait(), timeout=120)
+        except asyncio.TimeoutError:
+            self._pending_confirms.pop(pending_id, None)
+            return None
+
+        pending = self._pending_confirms.pop(pending_id, {})
+        if not pending.get("confirmed"):
+            return None
+        return pending.get("tool_args", tool_args)
+
+    def _cleanup_stale_pending(self, max_age: float = 120) -> None:
+        """清理超过 TTL 的待确认请求。"""
+        now = time.time()
+        stale = [
+            pid
+            for pid, p in self._pending_confirms.items()
+            if now - p.get("created_at", 0) > max_age
+        ]
+        for pid in stale:
+            p = self._pending_confirms.pop(pid, None)
+            if p and not p.get("event").is_set():
+                p["confirmed"] = False
+                p["event"].set()
+
+    def confirm_pending_tool(
+        self, pending_id: str, modified_args: dict | None = None
+    ) -> bool:
+        """确认待定工具调用。"""
+        pending = self._pending_confirms.get(pending_id)
+        if not pending or pending["event"].is_set():
+            return False
+        if modified_args:
+            pending["tool_args"] = modified_args
+        pending["confirmed"] = True
+        pending["event"].set()
+        return True
+
+    def cancel_pending_tool(self, pending_id: str) -> bool:
+        """取消待定工具调用。"""
+        pending = self._pending_confirms.get(pending_id)
+        if not pending or pending["event"].is_set():
+            return False
+        pending["confirmed"] = False
+        pending["event"].set()
+        return True
 
     # ── 工具方法 ──────────────────────────────────────────────────────────
 
@@ -198,6 +280,7 @@ class WritingChatService:
         # 工具调用循环：先非流式检测 tool_call，再流式输出最终回复
         if tools:
             tool_messages = list(messages)  # 拷贝用于工具调用的 messages
+            initial_msg_count = len(tool_messages)
             max_rounds = 3  # 防止无限工具调用循环
 
             for round_idx in range(max_rounds):
@@ -244,7 +327,49 @@ class WritingChatService:
                         "args": tool_args,
                     }
 
-                    # 注入工作区上下文（project_tools executor 使用）
+                    # 敏感操作（edit_paragraph / undo_last_edit）检查是否需要用户确认
+                    if (
+                        self._is_sensitive_tool(tool_name)
+                        and get_config().features.function_calling.edit_tools.require_confirmation
+                    ):
+                        pending_id = uuid.uuid4().hex[:12]
+                        yield {
+                            "type": "tool_pending",
+                            "pending_id": pending_id,
+                            "tool": tool_name,
+                            "label": self._get_tool_label(tool_name, tool_args),
+                            "args": tool_args,
+                        }
+                        confirmed_args = await self._request_tool_confirmation(
+                            pending_id,
+                            tool_name,
+                            tool_args,
+                        )
+                        if confirmed_args is None:
+                            self._logger.info(
+                                f"Tool {tool_name} cancelled by user [pending={pending_id}]"
+                            )
+                            yield {
+                                "type": "tool_cancelled",
+                                "pending_id": pending_id,
+                                "tool": tool_name,
+                            }
+                            # 添加空的 tool result，避免 LLM API 报未完成的 tool_call
+                            tool_messages.append(
+                                {
+                                    "role": "tool",
+                                    "tool_call_id": tc.id,
+                                    "content": f"The user canceled the {tool_name} operation. Please skip this change.",
+                                }
+                            )
+                            continue
+                        # 使用可能被前端修改后的参数
+                        tool_args = confirmed_args
+                        self._logger.info(
+                            f"Tool {tool_name} confirmed by user [pending={pending_id}]"
+                        )
+
+                    # 注入工作区上下文
                     tool_args["_workspace_id"] = workspace_id
                     try:
                         tool_result = await get_tool_registry().execute(
@@ -353,6 +478,11 @@ class WritingChatService:
                 ctx.delete_message(user_msg.id)
                 ctx.save_to_disk()
                 return
+
+            # 将工具调用/结果消息持久化到会话上下文
+            new_tool_msgs = tool_messages[initial_msg_count:]
+            if new_tool_msgs:
+                ctx.append_tool_messages(new_tool_msgs)
 
         else:
             # 无工具：原有纯流式逻辑
@@ -607,6 +737,20 @@ class WritingChatService:
             except Exception as e:
                 self._logger.warning(
                     "Failed to load project tools for workspace %s: %s",
+                    workspace_id,
+                    e,
+                )
+
+        # ── 段落编辑工具（从"建议者"升级为"执行者"） ─────────────────
+        if cfg.features.function_calling.edit_tools.enabled and workspace_id:
+            try:
+                pm = get_project_manager_for_workspace(workspace_id)
+                if pm.is_open:
+                    et_mgr = get_edit_tools_manager()
+                    tools.extend(et_mgr.get_tools_schema())
+            except Exception as e:
+                self._logger.warning(
+                    "Failed to load edit tools for workspace %s: %s",
                     workspace_id,
                     e,
                 )
