@@ -159,14 +159,14 @@ async def get_full_config():
     key = data["llm"]["api_key"]
     if key:
         data["llm"]["api_key"] = "***" + key[-4:] if len(key) > 4 else "****"
-    openalex = data["features"]["function_calling"]["scholarly_research"]["providers"][
-        "openalex"
-    ]
-    openalex_key = openalex["api_key"]
-    if openalex_key:
-        openalex["api_key"] = (
-            "***" + openalex_key[-4:] if len(openalex_key) > 4 else "****"
-        )
+    providers = data["features"]["function_calling"]["scholarly_research"]["providers"]
+    for provider_key in ("openalex", "semantic_scholar", "core", "unpaywall", "pubmed"):
+        p = providers.get(provider_key, {})
+        if "api_key" not in p:
+            continue
+        k = p["api_key"]
+        if k:
+            p["api_key"] = "***" + k[-4:] if len(k) > 4 else "****"
     return data
 
 

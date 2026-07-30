@@ -1,0 +1,78 @@
+"""Unpaywall API 提供者 — 开放获取全文定位增强。"""
+
+from typing import Any
+
+import httpx
+
+from backend.core.config import get_config
+from backend.core.logger import get_logger
+
+from ..base import BaseResearchProvider
+from ..models import RelatedWorksResult, SearchScholarlyResult, WorkDetailResult
+
+_API_BASE = "https://api.unpaywall.org/v2"
+
+
+class UnpaywallProvider(BaseResearchProvider):
+    """Unpaywall 仅用于根据 DOI 查找开放获取全文 URL，不提供搜索或引文关系。"""
+
+    name = "unpaywall"
+
+    def __init__(self, client: httpx.AsyncClient) -> None:
+        self._client = client
+        self._logger = get_logger("scholarly_research.unpaywall")
+
+    def _email(self) -> str:
+        cfg = get_config().features.function_calling.scholarly_research
+        return (cfg.providers.unpaywall.api_key or "").strip()
+
+    def _get_user_agent(self) -> str:
+        return get_config().http.user_agent
+
+    async def _request_json(
+        self, path: str, params: dict[str, Any] | None = None
+    ) -> dict[str, Any]:
+        cfg = get_config().features.function_calling.scholarly_research
+        url = f"{_API_BASE}{path}"
+        request_params = dict(params or {})
+        email = self._email()
+        if email:
+            request_params["email"] = email
+        response = await self._client.get(
+            url,
+            params=request_params,
+            headers={"User-Agent": self._get_user_agent()},
+            timeout=cfg.timeout_seconds,
+        )
+        response.raise_for_status()
+        payload = response.json()
+        if not isinstance(payload, dict):
+            raise RuntimeError("Unpaywall returned a non-object JSON response")
+        return payload
+
+    async def search(self, query: str, **filters: Any) -> SearchScholarlyResult:
+        return SearchScholarlyResult(query=query, source=self.name)
+
+    async def get_details(self, work_id: str) -> WorkDetailResult | None:
+        return None
+
+    async def find_related(
+        self, seed_id: str | None = None, relation_type: str = "similar", **kwargs: Any
+    ) -> RelatedWorksResult:
+        return RelatedWorksResult(seed_id=seed_id or "", relation_type=relation_type)
+
+    async def find_oa_url(self, doi: str) -> str:
+        """根据 DOI 查询 Unpaywall 中的开放获取全文链接。"""
+        try:
+            payload = await self._request_json(f"/{doi.strip()}")
+            best = payload.get("best_oa_location") or {}
+            if best:
+                return (
+                    best.get("url")
+                    or best.get("url_for_pdf")
+                    or best.get("url_for_landing_page")
+                    or ""
+                )
+        except Exception as exc:
+            self._logger.debug("Unpaywall OA lookup failed for %s: %s", doi, exc)
+        return ""

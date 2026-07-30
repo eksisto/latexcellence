@@ -1,4 +1,4 @@
-"""OpenAlex 学术论文检索与引文追踪工具。"""
+"""学术论文检索与引文追踪工具 — 多数据源联邦。"""
 
 from .manager import (
     ResearchManager,

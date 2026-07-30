@@ -802,24 +802,94 @@ export default function SettingsDialog() {
               }
             />
             {config.features.function_calling.scholarly_research.enabled && (
-              <div className="ml-6 space-y-1.5">
-                <Label className="text-xs">
-                  {t("settings.openAlexApiKey")}
-                </Label>
-                <Input
-                  type="password"
-                  placeholder={t("settings.openAlexApiKeyHint")}
-                  value={
-                    config.features.function_calling.scholarly_research
-                      .providers.openalex.api_key || ""
-                  }
-                  onChange={(e) =>
-                    set(
-                      "features.function_calling.scholarly_research.providers.openalex.api_key",
-                      e.target.value,
-                    )
-                  }
-                />
+              <div className="ml-6 space-y-3 rounded-md border p-2.5 bg-muted/40">
+                {[
+                  {
+                    key: "openalex",
+                    label: "OpenAlex",
+                    hintKey: "openAlexApiKeyHint",
+                    hasKey: true,
+                  },
+                  {
+                    key: "semantic_scholar",
+                    label: "Semantic Scholar",
+                    hintKey: "semanticScholarApiKeyHint",
+                    hasKey: true,
+                  },
+                  {
+                    key: "crossref",
+                    label: "Crossref",
+                    hintKey: null,
+                    hasKey: false,
+                  },
+                  {
+                    key: "arxiv",
+                    label: "arXiv",
+                    hintKey: null,
+                    hasKey: false,
+                  },
+                  {
+                    key: "core",
+                    label: "CORE",
+                    hintKey: null,
+                    hasKey: true,
+                  },
+                  {
+                    key: "unpaywall",
+                    label: "Unpaywall",
+                    hintKey: "unpaywallApiKeyHint",
+                    hasKey: true,
+                  },
+                  {
+                    key: "pubmed",
+                    label: "PubMed",
+                    hintKey: "pubmedApiKeyHint",
+                    hasKey: true,
+                  },
+                  {
+                    key: "datacite",
+                    label: "DataCite",
+                    hintKey: null,
+                    hasKey: false,
+                  },
+                ].map(({ key, label, hintKey, hasKey }) => (
+                  <div key={key} className="space-y-1.5">
+                    <CheckboxField
+                      label={`${label}${!hasKey ? "" : ""}`}
+                      checked={
+                        config.features.function_calling.scholarly_research
+                          .providers[key].enabled
+                      }
+                      onChange={(v) =>
+                        set(
+                          `features.function_calling.scholarly_research.providers.${key}.enabled`,
+                          v,
+                        )
+                      }
+                    />
+                    {hasKey &&
+                      config.features.function_calling.scholarly_research
+                        .providers[key].enabled && (
+                        <Input
+                          type="password"
+                          className="ml-5 mt-1 w-[calc(100%-1.25rem)]"
+                          placeholder={
+                            hintKey ? t(`settings.${hintKey}`) : "API Key"
+                          }
+                          value={
+                            config.features.function_calling.scholarly_research
+                              .providers[key].api_key || ""
+                          }
+                          onChange={(e) =>
+                            set(
+                              `features.function_calling.scholarly_research.providers.${key}.api_key`,
+                              e.target.value,
+                            )
+                          }
+                        />
+                      )}
+                  </div>
+                ))}
               </div>
             )}
           </ConfigSection>

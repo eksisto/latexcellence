@@ -7,15 +7,19 @@ import httpx
 import pytest
 
 from backend.core.config import get_config
+from backend.utils.scholarly_research import manager as manager_module
+from backend.utils.scholarly_research._utils import _dedup_works
 from backend.utils.scholarly_research.manager import (
     ResearchManager,
-    _build_work_from_openalex,
-    _reconstruct_abstract,
     _scholarly_research_executor,
     reset_research_manager,
 )
-from backend.utils.scholarly_research import manager as manager_module
 from backend.utils.scholarly_research.models import ScholarlyWork
+from backend.utils.scholarly_research.providers.openalex import (
+    OpenAlexProvider,
+    _build_work_from_openalex,
+    _reconstruct_abstract,
+)
 
 
 def _openalex_work(
@@ -114,7 +118,7 @@ def test_dedup_prefers_published_version_and_merges_sources():
         source_records=["another-source"],
     )
 
-    result = ResearchManager._dedup_works([preprint, article])
+    result = _dedup_works([preprint, article])
 
     assert len(result) == 1
     assert result[0].title == "Paper article"
@@ -153,7 +157,7 @@ async def test_search_builds_openalex_filters(monkeypatch):
         20,
     )
     try:
-        result = await ResearchManager(client).search_works(
+        result = await OpenAlexProvider(client).search_works(
             query="program synthesis",
             year_from=2022,
             year_to=2026,
@@ -191,7 +195,7 @@ async def test_search_resolves_author_name_to_id():
 
     client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
     try:
-        await ResearchManager(client).search_works(
+        await OpenAlexProvider(client).search_works(
             query="analytical engines", authors=["Ada Lovelace"]
         )
     finally:
@@ -215,7 +219,7 @@ async def test_search_sends_configured_api_key(monkeypatch):
     monkeypatch.setattr(research_cfg.providers.openalex, "api_key", "test-openalex-key")
     client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
     try:
-        await ResearchManager(client).search_works(query="latex")
+        await OpenAlexProvider(client).search_works(query="latex")
     finally:
         await client.aclose()
 
@@ -241,7 +245,7 @@ async def test_find_cited_by_uses_cites_filter():
 
     client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
     try:
-        result = await ResearchManager(client).find_related_works(
+        result = await OpenAlexProvider(client).find_related_works(
             work_id="W123", relation_type="cited_by", max_results=5
         )
     finally:
@@ -269,7 +273,7 @@ async def test_find_similar_uses_related_works_batch_filter():
 
     client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
     try:
-        result = await ResearchManager(client).find_related_works(
+        result = await OpenAlexProvider(client).find_related_works(
             work_id="W123", relation_type="similar", max_results=5
         )
     finally:
@@ -296,8 +300,10 @@ async def test_get_full_text_returns_abstract_and_oa_url():
         return httpx.Response(200, json=_openalex_work())
 
     client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+    manager = ResearchManager()
+    manager.register(OpenAlexProvider(client))
     try:
-        result = await ResearchManager(client).get_full_text(
+        result = await manager.get_full_text(
             "10.1000/test", requested_sections=["abstract", "methods"]
         )
     finally:

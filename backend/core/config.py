@@ -233,6 +233,27 @@ class ScholarlyResearchProvidersConfig(BaseModel):
     """学术研究数据源集合。"""
 
     openalex: ScholarlyResearchProviderConfig = ScholarlyResearchProviderConfig()
+    semantic_scholar: ScholarlyResearchProviderConfig = ScholarlyResearchProviderConfig(
+        enabled=False, api_key=""
+    )
+    crossref: ScholarlyResearchProviderConfig = ScholarlyResearchProviderConfig(
+        enabled=False
+    )
+    arxiv: ScholarlyResearchProviderConfig = ScholarlyResearchProviderConfig(
+        enabled=False
+    )
+    core: ScholarlyResearchProviderConfig = ScholarlyResearchProviderConfig(
+        enabled=False, api_key=""
+    )
+    unpaywall: ScholarlyResearchProviderConfig = ScholarlyResearchProviderConfig(
+        enabled=False, api_key=""
+    )
+    pubmed: ScholarlyResearchProviderConfig = ScholarlyResearchProviderConfig(
+        enabled=False, api_key=""
+    )
+    datacite: ScholarlyResearchProviderConfig = ScholarlyResearchProviderConfig(
+        enabled=False
+    )
 
 
 class ScholarlyResearchConfig(BaseModel):
@@ -451,17 +472,18 @@ def update_config_from_dict(updates: dict) -> AppConfig:
             # 用户提供了真实 Key，更新内存并解除环境变量标记
             _api_key_from_env = False
 
-    # OpenAlex Key 也通过设置页以掩码返回，掩码或空值表示保留原配置。
+    # 所有已启用 API Key 的数据源均通过设置页以掩码返回，掩码表示保留原配置。
     function_calling = updates.get("features", {}).get("function_calling", {})
     scholarly_research = function_calling.get("scholarly_research", {})
     providers = scholarly_research.get("providers", {})
-    openalex = providers.get("openalex", {})
-    if isinstance(openalex, dict) and "api_key" in openalex:
-        openalex_key = openalex.get("api_key", "")
-        if openalex_key.startswith("***"):
-            openalex["api_key"] = current["features"]["function_calling"][
-                "scholarly_research"
-            ]["providers"]["openalex"]["api_key"]
+    for provider_key in ("openalex", "semantic_scholar", "core", "unpaywall", "pubmed"):
+        p = providers.get(provider_key, {})
+        if isinstance(p, dict) and "api_key" in p:
+            k = p.get("api_key", "")
+            if k.startswith("***"):
+                p["api_key"] = current["features"]["function_calling"][
+                    "scholarly_research"
+                ]["providers"][provider_key]["api_key"]
 
     merged = _deep_merge(current, updates)
     _config = AppConfig(**merged)

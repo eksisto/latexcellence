@@ -141,6 +141,31 @@
           "openalex": {
             "enabled": true,
             "api_key": ""
+          },
+          "semantic_scholar": {
+            "enabled": false,
+            "api_key": ""
+          },
+          "crossref": {
+            "enabled": false
+          },
+          "arxiv": {
+            "enabled": false
+          },
+          "core": {
+            "enabled": false,
+            "api_key": ""
+          },
+          "unpaywall": {
+            "enabled": false,
+            "api_key": ""
+          },
+          "pubmed": {
+            "enabled": false,
+            "api_key": ""
+          },
+          "datacite": {
+            "enabled": false
           }
         }
       }
