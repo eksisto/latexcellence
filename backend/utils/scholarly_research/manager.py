@@ -232,19 +232,19 @@ class ResearchManager:
                 "function": {
                     "name": "search_scholarly_works",
                     "description": (
-                        "跨多个学术数据源检索论文。按主题、作者、年份、文献类型等条件搜索，"
-                        "返回含 DOI、OpenAlex ID 等稳定标识符的结构化记录。"
+                        "Search for papers across multiple academic data sources. Support searching by topic, author, year, document type, and other criteria, "
+                        "and return structured records containing stable identifiers such as DOI and OpenAlex ID."
                     ),
                     "parameters": {
                         "type": "object",
                         "properties": {
-                            "query": {"type": "string", "description": "搜索关键词"},
-                            "year_from": {"type": "integer", "description": "起始年份"},
-                            "year_to": {"type": "integer", "description": "结束年份"},
+                            "query": {"type": "string", "description": "Search keyword"},
+                            "year_from": {"type": "integer", "description": "Start year"},
+                            "year_to": {"type": "integer", "description": "End year"},
                             "authors": {
                                 "type": "array",
                                 "items": {"type": "string"},
-                                "description": "作者姓名",
+                                "description": "Author names",
                             },
                             "work_types": {
                                 "type": "array",
@@ -274,15 +274,15 @@ class ResearchManager:
                 "function": {
                     "name": "get_work_details",
                     "description": (
-                        "获取论文的完整详细信息：摘要、作者、机构、期刊、DOI、被引数、"
-                        "主题和开放获取信息。支持多种数据源。"
+                        "Get the complete detailed information of a paper: abstract, authors, affiliations, journal, DOI, citation count, "
+                        "topics, and open access information. Support multiple data sources."
                     ),
                     "parameters": {
                         "type": "object",
                         "properties": {
                             "work_id": {
                                 "type": "string",
-                                "description": "论文 OpenAlex ID 或 DOI",
+                                "description": "OpenAlex ID or DOI for the paper",
                             }
                         },
                         "required": ["work_id"],
@@ -294,15 +294,15 @@ class ResearchManager:
                 "function": {
                     "name": "find_related_works",
                     "description": (
-                        "基于种子论文查找参考文献、引用该论文的后续工作或相似论文。"
-                        "利用多个数据源的引文图谱。"
+                        "Find related works based on a seed paper: references, papers that cite the seed paper, or similar papers."
+                        "Utilize citation graphs from multiple data sources."
                     ),
                     "parameters": {
                         "type": "object",
                         "properties": {
                             "work_id": {
                                 "type": "string",
-                                "description": "OpenAlex ID 或 DOI",
+                                "description": "OpenAlex ID or DOI",
                             },
                             "relation_type": {
                                 "type": "string",
@@ -328,14 +328,14 @@ class ResearchManager:
                 "function": {
                     "name": "get_full_text_or_sections",
                     "description": (
-                        "获取论文的摘要和开放获取全文定位信息。跨数据源提供最全面的 OA 链接。"
+                        "Get the abstract and open access full-text location information of a paper. Provide the most comprehensive OA links across data sources."
                     ),
                     "parameters": {
                         "type": "object",
                         "properties": {
                             "work_id": {
                                 "type": "string",
-                                "description": "OpenAlex ID 或 DOI",
+                                "description": "OpenAlex ID or DOI",
                             },
                             "requested_sections": {
                                 "type": "array",
@@ -355,12 +355,12 @@ class ResearchManager:
                 "function": {
                     "name": "search_research_data_resources",
                     "description": (
-                        "检索与研究主题相关的数据集和研究数据。跨数据源搜索。"
+                        "Search for datasets and research data related to a research topic. Search across multiple data sources."
                     ),
                     "parameters": {
                         "type": "object",
                         "properties": {
-                            "query": {"type": "string", "description": "研究主题"},
+                            "query": {"type": "string", "description": "Research topic"},
                             "resource_type": {
                                 "type": "string",
                                 "enum": ["dataset"],
