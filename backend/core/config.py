@@ -222,6 +222,29 @@ class WebSearchConfig(BaseModel):
     query_rewriting: QueryRewritingConfig = QueryRewritingConfig()
 
 
+class ScholarlyResearchProviderConfig(BaseModel):
+    """单个学术数据源配置。"""
+
+    enabled: bool = True
+    api_key: str = ""
+
+
+class ScholarlyResearchProvidersConfig(BaseModel):
+    """学术研究数据源集合。"""
+
+    openalex: ScholarlyResearchProviderConfig = ScholarlyResearchProviderConfig()
+
+
+class ScholarlyResearchConfig(BaseModel):
+    """学术论文检索与引文追踪工具配置。"""
+
+    enabled: bool = False
+    primary_source: str = "openalex"
+    max_results: int = Field(20, ge=1, le=100)
+    timeout_seconds: int = Field(30, ge=1)
+    providers: ScholarlyResearchProvidersConfig = ScholarlyResearchProvidersConfig()
+
+
 class BibProviderConfig(BaseModel):
     """单个 DOI 数据源配置"""
 
@@ -253,6 +276,7 @@ class FunctionCallingConfig(BaseModel):
     web_search: WebSearchConfig = WebSearchConfig()
     project_tools: ProjectToolsConfig = ProjectToolsConfig()
     edit_tools: EditToolsConfig = EditToolsConfig()
+    scholarly_research: ScholarlyResearchConfig = ScholarlyResearchConfig()
 
 
 class FeaturesConfig(BaseModel):
@@ -426,6 +450,18 @@ def update_config_from_dict(updates: dict) -> AppConfig:
         else:
             # 用户提供了真实 Key，更新内存并解除环境变量标记
             _api_key_from_env = False
+
+    # OpenAlex Key 也通过设置页以掩码返回，掩码或空值表示保留原配置。
+    function_calling = updates.get("features", {}).get("function_calling", {})
+    scholarly_research = function_calling.get("scholarly_research", {})
+    providers = scholarly_research.get("providers", {})
+    openalex = providers.get("openalex", {})
+    if isinstance(openalex, dict) and "api_key" in openalex:
+        openalex_key = openalex.get("api_key", "")
+        if openalex_key.startswith("***"):
+            openalex["api_key"] = current["features"]["function_calling"][
+                "scholarly_research"
+            ]["providers"]["openalex"]["api_key"]
 
     merged = _deep_merge(current, updates)
     _config = AppConfig(**merged)

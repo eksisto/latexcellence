@@ -7,7 +7,16 @@ import {
   Undo2,
   HelpCircle,
   FolderOpen,
+  GraduationCap,
 } from "lucide-react";
+
+const scholarlyTools = [
+  "search_scholarly_works",
+  "get_work_details",
+  "find_related_works",
+  "get_full_text_or_sections",
+  "search_research_data_resources",
+];
 
 const toolIconMap = {
   web_search: Globe,
@@ -18,6 +27,11 @@ const toolIconMap = {
   edit_paragraph: PencilLine,
   undo_last_edit: Undo2,
   request_clarification: HelpCircle,
+  search_scholarly_works: GraduationCap,
+  get_work_details: GraduationCap,
+  find_related_works: GraduationCap,
+  get_full_text_or_sections: GraduationCap,
+  search_research_data_resources: GraduationCap,
 };
 
 const toolColorMap = {
@@ -31,6 +45,12 @@ const toolColorMap = {
   edit_paragraph: "text-amber-500 bg-amber-500/5 border-amber-500/20",
   undo_last_edit: "text-purple-500 bg-purple-500/5 border-purple-500/20",
   request_clarification: "text-violet-500 bg-violet-500/5 border-violet-500/20",
+  ...Object.fromEntries(
+    scholarlyTools.map((tool) => [
+      tool,
+      "text-violet-500 bg-violet-500/5 border-violet-500/20",
+    ]),
+  ),
 };
 
 export default function ToolStatusBar({ toolStatus }) {

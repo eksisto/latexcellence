@@ -216,6 +216,18 @@ const PATTERN_MAP = [
   [/Challenge expired or not found/, "challengeExpired", () => ({})],
   [/Verification failed, please retry/, "verificationFailed", () => ({})],
   [/IP has been blocked, please try again later/, "ipBlocked", () => ({})],
+
+  // 学术研究
+  [/^OpenAlex request failed:/, "openAlexRequestFailed", () => ({})],
+  [
+    /^Scholarly work not found:\s*(.+)/,
+    "scholarlyWorkNotFound",
+    (m) => ({ id: m[1] }),
+  ],
+  [/^work_id must be/, "invalidScholarlyWorkId", () => ({})],
+  [/^relation_type must be/, "invalidScholarlyRelation", () => ({})],
+  [/^resource_type must be/, "invalidResearchResourceType", () => ({})],
+  [/^year_from must be/, "invalidScholarlyYearRange", () => ({})],
 ];
 
 /**

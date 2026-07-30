@@ -118,6 +118,8 @@ export default function SettingsDialog() {
         bib_manager: config.features.bib_manager.enabled,
         project_tools: config.features.function_calling.project_tools.enabled,
         web_search: config.features.function_calling.web_search.enabled,
+        scholarly_research:
+          config.features.function_calling.scholarly_research.enabled,
       });
       setOpen(false);
       toast.success(t("settings.configSaved"));
@@ -785,6 +787,36 @@ export default function SettingsDialog() {
                     set(
                       "features.function_calling.web_search.query_rewriting.enabled",
                       v,
+                    )
+                  }
+                />
+              </div>
+            )}
+            <CheckboxField
+              label={t("settings.featureScholarlyResearch")}
+              checked={
+                config.features.function_calling.scholarly_research.enabled
+              }
+              onChange={(v) =>
+                set("features.function_calling.scholarly_research.enabled", v)
+              }
+            />
+            {config.features.function_calling.scholarly_research.enabled && (
+              <div className="ml-6 space-y-1.5">
+                <Label className="text-xs">
+                  {t("settings.openAlexApiKey")}
+                </Label>
+                <Input
+                  type="password"
+                  placeholder={t("settings.openAlexApiKeyHint")}
+                  value={
+                    config.features.function_calling.scholarly_research
+                      .providers.openalex.api_key || ""
+                  }
+                  onChange={(e) =>
+                    set(
+                      "features.function_calling.scholarly_research.providers.openalex.api_key",
+                      e.target.value,
                     )
                   }
                 />

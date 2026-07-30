@@ -20,6 +20,7 @@ const ALL_ENABLED = {
   bib_manager: true,
   project_tools: true,
   web_search: true,
+  scholarly_research: true,
 };
 
 export default function useEnabledFeatures() {

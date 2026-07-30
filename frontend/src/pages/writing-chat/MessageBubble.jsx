@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, memo } from "react";
 import { useTranslation } from "react-i18next";
 import {
   Loader2,
@@ -13,6 +13,7 @@ import {
   Trash2,
   Undo2,
   History,
+  GraduationCap,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import MarkdownRenderer from "@/components/MarkdownRenderer";
@@ -22,6 +23,75 @@ function formatTime(ts) {
   const d = new Date(ts * 1000);
   return d.toLocaleString();
 }
+
+const OA_URL_RE = /^https?:\/\//i;
+
+const areResultsEqual = (prevProps, nextProps) => {
+  const a = prevProps.result;
+  const b = nextProps.result;
+  return a.id === b.id && a.doi === b.doi && a.title === b.title;
+};
+
+const ScholarlyResultItem = memo(({ result, t }) => {
+  return (
+    <li className="flex flex-col gap-0.5 border-b border-border/50 pb-2 last:border-b-0 last:pb-0">
+      <span className="text-xs font-medium leading-snug text-foreground">
+        {result.title}
+      </span>
+      <span className="text-[11px] text-muted-foreground">
+        {result.authors?.join(", ") ||
+          t("pages:writingChat.scholarlyUnknownAuthor")}
+        {result.year > 0 && ` (${result.year})`}
+      </span>
+      {result.journal && (
+        <span className="text-[11px] italic text-muted-foreground">
+          {result.journal}
+        </span>
+      )}
+      <div className="mt-0.5 flex flex-wrap items-center gap-1.5">
+        {result.work_type && (
+          <span className="rounded bg-violet-500/10 px-1 py-0.5 text-[10px] font-medium text-violet-600 dark:text-violet-400">
+            {t(`pages:writingChat.scholarlyType.${result.work_type}`, {
+              defaultValue: result.work_type,
+            })}
+          </span>
+        )}
+        {result.citation_count > 0 && (
+          <span className="rounded bg-blue-500/10 px-1 py-0.5 text-[10px] font-medium text-blue-600 dark:text-blue-400">
+            {t("pages:writingChat.scholarlyCiteCount", {
+              count: result.citation_count,
+            })}
+          </span>
+        )}
+        {result.is_oa && (
+          <span className="rounded bg-green-500/10 px-1 py-0.5 text-[10px] font-medium text-green-600 dark:text-green-400">
+            {t("pages:writingChat.scholarlyOa")}
+          </span>
+        )}
+        {result.doi && (
+          <a
+            href={`https://doi.org/${result.doi}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="rounded bg-zinc-500/10 px-1 py-0.5 font-mono text-[10px] text-zinc-600 hover:underline dark:text-zinc-400"
+          >
+            DOI
+          </a>
+        )}
+        {!result.doi && OA_URL_RE.test(result.oa_url || "") && (
+          <a
+            href={result.oa_url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="rounded bg-green-500/10 px-1 py-0.5 text-[10px] font-medium text-green-600 hover:underline dark:text-green-400"
+          >
+            {t("pages:writingChat.scholarlyOpen")}
+          </a>
+        )}
+      </div>
+    </li>
+  );
+}, areResultsEqual);
 
 export default function MessageBubble({ message, actions }) {
   const { t } = useTranslation(["pages", "common"]);
@@ -43,6 +113,7 @@ export default function MessageBubble({ message, actions }) {
     () => !message.thinkingClosed,
   );
   const [searchExpanded, setSearchExpanded] = useState(true);
+  const [scholarlyExpanded, setScholarlyExpanded] = useState(true);
 
   // 在流式更新 thinkingClosed 时同步展开状态
   useEffect(() => {
@@ -250,6 +321,52 @@ export default function MessageBubble({ message, actions }) {
                                 </a>
                               )}
                             </li>
+                          ))}
+                        </ul>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+              {/* 学术检索结果折叠框 */}
+              {message.scholarlyResults?.length > 0 && (
+                <div className="mb-2 rounded border border-violet-500/20 bg-violet-500/5 p-2">
+                  <button
+                    type="button"
+                    className="flex w-full cursor-pointer select-none items-center gap-1 text-left text-xs font-medium text-violet-600 dark:text-violet-400"
+                    onClick={() => setScholarlyExpanded((value) => !value)}
+                  >
+                    <GraduationCap className="size-3 shrink-0" />
+                    {t("pages:writingChat.scholarlyResults")}
+                    {message.scholarlyQuery && (
+                      <span className="truncate font-normal text-muted-foreground">
+                        · {message.scholarlyQuery}
+                      </span>
+                    )}
+                    <ChevronDown
+                      className={`ml-auto size-3 transition-transform duration-300 ${scholarlyExpanded ? "rotate-180" : ""}`}
+                    />
+                  </button>
+                  <div
+                    className="grid transition-[grid-template-rows] duration-300 ease-in-out"
+                    style={{
+                      gridTemplateRows: scholarlyExpanded ? "1fr" : "0fr",
+                    }}
+                  >
+                    <div className="overflow-hidden">
+                      <div className="mt-2 text-xs leading-relaxed">
+                        <div className="mb-2 text-[10px] text-muted-foreground">
+                          {t("pages:writingChat.scholarlyResultsCount", {
+                            count: message.scholarlyTotal,
+                          })}
+                        </div>
+                        <ul className="space-y-2">
+                          {message.scholarlyResults.map((result) => (
+                            <ScholarlyResultItem
+                              key={result.id || result.doi || result.title}
+                              result={result}
+                              t={t}
+                            />
                           ))}
                         </ul>
                       </div>

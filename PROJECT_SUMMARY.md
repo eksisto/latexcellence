@@ -48,6 +48,11 @@ latexcellence/
 │   │   │       ├── ddg.py            # DuckDuckGo HTML 引擎 + DDG Challenge 处理
 │   │   │       ├── searxng.py        # SearXNG 引擎
 │   │   │       └── mock.py           # Mock 引擎（测试/降级）
+│   │   ├── scholarly_research/        # 学术研究工具（OpenAlex 检索、详情、引文追踪、OA 定位）
+│   │   │   ├── __init__.py            # 包入口与生命周期 API
+│   │   │   ├── models.py              # 统一作品、作者、主题和结果模型
+│   │   │   ├── base.py                # 学术数据源抽象接口
+│   │   │   └── manager.py             # ResearchManager + OpenAlex + Function Calling 工具
 │   │   ├── project_tools/            # LLM Function Calling 工具集（浏览 + 编辑）
 │   │   │   ├── __init__.py
 │   │   │   ├── manager.py            # ProjectToolsManager — 浏览工具（list_files/read_file_content/get_section_structure/search_across_files）
@@ -120,7 +125,7 @@ latexcellence/
 | table_ocr | 图片→LaTeX 表格 | router.py, service.py | ✓(Vision) | ✗ |
 | format_converter | 格式转换(pandoc) | router.py, service.py | ✓(宏包分析) | ✗ |
 | style_modify | 自然语言修改样式 | router.py, service.py | ✓ | ✗ |
-| writing_chat | 写作助手对话（含联网搜索 + Deep Read + 查询重写 + 项目文件浏览 + 段落编辑 + 工具确认） | router.py, service.py, context.py, models.py, prompt_manager.py | ✓ | ✗ |
+| writing_chat | 写作助手对话（含联网搜索、学术检索与引文追踪、项目浏览、段落编辑和工具确认） | router.py, service.py, context.py, models.py, prompt_manager.py | ✓ | ✗ |
 | bib_manager | 参考文献管理 + DOI 多数据源查询 + 重复检测 + 文献库 | router.py, service.py, models.py, bib_parser.py, provider_manager.py, providers/ | ✓(DOI 查询不依赖 LLM) | ✗ |
 
 ## 核心设计思路
@@ -140,9 +145,10 @@ latexcellence/
     - `SearchManager`（搜索管理器）提供 `web_search` 工具的 schema 和执行，统一封装 `DuckDuckGoHtmlEngine`（模拟浏览器请求，遇 HTTP 202 Challenge 时抛出 `DDGChallengeError`，由 service 捕获并以 `captcha_challenge` SSE 事件推送到前端）和 `SearXNGEngine`（通过 `/search?format=json` 获取结果，无验证码）
     - `ProjectToolsManager`（项目工具管理器）提供 4 个浏览工具（`list_files` / `read_file_content` / `get_section_structure` / `search_across_files`），允许 LLM 浏览项目文件和目录结构
     - `EditToolsManager`（段落编辑工具管理器）提供 2 个编辑工具（`edit_paragraph` / `undo_last_edit`），允许 LLM 直接修改 .tex 文件段落并支持撤销，敏感操作需前端用户确认
+    - `ResearchManager` 提供基于 OpenAlex 的论文检索、详情查询、引文追踪、摘要/OA 定位和研究数据资源检索；统一映射为可追溯、可去重的 `ScholarlyWork`，共享 HTTP 客户端由 FastAPI lifespan 管理
     - DDG Challenge 验证码提交通过通用路由 `/api/search/ddg-challenge` 处理，不绑定特定业务模块
     - 搜索流程可串联 **Query Rewriting**（将用户查询拆解为多条并行查询，去重合并）和 **Deep Read**（并发抓取搜索结果前 N 条页面正文，通过 `format_for_llm()` 注入 LLM 上下文）
-    - Writing Chat 的 `send()` 方法作为 Function Calling 工具的消费端，集成联网搜索、项目浏览、段落编辑三类工具：检测 LLM 返回 `tool_call` 时自动执行工具、将结果回传 LLM，再流式输出最终回复（"先工具调用再流式"模式）。敏感写操作（edit_paragraph / undo_last_edit）推送 `tool_pending` SSE 事件等待前端用户确认
+    - Writing Chat 的 `send()` 方法作为 Function Calling 工具的消费端，集成联网搜索、学术研究、项目浏览和段落编辑工具：检测 LLM 返回 `tool_call` 时自动执行、将结果回传 LLM，再流式输出最终回复。学术检索结果通过 `tool_result.scholarly_results` 推送前端；敏感写操作推送 `tool_pending` 等待确认
 - **DOI 多数据源查询**: `ProviderManager`（全局单例）管理多个可插拔 `BaseMetadataProvider`
     - Crossref 主索引 + arXiv 预印本专用 + 补全层
     - arXiv DOI（`10.48550/arXiv.*`）自动路由到 ArxivProvider

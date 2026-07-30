@@ -23,6 +23,7 @@ import {
   MessagesSquare,
   BookMarked,
   Languages,
+  GraduationCap,
 } from "lucide-react";
 import useEnabledFeatures from "@/hooks/useEnabledFeatures";
 
@@ -183,21 +184,23 @@ export default function WelcomePage() {
               {group.categoryLabel}
             </h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-5 gap-y-4">
-              {group.features.map(({ title, description, to, icon: Icon }) => (
-                <Link key={to} to={to}>
-                  <Card className="h-full transition-all duration-300 ease-out hover:scale-[1.02] hover:shadow-lg cursor-pointer">
-                    <CardHeader className="pb-2 flex flex-row items-center gap-2">
-                      <Icon className="size-5 text-muted-foreground shrink-0" />
-                      <CardTitle className="text-base">{title}</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <CardDescription className="mx-0.5">
-                        {description}
-                      </CardDescription>
-                    </CardContent>
-                  </Card>
-                </Link>
-              ))}
+              {group.features.map(
+                ({ id, title, description, to, icon: Icon }) => (
+                  <Link key={id} to={to}>
+                    <Card className="h-full transition-all duration-300 ease-out hover:scale-[1.02] hover:shadow-lg cursor-pointer">
+                      <CardHeader className="pb-2 flex flex-row items-center gap-2">
+                        <Icon className="size-5 text-muted-foreground shrink-0" />
+                        <CardTitle className="text-base">{title}</CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <CardDescription className="mx-0.5">
+                          {description}
+                        </CardDescription>
+                      </CardContent>
+                    </Card>
+                  </Link>
+                ),
+              )}
             </div>
           </div>
         ))}

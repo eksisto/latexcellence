@@ -246,6 +246,9 @@ class ConversationContext:
         content: str,
         tokens: int = 0,
         edit_op: Any | None = None,
+        scholarly_results: list[dict[str, Any]] | None = None,
+        scholarly_query: str = "",
+        scholarly_total: int = 0,
     ) -> ChatMessage:
         """
         追加 assistant 回复消息。
@@ -260,6 +263,9 @@ class ConversationContext:
             content=content,
             tokens=tokens,
             edit_op=edit_op,
+            scholarly_results=scholarly_results or [],
+            scholarly_query=scholarly_query,
+            scholarly_total=scholarly_total,
             created_at=time.time(),
         )
         self.messages.append(msg)

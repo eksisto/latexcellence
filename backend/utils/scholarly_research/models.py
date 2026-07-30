@@ -1,0 +1,204 @@
+"""学术研究工具的统一数据模型。"""
+
+from pydantic import BaseModel, Field
+
+
+class Author(BaseModel):
+    """论文作者及其可追溯身份信息。"""
+
+    name: str
+    orcid: str = ""
+    institution: str = ""
+
+
+class Concept(BaseModel):
+    """OpenAlex 主题或概念标签。"""
+
+    id: str
+    name: str
+    score: float = 0.0
+    level: int = 0
+
+
+class ScholarlyWork(BaseModel):
+    """跨数据源统一的学术作品记录。"""
+
+    openalex_id: str = ""
+    doi: str = ""
+    semantic_scholar_id: str = (
+        ""  # Future: will be populated when Semantic Scholar provider is added
+    )
+    pmid: str = ""
+    pmcid: str = ""
+    arxiv_id: str = ""
+
+    title: str
+    authors: list[Author] = Field(default_factory=list)
+    year: int = 0
+    journal: str = ""
+    volume: str = ""
+    issue: str = ""
+    pages: str = ""
+    publisher: str = ""
+    work_type: str = ""
+    abstract: str = ""
+    keywords: list[str] = Field(default_factory=list)
+    concepts: list[Concept] = Field(default_factory=list)
+
+    citation_count: int = 0
+    normalized_citation_percentile: float = 0.0
+
+    is_oa: bool = False
+    oa_url: str = ""
+    oa_status: str = ""
+
+    source_records: list[str] = Field(default_factory=lambda: ["openalex"])
+    is_preprint_of: str = ""
+    has_preprint: bool = False
+
+    referenced_works_count: int = 0
+    cited_by_count: int = 0
+
+
+class SearchScholarlyResult(BaseModel):
+    """学术作品检索结果。"""
+
+    query: str
+    results: list[ScholarlyWork] = Field(default_factory=list)
+    total_estimated: int = 0
+    page: int = 1
+    per_page: int = 20
+    source: str = "openalex"
+    search_time_ms: float = 0.0
+
+    def format_for_llm(self, max_results: int = 10) -> str:
+        items = self.results[:max_results]
+        if not items:
+            return f'No scholarly works found for "{self.query}".'
+        lines = [
+            f'Search "{self.query}" returned approximately '
+            f"{self.total_estimated} result(s):"
+        ]
+        for index, work in enumerate(items, 1):
+            authors = ", ".join(author.name for author in work.authors[:3])
+            if len(work.authors) > 3:
+                authors += " et al."
+            lines.append(
+                f"[{index}] {work.title} | {authors} ({work.year}) | "
+                f"{work.journal} | Cited: {work.citation_count}"
+            )
+            if work.openalex_id:
+                lines.append(f"    OpenAlex ID: {work.openalex_id}")
+            if work.doi:
+                lines.append(f"    DOI: {work.doi}")
+            if work.is_oa and work.oa_url:
+                lines.append(f"    OA: {work.oa_url}")
+            if work.abstract:
+                suffix = "..." if len(work.abstract) > 300 else ""
+                lines.append(f"    Abstract: {work.abstract[:300]}{suffix}")
+            lines.append("")
+        return "\n".join(lines)
+
+
+class WorkDetailResult(BaseModel):
+    """单篇作品详情。"""
+
+    work: ScholarlyWork
+    source: str = "openalex"
+
+    def format_for_llm(self) -> str:
+        work = self.work
+        lines = [
+            f"Title: {work.title}",
+            f"Authors: {', '.join(author.name for author in work.authors)}",
+            f"Year: {work.year}",
+            f"Journal: {work.journal}",
+            f"Work Type: {work.work_type}",
+            f"Citations: {work.citation_count}",
+            f"DOI: {work.doi}",
+            f"OpenAlex ID: {work.openalex_id}",
+        ]
+        if work.is_oa:
+            lines.extend([f"OA Status: {work.oa_status}", f"OA URL: {work.oa_url}"])
+        if work.abstract:
+            lines.append(f"\nAbstract:\n{work.abstract}")
+        if work.keywords:
+            lines.append(f"\nKeywords: {', '.join(work.keywords)}")
+        if work.concepts:
+            top = sorted(
+                work.concepts, key=lambda concept: concept.score, reverse=True
+            )[:5]
+            lines.append(
+                "\nConcepts: "
+                + ", ".join(f"{concept.name}({concept.score:.2f})" for concept in top)
+            )
+        return "\n".join(lines)
+
+
+class RelatedWorksResult(BaseModel):
+    """引文追踪或相似作品结果。"""
+
+    seed_id: str
+    relation_type: str
+    works: list[ScholarlyWork] = Field(default_factory=list)
+    total: int = 0
+
+    def format_for_llm(self, max_results: int = 15) -> str:
+        items = self.works[:max_results]
+        if not items:
+            return f"No {self.relation_type} works found."
+        labels = {
+            "references": "References",
+            "cited_by": "Cited by",
+            "similar": "Similar works",
+        }
+        lines = [
+            f"{labels.get(self.relation_type, self.relation_type)} "
+            f"({self.total} total):"
+        ]
+        for index, work in enumerate(items, 1):
+            authors = ", ".join(author.name for author in work.authors[:3])
+            if len(work.authors) > 3:
+                authors += " et al."
+            lines.append(
+                f"[{index}] {work.title} | {authors} ({work.year}) | "
+                f"{work.journal} | Cited: {work.citation_count}"
+            )
+            if work.openalex_id:
+                lines.append(f"    OpenAlex ID: {work.openalex_id}")
+            if work.doi:
+                lines.append(f"    DOI: {work.doi}")
+            lines.append("")
+        return "\n".join(lines)
+
+
+class FullTextResult(BaseModel):
+    """可获取的正文片段及开放获取定位信息。"""
+
+    work_id: str
+    sections: dict[str, str] = Field(default_factory=dict)
+    oa_url: str = ""
+    note: str = ""
+
+    def format_for_llm(self) -> str:
+        lines = [f"Work ID: {self.work_id}"]
+        if self.oa_url:
+            lines.append(f"OA URL: {self.oa_url}")
+        if self.note:
+            lines.append(f"Note: {self.note}")
+        for section_name, text in self.sections.items():
+            lines.append(f"\n--- {section_name.upper()} ---\n{text}")
+        return "\n".join(lines)
+
+
+class ResearchDataResource(BaseModel):
+    """研究数据资源的轻量展示模型。"""
+
+    name: str
+    url: str = ""
+    description: str = ""
+    resource_type: str = ""
+    related_work_doi: str = ""
+
+    def format_for_llm(self) -> str:
+        return f"[{self.resource_type}] {self.name} - {self.description} ({self.url})"

@@ -108,6 +108,10 @@
       "project_tools": {
         "enabled": true
       },
+      "edit_tools": {
+        "enabled": true,
+        "require_confirmation": true
+      },
       "web_search": {
         "enabled": true,
         "engines": {
@@ -126,6 +130,18 @@
         "deep_read_max_chars": 4000,
         "query_rewriting": {
           "enabled": true
+        }
+      },
+      "scholarly_research": {
+        "enabled": false,
+        "primary_source": "openalex",
+        "max_results": 20,
+        "timeout_seconds": 30,
+        "providers": {
+          "openalex": {
+            "enabled": true,
+            "api_key": ""
+          }
         }
       }
     }

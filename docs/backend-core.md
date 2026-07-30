@@ -11,8 +11,9 @@
 - `TypoCheckConfig` / `ExpressionOptConfig` / `TerminologyCheckConfig` / `FormulaOCRConfig` / `TableOCRConfig` / `TemplateGenConfig` / `CodeReviewConfig` / `CompileConfig` / `GitDiffConfig` / `FormatConverterConfig` / `StyleModifyConfig` / `WritingChatConfig` / `BibManagerConfig` / `ParagraphTranslateConfig` — 各功能模块配置
     - `CompileConfig` 包含 `engine`（编译引擎：auto/pdflatex/xelatex/lualatex）和 `pdfa`（PDF/A-2b 归档格式输出）配置
     - `TemplateGenConfig` 包含 `cleanup_enabled`/`cleanup_interval_seconds`/`cleanup_retention_days` 沙箱清理配置
-- `ProjectToolsConfig` / `EditToolsConfig` / `WebSearchConfig` — Function Calling 工具配置
+- `ProjectToolsConfig` / `EditToolsConfig` / `WebSearchConfig` / `ScholarlyResearchConfig` — Function Calling 工具配置
     - `EditToolsConfig` 包含 `require_confirmation`（敏感操作是否需要前端确认弹窗）
+    - `ScholarlyResearchConfig` 包含 OpenAlex 数据源开关、API Key、结果上限与请求超时
 - `FeaturesConfig` — 功能聚合
 - `LoggingConfig` — 日志配置
 - `AppConfig` — 顶层聚合（server, llm, features, logging）
@@ -285,6 +286,7 @@ get_tool_registry().register(
 | `SearchManager` | `web_search` | `features.function_calling.web_search.enabled` | 联网搜索 |
 | `ProjectToolsManager` | `list_files` / `read_file_content` / `get_section_structure` / `search_across_files` | `features.function_calling.project_tools.enabled` | 项目文件浏览 |
 | `EditToolsManager` | `edit_paragraph` / `undo_last_edit` | `features.function_calling.edit_tools.enabled` | 段落编辑（敏感操作需用户确认） |
+| `ResearchManager` | 学术检索、详情、关联作品、摘要/OA 定位、数据资源检索 | `features.function_calling.scholarly_research.enabled` | OpenAlex 学术研究 |
 
 **注意事项**：
 - `schema` 是整个 OpenAI function schema（包含 `type` 和 `function`），不含外层 `tools` 数组
@@ -303,6 +305,12 @@ get_tool_registry().register(
 ---
 
 ## 后端工具模块
+
+### `scholarly_research/` — OpenAlex 学术研究
+
+`models.py` 定义统一的作者、主题、作品和结果模型；`base.py` 定义可插拔数据源接口；`manager.py` 实现 OpenAlex 请求、元数据映射、去重、引文追踪和 Function Calling 注册。共享 `httpx.AsyncClient` 在 FastAPI lifespan 中创建和关闭，方法内实时读取超时、结果上限和 API Key 配置。
+
+检索支持主题、年份、作者、作品类型与排序；作者姓名先解析为稳定 Author ID。引用该论文的工作通过 `filter=cites:<OpenAlex ID>` 查询，参考文献和相似工作根据 OpenAlex 提供的 ID 列表批量获取。当前 `get_full_text_or_sections` 仅返回 OpenAlex 摘要和开放获取链接。
 
 ### `file_ops.py` — 文件安全操作与撤销栈
 

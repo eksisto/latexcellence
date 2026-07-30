@@ -77,6 +77,34 @@ export function createSSEEventHandler({
           }),
         );
       }
+      if (event.scholarly_results && event.scholarly_results.length > 0) {
+        setWritingChatMessages((prev) =>
+          prev.map((m) => {
+            if (m.id !== tmpAssistantId) return m;
+            const combined = [
+              ...(m.scholarlyResults || []),
+              ...event.scholarly_results,
+            ];
+            const uniqueResults = Array.from(
+              new Map(
+                combined.map((result) => [
+                  result.id || result.doi || result.title,
+                  result,
+                ]),
+              ).values(),
+            );
+            return {
+              ...m,
+              scholarlyResults: uniqueResults,
+              scholarlyQuery: event.query || "",
+              scholarlyTotal: Math.max(
+                m.scholarlyTotal || 0,
+                event.total_estimated || 0,
+              ),
+            };
+          }),
+        );
+      }
     } else if (event.type === "captcha_challenge") {
       setToolStatus(null);
       setCaptchaChallenge({

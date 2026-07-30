@@ -198,3 +198,103 @@ class TestUpdateConfigFromDict:
         result = _read_config(config_path)
         assert result["llm"]["api_key"] == "stable-key"
         assert result["server"]["port"] == 9999
+
+    def test_masked_openalex_key_keeps_existing(self, tmp_path):
+        config_path = _write_config(
+            tmp_path,
+            overrides={
+                "features": {
+                    "function_calling": {
+                        "scholarly_research": {
+                            "providers": {"openalex": {"api_key": "openalex-secret"}}
+                        }
+                    }
+                }
+            },
+        )
+        with mock.patch.dict(os.environ, {}, clear=True):
+            cfg_module.load_config(config_path)
+            cfg_module.update_config_from_dict(
+                {
+                    "features": {
+                        "function_calling": {
+                            "scholarly_research": {
+                                "providers": {"openalex": {"api_key": "***cret"}}
+                            }
+                        }
+                    }
+                }
+            )
+
+        result = _read_config(config_path)
+        assert (
+            result["features"]["function_calling"]["scholarly_research"]["providers"][
+                "openalex"
+            ]["api_key"]
+            == "openalex-secret"
+        )
+
+    def test_empty_openalex_key_clears_existing(self, tmp_path):
+        config_path = _write_config(
+            tmp_path,
+            overrides={
+                "features": {
+                    "function_calling": {
+                        "scholarly_research": {
+                            "providers": {"openalex": {"api_key": "openalex-secret"}}
+                        }
+                    }
+                }
+            },
+        )
+        with mock.patch.dict(os.environ, {}, clear=True):
+            cfg_module.load_config(config_path)
+            cfg_module.update_config_from_dict(
+                {
+                    "features": {
+                        "function_calling": {
+                            "scholarly_research": {
+                                "providers": {"openalex": {"api_key": ""}}
+                            }
+                        }
+                    }
+                }
+            )
+
+        result = _read_config(config_path)
+        assert (
+            result["features"]["function_calling"]["scholarly_research"]["providers"][
+                "openalex"
+            ]["api_key"]
+            == ""
+        )
+
+
+class TestOpenAlexKeyMasking:
+    @pytest.mark.asyncio
+    async def test_full_config_masks_openalex_key(self, tmp_path):
+        config_path = _write_config(
+            tmp_path,
+            overrides={
+                "features": {
+                    "function_calling": {
+                        "scholarly_research": {
+                            "providers": {
+                                "openalex": {"api_key": "openalex-secret-1234"}
+                            }
+                        }
+                    }
+                }
+            },
+        )
+        with mock.patch.dict(os.environ, {}, clear=True):
+            cfg_module.load_config(config_path)
+            from main import get_full_config
+
+            response = await get_full_config()
+
+        masked = response["features"]["function_calling"]["scholarly_research"][
+            "providers"
+        ]["openalex"]["api_key"]
+        assert masked == "***1234"
+        assert "openalex-secret" not in json.dumps(response)

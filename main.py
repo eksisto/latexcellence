@@ -56,17 +56,23 @@ async def lifespan(app: FastAPI):
     logger.info("Starting LaTeXcellence server")
 
     from backend.modules.template_gen.cleanup import cleanup_loop
+    from backend.utils.scholarly_research import (
+        close_research_http_client,
+        initialize_research_http_client,
+    )
 
+    await initialize_research_http_client()
     cleanup_task = asyncio.create_task(cleanup_loop())
-
-    yield
-
-    cleanup_task.cancel()
     try:
-        await cleanup_task
-    except asyncio.CancelledError:
-        pass
-    logger.info("Shutting down LaTeXcellence server")
+        yield
+    finally:
+        cleanup_task.cancel()
+        try:
+            await cleanup_task
+        except asyncio.CancelledError:
+            pass
+        await close_research_http_client()
+        logger.info("Shutting down LaTeXcellence server")
 
 
 app = FastAPI(
@@ -135,6 +141,7 @@ async def config_status():
         | {
             "web_search": cfg.features.function_calling.web_search.enabled,
             "project_tools": cfg.features.function_calling.project_tools.enabled,
+            "scholarly_research": cfg.features.function_calling.scholarly_research.enabled,
         },
     }
 
@@ -152,6 +159,14 @@ async def get_full_config():
     key = data["llm"]["api_key"]
     if key:
         data["llm"]["api_key"] = "***" + key[-4:] if len(key) > 4 else "****"
+    openalex = data["features"]["function_calling"]["scholarly_research"]["providers"][
+        "openalex"
+    ]
+    openalex_key = openalex["api_key"]
+    if openalex_key:
+        openalex["api_key"] = (
+            "***" + openalex_key[-4:] if len(openalex_key) > 4 else "****"
+        )
     return data
 
 

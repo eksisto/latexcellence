@@ -74,6 +74,11 @@ class WritingChatService:
         "edit_paragraph": "editing_paragraph",
         "undo_last_edit": "undoing_edit",
         "request_clarification": "requesting_clarification",
+        "search_scholarly_works": "searching_scholarly",
+        "get_work_details": "getting_work_details",
+        "find_related_works": "finding_related_works",
+        "get_full_text_or_sections": "reading_full_text",
+        "search_research_data_resources": "searching_research_data",
     }
 
     def __init__(self):
@@ -337,6 +342,11 @@ class WritingChatService:
         # 助手指令注入 system prompt（不写入 user message，界面上不可见）
         if req.assistant_prompt:
             system_prompt = req.assistant_prompt + "\n\n" + system_prompt
+        research_cfg = get_config().features.function_calling.scholarly_research
+        if research_cfg.enabled and research_cfg.providers.openalex.enabled:
+            system_prompt += "\n\n" + get_prompt(
+                "writing_chat", "scholarly_research_tool_guide"
+            )
         messages = [
             {"role": "system", "content": system_prompt}
         ] + ctx.to_llm_messages()
@@ -344,6 +354,9 @@ class WritingChatService:
 
         # 获取可用的 Function Calling 工具（搜索 + 项目浏览）
         tools = self._get_enabled_tools(workspace_id, req.web_search_enabled)
+        persisted_scholarly_results: list[dict[str, Any]] = []
+        persisted_scholarly_query = ""
+        persisted_scholarly_total = 0
 
         # 工具调用循环：先非流式检测 tool_call，再流式输出最终回复
         if tools:
@@ -482,7 +495,11 @@ class WritingChatService:
                             "result_count": (
                                 len(tool_result.results)
                                 if hasattr(tool_result, "results")
-                                else 0
+                                else (
+                                    len(tool_result.works)
+                                    if hasattr(tool_result, "works")
+                                    else 0
+                                )
                             ),
                         }
                         # 搜索结果摘要（供前端折叠框展示）
@@ -512,6 +529,52 @@ class WritingChatService:
                                 tool_event["rewritten_queries"] = (
                                     tool_result.rewritten_queries
                                 )
+                        if tool_name in {
+                            "search_scholarly_works",
+                            "find_related_works",
+                            "search_research_data_resources",
+                        }:
+                            scholarly_results = getattr(
+                                tool_result,
+                                "results",
+                                getattr(tool_result, "works", []),
+                            )
+                            tool_event["scholarly_results"] = [
+                                {
+                                    "id": result.openalex_id or result.doi,
+                                    "title": result.title,
+                                    "authors": [
+                                        author.name for author in result.authors[:3]
+                                    ],
+                                    "year": result.year,
+                                    "journal": result.journal,
+                                    "citation_count": result.citation_count,
+                                    "doi": result.doi,
+                                    "is_oa": result.is_oa,
+                                    "oa_url": result.oa_url,
+                                    "work_type": result.work_type,
+                                }
+                                for result in scholarly_results[:5]
+                            ]
+                            tool_event["query"] = tool_args.get("query", "")
+                            tool_event["total_estimated"] = getattr(
+                                tool_result,
+                                "total_estimated",
+                                getattr(tool_result, "total", len(scholarly_results)),
+                            )
+                            existing_ids = {
+                                item["id"] for item in persisted_scholarly_results
+                            }
+                            persisted_scholarly_results.extend(
+                                item
+                                for item in tool_event["scholarly_results"]
+                                if item["id"] not in existing_ids
+                            )
+                            persisted_scholarly_query = tool_event["query"]
+                            persisted_scholarly_total = max(
+                                persisted_scholarly_total,
+                                tool_event["total_estimated"],
+                            )
                         yield tool_event
                     except DDGChallengeError as ce:
                         # DDG Challenge：推送 captcha 到前端，终止本轮搜索
@@ -606,6 +669,9 @@ class WritingChatService:
         assistant_msg = ctx.append_assistant_message(
             content="".join(full_content_parts),
             tokens=assistant_tokens,
+            scholarly_results=persisted_scholarly_results,
+            scholarly_query=persisted_scholarly_query,
+            scholarly_total=persisted_scholarly_total,
         )
         ctx.update_last_message_tokens(last_usage_tokens)
         ctx.save_to_disk()
@@ -885,6 +951,16 @@ class WritingChatService:
                     workspace_id,
                     e,
                 )
+
+        # ── 学术论文检索与引文追踪工具 ────────────────────────────────
+        research_cfg = cfg.features.function_calling.scholarly_research
+        if research_cfg.enabled and research_cfg.providers.openalex.enabled:
+            try:
+                from backend.utils.scholarly_research import get_research_manager
+
+                tools.extend(get_research_manager().get_tools_schema())
+            except Exception as e:
+                self._logger.warning("Failed to load scholarly research tools: %s", e)
 
         return tools
 

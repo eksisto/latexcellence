@@ -35,6 +35,21 @@ class EditOp(BaseModel):
     applied: bool = False
 
 
+class ScholarlyResultSummary(BaseModel):
+    """持久化在 assistant 消息上的学术结果摘要。"""
+
+    id: str
+    title: str
+    authors: list[str] = Field(default_factory=list)
+    year: int = 0
+    journal: str = ""
+    citation_count: int = 0
+    doi: str = ""
+    is_oa: bool = False
+    oa_url: str = ""
+    work_type: str = ""
+
+
 class ChatMessage(BaseModel):
     """
     单条对话消息。
@@ -71,6 +86,9 @@ class ChatMessage(BaseModel):
     created_at: float = 0.0
     tool_calls: list[dict] | None = None
     tool_call_id: str | None = None
+    scholarly_results: list[ScholarlyResultSummary] = Field(default_factory=list)
+    scholarly_query: str = ""
+    scholarly_total: int = 0
 
 
 ChatMessage.model_rebuild()

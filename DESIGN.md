@@ -406,10 +406,11 @@ Phase 3: 程序生成修正结果
 
 ```
 RS1（流式对话 + Function Calling）:
-   用户消息 + 文件上下文（纯文本，无 marker）
+   用户消息 + 文件上下文（原始 LaTeX，无 marker）
         ↓
-   _get_enabled_tools() 动态注入三类工具：
+   _get_enabled_tools() 动态注入工具：
        SearchManager    → web_search
+       ResearchManager  → search_scholarly_works / find_related_works / ...
        ProjectToolsManager → list_files / read_file_content / ...
        EditToolsManager → edit_paragraph / undo_last_edit
         ↓ SSE fetch streaming
@@ -438,11 +439,9 @@ RS1（流式对话 + Function Calling）:
 RS2（结构化编辑）:
    用户点击"生成编辑建议" → instruction 发送
         ↓
-   strip_to_plain_text() 剥离 LaTeX → marker 保护校验
-        ↓
-   retry_with_validation() → LLM 结构化 JSON
-        ↓ restore_from_markers()
-   还原完整 LaTeX → 构造 unified diff → 附挂 EditOp
+   原始 LaTeX 直接发送给 LLM
+        ↓ retry_with_validation() → LLM 结构化 JSON
+   校验完整 LaTeX → 构造 unified diff → 附挂 EditOp
         ↓
    用户点击"应用到 .tex"（可选：手动编辑后传递 new_latex）
         ↓ project_manager.apply_change()
@@ -471,9 +470,9 @@ LLM 输出中可能包含 `<thinking>...</thinking>` 标签，包裹推理过程
 3. 用一条 `role="summary"` 消息替换全部历史
 4. 用户可通过"撤回压缩消息"一键还原
 
-**Function Calling 工具调用（联网搜索 + 项目浏览 + 段落编辑）**：
+**Function Calling 工具调用（联网搜索 + 学术研究 + 项目浏览 + 段落编辑）**：
 
-LLM 在流式输出过程中可发起 tool_call，触发三类工具调用。支持自动化工具调度和敏感操作确认：
+LLM 在流式输出过程中可发起 tool_call，触发各类工具调用。支持自动化工具调度和敏感操作确认：
 
 ```
 RS1 流式对话中 tool_call:
@@ -483,6 +482,7 @@ RS1 流式对话中 tool_call:
        ↓
   ┌─ 工具分发 ───────────────────────────────────┐
   │ SearchManager   → web_search (联网搜索)       │
+  │ ResearchManager → OpenAlex 检索/详情/引文追踪 │
   │ ProjectToolsManager → list_files / ... (浏览) │
   │ EditToolsManager → edit_paragraph / ... (编辑) │
   └──────────────────────────────────────────────┘
@@ -509,11 +509,13 @@ RS1 流式对话中 tool_call:
   │   用户确认后继续执行，取消后回传 LLM "用户跳过"   │
   └──────────────────────────────────────────────────┘
        ↓
-  提取结果 → SSE event: tool_result / search_results
+  提取结果 → SSE event: tool_result / search_results / scholarly_results
   → 工具结果注入 LLM 继续对话（SSE event: message）
   → 工具消息通过 append_tool_messages() 持久化到上下文
   → 前端显示结果引用
 ```
+
+`ResearchManager` 将 OpenAlex work 映射为统一 `ScholarlyWork`，按 DOI、OpenAlex ID、arXiv ID 或标题年份去重。作者姓名先解析为 Author ID；参考文献和相似作品按 OpenAlex 每批 100 个 ID 的限制批量获取，极端情况下最多检查前 500 条候选，避免逐篇请求和无界开销。所有请求共享 FastAPI lifespan 管理的 `httpx.AsyncClient`。当前全文工具只返回 OpenAlex 摘要和 OA 定位，不抓取第三方全文。外部元数据视为不可信内容，system prompt 明确禁止执行其中包含的指令。
 
 ### 5.5 参考文献管理数据流
 

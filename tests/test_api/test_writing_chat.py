@@ -118,6 +118,22 @@ class TestModels:
         assert len(loaded.snapshot) == 1
         assert loaded.snapshot[0].content == "hi"
 
+    def test_chat_message_scholarly_results_roundtrip(self):
+        from backend.modules.writing_chat.models import ScholarlyResultSummary
+
+        message = ChatMessage(
+            id="a1",
+            role="assistant",
+            scholarly_results=[ScholarlyResultSummary(id="W123", title="A paper")],
+            scholarly_query="paper",
+            scholarly_total=10,
+        )
+
+        loaded = ChatMessage.model_validate(message.model_dump(mode="json"))
+        assert loaded.scholarly_results[0].id == "W123"
+        assert loaded.scholarly_query == "paper"
+        assert loaded.scholarly_total == 10
+
     def test_edit_op_defaults(self):
         op = EditOp(
             file_path="main.tex",
@@ -813,6 +829,129 @@ class TestWebSearchToolEvent:
         assert tool_event["result_count"] == 0
         # search_results 字段存在但为空列表，前端靠 .length > 0 过滤
         assert tool_event["search_results"] == []
+
+
+class TestScholarlyResearchToolEvent:
+    """验证学术检索工具 schema 与前端摘要事件。"""
+
+    def test_enabled_tools_include_scholarly_research(self, service, monkeypatch):
+        research_cfg = get_config().features.function_calling.scholarly_research
+        monkeypatch.setattr(research_cfg, "enabled", True)
+
+        names = [
+            schema["function"]["name"]
+            for schema in service._get_enabled_tools(workspace_id="")
+        ]
+
+        assert "search_scholarly_works" in names
+        assert "get_work_details" in names
+        assert "find_related_works" in names
+
+    @pytest.mark.asyncio
+    async def test_send_emits_scholarly_results(
+        self, temp_session_dir, open_project, service, monkeypatch
+    ):
+        import json
+
+        from backend.utils.scholarly_research.models import (
+            Author,
+            ScholarlyWork,
+            SearchScholarlyResult,
+        )
+
+        monkeypatch.setattr(get_config().llm, "api_key", "test-key")
+        monkeypatch.setattr(
+            get_config().features.function_calling.scholarly_research,
+            "enabled",
+            True,
+        )
+        scholarly_response = SearchScholarlyResult(
+            query="retrieval augmented generation",
+            results=[
+                ScholarlyWork(
+                    openalex_id="W123",
+                    doi="10.1000/rag",
+                    title="Retrieval-Augmented Generation",
+                    authors=[Author(name="Ada Lovelace")],
+                    year=2025,
+                    journal="Journal of Retrieval",
+                    work_type="journal_article",
+                    citation_count=12,
+                    is_oa=True,
+                    oa_url="https://example.test/rag.pdf",
+                )
+            ],
+            total_estimated=37,
+        )
+        tool_call = _make_tool_call()
+        tool_call.function.name = "search_scholarly_works"
+        tool_call.function.arguments = json.dumps(
+            {"query": "retrieval augmented generation"}
+        )
+        first_response = _make_chat_completion_with_tools(tool_calls=[tool_call])
+        second_response = _make_chat_completion_with_tools(
+            tool_calls=None, content="检索完成"
+        )
+        call_count = 0
+
+        async def fake_chat_with_tools(**kwargs):
+            nonlocal call_count
+            call_count += 1
+            return first_response if call_count == 1 else second_response
+
+        mock_registry = MagicMock()
+        mock_registry.execute = AsyncMock(return_value=scholarly_response)
+        chunks = [
+            StreamChunk(content="结果如下", usage=None),
+            StreamChunk(
+                content=None,
+                usage=UsageInfo(prompt_tokens=10, completion_tokens=2, total_tokens=12),
+            ),
+        ]
+
+        with patch(_LLM_CLIENT_PATH) as m_llm, patch(
+            _TOOL_REGISTRY_PATH, return_value=mock_registry
+        ):
+            client = MagicMock()
+            client.chat_with_tools = fake_chat_with_tools
+            client.chat_stream_with_usage = MagicMock(return_value=_stream(chunks))
+            m_llm.return_value = client
+            events = [
+                event
+                async for event in service.send(
+                    ChatSendRequest(
+                        file_path="main.tex",
+                        user_message="检索 RAG 论文",
+                    )
+                )
+            ]
+
+        tool_event = next(event for event in events if event["type"] == "tool_result")
+        assert tool_event["total_estimated"] == 37
+        assert tool_event["query"] == "retrieval augmented generation"
+        assert tool_event["scholarly_results"] == [
+            {
+                "id": "W123",
+                "title": "Retrieval-Augmented Generation",
+                "authors": ["Ada Lovelace"],
+                "year": 2025,
+                "journal": "Journal of Retrieval",
+                "citation_count": 12,
+                "doi": "10.1000/rag",
+                "is_oa": True,
+                "oa_url": "https://example.test/rag.pdf",
+                "work_type": "journal_article",
+            }
+        ]
+        context = ConversationContext.load_from_disk(events[-1]["session_id"])
+        assert context is not None
+        assistant = next(
+            message
+            for message in reversed(context.messages)
+            if message.role == "assistant" and message.content == "结果如下"
+        )
+        assert assistant.scholarly_results[0].id == "W123"
+        assert assistant.scholarly_total == 37
 
 
 def _make_chat_completion_with_tools(tool_calls=None, content=None):

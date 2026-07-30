@@ -15,7 +15,7 @@
 - **Git 差异高亮**：选择主文件和两个 Git 状态，将文档差异编译为红删绿增底纹的 PDF（不影响项目源码）
 - **Markdown 转 LaTeX**：粘贴 Markdown 文本，调用 Pandoc 转换为 LaTeX 代码（需系统安装 Pandoc）
 - **LaTeX 样式修改**：粘贴 LaTeX 代码并用自然语言描述修改需求，LLM 自动执行样式调整（表格对齐、文字样式、图片排版等）
-- **写作助手 Chat**：上下文感知的多轮对话，能直接修改指定段落；深度思考折叠框、助手提示词预设、会话磁盘持久化与重命名、Markdown + KaTeX 渲染、双轮协议（流式回复 + 结构化编辑建议 diff）、上下文压缩与撤回；编辑建议支持手动微调后一键应用
+- **写作助手 Chat**：上下文感知的多轮对话，能直接修改指定段落；支持联网搜索、OpenAlex 学术论文检索、引文追踪和开放获取定位；深度思考折叠框、助手提示词预设、会话持久化、Markdown + KaTeX 渲染、流式回复与结构化编辑建议
 - **参考文献管理**：识别参考文献格式规则，从文本或截图提取结构化元数据，自动生成规范的 BibTeX 代码并写入项目 .bib 文件；支持元数据缺失字段告警和 BibTeX 代码编辑
 - **多文件 \input 展开**：文本校对、表达优化、源码格式化、术语一致性检查均支持递归解析 `\input`/`\include` 引用，一键处理整个项目的多个 `.tex` 文件
 
@@ -74,6 +74,8 @@ cp config.example.json config.json
 可以在 `config.json` 中填入 `api_key`，也可以使用环境变量 `LX_LLM_KEY`（推荐）。
 
 环境变量 `LX_LLM_KEY` 优先级高于配置文件中的 `api_key`。
+
+学术文献检索默认关闭。可在设置页启用并填写免费的 OpenAlex API Key；Key 可从 [OpenAlex 设置页](https://openalex.org/settings/api) 获取。
 
 ### 启动
 

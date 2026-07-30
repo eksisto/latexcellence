@@ -10,12 +10,12 @@
 | --- | --- | --- |
 | 交互模式 | 单向触发 → 返回结果 | 双向多轮对话 |
 | LLM 输出 | 单段落结构化结果 | RS1 流式 Markdown + Function Calling / RS2 结构化编辑建议 |
-| Marker 保护 | 是 | 分层：纯对话无 marker；编辑走 marker pipeline |
+| Marker 保护 | 是 | 否；对话和编辑都直接使用原始 LaTeX |
 | 状态管理 | 无状态 | 有状态：按项目路径隔离持久化 |
 
 ### 双轮协议 + Function Calling
 
-- **RS1**：用户发送消息 → SSE 流式 `chat_stream_with_usage` → Markdown 自由回复。RS1 中 LLM 可发起 Function Calling 调用工具（联网搜索、项目文件浏览、段落编辑、请求澄清），工具结果回传 LLM 后继续流式输出最终回复
+- **RS1**：用户发送消息 → SSE 流式 `chat_stream_with_usage` → Markdown 自由回复。RS1 中 LLM 可发起 Function Calling 调用联网搜索、学术研究、项目文件浏览、段落编辑和请求澄清工具，工具结果回传 LLM 后继续流式输出最终回复
 - **RS2**：用户在 RS1 回复上点击"生成编辑建议" → 结构化 JSON → `LlmEditResult` → `EditOp`
 
 RS2 不直接写回 `.tex`，用户再点"应用到 .tex"才调用 `project_manager.apply_change`。
@@ -50,7 +50,7 @@ RS2 不直接写回 `.tex`，用户再点"应用到 .tex"才调用 `project_mana
 | 方法 | 功能 |
 | --- | --- |
 | `send(req, workspace_id)` | RS1 主聊天流：加载/创建会话 → 追加消息 → 压缩判定 → 注入 Function Calling 工具 → chat_stream_with_usage → 工具调用循环 → SSE 推送 |
-| `generate_edit(req, workspace_id)` | RS2 编辑流：strip_to_plain_text → marker 还原 → diff → 附挂 EditOp |
+| `generate_edit(req, workspace_id)` | RS2 编辑流：把原始 LaTeX 交给 LLM → 校验结构化结果 → diff → 附挂 EditOp |
 | `apply_edit(req, workspace_id)` | 调用 apply_change 写回 .tex，标记 edit_op.applied |
 | `confirm_pending_tool(pending_id, modified_args)` | 前端确认敏感工具调用（如 edit_paragraph），可选修改参数 |
 | `cancel_pending_tool(pending_id)` | 前端取消待定工具调用 |
@@ -69,6 +69,7 @@ System Prompt 分三类：聊天角色、编辑操作、压缩摘要。
 2. **联网搜索**（`SearchManager`）：`web_search` — 搜索互联网
 3. **项目浏览**（`ProjectToolsManager`）：`list_files` / `read_file_content` / `get_section_structure` / `search_across_files` — 浏览项目文件
 4. **段落编辑**（`EditToolsManager`）：`edit_paragraph` / `undo_last_edit` — 直接修改 .tex 文件
+5. **学术研究**（`ResearchManager`）：`search_scholarly_works` / `get_work_details` / `find_related_works` / `get_full_text_or_sections` / `search_research_data_resources` — OpenAlex 论文检索、详情、引文追踪和 OA 定位
 
 LLM 返回 `tool_call` 时，service 执行以下流程：
 
@@ -144,6 +145,7 @@ Prefix: `/api/writing-chat`, Tag: `writing_chat`
 | `tool_cancelled` | 工具被用户取消 |
 | `clarification_request` | LLM 向用户提问，等待回复（含 clarify_id、question、options） |
 | `tool_result` | 工具执行结果 |
+| `tool_result.scholarly_results` | 学术检索或引文追踪的前端摘要，含稳定 ID、作者、年份、期刊、DOI、被引数和 OA 状态 |
 | `captcha_challenge` | DDG 验证码挑战 |
 | `search_results` | 联网搜索结果 |
 | `done` | 流式结束（含 token 用量、session_id） |
@@ -158,6 +160,10 @@ Prefix: `/api/writing-chat`, Tag: `writing_chat`
 | custom_prompts_dir | prompts/writing_chat/ | 助手提示词目录 |
 | summary_temperature | 0.2 | 摘要 LLM 温度 |
 | summary_max_tokens | 1024 | 摘要最大 token 数 |
+| features.function_calling.scholarly_research.enabled | false | 学术研究工具总开关 |
+| features.function_calling.scholarly_research.max_results | 20 | 单次工具返回结果上限 |
+| features.function_calling.scholarly_research.timeout_seconds | 30 | OpenAlex 请求超时 |
+| features.function_calling.scholarly_research.providers.openalex.api_key | 空 | OpenAlex API Key；设置接口返回脱敏值 |
 
 ## 前端 `useWritingChat` hook
 
@@ -173,7 +179,7 @@ Prefix: `/api/writing-chat`, Tag: `writing_chat`
 - `submitClarification(answer)` 调用 `/clarify` 接口提交用户回答
 - `cancelClarification()` 调用 `/cancel-clarify` 接口取消
 
-SSE 事件处理器新增 `tool_pending`（触发确认弹窗）、`tool_cancelled`（显示 toast 提示）和 `clarification_request`（触发澄清弹窗）处理。
+SSE 事件处理器处理 `tool_pending`、`tool_cancelled`、`clarification_request`，并把 `scholarly_results` 存入 assistant 消息。`MessageBubble` 使用紫色折叠卡展示学术记录、文献类型、被引数、开放获取状态和 DOI 链接。
 
 **WritingChatPage 工具弹窗**：
 - `ToolConfirmDialog` — 敏感工具确认，使用 shadcn/ui Dialog，根据工具类型显示对应图标和文案

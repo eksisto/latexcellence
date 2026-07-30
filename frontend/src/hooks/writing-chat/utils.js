@@ -36,13 +36,19 @@ export function parseThinking(rawText) {
  */
 export function processLoadedMessages(messages) {
   return messages.map((msg) => {
-    if (msg.role !== "assistant" || !msg.content) return msg;
-    if (!/<thinking>[\s\S]*?<\/thinking>/.test(msg.content)) return msg;
+    const normalized = {
+      ...msg,
+      scholarlyResults: msg.scholarly_results || msg.scholarlyResults || [],
+      scholarlyQuery: msg.scholarly_query || msg.scholarlyQuery || "",
+      scholarlyTotal: msg.scholarly_total || msg.scholarlyTotal || 0,
+    };
+    if (msg.role !== "assistant" || !msg.content) return normalized;
+    if (!/<thinking>[\s\S]*?<\/thinking>/.test(msg.content)) return normalized;
     // Already has parsed thinking fields
-    if (msg.thinkingContent !== undefined) return msg;
+    if (msg.thinkingContent !== undefined) return normalized;
     const parsed = parseThinking(msg.content);
     return {
-      ...msg,
+      ...normalized,
       thinkingContent: parsed.thinking,
       displayContent: parsed.display,
       thinkingOpen: false,

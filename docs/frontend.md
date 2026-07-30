@@ -60,7 +60,7 @@ API 按功能分组暴露（health、config、project、typoCheck、expressionOp
 | `ProjectExplorer.jsx` | 递归文件树：目录展开/折叠，文件选择 |
 | `PDFPreview.jsx` | iframe 嵌入 PDF 预览 |
 | `PromptEditor.jsx` | 自定义提示词编辑框 |
-| `SettingsDialog.jsx` | 完整设置对话框，实时读写 config.json |
+| `SettingsDialog.jsx` | 完整设置对话框，实时读写 config.json，包括联网搜索和学术研究工具开关 |
 | `FolderPickerDialog.jsx` | 文件夹选择对话框，逐级进入子文件夹 |
 | `MarkdownRenderer.jsx` | 基于 react-markdown + remark + rehype-katex |
 | `ThemeToggle.jsx` | 亮/暗模式切换 |
@@ -79,7 +79,7 @@ API 按功能分组暴露（health、config、project、typoCheck、expressionOp
 | --- | --- |
 | `useParagraphCheck.js` | 封装逐段 LLM 检查公共逻辑（预览、检查/优化、排序、暂停/继续/停止、应用、refresh 持久化）。支持 `resolveInput` 多文件模式。内置乐观锁：读取段落时缓存文件 MD5，应用修改时传回，冲突（409）后自动刷新 MD5 并提示重试。SSE 结果通过 rAF 微批次合并。 |
 | `useEnabledFeatures.js` | 从后端加载功能开关到 Zustand store，幂等。 |
-| `useWritingChat.js` | 封装写作助手 Chat 全部逻辑（会话管理、SSE 流式、深度思考解析、生成编辑、应用编辑、助手管理）。内部使用子 hooks。 |
+| `useWritingChat.js` | 封装写作助手 Chat 全部逻辑（会话管理、SSE 流式、搜索/学术结果、深度思考解析、生成编辑、应用编辑、助手管理）。内部使用子 hooks。 |
 | `useThemeManager.js` | 多主题自发现 hook，自动发现 `theme/` 目录下 CSS 文件。 |
 | `useTheme.js` | 暗/亮主题切换，支持 View Transitions API 平滑过渡。 |
 | `useUndoRedo.js` | 撤销/重做状态管理，轮询后端端点，支持键盘快捷键。 |
