@@ -74,7 +74,6 @@ export default function WritingChatPage() {
     generateEdit,
     applyEdit,
     deleteMessage,
-    undoMessage,
     handleFileChange,
     // 助手
     assistants,
@@ -114,7 +113,6 @@ export default function WritingChatPage() {
       generateEdit,
       applyEdit,
       deleteMessage,
-      undoMessage,
       editingMessageId,
       applyingMessageId,
       canEdit,
@@ -123,7 +121,6 @@ export default function WritingChatPage() {
       generateEdit,
       applyEdit,
       deleteMessage,
-      undoMessage,
       editingMessageId,
       applyingMessageId,
       canEdit,

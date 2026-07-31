@@ -99,7 +99,6 @@ export default function MessageBubble({ message, actions }) {
     generateEdit,
     applyEdit,
     deleteMessage,
-    undoMessage,
     editingMessageId,
     applyingMessageId,
     canEdit,
@@ -437,8 +436,8 @@ export default function MessageBubble({ message, actions }) {
             <Button
               size="icon-xs"
               variant="ghost"
-              title={t("pages:writingChat.undoCompressed")}
-              onClick={() => undoMessage(message.id)}
+              title={t("pages:writingChat.deleteCompressed")}
+              onClick={() => deleteMessage(message.id)}
             >
               <Undo2 className="size-3" />
             </Button>
@@ -446,7 +445,7 @@ export default function MessageBubble({ message, actions }) {
             <Button
               size="icon-xs"
               variant="ghost"
-              title={t("pages:writingChat.undoMessage")}
+              title={t("pages:writingChat.deleteMessage")}
               onClick={() => deleteMessage(message.id)}
             >
               <Trash2 className="size-3" />

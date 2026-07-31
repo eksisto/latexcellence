@@ -5,8 +5,7 @@
     POST /api/writing-chat/send           — 流式发送消息（SSE）
     POST /api/writing-chat/generate-edit    — 生成编辑操作建议
     POST /api/writing-chat/apply-edit        — 应用一条编辑操作
-    POST /api/writing-chat/message/delete   — 删除单条消息
-    POST /api/writing-chat/message/undo      — 撤回消息（含 summary 还原）
+    POST /api/writing-chat/message/delete   — 删除消息（summary 消息还原其快照）
     GET  /api/writing-chat/sessions          — 列出所有会话
     GET  /api/writing-chat/sessions/{id}     — 加载单个会话完整数据
     DELETE /api/writing-chat/sessions/{id}   — 删除会话
@@ -30,7 +29,6 @@ from backend.modules.writing_chat.models import (
     DeleteMessageRequest,
     GenerateEditRequest,
     RenameSessionRequest,
-    UndoMessageRequest,
 )
 from backend.modules.writing_chat.prompt_manager import get_prompt_manager
 from backend.modules.writing_chat.service import get_writing_chat_service
@@ -179,26 +177,18 @@ async def cancel_clarification(request: CancelClarifyRequest):
     return {"status": "ok", "clarify_id": request.clarify_id}
 
 
-# ── 删除 / 撤回 ──────────────────────────────────────────────────────
+# ── 删除消息 ──────────────────────────────────────────────────────────────
 
 
 @router.post("/message/delete")
 async def delete_message(request: DeleteMessageRequest):
+    """删除消息；summary 消息会还原其快照（原始对话）。"""
     service = get_writing_chat_service()
     try:
-        ok = service.delete_message(request)
-        if not ok:
+        result = service.delete_message(request)
+        if not result["removed"] and not result["restored"]:
             raise HTTPException(status_code=404, detail="Message not found")
-        return {"status": "ok"}
-    except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
-
-
-@router.post("/message/undo")
-async def undo_message(request: UndoMessageRequest):
-    service = get_writing_chat_service()
-    try:
-        return service.undo_message(request)
+        return {"status": "ok", **result}
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
 

@@ -12,7 +12,7 @@
     3. 上下文压缩：
         - 每次发送消息前判断 cumulative_tokens 是否达到阈值
         - 触发时把 messages 打包送 LLM 生成一条 summary 摘要，替换全部历史
-        - 被压缩的原始消息保存在 summary 的 snapshot 字段，支持撤回
+        - 被压缩的原始消息保存在 summary 的 snapshot 字段，删除 summary 时还原
 
 事件流（RS1）通过 SSE 推送：
     { type: "token", content: "..." }       # 流式 Markdown 片段
@@ -52,7 +52,6 @@ from backend.modules.writing_chat.models import (
     EditOp,
     GenerateEditRequest,
     LlmEditResult,
-    UndoMessageRequest,
 )
 
 # ── Service ────────────────────────────────────────────────────────────────
@@ -844,22 +843,13 @@ class WritingChatService:
         )
         return {"applied": True, "already_applied": False}
 
-    # ── 删除 / 撤回 ────────────────────────────────────────────────────────
+    # ── 删除消息 ────────────────────────────────────────────────────────────
 
-    def delete_message(self, req: DeleteMessageRequest) -> bool:
+    def delete_message(self, req: DeleteMessageRequest) -> dict:
         ctx = ConversationContext.load_from_disk(req.session_id)
         if ctx is None:
             raise ValueError(f"Session not found: {req.session_id}")
-        ok = ctx.delete_message(req.message_id)
-        if ok:
-            ctx.save_to_disk()
-        return ok
-
-    def undo_message(self, req: UndoMessageRequest) -> dict:
-        ctx = ConversationContext.load_from_disk(req.session_id)
-        if ctx is None:
-            raise ValueError(f"Session not found: {req.session_id}")
-        result = ctx.undo_message(req.message_id)
+        result = ctx.delete_message(req.message_id)
         if result["restored"] or result["removed"]:
             ctx.save_to_disk()
         return result

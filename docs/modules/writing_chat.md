@@ -36,7 +36,7 @@ RS2 不直接写回 `.tex`，用户再点"应用到 .tex"才调用 `project_mana
 
 **Token 压缩**：累计 token 超过阈值（默认 200000）时触发压缩：将 ≥4 条消息的历史由 LLM 生成摘要，替换为一条 summary 消息，原消息保存到 `snapshot` 字段。
 
-**撤回/删除**：summary 消息撤回时还原 snapshot；普通消息等同删除。
+**删除消息**：summary 消息删除时还原 snapshot（恢复原始对话）；普通消息直接移除。
 
 **上下文锚点**：`build_file_context_text` 构造纯文本上下文（全文最多 12 段，或当前段 ±1 段）。
 
@@ -55,7 +55,7 @@ RS2 不直接写回 `.tex`，用户再点"应用到 .tex"才调用 `project_mana
 | `cancel_pending_tool(pending_id)` | 前端取消待定工具调用 |
 | `submit_clarification(clarify_id, answer)` | 前端回复 LLM 的澄清请求 |
 | `cancel_clarification(clarify_id)` | 前端取消待定的澄清请求 |
-| `delete_message` / `undo_message` / `rename_session` | 消息操作 |
+| `delete_message` / `rename_session` | 消息操作 |
 | `list_sessions` / `load_session` / `delete_session` | 会话 CRUD |
 
 System Prompt 分三类：聊天角色、编辑操作、压缩摘要。
@@ -117,7 +117,7 @@ Prefix: `/api/writing-chat`, Tag: `writing_chat`
 | POST | `/cancel-tool` | 取消待定工具调用 |
 | POST | `/clarify` | 提交对 LLM 澄清请求的回复 |
 | POST | `/cancel-clarify` | 取消待定的澄清请求 |
-| POST | `/message/delete` / `/message/undo` | 消息操作 |
+| POST | `/message/delete` | 删除消息（summary 消息还原其快照） |
 | PATCH | `/sessions/{id}/rename` | 重命名会话 |
 | GET | `/sessions` | 列出会话 |
 | GET | `/sessions/{id}` | 加载会话 |
@@ -170,7 +170,7 @@ writing_chat 是 `chat_stream_with_tools` 方法的主要消费者。该方法�
 
 ## 前端 `useWritingChat` hook
 
-封装：项目恢复、会话管理、SSE 流式发送、深度思考解析（parseThinking + processLoadedMessages）、生成编辑、应用编辑（支持手动微调 customText）、删除/撤回消息、工具调用确认、澄清请求、助手管理。
+封装：项目恢复、会话管理、SSE 流式发送、深度思考解析（parseThinking + processLoadedMessages）、生成编辑、应用编辑（支持手动微调 customText）、删除消息（summary 消息还原快照）、工具调用确认、澄清请求、助手管理。
 
 **工具确认流程**：
 - `pendingTool` state 存储待确认的工具调用

@@ -6,7 +6,7 @@
     2. 维护会话中的 messages 列表与累计 token 计数（cumulative_tokens）
     3. 提供 to_llm_messages()：将本会话转为发送给 LLM 的 messages 数组
     4. 触发上下文压缩：累计 token 超阈值时把旧消息打包给 LLM 生成摘要并替换
-    5. 支持删除单条消息，以及撤回消息（若是 summary 消息则还原 snapshot）
+    5. 支持删除单条消息（若是 summary 消息则还原其 snapshot）
     6. 加载文件段落作为上下文锚点（发送原始 LaTeX 源码，不用 marker）
 
 设计约定：
@@ -337,23 +337,12 @@ class ConversationContext:
                 return True
         return False
 
-    def delete_message(self, message_id: str) -> bool:
-        """删除消息；token 计数同步递减（不低于 0）。"""
-        for i, m in enumerate(self.messages):
-            if m.id == message_id:
-                self.cumulative_tokens = max(0, self.cumulative_tokens - m.tokens)
-                self.messages.pop(i)
-                # summary 消息删除时丢弃其 snapshot
-                self.last_updated_at = time.time()
-                return True
-        return False
-
-    def undo_message(self, message_id: str) -> dict[str, Any]:
+    def delete_message(self, message_id: str) -> dict[str, Any]:
         """
-        撤回一条消息。
+        删除一条消息。
 
         - 若该消息是 summary（compressed=True），则用其 snapshot 还原原始消息
-        - 否则等同于删除该消息
+        - 否则移除该消息；token 计数同步递减（不低于 0）
         返回：
             { "restored": bool, "restored_count": int, "removed": bool }
         """
@@ -378,13 +367,11 @@ class ConversationContext:
                 "restored_count": len(snapshot_msgs),
                 "removed": False,
             }
-        # 普通消息：等同删除
-        ok = self.delete_message(message_id)
-        return {
-            "restored": False,
-            "restored_count": 0,
-            "removed": ok,
-        }
+        # 普通消息：直接移除
+        self.cumulative_tokens = max(0, self.cumulative_tokens - msg.tokens)
+        self.messages.pop(idx)
+        self.last_updated_at = time.time()
+        return {"restored": False, "restored_count": 0, "removed": True}
 
     # ── 压缩触发 ────────────────────────────────────────────────────────────
 

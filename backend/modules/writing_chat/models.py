@@ -4,7 +4,7 @@
 设计要点：
     - ChatMessage：单条对话消息，含可选 edit_op（编辑操作）与 snapshot（被压缩前的原消息列表快照）
     - edit_op 用于"双轮协议"中的第二轮结构化请求结果
-    - snapshot 用于支持撤回压缩消息时还原原始对话
+    - snapshot 用于支持删除压缩消息时还原原始对话
 
 模型分两类：
     1. 业务持久化模型（ChatMessage / EditOp）——会被 JSON 序列化落盘
@@ -67,7 +67,7 @@ class ChatMessage(BaseModel):
         edit_op: 仅 assistant 消息可能携带；表示该回复附带的编辑操作建议
         compressed: 是否是压缩产生的 summary 消息
         snapshot: 若 compressed=True，保存压缩前被替换的原始消息列表，
-                  用于撤回该 summary 时还原上下文
+                  用于删除该 summary 时还原上下文
         referenced_file / referenced_paragraph: 用户在该消息中选择的上下文锚点
         tool_calls: 仅 assistant 消息携带，LLM 请求调用的工具列表
                     （OpenAI tool_calls 格式，list[dict]）
@@ -148,14 +148,7 @@ class ApplyEditRequest(BaseModel):
 
 
 class DeleteMessageRequest(BaseModel):
-    """删除会话中的某条消息。"""
-
-    session_id: str
-    message_id: str
-
-
-class UndoMessageRequest(BaseModel):
-    """撤回某条消息（summary 消息则还原快照）。"""
+    """删除会话中的某条消息（summary 消息则还原其快照）。"""
 
     session_id: str
     message_id: str

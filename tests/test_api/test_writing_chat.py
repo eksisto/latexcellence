@@ -3,11 +3,11 @@
 
 覆盖：
     - Pydantic 模型校验（ChatMessage / EditOp / LlmEditResult）
-    - ConversationContext：创建/追加/删除/撤回/压缩
+    - ConversationContext：创建/追加/删除/压缩
     - WritingChatService.send（mock chat_stream_with_tools / chat_stream_with_usage）：token 累计、压缩触发、user 删除回滚
     - WritingChatService.generate_edit（mock chat）：marker 一致性、还原、附挂
     - WritingChatService.apply_edit：写回 .tex
-    - 删除/撤回消息在父子组件中保持 token 计数一致
+    - 删除消息（含 summary 还原快照）在父子组件中保持 token 计数一致
     - 会话磁盘持久化往返
 """
 
@@ -28,7 +28,6 @@ from backend.modules.writing_chat.models import (
     GenerateEditRequest,
     ApplyEditRequest,
     DeleteMessageRequest,
-    UndoMessageRequest,
     ChatSendRequest,
 )
 from backend.modules.writing_chat.service import WritingChatService
@@ -191,12 +190,13 @@ class TestContext:
         ctx.cumulative_tokens = 50 + 20
         ctx.save_to_disk()
 
-        ok = ctx.delete_message(ctx.messages[0].id)
-        assert ok
+        result = ctx.delete_message(ctx.messages[0].id)
+        assert result["removed"] is True
+        assert result["restored"] is False
         assert ctx.cumulative_tokens == 20
         assert len(ctx.messages) == 1
 
-    def test_undo_summary_restores_snapshot(self, temp_session_dir, open_project):
+    def test_delete_summary_restores_snapshot(self, temp_session_dir, open_project):
         ctx = ConversationContext.create_session(scope="test")
         ctx.append_user_message("hello")
         ctx.append_assistant_message("hi", tokens=10)
@@ -209,20 +209,18 @@ class TestContext:
         assert len(ctx.messages) == 1
         assert ctx.messages[0].compressed is True
 
-        result = ctx.undo_message(ctx.messages[0].id)
+        result = ctx.delete_message(ctx.messages[0].id)
         assert result["restored"] is True
         assert result["restored_count"] == 4
         assert len(ctx.messages) == 4
         assert ctx.messages[0].content == "hello"
 
-    def test_undo_regular_message_equivalent_to_delete(
-        self, temp_session_dir, open_project
-    ):
+    def test_delete_regular_message(self, temp_session_dir, open_project):
         ctx = ConversationContext.create_session(scope="test")
         ctx.append_user_message("q")
         ctx.append_assistant_message("a", tokens=20)
         assert ctx.cumulative_tokens == 20
-        result = ctx.undo_message(ctx.messages[1].id)
+        result = ctx.delete_message(ctx.messages[1].id)
         assert result["restored"] is False
         assert result["removed"] is True
         assert ctx.cumulative_tokens == 0
@@ -569,7 +567,7 @@ class TestServiceEdit:
         assert "suboptimal" in content
 
 
-# ── Delete / undo message via service ─────────────────────────────────────
+# ── Delete message via service ─────────────────────────────────────────────
 
 
 class TestServiceMessageOps:
@@ -579,16 +577,16 @@ class TestServiceMessageOps:
         ctx.append_assistant_message("a", tokens=10)
         ctx.save_to_disk()
 
-        ok = service.delete_message(
+        result = service.delete_message(
             DeleteMessageRequest(session_id=ctx.session_id, message_id=u.id)
         )
-        assert ok is True
+        assert result["removed"] is True
         loaded = ConversationContext.load_from_disk(ctx.session_id)
         assert len(loaded.messages) == 1
         # user 消息 tokens=0，删除后 cumulative_tokens 不变
         assert loaded.cumulative_tokens == 10
 
-    def test_undo_summary_message(self, temp_session_dir, open_project, service):
+    def test_delete_summary_message(self, temp_session_dir, open_project, service):
         ctx = ConversationContext.create_session(scope="test")
         ctx.append_user_message("q1")
         ctx.append_assistant_message("a1", tokens=20)
@@ -596,8 +594,8 @@ class TestServiceMessageOps:
         ctx.save_to_disk()
         summary_id = ctx.messages[0].id
 
-        result = service.undo_message(
-            UndoMessageRequest(session_id=ctx.session_id, message_id=summary_id)
+        result = service.delete_message(
+            DeleteMessageRequest(session_id=ctx.session_id, message_id=summary_id)
         )
         assert result["restored"] is True
         loaded = ConversationContext.load_from_disk(ctx.session_id)

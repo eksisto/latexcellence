@@ -432,37 +432,24 @@ export default function useWritingChat() {
     [writingChatCurrentSessionId, setWritingChatMessages],
   );
 
-  // ── 删除消息 ────────────────────────────────────────────────────
+  // ── 删除消息（summary 消息会还原快照） ────────────────────────
   const deleteMessage = useCallback(
     async (messageId) => {
       if (!writingChatCurrentSessionId) return;
+      let result;
       try {
-        await api.writingChat.deleteMessage({
+        result = await api.writingChat.deleteMessage({
           session_id: writingChatCurrentSessionId,
           message_id: messageId,
         });
-        setWritingChatMessages((prev) =>
-          prev.filter((m) => m.id !== messageId),
-        );
       } catch (e) {
         setError(e.message);
         toast.error(i18n.t("hooks:writingChat.deleteMessageFailed"), {
           description: e.message,
         });
+        return;
       }
-    },
-    [writingChatCurrentSessionId, setWritingChatMessages],
-  );
-
-  // ── 撤回消息（summary 消息会还原快照） ────────────────────────
-  const undoMessage = useCallback(
-    async (messageId) => {
-      if (!writingChatCurrentSessionId) return;
       try {
-        const result = await api.writingChat.undoMessage({
-          session_id: writingChatCurrentSessionId,
-          message_id: messageId,
-        });
         // 重新拉取会话完整数据以同步 snapshot 还原结构
         const fresh = await api.writingChat.loadSession(
           writingChatCurrentSessionId,
@@ -472,20 +459,37 @@ export default function useWritingChat() {
           (m) => m.compressed && m.role === "summary",
         );
         setWritingChatCompressed(hasCompressed);
-        if (result?.restored) {
-          toast.success(i18n.t("hooks:writingChat.undoCompressedSuccess"));
-        } else if (result?.removed) {
-          toast.success(i18n.t("hooks:writingChat.undoSuccess"));
-        }
       } catch (e) {
+        // 删除已成功，仅本地同步失败：尽力在本地应用等价变更
         setError(e.message);
-        toast.error(i18n.t("hooks:writingChat.undoFailed"), {
+        const next = [...writingChatMessages];
+        const idx = next.findIndex((m) => m.id === messageId);
+        if (idx !== -1) {
+          const target = next[idx];
+          if (target?.compressed && target?.snapshot?.length) {
+            next.splice(idx, 1, ...target.snapshot);
+          } else {
+            next.splice(idx, 1);
+          }
+        }
+        setWritingChatMessages(next);
+        setWritingChatCompressed(
+          next.some((m) => m.compressed && m.role === "summary"),
+        );
+        toast.warning(i18n.t("hooks:writingChat.deleteSyncFailed"), {
           description: e.message,
         });
+        return;
+      }
+      if (result?.restored) {
+        toast.success(i18n.t("hooks:writingChat.deleteCompressedSuccess"));
+      } else if (result?.removed) {
+        toast.success(i18n.t("hooks:writingChat.deleteSuccess"));
       }
     },
     [
       writingChatCurrentSessionId,
+      writingChatMessages,
       setWritingChatMessages,
       setWritingChatCompressed,
     ],
@@ -549,7 +553,6 @@ export default function useWritingChat() {
     generateEdit,
     applyEdit,
     deleteMessage,
-    undoMessage,
     handleFileChange,
     refreshSessions,
   };

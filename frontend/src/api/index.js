@@ -654,11 +654,6 @@ export const api = {
         method: "POST",
         body: JSON.stringify(data),
       }),
-    undoMessage: (data) =>
-      request("/writing-chat/message/undo", {
-        method: "POST",
-        body: JSON.stringify(data),
-      }),
     listSessions: (workspaceId) =>
       request(appendWs("/writing-chat/sessions", workspaceId)),
     loadSession: (id) => request(`/writing-chat/sessions/${id}`),
