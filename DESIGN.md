@@ -465,7 +465,7 @@ LLM 输出中可能包含 `<thinking>...</thinking>` 标签，包裹推理过程
 **上下文压缩**：
 
 与 typo_check 等单向模块不同，写作助手是有状态的多轮对话。`cumulative_tokens` 跟踪最新一次 LLM 调用的 `total_tokens`（上下文窗口大小），当达到阈值时触发压缩：
-1. LLM 对历史消息生成摘要（`LlmSummaryResult`）
+1. LLM 对历史消息生成纯文本摘要（直接 `llm.chat()`）
 2. 原始消息深拷贝到 `summary.snapshot` 字段
 3. 用一条 `role="summary"` 消息替换全部历史
 4. 用户可通过"撤回压缩消息"一键还原

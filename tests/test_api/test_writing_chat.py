@@ -300,8 +300,8 @@ class TestServiceSend:
         ctx.cumulative_tokens = 500  # 模拟已超阈值
         ctx.save_to_disk()
 
-        # mock 压缩 LLM 返回 summary
-        summary_response = {"summary": "压缩摘要内容"}
+        # mock 压缩 LLM 返回纯文本 summary
+        summary_response = "压缩摘要内容"
 
         async def fake_chat(messages, **kwargs):
             return summary_response

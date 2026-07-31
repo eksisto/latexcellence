@@ -29,7 +29,6 @@ from backend.core.logger import get_logger
 from backend.utils.file_ops import atomic_write, safe_read
 from backend.modules.writing_chat.models import (
     ChatMessage,
-    LlmSummaryResult,
 )
 
 _SCOPE_SEPARATOR = ":"

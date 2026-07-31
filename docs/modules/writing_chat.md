@@ -29,7 +29,6 @@ RS2 不直接写回 `.tex`，用户再点"应用到 .tex"才调用 `project_mana
     - `tool_call_id`（仅 tool 角色）：关联到触发该结果的工具调用 ID
 - `LlmEditResult` — RS2 LLM 输出（paragraph_index, original, optimized, reason）
 - `ChatSendRequest` / `GenerateEditRequest` / `ApplyEditRequest` / `RenameSessionRequest` / `ConfirmToolRequest` / `CancelToolRequest` / `ClarifyRequest` / `CancelClarifyRequest` — 请求体
-- `LlmSummaryResult` — 压缩摘要 LLM 输出（summary）
 
 ## 会话上下文管理 `context.py`
 
@@ -163,7 +162,7 @@ writing_chat 是 `chat_stream_with_tools` 方法的主要消费者。该方法�
 | sessions_dir | writing_chat_sessions/ | 会话持久化目录 |
 | custom_prompts_dir | prompts/writing_chat/ | 助手提示词目录 |
 | summary_temperature | 0.2 | 摘要 LLM 温度 |
-| summary_max_tokens | 1024 | 摘要最大 token 数 |
+| summary_max_tokens | 50000 | 摘要最大 token 数 |
 | features.function_calling.scholarly_research.enabled | false | 学术研究工具总开关 |
 | features.function_calling.scholarly_research.max_results | 20 | 单次工具返回结果上限 |
 | features.function_calling.scholarly_research.timeout_seconds | 30 | OpenAlex 请求超时 |

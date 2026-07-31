@@ -184,15 +184,6 @@ class SessionFull(BaseModel):
     file_path: str | None = None
 
 
-# ── LLM 压缩摘要输出 schema ─────────────────────────────────────────────────
-
-
-class LlmSummaryResult(BaseModel):
-    """压缩摘要 LLM JSON 输出 schema。"""
-
-    summary: str
-
-
 # ── SSE 事件 payload 结构（仅供 service 构造时的类型参考） ──────────────────
 
 

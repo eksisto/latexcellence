@@ -52,7 +52,6 @@ from backend.modules.writing_chat.models import (
     EditOp,
     GenerateEditRequest,
     LlmEditResult,
-    LlmSummaryResult,
     UndoMessageRequest,
 )
 
@@ -1008,23 +1007,22 @@ class WritingChatService:
             {"role": "user", "content": f"CONVERSATION:\n{transcript}"},
         ]
         try:
-            validated: LlmSummaryResult = await retry_with_validation(
-                chat_fn=llm.chat,
-                messages=messages,
-                model_cls=LlmSummaryResult,
-                max_retries=3,
-                logger_name="writing_chat.service",
+            summary_text = await llm.chat(
+                messages,
                 temperature=cfg.features.writing_chat.summary_temperature,
                 max_tokens=cfg.features.writing_chat.summary_max_tokens,
-                response_format={"type": "json_object"},
             )
         except Exception as e:
             self._logger.warning(f"Compression failed, skip: {e}")
             return False
+        if not summary_text or not summary_text.strip():
+            self._logger.warning("Compression failed, empty summary, skip")
+            return False
+        summary_text = summary_text.strip()
 
         # 估算摘要 token：粗略按字符近似
-        summary_tokens = int(len(validated.summary) / 3.5) + 50
-        ctx.replace_with_summary(validated.summary, summary_tokens)
+        summary_tokens = int(len(summary_text) / 3.5) + 50
+        ctx.replace_with_summary(summary_text, summary_tokens)
         self._logger.info(
             f"Session {ctx.session_id} compressed to {summary_tokens} tokens, "
             f"snapshot saved"

@@ -178,7 +178,7 @@ class WritingChatConfig(BaseModel):
     sessions_dir: str = "writing_chat_sessions/"  # 会话持久化目录
     custom_prompts_dir: str = "prompts/writing_chat/"  # 助手提示词存放目录
     summary_temperature: float = 0.2  # 生成压缩摘要时的温度
-    summary_max_tokens: int = 1024  # 压缩摘要最大生成 token 数
+    summary_max_tokens: int = 50000  # 压缩摘要最大生成 token 数
     # 是否在聊天中启用联网搜索（受全局 web_search.enabled 约束）
     web_search_enabled: bool = True
 
