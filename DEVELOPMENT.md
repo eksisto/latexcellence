@@ -12,3 +12,4 @@
 | [docs/modules/](docs/modules/) | 各模块的详细文档 |
 | [docs/frontend.md](docs/frontend.md) | 前端开发文档 |
 | [docs/testing.md](docs/testing.md) | 测试规范 |
+| [docs/function-calling-tools.md](docs/function-calling-tools.md) | Function Calling 工具清单（全局/私有工具、配置结构） |

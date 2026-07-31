@@ -72,7 +72,7 @@
 | **定义位置** | `backend/utils/project_tools/edit_tools_manager.py:33` |
 | **执行函数** | `_edit_paragraph_executor()` (同文件:103) |
 | **配置路径** | `features.function_calling.edit_tools.enabled` |
-| **说明** | 使用 MD5 乐观锁防并发冲突，走 `ProjectManager.apply_change()` 流程 |
+| **说明** | 使用 MD5 乐观锁防并发冲突，走 `ProjectManager.apply_change()` 流程。写作助手中默认需经前端确认弹窗（`edit_tools.require_confirmation`）后才执行 |
 
 ---
 
@@ -84,6 +84,65 @@
 | **定义位置** | `backend/utils/project_tools/edit_tools_manager.py:74` |
 | **执行函数** | `_undo_last_edit_executor()` (同文件:158) |
 | **配置路径** | `features.function_calling.edit_tools.enabled` |
+
+---
+
+### 学术检索与引文追踪工具
+
+| 属性 | 值 |
+|------|-----|
+| **名称** | `search_scholarly_works` |
+| **描述** | 跨多个学术数据源检索论文，支持按主题、作者、年份、文献类型筛选，返回含 DOI / OpenAlex ID 等稳定标识的结构化记录 |
+| **参数** | `query` (string, 必填), `year_from` / `year_to` (integer, 可选), `authors` (string[], 可选), `work_types` (string[], 可选), `sort_by` (enum: `relevance`/`citation_count`/`publication_date`, 默认 `relevance`), `max_results` (integer, 默认 20) |
+| **定义位置** | `backend/utils/scholarly_research/manager.py:233` |
+| **执行函数** | `_scholarly_research_executor()` (同文件:378) |
+| **配置路径** | `features.function_calling.scholarly_research.enabled` |
+| **说明** | 联邦搜索：并发查询所有启用的 Provider，结果去重、排序后合并 |
+
+---
+
+| 属性 | 值 |
+|------|-----|
+| **名称** | `get_work_details` |
+| **描述** | 获取某篇论文的完整详细信息：摘要、作者、机构、期刊、DOI、被引数、主题与开放获取信息，支持多数据源 |
+| **参数** | `work_id` (string, 必填) |
+| **定义位置** | `backend/utils/scholarly_research/manager.py:275` |
+| **执行函数** | `_scholarly_research_executor()` (同文件:378) |
+| **配置路径** | `features.function_calling.scholarly_research.enabled` |
+
+---
+
+| 属性 | 值 |
+|------|-----|
+| **名称** | `find_related_works` |
+| **描述** | 基于种子论文检索相关文献：参考文献（references）、施引文献（cited_by）、相似论文（similar），利用多数据源引文图 |
+| **参数** | `work_id` (string, 必填), `relation_type` (enum: `references`/`cited_by`/`similar`, 必填), `max_results` (integer, 默认 20), `sort_by` (enum, 默认 `citation_count`) |
+| **定义位置** | `backend/utils/scholarly_research/manager.py:295` |
+| **执行函数** | `_scholarly_research_executor()` (同文件:378) |
+| **配置路径** | `features.function_calling.scholarly_research.enabled` |
+
+---
+
+| 属性 | 值 |
+|------|-----|
+| **名称** | `get_full_text_or_sections` |
+| **描述** | 获取论文的摘要与开放获取（OA）全文位置信息，跨数据源提供最全的 OA 链接 |
+| **参数** | `work_id` (string, 必填), `requested_sections` (string[], 可选, 如 `abstract`/`methods`/`results`) |
+| **定义位置** | `backend/utils/scholarly_research/manager.py:329` |
+| **执行函数** | `_scholarly_research_executor()` (同文件:378) |
+| **配置路径** | `features.function_calling.scholarly_research.enabled` |
+| **说明** | 目前仅 `abstract` 章节实际可取，其余章节返回不可用提示并注明 OA 位置 |
+
+---
+
+| 属性 | 值 |
+|------|-----|
+| **名称** | `search_research_data_resources` |
+| **描述** | 检索与研究主题相关的数据集与研究数据，跨多数据源搜索 |
+| **参数** | `query` (string, 必填), `resource_type` (enum: `dataset`, 默认 `dataset`), `max_results` (integer, 默认 10) |
+| **定义位置** | `backend/utils/scholarly_research/manager.py:356` |
+| **执行函数** | `_scholarly_research_executor()` (同文件:378) |
+| **配置路径** | `features.function_calling.scholarly_research.enabled` |
 
 ---
 
@@ -120,7 +179,7 @@
 
 ## 工具组成方式
 
-**写作助手 (writing_chat)**: `_get_enabled_tools()` 无条件注入 `request_clarification` 工具（始终可用），再按配置依次追加联网搜索 + 项目浏览 + 段落编辑三类工具的 schema，注入 LLM `tools` 参数。
+**写作助手 (writing_chat)**: `_get_enabled_tools()` 无条件注入 `request_clarification` 工具（始终可用），再按配置依次追加联网搜索 + 项目浏览 + 段落编辑 + 学术检索四类工具的 schema，注入 LLM `tools` 参数。其中段落编辑工具（`edit_paragraph` / `undo_last_edit`）默认需经前端确认弹窗（`edit_tools.require_confirmation=true`）后才执行，用户可修改参数或拒绝。
 
 **模板生成 (template_gen)**: `_build_tools_schema()` 私有构建工具列表，通过 `chat_with_tools()` 直接传入，工具数量根据 `agent_compile_enabled` 配置为 4-5 个。
 
