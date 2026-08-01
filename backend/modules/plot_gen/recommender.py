@@ -5,25 +5,37 @@ from typing import Any
 from backend.core.config import get_config
 from backend.core.logger import get_logger
 from backend.core.prompts import get_prompt
+from backend.modules.plot_gen.data_parser import (
+    build_profile_context,
+    redundancy_hint_pairs,
+)
 from backend.modules.plot_gen.models import ChartPlan, DataProfile
 from backend.utils.json_utils import retry_with_validation
 
 logger = get_logger(__name__)
 
 
-def deterministic_chart_plan(
-    profile: DataProfile, description: str = ""
-) -> ChartPlan:
+def _match_named_column(
+    profile: DataProfile, description: str, text: str, inferred_types: tuple[str, ...]
+) -> str | None:
+    """按名称在描述中匹配指定类型的列，用于优先选择与用户语义相关的列。"""
+    lowered = text
+    for c in profile.column_profiles:
+        if c.inferred_type not in inferred_types:
+            continue
+        if c.name.lower() in lowered or (description and c.name in description):
+            return c.name
+    return None
+
+
+def deterministic_chart_plan(profile: DataProfile, description: str = "") -> ChartPlan:
     """根据数据形状和用户描述返回规则兜底方案。"""
     numeric = [
-        c.name
-        for c in profile.column_profiles
-        if c.inferred_type == "continuous"
+        c.name for c in profile.column_profiles if c.inferred_type == "continuous"
     ]
+    # id 列是唯一标识，不能作为分组/着色维度
     categorical = [
-        c.name
-        for c in profile.column_profiles
-        if c.inferred_type in ("categorical", "id")
+        c.name for c in profile.column_profiles if c.inferred_type == "categorical"
     ]
     datetime_cols = [
         c.name for c in profile.column_profiles if c.inferred_type == "datetime"
@@ -45,6 +57,25 @@ def deterministic_chart_plan(
             y=numeric[-1] if numeric else None,
             color=categorical[0] if categorical else None,
             rationale="用户关注趋势，推荐折线图。",
+        )
+    elif _is_distribution_request(description, text) and categorical and numeric:
+        x_col = (
+            _match_named_column(profile, description, text, ("categorical",))
+            or categorical[0]
+        )
+        y_col = (
+            _match_named_column(profile, description, text, ("continuous",))
+            or numeric[0]
+        )
+        plan = ChartPlan(
+            chart_type="box",
+            x=x_col,
+            y=y_col,
+            color=None,
+            aggregation="none",
+            error_bar=None,
+            rationale="用户关注分组分布/偏态/异常值，推荐箱线图并叠加原始数据点。",
+            risks=["每组样本量较小时须线退化为最小/最大值，需结合散点判断。"],
         )
     elif "correl" in text or "相关" in description or len(numeric) >= 2:
         plan = ChartPlan(
@@ -79,7 +110,38 @@ def deterministic_chart_plan(
             x=numeric[0] if numeric else None,
             rationale="没有更明确的维度组合，默认展示首个数值列分布。",
         )
+    _drop_noop_aggregation(plan, profile)
     return plan
+
+
+def _drop_noop_aggregation(plan: ChartPlan, profile: DataProfile) -> None:
+    """当推荐方案的 (x, color) 组合每单元格只有一行时，取消聚合与误差棒。"""
+    pairs = redundancy_hint_pairs(profile)
+    if not pairs:
+        return
+    x = plan.x
+    color = plan.color
+    if any(x == other and color == cat for other, cat in pairs) or any(
+        x == other and color is None for other, cat in pairs
+    ):
+        plan.aggregation = "none"
+        plan.error_bar = None
+        plan.risks = [r for r in plan.risks if "聚合" not in r]
+
+
+def _is_distribution_request(description: str, text: str) -> bool:
+    """判断用户是否关注分布形态（偏态/异常值/分组比较）。"""
+    zh_hints = ("分布", "偏态", "异常值", "离群", "箱线", "小提琴", "分位数")
+    en_hints = (
+        "distribution",
+        "skew",
+        "outlier",
+        "boxplot",
+        "violin",
+        "spread",
+        "spreadness",
+    )
+    return any(h in description for h in zh_hints) or any(h in text for h in en_hints)
 
 
 async def recommend_chart_plan(
@@ -102,16 +164,26 @@ async def recommend_chart_plan(
         "chart_recommendation_system",
         language=language,
     )
+    pairs = redundancy_hint_pairs(profile)
+    hint_text = ""
+    if pairs:
+        lines = []
+        for other, cat in pairs[:3]:
+            lines.append(f"- {other} x {cat}: one row per cell (rows == unique product)")
+        hint_text = (
+            "\n\nREDUNDANCY HINT:\n"
+            + "\n".join(lines)
+            + "\nFor these pairs set aggregation='none' and error_bar='none'."
+        )
+    user_content = (
+        f"User request:\n{description}\n\n"
+        f"Target style: {style}\n\n"
+        f"Data profile:\n{build_profile_context(profile)}"
+        f"{hint_text}"
+    )
     messages = [
         {"role": "system", "content": system_prompt},
-        {
-            "role": "user",
-            "content": (
-                f"User request:\n{description}\n\n"
-                f"Target style: {style}\n\n"
-                f"Data summary:\n{profile.raw_summary}"
-            ),
-        },
+        {"role": "user", "content": user_content},
     ]
     try:
         return await retry_with_validation(

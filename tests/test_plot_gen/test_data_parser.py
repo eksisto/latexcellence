@@ -53,3 +53,20 @@ def test_parse_preview_contains_no_nan(tmp_path: Path):
     ]
     # 模拟 Starlette JSONResponse（allow_nan=False），不得抛异常
     json.dumps(profile.model_dump(), allow_nan=False)
+
+
+def test_infer_medium_cardinality_column_as_categorical(tmp_path: Path):
+    """中等基数列（如 4 个取值/12 行）应判为 categorical，而非 unknown。"""
+    path = tmp_path / "data.csv"
+    path.write_text(
+        "Treatment,value\n"
+        "Control,1\nControl,2\nControl,3\n"
+        "Low,4\nLow,5\nLow,6\n"
+        "Medium,7\nMedium,8\nMedium,9\n"
+        "High,10\nHigh,11\nHigh,12\n",
+        encoding="utf-8",
+    )
+    profile = parse_data_file(path, max_rows=100)
+    by_name = {c.name: c.inferred_type for c in profile.column_profiles}
+    assert by_name["Treatment"] == "categorical"
+    assert by_name["value"] == "continuous"

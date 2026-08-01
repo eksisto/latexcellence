@@ -9,7 +9,8 @@ from typing import Any, AsyncIterator
 from backend.core.config import get_config
 from backend.core.logger import get_logger
 from backend.core.llm_client import get_llm_client
-from backend.core.prompts import get_prompt
+from backend.core.prompts import get_prompt, render_pgfplots_reference
+from backend.modules.plot_gen.data_parser import build_profile_context
 from backend.modules.plot_gen.executor import PlotExecutor
 from backend.modules.plot_gen.models import ChartPlan, DataProfile, PlotSessionMeta
 from backend.modules.plot_gen.trace import append_trace, now_iso
@@ -119,8 +120,11 @@ class PlotGenAgent:
         system_prompt = get_prompt(
             "plot_gen",
             "agent_system",
-            profile=profile.raw_summary,
+            profile=build_profile_context(profile),
             chart_plan=plan_text,
+            pgfplots_reference=render_pgfplots_reference(
+                meta.chart_plan.chart_type if meta.chart_plan else None
+            ),
             style=meta.style,
             language=language,
             max_rounds=cfg.features.plot_gen.agent_max_rounds,
@@ -200,6 +204,11 @@ class PlotGenAgent:
         rounds_used = 0
         last_fail = {"tool": "", "text": "", "count": 0}
         repeat_limit = 3
+        # 按工具族累计连续失败次数：python_sandbox / compile_tikz 各自达到阈值时
+        # 注入强约束消息，强制 Agent 换思路（简化图表/手写 PGFPlots/finish 带警告），
+        # 防止在 matplot2tikz 产物上反复小修小补形成死循环。
+        fail_budget: dict[str, int] = {"python_sandbox": 0, "compile_tikz": 0}
+        fail_budget_limit = 3
 
         await append_trace(
             sandbox,
@@ -352,6 +361,38 @@ class PlotGenAgent:
                     )
                     messages.append({"role": "system", "content": repeat_msg})
                     yield {"type": "warning", "message": repeat_msg}
+
+                # 工具族失败预算：失败原因文字不同但同族连续失败同样需要止损
+                if failed and tool_name in fail_budget:
+                    fail_budget[tool_name] += 1
+                    if fail_budget[tool_name] >= fail_budget_limit:
+                        fail_budget[tool_name] = 0
+                        if tool_name == "python_sandbox":
+                            budget_msg = (
+                                "STOP: `python_sandbox` has failed "
+                                f"{fail_budget_limit} times in a row. Do not keep "
+                                "tweaking the same script. Simplify the figure "
+                                "(remove error bars, annotations, 3D effects, or any "
+                                "advanced feature), double-check every column name "
+                                "against the data profile, then rewrite the script "
+                                "with `write_file` and rerun. If the data cannot be "
+                                "plotted, call `finish` with an explicit warning."
+                            )
+                        else:
+                            budget_msg = (
+                                "STOP: `compile_tikz` has failed "
+                                f"{fail_budget_limit} times in a row. Do not keep "
+                                "patching the matplot2tikz output. Rewrite the script "
+                                "so it writes a simple hand-written PGFPlots file "
+                                "(ASCII labels, data in artifacts/*.csv, small/relative "
+                                "x values, explicit y error columns if needed), rerun "
+                                "`python_sandbox`, then `compile_tikz`. If TikZ remains "
+                                "impossible, call `finish` with an explicit warning."
+                            )
+                        messages.append({"role": "system", "content": budget_msg})
+                        yield {"type": "warning", "message": budget_msg}
+                elif not failed and tool_name in fail_budget:
+                    fail_budget[tool_name] = 0
 
                 if tool_name == "python_sandbox":
                     execution_state["called"] = True

@@ -1,5 +1,6 @@
 """科研绘图沙箱执行器。"""
 
+import ast
 import asyncio
 import os
 import re
@@ -41,6 +42,153 @@ ARTIFACT_SUFFIXES = (
     ".txt",
 )
 INTERNAL_DIRS = (".cache", "tmp")
+PRECHECK_LARGE_COORD_THRESHOLD = 1e4
+
+
+def _precheck_tikz(content: str) -> tuple[list[dict[str, str]], bool]:
+    """编译前对 TikZ 源做轻量纯文本预检（不调用 LLM）。
+
+    针对 matplot2tikz 0.5.4 的高频故障模式：
+      - 内联 `y error=` / `+-` 误差棒语法（含 nan/inf 误差增量）;
+      - 线性轴上绝对值 > 1e4 的坐标（Excel 日期序号触发 Dimension too large）;
+      - 非 ASCII 字符（标签缺失字形，仅警告不拦截）。
+
+    返回 (findings, blocked)：blocked=True 表示存在大概率必然编译失败的问题，
+    调用方应跳过实际编译，直接把预检结果回传给 Agent 修正。
+    """
+    findings: list[dict[str, str]] = []
+    blocked = False
+
+    # 1) 内联误差棒语法：y error= 是无效 key（y error plus/minus 才是合法形式）
+    if re.search(r"y\s*error\s*=(?!\s*(?:plus|minus))", content, re.IGNORECASE):
+        findings.append(
+            {
+                "rule": "error_bar",
+                "level": "error",
+                "message": (
+                    "Inline 'y error=' syntax detected. PGFPlots accepts "
+                    "'y error plus'/'y error minus' only. Rewrite the plot by "
+                    "hand in PGFPlots with explicit error columns, or drop "
+                    "error bars."
+                ),
+            }
+        )
+        blocked = True
+
+    for m in re.finditer(r"\+-\s*\(\s*([^)]*?)\s*,\s*([^)]*?)\s*\)", content):
+        deltas = m.group(1) + "," + m.group(2)
+        if re.search(r"nan|inf|none", deltas, re.IGNORECASE):
+            # matplot2tikz 把缺失误差写成 (nan, nan)，PGFPlots 无法解析
+            findings.append(
+                {
+                    "rule": "error_bar",
+                    "level": "error",
+                    "message": (
+                        "Inline '+-' error bar deltas are not numeric "
+                        f"(e.g. '{m.group(0).strip()[:40]}'). matplot2tikz "
+                        "error bar output is unreliable. Rewrite the plot by "
+                        "hand in PGFPlots with explicit numeric error columns, "
+                        "or drop error bars."
+                    ),
+                }
+            )
+            blocked = True
+        else:
+            findings.append(
+                {
+                    "rule": "error_bar",
+                    "level": "warning",
+                    "message": (
+                        "Inline '+-' error bars detected. Prefer hand-written "
+                        "PGFPlots with table-based 'y error plus'/'y error "
+                        "minus' columns to avoid matplot2tikz compatibility "
+                        "issues."
+                    ),
+                }
+            )
+        break
+
+    # 2) 线性轴上绝对值 > 1e4 的坐标（日期序号等）。对数轴上的大数值合法，跳过。
+    x_is_log = bool(re.search(r"xmode\s*=\s*log", content, re.IGNORECASE))
+    y_is_log = bool(re.search(r"ymode\s*=\s*log", content, re.IGNORECASE))
+    coord_pat = re.compile(
+        r"\(\s*([+-]?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)\s*,\s*"
+        r"([+-]?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)\s*\)"
+    )
+    for m in coord_pat.finditer(content):
+        xv = float(m.group(1))
+        yv = float(m.group(2))
+        if abs(xv) > PRECHECK_LARGE_COORD_THRESHOLD and not x_is_log:
+            findings.append(
+                {
+                    "rule": "large_coordinate",
+                    "level": "error",
+                    "message": (
+                        f"Coordinate x={xv:.6g} exceeds +/-"
+                        f"{PRECHECK_LARGE_COORD_THRESHOLD:.0f} on a linear axis; "
+                        "large values (e.g. Excel datetime serials) trigger "
+                        "'Dimension too large' in PGFPlots. Convert datetime to "
+                        "day offsets from the first date or use relative "
+                        "coordinates."
+                    ),
+                }
+            )
+            blocked = True
+            break
+        if abs(yv) > PRECHECK_LARGE_COORD_THRESHOLD and not y_is_log:
+            findings.append(
+                {
+                    "rule": "large_coordinate",
+                    "level": "error",
+                    "message": (
+                        f"Coordinate y={yv:.6g} exceeds +/-"
+                        f"{PRECHECK_LARGE_COORD_THRESHOLD:.0f} on a linear axis; "
+                        "large values trigger 'Dimension too large' in "
+                        "PGFPlots. Use relative/offset coordinates instead."
+                    ),
+                }
+            )
+            blocked = True
+            break
+
+    # 3) 非 ASCII 字符：缺失字形风险，警告但不拦截（xelatex 可正常渲染中文）
+    non_ascii = sorted({ch for ch in content if ord(ch) > 0x7F})
+    if non_ascii:
+        sample = " ".join(repr(c) for c in non_ascii[:8])
+        findings.append(
+            {
+                "rule": "non_ascii",
+                "level": "warning",
+                "message": (
+                    "Non-ASCII characters detected in TikZ source "
+                    f"({sample}). Labels with such characters may render as "
+                    "missing glyphs under pdflatex. Replace figure text with "
+                    "ASCII equivalents (e.g. 'uM', 'degC', 'x')."
+                ),
+            }
+        )
+    return findings, blocked
+
+
+def _format_precheck(findings: list[dict[str, str]]) -> str:
+    """把预检结果格式化为回传 LLM 的文本。"""
+    if not findings:
+        return ""
+    lines = ["TIKZ PRECHECK:"]
+    for f in findings:
+        lines.append(f"- [{f['level']}] {f['message']}")
+    return "\n".join(lines)
+
+
+def _check_python_syntax(content: str) -> str | None:
+    """对 .py 内容做 ast.parse 语法检查，返回可读错误描述或 None。"""
+    try:
+        ast.parse(content)
+    except SyntaxError as e:
+        line = e.lineno if e.lineno is not None else "?"
+        col = e.offset if e.offset is not None else "?"
+        return f"line {line}, col {col}: {e.msg}"
+    return None
 
 
 def is_internal_rel_path(rel_path: str) -> bool:
@@ -69,6 +217,51 @@ def _kill_process_tree(proc: asyncio.subprocess.Process) -> None:
             proc.kill()
         except ProcessLookupError:
             pass
+
+
+def _extract_tikz_issues(raw_output: str, limit: int = 8) -> list[dict[str, str]]:
+    """从 latexmk 日志中提取错误与警告，用于给 Agent 质量信号。
+
+    "Missing character" 提示图中部分文本/数字未渲染（如 nullfont），
+    即使 latexmk 退出码为 0，也值得让 Agent 察觉。
+    """
+    patterns: list[tuple[str, re.Pattern[str]]] = [
+        ("error", re.compile(r"! LaTeX Error")),
+        ("error", re.compile(r"Emergency stop")),
+        ("error", re.compile(r"Runaway argument")),
+        ("error", re.compile(r"Undefined control sequence")),
+        ("error", re.compile(r"! Package [^\n]*?Error")),
+        ("error", re.compile(r"! Undefined")),
+        ("error", re.compile(r"! Dimension too large")),
+        ("error", re.compile(r"! Extra \\endcsname")),
+        ("error", re.compile(r"! Missing control sequence inserted")),
+        ("error", re.compile(r"! Missing \$ inserted")),
+        ("error", re.compile(r"! Text line contains an invalid character")),
+        ("error", re.compile(r"! I can't find file")),
+        ("error", re.compile(r"! Package pgfplots Error")),
+        ("error", re.compile(r"! Package pgfkeys Error")),
+        ("warning", re.compile(r"Missing character")),
+        ("warning", re.compile(r"LaTeX Warning")),
+        ("warning", re.compile(r"Package [^\n]*?Warning")),
+        ("warning", re.compile(r"LaTeX Font Warning")),
+        ("warning", re.compile(r"Font [^\n]*?not found")),
+        ("info", re.compile(r"Overfull \\hbox")),
+        ("info", re.compile(r"Underfull \\hbox")),
+    ]
+    issues: list[dict[str, str]] = []
+    seen: set[str] = set()
+    for level, pat in patterns:
+        for m in pat.finditer(raw_output):
+            snippet = raw_output[max(0, m.start() - 120) : m.end() + 120]
+            snippet = " ".join(snippet.split())
+            key = snippet[:160]
+            if key in seen:
+                continue
+            seen.add(key)
+            issues.append({"level": level, "message": snippet})
+            if len(issues) >= limit:
+                return issues
+    return issues
 
 
 class PlotExecutor:
@@ -160,6 +353,23 @@ class PlotExecutor:
         if len(content_bytes) > max_bytes:
             msg = f"File {file_path} exceeds {fcfg.agent_max_file_size_kb} KB"
             return msg, {"tool": "write_file", "ok": False, "summary": msg}
+
+        # Python 静态校验：写入前做 ast.parse 语法检查，把语法错误提前到
+        # 写入阶段暴露，避免白跑一轮 python_sandbox 子进程。
+        if Path(file_path).suffix.lower() == ".py":
+            syntax_error = _check_python_syntax(content)
+            if syntax_error is not None:
+                msg = (
+                    f"Python syntax error in {file_path}: {syntax_error}. "
+                    "Fix the syntax error before running python_sandbox."
+                )
+                return msg, {
+                    "tool": "write_file",
+                    "ok": False,
+                    "summary": f"Python syntax error: {syntax_error}",
+                    "file_path": file_path,
+                    "syntax_error": syntax_error,
+                }
 
         resolved.parent.mkdir(parents=True, exist_ok=True)
         resolved.write_bytes(content_bytes)
@@ -349,6 +559,32 @@ class PlotExecutor:
         artifacts_dir.mkdir(parents=True, exist_ok=True)
         content = tikz_path.read_text(encoding="utf-8", errors="replace")
 
+        # 轻量预检：命中大概率必失败的规则时跳过实际编译，直接把修正建议
+        # 回传 Agent，避免在 matplot2tikz 故障输出上浪费编译轮次。
+        precheck_findings, precheck_blocked = _precheck_tikz(content)
+        precheck_text = _format_precheck(precheck_findings)
+        if precheck_blocked:
+            msg = (
+                "TikZ PRECHECK FAILED (compilation skipped).\n\n"
+                + precheck_text
+                + "\n\nFix the TikZ source (rewrite the plot by hand in "
+                "PGFPlots if needed) and call compile_tikz again."
+            )
+            summary = (
+                "TikZ PRECHECK failed; fix the issues above and recompile"
+            )
+            return msg, {
+                "tool": "compile_tikz",
+                "ok": False,
+                "success": False,
+                "log": msg,
+                "summary": summary,
+                "precheck": precheck_findings,
+                "precheck_blocked": True,
+                "issues": [],
+                "warnings": [],
+            }
+
         # 完整 standalone 文档（含 \documentclass）直接作为主文件编译，
         # 避免再 \input 包装造成重复 \documentclass；片段则包装进主文件。
         is_full_doc = bool(re.search(r"\\documentclass", content))
@@ -393,18 +629,59 @@ class PlotExecutor:
             }
 
         log = tex_result.raw_output[-4000:]
+        issues = _extract_tikz_issues(tex_result.raw_output)
+        errors = [i for i in issues if i["level"] == "error"]
+        # nullfont 的 "Missing character" 来自版本字符串（如 "This is pdfTeX..."），
+        # 与实际图表标签无关，过滤掉可避免 Agent 对无害噪音做无效修复。
+        warnings = [
+            i
+            for i in issues
+            if i["level"] == "warning"
+            and "nullfont" not in i["message"].lower()
+        ]
+        # latexmk 退出码为 0 但日志含真实错误时，仍视为编译失败
+        success = tex_result.success and not errors
+        issue_text = ""
+        if errors or warnings:
+            lines = []
+            for it in (errors + warnings)[:8]:
+                lines.append(f"[{it['level']}] {it['message']}")
+            issue_text = (
+                "\n\nTIKZ ISSUES DETECTED IN LOG:\n"
+                + "\n".join(lines)
+                + "\n\nFix any errors. For 'Missing character' warnings, check "
+                "that all text/labels in the figure are actually rendered; "
+                "warnings mentioning 'nullfont' come from version strings and "
+                "are harmless."
+            )
+        if success:
+            summary = (
+                "TikZ compilation succeeded with warnings"
+                if (errors or warnings)
+                else "TikZ compilation succeeded"
+            )
+            text = log
+            if precheck_text:
+                text += "\n\n" + precheck_text
+            if issue_text:
+                text += issue_text
+        else:
+            summary = "TikZ compilation failed; inspect the log and fix the TikZ source"
+            text = "TikZ compilation FAILED.\n\n" + log
+            if precheck_text:
+                text += "\n\n" + precheck_text
+            text += issue_text
         event = {
             "tool": "compile_tikz",
-            "ok": True,
-            "success": tex_result.success,
+            "ok": success,
+            "success": success,
             "log": log,
-            "summary": (
-                "TikZ compilation succeeded"
-                if tex_result.success
-                else "TikZ compilation failed; inspect the log and fix the TikZ source"
-            ),
+            "summary": summary,
+            "precheck": precheck_findings,
+            "precheck_blocked": False,
+            "warnings": [i["message"] for i in warnings][:8],
+            "issues": issues[:8],
         }
-        text = log if tex_result.success else ("TikZ compilation FAILED.\n\n" + log)
         return text, event
 
     def _stats_test(self, args: dict[str, Any]) -> tuple[str, dict[str, Any]]:

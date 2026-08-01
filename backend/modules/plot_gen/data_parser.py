@@ -1,5 +1,6 @@
 """数据文件解析与画像生成。"""
 
+import json
 from io import BytesIO
 from pathlib import Path
 from typing import Any
@@ -112,9 +113,11 @@ def _infer_type(series: pd.Series, unique: int, missing: int) -> str:
         parsed = pd.to_datetime(series, errors="coerce", format="mixed")
         if parsed.notna().sum() >= max(1, int(len(series) * 0.8)):
             return "datetime"
-    if len(series) > 0 and unique == len(series) - missing:
+    n = len(series) - missing
+    # 只有行数足够多时全唯一列才判定为 id，避免小样本分类列被误判
+    if n >= 10 and unique == n:
         return "id"
-    if unique <= max(2, int(len(series) ** 0.5)):
+    if unique <= max(2, min(int(n * 0.5), 30)):
         return "categorical"
     return "unknown"
 
@@ -127,3 +130,66 @@ def _build_raw_summary(df: pd.DataFrame, columns: list[ColumnProfile]) -> str:
             f"unique={col.unique}"
         )
     return "\n".join(lines)
+
+
+def redundancy_hint_pairs(profile: DataProfile) -> list[tuple[str, str]]:
+    """找出“一个单元格只有一行”的 (x, 分类列) 组合。
+
+    当 unique(x) * unique(cat) ≈ 行数 时，说明 x × cat 的每个组合只有一条记录，
+    对该组合做 mean/sd 聚合或加误差棒没有意义，且会显著增加 TikZ 输出复杂度。
+    """
+    rows = profile.rows
+    if rows <= 0:
+        return []
+    by_name = {c.name: c for c in profile.column_profiles}
+    cats = [
+        c.name
+        for c in profile.column_profiles
+        if c.inferred_type == "categorical" and c.unique >= 1
+    ]
+    others = [
+        c.name
+        for c in profile.column_profiles
+        if c.inferred_type in ("datetime", "continuous", "id") and c.unique >= 2
+    ]
+    pairs: list[tuple[str, str]] = []
+    for cat in cats:
+        for other in others:
+            product = by_name[cat].unique * by_name[other].unique
+            if product and abs(product - rows) <= max(1, int(rows * 0.05)):
+                pairs.append((other, cat))
+    return pairs
+
+
+def build_profile_context(profile: DataProfile) -> str:
+    """生成给 LLM 的完整数据画像上下文（原始摘要 + 列明细 + 预览）。
+
+    列明细包含 top_values / quantiles / sample，帮助 LLM 理解列语义，
+    从而减少其通过 read_file 读取原始数据的需要。
+    """
+    parts = [profile.raw_summary]
+    detail_lines = []
+    for c in profile.column_profiles:
+        detail = f"- {c.name}: {c.inferred_type} | unique={c.unique}"
+        extras = []
+        if c.top_values:
+            extras.append("top=" + ", ".join(str(v) for v in c.top_values[:6]))
+        if c.quantiles:
+            extras.append("quantiles=" + ", ".join(f"{q:.2g}" for q in c.quantiles))
+        elif c.sample:
+            extras.append("sample=" + ", ".join(str(v) for v in c.sample[:6]))
+        if extras:
+            detail += " | " + " | ".join(extras)
+        detail_lines.append(detail)
+    parts.append("Columns:")
+    parts.extend(detail_lines)
+    parts.append("Preview (first rows):")
+    parts.append(json.dumps(profile.preview[:5], ensure_ascii=False, default=str))
+    hints = redundancy_hint_pairs(profile)
+    if hints:
+        parts.append("Redundancy hints (one row per cell -> aggregation/error bars NOT needed):")
+        for other, cat in hints[:3]:
+            parts.append(
+                f"- {other} x {cat}: unique product == rows ({profile.rows})"
+            )
+    return "\n".join(parts)
