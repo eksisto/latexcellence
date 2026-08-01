@@ -17,7 +17,7 @@ latexcellence/
 ├── PROJECT_SUMMARY.md               # ← 本文件：项目概要（供 AI 快速读取）
 ├── README.md                        # 项目简介
 ├── THIRD_PARTY_NOTICES.md           # 第三方许可
-├── clean-cache.sh                   # 缓存清理脚本
+├── clean-cache.sh / clean-cache.ps1 # 缓存清理脚本（Bash / PowerShell）
 ├── backend/
 │   ├── core/
 │   │   ├── config.py                # Pydantic 配置模型 + 热重载

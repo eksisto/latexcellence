@@ -1,0 +1,117 @@
+# LateXcellence Cache Cleaner
+# PowerShell 版本，与 clean-cache.sh 功能一致。
+
+param(
+    [switch]$NoPause
+)
+
+$ErrorActionPreference = "SilentlyContinue"
+$Root = $PSScriptRoot
+$script:Cleaned = 0
+$script:Failed = 0
+
+Write-Host ""
+Write-Host "========================================"
+Write-Host "  LateXcellence Cache Cleaner"
+Write-Host "========================================"
+Write-Host ""
+
+function Get-CacheItems {
+    param(
+        [string]$SearchRoot,
+        [string]$NamePattern
+    )
+
+    $found = [System.Collections.Generic.List[string]]::new()
+    $pending = [System.Collections.Generic.Stack[string]]::new()
+    $pending.Push($SearchRoot)
+
+    while ($pending.Count -gt 0) {
+        $current = $pending.Pop()
+        $children = @(Get-ChildItem -LiteralPath $current -Force -ErrorAction SilentlyContinue)
+
+        foreach ($child in $children) {
+            if ($child.PSIsContainer -and $child.Name -eq "node_modules") {
+                continue
+            }
+            if ($child.Name -like $NamePattern) {
+                $found.Add($child.FullName)
+            }
+            if ($child.PSIsContainer) {
+                $pending.Push($child.FullName)
+            }
+        }
+    }
+
+    return $found
+}
+
+function Remove-CacheItem {
+    param([string]$Item)
+
+    $relative = $Item
+    if ($Item.StartsWith($Root, [System.StringComparison]::OrdinalIgnoreCase)) {
+        $relative = $Item.Substring($Root.Length).TrimStart('\')
+    }
+
+    try {
+        Remove-Item -LiteralPath $Item -Recurse -Force -ErrorAction Stop
+        Write-Host "  [OK]   $relative"
+        $script:Cleaned++
+    }
+    catch {
+        Write-Host "  [FAIL] $relative"
+        $script:Failed++
+    }
+}
+
+function Invoke-CleanPattern {
+    param(
+        [string]$Description,
+        [string]$NamePattern,
+        [string]$SearchRoot
+    )
+
+    $items = @(Get-CacheItems -SearchRoot $SearchRoot -NamePattern $NamePattern)
+    if ($items.Count -eq 0) {
+        Write-Host "  --     $Description (不存在，跳过)"
+        return
+    }
+
+    foreach ($item in $items) {
+        Remove-CacheItem -Item $item
+    }
+}
+
+Write-Host "[1/4] 清理 __pycache__ ..."
+Invoke-CleanPattern -Description "__pycache__" -NamePattern "__pycache__" -SearchRoot $Root
+
+Write-Host "[2/4] 清理 *.pyc ..."
+Invoke-CleanPattern -Description "*.pyc" -NamePattern "*.pyc" -SearchRoot $Root
+
+Write-Host "[3/4] 清理 node_modules/.cache ..."
+$cache = Join-Path $Root "frontend\node_modules\.cache"
+if (Test-Path -LiteralPath $cache) {
+    Remove-CacheItem -Item $cache
+}
+else {
+    Write-Host "  --     node_modules/.cache (不存在，跳过)"
+}
+
+Write-Host "[4/4] 清理 .pytest_cache ..."
+Invoke-CleanPattern -Description ".pytest_cache" -NamePattern ".pytest_cache" -SearchRoot $Root
+
+Write-Host ""
+Write-Host "========================================"
+Write-Host "  清理结果"
+Write-Host "========================================"
+Write-Host ""
+Write-Host "  已清理: $Cleaned 项"
+Write-Host "  失败:   $Failed 项"
+Write-Host ""
+
+if (-not $NoPause) {
+    Write-Host "按任意键退出..." -NoNewline
+    $null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
+    Write-Host ""
+}

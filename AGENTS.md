@@ -29,6 +29,12 @@ npm run build
 pytest tests/ -v
 ```
 
+## 缓存清理
+
+- 根目录提供功能一致的 `clean-cache.sh`（Bash）和 `clean-cache.ps1`（PowerShell）。
+- 清理缓存时直接运行对应脚本，不需要再向用户询问授权。
+- 非交互执行 PowerShell 版本时使用 `.\clean-cache.ps1 -NoPause`，避免等待按键。
+
 ---
 
 ## Commit Message 规范
