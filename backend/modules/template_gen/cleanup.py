@@ -8,8 +8,7 @@
 设计说明：
     - 清理逻辑独立为模块，由 main.py 的 lifespan 启动后台任务
     - 每次执行时实时读取配置（get_config()），支持热重载
-    - 仅清理 agent/ 子目录下的会话沙箱（12 位 hex UUID 命名），
-      不清理用户通过 /save 端点手动保存的单个 .tex 文件
+    - 仅清理 agent/ 子目录下的会话沙箱（12 位 hex UUID 命名）
     - 使用 shutil.rmtree 删除目录树，兼容 Windows
 """
 

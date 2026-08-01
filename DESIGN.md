@@ -627,20 +627,22 @@ apply 时携带 file_path → 精确写回对应文件
 
 ### 5.8 模板生成数据流
 
-模板生成从零创建 LaTeX 模板，不操作已有 `.tex` 文件，不走 SSE 流式：
+模板生成从零创建 LaTeX 工程，不操作已有 `.tex` 文件，通过**自主 Agent**（SSE 流式）完成：
 
 ```
 POST /api/template-gen/generate { description: "..." }
         ↓
-retry_with_validation(TemplateGenResult)
-  一次 LLM 调用（system prompt = 模板设计师）
+TemplateAgentService.generate() 基于 Function Calling 自主迭代
+   plan → write_file（多文件）→ list_files → compile_latex 验证
+        ↓ 编译失败
+   _extract_errors() → _format_error_analysis() → 回传 LLM 修复 → 再编译
         ↓
-返回 { template_name, preamble, body_structure, packages, explanation }
-        ↓ (可选保存)
-POST /api/template-gen/save  →  组装完整 .tex → 写入 output_dir
+SSE 事件流：plan / tool_call / tool_result / compile / warning / done / error
+        ↓
+产出物：output_dir/agent/<session_id>/ 下的完整可编译多文件 LaTeX 工程
 ```
 
-**关键差异**：不使用 Marker 保护（生成全新模板，无 LaTeX 结构需保护）；一次 LLM 调用完成，非批量段落模式。
+**关键差异**：不使用 Marker 保护（生成全新工程，无 LaTeX 结构需保护）；基于 Function Calling 多轮迭代 + 编译验证，非批量段落模式。
 
 ### 5.9 公式 OCR 数据流
 

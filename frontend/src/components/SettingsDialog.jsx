@@ -325,13 +325,6 @@ export default function SettingsDialog() {
             />
             {config.features.template_gen.enabled && (
               <div className="ml-6 space-y-2 rounded-md border p-2.5 bg-muted/40">
-                <CheckboxField
-                  label={t("settings.templateGenAgentEnabled")}
-                  checked={config.features.template_gen.agent_enabled}
-                  onChange={(v) =>
-                    set("features.template_gen.agent_enabled", v)
-                  }
-                />
                 <div className="grid grid-cols-2 gap-2">
                   <div className="space-y-1">
                     <Label className="text-xs">
@@ -620,11 +613,6 @@ export default function SettingsDialog() {
             />
             {config.features.plot_gen.enabled && (
               <div className="ml-6 space-y-2 rounded-md border p-2.5 bg-muted/40">
-                <CheckboxField
-                  label={t("settings.plotGenAgentEnabled")}
-                  checked={config.features.plot_gen.agent_enabled}
-                  onChange={(v) => set("features.plot_gen.agent_enabled", v)}
-                />
                 <div className="grid grid-cols-2 gap-2">
                   <div className="space-y-1">
                     <Label className="text-xs">
@@ -695,9 +683,7 @@ export default function SettingsDialog() {
                 <CheckboxField
                   label={t("settings.plotGenCleanup")}
                   checked={config.features.plot_gen.cleanup_enabled}
-                  onChange={(v) =>
-                    set("features.plot_gen.cleanup_enabled", v)
-                  }
+                  onChange={(v) => set("features.plot_gen.cleanup_enabled", v)}
                 />
               </div>
             )}

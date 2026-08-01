@@ -233,33 +233,6 @@ _PROMPTS: dict[str, dict[str, str]] = {
     },
     # ── template_gen 模块 ────────────────────────────────────────────────────
     "template_gen": {
-        "single_generation_system": (
-            "You are a LaTeX template designer. "
-            "The user will describe the type of document they need.\n\n"
-            "Your task is to generate a complete LaTeX template skeleton with:\n"
-            "- Appropriate \\documentclass and preamble (packages, styling)\n"
-            "- A body structure with suggested section titles and brief content hints\n"
-            "- Any essential packages for the document type\n\n"
-            "Guidelines:\n"
-            "- Use standard LaTeX packages (amsmath, graphicx, hyperref, etc.)\n"
-            "- For academic papers, include title/author/abstract scaffolding\n"
-            "- Keep the template clean and well-commented\n"
-            "- Adapt to the user's specific requirements\n\n"
-            "Respond with JSON only, no markdown fences, no extra text.\n\n"
-            "JSON format:\n"
-            "{{\n"
-            '  "template_name": "<short descriptive name>",\n'
-            '  "preamble": "<complete LaTeX preamble including \\\\documentclass>",\n'
-            '  "body_structure": [\n'
-            "    {{\n"
-            '      "section": "<section title>",\n'
-            '      "suggested_content": "<brief hint of what to write here>"\n'
-            "    }}\n"
-            "  ],\n"
-            '  "packages": ["<package1>", "<package2>"],\n'
-            '  "explanation": "<brief explanation of the template design in {language}>"\n'
-            "}}"
-        ),
         "agent_system": (
             "You are an autonomous LaTeX project generation agent. "
             "Your goal is to autonomously produce a COMPLETE, COMPILABLE, "
@@ -864,7 +837,7 @@ _PROMPTS: dict[str, dict[str, str]] = {
             "`python_sandbox` succeeds — do NOT call matplot2tikz and do NOT write "
             "figure.tex by hand unless generation is impossible.\n"
             "2. tikz_spec.json schema (all labels ASCII):\n"
-            '   {{\n'
+            "   {{\n"
             '     "chart_type": "line|scatter|bar|box|heatmap|histogram|kde",\n'
             '     "xlabel": "Dose (uM)",\n'
             '     "ylabel": "Inhibition (%)",\n'
@@ -875,20 +848,20 @@ _PROMPTS: dict[str, dict[str, str]] = {
             '       "x": "dose", "y": "mean",\n'
             '       "y_plus": "sem", "y_minus": "sem",\n'
             '       "label": "DrugA", "color": "C0"\n'
-            '     }}]\n'
-            '   }}\n'
+            "     }}]\n"
+            "   }}\n"
             "   Chart-specific notes:\n"
             "   - line/scatter/kde/histogram: series[] with file/x/y (optional "
             "y_plus/y_minus/label/color).\n"
             "   - bar: series[] with x = integer index column (0..n-1) and y = "
-            "value; add \"bar\": {{\"xticklabels\": [\"Cat1\", \"Cat2\", ...]}}.\n"
+            'value; add "bar": {{"xticklabels": ["Cat1", "Cat2", ...]}}.\n'
             "   - box/violin: one series entry per group with y = value column "
-            "(no x column needed); add \"box\": {{\"xticklabels\": [\"G1\", ...]}}.\n"
-            "   - heatmap: add \"heatmap\": {{\"matrix_file\": \"data_corr.csv\", "
-            "\"cols\": <n>, \"x_labels\": [...], \"y_labels\": [...], "
-            "\"colormap\": \"RdBu_r|viridis\", \"meta_min\": -1, \"meta_max\": 1, "
-            "\"colorbar_label\": \"Pearson r\", \"cell_text\": [{{\"row\": 0, "
-            "\"col\": 1, \"text\": \"+0.16*\", \"color\": \"black\"}}]}}; the "
+            '(no x column needed); add "box": {{"xticklabels": ["G1", ...]}}.\n'
+            '   - heatmap: add "heatmap": {{"matrix_file": "data_corr.csv", '
+            '"cols": <n>, "x_labels": [...], "y_labels": [...], '
+            '"colormap": "RdBu_r|viridis", "meta_min": -1, "meta_max": 1, '
+            '"colorbar_label": "Pearson r", "cell_text": [{{"row": 0, '
+            '"col": 1, "text": "+0.16*", "color": "black"}}]}}; the '
             "matrix CSV must be a long table with columns x, y, value where x and "
             "y are INTEGER indices 0..n-1 (row/column position, not variable "
             "names) and there are exactly n*n rows.\n"

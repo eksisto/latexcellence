@@ -94,8 +94,9 @@ bib_manager 的 DOI 查询模块和 web_search 模块共享类似的**可插拔 
 | 模式 | 模块 |
 | --- | --- |
 | 逐段检查 + SSE 流式 | typo_check, expression_opt, terminology_check, code_review, paragraph_translate |
+| Agent + SSE 流式 | template_gen, plot_gen |
 | 多轮对话 | writing_chat |
-| 单次请求-响应 | formula_ocr, table_ocr, template_gen, style_modify, compile, git_diff, format_converter |
+| 单次请求-响应 | formula_ocr, table_ocr, style_modify, compile, git_diff, format_converter |
 | 无 LLM | compile（编译本身） |
 
 ### 外部依赖

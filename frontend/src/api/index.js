@@ -306,19 +306,9 @@ export const api = {
 
   /* ---- 模板生成 ---- */
   templateGen: {
-    generate: (data) =>
-      request("/template-gen/generate", {
-        method: "POST",
-        body: JSON.stringify({ ...data, language: getUiLanguage() }),
-      }),
-    save: (data) =>
-      request("/template-gen/save", {
-        method: "POST",
-        body: JSON.stringify(data),
-      }),
     /* 自主 Agent 生成（SSE 流式） */
-    agentGenerate: async ({ description, language, onEvent, onError }) => {
-      const res = await fetch(`${BASE_URL}/template-gen/agent/generate`, {
+    generate: async ({ description, language, onEvent, onError }) => {
+      const res = await fetch(`${BASE_URL}/template-gen/generate`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -332,16 +322,16 @@ export const api = {
       }
       await consumeSse(res, onEvent, onError);
     },
-    agentFiles: (sessionId) =>
+    files: (sessionId) =>
       request(
-        `/template-gen/agent/files?session_id=${encodeURIComponent(sessionId)}`,
+        `/template-gen/files?session_id=${encodeURIComponent(sessionId)}`,
       ),
-    agentFile: (sessionId, path) =>
+    file: (sessionId, path) =>
       request(
-        `/template-gen/agent/file?session_id=${encodeURIComponent(sessionId)}&path=${encodeURIComponent(path)}`,
+        `/template-gen/file?session_id=${encodeURIComponent(sessionId)}&path=${encodeURIComponent(path)}`,
       ),
-    agentDownload: (sessionId) => {
-      const url = `${BASE_URL}/template-gen/agent/download?session_id=${encodeURIComponent(sessionId)}`;
+    download: (sessionId) => {
+      const url = `${BASE_URL}/template-gen/download?session_id=${encodeURIComponent(sessionId)}`;
       const a = document.createElement("a");
       a.href = url;
       a.download = "";

@@ -1,162 +1,129 @@
 """
-模板生成业务逻辑。
+模板生成业务编排。
 
-根据用户描述生成 LaTeX 模板，包含：
-    - documentclass + preamble（包导入、配置）
-    - body 结构（section 骨架和推荐内容）
-    - 使用说明
+本模块遵循分层约束：router.py（薄路由） → service.py（业务逻辑/LLM 编排） →
+agent.py（Function Calling Agent 主循环与工具执行）。
+
+- generate()：创建沙箱工作区后驱动自主 Agent（SSE 事件流），并向上转发事件
+- list_session_files / read_session_file / zip_session：Agent 产物浏览与打包下载
 """
 
+import io
+import uuid
+import zipfile
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, AsyncIterator
 
-from pydantic import BaseModel
-
-from backend.core.logger import get_logger
-from backend.core.llm_client import get_llm_client
 from backend.core.config import get_config
-from backend.core.prompts import get_prompt
-from backend.utils.json_utils import retry_with_validation
+from backend.core.logger import get_logger
+from backend.modules.template_gen.agent import (
+    get_template_agent_service,
+    load_sandbox,
+    safe_read_sandbox_file,
+)
 
-
-class SectionSkeleton(BaseModel):
-    """模板节骨架"""
-
-    section: str
-    suggested_content: str = ""
-
-
-class TemplateGenResult(BaseModel):
-    """LLM 模板生成输出——对应 DEVELOPMENT.md §2.1 JSON 协议"""
-
-    template_name: str
-    preamble: str = ""
-    body_structure: list[SectionSkeleton] = []
-    packages: list[str] = []
-    explanation: str = ""
+logger = get_logger(__name__)
 
 
 class TemplateGenService:
-    """
-    模板生成服务。
+    """模板生成业务编排（单例）。"""
 
-    用法：
-        svc = TemplateGenService()
-        result = await svc.generate_template("a CVPR-style paper")
-    """
+    # ── 自主 Agent 生成 ──────────────────────────────────────────────
 
-    def __init__(self):
-        self._logger = get_logger("template_gen")
-
-    async def generate_template(
-        self, description: str, language: str = "zh", llm=None
-    ) -> dict[str, Any]:
+    async def generate(
+        self,
+        description: str,
+        language: str = "zh",
+        *,
+        llm: Any | None = None,
+    ) -> AsyncIterator[dict[str, Any]]:
         """
-        根据用户描述生成 LaTeX 模板。
+        创建沙箱并驱动自主 Agent 生成完整 LaTeX 工程，SSE 事件流。
 
         参数：
-            description: 用户对所需模板的描述
-            llm: 可选的 LLM 客户端（测试用）
-
-        返回：
-            包含 template_name / preamble / body_structure / packages / explanation 的 dict
+            description: 用户对模板的自然语言描述
+            language: 输出语言（注入 system prompt）
+            llm: 可选 LLM 客户端（测试注入用）
         """
         cfg = get_config()
 
-        if not cfg.llm.api_key:
-            self._logger.warning("No API key configured, returning empty template")
-            return {
-                "template_name": "empty",
-                "preamble": r"\documentclass{article}",
-                "body_structure": [],
-                "packages": [],
-                "explanation": "No API key configured.",
-            }
-
-        if llm is None:
-            llm = get_llm_client()
-        system_prompt = get_prompt(
-            "template_gen", "single_generation_system", language=language
-        )
-        messages = [
-            {"role": "system", "content": system_prompt},
-            {
-                "role": "user",
-                "content": (
-                    f"Please generate a LaTeX template for the following requirement:\n\n"
-                    f"{description}\n\n"
-                    f"Make sure the template is complete and ready to use."
-                ),
-            },
-        ]
-
-        try:
-            validated: TemplateGenResult = await retry_with_validation(
-                chat_fn=llm.chat,
-                messages=messages,
-                model_cls=TemplateGenResult,
-                max_retries=3,
-                logger_name="template_gen",
-                temperature=0.3,
-                max_tokens=2048,
-                response_format={"type": "json_object"},
-            )
-
-            return validated.model_dump()
-
-        except ValueError as e:
-            self._logger.error(f"Template generation failed: {e}")
-            raise RuntimeError(f"Template generation failed: {e}")
-        except Exception as e:
-            self._logger.error(f"Template generation error: {e}")
-            raise RuntimeError(f"Template generation failed: {e}")
-
-    async def save_template(self, template: dict[str, Any]) -> dict[str, Any]:
-        """
-        将生成的模板保存为 .tex 文件。
-
-        参数：
-            template: generate_template 返回的完整结果
-
-        返回：
-            { "saved": true, "file_path": "..." }
-        """
-        cfg = get_config()
+        # 创建沙箱工作区
         output_dir = Path(cfg.features.template_gen.output_dir)
         if not output_dir.is_absolute():
             output_dir = Path.cwd() / output_dir
-        output_dir.mkdir(parents=True, exist_ok=True)
+        session_id = uuid.uuid4().hex[:12]
+        sandbox = output_dir / "agent" / session_id
+        sandbox.mkdir(parents=True, exist_ok=True)
+        logger.info(f"Agent sandbox has been created: {sandbox}")
 
-        name = template.get("template_name", "untitled")
-        safe_name = "".join(c if c.isalnum() or c in "-_" else "_" for c in name)
-        file_path = output_dir / f"{safe_name}.tex"
+        agent = get_template_agent_service()
+        async for event in agent.generate(
+            description,
+            language,
+            sandbox=sandbox,
+            llm=llm,
+        ):
+            yield event
 
-        content = self._assemble_template(template)
-        file_path.write_text(content, encoding="utf-8")
+    # ── 产物浏览 ─────────────────────────────────────────────────────
 
-        self._logger.info(f"Saved template to {file_path}")
-        return {
-            "saved": True,
-            "file_path": str(file_path),
-            "content": content,
-        }
+    def list_session_files(self, session_id: str) -> dict[str, Any]:
+        """列出某次 Agent 生成产出的文件树。"""
+        cfg = get_config()
+        sandbox = self._load_sandbox(cfg, session_id)
 
-    def _assemble_template(self, template: dict[str, Any]) -> str:
-        """将模板各部分组装为完整 .tex 源码。"""
-        lines = []
-        lines.append(template.get("preamble", r"\documentclass{article}"))
-        lines.append("")
-        lines.append(r"\begin{document}")
-        lines.append("")
+        files: list[dict[str, Any]] = []
+        root = sandbox.resolve()
+        for p in sorted(root.rglob("*")):
+            if not p.is_file():
+                continue
+            rel = p.relative_to(root).as_posix()
+            files.append({"path": rel, "size": p.stat().st_size})
+        return {"session_id": session_id, "sandbox": str(sandbox), "files": files}
 
-        sections = template.get("body_structure", [])
-        for sec in sections:
-            title = sec.get("section", "Untitled")
-            hint = sec.get("suggested_content", "")
-            lines.append(r"\section{" + title + "}")
-            if hint:
-                lines.append(f"% {hint}")
-            lines.append("")
+    def read_session_file(self, session_id: str, rel_path: str) -> dict[str, Any]:
+        """读取沙箱内单个文件内容。"""
+        cfg = get_config()
+        sandbox = self._load_sandbox(cfg, session_id)
 
-        lines.append(r"\end{document}")
-        return "\n".join(lines)
+        content, err = safe_read_sandbox_file(sandbox, rel_path)
+        if err is not None:
+            raise ValueError(err)
+        return {"session_id": session_id, "path": rel_path, "content": content}
+
+    def zip_session(self, session_id: str) -> tuple[bytes, str]:
+        """将沙箱内所有文件打包为 ZIP，返回 (bytes, 下载文件名)。"""
+        cfg = get_config()
+        sandbox = self._load_sandbox(cfg, session_id)
+
+        root = sandbox.resolve()
+        files = [p for p in sorted(root.rglob("*")) if p.is_file()]
+        if not files:
+            raise ValueError("No files in sandbox")
+
+        buf = io.BytesIO()
+        with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+            for p in files:
+                arcname = p.relative_to(root).as_posix()
+                zf.write(p, arcname)
+                logger.debug("ZIP included: %s", arcname)
+        return buf.getvalue(), f"latex-template-{session_id[:8]}.zip"
+
+    # ── 内部辅助 ─────────────────────────────────────────────────────
+
+    def _load_sandbox(self, cfg: Any, session_id: str) -> Path:
+        """解析沙箱路径并校验存在性（不存在时抛出 ValueError）。"""
+        sandbox = load_sandbox(cfg.features.template_gen.output_dir, session_id)
+        if not sandbox.exists():
+            raise ValueError("Session not found")
+        return sandbox
+
+
+_service: "TemplateGenService | None" = None
+
+
+def get_template_gen_service() -> TemplateGenService:
+    global _service
+    if _service is None:
+        _service = TemplateGenService()
+    return _service

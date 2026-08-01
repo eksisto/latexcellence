@@ -80,7 +80,6 @@ class TemplateGenConfig(BaseModel):
     enabled: bool = True  # 是否启用
     output_dir: str = "templates/"  # 生成模板的输出目录
     # ── 自主生成 Agent 配置 ──
-    agent_enabled: bool = True  # 是否启用自主 Agent（关闭则回退到旧的单次生成）
     agent_max_rounds: int = Field(30, ge=1, le=50)  # Agent 最大工具调用轮数（防发散）
     agent_max_files: int = Field(30, ge=1, le=200)  # 单次生成的最大文件数
     agent_max_file_size_kb: int = Field(512, ge=1)  # 单个文件大小上限（KB）
@@ -296,7 +295,6 @@ class PlotGenConfig(BaseModel):
 
     enabled: bool = True
     output_dir: str = "plots/"
-    agent_enabled: bool = True
     agent_max_rounds: int = Field(20, ge=1, le=50)
     agent_max_files: int = Field(30, ge=1, le=200)
     agent_max_file_size_kb: int = Field(1024, ge=1)

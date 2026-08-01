@@ -39,7 +39,6 @@
     "template_gen": {
       "enabled": true,
       "output_dir": "templates/",
-      "agent_enabled": true,
       "agent_max_rounds": 30,
       "agent_max_files": 30,
       "agent_max_file_size_kb": 512,
@@ -107,7 +106,6 @@
     "plot_gen": {
       "enabled": true,
       "output_dir": "plots/",
-      "agent_enabled": true,
       "agent_max_rounds": 20,
       "agent_max_files": 30,
       "agent_max_file_size_kb": 1024,

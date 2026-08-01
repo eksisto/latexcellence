@@ -92,9 +92,6 @@ class PlotGenAgent:
         if not cfg.llm.api_key and llm is None:
             yield {"type": "error", "message": "No API key configured"}
             return
-        if not cfg.features.plot_gen.agent_enabled:
-            yield {"type": "error", "message": "Agent mode disabled by config"}
-            return
 
         if llm is None:
             llm = get_llm_client()

@@ -20,7 +20,7 @@
 | `test_api/test_typo_check.py` | 模型校验、LLM mock、marker 保护、写回 |
 | `test_api/test_expression_opt.py` | 模型校验、LLM mock、marker 保护、prompt CRUD |
 | `test_api/test_terminology_check.py` | 模型校验、LLM mock、聚类逻辑、写回 |
-| `test_api/test_template_gen.py` | 模型校验、LLM mock、模板组装、保存 |
+| `test_api/test_template_gen.py` | Agent 循环、沙箱路径校验、编译错误解析、失败警告 |
 | `test_api/test_formula_ocr.py` | 模型校验、图片校验、预处理、LLM mock |
 | `test_api/test_table_ocr.py` | 模型校验、图片校验、LLM mock |
 | `test_api/test_code_review.py` | 模型校验、preview 原始 LaTeX、LLM mock、写回 |

@@ -47,7 +47,6 @@ const EXACT_MAP = {
   "Session not found": "sessionNotFound",
   "Diff PDF not found": "diffPdfNotFound",
   "No trace recorded for this session": "noTraceRecorded",
-  "Agent mode disabled by config": "plotGenAgentDisabled",
   "Data profile is missing": "plotGenDataProfileMissing",
   "Session meta not found": "plotGenSessionMetaNotFound",
   "session_id cannot be empty": "plotGenSessionIdEmpty",

@@ -2,20 +2,25 @@
 模板生成自主 Agent。
 
 设计目标：
-    将"单次 LLM 出一个 .tex 骨架"升级为基于 Function Calling 的自主 Agent：
+    基于 Function Calling 的自主 Agent 生成完整 LaTeX 工程：
     Agent 自主规划文件结构 → 逐个 write_file → 调用 compile_latex 验证 →
     读取编译日志 → 修正错误 → 再编译，最多 N 轮，最终产出一个完整可编译的多文件
     LaTeX 项目。
 
+模块分层：
+    本文件包含 Function Calling Agent 主循环、工具 schema 构建与工具执行器；
+    沙箱创建与业务编排在 service.py（TemplateGenService）中完成，
+    service.generate() 创建沙箱后调用本类的 generate() 驱动 Agent 循环。
+
 工具体系（session 级私有）：
-    工具 schema 由本服务动态构建并随 chat_with_tools 注入，执行函数在沙箱目录内
+    工具 schema 由本类动态构建并随 chat_with_tools 注入，执行函数在沙箱目录内
     操作。不注册到全局 ToolRegistry——因为这些工具绑定到一次性沙箱目录，注册成
     全局能力会污染其他模块（如 writing_chat）的工具集。
 
 沙箱与路径安全：
-    每次生成在 `output_dir/agent/<session_id>/` 下创建独立目录，所有 file_path
-    参数经 _resolve_sandbox_path 校验：禁止绝对路径、禁止 '..'、解析后必须仍在
-    沙箱内、扩展名白名单限制为 LaTeX 相关文件。
+    每次生成由 service.py 在 `output_dir/agent/<session_id>/` 下创建独立目录，
+    所有 file_path 参数经 _resolve_sandbox_path 校验：禁止绝对路径、禁止 '..'、
+    解析后必须仍在沙箱内、扩展名白名单限制为 LaTeX 相关文件。
 
 事件流（SSE）：
     {"type":"plan","content":"..."}               Agent 的思考/说明文本
@@ -38,7 +43,6 @@ import asyncio
 import json
 import re
 import shutil
-import uuid
 from pathlib import Path
 from typing import Any, AsyncIterator, Callable
 
@@ -80,6 +84,7 @@ class TemplateAgentService:
         description: str,
         language: str = "zh",
         *,
+        sandbox: Path,
         llm: Any | None = None,
     ) -> AsyncIterator[dict[str, Any]]:
         """
@@ -88,6 +93,7 @@ class TemplateAgentService:
         参数：
             description: 用户对模板的自然语言描述
             language: 输出语言（注入 system prompt）
+            sandbox: 由 service.py 创建的沙箱目录（`output_dir/agent/<session_id>/`）
             llm: 可选 LLM 客户端（测试注入用）
         """
         cfg = get_config()
@@ -95,27 +101,16 @@ class TemplateAgentService:
             yield {"type": "error", "message": "No API key configured"}
             return
 
-        if not cfg.features.template_gen.agent_enabled:
-            yield {"type": "error", "message": "Agent mode disabled by config"}
-            return
-
         if llm is None:
             llm = get_llm_client()
 
-        # 1. 创建沙箱工作区
-        output_dir = Path(cfg.features.template_gen.output_dir)
-        if not output_dir.is_absolute():
-            output_dir = Path.cwd() / output_dir
-        session_id = uuid.uuid4().hex[:12]
-        sandbox = output_dir / "agent" / session_id
-        sandbox.mkdir(parents=True, exist_ok=True)
-        self._logger.info(f"Agent sandbox has been created: {sandbox}")
+        session_id = sandbox.name
 
-        # 2. 构造工具 schema 与执行器
+        # 1. 构造工具 schema 与执行器
         tools = self._build_tools_schema(cfg)
         executor = _ToolExecutor(sandbox, cfg, self._logger)
 
-        # 3. 构造 messages
+        # 2. 构造 messages
         system_prompt = get_prompt(
             "template_gen",
             "agent_system",
@@ -140,7 +135,7 @@ class TemplateAgentService:
             },
         ]
 
-        # 4. Agent 循环
+        # 3. Agent 循环
         max_rounds = cfg.features.template_gen.agent_max_rounds
         final_summary = ""
         # 跟踪编译状态：不允许 Agent 在最后一次编译仍失败时静默 finish
@@ -271,7 +266,7 @@ class TemplateAgentService:
                     ),
                 }
 
-        # 5. 汇总文件
+        # 4. 汇总文件
         files = executor.list_files()
         yield {
             "type": "done",

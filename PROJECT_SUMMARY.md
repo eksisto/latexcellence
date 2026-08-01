@@ -66,7 +66,7 @@ latexcellence/
 │       ├── code_review/              # LaTeX 代码审查
 │       ├── compile/                 # 自动编译
 │       ├── git_diff/                # Git 差异高亮
-│       ├── template_gen/            # 模板生成（含自主 Agent）
+│       ├── template_gen/            # 模板生成（自主 Agent）
 │       ├── formula_ocr/             # 公式 OCR
 │       ├── table_ocr/               # 表格 OCR
 │       ├── format_converter/        # 格式转换
@@ -157,8 +157,8 @@ latexcellence/
     - 普通 DOI 先查 Crossref 成功后用补全层合并空字段（`_merge()`），失败则串行降级
     - 配置通过 `config.json → features.bib_manager.providers` 独立开关每个数据源
 - **HTTP 全局配置**: `AppConfig.http.user_agent` 统一管理所有外部 HTTP 请求的 User-Agent，供 web_search 引擎和 bib_manager Provider 共用
-- **模板生成自主 Agent**: `TemplateAgentService` 基于 Function Calling 实现"写文件 → 编译验证 → 读日志 → 修错 → 再编译"的自主循环，产出完整可编译的多文件 LaTeX 工程。
-    - 工具（`write_file`/`read_file`/`list_files`/`compile_latex`/`finish`）为 session 级私有，schema 由 service 动态构建并经 `chat_with_tools` 注入，不注册到全局 `ToolRegistry` 避免污染其他模块工具集。
+- **模板生成自主 Agent**: 分层为 `service.py`（`TemplateGenService` 创建沙箱并编排）+ `agent.py`（`TemplateAgentService` Function Calling 主循环 + `_ToolExecutor` 工具执行），实现"写文件 → 编译验证 → 读日志 → 修错 → 再编译"的自主循环，产出完整可编译的多文件 LaTeX 工程。
+    - 工具（`write_file`/`read_file`/`list_files`/`compile_latex`/`finish`）为 session 级私有，schema 由 `TemplateAgentService._build_tools_schema` 动态构建并经 `chat_with_tools` 注入，不注册到全局 `ToolRegistry` 避免污染其他模块工具集。
     - 每次生成在 `output_dir/agent/<session_id>/` 创建独立沙箱，路径经 `_resolve_sandbox_path` 校验（禁绝对路径 / `..` / 非白名单扩展名 / 越界）。SSE 推送 `plan`/`tool_call`/`tool_result`/`compile`（含结构化 `errors` 列表）/`warning`（编译未过却 finish）/`done`/`error` 事件。
     - 编译失败时 `_extract_errors` 从日志中提取类型/文件/行号，`_format_error_analysis` 拼接聚焦摘要回传 LLM；prompt 中 COMPILATION ERROR RECOVERY PROTOCOL 强制 LLM 走 ANALYZE→READ→FIX→RECOMPILE 循环，禁止编译未过时调用 finish。
     - 沙箱自动清理由 `cleanup.py` 实现：`cleanup_expired_sandboxes()` 按目录内最新文件 mtime 与 `cleanup_retention_days` 比较判定过期，`cleanup_loop()` 作为 `asyncio` 后台任务在 FastAPI lifespan 中启动并按 `cleanup_interval_seconds` 周期扫描，删除过期目录，服务关闭时优雅取消。

@@ -75,7 +75,7 @@ export default function TemplateGenPage() {
     reset();
     setRunning(true);
     try {
-      await api.templateGen.agentGenerate({
+      await api.templateGen.generate({
         description: description.trim(),
         onEvent: (ev) => {
           if (ev.type === "error") {
@@ -109,7 +109,7 @@ export default function TemplateGenPage() {
       setSelectedFile(path);
       setLoadingFile(true);
       try {
-        const data = await api.templateGen.agentFile(sessionId, path);
+        const data = await api.templateGen.file(sessionId, path);
         setFileContent(data.content || "");
       } catch (e) {
         setFileContent(`// ${e.message}`);
@@ -322,7 +322,7 @@ export default function TemplateGenPage() {
                       variant="ghost"
                       size="sm"
                       className="h-6 px-1.5 text-xs gap-1"
-                      onClick={() => api.templateGen.agentDownload(sessionId)}
+                      onClick={() => api.templateGen.download(sessionId)}
                     >
                       <Download className="size-3" />
                       {t("pages:templateGen.downloadZip")}
