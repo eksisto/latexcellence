@@ -46,6 +46,12 @@ const EXACT_MAP = {
   "Message not found": "messageNotFound",
   "Session not found": "sessionNotFound",
   "Diff PDF not found": "diffPdfNotFound",
+  "No trace recorded for this session": "noTraceRecorded",
+  "Agent mode disabled by config": "plotGenAgentDisabled",
+  "Data profile is missing": "plotGenDataProfileMissing",
+  "Session meta not found": "plotGenSessionMetaNotFound",
+  "session_id cannot be empty": "plotGenSessionIdEmpty",
+  "session_id contains invalid characters": "plotGenSessionIdInvalid",
   "Invalid job id": "invalidJobId",
   "Missing content type": "missingContentType",
   "Main file must be a .tex file": "mainFileMustBeTex",
@@ -124,6 +130,26 @@ const PATTERN_MAP = [
     "imageTooLarge",
     (m) => ({ size: m[1], max: m[2] }),
   ],
+
+  // 配置校验
+  [
+    /^Config validation failed:\s*(.+)/,
+    "configValidationFailed",
+    (m) => ({ details: m[1] }),
+  ],
+
+  // 科研绘图
+  [
+    /^Scientific plotting failed:\s*(.+)/,
+    "plotGenGenerationFailed",
+    (m) => ({ error: m[1] }),
+  ],
+  [
+    /^Data rows exceed the limit:\s*(\d+) > (\d+)/,
+    "plotGenDataRowsExceeded",
+    (m) => ({ rows: m[1], max: m[2] }),
+  ],
+  [/^Failed to decode CSV/, "plotGenCsvDecodeFailed", () => ({})],
 
   // 文件上传
   [

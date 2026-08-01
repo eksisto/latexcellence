@@ -15,10 +15,11 @@ import sys
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
+from pydantic import ValidationError
 import uvicorn
 
 from backend.core.config import load_config, get_config, update_config_from_dict
@@ -42,6 +43,7 @@ from backend.modules.paragraph_translate.router import (
 )
 from backend.modules.writing_chat.router import router as writing_chat_router
 from backend.modules.bib_manager.router import router as bib_manager_router
+from backend.modules.plot_gen.router import router as plot_gen_router
 from backend.utils.search_router import router as search_router
 
 
@@ -56,6 +58,7 @@ async def lifespan(app: FastAPI):
     logger.info("Starting LaTeXcellence server")
 
     from backend.modules.template_gen.cleanup import cleanup_loop
+    from backend.modules.plot_gen.cleanup import cleanup_loop as plot_cleanup_loop
     from backend.utils.scholarly_research import (
         close_research_http_client,
         initialize_research_http_client,
@@ -63,12 +66,18 @@ async def lifespan(app: FastAPI):
 
     await initialize_research_http_client()
     cleanup_task = asyncio.create_task(cleanup_loop())
+    plot_cleanup_task = asyncio.create_task(plot_cleanup_loop())
     try:
         yield
     finally:
         cleanup_task.cancel()
+        plot_cleanup_task.cancel()
         try:
             await cleanup_task
+        except asyncio.CancelledError:
+            pass
+        try:
+            await plot_cleanup_task
         except asyncio.CancelledError:
             pass
         await close_research_http_client()
@@ -136,6 +145,7 @@ async def config_status():
                 "paragraph_translate",
                 "writing_chat",
                 "bib_manager",
+                "plot_gen",
             ]
         }
         | {
@@ -176,7 +186,17 @@ async def update_config(payload: dict):
     更新配置并持久化到 config.json。
     支持部分更新——只需传入需要修改的字段即可。
     """
-    update_config_from_dict(payload)
+    try:
+        update_config_from_dict(payload)
+    except ValidationError as exc:
+        details = "; ".join(
+            f"{'.'.join(str(part) for part in error['loc'])}: {error['msg']}"
+            for error in exc.errors()
+        )
+        get_logger("main").warning("Config validation failed: %s", details)
+        raise HTTPException(
+            status_code=400, detail=f"Config validation failed: {details}"
+        )
     return {"status": "ok"}
 
 
@@ -197,6 +217,7 @@ app.include_router(paragraph_translate_router)
 app.include_router(search_router)
 app.include_router(writing_chat_router)
 app.include_router(bib_manager_router)
+app.include_router(plot_gen_router)
 
 
 def main():

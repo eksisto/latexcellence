@@ -24,6 +24,7 @@ import {
   BookMarked,
   Languages,
   GraduationCap,
+  BarChart3,
 } from "lucide-react";
 import useEnabledFeatures from "@/hooks/useEnabledFeatures";
 
@@ -63,6 +64,13 @@ const featureGroups = [
         to: "/template-gen",
         icon: FileText,
         id: "template_gen",
+      },
+      {
+        titleKey: "plotGen.title",
+        descKey: "plotGen.desc",
+        to: "/plot-gen",
+        icon: BarChart3,
+        id: "plot_gen",
       },
       {
         titleKey: "bibManager.title",

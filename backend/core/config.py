@@ -291,6 +291,28 @@ class BibManagerConfig(BaseModel):
     providers: BibProvidersConfig = BibProvidersConfig()  # DOI 数据源配置
 
 
+class PlotGenConfig(BaseModel):
+    """科研绘图 Agent 配置"""
+
+    enabled: bool = True
+    output_dir: str = "plots/"
+    agent_enabled: bool = True
+    agent_max_rounds: int = Field(30, ge=1, le=50)
+    agent_max_files: int = Field(30, ge=1, le=200)
+    agent_max_file_size_kb: int = Field(1024, ge=1)
+    max_data_size_mb: int = Field(50, ge=1)
+    max_data_rows: int = Field(1_000_000, ge=1)
+    sandbox_exec_timeout: int = Field(60, ge=1)
+    sandbox_max_stdout_chars: int = Field(8000, ge=500)
+    python_interpreter: str = ""
+    tikz_compile_enabled: bool = True
+    tikz_compile_timeout: int = Field(120, ge=1)
+    default_style: str = "nature"
+    cleanup_enabled: bool = True
+    cleanup_interval_seconds: int = Field(3600, ge=60)
+    cleanup_retention_days: int = Field(7, ge=1)
+
+
 class FunctionCallingConfig(BaseModel):
     """Function Calling 工具配置（全局工具，LLM 自主调用）"""
 
@@ -317,6 +339,7 @@ class FeaturesConfig(BaseModel):
     paragraph_translate: ParagraphTranslateConfig = ParagraphTranslateConfig()
     writing_chat: WritingChatConfig = WritingChatConfig()
     bib_manager: BibManagerConfig = BibManagerConfig()
+    plot_gen: PlotGenConfig = PlotGenConfig()
     function_calling: FunctionCallingConfig = FunctionCallingConfig()
 
 

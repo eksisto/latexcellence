@@ -82,6 +82,7 @@ latexcellence/
 │       ├── formula_ocr/            # 公式识别
 │       ├── table_ocr/              # 表格识别
 │       ├── template_gen/           # 模板生成
+│       ├── plot_gen/               # 科研绘图 Agent
 │       ├── code_review/            # LaTeX 代码审查
 │       ├── compile/                # 自动编译
 │       ├── format_converter/       # 文档格式转换

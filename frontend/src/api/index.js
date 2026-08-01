@@ -47,6 +47,65 @@ function appendWs(url, workspaceId) {
   return `${url}${sep}workspace_id=${encodeURIComponent(workspaceId)}`;
 }
 
+async function consumeSse(res, onEvent, onError) {
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder("utf-8");
+  let buffer = "";
+  while (true) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    let idx;
+    while ((idx = buffer.indexOf("\n\n")) !== -1) {
+      const frame = buffer.slice(0, idx);
+      buffer = buffer.slice(idx + 2);
+      if (!frame.startsWith("data:")) continue;
+      const jsonStr = frame.slice(5).trim();
+      if (!jsonStr) continue;
+      try {
+        if (onEvent) onEvent(JSON.parse(jsonStr));
+      } catch (e) {
+        if (onError) onError(e);
+      }
+    }
+  }
+  if (buffer.startsWith("data:")) {
+    const jsonStr = buffer.slice(5).trim();
+    if (jsonStr) {
+      try {
+        if (onEvent) onEvent(JSON.parse(jsonStr));
+      } catch (e) {
+        if (onError) onError(e);
+      }
+    }
+  }
+}
+
+/**
+ * 下载文件（fetch + blob），失败时抛出已翻译的错误
+ * @param {string} url  下载地址
+ * @param {string} fallbackName  无 Content-Disposition 时的兜底文件名
+ */
+async function downloadBlob(url, fallbackName) {
+  const res = await fetch(url);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }));
+    throw new Error(translateError(err.detail || `HTTP ${res.status}`));
+  }
+  const blob = await res.blob();
+  const cd = res.headers.get("content-disposition") || "";
+  const match = /filename="?([^";]+)"?/i.exec(cd);
+  const filename = (match && match[1]) || fallbackName;
+  const objectUrl = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = objectUrl;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(objectUrl);
+}
+
 /**
  * 通用请求函数
  * @param {string} url     API 路径（如 "/health"）
@@ -271,38 +330,7 @@ export const api = {
         const err = await res.json().catch(() => ({ detail: res.statusText }));
         throw new Error(translateError(err.detail || `HTTP ${res.status}`));
       }
-      const reader = res.body.getReader();
-      const decoder = new TextDecoder("utf-8");
-      let buffer = "";
-      while (true) {
-        const { value, done } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-        let idx;
-        while ((idx = buffer.indexOf("\n\n")) !== -1) {
-          const frame = buffer.slice(0, idx);
-          buffer = buffer.slice(idx + 2);
-          if (!frame.startsWith("data:")) continue;
-          const jsonStr = frame.slice(5).trim();
-          if (!jsonStr) continue;
-          try {
-            const event = JSON.parse(jsonStr);
-            if (onEvent) onEvent(event);
-          } catch (e) {
-            if (onError) onError(e);
-          }
-        }
-      }
-      if (buffer.startsWith("data:")) {
-        const jsonStr = buffer.slice(5).trim();
-        if (jsonStr) {
-          try {
-            if (onEvent) onEvent(JSON.parse(jsonStr));
-          } catch (e) {
-            if (onError) onError(e);
-          }
-        }
-      }
+      await consumeSse(res, onEvent, onError);
     },
     agentFiles: (sessionId) =>
       request(
@@ -582,6 +610,78 @@ export const api = {
     },
   },
 
+  /* ---- 科研绘图 Agent ---- */
+  plotGen: {
+    upload: (formData) => requestForm("/plot-gen/upload", formData),
+    styles: () => request("/plot-gen/styles"),
+    generate: async ({
+      sessionId,
+      description,
+      style,
+      signal,
+      onEvent,
+      onError,
+    }) => {
+      const res = await fetch(`${BASE_URL}/plot-gen/agent/generate`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          session_id: sessionId,
+          description,
+          style,
+          language: getUiLanguage(),
+        }),
+        signal,
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ detail: res.statusText }));
+        throw new Error(translateError(err.detail || `HTTP ${res.status}`));
+      }
+      await consumeSse(res, onEvent, onError);
+    },
+    refine: async ({ sessionId, message, signal, onEvent, onError }) => {
+      const res = await fetch(
+        `${BASE_URL}/plot-gen/sessions/${encodeURIComponent(sessionId)}/refine`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            message,
+            language: getUiLanguage(),
+          }),
+          signal,
+        },
+      );
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ detail: res.statusText }));
+        throw new Error(translateError(err.detail || `HTTP ${res.status}`));
+      }
+      await consumeSse(res, onEvent, onError);
+    },
+    files: (sessionId) =>
+      request(`/plot-gen/sessions/${encodeURIComponent(sessionId)}/files`),
+    file: (sessionId, path) =>
+      request(
+        `/plot-gen/sessions/${encodeURIComponent(sessionId)}/file?path=${encodeURIComponent(path)}`,
+      ),
+    preview: (sessionId, path) =>
+      `${BASE_URL}/plot-gen/sessions/${encodeURIComponent(sessionId)}/preview?path=${encodeURIComponent(path)}`,
+    trace: (sessionId) =>
+      request(`/plot-gen/sessions/${encodeURIComponent(sessionId)}/trace`),
+    downloadTrace: async (sessionId) => {
+      await downloadBlob(
+        `${BASE_URL}/plot-gen/sessions/${encodeURIComponent(sessionId)}/trace/download`,
+        `plot-gen-${sessionId.slice(0, 8)}-trace.json`,
+      );
+    },
+    download: async (sessionId) => {
+      await downloadBlob(
+        `${BASE_URL}/plot-gen/sessions/${encodeURIComponent(sessionId)}/download`,
+        `plot-gen-${sessionId.slice(0, 8)}.zip`,
+      );
+    },
+  },
+
   /* ---- 写作助手 Chat ---- */
   writingChat: {
     send: async ({
@@ -616,28 +716,7 @@ export const api = {
         const err = await res.json().catch(() => ({ detail: res.statusText }));
         throw new Error(translateError(err.detail || `HTTP ${res.status}`));
       }
-      const reader = res.body.getReader();
-      const decoder = new TextDecoder("utf-8");
-      let buffer = "";
-      while (true) {
-        const { value, done } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-        let idx;
-        while ((idx = buffer.indexOf("\n\n")) !== -1) {
-          const frame = buffer.slice(0, idx);
-          buffer = buffer.slice(idx + 2);
-          if (!frame.startsWith("data:")) continue;
-          const jsonStr = frame.slice(5).trim();
-          if (!jsonStr) continue;
-          try {
-            const event = JSON.parse(jsonStr);
-            if (onEvent) onEvent(event);
-          } catch (e) {
-            if (onError) onError(e);
-          }
-        }
-      }
+      await consumeSse(res, onEvent, onError);
     },
     generateEdit: (data, workspaceId) =>
       request(appendWs("/writing-chat/generate-edit", workspaceId), {

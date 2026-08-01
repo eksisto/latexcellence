@@ -38,6 +38,7 @@ const ParagraphTranslatePage = lazy(
 );
 const WritingChatPage = lazy(() => import("./pages/WritingChatPage"));
 const BibManagerPage = lazy(() => import("./pages/BibManagerPage"));
+const PlotGenPage = lazy(() => import("./pages/PlotGenPage"));
 
 const bgSvg = (
   <svg
@@ -137,6 +138,7 @@ export default function App() {
             />
             <Route path="/writing-chat" element={<WritingChatPage />} />
             <Route path="/bib-manager" element={<BibManagerPage />} />
+            <Route path="/plot-gen" element={<PlotGenPage />} />
           </Routes>
         </Suspense>
       </BrowserRouter>

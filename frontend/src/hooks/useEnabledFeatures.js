@@ -18,6 +18,7 @@ const ALL_ENABLED = {
   paragraph_translate: true,
   writing_chat: true,
   bib_manager: true,
+  plot_gen: true,
   project_tools: true,
   web_search: true,
   scholarly_research: true,

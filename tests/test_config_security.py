@@ -298,3 +298,23 @@ class TestOpenAlexKeyMasking:
         ]["openalex"]["api_key"]
         assert masked == "***1234"
         assert "openalex-secret" not in json.dumps(response)
+
+
+class TestConfigApiValidation:
+    @pytest.mark.asyncio
+    async def test_invalid_plot_rounds_returns_400(self, tmp_path):
+        """越界的配置值应返回 400，而不是触发 500。"""
+        config_path = _write_config(tmp_path)
+        with mock.patch.dict(os.environ, {}, clear=True):
+            cfg_module.load_config(config_path)
+            from fastapi import HTTPException
+            from main import update_config
+
+            with pytest.raises(HTTPException) as exc_info:
+                await update_config(
+                    {"features": {"plot_gen": {"agent_max_rounds": 100}}}
+                )
+
+        assert exc_info.value.status_code == 400
+        assert "agent_max_rounds" in exc_info.value.detail
+        assert cfg_module.get_config().features.plot_gen.agent_max_rounds == 30

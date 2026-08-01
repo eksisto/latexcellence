@@ -162,6 +162,24 @@
 
 ---
 
+### 科研绘图 Agent
+
+定义在 `backend/modules/plot_gen/agent.py`，由 `PlotGenAgent._build_tools_schema()` 构建，**不注册到全局 ToolRegistry**。工具在 `plots/<session_id>/` 沙箱内运行，通过 `PlotExecutor` 私有类分发。
+
+| # | 名称 | 描述 | 必填参数 | 条件 |
+|---|------|------|----------|------|
+| 1 | `write_file` | 在绘图沙箱中创建/覆写文件 | `file_path`, `content` | 始终 |
+| 2 | `read_file` | 读取沙箱文件 | `file_path` | 始终 |
+| 3 | `list_files` | 列出沙箱文件 | 无 | 始终 |
+| 4 | `python_sandbox` | 执行绘图脚本并返回 stdout/stderr 和产物 | `script_name` | 始终 |
+| 5 | `compile_tikz` | 编译 TikZ/PGFPlots 源文件 | `tikz_file` | `tikz_compile_enabled=true` |
+| 6 | `stats_test` | 执行 scipy 统计检验 | `data_file`, `test` | 始终 |
+| 7 | `list_styles` | 列出风格预设 | 无 | 始终 |
+| 8 | `apply_style` | 切换当前风格 | `style` | 始终 |
+| 9 | `finish` | 标记会话完成 | `summary` | 始终 |
+
+---
+
 ### 写作助手专属工具
 
 由 `WritingChatService._get_enabled_tools()` 直接定义 schema 并在工具循环中内联处理，**不注册到全局 ToolRegistry**。仅写作助手模块可用。

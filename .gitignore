@@ -40,3 +40,5 @@ templates/
 writing_chat_sessions/
 ## BibTeX entries
 formats/
+## Plot Gen
+plots/

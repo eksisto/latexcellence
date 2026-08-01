@@ -116,6 +116,7 @@ export default function SettingsDialog() {
         paragraph_translate: config.features.paragraph_translate.enabled,
         writing_chat: config.features.writing_chat.enabled,
         bib_manager: config.features.bib_manager.enabled,
+        plot_gen: config.features.plot_gen.enabled,
         project_tools: config.features.function_calling.project_tools.enabled,
         web_search: config.features.function_calling.web_search.enabled,
         scholarly_research:
@@ -612,6 +613,94 @@ export default function SettingsDialog() {
               checked={config.features.bib_manager.enabled}
               onChange={(v) => set("features.bib_manager.enabled", v)}
             />
+            <CheckboxField
+              label={t("settings.featurePlotGen")}
+              checked={config.features.plot_gen.enabled}
+              onChange={(v) => set("features.plot_gen.enabled", v)}
+            />
+            {config.features.plot_gen.enabled && (
+              <div className="ml-6 space-y-2 rounded-md border p-2.5 bg-muted/40">
+                <CheckboxField
+                  label={t("settings.plotGenAgentEnabled")}
+                  checked={config.features.plot_gen.agent_enabled}
+                  onChange={(v) => set("features.plot_gen.agent_enabled", v)}
+                />
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="space-y-1">
+                    <Label className="text-xs">
+                      {t("settings.plotGenMaxRounds")}
+                    </Label>
+                    <Input
+                      type="number"
+                      min="1"
+                      max="50"
+                      value={config.features.plot_gen.agent_max_rounds}
+                      onChange={(e) =>
+                        set(
+                          "features.plot_gen.agent_max_rounds",
+                          Math.min(
+                            Math.max(parseInt(e.target.value, 10) || 30, 1),
+                            50,
+                          ),
+                        )
+                      }
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs">
+                      {t("settings.plotGenExecTimeout")}
+                    </Label>
+                    <Input
+                      type="number"
+                      min="1"
+                      value={config.features.plot_gen.sandbox_exec_timeout}
+                      onChange={(e) =>
+                        set(
+                          "features.plot_gen.sandbox_exec_timeout",
+                          parseInt(e.target.value, 10) || 60,
+                        )
+                      }
+                    />
+                  </div>
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs">
+                    {t("settings.plotGenDefaultStyle")}
+                  </Label>
+                  <Select
+                    value={config.features.plot_gen.default_style}
+                    onValueChange={(v) =>
+                      set("features.plot_gen.default_style", v)
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {["nature", "science", "cell", "ieee", "acs"].map((s) => (
+                        <SelectItem key={s} value={s}>
+                          {s}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <CheckboxField
+                  label={t("settings.plotGenTikzCompile")}
+                  checked={config.features.plot_gen.tikz_compile_enabled}
+                  onChange={(v) =>
+                    set("features.plot_gen.tikz_compile_enabled", v)
+                  }
+                />
+                <CheckboxField
+                  label={t("settings.plotGenCleanup")}
+                  checked={config.features.plot_gen.cleanup_enabled}
+                  onChange={(v) =>
+                    set("features.plot_gen.cleanup_enabled", v)
+                  }
+                />
+              </div>
+            )}
           </ConfigSection>
 
           {/* Function Calling 工具 */}

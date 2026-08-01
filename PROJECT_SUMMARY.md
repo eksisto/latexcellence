@@ -74,6 +74,7 @@ latexcellence/
 │       ├── writing_chat/            # 写作助手聊天
 │       ├── bib_manager/             # 参考文献管理（含 DOI 多数据源查询、重复检测、文献库管理）
 │       │   └── providers/           # 可插拔 DOI 数据源提供者
+│       ├── plot_gen/                # 科研绘图 Agent（上传数据 -> 矢量图 + TikZ）
 │       └── project_router.py        # 项目管理路由
 │
 ├── frontend/
@@ -127,6 +128,7 @@ latexcellence/
 | style_modify | 自然语言修改样式 | router.py, service.py | ✓ | ✗ |
 | writing_chat | 写作助手对话（含联网搜索、学术检索与引文追踪、项目浏览、段落编辑和工具确认） | router.py, service.py, context.py, models.py, prompt_manager.py | ✓ | ✗ |
 | bib_manager | 参考文献管理 + DOI 多数据源查询 + 重复检测 + 文献库 | router.py, service.py, models.py, bib_parser.py, provider_manager.py, providers/ | ✓(DOI 查询不依赖 LLM) | ✗ |
+| plot_gen | 科研绘图 Agent（数据画像 -> 图表推荐 -> Python 执行 -> TikZ 编译） | router.py, service.py, agent.py, models.py, data_parser.py, recommender.py, styles.py, executor.py, sandbox_guard.py, trace.py, cleanup.py | ✓ | ✗ |
 
 ## 核心设计思路
 
@@ -160,6 +162,12 @@ latexcellence/
     - 每次生成在 `output_dir/agent/<session_id>/` 创建独立沙箱，路径经 `_resolve_sandbox_path` 校验（禁绝对路径 / `..` / 非白名单扩展名 / 越界）。SSE 推送 `plan`/`tool_call`/`tool_result`/`compile`（含结构化 `errors` 列表）/`warning`（编译未过却 finish）/`done`/`error` 事件。
     - 编译失败时 `_extract_errors` 从日志中提取类型/文件/行号，`_format_error_analysis` 拼接聚焦摘要回传 LLM；prompt 中 COMPILATION ERROR RECOVERY PROTOCOL 强制 LLM 走 ANALYZE→READ→FIX→RECOMPILE 循环，禁止编译未过时调用 finish。
     - 沙箱自动清理由 `cleanup.py` 实现：`cleanup_expired_sandboxes()` 按目录内最新文件 mtime 与 `cleanup_retention_days` 比较判定过期，`cleanup_loop()` 作为 `asyncio` 后台任务在 FastAPI lifespan 中启动并按 `cleanup_interval_seconds` 周期扫描，删除过期目录，服务关闭时优雅取消。
+- **科研绘图 Agent**: `PlotGenAgent` 基于 Function Calling 实现"数据画像 → 图表方案 → 写脚本 → Python 沙箱执行 → 错误回修 → TikZ 编译 → finish"的自主循环，支持上传 CSV/TSV/Excel/JSON 数据并输出 PDF/SVG/TikZ。
+    - 数据文件只进入 session 沙箱 `data/`，绘图脚本通过 `python_sandbox` 在 `plots/<session_id>/` 内运行；风格由 `styles.py` 后端注入，不依赖 LLM 手写样式。
+    - `python_sandbox` 执行前由 `sandbox_guard.py` 注入 `sys.addaudithook()` 审计钩子作为安全监听器：拦截读沙箱外文件、子进程/命令执行、网络访问、删除/修改系统文件与 ctypes 危险用法（进程句柄加载、按路径加载库、危险符号解析），并将 `TMPDIR`/`TEMP`/`TMP` 与 `MPLCONFIGDIR` 重定向进沙箱，避免正常绘图流程被误拦；属 Python 层纵深防御而非操作系统级沙箱。
+    - 工具集为 session 私有：`write_file`/`read_file`/`list_files`/`python_sandbox`/`compile_tikz`/`stats_test`/`list_styles`/`apply_style`/`finish`，不注册到全局 `ToolRegistry`。
+    - SSE 推送 `plan`/`data_profile`/`chart_plan`/`tool_call`/`tool_result`/`execution`/`tikz`/`warning`/`done`/`error` 事件；会话元数据和 messages 持久化在 `meta.json`，支持刷新后自然语言微调。
+    - 每次运行（生成/微调）的完整交互由 `trace.py` 按时间顺序追加到沙箱 `trace.jsonl`（`run_start`/`llm`/`tool_result`/`warning`/`error`/`run_end` 事件，含完整工具参数与回传 LLM 的结果），通过 `/api/plot-gen/sessions/{session_id}/trace` 查看或 `/trace/download` 导出 JSON，用于分析与改进 Agent。
 - **useParagraphCheck Hook**: TypoCheck/ExpressionOpt/CodeReview/TerminologyCheck/ParagraphTranslate 多页共享同一 hook 封装流程
 - **useEnabledFeatures Hook**: 从后端 `/api/config/status` 加载功能开关到 Zustand store，幂等（已加载则跳过）。WelcomePage 和 WorkspacePage 均调用此 hook，确保直接刷新任一页面时功能开关均可用
 - **Zustand Persist**: `partialize` 选择性持久化检查结果，支持刷新保留

@@ -28,6 +28,7 @@
 | 模块 | 文档 | 说明 |
 | --- | --- | --- |
 | 模板生成 | [template_gen.md](modules/template_gen.md) | 自主 Agent 规划并编译验证，生成可编译的多文件 LaTeX 工程 |
+| 科研绘图 | [plot_gen.md](modules/plot_gen.md) | 上传数据，生成可复现、可编辑的 PDF/SVG/TikZ 科研矢量图表 |
 | 文档格式转换 | [format_converter.md](modules/format_converter.md) | Markdown/DOCX/HTML 与 LaTeX 互转 |
 
 ### 项目管理模块

@@ -793,6 +793,19 @@ class TestScholarlyResearchToolEvent:
     def test_enabled_tools_include_scholarly_research(self, service, monkeypatch):
         research_cfg = get_config().features.function_calling.scholarly_research
         monkeypatch.setattr(research_cfg, "enabled", True)
+        mock_manager = MagicMock()
+        mock_manager.get_tools_schema.return_value = [
+            {"function": {"name": name}}
+            for name in (
+                "search_scholarly_works",
+                "get_work_details",
+                "find_related_works",
+            )
+        ]
+        monkeypatch.setattr(
+            "backend.utils.scholarly_research.get_research_manager",
+            lambda: mock_manager,
+        )
 
         names = [
             schema["function"]["name"]

@@ -104,6 +104,25 @@
         "semantic_scholar": { "enabled": false }
       }
     },
+    "plot_gen": {
+      "enabled": true,
+      "output_dir": "plots/",
+      "agent_enabled": true,
+      "agent_max_rounds": 30,
+      "agent_max_files": 30,
+      "agent_max_file_size_kb": 1024,
+      "max_data_size_mb": 50,
+      "max_data_rows": 1000000,
+      "sandbox_exec_timeout": 60,
+      "sandbox_max_stdout_chars": 8000,
+      "python_interpreter": "",
+      "tikz_compile_enabled": true,
+      "tikz_compile_timeout": 120,
+      "default_style": "nature",
+      "cleanup_enabled": true,
+      "cleanup_interval_seconds": 3600,
+      "cleanup_retention_days": 7
+    },
     "function_calling": {
       "web_search": {
         "enabled": true,
