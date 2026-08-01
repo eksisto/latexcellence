@@ -97,7 +97,6 @@
 | [colorcet](https://colorcet.holoviz.org) | >=3.1.0 | CC-BY-4.0 | Copyright (c) James A. Bednar (HoloViz) | 科研色板 |
 | [openpyxl](https://openpyxl.readthedocs.io) | >=3.1.0 | MIT | Copyright (c) openpyxl contributors (Eric Gazoni, Charlie Clark) | 读取 .xlsx 数据文件 |
 | [xlrd](https://xlrd.readthedocs.io) | >=2.0.1 | BSD | Copyright (c) 2005-2009 Stephen John Machin, Lingfo Pty Ltd | 读取 .xls 数据文件 |
-| [matplot2tikz](https://github.com/ErwindeGelder/matplot2tikz) | >=0.5.0 | MIT | Copyright (c) ErwindeGelder and contributors（源自 Nico Schlömer 的 matplotlib2tikz） | matplotlib 图表转 TikZ/PGFPlots |
 | [pytest](https://pytest.org) | >=8.0.0 | MIT | Copyright (c) 2004 Holger Krekel and others | 测试框架 |
 | [pytest-asyncio](https://github.com/pytest-dev/pytest-asyncio) | >=0.24.0 | Apache-2.0 | Copyright (c) Tin Tvrtković | 异步测试支持 |
 

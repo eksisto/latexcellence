@@ -317,4 +317,4 @@ class TestConfigApiValidation:
 
         assert exc_info.value.status_code == 400
         assert "agent_max_rounds" in exc_info.value.detail
-        assert cfg_module.get_config().features.plot_gen.agent_max_rounds == 30
+        assert cfg_module.get_config().features.plot_gen.agent_max_rounds == 20

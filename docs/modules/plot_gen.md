@@ -100,11 +100,13 @@ backend/modules/plot_gen/
 
 `agent.py` 主循环内置"连续相同失败"检测：同一工具调用产生完全一致的失败结果达到 3 次时，向 LLM 注入系统提示要求停止盲目重试（改为换思路诊断或带警告调用 `finish`），并向前端发出 warning 事件。
 
-除逐字相同的失败检测外，还按工具族（`python_sandbox` / `compile_tikz`）维护**失败预算**：同一工具族连续失败 3 次即注入强约束提示——`python_sandbox` 连续失败时要求简化图表（去掉误差棒/3D/花哨标注）并核对列名；`compile_tikz` 连续失败时要求放弃修补 matplot2tikz 输出、改用手写 PGFPlots。该机制可拦截"错误信息文字不同但根因相同"的隐性死循环。
+除逐字相同的失败检测外，还按工具族（`python_sandbox` / `compile_tikz`）维护**失败预算**：同一工具族连续失败 3 次即注入强约束提示——`python_sandbox` 连续失败时要求简化图表（去掉误差棒/3D/花哨标注）并核对列名；`compile_tikz` 连续失败时要求先修正 `tikz_spec.json`/数据 CSV（后端自动重新渲染 figure.tex），必要时改用手写 PGFPlots。该机制可拦截"错误信息文字不同但根因相同"的隐性死循环。
 
 System prompt 还包含以下约束，防止 Agent 在成功路径上产出低质量结果：
 
 - **统计真实性**：只有用户明确要求时才运行统计检验，且必须调用 `stats_test` 工具并原样引用其返回值；禁止在脚本内联计算统计量作为替代，禁止在 summary 中编造/改写任何 p 值或统计量（图中标注与 summary 数值必须一致）
+
+`stats_test` 参数校验（`executor.py::_validate_stats_inputs`）：按测试类型强制必填参数并在缺失/类型不符时给出明确消息——t-test/wilcoxon/anova/kruskal 要求 `group` + 数值列 `y`；pearson/spearman 要求数值列 `x` + `y`；chi2 要求分类列 `x` + `y`（高基数数值列会被拒绝）。错误消息包含缺失参数名与数据文件可用列，避免原先 `df.loc[df[group]==g, None]` 抛晦涩 KeyError。
 - **风格约束**：禁止覆盖预置 rcParams，见"风格注入"一节
 - **图内文字语言**：图内文字（标题/坐标轴/图例/标注）必须使用纯英文 ASCII；单位采用 ASCII 转写（`ug/mL`、`uM`、`degC`、`x`），禁止 μ/°/± 等 Unicode 符号，避免 TikZ 编译失败或渲染为 U+FFFD
 - **日期/坐标指导**：datetime 列先转成日序号（day index）再绘图或写 TikZ，避免大绝对值坐标（如 44927）触发 PGFPlots "Dimension too large"；对数坐标需求显式使用 `xmode=log` 并过滤非正剂量
@@ -113,17 +115,19 @@ System prompt 还包含以下约束，防止 Agent 在成功路径上产出低�
 
 ## TikZ 生成与回退协议
 
-提示词内置两层生成策略：
+提示词内置受控生成 + 手写回退两层策略：
 
-1. **首选 matplot2tikz**：`matplot2tikz.save('artifacts/figure.tex', figure=fig)`（禁止传多余 kwargs）。
-2. **手写 PGFPlots 回退**：当 `compile_tikz` 对同一根因失败 2 次（或 Agent 判断 matplot2tikz 输出质量不可用，如图例错乱、误差棒渲染错误）时，改为脚本内手写简单 PGFPlots 源文件：
+1. **首选受控确定性生成（`tikzgen.py`）**：脚本只负责计算数据，把每个系列/分组写入 `artifacts/data_*.csv`（ASCII 列名、`to_csv(index=False)`），并写一份声明式 `artifacts/tikz_spec.json`（chart_type / 轴标签 / xmode / series 列映射 / box/bar/heatmap 子对象）。`python_sandbox` 成功后由后端 `generate_figure_tex()` 用 Pydantic v2 校验 spec 并确定性渲染 `artifacts/figure.tex`，不调用 LLM、不依赖 matplot2tikz；spec 校验失败或引用 CSV 缺失时，错误消息直接回传 Agent 修正。
+2. **手写 PGFPlots 回退**：仅当 spec 生成对同一根因失败 2 次（或需要生成器不支持的图形特性）时，才改为脚本内手写简单 PGFPlots 源文件：
    - 标签保持 ASCII；
    - 数据写入 `artifacts/data_*.csv`，按列名引用（`table[x=..., y=..., y error plus=..., y error minus=...]`），避免超大内联坐标；
    - 使用小/相对 x 值（日序号或 0..n）；
    - 误差棒通过显式 `y error plus/minus` 列实现，否则省略；
    - 文件以裸 `\end{tikzpicture}` 结尾（不含 `\documentclass`）。
    - **必须写 `col sep=comma`**：pandas `to_csv` 输出逗号分隔，而 PGFPlots 默认按空格/制表符解析，漏写会导致"找不到列"错误（这是手写路径最常见的隐性失败根因）。
-3. **参考模板注入**：`prompts.py::render_pgfplots_reference(chart_type)` 按 `chart_plan.chart_type` 向 agent system 注入已验证的最小 PGFPlots 模板（箱线图/折线图/热力图各一）。模板在 backend 的 standalone 包装下经 latexmk 人工编译验证；箱线图模板包含 `\usepgfplotslibrary{statistics}`，热力图模板使用 `matrix plot` + `mesh/cols`。
+3. **参考模板注入**：`prompts.py::render_pgfplots_reference(chart_type)` 按 `chart_plan.chart_type` 向 agent system 注入已验证的最小 PGFPlots 模板（箱线图/折线图/柱状图/热力图各一）。模板在 backend 的 standalone 包装下经 latexmk 编译验证；箱线图模板包含 `\usepgfplotslibrary{statistics}`，热力图模板使用 `matrix plot` + `mesh/cols`，柱状图模板使用整数索引列 `x_index` + `xticklabels` 类别展示。
+
+`tikzgen.py` 支持的声明类型：`line` / `scatter` / `bar` / `box` / `heatmap` / `histogram` / `kde`（violin 回退为 boxplot 渲染）；热力图支持 `RdBu_r`/`RdBu` 内建色标与 `colormap_stops` 自定义色标，单元格显著性标注通过 `cell_text` 声明为 `\node` 叠加。`python_sandbox` 事件新增 `tikz` 字段（`generated`/`error`/`warnings`），spec 缺失时回传文本明确提示 Agent 补写 spec 或手写 figure.tex。
 
 输出约定：每次成功运行必须产出 `figure.pdf`、`figure.svg`、`figure.png`（前端预览）和 TikZ 源文件。
 

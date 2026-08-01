@@ -205,8 +205,8 @@ class PlotGenAgent:
         last_fail = {"tool": "", "text": "", "count": 0}
         repeat_limit = 3
         # 按工具族累计连续失败次数：python_sandbox / compile_tikz 各自达到阈值时
-        # 注入强约束消息，强制 Agent 换思路（简化图表/手写 PGFPlots/finish 带警告），
-        # 防止在 matplot2tikz 产物上反复小修小补形成死循环。
+        # 注入强约束消息，强制 Agent 换思路（简化图表/tikz_spec 回修/finish 带警告），
+        # 防止在故障 TikZ 产物上反复小修小补形成死循环。
         fail_budget: dict[str, int] = {"python_sandbox": 0, "compile_tikz": 0}
         fail_budget_limit = 3
 
@@ -382,12 +382,15 @@ class PlotGenAgent:
                             budget_msg = (
                                 "STOP: `compile_tikz` has failed "
                                 f"{fail_budget_limit} times in a row. Do not keep "
-                                "patching the matplot2tikz output. Rewrite the script "
-                                "so it writes a simple hand-written PGFPlots file "
-                                "(ASCII labels, data in artifacts/*.csv, small/relative "
-                                "x values, explicit y error columns if needed), rerun "
-                                "`python_sandbox`, then `compile_tikz`. If TikZ remains "
-                                "impossible, call `finish` with an explicit warning."
+                                "patching the generated TikZ output. Write "
+                                "`artifacts/tikz_spec.json` + data CSVs and let the "
+                                "backend render figure.tex (see TIKZ PROTOCOL), or "
+                                "rewrite the script to emit a simple hand-written "
+                                "PGFPlots file (ASCII labels, data in artifacts/*.csv, "
+                                "small/relative x values, explicit y error columns if "
+                                "needed), rerun `python_sandbox`, then `compile_tikz`. "
+                                "If TikZ remains impossible, call `finish` with an "
+                                "explicit warning."
                             )
                         messages.append({"role": "system", "content": budget_msg})
                         yield {"type": "warning", "message": budget_msg}

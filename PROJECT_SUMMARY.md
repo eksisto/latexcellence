@@ -128,7 +128,7 @@ latexcellence/
 | style_modify | 自然语言修改样式 | router.py, service.py | ✓ | ✗ |
 | writing_chat | 写作助手对话（含联网搜索、学术检索与引文追踪、项目浏览、段落编辑和工具确认） | router.py, service.py, context.py, models.py, prompt_manager.py | ✓ | ✗ |
 | bib_manager | 参考文献管理 + DOI 多数据源查询 + 重复检测 + 文献库 | router.py, service.py, models.py, bib_parser.py, provider_manager.py, providers/ | ✓(DOI 查询不依赖 LLM) | ✗ |
-| plot_gen | 科研绘图 Agent（数据画像 -> 图表推荐 -> Python 执行 -> TikZ 编译） | router.py, service.py, agent.py, models.py, data_parser.py, recommender.py, styles.py, executor.py, sandbox_guard.py, trace.py, cleanup.py | ✓ | ✗ |
+| plot_gen | 科研绘图 Agent（数据画像 -> 图表推荐 -> Python 执行 -> TikZ 编译） | router.py, service.py, agent.py, models.py, data_parser.py, recommender.py, styles.py, executor.py, tikzgen.py, sandbox_guard.py, trace.py, cleanup.py | ✓ | ✗ |
 
 ## 核心设计思路
 
@@ -165,6 +165,7 @@ latexcellence/
 - **科研绘图 Agent**: `PlotGenAgent` 基于 Function Calling 实现"数据画像 → 图表方案 → 写脚本 → Python 沙箱执行 → 错误回修 → TikZ 编译 → finish"的自主循环，支持上传 CSV/TSV/Excel/JSON 数据并输出 PDF/SVG/TikZ。
     - 数据文件只进入 session 沙箱 `data/`，绘图脚本通过 `python_sandbox` 在 `plots/<session_id>/` 内运行；风格由 `styles.py` 后端注入，不依赖 LLM 手写样式。
     - `python_sandbox` 执行前由 `sandbox_guard.py` 注入 `sys.addaudithook()` 审计钩子作为安全监听器：拦截读沙箱外文件、子进程/命令执行、网络访问、删除/修改系统文件与 ctypes 危险用法（进程句柄加载、按路径加载库、危险符号解析），并将 `TMPDIR`/`TEMP`/`TMP` 与 `MPLCONFIGDIR` 重定向进沙箱，避免正常绘图流程被误拦；属 Python 层纵深防御而非操作系统级沙箱。
+    - TikZ 源由 `tikzgen.py` **受控确定性生成**（替代 matplot2tikz）：Agent 脚本只写 `artifacts/data_*.csv` + 声明式 `artifacts/tikz_spec.json`，`python_sandbox` 成功后后端经 Pydantic v2 校验（含 CSV 列/数值/热力图整数索引校验）确定性渲染 `artifacts/figure.tex`；支持 line/scatter/bar/box/heatmap/histogram/kde（violin 回退 boxplot），热力图内置 RdBu_r/RdBu 色标与显著性标注。
     - 工具集为 session 私有：`write_file`/`read_file`/`list_files`/`python_sandbox`/`compile_tikz`/`stats_test`/`list_styles`/`apply_style`/`finish`，不注册到全局 `ToolRegistry`。
     - SSE 推送 `plan`/`data_profile`/`chart_plan`/`tool_call`/`tool_result`/`execution`/`tikz`/`warning`/`done`/`error` 事件；会话元数据和 messages 持久化在 `meta.json`，支持刷新后自然语言微调。
     - 每次运行（生成/微调）的完整交互由 `trace.py` 按时间顺序追加到沙箱 `trace.jsonl`（`run_start`/`llm`/`tool_result`/`warning`/`error`/`run_end` 事件，含完整工具参数与回传 LLM 的结果），通过 `/api/plot-gen/sessions/{session_id}/trace` 查看或 `/trace/download` 导出 JSON，用于分析与改进 Agent。

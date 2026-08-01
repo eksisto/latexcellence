@@ -742,9 +742,32 @@ _PROMPTS: dict[str, dict[str, str]] = {
                 "\\end{axis}\n"
                 "\\end{tikzpicture}"
             ),
+            "bar": (
+                "Bar chart template (CSV must contain an integer index column "
+                "x_index = 0..n-1 plus the value column; xticklabels show the "
+                "category names):\n"
+                "\\begin{tikzpicture}\n"
+                "\\begin{axis}[\n"
+                "  width=\\linewidth, height=0.7\\linewidth,\n"
+                "  ybar, bar width=8pt,\n"
+                "  ylabel={Sales},\n"
+                "  xtick={0,...,5},\n"
+                "  xticklabels={Electronics, Clothing, Food, Books, Furniture, Toys},\n"
+                "]\n"
+                "\\addplot+[ybar] table[x=x_index, y=sales, col sep=comma] "
+                "{data_North.csv};\n"
+                "\\addlegendentry{North}\n"
+                "\\addplot+[ybar] table[x=x_index, y=sales, col sep=comma] "
+                "{data_South.csv};\n"
+                "\\addlegendentry{South}\n"
+                "\\end{axis}\n"
+                "\\end{tikzpicture}"
+            ),
             "heatmap": (
-                "Heatmap template (CSV with columns x, y, corr; "
-                "mesh/cols must equal the number of x values):\n"
+                "Heatmap template (CSV with columns x, y, corr; x and y MUST be "
+                "integer indices 0..n-1 (column/row index), NOT variable names; "
+                "display names go into x_labels/y_labels; mesh/cols must equal "
+                "the number of x values):\n"
                 "\\begin{tikzpicture}\n"
                 "\\begin{axis}[\n"
                 "  width=\\linewidth, height=0.8\\linewidth,\n"
@@ -832,13 +855,45 @@ _PROMPTS: dict[str, dict[str, str]] = {
             "  fig.savefig('artifacts/figure.png', dpi=150)   # frontend preview\n"
             "Plus a TikZ/PGFPlots source (see TIKZ PROTOCOL below).\n\n"
             "TIKZ PROTOCOL:\n"
-            "1. Prefer matplot2tikz: "
-            "`matplot2tikz.save('artifacts/figure.tex', figure=fig)`. The signature "
-            "is exactly `save(filepath, figure=fig)` — do NOT pass extra kwargs like "
-            "`write_only`, `show_text`, `convert_sizes`, `resize`, or "
-            "`input_encoding`; they do not exist.\n"
-            "2. If `compile_tikz` fails for the same root cause twice, STOP patching "
-            "the matplot2tikz output. Rewrite the script so it writes a simple "
+            "1. PREFERRED — DETERMINISTIC GENERATION (no matplot2tikz, no "
+            "hand-written TikZ): after computing the plotted data in the script, "
+            "write the plotted series/groups to `artifacts/data_*.csv` (pandas "
+            "`to_csv('artifacts/data_xxx.csv', index=False)`; ASCII column names) "
+            "and write `artifacts/tikz_spec.json` (schema below). The backend "
+            "automatically renders `artifacts/figure.tex` from the spec after "
+            "`python_sandbox` succeeds — do NOT call matplot2tikz and do NOT write "
+            "figure.tex by hand unless generation is impossible.\n"
+            "2. tikz_spec.json schema (all labels ASCII):\n"
+            '   {{\n'
+            '     "chart_type": "line|scatter|bar|box|heatmap|histogram|kde",\n'
+            '     "xlabel": "Dose (uM)",\n'
+            '     "ylabel": "Inhibition (%)",\n'
+            '     "xmode": "linear|log", "ymode": "linear|log",\n'
+            '     "legend": {{"pos": "north east|north west|south east|south west"}},\n'
+            '     "series": [{{\n'
+            '       "file": "data_DrugA.csv",\n'
+            '       "x": "dose", "y": "mean",\n'
+            '       "y_plus": "sem", "y_minus": "sem",\n'
+            '       "label": "DrugA", "color": "C0"\n'
+            '     }}]\n'
+            '   }}\n'
+            "   Chart-specific notes:\n"
+            "   - line/scatter/kde/histogram: series[] with file/x/y (optional "
+            "y_plus/y_minus/label/color).\n"
+            "   - bar: series[] with x = integer index column (0..n-1) and y = "
+            "value; add \"bar\": {{\"xticklabels\": [\"Cat1\", \"Cat2\", ...]}}.\n"
+            "   - box/violin: one series entry per group with y = value column "
+            "(no x column needed); add \"box\": {{\"xticklabels\": [\"G1\", ...]}}.\n"
+            "   - heatmap: add \"heatmap\": {{\"matrix_file\": \"data_corr.csv\", "
+            "\"cols\": <n>, \"x_labels\": [...], \"y_labels\": [...], "
+            "\"colormap\": \"RdBu_r|viridis\", \"meta_min\": -1, \"meta_max\": 1, "
+            "\"colorbar_label\": \"Pearson r\", \"cell_text\": [{{\"row\": 0, "
+            "\"col\": 1, \"text\": \"+0.16*\", \"color\": \"black\"}}]}}; the "
+            "matrix CSV must be a long table with columns x, y, value where x and "
+            "y are INTEGER indices 0..n-1 (row/column position, not variable "
+            "names) and there are exactly n*n rows.\n"
+            "3. HAND-WRITTEN FALLBACK (only if spec generation fails for the same "
+            "root cause twice): rewrite the script so it writes a simple "
             "hand-written PGFPlots file (use `write_file` to replace "
             "`scripts/plot.py`), then rerun `python_sandbox` and `compile_tikz`:\n"
             "   - Keep all labels ASCII.\n"
@@ -860,7 +915,7 @@ _PROMPTS: dict[str, dict[str, str]] = {
             "reference: pandas `to_csv` writes comma-separated files, while "
             "PGFPlots defaults to space-separated tables and will silently fail "
             "to find columns otherwise.\n"
-            "3. VERIFIED PGFPLOTS TEMPLATES (injected for your chart_type; "
+            "4. VERIFIED PGFPLOTS TEMPLATES (injected for your chart_type; "
             "adapt column names/file names/labels only — the structure is "
             "known to compile):\n"
             "{pgfplots_reference}\n"
@@ -898,9 +953,9 @@ _PROMPTS: dict[str, dict[str, str]] = {
             "and top values. Rely on it. Do NOT call `read_file` on `data/<data_file>` "
             "and do NOT call `list_files`/`list_styles` at the start — the profile, "
             "style and file names are already provided; such calls waste a round. "
-            "Do not wrap the matplot2tikz call in a bare try/except that swallows "
-            "errors — if figure.tex is missing after python_sandbox, one compile "
-            "round is wasted.\n"
+            "Do not wrap script execution or TikZ generation in a bare try/except "
+            "that swallows errors — if figure.tex is missing after python_sandbox, "
+            "one compile round is wasted.\n"
             "10. FAILURE BUDGET:\n"
             "   - If `python_sandbox` fails 3 times in a row, STOP tweaking the "
             "same script. Simplify the figure (drop error bars, annotations, or "
@@ -925,11 +980,12 @@ _PROMPTS: dict[str, dict[str, str]] = {
             "`stats_test` tool and must not be invented.\n\n"
             "Figure text (labels/legend/annotations) must stay English/ASCII so "
             "the TikZ source compiles. Keep all outputs: figure.pdf, figure.svg, "
-            "figure.png and the TikZ source. If TikZ compilation fails twice, "
-            "switch to a simple hand-written PGFPlots file (ASCII labels, data in "
-            "artifacts/*.csv, small/relative x values) instead of patching "
-            "matplot2tikz output. After a successful compile_tikz, call finish "
-            "directly — do not re-run scripts or compile just to verify.\n\n"
+            "figure.png and the TikZ source. If TikZ compilation fails twice, fix "
+            "artifacts/tikz_spec.json + data CSVs (the backend regenerates "
+            "figure.tex), or switch to a simple hand-written PGFPlots file (ASCII "
+            "labels, data in artifacts/*.csv, small/relative x values). After a "
+            "successful compile_tikz, call finish directly — do not re-run scripts "
+            "or compile just to verify.\n\n"
             "User instruction: {message}\n"
             "Respond in {language}."
         ),
@@ -950,7 +1006,7 @@ def render_pgfplots_reference(chart_type: str | None) -> str:
     key = (chart_type or "").lower()
     if key in templates:
         return templates[key]
-    if key in ("scatter", "bar", "violin", "histogram", "kde"):
+    if key in ("scatter", "violin", "histogram", "kde"):
         return (
             "No dedicated verified template for chart_type "
             f"'{chart_type}'. Use the line template above as the structural "

@@ -4,7 +4,7 @@ from backend.core.prompts import get_prompt, render_pgfplots_reference
 
 
 def test_render_known_chart_types():
-    """box/line/heatmap 均返回已验证模板且强制 col sep=comma。"""
+    """box/line/bar/heatmap 均返回已验证模板且强制 col sep=comma。"""
     box = render_pgfplots_reference("box")
     assert "\\usepgfplotslibrary{statistics}" in box
     assert "boxplot" in box
@@ -14,6 +14,11 @@ def test_render_known_chart_types():
     assert "xmode=log" in line
     assert "y error plus=sem" in line
     assert "col sep=comma" in line
+
+    bar = render_pgfplots_reference("bar")
+    assert "ybar" in bar
+    assert "x_index" in bar
+    assert "col sep=comma" in bar
 
     heatmap = render_pgfplots_reference("heatmap")
     assert "matrix plot" in heatmap
@@ -51,3 +56,21 @@ def test_agent_system_formats_with_reference():
     assert "\\addplot table[x=dose, y=mean, y error plus=sem," in prompt
     assert "col sep=comma" in prompt
     assert "{{data_SeriesA.csv}}" not in prompt, "模板花括号不应被双重转义"
+
+
+def test_agent_system_promotes_deterministic_tikz_generation():
+    """TIKZ PROTOCOL 首选确定性生成（tikz_spec.json），不再要求调用 matplot2tikz。"""
+    prompt = get_prompt(
+        "plot_gen",
+        "agent_system",
+        profile="shape: 10 rows",
+        chart_plan='{"chart_type": "heatmap"}',
+        pgfplots_reference=render_pgfplots_reference("heatmap"),
+        style="nature",
+        language="zh",
+        max_rounds=30,
+    )
+    assert "DETERMINISTIC GENERATION" in prompt
+    assert "tikz_spec.json" in prompt
+    assert "matplot2tikz.save" not in prompt
+    assert "HAND-WRITTEN FALLBACK" in prompt

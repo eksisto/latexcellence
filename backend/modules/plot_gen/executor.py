@@ -27,6 +27,7 @@ from backend.modules.plot_gen.styles import (
     render_setup_code,
     validate_style_key,
 )
+from backend.modules.plot_gen.tikzgen import generate_figure_tex
 from backend.utils.path_guard import resolve_project_path
 from backend.utils.tex_compile import detect_engine_from_file, run_tex_compile
 
@@ -48,7 +49,7 @@ PRECHECK_LARGE_COORD_THRESHOLD = 1e4
 def _precheck_tikz(content: str) -> tuple[list[dict[str, str]], bool]:
     """编译前对 TikZ 源做轻量纯文本预检（不调用 LLM）。
 
-    针对 matplot2tikz 0.5.4 的高频故障模式：
+    针对自动生成/手写 PGFPlots 的高频故障模式：
       - 内联 `y error=` / `+-` 误差棒语法（含 nan/inf 误差增量）;
       - 线性轴上绝对值 > 1e4 的坐标（Excel 日期序号触发 Dimension too large）;
       - 非 ASCII 字符（标签缺失字形，仅警告不拦截）。
@@ -78,7 +79,7 @@ def _precheck_tikz(content: str) -> tuple[list[dict[str, str]], bool]:
     for m in re.finditer(r"\+-\s*\(\s*([^)]*?)\s*,\s*([^)]*?)\s*\)", content):
         deltas = m.group(1) + "," + m.group(2)
         if re.search(r"nan|inf|none", deltas, re.IGNORECASE):
-            # matplot2tikz 把缺失误差写成 (nan, nan)，PGFPlots 无法解析
+            # 自动导出器把缺失误差写成 (nan, nan)，PGFPlots 无法解析
             findings.append(
                 {
                     "rule": "error_bar",
@@ -86,9 +87,9 @@ def _precheck_tikz(content: str) -> tuple[list[dict[str, str]], bool]:
                     "message": (
                         "Inline '+-' error bar deltas are not numeric "
                         f"(e.g. '{m.group(0).strip()[:40]}'). matplot2tikz "
-                        "error bar output is unreliable. Rewrite the plot by "
-                        "hand in PGFPlots with explicit numeric error columns, "
-                        "or drop error bars."
+                        "error bar output is unreliable. Rewrite the plot in "
+                        "PGFPlots with explicit numeric error columns, or drop "
+                        "error bars."
                     ),
                 }
             )
@@ -101,8 +102,7 @@ def _precheck_tikz(content: str) -> tuple[list[dict[str, str]], bool]:
                     "message": (
                         "Inline '+-' error bars detected. Prefer hand-written "
                         "PGFPlots with table-based 'y error plus'/'y error "
-                        "minus' columns to avoid matplot2tikz compatibility "
-                        "issues."
+                        "minus' columns."
                     ),
                 }
             )
@@ -520,7 +520,17 @@ class PlotExecutor:
                 else "Execution failed; analyze the traceback, fix the script, and rerun"
             ),
         )
-        return self._format_execution_result(result)
+        # 受控 TikZ 生成：脚本成功执行后，若写入了 tikz_spec.json +
+        # 数据 CSV，则由后端确定性渲染 artifacts/figure.tex（替代
+        # matplot2tikz，也避免 LLM 手写 PGFPlots 的语法/列名错误）。
+        # generate_figure_tex 涉及 pandas 读 CSV 与文件写入等同步阻塞 I/O，
+        # 必须放入线程池，避免阻塞事件循环。
+        tikz_info: dict[str, Any] | None = None
+        if proc.returncode == 0:
+            tikz_info = await asyncio.to_thread(generate_figure_tex, self._sandbox)
+            if tikz_info.get("generated"):
+                result.artifacts = self.scan_artifacts()
+        return self._format_execution_result(result, tikz_info)
 
     async def _compile_tikz(self, args: dict[str, Any]) -> tuple[str, dict[str, Any]]:
         fcfg = self._cfg.features.plot_gen
@@ -546,7 +556,13 @@ class PlotExecutor:
                 "summary": f"Path validation failed: {e}",
             }
         if not tikz_path.exists():
-            msg = f"TikZ file not found: {tikz_file}"
+            msg = (
+                f"TikZ file not found: {tikz_file}. The backend only generates "
+                "figure.tex when `python_sandbox` succeeds: if you changed "
+                "artifacts/tikz_spec.json or the data CSVs, rerun `python_sandbox` "
+                "first; or hand-write the TikZ source and save it to "
+                "artifacts/figure.tex, then call `compile_tikz` again."
+            )
             return msg, {
                 "tool": "compile_tikz",
                 "ok": False,
@@ -560,7 +576,7 @@ class PlotExecutor:
         content = tikz_path.read_text(encoding="utf-8", errors="replace")
 
         # 轻量预检：命中大概率必失败的规则时跳过实际编译，直接把修正建议
-        # 回传 Agent，避免在 matplot2tikz 故障输出上浪费编译轮次。
+        # 回传 Agent，避免在故障 TikZ 输出上浪费编译轮次。
         precheck_findings, precheck_blocked = _precheck_tikz(content)
         precheck_text = _format_precheck(precheck_findings)
         if precheck_blocked:
@@ -570,9 +586,7 @@ class PlotExecutor:
                 + "\n\nFix the TikZ source (rewrite the plot by hand in "
                 "PGFPlots if needed) and call compile_tikz again."
             )
-            summary = (
-                "TikZ PRECHECK failed; fix the issues above and recompile"
-            )
+            summary = "TikZ PRECHECK failed; fix the issues above and recompile"
             return msg, {
                 "tool": "compile_tikz",
                 "ok": False,
@@ -636,8 +650,7 @@ class PlotExecutor:
         warnings = [
             i
             for i in issues
-            if i["level"] == "warning"
-            and "nullfont" not in i["message"].lower()
+            if i["level"] == "warning" and "nullfont" not in i["message"].lower()
         ]
         # latexmk 退出码为 0 但日志含真实错误时，仍视为编译失败
         success = tex_result.success and not errors
@@ -723,11 +736,10 @@ class PlotExecutor:
         y = args.get("y")
         group = args.get("group")
         alternative = args.get("alternative", "two-sided")
+        self._validate_stats_inputs(df, data_file, test, x, y, group)
         from scipy import stats
 
         if test in ("t-test", "wilcoxon", "anova", "kruskal"):
-            if not group or group not in df.columns:
-                raise ValueError("group column is required for this test")
             groups = [df.loc[df[group] == g, y].dropna() for g in df[group].unique()]
             if test == "t-test":
                 if len(groups) != 2:
@@ -775,8 +787,6 @@ class PlotExecutor:
             )
 
         if test in ("pearson", "spearman"):
-            if not x or not y or x not in df.columns or y not in df.columns:
-                raise ValueError("x and y numeric columns are required")
             xv = pd.to_numeric(df[x], errors="coerce").dropna()
             yv = pd.to_numeric(df[y], errors="coerce").dropna()
             common = xv.index.intersection(yv.index)
@@ -795,8 +805,6 @@ class PlotExecutor:
             )
 
         if test == "chi2":
-            if not x or not y or x not in df.columns or y not in df.columns:
-                raise ValueError("x and y categorical columns are required")
             table = pd.crosstab(df[x], df[y])
             stat, p, df_res, _ = stats.chi2_contingency(table)
             return StatsTestResult(
@@ -809,6 +817,70 @@ class PlotExecutor:
             )
 
         raise ValueError(f"Unsupported test: {test}")
+
+    @staticmethod
+    def _validate_stats_inputs(
+        df: pd.DataFrame,
+        data_file: str,
+        test: str,
+        x: str | None,
+        y: str | None,
+        group: str | None,
+    ) -> None:
+        """按测试类型校验 stats_test 必填参数，缺失/类型错误时给出明确消息。
+
+        此前 group 分支直接用缺失的 y 做 `df.loc[df[group] == g, y]`，
+        会抛晦涩的 KeyError；此处把参数校验提前并指明缺失列与可用列。
+        """
+
+        def _missing(cols: list[tuple[str, str | None]]) -> list[str]:
+            return [name for name, c in cols if not c or c not in df.columns]
+
+        def _numeric_ok(col: str) -> bool:
+            coerced = pd.to_numeric(df[col], errors="coerce")
+            return int(coerced.notna().sum()) >= 2
+
+        if test in ("t-test", "wilcoxon", "anova", "kruskal"):
+            missing = _missing([("group", group), ("y", y)])
+            if missing:
+                raise ValueError(
+                    f"stats_test '{test}' requires columns 'group' and 'y'; "
+                    f"missing: {missing}. Available columns: {list(df.columns)}"
+                )
+            if not _numeric_ok(y):
+                raise ValueError(
+                    f"stats_test '{test}' requires numeric column 'y'; column "
+                    f"'{y}' has no numeric values in {data_file}"
+                )
+        elif test in ("pearson", "spearman"):
+            missing = _missing([("x", x), ("y", y)])
+            if missing:
+                raise ValueError(
+                    f"stats_test '{test}' requires numeric columns 'x' and 'y'; "
+                    f"missing: {missing}. Available columns: {list(df.columns)}"
+                )
+            for c in (x, y):
+                if not _numeric_ok(c):
+                    raise ValueError(
+                        f"stats_test '{test}' requires numeric columns; column "
+                        f"'{c}' has no numeric values in {data_file}"
+                    )
+        elif test == "chi2":
+            missing = _missing([("x", x), ("y", y)])
+            if missing:
+                raise ValueError(
+                    f"stats_test 'chi2' requires categorical columns 'x' and "
+                    f"'y'; missing: {missing}. Available columns: {list(df.columns)}"
+                )
+            for c in (x, y):
+                if pd.api.types.is_numeric_dtype(df[c]) and df[c].nunique() > 20:
+                    raise ValueError(
+                        f"stats_test 'chi2' requires categorical columns; column "
+                        f"'{c}' looks numeric ({df[c].nunique()} unique values) "
+                        f"in {data_file}"
+                    )
+        else:
+            raise ValueError(f"Unsupported test: {test}")
 
     def _list_styles(self, args: dict[str, Any]) -> tuple[str, dict[str, Any]]:
         styles = list_styles()
@@ -887,7 +959,9 @@ class PlotExecutor:
         return result
 
     def _format_execution_result(
-        self, result: ExecutionResult
+        self,
+        result: ExecutionResult,
+        tikz_info: dict[str, Any] | None = None,
     ) -> tuple[str, dict[str, Any]]:
         if result.success:
             text = "Execution succeeded. Artifacts:\n" + "\n".join(
@@ -908,4 +982,13 @@ class PlotExecutor:
             "timed_out": result.timed_out,
             "artifacts": [a.model_dump() for a in result.artifacts],
         }
+        if tikz_info is not None:
+            text += "\n\n" + tikz_info.get("message", "")
+            for w in tikz_info.get("warnings", []):
+                text += f"\nTIKZ WARNING: {w}"
+            event["tikz"] = {
+                "generated": tikz_info.get("generated", False),
+                "error": tikz_info.get("error"),
+                "warnings": tikz_info.get("warnings", []),
+            }
         return text, event

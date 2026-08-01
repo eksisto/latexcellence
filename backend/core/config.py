@@ -297,7 +297,7 @@ class PlotGenConfig(BaseModel):
     enabled: bool = True
     output_dir: str = "plots/"
     agent_enabled: bool = True
-    agent_max_rounds: int = Field(30, ge=1, le=50)
+    agent_max_rounds: int = Field(20, ge=1, le=50)
     agent_max_files: int = Field(30, ge=1, le=200)
     agent_max_file_size_kb: int = Field(1024, ge=1)
     max_data_size_mb: int = Field(50, ge=1)

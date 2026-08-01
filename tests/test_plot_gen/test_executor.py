@@ -46,6 +46,41 @@ def test_write_and_run_script(tmp_path, monkeypatch):
     assert any(a["path"].endswith("out.txt") for a in result_event["artifacts"])
 
 
+def test_python_sandbox_generates_tikz_from_spec(tmp_path, monkeypatch):
+    """脚本写入 tikz_spec.json + 数据 CSV 后，python_sandbox 自动渲染 figure.tex。"""
+    code = (
+        "import json\n"
+        "from pathlib import Path\n"
+        "Path('artifacts/data_A.csv').write_text("
+        "'dose,mean\\n0.1,0.5\\n1.0,0.8\\n', encoding='utf-8')\n"
+        "Path('artifacts/tikz_spec.json').write_text(json.dumps({\n"
+        "    'chart_type': 'line',\n"
+        "    'series': [{'file': 'data_A.csv', 'x': 'dose', 'y': 'mean'}]\n"
+        "}), encoding='utf-8')\n"
+    )
+    text, event = _run_sandbox_script(tmp_path, monkeypatch, code)
+    assert event["success"] is True
+    assert event["tikz"]["generated"] is True
+    assert event["tikz"]["error"] is None
+    assert "figure.tex" in text
+    assert any(a["path"] == "artifacts/figure.tex" for a in event["artifacts"])
+    fig = tmp_path / "session" / "artifacts" / "figure.tex"
+    assert fig.exists()
+    assert "table[x=dose, y=mean, col sep=comma]" in fig.read_text(encoding="utf-8")
+
+
+def test_python_sandbox_without_spec_hints_agent(tmp_path, monkeypatch):
+    """脚本未写 tikz_spec.json 时，回传文本提示 Agent 补写 spec。"""
+    code = (
+        "from pathlib import Path\n"
+        "Path('artifacts/out.txt').write_text('ok', encoding='utf-8')\n"
+    )
+    text, event = _run_sandbox_script(tmp_path, monkeypatch, code)
+    assert event["success"] is True
+    assert event["tikz"]["generated"] is False
+    assert "tikz_spec.json is missing" in text
+
+
 def test_path_traversal_rejected(tmp_path, monkeypatch):
     _load_cfg(tmp_path, monkeypatch)
     sandbox = tmp_path / "session"
@@ -275,6 +310,114 @@ def test_stats_test_two_groups(tmp_path, monkeypatch):
     )
     assert event["ok"] is True
     assert event["result"]["test"] == "t-test"
+    assert event["result"]["p_value"] is not None
+
+
+def _run_stats(tmp_path, monkeypatch, csv_text, args):
+    _load_cfg(tmp_path, monkeypatch)
+    sandbox = tmp_path / "session"
+    (sandbox / "data").mkdir(parents=True, exist_ok=True)
+    (sandbox / "data" / "data.csv").write_text(csv_text, encoding="utf-8")
+    executor = PlotExecutor(sandbox, get_config())
+    return asyncio.run(
+        executor.execute(
+            "stats_test",
+            {"data_file": "data/data.csv", **args},
+        )
+    )
+
+
+def test_stats_test_missing_group_yields_clear_error(tmp_path, monkeypatch):
+    text, event = _run_stats(
+        tmp_path,
+        monkeypatch,
+        "group,value\nA,1\nA,2\nB,5\nB,6\n",
+        {"test": "t-test", "y": "value"},  # 缺 group
+    )
+    assert event["ok"] is False
+    assert "requires columns 'group' and 'y'" in text
+    assert "missing: ['group']" in text
+    assert "value" in text  # 可用列提示
+
+
+def test_stats_test_missing_y_no_keyerror(tmp_path, monkeypatch):
+    """y 缺失时不得再抛 KeyError，而应给出参数校验消息。"""
+    text, event = _run_stats(
+        tmp_path,
+        monkeypatch,
+        "group,value\nA,1\nA,2\nB,5\nB,6\n",
+        {"test": "wilcoxon", "group": "group"},  # 缺 y
+    )
+    assert event["ok"] is False
+    assert "requires columns 'group' and 'y'" in text
+    assert "KeyError" not in text
+
+
+def test_stats_test_non_numeric_y_rejected(tmp_path, monkeypatch):
+    text, event = _run_stats(
+        tmp_path,
+        monkeypatch,
+        "group,value\nA,x\nA,y\nB,z\nB,w\n",
+        {"test": "t-test", "group": "group", "y": "value"},
+    )
+    assert event["ok"] is False
+    assert "requires numeric column 'y'" in text
+
+
+def test_stats_test_pearson_requires_x_and_y(tmp_path, monkeypatch):
+    text, event = _run_stats(
+        tmp_path,
+        monkeypatch,
+        "a,b\n1,2\n2,3\n3,4\n4,5\n",
+        {"test": "pearson", "x": "a"},  # 缺 y
+    )
+    assert event["ok"] is False
+    assert "requires numeric columns 'x' and 'y'" in text
+    assert "missing: ['y']" in text
+
+
+def test_stats_test_pearson_rejects_non_numeric_column(tmp_path, monkeypatch):
+    text, event = _run_stats(
+        tmp_path,
+        monkeypatch,
+        "a,b\n1,red\n2,blue\n3,green\n4,black\n",
+        {"test": "spearman", "x": "a", "y": "b"},
+    )
+    assert event["ok"] is False
+    assert "requires numeric columns" in text
+    assert "'b'" in text
+
+
+def test_stats_test_chi2_requires_categorical_columns(tmp_path, monkeypatch):
+    text, event = _run_stats(
+        tmp_path,
+        monkeypatch,
+        "a,b\n1,2\n2,3\n3,4\n4,5\n5,6\n6,7\n7,8\n8,9\n9,10\n10,11\n11,12\n12,13\n13,14\n14,15\n15,16\n16,17\n17,18\n18,19\n19,20\n20,21\n21,22\n22,23\n23,24\n24,25\n",
+        {"test": "chi2", "x": "a", "y": "b"},
+    )
+    assert event["ok"] is False
+    assert "looks numeric" in text
+
+
+def test_stats_test_chi2_happy_path(tmp_path, monkeypatch):
+    text, event = _run_stats(
+        tmp_path,
+        monkeypatch,
+        "treat,outcome\nA,pass\nA,fail\nB,pass\nB,pass\nB,fail\nA,fail\n",
+        {"test": "chi2", "x": "treat", "y": "outcome"},
+    )
+    assert event["ok"] is True
+    assert event["result"]["test"] == "chi2"
+
+
+def test_stats_test_wilcoxon_happy_path(tmp_path, monkeypatch):
+    text, event = _run_stats(
+        tmp_path,
+        monkeypatch,
+        "group,value\nA,1\nA,2\nA,3\nB,5\nB,6\nB,7\n",
+        {"test": "wilcoxon", "group": "group", "y": "value"},
+    )
+    assert event["ok"] is True
     assert event["result"]["p_value"] is not None
 
 
