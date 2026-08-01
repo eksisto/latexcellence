@@ -27,6 +27,7 @@ import {
   XCircle,
 } from "lucide-react";
 import { api } from "@/api/index";
+import { translateError } from "@/utils/errorMessages";
 
 const ROLE_ICON = {
   plan: Wand2,
@@ -79,11 +80,11 @@ export default function TemplateGenPage() {
         description: description.trim(),
         onEvent: (ev) => {
           if (ev.type === "error") {
-            setError(ev.message);
+            setError(translateError(ev.message || ""));
             return;
           }
           if (ev.type === "warning") {
-            setWarning(ev.message);
+            setWarning(translateError(ev.message || ""));
             return;
           }
           if (ev.type === "done") {
