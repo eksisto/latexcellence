@@ -55,7 +55,7 @@
           "desc": "Markdown/DOCX/HTML 与 LaTeX 互转"
         },
         "templateGen": {
-          "title": "模板生成",
+          "title": "模板生成 Agent",
           "desc": "根据文字描述生成 LaTeX 模板"
         },
         "plotGen": {
@@ -596,7 +596,7 @@
       "resultTitle": "修改结果"
     },
     "templateGen": {
-      "title": "模板生成",
+      "title": "模板生成 Agent",
       "descLabel": "描述你的需求",
       "descPlaceholder": "描述你需要的 LaTeX 模板类型（如 IEEE 会议论文、中文简历、学术报告）",
       "descDetailPlaceholder": "例如：一篇用于投稿 CVPR 的论文模板，包含摘要、引言、方法、实验、结论...",
@@ -728,7 +728,7 @@
       "featureExpressionOpt": "表达优化",
       "featureExpressionOptDefaultPrompt": "表达优化默认提示词",
       "featureFormulaOcr": "公式识别",
-      "featureTemplateGen": "模板生成",
+      "featureTemplateGen": "模板生成 Agent",
       "templateGenAgentMaxRounds": "Agent 最大轮数",
       "templateGenAgentMaxFiles": "Agent 最大文件数",
       "templateGenAgentCompileEnabled": "Agent 编译验证",

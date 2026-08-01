@@ -55,7 +55,7 @@
           "desc": "Convert between Markdown/DOCX/HTML and LaTeX"
         },
         "templateGen": {
-          "title": "Template Generator",
+          "title": "Template Gen Agent",
           "desc": "Generate LaTeX templates from descriptions"
         },
         "plotGen": {
@@ -596,7 +596,7 @@
       "resultTitle": "Modification Result"
     },
     "templateGen": {
-      "title": "Template Generator",
+      "title": "Template Gen Agent",
       "descLabel": "Describe your requirements",
       "descPlaceholder": "Describe the LaTeX template type you need (e.g., IEEE conference paper, English resume, academic report)",
       "descDetailPlaceholder": "e.g., A paper template for CVPR submission, including abstract, introduction, methods, experiments, conclusion...",
@@ -728,7 +728,7 @@
       "featureExpressionOpt": "Expression Optimization",
       "featureExpressionOptDefaultPrompt": "Expression Optimization Default Prompt",
       "featureFormulaOcr": "Formula Recognition",
-      "featureTemplateGen": "Template Generator",
+      "featureTemplateGen": "Template Gen Agent",
       "templateGenAgentMaxRounds": "Agent Max Rounds",
       "templateGenAgentMaxFiles": "Agent Max Files",
       "templateGenAgentCompileEnabled": "Agent Compile Verification",
