@@ -629,7 +629,15 @@
       "step_compile": "编译",
       "step_done": "完成",
       "step_error": "错误",
-      "step_warning": "警告"
+      "step_warning": "警告",
+      "traceTitle": "Agent 日志",
+      "traceDesc": "记录 Agent 每次运行的完整交互（提示词、工具调用、执行结果），用于分析与改进",
+      "traceView": "查看日志",
+      "traceDownload": "导出日志",
+      "traceDialogTitle": "Agent 运行日志",
+      "traceEmpty": "暂无日志，运行一次生成后即可查看",
+      "traceLanguage": "输出语言",
+      "traceMaxRounds": "最大轮数"
     },
     "plotGen": {
       "title": "科研绘图 Agent",

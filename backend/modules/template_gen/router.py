@@ -4,11 +4,13 @@
 薄路由层：仅做参数校验与状态码映射，业务逻辑在 service.py，Agent 主循环在 agent.py。
 """
 
+import io
 import json
 
 from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import Response, StreamingResponse
 from pydantic import BaseModel
+from starlette.background import BackgroundTask
 
 from backend.core.logger import get_logger
 from backend.modules.template_gen.service import get_template_gen_service
@@ -85,4 +87,44 @@ async def download_zip(session_id: str = Query(..., description="Agent 会话 ID
         data,
         media_type="application/zip",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@router.get("/trace")
+async def get_session_trace(session_id: str = Query(..., description="Agent 会话 ID")):
+    """读取 Agent 运行追踪日志。"""
+    try:
+        return get_template_gen_service().get_session_trace(session_id)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.get("/trace/download")
+async def download_session_trace(
+    session_id: str = Query(..., description="Agent 会话 ID"),
+):
+    """导出 Agent 运行追踪日志（JSON）。"""
+    try:
+        data = get_template_gen_service().get_session_trace(session_id)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    if not data["events"]:
+        raise HTTPException(
+            status_code=404, detail="No trace recorded for this session"
+        )
+    content = json.dumps(data, ensure_ascii=False, indent=2)
+    buf = io.BytesIO(content.encode("utf-8"))
+
+    def _cleanup():
+        buf.close()
+
+    return StreamingResponse(
+        buf,
+        media_type="application/json",
+        headers={
+            "Content-Disposition": (
+                f'attachment; filename="latex-template-{session_id[:8]}-trace.json"'
+            )
+        },
+        background=BackgroundTask(_cleanup),
     )

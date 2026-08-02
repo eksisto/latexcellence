@@ -17,15 +17,24 @@ import {
   Loader2,
   Copy,
   Download,
+  Eye,
   FolderTree,
   FileCheck2,
   AlertTriangle,
   AlertOctagon,
+  ScrollText,
   Wand2,
   Wrench,
   CheckCircle2,
   XCircle,
 } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { api } from "@/api/index";
 import { translateError } from "@/utils/errorMessages";
 
@@ -52,6 +61,9 @@ export default function TemplateGenPage() {
   const [fileContent, setFileContent] = useState("");
   const [loadingFile, setLoadingFile] = useState(false);
   const [summary, setSummary] = useState("");
+  const [traceOpen, setTraceOpen] = useState(false);
+  const [trace, setTrace] = useState(null);
+  const [loadingTrace, setLoadingTrace] = useState(false);
   const scrollRef = useRef(null);
 
   useEffect(() => {
@@ -67,6 +79,7 @@ export default function TemplateGenPage() {
     setSelectedFile(null);
     setFileContent("");
     setSummary("");
+    setTrace(null);
     setError(null);
     setWarning(null);
   }, []);
@@ -125,6 +138,30 @@ export default function TemplateGenPage() {
     if (!text) return;
     navigator.clipboard.writeText(text).catch(() => {});
   }, []);
+
+  const handleLoadTrace = useCallback(async () => {
+    if (!sessionId) return;
+    setLoadingTrace(true);
+    try {
+      const data = await api.templateGen.trace(sessionId);
+      setTrace(data);
+      setTraceOpen(true);
+    } catch (e) {
+      setTrace(null);
+      setError(e.message);
+    } finally {
+      setLoadingTrace(false);
+    }
+  }, [sessionId]);
+
+  const handleDownloadTrace = useCallback(async () => {
+    if (!sessionId) return;
+    try {
+      await api.templateGen.downloadTrace(sessionId);
+    } catch (e) {
+      setError(e.message);
+    }
+  }, [sessionId]);
 
   const compileResults = useMemo(
     () => steps.filter((s) => s.type === "compile"),
@@ -359,6 +396,44 @@ export default function TemplateGenPage() {
             </CardContent>
           </Card>
 
+          {sessionId && (
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm flex items-center gap-2">
+                  <ScrollText className="size-4" />
+                  {t("pages:templateGen.traceTitle")}
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                <p className="text-xs text-muted-foreground">
+                  {t("pages:templateGen.traceDesc")}
+                </p>
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-7 text-xs gap-1"
+                    disabled={running}
+                    onClick={handleLoadTrace}
+                  >
+                    <Eye className="size-3" />
+                    {t("pages:templateGen.traceView")}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-7 text-xs gap-1"
+                    disabled={running}
+                    onClick={handleDownloadTrace}
+                  >
+                    <Download className="size-3" />
+                    {t("pages:templateGen.traceDownload")}
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
           {summary && (
             <Card>
               <CardHeader className="pb-2">
@@ -417,6 +492,30 @@ export default function TemplateGenPage() {
           </Card>
         </div>
       )}
+
+      {/* Agent 运行日志弹窗 */}
+      <Dialog open={traceOpen} onOpenChange={setTraceOpen}>
+        <DialogContent className="sm:max-w-2xl max-h-[85vh] flex flex-col overflow-hidden">
+          <DialogHeader>
+            <DialogTitle>{t("pages:templateGen.traceDialogTitle")}</DialogTitle>
+          </DialogHeader>
+          <div className="flex-1 min-h-0 overflow-y-auto pr-1">
+            {loadingTrace ? (
+              <div className="flex items-center gap-2 text-sm text-muted-foreground py-6">
+                <Loader2 className="animate-spin size-4" />
+                {t("common:loading")}
+              </div>
+            ) : !trace || trace.events?.length === 0 ? (
+              <p className="text-xs text-muted-foreground py-8 text-center">
+                {t("pages:templateGen.traceEmpty")}
+              </p>
+            ) : (
+              <TraceViewer trace={trace} t={t} />
+            )}
+          </div>
+          <DialogFooter showCloseButton />
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
@@ -517,4 +616,51 @@ function stepLabel(step, t) {
     }[step.type] || step.type;
   const translated = t(key);
   return translated === key ? fallback : translated;
+}
+
+function TraceViewer({ trace, t }) {
+  return (
+    <div className="space-y-2 text-xs">
+      <div className="flex flex-wrap items-center gap-2">
+        <Badge variant="outline" className="font-mono">
+          {trace.session_id}
+        </Badge>
+        <Badge variant="secondary">{trace.events.length}</Badge>
+        {trace.meta?.language && (
+          <Badge variant="secondary">
+            {t("pages:templateGen.traceLanguage")}: {trace.meta.language}
+          </Badge>
+        )}
+        {trace.meta?.max_rounds != null && (
+          <Badge variant="secondary">
+            {t("pages:templateGen.traceMaxRounds")}: {trace.meta.max_rounds}
+          </Badge>
+        )}
+      </div>
+      <div className="space-y-1.5">
+        {trace.events.map((ev, i) => (
+          <details
+            key={ev.ts || i}
+            className="rounded border bg-card overflow-hidden"
+            open={ev.type === "run_start"}
+          >
+            <summary className="cursor-pointer flex items-center gap-2 px-2.5 py-1.5">
+              <Badge variant="outline" className="font-mono text-[10px]">
+                {ev.type}
+              </Badge>
+              <span className="text-muted-foreground font-mono">{ev.ts}</span>
+              {ev.type === "tool_result" && (
+                <span className="text-muted-foreground truncate max-w-[40%]">
+                  {ev.data?.tool}
+                </span>
+              )}
+            </summary>
+            <pre className="px-2.5 pb-2.5 pt-1 font-mono text-[10px] overflow-x-auto whitespace-pre-wrap text-muted-foreground">
+              {JSON.stringify(ev.data, null, 2)}
+            </pre>
+          </details>
+        ))}
+      </div>
+    </div>
+  );
 }

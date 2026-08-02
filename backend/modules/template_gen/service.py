@@ -21,6 +21,7 @@ from backend.modules.template_gen.agent import (
     load_sandbox,
     safe_read_sandbox_file,
 )
+from backend.modules.template_gen.trace import read_trace
 
 logger = get_logger(__name__)
 
@@ -108,6 +109,28 @@ class TemplateGenService:
                 zf.write(p, arcname)
                 logger.debug("ZIP included: %s", arcname)
         return buf.getvalue(), f"latex-template-{session_id[:8]}.zip"
+
+    def get_session_trace(self, session_id: str) -> dict[str, Any]:
+        """读取 Agent 运行追踪（完整交互日志），用于分析与改进。"""
+        cfg = get_config()
+        sandbox = self._load_sandbox(cfg, session_id)
+        events = read_trace(sandbox)
+        meta_info: dict[str, Any] = {}
+        # 从 trace 首条 run_start 事件中提取基础信息
+        for ev in events:
+            if ev.get("type") == "run_start":
+                data = ev.get("data") or {}
+                meta_info = {
+                    "description": data.get("description", ""),
+                    "language": data.get("language", ""),
+                    "max_rounds": data.get("max_rounds"),
+                }
+                break
+        return {
+            "session_id": session_id,
+            "meta": meta_info,
+            "events": events,
+        }
 
     # ── 内部辅助 ─────────────────────────────────────────────────────
 

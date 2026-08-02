@@ -629,7 +629,15 @@
       "step_compile": "Compile",
       "step_done": "Done",
       "step_error": "Error",
-      "step_warning": "Warning"
+      "step_warning": "Warning",
+      "traceTitle": "Agent Log",
+      "traceDesc": "Records the full interaction of each Agent run (prompts, tool calls, execution results) for analysis and improvement",
+      "traceView": "View Log",
+      "traceDownload": "Export Log",
+      "traceDialogTitle": "Agent Run Log",
+      "traceEmpty": "No trace yet. Run a generation to record one.",
+      "traceLanguage": "Language",
+      "traceMaxRounds": "Max rounds"
     },
     "plotGen": {
       "title": "Scientific Plot Agent",

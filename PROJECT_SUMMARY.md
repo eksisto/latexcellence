@@ -121,7 +121,7 @@ latexcellence/
 | paragraph_translate | 逐段翻译 | router.py, service.py | ✓ | ✓ |
 | compile | 编译 + 错误翻译 + 引擎自动检测 + PDF/A 支持 | router.py, service.py | ✓(错误翻译) | ✗ |
 | git_diff | Git 版本差异 PDF | router.py, service.py | ✓(编译失败时翻译错误) | ✗ |
-| template_gen | 模板生成（自主 Agent） | router.py, service.py, agent.py, cleanup.py | ✓ | ✗ |
+| template_gen | 模板生成（自主 Agent） | router.py, service.py, agent.py, trace.py, cleanup.py | ✓ | ✗ |
 | formula_ocr | 图片→LaTeX 公式 | router.py, service.py | ✓(Vision) | ✗ |
 | table_ocr | 图片→LaTeX 表格 | router.py, service.py | ✓(Vision) | ✗ |
 | format_converter | 格式转换(pandoc) | router.py, service.py | ✓(宏包分析) | ✗ |
@@ -161,6 +161,7 @@ latexcellence/
     - 工具（`write_file`/`read_file`/`list_files`/`compile_latex`/`finish`）为 session 级私有，schema 由 `TemplateAgentService._build_tools_schema` 动态构建并经 `chat_with_tools` 注入，不注册到全局 `ToolRegistry` 避免污染其他模块工具集。
     - 每次生成在 `output_dir/agent/<session_id>/` 创建独立沙箱，路径经 `_resolve_sandbox_path` 校验（禁绝对路径 / `..` / 非白名单扩展名 / 越界）。SSE 推送 `plan`/`tool_call`/`tool_result`/`compile`（含结构化 `errors` 列表）/`warning`（编译未过却 finish）/`done`/`error` 事件。
     - 编译失败时 `_extract_errors` 从日志中提取类型/文件/行号，`_format_error_analysis` 拼接聚焦摘要回传 LLM；prompt 中 COMPILATION ERROR RECOVERY PROTOCOL 强制 LLM 走 ANALYZE→READ→FIX→RECOMPILE 循环，禁止编译未过时调用 finish。
+    - 每次生成的完整交互由 `trace.py` 按时间顺序追加到沙箱 `trace.jsonl`（`run_start`/`llm`/`tool_result`/`warning`/`error`/`run_end` 事件，含完整工具参数与回传 LLM 的结果），通过 `/api/template-gen/trace` 查看或 `/trace/download` 导出 JSON，用于分析与改进 Agent。
     - 沙箱自动清理由 `cleanup.py` 实现：`cleanup_expired_sandboxes()` 按目录内最新文件 mtime 与 `cleanup_retention_days` 比较判定过期，`cleanup_loop()` 作为 `asyncio` 后台任务在 FastAPI lifespan 中启动并按 `cleanup_interval_seconds` 周期扫描，删除过期目录，服务关闭时优雅取消。
 - **科研绘图 Agent**: `PlotGenAgent` 基于 Function Calling 实现"数据画像 → 图表方案 → 写脚本 → Python 沙箱执行 → 错误回修 → TikZ 编译 → finish"的自主循环，支持上传 CSV/TSV/Excel/JSON 数据并输出 PDF/SVG/TikZ。
     - 数据文件只进入 session 沙箱 `data/`，绘图脚本通过 `python_sandbox` 在 `plots/<session_id>/` 内运行；风格由 `styles.py` 后端注入，不依赖 LLM 手写样式。

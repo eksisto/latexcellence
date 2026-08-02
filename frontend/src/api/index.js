@@ -330,6 +330,16 @@ export const api = {
       request(
         `/template-gen/file?session_id=${encodeURIComponent(sessionId)}&path=${encodeURIComponent(path)}`,
       ),
+    trace: (sessionId) =>
+      request(
+        `/template-gen/trace?session_id=${encodeURIComponent(sessionId)}`,
+      ),
+    downloadTrace: async (sessionId) => {
+      await downloadBlob(
+        `${BASE_URL}/template-gen/trace/download?session_id=${encodeURIComponent(sessionId)}`,
+        `latex-template-${sessionId.slice(0, 8)}-trace.json`,
+      );
+    },
     download: (sessionId) => {
       const url = `${BASE_URL}/template-gen/download?session_id=${encodeURIComponent(sessionId)}`;
       const a = document.createElement("a");

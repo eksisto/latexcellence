@@ -37,19 +37,25 @@
     摘要回传 LLM。prompt 强制 LLM 走 ANALYZE→READ→FIX→RECOMPILE 循环，
     最新一次编译失败时不允许 finish。循环跟踪 last_compile_success 状态，
     若 Agent 在编译未通过时仍调用 finish，则推送 warning 事件提示前端。
+
+运行追踪：
+    每次生成由 trace.py 将 Agent loop 的完整交互（system prompt、LLM 回复、
+    工具调用参数与结果、警告与错误）按时间顺序追加到沙箱 trace.jsonl，
+    供分析、改进 prompt 与复现调试使用。
 """
 
 import asyncio
 import json
 import re
-import shutil
+import uuid
 from pathlib import Path
-from typing import Any, AsyncIterator, Callable
+from typing import Any, AsyncIterator
 
 from backend.core.config import get_config
 from backend.core.logger import get_logger
 from backend.core.llm_client import get_llm_client
 from backend.core.prompts import get_prompt
+from backend.modules.template_gen.trace import append_trace, now_iso
 from backend.utils.tex_compile import run_tex_compile
 
 # 允许在沙箱内创建的文件扩展名白名单
@@ -140,7 +146,27 @@ class TemplateAgentService:
         final_summary = ""
         # 跟踪编译状态：不允许 Agent 在最后一次编译仍失败时静默 finish
         compile_state = {"called": False, "success": None}
+        run_id = uuid.uuid4().hex[:12]
+        rounds_used = 0
+
+        await append_trace(
+            sandbox,
+            {
+                "ts": now_iso(),
+                "run_id": run_id,
+                "type": "run_start",
+                "data": {
+                    "description": description,
+                    "language": language,
+                    "system_prompt": system_prompt,
+                    "messages": messages,
+                    "max_rounds": max_rounds,
+                },
+            },
+        )
+
         for round_idx in range(max_rounds):
+            rounds_used = round_idx + 1
             if round_idx == 0:
                 yield {
                     "type": "plan",
@@ -158,6 +184,15 @@ class TemplateAgentService:
                 self._logger.error(
                     f"chat_with_tools failed (round {round_idx + 1}): {e}"
                 )
+                await append_trace(
+                    sandbox,
+                    {
+                        "ts": now_iso(),
+                        "run_id": run_id,
+                        "type": "error",
+                        "data": {"message": str(e)},
+                    },
+                )
                 yield {"type": "error", "message": str(e)}
                 return
 
@@ -169,6 +204,30 @@ class TemplateAgentService:
             if msg.content:
                 yield {"type": "plan", "content": msg.content}
                 final_summary = msg.content
+
+            await append_trace(
+                sandbox,
+                {
+                    "ts": now_iso(),
+                    "run_id": run_id,
+                    "type": "llm",
+                    "data": {
+                        "role": "assistant",
+                        "content": msg.content or "",
+                        "tool_calls": [
+                            {
+                                "id": tc.id,
+                                "type": getattr(tc, "type", "function"),
+                                "function": {
+                                    "name": tc.function.name,
+                                    "arguments": tc.function.arguments,
+                                },
+                            }
+                            for tc in (tool_calls or [])
+                        ],
+                    },
+                },
+            )
 
             if not tool_calls:
                 # Agent 主动结束（无工具调用即终止）
@@ -207,6 +266,22 @@ class TemplateAgentService:
                         "summary": result_text,
                     }
 
+                await append_trace(
+                    sandbox,
+                    {
+                        "ts": now_iso(),
+                        "run_id": run_id,
+                        "type": "tool_result",
+                        "data": {
+                            "tool": tool_name,
+                            "args": tool_args,
+                            "ok": result_event.get("ok"),
+                            "result_text": result_text,
+                            "event": result_event,
+                        },
+                    },
+                )
+
                 # 编译单独事件，便于前端高亮展示
                 if tool_name == "compile_latex":
                     compile_state["called"] = True
@@ -228,12 +303,22 @@ class TemplateAgentService:
                     # 校验：若曾被调用过编译且最后一次仍失败，
                     # 不放任 Agent 逃避，推送 warning 提示前端（仍允许结束）
                     if compile_state["called"] and compile_state["success"] is False:
+                        warning_msg = (
+                            "Agent called finish, but the last compilation still failed. "
+                            "The project may not build successfully. Please check the sandbox files manually."
+                        )
+                        await append_trace(
+                            sandbox,
+                            {
+                                "ts": now_iso(),
+                                "run_id": run_id,
+                                "type": "warning",
+                                "data": {"message": warning_msg},
+                            },
+                        )
                         yield {
                             "type": "warning",
-                            "message": (
-                                "Agent called finish, but the last compilation still failed. "
-                                "The project may not build successfully. Please check the sandbox files manually."
-                            ),
+                            "message": warning_msg,
                         }
                     final_summary = tool_args.get("summary", final_summary)
                     finish_this_round = True
@@ -258,13 +343,37 @@ class TemplateAgentService:
             }
             # 达到极限时，若仍编译失败，也推送一次 warning
             if compile_state["called"] and compile_state["success"] is False:
+                warning_msg = (
+                    f"Reached the maximum number of rounds ({max_rounds}), but the last compilation still did not pass. "
+                    "The project may not build successfully. Please check the sandbox files manually."
+                )
+                await append_trace(
+                    sandbox,
+                    {
+                        "ts": now_iso(),
+                        "run_id": run_id,
+                        "type": "warning",
+                        "data": {"message": warning_msg},
+                    },
+                )
                 yield {
                     "type": "warning",
-                    "message": (
-                        f"Reached the maximum number of rounds ({max_rounds}), but the last compilation still did not pass. "
-                        "The project may not build successfully. Please check the sandbox files manually."
-                    ),
+                    "message": warning_msg,
                 }
+
+        await append_trace(
+            sandbox,
+            {
+                "ts": now_iso(),
+                "run_id": run_id,
+                "type": "run_end",
+                "data": {
+                    "summary": final_summary,
+                    "rounds": rounds_used,
+                    "compile_success": compile_state["success"],
+                },
+            },
+        )
 
         # 4. 汇总文件
         files = executor.list_files()

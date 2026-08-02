@@ -9,8 +9,10 @@
 | 文件 | 职责 |
 | --- | --- |
 | `router.py` | 薄路由：参数校验、SSE 响应与状态码映射 |
-| `service.py` | `TemplateGenService`：创建沙箱工作区、驱动 Agent、产物浏览（`list_session_files` / `read_session_file` / `zip_session`） |
+| `service.py` | `TemplateGenService`：创建沙箱工作区、驱动 Agent、产物浏览（`list_session_files` / `read_session_file` / `zip_session` / `get_session_trace`） |
 | `agent.py` | `TemplateAgentService`：Function Calling 主循环、工具 schema 构建、`_ToolExecutor` 工具执行、编译日志错误解析 |
+| `trace.py` | Agent 运行追踪（`trace.jsonl` 记录与读取） |
+| `cleanup.py` | 过期沙箱自动清理（后台任务） |
 
 ## 设计目标
 
@@ -133,6 +135,7 @@ prompt 同时列出 6 种常见 LaTeX 编译错误的根因与修复指引（`Un
 | `list_session_files(session_id)` | `TemplateGenService` | 列出某次 Agent 生成的文件树 |
 | `read_session_file(session_id, path)` | `TemplateGenService` | 读取沙箱内单个文件内容 |
 | `zip_session(session_id)` | `TemplateGenService` | 打包沙箱为 ZIP（返回 bytes + 文件名） |
+| `get_session_trace(session_id)` | `TemplateGenService` | 读取 Agent 运行追踪（meta + events） |
 | `generate(description, sandbox, llm)` | `TemplateAgentService` | Function Calling 主循环（SSE） |
 
 ## API 路由
@@ -145,3 +148,16 @@ Prefix: `/api/template-gen`, Tag: `template_gen`
 | GET | `/files` | 列出某次 Agent 生成的文件树 |
 | GET | `/file` | 读取沙箱内单个文件内容 |
 | GET | `/download` | 下载整个沙箱为 ZIP 文件（流式响应） |
+| GET | `/trace` | 读取 Agent 运行追踪日志（JSON） |
+| GET | `/trace/download` | 导出 Agent 运行追踪日志（JSON 附件） |
+
+## 运行追踪
+
+`agent.py` 在每次生成时把 Agent 主循环的完整交互按时间顺序逐条追加到 session 沙箱的 `trace.jsonl`，用于分析、改进 prompt 与复现调试。
+
+- 由 `trace.py` 提供追加与读取：`append_trace()`（沙箱级锁 + 线程内写文件，防并发交错）、`read_trace()`
+- 事件类型：`run_start`（描述/语言/system prompt/初始 messages/最大轮数）、`llm`（每次 LLM 回复含 tool_calls）、`tool_result`（工具名/完整参数/结果文本/前端事件）、`warning`、`error`、`run_end`（总结/轮数/最终编译状态）
+- `trace.jsonl` 随沙箱一起被 `cleanup.py` 清理，并包含在下载的 ZIP 中
+- 通过 `/api/template-gen/trace` 查看或 `/trace/download` 导出 JSON，供分析与改进 Agent
+
+前端 `TemplateGenPage` 提供 Agent 日志卡片（`查看日志` / `导出日志`），查看时在弹窗中逐条展示追踪事件。

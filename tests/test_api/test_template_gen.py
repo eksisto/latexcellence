@@ -2,6 +2,7 @@
 模板生成自主 Agent 端到端测试（Mock LLM）。
 """
 
+import asyncio
 import json
 from pathlib import Path
 from types import SimpleNamespace
@@ -17,6 +18,7 @@ from backend.modules.template_gen.agent import (
     _format_error_analysis,
     _trim_log,
 )
+from backend.modules.template_gen.trace import append_trace, read_trace
 
 
 def _make_tool_call(name, arguments, cid="tc-1"):
@@ -400,6 +402,156 @@ class TestCompileFailureWarning:
         assert "compilation" in warning_ev["message"].lower()
         # 最后仍是 done（warning 不阻断 finish）
         assert events[-1]["type"] == "done"
+
+
+class TestTraceRecording:
+    """Agent 运行追踪（trace.jsonl 记录与读取）。"""
+
+    @pytest.fixture(autouse=True)
+    def _load_cfg(self, tmp_path, monkeypatch):
+        load_config("config.json")
+        cfg = get_config()
+        monkeypatch.setattr(
+            cfg.features.template_gen,
+            "output_dir",
+            str(tmp_path / "templates"),
+        )
+        monkeypatch.setattr(cfg.features.template_gen, "agent_max_rounds", 8)
+        monkeypatch.setattr(cfg.features.template_gen, "agent_max_files", 10)
+        monkeypatch.setattr(cfg.features.template_gen, "agent_max_file_size_kb", 64)
+        monkeypatch.setattr(cfg.features.template_gen, "agent_compile_enabled", True)
+        monkeypatch.setattr(cfg.features.template_gen, "agent_compile_timeout", 30)
+
+    def test_agent_writes_trace_events(self, tmp_path):
+        """生成结束后沙箱内应有 trace.jsonl，含 run_start / llm / tool_result / run_end。"""
+        svc = TemplateAgentService()
+        llm = MagicMock()
+        responses = [
+            _make_response(
+                content="Write the main file",
+                tool_calls=[
+                    _make_tool_call(
+                        "write_file",
+                        {
+                            "file_path": "main.tex",
+                            "content": r"\documentclass{article}\begin{document}hi\end{document}",
+                        },
+                        "t1",
+                    )
+                ],
+            ),
+            _make_response(
+                content="Finish",
+                tool_calls=[
+                    _make_tool_call(
+                        "finish",
+                        {"summary": "Completed", "main_file": "main.tex"},
+                        "t2",
+                    )
+                ],
+            ),
+        ]
+        llm.chat_with_tools = AsyncMock(side_effect=responses)
+
+        events = _collect(svc, "a simple article", llm)
+        done = events[-1]
+        sandbox = Path(done["sandbox"])
+
+        trace = read_trace(sandbox)
+        types = [e["type"] for e in trace]
+        assert "run_start" in types
+        assert "llm" in types
+        assert "tool_result" in types
+        assert "run_end" in types
+        # run_start 携带描述信息
+        start = next(e for e in trace if e["type"] == "run_start")
+        assert start["data"]["description"] == "a simple article"
+        # tool_result 记录完整参数（含 write_file 内容）
+        tr = next(e for e in trace if e["type"] == "tool_result")
+        assert tr["data"]["tool"] == "write_file"
+        assert "main.tex" in tr["data"]["args"]["file_path"]
+        assert tr["data"]["ok"] is True
+
+    def test_service_get_session_trace(self, tmp_path):
+        """get_session_trace 返回会话追踪数据（meta + events）。"""
+        from backend.modules.template_gen.service import TemplateGenService
+
+        svc = TemplateGenService()
+        llm = MagicMock()
+        responses = [
+            _make_response(
+                content="Start",
+                tool_calls=[
+                    _make_tool_call(
+                        "write_file",
+                        {
+                            "file_path": "main.tex",
+                            "content": r"\documentclass{article}\begin{document}hi\end{document}",
+                        },
+                        "t1",
+                    )
+                ],
+            ),
+            _make_response(
+                content="Finish",
+                tool_calls=[
+                    _make_tool_call(
+                        "finish", {"summary": "ok", "main_file": "main.tex"}, "t2"
+                    )
+                ],
+            ),
+        ]
+        llm.chat_with_tools = AsyncMock(side_effect=responses)
+
+        async def run():
+            events = []
+            async for ev in svc.generate("meta test", "zh", llm=llm):
+                events.append(ev)
+            return events
+
+        events = asyncio.run(run())
+        session_id = events[-1]["session_id"]
+
+        data = svc.get_session_trace(session_id)
+        assert data["session_id"] == session_id
+        assert data["meta"]["description"] == "meta test"
+        assert data["meta"]["max_rounds"] == 8
+        assert any(e["type"] == "run_start" for e in data["events"])
+
+
+class TestTraceHelpers:
+    """trace.py 基础读写。"""
+
+    def test_append_and_read_roundtrip(self, tmp_path):
+        sandbox = tmp_path / "session"
+        sandbox.mkdir()
+        ev1 = {
+            "ts": "2026-01-01T00:00:00.000",
+            "run_id": "r1",
+            "type": "run_start",
+            "data": {"x": 1},
+        }
+        ev2 = {
+            "ts": "2026-01-01T00:00:00.001",
+            "run_id": "r1",
+            "type": "llm",
+            "data": {"content": "hi"},
+        }
+        asyncio.run(append_trace(sandbox, ev1))
+        asyncio.run(append_trace(sandbox, ev2))
+        assert read_trace(sandbox) == [ev1, ev2]
+
+    def test_read_trace_missing_returns_empty(self, tmp_path):
+        assert read_trace(tmp_path / "nonexistent") == []
+
+    def test_read_trace_skips_corrupt_lines(self, tmp_path):
+        sandbox = tmp_path / "session"
+        sandbox.mkdir()
+        (sandbox / "trace.jsonl").write_text(
+            '{"type": "ok"}\nnot-json\n{"type": "ok2"}\n', encoding="utf-8"
+        )
+        types = [e["type"] for e in read_trace(sandbox)]
+        assert types == ["ok", "ok2"]
 
 
 class TestGenServiceOrchestration:
