@@ -318,8 +318,8 @@ async def render_diff_pdf(
         added_lines=added_lines,
         deleted_lines=deleted_lines,
         included_files=included_files,
-        stdout=compile_result.stdout,
-        stderr=compile_result.stderr,
+        stdout=compile_result.raw_output,
+        stderr=compile_result.filtered_output,
     )
 
 
