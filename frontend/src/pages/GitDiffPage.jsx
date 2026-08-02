@@ -467,17 +467,18 @@ export default function GitDiffPage() {
 
               <div className="rounded-lg border bg-muted/30 p-3 text-xs text-muted-foreground space-y-1">
                 <div>
-                  {t("pages:gitDiff.gitRoot")}:{" "}
+                  {t("pages:gitDiff.gitRoot")}
                   {gitRoot || t("pages:gitDiff.notLoaded")}
                 </div>
                 <div>
-                  {t("pages:gitDiff.workspaceStatus")}:{" "}
+                  {t("pages:gitDiff.workspaceStatus")}
                   {isDirty
                     ? t("pages:gitDiff.hasUncommittedChanges")
                     : t("pages:gitDiff.cleanOrNoChanges")}
                 </div>
                 <div>
-                  {t("pages:gitDiff.projectDirectory")}: {rootPath}
+                  {t("pages:gitDiff.projectDirectory")}
+                  {rootPath}
                 </div>
               </div>
 
