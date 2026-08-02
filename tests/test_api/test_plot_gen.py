@@ -365,6 +365,59 @@ async def test_generate_records_trace(plot_cfg, monkeypatch):
     assert llm_ev["data"]["tool_calls"][0]["function"]["name"] == "write_file"
 
 
+@pytest.mark.asyncio
+async def test_trace_failure_does_not_abort_generation(plot_cfg, monkeypatch):
+    """append_trace 写入失败时仅记录日志，不中断生成主流程。"""
+    import backend.modules.plot_gen.agent as agent_mod
+
+    async def _boom(*args, **kwargs):
+        raise OSError("disk full")
+
+    monkeypatch.setattr(agent_mod, "append_trace", _boom)
+
+    service = PlotGenService()
+    result = await service.create_session_from_upload(
+        b"group,value\nA,1\nB,2\n",
+        "data.csv",
+        description="比较两组",
+    )
+    session_id = result["session_id"]
+    sandbox = Path(plot_cfg.features.plot_gen.output_dir) / session_id
+
+    class FakeExecutor:
+        def __init__(self, sandbox, cfg, logger=None, style_key=None):
+            pass
+
+        async def execute(self, tool_name, args):
+            if tool_name == "finish":
+                return "finished", {"tool": "finish", "ok": True, "summary": "finished"}
+            return "ok", {"tool": tool_name, "ok": True, "summary": "ok"}
+
+        def list_files(self):
+            return []
+
+        def scan_artifacts(self):
+            return []
+
+    monkeypatch.setattr(agent_mod, "PlotExecutor", FakeExecutor)
+
+    llm = MagicMock()
+    llm.chat = AsyncMock(return_value={})
+    llm.chat_with_tools = AsyncMock(
+        side_effect=[
+            _make_response(
+                content="Finish now",
+                tool_calls=[_make_tool_call("finish", {"summary": "done"}, "f1")],
+            ),
+        ]
+    )
+
+    events = await _collect(
+        service.generate(session_id, "比较两组", "nature", "zh", llm=llm)
+    )
+    assert events[-1]["type"] == "done"
+
+
 class TestPlotGenTraceRouter:
     """/trace 与 /trace/download 端点测试。"""
 

@@ -518,6 +518,44 @@ class TestTraceRecording:
         assert data["meta"]["max_rounds"] == 8
         assert any(e["type"] == "run_start" for e in data["events"])
 
+    def test_trace_failure_does_not_abort_generation(self, tmp_path, monkeypatch):
+        """append_trace 写入失败时仅记录日志，不中断生成主流程。"""
+        import backend.modules.template_gen.agent as agent_mod
+
+        async def _boom(*args, **kwargs):
+            raise OSError("disk full")
+
+        monkeypatch.setattr(agent_mod, "append_trace", _boom)
+        svc = TemplateAgentService()
+        llm = MagicMock()
+        responses = [
+            _make_response(
+                content="Write main file",
+                tool_calls=[
+                    _make_tool_call(
+                        "write_file",
+                        {
+                            "file_path": "main.tex",
+                            "content": r"\documentclass{article}\begin{document}hi\end{document}",
+                        },
+                        "t1",
+                    )
+                ],
+            ),
+            _make_response(
+                content="Finish",
+                tool_calls=[
+                    _make_tool_call(
+                        "finish", {"summary": "done", "main_file": "main.tex"}, "t2"
+                    )
+                ],
+            ),
+        ]
+        llm.chat_with_tools = AsyncMock(side_effect=responses)
+
+        events = _collect(svc, "a simple article", llm)
+        assert events[-1]["type"] == "done"
+
 
 class TestTraceHelpers:
     """trace.py 基础读写。"""

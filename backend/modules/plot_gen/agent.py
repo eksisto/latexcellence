@@ -78,6 +78,13 @@ class PlotGenAgent:
     def __init__(self) -> None:
         self._logger = get_logger("plot_gen.agent")
 
+    async def _append_trace(self, sandbox: Path, event: dict[str, Any]) -> None:
+        """追加追踪事件；写入失败仅记日志，不中断生成主流程。"""
+        try:
+            await append_trace(sandbox, event)
+        except Exception as e:
+            self._logger.warning("Failed to append plot_gen trace event: %s", e)
+
     async def generate(
         self,
         session_id: str,
@@ -207,7 +214,7 @@ class PlotGenAgent:
         fail_budget: dict[str, int] = {"python_sandbox": 0, "compile_tikz": 0}
         fail_budget_limit = 3
 
-        await append_trace(
+        await self._append_trace(
             sandbox,
             {
                 "ts": now_iso(),
@@ -238,7 +245,7 @@ class PlotGenAgent:
                 )
             except Exception as e:
                 self._logger.error("plot_gen chat_with_tools failed: %s", e)
-                await append_trace(
+                await self._append_trace(
                     sandbox,
                     {
                         "ts": now_iso(),
@@ -257,7 +264,7 @@ class PlotGenAgent:
                 yield {"type": "plan", "content": msg.content}
                 final_summary = msg.content
 
-            await append_trace(
+            await self._append_trace(
                 sandbox,
                 {
                     "ts": now_iso(),
@@ -316,7 +323,7 @@ class PlotGenAgent:
                         "summary": result_text,
                     }
 
-                await append_trace(
+                await self._append_trace(
                     sandbox,
                     {
                         "ts": now_iso(),
@@ -421,7 +428,7 @@ class PlotGenAgent:
                             "Agent called finish without a successful TikZ "
                             "compilation. The TikZ artifact may be missing or invalid."
                         )
-                        await append_trace(
+                        await self._append_trace(
                             sandbox,
                             {
                                 "ts": now_iso(),
@@ -457,7 +464,7 @@ class PlotGenAgent:
                 warning_msg = (
                     "Reached maximum rounds without successful TikZ compilation."
                 )
-                await append_trace(
+                await self._append_trace(
                     sandbox,
                     {
                         "ts": now_iso(),
@@ -471,7 +478,7 @@ class PlotGenAgent:
                     "message": warning_msg,
                 }
 
-        await append_trace(
+        await self._append_trace(
             sandbox,
             {
                 "ts": now_iso(),

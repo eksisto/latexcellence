@@ -83,6 +83,13 @@ class TemplateAgentService:
     def __init__(self) -> None:
         self._logger = get_logger("template_gen.agent")
 
+    async def _append_trace(self, sandbox: Path, event: dict[str, Any]) -> None:
+        """追加追踪事件；写入失败仅记日志，不中断生成主流程。"""
+        try:
+            await append_trace(sandbox, event)
+        except Exception as e:
+            self._logger.warning(f"Failed to append trace event: {e}")
+
     # ── 公共入口 ─────────────────────────────────────────────────────────
 
     async def generate(
@@ -149,7 +156,7 @@ class TemplateAgentService:
         run_id = uuid.uuid4().hex[:12]
         rounds_used = 0
 
-        await append_trace(
+        await self._append_trace(
             sandbox,
             {
                 "ts": now_iso(),
@@ -184,7 +191,7 @@ class TemplateAgentService:
                 self._logger.error(
                     f"chat_with_tools failed (round {round_idx + 1}): {e}"
                 )
-                await append_trace(
+                await self._append_trace(
                     sandbox,
                     {
                         "ts": now_iso(),
@@ -205,7 +212,7 @@ class TemplateAgentService:
                 yield {"type": "plan", "content": msg.content}
                 final_summary = msg.content
 
-            await append_trace(
+            await self._append_trace(
                 sandbox,
                 {
                     "ts": now_iso(),
@@ -266,7 +273,7 @@ class TemplateAgentService:
                         "summary": result_text,
                     }
 
-                await append_trace(
+                await self._append_trace(
                     sandbox,
                     {
                         "ts": now_iso(),
@@ -307,7 +314,7 @@ class TemplateAgentService:
                             "Agent called finish, but the last compilation still failed. "
                             "The project may not build successfully. Please check the sandbox files manually."
                         )
-                        await append_trace(
+                        await self._append_trace(
                             sandbox,
                             {
                                 "ts": now_iso(),
@@ -347,7 +354,7 @@ class TemplateAgentService:
                     f"Reached the maximum number of rounds ({max_rounds}), but the last compilation still did not pass. "
                     "The project may not build successfully. Please check the sandbox files manually."
                 )
-                await append_trace(
+                await self._append_trace(
                     sandbox,
                     {
                         "ts": now_iso(),
@@ -361,7 +368,7 @@ class TemplateAgentService:
                     "message": warning_msg,
                 }
 
-        await append_trace(
+        await self._append_trace(
             sandbox,
             {
                 "ts": now_iso(),
