@@ -199,6 +199,58 @@ class TestAgentLoop:
         assert llm.chat_with_tools.call_count == 1
         assert events[-1]["type"] == "done"
 
+    def test_no_tool_call_is_nudged_not_terminated(self, tmp_path):
+        """LLM 首轮只输出规划文本、不调用工具时，循环应引导其继续行动，
+        而不是直接当作结束（规划瘫痪防护）。"""
+        svc = TemplateAgentService()
+        llm = MagicMock()
+        responses = [
+            _make_response(
+                content="Let me think about the file structure first",
+                tool_calls=None,
+            ),
+            _make_response(
+                content="Now I will write the main file",
+                tool_calls=[
+                    _make_tool_call(
+                        "write_file",
+                        {
+                            "file_path": "main.tex",
+                            "content": r"\documentclass{article}\begin{document}hi\end{document}",
+                        },
+                        "w1",
+                    )
+                ],
+            ),
+            _make_response(
+                content="Finished",
+                tool_calls=[
+                    _make_tool_call(
+                        "finish",
+                        {"summary": "ok", "main_file": "main.tex"},
+                        "f1",
+                    )
+                ],
+            ),
+        ]
+        llm.chat_with_tools = AsyncMock(side_effect=responses)
+
+        events = _collect(svc, "nudge test", llm)
+        # 3 次 LLM 调用：规划(无工具) → 写入 → finish
+        assert llm.chat_with_tools.call_count == 3
+        # 引导文案注入第二轮请求的 LLM 历史（作为 user 消息）
+        calls = llm.chat_with_tools.await_args_list
+        second_msgs = calls[1].kwargs["messages"]
+        assert any(
+            m["role"] == "user" and "stalled round" in m["content"] for m in second_msgs
+        )
+        # 引导文案不推送到前端：plan 事件流中不出现该文本
+        plans = " ".join(e.get("content", "") for e in events if e["type"] == "plan")
+        assert "stalled round" not in plans
+        done = events[-1]
+        assert done["type"] == "done"
+        assert any(f["path"] == "main.tex" for f in done["files"])
+
 
 class TestSandboxPath:
     """沙箱路径校验。"""
@@ -291,6 +343,26 @@ class TestErrorAnalysis:
     def test_extract_no_errors(self):
         log = "Output written on main.pdf\n"
         assert _extract_errors(log) == []
+
+    def test_extract_missing_character(self):
+        """xelatex 的中文缺字诊断不产生 `!` 行，也应被提取并带字体提示；
+        连续刷屏的缺字行只保留一条合并条目，避免挤占错误列表上限。"""
+        log = (
+            "Missing character: There is no 基 (U+57FA) in font "
+            "Fira Sans Regular/OT:script=latn;language=dflt;mapping=tex-text;!\n"
+            "Missing character: There is no 于 (U+4E8E) in font "
+            "Fira Sans Regular/OT:script=latn;language=dflt;mapping=tex-text;!\n"
+        )
+        errors = _extract_errors(log)
+        assert len(errors) == 1
+        assert errors[0]["type"].startswith("Missing character")
+        assert "U+57FA" in errors[0]["detail"]
+        # 字体名含空格，应完整提取（正则不再只取首个 token）
+        assert errors[0]["font"] == "Fira Sans Regular"
+        # 合并计数：两条缺字诊断合并为一条
+        assert "+1 more missing-character lines" in errors[0]["detail"]
+        text = _format_error_analysis(errors)
+        assert "CJK" in text or "xeCJK" in text
 
     def test_format_analysis_lists_first_error(self):
         errors = [

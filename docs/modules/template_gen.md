@@ -69,11 +69,29 @@ Agent 自主规划文件结构 → 逐个 `write_file` → 调用 `compile_latex
 | `error` | 错误终止 |
 
 循环逻辑：
-1. 调用 `chat_with_tools`，若 LLM 无 `tool_calls` → 主动结束
+1. 调用 `chat_with_tools`；若 LLM 无 `tool_calls`，先按"规划瘫痪防护"引导
+   继续行动（见下文），连续 2 次仍无工具调用才结束
 2. 否则把 assistant 消息追加进历史，依次执行每个 `tool_call`，将工具结果以 `role:"tool"` 回传 LLM
 3. `finish` 工具立即跳出整体循环
 4. 循环中跟踪 `compile_state`（`called`/`success`）。若最后一次编译仍失败时触发 `finish`，额外推送 `warning` 事件（不阻断 `done`）。
 5. 达到 `agent_max_rounds` 仍未 finish → 自动结束并推送提示；若此时编译仍失败，同样推送 `warning`。
+
+## 规划瘫痪防护（no-tool-call nudge）
+
+LLM 面对复杂需求时可能出现"规划瘫痪"：首轮输出长篇思考文本却不调用任何工具，
+旧逻辑会把它当作主动结束，导致生成 0 个文件就 `done`。现循环对"无 tool_call 的
+回复"做如下处理：
+
+- 累计最多 2 次无工具回复时，注入一条用户消息引导其立即调用
+  `write_file / read_file / list_files / compile_latex / finish`，
+  并写入 trace（`type: "nudge"`）供分析；
+- 超过 2 次仍无工具调用才视为异常结束。
+
+引导文案仅注入 LLM 历史并记录到 trace，**不推送 `plan` 事件到前端**——
+它是面向模型的指令，对用户没有展示价值。
+
+系统提示词同步要求"首轮回复必须包含至少一个 tool_call"，且每轮 `content`
+不超过 2 句，把规划收敛到行动上。
 
 ## 编译错误修复协议
 
@@ -99,8 +117,21 @@ prompt 同时列出 6 种常见 LaTeX 编译错误的根因与修复指引（`Un
 - `file`：错误所在源文件相对路径
 - `line`：错误行号（`int` 或 `None`）
 - `detail`：行内容（如 `\unknowncommand`）
+- `font`（可选）：缺字诊断中涉及的字体名
 
 识别逻辑：`^! ...` 声明行 → 回溯最近 `(xxx.tex` 上下文作为文件名 → 向后扫 15 行寻找 `l.NNN` 行号。
+
+除 `!` 行外，额外识别 **Missing character** 缺字诊断（如中文内容未配置 CJK
+字体时 xelatex 报 `Missing character: There is no 基 (U+57FA) in font ...`）：
+这类问题不产生 `!` 行但会导致 latexmk 退出码非 0 且 PDF 缺字，Agent 之前无法
+诊断。提取后 `_format_error_analysis` 会附带"加载 xeCJK/ctex 并配置 CJK 字体"
+的修复提示。
+
+缺字诊断会逐字符刷屏（一段文本可能产生成百上千条），为防挤占 8 条错误上限，
+`_extract_errors` 只保留**第一条**缺字诊断（含所在文件与字体名），后续刷屏行
+仅累计数量并合并进 `detail`（如 `+N more missing-character lines`）。
+
+字体名可能含空格（如 `Fira Sans Regular`），提取正则取 `in font` 到 `/`、`;` 或 `!` 之前的完整名称。
 
 **`_format_error_analysis(errors)`**：格式化为给 LLM 看的聚焦错误摘要，强调"Fix the FIRST error and recompile"。
 
@@ -161,3 +192,37 @@ Prefix: `/api/template-gen`, Tag: `template_gen`
 - 通过 `/api/template-gen/trace` 查看或 `/trace/download` 导出 JSON，供分析与改进 Agent
 
 前端 `TemplateGenPage` 提供 Agent 日志卡片（`查看日志` / `导出日志`），查看时在弹窗中逐条展示追踪事件。
+
+## 质量约束（系统提示词，基准驱动）
+
+`agent_system` 提示词按"工业级模板基准"重构，包含：
+
+- **需求→实现 1:1 映射清单**：边距→`geometry`、字体→`fontspec`/`ctex`、
+  主题色→`\definecolor`+`\colorlet`、三线表→`booktabs`、参考文献→
+  `natbib`/`biblatex`+`.bib`、中文→`ctex`/`xeCJK`（XeLaTeX）等；
+- **格式与内容分离**：样式封装 `.cls`/`.sty`，正文只用语义命令；
+- **分类玩法**：学位论文（front/main/back matter、`\ctexset` "第N章"、
+  元数据命令勿裸排 `\@title`）、演示文稿（扁平化、进度条、独立 color theme、
+  中文内容必须配 CJK 字体）、简历（单页纪律、语义命令、紧凑排版）、会议论文
+  （author-year 引用、双栏）；
+- **字体安全**：只引用系统确定存在的字体（Windows 下 SimSun/SimHei/Times New
+  Roman 等），Fira/Noto 等缺失字体须 `\IfFontExistsTF` 兜底；
+- **图片占位**：Agent 无法创建二进制文件，禁止引用不存在的 PNG，改用 TikZ 或
+  `\fcolorbox`/`\rule`；
+- **finish 前质量门禁**：对照需求清单复核文件、示例内容覆盖
+  公式/图表/引用/目录，README 说明编译引擎，日志无未定义引用。
+
+## 离线评测工具链（templategen_opt/）
+
+`templategen_opt/` 是复现 Agent 优化闭环的离线工具（与 `plotgen_opt/` 同模式）：
+
+| 脚本 | 用途 |
+| --- | --- |
+| `run_templategen.py <tag> [场景,...]` | 驱动 Agent 生成并采集指标（轮数/编译/需求遵守/启发式评分），结果写入 `results/<tag>/<场景>/` |
+| `analyze_trace.py <tag>` | 分析 trace.jsonl：工具分布、失败工具、编译轮次、时间线 |
+| `visual_review.py <tag>` | pdftoppm 渲染 PDF 前若干页 → LLM 视觉审查（字体/版式/美学/需求遵守，0-10 分） |
+| `compare.py <tagA> <tagB>` | 对比两个 tag 的启发式与视觉评分 |
+| `descriptions.py` | 用户口吻的场景描述（学位论文/演示文稿/简历/需求遵守）与硬性要求检查表 |
+
+场景说明：每个场景的 `summary.json` 记录 `req.detail` 逐条需求遵守结果、
+`visual_review` 记录视觉评分与问题清单，用于诊断 Agent 质量缺失环节。

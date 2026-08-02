@@ -155,6 +155,8 @@ class TemplateAgentService:
         compile_state = {"called": False, "success": None}
         run_id = uuid.uuid4().hex[:12]
         rounds_used = 0
+        # 连续出现"只输出文本、不调用工具"的次数（规划瘫痪防护）
+        no_tool_strikes = 0
 
         await self._append_trace(
             sandbox,
@@ -237,7 +239,23 @@ class TemplateAgentService:
             )
 
             if not tool_calls:
-                # Agent 主动结束（无工具调用即终止）
+                # LLM 只输出文本未调用工具：可能是"规划瘫痪"（长篇思考却不行动）。
+                # 引导最多 2 次后仍无工具调用，才视为异常结束。
+                if no_tool_strikes < 2 and round_idx < max_rounds - 1:
+                    no_tool_strikes += 1
+                    nudge = _nudge_message()
+                    messages.append(msg.model_dump())
+                    messages.append({"role": "user", "content": nudge})
+                    await self._append_trace(
+                        sandbox,
+                        {
+                            "ts": now_iso(),
+                            "run_id": run_id,
+                            "type": "nudge",
+                            "data": {"strike": no_tool_strikes, "message": nudge},
+                        },
+                    )
+                    continue
                 break
 
             # 将 assistant 含 tool_calls 的消息追加进历史
@@ -454,7 +472,12 @@ class TemplateAgentService:
                 "type": "function",
                 "function": {
                     "name": "read_file",
-                    "description": "Read the current contents of a file already created in the workspace. Useful before editing to fix compile errors.",
+                    "description": (
+                        "Read the current contents of a file already created in "
+                        "the workspace. Useful before editing to fix compile "
+                        "errors, and for the pre-finish quality gate (re-check "
+                        "files against the requirement checklist)."
+                    ),
                     "parameters": {
                         "type": "object",
                         "properties": {
@@ -484,7 +507,10 @@ class TemplateAgentService:
                             "Compile the project with latexmk -xelatex to verify it "
                             "builds successfully. Returns success status and a trimmed "
                             "log on failure. Call this after writing all files, and "
-                            "again after any fix. Do not loop more than necessary."
+                            "again after any fix. On success, also inspect the log "
+                            "tail for warnings such as undefined references or "
+                            "overfull boxes and fix them when present. Do not loop "
+                            "more than necessary."
                         ),
                         "parameters": {
                             "type": "object",
@@ -814,6 +840,16 @@ def _trim_log(log: str, success: bool) -> str:
     return "Compilation FAILED.\n\n" + snippet
 
 
+def _nudge_message() -> str:
+    """规划瘫痪引导文案（仅注入 LLM 历史与 trace，不推送到前端）。"""
+    return (
+        "You replied without calling any tool, which counts as a stalled round. "
+        "Immediately call the next tool (write_file / read_file / list_files / "
+        "compile_latex / finish) — never reply with prose only. Keep plan text to "
+        "at most 2 sentences."
+    )
+
+
 # 匹配 latexmk/xelatex 日志中的文件入栈标记，形如 `(./main.tex` 或
 # `(chapters/intro.tex`。用于追踪错误发生在哪个源文件中。
 _FILE_CTX_RE = re.compile(r"\(\s*((?:\.{1,2}/)?[\w./\-]+\.tex)\b")
@@ -830,16 +866,45 @@ def _extract_errors(log: str) -> list[dict[str, Any]]:
 
     LaTeX 错误会级联（第一个错误往往引来一系列后续错误），所以只
     返回前若干个错误就足以让 LLM 聚焦根因。
+
+    另外识别"缺字"类诊断（如中文内容未配 CJK 字体时 xelatex 报
+    `Missing character: There is no ...`）：这类问题不产生 `!` 行，
+    但会导致 latexmk 退出码非 0 且 PDF 缺字。缺字诊断会逐字符刷屏，
+    同一段文本可能产生成百上千条，因此只保留第一条并合并计数。
     """
     errors: list[dict[str, Any]] = []
     lines = log.splitlines()
     last_file: str | None = None
+    # 只保留第一条缺字诊断（记录首条所在文件/字体），后续只累计数量
+    missing_char: dict[str, Any] | None = None
+    missing_char_count = 0
 
     for i, line in enumerate(lines):
         # 更新当前文件上下文（粗略追踪，不处理栈深度，仅用最近出现的）
         for m in _FILE_CTX_RE.finditer(line):
             raw = m.group(1).lstrip("./")
             last_file = raw or last_file
+
+        # 缺字诊断：`Missing character: There is no X (U+XXXX) in font Y`
+        if "Missing character" in line or "missing character" in line:
+            missing_char_count += 1
+            if missing_char is None:
+                # 尝试提取字体名（in font <字体>，可能含空格，字体参数以 / 或 ; 分隔）
+                font = None
+                m_font = re.search(r"in font ([^/;!]+)", line)
+                if m_font:
+                    font = m_font.group(1).strip()
+                missing_char = {
+                    "type": "Missing character (CJK font not configured?)",
+                    "file": last_file,
+                    "line": None,
+                    "detail": line.strip()[:200],
+                }
+                if font:
+                    missing_char["font"] = font
+                # 按日志顺序插入首条缺字诊断，后续刷屏行不再产生新条目
+                errors.append(missing_char)
+            continue
 
         if not line.startswith("!"):
             continue
@@ -861,6 +926,13 @@ def _extract_errors(log: str) -> list[dict[str, Any]]:
                 # 下一个错误已经开始，停止继续找行号
                 break
         errors.append(err)
+
+    # 合并计数：多条缺字诊断合并为一条，避免挤占错误列表上限
+    if missing_char is not None and missing_char_count > 1:
+        missing_char["detail"] = (
+            f"{missing_char['detail']} "
+            f"(+{missing_char_count - 1} more missing-character lines)"
+        )
 
     # 限制最多 8 个错误，避免极端情况日志回传过长
     return errors[:8]
@@ -892,6 +964,14 @@ def _format_error_analysis(errors: list[dict[str, Any]]) -> str:
             parts.append(f"  line: {e['line']}")
         if e["detail"]:
             parts.append(f"  detail: {e['detail']}")
+        if e.get("font"):
+            parts.append(f"  font: {e['font']}")
+        if e["type"].startswith("Missing character"):
+            parts.append(
+                "  hint: Chinese/CJK text is typeset in a font that lacks "
+                "those glyphs — load xeCJK/ctex and set a CJK font "
+                "(e.g. SimSun/SimHei) for CJK text."
+            )
         parts.append("")
     return "\n".join(parts)
 
