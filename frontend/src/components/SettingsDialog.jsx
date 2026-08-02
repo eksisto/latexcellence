@@ -292,31 +292,54 @@ export default function SettingsDialog() {
           {/* Features */}
           <ConfigSection title={t("settings.features")}>
             <CheckboxField
-              label={t("settings.featureTypoCheck")}
-              checked={config.features.typo_check.enabled}
-              onChange={(v) => set("features.typo_check.enabled", v)}
+              label={t("settings.featureCompile")}
+              checked={config.features.compile.enabled}
+              onChange={(v) => set("features.compile.enabled", v)}
             />
-            <CheckboxField
-              label={t("settings.featureExpressionOpt")}
-              checked={config.features.expression_opt.enabled}
-              onChange={(v) => set("features.expression_opt.enabled", v)}
-            />
-            <div className="space-y-1.5">
-              <Label className="text-xs">
-                {t("settings.featureExpressionOptDefaultPrompt")}
-              </Label>
-              <Textarea
-                rows={3}
-                value={config.features.expression_opt.default_prompt}
-                onChange={(e) =>
-                  set("features.expression_opt.default_prompt", e.target.value)
-                }
-              />
-            </div>
+            {config.features.compile.enabled && (
+              <div className="ml-6 space-y-3 rounded-md border p-2.5 bg-muted/40">
+                <div className="space-y-1.5">
+                  <Label className="text-xs">
+                    {t("settings.compileEngine")}
+                  </Label>
+                  <Select
+                    value={config.features.compile.engine}
+                    onValueChange={(v) => set("features.compile.engine", v)}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="auto">
+                        {t("settings.compileEngineAuto")}
+                      </SelectItem>
+                      <SelectItem value="pdflatex">pdfLaTeX</SelectItem>
+                      <SelectItem value="xelatex">XeLaTeX</SelectItem>
+                      <SelectItem value="lualatex">LuaLaTeX</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <CheckboxField
+                  label={t("settings.compilePdfa")}
+                  checked={config.features.compile.pdfa}
+                  onChange={(v) => set("features.compile.pdfa", v)}
+                />
+              </div>
+            )}
             <CheckboxField
               label={t("settings.featureFormulaOcr")}
               checked={config.features.formula_ocr.enabled}
               onChange={(v) => set("features.formula_ocr.enabled", v)}
+            />
+            <CheckboxField
+              label={t("settings.featureTableOcr")}
+              checked={config.features.table_ocr.enabled}
+              onChange={(v) => set("features.table_ocr.enabled", v)}
+            />
+            <CheckboxField
+              label={t("settings.featureFormatConvert")}
+              checked={config.features.format_converter.enabled}
+              onChange={(v) => set("features.format_converter.enabled", v)}
             />
             <CheckboxField
               label={t("settings.featureTemplateGen")}
@@ -423,45 +446,133 @@ export default function SettingsDialog() {
               </div>
             )}
             <CheckboxField
-              label={t("settings.featureCodeReview")}
-              checked={config.features.code_review.enabled}
-              onChange={(v) => set("features.code_review.enabled", v)}
+              label={t("settings.featurePlotGen")}
+              checked={config.features.plot_gen.enabled}
+              onChange={(v) => set("features.plot_gen.enabled", v)}
             />
-            <CheckboxField
-              label={t("settings.featureCompile")}
-              checked={config.features.compile.enabled}
-              onChange={(v) => set("features.compile.enabled", v)}
-            />
-            {config.features.compile.enabled && (
-              <div className="ml-6 space-y-3 rounded-md border p-2.5 bg-muted/40">
+            {config.features.plot_gen.enabled && (
+              <div className="ml-6 space-y-2 rounded-md border p-2.5 bg-muted/40">
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="space-y-1">
+                    <Label className="text-xs">
+                      {t("settings.plotGenMaxRounds")}
+                    </Label>
+                    <Input
+                      type="number"
+                      min="1"
+                      max="50"
+                      value={config.features.plot_gen.agent_max_rounds}
+                      onChange={(e) =>
+                        set(
+                          "features.plot_gen.agent_max_rounds",
+                          Math.min(
+                            Math.max(parseInt(e.target.value, 10) || 30, 1),
+                            50,
+                          ),
+                        )
+                      }
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs">
+                      {t("settings.plotGenExecTimeout")}
+                    </Label>
+                    <Input
+                      type="number"
+                      min="1"
+                      value={config.features.plot_gen.sandbox_exec_timeout}
+                      onChange={(e) =>
+                        set(
+                          "features.plot_gen.sandbox_exec_timeout",
+                          parseInt(e.target.value, 10) || 60,
+                        )
+                      }
+                    />
+                  </div>
+                </div>
                 <div className="space-y-1.5">
                   <Label className="text-xs">
-                    {t("settings.compileEngine")}
+                    {t("settings.plotGenDefaultStyle")}
                   </Label>
                   <Select
-                    value={config.features.compile.engine}
-                    onValueChange={(v) => set("features.compile.engine", v)}
+                    value={config.features.plot_gen.default_style}
+                    onValueChange={(v) =>
+                      set("features.plot_gen.default_style", v)
+                    }
                   >
                     <SelectTrigger>
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="auto">
-                        {t("settings.compileEngineAuto")}
-                      </SelectItem>
-                      <SelectItem value="pdflatex">pdfLaTeX</SelectItem>
-                      <SelectItem value="xelatex">XeLaTeX</SelectItem>
-                      <SelectItem value="lualatex">LuaLaTeX</SelectItem>
+                      {["nature", "science", "cell", "ieee", "acs"].map((s) => (
+                        <SelectItem key={s} value={s}>
+                          {s}
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </div>
                 <CheckboxField
-                  label={t("settings.compilePdfa")}
-                  checked={config.features.compile.pdfa}
-                  onChange={(v) => set("features.compile.pdfa", v)}
+                  label={t("settings.plotGenTikzCompile")}
+                  checked={config.features.plot_gen.tikz_compile_enabled}
+                  onChange={(v) =>
+                    set("features.plot_gen.tikz_compile_enabled", v)
+                  }
+                />
+                <CheckboxField
+                  label={t("settings.plotGenCleanup")}
+                  checked={config.features.plot_gen.cleanup_enabled}
+                  onChange={(v) => set("features.plot_gen.cleanup_enabled", v)}
                 />
               </div>
             )}
+            <CheckboxField
+              label={t("settings.featureBibManager")}
+              checked={config.features.bib_manager.enabled}
+              onChange={(v) => set("features.bib_manager.enabled", v)}
+            />
+            <CheckboxField
+              label={t("settings.featureTypoCheck")}
+              checked={config.features.typo_check.enabled}
+              onChange={(v) => set("features.typo_check.enabled", v)}
+            />
+            <CheckboxField
+              label={t("settings.featureExpressionOpt")}
+              checked={config.features.expression_opt.enabled}
+              onChange={(v) => set("features.expression_opt.enabled", v)}
+            />
+            <div className="space-y-1.5">
+              <Label className="text-xs">
+                {t("settings.featureExpressionOptDefaultPrompt")}
+              </Label>
+              <Textarea
+                rows={3}
+                value={config.features.expression_opt.default_prompt}
+                onChange={(e) =>
+                  set("features.expression_opt.default_prompt", e.target.value)
+                }
+              />
+            </div>
+            <CheckboxField
+              label={t("settings.featureTerminologyCheck")}
+              checked={config.features.terminology_check.enabled}
+              onChange={(v) => set("features.terminology_check.enabled", v)}
+            />
+            <CheckboxField
+              label={t("settings.featureParagraphTranslate")}
+              checked={config.features.paragraph_translate.enabled}
+              onChange={(v) => set("features.paragraph_translate.enabled", v)}
+            />
+            <CheckboxField
+              label={t("settings.featureCodeReview")}
+              checked={config.features.code_review.enabled}
+              onChange={(v) => set("features.code_review.enabled", v)}
+            />
+            <CheckboxField
+              label={t("settings.featureStyleModify")}
+              checked={config.features.style_modify.enabled}
+              onChange={(v) => set("features.style_modify.enabled", v)}
+            />
             <CheckboxField
               label={t("settings.featureGitDiff")}
               checked={config.features.git_diff.enabled}
@@ -561,31 +672,6 @@ export default function SettingsDialog() {
               </div>
             )}
             <CheckboxField
-              label={t("settings.featureTableOcr")}
-              checked={config.features.table_ocr.enabled}
-              onChange={(v) => set("features.table_ocr.enabled", v)}
-            />
-            <CheckboxField
-              label={t("settings.featureFormatConvert")}
-              checked={config.features.format_converter.enabled}
-              onChange={(v) => set("features.format_converter.enabled", v)}
-            />
-            <CheckboxField
-              label={t("settings.featureStyleModify")}
-              checked={config.features.style_modify.enabled}
-              onChange={(v) => set("features.style_modify.enabled", v)}
-            />
-            <CheckboxField
-              label={t("settings.featureTerminologyCheck")}
-              checked={config.features.terminology_check.enabled}
-              onChange={(v) => set("features.terminology_check.enabled", v)}
-            />
-            <CheckboxField
-              label={t("settings.featureParagraphTranslate")}
-              checked={config.features.paragraph_translate.enabled}
-              onChange={(v) => set("features.paragraph_translate.enabled", v)}
-            />
-            <CheckboxField
               label={t("settings.featureWritingChat")}
               checked={config.features.writing_chat.enabled}
               onChange={(v) => set("features.writing_chat.enabled", v)}
@@ -598,92 +684,6 @@ export default function SettingsDialog() {
                   onChange={(v) =>
                     set("features.writing_chat.web_search_enabled", v)
                   }
-                />
-              </div>
-            )}
-            <CheckboxField
-              label={t("settings.featureBibManager")}
-              checked={config.features.bib_manager.enabled}
-              onChange={(v) => set("features.bib_manager.enabled", v)}
-            />
-            <CheckboxField
-              label={t("settings.featurePlotGen")}
-              checked={config.features.plot_gen.enabled}
-              onChange={(v) => set("features.plot_gen.enabled", v)}
-            />
-            {config.features.plot_gen.enabled && (
-              <div className="ml-6 space-y-2 rounded-md border p-2.5 bg-muted/40">
-                <div className="grid grid-cols-2 gap-2">
-                  <div className="space-y-1">
-                    <Label className="text-xs">
-                      {t("settings.plotGenMaxRounds")}
-                    </Label>
-                    <Input
-                      type="number"
-                      min="1"
-                      max="50"
-                      value={config.features.plot_gen.agent_max_rounds}
-                      onChange={(e) =>
-                        set(
-                          "features.plot_gen.agent_max_rounds",
-                          Math.min(
-                            Math.max(parseInt(e.target.value, 10) || 30, 1),
-                            50,
-                          ),
-                        )
-                      }
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <Label className="text-xs">
-                      {t("settings.plotGenExecTimeout")}
-                    </Label>
-                    <Input
-                      type="number"
-                      min="1"
-                      value={config.features.plot_gen.sandbox_exec_timeout}
-                      onChange={(e) =>
-                        set(
-                          "features.plot_gen.sandbox_exec_timeout",
-                          parseInt(e.target.value, 10) || 60,
-                        )
-                      }
-                    />
-                  </div>
-                </div>
-                <div className="space-y-1.5">
-                  <Label className="text-xs">
-                    {t("settings.plotGenDefaultStyle")}
-                  </Label>
-                  <Select
-                    value={config.features.plot_gen.default_style}
-                    onValueChange={(v) =>
-                      set("features.plot_gen.default_style", v)
-                    }
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {["nature", "science", "cell", "ieee", "acs"].map((s) => (
-                        <SelectItem key={s} value={s}>
-                          {s}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <CheckboxField
-                  label={t("settings.plotGenTikzCompile")}
-                  checked={config.features.plot_gen.tikz_compile_enabled}
-                  onChange={(v) =>
-                    set("features.plot_gen.tikz_compile_enabled", v)
-                  }
-                />
-                <CheckboxField
-                  label={t("settings.plotGenCleanup")}
-                  checked={config.features.plot_gen.cleanup_enabled}
-                  onChange={(v) => set("features.plot_gen.cleanup_enabled", v)}
                 />
               </div>
             )}
