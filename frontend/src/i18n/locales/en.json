@@ -568,8 +568,11 @@
       "colorDel": "Deletion Color",
       "excludeSafecmd": "Exclude Safe Commands",
       "excludeTextcmd": "Exclude Text Commands",
-      "excludeSafecmdPlaceholder": "e.g.: ref,cite",
-      "excludeTextcmdPlaceholder": "e.g.: textbf,emph"
+      "excludeSafecmdPlaceholder": "e.g.: ref, cite",
+      "excludeTextcmdPlaceholder": "e.g.: textbf, emph",
+      "enterFullscreen": "Fullscreen",
+      "quitFullscreen": "Exit fullscreen",
+      "fullscreenTitle": "Diff PDF Fullscreen Preview"
     },
     "formulaOcr": {
       "title": "Formula OCR",

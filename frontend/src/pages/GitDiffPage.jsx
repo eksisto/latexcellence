@@ -6,10 +6,12 @@ import {
   Check,
   CircleX,
   Download,
+  Expand,
   FileDiff,
   GitBranch,
   GitCommit,
   Loader2,
+  Minimize,
   RefreshCw,
   Settings2,
   Tag,
@@ -102,6 +104,7 @@ export default function GitDiffPage() {
   const [error, setError] = useState("");
   const [result, setResult] = useState(null);
   const [pdfUrl, setPdfUrl] = useState("");
+  const [pdfFullscreen, setPdfFullscreen] = useState(false);
   const [showRawOutput, setShowRawOutput] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [diffEngine, setDiffEngine] = useState("difflib");
@@ -155,6 +158,16 @@ export default function GitDiffPage() {
       setSelectedMainFile(mainFile);
     }
   }, [mainFile, selectedMainFile]);
+
+  useEffect(() => {
+    if (!pdfFullscreen) return;
+
+    const onKeyDown = (e) => {
+      if (e.key === "Escape") setPdfFullscreen(false);
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [pdfFullscreen]);
 
   const loadRefs = useCallback(async () => {
     if (!projectPath) return;
@@ -753,9 +766,43 @@ export default function GitDiffPage() {
           )}
         </div>
 
-        <div className="h-[720px]">
-          <PDFPreview url={pdfUrl} />
+        <div className="relative h-[720px]">
+          {!pdfFullscreen && <PDFPreview url={pdfUrl} />}
+          {pdfUrl && !pdfFullscreen && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="absolute bottom-2 left-2 z-10 bg-background/80 backdrop-blur"
+              onClick={() => setPdfFullscreen(true)}
+            >
+              <Expand />
+              {t("pages:gitDiff.enterFullscreen")}
+            </Button>
+          )}
         </div>
+
+        {pdfFullscreen && pdfUrl && (
+          <div className="fixed inset-0 z-50 flex flex-col bg-background">
+            <div className="flex items-center justify-between border-b px-4 py-2">
+              <h2 className="text-sm font-semibold">
+                {t("pages:gitDiff.fullscreenTitle")}
+              </h2>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setPdfFullscreen(false)}
+              >
+                <Minimize />
+                {t("pages:gitDiff.quitFullscreen")}
+              </Button>
+            </div>
+            <div className="flex-1 overflow-hidden p-4">
+              <div className="h-full">
+                <PDFPreview url={pdfUrl} />
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

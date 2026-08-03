@@ -568,8 +568,11 @@
       "colorDel": "删除颜色",
       "excludeSafecmd": "排除安全命令",
       "excludeTextcmd": "排除文本命令",
-      "excludeSafecmdPlaceholder": "如：ref,cite",
-      "excludeTextcmdPlaceholder": "如：textbf,emph"
+      "excludeSafecmdPlaceholder": "如：ref，cite",
+      "excludeTextcmdPlaceholder": "如：textbf，emph",
+      "enterFullscreen": "全屏查看",
+      "quitFullscreen": "退出全屏",
+      "fullscreenTitle": "差异 PDF 全屏预览"
     },
     "formulaOcr": {
       "title": "公式 OCR 识别",
