@@ -3,15 +3,26 @@ table_ocr 模块集成测试。
 """
 
 import io
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from pydantic import ValidationError
 
 from backend.modules.table_ocr.service import (
-    TableOCRService,
     TableOCRResult,
+    TableOCRService,
 )
+
+TABLE_LATEX = (
+    r"\begin{table}[htbp]\centering"
+    r"\caption{Results}\begin{tabular}{lr}\toprule Name & Value \\"
+    r"\midrule A & 10 \\\bottomrule\end{tabular}\end{table}"
+)
+
+
+def ocr_response(latex, confidence="0.95"):
+    """构造符合 <<<LATEX>>> 分隔符协议的模型原始输出。"""
+    return f"<<<LATEX>>>\n{latex}\n<<<END>>>\n" f"CONFIDENCE: {confidence}"
 
 
 @pytest.fixture
@@ -30,10 +41,7 @@ class TestTableOCRResultModel:
     """TableOCRResult 模型校验测试。"""
 
     def test_valid(self):
-        data = {
-            "latex": r"\begin{table}[htbp]\centering\begin{tabular}{cc}\toprule A & B \\\midrule 1 & 2 \\\bottomrule\end{tabular}\end{table}",
-            "confidence": 0.95,
-        }
+        data = {"latex": TABLE_LATEX, "confidence": 0.95}
         result = TableOCRResult.model_validate(data)
         assert result.confidence == 0.95
 
@@ -54,6 +62,64 @@ class TestTableOCRResultModel:
                     "confidence": "high",
                 }
             )
+
+    def test_confidence_out_of_range(self):
+        with pytest.raises(ValidationError):
+            TableOCRResult.model_validate({"latex": TABLE_LATEX, "confidence": 1.5})
+
+    def test_rejects_control_char(self):
+        """\begin 经 JSON 转义损坏后变成退格 + 'egin'，必须被内容校验器拦截。"""
+        latex = "\b" + r"egin{table}[htbp]\end{table}"
+        with pytest.raises(ValidationError, match="control character"):
+            TableOCRResult.model_validate({"latex": latex})
+
+    def test_rejects_garbage_placeholder(self):
+        latex = (
+            r"\begin{table}[htbp]\centering"
+            r"\begin{tabular}{c}[object Object]\end{tabular}\end{table}"
+        )
+        with pytest.raises(ValidationError, match="garbage"):
+            TableOCRResult.model_validate({"latex": latex})
+
+    def test_rejects_unbalanced_braces(self):
+        latex = r"\begin{table}[htbp]\caption{Results\end{table}"
+        with pytest.raises(ValidationError, match="unbalanced braces"):
+            TableOCRResult.model_validate({"latex": latex})
+
+    def test_rejects_missing_table_env(self):
+        """必须输出 table 浮动体，仅 tabular 不通过。"""
+        latex = r"\begin{tabular}{cc}A & B\end{tabular}"
+        with pytest.raises(ValidationError, match="table"):
+            TableOCRResult.model_validate({"latex": latex})
+
+    def test_table_star_accepted(self):
+        """table*（跨栏宽表格）是合法浮动体，应放行。"""
+        latex = r"\begin{table*}[htbp]\centering A & B \end{table*}"
+        result = TableOCRResult.model_validate({"latex": latex, "confidence": 0.9})
+        assert result.latex == latex
+
+    def test_empty_latex_zero_confidence_passes(self):
+        """图片不是表格时按协议输出空块 + CONFIDENCE 0.0，应放行。"""
+        result = TableOCRResult.model_validate({"latex": "", "confidence": 0.0})
+        assert result.latex == ""
+        assert result.confidence == 0.0
+
+    def test_empty_latex_high_confidence_rejected(self):
+        """空输出却给了非 0 置信度 → 协议不一致，拒绝并触发重试。"""
+        with pytest.raises(ValidationError, match="empty latex"):
+            TableOCRResult.model_validate({"latex": "", "confidence": 0.6})
+
+    def test_rejects_unclosed_environment(self):
+        latex = r"\begin{table}[htbp]\begin{tabular}{cc}A & B\end{tabular}"
+        with pytest.raises(ValidationError, match="unclosed"):
+            TableOCRResult.model_validate({"latex": latex})
+
+    def test_rejects_mismatched_environment(self):
+        latex = (
+            r"\begin{table}[htbp]\begin{tabular}{cc}A & B" r"\end{table}\end{tabular}"
+        )
+        with pytest.raises(ValidationError, match="mismatched"):
+            TableOCRResult.model_validate({"latex": latex})
 
 
 class TestImageValidation:
@@ -115,14 +181,11 @@ class TestPreprocess:
 
 
 class TestRecognize:
-    """第一次 LLM 调用测试。"""
+    """分隔符协议识别测试（不再使用 JSON 输出）。"""
 
     @pytest.mark.asyncio
     async def test_successful_recognition(self, mock_llm, service, minimal_png):
-        mock_llm.chat.return_value = {
-            "latex": r"\begin{table}[htbp]\centering\caption{Results}\begin{tabular}{lr}\toprule Name & Value \\\midrule A & 10 \\\bottomrule\end{tabular}\end{table}",
-            "confidence": 0.95,
-        }
+        mock_llm.chat.return_value = ocr_response(TABLE_LATEX)
 
         png = minimal_png
         result = await service._recognize_with_llm(mock_llm, png, "image/png")
@@ -133,10 +196,9 @@ class TestRecognize:
 
     @pytest.mark.asyncio
     async def test_low_confidence(self, mock_llm, service, minimal_png):
-        mock_llm.chat.return_value = {
-            "latex": r"\begin{table}[htbp]\end{table}",
-            "confidence": 0.4,
-        }
+        mock_llm.chat.return_value = ocr_response(
+            r"\begin{table}[htbp]\end{table}", confidence="0.4"
+        )
 
         png = minimal_png
         result = await service._recognize_with_llm(mock_llm, png, "image/png")
@@ -145,8 +207,107 @@ class TestRecognize:
         assert result["low_confidence"] is True
 
     @pytest.mark.asyncio
-    async def test_pydantic_retry_exhausted(self, mock_llm, service, minimal_png):
-        mock_llm.chat.return_value = {"bad": True}
+    async def test_not_a_table_returns_empty(self, mock_llm, service, minimal_png):
+        """非表格图片 → 空 LaTeX 块 + CONFIDENCE 0.0 → 优雅返回（不重试）。"""
+        mock_llm.chat.return_value = ocr_response("", confidence="0.0")
+
+        png = minimal_png
+        result = await service._recognize_with_llm(mock_llm, png, "image/png")
+
+        assert result["latex"] == ""
+        assert result["confidence"] == 0.0
+        assert result["low_confidence"] is True
+        mock_llm.chat.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_confidence_inside_latex_block_ignored(
+        self, mock_llm, service, minimal_png
+    ):
+        """LaTeX 单元格内容里的 'CONFIDENCE: x' 不应被当成元数据解析。"""
+        latex = TABLE_LATEX.replace(
+            r"\caption{Results}", r"\caption{Results CONFIDENCE: 0.99}"
+        )
+        mock_llm.chat.return_value = ocr_response(latex, confidence="0.9")
+
+        png = minimal_png
+        result = await service._recognize_with_llm(mock_llm, png, "image/png")
+
+        assert result["confidence"] == 0.9
+
+    @pytest.mark.asyncio
+    async def test_missing_metadata_defaults(self, mock_llm, service, minimal_png):
+        mock_llm.chat.return_value = f"<<<LATEX>>>\n{TABLE_LATEX}\n<<<END>>>"
+
+        png = minimal_png
+        result = await service._recognize_with_llm(mock_llm, png, "image/png")
+
+        assert result["confidence"] == 0.0
+
+    @pytest.mark.asyncio
+    async def test_missing_block_retries_then_recovers(
+        self, mock_llm, service, minimal_png
+    ):
+        mock_llm.chat.side_effect = [
+            "I cannot see the table clearly.",
+            ocr_response(TABLE_LATEX, confidence="0.9"),
+        ]
+
+        png = minimal_png
+        result = await service._recognize_with_llm(mock_llm, png, "image/png")
+
+        assert "table" in result["latex"]
+        assert mock_llm.chat.call_count == 2
+
+    @pytest.mark.asyncio
+    async def test_control_char_retries(self, mock_llm, service, minimal_png):
+        """模拟旧的 JSON 转义损坏（\begin 变成退格 + 'egin'），应触发重试并恢复。"""
+        bad = "\b" + r"egin{table}[htbp]\end{table}"
+        mock_llm.chat.side_effect = [
+            ocr_response(bad),
+            ocr_response(TABLE_LATEX, confidence="0.9"),
+        ]
+
+        png = minimal_png
+        result = await service._recognize_with_llm(mock_llm, png, "image/png")
+
+        assert "table" in result["latex"]
+        assert mock_llm.chat.call_count == 2
+
+    @pytest.mark.asyncio
+    async def test_garbage_placeholder_retries(self, mock_llm, service, minimal_png):
+        bad = (
+            r"\begin{table}[htbp]\centering"
+            r"\begin{tabular}{c}[object Object]\end{tabular}\end{table}"
+        )
+        mock_llm.chat.side_effect = [
+            ocr_response(bad),
+            ocr_response(TABLE_LATEX, confidence="0.9"),
+        ]
+
+        png = minimal_png
+        result = await service._recognize_with_llm(mock_llm, png, "image/png")
+
+        assert "table" in result["latex"]
+        assert mock_llm.chat.call_count == 2
+
+    @pytest.mark.asyncio
+    async def test_missing_table_env_retries(self, mock_llm, service, minimal_png):
+        """只输出 tabular 而没有 table 浮动体 → 校验失败并重试恢复。"""
+        bad = r"\begin{tabular}{cc}A & B\end{tabular}"
+        mock_llm.chat.side_effect = [
+            ocr_response(bad),
+            ocr_response(TABLE_LATEX, confidence="0.9"),
+        ]
+
+        png = minimal_png
+        result = await service._recognize_with_llm(mock_llm, png, "image/png")
+
+        assert r"\begin{table}" in result["latex"]
+        assert mock_llm.chat.call_count == 2
+
+    @pytest.mark.asyncio
+    async def test_retry_exhausted(self, mock_llm, service, minimal_png):
+        mock_llm.chat.return_value = "no block here"
 
         png = minimal_png
         with pytest.raises(RuntimeError, match="Table recognition failed"):
@@ -156,7 +317,7 @@ class TestRecognize:
 
 
 class TestRecognizeWithPackageAnalysis:
-    """完整流水线测试（第一次 LLM 识别 + 第二次宏包分析）。"""
+    """完整流水线测试（第一次分隔符协议识别 + 第二次宏包分析）。"""
 
     @pytest.fixture(autouse=True)
     def _mock_get_llm_client(self, mock_llm, monkeypatch):
@@ -170,14 +331,7 @@ class TestRecognizeWithPackageAnalysis:
     async def test_with_packages_detected(self, mock_llm, service, monkeypatch):
         """第一次返回表格代码，第二次返回宏包列表 → 结果含注释。"""
         mock_llm.chat.side_effect = [
-            {
-                "latex": (
-                    r"\begin{table}[htbp]\centering"
-                    r"\begin{tabular}{lr}\toprule Name & Value \\"
-                    r"\midrule A & 10 \\\bottomrule\end{tabular}\end{table}"
-                ),
-                "confidence": 0.95,
-            },
+            ocr_response(TABLE_LATEX),
             {"packages": ["booktabs"]},
         ]
 
@@ -204,15 +358,11 @@ class TestRecognizeWithPackageAnalysis:
     @pytest.mark.asyncio
     async def test_without_packages(self, mock_llm, service, monkeypatch):
         """第一次返回表格代码，第二次返回空列表 → 无注释。"""
+        hline_latex = TABLE_LATEX.replace(r"\toprule", r"\hline").replace(
+            r"\midrule", r"\hline"
+        )
         mock_llm.chat.side_effect = [
-            {
-                "latex": (
-                    r"\begin{table}[htbp]\centering"
-                    r"\begin{tabular}{lr}\hline Name & Value \\"
-                    r"\hline A & 10 \\\hline\end{tabular}\end{table}"
-                ),
-                "confidence": 0.90,
-            },
+            ocr_response(hline_latex, confidence="0.90"),
             {"packages": []},
         ]
 
@@ -239,14 +389,7 @@ class TestRecognizeWithPackageAnalysis:
     ):
         """第二次 LLM 调用失败 → 返回原始表格代码（优雅降级）。"""
         mock_llm.chat.side_effect = [
-            {
-                "latex": (
-                    r"\begin{table}[htbp]\centering"
-                    r"\begin{tabular}{lr}\toprule A & B \\"
-                    r"\midrule 1 & 2 \\\bottomrule\end{tabular}\end{table}"
-                ),
-                "confidence": 0.92,
-            },
+            ocr_response(TABLE_LATEX, confidence="0.92"),
             RuntimeError("API error"),
         ]
 

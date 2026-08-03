@@ -28,16 +28,13 @@ from backend.core.llm_client import get_llm_client
 from backend.core.logger import get_logger
 from backend.core.prompts import get_prompt
 from backend.utils.json_utils import format_validation_error
+from backend.utils.latex_json_guard import validate_latex_field
 from backend.utils.latex_package_analyzer import prepend_package_comments
 
 # 分隔符协议：LaTeX 以纯文本形式夹在标记之间，避免 JSON 反斜杠转义损坏
 _LATEX_BLOCK_RE = re.compile(r"<<<LATEX>>>(.*?)<<<END>>>", re.DOTALL | re.IGNORECASE)
 _INLINE_RE = re.compile(r"INLINE\s*:\s*(true|false)", re.IGNORECASE)
 _CONFIDENCE_RE = re.compile(r"CONFIDENCE\s*:\s*([0-9]*\.?[0-9]+)", re.IGNORECASE)
-
-# 内容校验：除换行外的控制字符（\r \t \f \b 等都是 JSON 转义损坏特征）、垃圾占位符
-_BAD_CONTROL_RE = re.compile(r"[\x00-\x09\x0b-\x1f\x7f]")
-_GARBAGE_RE = re.compile(r"\[object [A-Za-z]+\]")
 
 # 自带显示模式的顶层环境：复制时不再额外包裹（aligned/cases/matrix 等内层环境仍需包裹）
 _STANDALONE_DISPLAY_ENV_RE = re.compile(
@@ -67,24 +64,8 @@ class FormulaOCRResult(BaseModel):
     @field_validator("latex")
     @classmethod
     def _validate_latex_content(cls, value: str) -> str:
-        """内容校验器：拦截 JSON 转义损坏、垃圾占位符、花括号与 $ 不配平。"""
-        bad = _BAD_CONTROL_RE.search(value)
-        if bad:
-            raise ValueError(
-                f"latex contains a control character (U+{ord(bad.group()):04X} "
-                f"at position {bad.start()}); possible JSON escaping corruption"
-            )
-        if _GARBAGE_RE.search(value):
-            raise ValueError(
-                "latex contains a garbage placeholder like '[object Object]'"
-            )
-        braces = re.sub(r"\\[{}]", "", value)
-        if braces.count("{") != braces.count("}"):
-            raise ValueError("latex has unbalanced braces")
-        dollars = re.sub(r"\\\$", "", value)
-        if dollars.count("$") % 2 != 0:
-            raise ValueError("latex has unbalanced dollar signs")
-        return value
+        """内容校验器：拦截 JSON 转义损坏、垃圾占位符、花括号与 $ 不配平（共享实现）。"""
+        return validate_latex_field(value)
 
 
 class FormulaOCRService:

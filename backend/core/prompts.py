@@ -523,17 +523,20 @@ _PROMPTS: dict[str, dict[str, str]] = {
             "No fabrication or omission of any text or data. "
             "Mathematical formulas, superscripts/subscripts, Greek letters in text must use correct LaTeX math mode.\n"
             "5. Special symbols (%, &, _, #, ~, etc.) must be properly escaped.\n"
-            "6. Set 'confidence' based on recognition quality:\n"
+            "6. Set CONFIDENCE based on recognition quality:\n"
             "  * 0.9-1.0: Clear, confident recognition\n"
             "  * 0.7-0.9: Mostly clear, minor uncertainties\n"
             "  * 0.5-0.7: Partially clear, some guesses\n"
             "  * Below 0.5: Poor quality, significant uncertainty\n"
-            "If the image is not a table or unrecognizable, set 'latex' to empty string and 'confidence' to 0.0\n\n"
-            "Respond with JSON only, no markdown fences:\n"
-            "{\n"
-            '  "latex": "<LaTeX table float code>",\n'
-            '  "confidence": <float between 0 and 1>\n'
-            "}"
+            "If the image is not a table or unrecognizable, output an empty LaTeX block "
+            "and CONFIDENCE: 0.0.\n\n"
+            "Output format (strict; NO JSON, NO markdown fences):\n"
+            "<<<LATEX>>>\n"
+            "<LaTeX table float code>\n"
+            "<<<END>>>\n"
+            "CONFIDENCE: <float between 0 and 1>\n\n"
+            "Additional rule: backslashes are literal characters — write \\begin, \\toprule "
+            "exactly as-is; never escape or double them."
         ),
     },
     # ── style_modify 模块 ────────────────────────────────────────────────────
