@@ -30,7 +30,7 @@ Agentic 混合流水线：latexindent.pl（或内置轻量格式化器）处理�
 
 ## Pydantic 输出模型
 
-- `CodeReviewSuggestion` — 审查建议（type, severity, description, original, suggested）
+- `CodeReviewSuggestion` — 审查建议（type, severity, description, original, suggested；original/suggested 为 `LatexText`，经内容校验拦截 JSON 转义损坏）
 - `CodeReviewResult` — 逐段审查结果（paragraph_index, needs_review, suggestions）
 
 ## Service 核心方法

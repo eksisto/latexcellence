@@ -260,6 +260,18 @@ JSON validation failed. Please fix the following issues:
 
 LLM 收到错误后，有机会修正输出。这比简单的"请重新生成"更有效。
 
+### 3.5 LaTeX 内容校验（latex_json_guard.py）
+
+JSON schema 校验保证字段类型正确，但拦不住"合法 JSON + 损坏内容"的 LaTeX 字段：LaTeX 命令以反斜杠开头，而 JSON 字符串中反斜杠是转义符，未转义的反斜杠会被 JSON 静默损坏（`\rho` → 回车 + "ho"）或解析失败（`\sigma`）。`backend/utils/latex_json_guard.py` 提供**内容级校验**：
+
+- 控制字符（除换行外）—— JSON 反斜杠转义损坏特征
+- `[object Object]` 等垃圾占位符
+- 花括号配平（忽略 `\{` / `\}`，跳过注释、verbatim、URL 内容）
+- `$` 配平（同上跳过规则）
+- 可选 `\begin` / `\end` 环境栈式配平；BibTeX 模式 `%` 为字面字符
+
+接入方式：以 `LatexText` 字段类型挂到 Pydantic 模型（writing_chat / code_review / style_modify / bib_manager / OCR），或在写盘前由工具执行器调用 `check_latex_text()`（template_gen `write_file`、edit_tools `edit_paragraph`）。OCR 模块（formula_ocr / table_ocr）改用分隔符协议让反斜杠原样传输，并用该校验器把损坏输出转为可重试错误。
+
 ---
 
 ## 4. 文件安全操作
@@ -654,8 +666,11 @@ POST /api/formula-ocr/recognize (FormData: UploadFile)
 _validate_content_type() → _preprocess() → _to_base64()
   校验 MIME / 缩放超2000px边 / 转 JPEG base64
         ↓
-retry_with_validation(FormulaOCRResult)
-  Vision API（system prompt = 公式 OCR 专家，temperature=0.1）
+Vision API（system prompt = 公式 OCR 专家，temperature=0.1）
+  分隔符协议输出 <<<LATEX>>>...<<<END>>> + INLINE/CONFIDENCE 元数据
+        ↓
+正则提取 → latex_json_guard 内容校验
+  失败 → 错误回喂 LLM 重试（最多 3 次）
         ↓
 返回 { latex, inline, confidence }
   confidence < 0.7 时附加 low_confidence: true
@@ -673,8 +688,11 @@ POST /api/table-ocr/recognize (FormData: UploadFile)
 _validate_content_type() → _preprocess() → _to_base64()
   与 formula_ocr 完全一致的预处理逻辑
         ↓
-retry_with_validation(TableOCRResult)
-  Vision API（要求输出 \begin{table}[htbp]...\end{table} 和三线表样式，temperature=0.1）
+Vision API（要求按分隔符协议输出 \begin{table}[htbp]...\end{table} 和三线表样式，temperature=0.1）
+  <<<LATEX>>>...<<<END>>> + CONFIDENCE 元数据
+        ↓
+正则提取 → latex_json_guard 内容校验（含环境配平、table 浮动体检查）
+  失败 → 错误回喂 LLM 重试（最多 3 次）
         ↓
 返回 { latex, confidence }
   confidence < 0.7 时附加 low_confidence: true

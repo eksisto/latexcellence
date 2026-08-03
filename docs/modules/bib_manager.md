@@ -45,6 +45,7 @@ bib_manager/
 - `DoiLookupRequest`（doi: str）
 - 各类请求体：`FormatAnalysisRequest`、`ExtractRequest`、`GenerateBibtexRequest`、`SaveBibRequest`
 - **文献库管理模型**：`ParseBibRequest`、`ParseBibResponse`、`DetectDuplicatesRequest`、`DetectDuplicatesResponse`、`DuplicateGroup`、`DeleteEntryRequest`、`UpdateEntryRequest`、`EntryStatsResponse`
+- `ReferenceFormatResult.latex_preamble` 与 `BibEntry.fields` / `raw_bibtex` 经 `latex_json_guard.py` 内容校验（BibTeX 语义：`%` 为字面字符），拦截 LLM JSON 输出中的反斜杠转义损坏
 
 ## 多数据源架构（DOI 查询）
 

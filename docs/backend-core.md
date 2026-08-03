@@ -364,7 +364,7 @@ get_tool_registry().register(
 
 ### `json_utils.py` — LLM JSON 输出校验与重试
 
-**设计理念**：OpenAI 的 `response_format={"type": "json_object"}` 只保证输出是合法 JSON，**不保证字段符合预期 schema**。因此必须在收到回复后执行 Pydantic 校验。`safe_parse_json()` 是整个系统**唯一的 JSON 解析入口**，负责处理 LLM 输出中的各种格式问题（Markdown 围栏、尾逗号、单引号等）。
+**设计理念**：OpenAI 的 `response_format={"type": "json_object"}` 只保证输出是合法 JSON，**不保证字段符合预期 schema**。因此必须在收到回复后执行 Pydantic 校验。`safe_parse_json()` 是整个系统**唯一的 JSON 解析入口**，负责处理 LLM 输出中的各种格式问题（Markdown 围栏、尾逗号、单引号等）。schema 校验拦不住“合法 JSON + 内容损坏”的 LaTeX 字段（JSON 反斜杠转义），需配合 `latex_json_guard.py` 的字段级内容校验。
 
 **核心接口**：
 
@@ -388,6 +388,34 @@ for attempt in range(max_retries):
         messages += [correction_prompt_with_error_details]  # 🔁 反馈错误重试
 raise ValueError("Validation failed after N attempts")        # ❌ 耗尽
 ```
+
+### `latex_json_guard.py` — LaTeX×JSON 转义防护校验器
+
+**背景**：LaTeX 命令以反斜杠开头，而 JSON 字符串里反斜杠是转义符。LLM 输出经 JSON 传输时，未转义的反斜杠会被 JSON 静默损坏（如 `\rho` → 回车 + "ho"）或直接解析失败（如 `\sigma`）。schema 校验只能保证字段类型正确，拦不住这种“合法 JSON + 损坏内容”。
+
+**职责**：对 LaTeX/BibTeX 文本做内容级校验，把静默损坏变成可重试/可拦截错误。校验项：
+
+- 控制字符（除换行外）—— JSON 反斜杠转义损坏特征
+- `[object Object]` 等垃圾占位符
+- 花括号配平（忽略 `\{` / `\}`，跳过注释、verbatim、URL 内容）
+- `$` 配平（同上跳过规则）
+- 可选：`\begin{X}` / `\end{X}` 环境栈式配平
+
+**BibTeX 模式**：`bibtex=True` 时 `%` 视为字面字符（非注释起点），避免 percent-encoding URL（`https://x/y%20z`）被误判为花括号不配平。
+
+**核心接口**：
+
+| 接口 | 功能 |
+| --- | --- |
+| `check_latex_text(value, *, bibtex=False)` | 基础内容校验，通过返回 `None`，失败返回错误消息 |
+| `check_latex_environments(value)` | 环境栈式配平校验 |
+| `validate_latex_field(value, *, check_environments=False, bibtex=False)` | Pydantic 校验器回调：失败抛 `ValueError` |
+| `LatexText` | `Annotated[str, AfterValidator(...)]` 类型别名，字段声明直接复用 |
+
+**接入方式**：
+
+- 模型字段：`original: LatexText` 等 Pydantic 字段级校验（writing_chat / code_review / style_modify / bib_manager / formula_ocr / table_ocr）
+- 写盘前：template_gen `write_file`、edit_tools `edit_paragraph` 在写盘前调用 `check_latex_text()`，损坏内容直接拒绝并回喂 LLM 自纠
 
 ### `tex_compile.py` — 统一 TeX 编译执行模块
 

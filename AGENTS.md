@@ -69,6 +69,14 @@ LLM 输出**必须**经过 `json_utils.py` 的 `retry_with_validation()` 处理�
 2. Pydantic `.model_validate()` 严格校验
 3. 失败时，用 `format_validation_error()` 将错误格式化后反馈给 LLM 重试（最多 3 次）
 
+### 3. LaTeX 内容校验（JSON 转义防护）
+
+LLM 输出的 LaTeX 文本（经 JSON 传输或写盘前）**必须**使用 `backend/utils/latex_json_guard.py` 的共享校验器（`LatexText` / `check_latex_text()` / `validate_latex_field()`）：
+
+- 校验项：控制字符（JSON 反斜杠转义损坏特征）、`[object Object]` 垃圾占位符、花括号 / `$` 配平，可选 `\begin` / `\end` 环境配平
+- BibTeX 字段使用 `bibtex=True`（`%` 为字面字符，避免 URL percent-encoding 误判）
+- OCR 类模块优先采用分隔符协议（`<<<LATEX>>>...<<<END>>>`）直接传输纯文本，从根上避免 JSON 转义
+
 ---
 
 ## Python 后端规范

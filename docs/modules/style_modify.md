@@ -9,7 +9,7 @@
 
 ## Pydantic 输出模型
 
-- `StyleModifyResult`（latex）
+- `StyleModifyResult`（latex，字段为 `LatexText`，经 `latex_json_guard.py` 内容校验）
 
 ## Service 核心方法
 

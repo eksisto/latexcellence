@@ -62,6 +62,7 @@ latexcellence/
 │   │   ├── file_ops.py             # 文件读写（MD5、原子写入、BackupManager）
 │   │   ├── input_resolver.py       # \input/\include 递归解析器
 │   │   ├── json_utils.py           # LLM JSON 输出解析/校验/重试
+│   │   ├── latex_json_guard.py     # LaTeX×JSON 转义防护（内容校验，跨模块共享）
 │   │   ├── latex_parser.py         # LaTeX → 纯文本（Marker 保护）
 │   │   ├── tex_compile.py          # 统一 TeX 编译执行（texfot 过滤 + 引擎自动检测 + PDF/A 支持）
 │   │   ├── compile_error_translator.py  # 编译错误 LLM 翻译（compile + git_diff 复用）
@@ -247,6 +248,7 @@ core/ + utils/ (基础设施：配置、LLM 客户端、项目管理、文件 IO
 | LLM 调用 rate limit | 指数退避重试（最多 3 次） |
 | LLM 修改/删除 marker | 后处理验证完整性，缺失时回退原文 |
 | LLM JSON 输出不符 | `retry_with_validation()` 反馈重试 |
+| LLM 输出的 LaTeX 含 JSON 转义损坏（控制字符/括号不配平） | `latex_json_guard.py` 内容校验拦截并回喂重试 |
 | 用户审核期间修改文件 | MD5 校验，不一致拒绝写入 |
 | 撤销/重做 | BackupManager 维护操作栈（最多 50 层） |
 | API 密钥 | 加入 `.gitignore`，提供脱敏模板，环境变量优先 |

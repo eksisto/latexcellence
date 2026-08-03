@@ -24,7 +24,7 @@ Agent 自主规划文件结构 → 逐个 `write_file` → 调用 `compile_latex
 
 | 工具 | 功能 | 备注 |
 | --- | --- | --- |
-| `write_file` | 创建/覆盖沙箱内文件，完整内容写入 | 路径校验 + 文件数/大小上限 |
+| `write_file` | 创建/覆盖沙箱内文件，完整内容写入 | 路径校验 + 文件数/大小上限 + LaTeX 内容校验（写盘前拦截 JSON 转义损坏，失败回传 LLM 自纠） |
 | `read_file` | 读取沙箱内已写文件 | 修错时回看内容 |
 | `list_files` | 列出沙箱内全部文件 | 验证项目结构 |
 | `compile_latex` | `latexmk -xelatex` 在沙箱目录编译 | 受 `agent_compile_enabled` 开关控制，失败时截取错误行附近日志回传 LLM |

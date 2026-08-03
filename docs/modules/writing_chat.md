@@ -27,7 +27,7 @@ RS2 不直接写回 `.tex`，用户再点"应用到 .tex"才调用 `project_mana
     - `role` 中 tool 角色用于持久化工具调用结果
     - `tool_calls`（仅 assistant 角色）：LLM 请求调用的工具列表（OpenAI tool_calls 格式）
     - `tool_call_id`（仅 tool 角色）：关联到触发该结果的工具调用 ID
-- `LlmEditResult` — RS2 LLM 输出（paragraph_index, original, optimized, reason）
+- `LlmEditResult` — RS2 LLM 输出（paragraph_index, original, optimized, reason；original/optimized 为 `LatexText`，经 `latex_json_guard.py` 内容校验拦截 JSON 反斜杠转义损坏）
 - `ChatSendRequest` / `GenerateEditRequest` / `ApplyEditRequest` / `RenameSessionRequest` / `ConfirmToolRequest` / `CancelToolRequest` / `ClarifyRequest` / `CancelClarifyRequest` — 请求体
 
 ## 会话上下文管理 `context.py`

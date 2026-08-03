@@ -72,7 +72,7 @@
 | **定义位置** | `backend/utils/project_tools/edit_tools_manager.py:33` |
 | **执行函数** | `_edit_paragraph_executor()` (同文件:103) |
 | **配置路径** | `features.function_calling.edit_tools.enabled` |
-| **说明** | 使用 MD5 乐观锁防并发冲突，走 `ProjectManager.apply_change()` 流程。写作助手中默认需经前端确认弹窗（`edit_tools.require_confirmation`）后才执行 |
+| **说明** | 使用 MD5 乐观锁防并发冲突，走 `ProjectManager.apply_change()` 流程。写作助手中默认需经前端确认弹窗（`edit_tools.require_confirmation`）后才执行。`new_content` 写盘前经 `latex_json_guard.py` 内容校验，JSON 转义损坏的 LaTeX 直接拒绝并提示 LLM 自纠 |
 
 ---
 
@@ -154,7 +154,7 @@
 
 | # | 名称 | 描述 | 必填参数 | 条件 |
 |---|------|------|----------|------|
-| 1 | `write_file` | 在沙箱中创建/覆写文件（仅允许 LaTeX 扩展名） | `file_path`, `content` | 始终 |
+| 1 | `write_file` | 在沙箱中创建/覆写文件（仅允许 LaTeX 扩展名）；写盘前做 LaTeX 内容校验 | `file_path`, `content` | 始终 |
 | 2 | `read_file` | 读取沙箱中已创建的文件内容 | `file_path` | 始终 |
 | 3 | `list_files` | 列出沙箱中所有文件（与全局同名工具隔离） | 无 | 始终 |
 | 4 | `compile_latex` | 用 latexmk 编译项目验证构建 | `main_file` | `agent_compile_enabled=true` |

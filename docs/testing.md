@@ -16,13 +16,15 @@
 | `test_utils/test_input_resolver.py` | 递归展开路径穿越检测 |
 | `test_utils/test_compile_error_translator.py` | ErrorTranslation 模型、错误提取、LLM 流程、filtered_output |
 | `test_utils/test_tex_compile.py` | TexCompileResult 模型、texfot 成功/失败/超时、引擎自动检测、PDF/A 注入 |
+| `test_utils/test_latex_json_guard.py` | LaTeX/BibTeX 内容校验：控制字符、垃圾占位符、花括号/$/环境配平、bibtex 模式 |
+| `test_utils/test_edit_tools_manager.py` | edit_paragraph / undo_last_edit 执行、LaTeX 内容校验拒绝、写回 |
 | `test_utils/test_scholarly_research.py` | OpenAlex 元数据映射、摘要重建、去重、查询过滤、引文追踪、OA 定位和工具执行器 |
 | `test_api/test_typo_check.py` | 模型校验、LLM mock、marker 保护、写回 |
 | `test_api/test_expression_opt.py` | 模型校验、LLM mock、marker 保护、prompt CRUD |
 | `test_api/test_terminology_check.py` | 模型校验、LLM mock、聚类逻辑、写回 |
-| `test_api/test_template_gen.py` | Agent 循环、沙箱路径校验、编译错误解析、失败警告、运行追踪（trace.jsonl 读写与 get_session_trace） |
-| `test_api/test_formula_ocr.py` | 模型校验、图片校验、预处理、LLM mock |
-| `test_api/test_table_ocr.py` | 模型校验、图片校验、LLM mock |
+| `test_api/test_template_gen.py` | Agent 循环、沙箱路径校验、写盘前 LaTeX 内容校验、编译错误解析、失败警告、运行追踪（trace.jsonl 读写与 get_session_trace） |
+| `test_api/test_formula_ocr.py` | 分隔符协议、内容校验重试、图片校验、预处理、LLM mock |
+| `test_api/test_table_ocr.py` | 分隔符协议、内容校验、图片校验、LLM mock |
 | `test_api/test_code_review.py` | 模型校验、preview 原始 LaTeX、LLM mock、写回 |
 | `test_api/test_compile.py` | 编译成功/失败/超时、LLM 错误翻译、PDF 端点、路径穿越防御 |
 | `test_api/test_git_diff.py` | Git revision、差异 PDF 渲染、路径安全校验 |
