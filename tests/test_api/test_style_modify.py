@@ -158,6 +158,35 @@ class TestStyleModifyService:
                 with pytest.raises(RuntimeError, match="Style modification failed"):
                     await service.modify(sample_latex, "bold")
 
+    @pytest.mark.asyncio
+    async def test_llm_unescaped_backslash_retries(self, service, sample_latex):
+        """
+        LLM 输出未转义的 \\rho（JSON 解析后变成回车 + ho）→ 触发重试，
+        最终结果无控制字符。
+        """
+        import json
+
+        mock_llm = MagicMock()
+        # 模拟 LLM 原始输出：JSON 字符串里只有一个反斜杠（\\rho 会被 JSON 解析成回车）
+        corrupt = '{"latex": "R^\\rho is fine"}'
+        good = json.dumps({"latex": r"R^{\rho} is fine"})
+        mock_llm.chat = AsyncMock(side_effect=[corrupt, good])
+
+        mock_cfg = MagicMock()
+        mock_cfg.llm.api_key = "sk-test"
+
+        with patch(
+            "backend.modules.style_modify.service.get_config", return_value=mock_cfg
+        ):
+            with patch(
+                "backend.modules.style_modify.service.get_llm_client",
+                return_value=mock_llm,
+            ):
+                result = await service.modify(sample_latex, "bold")
+
+        assert result["latex"] == r"R^{\rho} is fine"
+        assert mock_llm.chat.call_count == 2
+
 
 # ── Router HTTP endpoint tests ─────────────────────────────────────────────
 

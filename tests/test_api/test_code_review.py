@@ -97,6 +97,27 @@ class TestCodeReviewResultModel:
         assert suggestion.type == "modernization"
         assert suggestion.severity == "info"
 
+    def test_rejects_control_char_in_original(self):
+        """\\rho 经 JSON 转义损坏后变成回车 + 'ho'，original 必须被拦截。"""
+        data = {
+            "type": "code_smell",
+            "description": "x",
+            "original": "R^" + "\r" + "ho",
+            "suggested": r"\rho",
+        }
+        with pytest.raises(ValidationError, match="control character"):
+            CodeReviewSuggestion.model_validate(data)
+
+    def test_rejects_unbalanced_braces_in_suggested(self):
+        data = {
+            "type": "best_practice",
+            "description": "x",
+            "original": r"\label{sec:1}",
+            "suggested": r"\label{sec:1",
+        }
+        with pytest.raises(ValidationError, match="unbalanced braces"):
+            CodeReviewSuggestion.model_validate(data)
+
     def test_missing_required_field(self):
         # paragraph_index is the only field without a default
         data = {"needs_review": False}
@@ -268,6 +289,50 @@ class TestCheckOneParagraph:
 
         assert result["paragraph_index"] == 7
         assert result["suggestions"] == []
+
+    @pytest.mark.asyncio
+    async def test_control_char_retries_then_recovers(self, mock_llm, service):
+        """suggestions 里的 LaTeX 片段损坏 → 触发重试并最终恢复。"""
+        original = r"\centerline{Hello World}"
+
+        mock_llm.chat = AsyncMock(
+            side_effect=[
+                {
+                    "paragraph_index": 0,
+                    "needs_review": True,
+                    "suggestions": [
+                        {
+                            "type": "code_smell",
+                            "severity": "warning",
+                            "description": "x",
+                            "original": "R^" + "\r" + "ho",
+                            "suggested": r"\rho",
+                        }
+                    ],
+                },
+                {
+                    "paragraph_index": 0,
+                    "needs_review": True,
+                    "suggestions": [
+                        {
+                            "type": "code_smell",
+                            "severity": "warning",
+                            "description": "x",
+                            "original": r"\centerline{Hello World}",
+                            "suggested": r"\begin{center}Hello World\end{center}",
+                        }
+                    ],
+                },
+            ]
+        )
+
+        result = await service._check_one_paragraph(
+            mock_llm, 0, 5, "Hello World", original, "main.tex"
+        )
+
+        assert len(result["suggestions"]) == 1
+        assert result["suggestions"][0]["suggested"] == r"\begin{center}Hello World\end{center}"
+        assert mock_llm.chat.call_count == 2
 
     @pytest.mark.asyncio
     async def test_pure_marker_paragraph_skips_llm(self, mock_llm, service):

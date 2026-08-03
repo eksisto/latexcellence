@@ -170,6 +170,49 @@ class TestBibEntry:
         assert result.cite_key == "devlin2018bert"
         assert result.fields["author"] == "Devlin, Jacob and Chang, Ming-Wei"
 
+    def test_rejects_control_char_in_fields_value(self):
+        """\\url 经 JSON 转义损坏后变成制表符 + 'url'，fields 值必须被拦截。"""
+        data = {
+            "cite_key": "k",
+            "entry_type": "misc",
+            "fields": {"url": "\turl{https://example.com}"},
+            "raw_bibtex": "@misc{k, url = {https://example.com}}",
+        }
+        with pytest.raises(ValidationError, match="control character"):
+            BibEntry.model_validate(data)
+
+    def test_rejects_control_char_in_raw_bibtex(self):
+        data = {
+            "cite_key": "k",
+            "entry_type": "misc",
+            "fields": {},
+            "raw_bibtex": "R^" + "\r" + "ho",
+        }
+        with pytest.raises(ValidationError, match="control character"):
+            BibEntry.model_validate(data)
+
+    def test_rejects_unbalanced_braces_in_fields_value(self):
+        data = {
+            "cite_key": "k",
+            "entry_type": "misc",
+            "fields": {"title": "{Unbalanced"},
+            "raw_bibtex": "@misc{k, title = {{Unbalanced}}",
+        }
+        with pytest.raises(ValidationError, match="unbalanced braces"):
+            BibEntry.model_validate(data)
+
+    def test_accepts_percent_in_fields_value(self):
+        """BibTeX 字段值中的 % 是字面字符（percent-encoding URL），应通过。"""
+        url = "https://doi.org/10.1000/xyz%2Fabc"
+        data = {
+            "cite_key": "k",
+            "entry_type": "misc",
+            "fields": {"url": url},
+            "raw_bibtex": f"@misc{{k, url = {{{url}}}}}",
+        }
+        result = BibEntry.model_validate(data)
+        assert result.fields["url"] == url
+
 
 class TestCheckMissingFields:
     def test_missing_required(self, service):
@@ -299,6 +342,34 @@ class TestServiceGenerateBibtex:
             result = await service.generate_bibtex(metadata)
             assert result["cite_key"] == "vaswani2017attention"
             assert result["entry_type"] == "article"
+
+    @pytest.mark.asyncio
+    async def test_generate_unescaped_backslash_retries(self, service):
+        """未转义的 \\rho（JSON 解析后变成回车 + ho）→ 触发重试并最终恢复。"""
+        mock_llm = AsyncMock()
+        corrupt = {
+            "cite_key": "k2024test",
+            "entry_type": "misc",
+            "fields": {"note": "R^" + "\r" + "ho"},
+            "raw_bibtex": "@misc{k2024test,\n  note = {R^" + "\r" + "ho}\n}",
+        }
+        good = {
+            "cite_key": "k2024test",
+            "entry_type": "misc",
+            "fields": {"note": r"R^{\rho}"},
+            "raw_bibtex": "@misc{k2024test,\n  note = {R^\\rho}\n}",
+        }
+        mock_llm.chat = AsyncMock(side_effect=[corrupt, good])
+
+        with patch(
+            "backend.modules.bib_manager.service.get_llm_client", return_value=mock_llm
+        ):
+            result = await service.generate_bibtex({"title": "T"})
+
+        assert result["cite_key"] == "k2024test"
+        assert mock_llm.chat.call_count == 2
+        assert r"\rho" in result["raw_bibtex"]
+        assert "\r" not in result["raw_bibtex"]
 
 
 class TestServiceFileOperations:

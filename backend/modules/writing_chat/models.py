@@ -15,6 +15,8 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
+from backend.utils.latex_json_guard import LatexText
+
 # ── 持久化的消息数据 ────────────────────────────────────────────────────────
 
 
@@ -106,8 +108,8 @@ class LlmEditResult(BaseModel):
     """
 
     paragraph_index: int
-    original: str
-    optimized: str
+    original: LatexText
+    optimized: LatexText
     reason: str = ""
 
 

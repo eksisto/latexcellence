@@ -21,12 +21,13 @@ from backend.core.llm_client import get_llm_client
 from backend.core.config import get_config
 from backend.core.prompts import get_prompt
 from backend.utils.json_utils import retry_with_validation
+from backend.utils.latex_json_guard import LatexText
 
 
 class StyleModifyResult(BaseModel):
     """LLM 样式修改输出"""
 
-    latex: str
+    latex: LatexText
 
 
 class StyleModifyService:

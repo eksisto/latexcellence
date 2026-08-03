@@ -20,11 +20,19 @@ from backend.utils.json_utils import (
     safe_parse_json,
     validate_model,
 )
+from backend.utils.latex_json_guard import LatexText
 
 
 class SampleItem(BaseModel):
     name: str
     value: int
+
+
+class ValidatedLatexItem(BaseModel):
+    """带 LatexText 内容校验器的模型，用于测试模型级校验触发重试循环。"""
+
+    latex: LatexText
+    title: str = ""
 
 
 # ── safe_parse_json ─────────────────────────────────────────────────────────
@@ -310,3 +318,40 @@ class TestRetryWithValidation:
                 model_cls=SampleItem,
                 max_retries=1,
             )
+
+    # ── 模型级 LaTeX 内容校验（LatexText） ──────────────────────────────
+
+    @pytest.mark.asyncio
+    async def test_model_validator_corrupt_retries(self):
+        """未转义的 \\rho（JSON 解析后变成回车 + ho）→ 模型级校验失败触发重试。"""
+        import json
+
+        corrupt = '{"latex": "R^\\rho", "title": "x"}'
+        good = json.dumps({"latex": r"R^{\rho}", "title": "x"})
+        chat_fn = AsyncMock(side_effect=[corrupt, good])
+
+        result = await retry_with_validation(
+            chat_fn=chat_fn,
+            messages=[{"role": "user", "content": "test"}],
+            model_cls=ValidatedLatexItem,
+            max_retries=3,
+        )
+
+        assert result.latex == r"R^{\rho}"
+        assert chat_fn.call_count == 2
+
+    @pytest.mark.asyncio
+    async def test_model_validator_exhausted_raises(self):
+        """内容校验持续失败 → 耗尽重试后抛 ValueError。"""
+        corrupt = '{"latex": "R^\\rho", "title": "x"}'
+        chat_fn = AsyncMock(return_value=corrupt)
+
+        with pytest.raises(ValueError, match="Validation failed after"):
+            await retry_with_validation(
+                chat_fn=chat_fn,
+                messages=[{"role": "user", "content": "test"}],
+                model_cls=ValidatedLatexItem,
+                max_retries=3,
+            )
+
+        assert chat_fn.call_count == 3

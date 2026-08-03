@@ -412,6 +412,67 @@ class TestServiceEdit:
         assert attached.edit_op is not None
         assert attached.edit_op.applied is False
 
+    @pytest.mark.asyncio
+    async def test_generate_edit_unescaped_backslash_retries(
+        self, temp_session_dir, temp_project, open_project, service, monkeypatch
+    ):
+        """
+        LLM 输出含 JSON 转义损坏的 \\rho（回车 + ho）→ LlmEditResult 内容
+        校验失败 → 重试后恢复，最终 edit_op 无控制字符。
+        """
+        monkeypatch.setattr(get_config().llm, "api_key", "test-key")
+        from backend.core.workspace_manager import get_project_manager_for_workspace
+
+        ws_id = "test-ws"
+        pm = get_project_manager_for_workspace(ws_id)
+        pm.open(str(temp_project))
+        paragraphs = pm.get_paragraphs("main.tex")
+        para = next(p for p in paragraphs if "Bold claim" in p.text)
+
+        ctx = ConversationContext.create_session(file_path="main.tex", scope="test")
+        ctx.append_user_message("把这段改得更学术")
+        ctx.append_assistant_message("好的，建议...", tokens=10)
+        ctx.save_to_disk()
+
+        calls = {"n": 0}
+
+        async def fake_chat(messages, **kwargs):
+            calls["n"] += 1
+            if calls["n"] == 1:
+                # 模拟 JSON 转义损坏：\\rho 被解析成回车 + ho
+                return {
+                    "paragraph_index": para.index,
+                    "original": para.text,
+                    "optimized": "R^" + "\r" + "ho is fine",
+                    "reason": "bad",
+                }
+            new_latex = para.text.replace("verified", "verified (empirically)")
+            return {
+                "paragraph_index": para.index,
+                "original": para.text,
+                "optimized": new_latex,
+                "reason": "more precise",
+            }
+
+        with patch(_LLM_CLIENT_PATH) as m_llm:
+            client = MagicMock()
+            client.chat = fake_chat
+            m_llm.return_value = client
+
+            req = GenerateEditRequest(
+                session_id=ctx.session_id,
+                file_path="main.tex",
+                paragraph_index=para.index,
+                instruction="把这段改得更学术",
+            )
+            result = await service.generate_edit(req, workspace_id="test-ws")
+
+        assert calls["n"] == 2
+        op = EditOp.model_validate(result["edit_op"])
+        assert "empirically" in op.new_latex
+        assert "\r" not in op.new_latex
+        assert r"\textbf" in op.new_latex
+
     def test_apply_edit_writes_back_to_file(
         self, temp_session_dir, temp_project, open_project, service
     ):

@@ -26,6 +26,7 @@ from backend.core.base_paragraph_check import BaseParagraphCheckService
 from backend.core.prompts import get_prompt
 from backend.utils.json_utils import retry_with_validation
 from backend.utils.latex_parser import MARKER_PATTERN
+from backend.utils.latex_json_guard import LatexText
 from backend.utils.latexindent_utils import (
     is_latexindent_available,
     format_with_latexindent,
@@ -47,8 +48,8 @@ class CodeReviewSuggestion(BaseModel):
     ]
     severity: Literal["info", "warning", "error"] = "info"
     description: str
-    original: str
-    suggested: str
+    original: LatexText
+    suggested: LatexText
 
 
 class CodeReviewResult(BaseModel):

@@ -4,7 +4,9 @@
 定义 API 请求体和 LLM 响应 schema。
 """
 
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
+
+from backend.utils.latex_json_guard import LatexText, check_latex_text, validate_latex_field
 
 
 class FormatAnalysisRequest(BaseModel):
@@ -29,7 +31,7 @@ class ReferenceFormatResult(BaseModel):
     latex_backend: str | None = None  # "bibtex" 或 "biblatex"
     latex_package: str | None = None  # 需要的 LaTeX 宏包
     latex_bibliographystyle: str | None = None  # .bst 样式名
-    latex_preamble: str | None = None  # 完整 preamble 代码片段
+    latex_preamble: LatexText | None = None  # 完整 preamble 代码片段（LaTeX 内容校验）
 
 
 class ExtractRequest(BaseModel):
@@ -62,6 +64,23 @@ class BibEntry(BaseModel):
     entry_type: str
     fields: dict[str, str] = {}
     raw_bibtex: str = ""
+
+    @field_validator("fields")
+    @classmethod
+    def _check_fields_latex(cls, value: dict[str, str]) -> dict[str, str]:
+        """BibTeX 字段值含 \\url / \\c{c} 等 LaTeX 宏，逐值做内容校验。"""
+        for key, item in value.items():
+            error = check_latex_text(item, bibtex=True)
+            if error:
+                raise ValueError(f"field '{key}': {error}")
+        return value
+
+    @field_validator("raw_bibtex")
+    @classmethod
+    def _check_raw_bibtex_latex(cls, value: str) -> str:
+        """完整 BibTeX 条目按 BibTeX 语义校验（拦截 JSON 反斜杠转义损坏；
+        % 是字面字符，避免 percent-encoding URL 被误判为花括号不配平）。"""
+        return validate_latex_field(value, bibtex=True)
 
 
 class SaveBibRequest(BaseModel):

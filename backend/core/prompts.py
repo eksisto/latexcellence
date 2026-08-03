@@ -16,6 +16,27 @@
 
 from typing import Any
 
+# ── 共享常量 ──────────────────────────────────────────────────────────────
+
+# LaTeX × JSON 转义防护规则：插入所有"JSON 字符串里直接承载 LaTeX 源码"
+# 的 system prompt。注意本常量文本不能包含字面 { }，否则会被 get_prompt
+# 的 str.format() 误解析（edit_system / code_review / format_analysis 等
+# 带 kwargs 的提示词会执行格式化）。
+LATEX_JSON_ESCAPE_RULES = (
+    "JSON STRING ESCAPING (CRITICAL):\n"
+    "- Inside JSON strings, every backslash is an escape character, so each "
+    "LaTeX backslash must be written as TWO backslash characters. Example: "
+    "LaTeX \\rho must appear in the JSON string as \\\\rho; \\frac as \\\\frac; "
+    "\\begin as \\\\begin.\n"
+    "- A single backslash before r, n, t, f or b becomes a control character "
+    "(carriage return, newline, tab, form feed, backspace) and silently "
+    "corrupts the LaTeX.\n"
+    "- Never output control characters or placeholders like '[object Object]'.\n"
+    "- Keep group braces and dollar signs balanced; when a literal brace or "
+    "dollar sign is needed in the LaTeX, escape it with a backslash in the "
+    "LaTeX itself."
+)
+
 # ── 提示词存储 ──────────────────────────────────────────────────────────────
 
 _PROMPTS: dict[str, dict[str, str]] = {
@@ -128,6 +149,8 @@ _PROMPTS: dict[str, dict[str, str]] = {
             "7. DO NOT modify, delete, or split any marker "
             "(__CMD_XXXX__, __MATH_XXXX__, __ENV_XXXX__, etc.). "
             "They are invisible structural placeholders — treat them as read-only.\n\n"
+            + LATEX_JSON_ESCAPE_RULES
+            + "\n\n"
             "JSON format (strictly follow this schema):\n"
             "{{\n"
             '  "paragraph_index": <int>,\n'
@@ -190,6 +213,8 @@ _PROMPTS: dict[str, dict[str, str]] = {
             '  "optimized": "<the rewritten paragraph as raw LaTeX>",\n'
             '  "reason": "<brief explanation of the edit in {language}>"\n'
             "}}\n\n"
+            + LATEX_JSON_ESCAPE_RULES
+            + "\n\n"
             "USER INSTRUCTION:\n"
             "{instruction}"
         ),
@@ -529,6 +554,8 @@ _PROMPTS: dict[str, dict[str, str]] = {
             "2. The 'latex' field must contain the complete modified LaTeX code\n"
             "3. Do NOT add markdown fences or extra commentary in the JSON response\n"
             "4. Respond with JSON only, following the schema exactly\n\n"
+            + LATEX_JSON_ESCAPE_RULES
+            + "\n\n"
             "JSON format:\n"
             "{\n"
             '  "latex": "<the complete modified LaTeX code>"\n'
@@ -575,6 +602,8 @@ _PROMPTS: dict[str, dict[str, str]] = {
             "  * MLA 9th → latex_backend='bibtex', latex_package='mla13', "
             "latex_bibliographystyle='mla'\n"
             "- If unsure about LaTeX style, set all latex_* fields to null.\n\n"
+            + LATEX_JSON_ESCAPE_RULES
+            + "\n\n"
             "## Output\n"
             "Respond with JSON only. No markdown fences, no commentary.\n\n"
             "{{\n"
@@ -633,6 +662,8 @@ _PROMPTS: dict[str, dict[str, str]] = {
             "- Do NOT include fields that have no value (empty string) as optional fields\n"
             "- But DO include required fields even if empty\n"
             "- Avoid duplicate cite_keys: if existing_keys is provided, adjust the cite_key\n\n"
+            + LATEX_JSON_ESCAPE_RULES
+            + "\n\n"
             "Respond with JSON only, no markdown fences, no extra text.\n\n"
             "JSON format:\n"
             "{\n"

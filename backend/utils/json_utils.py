@@ -175,7 +175,8 @@ async def retry_with_validation(
     流程：
         1. 调用 LLM（通过 chat_fn）
         2. 解析返回的 JSON
-        3. 用 Pydantic 校验
+        3. 用 Pydantic 校验（模型字段级内容校验器，如 LatexText，负责拦截
+           JSON 反斜杠转义静默损坏）
         4. 校验失败时，将错误信息附加到消息中，重新调用 LLM
         5. 最多重试 max_retries 次
 
