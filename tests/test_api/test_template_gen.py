@@ -304,6 +304,61 @@ class TestToolExecutorCompile:
         assert "not found" in ev["summary"].lower()
 
 
+class TestToolExecutorWriteFile:
+    """write_file 写盘前的 LaTeX 内容校验。"""
+
+    def _make_executor(self, tmp_path):
+        cfg = get_config()
+        cfg.features.template_gen.output_dir = str(tmp_path)
+        return _ToolExecutor(tmp_path, cfg, MagicMock())
+
+    def test_rejects_corrupt_content(self, tmp_path):
+        """\\rho 被 JSON 转义损坏成回车 + ho → 拒绝写盘。"""
+        executor = self._make_executor(tmp_path)
+
+        text, ev = asyncio.run(
+            executor._write_file(
+                {"file_path": "main.tex", "content": "R^" + "\r" + "ho"}
+            )
+        )
+
+        assert ev["ok"] is False
+        assert "rejected" in text.lower()
+        assert not (tmp_path / "main.tex").exists()
+
+    def test_accepts_escaped_latex(self, tmp_path):
+        executor = self._make_executor(tmp_path)
+
+        text, ev = asyncio.run(
+            executor._write_file(
+                {
+                    "file_path": "main.tex",
+                    "content": (
+                        r"\documentclass{article}"
+                        r"\begin{document}hi\end{document}"
+                    ),
+                }
+            )
+        )
+
+        assert ev["ok"] is True
+        content = (tmp_path / "main.tex").read_text(encoding="utf-8")
+        assert r"\begin{document}" in content
+
+    def test_rejects_unbalanced_braces(self, tmp_path):
+        executor = self._make_executor(tmp_path)
+
+        text, ev = asyncio.run(
+            executor._write_file(
+                {"file_path": "main.tex", "content": r"\textbf{hello"}
+            )
+        )
+
+        assert ev["ok"] is False
+        assert "unbalanced braces" in text
+        assert not (tmp_path / "main.tex").exists()
+
+
 class TestErrorAnalysis:
     """编译日志结构化错误解析。"""
 

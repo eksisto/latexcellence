@@ -56,6 +56,7 @@ from backend.core.logger import get_logger
 from backend.core.llm_client import get_llm_client
 from backend.core.prompts import get_prompt
 from backend.modules.template_gen.trace import append_trace, now_iso
+from backend.utils.latex_json_guard import check_latex_text
 from backend.utils.tex_compile import run_tex_compile
 
 # 允许在沙箱内创建的文件扩展名白名单
@@ -461,7 +462,14 @@ class TemplateAgentService:
                             },
                             "content": {
                                 "type": "string",
-                                "description": "The full file content to write.",
+                                "description": (
+                                    "The full file content to write. "
+                                    "LaTeX backslashes are literal characters; "
+                                    "inside this JSON string each one must be "
+                                    "escaped as two backslash characters "
+                                    "(\\\\) so JSON parsing does not corrupt "
+                                    "them into control characters."
+                                ),
                             },
                         },
                         "required": ["file_path", "content"],
@@ -617,6 +625,24 @@ class _ToolExecutor:
             msg = (
                 f"File {file_path} exceeds the maximum size "
                 f"of {fcfg.agent_max_file_size_kb} KB"
+            )
+            return msg, {"tool": "write_file", "ok": False, "summary": msg}
+
+        # 写盘前 LaTeX 内容校验：拦截 JSON 反斜杠转义损坏（\\rho → 回车 + ho），
+        # 让 Agent 自纠而不是把损坏内容写进项目文件
+        latex_error = check_latex_text(content)
+        if latex_error:
+            self._logger.warning(
+                f"write_file rejected corrupt LaTeX content for "
+                f"{file_path}: {latex_error}"
+            )
+            msg = (
+                f"File {file_path} was rejected: {latex_error}. "
+                "In JSON tool arguments, each LaTeX backslash must be escaped "
+                "as two backslash characters (\\\\), otherwise JSON parsing "
+                "silently corrupts the LaTeX (e.g. \\rho becomes a carriage "
+                "return). Rewrite the file content with properly escaped "
+                "backslashes."
             )
             return msg, {"tool": "write_file", "ok": False, "summary": msg}
 

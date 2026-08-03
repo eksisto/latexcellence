@@ -15,6 +15,7 @@ from typing import Any
 from backend.core.logger import get_logger
 from backend.core.workspace_manager import get_project_manager_for_workspace
 from backend.utils.file_ops import compute_md5
+from backend.utils.latex_json_guard import check_latex_text
 from backend.utils.path_guard import resolve_project_path
 
 
@@ -64,6 +65,9 @@ class EditToolsManager:
                                 "description": (
                                     "修改后的段落完整 LaTeX 内容。"
                                     "\\n 表示换行，请用 \\n 连接同一段落的多行。"
+                                    "LaTeX 命令中的每个反斜杠在 JSON 字符串里"
+                                    "必须写成两个反斜杠（\\\\），否则会被 JSON "
+                                    "转义静默损坏（如 \\rho 会变成回车）。"
                                 ),
                             },
                         },
@@ -118,6 +122,19 @@ async def _edit_paragraph_executor(tool_name: str, arguments: dict[str, Any]) ->
         return "错误：缺少 paragraph_index 参数。"
     if not new_content:
         return "错误：缺少 new_content 参数。"
+
+    # 写盘前 LaTeX 内容校验：拦截 JSON 反斜杠转义损坏（如 \\rho 被解析成
+    # 回车 + ho），让 LLM 自纠而不是把损坏内容写进 .tex
+    latex_error = check_latex_text(new_content)
+    if latex_error:
+        get_logger("edit_tools").warning(
+            f"edit_paragraph rejected corrupt LaTeX content: {latex_error}"
+        )
+        return (
+            f"错误：new_content 未通过 LaTeX 内容校验——{latex_error}。"
+            f"JSON 字符串里的每个反斜杠必须写成两个反斜杠（\\\\），"
+            f"否则会被 JSON 解析成转义符损坏源码。请修正后重试。"
+        )
 
     # 验证段落索引有效性
     try:
