@@ -30,9 +30,8 @@ import {
 } from "@/components/ui/select";
 import {
   ArrowLeft,
-  AlertOctagon,
   AlertTriangle,
-  BarChart3,
+  ChartSpline,
   CheckCircle2,
   Copy,
   Download,
@@ -45,7 +44,7 @@ import {
   Upload,
   Wand2,
   Wrench,
-  XCircle,
+  CircleX,
 } from "lucide-react";
 import {
   Dialog,
@@ -61,10 +60,10 @@ const STEP_ICON = {
   plan: Wand2,
   tool_call: Wrench,
   tool_result: CheckCircle2,
-  execution: BarChart3,
+  execution: ChartSpline,
   tikz: FileText,
-  error: AlertTriangle,
-  warning: AlertOctagon,
+  error: CircleX,
+  warning: AlertTriangle,
   done: CheckCircle2,
 };
 
@@ -249,7 +248,7 @@ export default function PlotGenPage() {
 
           {plot.warning && (
             <div className="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm flex items-start gap-2 text-amber-700 dark:text-amber-400">
-              <AlertOctagon className="size-4 mt-0.5 shrink-0" />
+              <AlertTriangle className="size-4 mt-0.5 shrink-0" />
               <span className="whitespace-pre-wrap">{plot.warning}</span>
             </div>
           )}
@@ -317,7 +316,7 @@ export default function PlotGenPage() {
           <Card>
             <CardHeader className="pb-2">
               <CardTitle className="text-sm flex items-center gap-2">
-                <BarChart3 className="size-4" />
+                <ChartSpline className="size-4" />
                 {t("pages:plotGen.artifacts")}
               </CardTitle>
             </CardHeader>
@@ -677,7 +676,7 @@ function StatusRow({ ok, t }) {
       {ok ? (
         <CheckCircle2 className="size-4" />
       ) : (
-        <XCircle className="size-4" />
+        <CircleX className="size-4" />
       )}
       {ok ? t("pages:plotGen.success") : t("pages:plotGen.failed")}
     </div>

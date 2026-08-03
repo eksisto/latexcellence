@@ -14,7 +14,7 @@ import {
 } from "@/components/ui/tooltip";
 import { Button } from "@/components/ui/button";
 import { Toaster } from "@/components/ui/sonner";
-import { Loader2, Archive } from "lucide-react";
+import { Loader2, SquareKanban } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import ThemeToggle from "@/components/ThemeToggle";
 import ThemeSwitcher from "@/components/ThemeSwitcher";
@@ -90,7 +90,7 @@ const AppToolbar = memo(function AppToolbar() {
             <Button variant="ghost" size="icon" onClick={handleNavigate} />
           }
         >
-          <Archive className="size-5" />
+          <SquareKanban className="size-5" />
           <span className="sr-only">{t("workspace")}</span>
         </TooltipTrigger>
         <TooltipContent>{t("workspace")}</TooltipContent>

@@ -4,7 +4,7 @@ import { useTranslation } from "react-i18next";
 import {
   ArrowLeft,
   Check,
-  CircleAlert,
+  CircleX,
   Download,
   FileDiff,
   GitBranch,
@@ -661,7 +661,7 @@ export default function GitDiffPage() {
                       </>
                     ) : (
                       <>
-                        <CircleAlert />
+                        <CircleX />
                         {t("pages:gitDiff.failed")}
                       </>
                     )}

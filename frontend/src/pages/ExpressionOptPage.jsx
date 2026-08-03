@@ -25,6 +25,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import {
   ArrowLeft,
   PencilLine,
+  PencilSparkles,
   Eye,
   Loader2,
   Plus,
@@ -348,7 +349,7 @@ export default function ExpressionOptPage() {
                     {isLoading ? (
                       <Loader2 className="animate-spin" />
                     ) : (
-                      <PencilLine />
+                      <PencilSparkles />
                     )}
                     {isLoading
                       ? t("pages:expressionOpt.optimizing")

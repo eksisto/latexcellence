@@ -22,6 +22,7 @@ import { Textarea } from "@/components/ui/textarea";
 import {
   ArrowLeft,
   BookOpen,
+  BookOpenText,
   Copy,
   FileText,
   Loader2,
@@ -744,7 +745,7 @@ export default function BibManagerPage() {
                       {step3Loading ? (
                         <Loader2 className="animate-spin" />
                       ) : (
-                        <BookOpen />
+                        <BookOpenText />
                       )}
                       {step3Loading
                         ? t("pages:bibManager.step3BtnLoading")

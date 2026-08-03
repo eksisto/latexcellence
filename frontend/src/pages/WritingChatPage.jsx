@@ -4,11 +4,11 @@ import { useTranslation } from "react-i18next";
 import {
   Loader2,
   ArrowLeft,
-  Send,
+  ArrowUp,
   Plus,
   Trash2,
   PencilLine,
-  FileText,
+  TextAlignStart,
   MessagesSquare,
   Sparkles,
   X,
@@ -267,7 +267,7 @@ export default function WritingChatPage() {
           <Card className="h-[calc(100vh-160px)] min-h-[400px] flex flex-col">
             <CardHeader className="pb-2">
               <CardTitle className="text-sm flex items-center gap-1">
-                <FileText className="size-3.5" />
+                <TextAlignStart className="size-3.5" />
                 {t("pages:writingChat.contextAnchor")}
               </CardTitle>
             </CardHeader>
@@ -296,7 +296,7 @@ export default function WritingChatPage() {
                     </span>
                   ) : (
                     <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded bg-primary/10 text-primary border border-primary/20">
-                      <FileText className="size-3 shrink-0" />
+                      <TextAlignStart className="size-3 shrink-0" />
                       <span className="truncate max-w-[120px]">
                         {paragraphIndex == null
                           ? t("pages:writingChat.anchorFullText")
@@ -490,7 +490,7 @@ export default function WritingChatPage() {
                   {streaming ? (
                     <Loader2 className="animate-spin" />
                   ) : (
-                    <Send className="size-4" />
+                    <ArrowUp className="size-4" />
                   )}
                 </Button>
               </div>

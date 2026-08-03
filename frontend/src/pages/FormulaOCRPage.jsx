@@ -1,6 +1,6 @@
 import { useCallback } from "react";
 import { useTranslation } from "react-i18next";
-import { ImageIcon } from "lucide-react";
+import { ScanText } from "lucide-react";
 import { api } from "@/api/index";
 import ImageOCRPage from "@/components/ImageOCRPage";
 
@@ -23,7 +23,7 @@ export default function FormulaOCRPage() {
   return (
     <ImageOCRPage
       title={t("pages:formulaOcr.title")}
-      icon={ImageIcon}
+      icon={ScanText}
       recognize={api.formulaOCR.recognize}
       recognizeButtonText={t("pages:formulaOcr.btn")}
       renderResultMeta={renderFormulaMeta}

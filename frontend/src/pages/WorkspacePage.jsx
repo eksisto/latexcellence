@@ -33,13 +33,13 @@ import {
   Play,
   Loader2,
   Check,
-  CircleAlert,
+  CircleX,
   ChevronDown,
   ChevronRight,
   FileDiff,
   Undo2,
   Redo2,
-  BookOpen,
+  FileTypeCorner,
 } from "lucide-react";
 import { api } from "@/api/index";
 import { translateError } from "@/utils/errorMessages";
@@ -512,7 +512,7 @@ export default function WorkspacePage() {
                                 />
                               }
                             >
-                              <BookOpen />
+                              <FileTypeCorner />
                             </TooltipTrigger>
                             <TooltipContent>
                               {t("pages:workspace.terminologyCheck")}
@@ -578,7 +578,7 @@ export default function WorkspacePage() {
                         </>
                       ) : (
                         <>
-                          <CircleAlert /> {t("pages:workspace.compileFailed")}
+                          <CircleX /> {t("pages:workspace.compileFailed")}
                         </>
                       )}
                     </Badge>
