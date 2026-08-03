@@ -47,7 +47,7 @@ class TestEditParagraphLatexGuard:
             },
         )
 
-        assert "未通过 LaTeX 内容校验" in result
+        assert "failed LaTeX content validation" in result
         content = (temp_project / "main.tex").read_text(encoding="utf-8")
         assert "Hello world." in content  # 文件未被写入损坏内容
         assert "\r" not in content
@@ -66,7 +66,7 @@ class TestEditParagraphLatexGuard:
             },
         )
 
-        assert "成功修改" in result
+        assert "Successfully edited" in result
         content = (temp_project / "main.tex").read_text(encoding="utf-8")
         assert r"\textbf{Hello world.}" in content
 

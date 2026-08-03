@@ -36,11 +36,12 @@ class EditToolsManager:
                 "function": {
                     "name": "edit_paragraph",
                     "description": (
-                        "修改指定 .tex 文件中某个段落的内容。"
-                        "调用此工具将直接修改源文件，修改前会自动备份，支持撤销。"
-                        "使用前请先通过 read_file_content 确认文件当前内容。"
-                        "new_content 是完整的段落 LaTeX 源码（非纯文本），"
-                        "多个逻辑行用 \\n 连接。注意保持段落语义完整。"
+                        "Modify the content of a paragraph in the specified .tex file. "
+                        "Calling this tool modifies the source file directly; the file is "
+                        "automatically backed up before modification and the change can be undone. "
+                        "Confirm the current file content with read_file_content before using this tool. "
+                        "new_content must be the complete paragraph LaTeX source (not plain text); "
+                        "join multiple logical lines with \\n. Keep the paragraph's semantic meaning intact."
                     ),
                     "parameters": {
                         "type": "object",
@@ -48,26 +49,26 @@ class EditToolsManager:
                             "file_path": {
                                 "type": "string",
                                 "description": (
-                                    "相对于项目根目录的 .tex 文件路径，"
-                                    "如 'chapters/chapter3.tex'"
+                                    "The .tex file path relative to the project root, "
+                                    "e.g. 'chapters/chapter3.tex'"
                                 ),
                             },
                             "paragraph_index": {
                                 "type": "integer",
                                 "description": (
-                                    "段落索引（从 0 开始）。段落按空行分割，"
-                                    "每个 \\item（itemize/enumerate 环境）"
-                                    "内的项目也算一个段落。"
+                                    "Paragraph index (0-based). Paragraphs are separated by blank lines; "
+                                    "each \\item inside an itemize/enumerate environment "
+                                    "also counts as a paragraph."
                                 ),
                             },
                             "new_content": {
                                 "type": "string",
                                 "description": (
-                                    "修改后的段落完整 LaTeX 内容。"
-                                    "\\n 表示换行，请用 \\n 连接同一段落的多行。"
-                                    "LaTeX 命令中的每个反斜杠在 JSON 字符串里"
-                                    "必须写成两个反斜杠（\\\\），否则会被 JSON "
-                                    "转义静默损坏（如 \\rho 会变成回车）。"
+                                    "The complete LaTeX content of the paragraph after modification. "
+                                    "\\n represents a newline; use \\n to join multiple lines of the same paragraph. "
+                                    "In a JSON string, every backslash in a LaTeX command must be written "
+                                    "as two backslashes (\\\\), otherwise JSON escaping will silently corrupt "
+                                    "it (e.g. \\rho becomes a carriage return)."
                                 ),
                             },
                         },
@@ -80,9 +81,10 @@ class EditToolsManager:
                 "function": {
                     "name": "undo_last_edit",
                     "description": (
-                        "撤销对指定文件最近一次的修改。"
-                        "当修改错了段落或想回退到修改前的状态时使用。"
-                        "可以多次调用以退回更早的版本（支持多步撤销）。"
+                        "Revert the most recent edit to the specified file. "
+                        "Use this when a paragraph was modified incorrectly or you want to "
+                        "restore the pre-edit state. It can be called multiple times to go "
+                        "back further (supports multi-step undo)."
                     ),
                     "parameters": {
                         "type": "object",
@@ -90,8 +92,8 @@ class EditToolsManager:
                             "file_path": {
                                 "type": "string",
                                 "description": (
-                                    "相对于项目根目录的 .tex 文件路径，"
-                                    "如 'chapters/chapter3.tex'"
+                                    "The .tex file path relative to the project root, "
+                                    "e.g. 'chapters/chapter3.tex'"
                                 ),
                             },
                         },
@@ -117,11 +119,11 @@ async def _edit_paragraph_executor(tool_name: str, arguments: dict[str, Any]) ->
     new_content = arguments.get("new_content", "")
 
     if not file_path:
-        return "错误：缺少 file_path 参数。"
+        return "Error: missing file_path parameter."
     if paragraph_index is None:
-        return "错误：缺少 paragraph_index 参数。"
+        return "Error: missing paragraph_index parameter."
     if not new_content:
-        return "错误：缺少 new_content 参数。"
+        return "Error: missing new_content parameter."
 
     # 写盘前 LaTeX 内容校验：拦截 JSON 反斜杠转义损坏（如 \\rho 被解析成
     # 回车 + ho），让 LLM 自纠而不是把损坏内容写进 .tex
@@ -131,21 +133,22 @@ async def _edit_paragraph_executor(tool_name: str, arguments: dict[str, Any]) ->
             f"edit_paragraph rejected corrupt LaTeX content: {latex_error}"
         )
         return (
-            f"错误：new_content 未通过 LaTeX 内容校验——{latex_error}。"
-            f"JSON 字符串里的每个反斜杠必须写成两个反斜杠（\\\\），"
-            f"否则会被 JSON 解析成转义符损坏源码。请修正后重试。"
+            f"Error: new_content failed LaTeX content validation: {latex_error}. "
+            f"In a JSON string, every backslash must be written as two backslashes (\\\\), "
+            f"otherwise JSON parses it as an escape character and corrupts the source. "
+            f"Please fix it and retry."
         )
 
     # 验证段落索引有效性
     try:
         paragraphs = pm.get_paragraphs(file_path)
     except Exception as e:
-        return f"读取文件段落失败：{e}"
+        return f"Failed to read file paragraphs: {e}"
 
     if paragraph_index < 0 or paragraph_index >= len(paragraphs):
         return (
-            f"段落索引 {paragraph_index} 无效，文件共有 {len(paragraphs)} 个段落 "
-            f"（索引范围 0-{len(paragraphs) - 1}）。"
+            f"Paragraph index {paragraph_index} is invalid; the file has {len(paragraphs)} paragraphs "
+            f"(valid range 0-{len(paragraphs) - 1})."
         )
 
     orig_text = paragraphs[paragraph_index].text
@@ -157,21 +160,21 @@ async def _edit_paragraph_executor(tool_name: str, arguments: dict[str, Any]) ->
         )
         md5 = compute_md5(full_path)
     except Exception as e:
-        return f"计算文件 MD5 失败：{e}"
+        return f"Failed to compute file MD5: {e}"
 
     try:
         pm.apply_change(file_path, paragraph_index, new_content, expected_md5=md5)
     except Exception as e:
-        return f"修改失败：{e}"
+        return f"Edit failed: {e}"
 
     # 返回修改摘要供 LLM 引用
     orig_preview = orig_text[:80].replace("\n", "\\n")
     new_preview = new_content[:80].replace("\n", "\\n")
     return (
-        f"✅ 成功修改 {file_path} 段落 [{paragraph_index}]。\n"
-        f"原段落（前 80 字符）：{orig_preview}{'…' if len(orig_text) > 80 else ''}\n"
-        f"新段落（前 80 字符）：{new_preview}{'…' if len(new_content) > 80 else ''}\n"
-        f"如需撤销可调用 undo_last_edit。"
+        f"✅ Successfully edited paragraph [{paragraph_index}] in {file_path}.\n"
+        f"Original paragraph (first 80 chars): {orig_preview}{'…' if len(orig_text) > 80 else ''}\n"
+        f"New paragraph (first 80 chars): {new_preview}{'…' if len(new_content) > 80 else ''}\n"
+        f"Call undo_last_edit if you need to revert."
     )
 
 
@@ -184,18 +187,19 @@ async def _undo_last_edit_executor(tool_name: str, arguments: dict[str, Any]) ->
 
     file_path = arguments.get("file_path", "")
     if not file_path:
-        return "错误：缺少 file_path 参数。"
+        return "Error: missing file_path parameter."
 
     try:
         ok = pm.undo(file_path)
     except Exception as e:
-        return f"撤销失败：{e}"
+        return f"Undo failed: {e}"
 
     if not ok:
-        return f"文件 {file_path} 没有可撤销的操作。"
+        return f"File {file_path} has no operations to undo."
 
     return (
-        f"✅ 成功撤销对 {file_path} 的修改。可以继续调用 undo_last_edit 退回更早版本。"
+        f"✅ Successfully reverted the edit to {file_path}. "
+        f"You can call undo_last_edit again to revert to an even earlier version."
     )
 
 
@@ -207,9 +211,9 @@ def _require_open_project(workspace_id: str) -> Any:
     try:
         pm = get_project_manager_for_workspace(workspace_id)
     except Exception as e:
-        return f"获取工作区失败：{e}"
+        return f"Failed to get workspace: {e}"
     if not pm.is_open:
-        return "错误：当前未打开任何项目。请先打开一个 LaTeX 项目。"
+        return "Error: no project is currently open. Please open a LaTeX project first."
     return pm
 
 
