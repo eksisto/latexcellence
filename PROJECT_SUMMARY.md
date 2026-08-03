@@ -34,6 +34,7 @@ latexcellence/
 │   │   ├── input_resolver.py        # \input/\include 递归解析
 │   │   ├── time_utils.py            # 时间工具：当前日期/时间/星期格式化
 │   │   ├── latex_parser.py          # LaTeX 源码↔纯文本转换（Marker 保护）
+│   │   ├── latex_json_guard.py      # LaTeX×JSON 转义防护（内容校验器，跨模块共享）
 │   │   ├── compile_error_translator.py  # LaTeX 编译错误 LLM 翻译（compile + git_diff 复用）
 │   │   ├── latexindent_utils.py     # latexindent.pl 调用封装（code_review 使用）
 │   │   ├── builtin_formatter.py     # 内置轻量 LaTeX 格式化器（latexindent 不可用时兜底）
