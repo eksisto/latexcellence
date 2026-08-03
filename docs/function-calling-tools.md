@@ -215,7 +215,8 @@
 | **code_review**（代码审查） | 同上 |
 | **terminology_check**（术语一致性） | 同上 |
 | **paragraph_translate**（逐段翻译） | 同上 |
-| **formula_ocr / table_ocr** | 图片上传 → LLM JSON 识别 |
+| **formula_ocr** | 图片上传 → LLM Vision（`<<<LATEX>>>` 分隔符协议 + 内容校验，非 JSON） |
+| **table_ocr** | 图片上传 → LLM JSON 识别 |
 | **style_modify**（样式修改） | LLM JSON 修改建议 |
 | **format_converter**（格式转换） | Pandoc + LLM JSON |
 

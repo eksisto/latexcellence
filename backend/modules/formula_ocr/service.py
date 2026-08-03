@@ -5,36 +5,86 @@
     1. 校验图片格式（PNG/JPEG/WebP）和大小
     2. 预处理：超过 2000px 的边等比缩放到 2000px
     3. 转为 base64 发送给 LLM Vision API（第一次 LLM 调用）
-    4. 获取返回的 LaTeX 公式代码后，调用 LaTeX 宏包分析器（第二次 LLM 调用）
-    5. 将宏包注释前置到 LaTeX 代码中，返回合并结果
+    4. 模型按分隔符协议输出 LaTeX（<<<LATEX>>>...<<<END>>> + INLINE/CONFIDENCE），
+       后端提取并做内容校验（控制字符 / 垃圾占位符 / 花括号与 $ 配平）
+    5. 调用 LaTeX 宏包分析器（第二次 LLM 调用），将宏包注释前置后返回
+
+设计说明：
+    LaTeX 不放在 JSON 字符串中传输——JSON 会把未转义的 \\rho 解释为回车、
+    \\nu 解释为换行（静默损坏），且 \\sigma 等非法转义会直接解析失败。
+    改用分隔符协议让反斜杠原样传输，并用内容校验器拦截损坏输出。
 """
 
 import base64
 import io
-from pathlib import Path
-from typing import Any, Optional
+import re
+from typing import Any
 
 from PIL import Image
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, ValidationError, field_validator
 
-from backend.core.logger import get_logger
-from backend.core.llm_client import get_llm_client
 from backend.core.config import get_config
+from backend.core.llm_client import get_llm_client
+from backend.core.logger import get_logger
 from backend.core.prompts import get_prompt
-from backend.utils.json_utils import retry_with_validation
+from backend.utils.json_utils import format_validation_error
 from backend.utils.latex_package_analyzer import prepend_package_comments
+
+# 分隔符协议：LaTeX 以纯文本形式夹在标记之间，避免 JSON 反斜杠转义损坏
+_LATEX_BLOCK_RE = re.compile(r"<<<LATEX>>>(.*?)<<<END>>>", re.DOTALL | re.IGNORECASE)
+_INLINE_RE = re.compile(r"INLINE\s*:\s*(true|false)", re.IGNORECASE)
+_CONFIDENCE_RE = re.compile(r"CONFIDENCE\s*:\s*([0-9]*\.?[0-9]+)", re.IGNORECASE)
+
+# 内容校验：除换行外的控制字符（\r \t \f \b 等都是 JSON 转义损坏特征）、垃圾占位符
+_BAD_CONTROL_RE = re.compile(r"[\x00-\x09\x0b-\x1f\x7f]")
+_GARBAGE_RE = re.compile(r"\[object [A-Za-z]+\]")
+
+# 自带显示模式的顶层环境：复制时不再额外包裹（aligned/cases/matrix 等内层环境仍需包裹）
+_STANDALONE_DISPLAY_ENV_RE = re.compile(
+    r"^\s*\\begin\{(equation|equation\*|displaymath|align|align\*|alignat|alignat\*|"
+    r"flalign|flalign\*|gather|gather\*|multline|multline\*|eqnarray|eqnarray\*)\}"
+)
+
+# 仅剥离"空壳显示环境"（不携带公式结构），结构型环境（aligned/cases/matrix/align* 等）保留
+_WRAPPER_ENVS = (
+    (r"\begin{equation*}", r"\end{equation*}"),
+    (r"\begin{equation}", r"\end{equation}"),
+    (r"\begin{displaymath}", r"\end{displaymath}"),
+)
+
+_MAX_OCR_RETRIES = 3
+_MAX_DIMENSION = 2000
+_SUPPORTED_FORMATS = {"image/png", "image/jpeg", "image/webp"}
 
 
 class FormulaOCRResult(BaseModel):
-    """公式识别输出——对应 DEVELOPMENT.md §2.1 JSON 协议"""
+    """公式识别输出（后端解析分隔符协议后构造，模型不再直接输出 JSON）。"""
 
     latex: str
     inline: bool = False
-    confidence: float = 0.0
+    confidence: float = Field(default=0.0, ge=0.0, le=1.0)
 
-
-_MAX_DIMENSION = 2000
-_SUPPORTED_FORMATS = {"image/png", "image/jpeg", "image/webp"}
+    @field_validator("latex")
+    @classmethod
+    def _validate_latex_content(cls, value: str) -> str:
+        """内容校验器：拦截 JSON 转义损坏、垃圾占位符、花括号与 $ 不配平。"""
+        bad = _BAD_CONTROL_RE.search(value)
+        if bad:
+            raise ValueError(
+                f"latex contains a control character (U+{ord(bad.group()):04X} "
+                f"at position {bad.start()}); possible JSON escaping corruption"
+            )
+        if _GARBAGE_RE.search(value):
+            raise ValueError(
+                "latex contains a garbage placeholder like '[object Object]'"
+            )
+        braces = re.sub(r"\\[{}]", "", value)
+        if braces.count("{") != braces.count("}"):
+            raise ValueError("latex has unbalanced braces")
+        dollars = re.sub(r"\\\$", "", value)
+        if dollars.count("$") % 2 != 0:
+            raise ValueError("latex has unbalanced dollar signs")
+        return value
 
 
 class FormulaOCRService:
@@ -72,8 +122,12 @@ class FormulaOCRService:
         llm = get_llm_client()
         result = await self._recognize_with_llm(llm, base64_image, content_type)
 
-        # 第二步：分析 LaTeX 代码所需的宏包
         if result.get("latex"):
+            # 确定性包裹：让复制结果即贴即显（模型自身加包裹不可靠，故由后端统一处理）
+            result["latex"] = self._wrap_latex_for_paste(
+                result["latex"], result.get("inline", False)
+            )
+            # 第二步：分析 LaTeX 代码所需的宏包
             result["latex"] = await prepend_package_comments(llm, result["latex"])
 
         return result
@@ -81,6 +135,7 @@ class FormulaOCRService:
     async def _recognize_with_llm(
         self, llm, base64_image: str, content_type: str
     ) -> dict[str, Any]:
+        """按分隔符协议调用 Vision 模型，提取并校验 LaTeX，失败时回喂重试。"""
         messages = [
             {"role": "system", "content": get_prompt("formula_ocr", "vision_system")},
             {
@@ -101,32 +156,121 @@ class FormulaOCRService:
             },
         ]
 
-        try:
-            validated: FormulaOCRResult = await retry_with_validation(
-                chat_fn=llm.chat,
-                messages=messages,
-                model_cls=FormulaOCRResult,
-                max_retries=3,
-                logger_name="formula_ocr",
-                temperature=0.1,
-                max_tokens=1024,
-                response_format={"type": "json_object"},
+        last_error: str | None = None
+        for attempt in range(_MAX_OCR_RETRIES):
+            try:
+                response_text = await llm.chat(
+                    messages,
+                    temperature=0.1,
+                    max_tokens=4096,
+                )
+                latex = self._extract_latex_block(response_text)
+                if latex is None:
+                    raise ValueError(
+                        "Response did not contain a <<<LATEX>>>...<<<END>>> block. "
+                        "Output the LaTeX code strictly between those two markers."
+                    )
+                inline, confidence = self._parse_metadata(response_text)
+                validated = FormulaOCRResult(
+                    latex=latex, inline=inline, confidence=confidence
+                )
+                result = validated.model_dump()
+
+                # 置信度阈值处理
+                if validated.confidence < 0.7:
+                    result["low_confidence"] = True
+
+                return result
+
+            except ValidationError as e:
+                last_error = format_validation_error(e.errors())
+            except ValueError as e:
+                last_error = str(e)
+            except Exception as e:
+                self._logger.error(f"Formula OCR error: {e}")
+                raise RuntimeError(f"Formula recognition failed: {e}")
+
+            self._logger.warning(
+                f"Formula OCR protocol/validation failed on attempt "
+                f"{attempt + 1}/{_MAX_OCR_RETRIES}: {last_error}"
             )
+            messages = messages + [
+                {
+                    "role": "user",
+                    "content": (
+                        "Your previous response failed the output protocol. "
+                        f"Error: {last_error}\n\n"
+                        "Please re-read the formula image and respond with exactly:\n"
+                        "<<<LATEX>>>\n<LaTeX code>\n<<<END>>>\n"
+                        "INLINE: <true|false>\n"
+                        "CONFIDENCE: <float between 0 and 1>"
+                    ),
+                }
+            ]
 
-            result = validated.model_dump()
+        raise RuntimeError(
+            f"Formula recognition failed after {_MAX_OCR_RETRIES} attempts. "
+            f"Last error: {last_error}"
+        )
 
-            # 置信度阈值处理
-            if validated.confidence < 0.7:
-                result["low_confidence"] = True
+    def _extract_latex_block(self, response_text: str) -> str | None:
+        """提取 <<<LATEX>>>...<<<END>>> 块，并剥离误加的数学包裹。"""
+        match = _LATEX_BLOCK_RE.search(response_text)
+        if not match:
+            return None
+        return self._strip_math_wrappers(match.group(1).strip())
 
-            return result
+    @staticmethod
+    def _strip_math_wrappers(latex: str) -> str:
+        """去除模型误加的显示模式包裹（$$ / \\[ \\] / \\( \\) / $ / equation 等）。"""
+        s = latex.strip()
+        if len(s) >= 4 and s.startswith("$$") and s.endswith("$$"):
+            s = s[2:-2].strip()
+        if len(s) >= 4 and s.startswith(r"\[") and s.endswith(r"\]"):
+            s = s[2:-2].strip()
+        if len(s) >= 4 and s.startswith(r"\(") and s.endswith(r"\)"):
+            s = s[2:-2].strip()
+        if len(s) >= 2 and s.startswith("$") and s.endswith("$"):
+            s = s[1:-1].strip()
+        for begin, end in _WRAPPER_ENVS:
+            if (
+                len(s) >= len(begin) + len(end)
+                and s.startswith(begin)
+                and s.endswith(end)
+            ):
+                s = s[len(begin) : -len(end)].strip()
+                break
+        return s
 
-        except ValueError as e:
-            self._logger.error(f"Formula OCR failed after retries: {e}")
-            raise RuntimeError(f"Formula recognition failed: {e}")
-        except Exception as e:
-            self._logger.error(f"Formula OCR error: {e}")
-            raise RuntimeError(f"Formula recognition failed: {e}")
+    @staticmethod
+    def _parse_metadata(response_text: str) -> tuple[bool, float]:
+        """解析 INLINE / CONFIDENCE 元数据行，缺省时返回 (False, 0.0)。"""
+        inline = False
+        confidence = 0.0
+        inline_match = _INLINE_RE.search(response_text)
+        if inline_match:
+            inline = inline_match.group(1).lower() == "true"
+        conf_match = _CONFIDENCE_RE.search(response_text)
+        if conf_match:
+            confidence = float(conf_match.group(1))
+        return inline, confidence
+
+    @staticmethod
+    def _wrap_latex_for_paste(latex: str, inline: bool) -> str:
+        """按 inline 标志给公式加确定性包裹，复制结果可直接粘贴显示。
+
+        - 已是完整显示环境（align*/gather*/multline* 等）→ 原样保留
+        - 行内公式 → $...$
+        - 展示公式 → \\[...\\]
+        """
+        s = latex.strip()
+        if not s:
+            return s
+        if _STANDALONE_DISPLAY_ENV_RE.match(s):
+            return s
+        if inline:
+            return f"${s}$"
+        return rf"\[{s}\]"
 
     def _validate_content_type(self, content_type: str) -> None:
         """校验图片格式。"""
