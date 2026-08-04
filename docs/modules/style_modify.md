@@ -7,9 +7,9 @@
 | 是否修改源文件 | 否（仅返回结果，用户手动复制） | 是/否 |
 | 是否使用 Marker | 否 | 是（逐段检查模块） |
 
-## Pydantic 输出模型
+## 输出协议
 
-- `StyleModifyResult`（latex，字段为 `LatexText`，经 `latex_json_guard.py` 内容校验）
+LaTeX 不放在 JSON 字符串中传输（JSON 会把未转义的 `\rho` 解释为回车等静默损坏），采用与 OCR 模块一致的分隔符协议：LLM 在 `<<<LATEX>>>...<<<END>>>` 之间输出完整修改后的 LaTeX 源码，后端正则提取后用 `latex_json_guard.py` 做内容校验（控制字符 / 垃圾占位符 / 花括号与 `$` 配平），失败时回喂 LLM 重试（最多 3 次）。响应结构保持不变：`{ latex: "..." }`。
 
 ## Service 核心方法
 

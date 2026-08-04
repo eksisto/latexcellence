@@ -270,7 +270,7 @@ JSON schema 校验保证字段类型正确，但拦不住"合法 JSON + 损坏�
 - `$` 配平（同上跳过规则）
 - 可选 `\begin` / `\end` 环境栈式配平；BibTeX 模式 `%` 为字面字符
 
-接入方式：以 `LatexText` 字段类型挂到 Pydantic 模型（writing_chat / code_review / style_modify / bib_manager / OCR），或在写盘前由工具执行器调用 `check_latex_text()`（template_gen `write_file`、edit_tools `edit_paragraph`）。OCR 模块（formula_ocr / table_ocr）改用分隔符协议让反斜杠原样传输，并用该校验器把损坏输出转为可重试错误。
+接入方式：以 `LatexText` 字段类型挂到 Pydantic 模型（writing_chat / code_review / bib_manager / OCR），或在写盘前由工具执行器调用 `check_latex_text()`（template_gen `write_file`、edit_tools `edit_paragraph`）。OCR 模块（formula_ocr / table_ocr）与 style_modify 改用分隔符协议（`<<<LATEX>>>...<<<END>>>`）让反斜杠原样传输，并用该校验器把损坏输出转为可重试错误。
 
 ---
 
@@ -725,8 +725,9 @@ asyncio.to_thread(subprocess.run)
 ```
 POST /api/style-modify/modify { latex: "...", description: "..." }
         ↓
-retry_with_validation(StyleModifyResult)
-  一次 LLM 调用（要求返回完整 LaTeX 代码，temperature=0.3）
+分隔符协议（<<<LATEX>>>...<<<END>>>）+ 内容校验
+  一次 LLM 调用（要求返回完整 LaTeX 代码，temperature=0.3），
+  协议/校验失败时回喂重试（最多 3 次）
         ↓
 空结果回退为原始代码
         ↓

@@ -414,7 +414,7 @@ raise ValueError("Validation failed after N attempts")        # ❌ 耗尽
 
 **接入方式**：
 
-- 模型字段：`original: LatexText` 等 Pydantic 字段级校验（writing_chat / code_review / style_modify / bib_manager / formula_ocr / table_ocr）
+- 模型字段：`original: LatexText` 等 Pydantic 字段级校验（writing_chat / code_review / bib_manager / formula_ocr / table_ocr）
 - 写盘前：template_gen `write_file`、edit_tools `edit_paragraph` 在写盘前调用 `check_latex_text()`，损坏内容直接拒绝并回喂 LLM 自纠
 
 ### `tex_compile.py` — 统一 TeX 编译执行模块

@@ -170,6 +170,6 @@ def validate_latex_field(
 
 
 # Annotated 类型别名：声明 Pydantic 字段时直接复用
-#     class StyleModifyResult(BaseModel):
-#         latex: LatexText
+#     class CodeReviewSuggestion(BaseModel):
+#         suggested: LatexText
 LatexText = Annotated[str, AfterValidator(validate_latex_field)]

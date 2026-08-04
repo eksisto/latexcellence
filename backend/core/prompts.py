@@ -552,17 +552,16 @@ _PROMPTS: dict[str, dict[str, str]] = {
             "- If the request cannot be fulfilled (e.g., asking to modify something that doesn't exist), "
             "explain briefly and return the original code unchanged\n"
             "- Return the COMPLETE modified LaTeX code, not just the changed portion\n\n"
-            "CRITICAL RULES:\n"
-            "1. Return the FULL LaTeX source, not just a diff or excerpt\n"
-            "2. The 'latex' field must contain the complete modified LaTeX code\n"
-            "3. Do NOT add markdown fences or extra commentary in the JSON response\n"
-            "4. Respond with JSON only, following the schema exactly\n\n"
-            + LATEX_JSON_ESCAPE_RULES
-            + "\n\n"
-            "JSON format:\n"
-            "{\n"
-            '  "latex": "<the complete modified LaTeX code>"\n'
-            "}"
+            "Output format (strict; NO JSON, NO markdown fences):\n"
+            "<<<LATEX>>>\n"
+            "<complete modified LaTeX code>\n"
+            "<<<END>>>\n\n"
+            "Rules:\n"
+            "- The text between <<<LATEX>>> and <<<END>>> must be ONLY the complete "
+            "modified LaTeX code.\n"
+            "- Backslashes are literal characters: write \\frac exactly as-is; "
+            "never escape or double them.\n"
+            "- Do NOT add any commentary, explanation, or markdown fences."
         ),
     },
     # ── bib_manager 模块 ──────────────────────────────────────────────────────
