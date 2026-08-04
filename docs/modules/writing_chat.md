@@ -9,14 +9,14 @@
 | 维度 | typo_check / expression_opt | writing_chat |
 | --- | --- | --- |
 | 交互模式 | 单向触发 → 返回结果 | 双向多轮对话 |
-| LLM 输出 | 单段落结构化结果 | RS1 流式 Markdown + Function Calling / RS2 结构化编辑建议 |
+| LLM 输出 | 单段落结构化结果 | RS1 流式 Markdown + Function Calling / RS2 分隔符协议编辑建议（无 JSON） |
 | Marker 保护 | 是 | 否；对话和编辑都直接使用原始 LaTeX |
 | 状态管理 | 无状态 | 有状态：按项目路径隔离持久化 |
 
 ### 双轮协议 + Function Calling
 
 - **RS1**：用户发送消息 → SSE 流式 `chat_stream_with_tools` → 实时输出文本 + 检测工具调用。RS1 中 LLM 可发起 Function Calling 调用联网搜索、学术研究、项目文件浏览、段落编辑和请求澄清工具，工具结果回传 LLM 后继续流式输出最终回复
-- **RS2**：用户在 RS1 回复上点击"生成编辑建议" → 结构化 JSON → `LlmEditResult` → `EditOp`
+- **RS2**：用户在 RS1 回复上点击"生成编辑建议" → LLM 按分隔符协议（`<<<LATEX>>>...<<<END>>>`）输出修改后的完整 LaTeX 段落，可附带 `<<<REASON>>>...<<<END>>>` 说明 → 后端提取、校验并附挂 `EditOp`。LaTeX 不经过 JSON 字符串传输，反斜杠原样保留，从根上避免 JSON 转义静默损坏；`original` 由后端从段落原文填充，不再要求 LLM 回显
 
 RS2 不直接写回 `.tex`，用户再点"应用到 .tex"才调用 `project_manager.apply_change`。
 
@@ -27,7 +27,7 @@ RS2 不直接写回 `.tex`，用户再点"应用到 .tex"才调用 `project_mana
     - `role` 中 tool 角色用于持久化工具调用结果
     - `tool_calls`（仅 assistant 角色）：LLM 请求调用的工具列表（OpenAI tool_calls 格式）
     - `tool_call_id`（仅 tool 角色）：关联到触发该结果的工具调用 ID
-- `LlmEditResult` — RS2 LLM 输出（paragraph_index, original, optimized, reason；original/optimized 为 `LatexText`，经 `latex_json_guard.py` 内容校验拦截 JSON 反斜杠转义损坏）
+- RS2 无独立 LLM 输出模型：LLM 按分隔符协议输出 `<<<LATEX>>>...<<<END>>>`（必选）+ `<<<REASON>>>...<<<END>>>`（可选）纯文本块。提取出的修改段落经 `latex_json_guard.py` 的 `validate_latex_field(relaxed=True)` 宽松校验（放行 `\t` / `\r` 等合法 LaTeX 空白），失败时回喂 LLM 重试（最多 3 次）
 - `ChatSendRequest` / `GenerateEditRequest` / `ApplyEditRequest` / `RenameSessionRequest` / `ConfirmToolRequest` / `CancelToolRequest` / `ClarifyRequest` / `CancelClarifyRequest` — 请求体
 
 ## 会话上下文管理 `context.py`
@@ -49,7 +49,7 @@ RS2 不直接写回 `.tex`，用户再点"应用到 .tex"才调用 `project_mana
 | 方法 | 功能 |
 | --- | --- |
 | `send(req, workspace_id)` | RS1 主聊天流：加载/创建会话 → 追加消息 → 压缩判定 → 注入 Function Calling 工具 → chat_stream_with_tools（实时产出文本 + 检测工具调用）→ 工具调用循环 → 后置流式 → SSE 推送 |
-| `generate_edit(req, workspace_id)` | RS2 编辑流：把原始 LaTeX 交给 LLM → 校验结构化结果 → diff → 附挂 EditOp |
+| `generate_edit(req, workspace_id)` | RS2 编辑流：把原始 LaTeX 交给 LLM → 分隔符协议提取 + 宽松校验（失败回喂重试，最多 3 次）→ diff → 附挂 EditOp |
 | `apply_edit(req, workspace_id)` | 调用 apply_change 写回 .tex，标记 edit_op.applied |
 | `confirm_pending_tool(pending_id, modified_args)` | 前端确认敏感工具调用（如 edit_paragraph），可选修改参数 |
 | `cancel_pending_tool(pending_id)` | 前端取消待定工具调用 |

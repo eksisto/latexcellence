@@ -37,6 +37,9 @@ from pydantic import AfterValidator
 # 控制字符：除换行（\\x0a）外的 C0 控制符 + DEL。\\r \\t \\f \\b 等
 # 都是 JSON 未转义反斜杠时静默损坏的特征（\\rho → 回车 + ho）。
 _BAD_CONTROL_RE = re.compile(r"[\x00-\x09\x0b-\x1f\x7f]")
+# 宽松模式（分隔符协议 / 非 JSON 传输）：\t（U+0009）与 \r（U+000D）是合法
+# LaTeX 空白，放行；仍拦截 \b（0x08）、\f（0x0C）等真正的静默损坏特征。
+_BAD_CONTROL_RELAXED_RE = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
 # LLM 把对象序列化成字符串时产生的垃圾占位符
 _GARBAGE_RE = re.compile(r"\[object [A-Za-z]+\]")
 # 环境声明：\\begin{X} / \\end{X}
@@ -76,7 +79,9 @@ def _strip_verbatim(value: str, *, bibtex: bool = False) -> str:
     return value
 
 
-def check_latex_text(value: str, *, bibtex: bool = False) -> str | None:
+def check_latex_text(
+    value: str, *, bibtex: bool = False, relaxed: bool = False
+) -> str | None:
     """校验一段 LaTeX/BibTeX 文本，通过返回 None，失败返回错误消息。
 
     校验项：
@@ -86,6 +91,9 @@ def check_latex_text(value: str, *, bibtex: bool = False) -> str | None:
         4. $ 配平（忽略 \\$，同样跳过）
 
     bibtex=True 时按 BibTeX 语义处理：% 是字面字符，不当作注释起点。
+    relaxed=True 用于分隔符协议（非 JSON）传输路径：反斜杠原样传输，不存在
+    JSON 转义风险，因此放行 \\t / \\r 这类合法 LaTeX 空白，且错误归因不再
+    提示"把反斜杠双写"。
     """
     if not isinstance(value, str):
         return f"expected a string, got {type(value).__name__}"
@@ -93,8 +101,15 @@ def check_latex_text(value: str, *, bibtex: bool = False) -> str | None:
     # 控制字符 / 垃圾占位符：先剔除 verbatim / URL 内容再扫描，
     # 避免 \\verb|a<TAB>b| 等合法字面内容被误判。
     probe = _strip_verbatim(value, bibtex=bibtex)
-    bad = _BAD_CONTROL_RE.search(probe)
+    bad_re = _BAD_CONTROL_RELAXED_RE if relaxed else _BAD_CONTROL_RE
+    bad = bad_re.search(probe)
     if bad:
+        if relaxed:
+            return (
+                f"LaTeX text contains an illegal control character "
+                f"(U+{ord(bad.group()):04X} at position {bad.start()}); "
+                "the output appears corrupted"
+            )
         return (
             f"LaTeX text contains a control character (U+{ord(bad.group()):04X} "
             f"at position {bad.start()}); possible JSON escaping corruption — "
@@ -148,6 +163,7 @@ def validate_latex_field(
     *,
     check_environments: bool = False,
     bibtex: bool = False,
+    relaxed: bool = False,
 ) -> str:
     """Pydantic 校验器回调：校验失败抛出 ValueError（带错误消息）。
 
@@ -158,8 +174,9 @@ def validate_latex_field(
         def _check(cls, value: str) -> str:
             return validate_latex_field(value)
     bibtex=True 时按 BibTeX 语义校验（% 为字面字符），用于 BibEntry 字段。
+    relaxed=True 用于分隔符协议（非 JSON）路径，放行 \\t / \\r 并调整错误归因。
     """
-    error = check_latex_text(value, bibtex=bibtex)
+    error = check_latex_text(value, bibtex=bibtex, relaxed=relaxed)
     if error:
         raise ValueError(error)
     if check_environments:

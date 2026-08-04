@@ -6,9 +6,11 @@
        LLM 直接接收原始 LaTeX 源码，包括所有命令、环境、公式，能够充分理解文档结构与内容。
     2. 双轮协议：
         - RS1: chat_stream_with_usage 流式输出 Markdown 回复给用户看
-        - RS2: 仅当用户点击"生成编辑"按钮后，发起独立的 JSON 结构化请求
-          (LlmEditResult schema + retry_with_validation)，得到编辑操作建议
-          附挂到该 assistant 消息上（不直接写回 .tex，等用户再点应用）
+        - RS2: 仅当用户点击"生成编辑"按钮后，发起独立的编辑请求
+          （分隔符协议：<<<LATEX>>>...<<<END>>> 纯文本块 + 可选
+          <<<REASON>>>...<<<END>>>），得到编辑操作建议附挂到该 assistant
+          消息上（不直接写回 .tex，等用户再点应用）。
+          不用 JSON 传输 LaTeX，避免反斜杠转义静默损坏。
     3. 上下文压缩：
         - 每次发送消息前判断 cumulative_tokens 是否达到阈值
         - 触发时把 messages 打包送 LLM 生成一条 summary 摘要，替换全部历史
@@ -24,6 +26,7 @@
 import asyncio
 import difflib
 import json
+import re
 import time
 import uuid
 from typing import Any, AsyncIterator
@@ -34,7 +37,7 @@ from backend.core.llm_client import get_llm_client
 from backend.core.tool_registry import get_tool_registry
 from backend.core.workspace_manager import get_project_manager_for_workspace
 from backend.core.prompts import get_prompt
-from backend.utils.json_utils import retry_with_validation
+from backend.utils.latex_json_guard import validate_latex_field
 from backend.utils.time_utils import get_current_time_context
 from backend.utils.web_search import DDGChallengeError, get_search_manager
 from backend.utils.project_tools import get_project_tools_manager
@@ -51,7 +54,6 @@ from backend.modules.writing_chat.models import (
     DeleteMessageRequest,
     EditOp,
     GenerateEditRequest,
-    LlmEditResult,
 )
 
 # ── Service ────────────────────────────────────────────────────────────────
@@ -705,7 +707,7 @@ class WritingChatService:
             "tokens": last_usage_tokens,
         }
 
-    # ── 生成编辑（RS2，结构化 JSON） ───────────────────────────────────
+    # ── 生成编辑（RS2，分隔符协议） ─────────────────────────────────
 
     async def generate_edit(
         self, req: GenerateEditRequest, workspace_id: str = ""
@@ -715,6 +717,10 @@ class WritingChatService:
 
         直接发送原始 LaTeX 源码给 LLM，LLM 返回修改后的 LaTeX 源码，
         无需 marker pipeline（writing_chat 是特例，不用 marker 保护）。
+
+        LLM 输出走分隔符协议（<<<LATEX>>>...<<<END>>>）而非 JSON：
+        反斜杠原样传输，避免 JSON 转义静默损坏；original 由后端从段落
+        原文填充，不再要求 LLM 回显，减少误报与 token 消耗。
         """
         if self._no_api_key():
             raise RuntimeError("No API key configured")
@@ -752,26 +758,7 @@ class WritingChatService:
             },
         ]
 
-        try:
-            validated: LlmEditResult = await retry_with_validation(
-                chat_fn=llm.chat,
-                messages=messages,
-                model_cls=LlmEditResult,
-                max_retries=3,
-                logger_name="writing_chat.service",
-                temperature=0.3,
-                max_tokens=4096,
-                response_format={"type": "json_object"},
-            )
-        except ValueError as e:
-            self._logger.warning(f"generate_edit validation exhausted: {e}")
-            raise RuntimeError(f"Edit generation failed: {e}")
-        except Exception as e:
-            self._logger.error(f"generate_edit LLM call failed: {e}")
-            raise RuntimeError(f"Edit generation failed: {e}")
-
-        optimized_latex = validated.optimized
-        reason = validated.reason
+        optimized_latex, reason = await self._generate_edit_with_llm(llm, messages)
 
         # 构造 unified diff（基于原始 LaTeX）
         diff_text = "\n".join(
@@ -808,6 +795,99 @@ class WritingChatService:
             "edit_op": edit_op.model_dump(mode="json"),
             "reason": reason,
         }
+
+    # ── 分隔符协议：提取 + 校验 + 重试 ───────────────────────────────
+
+    _EDIT_LATEX_BLOCK_RE = re.compile(
+        r"<<<LATEX>>>(.*?)<<<END>>>", re.DOTALL | re.IGNORECASE
+    )
+    _EDIT_REASON_BLOCK_RE = re.compile(
+        r"<<<REASON>>>(.*?)<<<END>>>", re.DOTALL | re.IGNORECASE
+    )
+    _MAX_EDIT_RETRIES = 3
+
+    async def _generate_edit_with_llm(
+        self, llm, messages: list[dict[str, Any]]
+    ) -> tuple[str, str]:
+        """
+        按分隔符协议调用 LLM 生成编辑结果。
+
+        返回 (optimized_latex, reason)。提取的 LaTeX 过内容校验
+        （非 JSON 宽松模式，放行 \\t / \\r），失败时把错误回喂 LLM 重试，
+        最多 3 次；重试耗尽后抛 RuntimeError（与 style_modify 行为一致）。
+        """
+        last_error: str | None = None
+        for attempt in range(self._MAX_EDIT_RETRIES):
+            try:
+                response_text = await llm.chat(
+                    messages,
+                    temperature=0.3,
+                    max_tokens=4096,
+                )
+                optimized = self._extract_edit_latex_block(response_text)
+                if optimized is None:
+                    raise ValueError(
+                        "Response did not contain a <<<LATEX>>>...<<<END>>> block. "
+                        "Output the complete rewritten paragraph strictly between "
+                        "those two markers, with NO JSON and NO markdown fences."
+                    )
+                if not optimized.strip():
+                    raise ValueError(
+                        "The <<<LATEX>>> block is empty. Output the complete "
+                        "rewritten paragraph between the markers."
+                    )
+                validate_latex_field(optimized, relaxed=True)
+                reason = self._extract_edit_reason_block(response_text) or ""
+                self._logger.info(
+                    f"generate_edit succeeded: {len(optimized)} chars "
+                    f"on attempt {attempt + 1}"
+                )
+                return optimized, reason
+
+            except ValueError as e:
+                last_error = str(e)
+                self._logger.warning(
+                    f"generate_edit protocol/validation failed on attempt "
+                    f"{attempt + 1}/{self._MAX_EDIT_RETRIES}: {last_error}"
+                )
+            except Exception as e:
+                self._logger.error(f"generate_edit LLM call failed: {e}")
+                raise RuntimeError(f"Edit generation failed: {e}")
+
+            messages = messages + [
+                {
+                    "role": "user",
+                    "content": (
+                        "Your previous response failed the output protocol. "
+                        f"Error: {last_error}\n\n"
+                        "Please output exactly:\n"
+                        "<<<LATEX>>>\n<complete rewritten paragraph as raw LaTeX>\n"
+                        "<<<END>>>\n"
+                        "<<<REASON>>>\n<brief explanation>\n<<<END>>>"
+                    ),
+                }
+            ]
+
+        raise RuntimeError(
+            f"Edit generation failed: all {self._MAX_EDIT_RETRIES} attempts "
+            f"failed. Last error: {last_error}"
+        )
+
+    @staticmethod
+    def _extract_edit_latex_block(response_text: str) -> str | None:
+        """提取 <<<LATEX>>>...<<<END>>> 块内容；缺失返回 None。"""
+        match = WritingChatService._EDIT_LATEX_BLOCK_RE.search(response_text)
+        if not match:
+            return None
+        return match.group(1).strip()
+
+    @staticmethod
+    def _extract_edit_reason_block(response_text: str) -> str | None:
+        """提取 <<<REASON>>>...<<<END>>> 块内容；缺失返回 None。"""
+        match = WritingChatService._EDIT_REASON_BLOCK_RE.search(response_text)
+        if not match:
+            return None
+        return match.group(1).strip()
 
     # ── 应用编辑 ──────────────────────────────────────────────────────
 

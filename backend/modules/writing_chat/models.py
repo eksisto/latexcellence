@@ -15,8 +15,6 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
-from backend.utils.latex_json_guard import LatexText
-
 # ── 持久化的消息数据 ────────────────────────────────────────────────────────
 
 
@@ -24,9 +22,10 @@ class EditOp(BaseModel):
     """
     编辑操作结构。
 
-    当 assistant 回复触发"生成编辑"第二轮请求后，LLM 输出的 LlmEditResult
-    会被封装为 EditOp 存储到该 assistant 消息上；前端待用户点击"应用"
-    后才调用 project_manager.apply_change 写回源文件。
+    当 assistant 回复触发"生成编辑"第二轮请求后，LLM 输出的修改结果
+    （分隔符协议提取的 new_latex + reason）会被封装为 EditOp 存储到
+    该 assistant 消息上；前端待用户点击"应用"后才调用
+    project_manager.apply_change 写回源文件。
     """
 
     file_path: str
@@ -94,24 +93,6 @@ class ChatMessage(BaseModel):
 
 
 ChatMessage.model_rebuild()
-
-
-# ── 第二轮结构化 LLM 输出 schema ────────────────────────────────────────────
-
-
-class LlmEditResult(BaseModel):
-    """
-    生成编辑时 LLM 的 JSON 输出 schema。
-
-    LLM 直接操作原始 LaTeX 源码（writing_chat 为特例，不用 marker 剥离），
-    optimized 字段返回修改后的完整 LaTeX 段落。
-    """
-
-    paragraph_index: int
-    original: LatexText
-    optimized: LatexText
-    reason: str = ""
-
 
 # ── API 请求/响应模型 ────────────────────────────────────────────────────────
 

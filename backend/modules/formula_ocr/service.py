@@ -64,8 +64,9 @@ class FormulaOCRResult(BaseModel):
     @field_validator("latex")
     @classmethod
     def _validate_latex_content(cls, value: str) -> str:
-        """内容校验器：拦截 JSON 转义损坏、垃圾占位符、花括号与 $ 不配平（共享实现）。"""
-        return validate_latex_field(value)
+        """内容校验器（非 JSON 宽松模式，放行 \\t / \\r）：拦截控制字符损坏、
+        垃圾占位符、花括号与 $ 不配平（共享实现）。"""
+        return validate_latex_field(value, relaxed=True)
 
 
 class FormulaOCRService:

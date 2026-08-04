@@ -75,7 +75,7 @@ LLM 输出的 LaTeX 文本（经 JSON 传输或写盘前）**必须**使用 `bac
 
 - 校验项：控制字符（JSON 反斜杠转义损坏特征）、`[object Object]` 垃圾占位符、花括号 / `$` 配平，可选 `\begin` / `\end` 环境配平
 - BibTeX 字段使用 `bibtex=True`（`%` 为字面字符，避免 URL percent-encoding 误判）
-- OCR 类模块优先采用分隔符协议（`<<<LATEX>>>...<<<END>>>`）直接传输纯文本，从根上避免 JSON 转义
+- 直接传输 LaTeX 的模块（OCR 类、writing_chat 编辑输出等）优先采用分隔符协议（`<<<LATEX>>>...<<<END>>>`）直接传输纯文本，从根上避免 JSON 转义；非 JSON 路径使用 `latex_json_guard.py` 的 `relaxed=True` 宽松校验（放行 `\t` / `\r` 等合法 LaTeX 空白）
 
 ---
 

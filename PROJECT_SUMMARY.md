@@ -139,7 +139,7 @@ latexcellence/
 - **WorkspaceManager**: 多浏览器多工作区隔离，每个 workspace_id 拥有独立的 `LatexProject` 实例（项目状态、文件树、MD5 缓存、撤销栈完全隔离）
 - **乐观锁**: 多工作区并发编辑同一文件时，通过 MD5 哈希检测冲突。读取段落时返回 `file_md5`，应用修改时前端传回 `expected_md5`，后端校验失败时抛出 `FileConflictError`（HTTP 409），前端自动刷新 MD5 并提示用户重试。`inject_expected_md5s()` 辅助函数统一为各模块 router 注入预期 MD5
 - **Marker Protection**: LaTeX 结构 → `__CMD_NNNN__` / `__MATH_NNNN__` / `__ENV_NNNN__` / `__VERB_NNNN__` marker → LLM 只改纯文本 → 按长度降序还原。apply 时若 marker_map 缺失（context 过期/重启/新操作覆盖），跳过该段写入并返回 `errors`，防止字面 marker 污染 `.tex` 文件；前端据此保留未应用项并提示用户重新检查。返回给前端展示的 `changes[]` 中的 `original`/`corrected` 会在 `_build_success_result` 中预先还原 marker，确保用户看到的是干净的 LaTeX 文本而非 `__CMD_NNNN__` 占位符
-- **JSON Validation Pipeline**: `safe_parse_json()` → Pydantic `.model_validate()` → `retry_with_validation()` (最多 3 次重试 + 错误反馈)；`latex_json_guard.py` 提供字段级 LaTeX 内容校验（`LatexText` / `check_latex_text()`），拦截 JSON 反斜杠转义静默损坏
+- **JSON Validation Pipeline**: `safe_parse_json()` → Pydantic `.model_validate()` → `retry_with_validation()` (最多 3 次重试 + 错误反馈)；`latex_json_guard.py` 提供字段级 LaTeX 内容校验（`LatexText` / `check_latex_text()`），拦截 JSON 反斜杠转义静默损坏；分隔符协议（非 JSON）路径使用 `relaxed=True` 宽松模式（放行 `\t` / `\r` 合法 LaTeX 空白，错误归因不再提示 JSON 转义）
 - **SSE Streaming**: 所有段落检查模块通过 Server-Sent Events 推送 `progress`/`result`/`error`/`done` 事件
 - **Function Calling 工具体系**
     - `features.function_calling` 配置组将全局 LLM 工具归入嵌套结构（替代原先扁平的 `features.function_calling.web_search` / `features.project_tools`），支持旧配置自动迁移
@@ -152,6 +152,7 @@ latexcellence/
     - DDG Challenge 验证码提交通过通用路由 `/api/search/ddg-challenge` 处理，不绑定特定业务模块
     - 搜索流程可串联 **Query Rewriting**（将用户查询拆解为多条并行查询，去重合并）和 **Deep Read**（并发抓取搜索结果前 N 条页面正文，通过 `format_for_llm()` 注入 LLM 上下文）
     - Writing Chat 的 `send()` 方法作为 Function Calling 工具的消费端，集成联网搜索、学术研究、项目浏览和段落编辑工具：检测 LLM 返回 `tool_call` 时自动执行、将结果回传 LLM，再流式输出最终回复。学术检索结果通过 `tool_result.scholarly_results` 推送前端；敏感写操作推送 `tool_pending` 等待确认
+    - RS2 生成编辑走分隔符协议（`<<<LATEX>>>...<<<END>>>` 纯文本块 + 可选 `<<<REASON>>>...<<<END>>>`），不再经 JSON 传输，避免反斜杠转义静默损坏；`original` 由后端从段落原文填充（不再要求 LLM 回显），提取出的修改段落经 `validate_latex_field(relaxed=True)` 宽松校验，失败回喂重试（最多 3 次）
 - **DOI 多数据源查询**: `ProviderManager`（全局单例）管理多个可插拔 `BaseMetadataProvider`
     - Crossref 主索引 + arXiv 预印本专用 + 补全层
     - arXiv DOI（`10.48550/arXiv.*`）自动路由到 ArxivProvider

@@ -55,8 +55,9 @@ class TableOCRResult(BaseModel):
     @field_validator("latex")
     @classmethod
     def _validate_latex_content(cls, value: str) -> str:
-        """内容校验器：共享基础校验 + 环境配平（table 浮动体要求见模型级校验）。"""
-        return validate_latex_field(value, check_environments=True)
+        """内容校验器（非 JSON 宽松模式，放行 \\t / \\r）：共享基础校验 + 环境配平
+        （table 浮动体要求见模型级校验）。"""
+        return validate_latex_field(value, check_environments=True, relaxed=True)
 
     @model_validator(mode="after")
     def _validate_table_float(self) -> "TableOCRResult":

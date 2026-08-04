@@ -2,10 +2,10 @@
 写作助手 Chat 模块集成测试。
 
 覆盖：
-    - Pydantic 模型校验（ChatMessage / EditOp / LlmEditResult）
+    - Pydantic 模型校验（ChatMessage / EditOp）
     - ConversationContext：创建/追加/删除/压缩
     - WritingChatService.send（mock chat_stream_with_tools / chat_stream_with_usage）：token 累计、压缩触发、user 删除回滚
-    - WritingChatService.generate_edit（mock chat）：marker 一致性、还原、附挂
+    - WritingChatService.generate_edit（mock chat）：分隔符协议提取、校验失败重试、original 后端自填、附挂
     - WritingChatService.apply_edit：写回 .tex
     - 删除消息（含 summary 还原快照）在父子组件中保持 token 计数一致
     - 会话磁盘持久化往返
@@ -142,14 +142,6 @@ class TestModels:
         )
         assert op.applied is False
         assert op.diff_text == ""
-
-    def test_llm_edit_result_required_fields(self):
-        from pydantic import ValidationError
-        from backend.modules.writing_chat.models import LlmEditResult
-
-        with pytest.raises(ValidationError):
-            LlmEditResult.model_validate({"paragraph_index": 0})
-
 
 # ── ConversationContext tests ─────────────────────────────────────────────
 
@@ -374,16 +366,14 @@ class TestServiceEdit:
         ctx.append_assistant_message("好的，建议...", tokens=10)
         ctx.save_to_disk()
 
-        # mock LLM：输出改写了 plain 文本但保留了 LaTeX 结构的 raw LaTeX
+        # mock LLM：按分隔符协议输出改写后的 raw LaTeX（保留 LaTeX 结构）
         new_latex = para.text.replace("verified", "verified (empirically)")
 
         async def fake_chat(messages, **kwargs):
-            return {
-                "paragraph_index": para.index,
-                "original": para.text,
-                "optimized": new_latex,
-                "reason": "more precise",
-            }
+            return (
+                "<<<LATEX>>>\n" + new_latex + "\n<<<END>>>\n"
+                "<<<REASON>>>\nmore precise\n<<<END>>>"
+            )
 
         with patch(_LLM_CLIENT_PATH) as m_llm:
             client = MagicMock()
@@ -399,9 +389,12 @@ class TestServiceEdit:
             result = await service.generate_edit(req, workspace_id="test-ws")
 
         assert result["session_id"] == ctx.session_id
+        assert result["reason"] == "more precise"
         op = EditOp.model_validate(result["edit_op"])
         assert op.applied is False
-        # LLM 输出直接用作 new_latex，保留了原始 LaTeX 结构
+        # original 由后端从段落原文填充，不再要求 LLM 回显
+        assert op.original_latex == para.text
+        # 分隔符块内容直接用作 new_latex，反斜杠原样保留
         assert "empirically" in op.new_latex
         assert r"\textbf" in op.new_latex
         loaded = ConversationContext.load_from_disk(ctx.session_id)
@@ -413,12 +406,12 @@ class TestServiceEdit:
         assert attached.edit_op.applied is False
 
     @pytest.mark.asyncio
-    async def test_generate_edit_unescaped_backslash_retries(
+    async def test_generate_edit_validation_failure_retries(
         self, temp_session_dir, temp_project, open_project, service, monkeypatch
     ):
         """
-        LLM 输出含 JSON 转义损坏的 \\rho（回车 + ho）→ LlmEditResult 内容
-        校验失败 → 重试后恢复，最终 edit_op 无控制字符。
+        LLM 输出的 LATEX 块含内容损坏（非法控制字符 \\f）→ 宽松校验
+        拦截失败 → 回喂重试 → 最终 edit_op 无控制字符。
         """
         monkeypatch.setattr(get_config().llm, "api_key", "test-key")
         from backend.core.workspace_manager import get_project_manager_for_workspace
@@ -439,20 +432,10 @@ class TestServiceEdit:
         async def fake_chat(messages, **kwargs):
             calls["n"] += 1
             if calls["n"] == 1:
-                # 模拟 JSON 转义损坏：\\rho 被解析成回车 + ho
-                return {
-                    "paragraph_index": para.index,
-                    "original": para.text,
-                    "optimized": "R^" + "\r" + "ho is fine",
-                    "reason": "bad",
-                }
+                # 内容损坏：混入非法控制字符（\\f，U+000C）
+                return "<<<LATEX>>>\nR^\fho is fine\n<<<END>>>"
             new_latex = para.text.replace("verified", "verified (empirically)")
-            return {
-                "paragraph_index": para.index,
-                "original": para.text,
-                "optimized": new_latex,
-                "reason": "more precise",
-            }
+            return "<<<LATEX>>>\n" + new_latex + "\n<<<END>>>"
 
         with patch(_LLM_CLIENT_PATH) as m_llm:
             client = MagicMock()
@@ -470,8 +453,201 @@ class TestServiceEdit:
         assert calls["n"] == 2
         op = EditOp.model_validate(result["edit_op"])
         assert "empirically" in op.new_latex
-        assert "\r" not in op.new_latex
+        assert "\f" not in op.new_latex
         assert r"\textbf" in op.new_latex
+
+    @pytest.mark.asyncio
+    async def test_generate_edit_missing_block_retries(
+        self, temp_session_dir, temp_project, open_project, service, monkeypatch
+    ):
+        """LLM 首轮未按分隔符协议输出 → 回喂重试 → 第二轮成功。"""
+        monkeypatch.setattr(get_config().llm, "api_key", "test-key")
+        from backend.core.workspace_manager import get_project_manager_for_workspace
+
+        ws_id = "test-ws"
+        pm = get_project_manager_for_workspace(ws_id)
+        pm.open(str(temp_project))
+        paragraphs = pm.get_paragraphs("main.tex")
+        para = next(p for p in paragraphs if "Bold claim" in p.text)
+
+        ctx = ConversationContext.create_session(file_path="main.tex", scope="test")
+        ctx.append_user_message("把这段改得更学术")
+        ctx.append_assistant_message("好的，建议...", tokens=10)
+        ctx.save_to_disk()
+
+        new_latex = para.text.replace("verified", "verified (empirically)")
+        calls = {"n": 0}
+
+        async def fake_chat(messages, **kwargs):
+            calls["n"] += 1
+            if calls["n"] == 1:
+                # 未包含 <<<LATEX>>> 块（例如普通 Markdown 回复）
+                return "Here is the rewritten paragraph:\n" + new_latex
+            return "<<<LATEX>>>\n" + new_latex + "\n<<<END>>>"
+
+        with patch(_LLM_CLIENT_PATH) as m_llm:
+            client = MagicMock()
+            client.chat = fake_chat
+            m_llm.return_value = client
+
+            req = GenerateEditRequest(
+                session_id=ctx.session_id,
+                file_path="main.tex",
+                paragraph_index=para.index,
+                instruction="把这段改得更学术",
+            )
+            result = await service.generate_edit(req, workspace_id="test-ws")
+
+        assert calls["n"] == 2
+        op = EditOp.model_validate(result["edit_op"])
+        assert "empirically" in op.new_latex
+        assert op.original_latex == para.text
+
+    @pytest.mark.asyncio
+    async def test_generate_edit_empty_block_retries(
+        self, temp_session_dir, temp_project, open_project, service, monkeypatch
+    ):
+        """LATEX 块为空 → 协议失败 → 回喂重试。"""
+        monkeypatch.setattr(get_config().llm, "api_key", "test-key")
+        from backend.core.workspace_manager import get_project_manager_for_workspace
+
+        ws_id = "test-ws"
+        pm = get_project_manager_for_workspace(ws_id)
+        pm.open(str(temp_project))
+        paragraphs = pm.get_paragraphs("main.tex")
+        para = next(p for p in paragraphs if "Bold claim" in p.text)
+
+        ctx = ConversationContext.create_session(file_path="main.tex", scope="test")
+        ctx.append_user_message("把这段改得更学术")
+        ctx.append_assistant_message("好的，建议...", tokens=10)
+        ctx.save_to_disk()
+
+        new_latex = para.text.replace("verified", "verified (empirically)")
+        calls = {"n": 0}
+
+        async def fake_chat(messages, **kwargs):
+            calls["n"] += 1
+            if calls["n"] == 1:
+                return "<<<LATEX>>>\n   \n<<<END>>>"
+            return "<<<LATEX>>>\n" + new_latex + "\n<<<END>>>"
+
+        with patch(_LLM_CLIENT_PATH) as m_llm:
+            client = MagicMock()
+            client.chat = fake_chat
+            m_llm.return_value = client
+
+            req = GenerateEditRequest(
+                session_id=ctx.session_id,
+                file_path="main.tex",
+                paragraph_index=para.index,
+                instruction="把这段改得更学术",
+            )
+            result = await service.generate_edit(req, workspace_id="test-ws")
+
+        assert calls["n"] == 2
+        op = EditOp.model_validate(result["edit_op"])
+        assert "empirically" in op.new_latex
+
+    @pytest.mark.asyncio
+    async def test_generate_edit_crlf_paragraph_no_false_positive(
+        self, temp_session_dir, temp_project, open_project, service, monkeypatch
+    ):
+        """
+        CRLF 行尾的段落：original 由后端自填（不再经 LLM 回显/校验），
+        optimized 走非 JSON 宽松校验（放行 \\r），不触发控制字符误报。
+        """
+        monkeypatch.setattr(get_config().llm, "api_key", "test-key")
+        from backend.core.project_manager import Paragraph
+        from backend.core.workspace_manager import get_project_manager_for_workspace
+
+        ws_id = "test-ws"
+        pm = get_project_manager_for_workspace(ws_id)
+        pm.open(str(temp_project))
+        # safe_read 使用通用换行会把文件里的 \r\n 规范化为 \n，因此直接
+        # 构造含 CRLF 行尾的内存 Paragraph，聚焦验证 service 层行为。
+        para = Paragraph(
+            index=0,
+            text="First line with CRLF.\r\nSecond line with CRLF.",
+            file_path="main.tex",
+            line_start=3,
+            line_end=4,
+        )
+        assert "\r" in para.text
+        monkeypatch.setattr(pm, "get_paragraphs", lambda file_path: [para])
+
+        ctx = ConversationContext.create_session(file_path="main.tex", scope="test")
+        ctx.append_user_message("润色这段")
+        ctx.append_assistant_message("好的", tokens=5)
+        ctx.save_to_disk()
+
+        new_latex = para.text.replace("First line", "First line (revised)")
+        calls = {"n": 0}
+
+        async def fake_chat(messages, **kwargs):
+            calls["n"] += 1
+            # LLM 回显保留了 CRLF 行尾
+            return "<<<LATEX>>>\n" + new_latex + "\n<<<END>>>"
+
+        with patch(_LLM_CLIENT_PATH) as m_llm:
+            client = MagicMock()
+            client.chat = fake_chat
+            m_llm.return_value = client
+
+            req = GenerateEditRequest(
+                session_id=ctx.session_id,
+                file_path="main.tex",
+                paragraph_index=para.index,
+                instruction="润色这段",
+            )
+            result = await service.generate_edit(req, workspace_id="test-ws")
+
+        # 未触发重试，CRLF 不再误报
+        assert calls["n"] == 1
+        op = EditOp.model_validate(result["edit_op"])
+        assert op.original_latex == para.text
+        assert "First line (revised)" in op.new_latex
+        assert "\r" in op.new_latex
+
+    @pytest.mark.asyncio
+    async def test_generate_edit_protocol_failure_raises(
+        self, temp_session_dir, temp_project, open_project, service, monkeypatch
+    ):
+        """LLM 始终不按分隔符协议输出 → 重试耗尽 → RuntimeError。"""
+        monkeypatch.setattr(get_config().llm, "api_key", "test-key")
+        from backend.core.workspace_manager import get_project_manager_for_workspace
+
+        ws_id = "test-ws"
+        pm = get_project_manager_for_workspace(ws_id)
+        pm.open(str(temp_project))
+        paragraphs = pm.get_paragraphs("main.tex")
+        para = next(p for p in paragraphs if "Bold claim" in p.text)
+
+        ctx = ConversationContext.create_session(file_path="main.tex", scope="test")
+        ctx.append_user_message("把这段改得更学术")
+        ctx.append_assistant_message("好的，建议...", tokens=10)
+        ctx.save_to_disk()
+
+        calls = {"n": 0}
+
+        async def fake_chat(messages, **kwargs):
+            calls["n"] += 1
+            return "Here is the modified text: ..."  # 始终无 LATEX 块
+
+        with patch(_LLM_CLIENT_PATH) as m_llm:
+            client = MagicMock()
+            client.chat = fake_chat
+            m_llm.return_value = client
+
+            req = GenerateEditRequest(
+                session_id=ctx.session_id,
+                file_path="main.tex",
+                paragraph_index=para.index,
+                instruction="把这段改得更学术",
+            )
+            with pytest.raises(RuntimeError, match="Edit generation failed"):
+                await service.generate_edit(req, workspace_id="test-ws")
+
+        assert calls["n"] == 3
 
     def test_apply_edit_writes_back_to_file(
         self, temp_session_dir, temp_project, open_project, service

@@ -19,6 +19,29 @@ class TestCheckLatexText:
         assert error is not None
         assert "control character" in error
 
+    def test_relaxed_mode_allows_crlf(self):
+        """宽松模式（分隔符协议/非 JSON）放行 \\r：CRLF 行尾是合法 LaTeX 空白。"""
+        assert check_latex_text("line1\r\nline2", relaxed=True) is None
+        # 默认（JSON）路径仍拦截 \\r（JSON 转义损坏特征）
+        assert check_latex_text("line1\r\nline2") is not None
+
+    def test_relaxed_mode_allows_tab(self):
+        assert check_latex_text("a\tb", relaxed=True) is None
+        assert check_latex_text("a\tb") is not None
+
+    def test_relaxed_mode_still_rejects_real_corruption(self):
+        """宽松模式只放行 \\t / \\r，\\f 等真正损坏特征仍拦截。"""
+        error = check_latex_text("a\fb", relaxed=True)
+        assert error is not None
+        assert "corrupted" in error
+
+    def test_relaxed_error_attribution_is_not_json(self):
+        """非 JSON 路径的错误归因不应再提示"把反斜杠双写"。"""
+        relaxed_error = check_latex_text("a\fb", relaxed=True)
+        assert "JSON" not in relaxed_error
+        json_error = check_latex_text("a\fb")
+        assert "JSON" in json_error
+
     def test_rejects_garbage_placeholder(self):
         error = check_latex_text("[object Object]")
         assert error is not None
@@ -125,3 +148,9 @@ class TestValidateLatexField:
     def test_bibtex_mode_passes_literal_percent(self):
         value = r"@misc{k, url = {https://doi.org/10.1000/xyz%2Fabc}}"
         assert validate_latex_field(value, bibtex=True) == value
+
+    def test_relaxed_mode_passes_crlf(self):
+        value = "line1\r\nline2"
+        assert validate_latex_field(value, relaxed=True) == value
+        with pytest.raises(ValueError, match="control character"):
+            validate_latex_field(value)

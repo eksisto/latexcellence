@@ -269,8 +269,9 @@ JSON schema 校验保证字段类型正确，但拦不住"合法 JSON + 损坏�
 - 花括号配平（忽略 `\{` / `\}`，跳过注释、verbatim、URL 内容）
 - `$` 配平（同上跳过规则）
 - 可选 `\begin` / `\end` 环境栈式配平；BibTeX 模式 `%` 为字面字符
+- 宽松模式（`relaxed=True`）：分隔符协议（非 JSON）路径放行 `\t` / `\r` 等合法 LaTeX 空白，仅拦截 `\b` / `\f` 等真实损坏特征，错误归因不再提示 JSON 转义
 
-接入方式：以 `LatexText` 字段类型挂到 Pydantic 模型（writing_chat / code_review / bib_manager / OCR），或在写盘前由工具执行器调用 `check_latex_text()`（template_gen `write_file`、edit_tools `edit_paragraph`）。OCR 模块（formula_ocr / table_ocr）与 style_modify 改用分隔符协议（`<<<LATEX>>>...<<<END>>>`）让反斜杠原样传输，并用该校验器把损坏输出转为可重试错误。
+接入方式：以 `LatexText` 字段类型挂到 Pydantic 模型（code_review / bib_manager / OCR），或在写盘前由工具执行器调用 `check_latex_text()`（template_gen `write_file`、edit_tools `edit_paragraph`）。OCR 模块（formula_ocr / table_ocr）、style_modify 与 writing_chat 编辑输出（generate_edit）改用分隔符协议（`<<<LATEX>>>...<<<END>>>`）让反斜杠原样传输，并用该校验器把损坏输出转为可重试错误（writing_chat 走 `relaxed=True` 宽松模式）。
 
 ---
 
@@ -452,8 +453,9 @@ RS2（结构化编辑）:
    用户点击"生成编辑建议" → instruction 发送
         ↓
    原始 LaTeX 直接发送给 LLM
-        ↓ retry_with_validation() → LLM 结构化 JSON
-   校验完整 LaTeX → 构造 unified diff → 附挂 EditOp
+        ↓ 分隔符协议（<<<LATEX>>>...<<<END>>>）纯文本输出
+   提取 + validate_latex_field(relaxed=True) 校验 → 失败回喂重试（最多 3 次）
+   构造 unified diff → 附挂 EditOp
         ↓
    用户点击"应用到 .tex"（可选：手动编辑后传递 new_latex）
         ↓ project_manager.apply_change()

@@ -202,19 +202,15 @@ _PROMPTS: dict[str, dict[str, str]] = {
             "environments, math formulas, citations, labels, and cross-references unchanged "
             "unless the user explicitly asks to modify specific ones.\n"
             "2. Only modify the textual content (words, sentences, phrasing) as instructed.\n"
-            "3. The optimized field MUST contain the COMPLETE paragraph, not just the changed "
+            "3. The LATEX block MUST contain the COMPLETE paragraph, not just the changed "
             "portion. It must be valid, compilable LaTeX code.\n"
-            "4. If no change is needed, the optimized field must be identical to the original.\n"
-            "5. Respond with JSON only, no markdown fences, no extra text.\n\n"
-            "JSON format (strictly follow this schema):\n"
-            "{{\n"
-            '  "paragraph_index": <int>,\n'
-            '  "original": "<the exact original paragraph as raw LaTeX>",\n'
-            '  "optimized": "<the rewritten paragraph as raw LaTeX>",\n'
-            '  "reason": "<brief explanation of the edit in {language}>"\n'
-            "}}\n\n"
-            + LATEX_JSON_ESCAPE_RULES
-            + "\n\n"
+            "4. If no change is needed, the LATEX block must be identical to the original.\n"
+            "5. Output the LaTeX as PLAIN TEXT between the markers — NO JSON, NO markdown "
+            "fences, NO extra text outside the markers.\n\n"
+            "OUTPUT FORMAT (plain text, no JSON):\n"
+            "<<<LATEX>>>\n<complete rewritten paragraph as raw LaTeX>\n<<<END>>>\n"
+            "<<<REASON>>>\n<brief explanation of the edit in {language}>\n<<<END>>>\n\n"
+            "The REASON block is optional; if omitted it is treated as empty.\n"
             "USER INSTRUCTION:\n"
             "{instruction}"
         ),

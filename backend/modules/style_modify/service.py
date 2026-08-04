@@ -11,7 +11,8 @@ LaTeX 样式修改业务逻辑。
       （如添加列对齐、调整表格位置、加粗文字等），因此 LLM 看到的是原始 LaTeX 源码。
     - LaTeX 不放在 JSON 字符串中传输——JSON 会把未转义的 \\rho 解释为回车等
       （静默损坏）。改用分隔符协议（<<<LATEX>>>...<<<END>>>）让反斜杠原样传输，
-      再用 latex_json_guard 内容校验拦截结构损坏，失败时回喂 LLM 重试。
+      再用 latex_json_guard 内容校验（宽松模式，放行 \\t / \\r）拦截结构损坏，
+      失败时回喂 LLM 重试。
 """
 
 import re
@@ -87,7 +88,7 @@ class StyleModifyService:
                 if not latex_out.strip():
                     self._logger.warning("LLM returned empty latex block")
                     return {"latex": latex}
-                validate_latex_field(latex_out)
+                validate_latex_field(latex_out, relaxed=True)
 
                 self._logger.info(
                     f"Style modify completed: {len(latex)} -> {len(latex_out)} chars"

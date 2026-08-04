@@ -61,10 +61,16 @@ class TestFormulaOCRResultModel:
             FormulaOCRResult.model_validate({"latex": "x", "confidence": 1.5})
 
     def test_rejects_control_char(self):
-        """\rho 经 JSON 转义损坏后变成回车 + 'ho'，必须被内容校验器拦截。"""
-        latex = "R^{" + "\r" + "ho}"
+        """\\begin 经 JSON 转义损坏后变成退格 + 'egin'；宽松模式仍拦截此类真正损坏。"""
+        latex = "\b" + r"egin{matrix}x\end{matrix}"
         with pytest.raises(ValidationError, match="control character"):
             FormulaOCRResult.model_validate({"latex": latex})
+
+    def test_accepts_crlf_and_tab(self):
+        """分隔符协议（非 JSON）路径放行合法空白 \\t / \\r（宽松模式）。"""
+        latex = "R^{" + "\t" + "x}" + "\r\n" + "$y$"
+        result = FormulaOCRResult.model_validate({"latex": latex})
+        assert result.latex == latex
 
     def test_rejects_garbage_placeholder(self):
         with pytest.raises(ValidationError, match="garbage"):
@@ -252,17 +258,17 @@ class TestRecognize:
 
     @pytest.mark.asyncio
     async def test_control_char_retries(self, mock_llm, service, minimal_png):
-        """模拟旧的 JSON 转义损坏（\rho 变成回车 + 'ho'），应触发重试并恢复。"""
-        bad = "R^{" + "\r" + "ho}"
+        """模拟真正的损坏特征（\\frac 经 JSON 转义损坏后变成换页 + 'rac'），应触发重试并恢复。"""
+        bad = "R^{" + "\f" + "rac}"
         mock_llm.chat.side_effect = [
             ocr_response(bad),
-            ocr_response(r"R^{\rho}", confidence="0.9"),
+            ocr_response(r"R^{\frac{a}{b}}", confidence="0.9"),
         ]
 
         png = minimal_png
         result = await service._recognize_with_llm(mock_llm, png, "image/png")
 
-        assert result["latex"] == r"R^{\rho}"
+        assert result["latex"] == r"R^{\frac{a}{b}}"
         assert mock_llm.chat.call_count == 2
 
     @pytest.mark.asyncio

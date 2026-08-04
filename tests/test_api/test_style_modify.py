@@ -131,6 +131,28 @@ class TestStyleModifyService:
         assert result["latex"] == r"R^\rho is fine"
 
     @pytest.mark.asyncio
+    async def test_crlf_and_tab_pass_relaxed_validation(self, service, sample_latex):
+        """非 JSON 分隔符路径放行合法空白：CRLF 行尾与制表符不再被误判为损坏。"""
+        modified_latex = r"\textbf{Hello} world." + "\t" + "\r\n" + r"\textit{tabbed}"
+        mock_llm = MagicMock()
+        mock_llm.chat = AsyncMock(return_value=self._block(modified_latex))
+
+        mock_cfg = MagicMock()
+        mock_cfg.llm.api_key = "sk-test"
+
+        with patch(
+            "backend.modules.style_modify.service.get_config", return_value=mock_cfg
+        ):
+            with patch(
+                "backend.modules.style_modify.service.get_llm_client",
+                return_value=mock_llm,
+            ):
+                result = await service.modify(sample_latex, "add whitespace")
+
+        assert result["latex"] == modified_latex
+        mock_llm.chat.assert_called_once()
+
+    @pytest.mark.asyncio
     async def test_llm_empty_latex_falls_back(self, service, sample_latex):
         """LLM 返回空 LaTeX 块时回退到原始输入。"""
         mock_llm = MagicMock()

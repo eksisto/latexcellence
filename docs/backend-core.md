@@ -403,19 +403,22 @@ raise ValueError("Validation failed after N attempts")        # ❌ 耗尽
 
 **BibTeX 模式**：`bibtex=True` 时 `%` 视为字面字符（非注释起点），避免 percent-encoding URL（`https://x/y%20z`）被误判为花括号不配平。
 
+**宽松模式（`relaxed=True`）**：用于分隔符协议（`<<<LATEX>>>...<<<END>>>`）等非 JSON 传输路径。反斜杠原样传输、不存在 JSON 转义风险，因此放行 `\t`（U+0009）与 `\r`（U+000D）这类合法 LaTeX 空白，仅拦截 `\b` / `\f` 等真正的静默损坏特征；错误归因也不再提示"把反斜杠双写"。
+
 **核心接口**：
 
 | 接口 | 功能 |
 | --- | --- |
-| `check_latex_text(value, *, bibtex=False)` | 基础内容校验，通过返回 `None`，失败返回错误消息 |
+| `check_latex_text(value, *, bibtex=False, relaxed=False)` | 基础内容校验，通过返回 `None`，失败返回错误消息 |
 | `check_latex_environments(value)` | 环境栈式配平校验 |
-| `validate_latex_field(value, *, check_environments=False, bibtex=False)` | Pydantic 校验器回调：失败抛 `ValueError` |
+| `validate_latex_field(value, *, check_environments=False, bibtex=False, relaxed=False)` | Pydantic 校验器回调：失败抛 `ValueError` |
 | `LatexText` | `Annotated[str, AfterValidator(...)]` 类型别名，字段声明直接复用 |
 
 **接入方式**：
 
-- 模型字段：`original: LatexText` 等 Pydantic 字段级校验（writing_chat / code_review / bib_manager / formula_ocr / table_ocr）
+- 模型字段：`LatexText` 等 Pydantic 字段级校验（code_review / bib_manager / formula_ocr / table_ocr）
 - 写盘前：template_gen `write_file`、edit_tools `edit_paragraph` 在写盘前调用 `check_latex_text()`，损坏内容直接拒绝并回喂 LLM 自纠
+- 分隔符协议路径：writing_chat `generate_edit` 提取 `<<<LATEX>>>...<<<END>>>` 块后调用 `validate_latex_field(relaxed=True)` 宽松校验（避免 CRLF / tab 原文误报）；formula_ocr / table_ocr / style_modify 同样采用分隔符协议 + 内容校验重试（暂用默认严格模式）
 
 ### `tex_compile.py` — 统一 TeX 编译执行模块
 

@@ -45,6 +45,14 @@ class TestTableOCRResultModel:
         result = TableOCRResult.model_validate(data)
         assert result.confidence == 0.95
 
+    def test_accepts_crlf_and_tab(self):
+        """分隔符协议（非 JSON）路径放行合法空白 \\t / \\r（宽松模式）。"""
+        latex = TABLE_LATEX.replace(
+            r"Name & Value", "Name" + "\t" + "&" + "\r" + "Value"
+        )
+        result = TableOCRResult.model_validate({"latex": latex})
+        assert result.latex == latex
+
     def test_defaults(self):
         data = {"latex": r"\begin{table}[htbp]\end{table}"}
         result = TableOCRResult.model_validate(data)
@@ -68,7 +76,7 @@ class TestTableOCRResultModel:
             TableOCRResult.model_validate({"latex": TABLE_LATEX, "confidence": 1.5})
 
     def test_rejects_control_char(self):
-        """\begin 经 JSON 转义损坏后变成退格 + 'egin'，必须被内容校验器拦截。"""
+        """\\begin 经 JSON 转义损坏后变成退格 + 'egin'，必须被内容校验器拦截。"""
         latex = "\b" + r"egin{table}[htbp]\end{table}"
         with pytest.raises(ValidationError, match="control character"):
             TableOCRResult.model_validate({"latex": latex})
@@ -260,7 +268,7 @@ class TestRecognize:
 
     @pytest.mark.asyncio
     async def test_control_char_retries(self, mock_llm, service, minimal_png):
-        """模拟旧的 JSON 转义损坏（\begin 变成退格 + 'egin'），应触发重试并恢复。"""
+        """模拟旧的 JSON 转义损坏（\\begin 变成退格 + 'egin'），应触发重试并恢复。"""
         bad = "\b" + r"egin{table}[htbp]\end{table}"
         mock_llm.chat.side_effect = [
             ocr_response(bad),
