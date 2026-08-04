@@ -24,7 +24,10 @@ LaTeX 文本提取与位置映射模块。
     - 转义字符（\\& \\% \\_ \\# 等）：替换为 marker
     - \\include / \\input 多层嵌套：由 project_manager 处理，本模块不涉及
     - 中英文混合（UTF-8）：正常按字符处理
-    - \\verb|...| 内联逐字：替换为 marker
+    - \\verb / \\verb* / \\lstinline / \\lstinline* 内联逐字：整体替换为 marker
+    - 控制符号（\\? \\' \\" \\7 \\~{n}、\\ + 换行、未配对 \\[ \\( 等）：替换为 marker
+    - 行内数学 $...$ 非贪婪匹配；不成对的 $ 保持原文（合法 LaTeX 中 $ 必须写作 \\$，
+      由转义字符规则处理，如 \\$500 不会进入数学匹配）
 """
 
 import re
@@ -67,6 +70,8 @@ _PROTECTED_ENVS = [
 _ESCAPED_CHARS = set("#$%&_{}")
 
 # ── symbols that look like commands but are single tokens ─────────────────
+# \~ / \^ 等控制符号不再列在这里，由 _replace_commands 的通用控制符号规则
+# 统一处理（覆盖 \? \' \" \7 \~{n} 等，并能吸收紧随的 {arg}）
 
 _SINGLE_TOKEN_COMMANDS = {
     r"\,",
@@ -76,9 +81,6 @@ _SINGLE_TOKEN_COMMANDS = {
     r"\-",
     r"\\",  # line break
     r"\ ",  # explicit space
-    # accents that don't take args (but \~{n} does; handled later)
-    r"\~",
-    r"\^",
 }
 
 # 内置命令名（无参数，无需读取 {arg}）
@@ -143,7 +145,7 @@ class LatexParser:
         将 LaTeX 源码转换为带 marker 的纯文本。
 
         流程：
-            1. 替换 \\verb|...| 内联逐字
+            1. 替换 \\verb / \\lstinline 内联逐字（含分隔符与花括号形式）
             2. 替换逐字类环境（verbatim / lstlisting，可含字面 %）
             3. 将注释替换为 marker（原子化捕获注释内所有内容）
             4. 替换受保护环境（equation, table, tikzpicture 等）
@@ -151,6 +153,9 @@ class LatexParser:
             6. 替换行内数学模式（$...$, \\(...\\)）
             7. 替换剩余 LaTeX 命令
             8. 规范化空白
+
+        行内数学 $...$ 采用非贪婪匹配，不因空格收紧匹配条件；
+        合法的美元符号是 \\$（由转义字符规则处理），裸 $ 不配对时保持原文。
 
         注意：注释替换（第 3 步）在环境/数学/命令（第 4-7 步）之前，
         确保注释内的 LaTeX 结构不被单独提取。逐字类环境（第 2 步）
@@ -236,10 +241,20 @@ class LatexParser:
 
     def _replace_verb_inline(self, text: str) -> str:
         """
-        替换 \\verb|c| 内联逐字命令。
-        \\verb 后的第一个字符是分隔符，内容到再次出现该分隔符为止。
+        替换内联逐字命令：
+            \\verb|...| / \\verb*|...|        （任意单字符分隔符）
+            \\lstinline|...| / \\lstinline*|...|（分隔符形式）
+            \\lstinline{...} / \\lstinline*{...}（花括号形式）
+        整体替换为一个 VERB marker，逐字内容 LLM 不可见、不可修改。
+
+        分隔符为命令后第一个非字母、非 `*`、非花括号、非空白的字符；
+        内容到再次出现该分隔符为止。
         """
-        pattern = re.compile(r"\\verb(.)(.+?)\1")
+        pattern = re.compile(
+            r"(?:\\verb|\\lstinline)(?:\*)?"
+            r"(?P<delim>[^A-Za-z0-9*{}\s])(?P<body>.+?)(?P=delim)"
+            r"|\\lstinline(?:\*)?\{[^{}]+\}"
+        )
         result = []
         last_end = 0
         for m in pattern.finditer(text):
@@ -317,14 +332,19 @@ class LatexParser:
             \\(...\\) → marker
         """
 
-        # $...$  — 使用负向断言排除 $$
+        # $...$ — 使用负向断言排除 $$；非贪婪匹配；
+        # 被反斜杠转义的 \$（如 \$500）不参与数学匹配，交给转义字符规则处理
         def dollar_replacer(m):
             marker = self._gen_marker("MATH")
             self._marker_map[marker] = m.group(0)
             return marker
 
-        # 匹配 $...$ 但不能是 $$
-        text = re.sub(r"(?<!\$)\$(?!\$)(.+?)(?<!\$)\$(?!\$)", dollar_replacer, text)
+        # 匹配 $...$：前后都不能是 $（排除 $$）且不能是 \$（排除转义美元）
+        text = re.sub(
+            r"(?<!\$)(?<!\\)\$(?!\$)(.+?)(?<!\$)(?<!\\)\$(?!\$)",
+            dollar_replacer,
+            text,
+        )
 
         # \(...\)
         def paren_replacer(m):
@@ -364,11 +384,16 @@ class LatexParser:
 
             # ── 转义字符 ──
             if i + 1 < n and text[i + 1] in _ESCAPED_CHARS:
-                token = text[i : i + 2]
+                token_end = i + 2
+                # 吸收紧随的 {arg}（如 \&{...}、\%{...}），避免花括号泄漏
+                k = self._skip_whitespace(text, token_end)
+                if k < n and text[k] == "{":
+                    token_end = self._find_matching_brace(text, k + 1) + 1
+                token = text[i:token_end]
                 marker = self._gen_marker("CMD")
                 self._marker_map[marker] = token
                 result.append(marker)
-                i += 2
+                i = token_end
                 continue
 
             # ── 单 token 命令（\, \; \: 等）──
@@ -382,6 +407,21 @@ class LatexParser:
                     single_matched = True
                     break
             if single_matched:
+                continue
+
+            # ── 通用控制符号：\ 后跟单个非字母字符（\? \' \" \7 \~ \^ 等）──
+            # 覆盖未配对 \[ \（ 以及 \ + 换行 / EOF 处的孤立 \
+            if i + 1 >= n or not (text[i + 1].isalpha() or text[i + 1] in "*@"):
+                token_end = i + 2 if i + 1 < n else i + 1
+                # 吸收紧随的 {arg}（如 \~{n} → 单一 marker）
+                k = self._skip_whitespace(text, token_end)
+                if k < n and text[k] == "{":
+                    token_end = self._find_matching_brace(text, k + 1) + 1
+                token = text[i:token_end]
+                marker = self._gen_marker("CMD")
+                self._marker_map[marker] = token
+                result.append(marker)
+                i = token_end
                 continue
 
             # ── 读取命令名 ──

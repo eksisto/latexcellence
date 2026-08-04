@@ -6,7 +6,7 @@
 
 | 测试文件 | 覆盖内容 |
 | --- | --- |
-| `test_latex_parser.py` | 注释、verb、环境、数学模式、命令替换、往返一致性 |
+| `test_latex_parser.py` | 注释、verb、环境、数学模式、命令替换、控制符号（`\?`/`\'`/`\~{n}` 等）、`\$` 转义处理（不进入数学匹配）、内联逐字扩展（`\verb*`/`\lstinline`）、往返一致性 |
 | `test_marker_numbering_demo.py` | marker 编号机制演示 |
 | `test_project_manager.py` | 项目打开、段落定位、原地修改、MD5 校验、撤销、路径穿越防御 |
 | `test_json_utils.py` | safe_parse_json 容错解析、retry_with_validation |

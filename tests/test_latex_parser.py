@@ -9,6 +9,9 @@ latex_parser 单元测试。
     - 行内数学模式 ($, \\(\\))
     - LaTeX 命令（含嵌套花括号、可选参数、多参数）
     - 转义字符
+    - 美元符号 \\$500 由转义字符规则处理，不进入行内数学匹配
+    - 控制符号（\\? \\' \\" \\7、\\~{n} 吸收、\\ + 换行、未配对 \\[ \\(）
+    - 内联逐字扩展（\\verb* / \\lstinline 分隔符与花括号形式）
     - 自定义命令（\\newcommand）
     - 中英文混合
     - marker 剥离/还原往返一致性
@@ -422,3 +425,155 @@ class TestEdgeCases:
         assert r"\textit{B}" in restored
         assert r"\texttt{C}" in restored
         assert "and" in restored
+
+
+# ── 控制符号覆盖（方案第 5 章：\? \' \" \7、\ + 换行、未配对 \[ \(）──
+
+
+class TestControlSymbols:
+    def test_control_symbols_single_marker(self, parser):
+        source = r"\? \' \" \7"
+        stripped, marker_map = parser.strip_to_plain_text(source)
+        # 每个控制符号都是一个独立 marker，不再有残余反斜杠
+        assert "\\" not in stripped
+        assert stripped.count("__CMD_") == 4
+        assert list(marker_map.values()) == [r"\?", r"\'", r"\"", r"\7"]
+
+    def test_control_symbol_no_residual_backslash(self, parser):
+        source = r"\? 和 \' 和 \" 和 \7"
+        stripped, _ = parser.strip_to_plain_text(source)
+        assert "\\" not in stripped
+        assert "和" in stripped
+
+    def test_backslash_newline_marker(self, parser):
+        source = "text with \\\nnewline continuation"
+        stripped, _ = parser.strip_to_plain_text(source)
+        assert "\\" not in stripped
+        assert "__CMD_" in stripped
+
+    def test_unmatched_bracket_paren_marker(self, parser):
+        source = r"unmatched \[ here and \( there"
+        stripped, _ = parser.strip_to_plain_text(source)
+        assert "\\" not in stripped
+
+    def test_trailing_lone_backslash(self, parser):
+        source = "ends with \\"
+        stripped, marker_map = parser.strip_to_plain_text(source)
+        assert "\\" not in stripped
+        assert "__CMD_" in stripped
+        assert list(marker_map.values()) == ["\\"]
+
+    def test_control_symbol_roundtrip(self, parser):
+        source = r"\? \' \" \7 和 \~{n} 与未配对 \[ \("
+        assert_roundtrip(parser, source)
+
+
+# ── 控制符号 {arg} 吸收（\~{n} → 单一 marker，不残留 {n}）──
+
+
+class TestControlSymbolArgAbsorption:
+    def test_tilde_brace_absorbed(self, parser):
+        source = r"\~{n}"
+        stripped, marker_map = parser.strip_to_plain_text(source)
+        assert stripped == "__CMD_0000__"
+        assert list(marker_map.values()) == [r"\~{n}"]
+
+    def test_hat_brace_absorbed(self, parser):
+        source = r"\^{o}"
+        stripped, marker_map = parser.strip_to_plain_text(source)
+        assert list(marker_map.values()) == [r"\^{o}"]
+
+    def test_escaped_char_brace_absorbed(self, parser):
+        source = r"\&{escaped-amp}"
+        stripped, marker_map = parser.strip_to_plain_text(source)
+        assert "{escaped-amp}" not in stripped
+        assert list(marker_map.values()) == [r"\&{escaped-amp}"]
+
+    def test_arg_absorption_roundtrip(self, parser):
+        source = r"\~{n} 和 \^{o} 以及 \&{x}"
+        assert_roundtrip(parser, source)
+
+
+# ── 美元符号处理（合法 LaTeX 中 $ 必须写作 \$，不参与数学匹配）──
+
+
+class TestDollarSignEscaping:
+    def test_escaped_dollar_roundtrip(self, parser):
+        source = r"\$500 美元"
+        stripped, marker_map = parser.strip_to_plain_text(source)
+        # \$ 是转义字符，整体替换为 marker；500 是纯文本
+        assert stripped == "__CMD_0000__500 美元"
+        assert list(marker_map.values()) == [r"\$"]
+        restored = parser.restore_from_markers(stripped, marker_map)
+        assert restored == source
+
+    def test_escaped_dollar_not_math(self, parser):
+        source = r"价格 \$500 与公式 $x+y$"
+        stripped, marker_map = parser.strip_to_plain_text(source)
+        # \$500 由转义字符规则处理（CMD marker），不进入数学匹配；
+        # $x+y$ 正常匹配为 MATH marker
+        assert "500" in stripped
+        assert "__MATH_" in stripped
+        assert list(marker_map.values()) == ["$x+y$", r"\$"]
+
+    def test_escaped_dollar_pair_not_math(self, parser):
+        source = r"\$x\$ and \$y"
+        stripped, marker_map = parser.strip_to_plain_text(source)
+        # 三个 \$ 各自为 CMD marker，不被配对成数学公式
+        assert stripped == "__CMD_0000__x__CMD_0001__ and __CMD_0002__y"
+        assert list(marker_map.values()) == [r"\$", r"\$", r"\$"]
+        restored = parser.restore_from_markers(stripped, marker_map)
+        assert restored == source
+
+    def test_math_with_spaces_still_matched(self, parser):
+        source = "$x + y$ 和 $ x $"
+        stripped, _ = parser.strip_to_plain_text(source)
+        assert stripped.count("__MATH_") == 2
+
+    def test_math_spans_unpaired_dollar_roundtrip(self, parser):
+        # 裸 $ 不成对属非法 LaTeX（合法写法是 \$）；不修改它，仅保证往返一致
+        source = "价格 $500（不成对 $）"
+        assert_roundtrip(parser, source)
+
+
+# ── 内联逐字保护扩展（\verb* / \lstinline 分隔符与花括号形式）──
+
+
+class TestInlineVerbExtended:
+    def test_lstinline_delimiter_single_marker(self, parser):
+        source = r"\lstinline|\frac{x}{y}|"
+        stripped, marker_map = parser.strip_to_plain_text(source)
+        assert stripped == "__VERB_0000__"
+        assert list(marker_map.values()) == [r"\lstinline|\frac{x}{y}|"]
+
+    def test_lstinline_brace_single_marker(self, parser):
+        source = r"\lstinline{code_here}"
+        stripped, marker_map = parser.strip_to_plain_text(source)
+        assert stripped == "__VERB_0000__"
+        assert list(marker_map.values()) == [r"\lstinline{code_here}"]
+
+    def test_lstinline_star_single_marker(self, parser):
+        source = r"\lstinline*|\frac{x}{y}|"
+        stripped, marker_map = parser.strip_to_plain_text(source)
+        assert stripped == "__VERB_0000__"
+        assert list(marker_map.values()) == [r"\lstinline*|\frac{x}{y}|"]
+
+    def test_verb_star_single_marker(self, parser):
+        source = r"\verb*|x|"
+        stripped, marker_map = parser.strip_to_plain_text(source)
+        assert stripped == "__VERB_0000__"
+        assert list(marker_map.values()) == [r"\verb*|x|"]
+
+    def test_verb_content_with_special_chars(self, parser):
+        source = r"\verb|100% $special$ #char|"
+        stripped, marker_map = parser.strip_to_plain_text(source)
+        assert "%" not in stripped
+        assert "$special$" not in stripped
+        assert list(marker_map.values()) == [r"\verb|100% $special$ #char|"]
+
+    def test_extended_verb_roundtrip(self, parser):
+        source = (
+            r"\lstinline|\frac{x}{y}| 与 \verb*|x| 与 "
+            r"\lstinline{code} 和 $x+y$ 混合"
+        )
+        assert_roundtrip(parser, source)
