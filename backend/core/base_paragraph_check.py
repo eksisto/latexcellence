@@ -37,6 +37,7 @@ from backend.core.config import get_config
 from backend.utils.latex_parser import LatexParser, MARKER_PATTERN
 from backend.utils.input_resolver import resolve_inputs
 from backend.utils.json_utils import retry_with_validation
+from backend.utils.latex_json_guard import check_latex_text_lite
 from backend.utils.file_ops import compute_md5
 
 
@@ -362,6 +363,18 @@ class BaseParagraphCheckService:
             )
 
             output_text = getattr(validated, self._output_field)
+
+            # 轻量内容校验：只查控制字符（排除 \t / \n，\r 仍拦截）与
+            # 垃圾占位符，不查花括号 / $ 配平——marker 化段落可能残留
+            # 合法结构（如 \~{n}），配平检查会误报。失败视为内容损坏，
+            # 回退到原文，避免损坏内容进入 marker 校验与写回链路。
+            content_error = check_latex_text_lite(output_text)
+            if content_error:
+                self._logger.warning(
+                    f"Paragraph {idx} in {file_path}: output content "
+                    f"corrupted — {content_error}. Falling back to original text."
+                )
+                return self._make_fallback(idx, text, original_text, file_path)
 
             if self.use_marker_protection:
                 output_markers = MARKER_PATTERN.findall(output_text)

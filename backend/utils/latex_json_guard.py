@@ -40,6 +40,9 @@ _BAD_CONTROL_RE = re.compile(r"[\x00-\x09\x0b-\x1f\x7f]")
 # 宽松模式（分隔符协议 / 非 JSON 传输）：\t（U+0009）与 \r（U+000D）是合法
 # LaTeX 空白，放行；仍拦截 \b（0x08）、\f（0x0C）等真正的静默损坏特征。
 _BAD_CONTROL_RELAXED_RE = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
+# 轻量校验（marker 模块输出字段）：排除 \t / \n（合法空白），\r 在 JSON 路径
+# 仍拦截（未转义反斜杠的静默损坏特征），即 [\x00-\x08\x0b-\x1f\x7f]。
+_BAD_CONTROL_LITE_RE = re.compile(r"[\x00-\x08\x0b-\x1f\x7f]")
 # LLM 把对象序列化成字符串时产生的垃圾占位符
 _GARBAGE_RE = re.compile(r"\[object [A-Za-z]+\]")
 # 环境声明：\\begin{X} / \\end{X}
@@ -158,6 +161,35 @@ def check_latex_environments(value: str) -> str | None:
     return None
 
 
+def check_latex_text_lite(value: str) -> str | None:
+    """轻量内容校验：只查控制字符与 '[object Object]' 类垃圾占位符。
+
+    用于 marker 模块（typo_check / expression_opt / paragraph_translate）
+    的 LLM 输出字段。这些字段走 JSON 传输，但 marker 化后常规段落不再含
+    反斜杠，花括号 / $ 配平检查可能因残余结构（如 \\~{n}）误报，因此只做
+    最小校验：
+        - 控制字符：排除 \\t / \\n（合法 LaTeX 空白），\\r 仍拦截
+          （JSON 未转义反斜杠的静默损坏特征）
+        - 垃圾占位符
+    失败消息按"内容损坏"归因，不提示"把反斜杠双写"。
+    """
+    if not isinstance(value, str):
+        return f"expected a string, got {type(value).__name__}"
+
+    # 先剔除 verbatim / URL 内容，避免其中的合法字面字符被误判
+    probe = _strip_verbatim(value)
+    bad = _BAD_CONTROL_LITE_RE.search(probe)
+    if bad:
+        return (
+            f"LaTeX text contains an illegal control character "
+            f"(U+{ord(bad.group()):04X} at position {bad.start()}); "
+            "the output appears corrupted"
+        )
+    if _GARBAGE_RE.search(probe):
+        return "LaTeX text contains a garbage placeholder like '[object Object]'"
+    return None
+
+
 def validate_latex_field(
     value: str,
     *,
@@ -186,7 +218,20 @@ def validate_latex_field(
     return value
 
 
+def validate_latex_field_lite(value: str) -> str:
+    """Pydantic 校验器回调（轻量）：校验失败抛出 ValueError。"""
+    error = check_latex_text_lite(value)
+    if error:
+        raise ValueError(error)
+    return value
+
+
 # Annotated 类型别名：声明 Pydantic 字段时直接复用
 #     class CodeReviewSuggestion(BaseModel):
 #         suggested: LatexText
 LatexText = Annotated[str, AfterValidator(validate_latex_field)]
+
+# 轻量 Annotated 类型别名：marker 模块输出字段（corrected/optimized/translated）复用
+#     class TypoCheckResult(BaseModel):
+#         corrected: LatexTextLite
+LatexTextLite = Annotated[str, AfterValidator(validate_latex_field_lite)]

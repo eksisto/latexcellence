@@ -378,6 +378,80 @@ class TestCheckOneParagraph:
         assert mock_llm.chat.call_count == 3
 
     @pytest.mark.asyncio
+    async def test_corrupted_output_control_char_falls_back(self, mock_llm, service):
+        """corrected 含控制字符（JSON 反斜杠转义损坏特征）→ 重试耗尽回退。"""
+        plain = "Some text."
+        original_tex = "Some text."
+
+        # \\rho 未转义 → JSON 解析后损坏为回车 + "ho"
+        corrupted = "R^" + "\r" + "ho"
+        mock_llm.chat = AsyncMock(
+            return_value={
+                "paragraph_index": 0,
+                "original": plain,
+                "corrected": corrupted,
+                "changes": [],
+            }
+        )
+
+        result = await service._check_one_paragraph(
+            mock_llm, 0, 3, plain, original_tex, "main.tex"
+        )
+
+        assert result["corrected"] == plain
+        assert result["changes"] == []
+        assert mock_llm.chat.call_count == 3
+
+    @pytest.mark.asyncio
+    async def test_corrupted_output_garbage_placeholder_falls_back(
+        self, mock_llm, service
+    ):
+        """corrected 含 '[object Object]' 垃圾占位符 → 重试耗尽回退。"""
+        plain = "Some text."
+        original_tex = "Some text."
+
+        mock_llm.chat = AsyncMock(
+            return_value={
+                "paragraph_index": 0,
+                "original": plain,
+                "corrected": "[object Object]",
+                "changes": [],
+            }
+        )
+
+        result = await service._check_one_paragraph(
+            mock_llm, 0, 3, plain, original_tex, "main.tex"
+        )
+
+        assert result["corrected"] == plain
+        assert result["changes"] == []
+        assert mock_llm.chat.call_count == 3
+
+    @pytest.mark.asyncio
+    async def test_output_with_tab_and_newline_passes(self, mock_llm, service):
+        """corrected 含 \\t / \\n 属合法空白，轻量校验放行、不误报。"""
+        plain = "Line one.\nLine two."
+        original_tex = "Line one.\nLine two."
+
+        corrected = "Line one\tfixed.\nLine two."
+        mock_llm.chat = AsyncMock(
+            return_value={
+                "paragraph_index": 0,
+                "original": plain,
+                "corrected": corrected,
+                "changes": [],
+            }
+        )
+
+        result = await service._check_one_paragraph(
+            mock_llm, 0, 3, plain, original_tex, "main.tex"
+        )
+
+        assert result["corrected"] == corrected
+        assert "marker_error" not in result
+        assert mock_llm.chat.call_count == 1
+
+    @pytest.mark.asyncio
     async def test_llm_exception_falls_back(self, mock_llm, service):
         """LLM 调用抛异常 → 回退到原始文本。"""
         plain = "Some text."

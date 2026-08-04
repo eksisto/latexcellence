@@ -19,6 +19,7 @@ from pydantic import BaseModel
 from backend.core.config import get_config
 from backend.core.base_paragraph_check import BaseParagraphCheckService
 from backend.core.prompts import get_prompt
+from backend.utils.latex_json_guard import LatexTextLite
 
 # ── Pydantic models for LLM response schema ────────────────────────────────
 
@@ -37,7 +38,8 @@ class TypoCheckResult(BaseModel):
     """LLM 错字检查输出——对应 DEVELOPMENT.md §2.1 JSON 协议"""
 
     paragraph_index: int
-    corrected: str
+    # 轻量内容校验：只拦控制字符 / 垃圾占位符，不查配平（避免残余结构误报）
+    corrected: LatexTextLite
     changes: list[TypoChangeItem] = []
 
 

@@ -5,7 +5,9 @@ import pytest
 from backend.utils.latex_json_guard import (
     check_latex_environments,
     check_latex_text,
+    check_latex_text_lite,
     validate_latex_field,
+    validate_latex_field_lite,
 )
 
 
@@ -154,3 +156,64 @@ class TestValidateLatexField:
         assert validate_latex_field(value, relaxed=True) == value
         with pytest.raises(ValueError, match="control character"):
             validate_latex_field(value)
+
+
+class TestCheckLatexTextLite:
+    """轻量校验（marker 模块输出字段）测试。"""
+
+    def test_valid_text_passes(self):
+        assert check_latex_text_lite(r"\textbf{hello} and $x+y$") is None
+
+    def test_allows_tab_and_newline(self):
+        """\\t / \\n 是合法 LaTeX 空白，轻量校验放行。"""
+        assert check_latex_text_lite("line1\nline2\ttabbed") is None
+
+    def test_blocks_carriage_return(self):
+        """\\r 在 JSON 路径仍拦截（未转义反斜杠的静默损坏特征）。"""
+        error = check_latex_text_lite("R^" + "\r" + "ho")
+        assert error is not None
+        assert "control character" in error
+
+    def test_blocks_form_feed(self):
+        error = check_latex_text_lite("a\fb")
+        assert error is not None
+        assert "corrupted" in error
+
+    def test_blocks_garbage_placeholder(self):
+        error = check_latex_text_lite("[object Object]")
+        assert error is not None
+        assert "garbage" in error
+
+    def test_error_attribution_is_content_corruption_not_json(self):
+        """失败消息按"内容损坏"归因，不提示"把反斜杠双写"。"""
+        error = check_latex_text_lite("a\fb")
+        assert "JSON" not in error
+        assert "corrupted" in error
+
+    def test_skips_verbatim_content(self):
+        """verbatim 内合法字面内容（如 $ / { }）不参与轻量校验。"""
+        assert check_latex_text_lite(r"\verb|{| and \lstinline|$|") is None
+
+    def test_non_string_rejected(self):
+        error = check_latex_text_lite(123)
+        assert error is not None
+        assert "expected a string" in error
+
+    def test_validate_field_lite_raises_on_corruption(self):
+        with pytest.raises(ValueError, match="control character"):
+            validate_latex_field_lite("R^" + "\r" + "ho")
+        assert validate_latex_field_lite("a\tb\nc") == "a\tb\nc"
+
+    def test_latex_text_lite_type_rejects_corruption(self):
+        """LatexTextLite 作为 Pydantic 字段类型时拦截损坏内容。"""
+        from pydantic import BaseModel, ValidationError
+        from backend.utils.latex_json_guard import LatexTextLite
+
+        class M(BaseModel):
+            text: LatexTextLite
+
+        with pytest.raises(ValidationError):
+            M(text="R^" + "\r" + "ho")
+        with pytest.raises(ValidationError):
+            M(text="[object Object]")
+        assert M(text="a\tb\nc").text == "a\tb\nc"

@@ -162,6 +162,7 @@ class ProjectInfo:
 - 类变量控制差异：
   - `_output_field`: 结果字段名（`"corrected"` / `"optimized"`）
   - `use_marker_protection`: 是否启用 marker 保护（code_review / typo_check / expression_opt / terminology_check 均为 `True`）
+- **轻量内容校验**：`_check_one_paragraph` 在模型校验通过后、marker 计数/顺序校验前，对输出字段调用 `check_latex_text_lite()` 兜底——只拦控制字符（排除 `\t` / `\n`，`\r` 仍拦截）与垃圾占位符，不查配平，避免 marker 化段落的残余结构误报；失败直接回退原文，防止损坏内容进入写回链路
 - **上下文 TTL 清理**：默认 1 小时后自动过期
 
 ### `backend/core/prompts.py` — 中央提示词管理
@@ -405,18 +406,29 @@ raise ValueError("Validation failed after N attempts")        # ❌ 耗尽
 
 **宽松模式（`relaxed=True`）**：用于分隔符协议（`<<<LATEX>>>...<<<END>>>`）等非 JSON 传输路径。反斜杠原样传输、不存在 JSON 转义风险，因此放行 `\t`（U+0009）与 `\r`（U+000D）这类合法 LaTeX 空白，仅拦截 `\b` / `\f` 等真正的静默损坏特征；错误归因也不再提示"把反斜杠双写"。
 
+**轻量模式（`check_latex_text_lite` / `LatexTextLite`）**：用于 marker 模块（typo_check / expression_opt / paragraph_translate）的 LLM 输出字段。这些字段仍走 JSON 传输，但 marker 化后常规段落不再含反斜杠，花括号 / `$` 配平检查可能因残余结构（如 `\~{n}`）误报，因此只做最小校验：
+
+- 控制字符：排除 `\t` / `\n`（合法空白），`\r` 仍拦截（JSON 未转义反斜杠的静默损坏特征）
+- `[object Object]` 等垃圾占位符
+
+失败消息按"内容损坏"归因，不提示"把反斜杠双写"；模型字段挂 `LatexTextLite` 后，损坏内容在 `retry_with_validation` 的模型校验阶段即被拦截并回喂 LLM 重试。
+
 **核心接口**：
 
 | 接口 | 功能 |
 | --- | --- |
 | `check_latex_text(value, *, bibtex=False, relaxed=False)` | 基础内容校验，通过返回 `None`，失败返回错误消息 |
+| `check_latex_text_lite(value)` | 轻量内容校验（marker 模块输出字段）：控制字符 + 垃圾占位符，不查配平 |
 | `check_latex_environments(value)` | 环境栈式配平校验 |
 | `validate_latex_field(value, *, check_environments=False, bibtex=False, relaxed=False)` | Pydantic 校验器回调：失败抛 `ValueError` |
+| `validate_latex_field_lite(value)` | Pydantic 校验器回调（轻量）：失败抛 `ValueError` |
 | `LatexText` | `Annotated[str, AfterValidator(...)]` 类型别名，字段声明直接复用 |
+| `LatexTextLite` | 轻量 `Annotated` 类型别名：marker 模块输出字段（corrected / optimized / translated）复用 |
 
 **接入方式**：
 
 - 模型字段：`LatexText` 等 Pydantic 字段级校验（code_review / bib_manager / formula_ocr / table_ocr）
+- marker 模块输出字段：typo_check `corrected`、expression_opt `optimized`、paragraph_translate `translated` 挂 `LatexTextLite` 轻量校验；`base_paragraph_check._check_one_paragraph` 在模型校验之后、marker 计数校验之前再做一次轻量兜底
 - 写盘前：template_gen `write_file`、edit_tools `edit_paragraph` 在写盘前调用 `check_latex_text()`，损坏内容直接拒绝并回喂 LLM 自纠
 - 分隔符协议路径：writing_chat `generate_edit` 提取 `<<<LATEX>>>...<<<END>>>` 块后调用 `validate_latex_field(relaxed=True)` 宽松校验（避免 CRLF / tab 原文误报）；formula_ocr / table_ocr / style_modify 同样采用分隔符协议 + 内容校验重试（暂用默认严格模式）
 
