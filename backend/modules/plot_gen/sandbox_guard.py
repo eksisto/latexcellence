@@ -223,7 +223,9 @@ def _audit(event, args):
         if isinstance(mode, bytes):
             mode = os.fsdecode(mode)
         flags = flags or 0
-        if any(c in mode for c in "wax+") or (flags & _WRITE_OFLAGS):
+        if (isinstance(mode, str) and any(c in mode for c in "wax+")) or (
+            flags & _WRITE_OFLAGS
+        ):
             if not _write_ok(p):
                 _block("write outside sandbox is blocked", p)
         elif not _read_ok(p):
