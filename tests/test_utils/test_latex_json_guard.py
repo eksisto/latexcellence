@@ -90,6 +90,40 @@ class TestCheckLatexText:
         """\\verb 定界符内的字面制表符是合法内容，不应命中控制字符检查。"""
         assert check_latex_text(r"\verb|a" + "\t" + "b|") is None
 
+    def test_accepts_fancy_verb(self):
+        """fancyvrb \\Verb 定界符内的孤立花括号是合法内容。"""
+        assert check_latex_text(r"\Verb|{| and \Verb*|}|") is None
+
+    def test_accepts_mintinline_with_braces(self):
+        """\\mintinline 的 code 参数含花括号/美元符是合法内容。"""
+        assert (
+            check_latex_text(r"\mintinline{python}{x = {1};} and $y$")
+            is None
+        )
+        assert check_latex_text(r"\mintinline[breaklines]{c++}{$v$ = {1};}") is None
+
+    def test_accepts_alltt_environment(self):
+        """alltt 环境内容按字面处理，其中的花括号不参与配平。"""
+        assert (
+            check_latex_text(r"\begin{alltt}a { b }\end{alltt} and text")
+            is None
+        )
+
+    def test_url_with_nested_braces_and_dollar(self):
+        """URL 参数内的 $ / 嵌套花括号是字面字符，不应误报。"""
+        assert check_latex_text(r"\url{https://a.com/x{y}z$}") is None
+        assert check_latex_text(r"\href{https://a.com/x{y}z$}{text}") is None
+
+    def test_bibtex_url_with_dollar_and_braces(self):
+        """bibtex 模式同样剥离 URL 参数：$ / { 是字面字符。"""
+        assert (
+            check_latex_text(
+                r"\url{https://doi.org/10.1000/x{y}%2Fz$}",
+                bibtex=True,
+            )
+            is None
+        )
+
     def test_bibtex_mode_accepts_literal_percent(self):
         """BibTeX 字段值里的 % 是字面字符，percent-encoding URL 应通过。"""
         assert (
@@ -105,6 +139,21 @@ class TestCheckLatexText:
 
     def test_escaped_dollar_does_not_count(self):
         assert check_latex_text(r"\$5 and $x$") is None
+
+    def test_error_hints_are_specific_per_type(self):
+        """错误归因分诊：控制字符 / 占位符 / 配平给出不同修复提示。"""
+        control = check_latex_text("a\fb")
+        garbage = check_latex_text("[object Object]")
+        braces = check_latex_text(r"\textbf{hello")
+        dollars = check_latex_text(r"$x+y")
+
+        # 控制字符提示 JSON 转义（双写反斜杠）
+        assert "backslash" in control
+        # 占位符提示不要序列化对象
+        assert "do not serialize objects" in garbage
+        # 配平提示转义字面花括号 / 美元符
+        assert "\\{" in braces and "unbalanced braces" in braces
+        assert "\\$" in dollars and "unbalanced dollar" in dollars
 
 
 class TestCheckLatexEnvironments:

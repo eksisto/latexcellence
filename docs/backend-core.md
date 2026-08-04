@@ -404,6 +404,16 @@ raise ValueError("Validation failed after N attempts")        # ❌ 耗尽
 
 **BibTeX 模式**：`bibtex=True` 时 `%` 视为字面字符（非注释起点），避免 percent-encoding URL（`https://x/y%20z`）被误判为花括号不配平。
 
+**字面内容命令补全**：`_strip_verbatim` 支持逐字类内容（不参与配平/控制字符扫描）——`\verb` / `\verb*`、`\lstinline`、fancyvrb `\Verb`、`\mintinline{lang}{...}`（code 含嵌套花括号）、`verbatim` / `Verbatim` / `lstlisting` / `minted` / `comment` / `alltt` 环境。
+
+**URL 字面化**：`\url` / `\path` / `\href` 的 URL 参数在 LaTeX 与 BibTeX 两种模式均按字面剥离（URL 中的 `$`、`{` 是字面字符），括号计数支持 URL 内嵌套花括号；`\href` 的第二个参数（显示文本）保留并正常校验。
+
+**错误归因分诊**：按错误类型给出不同修复提示，不再一律"把反斜杠双写"——
+
+- 控制字符：JSON 转义损坏（提示反斜杠双写）或内容损坏（宽松/轻量模式）
+- 垃圾占位符：提示不要将对象序列化为字符串
+- 花括号 / `$` 配平：提示检查未配对符号、字面花括号应写 `\{` / `\}`、字面美元符应写 `\$`
+
 **宽松模式（`relaxed=True`）**：用于分隔符协议（`<<<LATEX>>>...<<<END>>>`）等非 JSON 传输路径。反斜杠原样传输、不存在 JSON 转义风险，因此放行 `\t`（U+0009）与 `\r`（U+000D）这类合法 LaTeX 空白，仅拦截 `\b` / `\f` 等真正的静默损坏特征；错误归因也不再提示"把反斜杠双写"。
 
 **轻量模式（`check_latex_text_lite` / `LatexTextLite`）**：用于 marker 模块（typo_check / expression_opt / paragraph_translate）的 LLM 输出字段。这些字段仍走 JSON 传输，但 marker 化后常规段落不再含反斜杠，花括号 / `$` 配平检查可能因残余结构（如 `\~{n}`）误报，因此只做最小校验：

@@ -22,11 +22,22 @@ LaTeX × JSON 转义损坏防护工具。
         - $ 配平（忽略 \\$，并跳过注释、verbatim 与 \\url 内容）
         - 可选：\\begin{X} / \\end{X} 环境栈式配平（同样跳过 verbatim）
 
+    字面内容（不参与配平 / 控制字符扫描）：
+        - \\verb / \\verb* / fancyvrb \\Verb / \\lstinline（定界符形式）
+        - \\mintinline{lang}{code}（code 含嵌套花括号）
+        - verbatim / Verbatim / lstlisting / minted / comment / alltt 环境
+        - \\url / \\path / \\href 的 URL 参数（LaTeX 与 BibTeX 模式均按字面
+          剥离，括号计数支持 URL 内嵌套花括号；\\href 第二参数保留校验）
+
     校验模式：
         - 默认（LaTeX）：% 是注释起点（\\% 除外），注释内容不参与配平；
           \\url / \\href / \\path 的 URL 参数按字面处理。
         - bibtex=True：% 是字面字符（BibTeX 字段值中的 % 不是注释），不剥离，
           避免 percent-encoding URL（如 https://x/y%20z）被误判为花括号不配平。
+        - relaxed=True：非 JSON 传输路径，放行 \\t / \\r 合法 LaTeX 空白。
+
+    错误归因分诊：按错误类型给出不同修复提示（控制字符 / 配平 / 占位符），
+    不再一律"把反斜杠双写"。
 """
 
 import re
@@ -50,14 +61,13 @@ _ENV_RE = re.compile(r"\\(begin|end)\{([^}]*)\}")
 # 注释：偶数个反斜杠前的 % 才是注释起点（\\% 不是；\\\\% 中 \\ 换行后
 # % 开始注释）。注释内容（可能含孤立花括号/$）不参与配平校验。
 _COMMENT_RE = re.compile(r"(?<!\\)(?:\\\\)*%.*")
-# URL 命令：\\url / \\path 单参数、\\href 第一个参数是 URL，内容按字面
-# 处理（其中的 % 不是注释、花括号不计入配平）；不支持 URL 内嵌套花括号。
-_URL_CMD_RE = re.compile(
-    r"(\\(?:url|path|href))\s*(?:\[[^\]]*\])?\{[^{}]*\}"
-)
-# verbatim 类环境：内容按字面处理，不参与配平校验
+# URL 命令起始：\\url / \\path 单参数、\\href 第一个参数是 URL。内容按字面
+# 处理（其中的 % 不是注释、$ / 花括号不计入配平）；支持 URL 内嵌套花括号
+#（由 _strip_url_commands 用括号计数找到完整参数）。
+_URL_CMD_START_RE = re.compile(r"(\\(?:url|path|href))\s*(?:\[[^\]]*\])?\{")
+# verbatim 类环境（含 alltt）：内容按字面处理，不参与配平校验
 _VERBATIM_ENV_RE = re.compile(
-    r"\\begin\{(verbatim\*?|Verbatim|lstlisting|minted|comment)\}.*?\\end\{\1\}",
+    r"\\begin\{(verbatim\*?|Verbatim|lstlisting|minted|comment|alltt)\}.*?\\end\{\1\}",
     re.DOTALL,
 )
 # \\verb / \\lstinline 内联命令：定界符（可为任意非字母非空白字符）之间的
@@ -65,20 +75,89 @@ _VERBATIM_ENV_RE = re.compile(
 _VERB_CMD_RE = re.compile(
     r"\\(?:verb|lstinline)\*?(?:\[[^\]]*\])?([^a-zA-Z\s])[^\r\n]*?\1"
 )
+# fancyvrb \\Verb：与 \\verb 类似但允许内容跨行，故用 DOTALL。
+_VERB_FANCY_RE = re.compile(
+    r"\\Verb\*?(?:\[[^\]]*\])?([^a-zA-Z\s]).*?\1",
+    re.DOTALL,
+)
+# \\mintinline{lang}{code}（可带 [options] 与 *）：code 内容按字面处理，
+# 可能含嵌套花括号，由 _strip_mintinline 用括号计数移除。
+_MINTINLINE_START_RE = re.compile(r"\\mintinline\*?(?:\[[^\]]*\])?\{[^{}]*\}\{")
+
+
+def _find_matching_brace(value: str, start: int) -> int | None:
+    """从 start（'{' 的位置）开始找匹配的 '}'，返回其下标；未闭合返回 None。
+
+    转义的 \\{ / \\} 不参与配平。
+    """
+    depth = 0
+    i = start
+    while i < len(value):
+        ch = value[i]
+        if ch == "\\":
+            i += 2  # 跳过转义字符（\\{ / \\} 等）
+            continue
+        if ch == "{":
+            depth += 1
+        elif ch == "}":
+            depth -= 1
+            if depth == 0:
+                return i
+        i += 1
+    return None
+
+
+def _strip_url_commands(value: str) -> str:
+    """将 \\url / \\path / \\href 的 URL 参数替换为空（保留命令名）。
+
+    URL 中的 $、{、} 是字面字符，剥离后再统计配平才不会误报；
+    \\href 的第二个参数（显示文本）保留，仍参与正常校验。
+    """
+    result: list[str] = []
+    pos = 0
+    for m in _URL_CMD_START_RE.finditer(value):
+        result.append(value[pos : m.start()])
+        close = _find_matching_brace(value, m.end() - 1)
+        if close is None:
+            # URL 参数未闭合：原样保留，交给配平检查处理
+            result.append(value[m.start() :])
+            pos = len(value)
+            break
+        result.append(m.group(1) + "{}")
+        pos = close + 1
+    result.append(value[pos:])
+    return "".join(result)
+
+
+def _strip_mintinline(value: str) -> str:
+    """移除 \\mintinline{lang}{code} 的整个参数块（含嵌套花括号的 code）。"""
+    result: list[str] = []
+    pos = 0
+    for m in _MINTINLINE_START_RE.finditer(value):
+        result.append(value[pos : m.start()])
+        close = _find_matching_brace(value, m.end() - 1)
+        if close is None:
+            result.append(value[m.start() :])
+            pos = len(value)
+            break
+        pos = close + 1
+    result.append(value[pos:])
+    return "".join(result)
 
 
 def _strip_verbatim(value: str, *, bibtex: bool = False) -> str:
-    """剔除 verbatim 与 URL 内容，避免其中的花括号/$/控制字符干扰校验。
+    """剔除 verbatim、内联逐字命令与 URL 内容，避免其中的字面量干扰校验。
 
-    \\verb|{|、\\lstinline|}|、\\url{...%20...} 里的内容都是字面量，
-    全文本扫描会误判为不配平或命中控制字符，因此先移除。
-    BibTeX 模式（bibtex=True）不剥离 URL 参数：% 本来就是字面字符，
-    URL 若含嵌套花括号也会被完整保留。
+    \\verb|{|、\\lstinline|}|、\\mintinline{python}{x={1}}、
+    \\url{...%20...} 里的内容都是字面量，全文本扫描会误判为不配平或命中
+    控制字符，因此先移除。URL 参数在 LaTeX 与 BibTeX 模式均按字面剥离
+    （URL 中的 $、{ 是字面字符）。
     """
-    if not bibtex:
-        value = _URL_CMD_RE.sub(r"\g<1>{}", value)
+    value = _strip_url_commands(value)
     value = _VERBATIM_ENV_RE.sub("", value)
     value = _VERB_CMD_RE.sub("", value)
+    value = _VERB_FANCY_RE.sub("", value)
+    value = _strip_mintinline(value)
     return value
 
 
@@ -111,7 +190,8 @@ def check_latex_text(
             return (
                 f"LaTeX text contains an illegal control character "
                 f"(U+{ord(bad.group()):04X} at position {bad.start()}); "
-                "the output appears corrupted"
+                "the output appears corrupted — check for raw control "
+                "characters in the produced text"
             )
         return (
             f"LaTeX text contains a control character (U+{ord(bad.group()):04X} "
@@ -120,7 +200,11 @@ def check_latex_text(
             "backslash characters"
         )
     if _GARBAGE_RE.search(probe):
-        return "LaTeX text contains a garbage placeholder like '[object Object]'"
+        return (
+            "LaTeX text contains a garbage placeholder like '[object Object]'; "
+            "do not serialize objects into strings — output the actual LaTeX "
+            "text content"
+        )
 
     # 配平前剔除注释（BibTeX 的 % 是字面字符，不剥离），避免 % { 等
     # 合法用法被误判为花括号/$ 不配平。
@@ -129,11 +213,17 @@ def check_latex_text(
         code = _COMMENT_RE.sub("", code)
     braces = re.sub(r"\\[{}]", "", code)
     if braces.count("{") != braces.count("}"):
-        return "LaTeX text has unbalanced braces"
+        return (
+            "LaTeX text has unbalanced braces; check for unmatched { or } — "
+            "literal braces should be written as \\{ and \\}"
+        )
 
     dollars = re.sub(r"\\\$", "", code)
     if dollars.count("$") % 2 != 0:
-        return "LaTeX text has unbalanced dollar signs"
+        return (
+            "LaTeX text has unbalanced dollar signs; check for unmatched $ — "
+            "literal dollar signs should be written as \\$"
+        )
 
     return None
 
