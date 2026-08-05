@@ -112,7 +112,7 @@ class ConversationContext:
         )
 
     @classmethod
-    def load_from_disk(cls, session_id: str) -> "ConversationContext" | None:
+    def load_from_disk(cls, session_id: str) -> "ConversationContext | None":
         """加载已有会话。不存在返回 None。"""
         path = cls._session_path(session_id)
         if not path.exists():
