@@ -1,4 +1,4 @@
-# LateXcellence Cache Cleaner
+﻿# LateXcellence Cache Cleaner
 # PowerShell 版本，与 clean-cache.sh 功能一致。
 
 param(
@@ -83,13 +83,68 @@ function Invoke-CleanPattern {
     }
 }
 
-Write-Host "[1/4] 清理 __pycache__ ..."
+function Remove-PytestTmp {
+    param([string]$Target)
+
+    # .pytest_tmp 是 pytest 的 basetemp（pytest.ini 里 --basetemp=.pytest_tmp）。
+    # 它在每个 pytest 会话结束时应被 pytest 自行删除；若会话异常中断/ACL 损坏，
+    # 会残留成普通权限无法删除的目录（连 listdir 都拒绝），进而导致后续每次
+    # pytest 会话结束时清理报 PermissionError。这里补清理，并在普通删除失败时
+    # 自动提权重试（仅该目录、仅失败时才弹 UAC）。
+
+    if (-not (Test-Path -LiteralPath $Target)) {
+        Write-Host "  --     .pytest_tmp (不存在，跳过)"
+        return
+    }
+
+    $removed = $false
+    try {
+        Remove-Item -LiteralPath $Target -Recurse -Force -ErrorAction Stop
+        $removed = $true
+    }
+    catch {
+        Write-Host "  [FAIL] .pytest_tmp（ACL 受限或文件被占用）"
+    }
+
+    if (-not $removed) {
+        $isAdmin = ([Security.Principal.WindowsPrincipal] `
+            [Security.Principal.WindowsIdentity]::GetCurrent()
+        ).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+        if (-not $isAdmin) {
+            Write-Host "  尝试以管理员权限清理 .pytest_tmp（会弹出 UAC 确认框，请选择 Yes）..."
+            try {
+                $elevated = "Remove-Item -LiteralPath '$Target' -Recurse -Force"
+                Start-Process -FilePath "powershell" -Verb RunAs -Wait `
+                    -ArgumentList "-NoProfile", "-Command", $elevated
+                if (Test-Path -LiteralPath $Target) {
+                    Write-Host "  [FAIL] .pytest_tmp（管理员清理仍失败）"
+                }
+                else {
+                    $removed = $true
+                }
+            }
+            catch {
+                Write-Host "  已取消提权，.pytest_tmp 未清理（可稍后以管理员身份运行本脚本）"
+            }
+        }
+    }
+
+    if ($removed) {
+        Write-Host "  [OK]   .pytest_tmp"
+        $script:Cleaned++
+    }
+    else {
+        $script:Failed++
+    }
+}
+
+Write-Host "[1/5] 清理 __pycache__ ..."
 Invoke-CleanPattern -Description "__pycache__" -NamePattern "__pycache__" -SearchRoot $Root
 
-Write-Host "[2/4] 清理 *.pyc ..."
+Write-Host "[2/5] 清理 *.pyc ..."
 Invoke-CleanPattern -Description "*.pyc" -NamePattern "*.pyc" -SearchRoot $Root
 
-Write-Host "[3/4] 清理 node_modules/.cache ..."
+Write-Host "[3/5] 清理 node_modules/.cache ..."
 $cache = Join-Path $Root "frontend\node_modules\.cache"
 if (Test-Path -LiteralPath $cache) {
     Remove-CacheItem -Item $cache
@@ -98,8 +153,11 @@ else {
     Write-Host "  --     node_modules/.cache (不存在，跳过)"
 }
 
-Write-Host "[4/4] 清理 .pytest_cache ..."
+Write-Host "[4/5] 清理 .pytest_cache ..."
 Invoke-CleanPattern -Description ".pytest_cache" -NamePattern ".pytest_cache" -SearchRoot $Root
+
+Write-Host "[5/5] 清理 .pytest_tmp ..."
+Remove-PytestTmp -Target (Join-Path $Root ".pytest_tmp")
 
 Write-Host ""
 Write-Host "========================================"
