@@ -29,10 +29,10 @@ from backend.core.logger import get_logger
 from backend.core.prompts import get_prompt
 from backend.utils.json_utils import format_validation_error
 from backend.utils.latex_json_guard import validate_latex_field
+from backend.utils.latex_literals import extract_delimited_block
 from backend.utils.latex_package_analyzer import prepend_package_comments
 
 # 分隔符协议：LaTeX 以纯文本形式夹在标记之间，避免 JSON 反斜杠转义损坏
-_LATEX_BLOCK_RE = re.compile(r"<<<LATEX>>>(.*?)<<<END>>>", re.DOTALL | re.IGNORECASE)
 _INLINE_RE = re.compile(r"INLINE\s*:\s*(true|false)", re.IGNORECASE)
 _CONFIDENCE_RE = re.compile(r"CONFIDENCE\s*:\s*([0-9]*\.?[0-9]+)", re.IGNORECASE)
 
@@ -196,11 +196,15 @@ class FormulaOCRService:
         )
 
     def _extract_latex_block(self, response_text: str) -> str | None:
-        """提取 <<<LATEX>>>...<<<END>>> 块，并剥离误加的数学包裹。"""
-        match = _LATEX_BLOCK_RE.search(response_text)
-        if not match:
+        """提取 <<<LATEX>>>...<<<END>>> 块，并剥离误加的数学包裹。
+
+        逐字内容（\\verb / \\lstinline 等）中的 <<<END>>> 不是协议结束，
+        提取由 latex_literals.extract_delimited_block 统一处理。
+        """
+        block = extract_delimited_block(response_text, "<<<LATEX>>>", "<<<END>>>")
+        if block is None:
             return None
-        return self._strip_math_wrappers(match.group(1).strip())
+        return self._strip_math_wrappers(block.strip())
 
     @staticmethod
     def _strip_math_wrappers(latex: str) -> str:

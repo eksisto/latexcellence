@@ -26,7 +26,6 @@
 import asyncio
 import difflib
 import json
-import re
 import time
 import uuid
 from typing import Any, AsyncIterator
@@ -38,6 +37,7 @@ from backend.core.tool_registry import get_tool_registry
 from backend.core.workspace_manager import get_project_manager_for_workspace
 from backend.core.prompts import get_prompt
 from backend.utils.latex_json_guard import validate_latex_field
+from backend.utils.latex_literals import extract_delimited_block
 from backend.utils.time_utils import get_current_time_context
 from backend.utils.web_search import DDGChallengeError, get_search_manager
 from backend.utils.project_tools import get_project_tools_manager
@@ -798,12 +798,6 @@ class WritingChatService:
 
     # ── 分隔符协议：提取 + 校验 + 重试 ───────────────────────────────
 
-    _EDIT_LATEX_BLOCK_RE = re.compile(
-        r"<<<LATEX>>>(.*?)<<<END>>>", re.DOTALL | re.IGNORECASE
-    )
-    _EDIT_REASON_BLOCK_RE = re.compile(
-        r"<<<REASON>>>(.*?)<<<END>>>", re.DOTALL | re.IGNORECASE
-    )
     _MAX_EDIT_RETRIES = 3
 
     async def _generate_edit_with_llm(
@@ -875,19 +869,23 @@ class WritingChatService:
 
     @staticmethod
     def _extract_edit_latex_block(response_text: str) -> str | None:
-        """提取 <<<LATEX>>>...<<<END>>> 块内容；缺失返回 None。"""
-        match = WritingChatService._EDIT_LATEX_BLOCK_RE.search(response_text)
-        if not match:
+        """提取 <<<LATEX>>>...<<<END>>> 块内容；缺失返回 None。
+
+        逐字内容（\\verb / \\lstinline 等）中的 <<<END>>> 不是协议结束，
+        提取由 latex_literals.extract_delimited_block 统一处理。
+        """
+        block = extract_delimited_block(response_text, "<<<LATEX>>>", "<<<END>>>")
+        if block is None:
             return None
-        return match.group(1).strip()
+        return block.strip()
 
     @staticmethod
     def _extract_edit_reason_block(response_text: str) -> str | None:
         """提取 <<<REASON>>>...<<<END>>> 块内容；缺失返回 None。"""
-        match = WritingChatService._EDIT_REASON_BLOCK_RE.search(response_text)
-        if not match:
+        block = extract_delimited_block(response_text, "<<<REASON>>>", "<<<END>>>")
+        if block is None:
             return None
-        return match.group(1).strip()
+        return block.strip()
 
     # ── 应用编辑 ──────────────────────────────────────────────────────
 

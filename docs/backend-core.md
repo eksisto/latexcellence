@@ -371,7 +371,7 @@ get_tool_registry().register(
 
 | 函数 | 功能 |
 | --- | --- |
-| `safe_parse_json(text)` | 容错解析：去除 markdown 围栏、尾逗号、单引号替换，支持 `str` 和 `dict` 输入 |
+| `safe_parse_json(text)` | 容错解析：去除 markdown 围栏、尾逗号、单引号替换（只替换双引号字符串之外的引号，不破坏 `author's` 等字符串内容），支持 `str` 和 `dict` 输入 |
 | `validate_model(data, model_cls)` | Pydantic `.model_validate()` 严格校验 |
 | `format_validation_error(errors)` | 将 Pydantic ValidationError 格式化为 LLM 可读的中文错误信息 |
 | `parse_and_validate(text, model)` | 一步完成：解析 + 校验，返回 `(model, error)` 元组 |
@@ -402,9 +402,11 @@ raise ValueError("Validation failed after N attempts")        # ❌ 耗尽
 - `$` 配平（同上跳过规则）
 - 可选：`\begin{X}` / `\end{X}` 环境栈式配平
 
+**换行损坏检测边界**：JSON 路径（`relaxed=False`）下，值首部的"换行 + 小写字母"是 `\n` 开头命令（`\nabla` / `\newcommand` 等）被 JSON 转义吞掉反斜杠的损坏特征，guard 会拦截。换行本身是合法 LaTeX 空白，guard 无法仅凭结果完整区分损坏与合法换行，因此只拦最典型特征；完整方案是让原始 LaTeX 脱离 JSON（分隔符协议），多行内容走 `relaxed=True` 宽松校验。
+
 **BibTeX 模式**：`bibtex=True` 时 `%` 视为字面字符（非注释起点），避免 percent-encoding URL（`https://x/y%20z`）被误判为花括号不配平。
 
-**字面内容命令补全**：`_strip_verbatim` 支持逐字类内容（不参与配平/控制字符扫描）——`\verb` / `\verb*`、`\lstinline`、fancyvrb `\Verb`、`\mintinline{lang}{...}`（code 含嵌套花括号）、`verbatim` / `Verbatim` / `lstlisting` / `minted` / `comment` / `alltt` 环境。
+**字面内容命令补全**：`_strip_verbatim` 支持逐字类内容（不参与配平/控制字符扫描）——`\verb` / `\verb*`、`\lstinline`（含可选参数与数字定界符）、fancyvrb `\Verb`（内容可跨行）、`\mintinline{lang}{...}`（code 含嵌套花括号）、`verbatim` / `Verbatim` / `lstlisting` / `minted` / `comment` / `alltt` 环境。识别逻辑统一来自 `latex_literals.py`，与 `latex_parser` 共享同一策略。
 
 **URL 字面化**：`\url` / `\path` / `\href` 的 URL 参数在 LaTeX 与 BibTeX 两种模式均按字面剥离（URL 中的 `$`、`{` 是字面字符），括号计数支持 URL 内嵌套花括号；`\href` 的第二个参数（显示文本）保留并正常校验。
 
@@ -527,18 +529,38 @@ raise ValueError("Validation failed after N attempts")        # ❌ 耗尽
 
 **Marker 格式**：`__{PREFIX}_{COUNTER:04d}__`（PREFIX: `CMD`/`MATH`/`ENV`/`VERB`/`COM`）
 
-**注释保护策略**：注释替换（`%` → 行尾 → `__COM_NNNN__`）放在逐字类环境（`verbatim`/`lstlisting`）之后、其他环境/数学/命令之前执行，确保注释内的 `\command{}`、`$math$`、`\begin{env}` 不被单独提取。逐字类环境（`_VERBATIM_ENVS`）在注释之前，因其内部可含字面 `%`。注释不再是直接删除，而是 marker 化，LLM 无法修改，还原时完整恢复。
+**注释保护策略**：注释替换（`%` → 行尾 → `__COM_NNNN__`）放在内联逐字、URL 参数与逐字类环境（`verbatim`/`Verbatim`/`lstlisting` 等）之后、其他环境/数学/命令之前执行，确保注释内的 `\command{}`、`$math$`、`\begin{env}` 不被单独提取。逐字类环境（`_VERBATIM_ENVS`）在注释之前，因其内部可含字面 `%`；URL 参数（`\url` / `\path` / `\href`）同样在注释之前整体 marker 化，`%20` 不会被误当作注释起点。注释不再是直接删除，而是 marker 化，LLM 无法修改，还原时完整恢复。
 
-**解析流水线**：VERB → VERBATIM_ENVS → COM → ENV → MATH → CMD（8 步顺序执行）
+**解析流水线**：VERB → URL → VERBATIM_ENVS → COM → ENV → MATH → CMD（9 步顺序执行）
 
 **Marker 匹配规则（v2 修复）**：
 
 - **通用控制符号**：`\` 后跟单个非字母字符（`\?`、`\'`、`\"`、`\7`、`\~`、`\^`、`\`+换行、EOF 处孤立 `\`、未配对的 `\[`/`\(`）整体记为 CMD marker，消除纯文本中的残余反斜杠
 - **控制符号 `{arg}` 吸收**：控制符号/转义字符后紧跟 `{...}` 时并入同一 marker（如 `\~{n}` → 单一 marker），不再残留 `{n}` 花括号；裸字母形式（`\~n`）保持现状
 - **行内数学与美元符号**：`$...$` 非贪婪匹配（`$x + y$` 带空格也照常匹配）；被反斜杠转义的 `\$`（如 `\$500`）不参与数学匹配，由转义字符规则整体替换为 marker；裸 `$` 不成对属非法 LaTeX（正确写法是 `\$`），不做特殊处理，仅保证往返不变
-- **内联逐字扩展**：`\verb`/`\verb*`/`\lstinline`/`\lstinline*`（含可选 `[...]` 参数）整体记为 VERB marker；分隔符形式用正则回引用匹配，花括号形式（`\lstinline{...}`）整体保护，逐字内容 LLM 不可见
+- **内联逐字扩展**：`\verb`/`\verb*`/`\Verb`/`\Verb*`/`\lstinline`/`\lstinline*`/`\mintinline` 整体记为 VERB marker。支持数字等任意非字母定界符（`\verb1a{b}$1`）、`\lstinline` 可选 `[...]` 参数、花括号形式（`\lstinline{...}`，可含嵌套花括号）与 fancyvrb `\Verb` 跨行内容，逐字内容 LLM 不可见。识别逻辑统一来自 `latex_literals.py`
+- **URL 参数保护**：`\url` / `\path` / `\href` 的完整命令（含可选参数与全部花括号参数）在注释替换之前整体记为 CMD marker，避免 URL 中的字面 `%` 被当作注释
 
 **还原策略**：按 marker 长度降序还原。
+
+### `latex_literals.py` — LaTeX 字面内容统一识别
+
+**设计理念**：逐字命令、逐字环境与 URL 参数的识别规则此前在 `latex_parser` 与 `latex_json_guard` 中各自维护，规则分叉导致 parser 漏保护数字定界符、`\Verb`、`\lstinline` 可选参数，以及 URL 中的 `%` 被注释规则吞掉。本模块把字面内容识别收敛为单一策略，供三处复用：
+
+- `latex_parser`：字面内容整体替换为 marker（VERB / CMD / ENV）
+- `latex_json_guard`：字面内容先剥离再做控制字符 / 配平扫描
+- 分隔符协议提取器（formula_ocr / table_ocr / style_modify / writing_chat）：跳过逐字内容中的 `<<<END>>>`，避免正文含协议标记时提前截断
+
+**核心接口**：
+
+| 接口 | 功能 |
+| --- | --- |
+| `find_literal_spans(text, kinds=None)` | 返回字面区间列表（按下标排序、重叠合并），kind 为 `verb` / `verb_fancy` / `mintinline` / `env` / `url` |
+| `blank_literal_spans(text, kinds=None)` | 剔除字面内容，保留其余文本（guard 剥离校验用） |
+| `extract_delimited_block(text, open, end)` | 提取分隔符协议块内容，跳过字面内容中的协议标记（大小写不敏感） |
+| `remove_delimited_block(text, open, end)` | 移除第一个分隔符协议块，返回剩余文本（表格 OCR 解析 CONFIDENCE 用） |
+
+**识别范围**：`\verb` / `\Verb` / `\lstinline`（分隔符与花括号形式）/ `\mintinline`、逐字环境（`verbatim` / `Verbatim` / `lstlisting` / `minted` / `comment` / `alltt`）、`\url` / `\path` / `\href` 的 URL 参数（括号计数支持嵌套花括号，`\href` 第二参数保留校验）。
 
 ### `latex_package_analyzer.py` — LaTeX 宏包分析器
 

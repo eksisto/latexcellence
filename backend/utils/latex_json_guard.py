@@ -22,12 +22,17 @@ LaTeX × JSON 转义损坏防护工具。
         - $ 配平（忽略 \\$，并跳过注释、verbatim 与 \\url 内容）
         - 可选：\\begin{X} / \\end{X} 环境栈式配平（同样跳过 verbatim）
 
-    字面内容（不参与配平 / 控制字符扫描）：
-        - \\verb / \\verb* / fancyvrb \\Verb / \\lstinline（定界符形式）
-        - \\mintinline{lang}{code}（code 含嵌套花括号）
-        - verbatim / Verbatim / lstlisting / minted / comment / alltt 环境
-        - \\url / \\path / \\href 的 URL 参数（LaTeX 与 BibTeX 模式均按字面
-          剥离，括号计数支持 URL 内嵌套花括号；\\href 第二参数保留校验）
+    字面内容（不参与配平 / 控制字符扫描）：\\verb / \\Verb / \\lstinline /
+    \\mintinline、逐字环境（verbatim / Verbatim / lstlisting / minted /
+    comment / alltt）与 \\url / \\path / \\href 的 URL 参数。字面区间识别
+    统一来自 latex_literals.find_literal_spans（与 latex_parser 共享同一策略；
+    \\href 第二参数保留校验）。
+
+    换行损坏检测边界：JSON 路径（relaxed=False）下值首部的 "换行 + 小写字母"
+    是 \\n 开头命令（\\nabla / \\newcommand 等）被 JSON 转义吞掉反斜杠的
+    损坏特征。换行本身是合法 LaTeX 空白，guard 无法仅凭结果完整区分损坏与
+    合法换行，因此该启发式只拦截最典型的特征；完整方案是让原始 LaTeX 脱离
+    JSON（分隔符协议），多行内容走 relaxed=True 宽松校验。
 
     校验模式：
         - 默认（LaTeX）：% 是注释起点（\\% 除外），注释内容不参与配平；
@@ -45,6 +50,8 @@ from typing import Annotated
 
 from pydantic import AfterValidator
 
+from backend.utils.latex_literals import blank_literal_spans
+
 # 控制字符：除换行（\\x0a）外的 C0 控制符 + DEL。\\r \\t \\f \\b 等
 # 都是 JSON 未转义反斜杠时静默损坏的特征（\\rho → 回车 + ho）。
 _BAD_CONTROL_RE = re.compile(r"[\x00-\x09\x0b-\x1f\x7f]")
@@ -61,104 +68,17 @@ _ENV_RE = re.compile(r"\\(begin|end)\{([^}]*)\}")
 # 注释：偶数个反斜杠前的 % 才是注释起点（\\% 不是；\\\\% 中 \\ 换行后
 # % 开始注释）。注释内容（可能含孤立花括号/$）不参与配平校验。
 _COMMENT_RE = re.compile(r"(?<!\\)(?:\\\\)*%.*")
-# URL 命令起始：\\url / \\path 单参数、\\href 第一个参数是 URL。内容按字面
-# 处理（其中的 % 不是注释、$ / 花括号不计入配平）；支持 URL 内嵌套花括号
-#（由 _strip_url_commands 用括号计数找到完整参数）。
-_URL_CMD_START_RE = re.compile(r"(\\(?:url|path|href))\s*(?:\[[^\]]*\])?\{")
-# verbatim 类环境（含 alltt）：内容按字面处理，不参与配平校验
-_VERBATIM_ENV_RE = re.compile(
-    r"\\begin\{(verbatim\*?|Verbatim|lstlisting|minted|comment|alltt)\}.*?\\end\{\1\}",
-    re.DOTALL,
-)
-# \\verb / \\lstinline 内联命令：定界符（可为任意非字母非空白字符）之间的
-# 内容按字面处理，不参与配平校验；\\verb 不能跨行，故用 [^\\r\\n] 限定。
-_VERB_CMD_RE = re.compile(
-    r"\\(?:verb|lstinline)\*?(?:\[[^\]]*\])?([^a-zA-Z\s])[^\r\n]*?\1"
-)
-# fancyvrb \\Verb：与 \\verb 类似但允许内容跨行，故用 DOTALL。
-_VERB_FANCY_RE = re.compile(
-    r"\\Verb\*?(?:\[[^\]]*\])?([^a-zA-Z\s]).*?\1",
-    re.DOTALL,
-)
-# \\mintinline{lang}{code}（可带 [options] 与 *）：code 内容按字面处理，
-# 可能含嵌套花括号，由 _strip_mintinline 用括号计数移除。
-_MINTINLINE_START_RE = re.compile(r"\\mintinline\*?(?:\[[^\]]*\])?\{[^{}]*\}\{")
 
 
-def _find_matching_brace(value: str, start: int) -> int | None:
-    """从 start（'{' 的位置）开始找匹配的 '}'，返回其下标；未闭合返回 None。
-
-    转义的 \\{ / \\} 不参与配平。
-    """
-    depth = 0
-    i = start
-    while i < len(value):
-        ch = value[i]
-        if ch == "\\":
-            i += 2  # 跳过转义字符（\\{ / \\} 等）
-            continue
-        if ch == "{":
-            depth += 1
-        elif ch == "}":
-            depth -= 1
-            if depth == 0:
-                return i
-        i += 1
-    return None
-
-
-def _strip_url_commands(value: str) -> str:
-    """将 \\url / \\path / \\href 的 URL 参数替换为空（保留命令名）。
-
-    URL 中的 $、{、} 是字面字符，剥离后再统计配平才不会误报；
-    \\href 的第二个参数（显示文本）保留，仍参与正常校验。
-    """
-    result: list[str] = []
-    pos = 0
-    for m in _URL_CMD_START_RE.finditer(value):
-        result.append(value[pos : m.start()])
-        close = _find_matching_brace(value, m.end() - 1)
-        if close is None:
-            # URL 参数未闭合：原样保留，交给配平检查处理
-            result.append(value[m.start() :])
-            pos = len(value)
-            break
-        result.append(m.group(1) + "{}")
-        pos = close + 1
-    result.append(value[pos:])
-    return "".join(result)
-
-
-def _strip_mintinline(value: str) -> str:
-    """移除 \\mintinline{lang}{code} 的整个参数块（含嵌套花括号的 code）。"""
-    result: list[str] = []
-    pos = 0
-    for m in _MINTINLINE_START_RE.finditer(value):
-        result.append(value[pos : m.start()])
-        close = _find_matching_brace(value, m.end() - 1)
-        if close is None:
-            result.append(value[m.start() :])
-            pos = len(value)
-            break
-        pos = close + 1
-    result.append(value[pos:])
-    return "".join(result)
-
-
-def _strip_verbatim(value: str, *, bibtex: bool = False) -> str:
-    """剔除 verbatim、内联逐字命令与 URL 内容，避免其中的字面量干扰校验。
+def _strip_verbatim(value: str) -> str:
+    """剔除 verbatim、内联逐字命令与 URL 参数，避免其中的字面量干扰校验。
 
     \\verb|{|、\\lstinline|}|、\\mintinline{python}{x={1}}、
     \\url{...%20...} 里的内容都是字面量，全文本扫描会误判为不配平或命中
-    控制字符，因此先移除。URL 参数在 LaTeX 与 BibTeX 模式均按字面剥离
-    （URL 中的 $、{ 是字面字符）。
+    控制字符，因此先移除。识别策略与 latex_parser 共享
+    （见 latex_literals.find_literal_spans）。
     """
-    value = _strip_url_commands(value)
-    value = _VERBATIM_ENV_RE.sub("", value)
-    value = _VERB_CMD_RE.sub("", value)
-    value = _VERB_FANCY_RE.sub("", value)
-    value = _strip_mintinline(value)
-    return value
+    return blank_literal_spans(value)
 
 
 def check_latex_text(
@@ -182,7 +102,7 @@ def check_latex_text(
 
     # 控制字符 / 垃圾占位符：先剔除 verbatim / URL 内容再扫描，
     # 避免 \\verb|a<TAB>b| 等合法字面内容被误判。
-    probe = _strip_verbatim(value, bibtex=bibtex)
+    probe = _strip_verbatim(value)
     bad_re = _BAD_CONTROL_RELAXED_RE if relaxed else _BAD_CONTROL_RE
     bad = bad_re.search(probe)
     if bad:
@@ -198,6 +118,17 @@ def check_latex_text(
             f"at position {bad.start()}); possible JSON escaping corruption — "
             "in JSON strings, every LaTeX backslash must be written as two "
             "backslash characters"
+        )
+    # JSON 路径（relaxed=False）的换行损坏边界：值首部 "换行 + 小写字母"
+    # 是 \\n 开头命令（\\nabla / \\newcommand 等）被 JSON 转义吞掉反斜杠的
+    # 特征。换行本身是合法空白，无法仅凭结果完整区分，只拦最典型特征。
+    if not relaxed and re.match(r"\n[a-z]", probe):
+        return (
+            "LaTeX text starts with a newline followed by a lowercase letter; "
+            "this is the damage signature of a JSON-escaped command like "
+            "\\nabla or \\newcommand whose backslash was consumed by JSON "
+            "parsing — in JSON strings, every LaTeX backslash must be written "
+            "as two backslash characters"
         )
     if _GARBAGE_RE.search(probe):
         return (

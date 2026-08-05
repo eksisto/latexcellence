@@ -17,6 +17,7 @@
 | `test_utils/test_compile_error_translator.py` | ErrorTranslation 模型、错误提取、LLM 流程、filtered_output |
 | `test_utils/test_tex_compile.py` | TexCompileResult 模型、texfot 成功/失败/超时、引擎自动检测、PDF/A 注入 |
 | `test_utils/test_latex_json_guard.py` | LaTeX/BibTeX 内容校验：控制字符、垃圾占位符、花括号/$/环境配平、bibtex 模式、宽松模式（relaxed=True 放行 `\t`/`\r`、错误归因） |
+| `test_latex_output_adversarial.py` | JSON/LaTeX 静默损坏、Marker 保护、URL/逐字内容、分隔符截断和 BibTeX 字段边界的对抗性回归测试（历史缺口修复后均为正式用例，不再使用 xfail） |
 | `test_utils/test_edit_tools_manager.py` | edit_paragraph / undo_last_edit 执行、LaTeX 内容校验拒绝、写回 |
 | `test_utils/test_scholarly_research.py` | OpenAlex 元数据映射、摘要重建、去重、查询过滤、引文追踪、OA 定位和工具执行器 |
 | `test_api/test_typo_check.py` | 模型校验、LLM mock、marker 保护、写回 |

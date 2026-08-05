@@ -47,6 +47,21 @@ class ExtractedMetadata(BaseModel):
 
     fields: dict[str, str] = {}
 
+    @field_validator("fields")
+    @classmethod
+    def _check_fields_latex(cls, value: dict[str, str]) -> dict[str, str]:
+        """动态字段按 BibTeX 语义逐值做 LaTeX 内容校验。
+
+        fields 的 key 由格式分析结果动态决定，无法用 Annotated 类型逐字段
+        声明，因此在这里统一逐值校验，拦截 JSON 反斜杠转义静默损坏
+        （如 \\rho → 回车 + ho）；BibTeX 模式下 % 是字面字符。
+        """
+        for key, item in value.items():
+            error = check_latex_text(item, bibtex=True)
+            if error:
+                raise ValueError(f"field '{key}': {error}")
+        return value
+
 
 class GenerateBibtexRequest(BaseModel):
     """BibTeX 生成请求"""

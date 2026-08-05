@@ -72,9 +72,9 @@ def safe_parse_json(text: str) -> dict[str, Any]:
     # 移除 trailing commas（对象和数组中的逗号后跟结束符号）
     text = re.sub(r",\s*([}\]])", r"\1", text)
 
-    # 替换单引号为双引号（仅替换 JSON 键/值中的单引号）
-    # 注意：不在字符串内容中错误替换
-    text = text.replace("'", '"')
+    # 替换单引号为双引号（仅替换双引号字符串之外的引号，
+    # 保留字符串内容原样，避免 author's 被改写为 author"s）
+    text = _replace_single_quotes_outside_strings(text)
 
     try:
         return json.loads(text)
@@ -83,6 +83,38 @@ def safe_parse_json(text: str) -> dict[str, Any]:
             f"Failed to parse JSON after cleanup. Original error: {e}\n"
             f"Processed text (first 500 chars): {text[:500]}"
         )
+
+
+def _replace_single_quotes_outside_strings(text: str) -> str:
+    """把双引号字符串之外的 ' 替换为 "，保留字符串内容原样。
+
+    修复 LLM 常见的单引号 JSON（如 {'name': 'test'}）时，不能对整个文本
+    全局替换——字符串内容里的 apostrophe（如 author's）是合法内容，会被
+    误改成 author"s。逐字符扫描：进入双引号字符串后原样保留（含 \\ 转义），
+    字符串外的 ' 视为 JSON 引号定界符替换为 "。
+    """
+    out: list[str] = []
+    in_string = False
+    i = 0
+    n = len(text)
+    while i < n:
+        ch = text[i]
+        if in_string:
+            out.append(ch)
+            if ch == "\\" and i + 1 < n:
+                out.append(text[i + 1])
+                i += 1
+            elif ch == '"':
+                in_string = False
+        elif ch == '"':
+            in_string = True
+            out.append(ch)
+        elif ch == "'":
+            out.append('"')
+        else:
+            out.append(ch)
+        i += 1
+    return "".join(out)
 
 
 def validate_model(data: dict[str, Any], model_cls: Type[T]) -> T:

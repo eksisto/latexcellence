@@ -35,6 +35,7 @@ latexcellence/
 │   │   ├── time_utils.py            # 时间工具：当前日期/时间/星期格式化
 │   │   ├── latex_parser.py          # LaTeX 源码↔纯文本转换（Marker 保护）
 │   │   ├── latex_json_guard.py      # LaTeX×JSON 转义防护（内容校验器，跨模块共享）
+│   │   ├── latex_literals.py        # LaTeX 字面内容识别（逐字命令/URL 参数，parser 与 guard 共享）
 │   │   ├── compile_error_translator.py  # LaTeX 编译错误 LLM 翻译（compile + git_diff 复用）
 │   │   ├── latexindent_utils.py     # latexindent.pl 调用封装（code_review 使用）
 │   │   ├── builtin_formatter.py     # 内置轻量 LaTeX 格式化器（latexindent 不可用时兜底）
@@ -142,6 +143,8 @@ latexcellence/
 - **JSON Validation Pipeline**:
     - `safe_parse_json()` → Pydantic `.model_validate()` → `retry_with_validation()` (最多 3 次重试 + 错误反馈)
     - `latex_json_guard.py` 提供字段级 LaTeX 内容校验（`LatexText` / `check_latex_text()`），拦截 JSON 反斜杠转义静默损坏
+    - `latex_literals.py` 统一逐字命令（`\verb`/`\Verb`/`\lstinline`/`\mintinline`）、逐字环境与 URL 参数的识别，
+      latex_parser（Marker 化）、latex_json_guard（剥离校验）与分隔符协议提取器（跳过逐字内容中的 `<<<END>>>`）共用同一策略
     - 分隔符协议（非 JSON）路径使用 `relaxed=True` 宽松模式（放行 `\t` / `\r` 合法 LaTeX 空白，错误归因不再提示 JSON 转义）
     - marker 模块（typo_check / expression_opt / paragraph_translate）输出字段挂 `LatexTextLite` 轻量校验（只拦控制字符与垃圾占位符，不查配平，避免残余结构误报），`base_paragraph_check` 在模型校验后另有轻量兜底
     - 逐字类内容（`\verb`/`\Verb`/`\lstinline`/`\mintinline`/`alltt` 等）与 URL 参数按字面剥离（含嵌套花括号），错误归因按类型分诊（控制字符 / 配平 / 占位符）

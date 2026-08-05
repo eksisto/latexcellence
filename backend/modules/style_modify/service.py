@@ -15,7 +15,6 @@ LaTeX 样式修改业务逻辑。
       失败时回喂 LLM 重试。
 """
 
-import re
 from typing import Any
 
 from backend.core.config import get_config
@@ -23,9 +22,9 @@ from backend.core.llm_client import get_llm_client
 from backend.core.logger import get_logger
 from backend.core.prompts import get_prompt
 from backend.utils.latex_json_guard import validate_latex_field
+from backend.utils.latex_literals import extract_delimited_block
 
 # 分隔符协议：LaTeX 以纯文本形式夹在标记之间，避免 JSON 反斜杠转义损坏
-_LATEX_BLOCK_RE = re.compile(r"<<<LATEX>>>(.*?)<<<END>>>", re.DOTALL | re.IGNORECASE)
 _MAX_RETRIES = 3
 
 
@@ -124,8 +123,12 @@ class StyleModifyService:
 
     @staticmethod
     def _extract_latex_block(response_text: str) -> str | None:
-        """提取 <<<LATEX>>>...<<<END>>> 块；缺失返回 None。"""
-        match = _LATEX_BLOCK_RE.search(response_text)
-        if not match:
+        """提取 <<<LATEX>>>...<<<END>>> 块；缺失返回 None。
+
+        逐字内容（\\verb / \\lstinline 等）中的 <<<END>>> 不是协议结束，
+        提取由 latex_literals.extract_delimited_block 统一处理。
+        """
+        block = extract_delimited_block(response_text, "<<<LATEX>>>", "<<<END>>>")
+        if block is None:
             return None
-        return match.group(1).strip()
+        return block.strip()

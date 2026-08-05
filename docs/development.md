@@ -64,6 +64,7 @@ latexcellence/
 │   │   ├── json_utils.py           # LLM JSON 输出解析/校验/重试
 │   │   ├── latex_json_guard.py     # LaTeX×JSON 转义防护（内容校验，跨模块共享）
 │   │   ├── latex_parser.py         # LaTeX → 纯文本（Marker 保护）
+│   │   ├── latex_literals.py       # LaTeX 字面内容识别（逐字命令/URL 参数，parser 与 guard 共享）
 │   │   ├── tex_compile.py          # 统一 TeX 编译执行（texfot 过滤 + 引擎自动检测 + PDF/A 支持）
 │   │   ├── compile_error_translator.py  # 编译错误 LLM 翻译（compile + git_diff 复用）
 │   │   ├── latexindent_utils.py    # latexindent.pl 调用封装

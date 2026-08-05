@@ -24,7 +24,11 @@ LaTeX 文本提取与位置映射模块。
     - 转义字符（\\& \\% \\_ \\# 等）：替换为 marker
     - \\include / \\input 多层嵌套：由 project_manager 处理，本模块不涉及
     - 中英文混合（UTF-8）：正常按字符处理
-    - \\verb / \\verb* / \\lstinline / \\lstinline* 内联逐字：整体替换为 marker
+    - \\verb / \\verb* / \\Verb / \\Verb* / \\lstinline / \\lstinline* /
+      \\mintinline 内联逐字：整体替换为 marker（支持数字等任意非字母定界符、
+      \\lstinline 可选参数 [options]、fancyvrb \\Verb 跨行内容）
+    - \\url / \\path / \\href 参数：在注释替换之前整体替换为 marker，
+      URL 中的 %20 不会被误当作注释起点
     - 控制符号（\\? \\' \\" \\7 \\~{n}、\\ + 换行、未配对 \\[ \\( 等）：替换为 marker
     - 行内数学 $...$ 非贪婪匹配；不成对的 $ 保持原文（合法 LaTeX 中 $ 必须写作 \\$，
       由转义字符规则处理，如 \\$500 不会进入数学匹配）
@@ -33,11 +37,25 @@ LaTeX 文本提取与位置映射模块。
 import re
 
 from backend.core.logger import get_logger
+from backend.utils.latex_literals import (
+    URL_CMD_START_RE,
+    find_literal_spans,
+    find_matching_brace,
+)
 
 # ── protected environments: entire block → single marker ──────────────────
 
-# 仅能含字面 % 的逐字类环境（必须在注释替换之前保护）
-_VERBATIM_ENVS = ["verbatim", "lstlisting"]
+# 仅能含字面 % 的逐字类环境（必须在注释替换之前保护）。
+# 与 latex_json_guard 的逐字环境列表保持一致（含 fancyvrb Verbatim 等）。
+_VERBATIM_ENVS = [
+    "verbatim",
+    "verbatim*",
+    "Verbatim",
+    "lstlisting",
+    "minted",
+    "comment",
+    "alltt",
+]
 
 _PROTECTED_ENVS = [
     "verbatim",
@@ -120,6 +138,26 @@ _NO_ARG_COMMANDS = {
 
 # 匹配 LaTeX marker（如 __CMD_0000__、__MATH_0001__）
 MARKER_PATTERN = re.compile(r"__[A-Z]+_\d{4,}__")
+# 提取 marker 内的 counter（创建序号）：__{PREFIX}_{counter:04d}__，
+# 用于还原时按创建顺序排序（嵌套的 marker 先创建、counter 较小）。
+_MARKER_COUNTER_RE = re.compile(r"__[A-Z]+_(\d+)__")
+
+
+def _marker_restore_key(item: tuple[str, str]) -> tuple[int, str]:
+    """marker 还原顺序键：counter 降序（外层 marker 先还原）。
+
+    counter 越大表示创建越晚；嵌套时（如 \\url 在 \\footnote{\\url{...}} 里、
+    \\verb 在 \\begin{verbatim}... 里）外层 marker 一定后创建，先还原外层、
+    让被包裹的内层 marker 出现在文本中，随后内层才能被还原。marker 是定宽
+    __{PREFIX}_{counter:04d}__，按 counter 降序同时避免短 marker 误匹配长
+    marker 前缀的问题（如 __CMD_1__ vs __CMD_1001__）。非标准 marker
+    回退为长度降序，保持防御性。
+    """
+    marker, _ = item
+    match = _MARKER_COUNTER_RE.match(marker)
+    if match:
+        return (-int(match.group(1)), marker)
+    return (-len(marker), marker)
 
 
 class LatexParser:
@@ -145,21 +183,23 @@ class LatexParser:
         将 LaTeX 源码转换为带 marker 的纯文本。
 
         流程：
-            1. 替换 \\verb / \\lstinline 内联逐字（含分隔符与花括号形式）
-            2. 替换逐字类环境（verbatim / lstlisting，可含字面 %）
-            3. 将注释替换为 marker（原子化捕获注释内所有内容）
-            4. 替换受保护环境（equation, table, tikzpicture 等）
-            5. 替换展示数学模式（$$...$$, \\[...\\]）
-            6. 替换行内数学模式（$...$, \\(...\\)）
-            7. 替换剩余 LaTeX 命令
-            8. 规范化空白
+            1. 替换内联逐字（\\verb / \\Verb / \\lstinline / \\mintinline，
+               含数字定界符、可选参数与跨行 \\Verb）
+            2. 替换 \\url / \\path / \\href 参数（URL 中的 % 是字面字符）
+            3. 替换逐字类环境（verbatim / Verbatim / lstlisting 等，可含字面 %）
+            4. 将注释替换为 marker（原子化捕获注释内所有内容）
+            5. 替换受保护环境（equation, table, tikzpicture 等）
+            6. 替换展示数学模式（$$...$$, \\[...\\]）
+            7. 替换行内数学模式（$...$, \\(...\\)）
+            8. 替换剩余 LaTeX 命令
+            9. 规范化空白
 
         行内数学 $...$ 采用非贪婪匹配，不因空格收紧匹配条件；
         合法的美元符号是 \\$（由转义字符规则处理），裸 $ 不配对时保持原文。
 
-        注意：注释替换（第 3 步）在环境/数学/命令（第 4-7 步）之前，
-        确保注释内的 LaTeX 结构不被单独提取。逐字类环境（第 2 步）
-        在注释之前，因其内部可含字面 %。
+        注意：注释替换（第 4 步）在环境/数学/命令（第 5-8 步）之前，
+        确保注释内的 LaTeX 结构不被单独提取。内联逐字 / URL 参数 / 逐字类
+        环境（第 1-3 步）在注释之前，因其内部可含字面 %。
 
         参数：
             source: LaTeX 源码
@@ -173,6 +213,7 @@ class LatexParser:
         text = source
 
         text = self._replace_verb_inline(text)
+        text = self._replace_url_args(text)
         text = self._replace_protected_envs(text, _VERBATIM_ENVS)
         text = self._replace_comments(text)
         text = self._replace_protected_envs(text)
@@ -189,7 +230,10 @@ class LatexParser:
         """
         将 LLM 处理后的文本中的 marker 还原为原始 LaTeX 内容。
 
-        反序处理（长 marker 优先），避免短 marker 误匹配长 marker 的前缀。
+        按创建顺序（counter）降序还原：嵌套的 marker（如 \\url 在
+        \\footnote{\\url{...}} 里、\\verb 在 \\begin{verbatim}... 里）总是
+        先创建、被后创建的外层 marker 包裹。先还原外层，内层 marker 才会
+        出现在文本中，随后才能被正确还原；否则内层 marker 会残留为字面文本。
 
         参数：
             processed_text: LLM 返回的文本（含 marker）
@@ -199,9 +243,9 @@ class LatexParser:
             还原后的完整 LaTeX 源码
         """
         result = processed_text
-        # 按 marker 长度降序排列，避免 __CMD_10 匹配到 __CMD_1001 的前缀
+        # counter 降序 = 外层（后创建）先还原。marker 定宽，见 _marker_restore_key
         for marker, original in sorted(
-            marker_map.items(), key=lambda x: (-len(x[0]), x[0])
+            marker_map.items(), key=_marker_restore_key
         ):
             result = result.replace(marker, original)
         return result
@@ -241,29 +285,68 @@ class LatexParser:
 
     def _replace_verb_inline(self, text: str) -> str:
         """
-        替换内联逐字命令：
-            \\verb|...| / \\verb*|...|        （任意单字符分隔符）
-            \\lstinline|...| / \\lstinline*|...|（分隔符形式）
-            \\lstinline{...} / \\lstinline*{...}（花括号形式）
+        替换内联逐字命令（识别策略与 latex_json_guard 共享）：
+            \\verb|...| / \\verb*|...|            任意单字符分隔符（含数字）
+            \\Verb|...| / \\Verb*|...|            fancyvrb，内容可跨行
+            \\lstinline|...| / \\lstinline*|...|  分隔符形式（可带 [options]）
+            \\lstinline{...} / \\lstinline*{...}  花括号形式（可含嵌套花括号）
+            \\mintinline{lang}{code}              code 可含嵌套花括号
         整体替换为一个 VERB marker，逐字内容 LLM 不可见、不可修改。
-
-        分隔符为命令后第一个非字母、非 `*`、非花括号、非空白的字符；
-        内容到再次出现该分隔符为止。
         """
-        pattern = re.compile(
-            r"(?:\\verb|\\lstinline)(?:\*)?"
-            r"(?P<delim>[^A-Za-z0-9*{}\s])(?P<body>.+?)(?P=delim)"
-            r"|\\lstinline(?:\*)?\{[^{}]+\}"
+        spans = find_literal_spans(
+            text, kinds={"verb", "verb_fancy", "mintinline"}
         )
-        result = []
+        result: list[str] = []
         last_end = 0
-        for m in pattern.finditer(text):
+        for span in spans:
             marker = self._gen_marker("VERB")
-            self._marker_map[marker] = m.group(0)
-            result.append(text[last_end : m.start()])
+            self._marker_map[marker] = text[span.start : span.end]
+            result.append(text[last_end : span.start])
             result.append(marker)
-            last_end = m.end()
+            last_end = span.end
         result.append(text[last_end:])
+        return "".join(result)
+
+    def _replace_url_args(self, text: str) -> str:
+        """
+        将 \\url / \\path / \\href 的完整命令（含可选参数与全部花括号参数）
+        整体替换为 CMD marker。
+
+        必须在注释替换之前执行：URL 参数里的 %（如 %20）是字面字符，若先做
+        注释替换会把 %20b} visible $x$ 之类的内容当成注释吞掉。
+        """
+        result: list[str] = []
+        pos = 0
+        for m in URL_CMD_START_RE.finditer(text):
+            result.append(text[pos : m.start()])
+            k = m.end()
+            # 第一个参数（URL）：括号计数支持嵌套花括号与字面 \\{ / \\}
+            close = find_matching_brace(text, k - 1)
+            if close is None:
+                # URL 参数未闭合：整体原样保留，交给命令规则处理
+                result.append(text[m.start() :])
+                pos = len(text)
+                break
+            k = close + 1
+            # 继续吸收后续参数（如 \\href{url}{display} 的显示文本），
+            # 与 _replace_commands 的普通命令参数读取保持一致
+            k = self._skip_whitespace(text, k)
+            while k < len(text) and text[k] in "[{":
+                if text[k] == "[":
+                    k = self._find_matching(text, k, "[", "]") + 1
+                else:
+                    close = find_matching_brace(text, k)
+                    if close is None:
+                        k = len(text)
+                        break
+                    k = close + 1
+                k = self._skip_whitespace(text, k)
+
+            marker = self._gen_marker("CMD")
+            self._marker_map[marker] = text[m.start() : k]
+            result.append(marker)
+            pos = k
+        result.append(text[pos:])
         return "".join(result)
 
     # ── protected environments ────────────────────────────────────────────

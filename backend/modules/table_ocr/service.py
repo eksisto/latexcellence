@@ -35,10 +35,10 @@ from backend.core.logger import get_logger
 from backend.core.prompts import get_prompt
 from backend.utils.json_utils import format_validation_error
 from backend.utils.latex_json_guard import validate_latex_field
+from backend.utils.latex_literals import extract_delimited_block, remove_delimited_block
 from backend.utils.latex_package_analyzer import prepend_package_comments
 
 # 分隔符协议：LaTeX 以纯文本形式夹在标记之间，避免 JSON 反斜杠转义损坏
-_LATEX_BLOCK_RE = re.compile(r"<<<LATEX>>>(.*?)<<<END>>>", re.DOTALL | re.IGNORECASE)
 _CONFIDENCE_RE = re.compile(r"CONFIDENCE\s*:\s*([0-9]*\.?[0-9]+)", re.IGNORECASE)
 
 _MAX_OCR_RETRIES = 3
@@ -200,16 +200,22 @@ class TableOCRService:
 
     @staticmethod
     def _extract_latex_block(response_text: str) -> str | None:
-        """提取 <<<LATEX>>>...<<<END>>> 块。"""
-        match = _LATEX_BLOCK_RE.search(response_text)
-        if not match:
+        """提取 <<<LATEX>>>...<<<END>>> 块。
+
+        逐字内容（\\verb / \\lstinline 等）中的 <<<END>>> 不是协议结束，
+        提取由 latex_literals.extract_delimited_block 统一处理。
+        """
+        block = extract_delimited_block(response_text, "<<<LATEX>>>", "<<<END>>>")
+        if block is None:
             return None
-        return match.group(1).strip()
+        return block.strip()
 
     @staticmethod
     def _parse_confidence(response_text: str) -> float:
         """解析 CONFIDENCE 元数据行，缺省为 0.0（只解析 LATEX 块外的文本）。"""
-        outside_block = _LATEX_BLOCK_RE.sub("", response_text)
+        outside_block = remove_delimited_block(
+            response_text, "<<<LATEX>>>", "<<<END>>>"
+        )
         conf_match = _CONFIDENCE_RE.search(outside_block)
         if conf_match:
             return float(conf_match.group(1))
