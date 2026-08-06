@@ -1,7 +1,9 @@
 # Config with secrets
 config.json
 
-# Skill
+# Agent
+.codex/
+.claude/
 .opencode/
 opencode.json
 skills-lock.json
