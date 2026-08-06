@@ -171,6 +171,151 @@ class TestPasteWrapping:
         assert FormulaOCRService._wrap_latex_for_paste("", False) == ""
 
 
+class TestInlineReconciliation:
+    """inline/display 确定性矫正测试（视觉决策树中可由 LaTeX 结构判定的部分）。"""
+
+    def test_numbered_equation_env_is_display(self):
+        assert (
+            FormulaOCRService._reconcile_inline(
+                r"\begin{equation} E = mc^2 \end{equation}", True
+            )
+            is False
+        )
+
+    def test_tag_is_display(self):
+        assert FormulaOCRService._reconcile_inline(r"x = 1 \tag{2.3}", True) is False
+        assert FormulaOCRService._reconcile_inline(r"x = 1 \tag*{A}", True) is False
+
+    def test_unstarred_align_is_display(self):
+        assert (
+            FormulaOCRService._reconcile_inline(
+                r"\begin{align} a &= b \end{align}", True
+            )
+            is False
+        )
+
+    def test_display_only_env_is_display(self):
+        assert (
+            FormulaOCRService._reconcile_inline(
+                r"\begin{align*} a &= b \\ c &= d \end{align*}", True
+            )
+            is False
+        )
+
+    def test_multiline_aligned_is_display(self):
+        assert (
+            FormulaOCRService._reconcile_inline(
+                r"\begin{aligned} a &= b \\ c &= d \end{aligned}", True
+            )
+            is False
+        )
+
+    def test_single_line_aligned_keeps_llm_decision(self):
+        assert (
+            FormulaOCRService._reconcile_inline(
+                r"\begin{aligned} a &= b \end{aligned}", True
+            )
+            is True
+        )
+        assert (
+            FormulaOCRService._reconcile_inline(
+                r"\begin{aligned} a &= b \end{aligned}", False
+            )
+            is False
+        )
+
+    def test_displaystyle_is_display(self):
+        assert (
+            FormulaOCRService._reconcile_inline(r"\displaystyle \sum_{i=1}^n i", True)
+            is False
+        )
+
+    def test_textstyle_is_inline(self):
+        assert (
+            FormulaOCRService._reconcile_inline(r"\textstyle \sum_{i=1}^n i", False)
+            is True
+        )
+
+    def test_textstyle_does_not_override_numbered_env(self):
+        assert (
+            FormulaOCRService._reconcile_inline(
+                r"\begin{equation} \textstyle x \end{equation}", True
+            )
+            is False
+        )
+
+    def test_limits_is_display(self):
+        assert (
+            FormulaOCRService._reconcile_inline(r"\sum\limits_{i=1}^n i^2", True)
+            is False
+        )
+
+    def test_nolimits_is_inline(self):
+        assert (
+            FormulaOCRService._reconcile_inline(
+                r"\int\nolimits_0^\infty e^{-x}\,dx", False
+            )
+            is True
+        )
+
+    def test_limits_overrides_textstyle(self):
+        """\\limits 直接决定上下标的渲染位置，优先于 \\textstyle（以实际渲染为准）。"""
+        assert (
+            FormulaOCRService._reconcile_inline(
+                r"\textstyle \sum\limits_{i=1}^n i", False
+            )
+            is False
+        )
+
+    def test_nolimits_overrides_displaystyle(self):
+        assert (
+            FormulaOCRService._reconcile_inline(
+                r"\displaystyle \sum\nolimits_{i=1}^n i", True
+            )
+            is True
+        )
+
+    def test_verbatim_content_not_scanned(self):
+        """逐字内容中的 \\limits / \\displaystyle 不应触发矫正。"""
+        assert (
+            FormulaOCRService._reconcile_inline(r"\verb|\sum\limits_{i=1}^n|", True)
+            is True
+        )
+        assert (
+            FormulaOCRService._reconcile_inline(r"\verb|\displaystyle|", True) is True
+        )
+
+    def test_text_wrapper_content_not_scanned(self):
+        """文本模式包裹（\\text{...}）中的信号不应触发矫正。"""
+        assert (
+            FormulaOCRService._reconcile_inline(r"\text{\displaystyle x}", True) is True
+        )
+        assert (
+            FormulaOCRService._reconcile_inline(
+                r"\text{\begin{equation} x \end{equation}}", True
+            )
+            is True
+        )
+
+    def test_masked_content_does_not_hide_real_signals(self):
+        """屏蔽只影响字面内容，真实数学结构仍生效。"""
+        assert (
+            FormulaOCRService._reconcile_inline(
+                r"\sum\limits_{i=1}^n \text{above} + \verb|x|", True
+            )
+            is False
+        )
+
+    def test_bare_big_op_keeps_llm_decision(self):
+        """\\sum_{i=1}^n 无 \\limits/\\nolimits 时源码无法判定，保留模型结论。"""
+        assert FormulaOCRService._reconcile_inline(r"\sum_{i=1}^n i^2", True) is True
+        assert FormulaOCRService._reconcile_inline(r"\sum_{i=1}^n i^2", False) is False
+
+    def test_plain_formula_keeps_llm_decision(self):
+        assert FormulaOCRService._reconcile_inline(r"x^2 + y^2 = z^2", True) is True
+        assert FormulaOCRService._reconcile_inline(r"x^2 + y^2 = z^2", False) is False
+
+
 class TestRecognize:
     """分隔符协议识别测试（不再使用 JSON 输出）。"""
 
@@ -222,6 +367,38 @@ class TestRecognize:
 
         assert result["inline"] is False
         assert result["confidence"] == 0.0
+
+    @pytest.mark.asyncio
+    async def test_numbered_env_overrides_llm_inline(
+        self, mock_llm, service, minimal_png
+    ):
+        """LLM 误判 inline，但 LaTeX 含编号 display 环境 → 矫正为 display。"""
+        mock_llm.chat.return_value = ocr_response(
+            r"\begin{equation} E = mc^2 \end{equation}",
+            inline="true",
+            confidence="0.95",
+        )
+
+        png = minimal_png
+        result = await service._recognize_with_llm(mock_llm, png, "image/png")
+
+        assert result["latex"] == "E = mc^2"
+        assert result["inline"] is False
+
+    @pytest.mark.asyncio
+    async def test_textstyle_overrides_llm_display(
+        self, mock_llm, service, minimal_png
+    ):
+        """LLM 误判 display，但 LaTeX 显式 \\textstyle → 矫正为 inline。"""
+        mock_llm.chat.return_value = ocr_response(
+            r"\textstyle \sum_{i=1}^n i", inline="false", confidence="0.9"
+        )
+
+        png = minimal_png
+        result = await service._recognize_with_llm(mock_llm, png, "image/png")
+
+        assert result["latex"] == r"\textstyle \sum_{i=1}^n i"
+        assert result["inline"] is True
 
     @pytest.mark.asyncio
     async def test_strips_display_dollar_wrapper(self, mock_llm, service, minimal_png):

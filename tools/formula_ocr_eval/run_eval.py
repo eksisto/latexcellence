@@ -67,6 +67,13 @@ def render_report(report_path: Path, results: list[dict]) -> None:
     counts: dict[str, int] = {}
     for item in results:
         counts[item["status"]] = counts.get(item["status"], 0) + 1
+    inline_mismatch = sum(
+        1
+        for item in results
+        if item["status"] == "ok"
+        and item.get("expected_inline") is not None
+        and item.get("result_inline") != item.get("expected_inline")
+    )
 
     by_tier: dict[int, list[dict]] = {}
     for item in results:
@@ -114,6 +121,7 @@ def render_report(report_path: Path, results: list[dict]) -> None:
 <div class="summary">
   生成时间：{now}<br>
   共 {len(results)} 条：识别成功 {counts.get("ok", 0)}，空结果 {counts.get("empty", 0)}，失败 {counts.get("error", 0)}，结果渲染失败 {counts.get("render_error", 0)}<br>
+  inline/display 判定与语料不一致：{inline_mismatch} 条<br>
   <span style="color:#888">说明：左侧为语料原公式渲染图，右侧为 OCR 识别结果渲染图；人工对比两图即可判断识别质量。</span>
 </div>
 {''.join(sections)}
@@ -129,11 +137,23 @@ def _card_html(item: dict) -> str:
     title = item["title"] or item["id"]
     conf = item.get("confidence")
     conf_text = f"{conf:.2f}" if conf is not None else "-"
+    expected = item.get("expected_inline")
+    expected_text = (
+        f"预期: {'行内' if expected else '展示'}" if expected is not None else ""
+    )
+    mismatch = (
+        item["status"] == "ok"
+        and expected is not None
+        and item.get("result_inline") != expected
+    )
+    mismatch_html = (
+        '<span style="color:#c0392b"> · inline 判定不一致</span>' if mismatch else ""
+    )
     meta = (
         f'<div class="meta">'
         f'{html.escape(item["id"])} · 置信度 {conf_text} · '
-        f'行内: {"是" if item.get("result_inline") else "否"}'
-        f"</div>"
+        f'行内: {"是" if item.get("result_inline") else "否"} · {expected_text}'
+        f"{mismatch_html}</div>"
     )
     latex_text = html.escape(item.get("latex", ""))
     if item.get("error"):
@@ -204,6 +224,7 @@ async def main_async(args: argparse.Namespace) -> int:
             "tier_name": entry["tier_name"],
             "title": entry["title"],
             "expected_latex": tex,
+            "expected_inline": entry["inline"],
             "status": "error",
         }
         print(f"[ocr] {entry['id']} ...", flush=True)

@@ -6,7 +6,11 @@
     2. 预处理：超过 2000px 的边等比缩放到 2000px
     3. 转为 base64 发送给 LLM Vision API（第一次 LLM 调用）
     4. 模型按分隔符协议输出 LaTeX（<<<LATEX>>>...<<<END>>> + INLINE/CONFIDENCE），
-       后端提取并做内容校验（控制字符 / 垃圾占位符 / 花括号与 $ 配平）
+       模型按视觉决策树（编号 / 多行对齐 / 算子上下标位置 / 积分形态 / 分式大小 /
+       矩阵舒展度）给出 inline 判定，后端再按 LaTeX 结构确定性矫正
+       （公式编号 / 多行对齐环境；\\limits / \\nolimits 优先于 \\displaystyle /
+       \\textstyle，按实际渲染为准），最后做内容校验（控制字符 / 垃圾占位符 /
+       花括号与 $ 配平）
     5. 调用 LaTeX 宏包分析器（第二次 LLM 调用），将宏包注释前置后返回
 
 设计说明：
@@ -29,12 +33,82 @@ from backend.core.logger import get_logger
 from backend.core.prompts import get_prompt
 from backend.utils.json_utils import format_validation_error
 from backend.utils.latex_json_guard import validate_latex_field
-from backend.utils.latex_literals import extract_delimited_block
+from backend.utils.latex_literals import (
+    blank_literal_spans,
+    extract_delimited_block,
+    find_matching_brace,
+)
 from backend.utils.latex_package_analyzer import prepend_package_comments
 
 # 分隔符协议：LaTeX 以纯文本形式夹在标记之间，避免 JSON 反斜杠转义损坏
 _INLINE_RE = re.compile(r"INLINE\s*:\s*(true|false)", re.IGNORECASE)
 _CONFIDENCE_RE = re.compile(r"CONFIDENCE\s*:\s*([0-9]*\.?[0-9]+)", re.IGNORECASE)
+
+# ── inline/display 确定性矫正（与 vision prompt 中的视觉决策树一致）──
+# 公式编号：未带 * 的 display 环境默认带编号，或显式 \tag → display
+_NUMBERED_DISPLAY_ENV_RE = re.compile(
+    r"\\begin\{(equation|align|alignat|flalign|gather|multline|eqnarray)\}(?!\*)"
+)
+_TAG_RE = re.compile(r"\\tag\*?\{")
+
+# 只能用于 display mode 的环境：出现在公式中即为 display（不可合法出现在 $...$ 内）
+_DISPLAY_ONLY_ENV_RE = re.compile(
+    r"\\begin\{(equation\*|displaymath|align\*|alignat\*|flalign\*|gather\*|"
+    r"multline\*|eqnarray\*)\}"
+)
+
+# 多行对齐的内层环境（可合法用于行内，但多行 + 对齐按规则判 display）
+_MULTILINE_ALIGN_ENV_RE = re.compile(
+    r"\\begin\{(aligned|gathered|split|alignedat|lgathered|rgathered)\}"
+)
+
+# 显式样式命令：作者强制 \displaystyle（展示样式）或 \textstyle（行内样式）
+_DISPLAYSTYLE_RE = re.compile(r"\\displaystyle")
+_TEXTSTYLE_RE = re.compile(r"\\textstyle")
+
+# 文本模式包裹命令：\text 及同类、\mbox/\hbox 等，参数不是数学结构
+_TEXT_WRAPPER_CMDS = (
+    "text",
+    "textnormal",
+    "textrm",
+    "textit",
+    "textbf",
+    "textsf",
+    "texttt",
+    "textsc",
+    "textup",
+    "textsl",
+    "mbox",
+    "hbox",
+)
+_TEXT_WRAPPER_RE = re.compile(r"\\(?:" + "|".join(_TEXT_WRAPPER_CMDS) + r")\{")
+
+# 大型运算符的显式上下标位置：\limits（正上下方→display）/ \nolimits（右侧→inline）
+_BIG_OP_LIMITS_RE = re.compile(
+    r"\\(sum|prod|coprod|int|iint|iiint|iiiint|oint|oiint|oiiint|"
+    r"lim|limsup|liminf|max|min|sup|inf|bigcup|bigcap|bigsqcup|"
+    r"bigoplus|bigotimes|bigodot|bigvee|bigwedge)\s*\\limits"
+)
+_BIG_OP_NOLIMITS_RE = re.compile(
+    r"\\(sum|prod|coprod|int|iint|iiint|iiiint|oint|oiint|oiiint|"
+    r"lim|limsup|liminf|max|min|sup|inf|bigcup|bigcap|bigsqcup|"
+    r"bigoplus|bigotimes|bigodot|bigvee|bigwedge)\s*\\nolimits"
+)
+
+
+def _blank_text_wrappers(latex: str) -> str:
+    """剔除文本模式包裹命令的整个参数（\\text{...} / \\mbox{...} 等）。"""
+    parts: list[str] = []
+    pos = 0
+    for m in _TEXT_WRAPPER_RE.finditer(latex):
+        close = find_matching_brace(latex, m.end() - 1)
+        if close is None:
+            continue
+        parts.append(latex[pos : m.start()])
+        pos = close + 1
+    parts.append(latex[pos:])
+    return "".join(parts)
+
 
 # 自带显示模式的顶层环境：复制时不再额外包裹（aligned/cases/matrix 等内层环境仍需包裹）
 _STANDALONE_DISPLAY_ENV_RE = re.compile(
@@ -148,13 +222,15 @@ class FormulaOCRService:
                     temperature=0.1,
                     max_tokens=4096,
                 )
-                latex = self._extract_latex_block(response_text)
-                if latex is None:
+                raw_block = self._extract_latex_block(response_text)
+                if raw_block is None:
                     raise ValueError(
                         "Response did not contain a <<<LATEX>>>...<<<END>>> block. "
                         "Output the LaTeX code strictly between those two markers."
                     )
+                latex = self._strip_math_wrappers(raw_block)
                 inline, confidence = self._parse_metadata(response_text)
+                inline = self._reconcile_inline(raw_block, inline)
                 validated = FormulaOCRResult(
                     latex=latex, inline=inline, confidence=confidence
                 )
@@ -198,15 +274,16 @@ class FormulaOCRService:
         )
 
     def _extract_latex_block(self, response_text: str) -> str | None:
-        """提取 <<<LATEX>>>...<<<END>>> 块，并剥离误加的数学包裹。
+        """提取 <<<LATEX>>>...<<<END>>> 原始块（数学包裹由调用方剥离）。
 
-        逐字内容（\\verb / \\lstinline 等）中的 <<<END>>> 不是协议结束，
-        提取由 latex_literals.extract_delimited_block 统一处理。
+        返回原始内容而非剥离结果，便于 inline/display 矫正识别模型误加的
+        编号环境等结构。逐字内容（\\verb / \\lstinline 等）中的 <<<END>>> 不是
+        协议结束，提取由 latex_literals.extract_delimited_block 统一处理。
         """
         block = extract_delimited_block(response_text, "<<<LATEX>>>", "<<<END>>>")
         if block is None:
             return None
-        return self._strip_math_wrappers(block.strip())
+        return block.strip()
 
     @staticmethod
     def _strip_math_wrappers(latex: str) -> str:
@@ -242,6 +319,40 @@ class FormulaOCRService:
         if conf_match:
             confidence = float(conf_match.group(1))
         return inline, confidence
+
+    @staticmethod
+    def _reconcile_inline(latex: str, inline: bool) -> bool:
+        """按 LaTeX 结构确定性矫正 LLM 的 inline 判定（不依赖模型）。
+
+        与 vision prompt 中的视觉决策树一致，只矫正可由源码判定的部分：
+        - 有公式编号（未带 * 的 display 环境、\\tag）→ display
+        - 只能用于 display mode 的环境（equation*/align*/gather* 等）→ display
+        - 多行对齐内层环境（aligned/gathered/split 等且含 \\\\ 换行）→ display
+        - 大型运算符显式 \\limits → display；\\nolimits → inline（优先于样式命令，
+          因为它们直接决定上下标的实际渲染位置）
+        - 显式 \\displaystyle → display；显式 \\textstyle → inline
+        扫描前先屏蔽逐字内容（\\verb / \\lstinline / verbatim 环境 / URL）与文本
+        模式包裹（\\text / \\mbox 等），避免字面字符串触发误判。其余视觉特征
+        （积分号形态、分式大小、矩阵舒展度等）保留模型判断。
+        """
+        # 逐字内容与文本模式包裹不是数学结构，不参与 inline/display 判定
+        scan = _blank_text_wrappers(blank_literal_spans(latex))
+
+        if _NUMBERED_DISPLAY_ENV_RE.search(scan) or _TAG_RE.search(scan):
+            return False
+        if _DISPLAY_ONLY_ENV_RE.search(scan):
+            return False
+        if _MULTILINE_ALIGN_ENV_RE.search(scan) and r"\\" in scan:
+            return False
+        if _BIG_OP_LIMITS_RE.search(scan):
+            return False
+        if _BIG_OP_NOLIMITS_RE.search(scan):
+            return True
+        if _DISPLAYSTYLE_RE.search(scan):
+            return False
+        if _TEXTSTYLE_RE.search(scan):
+            return True
+        return inline
 
     @staticmethod
     def _wrap_latex_for_paste(latex: str, inline: bool) -> str:

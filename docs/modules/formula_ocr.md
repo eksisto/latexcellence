@@ -16,6 +16,39 @@ CONFIDENCE: <0-1>
 
 后端用正则提取 `<<<LATEX>>>...<<<END>>>` 块，解析 `INLINE` / `CONFIDENCE` 元数据（缺省为 `false` / `0.0`），并自动剥离模型误加的 `$$...$$`、`\[...\]`、`\(...\)`、`$...$` 数学包裹。
 
+## inline / display 判定（视觉决策树 + 结构矫正）
+
+`INLINE` 由 Vision 模型按视觉决策树分类，后端再按 LaTeX 结构做确定性矫正（`_reconcile_inline`）——优先级最高的前两条与可源码判定的规则不依赖模型：
+
+| 优先级 | 视觉规则（模型判断） | 结论 |
+| --- | --- | --- |
+| 1 | 公式带编号（如 `(1)`、`(2.3)`） | display |
+| 2 | 多行且等号/箭头上下对齐 | display |
+| 3 | `\sum`/`\prod`/`\int`/`\lim`/`\max`/`\min` 上下标在正上下方 | 倾向 display |
+| 4 | 上下标在符号右侧（如 `\sum_{i=1}^n` 上下标在右） | 倾向 inline |
+| 5 | 积分号大、上下限在正上下方 | 倾向 display |
+| 6 | 积分号小、上下限在右侧 | 倾向 inline |
+| 7 | 分式大、多层嵌套清晰 | 倾向 display |
+| 8 | 分式小、嵌套明显压缩 | 倾向 inline |
+| 9 | 矩阵行距自然、大括号舒展 | 倾向 display |
+| 10 | 矩阵行距紧凑、大括号拥挤 | 倾向 inline |
+| 11 | 特征冲突时考虑作者是否强制 `\displaystyle` / `\textstyle` | 按实际渲染判断 |
+
+后端 `_reconcile_inline()` 的确定性矫正规则（优先级从高到低）：
+
+- 公式编号（未带 `*` 的 `equation`/`align`/`gather`/`multline`/`eqnarray` 环境、显式 `\tag`）→ display
+- 只能用于 display mode 的环境（`equation*`/`align*`/`gather*`/`multline*` 等）→ display
+- 多行对齐内层环境（`aligned`/`gathered`/`split` 等且含 `\\` 换行）→ display
+- 大型运算符显式 `\limits` → display；`\nolimits` → inline
+- 显式 `\displaystyle` → display；显式 `\textstyle` → inline
+- 其余视觉特征（积分号形态、分式大小、矩阵舒展度等）保留模型判断
+
+`\limits` / `\nolimits` 优先于样式命令：它们直接决定上下标的实际渲染位置（如 `\textstyle \sum\limits` 渲染后上下标仍在正上下方），与"以实际渲染为准"一致。
+
+矫正扫描前先用 `latex_literals` 屏蔽逐字内容（`\verb` / `\lstinline` / verbatim 环境 / URL）与文本模式包裹（`\text` / `\mbox` 等），避免字面字符串中的 `\limits`、`\displaystyle`、`\begin{equation}` 触发误判。
+
+矫正发生在数学包裹剥离**之前**（基于 `<<<LATEX>>>` 原始块），因此模型误加的 `\begin{equation}` 等编号环境也能正确判为 display；包裹剥离后再按矫正结果做确定性 `$...$` / `\[...\]` 包裹。
+
 ## 复制即贴即显（确定性包裹）
 
 LLM 自身加显示包裹极不可靠（测试时，输出有带 `$$`、有裸公式、有 `gather*`，且与 `inline` 标志矛盾），因此包裹由后端**确定性**添加，不依赖 LLM：
@@ -52,6 +85,7 @@ LLM 自身加显示包裹极不可靠（测试时，输出有带 `$$`、有裸�
 | `_extract_latex_block` | 正则提取 `<<<LATEX>>>...<<<END>>>` 块 |
 | `_strip_math_wrappers` | 剥离 `$$` / `\[ \]` / `\( \)` / `$` 数学包裹 |
 | `_parse_metadata` | 解析 `INLINE` / `CONFIDENCE` 元数据 |
+| `_reconcile_inline` | 按 LaTeX 结构确定性矫正 inline/display（编号 / 多行对齐 / 显式上下标位置与样式命令，先屏蔽逐字与文本内容） |
 | `_wrap_latex_for_paste` | 按 `inline` 标志确定性添加 `$...$` / `\[...\]` 包裹（完整显示环境除外） |
 | `_preprocess` | 检查文件大小，超 2000px 等比缩放（LANCZOS 重采样） |
 | `_to_base64` | PIL Image → JPEG base64 |
