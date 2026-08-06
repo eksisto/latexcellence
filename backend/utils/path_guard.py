@@ -15,7 +15,7 @@
 """
 
 import os
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 
 from backend.core.logger import get_logger
 
@@ -53,7 +53,10 @@ def resolve_project_path(
     if "\x00" in file_path:
         raise ValueError("file_path contains illegal characters")
 
-    if os.path.isabs(file_path):
+    # 跨平台绝对路径判断：os.path.isabs 只识别当前平台的绝对路径（Linux 上是
+    # POSIX /...，Windows 上是盘符/UNC），需叠加 PureWindowsPath 覆盖 Windows
+    # 风格绝对路径（C:/...、C:\...、\\server\share\...），防止跨平台走私绕过。
+    if os.path.isabs(file_path) or PureWindowsPath(file_path).is_absolute():
         raise ValueError("file_path must not be an absolute path")
 
     if ".." in Path(file_path).parts:

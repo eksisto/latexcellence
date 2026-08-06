@@ -58,9 +58,17 @@ class TestResolveProjectPath:
         with pytest.raises(ValueError, match="illegal characters"):
             resolve_project_path(project_root, "main\x00.tex")
 
-    def test_absolute_path_rejected(self, project_root):
+    @pytest.mark.parametrize(
+        "evil_path",
+        [
+            "C:/secret.tex",  # Windows 盘符，正斜杠
+            r"C:\secret.tex",  # Windows 盘符，反斜杠
+            r"\\server\share\secret.tex",  # UNC
+        ],
+    )
+    def test_absolute_path_rejected(self, project_root, evil_path):
         with pytest.raises(ValueError, match="must not be an absolute path"):
-            resolve_project_path(project_root, "C:/secret.tex")
+            resolve_project_path(project_root, evil_path)
 
     def test_dotdot_rejected(self, project_root):
         with pytest.raises(ValueError, match="must not contain"):

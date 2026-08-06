@@ -449,6 +449,22 @@ class TestPathTraversal:
         with pytest.raises(ValueError, match="must not be an absolute path"):
             project.get_paragraphs("C:/secret.tex")
 
+    @pytest.mark.parametrize(
+        "evil_path",
+        [
+            r"C:\secret.tex",  # Windows 盘符，反斜杠
+            r"\\server\share\secret.tex",  # UNC
+        ],
+    )
+    def test_get_paragraphs_cross_platform_absolute_rejected(
+        self, temp_project, evil_path
+    ):
+        """Windows 风格绝对路径在 Linux 上也应被拦截，防止跨平台走私。"""
+        project = LatexProject()
+        project.open(str(temp_project))
+        with pytest.raises(ValueError, match="must not be an absolute path"):
+            project.get_paragraphs(evil_path)
+
     def test_get_paragraphs_non_tex_rejected(self, temp_project):
         project = LatexProject()
         project.open(str(temp_project))
