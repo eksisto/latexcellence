@@ -238,8 +238,14 @@ class ResearchManager:
                     "parameters": {
                         "type": "object",
                         "properties": {
-                            "query": {"type": "string", "description": "Search keyword"},
-                            "year_from": {"type": "integer", "description": "Start year"},
+                            "query": {
+                                "type": "string",
+                                "description": "Search keyword",
+                            },
+                            "year_from": {
+                                "type": "integer",
+                                "description": "Start year",
+                            },
                             "year_to": {"type": "integer", "description": "End year"},
                             "authors": {
                                 "type": "array",
@@ -360,7 +366,10 @@ class ResearchManager:
                     "parameters": {
                         "type": "object",
                         "properties": {
-                            "query": {"type": "string", "description": "Research topic"},
+                            "query": {
+                                "type": "string",
+                                "description": "Research topic",
+                            },
                             "resource_type": {
                                 "type": "string",
                                 "enum": ["dataset"],

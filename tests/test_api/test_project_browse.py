@@ -99,7 +99,9 @@ class TestOpenProjectCaseInsensitive:
     def test_open_case_insensitive(self, client, tmp_path):
         real = tmp_path / "MyProject"
         real.mkdir()
-        (real / "main.tex").write_text(r"\documentclass{article}\begin{document}hi\end{document}")
+        (real / "main.tex").write_text(
+            r"\documentclass{article}\begin{document}hi\end{document}"
+        )
         wrong_case = tmp_path / "myproject"
 
         resp = client.post(

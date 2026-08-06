@@ -70,10 +70,7 @@ class TableOCRResult(BaseModel):
                     "(image is not a table)"
                 )
             return self
-        if (
-            "\\begin{table}" not in self.latex
-            and "\\begin{table*}" not in self.latex
-        ):
+        if "\\begin{table}" not in self.latex and "\\begin{table*}" not in self.latex:
             raise ValueError(
                 "latex is missing the required \\begin{table} float environment"
             )

@@ -169,7 +169,9 @@ async def recommend_chart_plan(
     if pairs:
         lines = []
         for other, cat in pairs[:3]:
-            lines.append(f"- {other} x {cat}: one row per cell (rows == unique product)")
+            lines.append(
+                f"- {other} x {cat}: one row per cell (rows == unique product)"
+            )
         hint_text = (
             "\n\nREDUNDANCY HINT:\n"
             + "\n".join(lines)

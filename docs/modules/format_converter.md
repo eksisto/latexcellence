@@ -47,20 +47,24 @@ Prefix: `/api/format-converter`, Tag: `format_converter`
 ### 请求/响应格式
 
 **`POST /convert`**（向后兼容）
+
 ```json
 { "markdown": "# Hello" }
 → { "latex": "\\section{Hello}" }
 ```
 
 **`POST /convert-text`**
+
 ```json
 { "text": "<b>bold</b>", "source_format": "html", "target_format": "latex" }
 → { "result": "\\textbf{bold}" }
 ```
 
 **`POST /convert-file`**（multipart/form-data）
+
 - Body: `file` 字段
 - Query: `source_format`, `target_format`
+
 ```json
 → { "result": "...", "output_filename": "document.tex" }
 ```

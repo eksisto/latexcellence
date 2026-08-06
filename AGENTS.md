@@ -46,6 +46,7 @@ pytest tests/ -v
 - **描述**：用中文，简洁明了
 
 示例：
+
 ```
 feat: 多工作区支持 + 配置清理
 fix(compile): 修复 latexmk 超时后子进程泄漏问题
@@ -59,12 +60,14 @@ refactor: 消除外部模块对私有属性的直接访问
 ### 1. Marker 保护（防止 AI 改坏 LaTeX）
 
 与 LLM 交互时，LaTeX 结构必须替换为 marker（`__CMD_0000__` / `__MATH_0000__` 等）。
+
 - **Prompt 约束**：必须在 System Prompt 中强约束 LLM：“**绝对禁止修改、删除或拆分任何 marker，只能修改纯文本**”。
 - **还原逻辑**：调用 `LatexParser.restore_from_markers()` 时，**必须按 marker 长度从长到短还原**，防止短的误匹配长的
 
 ### 2. JSON 输出校验流程
 
 LLM 输出**必须**经过 `json_utils.py` 的 `retry_with_validation()` 处理：
+
 1. `safe_parse_json()` 容错解析（去 markdown 围栏、尾逗号、单引号）
 2. Pydantic `.model_validate()` 严格校验
 3. 失败时，用 `format_validation_error()` 将错误格式化后反馈给 LLM 重试（最多 3 次）
@@ -152,6 +155,7 @@ LLM 输出的 LaTeX 文本（经 JSON 传输或写盘前）**必须**使用 `bac
 原因：项目结构会频繁变化，硬编码的数字极易过时，每次增删模块都需要同步修改文档中的数字，维护成本高且容易遗漏。
 
 **正确做法**：
+
 - 使用模糊描述替代具体数字：`多个`、`若干`、`各` 等
 - 或直接省略数量描述，只列出类型/目录结构
 - 需要精确数量时，应通过脚本动态统计而非手动写死
@@ -177,6 +181,7 @@ LLM 输出的 LaTeX 文本（经 JSON 传输或写盘前）**必须**使用 `bac
 ### 前端错误消息翻译规则
 
 前端**必须**将所有后端返回的英文错误消息翻译为当前语言后再展示给用户：
+
 - **HTTP 请求层**：`api/index.js` 的 `request()` 已统一通过 `translateError()` 翻译错误。
 - **SSE 流**：`useParagraphCheck` / `useWritingChat` 等 hook 中 SSE 返回的 `data.message` 必须手动调用 `translateError()` 翻译。
 - **响应体字段**：API 响应 JSON 中嵌套的错误字段（如 `result.errors[].reason`）**不经过 `request()` 拦截**，必须在消费处手动调用 `translateError()` 翻译。

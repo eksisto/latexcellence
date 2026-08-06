@@ -18,7 +18,6 @@ from backend.modules.paragraph_translate.service import (
     TranslateChangeItem,
 )
 
-
 # ── Pydantic model tests ───────────────────────────────────────────────────
 
 

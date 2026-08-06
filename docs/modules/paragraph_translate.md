@@ -21,6 +21,7 @@
 ## Prompt 设计
 
 System prompt 包含：
+
 - 学术翻译要求（准确性 > 流畅性 > 简洁性、术语一致、正式学术语气）
 - Marker 保护规则（禁止修改/删除/拆分任何 marker）
 - 严格 JSON 输出格式（paragraph_index, original, translated, changes）
@@ -80,6 +81,7 @@ Prefix: `/api/paragraph-translate`, Tag: `paragraph_translate`
 页面 `ParagraphTranslatePage.jsx` 复用 `useParagraphCheck` hook，与其他逐段检查页面共享相同的交互模式：文件选择 → 段落预览 → 翻译 → 审核结果 → 逐项/批量应用。
 
 额外功能：
+
 - 目标语言选择（支持多种语言）
 - 翻译结果中原文与译文对照展示
 - 多文件模式下按文件 Tab 分组显示

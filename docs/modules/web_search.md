@@ -24,6 +24,7 @@
 `BaseSearchEngine`：`search(query, max_results)` / `health_check()`
 
 内置引擎：
+
 - **DuckDuckGo Html**：通过 POST 访问 `html.duckduckgo.com/html/`，模拟浏览器行为（Chrome UA + Sec-Fetch 头）。DDG 触发 challenge 时返回 HTTP 202，引擎解析 challenge 图片并抛出异常向上传播，前端展示验证码由用户手动提交。
 - **SearXNG**：通过 JSON API 执行搜索，无需验证码，适合自建实例。
 - **Mock**：空结果，用于测试和降级。

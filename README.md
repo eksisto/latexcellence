@@ -116,9 +116,9 @@ python main.py config.json
 
 1. 打开本地 LaTeX 项目目录
 2. 选择 .tex 文件，系统解析段落
-    - 开启 `包含子文件` 后，自动递归展开 `\input`/`\include` 引用的子文件
+   - 开启 `包含子文件` 后，自动递归展开 `\input`/`\include` 引用的子文件
 3. LLM 在纯文本上执行校对/优化
-    - LaTeX 结构被替换为不可见的 marker，LLM 不能修改它们
+   - LaTeX 结构被替换为不可见的 marker，LLM 不能修改它们
 4. 用户审核 diff 结果，逐项确认
 5. 确认后，系统将 marker 还原为 LaTeX 并原子性写回源文件
 

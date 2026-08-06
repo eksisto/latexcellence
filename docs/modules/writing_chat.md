@@ -24,9 +24,9 @@ RS2 不直接写回 `.tex`，用户再点"应用到 .tex"才调用 `project_mana
 
 - `EditOp` — 编辑操作（file_path, paragraph_index, original_latex, new_latex, diff_text, applied）
 - `ChatMessage` — 聊天消息（id, role, content, tokens, edit_op, compressed, snapshot, tool_calls, tool_call_id 等）
-    - `role` 中 tool 角色用于持久化工具调用结果
-    - `tool_calls`（仅 assistant 角色）：LLM 请求调用的工具列表（OpenAI tool_calls 格式）
-    - `tool_call_id`（仅 tool 角色）：关联到触发该结果的工具调用 ID
+  - `role` 中 tool 角色用于持久化工具调用结果
+  - `tool_calls`（仅 assistant 角色）：LLM 请求调用的工具列表（OpenAI tool_calls 格式）
+  - `tool_call_id`（仅 tool 角色）：关联到触发该结果的工具调用 ID
 - RS2 无独立 LLM 输出模型：LLM 按分隔符协议输出 `<<<LATEX>>>...<<<END>>>`（必选）+ `<<<REASON>>>...<<<END>>>`（可选）纯文本块。提取出的修改段落经 `latex_json_guard.py` 的 `validate_latex_field(relaxed=True)` 宽松校验（放行 `\t` / `\r` 等合法 LaTeX 空白），失败时回喂 LLM 重试（最多 3 次）
 - `ChatSendRequest` / `GenerateEditRequest` / `ApplyEditRequest` / `RenameSessionRequest` / `ConfirmToolRequest` / `CancelToolRequest` / `ClarifyRequest` / `CancelClarifyRequest` — 请求体
 
@@ -132,6 +132,7 @@ Prefix: `/api/writing-chat`, Tag: `writing_chat`
 ## `llm_client.py` 扩展
 
 writing_chat 是 `chat_stream_with_tools` 方法的主要消费者。该方法继承 `chat_stream_with_usage` 的流式协议，额外支持 Function Calling 工具检测：
+
 - 流中同时产出 `content`（实时文本）和 `tool_calls`（末尾累积完整后 yield）
 - `StreamChunk` 新增 `tool_calls` 字段
 
@@ -173,11 +174,13 @@ writing_chat 是 `chat_stream_with_tools` 方法的主要消费者。该方法�
 封装：项目恢复、会话管理、SSE 流式发送、深度思考解析（parseThinking + processLoadedMessages）、生成编辑、应用编辑（支持手动微调 customText）、删除消息（summary 消息还原快照）、工具调用确认、澄清请求、助手管理。
 
 **工具确认流程**：
+
 - `pendingTool` state 存储待确认的工具调用
 - `confirmPendingTool(modifiedArgs)` 调用 `/confirm-tool` 接口，可选修改工具参数后确认
 - `cancelPendingTool()` 调用 `/cancel-tool` 接口取消
 
 **澄清请求流程**：
+
 - `pendingClarification` state 存储 LLM 的待回复问题（含 clarify_id、question、options）
 - `submitClarification(answer)` 调用 `/clarify` 接口提交用户回答
 - `cancelClarification()` 调用 `/cancel-clarify` 接口取消
@@ -185,6 +188,7 @@ writing_chat 是 `chat_stream_with_tools` 方法的主要消费者。该方法�
 SSE 事件处理器处理 `tool_pending`、`tool_cancelled`、`clarification_request`，并把 `scholarly_results` 存入 assistant 消息。`MessageBubble` 使用紫色折叠卡展示学术记录、文献类型、被引数、开放获取状态和 DOI 链接。
 
 **WritingChatPage 工具弹窗**：
+
 - `ToolConfirmDialog` — 敏感工具确认，使用 shadcn/ui Dialog，根据工具类型显示对应图标和文案
 - `ClarifyDialog` — 澄清请求弹窗，展示问题、可选项 pill 按钮和自由输入文本框
 

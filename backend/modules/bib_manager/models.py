@@ -6,7 +6,11 @@
 
 from pydantic import BaseModel, field_validator
 
-from backend.utils.latex_json_guard import LatexText, check_latex_text, validate_latex_field
+from backend.utils.latex_json_guard import (
+    LatexText,
+    check_latex_text,
+    validate_latex_field,
+)
 
 
 class FormatAnalysisRequest(BaseModel):

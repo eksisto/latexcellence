@@ -13,7 +13,6 @@ import pytest
 
 from backend.modules.style_modify.service import StyleModifyService
 
-
 # ── 分隔符协议提取 ─────────────────────────────────────────────────────────
 
 
@@ -27,8 +26,12 @@ class TestExtractLatexBlock:
     def test_extract_with_surrounding_text(self):
         resp = (
             "Here is the result:\n"
-            r"<<<LATEX>>>" "\n" r"\begin{document}hello\end{document}" "\n"
-            r"<<<END>>>" "\n"
+            r"<<<LATEX>>>"
+            "\n"
+            r"\begin{document}hello\end{document}"
+            "\n"
+            r"<<<END>>>"
+            "\n"
             "Hope this helps."
         )
         assert StyleModifyService._extract_latex_block(resp) == (

@@ -1,0 +1,19 @@
+# pre-commit 配置 —— 提交前自动格式化
+# 由 pre-commit 自建隔离环境安装工具，无任何绝对路径，换机器/挪项目直接可用
+# 版本号与本机在用的 black / prettier 保持一致，保证与 VS Code formatOnSave 输出一致
+repos:
+  - repo: local
+    hooks:
+      - id: black
+        name: black (Python 格式化)
+        entry: black
+        language: python
+        additional_dependencies: [black==26.5.1]
+        types: [python]
+
+      - id: prettier
+        name: prettier (前端格式化)
+        entry: prettier --write
+        language: node
+        additional_dependencies: [prettier@3.9.6]
+        types_or: [javascript, jsx, ts, tsx, css, html, json]

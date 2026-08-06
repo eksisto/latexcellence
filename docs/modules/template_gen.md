@@ -44,11 +44,13 @@ Agent 自主规划文件结构 → 逐个 `write_file` → 调用 `compile_latex
 为防止沙箱目录无限积累占用磁盘空间，提供基于 `asyncio` 的后台自动清理服务。
 
 **清理逻辑**：
+
 - `cleanup_expired_sandboxes()`：扫描 `output_dir/agent/` 下所有子目录（每个子目录 = 一个沙箱），取目录内最新文件的 mtime 作为该沙箱的"最后活跃时间"，若距今超过 `cleanup_retention_days` 天则删除整个目录
 - 使用 mtime 而非创建时间——用户读取/下载文件时 mtime 会更新，避免清理仍在使用中的沙箱
 - 仅清理 `agent/` 子目录下的会话沙箱
 
 **后台循环**：
+
 - `cleanup_loop()` 作为 `asyncio.Task` 在 FastAPI `lifespan` 中启动
 - 每 `cleanup_interval_seconds` 秒执行一次清理扫描
 - FastAPI 关闭时优雅取消该任务（`task.cancel()`）
@@ -69,6 +71,7 @@ Agent 自主规划文件结构 → 逐个 `write_file` → 调用 `compile_latex
 | `error` | 错误终止 |
 
 循环逻辑：
+
 1. 调用 `chat_with_tools`；若 LLM 无 `tool_calls`，先按"规划瘫痪防护"引导
    继续行动（见下文），连续 2 次仍无工具调用才结束
 2. 否则把 assistant 消息追加进历史，依次执行每个 `tool_call`，将工具结果以 `role:"tool"` 回传 LLM
@@ -113,6 +116,7 @@ prompt 同时列出 6 种常见 LaTeX 编译错误的根因与修复指引（`Un
 编译失败时由 `backend/modules/template_gen/agent.py` 中的两个辅助函数处理：
 
 **`_extract_errors(log)`**：从 latexmk 日志中提取结构化错误列表，每个错误包含：
+
 - `type`：错误类型（如 `"Undefined control sequence."`）
 - `file`：错误所在源文件相对路径
 - `line`：错误行号（`int` 或 `None`）
@@ -140,6 +144,7 @@ prompt 同时列出 6 种常见 LaTeX 编译错误的根因与修复指引（`Un
 ## 沙箱文件读取安全
 
 `load_sandbox(output_dir, session_id)` 为文件读取端点（`/files`、`/file`）提供路径基准解析。安全约束：
+
 - `session_id` 仅允许字母数字 / `-` / `_`，杜绝 `..` / `/` 注入
 - 解析后必须严格位于 `output_dir/agent/` 子目录内，无法逃逸到其他模板或兄弟会话目录
 

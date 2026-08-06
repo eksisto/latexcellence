@@ -143,6 +143,7 @@ class TestModels:
         assert op.applied is False
         assert op.diff_text == ""
 
+
 # ── ConversationContext tests ─────────────────────────────────────────────
 
 

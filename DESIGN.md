@@ -311,6 +311,7 @@ JSON schema 校验保证字段类型正确，但拦不住"合法 JSON + 损坏�
 **校验优先级**：`apply_change()` 的 `expected_md5` 参数优先于实例内部缓存的 MD5。前者用于跨工作区乐观锁（前端传入），后者用于单工作区内校验（兜底）。
 
 **冲突响应格式**：
+
 ```json
 {
   "error": "file_conflict",
@@ -448,7 +449,7 @@ RS1（流式对话 + Function Calling）:
    parseThinking() 逐 token 解析 <thinking> 标签
         ↓ streaming 结束
    落盘 assistant 消息（含 thinkingContent / displayContent / tokens）
-   
+
 RS2（结构化编辑）:
    用户点击"生成编辑建议" → instruction 发送
         ↓
@@ -465,6 +466,7 @@ RS2（结构化编辑）:
 **深度思考（Thinking Block）流式解析**：
 
 LLM 输出中可能包含 `<thinking>...</thinking>` 标签，包裹推理过程。前端在流式接收时：
+
 1. 每收到一个 token chunk，对累积的 rawText 执行 `parseThinking()` 正则匹配
 2. `<thinking>` 已出现但 `</thinking>` 未到 → `thinkingOpen=true`，UI 显示旋转 spinner + Lightbulb 图标
 3. `</thinking>` 到达 → `thinkingClosed=true`，`<details>` 元素自动折叠，正文部分提取为 `displayContent`
@@ -473,12 +475,14 @@ LLM 输出中可能包含 `<thinking>...</thinking>` 标签，包裹推理过程
 **助手提示词注入**：
 
 激活助手的提示词内容通过 `ChatSendRequest.assistant_prompt` 传递，后端在构建 LLM messages 时注入 **system prompt**，而非 user message。这样：
+
 - 助手提示词对用户不可见（不显示在聊天 UI 中）
 - 可随时切换不同助手角色而不污染对话历史
 
 **上下文压缩**：
 
 与 typo_check 等单向模块不同，写作助手是有状态的多轮对话。`cumulative_tokens` 跟踪最新一次 LLM 调用的 `total_tokens`（上下文窗口大小），当达到阈值时触发压缩：
+
 1. LLM 对历史消息生成纯文本摘要（直接 `llm.chat()`）
 2. 原始消息深拷贝到 `summary.snapshot` 字段
 3. 用一条 `role="summary"` 消息替换全部历史
@@ -603,6 +607,7 @@ Step 4: 写入 .bib 文件
 ```
 
 关键差异：
+
 - 使用 `asyncio.create_subprocess_exec` + `wait_for`（带超时）管理外部进程
 - LLM 仅在编译失败时被调用，且使用 `retry_with_validation()` 保证输出格式
 - 不涉及 Marker 保护、段落提取或源文件修改
@@ -804,6 +809,7 @@ Hook 内部封装了：项目恢复 → 文件选择 → 预览 → 检查 → �
 问题：CSS `transition` 在 DOM 树上逐元素启动，深层元素天然晚于浅层，导致视觉不同步。
 
 解决方案：
+
 1. **CSS 自定义属性过渡**：在 `:root` 上过渡 `--background` 等 ~30 个变量，子元素通过 `var()` 继承插值后的值
 2. **过渡期间抑制逐元素 transition**：`data-theme-transitioning` 属性 + CSS 规则 `transition-duration: 0s !important`
 
@@ -840,12 +846,14 @@ def get_config() -> AppConfig:
 ### 8.1 三层策略
 
 1. **前置条件检查**（快速失败）：
+
    ```python
    if not path.exists():
        raise FileNotFoundError(f"File not found: {path}")
    ```
 
 2. **try/except + 指数退避重试**：
+
    ```python
    for attempt in range(max_retries):
        try:

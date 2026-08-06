@@ -107,6 +107,7 @@ System prompt 还包含以下约束，防止 Agent 在成功路径上产出低�
 - **统计真实性**：只有用户明确要求时才运行统计检验，且必须调用 `stats_test` 工具并原样引用其返回值；禁止在脚本内联计算统计量作为替代，禁止在 summary 中编造/改写任何 p 值或统计量（图中标注与 summary 数值必须一致）
 
 `stats_test` 参数校验（`executor.py::_validate_stats_inputs`）：按测试类型强制必填参数并在缺失/类型不符时给出明确消息——t-test/wilcoxon/anova/kruskal 要求 `group` + 数值列 `y`；pearson/spearman 要求数值列 `x` + `y`；chi2 要求分类列 `x` + `y`（高基数数值列会被拒绝）。错误消息包含缺失参数名与数据文件可用列，避免原先 `df.loc[df[group]==g, None]` 抛晦涩 KeyError。
+
 - **风格约束**：禁止覆盖预置 rcParams，见"风格注入"一节
 - **图内文字语言**：图内文字（标题/坐标轴/图例/标注）必须使用纯英文 ASCII；单位采用 ASCII 转写（`ug/mL`、`uM`、`degC`、`x`），禁止 μ/°/± 等 Unicode 符号，避免 TikZ 编译失败或渲染为 U+FFFD
 - **日期/坐标指导**：datetime 列先转成日序号（day index）再绘图或写 TikZ，避免大绝对值坐标（如 44927）触发 PGFPlots "Dimension too large"；对数坐标需求显式使用 `xmode=log` 并过滤非正剂量

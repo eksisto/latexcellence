@@ -40,8 +40,7 @@ _INLINE_VERB_DELIM_RE = re.compile(
 
 # fancyvrb \\Verb / \\Verb*：与 \\verb 类似但内容允许跨行（DOTALL）。
 _VERB_FANCY_RE = re.compile(
-    r"\\Verb\*?(?:\[[^\]]*\])?"
-    r"(?P<delim>[^A-Za-z*{}\s])(?P<body>.*?)(?P=delim)",
+    r"\\Verb\*?(?:\[[^\]]*\])?" r"(?P<delim>[^A-Za-z*{}\s])(?P<body>.*?)(?P=delim)",
     re.DOTALL,
 )
 
@@ -64,9 +63,7 @@ _VERBATIM_ENV_RE = re.compile(
 
 # \\url / \\path / \\href（可带 [options]），要求紧跟 { 以排除 \\urlstyle
 # 等更长的命令名；URL 参数内的 % / $ / 花括号按字面处理。
-URL_CMD_START_RE = re.compile(
-    r"\\(?:url|path|href)(?![\w@*])\s*(?:\[[^\]]*\])?\{"
-)
+URL_CMD_START_RE = re.compile(r"\\(?:url|path|href)(?![\w@*])\s*(?:\[[^\]]*\])?\{")
 
 
 @dataclass(frozen=True)
@@ -100,9 +97,7 @@ def find_matching_brace(value: str, start: int) -> int | None:
     return None
 
 
-def find_literal_spans(
-    text: str, kinds: set[str] | None = None
-) -> list[LiteralSpan]:
+def find_literal_spans(text: str, kinds: set[str] | None = None) -> list[LiteralSpan]:
     """返回文本中所有字面区间的列表（按下标排序、重叠区间已合并）。
 
     kinds 为空集表示不返回任何区间；省略时返回全部类型

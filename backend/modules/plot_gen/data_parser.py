@@ -187,9 +187,9 @@ def build_profile_context(profile: DataProfile) -> str:
     parts.append(json.dumps(profile.preview[:5], ensure_ascii=False, default=str))
     hints = redundancy_hint_pairs(profile)
     if hints:
-        parts.append("Redundancy hints (one row per cell -> aggregation/error bars NOT needed):")
+        parts.append(
+            "Redundancy hints (one row per cell -> aggregation/error bars NOT needed):"
+        )
         for other, cat in hints[:3]:
-            parts.append(
-                f"- {other} x {cat}: unique product == rows ({profile.rows})"
-            )
+            parts.append(f"- {other} x {cat}: unique product == rows ({profile.rows})")
     return "\n".join(parts)

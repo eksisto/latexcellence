@@ -244,9 +244,7 @@ class LatexParser:
         """
         result = processed_text
         # counter 降序 = 外层（后创建）先还原。marker 定宽，见 _marker_restore_key
-        for marker, original in sorted(
-            marker_map.items(), key=_marker_restore_key
-        ):
+        for marker, original in sorted(marker_map.items(), key=_marker_restore_key):
             result = result.replace(marker, original)
         return result
 
@@ -293,9 +291,7 @@ class LatexParser:
             \\mintinline{lang}{code}              code 可含嵌套花括号
         整体替换为一个 VERB marker，逐字内容 LLM 不可见、不可修改。
         """
-        spans = find_literal_spans(
-            text, kinds={"verb", "verb_fancy", "mintinline"}
-        )
+        spans = find_literal_spans(text, kinds={"verb", "verb_fancy", "mintinline"})
         result: list[str] = []
         last_end = 0
         for span in spans:

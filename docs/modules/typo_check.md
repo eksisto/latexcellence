@@ -37,6 +37,7 @@ LLM 在 system prompt 中强制约束：marker（`__CMD_0000__`）代表 LaTeX �
 **批量处理**：按 `batch_size` 分批，`asyncio.gather` + `Semaphore(max_concurrency)` 并发，批次间等待 `request_interval`。
 
 **三层防护**：
+
 1. `retry_with_validation()` 校验 JSON schema → 反馈重试
 2. Marker 匹配验证 → 不一致时回退原文
 3. 异常兜底 → 返回原始文本 + 空 changes

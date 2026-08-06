@@ -334,8 +334,7 @@ class TestToolExecutorWriteFile:
                 {
                     "file_path": "main.tex",
                     "content": (
-                        r"\documentclass{article}"
-                        r"\begin{document}hi\end{document}"
+                        r"\documentclass{article}" r"\begin{document}hi\end{document}"
                     ),
                 }
             )
@@ -349,9 +348,7 @@ class TestToolExecutorWriteFile:
         executor = self._make_executor(tmp_path)
 
         text, ev = asyncio.run(
-            executor._write_file(
-                {"file_path": "main.tex", "content": r"\textbf{hello"}
-            )
+            executor._write_file({"file_path": "main.tex", "content": r"\textbf{hello"})
         )
 
         assert ev["ok"] is False

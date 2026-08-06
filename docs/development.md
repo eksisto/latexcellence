@@ -19,6 +19,7 @@
 LateXcellence 是一个 AI 驱动的 LaTeX 文档助手。后端 FastAPI + 前端 React/Vite，通过 LLM 对 `.tex` 文件进行错字查找、表达优化、公式识别、模板生成等操作。
 
 基本流程：
+
 1. 打开一个本地 LaTeX 项目目录
 2. 选择 `.tex` 文件，系统解析段落并剥离 LaTeX 结构为纯文本
 3. LLM 在纯文本上执行校对/优化（LaTeX 结构被替换为不可见的 marker，LLM 不能修改它们）

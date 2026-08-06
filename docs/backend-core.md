@@ -9,11 +9,11 @@
 - `ServerConfig` — 服务配置（host, port, dev_mode, vite_dev_url）
 - `LLMConfig` — LLM 配置（api_key, base_url, model, temperature 等）
 - `TypoCheckConfig` / `ExpressionOptConfig` / `TerminologyCheckConfig` / `FormulaOCRConfig` / `TableOCRConfig` / `TemplateGenConfig` / `CodeReviewConfig` / `CompileConfig` / `GitDiffConfig` / `FormatConverterConfig` / `StyleModifyConfig` / `WritingChatConfig` / `BibManagerConfig` / `ParagraphTranslateConfig` — 各功能模块配置
-    - `CompileConfig` 包含 `engine`（编译引擎：auto/pdflatex/xelatex/lualatex）和 `pdfa`（PDF/A-2b 归档格式输出）配置
-    - `TemplateGenConfig` 包含 `cleanup_enabled`/`cleanup_interval_seconds`/`cleanup_retention_days` 沙箱清理配置
+  - `CompileConfig` 包含 `engine`（编译引擎：auto/pdflatex/xelatex/lualatex）和 `pdfa`（PDF/A-2b 归档格式输出）配置
+  - `TemplateGenConfig` 包含 `cleanup_enabled`/`cleanup_interval_seconds`/`cleanup_retention_days` 沙箱清理配置
 - `ProjectToolsConfig` / `EditToolsConfig` / `WebSearchConfig` / `ScholarlyResearchConfig` — Function Calling 工具配置
-    - `EditToolsConfig` 包含 `require_confirmation`（敏感操作是否需要前端确认弹窗）
-    - `ScholarlyResearchConfig` 包含 OpenAlex 数据源开关、API Key、结果上限与请求超时
+  - `EditToolsConfig` 包含 `require_confirmation`（敏感操作是否需要前端确认弹窗）
+  - `ScholarlyResearchConfig` 包含 OpenAlex 数据源开关、API Key、结果上限与请求超时
 - `FeaturesConfig` — 功能聚合
 - `LoggingConfig` — 日志配置
 - `AppConfig` — 顶层聚合（server, llm, features, logging）
@@ -28,6 +28,7 @@
 | `update_config_from_dict(updates)` | 用字典部分更新配置（前端 SettingsDialog 使用）；用户手动输入新 Key 时更新内存并允许持久化 |
 
 **安全策略**：
+
 - 环境变量 `LX_LLM_KEY` 优先级高于 `config.json` 中的 `api_key`
 - 从环境变量注入的 API Key **禁止写回磁盘**：`save_config()` 内部通过 `_api_key_from_env` 标记自动识别 Key 来源，落盘前清空 `api_key` 字段
 - 用户通过 UI 手动输入的新 Key 解除环境变量标记，正常持久化到磁盘
@@ -59,6 +60,7 @@
 ```
 
 **重试策略**（`chat()` 内部）：
+
 - 最多重试 3 次
 - 指数退避：第 N 次重试前等待 `2^(N-1)` 秒（1s → 2s → 4s）
 - 仅网络/API 异常触发重试（`json.JSONDecodeError` 不再由客户端处理）
@@ -123,6 +125,7 @@ class ProjectInfo:
 **乐观锁机制**：`apply_change()` 支持 `expected_md5` 参数。优先使用调用方传入的 MD5（跨工作区乐观锁），否则退回到实例内部缓存的 MD5（单工作区内校验）。两者均不为 `None` 时，若当前文件 MD5 与预期不符，抛出 `FileConflictError`。
 
 **主文档检测逻辑**（递归深度限制 2 层）：
+
 1. 精确匹配文件名为 `main.tex`（不区分大小写） → 使用
 2. 文件名包含 `"main"` 子串的 `.tex` 文件（如 `main-chapter1.tex`） → 使用
 3. 若仍未找到，取文件树中第一个 `.tex` 文件（仅顶层，不递归）
@@ -157,6 +160,7 @@ class ProjectInfo:
 | `inject_expected_md5s(changes, fallback_file, md5s_map)` | 为 change 列表补充 `expected_md5`：从文件级 `md5s_map` 中查找并注入，供 4 个模块的 router 统一调用 |
 
 **关键设计**：
+
 - `ApplyChangeItem` 共享模型（`paragraph_index`, `new_text`, `file_path`）：四个模块 router 的 apply 接口统一使用
 - `CheckOperationContext` 操作上下文：每次 preview/check 生成唯一 `operation_id`，深拷贝 `marker_maps` 存入 `_operation_contexts` 字典；apply 时通过 `operation_id` 取回上下文还原 marker。若 context 丢失（过期/重启/新操作覆盖），逐段检查 `marker_map` 缺失时跳过写入并返回 `errors`，防止字面 marker 污染文件
 - 类变量控制差异：
@@ -214,6 +218,7 @@ registry.register(
 ```
 
 `config_path` 参数将工具和 `config.json` 中的功能开关绑定：
+
 - `config_path="features.function_calling.web_search.enabled"` → 当 `config.json` 中 `features.function_calling.web_search.enabled = false` 时，`get_enabled_tools()` 自动排除此工具
 - `config_path=None`（默认）→ 不受配置控制，仅受 `enabled` 参数或 `set_enabled()` 控制
 
@@ -291,6 +296,7 @@ get_tool_registry().register(
 | `ResearchManager` | 学术检索、详情、关联作品、摘要/OA 定位、数据资源检索 | `features.function_calling.scholarly_research.enabled` | OpenAlex 学术研究 |
 
 **注意事项**：
+
 - `schema` 是整个 OpenAI function schema（包含 `type` 和 `function`），不含外层 `tools` 数组
 - 注册时机避免在模块 `__init__` 中执行，宜在首次调用时或 FastAPI `lifespan` 中注册
 - 敏感工具（如写文件）建议添加用户确认环节：工具执行前推 SSE `confirmation_required` 事件
@@ -343,6 +349,7 @@ get_tool_registry().register(
 **设计理念**：所有需要根据项目根目录拼接 `file_path` 的调用方**必须**经过此模块的 `resolve_project_path()` 函数，作为防止路径穿越（path traversal）的唯一入口。该函数在 `project_manager`、`input_resolver`、`bib_manager`、`compile`、`git_diff` 等模块中统一使用。
 
 **校验规则（六层防御）**：
+
 1. 不为空 / 不含 null 字节
 2. 不是绝对路径（`os.path.isabs()`）
 3. 不含 `..` 路径段（快速拦截）
@@ -449,6 +456,7 @@ raise ValueError("Validation failed after N attempts")        # ❌ 耗尽
 **设计理念**：将 LaTeX 编译执行（latexmk 调用）和日志过滤（texfot）统一封装，供 `compile`（自动编译）、`git_diff`（差异高亮）、`template_gen`（模板生成 Agent）三个模块复用。texfot 是 TeX Live 自带的 Perl 工具，能从海量编译日志中自动提取错误、警告等关键信息，比自写正则更可靠。当 texfot 不可用时，静默降级为原始 latexmk 输出 + 正则 fallback。
 
 **核心功能**：
+
 - **引擎自动检测**：根据 `.tex` 文件内容自动选择编译引擎（pdflatex/xelatex/lualatex）
 - **PDF/A 归档输出**：在 `\documentclass` 之后注入 `\usepackage[a-2b]{pdfx}` 以支持 PDF/A-2b 归档格式
 - **临时目录管理**：编译在临时目录中进行，完成后自动清理并复制 PDF 回原目录
@@ -579,6 +587,7 @@ raise ValueError("Validation failed after N attempts")        # ❌ 耗尽
 **核心接口**：`resolve_inputs(main_file, project_root, pm)`
 
 **关键设计约束**：
+
 - **循环引用检测**：维护 `visited` 集合，已访问的文件不重复展开，防止无限递归
 - **相对路径解析**：`\input{chapters/intro}` 相对于被引用文件所在目录解析
 - **marker 保护顺序**：`resolve_inputs()` 必须在 `strip_to_plain_text()`（marker 替换）**之前**调用，否则 `\input` 命令会被替换为 marker 导致无法识别

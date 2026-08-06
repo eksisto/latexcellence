@@ -119,9 +119,7 @@ def test_parser_protects_digit_delimited_lstinline() -> None:
 
 def test_parser_protects_fancyvrb_verb() -> None:
     parser = LatexParser()
-    stripped, marker_map = parser.strip_to_plain_text(
-        r"\Verb|raw { $ \\end{table}|"
-    )
+    stripped, marker_map = parser.strip_to_plain_text(r"\Verb|raw { $ \\end{table}|")
 
     assert stripped == "__VERB_0000__"
     assert list(marker_map.values()) == [r"\Verb|raw { $ \\end{table}|"]
@@ -162,7 +160,12 @@ def test_delimiter_inside_verbatim_content_is_not_a_protocol_end(
         # text.lower() 搜索、再用 lower 下标切原文，遇到这类字符整体错位、
         # 静默截断（曾把 x 错切成 '<'）。
         ("İ<<<LATEX>>>x<<<END>>>", "<<<LATEX>>>", "<<<END>>>", "x"),
-        ("<<<LATEX>>>İstanbul & more<<<END>>>", "<<<LATEX>>>", "<<<END>>>", "İstanbul & more"),
+        (
+            "<<<LATEX>>>İstanbul & more<<<END>>>",
+            "<<<LATEX>>>",
+            "<<<END>>>",
+            "İstanbul & more",
+        ),
         ("<<<LATEX>>>x<<<END>>>İ", "<<<LATEX>>>", "<<<END>>>", "x"),
         # 中文 lower() 是恒等变换，本就不受影响，作为对照
         ("前置中文<<<LATEX>>>x<<<END>>>", "<<<LATEX>>>", "<<<END>>>", "x"),
@@ -176,10 +179,7 @@ def test_extract_delimited_block_survives_length_changing_lowercase(
 
 def test_remove_delimited_block_survives_length_changing_lowercase() -> None:
     text = "before İ<<<LATEX>>>x<<<END>>> after"
-    assert (
-        remove_delimited_block(text, "<<<LATEX>>>", "<<<END>>>")
-        == "before İ after"
-    )
+    assert remove_delimited_block(text, "<<<LATEX>>>", "<<<END>>>") == "before İ after"
 
 
 def test_restore_uses_longer_markers_first() -> None:

@@ -96,18 +96,12 @@ class TestCheckLatexText:
 
     def test_accepts_mintinline_with_braces(self):
         """\\mintinline 的 code 参数含花括号/美元符是合法内容。"""
-        assert (
-            check_latex_text(r"\mintinline{python}{x = {1};} and $y$")
-            is None
-        )
+        assert check_latex_text(r"\mintinline{python}{x = {1};} and $y$") is None
         assert check_latex_text(r"\mintinline[breaklines]{c++}{$v$ = {1};}") is None
 
     def test_accepts_alltt_environment(self):
         """alltt 环境内容按字面处理，其中的花括号不参与配平。"""
-        assert (
-            check_latex_text(r"\begin{alltt}a { b }\end{alltt} and text")
-            is None
-        )
+        assert check_latex_text(r"\begin{alltt}a { b }\end{alltt} and text") is None
 
     def test_url_with_nested_braces_and_dollar(self):
         """URL 参数内的 $ / 嵌套花括号是字面字符，不应误报。"""
@@ -127,8 +121,7 @@ class TestCheckLatexText:
     def test_bibtex_mode_accepts_literal_percent(self):
         """BibTeX 字段值里的 % 是字面字符，percent-encoding URL 应通过。"""
         assert (
-            check_latex_text("https://doi.org/10.1000/xyz%2Fabc", bibtex=True)
-            is None
+            check_latex_text("https://doi.org/10.1000/xyz%2Fabc", bibtex=True) is None
         )
         assert check_latex_text(r"note = {50% complete work}", bibtex=True) is None
 

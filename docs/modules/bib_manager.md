@@ -8,7 +8,9 @@
 
 1. **格式识别**：用户提供参考文献示例 → LLM 分析格式类型、条目类型、字段列表 + 推荐 LaTeX 样式
 2. **元数据提取**：用户输入文本或上传截图 → LLM 根据格式字段列表动态提取
-  - **DOI 查询**：用户输入 DOI → 多数据源聚合查询元数据（Crossref 主索引 + 多个补全层 + arXiv 预印本专用路由）
+
+- **DOI 查询**：用户输入 DOI → 多数据源聚合查询元数据（Crossref 主索引 + 多个补全层 + arXiv 预印本专用路由）
+
 3. **BibTeX 生成**：将元数据转换为标准 BibTeX 代码
 4. **应用到文件**：选择 `.bib` 文件，追加或更新条目
 5. **生成 LaTeX 代码**：生成包含正确引用的 LaTeX 代码片段
@@ -87,6 +89,7 @@ bib_manager/
 ### ProviderManager 全局单例
 
 `get_provider_manager()` 按配置注册 Provider：
+
 - `providers.crossref` → 注册为**主索引**
 - `providers.arxiv` → 注册为 **arXiv 专用路由**
 - 其他 Provider → 注册为**补全层**（按代码中注册顺序降级）

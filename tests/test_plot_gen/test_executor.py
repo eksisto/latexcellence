@@ -708,8 +708,7 @@ def test_precheck_clean_tikz_no_findings(tmp_path, monkeypatch):
 def test_precheck_numeric_error_bar_warns_only():
     """`+-` 数值增量是合法 PGFPlots 语法，只给警告不拦截。"""
     findings, blocked = _precheck_tikz(
-        "\\addplot+[error bars/.cd, y explicit] "
-        "coordinates {(1, 2) +- (0, 0.5)};\n"
+        "\\addplot+[error bars/.cd, y explicit] " "coordinates {(1, 2) +- (0, 0.5)};\n"
     )
     assert blocked is False
     assert any(f["rule"] == "error_bar" and f["level"] == "warning" for f in findings)

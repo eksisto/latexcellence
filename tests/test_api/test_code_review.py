@@ -331,7 +331,10 @@ class TestCheckOneParagraph:
         )
 
         assert len(result["suggestions"]) == 1
-        assert result["suggestions"][0]["suggested"] == r"\begin{center}Hello World\end{center}"
+        assert (
+            result["suggestions"][0]["suggested"]
+            == r"\begin{center}Hello World\end{center}"
+        )
         assert mock_llm.chat.call_count == 2
 
     @pytest.mark.asyncio
