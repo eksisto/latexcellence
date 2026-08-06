@@ -109,8 +109,10 @@ class FormulaOCRService:
             result["latex"] = self._wrap_latex_for_paste(
                 result["latex"], result.get("inline", False)
             )
-            # 第二步：分析 LaTeX 代码所需的宏包
-            result["latex"] = await prepend_package_comments(llm, result["latex"])
+            # 第二步：分析 LaTeX 代码所需的宏包（math 领域：排除表格/版式类宏包）
+            result["latex"] = await prepend_package_comments(
+                llm, result["latex"], domain="math"
+            )
 
         return result
 

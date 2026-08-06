@@ -1,0 +1,236 @@
+{
+  "formula_ocr/fractions_align.tex": {
+    "domain": "math",
+    "expected": ["amsmath"],
+    "source": "formula_ocr",
+    "note": "align 环境 + \\dfrac/\\tfrac → amsmath"
+  },
+  "formula_ocr/blackboard_bold.tex": {
+    "domain": "math",
+    "expected": ["amssymb", "bm"],
+    "source": "formula_ocr",
+    "note": "\\mathbb/\\mathfrak → amssymb；\\bm → bm"
+  },
+  "formula_ocr/slashed_tensor.tex": {
+    "domain": "math",
+    "expected": ["leftidx", "slashed", "tensor"],
+    "source": "formula_ocr",
+    "note": "数学补充第一批：\\slashed/\\leftidx/\\tensor"
+  },
+  "formula_ocr/oiint_esint.tex": {
+    "domain": "math",
+    "expected": ["esint"],
+    "source": "formula_ocr",
+    "note": "\\oiint/\\varoiint → esint"
+  },
+  "formula_ocr/siunitx_num.tex": {
+    "domain": "math",
+    "expected": ["siunitx"],
+    "source": "formula_ocr",
+    "note": "\\num/\\qty → siunitx（math 领域保留 siunitx）"
+  },
+  "formula_ocr/chem_ce.tex": {
+    "domain": "math",
+    "expected": ["mhchem"],
+    "source": "formula_ocr",
+    "note": "\\ce → mhchem（math 领域保留化学）"
+  },
+  "formula_ocr/table_cmd_noise.tex": {
+    "domain": "math",
+    "expected": [],
+    "source": "formula_ocr",
+    "note": "公式片段混入表格命令 → math 领域排除 booktabs",
+    "skip_compile": true,
+    "skip_reason": "math 领域故意排除表格宏包，编译验证不适用（对抗样本）"
+  },
+  "formula_ocr/kernel_only_math.tex": {
+    "domain": "math",
+    "expected": [],
+    "source": "formula_ocr",
+    "note": "\\frac/\\sum/\\int/\\mathcal 均为内核，不误报"
+  },
+  "table_ocr/booktabs_siunitx.tex": {
+    "domain": "table",
+    "expected": ["booktabs", "siunitx"],
+    "source": "table_ocr",
+    "note": "booktabs 规则线 + S 列"
+  },
+  "table_ocr/talltblr_colspec.tex": {
+    "domain": "table",
+    "expected": ["tabularray"],
+    "source": "table_ocr",
+    "note": "talltblr 环境 → tabularray"
+  },
+  "table_ocr/multirow_makecell.tex": {
+    "domain": "table",
+    "expected": ["makecell", "multirow"],
+    "source": "table_ocr",
+    "note": "\\multirow + \\makecell"
+  },
+  "table_ocr/xtabular.tex": {
+    "domain": "table",
+    "expected": ["xtab"],
+    "source": "table_ocr",
+    "note": "xtabular 环境 → xtab"
+  },
+  "table_ocr/table_float_h.tex": {
+    "domain": "table",
+    "expected": ["float"],
+    "source": "table_ocr",
+    "note": "table 浮动 [H] → float"
+  },
+  "table_ocr/supertabular.tex": {
+    "domain": "table",
+    "expected": ["supertabular"],
+    "source": "table_ocr",
+    "note": "supertabular 环境"
+  },
+  "table_ocr/table_math_cell.tex": {
+    "domain": "table",
+    "expected": ["amsmath"],
+    "source": "table_ocr",
+    "note": "表格单元格含 \\dfrac → 保留 amsmath（table 领域不排除数学）"
+  },
+  "table_ocr/wraptable.tex": {
+    "domain": "table",
+    "expected": ["wrapfig"],
+    "source": "table_ocr",
+    "note": "wraptable 环境 → wrapfig"
+  },
+  "table_ocr/sidewaystable.tex": {
+    "domain": "table",
+    "expected": ["rotating"],
+    "source": "table_ocr",
+    "note": "sidewaystable 环境 → rotating（table 领域保留）"
+  },
+  "pandoc/markdown_table.tex": {
+    "domain": "general",
+    "expected": ["booktabs"],
+    "source": "pandoc",
+    "note": "Markdown 表格转换结果含 booktabs 规则线"
+  },
+  "pandoc/full_document_loaded.tex": {
+    "domain": "general",
+    "expected": [],
+    "source": "pandoc",
+    "full_document": true,
+    "note": "整篇文档：booktabs/amsmath 已加载 → 不重复推荐"
+  },
+  "pandoc/partial_loaded.tex": {
+    "domain": "general",
+    "expected": ["siunitx"],
+    "source": "pandoc",
+    "full_document": true,
+    "note": "部分已加载：booktabs 排除，siunitx 仍推荐"
+  },
+  "pandoc/listing_inputs.tex": {
+    "domain": "general",
+    "expected": ["listings", "minted"],
+    "source": "pandoc",
+    "aux_files": {
+      "main.py": "print('hello')\n"
+    },
+    "skip_compile": true,
+    "skip_reason": "minted 需要 -shell-escape + pygments，编译验证跳过",
+    "note": "\\lstinputlisting + \\inputminted"
+  },
+  "pandoc/cite_crossref.tex": {
+    "domain": "general",
+    "expected": ["cleveref", "natbib", "varioref"],
+    "source": "pandoc",
+    "compile_package_order": ["varioref", "cleveref", "natbib"],
+    "note": "\\cref/\\vref/\\citep"
+  },
+  "pandoc/pdf_insert.tex": {
+    "domain": "general",
+    "expected": ["pdfpages"],
+    "source": "pandoc",
+    "aux_files": {
+      "appendix.pdf": "__GENERATE_BLANK_PDF__"
+    },
+    "note": "\\includepdf → pdfpages"
+  },
+  "adversarial/comment_only.tex": {
+    "domain": "general",
+    "expected": [],
+    "source": "adversarial",
+    "note": "全部命令在 % 注释内 → 不触发"
+  },
+  "adversarial/verb_content.tex": {
+    "domain": "general",
+    "expected": ["xcolor"],
+    "source": "adversarial",
+    "note": "\\verb 内容屏蔽，真实 \\textcolor 保留"
+  },
+  "adversarial/url_percent.tex": {
+    "domain": "general",
+    "expected": ["url"],
+    "source": "adversarial",
+    "note": "URL 参数中的 %20 不当作注释"
+  },
+  "adversarial/float_h_in_comment.tex": {
+    "domain": "general",
+    "expected": [],
+    "source": "adversarial",
+    "note": "[H] 在注释内 → 不触发 float"
+  },
+  "adversarial/kernel_only.tex": {
+    "domain": "general",
+    "expected": [],
+    "source": "adversarial",
+    "note": "tabular/hline/itemize/frac/sum 全为内核能力"
+  },
+  "adversarial/unclosed_table_env.tex": {
+    "domain": "general",
+    "expected": ["siunitx"],
+    "source": "adversarial",
+    "note": "未闭合环境不崩溃，S 列仍被识别",
+    "skip_compile": true,
+    "skip_reason": "片段故意不闭合，编译验证不适用（对抗样本）"
+  },
+  "adversarial/textgreek_correct.tex": {
+    "domain": "general",
+    "expected": ["textgreek"],
+    "source": "adversarial",
+    "note": "\\TextGreek（textgreek 实际用户命令）"
+  },
+  "adversarial/textgreek_lowercase_rejected.tex": {
+    "domain": "general",
+    "expected": [],
+    "source": "adversarial",
+    "note": "\\textgreek 未定义（编译验证拒绝，计划条目修正）",
+    "skip_compile": true,
+    "skip_reason": "\\textgreek 在任何常见宏包中都未定义，编译必然失败（对抗样本锁死拒绝决策）"
+  },
+  "adversarial/ltablex_env_rejected.tex": {
+    "domain": "general",
+    "expected": [],
+    "source": "adversarial",
+    "note": "ltablex 未定义 ltablex 环境（编译验证拒绝）",
+    "skip_compile": true,
+    "skip_reason": "ltablex 包不提供 ltablex 环境，编译必然失败（对抗样本锁死拒绝决策）"
+  },
+  "adversarial/algpseudocode_env_rejected.tex": {
+    "domain": "general",
+    "expected": [],
+    "source": "adversarial",
+    "note": "algpseudocode 未定义同名环境（编译验证拒绝）",
+    "skip_compile": true,
+    "skip_reason": "algpseudocode 包不提供同名环境，编译必然失败（对抗样本锁死拒绝决策）"
+  },
+  "adversarial/algorithmic_env.tex": {
+    "domain": "general",
+    "expected": ["algorithmicx"],
+    "source": "adversarial",
+    "note": "algorithmic 环境由 algorithmicx 提供",
+    "compile_extra_packages": ["algpseudocode"],
+    "compile_note": "\\State 等命令按计划不映射；编译验证额外加载 algpseudocode 以通过"
+  },
+  "adversarial/glossaries_acronym.tex": {
+    "domain": "general",
+    "expected": ["acronym", "glossaries"],
+    "source": "adversarial",
+    "note": "\\gls + \\ac + \\printglossary",
+    "compile_preamble": "\\makeglossaries\\newglossaryentry{term}{name={term},description={}}\\acrodef{AI}{Artificial Intelligence}"
+  }
+}

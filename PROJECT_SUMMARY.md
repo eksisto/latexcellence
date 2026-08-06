@@ -105,14 +105,21 @@ latexcellence/
 │   ├── frontend.md                  # 前端架构
 │   ├── testing.md                   # 测试规范
 │   ├── multi-user-migration-plan.md # 多用户改造计划
+│   ├── latex-package-rules.md       # 宏包规则表维护指南
 │   └── modules/                     # 模块文档
 ├── tests/                           # 测试用例
+│   └── fixtures/latex_packages/     # 宏包规则表语料（公式/表格/Pandoc/对抗样本）
 ├── prompts/                         # 自定义提示词
 ├── formats/                         # 参考文献格式定义
 ├── templates/                       # 生成的 LaTeX 模板
 ├── writing_chat_sessions/           # 写作助手聊天持久化数据
 ├── logs/                            # 运行时日志
-└── static/                          # Vite 构建产物
+├── tools/                         # 维护者工具（开发/评测/维护用脚本与 Agent 评测工作区，不进入运行时）
+│   └── latex_packages/            # 宏包规则表维护脚本（编译验证 + 覆盖率报告）
+│       ├── verify_rules.py        # 离线编译验证（维护者专用，需 TeX）
+│       ├── coverage_report.py     # 覆盖率报告（对照常用宏包清单）
+│       └── common_packages.txt    # 常用宏包期望清单（覆盖率基准）
+└── static/                        # Vite 构建产物
 ```
 
 ## Feature Modules Quick Reference
@@ -143,7 +150,10 @@ latexcellence/
 - **WorkspaceManager**: 多浏览器多工作区隔离，每个 workspace_id 拥有独立的 `LatexProject` 实例（项目状态、文件树、MD5 缓存、撤销栈完全隔离）
 - **乐观锁**: 多工作区并发编辑同一文件时，通过 MD5 哈希检测冲突。读取段落时返回 `file_md5`，应用修改时前端传回 `expected_md5`，后端校验失败时抛出 `FileConflictError`（HTTP 409），前端自动刷新 MD5 并提示用户重试。`inject_expected_md5s()` 辅助函数统一为各模块 router 注入预期 MD5
 - **Marker Protection**: LaTeX 结构 → `__CMD_NNNN__` / `__MATH_NNNN__` / `__ENV_NNNN__` / `__VERB_NNNN__` marker → LLM 只改纯文本 → 按长度降序还原。apply 时若 marker_map 缺失（context 过期/重启/新操作覆盖），跳过该段写入并返回 `errors`，防止字面 marker 污染 `.tex` 文件；前端据此保留未应用项并提示用户重新检查。返回给前端展示的 `changes[]` 中的 `original`/`corrected` 会在 `_build_success_result` 中预先还原 marker，确保用户看到的是干净的 LaTeX 文本而非 `__CMD_NNNN__` 占位符
-- **宏包规则表检测**: 宏包分析以确定性规则表（`latex_package_rules.py`：命令/环境/列说明符 → 宏包）为主路径，零 LLM 开销、结果可复现；扫描前屏蔽逐字内容与 `%` 注释防误报，LaTeX 内核能力不收录；LLM 仅在规则表未命中时兜底，输出经 schema 校验 + 归一化（小写/去 `.sty`/去重/排序）
+- **宏包规则表检测**:
+  - 宏包分析以确定性规则表（`latex_package_rules.py`：命令/环境/列说明符 → 宏包）为主路径，零 LLM 开销、结果可复现
+  - 扫描前屏蔽逐字内容与 `%` 注释防误报，LaTeX 内核能力不收录；LLM 仅在规则表未命中时兜底，输出经 schema 校验 + 归一化（小写/去 `.sty`/去重/排序）
+  - 支持 `domain` 参数（general/math/table）按领域排除无关宏包（如公式片段不带表格类宏包），并按 `\usepackage` / `\RequirePackage` 剔除已加载宏包避免整篇文档重复推荐。规则表有语料测试与数据完整性守卫，另有基于真实 TeX 编译的离线验证（`tools/latex_packages/verify_rules.py`）
 - **JSON Validation Pipeline**:
   - `safe_parse_json()` → Pydantic `.model_validate()` → `retry_with_validation()` (最多 3 次重试 + 错误反馈)
   - `latex_json_guard.py` 提供字段级 LaTeX 内容校验（`LatexText` / `check_latex_text()`），拦截 JSON 反斜杠转义静默损坏

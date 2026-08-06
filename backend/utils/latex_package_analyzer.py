@@ -10,12 +10,17 @@ LaTeX 宏包分析器。
 设计原则：
     - 主路径为规则表驱动的确定性检测：零 LLM 开销、结果可复现
     - LLM 仅作为兜底：规则表未命中任何宏包时才调用，且输出经 schema 校验、
-      归一化（小写/去 .sty/去重/排序）
+      归一化（小写/去 .sty/去重/排序）与领域/已加载过滤
     - 返回空列表表示不需要任何特定宏包
     - 兜底调用失败时记录警告并返回空列表（优雅降级）
+    - 支持领域参数（general / math / table）：按领域排除无关宏包
+      （如公式片段不推荐表格类宏包）
+    - 支持排除已加载宏包：扫描 \\usepackage / \\RequirePackage
+      （含可选参数、逗号分隔多包），避免整篇文档重复推荐
 """
 
 import re
+from collections.abc import Iterable
 
 from pydantic import BaseModel
 
@@ -24,10 +29,12 @@ from backend.core.prompts import get_prompt
 from backend.utils.json_utils import retry_with_validation
 from backend.utils.latex_literals import find_literal_spans, find_matching_brace
 from backend.utils.latex_package_rules import (
+    ALL_KNOWN_PACKAGES,
     COLSPEC_ENVS,
     COLUMN_LETTER_PACKAGES,
     COLUMN_PREFIX_PACKAGES,
     COMMAND_PACKAGES,
+    DOMAIN_EXCLUDED_PACKAGES,
     ENV_PACKAGES,
     WIDTH_FIRST_ENVS,
     X_NATIVE_ENVS,
@@ -38,14 +45,36 @@ logger = get_logger("latex_package_analyzer")
 _COMMAND_RE = re.compile(r"\\([A-Za-z@]+)")
 _BEGIN_ENV_RE = re.compile(r"\\begin\{([^{}]+)\}")
 _FLOAT_H_RE = re.compile(r"\\begin\{(?:figure|table)\}\s*\[[^\]]*H")
+_LOADED_PACKAGE_RE = re.compile(
+    r"\\(?:usepackage|RequirePackage)\s*(?:\[[^\]]*\])?\s*\{([^}]*)\}"
+)
+
+_VALID_DOMAINS = frozenset(DOMAIN_EXCLUDED_PACKAGES)
 
 
 class LatexPackageAnalysis(BaseModel):
     packages: list[str]
 
 
-def detect_required_packages(latex_code: str) -> list[str]:
+def _validate_domain(domain: str) -> None:
+    """校验领域参数，未知领域快速失败。"""
+    if domain not in _VALID_DOMAINS:
+        raise ValueError(
+            f"Unknown domain: {domain!r}. Supported: {sorted(_VALID_DOMAINS)}"
+        )
+
+
+def detect_required_packages(
+    latex_code: str, domain: str = "general", exclude_loaded: bool = True
+) -> list[str]:
     """确定性规则引擎：扫描 LaTeX 代码，返回所需宏包（排序去重）。
+
+    参数：
+        latex_code: 待分析的 LaTeX 代码
+        domain: 领域参数（general / math / table），按领域排除无关宏包
+        exclude_loaded: 是否排除已通过 \\usepackage / \\RequirePackage 加载的宏包
+            （默认 True：会剔除已加载宏包。仅分析含 preamble 的整篇文档时依赖此默认；
+            传入的片段只要不含宏包加载语句，结果不受影响）
 
     扫描顺序：
         1. 屏蔽逐字内容（\\verb / \\lstlisting / \\url 等）与 % 注释
@@ -53,11 +82,18 @@ def detect_required_packages(latex_code: str) -> list[str]:
         3. 匹配已知环境 → 宏包
         4. 解析表格类环境的列说明符（X / S / D / >{} 等）
         5. 识别 figure/table 的 [H] 浮动位置（需要 float 宏包）
+        6. 按领域排除无关宏包，排除已加载宏包
     """
+    _validate_domain(domain)
     if not latex_code or not latex_code.strip():
         return []
 
     text = _mask_literals_and_comments(latex_code)
+    return _apply_exclusions(_scan_rules(text), text, domain, exclude_loaded)
+
+
+def _scan_rules(text: str) -> set[str]:
+    """纯规则扫描：命令/环境/列说明符/[H] 浮动，不做领域与已加载过滤。"""
     packages: set[str] = set()
 
     for match in _COMMAND_RE.finditer(text):
@@ -75,27 +111,74 @@ def detect_required_packages(latex_code: str) -> list[str]:
     if _FLOAT_H_RE.search(text):
         packages.add("float")
 
-    return sorted(packages)
+    return packages
 
 
-async def analyze_latex_packages(latex_code: str, llm=None) -> list[str]:
+def _extract_loaded_packages(text: str) -> set[str]:
+    """提取已加载的宏包名（小写、去 .sty、逗号分隔多包）。"""
+    loaded: set[str] = set()
+    for match in _LOADED_PACKAGE_RE.finditer(text):
+        for name in match.group(1).split(","):
+            name = name.strip().lower()
+            if name.endswith(".sty"):
+                name = name[:-4]
+            if name:
+                loaded.add(name)
+    return loaded
+
+
+def _apply_exclusions(
+    packages: Iterable[str],
+    text: str,
+    domain: str,
+    exclude_loaded: bool,
+) -> list[str]:
+    """按领域与已加载宏包过滤结果，归一化并排序返回。"""
+    excluded_domain = {p.lower() for p in DOMAIN_EXCLUDED_PACKAGES[domain]}
+    loaded = _extract_loaded_packages(text) if exclude_loaded else set()
+    canonical = {p.lower(): p for p in ALL_KNOWN_PACKAGES}
+    result: set[str] = set()
+    for pkg in packages:
+        name = str(pkg).strip()
+        lowered = name.lower()
+        if lowered.endswith(".sty"):
+            lowered = lowered[:-4]
+        if not lowered:
+            continue
+        if lowered in excluded_domain:
+            continue
+        if lowered in loaded:
+            continue
+        # 优先使用规则表中的规范大小写（如 xeCJK），LLM 兜底输出的小写名同样回映。
+        result.add(canonical.get(lowered, lowered))
+    return sorted(result)
+
+
+async def analyze_latex_packages(
+    latex_code: str, llm=None, domain: str = "general"
+) -> list[str]:
     """
     分析 LaTeX 代码所需的宏包列表。
 
     参数：
         latex_code: 待分析的 LaTeX 代码
         llm: 可选 LLMClient 实例；仅在规则表未命中任何宏包时作为兜底使用
+        domain: 领域参数（general / math / table），结果按领域过滤
 
     返回：
         宏包名称列表。若不需要任何特定宏包，返回空列表。
         若兜底调用失败，记录警告并返回空列表（优雅降级）。
     """
+    _validate_domain(domain)
     if not latex_code or not latex_code.strip():
         return []
 
-    packages = detect_required_packages(latex_code)
-    if packages or llm is None:
-        return packages
+    text = _mask_literals_and_comments(latex_code)
+    raw = _scan_rules(text)
+    # 规则表有原始命中（即使被领域/已加载过滤掉）就不再调用 LLM 兜底，
+    # 避免 LLM 重新推荐被领域排除的宏包。
+    if raw or llm is None:
+        return _apply_exclusions(raw, text, domain, exclude_loaded=True)
 
     messages = [
         {"role": "system", "content": get_prompt("latex_package_analyzer", "system")},
@@ -116,24 +199,28 @@ async def analyze_latex_packages(latex_code: str, llm=None) -> list[str]:
             max_tokens=1024,
             response_format={"type": "json_object"},
         )
-        return _normalize_packages(validated.packages)
+        normalized = _normalize_packages(validated.packages)
+        return _apply_exclusions(normalized, text, domain, exclude_loaded=True)
     except Exception as e:
         logger.warning(f"Package analysis fallback failed, returning empty list: {e}")
         return []
 
 
-async def prepend_package_comments(llm, latex_code: str) -> str:
+async def prepend_package_comments(
+    llm, latex_code: str, domain: str = "general"
+) -> str:
     """
     分析 LaTeX 代码所需的宏包，将注释前置到代码前。
 
     参数：
         llm: LLMClient 实例（可为 None，此时完全走规则表，无 LLM 兜底）
         latex_code: LaTeX 代码
+        domain: 领域参数（general / math / table）
 
     返回：
         带宏包注释前缀的 LaTeX 代码（若无需要或失败则原样返回）
     """
-    packages = await analyze_latex_packages(latex_code, llm)
+    packages = await analyze_latex_packages(latex_code, llm, domain=domain)
     if packages:
         package_comments = packages_to_comments(packages)
         logger.info(f"Detected packages: {packages}")

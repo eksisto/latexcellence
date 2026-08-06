@@ -111,9 +111,11 @@ class TableOCRService:
         llm = get_llm_client()
         result = await self._recognize_with_llm(llm, base64_image, content_type)
 
-        # 第二步：分析 LaTeX 代码所需的宏包
+        # 第二步：分析 LaTeX 代码所需的宏包（table 领域：排除引用/版式类宏包）
         if result.get("latex"):
-            result["latex"] = await prepend_package_comments(llm, result["latex"])
+            result["latex"] = await prepend_package_comments(
+                llm, result["latex"], domain="table"
+            )
 
         return result
 

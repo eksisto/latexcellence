@@ -183,6 +183,120 @@ class TestDetectRequiredPackages:
         assert detect_required_packages("   \n\n  ") == []
 
 
+class TestDomainParameter:
+    """领域参数（general / math / table）行为测试。"""
+
+    def test_math_excludes_table_packages(self):
+        latex_code = r"\begin{array}{cc}\toprule a & b \\\bottomrule\end{array}"
+        assert detect_required_packages(latex_code, domain="math") == []
+
+    def test_math_keeps_math_packages(self):
+        latex_code = r"$\dfrac{a}{b}$ and $\mathbb{R}$ and $\bm{x}$"
+        assert detect_required_packages(latex_code, domain="math") == [
+            "amsmath",
+            "amssymb",
+            "bm",
+        ]
+
+    def test_math_excludes_float_layout(self):
+        latex_code = r"\begin{figure}[H]x\end{figure}"
+        assert detect_required_packages(latex_code, domain="math") == []
+
+    def test_table_keeps_table_packages(self):
+        latex_code = r"\begin{tabular}{lS}\toprule A & 1.5\\\bottomrule\end{tabular}"
+        assert detect_required_packages(latex_code, domain="table") == [
+            "booktabs",
+            "siunitx",
+        ]
+
+    def test_table_keeps_math_in_cells(self):
+        latex_code = r"\begin{tabular}{cc}$\dfrac{1}{2}$ & x\end{tabular}"
+        assert detect_required_packages(latex_code, domain="table") == ["amsmath"]
+
+    def test_table_keeps_float_and_sideways(self):
+        latex_code = (
+            r"\begin{table}[H]x\end{table} "
+            r"\begin{sidewaystable}x\end{sidewaystable}"
+        )
+        assert detect_required_packages(latex_code, domain="table") == [
+            "float",
+            "rotating",
+        ]
+
+    def test_table_excludes_citations(self):
+        latex_code = r"\citep{x}"
+        assert detect_required_packages(latex_code, domain="table") == []
+
+    def test_general_keeps_everything(self):
+        latex_code = (
+            r"\toprule \citep{x} \dfrac{1}{2} "
+            r"\begin{sidewaystable}x\end{sidewaystable}"
+        )
+        assert detect_required_packages(latex_code, domain="general") == [
+            "amsmath",
+            "booktabs",
+            "natbib",
+            "rotating",
+        ]
+
+    def test_invalid_domain_raises(self):
+        with pytest.raises(ValueError, match="Unknown domain"):
+            detect_required_packages(r"\toprule", domain="unknown")
+
+
+class TestLoadedPackageExclusion:
+    """排除已加载宏包（\\usepackage / \\RequirePackage）。"""
+
+    def test_loaded_package_excluded(self):
+        latex_code = (
+            r"\usepackage{booktabs}"
+            r"\begin{tabular}{cc}\toprule a & b \\\bottomrule\end{tabular}"
+        )
+        assert detect_required_packages(latex_code) == []
+
+    def test_loaded_package_with_options(self):
+        latex_code = (
+            r"\usepackage[utf8]{inputenc}"
+            r"\usepackage[table]{xcolor}"
+            r"\textcolor{red}{x}"
+        )
+        assert detect_required_packages(latex_code) == []
+
+    def test_loaded_multiple_packages_comma_separated(self):
+        latex_code = r"\usepackage{booktabs, multirow}" r"\toprule \multirow{2}{*}{x}"
+        assert detect_required_packages(latex_code) == []
+
+    def test_requirement_package_excluded(self):
+        latex_code = r"\RequirePackage{amsmath}$\dfrac{1}{2}$"
+        assert detect_required_packages(latex_code) == []
+
+    def test_exclude_loaded_false_keeps_loaded(self):
+        latex_code = r"\usepackage{booktabs}\toprule"
+        assert detect_required_packages(latex_code, exclude_loaded=False) == [
+            "booktabs"
+        ]
+
+    def test_commented_usepackage_ignored(self):
+        latex_code = r"% \usepackage{booktabs}" + "\n" + r"\toprule"
+        assert detect_required_packages(latex_code) == ["booktabs"]
+
+    def test_verb_usepackage_ignored(self):
+        latex_code = r"\verb|\usepackage{booktabs}| \toprule"
+        assert detect_required_packages(latex_code) == ["booktabs"]
+
+    def test_partial_loaded_only_missing_recommended(self):
+        latex_code = r"\usepackage{booktabs}" r"\toprule \num{1.23}"
+        assert detect_required_packages(latex_code) == ["siunitx"]
+
+    def test_sty_suffix_normalized(self):
+        latex_code = r"\usepackage{booktabs.sty}\toprule"
+        assert detect_required_packages(latex_code) == []
+
+    def test_space_between_command_and_brace(self):
+        latex_code = r"\usepackage {booktabs}\toprule"
+        assert detect_required_packages(latex_code) == []
+
+
 class TestAnalyzeLatexPackages:
     """analyze_latex_packages 规则表优先 + LLM 兜底测试（Mock LLM）。"""
 
@@ -236,6 +350,38 @@ class TestAnalyzeLatexPackages:
         mock_llm.chat.return_value = {"bad_field": True}
         packages = await analyze_latex_packages(r"\somefancycmd{1}", mock_llm)
         assert packages == []
+
+    @pytest.mark.asyncio
+    async def test_domain_excluded_rules_skip_llm(self, mock_llm):
+        """math 领域规则表命中但被领域排除 → 不调用 LLM 兜底。"""
+        packages = await analyze_latex_packages(r"\toprule", mock_llm, domain="math")
+        assert packages == []
+        mock_llm.chat.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_llm_output_filtered_by_domain(self, mock_llm):
+        """LLM 兜底输出含领域无关包 → 过滤后返回。"""
+        mock_llm.chat.return_value = {"packages": ["somefancypkg", "booktabs"]}
+        packages = await analyze_latex_packages(
+            r"\somefancycmd{1}", mock_llm, domain="math"
+        )
+        assert packages == ["somefancypkg"]
+
+    @pytest.mark.asyncio
+    async def test_llm_output_filtered_by_loaded(self, mock_llm):
+        """LLM 兜底输出含已加载包 → 过滤后返回。"""
+        mock_llm.chat.return_value = {"packages": ["booktabs", "somefancypkg"]}
+        latex = r"\usepackage{booktabs}\somefancycmd{1}"
+        packages = await analyze_latex_packages(latex, mock_llm)
+        assert packages == ["somefancypkg"]
+
+    @pytest.mark.asyncio
+    async def test_rule_hit_but_all_loaded_skips_llm(self, mock_llm):
+        """规则表命中但全部已加载 → 返回空且不调用 LLM。"""
+        latex = r"\usepackage{booktabs}\toprule"
+        packages = await analyze_latex_packages(latex, mock_llm)
+        assert packages == []
+        mock_llm.chat.assert_not_called()
 
 
 class TestPrependPackageComments:

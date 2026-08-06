@@ -11,6 +11,7 @@
 | [modules.md](./modules.md) | 所有功能模块 |
 | [frontend.md](./frontend.md) | 前端开发文档（样式架构、组件、Hook、状态管理） |
 | [testing.md](./testing.md) | 测试规范与用例覆盖 |
+| [latex-package-rules.md](./latex-package-rules.md) | 宏包规则表维护指南（新增规则模板 + 评审清单） |
 
 ---
 
@@ -104,6 +105,8 @@ latexcellence/
 │       │   └── ...
 │       └── pages/                  # 页面组件
 │
+├── tools/                        # 维护者工具（开发/评测/维护用脚本与 Agent 评测工作区，不进入运行时）
+│   └── latex_packages/             # 宏包规则表维护（离线编译验证 + 覆盖率报告）
 ├── static/                         # Vite 构建产物
 ├── prompts/                        # 自定义提示词
 ├── templates/                      # 生成的 LaTeX 模板

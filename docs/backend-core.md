@@ -574,16 +574,30 @@ raise ValueError("Validation failed after N attempts")        # ❌ 耗尽
 
 分析 LaTeX 代码使用的命令/环境/列说明符，判断所需宏包。供公式 OCR、表格 OCR、Markdown 转换等模块使用。
 
-**核心接口**：`detect_required_packages(latex_code)` / `analyze_latex_packages(latex_code, llm=None)` / `prepend_package_comments(llm, latex_code)` / `packages_to_comments(packages)`
+**核心接口**：`detect_required_packages(latex_code, domain="general", exclude_loaded=True)` / `analyze_latex_packages(latex_code, llm=None, domain="general")` / `prepend_package_comments(llm, latex_code, domain="general")` / `packages_to_comments(packages)`
 
 **Pydantic 模型**：`LatexPackageAnalysis`（packages）
 
 **检测流程**：主路径为确定性规则表 `latex_package_rules.py`（命令/环境/列说明符 → 宏包映射），
 零 LLM 开销、结果可复现；规则表未命中时若传入 `llm`，才走 LLM 兜底（输出经 schema 校验 +
-归一化：小写 / 去 `.sty` / 去重 / 排序）。
+归一化：小写 / 去 `.sty` / 去重 / 排序，再按领域与已加载过滤）。
+`domain` 参数（`general` / `math` / `table`）按领域排除无关宏包：公式 OCR 传 `math`
+（剔除表格/版式/引用类），表格 OCR 传 `table`，格式转换传 `general`。
+`exclude_loaded=True`（默认）会扫描 `\usepackage` / `\RequirePackage`（含可选参数、
+逗号分隔多包），把已加载宏包从结果剔除，避免整篇文档重复推荐。
 
 **误报防护**：扫描前屏蔽逐字内容（`\verb` / `\lstlisting` / `\url` 等）与 `%` 注释；
 只收录"必须加载该宏包才能编译"的命令/环境，LaTeX 内核能力（`tabular` / `\frac` / `\mathcal` 等）不收录。
+
+**内核白名单守卫**：`KERNEL_COMMANDS` / `KERNEL_ENVS` 记录 LaTeX 内核能力清单，
+测试断言规则表与白名单无交集，防止 `\frac` / `\mathcal` / `\hline` / `tabular` 误入。
+
+**语料与验证**：`tests/fixtures/latex_packages/` 存放按来源分组的真实片段
+（公式 OCR / 表格 OCR / Pandoc / 对抗样本），`test_latex_package_corpus.py`
+逐项比对形成查准率/查全率基线；`tools/latex_packages/verify_rules.py` 在装有 TeX
+的机器上离线编译验证（维护者专用，运行时不依赖 TeX）；`tools/latex_packages/coverage_report.py`
+对照常用宏包清单输出未覆盖项。新增规则模板与评审清单见
+[latex-package-rules.md](./latex-package-rules.md)。
 
 **降级策略**：LLM 兜底或 JSON 校验失败 → 返回空列表，不影响主流程。
 

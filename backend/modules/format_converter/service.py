@@ -131,7 +131,7 @@ class FormatConverterService:
         if cfg.llm.api_key:
             try:
                 llm = get_llm_client()
-                latex = await prepend_package_comments(llm, latex)
+                latex = await prepend_package_comments(llm, latex, domain="general")
             except Exception as e:
                 self._logger.warning(
                     f"Package analysis failed, returning raw output: {e}"
