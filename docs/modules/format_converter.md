@@ -1,10 +1,10 @@
 # 文档格式转换模块 `format_converter/`
 
-通过 `subprocess` 调用 Pandoc 实现 Markdown/DOCX/HTML 与 LaTeX 的互转，支持文本输入和文件上传两种模式。目标格式为 LaTeX 时，自动分析所需宏包。
+通过 `subprocess` 调用 Pandoc 实现 Markdown/DOCX/HTML 与 LaTeX 的互转，支持文本输入和文件上传两种模式。目标格式为 LaTeX 时，通过确定性宏包规则表自动分析所需宏包（LLM 仅兜底）。
 
 | 维度 | 格式转换 | 其他模块 |
 | --- | --- | --- |
-| 外部依赖 | pandoc + LLM（宏包分析） | latexmk / LLM |
+| 外部依赖 | pandoc + 宏包规则表（LLM 兜底） | latexmk / LLM |
 | 是否修改源文件 | 否（返回结果，手动复制/下载） | 是/否 |
 
 ## 支持的转换方向
@@ -32,7 +32,7 @@
 | `_run_pandoc_file(file_bytes, source, target)` | 通过临时文件调用 Pandoc（DOCX 等二进制格式） |
 | `_derive_output_filename(original, target)` | 推导输出文件名 |
 
-**降级策略**：无 API Key 或 LLM 分析失败时，直接返回 Pandoc 转换结果。
+**降级策略**：无 API Key 或 LLM 兜底分析失败时，直接返回 Pandoc 转换结果。
 
 ## API 路由
 

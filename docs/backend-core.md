@@ -572,13 +572,20 @@ raise ValueError("Validation failed after N attempts")        # ❌ 耗尽
 
 ### `latex_package_analyzer.py` — LaTeX 宏包分析器
 
-分析 LaTeX 代码使用的命令/环境，判断所需宏包。供公式 OCR、表格 OCR、Markdown 转换等模块使用。
+分析 LaTeX 代码使用的命令/环境/列说明符，判断所需宏包。供公式 OCR、表格 OCR、Markdown 转换等模块使用。
 
-**核心接口**：`analyze_latex_packages(latex_code, llm)` / `prepend_package_comments(llm, latex_code)` / `packages_to_comments(packages)`
+**核心接口**：`detect_required_packages(latex_code)` / `analyze_latex_packages(latex_code, llm=None)` / `prepend_package_comments(llm, latex_code)` / `packages_to_comments(packages)`
 
 **Pydantic 模型**：`LatexPackageAnalysis`（packages）
 
-**降级策略**：LLM 或 JSON 校验失败 → 返回空列表，不影响主流程。
+**检测流程**：主路径为确定性规则表 `latex_package_rules.py`（命令/环境/列说明符 → 宏包映射），
+零 LLM 开销、结果可复现；规则表未命中时若传入 `llm`，才走 LLM 兜底（输出经 schema 校验 +
+归一化：小写 / 去 `.sty` / 去重 / 排序）。
+
+**误报防护**：扫描前屏蔽逐字内容（`\verb` / `\lstlisting` / `\url` 等）与 `%` 注释；
+只收录"必须加载该宏包才能编译"的命令/环境，LaTeX 内核能力（`tabular` / `\frac` / `\mathcal` 等）不收录。
+
+**降级策略**：LLM 兜底或 JSON 校验失败 → 返回空列表，不影响主流程。
 
 ### `input_resolver.py` — `\input`/`\include` 递归解析器
 

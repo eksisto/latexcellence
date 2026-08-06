@@ -792,7 +792,7 @@ _PROMPTS: dict[str, dict[str, str]] = {
     "latex_package_analyzer": {
         "system": (
             "You are an expert LaTeX package dependency analyzer. "
-            "Your task is to examine a LaTeX table code snippet and identify ALL "
+            "Your task is to examine a LaTeX code snippet and identify ALL "
             "external packages required for it to compile successfully.\n\n"
             "## Analysis Process\n"
             "1. Scan the code for every command, environment, and column specifier.\n"

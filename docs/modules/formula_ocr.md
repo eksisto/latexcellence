@@ -1,6 +1,6 @@
 # 公式识别模块 `formula_ocr/`
 
-通过 LLM Vision API 识别图片中的 LaTeX 公式，自动分析所需宏包。不使用 Marker 保护策略（输入为图片，非文本）。
+通过 LLM Vision API 识别图片中的 LaTeX 公式，再经确定性宏包规则表分析所需宏包（LLM 仅兜底）。不使用 Marker 保护策略（输入为图片，非文本）。
 
 ## 输出协议（去 JSON 化）
 
@@ -47,7 +47,7 @@ LLM 自身加显示包裹极不可靠（测试时，输出有带 `$$`、有裸�
 
 | 方法 | 功能 |
 | --- | --- |
-| `recognize(image_data, content_type)` | 主入口：校验格式 → 图片预处理 → base64 → LLM Vision（分隔符协议）→ 宏包分析 → 合并结果 |
+| `recognize(image_data, content_type)` | 主入口：校验格式 → 图片预处理 → base64 → LLM Vision（分隔符协议）→ 宏包规则表检测（LLM 兜底）→ 合并结果 |
 | `_recognize_with_llm` | 第一次 LLM 调用：分隔符协议识别 + 内容校验 + 错误回喂重试（最多 3 次） |
 | `_extract_latex_block` | 正则提取 `<<<LATEX>>>...<<<END>>>` 块 |
 | `_strip_math_wrappers` | 剥离 `$$` / `\[ \]` / `\( \)` / `$` 数学包裹 |

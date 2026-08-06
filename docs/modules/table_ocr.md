@@ -2,7 +2,7 @@
 
 通过 LLM Vision API 识别图片中的表格，返回标准 LaTeX 浮动体代码（`table` + `tabular`）。与 `formula_ocr` 共享图片预处理流程。
 
-处理流程：图片输入 → 格式校验 → 等比缩放 → base64 → 第一次 LLM（Vision 识别表格）→ 第二次 LLM（宏包分析）→ 合并结果。
+处理流程：图片输入 → 格式校验 → 等比缩放 → base64 → 第一次 LLM（Vision 识别表格）→ 确定性宏包规则表（LLM 兜底）→ 合并结果。
 
 ## 输出协议（去 JSON 化）
 
@@ -39,13 +39,13 @@ CONFIDENCE: <0-1>
 
 | 方法 | 功能 |
 | --- | --- |
-| `recognize(image_data, content_type)` | 主入口：校验格式 → 图片预处理 → LLM Vision（分隔符协议）→ 宏包分析 → 合并结果 |
+| `recognize(image_data, content_type)` | 主入口：校验格式 → 图片预处理 → LLM Vision（分隔符协议）→ 宏包规则表检测（LLM 兜底）→ 合并结果 |
 | `_recognize_with_llm` | 第一次 LLM 调用：分隔符协议识别 + 内容校验 + 错误回喂重试（最多 3 次） |
 | `_extract_latex_block` | 正则提取 `<<<LATEX>>>...<<<END>>>` 块 |
 | `_parse_confidence` | 解析 `CONFIDENCE` 元数据 |
 | `_preprocess` / `_to_base64` / `_validate_content_type` | 图片预处理（与 formula_ocr 共享模式） |
 
-**降级策略**：第二次 LLM 调用（宏包分析）失败时，记录警告并直接返回第一次 LLM 结果。
+**降级策略**：规则表未命中且 LLM 兜底失败时，记录警告并直接返回第一次 LLM 结果。
 
 ## API 路由
 

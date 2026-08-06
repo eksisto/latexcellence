@@ -325,7 +325,7 @@ class TestRecognize:
 
 
 class TestRecognizeWithPackageAnalysis:
-    """完整流水线测试（第一次分隔符协议识别 + 第二次宏包分析）。"""
+    """完整流水线测试（第一次分隔符协议识别 + 确定性宏包规则表 / LLM 兜底）。"""
 
     @pytest.fixture(autouse=True)
     def _mock_get_llm_client(self, mock_llm, monkeypatch):
@@ -337,7 +337,7 @@ class TestRecognizeWithPackageAnalysis:
 
     @pytest.mark.asyncio
     async def test_with_packages_detected(self, mock_llm, service, monkeypatch):
-        """第一次返回表格代码，第二次返回宏包列表 → 结果含注释。"""
+        """规则表命中 booktabs（\toprule 等）→ 结果含注释且不调用 LLM 兜底。"""
         mock_llm.chat.side_effect = [
             ocr_response(TABLE_LATEX),
             {"packages": ["booktabs"]},
@@ -365,9 +365,11 @@ class TestRecognizeWithPackageAnalysis:
 
     @pytest.mark.asyncio
     async def test_without_packages(self, mock_llm, service, monkeypatch):
-        """第一次返回表格代码，第二次返回空列表 → 无注释。"""
-        hline_latex = TABLE_LATEX.replace(r"\toprule", r"\hline").replace(
-            r"\midrule", r"\hline"
+        """纯内核代码 → 规则表未命中，LLM 兜底返回空列表 → 无注释。"""
+        hline_latex = (
+            TABLE_LATEX.replace(r"\toprule", r"\hline")
+            .replace(r"\midrule", r"\hline")
+            .replace(r"\bottomrule", r"\hline")
         )
         mock_llm.chat.side_effect = [
             ocr_response(hline_latex, confidence="0.90"),
@@ -395,9 +397,14 @@ class TestRecognizeWithPackageAnalysis:
     async def test_package_analysis_fails_gracefully(
         self, mock_llm, service, monkeypatch
     ):
-        """第二次 LLM 调用失败 → 返回原始表格代码（优雅降级）。"""
+        """纯内核代码 → 规则表未命中，LLM 兜底失败 → 返回原始表格代码。"""
+        hline_latex = (
+            TABLE_LATEX.replace(r"\toprule", r"\hline")
+            .replace(r"\midrule", r"\hline")
+            .replace(r"\bottomrule", r"\hline")
+        )
         mock_llm.chat.side_effect = [
-            ocr_response(TABLE_LATEX, confidence="0.92"),
+            ocr_response(hline_latex, confidence="0.92"),
             RuntimeError("API error"),
         ]
 
@@ -416,5 +423,5 @@ class TestRecognizeWithPackageAnalysis:
         result = await service.recognize(buf.read(), "image/png")
 
         assert result["confidence"] == 0.92
-        assert r"\toprule" in result["latex"]
+        assert r"\hline" in result["latex"]
         assert not result["latex"].startswith(r"%")

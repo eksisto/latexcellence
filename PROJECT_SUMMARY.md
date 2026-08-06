@@ -37,6 +37,8 @@ latexcellence/
 │   │   ├── latex_parser.py          # LaTeX 源码↔纯文本转换（Marker 保护）
 │   │   ├── latex_json_guard.py      # LaTeX×JSON 转义防护（内容校验器，跨模块共享）
 │   │   ├── latex_literals.py        # LaTeX 字面内容识别（逐字命令/URL 参数，parser 与 guard 共享）
+│   │   ├── latex_package_rules.py   # LaTeX 宏包规则表（命令/环境/列说明符 → 宏包映射）
+│   │   ├── latex_package_analyzer.py # 宏包检测：确定性规则表为主，LLM 兜底
 │   │   ├── compile_error_translator.py  # LaTeX 编译错误 LLM 翻译（compile + git_diff 复用）
 │   │   ├── latexindent_utils.py     # latexindent.pl 调用封装（code_review 使用）
 │   │   ├── builtin_formatter.py     # 内置轻量 LaTeX 格式化器（latexindent 不可用时兜底）
@@ -127,7 +129,7 @@ latexcellence/
 | template_gen | 模板生成（自主 Agent） | router.py, service.py, agent.py, trace.py, cleanup.py | ✓ | ✗ |
 | formula_ocr | 图片→LaTeX 公式 | router.py, service.py | ✓(Vision) | ✗ |
 | table_ocr | 图片→LaTeX 表格 | router.py, service.py | ✓(Vision) | ✗ |
-| format_converter | 格式转换(pandoc) | router.py, service.py | ✓(宏包分析) | ✗ |
+| format_converter | 格式转换(pandoc) | router.py, service.py | ✓(宏包分析仅兜底) | ✗ |
 | style_modify | 自然语言修改样式 | router.py, service.py | ✓ | ✗ |
 | writing_chat | 写作助手对话（含联网搜索、学术检索与引文追踪、项目浏览、段落编辑和工具确认） | router.py, service.py, context.py, models.py, prompt_manager.py | ✓ | ✗ |
 | bib_manager | 参考文献管理 + DOI 多数据源查询 + 重复检测 + 文献库 | router.py, service.py, models.py, bib_parser.py, provider_manager.py, providers/ | ✓(DOI 查询不依赖 LLM) | ✗ |
@@ -141,6 +143,7 @@ latexcellence/
 - **WorkspaceManager**: 多浏览器多工作区隔离，每个 workspace_id 拥有独立的 `LatexProject` 实例（项目状态、文件树、MD5 缓存、撤销栈完全隔离）
 - **乐观锁**: 多工作区并发编辑同一文件时，通过 MD5 哈希检测冲突。读取段落时返回 `file_md5`，应用修改时前端传回 `expected_md5`，后端校验失败时抛出 `FileConflictError`（HTTP 409），前端自动刷新 MD5 并提示用户重试。`inject_expected_md5s()` 辅助函数统一为各模块 router 注入预期 MD5
 - **Marker Protection**: LaTeX 结构 → `__CMD_NNNN__` / `__MATH_NNNN__` / `__ENV_NNNN__` / `__VERB_NNNN__` marker → LLM 只改纯文本 → 按长度降序还原。apply 时若 marker_map 缺失（context 过期/重启/新操作覆盖），跳过该段写入并返回 `errors`，防止字面 marker 污染 `.tex` 文件；前端据此保留未应用项并提示用户重新检查。返回给前端展示的 `changes[]` 中的 `original`/`corrected` 会在 `_build_success_result` 中预先还原 marker，确保用户看到的是干净的 LaTeX 文本而非 `__CMD_NNNN__` 占位符
+- **宏包规则表检测**: 宏包分析以确定性规则表（`latex_package_rules.py`：命令/环境/列说明符 → 宏包）为主路径，零 LLM 开销、结果可复现；扫描前屏蔽逐字内容与 `%` 注释防误报，LaTeX 内核能力不收录；LLM 仅在规则表未命中时兜底，输出经 schema 校验 + 归一化（小写/去 `.sty`/去重/排序）
 - **JSON Validation Pipeline**:
   - `safe_parse_json()` → Pydantic `.model_validate()` → `retry_with_validation()` (最多 3 次重试 + 错误反馈)
   - `latex_json_guard.py` 提供字段级 LaTeX 内容校验（`LatexText` / `check_latex_text()`），拦截 JSON 反斜杠转义静默损坏
