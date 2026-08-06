@@ -54,6 +54,8 @@
 ### 安装
 
 ```bash
+# 克隆项目
+git clone https://github.com/eksisto/latexcellence.git
 cd latexcellence
 
 # 安装后端依赖
