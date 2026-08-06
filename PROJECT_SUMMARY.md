@@ -108,17 +108,19 @@ latexcellence/
 │   ├── latex-package-rules.md       # 宏包规则表维护指南
 │   └── modules/                     # 模块文档
 ├── tests/                           # 测试用例
-│   └── fixtures/latex_packages/     # 宏包规则表语料（公式/表格/Pandoc/对抗样本）
+│   ├── fixtures/latex_packages/     # 宏包规则表语料（公式/表格/Pandoc/对抗样本）
+│   └── fixtures/formula_ocr/        # 公式 OCR 人工评估语料（manifest + 每条公式一个 .tex 片段）
 ├── prompts/                         # 自定义提示词
 ├── formats/                         # 参考文献格式定义
 ├── templates/                       # 生成的 LaTeX 模板
 ├── writing_chat_sessions/           # 写作助手聊天持久化数据
 ├── logs/                            # 运行时日志
 ├── tools/                         # 维护者工具（开发/评测/维护用脚本与 Agent 评测工作区，不进入运行时）
-│   └── latex_packages/            # 宏包规则表维护脚本（编译验证 + 覆盖率报告）
-│       ├── verify_rules.py        # 离线编译验证（维护者专用，需 TeX）
-│       ├── coverage_report.py     # 覆盖率报告（对照常用宏包清单）
-│       └── common_packages.txt    # 常用宏包期望清单（覆盖率基准）
+│   ├── latex_packages/            # 宏包规则表维护脚本（编译验证 + 覆盖率报告）
+│   │   ├── verify_rules.py        # 离线编译验证（维护者专用，需 TeX）
+│   │   ├── coverage_report.py     # 覆盖率报告（对照常用宏包清单）
+│   │   └── common_packages.txt    # 常用宏包期望清单（覆盖率基准）
+│   └── formula_ocr_eval/          # 公式 OCR 人工评估工具（渲染语料 → 跑 OCR → 生成比对报告）
 └── static/                        # Vite 构建产物
 ```
 

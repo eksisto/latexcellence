@@ -33,3 +33,12 @@
 | `test_api/test_style_modify.py` | 模型校验、LLM mock、样式修改 |
 | `test_api/test_writing_chat.py` | 模型、会话管理、发送/编辑/应用、RS2 分隔符协议提取/校验失败重试/CRLF 原文、助手提示词、搜索与学术研究工具事件 |
 | `test_api/test_bib_manager.py` | 格式分析、元数据提取、BibTeX 生成、.bib 操作、路径穿越防御、DOI 查询、多数据源 Provider 降级 |
+
+## 人工评估工具（非 pytest）
+
+`tests/fixtures/formula_ocr/` 是公式 OCR 的**人工评估语料**（每条公式一个 LaTeX 片段 + `manifest.json`），配套维护者工具位于 `tools/formula_ocr_eval/`：
+
+- `render_corpus.py`：把语料渲染为评估输入图片（需本机 TeX Live）
+- `run_eval.py`：逐条调用真实 OCR 管线（含 LLM），把识别结果渲染成图片并生成 HTML 比对报告
+
+该流程涉及真实 LLM 调用且依赖人工判断，**不属于** `pytest tests/` 自动测试范围，也不会在 CI 中运行。使用说明见 `tools/formula_ocr_eval/README.md`。

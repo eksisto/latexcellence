@@ -1,0 +1,250 @@
+{
+  "description": "公式 OCR 人工评估语料（非 pytest 自动测试）。每条公式一个 .tex 片段（裸 LaTeX，不含 $ 包裹），inline 表示原语料中的行内/展示模式；渲染脚本据此选择 $...$ 或 \\[...\\] 包裹。",
+  "render": {
+    "packages": ["amsmath", "amssymb"],
+    "engine": "pdflatex",
+    "dpi": 300
+  },
+  "formulas": [
+    {
+      "id": "formula_01",
+      "file": "formula_01.tex",
+      "tier": 1,
+      "tier_name": "简单公式",
+      "title": "",
+      "inline": true
+    },
+    {
+      "id": "formula_02",
+      "file": "formula_02.tex",
+      "tier": 1,
+      "tier_name": "简单公式",
+      "title": "",
+      "inline": true
+    },
+    {
+      "id": "formula_03",
+      "file": "formula_03.tex",
+      "tier": 1,
+      "tier_name": "简单公式",
+      "title": "",
+      "inline": true
+    },
+    {
+      "id": "formula_04",
+      "file": "formula_04.tex",
+      "tier": 1,
+      "tier_name": "简单公式",
+      "title": "",
+      "inline": true
+    },
+    {
+      "id": "formula_05",
+      "file": "formula_05.tex",
+      "tier": 1,
+      "tier_name": "简单公式",
+      "title": "",
+      "inline": true
+    },
+    {
+      "id": "formula_06",
+      "file": "formula_06.tex",
+      "tier": 2,
+      "tier_name": "中等公式",
+      "title": "",
+      "inline": true
+    },
+    {
+      "id": "formula_07",
+      "file": "formula_07.tex",
+      "tier": 2,
+      "tier_name": "中等公式",
+      "title": "",
+      "inline": true
+    },
+    {
+      "id": "formula_08",
+      "file": "formula_08.tex",
+      "tier": 2,
+      "tier_name": "中等公式",
+      "title": "",
+      "inline": true
+    },
+    {
+      "id": "formula_09",
+      "file": "formula_09.tex",
+      "tier": 2,
+      "tier_name": "中等公式",
+      "title": "",
+      "inline": true
+    },
+    {
+      "id": "formula_10",
+      "file": "formula_10.tex",
+      "tier": 2,
+      "tier_name": "中等公式",
+      "title": "",
+      "inline": true
+    },
+    {
+      "id": "formula_11",
+      "file": "formula_11.tex",
+      "tier": 2,
+      "tier_name": "中等公式",
+      "title": "",
+      "inline": true
+    },
+    {
+      "id": "formula_12",
+      "file": "formula_12.tex",
+      "tier": 3,
+      "tier_name": "复杂公式",
+      "title": "施瓦茨不等式 (Cauchy–Schwarz)",
+      "inline": true
+    },
+    {
+      "id": "formula_13",
+      "file": "formula_13.tex",
+      "tier": 3,
+      "tier_name": "复杂公式",
+      "title": "三重积分球坐标换元",
+      "inline": true
+    },
+    {
+      "id": "formula_14",
+      "file": "formula_14.tex",
+      "tier": 3,
+      "tier_name": "复杂公式",
+      "title": "泰勒级数展开",
+      "inline": true
+    },
+    {
+      "id": "formula_15",
+      "file": "formula_15.tex",
+      "tier": 3,
+      "tier_name": "复杂公式",
+      "title": "广义二项系数",
+      "inline": true
+    },
+    {
+      "id": "formula_16",
+      "file": "formula_16.tex",
+      "tier": 3,
+      "tier_name": "复杂公式",
+      "title": "高斯函数积分",
+      "inline": true
+    },
+    {
+      "id": "formula_17",
+      "file": "formula_17.tex",
+      "tier": 4,
+      "tier_name": "高难度公式",
+      "title": "超几何函数 (超几何级数)",
+      "inline": true
+    },
+    {
+      "id": "formula_18",
+      "file": "formula_18.tex",
+      "tier": 4,
+      "tier_name": "高难度公式",
+      "title": "连分数表示 (continued fraction)",
+      "inline": true
+    },
+    {
+      "id": "formula_19",
+      "file": "formula_19.tex",
+      "tier": 4,
+      "tier_name": "高难度公式",
+      "title": "麦克斯韦方程组 (Maxwell's equations, 微分形式)",
+      "inline": true
+    },
+    {
+      "id": "formula_20",
+      "file": "formula_20.tex",
+      "tier": 4,
+      "tier_name": "高难度公式",
+      "title": "黎曼 ζ 函数 (积分表达)",
+      "inline": true
+    },
+    {
+      "id": "formula_21",
+      "file": "formula_21.tex",
+      "tier": 4,
+      "tier_name": "高难度公式",
+      "title": "张量 / 爱因斯坦求和约定 (爱因斯坦场方程)",
+      "inline": true
+    },
+    {
+      "id": "formula_22",
+      "file": "formula_22.tex",
+      "tier": 4,
+      "tier_name": "高难度公式",
+      "title": "多元泰勒 / 多行分段函数",
+      "inline": false
+    },
+    {
+      "id": "formula_23",
+      "file": "formula_23.tex",
+      "tier": 5,
+      "tier_name": "压力测试公式",
+      "title": "嵌套根号 \"无限嵌套根号\"",
+      "inline": true
+    },
+    {
+      "id": "formula_24",
+      "file": "formula_24.tex",
+      "tier": 5,
+      "tier_name": "压力测试公式",
+      "title": "广义积分/矩阵微分 (向量推导)",
+      "inline": true
+    },
+    {
+      "id": "formula_25",
+      "file": "formula_25.tex",
+      "tier": 5,
+      "tier_name": "压力测试公式",
+      "title": "有限傅里叶变换",
+      "inline": true
+    },
+    {
+      "id": "formula_26",
+      "file": "formula_26.tex",
+      "tier": 5,
+      "tier_name": "压力测试公式",
+      "title": "广义 Stirling 数 / 巨矩阵",
+      "inline": false
+    },
+    {
+      "id": "formula_27",
+      "file": "formula_27.tex",
+      "tier": 5,
+      "tier_name": "压力测试公式",
+      "title": "嵌套求和 + 三重积分 + 分数",
+      "inline": false
+    },
+    {
+      "id": "formula_28",
+      "file": "formula_28.tex",
+      "tier": 5,
+      "tier_name": "压力测试公式",
+      "title": "纳维-斯托克斯方程 (Navier–Stokes, 向量/张量压力测试)",
+      "inline": false
+    },
+    {
+      "id": "formula_29",
+      "file": "formula_29.tex",
+      "tier": 5,
+      "tier_name": "压力测试公式",
+      "title": "散度定理 + 分形微分 (高阶混合)",
+      "inline": false
+    },
+    {
+      "id": "formula_30",
+      "file": "formula_30.tex",
+      "tier": 5,
+      "tier_name": "压力测试公式",
+      "title": "弗里德曼方程 (Friedmann equations) — 宇宙学",
+      "inline": false
+    }
+  ]
+}

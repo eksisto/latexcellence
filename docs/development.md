@@ -106,7 +106,8 @@ latexcellence/
 │       └── pages/                  # 页面组件
 │
 ├── tools/                        # 维护者工具（开发/评测/维护用脚本与 Agent 评测工作区，不进入运行时）
-│   └── latex_packages/             # 宏包规则表维护（离线编译验证 + 覆盖率报告）
+│   ├── latex_packages/             # 宏包规则表维护（离线编译验证 + 覆盖率报告）
+│   └── formula_ocr_eval/           # 公式 OCR 人工评估（渲染语料 → 跑 OCR → 比对报告）
 ├── static/                         # Vite 构建产物
 ├── prompts/                        # 自定义提示词
 ├── templates/                      # 生成的 LaTeX 模板
@@ -117,6 +118,25 @@ latexcellence/
 ```
 
 > 依赖说明：后端使用 `requirements.txt`，无 `pyproject.toml`；前端包管理文件为 `frontend/package.json`，根目录无 `package.json`。
+
+## tools/ 维护者工具
+
+`tools/` 存放**开发、评测与维护用脚本及 Agent 评测工作区**，与生产运行路径完全隔离：
+
+- 不参与 FastAPI 运行时，也不被 `pytest tests/` 收集（除非脚本本身以 `test_` 开头并放在 `tests/` 下）
+- 以 `python tools/<工具>/<入口>.py` 方式手动运行，通常需要本机 TeX Live 或 LLM 配置
+- 每个工具子目录自带 `README.md` 说明用途与用法
+
+当前子目录：
+
+| 子目录 | 用途 |
+| --- | --- |
+| `tools/latex_packages/` | 宏包规则表维护：离线编译验证（`verify_rules.py`）与覆盖率报告（`coverage_report.py`），详见 [latex-package-rules.md](./latex-package-rules.md) |
+| `tools/formula_ocr_eval/` | 公式 OCR 人工评估：渲染语料为图片 → 调真实 OCR 管线 → 生成左右对比 HTML 报告，详见其 `README.md` |
+| `tools/plotgen_opt/` | plot_gen Agent 优化评测：驱动 Agent 生成图表并采集指标、trace 分析、视觉审查、版本对比，详见其 `README.md` |
+| `tools/templategen_opt/` | template_gen Agent 优化评测：驱动 Agent 生成 LaTeX 工程并采集指标、需求遵守检查、视觉审查，详见其 `README.md` |
+
+新增维护/评测工具时，按模块建子目录并补充 `README.md`，同时更新 `PROJECT_SUMMARY.md` 目录树。
 
 ---
 
