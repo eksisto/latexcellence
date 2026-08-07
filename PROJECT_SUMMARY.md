@@ -72,7 +72,7 @@ latexcellence/
 │       ├── compile/                 # 自动编译
 │       ├── git_diff/                # Git 差异高亮
 │       ├── template_gen/            # 模板生成（自主 Agent）
-│       ├── formula_ocr/             # 公式 OCR
+│       ├── formula_ocr/             # 公式 OCR（含 visual_inline.py 视觉 inline/display 判定）
 │       ├── table_ocr/               # 表格 OCR
 │       ├── format_converter/        # 格式转换
 │       ├── style_modify/            # 样式修改
@@ -138,7 +138,7 @@ latexcellence/
 | compile | 编译 + 错误翻译 + 引擎自动检测 + PDF/A 支持 | router.py, service.py | ✓(错误翻译) | ✗ |
 | git_diff | Git 版本差异 PDF | router.py, service.py | ✓(编译失败时翻译错误) | ✗ |
 | template_gen | 模板生成（自主 Agent） | router.py, service.py, agent.py, trace.py, cleanup.py | ✓ | ✗ |
-| formula_ocr | 图片→LaTeX 公式 | router.py, service.py | ✓(Vision) | ✗ |
+| formula_ocr | 图片→LaTeX 公式 | router.py, service.py, visual_inline.py | ✓(Vision) | ✗ |
 | table_ocr | 图片→LaTeX 表格 | router.py, service.py | ✓(Vision) | ✗ |
 | format_converter | 格式转换(pandoc) | router.py, service.py | ✓(宏包分析仅兜底) | ✗ |
 | style_modify | 自然语言修改样式 | router.py, service.py | ✓ | ✗ |

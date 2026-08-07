@@ -3,14 +3,24 @@ formula_ocr 模块集成测试。
 """
 
 import io
+from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from pydantic import ValidationError
+from PIL import Image
 
+from backend.modules.formula_ocr.visual_inline import (
+    VisualInlineHint,
+    analyze_formula_image,
+)
 from backend.modules.formula_ocr.service import (
     FormulaOCRResult,
     FormulaOCRService,
+)
+
+_VISUAL_FIXTURES = (
+    Path(__file__).resolve().parent.parent / "fixtures" / "formula_ocr" / "visual"
 )
 
 
@@ -244,35 +254,45 @@ class TestInlineReconciliation:
             is False
         )
 
-    def test_limits_is_display(self):
+    def test_limits_keeps_llm_decision(self):
+        """\\limits 只决定上下标位置，不决定行内/行间：保留模型判定。"""
         assert (
             FormulaOCRService._reconcile_inline(r"\sum\limits_{i=1}^n i^2", True)
+            is True
+        )
+        assert (
+            FormulaOCRService._reconcile_inline(r"\sum\limits_{i=1}^n i^2", False)
             is False
         )
 
-    def test_nolimits_is_inline(self):
+    def test_integral_limits_keeps_llm_decision(self):
+        """含积分上下限的行内公式（\\int\\limits）不应被矫正为 display。"""
+        assert (
+            FormulaOCRService._reconcile_inline(r"\int\limits_a^b f(x)\,dx", True)
+            is True
+        )
         assert (
             FormulaOCRService._reconcile_inline(
                 r"\int\nolimits_0^\infty e^{-x}\,dx", False
             )
-            is True
+            is False
         )
 
-    def test_limits_overrides_textstyle(self):
-        """\\limits 直接决定上下标的渲染位置，优先于 \\textstyle（以实际渲染为准）。"""
+    def test_textstyle_wins_over_limits(self):
+        """显式 \\textstyle 是唯一的样式信号：即使带 \\limits 也判 inline。"""
         assert (
             FormulaOCRService._reconcile_inline(
                 r"\textstyle \sum\limits_{i=1}^n i", False
             )
-            is False
+            is True
         )
 
-    def test_nolimits_overrides_displaystyle(self):
+    def test_displaystyle_wins_over_nolimits(self):
         assert (
             FormulaOCRService._reconcile_inline(
                 r"\displaystyle \sum\nolimits_{i=1}^n i", True
             )
-            is True
+            is False
         )
 
     def test_verbatim_content_not_scanned(self):
@@ -301,7 +321,7 @@ class TestInlineReconciliation:
         """屏蔽只影响字面内容，真实数学结构仍生效。"""
         assert (
             FormulaOCRService._reconcile_inline(
-                r"\sum\limits_{i=1}^n \text{above} + \verb|x|", True
+                r"\displaystyle \sum_{i=1}^n \text{above} + \verb|x|", True
             )
             is False
         )
@@ -314,6 +334,89 @@ class TestInlineReconciliation:
     def test_plain_formula_keeps_llm_decision(self):
         assert FormulaOCRService._reconcile_inline(r"x^2 + y^2 = z^2", True) is True
         assert FormulaOCRService._reconcile_inline(r"x^2 + y^2 = z^2", False) is False
+
+    def test_visual_hint_used_when_no_structure(self):
+        """无结构信号时，视觉判定（图片中的上下标位置）直接生效。"""
+        assert (
+            FormulaOCRService._reconcile_inline(r"\sum_{i=1}^n x_i", False, visual=True)
+            is True
+        )
+        assert (
+            FormulaOCRService._reconcile_inline(r"\sum_{i=1}^n x_i", True, visual=False)
+            is False
+        )
+
+    def test_visual_hint_does_not_override_display_structure(self):
+        """编号环境 / \\displaystyle 等结构信号优先于视觉判定。"""
+        assert (
+            FormulaOCRService._reconcile_inline(
+                r"\begin{equation} \sum_{i=1}^n x_i \end{equation}",
+                False,
+                visual=True,
+            )
+            is False
+        )
+        assert (
+            FormulaOCRService._reconcile_inline(
+                r"\displaystyle \sum_{i=1}^n x_i", False, visual=True
+            )
+            is False
+        )
+
+    def test_visual_hint_does_not_override_textstyle(self):
+        """显式 \\textstyle 是作者意图，视觉判定不得反向覆盖。"""
+        assert (
+            FormulaOCRService._reconcile_inline(
+                r"\textstyle \sum_{i=1}^n x_i", False, visual=False
+            )
+            is True
+        )
+
+
+class TestVisualInlineAnalysis:
+    """输入图片的确定性行内/行间视觉判定（固定语料图，不依赖 TeX）。"""
+
+    def _hint(self, name):
+        return analyze_formula_image(Image.open(_VISUAL_FIXTURES / f"{name}.png"))
+
+    def test_sum_inline_detected(self):
+        """\\sum 上下标在右侧（行内样式）→ 判行内。"""
+        hint = self._hint("sum_inline")
+        assert hint.inline is True
+        assert "side-pair" in hint.reason
+
+    def test_sum_display_detected(self):
+        """\\sum 上下标在正上下方（行间样式）→ 判行间。"""
+        hint = self._hint("sum_display")
+        assert hint.inline is False
+        assert "above-below" in hint.reason
+
+    def test_integral_inline_detected(self):
+        """文本样式 \\int（宽高比约 2.0）且上下限在右侧 → 判行内。"""
+        hint = self._hint("int_inline")
+        assert hint.inline is True
+        assert "side+aspect" in hint.reason
+
+    def test_integral_display_neutral(self):
+        """显示样式 \\int 默认上下限也在右侧（宽高比约 2.5），证据不足不投票。"""
+        hint = self._hint("int_display")
+        assert hint.inline is None
+
+    def test_limit_inline_detected(self):
+        """\\lim 的条件在右下方 → 判行内。"""
+        hint = self._hint("lim_inline")
+        assert hint.inline is True
+        assert "side-lower" in hint.reason
+
+    def test_limit_display_neutral(self):
+        """行间 \\lim 的字形不构成足够证据时保持中立。"""
+        hint = self._hint("lim_display")
+        assert hint.inline is None
+
+    def test_plain_formula_neutral(self):
+        """无大型算子的公式（如勾股定理）不投票，交给模型判定。"""
+        hint = self._hint("plain_inline")
+        assert hint.inline is None
 
 
 class TestRecognize:
@@ -346,6 +449,21 @@ class TestRecognize:
         png = minimal_png
         result = await service._recognize_with_llm(mock_llm, png, "image/png")
 
+        assert result["inline"] is True
+
+    @pytest.mark.asyncio
+    async def test_inline_sum_with_limits_stays_inline(
+        self, mock_llm, service, minimal_png
+    ):
+        """回归：含 \\limits 的求和/积分行内公式不得被矫正为 display。"""
+        mock_llm.chat.return_value = ocr_response(
+            r"\sum\limits_{i=1}^n x_i", inline="true", confidence="0.9"
+        )
+
+        png = minimal_png
+        result = await service._recognize_with_llm(mock_llm, png, "image/png")
+
+        assert result["latex"] == r"\sum\limits_{i=1}^n x_i"
         assert result["inline"] is True
 
     @pytest.mark.asyncio
@@ -594,3 +712,98 @@ class TestRecognizeWithPackageAnalysis:
         result = await service.recognize(buf.read(), "image/png")
 
         assert result["latex"] == r"\[x^2 + y^2 = z^2\]"
+
+
+class TestVisualHintMerge:
+    """视觉判定与 LLM / 结构矫正的合并流程。"""
+
+    @pytest.fixture
+    def mock_llm(self):
+        llm = MagicMock()
+        llm.chat = AsyncMock()
+        return llm
+
+    @pytest.fixture(autouse=True)
+    def _mock_get_llm_client(self, mock_llm, monkeypatch):
+        monkeypatch.setattr(
+            "backend.modules.formula_ocr.service.get_llm_client",
+            lambda: mock_llm,
+        )
+
+    @pytest.mark.asyncio
+    async def test_visual_hint_overrides_model_display_verdict(
+        self, mock_llm, service, minimal_png
+    ):
+        """模型把行内求和误判为 display，视觉判定（上下标在右侧）矫正为 inline。"""
+        mock_llm.chat.return_value = ocr_response(
+            r"\sum_{i=1}^n x_i", inline="false", confidence="0.95"
+        )
+        hint = VisualInlineHint(inline=True, confidence=0.8, reason="side-pair")
+
+        result = await service._recognize_with_llm(
+            mock_llm, minimal_png, "image/png", visual_hint=hint
+        )
+
+        assert result["latex"] == r"\sum_{i=1}^n x_i"
+        assert result["inline"] is True
+        assert result["inline_source"] == "visual"
+
+    @pytest.mark.asyncio
+    async def test_display_structure_wins_over_visual(
+        self, mock_llm, service, minimal_png
+    ):
+        """编号环境是最强信号，即使视觉说行内也保持行间。"""
+        mock_llm.chat.return_value = ocr_response(
+            r"\begin{equation} \sum_{i=1}^n x_i \end{equation}",
+            inline="false",
+            confidence="0.95",
+        )
+        hint = VisualInlineHint(inline=True, confidence=0.8, reason="side-pair")
+
+        result = await service._recognize_with_llm(
+            mock_llm, minimal_png, "image/png", visual_hint=hint
+        )
+
+        assert result["inline"] is False
+        assert result["inline_source"] == "structure"
+
+    @pytest.mark.asyncio
+    async def test_undecided_visual_keeps_model_verdict(
+        self, mock_llm, service, minimal_png
+    ):
+        """视觉证据不足（None）时保持模型/结构矫正的结论。"""
+        mock_llm.chat.return_value = ocr_response(
+            r"\int_0^1 f(x)\,dx", inline="false", confidence="0.95"
+        )
+        hint = VisualInlineHint(inline=None, confidence=0.0, reason="none")
+
+        result = await service._recognize_with_llm(
+            mock_llm, minimal_png, "image/png", visual_hint=hint
+        )
+
+        assert result["inline"] is False
+        assert result["inline_source"] == "model"
+
+    @pytest.mark.asyncio
+    async def test_recognize_pipeline_flips_sum_to_inline(
+        self, mock_llm, service, monkeypatch
+    ):
+        """端到端：模型误报 display 的行内求和，经视觉分析后以 $...$ 返回。"""
+        mock_llm.chat.side_effect = [
+            ocr_response(r"\sum_{i=1}^n x_i", inline="false", confidence="0.95"),
+            {"packages": []},
+        ]
+
+        import backend.core.config as cfg_mod
+
+        cfg = cfg_mod.get_config()
+        monkeypatch.setattr(cfg.features.formula_ocr, "max_image_size_mb", 100)
+
+        png_bytes = (_VISUAL_FIXTURES / "sum_inline.png").read_bytes()
+        result = await service.recognize(png_bytes, "image/png")
+
+        assert result["inline"] is True
+        assert result["inline_source"] == "visual"
+        assert result["latex"].startswith("$")
+        assert result["latex"].endswith("$")
+        assert r"\sum" in result["latex"]

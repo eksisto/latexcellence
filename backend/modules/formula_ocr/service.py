@@ -8,9 +8,9 @@
     4. 模型按分隔符协议输出 LaTeX（<<<LATEX>>>...<<<END>>> + INLINE/CONFIDENCE），
        模型按视觉决策树（编号 / 多行对齐 / 算子上下标位置 / 积分形态 / 分式大小 /
        矩阵舒展度）给出 inline 判定，后端再按 LaTeX 结构确定性矫正
-       （公式编号 / 多行对齐环境；\\limits / \\nolimits 优先于 \\displaystyle /
-       \\textstyle，按实际渲染为准），最后做内容校验（控制字符 / 垃圾占位符 /
-       花括号与 $ 配平）
+       （公式编号 / 多行对齐环境；显式 \\displaystyle / \\textstyle），并用
+       输入图片的确定性视觉分析（大型算子上下标位置 / 积分字形）兜底矫正，
+       最后做内容校验（控制字符 / 垃圾占位符 / 花括号与 $ 配平）
     5. 调用 LaTeX 宏包分析器（第二次 LLM 调用），将宏包注释前置后返回
 
 设计说明：
@@ -39,6 +39,7 @@ from backend.utils.latex_literals import (
     find_matching_brace,
 )
 from backend.utils.latex_package_analyzer import prepend_package_comments
+from .visual_inline import VisualInlineHint, analyze_formula_image
 
 # 分隔符协议：LaTeX 以纯文本形式夹在标记之间，避免 JSON 反斜杠转义损坏
 _INLINE_RE = re.compile(r"INLINE\s*:\s*(true|false)", re.IGNORECASE)
@@ -82,18 +83,6 @@ _TEXT_WRAPPER_CMDS = (
     "hbox",
 )
 _TEXT_WRAPPER_RE = re.compile(r"\\(?:" + "|".join(_TEXT_WRAPPER_CMDS) + r")\{")
-
-# 大型运算符的显式上下标位置：\limits（正上下方→display）/ \nolimits（右侧→inline）
-_BIG_OP_LIMITS_RE = re.compile(
-    r"\\(sum|prod|coprod|int|iint|iiint|iiiint|oint|oiint|oiiint|"
-    r"lim|limsup|liminf|max|min|sup|inf|bigcup|bigcap|bigsqcup|"
-    r"bigoplus|bigotimes|bigodot|bigvee|bigwedge)\s*\\limits"
-)
-_BIG_OP_NOLIMITS_RE = re.compile(
-    r"\\(sum|prod|coprod|int|iint|iiint|iiiint|oint|oiint|oiiint|"
-    r"lim|limsup|liminf|max|min|sup|inf|bigcup|bigcap|bigsqcup|"
-    r"bigoplus|bigotimes|bigodot|bigvee|bigwedge)\s*\\nolimits"
-)
 
 
 def _blank_text_wrappers(latex: str) -> str:
@@ -164,6 +153,11 @@ class FormulaOCRService:
 
         img = self._preprocess(image_data)
         base64_image = self._to_base64(img)
+        visual_hint = analyze_formula_image(img)
+        self._logger.info(
+            f"Formula OCR visual inline hint: inline={visual_hint.inline} "
+            f"conf={visual_hint.confidence:.2f} reason={visual_hint.reason}"
+        )
 
         cfg = get_config()
         if not cfg.llm.api_key:
@@ -176,7 +170,9 @@ class FormulaOCRService:
             }
 
         llm = get_llm_client()
-        result = await self._recognize_with_llm(llm, base64_image, content_type)
+        result = await self._recognize_with_llm(
+            llm, base64_image, content_type, visual_hint
+        )
 
         if result.get("latex"):
             # 确定性包裹：让复制结果即贴即显（模型自身加包裹不可靠，故由后端统一处理）
@@ -191,7 +187,11 @@ class FormulaOCRService:
         return result
 
     async def _recognize_with_llm(
-        self, llm, base64_image: str, content_type: str
+        self,
+        llm,
+        base64_image: str,
+        content_type: str,
+        visual_hint: VisualInlineHint | None = None,
     ) -> dict[str, Any]:
         """按分隔符协议调用 Vision 模型，提取并校验 LaTeX，失败时回喂重试。"""
         messages = [
@@ -229,12 +229,18 @@ class FormulaOCRService:
                         "Output the LaTeX code strictly between those two markers."
                     )
                 latex = self._strip_math_wrappers(raw_block)
-                inline, confidence = self._parse_metadata(response_text)
-                inline = self._reconcile_inline(raw_block, inline)
+                model_inline, confidence = self._parse_metadata(response_text)
+                visual_value = (
+                    visual_hint.inline if visual_hint and visual_hint.decided else None
+                )
+                inline, inline_source = self._inline_decision(
+                    raw_block, model_inline, visual=visual_value
+                )
                 validated = FormulaOCRResult(
                     latex=latex, inline=inline, confidence=confidence
                 )
                 result = validated.model_dump()
+                result["inline_source"] = inline_source
 
                 # 置信度阈值处理
                 if validated.confidence < 0.7:
@@ -321,38 +327,54 @@ class FormulaOCRService:
         return inline, confidence
 
     @staticmethod
-    def _reconcile_inline(latex: str, inline: bool) -> bool:
+    def _reconcile_inline(latex: str, inline: bool, visual: bool | None = None) -> bool:
         """按 LaTeX 结构确定性矫正 LLM 的 inline 判定（不依赖模型）。
 
         与 vision prompt 中的视觉决策树一致，只矫正可由源码判定的部分：
         - 有公式编号（未带 * 的 display 环境、\\tag）→ display
         - 只能用于 display mode 的环境（equation*/align*/gather* 等）→ display
         - 多行对齐内层环境（aligned/gathered/split 等且含 \\\\ 换行）→ display
-        - 大型运算符显式 \\limits → display；\\nolimits → inline（优先于样式命令，
-          因为它们直接决定上下标的实际渲染位置）
         - 显式 \\displaystyle → display；显式 \\textstyle → inline
+        - 其余情况若有视觉判定（visual），以视觉为准：大型算子上下标位置与
+          积分字形是只存在于图片中的信息，LaTeX 文本本身无法表达
+
+        注意：\\limits / \\nolimits 只决定大型算子上下标的绘制位置（正上下方 /
+        右侧），不决定公式是行内还是行间——行内公式同样可以写成
+        \\sum\\limits_{i=1}^n 或 \\int\\limits_a^b。因此不作为矫正依据，
+        保留模型的视觉判断。
+
         扫描前先屏蔽逐字内容（\\verb / \\lstinline / verbatim 环境 / URL）与文本
         模式包裹（\\text / \\mbox 等），避免字面字符串触发误判。其余视觉特征
         （积分号形态、分式大小、矩阵舒展度等）保留模型判断。
+        """
+        decision, _ = FormulaOCRService._inline_decision(latex, inline, visual=visual)
+        return decision
+
+    @staticmethod
+    def _inline_decision(
+        latex: str, inline: bool, visual: bool | None = None
+    ) -> tuple[bool, str]:
+        """合并模型 / 结构 / 视觉三层判定的最终 inline 结论及其来源。
+
+        返回 (inline, source)，source 为 "structure" / "visual" / "model"。
+        优先级：结构信号 > 视觉判定 > 模型判定。
         """
         # 逐字内容与文本模式包裹不是数学结构，不参与 inline/display 判定
         scan = _blank_text_wrappers(blank_literal_spans(latex))
 
         if _NUMBERED_DISPLAY_ENV_RE.search(scan) or _TAG_RE.search(scan):
-            return False
+            return False, "structure"
         if _DISPLAY_ONLY_ENV_RE.search(scan):
-            return False
+            return False, "structure"
         if _MULTILINE_ALIGN_ENV_RE.search(scan) and r"\\" in scan:
-            return False
-        if _BIG_OP_LIMITS_RE.search(scan):
-            return False
-        if _BIG_OP_NOLIMITS_RE.search(scan):
-            return True
+            return False, "structure"
         if _DISPLAYSTYLE_RE.search(scan):
-            return False
+            return False, "structure"
         if _TEXTSTYLE_RE.search(scan):
-            return True
-        return inline
+            return True, "structure"
+        if visual is not None:
+            return visual, "visual"
+        return inline, "model"
 
     @staticmethod
     def _wrap_latex_for_paste(latex: str, inline: bool) -> str:

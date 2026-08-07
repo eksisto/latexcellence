@@ -59,7 +59,7 @@ logs/formula_ocr_eval/
 | `error` | 识别过程失败（LLM 重试耗尽等） |
 | `render_error` | 识别成功但结果公式渲染失败（如缺少宏包），此时 `latex` 字段仍保留识别出的原文 |
 
-每条记录还包含 `expected_inline`（语料标注的行内/展示模式）与 `result_inline`（识别判定），报告顶部会汇总二者不一致的条数，卡片中不一致的条目会标红提示，用于评估 inline/display 分类效果。
+每条记录还包含 `expected_inline`（语料标注的行内/展示模式）、`result_inline`（识别判定）与 `result_inline_source`（判定来源：`structure` / `visual` / `model`），报告顶部会汇总二者不一致的条数，卡片中不一致的条目会标红提示，用于评估 inline/display 分类效果。
 
 ## 流程
 
