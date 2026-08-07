@@ -9,6 +9,7 @@
     "copy": "Copy",
     "apply": "Apply",
     "ignore": "Ignore",
+    "back": "Back",
     "applyAll": "Apply All",
     "openWorkspace": "Open Workspace",
     "selectTexFile": "Select .tex file",
@@ -33,6 +34,7 @@
     "welcome": {
       "slogan": "Let typesetting fade into silence, and let thinking return to itself",
       "version": "v0.1.0",
+      "tocLabel": "Modules",
       "groups": {
         "contentImport": "Content Import",
         "contentGeneration": "Content Generation",
@@ -43,60 +45,46 @@
       },
       "features": {
         "formulaOcr": {
-          "title": "Formula OCR",
-          "desc": "Convert images to LaTeX formulas"
+          "title": "Formula OCR"
         },
         "tableOcr": {
-          "title": "Table OCR",
-          "desc": "Convert images to LaTeX tables"
+          "title": "Table OCR"
         },
         "formatConvert": {
-          "title": "Format Converter",
-          "desc": "Convert between Markdown/DOCX/HTML and LaTeX"
+          "title": "Format Converter"
         },
         "templateGen": {
-          "title": "Template Gen Agent",
-          "desc": "Generate LaTeX templates from descriptions"
+          "title": "Template Gen Agent"
         },
         "plotGen": {
-          "title": "Scientific Plot Agent",
-          "desc": "Upload data and generate editable publication-ready vector figures"
+          "title": "Scientific Plot Agent"
         },
         "bibManager": {
-          "title": "Bib Manager",
-          "desc": "Identify bibliography formats, extract metadata and generate BibTeX code"
+          "title": "Bib Manager"
         },
         "typoCheck": {
-          "title": "Typo Check",
-          "desc": "Fix typos and grammar errors in documents"
+          "title": "Typo Check"
         },
         "expressionOpt": {
-          "title": "Expression Opt",
-          "desc": "Quickly optimize text expression for better quality"
+          "title": "Expression Opt"
         },
         "terminologyCheck": {
-          "title": "Terminology Check",
-          "desc": "Check terminology consistency in capitalization, abbreviations, etc."
+          "title": "Terminology Check"
         },
         "paragraphTranslate": {
-          "title": "Paragraph Translation",
-          "desc": "Translate paragraphs one by one while preserving LaTeX structure"
+          "title": "Paragraph Translation"
         },
         "code_review": {
-          "title": "LaTeX Code Review",
-          "desc": "Format source code, eliminate code smells, and align with best practices"
+          "title": "LaTeX Code Review"
         },
         "styleModify": {
-          "title": "Style Modifier",
-          "desc": "Describe style changes in natural language, LLM adjusts LaTeX code"
+          "title": "Style Modifier"
         },
         "gitDiff": {
-          "title": "Git Diff Highlight",
-          "desc": "Compile document differences between Git states into a red/green PDF"
+          "title": "Git Diff Highlight"
         },
         "writingChat": {
-          "title": "Writing Assistant Chat",
-          "desc": "Context-aware multi-turn conversation that can modify specific paragraphs"
+          "title": "Writing Assistant Chat"
         }
       }
     },

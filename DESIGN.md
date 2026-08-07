@@ -815,6 +815,16 @@ Hook 内部封装了：项目恢复 → 文件选择 → 预览 → 检查 → �
 1. **CSS 自定义属性过渡**：在 `:root` 上过渡 `--background` 等 ~30 个变量，子元素通过 `var()` 继承插值后的值
 2. **过渡期间抑制逐元素 transition**：`data-theme-transitioning` 属性 + CSS 规则 `transition-duration: 0s !important`
 
+### 6.4 前端设计体系（学术手稿方向）
+
+前端视觉以「被排好版的学术手稿」为方向，与产品题材（LaTeX 排版）同源：
+
+- **字体角色**：`--font-display` = **STIX Two Text**（学术衬线），仅用于字标、§ 章节编号、英文 small-caps 标签（`.text-small-caps`）；中文标题保持 Noto Sans SC，正文保持霞鹜文楷，均不随主题色板改动。
+- **签名组件**：`components/Wordmark.jsx`（字标）；`components/PageHeader.jsx`（共享页头，传 `groupKey` 自动生成 "§N · 分组" kicker）；`components/EmptyState.jsx`（无项目/恢复中/空结果）；`components/ProofDiff.jsx`（原文→改后对照）。
+- **欢迎页**：标题页 + 点线目录（dotted-leader TOC），功能分组按写作流程编 § 号（`pages/WelcomePage.jsx` 的 `featureGroups` / `SECTION_NUMBER`，已导出）。
+- **全局背景**：`App.jsx` 内联 `bgSvg`（`--primary` 圆形 + 双色 `\LaTeX` 字标，右下角固定，全站共享）。
+- **动效**：欢迎页 `.reveal` 错落入场，尊重 `prefers-reduced-motion`；全站不使用 `hover:scale` 类通用缩放。
+
 ---
 
 ## 7. 配置管理

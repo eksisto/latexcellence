@@ -1,6 +1,5 @@
 import { useState, useCallback } from "react";
 import { useTranslation } from "react-i18next";
-import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -10,7 +9,8 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
-import { ArrowLeft, Wand2, Loader2, Copy } from "lucide-react";
+import { Wand2, Loader2, Copy } from "lucide-react";
+import PageHeader from "@/components/PageHeader";
 import { api } from "@/api/index";
 
 export default function StyleModifyPage() {
@@ -43,20 +43,11 @@ export default function StyleModifyPage() {
 
   return (
     <div className="min-h-screen p-8">
-      <div className="max-w-6xl mx-auto mb-8">
-        <div className="flex items-center gap-4">
-          <Button
-            variant="ghost"
-            size="icon"
-            nativeButton={false}
-            render={<Link to="/" />}
-          >
-            <ArrowLeft />
-          </Button>
-          <h1 className="text-3xl font-bold tracking-tight">
-            {t("pages:styleModify.title")}
-          </h1>
-        </div>
+      <div className="max-w-6xl mx-auto">
+        <PageHeader
+          title={t("pages:styleModify.title")}
+          groupKey="code_review"
+        />
       </div>
 
       <div className="max-w-6xl mx-auto grid grid-cols-2 gap-6">

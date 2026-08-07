@@ -95,6 +95,7 @@ latexcellence/
 │       │   └── bib-manager/         # 参考文献管理子 hooks（format_analysis/metadata_extraction/bibtex_generation/bib_file_save/latex_generation）
 │       ├── components/              # 共享组件 + ui 基座组件
 │       ├── theme/                   # 主题 CSS + useThemeManager.js
+│       ├── fonts/                   # 字体加载（文楷 / Noto Sans SC / JetBrains Mono / STIX Two Text）
 │       ├── api/index.js             # 统一 API 层
 │       ├── utils/                   # 前端工具（errorMessages.js 错误翻译 / formulaWrap.js 公式包裹重写）
 │       └── store/useStore.js        # Zustand 全局状态

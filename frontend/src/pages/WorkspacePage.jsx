@@ -27,7 +27,6 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import {
-  ArrowLeft,
   FolderOpen,
   SpellCheck,
   Play,
@@ -47,6 +46,7 @@ import useStore from "@/store/useStore";
 import useEnabledFeatures from "@/hooks/useEnabledFeatures";
 import useUndoRedo from "@/hooks/useUndoRedo";
 import ProjectExplorer from "@/components/ProjectExplorer";
+import PageHeader from "@/components/PageHeader";
 import ConfirmDialog from "@/components/ConfirmDialog";
 import FolderPickerDialog from "@/components/FolderPickerDialog";
 import PDFPreview from "@/components/PDFPreview";
@@ -284,20 +284,8 @@ export default function WorkspacePage() {
 
   return (
     <div className="min-h-screen p-8">
-      <div className="max-w-6xl mx-auto mb-8">
-        <div className="flex items-center gap-4">
-          <Button
-            variant="ghost"
-            size="icon"
-            nativeButton={false}
-            render={<Link to="/" />}
-          >
-            <ArrowLeft />
-          </Button>
-          <h1 className="text-3xl font-bold tracking-tight">
-            {t("pages:workspace.title")}
-          </h1>
-        </div>
+      <div className="max-w-6xl mx-auto">
+        <PageHeader title={t("pages:workspace.title")} />
       </div>
 
       <div className="max-w-6xl mx-auto">

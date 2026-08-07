@@ -99,6 +99,7 @@ latexcellence/
 │       ├── main.jsx / App.jsx / index.css
 │       ├── api/index.js            # API 层封装
 │       ├── store/useStore.js       # Zustand 全局状态
+│       ├── fonts/                  # 字体加载（霞鹜文楷 / Noto Sans SC / JetBrains Mono / STIX Two Text）
 │       ├── hooks/                  # 自定义 hooks
 │       ├── components/             # 共享组件
 │       │   ├── ui/                 # shadcn/ui 封装

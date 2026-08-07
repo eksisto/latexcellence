@@ -1,10 +1,10 @@
 import { useState, useCallback, useRef, useEffect } from "react";
-import { Link } from "react-router-dom";
 import { toast } from "sonner";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { ArrowLeft, Upload, Loader2, Copy } from "lucide-react";
+import PageHeader from "@/components/PageHeader";
+import { Upload, Loader2, Copy } from "lucide-react";
 
 const ACCEPTED_TYPES = ["image/png", "image/jpeg", "image/webp"];
 
@@ -136,18 +136,8 @@ export default function ImageOCRPage({
 
   return (
     <div className="min-h-screen p-8">
-      <div className="max-w-6xl mx-auto mb-8">
-        <div className="flex items-center gap-4">
-          <Button
-            variant="ghost"
-            size="icon"
-            nativeButton={false}
-            render={<Link to="/" />}
-          >
-            <ArrowLeft />
-          </Button>
-          <h1 className="text-3xl font-bold tracking-tight">{title}</h1>
-        </div>
+      <div className="max-w-6xl mx-auto">
+        <PageHeader title={title} groupKey="contentImport" />
       </div>
 
       <div className="max-w-2xl mx-auto space-y-4">

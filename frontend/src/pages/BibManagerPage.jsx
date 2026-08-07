@@ -20,7 +20,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import {
-  ArrowLeft,
   BookOpen,
   BookOpenText,
   Copy,
@@ -38,6 +37,8 @@ import {
 } from "lucide-react";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import BibManagerLibrary from "@/components/BibManagerLibrary";
+import PageHeader from "@/components/PageHeader";
+import EmptyState from "@/components/EmptyState";
 import useStore from "@/store/useStore";
 import useFormatAnalysis from "@/hooks/bib-manager/useFormatAnalysis";
 import useMetadataExtraction from "@/hooks/bib-manager/useMetadataExtraction";
@@ -337,41 +338,24 @@ export default function BibManagerPage() {
 
   return (
     <div className="min-h-screen p-8">
-      <div className="max-w-6xl mx-auto mb-8">
-        <div className="flex items-center gap-4">
-          <Button
-            variant="ghost"
-            size="icon"
-            nativeButton={false}
-            render={<Link to="/" />}
-          >
-            <ArrowLeft />
-          </Button>
-          <h1 className="text-3xl font-bold tracking-tight">
-            {t("pages:bibManager.title")}
-          </h1>
-        </div>
+      <div className="max-w-6xl mx-auto">
+        <PageHeader
+          title={t("pages:bibManager.title")}
+          groupKey="contentGeneration"
+        />
       </div>
 
       {!projectPath ? (
         <div className="max-w-4xl mx-auto">
-          <Card>
-            <CardHeader>
-              <CardTitle>{t("pages:bibManager.noProjectTitle")}</CardTitle>
-              <CardDescription>
-                {t("pages:bibManager.noProjectDesc")}
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Button
-                className="w-full"
-                nativeButton={false}
-                render={<Link to="/workspace" />}
-              >
-                {t("common:openWorkspace")}
-              </Button>
-            </CardContent>
-          </Card>
+          <EmptyState
+            icon={Library}
+            title={t("pages:bibManager.noProjectTitle")}
+            description={t("pages:bibManager.noProjectDesc")}
+          >
+            <Button nativeButton={false} render={<Link to="/workspace" />}>
+              {t("common:openWorkspace")}
+            </Button>
+          </EmptyState>
         </div>
       ) : (
         <div className="max-w-6xl mx-auto">

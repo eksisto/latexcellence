@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import {
-  ArrowLeft,
   Check,
   CircleX,
   Download,
@@ -26,6 +25,8 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import ColorField from "@/components/ColorField";
+import EmptyState from "@/components/EmptyState";
+import PageHeader from "@/components/PageHeader";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
@@ -254,27 +255,19 @@ export default function GitDiffPage() {
     return (
       <div className="min-h-screen p-8">
         <div className="max-w-3xl mx-auto">
-          <Button
-            variant="ghost"
-            size="icon"
-            nativeButton={false}
-            render={<Link to="/" />}
+          <PageHeader
+            title={t("pages:gitDiff.title")}
+            groupKey="versionControl"
+          />
+          <EmptyState
+            icon={GitBranch}
+            title={t("pages:gitDiff.noProjectTitle")}
+            description={t("pages:gitDiff.noProjectDesc")}
           >
-            <ArrowLeft />
-          </Button>
-          <Card className="mt-8">
-            <CardHeader>
-              <CardTitle>{t("pages:gitDiff.noProjectTitle")}</CardTitle>
-              <CardDescription>
-                {t("pages:gitDiff.noProjectDesc")}
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Button nativeButton={false} render={<Link to="/workspace" />}>
-                {t("pages:gitDiff.openProjectWorkspace")}
-              </Button>
-            </CardContent>
-          </Card>
+            <Button nativeButton={false} render={<Link to="/workspace" />}>
+              {t("pages:gitDiff.openProjectWorkspace")}
+            </Button>
+          </EmptyState>
         </div>
       </div>
     );
@@ -282,25 +275,12 @@ export default function GitDiffPage() {
 
   return (
     <div className="min-h-screen p-8">
-      <div className="max-w-6xl mx-auto mb-8">
-        <div className="flex items-center gap-4">
-          <Button
-            variant="ghost"
-            size="icon"
-            nativeButton={false}
-            render={<Link to="/" />}
-          >
-            <ArrowLeft />
-          </Button>
-          <div>
-            <h1 className="text-3xl font-bold tracking-tight">
-              {t("pages:gitDiff.title")}
-            </h1>
-            <p className="text-sm text-muted-foreground mt-1">
-              {t("pages:gitDiff.description")}
-            </p>
-          </div>
-        </div>
+      <div className="max-w-6xl mx-auto">
+        <PageHeader
+          title={t("pages:gitDiff.title")}
+          description={t("pages:gitDiff.description")}
+          groupKey="versionControl"
+        />
       </div>
 
       <div className="max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-[380px_1fr] gap-6">

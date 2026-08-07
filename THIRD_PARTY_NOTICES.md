@@ -44,8 +44,9 @@
 | [zustand](https://github.com/pmndrs/zustand) | ^5.0.0 | MIT | Copyright (c) 2019 Paul Henschel | 状态管理 |
 | [KaTeX](https://katex.org) | ^0.17.0 | MIT | Copyright (c) 2013-2020 Khan Academy and other contributors | 数学公式渲染引擎（含内置字体） |
 | [@callmebill/lxgw-wenkai-web](https://github.com/CMBill/lxgw-wenkai-web) | ^1.522.0 | OFL-1.1（字体）/ MIT（npm 包装） | 字体 Copyright (c) 2020-2022 落霞孤鹜 (lxgw)；包装 Copyright (c) CM_Bill | 霞鹜文楷中文字体（Web 字体包） |
-| [@fontsource/jetbrains-mono](https://fontsource.org/fonts/jetbrains-mono) | ^5.3.0 | OFL-1.1 | Copyright 2020 The JetBrains Mono Project Authors | JetBrains Mono 等宽字体 |
+| [@fontsource/jetbrains-mono](https://fontsource.org/fonts/jetbrains-mono) | ^5.3.0 | OFL-1.1 | Copyright (c) 2020 The JetBrains Mono Project Authors | JetBrains Mono 等宽字体 |
 | [@fontsource/noto-sans-sc](https://fontsource.org/fonts/noto-sans-sc) | ^5.2.9 | OFL-1.1 | Copyright (c) Google Inc. | Noto Sans SC 中文字体 |
+| [@fontsource/stix-two-text](https://fontsource.org/fonts/stix-two-text) | ^5.3.0 | OFL-1.1 | Copyright (c) 2001-2021 The STIX Fonts Project Authors | STIX Two Text 学术衬线显示字体（品牌字标 / § 编号 / 小大写标签） |
 | [sonner](https://sonner.emilkowal.ski) | ^2.0.7 | MIT | Copyright (c) 2023 Emil Kowalski | Toast 通知组件 |
 | [lucide-react](https://lucide.dev) | ^1.23.0 | ISC and MIT | Copyright (c) Lucide Icons and Contributors | 图标库 |
 | [@base-ui/react](https://base-ui.com) | ^1.6.0 | MIT | Copyright (c) 2019 Material-UI SAS | 无头 UI Button 组件 |
@@ -106,7 +107,8 @@
 | --- | --- | --- | --- |
 | 霞鹜文楷 | OFL-1.1 | Copyright (c) 2020-2022 落霞孤鹜 (lxgw) | [lxgw/LXGW WenKai](https://github.com/lxgw/LxgwWenKai) |
 | Noto Sans SC | OFL-1.1 | Copyright (c) Google Inc. | [Google Fonts](https://fonts.adobe.com/fonts/noto-sans-sc) |
-| JetBrains Mono | OFL-1.1 | Copyright 2020 The JetBrains Mono Project Authors | [JetBrains](https://www.jetbrains.com/lp/mono) |
+| JetBrains Mono | OFL-1.1 | Copyright (c) 2020 The JetBrains Mono Project Authors | [JetBrains](https://www.jetbrains.com/lp/mono) |
+| STIX Two Text | OFL-1.1 | Copyright (c) 2001-2021 The STIX Fonts Project Authors | [STIX Fonts Project](https://github.com/stipub/stixfonts) |
 
 ## 五、系统级外部依赖
 

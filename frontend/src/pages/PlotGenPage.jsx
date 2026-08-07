@@ -8,7 +8,6 @@ import {
   useState,
 } from "react";
 import { useTranslation } from "react-i18next";
-import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -29,7 +28,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
-  ArrowLeft,
   AlertTriangle,
   ChartSpline,
   CheckCircle2,
@@ -54,6 +52,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { api } from "@/api/index";
+import PageHeader from "@/components/PageHeader";
 import usePlotGen from "@/hooks/usePlotGen";
 
 const STEP_ICON = {
@@ -135,25 +134,12 @@ export default function PlotGenPage() {
 
   return (
     <div className="min-h-screen p-6 md:p-8">
-      <div className="max-w-6xl mx-auto mb-6">
-        <div className="flex items-center gap-4">
-          <Button
-            variant="ghost"
-            size="icon"
-            nativeButton={false}
-            render={<Link to="/" />}
-          >
-            <ArrowLeft />
-          </Button>
-          <div>
-            <h1 className="text-2xl md:text-3xl font-bold tracking-tight">
-              {t("pages:plotGen.title")}
-            </h1>
-            <p className="text-sm text-muted-foreground mt-1">
-              {t("pages:plotGen.subtitle")}
-            </p>
-          </div>
-        </div>
+      <div className="max-w-6xl mx-auto">
+        <PageHeader
+          title={t("pages:plotGen.title")}
+          description={t("pages:plotGen.subtitle")}
+          groupKey="contentGeneration"
+        />
       </div>
 
       <div className="max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-3 gap-4">

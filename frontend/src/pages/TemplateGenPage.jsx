@@ -1,6 +1,5 @@
 import { useState, useCallback, useRef, useMemo, useEffect } from "react";
 import { useTranslation } from "react-i18next";
-import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -12,7 +11,6 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import {
-  ArrowLeft,
   FileText,
   Loader2,
   Copy,
@@ -35,6 +33,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { api } from "@/api/index";
+import PageHeader from "@/components/PageHeader";
 import { translateError } from "@/utils/errorMessages";
 
 const ROLE_ICON = {
@@ -171,24 +170,11 @@ export default function TemplateGenPage() {
   return (
     <div className="min-h-screen p-6 md:p-8">
       <div className="max-w-6xl mx-auto mb-6">
-        <div className="flex items-center gap-4">
-          <Button
-            variant="ghost"
-            size="icon"
-            nativeButton={false}
-            render={<Link to="/" />}
-          >
-            <ArrowLeft />
-          </Button>
-          <div>
-            <h1 className="text-2xl md:text-3xl font-bold tracking-tight">
-              {t("pages:templateGen.title")}
-            </h1>
-            <p className="text-sm text-muted-foreground mt-1">
-              {t("pages:templateGen.agentHint")}
-            </p>
-          </div>
-        </div>
+        <PageHeader
+          title={t("pages:templateGen.title")}
+          description={t("pages:templateGen.agentHint")}
+          groupKey="contentGeneration"
+        />
       </div>
 
       <div className="max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-3 gap-4">

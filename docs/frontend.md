@@ -23,10 +23,15 @@
 | `/git-diff` | GitDiffPage | JSON request |
 | `/writing-chat` | WritingChatPage | SSE（useWritingChat） |
 | `/bib-manager` | BibManagerPage | JSON request |
+| `/plot-gen` | PlotGenPage | **SSE Agent 流**（手写 fetch reader，无 hook） |
 
-全局 header 包含 ThemeSwitcher、ThemeToggle 和 SettingsDialog。
+全局右上角工具栏（AppToolbar）包含 ThemeSwitcher、ThemeToggle、工作区入口和 SettingsDialog；`App.jsx` 内联了一份全站共享的右下角 `\LaTeX` 字标背景装饰（`bgSvg`，含 `--primary` 圆形 + 双色字标路径），所有路由共享。
 
 `TemplateGenPage` 不使用 `useParagraphCheck` 或 `useWritingChat` hook，而是手写 `fetch` reader 对接 `/api/template-gen/generate` SSE 流，在本地 `steps` state 中累积 `plan`/`tool_call`/`tool_result`/`compile`/`warning`/`done` 事件并逐条渲染时间线。文件结果在 `done` 事件后通过 `/files` 和 `/file` 端点按需加载，支持通过 `/download` 下载整个沙箱为 ZIP 文件。生成完成后提供 Agent 日志卡片，可查看（弹窗内逐条展示 `trace.jsonl` 事件）或导出（下载 JSON），对应 `/trace` 与 `/trace/download` 端点。
+
+`PlotGenPage` 与 TemplateGenPage 同模式：`api.plotGen.upload` 先上传数据，`generate`/`refine` 通过手写 `fetch` reader 消费 `/plot-gen/agent/generate` 等 SSE 流，在本地 `steps` state 累积 Agent 事件并渲染时间线；会话文件与 trace 通过 `/files`、`/file`、`/trace` 端点加载。
+
+WelcomePage 采用「标题页 + 点线目录」构图：字标、slogan、「进入工作区」入口；功能模块按写作流程以 § 编号分组，每条目以点线引导至图标。模块分组与编号定义在 `pages/WelcomePage.jsx` 的 `featureGroups` 与 `SECTION_NUMBER`（已导出供复用）。
 
 ## 状态管理 `useStore.js`
 
@@ -71,6 +76,10 @@ API 按功能分组暴露（health、config、project、typoCheck、expressionOp
 | `ThemeSwitcher.jsx` | 配色主题切换下拉，自动发现主题文件 |
 | `ConfirmDialog.jsx` | 通用确认对话框（destructive 样式 + 禁止遮罩关闭） |
 | `ImageOCRPage.jsx` | 通用图片 OCR 页面组件（拖拽/粘贴/识别/复制；`renderResultMeta` 可接收 `(result, setResult)` 第二参数更新结果，FormulaOCR 未判定切换控件依赖此透传） |
+| `Wordmark.jsx` | STIX Two Text 排 "LaTeXcellence" |
+| `PageHeader.jsx` | 全站共享页头：返回链接 + `groupKey` 自动生成 "§N · 分组" kicker + 页面标题 + 右侧操作位（所有页面共用） |
+| `EmptyState.jsx` | 共享空状态：细环图标 + 标题 + 描述 + 可选 CTA（无项目 / 恢复中 / 空结果） |
+| `ProofDiff.jsx` | 原文→修改后对照行：原文衬线删除线、改后加粗（`modified` 可传字符串或 ReactNode，术语检查传自定义 Input） |
 | `ResultFilterBar.jsx` | 结果过滤工具栏（搜索框 + 类型下拉 + 段落跳转 + 重置） |
 | `ProgressBar.jsx` | 检查进度条组件 |
 | `ColorField.jsx` | 颜色选择器组件 |
@@ -138,13 +147,13 @@ API 按功能分组暴露（health、config、project、typoCheck、expressionOp
 | 主题系统 | CSS 自定义属性（oklch 色彩空间），主题文件在 `theme/` 目录，`data-theme` 属性选择 |
 | 深色模式 | `.dark` class 挂载在 `<html>`，配合 View Transitions API |
 | 多主题 | `theme/*.css` 自动发现，与亮暗模式无耦合 |
-| 字体 | bundled 中文字体 + 完整中文回退栈 |
+| 字体 | 学术衬线显示字体 STIX Two Text（字标 / § 编号 / 英文 small-caps 标签）+ 霞鹜文楷正文 + Noto Sans SC 标题 + JetBrains Mono 等宽，配完整中文回退栈 |
 | 图标 | lucide-react |
 | 类合并 | `cn()`（clsx + tailwind-merge） |
 
 ## CSS 文件 `src/index.css` + 主题目录 `src/theme/`
 
-- `index.css`：Tailwind 导入、自定义字体、深色变体定义、主题内联令牌、基础样式
+- `index.css`：Tailwind 导入、自定义字体、深色变体定义、主题内联令牌、基础样式。另含设计体系工具：`--font-display`（STIX Two Text）显示字体 token、`.text-small-caps` 英文小大写标签、`.tex-e` / `.tex-x` 字标 "TeX" 排字姿态、`.reveal` 入场动效（错落 + 尊重 `prefers-reduced-motion`）
 - `theme/` 下主题 CSS 文件：youminghei（幽冥黑）、jingtailan（景泰蓝）、hupohuang（琥珀黄）、ningyezi（凝夜紫）、tingwulv（庭芜绿）、hailuocheng（海螺橙）、yingtaohong（樱桃红）
 - `useThemeManager.js`：自动发现主题文件，管理 `data-theme` 属性
 - 新增主题只需添加 CSS 文件 + 添加 i18n 翻译键，自动发现

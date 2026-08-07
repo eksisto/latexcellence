@@ -1,14 +1,11 @@
 import { useMemo } from "react";
 import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { Separator } from "@/components/ui/separator";
+import { FolderOpen } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import Wordmark from "@/components/Wordmark";
+import useEnabledFeatures from "@/hooks/useEnabledFeatures";
+import { SECTION_BY_GROUP } from "@/lib/writingFlow";
 import {
   ScanText,
   Table2,
@@ -23,32 +20,27 @@ import {
   MessagesSquare,
   Album,
   Languages,
-  GraduationCap,
   ChartSpline,
 } from "lucide-react";
-import useEnabledFeatures from "@/hooks/useEnabledFeatures";
 
 const featureGroups = [
   {
-    category: "groups.contentImport",
+    category: "contentImport",
     features: [
       {
         titleKey: "formulaOcr.title",
-        descKey: "formulaOcr.desc",
         to: "/formula-ocr",
         icon: ScanText,
         id: "formula_ocr",
       },
       {
         titleKey: "tableOcr.title",
-        descKey: "tableOcr.desc",
         to: "/table-ocr",
         icon: Table2,
         id: "table_ocr",
       },
       {
         titleKey: "formatConvert.title",
-        descKey: "formatConvert.desc",
         to: "/format-convert",
         icon: ArrowLeftRight,
         id: "format_converter",
@@ -56,25 +48,22 @@ const featureGroups = [
     ],
   },
   {
-    category: "groups.contentGeneration",
+    category: "contentGeneration",
     features: [
       {
         titleKey: "templateGen.title",
-        descKey: "templateGen.desc",
         to: "/template-gen",
         icon: Scroll,
         id: "template_gen",
       },
       {
         titleKey: "plotGen.title",
-        descKey: "plotGen.desc",
         to: "/plot-gen",
         icon: ChartSpline,
         id: "plot_gen",
       },
       {
         titleKey: "bibManager.title",
-        descKey: "bibManager.desc",
         to: "/bib-manager",
         icon: Album,
         id: "bib_manager",
@@ -82,32 +71,28 @@ const featureGroups = [
     ],
   },
   {
-    category: "groups.textReview",
+    category: "textReview",
     features: [
       {
         titleKey: "typoCheck.title",
-        descKey: "typoCheck.desc",
         to: "/typo-check",
         icon: SpellCheck,
         id: "typo_check",
       },
       {
         titleKey: "expressionOpt.title",
-        descKey: "expressionOpt.desc",
         to: "/expression-opt",
         icon: PencilSparkles,
         id: "expression_opt",
       },
       {
         titleKey: "terminologyCheck.title",
-        descKey: "terminologyCheck.desc",
         to: "/terminology-check",
         icon: FileTypeCorner,
         id: "terminology_check",
       },
       {
         titleKey: "paragraphTranslate.title",
-        descKey: "paragraphTranslate.desc",
         to: "/paragraph-translate",
         icon: Languages,
         id: "paragraph_translate",
@@ -115,18 +100,16 @@ const featureGroups = [
     ],
   },
   {
-    category: "groups.code_review",
+    category: "code_review",
     features: [
       {
         titleKey: "code_review.title",
-        descKey: "code_review.desc",
         to: "/code-review",
         icon: ListChecks,
         id: "code_review",
       },
       {
         titleKey: "styleModify.title",
-        descKey: "styleModify.desc",
         to: "/style-modify",
         icon: PencilRuler,
         id: "style_modify",
@@ -134,11 +117,10 @@ const featureGroups = [
     ],
   },
   {
-    category: "groups.versionControl",
+    category: "versionControl",
     features: [
       {
         titleKey: "gitDiff.title",
-        descKey: "gitDiff.desc",
         to: "/git-diff",
         icon: FileDiff,
         id: "git_diff",
@@ -146,11 +128,10 @@ const featureGroups = [
     ],
   },
   {
-    category: "groups.aiAssist",
+    category: "aiAssist",
     features: [
       {
         titleKey: "writingChat.title",
-        descKey: "writingChat.desc",
         to: "/writing-chat",
         icon: MessagesSquare,
         id: "writing_chat",
@@ -167,55 +148,106 @@ export default function WelcomePage() {
     return featureGroups
       .map((group) => ({
         ...group,
-        categoryLabel: t(`pages:welcome.${group.category}`),
+        sectionNo: SECTION_BY_GROUP[group.category],
+        categoryLabel: t(`pages:welcome.groups.${group.category}`),
         features: group.features
           .filter((f) => !enabledFeatures || enabledFeatures[f.id])
           .map((f) => ({
             ...f,
             title: t(`pages:welcome.features.${f.titleKey}`),
-            description: t(`pages:welcome.features.${f.descKey}`),
           })),
       }))
       .filter((group) => group.features.length > 0);
   }, [t, enabledFeatures]);
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center p-8">
-      <h1 className="text-4xl font-bold mb-2 tracking-tight">LaTeXcellence</h1>
-      <p className="text-muted-foreground mb-8 text-lg">
-        {t("pages:welcome.slogan")}
-      </p>
-      <div className="w-full space-y-8 max-w-[min(56rem,70%)]">
-        {visibleGroups.map((group) => (
-          <div key={group.category}>
-            <h2 className="text-lg font-semibold mb-3 text-muted-foreground">
-              {group.categoryLabel}
-            </h2>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-5 gap-y-4">
-              {group.features.map(
-                ({ id, title, description, to, icon: Icon }) => (
-                  <Link key={id} to={to}>
-                    <Card className="h-full transition-all duration-300 ease-out hover:scale-[1.02] hover:shadow-lg cursor-pointer">
-                      <CardHeader className="pb-2 flex flex-row items-center gap-2">
-                        <Icon className="size-5 text-muted-foreground shrink-0" />
-                        <CardTitle className="text-base">{title}</CardTitle>
-                      </CardHeader>
-                      <CardContent>
-                        <CardDescription className="mx-0.5">
-                          {description}
-                        </CardDescription>
-                      </CardContent>
-                    </Card>
-                  </Link>
-                ),
-              )}
+    <div className="min-h-screen">
+      <div className="mx-auto flex min-h-screen max-w-6xl flex-col px-6 py-12 md:px-10 md:py-16">
+        {/* 标题页 + 点线目录 */}
+        <header className="grid flex-1 items-center gap-12 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] lg:gap-16">
+          {/* 标题块 */}
+          <div className="max-w-md">
+            <h1
+              className="reveal text-[2.6rem] font-medium leading-tight tracking-[-0.01em] md:text-6xl"
+              style={{ animationDelay: "0ms" }}
+            >
+              <Wordmark />
+            </h1>
+            <p
+              className="reveal mt-6 text-lg leading-relaxed text-muted-foreground"
+              style={{ animationDelay: "90ms" }}
+            >
+              {t("pages:welcome.slogan")}
+            </p>
+            <div className="reveal mt-8" style={{ animationDelay: "180ms" }}>
+              <Button
+                size="lg"
+                nativeButton={false}
+                render={<Link to="/workspace" />}
+              >
+                <FolderOpen />
+                {t("common:openWorkspace")}
+              </Button>
             </div>
           </div>
-        ))}
-      </div>
-      <Separator className="max-w-7xl w-full mt-8" />
-      <div className="mt-4 text-sm text-muted-foreground">
-        {t("pages:welcome.version")}
+
+          {/* 点线目录：功能条目按「写作流程」章节分组 */}
+          <nav
+            aria-label={t("pages:welcome.tocLabel")}
+            className="reveal"
+            style={{ animationDelay: "260ms" }}
+          >
+            <div className="space-y-7">
+              {visibleGroups.map((group, gi) => (
+                <section
+                  key={group.category}
+                  className="reveal"
+                  style={{ animationDelay: `${300 + gi * 70}ms` }}
+                >
+                  <h2 className="mb-1 flex items-baseline gap-3">
+                    <span className="font-display text-sm font-semibold text-muted-foreground">
+                      §{group.sectionNo}
+                    </span>
+                    <span className="font-heading text-base font-semibold text-foreground/80">
+                      {group.categoryLabel}
+                    </span>
+                    <span
+                      className="flex-1 border-b border-border"
+                      aria-hidden="true"
+                    />
+                  </h2>
+                  <ul>
+                    {group.features.map(({ id, title, to, icon: Icon }) => (
+                      <li key={id}>
+                        <Link
+                          to={to}
+                          className="group flex items-center gap-3 rounded-md py-[7px] pl-3 pr-2 transition-colors duration-200 hover:bg-accent/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60"
+                        >
+                          <span className="text-[15px] leading-snug">
+                            {title}
+                          </span>
+                          <span
+                            className="flex-1 border-b border-dotted border-foreground/25 transition-colors duration-200 group-hover:border-foreground/50"
+                            aria-hidden="true"
+                          />
+                          <Icon className="size-4 shrink-0 text-muted-foreground transition-colors duration-200 group-hover:text-foreground" />
+                        </Link>
+                      </li>
+                    ))}
+                  </ul>
+                </section>
+              ))}
+            </div>
+          </nav>
+        </header>
+
+        {/* colophon：字标 + 版本，像文档版权页 */}
+        <footer className="mt-16 flex items-center justify-between border-t border-border pt-6">
+          <Wordmark className="text-sm opacity-60" />
+          <span className="font-mono text-xs text-muted-foreground">
+            {t("pages:welcome.version")}
+          </span>
+        </footer>
       </div>
     </div>
   );

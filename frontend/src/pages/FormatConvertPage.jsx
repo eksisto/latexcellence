@@ -1,6 +1,5 @@
 import { useState, useCallback, useRef } from "react";
 import { useTranslation } from "react-i18next";
-import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -19,7 +18,6 @@ import {
 } from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import {
-  ArrowLeft,
   ArrowRightLeft,
   FileText,
   Loader2,
@@ -28,6 +26,7 @@ import {
   Upload,
 } from "lucide-react";
 import { api } from "@/api/index";
+import PageHeader from "@/components/PageHeader";
 
 const FORMATS = [
   { value: "markdown", label: "Markdown" },
@@ -179,25 +178,12 @@ export default function FormatConvertPage() {
 
   return (
     <div className="min-h-screen p-8">
-      <div className="max-w-6xl mx-auto mb-8">
-        <div className="flex items-center gap-4">
-          <Button
-            variant="ghost"
-            size="icon"
-            nativeButton={false}
-            render={<Link to="/" />}
-          >
-            <ArrowLeft />
-          </Button>
-          <div>
-            <h1 className="text-3xl font-bold tracking-tight">
-              {t("pages:formatConvert.title")}
-            </h1>
-            <p className="text-sm text-muted-foreground mt-1">
-              {t("pages:formatConvert.subtitle")}
-            </p>
-          </div>
-        </div>
+      <div className="max-w-6xl mx-auto">
+        <PageHeader
+          title={t("pages:formatConvert.title")}
+          description={t("pages:formatConvert.subtitle")}
+          groupKey="contentImport"
+        />
       </div>
 
       <div className="max-w-3xl mx-auto space-y-4">

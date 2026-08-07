@@ -20,7 +20,10 @@ import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { ArrowLeft, CheckCheck, Eye, Loader2, ListChecks } from "lucide-react";
+import { CheckCheck, Eye, Loader2, ListChecks, FolderOpen } from "lucide-react";
+import PageHeader from "@/components/PageHeader";
+import EmptyState from "@/components/EmptyState";
+import ProofDiff from "@/components/ProofDiff";
 import { api } from "@/api/index";
 import useParagraphCheck, { groupByFile } from "@/hooks/useParagraphCheck";
 import MarkerText from "@/components/MarkerText";
@@ -303,17 +306,12 @@ export default function TerminologyCheckPage() {
                             {change.explanation}
                           </p>
                         )}
-                        <div className="grid grid-cols-[auto_1fr] gap-x-2 gap-y-1 text-sm">
-                          <span className="text-muted-foreground whitespace-nowrap mt-0.5">
-                            {t("common:original")}
-                          </span>
-                          <span className="line-through text-foreground/60 whitespace-pre-wrap break-all mt-0.5">
-                            {change.original}
-                          </span>
-                          <span className="text-muted-foreground whitespace-nowrap mt-0.5">
-                            {t("pages:terminologyCheck.replacedWith")}
-                          </span>
-                          <div className="mt-0.5 flex items-center gap-2">
+                        <ProofDiff
+                          original={change.original}
+                          modifiedLabel={t(
+                            "pages:terminologyCheck.replacedWith",
+                          )}
+                          modified={
                             <Input
                               type="text"
                               value={
@@ -327,8 +325,8 @@ export default function TerminologyCheckPage() {
                               }
                               className="h-7 text-sm font-medium"
                             />
-                          </div>
-                        </div>
+                          }
+                        />
                       </li>
                     );
                   })}
@@ -372,56 +370,29 @@ export default function TerminologyCheckPage() {
 
   return (
     <div className="min-h-screen p-8">
-      <div className="max-w-6xl mx-auto mb-8">
-        <div className="flex items-center gap-4">
-          <Button
-            variant="ghost"
-            size="icon"
-            nativeButton={false}
-            render={<Link to="/" />}
-          >
-            <ArrowLeft />
-          </Button>
-          <h1 className="text-3xl font-bold tracking-tight">
-            {t("pages:terminologyCheck.title")}
-          </h1>
-        </div>
+      <div className="max-w-6xl mx-auto">
+        <PageHeader
+          title={t("pages:terminologyCheck.title")}
+          groupKey="textReview"
+        />
       </div>
 
       <div className="max-w-4xl mx-auto">
         {restoring ? (
-          <div className="flex justify-center mt-12">
-            <Card className="max-w-md w-full">
-              <CardHeader>
-                <CardTitle>{t("common:restoring")}</CardTitle>
-              </CardHeader>
-              <CardContent className="flex justify-center">
-                <Loader2 className="animate-spin size-6" />
-              </CardContent>
-            </Card>
-          </div>
+          <EmptyState title={t("common:restoring")} className="mt-12">
+            <Loader2 className="animate-spin size-6 text-muted-foreground" />
+          </EmptyState>
         ) : !projectPath || texFiles.length === 0 ? (
-          <div className="flex justify-center mt-12">
-            <Card className="max-w-md w-full">
-              <CardHeader>
-                <CardTitle>
-                  {t("pages:terminologyCheck.noProjectTitle")}
-                </CardTitle>
-                <CardDescription>
-                  {t("pages:terminologyCheck.noProjectDesc")}
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <Button
-                  className="w-full"
-                  nativeButton={false}
-                  render={<Link to="/workspace" />}
-                >
-                  {t("common:openWorkspace")}
-                </Button>
-              </CardContent>
-            </Card>
-          </div>
+          <EmptyState
+            icon={FolderOpen}
+            title={t("pages:terminologyCheck.noProjectTitle")}
+            description={t("pages:terminologyCheck.noProjectDesc")}
+            className="mt-12"
+          >
+            <Button nativeButton={false} render={<Link to="/workspace" />}>
+              {t("common:openWorkspace")}
+            </Button>
+          </EmptyState>
         ) : (
           <div className="space-y-4">
             <Card>

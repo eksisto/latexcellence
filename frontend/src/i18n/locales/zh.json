@@ -9,6 +9,7 @@
     "copy": "复制",
     "apply": "应用",
     "ignore": "忽略",
+    "back": "返回",
     "applyAll": "全部应用",
     "openWorkspace": "打开工作区",
     "selectTexFile": "选择 .tex 文件",
@@ -33,6 +34,7 @@
     "welcome": {
       "slogan": "让排版隐于无形，让思考回归本身",
       "version": "v0.1.0",
+      "tocLabel": "功能目录",
       "groups": {
         "contentImport": "内容导入",
         "contentGeneration": "内容生成",
@@ -43,60 +45,46 @@
       },
       "features": {
         "formulaOcr": {
-          "title": "公式 OCR 识别",
-          "desc": "将图像转换为 LaTeX 公式"
+          "title": "公式 OCR 识别"
         },
         "tableOcr": {
-          "title": "表格 OCR 识别",
-          "desc": "将图像转换为 LaTeX 表格"
+          "title": "表格 OCR 识别"
         },
         "formatConvert": {
-          "title": "格式转换",
-          "desc": "Markdown/DOCX/HTML 与 LaTeX 互转"
+          "title": "格式转换"
         },
         "templateGen": {
-          "title": "模板生成 Agent",
-          "desc": "根据文字描述生成 LaTeX 模板"
+          "title": "模板生成 Agent"
         },
         "plotGen": {
-          "title": "科研绘图 Agent",
-          "desc": "上传数据，自动生成可编辑的顶刊级矢量图表"
+          "title": "科研绘图 Agent"
         },
         "bibManager": {
-          "title": "参考文献管理",
-          "desc": "识别参考文献格式，提取元数据并生成规范的 BibTeX 代码"
+          "title": "参考文献管理"
         },
         "typoCheck": {
-          "title": "文本校对",
-          "desc": "修复文档中的错别字、语法错误等"
+          "title": "文本校对"
         },
         "expressionOpt": {
-          "title": "表达优化",
-          "desc": "快速优化文本表达，提升文章质量"
+          "title": "表达优化"
         },
         "terminologyCheck": {
-          "title": "术语一致性检查",
-          "desc": "检测术语大小写、缩写、中英混用等一致性问题"
+          "title": "术语一致性检查"
         },
         "paragraphTranslate": {
-          "title": "逐段翻译",
-          "desc": "按段落逐一翻译，保留 LaTeX 结构不被破坏"
+          "title": "逐段翻译"
         },
         "code_review": {
-          "title": "LaTeX 代码审查",
-          "desc": "格式化源码，消除坏味道，贴近最佳实践"
+          "title": "LaTeX 代码审查"
         },
         "styleModify": {
-          "title": "LaTeX 样式修改",
-          "desc": "用自然语言描述样式修改，LLM 自动调整 LaTeX 代码"
+          "title": "LaTeX 样式修改"
         },
         "gitDiff": {
-          "title": "Git 差异高亮",
-          "desc": "将两个 Git 状态的文档差异编译为红删绿增 PDF"
+          "title": "Git 差异高亮"
         },
         "writingChat": {
-          "title": "写作助手 Chat",
-          "desc": "上下文感知的多轮对话，能直接修改指定段落"
+          "title": "写作助手 Chat"
         }
       }
     },

@@ -5,6 +5,7 @@ import {
   Route,
   Navigate,
   useNavigate,
+  useLocation,
 } from "react-router-dom";
 import {
   TooltipProvider,
@@ -75,26 +76,35 @@ const bgSvg = (
   </svg>
 );
 
-const AppToolbar = memo(function AppToolbar() {
+/** 欢迎页外的「打开工作区」快捷入口。独立成组件，让 useLocation 订阅只影响它自身。 */
+const WorkspaceShortcut = memo(function WorkspaceShortcut() {
   const navigate = useNavigate();
+  const { pathname } = useLocation();
   const { t } = useTranslation("components");
   const handleNavigate = useCallback(() => navigate("/workspace"), [navigate]);
 
+  if (pathname === "/") return null;
+
+  return (
+    <Tooltip>
+      <TooltipTrigger
+        render={<Button variant="ghost" size="icon" onClick={handleNavigate} />}
+      >
+        <SquareKanban className="size-5" />
+        <span className="sr-only">{t("workspace")}</span>
+      </TooltipTrigger>
+      <TooltipContent>{t("workspace")}</TooltipContent>
+    </Tooltip>
+  );
+});
+
+const AppToolbar = memo(function AppToolbar() {
   return (
     <div className="fixed top-4 right-4 z-50 flex items-center gap-1">
+      {/* 欢迎页已有「打开工作区」主按钮，右上角不再重复显示工作区快捷入口 */}
+      <WorkspaceShortcut />
       <ThemeSwitcher />
       <ThemeToggle />
-      <Tooltip>
-        <TooltipTrigger
-          render={
-            <Button variant="ghost" size="icon" onClick={handleNavigate} />
-          }
-        >
-          <SquareKanban className="size-5" />
-          <span className="sr-only">{t("workspace")}</span>
-        </TooltipTrigger>
-        <TooltipContent>{t("workspace")}</TooltipContent>
-      </Tooltip>
       <SettingsDialog />
     </div>
   );

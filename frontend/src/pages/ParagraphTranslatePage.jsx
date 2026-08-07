@@ -20,7 +20,9 @@ import { Switch } from "@/components/ui/switch";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { ArrowLeft, Languages, Eye, Loader2, ListChecks } from "lucide-react";
+import { Languages, Eye, Loader2, ListChecks, FolderOpen } from "lucide-react";
+import PageHeader from "@/components/PageHeader";
+import EmptyState from "@/components/EmptyState";
 import { api } from "@/api/index";
 import useParagraphCheck, { groupByFile } from "@/hooks/useParagraphCheck";
 import MarkerText from "@/components/MarkerText";
@@ -231,56 +233,29 @@ export default function ParagraphTranslatePage() {
 
   return (
     <div className="min-h-screen p-8">
-      <div className="max-w-6xl mx-auto mb-8">
-        <div className="flex items-center gap-4">
-          <Button
-            variant="ghost"
-            size="icon"
-            nativeButton={false}
-            render={<Link to="/" />}
-          >
-            <ArrowLeft />
-          </Button>
-          <h1 className="text-3xl font-bold tracking-tight">
-            {t("pages:paragraphTranslate.title")}
-          </h1>
-        </div>
+      <div className="max-w-6xl mx-auto">
+        <PageHeader
+          title={t("pages:paragraphTranslate.title")}
+          groupKey="textReview"
+        />
       </div>
 
       <div className="max-w-4xl mx-auto">
         {restoring ? (
-          <div className="flex justify-center mt-12">
-            <Card className="max-w-md w-full">
-              <CardHeader>
-                <CardTitle>{t("common:restoring")}</CardTitle>
-              </CardHeader>
-              <CardContent className="flex justify-center">
-                <Loader2 className="animate-spin size-6" />
-              </CardContent>
-            </Card>
-          </div>
+          <EmptyState title={t("common:restoring")} className="mt-12">
+            <Loader2 className="animate-spin size-6 text-muted-foreground" />
+          </EmptyState>
         ) : !projectPath || texFiles.length === 0 ? (
-          <div className="flex justify-center mt-12">
-            <Card className="max-w-md w-full">
-              <CardHeader>
-                <CardTitle>
-                  {t("pages:paragraphTranslate.noProjectTitle")}
-                </CardTitle>
-                <CardDescription>
-                  {t("pages:paragraphTranslate.noProjectDesc")}
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <Button
-                  className="w-full"
-                  nativeButton={false}
-                  render={<Link to="/workspace" />}
-                >
-                  {t("common:openWorkspace")}
-                </Button>
-              </CardContent>
-            </Card>
-          </div>
+          <EmptyState
+            icon={FolderOpen}
+            title={t("pages:paragraphTranslate.noProjectTitle")}
+            description={t("pages:paragraphTranslate.noProjectDesc")}
+            className="mt-12"
+          >
+            <Button nativeButton={false} render={<Link to="/workspace" />}>
+              {t("common:openWorkspace")}
+            </Button>
+          </EmptyState>
         ) : (
           <div className="space-y-4">
             <Card>

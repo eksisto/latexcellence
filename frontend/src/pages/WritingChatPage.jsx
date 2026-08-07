@@ -3,15 +3,14 @@ import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import {
   Loader2,
-  ArrowLeft,
   ArrowUp,
   Plus,
   Trash2,
   PencilLine,
   TextAlignStart,
-  MessagesSquare,
   Sparkles,
   X,
+  FolderOpen,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -26,6 +25,8 @@ import {
 } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import PageHeader from "@/components/PageHeader";
+import EmptyState from "@/components/EmptyState";
 import useWritingChat from "@/hooks/useWritingChat";
 import MessageBubble from "./writing-chat/MessageBubble";
 import CaptchaDialog from "./writing-chat/CaptchaDialog";
@@ -129,40 +130,27 @@ export default function WritingChatPage() {
 
   return (
     <div className="min-h-screen p-4 md:p-8">
-      <div className="max-w-7xl mx-auto mb-4">
-        <div className="flex items-center gap-3">
-          <Button
-            variant="ghost"
-            size="icon"
-            nativeButton={false}
-            render={<Link to="/" />}
-          >
-            <ArrowLeft />
-          </Button>
-          <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
-            <MessagesSquare className="size-5" />
-            {t("pages:writingChat.title")}
-          </h1>
+      <div className="max-w-7xl mx-auto">
+        <PageHeader title={t("pages:writingChat.title")} groupKey="aiAssist">
           {compressed && (
-            <span className="ml-2 text-xs px-2 py-0.5 rounded bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-500/30">
+            <span className="text-xs px-2 py-1 rounded bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-500/30">
               {t("pages:writingChat.compressedToast")}
             </span>
           )}
-        </div>
+        </PageHeader>
       </div>
 
       {!projectPath || texFiles.length === 0 ? (
         <div className="max-w-7xl mx-auto">
-          <Card className="max-w-md mx-auto mt-12">
-            <CardHeader>
-              <CardTitle>{t("pages:writingChat.noProjectTitle")}</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <Button nativeButton={false} render={<Link to="/workspace" />}>
-                {t("common:openWorkspace")}
-              </Button>
-            </CardContent>
-          </Card>
+          <EmptyState
+            icon={FolderOpen}
+            title={t("pages:writingChat.noProjectTitle")}
+            className="mt-12"
+          >
+            <Button nativeButton={false} render={<Link to="/workspace" />}>
+              {t("common:openWorkspace")}
+            </Button>
+          </EmptyState>
         </div>
       ) : (
         <div className="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-[200px_1fr_2fr] gap-4">
