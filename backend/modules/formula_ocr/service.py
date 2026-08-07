@@ -5,11 +5,10 @@
     1. 校验图片格式（PNG/JPEG/WebP）和大小
     2. 预处理：超过 2000px 的边等比缩放到 2000px
     3. 转为 base64 发送给 LLM Vision API（第一次 LLM 调用）
-    4. 模型按分隔符协议输出 LaTeX（<<<LATEX>>>...<<<END>>> + INLINE/CONFIDENCE），
-       模型按视觉决策树（编号 / 多行对齐 / 算子上下标位置 / 积分形态 / 分式大小 /
-       矩阵舒展度）给出 inline 判定，后端再按 LaTeX 结构确定性矫正
-       （公式编号 / 多行对齐环境；显式 \\displaystyle / \\textstyle），并用
-       输入图片的确定性视觉分析（大型算子上下标位置 / 积分字形）兜底矫正，
+    4. 模型按分隔符协议输出 LaTeX（<<<LATEX>>>...<<<END>>> + CONFIDENCE），
+       inline/display 判定完全由后端完成：LaTeX 结构信号（公式编号 / 多行对齐
+       环境 / 显式 \\displaystyle / \\textstyle）优先，其次输入图片的确定性
+       视觉分析（大型算子上下标位置 / 积分字形），无证据时默认 display；
        最后做内容校验（控制字符 / 垃圾占位符 / 花括号与 $ 配平）
     5. 调用 LaTeX 宏包分析器（第二次 LLM 调用），将宏包注释前置后返回
 
@@ -42,10 +41,9 @@ from backend.utils.latex_package_analyzer import prepend_package_comments
 from .visual_inline import VisualInlineHint, analyze_formula_image
 
 # 分隔符协议：LaTeX 以纯文本形式夹在标记之间，避免 JSON 反斜杠转义损坏
-_INLINE_RE = re.compile(r"INLINE\s*:\s*(true|false)", re.IGNORECASE)
 _CONFIDENCE_RE = re.compile(r"CONFIDENCE\s*:\s*([0-9]*\.?[0-9]+)", re.IGNORECASE)
 
-# ── inline/display 确定性矫正（与 vision prompt 中的视觉决策树一致）──
+# ── inline/display 确定性判定（结构信号 + 视觉判定）──
 # 公式编号：未带 * 的 display 环境默认带编号，或显式 \tag → display
 _NUMBERED_DISPLAY_ENV_RE = re.compile(
     r"\\begin\{(equation|align|alignat|flalign|gather|multline|eqnarray)\}(?!\*)"
@@ -229,12 +227,12 @@ class FormulaOCRService:
                         "Output the LaTeX code strictly between those two markers."
                     )
                 latex = self._strip_math_wrappers(raw_block)
-                model_inline, confidence = self._parse_metadata(response_text)
+                confidence = self._parse_confidence(response_text)
                 visual_value = (
                     visual_hint.inline if visual_hint and visual_hint.decided else None
                 )
                 inline, inline_source = self._inline_decision(
-                    raw_block, model_inline, visual=visual_value
+                    raw_block, visual=visual_value
                 )
                 validated = FormulaOCRResult(
                     latex=latex, inline=inline, confidence=confidence
@@ -268,7 +266,6 @@ class FormulaOCRService:
                         f"Error: {last_error}\n\n"
                         "Please re-read the formula image and respond with exactly:\n"
                         "<<<LATEX>>>\n<LaTeX code>\n<<<END>>>\n"
-                        "INLINE: <true|false>\n"
                         "CONFIDENCE: <float between 0 and 1>"
                     ),
                 }
@@ -314,50 +311,45 @@ class FormulaOCRService:
         return s
 
     @staticmethod
-    def _parse_metadata(response_text: str) -> tuple[bool, float]:
-        """解析 INLINE / CONFIDENCE 元数据行，缺省时返回 (False, 0.0)。"""
-        inline = False
+    def _parse_confidence(response_text: str) -> float:
+        """解析 CONFIDENCE 元数据行，缺省时返回 0.0。"""
         confidence = 0.0
-        inline_match = _INLINE_RE.search(response_text)
-        if inline_match:
-            inline = inline_match.group(1).lower() == "true"
         conf_match = _CONFIDENCE_RE.search(response_text)
         if conf_match:
             confidence = float(conf_match.group(1))
-        return inline, confidence
+        return confidence
 
     @staticmethod
-    def _reconcile_inline(latex: str, inline: bool, visual: bool | None = None) -> bool:
-        """按 LaTeX 结构确定性矫正 LLM 的 inline 判定（不依赖模型）。
+    def _reconcile_inline(latex: str, visual: bool | None = None) -> bool:
+        """按 LaTeX 结构 + 视觉判定合并 inline/display 结论（不依赖模型）。
 
-        与 vision prompt 中的视觉决策树一致，只矫正可由源码判定的部分：
+        只使用可由源码判定的结构信号与输入图片的视觉判定：
         - 有公式编号（未带 * 的 display 环境、\\tag）→ display
         - 只能用于 display mode 的环境（equation*/align*/gather* 等）→ display
         - 多行对齐内层环境（aligned/gathered/split 等且含 \\\\ 换行）→ display
         - 显式 \\displaystyle → display；显式 \\textstyle → inline
-        - 其余情况若有视觉判定（visual），以视觉为准：大型算子上下标位置与
-          积分字形是只存在于图片中的信息，LaTeX 文本本身无法表达
+        - 无结构信号时，视觉判定（visual）已决定则以其为准：大型算子上下标位置
+          与积分字形是只存在于图片中的信息，LaTeX 文本本身无法表达；
+          视觉中立（None）则默认 display
 
         注意：\\limits / \\nolimits 只决定大型算子上下标的绘制位置（正上下方 /
         右侧），不决定公式是行内还是行间——行内公式同样可以写成
         \\sum\\limits_{i=1}^n 或 \\int\\limits_a^b。因此不作为矫正依据，
-        保留模型的视觉判断。
+        不参与结构判定。
 
         扫描前先屏蔽逐字内容（\\verb / \\lstinline / verbatim 环境 / URL）与文本
         模式包裹（\\text / \\mbox 等），避免字面字符串触发误判。其余视觉特征
-        （积分号形态、分式大小、矩阵舒展度等）保留模型判断。
+        （积分号形态、分式大小、矩阵舒展度等）由 visual_inline 的视觉判定覆盖。
         """
-        decision, _ = FormulaOCRService._inline_decision(latex, inline, visual=visual)
+        decision, _ = FormulaOCRService._inline_decision(latex, visual=visual)
         return decision
 
     @staticmethod
-    def _inline_decision(
-        latex: str, inline: bool, visual: bool | None = None
-    ) -> tuple[bool, str]:
-        """合并模型 / 结构 / 视觉三层判定的最终 inline 结论及其来源。
+    def _inline_decision(latex: str, visual: bool | None = None) -> tuple[bool, str]:
+        """合并结构 / 视觉两层判定的最终 inline 结论及其来源。
 
-        返回 (inline, source)，source 为 "structure" / "visual" / "model"。
-        优先级：结构信号 > 视觉判定 > 模型判定。
+        返回 (inline, source)，source 为 "structure" / "visual" / "default"。
+        优先级：结构信号 > 视觉判定 > 默认 display。
         """
         # 逐字内容与文本模式包裹不是数学结构，不参与 inline/display 判定
         scan = _blank_text_wrappers(blank_literal_spans(latex))
@@ -374,7 +366,7 @@ class FormulaOCRService:
             return True, "structure"
         if visual is not None:
             return visual, "visual"
-        return inline, "model"
+        return False, "default"
 
     @staticmethod
     def _wrap_latex_for_paste(latex: str, inline: bool) -> str:

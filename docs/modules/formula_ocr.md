@@ -10,43 +10,32 @@ LaTeX 代码**不放在 JSON 字符串中返回**——JSON 会把未转义的 `
 <<<LATEX>>>
 <LaTeX 代码>
 <<<END>>>
-INLINE: <true|false>
 CONFIDENCE: <0-1>
 ```
 
-后端用正则提取 `<<<LATEX>>>...<<<END>>>` 块，解析 `INLINE` / `CONFIDENCE` 元数据（缺省为 `false` / `0.0`），并自动剥离模型误加的 `$$...$$`、`\[...\]`、`\(...\)`、`$...$` 数学包裹。
+后端用正则提取 `<<<LATEX>>>...<<<END>>>` 块，解析 `CONFIDENCE` 元数据（缺省为 `0.0`），并自动剥离模型误加的 `$$...$$`、`\[...\]`、`\(...\)`、`$...$` 数学包裹。inline/display 判定不再由模型输出，完全由后端确定（见下节）。
 
-## inline / display 判定（视觉决策树 + 结构矫正）
+## inline / display 判定（结构信号 > 视觉判定 > 默认 display）
 
-`INLINE` 由 Vision 模型按视觉决策树分类，后端再按 LaTeX 结构做确定性矫正（`_reconcile_inline`）——优先级最高的前两条与可源码判定的规则不依赖模型：
+Vision 模型对"裁切出来的独立公式图"的 inline/display 判定系统性失效（实测对含求和/积分/极限的行内公式也几乎恒输出 display），因此**模型不再输出 INLINE 判定**。最终结论只由以下来源产生（按优先级）：
 
-| 优先级 | 视觉规则（模型判断） | 结论 |
-| --- | --- | --- |
-| 1 | 公式带编号（如 `(1)`、`(2.3)`） | display |
-| 2 | 多行且等号/箭头上下对齐 | display |
-| 3 | `\sum`/`\prod`/`\int`/`\lim`/`\max`/`\min` 上下标在正上下方 | 弱倾向 display（行内公式同样可用 `\limits` 使上下标在正上下方） |
-| 4 | 上下标在符号右侧（如 `\sum_{i=1}^n` 上下标在右） | 弱倾向 inline |
-| 5 | 积分号大、上下限在正上下方 | 弱倾向 display |
-| 6 | 积分号小、上下限在右侧 | 倾向 inline |
-| 7 | 分式大、多层嵌套清晰 | 倾向 display |
-| 8 | 分式小、嵌套明显压缩 | 倾向 inline |
-| 9 | 矩阵行距自然、大括号舒展 | 倾向 display |
-| 10 | 矩阵行距紧凑、大括号拥挤 | 倾向 inline |
-| 11 | 特征冲突时考虑作者是否强制 `\displaystyle` / `\textstyle` | 按实际渲染判断 |
+1. **结构信号**（LaTeX 文本，确定性）：编号环境 / `\tag` / display-only 环境 / 多行对齐环境（含 `\\`）/ `\displaystyle` → display；`\textstyle` → inline
+2. **视觉判定**（`visual_inline.py`）：已决定时以其为准
+3. **默认值**：`False`（display），来源记为 `"default"`
 
-后端 `_reconcile_inline()` 的确定性矫正规则（优先级从高到低）：
+`_reconcile_inline()` 的结构信号规则（优先级从高到低）：
 
 - 公式编号（未带 `*` 的 `equation`/`align`/`gather`/`multline`/`eqnarray` 环境、显式 `\tag`）→ display
 - 只能用于 display mode 的环境（`equation*`/`align*`/`gather*`/`multline*` 等）→ display
 - 多行对齐内层环境（`aligned`/`gathered`/`split` 等且含 `\\` 换行）→ display
 - 显式 `\displaystyle` → display；显式 `\textstyle` → inline
-- 其余视觉特征（积分号形态、分式大小、矩阵舒展度等）保留模型判断
+- 无结构信号时：视觉判定已决定则以其为准，否则默认 display
 
 `\limits` / `\nolimits` 只决定大型算子上下标的绘制位置（正上下方 / 右侧），**不决定公式是行内还是行间**——行内公式同样可以写成 `$\sum\limits_{i=1}^n x_i$` 或 `$\int\limits_a^b f(x)\,dx$`。因此它们不作为矫正依据，避免把这类常见行内公式误判为 display；显式样式命令（`\displaystyle` / `\textstyle`）才是唯一可由源码判定的样式信号。
 
 矫正扫描前先用 `latex_literals` 屏蔽逐字内容（`\verb` / `\lstinline` / verbatim 环境 / URL）与文本模式包裹（`\text` / `\mbox` 等），避免字面字符串中的 `\displaystyle`、`\begin{equation}` 触发误判。
 
-矫正发生在数学包裹剥离**之前**（基于 `<<<LATEX>>>` 原始块），因此模型误加的 `\begin{equation}` 等编号环境也能正确判为 display；包裹剥离后再按矫正结果做确定性 `$...$` / `\[...\]` 包裹。
+判定发生在数学包裹剥离**之前**（基于 `<<<LATEX>>>` 原始块），因此模型误加的 `\begin{equation}` 等编号环境也能正确判为 display；包裹剥离后再按判定结果做确定性 `$...$` / `\[...\]` 包裹。
 
 ## 输入图片的确定性视觉判定（`visual_inline.py`）
 
@@ -62,9 +51,9 @@ Vision 模型对"裁切出来的独立公式图"存在系统性倾向：即使�
 
 判定原则：
 
-- 只对证据明确的情况投票：无大型算子、积分字形为显示样式（宽高比约 2.5）等不确定情形一律返回 `None`，保持模型/结构矫正的结论，**绝不强行翻转**（在语料 40+ 组行内/行间渲染验证中 0 误翻转）。
+- 只对证据明确的情况投票：无大型算子、积分字形为显示样式（宽高比约 2.5）等不确定情形一律返回 `None`，退回默认 display，**绝不强行翻转**（在语料 40+ 组行内/行间渲染验证中 0 误翻转）。
 - 所有阈值均为相对量（图宽/图高的比例、宽高比），与 DPI 无关；分析前超过 1200px 的图等比缩小，只影响速度。
-- 优先级：结构信号（编号环境 / `\displaystyle` 等）> 视觉判定 > 模型判定，由 `_inline_decision` 统一合并，并返回来源（`inline_source`：`structure` / `visual` / `model`）供接口排查。
+- 优先级：结构信号（编号环境 / `\displaystyle` 等）> 视觉判定 > 默认 display，由 `_inline_decision` 统一合并，并返回来源（`inline_source`：`structure` / `visual` / `default`）供接口排查。
 
 视觉分析异常时静默降级（不影响 OCR 主流程）。
 
@@ -94,7 +83,7 @@ LLM 自身加显示包裹极不可靠（测试时，输出有带 `$$`、有裸�
 ## Pydantic 输出模型
 
 - `FormulaOCRResult`（latex, inline, confidence）
-- 接口返回另附 `inline_source`（`structure` / `visual` / `model`）字段，标注 inline 判定的最终来源，便于排查与评估
+- 接口返回另附 `inline_source`（`structure` / `visual` / `default`）字段，标注 inline 判定的最终来源，便于排查与评估
 
 ## Service 核心方法
 
@@ -104,9 +93,9 @@ LLM 自身加显示包裹极不可靠（测试时，输出有带 `$$`、有裸�
 | `_recognize_with_llm` | 第一次 LLM 调用：分隔符协议识别 + 内容校验 + 错误回喂重试（最多 3 次） |
 | `_extract_latex_block` | 正则提取 `<<<LATEX>>>...<<<END>>>` 块 |
 | `_strip_math_wrappers` | 剥离 `$$` / `\[ \]` / `\( \)` / `$` 数学包裹 |
-| `_parse_metadata` | 解析 `INLINE` / `CONFIDENCE` 元数据 |
-| `_inline_decision` | 合并模型 / 结构 / 视觉三层判定，返回 (inline, source)（优先级：结构 > 视觉 > 模型） |
-| `_reconcile_inline` | 按 LaTeX 结构确定性矫正 inline/display（编号 / 多行对齐 / 显式样式命令，先屏蔽逐字与文本内容）；可传入视觉判定兜底 |
+| `_parse_confidence` | 解析 `CONFIDENCE` 元数据（缺省 `0.0`） |
+| `_inline_decision` | 合并结构 / 视觉两层判定，返回 (inline, source)（优先级：结构 > 视觉 > 默认 display） |
+| `_reconcile_inline` | 按 LaTeX 结构 + 视觉判定合并 inline/display（编号 / 多行对齐 / 显式样式命令，先屏蔽逐字与文本内容）；无信号时默认 display |
 | `_wrap_latex_for_paste` | 按 `inline` 标志确定性添加 `$...$` / `\[...\]` 包裹（完整显示环境除外） |
 | `_preprocess` | 检查文件大小，超 2000px 等比缩放（LANCZOS 重采样） |
 | `_to_base64` | PIL Image → JPEG base64 |

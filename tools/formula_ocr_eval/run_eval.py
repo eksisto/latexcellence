@@ -236,7 +236,7 @@ async def main_async(args: argparse.Namespace) -> int:
                     "latex": result.get("latex", ""),
                     "confidence": result.get("confidence", 0.0),
                     "result_inline": result.get("inline", False),
-                    "result_inline_source": result.get("inline_source", "model"),
+                    "result_inline_source": result.get("inline_source", "default"),
                     "low_confidence": result.get("low_confidence", False),
                 }
             )

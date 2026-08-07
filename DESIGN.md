@@ -674,12 +674,14 @@ _validate_content_type() → _preprocess() → _to_base64()
   校验 MIME / 缩放超2000px边 / 转 JPEG base64
         ↓
 Vision API（system prompt = 公式 OCR 专家，temperature=0.1）
-  分隔符协议输出 <<<LATEX>>>...<<<END>>> + INLINE/CONFIDENCE 元数据
+  分隔符协议输出 <<<LATEX>>>...<<<END>>> + CONFIDENCE 元数据
         ↓
 正则提取 → latex_json_guard 内容校验
   失败 → 错误回喂 LLM 重试（最多 3 次）
         ↓
-返回 { latex, inline, confidence }
+结构信号 > 视觉判定 > 默认 display 合并 inline 结论
+        ↓
+返回 { latex, inline, confidence, inline_source }
   confidence < 0.7 时附加 low_confidence: true
 ```
 
