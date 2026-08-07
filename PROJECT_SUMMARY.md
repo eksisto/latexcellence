@@ -120,7 +120,9 @@ latexcellence/
 │   │   ├── verify_rules.py        # 离线编译验证（维护者专用，需 TeX）
 │   │   ├── coverage_report.py     # 覆盖率报告（对照常用宏包清单）
 │   │   └── common_packages.txt    # 常用宏包期望清单（覆盖率基准）
-│   └── formula_ocr_eval/          # 公式 OCR 人工评估工具（渲染语料 → 跑 OCR → 生成比对报告）
+│   ├── formula_ocr_eval/          # 公式 OCR 人工评估工具（渲染语料 → 跑 OCR → 生成比对报告）
+│   ├── plotgen_opt/               # plot_gen Agent 优化评测工作区（脚本/数据集/报告入库，results、previews 忽略）
+│   └── templategen_opt/           # template_gen Agent 优化评测工作区（脚本/场景定义/参考资料入库，results 忽略）
 └── static/                        # Vite 构建产物
 ```
 

@@ -107,7 +107,9 @@ latexcellence/
 │
 ├── tools/                        # 维护者工具（开发/评测/维护用脚本与 Agent 评测工作区，不进入运行时）
 │   ├── latex_packages/             # 宏包规则表维护（离线编译验证 + 覆盖率报告）
-│   └── formula_ocr_eval/           # 公式 OCR 人工评估（渲染语料 → 跑 OCR → 比对报告）
+│   ├── formula_ocr_eval/           # 公式 OCR 人工评估（渲染语料 → 跑 OCR → 比对报告）
+│   ├── plotgen_opt/                # plot_gen Agent 优化评测工作区
+│   └── templategen_opt/            # template_gen Agent 优化评测工作区
 ├── static/                         # Vite 构建产物
 ├── prompts/                        # 自定义提示词
 ├── templates/                      # 生成的 LaTeX 模板

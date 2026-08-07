@@ -1,0 +1,37 @@
+{
+  "s1_time_series": {
+    "file": "s1_time_series.csv",
+    "description": "比较 Control、TreatmentA、TreatmentB 三组在 180 天内的每日观测值随时间的变化趋势，突出各组差异。",
+    "rows": 540,
+    "columns": 3,
+    "nulls": 3
+  },
+  "s2_correlation": {
+    "file": "s2_correlation.xlsx",
+    "description": "分析 12 个环境监测变量的两两相关关系，绘制相关系数热力图，标注显著相关。",
+    "rows": 200,
+    "columns": 14,
+    "nulls": 12
+  },
+  "s3_distribution": {
+    "file": "s3_distribution.csv",
+    "description": "比较 4 个剂量组的实验结果测量值分布，关注偏态和离群值，展示各组中位数与四分位距。",
+    "rows": 160,
+    "columns": 2,
+    "nulls": 1
+  },
+  "s4_category": {
+    "file": "s4_category.csv",
+    "description": "展示各产品类别在各地区的销售额，比较不同类别之间的销售额大小。",
+    "rows": 24,
+    "columns": 3,
+    "nulls": 0
+  },
+  "s5_dose_response": {
+    "file": "s5_dose_response.csv",
+    "description": "绘制三种化合物的剂量-反应曲线，横轴为剂量（对数坐标），纵轴为抑制率（%），比较各化合物的半数抑制浓度 IC50。",
+    "rows": 75,
+    "columns": 4,
+    "nulls": 1
+  }
+}
