@@ -577,6 +577,7 @@
     "formulaOcr": {
       "title": "公式 OCR 识别",
       "btn": "识别公式",
+      "undecided": "无法自动判断，请选择",
       "inline": "行内公式",
       "display": "行间公式",
       "confidence": "% 置信度"

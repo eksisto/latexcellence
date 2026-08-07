@@ -37,6 +37,14 @@ Vision 模型对"裁切出来的独立公式图"的 inline/display 判定系统�
 
 判定发生在数学包裹剥离**之前**（基于 `<<<LATEX>>>` 原始块），因此模型误加的 `\begin{equation}` 等编号环境也能正确判为 display；包裹剥离后再按判定结果做确定性 `$...$` / `\[...\]` 包裹。
 
+前端对 `inline_source === "default"`（无结构信号且视觉中立）的结果提供行内/行间切换：
+默认展示行间公式，用户可切换为行内；切换时同步更新 `inline` 标志与按同一包裹规则
+重写的 `latex`（剥 `$...$` / `\[...\]` / 空壳显示环境后重包，独立显示环境原样保留，
+宏包注释前缀 `% \usepackage{...}` 原样保留），`<pre>` 展示与复制内容保持一致。
+重写逻辑位于 `frontend/src/utils/formulaWrap.js`（与后端 `_wrap_latex_for_paste` /
+`_strip_math_wrappers` 语义一致，`frontend/` 下 `npm test` 覆盖回归用例）。
+`structure` / `visual` 已判定的结果只读展示标签。
+
 ## 输入图片的确定性视觉判定（`visual_inline.py`）
 
 Vision 模型对"裁切出来的独立公式图"存在系统性倾向：即使上下标明显在算子右侧（行内样式），也常判为 `INLINE: false`（行间）。这类信息（上下标位置、积分字形）只存在于图片中，LaTeX 文本无法表达，因此后端增加一个**不依赖 LLM 的确定性视觉分析**（`analyze_formula_image`），对预处理后的同一张图做连通分量几何分析：

@@ -7,7 +7,7 @@
 - **文本校对**：逐段检查拼写错误，定位并修正，保留 LaTeX 结构不变
 - **表达优化**：按特定风格（如清晰、简洁、学术语气）优化表达，支持自定义提示词
 - **术语一致性检查**：LLM 提取全文术语，语义聚类识别不一致（大小写、中英混用、缩写变体），支持自定义替换
-- **公式识别**：上传公式图片，通过 LLM Vision API 识别为 LaTeX 代码
+- **公式识别**：上传公式图片，通过 LLM Vision API 识别为 LaTeX 代码；行内/行间判定由后端确定性完成（LaTeX 结构信号优先，辅以图片视觉分析），无法自动判定时可在结果页手动切换行内/行间模式
 - **表格识别**：上传表格图片，通过 LLM Vision API 识别为标准 LaTeX 浮动体代码（含三线表、合并单元格等）
 - **模板生成**：自主 Agent 基于自然语言描述，自动规划并产出可编译的多文件 LaTeX 工程——逐个写文件、调用 latexmk 编译验证、读日志修错、再编译，直至项目可成功构建；生成后支持一键下载 ZIP 压缩包，过期沙箱自动清理
 - **科研绘图 Agent**：上传 CSV/Excel/JSON 数据，自动完成数据画像、图表类型推荐、Python 绘图脚本生成与沙箱执行，输出 PDF/SVG 矢量图和 TikZ 源文件，并支持自然语言微调
@@ -39,7 +39,7 @@
 | --- | --- |
 | 后端 | Python 3.12+, FastAPI, uvicorn, openai, pydantic v2, httpx |
 | 前端 | React 19, Vite 6, Tailwind CSS 4, Zustand 5, shadcn/ui, sonner, react-markdown + KaTeX |
-| 测试 | pytest + pytest-asyncio |
+| 测试 | pytest + pytest-asyncio；前端 node:test（`npm test`，Node 内置测试运行器） |
 
 ## 快速开始
 

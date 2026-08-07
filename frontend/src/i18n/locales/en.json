@@ -577,6 +577,7 @@
     "formulaOcr": {
       "title": "Formula OCR",
       "btn": "Recognize Formula",
+      "undecided": "Cannot auto-detect, please choose",
       "inline": "Inline formula",
       "display": "Display formula",
       "confidence": "% confidence"

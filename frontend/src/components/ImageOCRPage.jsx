@@ -19,7 +19,7 @@ const ACCEPTED_TYPES = ["image/png", "image/jpeg", "image/webp"];
  * @param {React.ComponentType} props.icon  识别按钮图标
  * @param {(formData: FormData) => Promise<object>} props.recognize  识别 API 调用
  * @param {string} props.recognizeButtonText  识别按钮文案
- * @param {(result: object) => React.ReactNode} [props.renderResultMeta]  结果头部额外信息
+ * @param {(result: object, setResult: (updater) => void) => React.ReactNode} [props.renderResultMeta]  结果头部额外信息（可选第二参数用于更新 result）
  * @param {string} [props.resultEmptyText="(empty)"]  结果为空时的占位文本
  */
 export default function ImageOCRPage({
@@ -223,7 +223,7 @@ export default function ImageOCRPage({
                       {t("imageOcr.lowConfidence")}
                     </span>
                   )}
-                  {renderResultMeta && renderResultMeta(result)}
+                  {renderResultMeta && renderResultMeta(result, setResult)}
                   <Button variant="outline" size="sm" onClick={handleCopy}>
                     <Copy />
                     Copy

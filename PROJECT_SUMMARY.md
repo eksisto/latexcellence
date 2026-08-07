@@ -96,6 +96,7 @@ latexcellence/
 │       ├── components/              # 共享组件 + ui 基座组件
 │       ├── theme/                   # 主题 CSS + useThemeManager.js
 │       ├── api/index.js             # 统一 API 层
+│       ├── utils/                   # 前端工具（errorMessages.js 错误翻译 / formulaWrap.js 公式包裹重写）
 │       └── store/useStore.js        # Zustand 全局状态
 │
 ├── docs/                            # 开发文档

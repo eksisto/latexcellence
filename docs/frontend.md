@@ -44,6 +44,10 @@ API 按功能分组暴露（health、config、project、typoCheck、expressionOp
 
 后端英文错误消息 → 当前语言翻译。精确匹配 + 正则模式匹配，翻译资源位于 `errors` 命名空间。调用点包括 `request()`、`requestForm()`、`useParagraphCheck.js`、`useWritingChat.js`。
 
+## 工具模块 `utils/formulaWrap.js`
+
+公式行内/行间包裹重写工具（与后端 `formula_ocr/service.py` 的 `_strip_math_wrappers` / `_wrap_latex_for_paste` 语义一致）：剥离 `$$` / `\[ \]` / `\( \)` / `$` / 空壳显示环境包裹，并按 `inline` 标志重写为 `$...$` / `\[...\]`；独立显示环境原样保留，宏包注释前缀（`% \usepackage{...}`）在重写时保留。由 `FormulaOCRPage.jsx` 的行内/行间切换使用；`npm test`（`node --test`）覆盖回归用例。
+
 ## 国际化 `i18n/`
 
 基于 `i18next` + `react-i18next` + `i18next-browser-languagedetector`。翻译按 5 个命名空间拆分：`common`、`pages`、`components`、`hooks`、`errors`。Fallback 语言为中文。
@@ -66,7 +70,7 @@ API 按功能分组暴露（health、config、project、typoCheck、expressionOp
 | `ThemeToggle.jsx` | 亮/暗模式切换 |
 | `ThemeSwitcher.jsx` | 配色主题切换下拉，自动发现主题文件 |
 | `ConfirmDialog.jsx` | 通用确认对话框（destructive 样式 + 禁止遮罩关闭） |
-| `ImageOCRPage.jsx` | 通用图片 OCR 页面组件（拖拽/粘贴/识别/复制） |
+| `ImageOCRPage.jsx` | 通用图片 OCR 页面组件（拖拽/粘贴/识别/复制；`renderResultMeta` 可接收 `(result, setResult)` 第二参数更新结果，FormulaOCR 未判定切换控件依赖此透传） |
 | `ResultFilterBar.jsx` | 结果过滤工具栏（搜索框 + 类型下拉 + 段落跳转 + 重置） |
 | `ProgressBar.jsx` | 检查进度条组件 |
 | `ColorField.jsx` | 颜色选择器组件 |
