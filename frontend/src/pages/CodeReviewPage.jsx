@@ -1,4 +1,10 @@
-import { useState, useMemo, useCallback, useEffect } from "react";
+import {
+  useState,
+  useMemo,
+  useCallback,
+  useDeferredValue,
+  useRef,
+} from "react";
 import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
@@ -19,10 +25,10 @@ import {
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, Eye, Loader2, ListChecks, Search } from "lucide-react";
+import { ArrowLeft, Eye, ListChecks, Loader2, Search } from "lucide-react";
 import React from "react";
 import { diffLines } from "diff";
+import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { api } from "@/api/index";
 import useParagraphCheck, { groupByFile } from "@/hooks/useParagraphCheck";
@@ -32,6 +38,13 @@ import ConfirmDialog from "@/components/ConfirmDialog";
 import ResultFilterBar from "@/components/ResultFilterBar";
 import useResultFilter from "@/hooks/useResultFilter";
 import MarkerText from "@/components/MarkerText";
+import AnnotatedSource from "@/pages/code-review/AnnotatedSource";
+import DiffView from "@/pages/code-review/DiffView";
+import {
+  buildAnchors,
+  cumulativeShift,
+  locateSpan,
+} from "@/pages/code-review/anchors";
 
 const severityBadgeClass = {
   info: "bg-blue-500/10 text-blue-600 dark:text-blue-400",
@@ -49,244 +62,289 @@ const CodeReviewResultCard = React.memo(function CodeReviewResultCard({
 }) {
   const { t } = useTranslation(["pages", "common"]);
   const hasSuggestions = result.suggestions && result.suggestions.length > 0;
+  const originalText = result.text || result.original;
+  const formattedText = result.new_text;
   const hasFormattingDiff =
-    result.new_text && result.new_text !== (result.text || result.original);
-  const [showFormatted, setShowFormatted] = useState(
-    hasFormattingDiff && !hasSuggestions,
-  );
+    Boolean(formattedText) && formattedText !== originalText;
+  const [showFormatted, setShowFormatted] = useState(hasFormattingDiff);
   const toggleFormatted = useCallback(() => setShowFormatted((v) => !v), []);
   const diffParts = useMemo(() => {
-    const orig = result.text || result.original;
-    const mod = result.new_text;
-    if (!mod) return null;
-    return diffLines(orig, mod);
-  }, [result.text, result.original, result.new_text]);
-  const [editedText, setEditedText] = useState(result.new_text || "");
-  useEffect(() => {
-    setEditedText(result.new_text || "");
-  }, [result.new_text]);
-  const handleApplySuggestion = useCallback((original, suggested) => {
-    setEditedText((prev) => {
-      const idx = prev.indexOf(original);
-      if (idx === -1) return prev;
-      return prev.slice(0, idx) + suggested + prev.slice(idx + original.length);
-    });
-  }, []);
+    if (!formattedText) return null;
+    return diffLines(originalText, formattedText);
+  }, [formattedText, originalText]);
+  const anchors = useMemo(() => {
+    if (!formattedText || !hasSuggestions) return [];
+    return buildAnchors(formattedText, result.suggestions);
+  }, [formattedText, result.suggestions, hasSuggestions]);
+  const [editedText, setEditedText] = useState(formattedText || "");
+  /** 已采纳建议在 formattedText 坐标下的编辑记录（含对后续锚点位移），reset/换结果时清空。 */
+  const appliedEditsRef = useRef([]);
+  const [prevFormatted, setPrevFormatted] = useState(formattedText);
+  if (formattedText !== prevFormatted) {
+    setPrevFormatted(formattedText);
+    setEditedText(formattedText || "");
+    appliedEditsRef.current = [];
+  }
+  /** 建议编号 → 锚点 offset 的查找表（无锚点的建议取不到，回退首现匹配）。 */
+  const anchorOffsetBySuggestion = useMemo(() => {
+    const map = new Map();
+    anchors.forEach((a) => map.set(a.index, a.offset));
+    return map;
+  }, [anchors]);
+  const handleApplySuggestion = useCallback(
+    (original, suggested, anchorOffset) => {
+      if (!original) return;
+      const prev = editedText;
+      // 锚点 offset 是 formattedText 坐标：加上左侧已采纳编辑的累计位移，估算其在
+      // 当前文本中的位置，再就近命中同一片段——重复片段时不再总是替换首次出现处。
+      const estimated = Number.isFinite(anchorOffset)
+        ? anchorOffset + cumulativeShift(appliedEditsRef.current, anchorOffset)
+        : 0;
+      // 与锚点定位共用同一套容错逻辑：精确匹配失败时折叠空白宽松匹配；
+      // 找不到匹配时给出可见反馈，而不是静默失效。
+      const span = locateSpan(prev, original, estimated);
+      if (!span) {
+        toast.warning(t("pages:code_review.applySuggestionNoMatch"));
+        return;
+      }
+      const next = prev.slice(0, span.start) + suggested + prev.slice(span.end);
+      appliedEditsRef.current = Number.isFinite(anchorOffset)
+        ? [
+            ...appliedEditsRef.current.filter((e) => e.offset !== anchorOffset),
+            {
+              offset: anchorOffset,
+              removedLen: original.length,
+              addedLen: suggested.length,
+            },
+          ]
+        : appliedEditsRef.current;
+      setEditedText(next);
+    },
+    [editedText, t],
+  );
   const handleResetEdit = useCallback(() => {
-    setEditedText(result.new_text || "");
-  }, [result.new_text]);
+    setEditedText(formattedText || "");
+    appliedEditsRef.current = [];
+  }, [formattedText]);
+  const userChanged = Boolean(formattedText) && editedText !== formattedText;
+  const deferredEditedText = useDeferredValue(editedText);
+  const userDiffParts = useMemo(() => {
+    if (!userChanged) return null;
+    return diffLines(formattedText || "", deferredEditedText);
+  }, [userChanged, formattedText, deferredEditedText]);
+  const diffIsStale = editedText !== deferredEditedText;
+  const [showUserDiff, setShowUserDiff] = useState(false);
+  const statusKey = userChanged
+    ? "pages:code_review.finalStatusChanged"
+    : hasFormattingDiff
+      ? "pages:code_review.finalStatusFormatted"
+      : "pages:code_review.finalStatusOriginal";
   return (
     <Card
       key={`${result.file_path}-cr-result-P${result.paragraph_index}`}
       id={`cr-result-P${result.paragraph_index}`}
     >
       <CardHeader className="pb-2">
-        <div className="flex items-center justify-between">
-          <CardTitle className="text-sm">
+        <div className="flex items-baseline justify-between gap-3">
+          <CardTitle className="text-sm font-medium">
             {t("pages:code_review.paragraph", {
               index: result.paragraph_index,
             })}
           </CardTitle>
-          {hasSuggestions && (
-            <span className="rounded bg-primary/10 text-primary px-1.5 py-0.5 text-xs font-medium">
-              {t("pages:code_review.suggestionsCount", {
+          <span className="whitespace-nowrap text-xs text-muted-foreground">
+            {hasFormattingDiff
+              ? t("pages:code_review.formatDiffYes")
+              : t("pages:code_review.formatDiffNo")}
+            {hasSuggestions &&
+              ` · ${t("pages:code_review.suggestionsCount", {
                 count: result.suggestions.length,
-              })}
-            </span>
-          )}
+              })}`}
+          </span>
         </div>
       </CardHeader>
       <CardContent>
-        <div className="space-y-3">
-          {hasSuggestions ? (
-            <>
-              <ul className="space-y-2">
-                {result.suggestions.map((suggestion, i) => (
-                  <li
-                    key={i}
-                    className="rounded border border-border p-2 text-sm"
-                  >
-                    <div className="flex items-center gap-2 mb-1 flex-wrap">
-                      <span className="rounded bg-purple-500/10 text-purple-600 dark:text-purple-400 px-1 py-0.5 text-xs font-medium">
-                        {typeLabels?.[suggestion.type] || suggestion.type}
-                      </span>
-                      <Badge
-                        variant="outline"
-                        className={`text-xs py-0 ${severityBadgeClass[suggestion.severity] || ""}`}
-                      >
-                        {severityLabels?.[suggestion.severity] ||
-                          suggestion.severity}
-                      </Badge>
-                      {suggestion.description && (
-                        <span className="text-muted-foreground text-xs">
-                          {suggestion.description}
-                        </span>
-                      )}
-                    </div>
-                    <div className="grid grid-cols-[auto_1fr] gap-x-2 gap-y-1 text-sm">
-                      <span className="text-muted-foreground whitespace-nowrap mt-0.5">
-                        {t("common:original")}
-                      </span>
-                      <pre className="line-through text-foreground/60 break-all mt-0.5 font-mono text-xs whitespace-pre-wrap bg-muted/20 rounded p-1.5">
-                        <MarkerText text={result.text || result.original} />
-                      </pre>
-                      <span className="text-muted-foreground whitespace-nowrap mt-0.5">
-                        {t("pages:code_review.suggested")}
-                      </span>
-                      <pre className="font-medium break-all mt-0.5 font-mono text-xs whitespace-pre-wrap bg-muted/20 rounded p-1.5">
-                        <MarkerText text={suggestion.suggested} />
-                      </pre>
-                    </div>
-                    <div className="mt-2 flex justify-end">
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        className="h-7 text-xs"
-                        onClick={() =>
-                          handleApplySuggestion(
-                            suggestion.original,
-                            suggestion.suggested,
-                          )
-                        }
-                      >
-                        {t("pages:code_review.applySuggestion")}
-                      </Button>
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            </>
-          ) : (
-            <p className="text-sm text-muted-foreground">
-              {hasFormattingDiff
-                ? t("pages:code_review.formattingAvailable")
-                : t("pages:code_review.noIssues")}
-            </p>
-          )}
-          {result.new_text && (
-            <div className="rounded border border-border">
-              <button
-                type="button"
-                onClick={toggleFormatted}
-                className="flex w-full items-center gap-2 px-3 py-2 text-sm font-medium hover:bg-muted/50 cursor-pointer"
-              >
-                <svg
-                  className={`size-4 shrink-0 transition-transform duration-300 ${showFormatted ? "rotate-90" : ""}`}
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                >
-                  <path d="M9 18l6-6-6-6" />
-                </svg>
-                {showFormatted
-                  ? t("pages:code_review.hideFormattedDiff")
-                  : t("pages:code_review.showFormattedDiff")}
-              </button>
-              <div
-                className={cn(
-                  "grid transition-all duration-300 ease-in-out",
-                  showFormatted && diffParts
-                    ? "grid-rows-[1fr]"
-                    : "grid-rows-[0fr]",
-                )}
-              >
-                <div className="overflow-hidden">
-                  <div className="border-t border-border">
-                    {diffParts?.map((part, i) => {
-                      const lines = part.value.split("\n");
-                      return lines.map((line, j) => {
-                        if (j === lines.length - 1 && line === "") return null;
-                        return (
-                          <div
-                            key={`${i}-${j}`}
-                            className={cn(
-                              "flex px-3 py-px font-mono text-xs leading-relaxed",
-                              part.added && "bg-green-500/10",
-                              part.removed && "bg-red-500/10",
-                            )}
-                          >
-                            <span
-                              className={cn(
-                                "w-5 shrink-0 select-none",
-                                part.added &&
-                                  "text-green-600 dark:text-green-400",
-                                part.removed &&
-                                  "text-red-600 dark:text-red-400",
-                                !part.added &&
-                                  !part.removed &&
-                                  "text-muted-foreground/40",
-                              )}
-                            >
-                              {part.added ? "+" : part.removed ? "−" : " "}
-                            </span>
-                            <span
-                              className={cn(
-                                "whitespace-pre-wrap break-all",
-                                part.added &&
-                                  "text-green-800 dark:text-green-200",
-                                part.removed &&
-                                  "text-red-800 dark:text-red-200",
-                              )}
-                            >
-                              <MarkerText text={line} />
-                            </span>
-                          </div>
-                        );
-                      });
-                    })}
-                  </div>
+        <div className="space-y-4">
+          <div className="md:grid md:grid-cols-[minmax(0,1fr)_300px] md:gap-6">
+            {/* 样张：源码 + 格式化标记 + 批注锚点 */}
+            {formattedText && (
+              <div>
+                <div className="mb-1 flex items-baseline justify-between gap-2">
+                  <span className="text-xs text-muted-foreground">
+                    {t("pages:code_review.sourceCaption")}
+                  </span>
+                  {hasFormattingDiff && (
+                    <button
+                      type="button"
+                      onClick={toggleFormatted}
+                      className="text-xs text-muted-foreground underline decoration-muted-foreground/40 underline-offset-2 hover:text-foreground cursor-pointer"
+                    >
+                      {showFormatted
+                        ? t("pages:code_review.formatMarksOn")
+                        : t("pages:code_review.formatMarksOff")}
+                    </button>
+                  )}
                 </div>
-              </div>
-            </div>
-          )}
-          {result.new_text && (
-            <div className="space-y-2">
-              <label className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
-                {t("pages:code_review.editFormatted")}
-                <button
-                  type="button"
-                  onClick={handleResetEdit}
-                  className="text-xs text-muted-foreground/60 hover:text-foreground underline cursor-pointer"
-                >
-                  {t("pages:code_review.resetEdit")}
-                </button>
-              </label>
-              <textarea
-                value={editedText}
-                onChange={(e) => setEditedText(e.target.value)}
-                className="w-full min-h-[120px] rounded border border-border bg-muted/20 p-2 font-mono text-xs leading-relaxed whitespace-pre-wrap resize-y focus:outline-none focus:ring-1 focus:ring-ring"
-                placeholder={t("pages:code_review.editPlaceholder")}
-                spellCheck={false}
-              />
-            </div>
-          )}
-          {result.new_text &&
-            editedText !== (result.text || result.original) && (
-              <div className="flex items-center gap-2">
-                <Button
-                  size="sm"
-                  onClick={() =>
-                    onApply(
-                      result.paragraph_index,
-                      editedText,
-                      result.file_path,
-                    )
-                  }
-                >
-                  {t("common:applyChange")}
-                </Button>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() =>
-                    onIgnore(result.paragraph_index, result.file_path)
-                  }
-                >
-                  {t("common:ignore")}
-                </Button>
+                <div className="overflow-x-auto rounded-md border border-border bg-muted/40 p-3 font-mono text-xs leading-relaxed whitespace-pre-wrap break-all">
+                  <AnnotatedSource
+                    parts={diffParts}
+                    anchors={anchors}
+                    showMarks={showFormatted}
+                  />
+                </div>
+                {!hasFormattingDiff && (
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {t("pages:code_review.noFormattingDiff")}
+                  </p>
+                )}
               </div>
             )}
+
+            {/* 边注：LLM 批注 */}
+            <aside className="mt-4 md:mt-0 md:border-l md:border-border/70 md:pl-6">
+              <div className="mb-1 text-xs text-muted-foreground">
+                {t("pages:code_review.notesCaption")}
+              </div>
+              {hasSuggestions ? (
+                <ol className="space-y-2">
+                  {result.suggestions.map((suggestion, i) => (
+                    <li
+                      key={i}
+                      className="rounded-md border border-border/70 p-2.5 text-xs"
+                    >
+                      <div className="mb-1 flex items-center gap-1.5 flex-wrap">
+                        <span className="font-semibold text-amber-600 dark:text-amber-400">
+                          {i + 1}
+                        </span>
+                        <span className="font-medium">
+                          {typeLabels?.[suggestion.type] || suggestion.type}
+                        </span>
+                        <span
+                          className={cn(
+                            "rounded px-1 py-px text-[10px]",
+                            severityBadgeClass[suggestion.severity] ||
+                              "bg-muted text-muted-foreground",
+                          )}
+                        >
+                          {severityLabels?.[suggestion.severity] ||
+                            suggestion.severity}
+                        </span>
+                      </div>
+                      {suggestion.description && (
+                        <p className="mb-1.5 text-muted-foreground">
+                          {suggestion.description}
+                        </p>
+                      )}
+                      <div className="rounded bg-muted/40 p-1.5 font-mono text-[11px] leading-relaxed whitespace-pre-wrap break-all">
+                        <span className="text-muted-foreground line-through">
+                          <MarkerText text={suggestion.original} />
+                        </span>
+                        <span className="text-muted-foreground/50"> → </span>
+                        <span className="text-amber-700 dark:text-amber-300">
+                          <MarkerText text={suggestion.suggested} />
+                        </span>
+                      </div>
+                      <div className="mt-1.5 flex justify-end">
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-6 px-2 text-xs"
+                          onClick={() =>
+                            handleApplySuggestion(
+                              suggestion.original,
+                              suggestion.suggested,
+                              anchorOffsetBySuggestion.get(i + 1),
+                            )
+                          }
+                        >
+                          {t("pages:code_review.applySuggestion")}
+                        </Button>
+                      </div>
+                    </li>
+                  ))}
+                </ol>
+              ) : (
+                <p className="text-xs text-muted-foreground">
+                  {t("pages:code_review.noSuggestionsFound")}
+                </p>
+              )}
+            </aside>
+
+            {/* 定稿：用户可编辑的最终文本 */}
+            {formattedText && (
+              <div className="border-t border-border/70 pt-3 md:col-span-2">
+                <div className="mb-1 flex items-baseline gap-2">
+                  <span className="text-xs font-medium text-foreground/80">
+                    {t("pages:code_review.finalTextLabel")}
+                  </span>
+                  <span className="text-xs text-muted-foreground">
+                    {t(statusKey)}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={handleResetEdit}
+                    className="ml-auto text-xs text-muted-foreground underline decoration-muted-foreground/40 underline-offset-2 hover:text-foreground cursor-pointer"
+                  >
+                    {t("pages:code_review.resetEdit")}
+                  </button>
+                </div>
+                {userChanged && (
+                  <div className="mb-1">
+                    <button
+                      type="button"
+                      onClick={() => setShowUserDiff((v) => !v)}
+                      className="text-xs text-muted-foreground underline decoration-muted-foreground/40 underline-offset-2 hover:text-foreground cursor-pointer"
+                    >
+                      {showUserDiff
+                        ? t("pages:code_review.hideUserDiff")
+                        : t("pages:code_review.showUserDiff")}
+                    </button>
+                  </div>
+                )}
+                <textarea
+                  value={editedText}
+                  onChange={(e) => setEditedText(e.target.value)}
+                  className="w-full min-h-[120px] rounded-md border border-border bg-muted/20 p-2.5 font-mono text-xs leading-relaxed whitespace-pre-wrap resize-y focus:outline-none focus:ring-1 focus:ring-ring"
+                  placeholder={t("pages:code_review.editPlaceholder")}
+                  spellCheck={false}
+                />
+                {showUserDiff && userDiffParts && (
+                  <div
+                    className={cn(
+                      "mt-2 overflow-hidden rounded-md border border-border bg-muted/30 transition-opacity",
+                      diffIsStale && "opacity-60",
+                    )}
+                  >
+                    <DiffView parts={userDiffParts} />
+                  </div>
+                )}
+                {editedText !== originalText && (
+                  <div className="mt-2 flex items-center gap-2">
+                    <Button
+                      size="sm"
+                      onClick={() =>
+                        onApply(
+                          result.paragraph_index,
+                          editedText,
+                          result.file_path,
+                        )
+                      }
+                    >
+                      {t("common:applyChange")}
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() =>
+                        onIgnore(result.paragraph_index, result.file_path)
+                      }
+                    >
+                      {t("common:ignore")}
+                    </Button>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
           <ParagraphContext
             currentIndex={result.paragraph_index}
             paragraphs={paragraphs}
@@ -301,6 +359,25 @@ const CodeReviewResultCard = React.memo(function CodeReviewResultCard({
 export default function CodeReviewPage() {
   const { t } = useTranslation(["pages"]);
   const [confirmApplyAllOpen, setConfirmApplyAllOpen] = useState(false);
+  const hasResultIssue = useCallback((r) => {
+    const hasChanges = r.changes && r.changes.length > 0;
+    const hasSuggestions = r.suggestions && r.suggestions.length > 0;
+    const corrected = r.new_text;
+    const original = r.text || r.original;
+    const hasFormatDiff = corrected && original && corrected !== original;
+    return hasChanges || hasSuggestions || hasFormatDiff;
+  }, []);
+  const paragraphCheckMessages = useMemo(
+    () => ({
+      checkLoading: t("pages:code_review.checkLoading"),
+      checkSuccess: (count) => t("pages:code_review.checkSuccess", { count }),
+      applySuccess: (idx) => t("pages:code_review.applySuccess", { idx }),
+      applyAllSuccess: (count) =>
+        t("pages:code_review.applyAllSuccess", { count }),
+      applyAllEmpty: t("pages:code_review.applyAllEmpty"),
+    }),
+    [t],
+  );
   const {
     projectPath,
     activeFile,
@@ -330,14 +407,7 @@ export default function CodeReviewPage() {
     checkMethodName: "check",
     correctedTextField: "new_text",
     /** code_review 额外将工具格式化差异视为"有问题"，使这些段落在结果中置顶并纳入统计 */
-    hasResultIssue: (r) => {
-      const hasChanges = r.changes && r.changes.length > 0;
-      const hasSuggestions = r.suggestions && r.suggestions.length > 0;
-      const corrected = r.new_text;
-      const original = r.text || r.original;
-      const hasFormatDiff = corrected && original && corrected !== original;
-      return hasChanges || hasSuggestions || hasFormatDiff;
-    },
+    hasResultIssue,
     storeSlice: {
       paragraphsKey: "codeReviewParagraphs",
       setParagraphsKey: "setCodeReviewParagraphs",
@@ -345,14 +415,7 @@ export default function CodeReviewPage() {
       setResultsKey: "setCodeReviewResults",
       loadingKey: "codeReview",
     },
-    messages: {
-      checkLoading: t("pages:code_review.checkLoading"),
-      checkSuccess: (count) => t("pages:code_review.checkSuccess", { count }),
-      applySuccess: (idx) => t("pages:code_review.applySuccess", { idx }),
-      applyAllSuccess: (count) =>
-        t("pages:code_review.applyAllSuccess", { count }),
-      applyAllEmpty: t("pages:code_review.applyAllEmpty"),
-    },
+    messages: paragraphCheckMessages,
   });
 
   const {
