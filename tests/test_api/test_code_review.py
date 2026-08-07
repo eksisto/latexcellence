@@ -3,8 +3,8 @@ code_review 模块集成测试。
 
 覆盖内容：
     - Pydantic 模型校验（CodeReviewResult / CodeReviewSuggestion）
-    - _check_one_paragraph LLM mock（双数据线架构）
-    - _check_one_paragraph 纯 marker 段落（跳过 LLM）
+    - _check_one_paragraph LLM mock（单数据线架构：LLM 审查格式化后的真实 LaTeX）
+    - _check_one_paragraph 空白段落（跳过 LLM）
     - _check_one_paragraph LLM 报告无需审查
     - _check_one_paragraph LLM 报告有审查建议
     - apply_changes 直接写回（无需 marker 还原）
@@ -118,6 +118,27 @@ class TestCodeReviewResultModel:
         with pytest.raises(ValidationError, match="unbalanced braces"):
             CodeReviewSuggestion.model_validate(data)
 
+    def test_rejects_markers_in_original(self):
+        """suggestions 引用 marker（泄漏）必须被拦截，防止污染前端展示。"""
+        data = {
+            "type": "code_smell",
+            "description": "manual line breaks",
+            "original": "__CMD_0000____CMD_0001__ __CMD_0002__",
+            "suggested": r"\par",
+        }
+        with pytest.raises(ValidationError, match="marker"):
+            CodeReviewSuggestion.model_validate(data)
+
+    def test_rejects_markers_in_description(self):
+        data = {
+            "type": "code_smell",
+            "description": "see __CMD_0000__ for details",
+            "original": r"\\",
+            "suggested": r"\par",
+        }
+        with pytest.raises(ValidationError, match="marker"):
+            CodeReviewSuggestion.model_validate(data)
+
     def test_missing_required_field(self):
         # paragraph_index is the only field without a default
         data = {"needs_review": False}
@@ -206,7 +227,7 @@ class TestPreviewParagraphs:
 
 
 class TestCheckOneParagraph:
-    """LLM 调用 + 双数据线架构逻辑测试。"""
+    """LLM 调用 + 单数据线架构（无 marker 保护）逻辑测试。"""
 
     @pytest.fixture
     def mock_llm(self):
@@ -241,6 +262,33 @@ class TestCheckOneParagraph:
         assert "new_text" in result
         assert len(result["suggestions"]) == 1
         assert result["suggestions"][0]["type"] == "code_smell"
+
+    @pytest.mark.asyncio
+    async def test_llm_receives_formatted_source(self, mock_llm, service):
+        """LLM 审查的是工具格式化后的真实 LaTeX，而非原始文本。"""
+        original = r"  \section{Introduction}  "
+        formatted = r"\section{Introduction}"
+
+        mock_llm.chat = AsyncMock(
+            return_value={
+                "paragraph_index": 0,
+                "needs_review": False,
+                "suggestions": [],
+            }
+        )
+
+        with patch.object(
+            service, "_format_source", new=AsyncMock(return_value=formatted)
+        ):
+            result = await service._check_one_paragraph(
+                mock_llm, 0, 0, original, original, "main.tex"
+            )
+
+        assert result["new_text"] == formatted
+        sent_messages = mock_llm.chat.call_args.args[0]
+        user_message = next(m for m in sent_messages if m["role"] == "user")
+        assert formatted in user_message["content"]
+        assert original not in user_message["content"]
 
     @pytest.mark.asyncio
     async def test_no_review_needed(self, mock_llm, service):
@@ -338,20 +386,74 @@ class TestCheckOneParagraph:
         assert mock_llm.chat.call_count == 2
 
     @pytest.mark.asyncio
-    async def test_pure_marker_paragraph_skips_llm(self, mock_llm, service):
-        """纯 marker 段落（无可见文本）应跳过 LLM 审查。"""
-        original = r"\begin{equation}\end{equation}"
-        # 仅有 marker 的纯文本
-        text_with_markers = "__ENV_0000__"
+    async def test_marker_leak_retries_then_ignored(self, mock_llm, service):
+        """suggestions 泄漏 marker → 校验失败重试 → LLM 改为忽略该问题。"""
+        original = r"using \{\\ \} for manual line breaks."
+        text_with_markers = (
+            "using __CMD_0000____CMD_0001__ __CMD_0002__ for manual line breaks."
+        )
 
-        # 即使 LLM 不可用也不应被调用
+        mock_llm.chat = AsyncMock(
+            side_effect=[
+                {
+                    "paragraph_index": 0,
+                    "needs_review": True,
+                    "suggestions": [
+                        {
+                            "type": "best_practice",
+                            "severity": "warning",
+                            "description": "manual line breaks",
+                            "original": "__CMD_0000____CMD_0001__ __CMD_0002__",
+                            "suggested": r"\par",
+                        }
+                    ],
+                },
+                {
+                    "paragraph_index": 0,
+                    "needs_review": False,
+                    "suggestions": [],
+                },
+            ]
+        )
+
         result = await service._check_one_paragraph(
             mock_llm, 0, 0, text_with_markers, original, "main.tex"
+        )
+
+        assert result["suggestions"] == []
+        assert result["needs_review"] is False
+        assert mock_llm.chat.call_count == 2
+
+    @pytest.mark.asyncio
+    async def test_blank_paragraph_skips_llm(self, mock_llm, service):
+        """空白段落应跳过 LLM 审查。"""
+        result = await service._check_one_paragraph(
+            mock_llm, 0, 0, "   ", "   ", "main.tex"
         )
 
         assert result["needs_review"] is False
         assert result["suggestions"] == []
         mock_llm.chat.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_pure_latex_paragraph_now_reviewed(self, mock_llm, service):
+        """去掉 marker 保护后，纯 LaTeX 段落（如 equation 环境）应交给 LLM 审查。"""
+        original = r"\begin{equation}E=mc^2\end{equation}"
+
+        mock_llm.chat = AsyncMock(
+            return_value={
+                "paragraph_index": 0,
+                "needs_review": False,
+                "suggestions": [],
+            }
+        )
+
+        result = await service._check_one_paragraph(
+            mock_llm, 0, 0, original, original, "main.tex"
+        )
+
+        assert result["needs_review"] is False
+        mock_llm.chat.assert_called_once()
 
 
 class TestApplyChanges:

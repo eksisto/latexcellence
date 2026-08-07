@@ -66,7 +66,7 @@
 
 ### Marker 保护策略
 
-- **使用 Marker 保护**：typo_check, expression_opt, terminology_check, code_review, paragraph_translate
+- **使用 Marker 保护**：typo_check, expression_opt, terminology_check, paragraph_translate（code_review 例外：LLM 建议只读展示、不写回，直接审查真实格式化 LaTeX）
 - **不使用**：formula_ocr, table_ocr, compile, format_converter, style_modify, git_diff, template_gen
 
 ### 工具管理器自注册模式

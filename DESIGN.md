@@ -66,7 +66,7 @@
 
 ### 1.3 核心架构组件：BaseParagraphCheckService
 
-四个段落处理模块（typo_check、expression_opt、code_review、terminology_check）共享相同的业务流程：文件解析 → marker 替换 → LLM 编排 → 结果写回。为避免重复代码，抽取 `BaseParagraphCheckService` 基类：
+多个段落处理模块（typo_check、expression_opt、code_review、terminology_check、paragraph_translate）共享相同的业务流程：文件解析 → marker 替换（code_review 例外：无 marker，直接审查真实 LaTeX）→ LLM 编排 → 结果写回。为避免重复代码，抽取 `BaseParagraphCheckService` 基类：
 
 ```
 BaseParagraphCheckService
@@ -614,7 +614,7 @@ Step 4: 写入 .bib 文件
 
 ### 5.7 多文件 \input 展开数据流
 
-四个段落处理模块（typo_check、expression_opt、code_review、terminology_check）共享相同的多文件展开机制：
+多个段落处理模块（typo_check、expression_opt、code_review、terminology_check、paragraph_translate）共享相同的多文件展开机制：
 
 ```
 用户点击「包含子文件」开关

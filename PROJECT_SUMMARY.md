@@ -133,7 +133,7 @@ latexcellence/
 | --- | --- | --- | --- | --- |
 | typo_check | 错字/拼写检查 | router.py, service.py | ✓ | ✓ |
 | expression_opt | 学术表达优化 | router.py, service.py, prompt_manager.py | ✓ | ✓ |
-| code_review | LaTeX 代码审查（工具格式化 + LLM 质量审查） | router.py, service.py | ✓ | ✓ |
+| code_review | LaTeX 代码审查（工具格式化 + LLM 质量审查） | router.py, service.py | ✓ | ✗ |
 | terminology_check | 术语一致性检查 | router.py, service.py, extractor.py, models.py | ✓ | ✓ |
 | paragraph_translate | 逐段翻译 | router.py, service.py | ✓ | ✓ |
 | compile | 编译 + 错误翻译 + 引擎自动检测 + PDF/A 支持 | router.py, service.py | ✓(错误翻译) | ✗ |
@@ -155,6 +155,7 @@ latexcellence/
 - **WorkspaceManager**: 多浏览器多工作区隔离，每个 workspace_id 拥有独立的 `LatexProject` 实例（项目状态、文件树、MD5 缓存、撤销栈完全隔离）
 - **乐观锁**: 多工作区并发编辑同一文件时，通过 MD5 哈希检测冲突。读取段落时返回 `file_md5`，应用修改时前端传回 `expected_md5`，后端校验失败时抛出 `FileConflictError`（HTTP 409），前端自动刷新 MD5 并提示用户重试。`inject_expected_md5s()` 辅助函数统一为各模块 router 注入预期 MD5
 - **Marker Protection**: LaTeX 结构 → `__CMD_NNNN__` / `__MATH_NNNN__` / `__ENV_NNNN__` / `__VERB_NNNN__` marker → LLM 只改纯文本 → 按长度降序还原。apply 时若 marker_map 缺失（context 过期/重启/新操作覆盖），跳过该段写入并返回 `errors`，防止字面 marker 污染 `.tex` 文件；前端据此保留未应用项并提示用户重新检查。返回给前端展示的 `changes[]` 中的 `original`/`corrected` 会在 `_build_success_result` 中预先还原 marker，确保用户看到的是干净的 LaTeX 文本而非 `__CMD_NNNN__` 占位符
+  - **code_review 例外**：code_review 的 LLM 建议只读展示、从不写回文件，直接审查真实格式化 LaTeX（无 marker），详见 docs/modules/code_review.md
 - **宏包规则表检测**:
   - 宏包分析以确定性规则表（`latex_package_rules.py`：命令/环境/列说明符 → 宏包）为主路径，零 LLM 开销、结果可复现
   - 扫描前屏蔽逐字内容与 `%` 注释防误报，LaTeX 内核能力不收录；LLM 仅在规则表未命中时兜底，输出经 schema 校验 + 归一化（小写/去 `.sty`/去重/排序）

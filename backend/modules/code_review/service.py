@@ -3,13 +3,15 @@ LaTeX 代码审查业务逻辑。
 
 负责编排以下流程：
     1. 通过工具（latexindent.pl / 内置格式化器）对 LaTeX 源码进行机械格式化
-    2. 将格式化后的源码（含 marker 保护）交给 LLM 进行智能审查
+    2. 将格式化后的真实 LaTeX 源码交给 LLM 进行智能审查（不使用 marker 保护：
+       LLM 建议只读展示、不写回文件，new_text 完全由工具生成）
     3. LLM 输出审查建议（坏味道、过时用法、最佳实践等）
     4. 审核确认后将格式化结果写回源文件，LLM 建议仅展示不自动写回
 
 关键区别（与 typo_check / expression_opt / 旧 formatting 的不同）：
-    - 使用 Marker 保护策略（LLM 只看到含 marker 的纯文本，无法篡改 LaTeX 结构）
-    - 双数据线架构：原始 LaTeX → 工具格式化线，含 marker 纯文本 → LLM 审查线
+    - 无 marker 保护：LLM 直接审查真实 LaTeX 结构，可准确指出坏味道
+      （marker 遮挡代码曾导致 LLM 依据周围文本凭空臆测建议）
+    - 单数据线：工具格式化后的 formatted 同时作为 LLM 审查输入与写回结果
     - Token 消耗低（LLM 只出建议列表，不输出完整源码）
     - 源码修改由工具完成，LLM 仅提供建议
 """
@@ -51,6 +53,25 @@ class CodeReviewSuggestion(BaseModel):
     original: LatexText
     suggested: LatexText
 
+    @model_validator(mode="after")
+    def _reject_markers(self):
+        """兜底拦截 marker 样式占位符泄漏到建议字段。
+
+        code_review 输入已无 marker；若输出仍出现 __CMD_0000__ 等 token，
+        说明 LLM 在臆造/回显占位符，会污染前端展示（徽章/锚点/采纳逻辑）。
+        校验失败会进入 retry_with_validation 重试，要求精确引用源码片段；
+        若源码中无真实问题，应返回 needs_review=false。
+        """
+        for field in ("description", "original", "suggested"):
+            value = getattr(self, field)
+            if value and MARKER_PATTERN.search(value):
+                raise ValueError(
+                    f"suggestion.{field} contains a marker-like token "
+                    "(e.g. __CMD_0000__); quote the exact source fragment instead. "
+                    "If the source has no genuine issue, set needs_review to false."
+                )
+        return self
+
 
 class CodeReviewResult(BaseModel):
     """LLM 代码审查输出（不再输出 corrected 字段，源码修改由工具完成）"""
@@ -79,7 +100,7 @@ class CodeReviewService(BaseParagraphCheckService):
         svc.apply_changes("main.tex", [{"paragraph_index": 0, "new_text": "..."}])
     """
 
-    use_marker_protection: ClassVar[bool] = True
+    use_marker_protection: ClassVar[bool] = False
     _latexindent_available: bool | None = None
 
     def __init__(self):
@@ -139,38 +160,25 @@ class CodeReviewService(BaseParagraphCheckService):
         file_path: str,
     ) -> dict[str, Any]:
         """
-        双数据线架构实现：
+        单段审查实现（无 marker 保护）：
 
         1. 用原始 LaTeX 调用工具格式化 → formatted
-        2. 检查段落是否纯 marker（跳过 LLM）
-        3. Marker 回贴 → 对 formatted 重新提取 marker → formatted_with_markers
-        4. LLM 审查含 marker 的文本
-        5. 构造结果（new_text = formatted，LLM 建议仅展示）
+        2. LLM 直接审查格式化后的真实 LaTeX（建议仅展示，不写回源码）
+        3. 构造结果（new_text = formatted，LLM 建议仅展示）
         """
         # Step 1: 工具格式化（原始 LaTeX）
         formatted = await self._format_source(original_text)
 
-        # Step 2: 空白/纯 LaTeX 段落 → 跳过 LLM
-        if self.use_marker_protection:
-            plain_without_markers = MARKER_PATTERN.sub("", text).strip()
-            if not plain_without_markers:
-                return self._make_no_review_result(
-                    idx, formatted, original_text, file_path
-                )
+        # Step 2: 空白段落 → 跳过 LLM
+        if not formatted.strip():
+            return self._make_no_review_result(idx, formatted, original_text, file_path)
 
-        # Step 3: Marker 回贴 → 对格式化后的原始 LaTeX 重新提取 marker
-        marker_map = self._marker_maps.get(file_path, {}).get(idx, {})
-        if marker_map:
-            formatted_with_markers = self._parser.strip_to_plain_text(formatted)[0]
-        else:
-            formatted_with_markers = text
-
-        # Step 4: LLM 审查（含 marker，保护结构）
+        # Step 3: LLM 审查真实格式化后的 LaTeX（建议只读展示，无写回路径）
         messages = [
             {"role": "system", "content": self._get_system_prompt()},
             {
                 "role": "user",
-                "content": self._build_user_content(formatted_with_markers),
+                "content": self._build_user_content(formatted),
             },
         ]
 

@@ -165,7 +165,7 @@ class ProjectInfo:
 - `CheckOperationContext` 操作上下文：每次 preview/check 生成唯一 `operation_id`，深拷贝 `marker_maps` 存入 `_operation_contexts` 字典；apply 时通过 `operation_id` 取回上下文还原 marker。若 context 丢失（过期/重启/新操作覆盖），逐段检查 `marker_map` 缺失时跳过写入并返回 `errors`，防止字面 marker 污染文件
 - 类变量控制差异：
   - `_output_field`: 结果字段名（`"corrected"` / `"optimized"`）
-  - `use_marker_protection`: 是否启用 marker 保护（code_review / typo_check / expression_opt / terminology_check 均为 `True`）
+  - `use_marker_protection`: 是否启用 marker 保护（typo_check / expression_opt / terminology_check / paragraph_translate 为 `True`；code_review 为 `False`，见 docs/modules/code_review.md）
 - **轻量内容校验**：`_check_one_paragraph` 在模型校验通过后、marker 计数/顺序校验前，对输出字段调用 `check_latex_text_lite()` 兜底——只拦控制字符（排除 `\t` / `\n`，`\r` 仍拦截）与垃圾占位符，不查配平，避免 marker 化段落的残余结构误报；失败直接回退原文，防止损坏内容进入写回链路
 - **上下文 TTL 清理**：默认 1 小时后自动过期
 
