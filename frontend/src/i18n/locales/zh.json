@@ -229,7 +229,6 @@
       "applyAllDesc": "将一次性把所有段落的格式化结果写回源文件。LLM 代码审查建议仅作参考，不自动修改源码。",
       "paragraph": "段落 {{index}}",
       "suggestionsCount": "{{count}} 条审查建议",
-      "applyFormatting": "应用格式化",
       "paragraphs": "段落（{{count}}）",
       "paragraphsDescription": "原始 LaTeX 源码（将由工具格式化后交 LLM 审查）",
       "noResults": "没有匹配的审查结果",

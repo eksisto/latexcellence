@@ -261,27 +261,32 @@ const CodeReviewResultCard = React.memo(function CodeReviewResultCard({
               />
             </div>
           )}
-          {result.new_text && editedText !== result.new_text && (
-            <div className="flex items-center gap-2">
-              <Button
-                size="sm"
-                onClick={() =>
-                  onApply(result.paragraph_index, editedText, result.file_path)
-                }
-              >
-                {t("pages:code_review.applyFormatting")}
-              </Button>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() =>
-                  onIgnore(result.paragraph_index, result.file_path)
-                }
-              >
-                {t("common:ignore")}
-              </Button>
-            </div>
-          )}
+          {result.new_text &&
+            editedText !== (result.text || result.original) && (
+              <div className="flex items-center gap-2">
+                <Button
+                  size="sm"
+                  onClick={() =>
+                    onApply(
+                      result.paragraph_index,
+                      editedText,
+                      result.file_path,
+                    )
+                  }
+                >
+                  {t("common:applyChange")}
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() =>
+                    onIgnore(result.paragraph_index, result.file_path)
+                  }
+                >
+                  {t("common:ignore")}
+                </Button>
+              </div>
+            )}
           <ParagraphContext
             currentIndex={result.paragraph_index}
             paragraphs={paragraphs}

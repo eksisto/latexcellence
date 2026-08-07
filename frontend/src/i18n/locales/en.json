@@ -229,7 +229,6 @@
       "applyAllDesc": "All formatting results will be written back to the source file. Review suggestions are for reference only and will not modify source code.",
       "paragraph": "Paragraph {{index}}",
       "suggestionsCount": "{{count}} suggestions",
-      "applyFormatting": "Apply Formatting",
       "paragraphs": "Paragraphs ({{count}})",
       "paragraphsDescription": "Original LaTeX source (will be formatted then reviewed by LLM)",
       "noResults": "No matching review results",
