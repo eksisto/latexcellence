@@ -205,7 +205,7 @@ export default function WelcomePage() {
                   style={{ animationDelay: `${300 + gi * 70}ms` }}
                 >
                   <h2 className="mb-1 flex items-baseline gap-3">
-                    <span className="font-display text-sm font-semibold text-muted-foreground">
+                    <span className="-translate-y-0.5 font-display text-sm font-semibold text-muted-foreground">
                       §{group.sectionNo}
                     </span>
                     <span className="font-heading text-base font-semibold text-foreground/80">
