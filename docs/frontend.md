@@ -74,7 +74,6 @@ highlight.js 的按需注册与统一入口：
 
 | 组件 | 功能 |
 | --- | --- |
-| `DiffViewer.jsx` | 显示 LLM 检测到的修改（type 标签、原文/修正文、解释） |
 | `CodeBlock.jsx` | 统一代码块展示组件（`code` / `language` / `variant` / `highlight` / `lineNumbers` props），所有只读 LaTeX / TikZ / BibTeX / 日志展示统一走此组件；默认显示左侧行号；同时导出 `latexEditorClass` 共享代码编辑输入样式 |
 | `MarkerText.jsx` | 将 `__CMD_NNNN__` 等 marker 解析为彩色内联标签；`variant="code"`（默认）将纯文本片段渲染为 `.code-inline` 并做 LaTeX 高亮（渲染期派生 HTML，按 token 经 `useMemo` 缓存），`variant="text"` 保持原样（用于 diff 等已有语义配色的场景）。仅用于段落预览等含 marker 的展示场景。**结果卡片中**的 `change.original`/`change.corrected` 等字段因后端已还原 marker，直接以文本渲染，无需 `MarkerText` 包裹 |
 | `ParagraphContext.jsx` | 展开显示当前段落前后上下文 |
@@ -94,6 +93,7 @@ highlight.js 的按需注册与统一入口：
 | `ProofDiff.jsx` | 原文→修改后对照行：原文衬线删除线、改后加粗（`modified` 可传字符串或 ReactNode，术语检查传自定义 Input）；`code` prop（默认开启）将两侧切换为等宽字体 |
 | `ResultFilterBar.jsx` | 结果过滤工具栏（搜索框 + 类型下拉 + 段落跳转 + 重置） |
 | `ProgressBar.jsx` | 检查进度条组件 |
+| `UnlistedChanges.jsx` | 展示「模型修改了全文但未列出条目」（unlisted_changes）的琥珀色提示：`UnlistedChangesBadge`（卡片头标记）+ `UnlistedChangesBody`（全文预览 + 应用/忽略），typo_check / expression_opt 共用，全文经 MarkerText 渲染 |
 | `ColorField.jsx` | 颜色选择器组件 |
 | `BibManagerLibrary.jsx` | 参考文献库管理面板（文件列表、条目 CRUD、重复检测、统计） |
 | `FormatResultCard` | 格式识别结果展示卡片（`React.memo` 组件，展示格式名称、置信度、字段列表、LaTeX 样式推荐） |

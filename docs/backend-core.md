@@ -158,6 +158,8 @@ class ProjectInfo:
 | 函数 | 功能 |
 | --- | --- |
 | `inject_expected_md5s(changes, fallback_file, md5s_map)` | 为 change 列表补充 `expected_md5`：从文件级 `md5s_map` 中查找并注入，供 4 个模块的 router 统一调用 |
+| `normalize_changes_contract(changes, output_text, plain_text)` | 丢弃与主字段不一致的虚假 changes 条目：主字段与原文逐字符一致但 changes 非空 → 清空。后端不伪造展示数据（type 是前端本地化展示字段，合成条目会引入不一致的 type 值）；"有修改时 changes 非空"由 system prompt 约束。typo_check / expression_opt 的 `_build_success_result` 在 marker 还原前调用 |
+| `has_unlisted_changes(changes, output_text, plain_text)` | 检测"文本已修改但 changes 为空"的段落：主字段与原文不同且 changes 为空 → True。不合成整段条目，由前端把 `unlisted_changes=true` 的段落视为有问题并展示全文修改（应用/忽略），避免修改静默丢失 |
 
 **关键设计**：
 
@@ -176,6 +178,8 @@ class ProjectInfo:
 **格式化约定**：`get_prompt` 对所有模板执行 `str.format()`（即使未传 kwargs），因此模板中的字面花括号必须写成 `{{` / `}}`；含占位符的模板漏传参数会立即抛 `KeyError` 快速失败，避免把 `{language}` 之类的字面占位符发送给 LLM。新增或修改模板后应运行 `tests/test_prompts.py` 回归。
 
 **JSON 转义规则常量**：`LATEX_JSON_ESCAPE_RULES` 用于"JSON 字符串直接承载 LaTeX 源码"的提示词（如 code_review）；`BIBTEX_JSON_ESCAPE_RULES` 用于承载 BibTeX 源码的场景（bib_manager 的 format_analysis / bibtex_generation），其差异在于 BibTeX 的花括号是结构定界符、不反斜杠转义，`$` 是普通字符而非数学模式定界符。
+
+**changes 契约**：typo_check / expression_opt 的 system prompt 双向约束 `changes` 与主字段一致性——无修改时 `changes` 必须为 `[]`，有修改时 `changes` 必须非空且逐条对应。后端兜底两条：主字段未变但 changes 非空 → 清空；主字段已变但 changes 为空 → 结果带 `unlisted_changes=true`，前端展示全文修改而非静默丢弃。typo_check 的 `type` 是前端展示用的本地化错误类型（由模型按 `{language}` 输出），不参与逻辑判断。`compile_error_translator` 的 system prompt 拼接 `LATEX_JSON_ESCAPE_RULES`，`fixes` 中的 LaTeX 建议按 JSON 转义形式输出（每个反斜杠写两个）。
 
 ### `backend/core/tool_registry.py` — Function Calling 工具注册表
 

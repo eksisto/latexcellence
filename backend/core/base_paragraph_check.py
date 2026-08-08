@@ -86,6 +86,39 @@ def inject_expected_md5s(
                 change["expected_md5"] = md5s_map.get(target_file)
 
 
+def normalize_changes_contract(
+    changes: list[dict[str, Any]],
+    output_text: str,
+    plain_text: str,
+) -> list[dict[str, Any]]:
+    """丢弃与主字段不一致的虚假 changes 条目（typo_check / expression_opt 共用）。
+
+    changes 中的每条修改必须反映在主字段（corrected / optimized）里：
+    若主字段与原文逐字符一致而 changes 非空，说明 LLM 编造了未实际应用的
+    条目，直接清空，避免前端展示虚假问题。
+    有修改时 changes 必须非空由 system prompt 约束，后端不伪造展示数据
+    （type 是前端展示用的本地化字段，后端没有语言信息，合成条目会引入
+    与正常条目不一致的 type 值）。
+    """
+    if output_text == plain_text:
+        return []
+    return changes
+
+
+def has_unlisted_changes(
+    changes: list[dict[str, Any]],
+    output_text: str,
+    plain_text: str,
+) -> bool:
+    """检测"文本已修改但 changes 为空"的段落（typo_check / expression_opt 共用）。
+
+    LLM 修改了主字段却未输出明细条目时，后端不合成整段条目（type 是前端
+    本地化展示字段，后端没有语言信息，合成会引入不一致的 type 值），而是
+    返回 True 标记，由前端展示全文修改并提供应用/忽略操作，避免修改静默丢失。
+    """
+    return bool(output_text != plain_text and not changes)
+
+
 class BaseParagraphCheckService:
     """
     逐段检查服务基类。

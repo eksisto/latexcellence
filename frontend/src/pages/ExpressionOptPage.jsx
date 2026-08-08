@@ -38,6 +38,10 @@ import EmptyState from "@/components/EmptyState";
 import ProofDiff from "@/components/ProofDiff";
 import useParagraphCheck, { groupByFile } from "@/hooks/useParagraphCheck";
 import MarkerText from "@/components/MarkerText";
+import {
+  UnlistedChangesBadge,
+  UnlistedChangesBody,
+} from "@/components/UnlistedChanges";
 import ParagraphContext from "@/components/ParagraphContext";
 import ProgressBar from "@/components/ProgressBar";
 import ConfirmDialog from "@/components/ConfirmDialog";
@@ -592,6 +596,8 @@ export default function ExpressionOptPage() {
                             (resultsByFile[f] || []).map((result) => {
                               const hasChanges =
                                 result.changes && result.changes.length > 0;
+                              const hasUnlistedChanges =
+                                result.unlisted_changes === true;
                               return (
                                 <Card
                                   key={`${result.file_path}-expr-result-P${result.paragraph_index}`}
@@ -610,6 +616,13 @@ export default function ExpressionOptPage() {
                                           {result.changes.length}{" "}
                                           {t("pages:expressionOpt.suggestions")}
                                         </span>
+                                      )}
+                                      {hasUnlistedChanges && (
+                                        <UnlistedChangesBadge
+                                          label={t(
+                                            "pages:expressionOpt.unlistedChangesBadge",
+                                          )}
+                                        />
                                       )}
                                     </div>
                                   </CardHeader>
@@ -669,6 +682,29 @@ export default function ExpressionOptPage() {
                                             </Button>
                                           </div>
                                         </>
+                                      ) : hasUnlistedChanges ? (
+                                        <UnlistedChangesBody
+                                          text={result.optimized}
+                                          message={t(
+                                            "pages:expressionOpt.unlistedChanges",
+                                          )}
+                                          applyLabel={t(
+                                            "pages:expressionOpt.applyOptimization",
+                                          )}
+                                          onApply={() =>
+                                            handleApplyChange(
+                                              result.paragraph_index,
+                                              result.optimized,
+                                              result.file_path,
+                                            )
+                                          }
+                                          onIgnore={() =>
+                                            handleIgnoreChange(
+                                              result.paragraph_index,
+                                              result.file_path,
+                                            )
+                                          }
+                                        />
                                       ) : (
                                         <p className="text-sm text-muted-foreground">
                                           {t(

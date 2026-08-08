@@ -26,6 +26,10 @@ import EmptyState from "@/components/EmptyState";
 import ProofDiff from "@/components/ProofDiff";
 import useParagraphCheck, { groupByFile } from "@/hooks/useParagraphCheck";
 import MarkerText from "@/components/MarkerText";
+import {
+  UnlistedChangesBadge,
+  UnlistedChangesBody,
+} from "@/components/UnlistedChanges";
 import ParagraphContext from "@/components/ParagraphContext";
 import ProgressBar from "@/components/ProgressBar";
 import ConfirmDialog from "@/components/ConfirmDialog";
@@ -103,6 +107,7 @@ export default function TypoCheckPage() {
 
   const renderResultCard = (result) => {
     const hasChanges = result.changes && result.changes.length > 0;
+    const hasUnlistedChanges = result.unlisted_changes === true;
     return (
       <Card
         key={`${result.file_path}-${result.paragraph_index}`}
@@ -117,6 +122,11 @@ export default function TypoCheckPage() {
               <span className="rounded bg-destructive/10 text-destructive px-1.5 py-0.5 text-xs font-medium">
                 {result.changes.length} {t("common:issues")}
               </span>
+            )}
+            {hasUnlistedChanges && (
+              <UnlistedChangesBadge
+                label={t("pages:typoCheck.unlistedChangesBadge")}
+              />
             )}
           </div>
         </CardHeader>
@@ -174,6 +184,22 @@ export default function TypoCheckPage() {
                   </Button>
                 </div>
               </>
+            ) : hasUnlistedChanges ? (
+              <UnlistedChangesBody
+                text={result.corrected}
+                message={t("pages:typoCheck.unlistedChanges")}
+                applyLabel={t("common:applyChange")}
+                onApply={() =>
+                  handleApplyChange(
+                    result.paragraph_index,
+                    result.corrected,
+                    result.file_path,
+                  )
+                }
+                onIgnore={() =>
+                  handleIgnoreChange(result.paragraph_index, result.file_path)
+                }
+              />
             ) : (
               <p className="text-sm text-muted-foreground">
                 {t("pages:typoCheck.noIssues")}

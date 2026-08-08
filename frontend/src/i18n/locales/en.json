@@ -98,6 +98,8 @@
       "applyAllSuccess": "Applied changes to {{count}} paragraphs",
       "applyAllEmpty": "No changes to apply",
       "noIssues": "No typos found in this paragraph.",
+      "unlistedChangesBadge": "Full-text changes",
+      "unlistedChanges": "The model changed the full text without itemized changes; review before applying",
       "paragraphPreviewTitle": "Paragraphs ({{count}})",
       "paragraphPreviewDesc": "Plain text after stripping LaTeX (will be checked by LLM)",
       "checkButton": "Check Typos"
@@ -112,6 +114,8 @@
       "applyAllSuccess": "Applied optimizations to {{count}} paragraphs",
       "applyAllEmpty": "No optimizations to apply",
       "noSuggestions": "No optimization suggestions for this paragraph",
+      "unlistedChangesBadge": "Full-text changes",
+      "unlistedChanges": "The model optimized the full text without itemized changes; review before applying",
       "promptSectionTitle": "Optimization Prompts",
       "promptSectionDesc": "Select or customize LLM optimization strategy",
       "promptPlaceholder": "Enter custom prompt instructions for LLM...",
@@ -858,12 +862,6 @@
       "clear": "Clear",
       "resultTitle": "Result",
       "lowConfidence": "Low confidence"
-    },
-    "diffViewer": {
-      "changesFound": "Found {{count}} changes",
-      "noChanges": "No changes",
-      "modified": "Modified to: ",
-      "noContent": "No content to compare"
     },
     "themeToggle": {
       "switchDarkLight": "Toggle dark/light mode",

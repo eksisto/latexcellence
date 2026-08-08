@@ -119,7 +119,8 @@ export default function useParagraphCheck({
   const defaultHasResultIssue = useCallback((r) => {
     return (
       (r.changes && r.changes.length > 0) ||
-      (r.suggestions && r.suggestions.length > 0)
+      (r.suggestions && r.suggestions.length > 0) ||
+      r.unlisted_changes === true
     );
   }, []);
 

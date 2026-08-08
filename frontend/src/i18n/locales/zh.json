@@ -98,6 +98,8 @@
       "applyAllSuccess": "已批量应用 {{count}} 个段落的修改",
       "applyAllEmpty": "没有可应用的修改",
       "noIssues": "此段落未发现错字",
+      "unlistedChangesBadge": "全文修改",
+      "unlistedChanges": "模型修改了全文但未列出具体条目，请核对后再应用",
       "paragraphPreviewTitle": "段落（{{count}}）",
       "paragraphPreviewDesc": "剥离 LaTeX 后的纯文本（将交由 LLM 检查）",
       "checkButton": "检查错字"
@@ -112,6 +114,8 @@
       "applyAllSuccess": "已批量应用 {{count}} 个段落的优化",
       "applyAllEmpty": "没有可应用的优化建议",
       "noSuggestions": "当前段落没有优化建议",
+      "unlistedChangesBadge": "全文优化",
+      "unlistedChanges": "模型优化了全文但未列出具体条目，请核对后再应用",
       "promptSectionTitle": "优化提示词",
       "promptSectionDesc": "选择或自定义 LLM 的优化策略",
       "promptPlaceholder": "输入给 LLM 的自定义提示词说明...",
@@ -858,12 +862,6 @@
       "clear": "清除",
       "resultTitle": "识别结果",
       "lowConfidence": "低置信度"
-    },
-    "diffViewer": {
-      "changesFound": "发现 {{count}} 处修改",
-      "noChanges": "无修改",
-      "modified": "修改为：",
-      "noContent": "无内容可比较"
     },
     "themeToggle": {
       "switchDarkLight": "切换亮暗模式",

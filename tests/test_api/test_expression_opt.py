@@ -197,6 +197,29 @@ class TestOptimizeOneParagraph:
         assert result["changes"] == []
 
     @pytest.mark.asyncio
+    async def test_optimized_changed_but_changes_empty_marked(self, mock_llm, service):
+        """模型优化了文本却没输出 changes → 标记 unlisted_changes，不伪造条目。"""
+        plain = r"Text with __MATH_0000__ formula."
+        original_tex = r"Text with $x^2$ formula."
+
+        mock_llm.chat = AsyncMock(
+            return_value={
+                "paragraph_index": 0,
+                "original": plain,
+                "optimized": r"Improved text with __MATH_0000__ formula.",
+                "changes": [],
+            }
+        )
+
+        result = await service._check_one_paragraph(
+            mock_llm, 0, 0, plain, original_tex, "main.tex"
+        )
+
+        assert result["optimized"] == r"Improved text with __MATH_0000__ formula."
+        assert result["changes"] == []
+        assert result["unlisted_changes"] is True
+
+    @pytest.mark.asyncio
     async def test_marker_mismatch_falls_back(self, mock_llm, service):
         plain = r"Text with __CMD_0000__ marker."
         original_tex = r"Text with \textbf{marker.}"

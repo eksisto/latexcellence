@@ -18,7 +18,11 @@ from typing import Any
 from pydantic import BaseModel
 
 from backend.core.config import get_config
-from backend.core.base_paragraph_check import BaseParagraphCheckService
+from backend.core.base_paragraph_check import (
+    BaseParagraphCheckService,
+    has_unlisted_changes,
+    normalize_changes_contract,
+)
 from backend.core.prompts import get_prompt
 from backend.modules.expression_opt.prompt_manager import get_prompt_manager
 from backend.utils.latex_json_guard import LatexTextLite
@@ -143,8 +147,16 @@ class ExpressionOptService(BaseParagraphCheckService):
     ) -> dict[str, Any]:
         # changes[] 的 original/optimized 还原 marker → 前端干净展示
         # optimized 字段保留 marker → apply_changes 依赖 marker_map 写回
-        changes, _ = self._restore_change_markers(
+        changes = normalize_changes_contract(
             [c.model_dump() for c in validated.changes],
+            output_text=validated.optimized,
+            plain_text=plain_text,
+        )
+        unlisted_changes = has_unlisted_changes(
+            changes, validated.optimized, plain_text
+        )
+        changes, _ = self._restore_change_markers(
+            changes,
             file_path,
             idx,
             ("original", "optimized"),
@@ -154,6 +166,7 @@ class ExpressionOptService(BaseParagraphCheckService):
             "original": original_text,
             "optimized": validated.optimized,
             "changes": changes,
+            "unlisted_changes": unlisted_changes,
             "text": original_text,
             "plain_text": plain_text,
             "file_path": file_path,

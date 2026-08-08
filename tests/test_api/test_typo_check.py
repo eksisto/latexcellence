@@ -238,6 +238,60 @@ class TestCheckOneParagraph:
         assert result["changes"] == []
 
     @pytest.mark.asyncio
+    async def test_corrected_unchanged_but_changes_nonempty_dropped(
+        self, mock_llm, service
+    ):
+        """模型未改文本却编造 changes → 丢弃虚假条目。"""
+        plain = r"Correct text with __MATH_0000__ formula."
+        original_tex = r"Correct text with $x^2$ formula."
+
+        mock_llm.chat = AsyncMock(
+            return_value={
+                "paragraph_index": 0,
+                "original": plain,
+                "corrected": plain,
+                "changes": [
+                    {
+                        "type": "typo",
+                        "original": "Correct",
+                        "corrected": "correct",
+                        "explanation": "invented",
+                    }
+                ],
+            }
+        )
+
+        result = await service._check_one_paragraph(
+            mock_llm, 0, 0, plain, original_tex, "main.tex"
+        )
+
+        assert result["corrected"] == plain
+        assert result["changes"] == []
+
+    @pytest.mark.asyncio
+    async def test_corrected_changed_but_changes_empty_marked(self, mock_llm, service):
+        """模型改了文本却没输出 changes → 标记 unlisted_changes，不伪造条目。"""
+        plain = r"Correct text with __MATH_0000__ formula."
+        original_tex = r"Correct text with $x^2$ formula."
+
+        mock_llm.chat = AsyncMock(
+            return_value={
+                "paragraph_index": 0,
+                "original": plain,
+                "corrected": r"Fixed text with __MATH_0000__ formula.",
+                "changes": [],
+            }
+        )
+
+        result = await service._check_one_paragraph(
+            mock_llm, 0, 0, plain, original_tex, "main.tex"
+        )
+
+        assert result["corrected"] == r"Fixed text with __MATH_0000__ formula."
+        assert result["changes"] == []
+        assert result["unlisted_changes"] is True
+
+    @pytest.mark.asyncio
     async def test_marker_mismatch_falls_back(self, mock_llm, service):
         """LLM 修改了 marker → 回退到原始文本。"""
         plain = r"Text with __CMD_0000__ marker."

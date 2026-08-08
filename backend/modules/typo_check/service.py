@@ -17,7 +17,11 @@ from typing import Any
 from pydantic import BaseModel
 
 from backend.core.config import get_config
-from backend.core.base_paragraph_check import BaseParagraphCheckService
+from backend.core.base_paragraph_check import (
+    BaseParagraphCheckService,
+    has_unlisted_changes,
+    normalize_changes_contract,
+)
 from backend.core.prompts import get_prompt
 from backend.utils.latex_json_guard import LatexTextLite
 
@@ -120,14 +124,21 @@ class TypoCheckService(BaseParagraphCheckService):
     ) -> dict[str, Any]:
         # changes[] 的 original/corrected 还原 marker → 前端干净展示
         # corrected 字段保留 marker → apply_changes 依赖 marker_map 写回
-        changes, _ = self._restore_change_markers(
-            [c.model_dump() for c in validated.changes], file_path, idx
+        changes = normalize_changes_contract(
+            [c.model_dump() for c in validated.changes],
+            output_text=validated.corrected,
+            plain_text=plain_text,
         )
+        unlisted_changes = has_unlisted_changes(
+            changes, validated.corrected, plain_text
+        )
+        changes, _ = self._restore_change_markers(changes, file_path, idx)
         return {
             "paragraph_index": idx,
             "original": original_text,
             "corrected": validated.corrected,
             "changes": changes,
+            "unlisted_changes": unlisted_changes,
             "text": original_text,
             "plain_text": plain_text,
             "file_path": file_path,
