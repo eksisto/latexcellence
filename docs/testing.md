@@ -51,3 +51,11 @@
 - `run_eval.py`：逐条调用真实 OCR 管线（含 LLM），把识别结果渲染成图片并生成 HTML 比对报告
 
 同样依赖人工判断，不属于 `pytest tests/` 自动测试范围。使用说明见 `tools/table_ocr_eval/README.md`。
+
+---
+
+`tests/fixtures/typo_check/` 是错字查找的**人工评估语料**（每条一个 LaTeX 段落片段 + `manifest.json`，预埋期望错字，含干净段落用于误报检测），配套维护者工具位于 `tools/typo_check_eval/`：
+
+- `run_eval.py`：逐条调用真实逐段检查管线（含 LLM），把修正文本还原 marker 后生成原文/修正后对照 HTML 报告
+
+同样依赖人工判断，不属于 `pytest tests/` 自动测试范围。使用说明见 `tools/typo_check_eval/README.md`。

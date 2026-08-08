@@ -1,0 +1,356 @@
+{
+  "description": "错字查找人工评估语料（非 pytest 自动测试）。每条一个 LaTeX 段落片段（不含空行，恰好一个段落），manifest 标注难度分层与期望发现的错字；has_typo=false 的条目用于评估误报率。",
+  "items": [
+    {
+      "id": "typo_01",
+      "file": "typo_01.tex",
+      "tier": 1,
+      "tier_name": "简单错字",
+      "title": "英文常见拼写错误",
+      "has_typo": true,
+      "expected_issues": [
+        { "original": "recieve", "corrected": "receive" },
+        { "original": "seperates", "corrected": "separates" }
+      ]
+    },
+    {
+      "id": "typo_02",
+      "file": "typo_02.tex",
+      "tier": 1,
+      "tier_name": "简单错字",
+      "title": "双写字母与常见拼写",
+      "has_typo": true,
+      "expected_issues": [
+        { "original": "occured", "corrected": "occurred" },
+        { "original": "accomodate", "corrected": "accommodate" }
+      ]
+    },
+    {
+      "id": "typo_03",
+      "file": "typo_03.tex",
+      "tier": 1,
+      "tier_name": "简单错字",
+      "title": "中文错别字（音近）",
+      "has_typo": true,
+      "expected_issues": [
+        { "original": "按装", "corrected": "安装" },
+        { "original": "帐号", "corrected": "账号" }
+      ]
+    },
+    {
+      "id": "typo_04",
+      "file": "typo_04.tex",
+      "tier": 1,
+      "tier_name": "简单错字",
+      "title": "标点与空格",
+      "has_typo": true,
+      "expected_issues": [
+        { "original": "section,we", "corrected": "section, we" },
+        { "original": "notation,then", "corrected": "notation, then" }
+      ]
+    },
+    {
+      "id": "typo_05",
+      "file": "typo_05.tex",
+      "tier": 1,
+      "tier_name": "简单错字",
+      "title": "英文常见拼写错误（二）",
+      "has_typo": true,
+      "expected_issues": [
+        { "original": "definately", "corrected": "definitely" },
+        { "original": "goverment", "corrected": "government" }
+      ]
+    },
+    {
+      "id": "typo_06",
+      "file": "typo_06.tex",
+      "tier": 1,
+      "tier_name": "简单错字",
+      "title": "词首与词中字母",
+      "has_typo": true,
+      "expected_issues": [
+        { "original": "Teh", "corrected": "The" },
+        { "original": "adress", "corrected": "address" }
+      ]
+    },
+    {
+      "id": "typo_07",
+      "file": "typo_07.tex",
+      "tier": 2,
+      "tier_name": "中等错字",
+      "title": "冠词 a/an",
+      "has_typo": true,
+      "expected_issues": [
+        { "original": "a apple", "corrected": "an apple" },
+        { "original": "an university", "corrected": "a university" }
+      ]
+    },
+    {
+      "id": "typo_08",
+      "file": "typo_08.tex",
+      "tier": 2,
+      "tier_name": "中等错字",
+      "title": "主谓一致",
+      "has_typo": true,
+      "expected_issues": [
+        { "original": "shows", "corrected": "show" },
+        { "original": "perform", "corrected": "performs" },
+        { "original": "don't", "corrected": "doesn't" }
+      ]
+    },
+    {
+      "id": "typo_09",
+      "file": "typo_09.tex",
+      "tier": 2,
+      "tier_name": "中等错字",
+      "title": "形近/同音词（its/it's, your/you're）",
+      "has_typo": true,
+      "expected_issues": [
+        { "original": "its important", "corrected": "it's important" },
+        { "original": "you're contribution", "corrected": "your contribution" }
+      ]
+    },
+    {
+      "id": "typo_10",
+      "file": "typo_10.tex",
+      "tier": 2,
+      "tier_name": "中等错字",
+      "title": "affect/effect 与 principal/principle",
+      "has_typo": true,
+      "expected_issues": [
+        { "original": "affect on", "corrected": "effect on" },
+        { "original": "principal of", "corrected": "principle of" }
+      ]
+    },
+    {
+      "id": "typo_11",
+      "file": "typo_11.tex",
+      "tier": 2,
+      "tier_name": "中等错字",
+      "title": "中文的/地/得",
+      "has_typo": true,
+      "expected_issues": [
+        { "original": "表现的", "corrected": "表现得" },
+        { "original": "快速的", "corrected": "快速地" },
+        { "original": "稳定的", "corrected": "稳定地" }
+      ]
+    },
+    {
+      "id": "typo_12",
+      "file": "typo_12.tex",
+      "tier": 2,
+      "tier_name": "中等错字",
+      "title": "重复词",
+      "has_typo": true,
+      "expected_issues": [
+        { "original": "The the", "corrected": "The" },
+        { "original": "and and", "corrected": "and" }
+      ]
+    },
+    {
+      "id": "typo_13",
+      "file": "typo_13.tex",
+      "tier": 3,
+      "tier_name": "复杂错字",
+      "title": "数学环境附近的拼写",
+      "has_typo": true,
+      "expected_issues": [
+        { "original": "cna", "corrected": "can" },
+        { "original": "definately", "corrected": "definitely" }
+      ]
+    },
+    {
+      "id": "typo_14",
+      "file": "typo_14.tex",
+      "tier": 3,
+      "tier_name": "复杂错字",
+      "title": "命令附近的错字",
+      "has_typo": true,
+      "expected_issues": [
+        { "original": "definately", "corrected": "definitely" },
+        { "original": "seperate", "corrected": "separate" }
+      ]
+    },
+    {
+      "id": "typo_15",
+      "file": "typo_15.tex",
+      "tier": 3,
+      "tier_name": "复杂错字",
+      "title": "引用/图表上下文",
+      "has_typo": true,
+      "expected_issues": [
+        { "original": "showen", "corrected": "shown" },
+        { "original": "resutls", "corrected": "results" }
+      ]
+    },
+    {
+      "id": "typo_16",
+      "file": "typo_16.tex",
+      "tier": 3,
+      "tier_name": "复杂错字",
+      "title": "中英混排错字",
+      "has_typo": true,
+      "expected_issues": [
+        { "original": "improvd", "corrected": "improve" },
+        { "original": "尤其使", "corrected": "尤其是" }
+      ]
+    },
+    {
+      "id": "typo_17",
+      "file": "typo_17.tex",
+      "tier": 3,
+      "tier_name": "复杂错字",
+      "title": "时态与被动语态",
+      "has_typo": true,
+      "expected_issues": [
+        { "original": "was conduct", "corrected": "was conducted" },
+        { "original": "was analyzed", "corrected": "were analyzed" }
+      ]
+    },
+    {
+      "id": "typo_18",
+      "file": "typo_18.tex",
+      "tier": 3,
+      "tier_name": "复杂错字",
+      "title": "长句多重错字",
+      "has_typo": true,
+      "expected_issues": [
+        { "original": "comparision", "corrected": "comparison" },
+        { "original": "margine", "corrected": "margin" }
+      ]
+    },
+    {
+      "id": "typo_19",
+      "file": "typo_19.tex",
+      "tier": 4,
+      "tier_name": "高难度错字",
+      "title": "中文成语错别字",
+      "has_typo": true,
+      "expected_issues": [{ "original": "再接再励", "corrected": "再接再厉" }]
+    },
+    {
+      "id": "typo_20",
+      "file": "typo_20.tex",
+      "tier": 4,
+      "tier_name": "高难度错字",
+      "title": "近义词依赖语境",
+      "has_typo": true,
+      "expected_issues": [
+        { "original": "new stationary", "corrected": "new stationery" }
+      ]
+    },
+    {
+      "id": "typo_21",
+      "file": "typo_21.tex",
+      "tier": 4,
+      "tier_name": "高难度错字",
+      "title": "长段落多重错字",
+      "has_typo": true,
+      "expected_issues": [
+        { "original": "acheives", "corrected": "achieves" },
+        { "original": "Futhermore", "corrected": "Furthermore" },
+        { "original": "detaild", "corrected": "detailed" }
+      ]
+    },
+    {
+      "id": "typo_22",
+      "file": "typo_22.tex",
+      "tier": 4,
+      "tier_name": "高难度错字",
+      "title": "中文长段落错字",
+      "has_typo": true,
+      "expected_issues": [
+        { "original": "召会率", "corrected": "召回率" },
+        { "original": "部属", "corrected": "部署" }
+      ]
+    },
+    {
+      "id": "typo_23",
+      "file": "typo_23.tex",
+      "tier": 4,
+      "tier_name": "高难度错字",
+      "title": "专业术语拼写",
+      "has_typo": true,
+      "expected_issues": [
+        { "original": "paramter", "corrected": "parameter" },
+        { "original": "optmization", "corrected": "optimization" }
+      ]
+    },
+    {
+      "id": "typo_24",
+      "file": "typo_24.tex",
+      "tier": 4,
+      "tier_name": "高难度错字",
+      "title": "中英混排长段落",
+      "has_typo": true,
+      "expected_issues": [
+        { "original": "过拟和", "corrected": "过拟合" },
+        { "original": "收殓", "corrected": "收敛" }
+      ]
+    },
+    {
+      "id": "typo_25",
+      "file": "typo_25.tex",
+      "tier": 5,
+      "tier_name": "压力测试",
+      "title": "密集 LaTeX 环境",
+      "has_typo": true,
+      "expected_issues": [
+        { "original": "propotional", "corrected": "proportional" },
+        { "original": "follwoing", "corrected": "following" }
+      ]
+    },
+    {
+      "id": "typo_26",
+      "file": "typo_26.tex",
+      "tier": 5,
+      "tier_name": "压力测试",
+      "title": "干净英文段落（误报检测）",
+      "has_typo": false,
+      "expected_issues": []
+    },
+    {
+      "id": "typo_27",
+      "file": "typo_27.tex",
+      "tier": 5,
+      "tier_name": "压力测试",
+      "title": "干净中文段落（误报检测）",
+      "has_typo": false,
+      "expected_issues": []
+    },
+    {
+      "id": "typo_28",
+      "file": "typo_28.tex",
+      "tier": 5,
+      "tier_name": "压力测试",
+      "title": "命令密集段落",
+      "has_typo": true,
+      "expected_issues": [{ "original": "achives", "corrected": "achieves" }]
+    },
+    {
+      "id": "typo_29",
+      "file": "typo_29.tex",
+      "tier": 5,
+      "tier_name": "压力测试",
+      "title": "歧义语境辨析",
+      "has_typo": true,
+      "expected_issues": [
+        { "original": "will effect", "corrected": "will affect" },
+        { "original": "take affect", "corrected": "take effect" }
+      ]
+    },
+    {
+      "id": "typo_30",
+      "file": "typo_30.tex",
+      "tier": 5,
+      "tier_name": "压力测试",
+      "title": "超长混合压力测试",
+      "has_typo": true,
+      "expected_issues": [
+        { "original": "大里", "corrected": "大量" },
+        { "original": "注义", "corrected": "注意" },
+        { "original": "开消", "corrected": "开销" }
+      ]
+    }
+  ]
+}

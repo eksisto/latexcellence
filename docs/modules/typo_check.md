@@ -58,3 +58,7 @@ Prefix: `/api/typo-check`, Tag: `typo_check`
 ## 结果展示
 
 后端返回的 `changes[]` 中，`original` 和 `corrected` 字段已由 `_build_success_result` 调用 `_restore_change_markers()` 预先将 marker 还原为原始 LaTeX（如 `\textbf{}`）。前端直接展示还原后的文本，无需额外处理 marker。`corrected` 顶层字段则保留 marker，供 apply 流程使用。
+
+## 人工评估
+
+`tests/fixtures/typo_check/` 是错字查找的人工评估语料（每条一个 LaTeX 段落片段 + `manifest.json`，按难度分层，含干净的对照段落用于误报检测），配套维护者工具位于 `tools/typo_check_eval/`：`run_eval.py` 在语料目录上打开工作区，逐条调用本模块 `TypoCheckService.check_typos()`，并把修正文本中的 marker 还原后生成原文/修正后对照 HTML 报告。该流程依赖真实 LLM 调用与人工判断，不属于 `pytest tests/` 自动测试范围，详见 `tools/typo_check_eval/README.md`。
