@@ -70,6 +70,7 @@ latexcellence/
 │   │   ├── tex_compile.py          # 统一 TeX 编译执行（texfot 过滤 + 引擎自动检测 + PDF/A 支持）
 │   │   ├── compile_error_translator.py  # 编译错误 LLM 翻译（compile + git_diff 复用）
 │   │   ├── latexindent_utils.py    # latexindent.pl 调用封装
+│   │   ├── latexindent.yaml        # latexindent 统一缩进配置（每层 4 个空格）
 │   │   ├── builtin_formatter.py    # 内置轻量 LaTeX 格式化器
 │   │   ├── project_tools/          # LLM Function Calling 工具集（浏览 + 编辑）
 │   │   ├── web_search/             # 联网搜索多引擎抽象

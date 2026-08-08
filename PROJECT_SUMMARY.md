@@ -41,6 +41,7 @@ latexcellence/
 │   │   ├── latex_package_analyzer.py # 宏包检测：确定性规则表为主，LLM 兜底
 │   │   ├── compile_error_translator.py  # LaTeX 编译错误 LLM 翻译（compile + git_diff 复用）
 │   │   ├── latexindent_utils.py     # latexindent.pl 调用封装（code_review 使用）
+│   │   ├── latexindent.yaml         # latexindent 统一缩进配置（每层 4 个空格）
 │   │   ├── builtin_formatter.py     # 内置轻量 LaTeX 格式化器（latexindent 不可用时兜底）
 │   │   ├── web_search/               # 联网搜索模块（多引擎抽象包）
 │   │   │   ├── __init__.py           # 模块入口，向后兼容导出

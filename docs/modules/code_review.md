@@ -15,7 +15,10 @@ Agentic 混合流水线：latexindent.pl（或内置轻量格式化器）处理�
                                                        CodeReviewResult
 ```
 
-1. **工具格式化**：用原始 LaTeX（无 marker）调用 latexindent.pl 或内置兜底格式化器
+1. **工具格式化**：用原始 LaTeX（无 marker）调用 latexindent.pl 或内置兜底格式化器。
+   两条路径统一为每层 4 个空格缩进：latexindent 通过项目内置
+   `backend/utils/latexindent.yaml`（`defaultIndent`）覆盖其默认的制表符缩进；
+   内置格式化器同样按每层 4 个空格缩进
 2. **LLM 审查**：将格式化后的真实 LaTeX 直接发给 LLM，LLM 只出建议不动源码（坏味道、过时用法、最佳实践）
 
 **不使用 marker 保护的原因**：code_review 的 LLM 输出（建议）
@@ -61,7 +64,7 @@ system prompt 明确要求：只报告源码中实际存在的问题，禁止从
 
 ## 内置格式化器 `backend/utils/builtin_formatter.py`
 
-零外部依赖的轻量格式化器：环境缩进、环境间空行、`\begin`/`\end` 对齐、去除行尾多余空白。不做 latexindent 的高级对齐功能。
+零外部依赖的轻量格式化器：环境缩进（每层 4 个空格，与 latexindent 路径保持一致）、环境间空行、`\begin`/`\end` 对齐、去除行尾多余空白。不做 latexindent 的高级对齐功能。
 
 ## API 路由
 

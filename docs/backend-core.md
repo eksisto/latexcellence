@@ -500,7 +500,7 @@ raise ValueError("Validation failed after N attempts")        # ❌ 耗尽
 
 ### `latexindent_utils.py` — latexindent.pl 调用封装
 
-供 `code_review` 模块使用。负责检测系统是否安装 `latexindent`，并将 LaTeX 源码片段写入临时文件后调用 `latexindent` 进行格式化。
+供 `code_review` 模块使用。负责检测系统是否安装 `latexindent`，并将 LaTeX 源码片段写入临时文件后调用 `latexindent` 进行格式化。默认加载项目内置 `backend/utils/latexindent.yaml`（`defaultIndent` 为每层 4 个空格），覆盖 latexindent 默认的制表符缩进；`config_path` 参数可传入自定义配置覆盖。
 
 **核心接口**：
 
@@ -513,7 +513,7 @@ raise ValueError("Validation failed after N attempts")        # ❌ 耗尽
 
 无外部依赖的兜底格式化器，当 `latexindent.pl` 不可用时由 `code_review` 模块使用。
 
-**处理范围**：环境缩进、去除行尾多余空白、压缩连续空行、一致性换行。
+**处理范围**：环境缩进（每层 4 个空格，与 latexindent 路径一致）、去除行尾多余空白、压缩连续空行、一致性换行。
 
 **核心接口**：`format_latex(source: str) -> str`
 

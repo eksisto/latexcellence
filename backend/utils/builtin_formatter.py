@@ -3,7 +3,7 @@
 无外部依赖，作为 latexindent.pl 不可用时的兜底方案。
 
 处理范围：
-- 环境缩进（\\begin{env} … \\end{env} 内统一缩进）
+- 环境缩进（\\begin{env} … \\end{env} 内统一缩进，每层 4 个空格）
 - 去除行尾多余空白
 - 压缩连续空行
 - 一致性换行
@@ -49,7 +49,7 @@ def format_latex(source: str) -> str:
                     )
 
         indent_level = len(env_stack)
-        indented = "  " * indent_level + stripped
+        indented = "    " * indent_level + stripped
 
         result.append(indented)
 

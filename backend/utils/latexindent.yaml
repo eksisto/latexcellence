@@ -1,0 +1,4 @@
+# latexindent.pl 项目统一缩进配置。
+# code_review 通过 latexindent_utils.format_with_latexindent() 显式加载本文件，
+# 覆盖 latexindent 默认的制表符缩进（defaultIndent: "\t"），统一为每层 4 个空格。
+defaultIndent: "    "

@@ -11,6 +11,7 @@ code_review 模块集成测试。
     - _format_source 降级（无 latexindent 时使用内置格式化器）
 """
 
+import os
 import tempfile
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -23,6 +24,7 @@ from backend.modules.code_review.service import (
     CodeReviewResult,
     CodeReviewSuggestion,
 )
+from backend.utils.latexindent_utils import is_latexindent_available
 
 # ── fixtures ───────────────────────────────────────────────────────────────
 
@@ -504,18 +506,50 @@ class TestBuiltinFormatter:
         result = format_latex(source)
         assert r"\begin{document}" in result
         assert r"\end{document}" in result
-        # itemize 内的 items 应被缩进
-        assert "    \\item" in result
+        # 每层缩进 4 个空格：document > itemize > item
+        assert "    \\begin{itemize}" in result
+        assert "        \\item item 1" in result
+        assert "        \\item item 2" in result
 
 
 class TestLatexindentUtils:
     """latexindent 工具测试。"""
 
     def test_is_latexindent_available_returns_bool(self):
-        from backend.utils.latexindent_utils import is_latexindent_available
-
         result = is_latexindent_available()
         assert isinstance(result, bool)
+
+    def test_default_config_path_exists(self):
+        from backend.utils.latexindent_utils import DEFAULT_CONFIG_PATH
+
+        assert DEFAULT_CONFIG_PATH.is_file()
+
+    @pytest.mark.skipif(
+        not is_latexindent_available(), reason="latexindent not installed"
+    )
+    @pytest.mark.asyncio
+    async def test_format_with_latexindent_four_space_indent(self):
+        from backend.utils.latexindent_utils import format_with_latexindent
+
+        source = (
+            r"\begin{document}" + "\n"
+            r"\begin{itemize}" + "\n"
+            r"\item item 1" + "\n"
+            r"\end{itemize}" + "\n"
+            r"\end{document}"
+        )
+        # latexindent 会在当前目录写 indent.log，切到临时目录避免污染仓库
+        with tempfile.TemporaryDirectory() as tmpdir:
+            cwd = Path.cwd()
+            os.chdir(tmpdir)
+            try:
+                result = await format_with_latexindent(source)
+            finally:
+                os.chdir(cwd)
+
+        # latexindent 默认对 document 环境不额外缩进（noAdditionalIndent），
+        # 但缩进单位为每层 4 个空格（覆盖默认制表符）
+        assert "    \\item item 1" in result
 
 
 class TestEmptyResult:
