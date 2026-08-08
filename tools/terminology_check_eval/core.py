@@ -1,5 +1,9 @@
 """术语一致性人工评估共享逻辑（维护者工具，不进入运行时与 pytest）。
 
+通用逻辑（语料加载、工作区、marker 还原、归一化、CLI 骨架）收敛在
+tools/eval_common.py；本文件保留术语检查专属的簇级命中判定与语料校验，
+并向后兼容导出共享函数。
+
 职责：
     1. 加载 tests/fixtures/terminology_check 语料（manifest.json + 每条一个
        多段落 .tex 文档）
@@ -14,49 +18,36 @@
        recommended 是 variants 之一（防把术语写进命令参数/公式导致 LLM 看不到）
 """
 
-import json
-import re
-from pathlib import Path
+from eval_common import (
+    PROJECT_ROOT,
+    load_manifest as _load_manifest,
+    normalize_fragment,
+    restore_markers,
+    share_significant_token,
+)
+from eval_common import iter_items as _iter_items
+from eval_common import open_eval_workspace as _open_eval_workspace
 
-from backend.core.workspace_manager import get_workspace_manager
+import re
+
 from backend.utils.latex_parser import LatexParser
 
-PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 FIXTURES_DIR = PROJECT_ROOT / "tests" / "fixtures" / "terminology_check"
 
 
 def load_manifest() -> dict:
     """读取语料 manifest.json。"""
-    return json.loads((FIXTURES_DIR / "manifest.json").read_text(encoding="utf-8"))
+    return _load_manifest(FIXTURES_DIR)
 
 
 def iter_items(manifest: dict, limit: int | None = None):
     """逐条返回 (manifest 条目, 文档 LaTeX 全文)。"""
-    entries = manifest["items"]
-    if limit is not None:
-        entries = entries[:limit]
-    for entry in entries:
-        tex = (FIXTURES_DIR / entry["file"]).read_text(encoding="utf-8").strip()
-        yield entry, tex
+    yield from _iter_items(FIXTURES_DIR, manifest, limit)
 
 
 def open_eval_workspace(workspace_id: str) -> None:
     """在语料目录上打开评估工作区（幂等：已打开则复用）。"""
-    project = get_workspace_manager().get_or_create(workspace_id)
-    if not project.is_open:
-        project.open(str(FIXTURES_DIR))
-
-
-def restore_markers(original_tex: str, corrected_with_markers: str) -> str:
-    """把修正文本中的 marker 还原为原始 LaTeX（供报告展示）。"""
-    parser = LatexParser()
-    _, marker_map = parser.strip_to_plain_text(original_tex)
-    return parser.restore_from_markers(corrected_with_markers, marker_map)
-
-
-def normalize_fragment(text: str) -> str:
-    """归一化片段：折叠空白并转小写，用于期望变体与 changes 的宽松匹配。"""
-    return re.sub(r"\s+", " ", text).strip().lower()
+    _open_eval_workspace(FIXTURES_DIR, workspace_id)
 
 
 def analyze_hits(
@@ -151,26 +142,15 @@ def _pair_matches(exp: dict, orig_norm: str, corr_norm: str) -> bool:
         exp["variant_norm"] == orig_norm
         or exp["variant_norm"] in orig_norm
         or orig_norm in exp["variant_norm"]
-        or _share_significant_token(exp["variant_norm"], orig_norm)
+        or share_significant_token(exp["variant_norm"], orig_norm)
     )
     rec_ok = (
         exp["recommended_norm"] == corr_norm
         or exp["recommended_norm"] in corr_norm
         or corr_norm in exp["recommended_norm"]
-        or _share_significant_token(exp["recommended_norm"], corr_norm)
+        or share_significant_token(exp["recommended_norm"], corr_norm)
     )
     return variant_ok and rec_ok
-
-
-def _share_significant_token(expected_norm: str, change_norm: str) -> bool:
-    """期望片段与修改片段是否共享至少一个显著词元（长度 ≥ 4）。
-
-    中文片段整体作为单个词元处理（无空格分词），子串规则已覆盖；此规则
-    主要解决英文多词期望片段与更宽的 change.original 之间的匹配。
-    """
-    expected_tokens = set(expected_norm.split())
-    change_tokens = set(change_norm.split())
-    return any(len(tok) >= 4 and tok in change_tokens for tok in expected_tokens)
 
 
 def validate_corpus(manifest: dict | None = None) -> list[str]:

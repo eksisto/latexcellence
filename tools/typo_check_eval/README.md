@@ -39,8 +39,8 @@
 
 | 文件 | 作用 |
 | --- | --- |
-| `core.py` | 共享逻辑：加载语料、在工作区打开语料目录、marker 还原、期望错字命中判定 |
-| `run_eval.py` | 跑完整评估：逐条调用 `TypoCheckService.check_typos()`，生成 HTML 报告 |
+| `core.py` | 工具专属常量 + 共享逻辑的向后兼容导出（通用部分复用 `tools/eval_common.py`） |
+| `run_eval.py` | 跑完整评估：逐条调用 `TypoCheckService.check_typos()`，生成 HTML 报告（CLI 骨架复用 `tools/eval_common.py`） |
 | `README.md` | 本文档 |
 
 ### 3. 运行输出 `logs/typo_check_eval/`

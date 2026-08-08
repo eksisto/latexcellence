@@ -8,6 +8,9 @@
     4. 生成 HTML 报告（原文 vs 修正后 + 修改明细 + 期望术语簇命中标记），
        供人工观察
 
+CLI 骨架（语料加载 / 工作区 / 主循环 / 结果落盘 / --validate）复用
+tools/eval_common.py。
+
 用法：
     python tools/terminology_check_eval/run_eval.py
     python tools/terminology_check_eval/run_eval.py --limit 5
@@ -15,28 +18,23 @@
     python tools/terminology_check_eval/run_eval.py --validate   # 只校验语料，不调 LLM
 """
 
-import argparse
-import asyncio
 import html
-import json
 import sys
 from datetime import datetime
 from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
-# 把 tools/ 加入 sys.path（terminology_check_eval 是 tools 下的包）
+# 把 tools/ 加入 sys.path（terminology_check_eval 是 tools 下的包，eval_common 也在 tools/ 下）
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from backend.core.config import get_config, load_config
 from backend.modules.terminology_check.service import TerminologyCheckService
 
+from eval_common import REPORT_CSS, run_eval_cli
 from terminology_check_eval.core import (
+    FIXTURES_DIR,
     analyze_hits,
-    iter_items,
-    load_manifest,
     normalize_fragment,
-    open_eval_workspace,
     restore_markers,
     validate_corpus,
 )
@@ -57,17 +55,6 @@ _CLUSTER_STATUS_COLOR = {
     "missed": "#c0392b",
     "n/a": "#888888",
 }
-
-
-def ensure_config() -> None:
-    """确保 config 已加载（脚本不在 FastAPI lifespan 内运行）。"""
-    try:
-        get_config()
-    except RuntimeError:
-        config_path = PROJECT_ROOT / "config.json"
-        if not config_path.exists():
-            raise RuntimeError("未找到 config.json，请先配置 LLM API Key")
-        load_config(str(config_path))
 
 
 async def check_one(
@@ -178,33 +165,7 @@ def render_report(report_path: Path, results: list[dict]) -> None:
 <head>
 <meta charset="utf-8">
 <title>术语一致性人工评估报告</title>
-<style>
-  body {{ font-family: "Microsoft YaHei", "PingFang SC", sans-serif; margin: 24px; background: #f5f6f8; color: #222; }}
-  h1 {{ font-size: 22px; }}
-  .summary {{ background: #fff; border: 1px solid #ddd; border-radius: 8px; padding: 12px 16px; margin-bottom: 20px; }}
-  .grid {{ display: flex; flex-wrap: wrap; gap: 16px; }}
-  section {{ margin-bottom: 28px; }}
-  .card {{ background: #fff; border: 1px solid #ddd; border-radius: 8px; padding: 12px; width: 700px; }}
-  .card h3 {{ margin: 0 0 8px; font-size: 15px; }}
-  .badge {{ display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 12px; color: #fff; }}
-  .badge.ok {{ background: #2e9e5b; }}
-  .badge.warn {{ background: #d9822b; }}
-  .badge.err {{ background: #c0392b; }}
-  .badge.clean {{ background: #5b7fa6; }}
-  .meta {{ font-size: 12px; color: #666; margin: 4px 0; }}
-  .issues, .changes, .paragraphs {{ margin: 8px 0; font-size: 13px; }}
-  .issues ul {{ margin: 4px 0; padding-left: 18px; }}
-  .changes table {{ border-collapse: collapse; width: 100%; margin-top: 4px; }}
-  .changes th, .changes td {{ border: 1px solid #e0e0e0; padding: 4px 6px; font-size: 12px; text-align: left; vertical-align: top; }}
-  .changes th {{ background: #f4f5f7; }}
-  del {{ color: #c0392b; }}
-  ins {{ color: #2e9e5b; text-decoration: none; }}
-  pre {{ background: #f8f9fa; border: 1px solid #eee; border-radius: 4px; padding: 8px; font-size: 12px; overflow-x: auto; white-space: pre-wrap; word-break: break-all; }}
-  .hint {{ font-size: 12px; color: #d9822b; margin: 4px 0; }}
-  .terms {{ font-size: 12px; color: #5b7fa6; margin: 4px 0; }}
-  .empty {{ color: #999; padding: 8px 0; font-size: 13px; }}
-  .paragraphs b {{ display: block; margin-top: 6px; }}
-</style>
+<style>{REPORT_CSS}</style>
 </head>
 <body>
 <h1>术语一致性人工评估报告</h1>
@@ -346,78 +307,23 @@ def _card_html(item: dict) -> str:
 </div>"""
 
 
-def write_results(output_dir: Path, results: list[dict]) -> None:
-    (output_dir / "results.json").write_text(
-        json.dumps(results, ensure_ascii=False, indent=2),
-        encoding="utf-8",
-    )
-
-
-async def main_async(args: argparse.Namespace) -> int:
-    ensure_config()
-    cfg = get_config()
-    if not cfg.llm.api_key:
-        print(
+def main() -> int:
+    return run_eval_cli(
+        fixtures_dir=FIXTURES_DIR,
+        default_eval_dir=DEFAULT_EVAL_DIR,
+        default_workspace_id=DEFAULT_WORKSPACE_ID,
+        description="术语一致性人工评估",
+        no_key_warning=(
             "警告：config.json 未配置 llm.api_key，术语检查将走规则降级"
             "（仅提取术语，不产生修改建议）。"
-        )
-
-    manifest = load_manifest()
-    corpus_issues = validate_corpus(manifest)
-    for issue in corpus_issues:
-        print(f"[corpus] {issue}")
-    if corpus_issues:
-        print(f"语料校验发现 {len(corpus_issues)} 个问题，请先修复后再运行评估。")
-        return 1
-    if args.validate:
-        print("语料校验通过。")
-        return 0
-
-    open_eval_workspace(args.workspace_id)
-    args.output_dir.mkdir(parents=True, exist_ok=True)
-    service = TerminologyCheckService()
-    results: list[dict] = []
-    for entry, tex in iter_items(manifest, args.limit):
-        if args.only and entry["id"] != args.only:
-            continue
-        print(f"[check] {entry['id']} ...", flush=True)
-        result: dict = {}
-        error: str | None = None
-        try:
-            result = await check_one(service, entry["file"], args.workspace_id)
-        except Exception as e:
-            error = str(e)
-        item = build_item(entry, tex, result, error)
-        detail = f": {error}" if error else ""
-        print(f"  -> {item['status']}（{len(item['changes'])} 条修改）{detail}")
-        results.append(item)
-
-    write_results(args.output_dir, results)
-    report_path = args.output_dir / "report.html"
-    render_report(report_path, results)
-    print(f"\n报告已生成: {report_path}")
-    return 0
-
-
-def main() -> int:
-    parser = argparse.ArgumentParser(description="术语一致性人工评估")
-    parser.add_argument("--output-dir", type=Path, default=DEFAULT_EVAL_DIR)
-    parser.add_argument(
-        "--workspace-id", default=DEFAULT_WORKSPACE_ID, help="评估工作区 ID"
+        ),
+        check_label="check",
+        service_factory=TerminologyCheckService,
+        check_one=check_one,
+        build_item=build_item,
+        render_report=render_report,
+        validate_corpus=validate_corpus,
     )
-    parser.add_argument("--limit", type=int, default=None, help="只评估前 N 条")
-    parser.add_argument("--only", default=None, help="只评估指定 id（如 term_01）")
-    parser.add_argument(
-        "--validate",
-        action="store_true",
-        help="只校验语料（多段落 / 变体可见性 / 簇契约），不调用 LLM",
-    )
-    args = parser.parse_args()
-    try:
-        return asyncio.run(main_async(args))
-    except RuntimeError as e:
-        print(f"错误：{e}")
-        return 1
 
 
 if __name__ == "__main__":

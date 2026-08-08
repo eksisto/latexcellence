@@ -109,6 +109,7 @@ latexcellence/
 │       └── pages/                  # 页面组件
 │
 ├── tools/                        # 维护者工具（开发/评测/维护用脚本与 Agent 评测工作区，不进入运行时）
+│   ├── eval_common.py             # 人工评估工具共享基座（语料加载/工作区/marker 还原/命中判定/CLI 骨架）
 │   ├── latex_packages/             # 宏包规则表维护（离线编译验证 + 覆盖率报告）
 │   ├── formula_ocr_eval/           # 公式 OCR 人工评估（渲染语料 → 跑 OCR → 比对报告）
 │   ├── table_ocr_eval/             # 表格 OCR 人工评估（渲染语料 → 跑 OCR → 比对报告）

@@ -6,35 +6,28 @@
     3. 把修正文本中的 marker 还原为 LaTeX
     4. 生成 HTML 报告（原文 vs 修正后 + 修改明细 + 期望错字命中标记），供人工观察
 
+CLI 骨架（语料加载 / 工作区 / 主循环 / 结果落盘）复用 tools/eval_common.py。
+
 用法：
     python tools/typo_check_eval/run_eval.py
     python tools/typo_check_eval/run_eval.py --limit 5
     python tools/typo_check_eval/run_eval.py --only typo_01
 """
 
-import argparse
-import asyncio
 import html
-import json
 import sys
 from datetime import datetime
 from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
-# 把 tools/ 加入 sys.path（typo_check_eval 是 tools 下的包）
+# 把 tools/ 加入 sys.path（typo_check_eval 是 tools 下的包，eval_common 也在 tools/ 下）
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from backend.core.config import get_config, load_config
 from backend.modules.typo_check.service import TypoCheckService
 
-from typo_check_eval.core import (
-    analyze_hits,
-    iter_items,
-    load_manifest,
-    open_eval_workspace,
-    restore_markers,
-)
+from eval_common import REPORT_CSS, run_eval_cli
+from typo_check_eval.core import FIXTURES_DIR, analyze_hits, restore_markers
 
 DEFAULT_EVAL_DIR = PROJECT_ROOT / "logs" / "typo_check_eval"
 DEFAULT_WORKSPACE_ID = "typo_check_eval"
@@ -44,17 +37,6 @@ _STATUS_LABELS = {
     "clean": ("未发现问题", "warn"),
     "error": ("失败", "err"),
 }
-
-
-def ensure_config() -> None:
-    """确保 config 已加载（脚本不在 FastAPI lifespan 内运行）。"""
-    try:
-        get_config()
-    except RuntimeError:
-        config_path = PROJECT_ROOT / "config.json"
-        if not config_path.exists():
-            raise RuntimeError("未找到 config.json，请先配置 LLM API Key")
-        load_config(str(config_path))
 
 
 async def check_one(
@@ -143,31 +125,7 @@ def render_report(report_path: Path, results: list[dict]) -> None:
 <head>
 <meta charset="utf-8">
 <title>错字查找人工评估报告</title>
-<style>
-  body {{ font-family: "Microsoft YaHei", "PingFang SC", sans-serif; margin: 24px; background: #f5f6f8; color: #222; }}
-  h1 {{ font-size: 22px; }}
-  .summary {{ background: #fff; border: 1px solid #ddd; border-radius: 8px; padding: 12px 16px; margin-bottom: 20px; }}
-  .grid {{ display: flex; flex-wrap: wrap; gap: 16px; }}
-  section {{ margin-bottom: 28px; }}
-  .card {{ background: #fff; border: 1px solid #ddd; border-radius: 8px; padding: 12px; width: 620px; }}
-  .card h3 {{ margin: 0 0 8px; font-size: 15px; }}
-  .badge {{ display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 12px; color: #fff; }}
-  .badge.ok {{ background: #2e9e5b; }}
-  .badge.warn {{ background: #d9822b; }}
-  .badge.err {{ background: #c0392b; }}
-  .badge.clean {{ background: #5b7fa6; }}
-  .meta {{ font-size: 12px; color: #666; margin: 4px 0; }}
-  .issues, .changes {{ margin: 8px 0; font-size: 13px; }}
-  .issues ul {{ margin: 4px 0; padding-left: 18px; }}
-  .changes table {{ border-collapse: collapse; width: 100%; margin-top: 4px; }}
-  .changes th, .changes td {{ border: 1px solid #e0e0e0; padding: 4px 6px; font-size: 12px; text-align: left; vertical-align: top; }}
-  .changes th {{ background: #f4f5f7; }}
-  del {{ color: #c0392b; }}
-  ins {{ color: #2e9e5b; text-decoration: none; }}
-  pre {{ background: #f8f9fa; border: 1px solid #eee; border-radius: 4px; padding: 8px; font-size: 12px; overflow-x: auto; white-space: pre-wrap; word-break: break-all; }}
-  .hint {{ font-size: 12px; color: #d9822b; margin: 4px 0; }}
-  .empty {{ color: #999; padding: 8px 0; font-size: 13px; }}
-</style>
+<style>{REPORT_CSS}</style>
 </head>
 <body>
 <h1>错字查找人工评估报告</h1>
@@ -274,62 +232,21 @@ def _card_html(item: dict) -> str:
 </div>"""
 
 
-def write_results(output_dir: Path, results: list[dict]) -> None:
-    (output_dir / "results.json").write_text(
-        json.dumps(results, ensure_ascii=False, indent=2),
-        encoding="utf-8",
-    )
-
-
-async def main_async(args: argparse.Namespace) -> int:
-    ensure_config()
-    cfg = get_config()
-    if not cfg.llm.api_key:
-        print(
-            "警告：config.json 未配置 llm.api_key，检查将返回原文（全部记为未发现问题）。"
-        )
-
-    manifest = load_manifest()
-    open_eval_workspace(args.workspace_id)
-    args.output_dir.mkdir(parents=True, exist_ok=True)
-    service = TypoCheckService()
-    results: list[dict] = []
-    for entry, tex in iter_items(manifest, args.limit):
-        if args.only and entry["id"] != args.only:
-            continue
-        print(f"[check] {entry['id']} ...", flush=True)
-        para: dict = {}
-        error: str | None = None
-        try:
-            para = await check_one(service, entry["file"], args.workspace_id)
-        except Exception as e:
-            error = str(e)
-        item = build_item(entry, tex, para, error)
-        detail = f": {error}" if error else ""
-        print(f"  -> {item['status']}{detail}")
-        results.append(item)
-
-    write_results(args.output_dir, results)
-    report_path = args.output_dir / "report.html"
-    render_report(report_path, results)
-    print(f"\n报告已生成: {report_path}")
-    return 0
-
-
 def main() -> int:
-    parser = argparse.ArgumentParser(description="错字查找人工评估")
-    parser.add_argument("--output-dir", type=Path, default=DEFAULT_EVAL_DIR)
-    parser.add_argument(
-        "--workspace-id", default=DEFAULT_WORKSPACE_ID, help="评估工作区 ID"
+    return run_eval_cli(
+        fixtures_dir=FIXTURES_DIR,
+        default_eval_dir=DEFAULT_EVAL_DIR,
+        default_workspace_id=DEFAULT_WORKSPACE_ID,
+        description="错字查找人工评估",
+        no_key_warning=(
+            "警告：config.json 未配置 llm.api_key，检查将返回原文（全部记为未发现问题）。"
+        ),
+        check_label="check",
+        service_factory=TypoCheckService,
+        check_one=check_one,
+        build_item=build_item,
+        render_report=render_report,
     )
-    parser.add_argument("--limit", type=int, default=None, help="只评估前 N 条")
-    parser.add_argument("--only", default=None, help="只评估指定 id（如 typo_01）")
-    args = parser.parse_args()
-    try:
-        return asyncio.run(main_async(args))
-    except RuntimeError as e:
-        print(f"错误：{e}")
-        return 1
 
 
 if __name__ == "__main__":
