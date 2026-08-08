@@ -75,7 +75,6 @@ def build_item(entry: dict, tex: str, para: dict, error: str | None = None) -> d
         "expected_latex": tex,
         "translated_latex": tex,
         "changes": [],
-        "unlisted_changes": False,
         "status": "error",
         "error": error,
         "matched": [],
@@ -98,7 +97,6 @@ def build_item(entry: dict, tex: str, para: dict, error: str | None = None) -> d
         {
             "translated_latex": translated_latex,
             "changes": changes,
-            "unlisted_changes": False,
         }
     )
     item["status"] = "unchanged" if translated_latex == original_latex else "translated"

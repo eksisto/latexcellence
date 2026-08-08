@@ -1,7 +1,8 @@
 """人工评估工具共享基座（维护者工具，不进入运行时与 pytest）。
 
 错字查找（typo_check_eval）、表达优化（expression_opt_eval）、术语一致性
-（terminology_check_eval）三套人工评估工具共用同一套基础设施：
+（terminology_check_eval）、逐段翻译（paragraph_translate_eval）等人工评估
+工具共用同一套基础设施：
 
     - 语料加载：load_manifest / iter_items
     - 工作区：open_eval_workspace
@@ -29,7 +30,7 @@ from backend.utils.latex_parser import LatexParser
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
 
-# 三套报告共用的 HTML 样式（terminology 额外用到 .terms / .paragraphs b）
+# 各套报告共用的 HTML 样式（terminology 额外用到 .terms / .paragraphs b）
 REPORT_CSS = """
   body { font-family: "Microsoft YaHei", "PingFang SC", sans-serif; margin: 24px; background: #f5f6f8; color: #222; }
   h1 { font-size: 22px; }
@@ -190,11 +191,11 @@ def run_eval_cli(
     render_report: Callable[[Path, list[dict]], None],
     validate_corpus: Callable[[dict], list[str]] | None = None,
 ) -> int:
-    """三套人工评估工具共用的 CLI 入口与主循环。
+    """各套人工评估工具共用的 CLI 入口与主循环。
 
     各工具只需提供服务工厂、单条检查、条目整理与报告渲染；语料加载、
-    工作区打开、结果落盘与进度打印统一在此完成。terminology 额外提供
-    validate_corpus 时自动增加 --validate 参数。
+    工作区打开、结果落盘与进度打印统一在此完成。提供 validate_corpus
+    的工具自动增加 --validate 参数。
     """
     parser = argparse.ArgumentParser(description=description)
     parser.add_argument("--output-dir", type=Path, default=default_eval_dir)
