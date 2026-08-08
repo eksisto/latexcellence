@@ -3,6 +3,7 @@ import remarkGfm from "remark-gfm";
 import remarkMath from "remark-math";
 import rehypeKatex from "rehype-katex";
 import "katex/dist/katex.min.css";
+import CodeBlock from "@/components/CodeBlock";
 
 // 模块级常量，减少重复解析
 const remarkPlugins = [remarkGfm, remarkMath];
@@ -11,10 +12,11 @@ const rehypePlugins = [rehypeKatex];
 const components = {
   code({ inline, className, children, ...props }) {
     const isInline = inline ?? !String(children).includes("\n");
+    const language = (className || "").replace(/^language-/, "");
     if (isInline) {
       return (
         <code
-          className="rounded bg-muted px-1 py-0.5 font-mono text-xs"
+          className="code-inline rounded bg-muted px-1 py-0.5 text-xs"
           {...props}
         >
           {children}
@@ -22,11 +24,11 @@ const components = {
       );
     }
     return (
-      <pre className="rounded-md bg-muted p-3 overflow-x-auto text-xs font-mono leading-relaxed">
-        <code className={className} {...props}>
-          {children}
-        </code>
-      </pre>
+      <CodeBlock
+        code={String(children)}
+        language={language || "plaintext"}
+        className="p-3"
+      />
     );
   },
   a: ({ node, ...props }) => (

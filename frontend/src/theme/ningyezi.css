@@ -19,6 +19,9 @@
   --border: oklch(0.91 0 0);
   --input: oklch(0.91 0 0);
   --ring: oklch(0.5 0.22 287);
+  --code-bg: oklch(0.965 0 0);
+  --code-fg: oklch(0.3 0 0);
+  --code-border: oklch(0.88 0 0);
 }
 
 [data-theme="ningyezi"].dark {
@@ -42,4 +45,7 @@
   --border: oklch(0.34 0 0);
   --input: oklch(0.34 0 0);
   --ring: oklch(0.6 0.22 287);
+  --code-bg: oklch(0.235 0 0);
+  --code-fg: oklch(0.87 0 0);
+  --code-border: oklch(0.38 0 0);
 }

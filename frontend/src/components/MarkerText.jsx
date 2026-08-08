@@ -1,5 +1,7 @@
-import React, { useMemo } from "react";
+import React, { memo, useMemo } from "react";
 import { useTranslation } from "react-i18next";
+import "@/styles/code-highlight.css";
+import { highlightHtml } from "@/utils/highlight";
 
 const MARKER_COLORS = {
   MATH: "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200 border-blue-200 dark:border-blue-800",
@@ -11,8 +13,30 @@ const MARKER_COLORS = {
 
 const MARKER_REGEX = /(__(?:MATH|CMD|ENV|VERB|COM)_\d{4,}__)/g;
 
-export default function MarkerText({ text }) {
+/**
+ * 行内代码片段：以统一 .code-inline 样式渲染，并就地执行 LaTeX 高亮。
+ * 高亮 HTML 在渲染期派生（useMemo），每个非 marker 的纯文本 token 独立高亮，
+ * 避免破坏 marker 徽章的结构。
+ */
+const HighlightedFragment = memo(function HighlightedFragment({ text }) {
+  const html = useMemo(() => highlightHtml(text, "latex"), [text]);
+
+  return (
+    <code className="code-inline" dangerouslySetInnerHTML={{ __html: html }} />
+  );
+});
+
+/**
+ * 将含 marker（__MATH_0000__ 等）的 LaTeX 文本渲染为 marker 徽章 + 纯文本。
+ *
+ * @param {string} text     待展示文本
+ * @param {"code"|"text"} variant
+ *   code：纯文本片段以 .code-inline（等宽 + LaTeX 高亮）渲染，默认值；
+ *   text：保持纯文本原样（用于 diff 等已有语义配色的场景，避免高亮覆盖红/绿）。
+ */
+function MarkerText({ text, variant = "code" }) {
   const { t } = useTranslation("components");
+  const isCode = variant === "code";
 
   const markerLabels = useMemo(
     () => ({
@@ -46,8 +70,13 @@ export default function MarkerText({ text }) {
             </span>
           );
         }
-        return <React.Fragment key={index}>{token}</React.Fragment>;
+        if (!isCode) {
+          return <React.Fragment key={index}>{token}</React.Fragment>;
+        }
+        return <HighlightedFragment key={index} text={token} />;
       })}
     </>
   );
 }
+
+export default memo(MarkerText);

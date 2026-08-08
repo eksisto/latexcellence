@@ -47,6 +47,7 @@ import useEnabledFeatures from "@/hooks/useEnabledFeatures";
 import useUndoRedo from "@/hooks/useUndoRedo";
 import ProjectExplorer from "@/components/ProjectExplorer";
 import PageHeader from "@/components/PageHeader";
+import CodeBlock from "@/components/CodeBlock";
 import ConfirmDialog from "@/components/ConfirmDialog";
 import FolderPickerDialog from "@/components/FolderPickerDialog";
 import PDFPreview from "@/components/PDFPreview";
@@ -535,9 +536,12 @@ export default function WorkspacePage() {
                                 })}
                               </span>
                             </div>
-                            <pre className="whitespace-pre-wrap text-sm font-mono text-foreground/80">
-                              {p.text}
-                            </pre>
+                            <CodeBlock
+                              code={p.text}
+                              language="latex"
+                              variant="bare"
+                              className="text-sm text-foreground/80"
+                            />
                           </div>
                         ))}
                       </div>
@@ -605,11 +609,11 @@ export default function WorkspacePage() {
                       {t("pages:workspace.viewRawOutput")}
                     </Button>
                     {showRawOutput && (
-                      <pre className="mt-2 p-2 rounded bg-muted text-xs max-h-48 overflow-auto whitespace-pre-wrap">
-                        {compileResult.stdout || t("pages:workspace.noStdout")}
-                        {"\n"}
-                        {compileResult.stderr || t("pages:workspace.noStderr")}
-                      </pre>
+                      <CodeBlock
+                        code={`${compileResult.stdout || t("pages:workspace.noStdout")}\n${compileResult.stderr || t("pages:workspace.noStderr")}`}
+                        language="plaintext"
+                        className="mt-2 p-2 max-h-48"
+                      />
                     )}
                   </div>
                 </CardContent>

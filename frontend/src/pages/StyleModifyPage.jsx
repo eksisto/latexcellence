@@ -12,6 +12,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Wand2, Loader2, Copy } from "lucide-react";
 import PageHeader from "@/components/PageHeader";
 import { api } from "@/api/index";
+import CodeBlock, { latexEditorClass } from "@/components/CodeBlock";
+import { cn } from "@/lib/utils";
 
 export default function StyleModifyPage() {
   const { t } = useTranslation(["pages", "common"]);
@@ -63,7 +65,7 @@ export default function StyleModifyPage() {
             </CardHeader>
             <CardContent>
               <Textarea
-                className="min-h-80 resize-none font-mono text-sm"
+                className={cn(latexEditorClass, "min-h-80 resize-none")}
                 value={latex}
                 onChange={(e) => setLatex(e.target.value)}
                 placeholder={t("pages:styleModify.sourcePlaceholder")}
@@ -121,9 +123,11 @@ export default function StyleModifyPage() {
                 </div>
               </CardHeader>
               <CardContent>
-                <pre className="whitespace-pre-wrap p-4 bg-muted rounded text-sm font-mono max-h-96 overflow-y-auto">
-                  {result}
-                </pre>
+                <CodeBlock
+                  code={result}
+                  language="latex"
+                  className="p-4 max-h-96 text-sm"
+                />
               </CardContent>
             </Card>
           )}

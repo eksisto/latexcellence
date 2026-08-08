@@ -176,7 +176,7 @@ export default function ParagraphTranslatePage() {
                       {t("common:original")}
                     </span>
                     <div className="mt-0.5 whitespace-pre-wrap break-all text-foreground/60">
-                      {result.original}
+                      <MarkerText text={result.original} />
                     </div>
                   </div>
                   <div>

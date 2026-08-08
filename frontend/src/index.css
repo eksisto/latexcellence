@@ -43,6 +43,10 @@
   --radius-3xl: calc(var(--radius) * 2.2);
   --radius-4xl: calc(var(--radius) * 2.6);
   --animate-tab-enter: tab-enter 300ms ease-out;
+  /* 代码块/行内代码统一设计 token（由 --code-* 变量驱动，随主题切换） */
+  --color-code-bg: var(--code-bg);
+  --color-code-fg: var(--code-fg);
+  --color-code-border: var(--code-border);
 }
 
 @keyframes tab-enter {
@@ -62,11 +66,18 @@
   scrollbar-color: oklch(0.7 0 0) transparent;
   scrollbar-gutter: stable;
   --radius: 0.625rem;
+  /* 代码块 chrome（主题文件可覆盖；无覆盖时使用中性默认值） */
+  --code-bg: oklch(0.965 0 0);
+  --code-fg: oklch(0.3 0 0);
+  --code-border: oklch(0.88 0 0);
 }
 
 .dark {
   color-scheme: dark;
   scrollbar-color: oklch(0.4 0 0) transparent;
+  --code-bg: oklch(0.235 0 0);
+  --code-fg: oklch(0.87 0 0);
+  --code-border: oklch(0.38 0 0);
 }
 
 @layer base {
@@ -209,5 +220,40 @@ input[type="number"]::-moz-number-spinbox {
       animation: none;
       opacity: 1;
     }
+  }
+}
+
+/*
+ * 代码展示统一样式
+ * .code-block：带 chrome 的块级代码（背景/边框/圆角/溢出）
+ * .code-block-bare：无 chrome 的块级代码（仅排版，用于已带卡片容器的场景）
+ * .code-inline：行内代码（仅字体，颜色交由父级或高亮 token 决定）
+ * 后续调整代码样式只需改这里或主题文件中的 --code-* 变量。
+ */
+@layer components {
+  .code-block {
+    @apply overflow-auto rounded-md border border-code-border bg-code-bg font-mono text-xs leading-relaxed text-code-fg whitespace-pre-wrap break-words;
+  }
+
+  .code-block-bare {
+    @apply overflow-auto font-mono text-xs leading-relaxed whitespace-pre-wrap break-words;
+  }
+
+  .code-inline {
+    @apply font-mono;
+  }
+
+  /* 行号布局：左列行号 + 右列代码，行号随内容换行仍保持在首行 */
+  .code-lines {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .code-line-num {
+    @apply select-none pl-1 pr-3 text-right text-muted-foreground/60;
+  }
+
+  .code-line-text {
+    @apply min-w-0 whitespace-pre-wrap break-words;
   }
 }

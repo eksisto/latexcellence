@@ -27,6 +27,8 @@ import {
 } from "lucide-react";
 import { api } from "@/api/index";
 import PageHeader from "@/components/PageHeader";
+import CodeBlock, { latexEditorClass } from "@/components/CodeBlock";
+import { cn } from "@/lib/utils";
 
 const FORMATS = [
   { value: "markdown", label: "Markdown" },
@@ -267,7 +269,7 @@ export default function FormatConvertPage() {
               </TabsList>
               <TabsContent value="text" className="pt-2">
                 <Textarea
-                  className="min-h-48 resize-none font-mono text-sm"
+                  className={cn(latexEditorClass, "min-h-48 resize-none")}
                   value={text}
                   onChange={(e) => setText(e.target.value)}
                   placeholder={t("pages:formatConvert.inputPlaceholder")}
@@ -373,9 +375,11 @@ export default function FormatConvertPage() {
                   </p>
                 </div>
               ) : (
-                <pre className="whitespace-pre-wrap p-4 bg-muted rounded text-sm font-mono max-h-96 overflow-y-auto">
-                  {result}
-                </pre>
+                <CodeBlock
+                  code={result}
+                  language={targetFormat}
+                  className="p-4 max-h-96 text-sm"
+                />
               )}
             </CardContent>
           </Card>

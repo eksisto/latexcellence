@@ -12,6 +12,7 @@ export default function ProofDiff({
   originalLabel,
   modifiedLabel,
   className,
+  code = true,
 }) {
   const { t } = useTranslation("common");
   return (
@@ -24,7 +25,12 @@ export default function ProofDiff({
       <span className="text-muted-foreground whitespace-nowrap mt-0.5">
         {originalLabel ?? t("original")}
       </span>
-      <span className="font-display line-through decoration-1 text-foreground/55 whitespace-pre-wrap break-all mt-0.5">
+      <span
+        className={cn(
+          "font-display line-through decoration-1 text-foreground/55 whitespace-pre-wrap break-all mt-0.5",
+          code && "font-mono",
+        )}
+      >
         {original}
       </span>
       <span className="text-muted-foreground whitespace-nowrap mt-0.5">
@@ -32,7 +38,9 @@ export default function ProofDiff({
       </span>
       <div className="mt-0.5 min-w-0 whitespace-pre-wrap break-all">
         {typeof modified === "string" ? (
-          <span className="font-medium">{modified}</span>
+          <span className={cn("font-medium", code && "font-mono")}>
+            {modified}
+          </span>
         ) : (
           modified
         )}

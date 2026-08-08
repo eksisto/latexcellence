@@ -43,6 +43,7 @@
 | [remark-math](https://github.com/remarkjs/remark-math) | ^6.0.0 | MIT | Copyright (c) Junyoung Choi | 数学公式解析 |
 | [zustand](https://github.com/pmndrs/zustand) | ^5.0.0 | MIT | Copyright (c) 2019 Paul Henschel | 状态管理 |
 | [KaTeX](https://katex.org) | ^0.17.0 | MIT | Copyright (c) 2013-2020 Khan Academy and other contributors | 数学公式渲染引擎（含内置字体） |
+| [highlight.js](https://highlightjs.org) | ^11.11.1 | BSD-3-Clause | Copyright (c) 2006, Ivan Sagalaev | 代码语法高亮引擎（LaTeX / BibTeX / Markdown / Python / JSON 等） |
 | [@callmebill/lxgw-wenkai-web](https://github.com/CMBill/lxgw-wenkai-web) | ^1.522.0 | OFL-1.1（字体）/ MIT（npm 包装） | 字体 Copyright (c) 2020-2022 落霞孤鹜 (lxgw)；包装 Copyright (c) CM_Bill | 霞鹜文楷中文字体（Web 字体包） |
 | [@fontsource/jetbrains-mono](https://fontsource.org/fonts/jetbrains-mono) | ^5.3.0 | OFL-1.1 | Copyright (c) 2020 The JetBrains Mono Project Authors | JetBrains Mono 等宽字体 |
 | [@fontsource/noto-sans-sc](https://fontsource.org/fonts/noto-sans-sc) | ^5.2.9 | OFL-1.1 | Copyright (c) Google Inc. | Noto Sans SC 中文字体 |

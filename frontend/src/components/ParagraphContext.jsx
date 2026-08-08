@@ -52,7 +52,7 @@ export default function ParagraphContext({
                 P{currentIndex} {t("common:currentParagraph", { ns: "common" })}
               </div>
               <div className="whitespace-pre-wrap font-sans leading-relaxed">
-                {currentPara?.text || currentText}
+                <MarkerText text={currentPara?.text || currentText} />
               </div>
             </div>
             {nextPara && (

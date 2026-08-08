@@ -19,7 +19,7 @@ const renderTabSafeText = (text, keyPrefix, markClass) => {
         key={`${keyPrefix}-c${j}`}
         className={isTab ? "no-underline" : markClass}
       >
-        <MarkerText text={chunk} />
+        <MarkerText text={chunk} variant="text" />
       </span>
     );
   });
@@ -70,7 +70,7 @@ const AnnotatedSource = React.memo(
           } else {
             elements.push(
               <span key={`${i}-${cursor}`}>
-                <MarkerText text={sliceText} />
+                <MarkerText text={sliceText} variant="text" />
               </span>,
             );
           }
@@ -96,7 +96,7 @@ const AnnotatedSource = React.memo(
         } else {
           elements.push(
             <span key={`${i}-end`}>
-              <MarkerText text={sliceText} />
+              <MarkerText text={sliceText} variant="text" />
             </span>,
           );
         }

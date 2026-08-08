@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import PageHeader from "@/components/PageHeader";
+import CodeBlock from "@/components/CodeBlock";
 import { Upload, Loader2, Copy } from "lucide-react";
 
 const ACCEPTED_TYPES = ["image/png", "image/jpeg", "image/webp"];
@@ -222,9 +223,11 @@ export default function ImageOCRPage({
               </div>
             </CardHeader>
             <CardContent>
-              <pre className="whitespace-pre-wrap p-3 bg-muted rounded text-sm font-mono overflow-x-auto">
-                {result.latex || resultEmptyText}
-              </pre>
+              <CodeBlock
+                code={result.latex || resultEmptyText}
+                language="latex"
+                className="p-3 text-sm"
+              />
             </CardContent>
           </Card>
         )}

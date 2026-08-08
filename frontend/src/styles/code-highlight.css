@@ -1,0 +1,98 @@
+/*
+ * 代码语法高亮颜色（独立文件，仅在用到高亮时随 utils/highlight.js 一并引入）。
+ *
+ * 包含两部分：
+ * 1. --code-token-* 变量：亮色在 :root、暗色在 .dark，统一控制各语法 token 的颜色；
+ * 2. .hljs-* 映射：highlight.js v11 语法类名 → token 变量。
+ *
+ * 覆盖方式：
+ * - 全局调色：直接改下面的变量值；
+ * - 按主题定制：在某个主题文件（如 theme/ningyezi.css）的
+ *   [data-theme="..."]:root / .dark 块里覆盖 --code-token-*（选择器优先级更高，必定生效）。
+ */
+:root {
+  --code-token-keyword: oklch(0.48 0.2 287);
+  --code-token-string: oklch(0.48 0.14 160);
+  /* 蓝灰色调：比纯灰更醒目，且与绿色字符串 token 区分开 */
+  --code-token-comment: oklch(0.49 0.07 240);
+  --code-token-number: oklch(0.52 0.16 60);
+  --code-token-title: oklch(0.47 0.18 245);
+  --code-token-meta: oklch(0.45 0.1 200);
+  --code-token-built-in: oklch(0.47 0.16 210);
+  --code-token-params: oklch(0.5 0.12 190);
+  --code-token-punctuation: oklch(0.45 0 0);
+}
+
+.dark {
+  --code-token-keyword: oklch(0.78 0.15 290);
+  --code-token-string: oklch(0.8 0.13 155);
+  --code-token-comment: oklch(0.74 0.07 240);
+  --code-token-number: oklch(0.82 0.14 75);
+  --code-token-title: oklch(0.8 0.13 245);
+  --code-token-meta: oklch(0.78 0.1 205);
+  --code-token-built-in: oklch(0.8 0.12 215);
+  --code-token-params: oklch(0.8 0.1 195);
+  --code-token-punctuation: oklch(0.75 0 0);
+}
+
+.hljs-keyword,
+.hljs-literal,
+.hljs-section,
+.hljs-link,
+.hljs-doctag,
+.hljs-template-variable,
+.hljs-selector-tag {
+  color: var(--code-token-keyword);
+}
+
+.hljs-string,
+.hljs-regexp,
+.hljs-addition,
+.hljs-attribute,
+.hljs-symbol {
+  color: var(--code-token-string);
+}
+
+.hljs-comment,
+.hljs-quote,
+.hljs-deletion {
+  color: var(--code-token-comment);
+  font-style: italic;
+}
+
+.hljs-number,
+.hljs-variable,
+.hljs-meta .hljs-number {
+  color: var(--code-token-number);
+}
+
+.hljs-title,
+.hljs-title.function_,
+.hljs-title.class_,
+.hljs-function .hljs-title,
+.hljs-selector-id,
+.hljs-selector-class,
+.hljs-name {
+  color: var(--code-token-title);
+}
+
+.hljs-built-in {
+  color: var(--code-token-built-in);
+}
+
+.hljs-meta,
+.hljs-type,
+.hljs-params,
+.hljs-tag,
+.hljs-attr {
+  color: var(--code-token-meta);
+}
+
+.hljs-punctuation,
+.hljs-operator,
+.hljs-bullet,
+.hljs-emphasis,
+.hljs-strong,
+.hljs-subst {
+  color: var(--code-token-punctuation);
+}

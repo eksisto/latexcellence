@@ -38,6 +38,8 @@ import {
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import BibManagerLibrary from "@/components/BibManagerLibrary";
 import PageHeader from "@/components/PageHeader";
+import { latexEditorClass } from "@/components/CodeBlock";
+import { cn } from "@/lib/utils";
 import EmptyState from "@/components/EmptyState";
 import useStore from "@/store/useStore";
 import useFormatAnalysis from "@/hooks/bib-manager/useFormatAnalysis";
@@ -764,7 +766,10 @@ export default function BibManagerPage() {
                           />
                         </div>
                         <Textarea
-                          className="min-h-48 resize-none font-mono text-xs"
+                          className={cn(
+                            latexEditorClass,
+                            "min-h-48 resize-none text-xs",
+                          )}
                           value={editedBibtex}
                           onChange={(e) => setEditedBibtex(e.target.value)}
                         />
@@ -911,7 +916,10 @@ export default function BibManagerPage() {
                             </Button>
                           </div>
                           <Textarea
-                            className="min-h-32 resize-none font-mono text-xs"
+                            className={cn(
+                              latexEditorClass,
+                              "min-h-32 resize-none text-xs",
+                            )}
                             value={latexResult.full_code}
                             readOnly
                           />

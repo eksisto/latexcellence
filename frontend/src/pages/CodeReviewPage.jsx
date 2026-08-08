@@ -40,6 +40,7 @@ import ConfirmDialog from "@/components/ConfirmDialog";
 import ResultFilterBar from "@/components/ResultFilterBar";
 import useResultFilter from "@/hooks/useResultFilter";
 import MarkerText from "@/components/MarkerText";
+import CodeBlock, { latexEditorClass } from "@/components/CodeBlock";
 import AnnotatedSource from "@/pages/code-review/AnnotatedSource";
 import DiffView from "@/pages/code-review/DiffView";
 import {
@@ -186,7 +187,7 @@ const CodeReviewResultCard = React.memo(function CodeReviewResultCard({
                     </button>
                   )}
                 </div>
-                <div className="overflow-x-auto rounded-md border border-border bg-muted/40 p-3 font-mono text-xs leading-relaxed whitespace-pre-wrap break-all">
+                <div className="code-block p-3 text-xs">
                   <AnnotatedSource
                     parts={diffParts}
                     anchors={anchors}
@@ -236,13 +237,19 @@ const CodeReviewResultCard = React.memo(function CodeReviewResultCard({
                           {suggestion.description}
                         </p>
                       )}
-                      <div className="rounded bg-muted/40 p-1.5 font-mono text-[11px] leading-relaxed whitespace-pre-wrap break-all">
+                      <div className="rounded bg-code-bg/70 p-1.5 font-mono text-[11px] leading-relaxed whitespace-pre-wrap break-all">
                         <span className="text-muted-foreground line-through">
-                          <MarkerText text={suggestion.original} />
+                          <MarkerText
+                            text={suggestion.original}
+                            variant="text"
+                          />
                         </span>
                         <span className="text-muted-foreground/50"> → </span>
                         <span className="text-amber-700 dark:text-amber-300">
-                          <MarkerText text={suggestion.suggested} />
+                          <MarkerText
+                            text={suggestion.suggested}
+                            variant="text"
+                          />
                         </span>
                       </div>
                       <div className="mt-1.5 flex justify-end">
@@ -305,7 +312,10 @@ const CodeReviewResultCard = React.memo(function CodeReviewResultCard({
                 <textarea
                   value={editedText}
                   onChange={(e) => setEditedText(e.target.value)}
-                  className="w-full min-h-[120px] rounded-md border border-border bg-muted/20 p-2.5 font-mono text-xs leading-relaxed whitespace-pre-wrap resize-y focus:outline-none focus:ring-1 focus:ring-ring"
+                  className={cn(
+                    latexEditorClass,
+                    "w-full min-h-[120px] p-2.5 text-xs",
+                  )}
                   placeholder={t("pages:code_review.editPlaceholder")}
                   spellCheck={false}
                 />
@@ -601,9 +611,11 @@ export default function CodeReviewPage() {
                                   <span className="rounded bg-muted px-1.5 py-0.5 text-xs font-mono mb-1 inline-block">
                                     P{p.index}
                                   </span>
-                                  <pre className="text-sm text-foreground/80 mt-1 max-h-40 overflow-auto font-mono leading-relaxed whitespace-pre-wrap break-words bg-muted/30 rounded p-2">
-                                    {p.text || t("common:blank")}
-                                  </pre>
+                                  <CodeBlock
+                                    code={p.text || t("common:blank")}
+                                    language="latex"
+                                    className="mt-1 max-h-40 p-2 text-sm"
+                                  />
                                 </div>
                               ))}
                             </div>
@@ -620,9 +632,11 @@ export default function CodeReviewPage() {
                             <span className="rounded bg-muted px-1.5 py-0.5 text-xs font-mono mb-1 inline-block">
                               P{p.index}
                             </span>
-                            <pre className="text-sm text-foreground/80 mt-1 max-h-40 overflow-auto font-mono leading-relaxed whitespace-pre-wrap break-words bg-muted/30 rounded p-2">
-                              {p.text || t("common:blank")}
-                            </pre>
+                            <CodeBlock
+                              code={p.text || t("common:blank")}
+                              language="latex"
+                              className="mt-1 max-h-40 p-2 text-sm"
+                            />
                           </div>
                         ))}
                       </div>

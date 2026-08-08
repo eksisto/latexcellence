@@ -99,7 +99,8 @@ latexcellence/
 │       ├── theme/                   # 主题 CSS + useThemeManager.js
 │       ├── fonts/                   # 字体加载（文楷 / Noto Sans SC / JetBrains Mono / STIX Two Text）
 │       ├── api/index.js             # 统一 API 层
-│       ├── utils/                   # 前端工具（errorMessages.js 错误翻译 / formulaWrap.js 公式包裹重写）
+│       ├── utils/                   # 前端工具（errorMessages.js 错误翻译 / formulaWrap.js 公式包裹重写 / highlight.js 高亮入口）
+│       ├── styles/                  # 前端样式（code-highlight.css：高亮颜色独立文件，按需引入）
 │       └── store/useStore.js        # Zustand 全局状态
 │
 ├── docs/                            # 开发文档
@@ -159,6 +160,7 @@ latexcellence/
 - **乐观锁**: 多工作区并发编辑同一文件时，通过 MD5 哈希检测冲突。读取段落时返回 `file_md5`，应用修改时前端传回 `expected_md5`，后端校验失败时抛出 `FileConflictError`（HTTP 409），前端自动刷新 MD5 并提示用户重试。`inject_expected_md5s()` 辅助函数统一为各模块 router 注入预期 MD5
 - **Marker Protection**: LaTeX 结构 → `__CMD_NNNN__` / `__MATH_NNNN__` / `__ENV_NNNN__` / `__VERB_NNNN__` marker → LLM 只改纯文本 → 按长度降序还原。apply 时若 marker_map 缺失（context 过期/重启/新操作覆盖），跳过该段写入并返回 `errors`，防止字面 marker 污染 `.tex` 文件；前端据此保留未应用项并提示用户重新检查。返回给前端展示的 `changes[]` 中的 `original`/`corrected` 会在 `_build_success_result` 中预先还原 marker，确保用户看到的是干净的 LaTeX 文本而非 `__CMD_NNNN__` 占位符
   - **code_review 例外**：code_review 的 LLM 建议只读展示、从不写回文件，直接审查真实格式化 LaTeX（无 marker），详见 docs/modules/code_review.md
+- **统一代码展示与高亮**: 所有 LaTeX / TikZ / BibTeX 源码展示收敛到 `CodeBlock`（块级）与 `MarkerText`（行内/含 marker 段落，默认 `variant="code"`）两个组件；代码块 chrome 由 `index.css` 的 `--code-*` 变量与 `.code-block` / `.code-inline` 组件类控制，语法 token 颜色由 `styles/code-highlight.css`（独立文件，随 `CodeBlock` / `MarkerText` 按需引入）的 `--code-token-*` 变量控制，各主题文件在亮暗两档覆盖代码块 chrome、也可覆盖 token 颜色，不引入官方高亮主题
 - **宏包规则表检测**:
   - 宏包分析以确定性规则表（`latex_package_rules.py`：命令/环境/列说明符 → 宏包）为主路径，零 LLM 开销、结果可复现
   - 扫描前屏蔽逐字内容与 `%` 注释防误报，LaTeX 内核能力不收录；LLM 仅在规则表未命中时兜底，输出经 schema 校验 + 归一化（小写/去 `.sty`/去重/排序）
@@ -211,5 +213,5 @@ latexcellence/
 - **useUndoRedo Hook**: 基于后端每文件独立 undo/redo deque（最大 50 层）的撤销/重做状态管理，与 project_manager 同步
 - **useResultFilter Hook**: 检查结果排序与过滤逻辑封装——changes 非空优先、无建议在后、同类按 paragraph_index 升序
 - **useWritingChat Hook**: 写作助手聊天的完整生命周期管理（消息流式、thinking 标签解析、上下文压缩、会话持久化、工具调用确认）
-- **MarkerText / ParagraphContext 组件**: `MarkerText` 将含 marker 的文本渲染为友好标签（如 `__MATH_0000__` → 公式图标）；`ParagraphContext` 展示当前段落前后文，用于逐段检查结果页面
+- **MarkerText / ParagraphContext 组件**: `MarkerText` 将含 marker 的文本渲染为友好标签（如 `__MATH_0000__` → 公式图标），默认以行内代码样式渲染纯文本片段并做 LaTeX 高亮；`ParagraphContext` 展示当前段落前后文，用于逐段检查结果页面
 - **i18n 多语言**: 基于 `i18next` + `react-i18next` + `i18next-browser-languagedetector`，支持中文/英文双语。翻译文件按命名空间拆分（`common` / `pages` / `components` / `hooks`），组件通过 `useTranslation()` hook 或 `i18n.t()` 调用。语言选择持久化到 localStorage，用户可在设置弹窗中切换

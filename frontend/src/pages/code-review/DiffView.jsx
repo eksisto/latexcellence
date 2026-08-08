@@ -35,7 +35,7 @@ const DiffView = React.memo(({ parts }) => (
                 part.removed && "text-red-800 dark:text-red-200",
               )}
             >
-              <MarkerText text={line} />
+              <MarkerText text={line} variant="text" />
             </span>
           </div>
         );

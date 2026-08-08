@@ -53,6 +53,8 @@ import {
 } from "@/components/ui/dialog";
 import { api } from "@/api/index";
 import PageHeader from "@/components/PageHeader";
+import CodeBlock from "@/components/CodeBlock";
+import { languageFromFilename } from "@/utils/highlight";
 import usePlotGen from "@/hooks/usePlotGen";
 
 const STEP_ICON = {
@@ -456,9 +458,11 @@ export default function PlotGenPage() {
               <CardContent className="text-sm space-y-2">
                 <StatusRow ok={lastExecution.success} t={t} />
                 {lastExecution.traceback && (
-                  <pre className="p-2 bg-muted rounded text-xs font-mono max-h-40 overflow-auto whitespace-pre-wrap">
-                    {lastExecution.traceback}
-                  </pre>
+                  <CodeBlock
+                    code={lastExecution.traceback}
+                    language="plaintext"
+                    className="p-2 max-h-40"
+                  />
                 )}
               </CardContent>
             </Card>
@@ -478,9 +482,11 @@ export default function PlotGenPage() {
                     <summary className="cursor-pointer text-xs text-muted-foreground mt-2">
                       {t("pages:plotGen.viewLog")}
                     </summary>
-                    <pre className="mt-2 p-2 bg-muted rounded text-xs font-mono max-h-40 overflow-auto whitespace-pre-wrap">
-                      {lastTikz.log}
-                    </pre>
+                    <CodeBlock
+                      code={lastTikz.log}
+                      language="plaintext"
+                      className="mt-2 p-2 max-h-40"
+                    />
                   </details>
                 )}
               </CardContent>
@@ -536,9 +542,11 @@ export default function PlotGenPage() {
                   {t("common:loading")}
                 </div>
               ) : (
-                <pre className="p-3 bg-muted rounded text-xs font-mono max-h-[500px] overflow-auto whitespace-pre-wrap">
-                  {plot.fileContent}
-                </pre>
+                <CodeBlock
+                  code={plot.fileContent}
+                  language={languageFromFilename(plot.selectedFile)}
+                  className="p-3 max-h-[500px]"
+                />
               )}
             </CardContent>
           </Card>
@@ -706,14 +714,18 @@ const StepItem = memo(function StepItem({ step }) {
         </div>
       )}
       {step.type === "execution" && step.traceback && (
-        <pre className="px-2.5 py-1.5 font-mono text-[10px] max-h-40 overflow-auto whitespace-pre-wrap">
-          {step.traceback}
-        </pre>
+        <CodeBlock
+          code={step.traceback}
+          language="plaintext"
+          className="px-2.5 py-1.5 max-h-40 text-[10px]"
+        />
       )}
       {step.type === "tikz" && step.log && (
-        <pre className="px-2.5 py-1.5 font-mono text-[10px] max-h-40 overflow-auto whitespace-pre-wrap">
-          {step.log}
-        </pre>
+        <CodeBlock
+          code={step.log}
+          language="plaintext"
+          className="px-2.5 py-1.5 max-h-40 text-[10px]"
+        />
       )}
       {step.type === "tool_result" && (
         <div className="px-2.5 py-1.5 text-muted-foreground">
@@ -796,9 +808,11 @@ function TraceViewer({ trace, t }) {
                 </span>
               )}
             </summary>
-            <pre className="px-2.5 pb-2.5 pt-1 font-mono text-[10px] overflow-x-auto whitespace-pre-wrap text-muted-foreground">
-              {JSON.stringify(ev.data, null, 2)}
-            </pre>
+            <CodeBlock
+              code={JSON.stringify(ev.data, null, 2)}
+              language="json"
+              className="px-2.5 pb-2.5 pt-1 text-[10px] text-muted-foreground"
+            />
           </details>
         ))}
       </div>

@@ -27,6 +27,7 @@ import {
 import ColorField from "@/components/ColorField";
 import EmptyState from "@/components/EmptyState";
 import PageHeader from "@/components/PageHeader";
+import CodeBlock from "@/components/CodeBlock";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
@@ -735,11 +736,11 @@ export default function GitDiffPage() {
                     : t("pages:gitDiff.viewRawOutput")}
                 </Button>
                 {showRawOutput && (
-                  <pre className="max-h-48 overflow-auto rounded bg-muted p-2 text-xs whitespace-pre-wrap">
-                    {result.stdout || t("pages:gitDiff.noStdout")}
-                    {"\n"}
-                    {result.stderr || t("pages:gitDiff.noStderr")}
-                  </pre>
+                  <CodeBlock
+                    code={`${result.stdout || t("pages:gitDiff.noStdout")}\n${result.stderr || t("pages:gitDiff.noStderr")}`}
+                    language="plaintext"
+                    className="max-h-48 p-2"
+                  />
                 )}
               </CardContent>
             </Card>

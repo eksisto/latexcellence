@@ -34,6 +34,8 @@ import {
 } from "@/components/ui/dialog";
 import { api } from "@/api/index";
 import PageHeader from "@/components/PageHeader";
+import CodeBlock from "@/components/CodeBlock";
+import { languageFromFilename } from "@/utils/highlight";
 import { translateError } from "@/utils/errorMessages";
 
 const ROLE_ICON = {
@@ -312,9 +314,12 @@ export default function TemplateGenPage() {
                               )}
                             </div>
                             {err.detail && (
-                              <pre className="mt-1 whitespace-pre-wrap text-muted-foreground">
-                                {err.detail}
-                              </pre>
+                              <CodeBlock
+                                code={err.detail}
+                                language={languageFromFilename(err.file)}
+                                variant="bare"
+                                className="mt-1 text-muted-foreground"
+                              />
                             )}
                           </li>
                         ))}
@@ -325,9 +330,11 @@ export default function TemplateGenPage() {
                     <summary className="cursor-pointer text-xs text-muted-foreground">
                       {t("pages:templateGen.viewCompileLog")}
                     </summary>
-                    <pre className="mt-2 p-3 bg-muted rounded text-xs font-mono max-h-60 overflow-auto whitespace-pre-wrap">
-                      {lastCompile?.log || ""}
-                    </pre>
+                    <CodeBlock
+                      code={lastCompile?.log || ""}
+                      language="plaintext"
+                      className="mt-2 p-3 max-h-60"
+                    />
                   </details>
                 </>
               )}
@@ -469,9 +476,11 @@ export default function TemplateGenPage() {
                   {t("common:loading")}
                 </div>
               ) : (
-                <pre className="p-3 bg-muted rounded text-xs font-mono max-h-[500px] overflow-auto whitespace-pre-wrap">
-                  {fileContent}
-                </pre>
+                <CodeBlock
+                  code={fileContent}
+                  language={languageFromFilename(selectedFile)}
+                  className="p-3 max-h-[500px]"
+                />
               )}
             </CardContent>
           </Card>
@@ -562,19 +571,22 @@ function StepBody({ step }) {
           </span>
         </div>
         {a.preview && (
-          <pre className="bg-muted rounded p-1.5 font-mono text-[10px] max-h-32 overflow-auto whitespace-pre-wrap">
-            {a.preview}
-            {(a.content_length || 0) > 300 ? "\n…" : ""}
-          </pre>
+          <CodeBlock
+            code={`${a.preview}${(a.content_length || 0) > 300 ? "\n…" : ""}`}
+            language={languageFromFilename(a.file_path)}
+            className="p-1.5 max-h-32 text-[10px]"
+          />
         )}
       </div>
     );
   }
   if (step.type === "compile") {
     return (
-      <pre className="px-2.5 py-1.5 font-mono text-[10px] max-h-40 overflow-auto whitespace-pre-wrap">
-        {step.log || ""}
-      </pre>
+      <CodeBlock
+        code={step.log || ""}
+        language="plaintext"
+        className="px-2.5 py-1.5 max-h-40 text-[10px]"
+      />
     );
   }
   if (step.type === "tool_result") {
@@ -640,9 +652,11 @@ function TraceViewer({ trace, t }) {
                 </span>
               )}
             </summary>
-            <pre className="px-2.5 pb-2.5 pt-1 font-mono text-[10px] overflow-x-auto whitespace-pre-wrap text-muted-foreground">
-              {JSON.stringify(ev.data, null, 2)}
-            </pre>
+            <CodeBlock
+              code={JSON.stringify(ev.data, null, 2)}
+              language="json"
+              className="px-2.5 pb-2.5 pt-1 text-[10px] text-muted-foreground"
+            />
           </details>
         ))}
       </div>

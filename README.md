@@ -31,6 +31,7 @@
 - **多文件 Tab 分组**：开启 `包含子文件` 后，段落预览和检查结果按文件分 Tab 展示，进度条显示当前处理的文件名
 - **编译后 PDF 预览**：编译成功后自动在工作区内联展示 PDF
 - **图片 OCR 统一交互**：公式/表格识别共享拖拽上传、Ctrl+V 粘贴、一键复制
+- **LaTeX 代码高亮**：OCR 结果、代码审查、格式转换、样式修改等所有 LaTeX 源码展示统一为等宽代码块并支持语法高亮，颜色随主题与明暗模式自动适配
 - **写作助手 Chat 多轮对话**：会话磁盘持久化、会话重命名、助手提示词预设、深度思考折叠框（`<thinking>` 流式解析 + 可折叠 UI）、Markdown + KaTeX 渲染、双轮协议（流式回复 + 结构化编辑建议 diff）、编辑建议手动微调、上下文压缩与删除
 
 ## 技术栈
@@ -38,7 +39,7 @@
 | 层 | 技术 |
 | --- | --- |
 | 后端 | Python 3.12+, FastAPI, uvicorn, openai, pydantic v2, httpx |
-| 前端 | React 19, Vite 6, Tailwind CSS 4, Zustand 5, shadcn/ui, sonner, react-markdown + KaTeX |
+| 前端 | React 19, Vite 6, Tailwind CSS 4, Zustand 5, shadcn/ui, sonner, react-markdown + KaTeX, highlight.js |
 | 测试 | pytest + pytest-asyncio；前端 node:test（`npm test`，Node 内置测试运行器） |
 
 ## 快速开始

@@ -3,6 +3,8 @@ import { useTranslation } from "react-i18next";
 import { Loader2, PencilLine, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import CodeBlock, { latexEditorClass } from "@/components/CodeBlock";
+import { cn } from "@/lib/utils";
 
 export default function EditOpCard({ edit_op, reason, onApply, applying }) {
   const { t } = useTranslation(["pages", "common"]);
@@ -37,9 +39,11 @@ export default function EditOpCard({ edit_op, reason, onApply, applying }) {
             <div className="text-xs text-muted-foreground mb-1">
               {t("common:original")}
             </div>
-            <pre className="text-xs font-mono bg-muted rounded p-2 max-h-48 overflow-y-auto whitespace-pre-wrap break-all">
-              {edit_op.original_latex}
-            </pre>
+            <CodeBlock
+              code={edit_op.original_latex}
+              language="latex"
+              className="p-2 max-h-48 text-xs"
+            />
           </div>
           <div>
             <div className="text-xs text-muted-foreground mb-1">
@@ -48,14 +52,16 @@ export default function EditOpCard({ edit_op, reason, onApply, applying }) {
             {isEditing ? (
               <textarea
                 autoFocus
-                className="w-full min-h-32 text-xs font-mono bg-background border border-border rounded p-2 resize-y whitespace-pre-wrap"
+                className={cn(latexEditorClass, "w-full min-h-32 text-xs")}
                 value={editedText}
                 onChange={(e) => setEditedText(e.target.value)}
               />
             ) : (
-              <pre className="text-xs font-mono bg-green-500/5 border border-green-500/20 rounded p-2 max-h-48 overflow-y-auto whitespace-pre-wrap break-all">
-                {edit_op.new_latex}
-              </pre>
+              <CodeBlock
+                code={edit_op.new_latex}
+                language="latex"
+                className="p-2 max-h-48 text-xs bg-green-500/5 border-green-500/20"
+              />
             )}
           </div>
         </div>
@@ -64,9 +70,11 @@ export default function EditOpCard({ edit_op, reason, onApply, applying }) {
             <summary className="cursor-pointer text-muted-foreground">
               {t("pages:writingChat.viewUnifiedDiff")}
             </summary>
-            <pre className="font-mono bg-muted rounded p-2 mt-1 max-h-64 overflow-y-auto whitespace-pre">
-              {edit_op.diff_text}
-            </pre>
+            <CodeBlock
+              code={edit_op.diff_text}
+              language="diff"
+              className="p-2 mt-1 max-h-64 text-xs"
+            />
           </details>
         )}
         <div className="flex items-center gap-2">
