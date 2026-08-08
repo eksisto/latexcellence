@@ -185,7 +185,7 @@ def run_eval_cli(
     no_key_warning: str,
     check_label: str,
     service_factory: Callable[[], object],
-    check_one: Callable[[object, str, str], Awaitable[dict]],
+    check_one: Callable[[object, dict, str], Awaitable[dict]],
     build_item: Callable[..., dict],
     render_report: Callable[[Path, list[dict]], None],
     validate_corpus: Callable[[dict], list[str]] | None = None,
@@ -236,7 +236,7 @@ async def run_eval_main(
     no_key_warning: str,
     check_label: str,
     service_factory: Callable[[], object],
-    check_one: Callable[[object, str, str], Awaitable[dict]],
+    check_one: Callable[[object, dict, str], Awaitable[dict]],
     build_item: Callable[..., dict],
     render_report: Callable[[Path, list[dict]], None],
     validate_corpus: Callable[[dict], list[str]] | None = None,
@@ -271,7 +271,7 @@ async def run_eval_main(
         payload: dict = {}
         error: str | None = None
         try:
-            payload = await check_one(service, entry["file"], args.workspace_id)
+            payload = await check_one(service, entry, args.workspace_id)
         except Exception as e:
             error = str(e)
         item = build_item(entry, tex, payload, error)

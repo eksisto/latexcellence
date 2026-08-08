@@ -87,3 +87,11 @@ Prefix: `/api/paragraph-translate`, Tag: `paragraph_translate`
 - 多文件模式下按文件 Tab 分组显示
 
 配置同步：`config.json` 的 `features.paragraph_translate`（`enabled` + `batch_size`）。
+
+## 人工评估
+
+`tools/paragraph_translate_eval/` 提供逐段翻译人工评估工具，配套语料位于
+`tests/fixtures/paragraph_translate/`（每条一个单段落 LaTeX 片段 + 整段参考译文与
+期望短语）。新增语料或修改翻译 prompt/逻辑后，运行
+`python tools/paragraph_translate_eval/run_eval.py` 生成人工比对报告；
+新增语料先跑 `--validate` 校验。详见其 `README.md`。

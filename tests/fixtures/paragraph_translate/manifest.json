@@ -1,0 +1,332 @@
+{
+  "description": "逐段翻译人工评估语料（非 pytest 自动测试）。每条一个单段落 LaTeX 片段（不含空行，恰好一个段落），manifest 标注源/目标语言、整段参考译文与期望短语（original → translated）；has_translation=false 的条目是已在目标语言的段落，用于评估模型是否遵守「已在目标语言则原样返回」规则。",
+  "items": [
+    {
+      "id": "trans_01",
+      "file": "trans_01.tex",
+      "tier": 1,
+      "tier_name": "简单直译",
+      "title": "术语直译（graph neural network → 图神经网络）",
+      "source_language": "English",
+      "target_language": "Chinese",
+      "has_translation": true,
+      "expected_translation": "图神经网络已经成为建模关系型数据的流行工具。在本文中，我们提出了一种用于节点分类的新型图神经网络架构。",
+      "expected_phrases": [
+        { "original": "Graph neural networks", "translated": "图神经网络" },
+        { "original": "node classification", "translated": "节点分类" }
+      ]
+    },
+    {
+      "id": "trans_02",
+      "file": "trans_02.tex",
+      "tier": 1,
+      "tier_name": "简单直译",
+      "title": "方法描述句",
+      "source_language": "English",
+      "target_language": "Chinese",
+      "has_translation": true,
+      "expected_translation": "我们提出了一个轻量级框架，联合学习文本表示与任务特定的分类器。",
+      "expected_phrases": [
+        { "original": "lightweight framework", "translated": "轻量级框架" },
+        { "original": "text representations", "translated": "文本表示" }
+      ]
+    },
+    {
+      "id": "trans_03",
+      "file": "trans_03.tex",
+      "tier": 1,
+      "tier_name": "简单直译",
+      "title": "实验结果句",
+      "source_language": "English",
+      "target_language": "Chinese",
+      "has_translation": true,
+      "expected_translation": "在三个基准上的大量实验表明，我们的方法在降低推理成本的同时达到了最优性能。",
+      "expected_phrases": [
+        {
+          "original": "state-of-the-art performance",
+          "translated": "最优性能"
+        },
+        { "original": "inference cost", "translated": "推理成本" }
+      ]
+    },
+    {
+      "id": "trans_04",
+      "file": "trans_04.tex",
+      "tier": 1,
+      "tier_name": "简单直译",
+      "title": "中文到英文方法句",
+      "source_language": "Chinese",
+      "target_language": "English",
+      "has_translation": true,
+      "expected_translation": "This paper proposes a data augmentation method for low-resource scenarios, which can significantly improve the generalization ability of the model.",
+      "expected_phrases": [
+        {
+          "original": "数据增强方法",
+          "translated": "data augmentation method"
+        },
+        { "original": "泛化能力", "translated": "generalization ability" }
+      ]
+    },
+    {
+      "id": "trans_05",
+      "file": "trans_05.tex",
+      "tier": 2,
+      "tier_name": "学术套话与句式",
+      "title": "学术套话（It is worth noting / To this end）",
+      "source_language": "English",
+      "target_language": "Chinese",
+      "has_translation": true,
+      "expected_translation": "在本文中，我们提出了一种新的训练策略。值得注意的是，我们的方法不需要额外的标签。为此，我们设计了一个自监督目标。",
+      "expected_phrases": [
+        { "original": "It is worth noting that", "translated": "值得注意的是" },
+        { "original": "To this end", "translated": "为此" },
+        { "original": "self-supervised objective", "translated": "自监督目标" }
+      ]
+    },
+    {
+      "id": "trans_06",
+      "file": "trans_06.tex",
+      "tier": 2,
+      "tier_name": "学术套话与句式",
+      "title": "长句与被动语态",
+      "source_language": "English",
+      "target_language": "Chinese",
+      "has_translation": true,
+      "expected_translation": "所提出的模型先在大规模语料上进行训练，然后在下游任务上进行微调，这显著提升了低资源语言的性能。",
+      "expected_phrases": [
+        { "original": "large corpus", "translated": "大规模语料" },
+        { "original": "low-resource languages", "translated": "低资源语言" }
+      ]
+    },
+    {
+      "id": "trans_07",
+      "file": "trans_07.tex",
+      "tier": 2,
+      "tier_name": "学术套话与句式",
+      "title": "中文学术句式到英文",
+      "source_language": "Chinese",
+      "target_language": "English",
+      "has_translation": true,
+      "expected_translation": "It is worth noting that the experimental results show that the proposed method outperforms existing baselines on multiple datasets. In summary, the method has good practical value.",
+      "expected_phrases": [
+        { "original": "值得注意的是", "translated": "It is worth noting that" },
+        { "original": "综上所述", "translated": "In summary" },
+        { "original": "现有基线", "translated": "existing baselines" }
+      ]
+    },
+    {
+      "id": "trans_08",
+      "file": "trans_08.tex",
+      "tier": 2,
+      "tier_name": "学术套话与句式",
+      "title": "定义句",
+      "source_language": "English",
+      "target_language": "Chinese",
+      "has_translation": true,
+      "expected_translation": "我们将两个序列之间的对齐得分定义为其两两相似度的加权和，其中权重从数据中学习得到。",
+      "expected_phrases": [
+        { "original": "alignment score", "translated": "对齐得分" },
+        { "original": "weighted sum", "translated": "加权和" }
+      ]
+    },
+    {
+      "id": "trans_09",
+      "file": "trans_09.tex",
+      "tier": 3,
+      "tier_name": "复杂句式与上下文",
+      "title": "被动语态与复合从句",
+      "source_language": "English",
+      "target_language": "Chinese",
+      "has_translation": true,
+      "expected_translation": "我们引入了一个统一框架来处理同构与异构图，所得到的表示在所有任务之间共享。",
+      "expected_phrases": [
+        { "original": "unified framework", "translated": "统一框架" },
+        { "original": "heterogeneous graphs", "translated": "异构图" }
+      ]
+    },
+    {
+      "id": "trans_10",
+      "file": "trans_10.tex",
+      "tier": 3,
+      "tier_name": "复杂句式与上下文",
+      "title": "命令、引用与公式上下文",
+      "source_language": "English",
+      "target_language": "Chinese",
+      "has_translation": true,
+      "expected_translation": "如图~\\ref{fig:main} 和表~\\ref{tab:result} 所示，所提出的方法以较大优势持续优于基线。复杂度从 $O(n^2)$ 降低到 $O(n)$。",
+      "expected_phrases": [
+        { "original": "by a large margin", "translated": "较大优势" },
+        { "original": "The complexity", "translated": "复杂度" }
+      ]
+    },
+    {
+      "id": "trans_11",
+      "file": "trans_11.tex",
+      "tier": 3,
+      "tier_name": "复杂句式与上下文",
+      "title": "中英混排段落到英文",
+      "source_language": "Chinese",
+      "target_language": "English",
+      "has_translation": true,
+      "expected_translation": "The model uses Transformer as the backbone and is fine-tuned on downstream tasks. Experiments show that the method performs well on the GLUE benchmark.",
+      "expected_phrases": [
+        { "original": "骨干网络", "translated": "backbone" },
+        {
+          "original": "基准上表现优异",
+          "translated": "performs well on the GLUE benchmark"
+        }
+      ]
+    },
+    {
+      "id": "trans_12",
+      "file": "trans_12.tex",
+      "tier": 3,
+      "tier_name": "复杂句式与上下文",
+      "title": "让步与条件句",
+      "source_language": "English",
+      "target_language": "Chinese",
+      "has_translation": true,
+      "expected_translation": "尽管我们的方法引入了额外的参数，但它在训练和推理中仍然高效。只要批量大小足够大，内存开销就可以忽略不计。",
+      "expected_phrases": [
+        { "original": "Although", "translated": "尽管" },
+        { "original": "memory overhead", "translated": "内存开销" }
+      ]
+    },
+    {
+      "id": "trans_13",
+      "file": "trans_13.tex",
+      "tier": 4,
+      "tier_name": "专业领域与语体",
+      "title": "机器学习术语",
+      "source_language": "English",
+      "target_language": "Chinese",
+      "has_translation": true,
+      "expected_translation": "dropout 和权重衰减等正则化技术有助于防止过拟合，并提升深度模型的泛化能力。",
+      "expected_phrases": [
+        { "original": "Regularization techniques", "translated": "正则化技术" },
+        { "original": "overfitting", "translated": "过拟合" },
+        { "original": "generalization ability", "translated": "泛化能力" }
+      ]
+    },
+    {
+      "id": "trans_14",
+      "file": "trans_14.tex",
+      "tier": 4,
+      "tier_name": "专业领域与语体",
+      "title": "统计学术语",
+      "source_language": "English",
+      "target_language": "Chinese",
+      "has_translation": true,
+      "expected_translation": "结果在统计上显著，p 值低于 0.01，且各设置下的置信区间互不重叠。",
+      "expected_phrases": [
+        { "original": "statistically significant", "translated": "统计上显著" },
+        { "original": "confidence intervals", "translated": "置信区间" }
+      ]
+    },
+    {
+      "id": "trans_15",
+      "file": "trans_15.tex",
+      "tier": 4,
+      "tier_name": "专业领域与语体",
+      "title": "正式学术语体",
+      "source_language": "English",
+      "target_language": "Chinese",
+      "has_translation": true,
+      "expected_translation": "我们要强调的是，我们的发现并不与先前的工作相矛盾，而是通过关注问题的不同方面对其进行补充。",
+      "expected_phrases": [
+        {
+          "original": "do not contradict",
+          "translated": "并不与先前的工作相矛盾"
+        },
+        { "original": "complement", "translated": "补充" }
+      ]
+    },
+    {
+      "id": "trans_16",
+      "file": "trans_16.tex",
+      "tier": 4,
+      "tier_name": "专业领域与语体",
+      "title": "中文专业术语到英文",
+      "source_language": "Chinese",
+      "target_language": "English",
+      "has_translation": true,
+      "expected_translation": "Overfitting and underfitting are two issues that need to be balanced in model training. We select hyperparameters through cross-validation to strike a trade-off between bias and variance.",
+      "expected_phrases": [
+        {
+          "original": "过拟合与欠拟合",
+          "translated": "Overfitting and underfitting"
+        },
+        { "original": "交叉验证", "translated": "cross-validation" },
+        { "original": "偏差与方差", "translated": "bias and variance" }
+      ]
+    },
+    {
+      "id": "trans_17",
+      "file": "trans_17.tex",
+      "tier": 5,
+      "tier_name": "压力测试",
+      "title": "密集 LaTeX 长段落",
+      "source_language": "English",
+      "target_language": "Chinese",
+      "has_translation": true,
+      "expected_translation": "给定图 $\\mathcal{G}=(V,E)$ 和特征矩阵 $X$，我们的编码器通过消息传递计算节点表示。第 $l$ 层的更新规则定义为 $h_v^{(l+1)} = \\sigma(W^{(l)} \\cdot \\textsc{AGG}(\\{h_u^{(l)} : u \\in \\mathcal{N}(v)\\}))$，其中 $\\mathcal{N}(v)$ 表示节点 $v$ 的邻域。\\footnote{We omit bias terms for clarity.} 我们以端到端方式训练模型，并在四个数据集上评估其性能。",
+      "expected_phrases": [
+        { "original": "message passing", "translated": "消息传递" },
+        { "original": "node representations", "translated": "节点表示" },
+        { "original": "neighborhood", "translated": "邻域" }
+      ]
+    },
+    {
+      "id": "trans_18",
+      "file": "trans_18.tex",
+      "tier": 5,
+      "tier_name": "压力测试",
+      "title": "超长英文段落",
+      "source_language": "English",
+      "target_language": "Chinese",
+      "has_translation": true,
+      "expected_translation": "我们重新审视了图的非监督表示学习问题。与依赖对比损失的先前方法不同，我们证明，使用轻量编码器训练一个简单的重构目标即可在节点分类、链接预测和社区检测上取得有竞争力的结果。我们的分析表明，关键要素是负采样的选择，而不是模型大小或训练轮数。我们进一步证明了所学表示在领域间具有良好的迁移能力，并为观察到的行为提供了理论解释。",
+      "expected_phrases": [
+        {
+          "original": "unsupervised representation learning",
+          "translated": "非监督表示学习"
+        },
+        { "original": "contrastive losses", "translated": "对比损失" },
+        { "original": "negative sampling", "translated": "负采样" },
+        { "original": "community detection", "translated": "社区检测" }
+      ]
+    },
+    {
+      "id": "trans_19",
+      "file": "trans_19.tex",
+      "tier": 5,
+      "tier_name": "压力测试",
+      "title": "超长中文段落到英文",
+      "source_language": "Chinese",
+      "target_language": "English",
+      "has_translation": true,
+      "expected_translation": "This paper studies the issue of terminology consistency in cross-lingual knowledge distillation. We find that directly transferring the teacher model's outputs causes the student model to produce inconsistent translations of technical terms, which in turn hurts the performance of downstream tasks. To this end, we propose a term-aware distillation objective that explicitly constrains the student model to maintain consistent term mappings with the teacher model during training. Experiments on four low-resource language pairs show that the proposed method achieves stable improvements on both BLEU and term accuracy.",
+      "expected_phrases": [
+        { "original": "术语一致性", "translated": "terminology consistency" },
+        { "original": "知识蒸馏", "translated": "knowledge distillation" },
+        { "original": "术语感知", "translated": "term-aware" },
+        {
+          "original": "低资源语言对",
+          "translated": "low-resource language pairs"
+        }
+      ]
+    },
+    {
+      "id": "trans_20",
+      "file": "trans_20.tex",
+      "tier": 5,
+      "tier_name": "压力测试",
+      "title": "已在目标语言（应原样返回）",
+      "source_language": "English",
+      "target_language": "English",
+      "has_translation": false,
+      "expected_translation": "In this section, we summarize our contributions and discuss the limitations of the proposed approach. We believe these findings will benefit future research on efficient model compression.",
+      "expected_phrases": []
+    }
+  ]
+}

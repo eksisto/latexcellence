@@ -58,10 +58,10 @@ _CLUSTER_STATUS_COLOR = {
 
 
 async def check_one(
-    service: TerminologyCheckService, file_path: str, workspace_id: str
+    service: TerminologyCheckService, entry: dict, workspace_id: str
 ) -> dict:
     """调用一次术语检查，返回完整结果（含全部段落）。"""
-    return await service.check_terminology(file_path, workspace_id=workspace_id)
+    return await service.check_terminology(entry["file"], workspace_id=workspace_id)
 
 
 def build_item(entry: dict, tex: str, result: dict, error: str | None = None) -> dict:

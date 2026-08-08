@@ -40,10 +40,10 @@ _STATUS_LABELS = {
 
 
 async def check_one(
-    service: ExpressionOptService, file_path: str, workspace_id: str
+    service: ExpressionOptService, entry: dict, workspace_id: str
 ) -> dict:
     """调用一次逐段优化，取第一个段落的优化结果（语料每条恰好一个段落）。"""
-    result = await service.optimize(file_path, workspace_id=workspace_id)
+    result = await service.optimize(entry["file"], workspace_id=workspace_id)
     return result["results"][0]
 
 

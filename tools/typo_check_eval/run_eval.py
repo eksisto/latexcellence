@@ -39,11 +39,9 @@ _STATUS_LABELS = {
 }
 
 
-async def check_one(
-    service: TypoCheckService, file_path: str, workspace_id: str
-) -> dict:
+async def check_one(service: TypoCheckService, entry: dict, workspace_id: str) -> dict:
     """调用一次逐段检查，取第一个段落的检查结果（语料每条恰好一个段落）。"""
-    result = await service.check_typos(file_path, workspace_id=workspace_id)
+    result = await service.check_typos(entry["file"], workspace_id=workspace_id)
     return result["results"][0]
 
 
