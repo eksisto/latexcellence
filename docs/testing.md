@@ -59,3 +59,11 @@
 - `run_eval.py`：逐条调用真实逐段检查管线（含 LLM），把修正文本还原 marker 后生成原文/修正后对照 HTML 报告
 
 同样依赖人工判断，不属于 `pytest tests/` 自动测试范围。使用说明见 `tools/typo_check_eval/README.md`。
+
+---
+
+`tests/fixtures/expression_opt/` 是表达优化的**人工评估语料**（每条一个 LaTeX 段落片段 + `manifest.json`，预埋期望优化，含已精炼段落用于误报检测），配套维护者工具位于 `tools/expression_opt_eval/`：
+
+- `run_eval.py`：逐条调用真实逐段优化管线（含 LLM），把优化文本还原 marker 后生成原文/优化后对照 HTML 报告
+
+同样依赖人工判断，不属于 `pytest tests/` 自动测试范围。使用说明见 `tools/expression_opt_eval/README.md`。

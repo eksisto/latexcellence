@@ -1,0 +1,342 @@
+{
+  "description": "表达优化人工评估语料（非 pytest 自动测试）。每条一个 LaTeX 段落片段（不含空行，恰好一个段落），manifest 标注难度分层与期望的优化（original → optimized）；has_improvement=false 的条目是已精炼的干净段落，用于评估误报率（无谓改写/过度改写）。",
+  "items": [
+    {
+      "id": "expr_01",
+      "file": "expr_01.tex",
+      "tier": 1,
+      "tier_name": "简单冗余",
+      "title": "赘余短语（in order to / a large number of）",
+      "has_improvement": true,
+      "expected_improvements": [
+        { "original": "In order to evaluate", "optimized": "To evaluate" },
+        { "original": "a large number of", "optimized": "many" }
+      ]
+    },
+    {
+      "id": "expr_02",
+      "file": "expr_02.tex",
+      "tier": 1,
+      "tier_name": "简单冗余",
+      "title": "赘余短语（due to the fact that / utilize）",
+      "has_improvement": true,
+      "expected_improvements": [
+        { "original": "due to the fact that", "optimized": "because" },
+        { "original": "utilizes", "optimized": "uses" }
+      ]
+    },
+    {
+      "id": "expr_03",
+      "file": "expr_03.tex",
+      "tier": 1,
+      "tier_name": "简单冗余",
+      "title": "时间状语与条件从句赘词",
+      "has_improvement": true,
+      "expected_improvements": [
+        { "original": "At this point in time", "optimized": "Currently" },
+        { "original": "in the event that", "optimized": "if" }
+      ]
+    },
+    {
+      "id": "expr_04",
+      "file": "expr_04.tex",
+      "tier": 1,
+      "tier_name": "简单冗余",
+      "title": "弱动词与让步赘词",
+      "has_improvement": true,
+      "expected_improvements": [
+        { "original": "is able to", "optimized": "can" },
+        { "original": "regardless of the fact that", "optimized": "although" }
+      ]
+    },
+    {
+      "id": "expr_05",
+      "file": "expr_05.tex",
+      "tier": 1,
+      "tier_name": "简单冗余",
+      "title": "冗余时间与数量表述",
+      "has_improvement": true,
+      "expected_improvements": [
+        { "original": "in the month of June", "optimized": "in June" },
+        { "original": "a total of three times", "optimized": "three times" }
+      ]
+    },
+    {
+      "id": "expr_06",
+      "file": "expr_06.tex",
+      "tier": 2,
+      "tier_name": "名词化与弱动词",
+      "title": "名词化动词（make a comparison / carry out an investigation）",
+      "has_improvement": true,
+      "expected_improvements": [
+        { "original": "made a comparison between", "optimized": "compared" },
+        {
+          "original": "carried out an investigation of",
+          "optimized": "investigated"
+        }
+      ]
+    },
+    {
+      "id": "expr_07",
+      "file": "expr_07.tex",
+      "tier": 2,
+      "tier_name": "名词化与弱动词",
+      "title": "弱动词短语（has the ability to / has the intention to）",
+      "has_improvement": true,
+      "expected_improvements": [
+        { "original": "has the ability to", "optimized": "can" },
+        {
+          "original": "have the intention to release",
+          "optimized": "intend to release"
+        }
+      ]
+    },
+    {
+      "id": "expr_08",
+      "file": "expr_08.tex",
+      "tier": 2,
+      "tier_name": "名词化与弱动词",
+      "title": "there be 冗余句式",
+      "has_improvement": true,
+      "expected_improvements": [
+        {
+          "original": "There are several factors that affect",
+          "optimized": "Several factors affect"
+        }
+      ]
+    },
+    {
+      "id": "expr_09",
+      "file": "expr_09.tex",
+      "tier": 2,
+      "tier_name": "名词化与弱动词",
+      "title": "It 引导赘语（It is worth mentioning that）",
+      "has_improvement": true,
+      "expected_improvements": [
+        { "original": "It is worth mentioning that", "optimized": "Notably," }
+      ]
+    },
+    {
+      "id": "expr_10",
+      "file": "expr_10.tex",
+      "tier": 2,
+      "tier_name": "名词化与弱动词",
+      "title": "the reason is because 冗余",
+      "has_improvement": true,
+      "expected_improvements": [
+        {
+          "original": "The reason why the method fails is because",
+          "optimized": "The method fails because"
+        }
+      ]
+    },
+    {
+      "id": "expr_11",
+      "file": "expr_11.tex",
+      "tier": 3,
+      "tier_name": "结构拖沓与衔接",
+      "title": "论文导言拖沓句式",
+      "has_improvement": true,
+      "expected_improvements": [
+        {
+          "original": "In this paper, we will discuss",
+          "optimized": "This paper discusses"
+        },
+        { "original": "and then we will propose", "optimized": "and proposes" }
+      ]
+    },
+    {
+      "id": "expr_12",
+      "file": "expr_12.tex",
+      "tier": 3,
+      "tier_name": "结构拖沓与衔接",
+      "title": "It is obvious that / as can be seen from（引用附近）",
+      "has_improvement": true,
+      "expected_improvements": [
+        {
+          "original": "It is obvious that",
+          "optimized": "The proposed method clearly"
+        },
+        { "original": "as can be seen from", "optimized": "as shown in" }
+      ]
+    },
+    {
+      "id": "expr_13",
+      "file": "expr_13.tex",
+      "tier": 3,
+      "tier_name": "结构拖沓与衔接",
+      "title": "not only 平行结构与副词赘语",
+      "has_improvement": true,
+      "expected_improvements": [
+        {
+          "original": "not only effective but it is also",
+          "optimized": "not only effective but also"
+        },
+        { "original": "with ease", "optimized": "easily" }
+      ]
+    },
+    {
+      "id": "expr_14",
+      "file": "expr_14.tex",
+      "tier": 3,
+      "tier_name": "结构拖沓与衔接",
+      "title": "命令附近拖沓表达（make use of / helps us to）",
+      "has_improvement": true,
+      "expected_improvements": [
+        { "original": "make use of", "optimized": "exploit" },
+        {
+          "original": "this helps us to improve",
+          "optimized": "thereby improving"
+        }
+      ]
+    },
+    {
+      "id": "expr_15",
+      "file": "expr_15.tex",
+      "tier": 3,
+      "tier_name": "结构拖沓与衔接",
+      "title": "公式附近赘语（It is not difficult to see that）",
+      "has_improvement": true,
+      "expected_improvements": [
+        {
+          "original": "It is not difficult to see that",
+          "optimized": "Clearly,"
+        }
+      ]
+    },
+    {
+      "id": "expr_16",
+      "file": "expr_16.tex",
+      "tier": 4,
+      "tier_name": "学术语体与措辞精准",
+      "title": "口语化表达（gets better results / really fast）",
+      "has_improvement": true,
+      "expected_improvements": [
+        { "original": "gets better results", "optimized": "outperforms" },
+        { "original": "really fast", "optimized": "fast" }
+      ]
+    },
+    {
+      "id": "expr_17",
+      "file": "expr_17.tex",
+      "tier": 4,
+      "tier_name": "学术语体与措辞精准",
+      "title": "口语量化与弱修饰（A lot of / very useful）",
+      "has_improvement": true,
+      "expected_improvements": [
+        { "original": "A lot of studies", "optimized": "Many studies" },
+        { "original": "very useful", "optimized": "effective" }
+      ]
+    },
+    {
+      "id": "expr_18",
+      "file": "expr_18.tex",
+      "tier": 4,
+      "tier_name": "学术语体与措辞精准",
+      "title": "平行结构改写",
+      "has_improvement": true,
+      "expected_improvements": [
+        {
+          "original": "The algorithm is fast, and it has high accuracy, and it is easy to implement",
+          "optimized": "The algorithm is fast, accurate, and easy to implement"
+        }
+      ]
+    },
+    {
+      "id": "expr_19",
+      "file": "expr_19.tex",
+      "tier": 4,
+      "tier_name": "学术语体与措辞精准",
+      "title": "模糊影响与泛化表述",
+      "has_improvement": true,
+      "expected_improvements": [
+        {
+          "original": "has a big impact on",
+          "optimized": "significantly improves"
+        },
+        {
+          "original": "shows good performance on",
+          "optimized": "performs well on"
+        }
+      ]
+    },
+    {
+      "id": "expr_20",
+      "file": "expr_20.tex",
+      "tier": 4,
+      "tier_name": "学术语体与措辞精准",
+      "title": "非正式副词 maybe",
+      "has_improvement": true,
+      "expected_improvements": [
+        { "original": "are maybe influenced", "optimized": "may be influenced" }
+      ]
+    },
+    {
+      "id": "expr_21",
+      "file": "expr_21.tex",
+      "tier": 5,
+      "tier_name": "压力测试",
+      "title": "密集 LaTeX 环境内嵌冗余",
+      "has_improvement": true,
+      "expected_improvements": [
+        { "original": "Under the condition that", "optimized": "When" },
+        {
+          "original": "gives a good approximation of",
+          "optimized": "approximates"
+        }
+      ]
+    },
+    {
+      "id": "expr_22",
+      "file": "expr_22.tex",
+      "tier": 5,
+      "tier_name": "压力测试",
+      "title": "超长混合段落多重优化",
+      "has_improvement": true,
+      "expected_improvements": [
+        { "original": "It is important to note that", "optimized": "Notably," },
+        { "original": "is able to deal with", "optimized": "handles" },
+        {
+          "original": "does not need a lot of manual tuning",
+          "optimized": "requires little manual tuning"
+        }
+      ]
+    },
+    {
+      "id": "expr_23",
+      "file": "expr_23.tex",
+      "tier": 5,
+      "tier_name": "压力测试",
+      "title": "干净英文段落（误报检测）",
+      "has_improvement": false,
+      "expected_improvements": []
+    },
+    {
+      "id": "expr_24",
+      "file": "expr_24.tex",
+      "tier": 5,
+      "tier_name": "压力测试",
+      "title": "已精炼技术段落（误报检测）",
+      "has_improvement": false,
+      "expected_improvements": []
+    },
+    {
+      "id": "expr_25",
+      "file": "expr_25.tex",
+      "tier": 5,
+      "tier_name": "压力测试",
+      "title": "命令密集段落内嵌冗余",
+      "has_improvement": true,
+      "expected_improvements": [
+        {
+          "original": "the same as the one that was used in our previous work",
+          "optimized": "identical to our previous work"
+        },
+        {
+          "original": "In order to make the comparison fair",
+          "optimized": "To ensure a fair comparison"
+        }
+      ]
+    }
+  ]
+}
