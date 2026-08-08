@@ -114,6 +114,7 @@ latexcellence/
 │   ├── table_ocr_eval/             # 表格 OCR 人工评估（渲染语料 → 跑 OCR → 比对报告）
 │   ├── typo_check_eval/            # 错字查找人工评估（加载语料 → 跑检查 → 比对报告）
 │   ├── expression_opt_eval/        # 表达优化人工评估（加载语料 → 跑优化 → 比对报告）
+│   ├── terminology_check_eval/     # 术语一致性人工评估（加载多段术语语料 → 跑检查 → 比对报告）
 │   ├── plotgen_opt/                # plot_gen Agent 优化评测工作区
 │   └── templategen_opt/            # template_gen Agent 优化评测工作区
 ├── static/                         # Vite 构建产物
@@ -144,6 +145,7 @@ latexcellence/
 | `tools/table_ocr_eval/` | 表格 OCR 人工评估：渲染语料为图片 → 调真实 OCR 管线 → 生成左右对比 HTML 报告，详见其 `README.md` |
 | `tools/typo_check_eval/` | 错字查找人工评估：加载错字语料 → 调真实逐段检查管线 → 生成原文/修正后对照 HTML 报告，详见其 `README.md` |
 | `tools/expression_opt_eval/` | 表达优化人工评估：加载优化语料 → 调真实逐段优化管线 → 生成原文/优化后对照 HTML 报告，详见其 `README.md` |
+| `tools/terminology_check_eval/` | 术语一致性人工评估：加载多段落术语语料 → 调真实检查管线（逐段提取 + 语义聚类）→ 生成术语簇命中/漏检对照 HTML 报告，详见其 `README.md` |
 | `tools/plotgen_opt/` | plot_gen Agent 优化评测：驱动 Agent 生成图表并采集指标、trace 分析、视觉审查、版本对比，详见其 `README.md` |
 | `tools/templategen_opt/` | template_gen Agent 优化评测：驱动 Agent 生成 LaTeX 工程并采集指标、需求遵守检查、视觉审查，详见其 `README.md` |
 

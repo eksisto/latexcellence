@@ -128,6 +128,7 @@ latexcellence/
 │   ├── table_ocr_eval/            # 表格 OCR 人工评估工具（渲染语料 → 跑 OCR → 生成比对报告）
 │   ├── typo_check_eval/           # 错字查找人工评估工具（加载语料 → 跑检查 → 生成比对报告）
 │   ├── expression_opt_eval/       # 表达优化人工评估工具（加载语料 → 跑优化 → 生成比对报告）
+│   ├── terminology_check_eval/    # 术语一致性人工评估工具（加载多段术语语料 → 跑检查 → 生成比对报告）
 │   ├── plotgen_opt/               # plot_gen Agent 优化评测工作区（脚本/数据集/报告入库，results、previews 忽略）
 │   └── templategen_opt/           # template_gen Agent 优化评测工作区（脚本/场景定义/参考资料入库，results 忽略）
 └── static/                        # Vite 构建产物

@@ -1,0 +1,7 @@
+近年来，Transformer 已经成为自然语言处理的主流架构。我们在该架构的基础上引入了轻量注意力模块，以降低计算开销。
+
+与标准 transformer 相比，轻量注意力模块将复杂度从 $O(n^2)$ 降低到 $O(n)$。我们在 WMT14 英德翻译任务上进行了实验，结果表明 lightweight attention 在保持性能的同时显著减少了推理时间。
+
+与此同时，我们重新设计了位置编码策略。Positional Encoding 在长文本上的表现优于传统方案。实验还显示，positional encoding 与相对位置表示可以结合使用。
+
+最后，我们讨论了大语言模型（Large Language Model）背景下的效率问题。大语言模型的应用越来越广泛，但训练成本仍然较高。我们希望 lightweight attention 能够帮助降低大语言模型的部署门槛。

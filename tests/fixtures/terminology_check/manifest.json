@@ -1,0 +1,317 @@
+{
+  "description": "术语一致性人工评估语料（非 pytest 自动测试）。每条一个多段落 LaTeX 文档（段落间以空行分隔），manifest 标注难度分层与期望的术语一致性簇（recommended + variants）；has_inconsistency=false 的条目是术语一致的干净文档，用于评估误报率（过度聚类/无谓替换）。",
+  "items": [
+    {
+      "id": "term_01",
+      "file": "term_01.tex",
+      "tier": 1,
+      "tier_name": "大小写与格式混用",
+      "title": "大小写混用（Deep Learning / deep learning）",
+      "has_inconsistency": true,
+      "expected_clusters": [
+        {
+          "recommended": "deep learning",
+          "variants": ["Deep Learning", "deep learning"]
+        }
+      ]
+    },
+    {
+      "id": "term_02",
+      "file": "term_02.tex",
+      "tier": 1,
+      "tier_name": "大小写与格式混用",
+      "title": "大小写 + 缩写混用（Machine Learning / ML）",
+      "has_inconsistency": true,
+      "expected_clusters": [
+        {
+          "recommended": "machine learning",
+          "variants": ["Machine Learning", "machine learning", "ML"]
+        }
+      ]
+    },
+    {
+      "id": "term_03",
+      "file": "term_03.tex",
+      "tier": 1,
+      "tier_name": "大小写与格式混用",
+      "title": "专有名词大小写不一致（BERT / Bert / bert）",
+      "has_inconsistency": true,
+      "expected_clusters": [
+        { "recommended": "BERT", "variants": ["BERT", "Bert", "bert"] }
+      ]
+    },
+    {
+      "id": "term_04",
+      "file": "term_04.tex",
+      "tier": 2,
+      "tier_name": "缩写与全称",
+      "title": "全称与缩写混用（Convolutional Neural Network / CNN）",
+      "has_inconsistency": true,
+      "expected_clusters": [
+        {
+          "recommended": "convolutional neural network",
+          "variants": [
+            "Convolutional Neural Network",
+            "convolutional neural network",
+            "CNN"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "term_05",
+      "file": "term_05.tex",
+      "tier": 2,
+      "tier_name": "缩写与全称",
+      "title": "数学环境附近的缩写混用（Graph Neural Network / GNN）",
+      "has_inconsistency": true,
+      "expected_clusters": [
+        {
+          "recommended": "graph neural network",
+          "variants": ["Graph Neural Network", "graph neural network", "GNN"]
+        }
+      ]
+    },
+    {
+      "id": "term_06",
+      "file": "term_06.tex",
+      "tier": 2,
+      "tier_name": "缩写与全称",
+      "title": "强化学习全称与缩写（Reinforcement Learning / RL）",
+      "has_inconsistency": true,
+      "expected_clusters": [
+        {
+          "recommended": "reinforcement learning",
+          "variants": ["Reinforcement Learning", "reinforcement learning", "RL"]
+        }
+      ]
+    },
+    {
+      "id": "term_07",
+      "file": "term_07.tex",
+      "tier": 2,
+      "tier_name": "缩写与全称",
+      "title": "中文全称与英文缩写（图神经网络 / GNN）",
+      "has_inconsistency": true,
+      "expected_clusters": [
+        { "recommended": "图神经网络", "variants": ["图神经网络", "GNN"] }
+      ]
+    },
+    {
+      "id": "term_08",
+      "file": "term_08.tex",
+      "tier": 3,
+      "tier_name": "中英混用",
+      "title": "中英混用三变体（深度学习 / deep learning / DL）",
+      "has_inconsistency": true,
+      "expected_clusters": [
+        {
+          "recommended": "深度学习",
+          "variants": ["深度学习", "deep learning", "DL"]
+        }
+      ]
+    },
+    {
+      "id": "term_09",
+      "file": "term_09.tex",
+      "tier": 3,
+      "tier_name": "中英混用",
+      "title": "注意力机制中英混用（注意力机制 / attention mechanism）",
+      "has_inconsistency": true,
+      "expected_clusters": [
+        {
+          "recommended": "注意力机制",
+          "variants": ["注意力机制", "attention mechanism"]
+        }
+      ]
+    },
+    {
+      "id": "term_10",
+      "file": "term_10.tex",
+      "tier": 3,
+      "tier_name": "中英混用",
+      "title": "过拟合中英混用（过拟合 / overfitting）",
+      "has_inconsistency": true,
+      "expected_clusters": [
+        { "recommended": "过拟合", "variants": ["过拟合", "overfitting"] }
+      ]
+    },
+    {
+      "id": "term_11",
+      "file": "term_11.tex",
+      "tier": 3,
+      "tier_name": "中英混用",
+      "title": "数据增强中英混用（数据增强 / data augmentation）",
+      "has_inconsistency": true,
+      "expected_clusters": [
+        {
+          "recommended": "数据增强",
+          "variants": ["数据增强", "data augmentation"]
+        }
+      ]
+    },
+    {
+      "id": "term_12",
+      "file": "term_12.tex",
+      "tier": 4,
+      "tier_name": "拼写变体与近义统一",
+      "title": "连字符拼写变体（pre-training / pretraining）",
+      "has_inconsistency": true,
+      "expected_clusters": [
+        {
+          "recommended": "pretraining",
+          "variants": ["Pre-training", "pretraining", "pre-training"]
+        }
+      ]
+    },
+    {
+      "id": "term_13",
+      "file": "term_13.tex",
+      "tier": 4,
+      "tier_name": "拼写变体与近义统一",
+      "title": "写法变体 + 缩写（state-of-the-art / SOTA）",
+      "has_inconsistency": true,
+      "expected_clusters": [
+        {
+          "recommended": "state-of-the-art",
+          "variants": ["state-of-the-art", "state of the art", "SOTA"]
+        }
+      ]
+    },
+    {
+      "id": "term_14",
+      "file": "term_14.tex",
+      "tier": 4,
+      "tier_name": "拼写变体与近义统一",
+      "title": "连字符拼写变体（hyperparameter / hyper-parameter）",
+      "has_inconsistency": true,
+      "expected_clusters": [
+        {
+          "recommended": "hyperparameter",
+          "variants": ["Hyperparameter", "hyperparameter", "hyper-parameter"]
+        }
+      ]
+    },
+    {
+      "id": "term_15",
+      "file": "term_15.tex",
+      "tier": 4,
+      "tier_name": "拼写变体与近义统一",
+      "title": "中文近义表述（特征表示 / 表征）",
+      "has_inconsistency": true,
+      "expected_clusters": [
+        { "recommended": "特征表示", "variants": ["特征表示", "表征"] }
+      ]
+    },
+    {
+      "id": "term_16",
+      "file": "term_16.tex",
+      "tier": 4,
+      "tier_name": "拼写变体与近义统一",
+      "title": "中文与英文同义混用（超参数 / hyperparameter）",
+      "has_inconsistency": true,
+      "expected_clusters": [
+        { "recommended": "超参数", "variants": ["超参数", "hyperparameter"] }
+      ]
+    },
+    {
+      "id": "term_17",
+      "file": "term_17.tex",
+      "tier": 5,
+      "tier_name": "压力测试",
+      "title": "多簇混合文档（GNN / 对比学习 / 注意力机制）",
+      "has_inconsistency": true,
+      "expected_clusters": [
+        {
+          "recommended": "图神经网络",
+          "variants": ["图神经网络", "Graph Neural Network", "GNN"]
+        },
+        {
+          "recommended": "对比学习",
+          "variants": ["对比学习", "contrastive learning"]
+        },
+        {
+          "recommended": "注意力机制",
+          "variants": ["注意力机制", "attention mechanism"]
+        }
+      ]
+    },
+    {
+      "id": "term_18",
+      "file": "term_18.tex",
+      "tier": 5,
+      "tier_name": "压力测试",
+      "title": "命令与公式密集段落",
+      "has_inconsistency": true,
+      "expected_clusters": [
+        {
+          "recommended": "state-of-the-art",
+          "variants": [
+            "state-of-the-art",
+            "State of the Art",
+            "state of the art"
+          ]
+        },
+        { "recommended": "BERT", "variants": ["BERT", "bert"] }
+      ]
+    },
+    {
+      "id": "term_19",
+      "file": "term_19.tex",
+      "tier": 5,
+      "tier_name": "压力测试",
+      "title": "中文长文档多簇（知识蒸馏 / 对比学习）",
+      "has_inconsistency": true,
+      "expected_clusters": [
+        {
+          "recommended": "知识蒸馏",
+          "variants": ["知识蒸馏", "knowledge distillation"]
+        },
+        {
+          "recommended": "对比学习",
+          "variants": ["对比学习", "contrastive learning"]
+        }
+      ]
+    },
+    {
+      "id": "term_20",
+      "file": "term_20.tex",
+      "tier": 5,
+      "tier_name": "压力测试",
+      "title": "干净英文文档（误报检测）",
+      "has_inconsistency": false,
+      "expected_clusters": []
+    },
+    {
+      "id": "term_21",
+      "file": "term_21.tex",
+      "tier": 5,
+      "tier_name": "压力测试",
+      "title": "干净中文文档（误报检测：含相似但不同义的术语）",
+      "has_inconsistency": false,
+      "expected_clusters": []
+    },
+    {
+      "id": "term_22",
+      "file": "term_22.tex",
+      "tier": 5,
+      "tier_name": "压力测试",
+      "title": "超长中英混合压力测试（三簇）",
+      "has_inconsistency": true,
+      "expected_clusters": [
+        {
+          "recommended": "Transformer",
+          "variants": ["Transformer", "transformer"]
+        },
+        {
+          "recommended": "轻量注意力模块",
+          "variants": ["轻量注意力模块", "lightweight attention"]
+        },
+        {
+          "recommended": "positional encoding",
+          "variants": ["Positional Encoding", "positional encoding"]
+        }
+      ]
+    }
+  ]
+}

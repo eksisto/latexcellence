@@ -72,3 +72,10 @@ Prefix: `/api/terminology-check`, Tag: `terminology_check`
 | GET | `/stream/{workspace_id}` | SSE 流式推送 |
 
 请求模型：`TerminologyCheckRequest`、`TerminologyApplyRequest`
+
+## 人工评估
+
+`tools/terminology_check_eval/` 提供术语一致性人工评估工具，配套语料位于
+`tests/fixtures/terminology_check/`（每条一个多段落 LaTeX 文档 + 期望术语簇）。
+新增语料或修改术语提取/聚类逻辑后，运行 `python tools/terminology_check_eval/run_eval.py`
+生成人工比对报告；新增语料先跑 `--validate` 校验。详见其 `README.md`。
