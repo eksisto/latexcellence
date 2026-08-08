@@ -42,6 +42,8 @@
 
 渲染细节：语料片段是完整浮动体，直接放进 `preview` 会导致紧裁失效且 `\caption` 无处安放，因此渲染前统一**剥掉浮动体外壳**（`table` / `table*` / `wraptable` 取内部内容，`sidewaystable` 取内部内容并包 `\begin{sideways}`），`\caption` 改写为 `\captionof{table}`；裸 `longtable` 等环境直接渲染。
 
+风格说明：table_ocr 提示词强制输出 booktabs 三线表（后端另有 `_check_three_line_style` 校验，网格表输出会触发重试归一化），因此语料中的网格表（`\hline` / 竖线）输入，识别结果应为三线表风格——报告正好用于人工验证这条归一化规则是否生效。
+
 ### 3. 运行输出 `logs/table_ocr_eval/`
 
 ```

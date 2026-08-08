@@ -29,6 +29,8 @@ CONFIDENCE: <0-1>
 | `$` 数量不配对（忽略 `\$`） | 数学模式包裹损坏 |
 | `\begin{X}` / `\end{X}` 环境栈式配平 | 截断或环境错配 |
 | 非空输出必须包含 `\begin{table}` / `\begin{table*}` 浮动体 | 模型只输出 `tabular` 而未按协议输出 `table` 环境 |
+| 非空输出必须包含 `\begin{tabular}` / `\begin{tabularx}` | table 浮动体内缺少 tabular 实体（如裸表格行），输出不可编译 |
+| 三线表风格：禁止 `\hline` / `\cline` / `\vline`，禁止 tabular / tabularx / tabular* 列格式中的竖线 `|` | 网格表输入未归一化为 booktabs 三线表（`\toprule` / `\midrule` / `\bottomrule` / `\cmidrule`），失败时把风格说明反馈给 LLM 重试 |
 | 空输出（`confidence` 必须为 `0.0`） | 图片不是表格时的协议约定结果，放行（`low_confidence` 标记） |
 
 ## 统一格式化层
@@ -47,6 +49,7 @@ CONFIDENCE: <0-1>
 | `_recognize_with_llm` | 第一次 LLM 调用：分隔符协议识别 + 内容校验 + 错误回喂重试（最多 3 次） |
 | `_extract_latex_block` | 正则提取 `<<<LATEX>>>...<<<END>>>` 块 |
 | `_parse_confidence` | 解析 `CONFIDENCE` 元数据 |
+| `_check_three_line_style` | 三线表风格校验：拒绝 `\hline` / `\cline` / `\vline` 与竖线列格式，违规反馈 LLM 重试 |
 | `_preprocess` / `_to_base64` / `_validate_content_type` | 图片预处理（与 formula_ocr 共享模式） |
 
 **降级策略**：规则表未命中且 LLM 兜底失败时，记录警告并直接返回第一次 LLM 结果。

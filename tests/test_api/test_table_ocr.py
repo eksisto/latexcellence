@@ -19,6 +19,13 @@ TABLE_LATEX = (
     r"\midrule A & 10 \\\bottomrule\end{tabular}\end{table}"
 )
 
+# 纯 LaTeX 内核表格（无 booktabs 命令、无 \hline），用于测试宏包规则表未命中路径
+KERNEL_LATEX = (
+    r"\begin{table}[htbp]\centering"
+    r"\caption{Results}\begin{tabular}{lr}Name & Value \\"
+    r"A & 10 \end{tabular}\end{table}"
+)
+
 
 def ocr_response(latex, confidence="0.95"):
     """构造符合 <<<LATEX>>> 分隔符协议的模型原始输出。"""
@@ -54,7 +61,9 @@ class TestTableOCRResultModel:
         assert result.latex == latex
 
     def test_defaults(self):
-        data = {"latex": r"\begin{table}[htbp]\end{table}"}
+        data = {
+            "latex": r"\begin{table}[htbp]\begin{tabular}{c}A\end{tabular}\end{table}"
+        }
         result = TableOCRResult.model_validate(data)
         assert result.confidence == 0.0
 
@@ -102,9 +111,18 @@ class TestTableOCRResultModel:
 
     def test_table_star_accepted(self):
         """table*（跨栏宽表格）是合法浮动体，应放行。"""
-        latex = r"\begin{table*}[htbp]\centering A & B \end{table*}"
+        latex = (
+            r"\begin{table*}[htbp]\centering"
+            r"\begin{tabular}{cc}A & B\end{tabular}\end{table*}"
+        )
         result = TableOCRResult.model_validate({"latex": latex, "confidence": 0.9})
         assert result.latex == latex
+
+    def test_rejects_missing_tabular(self):
+        """table 浮动体内必须有 tabular，裸表格行不通过。"""
+        latex = r"\begin{table}[htbp]\centering A & B \end{table}"
+        with pytest.raises(ValidationError, match="tabular"):
+            TableOCRResult.model_validate({"latex": latex})
 
     def test_empty_latex_zero_confidence_passes(self):
         """图片不是表格时按协议输出空块 + CONFIDENCE 0.0，应放行。"""
@@ -128,6 +146,68 @@ class TestTableOCRResultModel:
         )
         with pytest.raises(ValidationError, match="mismatched"):
             TableOCRResult.model_validate({"latex": latex})
+
+
+class TestThreeLineStyle:
+    """三线表风格校验测试（booktabs 强制，拒绝 \\hline / 竖线）。"""
+
+    def test_accepts_booktabs(self):
+        assert TableOCRService._check_three_line_style(TABLE_LATEX) is None
+
+    def test_accepts_cmidrule(self):
+        latex = TABLE_LATEX.replace(r"\midrule", r"\cmidrule(lr){1-2}")
+        assert TableOCRService._check_three_line_style(latex) is None
+
+    def test_accepts_table_star(self):
+        latex = (
+            r"\begin{table*}[htbp]\centering"
+            r"\begin{tabular}{cc}\toprule A & B \\\bottomrule\end{tabular}\end{table*}"
+        )
+        assert TableOCRService._check_three_line_style(latex) is None
+
+    def test_rejects_hline(self):
+        latex = TABLE_LATEX.replace(r"\toprule", r"\hline")
+        assert TableOCRService._check_three_line_style(latex) is not None
+
+    def test_rejects_vertical_line_colspec(self):
+        latex = (
+            r"\begin{table}[htbp]"
+            r"\begin{tabular}{|c|c|}A & B\end{tabular}\end{table}"
+        )
+        assert TableOCRService._check_three_line_style(latex) is not None
+
+    def test_rejects_vertical_line_in_nested_colspec(self):
+        """>{} / p{} 嵌套花括号列格式中的竖线也必须被检出（花括号感知提取）。"""
+        latex = (
+            r"\begin{table}[htbp]"
+            r"\begin{tabularx}{\textwidth}{>{\raggedright\arraybackslash}|l|X}"
+            r"A & B\end{tabularx}\end{table}"
+        )
+        assert TableOCRService._check_three_line_style(latex) is not None
+
+    def test_rejects_vertical_line_in_tabular_star(self):
+        latex = (
+            r"\begin{table}[htbp]"
+            r"\begin{tabular*}{\textwidth}{|c|c|}A & B\end{tabular*}\end{table}"
+        )
+        assert TableOCRService._check_three_line_style(latex) is not None
+
+    def test_accepts_nested_colspec_without_vertical_lines(self):
+        """带 >{} / p{} 的合法三线表列格式不应误报。"""
+        latex = (
+            r"\begin{table}[htbp]\centering"
+            r"\begin{tabular}{>{\bfseries}l>{\raggedright\arraybackslash}p{4cm}r}"
+            r"A & B & C\end{tabular}\end{table}"
+        )
+        assert TableOCRService._check_three_line_style(latex) is None
+
+    def test_rejects_cline(self):
+        latex = TABLE_LATEX.replace(r"\midrule", r"\cline{1-2}")
+        assert TableOCRService._check_three_line_style(latex) is not None
+
+    def test_ignores_hline_in_comment(self):
+        latex = "% \\hline 注释不应误报\n" + TABLE_LATEX
+        assert TableOCRService._check_three_line_style(latex) is None
 
 
 class TestImageValidation:
@@ -205,7 +285,8 @@ class TestRecognize:
     @pytest.mark.asyncio
     async def test_low_confidence(self, mock_llm, service, minimal_png):
         mock_llm.chat.return_value = ocr_response(
-            r"\begin{table}[htbp]\end{table}", confidence="0.4"
+            r"\begin{table}[htbp]\centering\begin{tabular}{c}A\end{tabular}\end{table}",
+            confidence="0.4",
         )
 
         png = minimal_png
@@ -314,6 +395,44 @@ class TestRecognize:
         assert mock_llm.chat.call_count == 2
 
     @pytest.mark.asyncio
+    async def test_missing_tabular_retries(self, mock_llm, service, minimal_png):
+        """table 浮动体内缺少 tabular → 校验失败并重试恢复。"""
+        bad = r"\begin{table}[htbp]\centering 1.5 & 2.0 \\ \end{table}"
+        mock_llm.chat.side_effect = [
+            ocr_response(bad),
+            ocr_response(TABLE_LATEX, confidence="0.9"),
+        ]
+
+        png = minimal_png
+        result = await service._recognize_with_llm(mock_llm, png, "image/png")
+
+        assert r"\begin{tabular}{lr}" in result["latex"]
+        assert mock_llm.chat.call_count == 2
+
+    @pytest.mark.asyncio
+    async def test_grid_style_retries_to_three_line(
+        self, mock_llm, service, minimal_png
+    ):
+        """网格表输出（\\hline + 竖线列格式）→ 风格校验失败 → 重试恢复为 booktabs。"""
+        grid = (
+            r"\begin{table}[htbp]\centering"
+            r"\begin{tabular}{|c|c|}\hline x & y \\\hline 1 & 2 \\"
+            r"\hline\end{tabular}\end{table}"
+        )
+        mock_llm.chat.side_effect = [
+            ocr_response(grid),
+            ocr_response(TABLE_LATEX, confidence="0.9"),
+        ]
+
+        png = minimal_png
+        result = await service._recognize_with_llm(mock_llm, png, "image/png")
+
+        assert r"\toprule" in result["latex"]
+        assert r"\hline" not in result["latex"]
+        assert r"\begin{tabular}{lr}" in result["latex"]
+        assert mock_llm.chat.call_count == 2
+
+    @pytest.mark.asyncio
     async def test_retry_exhausted(self, mock_llm, service, minimal_png):
         mock_llm.chat.return_value = "no block here"
 
@@ -366,13 +485,8 @@ class TestRecognizeWithPackageAnalysis:
     @pytest.mark.asyncio
     async def test_without_packages(self, mock_llm, service, monkeypatch):
         """纯内核代码 → 规则表未命中，LLM 兜底返回空列表 → 无注释。"""
-        hline_latex = (
-            TABLE_LATEX.replace(r"\toprule", r"\hline")
-            .replace(r"\midrule", r"\hline")
-            .replace(r"\bottomrule", r"\hline")
-        )
         mock_llm.chat.side_effect = [
-            ocr_response(hline_latex, confidence="0.90"),
+            ocr_response(KERNEL_LATEX, confidence="0.90"),
             {"packages": []},
         ]
 
@@ -392,19 +506,15 @@ class TestRecognizeWithPackageAnalysis:
 
         assert result["confidence"] == 0.90
         assert not result["latex"].startswith(r"%")
+        assert r"\begin{tabular}{lr}" in result["latex"]
 
     @pytest.mark.asyncio
     async def test_package_analysis_fails_gracefully(
         self, mock_llm, service, monkeypatch
     ):
         """纯内核代码 → 规则表未命中，LLM 兜底失败 → 返回原始表格代码。"""
-        hline_latex = (
-            TABLE_LATEX.replace(r"\toprule", r"\hline")
-            .replace(r"\midrule", r"\hline")
-            .replace(r"\bottomrule", r"\hline")
-        )
         mock_llm.chat.side_effect = [
-            ocr_response(hline_latex, confidence="0.92"),
+            ocr_response(KERNEL_LATEX, confidence="0.92"),
             RuntimeError("API error"),
         ]
 
@@ -423,7 +533,7 @@ class TestRecognizeWithPackageAnalysis:
         result = await service.recognize(buf.read(), "image/png")
 
         assert result["confidence"] == 0.92
-        assert r"\hline" in result["latex"]
+        assert r"\begin{tabular}{lr}" in result["latex"]
         assert not result["latex"].startswith(r"%")
 
     @pytest.mark.asyncio

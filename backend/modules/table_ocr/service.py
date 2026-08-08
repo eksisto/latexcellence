@@ -18,7 +18,7 @@
 import base64
 import io
 import re
-from typing import Any
+from typing import Any, Iterator
 
 from PIL import Image
 from pydantic import (
@@ -36,15 +36,36 @@ from backend.core.prompts import get_prompt
 from backend.utils.json_utils import format_validation_error
 from backend.utils.latex_json_guard import validate_latex_field
 from backend.utils.latex_formatter import format_latex_source
-from backend.utils.latex_literals import extract_delimited_block, remove_delimited_block
+from backend.utils.latex_literals import (
+    extract_delimited_block,
+    find_matching_brace,
+    remove_delimited_block,
+)
 from backend.utils.latex_package_analyzer import prepend_package_comments
 
 # 分隔符协议：LaTeX 以纯文本形式夹在标记之间，避免 JSON 反斜杠转义损坏
 _CONFIDENCE_RE = re.compile(r"CONFIDENCE\s*:\s*([0-9]*\.?[0-9]+)", re.IGNORECASE)
 
+# 三线表风格校验：tabular / tabular* / tabularx 列格式声明起点（左花括号位置）
+_TABULAR_BEGIN_RE = re.compile(r"\\begin\{(?:tabular\*?|tabularx)\}(?:\{[^}]*\})?\{")
+# 非 booktabs 的横/竖线命令（\hline / \vline / \cline）
+_NON_BOOKTABS_RULE_RE = re.compile(r"\\(?:hline|vline|cline)\b")
+
 _MAX_OCR_RETRIES = 3
 _MAX_DIMENSION = 2000
 _SUPPORTED_FORMATS = {"image/png", "image/jpeg", "image/webp"}
+
+
+def _iter_column_specs(latex: str) -> Iterator[str]:
+    """按花括号配平提取 tabular / tabular* / tabularx 的列格式声明。
+
+    列格式可含 >{} / p{} 等嵌套花括号，不能按第一个 '}' 截断；
+    复用 latex_literals.find_matching_brace（跳过 \\{ / \\} 转义）。
+    """
+    for match in _TABULAR_BEGIN_RE.finditer(latex):
+        end = find_matching_brace(latex, match.end() - 1)
+        if end is not None:
+            yield latex[match.end() : end]
 
 
 class TableOCRResult(BaseModel):
@@ -74,6 +95,11 @@ class TableOCRResult(BaseModel):
         if "\\begin{table}" not in self.latex and "\\begin{table*}" not in self.latex:
             raise ValueError(
                 "latex is missing the required \\begin{table} float environment"
+            )
+        if not re.search(r"\\begin\{(?:tabular|tabularx)\}", self.latex):
+            raise ValueError(
+                "latex is missing the required \\begin{tabular} environment "
+                "inside the table float"
             )
         return self
 
@@ -162,6 +188,9 @@ class TableOCRService:
                     )
                 confidence = self._parse_confidence(response_text)
                 validated = TableOCRResult(latex=latex, confidence=confidence)
+                style_error = self._check_three_line_style(validated.latex)
+                if style_error:
+                    raise ValueError(style_error)
                 result = validated.model_dump()
 
                 # 置信度阈值处理
@@ -222,6 +251,30 @@ class TableOCRService:
         if conf_match:
             return float(conf_match.group(1))
         return 0.0
+
+    @staticmethod
+    def _check_three_line_style(latex: str) -> str | None:
+        """校验三线表风格：禁止 \\hline / \\cline / \\vline 与列格式中的竖线 |。
+
+        返回违规描述（作为错误反馈给 LLM 重试）；合规返回 None。
+        """
+        # 先剥掉注释行，避免 % \\hline 之类的注释误报
+        code = re.sub(r"(?m)^[ \t]*%.*$", "", latex)
+        if _NON_BOOKTABS_RULE_RE.search(code):
+            return (
+                "Table style violation: output must use the academic three-line "
+                "style. Remove \\hline / \\vline / \\cline; use \\toprule, "
+                "\\midrule, \\bottomrule from booktabs, and \\cmidrule for "
+                "partial rules."
+            )
+        for spec in _iter_column_specs(code):
+            if "|" in spec:
+                return (
+                    "Table style violation: vertical lines (|) are not allowed "
+                    "in column specs. Output a three-line (booktabs) table "
+                    "without vertical rules."
+                )
+        return None
 
     def _validate_content_type(self, content_type: str) -> None:
         """校验图片格式。"""
