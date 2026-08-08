@@ -19,9 +19,9 @@ from typing import Any
 # ── 共享常量 ──────────────────────────────────────────────────────────────
 
 # LaTeX × JSON 转义防护规则：插入所有"JSON 字符串里直接承载 LaTeX 源码"
-# 的 system prompt。注意本常量文本不能包含字面 { }，否则会被 get_prompt
-# 的 str.format() 误解析（edit_system / code_review / format_analysis 等
-# 带 kwargs 的提示词会执行格式化）。
+# 的 system prompt（BibTeX 场景使用下方的 BIBTEX_JSON_ESCAPE_RULES）。
+# 注意两个常量文本都不能包含字面 { }——get_prompt 会对所有模板执行
+# str.format()，模板中的字面花括号必须写成 {{ / }}。
 LATEX_JSON_ESCAPE_RULES = (
     "JSON STRING ESCAPING (CRITICAL):\n"
     "- Inside JSON strings, every backslash is an escape character, so each "
@@ -35,6 +35,27 @@ LATEX_JSON_ESCAPE_RULES = (
     "- Keep group braces and dollar signs balanced; when a literal brace or "
     "dollar sign is needed in the LaTeX, escape it with a backslash in the "
     "LaTeX itself."
+)
+
+# BibTeX × JSON 转义防护规则：用于输出 JSON 字符串中直接承载 BibTeX 源码
+# 的 system prompt（bib_manager 的 format_analysis / bibtex_generation）。
+# 与 LATEX_JSON_ESCAPE_RULES 的差异：BibTeX 的 { } 是结构定界符，必须保持
+# 配平但绝不能加反斜杠转义；$ 是普通字符而非数学模式定界符。
+BIBTEX_JSON_ESCAPE_RULES = (
+    "JSON STRING ESCAPING (CRITICAL):\n"
+    "- Inside JSON strings, every backslash is an escape character, so each "
+    "BibTeX backslash must be written as TWO backslash characters. Example: "
+    "BibTeX \\cite must appear in the JSON string as \\\\cite; \\author as "
+    "\\\\author.\n"
+    "- A single backslash before r, n, t, f or b becomes a control character "
+    "(carriage return, newline, tab, form feed, backspace) and silently "
+    "corrupts the BibTeX.\n"
+    "- Never output control characters or placeholders like '[object Object]'.\n"
+    "- BibTeX entries use braces as structural delimiters: keep them balanced "
+    "and do NOT backslash-escape them. Only a literal brace character inside "
+    "a field value is backslash-escaped in the BibTeX itself.\n"
+    "- Dollar signs are ordinary characters in BibTeX, not math-mode "
+    "delimiters: keep them as-is."
 )
 
 # ── 提示词存储 ──────────────────────────────────────────────────────────────
@@ -54,15 +75,18 @@ _PROMPTS: dict[str, dict[str, str]] = {
             "Every marker must appear in the corrected text EXACTLY as in the original.\n"
             "3. Only modify plain text portions (words, sentences, punctuation).\n"
             "4. If there are no errors, the corrected field must be byte-identical "
-            "to the original field.\n"
-            "5. Respond with JSON only, no markdown fences, no extra text.\n\n"
+            "to the original field, and changes MUST be an empty array [] — never "
+            "invent issues.\n"
+            "5. If you fix anything, changes MUST be non-empty and contain one entry "
+            "per modification; the corrected field must reflect every listed change.\n"
+            "6. Respond with JSON only, no markdown fences, no extra text.\n\n"
             "JSON format (strictly follow this schema):\n"
             "{{\n"
             '  "paragraph_index": <int>,\n'
             '  "corrected": "<the corrected text with all markers unchanged>",\n'
             '  "changes": [\n'
             "    {{\n"
-            '      "type": "typo in {language}",\n'
+            '      "type": "<error type in {language}>",\n'
             '      "original": "<incorrect text fragment>",\n'
             '      "corrected": "<correct text fragment>",\n'
             '      "position": <optional int, char offset in original>,\n'
@@ -95,8 +119,12 @@ _PROMPTS: dict[str, dict[str, str]] = {
             "Every marker must appear in the optimized text EXACTLY as in the original.\n"
             "3. Only modify plain text portions (words, sentences, punctuation).\n"
             "4. If no improvement is needed, the optimized field must be identical "
-            "to the original field.\n"
-            "5. Respond with JSON only, no markdown fences, no extra text.\n\n"
+            "to the original field, and changes MUST be an empty array [] — never "
+            "invent suggestions.\n"
+            "5. If you improve anything, changes MUST be non-empty and contain one "
+            "entry per modification; the optimized field must reflect every listed "
+            "change.\n"
+            "6. Respond with JSON only, no markdown fences, no extra text.\n\n"
             "JSON format (strictly follow this schema):\n"
             "{{\n"
             '  "paragraph_index": <int>,\n'
@@ -492,8 +520,8 @@ _PROMPTS: dict[str, dict[str, str]] = {
             "Rules:\n"
             "- The text between <<<LATEX>>> and <<<END>>> must be ONLY the math expression.\n"
             "- Do NOT wrap the whole formula in display-mode delimiters or empty wrappers: "
-            "$$...$$, \\(...\\), \\[...\\], \\begin{equation}, \\begin{equation*}, "
-            "\\begin{displaymath}.\n"
+            "$$...$$, \\(...\\), \\[...\\], \\begin{{equation}}, \\begin{{equation*}}, "
+            "\\begin{{displaymath}}.\n"
             "- Structural math environments ARE allowed and must be preserved when the "
             "formula requires them: aligned, gathered, cases, matrix, pmatrix, bmatrix, "
             "split, align*, gather*, multline*, etc. Keep the \\begin/\\end and all "
@@ -501,8 +529,8 @@ _PROMPTS: dict[str, dict[str, str]] = {
             "formula onto a single line.\n"
             "- Backslashes are literal characters: write \\frac exactly as-is; "
             "never escape or double them.\n"
-            "- Use compact standard LaTeX commands (\\frac{a}{b}, \\sqrt[3]{x}, "
-            "\\sum_{i=1}^n); avoid unnecessary braces or spaces such as { \\frac { a } { b } }.\n"
+            "- Use compact standard LaTeX commands (\\frac{{a}}{{b}}, \\sqrt[3]{{x}}, "
+            "\\sum_{{i=1}}^n); avoid unnecessary braces or spaces such as {{ \\frac {{ a }} {{ b }} }}.\n"
             "- Preserve structure faithfully: keep superscripts/subscripts and Greek letters.\n"
             "- Set CONFIDENCE based on recognition quality:\n"
             "  * 0.9-1.0: Clear, confident recognition\n"
@@ -521,7 +549,7 @@ _PROMPTS: dict[str, dict[str, str]] = {
             "high-quality, directly compilable LaTeX float code.\n\n"
             "Rules & Guidelines:\n"
             "1. Float structure: Must use the `table` environment wrapping a `tabular` environment. "
-            "Include \\begin{table}[htbp], \\centering, \\caption{...}, \\label{tab:xxx}, tabular, \\end{table}.\n"
+            "Include \\begin{{table}}[htbp], \\centering, \\caption{{...}}, \\label{{tab:xxx}}, tabular, \\end{{table}}.\n"
             "2. Table style (MANDATORY): ALWAYS output the academic three-line table style using "
             "\\toprule, \\midrule, \\bottomrule from the booktabs package. NEVER use \\hline, \\cline, "
             "\\vline, or vertical lines (|) in column specs. If the source image is a grid table with "
@@ -616,7 +644,7 @@ _PROMPTS: dict[str, dict[str, str]] = {
             "  * MLA 9th → latex_backend='bibtex', latex_package='mla13', "
             "latex_bibliographystyle='mla'\n"
             "- If unsure about LaTeX style, set all latex_* fields to null.\n\n"
-            + LATEX_JSON_ESCAPE_RULES
+            + BIBTEX_JSON_ESCAPE_RULES
             + "\n\n"
             "## Output\n"
             "Respond with JSON only. No markdown fences, no commentary.\n\n"
@@ -653,12 +681,12 @@ _PROMPTS: dict[str, dict[str, str]] = {
             "- Output each value as a plain string\n\n"
             "Respond with JSON only, no markdown fences, no extra text.\n\n"
             "JSON format:\n"
-            "{\n"
-            '  "fields": {\n'
+            "{{\n"
+            '  "fields": {{\n'
             '    "<field_name_1>": "<extracted value>",\n'
             '    "<field_name_2>": "<extracted value>"\n'
-            "  }\n"
-            "}"
+            "  }}\n"
+            "}}"
         ),
         "bibtex_generation": (
             "You are a BibTeX code generator. "
@@ -670,27 +698,27 @@ _PROMPTS: dict[str, dict[str, str]] = {
             "firstAuthorLastName + year + firstMeaningfulKeyword (all lowercase)\n"
             "  Example: devlin2018bert, krizhevsky2012imagenet\n"
             "- Include all available fields, use empty string for missing required fields\n"
-            "- Each field should be properly quoted with curly braces: title = {...},\n"
+            "- Each field should be properly quoted with curly braces: title = {{...}},\n"
             "- Preserve LaTeX special characters in titles (escape % & _ # if needed)\n"
             "- Format output as clean, indented BibTeX code\n"
             "- Do NOT include fields that have no value (empty string) as optional fields\n"
             "- But DO include required fields even if empty\n"
             "- Avoid duplicate cite_keys: if existing_keys is provided, adjust the cite_key\n\n"
-            + LATEX_JSON_ESCAPE_RULES
+            + BIBTEX_JSON_ESCAPE_RULES
             + "\n\n"
             "Respond with JSON only, no markdown fences, no extra text.\n\n"
             "JSON format:\n"
-            "{\n"
+            "{{\n"
             '  "cite_key": "<generated cite key>",\n'
             '  "entry_type": "<BibTeX entry type>",\n'
-            '  "fields": {\n'
+            '  "fields": {{\n'
             '    "author": "<author1 and author2>",\n'
             '    "title": "<title>",\n'
             '    "journal": "<journal>",\n'
             '    "year": "<year>"\n'
-            "  },\n"
+            "  }},\n"
             '  "raw_bibtex": "<complete formatted BibTeX code as a single string with \\\\n line breaks>"\n'
-            "}"
+            "}}"
         ),
     },
     # ── paragraph_translate 模块 ──────────────────────────────────────────────
@@ -714,10 +742,9 @@ _PROMPTS: dict[str, dict[str, str]] = {
             "Every marker must appear in the translated text EXACTLY as in the original.\n"
             "3. Only translate plain text portions (words, sentences, punctuation).\n"
             "4. Preserve the original meaning while following academic translation standards.\n"
-            "5. For LaTeX-specific terms (e.g., \\section, \\cite, \\ref), keep them unchanged.\n"
-            "6. If the text is already in the target language, the translated field must be "
+            "5. If the text is already in the target language, the translated field must be "
             "identical to the original field.\n"
-            "7. Respond with JSON only, no markdown fences, no extra text.\n\n"
+            "6. Respond with JSON only, no markdown fences, no extra text.\n\n"
             "JSON format (strictly follow this schema):\n"
             "{{\n"
             '  "paragraph_index": <int>,\n'
@@ -743,11 +770,13 @@ _PROMPTS: dict[str, dict[str, str]] = {
             "You are a professional expert in diagnosing LaTeX compilation errors.\n"
             "Your task is to analyze the raw error logs from latexmk/xelatex, identify the root cause, and explain it in plain language to non-technical users, while also providing practical and actionable fixes.\n\n"
             "Diagnostic Rules:\n"
-            "1. Focus on fatal errors: ignore ordinary warnings (such as Underfull \\\\hbox, Font Warning, etc.), and prioritize the core errors that cause compilation to fail (such as `! Undefined control sequence`, `Fatal error`, `Missing $ inserted`, `File \\`xxx.sty' not found`, etc.).\n"
+            "1. Focus on fatal errors: ignore ordinary warnings (such as Underfull \\hbox, Font Warning, etc.), and prioritize the core errors that cause compilation to fail (such as `! Undefined control sequence`, `Fatal error`, `Missing $ inserted`, `File 'xxx.sty' not found`, etc.).\n"
             "2. Pinpoint the location precisely: extract, whenever possible, the specific file from the log (such as `(./xxx.tex)`) and the code line number (such as `l.123`, meaning line 123).\n"
             "3. Analyze the cause in depth: do not merely translate mechanically. For example: when encountering Undefined control sequence, determine whether it is a spelling mistake or a missing package; when encountering File not found, suggest installing the corresponding package or checking the file name.\n"
-            "4. Provide specific and actionable suggestions: give concrete modification steps (for example: add `\\\\usepackage{{amsmath}}` in the preamble, or change `\\\\alfa` on line 15 to `\\\\alpha`).\n"
+            "4. Provide specific and actionable suggestions: give concrete modification steps. Suggestions appear inside JSON strings, so write them in JSON-escaped form — each LaTeX backslash becomes TWO backslashes (for example: add `\\\\usepackage{{amsmath}}` in the preamble, or change `\\\\alpa` on line 15 to `\\\\alpha`).\n"
             "5. Output JSON only: strictly return valid JSON format, and do not include Markdown code blocks or any other irrelevant text.\n\n"
+            + LATEX_JSON_ESCAPE_RULES
+            + "\n\n"
             "JSON Format Requirements:\n"
             "{{\n"
             '  "explanation": "<string: a comprehensive explanation of the file, line number, and root cause of the error. Write in {language} and the tone should be gentle and easy to understand.>",\n'
@@ -764,20 +793,20 @@ _PROMPTS: dict[str, dict[str, str]] = {
             "You are a search query optimization expert. Your task is to:\n\n"
             "1. Analyze the user's natural language search intent\n"
             "2. Output a JSON object with the following structure:\n"
-            "{\n"
-            '  "intent": {\n'
+            "{{\n"
+            '  "intent": {{\n'
             '    "keywords": ["keyword1", "keyword2", ...],\n'
-            '    "filters": {"target_users": "...", "time_frame": "...", "domain": "..."},\n'
+            '    "filters": {{"target_users": "...", "time_frame": "...", "domain": "..."}},\n'
             '    "expected_result": "type description",\n'
             '    "language": "zh"\n'
-            "  },\n"
+            "  }},\n"
             '  "variants": [\n'
             '    "query variant 1",\n'
             '    "query variant 2",\n'
             '    "query variant 3",\n'
             '    "query variant 4"\n'
             "  ]\n"
-            "}\n\n"
+            "}}\n\n"
             "Rules for generating variants:\n"
             "- Variant 1: Keyword query (space-separated core terms, no stop words)\n"
             "- Variant 2: Professional expression query\n"
@@ -788,20 +817,20 @@ _PROMPTS: dict[str, dict[str, str]] = {
             "Example:\n"
             "User input: 查询 2023 年之后有关蛋白质设计的扩散模型的论文\n"
             "LLM output:\n"
-            "{\n"
-            '  "intent": {\n'
+            "{{\n"
+            '  "intent": {{\n'
             '    "keywords": ["diffusion models", "protein design", "recent research", "papers after 2023"],\n'
-            '    "filters": {"target_users": "researchers", "time_frame": "after 2023", "domain": "computational biology / machine learning"},\n'
+            '    "filters": {{"target_users": "researchers", "time_frame": "after 2023", "domain": "computational biology / machine learning"}},\n'
             '    "expected_result": "recent academic papers, survey articles, and major research developments",\n'
             '    "language": "zh"\n'
-            "  },\n"
+            "  }},\n"
             '  "variants": [\n'
             '    "扩散模型 蛋白质设计 论文 after:2024-01-01",\n'
             '    "关于蛋白质设计中扩散模型的最新研究",\n'
             '    "diffusion models for protein design survey 2024",\n'
             '    "蛋白质设计 扩散模型 基准 方法"\n'
             "  ]\n"
-            "}\n"
+            "}}\n"
         ),
     },
     # ── latex_package_analyzer 模块 ───────────────────────────────────────────
@@ -821,40 +850,40 @@ _PROMPTS: dict[str, dict[str, str]] = {
             "- \\makecell, \\thead, \\makecellbox → makecell\n"
             "- \\diagbox → diagbox\n"
             "- \\resizebox, \\includegraphics, \\rotatebox, \\scalebox → graphicx\n"
-            "- >{...}, <{...}, p{}, m{}, b{} column specifiers → array\n"
+            "- >{{...}}, <{{...}}, p{{}}, m{{}}, b{{}} column specifiers → array\n"
             "- X column specifier → tabularx\n"
             "- S column specifier, \\num, \\SI, \\tablenum → siunitx\n"
             "- D column specifier → dcolumn\n"
             "- \\cellcolor, \\rowcolor, \\columncolor → colortbl\n"
             "- \\hhline → hhline\n"
-            "- {NiceTabular}, \\Block, \\CodeBefore → nicematrix\n"
-            "- {tblr}, \\SetRow, \\SetCell → tabularray\n"
-            "- {longtable}, \\endhead, \\endfoot, \\longtable → longtable\n"
-            "- {threeparttable}, \\tablenotes, \\tnote → threeparttable\n"
+            "- {{NiceTabular}}, \\Block, \\CodeBefore → nicematrix\n"
+            "- {{tblr}}, \\SetRow, \\SetCell → tabularray\n"
+            "- {{longtable}}, \\endhead, \\endfoot, \\longtable → longtable\n"
+            "- {{threeparttable}}, \\tablenotes, \\tnote → threeparttable\n"
             "- \\ding, \\Pifont → pifont\n"
-            "- Non-trivial math (\\frac, \\sum, \\begin{equation}, etc.) → amsmath\n\n"
+            "- Non-trivial math (\\frac, \\sum, \\begin{{equation}}, etc.) → amsmath\n\n"
             "## Rules\n"
             "1. Only include packages that are REQUIRED by features actually present.\n"
             "2. Do NOT include kernel-level commands/environments: tabular, "
-            "\\multicolumn, \\cline, \\hline, \\begin{tabular}, standard math mode.\n"
+            "\\multicolumn, \\cline, \\hline, \\begin{{tabular}}, standard math mode.\n"
             "3. If no extra packages are needed, return an empty list.\n"
             "4. Package names must be lowercase, without the '.sty' extension.\n"
             "5. Deduplicate the list and sort alphabetically.\n"
             "6. When a package is ambiguous (e.g., xcolor vs colortbl), prefer the "
             "one that directly provides the used command.\n\n"
             "## Examples\n"
-            "Input: \\begin{tabular}{lcr}\\toprule A & B & C\\\\\\midrule 1 & 2 & 3\\\\"
-            "\\bottomrule\\end{tabular}\n"
-            'Output: {"packages": ["booktabs"]}\n\n'
-            "Input: \\begin{tabular}{>{\\bfseries}l p{3cm}}\\makecell{A\\\\B} & "
-            "\\multirow{2}{*}{text}\\\\\\end{tabular}\n"
-            'Output: {"packages": ["array", "makecell", "multirow"]}\n\n'
-            "Input: \\begin{tabular}{ll}a & b\\end{tabular}\n"
-            'Output: {"packages": []}\n\n'
+            "Input: \\begin{{tabular}}{{lcr}}\\toprule A & B & C\\\\\\midrule 1 & 2 & 3\\\\"
+            "\\bottomrule\\end{{tabular}}\n"
+            'Output: {{"packages": ["booktabs"]}}\n\n'
+            "Input: \\begin{{tabular}}{{>{{\\bfseries}}l p{{3cm}}}}\\makecell{{A\\\\B}} & "
+            "\\multirow{{2}}{{*}}{{text}}\\\\\\end{{tabular}}\n"
+            'Output: {{"packages": ["array", "makecell", "multirow"]}}\n\n'
+            "Input: \\begin{{tabular}}{{ll}}a & b\\end{{tabular}}\n"
+            'Output: {{"packages": []}}\n\n'
             "## Output Format\n"
             "Respond with valid JSON only. No markdown fences, no explanations, "
             "no trailing commas.\n"
-            '{"packages": ["package1", "package2"]}'
+            '{{"packages": ["package1", "package2"]}}'
         ),
     },
     # ── plot_gen 科研绘图 Agent ───────────────────────────────────────────
@@ -1084,8 +1113,11 @@ _PROMPTS: dict[str, dict[str, str]] = {
             "{pgfplots_reference}\n"
             "MANDATORY WORKFLOW:\n"
             "1. Plan the Python script structure and write `scripts/plot.py` "
-            "with `write_file`. Read data from `data/<data_file>` inside the "
-            "sandbox. Do NOT hard-code absolute paths.\n"
+            "with `write_file`. Inside the script, load the data from "
+            "`data/<data_file>` (e.g. pandas `read_csv`/`read_excel`). Do NOT "
+            "call the `read_file` tool on the data file — the data profile "
+            "already provides its columns, types and samples. Do NOT hard-code "
+            "absolute paths.\n"
             "2. Follow OUTPUTS and TIKZ PROTOCOL above.\n"
             "3. Call `python_sandbox` with `scripts/plot.py`.\n"
             "4. If execution fails, follow the recovery protocol: "
@@ -1191,13 +1223,24 @@ def get_prompt(module: str, key: str, **kwargs: Any) -> str:
     返回：
         格式化后的提示词字符串
 
+    说明：
+        - 所有模板都会执行 str.format()（即使未传 kwargs），因此模板中的
+          字面花括号必须写成 {{ / }}，否则会抛 ValueError/KeyError。
+        - 若模板含有占位符但调用方漏传对应参数，会立即抛 KeyError 快速
+          失败，避免把 "{language}" 之类的字面占位符发送给 LLM。
+
     异常：
-        KeyError: 当模块或键不存在时抛出
+        KeyError: 当模块、键不存在，或模板占位符缺少对应参数时抛出
 
     示例：
-        >>> get_prompt("typo_check", "system")
+        >>> get_prompt("typo_check", "system", language="English")
         'You are a LaTeX document proofreader...'
-        >>> get_prompt("expression_opt", "base_system", custom_prompt="请使用正式学术风格...")
+        >>> get_prompt(
+        ...     "expression_opt",
+        ...     "base_system",
+        ...     custom_prompt="请使用正式学术风格...",
+        ...     language="Chinese",
+        ... )
         'You are a LaTeX document writing coach...'
     """
     if module not in _PROMPTS:
@@ -1212,6 +1255,4 @@ def get_prompt(module: str, key: str, **kwargs: Any) -> str:
         )
 
     prompt = module_prompts[key]
-    if kwargs:
-        return prompt.format(**kwargs)
-    return prompt
+    return prompt.format(**kwargs)

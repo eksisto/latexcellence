@@ -173,6 +173,10 @@ class ProjectInfo:
 
 集中存储所有 LLM 提示词模板，按模块和功能分类。提供 `get_prompt(module, key, **kwargs)` 函数获取提示词，支持参数化模板（如 `language` 输出语言注入）。各模块通过 `from backend.core.prompts import get_prompt` 统一导入使用，便于统一维护、版本控制和快速调整。
 
+**格式化约定**：`get_prompt` 对所有模板执行 `str.format()`（即使未传 kwargs），因此模板中的字面花括号必须写成 `{{` / `}}`；含占位符的模板漏传参数会立即抛 `KeyError` 快速失败，避免把 `{language}` 之类的字面占位符发送给 LLM。新增或修改模板后应运行 `tests/test_prompts.py` 回归。
+
+**JSON 转义规则常量**：`LATEX_JSON_ESCAPE_RULES` 用于"JSON 字符串直接承载 LaTeX 源码"的提示词（如 code_review）；`BIBTEX_JSON_ESCAPE_RULES` 用于承载 BibTeX 源码的场景（bib_manager 的 format_analysis / bibtex_generation），其差异在于 BibTeX 的花括号是结构定界符、不反斜杠转义，`$` 是普通字符而非数学模式定界符。
+
 ### `backend/core/tool_registry.py` — Function Calling 工具注册表
 
 全局工具注册表，所有可暴露给 LLM 的工具统一管理。通过 `get_tool_registry()` 获取单例。
