@@ -1,0 +1,233 @@
+{
+  "description": "表格 OCR 人工评估语料（非 pytest 自动测试）。每条表格一个完整的 LaTeX 浮动体片段（含 table / table* / sidewaystable / longtable 等外壳），渲染脚本据此直接渲染为输入图片；OCR 结果渲染时同样剥壳后紧裁。",
+  "render": {
+    "packages": [
+      "amsmath",
+      "amssymb",
+      "booktabs",
+      "array",
+      "caption",
+      "multirow",
+      "makecell",
+      "siunitx",
+      "tabularx",
+      "tabularray",
+      "rotating",
+      "longtable"
+    ],
+    "engine": "pdflatex",
+    "dpi": 300
+  },
+  "tables": [
+    {
+      "id": "table_01",
+      "file": "table_01.tex",
+      "tier": 1,
+      "tier_name": "简单表格",
+      "title": "基础三列表格（booktabs）"
+    },
+    {
+      "id": "table_02",
+      "file": "table_02.tex",
+      "tier": 1,
+      "tier_name": "简单表格",
+      "title": "带竖线与 \\hline 的网格表"
+    },
+    {
+      "id": "table_03",
+      "file": "table_03.tex",
+      "tier": 1,
+      "tier_name": "简单表格",
+      "title": "四列文本数据表"
+    },
+    {
+      "id": "table_04",
+      "file": "table_04.tex",
+      "tier": 1,
+      "tier_name": "简单表格",
+      "title": "带标题与标签的结果表"
+    },
+    {
+      "id": "table_05",
+      "file": "table_05.tex",
+      "tier": 1,
+      "tier_name": "简单表格",
+      "title": "数值网格表"
+    },
+    {
+      "id": "table_06",
+      "file": "table_06.tex",
+      "tier": 1,
+      "tier_name": "简单表格",
+      "title": "参数-取值-说明表"
+    },
+    {
+      "id": "table_07",
+      "file": "table_07.tex",
+      "tier": 2,
+      "tier_name": "中等表格",
+      "title": "\\multicolumn 合并表头"
+    },
+    {
+      "id": "table_08",
+      "file": "table_08.tex",
+      "tier": 2,
+      "tier_name": "中等表格",
+      "title": "siunitx S 列数值对齐"
+    },
+    {
+      "id": "table_09",
+      "file": "table_09.tex",
+      "tier": 2,
+      "tier_name": "中等表格",
+      "title": "p{} 单元格自动换行"
+    },
+    {
+      "id": "table_10",
+      "file": "table_10.tex",
+      "tier": 2,
+      "tier_name": "中等表格",
+      "title": "\\cmidrule 部分横线分组"
+    },
+    {
+      "id": "table_11",
+      "file": "table_11.tex",
+      "tier": 2,
+      "tier_name": "中等表格",
+      "title": "混合对齐与竖线网格"
+    },
+    {
+      "id": "table_12",
+      "file": "table_12.tex",
+      "tier": 2,
+      "tier_name": "中等表格",
+      "title": "超参数范围表（-- 连接号）"
+    },
+    {
+      "id": "table_13",
+      "file": "table_13.tex",
+      "tier": 3,
+      "tier_name": "复杂表格",
+      "title": "\\multirow 跨行合并"
+    },
+    {
+      "id": "table_14",
+      "file": "table_14.tex",
+      "tier": 3,
+      "tier_name": "复杂表格",
+      "title": "\\multirow + \\multicolumn 组合"
+    },
+    {
+      "id": "table_15",
+      "file": "table_15.tex",
+      "tier": 3,
+      "tier_name": "复杂表格",
+      "title": "数学符号单元格"
+    },
+    {
+      "id": "table_16",
+      "file": "table_16.tex",
+      "tier": 3,
+      "tier_name": "复杂表格",
+      "title": "tabularx X 列自适应宽度"
+    },
+    {
+      "id": "table_17",
+      "file": "table_17.tex",
+      "tier": 3,
+      "tier_name": "复杂表格",
+      "title": "table* 跨栏宽表"
+    },
+    {
+      "id": "table_18",
+      "file": "table_18.tex",
+      "tier": 3,
+      "tier_name": "复杂表格",
+      "title": "\\makecell 多行单元格"
+    },
+    {
+      "id": "table_19",
+      "file": "table_19.tex",
+      "tier": 4,
+      "tier_name": "高难度表格",
+      "title": "booktabs 混合规则（\\toprule/\\cmidrule/\\bottomrule）"
+    },
+    {
+      "id": "table_20",
+      "file": "table_20.tex",
+      "tier": 4,
+      "tier_name": "高难度表格",
+      "title": "\\multirow + \\makecell + 数学单元格"
+    },
+    {
+      "id": "table_21",
+      "file": "table_21.tex",
+      "tier": 4,
+      "tier_name": "高难度表格",
+      "title": "tabularx + \\multicolumn + siunitx"
+    },
+    {
+      "id": "table_22",
+      "file": "table_22.tex",
+      "tier": 4,
+      "tier_name": "高难度表格",
+      "title": "多年份密集数据表"
+    },
+    {
+      "id": "table_23",
+      "file": "table_23.tex",
+      "tier": 4,
+      "tier_name": "高难度表格",
+      "title": "跨行跨列子表头"
+    },
+    {
+      "id": "table_24",
+      "file": "table_24.tex",
+      "tier": 4,
+      "tier_name": "高难度表格",
+      "title": ">{...} 列格式声明"
+    },
+    {
+      "id": "table_25",
+      "file": "table_25.tex",
+      "tier": 5,
+      "tier_name": "压力测试表格",
+      "title": "longtable 长表格（无浮动体）"
+    },
+    {
+      "id": "table_26",
+      "file": "table_26.tex",
+      "tier": 5,
+      "tier_name": "压力测试表格",
+      "title": "tabularray talltblr"
+    },
+    {
+      "id": "table_27",
+      "file": "table_27.tex",
+      "tier": 5,
+      "tier_name": "压力测试表格",
+      "title": "sidewaystable 横向表格"
+    },
+    {
+      "id": "table_28",
+      "file": "table_28.tex",
+      "tier": 5,
+      "tier_name": "压力测试表格",
+      "title": "八列密集数据表"
+    },
+    {
+      "id": "table_29",
+      "file": "table_29.tex",
+      "tier": 5,
+      "tier_name": "压力测试表格",
+      "title": "tabularx + \\multirow + siunitx + 数学混合"
+    },
+    {
+      "id": "table_30",
+      "file": "table_30.tex",
+      "tier": 5,
+      "tier_name": "压力测试表格",
+      "title": "p{} 长文本描述表"
+    }
+  ]
+}

@@ -42,3 +42,12 @@
 - `run_eval.py`：逐条调用真实 OCR 管线（含 LLM），把识别结果渲染成图片并生成 HTML 比对报告
 
 该流程涉及真实 LLM 调用且依赖人工判断，**不属于** `pytest tests/` 自动测试范围，也不会在 CI 中运行。使用说明见 `tools/formula_ocr_eval/README.md`。
+
+---
+
+`tests/fixtures/table_ocr/` 是表格 OCR 的**人工评估语料**（每条表格一个完整 LaTeX 浮动体片段 + `manifest.json`），配套维护者工具位于 `tools/table_ocr_eval/`：
+
+- `render_corpus.py`：把语料渲染为评估输入图片（需本机 TeX Live）
+- `run_eval.py`：逐条调用真实 OCR 管线（含 LLM），把识别结果渲染成图片并生成 HTML 比对报告
+
+同样依赖人工判断，不属于 `pytest tests/` 自动测试范围。使用说明见 `tools/table_ocr_eval/README.md`。

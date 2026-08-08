@@ -111,6 +111,7 @@ latexcellence/
 ├── tools/                        # 维护者工具（开发/评测/维护用脚本与 Agent 评测工作区，不进入运行时）
 │   ├── latex_packages/             # 宏包规则表维护（离线编译验证 + 覆盖率报告）
 │   ├── formula_ocr_eval/           # 公式 OCR 人工评估（渲染语料 → 跑 OCR → 比对报告）
+│   ├── table_ocr_eval/             # 表格 OCR 人工评估（渲染语料 → 跑 OCR → 比对报告）
 │   ├── plotgen_opt/                # plot_gen Agent 优化评测工作区
 │   └── templategen_opt/            # template_gen Agent 优化评测工作区
 ├── static/                         # Vite 构建产物
@@ -138,6 +139,7 @@ latexcellence/
 | --- | --- |
 | `tools/latex_packages/` | 宏包规则表维护：离线编译验证（`verify_rules.py`）与覆盖率报告（`coverage_report.py`），详见 [latex-package-rules.md](./latex-package-rules.md) |
 | `tools/formula_ocr_eval/` | 公式 OCR 人工评估：渲染语料为图片 → 调真实 OCR 管线 → 生成左右对比 HTML 报告，详见其 `README.md` |
+| `tools/table_ocr_eval/` | 表格 OCR 人工评估：渲染语料为图片 → 调真实 OCR 管线 → 生成左右对比 HTML 报告，详见其 `README.md` |
 | `tools/plotgen_opt/` | plot_gen Agent 优化评测：驱动 Agent 生成图表并采集指标、trace 分析、视觉审查、版本对比，详见其 `README.md` |
 | `tools/templategen_opt/` | template_gen Agent 优化评测：驱动 Agent 生成 LaTeX 工程并采集指标、需求遵守检查、视觉审查，详见其 `README.md` |
 

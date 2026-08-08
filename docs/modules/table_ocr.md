@@ -58,3 +58,7 @@ Prefix: `/api/table-ocr`, Tag: `table_ocr`
 | 方法 | 路径 | 功能 |
 | --- | --- | --- |
 | POST | `/recognize` | 上传图片，返回 LaTeX 表格代码 |
+
+## 人工评估
+
+`tests/fixtures/table_ocr/` 是表格 OCR 的人工评估语料（每条表格一个完整 LaTeX 浮动体片段 + `manifest.json`，难度 1 简单 → 5 压力测试），配套维护者工具位于 `tools/table_ocr_eval/`：`render_corpus.py` 把语料渲染为输入图片，`run_eval.py` 逐条调用本模块 `TableOCRService.recognize()` 并把结果渲染成左右对比 HTML 报告。该流程依赖真实 LLM 调用与人工判断，不属于 `pytest tests/` 自动测试范围，详见 `tools/table_ocr_eval/README.md`。
