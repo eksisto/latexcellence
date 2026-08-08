@@ -40,9 +40,10 @@ latexcellence/
 │   │   ├── latex_package_rules.py   # LaTeX 宏包规则表（命令/环境/列说明符 → 宏包映射）
 │   │   ├── latex_package_analyzer.py # 宏包检测：确定性规则表为主，LLM 兜底
 │   │   ├── compile_error_translator.py  # LaTeX 编译错误 LLM 翻译（compile + git_diff 复用）
-│   │   ├── latexindent_utils.py     # latexindent.pl 调用封装（code_review 使用）
+│   │   ├── latex_formatter.py       # 统一 LaTeX 格式化工具（code_review / formula_ocr / table_ocr 共用）
+│   │   ├── latexindent_utils.py     # latexindent.pl 调用封装（latex_formatter 使用）
 │   │   ├── latexindent.yaml         # latexindent 统一缩进配置（每层 4 个空格）
-│   │   ├── builtin_formatter.py     # 内置轻量 LaTeX 格式化器（latexindent 不可用时兜底）
+│   │   ├── builtin_formatter.py     # 内置轻量 LaTeX 格式化器（latex_formatter 兜底）
 │   │   ├── web_search/               # 联网搜索模块（多引擎抽象包）
 │   │   │   ├── __init__.py           # 模块入口，向后兼容导出
 │   │   │   ├── models.py             # SearchResult / SearchResponse 数据模型

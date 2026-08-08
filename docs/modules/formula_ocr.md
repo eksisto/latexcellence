@@ -77,6 +77,10 @@ LLM 自身加显示包裹极不可靠（测试时，输出有带 `$$`、有裸�
 
 这样用户复制结果即贴即显；粘贴到已有 `align`/`equation` 中时也可自行去掉包裹。
 
+## 统一格式化层
+
+识别出的 LaTeX 在确定性包裹与宏包分析**之前**，先经 `latex_formatter.format_latex_source()` 统一格式化（latexindent.pl 优先，内置格式化器兜底，每层 4 个空格），整理多行公式/环境的缩进与对齐；单行公式不受影响。
+
 ## 内容校验器
 
 `FormulaOCRResult.latex` 通过 Pydantic v2 `@field_validator` 做内容校验，校验失败时把错误反馈给 LLM 重试（最多 3 次），重试耗尽后抛 `RuntimeError`：
@@ -97,7 +101,7 @@ LLM 自身加显示包裹极不可靠（测试时，输出有带 `$$`、有裸�
 
 | 方法 | 功能 |
 | --- | --- |
-| `recognize(image_data, content_type)` | 主入口：校验格式 → 图片预处理 → 视觉分析 → base64 → LLM Vision（分隔符协议）→ 宏包规则表检测（LLM 兜底）→ 合并结果 |
+| `recognize(image_data, content_type)` | 主入口：校验格式 → 图片预处理 → 视觉分析 → base64 → LLM Vision（分隔符协议）→ 统一格式化 → 宏包规则表检测（LLM 兜底）→ 合并结果 |
 | `_recognize_with_llm` | 第一次 LLM 调用：分隔符协议识别 + 内容校验 + 错误回喂重试（最多 3 次） |
 | `_extract_latex_block` | 正则提取 `<<<LATEX>>>...<<<END>>>` 块 |
 | `_strip_math_wrappers` | 剥离 `$$` / `\[ \]` / `\( \)` / `$` 数学包裹 |

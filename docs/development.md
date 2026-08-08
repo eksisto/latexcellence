@@ -69,9 +69,10 @@ latexcellence/
 │   │   ├── latex_literals.py       # LaTeX 字面内容识别（逐字命令/URL 参数，parser 与 guard 共享）
 │   │   ├── tex_compile.py          # 统一 TeX 编译执行（texfot 过滤 + 引擎自动检测 + PDF/A 支持）
 │   │   ├── compile_error_translator.py  # 编译错误 LLM 翻译（compile + git_diff 复用）
-│   │   ├── latexindent_utils.py    # latexindent.pl 调用封装
+│   │   ├── latex_formatter.py      # 统一 LaTeX 格式化工具（code_review / formula_ocr / table_ocr 共用）
+│   │   ├── latexindent_utils.py    # latexindent.pl 调用封装（latex_formatter 使用）
 │   │   ├── latexindent.yaml        # latexindent 统一缩进配置（每层 4 个空格）
-│   │   ├── builtin_formatter.py    # 内置轻量 LaTeX 格式化器
+│   │   ├── builtin_formatter.py    # 内置轻量 LaTeX 格式化器（latex_formatter 兜底）
 │   │   ├── project_tools/          # LLM Function Calling 工具集（浏览 + 编辑）
 │   │   ├── web_search/             # 联网搜索多引擎抽象
 │   │   └── scholarly_research/     # OpenAlex 学术检索与引文追踪工具

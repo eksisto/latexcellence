@@ -2,7 +2,7 @@
 
 通过 LLM Vision API 识别图片中的表格，返回标准 LaTeX 浮动体代码（`table` + `tabular`）。与 `formula_ocr` 共享图片预处理流程。
 
-处理流程：图片输入 → 格式校验 → 等比缩放 → base64 → 第一次 LLM（Vision 识别表格）→ 确定性宏包规则表（LLM 兜底）→ 合并结果。
+处理流程：图片输入 → 格式校验 → 等比缩放 → base64 → 第一次 LLM（Vision 识别表格）→ 统一格式化 → 确定性宏包规则表（LLM 兜底）→ 合并结果。
 
 ## 输出协议（去 JSON 化）
 
@@ -31,6 +31,10 @@ CONFIDENCE: <0-1>
 | 非空输出必须包含 `\begin{table}` / `\begin{table*}` 浮动体 | 模型只输出 `tabular` 而未按协议输出 `table` 环境 |
 | 空输出（`confidence` 必须为 `0.0`） | 图片不是表格时的协议约定结果，放行（`low_confidence` 标记） |
 
+## 统一格式化层
+
+识别出的 LaTeX 浮动体在宏包分析**之前**，先经 `latex_formatter.format_latex_source()` 统一格式化（latexindent.pl 优先，内置格式化器兜底，每层 4 个空格），整理 `table` / `tabular` 等环境的缩进与对齐。
+
 ## Pydantic 输出模型
 
 - `TableOCRResult`（latex, confidence）
@@ -39,7 +43,7 @@ CONFIDENCE: <0-1>
 
 | 方法 | 功能 |
 | --- | --- |
-| `recognize(image_data, content_type)` | 主入口：校验格式 → 图片预处理 → LLM Vision（分隔符协议）→ 宏包规则表检测（LLM 兜底）→ 合并结果 |
+| `recognize(image_data, content_type)` | 主入口：校验格式 → 图片预处理 → LLM Vision（分隔符协议）→ 统一格式化 → 宏包规则表检测（LLM 兜底）→ 合并结果 |
 | `_recognize_with_llm` | 第一次 LLM 调用：分隔符协议识别 + 内容校验 + 错误回喂重试（最多 3 次） |
 | `_extract_latex_block` | 正则提取 `<<<LATEX>>>...<<<END>>>` 块 |
 | `_parse_confidence` | 解析 `CONFIDENCE` 元数据 |

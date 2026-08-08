@@ -500,7 +500,9 @@ raise ValueError("Validation failed after N attempts")        # ❌ 耗尽
 
 ### `latexindent_utils.py` — latexindent.pl 调用封装
 
-供 `code_review` 模块使用。负责检测系统是否安装 `latexindent`，并将 LaTeX 源码片段写入临时文件后调用 `latexindent` 进行格式化。默认加载项目内置 `backend/utils/latexindent.yaml`（`defaultIndent` 为每层 4 个空格），覆盖 latexindent 默认的制表符缩进；`config_path` 参数可传入自定义配置覆盖。
+供统一格式化工具 `latex_formatter` 使用（`code_review` / `formula_ocr` / `table_ocr` 共用）。负责检测系统是否安装 `latexindent`，并将 LaTeX 源码片段写入临时文件后调用 `latexindent` 进行格式化。默认加载项目内置 `backend/utils/latexindent.yaml`（`defaultIndent` 为每层 4 个空格），覆盖 latexindent 默认的制表符缩进；`config_path` 参数可传入自定义配置覆盖。
+
+调用时通过 `-c` 把备份文件（`*.bak*`）与日志统一写入临时目录，并用 `-g` 指定每次运行独立的日志名；运行结束后统一清理，避免在项目目录残留文件。
 
 **核心接口**：
 
@@ -516,6 +518,17 @@ raise ValueError("Validation failed after N attempts")        # ❌ 耗尽
 **处理范围**：环境缩进（每层 4 个空格，与 latexindent 路径一致）、去除行尾多余空白、压缩连续空行、一致性换行。
 
 **核心接口**：`format_latex(source: str) -> str`
+
+### `latex_formatter.py` — 统一 LaTeX 格式化工具
+
+对外提供单一异步入口 `format_latex_source()`：优先调用 `latexindent.pl`（加载项目内置 `latexindent.yaml`，每层 4 个空格缩进），不可用时回退到内置轻量格式化器（同样每层 4 个空格）。`code_review` / `formula_ocr` / `table_ocr` 共用，避免各模块重复实现格式化调度；latexindent 可用性探测结果在进程内缓存。
+
+**核心接口**：
+
+| 函数 | 功能 |
+| --- | --- |
+| `format_latex_source(source)` | 异步统一格式化：latexindent → 内置格式化器兜底（空白源码原样返回，不抛错） |
+| `reset_latexindent_cache()` | 重置 latexindent 可用性缓存（测试 / 环境变化后重新探测） |
 
 ### `time_utils.py` — 时间工具函数
 

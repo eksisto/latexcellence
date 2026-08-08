@@ -425,3 +425,46 @@ class TestRecognizeWithPackageAnalysis:
         assert result["confidence"] == 0.92
         assert r"\hline" in result["latex"]
         assert not result["latex"].startswith(r"%")
+
+    @pytest.mark.asyncio
+    async def test_recognize_applies_formatting_before_package_analysis(
+        self, mock_llm, service, monkeypatch
+    ):
+        """统一格式化层在宏包分析之前应用，格式化结果直达输出。"""
+        import backend.modules.table_ocr.service as tsvc
+
+        # 全部使用 \hline（LaTeX 内核命令），避免规则表命中宏包注释
+        formatted = (
+            r"\begin{table}[htbp]" + "\n"
+            r"    \centering" + "\n"
+            r"    \begin{tabular}{lr}" + "\n"
+            r"        \hline Name & Value \\" + "\n"
+            r"        \hline" + "\n"
+            r"    \end{tabular}" + "\n"
+            r"\end{table}"
+        )
+
+        async def fake_format(source: str) -> str:
+            return formatted
+
+        monkeypatch.setattr(tsvc, "format_latex_source", fake_format)
+        mock_llm.chat.side_effect = [
+            ocr_response(TABLE_LATEX),
+            {"packages": []},
+        ]
+
+        import backend.core.config as cfg_mod
+
+        cfg = cfg_mod.get_config()
+        monkeypatch.setattr(cfg.features.table_ocr, "max_image_size_mb", 100)
+
+        from PIL import Image
+
+        img = Image.new("RGB", (100, 50), (255, 255, 255))
+        buf = io.BytesIO()
+        img.save(buf, format="PNG")
+        buf.seek(0)
+
+        result = await service.recognize(buf.read(), "image/png")
+
+        assert result["latex"] == formatted

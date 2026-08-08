@@ -58,7 +58,7 @@ system prompt 明确要求：只报告源码中实际存在的问题，禁止从
 | `check_code_review` | 批量代码审查（工具格式化 + LLM 审查） |
 | `check_code_review_stream` | SSE 流式审查 |
 | `apply_changes` | 写回格式化后的原始 LaTeX |
-| `_format_source` | 统一格式化入口（latexindent → 内置兜底） |
+| `_format_source` | 统一格式化入口（委托共享工具 `latex_formatter.format_latex_source`：latexindent → 内置兜底） |
 
 - `use_marker_protection = False`：LLM 直接审查格式化后的真实 LaTeX，建议只读展示、不写回（见上文"不使用 marker 保护的原因"）
 

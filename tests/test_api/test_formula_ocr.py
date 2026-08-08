@@ -695,6 +695,43 @@ class TestRecognizeWithPackageAnalysis:
 
         assert result["latex"] == r"\[x^2 + y^2 = z^2\]"
 
+    @pytest.mark.asyncio
+    async def test_recognize_applies_formatting_before_wrap(
+        self, mock_llm, service, monkeypatch
+    ):
+        """统一格式化层在确定性包裹与宏包分析之前应用，格式化结果直达输出。"""
+        import backend.modules.formula_ocr.service as fsvc
+
+        # equation 为 LaTeX 内核环境：不触发宏包注释，也不被再次包裹
+        formatted = (
+            r"\begin{equation}" + "\n" r"    x^2 + y^2 = z^2" + "\n" r"\end{equation}"
+        )
+
+        async def fake_format(source: str) -> str:
+            return formatted
+
+        monkeypatch.setattr(fsvc, "format_latex_source", fake_format)
+        mock_llm.chat.side_effect = [
+            ocr_response("x^2 + y^2 = z^2"),
+            {"packages": []},
+        ]
+
+        import backend.core.config as cfg_mod
+
+        cfg = cfg_mod.get_config()
+        monkeypatch.setattr(cfg.features.formula_ocr, "max_image_size_mb", 100)
+
+        from PIL import Image
+
+        img = Image.new("RGB", (100, 50), (255, 255, 255))
+        buf = io.BytesIO()
+        img.save(buf, format="PNG")
+        buf.seek(0)
+
+        result = await service.recognize(buf.read(), "image/png")
+
+        assert result["latex"] == formatted
+
 
 class TestVisualHintMerge:
     """视觉判定与结构判定的合并流程。"""

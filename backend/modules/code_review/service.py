@@ -16,7 +16,6 @@ LaTeX 代码审查业务逻辑。
     - 源码修改由工具完成，LLM 仅提供建议
 """
 
-import asyncio
 import re
 from typing import Any, ClassVar, Literal
 
@@ -29,11 +28,7 @@ from backend.core.prompts import get_prompt
 from backend.utils.json_utils import retry_with_validation
 from backend.utils.latex_parser import MARKER_PATTERN
 from backend.utils.latex_json_guard import LatexText
-from backend.utils.latexindent_utils import (
-    is_latexindent_available,
-    format_with_latexindent,
-)
-from backend.utils.builtin_formatter import format_latex
+from backend.utils.latex_formatter import format_latex_source
 
 # ── Pydantic models for LLM response schema ────────────────────────────────
 
@@ -101,7 +96,6 @@ class CodeReviewService(BaseParagraphCheckService):
     """
 
     use_marker_protection: ClassVar[bool] = False
-    _latexindent_available: bool | None = None
 
     def __init__(self):
         super().__init__("code_review")
@@ -139,14 +133,8 @@ class CodeReviewService(BaseParagraphCheckService):
     # ── 工具格式化入口 ──────────────────────────────────────────────────────
 
     async def _format_source(self, source: str) -> str:
-        """统一的格式化入口：latexindent → 内置兜底。"""
-        if self._latexindent_available is None:
-            self._latexindent_available = await asyncio.to_thread(
-                is_latexindent_available
-            )
-        if self._latexindent_available:
-            return await format_with_latexindent(source)
-        return await asyncio.to_thread(format_latex, source)
+        """统一的格式化入口：latexindent → 内置兜底（由共享工具 latex_formatter 实现）。"""
+        return await format_latex_source(source)
 
     # ── 覆写：双数据线架构 ──────────────────────────────────────────────────
 

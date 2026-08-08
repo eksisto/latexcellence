@@ -32,6 +32,7 @@ from backend.core.logger import get_logger
 from backend.core.prompts import get_prompt
 from backend.utils.json_utils import format_validation_error
 from backend.utils.latex_json_guard import validate_latex_field
+from backend.utils.latex_formatter import format_latex_source
 from backend.utils.latex_literals import (
     blank_literal_spans,
     extract_delimited_block,
@@ -173,6 +174,8 @@ class FormulaOCRService:
         )
 
         if result.get("latex"):
+            # 统一格式化层（latexindent / 内置兜底）：先整理缩进对齐，再包裹与宏包分析
+            result["latex"] = await format_latex_source(result["latex"])
             # 确定性包裹：让复制结果即贴即显（模型自身加包裹不可靠，故由后端统一处理）
             result["latex"] = self._wrap_latex_for_paste(
                 result["latex"], result.get("inline", False)

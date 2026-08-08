@@ -11,7 +11,6 @@ code_review 模块集成测试。
     - _format_source 降级（无 latexindent 时使用内置格式化器）
 """
 
-import os
 import tempfile
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -538,18 +537,38 @@ class TestLatexindentUtils:
             r"\end{itemize}" + "\n"
             r"\end{document}"
         )
-        # latexindent 会在当前目录写 indent.log，切到临时目录避免污染仓库
-        with tempfile.TemporaryDirectory() as tmpdir:
-            cwd = Path.cwd()
-            os.chdir(tmpdir)
-            try:
-                result = await format_with_latexindent(source)
-            finally:
-                os.chdir(cwd)
+        # cruft（备份 / indent.log）已通过 -c 写入系统临时目录并自动清理，无需切换工作目录
+        result = await format_with_latexindent(source)
 
         # latexindent 默认对 document 环境不额外缩进（noAdditionalIndent），
         # 但缩进单位为每层 4 个空格（覆盖默认制表符）
         assert "    \\item item 1" in result
+
+    @pytest.mark.skipif(
+        not is_latexindent_available(), reason="latexindent not installed"
+    )
+    @pytest.mark.asyncio
+    async def test_format_with_latexindent_cleans_cruft(self):
+        """latexindent 备份与日志统一清理：不残留 *.bak* 与共享 indent.log。"""
+        from backend.utils.latexindent_utils import format_with_latexindent
+
+        tmp_dir = Path(tempfile.gettempdir())
+        before = {p.name for p in tmp_dir.glob("latexindent_*")}
+        indent_log_before = (tmp_dir / "indent.log").exists()
+
+        source = (
+            r"\begin{document}" + "\n"
+            r"\begin{itemize}" + "\n"
+            r"\item item 1" + "\n"
+            r"\end{itemize}" + "\n"
+            r"\end{document}"
+        )
+        result = await format_with_latexindent(source)
+
+        after = {p.name for p in tmp_dir.glob("latexindent_*")}
+        assert "    \\item item 1" in result
+        assert after == before, f"临时目录残留 cruft 文件: {sorted(after - before)}"
+        assert (tmp_dir / "indent.log").exists() == indent_log_before
 
 
 class TestEmptyResult:
