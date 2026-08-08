@@ -367,6 +367,10 @@ export default function useParagraphCheck({
 
         if (data.type === "done") {
           operationIdRef.current = data.operation_id || null;
+          // 术语检查等模块会在流结束时一次性推送全部 result + done，
+          // 若 rAF 调度的 flush 尚未执行就 finalize 清空 buffer，
+          // 结果会被丢弃。先排空 buffer 再收尾。
+          drainBuffer();
           finalizeCheck(es, true);
           const count = resultsWithChangesRef.current;
           setMessage(messages.checkSuccess(count));
@@ -397,6 +401,7 @@ export default function useParagraphCheck({
     messages,
     finalizeCheck,
     scheduleFlush,
+    drainBuffer,
   ]);
 
   const refreshConflictMd5s = useCallback(

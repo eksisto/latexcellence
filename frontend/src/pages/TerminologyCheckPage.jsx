@@ -100,7 +100,11 @@ export default function TerminologyCheckPage() {
   } = useResultFilter(terminologyResults, { idPrefix: "term-result" });
 
   const buildCorrectedText = useCallback((result, overrides) => {
-    let corrected = result.original;
+    // 必须以 marker 保护的 plain_text 为基础重建修正文本：
+    // corrected 中的 marker（如 __MATH_0000__）在写回时由后端还原为
+    // 原始 LaTeX，若从 result.original（原始 LaTeX）重建，术语替换会
+    // 误伤数学公式 / 命令内部的同名片段。
+    let corrected = result.plain_text || result.corrected || result.original;
     const sorted = [...(result.changes || [])].sort(
       (a, b) => b.original.length - a.original.length,
     );
