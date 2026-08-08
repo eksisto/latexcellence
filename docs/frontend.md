@@ -156,6 +156,7 @@ API 按功能分组暴露（health、config、project、typoCheck、expressionOp
 - `index.css`：Tailwind 导入、自定义字体、深色变体定义、主题内联令牌、基础样式。另含设计体系工具：`--font-display`（STIX Two Text）显示字体 token、`.text-small-caps` 英文小大写标签、`.tex-e` / `.tex-x` 字标 "TeX" 排字姿态、`.reveal` 入场动效（错落 + 尊重 `prefers-reduced-motion`）
 - `theme/` 下主题 CSS 文件：youminghei（幽冥黑）、jingtailan（景泰蓝）、hupohuang（琥珀黄）、ningyezi（凝夜紫）、tingwulv（庭芜绿）、hailuocheng（海螺橙）、yingtaohong（樱桃红）
 - `useThemeManager.js`：自动发现主题文件，管理 `data-theme` 属性
+- 配色架构：所有主题共用同一套中性灰阶（背景/卡片/边框/文字，亮暗各一档），主题身份由单一色相承载，统一派生 `--primary` / `--accent` / `--ring` / `--selection-bg`；语义色（`--destructive`、`--brand-mark`）跨主题一致，深色模式下字标统一反白
 - 新增主题只需添加 CSS 文件 + 添加 i18n 翻译键，自动发现
 
 ## 主题切换机制
