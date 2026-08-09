@@ -4,7 +4,7 @@
 
 import { toast } from "sonner";
 import i18n from "@/i18n";
-import { parseThinking, isDraftSession } from "./utils";
+import { parseThinking, isDraftSession, resetStreamingContent } from "./utils";
 import { translateError } from "@/utils/errorMessages";
 
 /**
@@ -40,6 +40,12 @@ export function createSSEEventHandler({
             thinkingClosed: parsed.thinkingClosed,
           };
         }),
+      );
+    } else if (event.type === "round_start") {
+      // 新一轮工具轮次开始：重置累积的流式内容，只保留最后一轮的回复，
+      // 与后端落盘的 assistant 消息内容保持一致
+      setWritingChatMessages((prev) =>
+        resetStreamingContent(prev, tmpAssistantId),
       );
     } else if (event.type === "tool_status") {
       // web_search / project_tools 调用中 → 显示工具状态指示器
@@ -120,18 +126,26 @@ export function createSSEEventHandler({
         description: i18n.t("hooks:writingChat.toastCompressedDesc"),
       });
     } else if (event.type === "done") {
-      setWritingChatMessages((prev) =>
-        prev.map((m) =>
-          m.id === tmpAssistantId
-            ? {
-                ...m,
-                id: event.message_id || m.id,
-                streaming: false,
-                tokens: event.tokens || 0,
-              }
-            : m,
-        ),
-      );
+      if (event.captcha_pending) {
+        // 验证码流程中止：后端未持久化 assistant 消息，移除占位消息，
+        // 避免刷新后出现 JSON 中不存在的"幽灵"回复
+        setWritingChatMessages((prev) =>
+          prev.filter((m) => m.id !== tmpAssistantId),
+        );
+      } else {
+        setWritingChatMessages((prev) =>
+          prev.map((m) =>
+            m.id === tmpAssistantId
+              ? {
+                  ...m,
+                  id: event.message_id || m.id,
+                  streaming: false,
+                  tokens: event.tokens || 0,
+                }
+              : m,
+          ),
+        );
+      }
       if (event.session_id) {
         if (isDraftSession(writingChatCurrentSessionId)) {
           setWritingChatSessions((prev) =>

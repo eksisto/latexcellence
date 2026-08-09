@@ -9,7 +9,11 @@ import { useWritingChatSessions } from "./writing-chat/sessions";
 import { useWritingChatAssistants } from "./writing-chat/assistants";
 import { useWritingChatCaptcha } from "./writing-chat/captcha";
 import { createSSEEventHandler } from "./writing-chat/sse";
-import { isDraftSession, uid } from "./writing-chat/utils";
+import {
+  isDraftSession,
+  processLoadedMessages,
+  uid,
+} from "./writing-chat/utils";
 
 export default function useWritingChat() {
   const projectPath = useStore((s) => s.projectPath);
@@ -204,21 +208,24 @@ export default function useWritingChat() {
     setActiveFile,
   ]);
 
-  // ── 页面刷新：水合完成后自动加载上次选中的会话 ──────────────────
+  // ── 页面刷新：水合完成后以后端 JSON 为准重新加载上次选中的会话 ────
+  // 持久化的 writingChatMessages 可能因流式中断、多轮工具调用或会话
+  // 删除/重建而滞后于磁盘 JSON；因此刷新后先清空再重新拉取，避免展示
+  // 在 JSON 中找不到的"幽灵"内容。草稿会话仅存在于前端，直接保留。
   const hydrated = useStore((s) => s.hydrated);
+  const hydrationRestoredRef = useRef(false);
   useEffect(() => {
-    if (
-      hydrated &&
-      writingChatCurrentSessionId &&
-      writingChatMessages.length === 0
-    ) {
-      selectSession(writingChatCurrentSessionId);
-    }
+    if (!hydrated || hydrationRestoredRef.current) return;
+    hydrationRestoredRef.current = true;
+    const sessionId = writingChatCurrentSessionId;
+    if (!sessionId || isDraftSession(sessionId)) return;
+    setWritingChatMessages([]);
+    selectSession(sessionId);
   }, [
     hydrated,
     writingChatCurrentSessionId,
-    writingChatMessages.length,
     selectSession,
+    setWritingChatMessages,
   ]);
 
   // ── 加载段落预览（供段落选择 dropdown 使用） ─────────────────────
@@ -454,7 +461,7 @@ export default function useWritingChat() {
         const fresh = await api.writingChat.loadSession(
           writingChatCurrentSessionId,
         );
-        setWritingChatMessages(fresh.messages || []);
+        setWritingChatMessages(processLoadedMessages(fresh.messages || []));
         const hasCompressed = (fresh.messages || []).some(
           (m) => m.compressed && m.role === "summary",
         );

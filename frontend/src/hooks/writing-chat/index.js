@@ -9,6 +9,7 @@ export { createSSEEventHandler } from "./sse";
 export {
   parseThinking,
   processLoadedMessages,
+  isVisibleChatMessage,
   isDraftSession,
   uid,
   DRAFT_PREFIX,

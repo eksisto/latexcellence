@@ -40,7 +40,9 @@ RS2 不直接写回 `.tex`，用户再点"应用到 .tex"才调用 `project_mana
 
 **上下文锚点**：`build_file_context_text` 构造纯文本上下文（全文最多 12 段，或当前段 ±1 段）。
 
-**工具消息持久化**：`append_tool_messages()` 将 Function Calling 工具调用循环产生的 assistant（含 tool_calls）和 tool 角色消息持久化到上下文，确保工具调用历史在会话间可追溯。
+**工具消息持久化**：`append_tool_messages()` 将 Function Calling 工具调用循环产生的 assistant（含 tool_calls）和 tool 角色消息持久化到上下文，确保工具调用历史在会话间可追溯。tool 角色消息是内部上下文（仅用于回传 LLM），前端聊天区不直接展示（`isVisibleChatMessage` 过滤），工具活动由 `ToolStatusBar` 指示器呈现。
+
+**多轮工具调用与内容一致性**：工具调用循环中，`round_idx > 0` 的每一轮在流开始前推送 `round_start`，前端收到后重置流式消息的累积文本；无工具调用的一轮内容即最终落盘回复，不再重复生成。仅当 `max_rounds` 用尽、最后一轮仍请求工具调用时，才在额外生成的最终回复流前再推送一次 `round_start`。`parseThinking` 同时会剥离正文中残留的完整 thinking 块。web_search 结果（`search_results` / `search_query` / `deep_read_pages` / `rewritten_queries`）随 assistant 消息一并落盘，刷新后搜索卡片与实时展示一致。
 
 **消息转换**：`to_openai_messages()` 已扩展以支持 tool 角色和 assistant+tool_calls 格式，将 `ChatMessage` 正确地转换为 OpenAI messages API 格式。
 
@@ -144,6 +146,7 @@ writing_chat 是 `chat_stream_with_tools` 方法的主要消费者。该方法�
 | --- | --- |
 | `message` | 流式文本块 |
 | `tool_call` | LLM 发起工具调用 |
+| `round_start` | 新一轮工具轮次（或最终回复流）开始，前端重置流式消息累积内容 |
 | `tool_status` | 工具执行中状态指示 |
 | `tool_pending` | 敏感工具等待用户确认（含 pending_id、tool、args） |
 | `tool_cancelled` | 工具被用户取消 |
@@ -186,6 +189,8 @@ writing_chat 是 `chat_stream_with_tools` 方法的主要消费者。该方法�
 - `cancelClarification()` 调用 `/cancel-clarify` 接口取消
 
 SSE 事件处理器处理 `tool_pending`、`tool_cancelled`、`clarification_request`，并把 `scholarly_results` 存入 assistant 消息。`MessageBubble` 使用紫色折叠卡展示学术记录、文献类型、被引数、开放获取状态和 DOI 链接。
+
+**会话重载一致性**：页面刷新水合后，`useWritingChat` 清空持久化的 `writingChatMessages` 并以后端会话 JSON 为准重新拉取当前会话（草稿会话除外），避免 localStorage 中的陈旧消息与磁盘 JSON 不一致；删除消息后的重载同样经过 `processLoadedMessages` 解析 thinking。
 
 **WritingChatPage 工具弹窗**：
 

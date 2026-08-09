@@ -32,7 +32,12 @@ export function useWritingChatSessions({
   const refreshSessions = useCallback(async () => {
     try {
       const data = await api.writingChat.listSessions(workspaceId);
-      setWritingChatSessions(data.sessions || []);
+      setWritingChatSessions((prev) => {
+        // 草稿会话仅存在于前端状态，合并保留，避免被后端列表覆盖后
+        // currentSessionId 指向一个不在列表中的"悬空"会话
+        const drafts = (prev || []).filter((s) => isDraftSession(s.id));
+        return [...drafts, ...(data.sessions || [])];
+      });
     } catch (e) {
       // Error handled by parent
     }

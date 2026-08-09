@@ -357,19 +357,30 @@ class WritingChatService:
         persisted_scholarly_results: list[dict[str, Any]] = []
         persisted_scholarly_query = ""
         persisted_scholarly_total = 0
+        persisted_search_results: list[dict[str, Any]] = []
+        persisted_search_query = ""
+        persisted_deep_read_pages = 0
+        persisted_rewritten_queries: list[str] = []
 
         # 工具调用循环：流式检测 tool_call，实时输出文本
         if tools:
             tool_messages = list(messages)  # 拷贝用于工具调用的 messages
             initial_msg_count = len(tool_messages)
             max_rounds = 3  # 防止无限工具调用循环
-            _has_tool_calls = False  # 标记是否实际执行过工具调用
+            # max_rounds 用尽且最后一轮仍有工具调用时置 True
+            need_final_regeneration = False
             full_content_parts: list[str] = []
             last_usage_tokens = 0
 
             for round_idx in range(max_rounds):
                 round_content: list[str] = []
                 round_tool_calls = None
+
+                # 新一轮工具轮次的文本流从零开始累积：通知前端重置流式消息内容，
+                # 确保实时展示与最终落盘内容一致（前面轮次在工具调用前输出的
+                # 思考片段不写入会话 JSON）
+                if round_idx > 0:
+                    yield {"type": "round_start"}
 
                 try:
                     async for chunk in llm.chat_stream_with_tools(
@@ -392,11 +403,10 @@ class WritingChatService:
                     return
 
                 if not round_tool_calls:
-                    # 无 tool_call，内容已在流中实时输出到前端
+                    # 无 tool_call：该轮内容即最终回复，已在流中实时输出到前端，
+                    # 直接落盘，不再重复生成
                     full_content_parts = round_content
                     break
-
-                _has_tool_calls = True
 
                 # 重建 assistant message（含 tool_calls）追加到 messages
                 assistant_msg: dict[str, Any] = {
@@ -552,6 +562,17 @@ class WritingChatService:
                                 tool_event["rewritten_queries"] = (
                                     tool_result.rewritten_queries
                                 )
+                            # 持久化到 assistant 消息：与 tool_result 事件同构，
+                            # 刷新后搜索卡片与实时展示一致。前端多轮搜索覆盖显示，
+                            # 这里同样覆盖保留最后一轮的结果。
+                            persisted_search_results = tool_event["search_results"]
+                            persisted_search_query = tool_event["query"]
+                            persisted_deep_read_pages = tool_event.get(
+                                "deep_read_pages", 0
+                            )
+                            persisted_rewritten_queries = tool_event.get(
+                                "rewritten_queries", []
+                            )
                         if tool_name in {
                             "search_scholarly_works",
                             "find_related_works",
@@ -636,13 +657,17 @@ class WritingChatService:
                         }
                     )
 
+                # 已达最大轮次且本轮仍请求工具调用：循环结束后需再生成最终回复
+                if round_idx == max_rounds - 1:
+                    need_final_regeneration = True
                 # 继续下一轮工具调用检测
                 continue
 
-            if _has_tool_calls:
+            if need_final_regeneration:
                 # 有工具调用：流式输出最终回复（不再传递工具，防止继续调用）
                 full_content_parts = []
                 last_usage_tokens = 0
+                yield {"type": "round_start"}
                 try:
                     async for chunk in llm.chat_stream_with_usage(
                         messages=tool_messages,
@@ -660,10 +685,10 @@ class WritingChatService:
                     ctx.save_to_disk()
                     return
 
-                # 将工具调用/结果消息持久化到会话上下文
-                new_tool_msgs = tool_messages[initial_msg_count:]
-                if new_tool_msgs:
-                    ctx.append_tool_messages(new_tool_msgs)
+            # 将工具调用/结果消息持久化到会话上下文（任一成功路径都会执行）
+            new_tool_msgs = tool_messages[initial_msg_count:]
+            if new_tool_msgs:
+                ctx.append_tool_messages(new_tool_msgs)
 
         else:
             # 无工具：原有纯流式逻辑
@@ -696,6 +721,10 @@ class WritingChatService:
             scholarly_results=persisted_scholarly_results,
             scholarly_query=persisted_scholarly_query,
             scholarly_total=persisted_scholarly_total,
+            search_results=persisted_search_results,
+            search_query=persisted_search_query,
+            deep_read_pages=persisted_deep_read_pages,
+            rewritten_queries=persisted_rewritten_queries,
         )
         ctx.update_last_message_tokens(last_usage_tokens)
         ctx.save_to_disk()

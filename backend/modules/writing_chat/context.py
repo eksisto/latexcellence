@@ -248,6 +248,10 @@ class ConversationContext:
         scholarly_results: list[dict[str, Any]] | None = None,
         scholarly_query: str = "",
         scholarly_total: int = 0,
+        search_results: list[dict[str, Any]] | None = None,
+        search_query: str = "",
+        deep_read_pages: int = 0,
+        rewritten_queries: list[str] | None = None,
     ) -> ChatMessage:
         """
         追加 assistant 回复消息。
@@ -265,6 +269,10 @@ class ConversationContext:
             scholarly_results=scholarly_results or [],
             scholarly_query=scholarly_query,
             scholarly_total=scholarly_total,
+            search_results=search_results or [],
+            search_query=search_query,
+            deep_read_pages=deep_read_pages,
+            rewritten_queries=rewritten_queries or [],
             created_at=time.time(),
         )
         self.messages.append(msg)

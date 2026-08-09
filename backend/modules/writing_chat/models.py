@@ -51,6 +51,15 @@ class ScholarlyResultSummary(BaseModel):
     work_type: str = ""
 
 
+class SearchResultSummary(BaseModel):
+    """持久化在 assistant 消息上的 web_search 结果摘要（与 tool_result 事件同构）。"""
+
+    index: int = 0
+    title: str = ""
+    snippet: str = ""
+    url: str = ""
+
+
 class ChatMessage(BaseModel):
     """
     单条对话消息。
@@ -90,6 +99,10 @@ class ChatMessage(BaseModel):
     scholarly_results: list[ScholarlyResultSummary] = Field(default_factory=list)
     scholarly_query: str = ""
     scholarly_total: int = 0
+    search_results: list[SearchResultSummary] = Field(default_factory=list)
+    search_query: str = ""
+    deep_read_pages: int = 0
+    rewritten_queries: list[str] = Field(default_factory=list)
 
 
 ChatMessage.model_rebuild()

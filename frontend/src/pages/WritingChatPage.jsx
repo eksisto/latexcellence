@@ -28,6 +28,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import PageHeader from "@/components/PageHeader";
 import EmptyState from "@/components/EmptyState";
 import useWritingChat from "@/hooks/useWritingChat";
+import { isVisibleChatMessage } from "@/hooks/writing-chat";
 import MessageBubble from "./writing-chat/MessageBubble";
 import CaptchaDialog from "./writing-chat/CaptchaDialog";
 import ToolStatusBar from "./writing-chat/ToolStatusBar";
@@ -108,6 +109,7 @@ export default function WritingChatPage() {
   };
 
   const canEdit = paragraphIndex != null && !!activeFile;
+  const visibleMessages = messages.filter(isVisibleChatMessage);
 
   const messageActions = useMemo(
     () => ({
@@ -435,14 +437,14 @@ export default function WritingChatPage() {
                 ref={scrollRef}
                 className="flex-1 overflow-y-auto space-y-4 pr-1 rounded-t-xl"
               >
-                {messages.length === 0 && !streaming && (
+                {visibleMessages.length === 0 && !streaming && (
                   <div className="h-full flex items-center justify-center text-muted-foreground text-sm">
                     {currentSessionId
                       ? t("pages:writingChat.emptySession")
                       : t("pages:writingChat.emptySessionHint")}
                   </div>
                 )}
-                {messages.map((m) => (
+                {visibleMessages.map((m) => (
                   <MessageBubble
                     key={m.id}
                     message={m}
