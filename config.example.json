@@ -30,11 +30,13 @@
     },
     "formula_ocr": {
       "enabled": true,
-      "max_image_size_mb": 10
+      "max_image_size_mb": 10,
+      "format_latex": true
     },
     "table_ocr": {
       "enabled": true,
-      "max_image_size_mb": 10
+      "max_image_size_mb": 10,
+      "format_latex": true
     },
     "template_gen": {
       "enabled": true,

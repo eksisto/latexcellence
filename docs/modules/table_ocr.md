@@ -37,6 +37,8 @@ CONFIDENCE: <0-1>
 
 识别出的 LaTeX 浮动体在宏包分析**之前**，先经 `latex_formatter.format_latex_source()` 统一格式化（latexindent.pl 优先，内置格式化器兜底，每层 4 个空格），整理 `table` / `tabular` 等环境的缩进与对齐。
 
+该格式化层可通过配置 `features.table_ocr.format_latex`（默认 `true`）关闭。关闭后识别结果不再重排缩进/换行，直接进入宏包分析；设置界面（设置 → 功能 → 表格识别）提供对应开关。
+
 ## Pydantic 输出模型
 
 - `TableOCRResult`（latex, confidence）
@@ -45,7 +47,7 @@ CONFIDENCE: <0-1>
 
 | 方法 | 功能 |
 | --- | --- |
-| `recognize(image_data, content_type)` | 主入口：校验格式 → 图片预处理 → LLM Vision（分隔符协议）→ 统一格式化 → 宏包规则表检测（LLM 兜底）→ 合并结果 |
+| `recognize(image_data, content_type)` | 主入口：校验格式 → 图片预处理 → LLM Vision（分隔符协议）→ 统一格式化（可配置开关）→ 宏包规则表检测（LLM 兜底）→ 合并结果 |
 | `_recognize_with_llm` | 第一次 LLM 调用：分隔符协议识别 + 内容校验 + 错误回喂重试（最多 3 次） |
 | `_extract_latex_block` | 正则提取 `<<<LATEX>>>...<<<END>>>` 块 |
 | `_parse_confidence` | 解析 `CONFIDENCE` 元数据 |

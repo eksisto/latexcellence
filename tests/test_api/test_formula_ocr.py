@@ -732,6 +732,40 @@ class TestRecognizeWithPackageAnalysis:
 
         assert result["latex"] == formatted
 
+    @pytest.mark.asyncio
+    async def test_recognize_skips_formatting_when_disabled(
+        self, mock_llm, service, monkeypatch
+    ):
+        """关闭 features.formula_ocr.format_latex 后，统一格式化层被跳过。"""
+        import backend.modules.formula_ocr.service as fsvc
+
+        def unexpected_format(source: str) -> str:
+            raise AssertionError("format_latex_source must not be called")
+
+        monkeypatch.setattr(fsvc, "format_latex_source", unexpected_format)
+        mock_llm.chat.side_effect = [
+            ocr_response("x^2 + y^2 = z^2"),
+            {"packages": []},
+        ]
+
+        import backend.core.config as cfg_mod
+
+        cfg = cfg_mod.get_config()
+        monkeypatch.setattr(cfg.features.formula_ocr, "max_image_size_mb", 100)
+        monkeypatch.setattr(cfg.features.formula_ocr, "format_latex", False)
+
+        from PIL import Image
+
+        img = Image.new("RGB", (100, 50), (255, 255, 255))
+        buf = io.BytesIO()
+        img.save(buf, format="PNG")
+        buf.seek(0)
+
+        result = await service.recognize(buf.read(), "image/png")
+
+        # 关闭格式化后不重排，识别原文仅做确定性包裹（默认 display → \[...\]）
+        assert result["latex"] == r"\[x^2 + y^2 = z^2\]"
+
 
 class TestVisualHintMerge:
     """视觉判定与结构判定的合并流程。"""

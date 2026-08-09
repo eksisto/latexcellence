@@ -141,7 +141,10 @@ class TableOCRService:
         # 第二步：分析 LaTeX 代码所需的宏包（table 领域：排除引用/版式类宏包）
         if result.get("latex"):
             # 统一格式化层（latexindent / 内置兜底）：先整理缩进对齐，再做宏包分析
-            result["latex"] = await format_latex_source(result["latex"])
+            if cfg.features.table_ocr.format_latex:
+                result["latex"] = await format_latex_source(result["latex"])
+            else:
+                self._logger.debug("Table OCR formatting layer disabled by config")
             result["latex"] = await prepend_package_comments(
                 llm, result["latex"], domain="table"
             )

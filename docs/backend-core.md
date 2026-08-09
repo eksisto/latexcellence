@@ -529,7 +529,10 @@ raise ValueError("Validation failed after N attempts")        # ❌ 耗尽
 
 ### `latex_formatter.py` — 统一 LaTeX 格式化工具
 
-对外提供单一异步入口 `format_latex_source()`：优先调用 `latexindent.pl`（加载项目内置 `latexindent.yaml`，每层 4 个空格缩进），不可用时回退到内置轻量格式化器（同样每层 4 个空格）。`code_review` / `formula_ocr` / `table_ocr` 共用，避免各模块重复实现格式化调度；latexindent 可用性探测结果在进程内缓存。
+- 对外提供单一异步入口 `format_latex_source()`：优先调用 `latexindent.pl`（加载项目内置 `latexindent.yaml`，每层 4 个空格缩进），不可用时回退到内置轻量格式化器（同样每层 4 个空格）
+- `code_review` / `formula_ocr` / `table_ocr` 共用，避免各模块重复实现格式化调度
+- latexindent 可用性探测结果在进程内缓存
+- OCR 模块可通过 `features.formula_ocr.format_latex` / `features.table_ocr.format_latex`（默认 `true`）按模块关闭格式化层。
 
 **核心接口**：
 

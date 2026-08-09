@@ -65,6 +65,7 @@ class FormulaOCRConfig(BaseModel):
 
     enabled: bool = True  # 是否启用
     max_image_size_mb: int = 10  # 上传图片最大尺寸（MB）
+    format_latex: bool = True  # 是否启用统一 LaTeX 格式化层（latexindent / 内置兜底）
 
 
 class TableOCRConfig(BaseModel):
@@ -72,6 +73,7 @@ class TableOCRConfig(BaseModel):
 
     enabled: bool = True  # 是否启用
     max_image_size_mb: int = 10  # 上传图片最大尺寸（MB）
+    format_latex: bool = True  # 是否启用统一 LaTeX 格式化层（latexindent / 内置兜底）
 
 
 class TemplateGenConfig(BaseModel):

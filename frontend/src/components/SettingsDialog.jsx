@@ -331,11 +331,29 @@ export default function SettingsDialog() {
               checked={config.features.formula_ocr.enabled}
               onChange={(v) => set("features.formula_ocr.enabled", v)}
             />
+            {config.features.formula_ocr.enabled && (
+              <div className="ml-6 space-y-2 rounded-md border p-2.5 bg-muted/40">
+                <CheckboxField
+                  label={t("settings.formulaOcrFormatLatex")}
+                  checked={config.features.formula_ocr.format_latex}
+                  onChange={(v) => set("features.formula_ocr.format_latex", v)}
+                />
+              </div>
+            )}
             <CheckboxField
               label={t("settings.featureTableOcr")}
               checked={config.features.table_ocr.enabled}
               onChange={(v) => set("features.table_ocr.enabled", v)}
             />
+            {config.features.table_ocr.enabled && (
+              <div className="ml-6 space-y-2 rounded-md border p-2.5 bg-muted/40">
+                <CheckboxField
+                  label={t("settings.tableOcrFormatLatex")}
+                  checked={config.features.table_ocr.format_latex}
+                  onChange={(v) => set("features.table_ocr.format_latex", v)}
+                />
+              </div>
+            )}
             <CheckboxField
               label={t("settings.featureFormatConvert")}
               checked={config.features.format_converter.enabled}

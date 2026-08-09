@@ -175,7 +175,10 @@ class FormulaOCRService:
 
         if result.get("latex"):
             # 统一格式化层（latexindent / 内置兜底）：先整理缩进对齐，再包裹与宏包分析
-            result["latex"] = await format_latex_source(result["latex"])
+            if cfg.features.formula_ocr.format_latex:
+                result["latex"] = await format_latex_source(result["latex"])
+            else:
+                self._logger.debug("Formula OCR formatting layer disabled by config")
             # 确定性包裹：让复制结果即贴即显（模型自身加包裹不可靠，故由后端统一处理）
             result["latex"] = self._wrap_latex_for_paste(
                 result["latex"], result.get("inline", False)

@@ -578,3 +578,37 @@ class TestRecognizeWithPackageAnalysis:
         result = await service.recognize(buf.read(), "image/png")
 
         assert result["latex"] == formatted
+
+    @pytest.mark.asyncio
+    async def test_recognize_skips_formatting_when_disabled(
+        self, mock_llm, service, monkeypatch
+    ):
+        """关闭 features.table_ocr.format_latex 后，统一格式化层被跳过。"""
+        import backend.modules.table_ocr.service as tsvc
+
+        def unexpected_format(source: str) -> str:
+            raise AssertionError("format_latex_source must not be called")
+
+        monkeypatch.setattr(tsvc, "format_latex_source", unexpected_format)
+        mock_llm.chat.side_effect = [
+            ocr_response(KERNEL_LATEX),
+            {"packages": []},
+        ]
+
+        import backend.core.config as cfg_mod
+
+        cfg = cfg_mod.get_config()
+        monkeypatch.setattr(cfg.features.table_ocr, "max_image_size_mb", 100)
+        monkeypatch.setattr(cfg.features.table_ocr, "format_latex", False)
+
+        from PIL import Image
+
+        img = Image.new("RGB", (100, 50), (255, 255, 255))
+        buf = io.BytesIO()
+        img.save(buf, format="PNG")
+        buf.seek(0)
+
+        result = await service.recognize(buf.read(), "image/png")
+
+        # 关闭格式化后返回识别原文（缩进/换行不做重排）
+        assert result["latex"] == KERNEL_LATEX
