@@ -2,6 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   escapeHtml,
+  highlightEditorHtml,
   highlightHtml,
   highlightToHtmlLines,
   languageFromFilename,
@@ -77,6 +78,28 @@ test("highlightHtml 未注册语言按 plaintext 处理且仍转义", () => {
 test("highlightHtml 空字符串/空值返回空", () => {
   assert.equal(highlightHtml("", "latex"), "");
   assert.equal(highlightHtml(undefined), "");
+});
+
+test("highlightEditorHtml 末尾换行补零宽空格，与 textarea 空行一致", () => {
+  assert.ok(highlightEditorHtml("a\n", "plaintext").endsWith("\u200b"));
+  assert.ok(highlightEditorHtml("a\nb\n", "plaintext").endsWith("\u200b"));
+});
+
+test("highlightEditorHtml 无末尾换行不追加零宽空格", () => {
+  const html = highlightEditorHtml("a\nb", "plaintext");
+  assert.ok(!html.endsWith("\u200b"));
+  assert.equal(html, highlightHtml("a\nb", "plaintext"));
+});
+
+test("highlightEditorHtml 高亮与转义输出不变", () => {
+  const html = highlightEditorHtml("\\begin{document}\n", "latex");
+  assert.ok(html.includes('<span class="hljs-keyword">'));
+  assert.ok(!html.includes("<script>"));
+});
+
+test("highlightEditorHtml 空字符串/空值返回空", () => {
+  assert.equal(highlightEditorHtml("", "latex"), "");
+  assert.equal(highlightEditorHtml(undefined), "");
 });
 
 test("highlightToHtmlLines 多行纯文本按行拆分", () => {

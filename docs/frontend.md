@@ -57,9 +57,10 @@ API 按功能分组暴露（health、config、project、typoCheck、expressionOp
 
 highlight.js 的按需注册与统一入口：
 
-- `styles/code-highlight.css` 由 `CodeBlock` / `MarkerText` 组件引入：高亮颜色独立成文件，仅在使用到高亮的模块随 chunk 加载，未用到高亮的页面不会引入；`utils/highlight.js` 保持为无样式副作用的纯逻辑模块，可直接被 `node --test` 测试
+- `styles/code-highlight.css` 由 `CodeBlock` / `MarkerText` / `CodeEditorInput` 组件引入：高亮颜色独立成文件，仅在使用到高亮的模块随 chunk 加载，未用到高亮的页面不会引入；`utils/highlight.js` 保持为无样式副作用的纯逻辑模块，可直接被 `node --test` 测试
 - 仅注册当前用到的语言（latex / tex / bibtex / markdown / python / json / xml / html / diff / plaintext），新增语言在这里 `registerLanguage` 即可，控制构建体积
-- `highlightHtml(text, language)`：将源码高亮为已转义的 HTML 字符串（渲染期派生），供非行号模式的 `CodeBlock` 与 `MarkerText` 行内片段直接注入，不依赖 effect 就地改 DOM
+- `highlightHtml(text, language)`：将源码高亮为已转义的 HTML 字符串（渲染期派生），供非行号模式的 `CodeBlock`、`MarkerText` 行内片段与 `CodeEditorInput` 高亮层直接注入，不依赖 effect 就地改 DOM
+- `highlightEditorHtml(text, language)`：`CodeEditorInput` 专用入口——在 `highlightHtml` 基础上，源码以换行结尾时补一个零宽空格，保证高亮层与 textarea 的末尾空行行数一致（浏览器可能丢弃 `<pre>` 内容的尾部换行）
 - `highlightToHtmlLines(code, language)`：将代码高亮后按行拆分为自闭合的 HTML 片段数组（跨行 span 会按行重新闭合），供行号布局直接注入
 - `languageFromFilename(filename)`：按扩展名推断语言（`.tex/.sty/.cls/.ltx` → latex，`.bib` → bibtex 等）
 - BibTeX 语法为本地轻量实现（highlight.js v11 已移除内置 bibtex）：覆盖 `@entry`、字段名、引号字符串与注释
@@ -75,6 +76,7 @@ highlight.js 的按需注册与统一入口：
 | 组件 | 功能 |
 | --- | --- |
 | `CodeBlock.jsx` | 统一代码块展示组件（`code` / `language` / `variant` / `highlight` / `lineNumbers` props），所有只读 LaTeX / TikZ / BibTeX / 日志展示统一走此组件；默认显示左侧行号；同时导出 `latexEditorClass` 共享代码编辑输入样式 |
+| `CodeEditorInput.jsx` | 可编辑代码输入框（高亮版）：底层 `<pre>` 渲染 highlight.js 高亮结果、上层透明 textarea 保留光标/选区/滚动，两者共用同一套排版规则保证逐字对齐；供粘贴 LaTeX 源码等需要边输入边高亮的场景使用 |
 | `MarkerText.jsx` | 将 `__CMD_NNNN__` 等 marker 解析为彩色内联标签；`variant="code"`（默认）将纯文本片段渲染为 `.code-inline` 并做 LaTeX 高亮（渲染期派生 HTML，按 token 经 `useMemo` 缓存），`variant="text"` 保持原样（用于 diff 等已有语义配色的场景）。仅用于段落预览等含 marker 的展示场景。**结果卡片中**的 `change.original`/`change.corrected` 等字段因后端已还原 marker，直接以文本渲染，无需 `MarkerText` 包裹 |
 | `ParagraphContext.jsx` | 展开显示当前段落前后上下文 |
 | `ProjectExplorer.jsx` | 递归文件树：目录展开/折叠，文件选择 |
@@ -169,14 +171,14 @@ highlight.js 的按需注册与统一入口：
 
 - **块级展示**：`CodeBlock`（`variant="block"` 带背景/边框/圆角，`variant="bare"` 仅排版，默认开启 `lineNumbers` 左侧行号；行号列不参与选中复制），OCR 结果、格式转换/样式修改结果、代码审查样张与段落预览、写作助手编辑建议、工作区段落预览、模板/绘图 Agent 的文件内容与日志均使用
 - **行内/段落展示**：`MarkerText` 默认 `variant="code"`，段落预览、`ParagraphContext` 上下文、代码审查建议等含 marker 的 LaTeX 文本以 `.code-inline` 等宽渲染并高亮；diff 类场景（`AnnotatedSource` / `DiffView` / 代码审查建议对照）传 `variant="text"`，避免高亮 token 颜色覆盖红/绿语义色
-- **编辑输入**：`latexEditorClass` 常量，格式转换/样式修改输入、代码审查定稿编辑、写作助手手动编辑、BibTeX 编辑共用
-- **CSS token**：`index.css` 定义 `--code-bg` / `--code-fg` / `--code-border` 与组件类 `.code-block` / `.code-block-bare` / `.code-inline` / `.code-lines` / `.code-line-num`（位于 `@layer components`）；`styles/code-highlight.css` 独立承载语法 token 变量（`--code-token-*`，亮/暗默认值）与 `.hljs-*` 映射，由 `CodeBlock` / `MarkerText` 按需引入。各主题文件在亮/暗两档覆盖 `--code-*`，也可按主题覆盖 `--code-token-*`。utility 类可覆盖组件类默认值（如 `p-2`、`text-sm`）
+- **编辑输入**：`latexEditorClass` 常量提供共享排版（格式转换/样式修改输入、代码审查定稿编辑、写作助手手动编辑、BibTeX 编辑共用）；需要边输入边高亮的输入框（如 style_modify 的 LaTeX 源码窗口）使用 `CodeEditorInput`——高亮层与透明 textarea 叠加，光标/选区/滚动保留在 textarea
+- **CSS token**：`index.css` 定义 `--code-bg` / `--code-fg` / `--code-border` 与组件类 `.code-block` / `.code-block-bare` / `.code-inline` / `.code-lines` / `.code-line-num`（位于 `@layer components`）；`styles/code-highlight.css` 独立承载语法 token 变量（`--code-token-*`，亮/暗默认值）与 `.hljs-*` 映射，由 `CodeBlock` / `MarkerText` / `CodeEditorInput` 按需引入。各主题文件在亮/暗两档覆盖 `--code-*`，也可按主题覆盖 `--code-token-*`。utility 类可覆盖组件类默认值（如 `p-2`、`text-sm`）
 - **高亮接入**：`utils/highlight.js` 是唯一注册与执行入口，token 颜色经 `.hljs-*` 类映射到 `--code-token-*`，不引入官方主题，自动适配现有主题与明暗模式
 
 ## CSS 文件 `src/index.css` + 主题目录 `src/theme/`
 
 - `index.css`：Tailwind 导入、自定义字体、深色变体定义、主题内联令牌、基础样式。另含设计体系工具：`--font-display`（STIX Two Text）显示字体 token、`.text-small-caps` 英文小大写标签、`.tex-e` / `.tex-x` 字标 "TeX" 排字姿态、`.reveal` 入场动效（错落 + 尊重 `prefers-reduced-motion`）、代码块 chrome token（`--code-*`）与 `.code-block` / `.code-inline` 组件类
-- `styles/code-highlight.css`：代码语法高亮颜色（`--code-token-*` 变量 + `.hljs-*` 映射），独立成文件、由 `CodeBlock` / `MarkerText` 在用到高亮时引入
+- `styles/code-highlight.css`：代码语法高亮颜色（`--code-token-*` 变量 + `.hljs-*` 映射），独立成文件、由 `CodeBlock` / `MarkerText` / `CodeEditorInput` 在用到高亮时引入
 - `theme/` 下主题 CSS 文件：youminghei（幽冥黑）、jingtailan（景泰蓝）、hupohuang（琥珀黄）、ningyezi（凝夜紫）、tingwulv（庭芜绿）、hailuocheng（海螺橙）、yingtaohong（樱桃红）
 - `useThemeManager.js`：自动发现主题文件，管理 `data-theme` 属性
 - 配色架构：所有主题共用同一套中性灰阶（背景/卡片/边框/文字，亮暗各一档），主题身份由单一色相承载，统一派生 `--primary` / `--accent` / `--ring` / `--selection-bg`；语义色（`--destructive`、`--brand-mark`）跨主题一致，深色模式下字标统一反白

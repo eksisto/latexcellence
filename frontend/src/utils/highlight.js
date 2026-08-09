@@ -107,6 +107,19 @@ export function highlightHtml(text, language = DEFAULT_LANGUAGE) {
   }).value;
 }
 
+/**
+ * 可编辑高亮输入框（CodeEditorInput）专用入口。
+ *
+ * textarea 的末尾换行会在末行下方显示一个空行，而浏览器可能丢弃 <pre> 内容
+ * 的尾部换行，导致高亮层少一行。这里在源码以换行结尾时补一个零宽空格（不改变
+ * 视觉布局），保证高亮层与 textarea 行数一致。
+ */
+export function highlightEditorHtml(text, language = DEFAULT_LANGUAGE) {
+  const source = String(text ?? "");
+  const html = highlightHtml(source, language);
+  return source.endsWith("\n") ? `${html}\u200b` : html;
+}
+
 /** 转义 HTML 文本（用于拼接按行拆分的代码 HTML）。 */
 export function escapeHtml(value) {
   return String(value)

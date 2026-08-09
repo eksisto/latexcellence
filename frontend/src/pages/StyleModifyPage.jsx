@@ -12,8 +12,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Wand2, Loader2, Copy } from "lucide-react";
 import PageHeader from "@/components/PageHeader";
 import { api } from "@/api/index";
-import CodeBlock, { latexEditorClass } from "@/components/CodeBlock";
-import { cn } from "@/lib/utils";
+import CodeBlock from "@/components/CodeBlock";
+import CodeEditorInput from "@/components/CodeEditorInput";
 
 export default function StyleModifyPage() {
   const { t } = useTranslation(["pages", "common"]);
@@ -64,11 +64,11 @@ export default function StyleModifyPage() {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <Textarea
-                className={cn(latexEditorClass, "min-h-80 resize-none")}
+              <CodeEditorInput
                 value={latex}
                 onChange={(e) => setLatex(e.target.value)}
                 placeholder={t("pages:styleModify.sourcePlaceholder")}
+                className="min-h-80"
               />
             </CardContent>
           </Card>
