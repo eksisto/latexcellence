@@ -11,7 +11,11 @@ latexcellence/
 ├── main.py                          # FastAPI 入口 + 静态文件挂载
 ├── config.json                      # 配置文件
 ├── config.example.json              # 配置模板
+├── requirements.txt                 # Python 依赖
+├── pytest.ini                       # pytest 配置
+├── .pre-commit-config.yaml          # pre-commit 钩子配置
 ├── AGENTS.md                        # AI 编程助手规范
+├── CLAUDE.md                        # Claude 项目说明
 ├── DEVELOPMENT.md                   # 开发文档索引（指向 docs/ 目录）
 ├── DESIGN.md                        # 设计文档
 ├── PROJECT_SUMMARY.md               # ← 本文件：项目概要（供 AI 快速读取）
@@ -34,6 +38,8 @@ latexcellence/
 │   │   ├── file_ops.py              # 原子写入/备份/MD5
 │   │   ├── input_resolver.py        # \input/\include 递归解析
 │   │   ├── time_utils.py            # 时间工具：当前日期/时间/星期格式化
+│   │   ├── path_guard.py            # 项目路径安全校验唯一入口 resolve_project_path()
+│   │   ├── tex_compile.py           # 统一 TeX 编译执行（texfot+latexmk、引擎自动检测、PDF/A）
 │   │   ├── latex_parser.py          # LaTeX 源码↔纯文本转换（Marker 保护）
 │   │   ├── latex_json_guard.py      # LaTeX×JSON 转义防护（内容校验器，跨模块共享）
 │   │   ├── latex_literals.py        # LaTeX 字面内容识别（逐字命令/URL 参数，parser 与 guard 共享）
@@ -59,7 +65,9 @@ latexcellence/
 │   │   │   ├── __init__.py            # 包入口与生命周期 API
 │   │   │   ├── models.py              # 统一作品、作者、主题和结果模型
 │   │   │   ├── base.py                # 学术数据源抽象接口
-│   │   │   └── manager.py             # ResearchManager + OpenAlex + Function Calling 工具
+│   │   │   ├── manager.py             # ResearchManager + OpenAlex + Function Calling 工具
+│   │   │   ├── _utils.py              # 内部共享工具（DOI/URL 归一化等）
+│   │   │   └── providers/             # 可插拔学术数据源
 │   │   ├── project_tools/            # LLM Function Calling 工具集（浏览 + 编辑）
 │   │   │   ├── __init__.py
 │   │   │   ├── manager.py            # ProjectToolsManager — 浏览工具（list_files/read_file_content/get_section_structure/search_across_files）
@@ -80,19 +88,33 @@ latexcellence/
 │       ├── style_modify/            # 样式修改
 │       ├── writing_chat/            # 写作助手聊天
 │       ├── bib_manager/             # 参考文献管理（含 DOI 多数据源查询、重复检测、文献库管理）
-│       │   └── providers/           # 可插拔 DOI 数据源提供者
+│       │   └── providers/           # 可插拔 DOI 数据源
 │       ├── plot_gen/                # 科研绘图 Agent（上传数据 -> 矢量图 + TikZ）
 │       └── project_router.py        # 项目管理路由
 │
 ├── frontend/
+│   ├── package.json                 # npm 依赖与脚本
+│   ├── vite.config.js               # Vite 配置
+│   ├── index.html                   # 入口 HTML
+│   ├── components.json              # shadcn/ui 组件配置
+│   ├── jsconfig.json                # JS 路径别名配置
+│   ├── public/                      # 静态资源（favicon）
+│   ├── test/                        # 前端单元测试（formulaWrap / writingChatUtils）
 │   └── src/
+│       ├── main.jsx                 # React 入口
 │       ├── App.jsx                  # 根路由
+│       ├── index.css                # 全局样式（Tailwind + 代码块 CSS 变量）
 │       ├── i18n/                    # i18n 多语言配置 + 翻译资源
 │       │   ├── index.js             # i18next 初始化（含语言检测）
 │       │   └── locales/             # 翻译 JSON 文件
+│       ├── lib/                     # 通用前端工具
 │       ├── pages/                   # 页面组件
-│       │   └── writing-chat/        # 写作聊天子组件（MessageBubble/EditOpCard/CaptchaDialog）
+│       │   ├── code-review/         # 代码审查子组件
+│       │   └── writing-chat/        # 写作聊天子组件
 │       ├── hooks/                   # 自定义 hook
+│       │   ├── useParagraphCheck.js # 逐段检查统一流程 hook
+│       │   ├── useWritingChat.js    # 写作聊天生命周期 hook
+│       │   ├── usePlotGen.js        # 科研绘图 Agent hook
 │       │   ├── writing-chat/        # 写作聊天子 hooks（sessions/assistants/captcha/sse/utils）
 │       │   └── bib-manager/         # 参考文献管理子 hooks（format_analysis/metadata_extraction/bibtex_generation/bib_file_save/latex_generation）
 │       ├── components/              # 共享组件 + ui 基座组件
@@ -109,15 +131,21 @@ latexcellence/
 │   ├── modules.md                   # 模块索引
 │   ├── frontend.md                  # 前端架构
 │   ├── testing.md                   # 测试规范
-│   ├── multi-user-migration-plan.md # 多用户改造计划
 │   ├── latex-package-rules.md       # 宏包规则表维护指南
+│   ├── duckduckgo-challenge.md      # DDG 验证码处理说明
+│   ├── function-calling-tools.md    # Function Calling 工具体系说明
 │   └── modules/                     # 模块文档
 ├── tests/                           # 测试用例
+│   ├── conftest.py                  # pytest 共享 fixture
+│   ├── test_api/                    # 各模块 API 集成测试
+│   ├── test_plot_gen/               # plot_gen 单元测试
+│   ├── test_utils/                  # 后端工具单元测试（路径/JSON/宏包/搜索/学术检索/编译等）
 │   └── fixtures/                    # 测试数据（宏包规则表、公式/表格 OCR、错字查找/表达优化语料等）
-├── prompts/                         # 自定义提示词
+├── prompts/                         # 自定义提示词（expression/ 风格预设与 writing_chat/ 角色预设）
 ├── formats/                         # 参考文献格式定义
-├── templates/                       # 生成的 LaTeX 模板
+├── templates/                       # 生成的 LaTeX 模板（agent/<session_id>/ 沙箱产物）
 ├── writing_chat_sessions/           # 写作助手聊天持久化数据
+├── plots/                           # plot_gen 绘图运行输出（运行时生成）
 ├── logs/                            # 运行时日志
 ├── tools/                         # 维护者工具（开发/评测/维护用脚本与 Agent 评测工作区，不进入运行时）
 │   ├── eval_common.py             # 人工评估工具共享基座（语料加载/工作区/marker 还原/命中判定/CLI 骨架）

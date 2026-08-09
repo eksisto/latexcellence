@@ -12,12 +12,14 @@
 | [frontend.md](./frontend.md) | 前端开发文档（样式架构、组件、Hook、状态管理） |
 | [testing.md](./testing.md) | 测试规范与用例覆盖 |
 | [latex-package-rules.md](./latex-package-rules.md) | 宏包规则表维护指南（新增规则模板 + 评审清单） |
+| [function-calling-tools.md](./function-calling-tools.md) | Function Calling 工具体系：全局/私有工具、配置结构 |
+| [duckduckgo-challenge.md](./duckduckgo-challenge.md) | DDG 验证码处理 |
 
 ---
 
 ## 项目概述
 
-LateXcellence 是一个 AI 驱动的 LaTeX 文档助手。后端 FastAPI + 前端 React/Vite，通过 LLM 对 `.tex` 文件进行错字查找、表达优化、公式识别、模板生成等操作。
+LateXcellence 是一个由 LLM 驱动的智能体论文写作助手。后端 FastAPI + 前端 React/Vite，智能体通过 Function Calling 真正操作本地 LaTeX 项目（浏览文件、修改段落、生成工程、编译验证），而不是只停留在对话。
 
 基本流程：
 

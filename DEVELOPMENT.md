@@ -13,3 +13,4 @@
 | [docs/frontend.md](docs/frontend.md) | 前端开发文档 |
 | [docs/testing.md](docs/testing.md) | 测试规范 |
 | [docs/function-calling-tools.md](docs/function-calling-tools.md) | Function Calling 工具清单（全局/私有工具、配置结构） |
+| [docs/duckduckgo-challenge.md](docs/duckduckgo-challenge.md) | DDG 验证码处理与前端交互说明 |
