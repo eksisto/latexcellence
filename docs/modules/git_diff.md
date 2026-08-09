@@ -27,16 +27,20 @@
 | `_build_diff_document` | difflib 生成带红删绿增底纹的差异 LaTeX 文档 |
 | `_prepare_target_project` | git archive 或 copytree 准备编译目录 |
 | `get_pdf_path` | 根据 job_id 定位已生成的 PDF |
+| `_prune_old_job_dirs` | 清理过期的临时 job 目录，只保留最近生成的若干份 |
 
 **差异生成流程**：
 
 1. 展开 base_ref 主文件（递归解析 `\input`/ `\include`/ `\subfile` 依赖）
+   - include 路径只允许项目内相对路径：拒绝绝对路径和 `..` 目录穿越；
+     工作区模式读取统一走 `path_guard.resolve_project_path()`
 2. 展开 target_ref 主文件（工作区直接读文件；commit/branch/tag 通过 `git show <ref>:<path>`）
 3. 根据选择的差异引擎生成差异：
     - **difflib 引擎（内置）**：
         1. 两份文档以 `\begin{document}` 为界拆分为 preamble + body + end
         2. body 部分逐行 `difflib.SequenceMatcher` 比对：equal 原样保留、delete 行包裹 `LXDiffDeleted`（红色底纹）、insert 行包裹 `LXDiffAdded`（绿色底纹）、replace 行先删后插
         3. 组装差异文档：target 的 preamble + `xcolor`/`framed` 宏包定义 + 差异 body + target 的 end
+        - **浮动体处理**：`table`/`figure`/`algorithm` 等浮动体环境不能放在 `framed` 颜色框内（会报 "Not in outer par mode"）。生成差异时会把浮动体整体拆到高亮包裹之外，并在其前后补空行使其处于独立段落（避免紧贴颜色框导致 "Float(s) lost"），只高亮周围的普通文本。
     - **latexdiff 引擎（外部）**：
         1. 调用 `latexdiff` 命令行工具生成差异 `.tex` 文件
         2. 支持配置标记样式（markup type）和数学公式标记粒度（math markup）
@@ -63,6 +67,20 @@
 
 **PDF 存储**：系统临时目录 `latexcellence_git_diff/{job_id}/`，由 OS 重启时清理。
 
+**临时目录清理**：每次渲染都会复制整个项目，`_prune_old_job_dirs` 在每次渲染后
+按生成时间只保留最新若干份 job 目录，防止临时盘持续膨胀。
+
+**无提交仓库**：`git log` 在没有任何提交的新仓库会失败，此时提交列表返回空，
+页面仍可用 worktree 与其他分支/标签比较。
+
+**超时进程清理**：latexmk / latexdiff 超时后通过 `terminate_process_tree()`
+终止整个子进程树（Windows 用 `taskkill /T`，POSIX 用 `killpg`），避免
+xelatex / bibtex 子进程残留占用文件锁。
+
+**默认值配置**：`/options` 返回 `features.git_diff` 的默认引擎、标记类型、
+数学标记粒度和颜色；前端页面初始化时读取这些值，设置页的修改才会生效。
+服务端在请求未传这些字段时也会按配置兜底。
+
 ## API 路由
 
 Prefix: `/api/git-diff`, Tag: `git-diff`
@@ -70,7 +88,7 @@ Prefix: `/api/git-diff`, Tag: `git-diff`
 | 方法 | 路径 | 功能 |
 | --- | --- | --- |
 | GET | `/refs` | 获取 Git revision 列表 |
-| GET | `/options` | 获取差异引擎支持的选项（标记类型、数学标记粒度） |
+| GET | `/options` | 获取差异引擎支持的选项与配置默认值（标记类型、数学标记粒度、默认引擎/颜色） |
 | POST | `/render-pdf` | 生成差异高亮 PDF |
 | GET | `/pdf/{job_id}` | 下载/预览 PDF |
 

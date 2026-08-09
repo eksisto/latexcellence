@@ -58,6 +58,11 @@ const EXACT_MAP = {
   "Invalid project-relative path": "invalidProjectRelativePath",
   "Project directory not found in target revision":
     "projectDirNotFoundInRevision",
+  "Opened project is not inside its Git repository": "gitDiffProjectNotInRepo",
+  "Diff PDF generated but compilation failed. Please refer to the raw output to diagnose the issue.":
+    "diffCompileFailedFallback",
+  "LLM error translation failed, please refer to the raw compilation output below":
+    "llmTranslationFailed",
   "Pandoc produced empty output": "pandocEmptyOutput",
 
   // Pandoc
@@ -105,6 +110,8 @@ const PATTERN_MAP = [
     "invalidGitRevision",
     (m) => ({ revision: m[1] }),
   ],
+  [/^latexdiff command not found/, "latexdiffNotInstalled", () => ({})],
+  [/^latexdiff failed/, "latexdiffFailed", () => ({})],
   [
     /^File not found in revision (.+?):\s*(.+)/,
     "fileNotFoundInRevision",

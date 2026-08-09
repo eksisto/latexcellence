@@ -8,13 +8,15 @@ Git 差异高亮 PDF 生成服务。
 
 import asyncio
 import difflib
+import os
 import re
 import shutil
+import subprocess
 import tempfile
 import uuid
 import zipfile
 from dataclasses import dataclass, field
-from pathlib import Path, PurePosixPath
+from pathlib import Path, PurePosixPath, PureWindowsPath
 
 
 from pydantic import BaseModel, ConfigDict
@@ -24,18 +26,46 @@ from backend.core.logger import get_logger
 from backend.core.workspace_manager import get_project_manager_for_workspace
 from backend.utils.compile_error_translator import translate_compile_errors
 from backend.utils.path_guard import resolve_project_path
-from backend.utils.tex_compile import run_tex_compile, TexCompileResult
+from backend.utils.tex_compile import (
+    run_tex_compile,
+    terminate_process_tree,
+    TexCompileResult,
+)
 
 logger = get_logger(__name__)
 
 WORKTREE_REF = "__WORKTREE__"
 PDF_OUTPUT_ROOT = Path(tempfile.gettempdir()) / "latexcellence_git_diff"
+_MAX_KEPT_JOB_DIRS = 20
 
 _INPUT_PATTERN = re.compile(
     r"\\(?P<cmd>input|include|subfile)\s*\{(?P<path>[^{}\n]+)\}"
 )
 _BEGIN_DOCUMENT = r"\begin{document}"
 _END_DOCUMENT = r"\end{document}"
+
+# 浮动体环境：LaTeX 的 table/figure 等环境要求 outer par mode，
+# 不能出现在 LXDiffAdded / LXDiffDeleted（framed 颜色框）内部，
+# 否则编译会报 "Not in outer par mode"。
+# 生成差异时这些环境整体不包裹高亮，只高亮其周围的普通文本。
+_FLOAT_ENV_NAMES = frozenset(
+    {
+        "table",
+        "table*",
+        "figure",
+        "figure*",
+        "algorithm",
+        "algorithm*",
+        "wrapfigure",
+        "wraptable",
+        "sidewaystable",
+        "sidewaysfigure",
+    }
+)
+
+# 行内 \begin{...} / \end{...} 环境边界，用于把浮动体从高亮包裹中拆出。
+# 必须带捕获组：re.split 只有在存在捕获组时才会把匹配到的 token 一并返回。
+_ENV_TOKEN_RE = re.compile(r"(\\(?:begin|end)\{[^{}\n]+\})")
 
 # latexdiff 支持的标记类型
 LATEXDIFF_TYPES = [
@@ -72,8 +102,8 @@ _DIFF_PREAMBLE_TEMPLATE = r"""
 }}
 """
 
-_DEFAULT_COLOR_ADD_HEX = "DFF6DD"
-_DEFAULT_COLOR_DEL_HEX = "FFE3E3"
+_DEFAULT_COLOR_ADD_HEX = "D7E8B1"
+_DEFAULT_COLOR_DEL_HEX = "FFA3A3"
 
 
 class GitRevision(BaseModel):
@@ -215,9 +245,9 @@ async def render_diff_pdf(
     target_ref: str,
     workspace_id: str = "",
     *,
-    diff_engine: str = "difflib",
-    markup_type: str = "UNDERLINE",
-    math_markup: str = "fine",
+    diff_engine: str | None = None,
+    markup_type: str | None = None,
+    math_markup: str | None = None,
     color_add: str = "",
     color_del: str = "",
     exclude_safecmd: str = "",
@@ -235,6 +265,12 @@ async def render_diff_pdf(
     target_flattened = await _flatten_main_document(target_ref, context, main_rel)
 
     cfg = get_config()
+    if diff_engine is None:
+        diff_engine = cfg.features.git_diff.default_engine
+    if markup_type is None:
+        markup_type = cfg.features.git_diff.default_markup_type
+    if math_markup is None:
+        math_markup = cfg.features.git_diff.default_math_markup
     if not color_add:
         color_add = cfg.features.git_diff.default_color_add
     if not color_del:
@@ -277,6 +313,7 @@ async def render_diff_pdf(
 
     compile_result = await _compile_diff(project_dir, diff_rel)
     pdf_source = diff_path.with_suffix(".pdf")
+    await asyncio.to_thread(_prune_old_job_dirs)
 
     included_files = sorted(set(base_flattened.files) | set(target_flattened.files))
 
@@ -334,6 +371,25 @@ def get_pdf_path(job_id: str) -> Path:
     return pdf_path
 
 
+def _prune_old_job_dirs() -> None:
+    """清理过期的差异 PDF job 目录，只保留最近生成的若干份。
+
+    每次渲染都会把整个项目复制进系统临时目录，若不清理会持续占用磁盘。
+    成功与失败的 job 目录都统一按生成时间保留最新的若干份。
+    """
+    if not PDF_OUTPUT_ROOT.exists():
+        return
+    entries = [
+        entry
+        for entry in PDF_OUTPUT_ROOT.iterdir()
+        if entry.is_dir() and re.fullmatch(r"[a-f0-9]{32}", entry.name)
+    ]
+    entries.sort(key=lambda entry: entry.stat().st_mtime, reverse=True)
+    for stale in entries[_MAX_KEPT_JOB_DIRS:]:
+        shutil.rmtree(stale, ignore_errors=True)
+        logger.info(f"Pruned stale git diff job dir: {stale.name}")
+
+
 async def _get_project_context(workspace_id: str = "") -> ProjectContext:
     project = get_project_manager_for_workspace(workspace_id)
     if not project.is_open:
@@ -356,10 +412,18 @@ async def _get_project_context(workspace_id: str = "") -> ProjectContext:
 
 
 async def _list_commit_revisions(git_root: Path) -> list[GitRevision]:
-    result = await _run_git_checked(
+    result = await _run_git(
         git_root,
         ["log", "--pretty=format:%H%x00%h%x00%s", "-n", "50"],
+        timeout=30,
     )
+    if result.returncode != 0:
+        stderr = result.stderr.strip()
+        # 全新仓库还没有任何提交，返回空列表（只保留 worktree 可选）
+        if "does not have any commits yet" in stderr:
+            return []
+        raise RuntimeError(stderr or result.stdout.strip() or "Git log failed")
+
     revisions = []
     for line in result.stdout.splitlines():
         parts = line.split("\x00")
@@ -495,6 +559,11 @@ async def _resolve_include_path(
         return None
 
     path = PurePosixPath(normalized)
+    # 拒绝绝对路径和目录穿越：include 只允许项目内相对路径
+    if path.is_absolute() or PureWindowsPath(normalized).is_absolute():
+        return None
+    if ".." in path.parts:
+        return None
     if path.suffix == "":
         path = path.with_suffix(".tex")
 
@@ -529,7 +598,13 @@ async def _read_revision_file(
     required: bool,
 ) -> str | None:
     if ref == WORKTREE_REF:
-        path = project.root / Path(project_rel)
+        try:
+            path = resolve_project_path(project.root, project_rel)
+        except ValueError:
+            # 非法路径（含 ..、绝对路径、符号链接逃逸）按“文件不存在”处理
+            if required:
+                raise
+            return None
         if not path.exists() or not path.is_file():
             if required:
                 raise FileNotFoundError(f"File not found: {project_rel}")
@@ -758,10 +833,92 @@ def _diff_lines(
 
 
 def _wrap_diff_block(environment: str, lines: list[str]) -> list[str]:
+    """将差异行包裹为 LXDiffAdded / LXDiffDeleted 高亮块。
+
+    framed 颜色框不允许浮动体（table/figure 等）出现，否则编译报
+    "Not in outer par mode"。因此遇到浮动体环境时，会把高亮块从
+    浮动体前后拆开：浮动体本身（含其全部内容）保持不包裹，
+    前后的普通文本仍正常高亮。浮动体必须位于独立段落中（前后留空行），
+    否则紧贴 framed 框时 TeX 会报 "Float(s) lost"。
+    """
+
     if not lines:
         return []
     content = lines if any(line.strip() for line in lines) else ["~"]
-    return [f"\\begin{{{environment}}}", *content, f"\\end{{{environment}}}"]
+
+    output: list[str] = []
+    buffer: list[str] = []
+    float_stack: list[str] = []
+
+    def in_float() -> bool:
+        return bool(float_stack)
+
+    def flush_buffer() -> None:
+        if not buffer:
+            return
+        output.extend([f"\\begin{{{environment}}}", *buffer, f"\\end{{{environment}}}"])
+        buffer.clear()
+
+    def ensure_blank_separator() -> None:
+        if output and output[-1] != "":
+            output.append("")
+
+    for line in content:
+        if not line.strip():
+            # 空白行原样保留（包裹内是段落分隔；浮动体内保持原样）
+            if in_float():
+                output.append(line)
+            else:
+                buffer.append(line)
+            continue
+
+        for fragment in _ENV_TOKEN_RE.split(line):
+            if not fragment:
+                continue
+            if not _ENV_TOKEN_RE.fullmatch(fragment):
+                # 普通文本：浮动体内直接输出，否则先暂存待包裹
+                if in_float():
+                    output.append(fragment)
+                else:
+                    buffer.append(fragment)
+                continue
+
+            token = fragment
+            if token.startswith("\\begin"):
+                name = token[len("\\begin{") : -1]
+                if name in _FLOAT_ENV_NAMES:
+                    if not in_float():
+                        flush_buffer()
+                        ensure_blank_separator()
+                    float_stack.append(name)
+                elif in_float():
+                    # 浮动体内部的环境（如 tabular）随浮动体一起不包裹
+                    pass
+                else:
+                    buffer.append(token)
+                    continue
+                output.append(token)
+                continue
+
+            # \end{...}
+            name = token[len("\\end{") : -1]
+            if name in _FLOAT_ENV_NAMES:
+                if float_stack and float_stack[-1] == name:
+                    float_stack.pop()
+                elif name in float_stack:
+                    float_stack.remove(name)
+                output.append(token)
+                if not in_float():
+                    # 浮动体结束后回到普通段落，与后续包裹之间留空行
+                    flush_buffer()
+                    output.append("")
+            elif in_float():
+                output.append(token)
+            else:
+                buffer.append(token)
+
+    flush_buffer()
+    return output
 
 
 def _inject_diff_preamble(
@@ -908,16 +1065,22 @@ async def _run_git(cwd: Path, args: list[str], timeout: int = 30) -> ProcessResu
 
 
 async def _run_process(cmd: list[str], cwd: Path, timeout: int) -> ProcessResult:
+    proc_kwargs: dict = {}
+    if os.name == "nt":
+        proc_kwargs["creationflags"] = subprocess.CREATE_NEW_PROCESS_GROUP
+    else:
+        proc_kwargs["start_new_session"] = True
     process = await asyncio.create_subprocess_exec(
         *cmd,
         cwd=str(cwd),
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
+        **proc_kwargs,
     )
     try:
         stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=timeout)
     except asyncio.TimeoutError:
-        process.kill()
+        await terminate_process_tree(process)
         stdout, stderr = await process.communicate()
         return ProcessResult(
             returncode=-1,

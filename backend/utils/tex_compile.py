@@ -14,8 +14,11 @@ template_gen 模块（模板生成 Agent）复用。
 """
 
 import asyncio
+import os
 import re
 import shutil
+import signal
+import subprocess
 import tempfile
 from pathlib import Path
 
@@ -50,6 +53,47 @@ def _check_texfot_available() -> bool:
         else:
             logger.info("texfot not found on PATH, falling back to raw latexmk output")
     return _texfot_available
+
+
+async def terminate_process_tree(process: asyncio.subprocess.Process) -> None:
+    """终止进程及其子进程树，供 latexmk / latexdiff 等会派生子进程的命令使用。
+
+    只 kill 顶层进程时，Windows 上 xelatex / bibtex 等子进程会残留并占用
+    文件锁。子进程创建时已通过 ``creationflags`` / ``start_new_session``
+    建立独立进程组，这里整组终止。taskkill 不可用或失败时回退为只杀
+    顶层进程（与旧行为一致）。
+    """
+    pid = process.pid
+    if pid is None:
+        return
+
+    def _kill() -> None:
+        if os.name == "nt":
+            try:
+                result = subprocess.run(
+                    ["taskkill", "/F", "/T", "/PID", str(pid)],
+                    capture_output=True,
+                    timeout=10,
+                )
+                if result.returncode == 0:
+                    return
+            except Exception:
+                pass
+            try:
+                process.kill()
+            except ProcessLookupError:
+                pass
+            return
+
+        try:
+            os.killpg(os.getpgid(pid), signal.SIGKILL)
+        except (ProcessLookupError, PermissionError, OSError):
+            try:
+                process.kill()
+            except ProcessLookupError:
+                pass
+
+    await asyncio.to_thread(_kill)
 
 
 def _filter_with_regex(raw_output: str, max_chars: int = 3000) -> str:
@@ -306,17 +350,23 @@ async def run_tex_compile(
             cmd = ["texfot", "--quiet", "--no-interactive"] + latexmk_base
             logger.debug(f"Running: {' '.join(cmd)} in {cwd_str}")
             try:
+                proc_kwargs: dict = {}
+                if os.name == "nt":
+                    proc_kwargs["creationflags"] = subprocess.CREATE_NEW_PROCESS_GROUP
+                else:
+                    proc_kwargs["start_new_session"] = True
                 process = await asyncio.create_subprocess_exec(
                     *cmd,
                     cwd=cwd_str,
                     stdout=asyncio.subprocess.PIPE,
                     stderr=asyncio.subprocess.PIPE,
+                    **proc_kwargs,
                 )
                 stdout_b, stderr_b = await asyncio.wait_for(
                     process.communicate(), timeout=timeout
                 )
             except asyncio.TimeoutError:
-                process.kill()
+                await terminate_process_tree(process)
                 stdout_b, stderr_b = await process.communicate()
                 raw = _decode(stdout_b, stderr_b)
                 return TexCompileResult(
@@ -339,17 +389,23 @@ async def run_tex_compile(
         # ── 降级路径：直接 latexmk + 正则过滤 ──
         logger.debug(f"Running (fallback): {' '.join(latexmk_base)} in {cwd_str}")
         try:
+            proc_kwargs: dict = {}
+            if os.name == "nt":
+                proc_kwargs["creationflags"] = subprocess.CREATE_NEW_PROCESS_GROUP
+            else:
+                proc_kwargs["start_new_session"] = True
             process = await asyncio.create_subprocess_exec(
                 *latexmk_base,
                 cwd=cwd_str,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
+                **proc_kwargs,
             )
             stdout_b, stderr_b = await asyncio.wait_for(
                 process.communicate(), timeout=timeout
             )
         except asyncio.TimeoutError:
-            process.kill()
+            await terminate_process_tree(process)
             stdout_b, stderr_b = await process.communicate()
             raw = _decode(stdout_b, stderr_b)
             return TexCompileResult(

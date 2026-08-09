@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import {
@@ -44,6 +44,7 @@ import PDFPreview from "@/components/PDFPreview";
 import { api } from "@/api/index";
 import { cn } from "@/lib/utils";
 import useStore from "@/store/useStore";
+import { translateError } from "@/utils/errorMessages";
 
 const WORKTREE_REF = "__WORKTREE__";
 
@@ -120,6 +121,8 @@ export default function GitDiffPage() {
     markupTypes: [],
     mathMarkups: [],
   });
+  // 记录已经初始化过默认 ref 的项目，避免切换 base/target 时反复重拉 refs
+  const defaultsInitializedFor = useRef("");
 
   const texFiles = useMemo(() => flattenTexFiles(fileTree), [fileTree]);
   const grouped = useMemo(() => groupRevisions(refs), [refs]);
@@ -181,19 +184,19 @@ export default function GitDiffPage() {
       setRefs(revisions);
       setGitRoot(data.git_root || "");
       setIsDirty(Boolean(data.is_dirty));
-      if (!baseRef) {
+      // 只在项目首次加载（或切换项目）时设置默认 base/target
+      if (defaultsInitializedFor.current !== projectPath) {
         const head = revisions.find((item) => item.kind === "commit");
         setBaseRef(head?.value || "");
-      }
-      if (!targetRef) {
         setTargetRef(WORKTREE_REF);
+        defaultsInitializedFor.current = projectPath;
       }
     } catch (err) {
       setError(err.message);
     } finally {
       setLoadingRefs(false);
     }
-  }, [baseRef, projectPath, targetRef]);
+  }, [projectPath, workspaceId]);
 
   useEffect(() => {
     loadRefs();
@@ -204,6 +207,12 @@ export default function GitDiffPage() {
           markupTypes: data.markup_types || [],
           mathMarkups: data.math_markups || [],
         });
+        // 从配置初始化默认引擎 / 标记 / 颜色，设置页的修改才能生效
+        if (data.default_engine) setDiffEngine(data.default_engine);
+        if (data.default_markup_type) setMarkupType(data.default_markup_type);
+        if (data.default_math_markup) setMathMarkup(data.default_math_markup);
+        if (data.default_color_add) setColorAdd(data.default_color_add);
+        if (data.default_color_del) setColorDel(data.default_color_del);
       })
       .catch(() => {});
   }, [loadRefs]);
@@ -693,7 +702,7 @@ export default function GitDiffPage() {
                       {t("pages:gitDiff.errorExplanation")}
                     </Label>
                     <p className="text-sm mt-1 whitespace-pre-wrap text-destructive">
-                      {result.explanation}
+                      {translateError(result.explanation)}
                     </p>
                   </div>
                 )}

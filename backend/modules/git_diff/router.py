@@ -4,6 +4,7 @@ from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, ConfigDict
 
+from backend.core.config import get_config
 from backend.core.logger import get_logger
 from backend.modules.git_diff.service import (
     LATEXDIFF_MATH_MARKUPS,
@@ -22,12 +23,24 @@ class DiffOptions(BaseModel):
 
     markup_types: list[str] = LATEXDIFF_TYPES
     math_markups: list[str] = LATEXDIFF_MATH_MARKUPS
+    default_engine: str = "difflib"
+    default_markup_type: str = "UNDERLINE"
+    default_math_markup: str = "fine"
+    default_color_add: str = "#D7E8B1"
+    default_color_del: str = "#FFA3A3"
 
 
 @router.get("/options")
 async def get_options():
     """获取差异引擎支持的选项（标记类型、数学标记粒度）。"""
-    return DiffOptions().model_dump()
+    git_diff_cfg = get_config().features.git_diff
+    return DiffOptions(
+        default_engine=git_diff_cfg.default_engine,
+        default_markup_type=git_diff_cfg.default_markup_type,
+        default_math_markup=git_diff_cfg.default_math_markup,
+        default_color_add=git_diff_cfg.default_color_add,
+        default_color_del=git_diff_cfg.default_color_del,
+    ).model_dump()
 
 
 class DiffRenderRequest(BaseModel):
@@ -39,9 +52,10 @@ class DiffRenderRequest(BaseModel):
     base_ref: str
     target_ref: str
     # 高级选项
-    diff_engine: str = "difflib"  # difflib / latexdiff
-    markup_type: str = "UNDERLINE"  # latexdiff 标记类型
-    math_markup: str = "fine"  # latexdiff 数学标记粒度
+    # 置空时由服务端读取 features.git_diff 配置默认值
+    diff_engine: str | None = None  # difflib / latexdiff
+    markup_type: str | None = None  # latexdiff 标记类型
+    math_markup: str | None = None  # latexdiff 数学标记粒度
     color_add: str = ""  # 新增内容颜色（HEX，空则用配置默认值）
     color_del: str = ""  # 删除内容颜色（HEX，空则用配置默认值）
     exclude_safecmd: str = ""  # 排除的安全命令列表（逗号分隔）
