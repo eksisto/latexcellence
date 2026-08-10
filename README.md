@@ -169,6 +169,17 @@ python main.py config.json
 
 > 说明：前端依赖与脚本位于 `frontend/package.json`，根目录无 `package.json`。
 
+### 展示页（Showcase）
+
+项目内置一个独立的展示页（`showcase/`），用于对外演示功能与设计：滚动叙述式（Scrollytelling）落地页，零依赖（Node.js 内置 `http` 静态服务器），内容由 `showcase/js/content.js` 数据驱动，主题 CSS 从 `frontend/src/theme/*.css` 自动生成。
+
+```bash
+cd showcase
+npm start        # 或 node server.js
+```
+
+打开 http://127.0.0.1:4173。详见 [docs/showcase.md](docs/showcase.md)。
+
 ## 基本用法
 
 1. 打开本地 LaTeX 项目目录
@@ -192,6 +203,7 @@ latexcellence/
 │   └── utils/               # 工具：文件操作、JSON 校验、LaTeX 解析等
 ├── frontend/
 │   └── src/                 # React 应用
+├── showcase/                # 独立展示页（零依赖静态站，详见 docs/showcase.md）
 ├── prompts/                 # 自定义提示词
 ├── templates/               # 生成的模板
 ├── tests/                   # 测试

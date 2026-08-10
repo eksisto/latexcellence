@@ -111,6 +111,8 @@
 | JetBrains Mono | OFL-1.1 | Copyright (c) 2020 The JetBrains Mono Project Authors | [JetBrains](https://www.jetbrains.com/lp/mono) |
 | STIX Two Text | OFL-1.1 | Copyright (c) 2001-2021 The STIX Fonts Project Authors | [STIX Fonts Project](https://github.com/stipub/stixfonts) |
 
+> 说明：`showcase/` 展示页通过 cdnjs / mirrors 从 CDN 加载上述同一批字体与 KaTeX（见 `showcase/css/fonts.css`、`showcase/index.html`），不新增仓库内资产与依赖。
+
 ## 五、系统级外部依赖
 
 | 项目 | 版本 | 许可证 | 版权 / 作者 | 用途 |

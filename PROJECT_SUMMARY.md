@@ -125,6 +125,7 @@ latexcellence/
 │       ├── styles/                  # 前端样式（code-highlight.css：高亮颜色独立文件，按需引入）
 │       └── store/useStore.js        # Zustand 全局状态
 │
+├── showcase/                        # 独立展示页（零依赖静态站，详见 docs/showcase.md）
 ├── docs/                            # 开发文档
 │   ├── development.md               # 项目概述/技术栈/启动
 │   ├── backend-core.md              # 后端核心模块
@@ -134,7 +135,8 @@ latexcellence/
 │   ├── latex-package-rules.md       # 宏包规则表维护指南
 │   ├── duckduckgo-challenge.md      # DDG 验证码处理说明
 │   ├── function-calling-tools.md    # Function Calling 工具体系说明
-│   └── modules/                     # 模块文档
+│   ├── modules/                     # 模块文档
+│   └── showcase.md                  # 展示页（showcase）说明
 ├── tests/                           # 测试用例
 │   ├── conftest.py                  # pytest 共享 fixture
 │   ├── test_api/                    # 各模块 API 集成测试

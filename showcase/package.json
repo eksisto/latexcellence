@@ -1,0 +1,18 @@
+{
+  "name": "latexcellence-showcase",
+  "version": "0.1.0",
+  "private": true,
+  "description": "LateXcellence 展示页",
+  "type": "commonjs",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js",
+    "themes:gen": "node tools/gen-themes.mjs",
+    "themes:check": "node tools/check-themes.mjs",
+    "deploy": "node tools/deploy.mjs"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

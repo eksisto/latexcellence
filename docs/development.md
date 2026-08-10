@@ -110,6 +110,10 @@ latexcellence/
 │       │   └── ...
 │       └── pages/                  # 页面组件
 │
+├── showcase/                     # 独立展示页（零依赖静态站，Node 内置 http；详见 showcase.md）
+│   ├── index.html / server.js / package.json
+│   └── js/ css/ tools/            # 内容数据驱动渲染 + 主题 CSS 生成
+│
 ├── tools/                        # 维护者工具（开发/评测/维护用脚本与 Agent 评测工作区，不进入运行时）
 │   ├── eval_common.py             # 人工评估工具共享基座（语料加载/工作区/marker 还原/命中判定/CLI 骨架）
 │   ├── latex_packages/             # 宏包规则表维护（离线编译验证 + 覆盖率报告）
@@ -172,6 +176,17 @@ latexcellence/
 内联路由：`/api/health`、`/api/config/status`、`/api/config`
 
 路由模块均通过显式 `app.include_router()` 注册。
+
+### `showcase/` — 展示页
+
+独立的零依赖静态展示页，用 Node.js 内置 `http` 提供文件服务：
+
+```bash
+cd showcase
+npm start        # 或 node server.js
+```
+
+打开 http://127.0.0.1:4173。架构与维护方式见 [showcase.md](showcase.md)。
 
 ---
 
