@@ -289,6 +289,42 @@ class PlotGenAgent:
             )
 
             if not tool_calls:
+                # 首轮退化防护：generate 的第一个响应只输出文字、不调用任何
+                # 工具时，直接收尾会得到零产物的空会话。注入强约束消息让
+                # LLM 重试一次（仅首轮一次，此后仍按正常收尾处理）。
+                if run_type == "generate" and round_idx == 0:
+                    messages.append(msg.model_dump())
+                    nudge_msg = (
+                        "You replied with explanatory text but called NO tool, "
+                        "so nothing was produced. Start the plotting workflow "
+                        "NOW: call `write_file` to create `scripts/plot.py` "
+                        "(following OUTPUTS and TIKZ PROTOCOL), then run it "
+                        "with `python_sandbox`. Respond with tool calls, not "
+                        "prose."
+                    )
+                    messages.append({"role": "system", "content": nudge_msg})
+                    await self._append_trace(
+                        sandbox,
+                        {
+                            "ts": now_iso(),
+                            "run_id": run_id,
+                            "type": "warning",
+                            "data": {
+                                "message": (
+                                    "First-round reply had no tool call; "
+                                    "nudged the LLM to start the plotting tools."
+                                )
+                            },
+                        },
+                    )
+                    yield {
+                        "type": "plan",
+                        "content": (
+                            "First reply contained no tool call; retrying with "
+                            "an explicit instruction to start the plotting tools."
+                        ),
+                    }
+                    continue
                 # 正常收尾：把最终 assistant 回复并入会话并持久化，
                 # 否则 refine 读取 meta.messages 时会丢失这一轮上下文。
                 messages.append(msg.model_dump())

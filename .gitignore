@@ -18,6 +18,7 @@ dist/
 venv/
 env/
 .pytest_tmp/
+.pytest_run/
 
 # Node
 node_modules/

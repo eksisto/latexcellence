@@ -1,4 +1,4 @@
-"""汇总对比多轮结果（baseline/opt1..opt10）并输出表格数据。"""
+"""汇总对比多轮结果（baseline/opt1..opt11b）并输出表格数据。"""
 
 import json
 import sys
@@ -17,6 +17,8 @@ TAGS = [
     "opt8",
     "opt9",
     "opt10",
+    "opt11",
+    "opt11b",
 ]
 
 

@@ -312,6 +312,10 @@ def _axis_options(spec: TikzSpec) -> list[str]:
             opts.append(
                 "xticklabels={" + ", ".join(_escape(x) for x in xticklabels) + "}"
             )
+            # 类别多或标签长时水平排布必然重叠，确定性旋转（热力图同款规则）
+            max_label_len = max((len(str(x)) for x in xticklabels), default=0)
+            if (len(xticklabels) >= 5 and max_label_len >= 6) or max_label_len >= 10:
+                opts.append("xticklabel style={rotate=45,anchor=east}")
         elif spec.bar and spec.bar.group_labels:
             # 无 x 类别时按组标签展示
             opts.append(
@@ -382,12 +386,20 @@ def _table_opts(series: SeriesSpec, ct: str) -> str:
         opts = f"y={series.y}"
     else:
         opts = f"x={series.x}, y={series.y}"
+    # 误差列是 table 选项（声明列名），但 PGFPlots 默认不绘制误差棒，
+    # 还需在 \addplot+[...] 里启用 error bars/.cd, y dir=both, y explicit
+    # 才会真正画出（由 _error_bar_options 注入）。
     if series.y_plus:
         opts += f", y error plus={series.y_plus}"
     if series.y_minus:
         opts += f", y error minus={series.y_minus}"
     opts += ", col sep=comma"
     return opts
+
+
+def _error_bar_enable() -> str:
+    """返回 addplot 选项前缀，启用误差棒绘制（table 选项声明列名之后必需）。"""
+    return "error bars/.cd, y dir=both, y explicit"
 
 
 def _render(spec: TikzSpec) -> str:
@@ -399,6 +411,9 @@ def _render(spec: TikzSpec) -> str:
     ]
     if ct in ("box", "violin"):
         lines.insert(2, r"\usepgfplotslibrary{statistics}")
+    # 误差棒是 pgfplots 核心原生能力：在 addplot 启用
+    # `error bars/.cd, y dir=both, y explicit`，table 选项给
+    # `y error plus`/`y error minus` 列名即可绘制，无需加载额外 library。
 
     # 自定义颜色定义
     color_defs: list[str] = []
@@ -445,6 +460,8 @@ def _render(spec: TikzSpec) -> str:
             mo = _mark_options(s, ct, color_map.get(id(s)))
             if ct in ("bar", "histogram"):
                 mo = f"{mo}, ybar".strip(", ")
+            if s.y_plus or s.y_minus:
+                mo = (mo + ", " if mo else "") + _error_bar_enable()
             addplot = (
                 f"\\addplot+[{mo}] table[{_table_opts(s, ct)}] {{{s.file}}};"
                 if mo
@@ -524,13 +541,165 @@ def _validate_numeric(df: pd.DataFrame, col: str, ref: str) -> str | None:
     return None
 
 
-def _validate_csvs(spec: TikzSpec, artifacts_dir: Path) -> str | None:
-    """渲染前校验引用 CSV 的列/数值类型/网格维度，返回错误消息或 None。
+def _validate_error_column(
+    df: pd.DataFrame, col: str, ref: str, kind: str
+) -> str | None:
+    """误差列（y_plus/y_minus）：存在性 + 数值性 + 空值检查。
+
+    空单元格（单重复组 sem/sd 为 NaN 的常见来源）会让 PGFPlots 静默丢弃
+    误差棒——编译成功但图是错的，必须在生成期阻断并给出精确修法。
+    """
+    numeric_error = _validate_numeric(df, col, ref)
+    if numeric_error is not None:
+        return f"{numeric_error} (referenced as {kind})"
+    coerced = pd.to_numeric(df[col], errors="coerce")
+    na_rows = [int(i) for i in df.index[coerced.isna()][:5]]
+    if na_rows:
+        return (
+            f"column '{col}' ({kind}) in {ref} has empty value(s) at data "
+            f"row(s) {na_rows} — PGFPlots silently drops error bars for empty "
+            "cells. This usually comes from single-replicate groups whose "
+            "sem/sd is NaN: fill with 0 (e.g. agg['sem'] = "
+            "agg['sem'].fillna(0)) or drop those rows"
+        )
+    return None
+
+
+def _validate_log_positive(
+    spec: TikzSpec, df: pd.DataFrame, col: str, ref: str, axis: str
+) -> str | None:
+    """对数轴坐标必须严格为正，否则 PGFPlots 静默丢点。"""
+    mode = spec.xmode if axis == "x" else spec.ymode
+    if mode != "log" or col not in df.columns:
+        return None
+    values = pd.to_numeric(df[col], errors="coerce")
+    nonpos = values <= 0
+    if not bool(nonpos.any()):
+        return None
+    samples = ", ".join(f"{v:g}" for v in values[nonpos].head(3))
+    return (
+        f"column '{col}' in {ref} has {int(nonpos.sum())} non-positive "
+        f"value(s) (e.g. {samples}) but {axis}mode=log — PGFPlots silently "
+        "drops non-positive coordinates on a log axis. Filter them out in "
+        f"the script (e.g. df = df[df['{col}'] > 0]) before writing the CSV"
+    )
+
+
+def _derive_bar_labels(spec: TikzSpec, loaded: dict[str, pd.DataFrame]) -> list[str]:
+    """系列 CSV 含 category 文本列而 xticklabels 缺失时，按 x 索引推导标签。
+
+    索引不干净或系列间类别不一致时返回空列表（不推导），交由结构校验报错。
+    """
+    derived: dict[int, str] = {}
+    for s in spec.series:
+        df = loaded.get(s.file)
+        if df is None or "category" not in df.columns or s.x not in df.columns:
+            continue
+        x_vals = pd.to_numeric(df[s.x], errors="coerce")
+        if bool(x_vals.isna().any()):
+            return []
+        for xi, cat in zip(x_vals, df["category"].astype(str)):
+            idx = int(xi)
+            if idx in derived and derived[idx] != cat:
+                return []
+            derived[idx] = cat
+    if not derived:
+        return []
+    n = max(derived) + 1
+    if set(derived) != set(range(n)):
+        return []
+    return [derived[i] for i in range(n)]
+
+
+def _validate_bar_series(spec: TikzSpec, loaded: dict[str, pd.DataFrame]) -> list[str]:
+    """柱状图结构校验：索引完整覆盖 + y 非空 + 类别顺序交叉验证。
+
+    缺行（某类别无柱）、重复索引（同槽双柱）、y 空值与 xticklabels 顺序
+    错位都是静默数据保真问题——PGFPlots 编译成功但图是错的，必须在
+    生成期阻断。系列 CSV 含 ``category`` 文本列时逐行核对
+    ``xticklabels[x] == category``。
+    """
+    labels = (spec.bar.xticklabels if spec.bar else []) or []
+    if not labels:
+        return []
+    n = len(labels)
+    expected = set(range(n))
+    problems: list[str] = []
+    for s in spec.series:
+        df = loaded.get(s.file)
+        if df is None or s.x not in df.columns:
+            continue
+        x_vals = pd.to_numeric(df[s.x], errors="coerce")
+        if bool((x_vals.isna() & df[s.x].notna()).any()):
+            continue  # 非数值字符串已由 _validate_numeric 报告
+        clean = x_vals.dropna()
+        if bool((clean % 1 != 0).any()):
+            problems.append(
+                f"{s.file}: bar x values must be integer indices 0..{n - 1}, "
+                "not fractional numbers"
+            )
+            continue
+        present = {int(v) for v in clean}
+        if len(clean) != len(present):
+            problems.append(
+                f"{s.file}: duplicate x index — each category slot may appear "
+                "only once per series (duplicates draw two bars in one slot)"
+            )
+        extra = sorted(present - expected)
+        if extra:
+            problems.append(
+                f"{s.file}: x index {extra} out of range 0..{n - 1} "
+                f"(bar.xticklabels has {n} entries)"
+            )
+        missing = sorted(expected - present)
+        if missing:
+            named = ", ".join(f"{i} ('{labels[i]}')" for i in missing[:5])
+            problems.append(
+                f"{s.file}: missing category x index {named} — every series "
+                f"CSV must contain exactly one row per category index "
+                f"0..{n - 1}; a missing row renders as a missing bar. If the "
+                "category truly has no value, write an explicit 0"
+            )
+        if s.y in df.columns:
+            y_empty = pd.to_numeric(df[s.y], errors="coerce").isna() & df[s.y].isna()
+            if bool(y_empty.any()):
+                rows = [int(i) for i in df.index[y_empty][:5]]
+                problems.append(
+                    f"{s.file}: column '{s.y}' has empty value(s) at data "
+                    f"row(s) {rows} — renders as missing bar(s); write an "
+                    "explicit 0 for empty categories"
+                )
+        if "category" in df.columns and not bool(x_vals.isna().any()):
+            mismatches: list[str] = []
+            for xi, cat in zip(x_vals, df["category"].astype(str)):
+                idx = int(xi)
+                if 0 <= idx < n and labels[idx] != cat:
+                    mismatches.append(
+                        f"x={idx}: CSV category '{cat}' != "
+                        f"xticklabels[{idx}] '{labels[idx]}'"
+                    )
+                if len(mismatches) >= 5:
+                    break
+            if mismatches:
+                problems.append(
+                    f"{s.file}: category column does not match "
+                    f"bar.xticklabels order ({'; '.join(mismatches)}). Keep "
+                    "the category order identical across every series CSV "
+                    "and bar.xticklabels (x index i must mean xticklabels[i])"
+                )
+    return problems
+
+
+def _validate_csvs(spec: TikzSpec, artifacts_dir: Path) -> tuple[str | None, list[str]]:
+    """渲染前校验引用 CSV 的列/数值类型/网格维度，返回 (错误消息, 警告列表)。
 
     把本应在 latexmk 阶段才暴露的列名/数值错误提前到生成阶段，
-    避免 Agent 在编译错误上反复试错浪费轮次。
+    避免 Agent 在编译错误上反复试错浪费轮次；同时拦截静默数据保真
+    问题（误差棒空值、对数轴非正坐标、柱状图缺柱/标签错位）。
+    柱状图系列含 category 列而 xticklabels 缺失时，此处推导并回填 spec。
     """
     problems: list[str] = []
+    warnings: list[str] = []
     loaded: dict[str, pd.DataFrame] = {}
     for s in spec.series:
         df, err = _read_csv(artifacts_dir, s.file)
@@ -548,13 +717,37 @@ def _validate_csvs(spec: TikzSpec, artifacts_dir: Path) -> str | None:
                 for p in [
                     _validate_numeric(df, s.x, s.file),
                     _validate_numeric(df, s.y, s.file),
+                    _validate_log_positive(spec, df, s.x, s.file, "x"),
+                    _validate_log_positive(spec, df, s.y, s.file, "y"),
                 ]
                 if p is not None
             )
-        if s.y_plus and s.y_plus not in df.columns:
-            problems.append(f"column '{s.y_plus}' (y_plus) not found in {s.file}")
-        if s.y_minus and s.y_minus not in df.columns:
-            problems.append(f"column '{s.y_minus}' (y_minus) not found in {s.file}")
+        if s.y_plus:
+            problems.extend(
+                p
+                for p in [_validate_error_column(df, s.y_plus, s.file, "y_plus")]
+                if p is not None
+            )
+        if s.y_minus:
+            problems.extend(
+                p
+                for p in [_validate_error_column(df, s.y_minus, s.file, "y_minus")]
+                if p is not None
+            )
+
+    if spec.chart_type == "bar":
+        if not ((spec.bar.xticklabels if spec.bar else []) or []):
+            derived = _derive_bar_labels(spec, loaded)
+            if derived:
+                if spec.bar is None:
+                    spec.bar = BarSpec(xticklabels=derived)
+                else:
+                    spec.bar.xticklabels = derived
+                warnings.append(
+                    "bar.xticklabels was empty; derived from the category "
+                    f"column: {derived}"
+                )
+        problems.extend(_validate_bar_series(spec, loaded))
 
     if spec.heatmap is not None:
         hm = spec.heatmap
@@ -572,7 +765,10 @@ def _validate_csvs(spec: TikzSpec, artifacts_dir: Path) -> str | None:
                     if p is not None
                 )
             if problems:
-                return "TikZ spec data validation failed:\n- " + "\n- ".join(problems)
+                return (
+                    "TikZ spec data validation failed:\n- " + "\n- ".join(problems),
+                    warnings,
+                )
             n = hm.cols
             x_vals = pd.to_numeric(df["x"], errors="coerce")
             y_vals = pd.to_numeric(df["y"], errors="coerce")
@@ -619,8 +815,11 @@ def _validate_csvs(spec: TikzSpec, artifacts_dir: Path) -> str | None:
                 )
 
     if not problems:
-        return None
-    return "TikZ spec data validation failed:\n- " + "\n- ".join(problems)
+        return None, warnings
+    return (
+        "TikZ spec data validation failed:\n- " + "\n- ".join(problems),
+        warnings,
+    )
 
 
 def generate_figure_tex(sandbox: Path) -> dict[str, Any]:
@@ -681,7 +880,7 @@ def generate_figure_tex(sandbox: Path) -> dict[str, Any]:
         }
 
     artifacts_dir = sandbox / "artifacts"
-    data_error = _validate_csvs(spec, artifacts_dir)
+    data_error, data_warnings = _validate_csvs(spec, artifacts_dir)
     if data_error is not None:
         msg = (
             data_error + "\n\nFix tikz_spec.json and/or the data CSVs, then rerun "
@@ -691,11 +890,11 @@ def generate_figure_tex(sandbox: Path) -> dict[str, Any]:
             "generated": False,
             "error": msg,
             "message": msg,
-            "warnings": [],
+            "warnings": data_warnings,
             "size": None,
         }
 
-    warnings = _check_non_ascii(spec)
+    warnings = data_warnings + _check_non_ascii(spec)
     tex = _render(spec)
     out_path = resolve_project_path(
         sandbox, "artifacts/figure.tex", allowed_suffixes=(".tex",)

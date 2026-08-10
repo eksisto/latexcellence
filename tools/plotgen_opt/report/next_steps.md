@@ -18,15 +18,37 @@
 
 ## 2. 当前优化状态（已完成，勿重复实施）
 
-已实施 10 轮优化（基线 → opt1 → ... → opt10），5 场景平均分 87 → 100（典型轮）、平均轮数 15.8 → 4.8（opt10 6.2）、总时长 480.3s → 138.9s（opt10 129.2s），执行/TikZ 成功率保持 5/5：
+已实施 11 轮优化（基线 → opt1 → ... → opt11b），5 场景平均分 87 → 100（典型轮）、平均轮数 15.8 → ~6、总时长 480.3s → ~140s，执行/TikZ 成功率保持 5/5：
 
-| 场景 | 基线（分/轮/秒） | opt6（分/轮/秒） | opt7（分/轮/秒） |
-| --- | --- | --- |
-| s1 时间序列 | 80 / 34 / 234.0 | 100 / 4 / 13.5 | 100 / 4 / 28.8 |
-| s2 热力图 | 100 / 10 / 53.0 | 100 / 7 / 35.7 | 100 / 6 / 33.2（3 样本中位数 95 / 6 轮） |
-| s3 分布图 | 85 / 11 / 41.0 | 100 / 9 / 26.5 | 100 / 6 / 47.3 |
-| s4 柱状图 | 85 / 11 / 51.1 | 100 / 4 / 13.0 | 100 / 4 / 14.2 |
-| s5 剂量曲线 | 85 / 13 / 101.2 | 100 / 5 / 18.9 | 100 / 4 / 15.4 |
+| 场景 | 基线（分/轮/秒） | opt6（分/轮/秒） | opt7（分/轮/秒） | opt10（分/轮/秒） | opt11b（分/轮/秒） |
+| --- | --- | --- | --- | --- | --- |
+| s1 时间序列 | 80 / 34 / 234.0 | 100 / 4 / 13.5 | 100 / 4 / 28.8 | 100 / 4 / 14.9 | 100 / 4 / 15.6 |
+| s2 热力图 | 100 / 10 / 53.0 | 100 / 7 / 35.7 | 100 / 6 / 33.2 | 100 / 9 / 43.1 | 95 / 11 / 52.0 |
+| s3 分布图 | 85 / 11 / 41.0 | 100 / 9 / 26.5 | 100 / 6 / 47.3 | 100 / 8 / 33.8 | 100 / 9 / 38.5 |
+| s4 柱状图 | 85 / 11 / 51.1 | 100 / 4 / 13.0 | 100 / 4 / 14.2 | 100 / 6 / 21.9 | 100 / 6 / 20.1 |
+| s5 剂量曲线 | 85 / 13 / 101.2 | 100 / 5 / 18.9 | 100 / 4 / 15.4 | 100 / 4 / 14.8 | 100 / 5 / 19.0 |
+
+> opt11/opt11b 视觉审查平均 7.4/10（opt8 6.4、opt11 6.2）；s5 误差棒
+> 渲染修复使 fidelity 从 2 升至 7。opt11b LLM 随机性导致 s2 多花 11
+> 轮（启发式 95 分），非代码回归。
+
+已改动的文件（opt11/opt11b，勿回退）：
+
+- `backend/modules/plot_gen/tikzgen.py`：渲染前 CSV 校验扩展为 `(error, warnings)` 双返回——
+  - `_validate_error_column()`：拦截 `y_plus`/`y_minus` 列空单元格（单重复组 NaN sem 的常见产物，PGFPlots 静默丢误差棒）与非数值，给出 `fillna(0)`/删行修法指引；
+  - `_validate_log_positive()`：`xmode`/`ymode=log` 轴禁止 0/负坐标（PGFPlots 静默丢点），指引脚本先过滤非正行；
+  - `_validate_bar_series()`：柱状图结构校验——缺类别索引 = 静默缺柱、重复索引 = 一槽双柱、`y` 空值 = 缺柱，均阻断并指明行；
+  - 系列 CSV 含 `category` 文本列时逐行核对 `category` 与 `bar.xticklabels[x]` 是否一致（此前 s4 标签错位反复出现的根因），错位直接报错；
+  - `_derive_bar_labels()`：`bar.xticklabels` 缺失而系列 CSV 带 `category` 列时按 `x` 索引推导回填 spec 并发警告；
+  - `_axis_options()`：柱状图标签长度过长（类别 ≥5 且最长标签 ≥6 字符，或任一标签 ≥10 字符）时确定性注入 `xticklabel style={rotate=45,anchor=east}` 自动旋转，避免水平重叠；
+- `backend/modules/plot_gen/tikzgen.py`：**误差棒渲染 bug 修复**（确定性 bug）——`_table_opts` 把 `y error plus`/`y error minus` 列名留在 table 选项（位置本就对），新增 `_error_bar_enable()` 在 `\addplot+[...]` 注入 `error bars/.cd, y dir=both, y explicit`；此前漏掉启用声明，PGFPlots 默认不绘制误差棒，导致 TikZ 图长期无误差棒（matplotlib 预览有但审查器审 TikZ PDF，fidelity 被打 2 分）。验证：`\usepgfplotslibrary{errorbars}` 在 TeX Live 2026 找不到库文件（致命），误差棒是 pgfplots 核心原生能力，无需加载额外 library。
+- `backend/core/prompts.py`：agent_system 新增 `LAYOUT RULES`（箱线图不叠加误差棒/均值线、单系列去图例、轴范围紧贴数据），`DATE/AXIS SCALE GUIDANCE` 增 `xmin/xmax/ymin/ymax` 紧贴数据范围；bar chart-specific notes 改为强制"每系列每类别索引一行+缺类别写 0+类别顺序跨系列一致+含 category 文本列供校验"；line notes 增"误差列不得有空单元格，单重复 NaN sem 用 fillna(0) 或删行"；refine_system 同步 bar 顺序与误差棒空值约束；bar 模板补 `category` 文本列说明。
+- `backend/modules/plot_gen/agent.py`：`generate` 首轮若只输出文字无工具调用，注入强约束 system 消息重试一次（trace 记 warning），避免零产物空会话收尾。
+- `tests/test_plot_gen/test_tikzgen.py`：+11 项（误差列空值/非数值、对数轴非正坐标、柱状图缺索引/重复索引/空 y/类别错位、category 列推导、长标签旋转、误差棒渲染断言更新）。
+- `tests/test_api/test_plot_gen.py`：+1 项（首轮文字回复被 nudge 重试）。
+- `tools/plotgen_opt/compare.py`：标签扩展至 opt11b；`docs/modules/plot_gen.md`、`PROJECT_SUMMARY.md`：文档同步。
+
+### 已改动的文件（opt7，勿回退）
 
 > opt8（4.5 回归）：s1/s3/s4/s5 全部 100 分，s2 95 分（12 轮），TikZ 5/5。
 > opt9（4.6 回归）：全部场景 100 分，平均 6 轮 / 150.6s，TikZ 5/5。
@@ -138,6 +160,15 @@
 - **方案**：将默认上限收紧到 20（`backend/core/config.py` 的 `PlotGenConfig` 与 `config.json`/`config.example.json` 同步，前端无需改动），极端场景靠失败预算尽早结束；观察是否出现误截断。
 - **验证结果（opt10）**：`PlotGenConfig.agent_max_rounds` 默认与 `config.json`/`config.example.json` 统一为 20（`template_gen` 保持 30 不变）；opt10 全场景 100 分、TikZ 5/5，轮数 4~9（平均 6.2），未触发截断（`truncated=False`）。87/87 测试通过。
 
+### 4.8 TikZ 生成期数据保真校验 + 误差棒渲染修复（P2）— ✅ 已实施（opt11/opt11b，2026-08-10）
+
+- **背景**：opt8 视觉审查发现启发式 100 分掩盖的静默数据保真问题——s5 剂量曲线 TikZ 图无误差棒、s4 柱状图类别标签与柱体错位、误差列空值被 PGFPlots 静默吞掉。这些问题编译都成功但图是错的，生成期不阻断。
+- **方案**：
+  1. `tikzgen.py::_validate_csvs` 扩渲染前 CSV 校验：误差列空值/非数值、对数轴非正坐标（PGFPlots 静默丢点）、柱状图缺索引/重复索引/空 y/category 与 xticklabels 顺序错位、xticklabels 缺失时按 category 列推导回填、长标签自动旋转 45°。
+  2. **误差棒渲染确定性 bug 修复**：table 里的 `y error plus/minus` 只声明列，PGFPlots 默认不绘制，必须在 `\addplot+[...]` 加 `error bars/.cd, y dir=both, y explicit` 才会画——此前漏掉启用声明，TikZ 图长期无误差棒。
+  3. 提示词新增 LAYOUT RULES 与 bar/line 误差空值、类别顺序强约束；首轮只输出文字无工具调用时注入强约束重试。
+- **验证结果**：`_validate_error_column`/`_validate_log_positive`/`_validate_bar_series`/`_derive_bar_labels` 在生成期阻断静默保真问题并给出精确修法；误差棒 bug 修复后 s5 TikZ PDF 36KB→37KB，PNG 渲染出现误差棒像素。opt11b 视觉审查平均 7.4/10（opt8 6.4、opt11 6.2），s5 fidelity 2→7；opt11b 5 场景执行/TikZ 5/5，全量 1371 测试通过（+11 tikzgen、+1 agent）。
+
 ## 5. 已知边界与注意事项
 
 - **LLM 随机性**：同一场景同版本多次运行轮数差异可达 4~15 轮；结论至少取 2~3 次运行中位数。
@@ -154,6 +185,8 @@
 - ✅ "TikZ file not found" 工作流疏漏：`compile_tikz` 找不到 figure.tex 时已回传"先重跑 python_sandbox（后端据 tikz_spec.json 重新生成）或手写 figure.tex"的引导（opt7）。
 - ✅ s2 热力图生成器替换：opt7 产物为真正矢量 `matrix plot`（RdBu_r 色标 + `\node` 显著性标注），不再内嵌 `figure-000.png`；`figure-000.png` 随 matplot2tikz 移除不再产生。
 - ✅ s2 视觉补审（4.5 上线后）：opt7/opt8 的 s2 均 7/10；主要问题为显著性标注文字过小/与单元格错位、对角线未隐藏、相关性普遍偏高导致色差小（数据特性）。
-- ⏳ s4 柱状图标签顺序：Agent 需保证 `bar.xticklabels` 与系列 CSV 的 x_index 顺序一致（opt7/opt8 均出现"Electronics 标签错位"），建议后续在 tikzgen 的 bar 校验或提示词中强制要求"CSV 类别顺序 == xticklabels 顺序"。
-- ⏳ s5 误差棒边缘缺失：脚本对单重复剂量算出 NaN sem，`to_csv` 输出空值导致 TikZ 不渲染误差棒；建议后续在 tikzgen 校验中检查 `y_plus/y_minus` 列空值并提示 Agent 用 0 或丢弃该点。
-- ⏳ opt7b s2 退化样本（首轮仅输出文字未调用工具）属 LLM 随机性；可观察是否需要"首轮必须调用工具"的强制约束（后续轮次优化候选）。
+- ✅ s4 柱状图标签顺序：opt11 起 `_validate_bar_series` 在生成期逐行核对系列 CSV 的 `category` 与 `bar.xticklabels[x]`，错位直接报错并指明行；提示词强制"类别顺序跨系列一致 + 含 category 列供校验"。opt11/opt11b 未再出现标签错位。
+- ✅ s5 误差棒边缘缺失：opt11 起 `_validate_error_column` 拦截 `y_plus`/`y_minus` 列空值，指引 `fillna(0)` 或删行；同时修复误差棒渲染 bug（`\addplot` 加 `error bars/.cd, y dir=both, y explicit`），TikZ 图现在真正画出误差棒，fidelity 2→7。
+- ✅ opt7b s2 退化样本（首轮仅输出文字未调用工具）：opt11 起 generate 首轮无工具调用时注入强约束 system 消息重试一次，不再零产物收尾。
+- ⏳ s2 热力图显著性标注位置与对角线处理：属 LLM 脚本层 `cell_text` 坐标问题与数据特性（相关性普遍偏高导致色差小），非 tikzgen 确定性 bug，后续可在提示词或 `_validate_csvs` 加 cell_text 坐标边界校验。
+- ⏳ s4 柱状图异常值（Furniture-South=240000）把 y 轴拉满，其余柱被视觉压扁被误判为"缺数据"：纯数据特性，非代码 bug；后续可在提示词提示大异常值时用对数 y 轴或截断轴。

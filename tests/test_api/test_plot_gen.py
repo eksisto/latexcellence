@@ -418,6 +418,62 @@ async def test_trace_failure_does_not_abort_generation(plot_cfg, monkeypatch):
     assert events[-1]["type"] == "done"
 
 
+@pytest.mark.asyncio
+async def test_generate_first_round_text_only_is_nudged(plot_cfg, monkeypatch):
+    """首轮只输出文字未调用工具时，注入强约束消息重试，而不是直接结束会话。"""
+    service = PlotGenService()
+    result = await service.create_session_from_upload(
+        b"group,value\nA,1\nB,2\n",
+        "data.csv",
+        description="比较两组",
+    )
+    session_id = result["session_id"]
+
+    class FakeExecutor:
+        def __init__(self, sandbox, cfg, logger=None, style_key=None):
+            pass
+
+        async def execute(self, tool_name, args):
+            if tool_name == "finish":
+                return "finished", {"tool": "finish", "ok": True, "summary": "finished"}
+            return "ok", {"tool": tool_name, "ok": True, "summary": "ok"}
+
+        def list_files(self):
+            return []
+
+        def scan_artifacts(self):
+            return []
+
+    import backend.modules.plot_gen.agent as agent_mod
+
+    monkeypatch.setattr(agent_mod, "PlotExecutor", FakeExecutor)
+
+    llm = MagicMock()
+    llm.chat = AsyncMock(return_value={})
+    llm.chat_with_tools = AsyncMock(
+        side_effect=[
+            _make_response(content="让我先分析一下数据结构……", tool_calls=None),
+            _make_response(
+                content="Finish now",
+                tool_calls=[_make_tool_call("finish", {"summary": "done"}, "f1")],
+            ),
+        ]
+    )
+
+    events = await _collect(
+        service.generate(session_id, "比较两组", "nature", "zh", llm=llm)
+    )
+
+    # 首轮文字回复后没有收尾，而是带着强约束 system 消息发起了第二次调用
+    assert llm.chat_with_tools.await_count == 2
+    second_messages = llm.chat_with_tools.await_args_list[1].kwargs["messages"]
+    assert any(
+        m.get("role") == "system" and "called NO tool" in m.get("content", "")
+        for m in second_messages
+    )
+    assert events[-1]["type"] == "done"
+
+
 class TestPlotGenTraceRouter:
     """/trace 与 /trace/download 端点测试。"""
 
