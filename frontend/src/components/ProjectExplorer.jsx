@@ -32,7 +32,7 @@ function TreeNode({ node, depth = 0, expandedDirs, onToggleDir, onSelect }) {
     <li>
       <button
         className={cn(
-          "flex items-center gap-1.5 w-full rounded-md px-2 py-1 text-sm text-left",
+          "flex items-center gap-1.5 w-full cursor-pointer rounded-md px-2 py-1 text-sm text-left",
           "hover:bg-muted",
         )}
         style={{ paddingLeft: `${depth * 16 + 8}px` }}

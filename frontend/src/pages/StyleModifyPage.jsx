@@ -44,7 +44,7 @@ export default function StyleModifyPage() {
   }, [result]);
 
   return (
-    <div className="min-h-screen p-8">
+    <div className="min-h-screen p-8 animate-tab-enter">
       <div className="max-w-6xl mx-auto">
         <PageHeader
           title={t("pages:styleModify.title")}

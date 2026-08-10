@@ -136,7 +136,7 @@ export default function ImageOCRPage({
   }, []);
 
   return (
-    <div className="min-h-screen p-8">
+    <div className="min-h-screen p-8 animate-tab-enter">
       <div className="max-w-6xl mx-auto">
         <PageHeader title={title} groupKey="contentImport" />
       </div>

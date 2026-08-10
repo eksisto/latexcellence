@@ -59,7 +59,7 @@ export default function ThemeSwitcher() {
                 setCurrentTheme(name);
                 setOpen(false);
               }}
-              className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors hover:bg-accent hover:text-accent-foreground"
+              className="flex w-full cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors hover:bg-accent hover:text-accent-foreground"
             >
               <span className="flex-1 text-left">
                 {t(`themeNames.${name}`, { defaultValue: name })}

@@ -263,7 +263,7 @@ export default function GitDiffPage() {
 
   if (!projectPath) {
     return (
-      <div className="min-h-screen p-8">
+      <div className="min-h-screen p-8 animate-tab-enter">
         <div className="max-w-3xl mx-auto">
           <PageHeader
             title={t("pages:gitDiff.title")}
@@ -284,7 +284,7 @@ export default function GitDiffPage() {
   }
 
   return (
-    <div className="min-h-screen p-8">
+    <div className="min-h-screen p-8 animate-tab-enter">
       <div className="max-w-6xl mx-auto">
         <PageHeader
           title={t("pages:gitDiff.title")}

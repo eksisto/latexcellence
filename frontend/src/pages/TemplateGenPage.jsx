@@ -170,7 +170,7 @@ export default function TemplateGenPage() {
   const lastCompile = compileResults[compileResults.length - 1];
 
   return (
-    <div className="min-h-screen p-6 md:p-8">
+    <div className="min-h-screen p-6 md:p-8 animate-tab-enter">
       <div className="max-w-6xl mx-auto mb-6">
         <PageHeader
           title={t("pages:templateGen.title")}

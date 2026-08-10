@@ -131,7 +131,7 @@ export default function WritingChatPage() {
   );
 
   return (
-    <div className="min-h-screen p-4 md:p-8">
+    <div className="min-h-screen p-4 md:p-8 animate-tab-enter">
       <div className="max-w-7xl mx-auto">
         <PageHeader title={t("pages:writingChat.title")} groupKey="aiAssist">
           {compressed && (

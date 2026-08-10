@@ -32,7 +32,7 @@ function CheckboxField({ label, checked, onChange }) {
         type="checkbox"
         checked={checked}
         onChange={(e) => onChange(e.target.checked)}
-        className="size-4 rounded border-input accent-primary"
+        className="size-4 cursor-pointer rounded border-input accent-primary"
       />
       <span className="text-sm">{label}</span>
     </label>

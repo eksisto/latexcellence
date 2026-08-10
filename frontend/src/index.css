@@ -220,6 +220,9 @@ input[type="number"]::-moz-number-spinbox {
       animation: none;
       opacity: 1;
     }
+    .animate-tab-enter {
+      animation: none;
+    }
   }
 }
 

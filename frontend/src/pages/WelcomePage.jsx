@@ -161,7 +161,7 @@ export default function WelcomePage() {
   }, [t, enabledFeatures]);
 
   return (
-    <div className="min-h-screen">
+    <div className="min-h-screen animate-tab-enter">
       <div className="mx-auto flex min-h-screen max-w-6xl flex-col px-6 py-12 md:px-10 md:py-16">
         {/* 标题页 + 点线目录 */}
         <header className="grid flex-1 items-center gap-12 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] lg:gap-16">
