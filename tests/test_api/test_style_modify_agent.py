@@ -459,6 +459,8 @@ class TestStyleModifyAgentLifecycle:
                 StyleModifySessionStore,
             )
 
+            monkeypatch.setattr(agent_mod, "_tex_toolchain_available", lambda: True)
+
             async def noop_trace(session_dir, event):
                 pass
 
@@ -507,3 +509,91 @@ class TestStyleModifyAgentLifecycle:
             assert any(ev["type"] == "warning" for ev in events)
         finally:
             cfg.features.style_modify.agent.max_compile_runs = old_limit
+
+    @pytest.mark.asyncio
+    async def test_compile_unavailable_short_circuits_without_failed_warning(
+        self,
+        isolated_sessions,
+        open_project,
+        monkeypatch,
+    ):
+        """工具链缺失时不再真正执行编译，且 not_run 不得误报为编译失败。"""
+        workspace_id, project = open_project
+        store = get_session_store()
+        session_id = store.create_session(
+            workspace_id,
+            project.root_path,
+            "test",
+        )
+        original = (Path(project.root_path) / "mystyle.sty").read_text(encoding="utf-8")
+        store.stage_replace(
+            session_id,
+            "mystyle.sty",
+            original.replace("333333", "1F4E79"),
+        )
+
+        from backend.modules.style_modify import agent as agent_mod
+        from backend.modules.style_modify.session import (
+            StyleModifySessionStore,
+        )
+
+        monkeypatch.setattr(agent_mod, "_tex_toolchain_available", lambda: False)
+
+        async def noop_trace(session_dir, event):
+            pass
+
+        monkeypatch.setattr(agent_mod, "append_trace", noop_trace)
+        executions = {"n": 0}
+
+        async def fake_compile(self, session_id, main_file=None):
+            executions["n"] += 1
+            return CompileSummary(status="passed")
+
+        monkeypatch.setattr(
+            StyleModifySessionStore,
+            "compile_staged_project",
+            fake_compile,
+        )
+
+        class SequenceLLM:
+            def __init__(self):
+                self.calls = [
+                    _FakeResponse(
+                        [
+                            _FakeToolCall(
+                                "compile_staged_project",
+                                '{"main_file": "main.tex"}',
+                            )
+                        ]
+                    ),
+                    _FakeResponse(
+                        [
+                            _FakeToolCall(
+                                "finish",
+                                '{"summary": "done"}',
+                            )
+                        ]
+                    ),
+                ]
+
+            async def chat_with_tools(self, **kwargs):
+                return self.calls.pop(0)
+
+        events = [
+            ev
+            async for ev in get_style_modify_agent().run(
+                session_id,
+                workspace_id,
+                "test",
+                "zh",
+                llm=SequenceLLM(),
+            )
+        ]
+
+        assert executions["n"] == 0
+        assert not any(
+            ev["type"] == "warning"
+            and "last shadow compilation failed" in ev.get("message", "")
+            for ev in events
+        )
+        assert any(ev["type"] == "proposal" for ev in events)

@@ -162,7 +162,8 @@ latexcellence/
 │   ├── terminology_check_eval/    # 术语一致性人工评估工具（加载多段术语语料 → 跑检查 → 生成比对报告）
 │   ├── paragraph_translate_eval/  # 逐段翻译人工评估工具（加载语料 → 跑翻译 → 生成比对报告）
 │   ├── plotgen_opt/               # plot_gen Agent 优化评测工作区（脚本/数据集/报告入库，results、previews 忽略）
-│   └── templategen_opt/           # template_gen Agent 优化评测工作区（脚本/场景定义/参考资料入库，results 忽略）
+│   ├── templategen_opt/           # template_gen Agent 优化评测工作区（脚本/场景定义/参考资料入库，results 忽略）
+│   └── stylemodify_opt/           # style_modify Agent 优化评测工作区（脚本/场景定义/报告入库，results、runtime 忽略）
 └── static/                        # Vite 构建产物
 ```
 
@@ -244,6 +245,7 @@ latexcellence/
   - 私有工具为 `list_project_files` / `search_project_text` / `read_project_file` / `stage_replace` / `discard_file_changes` / `compile_staged_project` / `finish`，不注册到全局 `ToolRegistry`；路径统一走 `resolve_project_path()`，默认允许 `.tex/.sty/.cls/.bib`。
   - 会话目录包含 `baseline/`、`overlay/`、`shadow/`、`meta.json` 和 `trace.jsonl`；真实项目在确认前 MD5 不变。SSE 推送 `session`/`plan`/`tool_call`/`tool_result`/`file_staged`/`compile`/`proposal`/`warning`/`done`/`error` 事件。
   - 应用通过 `LatexProject.apply_whole_files()` 公开批量事务写回，写入前建立 operation 备份；撤销前校验 applied MD5，拒绝覆盖应用后的新编辑。
+  - 优化闭环：`tools/stylemodify_opt/` 提供 5 个可复现样式场景，自动驱动 Agent 并核验 proposal 需求遵守 / 内容保留 / 事务应用撤销，供提示词与 Agent 逻辑离线迭代。
 - **useParagraphCheck Hook**: TypoCheck/ExpressionOpt/CodeReview/TerminologyCheck/ParagraphTranslate 多页共享同一 hook 封装流程
 - **useEnabledFeatures Hook**: 从后端 `/api/config/status` 加载功能开关到 Zustand store，幂等（已加载则跳过）。WelcomePage 和 WorkspacePage 均调用此 hook，确保直接刷新任一页面时功能开关均可用
 - **Zustand Persist**: `partialize` 选择性持久化检查结果，支持刷新保留

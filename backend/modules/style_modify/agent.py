@@ -7,6 +7,7 @@ service 层通过 LatexProject 批量事务写回。
 """
 
 import json
+import shutil
 import uuid
 from typing import Any, AsyncIterator
 
@@ -52,16 +53,13 @@ class StyleModifyAgent:
         cfg = get_config()
         if llm is None:
             llm = get_llm_client()
+        compile_enabled = "available" if _tex_toolchain_available() else "unavailable"
         system_prompt = get_prompt(
             "style_modify",
             "agent_system",
             language=language,
             max_rounds=cfg.features.style_modify.agent.max_rounds,
-            compile_enabled=(
-                "available"
-                if cfg.features.style_modify.agent.shadow_compile_timeout > 0
-                else "unavailable"
-            ),
+            compile_enabled=compile_enabled,
         )
         messages: list[dict[str, Any]] = [
             {"role": "system", "content": system_prompt},
@@ -102,11 +100,13 @@ class StyleModifyAgent:
 
         if llm is None:
             llm = get_llm_client()
+        compile_enabled = "available" if _tex_toolchain_available() else "unavailable"
         refine_prompt = get_prompt(
             "style_modify",
             "refine_system",
             language=language,
             message=message,
+            compile_enabled=compile_enabled,
         )
         messages = list(meta.messages)
         if not messages:
@@ -116,7 +116,7 @@ class StyleModifyAgent:
                 "agent_system",
                 language=language,
                 max_rounds=cfg.features.style_modify.agent.max_rounds,
-                compile_enabled="available",
+                compile_enabled=compile_enabled,
             )
             messages = [{"role": "system", "content": system_prompt}]
         messages.append(
@@ -171,12 +171,14 @@ class StyleModifyAgent:
         fcfg = cfg.features.style_modify.agent
         executor = _ToolExecutor(session_id, self._logger)
         tools = self._build_tools_schema()
+        tex_available = _tex_toolchain_available()
         max_rounds = fcfg.max_rounds
         max_tool_calls = fcfg.max_tool_calls
         max_compile_runs = fcfg.max_compile_runs
         compile_state: dict[str, Any] = {
             "called": False,
             "success": None,
+            "status": None,
             "summary": None,
         }
         final_summary = ""
@@ -381,6 +383,7 @@ class StyleModifyAgent:
                 if tool_name == "compile_staged_project":
                     compile_state["called"] = True
                     compile_state["success"] = result_event.get("success")
+                    compile_state["status"] = result_event.get("status")
                     compile_state["summary"] = result_event.get("compile")
                     yield {"type": "compile", **result_event}
                 elif tool_name == "stage_replace":
@@ -402,13 +405,18 @@ class StyleModifyAgent:
                     if (
                         self._store.list_staged_files(session_id)
                         and not compile_state["called"]
+                        and tex_available
                     ):
                         warning_msg = (
                             "Agent finished without running a shadow compilation; "
                             "the proposal may not be verified."
                         )
                         yield {"type": "warning", "message": warning_msg}
-                    if compile_state["called"] and compile_state["success"] is False:
+                    if (
+                        compile_state["called"]
+                        and compile_state["success"] is False
+                        and compile_state["status"] == "failed"
+                    ):
                         warning_msg = (
                             "Agent finished while the last shadow compilation "
                             "failed; review the diff before applying."
@@ -612,7 +620,8 @@ class StyleModifyAgent:
                     "description": (
                         "Build a shadow copy of the project, overlay staged "
                         "candidates, and run latexmk to verify compilation. The "
-                        "real project is not modified."
+                        "real project is not modified. If the LaTeX toolchain is "
+                        "unavailable, this returns status not_run; do not retry it."
                     ),
                     "parameters": {
                         "type": "object",
@@ -799,6 +808,26 @@ class _ToolExecutor:
         self, args: dict[str, Any]
     ) -> tuple[str, dict[str, Any]]:
         main_file = args.get("main_file") or None
+        if not _tex_toolchain_available():
+            text = (
+                "LaTeX toolchain unavailable: latexmk was not found on PATH. "
+                "Do not call compile_staged_project again in this run. Review "
+                "the staged diff and call finish; state in the summary that "
+                "compilation was not verified because the toolchain is missing."
+            )
+            summary = CompileSummary(
+                status="not_run",
+                log=text,
+            )
+            return text, {
+                "tool": "compile_staged_project",
+                "ok": True,
+                "success": False,
+                "status": "not_run",
+                "summary": "Shadow compilation unavailable",
+                "compile": summary.model_dump(),
+                **summary.model_dump(),
+            }
         try:
             summary = await self._store.compile_staged_project(
                 self._session_id,
@@ -858,6 +887,16 @@ def _summarize_args(tool_name: str, args: dict[str, Any]) -> dict[str, Any]:
 
 
 _agent: StyleModifyAgent | None = None
+
+
+def _tex_toolchain_available() -> bool:
+    """判断当前环境是否具备 shadow 编译所需工具链。"""
+    if shutil.which("latexmk") is None:
+        return False
+    return any(
+        shutil.which(engine) is not None
+        for engine in ("pdflatex", "xelatex", "lualatex")
+    )
 
 
 def get_style_modify_agent() -> StyleModifyAgent:

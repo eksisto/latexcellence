@@ -1,0 +1,5 @@
+# 运行产物与临时会话：可再生成，不进入版本库
+__pycache__/
+results/
+runtime/
+data/projects/

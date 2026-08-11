@@ -139,3 +139,10 @@ SSE 事件类型包括 `session`、`plan`、`tool_call`、`tool_result`、`file_
 | `apply_agent_proposal(...)` | 校验基线并批量事务写回 |
 | `undo_agent_operation(...)` | 校验 applied MD5 后批量撤销 |
 | `delete_agent_session(...)` | 删除未运行中的会话 |
+
+## 维护者工具
+
+`tools/stylemodify_opt/` 提供 style_modify 项目 Agent 的离线优化闭环：构造 5 个
+可复现的样式修改场景，驱动 Agent 生成 proposal 并采集需求遵守、内容保留、
+编译状态、事务应用/撤销与轮次/时长指标，支持 trace 分析与多版本对比。详见
+`tools/stylemodify_opt/README.md` 与 `tools/stylemodify_opt/report/optimization_report.md`。

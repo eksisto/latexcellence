@@ -157,6 +157,7 @@ latexcellence/
 | `tools/paragraph_translate_eval/` | 逐段翻译人工评估：加载单段落语料（含整段参考译文与期望短语）→ 调真实逐段翻译管线 → 生成参考译文/原文/译文对照 HTML 报告，详见其 `README.md` |
 | `tools/plotgen_opt/` | plot_gen Agent 优化评测：驱动 Agent 生成图表并采集指标、trace 分析、视觉审查、版本对比，详见其 `README.md` |
 | `tools/templategen_opt/` | template_gen Agent 优化评测：驱动 Agent 生成 LaTeX 工程并采集指标、需求遵守检查、视觉审查，详见其 `README.md` |
+| `tools/stylemodify_opt/` | style_modify Agent 优化评测：构造样式修改场景、驱动 Agent 采集 proposal/需求遵守/内容保留/事务指标，trace 分析与版本对比，详见其 `README.md` |
 
 新增维护/评测工具时，按模块建子目录并补充 `README.md`，同时更新 `PROJECT_SUMMARY.md` 目录树。
 
