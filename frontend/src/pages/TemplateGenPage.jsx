@@ -111,7 +111,7 @@ export default function TemplateGenPage() {
         onError: () => {},
       });
     } catch (e) {
-      setError(e.message);
+      setError(translateError(e.message));
     } finally {
       setRunning(false);
     }

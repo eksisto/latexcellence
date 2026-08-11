@@ -946,6 +946,7 @@
     "fetchFailed": "Failed to fetch",
     "requestTimedOut": "Request timed out",
     "internalServerError": "Internal Server Error",
+    "sseParseFailed": "Failed to parse server response, please try again later",
     "noProjectOpened": "No project opened",
     "noApiKeyConfigured": "No API key configured",
     "maxRetriesExceeded": "Max retries exceeded",

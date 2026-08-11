@@ -53,7 +53,7 @@ export default function usePlotGen() {
   }, []);
 
   const handleStreamError = useCallback((e) => {
-    setError(e?.message || String(e));
+    setError(translateError(e?.message || String(e)));
   }, []);
 
   const upload = useCallback(async (file, description, style) => {
@@ -97,7 +97,7 @@ export default function usePlotGen() {
           onError: handleStreamError,
         });
       } catch (e) {
-        if (e?.name !== "AbortError") setError(e.message);
+        if (e?.name !== "AbortError") setError(translateError(e.message));
       } finally {
         if (abortRef.current === controller) abortRef.current = null;
         setRunning(false);
@@ -125,7 +125,7 @@ export default function usePlotGen() {
           onError: handleStreamError,
         });
       } catch (e) {
-        if (e?.name !== "AbortError") setError(e.message);
+        if (e?.name !== "AbortError") setError(translateError(e.message));
       } finally {
         if (abortRef.current === controller) abortRef.current = null;
         setRunning(false);

@@ -203,7 +203,8 @@ export default function WorkspacePage() {
       } else {
         toast.error(t("pages:workspace.compileFailedToast"), {
           description:
-            data.explanation || t("pages:workspace.compileFailedToast"),
+            (data.explanation && translateError(data.explanation)) ||
+            t("pages:workspace.compileFailedToast"),
         });
       }
     } catch (e) {
@@ -583,7 +584,7 @@ export default function WorkspacePage() {
                         {t("pages:workspace.errorExplanation")}
                       </Label>
                       <p className="text-sm mt-1 whitespace-pre-wrap">
-                        {compileResult.explanation}
+                        {translateError(compileResult.explanation)}
                       </p>
                     </div>
                   )}

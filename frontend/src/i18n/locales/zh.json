@@ -946,6 +946,7 @@
     "fetchFailed": "获取失败",
     "requestTimedOut": "请求超时",
     "internalServerError": "内部服务器错误",
+    "sseParseFailed": "服务器响应解析失败，请稍后重试",
     "noProjectOpened": "未打开任何项目，请先打开一个项目",
     "noApiKeyConfigured": "未配置 API 密钥，LLM 功能不可用",
     "maxRetriesExceeded": "请求次数超限，请稍后重试",

@@ -13,6 +13,8 @@ import i18n from "@/i18n";
 const EXACT_MAP = {
   // 网络 / 服务不可达
   "Failed to fetch": "fetchFailed",
+  "NetworkError when attempting to fetch resource.": "fetchFailed",
+  "Load failed": "fetchFailed",
   "Request timed out": "requestTimedOut",
   "Internal Server Error": "internalServerError",
 
@@ -72,6 +74,19 @@ const EXACT_MAP = {
 
 // ── 模式消息（正则匹配，提取参数后用 i18n.t() 翻译）────────────────
 const PATTERN_MAP = [
+  // 网络 / 服务不可达（跨浏览器变体）
+  [
+    /^NetworkError when attempting to fetch resource/,
+    "fetchFailed",
+    () => ({}),
+  ],
+  [/^Load failed/, "fetchFailed", () => ({})],
+
+  // SSE 流解析失败（JSON.parse 的引擎差异消息）
+  [/^Unexpected (token|end of JSON input)/, "sseParseFailed", () => ({})],
+  [/^JSON\.parse:/, "sseParseFailed", () => ({})],
+  [/^JSON Parse error:/, "sseParseFailed", () => ({})],
+
   // 超时
   [
     /^Compilation timed out after (\d+) seconds/,

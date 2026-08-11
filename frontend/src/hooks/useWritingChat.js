@@ -312,12 +312,12 @@ export default function useWritingChat() {
           onEvent,
         });
       } catch (e) {
-        setError(e.message);
+        const msg = translateError(e.message);
+        setError(msg);
         setWritingChatMessages((prev) =>
           prev.filter((m) => m.id !== tmpAssistantId),
         );
-        const msg = translateError(e.message);
-        toast.error(msg, { description: e.message });
+        toast.error(msg, { description: msg });
       } finally {
         setStreaming(false);
         setLoading("writingChat", false);
