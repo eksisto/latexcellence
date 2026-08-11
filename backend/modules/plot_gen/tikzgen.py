@@ -502,8 +502,10 @@ def _check_non_ascii(spec: TikzSpec) -> list[str]:
     sample = " ".join(repr(c) for c in chars[:8])
     return [
         "Non-ASCII characters detected in tikz_spec.json labels "
-        f"({sample}). Replace them with ASCII equivalents (e.g. 'uM', "
-        "'degC') so pdflatex can render the labels."
+        f"({sample}). They render only with xelatex plus a CJK-capable font "
+        "(the backend auto-detects the engine). If the user did not request "
+        "non-ASCII labels, use ASCII equivalents (e.g. 'uM', 'degC'); if "
+        "missing-glyph/font errors appear, fall back to ASCII."
     ]
 
 

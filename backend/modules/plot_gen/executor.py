@@ -161,9 +161,12 @@ def _precheck_tikz(content: str) -> tuple[list[dict[str, str]], bool]:
                 "level": "warning",
                 "message": (
                     "Non-ASCII characters detected in TikZ source "
-                    f"({sample}). Labels with such characters may render as "
-                    "missing glyphs under pdflatex. Replace figure text with "
-                    "ASCII equivalents (e.g. 'uM', 'degC', 'x')."
+                    f"({sample}). They render correctly only with xelatex and "
+                    "a font that covers them (the backend switches engine "
+                    "automatically). If the user did not request non-ASCII "
+                    "labels, use ASCII equivalents (e.g. 'uM', 'degC', 'x'); "
+                    "if a missing-glyph/font error appears, fall back to "
+                    "ASCII."
                 ),
             }
         )

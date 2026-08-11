@@ -109,7 +109,10 @@ System prompt 还包含以下约束，防止 Agent 在成功路径上产出低�
 `stats_test` 参数校验（`executor.py::_validate_stats_inputs`）：按测试类型强制必填参数并在缺失/类型不符时给出明确消息——t-test/wilcoxon/anova/kruskal 要求 `group` + 数值列 `y`；pearson/spearman 要求数值列 `x` + `y`；chi2 要求分类列 `x` + `y`（高基数数值列会被拒绝）。错误消息包含缺失参数名与数据文件可用列，避免原先 `df.loc[df[group]==g, None]` 抛晦涩 KeyError。
 
 - **风格约束**：禁止覆盖预置 rcParams，见"风格注入"一节
-- **图内文字语言**：图内文字（标题/坐标轴/图例/标注）必须使用纯英文 ASCII；单位采用 ASCII 转写（`ug/mL`、`uM`、`degC`、`x`），禁止 μ/°/± 等 Unicode 符号，避免 TikZ 编译失败或渲染为 U+FFFD
+- **图内文字语言**：默认使用纯英文 ASCII（单位采用 `ug/mL`、`uM`、`degC`、`x`
+  等 ASCII 转写），保证任意环境可编译；用户明确要求中文等非 ASCII 图注时
+  允许使用（后端自动切 xelatex、风格字体链含 CJK 字体），若编译报缺失字形/
+  字体则回退 ASCII 并在 summary 说明替代
 - **日期/坐标指导**：datetime 列先转成日序号（day index）再绘图或写 TikZ，避免大绝对值坐标（如 44927）触发 PGFPlots "Dimension too large"；对数坐标需求显式使用 `xmode=log` 并过滤非正剂量
 - **无验证循环**：`compile_tikz` 成功后不得重复 `read_file`/`python_sandbox`/`compile_tikz` 做无意义验证，直接调用 `finish`
 - **首轮必须调用工具**：`generate` 的第一个响应若只输出文字、不调用任何工具，会注入强约束 system 消息要求重试（trace 记 warning），避免 LLM 随机性导致零产物的空会话收尾
@@ -122,7 +125,7 @@ System prompt 还包含以下约束，防止 Agent 在成功路径上产出低�
 
 1. **首选受控确定性生成（`tikzgen.py`）**：脚本只负责计算数据，把每个系列/分组写入 `artifacts/data_*.csv`（ASCII 列名、`to_csv(index=False)`），并写一份声明式 `artifacts/tikz_spec.json`（chart_type / 轴标签 / xmode / series 列映射 / box/bar/heatmap 子对象）。`python_sandbox` 成功后由后端 `generate_figure_tex()` 用 Pydantic v2 校验 spec 并确定性渲染 `artifacts/figure.tex`，不调用 LLM、不依赖 matplot2tikz；spec 校验失败或引用 CSV 缺失时，错误消息直接回传 Agent 修正。
 2. **手写 PGFPlots 回退**：仅当 spec 生成对同一根因失败 2 次（或需要生成器不支持的图形特性）时，才改为脚本内手写简单 PGFPlots 源文件：
-   - 标签保持 ASCII；
+   - 标签默认保持 ASCII（非 ASCII 标签需 xelatex + CJK 字体，缺失时回退）；
    - 数据写入 `artifacts/data_*.csv`，按列名引用（`table[x=..., y=..., y error plus=..., y error minus=...]`），避免超大内联坐标；
    - 使用小/相对 x 值（日序号或 0..n）；
    - 误差棒通过显式 `y error plus/minus` 列实现，否则省略；
@@ -144,7 +147,9 @@ System prompt 还包含以下约束，防止 Agent 在成功路径上产出低�
   - `bar.xticklabels` 缺失而系列 CSV 带 `category` 列时（`_derive_bar_labels`），按 `x` 索引推导回填 spec 并发警告，减少一类常见的手填标签遗漏。
 - **柱状图标签自动旋转**：类别 ≥5 且最长标签 ≥6 字符，或任一标签 ≥10 字符时，确定性注入 `xticklabel style={rotate=45,anchor=east}`（热力图同款规则），避免长标签水平重叠。
 - **热力图整数索引与 n×n 维度校验**：`x`/`y` 必须为整数索引 `0..n-1` 且恰有 `n×n` 行；`x_labels`/`y_labels` 长度须等于 `cols`。
-- **非 ASCII 标签警告**：`xlabel`/`ylabel`/图例/`xticklabels`/热力图标签含非 ASCII 字符时仅警告（xelatex 可渲染），不阻断。
+- **非 ASCII 标签警告**：`xlabel`/`ylabel`/图例/`xticklabels`/热力图标签含
+  非 ASCII 字符时仅警告不阻断（xelatex + CJK 字体可渲染；未要求非 ASCII 时
+  建议替换，缺失字形/字体时回退 ASCII）。
 
 **误差棒渲染**：PGFPlots 默认不绘制误差棒——table 选项里的 `y error plus`/`y error minus` 只声明列，必须在 `\addplot+[...]` 里同时启用 `error bars/.cd, y dir=both, y explicit` 才会真正画出（`tikzgen.py` 由 `_error_bar_enable()` 注入）。漏掉启用声明是此前 TikZ 图误差棒静默缺失的根因。
 
