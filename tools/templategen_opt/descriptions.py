@@ -109,6 +109,10 @@ SCENARIOS = {
     ),
 }
 
+# holdout 场景：调优期间默认不运行、不看结果，只用于最终回归。
+# tju 是最具体的单点复刻目标，最容易诱导 Agent 背答案，故设为 holdout。
+HOLDOUT_SCENARIOS: set[str] = {"tju"}
+
 CATEGORY_LABELS = {
     "tju": "天津大学论文",
     "thesis": "学位论文",

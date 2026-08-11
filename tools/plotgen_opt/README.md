@@ -33,8 +33,8 @@ tools/plotgen_opt/
 
 ## 评测场景与数据集（gen_data.py）
 
-`SCENARIOS` 定义了 5 个代表性科研制图场景，每个数据集都注入正常值、异常值、
-边界值与缺失值，考验 Agent 的数据处理能力：
+`SCENARIOS` 定义了多个代表性科研制图场景（具体清单以 `gen_data.py` 为准），
+每个数据集都注入正常值、异常值、边界值与缺失值，考验 Agent 的数据处理能力：
 
 | key | 文件 | 数据说明 | 用户描述（要点） |
 | --- | --- | --- | --- |
@@ -42,7 +42,10 @@ tools/plotgen_opt/
 | `s2_correlation` | s2_correlation.xlsx | 12 个环境变量 × 200 样本 + batch/sample_id，含缺失与离群 | 两两相关关系热力图 |
 | `s3_distribution` | s3_distribution.csv | 4 剂量组 × 40 样本，偏态 + 离群值 + 零边界 | 各组分布 / 偏态 / 离群值 |
 | `s4_category` | s4_category.csv | 6 类 × 4 地区销售额，含零销量/负值/大额异常 | 各类别销售额对比 |
-| `s5_dose_response` | s5_dose_response.csv | 3 化合物 × 8 剂量 × 3 重复 S 型曲线，含越界/缺失 | 半对数剂量-反应曲线，比较 IC50 |
+| `s5_dose_response`（holdout） | s5_dose_response.csv | 3 化合物 × 8 剂量 × 3 重复 S 型曲线，含越界/缺失 | 半对数剂量-反应曲线，比较 IC50 |
+
+`HOLDOUT_SCENARIOS` 标记的 `s5_dose_response` 是 holdout 场景：**日常调优
+默认不运行、不看结果，只用于最终回归**，防止 Agent 对该领域特殊场景背答案。
 
 `gen_data.py` 使用固定随机种子（`seed_all(42)`），数据可复现；运行后写入
 `data/` 各文件并生成 `manifest.json`（含行数 / 列数 / 缺失数统计）。
@@ -71,7 +74,10 @@ python tools/plotgen_opt/smoke_test.py
 python tools/plotgen_opt/gen_data.py
 
 # 2. 运行 Agent 生成并采集指标（tag 默认 baseline，如用 optN 区分迭代）
-python tools/plotgen_opt/run_plotgen.py opt3
+python tools/plotgen_opt/run_plotgen.py opt3   # 默认排除 holdout 场景
+
+# 2.5 （可选）最终回归：包含 holdout 场景（s5_dose_response）
+python tools/plotgen_opt/run_plotgen.py final --include-holdout
 
 # 3. 分析 trace，定位失败环节
 python tools/plotgen_opt/analyze_trace.py opt3
@@ -81,6 +87,11 @@ python tools/plotgen_opt/visual_review.py opt3
 
 # 5. 汇总对比 baseline / opt1..opt10 全量结果
 python tools/plotgen_opt/compare.py
+
+# 6. 通用性门禁：优化提交前检查提示词 diff 的硬编码特征
+python tools/generality_gate.py check
+python tools/generality_gate.py size --baseline \
+    tools/plotgen_opt/results/prompt_size_baseline.json --write
 ```
 
 各命令的完整用法见下文。
@@ -104,7 +115,12 @@ python tools/plotgen_opt/compare.py
 核心运行器。参数：
 
 - `[tag]`（可选）：结果目录名，**默认 `baseline`**；迭代时用 `opt1`、`opt2`…
-- `scenario1,...`（可选）：逗号分隔的场景 key，省略时运行全部场景。
+- `scenario1,...`（可选）：逗号分隔的场景 key，省略时运行全部**非 holdout**
+  场景（默认排除 `s5_dose_response`）。
+- `--include-holdout`：包含 holdout 场景（仅最终回归使用）。
+- `--dry-run`：只打印本次将运行的场景列表与 holdout 策略，不调用 LLM。
+
+显式指定 holdout 场景 key 会运行，但会打印警告：该结果不得用于调优决策。
 
 对每个场景执行：
 
@@ -155,11 +171,21 @@ LLM 视觉质量审查。对每个场景：
 
 > 该审查为离线评估，不参与 `run_plotgen.py` 的启发式评分，两者互补。
 
-### 6. `compare.py`
+### 6. `compare.py [tagA tagB] [--targets k1,k2] [--tolerance 5] [--visual-tolerance 1] [--no-gate]`
 
-汇总对比 `baseline` 与 `opt1`..`opt10` 中已存在的 tag：逐场景打印
+无参数时汇总对比 `baseline` 与 `opt1`..`opt10` 中已存在的 tag：逐场景打印
 `质量分 / 轮数 / 时长`，并汇总各 tag 的平均分、平均轮数、总时长、执行 / TikZ
-成功率与总警告 / 错误数。纯控制台输出，无参数。
+成功率与总警告 / 错误数。
+
+传入两个 tag 时进入**优化验收模式**：
+
+- 自动输出**对照组回归**：未通过 `--targets` 声明的场景按对照处理，任一场景
+  启发式分回退超过 `--tolerance`（默认 5）或视觉分回退超过
+  `--visual-tolerance`（默认 1）即判定本次优化作废。
+- 自动运行 **Generality Gate**（可用 `--no-gate` 跳过）：提示词 diff 含
+  硬编码特征时打回。
+
+双 tag 模式退出码：`0` 通过；`1` 硬编码门禁失败；`2` 对照组回归失败。
 
 ### 7. `test_visual_review.py`
 
@@ -209,11 +235,18 @@ python -m pytest tools/plotgen_opt/test_visual_review.py -q
    - 执行失败      → 看 trace 中 python_sandbox 的报错与修复路径
    - 视觉差        → 看 visual_reviews.json 的 issues（轴标签/图例/配色/数据一致性）
 6. 修改提示词/逻辑  backend/core/prompts.py 或 backend/modules/plot_gen/
-7. 重跑对比        python tools/plotgen_opt/run_plotgen.py optN && \
+7. 门禁检查        python tools/generality_gate.py check && \
+                   python tools/generality_gate.py size --baseline \
+                       tools/plotgen_opt/results/prompt_size_baseline.json
+8. 重跑对比        python tools/plotgen_opt/run_plotgen.py optN && \
                    python tools/plotgen_opt/visual_review.py optN && \
-                   python tools/plotgen_opt/compare.py
-8. 达标后         将获胜的提示词固化进 backend/core/prompts.py
+                   python tools/plotgen_opt/compare.py baseline optN
+9. 达标后         将获胜的提示词固化进 backend/core/prompts.py
 ```
+
+> 门禁说明：`compare.py` 双 tag 模式已自动执行硬编码检查与对照组回归；
+> 提交前单独跑 `generality_gate.py check` 是为了在"评测结果生成之前"就拦住
+> 污染，而不是等跑完一轮才发现。
 
 ## 历史优化结论（report/）
 
@@ -234,3 +267,5 @@ python -m pytest tools/plotgen_opt/test_visual_review.py -q
 - **`pdftoppm` 不可用**：视觉审查回退到 matplotlib PNG，或跳过该场景。
 - **LLM 随机性**：单次结果波动正常，结论至少看 2~3 次运行，或以 `compare.py`
   汇总均值判断。
+- **`generality_gate.py check` 显示"无新增行"**：说明提示词/Agent 代码没有
+  未提交改动，检查应在提交前、改动在工作区时运行。

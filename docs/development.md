@@ -14,6 +14,7 @@
 | [latex-package-rules.md](./latex-package-rules.md) | 宏包规则表维护指南（新增规则模板 + 评审清单） |
 | [function-calling-tools.md](./function-calling-tools.md) | Function Calling 工具体系：全局/私有工具、配置结构 |
 | [duckduckgo-challenge.md](./duckduckgo-challenge.md) | DDG 验证码处理 |
+| [closed-loop-optimization-lessons.md](./closed-loop-optimization-lessons.md) | Agent 闭环优化复盘：通用性退化事故的原因、教训与改进机制 |
 
 ---
 
@@ -148,6 +149,7 @@ latexcellence/
 
 | 子目录 | 用途 |
 | --- | --- |
+| `tools/` 根目录共享工具 | `eval_common.py`（人工评估基座）、`tex_path.py`（TeX Live 路径发现）、`generality_gate.py`（Agent 闭环优化通用性门禁：硬编码特征扫描 / 提示词体积监控 / holdout 场景解析 / 对照组回归判定，详见 [closed-loop-optimization-lessons.md](./closed-loop-optimization-lessons.md)） |
 | `tools/latex_packages/` | 宏包规则表维护：离线编译验证（`verify_rules.py`）与覆盖率报告（`coverage_report.py`），详见 [latex-package-rules.md](./latex-package-rules.md) |
 | `tools/formula_ocr_eval/` | 公式 OCR 人工评估：渲染语料为图片 → 调真实 OCR 管线 → 生成左右对比 HTML 报告，详见其 `README.md` |
 | `tools/table_ocr_eval/` | 表格 OCR 人工评估：渲染语料为图片 → 调真实 OCR 管线 → 生成左右对比 HTML 报告，详见其 `README.md` |
@@ -160,6 +162,25 @@ latexcellence/
 | `tools/stylemodify_opt/` | style_modify Agent 优化评测：构造样式修改场景、驱动 Agent 采集 proposal/需求遵守/内容保留/事务指标，trace 分析与版本对比，详见其 `README.md` |
 
 新增维护/评测工具时，按模块建子目录并补充 `README.md`，同时更新 `PROJECT_SUMMARY.md` 目录树。
+
+### Agent 闭环优化规范
+
+优化 template_gen / plot_gen / style_modify 三个 Agent 时，必须遵守以下
+内容边界与门禁（机制已内建在工具中，具体用法见各工具 `README.md`）：
+
+- 评测数据只允许存在于 `tools/` 对应目录，禁止写入 `backend/` 的生产提示词
+  或运行时逻辑；
+- 生产提示词只允许出现通用能力、策略与协议，禁止硬编码具体学校/模板/期刊、
+  字体名、宏包版本、操作系统/路径、评测场景内容；环境能力一律运行时探测或
+  按缺失资源协议处理；
+- 每个闭环工具维护 `HOLDOUT_SCENARIOS`：日常调优默认排除 holdout，仅最终
+  回归可运行；
+- 优化提交前运行 `python tools/generality_gate.py check`（提示词体积用
+  `size` 子命令跟踪基线）；
+- `compare.py` 双 tag 模式自动执行对照组回归判定与硬编码门禁，非零退出即打回。
+
+事故复盘与改进机制详见
+[closed-loop-optimization-lessons.md](./closed-loop-optimization-lessons.md)。
 
 ---
 

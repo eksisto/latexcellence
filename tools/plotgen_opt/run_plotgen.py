@@ -2,6 +2,7 @@
 
 用法：
     python tools/plotgen_opt/run_plotgen.py <tag> [s1,s2,...]
+        [--include-holdout] [--dry-run]
 
 每个场景输出到 tools/plotgen_opt/results/<tag>/<scenario>/
     - events.json       所有 SSE 事件（含时间戳与工具调用摘要）
@@ -30,8 +31,9 @@ load_config("config.json")
 
 from backend.core.config import get_config  # noqa: E402
 
+from generality_gate import resolve_scenarios  # noqa: E402
 from tex_path import ensure_tex_path  # noqa: E402
-from plotgen_opt.gen_data import SCENARIOS  # noqa: E402
+from plotgen_opt.gen_data import HOLDOUT_SCENARIOS, SCENARIOS  # noqa: E402
 
 
 def quality_score(metrics: dict[str, Any]) -> dict[str, int]:
@@ -205,8 +207,20 @@ async def run_scenario(
 
 async def main() -> None:
     ensure_tex_path()
-    tag = sys.argv[1] if len(sys.argv) > 1 else "baseline"
-    keys = sys.argv[2].split(",") if len(sys.argv) > 2 else list(SCENARIOS)
+    args = [a for a in sys.argv[1:] if not a.startswith("--")]
+    include_holdout = "--include-holdout" in sys.argv[1:]
+    tag = args[0] if args else "baseline"
+    keys, messages = resolve_scenarios(
+        list(SCENARIOS),
+        HOLDOUT_SCENARIOS,
+        requested=args[1].split(",") if len(args) > 1 else None,
+        include_holdout=include_holdout,
+    )
+    for msg in messages:
+        print(msg)
+    if "--dry-run" in sys.argv[1:]:
+        print(f"[dry-run] 将运行 {len(keys)} 个场景: {', '.join(keys)}")
+        return
     out_root = Path(__file__).resolve().parent / "results"
     out_root.mkdir(parents=True, exist_ok=True)
 

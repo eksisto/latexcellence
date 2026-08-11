@@ -3,6 +3,7 @@
 
 用法：
     python tools/templategen_opt/run_templategen.py <tag> [scenario1,scenario2,...]
+        [--include-holdout] [--dry-run]
 
 每个场景输出到 tools/templategen_opt/results/<tag>/<scenario>/
     - events.json        所有 SSE 事件（含时间戳）
@@ -31,8 +32,10 @@ from backend.modules.template_gen.service import TemplateGenService  # noqa: E40
 
 load_config("config.json")
 
+from generality_gate import resolve_scenarios  # noqa: E402
 from templategen_opt.descriptions import (  # noqa: E402
     CATEGORY_LABELS,
+    HOLDOUT_SCENARIOS,
     REQUIREMENT_PATTERNS,
     SCENARIOS,
 )
@@ -273,11 +276,23 @@ async def run_scenario(
 
 async def main() -> None:
     ensure_tex_path()
-    if len(sys.argv) < 2:
+    args = [a for a in sys.argv[1:] if not a.startswith("--")]
+    include_holdout = "--include-holdout" in sys.argv[1:]
+    if not args:
         print(__doc__)
         return
-    tag = sys.argv[1]
-    keys = sys.argv[2].split(",") if len(sys.argv) > 2 else list(SCENARIOS)
+    tag = args[0]
+    keys, messages = resolve_scenarios(
+        list(SCENARIOS),
+        HOLDOUT_SCENARIOS,
+        requested=args[1].split(",") if len(args) > 1 else None,
+        include_holdout=include_holdout,
+    )
+    for msg in messages:
+        print(msg)
+    if "--dry-run" in sys.argv[1:]:
+        print(f"[dry-run] 将运行 {len(keys)} 个场景: {', '.join(keys)}")
+        return
     out_root = Path(__file__).resolve().parent / "results"
 
     service = TemplateGenService()

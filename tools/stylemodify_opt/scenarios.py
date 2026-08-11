@@ -270,6 +270,10 @@ SCENARIOS: dict[str, dict[str, Any]] = {
     },
 }
 
+# holdout 场景：调优期间默认不运行、只看回归结果。
+# s5_class_options 涉及自定义 .cls 类选项，与"背模板答案"的过拟合风险最相关。
+HOLDOUT_SCENARIOS: set[str] = {"s5_class_options"}
+
 
 def build_scenario_projects(data_root: Path) -> dict[str, Path]:
     """从场景定义生成项目目录，返回 key -> 项目根。"""

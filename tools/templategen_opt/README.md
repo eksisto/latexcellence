@@ -29,9 +29,9 @@ tools/templategen_opt/
 
 ## 评测场景（descriptions.py）
 
-`SCENARIOS` 定义了 4 个场景，每个都埋入了可客观核验的硬性要求
-（边距数值、字体、主题色、文件结构、语义命令），用于检验 Agent 是否
-「遵循用户输入要求」：
+`SCENARIOS` 定义了多个场景（具体清单以 `descriptions.py` 为准），每个都埋入
+可客观核验的硬性要求（边距数值、字体、主题色、文件结构、语义命令），用于
+检验 Agent 是否「遵循用户输入要求」：
 
 | key | 场景 | 主要硬性要求 |
 | --- | --- | --- |
@@ -39,6 +39,10 @@ tools/templategen_opt/
 | `beamer` | 现代学术幻灯片 | 扁平化 metropolis 风格、#00539F/#F5A623 配色、进度条、独立 color theme 等 10 条 |
 | `resume` | 单页求职简历 | 紧凑边距、无衬线字体、fontawesome 图标、语义命令、单页（PDF ≤2 页）等 10 条 |
 | `requirements` | 需求遵守压力测试 | Letter + 1in、双栏、10pt、共享编号定理、natbib author-year、#1F4E79 等 10 条 |
+| `tju`（holdout） | 天津大学学位论文 | A4 精确边距（27.5/31.7/35.7mm 等）、master/phd/print 类选项、答辩委员会表、中英文摘要等专项要求 |
+
+`HOLDOUT_SCENARIOS` 标记的 `tju` 是 holdout 场景：**日常调优默认不运行、
+不看结果，只用于最终回归**，防止 Agent 对该单点目标背答案。
 
 `CATEGORY_LABELS` 提供各场景的中文名；`REQUIREMENT_PATTERNS` 是运行器实际
 使用的正则检查表（`run_templategen.py::_requirement_adherence`），
@@ -63,7 +67,10 @@ tools/templategen_opt/
 python tools/templategen_opt/run_templategen.py smoke beamer
 
 # 1. 运行 Agent 生成并采集指标（tag 用于区分基线/迭代，如 base / opt1 / opt3）
-python tools/templategen_opt/run_templategen.py opt3 thesis,beamer,resume,requirements
+python tools/templategen_opt/run_templategen.py opt3          # 默认排除 holdout 场景
+
+# 1.5 （可选）最终回归：包含 holdout 场景（tju）
+python tools/templategen_opt/run_templategen.py final --include-holdout
 
 # 2. 分析 trace，定位质量缺失发生在哪个环节
 python tools/templategen_opt/analyze_trace.py opt3
@@ -73,6 +80,11 @@ python tools/templategen_opt/visual_review.py opt3
 
 # 4. 对比两个 tag（启发式分 + 视觉分）
 python tools/templategen_opt/compare.py base opt3
+
+# 5. 通用性门禁：优化提交前检查提示词 diff 的硬编码特征
+python tools/generality_gate.py check
+python tools/generality_gate.py size --baseline \
+    tools/templategen_opt/results/prompt_size_baseline.json --write
 ```
 
 各命令的完整用法见下文。
@@ -86,7 +98,12 @@ python tools/templategen_opt/compare.py base opt3
 核心运行器。参数：
 
 - `<tag>`（必填）：结果目录名，用于区分基线 / 迭代，如 `base`、`opt1`、`opt3`。
-- `scenario1,...`（可选）：逗号分隔的场景 key，省略时运行全部场景。
+- `scenario1,...`（可选）：逗号分隔的场景 key，省略时运行全部**非 holdout**
+  场景（默认排除 `tju`）。
+- `--include-holdout`：包含 holdout 场景（仅最终回归使用）。
+- `--dry-run`：只打印本次将运行的场景列表与 holdout 策略，不调用 LLM。
+
+显式指定 holdout 场景 key 会运行，但会打印警告：该结果不得用于调优决策。
 
 对每个场景执行：
 
@@ -148,13 +165,20 @@ LLM 视觉质量审查。对每个场景：
 > 这是质量验收的主要依据——启发式检查只验证「关键词是否存在」，视觉审查验证
 > 「渲染出来好不好看、是否符合需求」。
 
-### 4. `compare.py <tagA> <tagB>`
+### 4. `compare.py <tagA> <tagB> [--targets k1,k2] [--tolerance 5] [--visual-tolerance 1] [--no-gate]`
 
 对比两个 tag 的评测结果：
 
 - 逐场景对比启发式分与需求遵守率（`req_ratio`）；
 - 汇总两个 tag 的平均启发式分（0-100）与平均视觉总评（0-10，依赖
   `visual_reviews.json`，未运行视觉审查则显示为空）。
+- 自动输出**对照组回归**：未通过 `--targets` 声明的场景按对照处理，任一场景
+  启发式分回退超过 `--tolerance`（默认 5）或视觉分回退超过
+  `--visual-tolerance`（默认 1）即判定本次优化作废。
+- 自动运行 **Generality Gate**（可用 `--no-gate` 跳过）：提示词 diff 含
+  硬编码特征时打回。
+
+退出码：`0` 通过；`1` 硬编码门禁失败；`2` 对照组回归失败。
 
 ---
 
@@ -202,11 +226,18 @@ LLM 视觉质量审查。对每个场景：
    - 需求不遵守    → 看 summary.json 的 req.detail，逐条核对漏项
    - 视觉差        → 看 visual_reviews.json 的 issues
 5. 修改提示词/逻辑  backend/core/prompts.py 或 backend/modules/template_gen/
-6. 重跑对比        python tools/templategen_opt/run_templategen.py optN ... && \
+6. 门禁检查        python tools/generality_gate.py check && \
+                   python tools/generality_gate.py size --baseline \
+                       tools/templategen_opt/results/prompt_size_baseline.json
+7. 重跑对比        python tools/templategen_opt/run_templategen.py optN ... && \
                    python tools/templategen_opt/visual_review.py optN && \
                    python tools/templategen_opt/compare.py base optN
-7. 达标后         将获胜的提示词固化进 backend/core/prompts.py
+8. 达标后         将获胜的提示词固化进 backend/core/prompts.py
 ```
+
+> 门禁说明：`compare.py` 双 tag 模式已自动执行硬编码检查与对照组回归；
+> 提交前单独跑 `generality_gate.py check` 是为了在"评测结果生成之前"就拦住
+> 污染，而不是等跑完一轮才发现。
 
 ## 提示词工程参考
 
@@ -223,3 +254,5 @@ LLM 视觉质量审查。对每个场景：
 - **LLM 端点异常**：先确认 `config.json` 的 `llm` 配置与网络；可用
   `backend` 侧冒烟脚本（参见 `tools/plotgen_opt/smoke_test.py`）验证端点连通性。
 - **视觉审查为离线评估**：不参与 `run_templategen.py` 的启发式评分，两者互补使用。
+- **`generality_gate.py check` 显示"无新增行"**：说明提示词/Agent 代码没有
+  未提交改动，检查应在提交前、改动在工作区时运行。

@@ -2,7 +2,8 @@
 """运行 style_modify 项目 Agent 并采集逐场景指标（基线/迭代共用）。
 
 用法：
-    python tools/stylemodify_opt/run_stylemodify.py <tag> [s1,s2,...] [--no-apply]
+    python tools/stylemodify_opt/run_stylemodify.py <tag> [s1,s2,...]
+        [--no-apply] [--include-holdout] [--dry-run]
 
 每个场景输出到 tools/stylemodify_opt/results/<tag>/<scenario>/
     - events.json        所有 SSE 事件（含时间戳）
@@ -35,7 +36,9 @@ from backend.core.workspace_manager import (  # noqa: E402
 )
 from backend.modules.style_modify.service import StyleModifyService  # noqa: E402
 
+from generality_gate import resolve_scenarios  # noqa: E402
 from stylemodify_opt.scenarios import (  # noqa: E402
+    HOLDOUT_SCENARIOS,
     SCENARIOS,
     build_scenario_projects,
     check_allowed_targets,
@@ -304,8 +307,19 @@ async def main() -> None:
     ensure_tex_path()
     args = [a for a in sys.argv[1:] if not a.startswith("--")]
     do_apply_test = "--no-apply" not in sys.argv[1:]
+    include_holdout = "--include-holdout" in sys.argv[1:]
     tag = args[0] if args else "baseline"
-    keys = args[1].split(",") if len(args) > 1 else list(SCENARIOS)
+    keys, messages = resolve_scenarios(
+        list(SCENARIOS),
+        HOLDOUT_SCENARIOS,
+        requested=args[1].split(",") if len(args) > 1 else None,
+        include_holdout=include_holdout,
+    )
+    for msg in messages:
+        print(msg)
+    if "--dry-run" in sys.argv[1:]:
+        print(f"[dry-run] 将运行 {len(keys)} 个场景: {', '.join(keys)}")
+        return
     out_root = Path(__file__).resolve().parent / "results"
     out_root.mkdir(parents=True, exist_ok=True)
 

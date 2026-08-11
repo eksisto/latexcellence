@@ -33,9 +33,9 @@ tools/stylemodify_opt/
 
 ## 评测场景（scenarios.py）
 
-`SCENARIOS` 定义了 5 个代表性样式修改场景，每个项目都埋入了必须保留的正文
-标记（label / 公式 / 表格数据 / frame 文本），用于检测 Agent 是否“只改样式、
-不破坏内容”：
+`SCENARIOS` 定义了多个代表性样式修改场景（具体清单以 `scenarios.py` 为准），
+每个项目都埋入了必须保留的正文标记（label / 公式 / 表格数据 / frame 文本），
+用于检测 Agent 是否“只改样式、不破坏内容”：
 
 | key | 说明 | 需求要点 |
 | --- | --- | --- |
@@ -43,7 +43,11 @@ tools/stylemodify_opt/
 | `s2_section_format` | titlesec 章节样式 | 深蓝加粗标题 + 方块装饰 |
 | `s3_table_style` | 普通表格 → booktabs | 三线表 + 表头加粗 + 数值列左对齐 |
 | `s4_beamer_color` | beamer 自定义 theme | 主题色 → 深蓝，强调色 → 橙色 |
-| `s5_class_options` | 自定义 `.cls` | 11pt → 12pt、A4、边距 2cm |
+| `s5_class_options`（holdout） | 自定义 `.cls` | 11pt → 12pt、A4、边距 2cm |
+
+`HOLDOUT_SCENARIOS` 标记的 `s5_class_options` 是 holdout 场景：**日常调优
+默认不运行、不看结果，只用于最终回归**，防止 Agent 对自定义 `.cls` 类专项
+场景背答案。
 
 每个场景的 `checks` 是正则检查点（如新颜色存在、旧颜色移除、命令命中），
 `preserve_markers` 是内容保留检查，`allowed_targets` 是“只允许改哪些文件”。
@@ -64,7 +68,10 @@ tools/stylemodify_opt/
 python tools/stylemodify_opt/smoke_test.py
 
 # 1. 运行 Agent 并采集指标（tag 默认 baseline，如用 optN 区分迭代）
-python tools/stylemodify_opt/run_stylemodify.py baseline
+python tools/stylemodify_opt/run_stylemodify.py baseline   # 默认排除 holdout
+
+# 1.5 （可选）最终回归：包含 holdout 场景（s5_class_options）
+python tools/stylemodify_opt/run_stylemodify.py final --include-holdout
 
 # 2. 分析 trace，定位失败 / 低效环节
 python tools/stylemodify_opt/analyze_trace.py baseline
@@ -74,12 +81,22 @@ python tools/stylemodify_opt/run_stylemodify.py opt1
 
 # 4. 汇总对比全部 tag
 python tools/stylemodify_opt/compare.py
+
+# 5. 通用性门禁：优化提交前检查提示词 diff 的硬编码特征
+python tools/generality_gate.py check
+python tools/generality_gate.py size --baseline \
+    tools/stylemodify_opt/results/prompt_size_baseline.json --write
 ```
 
 常用参数：
 
 - `run_stylemodify.py <tag> [s1_theme_color,s3_table_style]`：只跑指定场景。
 - `run_stylemodify.py <tag> --no-apply`：跳过 proposal 应用/撤销事务测试。
+- `run_stylemodify.py <tag> --include-holdout`：包含 holdout 场景（仅最终回归）。
+- `run_stylemodify.py <tag> --dry-run`：只打印场景列表，不调用 LLM。
+
+未指定场景时默认运行全部**非 holdout** 场景；显式指定 holdout 场景 key 会
+运行，但会打印警告：该结果不得用于调优决策。
 
 ## 输出指标
 
@@ -122,11 +139,22 @@ python tools/stylemodify_opt/compare.py
    - 轮数爆炸      → 看 trace 的重复工具与失败根因（常见：反复 read、无效 stage）
    - 编译失败      → 看 compile 事件的错误片段与修复路径
 5. 修改提示词/逻辑  backend/core/prompts.py 或 backend/modules/style_modify/
-6. 重跑对比        python tools/stylemodify_opt/run_stylemodify.py optN && \
+6. 门禁检查        python tools/generality_gate.py check && \
+                   python tools/generality_gate.py size --baseline \
+                       tools/stylemodify_opt/results/prompt_size_baseline.json
+7. 重跑对比        python tools/stylemodify_opt/run_stylemodify.py optN && \
                    python tools/stylemodify_opt/analyze_trace.py optN && \
-                   python tools/stylemodify_opt/compare.py
-7. 达标后         将获胜的提示词固化进 backend/core/prompts.py
+                   python tools/stylemodify_opt/compare.py baseline optN
+8. 达标后         将获胜的提示词固化进 backend/core/prompts.py
 ```
+
+`compare.py <tagA> <tagB>` 双 tag 模式自动执行对照组回归判定（任一场景回退
+超过 `--tolerance` 默认 5 分即打回，退出码 2）与 Generality Gate（提示词 diff
+含硬编码特征即打回，退出码 1）。无参数时保持全量 tag 汇总表。
+
+> 门禁说明：`compare.py` 双 tag 模式已自动执行硬编码检查与对照组回归；
+> 提交前单独跑 `generality_gate.py check` 是为了在"评测结果生成之前"就拦住
+> 污染，而不是等跑完一轮才发现。
 
 ## 历史优化结论（report/）
 
@@ -141,3 +169,5 @@ python tools/stylemodify_opt/compare.py
   bin 目录。Linux 运行器会尝试自动发现 `/usr/local/texlive/*/bin/*/latexmk`；
   若自定义安装位置，可设置 `PATH="/path/to/texlive/bin:$PATH"` 后重跑。
 - **LLM 随机性**：单次结果波动正常，结论至少看 2~3 次运行，或对比多 tag 均值。
+- **`generality_gate.py check` 显示"无新增行"**：说明提示词/Agent 代码没有
+  未提交改动，检查应在提交前、改动在工作区时运行。

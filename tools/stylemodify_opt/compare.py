@@ -1,36 +1,57 @@
 # -*- coding: utf-8 -*-
-"""对比 style_modify Agent 多轮评测结果。
+"""对比 style_modify Agent 多轮评测结果 + 双 tag 对照组回归判定。
 
 用法：
     python tools/stylemodify_opt/compare.py [tag1 tag2 ...]
+    python tools/stylemodify_opt/compare.py <tagA> <tagB> \
+        [--targets k1,k2] [--tolerance 5] [--no-gate]
+
+双 tag 模式退出码：
+    0  通过（无门禁失败、无显著回退）
+    1  Generality Gate 发现新增硬编码特征
+    2  对照组回归：有场景显著回退
 """
 
 import json
 import sys
 from pathlib import Path
+from typing import Any
 
-ROOT = Path(__file__).resolve().parent / "results"
+TOOLS_ROOT = Path(__file__).resolve().parents[1]  # tools/
+TOOL_ROOT = TOOLS_ROOT / "stylemodify_opt"
+RESULTS = TOOL_ROOT / "results"
+sys.path.insert(0, str(TOOLS_ROOT))
+
+from generality_gate import check_hardcoding, regression_verdict  # noqa: E402
 
 
-def load(tag: str) -> dict:
-    p = ROOT / tag / "all_summary.json"
+def load(tag: str) -> dict[str, Any]:
+    p = RESULTS / tag / "all_summary.json"
     return json.loads(p.read_text(encoding="utf-8")) if p.exists() else {}
 
 
-def main() -> None:
-    if len(sys.argv) > 1:
-        tags = [t for t in sys.argv[1:] if load(t)]
-    else:
-        tags = sorted(
-            p.name
-            for p in ROOT.iterdir()
-            if p.is_dir() and (p / "all_summary.json").exists()
-        )
-    if not tags:
-        print("no results found")
-        return
+def score_of(metrics: dict[str, Any]) -> float:
+    return float(metrics.get("quality", {}).get("score", 0))
 
-    data = {t: load(t) for t in tags}
+
+def _parse_args(
+    argv: list[str],
+) -> tuple[list[str], set[str], float, bool]:
+    positional = [a for a in argv if not a.startswith("--")]
+    targets: set[str] = set()
+    tolerance = 5.0
+    run_gate = True
+    for i, arg in enumerate(argv):
+        if arg == "--targets" and i + 1 < len(argv):
+            targets = {k for k in argv[i + 1].split(",") if k}
+        elif arg == "--tolerance" and i + 1 < len(argv):
+            tolerance = float(argv[i + 1])
+        elif arg == "--no-gate":
+            run_gate = False
+    return positional, targets, tolerance, run_gate
+
+
+def _print_table(tags: list[str], data: dict[str, dict[str, Any]]) -> None:
     all_scenarios = sorted({k for m in data.values() for k in m})
     header = f"{'场景':<18} " + " ".join(f"{t:>14}" for t in tags)
     print(header)
@@ -75,5 +96,94 @@ def main() -> None:
         )
 
 
+def _run_pair_gate(
+    tag_a: str,
+    tag_b: str,
+    metrics_a: dict,
+    metrics_b: dict,
+    *,
+    targets: set[str],
+    tolerance: float,
+    run_gate: bool,
+) -> int:
+    verdict = regression_verdict(
+        metrics_a,
+        metrics_b,
+        score_of=score_of,
+        tolerance=tolerance,
+        target_keys=targets,
+    )
+    print("\n=== 对照组回归 ===")
+    for row in verdict["rows"]:
+        tag = "target" if row["kind"] == "target" else "control"
+        print(
+            f"  [{tag}] {row['scenario']}: {row['score_a']:g} → "
+            f"{row['score_b']:g} ({row['delta']:+.1f})"
+        )
+    for note in verdict["notes"]:
+        print(f"  提示：{note}")
+    exit_code = 0
+    if verdict["failed"]:
+        print("\n[BLOCKED] 对照组回归失败，本次优化作废：")
+        for issue in verdict["issues"]:
+            print(f"  - {issue}")
+        exit_code = 2
+
+    if run_gate:
+        gate = check_hardcoding()
+        if gate["failures"]:
+            print("\n[BLOCKED] Generality Gate 失败：提示词 diff 含硬编码特征：")
+            for hit in gate["failures"]:
+                print(
+                    f"  - [{hit['pattern']}] {hit['file']}:{hit['line']}: "
+                    f"{hit['text'].strip()}"
+                )
+            exit_code = exit_code or 1
+        elif any(h["kind"] == "suspicious" for h in gate["warnings"]):
+            print("\n[WARN] Generality Gate 发现疑似环境事实（请人工确认）：")
+            for hit in gate["warnings"]:
+                if hit["kind"] == "suspicious":
+                    print(f"  - {hit['file']}:{hit['line']}: {hit['text'].strip()}")
+        else:
+            print("\nGenerality Gate：PASS（未发现新增硬编码特征）")
+    if exit_code == 0:
+        print("\nPASS：无显著回归，可进入下一轮。")
+    return exit_code
+
+
+def main() -> int:
+    positional, targets, tolerance, run_gate = _parse_args(sys.argv[1:])
+    if len(positional) == 2:
+        tag_a, tag_b = positional[0], positional[1]
+        metrics_a, metrics_b = load(tag_a), load(tag_b)
+        if not metrics_a or not metrics_b:
+            print("missing all_summary.json for one of the tags")
+            return 2
+        _print_table([tag_a, tag_b], {tag_a: metrics_a, tag_b: metrics_b})
+        return _run_pair_gate(
+            tag_a,
+            tag_b,
+            metrics_a,
+            metrics_b,
+            targets=targets,
+            tolerance=tolerance,
+            run_gate=run_gate,
+        )
+
+    if positional:
+        tags = [t for t in positional if load(t)]
+    else:
+        tags = sorted(
+            p.name
+            for p in RESULTS.iterdir()
+            if p.is_dir() and (p / "all_summary.json").exists()
+        )
+    if not tags:
+        print("no results found")
+        return 0
+    _print_table(tags, {t: load(t) for t in tags})
+    return 0
+
+
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

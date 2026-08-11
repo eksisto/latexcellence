@@ -264,6 +264,10 @@ SCENARIOS = {
     },
 }
 
+# holdout 场景：调优期间默认不运行、只看回归结果。
+# s5_dose_response 是领域最特殊（剂量-反应/IC50）的场景，最能暴露过拟合。
+HOLDOUT_SCENARIOS: set[str] = {"s5_dose_response"}
+
 
 def main() -> None:
     seed_all()
