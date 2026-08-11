@@ -50,6 +50,10 @@ tools/templategen_opt/
   LLM 端点可访问（`backend/core/llm_client.py`）。
 - 具备 TeX Live（`latexmk` / `xelatex`）以便 Agent 编译验证；`pdfinfo`、
   `pdftoppm`（均随 TeX Live 提供）用于页数统计与视觉审查截图。
+- 评测脚本会自动调用共享的 `tools/tex_path.py`：扫描
+  `/usr/local/texlive/*/bin/*/latexmk` 与 `/opt/texlive/*/bin/*/latexmk` 并加入
+  `PATH`，也支持通过环境变量 `TEXLIVE_BIN` 显式指定 bin 目录；非交互 shell
+  即使没有加载 `~/.bashrc` 也能找到 latexmk。
 - Python 依赖同后端（pydantic v2、openai 客户端等），建议在项目 `.venv` 下运行。
 
 ## 快速开始

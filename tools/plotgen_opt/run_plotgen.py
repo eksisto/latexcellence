@@ -30,6 +30,7 @@ load_config("config.json")
 
 from backend.core.config import get_config  # noqa: E402
 
+from tex_path import ensure_tex_path  # noqa: E402
 from plotgen_opt.gen_data import SCENARIOS  # noqa: E402
 
 
@@ -203,6 +204,7 @@ async def run_scenario(
 
 
 async def main() -> None:
+    ensure_tex_path()
     tag = sys.argv[1] if len(sys.argv) > 1 else "baseline"
     keys = sys.argv[2].split(",") if len(sys.argv) > 2 else list(SCENARIOS)
     out_root = Path(__file__).resolve().parent / "results"

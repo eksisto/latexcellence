@@ -53,6 +53,10 @@ tools/plotgen_opt/
   LLM 端点可访问。
 - 具备 TeX Live（`latexmk` 等）以支持 TikZ 编译；`pdftoppm`（随 TeX Live）用于
   视觉审查截图。
+- 评测脚本会自动调用共享的 `tools/tex_path.py`：扫描
+  `/usr/local/texlive/*/bin/*/latexmk` 与 `/opt/texlive/*/bin/*/latexmk` 并加入
+  `PATH`，也支持通过环境变量 `TEXLIVE_BIN` 显式指定 bin 目录；非交互 shell
+  即使没有加载 `~/.bashrc` 也能找到 latexmk。
 - 生成数据需 `numpy` / `pandas` / `openpyxl`（写 xlsx）；绘图 Agent 依赖
   `matplotlib` / `scipy`。
 - Python 依赖同后端，建议在项目 `.venv` 下运行。

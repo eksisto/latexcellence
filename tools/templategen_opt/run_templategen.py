@@ -36,6 +36,7 @@ from templategen_opt.descriptions import (  # noqa: E402
     REQUIREMENT_PATTERNS,
     SCENARIOS,
 )
+from tex_path import ensure_tex_path  # noqa: E402
 
 
 def _page_count(pdf_path: Path) -> int | None:
@@ -271,6 +272,7 @@ async def run_scenario(
 
 
 async def main() -> None:
+    ensure_tex_path()
     if len(sys.argv) < 2:
         print(__doc__)
         return

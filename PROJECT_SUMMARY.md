@@ -151,6 +151,7 @@ latexcellence/
 ├── logs/                            # 运行时日志
 ├── tools/                         # 维护者工具（开发/评测/维护用脚本与 Agent 评测工作区，不进入运行时）
 │   ├── eval_common.py             # 人工评估工具共享基座（语料加载/工作区/marker 还原/命中判定/CLI 骨架）
+│   ├── tex_path.py                # 评测工具共享：TeX Live 路径自动发现（非交互 shell 也能定位 latexmk）
 │   ├── latex_packages/            # 宏包规则表维护脚本（编译验证 + 覆盖率报告）
 │   │   ├── verify_rules.py        # 离线编译验证（维护者专用，需 TeX）
 │   │   ├── coverage_report.py     # 覆盖率报告（对照常用宏包清单）

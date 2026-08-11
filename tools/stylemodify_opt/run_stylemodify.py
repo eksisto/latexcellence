@@ -13,7 +13,6 @@
 
 import asyncio
 import json
-import os
 import shutil
 import sys
 import time
@@ -43,6 +42,7 @@ from stylemodify_opt.scenarios import (  # noqa: E402
     check_preservation,
     check_requirements,
 )
+from tex_path import ensure_tex_path  # noqa: E402
 
 
 def _ignore_session_files(directory: str, names: list[str]) -> set[str]:
@@ -73,26 +73,6 @@ def quality_score(metrics: dict[str, Any]) -> dict[str, int]:
 
 def _compile_available() -> bool:
     return shutil.which("latexmk") is not None
-
-
-def _ensure_tex_path() -> None:
-    """把常见 TeX Live Linux 安装目录加入 PATH，避免因 shell PATH 缺失误判。"""
-    current = os.environ.get("PATH", "")
-    candidates: list[str] = []
-    root = Path("/usr/local/texlive")
-    if root.is_dir():
-        for version_dir in sorted(root.iterdir(), reverse=True):
-            bin_root = version_dir / "bin"
-            if not bin_root.is_dir():
-                continue
-            for bindir in bin_root.iterdir():
-                if (bindir / "latexmk").exists():
-                    candidates.append(str(bindir))
-    for candidate in candidates:
-        if candidate not in current.split(os.pathsep):
-            current = candidate + os.pathsep + current
-    if current:
-        os.environ["PATH"] = current
 
 
 async def run_scenario(
@@ -321,7 +301,7 @@ async def run_scenario(
 
 
 async def main() -> None:
-    _ensure_tex_path()
+    ensure_tex_path()
     args = [a for a in sys.argv[1:] if not a.startswith("--")]
     do_apply_test = "--no-apply" not in sys.argv[1:]
     tag = args[0] if args else "baseline"

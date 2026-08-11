@@ -35,6 +35,7 @@ sys.path.insert(0, str(TOOLS_ROOT))
 from backend.core.config import load_config  # noqa: E402
 from backend.core.llm_client import get_llm_client  # noqa: E402
 from backend.utils.json_utils import retry_with_validation  # noqa: E402
+from tex_path import ensure_tex_path  # noqa: E402
 
 load_config("config.json")
 
@@ -205,6 +206,7 @@ async def review_scenario(
 
 
 async def main() -> None:
+    ensure_tex_path()
     if len(sys.argv) < 2:
         print(__doc__)
         return
