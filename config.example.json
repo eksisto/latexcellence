@@ -57,7 +57,7 @@
     "compile": {
       "enabled": true,
       "latexmk_timeout": 120,
-      "engine": "pdflatex",
+      "engine": "xelatex",
       "pdfa": true
     },
     "git_diff": {
@@ -151,6 +151,10 @@
           "searxng": {
             "enabled": false,
             "base_url": "http://localhost:8080"
+          },
+          "tavily": {
+            "enabled": false,
+            "api_key": ""
           }
         },
         "deep_read_pages": 2,
@@ -181,10 +185,12 @@
             "api_key": ""
           },
           "crossref": {
-            "enabled": false
+            "enabled": false,
+            "api_key": ""
           },
           "arxiv": {
-            "enabled": false
+            "enabled": false,
+            "api_key": ""
           },
           "core": {
             "enabled": false,
@@ -199,7 +205,8 @@
             "api_key": ""
           },
           "datacite": {
-            "enabled": false
+            "enabled": false,
+            "api_key": ""
           }
         }
       }

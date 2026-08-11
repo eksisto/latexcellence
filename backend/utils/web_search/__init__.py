@@ -25,6 +25,7 @@ from backend.utils.web_search.engines.ddg import (
 )
 from backend.utils.web_search.engines.mock import MockSearchEngine
 from backend.utils.web_search.engines.searxng import SearXNGEngine
+from backend.utils.web_search.engines.tavily import TavilyEngine
 from backend.utils.web_search.manager import (
     SearchManager,
     get_search_manager,
@@ -47,6 +48,7 @@ __all__ = [
     # 具体引擎
     "DuckDuckGoHtmlEngine",
     "SearXNGEngine",
+    "TavilyEngine",
     "MockSearchEngine",
     # DDG 验证码
     "DDGChallengeError",

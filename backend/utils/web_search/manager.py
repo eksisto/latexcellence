@@ -12,6 +12,7 @@ from backend.utils.web_search.base import BaseSearchEngine
 from backend.utils.web_search.deep_read import DeepReader
 from backend.utils.web_search.engines.ddg import DDGChallengeError, DuckDuckGoHtmlEngine
 from backend.utils.web_search.engines.searxng import SearXNGEngine
+from backend.utils.web_search.engines.tavily import TavilyEngine
 from backend.utils.web_search.models import SearchResponse, SearchResult
 from backend.utils.web_search.query_rewriter import QueryRewriter
 
@@ -262,6 +263,8 @@ def get_search_manager() -> SearchManager:
             engine_registry["duckduckgo"] = DuckDuckGoHtmlEngine()
         if engines_cfg.searxng.enabled:
             engine_registry["searxng"] = SearXNGEngine()
+        if engines_cfg.tavily.enabled and engines_cfg.tavily.api_key:
+            engine_registry["tavily"] = TavilyEngine()
 
         primary = cfg.features.function_calling.web_search.primary_engine
         for name, engine in engine_registry.items():

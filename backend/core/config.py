@@ -218,11 +218,19 @@ class SearXNGConfig(BaseModel):
     base_url: str = ""  # SearXNG 实例地址（如 http://localhost:8080）
 
 
+class TavilyConfig(BaseModel):
+    """Tavily 搜索引擎配置"""
+
+    enabled: bool = False
+    api_key: str = ""  # Tavily API Key（https://app.tavily.com 获取）
+
+
 class WebSearchEnginesConfig(BaseModel):
     """联网搜索引擎集合 — 每个引擎独立开关和参数"""
 
     duckduckgo: DuckDuckGoConfig = DuckDuckGoConfig()
     searxng: SearXNGConfig = SearXNGConfig()
+    tavily: TavilyConfig = TavilyConfig()
 
 
 class QueryRewritingConfig(BaseModel):
@@ -235,7 +243,9 @@ class WebSearchConfig(BaseModel):
     """联网搜索模块配置"""
 
     enabled: bool = False  # 是否启用（默认关闭，用户手动开启）
-    primary_engine: str = "duckduckgo"  # 主搜索引擎标识（duckduckgo / searxng）
+    primary_engine: str = (
+        "duckduckgo"  # 主搜索引擎标识（duckduckgo / searxng / tavily）
+    )
     max_results: int = Field(5, ge=1, le=20)  # 默认返回结果数上限
     timeout_seconds: int = Field(10, ge=1)  # 单次搜索超时（秒）
     engines: WebSearchEnginesConfig = WebSearchEnginesConfig()
@@ -528,6 +538,17 @@ def update_config_from_dict(updates: dict) -> AppConfig:
                 p["api_key"] = current["features"]["function_calling"][
                     "scholarly_research"
                 ]["providers"][provider_key]["api_key"]
+
+    # Tavily 搜索 API Key：前端掩码 → 保留原值；空值/真实 Key → 按用户输入处理
+    web_search = function_calling.get("web_search", {})
+    engines = web_search.get("engines", {})
+    tavily = engines.get("tavily", {})
+    if isinstance(tavily, dict) and "api_key" in tavily:
+        k = tavily.get("api_key", "")
+        if k.startswith("***"):
+            tavily["api_key"] = current["features"]["function_calling"]["web_search"][
+                "engines"
+            ]["tavily"]["api_key"]
 
     merged = _deep_merge(current, updates)
     _config = AppConfig(**merged)

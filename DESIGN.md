@@ -62,7 +62,7 @@
 | 术语一致性是语义问题而非文本匹配 | LLM 语义聚类替代固定算法 |
 | LaTeX 项目通常拆分为多个 \input 文件 | `input_resolver.py` 递归展开，按文件分组结果 |
 | 多浏览器同时处理不同项目 | `workspace_manager.py` 隔离各工作区 LatexProject 实例 |
-| 联网搜索无需 API Key | DuckDuckGo HTML 引擎 + 验证码转发；SearXNG 自建实例 JSON API；工具通过 `ToolRegistry` 注册，LLM 自动调用 |
+| 联网搜索 | DuckDuckGo HTML 引擎 + 验证码转发；SearXNG 自建实例 JSON API；Tavily Search API（Bearer API Key）；工具通过 `ToolRegistry` 注册，LLM 自动调用 |
 
 ### 1.3 核心架构组件：BaseParagraphCheckService
 
@@ -508,6 +508,7 @@ RS1 流式对话中 tool_call:
   ┌─ 引擎选择（根据配置）────────────────────────────┐
   │ DDG: https POST https://html.duckduckgo.com/html/  │
   │ SearXNG: httpx GET {base_url}/search?format=json    │
+  │ Tavily: httpx POST https://api.tavily.com/search    │
   └────────────────────────────────────────────────────┘
        ↓
   ┌─ DDG 路径 ────────────────────────────────────────┐
@@ -517,7 +518,7 @@ RS1 流式对话中 tool_call:
   │   → done(captcha_pending=true)，用户需重新发送     │
   └───────────────────────────────────────────────────┘
        ↓ 正常结果
-  ┌─ SearXNG 路径（无验证码） ───────────────────────┐
+  ┌─ Tavily / SearXNG 路径（无验证码） ──────────────┐
   │ 直接解析 JSON 结果                                 │
   └───────────────────────────────────────────────────┘
        ↓
@@ -952,4 +953,4 @@ Mock 返回值必须符合 Pydantic schema，确保测试的可重复性。
 | 参考文献元数据结构 | 动态 dict（非固定 Pydantic 字段） | 不同格式（GB/T、APA、IEEE）字段集不同，固定模型无法覆盖；`fields: dict[str, str]` 避免字段映射 |
 | 缺失字段检测 | 基于 `raw_observed_fields` 过滤 | 只报告输入中实际出现的必填字段缺失，不报输入中没有的字段（如 abstract），减少误报 |
 | 格式配置持久化 | JSON 文件，文件名由 `format_name` 自动生成 | 无需用户手动命名；合法字符替换为 `-`；支持 CRUD 加载复用 |
-| 联网搜索引擎 | DuckDuckGo HTML + SearXNG JSON API | DDG 免费无 API Key，HTTP 202 验证码转发；SearXNG 自建实例通过 `/search?format=json` 获取结果，无验证码；工具通过 ToolRegistry 注册，LLM 可自动调用；前端设置页面可切换引擎 |
+| 联网搜索引擎 | DuckDuckGo HTML + SearXNG JSON API + Tavily Search API | DDG 免费无 API Key，HTTP 202 验证码转发；SearXNG 自建实例通过 `/search?format=json` 获取结果，无验证码；Tavily 通过 `POST /search` 获取结果，需 API Key；工具通过 ToolRegistry 注册，LLM 可自动调用；前端设置页面可切换引擎 |

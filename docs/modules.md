@@ -109,4 +109,4 @@ bib_manager 的 DOI 查询模块和 web_search 模块共享类似的**可插拔 
 | OpenAI 兼容 API | 大部分 LLM 模块 |
 | Crossref / DataCite / OpenAlex / Europe PMC / Semantic Scholar API | bib_manager（DOI 查询数据源）与 writing_chat（OpenAlex 学术研究） |
 | arXiv API | bib_manager（预印本查询） |
-| DuckDuckGo HTML / SearXNG API | web_search（联网搜索） |
+| DuckDuckGo HTML / SearXNG / Tavily API | web_search（联网搜索） |

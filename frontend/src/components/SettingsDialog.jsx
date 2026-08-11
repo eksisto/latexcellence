@@ -807,6 +807,7 @@ export default function SettingsDialog() {
                       <SelectContent>
                         <SelectItem value="duckduckgo">DuckDuckGo</SelectItem>
                         <SelectItem value="searxng">SearXNG</SelectItem>
+                        <SelectItem value="tavily">Tavily</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
@@ -864,6 +865,46 @@ export default function SettingsDialog() {
                           onChange={(e) =>
                             set(
                               "features.function_calling.web_search.engines.searxng.base_url",
+                              e.target.value,
+                            )
+                          }
+                        />
+                      </div>
+                    )}
+                  </fieldset>
+
+                  {/* Tavily */}
+                  <fieldset className="rounded border p-2.5 space-y-2">
+                    <legend className="px-1 text-xs font-medium">Tavily</legend>
+                    <CheckboxField
+                      label={t("settings.enabled")}
+                      checked={
+                        config.features.function_calling.web_search.engines
+                          .tavily.enabled
+                      }
+                      onChange={(v) =>
+                        set(
+                          "features.function_calling.web_search.engines.tavily.enabled",
+                          v,
+                        )
+                      }
+                    />
+                    {config.features.function_calling.web_search.engines.tavily
+                      .enabled && (
+                      <div className="space-y-1.5">
+                        <Label className="text-xs">
+                          {t("settings.apiKey")}
+                        </Label>
+                        <Input
+                          type="password"
+                          placeholder={t("settings.tavilyApiKeyHint")}
+                          value={
+                            config.features.function_calling.web_search.engines
+                              .tavily.api_key
+                          }
+                          onChange={(e) =>
+                            set(
+                              "features.function_calling.web_search.engines.tavily.api_key",
                               e.target.value,
                             )
                           }

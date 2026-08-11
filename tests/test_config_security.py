@@ -300,6 +300,104 @@ class TestOpenAlexKeyMasking:
         assert "openalex-secret" not in json.dumps(response)
 
 
+class TestTavilyKeyMasking:
+    """Tavily 搜索 API Key 的掩码与保留逻辑。"""
+
+    def test_masked_tavily_key_keeps_existing(self, tmp_path):
+        config_path = _write_config(
+            tmp_path,
+            overrides={
+                "features": {
+                    "function_calling": {
+                        "web_search": {
+                            "engines": {"tavily": {"api_key": "tvly-secret-1234"}}
+                        }
+                    }
+                }
+            },
+        )
+        with mock.patch.dict(os.environ, {}, clear=True):
+            cfg_module.load_config(config_path)
+            cfg_module.update_config_from_dict(
+                {
+                    "features": {
+                        "function_calling": {
+                            "web_search": {
+                                "engines": {"tavily": {"api_key": "***1234"}}
+                            }
+                        }
+                    }
+                }
+            )
+
+        result = _read_config(config_path)
+        assert (
+            result["features"]["function_calling"]["web_search"]["engines"]["tavily"][
+                "api_key"
+            ]
+            == "tvly-secret-1234"
+        )
+
+    def test_empty_tavily_key_clears_existing(self, tmp_path):
+        config_path = _write_config(
+            tmp_path,
+            overrides={
+                "features": {
+                    "function_calling": {
+                        "web_search": {
+                            "engines": {"tavily": {"api_key": "tvly-secret-1234"}}
+                        }
+                    }
+                }
+            },
+        )
+        with mock.patch.dict(os.environ, {}, clear=True):
+            cfg_module.load_config(config_path)
+            cfg_module.update_config_from_dict(
+                {
+                    "features": {
+                        "function_calling": {
+                            "web_search": {"engines": {"tavily": {"api_key": ""}}}
+                        }
+                    }
+                }
+            )
+
+        result = _read_config(config_path)
+        assert (
+            result["features"]["function_calling"]["web_search"]["engines"]["tavily"][
+                "api_key"
+            ]
+            == ""
+        )
+
+    @pytest.mark.asyncio
+    async def test_full_config_masks_tavily_key(self, tmp_path):
+        config_path = _write_config(
+            tmp_path,
+            overrides={
+                "features": {
+                    "function_calling": {
+                        "web_search": {
+                            "engines": {"tavily": {"api_key": "tvly-secret-1234"}}
+                        }
+                    }
+                }
+            },
+        )
+        with mock.patch.dict(os.environ, {}, clear=True):
+            cfg_module.load_config(config_path)
+            from main import get_full_config
+
+            response = await get_full_config()
+
+        masked = response["features"]["function_calling"]["web_search"]["engines"][
+            "tavily"
+        ]["api_key"]
+        assert masked == "***1234"
+        assert "tvly-secret-1234" not in json.dumps(response)
+
+
 class TestConfigApiValidation:
     @pytest.mark.asyncio
     async def test_invalid_plot_rounds_returns_400(self, tmp_path):

@@ -60,6 +60,7 @@ latexcellence/
 │   │   │   └── engines/              # 具体搜索引擎实现
 │   │   │       ├── ddg.py            # DuckDuckGo HTML 引擎 + DDG Challenge 处理
 │   │   │       ├── searxng.py        # SearXNG 引擎
+│   │   │       ├── tavily.py         # Tavily Search API 引擎
 │   │   │       └── mock.py           # Mock 引擎（测试/降级）
 │   │   ├── scholarly_research/        # 学术研究工具（OpenAlex 检索、详情、引文追踪、OA 定位）
 │   │   │   ├── __init__.py            # 包入口与生命周期 API
@@ -215,7 +216,7 @@ latexcellence/
   - `features.function_calling` 配置组将全局 LLM 工具归入嵌套结构（替代原先扁平的 `features.function_calling.web_search` / `features.project_tools`），支持旧配置自动迁移
   - `ToolRegistry`（工具注册表）管理所有可用工具的 schema 和执行函数，基于 `config_path` 动态检查功能开关
   - 自注册模式：每个工具管理器在首次初始化时自动注册自身工具
-  - `SearchManager`（搜索管理器）提供 `web_search` 工具的 schema 和执行，统一封装 `DuckDuckGoHtmlEngine`（模拟浏览器请求，遇 HTTP 202 Challenge 时抛出 `DDGChallengeError`，由 service 捕获并以 `captcha_challenge` SSE 事件推送到前端）和 `SearXNGEngine`（通过 `/search?format=json` 获取结果，无验证码）
+  - `SearchManager`（搜索管理器）提供 `web_search` 工具的 schema 和执行，统一封装 `DuckDuckGoHtmlEngine`（模拟浏览器请求，遇 HTTP 202 Challenge 时抛出 `DDGChallengeError`，由 service 捕获并以 `captcha_challenge` SSE 事件推送到前端）、`SearXNGEngine`（通过 `/search?format=json` 获取结果，无验证码）和 `TavilyEngine`（通过 Tavily Search API，需 API Key）
   - `ProjectToolsManager`（项目工具管理器）提供 4 个浏览工具（`list_files` / `read_file_content` / `get_section_structure` / `search_across_files`），允许 LLM 浏览项目文件和目录结构
   - `EditToolsManager`（段落编辑工具管理器）提供 2 个编辑工具（`edit_paragraph` / `undo_last_edit`），允许 LLM 直接修改 .tex 文件段落并支持撤销，敏感操作需前端用户确认
   - `ResearchManager` 提供基于 OpenAlex 的论文检索、详情查询、引文追踪、摘要/OA 定位和研究数据资源检索；统一映射为可追溯、可去重的 `ScholarlyWork`，共享 HTTP 客户端由 FastAPI lifespan 管理

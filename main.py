@@ -186,6 +186,17 @@ async def get_full_config():
         k = p["api_key"]
         if k:
             p["api_key"] = "***" + k[-4:] if len(k) > 4 else "****"
+    tavily = (
+        data.get("features", {})
+        .get("function_calling", {})
+        .get("web_search", {})
+        .get("engines", {})
+        .get("tavily", {})
+    )
+    if isinstance(tavily, dict) and "api_key" in tavily:
+        k = tavily["api_key"]
+        if k:
+            tavily["api_key"] = "***" + k[-4:] if len(k) > 4 else "****"
     return data
 
 

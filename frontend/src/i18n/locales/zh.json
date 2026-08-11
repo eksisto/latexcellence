@@ -823,6 +823,7 @@
       "searchEngineConfig": "搜索引擎配置",
       "featureWebSearch": "联网搜索",
       "featureScholarlyResearch": "学术文献检索",
+      "tavilyApiKeyHint": "在 app.tavily.com 获取 API Key",
       "openAlexApiKey": "OpenAlex API Key",
       "openAlexApiKeyHint": "可在 openalex.org/settings/api 免费获取",
       "semanticScholarApiKeyHint": "可在 semanticscholar.org 获取免费 API Key",

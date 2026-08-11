@@ -14,6 +14,7 @@
 | `query_rewriter.py` | QueryRewriter — LLM 搜索查询重写 + 规则兜底 |
 | `engines/ddg.py` | DuckDuckGo HTML 引擎 + Challenge 处理 |
 | `engines/searxng.py` | SearXNG 引擎 |
+| `engines/tavily.py` | Tavily Search API 引擎 |
 | `engines/mock.py` | Mock 引擎（测试/降级） |
 | `backend/core/tool_registry.py` | Function Calling 工具注册表 |
 
@@ -27,6 +28,7 @@
 
 - **DuckDuckGo Html**：通过 POST 访问 `html.duckduckgo.com/html/`，模拟浏览器行为（Chrome UA + Sec-Fetch 头）。DDG 触发 challenge 时返回 HTTP 202，引擎解析 challenge 图片并抛出异常向上传播，前端展示验证码由用户手动提交。
 - **SearXNG**：通过 JSON API 执行搜索，无需验证码，适合自建实例。
+- **Tavily**：通过 Tavily Search API（`POST https://api.tavily.com/search`）执行搜索，使用 Bearer API Key 鉴权，无需处理验证码，适合有 Tavily 额度的用户。
 - **Mock**：空结果，用于测试和降级。
 
 ### SearchManager
@@ -64,11 +66,15 @@ Function Calling 工具注册表，统一管理所有可用工具。`web_search`
 | `primary_engine` | str | duckduckgo | 主搜索引擎 |
 | `max_results` | int | 5 | 返回结果数上限（1-20） |
 | `timeout_seconds` | int | 10 | 单次搜索超时 |
+| `engines.tavily.enabled` | bool | false | 是否启用 Tavily 引擎 |
+| `engines.tavily.api_key` | str | "" | Tavily API Key（设置页掩码展示，保存时保留原值） |
 | `deep_read_pages` | int | 2 | Deep Read 抓取前 N 条正文（0=禁用） |
 | `deep_read_max_chars` | int | 4000 | 每页最大抓取字符数 |
 | `query_rewriting.enabled` | bool | true | 是否启用 LLM 查询重写 |
 
 两级开关（`function_calling.web_search.enabled` + `writing_chat.web_search_enabled`）需同时开启才会在聊天中注入搜索工具。
+
+Tavily 引擎需要同时满足 `engines.tavily.enabled = true` 且已配置 API Key 才会注册到 `SearchManager`；未配置 Key 时自动跳过该引擎，由其他可用引擎降级兜底。
 
 ## 与 Writing Chat 集成
 
