@@ -59,6 +59,9 @@ async def lifespan(app: FastAPI):
 
     from backend.modules.template_gen.cleanup import cleanup_loop
     from backend.modules.plot_gen.cleanup import cleanup_loop as plot_cleanup_loop
+    from backend.modules.style_modify.cleanup import (
+        cleanup_loop as style_modify_cleanup_loop,
+    )
     from backend.utils.scholarly_research import (
         close_research_http_client,
         initialize_research_http_client,
@@ -67,17 +70,23 @@ async def lifespan(app: FastAPI):
     await initialize_research_http_client()
     cleanup_task = asyncio.create_task(cleanup_loop())
     plot_cleanup_task = asyncio.create_task(plot_cleanup_loop())
+    style_modify_cleanup_task = asyncio.create_task(style_modify_cleanup_loop())
     try:
         yield
     finally:
         cleanup_task.cancel()
         plot_cleanup_task.cancel()
+        style_modify_cleanup_task.cancel()
         try:
             await cleanup_task
         except asyncio.CancelledError:
             pass
         try:
             await plot_cleanup_task
+        except asyncio.CancelledError:
+            pass
+        try:
+            await style_modify_cleanup_task
         except asyncio.CancelledError:
             pass
         await close_research_http_client()

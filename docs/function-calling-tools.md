@@ -180,6 +180,22 @@
 
 ---
 
+### style_modify 项目 Agent
+
+定义在 `backend/modules/style_modify/agent.py`，由 `StyleModifyAgent._build_tools_schema()` 构建，**不注册到全局 ToolRegistry**。工具绑定当前 workspace、项目根目录和 session，真实项目只读，候选文件写入会话 overlay。
+
+| # | 名称 | 描述 | 必填参数 | 条件 |
+|---|------|------|----------|------|
+| 1 | `list_project_files` | 列出项目内允许后缀文件 | 无 | 始终 |
+| 2 | `search_project_text` | 在允许文件中搜索文本 | `query` | 始终 |
+| 3 | `read_project_file` | 读取文件或行区间 | `file_path` | 始终 |
+| 4 | `stage_replace` | 将完整候选内容写入 overlay | `file_path`, `content` | 始终 |
+| 5 | `discard_file_changes` | 丢弃某文件候选修改 | `file_path` | 始终 |
+| 6 | `compile_staged_project` | 在 shadow 项目编译候选版本 | 无（可选 `main_file`） | 始终 |
+| 7 | `finish` | 生成 proposal 并结束当前 run | `summary` | 始终 |
+
+`stage_replace` 写 overlay 前使用 `latex_json_guard.py` 内容校验；`.bib` 使用 `bibtex=True`。Agent 不提供创建、删除、重命名文件工具，也不允许执行任意 shell 命令。
+
 ### 写作助手专属工具
 
 由 `WritingChatService._get_enabled_tools()` 直接定义 schema 并在工具循环中内联处理，**不注册到全局 ToolRegistry**。仅写作助手模块可用。
@@ -201,6 +217,8 @@
 
 **模板生成 (template_gen)**: `_build_tools_schema()` 私有构建工具列表，通过 `chat_with_tools()` 直接传入，工具数量根据 `agent_compile_enabled` 配置为 4-5 个。
 
+**style_modify (项目 Agent)**: `StyleModifyAgent._build_tools_schema()` 私有构建项目浏览、搜索、读取、候选替换、丢弃、shadow 编译和 finish 工具，通过 `chat_with_tools()` 直接传入。
+
 ---
 
 ## 未接入 Function Calling 的模块
@@ -217,7 +235,7 @@
 | **paragraph_translate**（逐段翻译） | 同上 |
 | **formula_ocr** | 图片上传 → LLM Vision（`<<<LATEX>>>` 分隔符协议 + 内容校验，非 JSON） |
 | **table_ocr** | 图片上传 → LLM Vision（`<<<LATEX>>>` 分隔符协议 + 内容校验，非 JSON） |
-| **style_modify**（样式修改） | LLM JSON 修改建议 |
+| **style_modify**（样式修改） | 粘贴代码模式使用分隔符协议；项目 Agent 模式使用私有 Function Calling 工具 |
 | **format_converter**（格式转换） | Pandoc + LLM JSON |
 
 ---

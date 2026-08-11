@@ -74,7 +74,22 @@
       "max_file_size_mb": 20
     },
     "style_modify": {
-      "enabled": true
+      "enabled": true,
+      "agent": {
+        "enabled": true,
+        "sessions_dir": "style_modify_sessions/",
+        "max_rounds": 20,
+        "max_tool_calls": 100,
+        "max_compile_runs": 10,
+        "max_file_size_kb": 1024,
+        "max_session_size_kb": 10240,
+        "max_tool_output_chars": 12000,
+        "shadow_compile_timeout": 120,
+        "allowed_suffixes": [".tex", ".sty", ".cls", ".bib"],
+        "cleanup_enabled": true,
+        "cleanup_interval_seconds": 3600,
+        "cleanup_retention_days": 7
+      }
     },
     "terminology_check": {
       "enabled": true,

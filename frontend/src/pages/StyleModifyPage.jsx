@@ -1,5 +1,20 @@
-import { useState, useCallback } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
+import {
+  Check,
+  Download,
+  FileDiff,
+  FolderOpen,
+  Loader2,
+  Play,
+  RefreshCw,
+  ScrollText,
+  Square,
+  Trash2,
+  Undo2,
+  Wand2,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -9,39 +24,92 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
-import { Wand2, Loader2, Copy } from "lucide-react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import PageHeader from "@/components/PageHeader";
 import { api } from "@/api/index";
 import CodeBlock from "@/components/CodeBlock";
 import CodeEditorInput from "@/components/CodeEditorInput";
+import useStore from "@/store/useStore";
+import useStyleModifyAgent from "@/hooks/useStyleModifyAgent";
+
+function compileLabel(t, status) {
+  if (status === "passed") return t("pages:styleModify.compilePassed");
+  if (status === "failed") return t("pages:styleModify.compileFailed");
+  return t("pages:styleModify.compileNotRun");
+}
 
 export default function StyleModifyPage() {
   const { t } = useTranslation(["pages", "common"]);
-  const [latex, setLatex] = useState("");
-  const [description, setDescription] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
-  const [result, setResult] = useState(null);
+  const agent = useStyleModifyAgent();
+  const rootPath = useStore((state) => state.rootPath);
 
-  const handleModify = useCallback(async () => {
-    if (!latex.trim() || !description.trim()) return;
-    setLoading(true);
-    setError(null);
-    setResult(null);
+  const [pasteLatex, setPasteLatex] = useState("");
+  const [pasteDescription, setPasteDescription] = useState("");
+  const [pasteLoading, setPasteLoading] = useState(false);
+  const [pasteError, setPasteError] = useState("");
+  const [result, setResult] = useState("");
+  const [agentRequirement, setAgentRequirement] = useState("");
+  const [refineMessage, setRefineMessage] = useState("");
+  const [showTrace, setShowTrace] = useState(false);
+
+  const isAgent = agent.mode === "agent";
+
+  const handlePasteModify = useCallback(async () => {
+    if (!pasteLatex.trim() || !pasteDescription.trim()) return;
+    setPasteLoading(true);
+    setPasteError("");
+    setResult("");
     try {
-      const data = await api.styleModify.modify(latex, description);
+      const data = await api.styleModify.modify(pasteLatex, pasteDescription);
       setResult(data.latex);
     } catch (e) {
-      setError(e.message);
+      setPasteError(e.message);
     } finally {
-      setLoading(false);
+      setPasteLoading(false);
     }
-  }, [latex, description]);
+  }, [pasteLatex, pasteDescription]);
 
   const handleCopy = useCallback(() => {
-    if (!result) return;
-    navigator.clipboard.writeText(result).catch(() => {});
+    if (result) navigator.clipboard.writeText(result).catch(() => {});
   }, [result]);
+
+  const handleAgentRun = useCallback(() => {
+    // 与运行按钮的禁用条件保持一致：已有 session 时不允许静默新建会话
+    // 覆盖当前未审核的 proposal。
+    if (agentRequirement.trim() && !agent.sessionId)
+      agent.run(agentRequirement);
+  }, [agentRequirement, agent.sessionId, agent.run]);
+
+  const handleRefine = useCallback(() => {
+    if (refineMessage.trim()) agent.refine(refineMessage);
+  }, [refineMessage, agent.refine]);
+
+  const handleKeyDown = useCallback(
+    (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
+        if (isAgent) handleAgentRun();
+        else handlePasteModify();
+      }
+    },
+    [isAgent, handleAgentRun, handlePasteModify],
+  );
+
+  const handleKeyDownRef = useRef(handleKeyDown);
+  useEffect(() => {
+    handleKeyDownRef.current = handleKeyDown;
+  });
+  useEffect(() => {
+    const onKeyDown = (e) => handleKeyDownRef.current(e);
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, []);
+
+  const compileStatus =
+    agent.compile?.status || agent.proposal?.compile?.status || "not_run";
+  const compileLog = agent.compile?.log || agent.proposal?.compile?.log || "";
+  const compileErrors =
+    agent.compile?.errors || agent.proposal?.compile?.errors || [];
+  const applied = agent.operation?.status === "applied";
 
   return (
     <div className="min-h-screen p-8 animate-tab-enter">
@@ -52,86 +120,440 @@ export default function StyleModifyPage() {
         />
       </div>
 
-      <div className="max-w-6xl mx-auto grid grid-cols-2 gap-6">
-        <div className="space-y-4">
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm">
-                {t("pages:styleModify.sourceCode")}
-              </CardTitle>
-              <CardDescription>
-                {t("pages:styleModify.sourcePlaceholder")}
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <CodeEditorInput
-                value={latex}
-                onChange={(e) => setLatex(e.target.value)}
-                placeholder={t("pages:styleModify.sourcePlaceholder")}
-                className="min-h-80"
-              />
-            </CardContent>
-          </Card>
-        </div>
+      <div className="max-w-6xl mx-auto space-y-6">
+        <Tabs value={agent.mode} onValueChange={agent.setMode}>
+          <TabsList className="mx-auto mb-6">
+            <TabsTrigger value="agent">
+              {t("pages:styleModify.modeAgent")}
+            </TabsTrigger>
+            <TabsTrigger value="paste">
+              {t("pages:styleModify.modePaste")}
+            </TabsTrigger>
+          </TabsList>
 
-        <div className="space-y-4">
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm">
-                {t("pages:styleModify.requirement")}
-              </CardTitle>
-              <CardDescription>
-                {t("pages:styleModify.requirementPlaceholder")}
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <Textarea
-                className="min-h-32 resize-none"
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                placeholder={t("pages:styleModify.requirementExamples")}
-              />
-              <div className="flex items-center gap-2">
-                <Button
-                  onClick={handleModify}
-                  disabled={loading || !latex.trim() || !description.trim()}
-                >
-                  {loading ? <Loader2 className="animate-spin" /> : <Wand2 />}
-                  {loading
-                    ? t("pages:styleModify.modifyBtnLoading")
-                    : t("pages:styleModify.modifyBtn")}
-                </Button>
-                <span className="text-xs text-muted-foreground">
-                  {t("pages:styleModify.submitHint")}
-                </span>
+          <TabsContent value="agent" className="animate-tab-enter">
+            <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
+              <div className="space-y-4">
+                {!rootPath ? (
+                  <Card>
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-sm">
+                        {t("pages:styleModify.noProjectTitle")}
+                      </CardTitle>
+                      <CardDescription>
+                        {t("pages:styleModify.noProjectDesc")}
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <Button
+                        nativeButton={false}
+                        render={<Link to="/workspace" />}
+                      >
+                        <FolderOpen />
+                        {t("common:openWorkspace")}
+                      </Button>
+                    </CardContent>
+                  </Card>
+                ) : (
+                  <Card>
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-sm">
+                        {t("pages:styleModify.agentRequirement")}
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-3">
+                      <Textarea
+                        className="min-h-32 resize-none"
+                        value={agentRequirement}
+                        onChange={(e) => setAgentRequirement(e.target.value)}
+                        placeholder={t(
+                          "pages:styleModify.agentRequirementPlaceholder",
+                        )}
+                      />
+                      <div className="flex flex-wrap items-center gap-2">
+                        {agent.running ? (
+                          <Button variant="secondary" onClick={agent.stop}>
+                            <Square />
+                            {t("pages:styleModify.agentStop")}
+                          </Button>
+                        ) : (
+                          <Button
+                            onClick={handleAgentRun}
+                            disabled={
+                              !agentRequirement.trim() || !!agent.sessionId
+                            }
+                          >
+                            <Play />
+                            {t("pages:styleModify.agentRun")}
+                          </Button>
+                        )}
+                        {agent.sessionId && (
+                          <Button
+                            variant="outline"
+                            onClick={() => agent.loadSession(agent.sessionId)}
+                          >
+                            <RefreshCw />
+                            {t("pages:styleModify.refreshSession")}
+                          </Button>
+                        )}
+                      </div>
+                      {agent.error && (
+                        <p className="text-sm text-destructive">
+                          {agent.error}
+                        </p>
+                      )}
+                      {agent.warning && (
+                        <p className="text-sm text-amber-600">
+                          {agent.warning}
+                        </p>
+                      )}
+                    </CardContent>
+                  </Card>
+                )}
+
+                <Card>
+                  <CardHeader className="pb-2">
+                    <div className="flex items-center justify-between">
+                      <CardTitle className="text-sm">
+                        {t("pages:styleModify.agentTimeline")}
+                      </CardTitle>
+                      {agent.sessionId && (
+                        <div className="flex items-center gap-2">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setShowTrace((v) => !v)}
+                          >
+                            <ScrollText />
+                            {t("pages:styleModify.viewTrace")}
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={agent.downloadTrace}
+                          >
+                            <Download />
+                            {t("pages:styleModify.downloadTrace")}
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                  </CardHeader>
+                  <CardContent>
+                    {agent.steps.length === 0 ? (
+                      <p className="text-sm text-muted-foreground">
+                        {t("pages:styleModify.agentTimelineEmpty")}
+                      </p>
+                    ) : (
+                      <ol className="space-y-2 text-sm">
+                        {agent.steps.map((step) => (
+                          <li
+                            key={step._key}
+                            className="rounded-md border bg-muted/30 p-2"
+                          >
+                            <div className="font-medium">
+                              {t(
+                                `pages:styleModify.step_${step.type || "tool_result"}`,
+                              )}
+                              {step.tool ? ` · ${step.tool}` : ""}
+                            </div>
+                            {step.summary && (
+                              <div className="mt-1 text-xs text-muted-foreground">
+                                {step.summary}
+                              </div>
+                            )}
+                          </li>
+                        ))}
+                      </ol>
+                    )}
+                    {showTrace && (
+                      <div className="mt-4">
+                        <CodeBlock
+                          code={
+                            agent.trace
+                              ? JSON.stringify(agent.trace, null, 2)
+                              : t("pages:styleModify.traceEmpty")
+                          }
+                          language="json"
+                          lineNumbers={false}
+                          className="max-h-80 overflow-auto text-xs"
+                        />
+                        {!agent.trace && agent.sessionId && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="mt-2"
+                            onClick={agent.loadTrace}
+                          >
+                            {agent.loadingTrace
+                              ? t("common:loading")
+                              : t("pages:styleModify.viewTrace")}
+                          </Button>
+                        )}
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
               </div>
-              {error && <p className="text-sm text-destructive">{error}</p>}
-            </CardContent>
-          </Card>
 
-          {result && (
-            <Card>
-              <CardHeader className="pb-2">
-                <div className="flex items-center justify-between">
-                  <CardTitle className="text-sm">
-                    {t("pages:styleModify.resultTitle")}
-                  </CardTitle>
-                  <Button variant="outline" size="sm" onClick={handleCopy}>
-                    <Copy />
-                    {t("common:copy")}
-                  </Button>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <CodeBlock
-                  code={result}
-                  language="latex"
-                  className="p-4 max-h-96 text-sm"
-                />
-              </CardContent>
-            </Card>
-          )}
-        </div>
+              <div className="space-y-4">
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm">
+                      {t("pages:styleModify.proposalTitle")}
+                    </CardTitle>
+                    <CardDescription>
+                      {agent.proposal?.summary || agent.summary || " "}
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="text-sm font-medium">
+                        {t("pages:styleModify.compileStatus")}
+                      </span>
+                      <span
+                        className={`rounded-md px-2 py-0.5 text-xs font-medium ${
+                          compileStatus === "passed"
+                            ? "bg-emerald-500/10 text-emerald-600"
+                            : compileStatus === "failed"
+                              ? "bg-red-500/10 text-red-600"
+                              : "bg-muted text-muted-foreground"
+                        }`}
+                      >
+                        {compileLabel(t, compileStatus)}
+                      </span>
+                    </div>
+                    {compileLog && (
+                      <details>
+                        <summary className="cursor-pointer text-xs text-muted-foreground">
+                          {t("pages:styleModify.viewCompileLog")}
+                        </summary>
+                        <CodeBlock
+                          code={compileLog}
+                          language="plaintext"
+                          lineNumbers={false}
+                          className="mt-2 max-h-72 overflow-auto text-xs"
+                        />
+                      </details>
+                    )}
+                    {compileErrors.length > 0 && (
+                      <ul className="space-y-1 text-xs text-destructive">
+                        {compileErrors.map((err, idx) => (
+                          <li key={idx}>
+                            {err.type}
+                            {err.file ? ` · ${err.file}` : ""}
+                            {err.line ? `:${err.line}` : ""}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+
+                    {agent.files.length === 0 ? (
+                      <p className="text-sm text-muted-foreground">
+                        {t("pages:styleModify.noFiles")}
+                      </p>
+                    ) : (
+                      <Tabs
+                        key={agent.files.map((f) => f.path).join(",")}
+                        defaultValue={agent.files[0]?.path}
+                      >
+                        <TabsList className="max-w-full overflow-x-auto">
+                          {agent.files.map((file) => (
+                            <TabsTrigger key={file.path} value={file.path}>
+                              {file.path}
+                            </TabsTrigger>
+                          ))}
+                        </TabsList>
+                        {agent.files.map((file) => (
+                          <TabsContent
+                            key={file.path}
+                            value={file.path}
+                            className="animate-tab-enter"
+                          >
+                            <CodeBlock
+                              code={file.diff || t("common:noChanges")}
+                              language="plaintext"
+                              lineNumbers={false}
+                              className="max-h-[28rem] overflow-auto text-xs"
+                            />
+                          </TabsContent>
+                        ))}
+                      </Tabs>
+                    )}
+
+                    <div className="flex flex-wrap items-center gap-2 pt-1">
+                      <Button
+                        onClick={agent.apply}
+                        disabled={
+                          !agent.proposal?.applicable ||
+                          agent.applying ||
+                          agent.running
+                        }
+                      >
+                        {agent.applying ? (
+                          <Loader2 className="animate-spin" />
+                        ) : (
+                          <Check />
+                        )}
+                        {agent.applying
+                          ? t("pages:styleModify.applyingProposal")
+                          : t("pages:styleModify.applyProposal")}
+                      </Button>
+                      {applied && (
+                        <Button
+                          variant="outline"
+                          onClick={agent.undo}
+                          disabled={agent.applying}
+                        >
+                          <Undo2 />
+                          {t("pages:styleModify.undoOperation")}
+                        </Button>
+                      )}
+                      {agent.sessionId && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={agent.deleteSession}
+                        >
+                          <Trash2 />
+                          {t("pages:styleModify.deleteSession")}
+                        </Button>
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm">
+                      {t("pages:styleModify.refineTitle")}
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    <Textarea
+                      className="min-h-24 resize-none"
+                      value={refineMessage}
+                      onChange={(e) => setRefineMessage(e.target.value)}
+                      placeholder={t("pages:styleModify.refinePlaceholder")}
+                    />
+                    <Button
+                      onClick={handleRefine}
+                      disabled={
+                        !refineMessage.trim() ||
+                        !agent.sessionId ||
+                        !agent.proposal ||
+                        agent.running
+                      }
+                    >
+                      <Wand2 />
+                      {agent.running
+                        ? t("pages:styleModify.refining")
+                        : t("pages:styleModify.refineBtn")}
+                    </Button>
+                  </CardContent>
+                </Card>
+              </div>
+            </div>
+          </TabsContent>
+
+          <TabsContent value="paste" className="animate-tab-enter">
+            <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
+              <div className="space-y-4">
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm">
+                      {t("pages:styleModify.sourceCode")}
+                    </CardTitle>
+                    <CardDescription>
+                      {t("pages:styleModify.sourcePlaceholder")}
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <CodeEditorInput
+                      value={pasteLatex}
+                      onChange={(e) => setPasteLatex(e.target.value)}
+                      placeholder={t("pages:styleModify.sourcePlaceholder")}
+                      className="min-h-80"
+                    />
+                  </CardContent>
+                </Card>
+              </div>
+
+              <div className="space-y-4">
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm">
+                      {t("pages:styleModify.requirement")}
+                    </CardTitle>
+                    <CardDescription>
+                      {t("pages:styleModify.requirementPlaceholder")}
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    <Textarea
+                      className="min-h-32 resize-none"
+                      value={pasteDescription}
+                      onChange={(e) => setPasteDescription(e.target.value)}
+                      placeholder={t("pages:styleModify.requirementExamples")}
+                    />
+                    <div className="flex items-center gap-2">
+                      <Button
+                        onClick={handlePasteModify}
+                        disabled={
+                          pasteLoading ||
+                          !pasteLatex.trim() ||
+                          !pasteDescription.trim()
+                        }
+                      >
+                        {pasteLoading ? (
+                          <Loader2 className="animate-spin" />
+                        ) : (
+                          <Wand2 />
+                        )}
+                        {pasteLoading
+                          ? t("pages:styleModify.modifyBtnLoading")
+                          : t("pages:styleModify.modifyBtn")}
+                      </Button>
+                      <span className="text-xs text-muted-foreground">
+                        {t("pages:styleModify.submitHint")}
+                      </span>
+                    </div>
+                    {pasteError && (
+                      <p className="text-sm text-destructive">{pasteError}</p>
+                    )}
+                  </CardContent>
+                </Card>
+
+                {result && (
+                  <Card>
+                    <CardHeader className="pb-2">
+                      <div className="flex items-center justify-between">
+                        <CardTitle className="text-sm">
+                          {t("pages:styleModify.resultTitle")}
+                        </CardTitle>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={handleCopy}
+                        >
+                          <FileDiff />
+                          {t("common:copy")}
+                        </Button>
+                      </div>
+                    </CardHeader>
+                    <CardContent>
+                      <CodeBlock
+                        code={result}
+                        language="latex"
+                        className="p-4 max-h-96 text-sm"
+                      />
+                    </CardContent>
+                  </Card>
+                )}
+              </div>
+            </div>
+          </TabsContent>
+        </Tabs>
       </div>
     </div>
   );

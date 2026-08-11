@@ -13,7 +13,7 @@
 | 术语一致性检查 | [terminology_check.md](modules/terminology_check.md) | 术语一致性检查 |
 | 逐段翻译 | [paragraph_translate.md](modules/paragraph_translate.md) | 按段落翻译为目标语言，保留 LaTeX 结构 |
 | LaTeX 代码审查 | [code_review.md](modules/code_review.md) | 工具格式化 + LLM 智能审查 |
-| LaTeX 样式修改 | [style_modify.md](modules/style_modify.md) | 自然语言描述修改样式 |
+| LaTeX 样式修改 | [style_modify.md](modules/style_modify.md) | 粘贴代码修改样式，或项目 Agent 定位样式并生成可审核、可撤销的候选修改 |
 | 写作助手 | [writing_chat.md](modules/writing_chat.md) | 多轮对话式写作辅助 |
 
 ### OCR 识别模块
@@ -94,9 +94,9 @@ bib_manager 的 DOI 查询模块和 web_search 模块共享类似的**可插拔 
 | 模式 | 模块 |
 | --- | --- |
 | 逐段检查 + SSE 流式 | typo_check, expression_opt, terminology_check, code_review, paragraph_translate |
-| Agent + SSE 流式 | template_gen, plot_gen |
+| Agent + SSE 流式 | template_gen, plot_gen, style_modify（项目 Agent 模式） |
 | 多轮对话 | writing_chat |
-| 单次请求-响应 | formula_ocr, table_ocr, style_modify, compile, git_diff, format_converter |
+| 单次请求-响应 | formula_ocr, table_ocr, style_modify（粘贴代码模式）, compile, git_diff, format_converter |
 | 无 LLM | compile（编译本身） |
 
 ### 外部依赖

@@ -63,6 +63,12 @@ const useStore = create(
       activeFile: null,
       mainFile: null,
 
+      /* ===== style_modify Agent（只持久化恢复所需标识） ===== */
+      styleModifySessionId: null,
+      styleModifyRevision: null,
+      styleModifyOperationId: null,
+      styleModifyMode: "agent",
+
       /* ===== 功能模块结果（不持久化） ===== */
       typos: [],
       expressions: [],
@@ -104,6 +110,13 @@ const useStore = create(
       setFileTree: (tree) => set({ fileTree: tree }),
       setActiveFile: (file) => set({ activeFile: file }),
       setMainFile: (file) => set({ mainFile: file }),
+      setStyleModifySession: ({ sessionId, revision, operationId } = {}) =>
+        set({
+          styleModifySessionId: sessionId || null,
+          styleModifyRevision: revision || null,
+          styleModifyOperationId: operationId || null,
+        }),
+      setStyleModifyMode: (mode) => set({ styleModifyMode: mode }),
       setTypos: (typos) => set({ typos }),
       setExpressions: (expressions) => set({ expressions }),
       setTypoParagraphs: (paras) => {
@@ -258,6 +271,9 @@ const useStore = create(
           writingChatCurrentSessionId: null,
           writingChatMessages: [],
           writingChatCompressed: false,
+          styleModifySessionId: null,
+          styleModifyRevision: null,
+          styleModifyOperationId: null,
           checkProgress: null,
         });
       },
@@ -275,6 +291,10 @@ const useStore = create(
         rootPath: state.rootPath,
         activeFile: state.activeFile,
         mainFile: state.mainFile,
+        styleModifySessionId: state.styleModifySessionId,
+        styleModifyRevision: state.styleModifyRevision,
+        styleModifyOperationId: state.styleModifyOperationId,
+        styleModifyMode: state.styleModifyMode,
         currentTheme: state.currentTheme,
         typoResults: state.typoResults,
         typoParagraphs: state.typoParagraphs,

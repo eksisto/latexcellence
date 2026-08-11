@@ -729,7 +729,9 @@ asyncio.to_thread(subprocess.run)
 
 ### 5.12 样式修改数据流
 
-样式修改让用户通过自然语言描述修改 LaTeX 样式（如改列对齐、调整间距），LLM **直接操作原始 LaTeX 结构**，不使用 Marker 保护：
+样式修改让用户通过自然语言描述修改 LaTeX 样式（如改列对齐、调整间距），LLM **直接操作原始 LaTeX 结构**，不使用 Marker 保护。模块包含粘贴代码和项目 Agent 两种模式。
+
+粘贴代码模式数据流：
 
 ```
 POST /api/style-modify/modify { latex: "...", description: "..." }
@@ -743,7 +745,28 @@ POST /api/style-modify/modify { latex: "...", description: "..." }
 返回 { latex: "..." }
 ```
 
-**关键差异**：不使用 Marker 保护（设计要求 LLM 直接操作 LaTeX 结构，如改 `\begin{tabular}{lcr}` 为 `\begin{tabular}{ccc}`）；无 SSE 流式；单次请求-响应。
+项目 Agent 模式数据流：
+
+```
+POST /api/style-modify/agent/run { description, workspace_id }
+        ↓
+创建 style_modify_sessions/<session_id>/
+真实项目只读；私有工具浏览/搜索/读取项目
+        ↓
+stage_replace → baseline/ + overlay/（不写真实项目）
+        ↓
+compile_staged_project → shadow/ 覆盖 overlay 后 latexmk 编译
+        ↓
+finish → proposal revision（diff + MD5 + 编译摘要）
+        ↓ 用户确认
+apply → LatexProject.apply_whole_files()
+  校验 workspace / 项目指纹 / revision / 路径 / baseline MD5
+  批量原子写入 + operation 备份
+        ↓
+undo → 校验 applied MD5 后批量恢复
+```
+
+**关键差异**：粘贴代码模式无 SSE、单次请求响应；项目 Agent 模式使用 SSE、Function Calling 私有工具、会话 overlay、shadow 编译和批量事务写回。两种模式都不使用 Marker 保护。
 
 ### 5.13 Git 差异高亮数据流
 

@@ -16,6 +16,7 @@ LaTeX 项目管理模块。
 
 from dataclasses import dataclass, field
 from pathlib import Path
+import threading
 
 
 from backend.core.logger import get_logger
@@ -104,6 +105,7 @@ class LatexProject:
         self._project_info: ProjectInfo | None = None
         self._logger = get_logger("project_manager")
         self._backup_mgr = backup_mgr or get_backup_manager()
+        self._transaction_lock = threading.RLock()
         # { file_path_abs: md5_hex }  记录解析时的文件哈希
         self._file_md5: dict[str, str] = {}
 
@@ -348,6 +350,89 @@ class LatexProject:
             f"Applied change: {file_path} paragraph[{paragraph_index}] "
             f"lines {para.line_start}-{para.line_end}"
         )
+
+    def apply_whole_files(
+        self,
+        updates: dict[str, str],
+        *,
+        expected_md5s: dict[str, str] | None = None,
+        allowed_suffixes: tuple[str, ...] | None = None,
+    ) -> dict[str, str]:
+        """
+        以事务方式批量替换多个文件的完整内容。
+
+        提交前校验每个文件当前 MD5 与 expected_md5s 一致；任一文件校验失败或
+        写入失败时，已写入文件恢复到事务开始前的内容。每个文件在写入前会推入
+        BackupManager，保留常规 undo 能力。
+
+        参数：
+            updates: {相对路径: 完整新内容}
+            expected_md5s: 可选的乐观锁 {相对路径: 期望 MD5}
+            allowed_suffixes: 可选扩展名白名单
+
+        返回：
+            {相对路径: 写入后的 MD5}
+        """
+        if not self._project_info:
+            raise RuntimeError("No project opened")
+        root = Path(self._project_info.root_path).resolve()
+        with self._transaction_lock:
+            prepared: list[tuple[str, Path, str, str]] = []
+            for file_path, content in updates.items():
+                full_path = resolve_project_path(
+                    root,
+                    file_path,
+                    allowed_suffixes=allowed_suffixes,
+                    allow_symlink=False,
+                )
+                if not full_path.exists() or not full_path.is_file():
+                    raise FileNotFoundError(f"File not found: {file_path}")
+                current = safe_read(full_path)
+                if expected_md5s is not None:
+                    expected = expected_md5s.get(file_path)
+                    if expected is not None:
+                        current_md5 = compute_md5(full_path)
+                        if current_md5 != expected:
+                            raise FileConflictError(
+                                file_path=file_path,
+                                expected_md5=expected,
+                                current_md5=current_md5,
+                            )
+                prepared.append((file_path, full_path, current, content))
+
+            written: list[Path] = []
+            try:
+                for _, full_path, _, content in prepared:
+                    self._backup_mgr.push(full_path)
+                    atomic_write(full_path, content)
+                    written.append(full_path)
+            except Exception as exc:
+                self._logger.error(
+                    "Batch write failed, restoring %d file(s): %s",
+                    len(prepared),
+                    exc,
+                )
+                for _, full_path, current, _ in prepared:
+                    try:
+                        atomic_write(full_path, current)
+                    except Exception as restore_error:
+                        self._logger.error(
+                            "Failed to restore %s after batch error: %s",
+                            full_path,
+                            restore_error,
+                        )
+                raise
+
+            result: dict[str, str] = {}
+            for file_path, full_path, _, _ in prepared:
+                md5 = compute_md5(full_path)
+                self._file_md5[str(full_path)] = md5
+                result[file_path] = md5
+            self._logger.info(
+                "Applied whole-file batch: %d file(s)",
+                len(prepared),
+            )
+            return result
 
     def undo(self, file_path: str) -> bool:
         """

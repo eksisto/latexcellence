@@ -8,9 +8,10 @@
 
 - `ServerConfig` — 服务配置（host, port, dev_mode, vite_dev_url）
 - `LLMConfig` — LLM 配置（api_key, base_url, model, temperature 等）
-- `TypoCheckConfig` / `ExpressionOptConfig` / `TerminologyCheckConfig` / `FormulaOCRConfig` / `TableOCRConfig` / `TemplateGenConfig` / `CodeReviewConfig` / `CompileConfig` / `GitDiffConfig` / `FormatConverterConfig` / `StyleModifyConfig` / `WritingChatConfig` / `BibManagerConfig` / `ParagraphTranslateConfig` — 各功能模块配置
+- `TypoCheckConfig` / `ExpressionOptConfig` / `TerminologyCheckConfig` / `FormulaOCRConfig` / `TableOCRConfig` / `TemplateGenConfig` / `CodeReviewConfig` / `CompileConfig` / `GitDiffConfig` / `FormatConverterConfig` / `StyleModifyConfig` / `StyleModifyAgentConfig` / `WritingChatConfig` / `BibManagerConfig` / `ParagraphTranslateConfig` — 各功能模块配置
   - `CompileConfig` 包含 `engine`（编译引擎：auto/pdflatex/xelatex/lualatex）和 `pdfa`（PDF/A-2b 归档格式输出）配置
   - `TemplateGenConfig` 包含 `cleanup_enabled`/`cleanup_interval_seconds`/`cleanup_retention_days` 沙箱清理配置
+  - `StyleModifyAgentConfig` 包含项目 Agent 会话目录、轮次、大小、shadow 编译和清理配置
 - `ProjectToolsConfig` / `EditToolsConfig` / `WebSearchConfig` / `ScholarlyResearchConfig` — Function Calling 工具配置
   - `EditToolsConfig` 包含 `require_confirmation`（敏感操作是否需要前端确认弹窗）
   - `ScholarlyResearchConfig` 包含 OpenAlex 数据源开关、API Key、结果上限与请求超时
@@ -118,11 +119,14 @@ class ProjectInfo:
 | `get_file_md5(file_path)` | 返回指定文件的当前 MD5 哈希值（乐观锁版本号），同时更新内部缓存 |
 | `get_paragraphs(file_path)` | 按空行分割文件为段落，记录行号范围 |
 | `apply_change(file_path, idx, text, expected_md5=None)` | 原地修改段落：乐观锁校验 → 备份 → 替换行范围 → 原子写入 → 更新 MD5 缓存 |
+| `apply_whole_files(updates, expected_md5s=None, allowed_suffixes=None)` | 批量替换多个文件的完整内容：先校验全部 MD5，再逐文件备份、原子写入；任一文件失败时恢复本次已写入文件 |
 | `set_main_file(file_path)` | 手动设置主文档路径 |
 | `undo(file_path)` / `redo(file_path)` | 撤销 / 重做（委托给 `BackupManager`） |
 | `can_undo(file_path)` / `can_redo(file_path)` | 检查撤销/重做栈是否有记录 |
 
 **乐观锁机制**：`apply_change()` 支持 `expected_md5` 参数。优先使用调用方传入的 MD5（跨工作区乐观锁），否则退回到实例内部缓存的 MD5（单工作区内校验）。两者均不为 `None` 时，若当前文件 MD5 与预期不符，抛出 `FileConflictError`。
+
+**whole-file 批量事务**：`apply_whole_files()` 供 style_modify 项目 Agent 的多文件 proposal 写回使用。方法在一个事务锁内先完成路径、后缀、符号链接和 MD5 校验，再为每个文件调用 `BackupManager.push()` 并 `atomic_write()`。写入失败时恢复全部目标文件，成功后更新内部 MD5 缓存。
 
 **主文档检测逻辑**（递归深度限制 2 层）：
 
@@ -488,6 +492,7 @@ raise ValueError("Validation failed after N attempts")        # ❌ 耗尽
 | `compile/service.py` | `compile_latex()` 调用 |
 | `git_diff/service.py` | `_compile_diff()` 调用 |
 | `template_gen/agent.py` | `_ToolExecutor._compile_latex()` 调用 |
+| `style_modify/session.py` | `compile_staged_project()` 调用 |
 
 ### `compile_error_translator.py` — LaTeX 编译错误 LLM 翻译
 

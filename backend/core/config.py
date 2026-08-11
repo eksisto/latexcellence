@@ -138,10 +138,31 @@ class FormatConverterConfig(BaseModel):
     max_file_size_mb: int = 20  # 上传文件最大尺寸（MB）
 
 
+class StyleModifyAgentConfig(BaseModel):
+    """style_modify 项目 Agent 配置"""
+
+    enabled: bool = True  # 是否启用项目 Agent 模式
+    sessions_dir: str = "style_modify_sessions/"  # 会话缓存目录
+    max_rounds: int = Field(20, ge=1, le=50)  # Agent 最大工具轮数
+    max_tool_calls: int = Field(100, ge=1, le=500)  # 单轮会话工具调用上限
+    max_compile_runs: int = Field(10, ge=1, le=100)  # 单轮会话编译次数上限
+    max_file_size_kb: int = Field(1024, ge=1)  # 单个候选文件大小上限（KB）
+    max_session_size_kb: int = Field(10240, ge=1)  # 单会话候选总量上限（KB）
+    max_tool_output_chars: int = Field(12000, ge=500)  # 工具输出回传上限
+    shadow_compile_timeout: int = Field(120, ge=1)  # shadow 编译超时（秒）
+    allowed_suffixes: list[str] = Field(
+        default_factory=lambda: [".tex", ".sty", ".cls", ".bib"]
+    )  # 允许修改的文件后缀
+    cleanup_enabled: bool = True  # 是否启用过期会话自动清理
+    cleanup_interval_seconds: int = Field(3600, ge=60)  # 清理检查间隔（秒）
+    cleanup_retention_days: int = Field(7, ge=1)  # 会话保留天数
+
+
 class StyleModifyConfig(BaseModel):
     """LaTeX 样式修改模块配置"""
 
     enabled: bool = True  # 是否启用
+    agent: StyleModifyAgentConfig = StyleModifyAgentConfig()  # 项目 Agent 配置
 
 
 class TerminologyCheckConfig(BaseModel):

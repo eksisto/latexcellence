@@ -302,6 +302,106 @@ export const api = {
         method: "POST",
         body: JSON.stringify({ latex, description }),
       }),
+    agent: {
+      run: async ({ workspaceId, description, signal, onEvent, onError }) => {
+        const res = await fetch(`${BASE_URL}/style-modify/agent/run`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            description,
+            workspace_id: workspaceId,
+            language: getUiLanguage(),
+          }),
+          signal,
+        });
+        if (!res.ok) {
+          const err = await res
+            .json()
+            .catch(() => ({ detail: res.statusText }));
+          throw new Error(translateError(err.detail || `HTTP ${res.status}`));
+        }
+        await consumeSse(res, onEvent, onError);
+      },
+      refine: async ({
+        sessionId,
+        workspaceId,
+        message,
+        signal,
+        onEvent,
+        onError,
+      }) => {
+        const res = await fetch(
+          `${BASE_URL}/style-modify/agent/sessions/${encodeURIComponent(sessionId)}/refine`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              workspace_id: workspaceId,
+              message,
+              language: getUiLanguage(),
+            }),
+            signal,
+          },
+        );
+        if (!res.ok) {
+          const err = await res
+            .json()
+            .catch(() => ({ detail: res.statusText }));
+          throw new Error(translateError(err.detail || `HTTP ${res.status}`));
+        }
+        await consumeSse(res, onEvent, onError);
+      },
+      session: (sessionId, workspaceId) =>
+        request(
+          appendWs(
+            `/style-modify/agent/sessions/${encodeURIComponent(sessionId)}`,
+            workspaceId,
+          ),
+        ),
+      trace: (sessionId, workspaceId) =>
+        request(
+          appendWs(
+            `/style-modify/agent/sessions/${encodeURIComponent(sessionId)}/trace`,
+            workspaceId,
+          ),
+        ),
+      downloadTrace: async (sessionId, workspaceId) => {
+        await downloadBlob(
+          appendWs(
+            `${BASE_URL}/style-modify/agent/sessions/${encodeURIComponent(sessionId)}/trace/download`,
+            workspaceId,
+          ),
+          `style-modify-${sessionId.slice(0, 8)}-trace.json`,
+        );
+      },
+      apply: (sessionId, revision, workspaceId) =>
+        request(
+          appendWs(
+            `/style-modify/agent/sessions/${encodeURIComponent(sessionId)}/apply`,
+            workspaceId,
+          ),
+          {
+            method: "POST",
+            body: JSON.stringify({ revision, workspace_id: workspaceId }),
+          },
+        ),
+      undo: (operationId, workspaceId) =>
+        request(
+          `/style-modify/agent/operations/${encodeURIComponent(operationId)}/undo`,
+          {
+            method: "POST",
+            body: JSON.stringify({ workspace_id: workspaceId }),
+          },
+        ),
+      delete: (sessionId, workspaceId) =>
+        request(
+          appendWs(
+            `/style-modify/agent/sessions/${encodeURIComponent(sessionId)}`,
+            workspaceId,
+          ),
+          { method: "DELETE" },
+        ),
+    },
   },
 
   /* ---- 模板生成 ---- */

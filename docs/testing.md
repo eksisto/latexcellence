@@ -2,6 +2,10 @@
 
 运行方式：`pytest tests/ -v`
 
+## 运行环境注意：TestClient 与受限沙箱
+
+在禁用 AF_UNIX socket 写入的受限沙箱（如网络受限的 Codex Linux 沙箱）中，`TestClient` 会在首次请求处挂起，属环境限制而非代码问题。解决方式：`~/.codex/config.toml` 开启 `network_access` 等。
+
 ## 测试文件一览
 
 | 测试文件 | 覆盖内容 |
@@ -31,8 +35,22 @@
 | `test_api/test_git_diff.py` | Git revision、差异 PDF 渲染、路径安全校验 |
 | `test_api/test_format_converter.py` | 格式转换、pandoc mock |
 | `test_api/test_style_modify.py` | 模型校验、LLM mock、样式修改 |
+| `test_api/test_style_modify_agent.py` | 项目 Agent：LatexProject 批量事务、session overlay、proposal、应用冲突、撤销、workspace 隔离、路径穿越防御 |
 | `test_api/test_writing_chat.py` | 模型、会话管理、发送/编辑/应用、RS2 分隔符协议提取/校验失败重试/CRLF 原文、助手提示词、搜索与学术研究工具事件 |
 | `test_api/test_bib_manager.py` | 格式分析、元数据提取、BibTeX 生成、.bib 操作、路径穿越防御、DOI 查询、多数据源 Provider 降级 |
+
+## style_modify Agent 测试要点
+
+`tests/test_api/test_style_modify_agent.py` 覆盖项目 Agent 的事务语义：
+
+- `LatexProject.apply_whole_files()` 成功写入全部文件并更新 MD5，MD5 冲突时快速失败且不覆盖新内容
+- `stage_replace` 冻结 baseline、写 overlay，真实项目在应用前保持不变
+- proposal 生成后应用会校验 workspace、项目根目录、revision 和真实文件 MD5
+- 多文件操作以 all-or-nothing 语义写回，operation 保存 before/applied 内容
+- undo 只恢复仍等于 applied MD5 的文件，不覆盖应用后的其他编辑
+- 不同 workspace 不能读取同一 session
+
+Agent 的 LLM 循环测试应 mock `chat_with_tools()`，不发起真实网络请求；shadow 编译测试应 mock 或复用 `run_tex_compile()` 的确定性路径。
 
 ## 人工评估工具（非 pytest）
 

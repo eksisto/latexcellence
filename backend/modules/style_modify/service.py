@@ -6,6 +6,11 @@ LaTeX 样式修改业务逻辑。
     2. 将 LaTeX 源码和描述发送给 LLM，要求 LLM 根据描述修改 LaTeX
     3. 返回修改后的 LaTeX 代码
 
+项目 Agent 模式：
+    创建独立 session，真实项目只读；Agent 工具将候选文件写入 session overlay，
+    在 shadow 项目编译，生成 proposal 后由用户确认，再通过 LatexProject 批量
+    事务写回并支持撤销。旧粘贴代码流程保持不变。
+
 设计说明：
     - 不使用 Marker 保护策略。样式修改需要 LLM 理解并修改 LaTeX 结构
       （如添加列对齐、调整表格位置、加粗文字等），因此 LLM 看到的是原始 LaTeX 源码。
@@ -15,12 +20,16 @@ LaTeX 样式修改业务逻辑。
       失败时回喂 LLM 重试。
 """
 
-from typing import Any
+import asyncio
+from typing import Any, AsyncIterator
 
 from backend.core.config import get_config
 from backend.core.llm_client import get_llm_client
 from backend.core.logger import get_logger
 from backend.core.prompts import get_prompt
+from backend.core.workspace_manager import get_project_manager_for_workspace
+from backend.modules.style_modify.agent import get_style_modify_agent
+from backend.modules.style_modify.session import get_session_store
 from backend.utils.latex_json_guard import validate_latex_field
 from backend.utils.latex_literals import extract_delimited_block
 
@@ -33,6 +42,9 @@ class StyleModifyService:
 
     def __init__(self):
         self._logger = get_logger("style_modify")
+        self._store = get_session_store()
+
+    # ── 粘贴代码模式（旧接口） ──────────────────────────────────────
 
     async def modify(self, latex: str, description: str) -> dict[str, Any]:
         """
@@ -132,3 +144,117 @@ class StyleModifyService:
         if block is None:
             return None
         return block.strip()
+
+    # ── 项目 Agent 模式 ─────────────────────────────────────────────
+
+    async def agent_run(
+        self,
+        workspace_id: str,
+        description: str,
+        language: str = "zh",
+        *,
+        llm: Any | None = None,
+    ) -> AsyncIterator[dict[str, Any]]:
+        """创建 session 并通过 SSE 执行项目 Agent。"""
+        cfg = get_config()
+        project = get_project_manager_for_workspace(workspace_id)
+        if not project.is_open:
+            yield {"type": "error", "message": "No project opened"}
+            return
+        if not cfg.features.style_modify.agent.enabled:
+            yield {"type": "error", "message": "Style modify agent is disabled"}
+            return
+        if not cfg.llm.api_key and llm is None:
+            yield {"type": "error", "message": "No API key configured"}
+            return
+
+        session_id = self._store.create_session(
+            workspace_id,
+            project.root_path,
+            description,
+            language,
+        )
+        yield {"type": "session", "session_id": session_id}
+        agent = get_style_modify_agent()
+        async with self._store.lock(session_id):
+            async for event in agent.run(
+                session_id,
+                workspace_id,
+                description,
+                language,
+                llm=llm,
+            ):
+                yield event
+
+    async def agent_refine(
+        self,
+        session_id: str,
+        workspace_id: str,
+        message: str,
+        language: str = "zh",
+        *,
+        llm: Any | None = None,
+    ) -> AsyncIterator[dict[str, Any]]:
+        """基于最新 proposal 追加要求并流式生成新 revision。"""
+        meta = self._store.load_meta(session_id)
+        self._store.require_workspace(meta, workspace_id)
+        if meta.proposal is None:
+            yield {"type": "error", "message": "No proposal to refine"}
+            return
+        agent = get_style_modify_agent()
+        async with self._store.lock(session_id):
+            async for event in agent.refine(
+                session_id,
+                workspace_id,
+                message,
+                language,
+                llm=llm,
+            ):
+                yield event
+
+    def get_agent_session(self, session_id: str, workspace_id: str) -> dict[str, Any]:
+        return self._store.get_session(session_id, workspace_id)
+
+    def get_agent_trace(self, session_id: str, workspace_id: str) -> dict[str, Any]:
+        return self._store.get_trace(session_id, workspace_id)
+
+    async def apply_agent_proposal(
+        self,
+        session_id: str,
+        workspace_id: str,
+        revision: int,
+    ) -> dict[str, Any]:
+        meta = self._store.load_meta(session_id)
+        self._store.require_workspace(meta, workspace_id)
+        async with self._store.lock(session_id):
+            operation = await asyncio.to_thread(
+                self._store.apply_proposal,
+                session_id,
+                workspace_id,
+                revision,
+            )
+        return operation.model_dump()
+
+    async def undo_agent_operation(
+        self,
+        operation_id: str,
+        workspace_id: str,
+    ) -> dict[str, Any]:
+        operation = await asyncio.to_thread(
+            self._store.undo_operation,
+            operation_id,
+            workspace_id,
+        )
+        return operation.model_dump()
+
+    async def delete_agent_session(
+        self,
+        session_id: str,
+        workspace_id: str,
+    ) -> dict[str, Any]:
+        deleted = await asyncio.to_thread(
+            self._store.delete_session,
+            session_id,
+            workspace_id,
+        )
+        return {"deleted": deleted}

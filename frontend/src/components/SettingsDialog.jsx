@@ -591,6 +591,60 @@ export default function SettingsDialog() {
               checked={config.features.style_modify.enabled}
               onChange={(v) => set("features.style_modify.enabled", v)}
             />
+            {config.features.style_modify.enabled && (
+              <div className="ml-6 space-y-2 rounded-md border p-2.5 bg-muted/40">
+                <CheckboxField
+                  label={t("settings.styleModifyAgentEnabled")}
+                  checked={config.features.style_modify.agent?.enabled ?? true}
+                  onChange={(v) =>
+                    set("features.style_modify.agent.enabled", v)
+                  }
+                />
+                {config.features.style_modify.agent?.enabled && (
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="space-y-1">
+                      <Label className="text-xs">
+                        {t("settings.styleModifyAgentMaxRounds")}
+                      </Label>
+                      <Input
+                        type="number"
+                        min="1"
+                        max="50"
+                        value={config.features.style_modify.agent.max_rounds}
+                        onChange={(e) =>
+                          set(
+                            "features.style_modify.agent.max_rounds",
+                            Math.min(
+                              Math.max(parseInt(e.target.value, 10) || 20, 1),
+                              50,
+                            ),
+                          )
+                        }
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs">
+                        {t("settings.styleModifyAgentCompileTimeout")}
+                      </Label>
+                      <Input
+                        type="number"
+                        min="1"
+                        value={
+                          config.features.style_modify.agent
+                            .shadow_compile_timeout
+                        }
+                        onChange={(e) =>
+                          set(
+                            "features.style_modify.agent.shadow_compile_timeout",
+                            parseInt(e.target.value, 10) || 120,
+                          )
+                        }
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
             <CheckboxField
               label={t("settings.featureGitDiff")}
               checked={config.features.git_diff.enabled}

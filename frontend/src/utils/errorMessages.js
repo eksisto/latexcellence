@@ -24,6 +24,26 @@ const EXACT_MAP = {
   // LLM / API Key
   "No API key configured": "noApiKeyConfigured",
   "Max retries exceeded": "maxRetriesExceeded",
+  "Style modify agent is disabled": "styleModifyAgentDisabled",
+  "No proposal to refine": "noProposalToRefine",
+  "No proposal for this session": "noProposalForSession",
+  "Proposal revision does not match the latest proposal":
+    "proposalRevisionMismatch",
+  "Only the latest proposal revision can be applied": "latestRevisionRequired",
+  "Session is already applying a proposal": "sessionAlreadyApplying",
+  "No staged changes to apply": "noStagedChanges",
+  "Session belongs to a different workspace": "sessionDifferentWorkspace",
+  "Project root has changed since the proposal was created":
+    "projectRootChanged",
+  "Project root has changed since the operation was applied":
+    "projectRootChangedOperation",
+  "Project fingerprint mismatch": "projectFingerprintMismatch",
+  "Candidate content must not be empty": "candidateContentEmpty",
+  "query must not be empty": "queryEmpty",
+  "Operation belongs to a different workspace": "operationDifferentWorkspace",
+  "Operation is not in applied state": "operationNotApplied",
+  "Cannot delete a session that is running or applying":
+    "sessionRunningDeleteDenied",
 
   // 段落应用错误
   "Marker map missing": "markerMapMissing",
@@ -189,6 +209,48 @@ const PATTERN_MAP = [
     /^File (.+) has been modified since parsing/,
     "fileModifiedSinceParsing",
     (m) => ({ file: m[1] }),
+  ],
+  [
+    /^File (.+) has been modified since the proposal was created/,
+    "fileModifiedSinceProposal",
+    (m) => ({ file: m[1] }),
+  ],
+  [
+    /^File (.+) was modified after it was applied/,
+    "fileModifiedAfterApply",
+    (m) => ({ file: m[1] }),
+  ],
+  [
+    /^Candidate file missing: (.+)/,
+    "candidateFileMissing",
+    (m) => ({ file: m[1] }),
+  ],
+  [/^Undo backup missing: (.+)/, "undoBackupMissing", (m) => ({ file: m[1] })],
+  [/^Operation not found: (.+)/, "operationNotFound", (m) => ({ name: m[1] })],
+  [
+    /^File (.+) exceeds maximum size of (\d+) KB/,
+    "fileTooLargeKb",
+    (m) => ({ file: m[1], kb: m[2] }),
+  ],
+  [
+    /^Session candidate size exceeds (\d+) KB/,
+    "sessionCandidateTooLarge",
+    (m) => ({ kb: m[1] }),
+  ],
+  [
+    /^start_line out of range|^start_line must be less than/,
+    "lineRangeInvalid",
+    () => ({}),
+  ],
+  [
+    /^Tool call limit (\d+) exceeded/,
+    "toolCallLimitExceeded",
+    (m) => ({ limit: m[1] }),
+  ],
+  [
+    /^Shadow compile limit (\d+) reached/,
+    "compileLimitReached",
+    (m) => ({ limit: m[1] }),
   ],
 
   // 文件冲突（乐观锁）

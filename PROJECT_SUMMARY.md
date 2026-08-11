@@ -85,7 +85,7 @@ latexcellence/
 │       ├── formula_ocr/             # 公式 OCR（含 visual_inline.py 视觉 inline/display 判定）
 │       ├── table_ocr/               # 表格 OCR
 │       ├── format_converter/        # 格式转换
-│       ├── style_modify/            # 样式修改
+│       ├── style_modify/            # 样式修改（粘贴代码 + 项目 Agent）
 │       ├── writing_chat/            # 写作助手聊天
 │       ├── bib_manager/             # 参考文献管理（含 DOI 多数据源查询、重复检测、文献库管理）
 │       │   └── providers/           # 可插拔 DOI 数据源
@@ -181,7 +181,7 @@ latexcellence/
 | formula_ocr | 图片→LaTeX 公式 | router.py, service.py, visual_inline.py | ✓(Vision) | ✗ |
 | table_ocr | 图片→LaTeX 表格 | router.py, service.py | ✓(Vision) | ✗ |
 | format_converter | 格式转换(pandoc) | router.py, service.py | ✓(宏包分析仅兜底) | ✗ |
-| style_modify | 自然语言修改样式 | router.py, service.py | ✓ | ✗ |
+| style_modify | 粘贴代码 / 项目 Agent 修改样式，支持 shadow 编译、proposal 审核、批量事务与撤销 | router.py, service.py, agent.py, models.py, session.py, trace.py, cleanup.py | ✓ | ✗ |
 | writing_chat | 写作助手对话（含联网搜索、学术检索与引文追踪、项目浏览、段落编辑和工具确认） | router.py, service.py, context.py, models.py, prompt_manager.py | ✓ | ✗ |
 | bib_manager | 参考文献管理 + DOI 多数据源查询 + 重复检测 + 文献库 | router.py, service.py, models.py, bib_parser.py, provider_manager.py, providers/ | ✓(DOI 查询不依赖 LLM) | ✗ |
 | plot_gen | 科研绘图 Agent（数据画像 -> 图表推荐 -> Python 执行 -> TikZ 编译） | router.py, service.py, agent.py, models.py, data_parser.py, recommender.py, styles.py, executor.py, tikzgen.py, sandbox_guard.py, trace.py, cleanup.py | ✓ | ✗ |
@@ -240,6 +240,10 @@ latexcellence/
   - 工具集为 session 私有：`write_file`/`read_file`/`list_files`/`python_sandbox`/`compile_tikz`/`stats_test`/`list_styles`/`apply_style`/`finish`，不注册到全局 `ToolRegistry`。
   - SSE 推送 `plan`/`data_profile`/`chart_plan`/`tool_call`/`tool_result`/`execution`/`tikz`/`warning`/`done`/`error` 事件；会话元数据和 messages 持久化在 `meta.json`，支持刷新后自然语言微调。
   - 每次运行（生成/微调）的完整交互由 `trace.py` 按时间顺序追加到沙箱 `trace.jsonl`（`run_start`/`llm`/`tool_result`/`warning`/`error`/`run_end` 事件，含完整工具参数与回传 LLM 的结果），通过 `/api/plot-gen/sessions/{session_id}/trace` 查看或 `/trace/download` 导出 JSON，用于分析与改进 Agent。
+- **style_modify 项目 Agent**: 在真实项目只读前提下执行 Function Calling 循环，候选文件写入会话 overlay，在 shadow 项目编译，`finish` 生成不可变 proposal revision。
+  - 私有工具为 `list_project_files` / `search_project_text` / `read_project_file` / `stage_replace` / `discard_file_changes` / `compile_staged_project` / `finish`，不注册到全局 `ToolRegistry`；路径统一走 `resolve_project_path()`，默认允许 `.tex/.sty/.cls/.bib`。
+  - 会话目录包含 `baseline/`、`overlay/`、`shadow/`、`meta.json` 和 `trace.jsonl`；真实项目在确认前 MD5 不变。SSE 推送 `session`/`plan`/`tool_call`/`tool_result`/`file_staged`/`compile`/`proposal`/`warning`/`done`/`error` 事件。
+  - 应用通过 `LatexProject.apply_whole_files()` 公开批量事务写回，写入前建立 operation 备份；撤销前校验 applied MD5，拒绝覆盖应用后的新编辑。
 - **useParagraphCheck Hook**: TypoCheck/ExpressionOpt/CodeReview/TerminologyCheck/ParagraphTranslate 多页共享同一 hook 封装流程
 - **useEnabledFeatures Hook**: 从后端 `/api/config/status` 加载功能开关到 Zustand store，幂等（已加载则跳过）。WelcomePage 和 WorkspacePage 均调用此 hook，确保直接刷新任一页面时功能开关均可用
 - **Zustand Persist**: `partialize` 选择性持久化检查结果，支持刷新保留
