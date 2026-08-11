@@ -9,6 +9,37 @@ REQUIREMENT_CHECKS 由检查表标签自动派生，供人工复核参考，避�
 """
 
 SCENARIOS = {
+    # ── 天津大学学位论文 ────────────────────────
+    "tju": (
+        "帮我生成一个天津大学硕士学位论文的 LaTeX 模板。\n"
+        "结构按规定依次包含：扉页、独创性声明和学位论文使用授权说明、"
+        "中英文摘要、目录、正文、参考文献、附录、发表论文和参加科研情况说明、致谢。\n"
+        "扉页包含中文题目（宋体二号加粗）、英文题目、基本信息表"
+        "（一级学科、研究方向、作者姓名、指导教师）和答辩委员会名单表；"
+        "声明页必须保留作者和导师签名线，学校名称用楷体加粗。\n"
+        "页面使用 A4、双面排版，每章从右页（奇数页）开始；"
+        "电子版左右边距 31.7mm、打印版内侧 35.7mm 外侧 27.7mm，"
+        "上边距 27.5mm、下边距 25.4mm，页眉距边界 15mm、页脚距边界 17.5mm，"
+        "并提供 master/phd/print 类选项切换。\n"
+        "正文中文宋体、英文和数字 Times New Roman，正文小四号，"
+        "固定行距 20 磅，首行缩进 2 字符；章标题黑体小三号居中、"
+        "格式“第 1 章”，二三级标题黑体四号、四级标题黑体小四号。\n"
+        "摘要页码从大写罗马数字开始且无页眉，正文从 1 重新开始；"
+        "页眉从正文到结尾：奇数页为当前章名、偶数页为“天津大学硕士学位论文”，"
+        "宋体五号，页脚居中小五号页码。\n"
+        "图表公式按章用阿拉伯数字编号（如“图 3-1”），图题居中置于图下、"
+        "表题居中置于表上、题注五号，表格用 booktabs 三线表，"
+        "公式编号右对齐并用英文小括号；提供 \\figref、\\tabref、\\eqref、"
+        "\\chref 等语义引用命令和图表公式交叉引用示例。\n"
+        "目录列到三级标题并使用点引导线。\n"
+        "参考文献采用 GB/T 7714-2005 格式（biblatex/biber 或 "
+        "natbib+gbt7714 等能正常编译的方案均可），正文引用用上标，"
+        "提供一个 references.bib 示例。\n"
+        "工程组织：所有格式封装在单个 .cls 文件，主文件用 \\include 按 "
+        "front/（扉页声明）、abstract、chapters/（正文分章）、back/（附录、"
+        "发表论文、致谢）组织，附 README 说明 XeLaTeX + latexmk 编译方式。\n"
+        "示例内容用占位学术文本即可，但必须能完整编译并展示上述全部结构。"
+    ),
     # ── 学位论文 ──────────────────────────────────────────────────────
     "thesis": (
         "帮我生成一个硕士学位论文的 LaTeX 模板，中文为主、英文摘要在后。\n"
@@ -79,6 +110,7 @@ SCENARIOS = {
 }
 
 CATEGORY_LABELS = {
+    "tju": "天津大学论文",
     "thesis": "学位论文",
     "beamer": "演示文稿",
     "resume": "简历",
@@ -86,6 +118,94 @@ CATEGORY_LABELS = {
 }
 
 REQUIREMENT_PATTERNS = {
+    "tju": [
+        (
+            "A4 + TJU 精确边距（27.5/25.4/31.7 或 35.7/27.7mm）",
+            [
+                r"a4paper",
+                r"top\s*=\s*27\.5mm",
+                r"bottom\s*=\s*25\.4mm",
+                r"left\s*=\s*(?:31\.7|35\.7)mm",
+                r"right\s*=\s*(?:31\.7|27\.7)mm",
+            ],
+        ),
+        (
+            "页眉距边界 15mm / 页脚距边界 17.5mm",
+            [r"headsep", r"headheight", r"footskip"],
+        ),
+        (
+            "master/phd/print 类选项",
+            [
+                r"DeclareOption\{master\}",
+                r"DeclareOption\{phd\}",
+                r"DeclareOption\{print\}",
+            ],
+        ),
+        (
+            "ctex + 宋体 + Times New Roman",
+            [r"ctex", r"SimSun|songti|宋体", r"Times New Roman"],
+        ),
+        (
+            "正文小四、固定 20 磅、首行缩进",
+            [r"zihao\{-4\}|12pt", r"20bp|20pt", r"parindent"],
+        ),
+        (
+            "章/节标题字号与中文编号",
+            [
+                r"heiti|黑体",
+                r"zihao\{-3\}",
+                r"zihao\{4\}",
+                r"arabic\{chapter\}|第\s*[0-9]+\s*章",
+                r"secnumdepth",
+            ],
+        ),
+        (
+            "前置/正文/后置结构与双面右页起章",
+            [r"frontmatter|mainmatter|backmatter", r"openright|cleardoublepage"],
+        ),
+        (
+            "中英文摘要、声明、签名与致谢等规定结构",
+            [
+                r"abstract|摘要|ABSTRACT",
+                r"声明|declaration",
+                r"致谢|acknowledgements",
+                r"签名|签字",
+                r"答辩委员会",
+            ],
+        ),
+        (
+            "目录三级 + 点引导线",
+            [r"tocdepth", r"titletoc|titlerule|dot"],
+        ),
+        (
+            "图表公式分章编号与题注位置、三线表",
+            [
+                r"thefigure|thetable|theequation",
+                r"position\s*=\s*(below|above)",
+                r"booktabs|toprule",
+            ],
+        ),
+        (
+            "GB/T 7714-2005 + 上标引用 + bib 数据库",
+            [
+                r"gb7714-2005|gbt7714",
+                r"supercite|superscript|上标",
+                r"addbibresource|bibliography",
+            ],
+        ),
+        (
+            "TJU 页眉页脚与罗马/阿拉伯页码",
+            [
+                r"天津大学硕士学位论文",
+                r"fancyhdr|pagestyle",
+                r"pagenumbering\{(Roman|arabic)\}",
+            ],
+        ),
+        (
+            "cls + 分文件组织 + README/XeLaTeX",
+            [r"\.cls", r"\\include|\\input", r"README", r"xelatex|XeLaTeX"],
+        ),
+    ],
     "thesis": [
         (
             "a4paper 或 geometry 中 2.5cm/3cm 边距",

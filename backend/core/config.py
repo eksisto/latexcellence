@@ -39,7 +39,7 @@ class LLMConfig(BaseModel):
     base_url: str = "https://api.deepseek.com"  # API 端点（兼容第三方代理）
     model: str = "deepseek-flash"  # 模型名称
     temperature: float = Field(0.3, le=2)  # 生成温度（越低越确定，越高越创意）
-    max_tokens: int = Field(4096, ge=1)  # 单次生成最大 token 数
+    max_tokens: int = Field(8192, ge=1)  # 单次生成最大 token 数
     request_interval: float = Field(1.5, ge=0)  # 请求间隔（秒），避免触发 rate limit
     max_concurrency: int = Field(5, ge=1)  # 最大并发 LLM 请求数（Semaphore）
 

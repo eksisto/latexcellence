@@ -142,12 +142,25 @@ def check_latex_text(
     code = probe
     if not bibtex:
         code = _COMMENT_RE.sub("", code)
-    braces = re.sub(r"\\[{}]", "", code)
-    if braces.count("{") != braces.count("}"):
-        return (
-            "LaTeX text has unbalanced braces; check for unmatched { or } — "
-            "literal braces should be written as \\{ and \\}"
-        )
+    # 栈式扫描定位第一个不配平的花括号，返回行号与上下文，
+    # 便于 LLM 直接定位修复（仅计数无法告诉模型错在哪一行）。
+    stack: list[int] = []
+    i = 0
+    code_len = len(code)
+    while i < code_len:
+        ch = code[i]
+        if ch == "\\" and i + 1 < code_len and code[i + 1] in "{}":
+            i += 2  # 跳过 \{ / \}
+            continue
+        if ch == "{":
+            stack.append(i)
+        elif ch == "}":
+            if not stack:
+                return _brace_error(code, i, "unmatched }")
+            stack.pop()
+        i += 1
+    if stack:
+        return _brace_error(code, stack[0], "unclosed {")
 
     dollars = re.sub(r"\\\$", "", code)
     if dollars.count("$") % 2 != 0:
@@ -157,6 +170,20 @@ def check_latex_text(
         )
 
     return None
+
+
+def _brace_error(code: str, pos: int, kind: str) -> str:
+    """把花括号不配平位置格式化为带行号与上下文的错误消息。"""
+    line = code.count("\n", 0, pos) + 1
+    start = max(0, pos - 40)
+    end = min(len(code), pos + 40)
+    snippet = " ".join(code[start:end].split())
+    return (
+        "LaTeX text has unbalanced braces; check for unmatched { or } — "
+        "literal braces should be written as \\{ and \\}. "
+        f"First issue: {kind} at position {pos} (line {line}) near "
+        f'"{snippet}"'
+    )
 
 
 def check_latex_environments(value: str) -> str | None:

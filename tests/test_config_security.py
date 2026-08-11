@@ -22,7 +22,7 @@ SAMPLE_CONFIG = {
         "base_url": "https://api.openai.com/v1",
         "model": "gpt-4o",
         "temperature": 0.3,
-        "max_tokens": 4096,
+        "max_tokens": 8192,
         "request_interval": 1.5,
         "max_concurrency": 5,
     },

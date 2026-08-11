@@ -138,6 +138,71 @@
 - [ ] 装饰有目的（进度条、分割线、图标），无随机花哨
 - [ ] 信息密度与可读性平衡（简历紧凑、论文规范、幻灯片留白多）
 
+## 6. tjuthesis 专项基准（复刻目标）
+
+来源：<https://github.com/HaimingZ/tjuthesis>（天津大学硕博学位论文模板，
+依据《天津大学关于博士、硕士学位论文统一格式的规定》）。该模板以"单 `.cls` +
+`main.tex` 编排 + `contents/` 分文件"的极简架构达到存档级质量，是
+`tju` 评测场景的复刻基准。
+
+### 6.1 类与选项
+
+- `\LoadClass[openright, twoside, a4paper]{book}`；自定义选项 `master` /
+  `phd`（决定偶数页页眉文案）/ `print`（切换装订侧边距），`\DeclareOption` +
+  `\ProcessOptions*` 实现。
+- 页边距：`top=27.5mm, bottom=25.4mm`；电子版 `left=right=31.7mm`，
+  打印版 `left=35.7mm, right=27.7mm`；再以 `headsep=7.5mm,
+  headheight=5mm`（页眉距边界 15mm）、`footskip=7.9mm`（页脚距边界 17.5mm）
+  精确落地。
+
+### 6.2 中文字体与标题体系
+
+- `ctex[heading=true, zihao=-4]` 开启中文章节/图表标题、默认正文小四；
+  `\setmainfont{Times New Roman}`；宋体经 `\setCJKfamilyfont{zhsong}
+  [AutoFakeBold=3.17]{SimSun}` 提供伪粗体；另设 GB2312 楷体（`kaigb`）
+  专供声明页学校名称。
+- `\ctexset` 逐级定制：章=黑体小三居中、编号为阿拉伯数字、`aftername=~`，
+  二/三级=黑体四号，四级=黑体小四，并为每级设置 `beforeskip/afterskip`
+  精确间距；`secnumdepth=3`。
+- 正文行距固定 20bp（`\setlength{\baselineskip}{20bp plus 2bp minus 2bp}`），
+  脚注字号 `10.5bp/13bp`（五号）。
+
+### 6.3 页面结构与编号
+
+- 重定义 `\frontmatter`（`\cleardoublepage` + `noheader` 样式 +
+  `\pagenumbering{Roman}`）与 `\mainmatter`（`plain` 样式 +
+  `\pagenumbering{arabic}`），实现"摘要罗马页码、正文从 1 重排"。
+- `fancyhdr` 两个样式：`plain`（奇数页 `\leftmark` 章名、偶数页"天津大学
+  硕士学位论文/博士学位论文"、页脚居中页码、`\headrulewidth=0.5bp`）、
+  `noheader`（仅页脚页码）。
+- 图表公式编号 `\arabic{chapter}-\arabic{...}`；`caption` 图下/表上、
+  `font=small`、`labelsep=space`；`enumitem[shortlabels]` 的 `nosep`
+  紧凑列表；目录 `tocdepth=2` + `titletoc` 点引导线。
+
+### 6.4 语义命令与参考文献
+
+- 自定义引用命令：`\figref`（图~...）、`\tabref`（表~...）、
+  `\eqref`（式~(...)）、`\chref`（第~...~章）、`\secref`（第~...~节）。
+- `biblatex[backend=biber, natbib=true, style=gb7714-2005,
+  gbnamefmt=quanpin, gbmedium=false, doi=false]`；`main.tex` 用
+  `\addbibresource{references.bib}` + `\printbibliography[heading=bibintoc]`。
+  注意：若编译沙箱未安装 biblatex-gb7714（如本项目 TeX Live 环境），
+  用 natbib + `gbt7714`（`\usepackage[super]{gbt7714}` +
+  `\bibliographystyle{gbt7714-2005-numerical}`）实现等价的 2005 上标引用。
+- 主文件流程：扉页 → 声明 → `\frontmatter`（摘要、目录）→ `\mainmatter`
+  （正文分章）→ 参考文献 → 附录 → `\backmatter`（发表论文情况、致谢）。
+
+### 6.5 与通用论文模板的差异点（Agent 易漏）
+
+- 封面页信息表（一级学科/研究方向/作者/导师）与答辩委员会名单表，而非
+  通用 `\maketitle`；
+- 声明页"独创性声明 + 版权使用授权书"双页结构，保留签名/日期下划线；
+- 摘要标题用 `\chapter*{摘 \qquad 要}` 与 `ABSTRACT`，关键词带
+  `关键词：` / `KEY WORDS:` 前缀；
+- 偶数页页眉文案随 `master` / `phd` 选项变化，不是写死；
+- 数字编号"第 1 章"由 `\arabic{chapter}` + `aftername=~` 组合实现，
+  而非硬编码中文数字。
+
 ---
 
 *本文档是 template_gen Agent 提示词工程的输入，不替代项目正式文档。*

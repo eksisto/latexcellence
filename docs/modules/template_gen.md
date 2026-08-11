@@ -231,3 +231,33 @@ Prefix: `/api/template-gen`, Tag: `template_gen`
 
 场景说明：每个场景的 `summary.json` 记录 `req.detail` 逐条需求遵守结果、
 `visual_review` 记录视觉评分与问题清单，用于诊断 Agent 质量缺失环节。
+
+## 闭环优化加固（templategen_opt 迭代产出）
+
+`template_gen` 的 Agent 提示词保持通用（面向任意模板生成需求，不绑定特定
+学校/模板/环境）。针对闭环评测暴露的共性问题做了以下加固：
+
+- **缺失资源协议**：不假设环境里有哪些字体/宏包（用户环境可能不同、可能
+  自行安装），也不允许 `test_fonts.tex` 之类的环境探测旁路；遇到
+  `fontspec Error` / `File 'xxx.sty' not found` 时，用
+  `\IfFontExistsTF` 便携回退或标准等价宏包一次性修复、README 记录用户
+  期望字体、最多 1–2 轮处理同一缺失资源，并在 `finish` 摘要中说明替代。
+- **Walking Skeleton 工作流**：先写最小可编译骨架并编译通过，再逐层丰富
+  内容，禁止一次性写完整套复杂宏再编译。
+- **输出 token 上限放宽**：全局默认 `llm.max_tokens` 由 4096 提至 8192
+  （`backend/core/config.py` / `config.example.json` / SettingsDialog 同步）；
+  template_gen 仍保留 `max(cfg.llm.max_tokens, 8192)` 下限，即使用户把全局
+  `max_tokens` 调得很小，`.cls` 等大文件在工具参数尾部也不会被截断导致
+  花括号不配平。
+- **重复被拒内容防呆**：同一 `write_file` 内容连续被拒 3 次时，向对话注入
+  `[SYSTEM INTERVENTION]` 纠正消息，打断模型"原样重发"的退化循环。
+- **校验错误定位**：`latex_json_guard.check_latex_text()` 的花括号不配平
+  错误现在返回首个问题位置、行号与上下文片段，便于 LLM 直接修复。
+- **轮次上限**：`features.template_gen.agent_max_rounds` 由 40 提至 50
+  （`config.json` / `config.example.json` / SettingsDialog 上限同步）。
+
+评测数据（`tools/templategen_opt/results/`）显示：加固后简单场景
+（如 `requirements`）可在 30 轮内编译通过并获视觉 8.5/10；tjuthesis 复刻
+场景（`tju`）需求关键词检查全过（13/13），但当前模型在 50 轮内仍未能收敛
+到编译通过，说明该场景对模型的规划/调试能力要求高于其余场景，是后续
+模型升级或评测场景调优方向的主要验收基准。

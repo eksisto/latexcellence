@@ -74,6 +74,14 @@ _ALLOWED_SUFFIXES = (
     ".def",
 )
 
+
+def _content_hash(content: str) -> str:
+    """计算写入内容的 SHA-256，用于识别"原样重发被拒内容"的退化循环。"""
+    import hashlib
+
+    return hashlib.sha256(content.encode("utf-8", errors="replace")).hexdigest()
+
+
 # 编译日志回传给 LLM 时的截断长度（字符）
 _LOG_TRUNCATE = 4000
 
@@ -158,6 +166,11 @@ class TemplateAgentService:
         rounds_used = 0
         # 连续出现"只输出文本、不调用工具"的次数（规划瘫痪防护）
         no_tool_strikes = 0
+        # 连续重发同一份被拒内容时的防呆：同一 (file, content) 失败 3 次后
+        # 注入显式纠正指令，打断模型"原样重发"的退化循环。
+        last_fail_key: tuple[str, str] | None = None
+        repeat_failures = 0
+        injected_fail_keys: set[tuple[str, str]] = set()
 
         await self._append_trace(
             sandbox,
@@ -188,7 +201,8 @@ class TemplateAgentService:
                     messages=messages,
                     tools=tools,
                     temperature=cfg.llm.temperature,
-                    max_tokens=cfg.llm.max_tokens,
+                    # 模板文件（尤其 .cls/.sty）常接近 10KB，若 max_tokens 太小可能被截断
+                    max_tokens=max(cfg.llm.max_tokens, 8192),
                 )
             except Exception as e:
                 self._logger.error(
@@ -323,6 +337,42 @@ class TemplateAgentService:
                         "content": result_text,
                     }
                 )
+
+                # 同一份被拒内容重发 3 次 → 显式纠正（防退化循环）
+                if tool_name == "write_file" and result_event.get("ok") is False:
+                    content_hash = _content_hash(tool_args.get("content", ""))
+                    fail_key = (str(tool_args.get("file_path", "")), content_hash)
+                    if fail_key == last_fail_key:
+                        repeat_failures += 1
+                    else:
+                        last_fail_key = fail_key
+                        repeat_failures = 1
+                    if repeat_failures >= 3 and fail_key not in injected_fail_keys:
+                        injected_fail_keys.add(fail_key)
+                        guidance = (
+                            "[SYSTEM INTERVENTION] Your last "
+                            f"{repeat_failures} write_file calls for "
+                            f"'{tool_args.get('file_path')}' were rejected "
+                            f"for the SAME reason: {result_text[:300]}. "
+                            "Do NOT resend identical or near-identical "
+                            "content — it will be rejected again. Rewrite "
+                            "the file completely with balanced braces, or "
+                            "split it into smaller files, then call "
+                            "write_file again."
+                        )
+                        messages.append({"role": "user", "content": guidance})
+                        await self._append_trace(
+                            sandbox,
+                            {
+                                "ts": now_iso(),
+                                "run_id": run_id,
+                                "type": "nudge",
+                                "data": {
+                                    "kind": "repeated_rejected_write",
+                                    "message": guidance,
+                                },
+                            },
+                        )
 
                 # finish 工具立即终止循环
                 if tool_name == "finish":

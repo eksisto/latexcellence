@@ -249,7 +249,7 @@ export default function SettingsDialog() {
                   type="number"
                   value={config.llm.max_tokens}
                   onChange={(e) =>
-                    set("llm.max_tokens", parseInt(e.target.value, 10) || 4096)
+                    set("llm.max_tokens", parseInt(e.target.value, 10) || 8192)
                   }
                 />
               </div>
@@ -374,7 +374,7 @@ export default function SettingsDialog() {
                     <Input
                       type="number"
                       min="1"
-                      max="40"
+                      max="50"
                       value={config.features.template_gen.agent_max_rounds}
                       onChange={(e) =>
                         set(
