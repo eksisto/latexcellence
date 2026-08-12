@@ -65,8 +65,12 @@ class TavilyEngine(BaseSearchEngine):
         """实际搜索逻辑。"""
         payload = {
             "query": query,
-            "search_depth": "basic",
+            "search_depth": "advanced",
             "max_results": max_results,
+            # 合成答案 + 原始正文：答案直接给 LLM 快速结论，
+            # raw_content 填充 full_content，避免 Deep Read 再次抓取
+            "include_answer": True,
+            "include_raw_content": True,
         }
         headers = {
             "Authorization": f"Bearer {api_key}",
@@ -89,14 +93,21 @@ class TavilyEngine(BaseSearchEngine):
 
         data = resp.json()
         raw_results = data.get("results", []) or []
+        answer = data.get("answer", "") or ""
         results: list[SearchResult] = []
+        max_chars = (
+            get_config().features.function_calling.web_search.deep_read_max_chars
+        )
         for item in raw_results[:max_results]:
+            raw_content = item.get("raw_content", "") or ""
+            full_content = raw_content[:max_chars] if raw_content else ""
             results.append(
                 SearchResult(
                     title=item.get("title", ""),
                     url=item.get("url", ""),
                     snippet=item.get("content", ""),
                     source=self.name,
+                    full_content=full_content,
                 )
             )
 
@@ -106,6 +117,7 @@ class TavilyEngine(BaseSearchEngine):
             results=results,
             engine=self.name,
             total_results=len(raw_results),
+            answer=answer,
         )
 
     async def health_check(self) -> bool:

@@ -25,6 +25,7 @@ async def test_tavily_search_sends_bearer_token_and_maps_results():
                         "title": "LaTeX 入门教程",
                         "url": "https://example.com/latex-intro",
                         "content": "LaTeX 是一个高质量的排版系统。",
+                        "raw_content": "RAW " + "LaTeX 入门教程。" * 100,
                         "score": 0.92,
                     },
                     {
@@ -34,6 +35,7 @@ async def test_tavily_search_sends_bearer_token_and_maps_results():
                         "score": 0.85,
                     },
                 ],
+                "answer": "A quick summary of LaTeX tutorials.",
                 "response_time": "1.2",
             },
         )
@@ -50,16 +52,23 @@ async def test_tavily_search_sends_bearer_token_and_maps_results():
     assert captured_request.headers["Content-Type"] == "application/json"
     payload = json.loads(captured_request.content)
     assert payload["query"] == "latex tutorial"
-    assert payload["search_depth"] == "basic"
+    assert payload["search_depth"] == "advanced"
     assert payload["max_results"] == 5
+    assert payload["include_answer"] is True
+    assert payload["include_raw_content"] is True
 
     assert result.engine == "tavily"
     assert result.total_results == 2
+    assert result.answer == "A quick summary of LaTeX tutorials."
     assert len(result.results) == 2
     assert result.results[0].title == "LaTeX 入门教程"
     assert result.results[0].url == "https://example.com/latex-intro"
     assert result.results[0].snippet == "LaTeX 是一个高质量的排版系统。"
     assert result.results[0].source == "tavily"
+    # raw_content 应填充 full_content（受 deep_read_max_chars 上限约束）
+    max_chars = get_config().features.function_calling.web_search.deep_read_max_chars
+    assert result.results[0].full_content.startswith("RAW LaTeX")
+    assert len(result.results[0].full_content) <= max_chars + 3
 
 
 @pytest.mark.asyncio

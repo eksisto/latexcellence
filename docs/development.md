@@ -4,17 +4,17 @@
 
 **文档索引**：
 
-| 文档 | 内容 |
-| --- | --- |
-| [development.md](./development.md) | 本文件：项目概述、技术栈、目录结构、启动入口、配置、架构、编码规范 |
-| [backend-core.md](./backend-core.md) | 后端核心模块：config、llm_client、logger、project_manager、工具模块 |
-| [modules.md](./modules.md) | 所有功能模块 |
-| [frontend.md](./frontend.md) | 前端开发文档（样式架构、组件、Hook、状态管理） |
-| [testing.md](./testing.md) | 测试规范与用例覆盖 |
-| [latex-package-rules.md](./latex-package-rules.md) | 宏包规则表维护指南（新增规则模板 + 评审清单） |
-| [function-calling-tools.md](./function-calling-tools.md) | Function Calling 工具体系：全局/私有工具、配置结构 |
-| [duckduckgo-challenge.md](./duckduckgo-challenge.md) | DDG 验证码处理 |
-| [closed-loop-optimization-lessons.md](./closed-loop-optimization-lessons.md) | Agent 闭环优化复盘：通用性退化事故的原因、教训与改进机制 |
+| 文档                                                                         | 内容                                                                |
+| ---------------------------------------------------------------------------- | ------------------------------------------------------------------- |
+| [development.md](./development.md)                                           | 本文件：项目概述、技术栈、目录结构、启动入口、配置、架构、编码规范  |
+| [backend-core.md](./backend-core.md)                                         | 后端核心模块：config、llm_client、logger、project_manager、工具模块 |
+| [modules.md](./modules.md)                                                   | 所有功能模块                                                        |
+| [frontend.md](./frontend.md)                                                 | 前端开发文档（样式架构、组件、Hook、状态管理）                      |
+| [testing.md](./testing.md)                                                   | 测试规范与用例覆盖                                                  |
+| [latex-package-rules.md](./latex-package-rules.md)                           | 宏包规则表维护指南（新增规则模板 + 评审清单）                       |
+| [function-calling-tools.md](./function-calling-tools.md)                     | Function Calling 工具体系：全局/私有工具、配置结构                  |
+| [duckduckgo-challenge.md](./duckduckgo-challenge.md)                         | DDG 验证码处理                                                      |
+| [closed-loop-optimization-lessons.md](./closed-loop-optimization-lessons.md) | Agent 闭环优化复盘：通用性退化事故的原因、教训与改进机制            |
 
 ---
 
@@ -34,11 +34,11 @@ LateXcellence 是一个由 LLM 驱动的智能体论文写作助手。后端 Fas
 
 ## 技术栈
 
-| 层 | 语言 | 框架/关键库 |
-| --- | --- | --- |
-| 后端 | Python 3.12+ | FastAPI, uvicorn, openai, pydantic v2, httpx |
+| 层   | 语言             | 框架/关键库                                            |
+| ---- | ---------------- | ------------------------------------------------------ |
+| 后端 | Python 3.12+     | FastAPI, uvicorn, openai, pydantic v2, httpx           |
 | 前端 | JavaScript (JSX) | React 19, Vite 6, Tailwind CSS 4, Zustand 5, shadcn/ui |
-| 测试 | Python | pytest + pytest-asyncio + httpx |
+| 测试 | Python           | pytest + pytest-asyncio + httpx                        |
 
 ---
 
@@ -147,19 +147,19 @@ latexcellence/
 
 当前子目录：
 
-| 子目录 | 用途 |
-| --- | --- |
-| `tools/` 根目录共享工具 | `eval_common.py`（人工评估基座）、`tex_path.py`（TeX Live 路径发现）、`generality_gate.py`（Agent 闭环优化通用性门禁：硬编码特征扫描 / 提示词体积监控 / holdout 场景解析 / 对照组回归判定，详见 [closed-loop-optimization-lessons.md](./closed-loop-optimization-lessons.md)） |
-| `tools/latex_packages/` | 宏包规则表维护：离线编译验证（`verify_rules.py`）与覆盖率报告（`coverage_report.py`），详见 [latex-package-rules.md](./latex-package-rules.md) |
-| `tools/formula_ocr_eval/` | 公式 OCR 人工评估：渲染语料为图片 → 调真实 OCR 管线 → 生成左右对比 HTML 报告，详见其 `README.md` |
-| `tools/table_ocr_eval/` | 表格 OCR 人工评估：渲染语料为图片 → 调真实 OCR 管线 → 生成左右对比 HTML 报告，详见其 `README.md` |
-| `tools/typo_check_eval/` | 错字查找人工评估：加载错字语料 → 调真实逐段检查管线 → 生成原文/修正后对照 HTML 报告，详见其 `README.md` |
-| `tools/expression_opt_eval/` | 表达优化人工评估：加载优化语料 → 调真实逐段优化管线 → 生成原文/优化后对照 HTML 报告，详见其 `README.md` |
-| `tools/terminology_check_eval/` | 术语一致性人工评估：加载多段落术语语料 → 调真实检查管线（逐段提取 + 语义聚类）→ 生成术语簇命中/漏检对照 HTML 报告，详见其 `README.md` |
-| `tools/paragraph_translate_eval/` | 逐段翻译人工评估：加载单段落语料（含整段参考译文与期望短语）→ 调真实逐段翻译管线 → 生成参考译文/原文/译文对照 HTML 报告，详见其 `README.md` |
-| `tools/plotgen_opt/` | plot_gen Agent 优化评测：驱动 Agent 生成图表并采集指标、trace 分析、视觉审查、版本对比，详见其 `README.md` |
-| `tools/templategen_opt/` | template_gen Agent 优化评测：驱动 Agent 生成 LaTeX 工程并采集指标、需求遵守检查、视觉审查，详见其 `README.md` |
-| `tools/stylemodify_opt/` | style_modify Agent 优化评测：构造样式修改场景、驱动 Agent 采集 proposal/需求遵守/内容保留/事务指标，trace 分析与版本对比，详见其 `README.md` |
+| 子目录                            | 用途                                                                                                                                                                                                                                                                           |
+| --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `tools/` 根目录共享工具           | `eval_common.py`（人工评估基座）、`tex_path.py`（TeX Live 路径发现）、`generality_gate.py`（Agent 闭环优化通用性门禁：硬编码特征扫描 / 提示词体积监控 / holdout 场景解析 / 对照组回归判定，详见 [closed-loop-optimization-lessons.md](./closed-loop-optimization-lessons.md)） |
+| `tools/latex_packages/`           | 宏包规则表维护：离线编译验证（`verify_rules.py`）与覆盖率报告（`coverage_report.py`），详见 [latex-package-rules.md](./latex-package-rules.md)                                                                                                                                 |
+| `tools/formula_ocr_eval/`         | 公式 OCR 人工评估：渲染语料为图片 → 调真实 OCR 管线 → 生成左右对比 HTML 报告，详见其 `README.md`                                                                                                                                                                               |
+| `tools/table_ocr_eval/`           | 表格 OCR 人工评估：渲染语料为图片 → 调真实 OCR 管线 → 生成左右对比 HTML 报告，详见其 `README.md`                                                                                                                                                                               |
+| `tools/typo_check_eval/`          | 错字查找人工评估：加载错字语料 → 调真实逐段检查管线 → 生成原文/修正后对照 HTML 报告，详见其 `README.md`                                                                                                                                                                        |
+| `tools/expression_opt_eval/`      | 表达优化人工评估：加载优化语料 → 调真实逐段优化管线 → 生成原文/优化后对照 HTML 报告，详见其 `README.md`                                                                                                                                                                        |
+| `tools/terminology_check_eval/`   | 术语一致性人工评估：加载多段落术语语料 → 调真实检查管线（逐段提取 + 语义聚类）→ 生成术语簇命中/漏检对照 HTML 报告，详见其 `README.md`                                                                                                                                          |
+| `tools/paragraph_translate_eval/` | 逐段翻译人工评估：加载单段落语料（含整段参考译文与期望短语）→ 调真实逐段翻译管线 → 生成参考译文/原文/译文对照 HTML 报告，详见其 `README.md`                                                                                                                                    |
+| `tools/plotgen_opt/`              | plot_gen Agent 优化评测：驱动 Agent 生成图表并采集指标、trace 分析、视觉审查、版本对比，详见其 `README.md`                                                                                                                                                                     |
+| `tools/templategen_opt/`          | template_gen Agent 优化评测：驱动 Agent 生成 LaTeX 工程并采集指标、需求遵守检查、视觉审查，详见其 `README.md`                                                                                                                                                                  |
+| `tools/stylemodify_opt/`          | style_modify Agent 优化评测：构造样式修改场景、驱动 Agent 采集 proposal/需求遵守/内容保留/事务指标，trace 分析与版本对比，详见其 `README.md`                                                                                                                                   |
 
 新增维护/评测工具时，按模块建子目录并补充 `README.md`，同时更新 `PROJECT_SUMMARY.md` 目录树。
 
@@ -216,14 +216,14 @@ npm start        # 或 node server.js
 
 配置文件包含以下顶级段：
 
-| 顶级段 | 关键字段 | 说明 |
-| --- | --- | --- |
-| `server` | host, port, dev_mode, vite_dev_url | 服务监听配置 |
-| `llm` | api_key, base_url, model, temperature, max_tokens, request_interval, max_concurrency | LLM 连接与调用参数 |
-| `features` | 各模块的 `enabled` + 特有配置（batch_size, output_dir, timeout 等） | 功能开关与模块级参数 |
-| `features.function_calling` | `web_search.*`、`scholarly_research.*`、`project_tools.*`、`edit_tools.*` | 全局 LLM Function Calling 工具集；学术研究支持 OpenAlex API Key、结果上限和请求超时配置；联网搜索支持 DuckDuckGo / SearXNG / Tavily 引擎与 API Key 配置 |
-| `features.style_modify.agent` | 项目 Agent 的会话目录、轮次、工具/编译上限、大小限制、shadow 编译和清理配置 | style_modify 项目 Agent 模式 |
-| `logging` | level, dir | 日志级别与存储路径 |
+| 顶级段                        | 关键字段                                                                             | 说明                                                                                                                                                                                                                                                                          |
+| ----------------------------- | ------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `server`                      | host, port, dev_mode, vite_dev_url                                                   | 服务监听配置                                                                                                                                                                                                                                                                  |
+| `llm`                         | api_key, base_url, model, temperature, max_tokens, request_interval, max_concurrency | LLM 连接与调用参数                                                                                                                                                                                                                                                            |
+| `features`                    | 各模块的 `enabled` + 特有配置（batch_size, output_dir, timeout 等）                  | 功能开关与模块级参数                                                                                                                                                                                                                                                          |
+| `features.function_calling`   | `web_search.*`、`scholarly_research.*`、`project_tools.*`、`edit_tools.*`            | 全局 LLM Function Calling 工具集；学术研究支持 OpenAlex API Key、结果上限和请求超时配置；联网搜索支持 Tavily / SearXNG / DuckDuckGo 引擎与 API Key 配置，Tavily 默认 `advanced` 深度并返回合成答案/原始正文，`deep_read_pages` 默认 0（由 open_page / find_in_page 按需读取） |
+| `features.style_modify.agent` | 项目 Agent 的会话目录、轮次、工具/编译上限、大小限制、shadow 编译和清理配置          | style_modify 项目 Agent 模式                                                                                                                                                                                                                                                  |
+| `logging`                     | level, dir                                                                           | 日志级别与存储路径                                                                                                                                                                                                                                                            |
 
 所有字段有 Pydantic 默认值，可部分配置。`LX_LLM_KEY` 环境变量优先于 `config.json` 中的 `api_key`。
 
@@ -233,10 +233,10 @@ npm start        # 或 node server.js
 
 ## 开发/生产模式
 
-| 模式 | `dev_mode` | FastAPI 行为 | 前端行为 |
-| --- | --- | --- | --- |
-| 开发 | `true` | 不挂载 `static/`；CORS 允许所有来源 | 由 Vite dev server（默认 5173）独立运行，`vite.config.js` 代理 `/api` 到 `localhost:8000` |
-| 生产 | `false` | 挂载 `static/` 目录作为静态文件服务 | 前端已构建为 `static/` 下的产物，由 FastAPI 直接提供 |
+| 模式 | `dev_mode` | FastAPI 行为                        | 前端行为                                                                                  |
+| ---- | ---------- | ----------------------------------- | ----------------------------------------------------------------------------------------- |
+| 开发 | `true`     | 不挂载 `static/`；CORS 允许所有来源 | 由 Vite dev server（默认 5173）独立运行，`vite.config.js` 代理 `/api` 到 `localhost:8000` |
+| 生产 | `false`    | 挂载 `static/` 目录作为静态文件服务 | 前端已构建为 `static/` 下的产物，由 FastAPI 直接提供                                      |
 
 **切换到生产模式**：
 
@@ -291,24 +291,24 @@ core/ + utils/ (基础设施：配置、LLM 客户端、项目管理、文件 IO
 
 ### Python
 
-| 规范项 | 要求 |
-| --- | --- |
-| 导入顺序 | 标准库 → 第三方 → 应用内部（禁止相对导入） |
-| 类型注解 | 强制注解，使用 `list[X]` / `dict[K, V]` / `X \| None` |
-| 字符串引号 | docstring/f-string 双引号；正则 `r"..."` |
-| 路径操作 | `pathlib.Path`，禁止 `os.path` |
-| 文件编码 | 显式 `encoding="utf-8"` |
-| 命名 | 类 PascalCase、函数/变量 snake_case、常量 UPPER_SNAKE |
-| Pydantic | 仅 v2 API（`model_validate()`、`model_dump()`） |
-| 调试 | `logger.debug()`，禁止 `print()` |
+| 规范项     | 要求                                                  |
+| ---------- | ----------------------------------------------------- |
+| 导入顺序   | 标准库 → 第三方 → 应用内部（禁止相对导入）            |
+| 类型注解   | 强制注解，使用 `list[X]` / `dict[K, V]` / `X \| None` |
+| 字符串引号 | docstring/f-string 双引号；正则 `r"..."`              |
+| 路径操作   | `pathlib.Path`，禁止 `os.path`                        |
+| 文件编码   | 显式 `encoding="utf-8"`                               |
+| 命名       | 类 PascalCase、函数/变量 snake_case、常量 UPPER_SNAKE |
+| Pydantic   | 仅 v2 API（`model_validate()`、`model_dump()`）       |
+| 调试       | `logger.debug()`，禁止 `print()`                      |
 
 ### JavaScript/JSX
 
-| 规范项 | 要求 |
-| --- | --- |
-| 导入 | ESM `import`，相对路径带 `./` |
-| 字符串 | 双引号，无分号，2 空格缩进 |
-| 状态管理 | Zustand 箭头函数 setter |
+| 规范项   | 要求                               |
+| -------- | ---------------------------------- |
+| 导入     | ESM `import`，相对路径带 `./`      |
+| 字符串   | 双引号，无分号，2 空格缩进         |
+| 状态管理 | Zustand 箭头函数 setter            |
 | API 调用 | 通过 `api/index.js` 的 `request()` |
 
 ---
@@ -322,20 +322,20 @@ core/ + utils/ (基础设施：配置、LLM 客户端、项目管理、文件 IO
 
 ## 安全与边界处理
 
-| 场景 | 处理策略 |
-| --- | --- |
-| `\include`/ `\input` | 递归解析，记录依赖图 |
-| verbatim 等环境 | 整体替换为 marker，LLM 不可修改 |
-| 控制符号（`\?`/`\'`/`\7`/`\~{n}`、`\`+换行、未配对 `\[`/`\(`） | 整体替换为 marker，不残留反斜杠/花括号 |
-| 行内数学 `$...$` | 非贪婪匹配；`\$`（如 `\$500`）由转义字符规则处理，不进入数学匹配 |
-| 内联逐字（`\verb`/`\verb*`/`\lstinline`） | 整体替换为 marker，逐字内容 LLM 不可修改 |
-| LLM 调用 rate limit | 指数退避重试（最多 3 次） |
-| LLM 修改/删除 marker | 后处理验证完整性，缺失时回退原文 |
-| LLM JSON 输出不符 | `retry_with_validation()` 反馈重试 |
-| LLM 输出的 LaTeX 含损坏内容（控制字符/括号不配平） | `latex_json_guard.py` 内容校验拦截并回喂重试（分隔符协议路径用 `relaxed=True` 宽松模式） |
-| 用户审核期间修改文件 | MD5 校验，不一致拒绝写入 |
-| 撤销/重做 | BackupManager 维护操作栈（最多 50 层） |
-| API 密钥 | 加入 `.gitignore`，提供脱敏模板，环境变量优先 |
+| 场景                                                           | 处理策略                                                                                 |
+| -------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| `\include`/ `\input`                                           | 递归解析，记录依赖图                                                                     |
+| verbatim 等环境                                                | 整体替换为 marker，LLM 不可修改                                                          |
+| 控制符号（`\?`/`\'`/`\7`/`\~{n}`、`\`+换行、未配对 `\[`/`\(`） | 整体替换为 marker，不残留反斜杠/花括号                                                   |
+| 行内数学 `$...$`                                               | 非贪婪匹配；`\$`（如 `\$500`）由转义字符规则处理，不进入数学匹配                         |
+| 内联逐字（`\verb`/`\verb*`/`\lstinline`）                      | 整体替换为 marker，逐字内容 LLM 不可修改                                                 |
+| LLM 调用 rate limit                                            | 指数退避重试（最多 3 次）                                                                |
+| LLM 修改/删除 marker                                           | 后处理验证完整性，缺失时回退原文                                                         |
+| LLM JSON 输出不符                                              | `retry_with_validation()` 反馈重试                                                       |
+| LLM 输出的 LaTeX 含损坏内容（控制字符/括号不配平）             | `latex_json_guard.py` 内容校验拦截并回喂重试（分隔符协议路径用 `relaxed=True` 宽松模式） |
+| 用户审核期间修改文件                                           | MD5 校验，不一致拒绝写入                                                                 |
+| 撤销/重做                                                      | BackupManager 维护操作栈（最多 50 层）                                                   |
+| API 密钥                                                       | 加入 `.gitignore`，提供脱敏模板，环境变量优先                                            |
 
 ---
 

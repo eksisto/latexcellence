@@ -31,7 +31,12 @@ from backend.utils.web_search.manager import (
     get_search_manager,
     reset_search_manager,
 )
-from backend.utils.web_search.models import SearchResponse, SearchResult
+from backend.utils.web_search.models import (
+    FindInPageResult,
+    PageReadResult,
+    SearchResponse,
+    SearchResult,
+)
 from backend.utils.web_search.query_rewriter import QueryRewriter, SearchIntent
 
 __all__ = [
@@ -39,6 +44,8 @@ __all__ = [
     "SearchResult",
     "SearchResponse",
     "SearchIntent",
+    "PageReadResult",
+    "FindInPageResult",
     # Deep Read
     "DeepReader",
     # 查询重写

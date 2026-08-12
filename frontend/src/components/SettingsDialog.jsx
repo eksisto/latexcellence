@@ -956,7 +956,7 @@ export default function SettingsDialog() {
                         onChange={(e) =>
                           set(
                             "features.function_calling.web_search.deep_read_max_chars",
-                            parseInt(e.target.value, 10) || 4000,
+                            parseInt(e.target.value, 10) || 10000,
                           )
                         }
                       />

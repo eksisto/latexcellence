@@ -404,6 +404,8 @@
       "emptySessionHint": "点击左侧 + 按钮新建会话",
       "toolStatus": {
         "searching": "正在搜索：{{query}}",
+        "reading_page": "正在读取网页：{{url}}",
+        "searching_in_page": "正在网页内查找：{{query}}",
         "browsing_files": "正在浏览项目目录...",
         "reading_file": "正在读取文件...",
         "parsing_structure": "正在解析文档结构...",
@@ -447,6 +449,7 @@
       },
       "deepRead": "已读 {{n}} 页",
       "multiQuery": "多角度 {{n}} 条",
+      "citationWarning": "以下引用链接未在本次搜索结果中找到，请核实来源：",
       "thinking": "思考中...",
       "copyRaw": "复制原始文本",
       "generateEdit": "生成编辑建议",

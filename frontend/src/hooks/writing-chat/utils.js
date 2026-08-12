@@ -97,6 +97,9 @@ export function processLoadedMessages(messages) {
       searchQuery: msg.search_query || msg.searchQuery || "",
       deepReadPages: msg.deep_read_pages || msg.deepReadPages || 0,
       rewrittenQueries: msg.rewritten_queries || msg.rewrittenQueries || [],
+      citationNote: msg.citation_note || msg.citationNote || "",
+      unverifiedCitations:
+        msg.unverified_citations || msg.unverifiedCitations || [],
     };
     if (msg.role !== "assistant" || !msg.content) return normalized;
     if (!/<thinking>[\s\S]*?<\/thinking>/.test(msg.content)) return normalized;

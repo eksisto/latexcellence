@@ -252,6 +252,8 @@ class ConversationContext:
         search_query: str = "",
         deep_read_pages: int = 0,
         rewritten_queries: list[str] | None = None,
+        citation_note: str = "",
+        unverified_citations: list[str] | None = None,
     ) -> ChatMessage:
         """
         追加 assistant 回复消息。
@@ -273,6 +275,8 @@ class ConversationContext:
             search_query=search_query,
             deep_read_pages=deep_read_pages,
             rewritten_queries=rewritten_queries or [],
+            citation_note=citation_note,
+            unverified_citations=unverified_citations or [],
             created_at=time.time(),
         )
         self.messages.append(msg)

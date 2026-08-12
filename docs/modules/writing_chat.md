@@ -42,7 +42,9 @@ RS2 不直接写回 `.tex`，用户再点"应用到 .tex"才调用 `project_mana
 
 **工具消息持久化**：`append_tool_messages()` 将 Function Calling 工具调用循环产生的 assistant（含 tool_calls）和 tool 角色消息持久化到上下文，确保工具调用历史在会话间可追溯。tool 角色消息是内部上下文（仅用于回传 LLM），前端聊天区不直接展示（`isVisibleChatMessage` 过滤），工具活动由 `ToolStatusBar` 指示器呈现。
 
-**多轮工具调用与内容一致性**：工具调用循环中，`round_idx > 0` 的每一轮在流开始前推送 `round_start`，前端收到后重置流式消息的累积文本；无工具调用的一轮内容即最终落盘回复，不再重复生成。仅当 `max_rounds` 用尽、最后一轮仍请求工具调用时，才在额外生成的最终回复流前再推送一次 `round_start`。`parseThinking` 同时会剥离正文中残留的完整 thinking 块。web_search 结果（`search_results` / `search_query` / `deep_read_pages` / `rewritten_queries`）随 assistant 消息一并落盘，刷新后搜索卡片与实时展示一致。
+**多轮工具调用与内容一致性**：工具调用循环中，`round_idx > 0` 的每一轮在流开始前推送 `round_start`，前端收到后重置流式消息的累积文本；无工具调用的一轮内容即最终落盘回复，不再重复生成。工具调用循环上限为 6 轮（`_MAX_TOOL_ROUNDS`），支持"搜索 → 读页 → 再搜索"的 agentic 检索；仅当轮数用尽、最后一轮仍请求工具调用时，才在额外生成的最终回复流前再推送一次 `round_start`。工具证据按 `_MAX_TOOL_CONTEXT_CHARS`（60000 字符）滚动预算裁剪：只裁剪已收齐结果的旧"assistant tool_calls + tool 结果"对，始终保留当前轮（正在执行或刚完成的轮次），避免多轮搜索撑爆上下文或拆散同一轮的多工具调用。`parseThinking` 同时会剥离正文中残留的完整 thinking 块。web_search 结果（`search_results` / `search_query` / `deep_read_pages` / `rewritten_queries`）随 assistant 消息一并落盘，刷新后搜索卡片与实时展示一致。
+
+**引用校验与 untrusted 防护**：System Prompt 强制要求只能引用工具结果中真实出现的 URL；回复落盘前 `_validate_citations()` 提取正文 Markdown 链接并与当轮搜索/读页来源集合比对，未验证链接通过 `citation_note` 落盘并推送 `citation_note` SSE 事件，前端在消息气泡中展示警示。搜索结果与页面正文经 `format_for_llm()` 统一以 `UNTRUSTED DATA` 包装头注入，提示模型网页内容是数据而非指令。
 
 **消息转换**：`to_openai_messages()` 已扩展以支持 tool 角色和 assistant+tool_calls 格式，将 `ChatMessage` 正确地转换为 OpenAI messages API 格式。
 
@@ -67,7 +69,7 @@ System Prompt 分三类：聊天角色、编辑操作、压缩摘要。
 `send()` 方法在 RS1 中通过 `_get_enabled_tools()` 动态注入工具 schema：
 
 1. **请求澄清**（内置）：`request_clarification` — 向用户提问以补充信息或做出选择（始终可用，无条件注入）
-2. **联网搜索**（`SearchManager`）：`web_search` — 搜索互联网
+2. **联网搜索**（`SearchManager`）：`web_search`（搜索，返回 10-15 条标题/摘要/URL）→ `open_page`（读指定页面全文）/ `find_in_page`（页内定位关键词）— 由模型按需深入阅读
 3. **项目浏览**（`ProjectToolsManager`）：`list_files` / `read_file_content` / `get_section_structure` / `search_across_files` — 浏览项目文件
 4. **段落编辑**（`EditToolsManager`）：`edit_paragraph` / `undo_last_edit` — 直接修改 .tex 文件
 5. **学术研究**（`ResearchManager`）：`search_scholarly_works` / `get_work_details` / `find_related_works` / `get_full_text_or_sections` / `search_research_data_resources` — OpenAlex 论文检索、详情、引文追踪和 OA 定位

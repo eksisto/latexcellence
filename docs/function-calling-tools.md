@@ -10,13 +10,13 @@
 
 | 属性 | 值 |
 |------|-----|
-| **名称** | `web_search` |
-| **描述** | 搜索互联网获取最新信息。自动注入当前时间上下文辅助 LLM 理解时效性。 |
-| **参数** | `query` (string, 必填), `max_results` (integer, 默认 5) |
-| **定义位置** | `backend/utils/web_search/manager.py:151` |
-| **执行函数** | `_web_search_executor()` (同文件:197) |
+| **名称** | `web_search` / `open_page` / `find_in_page` |
+| **描述** | `web_search` 搜索互联网获取最新信息（自动注入当前时间上下文）；`open_page` 抓取指定 URL 全文；`find_in_page` 在页面内定位关键词。三者构成 agentic 检索循环（搜索 → 读页 → 再搜索）。 |
+| **参数** | `web_search`: `query` (string, 必填), `max_results` (integer, 默认 10)；`open_page`: `url` (string, 必填), `max_chars` (integer, 默认 10000)；`find_in_page`: `url` + `query` (必填), `context_chars` (默认 600), `max_matches` (默认 5) |
+| **定义位置** | `backend/utils/web_search/manager.py` |
+| **执行函数** | `_web_search_executor()` / `_open_page_executor()` / `_find_in_page_executor()` |
 | **配置路径** | `features.function_calling.web_search.enabled` |
-| **说明** | 支持查询重写、多角度并行搜索、引擎降级、Deep Read 全文抓取 |
+| **说明** | 支持查询重写、多角度并行搜索（合并上限 15 条）、引擎降级、Deep Read（默认关闭）、页面按需读取、引用校验与 untrusted 防护 |
 
 ### 项目浏览工具
 

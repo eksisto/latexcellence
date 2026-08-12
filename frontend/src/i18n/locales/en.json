@@ -404,6 +404,8 @@
       "emptySessionHint": "Click the + button on the left to create a new session",
       "toolStatus": {
         "searching": "Searching: {{query}}",
+        "reading_page": "Reading page: {{url}}",
+        "searching_in_page": "Searching within page: {{query}}",
         "browsing_files": "Browsing project files...",
         "reading_file": "Reading file...",
         "parsing_structure": "Parsing document structure...",
@@ -447,6 +449,7 @@
       },
       "deepRead": "{{n}} pages read",
       "multiQuery": "{{n}} angles",
+      "citationWarning": "The following citation links were not found in this search. Please verify the sources:",
       "thinking": "Thinking...",
       "copyRaw": "Copy raw text",
       "generateEdit": "Generate edit suggestion",

@@ -1026,7 +1026,7 @@ class TestMultiRoundToolStreamConsistency:
     async def test_send_regenerates_final_answer_when_max_rounds_exhausted(
         self, temp_session_dir, open_project, service, monkeypatch
     ):
-        """三轮全部请求工具调用时，循环结束后才生成一次最终回复并落盘。"""
+        """全部轮次都请求工具调用时，循环结束后才生成一次最终回复并落盘。"""
         monkeypatch.setattr(get_config().llm, "api_key", "test-key")
         search_resp = _make_search_response("latex 公式写法")
 
@@ -1062,6 +1062,9 @@ class TestMultiRoundToolStreamConsistency:
                     _stream(tool_round_chunks),
                     _stream(tool_round_chunks),
                     _stream(tool_round_chunks),
+                    _stream(tool_round_chunks),
+                    _stream(tool_round_chunks),
+                    _stream(tool_round_chunks),
                 ]
             )
             client.chat_stream_with_usage = MagicMock(
@@ -1078,9 +1081,9 @@ class TestMultiRoundToolStreamConsistency:
 
         types = [e["type"] for e in events]
         assert types[-1] == "done"
-        # 第 2、3 轮流开始 + 最终回复流开始，共 3 个 round_start
-        assert types.count("round_start") == 3
-        assert mock_registry.execute.await_count == 3
+        # 第 2..6 轮流开始 + 最终回复流开始，共 6 个 round_start
+        assert types.count("round_start") == 6
+        assert mock_registry.execute.await_count == 6
         client.chat_stream_with_usage.assert_called_once()
         # 最终回复前的 round_start 之后流出的 token 才是落盘内容
         last_round_start = len(types) - 1 - types[::-1].index("round_start")
@@ -1094,9 +1097,9 @@ class TestMultiRoundToolStreamConsistency:
         final_msgs = [m for m in ctx.messages if m.role == "assistant" and m.content]
         assert len(final_msgs) == 1
         assert final_msgs[0].content == "### 总体评价\n**拒稿**"
-        # 三轮工具结果均持久化
+        # 六轮工具结果均持久化
         tool_msgs = [m for m in ctx.messages if m.role == "tool"]
-        assert len(tool_msgs) == 3
+        assert len(tool_msgs) == 6
 
 
 class TestWebSearchToolEvent:
@@ -1270,6 +1273,191 @@ class TestWebSearchToolEvent:
         final_msgs = [m for m in ctx.messages if m.role == "assistant" and m.content]
         assert final_msgs[0].content == "无结果"
         assert final_msgs[0].search_results == []
+
+    @pytest.mark.asyncio
+    async def test_send_citation_to_result_beyond_display_limit_is_verified(
+        self, temp_session_dir, open_project, service, monkeypatch
+    ):
+        """引用第 6+ 条搜索结果不应被误报为未验证来源。"""
+        monkeypatch.setattr(get_config().llm, "api_key", "test-key")
+
+        from backend.utils.web_search import SearchResponse, SearchResult
+
+        results = [
+            SearchResult(
+                title=f"来源 {i}",
+                snippet=f"摘要 {i}",
+                url=f"https://example.com/{i}",
+            )
+            for i in range(1, 11)
+        ]
+        search_resp = SearchResponse(
+            query="q", results=results, engine="duckduckgo", total_results=10
+        )
+
+        mock_registry = MagicMock()
+        mock_registry.execute = AsyncMock(return_value=search_resp)
+
+        with patch(_LLM_CLIENT_PATH) as m_llm, patch(
+            _TOOL_REGISTRY_PATH, return_value=mock_registry
+        ):
+            client = MagicMock()
+            client.chat_stream_with_tools = MagicMock(
+                side_effect=[
+                    _stream(
+                        [
+                            StreamChunk(
+                                content=None,
+                                usage=None,
+                                tool_calls=[_make_tool_call(query="q")],
+                            ),
+                            StreamChunk(
+                                content=None,
+                                usage=UsageInfo(
+                                    prompt_tokens=1,
+                                    completion_tokens=1,
+                                    total_tokens=2,
+                                ),
+                            ),
+                        ]
+                    ),
+                    _stream(
+                        [
+                            StreamChunk(
+                                content="参考 [来源](https://example.com/10)",
+                                usage=None,
+                            ),
+                            StreamChunk(
+                                content=None,
+                                usage=UsageInfo(
+                                    prompt_tokens=1,
+                                    completion_tokens=1,
+                                    total_tokens=2,
+                                ),
+                            ),
+                        ]
+                    ),
+                ]
+            )
+            client.chat_stream_with_usage = MagicMock()
+            m_llm.return_value = client
+
+            req = ChatSendRequest(
+                file_path="main.tex",
+                user_message="q",
+                web_search_enabled=True,
+            )
+            events = [e async for e in service.send(req)]
+
+        types = [e["type"] for e in events]
+        assert "citation_note" not in types
+        ctx = ConversationContext.load_from_disk(events[-1]["session_id"])
+        final_msgs = [m for m in ctx.messages if m.role == "assistant" and m.content]
+        assert final_msgs[0].unverified_citations == []
+
+
+class TestToolEvidenceBudgetPersistence:
+    """工具证据裁剪后，最新证据保留且当轮消息完整持久化。"""
+
+    @pytest.mark.asyncio
+    async def test_send_keeps_latest_evidence_and_persists_after_trim(
+        self, temp_session_dir, open_project, service, monkeypatch
+    ):
+        monkeypatch.setattr(get_config().llm, "api_key", "test-key")
+
+        # 历史会话带一条 30k 字符的工具结果对，作为最旧证据
+        ctx = ConversationContext.create_session(file_path="main.tex", scope="test")
+        ctx.append_user_message("旧问题")
+        old_asst = ctx.append_assistant_message(content="", tokens=0)
+        old_asst.tool_calls = [
+            {
+                "id": "hist",
+                "type": "function",
+                "function": {"name": "web_search", "arguments": "{}"},
+            }
+        ]
+        ctx.append_tool_messages(
+            [
+                {"role": "assistant", "tool_calls": old_asst.tool_calls},
+                {"role": "tool", "tool_call_id": "hist", "content": "H" * 30000},
+            ]
+        )
+        ctx.append_assistant_message(content="旧回复", tokens=0)
+        ctx.save_to_disk()
+
+        from backend.utils.web_search import SearchResponse, SearchResult
+
+        big_resp = SearchResponse(
+            query="q",
+            results=[
+                SearchResult(
+                    title="大页面",
+                    snippet="s",
+                    url="https://example.com/big",
+                    full_content="Z" * 20000,
+                )
+            ],
+            engine="duckduckgo",
+            total_results=1,
+        )
+        mock_registry = MagicMock()
+        mock_registry.execute = AsyncMock(return_value=big_resp)
+
+        def _tool_round(call_id: str) -> list:
+            return [
+                StreamChunk(content="继续检索", usage=None),
+                StreamChunk(
+                    content=None,
+                    usage=None,
+                    tool_calls=[_make_tool_call(call_id=call_id)],
+                ),
+                StreamChunk(
+                    content=None,
+                    usage=UsageInfo(
+                        prompt_tokens=1, completion_tokens=1, total_tokens=2
+                    ),
+                ),
+            ]
+
+        final_round_chunks = [
+            StreamChunk(content="最终答复", usage=None),
+            StreamChunk(
+                content=None,
+                usage=UsageInfo(prompt_tokens=1, completion_tokens=1, total_tokens=2),
+            ),
+        ]
+
+        with patch(_LLM_CLIENT_PATH) as m_llm, patch(
+            _TOOL_REGISTRY_PATH, return_value=mock_registry
+        ):
+            client = MagicMock()
+            client.chat_stream_with_tools = MagicMock(
+                side_effect=[
+                    _stream(_tool_round("cur1")),
+                    _stream(_tool_round("cur2")),
+                    _stream(final_round_chunks),
+                ]
+            )
+            client.chat_stream_with_usage = MagicMock()
+            m_llm.return_value = client
+
+            req = ChatSendRequest(
+                session_id=ctx.session_id,
+                file_path="main.tex",
+                user_message="新问题",
+                web_search_enabled=True,
+            )
+            events = [e async for e in service.send(req)]
+
+        ctx = ConversationContext.load_from_disk(events[-1]["session_id"])
+        assert ctx is not None
+        final_msgs = [m for m in ctx.messages if m.role == "assistant" and m.content]
+        assert final_msgs[-1].content == "最终答复"
+        # 历史大结果对触发裁剪（只影响本轮 LLM 上下文），
+        # 历史消息仍保留在会话中，且本轮两轮工具消息必须完整持久化
+        tool_msgs = [m for m in ctx.messages if m.role == "tool"]
+        assert len(tool_msgs) == 3
+        assert {"cur1", "cur2"}.issubset({m.tool_call_id for m in tool_msgs})
 
 
 class TestScholarlyResearchToolEvent:

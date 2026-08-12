@@ -125,6 +125,19 @@ export function createSSEEventHandler({
       toast.info(i18n.t("hooks:writingChat.toastCompressed"), {
         description: i18n.t("hooks:writingChat.toastCompressedDesc"),
       });
+    } else if (event.type === "citation_note") {
+      // 引用校验结果：回复中存在未在搜索结果中出现的链接
+      setWritingChatMessages((prev) =>
+        prev.map((m) =>
+          m.id === tmpAssistantId
+            ? {
+                ...m,
+                citationNote: event.note || "",
+                unverifiedCitations: event.unverified || [],
+              }
+            : m,
+        ),
+      );
     } else if (event.type === "done") {
       if (event.captcha_pending) {
         // 验证码流程中止：后端未持久化 assistant 消息，移除占位消息，

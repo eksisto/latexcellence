@@ -141,8 +141,8 @@
     "function_calling": {
       "web_search": {
         "enabled": true,
-        "primary_engine": "duckduckgo",
-        "max_results": 5,
+        "primary_engine": "tavily",
+        "max_results": 10,
         "timeout_seconds": 10,
         "engines": {
           "duckduckgo": {
@@ -153,12 +153,12 @@
             "base_url": "http://localhost:8080"
           },
           "tavily": {
-            "enabled": false,
+            "enabled": true,
             "api_key": ""
           }
         },
-        "deep_read_pages": 2,
-        "deep_read_max_chars": 4000,
+        "deep_read_pages": 0,
+        "deep_read_max_chars": 10000,
         "query_rewriting": {
           "enabled": true
         }

@@ -217,12 +217,14 @@ latexcellence/
   - `features.function_calling` 配置组将全局 LLM 工具归入嵌套结构（替代原先扁平的 `features.function_calling.web_search` / `features.project_tools`），支持旧配置自动迁移
   - `ToolRegistry`（工具注册表）管理所有可用工具的 schema 和执行函数，基于 `config_path` 动态检查功能开关
   - 自注册模式：每个工具管理器在首次初始化时自动注册自身工具
-  - `SearchManager`（搜索管理器）提供 `web_search` 工具的 schema 和执行，统一封装 `DuckDuckGoHtmlEngine`（模拟浏览器请求，遇 HTTP 202 Challenge 时抛出 `DDGChallengeError`，由 service 捕获并以 `captcha_challenge` SSE 事件推送到前端）、`SearXNGEngine`（通过 `/search?format=json` 获取结果，无验证码）和 `TavilyEngine`（通过 Tavily Search API，需 API Key）
+  - `SearchManager`（搜索管理器）提供 `web_search` / `open_page` / `find_in_page` 三个工具的 schema 和执行：`web_search` 统一封装 `DuckDuckGoHtmlEngine`（模拟浏览器请求，遇 HTTP 202 Challenge 时抛出 `DDGChallengeError`，由 service 捕获并以 `captcha_challenge` SSE 事件推送到前端）、`SearXNGEngine`（通过 `/search?format=json` 获取结果，无验证码）和 `TavilyEngine`（Tavily Search API，`search_depth="advanced"` + `include_answer` + `include_raw_content`，需 API Key，建议主引擎）；`open_page` 按需抓取指定 URL 正文，`find_in_page` 页内定位关键词，模拟 Codex 的 agentic 检索模式
   - `ProjectToolsManager`（项目工具管理器）提供 4 个浏览工具（`list_files` / `read_file_content` / `get_section_structure` / `search_across_files`），允许 LLM 浏览项目文件和目录结构
   - `EditToolsManager`（段落编辑工具管理器）提供 2 个编辑工具（`edit_paragraph` / `undo_last_edit`），允许 LLM 直接修改 .tex 文件段落并支持撤销，敏感操作需前端用户确认
   - `ResearchManager` 提供基于 OpenAlex 的论文检索、详情查询、引文追踪、摘要/OA 定位和研究数据资源检索；统一映射为可追溯、可去重的 `ScholarlyWork`，共享 HTTP 客户端由 FastAPI lifespan 管理
   - DDG Challenge 验证码提交通过通用路由 `/api/search/ddg-challenge` 处理，不绑定特定业务模块
-  - 搜索流程可串联 **Query Rewriting**（将用户查询拆解为多条并行查询，去重合并）和 **Deep Read**（并发抓取搜索结果前 N 条页面正文，通过 `format_for_llm()` 注入 LLM 上下文）
+  - 搜索流程可串联 **Query Rewriting**（将用户查询拆解为多条并行查询，去重合并，合并上限 15 条）和 **Deep Read**（可配置自动抓取前 N 条，默认关闭；全局共享 `DeepReader`，带 5 分钟 TTL 缓存；仅允许公网 HTTPS，拦截私网/环回/保留地址防 SSRF）
+  - 搜索结果与页面正文经 `format_for_llm()` 统一以 `UNTRUSTED DATA` 包装头注入并按字符预算截断，防 prompt injection 与上下文膨胀；Writing Chat 落盘前校验回复链接是否来自当轮工具真实来源，未验证链接通过 `citation_note` + `citation_note` SSE 事件警示前端
+  - Writing Chat 工具调用循环上限 6 轮，工具证据按 60000 字符滚动预算裁剪最旧工具调用对，支持"搜索 → 读页 → 再搜索"的迭代检索
   - Writing Chat 的 `send()` 方法作为 Function Calling 工具的消费端，集成联网搜索、学术研究、项目浏览和段落编辑工具：检测 LLM 返回 `tool_call` 时自动执行、将结果回传 LLM，再流式输出最终回复。学术检索结果通过 `tool_result.scholarly_results` 推送前端；敏感写操作推送 `tool_pending` 等待确认
   - RS2 生成编辑走分隔符协议（`<<<LATEX>>>...<<<END>>>` 纯文本块 + 可选 `<<<REASON>>>...<<<END>>>`），不再经 JSON 传输，避免反斜杠转义静默损坏；`original` 由后端从段落原文填充（不再要求 LLM 回显），提取出的修改段落经 `validate_latex_field(relaxed=True)` 宽松校验，失败回喂重试（最多 3 次）
 - **DOI 多数据源查询**: `ProviderManager`（全局单例）管理多个可插拔 `BaseMetadataProvider`

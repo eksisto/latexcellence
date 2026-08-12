@@ -26,9 +26,11 @@
 import asyncio
 import difflib
 import json
+import re
 import time
 import uuid
 from typing import Any, AsyncIterator
+from urllib.parse import urlparse, urlunparse
 
 from backend.core.config import get_config
 from backend.core.logger import get_logger
@@ -67,6 +69,8 @@ class WritingChatService:
     # 工具名 → i18n label 映射，前端通过 label 查找 toolStatus 翻译
     _TOOL_LABELS: dict[str, str] = {
         "web_search": "searching",
+        "open_page": "reading_page",
+        "find_in_page": "searching_in_page",
         "list_files": "browsing_files",
         "read_file_content": "reading_file",
         "get_section_structure": "parsing_structure",
@@ -81,6 +85,15 @@ class WritingChatService:
         "search_research_data_resources": "searching_research_data",
     }
 
+    # 工具调用循环最大轮数：放长 agentic 搜索（搜索 → 读页 → 再搜索）
+    _MAX_TOOL_ROUNDS = 6
+
+    # 工具结果注入上下文的滚动字符预算：超出后裁剪最旧的工具调用对
+    _MAX_TOOL_CONTEXT_CHARS = 60000
+
+    # 正文内 Markdown 链接提取正则（URL 不含空格与右括号）
+    _MARKDOWN_LINK_RE = re.compile(r"\[[^\]]*\]\((https?://[^)\s]+)\)")
+
     def __init__(self):
         self._logger = get_logger("writing_chat.service")
         # 待用户确认的工具调用（写操作：edit_paragraph / undo_last_edit）
@@ -89,6 +102,95 @@ class WritingChatService:
         # 待用户回复的澄清请求（request_clarification）
         # key: clarify_id, value: {event: asyncio.Event, answered: bool, answer: str, created_at: float}
         self._pending_clarifications: dict[str, dict[str, Any]] = {}
+
+    @staticmethod
+    def _normalize_citation_url(url: str) -> str:
+        """URL 规范化，用于引用校验（去 fragment、小写 host、去尾部斜杠）。"""
+        try:
+            p = urlparse(url)
+            return urlunparse(
+                (
+                    p.scheme.lower(),
+                    p.netloc.lower(),
+                    p.path.rstrip("/") or "/",
+                    "",
+                    "",
+                    "",
+                )
+            )
+        except Exception:
+            return url
+
+    @classmethod
+    def _validate_citations(
+        cls, content: str, allowed_urls: set[str]
+    ) -> tuple[list[str], str]:
+        """
+        校验回复中的 Markdown 链接是否来自当轮工具返回的真实来源。
+
+        返回：
+            (unverified_urls, note)
+        """
+        if not content or not allowed_urls:
+            return [], ""
+        allowed = {cls._normalize_citation_url(u) for u in allowed_urls}
+        found = cls._MARKDOWN_LINK_RE.findall(content)
+        unverified = [u for u in found if cls._normalize_citation_url(u) not in allowed]
+        if not unverified:
+            return [], ""
+        return unverified, "".join(f"[{i}] {u}\n" for i, u in enumerate(unverified, 1))
+
+    @staticmethod
+    def _trim_tool_messages(
+        messages: list[dict], max_chars: int = _MAX_TOOL_CONTEXT_CHARS
+    ) -> list[dict]:
+        """
+        裁剪工具证据，使注入 LLM 的工具结果总量尽量不超过字符预算。
+
+        规则：
+        - 只裁剪"完整"的工具调用对（assistant tool_calls 后紧跟数量匹配的
+          tool 消息），避免破坏正在执行的同一轮多工具调用
+        - 从最旧的一对开始删，但始终保留当前轮（最后一条 assistant+tool_calls）
+          ——最新证据是生成最终回复的直接依据，预算超限时作为软上限接受
+        """
+        total = sum(
+            len(str(m.get("content", ""))) for m in messages if m.get("role") == "tool"
+        )
+        while total > max_chars:
+            # 当前轮（最后一条 assistant+tool_calls）即使结果尚未收齐也不可裁剪，
+            # 否则会拆散正在执行的同轮多工具调用
+            last_tool_assistant_idx = -1
+            for i, m in enumerate(messages):
+                if m.get("role") == "assistant" and m.get("tool_calls"):
+                    last_tool_assistant_idx = i
+            candidates: list[tuple[int, int, int]] = []
+            for i, m in enumerate(messages):
+                if m.get("role") == "assistant" and m.get("tool_calls"):
+                    tool_calls = m["tool_calls"]
+                    j = i + 1
+                    count = 0
+                    while j < len(messages) and messages[j].get("role") == "tool":
+                        count += 1
+                        j += 1
+                    if count == len(tool_calls):
+                        pair_chars = sum(
+                            len(str(messages[k].get("content", "")))
+                            for k in range(i + 1, j)
+                        )
+                        candidates.append((i, j, pair_chars))
+            if not candidates:
+                break
+            removed = False
+            for start, end, pair_chars in candidates:
+                if start == last_tool_assistant_idx:
+                    continue
+                total -= pair_chars
+                del messages[start:end]
+                removed = True
+                break
+            if not removed:
+                break
+        return messages
 
     @staticmethod
     def _get_tool_label(tool_name: str, _tool_args: dict) -> str:
@@ -361,12 +463,17 @@ class WritingChatService:
         persisted_search_query = ""
         persisted_deep_read_pages = 0
         persisted_rewritten_queries: list[str] = []
+        persisted_source_urls: set[str] = set()
+        persisted_opened_pages: set[str] = set()
+        citation_note = ""
+        unverified_citations: list[str] = []
 
         # 工具调用循环：流式检测 tool_call，实时输出文本
         if tools:
             tool_messages = list(messages)  # 拷贝用于工具调用的 messages
-            initial_msg_count = len(tool_messages)
-            max_rounds = 3  # 防止无限工具调用循环
+            # 引用方式记录本轮回新增的 tool 消息，裁剪/删除不影响持久化
+            persisted_tool_msg_refs: list[dict[str, Any]] = []
+            max_rounds = self._MAX_TOOL_ROUNDS  # 防止无限工具调用循环
             # max_rounds 用尽且最后一轮仍有工具调用时置 True
             need_final_regeneration = False
             full_content_parts: list[str] = []
@@ -425,6 +532,7 @@ class WritingChatService:
                     ],
                 }
                 tool_messages.append(assistant_msg)
+                persisted_tool_msg_refs.append(assistant_msg)
 
                 for tc in round_tool_calls:
                     tool_name = tc.function.name
@@ -458,13 +566,13 @@ class WritingChatService:
                         self._logger.info(
                             f"Clarification answered [clarify_id={clarify_id}]"
                         )
-                        tool_messages.append(
-                            {
-                                "role": "tool",
-                                "tool_call_id": tc.id,
-                                "content": answer,
-                            }
-                        )
+                        tool_msg: dict[str, Any] = {
+                            "role": "tool",
+                            "tool_call_id": tc.id,
+                            "content": answer,
+                        }
+                        tool_messages.append(tool_msg)
+                        persisted_tool_msg_refs.append(tool_msg)
                         continue
 
                     # 敏感操作（edit_paragraph / undo_last_edit）检查是否需要用户确认
@@ -495,13 +603,13 @@ class WritingChatService:
                                 "tool": tool_name,
                             }
                             # 添加空的 tool result，避免 LLM API 报未完成的 tool_call
-                            tool_messages.append(
-                                {
-                                    "role": "tool",
-                                    "tool_call_id": tc.id,
-                                    "content": f"The user canceled the {tool_name} operation. Please skip this change.",
-                                }
-                            )
+                            tool_msg = {
+                                "role": "tool",
+                                "tool_call_id": tc.id,
+                                "content": f"The user canceled the {tool_name} operation. Please skip this change.",
+                            }
+                            tool_messages.append(tool_msg)
+                            persisted_tool_msg_refs.append(tool_msg)
                             continue
                         # 使用可能被前端修改后的参数
                         tool_args = confirmed_args
@@ -573,6 +681,29 @@ class WritingChatService:
                             persisted_rewritten_queries = tool_event.get(
                                 "rewritten_queries", []
                             )
+                            for r in tool_result.results:
+                                if r.url:
+                                    persisted_source_urls.add(r.url)
+                        if tool_name == "open_page":
+                            url = getattr(tool_result, "url", "")
+                            if url and not getattr(tool_result, "error", ""):
+                                persisted_source_urls.add(url)
+                                if url not in persisted_opened_pages:
+                                    persisted_opened_pages.add(url)
+                                    persisted_deep_read_pages += 1
+                                tool_event["url"] = url
+                                tool_event["title"] = getattr(tool_result, "title", "")
+                                tool_event["chars"] = len(
+                                    getattr(tool_result, "content", "")
+                                )
+                        if tool_name == "find_in_page":
+                            url = getattr(tool_result, "url", "")
+                            if url and not getattr(tool_result, "error", ""):
+                                persisted_source_urls.add(url)
+                                tool_event["url"] = url
+                                tool_event["match_count"] = len(
+                                    getattr(tool_result, "matches", [])
+                                )
                         if tool_name in {
                             "search_scholarly_works",
                             "find_related_works",
@@ -649,13 +780,15 @@ class WritingChatService:
                         result_text = f"Tool execution failed: {e}"
 
                     # 追加 tool result 消息
-                    tool_messages.append(
-                        {
-                            "role": "tool",
-                            "tool_call_id": tc.id,
-                            "content": result_text,
-                        }
-                    )
+                    tool_msg = {
+                        "role": "tool",
+                        "tool_call_id": tc.id,
+                        "content": result_text,
+                    }
+                    tool_messages.append(tool_msg)
+                    persisted_tool_msg_refs.append(tool_msg)
+                    # 证据滚动预算：裁剪最旧的工具调用对
+                    tool_messages = self._trim_tool_messages(tool_messages)
 
                 # 已达最大轮次且本轮仍请求工具调用：循环结束后需再生成最终回复
                 if round_idx == max_rounds - 1:
@@ -686,9 +819,8 @@ class WritingChatService:
                     return
 
             # 将工具调用/结果消息持久化到会话上下文（任一成功路径都会执行）
-            new_tool_msgs = tool_messages[initial_msg_count:]
-            if new_tool_msgs:
-                ctx.append_tool_messages(new_tool_msgs)
+            if persisted_tool_msg_refs:
+                ctx.append_tool_messages(persisted_tool_msg_refs)
 
         else:
             # 无工具：原有纯流式逻辑
@@ -711,12 +843,24 @@ class WritingChatService:
                 ctx.save_to_disk()
                 return
 
-        # 5. 写入 assistant 消息并落盘
+        # 5. 引用校验：回复中的链接必须来自当轮工具返回的真实来源
+        content = "".join(full_content_parts)
+        if persisted_source_urls:
+            unverified_citations, citation_note = self._validate_citations(
+                content, persisted_source_urls
+            )
+            if unverified_citations:
+                self._logger.warning(
+                    "Unverified citations in response: %s",
+                    ", ".join(unverified_citations[:5]),
+                )
+
+        # 6. 写入 assistant 消息并落盘
         assistant_tokens = 0
         if last_usage_tokens > 0:
             assistant_tokens = last_usage_tokens
         assistant_msg = ctx.append_assistant_message(
-            content="".join(full_content_parts),
+            content=content,
             tokens=assistant_tokens,
             scholarly_results=persisted_scholarly_results,
             scholarly_query=persisted_scholarly_query,
@@ -725,9 +869,18 @@ class WritingChatService:
             search_query=persisted_search_query,
             deep_read_pages=persisted_deep_read_pages,
             rewritten_queries=persisted_rewritten_queries,
+            citation_note=citation_note,
+            unverified_citations=unverified_citations,
         )
         ctx.update_last_message_tokens(last_usage_tokens)
         ctx.save_to_disk()
+
+        if citation_note:
+            yield {
+                "type": "citation_note",
+                "note": citation_note,
+                "unverified": unverified_citations,
+            }
 
         yield {
             "type": "done",

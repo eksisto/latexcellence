@@ -20,6 +20,8 @@ const scholarlyTools = [
 
 const toolIconMap = {
   web_search: Globe,
+  open_page: FileText,
+  find_in_page: Search,
   list_files: FolderOpen,
   read_file_content: FileText,
   get_section_structure: FileText,
@@ -36,6 +38,8 @@ const toolIconMap = {
 
 const toolColorMap = {
   web_search: "text-blue-500 bg-blue-500/5 border-blue-500/20",
+  open_page: "text-blue-500 bg-blue-500/5 border-blue-500/20",
+  find_in_page: "text-blue-500 bg-blue-500/5 border-blue-500/20",
   list_files: "text-emerald-500 bg-emerald-500/5 border-emerald-500/20",
   read_file_content: "text-emerald-500 bg-emerald-500/5 border-emerald-500/20",
   get_section_structure:
@@ -60,6 +64,12 @@ export default function ToolStatusBar({ toolStatus }) {
   const colors =
     toolColorMap[toolStatus.tool] ||
     "text-emerald-500 bg-emerald-500/5 border-emerald-500/20";
+  const labelArgs =
+    toolStatus.tool === "open_page"
+      ? { url: toolStatus.args?.url || "" }
+      : toolStatus.tool === "find_in_page"
+        ? { query: toolStatus.args?.query || "" }
+        : undefined;
   return (
     <div
       className={`flex items-center gap-2 text-xs text-muted-foreground py-1 px-2 rounded ${colors}`}
@@ -70,7 +80,7 @@ export default function ToolStatusBar({ toolStatus }) {
           ? t("pages:writingChat.toolStatus.searching", {
               query: toolStatus.args?.query || "...",
             })
-          : t(`pages:writingChat.toolStatus.${toolStatus.label}`)}
+          : t(`pages:writingChat.toolStatus.${toolStatus.label}`, labelArgs)}
       </span>
     </div>
   );

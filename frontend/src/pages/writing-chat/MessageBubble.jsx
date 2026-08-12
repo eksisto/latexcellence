@@ -327,6 +327,17 @@ export default function MessageBubble({ message, actions }) {
                   </div>
                 </div>
               )}
+              {/* 引用校验提示 */}
+              {message.citationNote && (
+                <div className="mb-2 rounded border border-amber-500/25 bg-amber-500/10 p-2">
+                  <div className="text-xs font-medium text-amber-600 dark:text-amber-400">
+                    {t("pages:writingChat.citationWarning")}
+                  </div>
+                  <pre className="mt-1 text-[10px] leading-relaxed whitespace-pre-wrap text-muted-foreground">
+                    {message.citationNote}
+                  </pre>
+                </div>
+              )}
               {/* 学术检索结果折叠框 */}
               {message.scholarlyResults?.length > 0 && (
                 <div className="mb-2 rounded border border-violet-500/20 bg-violet-500/5 p-2">

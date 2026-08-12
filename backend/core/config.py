@@ -221,7 +221,7 @@ class SearXNGConfig(BaseModel):
 class TavilyConfig(BaseModel):
     """Tavily 搜索引擎配置"""
 
-    enabled: bool = False
+    enabled: bool = True
     api_key: str = ""  # Tavily API Key（https://app.tavily.com 获取）
 
 
@@ -243,14 +243,14 @@ class WebSearchConfig(BaseModel):
     """联网搜索模块配置"""
 
     enabled: bool = False  # 是否启用（默认关闭，用户手动开启）
-    primary_engine: str = (
-        "duckduckgo"  # 主搜索引擎标识（duckduckgo / searxng / tavily）
-    )
-    max_results: int = Field(5, ge=1, le=20)  # 默认返回结果数上限
+    primary_engine: str = "tavily"  # 主搜索引擎标识（tavily / searxng / duckduckgo）
+    max_results: int = Field(10, ge=1, le=20)  # 默认返回结果数上限
     timeout_seconds: int = Field(10, ge=1)  # 单次搜索超时（秒）
     engines: WebSearchEnginesConfig = WebSearchEnginesConfig()
-    deep_read_pages: int = Field(2, ge=0, le=5)  # Deep Read 抓取前 N 条正文（0=禁用）
-    deep_read_max_chars: int = Field(4000, ge=500, le=20000)  # 每页最大抓取字符数
+    deep_read_pages: int = Field(
+        0, ge=0, le=5
+    )  # 自动 Deep Read 前 N 条（0=禁用，由 open_page 按需读取）
+    deep_read_max_chars: int = Field(10000, ge=500, le=20000)  # 每页最大抓取字符数
     query_rewriting: QueryRewritingConfig = QueryRewritingConfig()
 
 

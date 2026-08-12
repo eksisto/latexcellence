@@ -103,6 +103,8 @@ class ChatMessage(BaseModel):
     search_query: str = ""
     deep_read_pages: int = 0
     rewritten_queries: list[str] = Field(default_factory=list)
+    citation_note: str = ""  # 引用校验备注（存在未在搜索结果中出现的链接时非空）
+    unverified_citations: list[str] = Field(default_factory=list)
 
 
 ChatMessage.model_rebuild()
