@@ -36,7 +36,6 @@ class TranslateChangeItem(BaseModel):
 class ParagraphTranslateResult(BaseModel):
     """LLM 翻译输出"""
 
-    paragraph_index: int
     # 轻量内容校验：只拦控制字符 / 垃圾占位符，不查配平（避免残余结构误报）
     translated: LatexTextLite
     changes: list[TranslateChangeItem] = []

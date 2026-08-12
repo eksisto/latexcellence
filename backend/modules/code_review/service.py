@@ -71,7 +71,6 @@ class CodeReviewSuggestion(BaseModel):
 class CodeReviewResult(BaseModel):
     """LLM 代码审查输出（不再输出 corrected 字段，源码修改由工具完成）"""
 
-    paragraph_index: int
     needs_review: bool = True
     suggestions: list[CodeReviewSuggestion] = []
 

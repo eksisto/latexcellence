@@ -60,18 +60,15 @@ class TestTypoCheckResultModel:
 
     def test_valid_minimal(self):
         data = {
-            "paragraph_index": 0,
             "original": "hello world",
             "corrected": "hello world",
             "changes": [],
         }
         result = TypoCheckResult.model_validate(data)
-        assert result.paragraph_index == 0
         assert result.changes == []
 
     def test_valid_with_changes(self):
         data = {
-            "paragraph_index": 1,
             "original": "Ths is rong",
             "corrected": r"This is wrong",
             "changes": [
@@ -108,16 +105,13 @@ class TestTypoCheckResultModel:
         assert change.position is None
 
     def test_missing_corrected_field(self):
-        data = {
-            "paragraph_index": 0,
-        }
+        data = {}
         with pytest.raises(ValidationError):
             TypoCheckResult.model_validate(data)
 
     def test_wrong_type(self):
         data = {
-            "paragraph_index": "not_a_number",
-            "corrected": "text",
+            "corrected": 123,
             "changes": [],
         }
         with pytest.raises(ValidationError):
@@ -189,7 +183,6 @@ class TestCheckOneParagraph:
 
         mock_llm.chat = AsyncMock(
             return_value={
-                "paragraph_index": 0,
                 "original": plain,
                 "corrected": r"This is __CMD_0000__ a test paragraph.",
                 "changes": [
@@ -222,7 +215,6 @@ class TestCheckOneParagraph:
 
         mock_llm.chat = AsyncMock(
             return_value={
-                "paragraph_index": 0,
                 "original": plain,
                 "corrected": plain,
                 "changes": [],
@@ -247,7 +239,6 @@ class TestCheckOneParagraph:
 
         mock_llm.chat = AsyncMock(
             return_value={
-                "paragraph_index": 0,
                 "original": plain,
                 "corrected": plain,
                 "changes": [
@@ -276,7 +267,6 @@ class TestCheckOneParagraph:
 
         mock_llm.chat = AsyncMock(
             return_value={
-                "paragraph_index": 0,
                 "original": plain,
                 "corrected": r"Fixed text with __MATH_0000__ formula.",
                 "changes": [],
@@ -300,7 +290,6 @@ class TestCheckOneParagraph:
         # LLM 返回的 corrected 缺少 marker
         mock_llm.chat = AsyncMock(
             return_value={
-                "paragraph_index": 0,
                 "original": plain,
                 "corrected": "Text with marker.",  # 缺少 __CMD_0000__
                 "changes": [],
@@ -324,7 +313,6 @@ class TestCheckOneParagraph:
         # LLM 凭空添加 marker
         mock_llm.chat = AsyncMock(
             return_value={
-                "paragraph_index": 0,
                 "original": plain,
                 "corrected": r"Plain __CMD_0099__ text only.",
                 "changes": [],
@@ -347,7 +335,6 @@ class TestCheckOneParagraph:
         # marker __CMD_0000__ 在输出中出现两次
         mock_llm.chat = AsyncMock(
             return_value={
-                "paragraph_index": 0,
                 "original": plain,
                 "corrected": r"Text __CMD_0000__ and __CMD_0000__ end.",
                 "changes": [],
@@ -370,7 +357,6 @@ class TestCheckOneParagraph:
         # 输出中两个 marker 顺序互换
         mock_llm.chat = AsyncMock(
             return_value={
-                "paragraph_index": 0,
                 "original": plain,
                 "corrected": r"__CMD_0001__ before __CMD_0000__ after.",
                 "changes": [],
@@ -393,7 +379,6 @@ class TestCheckOneParagraph:
         # 纯文本 word1/word2 互换，marker 序列保持原顺序
         mock_llm.chat = AsyncMock(
             return_value={
-                "paragraph_index": 0,
                 "original": plain,
                 "corrected": r"__CMD_0000__ word2 __CMD_0001__ word1.",
                 "changes": [],
@@ -441,7 +426,6 @@ class TestCheckOneParagraph:
         corrupted = "R^" + "\r" + "ho"
         mock_llm.chat = AsyncMock(
             return_value={
-                "paragraph_index": 0,
                 "original": plain,
                 "corrected": corrupted,
                 "changes": [],
@@ -466,7 +450,6 @@ class TestCheckOneParagraph:
 
         mock_llm.chat = AsyncMock(
             return_value={
-                "paragraph_index": 0,
                 "original": plain,
                 "corrected": "[object Object]",
                 "changes": [],
@@ -490,7 +473,6 @@ class TestCheckOneParagraph:
         corrected = "Line one\tfixed.\nLine two."
         mock_llm.chat = AsyncMock(
             return_value={
-                "paragraph_index": 0,
                 "original": plain,
                 "corrected": corrected,
                 "changes": [],
@@ -531,7 +513,6 @@ class TestCheckOneParagraph:
 
         mock_llm.chat = AsyncMock(
             return_value={
-                "paragraph_index": 0,
                 "original": plain,
                 "corrected": corrected,
                 "changes": [

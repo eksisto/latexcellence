@@ -41,7 +41,6 @@ class TypoChangeItem(BaseModel):
 class TypoCheckResult(BaseModel):
     """LLM 错字检查输出——对应 DEVELOPMENT.md §2.1 JSON 协议"""
 
-    paragraph_index: int
     # 轻量内容校验：只拦控制字符 / 垃圾占位符，不查配平（避免残余结构误报）
     corrected: LatexTextLite
     changes: list[TypoChangeItem] = []

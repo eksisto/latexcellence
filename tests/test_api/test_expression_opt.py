@@ -59,19 +59,16 @@ class TestExpressionOptResultModel:
 
     def test_valid_minimal(self):
         data = {
-            "paragraph_index": 0,
             "original": "hello world",
             "optimized": "hello world",
             "changes": [],
         }
         result = ExpressionOptResult.model_validate(data)
-        assert result.paragraph_index == 0
         assert result.optimized == "hello world"
         assert result.changes == []
 
     def test_valid_with_changes(self):
         data = {
-            "paragraph_index": 1,
             "original": "This method is not very good.",
             "optimized": "This approach is suboptimal.",
             "changes": [
@@ -98,15 +95,13 @@ class TestExpressionOptResultModel:
         assert change.reason == ""
 
     def test_missing_required_field(self):
-        data = {"paragraph_index": 0, "original": "text"}
+        data = {"changes": []}
         with pytest.raises(ValidationError):
             ExpressionOptResult.model_validate(data)
 
     def test_wrong_type(self):
         data = {
-            "paragraph_index": "wrong",
-            "original": "text",
-            "optimized": "text",
+            "optimized": 123,
             "changes": [],
         }
         with pytest.raises(ValidationError):
@@ -150,7 +145,6 @@ class TestOptimizeOneParagraph:
 
         mock_llm.chat = AsyncMock(
             return_value={
-                "paragraph_index": 0,
                 "original": plain,
                 "optimized": r"__CMD_0000__ This approach is suboptimal.",
                 "changes": [
@@ -181,7 +175,6 @@ class TestOptimizeOneParagraph:
 
         mock_llm.chat = AsyncMock(
             return_value={
-                "paragraph_index": 0,
                 "original": plain,
                 "optimized": plain,
                 "changes": [],
@@ -204,7 +197,6 @@ class TestOptimizeOneParagraph:
 
         mock_llm.chat = AsyncMock(
             return_value={
-                "paragraph_index": 0,
                 "original": plain,
                 "optimized": r"Improved text with __MATH_0000__ formula.",
                 "changes": [],
@@ -226,7 +218,6 @@ class TestOptimizeOneParagraph:
 
         mock_llm.chat = AsyncMock(
             return_value={
-                "paragraph_index": 0,
                 "original": plain,
                 "optimized": "Text with marker.",
                 "changes": [],
@@ -264,7 +255,6 @@ class TestOptimizeOneParagraph:
         corrupted = "R^" + "\r" + "ho"
         mock_llm.chat = AsyncMock(
             return_value={
-                "paragraph_index": 0,
                 "original": plain,
                 "optimized": corrupted,
                 "changes": [],
@@ -289,7 +279,6 @@ class TestOptimizeOneParagraph:
 
         mock_llm.chat = AsyncMock(
             return_value={
-                "paragraph_index": 0,
                 "original": plain,
                 "optimized": "[object Object]",
                 "changes": [],
@@ -313,7 +302,6 @@ class TestOptimizeOneParagraph:
         optimized = "Line one\tfixed.\nLine two."
         mock_llm.chat = AsyncMock(
             return_value={
-                "paragraph_index": 0,
                 "original": plain,
                 "optimized": optimized,
                 "changes": [],

@@ -16,7 +16,7 @@
 ## Pydantic 输出模型
 
 - `TranslateChangeItem` — 单条翻译修改（type, original, translated, explanation）
-- `ParagraphTranslateResult` — 翻译输出（paragraph_index, original, translated, changes）
+- `ParagraphTranslateResult` — 翻译输出（translated, changes）
 
 ## Prompt 设计
 
@@ -24,7 +24,7 @@ System prompt 包含：
 
 - 学术翻译要求（准确性 > 流畅性 > 简洁性、术语一致、正式学术语气）
 - Marker 保护规则（禁止修改/删除/拆分任何 marker）
-- 严格 JSON 输出格式（paragraph_index, original, translated, changes）
+- 严格 JSON 输出格式（translated, changes）
 - 已在目标语言时原样返回
 
 User prompt 将待翻译纯文本和目标语言注入模板。

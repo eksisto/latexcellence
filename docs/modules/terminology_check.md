@@ -13,7 +13,7 @@
 ## Pydantic 输出模型
 
 - `ExtractedTerm` — 单条抽取术语（term, term_type, context）
-- `TermExtractionResult` — 术语抽取响应（paragraph_index, terms）
+- `TermExtractionResult` — 术语抽取响应（terms）
 - `TermChange` — 术语修改建议（type, concept, original, corrected, explanation）
 - `TermCluster` — 语义聚类结果（recommended, variants）
 - `TermClusterResult` — 聚类响应（clusters）

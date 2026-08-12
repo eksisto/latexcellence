@@ -82,7 +82,6 @@ _PROMPTS: dict[str, dict[str, str]] = {
             "6. Respond with JSON only, no markdown fences, no extra text.\n\n"
             "JSON format (strictly follow this schema):\n"
             "{{\n"
-            '  "paragraph_index": <int>,\n'
             '  "corrected": "<the corrected text with all markers unchanged>",\n'
             '  "changes": [\n'
             "    {{\n"
@@ -127,7 +126,6 @@ _PROMPTS: dict[str, dict[str, str]] = {
             "6. Respond with JSON only, no markdown fences, no extra text.\n\n"
             "JSON format (strictly follow this schema):\n"
             "{{\n"
-            '  "paragraph_index": <int>,\n'
             '  "optimized": "<the improved text with all markers unchanged>",\n'
             '  "changes": [\n'
             "    {{\n"
@@ -193,7 +191,6 @@ _PROMPTS: dict[str, dict[str, str]] = {
             "\n" + LATEX_JSON_ESCAPE_RULES + "\n\n"
             "JSON format (strictly follow this schema):\n"
             "{{\n"
-            '  "paragraph_index": <int>,\n'
             '  "needs_review": true | false,\n'
             '  "suggestions": [\n'
             "    {{\n"
@@ -921,7 +918,6 @@ _PROMPTS: dict[str, dict[str, str]] = {
             "6. Respond with JSON only, no markdown fences, no extra text.\n\n"
             "JSON format (strictly follow this schema):\n"
             "{{\n"
-            '  "paragraph_index": <int>,\n'
             '  "translated": "<the translated text in {target_language} with all markers unchanged>",\n'
             '  "changes": [\n'
             "    {{\n"

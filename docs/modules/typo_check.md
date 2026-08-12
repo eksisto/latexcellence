@@ -23,7 +23,7 @@ LLM 在 system prompt 中强制约束：marker（`__CMD_0000__`）代表 LaTeX �
 ## Pydantic 输出模型
 
 - `TypoChangeItem` — 单条修改（type, original, corrected, position, explanation）
-- `TypoCheckResult` — 逐段检查结果（paragraph_index, original, corrected, changes）
+- `TypoCheckResult` — 逐段检查结果（corrected, changes）
 
 ## Service 核心方法
 

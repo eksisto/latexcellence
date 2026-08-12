@@ -116,6 +116,17 @@ def test_typo_changes_contract_in_prompt():
     assert '"type": "typo"' not in raw
 
 
+def test_llm_output_schemas_no_paragraph_index():
+    """LLM 输出 schema 不再要求 paragraph_index，索引由服务端统一注入。"""
+    for module, key in (
+        ("typo_check", "system"),
+        ("expression_opt", "base_system"),
+        ("code_review", "system"),
+        ("paragraph_translate", "system"),
+    ):
+        assert '"paragraph_index"' not in _PROMPTS[module][key]
+
+
 def test_expression_changes_contract_in_prompt():
     """expression_opt 明确 changes 与 optimized 的双向约束。"""
     prompt = get_prompt(

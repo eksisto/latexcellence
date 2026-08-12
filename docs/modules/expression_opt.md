@@ -12,7 +12,7 @@
 ## Pydantic 输出模型
 
 - `ExpressionChangeItem` — 单条优化（type, original, optimized, reason）
-- `ExpressionOptResult` — 逐段优化结果（paragraph_index, original, optimized, changes）
+- `ExpressionOptResult` — 逐段优化结果（optimized, changes）
 
 ## Service 核心方法
 

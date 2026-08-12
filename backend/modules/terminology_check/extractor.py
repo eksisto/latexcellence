@@ -28,7 +28,6 @@ class TermItem(BaseModel):
 class TermExtractOutput(BaseModel):
     """LLM 术语抽取响应"""
 
-    paragraph_index: int
     terms: list[TermItem] = []
 
 
@@ -56,7 +55,6 @@ _TERM_EXTRACT_PROMPT = (
     "6. Respond with JSON only, no markdown fences, no extra text.\n\n"
     "JSON format:\n"
     "{\n"
-    '  "paragraph_index": <int>,\n'
     '  "terms": [\n'
     '    {"term": "<exact term>", "term_type": "<concept|abbreviation|proper_noun>", "context": "<surrounding text>"}\n'
     "  ]\n"
@@ -141,8 +139,6 @@ class TermExtractor:
                 max_tokens=1024,
                 response_format={"type": "json_object"},
             )
-
-            validated.paragraph_index = paragraph_index
 
             filtered = [
                 t

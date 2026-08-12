@@ -59,18 +59,15 @@ class TestCodeReviewResultModel:
 
     def test_valid_minimal(self):
         data = {
-            "paragraph_index": 0,
             "needs_review": False,
             "suggestions": [],
         }
         result = CodeReviewResult.model_validate(data)
-        assert result.paragraph_index == 0
         assert result.needs_review is False
         assert result.suggestions == []
 
     def test_valid_with_suggestions(self):
         data = {
-            "paragraph_index": 1,
             "needs_review": True,
             "suggestions": [
                 {
@@ -140,15 +137,15 @@ class TestCodeReviewResultModel:
         with pytest.raises(ValidationError, match="marker"):
             CodeReviewSuggestion.model_validate(data)
 
-    def test_missing_required_field(self):
-        # paragraph_index is the only field without a default
+    def test_minimal_without_paragraph_index(self):
+        """移除 paragraph_index 后，needs_review=false 即为合法最小输出。"""
         data = {"needs_review": False}
-        with pytest.raises(ValidationError):
-            CodeReviewResult.model_validate(data)
+        result = CodeReviewResult.model_validate(data)
+        assert result.needs_review is False
+        assert result.suggestions == []
 
     def test_needs_review_true_empty_suggestions(self):
         data = {
-            "paragraph_index": 0,
             "needs_review": True,
             "suggestions": [],
         }
@@ -157,7 +154,6 @@ class TestCodeReviewResultModel:
 
     def test_needs_review_false_nonempty_suggestions(self):
         data = {
-            "paragraph_index": 0,
             "needs_review": False,
             "suggestions": [
                 {
@@ -173,7 +169,6 @@ class TestCodeReviewResultModel:
 
     def test_invalid_suggestion_type(self):
         data = {
-            "paragraph_index": 0,
             "needs_review": True,
             "suggestions": [
                 {
@@ -189,7 +184,6 @@ class TestCodeReviewResultModel:
 
     def test_invalid_severity(self):
         data = {
-            "paragraph_index": 0,
             "needs_review": True,
             "suggestions": [
                 {
@@ -241,7 +235,6 @@ class TestCheckOneParagraph:
 
         mock_llm.chat = AsyncMock(
             return_value={
-                "paragraph_index": 0,
                 "needs_review": True,
                 "suggestions": [
                     {
@@ -272,7 +265,6 @@ class TestCheckOneParagraph:
 
         mock_llm.chat = AsyncMock(
             return_value={
-                "paragraph_index": 0,
                 "needs_review": False,
                 "suggestions": [],
             }
@@ -298,7 +290,6 @@ class TestCheckOneParagraph:
 
         mock_llm.chat = AsyncMock(
             return_value={
-                "paragraph_index": 0,
                 "needs_review": False,
                 "suggestions": [],
             }
@@ -347,7 +338,6 @@ class TestCheckOneParagraph:
         mock_llm.chat = AsyncMock(
             side_effect=[
                 {
-                    "paragraph_index": 0,
                     "needs_review": True,
                     "suggestions": [
                         {
@@ -360,7 +350,6 @@ class TestCheckOneParagraph:
                     ],
                 },
                 {
-                    "paragraph_index": 0,
                     "needs_review": True,
                     "suggestions": [
                         {
@@ -397,7 +386,6 @@ class TestCheckOneParagraph:
         mock_llm.chat = AsyncMock(
             side_effect=[
                 {
-                    "paragraph_index": 0,
                     "needs_review": True,
                     "suggestions": [
                         {
@@ -410,7 +398,6 @@ class TestCheckOneParagraph:
                     ],
                 },
                 {
-                    "paragraph_index": 0,
                     "needs_review": False,
                     "suggestions": [],
                 },
@@ -443,7 +430,6 @@ class TestCheckOneParagraph:
 
         mock_llm.chat = AsyncMock(
             return_value={
-                "paragraph_index": 0,
                 "needs_review": False,
                 "suggestions": [],
             }

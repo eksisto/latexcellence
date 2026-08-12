@@ -33,7 +33,7 @@ paragraph_translate）的输出会写回文件，仍保留 marker 保护。
 ## Pydantic 输出模型
 
 - `CodeReviewSuggestion` — 审查建议（type, severity, description, original, suggested；original/suggested 为 `LatexText`，经内容校验拦截 JSON 转义损坏）
-- `CodeReviewResult` — 逐段审查结果（paragraph_index, needs_review, suggestions）
+- `CodeReviewResult` — 逐段审查结果（needs_review, suggestions）
 
 `CodeReviewSuggestion` 通过 `_reject_markers` 校验器兜底：输入已无 marker，若
 `description` / `original` / `suggested` 仍出现 `__CMD_0000__` 等占位符样式 token，

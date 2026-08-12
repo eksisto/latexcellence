@@ -26,18 +26,15 @@ class TestParagraphTranslateResultModel:
 
     def test_valid_minimal(self):
         data = {
-            "paragraph_index": 0,
             "translated": "你好，世界。",
             "changes": [],
         }
         result = ParagraphTranslateResult.model_validate(data)
-        assert result.paragraph_index == 0
         assert result.translated == "你好，世界。"
         assert result.changes == []
 
     def test_valid_with_changes(self):
         data = {
-            "paragraph_index": 1,
             "translated": r"Hello __CMD_0000__ world.",
             "changes": [
                 {
@@ -63,14 +60,13 @@ class TestParagraphTranslateResultModel:
         assert change.explanation == ""
 
     def test_missing_required_field(self):
-        data = {"paragraph_index": 0}
+        data = {"changes": []}
         with pytest.raises(ValidationError):
             ParagraphTranslateResult.model_validate(data)
 
     def test_wrong_type(self):
         data = {
-            "paragraph_index": "not_a_number",
-            "translated": "text",
+            "translated": 123,
             "changes": [],
         }
         with pytest.raises(ValidationError):
@@ -79,7 +75,6 @@ class TestParagraphTranslateResultModel:
     def test_control_char_rejected(self):
         """translated 含控制字符（JSON 反斜杠转义损坏特征）→ 校验失败。"""
         data = {
-            "paragraph_index": 0,
             "translated": "R^" + "\r" + "ho",
             "changes": [],
         }
@@ -88,7 +83,6 @@ class TestParagraphTranslateResultModel:
 
     def test_garbage_placeholder_rejected(self):
         data = {
-            "paragraph_index": 0,
             "translated": "[object Object]",
             "changes": [],
         }
@@ -98,7 +92,6 @@ class TestParagraphTranslateResultModel:
     def test_tab_and_newline_accepted(self):
         """\\t / \\n 是合法空白，轻量校验放行。"""
         data = {
-            "paragraph_index": 0,
             "translated": "line1\nline2\ttab",
             "changes": [],
         }
@@ -128,7 +121,6 @@ class TestCheckOneParagraph:
 
         mock_llm.chat = AsyncMock(
             return_value={
-                "paragraph_index": 0,
                 "translated": r"你好 __CMD_0000__ 世界。",
                 "changes": [],
             }
@@ -151,7 +143,6 @@ class TestCheckOneParagraph:
 
         mock_llm.chat = AsyncMock(
             return_value={
-                "paragraph_index": 0,
                 "translated": "Text with marker.",
                 "changes": [],
             }
@@ -173,7 +164,6 @@ class TestCheckOneParagraph:
         corrupted = "R^" + "\r" + "ho"
         mock_llm.chat = AsyncMock(
             return_value={
-                "paragraph_index": 0,
                 "translated": corrupted,
                 "changes": [],
             }
@@ -197,7 +187,6 @@ class TestCheckOneParagraph:
 
         mock_llm.chat = AsyncMock(
             return_value={
-                "paragraph_index": 0,
                 "translated": "[object Object]",
                 "changes": [],
             }
@@ -220,7 +209,6 @@ class TestCheckOneParagraph:
         translated = "第一行\t修正。\n第二行。"
         mock_llm.chat = AsyncMock(
             return_value={
-                "paragraph_index": 0,
                 "translated": translated,
                 "changes": [],
             }

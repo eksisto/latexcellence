@@ -24,7 +24,6 @@ class TermExtractionResult(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    paragraph_index: int
     terms: list[ExtractedTerm] = []
 
 

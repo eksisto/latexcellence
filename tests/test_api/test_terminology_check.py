@@ -107,7 +107,7 @@ class TestModels:
         assert term.term_type == "concept"
 
     def test_term_extraction_result_empty(self):
-        data = {"paragraph_index": 0, "terms": []}
+        data = {"terms": []}
         result = TermExtractionResult.model_validate(data)
         assert result.terms == []
 
@@ -444,7 +444,6 @@ class TestExtractor:
             mock_llm = MagicMock()
             mock_llm.chat = AsyncMock(
                 return_value={
-                    "paragraph_index": 0,
                     "terms": [
                         {
                             "term": "Machine Learning",
