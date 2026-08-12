@@ -85,3 +85,12 @@ Agent 的 LLM 循环测试应 mock `chat_with_tools()`，不发起真实网络�
 - `run_eval.py`：逐条调用真实逐段优化管线（含 LLM），把优化文本还原 marker 后生成原文/优化后对照 HTML 报告
 
 同样依赖人工判断，不属于 `pytest tests/` 自动测试范围。使用说明见 `tools/expression_opt_eval/README.md`。
+
+---
+
+`tools/prompt_comprehension_eval/` 是提示词理解评测工具：对
+`backend/core/prompts.py` 中每个 LLM 提示词构造最简探测任务，调用真实
+LLM 并自动核验 JSON 格式、marker 保护、分隔符协议、JSON 转义、语言注入
+等关键契约，输出 `logs/prompt_comprehension_eval/results.json` 供人工复核。
+该流程依赖真实 LLM 调用，不属于 `pytest tests/` 自动测试范围。使用说明见
+`tools/prompt_comprehension_eval/README.md`。
