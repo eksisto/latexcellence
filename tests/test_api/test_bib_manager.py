@@ -269,6 +269,68 @@ class TestServiceAnalyzeFormat:
             )
             assert result["format_name"] == "GB/T 7714"
             assert result["entry_type"] == "article"
+            assert result["latex_backend"] == "bibtex"
+            assert result["latex_package"] == "gbt7714"
+            assert result["latex_bibliographystyle"] == "gbt7714-numerical"
+            assert result["latex_preamble"] == r"\usepackage{gbt7714}"
+
+    @pytest.mark.asyncio
+    async def test_analyze_registry_fills_style_fields(self, service):
+        """格式名命中注册表时，latex_* 字段由注册表填充（LLM 输出不含样式字段）。"""
+        mock_llm = AsyncMock()
+        mock_llm.chat = AsyncMock(
+            return_value={
+                "format_name": "APA 7th",
+                "confidence": "high",
+                "entry_type": "article",
+                "required_fields": ["author", "title"],
+                "optional_fields": [],
+                "field_descriptions": {},
+                "format_description": "test",
+                "raw_observed_fields": ["author", "title"],
+            }
+        )
+
+        with patch(
+            "backend.modules.bib_manager.service.get_llm_client", return_value=mock_llm
+        ):
+            result = await service.analyze_format("Example reference.")
+
+        assert result["format_name"] == "APA 7th"
+        assert result["latex_backend"] == "biblatex"
+        assert result["latex_package"] == "biblatex"
+        assert result["latex_bibliographystyle"] is None
+        assert result["latex_preamble"] == (
+            r"\usepackage[backend=biber,style=apa]{biblatex}"
+            "\n" + r"\addbibresource{references.bib}"
+        )
+
+    @pytest.mark.asyncio
+    async def test_analyze_unknown_format_style_fields_none(self, service):
+        """格式名未命中注册表时，latex_* 字段全部为 None。"""
+        mock_llm = AsyncMock()
+        mock_llm.chat = AsyncMock(
+            return_value={
+                "format_name": "unknown",
+                "confidence": "low",
+                "entry_type": "misc",
+                "required_fields": [],
+                "optional_fields": [],
+                "field_descriptions": {},
+                "format_description": "test",
+                "raw_observed_fields": [],
+            }
+        )
+
+        with patch(
+            "backend.modules.bib_manager.service.get_llm_client", return_value=mock_llm
+        ):
+            result = await service.analyze_format("Example reference.")
+
+        assert result["latex_backend"] is None
+        assert result["latex_package"] is None
+        assert result["latex_bibliographystyle"] is None
+        assert result["latex_preamble"] is None
 
 
 class TestServiceExtractFromText:

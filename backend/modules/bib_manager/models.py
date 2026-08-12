@@ -7,7 +7,6 @@
 from pydantic import BaseModel, field_validator
 
 from backend.utils.latex_json_guard import (
-    LatexText,
     check_latex_text,
     validate_latex_field,
 )
@@ -20,7 +19,7 @@ class FormatAnalysisRequest(BaseModel):
 
 
 class ReferenceFormatResult(BaseModel):
-    """LLM 格式分析输出"""
+    """LLM 格式分析输出（LaTeX 样式字段由 service 按注册表填充到 API 响应）"""
 
     format_name: str
     confidence: str = "high"
@@ -31,11 +30,6 @@ class ReferenceFormatResult(BaseModel):
     field_descriptions: dict[str, str] = {}
     format_description: str = ""
     raw_observed_fields: list[str] = []
-    # LaTeX 样式字段（由 LLM 推荐 + style_registry 补全）
-    latex_backend: str | None = None  # "bibtex" 或 "biblatex"
-    latex_package: str | None = None  # 需要的 LaTeX 宏包
-    latex_bibliographystyle: str | None = None  # .bst 样式名
-    latex_preamble: LatexText | None = None  # 完整 preamble 代码片段（LaTeX 内容校验）
 
 
 class ExtractRequest(BaseModel):

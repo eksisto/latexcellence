@@ -90,6 +90,8 @@ python tools/latex_packages/coverage_report.py
 - `kpsewhich` 存在性探测（同样依赖 TeX 发行版）
 - 推荐宏包选项（只输出包名注释，不推断 `\usepackage[opt]{...}`）
 - 动态学习用户自定义宏包（留给 LLM 兜底路径）
+- 在 LLM 兜底提示词中维护第二份 Feature→Package 映射表（已移除；
+  规则表保持唯一事实来源，兜底只做通用推理与内核能力排除）
 
 ## 后续扩充路线图
 

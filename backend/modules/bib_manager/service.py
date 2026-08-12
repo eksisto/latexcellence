@@ -106,18 +106,20 @@ class BibManagerService:
             )
             result = validated.model_dump()
 
-            # 如果 LLM 未提供 LaTeX 样式字段，从注册表补全
-            if not result.get("latex_bibliographystyle"):
-                style_info = get_style_for_format(result.get("format_name", ""))
-                if style_info:
-                    result["latex_backend"] = style_info.backend
-                    result["latex_package"] = style_info.package
-                    result["latex_bibliographystyle"] = style_info.bibliographystyle
-                    result["latex_preamble"] = style_info.preamble
-                    self._logger.info(
-                        f"LaTeX style filled from registry: "
-                        f"{style_info.bibliographystyle}"
-                    )
+            # LaTeX 样式映射以注册表为唯一事实来源：LLM 输出不含样式字段，
+            # 这里按格式名从注册表解析并写入响应；未命中时全部为 None。
+            style_info = get_style_for_format(result.get("format_name", ""))
+            result["latex_backend"] = style_info.backend if style_info else None
+            result["latex_package"] = style_info.package if style_info else None
+            result["latex_bibliographystyle"] = (
+                style_info.bibliographystyle if style_info else None
+            )
+            result["latex_preamble"] = style_info.preamble if style_info else None
+            if style_info:
+                self._logger.info(
+                    f"LaTeX style resolved from registry: "
+                    f"{style_info.bibliographystyle or style_info.package}"
+                )
 
             self._logger.info(f"Format identified: {validated.format_name}")
             return result

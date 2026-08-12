@@ -6,7 +6,7 @@
 
 ### 核心流程
 
-1. **格式识别**：用户提供参考文献示例 → LLM 分析格式类型、条目类型、字段列表 + 推荐 LaTeX 样式
+1. **格式识别**：用户提供参考文献示例 → LLM 分析格式类型、条目类型、字段列表；LaTeX 样式由后端注册表统一解析
 2. **元数据提取**：用户输入文本或上传截图 → LLM 根据格式字段列表动态提取
 
 - **DOI 查询**：用户输入 DOI → 多数据源聚合查询元数据（Crossref 主索引 + 多个补全层 + arXiv 预印本专用路由）
@@ -39,7 +39,7 @@ bib_manager/
 
 ## Pydantic 模型
 
-- `ReferenceFormatResult`（format_name, confidence, entry_type, required_fields, optional_fields, field_descriptions, latex_backend, latex_package 等）
+- `ReferenceFormatResult`（format_name, confidence, entry_type, required_fields, optional_fields, field_descriptions, raw_observed_fields 等；latex_* 样式字段由 service 按注册表填充到响应，不属于 LLM 输出）
 - `ExtractedMetadata`（fields: dict — 动态字段，非写死）
 - `BibEntry`（cite_key, entry_type, fields, raw_bibtex）
 - `LatexCodeResult`（preamble, bibliographystyle, bibliography, cite_command, full_code）
@@ -47,7 +47,7 @@ bib_manager/
 - `DoiLookupRequest`（doi: str）
 - 各类请求体：`FormatAnalysisRequest`、`ExtractRequest`、`GenerateBibtexRequest`、`GenerateLatexRequest`（含 `language`，用于指定生成代码注释的 UI 语言）、`SaveBibRequest`
 - **文献库管理模型**：`ParseBibRequest`、`ParseBibResponse`、`DetectDuplicatesRequest`、`DetectDuplicatesResponse`、`DuplicateGroup`、`DeleteEntryRequest`、`UpdateEntryRequest`、`EntryStatsResponse`
-- `ReferenceFormatResult.latex_preamble` 与 `BibEntry.fields` / `raw_bibtex` 经 `latex_json_guard.py` 内容校验（BibTeX 语义：`%` 为字面字符），拦截 LLM JSON 输出中的反斜杠转义损坏
+- `BibEntry.fields` / `raw_bibtex` 经 `latex_json_guard.py` 内容校验（BibTeX 语义：`%` 为字面字符），拦截 LLM JSON 输出中的反斜杠转义损坏；`latex_preamble` 由注册表提供，不经过 LLM 输出校验
 
 ## 多数据源架构（DOI 查询）
 
@@ -119,7 +119,7 @@ bib_manager/
 
 ## 样式注册表 `style_registry.py`
 
-内置常见学术格式到 LaTeX 样式的映射（如 GB/T 7714-2015 → gbt7714、APA 7th → biblatex-apa、IEEE → IEEEtran 等）。`analyze_format()` 在 LLM 返回后自动补全缺失的 `latex_bibliographystyle`。
+内置常见学术格式到 LaTeX 样式的映射（如 GB/T 7714-2015 → gbt7714、APA 7th → biblatex-apa、IEEE → IEEEtran 等）。`analyze_format()` 识别出格式名后，一律按注册表解析并填充响应中的 `latex_*` 字段；LLM 输出 schema 不再包含样式字段（只负责识别格式），避免映射知识在提示词与注册表之间漂移。
 
 ## API 路由
 

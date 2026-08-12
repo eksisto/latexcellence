@@ -146,3 +146,37 @@ def test_compile_error_translator_json_escape_rules():
     assert "\\\\alpha" in prompt
     assert "File 'xxx.sty' not found" in prompt
     assert "Underfull \\hbox" in prompt
+
+
+def test_package_analyzer_prompt_has_no_static_mapping():
+    """LLM 兜底提示词不再内置 Feature→Package 映射，避免与规则表漂移。"""
+    analyzer = get_prompt("latex_package_analyzer", "system")
+    assert "Feature → Package Mapping" not in analyzer
+    assert "column specifiers → array" not in analyzer
+    assert "Non-trivial math" not in analyzer
+    assert "p{} column" in analyzer
+    assert "\\begin{equation}" in analyzer
+
+
+def test_format_analysis_prompt_defers_style_to_registry():
+    """format_analysis 输出不含 latex_* 字段，样式由后端注册表统一填充。"""
+    prompt = get_prompt("bib_manager", "format_analysis", reference_entry="test")
+    assert "known mappings as reference" not in prompt
+    assert "Do NOT include LaTeX style fields" in prompt
+    assert '"latex_backend"' not in prompt
+    assert '"latex_preamble"' not in prompt
+
+
+def test_template_gen_quality_gate_not_universal():
+    """template_gen 质量门禁不再对所有文档类型强制 citation/TOC/图表。"""
+    prompt = get_prompt(
+        "template_gen",
+        "agent_system",
+        language="Chinese",
+        max_files=30,
+        max_rounds=30,
+        compile_enabled="available",
+    )
+    assert "at least one citation" not in prompt
+    assert "never add a construct" in prompt
+    assert "labels/refs resolve" in prompt

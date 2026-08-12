@@ -37,15 +37,6 @@ def get_service() -> BibManagerService:
     return _service
 
 
-class BibAnalysisResponse(BaseModel):
-    format_name: str
-    entry_type: str
-    required_fields: list[str] = []
-    optional_fields: list[str] = []
-    field_descriptions: dict[str, str] = {}
-    format_description: str = ""
-
-
 @router.post("/analyze-format")
 async def analyze_format(request: FormatAnalysisRequest):
     """分析一条参考文献示例的格式规则。"""

@@ -651,6 +651,15 @@ def _format_analysis_check(response: str) -> tuple[str, str]:
         assert isinstance(data["optional_fields"], list), "optional_fields 不是数组"
         assert isinstance(data["field_descriptions"], dict), "field_descriptions 缺失"
         assert isinstance(data["raw_observed_fields"], list), "raw_observed_fields 缺失"
+        assert not any(
+            key in data
+            for key in (
+                "latex_backend",
+                "latex_package",
+                "latex_bibliographystyle",
+                "latex_preamble",
+            )
+        ), "LLM 输出不应包含 latex_* 字段，样式由后端注册表填充"
 
     def gbt():
         data = parse_json_object(response)

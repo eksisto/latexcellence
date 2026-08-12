@@ -617,6 +617,8 @@ raise ValueError("Validation failed after N attempts")        # ❌ 耗尽
 
 **误报防护**：扫描前屏蔽逐字内容（`\verb` / `\lstlisting` / `\url` 等）与 `%` 注释；
 只收录"必须加载该宏包才能编译"的命令/环境，LaTeX 内核能力（`tabular` / `\frac` / `\mathcal` 等）不收录。
+LLM 兜底提示词不携带映射表，只要求通用推理并显式排除内核能力
+（如 `p{}` 列说明符、`\frac` / `\sum` / `equation` 环境），避免与规则表双源漂移。
 
 **内核白名单守卫**：`KERNEL_COMMANDS` / `KERNEL_ENVS` 记录 LaTeX 内核能力清单，
 测试断言规则表与白名单无交集，防止 `\frac` / `\mathcal` / `\hline` / `tabular` 误入。
