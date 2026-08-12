@@ -48,6 +48,32 @@ from backend.utils.path_guard import resolve_project_path
 _MAX_DIMENSION = 2000
 _SUPPORTED_FORMATS = {"image/png", "image/jpeg", "image/webp"}
 
+_LATEX_COMMENT_TEMPLATES = {
+    "en": {
+        "preamble": "Preamble package configuration to add in the preamble",
+        "biblatex_print": (
+            "Use the following command at the end of your document to "
+            "generate the bibliography list"
+        ),
+        "bibtex_add": (
+            r"Add the following after \begin{document} and before \end{document}:"
+        ),
+        "citation_example": "Citation example: {cmd}",
+    },
+    "zh": {
+        "preamble": "以下宏包配置需要添加到导言区",
+        "biblatex_print": "在文档末尾使用以下命令生成参考文献列表",
+        "bibtex_add": (r"在 \begin{document} 之后、\end{document} 之前添加以下内容："),
+        "citation_example": "引用示例：{cmd}",
+    },
+}
+
+
+def _latex_comment_language(language: str) -> str:
+    """根据 UI 语言选择 LaTeX 注释语言（zh / en）。"""
+    normalized = (language or "").strip().lower()
+    return "zh" if normalized.startswith(("zh", "chinese")) else "en"
+
 
 class BibManagerService:
     def __init__(self):
@@ -321,8 +347,10 @@ class BibManagerService:
         metadata: dict[str, Any],
         format_info: dict | None = None,
         bib_file_path: str | None = None,
+        language: str = "English",
     ) -> dict[str, Any]:
         """根据格式信息生成包含正确样式的 LaTeX 参考文献代码。"""
+        comments = _LATEX_COMMENT_TEMPLATES[_latex_comment_language(language)]
         # 从 format_info 或注册表获取 LaTeX 样式
         backend = None
         preamble = ""
@@ -352,7 +380,7 @@ class BibManagerService:
         lines: list[str] = []
 
         if preamble:
-            lines.append(f"% Preamble package configuration to add in the preamble")
+            lines.append(f"% {comments['preamble']}")
             lines.append(preamble)
             lines.append("")
 
@@ -363,9 +391,7 @@ class BibManagerService:
                 if format_info
                 else "\\printbibliography"
             )
-            lines.append(
-                f"% Use the following command at the end of your document to generate the bibliography list"
-            )
+            lines.append(f"% {comments['biblatex_print']}")
             lines.append(print_cmd)
             if cite_key:
                 cite_cmd = (
@@ -373,19 +399,19 @@ class BibManagerService:
                     if format_info
                     else "\\cite"
                 )
+                citation = f"{cite_cmd}{{{cite_key}}}"
                 lines.append("")
-                lines.append(f"% Citation example: {cite_cmd}{{{cite_key}}}")
+                lines.append(f"% {comments['citation_example'].format(cmd=citation)}")
         else:
             # BibTeX 工作流
             if bibliographystyle:
-                lines.append(
-                    f"% Add the following after \\begin{{document}} and before \\end{{document}}:"
-                )
+                lines.append(f"% {comments['bibtex_add']}")
                 lines.append(f"\\bibliographystyle{{{bibliographystyle}}}")
             lines.append(f"\\bibliography{{{bib_path}}}")
             if cite_key:
+                citation = f"\\cite{{{cite_key}}}"
                 lines.append("")
-                lines.append(f"% Citation example: \\cite{{{cite_key}}}")
+                lines.append(f"% {comments['citation_example'].format(cmd=citation)}")
 
         full_code = "\n".join(lines)
 

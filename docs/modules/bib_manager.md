@@ -45,7 +45,7 @@ bib_manager/
 - `LatexCodeResult`（preamble, bibliographystyle, bibliography, cite_command, full_code）
 - `DoiLookupResult`（title, authors, year, journal, volume, issue, pages, doi, publisher, abstract, url, isbn, issn, keywords, data_source — 标识数据来源）
 - `DoiLookupRequest`（doi: str）
-- 各类请求体：`FormatAnalysisRequest`、`ExtractRequest`、`GenerateBibtexRequest`、`SaveBibRequest`
+- 各类请求体：`FormatAnalysisRequest`、`ExtractRequest`、`GenerateBibtexRequest`、`GenerateLatexRequest`（含 `language`，用于指定生成代码注释的 UI 语言）、`SaveBibRequest`
 - **文献库管理模型**：`ParseBibRequest`、`ParseBibResponse`、`DetectDuplicatesRequest`、`DetectDuplicatesResponse`、`DuplicateGroup`、`DeleteEntryRequest`、`UpdateEntryRequest`、`EntryStatsResponse`
 - `ReferenceFormatResult.latex_preamble` 与 `BibEntry.fields` / `raw_bibtex` 经 `latex_json_guard.py` 内容校验（BibTeX 语义：`%` 为字面字符），拦截 LLM JSON 输出中的反斜杠转义损坏
 
@@ -104,7 +104,7 @@ bib_manager/
 | `extract_from_text(text, format_info)` | LLM 从文本提取元数据 |
 | `extract_from_image(image_data, content_type, format_info)` | LLM Vision 从截图提取元数据 |
 | `generate_bibtex(metadata, format_info, existing_keys)` | LLM 生成 BibTeX → BibEntry |
-| `generate_latex_code(metadata, format_info, bib_file_path)` | 生成 LaTeX 代码片段 |
+| `generate_latex_code(metadata, format_info, bib_file_path, language)` | 生成 LaTeX 代码片段（注释跟随 UI 语言） |
 | `lookup_doi(doi)` | 委托 ProviderManager 查询多数据源聚合元数据 |
 | `generate_bibtex_from_doi(doi, format_info, existing_keys)` | 查询 DOI + 生成 BibTeX 一步完成 |
 | `read_bib_file(file_path)` | 读取 .bib 文件 |
@@ -130,7 +130,7 @@ Prefix: `/api/bib-manager`
 | POST | `/analyze-format` | 分析参考文献格式 |
 | POST | `/extract` | 提取元数据（FormData） |
 | POST | `/generate` | 生成 BibTeX |
-| POST | `/generate-latex` | 生成 LaTeX 代码 |
+| POST | `/generate-latex` | 生成 LaTeX 代码（注释跟随 UI 语言） |
 | POST | `/doi-lookup` | 通过 DOI 查询多数据源聚合元数据 |
 | POST | `/generate-from-doi` | 查询 DOI 并生成 BibTeX |
 | GET | `/latex-styles` | 列出内置 LaTeX 样式映射 |

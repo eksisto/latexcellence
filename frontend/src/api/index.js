@@ -638,7 +638,7 @@ export const api = {
     generateLatex: (data) =>
       request("/bib-manager/generate-latex", {
         method: "POST",
-        body: JSON.stringify(data),
+        body: JSON.stringify({ ...data, language: getUiLanguage() }),
       }),
     latexStyles: () => request("/bib-manager/latex-styles"),
     readBib: (filePath, workspaceId) =>

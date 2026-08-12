@@ -122,6 +122,7 @@ class GenerateLatexRequest(BaseModel):
     metadata: dict
     format_info: dict | None = None
     bib_file_path: str | None = None
+    language: str = "English"
 
 
 class LatexCodeResult(BaseModel):

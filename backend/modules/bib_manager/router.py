@@ -277,6 +277,7 @@ async def generate_latex_code(request: GenerateLatexRequest):
             request.metadata,
             request.format_info,
             request.bib_file_path,
+            request.language,
         )
         return result
     except Exception as e:

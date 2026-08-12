@@ -26,6 +26,7 @@ from backend.modules.bib_manager.models import (
     DoiLookupResult,
     ExtractedMetadata,
     GenerateBibtexRequest,
+    GenerateLatexRequest,
     ReferenceFormatResult,
     SaveBibRequest,
 )
@@ -431,6 +432,73 @@ class TestGenerateBibtexRequest:
         }
         result = GenerateBibtexRequest.model_validate(data)
         assert result.existing_keys == ["key1"]
+
+
+class TestGenerateLatexRequest:
+    def test_language_default(self):
+        result = GenerateLatexRequest.model_validate({"metadata": {"cite_key": "test"}})
+        assert result.language == "English"
+
+    def test_language_passed(self):
+        result = GenerateLatexRequest.model_validate(
+            {"metadata": {"cite_key": "test"}, "language": "Chinese"}
+        )
+        assert result.language == "Chinese"
+
+
+class TestServiceGenerateLatexCode:
+    """LaTeX 参考文献代码生成测试（注释跟随 UI 语言）。"""
+
+    BIBTEX_FORMAT = {
+        "format_name": "IEEE",
+        "latex_backend": "bibtex",
+        "latex_bibliographystyle": "IEEEtran",
+        "latex_preamble": r"\usepackage{IEEEtran}",
+    }
+
+    BIBLATEX_FORMAT = {
+        "format_name": "APA 7th",
+        "latex_backend": "biblatex",
+        "latex_preamble": r"\usepackage[style=apa]{biblatex}",
+    }
+
+    def test_bibtex_workflow_english_default(self, service):
+        result = service.generate_latex_code(
+            {"cite_key": "devlin2018bert"},
+            self.BIBTEX_FORMAT,
+            "references",
+        )
+        assert (
+            "% Preamble package configuration to add in the preamble"
+            in result["full_code"]
+        )
+        assert r"% Citation example: \cite{devlin2018bert}" in result["full_code"]
+        assert r"\bibliographystyle{IEEEtran}" in result["full_code"]
+
+    def test_bibtex_workflow_chinese(self, service):
+        result = service.generate_latex_code(
+            {"cite_key": "devlin2018bert"},
+            self.BIBTEX_FORMAT,
+            "references",
+            language="Chinese",
+        )
+        assert "以下宏包配置需要添加到导言区" in result["full_code"]
+        assert (
+            r"在 \begin{document} 之后、\end{document} 之前添加以下内容："
+            in result["full_code"]
+        )
+        assert r"引用示例：\cite{devlin2018bert}" in result["full_code"]
+
+    def test_biblatex_workflow_chinese(self, service):
+        result = service.generate_latex_code(
+            {"cite_key": "vaswani2017attention"},
+            self.BIBLATEX_FORMAT,
+            "references",
+            language="zh",
+        )
+        assert "在文档末尾使用以下命令生成参考文献列表" in result["full_code"]
+        assert r"\printbibliography" in result["full_code"]
+        assert r"引用示例：\cite{vaswani2017attention}" in result["full_code"]
 
 
 class TestPathTraversal:
