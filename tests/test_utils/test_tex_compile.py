@@ -136,6 +136,9 @@ class TestRunTexCompile:
     def _make_process(self, returncode: int, stdout: bytes, stderr: bytes = b""):
         process = MagicMock()
         process.returncode = returncode
+        # 必须给一个不存在的真实 PID：MagicMock 缺省 pid 的 __index__ 为 1，
+        # 超时路径里的 killpg(getpgid(1)) 会误杀当前进程组（pytest 自身）
+        process.pid = 2147483000
 
         async def communicate():
             return (stdout, stderr)
@@ -620,6 +623,8 @@ class TestRunTexCompileWithEngineAndPdfa:
     def _make_process(self, returncode: int, stdout: bytes, stderr: bytes = b""):
         process = MagicMock()
         process.returncode = returncode
+        # 同上：避免 MagicMock 缺省 pid=1 触发 killpg(1) 自杀
+        process.pid = 2147483000
 
         async def communicate():
             return (stdout, stderr)

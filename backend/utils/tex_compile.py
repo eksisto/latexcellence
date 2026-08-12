@@ -64,7 +64,9 @@ async def terminate_process_tree(process: asyncio.subprocess.Process) -> None:
     顶层进程（与旧行为一致）。
     """
     pid = process.pid
-    if pid is None:
+    # pid<=1（0/1 或 MagicMock 缺省值）绝不能作为 killpg 目标：
+    # PID 1 的进程组可能正是当前进程组，误杀会带走整个服务/测试进程
+    if not pid or pid <= 1:
         return
 
     def _kill() -> None:

@@ -202,6 +202,11 @@ def is_internal_rel_path(rel_path: str) -> bool:
 
 def _kill_process_tree(proc: asyncio.subprocess.Process) -> None:
     """终止子进程及其子孙进程，防止超时后残留孤儿进程。"""
+    pid = proc.pid
+    # pid<=1 是无效/危险目标（MagicMock 缺省 pid 也可能是 1），
+    # 误杀 PID 1 进程组会带走当前进程组
+    if not pid or pid <= 1:
+        return
     if os.name == "nt":
         try:
             subprocess.run(
