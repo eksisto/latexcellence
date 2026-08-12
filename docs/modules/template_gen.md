@@ -206,12 +206,14 @@ Prefix: `/api/template-gen`, Tag: `template_gen`
   主题色→`\definecolor`+`\colorlet`、三线表→`booktabs`、参考文献→
   `natbib`/`biblatex`+`.bib`、中文→`ctex`/`xeCJK`（XeLaTeX）等；
 - **格式与内容分离**：样式封装 `.cls`/`.sty`，正文只用语义命令；
-- **分类玩法**：学位论文（front/main/back matter、`\ctexset` "第N章"、
-  元数据命令勿裸排 `\@title`）、演示文稿（扁平化、进度条、独立 color theme、
-  中文内容必须配 CJK 字体）、简历（单页纪律、语义命令、紧凑排版）、会议论文
-  （author-year 引用、双栏）；
-- **字体安全**：只引用系统确定存在的字体（Windows 下 SimSun/SimHei/Times New
-  Roman 等），Fira/Noto 等缺失字体须 `\IfFontExistsTF` 兜底；
+- **分类玩法**：学位论文（front/main/back matter、元数据命令勿裸排
+  `\@title`）、演示文稿（典型结构与字体机制、中文内容必须配 CJK 字体）、
+  简历（语义命令、紧凑排版、页数服从用户要求）、会议论文（引用风格一致、
+  双栏实现方式）；所有 playbook 以用户明确需求优先，未指定时才采用通用
+  默认并在 README 记录，禁止写入学校/模板专属结构或数值；
+- **字体安全**：只假设各 TeX 发行版默认提供的字体（Latin Modern 与
+  ctex/xeCJK 默认 fontset）；用户指定字体一律用 `\IfFontExistsTF`
+  兜底便携回退；
 - **图片占位**：Agent 无法创建二进制文件，禁止引用不存在的 PNG，改用 TikZ 或
   `\fcolorbox`/`\rule`；
 - **finish 前质量门禁**：对照需求清单复核文件、示例内容覆盖

@@ -1045,8 +1045,9 @@ def _format_error_analysis(errors: list[dict[str, Any]]) -> str:
         if e["type"].startswith("Missing character"):
             parts.append(
                 "  hint: Chinese/CJK text is typeset in a font that lacks "
-                "those glyphs — load xeCJK/ctex and set a CJK font "
-                "(e.g. SimSun/SimHei) for CJK text."
+                "those glyphs — load xeCJK/ctex and use its default CJK "
+                "fontset (or a user-requested font guarded with "
+                "\\IfFontExistsTF) for CJK text."
             )
         parts.append("")
     return "\n".join(parts)

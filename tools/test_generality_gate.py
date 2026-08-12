@@ -78,6 +78,18 @@ def test_tju_prefix_macro_is_failure(tmp_path: Path) -> None:
     assert "TJU 前缀私有宏残留" in names
 
 
+def test_template_default_weak_flag(tmp_path: Path) -> None:
+    src = tmp_path / "prompt.py"
+    src.write_text(
+        "use 1.5 line spacing and a metropolis-style flat theme\n", encoding="utf-8"
+    )
+    report = check_hardcoding(full=True, paths=[str(src)], project_root=tmp_path)
+    assert report["passed"] is True  # 弱特征不自动失败
+    suspicious = [h for h in report["warnings"] if h["kind"] == "suspicious"]
+    assert any("模板默认数值/结构" in h["pattern"] for h in suspicious)
+    assert any("模板/主题名" in h["pattern"] for h in suspicious)
+
+
 def test_suspicious_font_flag(tmp_path: Path) -> None:
     src = tmp_path / "prompt.py"
     src.write_text("matplotlib font chain: Arial, Noto Sans CJK SC\n", encoding="utf-8")

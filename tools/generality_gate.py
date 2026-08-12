@@ -72,6 +72,18 @@ WEAK_PACKAGE_PATTERNS: list[tuple[str, str]] = [
     ("宏包名", r"gbt7714|biblatex-gb7714|IEEEtran|ctexbook|ctexart"),
 ]
 
+# 弱特征：模板级默认值/具体主题名。可能是通用起点，也可能是"背答案"，
+# 命中标 suspicious，需要人工确认是否把评测场景/模板细节写进了提示词。
+WEAK_TEMPLATE_PATTERNS: list[tuple[str, str]] = [
+    (
+        "模板默认数值/结构",
+        r"1\.5\s*line spacing|9[–-]10\s*pt|28\s*pt|1\.5[–-]2\s*cm"
+        r"|letterpaper\s*\+\s*1in",
+    ),
+    ("模板/主题名", r"metropolis|fontawesome"),
+    ("模板默认结构", r"第N章|图 3-1|single page"),
+]
+
 EXAMPLE_MARKERS = re.compile(
     r"e\.g\.|such as|for example|example|i\.e\.|如|例如"
     r"|fall back|fallback|or the default|unless",
@@ -160,6 +172,9 @@ def _scan_lines(lines: list[dict[str, Any]]) -> dict[str, list[dict[str, Any]]]:
         for name, pat in WEAK_PACKAGE_PATTERNS:
             if re.search(pat, text, re.IGNORECASE):
                 infos.append({**item, "pattern": name})
+        for name, pat in WEAK_TEMPLATE_PATTERNS:
+            if re.search(pat, text, re.IGNORECASE):
+                warnings.append({**item, "pattern": name, "kind": "suspicious"})
     return {"failures": failures, "warnings": warnings, "infos": infos}
 
 
