@@ -29,8 +29,13 @@ from backend.modules.bib_manager.models import (
     GenerateLatexRequest,
     ReferenceFormatResult,
     SaveBibRequest,
+    SavedFormatInfo,
 )
 from backend.modules.bib_manager.service import BibManagerService
+from backend.modules.bib_manager.style_registry import (
+    get_style_for_format,
+    list_all_styles,
+)
 from backend.modules.bib_manager.bib_parser import (
     parse_bib_file,
     remove_entry_from_content,
@@ -45,6 +50,7 @@ from backend.modules.bib_manager.providers.base import (
 )
 from backend.modules.bib_manager.providers.crossref import CrossrefProvider
 from backend.modules.bib_manager.providers.arxiv import ArxivProvider
+from backend.core.config import get_config
 from backend.utils.file_ops import safe_read
 
 
@@ -117,6 +123,78 @@ class TestReferenceFormatResult:
     def test_missing_required_raises(self):
         with pytest.raises(ValidationError):
             ReferenceFormatResult.model_validate({})
+
+
+class TestSavedFormatInfo:
+    """用户保存/自定义格式配置的字段校验。"""
+
+    def test_valid_custom_style(self):
+        data = {
+            "format_name": "My Style",
+            "entry_type": "article",
+            "latex_backend": "biblatex",
+            "latex_package": "biblatex",
+            "latex_preamble": (
+                r"\usepackage[style=custom]{biblatex}"
+                "\n" + r"\addbibresource{references.bib}"
+            ),
+        }
+        result = SavedFormatInfo.model_validate(data)
+        assert result.latex_backend == "biblatex"
+        assert result.latex_package == "biblatex"
+
+    def test_invalid_backend_rejected(self):
+        with pytest.raises(ValidationError, match="latex_backend"):
+            SavedFormatInfo.model_validate(
+                {"format_name": "X", "latex_backend": "natbib"}
+            )
+
+    def test_package_with_space_rejected(self):
+        with pytest.raises(ValidationError, match="single identifier"):
+            SavedFormatInfo.model_validate(
+                {"format_name": "X", "latex_package": "biblatex chicago"}
+            )
+
+    def test_unbalanced_preamble_rejected(self):
+        with pytest.raises(ValidationError, match="latex_preamble"):
+            SavedFormatInfo.model_validate(
+                {"format_name": "X", "latex_preamble": r"\usepackage{foo"}
+            )
+
+
+class TestStyleRegistry:
+    """样式注册表覆盖与数据完整性。"""
+
+    def test_new_formats_resolved(self):
+        expected = {
+            "Harvard": "bibtex",
+            "Nature": "bibtex",
+            "AMA": "bibtex",
+            "ACS": "biblatex",
+            "OSCOLA": "biblatex",
+            "Turabian": "biblatex",
+            "ACM": "bibtex",
+            "APS": "bibtex",
+        }
+        for name, backend in expected.items():
+            info = get_style_for_format(name)
+            assert info is not None, f"{name} 未命中注册表"
+            assert info.backend == backend
+
+    def test_aliases_resolve(self):
+        assert get_style_for_format("哈佛").package == "natbib"
+        assert get_style_for_format("美国化学会").backend == "biblatex"
+        assert (
+            get_style_for_format("american physical society").bibliographystyle
+            == "apsrev4-2"
+        )
+
+    def test_registry_entries_are_complete(self):
+        for name, info in list_all_styles().items():
+            assert info["backend"] in ("bibtex", "biblatex")
+            assert (
+                info["bibliographystyle"] or info["preamble"]
+            ), f"{name} 缺少样式名和导言区配置"
 
 
 class TestExtractedMetadata:
@@ -264,15 +342,57 @@ class TestServiceAnalyzeFormat:
         with patch(
             "backend.modules.bib_manager.service.get_llm_client", return_value=mock_llm
         ):
-            result = await service.analyze_format(
-                "Vaswani, Ashish and Shazeer, Noam and Parmar, Niki and Uszkoreit, Jakob and Jones, Llion and Gomez, Aidan N. and Kaiser, Łukasz and Polosukhin, Illia.Attention Is All You Need[J].arXiv preprint arXiv:1706.03762,2017."
-            )
+            result = await service.analyze_format("Example reference.")
             assert result["format_name"] == "GB/T 7714"
             assert result["entry_type"] == "article"
             assert result["latex_backend"] == "bibtex"
             assert result["latex_package"] == "gbt7714"
             assert result["latex_bibliographystyle"] == "gbt7714-numerical"
             assert result["latex_preamble"] == r"\usepackage{gbt7714}"
+
+    @pytest.mark.asyncio
+    async def test_rule_hit_skips_llm(self, service):
+        """规则命中时直接返回确定性结果，不调用 LLM。"""
+        mock_llm = AsyncMock()
+        mock_llm.chat = AsyncMock(
+            side_effect=AssertionError("LLM should not be called on rule hit")
+        )
+        with patch(
+            "backend.modules.bib_manager.service.get_llm_client", return_value=mock_llm
+        ):
+            result = await service.analyze_format(
+                "张三, 李四. 题名[J]. 刊名, 2023, 46(1): 1-15."
+            )
+        assert result["format_name"] == "GB/T 7714-2015"
+        assert result["confidence"] == "high"
+        assert result["entry_type"] == "article"
+        assert result["latex_package"] == "gbt7714"
+        mock_llm.chat.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_rule_miss_falls_back_to_llm(self, service):
+        """规则未命中时走 LLM 兜底。"""
+        mock_llm = AsyncMock()
+        mock_llm.chat = AsyncMock(
+            return_value={
+                "format_name": "APA 7th",
+                "confidence": "high",
+                "entry_type": "article",
+                "required_fields": ["author", "title"],
+                "optional_fields": [],
+                "field_descriptions": {},
+                "format_description": "test",
+                "raw_observed_fields": ["author", "title"],
+            }
+        )
+        with patch(
+            "backend.modules.bib_manager.service.get_llm_client", return_value=mock_llm
+        ):
+            result = await service.analyze_format(
+                "Some unusual reference without any known format markers."
+            )
+        assert result["format_name"] == "APA 7th"
+        mock_llm.chat.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_analyze_registry_fills_style_fields(self, service):
@@ -472,6 +592,72 @@ class TestServiceFileOperations:
         new_entry = "@article{test2023, title={Test}}\n"
         result = service._replace_bib_entry(old_content, "test2023", new_entry)
         assert "other" in result
+
+
+class TestServiceFormatSaveLoad:
+    """格式配置保存/加载：字段校验、注册表补全与文件名安全。"""
+
+    def _use_tmp_formats_dir(self, tmp_path, monkeypatch):
+        fmt_dir = tmp_path / "formats"
+        monkeypatch.setattr(
+            get_config().features.bib_manager, "format_configs_dir", str(fmt_dir)
+        )
+        return fmt_dir
+
+    def test_save_valid_format(self, service, tmp_path, monkeypatch):
+        fmt_dir = self._use_tmp_formats_dir(tmp_path, monkeypatch)
+        result = service.save_format(
+            "My Style",
+            {
+                "format_name": "My Style",
+                "entry_type": "article",
+                "latex_backend": "bibtex",
+                "latex_package": "natbib",
+                "latex_bibliographystyle": "plainnat",
+                "latex_preamble": r"\usepackage{natbib}",
+            },
+        )
+        assert result["name"] == "MyStyle"
+        assert (fmt_dir / "MyStyle.json").exists()
+
+    def test_save_rejects_invalid_backend(self, service, tmp_path, monkeypatch):
+        self._use_tmp_formats_dir(tmp_path, monkeypatch)
+        with pytest.raises(ValueError, match="latex_backend"):
+            service.save_format(
+                "Bad",
+                {"format_name": "Bad", "latex_backend": "natbib"},
+            )
+
+    def test_save_rejects_unbalanced_preamble(self, service, tmp_path, monkeypatch):
+        self._use_tmp_formats_dir(tmp_path, monkeypatch)
+        with pytest.raises(ValueError, match="latex_preamble"):
+            service.save_format(
+                "Bad",
+                {"format_name": "Bad", "latex_preamble": r"\usepackage{foo"},
+            )
+
+    def test_load_enriches_style_from_registry(self, service, tmp_path, monkeypatch):
+        self._use_tmp_formats_dir(tmp_path, monkeypatch)
+        service.save_format(
+            "APA7th",
+            {"format_name": "APA 7th", "entry_type": "article"},
+        )
+        data = service.load_format("APA7th")
+        assert data["latex_backend"] == "biblatex"
+        assert data["latex_preamble"]
+
+    def test_load_and_delete_reject_traversal_name(
+        self, service, tmp_path, monkeypatch
+    ):
+        self._use_tmp_formats_dir(tmp_path, monkeypatch)
+        with pytest.raises(ValueError, match="Invalid format name"):
+            service.load_format("../secret")
+        with pytest.raises(ValueError, match="Invalid format name"):
+            service.delete_format("../secret")
+
+    def test_delete_missing_format_returns_false(self, service, tmp_path, monkeypatch):
+        self._use_tmp_formats_dir(tmp_path, monkeypatch)
+        assert service.delete_format("missing") is False
 
 
 class TestSaveBibRequest:

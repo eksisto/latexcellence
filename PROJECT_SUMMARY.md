@@ -88,7 +88,7 @@ latexcellence/
 │       ├── format_converter/        # 格式转换
 │       ├── style_modify/            # 样式修改（粘贴代码 + 项目 Agent）
 │       ├── writing_chat/            # 写作助手聊天
-│       ├── bib_manager/             # 参考文献管理（含 DOI 多数据源查询、重复检测、文献库管理）
+│       ├── bib_manager/             # 参考文献管理（格式规则层 + DOI 多数据源查询 + 重复检测 + 文献库管理）
 │       │   └── providers/           # 可插拔 DOI 数据源
 │       ├── plot_gen/                # 科研绘图（上传数据 -> 矢量图 + TikZ）
 │       └── project_router.py        # 项目管理路由
@@ -188,7 +188,7 @@ latexcellence/
 | format_converter | 格式转换(pandoc) | router.py, service.py | ✓(宏包分析仅兜底) | ✗ |
 | style_modify | 粘贴代码 / 项目 Agent 修改样式，支持 shadow 编译、proposal 审核、批量事务与撤销 | router.py, service.py, agent.py, models.py, session.py, trace.py, cleanup.py | ✓ | ✗ |
 | writing_chat | 写作助手对话（含联网搜索、学术检索与引文追踪、项目浏览、段落编辑和工具确认） | router.py, service.py, context.py, models.py, prompt_manager.py | ✓ | ✗ |
-| bib_manager | 参考文献管理 + DOI 多数据源查询 + 重复检测 + 文献库 | router.py, service.py, models.py, bib_parser.py, provider_manager.py, providers/ | ✓(DOI 查询不依赖 LLM) | ✗ |
+| bib_manager | 参考文献管理 + 格式规则层 + DOI 多数据源查询 + 重复检测 + 文献库 | router.py, service.py, models.py, bib_parser.py, format_rules.py, style_registry.py, provider_manager.py, providers/ | ✓(格式规则命中不依赖 LLM；DOI 查询不依赖 LLM) | ✗ |
 | plot_gen | 科研绘图 Agent（数据画像 -> 图表推荐 -> Python 执行 -> TikZ 编译） | router.py, service.py, agent.py, models.py, data_parser.py, recommender.py, styles.py, executor.py, tikzgen.py, sandbox_guard.py, trace.py, cleanup.py | ✓ | ✗ |
 
 ## 核心设计思路
@@ -233,6 +233,7 @@ latexcellence/
   - arXiv DOI（`10.48550/arXiv.*`）自动路由到 ArxivProvider
   - 普通 DOI 先查 Crossref 成功后用补全层合并空字段（`_merge()`），失败则串行降级
   - 配置通过 `config.json → features.bib_manager.providers` 独立开关每个数据源
+- **bib_manager 格式识别规则层**: `format_rules.py` 以确定性规则（文献类型标识、期刊缩写、DOI 前缀、版式特征）优先判定 14 种内置格式，命中即返回 `high` 置信度且不调用 LLM；未命中时 LLM 兜底（提示词内置各格式规范样例）。规则语料离线测试保证可复现，新增格式必须同步补语料
 - **HTTP 全局配置**: `AppConfig.http.user_agent` 统一管理所有外部 HTTP 请求的 User-Agent，供 web_search 引擎和 bib_manager Provider 共用
 - **模板生成自主 Agent**: 分层为 `service.py`（`TemplateGenService` 创建沙箱并编排）+ `agent.py`（`TemplateAgentService` Function Calling 主循环 + `_ToolExecutor` 工具执行），实现"写文件 → 编译验证 → 读日志 → 修错 → 再编译"的自主循环，产出完整可编译的多文件 LaTeX 工程。
   - 工具（`write_file`/`read_file`/`list_files`/`compile_latex`/`finish`）为 session 级私有，schema 由 `TemplateAgentService._build_tools_schema` 动态构建并经 `chat_with_tools` 注入，不注册到全局 `ToolRegistry` 避免污染其他模块工具集。

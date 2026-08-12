@@ -60,6 +60,7 @@
 | 配置需要运行时热重载 | 单例 + 方法内实时 `get_config()` |
 | 编译错误信息难以理解 | 提取 stderr 和 stdout → LLM 翻译为中文解释 |
 | 术语一致性是语义问题而非文本匹配 | LLM 语义聚类替代固定算法 |
+| 参考文献格式识别等可枚举判断 | 确定性规则表优先（文献类型标识、期刊缩写、DOI 前缀、版式特征），LLM 仅兜底并附带规范样例 |
 | LaTeX 项目通常拆分为多个 \input 文件 | `input_resolver.py` 递归展开，按文件分组结果 |
 | 多浏览器同时处理不同项目 | `workspace_manager.py` 隔离各工作区 LatexProject 实例 |
 | 联网搜索 | DuckDuckGo HTML 引擎 + 验证码转发；SearXNG 自建实例 JSON API；Tavily Search API（Bearer API Key）；工具通过 `ToolRegistry` 注册，LLM 自动调用 |

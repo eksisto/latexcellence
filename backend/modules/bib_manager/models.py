@@ -32,6 +32,63 @@ class ReferenceFormatResult(BaseModel):
     raw_observed_fields: list[str] = []
 
 
+class SavedFormatInfo(BaseModel):
+    """用户保存/自定义的参考文献格式配置（含可选 LaTeX 样式字段，保存时统一校验）。"""
+
+    format_name: str
+    confidence: str = "high"
+    entry_type: str = "misc"
+    document_type_marker: str | None = None
+    required_fields: list[str] = []
+    optional_fields: list[str] = []
+    field_descriptions: dict[str, str] = {}
+    format_description: str = ""
+    raw_observed_fields: list[str] = []
+    latex_backend: str | None = None  # "bibtex" / "biblatex" / null
+    latex_package: str | None = None
+    latex_bibliographystyle: str | None = None
+    latex_preamble: str | None = None
+    citation_command: str | None = None
+    print_command: str | None = None
+
+    @field_validator("format_name")
+    @classmethod
+    def _check_format_name(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("format_name must not be empty")
+        return value
+
+    @field_validator("latex_backend")
+    @classmethod
+    def _check_latex_backend(cls, value: str | None) -> str | None:
+        if value is not None and value not in ("bibtex", "biblatex"):
+            raise ValueError("latex_backend must be 'bibtex', 'biblatex' or null")
+        return value
+
+    @field_validator("latex_package", "latex_bibliographystyle")
+    @classmethod
+    def _check_simple_style_names(cls, value: str | None) -> str | None:
+        if value is None:
+            return value
+        value = value.strip()
+        if not value:
+            return None
+        if any(ch.isspace() or ch in "\\{}" for ch in value):
+            raise ValueError("must be a single identifier without spaces or braces")
+        return value
+
+    @field_validator("latex_preamble")
+    @classmethod
+    def _check_latex_preamble(cls, value: str | None) -> str | None:
+        if value is None:
+            return value
+        error = check_latex_text(value, bibtex=True)
+        if error:
+            raise ValueError(f"latex_preamble: {error}")
+        return value
+
+
 class ExtractRequest(BaseModel):
     """元数据提取请求"""
 

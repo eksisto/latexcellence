@@ -137,6 +137,87 @@ const FormatResultCard = React.memo(function FormatResultCard({
               }
             />
           </div>
+          <div className="col-span-2 pt-1 border-t border-border space-y-1">
+            <Label className="text-xs font-semibold">
+              {t("pages:bibManager.latexStyleFields")}
+            </Label>
+            <p className="text-xs text-muted-foreground">
+              {t("pages:bibManager.latexStyleFieldsHint")}
+            </p>
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs">
+              {t("pages:bibManager.latexBackend")}
+            </Label>
+            <Select
+              value={editedFormatInfo.latex_backend || "none"}
+              onValueChange={(value) =>
+                onEditedFormatInfoChange((prev) => ({
+                  ...prev,
+                  latex_backend: value === "none" ? null : value,
+                }))
+              }
+            >
+              <SelectTrigger className="h-8 text-xs">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">
+                  {t("pages:bibManager.noStyle")}
+                </SelectItem>
+                <SelectItem value="bibtex">bibtex</SelectItem>
+                <SelectItem value="biblatex">biblatex</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs">
+              {t("pages:bibManager.latexPackage")}
+            </Label>
+            <Input
+              className="h-8 text-xs font-mono"
+              value={editedFormatInfo.latex_package || ""}
+              onChange={(e) =>
+                onEditedFormatInfoChange((prev) => ({
+                  ...prev,
+                  latex_package: e.target.value,
+                }))
+              }
+              placeholder="natbib / biblatex-chicago / ..."
+            />
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs">
+              {t("pages:bibManager.latexBibliographystyle")}
+            </Label>
+            <Input
+              className="h-8 text-xs font-mono"
+              value={editedFormatInfo.latex_bibliographystyle || ""}
+              onChange={(e) =>
+                onEditedFormatInfoChange((prev) => ({
+                  ...prev,
+                  latex_bibliographystyle: e.target.value,
+                }))
+              }
+              placeholder="plainnat / ACM-Reference-Format / ..."
+            />
+          </div>
+          <div className="col-span-2 space-y-1">
+            <Label className="text-xs">
+              {t("pages:bibManager.latexPreamble")}
+            </Label>
+            <Textarea
+              className="min-h-20 text-xs font-mono"
+              value={editedFormatInfo.latex_preamble || ""}
+              onChange={(e) =>
+                onEditedFormatInfoChange((prev) => ({
+                  ...prev,
+                  latex_preamble: e.target.value,
+                }))
+              }
+              placeholder={"\\usepackage{natbib}"}
+            />
+          </div>
           <div className="flex items-center gap-2">
             <Button size="sm" onClick={onSaveEdit}>
               <Check />
@@ -197,6 +278,14 @@ const FormatResultCard = React.memo(function FormatResultCard({
               {formatResult.format_description}
             </p>
           )}
+          {!formatResult.latex_backend &&
+            !formatResult.latex_package &&
+            !formatResult.latex_bibliographystyle &&
+            !formatResult.latex_preamble && (
+              <p className="text-xs text-muted-foreground">
+                {t("pages:bibManager.customStyleHint")}
+              </p>
+            )}
           {formatResult.latex_bibliographystyle && (
             <div className="rounded bg-muted/50 p-2 mt-1">
               <span className="text-xs text-muted-foreground">

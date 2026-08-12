@@ -20,6 +20,7 @@ from backend.modules.bib_manager.models import (
     ParseBibRequest,
     ReadBibRequest,
     SaveBibRequest,
+    SavedFormatInfo,
     UpdateEntryRequest,
 )
 from backend.modules.bib_manager.service import BibManagerService
@@ -207,7 +208,7 @@ async def list_bib_files(
 
 class FormatSaveRequest(BaseModel):
     name: str
-    format_info: dict
+    format_info: SavedFormatInfo
 
 
 @router.get("/formats")
@@ -223,7 +224,10 @@ async def list_formats():
 @router.get("/formats/{name}")
 async def load_format(name: str):
     """加载指定格式配置。"""
-    data = get_service().load_format(name)
+    try:
+        data = get_service().load_format(name)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     if data is None:
         raise HTTPException(status_code=404, detail=f"Format not found: {name}")
     return data
@@ -235,8 +239,12 @@ async def save_format(request: FormatSaveRequest):
     if not request.name.strip():
         raise HTTPException(status_code=400, detail="Format name required")
     try:
-        result = get_service().save_format(request.name.strip(), request.format_info)
+        result = get_service().save_format(
+            request.name.strip(), request.format_info.model_dump()
+        )
         return result
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -244,7 +252,11 @@ async def save_format(request: FormatSaveRequest):
 @router.delete("/formats/{name}")
 async def delete_format(name: str):
     """删除指定格式配置。"""
-    if not get_service().delete_format(name):
+    try:
+        deleted = get_service().delete_format(name)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    if not deleted:
         raise HTTPException(status_code=404, detail=f"Format not found: {name}")
     return {"status": "ok"}
 

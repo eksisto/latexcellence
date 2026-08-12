@@ -85,6 +85,14 @@ export default function useFormatAnalysis() {
   const handleSaveEditFormat = useCallback(() => {
     if (!editedFormatInfo) return;
     const parsed = { ...editedFormatInfo };
+    [
+      "latex_backend",
+      "latex_package",
+      "latex_bibliographystyle",
+      "latex_preamble",
+    ].forEach((key) => {
+      if (parsed[key] === "" || parsed[key] == null) parsed[key] = null;
+    });
     if (typeof parsed.required_fields === "string") {
       parsed.required_fields = parsed.required_fields
         .split(",")
@@ -115,9 +123,18 @@ export default function useFormatAnalysis() {
         .replace(/[<>:"/\\|?*\x00-\x1f]/g, "-")
         .replace(/-+/g, "-")
         .replace(/^-|-$/g, "") || "unnamed";
+    const payload = { ...formatResult };
+    [
+      "latex_backend",
+      "latex_package",
+      "latex_bibliographystyle",
+      "latex_preamble",
+    ].forEach((key) => {
+      if (payload[key] === "" || payload[key] == null) payload[key] = null;
+    });
     setSavingFormat(true);
     try {
-      const result = await api.bibManager.formats.save(safeName, formatResult);
+      const result = await api.bibManager.formats.save(safeName, payload);
       toast.success(
         t("pages:bibManager.saveFormatSuccess", { name: result.name }),
       );

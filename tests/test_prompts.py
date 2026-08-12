@@ -15,6 +15,7 @@ from backend.core.prompts import (
     _PROMPTS,
     get_prompt,
 )
+from backend.modules.bib_manager.style_registry import list_all_styles
 
 _PLACEHOLDER_RE = re.compile(r"(?<!\{)\{([a-zA-Z_][a-zA-Z0-9_]*)\}(?!\})")
 
@@ -165,6 +166,24 @@ def test_format_analysis_prompt_defers_style_to_registry():
     assert "Do NOT include LaTeX style fields" in prompt
     assert '"latex_backend"' not in prompt
     assert '"latex_preamble"' not in prompt
+
+
+def test_format_analysis_prompt_covers_style_registry():
+    """格式分析提示词列出的格式名必须覆盖样式注册表，防止识别名与映射名脱节。"""
+    prompt = get_prompt("bib_manager", "format_analysis", reference_entry="test")
+    for name in list_all_styles():
+        assert name in prompt
+
+
+def test_format_analysis_prompt_has_canonical_examples():
+    """格式分析提示词为 LLM 兜底提供每种格式的规范样例。"""
+    prompt = get_prompt("bib_manager", "format_analysis", reference_entry="test")
+    assert "## Format Reference Examples" in prompt
+    assert "Phys. Rev. Lett." in prompt
+    assert "J. Am. Chem. Soc." in prompt
+    assert "J. ACM" in prompt
+    assert "Nature 580" in prompt
+    assert "JAMA" in prompt
 
 
 def test_template_gen_quality_gate_not_universal():

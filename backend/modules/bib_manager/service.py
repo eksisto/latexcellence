@@ -17,7 +17,7 @@ from pathlib import Path
 from typing import Any
 
 from PIL import Image
-from pydantic import BaseModel
+from pydantic import ValidationError
 
 from backend.core.logger import get_logger
 from backend.core.workspace_manager import get_project_manager_for_workspace
@@ -30,7 +30,9 @@ from backend.modules.bib_manager.models import (
     ExtractedMetadata,
     LatexCodeResult,
     ReferenceFormatResult,
+    SavedFormatInfo,
 )
+from backend.modules.bib_manager.format_rules import detect_format
 from backend.modules.bib_manager.bib_parser import (
     parse_bib_file,
     remove_entry_from_content,
@@ -47,6 +49,20 @@ from backend.utils.path_guard import resolve_project_path
 
 _MAX_DIMENSION = 2000
 _SUPPORTED_FORMATS = {"image/png", "image/jpeg", "image/webp"}
+
+
+def _safe_format_name(name: str) -> str:
+    """仅保留字母数字与 _-，用于格式配置文件名（兼容中文等 Unicode 字母数字）。"""
+    return "".join(c for c in name if c.isalnum() or c in "_-")
+
+
+def _validate_format_name(name: str) -> str:
+    """校验格式名可安全用作文件名，防止路径穿越。"""
+    safe = _safe_format_name(name)
+    if not safe or safe != name:
+        raise ValueError("Invalid format name: contains unsafe characters")
+    return safe
+
 
 _LATEX_COMMENT_TEMPLATES = {
     "en": {
@@ -80,7 +96,24 @@ class BibManagerService:
         self._logger = get_logger("bib_manager")
 
     async def analyze_format(self, example: str) -> dict[str, Any]:
-        """识别参考文献格式规则。"""
+        """识别参考文献格式规则（确定性规则优先，LLM 兜底）。"""
+        rule_result = detect_format(example)
+        if rule_result:
+            style_info = get_style_for_format(rule_result["format_name"])
+            result = {
+                **rule_result,
+                "latex_backend": style_info.backend if style_info else None,
+                "latex_package": style_info.package if style_info else None,
+                "latex_bibliographystyle": (
+                    style_info.bibliographystyle if style_info else None
+                ),
+                "latex_preamble": style_info.preamble if style_info else None,
+            }
+            self._logger.info(
+                f"Format identified by rules: {rule_result['format_name']}"
+            )
+            return result
+
         cfg = get_config()
         if not cfg.llm.api_key:
             raise RuntimeError("No API key configured")
@@ -585,30 +618,50 @@ class BibManagerService:
     def load_format(self, name: str) -> dict[str, Any] | None:
         """加载指定格式配置。"""
         fmt_dir = self._get_format_dir()
-        file_path = fmt_dir / f"{name}.json"
+        file_path = fmt_dir / f"{_validate_format_name(name)}.json"
         if not file_path.exists():
             return None
         with open(file_path, "r", encoding="utf-8") as f:
             data = json.load(f)
+        # 兼容旧数据：保存的配置未携带 LaTeX 样式字段时，按格式名从注册表补全
+        if not any(
+            data.get(key)
+            for key in (
+                "latex_backend",
+                "latex_package",
+                "latex_bibliographystyle",
+                "latex_preamble",
+            )
+        ):
+            style_info = get_style_for_format(data.get("format_name", ""))
+            if style_info:
+                data["latex_backend"] = style_info.backend
+                data["latex_package"] = style_info.package
+                data["latex_bibliographystyle"] = style_info.bibliographystyle
+                data["latex_preamble"] = style_info.preamble
         self._logger.info(f"Loaded format: {name}")
         return data
 
     def save_format(self, name: str, format_info: dict[str, Any]) -> dict[str, Any]:
-        """保存格式配置为 JSON 文件。"""
+        """保存格式配置为 JSON 文件（保存前统一校验字段与 LaTeX 内容）。"""
         fmt_dir = self._get_format_dir()
-        safe_name = "".join(c for c in name if c.isalnum() or c in "_-")
+        safe_name = _safe_format_name(name)
         if not safe_name:
             safe_name = "unnamed"
+        try:
+            validated = SavedFormatInfo.model_validate(format_info)
+        except ValidationError as e:
+            raise ValueError(f"Invalid format info: {e}") from e
         file_path = fmt_dir / f"{safe_name}.json"
         with open(file_path, "w", encoding="utf-8") as f:
-            json.dump(format_info, f, indent=2, ensure_ascii=False)
+            json.dump(validated.model_dump(), f, indent=2, ensure_ascii=False)
         self._logger.info(f"Saved format: {safe_name}")
         return {"status": "ok", "name": safe_name}
 
     def delete_format(self, name: str) -> bool:
         """删除指定格式配置。"""
         fmt_dir = self._get_format_dir()
-        file_path = fmt_dir / f"{name}.json"
+        file_path = fmt_dir / f"{_validate_format_name(name)}.json"
         if not file_path.exists():
             return False
         os.remove(file_path)

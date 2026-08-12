@@ -6,7 +6,7 @@
 
 ### 核心流程
 
-1. **格式识别**：用户提供参考文献示例 → LLM 分析格式类型、条目类型、字段列表；LaTeX 样式由后端注册表统一解析
+1. **格式识别**：用户提供参考文献示例 → 确定性规则层优先判定（文献类型标识、期刊缩写、DOI 前缀、版式特征），未命中时由 LLM 兜底（提示词内置 14 种格式的规范样例）；LaTeX 样式由后端注册表统一解析
 2. **元数据提取**：用户输入文本或上传截图 → LLM 根据格式字段列表动态提取
 
 - **DOI 查询**：用户输入 DOI → 多数据源聚合查询元数据（Crossref 主索引 + 多个补全层 + arXiv 预印本专用路由）
@@ -24,6 +24,7 @@ bib_manager/
 ├── router.py                # FastAPI 路由
 ├── service.py               # 业务逻辑编排
 ├── bib_parser.py            # BibTeX 解析器（条目解析、规范化、重复检测工具函数）
+├── format_rules.py          # 格式确定性识别规则（规则优先，LLM 兜底）
 ├── style_registry.py        # 内置样式映射注册表
 ├── provider_manager.py      # DOI 数据源管理器（全局单例）
 └── providers/               # 可插拔数据源提供者
@@ -40,6 +41,7 @@ bib_manager/
 ## Pydantic 模型
 
 - `ReferenceFormatResult`（format_name, confidence, entry_type, required_fields, optional_fields, field_descriptions, raw_observed_fields 等；latex_* 样式字段由 service 按注册表填充到响应，不属于 LLM 输出）
+- `SavedFormatInfo`（用户保存/自定义格式配置：格式字段 + 可选 latex_* 样式字段；保存时统一校验 backend 枚举、宏包/样式名和导言区 LaTeX 内容）
 - `ExtractedMetadata`（fields: dict — 动态字段，非写死）
 - `BibEntry`（cite_key, entry_type, fields, raw_bibtex）
 - `LatexCodeResult`（preamble, bibliographystyle, bibliography, cite_command, full_code）
@@ -47,7 +49,7 @@ bib_manager/
 - `DoiLookupRequest`（doi: str）
 - 各类请求体：`FormatAnalysisRequest`、`ExtractRequest`、`GenerateBibtexRequest`、`GenerateLatexRequest`（含 `language`，用于指定生成代码注释的 UI 语言）、`SaveBibRequest`
 - **文献库管理模型**：`ParseBibRequest`、`ParseBibResponse`、`DetectDuplicatesRequest`、`DetectDuplicatesResponse`、`DuplicateGroup`、`DeleteEntryRequest`、`UpdateEntryRequest`、`EntryStatsResponse`
-- `BibEntry.fields` / `raw_bibtex` 经 `latex_json_guard.py` 内容校验（BibTeX 语义：`%` 为字面字符），拦截 LLM JSON 输出中的反斜杠转义损坏；`latex_preamble` 由注册表提供，不经过 LLM 输出校验
+- `BibEntry.fields` / `raw_bibtex` 经 `latex_json_guard.py` 内容校验（BibTeX 语义：`%` 为字面字符），拦截 LLM JSON 输出中的反斜杠转义损坏；`latex_preamble` 由注册表提供，用户保存的自定义样式在写入前经 `SavedFormatInfo` 校验
 
 ## 多数据源架构（DOI 查询）
 
@@ -117,9 +119,24 @@ bib_manager/
 | `update_entry(file_path, cite_key, bibtex_code, workspace_id)` | 更新 .bib 文件中的指定条目 |
 | `get_entry_stats(file_path, workspace_id)` | 获取 .bib 文件的条目统计信息（按类型/年份/DOI 覆盖率） |
 
+## 格式识别规则层 `format_rules.py`
+
+格式识别以确定性规则为第一道闸，覆盖全部 14 种内置格式：GB/T 7714-2015 的
+`[J]`/`[M]`/`[C]` 文献类型标识、`Phys. Rev. Lett.` → APS、`J. Am. Chem. Soc.`
+→ ACS、`JAMA`/`10.1001` → AMA、`J. ACM`/`10.1145` → ACM、`Nature 卷, 页` →
+Nature、`vol./no./pp.` → IEEE、MLA 的 `卷, 期, 年, pp.`、温哥华的
+`年;卷(期):页码`、Harvard 的 `Last, I. and Last, I., YYYY.`、Chicago 著者-出版年、
+Turabian/Chicago notes 的 `卷, no. 期 (年): 页码`、APA 的 `(年份).` 等。
+
+规则命中时直接返回 `confidence=high`，不调用 LLM、不依赖 API Key；未命中才走
+LLM 兜底（提示词内置每种格式的规范样例供比对）。规则语料见
+`tests/test_utils/test_bib_manager_format_rules.py`，新增格式必须同步补语料。
+
 ## 样式注册表 `style_registry.py`
 
-内置常见学术格式到 LaTeX 样式的映射（如 GB/T 7714-2015 → gbt7714、APA 7th → biblatex-apa、IEEE → IEEEtran 等）。`analyze_format()` 识别出格式名后，一律按注册表解析并填充响应中的 `latex_*` 字段；LLM 输出 schema 不再包含样式字段（只负责识别格式），避免映射知识在提示词与注册表之间漂移。
+内置常见学术格式到 LaTeX 样式的映射，当前覆盖：GB/T 7714-2015、APA 7th、IEEE、MLA 9th、Chicago、Vancouver、Harvard、Nature、AMA、ACS、OSCOLA、Turabian、ACM、APS。`analyze_format()` 识别出格式名后，一律按注册表解析并填充响应中的 `latex_*` 字段；LLM 输出 schema 不再包含样式字段（只负责识别格式），提示词与注册表通过测试保持同步，避免映射知识漂移。
+
+注册表未命中的格式返回空样式字段，前端允许用户通过“编辑格式”填写自定义 LaTeX 样式并保存；`save_format()` 保存前经 `SavedFormatInfo` 校验（backend 仅允许 `bibtex`/`biblatex`，宏包与样式名不允许空格/花括号，导言区走 `latex_json_guard` 内容校验），不再原样写 JSON。加载旧配置时若缺少样式字段，会按格式名从注册表自动补全；格式名仅允许字母数字与 `_`/`-`，防止路径穿越。
 
 ## API 路由
 

@@ -790,11 +790,28 @@ _PROMPTS: dict[str, dict[str, str]] = {
             "<reference>\n{reference_entry}\n</reference>\n\n"
             "## Task\n"
             "1. Identify the citation format (GB/T 7714-2015, APA 7th, IEEE, MLA 9th, "
-            "Chicago, Vancouver, or unknown).\n"
+            "Chicago, Vancouver, Harvard, Nature, AMA, ACS, OSCOLA, Turabian, ACM, "
+            "APS, or unknown).\n"
             "2. Map it to the most appropriate BibTeX entry type "
             "(article, book, inproceedings, incollection, phdthesis, mastersthesis, "
             "techreport, misc, etc.).\n"
             "3. Extract the formatting rules observed in this entry.\n\n"
+            "## Format Reference Examples\n"
+            "Use these canonical patterns as reference when matching:\n"
+            "- GB/T 7714-2015: 张三, 李四. 题名[J]. 刊名, 2023, 46(1): 1-15.\n"
+            "- APA 7th: Smith, J., & Jones, J. (2020). Title. Journal, 12(3), 100-115.\n"
+            '- IEEE: J. Smith and J. Jones, "Title," IEEE Trans. Pattern Anal. Mach. Intell., vol. 12, no. 3, pp. 100-115, 2020.\n'
+            '- MLA 9th: Smith, John, and Jane Jones. "Title." Journal, vol. 12, no. 3, 2020, pp. 100-115.\n'
+            '- Chicago: Smith, John, and Jane Jones. 2020. "Title." Journal 12, no. 3: 100-115.\n'
+            "- Vancouver: Smith J, Jones J. Title. J Abbrev. 2020;12(3):100-115.\n"
+            "- Harvard: Smith, J. and Jones, J., 2020. Title. Journal, 12(3), pp.100-115.\n"
+            "- Nature: Smith, J., Jones, J. & Brown, B. Title. Nature 580, 100-115 (2020).\n"
+            "- AMA: Smith J, Jones J, Brown B. Title. JAMA. 2020;323(10):1000-1005. doi:10.1001/jama.2020.1234\n"
+            "- ACS: Smith, J.; Jones, J.; Brown, B. Title. J. Am. Chem. Soc. 2020, 142 (10), 1000-1015.\n"
+            "- OSCOLA: John Smith, 'Title' (2020) 12(3) Journal of Testing 100\n"
+            '- Turabian: Smith, John, and Jane Jones. "Title." Journal 12, no. 3 (2020): 100-115.\n'
+            "- ACM: John Smith, Jane Jones, and Bob Brown. 2020. Title. J. ACM 12, 3, Article 45 (2020), 15 pages.\n"
+            '- APS: J. Smith, J. Jones, and B. Brown, "Title," Phys. Rev. Lett. 124, 100001 (2020).\n\n'
             "## Guidelines\n"
             "- If the format cannot be determined with confidence, set format_name to "
             '"unknown" and confidence to "low".\n'
@@ -813,7 +830,7 @@ _PROMPTS: dict[str, dict[str, str]] = {
             "## Output\n"
             "Respond with JSON only. No markdown fences, no commentary.\n\n"
             "{{\n"
-            '  "format_name": "GB/T 7714-2015 | APA 7th | IEEE | MLA 9th | Chicago | Vancouver | unknown",\n'
+            '  "format_name": "GB/T 7714-2015 | APA 7th | IEEE | MLA 9th | Chicago | Vancouver | Harvard | Nature | AMA | ACS | OSCOLA | Turabian | ACM | APS | unknown",\n'
             '  "confidence": "high | medium | low",\n'
             '  "entry_type": "article | book | inproceedings | ...",\n'
             '  "document_type_marker": "[J] | [M] | [C] | [D] | null (for non-GB/T formats)",\n'
