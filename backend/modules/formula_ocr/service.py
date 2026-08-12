@@ -218,13 +218,14 @@ class FormulaOCRService:
             },
         ]
 
+        max_tokens = max(get_config().llm.max_tokens, 4096)
         last_error: str | None = None
         for attempt in range(_MAX_OCR_RETRIES):
             try:
                 response_text = await llm.chat(
                     messages,
                     temperature=0.1,
-                    max_tokens=4096,
+                    max_tokens=max_tokens,
                 )
                 raw_block = self._extract_latex_block(response_text)
                 if raw_block is None:

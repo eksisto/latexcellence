@@ -839,13 +839,14 @@ class WritingChatService:
         （非 JSON 宽松模式，放行 \\t / \\r），失败时把错误回喂 LLM 重试，
         最多 3 次；重试耗尽后抛 RuntimeError（与 style_modify 行为一致）。
         """
+        max_tokens = max(get_config().llm.max_tokens, 4096)
         last_error: str | None = None
         for attempt in range(self._MAX_EDIT_RETRIES):
             try:
                 response_text = await llm.chat(
                     messages,
                     temperature=0.3,
-                    max_tokens=4096,
+                    max_tokens=max_tokens,
                 )
                 optimized = self._extract_edit_latex_block(response_text)
                 if optimized is None:

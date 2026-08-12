@@ -100,6 +100,7 @@ class TestStyleModifyService:
 
         mock_cfg = MagicMock()
         mock_cfg.llm.api_key = "sk-test"
+        mock_cfg.llm.max_tokens = 8192
 
         with patch(
             "backend.modules.style_modify.service.get_config", return_value=mock_cfg
@@ -121,6 +122,7 @@ class TestStyleModifyService:
 
         mock_cfg = MagicMock()
         mock_cfg.llm.api_key = "sk-test"
+        mock_cfg.llm.max_tokens = 8192
 
         with patch(
             "backend.modules.style_modify.service.get_config", return_value=mock_cfg
@@ -142,6 +144,7 @@ class TestStyleModifyService:
 
         mock_cfg = MagicMock()
         mock_cfg.llm.api_key = "sk-test"
+        mock_cfg.llm.max_tokens = 8192
 
         with patch(
             "backend.modules.style_modify.service.get_config", return_value=mock_cfg
@@ -163,6 +166,7 @@ class TestStyleModifyService:
 
         mock_cfg = MagicMock()
         mock_cfg.llm.api_key = "sk-test"
+        mock_cfg.llm.max_tokens = 8192
 
         with patch(
             "backend.modules.style_modify.service.get_config", return_value=mock_cfg
@@ -183,6 +187,7 @@ class TestStyleModifyService:
 
         mock_cfg = MagicMock()
         mock_cfg.llm.api_key = "sk-test"
+        mock_cfg.llm.max_tokens = 8192
 
         with patch(
             "backend.modules.style_modify.service.get_config", return_value=mock_cfg
@@ -209,6 +214,7 @@ class TestStyleModifyService:
 
         mock_cfg = MagicMock()
         mock_cfg.llm.api_key = "sk-test"
+        mock_cfg.llm.max_tokens = 8192
 
         with patch(
             "backend.modules.style_modify.service.get_config", return_value=mock_cfg
@@ -230,6 +236,7 @@ class TestStyleModifyService:
 
         mock_cfg = MagicMock()
         mock_cfg.llm.api_key = "sk-test"
+        mock_cfg.llm.max_tokens = 8192
 
         with patch(
             "backend.modules.style_modify.service.get_config", return_value=mock_cfg

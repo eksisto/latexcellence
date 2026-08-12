@@ -81,13 +81,14 @@ class StyleModifyService:
             {"role": "user", "content": user_message},
         ]
 
+        max_tokens = max(get_config().llm.max_tokens, 8192)
         last_error: str | None = None
         for attempt in range(_MAX_RETRIES):
             try:
                 response_text = await llm.chat(
                     messages,
                     temperature=0.3,
-                    max_tokens=4096,
+                    max_tokens=max_tokens,
                 )
                 latex_out = self._extract_latex_block(response_text)
                 if latex_out is None:

@@ -109,7 +109,11 @@ class TypoCheckService(BaseParagraphCheckService):
         return TypoCheckResult
 
     def _get_llm_params(self) -> dict[str, Any]:
-        return {"temperature": 0.3, "max_tokens": 2048}
+        cfg = get_config()
+        return {
+            "temperature": 0.3,
+            "max_tokens": max(cfg.llm.max_tokens, 4096),
+        }
 
     def _get_batch_size(self) -> int:
         return get_config().features.typo_check.batch_size

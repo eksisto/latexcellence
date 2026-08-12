@@ -319,7 +319,11 @@ class CodeReviewService(BaseParagraphCheckService):
         return CodeReviewResult
 
     def _get_llm_params(self) -> dict[str, Any]:
-        return {"temperature": 0.2, "max_tokens": 4096}
+        cfg = get_config()
+        return {
+            "temperature": 0.2,
+            "max_tokens": max(cfg.llm.max_tokens, 4096),
+        }
 
     def _get_batch_size(self) -> int:
         config = get_config()
