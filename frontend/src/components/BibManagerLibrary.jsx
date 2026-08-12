@@ -629,7 +629,7 @@ export default function BibManagerLibrary() {
 
       {/* Duplicate results dialog */}
       <Dialog open={showDupDialog} onOpenChange={setShowDupDialog}>
-        <DialogContent className="sm:max-w-lg max-h-[80vh] overflow-y-auto">
+        <DialogContent className="sm:max-w-lg max-h-[80vh] flex flex-col overflow-hidden">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <AlertTriangle className="size-4 text-destructive" />
@@ -640,7 +640,7 @@ export default function BibManagerLibrary() {
                   })}
             </DialogTitle>
           </DialogHeader>
-          <div className="space-y-3 py-2">
+          <div className="flex-1 min-h-0 overflow-y-auto space-y-3 py-2 pr-1 -mr-1">
             {duplicates.length === 0 ? (
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 <CheckCircle className="size-4 text-green-500" />
