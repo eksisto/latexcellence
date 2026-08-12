@@ -1,5 +1,7 @@
 "use client";
 
+import { useEffect, useRef } from "react";
+
 import { Tabs as TabsPrimitive } from "@base-ui/react/tabs";
 import { cva } from "class-variance-authority";
 
@@ -20,7 +22,7 @@ function Tabs({ className, orientation = "horizontal", ...props }) {
 }
 
 const tabsListVariants = cva(
-  "group/tabs-list inline-flex w-fit items-center justify-center rounded-lg p-[3px] text-muted-foreground group-data-horizontal/tabs:h-8 group-data-vertical/tabs:h-fit group-data-vertical/tabs:flex-col data-[variant=line]:rounded-none",
+  "group/tabs-list inline-flex w-fit max-w-full items-center [justify-content:safe_center] overflow-x-auto rounded-lg p-[3px] text-muted-foreground [scrollbar-width:none] [&::-webkit-scrollbar]:hidden group-data-horizontal/tabs:h-8 group-data-vertical/tabs:h-fit group-data-vertical/tabs:flex-col data-[variant=line]:rounded-none",
   {
     variants: {
       variant: {
@@ -35,8 +37,26 @@ const tabsListVariants = cva(
 );
 
 function TabsList({ className, variant = "default", children, ...props }) {
+  const listRef = useRef(null);
+
+  useEffect(() => {
+    const el = listRef.current;
+    if (!el) return;
+
+    const handleWheel = (event) => {
+      if (el.scrollWidth <= el.clientWidth) return;
+      event.preventDefault();
+      const { deltaX, deltaY } = event;
+      el.scrollLeft += Math.abs(deltaY) >= Math.abs(deltaX) ? deltaY : deltaX;
+    };
+
+    el.addEventListener("wheel", handleWheel, { passive: false });
+    return () => el.removeEventListener("wheel", handleWheel);
+  }, []);
+
   return (
     <TabsPrimitive.List
+      ref={listRef}
       data-slot="tabs-list"
       data-variant={variant}
       className={cn(tabsListVariants({ variant }), "relative", className)}
