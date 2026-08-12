@@ -1,5 +1,5 @@
 """
-写作助手 Chat 模块集成测试。
+写作助手模块集成测试。
 
 覆盖：
     - Pydantic 模型校验（ChatMessage / EditOp）

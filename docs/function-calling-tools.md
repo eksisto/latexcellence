@@ -162,7 +162,7 @@
 
 ---
 
-### 科研绘图 Agent
+### 科研绘图
 
 定义在 `backend/modules/plot_gen/agent.py`，由 `PlotGenAgent._build_tools_schema()` 构建，**不注册到全局 ToolRegistry**。工具在 `plots/<session_id>/` 沙箱内运行，通过 `PlotExecutor` 私有类分发。
 

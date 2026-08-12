@@ -1,5 +1,5 @@
 """
-写作助手 Chat 业务逻辑。
+写作助手业务逻辑。
 
 核心设计：
     1. 无 marker 保护：整个 writing_chat 作为特例，不采用 LaTeX → marker → 纯文本 的剥离/还原流程。
@@ -63,7 +63,7 @@ from backend.modules.writing_chat.models import (
 
 class WritingChatService:
     """
-    写作助手 Chat 服务（单例）。
+    写作助手服务（单例）。
     """
 
     # 工具名 → i18n label 映射，前端通过 label 查找 toolStatus 翻译

@@ -10,7 +10,7 @@
     5. 支持 PDF/A-2b 归档格式输出（自动注入 pdfx 宏包）。
 
 供 compile 模块（自动编译）、git_diff 模块（差异高亮）、
-template_gen 模块（模板生成 Agent）复用。
+template_gen 模块（模板生成）复用。
 """
 
 import asyncio

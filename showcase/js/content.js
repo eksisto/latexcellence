@@ -266,7 +266,7 @@ export const SCENES = [
       {
         id: "feature-plot-gen",
         icon: "i-chart",
-        title: "科研绘图 Agent",
+        title: "科研绘图",
         desc: "数据画像、图表类型推荐、Python 脚本沙箱执行，输出 PDF / SVG / TikZ。",
       },
       {
@@ -279,7 +279,7 @@ export const SCENES = [
     feature: {
       id: "feature-template-gen",
       icon: "i-scroll",
-      title: "模板生成 Agent",
+      title: "模板生成",
       tag: "template_gen",
       desc: "只凭一句描述，便规划出可编译的多文件工程：逐个写盘、编译、读日志、修错，直至构建成功。",
       mock: {
@@ -471,7 +471,7 @@ export const SCENES = [
     feature: {
       id: "feature-writing-chat",
       icon: "i-chat",
-      title: "写作助手 Chat",
+      title: "写作助手",
       tag: "writing_chat",
       desc: "记得上下文的对话：联网搜索、检索文献、追踪引文、翻阅项目、修改段落，皆在一处。",
       mock: {
@@ -484,7 +484,7 @@ export const SCENES = [
             user: "帮我润色讨论部分的结论句，并补充 2–3 篇近年相关文献。",
             think: [
               "· 正在分析段落论证结构与上下文…",
-              "· 计划调用 web_search 检索 2023–2025 相关文献",
+              "· 计划调用 web_search 检索 2023–2026 相关文献",
             ],
             tools: ["web_search", "openalex", "edit_paragraph"],
             assistant:

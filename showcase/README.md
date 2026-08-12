@@ -19,7 +19,7 @@ showcase/
 ├── package.json
 ├── index.html         # 静态骨架：头部 / 图标精灵 / 进度条·行号栏·导轨·工具栏容器 / 尾声页脚
 ├── css/
-│   ├── fonts.css      # cdnjs 网络字体（STIX Two Text / Noto Sans SC / JetBrains Mono）
+│   ├── fonts.css      # 又拍云 Zstatic 网络字体（STIX Two Text / Noto Sans SC / JetBrains Mono）
 │   ├── themes.css     # 主题 token —— 由 tools/gen-themes.mjs 从 frontend 生成，勿手改
 │   ├── showcase.css   # 主题工具栏 / mock 组件 / 主题色卡等基础样式
 │   └── scrolly.css    # 场景系统：固定场景、视差层、行号栏、章节导轨、进度条
@@ -136,11 +136,15 @@ showcase/
 
 ## 字体
 
-字体统一通过 cdnjs 加载，仓库内不保留字体文件：
+字体统一通过又拍云 Zstatic（`s4.zstatic.net`，cdnjs 镜像）加载，仓库内不保留字体文件：
 
-- 正文 LXGW WenKai：`index.html` 引入 cdnjs 上 `lxgw-wenkai-web` 官方包的
+- 正文 LXGW WenKai：`index.html` 引入 Zstatic 上 `lxgw-wenkai-web` 官方包的
   `lxgwwenkai-regular/result.css`（按 unicode-range 分片，浏览器只按需下载用到的字形）。
 - 标题 Noto Sans SC、字标 STIX Two Text、代码 JetBrains Mono：
-  `css/fonts.css` 中 `@font-face` 直接引用 cdnjs fontsource 包的 woff2 文件。
+  `css/fonts.css` 中 `@font-face` 直接引用 Zstatic 上 cdnjs fontsource 包的 woff2 文件。
 
 页面需联网加载字体；离线时回退到系统字体（`font-display: swap`）。
+若需更换 CDN，保持 `cdnjs.cloudflare.com/ajax/libs/` 路径结构不变，只换前缀
+（如 `s4.zstatic.net/ajax/libs/`）。
+
+`mirrors.sustech.edu.cn` 镜像未提供字体所需的 CORS 响应头（或跨域时会重定向），部署到跨源页面后，浏览器会以“CORS 请求未能成功”拦截 woff2 字体。

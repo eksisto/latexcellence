@@ -1060,7 +1060,7 @@ _PROMPTS: dict[str, dict[str, str]] = {
             '{{"packages": ["package1", "package2"]}}'
         ),
     },
-    # ── plot_gen 科研绘图 Agent ───────────────────────────────────────────
+    # ── plot_gen 科研绘图 ───────────────────────────────────────────
     "plot_gen": {
         "pgfplots_templates": {
             "box": (

@@ -710,7 +710,7 @@ export const api = {
     },
   },
 
-  /* ---- 科研绘图 Agent ---- */
+  /* ---- 科研绘图 ---- */
   plotGen: {
     upload: (formData) => requestForm("/plot-gen/upload", formData),
     styles: () => request("/plot-gen/styles"),
@@ -782,7 +782,7 @@ export const api = {
     },
   },
 
-  /* ---- 写作助手 Chat ---- */
+  /* ---- 写作助手 ---- */
   writingChat: {
     send: async ({
       sessionId,

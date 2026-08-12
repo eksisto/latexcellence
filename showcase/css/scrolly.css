@@ -822,7 +822,7 @@ html.no-pin .themes-track .theme-card {
 }
 html.no-pin .themes-head {
   width: 100%;
-  padding-right: 0;
+  padding-inline: 1.25rem;
 }
 html.no-pin .type-caret {
   animation: none;

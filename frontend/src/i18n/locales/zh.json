@@ -54,10 +54,10 @@
           "title": "格式转换"
         },
         "templateGen": {
-          "title": "模板生成 Agent"
+          "title": "模板生成"
         },
         "plotGen": {
-          "title": "科研绘图 Agent"
+          "title": "科研绘图"
         },
         "bibManager": {
           "title": "参考文献管理"
@@ -84,7 +84,7 @@
           "title": "Git 差异高亮"
         },
         "writingChat": {
-          "title": "写作助手 Chat"
+          "title": "写作助手"
         }
       }
     },
@@ -372,7 +372,7 @@
       }
     },
     "writingChat": {
-      "title": "写作助手 Chat",
+      "title": "写作助手",
       "noProjectTitle": "未选择项目",
       "noProjectDesc": "先打开项目",
       "sessions": "会话",
@@ -642,7 +642,7 @@
       "resultTitle": "修改结果"
     },
     "templateGen": {
-      "title": "模板生成 Agent",
+      "title": "模板生成",
       "descLabel": "描述你的需求",
       "descPlaceholder": "描述你需要的 LaTeX 模板类型（如 IEEE 会议论文、中文简历、学术报告）",
       "descDetailPlaceholder": "例如：一篇用于投稿 CVPR 的论文模板，包含摘要、引言、方法、实验、结论...",
@@ -686,7 +686,7 @@
       "traceMaxRounds": "最大轮数"
     },
     "plotGen": {
-      "title": "科研绘图 Agent",
+      "title": "科研绘图",
       "subtitle": "上传 CSV/Excel/JSON 数据，生成可复现的 PDF/SVG/TikZ 矢量图表",
       "inputTitle": "数据与目标",
       "dataLabel": "数据文件",
@@ -783,7 +783,7 @@
       "featureExpressionOptDefaultPrompt": "表达优化默认提示词",
       "featureFormulaOcr": "公式识别",
       "formulaOcrFormatLatex": "公式 LaTeX 代码格式化",
-      "featureTemplateGen": "模板生成 Agent",
+      "featureTemplateGen": "模板生成",
       "templateGenAgentMaxRounds": "Agent 最大轮数",
       "templateGenAgentMaxFiles": "Agent 最大文件数",
       "templateGenAgentCompileEnabled": "Agent 编译验证",
@@ -812,10 +812,10 @@
       "styleModifyAgentCompileTimeout": "Shadow 编译超时（秒）",
       "featureTerminologyCheck": "术语一致性检查",
       "featureParagraphTranslate": "逐段翻译",
-      "featureWritingChat": "写作助手 Chat",
+      "featureWritingChat": "写作助手",
       "featureWritingChatWebSearch": "写作助手允许联网搜索",
       "featureBibManager": "参考文献管理",
-      "featurePlotGen": "科研绘图 Agent",
+      "featurePlotGen": "科研绘图",
       "plotGenMaxRounds": "Agent 最大轮数",
       "plotGenExecTimeout": "脚本执行超时（秒）",
       "plotGenDefaultStyle": "默认风格",

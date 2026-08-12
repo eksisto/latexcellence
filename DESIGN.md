@@ -100,6 +100,7 @@ BaseParagraphCheckService
 | `created_at` | 创建时间戳（TTL 清理依据，默认 1 小时） |
 
 **流程**：
+
 1. Preview/Check 时：生成 `operation_id` → 深拷贝 `_marker_maps` → 存入 `_operation_contexts`
 2. Apply 时：前端回传 `operation_id` → 查找对应上下文 → 使用上下文中的 `marker_maps` 还原 marker → 写回文件
 3. 上下文过期后自动清理（TTL 1 小时）
@@ -416,7 +417,7 @@ Phase 3: 程序生成修正结果
 
 ### 5.4 写作助手聊天的数据流
 
-写作助手 Chat 采用**双轮协议 + Function Calling**，每轮走不同路径：
+写作助手采用**双轮协议 + Function Calling**，每轮走不同路径：
 
 ```
 RS1（流式对话 + Function Calling）:

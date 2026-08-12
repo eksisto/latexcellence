@@ -1,5 +1,5 @@
 """
-写作助手 Chat API 路由。
+写作助手 API 路由。
 
 端点：
     POST /api/writing-chat/send           — 流式发送消息（SSE）

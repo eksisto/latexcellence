@@ -465,7 +465,7 @@ raise ValueError("Validation failed after N attempts")        # ❌ 耗尽
 
 ### `tex_compile.py` — 统一 TeX 编译执行模块
 
-**设计理念**：将 LaTeX 编译执行（latexmk 调用）和日志过滤（texfot）统一封装，供 `compile`（自动编译）、`git_diff`（差异高亮）、`template_gen`（模板生成 Agent）三个模块复用。texfot 是 TeX Live 自带的 Perl 工具，能从海量编译日志中自动提取错误、警告等关键信息，比自写正则更可靠。当 texfot 不可用时，静默降级为原始 latexmk 输出 + 正则 fallback。
+**设计理念**：将 LaTeX 编译执行（latexmk 调用）和日志过滤（texfot）统一封装，供 `compile`（自动编译）、`git_diff`（差异高亮）、`template_gen`（模板生成）三个模块复用。texfot 是 TeX Live 自带的 Perl 工具，能从海量编译日志中自动提取错误、警告等关键信息，比自写正则更可靠。当 texfot 不可用时，静默降级为原始 latexmk 输出 + 正则 fallback。
 
 **核心功能**：
 

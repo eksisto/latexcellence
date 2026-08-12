@@ -1,7 +1,7 @@
-/* 字体引入 —— cdnjs 网络字体（fontsource / lxgw-wenkai-web） */
+/* 字体引入 —— 又拍云 Zstatic（s4.zstatic.net，cdnjs 镜像，带 CORS 响应头） */
 @font-face {
   font-family: "STIX Two Text";
-  src: url("https://mirrors.sustech.edu.cn/cdnjs/ajax/libs/fontsource-stix-two-text/5.2.8/files/stix-two-text-latin-400-normal.woff2")
+  src: url("https://s4.zstatic.net/ajax/libs/fontsource-stix-two-text/5.2.8/files/stix-two-text-latin-400-normal.woff2")
     format("woff2");
   font-style: normal;
   font-weight: 400;
@@ -9,7 +9,7 @@
 }
 @font-face {
   font-family: "STIX Two Text";
-  src: url("https://mirrors.sustech.edu.cn/cdnjs/ajax/libs/fontsource-stix-two-text/5.2.8/files/stix-two-text-latin-500-normal.woff2")
+  src: url("https://s4.zstatic.net/ajax/libs/fontsource-stix-two-text/5.2.8/files/stix-two-text-latin-500-normal.woff2")
     format("woff2");
   font-style: normal;
   font-weight: 500;
@@ -17,7 +17,7 @@
 }
 @font-face {
   font-family: "STIX Two Text";
-  src: url("https://mirrors.sustech.edu.cn/cdnjs/ajax/libs/fontsource-stix-two-text/5.2.8/files/stix-two-text-latin-600-normal.woff2")
+  src: url("https://s4.zstatic.net/ajax/libs/fontsource-stix-two-text/5.2.8/files/stix-two-text-latin-600-normal.woff2")
     format("woff2");
   font-style: normal;
   font-weight: 600;
@@ -25,7 +25,7 @@
 }
 @font-face {
   font-family: "Noto Sans SC";
-  src: url("https://mirrors.sustech.edu.cn/cdnjs/ajax/libs/fontsource-noto-sans-sc/5.2.8/files/noto-sans-sc-latin-500-normal.woff2")
+  src: url("https://s4.zstatic.net/ajax/libs/fontsource-noto-sans-sc/5.2.8/files/noto-sans-sc-latin-500-normal.woff2")
     format("woff2");
   font-style: normal;
   font-weight: 500;
@@ -37,7 +37,7 @@
 }
 @font-face {
   font-family: "Noto Sans SC";
-  src: url("https://mirrors.sustech.edu.cn/cdnjs/ajax/libs/fontsource-noto-sans-sc/5.2.8/files/noto-sans-sc-chinese-simplified-500-normal.woff2")
+  src: url("https://s4.zstatic.net/ajax/libs/fontsource-noto-sans-sc/5.2.8/files/noto-sans-sc-chinese-simplified-500-normal.woff2")
     format("woff2");
   font-style: normal;
   font-weight: 500;
@@ -47,7 +47,7 @@
 }
 @font-face {
   font-family: "JetBrains Mono";
-  src: url("https://mirrors.sustech.edu.cn/cdnjs/ajax/libs/fontsource-jetbrains-mono/5.2.8/files/jetbrains-mono-latin-400-normal.woff2")
+  src: url("https://s4.zstatic.net/ajax/libs/fontsource-jetbrains-mono/5.2.8/files/jetbrains-mono-latin-400-normal.woff2")
     format("woff2");
   font-style: normal;
   font-weight: 400;

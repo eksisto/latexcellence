@@ -90,7 +90,7 @@ latexcellence/
 │       ├── writing_chat/            # 写作助手聊天
 │       ├── bib_manager/             # 参考文献管理（含 DOI 多数据源查询、重复检测、文献库管理）
 │       │   └── providers/           # 可插拔 DOI 数据源
-│       ├── plot_gen/                # 科研绘图 Agent（上传数据 -> 矢量图 + TikZ）
+│       ├── plot_gen/                # 科研绘图（上传数据 -> 矢量图 + TikZ）
 │       └── project_router.py        # 项目管理路由
 │
 ├── frontend/
@@ -194,7 +194,7 @@ latexcellence/
 
 - **集中式提示词管理**: 所有 LLM 提示词集中存储在 `backend/core/prompts.py` 中，按模块和功能分类。提供 `get_prompt(module, key, **kwargs)` 函数获取提示词，支持参数化模板。各模块通过 `from backend.core.prompts import get_prompt` 导入使用，便于统一维护和版本控制
 - **LLM 输出语言注入**: 所有调用 LLM 的模块在 system prompt 中通过 `{language}` 占位符指定输出语言。前端 `getUiLanguage()` 将 i18n 语言代码（`"zh"`/`"en"`）转为完整名称（`"Chinese"`/`"English"`），通过 `language` 参数传入后端并注入 prompt 模板。无需额外的 `_general.language_context` 拼接
-- **BaseParagraphCheckService**: 多个逐段检查模块（typo_check / expression_opt / code_review / terminology_check / paragraph_translate）共享的基类，封装文件解析、marker 替换、LLM 编排（批量+流式）、结果写回等流程。子类通过多个 hooks（_get_system_prompt / _build_user_content / _get_model_cls / _get_llm_params / _get_batch_size / _build_success_result）定制行为
+- **BaseParagraphCheckService**: 多个逐段检查模块（typo_check / expression_opt / code_review / terminology_check / paragraph_translate）共享的基类，封装文件解析、marker 替换、LLM 编排（批量+流式）、结果写回等流程。子类通过多个 hooks（\_get_system_prompt / \_build_user_content / \_get_model_cls / \_get_llm_params / \_get_batch_size / \_build_success_result）定制行为
 - **WorkspaceManager**: 多浏览器多工作区隔离，每个 workspace_id 拥有独立的 `LatexProject` 实例（项目状态、文件树、MD5 缓存、撤销栈完全隔离）
 - **乐观锁**: 多工作区并发编辑同一文件时，通过 MD5 哈希检测冲突。读取段落时返回 `file_md5`，应用修改时前端传回 `expected_md5`，后端校验失败时抛出 `FileConflictError`（HTTP 409），前端自动刷新 MD5 并提示用户重试。`inject_expected_md5s()` 辅助函数统一为各模块 router 注入预期 MD5
 - **Marker Protection**: LaTeX 结构 → `__CMD_NNNN__` / `__MATH_NNNN__` / `__ENV_NNNN__` / `__VERB_NNNN__` marker → LLM 只改纯文本 → 按长度降序还原。apply 时若 marker_map 缺失（context 过期/重启/新操作覆盖），跳过该段写入并返回 `errors`，防止字面 marker 污染 `.tex` 文件；前端据此保留未应用项并提示用户重新检查。返回给前端展示的 `changes[]` 中的 `original`/`corrected` 会在 `_build_success_result` 中预先还原 marker，确保用户看到的是干净的 LaTeX 文本而非 `__CMD_NNNN__` 占位符
@@ -239,7 +239,7 @@ latexcellence/
   - 编译失败时 `_extract_errors` 从日志中提取类型/文件/行号，`_format_error_analysis` 拼接聚焦摘要回传 LLM；prompt 中 COMPILATION ERROR RECOVERY PROTOCOL 强制 LLM 走 ANALYZE→READ→FIX→RECOMPILE 循环，禁止编译未过时调用 finish。
   - 每次生成的完整交互由 `trace.py` 按时间顺序追加到沙箱 `trace.jsonl`（`run_start`/`llm`/`tool_result`/`warning`/`error`/`run_end` 事件，含完整工具参数与回传 LLM 的结果），通过 `/api/template-gen/trace` 查看或 `/trace/download` 导出 JSON，用于分析与改进 Agent。
   - 沙箱自动清理由 `cleanup.py` 实现：`cleanup_expired_sandboxes()` 按目录内最新文件 mtime 与 `cleanup_retention_days` 比较判定过期，`cleanup_loop()` 作为 `asyncio` 后台任务在 FastAPI lifespan 中启动并按 `cleanup_interval_seconds` 周期扫描，删除过期目录，服务关闭时优雅取消。
-- **科研绘图 Agent**: `PlotGenAgent` 基于 Function Calling 实现"数据画像 → 图表方案 → 写脚本 → Python 沙箱执行 → 错误回修 → TikZ 编译 → finish"的自主循环，支持上传 CSV/TSV/Excel/JSON 数据并输出 PDF/SVG/TikZ。
+- **科研绘图**: `PlotGenAgent` 基于 Function Calling 实现"数据画像 → 图表方案 → 写脚本 → Python 沙箱执行 → 错误回修 → TikZ 编译 → finish"的自主循环，支持上传 CSV/TSV/Excel/JSON 数据并输出 PDF/SVG/TikZ。
   - 数据文件只进入 session 沙箱 `data/`，绘图脚本通过 `python_sandbox` 在 `plots/<session_id>/` 内运行；风格由 `styles.py` 后端注入，不依赖 LLM 手写样式。
   - `python_sandbox` 执行前由 `sandbox_guard.py` 注入 `sys.addaudithook()` 审计钩子作为安全监听器：拦截读沙箱外文件、子进程/命令执行、网络访问、删除/修改系统文件与 ctypes 危险用法（进程句柄加载、按路径加载库、危险符号解析），并将 `TMPDIR`/`TEMP`/`TMP` 与 `MPLCONFIGDIR` 重定向进沙箱，避免正常绘图流程被误拦；属 Python 层纵深防御而非操作系统级沙箱。
   - TikZ 源由 `tikzgen.py` **受控确定性生成**（替代 matplot2tikz）：Agent 脚本只写 `artifacts/data_*.csv` + 声明式 `artifacts/tikz_spec.json`，`python_sandbox` 成功后后端经 Pydantic v2 校验（含 CSV 列/数值/热力图整数索引校验、误差列空值/对数轴非正坐标/柱状图缺柱与标签错位等静默保真问题拦截）确定性渲染 `artifacts/figure.tex`；支持 line/scatter/bar/box/heatmap/histogram/kde（violin 回退 boxplot），热力图内置 RdBu_r/RdBu 色标与显著性标注，误差棒需 `y error plus/minus` 列 + addplot 启用 `error bars/.cd, y dir=both, y explicit` 才渲染。

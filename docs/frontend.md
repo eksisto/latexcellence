@@ -39,7 +39,7 @@ WelcomePage 采用「标题页 + 点线目录」构图：字标、slogan、「�
 
 使用 Zustand 5 + `persist` 中间件，持久化键 `"latexcellence-project"`。setter 支持 function updater 模式。持久化水合完成后设置 `hydrated: true`。
 
-状态切片：水合状态、功能开关、系统状态（主题色、workspaceId）、项目状态（路径、文件树、主文件）、style_modify Agent 恢复标识（session_id / revision / operation_id / mode）、写作助手 Chat（会话列表、消息）、各检查模块段落/结果、编译结果/进度、加载状态。`partialize` 只持久化 Agent 恢复所需标识，不持久化完整源码、diff 和 trace。
+状态切片：水合状态、功能开关、系统状态（主题色、workspaceId）、项目状态（路径、文件树、主文件）、style_modify Agent 恢复标识（session_id / revision / operation_id / mode）、写作助手（会话列表、消息）、各检查模块段落/结果、编译结果/进度、加载状态。`partialize` 只持久化 Agent 恢复所需标识，不持久化完整源码、diff 和 trace。
 
 ## API 层 `api/index.js`
 

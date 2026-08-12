@@ -1,5 +1,5 @@
 """
-写作助手 Chat 模块的 Pydantic 数据模型。
+写作助手模块的 Pydantic 数据模型。
 
 设计要点：
     - ChatMessage：单条对话消息，含可选 edit_op（编辑操作）与 snapshot（被压缩前的原消息列表快照）

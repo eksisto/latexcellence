@@ -54,10 +54,10 @@
           "title": "Format Converter"
         },
         "templateGen": {
-          "title": "Template Gen Agent"
+          "title": "Template Gen"
         },
         "plotGen": {
-          "title": "Scientific Plot Agent"
+          "title": "Scientific Plot"
         },
         "bibManager": {
           "title": "Bib Manager"
@@ -84,7 +84,7 @@
           "title": "Git Diff Highlight"
         },
         "writingChat": {
-          "title": "Writing Assistant Chat"
+          "title": "Writing Assistant"
         }
       }
     },
@@ -372,7 +372,7 @@
       }
     },
     "writingChat": {
-      "title": "Writing Assistant Chat",
+      "title": "Writing Assistant",
       "noProjectTitle": "No project opened",
       "noProjectDesc": "Open a project first",
       "sessions": "Sessions",
@@ -642,7 +642,7 @@
       "resultTitle": "Modification Result"
     },
     "templateGen": {
-      "title": "Template Gen Agent",
+      "title": "Template Gen",
       "descLabel": "Describe your requirements",
       "descPlaceholder": "Describe the LaTeX template type you need (e.g., IEEE conference paper, English resume, academic report)",
       "descDetailPlaceholder": "e.g., A paper template for CVPR submission, including abstract, introduction, methods, experiments, conclusion...",
@@ -686,7 +686,7 @@
       "traceMaxRounds": "Max rounds"
     },
     "plotGen": {
-      "title": "Scientific Plot Agent",
+      "title": "Scientific Plot",
       "subtitle": "Upload CSV/Excel/JSON data and generate reproducible PDF/SVG/TikZ vector figures",
       "inputTitle": "Data & Goal",
       "dataLabel": "Data file",
@@ -783,7 +783,7 @@
       "featureExpressionOptDefaultPrompt": "Expression Optimization Default Prompt",
       "featureFormulaOcr": "Formula Recognition",
       "formulaOcrFormatLatex": "Format Formula LaTeX Code",
-      "featureTemplateGen": "Template Gen Agent",
+      "featureTemplateGen": "Template Gen",
       "templateGenAgentMaxRounds": "Agent Max Rounds",
       "templateGenAgentMaxFiles": "Agent Max Files",
       "templateGenAgentCompileEnabled": "Agent Compile Verification",
@@ -812,10 +812,10 @@
       "styleModifyAgentCompileTimeout": "Shadow Compile Timeout (s)",
       "featureTerminologyCheck": "Terminology Consistency Check",
       "featureParagraphTranslate": "Paragraph Translation",
-      "featureWritingChat": "Writing Assistant Chat",
+      "featureWritingChat": "Writing Assistant",
       "featureWritingChatWebSearch": "Writing Assistant Web Search",
       "featureBibManager": "Bib Manager",
-      "featurePlotGen": "Scientific Plot Agent",
+      "featurePlotGen": "Scientific Plot",
       "plotGenMaxRounds": "Agent Max Rounds",
       "plotGenExecTimeout": "Script Timeout (s)",
       "plotGenDefaultStyle": "Default Style",

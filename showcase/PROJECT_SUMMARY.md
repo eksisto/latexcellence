@@ -27,7 +27,7 @@ showcase/
 ├── PROJECT_SUMMARY.md # ← 本文件
 ├── README.md          # 项目介绍 + 维护手册
 ├── css/
-│   ├── fonts.css      # cdnjs 网络字体（STIX Two Text / Noto Sans SC / JetBrains Mono）
+│   ├── fonts.css      # 又拍云 Zstatic 网络字体（STIX Two Text / Noto Sans SC / JetBrains Mono）
 │   ├── themes.css     # 主题 token —— 由 tools/gen-themes.mjs 生成，禁止手改
 │   ├── showcase.css   # 主题工具栏 / mock 组件 / 主题色卡等基础样式
 │   └── scrolly.css    # 场景系统：固定场景、视差层、行号栏、章节导轨、进度条
@@ -97,7 +97,7 @@ showcase/
 ## 依赖关系
 
 - **主题 token**：依赖父仓库 `frontend/src/theme/*.css`（生成而非复制）。
-- **字体**：经 cdnjs 加载（LXGW WenKai / Noto Sans SC / STIX Two Text / JetBrains Mono），仓库内不保留字体文件；离线回退系统字体。
+- **字体**：经又拍云 Zstatic（`s4.zstatic.net`，cdnjs 镜像）加载（LXGW WenKai / Noto Sans SC / STIX Two Text / JetBrains Mono），仓库内不保留字体文件；离线回退系统字体。
 - **无其他依赖**：保持零依赖是设计目标，不要引入运行时依赖或构建步骤。
 
 ## 文档

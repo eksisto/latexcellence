@@ -193,7 +193,7 @@ class EditToolsConfig(BaseModel):
 
 
 class WritingChatConfig(BaseModel):
-    """写作助手 Chat 模块配置"""
+    """写作助手模块配置"""
 
     enabled: bool = True  # 是否启用
     compression_threshold_tokens: int = 200000  # 触发上下文压缩的累计 token 阈值
@@ -324,7 +324,7 @@ class BibManagerConfig(BaseModel):
 
 
 class PlotGenConfig(BaseModel):
-    """科研绘图 Agent 配置"""
+    """科研绘图配置"""
 
     enabled: bool = True
     output_dir: str = "plots/"
