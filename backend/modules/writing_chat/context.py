@@ -521,9 +521,13 @@ def _format_paragraphs(items: list[tuple[int, str]]) -> str:
 
 
 def _derive_title(messages: list[dict]) -> str:
-    """从会话的第一条 user 消息中提取前 40 个字符作为标题。"""
+    """从会话的第一条 user 消息中提取前 40 个字符作为标题。
+
+    没有 user 消息（或内容为空）时返回空字符串，由前端按用户语言
+    显示“无标题”类兜底文案，避免后端硬编码特定语言的占位符。
+    """
     for m in messages:
         if m.get("role") == "user":
             c = (m.get("content") or "").strip().replace("\n", " ")
-            return c[:40] if c else "(no title)"
-    return "(no title)"
+            return c[:40] if c else ""
+    return ""

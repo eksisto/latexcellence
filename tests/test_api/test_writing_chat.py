@@ -205,6 +205,17 @@ class TestContext:
         # 后创建的 last_updated_at 更大，应排在前
         assert metas[0]["id"] == ctx2.session_id
 
+    def test_list_sessions_empty_title_fallback(self, temp_session_dir, open_project):
+        """空会话标题应返回空字符串，由前端按用户语言显示“无标题”文案。"""
+        ctx = ConversationContext.create_session(scope="test")
+        ctx.save_to_disk()
+
+        metas = ConversationContext.list_sessions()
+        assert len(metas) == 1
+        assert metas[0]["id"] == ctx.session_id
+        assert metas[0]["message_count"] == 0
+        assert metas[0]["title"] == ""
+
     def test_delete_message_reduces_tokens(self, temp_session_dir, open_project):
         ctx = ConversationContext.create_session(scope="test")
         u = ctx.append_user_message("q")
