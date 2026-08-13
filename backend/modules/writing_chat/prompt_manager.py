@@ -2,7 +2,7 @@
 写作助手的助手提示词管理。
 
 职责：
-    1. 管理 prompts/writing_chat/ 目录下的提示词文件（每个文件 = 一个助手）
+    1. 管理 data/prompts/writing_chat/ 目录下的提示词文件（每个文件 = 一个助手）
     2. 提供 CRUD 操作：list / load / save / delete
     3. 管理"当前激活的助手"（通过 _active.txt marker file）
 

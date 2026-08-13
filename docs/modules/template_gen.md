@@ -32,7 +32,7 @@ Agent 自主规划文件结构 → 逐个 `write_file` → 调用 `compile_latex
 
 ## 沙箱与路径安全
 
-每次生成由 `service.py` 在 `output_dir/agent/<session_id>/` 下创建独立目录。所有 `file_path` 参数经 `TemplateAgentService._resolve_sandbox_path()` 校验：
+每次生成由 `service.py` 在 `output_dir/<session_id>/` 下创建独立目录。所有 `file_path` 参数经 `TemplateAgentService._resolve_sandbox_path()` 校验：
 
 - 禁止空、null 字节、绝对路径
 - 禁止 `..` 路径段
@@ -46,9 +46,9 @@ Agent 自主规划文件结构 → 逐个 `write_file` → 调用 `compile_latex
 
 **清理逻辑**：
 
-- `cleanup_expired_sandboxes()`：扫描 `output_dir/agent/` 下所有子目录（每个子目录 = 一个沙箱），取目录内最新文件的 mtime 作为该沙箱的"最后活跃时间"，若距今超过 `cleanup_retention_days` 天则删除整个目录
+- `cleanup_expired_sandboxes()`：扫描 `output_dir/` 下所有子目录（每个子目录 = 一个沙箱），取目录内最新文件的 mtime 作为该沙箱的"最后活跃时间"，若距今超过 `cleanup_retention_days` 天则删除整个目录
 - 使用 mtime 而非创建时间——用户读取/下载文件时 mtime 会更新，避免清理仍在使用中的沙箱
-- 仅清理 `agent/` 子目录下的会话沙箱
+- 仅清理输出目录下的会话沙箱
 
 **后台循环**：
 
@@ -177,14 +177,14 @@ latexmk 的 stdout/stderr 有时不含 `!` 错误行（错误只写进了 `<main
 `load_sandbox(output_dir, session_id)` 为文件读取端点（`/files`、`/file`）提供路径基准解析。安全约束：
 
 - `session_id` 仅允许字母数字 / `-` / `_`，杜绝 `..` / `/` 注入
-- 解析后必须严格位于 `output_dir/agent/` 子目录内，无法逃逸到其他模板或兄弟会话目录
+- 解析后必须严格位于 `output_dir/` 子目录内，无法逃逸到其他模板或兄弟会话目录
 
 ## 配置项（`features.template_gen`）
 
 | 字段 | 默认 | 说明 |
 | --- | --- | --- |
 | `enabled` | `true` | 模块总开关 |
-| `output_dir` | `templates/` | Agent 沙箱根目录 |
+| `output_dir` | `data/templates/` | Agent 沙箱根目录 |
 | `agent_max_rounds` | `30` | Agent 最大工具调用轮数 |
 | `agent_max_files` | `30` | 单次生成最大**不同文件数**（重写已有文件不计入预算） |
 | `agent_max_file_size_kb` | `512` | 单文件大小上限 |

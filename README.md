@@ -223,8 +223,7 @@ latexcellence/
 ├── frontend/
 │   └── src/                 # React 应用
 ├── showcase/                # 独立展示页（零依赖静态站，详见 docs/showcase.md）
-├── prompts/                 # 自定义提示词
-├── templates/               # 生成的模板
+├── data/                    # 应用运行期与用户数据（formats/ plots/ prompts/ style_modify_sessions/ templates/ writing_chat_sessions/）
 ├── tests/                   # 测试
 ├── docs/                    # 项目文档
 └── clean-cache.sh / clean-cache.ps1  # 清理缓存脚本（Python/前端缓存）

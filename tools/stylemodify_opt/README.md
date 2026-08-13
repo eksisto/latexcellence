@@ -27,7 +27,7 @@ tools/stylemodify_opt/
 ├── compare.py          # 多 tag 结果对比表格
 ├── README.md
 ├── data/projects/      # 运行时生成的场景项目（gitignore）
-├── runtime/            # 评测会话目录（gitignore，不污染 style_modify_sessions/）
+├── runtime/            # 评测会话目录（gitignore，不污染 data/style_modify_sessions/）
 └── results/<tag>/      # 每次运行的结果根目录（gitignore）
 ```
 

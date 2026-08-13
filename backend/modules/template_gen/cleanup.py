@@ -1,14 +1,14 @@
 """
 模板生成沙箱自动清理服务。
 
-定期扫描 `output_dir/agent/` 下的会话沙箱目录，删除超过保留期限的过期
+定期扫描 `output_dir/` 下的会话沙箱目录，删除超过保留期限的过期
 目录。基于目录内文件的最大修改时间（mtime）判定是否过期，而非目录创建
 时间，以确保最近被访问/读取的沙箱不会被误删。
 
 设计说明：
     - 清理逻辑独立为模块，由 main.py 的 lifespan 启动后台任务
     - 每次执行时实时读取配置（get_config()），支持热重载
-    - 仅清理 agent/ 子目录下的会话沙箱（12 位 hex UUID 命名）
+    - 仅清理输出目录下的会话沙箱（12 位 hex UUID 命名）
     - 使用 shutil.rmtree 删除目录树，兼容 Windows
 """
 
@@ -25,7 +25,7 @@ logger = get_logger(__name__)
 def cleanup_expired_sandboxes() -> int:
     """扫描沙箱目录并删除过期会话，返回本次删除的目录数。
 
-    判定逻辑：遍历 `<output_dir>/agent/` 下所有子目录，取目录内
+    判定逻辑：遍历 `<output_dir>/` 下所有子目录，取目录内
     所有文件的最大 mtime，若距今超过 `cleanup_retention_days` 天
     则删除该目录。
     """
@@ -38,9 +38,9 @@ def cleanup_expired_sandboxes() -> int:
     output_dir = Path(tg.output_dir)
     if not output_dir.is_absolute():
         output_dir = Path.cwd() / output_dir
-    agent_root = output_dir / "agent"
+    sandbox_root = output_dir
 
-    if not agent_root.is_dir():
+    if not sandbox_root.is_dir():
         return 0
 
     import time
@@ -49,7 +49,7 @@ def cleanup_expired_sandboxes() -> int:
     cutoff = now - tg.cleanup_retention_days * 86400
     removed = 0
 
-    for child in sorted(agent_root.iterdir()):
+    for child in sorted(sandbox_root.iterdir()):
         if not child.is_dir():
             continue
 

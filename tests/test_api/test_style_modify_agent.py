@@ -264,9 +264,9 @@ class TestStyleModifySessionStore:
 
 
 class TestShadowCopyIgnore:
-    """shadow 复制：应用运行时目录仅根层级忽略，嵌套同名目录保留。"""
+    """shadow 复制：应用运行时 data/ 容器仅根层级忽略，嵌套同名目录保留。"""
 
-    def test_nested_plot_and_git_dirs(self, workdir):
+    def test_nested_data_and_git_dirs(self, workdir):
         from backend.modules.style_modify.session import _copy_project
 
         root = workdir / "proj"
@@ -275,11 +275,14 @@ class TestShadowCopyIgnore:
             r"\documentclass{article}",
             encoding="utf-8",
         )
+        (root / "data").mkdir()
+        (root / "data" / "root.tex").write_text("x", encoding="utf-8")
+        # 根层级非应用运行时目录（如旧版遗留的 plots/）视为普通项目源码保留
         (root / "plots").mkdir()
         (root / "plots" / "root.tex").write_text("x", encoding="utf-8")
         (root / "thesis").mkdir()
-        (root / "thesis" / "plots").mkdir(parents=True)
-        (root / "thesis" / "plots" / "nested.tex").write_text(
+        (root / "thesis" / "data").mkdir(parents=True)
+        (root / "thesis" / "data" / "nested.tex").write_text(
             "y",
             encoding="utf-8",
         )
@@ -290,8 +293,9 @@ class TestShadowCopyIgnore:
         _copy_project(root, shadow)
 
         assert (shadow / "main.tex").exists()
-        assert not (shadow / "plots").exists()
-        assert (shadow / "thesis" / "plots" / "nested.tex").exists()
+        assert not (shadow / "data").exists()
+        assert (shadow / "plots" / "root.tex").exists()
+        assert (shadow / "thesis" / "data" / "nested.tex").exists()
         assert not (shadow / "thesis" / ".git").exists()
 
 

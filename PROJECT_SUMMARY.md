@@ -151,11 +151,13 @@ latexcellence/
 │   ├── test_plot_gen/               # plot_gen 单元测试
 │   ├── test_utils/                  # 后端工具单元测试（路径/JSON/宏包/搜索/学术检索/编译等）
 │   └── fixtures/                    # 测试数据（宏包规则表、公式/表格 OCR、错字查找/表达优化语料等）
-├── prompts/                         # 自定义提示词（expression/ 风格预设与 writing_chat/ 角色预设）
-├── formats/                         # 参考文献格式定义
-├── templates/                       # 生成的 LaTeX 模板（agent/<session_id>/ 沙箱产物）
-├── writing_chat_sessions/           # 写作助手聊天持久化数据
-├── plots/                           # plot_gen 绘图运行输出（运行时生成）
+├── data/                            # 应用运行期与用户数据统一目录
+│   ├── formats/                     # 参考文献格式定义
+│   ├── plots/                       # plot_gen 绘图运行输出（运行时生成）
+│   ├── prompts/                     # 自定义提示词（expression/ 风格预设与 writing_chat/ 角色预设）
+│   ├── style_modify_sessions/       # style_modify Agent 会话缓存
+│   ├── templates/                   # 生成的 LaTeX 模板（<session_id>/ 沙箱产物）
+│   └── writing_chat_sessions/       # 写作助手聊天持久化数据
 ├── logs/                            # 运行时日志
 ├── tools/                         # 维护者工具（开发/评测/维护用脚本与 Agent 评测工作区，不进入运行时）
 │   ├── eval_common.py             # 人工评估工具共享基座（语料加载/工作区/marker 还原/命中判定/CLI 骨架）

@@ -2,7 +2,7 @@
 用户自定义提示词管理。
 
 职责：
-    1. 管理 prompts/expression/ 目录下的自定义提示词文件
+    1. 管理 data/prompts/expression/ 目录下的自定义提示词文件
     2. 提供 CRUD 操作：list / load / save / delete
     3. 管理"当前激活的提示词"（通过 marker file）
 

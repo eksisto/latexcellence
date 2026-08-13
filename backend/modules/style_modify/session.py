@@ -1,6 +1,6 @@
 """style_modify Agent 会话存储与候选文件管理。
 
-会话目录位于应用管理的缓存目录（默认 style_modify_sessions/），不进入用户项目。
+会话目录位于应用管理的缓存目录（默认 data/style_modify_sessions/），不进入用户项目。
 真实项目始终只读；候选文件只写入 session baseline/overlay，shadow 目录用于隔离
 编译。proposal 确认后通过 LatexProject 的公开批量事务接口写回真实项目。
 """
@@ -50,18 +50,15 @@ _IGNORED_DIRS_ANY_DEPTH = {
     "__pycache__",
 }
 # 仅项目根层级忽略的应用运行时目录。这些是应用自身在项目根下生成的
-# 缓存/产物目录（如 plots/、templates/）；但用户项目中嵌套的、名称相同
-# 的合法源码目录（如 thesis/plots/、book/templates/）必须保留，否则
+# 缓存/产物容器（运行时数据统一放在 data/ 下）；但用户项目中嵌套的、
+# 名称相同的合法源码目录（如 thesis/data/、book/data/）必须保留，否则
 # Agent 会看不到它们，shadow 编译也会因缺文件产生误导性失败。
 _IGNORED_APP_DIRS = {
     "static",
     "dist",
     "build",
     "logs",
-    "templates",
-    "plots",
-    "writing_chat_sessions",
-    "style_modify_sessions",
+    "data",
 }
 
 
@@ -135,7 +132,7 @@ def _allowed_project_path(parts: tuple[str, ...]) -> bool:
     """判断相对路径是否允许进入 Agent 视野 / shadow 副本。
 
     通用忽略目录在任何层级生效；应用运行时目录只在项目根层级忽略，
-    嵌套的同名目录（如 thesis/plots/）视为普通项目源码保留。
+    嵌套的同名目录（如 thesis/data/）视为普通项目源码保留。
     """
     parent_parts = parts[:-1]
     if any(

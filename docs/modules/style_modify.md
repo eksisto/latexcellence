@@ -39,10 +39,10 @@ LaTeX 不放在 JSON 字符串中传输，采用与 OCR 模块一致的分隔符
 
 ### 会话目录
 
-会话目录位于应用缓存目录，不放入用户项目。默认根目录为 `style_modify_sessions/`。
+会话目录位于应用缓存目录，不放入用户项目。默认根目录为 `data/style_modify_sessions/`。
 
 ```text
-style_modify_sessions/<session_id>/
+data/style_modify_sessions/<session_id>/
 ├── meta.json       # 会话状态、proposal、消息历史
 ├── baseline/       # 首次候选修改时冻结的原始文件
 ├── overlay/        # 当前候选文件
@@ -50,7 +50,7 @@ style_modify_sessions/<session_id>/
 └── trace.jsonl     # Agent 运行轨迹
 ```
 
-操作备份保存在 `style_modify_sessions/operations/<operation_id>/`，包含 `before/`、`applied/` 和 `meta.json`。
+操作备份保存在 `data/style_modify_sessions/operations/<operation_id>/`，包含 `before/`、`applied/` 和 `meta.json`。
 
 ### 私有工具
 
@@ -115,7 +115,7 @@ SSE 事件类型包括 `session`、`plan`、`tool_call`、`tool_result`、`file_
 | 字段 | 默认值 | 说明 |
 | --- | --- | --- |
 | `enabled` | `true` | 是否启用项目 Agent 模式 |
-| `sessions_dir` | `style_modify_sessions/` | 会话缓存目录 |
+| `sessions_dir` | `data/style_modify_sessions/` | 会话缓存目录 |
 | `max_rounds` | `20` | Agent 最大轮数 |
 | `max_tool_calls` | `100` | 单会话工具调用上限 |
 | `max_compile_runs` | `10` | 单会话 shadow 编译次数上限 |

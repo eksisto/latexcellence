@@ -57,7 +57,7 @@ class ExpressionOptConfig(BaseModel):
     enabled: bool = True  # 是否启用
     batch_size: int = 3  # 每批发送给 LLM 的段落数
     default_prompt: str = "请优化以下段落的学术表达..."  # 默认提示词
-    custom_prompts_dir: str = "prompts/expression/"  # 用户自定义提示词存放目录
+    custom_prompts_dir: str = "data/prompts/expression/"  # 用户自定义提示词存放目录
 
 
 class FormulaOCRConfig(BaseModel):
@@ -80,7 +80,7 @@ class TemplateGenConfig(BaseModel):
     """模板生成模块配置"""
 
     enabled: bool = True  # 是否启用
-    output_dir: str = "templates/"  # 生成模板的输出目录
+    output_dir: str = "data/templates/"  # 生成模板的输出目录
     # ── 自主生成 Agent 配置 ──
     agent_max_rounds: int = Field(50, ge=1, le=70)  # Agent 最大工具调用轮数（防发散）
     agent_max_files: int = Field(30, ge=1, le=200)  # 单次生成的最大文件数
@@ -142,7 +142,7 @@ class StyleModifyAgentConfig(BaseModel):
     """style_modify 项目 Agent 配置"""
 
     enabled: bool = True  # 是否启用项目 Agent 模式
-    sessions_dir: str = "style_modify_sessions/"  # 会话缓存目录
+    sessions_dir: str = "data/style_modify_sessions/"  # 会话缓存目录
     max_rounds: int = Field(20, ge=1, le=50)  # Agent 最大工具轮数
     max_tool_calls: int = Field(100, ge=1, le=500)  # 单轮会话工具调用上限
     max_compile_runs: int = Field(10, ge=1, le=100)  # 单轮会话编译次数上限
@@ -197,8 +197,8 @@ class WritingChatConfig(BaseModel):
 
     enabled: bool = True  # 是否启用
     compression_threshold_tokens: int = 200000  # 触发上下文压缩的累计 token 阈值
-    sessions_dir: str = "writing_chat_sessions/"  # 会话持久化目录
-    custom_prompts_dir: str = "prompts/writing_chat/"  # 助手提示词存放目录
+    sessions_dir: str = "data/writing_chat_sessions/"  # 会话持久化目录
+    custom_prompts_dir: str = "data/prompts/writing_chat/"  # 助手提示词存放目录
     summary_temperature: float = 0.2  # 生成压缩摘要时的温度
     summary_max_tokens: int = 50000  # 压缩摘要最大生成 token 数
     # 是否在聊天中启用联网搜索（受全局 web_search.enabled 约束）
@@ -319,7 +319,7 @@ class BibManagerConfig(BaseModel):
     """参考文献管理模块配置"""
 
     enabled: bool = True  # 是否启用
-    format_configs_dir: str = "formats/"  # 保存的格式配置文件目录
+    format_configs_dir: str = "data/formats/"  # 保存的格式配置文件目录
     providers: BibProvidersConfig = BibProvidersConfig()  # DOI 数据源配置
 
 
@@ -327,7 +327,7 @@ class PlotGenConfig(BaseModel):
     """科研绘图配置"""
 
     enabled: bool = True
-    output_dir: str = "plots/"
+    output_dir: str = "data/plots/"
     agent_max_rounds: int = Field(20, ge=1, le=50)
     agent_max_files: int = Field(30, ge=1, le=200)
     agent_max_file_size_kb: int = Field(1024, ge=1)

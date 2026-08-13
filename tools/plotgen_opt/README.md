@@ -127,7 +127,7 @@ python tools/generality_gate.py size --baseline \
 1. 读取 `data/<file>`，调用 `PlotGenService.create_session_from_upload()` 上传建会话；
 2. 调用 `generate()` 流式消费 SSE 事件（每条带 `ts_ms` 相对时间戳），统计
    `upload / recommendation / agent / total` 各阶段耗时；
-3. 从 Agent 沙箱（`plots/<session_id>/`）拷贝 `trace.jsonl` 副本；
+3. 从 Agent 沙箱（`data/plots/<session_id>/`）拷贝 `trace.jsonl` 副本；
 4. 统计工具调用分布、警告数、错误数、执行成功 / TikZ 编译成功标志、轮数与是否
    截断（达到 `features.plot_gen.agent_max_rounds`）；
 5. 汇总启发式质量评分（0-100）。

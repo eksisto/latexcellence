@@ -74,7 +74,8 @@ latexcellence/
 ├── docs/                      # 开发文档（本目录）
 ├── tests/                     # pytest 测试
 ├── static/                    # Vite 构建产物
-└── prompts/ templates/ formats/ plots/ logs/ writing_chat_sessions/  # 运行期与用户数据目录
+├── logs/                    # 运行时日志
+└── data/                    # 运行期与用户数据统一目录（formats/ plots/ prompts/ style_modify_sessions/ templates/ writing_chat_sessions/）
 ```
 
 > 带逐文件注释的完整目录树见 [PROJECT_SUMMARY.md](../PROJECT_SUMMARY.md)。

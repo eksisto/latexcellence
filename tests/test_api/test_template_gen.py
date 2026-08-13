@@ -70,7 +70,7 @@ def _collect(service, description, llm):
         if not output_dir.is_absolute():
             output_dir = Path.cwd() / output_dir
         session_id = uuid.uuid4().hex[:12]
-        sandbox = output_dir / "agent" / session_id
+        sandbox = output_dir / session_id
         sandbox.mkdir(parents=True, exist_ok=True)
         events = []
         async for ev in service.generate(description, "zh", sandbox=sandbox, llm=llm):
@@ -87,7 +87,7 @@ class TestAgentLoop:
     def _load_cfg(self, tmp_path, monkeypatch):
         load_config("config.json")
         cfg = get_config()
-        # 重定向输出目录到临时目录，避免污染真实 templates/
+        # 重定向输出目录到临时目录，避免污染真实 data/templates/
         monkeypatch.setattr(
             cfg.features.template_gen,
             "output_dir",
@@ -1045,7 +1045,7 @@ class TestGenServiceOrchestration:
         assert events[-1]["type"] == "done"
         done = events[-1]
         sandbox = Path(done["sandbox"])
-        # 沙箱应创建在 output_dir/agent/<session_id>/ 下
-        assert sandbox.is_relative_to(tmp_path / "templates" / "agent")
+        # 沙箱应创建在 output_dir/<session_id>/ 下
+        assert sandbox.is_relative_to(tmp_path / "templates")
         assert (sandbox / "main.tex").exists()
         assert done["session_id"] == sandbox.name

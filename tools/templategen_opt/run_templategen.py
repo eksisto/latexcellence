@@ -179,10 +179,10 @@ async def run_scenario(
     # 事件流里没有 run_end（服务不转发），从 trace.jsonl 读取；
     # 无 done 说明生成未正常完成（超时/异常），此时不得回退到复制当前目录。
     sandbox = Path(done["sandbox"]) if done else None
-    is_agent_sandbox = sandbox is not None and "agent" in sandbox.parts
+    is_sandbox = sandbox is not None
     trace_events: list[dict[str, Any]] = []
     run_meta: dict[str, Any] = {}
-    if is_agent_sandbox and sandbox.exists():
+    if is_sandbox and sandbox.exists():
         trace_path = sandbox / "trace.jsonl"
         if trace_path.exists():
             for line in trace_path.read_text(
@@ -204,7 +204,7 @@ async def run_scenario(
 
     # 复制沙箱快照（自包含，避免 cleanup 删除后无法回看）
     sandbox_snapshot = out_dir / "sandbox"
-    if is_agent_sandbox and sandbox.exists() and sandbox.is_dir():
+    if is_sandbox and sandbox.exists() and sandbox.is_dir():
         if sandbox_snapshot.exists():
             shutil.rmtree(sandbox_snapshot)
         shutil.copytree(

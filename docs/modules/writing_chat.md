@@ -169,8 +169,8 @@ writing_chat 是 `chat_stream_with_tools` 方法的主要消费者。该方法�
 | 字段 | 默认值 | 说明 |
 | --- | --- | --- |
 | compression_threshold_tokens | 200000 | 触发上下文压缩的 token 阈值 |
-| sessions_dir | writing_chat_sessions/ | 会话持久化目录 |
-| custom_prompts_dir | prompts/writing_chat/ | 助手提示词目录 |
+| sessions_dir | data/writing_chat_sessions/ | 会话持久化目录 |
+| custom_prompts_dir | data/prompts/writing_chat/ | 助手提示词目录 |
 | summary_temperature | 0.2 | 摘要 LLM 温度 |
 | summary_max_tokens | 50000 | 摘要最大 token 数 |
 | features.function_calling.scholarly_research.enabled | false | 学术研究工具总开关 |

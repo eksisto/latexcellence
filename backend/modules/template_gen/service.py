@@ -53,7 +53,7 @@ class TemplateGenService:
         if not output_dir.is_absolute():
             output_dir = Path.cwd() / output_dir
         session_id = uuid.uuid4().hex[:12]
-        sandbox = output_dir / "agent" / session_id
+        sandbox = output_dir / session_id
         sandbox.mkdir(parents=True, exist_ok=True)
         logger.info(f"Agent sandbox has been created: {sandbox}")
 

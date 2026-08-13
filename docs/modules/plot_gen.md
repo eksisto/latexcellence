@@ -44,9 +44,9 @@ backend/modules/plot_gen/
 
 ## 沙箱与执行
 
-- 上传数据写入 `plots/<session_id>/data/`
-- Agent 脚本写入 `plots/<session_id>/scripts/`
-- 产物写入 `plots/<session_id>/artifacts/`
+- 上传数据写入 `data/plots/<session_id>/data/`
+- Agent 脚本写入 `data/plots/<session_id>/scripts/`
+- 产物写入 `data/plots/<session_id>/artifacts/`
 - Python 子进程使用 `-I -B`（隐含 `-E`/`-s`，忽略 `PYTHON*` 环境变量与 user site），设置 `MPLBACKEND=Agg`
 - 每次执行前在 `scripts/_run_plot.py` 头部注入 `sandbox_guard.render_guard_bootstrap()` 的防护引导代码，先安装审计钩子再执行风格注入与用户脚本
 - 临时目录（`TMPDIR`/`TEMP`/`TMP`）重定向到 `tmp/`、matplotlib 缓存（`MPLCONFIGDIR`）重定向到 `.cache/matplotlib/`，均在沙箱内部

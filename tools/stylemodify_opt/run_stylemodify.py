@@ -323,7 +323,7 @@ async def main() -> None:
     out_root = Path(__file__).resolve().parent / "results"
     out_root.mkdir(parents=True, exist_ok=True)
 
-    # 评测会话与用户会话隔离，运行后不污染 style_modify_sessions/
+    # 评测会话与用户会话隔离，运行后不污染 data/style_modify_sessions/
     runtime_root = Path(__file__).resolve().parent / "runtime"
     runtime_root.mkdir(parents=True, exist_ok=True)
     cfg = get_config()

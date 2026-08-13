@@ -18,7 +18,7 @@
     全局能力会污染其他模块（如 writing_chat）的工具集。
 
 沙箱与路径安全：
-    每次生成由 service.py 在 `output_dir/agent/<session_id>/` 下创建独立目录，
+    每次生成由 service.py 在 `output_dir/<session_id>/` 下创建独立目录，
     所有 file_path 参数经 _resolve_sandbox_path 校验：禁止绝对路径、禁止 '..'、
     解析后必须仍在沙箱内、扩展名白名单限制为 LaTeX 相关文件。
 
@@ -137,7 +137,7 @@ class TemplateAgentService:
         参数：
             description: 用户对模板的自然语言描述
             language: 输出语言（注入 system prompt）
-            sandbox: 由 service.py 创建的沙箱目录（`output_dir/agent/<session_id>/`）
+            sandbox: 由 service.py 创建的沙箱目录（`output_dir/<session_id>/`）
             llm: 可选 LLM 客户端（测试注入用）
         """
         cfg = get_config()
@@ -1494,7 +1494,7 @@ def load_sandbox(output_dir: str, session_id: str) -> Path:
     """根据 session_id 解析沙箱目录（供 router 的文件读取端点使用）。
 
     安全约束：session_id 必须是纯十六进制/字母数字（生成时为 uuid hex），
-    解析后必须严格位于 `output_dir/agent/` 子目录内，禁止 `..` 逃逸到
+    解析后必须严格位于 `output_dir/` 子目录内，禁止 `..` 逃逸到
     其他模板或兄弟会话目录。
     """
     if not session_id or not session_id.strip():
@@ -1508,9 +1508,9 @@ def load_sandbox(output_dir: str, session_id: str) -> Path:
     base = Path(output_dir)
     if not base.is_absolute():
         base = Path.cwd() / base
-    agent_root = (base / "agent").resolve()
-    sandbox = (agent_root / session_id).resolve()
-    if not sandbox.is_relative_to(agent_root):
+    base_root = base.resolve()
+    sandbox = (base_root / session_id).resolve()
+    if not sandbox.is_relative_to(base_root):
         raise ValueError("session_id resolves outside the sandbox root")
     return sandbox
 
