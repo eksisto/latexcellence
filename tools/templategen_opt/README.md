@@ -176,7 +176,8 @@ export LX_REVIEW_LLM_KEY="sk-..."            # 留空=沿用生成 Key
 python tools/templategen_opt/visual_review.py opt5
 ```
 
-运行时会打印实际使用的评审模型与哪些环境变量生效。评审请求同时附带沙箱源文件
+评审专用客户端通过 OpenAI Responses API（`POST /responses`）发送视觉输入，
+脚本会自动将 Chat Completions 格式的消息转换为 Responses 格式。运行时会打印实际使用的评审模型与哪些环境变量生效。评审请求同时附带沙箱源文件
 清单与 README 摘要作为事实上下文，避免模型把「图片里看不到」误判为「文件缺失」。
 
 ### 4. `compare.py <tagA> <tagB> [--targets k1,k2] [--tolerance 5] [--visual-tolerance 1] [--no-gate]`

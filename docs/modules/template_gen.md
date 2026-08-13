@@ -73,11 +73,29 @@ Agent 自主规划文件结构 → 逐个 `write_file` → 调用 `compile_latex
 
 循环逻辑：
 
-1. 调用 `chat_with_tools`；若 LLM 无 `tool_calls`，先按"规划瘫痪防护"引导
+1. 历史消息超过上下文预算时自动压缩（保留最近若干轮，更早轮次替换为摘要），
+   防止超大 tool_call 参数把上下文撑爆
+2. 调用 `chat_with_tools`；若 LLM 无 `tool_calls`，先按"规划瘫痪防护"引导
    继续行动（见下文），连续 2 次仍无工具调用才结束
-2. 否则把 assistant 消息追加进历史，依次执行每个 `tool_call`，将工具结果以 `role:"tool"` 回传 LLM
-3. `finish` 工具立即跳出整体循环
-4. 循环中跟踪 `compile_state`（`called`/`success`）。若最后一次编译仍失败时触发 `finish`，额外推送 `warning` 事件（不阻断 `done`）。
+3. 否则把 assistant 消息追加进历史，依次执行每个 `tool_call`，将工具结果以 `role:"tool"` 回传 LLM
+4. `finish` 工具立即跳出整体循环
+5. 循环中跟踪 `compile_state`（`called`/`success`）。若最后一次编译仍失败时触发 `finish`，额外推送 `warning` 事件（不阻断 `done`）。
+
+## 写盘静态校验
+
+`_ToolExecutor._write_file()` 在写盘前执行多层通用校验，把常见 LaTeX
+结构错误从"编译期"前移到"写盘期"：
+
+- `.tex` 正文拒绝 `\newcommand`/`\renewcommand`/`\setlength` 等样式定义
+- beamer 主文件含实际中文内容、未加载 ctex/xeCJK 且本地依赖也未加载 ctex/xeCJK 时拒绝
+- `.cls/.sty` 的 `\ProvidesClass`/`\ProvidesPackage` 可选日期必须 `YYYY/MM/DD`
+- `.cls/.sty` 内部允许 `@` 私有名；正文 `.tex` 禁止定义或调用 `@` 命令
+- `.cls` 的 `\DeclareOption`/`\ExecuteOptions` 必须在 `\ProcessOptions` 之前
+- setter 的 accessor 必须已有 `\newcommand` 默认值
+- 正文文件禁止使用 `\@...` 私有控制序列
+
+`compile_latex` 的质量门禁只读取最后一次主 `.log`，避免把早期 pass 的
+undefined citation/reference 误判为失败；未解析引用/缺字仍会阻断成功。
 5. 达到 `agent_max_rounds` 仍未 finish → 自动结束并推送提示；若此时编译仍失败，同样推送 `warning`。
 
 ## 规划瘫痪防护（no-tool-call nudge）

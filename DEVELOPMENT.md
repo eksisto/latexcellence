@@ -16,3 +16,4 @@
 | [docs/duckduckgo-challenge.md](docs/duckduckgo-challenge.md) | DDG 验证码处理与前端交互说明 |
 | [docs/closed-loop-optimization-lessons.md](docs/closed-loop-optimization-lessons.md) | Agent 闭环优化复盘与通用性门禁说明 |
 | [docs/showcase.md](docs/showcase.md) | 独立展示页 |
+| [tools/visual_review_api.py](tools/visual_review_api.py) | 视觉评审工具的 Chat Completions → Responses API 请求适配 |

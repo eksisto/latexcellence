@@ -311,6 +311,53 @@ class TestDetectEngineFromFile:
         )
         assert detect_engine_from_file(tex_file) == "xelatex"
 
+    def test_detect_xelatex_from_local_style_dependency(self, tmp_path):
+        """主文件只加载本地 .sty 时，也应沿依赖检测 fontspec。"""
+        tex_file = tmp_path / "main.tex"
+        tex_file.write_text(
+            r"\documentclass{article}"
+            "\n"
+            r"\usepackage{local-theme}"
+            "\n"
+            r"\begin{document}Hello\end{document}",
+            encoding="utf-8",
+        )
+        (tmp_path / "local-theme.sty").write_text(
+            r"\ProvidesPackage{local-theme}" "\n" r"\RequirePackage{fontspec}",
+            encoding="utf-8",
+        )
+
+        assert detect_engine_from_file(tex_file) == "xelatex"
+
+    def test_detect_xelatex_from_local_input_unicode(self, tmp_path):
+        r"""主文件通过本地 \input 引入中文时，也应排除 pdfLaTeX。"""
+        tex_file = tmp_path / "main.tex"
+        tex_file.write_text(
+            r"\documentclass{article}"
+            "\n"
+            r"\input{sections/body}"
+            "\n"
+            r"\begin{document}\end{document}",
+            encoding="utf-8",
+        )
+        (tmp_path / "sections").mkdir()
+        (tmp_path / "sections" / "body.tex").write_text("中文内容", encoding="utf-8")
+
+        assert detect_engine_from_file(tex_file) == "xelatex"
+
+    def test_ignore_unloaded_local_style_dependency(self, tmp_path):
+        """未被主文件加载的本地样式不能污染引擎检测。"""
+        tex_file = tmp_path / "main.tex"
+        tex_file.write_text(
+            r"\documentclass{article}\begin{document}Hello\end{document}",
+            encoding="utf-8",
+        )
+        (tmp_path / "unused.sty").write_text(
+            r"\RequirePackage{fontspec}", encoding="utf-8"
+        )
+
+        assert detect_engine_from_file(tex_file) == "pdflatex"
+
     def test_detect_xelatex_xecjk(self, tmp_path):
         """检测 xeCJK 宏包 → xelatex。"""
         tex_file = tmp_path / "test.tex"
@@ -363,7 +410,7 @@ class TestDetectEngineFromFile:
         assert detect_engine_from_file(tex_file) == "lualatex"
 
     def test_detect_lualatex_directlua(self, tmp_path):
-        """检测 \directlua 命令 → lualatex。"""
+        r"""检测 \directlua 命令 → lualatex。"""
         tex_file = tmp_path / "test.tex"
         tex_file.write_text(
             r"\documentclass{article}"

@@ -182,7 +182,8 @@ export LX_REVIEW_LLM_KEY="sk-..."            # 留空=沿用生成 Key
 python tools/plotgen_opt/visual_review.py opt3
 ```
 
-运行时会打印实际使用的评审模型与哪些环境变量生效。该环境变量约定与
+评审专用客户端通过 OpenAI Responses API（`POST /responses`）发送视觉输入，
+脚本会自动将 Chat Completions 格式的消息转换为 Responses 格式。运行时会打印实际使用的评审模型与哪些环境变量生效。该环境变量约定与
 `tools/templategen_opt/visual_review.py` 完全一致，两个工具的评审模型可统一切换。
 
 ### 6. `compare.py [tagA tagB] [--targets k1,k2] [--tolerance 5] [--visual-tolerance 1] [--no-gate]`

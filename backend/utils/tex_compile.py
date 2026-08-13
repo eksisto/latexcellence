@@ -131,14 +131,112 @@ def _filter_with_regex(raw_output: str, max_chars: int = 3000) -> str:
     return raw_output[-max_chars:] if len(raw_output) > max_chars else raw_output
 
 
+_LOCAL_ENGINE_SCAN_SUFFIXES = frozenset(
+    {".tex", ".ltx", ".latex", ".sty", ".cls", ".cfg", ".def"}
+)
+_LOCAL_DEPENDENCY_RE = re.compile(
+    r"\\(?P<command>input|include|subfile|documentclass|usepackage|"
+    r"RequirePackage|LoadClass)"
+    r"(?:\s*\[[^\]]*\])?\s*\{(?P<names>[^{}]+)\}"
+)
+
+
+def _strip_tex_comments(content: str) -> str:
+    """移除 TeX 注释，保留转义的百分号。"""
+    lines: list[str] = []
+    for line in content.splitlines():
+        uncommented = re.split(r"(?<!\\)%", line, maxsplit=1)[0]
+        if uncommented.strip():
+            lines.append(uncommented.strip())
+    return "\n".join(lines)
+
+
+def _local_dependency_candidates(
+    root: Path, current_dir: Path, raw_name: str
+) -> list[Path]:
+    """解析项目内的 input/package/class 名称，不访问 TeX 发行版文件。"""
+    name = raw_name.strip()
+    if not name or name.startswith(("/", "\\")):
+        return []
+    relative_name = Path(name)
+    bases = [current_dir / relative_name]
+    root_candidate = root / relative_name
+    if root_candidate != bases[0]:
+        bases.append(root_candidate)
+
+    candidates: list[Path] = []
+    for base in bases:
+        if base.suffix.lower() in _LOCAL_ENGINE_SCAN_SUFFIXES:
+            candidates.append(base)
+        else:
+            candidates.extend(
+                base.with_suffix(suffix) for suffix in _LOCAL_ENGINE_SCAN_SUFFIXES
+            )
+    return candidates
+
+
+def _read_local_engine_sources(tex_path: Path) -> list[str]:
+    """读取主文件及其可解析的本地依赖，供引擎检测使用。
+
+    只沿着 ``\\input``/``\\include``/包和类加载关系扫描项目目录，避免把
+    未使用的测试文件或用户 README 中的文字误判成当前文档的引擎需求。
+    """
+    try:
+        root = tex_path.resolve().parent
+        first = tex_path.resolve()
+    except OSError:
+        return []
+
+    queue = [first]
+    seen: set[Path] = set()
+    sources: list[str] = []
+    while queue and len(seen) < 128:
+        current = queue.pop(0)
+        try:
+            current = current.resolve()
+        except OSError:
+            continue
+        if current in seen or not current.is_file():
+            continue
+        try:
+            if not current.is_relative_to(root):
+                continue
+            content = current.read_text(encoding="utf-8", errors="replace")
+        except (OSError, UnicodeError):
+            continue
+        seen.add(current)
+        source = _strip_tex_comments(content)
+        sources.append(source)
+
+        for match in _LOCAL_DEPENDENCY_RE.finditer(source):
+            current_dir = current.parent
+            for raw_name in match.group("names").split(","):
+                for candidate in _local_dependency_candidates(
+                    root, current_dir, raw_name
+                ):
+                    try:
+                        candidate = candidate.resolve()
+                    except OSError:
+                        continue
+                    if (
+                        candidate in seen
+                        or not candidate.is_file()
+                        or not candidate.is_relative_to(root)
+                    ):
+                        continue
+                    queue.append(candidate)
+                    break
+    return sources
+
+
 def detect_engine_from_file(tex_path: Path) -> str:
     """根据 .tex 文件内容自动检测编译引擎。
 
     检测逻辑（按优先级）：
-    1. 读取文件内容并过滤注释
+    1. 读取主文件及其项目内的 \\input/\\include/类/包依赖并过滤注释
     2. 检测 XeLaTeX 专属宏包（fontspec/xeCJK/polyglossia）→ xelatex
     3. 检测 LuaLaTeX 专属宏包/命令（luacode/luatextra/directlua）→ lualatex
-    4. 检测非 ASCII 字符（中文、日文、韩文、特殊符号等）：
+    4. 检测主文件或本地依赖中的非 ASCII 字符（中文、日文、韩文、特殊符号等）：
        - pdfLaTeX 不支持 Unicode，排除 pdfLaTeX
        - 若已命中 LuaLaTeX 规则则返回 lualatex
        - 否则默认 xelatex
@@ -156,32 +254,23 @@ def detect_engine_from_file(tex_path: Path) -> str:
         )
         return "pdflatex"
 
-    try:
-        content = tex_path.read_text(encoding="utf-8", errors="replace")
-    except Exception as e:
+    sources = _read_local_engine_sources(tex_path)
+    if not sources:
         logger.warning(
-            f"Failed to read {tex_path} for engine detection: {e}, defaulting to pdflatex"
+            f"Failed to read {tex_path} for engine detection, defaulting to pdflatex"
         )
         return "pdflatex"
 
-    # 过滤注释：移除行内 % 注释，删除空行
-    lines = content.split("\n")
-    uncommented_lines = []
-    for line in lines:
-        # 移除行内注释（简单处理，不处理转义的 %）
-        if "%" in line:
-            line = line[: line.index("%")]
-        stripped = line.strip()
-        if stripped:
-            uncommented_lines.append(stripped)
-
-    uncommented = "\n".join(uncommented_lines)
+    uncommented = "\n".join(sources)
 
     # 检测 XeLaTeX 专属宏包
     xelatex_patterns = [
-        r"\\usepackage\{fontspec\}",
-        r"\\usepackage\{xeCJK\}",
-        r"\\usepackage\{polyglossia\}",
+        r"\\(?:usepackage|RequirePackage)(?:\[[^\]]*\])?\s*\{[^}]*\bfontspec\b",
+        r"\\(?:usepackage|RequirePackage)(?:\[[^\]]*\])?\s*\{[^}]*\bxeCJK\b",
+        r"\\(?:usepackage|RequirePackage)(?:\[[^\]]*\])?\s*\{[^}]*\bpolyglossia\b",
+        r"\\(?:usepackage|RequirePackage)(?:\[[^\]]*\])?\s*\{[^}]*\bunicode-math\b",
+        r"\\(?:documentclass|LoadClass)\s*\{[^}]*\bctex(?:art|book|rep)?\b",
+        r"\\set(?:main|sans|mono|CJKmain|CJKsans|CJKfamily)font\b",
     ]
     for pattern in xelatex_patterns:
         if re.search(pattern, uncommented):
@@ -190,8 +279,9 @@ def detect_engine_from_file(tex_path: Path) -> str:
 
     # 检测 LuaLaTeX 专属宏包/命令
     lualatex_patterns = [
-        r"\\usepackage\{luacode\}",
-        r"\\usepackage\{luatextra\}",
+        r"\\(?:usepackage|RequirePackage)(?:\[[^\]]*\])?\s*\{[^}]*\bluacode\b",
+        r"\\(?:usepackage|RequirePackage)(?:\[[^\]]*\])?\s*\{[^}]*\bluatextra\b",
+        r"\\(?:usepackage|RequirePackage)(?:\[[^\]]*\])?\s*\{[^}]*\bluatexja\b",
         r"\\directlua",
     ]
     for pattern in lualatex_patterns:

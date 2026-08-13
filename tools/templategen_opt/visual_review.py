@@ -35,6 +35,7 @@ from backend.core.llm_client import get_llm_client  # noqa: E402
 from backend.utils.json_utils import retry_with_validation  # noqa: E402
 from tex_path import ensure_tex_path  # noqa: E402
 from templategen_opt.descriptions import SCENARIOS  # noqa: E402
+from visual_review_api import build_responses_request  # noqa: E402
 
 load_config("config.json")
 
@@ -50,7 +51,7 @@ REVIEW_API_KEY = os.environ.get("LX_REVIEW_LLM_KEY", "").strip()
 _review_client = None
 
 
-def _get_review_client():
+def _get_review_client() -> Any:
     """按环境变量创建独立评审客户端（进程内只创建一次）。"""
     global _review_client
     if _review_client is None:
@@ -75,20 +76,20 @@ async def _review_chat(
     messages: list[dict[str, Any]],
     temperature: float | None = None,
     max_tokens: int | None = None,
-    response_format: dict | None = None,
+    response_format: dict[str, Any] | None = None,
 ) -> str:
-    """评审专用 chat：配置了独立评审模型时走独立客户端，否则退回生成客户端。"""
+    """调用评审模型；独立评审客户端使用 Responses API。"""
     if REVIEW_MODEL or REVIEW_BASE_URL or REVIEW_API_KEY:
         client = _get_review_client()
-        kwargs: dict[str, Any] = {
-            "model": REVIEW_MODEL or get_config().llm.model,
-            "temperature": temperature,
-            "max_tokens": max_tokens,
-        }
-        if response_format:
-            kwargs["response_format"] = response_format
-        resp = await client.chat.completions.create(messages=messages, **kwargs)
-        return resp.choices[0].message.content or ""
+        kwargs = build_responses_request(
+            messages,
+            model=REVIEW_MODEL or get_config().llm.model,
+            temperature=temperature,
+            max_tokens=max_tokens,
+            response_format=response_format,
+        )
+        resp = await client.responses.create(**kwargs)
+        return resp.output_text or ""
     llm = get_llm_client()
     return await llm.chat(
         messages,
@@ -292,7 +293,9 @@ async def review_scenario(llm: Any, key: str, result_dir: Path) -> dict[str, Any
             max_retries=3,
             logger_name="template_gen.visual_review",
             temperature=0.1,
-            max_tokens=1024,
+            # Responses 视觉模型的推理 token 也计入 max_output_tokens；1024
+            # 容易在尚未输出 JSON 前耗尽，导致空 output_text。
+            max_tokens=2048,
             response_format={"type": "json_object"},
         )
     except Exception as e:  # noqa: BLE001

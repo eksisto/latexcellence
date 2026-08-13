@@ -14,6 +14,13 @@ from backend.core.config import load_config, get_config
 from backend.modules.template_gen.agent import (
     TemplateAgentService,
     _ToolExecutor,
+    _attach_source_context,
+    _check_body_style_commands,
+    _check_cjk_support,
+    _check_class_option_order,
+    _check_provides_date,
+    _check_setter_accessors,
+    _compact_messages,
     _extract_errors,
     _format_error_analysis,
     _trim_log,
@@ -148,6 +155,41 @@ class TestAgentLoop:
             .read_text(encoding="utf-8")
             .startswith(r"\documentclass")
         )
+
+    def test_context_compaction_keeps_recent_rounds(self):
+        messages = [
+            {"role": "system", "content": "sys"},
+            {"role": "user", "content": "req"},
+        ]
+        for i in range(30):
+            messages.append(
+                {
+                    "role": "assistant",
+                    "content": "",
+                    "tool_calls": [
+                        {
+                            "id": f"t{i}",
+                            "type": "function",
+                            "function": {
+                                "name": "write_file",
+                                "arguments": '{"content":"' + "x" * 5000 + '"}',
+                            },
+                        }
+                    ],
+                }
+            )
+            messages.append({"role": "tool", "tool_call_id": f"t{i}", "content": "ok"})
+
+        compacted = _compact_messages(messages)
+
+        assert compacted[0] == messages[0]
+        assert compacted[1] == messages[1]
+        assert any(
+            m.get("role") == "user" and "compacted" in m.get("content", "")
+            for m in compacted
+        )
+        assert compacted[-1] == messages[-1]
+        assert len(compacted) < len(messages)
 
     def test_path_traversal_rejected(self, tmp_path):
         svc = TemplateAgentService()
@@ -429,6 +471,50 @@ class TestToolExecutorCompile:
         assert "missing field" in text
         assert "\\bibliographystyle" in text
 
+    def test_quality_gate_uses_final_log_not_stale_raw_output(
+        self, tmp_path, monkeypatch
+    ):
+        """后续 TeX pass 已修复的首轮引用 warning 不应阻断成功。"""
+        import backend.modules.template_gen.agent as agent_mod
+
+        cfg = get_config()
+        cfg.features.template_gen.output_dir = str(tmp_path)
+        (tmp_path / "main.tex").write_text(
+            r"\documentclass{article}\begin{document}x\end{document}",
+            encoding="utf-8",
+        )
+        # latexmk 的 stdout 可能保留早期 pass 的 undefined citation；主
+        # .log 是最后一次 pass，已无该 warning，但仍可包含非致命排版提示。
+        (tmp_path / "main.log").write_text(
+            "This is the final TeX pass.\n"
+            "Output written on main.xdv (1 page).\n"
+            "Overfull \\hbox (2.0pt too wide) in paragraph at lines 1--2\n",
+            encoding="utf-8",
+        )
+        fake = SimpleNamespace(
+            success=True,
+            raw_output=(
+                "Package natbib Warning: There were undefined citations.\n"
+                "LaTeX Warning: Reference `old' undefined on input line 1.\n"
+                "main.xdv -> main.pdf"
+            ),
+            filtered_output="",
+            timed_out=False,
+            used_texfot=False,
+        )
+
+        async def _fake_run(*args, **kwargs):
+            return fake
+
+        monkeypatch.setattr(agent_mod, "run_tex_compile", _fake_run)
+        executor = _ToolExecutor(tmp_path, cfg, MagicMock())
+
+        text, event = asyncio.run(executor._compile_latex({"main_file": "main.tex"}))
+
+        assert event["success"] is True
+        assert "undefined" not in text.lower()
+        assert event["quality_warnings"]
+
 
 class TestToolExecutorWriteFile:
     """write_file 写盘前的 LaTeX 内容校验。"""
@@ -470,6 +556,319 @@ class TestToolExecutorWriteFile:
         content = (tmp_path / "main.tex").read_text(encoding="utf-8")
         assert r"\begin{document}" in content
 
+    def test_rejects_invalid_provides_date(self, tmp_path):
+        executor = self._make_executor(tmp_path)
+
+        text, ev = asyncio.run(
+            executor._write_file(
+                {
+                    "file_path": "cv.cls",
+                    "content": (
+                        r"\NeedsTeXFormat{LaTeX2e}"
+                        r"\ProvidesClass{cv}[2024/01 Master Thesis Template]"
+                        r"\LoadClass{article}"
+                    ),
+                }
+            )
+        )
+
+        assert ev["ok"] is False
+        assert "YYYY/MM/DD" in text
+        assert "Missing = inserted" in text
+        assert not (tmp_path / "cv.cls").exists()
+
+    def test_accepts_full_provides_date(self, tmp_path):
+        executor = self._make_executor(tmp_path)
+
+        text, ev = asyncio.run(
+            executor._write_file(
+                {
+                    "file_path": "cv.cls",
+                    "content": (
+                        r"\NeedsTeXFormat{LaTeX2e}"
+                        r"\ProvidesClass{cv}[2024/01/01 Master Thesis Template]"
+                        r"\LoadClass{article}"
+                    ),
+                }
+            )
+        )
+
+        assert ev["ok"] is True
+        assert (tmp_path / "cv.cls").exists()
+
+    def test_provides_date_helper_accepts_no_optional_arg(self):
+        assert _check_provides_date(r"\ProvidesPackage{theme}") is None
+
+    def test_accepts_private_def_in_public_setter(self, tmp_path):
+        """.cls/.sty 读取时 `@` 是字母，setter 内定义私有名是合法 LaTeX。"""
+        executor = self._make_executor(tmp_path)
+
+        text, ev = asyncio.run(
+            executor._write_file(
+                {
+                    "file_path": "thesis.cls",
+                    "content": (
+                        r"\NeedsTeXFormat{LaTeX2e}"
+                        r"\ProvidesClass{thesis}[2024/01/01 Thesis]"
+                        r"\newcommand{\university}[1]{\def\thesis@university{#1}}"
+                    ),
+                }
+            )
+        )
+
+        assert ev["ok"] is True
+        assert (tmp_path / "thesis.cls").exists()
+
+    def test_accepts_public_setter_without_at_assignment(self, tmp_path):
+        executor = self._make_executor(tmp_path)
+
+        text, ev = asyncio.run(
+            executor._write_file(
+                {
+                    "file_path": "thesis.cls",
+                    "content": (
+                        r"\NeedsTeXFormat{LaTeX2e}"
+                        r"\ProvidesClass{thesis}[2024/01/01 Thesis]"
+                        r"\newcommand{\universityvalue}{}"
+                        r"\newcommand{\university}[1]"
+                        r"{\renewcommand{\universityvalue}{#1}}"
+                    ),
+                }
+            )
+        )
+
+        assert ev["ok"] is True
+        assert (tmp_path / "thesis.cls").exists()
+
+    def test_rejects_style_definition_in_body_file(self, tmp_path):
+        executor = self._make_executor(tmp_path)
+
+        text, ev = asyncio.run(
+            executor._write_file(
+                {
+                    "file_path": "main.tex",
+                    "content": (
+                        r"\documentclass{article}"
+                        r"\renewcommand{\maketitlepage}{hello}"
+                        r"\begin{document}hi\end{document}"
+                    ),
+                }
+            )
+        )
+
+        assert ev["ok"] is False
+        assert "style command" in text
+        assert not (tmp_path / "main.tex").exists()
+
+    def test_rejects_cjk_without_support(self, tmp_path):
+        executor = self._make_executor(tmp_path)
+
+        text, ev = asyncio.run(
+            executor._write_file(
+                {
+                    "file_path": "main.tex",
+                    "content": (
+                        r"\documentclass{beamer}"
+                        r"\begin{document}中文内容\end{document}"
+                    ),
+                }
+            )
+        )
+
+        assert ev["ok"] is False
+        assert "ctex" in text
+        assert not (tmp_path / "main.tex").exists()
+
+    def test_accepts_cjk_with_ctex(self, tmp_path):
+        executor = self._make_executor(tmp_path)
+
+        text, ev = asyncio.run(
+            executor._write_file(
+                {
+                    "file_path": "main.tex",
+                    "content": (
+                        r"\documentclass{ctexart}"
+                        r"\begin{document}中文内容\end{document}"
+                    ),
+                }
+            )
+        )
+
+        assert ev["ok"] is True
+        assert (tmp_path / "main.tex").exists()
+
+    def test_accepts_article_cjk_without_inline_package(self, tmp_path):
+        """article 的 CJK 支持可能来自本地 .sty，正文文件不应被误伤。"""
+        executor = self._make_executor(tmp_path)
+
+        text, ev = asyncio.run(
+            executor._write_file(
+                {
+                    "file_path": "main.tex",
+                    "content": (
+                        r"\documentclass{article}"
+                        r"\usepackage{conference-paper}"
+                        r"\begin{document}中文内容\end{document}"
+                    ),
+                }
+            )
+        )
+
+        assert ev["ok"] is True
+
+    def test_accepts_beamer_cjk_with_local_style_support(self, tmp_path):
+        """beamer 的 CJK 支持可能由本地样式提供，正文文件不应被误伤。"""
+        executor = self._make_executor(tmp_path)
+        (tmp_path / "mytheme.sty").write_text(
+            r"\RequirePackage{ctex}", encoding="utf-8"
+        )
+
+        text, ev = asyncio.run(
+            executor._write_file(
+                {
+                    "file_path": "main.tex",
+                    "content": (
+                        r"\documentclass{beamer}"
+                        r"\usepackage{mytheme}"
+                        r"\begin{document}中文内容\end{document}"
+                    ),
+                }
+            )
+        )
+
+        assert ev["ok"] is True
+        assert (tmp_path / "main.tex").exists()
+
+    def test_rejects_beamer_cjk_with_non_cjk_local_style(self, tmp_path):
+        """本地样式确实存在但没有加载 ctex/xeCJK 时仍应拒绝，避免漏判。"""
+        executor = self._make_executor(tmp_path)
+        (tmp_path / "mytheme.sty").write_text(
+            r"\ProvidesPackage{mytheme}", encoding="utf-8"
+        )
+
+        text, ev = asyncio.run(
+            executor._write_file(
+                {
+                    "file_path": "main.tex",
+                    "content": (
+                        r"\documentclass{beamer}"
+                        r"\usepackage{mytheme}"
+                        r"\begin{document}中文内容\end{document}"
+                    ),
+                }
+            )
+        )
+
+        assert ev["ok"] is False
+        assert "ctex" in text
+        assert not (tmp_path / "main.tex").exists()
+
+    def test_accepts_beamer_cjk_in_comment_only(self, tmp_path):
+        """中文只出现在注释里时不触发缺字误报。"""
+        executor = self._make_executor(tmp_path)
+
+        text, ev = asyncio.run(
+            executor._write_file(
+                {
+                    "file_path": "main.tex",
+                    "content": (
+                        r"\documentclass{beamer}"
+                        "\n"
+                        "% 中文注释，不是正文内容"
+                        "\n"
+                        r"\begin{document}English\end{document}"
+                    ),
+                }
+            )
+        )
+
+        assert ev["ok"] is True
+        assert (tmp_path / "main.tex").exists()
+
+    def test_rejects_class_options_after_process_options(self, tmp_path):
+        executor = self._make_executor(tmp_path)
+
+        text, ev = asyncio.run(
+            executor._write_file(
+                {
+                    "file_path": "thesis.cls",
+                    "content": (
+                        r"\NeedsTeXFormat{LaTeX2e}"
+                        r"\ProvidesClass{thesis}[2024/01/01 Thesis]"
+                        r"\ProcessOptions\relax"
+                        r"\DeclareOption{print}{\def\print{1}}"
+                    ),
+                }
+            )
+        )
+
+        assert ev["ok"] is False
+        assert "ProcessOptions" in text
+        assert not (tmp_path / "thesis.cls").exists()
+
+    def test_accepts_class_options_before_process_options(self, tmp_path):
+        executor = self._make_executor(tmp_path)
+
+        text, ev = asyncio.run(
+            executor._write_file(
+                {
+                    "file_path": "thesis.cls",
+                    "content": (
+                        r"\NeedsTeXFormat{LaTeX2e}"
+                        r"\ProvidesClass{thesis}[2024/01/01 Thesis]"
+                        r"\DeclareOption{print}{\def\print{1}}"
+                        r"\ProcessOptions\relax"
+                        r"\LoadClass{article}"
+                    ),
+                }
+            )
+        )
+
+        assert ev["ok"] is True
+        assert (tmp_path / "thesis.cls").exists()
+
+    def test_rejects_setter_without_accessor_default(self, tmp_path):
+        executor = self._make_executor(tmp_path)
+
+        text, ev = asyncio.run(
+            executor._write_file(
+                {
+                    "file_path": "thesis.cls",
+                    "content": (
+                        r"\NeedsTeXFormat{LaTeX2e}"
+                        r"\ProvidesClass{thesis}[2024/01/01 Thesis]"
+                        r"\newcommand{\university}[1]"
+                        r"{\renewcommand{\universityvalue}{#1}}"
+                    ),
+                }
+            )
+        )
+
+        assert ev["ok"] is False
+        assert "universityvalue" in text
+        assert not (tmp_path / "thesis.cls").exists()
+
+    def test_accepts_setter_with_accessor_default(self, tmp_path):
+        executor = self._make_executor(tmp_path)
+
+        text, ev = asyncio.run(
+            executor._write_file(
+                {
+                    "file_path": "thesis.cls",
+                    "content": (
+                        r"\NeedsTeXFormat{LaTeX2e}"
+                        r"\ProvidesClass{thesis}[2024/01/01 Thesis]"
+                        r"\newcommand{\universityvalue}{}"
+                        r"\newcommand{\university}[1]"
+                        r"{\renewcommand{\universityvalue}{#1}}"
+                    ),
+                }
+            )
+        )
+
+        assert ev["ok"] is True
+        assert (tmp_path / "thesis.cls").exists()
+
     def test_rejects_unbalanced_braces(self, tmp_path):
         executor = self._make_executor(tmp_path)
 
@@ -480,6 +879,65 @@ class TestToolExecutorWriteFile:
         assert ev["ok"] is False
         assert "unbalanced braces" in text
         assert not (tmp_path / "main.tex").exists()
+
+    def test_rejects_private_command_in_body_file(self, tmp_path):
+        """正文不得泄漏 .cls/.sty 内部的 `@` 控制序列。"""
+        executor = self._make_executor(tmp_path)
+
+        text, ev = asyncio.run(
+            executor._write_file(
+                {
+                    "file_path": "front/titlepage.tex",
+                    "content": (
+                        r"\begin{titlepage}"
+                        "\n"
+                        r"\@thesistitle@value"
+                        "\n"
+                        r"\end{titlepage}"
+                    ),
+                }
+            )
+        )
+
+        assert ev["ok"] is False
+        assert "private control sequence" in text
+        assert "public API" in text
+        assert not (tmp_path / "front" / "titlepage.tex").exists()
+
+    def test_allows_private_command_in_style_file(self, tmp_path):
+        """类/样式文件可以使用 `@`，保护只作用于正文文件。"""
+        executor = self._make_executor(tmp_path)
+
+        text, ev = asyncio.run(
+            executor._write_file(
+                {
+                    "file_path": "template.sty",
+                    "content": r"\newcommand{\@internal@title}{}",
+                }
+            )
+        )
+
+        assert ev["ok"] is True
+        assert "Wrote template.sty" in text
+
+    def test_allows_split_environment_hooks_in_style_files(self, tmp_path):
+        """包文件可在不同模板钩子中分别打开/关闭环境。"""
+        executor = self._make_executor(tmp_path)
+        text, ev = asyncio.run(
+            executor._write_file(
+                {
+                    "file_path": "theme.sty",
+                    "content": (
+                        r"\setbeamertemplate{block begin}{\begin{beamercolorbox}}"
+                        "\n"
+                        r"\setbeamertemplate{block end}{\end{beamercolorbox}}"
+                    ),
+                }
+            )
+        )
+
+        assert ev["ok"] is True
+        assert "Wrote theme.sty" in text
 
     def test_budget_counts_unique_files_not_rewrites(self, tmp_path):
         """文件预算按"不同文件数"计算：重写已有文件不消耗预算。"""
@@ -522,6 +980,111 @@ class TestToolExecutorWriteFile:
         assert ev["ok"] is True
         assert "Something bad" in text
 
+    def test_read_source_line_range(self, tmp_path):
+        """read_file 支持按编译错误行号读取局部源码。"""
+        cfg = get_config()
+        cfg.features.template_gen.output_dir = str(tmp_path)
+        executor = _ToolExecutor(tmp_path, cfg, MagicMock())
+        (tmp_path / "main.tex").write_text(
+            "line 1\nline 2\nline 3\nline 4\n", encoding="utf-8"
+        )
+
+        text, ev = executor._read_file(
+            {"file_path": "main.tex", "start_line": 2, "end_line": 3}
+        )
+        assert text == "line 2\nline 3\n"
+        assert ev["line_range"] == [2, 3]
+
+    def test_repeated_compile_is_skipped_without_source_change(
+        self, tmp_path, monkeypatch
+    ):
+        """失败后源码未变时不应反复执行相同的 latexmk。"""
+        import backend.modules.template_gen.agent as agent_mod
+        from types import SimpleNamespace
+
+        cfg = get_config()
+        cfg.features.template_gen.output_dir = str(tmp_path)
+        cfg.features.template_gen.agent_compile_timeout = 30
+        (tmp_path / "main.tex").write_text(
+            r"\documentclass{article}\begin{document}\bad\end{document}",
+            encoding="utf-8",
+        )
+        fake = SimpleNamespace(
+            success=False,
+            raw_output="(./main.tex\n! Undefined control sequence.\nl.1 \\bad\n)",
+            filtered_output="",
+            timed_out=False,
+            used_texfot=False,
+        )
+        calls = 0
+
+        async def _fake_run(*args, **kwargs):
+            nonlocal calls
+            calls += 1
+            return fake
+
+        monkeypatch.setattr(agent_mod, "run_tex_compile", _fake_run)
+        executor = _ToolExecutor(tmp_path, cfg, MagicMock())
+
+        _first_text, first_event = asyncio.run(
+            executor._compile_latex({"main_file": "main.tex"})
+        )
+        second_text, second_event = asyncio.run(
+            executor._compile_latex({"main_file": "main.tex"})
+        )
+        assert first_event["success"] is False
+        assert second_event["compile_skipped"] is True
+        assert "unchanged" in second_text
+        assert calls == 1
+
+    def test_compile_failure_uses_full_main_log_for_source_context(
+        self, tmp_path, monkeypatch
+    ):
+        """失败摘要只有外层行号时，结构化错误应优先来自完整 .log。"""
+        import backend.modules.template_gen.agent as agent_mod
+        from types import SimpleNamespace
+
+        cfg = get_config()
+        cfg.features.template_gen.output_dir = str(tmp_path)
+        (tmp_path / "main.tex").write_text(
+            r"\documentclass{article}\begin{document}x\end{document}",
+            encoding="utf-8",
+        )
+        (tmp_path / "chapters").mkdir()
+        (tmp_path / "chapters" / "intro.tex").write_text(
+            "line 1\nline 2\nline 3\n", encoding="utf-8"
+        )
+        fake = SimpleNamespace(
+            success=False,
+            raw_output="(./main.tex\n! Undefined control sequence.\nl.1 \\outer\n)",
+            filtered_output="",
+            timed_out=False,
+            used_texfot=False,
+        )
+
+        async def _fake_run(*args, **kwargs):
+            return fake
+
+        monkeypatch.setattr(agent_mod, "run_tex_compile", _fake_run)
+        monkeypatch.setattr(
+            agent_mod,
+            "_read_log_text",
+            lambda path, max_chars=262144: (
+                "(./chapters/intro.tex\n"
+                "! Undefined control sequence.\n"
+                "l.2 \\inner\n"
+                ")"
+            ),
+        )
+        executor = _ToolExecutor(tmp_path, cfg, MagicMock())
+
+        _text, event = asyncio.run(executor._compile_latex({"main_file": "main.tex"}))
+
+        assert event["success"] is False
+        assert event["errors"][0]["file"] == "chapters/intro.tex"
+        assert event["errors"][0]["line"] == 2
+        assert event["errors"][0]["detail"] == r"\inner"
+
 
 class TestErrorAnalysis:
     """编译日志结构化错误解析。"""
@@ -541,6 +1104,27 @@ class TestErrorAnalysis:
         assert errors[0]["file"] == "chapters/intro.tex"
         assert errors[0]["line"] == 45
         assert errors[0]["detail"] == "\\unknowncommand"
+
+    def test_external_stack_file_is_not_reported_as_project_file(self, tmp_path):
+        """外部 TeX 包路径不应诱导 Agent 去修改发行版文件。"""
+        (tmp_path / "main.tex").write_text(
+            "first\nsecond\nthird\nfourth\nfifth\n", encoding="utf-8"
+        )
+        log = (
+            "(./main.tex\n"
+            "(/usr/local/texlive/2026/texmf-dist/tex/latex/tools/array.sty\n"
+            "! Illegal unit of measure (pt inserted).\n"
+            "l.4 \\begin{document}\n"
+            ")\n"
+        )
+        errors = _extract_errors(log, project_root=tmp_path, fallback_file="main.tex")
+        assert errors[0]["file"] == "main.tex"
+        assert "array.sty" in errors[0]["external_file"]
+        formatted = _format_error_analysis(
+            _attach_source_context(errors, tmp_path, fallback_file="main.tex")
+        )
+        assert "do not edit" in formatted
+        assert "4: fourth" in formatted
 
     def test_extract_multiple_errors(self):
         log = (
@@ -635,6 +1219,32 @@ class TestErrorAnalysis:
         assert "HINTS" in text
         assert "CJK" in text
         assert "ctex" in text
+
+    def test_hints_for_dimension_and_font_probe_errors(self):
+        errors = [
+            {
+                "type": "Illegal unit of measure (pt inserted).",
+                "file": "main.tex",
+                "line": 41,
+                "detail": "\\begin{document}",
+            },
+            {
+                "type": "Undefined control sequence.",
+                "file": "theme.sty",
+                "line": 12,
+                "detail": "\\IfFontExistsTF",
+            },
+            {
+                "type": "Missing = inserted for \\ifnum.",
+                "file": "main.tex",
+                "line": 12,
+                "detail": "\\usetheme{Custom}",
+            },
+        ]
+        text = _format_error_analysis(errors)
+        assert "Dimension parsing issue" in text
+        assert "fontspec" in text
+        assert "rounded=false" in text
 
     def test_hints_for_literal_hash(self):
         """字面 `#`（如 HTML 颜色 `#1F4E79`）错误应提示转义与颜色写法。"""

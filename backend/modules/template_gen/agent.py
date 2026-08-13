@@ -56,7 +56,12 @@ from backend.core.logger import get_logger
 from backend.core.llm_client import get_llm_client
 from backend.core.prompts import get_prompt
 from backend.modules.template_gen.trace import append_trace, now_iso
-from backend.utils.latex_json_guard import check_latex_text
+from backend.utils.latex_json_guard import (
+    check_latex_environments,
+    check_latex_text,
+    check_latex_text_lite,
+)
+from backend.utils.latex_literals import blank_literal_spans
 from backend.utils.tex_compile import run_tex_compile
 
 # 允许在沙箱内创建的文件扩展名白名单
@@ -96,12 +101,329 @@ _ALLOWED_READ_SUFFIXES = _ALLOWED_SUFFIXES + (
     ".synctex.gz",
 )
 
+# 参与项目源码快照与静态环境检查的扩展名。生成的诊断文件不应使
+# "源码是否变化"判断失真。
+_LATEX_SOURCE_SUFFIXES = frozenset(
+    {
+        ".tex",
+        ".sty",
+        ".cls",
+        ".bib",
+        ".cfg",
+        ".bst",
+        ".def",
+        ".ltx",
+        ".latex",
+    }
+)
+# 只对正文源文件做整文件环境配对检查。`.sty`/`.cls` 经常把环境的打开
+# 与关闭分别放在 beamer/template hook 或 begin/end 宏中，按文件顺序扫描会
+# 将这种合法的跨宏配对误判为错误；包代码仍由实际编译验证。
+_LATEX_ENV_CHECK_SUFFIXES = frozenset({".tex", ".ltx", ".latex"})
+
+# 正文文件在 TeX 中读取时 `@` 不是字母。把类/样式内部的实现宏泄漏到
+# `.tex` 会将 `\@private@name` 拆成 `\@` + 普通文本，常见结果是
+# `\spacefactor in vertical mode` 或一串看似无关的 undefined control
+# sequence。这里仅拦截控制序列形式，不拦截普通正文中的邮箱地址等字面 `@`。
+_PRIVATE_BODY_COMMAND_RE = re.compile(r"\\@(?:[A-Za-z@]+)")
+# `\ProvidesClass` / `\ProvidesPackage` 的可选参数必须以 LaTeX 内核要求的
+# YYYY/MM/DD 日期开头；写 `[2024/01 Master Thesis Template]` 这类值会把
+# 后面的 "Master" 当作 `\ifnum` 的数字解析，在 `\documentclass` 处产生
+# 非常难定位的 "Missing = inserted for \ifnum"。
+_PROVIDES_STATEMENT_RE = re.compile(
+    r"\\(?:ProvidesClass|ProvidesPackage)\s*\{[^{}]*\}\s*\[([^\]]*)\]"
+)
+_VALID_PROVIDES_DATE_RE = re.compile(r"^\s*\d{4}/\d{1,2}/\d{1,2}\b")
+# 正文文件出现样式/命令定义时，说明格式没有全部收敛到 .cls/.sty。
+_BODY_STYLE_COMMAND_RE = re.compile(
+    r"\\(?:newcommand|renewcommand|newenvironment|renewenvironment|"
+    r"g?def|setlength|addtolength|titleformat|titlespacing|geometry|"
+    r"setmainfont|setsansfont|setCJKmainfont|setCJKsansfont|pagestyle|"
+    r"hypersetup|ctexset)"
+)
+_CJK_RE = re.compile(r"[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]")
+_CJK_PACKAGE_RE = re.compile(
+    r"\\(?:usepackage|documentclass|RequirePackage)"
+    r"(?:\[[^\]]*\])?\s*\{[^}]*\b(?:ctex[a-z]*|xecjk)\b",
+    re.IGNORECASE,
+)
+# 本地样式/主题/输入文件可能提供 CJK 支持，需要实际解析这些依赖后再判断；
+# 不能因为出现了 `\usepackage{graphicx}` 就默认“有人会负责加载 ctex”。
+_CJK_DEPENDENCY_RE = re.compile(
+    r"\\(?P<cmd>usepackage|RequirePackage|input|include|subfile|LoadClass|"
+    r"usetheme|usecolortheme|usefonttheme)"
+    r"(?:\s*\[[^\]]*\])?\s*\{(?P<name>[^{}]+)\}"
+)
+_SETTER_ACCESSOR_RE = re.compile(
+    r"\\newcommand\{\\([A-Za-z@]+)\}\s*(?:\[[^\]]*\])?\s*"
+    r"\{\\renewcommand\{\\([A-Za-z@]+)\}\{#1\}"
+)
+
+
+def _strip_latex_comments(text: str) -> list[str]:
+    """返回去掉未转义注释后的行，保留行号以便给 Agent 可操作反馈。"""
+    result: list[str] = []
+    for line in text.splitlines():
+        comment_at: int | None = None
+        for index, char in enumerate(line):
+            if char != "%":
+                continue
+            backslashes = 0
+            cursor = index - 1
+            while cursor >= 0 and line[cursor] == "\\":
+                backslashes += 1
+                cursor -= 1
+            if backslashes % 2 == 0:
+                comment_at = index
+                break
+        result.append(line if comment_at is None else line[:comment_at])
+    return result
+
+
+def _check_public_body_commands(content: str) -> str | None:
+    """拒绝正文使用类/样式内部的 `@` 控制序列。"""
+    for line_number, line in enumerate(_strip_latex_comments(content), 1):
+        match = _PRIVATE_BODY_COMMAND_RE.search(line)
+        if match:
+            return (
+                f"LaTeX body uses private control sequence "
+                f"'{match.group(0)}' at line {line_number}. Commands containing "
+                "@ are implementation details for .cls/.sty files; define a "
+                "public accessor or public rendering command in the class/style "
+                "and use that command from the .tex file."
+            )
+    return None
+
+
+def _check_provides_date(content: str) -> str | None:
+    """校验 .cls/.sty 的 \\ProvidesClass/\\ProvidesPackage 日期参数。"""
+    match = _PROVIDES_STATEMENT_RE.search(content)
+    if not match:
+        return None
+    optional = match.group(1)
+    if _VALID_PROVIDES_DATE_RE.match(optional):
+        return None
+    return (
+        "The optional argument of \\ProvidesClass/\\ProvidesPackage must "
+        "start with a YYYY/MM/DD date (e.g. [2024/01/01 Template]); the "
+        f"current value '{optional.strip()}' makes LaTeX parse the following "
+        "text as an integer and fail with 'Missing = inserted for \\ifnum'. "
+        "Use a full date such as [2024/01/01] or omit the optional argument."
+    )
+
+
+def _check_body_style_commands(content: str) -> str | None:
+    """正文 .tex 不允许定义/重定义样式命令（格式应封装在 .cls/.sty）。"""
+    for line_number, line in enumerate(_strip_latex_comments(content), 1):
+        match = _BODY_STYLE_COMMAND_RE.search(line)
+        if match:
+            return (
+                f"Body file defines or redefines the style command "
+                f"'{match.group(0)}' at line {line_number}. All styling must "
+                "live in the .cls/.sty file; body files should only call "
+                "semantic commands. Move this definition into the class/style "
+                "and call a public command from the body."
+            )
+    return None
+
+
+def _cjk_dependency_candidates(
+    name: str, command: str, current_dir: Path, root: Path
+) -> list[Path]:
+    r"""把 `\usepackage` / `\usetheme` / `\input` 等引用解析成本地候选文件。"""
+    name = name.strip()
+    if not name or name.startswith(("/", "\\")):
+        return []
+
+    relative = Path(name)
+    bases = [current_dir / relative, root / relative]
+    candidates: list[Path] = []
+
+    if command in {"input", "include", "subfile"}:
+        for base in bases:
+            if base.suffix.lower() in _LATEX_SOURCE_SUFFIXES:
+                candidates.append(base)
+            else:
+                candidates.append(base.with_suffix(".tex"))
+    elif command in {"usepackage", "RequirePackage"}:
+        for base in bases:
+            candidates.append(Path(str(base) + ".sty"))
+            candidates.append(Path(str(base) + ".cls"))
+    elif command == "usetheme":
+        for base in bases:
+            candidates.append(base.parent / f"beamertheme{base.name}.sty")
+            candidates.append(Path(str(base) + ".sty"))
+    elif command == "usecolortheme":
+        for base in bases:
+            candidates.append(base.parent / f"beamercolortheme{base.name}.sty")
+            candidates.append(Path(str(base) + ".sty"))
+    elif command == "usefonttheme":
+        for base in bases:
+            candidates.append(base.parent / f"beamerfonttheme{base.name}.sty")
+            candidates.append(Path(str(base) + ".sty"))
+    else:  # LoadClass
+        for base in bases:
+            candidates.append(Path(str(base) + ".cls"))
+
+    return candidates
+
+
+def _local_dependencies_provide_cjk(
+    content: str, project_root: Path, current_path: Path
+) -> bool:
+    """递归检查当前文件引用的本地依赖是否实际加载 ctex/xeCJK。"""
+    root = project_root.resolve()
+    current_dir = current_path.resolve().parent
+    queue: list[Path] = []
+    code = "\n".join(_strip_latex_comments(blank_literal_spans(content)))
+    for match in _CJK_DEPENDENCY_RE.finditer(code):
+        for raw_name in match.group("name").split(","):
+            queue.extend(
+                _cjk_dependency_candidates(
+                    raw_name, match.group("cmd"), current_dir, root
+                )
+            )
+
+    seen: set[Path] = set()
+    while queue:
+        candidate = queue.pop(0)
+        try:
+            candidate = candidate.resolve()
+        except OSError:
+            continue
+        if (
+            candidate in seen
+            or not candidate.is_file()
+            or not candidate.is_relative_to(root)
+        ):
+            continue
+        seen.add(candidate)
+        try:
+            file_text = candidate.read_text(encoding="utf-8", errors="replace")
+            dep_code = "\n".join(_strip_latex_comments(blank_literal_spans(file_text)))
+        except OSError:
+            continue
+        if _CJK_PACKAGE_RE.search(dep_code):
+            return True
+        for match in _CJK_DEPENDENCY_RE.finditer(dep_code):
+            for raw_name in match.group("name").split(","):
+                queue.extend(
+                    _cjk_dependency_candidates(
+                        raw_name,
+                        match.group("cmd"),
+                        candidate.parent,
+                        root,
+                    )
+                )
+    return False
+
+
+def _check_cjk_support(
+    content: str,
+    *,
+    project_root: Path | None = None,
+    current_path: Path | None = None,
+) -> str | None:
+    r"""beamer 主文件含中文但未加载 ctex/xeCJK 时拒绝，避免字形静默缺失。
+
+    普通 article/custom class 的 CJK 支持可能由本地 .sty/.cls 提供，不能
+    对每个分章文件做全文件检查，否则会误伤合法工程。检查只针对真正会被
+    typeset 的内容：先剥离 verbatim/URL 与注释，避免中文注释或字面量误报；
+    若正文引用了本地样式/主题/输入文件，则递归检查这些文件是否确实加载
+    ctex/xeCJK；不能因为存在任意 `\usepackage` 就默认 CJK 已有人负责。
+    """
+    code = "\n".join(_strip_latex_comments(blank_literal_spans(content)))
+    if not _CJK_RE.search(code):
+        return None
+    if _CJK_PACKAGE_RE.search(code):
+        return None
+    if not re.search(r"\\documentclass(?:\[[^\]]*\])?\s*\{[^}]*beamer", code):
+        return None
+    if project_root is not None and current_path is not None:
+        if _local_dependencies_provide_cjk(content, project_root, current_path):
+            return None
+    return (
+        "This file contains Chinese/CJK text but does not load ctex or "
+        "xeCJK, so every CJK glyph will be missing from the PDF. Add "
+        "\\usepackage{ctex} (or \\usepackage{xeCJK}) to the preamble/class "
+        "before any Chinese content and rely on its default fontset."
+    )
+
+
+def _check_class_option_order(content: str) -> str | None:
+    """\\DeclareOption/\\ExecuteOptions 必须出现在 \\ProcessOptions 之前。"""
+    code = "\n".join(_strip_latex_comments(content))
+    process_pos = code.find("\\ProcessOptions")
+    if process_pos < 0:
+        return None
+    for keyword in ("\\DeclareOption", "\\ExecuteOptions"):
+        pos = code.find(keyword)
+        while pos >= 0:
+            if pos > process_pos:
+                return (
+                    f"{keyword} appears after \\ProcessOptions in the class "
+                    "options section. LaTeX only honors class options declared "
+                    "before \\ProcessOptions; move every \\DeclareOption and "
+                    "\\ExecuteOptions above it, then \\LoadClass, then packages."
+                )
+            pos = code.find(keyword, pos + 1)
+    return None
+
+
+def _check_setter_accessors(content: str) -> str | None:
+    """公开 setter 的 \\renewcommand 目标必须已在类/样式中定义。"""
+    code = "\n".join(_strip_latex_comments(content))
+    for match in _SETTER_ACCESSOR_RE.finditer(code):
+        setter_name, accessor_name = match.group(1), match.group(2)
+        if re.search(rf"\\newcommand\{{\\{accessor_name}\}}", code) or re.search(
+            rf"\\providecommand\{{\\{accessor_name}\}}", code
+        ):
+            continue
+        return (
+            f"Public setter \\{setter_name} uses "
+            f"\\renewcommand{{\\{accessor_name}}}, but \\{accessor_name} is "
+            "never defined in this file. Define a public accessor default "
+            "with \\newcommand (for example \\newcommand{\\universityvalue}{}) "
+            "before or after the setter, otherwise calling the setter from "
+            "main.tex fails with 'Command undefined'."
+        )
+    return None
+
 
 def _content_hash(content: str) -> str:
     """计算写入内容的 SHA-256，用于识别"原样重发被拒内容"的退化循环。"""
     import hashlib
 
     return hashlib.sha256(content.encode("utf-8", errors="replace")).hexdigest()
+
+
+def _compact_messages(
+    messages: list[dict[str, Any]], *, keep_rounds: int = 12
+) -> list[dict[str, Any]]:
+    """压缩 Agent 对话历史，防止超长工具调用把上下文撑爆。
+
+    保留 system 与最初的 user 需求，然后只保留最近 keep_rounds 个
+    assistant 轮次及其随后的 tool 结果。更早的轮次替换为一条摘要提示，
+    避免旧的大文件 tool_call 参数继续占用上下文。
+    """
+    if len(messages) <= 4:
+        return messages
+    assistant_indices = [
+        i for i, message in enumerate(messages) if message.get("role") == "assistant"
+    ]
+    if len(assistant_indices) <= keep_rounds:
+        return messages
+    cut = assistant_indices[-keep_rounds]
+    prefix = messages[:2]
+    summary = {
+        "role": "user",
+        "content": (
+            "[Earlier generation rounds were compacted to fit the context "
+            "window. The current project files on disk are the source of "
+            "truth; continue from that state and call the next tool.]"
+        ),
+    }
+    return prefix + [summary] + messages[cut:]
 
 
 # 编译日志回传给 LLM 时的截断长度（字符）
@@ -204,6 +526,10 @@ class TemplateAgentService:
         last_compile_key: str | None = None
         repeat_compiles = 0
         injected_compile_keys: set[str] = set()
+        # compile_latex 在源码未变化时会快速拒绝。模型有时会忽略该工具
+        # 反馈，在连续几轮中重复提交同一个 compile call；单独计数，便于
+        # 给出更强的动作性干预，而不是让这种无效调用消耗整个轮次预算。
+        compile_skip_strikes = 0
         # 不同编译错误签名总数：超过阈值说明项目存在多个独立缺陷，
         # 逐个修补效率太低，应系统性重写/拆分。
         distinct_compile_keys: set[str] = set()
@@ -234,6 +560,30 @@ class TemplateAgentService:
                 }
 
             try:
+                if len(messages) > 20:
+                    total_chars = sum(
+                        len(json.dumps(message, ensure_ascii=False))
+                        for message in messages
+                    )
+                    if total_chars > 600_000:
+                        messages = _compact_messages(messages)
+                        await self._append_trace(
+                            sandbox,
+                            {
+                                "ts": now_iso(),
+                                "run_id": run_id,
+                                "type": "nudge",
+                                "data": {
+                                    "kind": "context_compacted",
+                                    "message": (
+                                        "Conversation history was compacted "
+                                        "because it exceeded the context "
+                                        "budget; earlier rounds were replaced "
+                                        "with a summary."
+                                    ),
+                                },
+                            },
+                        )
                 response = await llm.chat_with_tools(
                     messages=messages,
                     tools=tools,
@@ -375,6 +725,40 @@ class TemplateAgentService:
                     }
                 )
 
+                # 编译工具可能返回"源码未变化"的快速失败结果。此时不要让
+                # LLM 继续消耗真实编译机会，明确要求它先修改根因。
+                if tool_name == "compile_latex" and result_event.get("compile_skipped"):
+                    compile_skip_strikes += 1
+                    guidance = (
+                        "[SYSTEM INTERVENTION] compile_latex was skipped because "
+                        "the project source is byte-identical to the previous "
+                        "failed attempt. Do not call compile_latex again without "
+                        "a meaningful source change. Read the reported source "
+                        "excerpt and log context, fix the root cause in the "
+                        "project file, then compile once. Never remove a third-"
+                        "party package merely because its path appears in a TeX "
+                        "stack trace. This is skip strike "
+                        f"{compile_skip_strikes}; the next tool call must be "
+                        "read_file or write_file, not compile_latex."
+                    )
+                    messages.append({"role": "user", "content": guidance})
+                    await self._append_trace(
+                        sandbox,
+                        {
+                            "ts": now_iso(),
+                            "run_id": run_id,
+                            "type": "nudge",
+                            "data": {
+                                "kind": "unchanged_compile",
+                                "message": guidance,
+                            },
+                        },
+                    )
+                elif tool_name == "write_file" and result_event.get("ok"):
+                    # 一次成功的源码写入打断 compile-skip 计数；失败的写入
+                    # 不应伪装成已经改变了编译输入。
+                    compile_skip_strikes = 0
+
                 # 同一份被拒内容重发 3 次 → 显式纠正（防退化循环）
                 if tool_name == "write_file" and result_event.get("ok") is False:
                     content_hash = _content_hash(tool_args.get("content", ""))
@@ -411,12 +795,13 @@ class TemplateAgentService:
                             },
                         )
                     # 文件级干预：同一路径连续被拒 5 次 → 强制简化/重写
-                    fail_file = str(tool_args.get("file_path", ""))
-                    if fail_file == last_fail_file:
-                        file_repeat_failures += 1
-                    else:
-                        last_fail_file = fail_file
-                        file_repeat_failures = 1
+                    fail_file = str(tool_args.get("file_path") or "")
+                    if fail_file:
+                        if fail_file == last_fail_file:
+                            file_repeat_failures += 1
+                        else:
+                            last_fail_file = fail_file
+                            file_repeat_failures = 1
                     if (
                         file_repeat_failures >= 5
                         and fail_file not in injected_file_keys
@@ -704,12 +1089,22 @@ class TemplateAgentService:
                         "files against the requirement checklist). Generated "
                         "diagnostic files (.log/.aux/.toc/.out/.blg/.fls) can "
                         "also be read — e.g. 'read_file main.log' gives the "
-                        "full compiler log when the error summary is unclear."
+                        "full compiler log when the error summary is unclear. "
+                        "Optional start_line/end_line can limit a source read "
+                        "to the reported error area."
                     ),
                     "parameters": {
                         "type": "object",
                         "properties": {
                             "file_path": {"type": "string"},
+                            "start_line": {
+                                "type": "integer",
+                                "description": "Optional 1-based first line to read.",
+                            },
+                            "end_line": {
+                                "type": "integer",
+                                "description": "Optional inclusive last line to read.",
+                            },
                         },
                         "required": ["file_path"],
                     },
@@ -807,6 +1202,9 @@ class _ToolExecutor:
         # 计算：重写已有文件不消耗预算，防止 Agent 把轮次耗在反复修复
         # 同一批文件上时被预算卡死。
         self._written_paths: set[str] = set()
+        # 记录最近一次失败编译对应的源码快照。若源码完全未变，重复编译
+        # 只会产生相同结果，直接返回可操作的干预信息，避免浪费超时预算。
+        self._last_failed_source_hash: str | None = None
 
     async def execute(
         self, tool_name: str, args: dict[str, Any]
@@ -865,23 +1263,112 @@ class _ToolExecutor:
             )
             return msg, {"tool": "write_file", "ok": False, "summary": msg}
 
-        # 写盘前 LaTeX 内容校验：拦截 JSON 反斜杠转义损坏（\\rho → 回车 + ho），
-        # 让 Agent 自纠而不是把损坏内容写进项目文件
-        latex_error = check_latex_text(content)
+        # 写盘前内容校验：LaTeX/BibTeX 走各自的结构规则，README 等文档只做
+        # 传输完整性检查。不能把普通 Markdown 的花括号/$ 当成 LaTeX 语法，
+        # 也不能把 BibTeX URL 中的百分号当作 LaTeX 注释。
+        suffix = resolved.suffix.lower()
+        if suffix == ".bib":
+            latex_error = check_latex_text(content, bibtex=True)
+        elif suffix in _LATEX_SOURCE_SUFFIXES - {".bib", ".bst"}:
+            latex_error = check_latex_text(content)
+        elif suffix == ".bst":
+            latex_error = check_latex_text(content, bibtex=True)
+        else:
+            latex_error = check_latex_text_lite(content)
         if latex_error:
             self._logger.warning(
                 f"write_file rejected corrupt LaTeX content for "
                 f"{file_path}: {latex_error}"
             )
-            msg = (
-                f"File {file_path} was rejected: {latex_error}. "
-                "In JSON tool arguments, each LaTeX backslash must be escaped "
-                "as two backslash characters (\\\\), otherwise JSON parsing "
-                "silently corrupts the LaTeX (e.g. \\rho becomes a carriage "
-                "return). Rewrite the file content with properly escaped "
-                "backslashes."
-            )
+            msg = f"File {file_path} was rejected: {latex_error}."
+            if suffix in _LATEX_SOURCE_SUFFIXES:
+                msg += (
+                    " In JSON tool arguments, each LaTeX backslash must be "
+                    "escaped as two backslash characters (\\\\); resend the "
+                    "complete file with intact LaTeX."
+                )
+            else:
+                msg += " Resend the complete file with intact text content."
             return msg, {"tool": "write_file", "ok": False, "summary": msg}
+
+        if resolved.suffix.lower() in {".cls", ".sty"}:
+            provides_error = _check_provides_date(content)
+            if provides_error:
+                self._logger.warning(
+                    f"write_file rejected invalid Provides date for "
+                    f"{file_path}: {provides_error}"
+                )
+                msg = f"File {file_path} was rejected: {provides_error}"
+                return msg, {"tool": "write_file", "ok": False, "summary": msg}
+            if resolved.suffix.lower() == ".cls":
+                option_order_error = _check_class_option_order(content)
+                if option_order_error:
+                    self._logger.warning(
+                        f"write_file rejected class option order for "
+                        f"{file_path}: {option_order_error}"
+                    )
+                    msg = f"File {file_path} was rejected: {option_order_error}"
+                    return msg, {"tool": "write_file", "ok": False, "summary": msg}
+            setter_accessor_error = _check_setter_accessors(content)
+            if setter_accessor_error:
+                self._logger.warning(
+                    f"write_file rejected undefined setter accessor for "
+                    f"{file_path}: {setter_accessor_error}"
+                )
+                msg = f"File {file_path} was rejected: {setter_accessor_error}"
+                return msg, {"tool": "write_file", "ok": False, "summary": msg}
+
+        if resolved.suffix.lower() in _LATEX_ENV_CHECK_SUFFIXES:
+            cjk_error = _check_cjk_support(
+                content,
+                project_root=self._sandbox,
+                current_path=resolved,
+            )
+            if cjk_error:
+                self._logger.warning(
+                    f"write_file rejected missing CJK support for "
+                    f"{file_path}: {cjk_error}"
+                )
+                msg = f"File {file_path} was rejected: {cjk_error}"
+                return msg, {"tool": "write_file", "ok": False, "summary": msg}
+            body_style_error = _check_body_style_commands(content)
+            if body_style_error:
+                self._logger.warning(
+                    f"write_file rejected style definition in body for "
+                    f"{file_path}: {body_style_error}"
+                )
+                msg = f"File {file_path} was rejected: {body_style_error}"
+                return msg, {"tool": "write_file", "ok": False, "summary": msg}
+
+        # 环境配对错误在 TeX 编译时通常会级联成难以定位的错误。对源文件
+        # 做一次轻量静态检查，把明确的结构错误在写盘阶段反馈给 Agent；
+        # 不检查 README/BibTeX，因为它们不遵循 LaTeX 环境语法。
+        if resolved.suffix.lower() in _LATEX_ENV_CHECK_SUFFIXES:
+            environment_error = check_latex_environments(content)
+            if environment_error:
+                self._logger.warning(
+                    f"write_file rejected mismatched LaTeX environments for "
+                    f"{file_path}: {environment_error}"
+                )
+                msg = (
+                    f"File {file_path} was rejected: {environment_error}. "
+                    "Fix the begin/end environment pair and resend the complete "
+                    "file."
+                )
+                return msg, {"tool": "write_file", "ok": False, "summary": msg}
+
+            public_api_error = _check_public_body_commands(content)
+            if public_api_error:
+                self._logger.warning(
+                    f"write_file rejected private body command for "
+                    f"{file_path}: {public_api_error}"
+                )
+                msg = (
+                    f"File {file_path} was rejected: {public_api_error} "
+                    "Keep internal @ macros inside the .cls/.sty implementation "
+                    "and resend the complete body file using its public API."
+                )
+                return msg, {"tool": "write_file", "ok": False, "summary": msg}
 
         resolved.parent.mkdir(parents=True, exist_ok=True)
         resolved.write_bytes(content_bytes)
@@ -915,11 +1402,29 @@ class _ToolExecutor:
             msg = f"File not found: {file_path}"
             return msg, {"tool": "read_file", "ok": False, "summary": msg}
         content = resolved.read_text(encoding="utf-8")
+        start_line = args.get("start_line")
+        end_line = args.get("end_line")
+        line_range: tuple[int, int] | None = None
+        if start_line is not None or end_line is not None:
+            try:
+                start = int(start_line) if start_line is not None else 1
+                end = int(end_line) if end_line is not None else start + 40
+            except (TypeError, ValueError):
+                msg = "start_line and end_line must be integers"
+                return msg, {"tool": "read_file", "ok": False, "summary": msg}
+            if start < 1 or end < start:
+                msg = "read_file line range must satisfy 1 <= start_line <= end_line"
+                return msg, {"tool": "read_file", "ok": False, "summary": msg}
+            lines = content.splitlines(keepends=True)
+            content = "".join(lines[start - 1 : end])
+            line_range = (start, end)
         # 截断超长内容回传 LLM
         truncated = (
             content if len(content) <= 8000 else (content[:8000] + "\n...[truncated]")
         )
         event = {"tool": "read_file", "ok": True, "summary": file_path}
+        if line_range is not None:
+            event["line_range"] = list(line_range)
         return truncated, event
 
     # ── list_files ────────────────────────────────────────────────────
@@ -979,6 +1484,23 @@ class _ToolExecutor:
                 "summary": msg,
             }
 
+        source_hash = await asyncio.to_thread(self._source_hash)
+        if self._last_failed_source_hash == source_hash:
+            msg = (
+                "Compilation skipped: project source is unchanged since the "
+                "previous failed compile. Read the source excerpt and log "
+                "context from that failure, make a meaningful source edit, "
+                "then call compile_latex again."
+            )
+            return msg, {
+                "tool": "compile_latex",
+                "ok": False,
+                "success": False,
+                "compile_skipped": True,
+                "log": msg,
+                "summary": msg,
+            }
+
         timeout = fcfg.agent_compile_timeout
         self._logger.info(f"agent compile | main={main_file} | cwd={self._sandbox}")
 
@@ -987,7 +1509,11 @@ class _ToolExecutor:
                 main_file,
                 self._sandbox,
                 timeout,
-                extra_args=["-halt-on-error"],
+                # 每次源码发生变化都从干净的辅助文件状态开始。模板 Agent
+                # 可能在修复过程中切换 biblatex/BibTeX、class 或 engine；
+                # latexmk 默认复用旧 .aux/.bcf 会把上一轮格式的命令带入本轮，
+                # 产生与当前源码无关的假错误。
+                extra_args=["-halt-on-error", "-gg"],
             )
         except FileNotFoundError:
             msg = "latexmk is not installed or is not on PATH"
@@ -1015,21 +1541,73 @@ class _ToolExecutor:
         trimmed = _trim_log(full_log, success)
         self._logger.info(f"agent compile done | success={success}")
 
-        if success:
-            llm_text = trimmed
-            errors: list[dict[str, Any]] = []
+        # latexmk/texfot 的摘要可能只保留外层 main.tex 的错误行，而真正的
+        # `!` 错误和输入栈位于完整的 .log 中。无论成功还是失败都读取主日志：
+        # 成功时用于缺字/未解析引用质量门禁，失败时用于给 Agent 正确的
+        # .cls/.sty/.tex 文件上下文，避免它根据错误的外层行号盲修。
+        log_text = await asyncio.to_thread(_read_log_text, resolved.with_suffix(".log"))
+        diagnostic_log = f"{log_text}\n{full_log}" if log_text else full_log
+        # latexmk 的标准输出可能包含同一次构建中早期 TeX pass 的警告，
+        # 而主 .log 在 latexmk 完成后代表最后一次 pass。质量门禁（缺字、
+        # 未解析引用、版面警告）只能检查最后一次 pass；否则已经由 BibTeX
+        # / 后续 pass 修复的首轮 warning 会被错误地再次升级成失败。
+        quality_log = log_text or full_log
+        errors = _extract_errors(
+            diagnostic_log,
+            project_root=self._sandbox,
+            fallback_file=Path(main_file).as_posix(),
+        )
+        quality_errors = [
+            error
+            for error in _extract_errors(
+                quality_log,
+                project_root=self._sandbox,
+                fallback_file=Path(main_file).as_posix(),
+            )
+            if str(error.get("type", "")).startswith("Missing character")
+        ]
+        quality_errors.extend(
+            _extract_unresolved_reference_errors(
+                quality_log,
+                fallback_file=Path(main_file).as_posix(),
+            )
+        )
+        quality_warnings = _extract_quality_warnings(quality_log)
+        build_success = success and not quality_errors
+
+        if build_success:
+            # 保留成功状态，但把可修复的版面警告明确交给模型；它们不是
+            # 编译失败，不应让 Agent 为了消除每个 overfull box 无限重写。
+            # 成功时不要把 latexmk stdout 中早期 pass 的原始 warning 再次
+            # 回传给模型；质量 warning 已从最后一次主 .log 重新提取，成功
+            # 摘要只需保留这一份权威结果。
+            llm_text = _format_quality_feedback(
+                quality_warnings, "Compilation succeeded."
+            )
             summary = "Compilation succeeded"
         else:
-            errors = _extract_errors(full_log)
-            log_note = ""
+            if success:
+                # 质量门禁失败时仍使用统一的结构化错误回路；此时 PDF 可能
+                # 已生成，但不能让 finish 把缺字/断引用伪装成合格产物。
+                errors = quality_errors
+            log_file = resolved.with_suffix(".log")
+            log_note = (
+                f"[note: complete {log_file.name} was included when extracting "
+                "the structured errors and source context]"
+                if log_text
+                else ""
+            )
             # latexmk 的 stdout/stderr 可能不含 `!` 错误行（错误只写进了
             # <main>.log）。此时直接从沙箱读取日志文件兜底提取，避免
             # Agent 因"看不到错误"而盲目重试。
             if not errors:
-                log_file = resolved.with_suffix(".log")
                 log_text = await asyncio.to_thread(_read_log_text, log_file)
                 if log_text:
-                    log_errors = _extract_errors(log_text)
+                    log_errors = _extract_errors(
+                        log_text,
+                        project_root=self._sandbox,
+                        fallback_file=Path(main_file).as_posix(),
+                    )
                     if log_errors:
                         errors = log_errors
                         log_note = (
@@ -1077,13 +1655,19 @@ class _ToolExecutor:
                         trimmed = (
                             trimmed + f"\n\n--- {blg_file.name} (tail) ---\n" + blg_tail
                         )
+            errors = _attach_source_context(
+                errors,
+                self._sandbox,
+                fallback_file=Path(main_file).as_posix(),
+            )
             analysis = _format_error_analysis(errors)
             if log_note:
                 analysis = log_note + "\n\n" + analysis
             llm_text = analysis + "\n\n--- Raw log (trimmed) ---\n" + trimmed
             error_count = len(errors)
             summary = (
-                f"Compilation failed ({error_count} error(s)); analyze the error summary, "
+                f"Compilation failed or quality gate rejected the build "
+                f"({error_count} error(s)); analyze the error summary, "
                 f"use read_file to inspect the relevant files (main.log is readable), "
                 f"then use write_file to fix and compile again"
             )
@@ -1091,12 +1675,17 @@ class _ToolExecutor:
         event = {
             "tool": "compile_latex",
             "ok": True,
-            "success": success,
+            "success": build_success,
             "log": trimmed,
             "summary": summary,
         }
-        if not success:
+        if quality_warnings:
+            event["quality_warnings"] = quality_warnings
+        if not build_success:
+            self._last_failed_source_hash = source_hash
             event["errors"] = errors
+        else:
+            self._last_failed_source_hash = None
         return llm_text, event
 
     # ── finish ────────────────────────────────────────────────────────
@@ -1129,6 +1718,23 @@ class _ToolExecutor:
             rel = p.relative_to(root).as_posix()
             result.append({"path": rel, "size": p.stat().st_size})
         return result
+
+    def _source_hash(self) -> str:
+        """计算当前项目源码快照，用于阻止未改源码的重复编译。"""
+        import hashlib
+
+        digest = hashlib.sha256()
+        root = self._sandbox.resolve()
+        for path in sorted(root.rglob("*")):
+            if not path.is_file() or path.suffix.lower() not in _LATEX_SOURCE_SUFFIXES:
+                continue
+            try:
+                digest.update(path.relative_to(root).as_posix().encode("utf-8"))
+                digest.update(b"\0")
+                digest.update(path.read_bytes())
+            except OSError:
+                continue
+        return digest.hexdigest()
 
 
 # ── 辅助函数 ───────────────────────────────────────────────────────────
@@ -1191,12 +1797,44 @@ _FILE_CTX_RE = re.compile(r"\(\s*((?:\.{1,2}/)?[\w./\-]+\.(?:tex|cls|sty))\b")
 _LINE_INFO_RE = re.compile(r"l\.(\d+)\s?(.*)")
 
 
-def _extract_errors(log: str) -> list[dict[str, Any]]:
+def _normalize_log_file(
+    raw_file: str, project_root: Path | None
+) -> tuple[str | None, str | None]:
+    """把日志文件上下文限制在项目沙箱内，避免误导 Agent 修改 TeX 安装文件。"""
+    raw = raw_file.strip()
+    if project_root is None:
+        return raw[2:] if raw.startswith("./") else raw, None
+
+    root = project_root.resolve()
+    raw_path = Path(raw)
+    if raw_path.is_absolute():
+        try:
+            return raw_path.resolve().relative_to(root).as_posix(), None
+        except ValueError:
+            return None, raw
+
+    relative = raw[2:] if raw.startswith("./") else raw
+    candidate = (root / relative).resolve()
+    if candidate.is_relative_to(root) and candidate.is_file():
+        return candidate.relative_to(root).as_posix(), None
+    return None, raw
+
+
+def _extract_errors(
+    log: str,
+    *,
+    project_root: Path | None = None,
+    fallback_file: str | None = None,
+) -> list[dict[str, Any]]:
     """从 latexmk/xelatex 日志中提取结构化错误信息。
 
     识别以 `!` 开头的错误声明行，并：
       - 回溯最近的 `(xxx.tex` 上下文记录错误所在文件
       - 向后扫 15 行寻找 `l.NNN ...` 行号提示
+
+    传入 project_root 时，TeX 发行版内部文件会被标记为
+    ``external_file``，不会伪装成项目文件。若错误只显示外部展开栈，使用
+    fallback_file 作为需要 Agent 检查的项目入口。
 
     LaTeX 错误会级联（第一个错误往往引来一系列后续错误），所以只
     返回前若干个错误就足以让 LLM 聚焦根因。
@@ -1209,6 +1847,7 @@ def _extract_errors(log: str) -> list[dict[str, Any]]:
     errors: list[dict[str, Any]] = []
     lines = log.splitlines()
     last_file: str | None = None
+    last_external_file: str | None = None
     # 只保留第一条缺字诊断（记录首条所在文件/字体），后续只累计数量
     missing_char: dict[str, Any] | None = None
     missing_char_count = 0
@@ -1216,8 +1855,12 @@ def _extract_errors(log: str) -> list[dict[str, Any]]:
     for i, line in enumerate(lines):
         # 更新当前文件上下文（粗略追踪，不处理栈深度，仅用最近出现的）
         for m in _FILE_CTX_RE.finditer(line):
-            raw = m.group(1).lstrip("./")
-            last_file = raw or last_file
+            normalized, external = _normalize_log_file(m.group(1), project_root)
+            if normalized:
+                last_file = normalized
+                last_external_file = None
+            elif external:
+                last_external_file = external
 
         # 缺字诊断：`Missing character: There is no X (U+XXXX) in font Y`
         if "Missing character" in line or "missing character" in line:
@@ -1234,6 +1877,8 @@ def _extract_errors(log: str) -> list[dict[str, Any]]:
                     "line": None,
                     "detail": line.strip()[:200],
                 }
+                if last_external_file:
+                    missing_char["external_file"] = last_external_file
                 if font:
                     missing_char["font"] = font
                 # 按日志顺序插入首条缺字诊断，后续刷屏行不再产生新条目
@@ -1249,6 +1894,8 @@ def _extract_errors(log: str) -> list[dict[str, Any]]:
             "line": None,
             "detail": "",
         }
+        if last_external_file:
+            err["external_file"] = last_external_file
         # 向后扫 15 行寻找 l.NNN
         for j in range(i + 1, min(len(lines), i + 15)):
             m_line = _LINE_INFO_RE.match(lines[j])
@@ -1269,7 +1916,127 @@ def _extract_errors(log: str) -> list[dict[str, Any]]:
         )
 
     # 限制最多 8 个错误，避免极端情况日志回传过长
-    return errors[:8]
+    limited = errors[:8]
+    if project_root and fallback_file:
+        for error in limited:
+            if error.get("external_file") or error.get("file") is None:
+                error["file"] = fallback_file
+    return limited
+
+
+def _extract_unresolved_reference_errors(
+    log: str, *, fallback_file: str
+) -> list[dict[str, Any]]:
+    """把成功构建但仍未解析的交叉引用/文献引用升级为质量错误。
+
+    latexmk 在某些情况下会返回 0 并生成 PDF，即使日志仍包含 undefined
+    reference/citation。对模板交付而言，这与编译失败同样不可接受；这里仅
+    提取明确的 unresolved 诊断，不把普通 rerun 提示误判为错误。
+    """
+    errors: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    lines = log.splitlines()
+    for line in lines:
+        stripped = line.strip()
+        lowered = stripped.lower()
+        is_unresolved = (
+            "undefined references" in lowered
+            or "undefined citations" in lowered
+            or ("reference `" in lowered and "undefined" in lowered)
+            or ("citation `" in lowered and "undefined" in lowered)
+        )
+        if not is_unresolved:
+            continue
+        if stripped in seen:
+            continue
+        seen.add(stripped)
+        errors.append(
+            {
+                "type": "Unresolved cross-reference or citation.",
+                "file": fallback_file,
+                "line": None,
+                "detail": stripped[:240],
+            }
+        )
+        if len(errors) >= 8:
+            break
+    return errors
+
+
+def _extract_quality_warnings(log: str, *, limit: int = 12) -> list[str]:
+    """提取不阻断 PDF 生成、但值得 Agent 在交付前处理的排版警告。"""
+    warnings: list[str] = []
+    seen: set[str] = set()
+    patterns = (
+        "overfull \\hbox",
+        "underfull \\hbox",
+        "font warning",
+        "label(s) may have changed",
+        "rerun to get cross-references",
+    )
+    for line in log.splitlines():
+        stripped = line.strip()
+        lowered = stripped.lower()
+        if not stripped or not any(pattern in lowered for pattern in patterns):
+            continue
+        if stripped in seen:
+            continue
+        seen.add(stripped)
+        warnings.append(stripped[:240])
+        if len(warnings) >= limit:
+            break
+    return warnings
+
+
+def _format_quality_feedback(warnings: list[str], trimmed_log: str) -> str:
+    """把非致命质量警告放在成功编译结果的最前面。"""
+    if not warnings:
+        return trimmed_log
+    lines = [
+        "Compilation succeeded, but review these non-fatal quality warnings "
+        "before finish:",
+    ]
+    lines.extend(f"- {warning}" for warning in warnings)
+    lines.append("")
+    lines.append(trimmed_log)
+    return "\n".join(lines)
+
+
+def _attach_source_context(
+    errors: list[dict[str, Any]],
+    project_root: Path,
+    *,
+    fallback_file: str,
+    radius: int = 3,
+) -> list[dict[str, Any]]:
+    """为结构化错误附加有限行号上下文，减少 LLM 盲读整份大文件。"""
+    root = project_root.resolve()
+    for error in errors:
+        file_name = error.get("file") or fallback_file
+        line_number = error.get("line")
+        if error.get("external_file"):
+            error["scope_note"] = (
+                "The log stack entered an external TeX distribution file; "
+                "do not edit that file. Inspect the project source instead."
+            )
+            file_name = fallback_file
+        if not isinstance(line_number, int) or line_number < 1:
+            continue
+        try:
+            source_path = (root / str(file_name)).resolve()
+            if not source_path.is_relative_to(root) or not source_path.is_file():
+                continue
+            source_lines = source_path.read_text(
+                encoding="utf-8", errors="replace"
+            ).splitlines()
+        except OSError:
+            continue
+        start = max(1, line_number - radius)
+        end = min(len(source_lines), line_number + radius)
+        error["source_context"] = "\n".join(
+            f"{index}: {source_lines[index - 1]}" for index in range(start, end + 1)
+        )
+    return errors
 
 
 def _error_hints(errors: list[dict[str, Any]]) -> list[str]:
@@ -1277,6 +2044,77 @@ def _error_hints(errors: list[dict[str, Any]]) -> list[str]:
     hints: list[str] = []
     for e in errors:
         combined = f"{e.get('type', '')} {e.get('detail', '')}".lower()
+        if "undefined control sequence" in combined:
+            hint = (
+                "Public API check: determine whether the undefined command is "
+                "project-defined or package-provided. Read the loaded .cls/.sty "
+                "and all body callers, then define one stable public command with "
+                "the exact argument count or replace the caller; do not create a "
+                "second accessor with a similar name. If the undefined command "
+                "appears while expanding a public setter, check whether that "
+                "setter performs `\\def`/`\\gdef` of a name containing `@` — "
+                "in a body file `@` is not a letter, so store the value in a "
+                "public accessor directly or wrap the assignment in "
+                "\\makeatletter ... \\makeatother. If it is package-provided, "
+                "load that package before the first use."
+            )
+            if hint not in hints:
+                hints.append(hint)
+        if "illegal unit of measure" in combined or "missing number" in combined:
+            hint = (
+                "Dimension parsing issue: inspect custom macros and key-value "
+                "options in the project source for a width, height, skip, or "
+                "ratio that lacks an explicit unit or expands to text. If the "
+                "reported line is `\\begin{document}` or a third-party package, "
+                "the root cause is usually an earlier project definition; do "
+                "not remove packages merely because the stack trace entered one. "
+                "Simplify the custom dimension macro and use a literal dimension "
+                "with a unit first."
+            )
+            if hint not in hints:
+                hints.append(hint)
+        if "missing = inserted for \\ifnum" in combined or (
+            "ifnum" in combined and "missing =" in combined
+        ):
+            hint = (
+                "Template/class arithmetic issue: inspect the project .sty/.cls "
+                "loaded at the reported `\\usetheme` or `\\documentclass` line, "
+                "not the theme name itself. A TeX `\\ifnum` must compare two "
+                "integer counts with `<`, `=`, or `>`; it cannot compare a "
+                "decimal or an expanded dimension. Also check that every "
+                "`\\ProvidesClass`/`\\ProvidesPackage` optional argument starts "
+                "with a YYYY/MM/DD date (e.g. [2024/01/01 Template]); an "
+                "incomplete date such as `2024/01` makes the next word be "
+                "parsed as an integer. And `\\setbeamertemplate{blocks}` accepts "
+                "a predefined template name such as `[default]` or `[rounded]`, "
+                "not a key-value option like `[rounded=false]`. Remove unsafe "
+                "custom template arithmetic and use a simple literal `\\rule` "
+                "progress bar until the base theme compiles."
+            )
+            if hint not in hints:
+                hints.append(hint)
+        if "tex capacity exceeded" in combined or "input stack size" in combined:
+            hint = (
+                "TeX capacity / recursion issue: the document is likely "
+                "redefining a beamer template or environment in a recursive "
+                "way (for example setting the same `\\setbeamertemplate` "
+                "twice, or an item template that calls itself). Inspect every "
+                "custom template definition in the .sty files, remove "
+                "duplicate/recursive `\\setbeamertemplate` calls, and keep "
+                "one built-in template name per element until the base "
+                "compiles."
+            )
+            if hint not in hints:
+                hints.append(hint)
+        if "iffontexiststf" in combined:
+            hint = (
+                "Font feature issue: `\\IfFontExistsTF` is provided by "
+                "fontspec, so it must not be used before fontspec is loaded. "
+                "Use it only for an explicitly requested Latin font; for CJK "
+                "text, load ctex/xeCJK and rely on its default fontset instead."
+            )
+            if hint not in hints:
+                hints.append(hint)
         if "spacefactor" in combined:
             hint = (
                 "Metadata trap: this error is caused by a `\\@...` internal "
@@ -1309,7 +2147,22 @@ def _error_hints(errors: list[dict[str, Any]]) -> list[str]:
                 "Command collision: the command already exists in the loaded "
                 "class/package. Use \\renewcommand when the base definition "
                 "must change, or define a NEW name; never \\newcommand over "
-                "an existing command."
+                "an existing command. For theorem/abstract/list infrastructure, "
+                "prefer the inherited environment or a project-specific name "
+                "instead of replacing the class interface."
+            )
+            if hint not in hints:
+                hints.append(hint)
+        if "unresolved cross-reference" in combined or (
+            "undefined" in combined
+            and ("reference" in combined or "citation" in combined)
+        ):
+            hint = (
+                "Reference integrity issue: every `\\ref`/`\\eqref`/citation "
+                "must point to a label or BibTeX key that exists in the project. "
+                "Read the cited source and references.bib, then either correct "
+                "the key or remove the unused reference and recompile until the "
+                "undefined-reference warning is gone."
             )
             if hint not in hints:
                 hints.append(hint)
@@ -1439,6 +2292,11 @@ def _format_error_analysis(errors: list[dict[str, Any]]) -> str:
             parts.append(f"  line: {e['line']}")
         if e["detail"]:
             parts.append(f"  detail: {e['detail']}")
+        if e.get("scope_note"):
+            parts.append(f"  scope: {e['scope_note']}")
+        if e.get("source_context"):
+            parts.append("  source excerpt:")
+            parts.extend(f"    {line}" for line in e["source_context"].splitlines())
         if e.get("font"):
             parts.append(f"  font: {e['font']}")
         if e["type"].startswith("Missing character"):
