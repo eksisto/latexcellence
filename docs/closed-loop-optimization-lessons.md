@@ -241,3 +241,92 @@ FACTS、matplotlib 字体链调整。
 - `backend/utils/latex_json_guard.py`
 - `tools/templategen_opt/descriptions.py` / `reference_benchmarks.md`
 - `docs/modules/template_gen.md` / `docs/modules/plot_gen.md`
+
+---
+
+## 6. 第二轮闭环（2026-08-13）：机制修复，不碰评测数据
+
+### 6.1 背景
+
+按本文档约束再次闭环优化 `template_gen`。
+采用既有闭环工具（`tools/templategen_opt/`）：先跑当前代码基线
+（`base2`，4 个通用场景），再做机制修复，再跑 `opt4` 对照，最后才运行
+holdout `tju` 做最终回归。
+
+### 6.2 基线诊断（base2）
+
+| 场景 | 轮数 | 编译 | 启发式分 |
+| --- | --- | --- | --- |
+| thesis | 50 | ✗ | 70 |
+| beamer | 50 | ✗ | 60 |
+| resume | 18 | ✓ | 90 |
+| requirements | 50 | ✗ | 65 |
+
+三个失败场景的需求遵守率都是 100%（关键词级），说明**失败集中在"能写对
+需求、但编译收敛不了"**。trace 显示三类共性根因：
+
+1. **CJK 字体被手动设置**：Agent 用 `\setCJKsansfont{FandolSong}` /
+   `\IfFontExistsTF` 探测 CJK 字族名，在部分 TeX 环境触发 fontspec 错误与
+   mktextfm 噪音——正确机制是交给 ctex 自动平台字体集；
+2. **元数据内部宏泄漏进正文**：封面/声明页直接写 `\@tjuthesis@title` 一类
+   `\@...` 宏，`@` 在正文文件中不是字母，被解析成 `\@` + 字母，触发
+   `\spacefactor in vertical mode`（即旧的 metadata trap 的变体）；
+3. **字面 `#`**：HTML 颜色（如 `#1F4E79`）被当作普通文本/参数传入，触发
+   `macro parameter character #'`。
+
+另外两个机制缺口放大了以上问题：
+
+- 文件预算按 write_file **调用次数**计数，同一文件反复修复 36 次就耗尽了
+  30 次预算；
+- latexmk 输出里没有 `!` 行时 Agent 看不到真实错误（`read_file main.log`
+  被扩展名白名单拒绝），只能盲目重试。
+
+### 6.3 本轮改动（全部为通用机制，无评测数据流入）
+
+| 改动 | 文件 | 为什么通用 |
+| --- | --- | --- |
+| CJK 字体协议修正：不手动 `\setCJK*font`、不对 CJK 字族名用 `\IfFontExistsTF`，交给 ctex 自动平台字体集 | `backend/core/prompts.py` | 任何环境都成立，删除的是"探测具体字体"这一错误动作 |
+| 正文禁用 `\@...` 内部宏，类需提供公开访问命令或 `\maketitlepage` | `backend/core/prompts.py` | LaTeX catcode 机制层面，与具体模板无关 |
+| 文件预算按**不同文件数**计数，重写不消耗 | `backend/modules/template_gen/agent.py` | 任何长修复迭代都需要；防止预算卡死 |
+| `read_file` 允许读取 `.log/.aux/.toc` 等生成文件（只读） | `backend/modules/template_gen/agent.py` | 通用调试能力 |
+| 编译失败无 `!` 行时从 `<main>.log` 兜底提取错误 | `backend/modules/template_gen/agent.py` | 通用日志协议 |
+| 错误分析追加 HINTS（`\spacefactor` / 缺字体 / `already defined` / 字面 `#`） | `backend/modules/template_gen/agent.py` | 按失败签名给通用修复指引，不是背答案 |
+| 同一编译错误连续 3 次注入干预 | `backend/modules/template_gen/agent.py` | 通用防循环 |
+
+**未改动**：`tju` 评测场景与基准（仍只在 `tools/`）；未向生产提示词写入任何
+TJU 专项内容（边距、类选项、学校名、字体名清单）。
+
+### 6.4 结果
+
+对照轮（`opt5`，与 `base2` 同机同配置、仅提示词/Agent 逻辑不同）：
+
+| 场景 | base2 轮数/编译/分 | opt5 轮数/编译/分 |
+| --- | --- | --- |
+| thesis | 50 / ✗ / 70 | 40 / ✓ / 100 |
+| beamer | 50 / ✗ / 60 | 33 / ✓ / 96 |
+| resume | 18 / ✓ / 90 | 40 / ✓ / 86 |
+| requirements | 50 / ✗ / 65 | 39 / ✓ / 91 |
+
+平均启发式分：71.25 → **93.2**；三个此前编译失败的场景全部通过。
+视觉审查与 holdout `tju` 回归结果见
+`tools/templategen_opt/results/`（`opt5/visual_reviews.json`、`tju13/`）。
+
+机制修复中，对收敛贡献最大的是：CJK 字体协议（beamer/thesis 首因）、
+`\@...`/`\makeatother` catcode 约束（thesis）、按唯一文件计数的写预算、
+`<main>.log`/`<main>.blg` 兜底读取，以及按失败签名给出的 HINTS。
+
+holdout `tju` 在 `tju12` 中仍因 7 个连续出现的通用小错误（`\wuhao` 不是命令、
+`\eqref` 重复定义、`p{}` 单元格内 `\centering` 吞行、`\kaiti`→`\kaishu`、
+不存在的 `.bst` 名、`algorithm` 环境缺宏包、`@inproceedings` 缺 `booktitle`）
+耗尽 50 轮；这些签名已全部追加为 HINTS，`tju13` 使用最终代码回归。
+
+### 6.5 经验教训
+
+- 上一轮撤销的"TJU 骨架"只是症状；这一轮证明：把**字体设置方式、内部宏
+  使用边界、调试日志通路**做成通用机制后，同一批失败模式的根因会自然消失，
+  不需要任何模板知识。
+- 文件预算按调用次数计数是一个隐蔽的可用性 bug：它不违反任何"硬编码"
+  约束，却会让 Agent 在修复后期失去写权限。通用性门禁之外，还应有
+  "机制是否自洽"的审查。
+- 关键词级需求检查（req=100）与"能否编译"完全解耦，前者高分不能作为
+  质量信号；必须依赖编译成功 + 视觉审查。

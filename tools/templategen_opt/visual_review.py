@@ -16,6 +16,7 @@ import asyncio
 import base64
 import io
 import json
+import os
 import shutil
 import subprocess
 import sys
@@ -29,7 +30,7 @@ PROJECT_ROOT = TOOLS_ROOT.parent  # 项目根（backend 所在）
 sys.path.insert(0, str(PROJECT_ROOT))
 sys.path.insert(0, str(TOOLS_ROOT))
 
-from backend.core.config import load_config  # noqa: E402
+from backend.core.config import get_config, load_config  # noqa: E402
 from backend.core.llm_client import get_llm_client  # noqa: E402
 from backend.utils.json_utils import retry_with_validation  # noqa: E402
 from tex_path import ensure_tex_path  # noqa: E402
@@ -38,6 +39,63 @@ from templategen_opt.descriptions import SCENARIOS  # noqa: E402
 load_config("config.json")
 
 MAX_IMAGE_DIM = 1024
+
+# 独立评审模型（默认与生成模型相同；通过环境变量切换到更强的视觉模型）：
+#   LX_REVIEW_LLM_MODEL     评审模型名，如 gpt-5.6-luna （留空 = 用生成模型）
+#   LX_REVIEW_LLM_BASE_URL  评审模型端点（留空 = 用生成模型端点）
+#   LX_REVIEW_LLM_KEY       评审模型 API Key（留空 = 用生成模型 Key）
+REVIEW_MODEL = os.environ.get("LX_REVIEW_LLM_MODEL", "").strip()
+REVIEW_BASE_URL = os.environ.get("LX_REVIEW_LLM_BASE_URL", "").strip()
+REVIEW_API_KEY = os.environ.get("LX_REVIEW_LLM_KEY", "").strip()
+_review_client = None
+
+
+def _get_review_client():
+    """按环境变量创建独立评审客户端（进程内只创建一次）。"""
+    global _review_client
+    if _review_client is None:
+        from openai import AsyncOpenAI
+
+        cfg = get_config().llm
+        _review_client = AsyncOpenAI(
+            api_key=REVIEW_API_KEY or cfg.api_key,
+            base_url=REVIEW_BASE_URL or cfg.base_url,
+        )
+    return _review_client
+
+
+def _active_review_model() -> str:
+    """当前评审实际使用的模型名（用于日志提示）。"""
+    if REVIEW_MODEL:
+        return REVIEW_MODEL
+    return get_config().llm.model
+
+
+async def _review_chat(
+    messages: list[dict[str, Any]],
+    temperature: float | None = None,
+    max_tokens: int | None = None,
+    response_format: dict | None = None,
+) -> str:
+    """评审专用 chat：配置了独立评审模型时走独立客户端，否则退回生成客户端。"""
+    if REVIEW_MODEL or REVIEW_BASE_URL or REVIEW_API_KEY:
+        client = _get_review_client()
+        kwargs: dict[str, Any] = {
+            "model": REVIEW_MODEL or get_config().llm.model,
+            "temperature": temperature,
+            "max_tokens": max_tokens,
+        }
+        if response_format:
+            kwargs["response_format"] = response_format
+        resp = await client.chat.completions.create(messages=messages, **kwargs)
+        return resp.choices[0].message.content or ""
+    llm = get_llm_client()
+    return await llm.chat(
+        messages,
+        temperature=temperature,
+        max_tokens=max_tokens,
+        response_format=response_format,
+    )
 
 
 class TemplateVisualReview(BaseModel):
@@ -67,9 +125,24 @@ SYSTEM_PROMPT = (
     "look, decorations purposeful), "
     "requirement_adherence (how faithfully the rendered document follows the "
     "user request: margins, fonts, colors, structure, style). "
+    "IMPORTANT GROUND RULES:\n"
+    "- You can ONLY see the first few rendered pages of a multi-page "
+    "document. A FACTUAL file list and README excerpt are provided in the "
+    "user message — they exist as stated, so never assert files are "
+    "missing or penalize their absence based on the images.\n"
+    "- Later pages (TOC, chapters, bibliography, appendices, back matter) "
+    "are not shown; do not claim they are missing or judge them.\n"
+    "- Judge only what is actually visible: typography, layout, colors, "
+    "spacing, alignment, page headers/footers, and the visible content "
+    "against the user request. When a requirement cannot be verified from "
+    "the images, do NOT penalize it and do NOT list it as an issue.\n"
+    "- The document may be typeset in Chinese; evaluate it as Chinese "
+    "academic typesetting. Minor pixelation from low-resolution rendering "
+    "is not a template defect.\n"
     "Return JSON only with keys: typography, layout, aesthetics, "
     "requirement_adherence, overall, issues (list of concrete problems), "
-    "suggestions (list of concrete fixes)."
+    "suggestions (list of concrete fixes). Keep issues and suggestions "
+    "grounded in visible evidence."
 )
 
 
@@ -129,7 +202,9 @@ def _pick_main_pdf(sandbox: Path) -> Path | None:
 
 
 def _build_user_content(
-    description: str, images: list[tuple[str, str]]
+    description: str,
+    images: list[tuple[str, str]],
+    files_text: str,
 ) -> list[dict[str, Any]]:
     content: list[dict[str, Any]] = [
         {
@@ -137,7 +212,14 @@ def _build_user_content(
             "text": (
                 "User request for this LaTeX template:\n\n"
                 f"{description}\n\n"
-                "Review the rendered pages below (first pages of the PDF)."
+                "FACTUAL context about the generated project (file names "
+                "and README excerpt, provided by the evaluation harness; "
+                "these files DO exist — do not question them):\n\n"
+                f"{files_text}\n\n"
+                "Now review the rendered pages below (first pages of the "
+                "PDF). Judge visual quality and visible requirement "
+                "adherence from the images; use the file list only as "
+                "evidence that structural pieces exist."
             ),
         }
     ]
@@ -146,6 +228,33 @@ def _build_user_content(
             {"type": "image_url", "image_url": {"url": data_uri, "detail": "high"}}
         )
     return content
+
+
+def _files_context(sandbox: Path) -> str:
+    """收集沙箱内的源文件清单与 README 摘要，作为评审的事实上下文。"""
+    src_suffixes = {".tex", ".sty", ".cls", ".bib", ".md", ".txt", ".cfg"}
+    paths: list[str] = []
+    if sandbox.exists():
+        for p in sorted(sandbox.rglob("*")):
+            if p.is_file() and p.suffix.lower() in src_suffixes:
+                paths.append(p.relative_to(sandbox).as_posix())
+    lines = ["Files:", *[f"- {p}" for p in paths]]
+    readme = next(
+        (
+            p
+            for p in (sandbox.rglob("README*") if sandbox.exists() else [])
+            if p.is_file()
+        ),
+        None,
+    )
+    if readme:
+        try:
+            text = readme.read_text(encoding="utf-8", errors="replace")
+            lines.append("\nREADME excerpt:")
+            lines.append(text[:2000])
+        except OSError:
+            pass
+    return "\n".join(lines)
 
 
 async def review_scenario(llm: Any, key: str, result_dir: Path) -> dict[str, Any]:
@@ -167,16 +276,17 @@ async def review_scenario(llm: Any, key: str, result_dir: Path) -> dict[str, Any
         return {}
 
     images = [_image_to_base64(p.read_bytes()) for p in pages]
+    files_text = _files_context(sandbox)
     messages = [
         {"role": "system", "content": SYSTEM_PROMPT},
         {
             "role": "user",
-            "content": _build_user_content(SCENARIOS.get(key, ""), images),
+            "content": _build_user_content(SCENARIOS.get(key, ""), images, files_text),
         },
     ]
     try:
         review: TemplateVisualReview = await retry_with_validation(
-            chat_fn=llm.chat,
+            chat_fn=_review_chat,
             messages=messages,
             model_cls=TemplateVisualReview,
             max_retries=3,
@@ -220,6 +330,11 @@ async def main() -> None:
         return
     scenarios = keys or sorted(p.name for p in out_root.iterdir() if p.is_dir())
     llm = get_llm_client()
+    print(
+        f"visual review model: {_active_review_model()} "
+        f"(env overrides: model={bool(REVIEW_MODEL)} "
+        f"base_url={bool(REVIEW_BASE_URL)} key={bool(REVIEW_API_KEY)})"
+    )
     all_reviews: dict[str, Any] = {}
     for key in scenarios:
         result_dir = out_root / key

@@ -171,6 +171,20 @@ LLM 视觉质量审查。对每个场景：
 
 > 该审查为离线评估，不参与 `run_plotgen.py` 的启发式评分，两者互补。
 
+**评审模型**：默认与生成 Agent 使用同一个 LLM（`config.json → llm`）。
+为了让质量评审有独立参考系，可用环境变量切换到更强的视觉模型（仅影响本工具，
+不影响生成）：
+
+```bash
+export LX_REVIEW_LLM_MODEL="gpt-5.6-luna"          # 评审模型名（必填以切换）
+export LX_REVIEW_LLM_BASE_URL="https://api.openai.com/v1"  # 留空=沿用生成端点
+export LX_REVIEW_LLM_KEY="sk-..."            # 留空=沿用生成 Key
+python tools/plotgen_opt/visual_review.py opt3
+```
+
+运行时会打印实际使用的评审模型与哪些环境变量生效。该环境变量约定与
+`tools/templategen_opt/visual_review.py` 完全一致，两个工具的评审模型可统一切换。
+
 ### 6. `compare.py [tagA tagB] [--targets k1,k2] [--tolerance 5] [--visual-tolerance 1] [--no-gate]`
 
 无参数时汇总对比 `baseline` 与 `opt1`..`opt10` 中已存在的 tag：逐场景打印

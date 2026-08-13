@@ -74,6 +74,28 @@ _ALLOWED_SUFFIXES = (
     ".def",
 )
 
+# read_file / 文件读取端点额外允许的生成文件扩展名（只读诊断用，
+# 例如编译失败后读 main.log 定位根因；写入仍受 _ALLOWED_SUFFIXES 限制）
+_ALLOWED_READ_SUFFIXES = _ALLOWED_SUFFIXES + (
+    ".log",
+    ".aux",
+    ".toc",
+    ".lof",
+    ".lot",
+    ".out",
+    ".blg",
+    ".bbl",
+    ".bcf",
+    ".run.xml",
+    ".fls",
+    ".fdb_latexmk",
+    ".xdv",
+    ".nav",
+    ".snm",
+    ".vrb",
+    ".synctex.gz",
+)
+
 
 def _content_hash(content: str) -> str:
     """计算写入内容的 SHA-256，用于识别"原样重发被拒内容"的退化循环。"""
@@ -171,6 +193,21 @@ class TemplateAgentService:
         last_fail_key: tuple[str, str] | None = None
         repeat_failures = 0
         injected_fail_keys: set[tuple[str, str]] = set()
+        # 同一文件连续被拒（不限内容哈希）的防呆：内容哈希变化会让上面的
+        # 计数器不断重置，导致"近似重发"绕过干预；这里按文件路径累计，
+        # 连续 5 次被拒后强制要求简化/重写该文件。
+        last_fail_file: str | None = None
+        file_repeat_failures = 0
+        injected_file_keys: set[str] = set()
+        # 连续出现同一编译错误签名时的防呆：3 次后注入显式纠正指令，
+        # 打断"同一根因反复试错"的循环。
+        last_compile_key: str | None = None
+        repeat_compiles = 0
+        injected_compile_keys: set[str] = set()
+        # 不同编译错误签名总数：超过阈值说明项目存在多个独立缺陷，
+        # 逐个修补效率太低，应系统性重写/拆分。
+        distinct_compile_keys: set[str] = set()
+        distinct_guidance_injected = False
 
         await self._append_trace(
             sandbox,
@@ -373,6 +410,128 @@ class TemplateAgentService:
                                 },
                             },
                         )
+                    # 文件级干预：同一路径连续被拒 5 次 → 强制简化/重写
+                    fail_file = str(tool_args.get("file_path", ""))
+                    if fail_file == last_fail_file:
+                        file_repeat_failures += 1
+                    else:
+                        last_fail_file = fail_file
+                        file_repeat_failures = 1
+                    if (
+                        file_repeat_failures >= 5
+                        and fail_file not in injected_file_keys
+                    ):
+                        injected_file_keys.add(fail_file)
+                        guidance = (
+                            f"[SYSTEM INTERVENTION] '{fail_file}' has been "
+                            f"rejected {file_repeat_failures} times in a row "
+                            "for structural problems (unbalanced braces / "
+                            "corrupt content). STOP resending modified "
+                            "versions of the same large file. Fix the exact "
+                            "line reported in the rejection, or rewrite the "
+                            "file as a MUCH SIMPLER version: remove "
+                            "conditional \\ifx/\\ifnum icon chains, use plain "
+                            "text instead of icon macros, and keep custom "
+                            "commands minimal. If it is still too large, "
+                            "split it into smaller .sty files. Do NOT resend "
+                            "the same structure again."
+                        )
+                        messages.append({"role": "user", "content": guidance})
+                        await self._append_trace(
+                            sandbox,
+                            {
+                                "ts": now_iso(),
+                                "run_id": run_id,
+                                "type": "nudge",
+                                "data": {
+                                    "kind": "repeated_file_rejection",
+                                    "message": guidance,
+                                },
+                            },
+                        )
+
+                # 同一编译错误连续 3 次 → 显式纠正（防根因循环）
+                if (
+                    tool_name == "compile_latex"
+                    and result_event.get("success") is False
+                ):
+                    errs = result_event.get("errors") or []
+                    if errs:
+                        first = errs[0]
+                        compile_key = (
+                            f"{first.get('type')}|{first.get('file')}|"
+                            f"{first.get('line')}|{first.get('detail')}"
+                        )
+                    else:
+                        compile_key = "NO_ERRORS"
+                    distinct_compile_keys.add(compile_key)
+                    if compile_key == last_compile_key:
+                        repeat_compiles += 1
+                    else:
+                        last_compile_key = compile_key
+                        repeat_compiles = 1
+                    if (
+                        repeat_compiles >= 3
+                        and compile_key not in injected_compile_keys
+                    ):
+                        injected_compile_keys.add(compile_key)
+                        guidance = (
+                            f"[SYSTEM INTERVENTION] Your last "
+                            f"{repeat_compiles} compile_latex calls failed "
+                            f"with the SAME error. Stop symptom patching: "
+                            "read the generated log with read_file (e.g. "
+                            "'read_file main.log') and read the source file "
+                            "named in the error, then rewrite the "
+                            "root-cause block ONCE. If the error mentions a "
+                            "font, remove explicit CJK font commands and let "
+                            "ctex's default fontset handle it. If it is a "
+                            "'spacefactor' error, replace `\\@...` internals "
+                            "in body files with public commands defined in "
+                            "the class."
+                        )
+                        messages.append({"role": "user", "content": guidance})
+                        await self._append_trace(
+                            sandbox,
+                            {
+                                "ts": now_iso(),
+                                "run_id": run_id,
+                                "type": "nudge",
+                                "data": {
+                                    "kind": "repeated_compile_error",
+                                    "message": guidance,
+                                },
+                            },
+                        )
+                    if (
+                        len(distinct_compile_keys) >= 6
+                        and not distinct_guidance_injected
+                    ):
+                        distinct_guidance_injected = True
+                        guidance = (
+                            f"[SYSTEM INTERVENTION] You have now hit "
+                            f"{len(distinct_compile_keys)} DISTINCT compile "
+                            "errors in a row — the project has multiple "
+                            "independent defects, and fixing them one at a "
+                            "time will exhaust your round budget. STOP. "
+                            "Read the entire .cls/.sty and main .tex files, "
+                            "then rewrite the class/style ONCE in smaller "
+                            ".sty files (or simplify the design: remove "
+                            "constructs you cannot verify), and recompile. "
+                            "Do not add new features at this point."
+                        )
+                        messages.append({"role": "user", "content": guidance})
+                        await self._append_trace(
+                            sandbox,
+                            {
+                                "ts": now_iso(),
+                                "run_id": run_id,
+                                "type": "nudge",
+                                "data": {
+                                    "kind": "many_distinct_compile_errors",
+                                    "message": guidance,
+                                },
+                            },
+                        )
 
                 # finish 工具立即终止循环
                 if tool_name == "finish":
@@ -464,8 +623,14 @@ class TemplateAgentService:
     # ── 沙箱路径校验 ─────────────────────────────────────────────────────
 
     @staticmethod
-    def _resolve_sandbox_path(sandbox: Path, file_path: str) -> Path:
-        """校验并解析沙箱内相对路径，拒绝绝对路径 / '..' / 越界 / 非白名单扩展名。"""
+    def _resolve_sandbox_path(
+        sandbox: Path, file_path: str, *, for_read: bool = False
+    ) -> Path:
+        """校验并解析沙箱内相对路径，拒绝绝对路径 / '..' / 越界。
+
+        for_read=True 时允许读取编译生成文件（.log/.aux/.toc 等），
+        写入仍严格限制在 _ALLOWED_SUFFIXES 白名单内。
+        """
         if not file_path or not file_path.strip():
             raise ValueError("file_path must not be empty")
         if "\x00" in file_path:
@@ -481,9 +646,11 @@ class TemplateAgentService:
         if not resolved.is_relative_to(sandbox.resolve()):
             raise ValueError("file_path resolves outside the sandbox")
 
-        if resolved.suffix.lower() not in _ALLOWED_SUFFIXES:
+        allowed = _ALLOWED_READ_SUFFIXES if for_read else _ALLOWED_SUFFIXES
+        if resolved.suffix.lower() not in allowed:
             raise ValueError(
-                f"file_path has disallowed extension: {resolved.suffix} (allowed: {_ALLOWED_SUFFIXES})"
+                f"file_path has disallowed extension: {resolved.suffix} "
+                f"(allowed: {allowed})"
             )
         return resolved
 
@@ -534,7 +701,10 @@ class TemplateAgentService:
                         "Read the current contents of a file already created in "
                         "the workspace. Useful before editing to fix compile "
                         "errors, and for the pre-finish quality gate (re-check "
-                        "files against the requirement checklist)."
+                        "files against the requirement checklist). Generated "
+                        "diagnostic files (.log/.aux/.toc/.out/.blg/.fls) can "
+                        "also be read — e.g. 'read_file main.log' gives the "
+                        "full compiler log when the error summary is unclear."
                     ),
                     "parameters": {
                         "type": "object",
@@ -567,8 +737,12 @@ class TemplateAgentService:
                             "log on failure. Call this after writing all files, and "
                             "again after any fix. On success, also inspect the log "
                             "tail for warnings such as undefined references or "
-                            "overfull boxes and fix them when present. Do not loop "
-                            "more than necessary."
+                            "overfull boxes and fix them when present. On failure the "
+                            "returned text includes a structured error summary "
+                            "(extracted from the build output and, when needed, from "
+                            "the generated .log file); you may also call read_file on "
+                            "main.log for the full log. Do not loop more than "
+                            "necessary."
                         ),
                         "parameters": {
                             "type": "object",
@@ -629,7 +803,10 @@ class _ToolExecutor:
         self._sandbox = sandbox
         self._cfg = cfg
         self._logger = logger
-        self._file_count = 0
+        # 已写入的唯一文件路径（相对路径，正斜杠）。预算按"不同文件数"
+        # 计算：重写已有文件不消耗预算，防止 Agent 把轮次耗在反复修复
+        # 同一批文件上时被预算卡死。
+        self._written_paths: set[str] = set()
 
     async def execute(
         self, tool_name: str, args: dict[str, Any]
@@ -654,9 +831,6 @@ class _ToolExecutor:
         content = args.get("content", "")
 
         fcfg = self._cfg.features.template_gen
-        if self._file_count >= fcfg.agent_max_files:
-            msg = f"Maximum file count {fcfg.agent_max_files} reached; refusing to write {file_path}"
-            return msg, {"tool": "write_file", "ok": False, "summary": msg}
 
         try:
             resolved = TemplateAgentService._resolve_sandbox_path(
@@ -668,6 +842,19 @@ class _ToolExecutor:
                 "ok": False,
                 "summary": f"Path validation failed: {e}",
             }
+
+        rel_path = resolved.relative_to(self._sandbox).as_posix()
+        if (
+            rel_path not in self._written_paths
+            and len(self._written_paths) >= fcfg.agent_max_files
+        ):
+            msg = (
+                f"Maximum distinct-file count {fcfg.agent_max_files} reached; "
+                f"refusing to create a NEW file {file_path}. You may still "
+                "REWRITE (overwrite) existing files to fix them, but do not "
+                "create any additional files."
+            )
+            return msg, {"tool": "write_file", "ok": False, "summary": msg}
 
         max_bytes = fcfg.agent_max_file_size_kb * 1024
         content_bytes = content.encode("utf-8")
@@ -698,7 +885,7 @@ class _ToolExecutor:
 
         resolved.parent.mkdir(parents=True, exist_ok=True)
         resolved.write_bytes(content_bytes)
-        self._file_count += 1
+        self._written_paths.add(rel_path)
         self._logger.info(f"write_file: {file_path} ({len(content_bytes)} bytes)")
 
         summary = f"Wrote {file_path} ({len(content_bytes)} bytes)"
@@ -716,7 +903,7 @@ class _ToolExecutor:
         file_path = args.get("file_path", "")
         try:
             resolved = TemplateAgentService._resolve_sandbox_path(
-                self._sandbox, file_path
+                self._sandbox, file_path, for_read=True
             )
         except ValueError as e:
             return str(e), {
@@ -834,12 +1021,71 @@ class _ToolExecutor:
             summary = "Compilation succeeded"
         else:
             errors = _extract_errors(full_log)
+            log_note = ""
+            # latexmk 的 stdout/stderr 可能不含 `!` 错误行（错误只写进了
+            # <main>.log）。此时直接从沙箱读取日志文件兜底提取，避免
+            # Agent 因"看不到错误"而盲目重试。
+            if not errors:
+                log_file = resolved.with_suffix(".log")
+                log_text = await asyncio.to_thread(_read_log_text, log_file)
+                if log_text:
+                    log_errors = _extract_errors(log_text)
+                    if log_errors:
+                        errors = log_errors
+                        log_note = (
+                            f"[note: no error lines in latexmk output; errors "
+                            f"below were extracted from {log_file.name}]"
+                        )
+                    else:
+                        log_note = (
+                            f"[note: no '!' error lines in latexmk output or "
+                            f"{log_file.name}; a tail of {log_file.name} is "
+                            f"included below]"
+                        )
+                        log_tail = (
+                            log_text[-_LOG_TRUNCATE:]
+                            if len(log_text) > _LOG_TRUNCATE
+                            else log_text
+                        )
+                        trimmed = (
+                            trimmed + f"\n\n--- {log_file.name} (tail) ---\n" + log_tail
+                        )
+                    # 参考文献失败时真实错误在 .blg 里（如 .bst 不存在、
+                    # bib 条目缺字段），同样兜底追加
+                    blg_file = resolved.with_suffix(".blg")
+                    blg_text = await asyncio.to_thread(_read_log_text, blg_file)
+                    if blg_text and (
+                        "bibtex" in log_text.lower()
+                        or "bbl" in log_text.lower()
+                        or "blg" in log_text.lower()
+                    ):
+                        log_note = (
+                            log_note + " [bibtex note: if the .blg tail shows "
+                            "'couldn't open style file', the "
+                            "\\bibliographystyle name does not exist — use "
+                            "an installed style (e.g. gbt7714-numerical / "
+                            "gbt7714-2005-numerical) or a standard one; if "
+                            "it shows 'missing field for entry', fix that "
+                            "entry's type or add the missing field (e.g. "
+                            "@inproceedings needs booktitle).]"
+                        )
+                        blg_tail = (
+                            blg_text[-_LOG_TRUNCATE:]
+                            if len(blg_text) > _LOG_TRUNCATE
+                            else blg_text
+                        )
+                        trimmed = (
+                            trimmed + f"\n\n--- {blg_file.name} (tail) ---\n" + blg_tail
+                        )
             analysis = _format_error_analysis(errors)
+            if log_note:
+                analysis = log_note + "\n\n" + analysis
             llm_text = analysis + "\n\n--- Raw log (trimmed) ---\n" + trimmed
             error_count = len(errors)
             summary = (
                 f"Compilation failed ({error_count} error(s)); analyze the error summary, "
-                f"use read_file to inspect the relevant files, then use write_file to fix and compile again"
+                f"use read_file to inspect the relevant files (main.log is readable), "
+                f"then use write_file to fix and compile again"
             )
 
         event = {
@@ -888,6 +1134,17 @@ class _ToolExecutor:
 # ── 辅助函数 ───────────────────────────────────────────────────────────
 
 
+def _read_log_text(log_path: Path, max_chars: int = 262144) -> str:
+    """读取编译日志文件文本（供 _compile_latex 兜底解析），失败返回空串。"""
+    try:
+        if not log_path.exists() or not log_path.is_file():
+            return ""
+        text = log_path.read_text(encoding="utf-8", errors="replace")
+        return text if len(text) <= max_chars else text[:max_chars]
+    except OSError:
+        return ""
+
+
 def _trim_log(log: str, success: bool) -> str:
     """截断编译日志，失败时优先保留错误行附近上下文。
 
@@ -927,8 +1184,9 @@ def _nudge_message() -> str:
 
 
 # 匹配 latexmk/xelatex 日志中的文件入栈标记，形如 `(./main.tex` 或
-# `(chapters/intro.tex`。用于追踪错误发生在哪个源文件中。
-_FILE_CTX_RE = re.compile(r"\(\s*((?:\.{1,2}/)?[\w./\-]+\.tex)\b")
+# `(chapters/intro.tex`，也覆盖 `(./thesis.cls` / `(./theme.sty`。
+# 用于追踪错误发生在哪个源文件中（错误常出现在 .cls/.sty 的宏定义里）。
+_FILE_CTX_RE = re.compile(r"\(\s*((?:\.{1,2}/)?[\w./\-]+\.(?:tex|cls|sty))\b")
 # 匹配行号提示，形如 `l.123 ...`（不带转义因为 LaTeX 错误日志是纯文本）
 _LINE_INFO_RE = re.compile(r"l\.(\d+)\s?(.*)")
 
@@ -1014,6 +1272,145 @@ def _extract_errors(log: str) -> list[dict[str, Any]]:
     return errors[:8]
 
 
+def _error_hints(errors: list[dict[str, Any]]) -> list[str]:
+    """根据已知的通用 LaTeX 失败签名生成针对性修复提示（与具体模板无关）。"""
+    hints: list[str] = []
+    for e in errors:
+        combined = f"{e.get('type', '')} {e.get('detail', '')}".lower()
+        if "spacefactor" in combined:
+            hint = (
+                "Metadata trap: this error is caused by a `\\@...` internal "
+                "macro (or a bare `\\@`) typeset in a body .tex file, where "
+                "`@` is not a letter. Define PUBLIC metadata commands in the "
+                ".cls/.sty (e.g. `\\thesistitlevalue` accessors) or a "
+                "`\\maketitlepage` command, and use only those public "
+                "commands in body files."
+            )
+            if hint not in hints:
+                hints.append(hint)
+        if (
+            "cannot be found" in combined
+            or "fontspec" in combined
+            or ("font" in combined and "missing" in combined)
+        ):
+            hint = (
+                "Font issue: do NOT manually set CJK fonts "
+                "(\\setCJKmainfont / \\setCJKsansfont / \\setCJKfamilyfont) "
+                "or probe fonts with \\IfFontExistsTF on CJK family names "
+                "(unreliable for CJK). Delete the explicit CJK font commands "
+                "and let ctex's automatic platform fontset pick a working "
+                "stack; for Latin fonts fall back to Latin Modern or the "
+                "class default. Document any substitution in the README."
+            )
+            if hint not in hints:
+                hints.append(hint)
+        if "already defined" in combined:
+            hint = (
+                "Command collision: the command already exists in the loaded "
+                "class/package. Use \\renewcommand when the base definition "
+                "must change, or define a NEW name; never \\newcommand over "
+                "an existing command."
+            )
+            if hint not in hints:
+                hints.append(hint)
+        if "macro parameter character" in combined:
+            hint = (
+                "A literal `#` appears in text or in a command argument. In "
+                "LaTeX text, write `\\#` for the hash symbol; for HTML/RGB "
+                "colors, write `\\definecolor{...}{HTML}{1F4E79}` WITHOUT "
+                "the `#` prefix. Never place a bare `#` outside a macro "
+                "definition."
+            )
+            if hint not in hints:
+                hints.append(hint)
+        if "capacity exceeded" in combined or "input stack size" in combined:
+            hint = (
+                "Infinite recursion or runaway expansion: a macro is calling "
+                "itself (e.g. a command redefines its own name, or "
+                "\\labelenumi/\\theenumi is redefined circularly). Remove or "
+                "simplify the recursive redefinition; if a custom theme "
+                "redefines list counters, delete those lines and let the "
+                "class/beamer defaults handle them."
+            )
+            if hint not in hints:
+                hints.append(hint)
+        if "a node must have" in combined:
+            hint = (
+                "Every tikz \\node needs a (possibly empty) label text: "
+                "`\\node[options] (name) {text};` — the braces are "
+                "mandatory, e.g. `\\node[fill=blue] (box) {};`."
+            )
+            if hint not in hints:
+                hints.append(hint)
+        if "no counter" in combined:
+            hint = (
+                "The referenced counter is not defined (or not yet defined "
+                "at that point). Use counters provided by the class "
+                "(e.g. beamer defines 'frame'/'framenumber'; LaTeX defines "
+                "'figure'/'table'/'equation'), or define your own with "
+                "\\newcounter before using it. Do not \\newcounter over "
+                "names the class already provides."
+            )
+            if hint not in hints:
+                hints.append(hint)
+        if "not found" in combined and "file" in combined:
+            hint = (
+                "A file/package/theme is missing. If it is a file YOU "
+                "intended to provide (e.g. a custom .sty or "
+                "beamerthemeX.sty), create it with write_file; if it is a "
+                "third-party package, use a standard equivalent already "
+                "available in TeX distributions or remove the "
+                "\\usepackage/\\usetheme line."
+            )
+            if hint not in hints:
+                hints.append(hint)
+        if "missing \\begin{document}" in combined:
+            hint = (
+                "In a .cls/.sty file, `@` is already a letter, so a stray "
+                "`\\makeatother` turns every later `\\@...` command name into "
+                "`\\@` + letters, and the letters get typeset in the "
+                "preamble — which raises 'Missing \\begin{document}'. Remove "
+                "`\\makeatother` from class/style files (`\\makeatletter` is "
+                "unnecessary there). Also verify no body text appears in "
+                "main.tex before \\begin{document}."
+            )
+            if hint not in hints:
+                hints.append(hint)
+        if "missing \\endcsname" in combined:
+            hint = (
+                "Missing \\endcsname: a command used inside a key-value or "
+                "\\csname context is undefined or malformed. Chinese size "
+                "names like `\\wuhao` are NOT commands — use `\\zihao{5}` "
+                "(or `font=small` in \\captionsetup). Check every control "
+                "sequence in the reported line and the key it belongs to."
+            )
+            if hint not in hints:
+                hints.append(hint)
+        if "extra alignment tab" in combined:
+            hint = (
+                "A tabular row has more `&` separators than the column spec "
+                "allows, OR a `p{}`-cell declaration like \\centering/"
+                "\\raggedright swallowed the row break (\\centering "
+                "redefines `\\\\` inside the cell). Fix: end rows with "
+                "\\tabularnewline when a cell uses \\centering, or use "
+                "`>{\\centering\\arraybackslash}p{...}` column specs; also "
+                "count `&` against the column specification."
+            )
+            if hint not in hints:
+                hints.append(hint)
+        if "environment" in combined and "undefined" in combined:
+            hint = (
+                "Environment undefined: the environment's defining package "
+                "is not loaded (e.g. `algorithm` needs \\usepackage{algorithm}"
+                "+\\usepackage{algorithmic} or algorithm2e; `tikzpicture` "
+                "needs \\usepackage{tikz}), or the name is misspelled. Add "
+                "the package or fix the name."
+            )
+            if hint not in hints:
+                hints.append(hint)
+    return hints
+
+
 def _format_error_analysis(errors: list[dict[str, Any]]) -> str:
     """把结构化错误列表格式化为给 LLM 看的聚焦错误摘要。
 
@@ -1023,8 +1420,10 @@ def _format_error_analysis(errors: list[dict[str, Any]]) -> str:
     if not errors:
         return (
             "Compilation FAILED. No '! ' error lines were detected in the "
-            "log — inspect the raw log below for missing files, font issues, "
-            "or other diagnostics, then fix and recompile."
+            "build output or the generated .log file. Read the full log "
+            "with read_file (e.g. 'read_file main.log') and inspect it for "
+            "missing files, font issues, or other diagnostics, then fix and "
+            "recompile."
         )
     parts = [
         f"Compilation FAILED. Detected {len(errors)} LaTeX error(s).",
@@ -1046,9 +1445,13 @@ def _format_error_analysis(errors: list[dict[str, Any]]) -> str:
             parts.append(
                 "  hint: Chinese/CJK text is typeset in a font that lacks "
                 "those glyphs — load xeCJK/ctex and use its default CJK "
-                "fontset (or a user-requested font guarded with "
-                "\\IfFontExistsTF) for CJK text."
+                "fontset for CJK text; do not manually set CJK fonts."
             )
+        parts.append("")
+    hints = _error_hints(errors)
+    if hints:
+        parts.append("HINTS (apply before the next compile):")
+        parts.extend(f"- {h}" for h in hints)
         parts.append("")
     return "\n".join(parts)
 
@@ -1117,7 +1520,9 @@ def safe_read_sandbox_file(
 ) -> tuple[str | None, str | None]:
     """安全读取沙箱内文件，返回 (content, error)。"""
     try:
-        resolved = TemplateAgentService._resolve_sandbox_path(sandbox, rel_path)
+        resolved = TemplateAgentService._resolve_sandbox_path(
+            sandbox, rel_path, for_read=True
+        )
     except ValueError as e:
         return None, str(e)
     if not resolved.exists() or not resolved.is_file():

@@ -24,10 +24,10 @@ Agent 自主规划文件结构 → 逐个 `write_file` → 调用 `compile_latex
 
 | 工具 | 功能 | 备注 |
 | --- | --- | --- |
-| `write_file` | 创建/覆盖沙箱内文件，完整内容写入 | 路径校验 + 文件数/大小上限 + LaTeX 内容校验（写盘前拦截 JSON 转义损坏，失败回传 LLM 自纠） |
-| `read_file` | 读取沙箱内已写文件 | 修错时回看内容 |
+| `write_file` | 创建/覆盖沙箱内文件，完整内容写入 | 路径校验 + **不同文件数**/大小上限 + LaTeX 内容校验（写盘前拦截 JSON 转义损坏，失败回传 LLM 自纠）；重写已有文件不消耗文件预算，防止修复迭代中被预算卡死 |
+| `read_file` | 读取沙箱内文件 | 除已写源文件外，允许读取编译生成文件（`.log/.aux/.toc/.out/.blg/.fls` 等），便于编译失败后定位根因 |
 | `list_files` | 列出沙箱内全部文件 | 验证项目结构 |
-| `compile_latex` | `latexmk -xelatex` 在沙箱目录编译 | 受 `agent_compile_enabled` 开关控制，失败时截取错误行附近日志回传 LLM |
+| `compile_latex` | `latexmk -xelatex` 在沙箱目录编译 | 受 `agent_compile_enabled` 开关控制，失败时截取错误行附近日志回传 LLM；latexmk 输出无 `!` 行时自动从 `<main>.log` 兜底提取结构化错误 |
 | `finish` | 信号项目完成，附带总结与主文件路径 | 调用后立即终止循环 |
 
 ## 沙箱与路径安全
@@ -37,7 +37,8 @@ Agent 自主规划文件结构 → 逐个 `write_file` → 调用 `compile_latex
 - 禁止空、null 字节、绝对路径
 - 禁止 `..` 路径段
 - `resolve()` 后必须仍在沙箱内
-- 扩展名白名单：`.tex/.sty/.cls/.bib/.md/.txt/.cfg/.bst/.def/.ltx/.latex`
+- 写入扩展名白名单：`.tex/.sty/.cls/.bib/.md/.txt/.cfg/.bst/.def/.ltx/.latex`
+- 读取额外白名单（只读诊断）：`.log/.aux/.toc/.lof/.lot/.out/.blg/.bbl/.bcf/.run.xml/.fls/.fdb_latexmk/.xdv/.nav/.snm/.vrb/.synctex.gz`
 
 ## 沙箱自动清理（`cleanup.py`）
 
@@ -111,6 +112,36 @@ e. 重复 a–d 直到 `success=true` 才允许 `finish`
 
 prompt 同时列出多种常见 LaTeX 编译错误的根因与修复指引（`Undefined control sequence` / `File not found` / `Missing $ inserted` / `Environment undefined` / `begin/end mismatch` / `Runaway argument`），并硬性约束同错误连续 3 次修复失败应在 `finish` 中告知用户，防止死循环。
 
+### 编译错误兜底提取与针对性提示
+
+latexmk 的 stdout/stderr 有时不含 `!` 错误行（错误只写进了 `<main>.log`），
+旧逻辑会让 Agent 面对一段没有错误标记的日志盲目重试。现在：
+
+1. `compile_latex` 失败且未从输出中解析出 `!` 行时，自动读取沙箱内
+   `<main>.log` 兜底调用 `_extract_errors()`；若仍无 `!` 行，则把 `.log`
+   尾部追加到回传文本，并提示 Agent 用 `read_file main.log` 查看全文。
+2. `_format_error_analysis()` 会按已知的**通用失败签名**追加 `HINTS` 区块：
+   - `\spacefactor in vertical mode` → 元数据陷阱：正文文件不得使用
+     `\@...` 内部宏，类中需提供公开访问命令（如 `\thesistitlevalue`）或
+     `\maketitlepage`；
+   - 字体缺失 / fontspec 错误 → 删除显式 `\setCJKmainfont` 等命令，交给
+     ctex 自动平台字体集；拉丁字体回退 Latin Modern / 类默认；
+   - `Command ... already defined` → 改用 `\renewcommand` 或新命令名。
+   - `macro parameter character #` → 文本中的字面 `#` 写 `\#`；HTML 颜色
+     用 `\definecolor{...}{HTML}{1F4E79}` 且不带 `#` 前缀。
+   - `Missing \endcsname` → key-value 上下文里的命令未定义/畸形（如
+     `\wuhao` 不是命令，应用 `\zihao{5}` 或 `font=small`）。
+   - `Extra alignment tab` → `p{}` 单元格内 `\centering` 会重定义 `\\`，
+     行尾需 `\tabularnewline` 或用 `>{\centering\arraybackslash}p{...}`。
+   - `Environment xxx undefined` → 加载对应宏包（如 `algorithm`）。
+   - 参考文献失败（无 `.bbl`）→ 自动追加 `main.blg` 尾部并提示检查
+     `.bst` 名称与 `.bib` 条目字段。
+3. 同一编译错误签名连续出现 3 次时，循环注入 `[SYSTEM INTERVENTION]`
+   纠正消息（记录为 `nudge`），要求停止症状修补、读日志与源文件后一次性
+   重写根因块。
+4. 累计出现 6 个不同编译错误签名时，注入"系统性重写"干预：停止逐个修补，
+   通读 `.cls/.sty` 与主文件后拆分/简化重写一次。
+
 ## 编译日志结构化错误提取
 
 编译失败时由 `backend/modules/template_gen/agent.py` 中的两个辅助函数处理：
@@ -155,7 +186,7 @@ prompt 同时列出多种常见 LaTeX 编译错误的根因与修复指引（`Un
 | `enabled` | `true` | 模块总开关 |
 | `output_dir` | `templates/` | Agent 沙箱根目录 |
 | `agent_max_rounds` | `30` | Agent 最大工具调用轮数 |
-| `agent_max_files` | `30` | 单次生成最大文件数 |
+| `agent_max_files` | `30` | 单次生成最大**不同文件数**（重写已有文件不计入预算） |
 | `agent_max_file_size_kb` | `512` | 单文件大小上限 |
 | `agent_compile_enabled` | `true` | 是否允许 Agent 调用 `compile_latex` |
 | `agent_compile_timeout` | `120` | 编译超时（秒） |

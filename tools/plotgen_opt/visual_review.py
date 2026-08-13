@@ -19,6 +19,7 @@ import asyncio
 import base64
 import io
 import json
+import os
 import shutil
 import subprocess
 import sys
@@ -32,7 +33,7 @@ PROJECT_ROOT = TOOLS_ROOT.parent  # 项目根（backend 所在）
 sys.path.insert(0, str(PROJECT_ROOT))
 sys.path.insert(0, str(TOOLS_ROOT))
 
-from backend.core.config import load_config  # noqa: E402
+from backend.core.config import get_config, load_config  # noqa: E402
 from backend.core.llm_client import get_llm_client  # noqa: E402
 from backend.utils.json_utils import retry_with_validation  # noqa: E402
 from tex_path import ensure_tex_path  # noqa: E402
@@ -40,6 +41,63 @@ from tex_path import ensure_tex_path  # noqa: E402
 load_config("config.json")
 
 MAX_IMAGE_DIM = 1024
+
+# 独立评审模型（默认与生成模型相同；通过环境变量切换到更强的视觉模型）：
+#   LX_REVIEW_LLM_MODEL     评审模型名，如 gpt-5.6-luna（留空 = 用生成模型）
+#   LX_REVIEW_LLM_BASE_URL  评审模型端点（留空 = 用生成模型端点）
+#   LX_REVIEW_LLM_KEY       评审模型 API Key（留空 = 用生成模型 Key）
+REVIEW_MODEL = os.environ.get("LX_REVIEW_LLM_MODEL", "").strip()
+REVIEW_BASE_URL = os.environ.get("LX_REVIEW_LLM_BASE_URL", "").strip()
+REVIEW_API_KEY = os.environ.get("LX_REVIEW_LLM_KEY", "").strip()
+_review_client = None
+
+
+def _get_review_client():
+    """按环境变量创建独立评审客户端（进程内只创建一次）。"""
+    global _review_client
+    if _review_client is None:
+        from openai import AsyncOpenAI
+
+        cfg = get_config().llm
+        _review_client = AsyncOpenAI(
+            api_key=REVIEW_API_KEY or cfg.api_key,
+            base_url=REVIEW_BASE_URL or cfg.base_url,
+        )
+    return _review_client
+
+
+def _active_review_model() -> str:
+    """当前评审实际使用的模型名（用于日志提示）。"""
+    if REVIEW_MODEL:
+        return REVIEW_MODEL
+    return get_config().llm.model
+
+
+async def _review_chat(
+    messages: list[dict[str, Any]],
+    temperature: float | None = None,
+    max_tokens: int | None = None,
+    response_format: dict | None = None,
+) -> str:
+    """评审专用 chat：配置了独立评审模型时走独立客户端，否则退回生成客户端。"""
+    if REVIEW_MODEL or REVIEW_BASE_URL or REVIEW_API_KEY:
+        client = _get_review_client()
+        kwargs: dict[str, Any] = {
+            "model": REVIEW_MODEL or get_config().llm.model,
+            "temperature": temperature,
+            "max_tokens": max_tokens,
+        }
+        if response_format:
+            kwargs["response_format"] = response_format
+        resp = await client.chat.completions.create(messages=messages, **kwargs)
+        return resp.choices[0].message.content or ""
+    llm = get_llm_client()
+    return await llm.chat(
+        messages,
+        temperature=temperature,
+        max_tokens=max_tokens,
+        response_format=response_format,
+    )
 
 
 class VisualReview(BaseModel):
@@ -175,7 +233,7 @@ async def review_scenario(
     ]
     try:
         review: VisualReview = await retry_with_validation(
-            chat_fn=llm.chat,
+            chat_fn=_review_chat,
             messages=messages,
             model_cls=VisualReview,
             max_retries=3,
@@ -219,6 +277,11 @@ async def main() -> None:
         return
     scenarios = keys or sorted(p.name for p in tag_dir.iterdir() if p.is_dir())
     llm = get_llm_client()
+    print(
+        f"visual review model: {_active_review_model()} "
+        f"(env overrides: model={bool(REVIEW_MODEL)} "
+        f"base_url={bool(REVIEW_BASE_URL)} key={bool(REVIEW_API_KEY)})"
+    )
     all_reviews: dict[str, Any] = {}
     for key in scenarios:
         result_dir = tag_dir / key

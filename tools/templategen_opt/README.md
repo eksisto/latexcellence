@@ -165,6 +165,20 @@ LLM 视觉质量审查。对每个场景：
 > 这是质量验收的主要依据——启发式检查只验证「关键词是否存在」，视觉审查验证
 > 「渲染出来好不好看、是否符合需求」。
 
+**评审模型**：默认与生成 Agent 使用同一个 LLM（`config.json → llm`）。为了
+让质量评审有独立参考系，可用环境变量切换到更强的视觉模型（仅影响本工具，
+不影响生成）：
+
+```bash
+export LX_REVIEW_LLM_MODEL="gpt-4o"          # 评审模型名（必填以切换）
+export LX_REVIEW_LLM_BASE_URL="https://api.openai.com/v1"  # 留空=沿用生成端点
+export LX_REVIEW_LLM_KEY="sk-..."            # 留空=沿用生成 Key
+python tools/templategen_opt/visual_review.py opt5
+```
+
+运行时会打印实际使用的评审模型与哪些环境变量生效。评审请求同时附带沙箱源文件
+清单与 README 摘要作为事实上下文，避免模型把「图片里看不到」误判为「文件缺失」。
+
 ### 4. `compare.py <tagA> <tagB> [--targets k1,k2] [--tolerance 5] [--visual-tolerance 1] [--no-gate]`
 
 对比两个 tag 的评测结果：

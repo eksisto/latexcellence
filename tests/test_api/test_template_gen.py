@@ -251,6 +251,43 @@ class TestAgentLoop:
         assert done["type"] == "done"
         assert any(f["path"] == "main.tex" for f in done["files"])
 
+    def test_repeated_file_rejection_injects_simplify_guidance(self, tmp_path):
+        """同一文件连续被拒 5 次（即使内容哈希近似）应注入简化重写干预。"""
+        svc = TemplateAgentService()
+        llm = MagicMock()
+        bad_content = r"\newcommand{\cvsection}[1]{\textbf{hello"  # 缺右花括号
+        responses = []
+        for i in range(5):
+            responses.append(
+                _make_response(
+                    tool_calls=[
+                        _make_tool_call(
+                            "write_file",
+                            {
+                                "file_path": "resume.cls",
+                                "content": bad_content,
+                            },
+                            f"w{i}",
+                        )
+                    ]
+                )
+            )
+        responses.append(
+            _make_response(
+                tool_calls=[
+                    _make_tool_call("finish", {"summary": "done"}, "f1"),
+                ]
+            )
+        )
+        llm.chat_with_tools = AsyncMock(side_effect=responses)
+
+        events = _collect(svc, "resume test", llm)
+        done = events[-1]
+        assert done["type"] == "done"
+        trace_text = (Path(done["sandbox"]) / "trace.jsonl").read_text(encoding="utf-8")
+        assert "repeated_file_rejection" in trace_text
+        assert "MUCH SIMPLER" in trace_text
+
 
 class TestSandboxPath:
     """沙箱路径校验。"""
@@ -272,6 +309,15 @@ class TestSandboxPath:
             tmp_path, "chapters/intro.tex"
         )
         assert resolved.is_relative_to(tmp_path.resolve())
+
+    def test_read_allows_generated_log(self, tmp_path):
+        """read_file 允许读取编译生成文件（如 main.log），写入仍拒绝。"""
+        resolved = TemplateAgentService._resolve_sandbox_path(
+            tmp_path, "main.log", for_read=True
+        )
+        assert resolved.name == "main.log"
+        with pytest.raises(ValueError):
+            TemplateAgentService._resolve_sandbox_path(tmp_path, "main.log")
 
 
 class TestTrimLog:
@@ -302,6 +348,86 @@ class TestToolExecutorCompile:
         text, ev = asyncio.run(executor._compile_latex({"main_file": "nope.tex"}))
         assert ev["ok"] is False
         assert "not found" in ev["summary"].lower()
+
+    def test_fallback_extracts_errors_from_main_log(self, tmp_path, monkeypatch):
+        """latexmk 输出中没有 `!` 行时，应兜底从 <main>.log 提取结构化错误。"""
+        import backend.modules.template_gen.agent as agent_mod
+        from types import SimpleNamespace
+
+        cfg = get_config()
+        cfg.features.template_gen.output_dir = str(tmp_path)
+        cfg.features.template_gen.agent_compile_timeout = 30
+        (tmp_path / "main.tex").write_text(
+            r"\documentclass{article}\begin{document}\bad\end{document}",
+            encoding="utf-8",
+        )
+        (tmp_path / "main.log").write_text(
+            "(./main.tex\n! Undefined control sequence.\n" "l.1 \\bad\n)\n",
+            encoding="utf-8",
+        )
+
+        fake = SimpleNamespace(
+            success=False,
+            raw_output=("Latexmk: Errors, so I did not complete making targets"),
+            filtered_output="",
+            timed_out=False,
+            used_texfot=False,
+        )
+
+        async def _fake_run(*args, **kwargs):
+            return fake
+
+        monkeypatch.setattr(agent_mod, "run_tex_compile", _fake_run)
+        executor = _ToolExecutor(tmp_path, cfg, MagicMock())
+
+        text, ev = asyncio.run(executor._compile_latex({"main_file": "main.tex"}))
+        assert ev["ok"] is True
+        assert ev["success"] is False
+        assert ev["errors"][0]["type"] == "Undefined control sequence."
+        assert "main.log" in text
+
+    def test_fallback_appends_blg_tail_for_bibliography_failure(
+        self, tmp_path, monkeypatch
+    ):
+        """编译输出与 .log 都无 `!` 行、但 bibtex 失败时，应追加 .blg 尾部。"""
+        import backend.modules.template_gen.agent as agent_mod
+        from types import SimpleNamespace
+
+        cfg = get_config()
+        cfg.features.template_gen.output_dir = str(tmp_path)
+        cfg.features.template_gen.agent_compile_timeout = 30
+        (tmp_path / "main.tex").write_text(
+            r"\documentclass{article}\begin{document}x\end{document}",
+            encoding="utf-8",
+        )
+        (tmp_path / "main.log").write_text(
+            "Latexmk: Missing bbl file 'main.bbl'.\n", encoding="utf-8"
+        )
+        (tmp_path / "main.blg").write_text(
+            "The style file: gbt7714-2005-numerical.bst\n"
+            "`booktitle' is a missing field for entry lowe2004sift\n",
+            encoding="utf-8",
+        )
+
+        fake = SimpleNamespace(
+            success=False,
+            raw_output="Latexmk: Errors, so I did not complete making targets",
+            filtered_output="",
+            timed_out=False,
+            used_texfot=False,
+        )
+
+        async def _fake_run(*args, **kwargs):
+            return fake
+
+        monkeypatch.setattr(agent_mod, "run_tex_compile", _fake_run)
+        executor = _ToolExecutor(tmp_path, cfg, MagicMock())
+
+        text, ev = asyncio.run(executor._compile_latex({"main_file": "main.tex"}))
+        assert ev["success"] is False
+        assert "main.blg" in text
+        assert "missing field" in text
+        assert "\\bibliographystyle" in text
 
 
 class TestToolExecutorWriteFile:
@@ -354,6 +480,47 @@ class TestToolExecutorWriteFile:
         assert ev["ok"] is False
         assert "unbalanced braces" in text
         assert not (tmp_path / "main.tex").exists()
+
+    def test_budget_counts_unique_files_not_rewrites(self, tmp_path):
+        """文件预算按"不同文件数"计算：重写已有文件不消耗预算。"""
+        cfg = get_config()
+        cfg.features.template_gen.output_dir = str(tmp_path)
+        cfg.features.template_gen.agent_max_files = 2
+        executor = _ToolExecutor(tmp_path, cfg, MagicMock())
+
+        first = asyncio.run(
+            executor._write_file({"file_path": "main.tex", "content": "v1"})
+        )
+        second = asyncio.run(
+            executor._write_file({"file_path": "chapters/intro.tex", "content": "v1"})
+        )
+        assert first[1]["ok"] is True
+        assert second[1]["ok"] is True
+
+        # 第 3 个新文件被拒绝，并明确告知仍可重写已有文件
+        third = asyncio.run(
+            executor._write_file({"file_path": "chapters/method.tex", "content": "v1"})
+        )
+        assert third[1]["ok"] is False
+        assert "REWRITE" in third[0]
+
+        # 重写已有文件仍然允许
+        rewrite = asyncio.run(
+            executor._write_file({"file_path": "main.tex", "content": "v2"})
+        )
+        assert rewrite[1]["ok"] is True
+        assert (tmp_path / "main.tex").read_text(encoding="utf-8") == "v2"
+
+    def test_read_log_file(self, tmp_path):
+        """read_file 可读取编译生成的 main.log（修复前被白名单拒绝）。"""
+        cfg = get_config()
+        cfg.features.template_gen.output_dir = str(tmp_path)
+        executor = _ToolExecutor(tmp_path, cfg, MagicMock())
+        (tmp_path / "main.log").write_text("! Something bad\n", encoding="utf-8")
+
+        text, ev = executor._read_file({"file_path": "main.log"})
+        assert ev["ok"] is True
+        assert "Something bad" in text
 
 
 class TestErrorAnalysis:
@@ -438,6 +605,116 @@ class TestErrorAnalysis:
     def test_format_analysis_no_errors_hint(self):
         text = _format_error_analysis([])
         assert "No '! '" in text
+
+    def test_hints_for_spacefactor_metadata_trap(self):
+        r"""\spacefactor 垂直模式错误应给出"正文不用 \@ 内部宏"的通用提示。"""
+        errors = [
+            {
+                "type": "You can't use `\\spacefactor' in vertical mode.",
+                "file": "front/titlepage.tex",
+                "line": 13,
+                "detail": "\\zihao{2}\\bfseries\\heiti\\@",
+            }
+        ]
+        text = _format_error_analysis(errors)
+        assert "HINTS" in text
+        assert "PUBLIC metadata commands" in text
+        assert "body files" in text
+
+    def test_hints_for_missing_font(self):
+        """缺字体错误应给出"删除显式 CJK 字体命令、交给 ctex 默认字体集"的提示。"""
+        errors = [
+            {
+                "type": 'Package fontspec Error: The font "X" cannot be found.',
+                "file": "thesis.cls",
+                "line": 24,
+                "detail": "\\IfFontExistsTF",
+            }
+        ]
+        text = _format_error_analysis(errors)
+        assert "HINTS" in text
+        assert "CJK" in text
+        assert "ctex" in text
+
+    def test_hints_for_literal_hash(self):
+        """字面 `#`（如 HTML 颜色 `#1F4E79`）错误应提示转义与颜色写法。"""
+        errors = [
+            {
+                "type": (
+                    "You can't use `macro parameter character #' in "
+                    "restricted horizontal mode."
+                ),
+                "file": "main.tex",
+                "line": 5,
+                "detail": "#1F4E79",
+            }
+        ]
+        text = _format_error_analysis(errors)
+        assert "HINTS" in text
+        assert "\\#" in text
+        assert "HTML" in text
+
+    def test_hints_for_recursion_and_tikz_node(self):
+        """递归展开 / tikz 节点缺标签文本的通用失败签名应给出修复提示。"""
+        errors = [
+            {
+                "type": "! TeX capacity exceeded, sorry [input stack size=10000].",
+                "file": "main.tex",
+                "line": 15,
+                "detail": "\\labelenumi",
+            },
+            {
+                "type": "! Package tikz Error: A node must have a (possibly empty) label text.",
+                "file": "theme.tex",
+                "line": 3,
+                "detail": "\\node[fill=blue] (box);",
+            },
+        ]
+        text = _format_error_analysis(errors)
+        assert "recursion" in text.lower() or "Recursive" in text
+        assert "(name) {text}" in text
+
+    def test_hints_for_makeatother_in_class(self):
+        """.cls 中误用 \\makeatother 导致的 Missing \\begin{document} 应给出提示。"""
+        errors = [
+            {
+                "type": "! LaTeX Error: Missing \\begin{document}.",
+                "file": "thesis.cls",
+                "line": 128,
+                "detail": "\\newcommand{\\mt@university}{}",
+            }
+        ]
+        text = _format_error_analysis(errors)
+        assert "HINTS" in text
+        assert "\\makeatother" in text
+        assert "Missing \\begin{document}" in text
+
+    def test_hints_for_endcsname_and_alignment_and_environment(self):
+        r"""\endcsname / Extra alignment tab / Environment undefined 的通用提示。"""
+        errors = [
+            {
+                "type": "! Missing \\endcsname inserted.",
+                "file": "thesis.cls",
+                "line": 340,
+                "detail": "}",
+            },
+            {
+                "type": "! Extra alignment tab has been changed to \\cr.",
+                "file": "main.tex",
+                "line": 54,
+                "detail": "\\makecoverpage",
+            },
+            {
+                "type": "! LaTeX Error: Environment algorithm undefined.",
+                "file": "back/appendix.tex",
+                "line": 56,
+                "detail": "\\begin{algorithm}",
+            },
+        ]
+        text = _format_error_analysis(errors)
+        assert "\\zihao{5}" in text
+        assert "\\tabularnewline" in text
+        assert "algorithm" in text
 
 
 class TestCompileFailureWarning:
