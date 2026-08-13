@@ -73,10 +73,8 @@ npm start        # 或 node server.js
 - **代码块 / 文件树 / 终端内容**：空白敏感文本放在 `showcase/js/content.js` 的
   `CODE_BLOCKS`，场景数据里用 `data-code` 引用（HTML 只留占位，避免缩进被
   `white-space: pre` 原样显示）。
-- **公式图片示例（KaTeX）**：KaTeX 的 CSS/JS 经 cdnjs 按需加载（版本 `0.17.0`，
-  见 `index.html`），LaTeX 源文本写在 `showcase/js/content.js` 的场景数据
-  `data-katex` 字段，`showcase/js/showcase.js` 启动时调用 `katex.render()` 注入；
-  离线或 CDN 不可用时兜底显示源文本。
+- **公式图片示例**：不使用 KaTeX 的 CSS/JS 渲染 LaTeX 公式，直接引入渲染好
+  的 SVG 图片（`/assets/formula_ocr.svg`）。
 - **动效参数**：集中在 `showcase/js/constants.js`（滚轮灵敏度、行号栏行数、
   锚点比例、布局断点、打字机节奏等），调参只改这一处。
 - **生成部署产物**：运行 `npm run deploy`（`showcase/tools/deploy.mjs`），

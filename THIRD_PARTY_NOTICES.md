@@ -112,7 +112,7 @@
 | JetBrains Mono | OFL-1.1 | Copyright (c) 2020 The JetBrains Mono Project Authors | [JetBrains](https://www.jetbrains.com/lp/mono) |
 | STIX Two Text | OFL-1.1 | Copyright (c) 2001-2021 The STIX Fonts Project Authors | [STIX Fonts Project](https://github.com/stipub/stixfonts) |
 
-> 说明：`showcase/` 展示页通过 cdnjs / mirrors 从 CDN 加载上述同一批字体与 KaTeX（见 `showcase/css/fonts.css`、`showcase/index.html`），不新增仓库内资产与依赖。
+> 说明：`showcase/` 展示页通过 cdnjs 从 CDN 加载上述同一批字体（见 `showcase/css/fonts.css`、`showcase/index.html`），不新增仓库内资产与依赖。
 
 ## 五、系统级外部依赖
 
@@ -131,16 +131,16 @@ TeX Live 包含多个组件（xelatex、latexmk、latexindent.pl、latexdiff 等
 
 ## 六、主题资源
 
-以下配色主题来源于 [ShadcnThemer.com](https://shadcnthemer.com)（作者 [Mike Tromba](https://github.com/miketromba)），部分主题做了些许修改，特此致谢。
+配色主题来源于 [ShadcnThemer.com](https://shadcnthemer.com)，做了些许修改，特此致谢。
 
 | 中文名 | 英文原名 | 作者 | 来源 URL |
 | --- | --- | --- | --- |
-| 海螺橙 | Tangerine | @mike (tweakcn) | [shadcnthemer.com/themes/44dec9b0...](https://shadcnthemer.com/themes/44dec9b0-4404-4ded-9c7f-8f2a74a18efb) |
-| 琥珀黄 | Amber Minimal | @mike (tweakcn) | [shadcnthemer.com/themes/1bf014bc...](https://shadcnthemer.com/themes/1bf014bc-3163-4d1f-98a6-2788cc66f569) |
+| 海螺橙 | Tangerine | @mike | [shadcnthemer.com/themes/44dec9b0...](https://shadcnthemer.com/themes/44dec9b0-4404-4ded-9c7f-8f2a74a18efb) |
+| 琥珀黄 | Amber Minimal | @mike | [shadcnthemer.com/themes/1bf014bc...](https://shadcnthemer.com/themes/1bf014bc-3163-4d1f-98a6-2788cc66f569) |
 | 樱桃红 | Sabbir shadcn theme | @sabbirhossendev | [shadcnthemer.com/themes/a00a22e6...](https://shadcnthemer.com/themes/a00a22e6-f853-474d-a332-f861626fbd5e) |
-| 庭芜绿 | Northern Lights | @mike (tweakcn) | [shadcnthemer.com/themes/4bd47006...](https://shadcnthemer.com/themes/4bd47006-412c-4464-aa5a-83283e26b92c) |
+| 庭芜绿 | Northern Lights | @mike | [shadcnthemer.com/themes/4bd47006...](https://shadcnthemer.com/themes/4bd47006-412c-4464-aa5a-83283e26b92c) |
 | 景泰蓝 | Twitter | @mike | [shadcnthemer.com/themes/abb2128e...](https://shadcnthemer.com/themes/abb2128e-7392-4ec7-880c-ef68a0051da3) |
-| 凝夜紫 | Violet Bloom | @mike (tweakcn) | [shadcnthemer.com/themes/240c9813...](https://shadcnthemer.com/themes/240c9813-0123-4128-b128-c54519c12a4e) |
+| 凝夜紫 | Violet Bloom | @mike | [shadcnthemer.com/themes/240c9813...](https://shadcnthemer.com/themes/240c9813-0123-4128-b128-c54519c12a4e) |
 | 幽冥黑 | Vercel | @mike | [shadcnthemer.com/themes/418a8650...](https://shadcnthemer.com/themes/418a8650-514e-483b-a8cd-2c6e619ee97c) |
 
 这些主题的配色数据（oklch CSS 自定义属性）以 shadcn/ui 主题格式发布，本项目将其适配为 `[data-theme]` 选择器驱动的多主题系统。所有主题使用 MIT 许可证。

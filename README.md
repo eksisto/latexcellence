@@ -31,6 +31,12 @@ LateXcellence 是一个由 LLM 驱动的智能体论文写作助手：面向高�
 
 边界：定位为单用户的本地写作助手，不做在线协作与团队工作流。
 
+### 展示页（Showcase）
+
+项目内置一个独立的展示页（`showcase/`），用于对外演示功能与设计：滚动叙述式（Scrollytelling）落地页，零依赖（Node.js 内置 `http` 静态服务器），内容由 `showcase/js/content.js` 数据驱动，主题 CSS 从 `frontend/src/theme/*.css` 自动生成。
+
+点击前往展示页：https://latexcellence.example.com
+
 ### 为什么是 LaTeX：AI 时代，文本即接口
 
 LaTeX 源码是纯文本，章节、公式、表格、引用都以显式命令与环境表达，语义结构一目了然。而理解和生成文本正是大模型最擅长的能力——AI 可以直接读写 LaTeX、逐段修改、按结构审查，命令由模型代笔，报错由模型翻译，工程由模型搭建。LaTeX 的“难”（命令多、要编译、报错晦涩）本质上都来自文本化、结构化，而这恰好是大模型擅长消除的。

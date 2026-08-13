@@ -1,7 +1,5 @@
 # LateXcellence Function Calling 工具清单
 
----
-
 ## 全局工具（注册到 ToolRegistry）
 
 由 `backend/core/tool_registry.py` 的 `ToolRegistry` 统一管理，通过 feature toggle 控制启用/禁用。
@@ -17,6 +15,8 @@
 | **执行函数** | `_web_search_executor()` / `_open_page_executor()` / `_find_in_page_executor()` |
 | **配置路径** | `features.function_calling.web_search.enabled` |
 | **说明** | 支持查询重写、多角度并行搜索（合并上限 15 条）、引擎降级、Deep Read（默认关闭）、页面按需读取、引用校验与 untrusted 防护 |
+
+---
 
 ### 项目浏览工具
 
@@ -162,7 +162,7 @@
 
 ---
 
-### 科研绘图
+### 科研绘图 Agent
 
 定义在 `backend/modules/plot_gen/agent.py`，由 `PlotGenAgent._build_tools_schema()` 构建，**不注册到全局 ToolRegistry**。工具在 `plots/<session_id>/` 沙箱内运行，通过 `PlotExecutor` 私有类分发。
 
