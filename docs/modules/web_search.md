@@ -91,8 +91,8 @@ Tavily 引擎需要同时满足 `engines.tavily.enabled = true` 且已配置 API
 
 ## 与 Writing Chat 集成
 
-用户消息 → LLM（带 tools）→ 检测 tool_call → 推送 SSE "searching" → 查询重写（可选）→ 执行搜索（单条或多条并行，多查询合并上限 15 条）→ 自动 Deep Read（可选，默认关闭）→ 推送 "tool_result"（含 `deep_read_pages`、`rewritten_queries` 字段）→ 模型按需调用 `open_page` / `find_in_page` → 重复调用 LLM 直至无工具调用 → 流式输出。
+用户消息 → LLM（带 tools）→ 检测 tool_call → 推送 SSE `tool_status` → 查询重写（可选）→ 执行搜索（单条或多条并行，多查询合并上限 15 条）→ 自动 Deep Read（可选，默认关闭）→ 推送 `tool_result`（含 `search_results`、`deep_read_pages`、`rewritten_queries` 字段）→ 模型按需调用 `open_page` / `find_in_page` → 重复调用 LLM 直至无工具调用 → 流式输出。
 
-SSE 事件类型：`searching`、`tool_result`、`captcha_challenge`。
+SSE 事件类型：`tool_status`（搜索执行中）、`tool_result`（含 `search_results`）、`captcha_challenge`。
 
 DDG Challenge 提交 API：`POST /api/search/ddg-challenge`（challenge_id, selected_hashes）。

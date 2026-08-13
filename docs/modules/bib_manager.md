@@ -6,7 +6,7 @@
 
 ### 核心流程
 
-1. **格式识别**：用户提供参考文献示例 → 确定性规则层优先判定（文献类型标识、期刊缩写、DOI 前缀、版式特征），未命中时由 LLM 兜底（提示词内置 14 种格式的规范样例）；LaTeX 样式由后端注册表统一解析
+1. **格式识别**：用户提供参考文献示例 → 确定性规则层优先判定（文献类型标识、期刊缩写、DOI 前缀、版式特征），未命中时由 LLM 兜底（提示词内置各格式规范样例）；LaTeX 样式由后端注册表统一解析
 2. **元数据提取**：用户输入文本或上传截图 → LLM 根据格式字段列表动态提取
 
 - **DOI 查询**：用户输入 DOI → 多数据源聚合查询元数据（Crossref 主索引 + 多个补全层 + arXiv 预印本专用路由）
@@ -68,13 +68,13 @@ bib_manager/
   ├─ 10.48550/arXiv.* → ArxivProvider（提取 arXiv ID，调用 arXiv API）
   └─ 普通 DOI
        ├─ 1. Crossref（主索引）
-       │     ├─ 成功 → 返回
+       │     ├─ 成功 → 用补全层合并空字段（_merge）后返回
        │     └─ 失败 ↓
        └─ 2. DataCite → OpenAlex → Europe PMC → Semantic Scholar（串行降级）
 ```
 
 - arXiv DOI 由 `is_arxiv_doi()` / `extract_arxiv_id()` 工具函数识别
-- 普通 DOI 优先查询 Crossref 获取最完整元数据；失败后按配置优先级串行尝试补全层
+- 普通 DOI 优先查询 Crossref 获取最完整元数据，成功后用补全层填充缺失字段（`_merge`）；失败后按配置优先级串行尝试补全层
 - 所有 Provider 返回 `None` 时抛出 `ValueError("All providers failed")`
 
 ### 数据源列表
@@ -102,7 +102,7 @@ bib_manager/
 
 | 方法 | 功能 |
 | --- | --- |
-| `analyze_format(example)` | LLM 识别参考文献格式 → ReferenceFormatResult |
+| `analyze_format(example)` | 格式识别：确定性规则层优先，未命中时 LLM 兜底 → ReferenceFormatResult |
 | `extract_from_text(text, format_info)` | LLM 从文本提取元数据 |
 | `extract_from_image(image_data, content_type, format_info)` | LLM Vision 从截图提取元数据 |
 | `generate_bibtex(metadata, format_info, existing_keys)` | LLM 生成 BibTeX → BibEntry |
@@ -121,12 +121,12 @@ bib_manager/
 
 ## 格式识别规则层 `format_rules.py`
 
-格式识别以确定性规则为第一道闸，覆盖全部 14 种内置格式：GB/T 7714-2015 的
+格式识别以确定性规则为第一道闸，覆盖多种内置格式（GB/T 7714-2015 的
 `[J]`/`[M]`/`[C]` 文献类型标识、`Phys. Rev. Lett.` → APS、`J. Am. Chem. Soc.`
 → ACS、`JAMA`/`10.1001` → AMA、`J. ACM`/`10.1145` → ACM、`Nature 卷, 页` →
 Nature、`vol./no./pp.` → IEEE、MLA 的 `卷, 期, 年, pp.`、温哥华的
 `年;卷(期):页码`、Harvard 的 `Last, I. and Last, I., YYYY.`、Chicago 著者-出版年、
-Turabian/Chicago notes 的 `卷, no. 期 (年): 页码`、APA 的 `(年份).` 等。
+Turabian/Chicago notes 的 `卷, no. 期 (年): 页码`、APA 的 `(年份).` 等）。
 
 规则命中时直接返回 `confidence=high`，不调用 LLM、不依赖 API Key；未命中才走
 LLM 兜底（提示词内置每种格式的规范样例供比对）。规则语料见

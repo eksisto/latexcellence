@@ -215,7 +215,7 @@
 
 **写作助手 (writing_chat)**: `_get_enabled_tools()` 无条件注入 `request_clarification` 工具（始终可用），再按配置依次追加联网搜索 + 项目浏览 + 段落编辑 + 学术检索四类工具的 schema，注入 LLM `tools` 参数。其中段落编辑工具（`edit_paragraph` / `undo_last_edit`）默认需经前端确认弹窗（`edit_tools.require_confirmation=true`）后才执行，用户可修改参数或拒绝。
 
-**模板生成 (template_gen)**: `_build_tools_schema()` 私有构建工具列表，通过 `chat_with_tools()` 直接传入，工具数量根据 `agent_compile_enabled` 配置为 4-5 个。
+**模板生成 (template_gen)**: `_build_tools_schema()` 私有构建工具列表，通过 `chat_with_tools()` 直接传入，工具数量随 `agent_compile_enabled` 配置变化。
 
 **style_modify (项目 Agent)**: `StyleModifyAgent._build_tools_schema()` 私有构建项目浏览、搜索、读取、候选替换、丢弃、shadow 编译和 finish 工具，通过 `chat_with_tools()` 直接传入。
 

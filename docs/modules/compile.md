@@ -41,6 +41,7 @@ Prefix: `/api/compile`, Tag: `compile`
 | 方法 | 路径 | 功能 |
 | --- | --- | --- |
 | POST | `/run` | 编译 LaTeX 项目（支持 engine/pdfa 参数） |
+| GET | `/pdf` | 返回最近一次编译产出的 PDF（内联预览） |
 
 ## 配置项
 

@@ -1,5 +1,19 @@
 # LateXcellence — 前端开发文档
 
+## 目录
+
+- [入口与路由](#入口与路由)
+- [状态管理 useStore.js](#状态管理-usestorejs)
+- [API 层 api/index.js](#api-层-apiindexjs)
+- [工具模块（errorMessages / formulaWrap / highlight）](#工具模块)
+- [国际化（i18n）](#国际化i18n)
+- [核心组件](#核心组件)
+- [核心 Hook](#核心-hook)
+- [样式架构](#样式架构)
+- [代码展示与语法高亮](#代码展示与语法高亮)
+- [CSS 文件 src/index.css + 主题目录 src/theme](#css-文件-srcindexcss--主题目录-srctheme)
+- [主题切换机制](#主题切换机制)
+
 ## 入口与路由
 
 **`main.jsx`** → 将 `<App />` 渲染到 `#root`。
@@ -33,7 +47,7 @@
 
 `StyleModifyPage` 顶部使用 segmented control 切换项目 Agent 与粘贴代码。项目 Agent 模式通过 `useStyleModifyAgent` 消费 `/style-modify/agent/run` 和 refine SSE，展示工具步骤、逐文件 diff、编译状态、proposal 操作、refinement 输入和 trace 查看/导出；粘贴代码模式保留旧交互。
 
-WelcomePage 采用「标题页 + 点线目录」构图：字标、slogan、「进入工作区」入口；功能模块按写作流程以 § 编号分组，每条目以点线引导至图标。模块分组与编号定义在 `pages/WelcomePage.jsx` 的 `featureGroups` 与 `SECTION_NUMBER`（已导出供复用）。
+WelcomePage 采用「标题页 + 点线目录」构图：字标、slogan、「进入工作区」入口；功能模块按写作流程以 § 编号分组，每条目以点线引导至图标。模块分组定义在 `pages/WelcomePage.jsx` 的 `featureGroups`，§ 号映射 `SECTION_BY_GROUP` 定义在 `lib/writingFlow.js`（WelcomePage / PageHeader 共享）。
 
 ## 状态管理 `useStore.js`
 
@@ -47,15 +61,17 @@ WelcomePage 采用「标题页 + 点线目录」构图：字标、slogan、「�
 
 API 按功能分组暴露（health、config、project、typoCheck、expressionOpt、terminologyCheck、paragraphTranslate、formulaOCR、tableOCR、templateGen、codeReview、compile、gitDiff、styleModify、formatConverter、bibManager、writingChat），LLM 相关接口自动注入 `language` 参数。`templateGen.generate` 通过 `fetch` reader 解析 SSE 流（与 `writingChat.send` 同模式），实时推送 `plan`/`tool_call`/`tool_result`/`compile`/`warning`/`done`/`error` 事件；`templateGen.download` 支持下载整个沙箱为 ZIP 文件；`templateGen.trace` / `templateGen.downloadTrace` 支持查看与导出 Agent 运行追踪日志。`styleModify.agent` 分组提供 run、refine、session、trace、apply、undo、delete 接口，run/refine 使用 SSE，其余使用 JSON。
 
-## 工具模块 `utils/errorMessages.js`
+## 工具模块
+
+### utils/errorMessages.js
 
 后端英文错误消息 → 当前语言翻译。精确匹配 + 正则模式匹配，翻译资源位于 `errors` 命名空间。调用点包括 `request()`、`requestForm()`、`useParagraphCheck.js`、`useWritingChat.js`。
 
-## 工具模块 `utils/formulaWrap.js`
+### utils/formulaWrap.js
 
 公式行内/行间包裹重写工具（与后端 `formula_ocr/service.py` 的 `_strip_math_wrappers` / `_wrap_latex_for_paste` 语义一致）：剥离 `$$` / `\[ \]` / `\( \)` / `$` / 空壳显示环境包裹，并按 `inline` 标志重写为 `$...$` / `\[...\]`；独立显示环境原样保留，宏包注释前缀（`% \usepackage{...}`）在重写时保留。由 `FormulaOCRPage.jsx` 的行内/行间切换使用；`npm test`（`node --test`）覆盖回归用例。
 
-## 工具模块 `utils/highlight.js`
+### utils/highlight.js
 
 highlight.js 的按需注册与统一入口：
 
@@ -67,9 +83,9 @@ highlight.js 的按需注册与统一入口：
 - `languageFromFilename(filename)`：按扩展名推断语言（`.tex/.sty/.cls/.ltx` → latex，`.bib` → bibtex 等）
 - BibTeX 语法为本地轻量实现（highlight.js v11 已移除内置 bibtex）：覆盖 `@entry`、字段名、引号字符串与注释
 
-## 国际化 `i18n/`
+## 国际化（i18n）
 
-基于 `i18next` + `react-i18next` + `i18next-browser-languagedetector`。翻译按 5 个命名空间拆分：`common`、`pages`、`components`、`hooks`、`errors`。Fallback 语言为中文。
+基于 `i18next` + `react-i18next` + `i18next-browser-languagedetector`。翻译按命名空间拆分：`common`、`pages`、`components`、`hooks`、`errors`。Fallback 语言为中文。
 
 核心接口：`getUiLanguage()` 返回完整语言名称供后端 LLM 输出语言控制；`i18n.language` 返回语言代码用于前端 UI 判断。
 
@@ -108,6 +124,7 @@ highlight.js 的按需注册与统一入口：
 | --- | --- |
 | `useParagraphCheck.js` | 封装逐段 LLM 检查公共逻辑（预览、检查/优化、排序、暂停/继续/停止、应用、refresh 持久化）。支持 `resolveInput` 多文件模式。内置乐观锁：读取段落时缓存文件 MD5，应用修改时传回，冲突（409）后自动刷新 MD5 并提示重试。SSE 结果通过 rAF 微批次合并；`done` 事件到达时先排空待 flush 缓冲再收尾，避免一次性推送全部结果的模块（如术语一致性检查）在流结束时丢失结果。 |
 | `useEnabledFeatures.js` | 从后端加载功能开关到 Zustand store，幂等。 |
+| `useFavicon.js` | 按亮/暗模式切换浏览器标签页图标（MutationObserver 监听 `<html>` class）。 |
 | `useWritingChat.js` | 封装写作助手 Chat 全部逻辑（会话管理、SSE 流式、搜索/学术结果、深度思考解析、生成编辑、应用编辑、助手管理）。内部使用子 hooks。 |
 | `useStyleModifyAgent.js` | 封装 style_modify 项目 Agent：创建/恢复/删除 session、SSE 生命周期、refinement、proposal、apply/undo、trace 查看导出和 `translateError()` 处理。 |
 | `useThemeManager.js` | 多主题自发现 hook，自动发现 `theme/` 目录下 CSS 文件。 |

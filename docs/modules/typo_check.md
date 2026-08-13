@@ -14,7 +14,7 @@
 还原 LaTeX:      \textbf{这是一各错字} $x^2$ 更多内容
 ```
 
-**解析流水线**：8 步顺序执行（VERB → 逐字类环境 → COM → ENV → MATH → CMD → 空白规范化）。Marker 格式为 `__{PREFIX}_{COUNTER:04d}__`，PREFIX 为 CMD / MATH / ENV / VERB / COM。还原时按 marker 长度降序替换。
+**解析流水线**：9 步顺序执行（VERB → URL → 逐字类环境 → COM → ENV → MATH → CMD → 空白规范化）。Marker 格式为 `__{PREFIX}_{COUNTER:04d}__`，PREFIX 为 CMD / MATH / ENV / VERB / COM。还原时按创建顺序（counter）降序替换（外层 marker 先还原），非标准 marker 回退为按长度降序。
 
 ### System Prompt 核心约束
 
@@ -53,7 +53,7 @@ Prefix: `/api/typo-check`, Tag: `typo_check`
 | POST | `/apply` | 将审核通过的修改写回源文件 |
 | GET | `/stream/{workspace_id}` | SSE 流式推送检查进度 |
 
-请求模型：`TypoCheckRequest`（file_path, paragraph_indices, resolve_input）、`TypoApplyRequest`（file_path, changes, operation_id）
+请求模型：`TypoCheckRequest`（file_path, paragraph_indices, resolve_input, language）、`TypoApplyRequest`（file_path, changes, operation_id, expected_md5s）
 
 ## 结果展示
 

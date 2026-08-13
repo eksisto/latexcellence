@@ -148,9 +148,10 @@ writing_chat 是 `chat_stream_with_tools` 方法的主要消费者。该方法�
 
 | 事件类型 | 说明 |
 | --- | --- |
-| `message` | 流式文本块 |
+| `token` | 流式文本块 |
 | `tool_call` | LLM 发起工具调用 |
 | `round_start` | 新一轮工具轮次（或最终回复流）开始，前端重置流式消息累积内容 |
+| `compressed` | 上下文压缩完成（含 session_id） |
 | `tool_status` | 工具执行中状态指示 |
 | `tool_pending` | 敏感工具等待用户确认（含 pending_id、tool、args） |
 | `tool_cancelled` | 工具被用户取消 |
@@ -158,7 +159,8 @@ writing_chat 是 `chat_stream_with_tools` 方法的主要消费者。该方法�
 | `tool_result` | 工具执行结果 |
 | `tool_result.scholarly_results` | 学术检索或引文追踪的前端摘要，含稳定 ID、作者、年份、期刊、DOI、被引数和 OA 状态 |
 | `captcha_challenge` | DDG 验证码挑战 |
-| `search_results` | 联网搜索结果 |
+| `tool_result.search_results` | 联网搜索结果（包含在 `tool_result` 事件中） |
+| `citation_note` | 回复中存在未验证引用链接的警示 |
 | `done` | 流式结束（含 token 用量、session_id） |
 | `error` | 错误信息 |
 

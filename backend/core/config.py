@@ -82,7 +82,7 @@ class TemplateGenConfig(BaseModel):
     enabled: bool = True  # 是否启用
     output_dir: str = "templates/"  # 生成模板的输出目录
     # ── 自主生成 Agent 配置 ──
-    agent_max_rounds: int = Field(30, ge=1, le=50)  # Agent 最大工具调用轮数（防发散）
+    agent_max_rounds: int = Field(50, ge=1, le=70)  # Agent 最大工具调用轮数（防发散）
     agent_max_files: int = Field(30, ge=1, le=200)  # 单次生成的最大文件数
     agent_max_file_size_kb: int = Field(512, ge=1)  # 单个文件大小上限（KB）
     agent_compile_enabled: bool = True  # Agent 是否调用 latexmk 做编译验证

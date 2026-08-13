@@ -24,6 +24,10 @@
 | `test_latex_output_adversarial.py` | JSON/LaTeX 静默损坏、Marker 保护、URL/逐字内容、分隔符截断和 BibTeX 字段边界的对抗性回归测试（历史缺口修复后均为正式用例，不再使用 xfail） |
 | `test_utils/test_edit_tools_manager.py` | edit_paragraph / undo_last_edit 执行、LaTeX 内容校验拒绝、写回 |
 | `test_utils/test_scholarly_research.py` | OpenAlex 元数据映射、摘要重建、去重、查询过滤、引文追踪、OA 定位和工具执行器 |
+| `test_utils/test_project_tools_manager.py` | 项目浏览工具（list_files / read_file_content / get_section_structure / search_across_files）执行与路径保护 |
+| `test_utils/test_web_search_agentic.py` / `test_web_search_tavily.py` | 联网搜索：查询重写、引擎路由、Tavily 请求与结果解析 |
+| `test_utils/test_bib_manager_format_rules.py` | 参考文献格式确定性规则语料（格式识别命中与预期） |
+| `test_utils/test_latex_package_analyzer.py` / `test_latex_package_rules.py` / `test_latex_package_corpus.py` / `test_latex_package_compile_verification.py` | 宏包规则表：分析器、规则数据完整性、语料查准/查全基线、离线编译验证 |
 | `test_api/test_typo_check.py` | 模型校验、LLM mock、marker 保护、写回 |
 | `test_api/test_expression_opt.py` | 模型校验、LLM mock、marker 保护、prompt CRUD |
 | `test_api/test_terminology_check.py` | 模型校验、LLM mock、聚类逻辑、写回 |
@@ -38,6 +42,13 @@
 | `test_api/test_style_modify_agent.py` | 项目 Agent：LatexProject 批量事务、session overlay、proposal、应用冲突、撤销、workspace 隔离、路径穿越防御 |
 | `test_api/test_writing_chat.py` | 模型、会话管理、发送/编辑/应用、RS2 分隔符协议提取/校验失败重试/CRLF 原文、助手提示词、搜索与学术研究工具事件 |
 | `test_api/test_bib_manager.py` | 格式分析、元数据提取、BibTeX 生成、.bib 操作、路径穿越防御、DOI 查询、多数据源 Provider 降级 |
+| `test_api/test_paragraph_translate.py` | 模型校验、LLM mock、marker 保护、翻译写回 |
+| `test_api/test_plot_gen.py` | 数据上传、Agent 生成/微调 SSE、沙箱校验、会话文件与 trace |
+| `test_api/test_project_browse.py` | 项目目录浏览与路径解析 |
+| `test_api/test_latex_formatter.py` | 统一格式化入口（latexindent / 内置兜底） |
+| `test_changes_contract.py` / `test_prompts.py` | changes 契约（主字段与 changes 一致性）与提示词模板回归 |
+
+`tests/test_plot_gen/` 另含 plot_gen 单元测试：`test_data_parser.py`、`test_recommender.py`、`test_styles.py`、`test_executor.py`、`test_tikzgen.py`、`test_trace.py`、`test_prompts.py`。
 
 ## style_modify Agent 测试要点
 

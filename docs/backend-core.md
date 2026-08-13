@@ -1,5 +1,15 @@
 # LateXcellence — 后端核心模块
 
+本文档按文件模块组织，适合作为参考手册按需查询。
+
+## 目录
+
+- [后端核心模块](#后端核心模块)：config、llm_client、logger、project_manager、base_paragraph_check、prompts、tool_registry、workspace_manager
+- [后端工具模块](#后端工具模块)：scholarly_research、file_ops、path_guard、json_utils、latex_json_guard、tex_compile、compile_error_translator、latex_formatter、latex_parser、latex_literals、latex_package_analyzer、input_resolver 等
+- [项目管理路由 project_router.py](#项目管理路由-project_routerpy)
+
+---
+
 ## 后端核心模块
 
 ### `backend/core/config.py` — 配置管理
@@ -17,7 +27,8 @@
   - `ScholarlyResearchConfig` 包含 OpenAlex 数据源开关、API Key、结果上限与请求超时
 - `FeaturesConfig` — 功能聚合
 - `LoggingConfig` — 日志配置
-- `AppConfig` — 顶层聚合（server, llm, features, logging）
+- `HttpConfig` — 外部 HTTP 请求全局配置（user_agent）
+- `AppConfig` — 顶层聚合（server, llm, http, features, logging）
 
 **核心接口**：
 
@@ -139,7 +150,7 @@ class ProjectInfo:
 
 ### `backend/core/base_paragraph_check.py` — 逐段检查服务基类
 
-四个逐段检查模块（typo_check、expression_opt、code_review、terminology_check）共享的基类，封装文件解析、marker 替换、LLM 编排（批量+流式）、结果写回等流程。
+多个逐段检查模块（typo_check、expression_opt、code_review、terminology_check、paragraph_translate）共享的基类，封装文件解析、marker 替换、LLM 编排（批量+流式）、结果写回等流程。
 
 **核心接口**：
 
@@ -161,16 +172,16 @@ class ProjectInfo:
 
 | 函数 | 功能 |
 | --- | --- |
-| `inject_expected_md5s(changes, fallback_file, md5s_map)` | 为 change 列表补充 `expected_md5`：从文件级 `md5s_map` 中查找并注入，供 4 个模块的 router 统一调用 |
+| `inject_expected_md5s(changes, fallback_file, md5s_map)` | 为 change 列表补充 `expected_md5`：从文件级 `md5s_map` 中查找并注入，供各逐段检查模块的 router 统一调用 |
 | `normalize_changes_contract(changes, output_text, plain_text)` | 丢弃与主字段不一致的虚假 changes 条目：主字段与原文逐字符一致但 changes 非空 → 清空。后端不伪造展示数据（type 是前端本地化展示字段，合成条目会引入不一致的 type 值）；"有修改时 changes 非空"由 system prompt 约束。typo_check / expression_opt 的 `_build_success_result` 在 marker 还原前调用 |
 | `has_unlisted_changes(changes, output_text, plain_text)` | 检测"文本已修改但 changes 为空"的段落：主字段与原文不同且 changes 为空 → True。不合成整段条目，由前端把 `unlisted_changes=true` 的段落视为有问题并展示全文修改（应用/忽略），避免修改静默丢失 |
 
 **关键设计**：
 
-- `ApplyChangeItem` 共享模型（`paragraph_index`, `new_text`, `file_path`）：四个模块 router 的 apply 接口统一使用
+- `ApplyChangeItem` 共享模型（`paragraph_index`, `new_text`, `file_path`）：各逐段检查模块 router 的 apply 接口统一使用
 - `CheckOperationContext` 操作上下文：每次 preview/check 生成唯一 `operation_id`，深拷贝 `marker_maps` 存入 `_operation_contexts` 字典；apply 时通过 `operation_id` 取回上下文还原 marker。若 context 丢失（过期/重启/新操作覆盖），逐段检查 `marker_map` 缺失时跳过写入并返回 `errors`，防止字面 marker 污染文件
 - 类变量控制差异：
-  - `_output_field`: 结果字段名（`"corrected"` / `"optimized"`）
+  - `_output_field`: 结果字段名（`"corrected"` / `"optimized"` / `"translated"` 等）
   - `use_marker_protection`: 是否启用 marker 保护（typo_check / expression_opt / terminology_check / paragraph_translate 为 `True`；code_review 为 `False`，见 docs/modules/code_review.md）
 - **轻量内容校验**：`_check_one_paragraph` 在模型校验通过后、marker 计数/顺序校验前，对输出字段调用 `check_latex_text_lite()` 兜底——只拦控制字符（排除 `\t` / `\n`，`\r` 仍拦截）与垃圾占位符，不查配平，避免 marker 化段落的残余结构误报；失败直接回退原文，防止损坏内容进入写回链路
 - **上下文 TTL 清理**：默认 1 小时后自动过期
@@ -378,9 +389,13 @@ get_tool_registry().register(
 | `project_manager` | `get_paragraphs` / `set_main_file` | `(".tex",)` |
 | `project_manager` | `apply_change` / `undo` / `redo` / `can_undo` / `can_redo` | `None`（不限） |
 | `input_resolver` | `resolve_inputs` 入口 + 递归引用 | `None` |
+| `project_tools` | 浏览工具（`list_files` 等） | `None`；`search_across_files` 读取 .tex 时 `(".tex",)` |
+| `edit_tools_manager` | `edit_paragraph` / `undo_last_edit` | `(".tex",)` |
 | `bib_manager` | `read_bib_file` / `save_bib_entry` | `(".bib",)` |
 | `compile` | `_validate_main_file` | `(".tex",)` |
 | `git_diff` | `_validate_project_path`（`render_diff_pdf` + `\input` 展开） | `require_tex` 可选 |
+| `style_modify` | session 文件读写 | 默认 `(".tex", ".sty", ".cls", ".bib")`（来自配置），禁符号链接 |
+| `plot_gen` | 沙箱内路径 | `None`（沙箱内） |
 
 ### `json_utils.py` — LLM JSON 输出校验与重试
 
@@ -465,7 +480,7 @@ raise ValueError("Validation failed after N attempts")        # ❌ 耗尽
 
 ### `tex_compile.py` — 统一 TeX 编译执行模块
 
-**设计理念**：将 LaTeX 编译执行（latexmk 调用）和日志过滤（texfot）统一封装，供 `compile`（自动编译）、`git_diff`（差异高亮）、`template_gen`（模板生成）三个模块复用。texfot 是 TeX Live 自带的 Perl 工具，能从海量编译日志中自动提取错误、警告等关键信息，比自写正则更可靠。当 texfot 不可用时，静默降级为原始 latexmk 输出 + 正则 fallback。
+**设计理念**：将 LaTeX 编译执行（latexmk 调用）和日志过滤（texfot）统一封装，供 `compile`（自动编译）、`git_diff`（差异高亮）、`template_gen`（模板生成）等模块复用。texfot 是 TeX Live 自带的 Perl 工具，能从海量编译日志中自动提取错误、警告等关键信息，比自写正则更可靠。当 texfot 不可用时，静默降级为原始 latexmk 输出 + 正则 fallback。
 
 **核心功能**：
 
@@ -560,9 +575,9 @@ raise ValueError("Validation failed after N attempts")        # ❌ 耗尽
 
 | 接口 | 功能 |
 | --- | --- |
-| `MARKER_PATTERN` | 模块级常量：`re.compile(r"__[A-Z]+_\d{4}__")`，用于从文本中提取 marker。各 service 从此处统一导入，避免重复定义 |
+| `MARKER_PATTERN` | 模块级常量：`re.compile(r"__[A-Z]+_\d{4,}__")`，用于从文本中提取 marker。各 service 从此处统一导入，避免重复定义 |
 | `LatexParser.strip_to_plain_text(source)` | 将 LaTeX 源码转为带 marker 的纯文本，返回 `(plain_text, marker_map)` |
-| `LatexParser.restore_from_markers(processed, marker_map)` | 按 marker 长度降序还原，防止短 marker 误匹配长 marker 前缀 |
+| `LatexParser.restore_from_markers(processed, marker_map)` | 按创建顺序（counter）降序还原（外层 marker 先还原），非标准 marker 回退为按长度降序，防止短 marker 误匹配长 marker 前缀 |
 
 **Marker 格式**：`__{PREFIX}_{COUNTER:04d}__`（PREFIX: `CMD`/`MATH`/`ENV`/`VERB`/`COM`）
 
@@ -578,7 +593,7 @@ raise ValueError("Validation failed after N attempts")        # ❌ 耗尽
 - **内联逐字扩展**：`\verb`/`\verb*`/`\Verb`/`\Verb*`/`\lstinline`/`\lstinline*`/`\mintinline` 整体记为 VERB marker。支持数字等任意非字母定界符（`\verb1a{b}$1`）、`\lstinline` 可选 `[...]` 参数、花括号形式（`\lstinline{...}`，可含嵌套花括号）与 fancyvrb `\Verb` 跨行内容，逐字内容 LLM 不可见。识别逻辑统一来自 `latex_literals.py`
 - **URL 参数保护**：`\url` / `\path` / `\href` 的完整命令（含可选参数与全部花括号参数）在注释替换之前整体记为 CMD marker，避免 URL 中的字面 `%` 被当作注释
 
-**还原策略**：按 marker 长度降序还原。
+**还原策略**：按创建顺序（counter）降序还原（外层 marker 先还原），非标准 marker 回退为按长度降序。
 
 ### `latex_literals.py` — LaTeX 字面内容统一识别
 
@@ -645,7 +660,7 @@ LLM 兜底提示词不携带映射表，只要求通用推理并显式排除内�
 - **marker 保护顺序**：`resolve_inputs()` 必须在 `strip_to_plain_text()`（marker 替换）**之前**调用，否则 `\input` 命令会被替换为 marker 导致无法识别
 - **段落索引语义**：多文件模式下，`paragraph_index` 为每个文件内的局部索引（从 0 开始），不是全局索引
 
-**调用方模式**（四个模块的 service 均采用相同模式）：
+**调用方模式**（各逐段检查模块的 service 均采用相同模式）：
 
 ```python
 if resolve_input:

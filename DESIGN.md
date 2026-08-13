@@ -4,6 +4,21 @@
 
 ---
 
+
+## 目录
+
+1. [架构概览](#1-架构概览)
+2. [核心算法：Marker 替换-还原策略](#2-核心算法marker-替换-还原策略)
+3. [LLM 输出校验体系](#3-llm-输出校验体系)
+4. [文件安全操作](#4-文件安全操作)
+5. [数据流与模块索引](#5-数据流与模块索引)
+6. [前端架构](#6-前端架构)
+7. [配置管理](#7-配置管理)
+8. [错误处理策略](#8-错误处理策略)
+9. [测试策略](#9-测试策略)
+10. [关键设计决策总结](#10-关键设计决策总结)
+
+---
 ## 1. 架构概览
 
 ### 1.1 分层架构
@@ -20,20 +35,21 @@
 │  modules/                    core/                       │
 │  ├─ typo_check/              ├─ config.py                │
 │  ├─ expression_opt/          ├─ llm_client.py            │
-│  ├─ code_review/              ├─ workspace_manager.py     │
+│  ├─ code_review/             ├─ workspace_manager.py     │
 │  ├─ terminology_check/       ├─ project_manager.py       │
 │  ├─ compile/                 ├─ tool_registry.py         │
-│  ├─ writing_chat/            └─ base_paragraph_check.py  │
-│  ├─ bib_manager/            utils/                       │
-│  ├─ ... (多个模块)        ├─ json_utils.py             │
-│  └─ project_router.py       ├─ file_ops.py               │
-│                             ├─ input_resolver.py          │
-│                             ├─ time_utils.py              │
-│  ┌──────────┐               ├─ latex_parser.py            │
-│  │ router.py │→ service.py  ├─ web_search.py              │
-│  │  (薄层)   │  (厚层)      ├─ search_router.py           │
-│  └──────────┘               └─ (按需) Marker 替换/还原    │
-│  └──────────┘                                            │
+│  ├─ writing_chat/            ├─ prompts.py               │
+│  ├─ bib_manager/             └─ base_paragraph_check.py  │
+│  ├─ ... (多个模块)          utils/                       │
+│  └─ project_router.py       ├─ json_utils.py             │
+│                             ├─ file_ops.py               │
+│  ┌──────────┐               ├─ input_resolver.py         │
+│  │ router.py │→ service.py  ├─ latex_parser.py           │
+│  │  (薄层)   │  (厚层)      ├─ web_search/               │
+│  └──────────┘               ├─ scholarly_research/       │
+│                             ├─ project_tools/            │
+│                             ├─ search_router.py          │
+│                             └─ (按需) Marker 替换/还原    │
 └─────────────────────────────────────────────────────────┘
                            │
 ┌──────────────────────────▼──────────────────────────────┐
@@ -141,20 +157,21 @@ BaseParagraphCheckService
 
 ### 2.3 解析流水线
 
-8 步顺序执行，每步替换一类 LaTeX 结构。所有前缀共享同一个全局计数器，每次 `strip_to_plain_text()` 重置为 0。
+9 步顺序执行，每步替换一类 LaTeX 结构。所有前缀共享同一个全局计数器，每次 `strip_to_plain_text()` 重置为 0。
 
-**关键约束**：注释替换（第 3 步）在环境/数学/命令（第 4-7 步）之前，确保注释内的 `\command{}`、`$math$`、`\begin{env}` 不被单独提取。逐字类环境（第 2 步）在注释之前，因其内部可含字面 `%`。
+**关键约束**：注释替换（第 4 步）在环境/数学/命令（第 5-8 步）之前，确保注释内的 `\command{}`、`$math$`、`\begin{env}` 不被单独提取。内联逐字（第 1 步）、URL 参数（第 2 步）与逐字类环境（第 3 步）在注释之前，因其内部可含字面 `%`。
 
 | 步骤 | 目标 | 替换为 |
 | --- | --- | --- |
 | 1. `_replace_verb_inline()` | `\verb\|...\|` | `__VERB_NNNN__` |
-| 2. `_replace_protected_envs(envs=_VERBATIM_ENVS)` | 逐字类环境 `verbatim`/`lstlisting`（可含 `%`） | `__ENV_NNNN__` |
-| 3. `_replace_comments()` | `%` 注释 | `__COM_NNNN__` |
-| 4. `_replace_protected_envs()` | `table`/`equation`/`tikzpicture` 等环境 | `__ENV_NNNN__` |
-| 5. `_replace_display_math()` | `$$...$$` / `\[...\]` | `__MATH_NNNN__` |
-| 6. `_replace_inline_math()` | `$...$` / `\(...\)` | `__MATH_NNNN__` |
-| 7. `_replace_commands()` | 所有 `\command` | `__CMD_NNNN__` |
-| 8. `_normalize_whitespace()` | 连续空行 | 压缩为 2 行 |
+| 2. `_replace_url_args()` | `\url` / `\path` / `\href` 完整命令（含可选参数与全部花括号参数，URL 内 `%` 为字面字符） | `__CMD_NNNN__` |
+| 3. `_replace_protected_envs(envs=_VERBATIM_ENVS)` | 逐字类环境 `verbatim`/`lstlisting`（可含 `%`） | `__ENV_NNNN__` |
+| 4. `_replace_comments()` | `%` 注释 | `__COM_NNNN__` |
+| 5. `_replace_protected_envs()` | `table`/`equation`/`tikzpicture` 等环境 | `__ENV_NNNN__` |
+| 6. `_replace_display_math()` | `$$...$$` / `\[...\]` | `__MATH_NNNN__` |
+| 7. `_replace_inline_math()` | `$...$` / `\(...\)` | `__MATH_NNNN__` |
+| 8. `_replace_commands()` | 所有 `\command` | `__CMD_NNNN__` |
+| 9. `_normalize_whitespace()` | 连续空行 | 压缩为 2 行 |
 
 **Marker 前缀**：`CMD`（命令）、`MATH`（公式）、`ENV`（环境）、`VERB`（逐字）、`COM`（注释）
 
@@ -176,17 +193,17 @@ LaTeX 命令的参数结构复杂，需要字符级扫描：
 
 Marker 格式为 `__{PREFIX}_{COUNTER:04d}__`（如 `__CMD_0010__`）。
 
-还原时必须按 marker **长度降序**排列，防止短 marker 误匹配长 marker 的前缀：
+还原时必须按 marker **创建顺序（counter）降序**排列：嵌套时外层 marker 后创建，先还原外层、让内层 marker 重新出现在文本中，随后内层才能被还原；同时 marker 定宽，也不会出现短 marker 误匹配长 marker 前缀的问题。
 
 ```python
-# 按 marker 长度降序排列
+# counter 降序（外层先还原）；非标准 marker 回退为长度降序
 for marker, original in sorted(
-    marker_map.items(), key=lambda x: (-len(x[0]), x[0])
+    marker_map.items(), key=_marker_restore_key
 ):
     result = result.replace(marker, original)
 ```
 
-如果没有这个排序，`__CMD_001__` 会错误地匹配 `__CMD_0010__` 的前 10 个字符。
+`_marker_restore_key` 优先按 counter 降序（`-counter`），非标准 marker 回退为按长度降序，避免短 marker 误匹配长 marker 前缀。
 
 ### 2.6 结果展示时的双通道设计
 
@@ -350,272 +367,18 @@ redo 栈: []
 
 ---
 
-## 5. 数据流详解
+## 5. 数据流与模块索引
 
-### 5.1 错字查找数据流
+> 各模块的详细数据流、Pydantic 模型、API 与配置以模块文档为准；本节只保留跨模块的通用数据流与模块速览。
 
-```
-┌──────────┐    ┌──────────────┐    ┌────────────┐    ┌──────────┐
-│ 前端请求  │ →  │ router.py    │ →  │ service.py │ →  │ LLM API  │
-│ /preview  │    │ 参数校验     │    │ 编排逻辑   │    │          │
-└──────────┘    └──────────────┘    └────────────┘    └──────────┘
-                      │                   │
-                      ▼                   ▼
-              ┌──────────────┐    ┌────────────┐
-              │ project_mgr  │    │ latex_parser│
-              │ 段落提取     │    │ marker 替换 │
-              └──────────────┘    └────────────┘
-                                         │
-                                         ▼
-                                   ┌──────────────────────┐
-                                   │ CheckOperationContext │
-                                   │ (operation_id + TTL)  │
-                                   └──────────────────────┘
-```
+### 5.1 跨模块通用数据流
 
-**preview 阶段**：生成 `operation_id` → 提取段落 → 替换为 marker → 深拷贝 marker_map 到 `CheckOperationContext` → 返回纯文本 + operation_id
+- **逐段检查**（typo_check / expression_opt / terminology_check / code_review / paragraph_translate）：文件解析 → marker 替换（code_review 例外）→ LLM 批量/流式处理 → SSE 推送 → apply 时还原 marker + MD5 校验 + 原子写入。基类细节见 [1.3 核心架构组件](#13-核心架构组件baseparagraphcheckservice)。
+- **Agent 自主循环**（template_gen / plot_gen / style_modify 项目 Agent）：Function Calling 规划 → 写文件/执行 → 编译或沙箱验证 → 读结果自修 → finish；全程写入 `trace.jsonl`，事件经 SSE 推送。
+- **图片 OCR**（formula_ocr / table_ocr）：上传图片 → 预处理 → Vision API 分隔符协议输出 → 内容校验重试 → 统一格式化。
+- **外部进程**（compile / git_diff / format_converter）：调用 latexmk / pandoc / git；LLM 仅在编译失败翻译、宏包兜底等场景介入。
 
-**check 阶段**：前端回传 operation_id → 查找对应上下文 → 发送纯文本给 LLM → 校验输出 → 返回结果
-
-**apply 阶段**：前端回传 operation_id → 查找对应上下文 → 从上下文取 marker_map 还原 marker → MD5 校验 → 原子写入
-
-### 5.2 源码格式化的数据流差异
-
-源码格式化**不使用 marker 保护**，因为 LLM 需要直接修改 LaTeX 结构：
-
-```
-typo_check / expression_opt:
-  LLM 输入 = 纯文本（含 marker）
-  LLM 输出 = 修正后纯文本（含 marker）
-  apply = restore_from_markers() → 写入
-
-code_review:
-  LLM 输入 = 工具格式化后的含 marker 纯文本
-  LLM 输出 = 审查建议列表（含 original / suggested 片段）
-  apply = 直接写入工具格式化结果（原始 LaTeX），建议仅展示
-```
-
-### 5.3 术语一致性检查的数据流
-
-术语一致性检查使用**两阶段 LLM 调用**——提取 + 语义聚类——而非固定算法：
-
-```
-Phase 1: 逐段提取（N 次 LLM 调用，可并发）
-  LLM 输入 = 纯文本（含 marker）
-  LLM 输出 = 该段的关键术语列表
-
-Phase 2: 语义聚类（1 次 LLM 调用）
-  程序去重 → LLM 接收去重后的术语列表
-  LLM 输出 = 语义相同的术语组 + 每组推荐项
-  例: [{"recommended": "深度学习", "variants": ["Deep Learning", "deep learning", "DL"]}]
-
-Phase 3: 程序生成修正结果
-  构建 variant → recommended 替换映射
-  按段落生成 corrected 文本 + changes 列表
-```
-
-关键设计决策：使用 LLM 进行语义聚类（而非正则/启发式），因为术语一致性本质上是语义问题——"Deep Learning"、"deep learning"、"深度学习"、"DL"在文本层面完全不同，但语义上是同一概念。固定算法无法可靠判断跨语言同义词和缩写等价关系。
-
-### 5.4 写作助手聊天的数据流
-
-写作助手采用**双轮协议 + Function Calling**，每轮走不同路径：
-
-```
-RS1（流式对话 + Function Calling）:
-   用户消息 + 文件上下文（原始 LaTeX，无 marker）
-        ↓
-   _get_enabled_tools() 动态注入工具：
-       SearchManager    → web_search
-       ResearchManager  → search_scholarly_works / find_related_works / ...
-       ProjectToolsManager → list_files / read_file_content / ...
-       EditToolsManager → edit_paragraph / undo_last_edit
-        ↓ SSE fetch streaming
-   chat_stream_with_usage(tools=...) → LLM 流式回复
-        ↓
-   LLM 可能返回 tool_call（非流式检测）
-        ↓
-   ┌─ 工具调用循环（最多 3 轮）───────────────┐
-   │ ToolRegistry.execute(tool_name, args)   │
-   │    ↓                                     │
-   │ 敏感检查（edit_paragraph / undo_last_edit）│
-   │   ↓ SSE: tool_pending                    │
-   │   用户确认/取消（超时 120s）               │
-   │   ↓ SSE: tool_cancelled 或 继续执行       │
-   │ 结果回传 LLM                              │
-   │    ↓                                     │
-   │ LLM 继续生成回复或发起新的 tool_call       │
-   └──────────────────────────────────────────┘
-        ↓
-   工具消息通过 append_tool_messages() 持久化
-        ↓
-   parseThinking() 逐 token 解析 <thinking> 标签
-        ↓ streaming 结束
-   落盘 assistant 消息（含 thinkingContent / displayContent / tokens）
-
-RS2（结构化编辑）:
-   用户点击"生成编辑建议" → instruction 发送
-        ↓
-   原始 LaTeX 直接发送给 LLM
-        ↓ 分隔符协议（<<<LATEX>>>...<<<END>>>）纯文本输出
-   提取 + validate_latex_field(relaxed=True) 校验 → 失败回喂重试（最多 3 次）
-   构造 unified diff → 附挂 EditOp
-        ↓
-   用户点击"应用到 .tex"（可选：手动编辑后传递 new_latex）
-        ↓ project_manager.apply_change()
-   MD5 校验 → 原子写入
-```
-
-**深度思考（Thinking Block）流式解析**：
-
-LLM 输出中可能包含 `<thinking>...</thinking>` 标签，包裹推理过程。前端在流式接收时：
-
-1. 每收到一个 token chunk，对累积的 rawText 执行 `parseThinking()` 正则匹配
-2. `<thinking>` 已出现但 `</thinking>` 未到 → `thinkingOpen=true`，UI 显示旋转 spinner + Lightbulb 图标
-3. `</thinking>` 到达 → `thinkingClosed=true`，`<details>` 元素自动折叠，正文部分提取为 `displayContent`
-4. 页面刷新时，`processLoadedMessages()` 从存储的 `content` 字段重新提取，通过 `setMessages` 触发 Zustand 更新
-
-**助手提示词注入**：
-
-激活助手的提示词内容通过 `ChatSendRequest.assistant_prompt` 传递，后端在构建 LLM messages 时注入 **system prompt**，而非 user message。这样：
-
-- 助手提示词对用户不可见（不显示在聊天 UI 中）
-- 可随时切换不同助手角色而不污染对话历史
-
-**上下文压缩**：
-
-与 typo_check 等单向模块不同，写作助手是有状态的多轮对话。`cumulative_tokens` 跟踪最新一次 LLM 调用的 `total_tokens`（上下文窗口大小），当达到阈值时触发压缩：
-
-1. LLM 对历史消息生成纯文本摘要（直接 `llm.chat()`）
-2. 原始消息深拷贝到 `summary.snapshot` 字段
-3. 用一条 `role="summary"` 消息替换全部历史
-4. 用户可通过"删除压缩消息"一键还原
-
-**Function Calling 工具调用（联网搜索 + 学术研究 + 项目浏览 + 段落编辑）**：
-
-LLM 在流式输出过程中可发起 tool_call，触发各类工具调用。支持自动化工具调度和敏感操作确认：
-
-```
-RS1 流式对话中 tool_call:
-  LLM 输出 tool_call（function.name="web_search" / "edit_paragraph" 等）
-       ↓ SSE event: tool_call（前端停止打字机显示）
-  ToolRegistry.execute(tool_name, arguments)
-       ↓
-  ┌─ 工具分发 ───────────────────────────────────┐
-  │ SearchManager   → web_search (联网搜索)       │
-  │ ResearchManager → OpenAlex 检索/详情/引文追踪 │
-  │ ProjectToolsManager → list_files / ... (浏览) │
-  │ EditToolsManager → edit_paragraph / ... (编辑) │
-  └──────────────────────────────────────────────┘
-       ↓ 搜索工具走引擎路由
-  ┌─ 引擎选择（根据配置）────────────────────────────┐
-  │ DDG: https POST https://html.duckduckgo.com/html/  │
-  │ SearXNG: httpx GET {base_url}/search?format=json    │
-  │ Tavily: httpx POST https://api.tavily.com/search    │
-  └────────────────────────────────────────────────────┘
-       ↓
-  ┌─ DDG 路径 ────────────────────────────────────────┐
-  │ 二次验证（HTTP 202 + captcha_challenge）           │
-  │   → SSE event: captcha_challenge                   │
-  │   → 前端 CaptchaDialog → POST /api/search/ddg-challenge  │
-  │   → done(captcha_pending=true)，用户需重新发送     │
-  └───────────────────────────────────────────────────┘
-       ↓ 正常结果
-  ┌─ Tavily / SearXNG 路径（无验证码） ──────────────┐
-  │ 直接解析 JSON 结果                                 │
-  └───────────────────────────────────────────────────┘
-       ↓
-  ┌─ 敏感操作检查（edit_paragraph / undo_last_edit）─┐
-  │ require_confirmation=true → SSE: tool_pending     │
-  │   → 前端确认弹窗 → confirm-tool / cancel-tool     │
-  │   用户确认后继续执行，取消后回传 LLM "用户跳过"   │
-  └──────────────────────────────────────────────────┘
-       ↓
-  提取结果 → SSE event: tool_result / search_results / scholarly_results
-  → 工具结果注入 LLM 继续对话（SSE event: message）
-  → 工具消息通过 append_tool_messages() 持久化到上下文
-  → 前端显示结果引用
-```
-
-`ResearchManager` 将 OpenAlex work 映射为统一 `ScholarlyWork`，按 DOI、OpenAlex ID、arXiv ID 或标题年份去重。作者姓名先解析为 Author ID；参考文献和相似作品按 OpenAlex 每批 100 个 ID 的限制批量获取，极端情况下最多检查前 500 条候选，避免逐篇请求和无界开销。所有请求共享 FastAPI lifespan 管理的 `httpx.AsyncClient`。当前全文工具只返回 OpenAlex 摘要和 OA 定位，不抓取第三方全文。外部元数据视为不可信内容，system prompt 明确禁止执行其中包含的指令。
-
-### 5.5 参考文献管理数据流
-
-参考文献管理采用**四步独立请求**模式，无 SSE 流式，无 Marker 保护，无段落分割：
-
-```
-Step 1: 格式识别
-  用户输入参考文献示例
-       ↓ POST /analyze-format
-  retry_with_validation(ReferenceFormatResult)
-       ↓
-  返回格式名称、entry_type、required_fields、optional_fields、confidence、raw_observed_fields
-  （置信度为 low 时前端弹出 toast.warning）
-
-Step 2: 元数据提取
-  用户输入文本或截图
-       ↓ POST /extract（FormData）
-  retry_with_validation(ExtractedMetadata)
-       ↓
-  _check_missing_fields(fields, format_info)
-  只报告 raw_observed_fields 中同时出现的必填字段缺失
-       ↓
-  返回 {"fields": {...}, "missing_fields": [...]}
-  前端根据 fields 的 key 动态渲染编辑表单（非写死字段列表）
-
-Step 3: BibTeX 生成
-  前端将编辑后的 fields dict 发送
-       ↓ POST /generate
-  retry_with_validation(BibEntry)
-       ↓
-  返回 {cite_key, entry_type, fields, raw_bibtex}
-  前端渲染代码区，用户可编辑 cite_key 和 raw_bibtex 后复制或保存
-
-Step 4: 写入 .bib 文件
-  用户选择项目中的 .bib 文件
-       ↓ POST /save
-  safe_read → 检查 cite_key 是否存在 → 追加或替换 → atomic_write
-       ↓
-  返回 {status, action, cite_key}
-```
-
-**关键差异（与其他模块对比）**：
-
-| 特性 | typo_check / writing_chat | bib_manager |
-| --- | --- | --- |
-| 交互模式 | 逐段 + SSE 流式 | 四步逐步提交 |
-| Marker 保护 | 必须 | 不需要（不操作 .tex 文件） |
-| 元数据字段 | 固定 Pydantic schema | 动态：由格式分析阶段决定 |
-| LLM 调用次数 | 每段落 N 次 | 可重叠：分析 1 + 提取 1 + 生成 1 共 3 次 |
-| 格式持久化 | 无 | 格式 JSON 文件 CRUD |
-
-**动态字段设计**：`ExtractedMetadata` 不使用固定字段（如 `title: str`、`authors: list[str]`），而是使用 `fields: dict[str, str]` 的 key-value 结构。key 由格式分析阶段的 `ReferenceFormatResult.required_fields` + `optional_fields` 动态决定。这避免了格式差异导致的字段映射问题——GB/T 7714 可能要求 `language` 和 `document_type_marker`，APA 则不需要，但都可以用同一个模型表达。
-
-**缺失字段智能检测**：利用 `raw_observed_fields`（格式分析时 LLM 提取的"输入中实际出现的字段列表"）来减少误报。例如输入示例为 `Devlin, Jacob.BERT[J].arXiv,2018.`，其中明显不含 abstract、keywords 等字段，`raw_observed_fields` 不会包含它们，`_check_missing_fields` 就不会报告它们缺失。
-
-### 5.6 自动编译数据流
-
-编译模块与 LLM 模块不同——LLM 不参与文本修改，仅翻译编译错误：
-
-```
-┌──────────┐    ┌──────────────┐    ┌────────────┐    ┌──────────────┐
-│ 前端请求  │ →  │ router.py    │ →  │ service.py │ →  │ latexmk 进程  │
-│ /run      │    │ 参数校验     │    │ subprocess │    │              │
-└──────────┘    └──────────────┘    └────────────┘    └──────────────┘
-                                          │
-                                          ▼ returncode != 0
-                                    ┌────────────┐    ┌──────────┐
-                                    │ 错误提取    │ →  │ LLM API  │
-                                    │ (正则筛选)  │    │ 翻译错误  │
-                                    └────────────┘    └──────────┘
-```
-
-关键差异：
-
-- 使用 `asyncio.create_subprocess_exec` + `wait_for`（带超时）管理外部进程
-- LLM 仅在编译失败时被调用，且使用 `retry_with_validation()` 保证输出格式
-- 不涉及 Marker 保护、段落提取或源文件修改
-
-### 5.7 多文件 \input 展开数据流
+### 5.2 多文件 \input 展开数据流
 
 多个段落处理模块（typo_check、expression_opt、code_review、terminology_check、paragraph_translate）共享相同的多文件展开机制：
 
@@ -647,159 +410,24 @@ apply 时携带 file_path → 精确写回对应文件
 | 注释处理 | 展开前去除 `%` 注释 | 避免注释行中的 `\input` 被误识别 |
 | 结果归属 | 携带 `file_path` 字段 | apply 时精确定位目标文件，避免跨文件误写 |
 
-### 5.8 模板生成数据流
+### 5.3 模块数据流索引
 
-模板生成从零创建 LaTeX 工程，不操作已有 `.tex` 文件，通过**自主 Agent**（SSE 流式）完成：
-
-```
-POST /api/template-gen/generate { description: "..." }
-        ↓
-TemplateAgentService.generate() 基于 Function Calling 自主迭代
-   plan → write_file（多文件）→ list_files → compile_latex 验证
-        ↓ 编译失败
-   _extract_errors() → _format_error_analysis() → 回传 LLM 修复 → 再编译
-        ↓
-SSE 事件流：plan / tool_call / tool_result / compile / warning / done / error
-        ↓
-产出物：output_dir/agent/<session_id>/ 下的完整可编译多文件 LaTeX 工程
-```
-
-**关键差异**：不使用 Marker 保护（生成全新工程，无 LaTeX 结构需保护）；基于 Function Calling 多轮迭代 + 编译验证，非批量段落模式。
-
-### 5.9 公式 OCR 数据流
-
-公式 OCR 接收图片，经 Vision API 提取 LaTeX 公式代码：
-
-```
-POST /api/formula-ocr/recognize (FormData: UploadFile)
-        ↓
-_validate_content_type() → _preprocess() → _to_base64()
-  校验 MIME / 缩放超2000px边 / 转 JPEG base64
-        ↓
-Vision API（system prompt = 公式 OCR 专家，temperature=0.1）
-  分隔符协议输出 <<<LATEX>>>...<<<END>>> + CONFIDENCE 元数据
-        ↓
-正则提取 → latex_json_guard 内容校验
-  失败 → 错误回喂 LLM 重试（最多 3 次）
-        ↓
-结构信号 > 视觉判定 > 默认 display 合并 inline 结论
-        ↓
-返回 { latex, inline, confidence, inline_source }
-  confidence < 0.7 时附加 low_confidence: true
-```
-
-**关键差异**：无 SSE 流式、无 Marker 保护；通过 `UploadFile` 接收图片而非 LaTeX 源码；`max_image_size_mb` 由 `config.json` 控制。
-
-### 5.10 表格 OCR 数据流
-
-表格 OCR 与公式 OCR 共享相同的图片预处理流水线，区别在于 LLM 输出完整 `table` 浮动体：
-
-```
-POST /api/table-ocr/recognize (FormData: UploadFile)
-        ↓
-_validate_content_type() → _preprocess() → _to_base64()
-  与 formula_ocr 完全一致的预处理逻辑
-        ↓
-Vision API（要求按分隔符协议输出 \begin{table}[htbp]...\end{table} 和三线表样式，temperature=0.1）
-  <<<LATEX>>>...<<<END>>> + CONFIDENCE 元数据
-        ↓
-正则提取 → latex_json_guard 内容校验（含环境配平、table 浮动体检查）
-  失败 → 错误回喂 LLM 重试（最多 3 次）
-        ↓
-返回 { latex, confidence }
-  confidence < 0.7 时附加 low_confidence: true
-```
-
-**关键差异**：与 formula_ocr 相同的图片处理流程，但 LLM 输出约束不同——要求完整 table 浮动体、`booktabs` 三线表样式、支持合并单元格。
-
-### 5.11 Markdown→LaTeX 转换数据流
-
-本模块不调用 LLM，完全依赖外部 Pandoc 进程：
-
-```
-POST /api/format-converter/convert { markdown: "..." }
-        ↓
-_check_pandoc() → shutil.which("pandoc")
-  未安装则抛 RuntimeError
-        ↓
-asyncio.to_thread(subprocess.run)
-  pandoc -f markdown -t latex --wrap=preserve（超时 30s）
-        ↓
-返回 { latex: "..." }
-```
-
-**关键差异**：零 LLM 调用；通过 `asyncio.to_thread()` 将同步子进程丢入线程池避免阻塞事件循环；不涉及 Marker 保护、段落分割或文件写入。
-
-### 5.12 样式修改数据流
-
-样式修改让用户通过自然语言描述修改 LaTeX 样式（如改列对齐、调整间距），LLM **直接操作原始 LaTeX 结构**，不使用 Marker 保护。模块包含粘贴代码和项目 Agent 两种模式。
-
-粘贴代码模式数据流：
-
-```
-POST /api/style-modify/modify { latex: "...", description: "..." }
-        ↓
-分隔符协议（<<<LATEX>>>...<<<END>>>）+ 内容校验
-  一次 LLM 调用（要求返回完整 LaTeX 代码，temperature=0.3），
-  协议/校验失败时回喂重试（最多 3 次）
-        ↓
-空结果回退为原始代码
-        ↓
-返回 { latex: "..." }
-```
-
-项目 Agent 模式数据流：
-
-```
-POST /api/style-modify/agent/run { description, workspace_id }
-        ↓
-创建 style_modify_sessions/<session_id>/
-真实项目只读；私有工具浏览/搜索/读取项目
-        ↓
-stage_replace → baseline/ + overlay/（不写真实项目）
-        ↓
-compile_staged_project → shadow/ 覆盖 overlay 后 latexmk 编译
-        ↓
-finish → proposal revision（diff + MD5 + 编译摘要）
-        ↓ 用户确认
-apply → LatexProject.apply_whole_files()
-  校验 workspace / 项目指纹 / revision / 路径 / baseline MD5
-  批量原子写入 + operation 备份
-        ↓
-undo → 校验 applied MD5 后批量恢复
-```
-
-**关键差异**：粘贴代码模式无 SSE、单次请求响应；项目 Agent 模式使用 SSE、Function Calling 私有工具、会话 overlay、shadow 编译和批量事务写回。两种模式都不使用 Marker 保护。
-
-### 5.13 Git 差异高亮数据流
-
-Git 差异模块生成两个 Git revision 间的差异高亮 PDF：
-
-```
-GET /api/git-diff/refs
-        ↓
-list_git_revisions() → 分支/标签/commit 列表 → 返回 GitRefsResult
-```
-
-```
-POST /api/git-diff/render-pdf { main_file, base_ref, target_ref }
-        ↓
-_flatten_main_document()（递归展开 \input/\include/\subfile）
-  通过 git show 或工作目录读取各 revision 的文件内容
-        ↓
-difflib.SequenceMatcher 逐行差异对比
-  增行 → \LXDiffAdded（绿色底纹），删行 → \LXDiffDeleted（红色底纹）
-        ↓
-git archive → 复制 target revision 到临时目录
-        ↓
-latexmk -xelatex 编译差异高亮文档
-        ↓
-返回 { pdf_url, job_id }
-        ↓
-GET /api/git-diff/pdf/{job_id} → FileResponse 内联预览
-```
-
-**关键差异**：差异对比阶段零 LLM 调用，纯算法通过 `difflib.SequenceMatcher` 生成；生成 PDF 涉及完整 LaTeX 编译链；通过 `git show` 和 `git archive` 读取历史版本文件。当编译失败时，会调用 `compile_error_translator.translate_compile_errors()` 将错误日志翻译为中文解释和修复建议（复用 compile 模块的 LLM 能力），因此在失败场景下会涉及 LLM。
+| 模块 | 一句话流程 | 详细文档 |
+| --- | --- | --- |
+| 错字查找 | 逐段检查典型流程：preview → LLM 校验 → diff → apply | [typo_check.md](docs/modules/typo_check.md) |
+| 表达优化 | 同逐段检查，输出字段为 `optimized`，支持自定义提示词 | [expression_opt.md](docs/modules/expression_opt.md) |
+| 术语一致性 | 逐段提取术语 → 语义聚类 → 检查一致性 | [terminology_check.md](docs/modules/terminology_check.md) |
+| 逐段翻译 | 同逐段检查，输出字段为 `translated` | [paragraph_translate.md](docs/modules/paragraph_translate.md) |
+| LaTeX 代码审查 | 工具格式化真实 LaTeX → LLM 只读审查 → 建议展示不写回 | [code_review.md](docs/modules/code_review.md) |
+| 写作助手 | 多轮对话 + Function Calling（搜索/学术/项目浏览/段落编辑），编辑建议走 RS2 分隔符协议 | [writing_chat.md](docs/modules/writing_chat.md) |
+| 参考文献管理 | 格式识别（规则层优先）→ 元数据提取 → BibTeX 生成 → 写入 .bib | [bib_manager.md](docs/modules/bib_manager.md) |
+| 自动编译 | latexmk 编译（texfot 过滤）→ 失败时 LLM 翻译错误 | [compile.md](docs/modules/compile.md) |
+| 模板生成 | 自主 Agent 写文件 → 编译验证 → 修错重试 → 产出可下载工程 | [template_gen.md](docs/modules/template_gen.md) |
+| 科研绘图 | 数据画像 → 图表推荐 → Python 沙箱执行 → TikZ 确定性生成 → 编译 | [plot_gen.md](docs/modules/plot_gen.md) |
+| 公式/表格 OCR | 图片预处理 → Vision 分隔符协议输出 → 内容校验重试 | [formula_ocr.md](docs/modules/formula_ocr.md)、[table_ocr.md](docs/modules/table_ocr.md) |
+| 格式转换 | pandoc 子进程转换，宏包分析兜底补充 `\usepackage` 注释 | [format_converter.md](docs/modules/format_converter.md) |
+| 样式修改 | 粘贴代码单次请求，或项目 Agent overlay + shadow 编译 + proposal 事务写回 | [style_modify.md](docs/modules/style_modify.md) |
+| Git 差异高亮 | 两个 Git revision 内容对比 → 差异高亮文档 → latexmk 编译 PDF | [git_diff.md](docs/modules/git_diff.md) |
 
 ---
 
@@ -816,7 +444,7 @@ GET /api/git-diff/pdf/{job_id} → FileResponse 内联预览
 
 ### 6.2 useParagraphCheck hook
 
-四个页面（TypoCheck、ExpressionOpt、CodeReview、TerminologyCheck）共享相同的段落检查流程。通过 `useParagraphCheck` hook 抽象：
+多个逐段检查页面（TypoCheck、ExpressionOpt、CodeReview、TerminologyCheck、ParagraphTranslate）共享相同的段落检查流程。通过 `useParagraphCheck` hook 抽象：
 
 ```javascript
 useParagraphCheck({
@@ -847,7 +475,7 @@ Hook 内部封装了：项目恢复 → 文件选择 → 预览 → 检查 → �
 
 - **字体角色**：`--font-display` = **STIX Two Text**（学术衬线），仅用于字标、§ 章节编号、英文 small-caps 标签（`.text-small-caps`）；中文标题保持 Noto Sans SC，正文保持霞鹜文楷，均不随主题色板改动。
 - **签名组件**：`components/Wordmark.jsx`（字标）；`components/PageHeader.jsx`（共享页头，传 `groupKey` 自动生成 "§N · 分组" kicker）；`components/EmptyState.jsx`（无项目/恢复中/空结果）；`components/ProofDiff.jsx`（原文→改后对照）。
-- **欢迎页**：标题页 + 点线目录（dotted-leader TOC），功能分组按写作流程编 § 号（`pages/WelcomePage.jsx` 的 `featureGroups` / `SECTION_NUMBER`，已导出）。
+- **欢迎页**：标题页 + 点线目录（dotted-leader TOC），功能分组按写作流程编 § 号（`pages/WelcomePage.jsx` 的 `featureGroups`；§ 号映射 `SECTION_BY_GROUP` 定义在 `frontend/src/lib/writingFlow.js`，由 WelcomePage / PageHeader 共享）。
 - **全局背景**：`App.jsx` 内联 `bgSvg`（`--primary` 圆形 + 双色 `\LaTeX` 字标，右下角固定，全站共享）。
 - **动效**：欢迎页 `.reveal` 错落入场，尊重 `prefers-reduced-motion`；全站不使用 `hover:scale` 类通用缩放。
 - **主题色板架构（"一色一阶"）**：所有配色主题共用同一套中性灰阶（亮/暗各一档），主题身份由单一色相承载，`--primary` / `--accent` / `--ring` / `--selection-bg` 均按一致的亮度/彩度偏移量从该色相派生；琥珀黄等高明度色相的主按钮使用深色前景保证对比度；深色模式主按钮统一使用深色文字。语义色（危险红、字标墨色）跨主题一致，深色模式下字标统一反白，避免装饰元素在暗色背景上不可见。
@@ -947,9 +575,9 @@ Mock 返回值必须符合 Pydantic schema，确保测试的可重复性。
 | 文件写入 | 原子写入 | 防止写中断损坏文件 |
 | 撤销机制 | 内存 deque | 比文件备份更高效，支持多步 |
 | LLM 校验 | Pydantic + 重试 | 闭环反馈，比简单重试更可靠 |
-| Marker 还原 | 长度降序排序 | 防止短 marker 误匹配长 marker 前缀 |
+| Marker 还原 | 创建顺序（counter）降序；非标准 marker 回退按长度降序 | 外层 marker 先还原，同时防止短 marker 误匹配长 marker 前缀 |
 | 编译错误翻译 | 外部进程 + LLM | 正则提取关键错误，LLM 翻译为中文解释，不修改源文件 |
-| 写作助手 Marker 策略 | 分层处理 | 纯对话无 marker（方便 LLM 理解论文）；编辑操作走 marker pipeline（保护 LaTeX 结构） |
+| 写作助手 Marker 策略 | 全程无 marker | 对话与编辑建议都直接使用原始 LaTeX；编辑建议走分隔符协议（`<<<LATEX>>>...<<<END>>>`）避免 JSON 转义损坏 |
 | 深度思考渲染 | `<details>` + parseThinking | 流式解析 `<thinking>` 标签，实时展开/折叠；页面刷新时 `processLoadedMessages` 恢复 |
 | 助手提示词注入 | system prompt 注入 | 不污染用户消息体，用户不可见，可随时切换角色 |
 | 参考文献元数据结构 | 动态 dict（非固定 Pydantic 字段） | 不同格式（GB/T、APA、IEEE）字段集不同，固定模型无法覆盖；`fields: dict[str, str]` 避免字段映射 |

@@ -57,8 +57,8 @@
     "compile": {
       "enabled": true,
       "latexmk_timeout": 120,
-      "engine": "xelatex",
-      "pdfa": true
+      "engine": "auto",
+      "pdfa": false
     },
     "git_diff": {
       "enabled": true,
@@ -140,7 +140,7 @@
     },
     "function_calling": {
       "web_search": {
-        "enabled": true,
+        "enabled": false,
         "primary_engine": "tavily",
         "max_results": 10,
         "timeout_seconds": 10,

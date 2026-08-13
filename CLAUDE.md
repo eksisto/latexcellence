@@ -62,7 +62,7 @@ refactor: 消除外部模块对私有属性的直接访问
 与 LLM 交互时，LaTeX 结构必须替换为 marker（`__CMD_0000__` / `__MATH_0000__` 等）。
 
 - **Prompt 约束**：必须在 System Prompt 中强约束 LLM：“**绝对禁止修改、删除或拆分任何 marker，只能修改纯文本**”。
-- **还原逻辑**：调用 `LatexParser.restore_from_markers()` 时，**必须按 marker 长度从长到短还原**，防止短的误匹配长的
+- **还原逻辑**：调用 `LatexParser.restore_from_markers()` 时，**必须按创建顺序（counter）从大到小还原**（外层 marker 先还原），防止短的误匹配长的；非标准 marker 回退为按长度从长到短
 - **code_review 例外**：code_review 的 LLM 输出（建议）只读展示、从不写回文件，`new_text` 由工具格式化生成；因此该模块直接让 LLM 审查格式化后的真实 LaTeX，不使用 marker 保护
 
 ### 2. JSON 输出校验流程

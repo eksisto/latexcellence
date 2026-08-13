@@ -18,6 +18,24 @@
 
 ---
 
+**本文目录**：
+
+- [项目概述](#项目概述)
+- [技术栈](#技术栈)
+- [目录结构](#目录结构)
+- [tools/ 维护者工具](#tools-维护者工具)
+- [启动入口](#启动入口)
+- [config.json 结构](#configjson-结构)
+- [开发/生产模式](#开发生产模式)
+- [用户审核工作流（以错字查找为例）](#用户审核工作流以错字查找为例)
+- [架构核心设计模式](#架构核心设计模式)
+- [编码规范（关键要点）](#编码规范关键要点)
+- [日志](#日志)
+- [安全与边界处理](#安全与边界处理)
+- [文档维护约定](#文档维护约定)
+
+---
+
 ## 项目概述
 
 LateXcellence 是一个由 LLM 驱动的智能体论文写作助手。后端 FastAPI + 前端 React/Vite，智能体通过 Function Calling 真正操作本地 LaTeX 项目（浏览文件、修改段落、生成工程、编译验证），而不是只停留在对话。
@@ -46,94 +64,20 @@ LateXcellence 是一个由 LLM 驱动的智能体论文写作助手。后端 Fas
 
 ```
 latexcellence/
-├── main.py                         # 启动入口
-├── config.json                     # 配置文件
-├── config.example.json             # 配置模板
-├── requirements.txt                # Python 依赖
+├── main.py                    # 统一入口（FastAPI + 静态文件挂载）
+├── config.json / config.example.json / requirements.txt / pytest.ini
 ├── AGENTS.md / DEVELOPMENT.md / DESIGN.md / PROJECT_SUMMARY.md / README.md
-│
-├── backend/
-│   ├── core/                       # 核心基础设施
-│   │   ├── config.py               # 配置读写、热重载、Pydantic 校验
-│   │   ├── llm_client.py           # OpenAI API 统一封装（流式 + 重试 + 限流）
-│   │   ├── logger.py               # 统一日志（按日期旋转）
-│   │   ├── workspace_manager.py    # 多工作区管理
-│   │   ├── project_manager.py      # LaTeX 项目管理（文件树、段落、撤销栈）
-│   │   ├── prompts.py              # 中央提示词管理（所有 LLM 提示词模板）
-│   │   ├── tool_registry.py        # Function Calling 工具注册表
-│   │   └── base_paragraph_check.py # 逐段检查服务基类
-│   │
-│   ├── utils/                      # 工具模块
-│   │   ├── file_ops.py             # 文件读写（MD5、原子写入、BackupManager）
-│   │   ├── input_resolver.py       # \input/\include 递归解析器
-│   │   ├── json_utils.py           # LLM JSON 输出解析/校验/重试
-│   │   ├── latex_json_guard.py     # LaTeX×JSON 转义防护（内容校验，跨模块共享）
-│   │   ├── latex_parser.py         # LaTeX → 纯文本（Marker 保护）
-│   │   ├── latex_literals.py       # LaTeX 字面内容识别（逐字命令/URL 参数，parser 与 guard 共享）
-│   │   ├── tex_compile.py          # 统一 TeX 编译执行（texfot 过滤 + 引擎自动检测 + PDF/A 支持）
-│   │   ├── compile_error_translator.py  # 编译错误 LLM 翻译（compile + git_diff 复用）
-│   │   ├── latex_formatter.py      # 统一 LaTeX 格式化工具（code_review / formula_ocr / table_ocr 共用）
-│   │   ├── latexindent_utils.py    # latexindent.pl 调用封装（latex_formatter 使用）
-│   │   ├── latexindent.yaml        # latexindent 统一缩进配置（每层 4 个空格）
-│   │   ├── builtin_formatter.py    # 内置轻量 LaTeX 格式化器（latex_formatter 兜底）
-│   │   ├── project_tools/          # LLM Function Calling 工具集（浏览 + 编辑）
-│   │   ├── web_search/             # 联网搜索多引擎抽象
-│   │   └── scholarly_research/     # OpenAlex 学术检索与引文追踪工具
-│   │
-│   └── modules/                    # 各功能模块（router + service）
-│       ├── project_router.py
-│       ├── typo_check/             # 错字查找
-│       ├── expression_opt/         # 表达优化
-│       ├── terminology_check/      # 术语一致性检查
-│       ├── paragraph_translate/    # 逐段翻译
-│       ├── writing_chat/           # 写作助手聊天
-│       ├── bib_manager/            # 参考文献管理
-│       ├── formula_ocr/            # 公式识别
-│       ├── table_ocr/              # 表格识别
-│       ├── template_gen/           # 模板生成
-│       ├── plot_gen/               # 科研绘图
-│       ├── code_review/            # LaTeX 代码审查
-│       ├── compile/                # 自动编译
-│       ├── format_converter/       # 文档格式转换
-│       ├── style_modify/           # 样式修改
-│       └── git_diff/               # Git 差异高亮
-│
-├── frontend/
-│   ├── index.html / package.json / vite.config.js
-│   └── src/
-│       ├── main.jsx / App.jsx / index.css
-│       ├── api/index.js            # API 层封装
-│       ├── store/useStore.js       # Zustand 全局状态
-│       ├── fonts/                  # 字体加载（霞鹜文楷 / Noto Sans SC / JetBrains Mono / STIX Two Text）
-│       ├── hooks/                  # 自定义 hooks
-│       ├── components/             # 共享组件
-│       │   ├── ui/                 # shadcn/ui 封装
-│       │   └── ...
-│       └── pages/                  # 页面组件
-│
-├── showcase/                     # 独立展示页（零依赖静态站，Node 内置 http；详见 showcase.md）
-│   ├── index.html / server.js / package.json
-│   └── js/ css/ tools/            # 内容数据驱动渲染 + 主题 CSS 生成
-│
-├── tools/                        # 维护者工具（开发/评测/维护用脚本与 Agent 评测工作区，不进入运行时）
-│   ├── eval_common.py             # 人工评估工具共享基座（语料加载/工作区/marker 还原/命中判定/CLI 骨架）
-│   ├── latex_packages/             # 宏包规则表维护（离线编译验证 + 覆盖率报告）
-│   ├── formula_ocr_eval/           # 公式 OCR 人工评估（渲染语料 → 跑 OCR → 比对报告）
-│   ├── table_ocr_eval/             # 表格 OCR 人工评估（渲染语料 → 跑 OCR → 比对报告）
-│   ├── typo_check_eval/            # 错字查找人工评估（加载语料 → 跑检查 → 比对报告）
-│   ├── expression_opt_eval/        # 表达优化人工评估（加载语料 → 跑优化 → 比对报告）
-│   ├── terminology_check_eval/     # 术语一致性人工评估（加载多段术语语料 → 跑检查 → 比对报告）
-│   ├── paragraph_translate_eval/   # 逐段翻译人工评估（加载语料 → 跑翻译 → 比对报告）
-│   ├── plotgen_opt/                # plot_gen Agent 优化评测工作区
-│   └── templategen_opt/            # template_gen Agent 优化评测工作区
-├── static/                         # Vite 构建产物
-├── prompts/                        # 自定义提示词
-├── templates/                      # 生成的 LaTeX 模板
-├── writing_chat_sessions/          # 聊天数据
-├── clean-cache.sh                  # 清理缓存脚本
-├── docs/                           # 项目文档
-└── tests/                          # 测试
+├── backend/                   # FastAPI 后端（core / utils / modules）
+├── frontend/                  # React 前端
+├── showcase/                  # 独立展示页（零依赖静态站，详见 showcase.md）
+├── tools/                     # 维护者与评测工具（不进入运行时）
+├── docs/                      # 开发文档（本目录）
+├── tests/                     # pytest 测试
+├── static/                    # Vite 构建产物
+└── prompts/ templates/ formats/ plots/ logs/ writing_chat_sessions/  # 运行期与用户数据目录
 ```
+
+> 带逐文件注释的完整目录树见 [PROJECT_SUMMARY.md](../PROJECT_SUMMARY.md)。
 
 > 依赖说明：后端使用 `requirements.txt`，无 `pyproject.toml`；前端包管理文件为 `frontend/package.json`，根目录无 `package.json`。
 
@@ -147,26 +91,26 @@ latexcellence/
 
 当前子目录：
 
-| 子目录                            | 用途                                                                                                                                                                                                                                                                           |
-| --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `tools/` 根目录共享工具           | `eval_common.py`（人工评估基座）、`tex_path.py`（TeX Live 路径发现）、`generality_gate.py`（Agent 闭环优化通用性门禁：硬编码特征扫描 / 提示词体积监控 / holdout 场景解析 / 对照组回归判定，详见 [closed-loop-optimization-lessons.md](./closed-loop-optimization-lessons.md)） |
-| `tools/latex_packages/`           | 宏包规则表维护：离线编译验证（`verify_rules.py`）与覆盖率报告（`coverage_report.py`），详见 [latex-package-rules.md](./latex-package-rules.md)                                                                                                                                 |
-| `tools/formula_ocr_eval/`         | 公式 OCR 人工评估：渲染语料为图片 → 调真实 OCR 管线 → 生成左右对比 HTML 报告，详见其 `README.md`                                                                                                                                                                               |
-| `tools/table_ocr_eval/`           | 表格 OCR 人工评估：渲染语料为图片 → 调真实 OCR 管线 → 生成左右对比 HTML 报告，详见其 `README.md`                                                                                                                                                                               |
-| `tools/typo_check_eval/`          | 错字查找人工评估：加载错字语料 → 调真实逐段检查管线 → 生成原文/修正后对照 HTML 报告，详见其 `README.md`                                                                                                                                                                        |
-| `tools/expression_opt_eval/`      | 表达优化人工评估：加载优化语料 → 调真实逐段优化管线 → 生成原文/优化后对照 HTML 报告，详见其 `README.md`                                                                                                                                                                        |
-| `tools/terminology_check_eval/`   | 术语一致性人工评估：加载多段落术语语料 → 调真实检查管线（逐段提取 + 语义聚类）→ 生成术语簇命中/漏检对照 HTML 报告，详见其 `README.md`                                                                                                                                          |
-| `tools/paragraph_translate_eval/` | 逐段翻译人工评估：加载单段落语料（含整段参考译文与期望短语）→ 调真实逐段翻译管线 → 生成参考译文/原文/译文对照 HTML 报告，详见其 `README.md`                                                                                                                                    |
-| `tools/prompt_comprehension_eval/` | Prompt 理解评测：逐一发送 `prompts.py` 中的提示词并自动核验 JSON/marker/分隔符/转义/语言等关键契约，输出 JSON 报告，详见其 `README.md`                                                                                                                                  |
-| `tools/plotgen_opt/`              | plot_gen Agent 优化评测：驱动 Agent 生成图表并采集指标、trace 分析、视觉审查、版本对比，详见其 `README.md`                                                                                                                                                                     |
-| `tools/templategen_opt/`          | template_gen Agent 优化评测：驱动 Agent 生成 LaTeX 工程并采集指标、需求遵守检查、视觉审查，详见其 `README.md`                                                                                                                                                                  |
-| `tools/stylemodify_opt/`          | style_modify Agent 优化评测：构造样式修改场景、驱动 Agent 采集 proposal/需求遵守/内容保留/事务指标，trace 分析与版本对比，详见其 `README.md`                                                                                                                                   |
+| 子目录 | 用途 |
+| --- | --- |
+| `tools/` 根目录 | `eval_common.py`（人工评估基座）、`tex_path.py`（TeX Live 路径发现）、`generality_gate.py`（Agent 闭环优化通用性门禁，详见 [closed-loop-optimization-lessons.md](./closed-loop-optimization-lessons.md)） |
+| `latex_packages/` | 宏包规则表维护：离线编译验证与覆盖率报告（详见 [latex-package-rules.md](./latex-package-rules.md)） |
+| `formula_ocr_eval/` | 公式 OCR 人工评估（渲染语料 → 跑 OCR → 比对报告） |
+| `table_ocr_eval/` | 表格 OCR 人工评估 |
+| `typo_check_eval/` | 错字查找人工评估 |
+| `expression_opt_eval/` | 表达优化人工评估 |
+| `terminology_check_eval/` | 术语一致性人工评估 |
+| `paragraph_translate_eval/` | 逐段翻译人工评估 |
+| `prompt_comprehension_eval/` | Prompt 理解评测 |
+| `plotgen_opt/` | plot_gen Agent 闭环优化评测工作区 |
+| `templategen_opt/` | template_gen Agent 闭环优化评测工作区 |
+| `stylemodify_opt/` | style_modify Agent 闭环优化评测工作区 |
 
-新增维护/评测工具时，按模块建子目录并补充 `README.md`，同时更新 `PROJECT_SUMMARY.md` 目录树。
+每个工具子目录的详细用法见其自带 `README.md`。
 
 ### Agent 闭环优化规范
 
-优化 template_gen / plot_gen / style_modify 三个 Agent 时，必须遵守以下
+优化 template_gen / plot_gen / style_modify 等 Agent 时，必须遵守以下
 内容边界与门禁（机制已内建在工具中，具体用法见各工具 `README.md`）：
 
 - 评测数据只允许存在于 `tools/` 对应目录，禁止写入 `backend/` 的生产提示词
@@ -221,6 +165,7 @@ npm start        # 或 node server.js
 | ----------------------------- | ------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `server`                      | host, port, dev_mode, vite_dev_url                                                   | 服务监听配置                                                                                                                                                                                                                                                                  |
 | `llm`                         | api_key, base_url, model, temperature, max_tokens, request_interval, max_concurrency | LLM 连接与调用参数                                                                                                                                                                                                                                                            |
+| `http`                        | user_agent                                                                           | 外部 HTTP 请求的全局 User-Agent（web_search 引擎与 bib_manager Provider 共用）                                                                                                                                                                                                |
 | `features`                    | 各模块的 `enabled` + 特有配置（batch_size, output_dir, timeout 等）                  | 功能开关与模块级参数                                                                                                                                                                                                                                                          |
 | `features.function_calling`   | `web_search.*`、`scholarly_research.*`、`project_tools.*`、`edit_tools.*`            | 全局 LLM Function Calling 工具集；学术研究支持 OpenAlex API Key、结果上限和请求超时配置；联网搜索支持 Tavily / SearXNG / DuckDuckGo 引擎与 API Key 配置，Tavily 默认 `advanced` 深度并返回合成答案/原始正文，`deep_read_pages` 默认 0（由 open_page / find_in_page 按需读取） |
 | `features.style_modify.agent` | 项目 Agent 的会话目录、轮次、工具/编译上限、大小限制、shadow 编译和清理配置          | style_modify 项目 Agent 模式                                                                                                                                                                                                                                                  |
@@ -294,7 +239,7 @@ core/ + utils/ (基础设施：配置、LLM 客户端、项目管理、文件 IO
 
 | 规范项     | 要求                                                  |
 | ---------- | ----------------------------------------------------- |
-| 导入顺序   | 标准库 → 第三方 → 应用内部（禁止相对导入）            |
+| 导入顺序   | 标准库 → 第三方 → 应用内部；同包内用相对导入（`from . import ...`），跨包用绝对导入 |
 | 类型注解   | 强制注解，使用 `list[X]` / `dict[K, V]` / `X \| None` |
 | 字符串引号 | docstring/f-string 双引号；正则 `r"..."`              |
 | 路径操作   | `pathlib.Path`，禁止 `os.path`                        |

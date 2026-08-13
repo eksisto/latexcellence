@@ -109,7 +109,7 @@ d. RECOMPILE — `compile_latex` 验证
 e. 重复 a–d 直到 `success=true` 才允许 `finish`
 ```
 
-prompt 同时列出 6 种常见 LaTeX 编译错误的根因与修复指引（`Undefined control sequence` / `File not found` / `Missing $ inserted` / `Environment undefined` / `begin/end mismatch` / `Runaway argument`），并硬性约束同错误连续 3 次修复失败应在 `finish` 中告知用户，防止死循环。
+prompt 同时列出多种常见 LaTeX 编译错误的根因与修复指引（`Undefined control sequence` / `File not found` / `Missing $ inserted` / `Environment undefined` / `begin/end mismatch` / `Runaway argument`），并硬性约束同错误连续 3 次修复失败应在 `finish` 中告知用户，防止死循环。
 
 ## 编译日志结构化错误提取
 

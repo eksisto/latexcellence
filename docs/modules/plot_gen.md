@@ -219,4 +219,4 @@ System prompt 中的 `STYLE NOTE` 约束 LLM：风格已由后端预置，**禁�
 - Hook：`frontend/src/hooks/usePlotGen.js`
 - API：`frontend/src/api/index.js` 的 `plotGen` 命名空间
 - 支持数据上传、Agent 时间线、数据画像、图表方案、产物预览、文件查看、ZIP 下载和自然语言微调
-- 支持查看与导出 Agent 运行追踪日志（`pages/plotGen` 的 `trace*` 文案）
+- 支持查看与导出 Agent 运行追踪日志（前端 i18n 中的 `trace*` 文案）

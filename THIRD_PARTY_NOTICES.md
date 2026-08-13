@@ -91,6 +91,7 @@
 | [Pillow](https://python-pillow.github.io) | >=10.0.0 | Pillow license | Copyright (c) 1997-2011 Secret Labs AB; 1995-2011 Fredrik Lundh; 2010- Jeffrey A. Clark (Alex) and contributors | 图片处理 |
 | [aiofiles](https://github.com/Tinche/aiofiles) | >=24.0.0 | Apache-2.0 | Copyright (c) Tin Tvrtković | 异步文件 I/O |
 | [trafilatura](https://trafilatura.readthedocs.io) | >=2.1.0 | Apache-2.0 | Copyright (c) Adrien Barbaresi | 网页正文抽取 |
+| [beautifulsoup4](https://www.crummy.com/software/BeautifulSoup/) | >=4.15.0 | MIT | Copyright (c) Leonard Richardson | HTML 解析（网页正文抽取辅助） |
 | [numpy](https://numpy.org) | >=2.0.0 | BSD-3-Clause | Copyright (c) 2005-2025 NumPy Developers | 数值计算 |
 | [pandas](https://pandas.pydata.org) | >=2.0.0 | BSD-3-Clause | Copyright (c) 2008-2011 AQR Capital Management, LLC, Lambda Foundry, Inc. and PyData Development Team; 2011-2026 Open source contributors | 数据表格读取与解析 |
 | [scipy](https://scipy.org) | >=1.14.0 | BSD-3-Clause | Copyright (c) 2001-2002 Enthought, Inc.; 2003- SciPy Developers | 统计检验 |
