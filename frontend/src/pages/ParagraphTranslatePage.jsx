@@ -23,6 +23,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Languages, Eye, Loader2, ListChecks, FolderOpen } from "lucide-react";
 import PageHeader from "@/components/PageHeader";
 import EmptyState from "@/components/EmptyState";
+import UndoRedoButtons from "@/components/UndoRedoButtons";
 import { api } from "@/api/index";
 import useParagraphCheck, { groupByFile } from "@/hooks/useParagraphCheck";
 import MarkerText from "@/components/MarkerText";
@@ -62,8 +63,8 @@ export default function ParagraphTranslatePage() {
 
   const {
     projectPath,
-    activeFile,
     workspaceId,
+    activeFile,
     texFiles,
     paragraphs: translateParagraphs,
     results: translateResults,
@@ -302,6 +303,11 @@ export default function ParagraphTranslatePage() {
                     <Eye />
                     {t("common:loadAndPreview")}
                   </Button>
+                  <UndoRedoButtons
+                    activeFile={activeFile}
+                    workspaceId={workspaceId}
+                    onAfterUndoRedo={handlePreview}
+                  />
                   <div className="flex-1" />
                   <div className="flex items-center gap-2">
                     <Label className="text-sm whitespace-nowrap">

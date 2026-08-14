@@ -28,7 +28,12 @@
     "noChanges": "No changes",
     "noChangesDesc": "No suggestions for this paragraph",
     "noContent": "No content to compare",
-    "applyChange": "Apply Change"
+    "applyChange": "Apply Change",
+    "undo": "Undo (Ctrl+Z)",
+    "redo": "Redo (Ctrl+Shift+Z)",
+    "undoConfirmTitle": "Undo last change?",
+    "undoConfirmDesc": "Revert this file to its state before the last change. Can be redone after undoing.",
+    "undoConfirmBtn": "Undo"
   },
   "pages": {
     "welcome": {
@@ -494,8 +499,6 @@
       "selectMainFile": "Select main .tex file",
       "compileBtn": "Auto Compile",
       "compileBtnLoading": "Compiling...",
-      "undo": "Undo (Ctrl+Z)",
-      "redo": "Redo (Ctrl+Shift+Z)",
       "diffHighlight": "Diff Highlight",
       "files": "Files",
       "closeProject": "Close Project",
@@ -517,9 +520,6 @@
       "closeConfirmTitle": "Close project?",
       "closeConfirmDesc": "Closing will clear all loaded paragraphs and check results. You'll need to reopen next time.",
       "closeConfirmBtn": "Close Project",
-      "undoConfirmTitle": "Undo last change?",
-      "undoConfirmDesc": "Revert this file to its state before the last change. Can be redone after undoing.",
-      "undoConfirmBtn": "Undo",
       "projectClosed": "Project closed",
       "projectOpened": "Project opened",
       "openFailed": "Failed to open project",

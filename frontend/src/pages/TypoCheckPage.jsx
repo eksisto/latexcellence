@@ -23,6 +23,7 @@ import { CheckCheck, Eye, Loader2, ListChecks, FolderOpen } from "lucide-react";
 import { api } from "@/api/index";
 import PageHeader from "@/components/PageHeader";
 import EmptyState from "@/components/EmptyState";
+import UndoRedoButtons from "@/components/UndoRedoButtons";
 import ProofDiff from "@/components/ProofDiff";
 import useParagraphCheck, { groupByFile } from "@/hooks/useParagraphCheck";
 import MarkerText from "@/components/MarkerText";
@@ -41,6 +42,7 @@ export default function TypoCheckPage() {
   const [confirmApplyAllOpen, setConfirmApplyAllOpen] = useState(false);
   const {
     projectPath,
+    workspaceId,
     activeFile,
     texFiles,
     paragraphs: typoParagraphs,
@@ -297,6 +299,13 @@ export default function TypoCheckPage() {
                       ? t("common:checking")
                       : t("pages:typoCheck.checkButton")}
                   </Button>
+                  <div className="ml-auto">
+                    <UndoRedoButtons
+                      activeFile={activeFile}
+                      workspaceId={workspaceId}
+                      onAfterUndoRedo={handlePreview}
+                    />
+                  </div>
                 </div>
                 {message && (
                   <p className="text-sm text-muted-foreground mt-2">

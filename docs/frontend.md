@@ -112,6 +112,7 @@ highlight.js 的按需注册与统一入口：
 | `EmptyState.jsx` | 共享空状态：细环图标 + 标题 + 描述 + 可选 CTA（无项目 / 恢复中 / 空结果） |
 | `ProofDiff.jsx` | 原文→修改后对照行：原文衬线删除线、改后加粗（`modified` 可传字符串或 ReactNode，术语检查传自定义 Input）；`code` prop（默认开启）将两侧切换为等宽字体 |
 | `ResultFilterBar.jsx` | 结果过滤工具栏（搜索框 + 类型下拉 + 段落跳转 + 重置） |
+| `UndoRedoButtons.jsx` | 可复用撤销/重做按钮组：内部使用 `useUndoRedo`，轮询 undo-status（页面不可见时暂停），支持 Ctrl+Z / Ctrl+Shift+Z / Ctrl+Y 快捷键与撤销确认弹窗；快捷键由组件级共享监听处理（仅最近挂载实例响应）；用于 workspace、逐段检查各页与参考文献管理（文献库） |
 | `ProgressBar.jsx` | 检查进度条组件 |
 | `UnlistedChanges.jsx` | 展示「模型修改了全文但未列出条目」（unlisted_changes）的琥珀色提示：`UnlistedChangesBadge`（卡片头标记）+ `UnlistedChangesBody`（全文预览 + 应用/忽略），typo_check / expression_opt 共用，全文经 MarkerText 渲染 |
 | `ColorField.jsx` | 颜色选择器组件 |
@@ -129,7 +130,7 @@ highlight.js 的按需注册与统一入口：
 | `useStyleModifyAgent.js` | 封装 style_modify 项目 Agent：创建/恢复/删除 session、SSE 生命周期、refinement、proposal、apply/undo、trace 查看导出和 `translateError()` 处理。 |
 | `useThemeManager.js` | 多主题自发现 hook，自动发现 `theme/` 目录下 CSS 文件。 |
 | `useTheme.js` | 暗/亮主题切换，支持 View Transitions API 平滑过渡。 |
-| `useUndoRedo.js` | 撤销/重做状态管理，轮询后端端点，支持键盘快捷键。 |
+| `useUndoRedo.js` | 撤销/重做状态管理：挂载、文件切换与操作后刷新后端 undo-status 状态；请求带 AbortController 取消（防止重叠与过期响应覆盖），撤销/重做执行期间跳过轮询。由 UndoRedoButtons 组件统一封装使用。 |
 | `useResultFilter.js` | 段落检查结果搜索/过滤/跳转，与 ResultFilterBar 配套使用。 |
 | `useFormatAnalysis.js` | BibManager Step 1：格式识别状态与处理器 |
 | `useMetadataExtraction.js` | BibManager Step 2：元数据提取状态与处理器（含 DOI 查询） |
@@ -153,12 +154,11 @@ highlight.js 的按需注册与统一入口：
 
 | 参数 | 类型 | 默认值 | 说明 |
 | --- | --- | --- | --- |
-| `filePath` | string | 必填 | 当前文件路径 |
+| `activeFile` | string | 必填 | 当前文件路径 |
 | `workspaceId` | string | 必填 | 工作区 ID |
-| `onUndoRedoComplete` | function | `null` | 撤销/重做完成后的回调 |
-| `pollInterval` | number | 1000 | 轮询间隔（ms） |
+| `onAfterUndoRedo` | function | `null` | 撤销/重做成功后的回调（如刷新段落/条目） |
 
-**返回值**：`canUndo`、`canRedo`、`handleUndo`、`handleRedo`。键盘快捷键：`Ctrl+Z`（撤销）、`Ctrl+Shift+Z` / `Ctrl+Y`（重做），输入框/文本域中不拦截。
+**返回值**：`canUndo`、`canRedo`、`busy`、`handleUndo`、`handleRedo`、`refresh`。页面级按钮推荐直接使用 `UndoRedoButtons` 组件（自带 2.5s 状态轮询，页面不可见时暂停；快捷键与确认弹窗）。
 
 ### `useResultFilter` 返回值
 

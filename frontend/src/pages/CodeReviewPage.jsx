@@ -28,6 +28,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Eye, ListChecks, Loader2, Search, FolderOpen } from "lucide-react";
 import PageHeader from "@/components/PageHeader";
 import EmptyState from "@/components/EmptyState";
+import UndoRedoButtons from "@/components/UndoRedoButtons";
 import React from "react";
 import { diffLines } from "diff";
 import { toast } from "sonner";
@@ -392,6 +393,7 @@ export default function CodeReviewPage() {
   );
   const {
     projectPath,
+    workspaceId,
     activeFile,
     texFiles,
     paragraphs: codeReviewParagraphs,
@@ -556,6 +558,13 @@ export default function CodeReviewPage() {
                       ? t("pages:code_review.llmRequesting")
                       : t("pages:code_review.start")}
                   </Button>
+                  <div className="ml-auto">
+                    <UndoRedoButtons
+                      activeFile={activeFile}
+                      workspaceId={workspaceId}
+                      onAfterUndoRedo={handlePreview}
+                    />
+                  </div>
                 </div>
                 {message && (
                   <p className="text-sm text-muted-foreground mt-2">

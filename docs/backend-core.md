@@ -698,6 +698,7 @@ Prefix: `/api/project`, Tag: `project`
 | POST | `/set-main-file` | 手动设置项目主文件 |
 | POST | `/undo` / `/redo` | 撤销/重做 |
 | GET | `/can-undo` / `/can-redo` | 检查撤销/重做状态 |
+| GET | `/undo-status` | 一次返回 `can_undo` 与 `can_redo`（前端轮询用，减半请求数） |
 | DELETE | `/workspace/{workspace_id}` | 关闭工作区 |
 | GET | `/workspaces` | 列出所有活跃工作区 |
 

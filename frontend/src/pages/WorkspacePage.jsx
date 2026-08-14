@@ -36,15 +36,13 @@ import {
   ChevronDown,
   ChevronRight,
   FileDiff,
-  Undo2,
-  Redo2,
   FileTypeCorner,
 } from "lucide-react";
 import { api } from "@/api/index";
 import { translateError } from "@/utils/errorMessages";
 import useStore from "@/store/useStore";
 import useEnabledFeatures from "@/hooks/useEnabledFeatures";
-import useUndoRedo from "@/hooks/useUndoRedo";
+import UndoRedoButtons from "@/components/UndoRedoButtons";
 import ProjectExplorer from "@/components/ProjectExplorer";
 import PageHeader from "@/components/PageHeader";
 import CodeBlock from "@/components/CodeBlock";
@@ -95,7 +93,6 @@ export default function WorkspacePage() {
   const [error, setError] = useState(null);
   const [showRawOutput, setShowRawOutput] = useState(false);
   const [confirmCloseOpen, setConfirmCloseOpen] = useState(false);
-  const [confirmUndoOpen, setConfirmUndoOpen] = useState(false);
   const [folderPickerOpen, setFolderPickerOpen] = useState(false);
   const restoredRef = useRef(false);
 
@@ -252,38 +249,6 @@ export default function WorkspacePage() {
     }
   }, [activeFile]);
 
-  const {
-    canUndo,
-    canRedo,
-    busy: undoBusy,
-    handleUndo,
-    handleRedo,
-  } = useUndoRedo(activeFile, workspaceId, reloadActiveFileParagraphs);
-
-  // 键盘快捷键：Ctrl+Z 撤销、Ctrl+Shift+Z / Ctrl+Y 重做
-  // 输入框/文本域中不拦截，保留原生 undo 行为
-  useEffect(() => {
-    if (!projectPath) return;
-    const onKey = (e) => {
-      const target = e.target;
-      const tag = target?.tagName;
-      const isEditable =
-        tag === "INPUT" || tag === "TEXTAREA" || target?.isContentEditable;
-      if (isEditable) return;
-      if (!(e.ctrlKey || e.metaKey)) return;
-      const key = e.key.toLowerCase();
-      if (key === "z" && !e.shiftKey) {
-        e.preventDefault();
-        handleUndo();
-      } else if ((key === "z" && e.shiftKey) || key === "y") {
-        e.preventDefault();
-        handleRedo();
-      }
-    };
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, [projectPath, handleUndo, handleRedo]);
-
   return (
     <div className="min-h-screen p-8 animate-tab-enter">
       <div className="max-w-6xl mx-auto">
@@ -383,38 +348,12 @@ export default function WorkspacePage() {
                 </Button>
               )}
               {activeFile && (
-                <div className="flex items-center gap-1 ml-auto">
-                  <Tooltip>
-                    <TooltipTrigger
-                      render={
-                        <Button
-                          variant="outline"
-                          size="icon"
-                          onClick={() => setConfirmUndoOpen(true)}
-                          disabled={!canUndo || undoBusy}
-                        />
-                      }
-                    >
-                      <Undo2 />
-                    </TooltipTrigger>
-                    <TooltipContent>{t("pages:workspace.undo")}</TooltipContent>
-                  </Tooltip>
-                  <Tooltip>
-                    <TooltipTrigger
-                      render={
-                        <Button
-                          variant="outline"
-                          size="icon"
-                          onClick={handleRedo}
-                          disabled={!canRedo || undoBusy}
-                        />
-                      }
-                    >
-                      <Redo2 />
-                    </TooltipTrigger>
-                    <TooltipContent>{t("pages:workspace.redo")}</TooltipContent>
-                  </Tooltip>
-                </div>
+                <UndoRedoButtons
+                  activeFile={activeFile}
+                  workspaceId={workspaceId}
+                  onAfterUndoRedo={reloadActiveFileParagraphs}
+                  className="ml-auto"
+                />
               )}
               {enabledFeatures?.git_diff !== false && (
                 <Button
@@ -648,17 +587,6 @@ export default function WorkspacePage() {
         confirmText={t("pages:workspace.closeConfirmBtn")}
         variant="destructive"
         onConfirm={handleCloseProject}
-      />
-      <ConfirmDialog
-        open={confirmUndoOpen}
-        onOpenChange={setConfirmUndoOpen}
-        title={t("pages:workspace.undoConfirmTitle")}
-        description={t("pages:workspace.undoConfirmDesc")}
-        confirmText={t("pages:workspace.undoConfirmBtn")}
-        onConfirm={async () => {
-          await handleUndo();
-          setConfirmUndoOpen(false);
-        }}
       />
       <FolderPickerDialog
         open={folderPickerOpen}

@@ -23,6 +23,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { CheckCheck, Eye, Loader2, ListChecks, FolderOpen } from "lucide-react";
 import PageHeader from "@/components/PageHeader";
 import EmptyState from "@/components/EmptyState";
+import UndoRedoButtons from "@/components/UndoRedoButtons";
 import ProofDiff from "@/components/ProofDiff";
 import { api } from "@/api/index";
 import useParagraphCheck, { groupByFile } from "@/hooks/useParagraphCheck";
@@ -41,6 +42,7 @@ export default function TerminologyCheckPage() {
   const [customReplacements, setCustomReplacements] = useState({});
   const {
     projectPath,
+    workspaceId,
     activeFile,
     texFiles,
     paragraphs: terminologyParagraphs,
@@ -55,7 +57,6 @@ export default function TerminologyCheckPage() {
     resolveInput,
     setResolveInput,
     activeFiles,
-    workspaceId,
     operationId,
     handlePreview,
     handleCheck,
@@ -456,6 +457,13 @@ export default function TerminologyCheckPage() {
                       ? t("common:checking")
                       : t("pages:terminologyCheck.checkButton")}
                   </Button>
+                  <div className="ml-auto">
+                    <UndoRedoButtons
+                      activeFile={activeFile}
+                      workspaceId={workspaceId}
+                      onAfterUndoRedo={handlePreview}
+                    />
+                  </div>
                 </div>
                 {message && (
                   <p className="text-sm text-muted-foreground mt-2">

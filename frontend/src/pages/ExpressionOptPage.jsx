@@ -35,6 +35,7 @@ import {
 import { api } from "@/api/index";
 import PageHeader from "@/components/PageHeader";
 import EmptyState from "@/components/EmptyState";
+import UndoRedoButtons from "@/components/UndoRedoButtons";
 import ProofDiff from "@/components/ProofDiff";
 import useParagraphCheck, { groupByFile } from "@/hooks/useParagraphCheck";
 import MarkerText from "@/components/MarkerText";
@@ -52,6 +53,7 @@ export default function ExpressionOptPage() {
   const { t } = useTranslation(["pages", "common"]);
   const {
     projectPath,
+    workspaceId,
     activeFile,
     texFiles,
     paragraphs: expressionParagraphs,
@@ -337,6 +339,13 @@ export default function ExpressionOptPage() {
                       ? t("pages:expressionOpt.optimizing")
                       : t("pages:expressionOpt.startOptimize")}
                   </Button>
+                  <div className="ml-auto">
+                    <UndoRedoButtons
+                      activeFile={activeFile}
+                      workspaceId={workspaceId}
+                      onAfterUndoRedo={handlePreview}
+                    />
+                  </div>
                 </div>
                 {message && (
                   <p className="text-sm text-muted-foreground mt-2">

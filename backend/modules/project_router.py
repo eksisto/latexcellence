@@ -308,6 +308,19 @@ async def can_redo(
     return {"can_redo": project.can_redo(file_path)}
 
 
+@router.get("/undo-status")
+async def undo_status(
+    file_path: str = Query(...),
+    workspace_id: str = Query(..., description="工作区唯一标识符"),
+):
+    """一次返回指定文件的可撤销/可重做状态，供前端轮询减半请求。"""
+    project = get_project_manager_for_workspace(workspace_id)
+    return {
+        "can_undo": project.can_undo(file_path),
+        "can_redo": project.can_redo(file_path),
+    }
+
+
 @router.delete("/workspace/{workspace_id}")
 async def close_workspace(workspace_id: str):
     """关闭指定工作区，释放相关资源。"""

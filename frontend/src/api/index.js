@@ -120,6 +120,8 @@ async function request(url, options = {}) {
       ...options,
     });
   } catch (e) {
+    // 保留取消信号（AbortController）的原始错误，让调用方区分“主动取消”和“真的失败”
+    if (e?.name === "AbortError") throw e;
     throw new Error(translateError(e.message || "Request timed out"));
   }
   if (!res.ok) {
@@ -188,19 +190,13 @@ export const api = {
         method: "POST",
         body: JSON.stringify({ file_path: filePath }),
       }),
-    canUndo: (filePath, workspaceId) =>
+    undoStatus: (filePath, workspaceId, options = {}) =>
       request(
         appendWs(
-          `/project/can-undo?file_path=${encodeURIComponent(filePath)}`,
+          `/project/undo-status?file_path=${encodeURIComponent(filePath)}`,
           workspaceId,
         ),
-      ),
-    canRedo: (filePath, workspaceId) =>
-      request(
-        appendWs(
-          `/project/can-redo?file_path=${encodeURIComponent(filePath)}`,
-          workspaceId,
-        ),
+        options,
       ),
     setMainFile: (filePath, workspaceId) =>
       request(appendWs("/project/set-main-file", workspaceId), {

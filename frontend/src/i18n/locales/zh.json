@@ -28,7 +28,12 @@
     "noChanges": "无修改",
     "noChangesDesc": "当前段落没有修改建议",
     "noContent": "无内容可比较",
-    "applyChange": "应用修改"
+    "applyChange": "应用修改",
+    "undo": "撤销（Ctrl+Z）",
+    "redo": "重做（Ctrl+Shift+Z）",
+    "undoConfirmTitle": "撤销最近一次修改？",
+    "undoConfirmDesc": "将该文件回退到上一次修改前的状态。撤销后可通过重做恢复。",
+    "undoConfirmBtn": "撤销"
   },
   "pages": {
     "welcome": {
@@ -494,8 +499,6 @@
       "selectMainFile": "选择主 .tex 文件",
       "compileBtn": "自动编译",
       "compileBtnLoading": "编译中...",
-      "undo": "撤销（Ctrl+Z）",
-      "redo": "重做（Ctrl+Shift+Z）",
       "diffHighlight": "差异高亮",
       "files": "文件",
       "closeProject": "关闭项目",
@@ -517,9 +520,6 @@
       "closeConfirmTitle": "关闭项目？",
       "closeConfirmDesc": "关闭后将清空当前已加载的段落和检查结果，下次需重新打开。",
       "closeConfirmBtn": "关闭项目",
-      "undoConfirmTitle": "撤销最近一次修改？",
-      "undoConfirmDesc": "将该文件回退到上一次修改前的状态。撤销后可通过重做恢复。",
-      "undoConfirmBtn": "撤销",
       "projectClosed": "项目已关闭",
       "projectOpened": "项目已打开",
       "openFailed": "打开项目失败",

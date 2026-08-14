@@ -38,6 +38,7 @@ import {
   Filter,
 } from "lucide-react";
 import ConfirmDialog from "@/components/ConfirmDialog";
+import UndoRedoButtons from "@/components/UndoRedoButtons";
 import { api } from "@/api/index";
 import useStore from "@/store/useStore";
 
@@ -99,6 +100,11 @@ export default function BibManagerLibrary() {
       }
     },
     [workspaceId, t],
+  );
+
+  const handleAfterUndoRedo = useCallback(
+    () => loadData(selectedBibFile),
+    [selectedBibFile, loadData],
   );
 
   useEffect(() => {
@@ -430,6 +436,11 @@ export default function BibManagerLibrary() {
                 <span className="ml-1">×</span>
               </Badge>
             )}
+            <UndoRedoButtons
+              activeFile={selectedBibFile}
+              workspaceId={workspaceId}
+              onAfterUndoRedo={handleAfterUndoRedo}
+            />
             <Button
               variant="outline"
               size="sm"
