@@ -15,11 +15,10 @@ import {
 } from "@/components/ui/tooltip";
 import { Button } from "@/components/ui/button";
 import { Toaster } from "@/components/ui/sonner";
-import { Loader2, SquareKanban } from "lucide-react";
+import { Loader2, Settings, SquareKanban } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import ThemeToggle from "@/components/ThemeToggle";
 import ThemeSwitcher from "@/components/ThemeSwitcher";
-import SettingsDialog from "@/components/SettingsDialog";
 import useFavicon from "./hooks/useFavicon";
 
 const WelcomePage = lazy(() => import("./pages/WelcomePage"));
@@ -40,6 +39,7 @@ const ParagraphTranslatePage = lazy(
 const WritingChatPage = lazy(() => import("./pages/WritingChatPage"));
 const BibManagerPage = lazy(() => import("./pages/BibManagerPage"));
 const PlotGenPage = lazy(() => import("./pages/PlotGenPage"));
+const SettingsDialog = lazy(() => import("@/components/SettingsDialog"));
 
 const bgSvg = (
   <svg
@@ -111,7 +111,21 @@ const AppToolbar = memo(function AppToolbar() {
       <WorkspaceShortcut />
       <ThemeSwitcher />
       <ThemeToggle />
-      <SettingsDialog />
+      <Suspense
+        fallback={
+          <Button
+            variant="ghost"
+            size="icon"
+            disabled
+            aria-hidden="true"
+            tabIndex={-1}
+          >
+            <Settings className="size-5" />
+          </Button>
+        }
+      >
+        <SettingsDialog />
+      </Suspense>
     </div>
   );
 });

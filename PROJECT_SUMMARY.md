@@ -127,9 +127,11 @@ latexcellence/
 │       │   ├── writing-chat/        # 写作聊天子 hooks（sessions/assistants/captcha/sse/utils）
 │       │   └── bib-manager/         # 参考文献管理子 hooks（format_analysis/metadata_extraction/bibtex_generation/bib_file_save/latex_generation）
 │       ├── components/              # 共享组件 + ui 基座组件
+│       │   └── settings/            # 设置对话框分区配置组件
 │       ├── theme/                   # 主题 CSS + useThemeManager.js
 │       ├── fonts/                   # 字体加载（文楷 / Noto Sans SC / JetBrains Mono / STIX Two Text）
-│       ├── api/index.js             # 统一 API 层
+│       ├── api/index.js             # 统一 API 层（接口分组封装）
+│       ├── api/connection.js        # 后端连接配置（基地址/令牌/认证头/连接测试）
 │       ├── utils/                   # 前端工具（errorMessages.js 错误翻译 / formulaWrap.js 公式包裹重写 / highlight.js 高亮入口）
 │       ├── styles/                  # 前端样式（code-highlight.css：高亮颜色独立文件，按需引入）
 │       └── store/useStore.js        # Zustand 全局状态

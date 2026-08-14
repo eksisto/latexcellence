@@ -59,6 +59,8 @@ WelcomePage 采用「标题页 + 点线目录」构图：字标、slogan、「�
 
 所有请求通过 `request(url, options)`，自动处理 Content-Type、BASE_URL 前缀、错误翻译。FormData 请求通过 `requestForm(url, formData, method)`。需要工作区隔离的端点通过 `appendWs(url, workspaceId)` 拼接 `workspace_id` 参数。
 
+后端连接配置（API 基地址 / 访问令牌的运行时读写、认证请求头、EventSource 令牌追加、连接测试）集中在 `api/connection.js`，`api/index.js` 从该模块导入并保持兼容导出；纯 URL 计算（`normalizeApiBase` / `appendTokenToUrl` / `resolveUrlPath`）仍位于 `utils/apiUrl.js`，可被 `node --test` 直接单测。
+
 API 按功能分组暴露（health、config、project、typoCheck、expressionOpt、terminologyCheck、paragraphTranslate、formulaOCR、tableOCR、templateGen、codeReview、compile、gitDiff、styleModify、formatConverter、bibManager、writingChat），LLM 相关接口自动注入 `language` 参数。`templateGen.generate` 通过 `fetch` reader 解析 SSE 流（与 `writingChat.send` 同模式），实时推送 `plan`/`tool_call`/`tool_result`/`compile`/`warning`/`done`/`error` 事件；`templateGen.download` 支持下载整个沙箱为 ZIP 文件；`templateGen.trace` / `templateGen.downloadTrace` 支持查看与导出 Agent 运行追踪日志。`styleModify.agent` 分组提供 run、refine、session、trace、apply、undo、delete 接口，run/refine 使用 SSE，其余使用 JSON。
 
 ## 工具模块
@@ -100,7 +102,9 @@ highlight.js 的按需注册与统一入口：
 | `ProjectExplorer.jsx` | 递归文件树：目录展开/折叠，文件选择 |
 | `PDFPreview.jsx` | iframe 嵌入 PDF 预览 |
 | `PromptEditor.jsx` | 自定义提示词编辑框 |
-| `SettingsDialog.jsx` | 完整设置对话框，实时读写 config.json，包括联网搜索和学术研究工具开关 |
+| `ConnectionPanel.jsx` | 后端连接面板：编辑 API 基地址 / 访问令牌并测试连接，打开对话框时自动探测一次连接状态 |
+| `settings/` 分区组件 | 设置对话框各配置分区（Server / Security / LLM / Features / Function Calling / HTTP / Logging / Language）与共享原语（`ConfigSection` / `CheckboxField`） |
+| `SettingsDialog.jsx` | 设置对话框外壳：加载/保存 config.json、后端连接面板与各配置分区组装；功能开关保存后同步全局 Store |
 | `FolderPickerDialog.jsx` | 文件夹选择对话框，逐级进入子文件夹 |
 | `MarkdownRenderer.jsx` | 基于 react-markdown + remark + rehype-katex |
 | `ThemeToggle.jsx` | 亮/暗模式切换 |

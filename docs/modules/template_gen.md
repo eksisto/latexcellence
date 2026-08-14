@@ -318,7 +318,7 @@ Prefix: `/api/template-gen`, Tag: `template_gen`
 - **Walking Skeleton 工作流**：先写最小可编译骨架并编译通过，再逐层丰富
   内容，禁止一次性写完整套复杂宏再编译。
 - **输出 token 上限放宽**：全局默认 `llm.max_tokens` 由 4096 提至 8192
-  （`backend/core/config.py` / `config.example.json` / SettingsDialog 同步）；
+  （`backend/core/config.py` / `config.example.json` / 设置分区组件同步）；
   template_gen 仍保留 `max(cfg.llm.max_tokens, 8192)` 下限，即使用户把全局
   `max_tokens` 调得很小，`.cls` 等大文件在工具参数尾部也不会被截断导致
   花括号不配平。
@@ -327,7 +327,7 @@ Prefix: `/api/template-gen`, Tag: `template_gen`
 - **校验错误定位**：`latex_json_guard.check_latex_text()` 的花括号不配平
   错误现在返回首个问题位置、行号与上下文片段，便于 LLM 直接修复。
 - **轮次上限**：`features.template_gen.agent_max_rounds` 由 40 提至 50
-  （`config.json` / `config.example.json` / SettingsDialog 上限同步）。
+  （`config.json` / `config.example.json` / 设置分区组件上限同步）。
 
 评测数据（`tools/templategen_opt/results/`）显示：加固后简单场景
 （如 `requirements`）可在 30 轮内编译通过并获视觉 8.5/10；tjuthesis 复刻

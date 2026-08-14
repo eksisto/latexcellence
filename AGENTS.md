@@ -127,7 +127,7 @@ LLM 输出的 LaTeX 文本（经 JSON 传输或写盘前）**必须**使用 `bac
 - **代码风格**：遵循 Prettier 默认配置。
 - **页面文字**：前端页面使用中文。
 - **配置同步规范**：当修改 `config.json` 配置文件时（如新增配置项、删除配置项、修改配置结构），**必须**同步更新前端相关代码：
-  1. 更新 `frontend/src/components/SettingsDialog.jsx` 中的设置 UI，确保用户可以通过界面修改新配置项。
+  1. 更新 `frontend/src/components/settings/` 下的设置分区组件（由 `SettingsDialog.jsx` 组装），确保用户可以通过界面修改新配置项。
   2. 更新 `SettingsDialog.jsx` 的 `handleSave` 函数中 `setEnabledFeatures` 调用，确保新增的功能开关能实时同步到全局状态。
   3. 更新 `frontend/src/pages/WelcomePage.jsx` 中的 `featureGroups`，确保新功能在首页有点线目录条目展示。
   4. 更新后端 `backend/core/config.py` 中的 `AppConfig` 模型，确保 Pydantic 校验与 config.json 结构一致。

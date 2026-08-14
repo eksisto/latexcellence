@@ -15,67 +15,17 @@
 import { translateError } from "@/utils/errorMessages";
 import { getUiLanguage } from "@/i18n";
 import {
-  appendTokenToUrl,
-  normalizeApiBase,
-  resolveUrlPath,
-} from "@/utils/apiUrl";
+  appendToken,
+  authHeaders,
+  checkConnection,
+  getApiBase,
+  getApiToken,
+  resolveUrl,
+  setApiConnection,
+} from "./connection";
 
-const DEFAULT_API_BASE = normalizeApiBase(import.meta.env.VITE_API_BASE_URL);
-const STORAGE_BASE_KEY = "latexcellence_api_base";
-const STORAGE_TOKEN_KEY = "latexcellence_api_token";
-const TOKEN_HEADER = "X-Latexcellence-Token";
-
-/** 当前后端 API 基地址（设置页写入 localStorage，其次构建时环境变量） */
-export function getApiBase() {
-  try {
-    return normalizeApiBase(
-      localStorage.getItem(STORAGE_BASE_KEY),
-      DEFAULT_API_BASE,
-    );
-  } catch {
-    return DEFAULT_API_BASE;
-  }
-}
-
-/** 当前访问令牌（后端未启用令牌校验时为空字符串） */
-export function getApiToken() {
-  try {
-    return localStorage.getItem(STORAGE_TOKEN_KEY) || "";
-  } catch {
-    return "";
-  }
-}
-
-/** 保存后端连接配置（设置页调用，立即生效） */
-export function setApiConnection(apiBase, apiToken) {
-  try {
-    localStorage.setItem(
-      STORAGE_BASE_KEY,
-      normalizeApiBase(apiBase, DEFAULT_API_BASE),
-    );
-    localStorage.setItem(STORAGE_TOKEN_KEY, apiToken || "");
-  } catch {
-    // 隐私模式等场景 localStorage 不可用，忽略
-  }
-}
-
-/** 合并访问令牌请求头（未配置令牌时保持原有 headers） */
-function authHeaders(extra = {}) {
-  const headers = { ...extra };
-  const token = getApiToken();
-  if (token) headers[TOKEN_HEADER] = token;
-  return headers;
-}
-
-/** 为无法自定义请求头的 URL（EventSource 等）追加令牌查询参数 */
-function appendToken(url) {
-  return appendTokenToUrl(url, getApiToken());
-}
-
-/** 将后端返回的相对路径解析为完整地址（不追加令牌，实现见 utils/apiUrl.js） */
-export function resolveUrl(path) {
-  return resolveUrlPath(path, getApiBase(), window.location.origin);
-}
+// 兼容导出：连接相关能力统一实现在 ./connection，外部仍可经 "@/api" 引入
+export { getApiBase, getApiToken, resolveUrl, setApiConnection };
 
 /**
  * 通用 FormData 请求函数（用于文件上传场景）
@@ -216,37 +166,7 @@ export const api = {
   health: () => request("/health"),
   configStatus: () => request("/config/status"),
   /** 连接测试：health 验证可达性，config/status 验证令牌是否有效 */
-  checkConnection: async (apiBase, apiToken) => {
-    const base = (apiBase || getApiBase()).replace(/\/+$/, "");
-    const headers = { "Content-Type": "application/json" };
-    if (apiToken) headers[TOKEN_HEADER] = apiToken;
-    try {
-      const healthRes = await fetch(`${base}/health`, { headers });
-      if (!healthRes.ok) {
-        const err = await healthRes
-          .json()
-          .catch(() => ({ detail: healthRes.statusText }));
-        throw new Error(
-          translateError(err.detail || `HTTP ${healthRes.status}`),
-        );
-      }
-      const health = await healthRes.json();
-      const statusRes = await fetch(`${base}/config/status`, { headers });
-      if (!statusRes.ok) {
-        const err = await statusRes
-          .json()
-          .catch(() => ({ detail: statusRes.statusText }));
-        throw new Error(
-          translateError(err.detail || `HTTP ${statusRes.status}`),
-        );
-      }
-      const status = await statusRes.json();
-      return { ...health, ...status };
-    } catch (e) {
-      // fetch 网络错误（Failed to fetch / Load failed 等）同样需要翻译
-      throw new Error(translateError(e.message || "Request timed out"));
-    }
-  },
+  checkConnection,
 
   /* ---- 配置管理 ---- */
   config: {
