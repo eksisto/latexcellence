@@ -193,9 +193,8 @@ export default function WorkspacePage() {
       const data = await api.compile.run(mainFile, workspaceId);
       setCompileResult(data);
       if (data.success) {
-        setPdfUrl(
-          `${api.compile.pdfUrl(mainFile, workspaceId)}&t=${Date.now()}`,
-        );
+        const url = await api.compile.pdfBlobUrl(mainFile, workspaceId);
+        setPdfUrl(url);
         toast.success(t("pages:workspace.compileSuccessToast"));
       } else {
         toast.error(t("pages:workspace.compileFailedToast"), {

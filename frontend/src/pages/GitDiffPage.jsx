@@ -41,7 +41,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import PDFPreview from "@/components/PDFPreview";
-import { api } from "@/api/index";
+import { api, downloadBlob, fetchBlobUrl, resolveUrl } from "@/api/index";
 import { cn } from "@/lib/utils";
 import useStore from "@/store/useStore";
 import { translateError } from "@/utils/errorMessages";
@@ -107,6 +107,16 @@ export default function GitDiffPage() {
   const [error, setError] = useState("");
   const [result, setResult] = useState(null);
   const [pdfUrl, setPdfUrl] = useState("");
+  // blob URL 替换/清空时在提交后主动释放，避免 PDF 预览内存泄漏；
+  // 释放放在 effect 里而不是 setState updater 中，保持 updater 纯净
+  const prevPdfUrlRef = useRef("");
+  useEffect(() => {
+    const prev = prevPdfUrlRef.current;
+    prevPdfUrlRef.current = pdfUrl;
+    if (prev && prev !== pdfUrl && prev.startsWith("blob:")) {
+      URL.revokeObjectURL(prev);
+    }
+  }, [pdfUrl]);
   const [pdfFullscreen, setPdfFullscreen] = useState(false);
   const [showRawOutput, setShowRawOutput] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(false);
@@ -241,7 +251,8 @@ export default function GitDiffPage() {
       );
       setResult(data);
       if (data.success && data.pdf_url) {
-        setPdfUrl(`${data.pdf_url}?t=${Date.now()}`);
+        const url = await fetchBlobUrl(resolveUrl(data.pdf_url));
+        setPdfUrl(url);
       }
     } catch (err) {
       setError(err.message);
@@ -722,13 +733,11 @@ export default function GitDiffPage() {
                   <Button
                     variant="outline"
                     size="sm"
-                    nativeButton={false}
-                    render={
-                      <a
-                        href={result.pdf_url}
-                        download="diff-highlight.pdf"
-                        rel="noreferrer"
-                      />
+                    onClick={() =>
+                      downloadBlob(
+                        resolveUrl(result.pdf_url),
+                        "diff-highlight.pdf",
+                      ).catch((e) => setError(e.message))
                     }
                   >
                     <Download />

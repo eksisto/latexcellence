@@ -2,18 +2,80 @@
  * API 层 —— 封装所有后端接口调用
  *
  * 设计说明：
- * - BASE_URL 固定为 "/api"，开发时由 Vite 代理到后端，生产时同域访问
+ * - 后端地址运行时可配置，优先级：设置页（localStorage）→ VITE_API_BASE_URL → 默认同源 /api
+ * - 访问令牌：后端配置 security.access_token 后，所有请求必须携带
+ *   X-Latexcellence-Token 请求头；下载与 PDF/图片预览通过 fetch + Blob 完成，
+ *   只有 EventSource 等确实无法自定义请求头的流式场景才在 URL 上追加 ?token=
  * - request() 自动处理 JSON 序列化/反序列化和错误提取
  * - 后端英文错误经 translateError() 统一翻译为中文后抛出
  * - formulaOCR 模块使用 FormData（图片上传），不走 JSON 请求
- * - typoCheck 的 stream() 返回 SSE URL 字符串，供 EventSource 消费
  * - 所有需要工作区隔离的端点均携带 workspace_id 查询参数
  */
 
 import { translateError } from "@/utils/errorMessages";
 import { getUiLanguage } from "@/i18n";
+import {
+  appendTokenToUrl,
+  normalizeApiBase,
+  resolveUrlPath,
+} from "@/utils/apiUrl";
 
-const BASE_URL = "/api";
+const DEFAULT_API_BASE = normalizeApiBase(import.meta.env.VITE_API_BASE_URL);
+const STORAGE_BASE_KEY = "latexcellence_api_base";
+const STORAGE_TOKEN_KEY = "latexcellence_api_token";
+const TOKEN_HEADER = "X-Latexcellence-Token";
+
+/** 当前后端 API 基地址（设置页写入 localStorage，其次构建时环境变量） */
+export function getApiBase() {
+  try {
+    return normalizeApiBase(
+      localStorage.getItem(STORAGE_BASE_KEY),
+      DEFAULT_API_BASE,
+    );
+  } catch {
+    return DEFAULT_API_BASE;
+  }
+}
+
+/** 当前访问令牌（后端未启用令牌校验时为空字符串） */
+export function getApiToken() {
+  try {
+    return localStorage.getItem(STORAGE_TOKEN_KEY) || "";
+  } catch {
+    return "";
+  }
+}
+
+/** 保存后端连接配置（设置页调用，立即生效） */
+export function setApiConnection(apiBase, apiToken) {
+  try {
+    localStorage.setItem(
+      STORAGE_BASE_KEY,
+      normalizeApiBase(apiBase, DEFAULT_API_BASE),
+    );
+    localStorage.setItem(STORAGE_TOKEN_KEY, apiToken || "");
+  } catch {
+    // 隐私模式等场景 localStorage 不可用，忽略
+  }
+}
+
+/** 合并访问令牌请求头（未配置令牌时保持原有 headers） */
+function authHeaders(extra = {}) {
+  const headers = { ...extra };
+  const token = getApiToken();
+  if (token) headers[TOKEN_HEADER] = token;
+  return headers;
+}
+
+/** 为无法自定义请求头的 URL（EventSource 等）追加令牌查询参数 */
+function appendToken(url) {
+  return appendTokenToUrl(url, getApiToken());
+}
+
+/** 将后端返回的相对路径解析为完整地址（不追加令牌，实现见 utils/apiUrl.js） */
+export function resolveUrl(path) {
+  return resolveUrlPath(path, getApiBase(), window.location.origin);
+}
 
 /**
  * 通用 FormData 请求函数（用于文件上传场景）
@@ -25,7 +87,11 @@ const BASE_URL = "/api";
 async function requestForm(url, formData, method = "POST") {
   let res;
   try {
-    res = await fetch(`${BASE_URL}${url}`, { method, body: formData });
+    res = await fetch(`${getApiBase()}${url}`, {
+      method,
+      body: formData,
+      headers: authHeaders(),
+    });
   } catch (e) {
     throw new Error(translateError(e.message || "Request timed out"));
   }
@@ -86,8 +152,18 @@ async function consumeSse(res, onEvent, onError) {
  * @param {string} url  下载地址
  * @param {string} fallbackName  无 Content-Disposition 时的兜底文件名
  */
-async function downloadBlob(url, fallbackName) {
-  const res = await fetch(url);
+/** 以带认证头的 fetch 获取二进制资源，返回临时 blob URL（调用方负责 revoke） */
+export async function fetchBlobUrl(url) {
+  const res = await fetch(url, { headers: authHeaders() });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }));
+    throw new Error(translateError(err.detail || `HTTP ${res.status}`));
+  }
+  return URL.createObjectURL(await res.blob());
+}
+
+export async function downloadBlob(url, fallbackName) {
+  const res = await fetch(url, { headers: authHeaders() });
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: res.statusText }));
     throw new Error(translateError(err.detail || `HTTP ${res.status}`));
@@ -113,11 +189,15 @@ async function downloadBlob(url, fallbackName) {
  * @returns {Promise<object>} 解析后的 JSON 响应
  */
 async function request(url, options = {}) {
+  const { headers: optionHeaders, ...restOptions } = options;
   let res;
   try {
-    res = await fetch(`${BASE_URL}${url}`, {
-      headers: { "Content-Type": "application/json", ...options.headers },
-      ...options,
+    res = await fetch(`${getApiBase()}${url}`, {
+      ...restOptions,
+      headers: authHeaders({
+        "Content-Type": "application/json",
+        ...optionHeaders,
+      }),
     });
   } catch (e) {
     // 保留取消信号（AbortController）的原始错误，让调用方区分“主动取消”和“真的失败”
@@ -135,6 +215,38 @@ export const api = {
   /* ---- 系统 ---- */
   health: () => request("/health"),
   configStatus: () => request("/config/status"),
+  /** 连接测试：health 验证可达性，config/status 验证令牌是否有效 */
+  checkConnection: async (apiBase, apiToken) => {
+    const base = (apiBase || getApiBase()).replace(/\/+$/, "");
+    const headers = { "Content-Type": "application/json" };
+    if (apiToken) headers[TOKEN_HEADER] = apiToken;
+    try {
+      const healthRes = await fetch(`${base}/health`, { headers });
+      if (!healthRes.ok) {
+        const err = await healthRes
+          .json()
+          .catch(() => ({ detail: healthRes.statusText }));
+        throw new Error(
+          translateError(err.detail || `HTTP ${healthRes.status}`),
+        );
+      }
+      const health = await healthRes.json();
+      const statusRes = await fetch(`${base}/config/status`, { headers });
+      if (!statusRes.ok) {
+        const err = await statusRes
+          .json()
+          .catch(() => ({ detail: statusRes.statusText }));
+        throw new Error(
+          translateError(err.detail || `HTTP ${statusRes.status}`),
+        );
+      }
+      const status = await statusRes.json();
+      return { ...health, ...status };
+    } catch (e) {
+      // fetch 网络错误（Failed to fetch / Load failed 等）同样需要翻译
+      throw new Error(translateError(e.message || "Request timed out"));
+    }
+  },
 
   /* ---- 配置管理 ---- */
   config: {
@@ -236,7 +348,9 @@ export const api = {
         body: JSON.stringify(data),
       }),
     stream: (workspaceId, filePath, resolveInput = false) =>
-      `${BASE_URL}/typo-check/stream/${encodeURIComponent(workspaceId)}?file_path=${encodeURIComponent(filePath)}&resolve_input=${resolveInput}&language=${getUiLanguage()}`,
+      appendToken(
+        `${getApiBase()}/typo-check/stream/${encodeURIComponent(workspaceId)}?file_path=${encodeURIComponent(filePath)}&resolve_input=${resolveInput}&language=${getUiLanguage()}`,
+      ),
   },
 
   /* ---- 表达优化 ---- */
@@ -259,7 +373,9 @@ export const api = {
         body: JSON.stringify(data),
       }),
     stream: (workspaceId, filePath, resolveInput = false) =>
-      `${BASE_URL}/expression-opt/stream/${encodeURIComponent(workspaceId)}?file_path=${encodeURIComponent(filePath)}&resolve_input=${resolveInput}&language=${getUiLanguage()}`,
+      appendToken(
+        `${getApiBase()}/expression-opt/stream/${encodeURIComponent(workspaceId)}?file_path=${encodeURIComponent(filePath)}&resolve_input=${resolveInput}&language=${getUiLanguage()}`,
+      ),
     prompts: {
       list: () => request("/expression-opt/prompts"),
       load: (name) =>
@@ -300,9 +416,9 @@ export const api = {
       }),
     agent: {
       run: async ({ workspaceId, description, signal, onEvent, onError }) => {
-        const res = await fetch(`${BASE_URL}/style-modify/agent/run`, {
+        const res = await fetch(`${getApiBase()}/style-modify/agent/run`, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: authHeaders({ "Content-Type": "application/json" }),
           body: JSON.stringify({
             description,
             workspace_id: workspaceId,
@@ -327,10 +443,10 @@ export const api = {
         onError,
       }) => {
         const res = await fetch(
-          `${BASE_URL}/style-modify/agent/sessions/${encodeURIComponent(sessionId)}/refine`,
+          `${getApiBase()}/style-modify/agent/sessions/${encodeURIComponent(sessionId)}/refine`,
           {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: authHeaders({ "Content-Type": "application/json" }),
             body: JSON.stringify({
               workspace_id: workspaceId,
               message,
@@ -364,7 +480,7 @@ export const api = {
       downloadTrace: async (sessionId, workspaceId) => {
         await downloadBlob(
           appendWs(
-            `${BASE_URL}/style-modify/agent/sessions/${encodeURIComponent(sessionId)}/trace/download`,
+            `${getApiBase()}/style-modify/agent/sessions/${encodeURIComponent(sessionId)}/trace/download`,
             workspaceId,
           ),
           `style-modify-${sessionId.slice(0, 8)}-trace.json`,
@@ -404,9 +520,9 @@ export const api = {
   templateGen: {
     /* 自主 Agent 生成（SSE 流式） */
     generate: async ({ description, language, onEvent, onError }) => {
-      const res = await fetch(`${BASE_URL}/template-gen/generate`, {
+      const res = await fetch(`${getApiBase()}/template-gen/generate`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: authHeaders({ "Content-Type": "application/json" }),
         body: JSON.stringify({
           description,
           language: language ?? getUiLanguage(),
@@ -432,18 +548,15 @@ export const api = {
       ),
     downloadTrace: async (sessionId) => {
       await downloadBlob(
-        `${BASE_URL}/template-gen/trace/download?session_id=${encodeURIComponent(sessionId)}`,
+        `${getApiBase()}/template-gen/trace/download?session_id=${encodeURIComponent(sessionId)}`,
         `latex-template-${sessionId.slice(0, 8)}-trace.json`,
       );
     },
-    download: (sessionId) => {
-      const url = `${BASE_URL}/template-gen/download?session_id=${encodeURIComponent(sessionId)}`;
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = "";
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
+    download: async (sessionId) => {
+      await downloadBlob(
+        `${getApiBase()}/template-gen/download?session_id=${encodeURIComponent(sessionId)}`,
+        `latex-template-${sessionId.slice(0, 8)}.zip`,
+      );
     },
   },
 
@@ -467,7 +580,9 @@ export const api = {
         body: JSON.stringify(data),
       }),
     stream: (workspaceId, filePath, resolveInput = false) =>
-      `${BASE_URL}/code-review/stream/${encodeURIComponent(workspaceId)}?file_path=${encodeURIComponent(filePath)}&resolve_input=${resolveInput}&language=${getUiLanguage()}`,
+      appendToken(
+        `${getApiBase()}/code-review/stream/${encodeURIComponent(workspaceId)}?file_path=${encodeURIComponent(filePath)}&resolve_input=${resolveInput}&language=${getUiLanguage()}`,
+      ),
   },
 
   /* ---- 自动编译 ---- */
@@ -482,11 +597,13 @@ export const api = {
           pdfa: options.pdfa || false,
         }),
       }),
-    pdfUrl: (mainFile, workspaceId) =>
-      appendWs(
-        `${BASE_URL}/compile/pdf?main_file=${encodeURIComponent(mainFile)}`,
+    pdfBlobUrl: async (mainFile, workspaceId) => {
+      const url = appendWs(
+        `${getApiBase()}/compile/pdf?main_file=${encodeURIComponent(mainFile)}`,
         workspaceId,
-      ),
+      );
+      return fetchBlobUrl(url);
+    },
   },
 
   /* ---- Git 差异高亮 ---- */
@@ -587,7 +704,9 @@ export const api = {
         body: JSON.stringify(data),
       }),
     stream: (workspaceId, filePath, resolveInput = false) =>
-      `${BASE_URL}/terminology-check/stream/${encodeURIComponent(workspaceId)}?file_path=${encodeURIComponent(filePath)}&resolve_input=${resolveInput}`,
+      appendToken(
+        `${getApiBase()}/terminology-check/stream/${encodeURIComponent(workspaceId)}?file_path=${encodeURIComponent(filePath)}&resolve_input=${resolveInput}`,
+      ),
   },
 
   /* ---- 逐段翻译 ---- */
@@ -615,7 +734,9 @@ export const api = {
       resolveInput = false,
       targetLanguage = "English",
     ) =>
-      `${BASE_URL}/paragraph-translate/stream/${encodeURIComponent(workspaceId)}?file_path=${encodeURIComponent(filePath)}&resolve_input=${resolveInput}&language=${getUiLanguage()}&target_language=${encodeURIComponent(targetLanguage)}`,
+      appendToken(
+        `${getApiBase()}/paragraph-translate/stream/${encodeURIComponent(workspaceId)}?file_path=${encodeURIComponent(filePath)}&resolve_input=${resolveInput}&language=${getUiLanguage()}&target_language=${encodeURIComponent(targetLanguage)}`,
+      ),
   },
 
   /* ---- 参考文献管理 ---- */
@@ -718,9 +839,9 @@ export const api = {
       onEvent,
       onError,
     }) => {
-      const res = await fetch(`${BASE_URL}/plot-gen/agent/generate`, {
+      const res = await fetch(`${getApiBase()}/plot-gen/agent/generate`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: authHeaders({ "Content-Type": "application/json" }),
         body: JSON.stringify({
           session_id: sessionId,
           description,
@@ -737,10 +858,10 @@ export const api = {
     },
     refine: async ({ sessionId, message, signal, onEvent, onError }) => {
       const res = await fetch(
-        `${BASE_URL}/plot-gen/sessions/${encodeURIComponent(sessionId)}/refine`,
+        `${getApiBase()}/plot-gen/sessions/${encodeURIComponent(sessionId)}/refine`,
         {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: authHeaders({ "Content-Type": "application/json" }),
           body: JSON.stringify({
             message,
             language: getUiLanguage(),
@@ -760,19 +881,21 @@ export const api = {
       request(
         `/plot-gen/sessions/${encodeURIComponent(sessionId)}/file?path=${encodeURIComponent(path)}`,
       ),
-    preview: (sessionId, path) =>
-      `${BASE_URL}/plot-gen/sessions/${encodeURIComponent(sessionId)}/preview?path=${encodeURIComponent(path)}`,
+    previewBlobUrl: async (sessionId, path) => {
+      const url = `${getApiBase()}/plot-gen/sessions/${encodeURIComponent(sessionId)}/preview?path=${encodeURIComponent(path)}`;
+      return fetchBlobUrl(url);
+    },
     trace: (sessionId) =>
       request(`/plot-gen/sessions/${encodeURIComponent(sessionId)}/trace`),
     downloadTrace: async (sessionId) => {
       await downloadBlob(
-        `${BASE_URL}/plot-gen/sessions/${encodeURIComponent(sessionId)}/trace/download`,
+        `${getApiBase()}/plot-gen/sessions/${encodeURIComponent(sessionId)}/trace/download`,
         `plot-gen-${sessionId.slice(0, 8)}-trace.json`,
       );
     },
     download: async (sessionId) => {
       await downloadBlob(
-        `${BASE_URL}/plot-gen/sessions/${encodeURIComponent(sessionId)}/download`,
+        `${getApiBase()}/plot-gen/sessions/${encodeURIComponent(sessionId)}/download`,
         `plot-gen-${sessionId.slice(0, 8)}.zip`,
       );
     },
@@ -790,12 +913,12 @@ export const api = {
       onEvent,
       onError,
     }) => {
-      const url = appendWs(`${BASE_URL}/writing-chat/send`, workspaceId);
+      const url = appendWs(`${getApiBase()}/writing-chat/send`, workspaceId);
       let res;
       try {
         res = await fetch(url, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: authHeaders({ "Content-Type": "application/json" }),
           body: JSON.stringify({
             session_id: sessionId ?? null,
             file_path: filePath,

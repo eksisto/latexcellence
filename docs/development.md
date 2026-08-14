@@ -137,7 +137,7 @@ latexcellence/
 1. 调用 `load_config(config_path)` 从命令行参数加载配置
 2. 通过 `setup_logging()` 初始化日志系统
 3. 创建 FastAPI 应用，注册所有路由模块
-4. 配置 CORS（允许所有来源）
+4. 添加 CORS 白名单 + 访问令牌中间件（`backend/core/security_middleware.py`）
 5. 在 `lifespan` 中执行启动/关闭日志
 6. 生产模式挂载 `static/`，开发模式由 Vite dev server 独立运行
 
@@ -164,7 +164,8 @@ npm start        # 或 node server.js
 
 | 顶级段 | 关键字段 | 说明 |
 | --- | --- | --- |
-| `server` | host, port, dev_mode, vite_dev_url | 服务监听配置 |
+| `server` | host, port, dev_mode, vite_dev_url, allowed_origins | 服务监听配置与 CORS 白名单（前端部署域名 + 本地开发地址） |
+| `security` | access_token | 共享访问令牌；非空时所有 `/api/*` 请求（`/api/health` 除外）必须携带 `X-Latexcellence-Token` 请求头（EventSource 等无法自定义请求头的场景通过 `?token=` 传递） |
 | `llm` | api_key, base_url, model, temperature, max_tokens, request_interval, max_concurrency | LLM 连接与调用参数 |
 | `http` | user_agent | 外部 HTTP 请求的全局 User-Agent（web_search 引擎与 bib_manager Provider 共用） |
 | `features` | 各模块的 `enabled` + 特有配置（batch_size, output_dir, timeout 等） | 功能开关与模块级参数 |
@@ -182,7 +183,7 @@ npm start        # 或 node server.js
 
 | 模式 | `dev_mode` | FastAPI 行为 | 前端行为 |
 | --- | --- | --- | --- |
-| 开发 | `true` | 不挂载 `static/`；CORS 允许所有来源 | 由 Vite dev server（默认 5173）独立运行，`vite.config.js` 代理 `/api` 到 `localhost:8000` |
+| 开发 | `true` | 不挂载 `static/`；CORS 白名单默认含 `localhost:5173` / `127.0.0.1:5173` | 由 Vite dev server（默认 5173）独立运行，`vite.config.js` 代理 `/api` 到 `localhost:8000` |
 | 生产 | `false` | 挂载 `static/` 目录作为静态文件服务 | 前端已构建为 `static/` 下的产物，由 FastAPI 直接提供 |
 
 **切换到生产模式**：
@@ -193,6 +194,15 @@ npm start        # 或 node server.js
 4. 访问 http://localhost:8000。
 
 > 注意：`main.py` 仅在 `dev_mode == false` 时挂载 `static/`；若未切换就直接访问 8000 端口，将只能看到 API 接口而非前端页面。
+
+**前后端分离部署（远程前端 + 本地后端）**：
+
+前端可独立部署为静态站点（如 `https://latexcellence.example.com`），用户浏览器直接访问网站、自行下载并本地运行后端。此模式下：
+
+- 前端 API 地址运行时可配置（设置页 → localStorage → `VITE_API_BASE_URL` → 默认同源 `/api`）；前后端分离部署时在设置页填写完整后端地址（如 `http://localhost:8000/api`）。
+- 后端返回的相对 URL（如 git-diff 的 `pdf_url`）由前端统一补全为完整后端地址并追加令牌参数。
+- `server.allowed_origins` 必须包含前端域名；`security.access_token` 建议设置随机长字符串，前端在设置页填写同名令牌。
+- 后端应保持绑定 `127.0.0.1`，只服务本机浏览器。
 
 ---
 

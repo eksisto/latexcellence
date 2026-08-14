@@ -24,6 +24,9 @@ def _ensure_config():
             load_config(str(config_path))
         else:
             load_config("config.json")
+    # 访问令牌属于本地运行环境配置：中间件行为由 test_security_middleware 单独
+    # 覆盖，其余 API 测试统一在内存中绕过令牌校验，避免依赖开发者本机 config.json。
+    get_config().security.access_token = ""
 
 
 @pytest.fixture

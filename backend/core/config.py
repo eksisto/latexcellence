@@ -30,6 +30,17 @@ class ServerConfig(BaseModel):
     port: int = 8000  # HTTP 端口
     dev_mode: bool = True  # 是否开发模式（影响前端挂载方式）
     vite_dev_url: str = "http://localhost:5173"  # Vite dev server 地址
+    allowed_origins: list[str] = [
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+        "https://latexcellence.example.com",
+    ]  # CORS 白名单（前端部署域名 + 本地开发地址）
+
+
+class SecurityConfig(BaseModel):
+    """跨域访问安全配置"""
+
+    access_token: str = ""  # 共享访问令牌（留空表示不校验，用于纯本地开发）
 
 
 class LLMConfig(BaseModel):
@@ -394,6 +405,7 @@ class AppConfig(BaseModel):
     """应用总配置——顶层模型，包含所有子配置"""
 
     server: ServerConfig = ServerConfig()
+    security: SecurityConfig = SecurityConfig()
     llm: LLMConfig = LLMConfig()
     http: HttpConfig = HttpConfig()
     features: FeaturesConfig = FeaturesConfig()
@@ -525,6 +537,15 @@ def update_config_from_dict(updates: dict) -> AppConfig:
         else:
             # 用户提供了真实 Key，更新内存并解除环境变量标记
             _api_key_from_env = False
+
+    # 访问令牌：掩码（*** 开头）→ 保留原值；空字符串 → 清除令牌（禁用校验）；
+    # 真实 Token → 更新
+    if "security" in updates and isinstance(updates["security"], dict):
+        security_updates = updates["security"]
+        if "access_token" in security_updates:
+            token = security_updates["access_token"]
+            if token.startswith("***"):
+                security_updates["access_token"] = current["security"]["access_token"]
 
     # 所有已启用 API Key 的数据源均通过设置页以掩码返回，掩码表示保留原配置。
     function_calling = updates.get("features", {}).get("function_calling", {})

@@ -27,6 +27,7 @@ latexcellence/
 │   ├── core/
 │   │   ├── config.py                # Pydantic 配置模型 + 热重载
 │   │   ├── llm_client.py            # AsyncOpenAI 封装（流式 + 重试 + 限流 + Function Calling）
+│   │   ├── security_middleware.py   # CORS 白名单 + 共享访问令牌中间件（支持热重载）
 │   │   ├── logger.py                # TimedRotatingFileHandler 日志
 │   │   ├── workspace_manager.py     # 多工作区管理（workspace_id → LatexProject）
 │   │   ├── project_manager.py       # LaTeX 项目管理（文件树/段落/撤销）

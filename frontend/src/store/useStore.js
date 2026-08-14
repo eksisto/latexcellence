@@ -42,7 +42,7 @@ import { persist } from "zustand/middleware";
 
 const useStore = create(
   persist(
-    (set) => ({
+    (set, get) => ({
       /* ===== 水合状态（不持久化） ===== */
       hydrated: false,
 
@@ -207,7 +207,15 @@ const useStore = create(
           set({ paragraphTranslateResults: results });
         }
       },
-      setPdfUrl: (url) => set({ pdfUrl: url }),
+      setPdfUrl: (url) => {
+        // blob URL 在替换/清空时主动释放，避免 PDF 预览内存泄漏；
+        // 释放放在 updater 外，保持 set 函数纯净
+        const prev = get().pdfUrl;
+        if (prev && prev !== url && prev.startsWith("blob:")) {
+          URL.revokeObjectURL(prev);
+        }
+        set({ pdfUrl: url });
+      },
       setCompileResult: (result) => set({ compileResult: result }),
       setCompileLoading: (loading) => set({ compileLoading: loading }),
 

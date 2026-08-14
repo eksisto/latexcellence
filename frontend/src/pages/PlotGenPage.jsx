@@ -93,6 +93,11 @@ export default function PlotGenPage() {
       .catch(() => {});
   }, []);
 
+  // 切换预览文件时异步加载 blob（带令牌头，URL 不携带令牌）
+  useEffect(() => {
+    if (previewPath) plot.loadPreview(previewPath);
+  }, [previewPath, plot.loadPreview]);
+
   useLayoutEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
@@ -336,12 +341,12 @@ export default function PlotGenPage() {
                         </Button>
                       ))}
                   </div>
-                  {previewPath && (
+                  {previewPath && plot.previewSrc && (
                     <div className="rounded border bg-muted/40 p-2 min-h-40">
                       {previewPath.toLowerCase().endsWith(".svg") ||
                       previewPath.toLowerCase().endsWith(".png") ? (
                         <img
-                          src={plot.previewUrl(previewPath)}
+                          src={plot.previewSrc}
                           alt={previewPath}
                           loading="lazy"
                           className="max-h-72 w-auto mx-auto"
@@ -349,7 +354,7 @@ export default function PlotGenPage() {
                       ) : (
                         <iframe
                           title={previewPath}
-                          src={plot.previewUrl(previewPath)}
+                          src={plot.previewSrc}
                           className="w-full h-72 border-0 rounded bg-white"
                         />
                       )}

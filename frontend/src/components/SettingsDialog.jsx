@@ -22,7 +22,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { api } from "@/api";
+import { api, getApiBase, getApiToken, setApiConnection } from "@/api";
 import useStore from "@/store/useStore";
 
 function CheckboxField({ label, checked, onChange }) {
@@ -59,10 +59,19 @@ export default function SettingsDialog() {
     markupTypes: [],
     mathMarkups: [],
   });
+  const [apiBase, setApiBase] = useState(getApiBase);
+  const [apiToken, setApiToken] = useState(getApiToken);
+  const [testing, setTesting] = useState(false);
+  const [connectionResult, setConnectionResult] = useState(null);
+  const [configLoadFailed, setConfigLoadFailed] = useState(false);
   const { t, i18n } = useTranslation("components");
 
   useEffect(() => {
     if (open) {
+      setApiBase(getApiBase());
+      setApiToken(getApiToken());
+      setConnectionResult(null);
+      setConfigLoadFailed(false);
       setLoading(true);
       Promise.all([
         api.config.get(),
@@ -77,8 +86,28 @@ export default function SettingsDialog() {
             mathMarkups: optionsData.math_markups || [],
           });
         })
-        .catch(() => {})
+        .catch(() => setConfigLoadFailed(true))
         .finally(() => setLoading(false));
+
+      // 自动探测一次后端连接，刷新连接状态；
+      // 若用户随后修改了地址/令牌，则丢弃过期结果
+      const base = getApiBase();
+      const token = getApiToken();
+      api
+        .checkConnection(base, token)
+        .then((info) => {
+          if (getApiBase() === base && getApiToken() === token) {
+            setConnectionResult({
+              ok: true,
+              message: t("settings.connectionOk", { model: info.model }),
+            });
+          }
+        })
+        .catch((err) => {
+          if (getApiBase() === base && getApiToken() === token) {
+            setConnectionResult({ ok: false, message: err.message });
+          }
+        });
     }
   }, [open]);
 
@@ -93,6 +122,122 @@ export default function SettingsDialog() {
       target[keys[keys.length - 1]] = value;
       return next;
     });
+  }
+
+  function handleApiBaseChange(value) {
+    setApiBase(value);
+    setApiConnection(value, apiToken);
+    setConnectionResult(null);
+  }
+
+  function handleApiTokenChange(value) {
+    setApiToken(value);
+    setApiConnection(apiBase, value);
+    setConnectionResult(null);
+  }
+
+  async function handleTestConnection() {
+    setTesting(true);
+    setConnectionResult(null);
+    setApiConnection(apiBase, apiToken);
+    try {
+      const info = await api.checkConnection(apiBase, apiToken);
+      setConnectionResult({
+        ok: true,
+        message: t("settings.connectionOk", { model: info.model }),
+      });
+    } catch (err) {
+      setConnectionResult({ ok: false, message: err.message });
+    } finally {
+      setTesting(false);
+    }
+  }
+
+  function renderConnectionPanel() {
+    const state = testing
+      ? {
+          label: t("settings.testing"),
+          dot: "bg-amber-500",
+          text: "text-amber-600",
+        }
+      : connectionResult
+        ? connectionResult.ok
+          ? {
+              label: t("settings.connected"),
+              dot: "bg-emerald-500",
+              text: "text-emerald-600",
+            }
+          : {
+              label: t("settings.connectionFailed"),
+              dot: "bg-destructive",
+              text: "text-destructive",
+            }
+        : {
+            label: t("settings.notTested"),
+            dot: "bg-muted-foreground/40",
+            text: "text-muted-foreground",
+          };
+    return (
+      <div className="rounded-lg border border-border bg-muted/40 p-3">
+        <div className="flex items-center justify-between gap-2 pb-3">
+          <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+            {t("settings.connection")}
+          </span>
+          <span className={`flex items-center gap-1.5 text-xs ${state.text}`}>
+            <span
+              className={`size-2 rounded-full ${state.dot}`}
+              aria-hidden="true"
+            />
+            {state.label}
+          </span>
+        </div>
+        <div className="space-y-3">
+          <div className="space-y-1.5">
+            <Label className="text-xs">{t("settings.apiBase")}</Label>
+            <Input
+              placeholder="http://localhost:8000/api"
+              value={apiBase}
+              onChange={(e) => handleApiBaseChange(e.target.value)}
+            />
+            <p className="text-xs text-muted-foreground">
+              {t("settings.apiBaseHint")}
+            </p>
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-xs">{t("settings.apiToken")}</Label>
+            <Input
+              type="password"
+              placeholder={t("settings.apiTokenPlaceholder")}
+              value={apiToken}
+              onChange={(e) => handleApiTokenChange(e.target.value)}
+            />
+            <p className="text-xs text-muted-foreground">
+              {t("settings.apiTokenHint")}
+            </p>
+          </div>
+          <div className="flex items-center gap-3">
+            {connectionResult && (
+              <span
+                className={`min-w-0 flex-1 truncate text-xs ${
+                  connectionResult.ok ? "text-emerald-600" : "text-destructive"
+                }`}
+              >
+                {connectionResult.message}
+              </span>
+            )}
+            <Button
+              className="ml-auto shrink-0"
+              variant="outline"
+              size="sm"
+              onClick={handleTestConnection}
+              disabled={testing || !apiBase.trim()}
+            >
+              {testing ? t("settings.testing") : t("settings.testConnection")}
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   async function handleSave() {
@@ -142,11 +287,20 @@ export default function SettingsDialog() {
           <DialogHeader>
             <DialogTitle>{t("settings.title")}</DialogTitle>
           </DialogHeader>
-          <div className="flex items-center justify-center py-12">
-            <span className="text-sm text-muted-foreground">
-              {loading ? t("settings.loading") : t("settings.clickToLoad")}
-            </span>
-          </div>
+          {configLoadFailed ? (
+            <div className="space-y-4 py-2">
+              <p className="text-sm text-muted-foreground">
+                {t("settings.configLoadFailed")}
+              </p>
+              {renderConnectionPanel()}
+            </div>
+          ) : (
+            <div className="flex items-center justify-center py-12">
+              <span className="text-sm text-muted-foreground">
+                {loading ? t("settings.loading") : t("settings.clickToLoad")}
+              </span>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
     );
@@ -162,7 +316,19 @@ export default function SettingsDialog() {
         <DialogHeader>
           <DialogTitle>{t("settings.title")}</DialogTitle>
         </DialogHeader>
-        <div className="flex-1 overflow-y-auto space-y-4 pr-1 -mr-1">
+
+        <div className="mt-2 min-h-0 flex-1 space-y-4 overflow-y-auto pr-1 -mr-1">
+          {/* 后端连接 */}
+          {renderConnectionPanel()}
+
+          {/* 后端配置：标签 + 分隔线 */}
+          <div className="flex items-center gap-3 pl-3">
+            <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              {t("settings.backendConfig")}
+            </span>
+            <div className="h-px flex-1 bg-border" />
+          </div>
+
           {/* Server */}
           <ConfigSection title={t("settings.server")}>
             <div className="grid grid-cols-2 gap-3">
@@ -196,6 +362,41 @@ export default function SettingsDialog() {
               checked={config.server.dev_mode}
               onChange={(v) => set("server.dev_mode", v)}
             />
+            <div className="space-y-1.5">
+              <Label className="text-xs">{t("settings.allowedOrigins")}</Label>
+              <Input
+                placeholder="https://latexcellence.example.com"
+                value={(config.server.allowed_origins || []).join(", ")}
+                onChange={(e) =>
+                  set(
+                    "server.allowed_origins",
+                    e.target.value
+                      .split(",")
+                      .map((s) => s.trim())
+                      .filter(Boolean),
+                  )
+                }
+              />
+              <p className="text-xs text-muted-foreground">
+                {t("settings.allowedOriginsHint")}
+              </p>
+            </div>
+          </ConfigSection>
+
+          {/* Security */}
+          <ConfigSection title={t("settings.security")}>
+            <div className="space-y-1.5">
+              <Label className="text-xs">{t("settings.accessToken")}</Label>
+              <Input
+                type="password"
+                placeholder={t("settings.accessTokenPlaceholder")}
+                value={config.security?.access_token || ""}
+                onChange={(e) => set("security.access_token", e.target.value)}
+              />
+              <p className="text-xs text-muted-foreground">
+                {t("settings.accessTokenHint")}
+              </p>
+            </div>
           </ConfigSection>
 
           {/* LLM */}
@@ -1127,21 +1328,18 @@ export default function SettingsDialog() {
 
           {/* Language */}
           <ConfigSection title={t("settings.language")}>
-            <div className="space-y-1.5">
-              <Label className="text-xs">{t("settings.language")}</Label>
-              <Select
-                value={i18n.language}
-                onValueChange={(v) => i18n.changeLanguage(v)}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="zh">中文</SelectItem>
-                  <SelectItem value="en">English</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+            <Select
+              value={i18n.language}
+              onValueChange={(v) => i18n.changeLanguage(v)}
+            >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="zh">中文</SelectItem>
+                <SelectItem value="en">English</SelectItem>
+              </SelectContent>
+            </Select>
           </ConfigSection>
         </div>
         <DialogFooter className="mt-4">

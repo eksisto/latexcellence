@@ -16,7 +16,6 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
-from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from pydantic import ValidationError
@@ -24,6 +23,7 @@ import uvicorn
 
 from backend.core.config import load_config, get_config, update_config_from_dict
 from backend.core.logger import setup_logging, get_logger
+from backend.core.security_middleware import AccessSecurityMiddleware
 from backend.modules.project_router import router as project_router
 from backend.modules.typo_check.router import router as typo_check_router
 from backend.modules.expression_opt.router import router as expression_opt_router
@@ -100,15 +100,9 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# CORS 中间件：允许所有来源的跨域请求
-# 开发模式下前端（localhost:5173）和后端（localhost:8000）不同源，需要此配置
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+# CORS + 访问令牌中间件：白名单来自 server.allowed_origins，
+# 令牌校验来自 security.access_token，均每次请求实时读取（支持热重载）
+app.add_middleware(AccessSecurityMiddleware)
 
 
 @app.get("/api/health")
@@ -197,6 +191,12 @@ async def get_full_config():
         k = tavily["api_key"]
         if k:
             tavily["api_key"] = "***" + k[-4:] if len(k) > 4 else "****"
+    # 访问令牌只展示后 4 位，防止通过配置接口泄露完整令牌
+    token = data.get("security", {}).get("access_token", "")
+    if token:
+        data["security"]["access_token"] = (
+            "***" + token[-4:] if len(token) > 4 else "****"
+        )
     return data
 
 

@@ -17,6 +17,9 @@ const EXACT_MAP = {
   "Load failed": "fetchFailed",
   "Request timed out": "requestTimedOut",
   "Internal Server Error": "internalServerError",
+  "Server configuration not loaded": "configNotLoaded",
+  "Access token required or invalid": "accessTokenRequired",
+  "Origin not allowed by CORS policy": "originNotAllowed",
 
   // 项目管理
   "No project opened": "noProjectOpened",

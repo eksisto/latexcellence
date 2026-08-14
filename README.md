@@ -35,7 +35,7 @@ LateXcellence 是一个由 LLM 驱动的智能体论文写作助手：面向高�
 
 项目内置一个独立的展示页（`showcase/`），用于对外演示功能与设计：滚动叙述式（Scrollytelling）落地页，零依赖（Node.js 内置 `http` 静态服务器），内容由 `showcase/js/content.js` 数据驱动，主题 CSS 从 `frontend/src/theme/*.css` 自动生成。
 
-点击前往展示页：https://latexcellence.example.com
+点击前往展示页：https://show.latexcellence.example.com
 
 ### 为什么是 LaTeX：AI 时代，文本即接口
 
@@ -186,11 +186,22 @@ python main.py config.json
 
 打开 http://localhost:8000
 
+**前后端分离部署（推荐公开访问方式）**：
+
+前端只作为静态站点部署到服务器（如 `https://latexcellence.example.com`），用户自行下载并本地运行后端：
+
+1. 构建前端并把产物部署到服务器：`cd frontend && npm run build`，将 `static/` 目录内容托管为静态站点。
+2. 用户本地下载项目，在 `config.json` 中设置 `security.access_token`（随机长字符串），保持 `server.host` 为 `127.0.0.1`。
+3. 后端在配置 `server.allowed_origins` 中加入前端域名（默认已含 `https://latexcellence.example.com`）。
+4. 用户打开网站，在设置页填写后端地址（如 `http://localhost:8000/api`）和访问令牌，点击「测试连接」后即可使用。
+
+此模式下用户的 `.tex` 文件、TeX 工具链和 API Key 全部留在本地，前端服务器不接触用户数据；`/api/health` 保持公开以便连接测试，其余 `/api/*` 接口均校验访问令牌。
+
 ### 展示页（Showcase）
 
 项目内置一个独立的展示页（`showcase/`），用于对外演示功能与设计：滚动叙述式（Scrollytelling）落地页，零依赖（Node.js 内置 `http` 静态服务器），内容由 `showcase/js/content.js` 数据驱动，主题 CSS 从 `frontend/src/theme/*.css` 自动生成。
 
-点击前往展示页：https://latexcellence.example.com
+点击前往展示页：https://show.latexcellence.example.com
 
 ```bash
 cd showcase

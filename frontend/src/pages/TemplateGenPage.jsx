@@ -167,6 +167,15 @@ export default function TemplateGenPage() {
     }
   }, [sessionId]);
 
+  const handleDownloadZip = useCallback(async () => {
+    if (!sessionId) return;
+    try {
+      await api.templateGen.download(sessionId);
+    } catch (e) {
+      setError(e.message);
+    }
+  }, [sessionId]);
+
   const compileResults = useMemo(
     () => steps.filter((s) => s.type === "compile"),
     [steps],
@@ -356,7 +365,7 @@ export default function TemplateGenPage() {
                       variant="ghost"
                       size="sm"
                       className="h-6 px-1.5 text-xs gap-1"
-                      onClick={() => api.templateGen.download(sessionId)}
+                      onClick={handleDownloadZip}
                     >
                       <Download className="size-3" />
                       {t("pages:templateGen.downloadZip")}

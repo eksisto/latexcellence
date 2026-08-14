@@ -19,11 +19,21 @@ export default function usePlotGen() {
   const [loadingFile, setLoadingFile] = useState(false);
   const [trace, setTrace] = useState(null);
   const [loadingTrace, setLoadingTrace] = useState(false);
+  const [previewSrc, setPreviewSrc] = useState("");
 
   const abortRef = useRef(null);
+  const previewUrlRef = useRef("");
+  const previewSeqRef = useRef(0);
   const stepKeyRef = useRef(0);
 
   useEffect(() => () => abortRef.current?.abort(), []);
+  useEffect(
+    () => () => {
+      previewSeqRef.current += 1;
+      if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current);
+    },
+    [],
+  );
 
   const handleEvent = useCallback((ev) => {
     if (ev.type === "error") {
@@ -155,8 +165,27 @@ export default function usePlotGen() {
     [sessionId],
   );
 
-  const previewUrl = useCallback(
-    (path) => (sessionId ? api.plotGen.preview(sessionId, path) : ""),
+  const loadPreview = useCallback(
+    async (path) => {
+      const seq = ++previewSeqRef.current;
+      if (!sessionId) {
+        setPreviewSrc("");
+        return;
+      }
+      try {
+        const url = await api.plotGen.previewBlobUrl(sessionId, path);
+        if (seq !== previewSeqRef.current) {
+          // 已有更新的加载请求，丢弃本次结果并释放 blob，避免竞态覆盖新预览
+          URL.revokeObjectURL(url);
+          return;
+        }
+        if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current);
+        previewUrlRef.current = url;
+        setPreviewSrc(url);
+      } catch (_) {
+        if (seq === previewSeqRef.current) setPreviewSrc("");
+      }
+    },
     [sessionId],
   );
 
@@ -192,6 +221,7 @@ export default function usePlotGen() {
   }, [sessionId]);
 
   const reset = useCallback(() => {
+    previewSeqRef.current += 1;
     setSessionId(null);
     setDataProfile(null);
     setChartPlan(null);
@@ -205,6 +235,9 @@ export default function usePlotGen() {
     setSelectedFile("");
     setFileContent("");
     setTrace(null);
+    if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current);
+    previewUrlRef.current = "";
+    setPreviewSrc("");
   }, []);
 
   const clearFile = useCallback(() => {
@@ -232,7 +265,8 @@ export default function usePlotGen() {
     generate,
     refine,
     loadFile,
-    previewUrl,
+    previewSrc,
+    loadPreview,
     download,
     loadTrace,
     downloadTrace,

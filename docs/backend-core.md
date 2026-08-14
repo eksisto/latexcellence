@@ -4,7 +4,7 @@
 
 ## 目录
 
-- [后端核心模块](#后端核心模块)：config、llm_client、logger、project_manager、base_paragraph_check、prompts、tool_registry、workspace_manager
+- [后端核心模块](#后端核心模块)：config、security_middleware、llm_client、logger、project_manager、base_paragraph_check、prompts、tool_registry、workspace_manager
 - [后端工具模块](#后端工具模块)：scholarly_research、file_ops、path_guard、json_utils、latex_json_guard、tex_compile、compile_error_translator、latex_formatter、latex_parser、latex_literals、latex_package_analyzer、input_resolver 等
 - [项目管理路由 project_router.py](#项目管理路由-project_routerpy)
 
@@ -16,7 +16,8 @@
 
 定义完整的 Pydantic v2 配置模型树，每个 JSON 配置段对应一个 `BaseModel` 子类：
 
-- `ServerConfig` — 服务配置（host, port, dev_mode, vite_dev_url）
+- `ServerConfig` — 服务配置（host, port, dev_mode, vite_dev_url, allowed_origins）
+- `SecurityConfig` — 跨域访问安全配置（access_token）
 - `LLMConfig` — LLM 配置（api_key, base_url, model, temperature 等）
 - `TypoCheckConfig` / `ExpressionOptConfig` / `TerminologyCheckConfig` / `FormulaOCRConfig` / `TableOCRConfig` / `TemplateGenConfig` / `CodeReviewConfig` / `CompileConfig` / `GitDiffConfig` / `FormatConverterConfig` / `StyleModifyConfig` / `StyleModifyAgentConfig` / `WritingChatConfig` / `BibManagerConfig` / `ParagraphTranslateConfig` — 各功能模块配置
   - `CompileConfig` 包含 `engine`（编译引擎：auto/pdflatex/xelatex/lualatex）和 `pdfa`（PDF/A-2b 归档格式输出）配置
@@ -28,7 +29,7 @@
 - `FeaturesConfig` — 功能聚合
 - `LoggingConfig` — 日志配置
 - `HttpConfig` — 外部 HTTP 请求全局配置（user_agent）
-- `AppConfig` — 顶层聚合（server, llm, http, features, logging）
+- `AppConfig` — 顶层聚合（server, security, llm, http, features, logging）
 
 **核心接口**：
 
@@ -45,6 +46,17 @@
 - 从环境变量注入的 API Key **禁止写回磁盘**：`save_config()` 内部通过 `_api_key_from_env` 标记自动识别 Key 来源，落盘前清空 `api_key` 字段
 - 用户通过 UI 手动输入的新 Key 解除环境变量标记，正常持久化到磁盘
 - 前端提交的 `api_key` 若以 `***` 开头（掩码），保留原值不更新
+
+### `backend/core/security_middleware.py` — CORS 白名单与访问令牌
+
+统一处理跨域与本地后端的访问控制：
+
+- CORS 白名单来自 `server.allowed_origins`，白名单外的 `Origin` 一律返回 403，避免任意网页驱动用户本地后端（读取/修改 `.tex`、消耗 API Key）；空列表表示拒绝所有跨域来源（fail-closed）。
+- 配置未加载时中间件拒绝所有请求（503），不降级为放行。
+- 与请求 `Host` 同源的 `Origin` 自动放行——浏览器对同源 POST 也会携带 `Origin`，保证 FastAPI 直接托管 `static/` 的同源生产模式可用；白名单仍覆盖跨域部署场景。
+- `security.access_token` 非空时，所有 `/api/*` 请求（`/api/health` 除外）必须携带 `X-Latexcellence-Token` 请求头；仅 EventSource 等确实无法自定义请求头的流式场景通过 `?token=` 查询参数传递。下载与 PDF/图片预览均通过带令牌头的 fetch + Blob 完成，避免令牌进入访问日志。
+- 每次请求实时读取 `get_config()`，配置热重载后立即生效。
+- 前端 `api/index.js` 提供 `resolveUrl()` 解析后端返回的相对路径（不追加令牌）；第三方绝对 URL 原样返回，避免令牌泄漏给外部站点。
 
 ### `backend/core/llm_client.py` — LLM API 客户端
 
