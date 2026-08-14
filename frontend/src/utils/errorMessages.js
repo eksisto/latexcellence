@@ -86,6 +86,9 @@ const EXACT_MAP = {
   "LLM error translation failed, please refer to the raw compilation output below":
     "llmTranslationFailed",
   "Pandoc produced empty output": "pandocEmptyOutput",
+  "Command timed out": "agentCommandTimedOut",
+  "file_path must be a string": "agentFilePathMustBeString",
+  "content must be a string": "agentContentMustBeString",
 
   // Pandoc
   "Pandoc is not installed. Install it from https://pandoc.org/installing.html":
@@ -238,7 +241,7 @@ const PATTERN_MAP = [
     (m) => ({ kb: m[1] }),
   ],
   [
-    /^start_line out of range|^start_line must be less than/,
+    /^(?:start_line|line_range)(?: start)? (?:out of range|must be less than)|^line_range must be a two-item array|^read_file line_range must satisfy/,
     "lineRangeInvalid",
     () => ({}),
   ],
@@ -251,6 +254,61 @@ const PATTERN_MAP = [
     /^Shadow compile limit (\d+) reached/,
     "compileLimitReached",
     (m) => ({ limit: m[1] }),
+  ],
+
+  // Agent 私有文件工具 / 沙箱执行失败
+  [
+    /^Path validation failed:\s*(.+)/,
+    "agentPathValidationFailed",
+    (m) => ({ detail: m[1] }),
+  ],
+  [
+    /^file_path (?:must not|must|contains|resolves)/,
+    "agentInvalidFilePath",
+    () => ({}),
+  ],
+  [
+    /^Maximum (?:distinct-)?file count (\d+) reached/,
+    "agentMaxFileCountReached",
+    (m) => ({ count: m[1] }),
+  ],
+  [
+    /^Cannot write to protected path:\s*(.+)/,
+    "agentProtectedPath",
+    (m) => ({ path: m[1] }),
+  ],
+  [
+    /^Python syntax error:\s*(.+)/,
+    "agentPythonSyntaxError",
+    (m) => ({ detail: m[1] }),
+  ],
+  [/^File too large:\s*(.+)/, "agentFileTooLarge", (m) => ({ file: m[1] })],
+  [
+    /^File (.+) was rejected:\s*(.+)/,
+    "agentFileRejected",
+    (m) => ({ file: m[1], detail: m[2] }),
+  ],
+  [
+    /^Script not found:\s*(.+)/,
+    "agentScriptNotFound",
+    (m) => ({ script: m[1] }),
+  ],
+  [
+    /^TikZ compilation is disabled by config/,
+    "agentTikzCompileDisabled",
+    () => ({}),
+  ],
+  [
+    /^TikZ file not found:\s*(.+?)(?:\.\s|$)/,
+    "agentTikzFileNotFound",
+    (m) => ({ file: m[1] }),
+  ],
+  [/^TikZ PRECHECK failed; /, "agentTikzPrecheckFailed", () => ({})],
+  [/^Execution failed; /, "agentExecutionFailed", () => ({})],
+  [
+    /^(LaTeX text .*)$/,
+    "agentLatexValidationFailed",
+    (m) => ({ detail: m[1] }),
   ],
 
   // 文件冲突（乐观锁）

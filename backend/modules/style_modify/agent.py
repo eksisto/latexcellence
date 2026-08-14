@@ -18,6 +18,22 @@ from backend.core.prompts import get_prompt
 from backend.modules.style_modify.models import CompileSummary
 from backend.modules.style_modify.session import get_session_store
 from backend.modules.style_modify.trace import append_trace, now_iso
+from backend.utils.agent_file_tools import (
+    AgentFileRead,
+    AgentFileToolBehavior,
+    AgentFileToolExecutor,
+    AgentFileToolFailure,
+    AgentFileToolNames,
+    AgentFileWrite,
+    build_agent_file_tools_schema,
+    normalize_line_range,
+)
+
+STYLE_FILE_TOOL_NAMES = AgentFileToolNames(
+    write="stage_replace",
+    read="read_project_file",
+    list="list_project_files",
+)
 
 
 class StyleModifyAgent:
@@ -505,26 +521,42 @@ class StyleModifyAgent:
 
     @staticmethod
     def _build_tools_schema() -> list[dict[str, Any]]:
-        return [
-            {
-                "type": "function",
-                "function": {
-                    "name": "list_project_files",
-                    "description": (
-                        "List LaTeX-related files in the current project. "
-                        "Returns relative paths and sizes only."
-                    ),
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "max_results": {
-                                "type": "integer",
-                                "description": "Optional result limit.",
-                            }
-                        },
-                    },
+        file_tools = {
+            schema["function"]["name"]: schema
+            for schema in build_agent_file_tools_schema(
+                names=STYLE_FILE_TOOL_NAMES,
+                write_description=(
+                    "Stage a COMPLETE replacement of an existing project file "
+                    "into the session overlay. The real project is not written. "
+                    "Only existing .tex/.sty/.cls/.bib files are allowed; do "
+                    "not create, delete, or rename files."
+                ),
+                read_description=(
+                    "Read a project file or a line range. Use this before "
+                    "staging changes so you never guess file contents."
+                ),
+                list_description=(
+                    "List LaTeX-related files in the current project. "
+                    "Returns relative paths and sizes only."
+                ),
+                list_properties={
+                    "max_results": {
+                        "type": "integer",
+                        "description": "Optional result limit.",
+                    }
                 },
-            },
+                write_path_description="Relative path, e.g. main.tex.",
+                write_content_description=(
+                    "The complete candidate file content. LaTeX backslashes "
+                    "are literal; in JSON tool arguments write every LaTeX "
+                    "backslash as two backslash characters so parsing does "
+                    "not corrupt them."
+                ),
+                supports_line_range=True,
+            )
+        }
+        return [
+            file_tools[STYLE_FILE_TOOL_NAMES.list],
             {
                 "type": "function",
                 "function": {
@@ -550,57 +582,8 @@ class StyleModifyAgent:
                     },
                 },
             },
-            {
-                "type": "function",
-                "function": {
-                    "name": "read_project_file",
-                    "description": (
-                        "Read a project file or a line range. Use this before "
-                        "staging changes so you never guess file contents."
-                    ),
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "file_path": {"type": "string"},
-                            "start_line": {"type": "integer"},
-                            "end_line": {"type": "integer"},
-                        },
-                        "required": ["file_path"],
-                    },
-                },
-            },
-            {
-                "type": "function",
-                "function": {
-                    "name": "stage_replace",
-                    "description": (
-                        "Stage a COMPLETE replacement of an existing project file "
-                        "into the session overlay. The real project is not written. "
-                        "Only existing .tex/.sty/.cls/.bib files are allowed; do "
-                        "not create, delete, or rename files."
-                    ),
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "file_path": {
-                                "type": "string",
-                                "description": "Relative path, e.g. main.tex.",
-                            },
-                            "content": {
-                                "type": "string",
-                                "description": (
-                                    "The complete candidate file content. "
-                                    "LaTeX backslashes are literal; in JSON tool "
-                                    "arguments write every LaTeX backslash as two "
-                                    "backslash characters so parsing does not "
-                                    "corrupt them."
-                                ),
-                            },
-                        },
-                        "required": ["file_path", "content"],
-                    },
-                },
-            },
+            file_tools[STYLE_FILE_TOOL_NAMES.read],
+            file_tools[STYLE_FILE_TOOL_NAMES.write],
             {
                 "type": "function",
                 "function": {
@@ -658,8 +641,19 @@ class StyleModifyAgent:
         ]
 
 
-class _ToolExecutor:
+class _ToolExecutor(AgentFileToolExecutor):
     """执行绑定当前 session 的私有工具。"""
+
+    _file_tool_names = STYLE_FILE_TOOL_NAMES
+    _supports_line_range = True
+    _file_tool_behavior = AgentFileToolBehavior(
+        list_header="Project files:",
+        empty_list_text="No LaTeX-related files found in the project.",
+        empty_list_summary="0 files",
+        include_files_in_list_event=True,
+        include_write_size_in_event=False,
+        preserve_read_line_endings=False,
+    )
 
     def __init__(self, session_id: str, logger) -> None:
         self._session_id = session_id
@@ -671,14 +665,10 @@ class _ToolExecutor:
         tool_name: str,
         args: dict[str, Any],
     ) -> tuple[str, dict[str, Any]]:
-        if tool_name == "list_project_files":
-            return self._list_project_files(args)
+        if tool_name in self._file_tool_names.values:
+            return await self.execute_file_tool(tool_name, args)
         if tool_name == "search_project_text":
             return self._search_project_text(args)
-        if tool_name == "read_project_file":
-            return self._read_project_file(args)
-        if tool_name == "stage_replace":
-            return self._stage_replace(args)
         if tool_name == "discard_file_changes":
             return self._discard_file_changes(args)
         if tool_name == "compile_staged_project":
@@ -687,30 +677,17 @@ class _ToolExecutor:
             return self._finish(args)
         raise ValueError(f"Unknown tool: {tool_name}")
 
-    def _list_project_files(self, args: dict[str, Any]) -> tuple[str, dict[str, Any]]:
+    def _list_agent_files(
+        self,
+        args: dict[str, Any],
+    ) -> list[dict[str, Any]] | AgentFileToolFailure:
         try:
-            files = self._store.list_project_files(
+            return self._store.list_project_files(
                 self._session_id,
                 max_results=int(args.get("max_results") or 500),
             )
         except (TypeError, ValueError) as e:
-            return str(e), {
-                "tool": "list_project_files",
-                "ok": False,
-                "summary": str(e),
-            }
-        if not files:
-            text = "No LaTeX-related files found in the project."
-        else:
-            text = "Project files:\n" + "\n".join(
-                f"- {f['path']} ({f['size']} bytes)" for f in files
-            )
-        return text, {
-            "tool": "list_project_files",
-            "ok": True,
-            "summary": f"{len(files)} files",
-            "files": files,
-        }
+            return AgentFileToolFailure(str(e))
 
     def _search_project_text(self, args: dict[str, Any]) -> tuple[str, dict[str, Any]]:
         try:
@@ -738,34 +715,69 @@ class _ToolExecutor:
             "query": args.get("query", ""),
         }
 
-    def _read_project_file(self, args: dict[str, Any]) -> tuple[str, dict[str, Any]]:
+    def _read_agent_file(
+        self,
+        file_path: str,
+    ) -> AgentFileRead | AgentFileToolFailure:
         try:
             result = self._store.read_project_file(
                 self._session_id,
-                str(args.get("file_path", "")),
-                start_line=int(args.get("start_line") or 1),
-                end_line=(
-                    int(args["end_line"]) if args.get("end_line") is not None else None
-                ),
+                file_path,
             )
         except (TypeError, ValueError) as e:
-            return str(e), {"tool": "read_project_file", "ok": False, "summary": str(e)}
-        text = (
-            f"--- {result['path']} lines {result['start_line']}-{result['end_line']} ---\n"
-            f"{result['content']}"
-        )
-        return text, {
-            "tool": "read_project_file",
-            "ok": True,
-            "summary": f"{result['path']}:{result['start_line']}-{result['end_line']}",
-            "file_path": result["path"],
-            "start_line": result["start_line"],
-            "end_line": result["end_line"],
-        }
+            return AgentFileToolFailure(str(e))
+        return AgentFileRead(path=result["path"], content=result["content"])
 
-    def _stage_replace(self, args: dict[str, Any]) -> tuple[str, dict[str, Any]]:
-        file_path = str(args.get("file_path", ""))
-        content = str(args.get("content", ""))
+    def _max_read_chars(self) -> int:
+        return get_config().features.style_modify.agent.max_tool_output_chars
+
+    def _prepare_agent_line_range(
+        self,
+        content: str,
+        value: Any,
+    ) -> tuple[int, int] | None:
+        line_range = normalize_line_range(
+            value,
+            coerce=True,
+            allow_out_of_bounds=True,
+        )
+        if line_range is None:
+            return None
+        line_count = max(1, len(content.splitlines()))
+        start, end = line_range
+        start = max(1, start)
+        end = min(end or line_count, line_count)
+        if start > line_count:
+            raise ValueError(f"line_range start out of range: {start}")
+        if start > end:
+            raise ValueError("line_range start must be less than or equal to end")
+        return start, end
+
+    def _format_agent_file_read(
+        self,
+        result: AgentFileRead,
+        selected_text: str,
+        line_range: tuple[int, int] | None,
+    ) -> tuple[str, str, dict[str, Any]]:
+        display_range = line_range or (
+            1,
+            max(1, len(result.content.splitlines())),
+        )
+        start, end = display_range
+        return (
+            f"--- {result.path} lines {start}-{end} ---\n{selected_text}",
+            f"{result.path}:{start}-{end}",
+            {
+                "file_path": result.path,
+                "line_range": list(display_range),
+            },
+        )
+
+    def _write_agent_file(
+        self,
+        file_path: str,
+        content: str,
+    ) -> AgentFileWrite | AgentFileToolFailure:
         try:
             staged = self._store.stage_replace(
                 self._session_id,
@@ -773,19 +785,21 @@ class _ToolExecutor:
                 content,
             )
         except ValueError as e:
-            return str(e), {"tool": "stage_replace", "ok": False, "summary": str(e)}
+            return AgentFileToolFailure(str(e))
         text = (
             f"Staged {file_path} ({staged.baseline_size} -> "
             f"{staged.candidate_size} bytes).\nDiff:\n{staged.diff}"
         )
-        return text, {
-            "tool": "stage_replace",
-            "ok": True,
-            "summary": f"Staged {file_path}",
-            "file_path": file_path,
-            "baseline_md5": staged.baseline_md5,
-            "candidate_md5": staged.candidate_md5,
-        }
+        return AgentFileWrite(
+            path=file_path,
+            size=staged.candidate_size,
+            text=text,
+            summary=f"Staged {file_path}",
+            event={
+                "baseline_md5": staged.baseline_md5,
+                "candidate_md5": staged.candidate_md5,
+            },
+        )
 
     def _discard_file_changes(self, args: dict[str, Any]) -> tuple[str, dict[str, Any]]:
         file_path = str(args.get("file_path", ""))
@@ -874,11 +888,7 @@ def _summarize_args(tool_name: str, args: dict[str, Any]) -> dict[str, Any]:
             "preview": content[:300],
         }
     if tool_name in ("read_project_file", "discard_file_changes"):
-        return {
-            k: v
-            for k, v in args.items()
-            if k in ("file_path", "start_line", "end_line")
-        }
+        return {k: v for k, v in args.items() if k in ("file_path", "line_range")}
     if tool_name == "compile_staged_project":
         return {"main_file": args.get("main_file", "")}
     if tool_name == "finish":

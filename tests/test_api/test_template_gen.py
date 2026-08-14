@@ -989,11 +989,21 @@ class TestToolExecutorWriteFile:
             "line 1\nline 2\nline 3\nline 4\n", encoding="utf-8"
         )
 
-        text, ev = executor._read_file(
-            {"file_path": "main.tex", "start_line": 2, "end_line": 3}
-        )
+        text, ev = executor._read_file({"file_path": "main.tex", "line_range": [2, 3]})
         assert text == "line 2\nline 3\n"
         assert ev["line_range"] == [2, 3]
+
+    def test_read_rejects_invalid_line_range(self, tmp_path):
+        cfg = get_config()
+        executor = _ToolExecutor(tmp_path, cfg, MagicMock())
+        (tmp_path / "main.tex").write_text("line 1\n", encoding="utf-8")
+
+        text, event = executor._read_file(
+            {"file_path": "main.tex", "line_range": [2]},
+        )
+
+        assert event["ok"] is False
+        assert "line_range" in text
 
     def test_repeated_compile_is_skipped_without_source_change(
         self, tmp_path, monkeypatch

@@ -25,6 +25,7 @@
 | `test_utils/test_edit_tools_manager.py` | edit_paragraph / undo_last_edit 执行、LaTeX 内容校验拒绝、写回 |
 | `test_utils/test_scholarly_research.py` | OpenAlex 元数据映射、摘要重建、去重、查询过滤、引文追踪、OA 定位和工具执行器 |
 | `test_utils/test_project_tools_manager.py` | 项目浏览工具（list_files / read_file_content / get_section_structure / search_across_files）执行与路径保护 |
+| `test_utils/test_agent_file_tools.py` | template_gen / plot_gen / style_modify 私有文件工具共享执行层与 `line_range` schema 契约 |
 | `test_utils/test_web_search_agentic.py` / `test_web_search_tavily.py` | 联网搜索：查询重写、引擎路由、Tavily 请求与结果解析 |
 | `test_utils/test_bib_manager_format_rules.py` | 参考文献格式确定性规则语料（格式识别命中与预期） |
 | `test_utils/test_latex_package_analyzer.py` / `test_latex_package_rules.py` / `test_latex_package_corpus.py` / `test_latex_package_compile_verification.py` | 宏包规则表：分析器、规则数据完整性、语料查准/查全基线、离线编译验证 |
@@ -56,6 +57,7 @@
 
 - `LatexProject.apply_whole_files()` 成功写入全部文件并更新 MD5，MD5 冲突时快速失败且不覆盖新内容
 - `stage_replace` 冻结 baseline、写 overlay，真实项目在应用前保持不变
+- `read_project_file` 使用 `line_range: [start, end]`，返回事件不再暴露 `start_line` / `end_line`
 - proposal 生成后应用会校验 workspace、项目根目录、revision 和真实文件 MD5
 - 多文件操作以 all-or-nothing 语义写回，operation 保存 before/applied 内容
 - undo 只恢复仍等于 applied MD5 的文件，不覆盖应用后的其他编辑

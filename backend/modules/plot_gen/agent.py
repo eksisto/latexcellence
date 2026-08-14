@@ -14,6 +14,7 @@ from backend.modules.plot_gen.data_parser import build_profile_context
 from backend.modules.plot_gen.executor import PlotExecutor
 from backend.modules.plot_gen.models import ChartPlan, DataProfile, PlotSessionMeta
 from backend.modules.plot_gen.trace import append_trace, now_iso
+from backend.utils.agent_file_tools import build_agent_file_tools_schema
 
 SESSION_ID_RE = re.compile(r"^[A-Za-z0-9_-]+$")
 
@@ -563,41 +564,14 @@ class PlotGenAgent:
     @staticmethod
     def _build_tools_schema() -> list[dict[str, Any]]:
         return [
-            {
-                "type": "function",
-                "function": {
-                    "name": "write_file",
-                    "description": "Create or overwrite a file inside the plot sandbox. Use forward slashes, e.g. scripts/plot.py.",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "file_path": {"type": "string"},
-                            "content": {"type": "string"},
-                        },
-                        "required": ["file_path", "content"],
-                    },
-                },
-            },
-            {
-                "type": "function",
-                "function": {
-                    "name": "read_file",
-                    "description": "Read a file inside the plot sandbox.",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {"file_path": {"type": "string"}},
-                        "required": ["file_path"],
-                    },
-                },
-            },
-            {
-                "type": "function",
-                "function": {
-                    "name": "list_files",
-                    "description": "List all files currently in the plot sandbox.",
-                    "parameters": {"type": "object", "properties": {}},
-                },
-            },
+            *build_agent_file_tools_schema(
+                write_description=(
+                    "Create or overwrite a file inside the plot sandbox. Use "
+                    "forward slashes, e.g. scripts/plot.py."
+                ),
+                read_description="Read a file inside the plot sandbox.",
+                list_description=("List all files currently in the plot sandbox."),
+            ),
             {
                 "type": "function",
                 "function": {

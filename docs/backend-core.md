@@ -367,6 +367,17 @@ get_tool_registry().register(
 | `can_redo(file_path)` | redo 栈是否非空 |
 | `clear(file_path=None)` | 清空指定文件或所有文件的历史 |
 
+### `agent_file_tools.py` — Agent 私有文件工具共享层
+
+`template_gen`、`plot_gen` 与 `style_modify` 项目 Agent 的文件工具统一复用该模块。共享层负责：
+
+- 构建 `write_file` / `read_file` / `list_files` Function Calling schema；style_modify 通过名称映射继续暴露 `stage_replace` / `read_project_file` / `list_project_files`
+- 校验公共参数、分发工具、构造统一的成功/失败事件，并用 `asyncio.to_thread()` 执行同步文件 I/O
+- 对支持局部读取的 Agent 解析 `line_range: [start, end]`，按 1-based 闭区间切片并执行输出截断
+- 通过 `_write_agent_file()` / `_read_agent_file()` / `_list_agent_files()` 钩子保留各模块自己的后缀白名单、保护路径、内容校验、文件预算与存储目标
+
+共享层不绕过 `resolve_project_path()`，也不改变 style_modify 的 overlay / proposal 事务边界。plot_gen 仍只提供整文件读取；template_gen 与 style_modify 使用 `line_range`。
+
 ### `path_guard.py` — 项目路径安全校验
 
 **设计理念**：所有需要根据项目根目录拼接 `file_path` 的调用方**必须**经过此模块的 `resolve_project_path()` 函数，作为防止路径穿越（path traversal）的唯一入口。该函数在 `project_manager`、`input_resolver`、`bib_manager`、`compile`、`git_diff` 等模块中统一使用。
@@ -394,8 +405,9 @@ get_tool_registry().register(
 | `bib_manager` | `read_bib_file` / `save_bib_entry` | `(".bib",)` |
 | `compile` | `_validate_main_file` | `(".tex",)` |
 | `git_diff` | `_validate_project_path`（`render_diff_pdf` + `\input` 展开） | `require_tex` 可选 |
+| `template_gen` | Agent 沙箱文件读写与编译入口 | 写入和只读诊断分别使用后缀白名单；允许沙箱内符号链接但拒绝越界 |
 | `style_modify` | session 文件读写 | 默认 `(".tex", ".sty", ".cls", ".bib")`（来自配置），禁符号链接 |
-| `plot_gen` | 沙箱内路径 | `None`（沙箱内） |
+| `plot_gen` | Agent 沙箱文件读写与执行入口 | 文件工具按写入后缀白名单；专属执行工具另行收窄 |
 
 ### `json_utils.py` — LLM JSON 输出校验与重试
 

@@ -217,7 +217,7 @@ router.py (薄层：参数校验、HTTP 异常转换、SSE 封装)
     ↓
 service.py (厚层：业务编排、LLM 调用、marker 还原)
     ↓
-core/ + utils/ (基础设施：配置、LLM 客户端、项目管理、文件 IO、JSON 校验)
+core/ + utils/ (基础设施：配置、LLM 客户端、项目管理、文件 IO、Agent 文件工具、JSON 校验)
 ```
 
 ### 单例模式

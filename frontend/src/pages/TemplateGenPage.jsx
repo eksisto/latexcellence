@@ -106,7 +106,11 @@ export default function TemplateGenPage() {
             setSummary(ev.summary || "");
             return;
           }
-          setSteps((prev) => [...prev, ev]);
+          const step =
+            ev.ok === false && ev.summary
+              ? { ...ev, summary: translateError(ev.summary) }
+              : ev;
+          setSteps((prev) => [...prev, step]);
         },
         onError: () => {},
       });

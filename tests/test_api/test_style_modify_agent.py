@@ -104,6 +104,35 @@ class TestLatexProjectWholeFileBatch:
 
 
 class TestStyleModifySessionStore:
+    @pytest.mark.asyncio
+    async def test_agent_read_uses_line_range(
+        self,
+        isolated_sessions,
+        open_project,
+    ):
+        from unittest.mock import MagicMock
+
+        from backend.modules.style_modify.agent import _ToolExecutor
+
+        workspace_id, project = open_project
+        store = get_session_store()
+        session_id = store.create_session(
+            workspace_id,
+            project.root_path,
+            "read a range",
+        )
+        executor = _ToolExecutor(session_id, MagicMock())
+
+        text, event = await executor.execute(
+            "read_project_file",
+            {"file_path": "main.tex", "line_range": [2, 3]},
+        )
+
+        assert text.endswith(r"\usepackage{mystyle}" + "\n" + r"\begin{document}")
+        assert event["line_range"] == [2, 3]
+        assert "start_line" not in event
+        assert "end_line" not in event
+
     def test_stage_proposal_apply_and_undo(
         self,
         isolated_sessions,

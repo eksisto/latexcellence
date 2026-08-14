@@ -148,6 +148,12 @@
 
 ## 私有工具
 
+### Agent 文件工具共享层
+
+`backend/utils/agent_file_tools.py` 提供私有 Agent 文件工具的共享 schema 和执行模板。template_gen 与 plot_gen 使用标准名称 `write_file` / `read_file` / `list_files`；style_modify 使用名称映射保留 `stage_replace` / `read_project_file` / `list_project_files`，因此外部工具名与既有 trace 不变。
+
+共享层统一参数校验、事件结构、列表格式、UTF-8 文本读取、输出截断和同步 I/O 的 `asyncio.to_thread()` 调度。模块执行器只实现路径/后缀策略、内容校验和实际存储。局部读取参数统一为 `line_range: [start, end]`，表示 1-based、首尾均包含的行区间；template_gen 和 style_modify 支持该参数，plot_gen 保持整文件读取。
+
 ### 模板生成 Agent
 
 定义在 `backend/modules/template_gen/agent.py`，由 `TemplateAgentService._build_tools_schema()` 构建，**不注册到全局 ToolRegistry**。这些工具在 session 级沙箱内运行，通过 `_ToolExecutor` 私有类分发。
@@ -155,7 +161,7 @@
 | # | 名称 | 描述 | 必填参数 | 条件 |
 |---|------|------|----------|------|
 | 1 | `write_file` | 在沙箱中创建/覆写文件（仅允许 LaTeX 扩展名）；写盘前做 LaTeX 内容校验 | `file_path`, `content` | 始终 |
-| 2 | `read_file` | 读取沙箱中已创建的文件内容 | `file_path` | 始终 |
+| 2 | `read_file` | 读取沙箱中已创建的文件内容，可用 `line_range` 局部读取 | `file_path` | 始终 |
 | 3 | `list_files` | 列出沙箱中所有文件（与全局同名工具隔离） | 无 | 始终 |
 | 4 | `compile_latex` | 用 latexmk 编译项目验证构建 | `main_file` | `agent_compile_enabled=true` |
 | 5 | `finish` | 标记项目完成，结束 Agent 循环 | `summary` | 始终 |
@@ -188,7 +194,7 @@
 |---|------|------|----------|------|
 | 1 | `list_project_files` | 列出项目内允许后缀文件 | 无 | 始终 |
 | 2 | `search_project_text` | 在允许文件中搜索文本 | `query` | 始终 |
-| 3 | `read_project_file` | 读取文件或行区间 | `file_path` | 始终 |
+| 3 | `read_project_file` | 读取文件或 `line_range` 指定的行区间 | `file_path` | 始终 |
 | 4 | `stage_replace` | 将完整候选内容写入 overlay | `file_path`, `content` | 始终 |
 | 5 | `discard_file_changes` | 丢弃某文件候选修改 | `file_path` | 始终 |
 | 6 | `compile_staged_project` | 在 shadow 项目编译候选版本 | 无（可选 `main_file`） | 始终 |

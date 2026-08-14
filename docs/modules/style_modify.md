@@ -35,7 +35,7 @@ LaTeX 不放在 JSON 字符串中传输，采用与 OCR 模块一致的分隔符
   -> operation 支持安全撤销
 ```
 
-真实项目在用户确认前不会被修改。Agent 的私有工具不注册到全局 `ToolRegistry`，每个工具只绑定当前 workspace、项目根目录和 session。
+真实项目在用户确认前不会被修改。Agent 的私有工具不注册到全局 `ToolRegistry`，每个工具只绑定当前 workspace、项目根目录和 session。文件工具复用 `backend/utils/agent_file_tools.py`；共享层通过名称映射保留现有的 `stage_replace` / `read_project_file` / `list_project_files` 名称，模块仍负责 overlay 和路径/内容校验。
 
 ### 会话目录
 
@@ -58,7 +58,7 @@ data/style_modify_sessions/<session_id>/
 | --- | --- | --- |
 | `list_project_files` | 列出项目内允许后缀文件 | 返回相对路径和大小 |
 | `search_project_text` | 搜索命令、环境或文本 | 限制结果数、单行长度和总输出 |
-| `read_project_file` | 读取文件或指定行区间 | 每次重新执行路径保护、大小和编码限制 |
+| `read_project_file` | 读取文件或指定行区间 | 使用 `line_range: [start, end]`（1-based 闭区间）；每次重新执行路径保护、大小和编码限制 |
 | `stage_replace` | 将完整候选内容写入 overlay | 只允许修改已存在文件，校验基线和 LaTeX 内容 |
 | `discard_file_changes` | 丢弃某文件候选修改 | 只影响当前 session overlay |
 | `compile_staged_project` | 在 shadow 项目编译候选版本 | 复用 compile service 安全参数 |

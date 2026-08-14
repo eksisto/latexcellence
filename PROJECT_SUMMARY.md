@@ -36,6 +36,7 @@ latexcellence/
 │   ├── utils/
 │   │   ├── json_utils.py            # LLM JSON 解析/校验/重试
 │   │   ├── file_ops.py              # 原子写入/备份/MD5
+│   │   ├── agent_file_tools.py      # Agent 私有文件工具共享 schema、调度与 line_range 读取
 │   │   ├── input_resolver.py        # \input/\include 递归解析
 │   │   ├── time_utils.py            # 时间工具：当前日期/时间/星期格式化
 │   │   ├── path_guard.py            # 项目路径安全校验唯一入口 resolve_project_path()
@@ -221,7 +222,7 @@ latexcellence/
 | 多文件 \input 展开 | 递归解析 `\input` / `\include` / `\subfile`，段落索引为文件内局部索引，结果按文件分组展示与写回 | [backend-core.md](docs/backend-core.md) |
 | 编译与错误翻译 | `tex_compile.py` 统一编译执行（texfot + 引擎自动检测 + PDF/A），`compile_error_translator.py` 把失败日志翻译为修复建议 | [compile.md](docs/modules/compile.md) |
 | DOI 多数据源查询 | Crossref 主索引 + arXiv 专用路由 + 补全层，`ProviderManager` 全局单例管理可插拔数据源 | [bib_manager.md](docs/modules/bib_manager.md) |
-| 自主 Agent | template_gen / plot_gen / style_modify 项目 Agent 基于 Function Calling 自主规划、执行、验证、自修，`trace.jsonl` 全程回放 | [template_gen.md](docs/modules/template_gen.md) 等模块文档 |
+| 自主 Agent | template_gen / plot_gen / style_modify 项目 Agent 基于 Function Calling 自主规划、执行、验证、自修，`trace.jsonl` 全程回放；私有文件工具复用 `agent_file_tools.py` 的 schema、调度与范围读取契约 | [function-calling-tools.md](docs/function-calling-tools.md)、[template_gen.md](docs/modules/template_gen.md) 等模块文档 |
 | 代码展示与高亮 | CodeBlock / MarkerText / CodeEditorInput 统一 LaTeX 源码展示，token 颜色由 `--code-token-*` 变量控制 | [frontend.md](docs/frontend.md) |
 | 逐段检查前端流程 | `useParagraphCheck` 统一封装恢复、预览、检查、排序、应用与持久化；`useResultFilter` 负责排序过滤 | [frontend.md](docs/frontend.md) |
 | 写作助手 | `useWritingChat` 管理会话、SSE 流式、工具确认、编辑建议双轮协议 | [writing_chat.md](docs/modules/writing_chat.md) |

@@ -10,7 +10,7 @@
 | --- | --- |
 | `router.py` | 薄路由：参数校验、SSE 响应与状态码映射 |
 | `service.py` | `TemplateGenService`：创建沙箱工作区、驱动 Agent、产物浏览（`list_session_files` / `read_session_file` / `zip_session` / `get_session_trace`） |
-| `agent.py` | `TemplateAgentService`：Function Calling 主循环、工具 schema 构建、`_ToolExecutor` 工具执行、编译日志错误解析 |
+| `agent.py` | `TemplateAgentService`：Function Calling 主循环、模块文件校验策略、编译日志错误解析 |
 | `trace.py` | Agent 运行追踪（`trace.jsonl` 记录与读取） |
 | `cleanup.py` | 过期沙箱自动清理（后台任务） |
 
@@ -20,12 +20,12 @@ Agent 自主规划文件结构 → 逐个 `write_file` → 调用 `compile_latex
 
 ## 工具体系（session 级私有）
 
-工具 schema 由 `TemplateAgentService._build_tools_schema()` 动态构建，随 `chat_with_tools(tools=...)` 注入。**不注册到全局 `ToolRegistry`** —— 因为这些工具绑定到一次性沙箱目录，注册成全局能力会污染其他模块（如 `writing_chat`）的工具集。执行函数封装在 `_ToolExecutor` 中（持有沙箱路径）。
+工具 schema 由 `TemplateAgentService._build_tools_schema()` 动态构建，随 `chat_with_tools(tools=...)` 注入。**不注册到全局 `ToolRegistry`** —— 因为这些工具绑定到一次性沙箱目录，注册成全局能力会污染其他模块（如 `writing_chat`）的工具集。`write_file` / `read_file` / `list_files` 的 schema、参数处理和执行模板来自 `backend/utils/agent_file_tools.py`，`_ToolExecutor` 只提供模板沙箱的校验与存储策略。
 
 | 工具 | 功能 | 备注 |
 | --- | --- | --- |
 | `write_file` | 创建/覆盖沙箱内文件，完整内容写入 | 路径校验 + **不同文件数**/大小上限 + LaTeX 内容校验（写盘前拦截 JSON 转义损坏，失败回传 LLM 自纠）；重写已有文件不消耗文件预算，防止修复迭代中被预算卡死 |
-| `read_file` | 读取沙箱内文件 | 除已写源文件外，允许读取编译生成文件（`.log/.aux/.toc/.out/.blg/.fls` 等），便于编译失败后定位根因 |
+| `read_file` | 读取沙箱内文件 | 除已写源文件外，允许读取编译生成文件（`.log/.aux/.toc/.out/.blg/.fls` 等）；`line_range: [start, end]` 按 1-based 闭区间读取局部源码 |
 | `list_files` | 列出沙箱内全部文件 | 验证项目结构 |
 | `compile_latex` | `latexmk -xelatex` 在沙箱目录编译 | 受 `agent_compile_enabled` 开关控制，失败时截取错误行附近日志回传 LLM；latexmk 输出无 `!` 行时自动从 `<main>.log` 兜底提取结构化错误 |
 | `finish` | 信号项目完成，附带总结与主文件路径 | 调用后立即终止循环 |

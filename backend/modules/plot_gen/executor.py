@@ -28,6 +28,13 @@ from backend.modules.plot_gen.styles import (
     validate_style_key,
 )
 from backend.modules.plot_gen.tikzgen import generate_figure_tex
+from backend.utils.agent_file_tools import (
+    AgentFileRead,
+    AgentFileToolExecutor,
+    AgentFileToolFailure,
+    AgentFileToolBehavior,
+    AgentFileWrite,
+)
 from backend.utils.path_guard import resolve_project_path
 from backend.utils.tex_compile import detect_engine_from_file, run_tex_compile
 
@@ -272,8 +279,10 @@ def _extract_tikz_issues(raw_output: str, limit: int = 8) -> list[dict[str, str]
     return issues
 
 
-class PlotExecutor:
+class PlotExecutor(AgentFileToolExecutor):
     """持有单个 session 沙箱的工具执行器。"""
+
+    _file_tool_behavior = AgentFileToolBehavior(list_header="Files in sandbox:")
 
     def __init__(
         self,
@@ -297,12 +306,8 @@ class PlotExecutor:
         self, tool_name: str, args: dict[str, Any]
     ) -> tuple[str, dict[str, Any]]:
         """执行单个工具，返回 (回传 LLM 文本, 前端事件)。"""
-        if tool_name == "write_file":
-            return await self._write_file(args)
-        if tool_name == "read_file":
-            return self._read_file(args)
-        if tool_name == "list_files":
-            return self._list_files(args)
+        if tool_name in self._file_tool_names.values:
+            return await self.execute_file_tool(tool_name, args)
         if tool_name == "python_sandbox":
             return await self._run_script(args)
         if tool_name == "compile_tikz":
@@ -333,34 +338,35 @@ class PlotExecutor:
             allowed_suffixes=allowed_suffixes,
         )
 
-    async def _write_file(self, args: dict[str, Any]) -> tuple[str, dict[str, Any]]:
-        file_path = args.get("file_path", "")
-        content = args.get("content", "")
+    def _write_agent_file(
+        self,
+        file_path: str,
+        content: str,
+    ) -> AgentFileWrite | AgentFileToolFailure:
         fcfg = self._cfg.features.plot_gen
         if self._file_count >= fcfg.agent_max_files:
             msg = f"Maximum file count {fcfg.agent_max_files} reached"
-            return msg, {"tool": "write_file", "ok": False, "summary": msg}
+            return AgentFileToolFailure(msg)
 
         try:
             resolved = self._resolve(file_path)
         except ValueError as e:
-            return str(e), {
-                "tool": "write_file",
-                "ok": False,
-                "summary": f"Path validation failed: {e}",
-            }
+            return AgentFileToolFailure(
+                str(e),
+                summary=f"Path validation failed: {e}",
+            )
 
         # 保护上传数据与控制文件：Agent 不得覆写 data/ 与 meta.json/trace.jsonl
         rel = resolved.relative_to(self._sandbox.resolve()).as_posix()
         if rel.startswith("data/") or rel in ("meta.json", "trace.jsonl"):
             msg = f"Cannot write to protected path: {file_path}"
-            return msg, {"tool": "write_file", "ok": False, "summary": msg}
+            return AgentFileToolFailure(msg)
 
         max_bytes = fcfg.agent_max_file_size_kb * 1024
         content_bytes = content.encode("utf-8")
         if len(content_bytes) > max_bytes:
             msg = f"File {file_path} exceeds {fcfg.agent_max_file_size_kb} KB"
-            return msg, {"tool": "write_file", "ok": False, "summary": msg}
+            return AgentFileToolFailure(msg)
 
         # Python 静态校验：写入前做 ast.parse 语法检查，把语法错误提前到
         # 写入阶段暴露，避免白跑一轮 python_sandbox 子进程。
@@ -371,62 +377,44 @@ class PlotExecutor:
                     f"Python syntax error in {file_path}: {syntax_error}. "
                     "Fix the syntax error before running python_sandbox."
                 )
-                return msg, {
-                    "tool": "write_file",
-                    "ok": False,
-                    "summary": f"Python syntax error: {syntax_error}",
-                    "file_path": file_path,
-                    "syntax_error": syntax_error,
-                }
+                return AgentFileToolFailure(
+                    msg,
+                    summary=f"Python syntax error: {syntax_error}",
+                    event={
+                        "file_path": file_path,
+                        "syntax_error": syntax_error,
+                    },
+                )
 
         resolved.parent.mkdir(parents=True, exist_ok=True)
         resolved.write_bytes(content_bytes)
         if resolved.as_posix() not in self._written_paths:
             self._written_paths.add(resolved.as_posix())
             self._file_count += 1
-        summary = f"Wrote {file_path} ({len(content_bytes)} bytes)"
-        self._logger.info(summary)
-        return summary, {
-            "tool": "write_file",
-            "ok": True,
-            "summary": summary,
-            "file_path": file_path,
-            "size": len(content_bytes),
-        }
+        self._logger.info(f"Wrote {file_path} ({len(content_bytes)} bytes)")
+        return AgentFileWrite(path=file_path, size=len(content_bytes))
 
-    def _read_file(self, args: dict[str, Any]) -> tuple[str, dict[str, Any]]:
-        file_path = args.get("file_path", "")
+    def _read_agent_file(
+        self,
+        file_path: str,
+    ) -> AgentFileRead | AgentFileToolFailure:
         try:
             resolved = self._resolve(file_path)
         except ValueError as e:
-            return str(e), {
-                "tool": "read_file",
-                "ok": False,
-                "summary": f"Path validation failed: {e}",
-            }
+            return AgentFileToolFailure(
+                str(e),
+                summary=f"Path validation failed: {e}",
+            )
         if not resolved.exists() or not resolved.is_file():
             msg = f"File not found: {file_path}"
-            return msg, {"tool": "read_file", "ok": False, "summary": msg}
-        content = resolved.read_text(encoding="utf-8", errors="replace")
-        truncated = content[:8000] + ("\n...[truncated]" if len(content) > 8000 else "")
-        return truncated, {"tool": "read_file", "ok": True, "summary": file_path}
-
-    def _list_files(self, args: dict[str, Any]) -> tuple[str, dict[str, Any]]:
-        files = self.list_files()
-        if not files:
-            return "(workspace is empty)", {
-                "tool": "list_files",
-                "ok": True,
-                "summary": "Empty",
-            }
-        text = "Files in sandbox:\n" + "\n".join(
-            f"- {f['path']} ({f['size']} bytes)" for f in files
+            return AgentFileToolFailure(msg)
+        return AgentFileRead(
+            path=file_path,
+            content=resolved.read_text(encoding="utf-8", errors="replace"),
         )
-        return text, {
-            "tool": "list_files",
-            "ok": True,
-            "summary": f"{len(files)} files",
-        }
+
+    def _list_agent_files(self, args: dict[str, Any]) -> list[dict[str, Any]]:
+        return self.list_files()
 
     async def _run_script(self, args: dict[str, Any]) -> tuple[str, dict[str, Any]]:
         script_name = args.get("script_name") or "scripts/plot.py"

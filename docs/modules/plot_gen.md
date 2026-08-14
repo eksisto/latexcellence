@@ -28,7 +28,7 @@ backend/modules/plot_gen/
 
 ## Session 私有工具
 
-工具由 `PlotGenAgent._build_tools_schema()` 动态构建，不注册全局 `ToolRegistry`：
+工具由 `PlotGenAgent._build_tools_schema()` 动态构建，不注册全局 `ToolRegistry`。其中 `write_file` / `read_file` / `list_files` 复用 `backend/utils/agent_file_tools.py` 的共享 schema 与执行模板，plot_gen 只保留沙箱路径、文件预算、保护路径和 Python 语法校验策略：
 
 | 工具 | 职责 |
 |---|---|

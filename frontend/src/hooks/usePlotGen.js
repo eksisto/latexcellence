@@ -49,7 +49,11 @@ export default function usePlotGen() {
       setSummary(ev.summary || "");
       return;
     }
-    setSteps((prev) => [...prev, { ...ev, _key: stepKeyRef.current++ }]);
+    const step =
+      ev.ok === false && ev.summary
+        ? { ...ev, summary: translateError(ev.summary) }
+        : ev;
+    setSteps((prev) => [...prev, { ...step, _key: stepKeyRef.current++ }]);
   }, []);
 
   const handleStreamError = useCallback((e) => {

@@ -56,12 +56,21 @@ from backend.core.logger import get_logger
 from backend.core.llm_client import get_llm_client
 from backend.core.prompts import get_prompt
 from backend.modules.template_gen.trace import append_trace, now_iso
+from backend.utils.agent_file_tools import (
+    AgentFileRead,
+    AgentFileToolExecutor,
+    AgentFileToolFailure,
+    AgentFileWrite,
+    build_agent_file_tools_schema,
+    normalize_line_range,
+)
 from backend.utils.latex_json_guard import (
     check_latex_environments,
     check_latex_text,
     check_latex_text_lite,
 )
 from backend.utils.latex_literals import blank_literal_spans
+from backend.utils.path_guard import resolve_project_path
 from backend.utils.tex_compile import run_tex_compile
 
 # 允许在沙箱内创建的文件扩展名白名单
@@ -1159,21 +1168,8 @@ class TemplateAgentService:
         for_read=True 时允许读取编译生成文件（.log/.aux/.toc 等），
         写入仍严格限制在 _ALLOWED_SUFFIXES 白名单内。
         """
-        if not file_path or not file_path.strip():
-            raise ValueError("file_path must not be empty")
-        if "\x00" in file_path:
-            raise ValueError("file_path contains illegal characters")
-        # 统一用正斜杠处理，再判绝对路径
         fp = file_path.replace("\\", "/")
-        if fp.startswith("/"):
-            raise ValueError("file_path must not be an absolute path")
-        if ".." in Path(fp).parts:
-            raise ValueError("file_path must not contain '..' segments")
-
-        resolved = (sandbox / fp).resolve()
-        if not resolved.is_relative_to(sandbox.resolve()):
-            raise ValueError("file_path resolves outside the sandbox")
-
+        resolved = resolve_project_path(sandbox, fp, allow_symlink=True)
         allowed = _ALLOWED_READ_SUFFIXES if for_read else _ALLOWED_SUFFIXES
         if resolved.suffix.lower() not in allowed:
             raise ValueError(
@@ -1186,82 +1182,42 @@ class TemplateAgentService:
 
     def _build_tools_schema(self, cfg: Any) -> list[dict[str, Any]]:
         """构建 agent 专属工具 schema（session 级私有，不进全局 ToolRegistry）。"""
-        tools: list[dict[str, Any]] = [
-            {
-                "type": "function",
-                "function": {
-                    "name": "write_file",
-                    "description": (
-                        "Create or overwrite a file in the project workspace "
-                        "with the given content. Use forward slashes for paths "
-                        "(e.g. 'chapters/intro.tex'). Create all needed parent "
-                        "directories implicitly. Only LaTeX-related extensions "
-                        "are allowed."
-                    ),
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "file_path": {
-                                "type": "string",
-                                "description": "Relative path within the project, e.g. 'main.tex'.",
-                            },
-                            "content": {
-                                "type": "string",
-                                "description": (
-                                    "The full file content to write. "
-                                    "LaTeX backslashes are literal characters; "
-                                    "inside this JSON string each one must be "
-                                    "escaped as two backslash characters "
-                                    "(\\\\) so JSON parsing does not corrupt "
-                                    "them into control characters."
-                                ),
-                            },
-                        },
-                        "required": ["file_path", "content"],
-                    },
-                },
-            },
-            {
-                "type": "function",
-                "function": {
-                    "name": "read_file",
-                    "description": (
-                        "Read the current contents of a file already created in "
-                        "the workspace. Useful before editing to fix compile "
-                        "errors, and for the pre-finish quality gate (re-check "
-                        "files against the requirement checklist). Generated "
-                        "diagnostic files (.log/.aux/.toc/.out/.blg/.fls) can "
-                        "also be read — e.g. 'read_file main.log' gives the "
-                        "full compiler log when the error summary is unclear. "
-                        "Optional start_line/end_line can limit a source read "
-                        "to the reported error area."
-                    ),
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "file_path": {"type": "string"},
-                            "start_line": {
-                                "type": "integer",
-                                "description": "Optional 1-based first line to read.",
-                            },
-                            "end_line": {
-                                "type": "integer",
-                                "description": "Optional inclusive last line to read.",
-                            },
-                        },
-                        "required": ["file_path"],
-                    },
-                },
-            },
-            {
-                "type": "function",
-                "function": {
-                    "name": "list_files",
-                    "description": "List all files currently in the workspace with their relative paths and sizes. Call this after writing files to verify the project structure.",
-                    "parameters": {"type": "object", "properties": {}},
-                },
-            },
-        ]
+        tools = build_agent_file_tools_schema(
+            supports_line_range=True,
+            write_description=(
+                "Create or overwrite a file in the project workspace with the "
+                "given content. Use forward slashes for paths (e.g. "
+                "'chapters/intro.tex'). Create all needed parent directories "
+                "implicitly. Only LaTeX-related extensions are allowed."
+            ),
+            read_description=(
+                "Read the current contents of a file already created in the "
+                "workspace. Useful before editing to fix compile errors, and "
+                "for the pre-finish quality gate (re-check files against the "
+                "requirement checklist). Generated diagnostic files "
+                "(.log/.aux/.toc/.out/.blg/.fls) can also be read — e.g. "
+                "'read_file main.log' gives the full compiler log when the "
+                "error summary is unclear. Optional line_range can limit a "
+                "source read to the reported error area."
+            ),
+            list_description=(
+                "List all files currently in the workspace with their relative "
+                "paths and sizes. Call this after writing files to verify the "
+                "project structure."
+            ),
+            write_path_description=(
+                "Relative path within the project, e.g. 'main.tex'."
+            ),
+            write_content_description=(
+                "The full file content to write. LaTeX backslashes are literal "
+                "characters; inside this JSON string each one must be escaped "
+                "as two backslash characters (\\\\) so JSON parsing does not "
+                "corrupt them into control characters."
+            ),
+            line_range_description=(
+                "Optional inclusive 1-based [start, end] line range."
+            ),
+        )
 
         if cfg.features.template_gen.agent_compile_enabled:
             tools.append(
@@ -1329,8 +1285,10 @@ class TemplateAgentService:
 # ── 工具执行器（持有沙箱，无状态可重建） ─────────────────────────────────
 
 
-class _ToolExecutor:
+class _ToolExecutor(AgentFileToolExecutor):
     """沙箱内工具执行器，封装路径校验、文件 I/O 与编译。"""
+
+    _supports_line_range = True
 
     def __init__(
         self,
@@ -1356,12 +1314,8 @@ class _ToolExecutor:
         self, tool_name: str, args: dict[str, Any]
     ) -> tuple[str, dict[str, Any]]:
         """执行单个工具，返回 (回传 LLM 的文本, 前端事件 dict)。"""
-        if tool_name == "write_file":
-            return await self._write_file(args)
-        if tool_name == "read_file":
-            return self._read_file(args)
-        if tool_name == "list_files":
-            return self._list_files(args)
+        if tool_name in self._file_tool_names.values:
+            return await self.execute_file_tool(tool_name, args)
         if tool_name == "compile_latex":
             return await self._compile_latex(args)
         if tool_name == "finish":
@@ -1370,10 +1324,11 @@ class _ToolExecutor:
 
     # ── write_file ────────────────────────────────────────────────────
 
-    async def _write_file(self, args: dict[str, Any]) -> tuple[str, dict[str, Any]]:
-        file_path = args.get("file_path", "")
-        content = args.get("content", "")
-
+    def _write_agent_file(
+        self,
+        file_path: str,
+        content: str,
+    ) -> AgentFileWrite | AgentFileToolFailure:
         fcfg = self._cfg.features.template_gen
 
         try:
@@ -1381,11 +1336,10 @@ class _ToolExecutor:
                 self._sandbox, file_path
             )
         except ValueError as e:
-            return str(e), {
-                "tool": "write_file",
-                "ok": False,
-                "summary": f"Path validation failed: {e}",
-            }
+            return AgentFileToolFailure(
+                str(e),
+                summary=f"Path validation failed: {e}",
+            )
 
         rel_path = resolved.relative_to(self._sandbox).as_posix()
         if (
@@ -1398,7 +1352,7 @@ class _ToolExecutor:
                 "REWRITE (overwrite) existing files to fix them, but do not "
                 "create any additional files."
             )
-            return msg, {"tool": "write_file", "ok": False, "summary": msg}
+            return AgentFileToolFailure(msg)
 
         max_bytes = fcfg.agent_max_file_size_kb * 1024
         content_bytes = content.encode("utf-8")
@@ -1407,7 +1361,7 @@ class _ToolExecutor:
                 f"File {file_path} exceeds the maximum size "
                 f"of {fcfg.agent_max_file_size_kb} KB"
             )
-            return msg, {"tool": "write_file", "ok": False, "summary": msg}
+            return AgentFileToolFailure(msg)
 
         # 写盘前内容校验：LaTeX/BibTeX 走各自的结构规则，README 等文档只做
         # 传输完整性检查。不能把普通 Markdown 的花括号/$ 当成 LaTeX 语法，
@@ -1435,7 +1389,7 @@ class _ToolExecutor:
                 )
             else:
                 msg += " Resend the complete file with intact text content."
-            return msg, {"tool": "write_file", "ok": False, "summary": msg}
+            return AgentFileToolFailure(msg)
 
         if resolved.suffix.lower() in {".cls", ".sty"}:
             provides_error = _check_provides_date(content)
@@ -1445,7 +1399,7 @@ class _ToolExecutor:
                     f"{file_path}: {provides_error}"
                 )
                 msg = f"File {file_path} was rejected: {provides_error}"
-                return msg, {"tool": "write_file", "ok": False, "summary": msg}
+                return AgentFileToolFailure(msg)
             if resolved.suffix.lower() == ".cls":
                 option_order_error = _check_class_option_order(content)
                 if option_order_error:
@@ -1454,7 +1408,7 @@ class _ToolExecutor:
                         f"{file_path}: {option_order_error}"
                     )
                     msg = f"File {file_path} was rejected: {option_order_error}"
-                    return msg, {"tool": "write_file", "ok": False, "summary": msg}
+                    return AgentFileToolFailure(msg)
             setter_accessor_error = _check_setter_accessors(content)
             if setter_accessor_error:
                 self._logger.warning(
@@ -1462,7 +1416,7 @@ class _ToolExecutor:
                     f"{file_path}: {setter_accessor_error}"
                 )
                 msg = f"File {file_path} was rejected: {setter_accessor_error}"
-                return msg, {"tool": "write_file", "ok": False, "summary": msg}
+                return AgentFileToolFailure(msg)
 
         if resolved.suffix.lower() in _LATEX_ENV_CHECK_SUFFIXES:
             cjk_error = _check_cjk_support(
@@ -1476,7 +1430,7 @@ class _ToolExecutor:
                     f"{file_path}: {cjk_error}"
                 )
                 msg = f"File {file_path} was rejected: {cjk_error}"
-                return msg, {"tool": "write_file", "ok": False, "summary": msg}
+                return AgentFileToolFailure(msg)
             body_style_error = _check_body_style_commands(content)
             if body_style_error:
                 self._logger.warning(
@@ -1484,7 +1438,7 @@ class _ToolExecutor:
                     f"{file_path}: {body_style_error}"
                 )
                 msg = f"File {file_path} was rejected: {body_style_error}"
-                return msg, {"tool": "write_file", "ok": False, "summary": msg}
+                return AgentFileToolFailure(msg)
 
         # 环境配对错误在 TeX 编译时通常会级联成难以定位的错误。对源文件
         # 做一次轻量静态检查，把明确的结构错误在写盘阶段反馈给 Agent；
@@ -1501,7 +1455,7 @@ class _ToolExecutor:
                     "Fix the begin/end environment pair and resend the complete "
                     "file."
                 )
-                return msg, {"tool": "write_file", "ok": False, "summary": msg}
+                return AgentFileToolFailure(msg)
 
             public_api_error = _check_public_body_commands(content)
             if public_api_error:
@@ -1514,7 +1468,7 @@ class _ToolExecutor:
                     "Keep internal @ macros inside the .cls/.sty implementation "
                     "and resend the complete body file using its public API."
                 )
-                return msg, {"tool": "write_file", "ok": False, "summary": msg}
+                return AgentFileToolFailure(msg)
 
         resolved.parent.mkdir(parents=True, exist_ok=True)
         resolved.write_bytes(content_bytes)
@@ -1523,76 +1477,42 @@ class _ToolExecutor:
         self._last_success_source_hash = None
         self._logger.info(f"write_file: {file_path} ({len(content_bytes)} bytes)")
 
-        summary = f"Wrote {file_path} ({len(content_bytes)} bytes)"
-        return summary, {
-            "tool": "write_file",
-            "ok": True,
-            "summary": summary,
-            "file_path": file_path,
-            "size": len(content_bytes),
-        }
+        return AgentFileWrite(path=file_path, size=len(content_bytes))
 
     # ── read_file ─────────────────────────────────────────────────────
 
-    def _read_file(self, args: dict[str, Any]) -> tuple[str, dict[str, Any]]:
-        file_path = args.get("file_path", "")
+    def _read_agent_file(
+        self,
+        file_path: str,
+    ) -> AgentFileRead | AgentFileToolFailure:
         try:
             resolved = TemplateAgentService._resolve_sandbox_path(
                 self._sandbox, file_path, for_read=True
             )
         except ValueError as e:
-            return str(e), {
-                "tool": "read_file",
-                "ok": False,
-                "summary": f"Path validation failed: {e}",
-            }
+            return AgentFileToolFailure(
+                str(e),
+                summary=f"Path validation failed: {e}",
+            )
         if not resolved.exists() or not resolved.is_file():
             msg = f"File not found: {file_path}"
-            return msg, {"tool": "read_file", "ok": False, "summary": msg}
-        content = resolved.read_text(encoding="utf-8")
-        start_line = args.get("start_line")
-        end_line = args.get("end_line")
-        line_range: tuple[int, int] | None = None
-        if start_line is not None or end_line is not None:
-            try:
-                start = int(start_line) if start_line is not None else 1
-                end = int(end_line) if end_line is not None else start + 40
-            except (TypeError, ValueError):
-                msg = "start_line and end_line must be integers"
-                return msg, {"tool": "read_file", "ok": False, "summary": msg}
-            if start < 1 or end < start:
-                msg = "read_file line range must satisfy 1 <= start_line <= end_line"
-                return msg, {"tool": "read_file", "ok": False, "summary": msg}
-            lines = content.splitlines(keepends=True)
-            content = "".join(lines[start - 1 : end])
-            line_range = (start, end)
-        # 截断超长内容回传 LLM
-        truncated = (
-            content if len(content) <= 8000 else (content[:8000] + "\n...[truncated]")
+            return AgentFileToolFailure(msg)
+        return AgentFileRead(
+            path=file_path,
+            content=resolved.read_text(encoding="utf-8"),
         )
-        event = {"tool": "read_file", "ok": True, "summary": file_path}
-        if line_range is not None:
-            event["line_range"] = list(line_range)
-        return truncated, event
+
+    def _prepare_agent_line_range(
+        self,
+        content: str,
+        value: Any,
+    ) -> tuple[int, int] | None:
+        return normalize_line_range(value, coerce=True)
 
     # ── list_files ────────────────────────────────────────────────────
 
-    def _list_files(self, args: dict[str, Any]) -> tuple[str, dict[str, Any]]:
-        files = self.list_files()
-        if not files:
-            return "(workspace is empty)", {
-                "tool": "list_files",
-                "ok": True,
-                "summary": "Empty",
-            }
-        text = "Files in workspace:\n" + "\n".join(
-            f"- {f['path']} ({f['size']} bytes)" for f in files
-        )
-        return text, {
-            "tool": "list_files",
-            "ok": True,
-            "summary": f"{len(files)} files",
-        }
+    def _list_agent_files(self, args: dict[str, Any]) -> list[dict[str, Any]]:
+        return self.list_files()
 
     # ── compile_latex ─────────────────────────────────────────────────
 
@@ -2524,7 +2444,11 @@ def _summarize_args(tool_name: str, args: dict[str, Any]) -> dict[str, Any]:
     if tool_name == "compile_latex":
         return {"main_file": args.get("main_file", "")}
     if tool_name == "read_file":
-        return {"file_path": args.get("file_path", "")}
+        return {
+            key: value
+            for key, value in args.items()
+            if key in ("file_path", "line_range")
+        }
     if tool_name == "finish":
         return {
             "summary": args.get("summary", ""),

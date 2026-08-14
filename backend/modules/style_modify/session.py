@@ -371,9 +371,6 @@ class StyleModifySessionStore:
         self,
         session_id: str,
         file_path: str,
-        *,
-        start_line: int = 1,
-        end_line: int | None = None,
     ) -> dict[str, Any]:
         meta = self.load_meta(session_id)
         cfg = get_config()
@@ -391,29 +388,9 @@ class StyleModifySessionStore:
         if resolved.stat().st_size > max_bytes:
             raise ValueError(f"File too large: {file_path}")
         content = safe_read(resolved)
-        lines = content.splitlines()
-        if not lines and not content:
-            lines = [""]
-        start_line = max(1, start_line)
-        end_line = min(end_line or len(lines), len(lines))
-        if start_line > len(lines):
-            raise ValueError(f"start_line out of range: {start_line}")
-        if start_line > end_line:
-            raise ValueError("start_line must be less than or equal to end_line")
-        selected = lines[start_line - 1 : end_line]
-        selected_text = "\n".join(selected)
-        if len(selected_text) > cfg.features.style_modify.agent.max_tool_output_chars:
-            selected_text = (
-                selected_text[: cfg.features.style_modify.agent.max_tool_output_chars]
-                + "\n...[truncated]"
-            )
         return {
             "path": file_path,
-            "start_line": start_line,
-            "end_line": end_line,
-            "content": selected_text,
-            "truncated": len(selected_text)
-            > cfg.features.style_modify.agent.max_tool_output_chars,
+            "content": content,
         }
 
     # ── overlay 候选修改 ────────────────────────────────────────────

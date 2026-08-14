@@ -374,7 +374,7 @@ redo 栈: []
 ### 5.1 跨模块通用数据流
 
 - **逐段检查**（typo_check / expression_opt / terminology_check / code_review / paragraph_translate）：文件解析 → marker 替换（code_review 例外）→ LLM 批量/流式处理 → SSE 推送 → apply 时还原 marker + MD5 校验 + 原子写入。基类细节见 [1.3 核心架构组件](#13-核心架构组件baseparagraphcheckservice)。
-- **Agent 自主循环**（template_gen / plot_gen / style_modify 项目 Agent）：Function Calling 规划 → 写文件/执行 → 编译或沙箱验证 → 读结果自修 → finish；全程写入 `trace.jsonl`，事件经 SSE 推送。
+- **Agent 自主循环**（template_gen / plot_gen / style_modify 项目 Agent）：Function Calling 规划 → 写文件/执行 → 编译或沙箱验证 → 读结果自修 → finish；文件工具统一复用 `backend/utils/agent_file_tools.py` 的 schema、调度与 `line_range` 读取契约，模块只保留校验和存储策略；全程写入 `trace.jsonl`，事件经 SSE 推送。
 - **图片 OCR**（formula_ocr / table_ocr）：上传图片 → 预处理 → Vision API 分隔符协议输出 → 内容校验重试 → 统一格式化。
 - **外部进程**（compile / git_diff / format_converter）：调用 latexmk / pandoc / git；LLM 仅在编译失败翻译、宏包兜底等场景介入。
 
