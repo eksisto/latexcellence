@@ -1026,6 +1026,7 @@
     "invalidProjectRelativePath": "无效的项目相对路径",
     "projectDirNotFoundInRevision": "目标版本中找不到项目目录",
     "gitDiffProjectNotInRepo": "打开的项目不在其 Git 仓库内",
+    "gitNotRepository": "当前工作区不是 Git 仓库（未初始化）",
     "diffCompileFailedFallback": "差异 PDF 已生成，但编译失败，请参考原始输出来定位问题",
     "llmTranslationFailed": "错误翻译生成失败，请参考下方原始编译输出",
     "latexdiffNotInstalled": "未找到 latexdiff 命令，请确认已安装 TeX Live 且 latexdiff 在 PATH 中",

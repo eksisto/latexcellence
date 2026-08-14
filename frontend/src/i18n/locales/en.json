@@ -1026,6 +1026,7 @@
     "invalidProjectRelativePath": "Invalid project-relative path",
     "projectDirNotFoundInRevision": "Project directory not found in target revision",
     "gitDiffProjectNotInRepo": "Opened project is not inside its Git repository",
+    "gitNotRepository": "The current workspace is not a Git repository (not initialized)",
     "diffCompileFailedFallback": "Diff PDF generated but compilation failed. Please refer to the raw output to diagnose the issue.",
     "llmTranslationFailed": "LLM error translation failed, please refer to the raw compilation output below",
     "latexdiffNotInstalled": "latexdiff command not found. Please confirm that TeX Live is installed and latexdiff is in PATH",

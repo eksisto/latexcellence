@@ -143,6 +143,8 @@ const PATTERN_MAP = [
   [/^Format not found:\s*(.+)/, "formatNotFound", (m) => ({ name: m[1] })],
 
   // Git
+  [/^fatal: not a git repository/, "gitNotRepository", () => ({})],
+  [/^fatal: 不是 git 仓库/, "gitNotRepository", () => ({})],
   [
     /^Invalid Git revision:\s*(.+)/,
     "invalidGitRevision",
