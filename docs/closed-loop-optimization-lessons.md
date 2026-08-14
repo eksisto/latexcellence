@@ -12,6 +12,7 @@
 | 第 1 轮 | 2026-08-11 | 过拟合事故与修正 | §3.1 |
 | 第 2 轮 | 2026-08-13 | 机制修复，不碰评测数据 | §3.2 |
 | 第 3 轮 | 2026-08-13 | 机制补齐 + Responses 视觉评审 | §3.3 |
+| 第 4 轮 | 2026-08-14 | Windows 跨环境基线 + 循环机制补齐 | §3.4 |
 
 ## 1. 背景信息
 
@@ -418,6 +419,98 @@ API（`tools/visual_review_api.py`），result 目录清空后完全重测。
 - 上下文压缩不是可选优化，而是长任务 Agent 的必需能力；超大文件反复写入
   很容易在 50 轮内耗尽上下文。
 - 任何"连续失败 N 次"干预都要检查是否会被无关/畸形调用重置，否则干预形同虚设。
+
+### 3.4 第 4 轮（2026-08-14）：Windows 跨环境基线 + 循环机制补齐
+
+#### 基线（base3，Windows）
+
+| 场景 | 轮数 | 编译 | 需求 | 启发式分 |
+| --- | --- | --- | --- | --- |
+| thesis | 50 | ✗ | 10/10 | 70 |
+| beamer | 43 | ✓ | 10/10 | 100 |
+| resume | 25 | ✓ | 10/10 | 90 |
+| requirements | 50 | ✗ | 10/10 | 65 |
+
+平均 **81.2**。视觉审查只有 beamer（9.0）与 resume（9.0）有 PDF；
+thesis/requirements 因编译失败无 PDF 可审。
+
+#### 诊断出的机制缺口
+
+1. **"只写不编"退化循环**：requirements 在 50 轮里 `write_file` 42 次、
+   只编译 4 次；thesis 最后十余轮反复重写 `.cls`/`main.tex` 却不编译。
+   已有干预覆盖"重复编译错误""多错误系统性重写"，但没有覆盖
+   "编译后大量写文件却不验证"。
+2. **natbib 与 `.bbl` 风格不匹配**：thesis 中途切换引用风格后报
+   "Bibliography not compatible with author-year citations"，Agent 想
+   删除 `.bbl` 但工具没有删除能力，也没有针对该签名的修复指引；
+   实际上 latexmk `-gg` 会重新生成 `.bbl`，根因是 natbib 模式与 `.bst`
+   没有对齐。
+3. **成功编译后的空转**：requirements（opt7）对同一份已成功源码连续
+   调用 20+ 次 `compile_latex`；resume（opt8 初版）连续多次成功编译后
+   追 overfull box 直到耗尽 50 轮。没有"源码未变已成功→应 finish"与
+   "连续成功→非致命警告可交付"的防呆。
+4. **Windows 下评测工具自身的跨平台缺陷**：`generality_gate.py` 用系统
+   默认 GBK 解码 `git diff` 的 UTF-8 输出直接崩溃；`visual_review.py`
+   单场景重跑会整体覆盖 `visual_reviews.json`；`compare.py --targets`
+   的值被误算成位置参数，带 targets 的对比无法运行。
+5. **手动 CJK 字体写盘校验实验失败**：对 `.cls/.sty` 中
+   `\setCJK*font`（含 `[CJK]` 占位符）做整文件拒绝后，resume 的模型
+   连续 21 次重发被拒文件直到死循环，比不拒绝时（base3 在 25 轮内
+   自行收敛）更差，已撤销。
+
+#### 本轮改动
+
+| 改动 | 文件 | 为什么通用 |
+| --- | --- | --- |
+| 首次编译后连续 5 次写文件未编译 → 提示立即编译；同一文件重写 5 次 → 提示停止盲改 | `backend/modules/template_gen/agent.py` | 任何长修复迭代都需要验证闭环，与模板/环境无关 |
+| natbib 与 `.bbl` 风格不匹配的错误签名 HINT（对齐 natbib 模式与 `.bst`，不删 `.bbl`） | 同上 | 通用 LaTeX 引用机制 |
+| `Undefined color` 错误签名 HINT（先 `\definecolor` 再使用、检查大小写） | 同上 | 通用 xcolor/主题机制 |
+| 源码未变时跳过"重复成功编译"并提示 finish；连续 2 次触发 `success_recompile_loop` 干预 | 同上 | 防"已验证仍空转"的通用防呆 |
+| 连续 4 次成功编译 → 提示非致命质量警告可交付、应 finish | 同上 | 防"无限打磨 overfull box"的通用防呆 |
+| `generality_gate.py` 的 `git diff` 子进程显式 UTF-8 解码 | `tools/generality_gate.py` | Windows/非 UTF-8 控制台可移植性 |
+| `compare.py --targets/--tolerance/--visual-tolerance` 参数值不再混入位置参数 | `tools/templategen_opt/compare.py` | 工具自身参数解析缺陷 |
+| `visual_review.py` 汇总文件先加载旧结果再合并，单场景重跑不再覆盖其他场景 | `tools/templategen_opt/visual_review.py` | 工具自身状态合并缺陷 |
+| ~~`.cls/.sty` 手动 CJK 字体整文件拒绝~~（实验后撤销） | `backend/modules/template_gen/agent.py` | 整文件拒绝式校验对强先验模型制造更差循环 |
+
+#### 结果
+
+最终代码一轮（opt8；beamer/resume 各重跑一次消除采样噪声）：
+
+| 场景 | 轮数 | 编译 | 需求 | 启发式分 |
+| --- | --- | --- | --- | --- |
+| thesis | 36 | ✓ | 10/10 | 100 |
+| beamer | 50 | ✓ | 10/10 | 95 |
+| resume | 22 | ✓ | 10/10 | 90 |
+| requirements | 27 | ✓ | 9/10 | 91 |
+
+平均启发式 **81.2 → 94.0**。对照组回归：thesis +30、requirements +26，
+beamer -5（容差内）、resume 0；`generality_gate.py check` 与
+`compare.py` 双 tag 门禁均 PASS。视觉审查（全部 4 场景均有 PDF）：
+thesis 8.0、beamer 9.0、requirements 8.0、resume 9.0，平均 **8.5/10**。
+
+holdout `tju18`（Windows）50 轮内未编译成功，需求 12/13，启发式 67；
+失败集中在通用 `.cls` 细节（类选项顺序、`\kai`→`\kaishu`、`\thedate`
+未定义、`\setkeywords` 参数个数），未见 Windows 专属故障，但收敛未达标，
+留待下一轮继续。
+
+#### 经验教训
+
+- 循环干预要覆盖三种形态：只写不编（写文件后必须验证）、只编不写
+  （源码未变禁止重复编译）、成功编译后无限打磨（非致命警告可交付）。
+- 机制优先不等于"越拒绝越稳"：整文件拒绝式写盘校验可能把模型逼进
+  比提示词引导更差的循环；对模型有强先验的写法，先给错误签名 HINT，
+  再考虑确定性拒绝。
+- 环境轮换不仅考验生产代码，也暴露评测工具自身的编码、参数解析与
+  结果合并问题；跨环境矩阵应把 `tools/` 一并纳入检查。
+- 启发式分受模型采样与工程结构影响较大（beamer 在 61~100 间波动），
+  单轮对照组回退需结合编译成功与视觉分判断，不能只看分数。
+
+#### 链接
+
+- 评测 tag：`base3`（Windows 基线）、`opt6`/`opt7`（中间实验）、
+  `opt8`（最终对照）、`tju18`（holdout 回归）
+- 视觉审查结果：`tools/templategen_opt/results/opt8/visual_reviews.json`
+- 通用性门禁：`tools/generality_gate.py check` PASS
 
 ## 4. 轮次复盘模板（新增轮次时使用）
 

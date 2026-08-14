@@ -41,20 +41,33 @@ def score_of(metrics: dict[str, Any]) -> float:
 def _parse_args(
     argv: list[str],
 ) -> tuple[list[str], set[str], float, float, bool]:
-    positional = [a for a in argv if not a.startswith("--")]
+    positional: list[str] = []
     targets: set[str] = set()
     tolerance = 5.0
     visual_tolerance = 1.0
     run_gate = True
-    for i, arg in enumerate(argv):
+    i = 0
+    while i < len(argv):
+        arg = argv[i]
         if arg == "--targets" and i + 1 < len(argv):
             targets = {k for k in argv[i + 1].split(",") if k}
+            i += 2
+            continue
         elif arg == "--tolerance" and i + 1 < len(argv):
             tolerance = float(argv[i + 1])
+            i += 2
+            continue
         elif arg == "--visual-tolerance" and i + 1 < len(argv):
             visual_tolerance = float(argv[i + 1])
+            i += 2
+            continue
         elif arg == "--no-gate":
             run_gate = False
+            i += 1
+            continue
+        else:
+            positional.append(arg)
+            i += 1
     return positional, targets, tolerance, visual_tolerance, run_gate
 
 

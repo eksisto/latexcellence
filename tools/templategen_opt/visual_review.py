@@ -338,13 +338,19 @@ async def main() -> None:
         f"(env overrides: model={bool(REVIEW_MODEL)} "
         f"base_url={bool(REVIEW_BASE_URL)} key={bool(REVIEW_API_KEY)})"
     )
+    reviews_path = out_root / "visual_reviews.json"
     all_reviews: dict[str, Any] = {}
+    if reviews_path.exists():
+        try:
+            all_reviews = json.loads(reviews_path.read_text(encoding="utf-8"))
+        except json.JSONDecodeError:
+            all_reviews = {}
     for key in scenarios:
         result_dir = out_root / key
         rec = await review_scenario(llm, key, result_dir)
         if rec:
             all_reviews[key] = rec
-    (out_root / "visual_reviews.json").write_text(
+    reviews_path.write_text(
         json.dumps(all_reviews, ensure_ascii=False, indent=2), encoding="utf-8"
     )
     if all_reviews:

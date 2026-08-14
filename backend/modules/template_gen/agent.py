@@ -534,6 +534,20 @@ class TemplateAgentService:
         # 逐个修补效率太低，应系统性重写/拆分。
         distinct_compile_keys: set[str] = set()
         distinct_guidance_injected = False
+        # 首次编译之后连续写文件却不编译的防呆：项目搭建阶段大量首写是
+        # 正常的，但编译失败后的"反复重写同一文件、不验证"会烧光轮次。
+        writes_without_compile = 0
+        same_file_writes = 0
+        last_write_file: str | None = None
+        injected_write_loop_thresholds: set[int] = set()
+        injected_same_file_keys: set[str] = set()
+        # 连续对"已成功编译且源码未变"的项目重复调用 compile 的空转防呆。
+        success_recompile_strikes = 0
+        injected_success_recompile = False
+        # 连续多次成功编译但始终不 finish 的防呆：模型可能在追非致命
+        # 质量警告（overfull box 等）上无限打磨，烧光轮次预算。
+        consecutive_successes = 0
+        injected_finish_nudge = False
 
         await self._append_trace(
             sandbox,
@@ -758,6 +772,135 @@ class TemplateAgentService:
                     # 一次成功的源码写入打断 compile-skip 计数；失败的写入
                     # 不应伪装成已经改变了编译输入。
                     compile_skip_strikes = 0
+                    success_recompile_strikes = 0
+                    # 只有已经尝试过编译后才跟踪"写而不编"；项目初始搭建
+                    # 阶段连续创建十几个文件是正常流程，不应打断。
+                    if compile_state["called"]:
+                        writes_without_compile += 1
+                        write_path = str(tool_args.get("file_path") or "")
+                        if write_path:
+                            if write_path == last_write_file:
+                                same_file_writes += 1
+                            else:
+                                last_write_file = write_path
+                                same_file_writes = 1
+                        guidance_parts: list[str] = []
+                        if (
+                            same_file_writes >= 5
+                            and write_path
+                            and write_path not in injected_same_file_keys
+                        ):
+                            injected_same_file_keys.add(write_path)
+                            guidance_parts.append(
+                                f"You have rewritten '{write_path}' "
+                                f"{same_file_writes} times since the last "
+                                "compile_latex call."
+                            )
+                        if (
+                            writes_without_compile >= 5
+                            and writes_without_compile
+                            not in injected_write_loop_thresholds
+                        ):
+                            injected_write_loop_thresholds.add(writes_without_compile)
+                            guidance_parts.append(
+                                f"You have made {writes_without_compile} "
+                                "successful file writes since the last "
+                                "compile_latex call."
+                            )
+                        if guidance_parts:
+                            guidance = (
+                                "[SYSTEM INTERVENTION] "
+                                + " ".join(guidance_parts)
+                                + " STOP editing unverified files. Call "
+                                "compile_latex NOW to check the current "
+                                "project; if it fails, read the reported "
+                                "source excerpt and log (e.g. read_file "
+                                "main.log), fix the root cause ONCE, then "
+                                "compile again. Unverified rewrites do not "
+                                "count as progress."
+                            )
+                            messages.append({"role": "user", "content": guidance})
+                            await self._append_trace(
+                                sandbox,
+                                {
+                                    "ts": now_iso(),
+                                    "run_id": run_id,
+                                    "type": "nudge",
+                                    "data": {
+                                        "kind": "write_without_compile",
+                                        "message": guidance,
+                                    },
+                                },
+                            )
+                if tool_name == "compile_latex":
+                    # 无论成功/失败/跳过，一次编译尝试都视为验证动作，
+                    # 重置"写而不编"计数。
+                    writes_without_compile = 0
+                    same_file_writes = 0
+                    last_write_file = None
+                    if result_event.get("success") is True and not result_event.get(
+                        "already_verified"
+                    ):
+                        consecutive_successes += 1
+                        if consecutive_successes >= 4 and not injected_finish_nudge:
+                            injected_finish_nudge = True
+                            guidance = (
+                                "[SYSTEM INTERVENTION] You have produced "
+                                f"{consecutive_successes} consecutive "
+                                "successful compiles. Non-fatal quality "
+                                "warnings (overfull boxes, font shape "
+                                "fallbacks, etc.) do NOT block delivery. "
+                                "Unless you have identified a specific new "
+                                "defect to fix, call finish now with the "
+                                "main file and a summary; polishing "
+                                "warnings indefinitely will exhaust the "
+                                "round budget."
+                            )
+                            messages.append({"role": "user", "content": guidance})
+                            await self._append_trace(
+                                sandbox,
+                                {
+                                    "ts": now_iso(),
+                                    "run_id": run_id,
+                                    "type": "nudge",
+                                    "data": {
+                                        "kind": "finish_after_successes",
+                                        "message": guidance,
+                                    },
+                                },
+                            )
+                    elif result_event.get("success") is False:
+                        consecutive_successes = 0
+                    if result_event.get("already_verified"):
+                        success_recompile_strikes += 1
+                        if (
+                            success_recompile_strikes >= 2
+                            and not injected_success_recompile
+                        ):
+                            injected_success_recompile = True
+                            guidance = (
+                                "[SYSTEM INTERVENTION] You have called "
+                                "compile_latex "
+                                f"{success_recompile_strikes} times without "
+                                "changing the source, and the project already "
+                                "compiled successfully. Do NOT recompile "
+                                "again. Call finish now (with main_file and "
+                                "a summary), or make a real source change "
+                                "first."
+                            )
+                            messages.append({"role": "user", "content": guidance})
+                            await self._append_trace(
+                                sandbox,
+                                {
+                                    "ts": now_iso(),
+                                    "run_id": run_id,
+                                    "type": "nudge",
+                                    "data": {
+                                        "kind": "success_recompile_loop",
+                                        "message": guidance,
+                                    },
+                                },
+                            )
 
                 # 同一份被拒内容重发 3 次 → 显式纠正（防退化循环）
                 if tool_name == "write_file" and result_event.get("ok") is False:
@@ -1205,6 +1348,9 @@ class _ToolExecutor:
         # 记录最近一次失败编译对应的源码快照。若源码完全未变，重复编译
         # 只会产生相同结果，直接返回可操作的干预信息，避免浪费超时预算。
         self._last_failed_source_hash: str | None = None
+        # 记录最近一次成功编译对应的源码快照。源码未变时重复"成功编译"
+        # 同样是空转：项目已经验证过，应该 finish 或先改源码。
+        self._last_success_source_hash: str | None = None
 
     async def execute(
         self, tool_name: str, args: dict[str, Any]
@@ -1373,6 +1519,8 @@ class _ToolExecutor:
         resolved.parent.mkdir(parents=True, exist_ok=True)
         resolved.write_bytes(content_bytes)
         self._written_paths.add(rel_path)
+        # 源码已变化：允许（并要求）重新编译，清空成功快照防呆。
+        self._last_success_source_hash = None
         self._logger.info(f"write_file: {file_path} ({len(content_bytes)} bytes)")
 
         summary = f"Wrote {file_path} ({len(content_bytes)} bytes)"
@@ -1485,6 +1633,22 @@ class _ToolExecutor:
             }
 
         source_hash = await asyncio.to_thread(self._source_hash)
+        if self._last_success_source_hash == source_hash:
+            msg = (
+                "Compilation skipped: project source is unchanged since the "
+                "previous SUCCESSFUL compile, so the project is already "
+                "verified. Do not recompile without a meaningful source "
+                "change. Either call finish (with main_file and summary) "
+                "now, or edit a source file with write_file first."
+            )
+            return msg, {
+                "tool": "compile_latex",
+                "ok": True,
+                "success": True,
+                "already_verified": True,
+                "log": msg,
+                "summary": msg,
+            }
         if self._last_failed_source_hash == source_hash:
             msg = (
                 "Compilation skipped: project source is unchanged since the "
@@ -1683,9 +1847,11 @@ class _ToolExecutor:
             event["quality_warnings"] = quality_warnings
         if not build_success:
             self._last_failed_source_hash = source_hash
+            self._last_success_source_hash = None
             event["errors"] = errors
         else:
             self._last_failed_source_hash = None
+            self._last_success_source_hash = source_hash
         return llm_text, event
 
     # ── finish ────────────────────────────────────────────────────────
@@ -2258,6 +2424,37 @@ def _error_hints(errors: list[dict[str, Any]]) -> list[str]:
                 "+\\usepackage{algorithmic} or algorithm2e; `tikzpicture` "
                 "needs \\usepackage{tikz}), or the name is misspelled. Add "
                 "the package or fix the name."
+            )
+            if hint not in hints:
+                hints.append(hint)
+        if "undefined color" in combined or (
+            "xcolor" in combined and "undefined" in combined
+        ):
+            hint = (
+                "Color mismatch: a color name used in the document or theme "
+                "is not defined. Define every custom color with "
+                "\\definecolor{<name>}{<model>}{<spec>} in the color theme "
+                "file BEFORE its first use, or use a color name the loaded "
+                "class/theme already provides. Check spelling and case: "
+                "color names are case-sensitive, and a theme does not "
+                "magically provide a color unless you define it."
+            )
+            if hint not in hints:
+                hints.append(hint)
+        if "bibliography not compatible" in combined or (
+            "natbib" in combined and "bbl" in combined
+        ):
+            hint = (
+                "Bibliography style mismatch: natbib's citation mode and the "
+                ".bbl format disagree (author-year vs numeric). latexmk -gg "
+                "already regenerates .bbl from the current .bst, so do NOT "
+                "try to delete or hand-edit .bbl. Align the two sides in "
+                "source: either load natbib in numeric mode (e.g. [numbers] "
+                "or [sort&compress]) with a numeric .bst (plain / unsrt / "
+                "gbt7714-numerical), or switch to author-year mode with an "
+                "author-year .bst (plainnat / gbt7714-author-year). Pick ONE "
+                "mode and make \\bibliographystyle, natbib options and "
+                "citation commands consistent."
             )
             if hint not in hints:
                 hints.append(hint)

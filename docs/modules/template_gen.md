@@ -115,6 +115,21 @@ LLM 面对复杂需求时可能出现"规划瘫痪"：首轮输出长篇思考�
 系统提示词同步要求"首轮回复必须包含至少一个 tool_call"，且每轮 `content`
 不超过 2 句，把规划收敛到行动上。
 
+## 循环防呆干预（nudge）
+
+Agent 循环对三类"看似在工作、实际在空转"的行为注入 `[SYSTEM INTERVENTION]`
+干预（记录为 `type: "nudge"`，不影响工具结果）：
+
+1. **写而不编**：首次编译后连续 5 次成功 `write_file` 仍未调用
+   `compile_latex`，或同一文件连续重写 5 次，注入"停止盲改、立即编译验证"
+   的指令（`write_without_compile`）。
+2. **成功源码重复编译**：`compile_latex` 检测到源码与上次成功编译完全
+   一致时直接跳过并提示"项目已验证，应 finish 或先改源码"
+   （`already_verified`）；连续 2 次触发后注入 `success_recompile_loop`。
+3. **成功编译后无限打磨**：连续 4 次成功编译（源码有变化）仍不 finish 时，
+   注入"非致命质量警告可交付，除非有具体新缺陷否则应 finish"
+   （`finish_after_successes`），防止模型追 overfull box 等警告烧光轮次。
+
 ## 编译错误修复协议
 
 Agent 的 `agent_system` prompt 中写入了完整的编译错误修复协议（**COMPILATION ERROR RECOVERY PROTOCOL**），强制 LLM 在编译失败时走以下循环：
@@ -152,6 +167,11 @@ latexmk 的 stdout/stderr 有时不含 `!` 错误行（错误只写进了 `<main
    - `Extra alignment tab` → `p{}` 单元格内 `\centering` 会重定义 `\\`，
      行尾需 `\tabularnewline` 或用 `>{\centering\arraybackslash}p{...}`。
    - `Environment xxx undefined` → 加载对应宏包（如 `algorithm`）。
+   - `Undefined color 'X'` → 自定义颜色须先用 `\definecolor` 定义再使用，
+     检查拼写与大小写；主题不会凭空提供未定义的颜色。
+   - `Bibliography not compatible with author-year citations` → natbib
+     模式与 `.bst` 不一致；`latexmk -gg` 会自动重新生成 `.bbl`，无需删除，
+     只需把 natbib 选项与 `\bibliographystyle` 对齐到同一种风格。
    - 参考文献失败（无 `.bbl`）→ 自动追加 `main.blg` 尾部并提示检查
      `.bst` 名称与 `.bib` 条目字段。
 3. 同一编译错误签名连续出现 3 次时，循环注入 `[SYSTEM INTERVENTION]`
