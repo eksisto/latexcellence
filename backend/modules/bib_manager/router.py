@@ -10,6 +10,7 @@ import json
 from fastapi import APIRouter, File, Form, HTTPException, Query, UploadFile
 from pydantic import BaseModel
 
+from backend.core.project_manager import FileConflictError
 from backend.modules.bib_manager.models import (
     DeleteEntryRequest,
     DetectDuplicatesRequest,
@@ -181,6 +182,17 @@ async def save_bib_entry(
             request.file_path, request.bibtex_code, request.cite_key, workspace_id
         )
         return result
+    except FileConflictError as e:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "error": "file_conflict",
+                "message": str(e),
+                "file_path": e.file_path,
+                "expected_md5": e.expected_md5,
+                "current_md5": e.current_md5,
+            },
+        )
     except RuntimeError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except FileNotFoundError as e:
@@ -333,6 +345,17 @@ async def delete_entry(
             request.file_path, request.cite_key, workspace_id
         )
         return result
+    except FileConflictError as e:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "error": "file_conflict",
+                "message": str(e),
+                "file_path": e.file_path,
+                "expected_md5": e.expected_md5,
+                "current_md5": e.current_md5,
+            },
+        )
     except RuntimeError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except FileNotFoundError as e:
@@ -354,6 +377,17 @@ async def update_entry(
             request.file_path, request.cite_key, request.bibtex_code, workspace_id
         )
         return result
+    except FileConflictError as e:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "error": "file_conflict",
+                "message": str(e),
+                "file_path": e.file_path,
+                "expected_md5": e.expected_md5,
+                "current_md5": e.current_md5,
+            },
+        )
     except RuntimeError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except FileNotFoundError as e:

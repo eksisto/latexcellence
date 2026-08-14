@@ -7,6 +7,7 @@ bib_manager 模块集成测试。
     - extract_from_text（mock LLM）
     - generate_bibtex（mock LLM）
     - read_bib_file / save_bib_entry（临时项目）
+    - .bib 写回乐观锁冲突检测（读取后文件被改动）
     - list_bib_files
     - 缺失字段检测
     - Router 端点集成测试
@@ -1378,6 +1379,151 @@ class TestServiceDeleteEntry:
             assert "test2023" not in content
         finally:
             wm.remove(ws_id)
+
+
+class TestServiceBibUndo:
+    """.bib 写盘应推入撤销栈，workspace 撤销/重做可回退。"""
+
+    def _open_project(self, temp_project, ws_id):
+        from backend.core.workspace_manager import get_workspace_manager
+
+        wm = get_workspace_manager()
+        pm = wm.get_or_create(ws_id)
+        pm.open(str(temp_project))
+        return wm, pm
+
+    def test_save_bib_entry_is_undoable(self, temp_project, service):
+        ws_id = "test_save_bib_undo"
+        wm, pm = self._open_project(temp_project, ws_id)
+        try:
+            original = safe_read(temp_project / "refs.bib")
+            service.save_bib_entry(
+                "refs.bib",
+                "@article{key2024,\n  title = {New Entry},\n}",
+                "key2024",
+                ws_id,
+            )
+            assert "key2024" in safe_read(temp_project / "refs.bib")
+            assert pm.can_undo("refs.bib")
+            assert not pm.can_redo("refs.bib")
+
+            assert pm.undo("refs.bib")
+            assert safe_read(temp_project / "refs.bib") == original
+            assert pm.can_redo("refs.bib")
+
+            assert pm.redo("refs.bib")
+            assert "key2024" in safe_read(temp_project / "refs.bib")
+        finally:
+            wm.remove(ws_id)
+
+    def test_update_entry_is_undoable(self, temp_project, service):
+        ws_id = "test_update_bib_undo"
+        wm, pm = self._open_project(temp_project, ws_id)
+        try:
+            original = safe_read(temp_project / "refs.bib")
+            service.update_entry(
+                "refs.bib",
+                "test2023",
+                "@article{test2023,\n  title = {Updated Title},\n}",
+                ws_id,
+            )
+            assert "Updated Title" in safe_read(temp_project / "refs.bib")
+
+            assert pm.undo("refs.bib")
+            assert safe_read(temp_project / "refs.bib") == original
+
+            assert pm.redo("refs.bib")
+            assert "Updated Title" in safe_read(temp_project / "refs.bib")
+        finally:
+            wm.remove(ws_id)
+
+    def test_delete_entry_is_undoable(self, temp_project, service):
+        ws_id = "test_delete_bib_undo"
+        wm, pm = self._open_project(temp_project, ws_id)
+        try:
+            original = safe_read(temp_project / "refs.bib")
+            service.delete_entry("refs.bib", "test2023", ws_id)
+            assert "test2023" not in safe_read(temp_project / "refs.bib")
+
+            assert pm.undo("refs.bib")
+            assert safe_read(temp_project / "refs.bib") == original
+
+            assert pm.redo("refs.bib")
+            assert "test2023" not in safe_read(temp_project / "refs.bib")
+        finally:
+            wm.remove(ws_id)
+
+
+class TestServiceBibOptimisticLock:
+    """.bib 写回携带读取时 MD5，读后文件被改动时抛 FileConflictError。"""
+
+    def _open_project(self, temp_project, ws_id):
+        from backend.core.workspace_manager import get_workspace_manager
+
+        wm = get_workspace_manager()
+        pm = wm.get_or_create(ws_id)
+        pm.open(str(temp_project))
+        return wm, pm
+
+    def _assert_conflict(self, temp_project, service, ws_id, operation):
+        from backend.core.project_manager import FileConflictError
+        from backend.utils.file_ops import compute_md5
+
+        wm, _ = self._open_project(temp_project, ws_id)
+        try:
+            original = safe_read(temp_project / "refs.bib")
+            real_compute_md5 = compute_md5
+
+            def read_then_tamper(path):
+                # 模拟“读取后、写回前”文件被其他工作区/进程修改
+                md5 = real_compute_md5(path)
+                (temp_project / "refs.bib").write_text(
+                    original + "% concurrent edit\n", encoding="utf-8"
+                )
+                return md5
+
+            with patch(
+                "backend.modules.bib_manager.service.compute_md5",
+                side_effect=read_then_tamper,
+            ):
+                with pytest.raises(FileConflictError):
+                    operation(service, ws_id)
+        finally:
+            wm.remove(ws_id)
+
+    def test_save_entry_conflict_detected(self, temp_project, service):
+        self._assert_conflict(
+            temp_project,
+            service,
+            "test_save_bib_conflict",
+            lambda s, ws: s.save_bib_entry(
+                "refs.bib",
+                "@article{key2024,\n  title = {New Entry},\n}",
+                "key2024",
+                ws,
+            ),
+        )
+
+    def test_update_entry_conflict_detected(self, temp_project, service):
+        self._assert_conflict(
+            temp_project,
+            service,
+            "test_update_bib_conflict",
+            lambda s, ws: s.update_entry(
+                "refs.bib",
+                "test2023",
+                "@article{test2023,\n  title = {Updated Title},\n}",
+                ws,
+            ),
+        )
+
+    def test_delete_entry_conflict_detected(self, temp_project, service):
+        self._assert_conflict(
+            temp_project,
+            service,
+            "test_delete_bib_conflict",
+            lambda s, ws: s.delete_entry("refs.bib", "test2023", ws),
+        )
 
 
 class TestServiceParseEntries:

@@ -137,7 +137,7 @@ class ProjectInfo:
 
 **乐观锁机制**：`apply_change()` 支持 `expected_md5` 参数。优先使用调用方传入的 MD5（跨工作区乐观锁），否则退回到实例内部缓存的 MD5（单工作区内校验）。两者均不为 `None` 时，若当前文件 MD5 与预期不符，抛出 `FileConflictError`。
 
-**whole-file 批量事务**：`apply_whole_files()` 供 style_modify 项目 Agent 的多文件 proposal 写回使用。方法在一个事务锁内先完成路径、后缀、符号链接和 MD5 校验，再为每个文件调用 `BackupManager.push()` 并 `atomic_write()`。写入失败时恢复全部目标文件，成功后更新内部 MD5 缓存。
+**whole-file 批量事务**：`apply_whole_files()` 供 style_modify 项目 Agent 的多文件 proposal 写回与 bib_manager 的 `.bib` 整文件写回使用。方法在一个事务锁内先完成路径、后缀、符号链接和 MD5 校验，再为每个文件调用 `BackupManager.push()` 并 `atomic_write()`。写入失败时恢复全部目标文件，成功后更新内部 MD5 缓存。
 
 **主文档检测逻辑**（递归深度限制 2 层）：
 

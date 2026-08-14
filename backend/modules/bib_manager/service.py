@@ -44,7 +44,7 @@ from backend.modules.bib_manager.bib_parser import (
 from backend.modules.bib_manager.style_registry import get_style_for_format
 from backend.modules.bib_manager.provider_manager import get_provider_manager
 from backend.utils.json_utils import retry_with_validation
-from backend.utils.file_ops import atomic_write, safe_read
+from backend.utils.file_ops import compute_md5, safe_read
 from backend.utils.path_guard import resolve_project_path
 
 _MAX_DIMENSION = 2000
@@ -497,6 +497,7 @@ class BibManagerService:
             raise FileNotFoundError(f"File not found: {file_path}")
 
         content = safe_read(full_path)
+        expected_md5 = compute_md5(full_path)
 
         if cite_key in content:
             new_content = self._replace_bib_entry(content, cite_key, bibtex_code)
@@ -508,7 +509,12 @@ class BibManagerService:
             new_content = content_stripped + "\n" + bibtex_code.strip() + "\n"
             action = "appended"
 
-        atomic_write(full_path, new_content)
+        # 通过整文件事务写回：读取时 MD5 乐观锁 + 推入撤销栈，workspace 撤销/重做可回退
+        pm.apply_whole_files(
+            {file_path: new_content},
+            expected_md5s={file_path: expected_md5},
+            allowed_suffixes=(".bib",),
+        )
         self._logger.info(f"BibTeX entry {action} in {file_path}: cite_key={cite_key}")
         return {"status": "ok", "action": action, "cite_key": cite_key}
 
@@ -901,8 +907,14 @@ class BibManagerService:
             raise FileNotFoundError(f"File not found: {file_path}")
 
         content = safe_read(full_path)
+        expected_md5 = compute_md5(full_path)
         new_content = remove_entry_from_content(content, cite_key)
-        atomic_write(full_path, new_content)
+        # 通过整文件事务写回：读取时 MD5 乐观锁 + 推入撤销栈，workspace 撤销/重做可回退
+        pm.apply_whole_files(
+            {file_path: new_content},
+            expected_md5s={file_path: expected_md5},
+            allowed_suffixes=(".bib",),
+        )
         self._logger.info(f"Deleted entry {cite_key} from {file_path}")
         return {"status": "ok", "cite_key": cite_key}
 
@@ -920,8 +932,14 @@ class BibManagerService:
             raise FileNotFoundError(f"File not found: {file_path}")
 
         content = safe_read(full_path)
+        expected_md5 = compute_md5(full_path)
         new_content = self._replace_bib_entry(content, cite_key, bibtex_code.strip())
-        atomic_write(full_path, new_content)
+        # 通过整文件事务写回：读取时 MD5 乐观锁 + 推入撤销栈，workspace 撤销/重做可回退
+        pm.apply_whole_files(
+            {file_path: new_content},
+            expected_md5s={file_path: expected_md5},
+            allowed_suffixes=(".bib",),
+        )
         self._logger.info(f"Updated entry {cite_key} in {file_path}")
         return {"status": "ok", "cite_key": cite_key}
 

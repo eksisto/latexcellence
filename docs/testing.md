@@ -42,7 +42,7 @@
 | `test_api/test_style_modify.py` | 模型校验、LLM mock、样式修改 |
 | `test_api/test_style_modify_agent.py` | 项目 Agent：LatexProject 批量事务、session overlay、proposal、应用冲突、撤销、workspace 隔离、路径穿越防御 |
 | `test_api/test_writing_chat.py` | 模型、会话管理、发送/编辑/应用、RS2 分隔符协议提取/校验失败重试/CRLF 原文、助手提示词、搜索与学术研究工具事件 |
-| `test_api/test_bib_manager.py` | 格式分析、元数据提取、BibTeX 生成、.bib 操作、路径穿越防御、DOI 查询、多数据源 Provider 降级 |
+| `test_api/test_bib_manager.py` | 格式分析、元数据提取、BibTeX 生成、.bib 操作（含撤销/重做覆盖）、路径穿越防御、DOI 查询、多数据源 Provider 降级 |
 | `test_api/test_paragraph_translate.py` | 模型校验、LLM mock、marker 保护、翻译写回 |
 | `test_api/test_plot_gen.py` | 数据上传、Agent 生成/微调 SSE、沙箱校验、会话文件与 trace |
 | `test_api/test_project_browse.py` | 项目目录浏览与路径解析 |
