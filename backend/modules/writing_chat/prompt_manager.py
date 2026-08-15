@@ -9,11 +9,37 @@
 存储策略：与 expression_opt 的 prompt_manager 同一模式。
 """
 
+import re
 from pathlib import Path
 
 
 from backend.core.config import get_config
 from backend.core.logger import get_logger
+
+_SAFE_NAME_RE = re.compile(r"^[\w-]+$")
+
+
+def _validate_prompt_name(name: str, *, allow_empty: bool = False) -> str:
+    """校验提示词名称可安全用作文件名，防止路径穿越。
+
+    只允许字母/数字/下划线/连字符（\\w 覆盖中文等 Unicode 字符），
+    拒绝路径分隔符、'..'、空字节与 Windows 保留字符。
+    allow_empty=True 供 set_active 的"取消激活"场景使用。
+    """
+    if not isinstance(name, str):
+        raise ValueError("Prompt name must be a string")
+    name = name.strip()
+    if allow_empty and not name:
+        return name
+    if not name:
+        raise ValueError("Prompt name must not be empty")
+    if "\x00" in name:
+        raise ValueError("Prompt name contains illegal characters")
+    if not _SAFE_NAME_RE.fullmatch(name):
+        raise ValueError(
+            "Prompt name may only contain letters, digits, underscores and hyphens"
+        )
+    return name
 
 
 class WritingChatPromptManager:
@@ -44,6 +70,7 @@ class WritingChatPromptManager:
 
     def load_prompt(self, name: str) -> str | None:
         prompt_dir = self._get_dir()
+        name = _validate_prompt_name(name)
         file_path = prompt_dir / f"{name}.txt"
         if not file_path.exists():
             return None
@@ -51,12 +78,14 @@ class WritingChatPromptManager:
 
     def save_prompt(self, name: str, content: str) -> None:
         prompt_dir = self._get_dir()
+        name = _validate_prompt_name(name)
         file_path = prompt_dir / f"{name}.txt"
         file_path.write_text(content, encoding="utf-8")
         self._logger.info(f"Saved writing_chat prompt: {name}")
 
     def delete_prompt(self, name: str) -> bool:
         prompt_dir = self._get_dir()
+        name = _validate_prompt_name(name)
         file_path = prompt_dir / f"{name}.txt"
         if not file_path.exists():
             return False
@@ -65,6 +94,7 @@ class WritingChatPromptManager:
 
     def set_active(self, name: str) -> None:
         prompt_dir = self._get_dir()
+        name = _validate_prompt_name(name, allow_empty=True)
         active_file = prompt_dir / self._ACTIVE_FILE
         active_file.write_text(name, encoding="utf-8")
         self._logger.info(f"Set active writing_chat prompt: {name or 'default'}")

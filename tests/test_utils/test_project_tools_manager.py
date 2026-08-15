@@ -126,6 +126,29 @@ class TestListFiles:
         )
         assert "错误" in result or "error" in result.lower()
 
+    @pytest.mark.asyncio
+    async def test_parent_traversal_pattern_rejected(self, project_dir):
+        ws_id = "test-list-traversal"
+        _open_project(ws_id, project_dir)
+        outside = project_dir.parent / "outside.tex"
+        outside.write_text("secret", encoding="utf-8")
+        result = await _list_files_executor(
+            "list_files",
+            {"_workspace_id": ws_id, "pattern": "../*.tex"},
+        )
+        assert "outside.tex" not in result
+        assert "无效" in result or "invalid" in result.lower()
+
+    @pytest.mark.asyncio
+    async def test_absolute_pattern_rejected(self, project_dir):
+        ws_id = "test-list-absolute"
+        _open_project(ws_id, project_dir)
+        result = await _list_files_executor(
+            "list_files",
+            {"_workspace_id": ws_id, "pattern": str(project_dir / "*.tex")},
+        )
+        assert "无效" in result or "invalid" in result.lower()
+
 
 # ── read_file_content ───────────────────────────────────────────────────
 
@@ -190,6 +213,33 @@ class TestReadFileContent:
             },
         )
         assert "超出" in result or "exceed" in result.lower()
+
+    @pytest.mark.asyncio
+    async def test_unlisted_suffix_rejected(self, project_dir):
+        ws_id = "test-read-secret"
+        _open_project(ws_id, project_dir)
+        (project_dir / "config.json").write_text(
+            '{"api_key": "SECRET"}', encoding="utf-8"
+        )
+        result = await _read_file_content_executor(
+            "read_file_content",
+            {"_workspace_id": ws_id, "file_path": "config.json"},
+        )
+        assert "SECRET" not in result
+        assert "路径验证失败" in result or "path" in result.lower()
+
+    @pytest.mark.asyncio
+    async def test_parent_traversal_rejected(self, project_dir):
+        ws_id = "test-read-traversal"
+        _open_project(ws_id, project_dir)
+        outside = project_dir.parent / "outside.tex"
+        outside.write_text("secret", encoding="utf-8")
+        result = await _read_file_content_executor(
+            "read_file_content",
+            {"_workspace_id": ws_id, "file_path": "../outside.tex"},
+        )
+        assert "secret" not in result
+        assert "路径验证失败" in result or "path" in result.lower()
 
 
 # ── get_section_structure ───────────────────────────────────────────────
@@ -326,6 +376,58 @@ class TestSearchAcrossFiles:
             l for l in result.split("\n") if l.strip() and not l.startswith("搜索")
         ]
         assert len(lines) <= 4  # 3 results + header
+
+    @pytest.mark.asyncio
+    async def test_file_pattern_traversal_rejected(self, project_dir):
+        ws_id = "test-search-traversal"
+        _open_project(ws_id, project_dir)
+        outside = project_dir.parent / "outside.tex"
+        outside.write_text("SECRETMARK", encoding="utf-8")
+        result = await _search_across_files_executor(
+            "search_across_files",
+            {
+                "_workspace_id": ws_id,
+                "pattern": "SECRETMARK",
+                "file_pattern": "../*.tex",
+            },
+        )
+        assert "SECRETMARK" not in result
+        assert "无效" in result or "invalid" in result.lower()
+
+    @pytest.mark.asyncio
+    async def test_search_skips_unlisted_suffixes(self, project_dir):
+        ws_id = "test-search-suffix"
+        _open_project(ws_id, project_dir)
+        (project_dir / "secret.json").write_text(
+            '{"secret": "SECRETMARK"}', encoding="utf-8"
+        )
+        result = await _search_across_files_executor(
+            "search_across_files",
+            {
+                "_workspace_id": ws_id,
+                "pattern": "SECRETMARK",
+                "file_pattern": "*.json",
+            },
+        )
+        assert "SECRETMARK" not in result
+        assert "没有匹配" in result or "未找到" in result or "no" in result.lower()
+
+    @pytest.mark.asyncio
+    async def test_max_results_is_clamped(self, project_dir):
+        ws_id = "test-search-clamp"
+        _open_project(ws_id, project_dir)
+        result = await _search_across_files_executor(
+            "search_across_files",
+            {
+                "_workspace_id": ws_id,
+                "pattern": r".",
+                "max_results": 10**9,
+            },
+        )
+        lines = [
+            l for l in result.split("\n") if l.strip() and not l.startswith("搜索")
+        ]
+        assert len(lines) <= 201  # 上限 200 条 + header
 
 
 # ── 全局单例与注册 ─────────────────────────────────────────────────────

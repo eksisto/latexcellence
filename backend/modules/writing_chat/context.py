@@ -20,6 +20,7 @@
 import copy
 import hashlib
 import json
+import re
 import time
 import uuid
 from pathlib import Path
@@ -34,6 +35,10 @@ from backend.modules.writing_chat.models import (
 
 _SCOPE_SEPARATOR = ":"
 _NOPROJECT_SCOPE = "_noproject"
+# scope 是项目路径哈希或 _noproject；id_part 是 uuid4().hex。
+# 两者都必须是单层安全目录/文件名，禁止路径分隔符、'..' 等穿越字符。
+_SCOPE_RE = re.compile(r"^[A-Za-z0-9_-]+$")
+_ID_PART_RE = re.compile(r"^[A-Za-z0-9_-]+$")
 
 
 def compute_scope(project_root_path: str) -> str:
@@ -46,8 +51,12 @@ def compute_scope(project_root_path: str) -> str:
 
 def parse_scoped_session_id(session_id: str) -> tuple[str, str]:
     """解析 scoped session_id，返回 (scope, id_part)。"""
+    if not isinstance(session_id, str):
+        raise ValueError(f"Invalid scoped session_id: {session_id!r}")
     scope, _, id_part = session_id.partition(_SCOPE_SEPARATOR)
     if not scope or not id_part:
+        raise ValueError(f"Invalid scoped session_id: {session_id!r}")
+    if not _SCOPE_RE.fullmatch(scope) or not _ID_PART_RE.fullmatch(id_part):
         raise ValueError(f"Invalid scoped session_id: {session_id!r}")
     return scope, id_part
 
@@ -115,7 +124,11 @@ class ConversationContext:
     @classmethod
     def load_from_disk(cls, session_id: str) -> "ConversationContext | None":
         """加载已有会话。不存在返回 None。"""
-        path = cls._session_path(session_id)
+        try:
+            path = cls._session_path(session_id)
+        except ValueError:
+            # 非法 session_id（格式错误/路径穿越）按"会话不存在"处理
+            return None
         if not path.exists():
             return None
         try:
@@ -153,7 +166,12 @@ class ConversationContext:
     @classmethod
     def _session_path(cls, session_id: str) -> Path:
         scope, id_part = parse_scoped_session_id(session_id)
-        return cls._sessions_dir(scope) / f"{id_part}.json"
+        base = cls._sessions_dir(scope).resolve()
+        path = (base / f"{id_part}.json").resolve()
+        # 纵深防御：即使正则漏网，也确保解析后的路径不越出会话目录
+        if not path.is_relative_to(base):
+            raise ValueError("session_id resolves outside the sessions directory")
+        return path
 
     def save_to_disk(self) -> None:
         self.last_updated_at = time.time()

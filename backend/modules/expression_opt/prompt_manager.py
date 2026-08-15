@@ -13,11 +13,37 @@
 """
 
 import os
+import re
 from pathlib import Path
 
 
 from backend.core.config import get_config
 from backend.core.logger import get_logger
+
+_SAFE_NAME_RE = re.compile(r"^[\w-]+$")
+
+
+def _validate_prompt_name(name: str, *, allow_empty: bool = False) -> str:
+    """校验提示词名称可安全用作文件名，防止路径穿越。
+
+    只允许字母/数字/下划线/连字符（\\w 覆盖中文等 Unicode 字符），
+    拒绝路径分隔符、'..'、空字节与 Windows 保留字符。
+    allow_empty=True 供 set_active 的"取消激活"场景使用。
+    """
+    if not isinstance(name, str):
+        raise ValueError("Prompt name must be a string")
+    name = name.strip()
+    if allow_empty and not name:
+        return name
+    if not name:
+        raise ValueError("Prompt name must not be empty")
+    if "\x00" in name:
+        raise ValueError("Prompt name contains illegal characters")
+    if not _SAFE_NAME_RE.fullmatch(name):
+        raise ValueError(
+            "Prompt name may only contain letters, digits, underscores and hyphens"
+        )
+    return name
 
 
 class PromptManager:
@@ -81,6 +107,7 @@ class PromptManager:
         返回：
             提示词文本内容，不存在时返回 None
         """
+        name = _validate_prompt_name(name)
         prompt_dir = self._get_dir()
         file_path = prompt_dir / f"{name}.txt"
         if not file_path.exists():
@@ -96,6 +123,7 @@ class PromptManager:
             name: 提示词名称
             content: 提示词文本
         """
+        name = _validate_prompt_name(name)
         prompt_dir = self._get_dir()
         file_path = prompt_dir / f"{name}.txt"
         file_path.write_text(content, encoding="utf-8")
@@ -111,6 +139,7 @@ class PromptManager:
         返回：
             True 表示删除成功，False 表示文件不存在
         """
+        name = _validate_prompt_name(name)
         prompt_dir = self._get_dir()
         file_path = prompt_dir / f"{name}.txt"
         if not file_path.exists():
@@ -127,6 +156,7 @@ class PromptManager:
         参数：
             name: 提示词名称，空字符串表示使用默认提示词
         """
+        name = _validate_prompt_name(name, allow_empty=True)
         prompt_dir = self._get_dir()
         active_file = prompt_dir / self._ACTIVE_FILE
         active_file.write_text(name, encoding="utf-8")

@@ -13,7 +13,7 @@
 """
 
 import re
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 from typing import Any
 
 from backend.core.logger import get_logger
@@ -37,6 +37,52 @@ _SECTION_RE = re.compile(
     r"(?:\[.*?\])?"
     r"\{(.*?)\}"
 )
+
+# 允许读取/搜索的项目文本文件后缀（防止 LLM 读取 config.json / .env 等敏感文件）
+_READ_SUFFIXES = (".tex", ".bib", ".cls", ".sty", ".md", ".markdown", ".txt")
+# search_across_files 结果条数上限
+_MAX_SEARCH_RESULTS = 200
+
+
+def _normalize_glob_pattern(pattern: str, default: str) -> str:
+    """校验并规范化 glob 模式，拒绝绝对路径与 '..' 越界。
+
+    Path.rglob 支持 '..' 段并会匹配到根目录之外的文件，因此这里在
+    LLM 传入的模式进入 rglob 之前做白名单校验（正斜杠归一化后检查）。
+    """
+    if not pattern or not pattern.strip():
+        return default
+    normalized = pattern.strip().replace("\\", "/")
+    if "\x00" in normalized:
+        raise ValueError("Invalid pattern: contains illegal characters")
+    if normalized.startswith("/"):
+        raise ValueError("Invalid pattern: absolute paths are not allowed")
+    if re.match(r"^[A-Za-z]:", normalized):
+        raise ValueError("Invalid pattern: absolute paths are not allowed")
+    if Path(normalized).is_absolute() or PureWindowsPath(normalized).is_absolute():
+        raise ValueError("Invalid pattern: absolute paths are not allowed")
+    if ".." in normalized.split("/"):
+        raise ValueError("Invalid pattern: '..' segments are not allowed")
+    return normalized
+
+
+def _clamp_search_results(value: Any, default: int = 50) -> int:
+    """把 LLM 传入的结果数限制在 [1, _MAX_SEARCH_RESULTS] 内。"""
+    try:
+        n = int(value)
+    except (TypeError, ValueError):
+        n = default
+    return max(1, min(n, _MAX_SEARCH_RESULTS))
+
+
+def _is_inside_project(root: Path, candidate: Path) -> bool:
+    """确认匹配文件真实位于项目根内且不是符号链接（防 rglob 越界兜底）。"""
+    try:
+        return not candidate.is_symlink() and candidate.resolve().is_relative_to(
+            root.resolve()
+        )
+    except OSError:
+        return False
 
 
 # ── 管理器 ──────────────────────────────────────────────────────────────────
@@ -85,7 +131,7 @@ class ProjectToolsManager:
                 "function": {
                     "name": "read_file_content",
                     "description": (
-                        "读取项目内指定文件的内容（可指定行范围）。"
+                        "读取项目内指定文本文件的内容（可指定行范围）。"
                         "行号从 1 开始。省略 end_line 将读到文件末尾。"
                         "当你需要查看某个文件的具体内容时使用。"
                     ),
@@ -96,7 +142,8 @@ class ProjectToolsManager:
                                 "type": "string",
                                 "description": (
                                     "相对于项目根目录的文件路径，"
-                                    "如 'chapters/chapter3.tex'"
+                                    "如 'chapters/chapter3.tex'。仅支持 .tex/.bib/"
+                                    ".cls/.sty/.md/.txt 文本文件"
                                 ),
                             },
                             "start_line": {
@@ -144,6 +191,7 @@ class ProjectToolsManager:
                         "跨项目文件搜索正则表达式模式。"
                         "用于查找 \\\\label{fig:...} 定义位置、\\\\cite 引用、"
                         "或任何 LaTeX 命令/文本模式的分布。"
+                        "只在 .tex/.bib/.cls/.sty/.md/.txt 文本文件中搜索。"
                     ),
                     "parameters": {
                         "type": "object",
@@ -185,9 +233,17 @@ async def _list_files_executor(tool_name: str, arguments: dict[str, Any]) -> str
         return pm
 
     pattern = arguments.get("pattern", "**/*.tex")
+    try:
+        pattern = _normalize_glob_pattern(pattern, "**/*.tex")
+    except ValueError as e:
+        return f"无效的搜索模式：{e}"
     root = Path(pm.root_path)
     try:
-        matched = [p for p in sorted(root.rglob(pattern)) if p.is_file()]
+        matched = [
+            p
+            for p in sorted(root.rglob(pattern))
+            if p.is_file() and _is_inside_project(root, p)
+        ]
     except Exception as e:
         return f"Error searching for '{pattern}': {e}"
 
@@ -210,7 +266,11 @@ async def _read_file_content_executor(tool_name: str, arguments: dict[str, Any])
         return "错误：缺少 file_path 参数。"
 
     try:
-        full_path = resolve_project_path(Path(pm.root_path), file_path)
+        full_path = resolve_project_path(
+            Path(pm.root_path),
+            file_path,
+            allowed_suffixes=_READ_SUFFIXES,
+        )
     except Exception as e:
         return f"路径验证失败：{e}"
 
@@ -317,7 +377,11 @@ async def _search_across_files_executor(
     if not pattern_str:
         return "错误：缺少 pattern 参数。"
     file_pattern = arguments.get("file_pattern", "**/*.tex")
-    max_results = arguments.get("max_results", 50)
+    try:
+        file_pattern = _normalize_glob_pattern(file_pattern, "**/*.tex")
+    except ValueError as e:
+        return f"无效的文件搜索模式：{e}"
+    max_results = _clamp_search_results(arguments.get("max_results", 50))
 
     try:
         pat = re.compile(pattern_str)
@@ -326,7 +390,13 @@ async def _search_across_files_executor(
 
     root = Path(pm.root_path)
     try:
-        matched_files = [p for p in sorted(root.rglob(file_pattern)) if p.is_file()]
+        matched_files = [
+            p
+            for p in sorted(root.rglob(file_pattern))
+            if p.is_file()
+            and p.suffix.lower() in _READ_SUFFIXES
+            and _is_inside_project(root, p)
+        ]
     except Exception as e:
         return f"搜索文件失败：{e}"
 

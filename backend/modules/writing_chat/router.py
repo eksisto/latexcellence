@@ -265,7 +265,10 @@ async def list_prompts():
 async def load_prompt(name: str):
     """加载指定助手提示词内容。"""
     pm = get_prompt_manager()
-    content = pm.load_prompt(name)
+    try:
+        content = pm.load_prompt(name)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     if content is None:
         raise HTTPException(status_code=404, detail=f"Prompt not found: {name}")
     return {"name": name, "content": content}
@@ -275,7 +278,10 @@ async def load_prompt(name: str):
 async def save_prompt(request: AssistantSaveRequest):
     """保存（创建或更新）助手提示词。"""
     pm = get_prompt_manager()
-    pm.save_prompt(request.name, request.content)
+    try:
+        pm.save_prompt(request.name, request.content)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     return {"status": "ok", "name": request.name}
 
 
@@ -283,7 +289,11 @@ async def save_prompt(request: AssistantSaveRequest):
 async def delete_prompt(name: str):
     """删除指定助手提示词。"""
     pm = get_prompt_manager()
-    if not pm.delete_prompt(name):
+    try:
+        deleted = pm.delete_prompt(name)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    if not deleted:
         raise HTTPException(status_code=404, detail=f"Prompt not found: {name}")
     return {"status": "ok"}
 
@@ -292,5 +302,8 @@ async def delete_prompt(name: str):
 async def set_active_prompt(request: AssistantSetActiveRequest):
     """设置当前激活的助手。"""
     pm = get_prompt_manager()
-    pm.set_active(request.name)
+    try:
+        pm.set_active(request.name)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     return {"status": "ok", "name": request.name}
