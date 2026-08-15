@@ -185,7 +185,7 @@ highlight.js 的按需注册与统一入口：
 | 主题系统 | CSS 自定义属性（oklch 色彩空间），主题文件在 `theme/` 目录，`data-theme` 属性选择 |
 | 深色模式 | `.dark` class 挂载在 `<html>`，配合 View Transitions API |
 | 多主题 | `theme/*.css` 自动发现，与亮暗模式无耦合 |
-| 字体 | 学术衬线显示字体 STIX Two Text（字标 / § 编号 / 英文 small-caps 标签）+ 霞鹜文楷正文 + Noto Sans SC 标题 + JetBrains Mono 等宽，配完整中文回退栈 |
+| 字体 | 学术衬线显示字体 STIX Two Text（字标 / § 编号 / 英文 small-caps 标签）+ 霞鹜文楷正文 + Noto Sans SC 标题 + JetBrains Mono 等宽，配完整中文回退栈；dev 直接读本地 npm 字体包（可离线调试），build 不打包字体、改为在 `index.html` 注入 cdnjs 固定版本链接 |
 | 图标 | lucide-react |
 | 类合并 | `cn()`（clsx + tailwind-merge） |
 
@@ -203,6 +203,7 @@ highlight.js 的按需注册与统一入口：
 
 - `index.css`：Tailwind 导入、自定义字体、深色变体定义、主题内联令牌、基础样式。另含设计体系工具：`--font-display`（STIX Two Text）显示字体 token、`.text-small-caps` 英文小大写标签、`.tex-e` / `.tex-x` 字标 "TeX" 排字姿态、`.reveal` 入场动效（错落 + 尊重 `prefers-reduced-motion`）、代码块 chrome token（`--code-*`）与 `.code-block` / `.code-inline` 组件类
 - `styles/code-highlight.css`：代码语法高亮颜色（`--code-token-*` 变量 + `.hljs-*` 映射），独立成文件、由 `CodeBlock` / `MarkerText` / `CodeEditorInput` 在用到高亮时引入
+- `fonts/index.css`：dev 模式专用字体入口，由 Vite 插件按环境注入；生产构建不引用该文件，改由 `vite.config.js` 注入 cdnjs 字体样式链接，静态产物只保留 KaTeX 数学字体
 - `theme/` 下主题 CSS 文件：youminghei（幽冥黑）、jingtailan（景泰蓝）、hupohuang（琥珀黄）、ningyezi（凝夜紫）、tingwulv（庭芜绿）、hailuocheng（海螺橙）、yingtaohong（樱桃红）
 - `useThemeManager.js`：自动发现主题文件，管理 `data-theme` 属性
 - 配色架构：所有主题共用同一套中性灰阶（背景/卡片/边框/文字，亮暗各一档），主题身份由单一色相承载，统一派生 `--primary` / `--accent` / `--ring` / `--selection-bg`；语义色（`--destructive`、`--brand-mark`）跨主题一致，深色模式下字标统一反白

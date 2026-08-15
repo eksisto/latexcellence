@@ -3,8 +3,45 @@ import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import path from "path";
 
+// 生产构建通过 cdnjs 加载字体，避免把大体积的 woff2 打包进 static/。
+// 版本号固定，避免 cdnjs 包更新导致引用漂移；本地版本可在 npm 上略新（如文楷 1.522.0）。
+const CDN_FONT_LINKS = [
+  "https://s4.zstatic.net/ajax/libs/lxgw-wenkai-web/1.520.0/lxgwwenkai-regular/result.css",
+  "https://s4.zstatic.net/ajax/libs/lxgw-wenkai-web/1.520.0/lxgwwenkaimono-regular/result.css",
+  "https://s4.zstatic.net/ajax/libs/fontsource-noto-sans-sc/5.2.8/500.css",
+  "https://s4.zstatic.net/ajax/libs/fontsource-jetbrains-mono/5.2.8/400.css",
+  "https://s4.zstatic.net/ajax/libs/fontsource-stix-two-text/5.2.8/latin-400.css",
+  "https://s4.zstatic.net/ajax/libs/fontsource-stix-two-text/5.2.8/latin-500.css",
+  "https://s4.zstatic.net/ajax/libs/fontsource-stix-two-text/5.2.8/latin-600.css",
+];
+
+function fontSourcePlugin() {
+  return {
+    name: "font-source",
+    transformIndexHtml(html, ctx) {
+      const tags = ctx.server
+        ? [
+            {
+              tag: "link",
+              attrs: {
+                rel: "stylesheet",
+                href: "/src/fonts/index.css",
+              },
+              injectTo: "head-prepend",
+            },
+          ]
+        : CDN_FONT_LINKS.map((href) => ({
+            tag: "link",
+            attrs: { rel: "stylesheet", href },
+            injectTo: "head-prepend",
+          }));
+      return { html, tags };
+    },
+  };
+}
+
 export default defineConfig({
-  plugins: [react(), tailwindcss()],
+  plugins: [fontSourcePlugin(), react(), tailwindcss()],
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
@@ -44,10 +81,6 @@ export default defineConfig({
             if (/lucide-react/.test(id)) return "vendor-icons";
             if (/sonner/.test(id)) return "vendor-sonner";
             if (/katex/.test(id)) return "vendor-katex";
-            if (/lxgwwenkai-regular/.test(id)) return "font-wenkai";
-            if (/lxgwwenkaimono-regular/.test(id)) return "font-wenkai-mono";
-            if (/noto-sans-sc/.test(id)) return "font-noto-sans-sc";
-            if (/jetbrains-mono/.test(id)) return "font-jetbrains-mono";
             return "vendor";
           }
         },

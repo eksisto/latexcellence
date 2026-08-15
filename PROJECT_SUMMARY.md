@@ -129,7 +129,7 @@ latexcellence/
 │       ├── components/              # 共享组件 + ui 基座组件
 │       │   └── settings/            # 设置对话框分区配置组件
 │       ├── theme/                   # 主题 CSS + useThemeManager.js
-│       ├── fonts/                   # 字体加载（文楷 / Noto Sans SC / JetBrains Mono / STIX Two Text）
+│       ├── fonts/                   # 字体加载（dev 本地 npm 包 / build 走 cdnjs）
 │       ├── api/index.js             # 统一 API 层（接口分组封装）
 │       ├── api/connection.js        # 后端连接配置（基地址/令牌/认证头/连接测试）
 │       ├── utils/                   # 前端工具（errorMessages.js 错误翻译 / formulaWrap.js 公式包裹重写 / highlight.js 高亮入口）
