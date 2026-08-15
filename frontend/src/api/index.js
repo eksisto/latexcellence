@@ -2,7 +2,7 @@
  * API 层 —— 封装所有后端接口调用
  *
  * 设计说明：
- * - 后端地址运行时可配置，优先级：设置页（localStorage）→ VITE_API_BASE_URL → 默认同源 /api
+ * - 后端地址运行时可配置，优先级：设置页（localStorage）→ VITE_API_BASE_URL → 默认 http://localhost:8000/api
  * - 访问令牌：后端配置 security.access_token 后，所有请求必须携带
  *   X-Latexcellence-Token 请求头；下载与 PDF/图片预览通过 fetch + Blob 完成，
  *   只有 EventSource 等确实无法自定义请求头的流式场景才在 URL 上追加 ?token=

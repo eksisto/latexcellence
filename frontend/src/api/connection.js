@@ -3,7 +3,7 @@
  *
  * 职责：
  * - 管理 API 基地址 / 访问令牌的运行时配置
- *   （优先级：设置页 localStorage → VITE_API_BASE_URL → 默认同源 /api）
+ *   （优先级：设置页 localStorage → VITE_API_BASE_URL → 默认 http://localhost:8000/api）
  * - 统一构造认证请求头，并为无法自定义请求头的 URL（EventSource 等）追加令牌
  * - 提供连接测试（health 验证可达性，config/status 验证令牌是否有效）
  *

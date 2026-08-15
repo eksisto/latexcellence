@@ -18,8 +18,8 @@ test("normalizeApiBase 去除末尾斜杠", () => {
 });
 
 test("normalizeApiBase 空值回退到默认基地址", () => {
-  assert.equal(normalizeApiBase(""), "/api");
-  assert.equal(normalizeApiBase(null), "/api");
+  assert.equal(normalizeApiBase(""), "http://localhost:8000/api");
+  assert.equal(normalizeApiBase(null), "http://localhost:8000/api");
   assert.equal(
     normalizeApiBase("", "http://localhost:8000/api"),
     "http://localhost:8000/api",

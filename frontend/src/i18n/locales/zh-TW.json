@@ -777,7 +777,7 @@
       "saveConfig": "儲存設定",
       "connection": "後端連線",
       "apiBase": "後端 API 位址",
-      "apiBaseHint": "瀏覽器訪問的後端地址；默認同源 /api，前後端分離部署時填寫完整地址（如 http://localhost:8000/api）",
+      "apiBaseHint": "瀏覽器存取的後端位址；預設 http://localhost:8000/api，前後端分離部署時填寫完整位址",
       "apiToken": "存取權杖",
       "apiTokenPlaceholder": "後端未啟用權杖驗證時留空",
       "apiTokenHint": "需與後端 config.json 中 security.access_token 一致",

@@ -6,7 +6,10 @@
  */
 
 /** 去除 API 基地址末尾斜杠；空值回退到默认基地址 */
-export function normalizeApiBase(value, fallback = "/api") {
+export function normalizeApiBase(
+  value,
+  fallback = "http://localhost:8000/api",
+) {
   return (value || fallback).replace(/\/+$/, "");
 }
 
