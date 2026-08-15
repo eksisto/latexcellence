@@ -109,6 +109,7 @@ highlight.js 的按需注册与统一入口：
 | `MarkdownRenderer.jsx` | 基于 react-markdown + remark + rehype-katex |
 | `ThemeToggle.jsx` | 亮/暗模式切换 |
 | `ThemeSwitcher.jsx` | 配色主题切换下拉，自动发现主题文件 |
+| `components/ui/sonner.jsx` | 全局提示入口：使用内联 SVG 面图标、主题感知的 Toast classNames 与统一间距 |
 | `ConfirmDialog.jsx` | 通用确认对话框（destructive 样式 + 禁止遮罩关闭） |
 | `ImageOCRPage.jsx` | 通用图片 OCR 页面组件（拖拽/粘贴/识别/复制；`renderResultMeta` 可接收 `(result, setResult)` 第二参数更新结果，FormulaOCR 未判定切换控件依赖此透传） |
 | `Wordmark.jsx` | STIX Two Text 排 "LaTeXcellence" |
@@ -201,7 +202,8 @@ highlight.js 的按需注册与统一入口：
 
 ## CSS 文件 `src/index.css` + 主题目录 `src/theme/`
 
-- `index.css`：Tailwind 导入、自定义字体、深色变体定义、主题内联令牌、基础样式。另含设计体系工具：`--font-display`（STIX Two Text）显示字体 token、`.text-small-caps` 英文小大写标签、`.tex-e` / `.tex-x` 字标 "TeX" 排字姿态、`.reveal` 入场动效（错落 + 尊重 `prefers-reduced-motion`）、代码块 chrome token（`--code-*`）与 `.code-block` / `.code-inline` 组件类
+- `index.css`：Tailwind 导入、自定义字体、深色变体定义、主题内联令牌、基础样式。另含设计体系工具：`--font-display`（STIX Two Text）显示字体 token、`.text-small-caps` 英文小大写标签、`.tex-e` / `.tex-x` 字标 "TeX" 排字姿态、`.reveal` 入场动效（错落 + 尊重 `prefers-reduced-motion`）、代码块 chrome token（`--code-*`）与 `.code-block` / `.code-inline` 组件类；悬浮浮层圆角与阴影由 `--surface-radius` / `--surface-shadow` 统一管理（toast 与左下返回按钮共用）
+- 全局提示：`components/ui/sonner.jsx` 提供共享 Sonner 实例与内联 SVG 面图标；`index.css` 中的 `[data-sonner-toaster]` 规则保持安静的主题卡面（左侧 1/3 极淡状态色渐变：成功绿 / 提示蓝 / 错误红，无底色状态小图标，主题/暗色模式自适应），并保留 action/cancel/close 的键盘焦点与移动端宽度规则。后续调整提示外观应集中在这两个文件，不要在业务调用处追加外壳 class
 - `styles/code-highlight.css`：代码语法高亮颜色（`--code-token-*` 变量 + `.hljs-*` 映射），独立成文件、由 `CodeBlock` / `MarkerText` / `CodeEditorInput` 在用到高亮时引入
 - `fonts/index.css`：dev 模式专用字体入口，由 Vite 插件按环境注入；生产构建不引用该文件，改由 `vite.config.js` 注入 cdnjs 字体样式链接，静态产物只保留 KaTeX 数学字体
 - `theme/` 下主题 CSS 文件：youminghei（幽冥黑）、jingtailan（景泰蓝）、hupohuang（琥珀黄）、ningyezi（凝夜紫）、tingwulv（庭芜绿）、hailuocheng（海螺橙）、yingtaohong（樱桃红）

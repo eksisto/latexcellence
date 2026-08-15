@@ -29,7 +29,7 @@ export default function FloatingBackButton({ to = "/" }) {
       nativeButton={false}
       render={<Link to={to} aria-label={t("back")} />}
       className={cn(
-        "fixed bottom-6 left-6 z-40 h-10 gap-2 rounded-xl px-4 shadow-lg transition-all duration-300",
+        "fixed bottom-6 left-6 z-40 h-10 gap-2 rounded-[var(--surface-radius)] px-4 shadow-[var(--surface-shadow)] transition-all duration-300",
         visible
           ? "translate-y-0 opacity-100"
           : "pointer-events-none translate-y-2 opacity-0",
