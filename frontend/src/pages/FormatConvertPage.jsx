@@ -1,13 +1,7 @@
 import { useState, useCallback, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
@@ -45,6 +39,28 @@ const ACCEPT_MAP = {
   docx: ".docx",
   latex: ".tex",
 };
+
+function FormatSelect({ label, value, onChange, className }) {
+  return (
+    <div className={cn("flex flex-col gap-1.5", className)}>
+      <span className="text-center text-xs font-medium text-muted-foreground">
+        {label}
+      </span>
+      <Select value={value} onValueChange={onChange}>
+        <SelectTrigger className="h-9 w-full text-sm">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          {FORMATS.map((f) => (
+            <SelectItem key={f.value} value={f.value}>
+              {f.label}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </div>
+  );
+}
 
 function getOutputMimeType(targetFormat) {
   const map = {
@@ -190,59 +206,42 @@ export default function FormatConvertPage() {
 
       <div className="max-w-3xl mx-auto space-y-4">
         <Card>
-          <CardHeader className="pb-2">
-            <div className="flex items-center gap-3">
-              <div className="flex-1 space-y-1.5">
-                <span className="text-xs font-medium text-muted-foreground">
-                  {t("pages:formatConvert.sourceFormat")}
-                </span>
-                <Select
-                  value={sourceFormat}
-                  onValueChange={handleSourceFormatChange}
+          <CardContent className="space-y-4">
+            <div className="mx-auto flex max-w-lg items-end justify-center gap-2 sm:gap-3">
+              <FormatSelect
+                label={t("pages:formatConvert.sourceFormat")}
+                value={sourceFormat}
+                onChange={handleSourceFormatChange}
+                className="flex-1"
+              />
+              <div className="flex shrink-0 items-center gap-1 sm:gap-2">
+                <span
+                  className="hidden h-px w-6 border-t border-dotted border-foreground/30 sm:block md:w-10"
+                  aria-hidden="true"
+                />
+                <Button
+                  variant="outline"
+                  size="icon-lg"
+                  className="shrink-0"
+                  onClick={handleSwapFormats}
+                  aria-label={t("pages:formatConvert.swapFormats")}
+                  title={t("pages:formatConvert.swapFormats")}
                 >
-                  <SelectTrigger className="h-8 text-xs">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {FORMATS.map((f) => (
-                      <SelectItem key={f.value} value={f.value}>
-                        {f.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                  <ArrowRightLeft className="size-4" />
+                </Button>
+                <span
+                  className="hidden h-px w-6 border-t border-dotted border-foreground/30 sm:block md:w-10"
+                  aria-hidden="true"
+                />
               </div>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="mt-4 size-8"
-                onClick={handleSwapFormats}
-              >
-                <ArrowRightLeft className="size-4" />
-              </Button>
-              <div className="flex-1 space-y-1.5">
-                <span className="text-xs font-medium text-muted-foreground">
-                  {t("pages:formatConvert.targetFormat")}
-                </span>
-                <Select
-                  value={targetFormat}
-                  onValueChange={handleTargetFormatChange}
-                >
-                  <SelectTrigger className="h-8 text-xs">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {FORMATS.map((f) => (
-                      <SelectItem key={f.value} value={f.value}>
-                        {f.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+              <FormatSelect
+                label={t("pages:formatConvert.targetFormat")}
+                value={targetFormat}
+                onChange={handleTargetFormatChange}
+                className="flex-1"
+              />
             </div>
-          </CardHeader>
-          <CardContent className="space-y-3">
+
             <Tabs
               value={isTextMode ? "text" : "file"}
               onValueChange={(val) => {
@@ -256,7 +255,7 @@ export default function FormatConvertPage() {
                 }
               }}
             >
-              <TabsList>
+              <TabsList className="self-center">
                 <TabsTrigger value="text">
                   {t("pages:formatConvert.textTab")}
                 </TabsTrigger>
@@ -322,7 +321,7 @@ export default function FormatConvertPage() {
               </TabsContent>
             </Tabs>
 
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 border-t border-border pt-3">
               <Button onClick={handleConvert} disabled={loading || !canConvert}>
                 {loading ? <Loader2 className="animate-spin" /> : <FileText />}
                 {loading
