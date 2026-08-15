@@ -882,6 +882,10 @@ export const api = {
         method: "PATCH",
         body: JSON.stringify({ session_id: id, title }),
       }),
+    compactSession: (id) =>
+      request(`/writing-chat/sessions/${encodeURIComponent(id)}/compact`, {
+        method: "POST",
+      }),
     clarify: (clarifyId, answer) =>
       request("/writing-chat/clarify", {
         method: "POST",

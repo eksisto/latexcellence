@@ -12,8 +12,13 @@
           消息上（不直接写回 .tex，等用户再点应用）。
           不用 JSON 传输 LaTeX，避免反斜杠转义静默损坏。
     3. 上下文压缩：
-        - 每次发送消息前判断 cumulative_tokens 是否达到阈值
-        - 触发时把 messages 打包送 LLM 生成一条 summary 摘要，替换全部历史
+        - 每次发送消息前判断 cumulative_tokens 是否达到阈值（固定配置或按
+          模型上下文窗口动态推导）
+        - 触发时只摘要真正需要遗忘的旧历史，最近若干轮消息原样保留，本轮
+          user 消息始终以真实 user 角色进入 LLM
+        - 摘要输入剔除 tool 原始结果与 assistant+tool_calls 对，避免压缩
+          请求自身超限；摘要 tokens 优先使用真实 usage
+        - 摘要失败时确定性裁剪兜底，上下文超限时先裁剪再压缩重试
         - 被压缩的原始消息保存在 summary 的 snapshot 字段，删除 summary 时还原
 
 事件流（RS1）通过 SSE 推送：
@@ -90,6 +95,12 @@ class WritingChatService:
 
     # 工具结果注入上下文的滚动字符预算：超出后裁剪最旧的工具调用对
     _MAX_TOOL_CONTEXT_CHARS = 60000
+
+    # 工具循环单轮上下文超限的最大恢复尝试次数
+    _MAX_CONTEXT_RETRIES = 2
+
+    # 摘要请求的最大尝试次数（超限时扩大保留预算重试）
+    _MAX_SUMMARY_RETRIES = 3
 
     # 正文内 Markdown 链接提取正则（URL 不含空格与右括号）
     _MARKDOWN_LINK_RE = re.compile(r"\[[^\]]*\]\((https?://[^)\s]+)\)")
@@ -375,6 +386,25 @@ class WritingChatService:
         ctx.rename(title)
         return {"status": "ok", "title": ctx.title}
 
+    async def compact_session(self, session_id: str) -> dict:
+        """
+        手动压缩会话（复用自动压缩逻辑，不追加 user 消息）。
+
+        消息过少或压缩失败时返回 compressed=False，不改变会话结构。
+        """
+        ctx = ConversationContext.load_from_disk(session_id)
+        if ctx is None:
+            raise ValueError(f"Session not found: {session_id}")
+        compressed = await self._maybe_compress(ctx)
+        ctx.save_to_disk()
+        return {
+            "status": "ok",
+            "compressed": compressed,
+            "session_id": ctx.session_id,
+            "message_count": len(ctx.messages),
+            "cumulative_tokens": ctx.cumulative_tokens,
+        }
+
     # ── 发送消息（RS1，SSE 流式） ────────────────────────────────────────
 
     async def send(
@@ -401,9 +431,17 @@ class WritingChatService:
                 file_path=req.file_path, scope=scope
             )
 
-        # 2. 构造上下文锚点文本 + 追加 user 消息
+        # 2. 压缩检测：若发送前累积 token 已超阈值，先压缩旧消息（不含本轮
+        #    user 当前批），确保本轮 user 消息始终以真实 user 角色进入 LLM
         ctx.file_path = req.file_path or ctx.file_path
-        ctx.save_to_disk()
+        compressed_this_round = False
+        if await ctx.should_compress_async():
+            compressed_this_round = await self._maybe_compress(ctx)
+        if compressed_this_round:
+            ctx.save_to_disk()
+            yield {"type": "compressed", "session_id": ctx.session_id}
+
+        # 3. 构造上下文锚点文本 + 追加 user 消息
         context_block = self._build_context_block(
             req.file_path, req.paragraph_index, workspace_id
         )
@@ -413,14 +451,6 @@ class WritingChatService:
             referenced_paragraph=req.paragraph_index,
         )
         ctx.save_to_disk()
-
-        # 3. 压缩检测：若发送前累积 token 已超阈值，先压缩旧消息（不含本轮 user 当前批）
-        compressed_this_round = False
-        if ctx.should_compress():
-            compressed_this_round = await self._maybe_compress(ctx)
-        if compressed_this_round:
-            ctx.save_to_disk()
-            yield {"type": "compressed", "session_id": ctx.session_id}
 
         # 4. 调用 LLM 流式（支持 Function Calling 工具调用）
         llm = get_llm_client()
@@ -482,6 +512,7 @@ class WritingChatService:
             for round_idx in range(max_rounds):
                 round_content: list[str] = []
                 round_tool_calls = None
+                retry_skip_chars = 0
 
                 # 新一轮工具轮次的文本流从零开始累积：通知前端重置流式消息内容，
                 # 确保实时展示与最终落盘内容一致（前面轮次在工具调用前输出的
@@ -489,25 +520,79 @@ class WritingChatService:
                 if round_idx > 0:
                     yield {"type": "round_start"}
 
-                try:
-                    async for chunk in llm.chat_stream_with_tools(
-                        messages=tool_messages,
-                        tools=tools,
-                        temperature=get_config().llm.temperature,
-                    ):
-                        if chunk.content:
-                            round_content.append(chunk.content)
-                            yield {"type": "token", "content": chunk.content}
-                        if chunk.tool_calls:
-                            round_tool_calls = chunk.tool_calls
-                        if chunk.usage is not None:
-                            last_usage_tokens = chunk.usage.total_tokens
-                except Exception as e:
-                    self._logger.error(f"chat_stream_with_tools failed: {e}")
-                    yield {"type": "error", "message": str(e)}
-                    ctx.delete_message(user_msg.id)
-                    ctx.save_to_disk()
-                    return
+                # 上下文超限恢复：裁剪/压缩后重发同一轮，避免整轮失败
+                attempt = 0
+                while True:
+                    attempt += 1
+                    try:
+                        async for chunk in llm.chat_stream_with_tools(
+                            messages=tool_messages,
+                            tools=tools,
+                            temperature=get_config().llm.temperature,
+                        ):
+                            if chunk.content:
+                                content = chunk.content
+                                # 重试轮次跳过已实时输出过的前缀，避免前端重复显示
+                                if retry_skip_chars > 0:
+                                    if retry_skip_chars >= len(content):
+                                        retry_skip_chars -= len(content)
+                                        content = ""
+                                    else:
+                                        content = content[retry_skip_chars:]
+                                        retry_skip_chars = 0
+                                if content:
+                                    round_content.append(content)
+                                    yield {
+                                        "type": "token",
+                                        "content": content,
+                                    }
+                            if chunk.tool_calls:
+                                round_tool_calls = chunk.tool_calls
+                            if chunk.usage is not None:
+                                last_usage_tokens = chunk.usage.total_tokens
+                        break
+                    except Exception as e:
+                        is_overflow = self._is_context_overflow_error(e)
+                        if not is_overflow or attempt > self._MAX_CONTEXT_RETRIES:
+                            self._logger.error(f"chat_stream_with_tools failed: {e}")
+                            yield {"type": "error", "message": str(e)}
+                            if not is_overflow:
+                                # 非超限错误（认证/网络等）维持原有行为：
+                                # 移除本轮 user 消息，便于用户重新发送。
+                                # 超限重试耗尽时保留用户消息，避免静默丢消息。
+                                ctx.delete_message(user_msg.id)
+                            ctx.save_to_disk()
+                            return
+                        self._logger.warning(
+                            "Context overflow in tool round %s (attempt %s): %s",
+                            round_idx,
+                            attempt,
+                            e,
+                        )
+                        recovered = await self._recover_from_context_overflow(
+                            ctx,
+                            system_prompt,
+                            persisted_tool_msg_refs,
+                            tool_messages,
+                        )
+                        if recovered is None:
+                            # 恢复失败：保留用户消息，不静默删除
+                            yield {"type": "error", "message": str(e)}
+                            ctx.save_to_disk()
+                            return
+                        (
+                            tool_messages,
+                            persisted_tool_msg_refs,
+                            compressed_flag,
+                        ) = recovered
+                        if compressed_flag:
+                            compressed_this_round = True
+                            yield {
+                                "type": "compressed",
+                                "session_id": ctx.session_id,
+                            }
+                        retry_skip_chars = sum(len(x) for x in round_content)
+                        round_content = []
 
                 if not round_tool_calls:
                     # 无 tool_call：该轮内容即最终回复，已在流中实时输出到前端，
@@ -1238,47 +1323,184 @@ class WritingChatService:
 
         return tools
 
-    async def _maybe_compress(self, ctx: ConversationContext) -> bool:
-        """
-        调用 LLM 生成摘要并替换历史消息。
-
-        失败时记录日志但不抛出，避免影响主聊天流。
-        """
-        messages_to_summarize = ctx.to_llm_messages()
-        if len(messages_to_summarize) < 4:
-            return False  # 太短不值得压缩
-
-        llm = get_llm_client()
-        cfg = get_config()
-        transcript = "\n\n".join(
-            f"[{m['role'].upper()}]\n{m['content']}" for m in messages_to_summarize
-        )
-        messages = [
-            {"role": "system", "content": get_prompt("writing_chat", "summary_system")},
-            {"role": "user", "content": f"CONVERSATION:\n{transcript}"},
-        ]
-        try:
-            summary_text = await llm.chat(
-                messages,
-                temperature=cfg.features.writing_chat.summary_temperature,
-                max_tokens=cfg.features.writing_chat.summary_max_tokens,
+    @staticmethod
+    def _is_context_overflow_error(exc: Exception) -> bool:
+        """判断异常是否属于上下文超限（可恢复）。"""
+        text = str(exc).lower()
+        return any(
+            token in text
+            for token in (
+                "context length",
+                "context_length",
+                "maximum context",
+                "context window",
+                "context_window",
+                "too many tokens",
+                "token limit",
+                "input length",
+                "sequence length",
             )
-        except Exception as e:
-            self._logger.warning(f"Compression failed, skip: {e}")
-            return False
-        if not summary_text or not summary_text.strip():
-            self._logger.warning("Compression failed, empty summary, skip")
-            return False
-        summary_text = summary_text.strip()
+        )
 
-        # 估算摘要 token：粗略按字符近似
-        summary_tokens = int(len(summary_text) / 3.5) + 50
-        ctx.replace_with_summary(summary_text, summary_tokens)
+    @staticmethod
+    def _build_summary_transcript(messages: list[ChatMessage]) -> str:
+        """
+        把待摘要消息转为摘要请求文本。
+
+        剔除 role=tool 原始结果与 assistant+tool_calls 对的原始内容，
+        只保留 user / assistant / summary 的对话文本，避免压缩请求本身超限。
+        """
+        parts: list[str] = []
+        for m in messages:
+            if m.role == "tool":
+                continue
+            if m.role == "assistant" and m.tool_calls:
+                continue
+            role = "summary" if m.role == "summary" else m.role
+            parts.append(f"[{role.upper()}]\n{m.content or ''}")
+        return "\n\n".join(parts)
+
+    def _fallback_compact(self, ctx: ConversationContext) -> bool:
+        """
+        确定性兜底压缩：保留最近 N 轮原样，丢弃旧工具对，插入简短说明。
+
+        与 template_gen.agent._compact_messages 风格一致，保证 LLM 摘要
+        失败/超时/空摘要时上下文仍可继续。
+        """
+        to_summarize, to_keep = ctx.split_for_compression()
+        if len(to_summarize) < 4:
+            return False
+        note = (
+            "[Earlier conversation was compacted to fit the context window. "
+            "The current project files on disk are the source of truth; "
+            "continue from the retained messages below.]"
+        )
+        note_tokens = int(len(note) / 3.5) + 50
+        ctx.replace_with_summary(note, note_tokens, keep_messages=to_keep)
         self._logger.info(
-            f"Session {ctx.session_id} compressed to {summary_tokens} tokens, "
-            f"snapshot saved"
+            "Session %s fallback-compacted (kept %s messages)",
+            ctx.session_id,
+            len(to_keep),
         )
         return True
+
+    async def _recover_from_context_overflow(
+        self,
+        ctx: ConversationContext,
+        system_prompt: str,
+        persisted_tool_msg_refs: list[dict[str, Any]],
+        tool_messages: list[dict],
+    ) -> tuple[list[dict], list[dict], bool] | None:
+        """
+        工具循环上下文超限时的确定性恢复：
+
+        1. 优先裁剪旧工具对（完整对、保留当前轮），不改变持久化；
+        2. 仍超限：把已完成的历史工具轮次持久化到会话 → LLM 摘要，失败则
+           确定性裁剪兜底；
+        3. 用压缩后的会话重建 messages（不动当前正在执行的轮次）。
+
+        返回 (tool_messages, 新的 persisted_refs, 是否发生压缩)；
+        彻底失败返回 None。
+        """
+        try:
+            # 1) 裁剪旧工具对：完整对整体删除，保留当前轮；列表变化即直接重试
+            trimmed = self._trim_tool_messages(
+                list(tool_messages),
+                max_chars=self._MAX_TOOL_CONTEXT_CHARS // 2,
+            )
+            if len(trimmed) != len(tool_messages):
+                return trimmed, persisted_tool_msg_refs, False
+
+            # 2) 裁剪不够：先持久化已完成的历史工具轮次，再压缩旧历史
+            if persisted_tool_msg_refs:
+                ctx.append_tool_messages(persisted_tool_msg_refs)
+            compressed = await self._maybe_compress(ctx)
+            if not compressed:
+                compressed = self._fallback_compact(ctx)
+            if not compressed:
+                return None
+            ctx.save_to_disk()
+            tool_messages = [
+                {"role": "system", "content": system_prompt}
+            ] + ctx.to_llm_messages()
+            return tool_messages, [], True
+        except Exception as e:
+            self._logger.error(f"Context overflow recovery failed: {e}")
+            return None
+
+    async def _maybe_compress(
+        self, ctx: ConversationContext, keep_multiplier: float = 1.0
+    ) -> bool:
+        """
+        调用 LLM 生成摘要并替换旧历史（最近轮次原样保留）。
+
+        - 摘要输入剔除 tool 原始结果，体积显著小于全量历史；
+        - 摘要 tokens 优先使用真实 usage，无 usage 时按字符降级估算；
+        - 上下文超限时扩大保留预算重试（摘要更少内容）；
+        - LLM 失败/空摘要时回退到 _fallback_compact()，不阻塞对话。
+        """
+        cfg = get_config().features.writing_chat
+        llm = get_llm_client()
+        for attempt in range(self._MAX_SUMMARY_RETRIES):
+            keep_tokens = int(cfg.compression_keep_recent_tokens * keep_multiplier)
+            keep_turns = max(
+                1, int(cfg.compression_keep_recent_turns * keep_multiplier)
+            )
+            to_summarize, to_keep = ctx.split_for_compression(
+                keep_tokens=keep_tokens, keep_turns=keep_turns
+            )
+            if len(to_summarize) < 4:
+                return False  # 太短不值得压缩
+            transcript = self._build_summary_transcript(to_summarize)
+            if not transcript.strip():
+                return False
+            messages = [
+                {
+                    "role": "system",
+                    "content": get_prompt("writing_chat", "summary_system"),
+                },
+                {"role": "user", "content": f"CONVERSATION:\n{transcript}"},
+            ]
+            try:
+                summary_text, usage = await llm.chat_with_usage(
+                    messages,
+                    temperature=cfg.summary_temperature,
+                    max_tokens=cfg.summary_token_budget,
+                    model=cfg.summary_model or None,
+                )
+            except Exception as e:
+                self._logger.warning(
+                    "Compression LLM failed (attempt %s): %s", attempt + 1, e
+                )
+                if (
+                    self._is_context_overflow_error(e)
+                    and attempt < self._MAX_SUMMARY_RETRIES - 1
+                ):
+                    keep_multiplier *= 2
+                    continue
+                return self._fallback_compact(ctx)
+
+            if not summary_text or not summary_text.strip():
+                self._logger.warning("Compression LLM returned empty summary, fallback")
+                return self._fallback_compact(ctx)
+            summary_text = summary_text.strip()
+
+            if usage is not None and usage.completion_tokens > 0:
+                summary_tokens = usage.completion_tokens
+            else:
+                summary_tokens = int(len(summary_text) / 3.5) + 50
+            ctx.replace_with_summary(
+                summary_text, summary_tokens, keep_messages=to_keep
+            )
+            self._logger.info(
+                "Session %s compressed: summary=%s tokens, kept=%s messages, "
+                "snapshot saved",
+                ctx.session_id,
+                summary_tokens,
+                len(to_keep),
+            )
+            return True
+        return self._fallback_compact(ctx)
 
 
 # ── 单例 ─────────────────────────────────────────────────────────────────

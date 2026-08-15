@@ -465,7 +465,7 @@ function FeaturesSection({ features, onChange, diffOptions }) {
         onChange={(v) => onChange("features.writing_chat.enabled", v)}
       />
       {features.writing_chat.enabled && (
-        <div className="pl-6">
+        <div className="pl-6 space-y-2 rounded-md border p-2.5 bg-muted/40">
           <CheckboxField
             label={t("settings.featureWritingChatWebSearch")}
             checked={features.writing_chat.web_search_enabled}
@@ -473,6 +473,99 @@ function FeaturesSection({ features, onChange, diffOptions }) {
               onChange("features.writing_chat.web_search_enabled", v)
             }
           />
+          <div className="grid grid-cols-2 gap-3 pt-1">
+            <div className="space-y-1.5">
+              <Label className="text-xs">
+                {t("settings.writingChatCompressionThreshold")}
+              </Label>
+              <Input
+                type="number"
+                min="0"
+                value={features.writing_chat.compression_threshold_tokens}
+                onChange={(e) =>
+                  onChange(
+                    "features.writing_chat.compression_threshold_tokens",
+                    parseInt(e.target.value, 10) || 0,
+                  )
+                }
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">
+                {t("settings.writingChatHeadroom")}
+              </Label>
+              <Input
+                type="number"
+                min="0"
+                value={features.writing_chat.compression_headroom_tokens}
+                onChange={(e) =>
+                  onChange(
+                    "features.writing_chat.compression_headroom_tokens",
+                    parseInt(e.target.value, 10) || 0,
+                  )
+                }
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">
+                {t("settings.writingChatKeepRecentTokens")}
+              </Label>
+              <Input
+                type="number"
+                min="0"
+                value={features.writing_chat.compression_keep_recent_tokens}
+                onChange={(e) =>
+                  onChange(
+                    "features.writing_chat.compression_keep_recent_tokens",
+                    parseInt(e.target.value, 10) || 0,
+                  )
+                }
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">
+                {t("settings.writingChatKeepRecentTurns")}
+              </Label>
+              <Input
+                type="number"
+                min="1"
+                value={features.writing_chat.compression_keep_recent_turns}
+                onChange={(e) =>
+                  onChange(
+                    "features.writing_chat.compression_keep_recent_turns",
+                    parseInt(e.target.value, 10) || 1,
+                  )
+                }
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">
+                {t("settings.writingChatSummaryBudget")}
+              </Label>
+              <Input
+                type="number"
+                min="1"
+                value={features.writing_chat.summary_token_budget}
+                onChange={(e) =>
+                  onChange(
+                    "features.writing_chat.summary_token_budget",
+                    parseInt(e.target.value, 10) || 1,
+                  )
+                }
+              />
+            </div>
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-xs">
+              {t("settings.writingChatSummaryModel")}
+            </Label>
+            <Input
+              value={features.writing_chat.summary_model}
+              onChange={(e) =>
+                onChange("features.writing_chat.summary_model", e.target.value)
+              }
+            />
+          </div>
         </div>
       )}
     </ConfigSection>

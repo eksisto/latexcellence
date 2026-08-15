@@ -20,7 +20,9 @@
     "temperature": 0.3,
     "max_tokens": 8192,
     "request_interval": 1.5,
-    "max_concurrency": 5
+    "max_concurrency": 5,
+    "context_window_tokens": 0,
+    "models_probe_url": ""
   },
   "http": {
     "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36"
@@ -109,11 +111,15 @@
     },
     "writing_chat": {
       "enabled": true,
-      "compression_threshold_tokens": 200000,
+      "compression_threshold_tokens": 0,
+      "compression_headroom_tokens": 30000,
+      "compression_keep_recent_tokens": 20000,
+      "compression_keep_recent_turns": 5,
       "sessions_dir": "data/writing_chat_sessions/",
       "custom_prompts_dir": "data/prompts/writing_chat/",
       "summary_temperature": 0.2,
-      "summary_max_tokens": 50000,
+      "summary_token_budget": 6000,
+      "summary_model": "",
       "web_search_enabled": true
     },
     "bib_manager": {

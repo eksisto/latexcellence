@@ -502,6 +502,45 @@ export default function useWritingChat() {
     ],
   );
 
+  // ── 手动压缩会话 ──────────────────────────────────────────────
+  const compactSession = useCallback(async () => {
+    const sessionId = writingChatCurrentSessionId;
+    if (!sessionId || isDraftSession(sessionId)) return;
+    let result;
+    try {
+      result = await api.writingChat.compactSession(sessionId);
+    } catch (e) {
+      setError(e.message);
+      toast.error(i18n.t("hooks:writingChat.compactFailed"), {
+        description: e.message,
+      });
+      return;
+    }
+    // 消息过少或压缩失败时后端不改变会话结构，无需二次拉取
+    if (!result?.compressed) {
+      toast.info(i18n.t("hooks:writingChat.compactTooShort"));
+      return;
+    }
+    try {
+      const fresh = await api.writingChat.loadSession(sessionId);
+      setWritingChatMessages(processLoadedMessages(fresh.messages || []));
+      const hasCompressed = (fresh.messages || []).some(
+        (m) => m.compressed && m.role === "summary",
+      );
+      setWritingChatCompressed(hasCompressed);
+      toast.success(i18n.t("hooks:writingChat.compactSuccess"));
+    } catch (e) {
+      setError(e.message);
+      toast.error(i18n.t("hooks:writingChat.compactFailed"), {
+        description: e.message,
+      });
+    }
+  }, [
+    writingChatCurrentSessionId,
+    setWritingChatMessages,
+    setWritingChatCompressed,
+  ]);
+
   const handleFileChange = useCallback(
     (path) => {
       // 选择当前已选中的文件时直接返回，否则 setActiveFile 同值不触发 re-render，
@@ -524,6 +563,7 @@ export default function useWritingChat() {
     setParagraphIndex,
     sessions: writingChatSessions,
     currentSessionId: writingChatCurrentSessionId,
+    isCurrentSessionDraft: isDraftSession(writingChatCurrentSessionId),
     messages: writingChatMessages,
     compressed: writingChatCompressed,
     input,
@@ -560,6 +600,7 @@ export default function useWritingChat() {
     generateEdit,
     applyEdit,
     deleteMessage,
+    compactSession,
     handleFileChange,
     refreshSessions,
   };

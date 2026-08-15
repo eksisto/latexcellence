@@ -9,6 +9,7 @@
     GET  /api/writing-chat/sessions          — 列出所有会话
     GET  /api/writing-chat/sessions/{id}     — 加载单个会话完整数据
     DELETE /api/writing-chat/sessions/{id}   — 删除会话
+    POST /api/writing-chat/sessions/{id}/compact — 手动压缩会话
 """
 
 import json
@@ -236,6 +237,16 @@ async def rename_session(session_id: str, request: RenameSessionRequest):
     service = get_writing_chat_service()
     try:
         return service.rename_session(session_id, request.title)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+@router.post("/sessions/{session_id}/compact")
+async def compact_session(session_id: str):
+    """手动压缩会话（不追加用户消息，保留最近轮次原样）。"""
+    service = get_writing_chat_service()
+    try:
+        return await service.compact_session(session_id)
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
 

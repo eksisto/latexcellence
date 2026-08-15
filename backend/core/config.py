@@ -20,7 +20,7 @@ import os
 from pathlib import Path
 
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 class ServerConfig(BaseModel):
@@ -53,6 +53,14 @@ class LLMConfig(BaseModel):
     max_tokens: int = Field(8192, ge=1)  # 单次生成最大 token 数
     request_interval: float = Field(1.5, ge=0)  # 请求间隔（秒），避免触发 rate limit
     max_concurrency: int = Field(5, ge=1)  # 最大并发 LLM 请求数（Semaphore）
+    # 当前模型的上下文窗口 token 数；0 表示自动探测（API 探测 → 错误信息学习 →
+    # 内置模型表 → 默认值）。非 0 时跳过探测直接使用，适合代理不暴露元数据或
+    # 自定义模型别名的情况。
+    context_window_tokens: int = Field(0, ge=0)
+    # 可选的 /models 探测直连地址（如 http://<host>:8000/v1/models），
+    # 用于绕过不透传 /models 路由的网关；为空时使用 base_url。
+    # 仅当探测地址与 base_url 同源时才携带 API key，跨域探测不发送密钥。
+    models_probe_url: str = ""
 
 
 class TypoCheckConfig(BaseModel):
@@ -207,13 +215,42 @@ class WritingChatConfig(BaseModel):
     """写作助手模块配置"""
 
     enabled: bool = True  # 是否启用
-    compression_threshold_tokens: int = 200000  # 触发上下文压缩的累计 token 阈值
+    # 触发上下文压缩的累计 token 阈值；0 表示基于模型上下文窗口动态推导
+    # （window - max_tokens - headroom - keep_recent - summary_budget）
+    compression_threshold_tokens: int = 0
+    # 动态推导触发值时保留的窗口余量（token）
+    compression_headroom_tokens: int = 30000
+    # 压缩时原样保留的最近消息 token 预算
+    compression_keep_recent_tokens: int = 20000
+    # 压缩时原样保留的最近轮数（与 token 预算取先满足者）
+    compression_keep_recent_turns: int = 5
     sessions_dir: str = "data/writing_chat_sessions/"  # 会话持久化目录
     custom_prompts_dir: str = "data/prompts/writing_chat/"  # 助手提示词存放目录
     summary_temperature: float = 0.2  # 生成压缩摘要时的温度
-    summary_max_tokens: int = 50000  # 压缩摘要最大生成 token 数
+    # 压缩摘要最大生成 token 数（新字段；旧配置读取 summary_max_tokens 迁移）
+    summary_token_budget: int = 6000
+    # 已废弃，仅兼容旧配置；存在且 summary_token_budget 未显式给出时迁移为预算值
+    summary_max_tokens: int = 50000
+    # 可选的独立摘要模型；为空时跟随主模型
+    summary_model: str = ""
     # 是否在聊天中启用联网搜索（受全局 web_search.enabled 约束）
     web_search_enabled: bool = True
+
+    @model_validator(mode="before")
+    @classmethod
+    def _migrate_summary_max_tokens(cls, data):
+        """旧配置只含 summary_max_tokens 时迁移到 summary_token_budget 并告警。"""
+        if isinstance(data, dict) and "summary_token_budget" not in data:
+            if "summary_max_tokens" in data:
+                from backend.core.logger import get_logger
+
+                get_logger("config").warning(
+                    "writing_chat.summary_max_tokens is deprecated; "
+                    "using it as summary_token_budget"
+                )
+                data = dict(data)
+                data["summary_token_budget"] = data["summary_max_tokens"]
+        return data
 
 
 class DuckDuckGoConfig(BaseModel):

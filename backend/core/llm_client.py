@@ -13,8 +13,12 @@ OpenAI API 统一封装模块。
 """
 
 import asyncio
+import json
+import re
 import threading
 import time
+import urllib.parse
+import urllib.request
 from dataclasses import dataclass
 from typing import Any, AsyncIterator
 
@@ -32,6 +36,77 @@ class UsageInfo:
     prompt_tokens: int
     completion_tokens: int
     total_tokens: int
+
+
+# ── 上下文窗口探测常量 ────────────────────────────────────────────────────
+
+# 探测/模型表全部失败时的兜底窗口大小
+_DEFAULT_CONTEXT_WINDOW = 200000
+
+# 常见模型上下文窗口（前缀匹配，列表内按前缀长度降序排列，
+# 避免 "gpt-4.1" 被 "gpt-4" 先命中）
+_BUILTIN_MODEL_WINDOWS: list[tuple[str, int]] = [
+    ("gemini-3.5-flash-lite", 1_048_576),
+    ("gemini-3.1-flash-lite", 1_048_576),
+    ("gemini-3-flash-preview", 1_048_576),
+    ("qwen3.6-max-preview", 262_144),
+    ("qwen3.5-397b-a17b", 262_144),
+    ("qwen3.5-122b-a10b", 262_144),
+    ("deepseek-v4-flash", 1_000_000),
+    ("qwen3-max-preview", 262_144),
+    ("deepseek-v4-pro", 1_000_000),
+    ("gemini-3.7-flash", 1_048_576),
+    ("gemini-3.6-flash", 1_048_576),
+    ("gemini-3.5-flash", 1_048_576),
+    ("gemini-2.5-flash", 1_048_576),
+    ("qwen3.6-35b-a3b", 262_144),
+    ("qwen3-235b-a22b", 131_072),
+    ("claude-sonnet-5", 1_000_000),
+    ("claude-fable-5", 1_000_000),
+    ("claude-opus-5", 1_000_000),
+    ("gemini-3.1-pro", 1_048_576),
+    ("gemini-2.5-pro", 1_048_576),
+    ("qwen3.7-flash", 1_000_000),
+    ("qwen3.6-flash", 1_000_000),
+    ("qwen3.5-flash", 1_000_000),
+    ("qwen3.8-max", 1_000_000),
+    ("qwen3.7-max", 1_000_000),
+    ("qwen3.7-plus", 1_000_000),
+    ("qwen3.6-plus", 1_000_000),
+    ("qwen3.6-max", 262_144),
+    ("qwen3.6-27b", 262_144),
+    ("qwen3.5-plus", 1_000_000),
+    ("qwen3.5-27b", 262_144),
+    ("qwen3-max", 262_144),
+    ("qwen3-32b", 131_072),
+    ("kimi-k3", 1_048_576),
+    ("glm-5.3", 1_000_000),
+    ("glm-5.2", 1_000_000),
+    ("gpt-5.6", 1_050_000),
+    ("gpt-5.5", 1_050_000),
+    ("gpt-5.4", 1_050_000),
+]
+
+# 超限错误 → 窗口值 的解析正则（vLLM / OpenAI 兼容错误信息）
+_WINDOW_ERROR_PATTERNS = [
+    re.compile(r"maximum context length is\s+(\d+)", re.IGNORECASE),
+    re.compile(r"maximum context length[^\d]{0,40}(\d{4,})", re.IGNORECASE),
+    re.compile(r"context length[^\d]{0,40}(\d{4,})", re.IGNORECASE),
+    re.compile(r"context_window[^\d]{0,40}(\d{4,})", re.IGNORECASE),
+    re.compile(r"too many tokens[^\d]{0,40}(\d{4,})", re.IGNORECASE),
+]
+
+
+def _parse_context_window_value(value: Any) -> int | None:
+    """宽松读取 /models 响应中的窗口数值字段。"""
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int) and value > 0:
+        return value
+    if isinstance(value, str) and value.strip().isdigit():
+        n = int(value.strip())
+        return n if n > 0 else None
+    return None
 
 
 @dataclass
@@ -62,11 +137,180 @@ class LLMClient:
         self._client_lock = threading.Lock()
         self._last_request_time: float = 0
         self._logger = get_logger("llm_client")
+        # 上下文窗口缓存：key=(base_url, model)，reset() 时随配置一起失效
+        self._context_window_cache: dict[tuple[str, str], int] = {}
+        self._window_cache_lock = threading.Lock()
 
     def reset(self) -> None:
-        """重置缓存的 AsyncOpenAI 实例，使下次访问 client 时重新读取配置。"""
+        """重置缓存的 AsyncOpenAI 实例与上下文窗口探测结果，使下次访问重新读取配置。"""
         with self._client_lock:
             self._client = None
+        with self._window_cache_lock:
+            self._context_window_cache.clear()
+
+    # ── 上下文窗口探测 ─────────────────────────────────────────────────
+
+    @staticmethod
+    def _same_origin(base_url: str, probe_url: str) -> bool:
+        """判断探测地址与主服务是否同源（scheme + host + 端口一致）。"""
+
+        def _origin(url: str) -> tuple[str, str]:
+            parsed = urllib.parse.urlparse(url)
+            host = (parsed.hostname or "").lower()
+            try:
+                port = parsed.port
+            except ValueError:
+                port = None
+            if port is None:
+                port = 443 if parsed.scheme == "https" else 80
+            return parsed.scheme.lower(), f"{host}:{port}"
+
+        return _origin(base_url) == _origin(probe_url)
+
+    @staticmethod
+    def _probe_context_window_sync(
+        base_url: str,
+        model: str,
+        api_key: str,
+        probe_url: str,
+        timeout: float = 5.0,
+    ) -> int | None:
+        """
+        同步请求 OpenAI 兼容 /models 端点并解析模型上下文窗口。
+
+        优先匹配 id == model（支持 :latest 等后缀），宽松读取：
+        context_length / inputTokenLimit / outputTokenLimit / max_model_len /
+        context_window / max_context_length。
+
+        仅当探测地址与 base_url 同源时才携带 API key；跨域探测不发送密钥，
+        避免主服务密钥泄漏给直连地址（vLLM 通常无需鉴权即可访问 /models）。
+
+        任何失败（网络、鉴权、HTML 页面、字段缺失）都返回 None，绝不抛出。
+        """
+        base = (probe_url or base_url).rstrip("/")
+        url = f"{base}/models"
+        try:
+            req = urllib.request.Request(url, method="GET")
+            if api_key and LLMClient._same_origin(base_url, probe_url or base_url):
+                req.add_header("Authorization", f"Bearer {api_key}")
+            req.add_header("Accept", "application/json")
+            with urllib.request.urlopen(req, timeout=timeout) as resp:
+                payload = json.loads(resp.read().decode("utf-8", errors="replace"))
+        except Exception:
+            return None
+
+        items: list[Any] = []
+        if isinstance(payload, list):
+            items = payload
+        elif isinstance(payload, dict):
+            items = payload.get("data") or payload.get("models") or []
+
+        for item in items:
+            if not isinstance(item, dict):
+                continue
+            item_id = str(item.get("id", ""))
+            if item_id != model and not item_id.startswith(f"{model}:"):
+                continue
+            for key in (
+                "context_length",
+                "inputTokenLimit",
+                "outputTokenLimit",
+                "max_model_len",
+                "context_window",
+                "max_context_length",
+            ):
+                window = _parse_context_window_value(item.get(key))
+                if window is not None:
+                    return window
+        return None
+
+    @staticmethod
+    def _builtin_context_window(model: str) -> int | None:
+        """按内置模型表前缀匹配上下文窗口；未命中返回 None。"""
+        for prefix, window in _BUILTIN_MODEL_WINDOWS:
+            if model == prefix or model.startswith(prefix + "-"):
+                return window
+        return None
+
+    def learn_context_window_from_error(self, error_text: str) -> int | None:
+        """
+        从上下文超限错误信息中解析窗口值并缓存。
+
+        供 vLLM / OpenAI 兼容网关（"This model's maximum context length is
+        N tokens"）在探测不可用时学习真实窗口。解析成功返回窗口值，否则 None。
+        """
+        if not error_text:
+            return None
+        window = None
+        for pattern in _WINDOW_ERROR_PATTERNS:
+            m = pattern.search(error_text)
+            if m:
+                window = int(m.group(1))
+                break
+        if window is None:
+            return None
+        cfg = get_config().llm
+        key = (cfg.base_url, cfg.model)
+        with self._window_cache_lock:
+            self._context_window_cache[key] = window
+        self._logger.info(
+            "Learned context window %s from error (model=%s)", window, cfg.model
+        )
+        return window
+
+    def _learn_window_from_exception(self, exc: Exception) -> None:
+        """异常路径统一尝试从错误文本学习窗口；失败静默。"""
+        try:
+            self.learn_context_window_from_error(str(exc))
+        except Exception:
+            pass
+
+    async def get_context_window(self) -> int:
+        """
+        获取当前模型上下文窗口（token）。
+
+        优先级链：
+            1. 显式配置 llm.context_window_tokens（非 0）
+            2. 缓存（含错误信息学习结果，按 (base_url, model)）
+            3. GET {probe_base}/models 探测（默认 base_url，可用
+               llm.models_probe_url 覆盖为直连地址）
+            4. 内置模型表
+            5. 默认值 200000
+
+        探测失败只降级，绝不抛出；reset()（配置热重载）时缓存失效。
+        """
+        cfg = get_config().llm
+        explicit = cfg.context_window_tokens
+        if explicit > 0:
+            return explicit
+
+        key = (cfg.base_url, cfg.model)
+        with self._window_cache_lock:
+            cached = self._context_window_cache.get(key)
+        if cached is not None:
+            return cached
+
+        window = await asyncio.to_thread(
+            self._probe_context_window_sync,
+            cfg.base_url,
+            cfg.model,
+            cfg.api_key,
+            cfg.models_probe_url,
+        )
+        if window is None:
+            window = self._builtin_context_window(cfg.model)
+        if window is None:
+            window = _DEFAULT_CONTEXT_WINDOW
+
+        with self._window_cache_lock:
+            self._context_window_cache[key] = window
+        self._logger.info(
+            "Context window resolved to %s for model=%s (probe_base=%s)",
+            window,
+            cfg.model,
+            cfg.models_probe_url or cfg.base_url,
+        )
+        return window
 
     @property
     def client(self) -> AsyncOpenAI:
@@ -103,6 +347,7 @@ class LLMClient:
         max_tokens: int | None = None,
         response_format: dict | None = None,
         max_retries: int = 3,
+        model: str | None = None,
     ) -> str:
         """
         非流式 LLM 对话调用，返回原始文本。
@@ -113,6 +358,7 @@ class LLMClient:
             max_tokens: 最大生成 token 数（覆盖 config 中的默认值）
             response_format: OpenAI response_format 参数，如 {"type": "json_object"}
             max_retries: 最大重试次数（默认 3）
+            model: 覆盖使用的模型名（默认跟随 config.llm.model）
 
         返回：
             LLM 返回的原始文本（str），由调用方负责 JSON 解析和校验
@@ -120,7 +366,33 @@ class LLMClient:
         异常：
             重试耗尽后抛出最后一次异常的原始类型
         """
+        content, _ = await self.chat_with_usage(
+            messages=messages,
+            temperature=temperature,
+            max_tokens=max_tokens,
+            response_format=response_format,
+            max_retries=max_retries,
+            model=model,
+        )
+        return content
+
+    async def chat_with_usage(
+        self,
+        messages: list[dict],
+        temperature: float | None = None,
+        max_tokens: int | None = None,
+        response_format: dict | None = None,
+        max_retries: int = 3,
+        model: str | None = None,
+    ) -> tuple[str, UsageInfo | None]:
+        """
+        非流式 LLM 对话调用，返回 (文本, usage)。
+
+        usage 为 None 表示 API 未返回用量信息（调用方降级估算）；
+        其余行为与 chat() 一致。
+        """
         cfg = get_config().llm
+        model_name = model or cfg.model
         temp = temperature if temperature is not None else cfg.temperature
         max_tok = max_tokens if max_tokens is not None else cfg.max_tokens
 
@@ -129,11 +401,12 @@ class LLMClient:
                 await self._rate_limit()
 
                 self._logger.info(
-                    f"LLM request | model={cfg.model} | tokens={max_tok} | attempt={attempt + 1}"
+                    f"LLM request | model={model_name} | tokens={max_tok} "
+                    f"| attempt={attempt + 1}"
                 )
 
                 kwargs = {
-                    "model": cfg.model,
+                    "model": model_name,
                     "messages": messages,
                     "temperature": temp,
                     "max_tokens": max_tok,
@@ -145,16 +418,23 @@ class LLMClient:
 
                 content = response.choices[0].message.content
                 usage = response.usage
+                usage_info: UsageInfo | None = None
                 if usage:
+                    usage_info = UsageInfo(
+                        prompt_tokens=usage.prompt_tokens,
+                        completion_tokens=usage.completion_tokens,
+                        total_tokens=usage.total_tokens,
+                    )
                     self._logger.info(
                         f"LLM response | prompt_tokens={usage.prompt_tokens} "
                         f"completion_tokens={usage.completion_tokens} "
                         f"total_tokens={usage.total_tokens}"
                     )
 
-                return content
+                return content, usage_info
 
             except Exception as e:
+                self._learn_window_from_exception(e)
                 # 其他异常（网络错误、API 错误、认证失败等）
                 self._logger.error(
                     f"LLM request failed (attempt {attempt + 1}/{max_retries}): {e}"
@@ -267,6 +547,7 @@ class LLMClient:
                 return response
 
             except Exception as e:
+                self._learn_window_from_exception(e)
                 self._logger.error(
                     f"LLM request with tools failed "
                     f"(attempt {attempt + 1}/{max_retries}): {e}"

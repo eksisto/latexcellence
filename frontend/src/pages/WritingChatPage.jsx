@@ -11,6 +11,7 @@ import {
   Sparkles,
   X,
   FolderOpen,
+  Shrink,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -48,6 +49,7 @@ export default function WritingChatPage() {
     setParagraphIndex,
     sessions,
     currentSessionId,
+    isCurrentSessionDraft,
     messages,
     compressed,
     input,
@@ -76,6 +78,7 @@ export default function WritingChatPage() {
     generateEdit,
     applyEdit,
     deleteMessage,
+    compactSession,
     handleFileChange,
     // 助手
     assistants,
@@ -92,6 +95,7 @@ export default function WritingChatPage() {
   // 重命名会话
   const [renamingId, setRenamingId] = useState(null);
   const [renameTitle, setRenameTitle] = useState("");
+  const [compacting, setCompacting] = useState(false);
 
   // 打印 deck: 自动滚动到底部
   useEffect(() => {
@@ -133,13 +137,7 @@ export default function WritingChatPage() {
   return (
     <div className="min-h-screen p-4 md:p-8 animate-tab-enter">
       <div className="max-w-7xl mx-auto">
-        <PageHeader title={t("pages:writingChat.title")} groupKey="aiAssist">
-          {compressed && (
-            <span className="text-xs px-2 py-1 rounded bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-500/30">
-              {t("pages:writingChat.compressedToast")}
-            </span>
-          )}
-        </PageHeader>
+        <PageHeader title={t("pages:writingChat.title")} groupKey="aiAssist" />
       </div>
 
       {!projectPath || texFiles.length === 0 ? (
@@ -431,7 +429,50 @@ export default function WritingChatPage() {
           </Card>
 
           {/* 右：聊天区 */}
-          <Card className="h-[calc(100vh-160px)] min-h-[400px] flex flex-col">
+          <Card className="h-[calc(100vh-160px)] min-h-[400px] flex flex-col gap-2">
+            <CardHeader className="pb-1 flex items-center justify-between gap-2">
+              <CardTitle className="text-sm">
+                {t("pages:writingChat.conversation")}
+              </CardTitle>
+              <div className="flex items-center gap-1.5">
+                {compressed && (
+                  <span className="text-xs px-2 py-1 rounded bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-500/30">
+                    {t("pages:writingChat.compressedToast")}
+                  </span>
+                )}
+                <Button
+                  size="xs"
+                  variant="outline"
+                  disabled={
+                    !currentSessionId ||
+                    isCurrentSessionDraft ||
+                    streaming ||
+                    compacting
+                  }
+                  title={t("pages:writingChat.compactSession")}
+                  onClick={async () => {
+                    setCompacting(true);
+                    try {
+                      await compactSession();
+                    } finally {
+                      setCompacting(false);
+                    }
+                  }}
+                >
+                  {compacting ? (
+                    <Loader2 className="size-3 animate-spin" />
+                  ) : (
+                    <Shrink className="size-3" />
+                  )}
+                  {compacting
+                    ? t("pages:writingChat.compacting")
+                    : t("pages:writingChat.compactSession")}
+                </Button>
+              </div>
+            </CardHeader>
+            <div className="px-2">
+              <Separator />
+            </div>
             <CardContent className="flex-1 flex flex-col p-2 overflow-hidden rounded-t-xl">
               <div
                 ref={scrollRef}

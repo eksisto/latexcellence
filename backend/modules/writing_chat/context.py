@@ -17,6 +17,7 @@
     - 使用 pathlib 与 encoding="utf-8"（AGENTS.md）
 """
 
+import copy
 import hashlib
 import json
 import time
@@ -318,14 +319,37 @@ class ConversationContext:
         self.last_updated_at = time.time()
 
     def update_last_message_tokens(self, tokens: int) -> None:
-        """按 LLM usage 反推上条 user + assistant 共消耗的 tokens，平均分配到两条消息上用于记账。"""
-        if not self.messages or tokens <= 0:
+        """
+        用本轮真实 usage.total_tokens 更新累计值，并按内容长度比例把 total
+        分摊到本轮 user/assistant 两条消息的 tokens 字段。
+
+        tokens 字段仅用于删除/还原时的近似记账（近似值由下一次真实 usage 校准），
+        不是单条消息在 API 请求中的精确消耗。
+        """
+        if tokens <= 0:
             return
-        # 把本轮 total_tokens 视作"当前上下文窗口大小"，
-        # 并把它视作 cumulative_tokens 的新基准（而非累加），
-        # 因为每次 LLM 调用都会把整个 messages 数组发送出去。
         if tokens > self.cumulative_tokens:
             self.cumulative_tokens = tokens
+
+        user_idx: int | None = None
+        assistant_idx: int | None = None
+        for i, m in enumerate(self.messages):
+            if m.role == "user":
+                user_idx = i
+            elif m.role == "assistant" and not m.tool_calls:
+                assistant_idx = i
+        if user_idx is None:
+            if assistant_idx is not None:
+                self.messages[assistant_idx].tokens = tokens
+            return
+        if assistant_idx is None:
+            self.messages[user_idx].tokens = tokens
+            return
+        user_len = max(1, len(self.messages[user_idx].content or ""))
+        asst_len = max(1, len(self.messages[assistant_idx].content or ""))
+        user_tokens = int(tokens * user_len / (user_len + asst_len))
+        self.messages[user_idx].tokens = max(0, user_tokens)
+        self.messages[assistant_idx].tokens = max(0, tokens - user_tokens)
 
     def set_assistant_content(self, message_id: str, content: str) -> None:
         for m in self.messages:
@@ -387,12 +411,108 @@ class ConversationContext:
 
     # ── 压缩触发 ────────────────────────────────────────────────────────────
 
-    def should_compress(self) -> bool:
+    @staticmethod
+    def _estimate_message_tokens(message: Any) -> int:
+        """估算单条消息占用的 token（字符数近似，用于切分预算）。"""
+        content = message.content or ""
+        total = len(content) / 3.5
+        if getattr(message, "tool_calls", None):
+            total += len(str(message.tool_calls)) / 3.5
+        return int(total) + 1
+
+    def split_for_compression(
+        self,
+        keep_tokens: int | None = None,
+        keep_turns: int | None = None,
+    ) -> tuple[list[ChatMessage], list[ChatMessage]]:
+        """
+        将消息切分为 (待摘要, 原样保留)。
+
+        从尾部向前保留最近若干轮（轮数预算与 token 预算取先满足者）：
+        - 一个“轮”以 user 或 summary 消息为起点，包含其后到下一个 user 前的
+          全部 assistant / tool 消息，切分不会落在工具调用对中间；
+        - summary 视为独立轮次单元，连续压缩时嵌套快照语义保持；
+        - token 预算超出时优先保留更近的轮。
+        """
         cfg = get_config()
-        return (
-            self.cumulative_tokens
-            >= cfg.features.writing_chat.compression_threshold_tokens
+        token_budget = (
+            cfg.features.writing_chat.compression_keep_recent_tokens
+            if keep_tokens is None
+            else keep_tokens
         )
+        turn_budget = (
+            cfg.features.writing_chat.compression_keep_recent_turns
+            if keep_turns is None
+            else keep_turns
+        )
+        msgs = self.messages
+        if not msgs or turn_budget <= 0:
+            return msgs, []
+
+        turn_starts = [i for i, m in enumerate(msgs) if m.role in ("user", "summary")]
+        if not turn_starts:
+            return msgs, []
+
+        split_idx = turn_starts[-min(turn_budget, len(turn_starts))]
+
+        # token 预算：超限时向前推进到下一个轮次起点（丢弃最旧的保留轮）
+        kept_tokens = sum(self._estimate_message_tokens(m) for m in msgs[split_idx:])
+        next_turn_positions = [idx for idx in turn_starts if idx > split_idx]
+        while kept_tokens > token_budget and next_turn_positions:
+            new_split = next_turn_positions.pop(0)
+            kept_tokens -= sum(
+                self._estimate_message_tokens(m) for m in msgs[split_idx:new_split]
+            )
+            split_idx = new_split
+
+        # 安全网：切分点绝不落在 tool 消息与其 assistant+tool_calls 对之间
+        while split_idx < len(msgs) and msgs[split_idx].role == "tool":
+            j = split_idx - 1
+            while j >= 0 and msgs[j].role == "tool":
+                j -= 1
+            if j >= 0 and msgs[j].role == "assistant" and msgs[j].tool_calls:
+                split_idx = j
+                break
+            split_idx += 1
+
+        return msgs[:split_idx], msgs[split_idx:]
+
+    def should_compress(self, window_tokens: int | None = None) -> bool:
+        """
+        判断是否需要压缩。
+
+        compression_threshold_tokens > 0 时按固定阈值；
+        为 0 时按窗口动态推导：
+        window - max_tokens - headroom - keep_recent - summary_budget。
+        同步调用拿不到窗口时用 200000 兜底；异步调用应优先走
+        should_compress_async() 获取真实窗口。
+        """
+        cfg = get_config()
+        wc = cfg.features.writing_chat
+        threshold = wc.compression_threshold_tokens
+        if threshold <= 0:
+            window = window_tokens if window_tokens is not None else 200000
+            threshold = max(
+                1,
+                window
+                - cfg.llm.max_tokens
+                - wc.compression_headroom_tokens
+                - wc.compression_keep_recent_tokens
+                - wc.summary_token_budget,
+            )
+        return self.cumulative_tokens >= threshold
+
+    async def should_compress_async(self) -> bool:
+        """
+        异步判断是否需要压缩；动态推导时先探测模型上下文窗口。
+        """
+        from backend.core.llm_client import get_llm_client
+
+        cfg = get_config().features.writing_chat
+        if cfg.compression_threshold_tokens > 0:
+            return self.should_compress()
+        window = await get_llm_client().get_context_window()
+        return self.should_compress(window)
 
     def to_llm_messages(self) -> list[dict]:
         """
@@ -438,20 +558,33 @@ class ConversationContext:
         """
         对当前 messages 做深拷贝，作为压缩前的快照保存。
         """
-        import copy
-
         return copy.deepcopy(self.messages)
 
     def replace_with_summary(
-        self, summary_text: str, summary_tokens: int
+        self,
+        summary_text: str,
+        summary_tokens: int,
+        keep_messages: list[ChatMessage] | None = None,
     ) -> ChatMessage:
         """
-        用一条 summary 消息替换当前所有 messages。
-        snapshot 字段保留原始消息的深拷贝。
-        压缩后 cumulative_tokens 直接置为 summary_tokens，因为下次 LLM 调用
-        上下文窗口就是这条 summary（加上未来加入的新消息）。
+        用一条 summary 消息替换旧消息，原样保留 keep_messages（最近消息）。
+
+        snapshot 字段保留被替换部分的原始消息深拷贝；keep_messages 为空时
+        退化为“替换全部”（旧行为）。压缩后 cumulative_tokens 置为
+        summary_tokens + 保留消息按字符数/3.5 估算之和（近似值，由下一次
+        真实 usage 校准；不使用消息 tokens 字段，避免把历史请求 total
+        的分摊值误当作增量）。
         """
-        snapshot = self.snapshot_for_compression()
+        if keep_messages:
+            keep_ids = {m.id for m in keep_messages}
+            cut = 0
+            while cut < len(self.messages) and self.messages[cut].id not in keep_ids:
+                cut += 1
+            snapshot = copy.deepcopy(self.messages[:cut])
+            kept = list(keep_messages)
+        else:
+            snapshot = self.snapshot_for_compression()
+            kept = []
         summary_msg = ChatMessage(
             id=uuid.uuid4().hex,
             role="summary",
@@ -461,8 +594,10 @@ class ConversationContext:
             snapshot=snapshot,
             created_at=time.time(),
         )
-        self.messages = [summary_msg]
-        self.cumulative_tokens = summary_tokens
+        self.messages = [summary_msg] + kept
+        self.cumulative_tokens = summary_tokens + sum(
+            self._estimate_message_tokens(m) for m in kept
+        )
         self.last_updated_at = time.time()
         return summary_msg
 

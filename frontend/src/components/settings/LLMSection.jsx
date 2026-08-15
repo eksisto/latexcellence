@@ -84,6 +84,30 @@ function LLMSection({ llm, onChange }) {
           />
         </div>
       </div>
+      <div className="grid grid-cols-2 gap-3">
+        <div className="space-y-1.5">
+          <Label className="text-xs">{t("settings.llmContextWindow")}</Label>
+          <Input
+            type="number"
+            min="0"
+            value={llm.context_window_tokens}
+            onChange={(e) =>
+              onChange(
+                "llm.context_window_tokens",
+                parseInt(e.target.value, 10) || 0,
+              )
+            }
+          />
+        </div>
+        <div className="space-y-1.5">
+          <Label className="text-xs">{t("settings.llmModelsProbeUrl")}</Label>
+          <Input
+            value={llm.models_probe_url}
+            placeholder="http://host:8000/v1"
+            onChange={(e) => onChange("llm.models_probe_url", e.target.value)}
+          />
+        </div>
+      </div>
     </ConfigSection>
   );
 }

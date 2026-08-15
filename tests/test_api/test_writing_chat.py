@@ -267,6 +267,149 @@ class TestContext:
         ctx.cumulative_tokens = 10_000_000
         assert ctx.should_compress()
 
+    def test_split_for_compression_keeps_recent_turns(
+        self, temp_session_dir, open_project, monkeypatch
+    ):
+        cfg = get_config().features.writing_chat
+        monkeypatch.setattr(cfg, "compression_keep_recent_turns", 3)
+        monkeypatch.setattr(cfg, "compression_keep_recent_tokens", 10_000_000)
+
+        ctx = ConversationContext.create_session(scope="test")
+        for i in range(5):
+            ctx.append_user_message(f"q{i}")
+            ctx.append_assistant_message(f"a{i}", tokens=10)
+
+        to_summarize, to_keep = ctx.split_for_compression()
+        # 5 轮，保留最近 3 轮，最早 2 轮进入摘要
+        assert len(to_summarize) == 4
+        assert [m.content for m in to_summarize] == ["q0", "a0", "q1", "a1"]
+        assert len(to_keep) == 6
+        assert to_keep[0].content == "q2"
+        assert to_keep[-1].content == "a4"
+
+    def test_split_for_compression_never_splits_tool_pairs(
+        self, temp_session_dir, open_project, monkeypatch
+    ):
+        cfg = get_config().features.writing_chat
+        monkeypatch.setattr(cfg, "compression_keep_recent_turns", 2)
+        monkeypatch.setattr(cfg, "compression_keep_recent_tokens", 10_000_000)
+
+        ctx = ConversationContext.create_session(scope="test")
+        ctx.append_user_message("q0")
+        ctx.append_assistant_message("a0", tokens=5)
+        ctx.append_user_message("q1")
+        asst = ctx.append_assistant_message("", tokens=5)
+        asst.tool_calls = [
+            {
+                "id": "call_1",
+                "type": "function",
+                "function": {"name": "web_search", "arguments": "{}"},
+            }
+        ]
+        ctx.append_tool_messages(
+            [
+                {"role": "tool", "tool_call_id": "call_1", "content": "TOOL_DATA"},
+            ]
+        )
+        ctx.append_assistant_message("a1", tokens=5)
+        ctx.append_user_message("q2")
+        ctx.append_assistant_message("a2", tokens=5)
+
+        to_summarize, to_keep = ctx.split_for_compression()
+        # 保留最近 2 轮（q2/a2、q1 的完整工具轮），最早 q0/a0 摘要
+        assert len(to_summarize) == 2
+        assert [m.content for m in to_summarize] == ["q0", "a0"]
+        kept_roles = [m.role for m in to_keep]
+        assert kept_roles == [
+            "user",
+            "assistant",
+            "tool",
+            "assistant",
+            "user",
+            "assistant",
+        ]
+        assert to_keep[0].content == "q1"
+        assert to_keep[-1].content == "a2"
+
+    def test_replace_with_summary_keeps_recent_messages(
+        self, temp_session_dir, open_project, monkeypatch
+    ):
+        cfg = get_config().features.writing_chat
+        monkeypatch.setattr(cfg, "compression_keep_recent_turns", 2)
+        monkeypatch.setattr(cfg, "compression_keep_recent_tokens", 10_000_000)
+
+        ctx = ConversationContext.create_session(scope="test")
+        for i in range(4):
+            ctx.append_user_message(f"q{i}")
+            ctx.append_assistant_message(f"a{i}", tokens=10)
+        to_summarize, to_keep = ctx.split_for_compression()
+
+        summary_msg = ctx.replace_with_summary(
+            "summary", summary_tokens=7, keep_messages=to_keep
+        )
+        assert summary_msg.compressed is True
+        assert [m.role for m in ctx.messages] == [
+            "summary",
+            "user",
+            "assistant",
+            "user",
+            "assistant",
+        ]
+        assert [m.content for m in ctx.messages[1:]] == ["q2", "a2", "q3", "a3"]
+        # snapshot 只含被替换的旧消息（嵌套快照语义）
+        assert [m.content for m in summary_msg.snapshot] == ["q0", "a0", "q1", "a1"]
+        # cumulative = summary tokens + 保留消息按字符数/3.5 的估算
+        # （4 条消息各 2 字符：int(2/3.5)+1 = 1，合计 4）
+        assert ctx.cumulative_tokens == 7 + 4
+
+    def test_replace_with_summary_ignores_inflated_message_tokens(
+        self, temp_session_dir, open_project, monkeypatch
+    ):
+        """保留消息 tokens 字段存的是历史请求 total 的分摊值，不能作为增量累加。"""
+        cfg = get_config().features.writing_chat
+        monkeypatch.setattr(cfg, "compression_keep_recent_turns", 1)
+        monkeypatch.setattr(cfg, "compression_keep_recent_tokens", 10_000_000)
+
+        ctx = ConversationContext.create_session(scope="test")
+        for i in range(3):
+            ctx.append_user_message(f"用户问题{i}")
+            ctx.append_assistant_message(f"助手回答{i}", tokens=100_000)
+
+        to_summarize, to_keep = ctx.split_for_compression()
+        assert len(to_summarize) == 4
+        assert len(to_keep) == 2
+
+        ctx.replace_with_summary("summary", summary_tokens=7, keep_messages=to_keep)
+        # 按字符数/3.5 估算保留消息，而不是累加 100000 级别的历史 total
+        expected_kept = sum(
+            ConversationContext._estimate_message_tokens(m) for m in to_keep
+        )
+        assert ctx.cumulative_tokens == 7 + expected_kept
+        assert ctx.cumulative_tokens < 1000
+
+    def test_should_compress_dynamic_window(
+        self, temp_session_dir, open_project, monkeypatch
+    ):
+        cfg = get_config().features.writing_chat
+        monkeypatch.setattr(cfg, "compression_threshold_tokens", 0)
+        monkeypatch.setattr(cfg, "compression_headroom_tokens", 30000)
+        monkeypatch.setattr(cfg, "compression_keep_recent_tokens", 20000)
+        monkeypatch.setattr(cfg, "summary_token_budget", 6000)
+        monkeypatch.setattr(get_config().llm, "max_tokens", 8192)
+
+        ctx = ConversationContext.create_session(scope="test")
+        # 128000 - 8192 - 30000 - 20000 - 6000 = 63808
+        ctx.cumulative_tokens = 63807
+        assert not ctx.should_compress(window_tokens=128000)
+        ctx.cumulative_tokens = 63808
+        assert ctx.should_compress(window_tokens=128000)
+        # 固定阈值仍可直接覆盖
+        monkeypatch.setattr(cfg, "compression_threshold_tokens", 100)
+        ctx.cumulative_tokens = 99
+        assert not ctx.should_compress()
+        ctx.cumulative_tokens = 100
+        assert ctx.should_compress()
+
 
 # ── Service.send tests (mock chat_stream_with_usage) ──────────────────────
 
@@ -325,19 +468,22 @@ class TestServiceSend:
         # 先准备一条已超阈值的会话（含多条历史消息以便通过压缩最小消息数阈值）
         cfg = get_config().features.writing_chat
         monkeypatch.setattr(cfg, "compression_threshold_tokens", 100)
+        monkeypatch.setattr(cfg, "compression_keep_recent_turns", 3)
 
         ctx = ConversationContext.create_session(file_path="main.tex", scope="test")
-        for i in range(4):
+        for i in range(5):
             ctx.append_user_message(f"q{i}")
             ctx.append_assistant_message(f"a{i}", tokens=20)
         ctx.cumulative_tokens = 500  # 模拟已超阈值
         ctx.save_to_disk()
 
-        # mock 压缩 LLM 返回纯文本 summary
+        # mock 压缩 LLM 返回纯文本 summary + 真实 usage
         summary_response = "压缩摘要内容"
 
-        async def fake_chat(messages, **kwargs):
-            return summary_response
+        async def fake_chat_with_usage(messages, **kwargs):
+            return summary_response, UsageInfo(
+                prompt_tokens=100, completion_tokens=12, total_tokens=112
+            )
 
         chunks = [
             StreamChunk(content="reply", usage=None),
@@ -348,7 +494,7 @@ class TestServiceSend:
         ]
         with patch(_LLM_CLIENT_PATH) as m_llm:
             client = MagicMock()
-            client.chat = fake_chat
+            client.chat_with_usage = fake_chat_with_usage
             client.chat_stream_with_tools = MagicMock(return_value=_stream(chunks))
 
             m_llm.return_value = client
@@ -366,14 +512,25 @@ class TestServiceSend:
         assert "compressed" in types
         assert types[-1] == "done"
         loaded = ConversationContext.load_from_disk(ctx.session_id)
-        # 压缩后应至少存在 1 条 summary 消息 + 本轮 user + assistant
+        # 压缩后结构应为 [summary, 保留的最近轮次..., 本轮 user, assistant]：
+        # 本轮 user 必须以真实 user 角色出现在 summary 之后
         summary_msgs = [
             m for m in loaded.messages if m.role == "summary" and m.compressed
         ]
         assert len(summary_msgs) == 1
+        # 保留最近 3 轮（6 条），最早 2 轮（4 条）进入 snapshot；
+        # snapshot 不含本轮 user
         assert summary_msgs[0].snapshot is not None
-        # 压缩前有 4 组 user/assistant 消息 (8) + 本轮新追加的 user 消息 = 9 条
-        assert len(summary_msgs[0].snapshot) == 9
+        assert len(summary_msgs[0].snapshot) == 4
+        assert all(m.role == "user" for m in summary_msgs[0].snapshot[::2])
+        assert all(m.content != "another question" for m in summary_msgs[0].snapshot)
+        roles = [m.role for m in loaded.messages]
+        assert roles[0] == "summary"
+        assert "user" in roles[1:]
+        assert loaded.messages[-2].role == "user"
+        assert loaded.messages[-2].content == "another question"
+        assert loaded.messages[-1].role == "assistant"
+        assert loaded.messages[-1].content == "reply"
 
     @pytest.mark.asyncio
     async def test_send_no_api_key_emits_error(
@@ -384,6 +541,363 @@ class TestServiceSend:
         req = ChatSendRequest(file_path="main.tex", user_message="x")
         events = [e async for e in service.send(req)]
         assert any(e.get("type") == "error" for e in events)
+
+    @pytest.mark.asyncio
+    async def test_send_tool_loop_overflow_recovery(
+        self, temp_session_dir, open_project, service, monkeypatch
+    ):
+        """工具循环上下文超限 → 压缩历史 → 重试同一轮，用户消息不被删除。"""
+        monkeypatch.setattr(get_config().llm, "api_key", "test-key")
+        cfg = get_config().features.writing_chat
+        monkeypatch.setattr(cfg, "compression_threshold_tokens", 100_000_000)
+        monkeypatch.setattr(cfg, "compression_keep_recent_tokens", 10_000_000)
+        monkeypatch.setattr(cfg, "compression_keep_recent_turns", 5)
+
+        ctx = ConversationContext.create_session(file_path="main.tex", scope="test")
+        for i in range(7):
+            ctx.append_user_message(f"q{i}")
+            ctx.append_assistant_message(f"a{i}", tokens=10)
+        ctx.save_to_disk()
+
+        from backend.utils.web_search import SearchResponse, SearchResult
+
+        search_resp = SearchResponse(
+            query="q",
+            results=[SearchResult(title="t", snippet="s", url="https://e.com/1")],
+            engine="duckduckgo",
+        )
+        mock_registry = MagicMock()
+        mock_registry.execute = AsyncMock(return_value=search_resp)
+
+        async def fake_chat_with_usage(messages, **kwargs):
+            return "compressed summary", UsageInfo(
+                prompt_tokens=10, completion_tokens=3, total_tokens=13
+            )
+
+        tool_round = [
+            StreamChunk(content=None, usage=None, tool_calls=[_make_tool_call()]),
+            StreamChunk(
+                content=None,
+                usage=UsageInfo(prompt_tokens=5, completion_tokens=1, total_tokens=6),
+            ),
+        ]
+        final_round = [
+            StreamChunk(content="final reply", usage=None),
+            StreamChunk(
+                content=None,
+                usage=UsageInfo(prompt_tokens=5, completion_tokens=1, total_tokens=6),
+            ),
+        ]
+
+        async def overflow_gen():
+            raise RuntimeError("This model's maximum context length is 128000 tokens")
+            yield  # pragma: no cover
+
+        with patch(_LLM_CLIENT_PATH) as m_llm, patch(
+            _TOOL_REGISTRY_PATH, return_value=mock_registry
+        ):
+            client = MagicMock()
+            client.chat_stream_with_tools = MagicMock(
+                side_effect=[
+                    overflow_gen(),
+                    _stream(tool_round),
+                    _stream(final_round),
+                ]
+            )
+            client.chat_with_usage = fake_chat_with_usage
+            m_llm.return_value = client
+
+            req = ChatSendRequest(
+                session_id=ctx.session_id,
+                file_path="main.tex",
+                user_message="overflow question",
+                web_search_enabled=True,
+            )
+            events = [e async for e in service.send(req)]
+
+        types = [e["type"] for e in events]
+        assert "error" not in types
+        assert "compressed" in types
+        assert types[-1] == "done"
+
+        loaded = ConversationContext.load_from_disk(ctx.session_id)
+        assert loaded.messages[0].role == "summary"
+        # 本轮 user 保留在 summary 之后
+        user_contents = [m.content for m in loaded.messages if m.role == "user"]
+        assert "overflow question" in user_contents
+        # 恢复后的工具调用轮完整持久化
+        assert any(m.role == "tool" for m in loaded.messages)
+        assert loaded.messages[-1].content == "final reply"
+
+    @pytest.mark.asyncio
+    async def test_send_overflow_exhaustion_keeps_user_message(
+        self, temp_session_dir, open_project, service, monkeypatch
+    ):
+        """超限恢复重试耗尽后仍保留本轮用户消息（不静默删除）。"""
+        monkeypatch.setattr(get_config().llm, "api_key", "test-key")
+        cfg = get_config().features.writing_chat
+        monkeypatch.setattr(cfg, "compression_threshold_tokens", 100_000_000)
+
+        ctx = ConversationContext.create_session(file_path="main.tex", scope="test")
+        ctx.save_to_disk()
+
+        async def overflow_gen():
+            raise RuntimeError("This model's maximum context length is 128000 tokens")
+            yield  # pragma: no cover
+
+        recovered = (
+            [
+                {"role": "system", "content": "sys"},
+                {"role": "user", "content": "overflow question"},
+            ],
+            [],
+            False,
+        )
+        with patch(_LLM_CLIENT_PATH) as m_llm:
+            client = MagicMock()
+            client.chat_stream_with_tools = MagicMock(
+                side_effect=[overflow_gen(), overflow_gen(), overflow_gen()]
+            )
+            m_llm.return_value = client
+            recover_mock = AsyncMock(return_value=recovered)
+            service._recover_from_context_overflow = recover_mock
+
+            req = ChatSendRequest(
+                session_id=ctx.session_id,
+                file_path="main.tex",
+                user_message="overflow question",
+                web_search_enabled=True,
+            )
+            events = [e async for e in service.send(req)]
+
+        types = [e["type"] for e in events]
+        assert "error" in types
+        assert "done" not in types
+        # 前两次超限进入恢复，第三次重试耗尽直接报错
+        assert recover_mock.await_count == 2
+
+        loaded = ConversationContext.load_from_disk(ctx.session_id)
+        user_contents = [m.content for m in loaded.messages if m.role == "user"]
+        assert "overflow question" in user_contents
+
+
+# ── 压缩细节（阶段 2-5） ──────────────────────────────────────────────────
+
+
+class TestCompressionDetails:
+    @pytest.mark.asyncio
+    async def test_maybe_compress_summary_input_excludes_tool_content(
+        self, temp_session_dir, open_project, service, monkeypatch
+    ):
+        cfg = get_config().features.writing_chat
+        monkeypatch.setattr(cfg, "compression_keep_recent_turns", 1)
+        monkeypatch.setattr(cfg, "compression_keep_recent_tokens", 10_000_000)
+
+        ctx = ConversationContext.create_session(file_path="main.tex", scope="test")
+        ctx.append_user_message("q0")
+        ctx.append_assistant_message("a0", tokens=5)
+        ctx.append_user_message("q1")
+        asst = ctx.append_assistant_message("", tokens=5)
+        asst.tool_calls = [
+            {
+                "id": "call_secret",
+                "type": "function",
+                "function": {
+                    "name": "web_search",
+                    "arguments": '{"query":"secret_args"}',
+                },
+            }
+        ]
+        ctx.append_tool_messages(
+            [
+                {
+                    "role": "tool",
+                    "tool_call_id": "call_secret",
+                    "content": "SECRET_TOOL_PAGE 内容很长",
+                },
+            ]
+        )
+        ctx.append_assistant_message("a1 final", tokens=5)
+        ctx.append_user_message("q2")
+        ctx.append_assistant_message("a2", tokens=5)
+
+        captured = {}
+
+        async def fake_chat_with_usage(messages, **kwargs):
+            captured["user"] = messages[-1]["content"]
+            return "sum", UsageInfo(
+                prompt_tokens=10, completion_tokens=3, total_tokens=13
+            )
+
+        with patch(_LLM_CLIENT_PATH) as m_llm:
+            client = MagicMock()
+            client.chat_with_usage = fake_chat_with_usage
+            m_llm.return_value = client
+            ok = await service._maybe_compress(ctx)
+
+        assert ok is True
+        assert "q0" in captured["user"]
+        assert "q1" in captured["user"]
+        assert "SECRET_TOOL_PAGE" not in captured["user"]
+        assert "secret_args" not in captured["user"]
+        assert ctx.messages[0].role == "summary"
+        assert [m.content for m in ctx.messages[1:]] == ["q2", "a2"]
+        # snapshot 保留被替换的旧消息（含 tool 对，仅用于还原展示）
+        assert len(ctx.messages[0].snapshot) == 6
+
+    @pytest.mark.asyncio
+    async def test_maybe_compress_fallback_on_empty_summary(
+        self, temp_session_dir, open_project, service, monkeypatch
+    ):
+        cfg = get_config().features.writing_chat
+        monkeypatch.setattr(cfg, "compression_keep_recent_turns", 2)
+        monkeypatch.setattr(cfg, "compression_keep_recent_tokens", 10_000_000)
+
+        ctx = ConversationContext.create_session(file_path="main.tex", scope="test")
+        for i in range(5):
+            ctx.append_user_message(f"q{i}")
+            ctx.append_assistant_message(f"a{i}", tokens=10)
+
+        async def fake_chat_with_usage(messages, **kwargs):
+            return "", None
+
+        with patch(_LLM_CLIENT_PATH) as m_llm:
+            client = MagicMock()
+            client.chat_with_usage = fake_chat_with_usage
+            m_llm.return_value = client
+            ok = await service._maybe_compress(ctx)
+
+        assert ok is True  # 确定性兜底而非跳过
+        assert ctx.messages[0].role == "summary"
+        assert "compacted" in ctx.messages[0].content
+        assert [m.content for m in ctx.messages[1:]] == ["q3", "a3", "q4", "a4"]
+
+    @pytest.mark.asyncio
+    async def test_maybe_compress_overflow_retry_expands_keep(
+        self, temp_session_dir, open_project, service, monkeypatch
+    ):
+        cfg = get_config().features.writing_chat
+        monkeypatch.setattr(cfg, "compression_keep_recent_turns", 3)
+        monkeypatch.setattr(cfg, "compression_keep_recent_tokens", 10_000_000)
+
+        ctx = ConversationContext.create_session(file_path="main.tex", scope="test")
+        for i in range(10):
+            ctx.append_user_message(f"q{i}")
+            ctx.append_assistant_message(f"a{i}", tokens=10)
+
+        calls = {"n": 0}
+
+        async def fake_chat_with_usage(messages, **kwargs):
+            calls["n"] += 1
+            if calls["n"] == 1:
+                raise RuntimeError(
+                    "This model's maximum context length is 128000 tokens"
+                )
+            return "sum", UsageInfo(
+                prompt_tokens=1, completion_tokens=2, total_tokens=3
+            )
+
+        with patch(_LLM_CLIENT_PATH) as m_llm:
+            client = MagicMock()
+            client.chat_with_usage = fake_chat_with_usage
+            m_llm.return_value = client
+            ok = await service._maybe_compress(ctx)
+
+        assert ok is True
+        assert calls["n"] == 2
+        # 第一次保留 3 轮，超限后扩大为保留 6 轮 → 摘要 4 轮（8 条）
+        assert len(ctx.messages[0].snapshot) == 8
+        assert len(ctx.messages) == 13  # summary + 12 条保留消息
+
+    @pytest.mark.asyncio
+    async def test_manual_compact_session(
+        self, temp_session_dir, open_project, service, monkeypatch
+    ):
+        cfg = get_config().features.writing_chat
+        monkeypatch.setattr(cfg, "compression_keep_recent_turns", 3)
+        monkeypatch.setattr(cfg, "compression_keep_recent_tokens", 10_000_000)
+
+        ctx = ConversationContext.create_session(file_path="main.tex", scope="test")
+        for i in range(5):
+            ctx.append_user_message(f"q{i}")
+            ctx.append_assistant_message(f"a{i}", tokens=10)
+        ctx.save_to_disk()
+
+        async def fake_chat_with_usage(messages, **kwargs):
+            return "sum", UsageInfo(
+                prompt_tokens=10, completion_tokens=5, total_tokens=15
+            )
+
+        with patch(_LLM_CLIENT_PATH) as m_llm:
+            client = MagicMock()
+            client.chat_with_usage = fake_chat_with_usage
+            m_llm.return_value = client
+            result = await service.compact_session(ctx.session_id)
+
+        assert result["compressed"] is True
+        loaded = ConversationContext.load_from_disk(ctx.session_id)
+        assert loaded.messages[0].role == "summary"
+        assert loaded.messages[0].tokens == 5  # 真实 usage.completion_tokens
+        assert len(loaded.messages[0].snapshot) == 4
+        assert loaded.messages[-1].content == "a4"
+
+    @pytest.mark.asyncio
+    async def test_recover_from_context_overflow_trims_before_compression(
+        self, temp_session_dir, open_project, service, monkeypatch
+    ):
+        """超限恢复优先裁剪旧工具对，只有裁剪无效才走压缩。"""
+        ctx = ConversationContext.create_session(file_path="main.tex", scope="test")
+        ctx.append_user_message("q")
+        ctx.save_to_disk()
+        tool_messages = [
+            {"role": "system", "content": "sys"},
+            {"role": "user", "content": "q"},
+            {
+                "role": "assistant",
+                "content": None,
+                "tool_calls": [
+                    {
+                        "id": "old",
+                        "type": "function",
+                        "function": {
+                            "name": "web_search",
+                            "arguments": "{}",
+                        },
+                    }
+                ],
+            },
+            {"role": "tool", "tool_call_id": "old", "content": "X" * 40000},
+            {
+                "role": "assistant",
+                "content": None,
+                "tool_calls": [
+                    {
+                        "id": "cur",
+                        "type": "function",
+                        "function": {
+                            "name": "web_search",
+                            "arguments": "{}",
+                        },
+                    }
+                ],
+            },
+            {"role": "tool", "tool_call_id": "cur", "content": "Y" * 40000},
+        ]
+        service._maybe_compress = AsyncMock(return_value=True)
+
+        result = await service._recover_from_context_overflow(
+            ctx, "sys", [], tool_messages
+        )
+
+        assert result is not None
+        rebuilt, refs, compressed_flag = result
+        assert compressed_flag is False
+        assert refs == []
+        service._maybe_compress.assert_not_called()
+        # 旧工具对被裁剪，当前轮（最后一条 tool 消息）完整保留
+        tool_contents = [m.get("content") for m in rebuilt if m.get("role") == "tool"]
+        assert len(tool_contents) == 1
+        assert tool_contents[0].startswith("Y")
 
 
 # ── Service.generate_edit / apply_edit tests ──────────────────────────────

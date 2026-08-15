@@ -36,7 +36,17 @@ RS2 不直接写回 `.tex`，用户再点"应用到 .tex"才调用 `project_mana
 
 **会话标题**：`list_sessions()` 在会话未手动重命名时，从第一条 user 消息提取前 40 个字符作为标题；空会话返回空字符串，由前端按当前用户语言显示“无标题”类兜底文案，后端不硬编码语言占位符。
 
-**Token 压缩**：累计 token 超过阈值（默认 200000）时触发压缩：将 ≥4 条消息的历史由 LLM 生成摘要，替换为一条 summary 消息，原消息保存到 `snapshot` 字段。
+**Token 压缩**：发送消息前检查累计 token 是否超过触发值，超限时先把旧历史压缩，**再追加本轮 user 消息**，保证新指令始终以真实 user 角色进入 LLM。触发值默认按模型上下文窗口动态推导（`window - max_tokens - headroom - keep_recent - summary_budget`），`compression_threshold_tokens` 非 0 时作为固定覆盖。
+
+压缩只作用于真正需要“遗忘”的旧历史：`split_for_compression()` 从尾部向前保留最近若干轮（`compression_keep_recent_turns` 与 `compression_keep_recent_tokens` 取先满足者），切分点不会落在 assistant+tool_calls 与其 tool 结果对之间；被压缩的旧消息替换为一条 summary 消息并保存到 `snapshot` 字段（嵌套快照：删除外层 summary 可逐层还原），最近轮次原样保留。
+
+摘要请求输入剔除 tool 原始结果与 assistant+tool_calls 对，只保留对话文本；摘要 token 数优先取真实 `usage.completion_tokens`，无 usage 时按字符降级估算。摘要 LLM 失败/超时/空摘要时回退为确定性裁剪（保留最近 N 轮 + 丢弃旧工具对 + 插入简短说明），不阻塞对话。
+
+工具循环中单轮请求若触发上下文超限，会按序恢复：先裁剪旧工具对，仍超限则持久化已完成的历史工具轮次并压缩（不动当前正在执行的轮次），再重试同一轮；恢复失败时推送 SSE `error` 并保留用户消息（不静默删除）。
+
+**上下文窗口探测**：`LLMClient.get_context_window()` 按“显式配置 `llm.context_window_tokens` → API `/models` 探测（`context_length` / `inputTokenLimit` / `outputTokenLimit` / `max_model_len` / `context_window` / `max_context_length`）→ 超限错误信息学习 → 内置模型表 → 默认 200000”的优先级获取窗口，结果按 `(base_url, model)` 缓存，`reset()`（配置热重载）时失效。`llm.models_probe_url` 可指定直连 vLLM / OpenAI 兼容 `/models` 地址，绕过不透传 `/models` 的网关；仅当探测地址与主服务同源时才携带 API key，跨域探测不发送密钥。
+
+**手动压缩**：`POST /api/writing-chat/sessions/{id}/compact` 复用自动压缩逻辑（不追加 user 消息），前端会话页提供“压缩会话”按钮（streaming 或草稿会话中禁用；压缩成功后才重新拉取会话，消息过少/压缩失败时不发起二次请求）。
 
 **删除消息**：summary 消息删除时还原 snapshot（恢复原始对话）；普通消息直接移除。
 
@@ -54,7 +64,8 @@ RS2 不直接写回 `.tex`，用户再点"应用到 .tex"才调用 `project_mana
 
 | 方法 | 功能 |
 | --- | --- |
-| `send(req, workspace_id)` | RS1 主聊天流：加载/创建会话 → 追加消息 → 压缩判定 → 注入 Function Calling 工具 → chat_stream_with_tools（实时产出文本 + 检测工具调用）→ 工具调用循环 → 后置流式 → SSE 推送 |
+| `send(req, workspace_id)` | RS1 主聊天流：加载/创建会话 → 压缩判定（先压缩旧历史，保证本轮 user 以真实 user 角色进入）→ 追加消息 → 注入 Function Calling 工具 → chat_stream_with_tools（实时产出文本 + 检测工具调用）→ 工具调用循环（超限自动恢复）→ 后置流式 → SSE 推送 |
+| `compact_session(session_id)` | 手动压缩：复用 `_maybe_compress`，不追加 user 消息 |
 | `generate_edit(req, workspace_id)` | RS2 编辑流：把原始 LaTeX 交给 LLM → 分隔符协议提取 + 宽松校验（失败回喂重试，最多 3 次）→ diff → 附挂 EditOp |
 | `apply_edit(req, workspace_id)` | 调用 apply_change 写回 .tex，标记 edit_op.applied |
 | `confirm_pending_tool(pending_id, modified_args)` | 前端确认敏感工具调用（如 edit_paragraph），可选修改参数 |
@@ -125,6 +136,7 @@ Prefix: `/api/writing-chat`, Tag: `writing_chat`
 | POST | `/cancel-clarify` | 取消待定的澄清请求 |
 | POST | `/message/delete` | 删除消息（summary 消息还原其快照） |
 | PATCH | `/sessions/{id}/rename` | 重命名会话 |
+| POST | `/sessions/{id}/compact` | 手动压缩会话 |
 | GET | `/sessions` | 列出会话 |
 | GET | `/sessions/{id}` | 加载会话 |
 | DELETE | `/sessions/{id}` | 删除会话 |
@@ -168,11 +180,17 @@ writing_chat 是 `chat_stream_with_tools` 方法的主要消费者。该方法�
 
 | 字段 | 默认值 | 说明 |
 | --- | --- | --- |
-| compression_threshold_tokens | 200000 | 触发上下文压缩的 token 阈值 |
+| compression_threshold_tokens | 0 | 触发上下文压缩的 token 阈值；0=按模型窗口动态推导，非 0=固定覆盖 |
+| compression_headroom_tokens | 30000 | 动态推导触发值时保留的窗口余量 |
+| compression_keep_recent_tokens | 20000 | 压缩时原样保留的最近消息 token 预算 |
+| compression_keep_recent_turns | 5 | 压缩时原样保留的最近轮数（与 token 预算取先满足者） |
 | sessions_dir | data/writing_chat_sessions/ | 会话持久化目录 |
 | custom_prompts_dir | data/prompts/writing_chat/ | 助手提示词目录 |
 | summary_temperature | 0.2 | 摘要 LLM 温度 |
-| summary_max_tokens | 50000 | 摘要最大 token 数 |
+| summary_token_budget | 6000 | 摘要最大 token 数（旧配置 `summary_max_tokens` 自动迁移并告警） |
+| summary_model | 空 | 独立摘要模型；为空时跟随主模型 |
+| llm.context_window_tokens | 0 | 模型上下文窗口；0=自动探测，非 0 跳过探测直接使用 |
+| llm.models_probe_url | 空 | 可选的 /models 直连探测地址，绕过不透传 /models 的网关 |
 | features.function_calling.scholarly_research.enabled | false | 学术研究工具总开关 |
 | features.function_calling.scholarly_research.max_results | 20 | 单次工具返回结果上限 |
 | features.function_calling.scholarly_research.timeout_seconds | 30 | OpenAlex 请求超时 |

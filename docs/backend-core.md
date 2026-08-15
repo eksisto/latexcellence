@@ -71,9 +71,11 @@
 | `client` (property) | 懒加载获取 `AsyncOpenAI` 实例，使用 `threading.Lock` 双检锁保护并发创建（支持 `asyncio.to_thread()` 多线程场景） |
 | `reset()` | 重置缓存的 `AsyncOpenAI` 实例，下次访问 `client` 时重新读取配置创建 |
 | `chat()` | 非流式对话：调用 `chat.completions.create`，返回原始 `str`，由调用方负责 JSON 解析 |
+| `chat_with_usage()` | 非流式对话：返回 `(text, UsageInfo \| None)`，摘要/记账等需要真实 token 用量的场景使用 |
 | `chat_stream()` | 流式对话：返回 `AsyncIterator[str]`，按 token 产出，用于 SSE 推送 |
 | `chat_stream_with_usage()` | 流式对话 + 末尾携带 UsageInfo：返回 `AsyncIterator[StreamChunk]`，`StreamChunk.content` 为文本片段、`StreamChunk.usage` 为末次 LLM token 用量（用 `stream_options={"include_usage": True}` 透传，第三方不支持时降级为 `None`） |
 | `chat_stream_with_tools()` | 流式对话 + Function Calling：与 `chat_stream_with_usage` 类似，但额外接受 `tools` 参数。流中同时 yield content（文本 token 实时推送）和 tool_calls（末次 yield 完整 `ChatCompletionMessageToolCall` 列表） |
+| `get_context_window()` | 获取模型上下文窗口（token）：显式配置 → `/models` 探测 → 超限错误学习 → 内置模型表 → 默认 200000；结果按 `(base_url, model)` 缓存，`reset()` 时失效，探测失败绝不抛出；探测地址与主服务不同源时不携带 API key |
 | `_rate_limit()` | 内部限流器：确保两次请求间隔 ≥ `config.llm.request_interval` |
 
 **数据类**：
