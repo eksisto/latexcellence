@@ -3,8 +3,6 @@
 import re
 import xml.etree.ElementTree as ET
 
-import httpx
-
 from backend.core.logger import get_logger
 from backend.modules.bib_manager.models import DoiLookupResult
 from backend.modules.bib_manager.providers.base import (
@@ -26,6 +24,7 @@ class ArxivProvider(BaseMetadataProvider):
     _API_URL = "https://export.arxiv.org/api/query"
 
     def __init__(self):
+        super().__init__()
         self._logger = get_logger("bib_manager.arxiv")
 
     async def lookup_by_doi(self, doi: str) -> DoiLookupResult | None:
@@ -38,15 +37,15 @@ class ArxivProvider(BaseMetadataProvider):
 
         self._logger.info(f"arXiv lookup: {arxiv_id}")
         try:
-            async with httpx.AsyncClient(timeout=30.0, follow_redirects=True) as client:
-                response = await client.get(
-                    self._API_URL,
-                    params={
-                        "id_list": arxiv_id,
-                        "max_results": "1",
-                    },
-                )
-                response.raise_for_status()
+            response = await self._get_http_client().get(
+                self._API_URL,
+                params={
+                    "id_list": arxiv_id,
+                    "max_results": "1",
+                },
+                timeout=30.0,
+            )
+            response.raise_for_status()
 
             return self._parse_atom(doi, arxiv_id, response.text)
 
@@ -56,12 +55,12 @@ class ArxivProvider(BaseMetadataProvider):
 
     async def health_check(self) -> bool:
         try:
-            async with httpx.AsyncClient(timeout=10.0) as client:
-                response = await client.get(
-                    self._API_URL,
-                    params={"id_list": "1706.03762", "max_results": "1"},
-                )
-                return response.status_code == 200
+            response = await self._get_http_client().get(
+                self._API_URL,
+                params={"id_list": "1706.03762", "max_results": "1"},
+                timeout=10.0,
+            )
+            return response.status_code == 200
         except Exception:
             return False
 

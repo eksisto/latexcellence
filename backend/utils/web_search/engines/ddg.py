@@ -66,6 +66,35 @@ class DDGChallengeError(Exception):
 # ── Challenge 存储（内存 + TTL） ─────────────────────────────────────────────
 
 _challenge_store: dict[str, dict[str, Any]] = {}
+# 验证码提交共享客户端（懒创建，关闭时随引擎一起释放）
+_challenge_client: httpx.AsyncClient | None = None
+
+
+def _get_challenge_client() -> httpx.AsyncClient:
+    """获取提交 DDG 验证码的共享客户端。"""
+    global _challenge_client
+    if _challenge_client is None or _challenge_client.is_closed:
+        _challenge_client = httpx.AsyncClient(
+            follow_redirects=True,
+            headers={
+                "User-Agent": _get_user_agent(),
+                "Content-Type": "application/x-www-form-urlencoded",
+                "Referer": _DD_HTML_URL,
+                "Origin": "https://html.duckduckgo.com",
+                "Sec-Fetch-Dest": "document",
+                "Sec-Fetch-Mode": "navigate",
+                "Sec-Fetch-Site": "same-origin",
+            },
+        )
+    return _challenge_client
+
+
+async def close_challenge_client() -> None:
+    """释放验证码提交共享客户端。"""
+    global _challenge_client
+    if _challenge_client is not None:
+        await _challenge_client.aclose()
+        _challenge_client = None
 
 
 def _store_challenge(data: dict[str, Any]) -> str:
@@ -132,35 +161,40 @@ class DuckDuckGoHtmlEngine(BaseSearchEngine):
 
     def __init__(self) -> None:
         self._logger = get_logger("ddg_html")
+        # 进程级共享客户端：连接复用，避免每次请求新建（AGENTS.md 客户端生命周期）
+        self._client: httpx.AsyncClient | None = None
 
-    async def _get_client(self) -> httpx.AsyncClient:
-        """获取 httpx 异步客户端。"""
-        cfg = get_config()
-        return httpx.AsyncClient(
-            timeout=cfg.features.function_calling.web_search.timeout_seconds,
-            follow_redirects=True,
-            headers={
-                "User-Agent": _get_user_agent(),
-                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-                "Accept-Language": "en-US,en;q=0.9",
-                "Sec-Fetch-Dest": "document",
-                "Sec-Fetch-Mode": "navigate",
-                "Sec-Fetch-Site": "same-origin",
-                "Sec-Fetch-User": "?1",
-                "Upgrade-Insecure-Requests": "1",
-            },
-        )
+    def _get_client(self) -> httpx.AsyncClient:
+        """获取共享 httpx 异步客户端（懒创建，超时按请求传入以支持热重载）。"""
+        if self._client is None or self._client.is_closed:
+            self._client = httpx.AsyncClient(
+                follow_redirects=True,
+                headers={
+                    "User-Agent": _get_user_agent(),
+                    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+                    "Accept-Language": "en-US,en;q=0.9",
+                    "Sec-Fetch-Dest": "document",
+                    "Sec-Fetch-Mode": "navigate",
+                    "Sec-Fetch-Site": "same-origin",
+                    "Sec-Fetch-User": "?1",
+                    "Upgrade-Insecure-Requests": "1",
+                },
+            )
+        return self._client
+
+    async def close(self) -> None:
+        """释放共享客户端。"""
+        if self._client is not None:
+            await self._client.aclose()
+            self._client = None
+        await close_challenge_client()
 
     async def search(self, query: str, max_results: int = 5) -> SearchResponse:
         """执行搜索。遇到 DDG 验证码时抛出 DDGChallengeError。"""
         if len(query) >= 500:
             return SearchResponse(query=query, engine=self.name, results=[])
 
-        client = await self._get_client()
-        try:
-            return await self._do_search(client, query, max_results)
-        finally:
-            await client.aclose()
+        return await self._do_search(self._get_client(), query, max_results)
 
     async def _do_search(
         self, client: httpx.AsyncClient, query: str, max_results: int
@@ -172,11 +206,14 @@ class DuckDuckGoHtmlEngine(BaseSearchEngine):
         }
         data = {"q": query, "b": ""}
 
+        cfg = get_config()
+        timeout = cfg.features.function_calling.web_search.timeout_seconds
         self._logger.info(f"DDG HTML search: {query[:60]}")
         resp = await client.post(
             _DD_HTML_URL,
             headers=headers,
             content=_urlencode(data),
+            timeout=timeout,
         )
         self._logger.debug(f"DDG response: status={resp.status_code}")
 
@@ -324,6 +361,8 @@ class DuckDuckGoHtmlEngine(BaseSearchEngine):
         self, hashes: list[str], client: httpx.AsyncClient
     ) -> list[dict[str, str]]:
         """下载 challenge 图片并编码为 base64。"""
+        cfg = get_config()
+        timeout = cfg.features.function_calling.web_search.timeout_seconds
         images: list[dict[str, str]] = []
         for h in hashes:
             url = f"{_DD_IMAGE_BASE}/{h}.jpg"
@@ -331,6 +370,7 @@ class DuckDuckGoHtmlEngine(BaseSearchEngine):
                 resp = await client.get(
                     url,
                     headers={"Referer": _DD_HTML_URL},
+                    timeout=timeout,
                 )
                 if resp.status_code == 200:
                     b64 = base64.b64encode(resp.content).decode("ascii")
@@ -346,12 +386,8 @@ class DuckDuckGoHtmlEngine(BaseSearchEngine):
     async def health_check(self) -> bool:
         """健康检查：尝试访问 DDG HTML 页面。"""
         try:
-            client = await self._get_client()
-            try:
-                resp = await client.get(_DD_HTML_URL)
-                return resp.status_code == 200
-            finally:
-                await client.aclose()
+            resp = await self._get_client().get(_DD_HTML_URL, timeout=5)
+            return resp.status_code == 200
         except Exception:
             return False
 
@@ -389,23 +425,12 @@ class DuckDuckGoHtmlEngine(BaseSearchEngine):
         body = "&".join(body_parts)
 
         cfg = get_config()
-        client = httpx.AsyncClient(
-            timeout=cfg.features.function_calling.web_search.timeout_seconds,
-            follow_redirects=True,
-            headers={
-                "User-Agent": _get_user_agent(),
-                "Content-Type": "application/x-www-form-urlencoded",
-                "Referer": _DD_HTML_URL,
-                "Origin": "https://html.duckduckgo.com",
-                "Sec-Fetch-Dest": "document",
-                "Sec-Fetch-Mode": "navigate",
-                "Sec-Fetch-Site": "same-origin",
-            },
+        timeout = cfg.features.function_calling.web_search.timeout_seconds
+        resp = await _get_challenge_client().post(
+            submit_url,
+            content=body,
+            timeout=timeout,
         )
-        try:
-            resp = await client.post(submit_url, content=body)
-        finally:
-            await client.aclose()
 
         if resp.status_code != 200:
             return {

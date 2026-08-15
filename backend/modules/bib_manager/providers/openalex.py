@@ -20,6 +20,7 @@ class OpenAlexProvider(BaseMetadataProvider):
     _API_URL = "https://api.openalex.org/works"
 
     def __init__(self):
+        super().__init__()
         self._logger = get_logger("bib_manager.openalex")
 
     def _get_ua(self) -> str:
@@ -29,14 +30,14 @@ class OpenAlexProvider(BaseMetadataProvider):
 
     async def lookup_by_doi(self, doi: str) -> DoiLookupResult | None:
         try:
-            async with httpx.AsyncClient(timeout=30.0) as client:
-                response = await client.get(
-                    f"{self._API_URL}/doi:{doi}",
-                    headers={
-                        "User-Agent": self._get_ua(),
-                    },
-                )
-                response.raise_for_status()
+            response = await self._get_http_client().get(
+                f"{self._API_URL}/doi:{doi}",
+                headers={
+                    "User-Agent": self._get_ua(),
+                },
+                timeout=30.0,
+            )
+            response.raise_for_status()
 
             data = response.json()
             if not data or data.get("id") is None:
@@ -56,12 +57,12 @@ class OpenAlexProvider(BaseMetadataProvider):
 
     async def health_check(self) -> bool:
         try:
-            async with httpx.AsyncClient(timeout=10.0) as client:
-                response = await client.get(
-                    f"{self._API_URL}/doi:10.1038/12345",
-                    headers={"User-Agent": self._get_ua()},
-                )
-                return response.status_code in (200, 404)
+            response = await self._get_http_client().get(
+                f"{self._API_URL}/doi:10.1038/12345",
+                headers={"User-Agent": self._get_ua()},
+                timeout=10.0,
+            )
+            return response.status_code in (200, 404)
         except Exception:
             return False
 

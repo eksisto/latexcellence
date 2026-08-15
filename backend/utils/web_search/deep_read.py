@@ -80,6 +80,28 @@ class DeepReader:
         # 共用同一份抓取结果，避免同一页面重复请求；5 分钟过期
         self._cache: dict[str, tuple[float, str, str]] = {}
         self._cache_ttl = 300
+        # 进程级共享客户端：连接复用，避免每次抓取新建（AGENTS.md 客户端生命周期）
+        self._client: httpx.AsyncClient | None = None
+
+    def _get_client(self) -> httpx.AsyncClient:
+        """获取共享 httpx 异步客户端（懒创建；重定向手动跟随，超时按请求传入）。"""
+        if self._client is None or self._client.is_closed:
+            cfg = get_config()
+            self._client = httpx.AsyncClient(
+                follow_redirects=False,
+                headers={
+                    "User-Agent": cfg.http.user_agent,
+                    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+                    "Accept-Language": "en-US,en;q=0.9,zh-CN;q=0.8,zh;q=0.7",
+                },
+            )
+        return self._client
+
+    async def close(self) -> None:
+        """释放共享客户端。"""
+        if self._client is not None:
+            await self._client.aclose()
+            self._client = None
 
     async def fetch_content(
         self, url: str, max_chars: int = 4000, timeout: int = 10
@@ -111,17 +133,7 @@ class DeepReader:
                 return title, full_text
 
             try:
-                cfg = get_config()
-                async with httpx.AsyncClient(
-                    timeout=timeout,
-                    follow_redirects=False,
-                    headers={
-                        "User-Agent": cfg.http.user_agent,
-                        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-                        "Accept-Language": "en-US,en;q=0.9,zh-CN;q=0.8,zh;q=0.7",
-                    },
-                ) as client:
-                    resp = await client.get(current)
+                resp = await self._get_client().get(current, timeout=timeout)
             except Exception as e:
                 self._logger.warning(f"Deep read failed for {current[:80]}: {e}")
                 return "", ""
@@ -255,3 +267,11 @@ def get_deep_reader() -> DeepReader:
     if _deep_reader is None:
         _deep_reader = DeepReader()
     return _deep_reader
+
+
+async def close_deep_reader() -> None:
+    """释放 DeepReader 共享客户端（服务关闭时调用）。"""
+    global _deep_reader
+    if _deep_reader is not None:
+        await _deep_reader.close()
+        _deep_reader = None

@@ -20,6 +20,7 @@ terminology_check）的共享逻辑：
 
 import asyncio
 import copy
+import threading
 import time
 import uuid
 from collections import Counter
@@ -39,6 +40,7 @@ from backend.utils.input_resolver import resolve_inputs
 from backend.utils.json_utils import retry_with_validation
 from backend.utils.latex_json_guard import check_latex_text_lite
 from backend.utils.file_ops import compute_md5
+from backend.utils.path_guard import resolve_project_path
 
 
 @dataclass
@@ -56,6 +58,39 @@ class CheckOperationContext:
     file_path: str
     file_md5s: dict[str, str]
     created_at: float = field(default_factory=time.time)
+
+
+# ── 操作上下文全局存储 ──────────────────────────────────────────────────────
+# 服务实例按请求创建（消除实例状态并发串扰），但 apply 是独立的 HTTP 请求，
+# 必须能按 operation_id 找到 preview/check 阶段保存的上下文，因此上下文
+# 存放在进程级共享存储中，用锁保护并发读写。
+_operation_contexts: dict[str, CheckOperationContext] = {}
+_operation_contexts_lock = threading.Lock()
+
+
+def _cleanup_expired_contexts_locked(max_age_seconds: int = 3600) -> None:
+    """清理超过 TTL 的过期上下文（调用方必须已持有锁）。"""
+    now = time.time()
+    expired = [
+        oid
+        for oid, ctx in _operation_contexts.items()
+        if now - ctx.created_at > max_age_seconds
+    ]
+    for oid in expired:
+        del _operation_contexts[oid]
+
+
+def store_operation_context(context: CheckOperationContext) -> None:
+    """保存操作上下文并顺带清理过期项。"""
+    with _operation_contexts_lock:
+        _operation_contexts[context.operation_id] = context
+        _cleanup_expired_contexts_locked()
+
+
+def get_operation_context(operation_id: str) -> CheckOperationContext | None:
+    """按 operation_id 查找操作上下文。"""
+    with _operation_contexts_lock:
+        return _operation_contexts.get(operation_id)
 
 
 class ApplyChangeItem(BaseModel):
@@ -136,7 +171,6 @@ class BaseParagraphCheckService:
         self._parser = LatexParser()
         self._marker_maps: dict[str, dict[int, dict[str, str]]] = {}
         self._file_path: str | None = None
-        self._operation_contexts: dict[str, CheckOperationContext] = {}
 
     # ── 操作上下文管理 ──────────────────────────────────────────────────────
 
@@ -150,7 +184,7 @@ class BaseParagraphCheckService:
         root = Path(pm.root_path)
         md5s: dict[str, str] = {}
         for f in files:
-            full_path = root / f
+            full_path = resolve_project_path(root, f)
             if full_path.exists():
                 md5s[f] = compute_md5(full_path)
         return md5s
@@ -163,29 +197,23 @@ class BaseParagraphCheckService:
         file_md5s: dict[str, str],
     ) -> None:
         """保存操作上下文（深拷贝 marker_maps），并清理过期上下文。"""
-        self._operation_contexts[operation_id] = CheckOperationContext(
-            operation_id=operation_id,
-            marker_maps=copy.deepcopy(marker_maps),
-            file_path=file_path,
-            file_md5s=file_md5s,
+        store_operation_context(
+            CheckOperationContext(
+                operation_id=operation_id,
+                marker_maps=copy.deepcopy(marker_maps),
+                file_path=file_path,
+                file_md5s=file_md5s,
+            )
         )
-        self._cleanup_old_contexts()
 
     def _get_context(self, operation_id: str) -> CheckOperationContext | None:
         """按 operation_id 查找操作上下文。"""
-        return self._operation_contexts.get(operation_id)
+        return get_operation_context(operation_id)
 
     def _cleanup_old_contexts(self, max_age_seconds: int = 3600) -> None:
-        """清理超过 TTL 的过期上下文。"""
-        now = time.time()
-        expired = [
-            oid
-            for oid, ctx in self._operation_contexts.items()
-            if now - ctx.created_at > max_age_seconds
-        ]
-        for oid in expired:
-            del self._operation_contexts[oid]
-            self._logger.debug(f"Cleaned up expired operation context: {oid}")
+        """清理超过 TTL 的过期上下文（兼容旧调用方）。"""
+        with _operation_contexts_lock:
+            _cleanup_expired_contexts_locked(max_age_seconds)
 
     # ── 文件与段落 ──────────────────────────────────────────────────────────
 

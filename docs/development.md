@@ -233,7 +233,7 @@ core/ + utils/ (基础设施：配置、LLM 客户端、项目管理、文件 IO
 
 ### 单例模式
 
-所有服务/客户端通过模块级工厂函数实现单例：`get_config()`、`get_llm_client()`、`get_workspace_manager()`、`get_backup_manager()` 及各模块 `get_service()`。
+无状态的基础设施通过模块级工厂函数实现单例：`get_config()`、`get_llm_client()`、`get_workspace_manager()`、`get_backup_manager()`。持有请求级状态的服务（typo_check / expression_opt / code_review / terminology_check / paragraph_translate 的 `get_service()`）每次请求创建独立实例，避免并发请求互相覆盖 marker 映射等状态；跨请求共享的 `operation_id` 上下文存放在进程级共享存储中。
 
 ### 配置热重载
 

@@ -16,14 +16,10 @@ from backend.modules.code_review.service import CodeReviewService
 
 router = APIRouter(prefix="/api/code-review", tags=["code_review"])
 
-_service: CodeReviewService | None = None
-
 
 def get_service() -> CodeReviewService:
-    global _service
-    if _service is None:
-        _service = CodeReviewService()
-    return _service
+    # 每次请求创建独立实例，避免并发请求共享 marker 映射等请求级状态。
+    return CodeReviewService()
 
 
 # ── request models ─────────────────────────────────────────────────────────
@@ -64,6 +60,8 @@ async def preview_paragraphs(
         return result
     except RuntimeError as e:
         raise HTTPException(status_code=400, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     except FileNotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
 
@@ -93,6 +91,8 @@ async def check_code_review(
         return result
     except RuntimeError as e:
         raise HTTPException(status_code=400, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     except FileNotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
 
@@ -121,6 +121,8 @@ async def apply_changes(
     except RuntimeError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except IndexError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except FileNotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))

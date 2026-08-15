@@ -66,6 +66,13 @@ async def lifespan(app: FastAPI):
         close_research_http_client,
         initialize_research_http_client,
     )
+    from backend.utils.web_search import (
+        close_deep_reader,
+        close_search_manager,
+    )
+    from backend.modules.bib_manager.provider_manager import (
+        close_provider_manager,
+    )
 
     await initialize_research_http_client()
     cleanup_task = asyncio.create_task(cleanup_loop())
@@ -89,6 +96,18 @@ async def lifespan(app: FastAPI):
             await style_modify_cleanup_task
         except asyncio.CancelledError:
             pass
+        try:
+            await close_search_manager()
+        except Exception as e:
+            logger.warning("Failed to close search manager: %s", e)
+        try:
+            await close_deep_reader()
+        except Exception as e:
+            logger.warning("Failed to close deep reader: %s", e)
+        try:
+            await close_provider_manager()
+        except Exception as e:
+            logger.warning("Failed to close bib providers: %s", e)
         await close_research_http_client()
         logger.info("Shutting down LaTeXcellence server")
 

@@ -17,14 +17,11 @@ from backend.modules.expression_opt.prompt_manager import get_prompt_manager
 
 router = APIRouter(prefix="/api/expression-opt", tags=["expression_opt"])
 
-_service: ExpressionOptService | None = None
-
 
 def get_service() -> ExpressionOptService:
-    global _service
-    if _service is None:
-        _service = ExpressionOptService()
-    return _service
+    # 每次请求创建独立实例，避免并发请求共享 marker 映射/语言等请求级状态。
+    # operation_id → marker 映射保存在进程级共享存储，apply 仍可还原。
+    return ExpressionOptService()
 
 
 # ── request models ─────────────────────────────────────────────────────────
@@ -64,6 +61,8 @@ async def preview_paragraphs(
         return result
     except RuntimeError as e:
         raise HTTPException(status_code=400, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     except FileNotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
 
@@ -92,6 +91,8 @@ async def optimize_expression(
         return result
     except RuntimeError as e:
         raise HTTPException(status_code=400, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     except FileNotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
 
@@ -119,6 +120,8 @@ async def apply_changes(
     except RuntimeError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except IndexError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except FileNotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))

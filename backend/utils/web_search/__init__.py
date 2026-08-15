@@ -15,7 +15,7 @@
 """
 
 from backend.utils.web_search.base import BaseSearchEngine
-from backend.utils.web_search.deep_read import DeepReader
+from backend.utils.web_search.deep_read import DeepReader, close_deep_reader
 from backend.utils.web_search.engines.ddg import (
     DDGChallengeError,
     DDGChallengeSubmitRequest,
@@ -28,6 +28,7 @@ from backend.utils.web_search.engines.searxng import SearXNGEngine
 from backend.utils.web_search.engines.tavily import TavilyEngine
 from backend.utils.web_search.manager import (
     SearchManager,
+    close_search_manager,
     get_search_manager,
     reset_search_manager,
 )
@@ -48,6 +49,7 @@ __all__ = [
     "FindInPageResult",
     # Deep Read
     "DeepReader",
+    "close_deep_reader",
     # 查询重写
     "QueryRewriter",
     # 引擎基类
@@ -64,6 +66,7 @@ __all__ = [
     "remove_challenge",
     # 管理器
     "SearchManager",
+    "close_search_manager",
     "get_search_manager",
     "reset_search_manager",
 ]

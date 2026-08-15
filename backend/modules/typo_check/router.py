@@ -16,14 +16,13 @@ from backend.modules.typo_check.service import TypoCheckService
 
 router = APIRouter(prefix="/api/typo-check", tags=["typo_check"])
 
-_service: TypoCheckService | None = None
-
 
 def get_service() -> TypoCheckService:
-    global _service
-    if _service is None:
-        _service = TypoCheckService()
-    return _service
+    # 每次请求创建独立实例：BaseParagraphCheckService 持有 marker 映射等
+    # 请求级状态，模块级单例会在并发请求间互相覆盖（结果串台/写回错误）。
+    # 操作上下文（operation_id → marker 映射）保存在进程级共享存储中，
+    # apply 请求仍可通过 operation_id 精确还原。
+    return TypoCheckService()
 
 
 # ── request models ─────────────────────────────────────────────────────────
@@ -66,6 +65,8 @@ async def preview_paragraphs(
         return result
     except RuntimeError as e:
         raise HTTPException(status_code=400, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     except FileNotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
 
@@ -95,6 +96,8 @@ async def check_typos(
         return result
     except RuntimeError as e:
         raise HTTPException(status_code=400, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     except FileNotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
 
@@ -123,6 +126,8 @@ async def apply_changes(
     except RuntimeError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except IndexError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except FileNotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))

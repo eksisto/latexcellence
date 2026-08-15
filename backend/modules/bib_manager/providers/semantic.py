@@ -18,6 +18,7 @@ class SemanticScholarProvider(BaseMetadataProvider):
     _API_URL = "https://api.semanticscholar.org/graph/v1/paper"
 
     def __init__(self):
+        super().__init__()
         self._logger = get_logger("bib_manager.semantic_scholar")
 
     def _get_ua(self) -> str:
@@ -34,13 +35,13 @@ class SemanticScholarProvider(BaseMetadataProvider):
                 "publicationVenue,externalIds,abstract,"
                 "citationCount,openAccessPdf"
             )
-            async with httpx.AsyncClient(timeout=30.0) as client:
-                response = await client.get(
-                    url,
-                    params={"fields": params},
-                    headers={"User-Agent": self._get_ua()},
-                )
-                response.raise_for_status()
+            response = await self._get_http_client().get(
+                url,
+                params={"fields": params},
+                headers={"User-Agent": self._get_ua()},
+                timeout=30.0,
+            )
+            response.raise_for_status()
 
             data = response.json()
             if not data or data.get("paperId") is None:
@@ -62,13 +63,13 @@ class SemanticScholarProvider(BaseMetadataProvider):
 
     async def health_check(self) -> bool:
         try:
-            async with httpx.AsyncClient(timeout=10.0) as client:
-                response = await client.get(
-                    f"{self._API_URL}/DOI:10.1038%2F12345",
-                    params={"fields": "title"},
-                    headers={"User-Agent": self._get_ua()},
-                )
-                return response.status_code in (200, 404)
+            response = await self._get_http_client().get(
+                f"{self._API_URL}/DOI:10.1038%2F12345",
+                params={"fields": "title"},
+                headers={"User-Agent": self._get_ua()},
+                timeout=10.0,
+            )
+            return response.status_code in (200, 404)
         except Exception:
             return False
 

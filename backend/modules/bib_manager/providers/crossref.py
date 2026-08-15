@@ -20,6 +20,7 @@ class CrossrefProvider(BaseMetadataProvider):
     _API_URL = "https://api.crossref.org/works"
 
     def __init__(self):
+        super().__init__()
         self._logger = get_logger("bib_manager.crossref")
 
     def _get_ua(self) -> str:
@@ -29,12 +30,12 @@ class CrossrefProvider(BaseMetadataProvider):
 
     async def lookup_by_doi(self, doi: str) -> DoiLookupResult | None:
         try:
-            async with httpx.AsyncClient(timeout=30.0) as client:
-                response = await client.get(
-                    f"{self._API_URL}/{doi}",
-                    headers={"User-Agent": self._get_ua()},
-                )
-                response.raise_for_status()
+            response = await self._get_http_client().get(
+                f"{self._API_URL}/{doi}",
+                headers={"User-Agent": self._get_ua()},
+                timeout=30.0,
+            )
+            response.raise_for_status()
 
             data = response.json()
             message = data.get("message", {})
@@ -55,12 +56,12 @@ class CrossrefProvider(BaseMetadataProvider):
 
     async def health_check(self) -> bool:
         try:
-            async with httpx.AsyncClient(timeout=10.0) as client:
-                response = await client.get(
-                    "https://api.crossref.org/works/10.1038/12345",
-                    headers={"User-Agent": self._get_ua()},
-                )
-                return response.status_code in (200, 404)
+            response = await self._get_http_client().get(
+                "https://api.crossref.org/works/10.1038/12345",
+                headers={"User-Agent": self._get_ua()},
+                timeout=10.0,
+            )
+            return response.status_code in (200, 404)
         except Exception:
             return False
 

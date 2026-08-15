@@ -2,6 +2,8 @@
 
 from abc import ABC, abstractmethod
 
+import httpx
+
 from backend.modules.bib_manager.models import DoiLookupResult
 
 
@@ -15,6 +17,23 @@ class BaseMetadataProvider(ABC):
     """
 
     name: str = "base"
+
+    def __init__(self) -> None:
+        # 进程级共享客户端：连接复用，避免每次请求新建
+        # （AGENTS.md 客户端生命周期：lifespan 初始化、全局共享、关闭时释放）
+        self._http_client: httpx.AsyncClient | None = None
+
+    def _get_http_client(self) -> httpx.AsyncClient:
+        """获取共享 httpx 异步客户端（懒创建，超时按请求传入）。"""
+        if self._http_client is None or self._http_client.is_closed:
+            self._http_client = httpx.AsyncClient(follow_redirects=True)
+        return self._http_client
+
+    async def close(self) -> None:
+        """释放共享 HTTP 客户端。"""
+        if self._http_client is not None:
+            await self._http_client.aclose()
+            self._http_client = None
 
     @abstractmethod
     async def lookup_by_doi(self, doi: str) -> DoiLookupResult | None:

@@ -29,6 +29,20 @@ class TavilyEngine(BaseSearchEngine):
         self._logger = get_logger("tavily")
         self._api_key = api_key.strip()
         self._api_url = api_url.rstrip("/")
+        # 进程级共享客户端：连接复用，避免每次请求新建
+        self._client: httpx.AsyncClient | None = None
+
+    def _get_client(self) -> httpx.AsyncClient:
+        """获取共享 httpx 异步客户端（懒创建，超时按请求传入）。"""
+        if self._client is None or self._client.is_closed:
+            self._client = httpx.AsyncClient(follow_redirects=True)
+        return self._client
+
+    async def close(self) -> None:
+        """释放共享客户端。"""
+        if self._client is not None:
+            await self._client.aclose()
+            self._client = None
 
     def _get_api_key(self) -> str:
         """获取 Tavily API Key，优先使用运行时配置。"""
@@ -46,14 +60,10 @@ class TavilyEngine(BaseSearchEngine):
             return SearchResponse(query=query, engine=self.name, results=[])
 
         cfg = get_config()
-        client = httpx.AsyncClient(
-            timeout=cfg.features.function_calling.web_search.timeout_seconds,
-            follow_redirects=True,
+        timeout = cfg.features.function_calling.web_search.timeout_seconds
+        return await self._do_search(
+            self._get_client(), query, max_results, api_key, timeout
         )
-        try:
-            return await self._do_search(client, query, max_results, api_key)
-        finally:
-            await client.aclose()
 
     async def _do_search(
         self,
@@ -61,8 +71,11 @@ class TavilyEngine(BaseSearchEngine):
         query: str,
         max_results: int,
         api_key: str,
+        timeout: float | None = None,
     ) -> SearchResponse:
         """实际搜索逻辑。"""
+        if timeout is None:
+            timeout = get_config().features.function_calling.web_search.timeout_seconds
         payload = {
             "query": query,
             "search_depth": "advanced",
@@ -80,7 +93,9 @@ class TavilyEngine(BaseSearchEngine):
 
         self._logger.info(f"Tavily search: {query[:60]}")
         try:
-            resp = await client.post(self._api_url, json=payload, headers=headers)
+            resp = await client.post(
+                self._api_url, json=payload, headers=headers, timeout=timeout
+            )
         except httpx.ConnectError as e:
             self._logger.error(f"Tavily connection failed: {e}")
             return SearchResponse(query=query, engine=self.name, results=[])

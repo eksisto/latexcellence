@@ -26,3 +26,6 @@ class BaseSearchEngine(ABC):
     async def health_check(self) -> bool:
         """检查引擎是否可用（网络连通性、API Key 有效性等）。"""
         ...
+
+    async def close(self) -> None:
+        """释放引擎持有的共享资源（默认无操作，子类可按需覆写）。"""

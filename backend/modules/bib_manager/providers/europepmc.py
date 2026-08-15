@@ -21,6 +21,7 @@ class EuropePMCProvider(BaseMetadataProvider):
     _API_URL = "https://www.ebi.ac.uk/europepmc/webservices/rest/search"
 
     def __init__(self):
+        super().__init__()
         self._logger = get_logger("bib_manager.europepmc")
 
     def _get_ua(self) -> str:
@@ -30,17 +31,17 @@ class EuropePMCProvider(BaseMetadataProvider):
 
     async def lookup_by_doi(self, doi: str) -> DoiLookupResult | None:
         try:
-            async with httpx.AsyncClient(timeout=30.0) as client:
-                response = await client.get(
-                    self._API_URL,
-                    params={
-                        "query": f"EXT_ID:{doi}",
-                        "format": "json",
-                        "resultType": "core",
-                    },
-                    headers={"User-Agent": self._get_ua()},
-                )
-                response.raise_for_status()
+            response = await self._get_http_client().get(
+                self._API_URL,
+                params={
+                    "query": f"EXT_ID:{doi}",
+                    "format": "json",
+                    "resultType": "core",
+                },
+                headers={"User-Agent": self._get_ua()},
+                timeout=30.0,
+            )
+            response.raise_for_status()
 
             data = response.json()
             results = data.get("resultList", {}).get("result", [])
@@ -58,17 +59,17 @@ class EuropePMCProvider(BaseMetadataProvider):
 
     async def health_check(self) -> bool:
         try:
-            async with httpx.AsyncClient(timeout=10.0) as client:
-                response = await client.get(
-                    self._API_URL,
-                    params={
-                        "query": "EXT_ID:10.1038/12345",
-                        "format": "json",
-                        "resultType": "core",
-                    },
-                    headers={"User-Agent": self._get_ua()},
-                )
-                return response.status_code == 200
+            response = await self._get_http_client().get(
+                self._API_URL,
+                params={
+                    "query": "EXT_ID:10.1038/12345",
+                    "format": "json",
+                    "resultType": "core",
+                },
+                headers={"User-Agent": self._get_ua()},
+                timeout=10.0,
+            )
+            return response.status_code == 200
         except Exception:
             return False
 

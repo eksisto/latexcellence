@@ -545,11 +545,39 @@ class StyleModifySessionStore:
             main_file = project.main_file
         if main_file is None:
             main_file = _detect_main_file(shadow)
-        if main_file is None or not (shadow / main_file).is_file():
+        if main_file is None:
             return CompileSummary(
                 status="not_run",
                 log="Could not determine the LaTeX main file for shadow compilation.",
             )
+
+        # main_file 来自 LLM 工具参数，必须先经 resolve_project_path 校验：
+        # 拒绝绝对路径 / '..' 越界 / 非 .tex 后缀，避免编译 shadow 目录外文件。
+        try:
+            resolved_main = resolve_project_path(
+                shadow.resolve(),
+                main_file,
+                allowed_suffixes=(".tex",),
+                allow_symlink=False,
+            )
+        except ValueError as e:
+            self._logger.warning(
+                "style_modify shadow compile rejected main_file %r: %s",
+                main_file,
+                e,
+            )
+            return CompileSummary(
+                status="not_run",
+                main_file=main_file,
+                log=f"Invalid main file path: {e}",
+            )
+        if not resolved_main.is_file():
+            return CompileSummary(
+                status="not_run",
+                main_file=main_file,
+                log="Could not determine the LaTeX main file for shadow compilation.",
+            )
+        main_file = resolved_main.relative_to(shadow.resolve()).as_posix()
 
         cfg = get_config()
         timeout = cfg.features.style_modify.agent.shadow_compile_timeout

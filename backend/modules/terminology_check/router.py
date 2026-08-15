@@ -16,14 +16,10 @@ from backend.modules.terminology_check.service import TerminologyCheckService
 
 router = APIRouter(prefix="/api/terminology-check", tags=["terminology_check"])
 
-_service: TerminologyCheckService | None = None
-
 
 def get_service() -> TerminologyCheckService:
-    global _service
-    if _service is None:
-        _service = TerminologyCheckService()
-    return _service
+    # 每次请求创建独立实例，避免并发请求共享 marker 映射等请求级状态。
+    return TerminologyCheckService()
 
 
 class TerminologyCheckRequest(BaseModel):
@@ -56,6 +52,8 @@ async def preview_paragraphs(
         return result
     except RuntimeError as e:
         raise HTTPException(status_code=400, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     except FileNotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
 
@@ -81,6 +79,8 @@ async def check_terminology(
         return result
     except RuntimeError as e:
         raise HTTPException(status_code=400, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     except FileNotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
 
@@ -103,6 +103,8 @@ async def apply_changes(
     except RuntimeError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except IndexError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except FileNotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))

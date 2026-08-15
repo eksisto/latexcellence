@@ -43,6 +43,19 @@ class ProviderManager:
         self._arxiv = provider
         self._logger.info(f"arXiv provider registered: {provider.name}")
 
+    async def close(self) -> None:
+        """关闭所有已注册数据源持有的共享 HTTP 客户端。"""
+        providers = [self._primary, self._arxiv, *self._fallbacks]
+        for provider in providers:
+            if provider is None:
+                continue
+            try:
+                await provider.close()
+            except Exception as e:
+                self._logger.warning(
+                    "Failed to close provider %s: %s", provider.name, e
+                )
+
     def _merge(
         self, primary: DoiLookupResult, supplement: DoiLookupResult
     ) -> DoiLookupResult:
@@ -139,6 +152,15 @@ def reset_provider_manager() -> None:
     """重置全局 ProviderManager 单例，使配置变更立即生效。"""
     global _provider_manager
     _provider_manager = None
+
+
+async def close_provider_manager() -> None:
+    """关闭并释放全局 ProviderManager（服务关闭时调用）。"""
+    global _provider_manager
+    manager = _provider_manager
+    _provider_manager = None
+    if manager is not None:
+        await manager.close()
 
 
 def get_provider_manager() -> ProviderManager:

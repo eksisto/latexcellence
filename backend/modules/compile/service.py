@@ -21,12 +21,15 @@ from backend.utils.tex_compile import run_tex_compile
 logger = get_logger(__name__)
 
 
-def _validate_main_file(main_file: str, project_root: Path) -> None:
+def _validate_main_file(main_file: str, project_root: Path) -> Path:
     """
     校验 main_file 参数的合法性，防止参数注入和路径穿越。
 
     使用 resolve_project_path 执行通用路径安全校验，
     额外检查不以 '-' 开头（防止被 latexmk 解析为命令行 flag）。
+
+    返回：
+        校验通过后的项目内绝对路径（唯一入口 resolve_project_path）。
     """
     if not main_file or not main_file.strip():
         raise ValueError("main_file must not be empty")
@@ -34,7 +37,7 @@ def _validate_main_file(main_file: str, project_root: Path) -> None:
     if main_file.lstrip().startswith("-"):
         raise ValueError("main_file must not start with '-'")
 
-    resolve_project_path(
+    return resolve_project_path(
         project_root,
         main_file,
         allowed_suffixes=(".tex",),
@@ -77,7 +80,7 @@ async def compile_latex(
     root = Path(project.root_path)
     _validate_main_file(main_file, root)
 
-    main_path = root / main_file
+    main_path = _validate_main_file(main_file, root)
     if not main_path.exists():
         raise FileNotFoundError(f"Main file not found: {main_file}")
 

@@ -94,7 +94,7 @@ async def get_compiled_pdf(
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
-    pdf_path = root / Path(main_file).with_suffix(".pdf")
+    pdf_path = _validate_main_file(main_file, root).with_suffix(".pdf")
 
     if not pdf_path.exists():
         raise HTTPException(

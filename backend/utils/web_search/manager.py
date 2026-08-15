@@ -82,6 +82,16 @@ class SearchManager:
                 return e
         return None
 
+    async def close(self) -> None:
+        """关闭所有已注册引擎持有的共享资源（服务关闭时调用）。"""
+        for engine in self._engines:
+            try:
+                await engine.close()
+            except Exception as e:
+                self._logger.warning(
+                    "Failed to close search engine %s: %s", engine.name, e
+                )
+
     async def search(
         self,
         query: str,
@@ -428,6 +438,15 @@ def reset_search_manager() -> None:
     """重置全局 SearchManager 单例，使配置变更（如切换引擎）立即生效。"""
     global _search_manager
     _search_manager = None
+
+
+async def close_search_manager() -> None:
+    """关闭并释放全局 SearchManager（服务关闭时调用）。"""
+    global _search_manager
+    manager = _search_manager
+    _search_manager = None
+    if manager is not None:
+        await manager.close()
 
 
 def get_search_manager() -> SearchManager:

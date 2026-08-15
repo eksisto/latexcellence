@@ -100,6 +100,8 @@ bib_manager/
 
 配置变更时需要调用 `reset_provider_manager()` 重建单例。
 
+所有 Provider 共享进程级 `httpx.AsyncClient`（懒创建、按请求传超时），服务关闭时由 `close_provider_manager()` 统一释放。
+
 ## Service 核心方法
 
 | 方法 | 功能 |

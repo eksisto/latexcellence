@@ -193,7 +193,7 @@ class ProjectInfo:
 **关键设计**：
 
 - `ApplyChangeItem` 共享模型（`paragraph_index`, `new_text`, `file_path`）：各逐段检查模块 router 的 apply 接口统一使用
-- `CheckOperationContext` 操作上下文：每次 preview/check 生成唯一 `operation_id`，深拷贝 `marker_maps` 存入 `_operation_contexts` 字典；apply 时通过 `operation_id` 取回上下文还原 marker。若 context 丢失（过期/重启/新操作覆盖），逐段检查 `marker_map` 缺失时跳过写入并返回 `errors`，防止字面 marker 污染文件
+- `CheckOperationContext` 操作上下文：每次 preview/check 生成唯一 `operation_id`，深拷贝 `marker_maps` 存入**进程级共享存储**（`store_operation_context` / `get_operation_context`，带锁保护）；服务实例按请求创建，apply 时通过 `operation_id` 从共享存储取回上下文还原 marker。若 context 丢失（过期/重启/新操作覆盖），逐段检查 `marker_map` 缺失时跳过写入并返回 `errors`，防止字面 marker 污染文件
 - 类变量控制差异：
   - `_output_field`: 结果字段名（`"corrected"` / `"optimized"` / `"translated"` 等）
   - `use_marker_protection`: 是否启用 marker 保护（typo_check / expression_opt / terminology_check / paragraph_translate 为 `True`；code_review 为 `False`，见 docs/modules/code_review.md）

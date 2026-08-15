@@ -51,7 +51,7 @@ Function Calling 工具注册表，统一管理所有可用工具。`get_search_
 
 `DeepReader` 提供页面抓取与页内查找能力：
 
-1. 使用 `httpx.AsyncClient` 抓取页面 HTML（仅公网 HTTPS：拒绝非 HTTPS，并拦截私网/环回/链路本地/保留地址，防止 SSRF；重定向最多跟随 5 跳且每跳重新校验）
+1. 使用进程级共享的 `httpx.AsyncClient` 抓取页面 HTML（仅公网 HTTPS：拒绝非 HTTPS，并拦截私网/环回/链路本地/保留地址，防止 SSRF；重定向最多跟随 5 跳且每跳重新校验；超时按请求传入，客户端在服务关闭时统一释放）
 2. trafilatura 从 HTML 中提取标题与正文，去除导航/广告等噪音元素
 3. 正文写入 `SearchResult.full_content` 或 `PageReadResult.content`，通过 `format_for_llm()` 注入 LLM 上下文
 4. 结果带 5 分钟 TTL 内存缓存，全局共享的 `DeepReader` 实例供 `open_page`、`find_in_page` 与自动 Deep Read 复用，避免重复请求

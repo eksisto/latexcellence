@@ -111,7 +111,7 @@ class TerminologyCheckService(BaseParagraphCheckService):
                 return await coro
 
         all_terms: list[dict[str, Any]] = []
-        batch_size = cfg.features.typo_check.batch_size
+        batch_size = cfg.features.terminology_check.batch_size
 
         for batch_start in range(0, len(all_para_data), batch_size):
             batch = all_para_data[batch_start : batch_start + batch_size]
