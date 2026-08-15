@@ -82,14 +82,14 @@ const bgSvg = (
   </svg>
 );
 
-/** 欢迎页外的「打开工作区」快捷入口。独立成组件，让 useLocation 订阅只影响它自身。 */
+/** 欢迎页/工作区页外的「打开工作区」快捷入口。独立成组件，让 useLocation 订阅只影响它自身。 */
 const WorkspaceShortcut = memo(function WorkspaceShortcut() {
   const navigate = useNavigate();
   const { pathname } = useLocation();
   const { t } = useTranslation("components");
   const handleNavigate = useCallback(() => navigate("/workspace"), [navigate]);
 
-  if (pathname === "/") return null;
+  if (pathname === "/" || pathname === "/workspace") return null;
 
   return (
     <Tooltip>
@@ -107,7 +107,7 @@ const WorkspaceShortcut = memo(function WorkspaceShortcut() {
 const AppToolbar = memo(function AppToolbar() {
   return (
     <div className="fixed top-4 right-4 z-50 flex items-center gap-1">
-      {/* 欢迎页已有「打开工作区」主按钮，右上角不再重复显示工作区快捷入口 */}
+      {/* 欢迎页已有「打开工作区」主按钮、工作区页本身就在工作区，右上角不再显示工作区快捷入口 */}
       <WorkspaceShortcut />
       <ThemeSwitcher />
       <ThemeToggle />
