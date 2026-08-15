@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback, useDeferredValue } from "react";
 
 /**
  * 段落检查结果搜索/过滤 hook。
@@ -17,6 +17,8 @@ export default function useResultFilter(results, options = {}) {
 
   const [searchQuery, setSearchQuery] = useState("");
   const [typeFilter, setTypeFilter] = useState("all");
+  // 搜索过滤可能遍历大量结果，延迟值保证输入框优先响应
+  const deferredSearchQuery = useDeferredValue(searchQuery);
 
   // 从所有 changes 中提取可用类型列表（去重、保持出现顺序）
   const availableTypes = useMemo(() => {
@@ -35,7 +37,7 @@ export default function useResultFilter(results, options = {}) {
   }, [results]);
 
   const filteredResults = useMemo(() => {
-    const q = searchQuery.trim().toLowerCase();
+    const q = deferredSearchQuery.trim().toLowerCase();
     return results.filter((r) => {
       // 类型过滤：检查该 result 的任意 change.type 是否匹配
       if (typeFilter !== "all") {
@@ -66,7 +68,7 @@ export default function useResultFilter(results, options = {}) {
       }
       return true;
     });
-  }, [results, searchQuery, typeFilter]);
+  }, [results, deferredSearchQuery, typeFilter]);
 
   const jumpToParagraph = useCallback(
     (paragraphIndex) => {

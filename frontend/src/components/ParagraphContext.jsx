@@ -6,13 +6,19 @@ export default function ParagraphContext({
   currentIndex,
   paragraphs,
   currentText,
+  paragraphMap,
 }) {
   const { t } = useTranslation(["components", "common"]);
   const [open, setOpen] = useState(false);
   const toggle = useCallback(() => setOpen((v) => !v), []);
-  const prevPara = paragraphs.find((p) => p.index === currentIndex - 1);
-  const currentPara = paragraphs.find((p) => p.index === currentIndex);
-  const nextPara = paragraphs.find((p) => p.index === currentIndex + 1);
+  // 传入预构建的 Map 时 O(1) 查询，避免每张结果卡都对段落数组线性查找
+  const getParagraph = (index) =>
+    paragraphMap
+      ? paragraphMap.get(index)
+      : paragraphs.find((p) => p.index === index);
+  const prevPara = getParagraph(currentIndex - 1);
+  const currentPara = getParagraph(currentIndex);
+  const nextPara = getParagraph(currentIndex + 1);
 
   return (
     <div className="text-xs text-muted-foreground">

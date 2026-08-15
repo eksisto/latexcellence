@@ -51,6 +51,17 @@ import useResultFilter from "@/hooks/useResultFilter";
 
 export default function ExpressionOptPage() {
   const { t } = useTranslation(["pages", "common"]);
+  const paragraphCheckMessages = useMemo(
+    () => ({
+      checkLoading: t("pages:expressionOpt.checkLoading"),
+      checkSuccess: (count) => t("pages:expressionOpt.checkSuccess", { count }),
+      applySuccess: (idx) => t("pages:expressionOpt.applySuccess", { idx }),
+      applyAllSuccess: (count) =>
+        t("pages:expressionOpt.applyAllSuccess", { count }),
+      applyAllEmpty: t("pages:expressionOpt.applyAllEmpty"),
+    }),
+    [t],
+  );
   const {
     projectPath,
     workspaceId,
@@ -87,14 +98,7 @@ export default function ExpressionOptPage() {
       setResultsKey: "setExpressionResults",
       loadingKey: "expressionOpt",
     },
-    messages: {
-      checkLoading: t("pages:expressionOpt.checkLoading"),
-      checkSuccess: (count) => t("pages:expressionOpt.checkSuccess", { count }),
-      applySuccess: (idx) => t("pages:expressionOpt.applySuccess", { idx }),
-      applyAllSuccess: (count) =>
-        t("pages:expressionOpt.applyAllSuccess", { count }),
-      applyAllEmpty: t("pages:expressionOpt.applyAllEmpty"),
-    },
+    messages: paragraphCheckMessages,
   });
 
   const {
@@ -108,6 +112,11 @@ export default function ExpressionOptPage() {
     reset,
     hasFilters,
   } = useResultFilter(expressionResults, { idPrefix: "expr-result" });
+
+  const paragraphMap = useMemo(
+    () => new Map(expressionParagraphs.map((p) => [p.index, p])),
+    [expressionParagraphs],
+  );
 
   const [promptError, setPromptError] = useState(null);
   const [promptMessage, setPromptMessage] = useState(null);
@@ -724,6 +733,7 @@ export default function ExpressionOptPage() {
                                       <ParagraphContext
                                         currentIndex={result.paragraph_index}
                                         paragraphs={expressionParagraphs}
+                                        paragraphMap={paragraphMap}
                                         currentText={
                                           result.plain_text || result.original
                                         }
@@ -824,6 +834,7 @@ export default function ExpressionOptPage() {
                             <ParagraphContext
                               currentIndex={result.paragraph_index}
                               paragraphs={expressionParagraphs}
+                              paragraphMap={paragraphMap}
                               currentText={result.plain_text || result.original}
                             />
                           </div>

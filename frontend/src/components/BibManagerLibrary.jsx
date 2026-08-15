@@ -1,4 +1,10 @@
-import { useState, useCallback, useEffect } from "react";
+import {
+  useState,
+  useCallback,
+  useEffect,
+  useMemo,
+  useDeferredValue,
+} from "react";
 import { toast } from "sonner";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
@@ -226,31 +232,44 @@ export default function BibManagerLibrary() {
     [selectedBibFile, workspaceId, t, loadData],
   );
 
-  const filteredEntries = entries.filter((entry) => {
-    if (typeFilter !== "all" && entry.entry_type !== typeFilter) return false;
-    if (yearFilter && !(entry.fields?.year || "").trim().startsWith(yearFilter))
-      return false;
-    if (!searchText.trim()) return true;
-    const q = searchText.toLowerCase();
-    const fields = entry.fields || {};
-    return (
-      entry.cite_key.toLowerCase().includes(q) ||
-      (fields.author || "").toLowerCase().includes(q) ||
-      (fields.title || "").toLowerCase().includes(q) ||
-      (fields.year || "").includes(q) ||
-      (fields.journal || "").toLowerCase().includes(q)
-    );
-  });
+  // 搜索过滤可能遍历大量文献条目，延迟值保证输入框优先响应
+  const deferredSearchText = useDeferredValue(searchText);
 
-  const allTypes = [
-    ...new Set(entries.map((e) => e.entry_type).filter(Boolean)),
-  ].sort();
+  const filteredEntries = useMemo(() => {
+    return entries.filter((entry) => {
+      if (typeFilter !== "all" && entry.entry_type !== typeFilter) return false;
+      if (
+        yearFilter &&
+        !(entry.fields?.year || "").trim().startsWith(yearFilter)
+      )
+        return false;
+      if (!deferredSearchText.trim()) return true;
+      const q = deferredSearchText.toLowerCase();
+      const fields = entry.fields || {};
+      return (
+        entry.cite_key.toLowerCase().includes(q) ||
+        (fields.author || "").toLowerCase().includes(q) ||
+        (fields.title || "").toLowerCase().includes(q) ||
+        (fields.year || "").includes(q) ||
+        (fields.journal || "").toLowerCase().includes(q)
+      );
+    });
+  }, [entries, typeFilter, yearFilter, deferredSearchText]);
 
-  const sortedYears = stats
-    ? Object.keys(stats.by_year)
-        .filter((y) => y !== "unknown")
-        .sort((a, b) => b.localeCompare(a))
-    : [];
+  const allTypes = useMemo(
+    () => [...new Set(entries.map((e) => e.entry_type).filter(Boolean))].sort(),
+    [entries],
+  );
+
+  const sortedYears = useMemo(
+    () =>
+      stats
+        ? Object.keys(stats.by_year)
+            .filter((y) => y !== "unknown")
+            .sort((a, b) => b.localeCompare(a))
+        : [],
+    [stats],
+  );
 
   if (bibFiles.length === 0) {
     return (

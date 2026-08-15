@@ -61,6 +61,7 @@ const CodeReviewResultCard = React.memo(function CodeReviewResultCard({
   onApply,
   onIgnore,
   paragraphs,
+  paragraphMap,
   typeLabels,
   severityLabels,
 }) {
@@ -361,6 +362,7 @@ const CodeReviewResultCard = React.memo(function CodeReviewResultCard({
           <ParagraphContext
             currentIndex={result.paragraph_index}
             paragraphs={paragraphs}
+            paragraphMap={paragraphMap}
             currentText={result.text || result.original}
           />
         </div>
@@ -451,6 +453,10 @@ export default function CodeReviewPage() {
   const resultGroups = useMemo(
     () => groupByFile(filteredResults),
     [filteredResults],
+  );
+  const paragraphMap = useMemo(
+    () => new Map(codeReviewParagraphs.map((p) => [p.index, p])),
+    [codeReviewParagraphs],
   );
 
   const suggestionTypeLabels = useMemo(
@@ -712,6 +718,7 @@ export default function CodeReviewPage() {
                               onApply={handleApplyChange}
                               onIgnore={handleIgnoreChange}
                               paragraphs={codeReviewParagraphs}
+                              paragraphMap={paragraphMap}
                               typeLabels={suggestionTypeLabels}
                               severityLabels={severityLabels}
                             />
@@ -728,6 +735,7 @@ export default function CodeReviewPage() {
                       onApply={handleApplyChange}
                       onIgnore={handleIgnoreChange}
                       paragraphs={codeReviewParagraphs}
+                      paragraphMap={paragraphMap}
                       typeLabels={suggestionTypeLabels}
                       severityLabels={severityLabels}
                     />

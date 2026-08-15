@@ -40,6 +40,18 @@ export default function TerminologyCheckPage() {
   const { t } = useTranslation(["pages", "common"]);
   const [confirmApplyAllOpen, setConfirmApplyAllOpen] = useState(false);
   const [customReplacements, setCustomReplacements] = useState({});
+  const paragraphCheckMessages = useMemo(
+    () => ({
+      checkLoading: t("pages:terminologyCheck.checkLoading"),
+      checkSuccess: (count) =>
+        t("pages:terminologyCheck.checkSuccess", { count }),
+      applySuccess: (idx) => t("pages:terminologyCheck.applySuccess", { idx }),
+      applyAllSuccess: (count) =>
+        t("pages:terminologyCheck.applyAllSuccess", { count }),
+      applyAllEmpty: t("pages:terminologyCheck.applyAllEmpty"),
+    }),
+    [t],
+  );
   const {
     projectPath,
     workspaceId,
@@ -77,15 +89,7 @@ export default function TerminologyCheckPage() {
       setResultsKey: "setTerminologyResults",
       loadingKey: "terminologyCheck",
     },
-    messages: {
-      checkLoading: t("pages:terminologyCheck.checkLoading"),
-      checkSuccess: (count) =>
-        t("pages:terminologyCheck.checkSuccess", { count }),
-      applySuccess: (idx) => t("pages:terminologyCheck.applySuccess", { idx }),
-      applyAllSuccess: (count) =>
-        t("pages:terminologyCheck.applyAllSuccess", { count }),
-      applyAllEmpty: t("pages:terminologyCheck.applyAllEmpty"),
-    },
+    messages: paragraphCheckMessages,
   });
 
   const {
@@ -99,6 +103,11 @@ export default function TerminologyCheckPage() {
     reset,
     hasFilters,
   } = useResultFilter(terminologyResults, { idPrefix: "term-result" });
+
+  const paragraphMap = useMemo(
+    () => new Map(terminologyParagraphs.map((p) => [p.index, p])),
+    [terminologyParagraphs],
+  );
 
   const buildCorrectedText = useCallback((result, overrides) => {
     // 必须以 marker 保护的 plain_text 为基础重建修正文本：
@@ -365,6 +374,7 @@ export default function TerminologyCheckPage() {
             <ParagraphContext
               currentIndex={result.paragraph_index}
               paragraphs={terminologyParagraphs}
+              paragraphMap={paragraphMap}
               currentText={result.plain_text || result.original}
             />
           </div>

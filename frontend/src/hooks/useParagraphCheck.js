@@ -5,6 +5,25 @@ import useStore from "@/store/useStore";
 import { translateError } from "@/utils/errorMessages";
 import i18n from "@/i18n";
 
+/**
+ * 默认文案：模块级常量保证回调身份稳定（不随渲染重建），
+ * getter 保持翻译懒求值，语言切换后仍能取到最新文案。
+ */
+const DEFAULT_MESSAGES = {
+  get checkLoading() {
+    return i18n.t("hooks:paragraphCheck.defaultCheckLoading");
+  },
+  checkSuccess: (count) =>
+    i18n.t("hooks:paragraphCheck.defaultCheckSuccess", { count }),
+  applySuccess: (idx) =>
+    i18n.t("hooks:paragraphCheck.defaultApplySuccess", { idx }),
+  applyAllSuccess: (count) =>
+    i18n.t("hooks:paragraphCheck.defaultApplyAllSuccess", { count }),
+  get applyAllEmpty() {
+    return i18n.t("hooks:paragraphCheck.defaultApplyAllEmpty");
+  },
+};
+
 export function flattenTexFiles(tree, prefix = "") {
   const result = [];
   for (const node of tree) {
@@ -59,20 +78,7 @@ export default function useParagraphCheck({
     setResultsKey: "setTypoResults",
     loadingKey: "typoCheck",
   },
-  messages = {
-    get checkLoading() {
-      return i18n.t("hooks:paragraphCheck.defaultCheckLoading");
-    },
-    checkSuccess: (count) =>
-      i18n.t("hooks:paragraphCheck.defaultCheckSuccess", { count }),
-    applySuccess: (idx) =>
-      i18n.t("hooks:paragraphCheck.defaultApplySuccess", { idx }),
-    applyAllSuccess: (count) =>
-      i18n.t("hooks:paragraphCheck.defaultApplyAllSuccess", { count }),
-    get applyAllEmpty() {
-      return i18n.t("hooks:paragraphCheck.defaultApplyAllEmpty");
-    },
-  },
+  messages = DEFAULT_MESSAGES,
 }) {
   const fileTree = useStore((s) => s.fileTree);
   const projectPath = useStore((s) => s.projectPath);

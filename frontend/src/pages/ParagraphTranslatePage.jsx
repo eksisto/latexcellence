@@ -58,6 +58,19 @@ export default function ParagraphTranslatePage() {
   const [confirmApplyAllOpen, setConfirmApplyAllOpen] = useState(false);
   const [targetLanguage, setTargetLanguage] = useState("English");
   const [customLanguage, setCustomLanguage] = useState("");
+  const paragraphCheckMessages = useMemo(
+    () => ({
+      checkLoading: t("pages:paragraphTranslate.checkLoading"),
+      checkSuccess: (count) =>
+        t("pages:paragraphTranslate.checkSuccess", { count }),
+      applySuccess: (idx) =>
+        t("pages:paragraphTranslate.applySuccess", { idx }),
+      applyAllSuccess: (count) =>
+        t("pages:paragraphTranslate.applyAllSuccess", { count }),
+      applyAllEmpty: t("pages:paragraphTranslate.applyAllEmpty"),
+    }),
+    [t],
+  );
   const isOther = targetLanguage === OTHER_LANGUAGE;
   const effectiveTargetLanguage = isOther ? customLanguage : targetLanguage;
 
@@ -107,16 +120,7 @@ export default function ParagraphTranslatePage() {
       setResultsKey: "setParagraphTranslateResults",
       loadingKey: "paragraphTranslate",
     },
-    messages: {
-      checkLoading: t("pages:paragraphTranslate.checkLoading"),
-      checkSuccess: (count) =>
-        t("pages:paragraphTranslate.checkSuccess", { count }),
-      applySuccess: (idx) =>
-        t("pages:paragraphTranslate.applySuccess", { idx }),
-      applyAllSuccess: (count) =>
-        t("pages:paragraphTranslate.applyAllSuccess", { count }),
-      applyAllEmpty: t("pages:paragraphTranslate.applyAllEmpty"),
-    },
+    messages: paragraphCheckMessages,
   });
 
   const {
@@ -130,6 +134,11 @@ export default function ParagraphTranslatePage() {
     reset,
     hasFilters,
   } = useResultFilter(translateResults, { idPrefix: "translate-result" });
+
+  const paragraphMap = useMemo(
+    () => new Map(translateParagraphs.map((p) => [p.index, p])),
+    [translateParagraphs],
+  );
 
   const groupedParagraphs = useMemo(
     () => groupByFile(translateParagraphs),
@@ -224,6 +233,7 @@ export default function ParagraphTranslatePage() {
             <ParagraphContext
               currentIndex={result.paragraph_index}
               paragraphs={translateParagraphs}
+              paragraphMap={paragraphMap}
               currentText={result.plain_text || result.original}
             />
           </div>

@@ -40,6 +40,17 @@ import useResultFilter from "@/hooks/useResultFilter";
 export default function TypoCheckPage() {
   const { t } = useTranslation(["pages", "common"]);
   const [confirmApplyAllOpen, setConfirmApplyAllOpen] = useState(false);
+  const paragraphCheckMessages = useMemo(
+    () => ({
+      checkLoading: t("pages:typoCheck.checkLoading"),
+      checkSuccess: (count) => t("pages:typoCheck.checkSuccess", { count }),
+      applySuccess: (idx) => t("pages:typoCheck.applySuccess", { idx }),
+      applyAllSuccess: (count) =>
+        t("pages:typoCheck.applyAllSuccess", { count }),
+      applyAllEmpty: t("pages:typoCheck.applyAllEmpty"),
+    }),
+    [t],
+  );
   const {
     projectPath,
     workspaceId,
@@ -76,14 +87,7 @@ export default function TypoCheckPage() {
       setResultsKey: "setTypoResults",
       loadingKey: "typoCheck",
     },
-    messages: {
-      checkLoading: t("pages:typoCheck.checkLoading"),
-      checkSuccess: (count) => t("pages:typoCheck.checkSuccess", { count }),
-      applySuccess: (idx) => t("pages:typoCheck.applySuccess", { idx }),
-      applyAllSuccess: (count) =>
-        t("pages:typoCheck.applyAllSuccess", { count }),
-      applyAllEmpty: t("pages:typoCheck.applyAllEmpty"),
-    },
+    messages: paragraphCheckMessages,
   });
 
   const {
@@ -100,6 +104,10 @@ export default function TypoCheckPage() {
 
   const groupedParagraphs = useMemo(
     () => groupByFile(typoParagraphs),
+    [typoParagraphs],
+  );
+  const paragraphMap = useMemo(
+    () => new Map(typoParagraphs.map((p) => [p.index, p])),
     [typoParagraphs],
   );
   const groupedResults = useMemo(
@@ -210,6 +218,7 @@ export default function TypoCheckPage() {
             <ParagraphContext
               currentIndex={result.paragraph_index}
               paragraphs={typoParagraphs}
+              paragraphMap={paragraphMap}
               currentText={result.plain_text || result.original}
             />
           </div>
