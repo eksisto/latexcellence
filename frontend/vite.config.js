@@ -81,6 +81,15 @@ export default defineConfig({
             if (/lucide-react/.test(id)) return "vendor-icons";
             if (/sonner/.test(id)) return "vendor-sonner";
             if (/katex/.test(id)) return "vendor-katex";
+            // 以下库只被懒加载路由使用（MarkdownRenderer / CodeBlock 等），
+            // 独立分包，避免随 i18next/zustand 等首屏依赖一起进入初始 vendor chunk。
+            if (/highlight\.js/.test(id)) return "vendor-highlight";
+            if (
+              /react-markdown|remark-|rehype-|unified|hast-util-|mdast-util-|unist-util-|micromark|vfile|property-information|character-entities|comma-separated-tokens|space-separated-tokens|decode-named-character-reference|escape-string-regexp|is-plain-obj|trough|bail|extend|trim-lines|ccount|zwitch|devlop|dequal|markdown-table|longest-streak|web-namespaces|html-void-elements|stringify-entities|parse-entities|hastscript|style-to-js|style-to-object|inline-style-parser/.test(
+                id,
+              )
+            )
+              return "vendor-markdown";
             return "vendor";
           }
         },

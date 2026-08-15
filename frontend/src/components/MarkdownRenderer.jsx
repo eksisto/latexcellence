@@ -1,3 +1,4 @@
+import { memo } from "react";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import remarkMath from "remark-math";
@@ -62,7 +63,7 @@ const components = {
   ),
 };
 
-export default function MarkdownRenderer({ children }) {
+function MarkdownRenderer({ children }) {
   return (
     <div className="prose dark:prose-invert max-w-none text-sm leading-relaxed break-words">
       <Markdown
@@ -75,3 +76,7 @@ export default function MarkdownRenderer({ children }) {
     </div>
   );
 }
+
+// 聊天流式更新时，未变化的消息会带相同 children 重渲染；
+// memo 让 Markdown 解析只在内容真正变化时执行。
+export default memo(MarkdownRenderer);

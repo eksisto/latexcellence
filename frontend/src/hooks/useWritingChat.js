@@ -76,7 +76,7 @@ export default function useWritingChat() {
 
   // 待用户确认的工具调用（写操作：edit_paragraph / undo_last_edit）
   const [pendingTool, _setPendingTool] = useState(null);
-  const setPendingTool = (value) => _setPendingTool(value);
+  const setPendingTool = useCallback((value) => _setPendingTool(value), []);
   const pendingToolRef = useRef(null);
   useEffect(() => {
     pendingToolRef.current = pendingTool;
@@ -109,7 +109,10 @@ export default function useWritingChat() {
 
   // 待用户回复的澄清请求（request_clarification）
   const [pendingClarification, _setPendingClarification] = useState(null);
-  const setPendingClarification = (value) => _setPendingClarification(value);
+  const setPendingClarification = useCallback(
+    (value) => _setPendingClarification(value),
+    [],
+  );
   const pendingClarificationRef = useRef(null);
   useEffect(() => {
     pendingClarificationRef.current = pendingClarification;
@@ -180,6 +183,27 @@ export default function useWritingChat() {
     dismissCaptcha,
   } = useWritingChatCaptcha({ setError });
 
+  // ── 最新值 refs：让事件回调保持稳定引用（流式更新时不重建回调） ──
+  const activeFileRef = useRef(activeFile);
+  const paragraphIndexRef = useRef(paragraphIndex);
+  const inputRef = useRef(input);
+  const streamingRef = useRef(streaming);
+  const sessionIdRef = useRef(writingChatCurrentSessionId);
+  const activeAssistantRef = useRef(activeAssistant);
+  const assistantContentRef = useRef(assistantContent);
+  const messagesRef = useRef(writingChatMessages);
+
+  useEffect(() => {
+    activeFileRef.current = activeFile;
+    paragraphIndexRef.current = paragraphIndex;
+    inputRef.current = input;
+    streamingRef.current = streaming;
+    sessionIdRef.current = writingChatCurrentSessionId;
+    activeAssistantRef.current = activeAssistant;
+    assistantContentRef.current = assistantContent;
+    messagesRef.current = writingChatMessages;
+  });
+
   // ── 项目恢复 ──────────────────────────────────────────────────────
   useEffect(() => {
     if (restoringRef.current) return;
@@ -249,8 +273,13 @@ export default function useWritingChat() {
   // ── 发送消息（流式） ────────────────────────────────────────────
   const sendMessage = useCallback(
     async (text) => {
-      const content = (text ?? input).trim();
-      if (!content || !activeFile || streaming) return;
+      const content = (text ?? inputRef.current).trim();
+      const currentActiveFile = activeFileRef.current;
+      const currentParagraphIndex = paragraphIndexRef.current;
+      const currentSessionId = sessionIdRef.current;
+      const currentAssistant = activeAssistantRef.current;
+      const currentAssistantContent = assistantContentRef.current;
+      if (!content || !currentActiveFile || streamingRef.current) return;
 
       setInput("");
       setError(null);
@@ -266,8 +295,8 @@ export default function useWritingChat() {
           id: tmpUserId,
           role: "user",
           content,
-          referenced_file: activeFile,
-          referenced_paragraph: paragraphIndex,
+          referenced_file: currentActiveFile,
+          referenced_paragraph: currentParagraphIndex,
           tokens: 0,
         },
         {
@@ -295,19 +324,19 @@ export default function useWritingChat() {
         setWritingChatSessions,
         setWritingChatCurrentSessionId,
         setError,
-        writingChatCurrentSessionId,
+        writingChatCurrentSessionId: currentSessionId,
       });
 
       try {
         await api.writingChat.send({
-          sessionId: isDraftSession(writingChatCurrentSessionId)
-            ? null
-            : writingChatCurrentSessionId,
-          filePath: activeFile,
-          paragraphIndex: paragraphIndex,
+          sessionId: isDraftSession(currentSessionId) ? null : currentSessionId,
+          filePath: currentActiveFile,
+          paragraphIndex: currentParagraphIndex,
           userMessage: content,
           assistantPrompt:
-            activeAssistant && assistantContent ? assistantContent : null,
+            currentAssistant && currentAssistantContent
+              ? currentAssistantContent
+              : null,
           workspaceId,
           onEvent,
         });
@@ -327,16 +356,16 @@ export default function useWritingChat() {
       }
     },
     [
-      activeFile,
-      input,
-      paragraphIndex,
-      streaming,
-      writingChatCurrentSessionId,
-      activeAssistant,
-      assistantContent,
       setWritingChatMessages,
       setWritingChatCurrentSessionId,
       setLoading,
+      setToolStatus,
+      setPendingTool,
+      setPendingClarification,
+      setCaptchaChallenge,
+      setWritingChatCompressed,
+      setWritingChatSessions,
+      setError,
       refreshSessions,
     ],
   );
@@ -344,11 +373,14 @@ export default function useWritingChat() {
   // ── 生成编辑（第二轮） ──────────────────────────────────────────
   const generateEdit = useCallback(
     async (messageId, instruction) => {
+      const currentActiveFile = activeFileRef.current;
+      const currentSessionId = sessionIdRef.current;
+      const currentParagraphIndex = paragraphIndexRef.current;
       if (
-        !activeFile ||
-        !writingChatCurrentSessionId ||
-        paragraphIndex == null ||
-        paragraphIndex < 0
+        !currentActiveFile ||
+        !currentSessionId ||
+        currentParagraphIndex == null ||
+        currentParagraphIndex < 0
       ) {
         toast.error(i18n.t("hooks:writingChat.selectFileAndParagraph"));
         return null;
@@ -357,9 +389,9 @@ export default function useWritingChat() {
       try {
         const data = await api.writingChat.generateEdit(
           {
-            session_id: writingChatCurrentSessionId,
-            file_path: activeFile,
-            paragraph_index: paragraphIndex,
+            session_id: currentSessionId,
+            file_path: currentActiveFile,
+            paragraph_index: currentParagraphIndex,
             instruction:
               instruction ||
               "请基于刚才的对话内容修改此段落，使其更符合学术写作规范",
@@ -386,18 +418,14 @@ export default function useWritingChat() {
         setEditingMessageId(null);
       }
     },
-    [
-      activeFile,
-      paragraphIndex,
-      writingChatCurrentSessionId,
-      setWritingChatMessages,
-    ],
+    [setWritingChatMessages],
   );
 
   // ── 应用编辑 ────────────────────────────────────────────────────
   const applyEdit = useCallback(
     async (messageId, customText) => {
-      if (!writingChatCurrentSessionId) return;
+      const currentSessionId = sessionIdRef.current;
+      if (!currentSessionId) return;
       // 若有自定义文本，先更新消息中的 new_latex
       if (customText) {
         setWritingChatMessages((prev) =>
@@ -412,7 +440,7 @@ export default function useWritingChat() {
       try {
         // 若有自定义文本（用户手动编辑），将其传递给后端
         const payload = {
-          session_id: writingChatCurrentSessionId,
+          session_id: currentSessionId,
           edit_message_id: messageId,
         };
         if (customText.trim()) {
@@ -436,17 +464,19 @@ export default function useWritingChat() {
         setApplyingMessageId(null);
       }
     },
-    [writingChatCurrentSessionId, setWritingChatMessages],
+    [setWritingChatMessages],
   );
 
   // ── 删除消息（summary 消息会还原快照） ────────────────────────
   const deleteMessage = useCallback(
     async (messageId) => {
-      if (!writingChatCurrentSessionId) return;
+      const currentSessionId = sessionIdRef.current;
+      const currentMessages = messagesRef.current;
+      if (!currentSessionId) return;
       let result;
       try {
         result = await api.writingChat.deleteMessage({
-          session_id: writingChatCurrentSessionId,
+          session_id: currentSessionId,
           message_id: messageId,
         });
       } catch (e) {
@@ -458,9 +488,7 @@ export default function useWritingChat() {
       }
       try {
         // 重新拉取会话完整数据以同步 snapshot 还原结构
-        const fresh = await api.writingChat.loadSession(
-          writingChatCurrentSessionId,
-        );
+        const fresh = await api.writingChat.loadSession(currentSessionId);
         setWritingChatMessages(processLoadedMessages(fresh.messages || []));
         const hasCompressed = (fresh.messages || []).some(
           (m) => m.compressed && m.role === "summary",
@@ -469,7 +497,7 @@ export default function useWritingChat() {
       } catch (e) {
         // 删除已成功，仅本地同步失败：尽力在本地应用等价变更
         setError(e.message);
-        const next = [...writingChatMessages];
+        const next = [...currentMessages];
         const idx = next.findIndex((m) => m.id === messageId);
         if (idx !== -1) {
           const target = next[idx];
@@ -494,17 +522,12 @@ export default function useWritingChat() {
         toast.success(i18n.t("hooks:writingChat.deleteSuccess"));
       }
     },
-    [
-      writingChatCurrentSessionId,
-      writingChatMessages,
-      setWritingChatMessages,
-      setWritingChatCompressed,
-    ],
+    [setWritingChatMessages, setWritingChatCompressed],
   );
 
   // ── 手动压缩会话 ──────────────────────────────────────────────
   const compactSession = useCallback(async () => {
-    const sessionId = writingChatCurrentSessionId;
+    const sessionId = sessionIdRef.current;
     if (!sessionId || isDraftSession(sessionId)) return;
     let result;
     try {
@@ -535,11 +558,7 @@ export default function useWritingChat() {
         description: e.message,
       });
     }
-  }, [
-    writingChatCurrentSessionId,
-    setWritingChatMessages,
-    setWritingChatCompressed,
-  ]);
+  }, [setWritingChatMessages, setWritingChatCompressed]);
 
   const handleFileChange = useCallback(
     (path) => {

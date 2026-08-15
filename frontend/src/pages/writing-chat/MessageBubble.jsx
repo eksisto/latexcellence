@@ -1,4 +1,4 @@
-import { useEffect, useState, memo } from "react";
+import { useEffect, useState, memo, useDeferredValue } from "react";
 import { useTranslation } from "react-i18next";
 import {
   Loader2,
@@ -30,6 +30,49 @@ const areResultsEqual = (prevProps, nextProps) => {
   const a = prevProps.result;
   const b = nextProps.result;
   return a.id === b.id && a.doi === b.doi && a.title === b.title;
+};
+
+/**
+ * MessageBubble 的 memo 比较器：
+ * 只比较影响气泡渲染的字段，函数型 actions 依赖上层保持稳定引用，
+ * 这样流式更新时只有内容变化的那条消息会重渲染。
+ */
+const areMessageBubblesEqual = (prevProps, nextProps) => {
+  const a = prevProps.message;
+  const b = nextProps.message;
+  if (
+    a.id !== b.id ||
+    a.role !== b.role ||
+    a.content !== b.content ||
+    a.displayContent !== b.displayContent ||
+    a.thinkingContent !== b.thinkingContent ||
+    a.thinkingOpen !== b.thinkingOpen ||
+    a.thinkingClosed !== b.thinkingClosed ||
+    a.streaming !== b.streaming ||
+    a.tokens !== b.tokens ||
+    a.referenced_paragraph !== b.referenced_paragraph ||
+    a.created_at !== b.created_at ||
+    a.edit_op !== b.edit_op ||
+    a.edit_reason !== b.edit_reason ||
+    a.searchQuery !== b.searchQuery ||
+    a.deepReadPages !== b.deepReadPages ||
+    a.citationNote !== b.citationNote ||
+    a.rewrittenQueries !== b.rewrittenQueries ||
+    a.searchResults !== b.searchResults ||
+    a.scholarlyResults !== b.scholarlyResults ||
+    a.scholarlyTotal !== b.scholarlyTotal ||
+    a.scholarlyQuery !== b.scholarlyQuery ||
+    a.compressed !== b.compressed
+  ) {
+    return false;
+  }
+  const pa = prevProps.actions;
+  const na = nextProps.actions;
+  return (
+    pa.editingMessageId === na.editingMessageId &&
+    pa.applyingMessageId === na.applyingMessageId &&
+    pa.canEdit === na.canEdit
+  );
 };
 
 const ScholarlyResultItem = memo(({ result, t }) => {
@@ -93,7 +136,7 @@ const ScholarlyResultItem = memo(({ result, t }) => {
   );
 }, areResultsEqual);
 
-export default function MessageBubble({ message, actions }) {
+function MessageBubble({ message, actions }) {
   const { t } = useTranslation(["pages", "common"]);
   const {
     generateEdit,
@@ -113,6 +156,9 @@ export default function MessageBubble({ message, actions }) {
   );
   const [searchExpanded, setSearchExpanded] = useState(true);
   const [scholarlyExpanded, setScholarlyExpanded] = useState(true);
+  // 流式期间内容高频变化，Markdown 解析延迟到空闲帧，输入与滚动保持流畅
+  const markdownContent = message.displayContent || message.content;
+  const deferredMarkdownContent = useDeferredValue(markdownContent);
 
   // 在流式更新 thinkingClosed 时同步展开状态
   useEffect(() => {
@@ -143,7 +189,7 @@ export default function MessageBubble({ message, actions }) {
 
   return (
     <div
-      className={`group flex gap-2 ${
+      className={`group flex gap-2 [content-visibility:auto] [contain-intrinsic-size:auto_120px] ${
         isUser ? "flex-row-reverse pr-2" : "pl-2"
       }`}
     >
@@ -394,9 +440,7 @@ export default function MessageBubble({ message, actions }) {
                 </span>
               ) : message.displayContent ||
                 (!message.thinkingOpen && message.content) ? (
-                <MarkdownRenderer>
-                  {message.displayContent || message.content}
-                </MarkdownRenderer>
+                <MarkdownRenderer>{deferredMarkdownContent}</MarkdownRenderer>
               ) : null}
             </div>
           )}
@@ -467,3 +511,5 @@ export default function MessageBubble({ message, actions }) {
     </div>
   );
 }
+
+export default memo(MessageBubble, areMessageBubblesEqual);
