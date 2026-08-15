@@ -186,5 +186,5 @@ LLM 输出的 LaTeX 文本（经 JSON 传输或写盘前）**必须**使用 `bac
 - **HTTP 请求层**：`api/index.js` 的 `request()` 已统一通过 `translateError()` 翻译错误。
 - **SSE 流**：`useParagraphCheck` / `useWritingChat` 等 hook 中 SSE 返回的 `data.message` 必须手动调用 `translateError()` 翻译。
 - **响应体字段**：API 响应 JSON 中嵌套的错误字段（如 `result.errors[].reason`）**不经过 `request()` 拦截**，必须在消费处手动调用 `translateError()` 翻译。
-- **新增后端错误时**：必须同步在 `frontend/src/i18n/locales/zh.json` 和 `en.json` 的 `errors` 命名空间中添加对应翻译条目（精确匹配用扁平 key，模式匹配用描述性 key + `{{变量}}` 占位符）。
+- **新增后端错误时**：必须同步在 `frontend/src/i18n/locales/zh.json`、`zh-TW.json` 和 `en.json` 的 `errors` 命名空间中添加对应翻译条目（精确匹配用扁平 key，模式匹配用描述性 key + `{{变量}}` 占位符）。
 - **禁止硬编码中文兜底**：不要在组件中写 `e.reason === "xxx" ? "中文" : e.reason` 这样的条件翻译，统一走 `errorMessages.js` + i18n 维护。

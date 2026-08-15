@@ -301,5 +301,5 @@ core/ + utils/ (基础设施：配置、LLM 客户端、项目管理、文件 IO
 
 - 新增/删除模块或变更核心文件路径时，同步更新 `PROJECT_SUMMARY.md` 与本目录下的相关文档。
 - 模块级设计变更（接口、算法流程、关键约束）必须同步更新 `docs/modules/<module>.md`。
-- 新增后端错误消息时，同步更新 `frontend/src/i18n/locales/zh.json` 和 `en.json` 的 `errors` 命名空间。
+- 新增后端错误消息时，同步更新 `frontend/src/i18n/locales/zh.json`、`zh-TW.json` 和 `en.json` 的 `errors` 命名空间。
 - 避免在文档中硬编码会频繁变化的文件/模块/组件数量（如“X 个功能模块”），使用“多个”“若干”等模糊描述，或直接引用目录结构。

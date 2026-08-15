@@ -87,9 +87,13 @@ highlight.js 的按需注册与统一入口：
 
 ## 国际化（i18n）
 
-基于 `i18next` + `react-i18next` + `i18next-browser-languagedetector`。翻译按命名空间拆分：`common`、`pages`、`components`、`hooks`、`errors`。Fallback 语言为中文。
+基于 `i18next` + `react-i18next` + `i18next-browser-languagedetector`。支持简体中文（`zh`）、繁體中文（`zh-TW`）、英文（`en`），翻译按命名空间拆分：`common`、`pages`、`components`、`hooks`、`errors`。Fallback 语言为简体中文。
 
-核心接口：`getUiLanguage()` 返回完整语言名称供后端 LLM 输出语言控制；`i18n.language` 返回语言代码用于前端 UI 判断。
+语言检测会将浏览器返回的完整语言标签归一为受支持代码（`en-US` → `en`，`zh-CN` → `zh`，`zh-TW` / `zh-HK` / `zh-Hant` → `zh-TW`），避免设置页显示未匹配的原始标签；归一化逻辑与后端语言名映射集中在 `src/i18n/language.js`。
+
+核心接口：`getUiLanguage()` 返回完整语言名称（`Chinese` / `Traditional Chinese` / `English`）供后端 LLM 输出语言控制；`i18n.language` 返回归一后的语言代码用于前端 UI 判断。
+
+新增中文文案时，需同步更新 `zh.json` 与 `zh-TW.json`。
 
 ## 核心组件
 

@@ -109,6 +109,7 @@ latexcellence/
 │       ├── index.css                # 全局样式（Tailwind + 代码块 CSS 变量）
 │       ├── i18n/                    # i18n 多语言配置 + 翻译资源
 │       │   ├── index.js             # i18next 初始化（含语言检测）
+│       │   ├── language.js          # 语言代码归一化 + 后端语言名映射
 │       │   └── locales/             # 翻译 JSON 文件
 │       ├── lib/                     # 通用前端工具
 │       ├── pages/                   # 页面组件
@@ -230,6 +231,6 @@ latexcellence/
 | 逐段检查前端流程 | `useParagraphCheck` 统一封装恢复、预览、检查、排序、应用与持久化；`useResultFilter` 负责排序过滤 | [frontend.md](docs/frontend.md) |
 | 写作助手 | `useWritingChat` 管理会话、SSE 流式、工具确认、编辑建议双轮协议 | [writing_chat.md](docs/modules/writing_chat.md) |
 | 主题系统 | 主题 CSS 自动发现，亮/暗模式独立；`--primary` / `--accent` 等由单一色相派生 | [frontend.md](docs/frontend.md) |
-| i18n 多语言 | i18next 中英双语，按 `common` / `pages` / `components` / `hooks` / `errors` 命名空间拆分 | [frontend.md](docs/frontend.md) |
+| i18n 多语言 | i18next 简中 / 繁中 / 英语，按 `common` / `pages` / `components` / `hooks` / `errors` 命名空间拆分 | [frontend.md](docs/frontend.md) |
 
 各功能模块的单模块设计（数据流、Pydantic 模型、API、配置）见 [docs/modules.md](docs/modules.md)。
