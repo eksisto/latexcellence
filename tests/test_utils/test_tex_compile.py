@@ -19,10 +19,50 @@ from backend.utils.tex_compile import (
     TexCompileResult,
     _check_texfot_available,
     _filter_with_regex,
+    _strip_tex_comments,
     detect_engine_from_file,
     inject_pdfx_for_pdfa,
     run_tex_compile,
 )
+
+
+async def _fake_wait_for(awaitable, timeout):
+    """替身 asyncio.wait_for：真实 await 传入的协程，避免“协程从未等待”警告。"""
+    return await awaitable
+
+
+async def _fake_wait_for_timeout(awaitable, timeout):
+    """替身 asyncio.wait_for（超时路径）：先消费协程再抛 TimeoutError。"""
+    await awaitable
+    raise asyncio.TimeoutError()
+
+
+class TestStripTexComments:
+    """_strip_tex_comments 的注释剥离语义（与 latex_json_guard 一致）。"""
+
+    def test_escaped_percent_kept(self):
+        assert _strip_tex_comments(r"a \% b") == r"a \% b"
+
+    def test_plain_comment_stripped(self):
+        assert _strip_tex_comments("text % comment") == "text"
+
+    def test_double_backslash_percent_starts_comment(self):
+        # \\% 中 \\ 是换行命令，其后的 % 开始注释（偶数反斜杠语义），
+        # 整段注释（含 \\ 命令）随匹配一起剥离
+        assert _strip_tex_comments(r"line \\% \usepackage{fontspec}") == "line"
+
+    def test_comment_removed_before_engine_detection(self, tmp_path):
+        tex_file = tmp_path / "main.tex"
+        tex_file.write_text(
+            r"\documentclass{article}"
+            "\n"
+            r"\\% \usepackage{fontspec}"  # 注释内出现 fontspec 不应触发 xelatex
+            "\n"
+            r"\begin{document}Hello\end{document}",
+            encoding="utf-8",
+        )
+        assert detect_engine_from_file(tex_file) == "pdflatex"
+
 
 # ── TexCompileResult 模型测试 ─────────────────────────────────────────────
 
@@ -161,11 +201,7 @@ class TestRunTexCompile:
         process = self._make_process(0, b"Output written on main.pdf\n")
         with patch("shutil.which", return_value="/usr/bin/texfot"):
             with patch("asyncio.create_subprocess_exec", return_value=process):
-                with patch(
-                    "asyncio.wait_for",
-                    new_callable=AsyncMock,
-                    return_value=(b"Output written on main.pdf\n", b""),
-                ):
+                with patch("asyncio.wait_for", new=_fake_wait_for):
                     result = await run_tex_compile("main.tex", "/tmp", 60)
 
         assert result.success is True
@@ -179,11 +215,7 @@ class TestRunTexCompile:
         process = self._make_process(1, error_log)
         with patch("shutil.which", return_value="/usr/bin/texfot"):
             with patch("asyncio.create_subprocess_exec", return_value=process):
-                with patch(
-                    "asyncio.wait_for",
-                    new_callable=AsyncMock,
-                    return_value=(error_log, b""),
-                ):
+                with patch("asyncio.wait_for", new=_fake_wait_for):
                     result = await run_tex_compile("main.tex", "/tmp", 60)
 
         assert result.success is False
@@ -203,11 +235,7 @@ class TestRunTexCompile:
 
         with patch("shutil.which", return_value="/usr/bin/texfot"):
             with patch("asyncio.create_subprocess_exec", return_value=process):
-                with patch(
-                    "asyncio.wait_for",
-                    new_callable=AsyncMock,
-                    side_effect=asyncio.TimeoutError(),
-                ):
+                with patch("asyncio.wait_for", new=_fake_wait_for_timeout):
                     result = await run_tex_compile("main.tex", "/tmp", 60)
 
         assert result.success is False
@@ -220,11 +248,7 @@ class TestRunTexCompile:
         process = self._make_process(1, error_log)
         with patch("shutil.which", return_value=None):
             with patch("asyncio.create_subprocess_exec", return_value=process):
-                with patch(
-                    "asyncio.wait_for",
-                    new_callable=AsyncMock,
-                    return_value=(error_log, b""),
-                ):
+                with patch("asyncio.wait_for", new=_fake_wait_for):
                     result = await run_tex_compile("main.tex", "/tmp", 60)
 
         assert result.success is False
@@ -238,11 +262,7 @@ class TestRunTexCompile:
         process = self._make_process(0, ok_log)
         with patch("shutil.which", return_value=None):
             with patch("asyncio.create_subprocess_exec", return_value=process):
-                with patch(
-                    "asyncio.wait_for",
-                    new_callable=AsyncMock,
-                    return_value=(ok_log, b""),
-                ):
+                with patch("asyncio.wait_for", new=_fake_wait_for):
                     result = await run_tex_compile("main.tex", "/tmp", 60)
 
         assert result.success is True
@@ -257,11 +277,7 @@ class TestRunTexCompile:
             with patch(
                 "asyncio.create_subprocess_exec", return_value=process
             ) as mock_exec:
-                with patch(
-                    "asyncio.wait_for",
-                    new_callable=AsyncMock,
-                    return_value=(b"ok", b""),
-                ):
+                with patch("asyncio.wait_for", new=_fake_wait_for):
                     await run_tex_compile(
                         "main.tex", "/tmp", 60, extra_args=["-halt-on-error"]
                     )
@@ -277,11 +293,7 @@ class TestRunTexCompile:
         process = self._make_process(0, b"stdout", b"stderr info")
         with patch("shutil.which", return_value="/usr/bin/texfot"):
             with patch("asyncio.create_subprocess_exec", return_value=process):
-                with patch(
-                    "asyncio.wait_for",
-                    new_callable=AsyncMock,
-                    return_value=(b"stdout", b"stderr info"),
-                ):
+                with patch("asyncio.wait_for", new=_fake_wait_for):
                     result = await run_tex_compile("main.tex", "/tmp", 60)
 
         assert "stderr info" in result.raw_output
@@ -707,11 +719,7 @@ class TestRunTexCompileWithEngineAndPdfa:
             with patch(
                 "asyncio.create_subprocess_exec", return_value=process
             ) as mock_exec:
-                with patch(
-                    "asyncio.wait_for",
-                    new_callable=AsyncMock,
-                    return_value=(b"ok", b""),
-                ):
+                with patch("asyncio.wait_for", new=_fake_wait_for):
                     await run_tex_compile("main.tex", tmp_path, 60, engine="pdflatex")
 
         cmd = mock_exec.call_args[0]
@@ -737,11 +745,7 @@ class TestRunTexCompileWithEngineAndPdfa:
             with patch(
                 "asyncio.create_subprocess_exec", return_value=process
             ) as mock_exec:
-                with patch(
-                    "asyncio.wait_for",
-                    new_callable=AsyncMock,
-                    return_value=(b"ok", b""),
-                ):
+                with patch("asyncio.wait_for", new=_fake_wait_for):
                     await run_tex_compile("main.tex", tmp_path, 60, engine="xelatex")
 
         cmd = mock_exec.call_args[0]
@@ -766,11 +770,7 @@ class TestRunTexCompileWithEngineAndPdfa:
             with patch(
                 "asyncio.create_subprocess_exec", return_value=process
             ) as mock_exec:
-                with patch(
-                    "asyncio.wait_for",
-                    new_callable=AsyncMock,
-                    return_value=(b"ok", b""),
-                ):
+                with patch("asyncio.wait_for", new=_fake_wait_for):
                     await run_tex_compile("main.tex", tmp_path, 60, engine="lualatex")
 
         cmd = mock_exec.call_args[0]
@@ -797,11 +797,7 @@ class TestRunTexCompileWithEngineAndPdfa:
             with patch(
                 "asyncio.create_subprocess_exec", return_value=process
             ) as mock_exec:
-                with patch(
-                    "asyncio.wait_for",
-                    new_callable=AsyncMock,
-                    return_value=(b"ok", b""),
-                ):
+                with patch("asyncio.wait_for", new=_fake_wait_for):
                     await run_tex_compile("main.tex", tmp_path, 60, engine="auto")
 
         cmd = mock_exec.call_args[0]

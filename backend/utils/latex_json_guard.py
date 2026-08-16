@@ -81,6 +81,18 @@ def _strip_verbatim(value: str) -> str:
     return blank_literal_spans(value)
 
 
+def strip_latex_comments(text: str, *, bibtex: bool = False) -> str:
+    """移除未转义的 % 注释（% 至行尾），保留 \\% 等转义百分号。
+
+    反斜杠奇偶语义与 check_latex_text 完全一致：偶数个反斜杠前的 % 才是
+    注释起点（\\% 不是；\\\\% 中 \\\\ 换行后 % 开始注释）。BibTeX 模式
+    （bibtex=True）下 % 是字面字符，不做剥离。
+    """
+    if bibtex:
+        return text
+    return _COMMENT_RE.sub("", text)
+
+
 def check_latex_text(
     value: str, *, bibtex: bool = False, relaxed: bool = False
 ) -> str | None:
@@ -139,9 +151,7 @@ def check_latex_text(
 
     # 配平前剔除注释（BibTeX 的 % 是字面字符，不剥离），避免 % { 等
     # 合法用法被误判为花括号/$ 不配平。
-    code = probe
-    if not bibtex:
-        code = _COMMENT_RE.sub("", code)
+    code = strip_latex_comments(probe, bibtex=bibtex)
     # 栈式扫描定位第一个不配平的花括号，返回行号与上下文，
     # 便于 LLM 直接定位修复（仅计数无法告诉模型错在哪一行）。
     stack: list[int] = []

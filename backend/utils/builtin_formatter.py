@@ -7,6 +7,11 @@
 - 去除行尾多余空白
 - 压缩连续空行
 - 一致性换行
+
+已知限制：
+- 逐行 strip 会把 verbatim / Verbatim / lstlisting 等逐字环境内容的前导
+  空白规范化，无法保真（逐字内容中空格是字面字符）。该实现仅作为
+  latexindent.pl 不可用时的兜底；需要保真时请确保 latexindent 可用。
 """
 
 import re

@@ -102,7 +102,7 @@ async def apply_edit(
 
     service = get_writing_chat_service()
     try:
-        return service.apply_edit(request, workspace_id)
+        return await service.apply_edit(request, workspace_id)
     except FileConflictError as e:
         raise HTTPException(
             status_code=409,
@@ -186,7 +186,7 @@ async def delete_message(request: DeleteMessageRequest):
     """删除消息；summary 消息会还原其快照（原始对话）。"""
     service = get_writing_chat_service()
     try:
-        result = service.delete_message(request)
+        result = await service.delete_message(request)
         if not result["removed"] and not result["restored"]:
             raise HTTPException(status_code=404, detail="Message not found")
         return {"status": "ok", **result}
@@ -226,7 +226,7 @@ async def get_session(session_id: str):
 @router.delete("/sessions/{session_id}")
 async def delete_session(session_id: str):
     service = get_writing_chat_service()
-    if not service.delete_session(session_id):
+    if not await service.delete_session(session_id):
         raise HTTPException(status_code=404, detail="Session not found")
     return {"status": "ok"}
 
@@ -236,7 +236,7 @@ async def rename_session(session_id: str, request: RenameSessionRequest):
     """重命名会话。"""
     service = get_writing_chat_service()
     try:
-        return service.rename_session(session_id, request.title)
+        return await service.rename_session(session_id, request.title)
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
 

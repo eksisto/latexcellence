@@ -571,6 +571,8 @@ raise ValueError("Validation failed after N attempts")        # ❌ 耗尽
 
 **处理范围**：环境缩进（每层 4 个空格，与 latexindent 路径一致）、去除行尾多余空白、压缩连续空行、一致性换行。
 
+**已知限制**：逐行 `strip()` 会把 `verbatim` / `Verbatim` / `lstlisting` 等逐字环境内容的前导空白规范化，无法保真（逐字内容中空格是字面字符）。该路径仅作 latexindent 不可用时的兜底，需要保真时应确保 latexindent 可用。
+
 **核心接口**：`format_latex(source: str) -> str`
 
 ### `latex_formatter.py` — 统一 LaTeX 格式化工具

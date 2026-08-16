@@ -15,6 +15,7 @@ from backend.core.workspace_manager import (
     get_project_manager_for_workspace,
     get_workspace_manager,
 )
+from backend.utils.path_guard import resolve_path_case_insensitive
 
 router = APIRouter(prefix="/api/project", tags=["project"])
 
@@ -34,50 +35,6 @@ class FileActionRequest(BaseModel):
     file_path: str
 
 
-def _resolve_path_case_insensitive(path: str) -> Path | None:
-    """
-    大小写不敏感地解析路径，返回磁盘上的真实路径（真实大小写）。
-
-    Windows/NTFS 本身大小写不敏感，`Path.exists()` 已能命中错误大小写的路径；
-    此函数主要让 Linux 等大小写敏感文件系统获得一致的体验（例如输入 /latex
-    定位 /LaTeX）。路径不存在（含找不到 casefold 匹配）时返回 None。
-    """
-    p = Path(path)
-    if p.exists():
-        return p
-    if not p.is_absolute():
-        p = Path.cwd() / p
-        if p.exists():
-            return p
-
-    def _match(anchor: Path, remaining: list[str]) -> Path | None:
-        """逐段匹配：每层优先精确匹配，否则扫描父目录条目做 casefold 匹配。"""
-        if not remaining:
-            return anchor
-        head, tail = remaining[0], remaining[1:]
-        exact = anchor / head
-        if exact.exists():
-            return _match(exact, tail)
-        # 扫描候选（去重后排序，保持确定性）；找不到/无法扫描返回 None 回溯
-        try:
-            candidates = sorted(
-                {
-                    e.name
-                    for e in anchor.iterdir()
-                    if e.name.casefold() == head.casefold() and e.name != head
-                }
-            )
-        except OSError:
-            return None
-        for name in candidates:
-            resolved = _match(anchor / name, tail)
-            if resolved is not None:
-                return resolved
-        return None
-
-    return _match(Path(p.anchor), list(p.parts[1:]))
-
-
 @router.post("/open")
 async def open_project(
     request: OpenProjectRequest,
@@ -90,7 +47,7 @@ async def open_project(
     """
     project = get_project_manager_for_workspace(workspace_id)
     try:
-        real_path = _resolve_path_case_insensitive(request.path)
+        real_path = resolve_path_case_insensitive(request.path)
         if real_path is None:
             raise FileNotFoundError(f"Project path not found: {request.path}")
         info = project.open(str(real_path))
@@ -118,7 +75,7 @@ async def browse_directory(
     """
     try:
         if path:
-            target = _resolve_path_case_insensitive(path)
+            target = resolve_path_case_insensitive(path)
             if target is None:
                 raise HTTPException(
                     status_code=400, detail=f"Path does not exist: {path}"

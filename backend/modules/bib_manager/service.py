@@ -795,7 +795,13 @@ class BibManagerService:
         }
 
     def _find_duplicates(self, entries: list[dict[str, Any]]) -> list[dict[str, Any]]:
-        """多策略重复检测（并查集合并传递重复组）。"""
+        """多策略重复检测（并查集合并传递重复组）。
+
+        性能策略：先按 DOI / cite_key / 归一化标题建精确索引并直接合并；
+        标题模糊匹配仅在共享 4-gram 的候选桶内比较（ratio>=0.85 的两串
+        必共享至少一个 4-gram，因此预筛不会漏掉原标题判定），并把长度比
+        低于 0.74 的候选对提前跳过，避免大文献库的全量 O(n²) 比较。
+        """
         n = len(entries)
 
         # 并查集
@@ -814,11 +820,67 @@ class BibManagerService:
             elif py < px:
                 parent[px] = py
 
-        for i in range(n):
-            for j in range(i + 1, n):
-                reason = self._classify_duplicate(entries[i], entries[j])
-                if reason:
-                    union(i, j)
+        titles: list[str] = [""] * n
+        doi_buckets: dict[str, list[int]] = {}
+        key_buckets: dict[str, list[int]] = {}
+        exact_title_buckets: dict[str, list[int]] = {}
+        long_title_indices: list[int] = []
+
+        for i, entry in enumerate(entries):
+            fields = entry.get("fields", {}) or {}
+            doi = normalize_doi(fields.get("doi", ""))
+            if doi:
+                doi_buckets.setdefault(doi, []).append(i)
+            cite_key = entry.get("cite_key", "")
+            if cite_key:
+                key_buckets.setdefault(cite_key, []).append(i)
+            title = normalize_title(fields.get("title", ""))
+            titles[i] = title
+            # 与 _classify_duplicate 的标题长度阈值一致（len > 10）
+            if len(title) > 10:
+                exact_title_buckets.setdefault(title, []).append(i)
+                long_title_indices.append(i)
+
+        # 精确匹配（DOI / cite_key / 归一化标题）直接合并
+        for buckets in (doi_buckets, key_buckets, exact_title_buckets):
+            for indices in buckets.values():
+                first = indices[0]
+                for idx in indices[1:]:
+                    union(first, idx)
+
+        def classify_and_union(i: int, j: int) -> None:
+            if find(i) == find(j):
+                return
+            # ratio>=0.85 时长度比不可能低于 0.739（更短串长度 / 更长串长度），
+            # 用 0.74 作为安全预筛，避免公共 4-gram 桶内无效比较。
+            ti, tj = titles[i], titles[j]
+            if len(ti) > 10 and len(tj) > 10:
+                shorter, longer = sorted((len(ti), len(tj)))
+                if shorter * 100 < longer * 74:
+                    return
+            reason = self._classify_duplicate(entries[i], entries[j])
+            if reason:
+                union(i, j)
+
+        # 标题模糊匹配：4-gram 预筛 + 候选对去重后桶内比较
+        # （同一对共享多个 gram 时只比较一次，避免公共 gram 桶内重复计算）
+        gram_buckets: dict[str, list[int]] = {}
+        for i in long_title_indices:
+            title = titles[i]
+            grams = {title[j : j + 4] for j in range(len(title) - 3)}
+            for gram in grams:
+                gram_buckets.setdefault(gram, []).append(i)
+
+        candidate_pairs: set[tuple[int, int]] = set()
+        for indices in gram_buckets.values():
+            for a in range(len(indices)):
+                i = indices[a]
+                for b in range(a + 1, len(indices)):
+                    j = indices[b]
+                    candidate_pairs.add((i, j) if i < j else (j, i))
+
+        for i, j in candidate_pairs:
+            classify_and_union(i, j)
 
         # 按根节点分组
         root_entries: dict[int, list[int]] = {}
@@ -858,7 +920,6 @@ class BibManagerService:
             )
 
         groups.sort(key=lambda g: g["entries"][0]["cite_key"])
-
         return groups
 
     def _classify_duplicate(

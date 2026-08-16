@@ -41,6 +41,12 @@ _MAX_KEPT_JOB_DIRS = 20
 _INPUT_PATTERN = re.compile(
     r"\\(?P<cmd>input|include|subfile)\s*\{(?P<path>[^{}\n]+)\}"
 )
+# Git revision 白名单格式：完整/短提交哈希，或普通分支/标签名。
+# 分支/标签名禁止 `..`、`@`、`~`、`^`、`:`、`\`、`//` 等会改变
+# revision 解析语义或注入选项的字符（git 本身也禁止这些字符入名）。
+_COMMIT_HASH_RE = re.compile(r"^[0-9a-fA-F]{7,40}$")
+_REF_NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._/-]*$")
+_REF_FORBIDDEN_SUBSTRINGS = ("..", "@", "~", "^", ":", "\\", "//", "/.", "./")
 _BEGIN_DOCUMENT = r"\begin{document}"
 _END_DOCUMENT = r"\end{document}"
 
@@ -472,13 +478,26 @@ async def _list_ref_revisions(
 
 
 async def _validate_revision(git_root: Path, ref: str) -> None:
+    """校验 Git revision：只接受工作区标记、哈希或普通分支/标签名。
+
+    拒绝任意 commit-ish（HEAD~1、refs/... 语法、range 等），并使用
+    ``--end-of-options`` 隔离参数，防止以 ``-`` 开头的输入被当作 git 选项。
+    """
     if ref == WORKTREE_REF:
         return
     if not ref or ref.strip() != ref:
         raise ValueError("Git revision must not be empty or padded with spaces")
+    if ref.startswith("-"):
+        raise ValueError("Git revision must not start with '-'")
+    if not (_COMMIT_HASH_RE.fullmatch(ref) or _REF_NAME_RE.fullmatch(ref)):
+        raise ValueError(f"Invalid Git revision: {ref}")
+    if ref.endswith(("/", ".")) or any(
+        token in ref for token in _REF_FORBIDDEN_SUBSTRINGS
+    ):
+        raise ValueError(f"Invalid Git revision: {ref}")
     result = await _run_git(
         git_root,
-        ["rev-parse", "--verify", f"{ref}^{{commit}}"],
+        ["rev-parse", "--verify", "--end-of-options", f"{ref}^{{commit}}"],
         timeout=30,
     )
     if result.returncode != 0:

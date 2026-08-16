@@ -1206,7 +1206,8 @@ class TestServiceEdit:
 
         assert calls["n"] == 3
 
-    def test_apply_edit_writes_back_to_file(
+    @pytest.mark.asyncio
+    async def test_apply_edit_writes_back_to_file(
         self, temp_session_dir, temp_project, open_project, service
     ):
         # 准备 session + 一条带 edit_op 的 assistant 消息
@@ -1237,7 +1238,7 @@ class TestServiceEdit:
             session_id=ctx.session_id,
             edit_message_id=am.id,
         )
-        result = service.apply_edit(req, workspace_id="test-ws")
+        result = await service.apply_edit(req, workspace_id="test-ws")
         assert result["applied"] is True
 
         content = (temp_project / "main.tex").read_text(encoding="utf-8")
@@ -1249,7 +1250,8 @@ class TestServiceEdit:
         target = next(m for m in loaded.messages if m.id == am.id)
         assert target.edit_op.applied is True
 
-    def test_apply_edit_already_applied_returns_idempotent(
+    @pytest.mark.asyncio
+    async def test_apply_edit_already_applied_returns_idempotent(
         self, temp_session_dir, open_project, service
     ):
         ctx = ConversationContext.create_session(file_path="main.tex", scope="test")
@@ -1270,10 +1272,11 @@ class TestServiceEdit:
         ctx.save_to_disk()
 
         req = ApplyEditRequest(session_id=ctx.session_id, edit_message_id=am.id)
-        result = service.apply_edit(req)
+        result = await service.apply_edit(req)
         assert result == {"applied": True, "already_applied": True}
 
-    def test_apply_edit_with_custom_latex_uses_custom_value(
+    @pytest.mark.asyncio
+    async def test_apply_edit_with_custom_latex_uses_custom_value(
         self, temp_session_dir, temp_project, open_project, service
     ):
         # 测试当请求携带 new_latex（用户手动编辑内容）时，应优先使用该值
@@ -1310,7 +1313,7 @@ class TestServiceEdit:
             edit_message_id=am.id,
             new_latex=user_custom_text,
         )
-        result = service.apply_edit(req, workspace_id="test-ws")
+        result = await service.apply_edit(req, workspace_id="test-ws")
         assert result["applied"] is True
 
         content = (temp_project / "main.tex").read_text(encoding="utf-8")
@@ -1319,7 +1322,8 @@ class TestServiceEdit:
         assert "unsatisfactory" in content
         assert "suboptimal" not in content
 
-    def test_apply_edit_without_custom_latex_falls_back_to_edit_op(
+    @pytest.mark.asyncio
+    async def test_apply_edit_without_custom_latex_falls_back_to_edit_op(
         self, temp_session_dir, temp_project, open_project, service
     ):
         # 测试当请求不携带 new_latex 时，应使用 edit_op.new_latex（LLM 建议内容）
@@ -1352,7 +1356,7 @@ class TestServiceEdit:
             session_id=ctx.session_id,
             edit_message_id=am.id,
         )
-        result = service.apply_edit(req, workspace_id="test-ws")
+        result = await service.apply_edit(req, workspace_id="test-ws")
         assert result["applied"] is True
 
         content = (temp_project / "main.tex").read_text(encoding="utf-8")
@@ -1365,13 +1369,14 @@ class TestServiceEdit:
 
 
 class TestServiceMessageOps:
-    def test_delete_message(self, temp_session_dir, open_project, service):
+    @pytest.mark.asyncio
+    async def test_delete_message(self, temp_session_dir, open_project, service):
         ctx = ConversationContext.create_session(scope="test")
         u = ctx.append_user_message("q")
         ctx.append_assistant_message("a", tokens=10)
         ctx.save_to_disk()
 
-        result = service.delete_message(
+        result = await service.delete_message(
             DeleteMessageRequest(session_id=ctx.session_id, message_id=u.id)
         )
         assert result["removed"] is True
@@ -1380,7 +1385,10 @@ class TestServiceMessageOps:
         # user 消息 tokens=0，删除后 cumulative_tokens 不变
         assert loaded.cumulative_tokens == 10
 
-    def test_delete_summary_message(self, temp_session_dir, open_project, service):
+    @pytest.mark.asyncio
+    async def test_delete_summary_message(
+        self, temp_session_dir, open_project, service
+    ):
         ctx = ConversationContext.create_session(scope="test")
         ctx.append_user_message("q1")
         ctx.append_assistant_message("a1", tokens=20)
@@ -1388,7 +1396,7 @@ class TestServiceMessageOps:
         ctx.save_to_disk()
         summary_id = ctx.messages[0].id
 
-        result = service.delete_message(
+        result = await service.delete_message(
             DeleteMessageRequest(session_id=ctx.session_id, message_id=summary_id)
         )
         assert result["restored"] is True

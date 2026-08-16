@@ -66,6 +66,8 @@ system prompt 明确要求：只报告源码中实际存在的问题，禁止从
 
 零外部依赖的轻量格式化器：环境缩进（每层 4 个空格，与 latexindent 路径保持一致）、环境间空行、`\begin`/`\end` 对齐、去除行尾多余空白。不做 latexindent 的高级对齐功能。
 
+已知限制：逐行 `strip()` 会把 `verbatim` / `Verbatim` / `lstlisting` 等逐字环境内容的前导空白规范化，无法保真；仅作 latexindent 不可用时的兜底。
+
 ## API 路由
 
 Prefix: `/api/code-review`, Tag: `code_review`

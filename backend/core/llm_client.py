@@ -136,6 +136,11 @@ class LLMClient:
         self._client: AsyncOpenAI | None = None
         self._client_lock = threading.Lock()
         self._last_request_time: float = 0
+        self._rate_limit_lock = asyncio.Lock()
+        # 全局并发上限：所有 LLM 调用（含流式）共享同一信号量，
+        # 容量来自 config.llm.max_concurrency，热重载时随 reset() 重建。
+        self._semaphore: asyncio.Semaphore | None = None
+        self._semaphore_capacity: int = 0
         self._logger = get_logger("llm_client")
         # 上下文窗口缓存：key=(base_url, model)，reset() 时随配置一起失效
         self._context_window_cache: dict[tuple[str, str], int] = {}
@@ -147,6 +152,16 @@ class LLMClient:
             self._client = None
         with self._window_cache_lock:
             self._context_window_cache.clear()
+        self._semaphore = None
+        self._semaphore_capacity = 0
+
+    def _get_semaphore(self) -> asyncio.Semaphore:
+        """按当前 max_concurrency 配置获取全局并发信号量（容量变化时重建）。"""
+        cap = get_config().llm.max_concurrency
+        if self._semaphore is None or self._semaphore_capacity != cap:
+            self._semaphore = asyncio.Semaphore(cap)
+            self._semaphore_capacity = cap
+        return self._semaphore
 
     # ── 上下文窗口探测 ─────────────────────────────────────────────────
 
@@ -334,11 +349,12 @@ class LLMClient:
         确保两次请求之间的时间间隔不小于 config.llm.request_interval。
         如果上次请求距今不足间隔，则等待到足够时间后再放行。
         """
-        cfg = get_config().llm
-        elapsed = time.time() - self._last_request_time
-        if elapsed < cfg.request_interval:
-            await asyncio.sleep(cfg.request_interval - elapsed)
-        self._last_request_time = time.time()
+        async with self._rate_limit_lock:
+            cfg = get_config().llm
+            elapsed = time.time() - self._last_request_time
+            if elapsed < cfg.request_interval:
+                await asyncio.sleep(cfg.request_interval - elapsed)
+            self._last_request_time = time.time()
 
     async def chat(
         self,
@@ -377,6 +393,26 @@ class LLMClient:
         return content
 
     async def chat_with_usage(
+        self,
+        messages: list[dict],
+        temperature: float | None = None,
+        max_tokens: int | None = None,
+        response_format: dict | None = None,
+        max_retries: int = 3,
+        model: str | None = None,
+    ) -> tuple[str, UsageInfo | None]:
+        """非流式 LLM 对话调用，返回 (文本, usage)。受全局并发上限约束。"""
+        async with self._get_semaphore():
+            return await self._chat_with_usage_impl(
+                messages=messages,
+                temperature=temperature,
+                max_tokens=max_tokens,
+                response_format=response_format,
+                max_retries=max_retries,
+                model=model,
+            )
+
+    async def _chat_with_usage_impl(
         self,
         messages: list[dict],
         temperature: float | None = None,
@@ -451,6 +487,21 @@ class LLMClient:
         temperature: float | None = None,
         max_tokens: int | None = None,
     ) -> AsyncIterator[str]:
+        """流式 LLM 对话调用（Server-Sent Events）。受全局并发上限约束。"""
+        async with self._get_semaphore():
+            async for chunk in self._chat_stream_impl(
+                messages=messages,
+                temperature=temperature,
+                max_tokens=max_tokens,
+            ):
+                yield chunk
+
+    async def _chat_stream_impl(
+        self,
+        messages: list[dict],
+        temperature: float | None = None,
+        max_tokens: int | None = None,
+    ) -> AsyncIterator[str]:
         """
         流式 LLM 对话调用（Server-Sent Events）。
 
@@ -486,6 +537,24 @@ class LLMClient:
                 yield chunk.choices[0].delta.content
 
     async def chat_with_tools(
+        self,
+        messages: list[dict],
+        tools: list[dict] | None = None,
+        temperature: float | None = None,
+        max_tokens: int | None = None,
+        max_retries: int = 3,
+    ) -> ChatCompletion:
+        """带 Function Calling 的非流式 LLM 调用。受全局并发上限约束。"""
+        async with self._get_semaphore():
+            return await self._chat_with_tools_impl(
+                messages=messages,
+                tools=tools,
+                temperature=temperature,
+                max_tokens=max_tokens,
+                max_retries=max_retries,
+            )
+
+    async def _chat_with_tools_impl(
         self,
         messages: list[dict],
         tools: list[dict] | None = None,
@@ -564,6 +633,21 @@ class LLMClient:
         temperature: float | None = None,
         max_tokens: int | None = None,
     ) -> AsyncIterator["StreamChunk"]:
+        """流式 LLM 对话调用，并在流末尾附带 token 用量。受全局并发上限约束。"""
+        async with self._get_semaphore():
+            async for chunk in self._chat_stream_with_usage_impl(
+                messages=messages,
+                temperature=temperature,
+                max_tokens=max_tokens,
+            ):
+                yield chunk
+
+    async def _chat_stream_with_usage_impl(
+        self,
+        messages: list[dict],
+        temperature: float | None = None,
+        max_tokens: int | None = None,
+    ) -> AsyncIterator["StreamChunk"]:
         """
         流式 LLM 对话调用，并在流的末尾附带 token 用量信息。
 
@@ -628,6 +712,23 @@ class LLMClient:
                 )
 
     async def chat_stream_with_tools(
+        self,
+        messages: list[dict],
+        tools: list[dict],
+        temperature: float | None = None,
+        max_tokens: int | None = None,
+    ) -> AsyncIterator["StreamChunk"]:
+        """流式 LLM 对话调用，支持 Function Calling 工具检测。受全局并发上限约束。"""
+        async with self._get_semaphore():
+            async for chunk in self._chat_stream_with_tools_impl(
+                messages=messages,
+                tools=tools,
+                temperature=temperature,
+                max_tokens=max_tokens,
+            ):
+                yield chunk
+
+    async def _chat_stream_with_tools_impl(
         self,
         messages: list[dict],
         tools: list[dict],

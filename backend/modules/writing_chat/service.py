@@ -107,12 +107,23 @@ class WritingChatService:
 
     def __init__(self):
         self._logger = get_logger("writing_chat.service")
+        # 会话级写锁：同一 session 的 send / 编辑 / 压缩等操作互斥，
+        # 防止双标签页并发 save_to_disk 最后写者胜导致丢消息。
+        self._session_locks: dict[str, asyncio.Lock] = {}
         # 待用户确认的工具调用（写操作：edit_paragraph / undo_last_edit）
         # key: pending_id, value: {event: asyncio.Event, confirmed: bool | None, tool_name: str, ...}
         self._pending_confirms: dict[str, dict[str, Any]] = {}
         # 待用户回复的澄清请求（request_clarification）
         # key: clarify_id, value: {event: asyncio.Event, answered: bool, answer: str, created_at: float}
         self._pending_clarifications: dict[str, dict[str, Any]] = {}
+
+    def _session_lock(self, session_id: str) -> asyncio.Lock:
+        """获取指定会话的串行化锁（会话删除时由 delete_session 清理）。"""
+        lock = self._session_locks.get(session_id)
+        if lock is None:
+            lock = asyncio.Lock()
+            self._session_locks[session_id] = lock
+        return lock
 
     @staticmethod
     def _normalize_citation_url(url: str) -> str:
@@ -373,18 +384,22 @@ class WritingChatService:
     def load_session(self, session_id: str) -> ConversationContext | None:
         return ConversationContext.load_from_disk(session_id)
 
-    def delete_session(self, session_id: str) -> bool:
-        ctx = ConversationContext.load_from_disk(session_id)
-        if ctx is None:
-            return False
-        return ctx.delete_from_disk()
+    async def delete_session(self, session_id: str) -> bool:
+        async with self._session_lock(session_id):
+            ctx = ConversationContext.load_from_disk(session_id)
+            if ctx is None:
+                return False
+            result = ctx.delete_from_disk()
+            self._session_locks.pop(session_id, None)
+            return result
 
-    def rename_session(self, session_id: str, title: str) -> dict:
-        ctx = ConversationContext.load_from_disk(session_id)
-        if ctx is None:
-            raise ValueError(f"Session not found: {session_id}")
-        ctx.rename(title)
-        return {"status": "ok", "title": ctx.title}
+    async def rename_session(self, session_id: str, title: str) -> dict:
+        async with self._session_lock(session_id):
+            ctx = ConversationContext.load_from_disk(session_id)
+            if ctx is None:
+                raise ValueError(f"Session not found: {session_id}")
+            ctx.rename(title)
+            return {"status": "ok", "title": ctx.title}
 
     async def compact_session(self, session_id: str) -> dict:
         """
@@ -392,32 +407,46 @@ class WritingChatService:
 
         消息过少或压缩失败时返回 compressed=False，不改变会话结构。
         """
-        ctx = ConversationContext.load_from_disk(session_id)
-        if ctx is None:
-            raise ValueError(f"Session not found: {session_id}")
-        compressed = await self._maybe_compress(ctx)
-        ctx.save_to_disk()
-        return {
-            "status": "ok",
-            "compressed": compressed,
-            "session_id": ctx.session_id,
-            "message_count": len(ctx.messages),
-            "cumulative_tokens": ctx.cumulative_tokens,
-        }
+        async with self._session_lock(session_id):
+            ctx = ConversationContext.load_from_disk(session_id)
+            if ctx is None:
+                raise ValueError(f"Session not found: {session_id}")
+            compressed = await self._maybe_compress(ctx)
+            ctx.save_to_disk()
+            return {
+                "status": "ok",
+                "compressed": compressed,
+                "session_id": ctx.session_id,
+                "message_count": len(ctx.messages),
+                "cumulative_tokens": ctx.cumulative_tokens,
+            }
 
     # ── 发送消息（RS1，SSE 流式） ────────────────────────────────────────
 
     async def send(
         self, req: ChatSendRequest, workspace_id: str = ""
     ) -> AsyncIterator[dict]:
-        """
-        主对话流：发送用户消息、流式接收 LLM 回复、必要时执行压缩。
-
-        返回的 SSE 事件结构见模块 docstring。
-        """
+        """主对话流入口：同一会话的 send 串行执行，防止并发落盘丢消息。"""
         if self._no_api_key():
             yield {"type": "error", "message": "No API key configured"}
             return
+        if req.session_id:
+            async with self._session_lock(req.session_id):
+                async for event in self._send_locked(req, workspace_id):
+                    yield event
+        else:
+            async for event in self._send_locked(req, workspace_id):
+                yield event
+
+    async def _send_locked(
+        self, req: ChatSendRequest, workspace_id: str = ""
+    ) -> AsyncIterator[dict]:
+        """
+        主对话流实现（调用方已持有会话级锁）：发送用户消息、流式接收
+        LLM 回复、必要时执行压缩。
+
+        返回的 SSE 事件结构见模块 docstring。
+        """
 
         # 1. 加载或创建会话
         scope = self._get_scope(workspace_id)
@@ -979,7 +1008,18 @@ class WritingChatService:
     async def generate_edit(
         self, req: GenerateEditRequest, workspace_id: str = ""
     ) -> dict:
+        """基于用户对话指令生成编辑建议（会话写操作串行化）。"""
+        if self._no_api_key():
+            raise RuntimeError("No API key configured")
+        async with self._session_lock(req.session_id):
+            return await self._generate_edit_locked(req, workspace_id)
+
+    async def _generate_edit_locked(
+        self, req: GenerateEditRequest, workspace_id: str = ""
+    ) -> dict:
         """
+        生成编辑操作建议实现（调用方已持有会话级锁）。
+
         基于用户对话指令，对指定段落生成编辑操作建议。
 
         直接发送原始 LaTeX 源码给 LLM，LLM 返回修改后的 LaTeX 源码，
@@ -989,9 +1029,6 @@ class WritingChatService:
         反斜杠原样传输，避免 JSON 转义静默损坏；original 由后端从段落
         原文填充，不再要求 LLM 回显，减少误报与 token 消耗。
         """
-        if self._no_api_key():
-            raise RuntimeError("No API key configured")
-
         ctx = ConversationContext.load_from_disk(req.session_id)
         if ctx is None:
             raise ValueError(f"Session not found: {req.session_id}")
@@ -1157,7 +1194,13 @@ class WritingChatService:
 
     # ── 应用编辑 ──────────────────────────────────────────────────────
 
-    def apply_edit(self, req: ApplyEditRequest, workspace_id: str = "") -> dict:
+    async def apply_edit(self, req: ApplyEditRequest, workspace_id: str = "") -> dict:
+        """应用编辑操作（会话写操作串行化）。"""
+        async with self._session_lock(req.session_id):
+            return self._apply_edit_locked(req, workspace_id)
+
+    def _apply_edit_locked(self, req: ApplyEditRequest, workspace_id: str = "") -> dict:
+        """应用编辑操作实现（调用方已持有会话级锁）。"""
         ctx = ConversationContext.load_from_disk(req.session_id)
         if ctx is None:
             raise ValueError(f"Session not found: {req.session_id}")
@@ -1191,7 +1234,13 @@ class WritingChatService:
 
     # ── 删除消息 ────────────────────────────────────────────────────────────
 
-    def delete_message(self, req: DeleteMessageRequest) -> dict:
+    async def delete_message(self, req: DeleteMessageRequest) -> dict:
+        """删除消息（会话写操作串行化）。"""
+        async with self._session_lock(req.session_id):
+            return self._delete_message_locked(req)
+
+    def _delete_message_locked(self, req: DeleteMessageRequest) -> dict:
+        """删除消息实现（调用方已持有会话级锁）。"""
         ctx = ConversationContext.load_from_disk(req.session_id)
         if ctx is None:
             raise ValueError(f"Session not found: {req.session_id}")

@@ -25,6 +25,7 @@ from pathlib import Path
 from pydantic import BaseModel, ConfigDict
 
 from backend.core.logger import get_logger
+from backend.utils.latex_json_guard import strip_latex_comments
 
 logger = get_logger(__name__)
 
@@ -142,10 +143,14 @@ _LOCAL_DEPENDENCY_RE = re.compile(
 
 
 def _strip_tex_comments(content: str) -> str:
-    """移除 TeX 注释，保留转义的百分号。"""
+    """移除 TeX 注释，保留转义的百分号。
+
+    复用 latex_json_guard 的反斜杠奇偶语义（\\% 不是注释起点；
+    \\\\% 中换行命令后的 % 开始注释），避免注释内容参与引擎检测。
+    """
     lines: list[str] = []
     for line in content.splitlines():
-        uncommented = re.split(r"(?<!\\)%", line, maxsplit=1)[0]
+        uncommented = strip_latex_comments(line)
         if uncommented.strip():
             lines.append(uncommented.strip())
     return "\n".join(lines)

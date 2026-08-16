@@ -894,6 +894,32 @@ class TestValidateRevision:
     def test_worktree_ref_skips_check(self):
         assert asyncio.run(_validate_revision(Path("."), WORKTREE_REF)) is None
 
+    def test_empty_ref_rejected(self):
+        with pytest.raises(ValueError, match="Git revision"):
+            asyncio.run(_validate_revision(Path("."), ""))
+
+    def test_option_like_ref_rejected(self, monkeypatch):
+        monkeypatch.setattr(git_diff_service, "_run_git", AsyncMock())
+        with pytest.raises(ValueError, match="must not start with '-'"):
+            asyncio.run(_validate_revision(Path("."), "--output=x"))
+
+    @pytest.mark.parametrize(
+        "ref",
+        [
+            "HEAD~1",
+            "feature..other",
+            "abc1234^",
+            "foo:bar",
+            "foo\\bar",
+            "..hidden",
+            "bad ref",
+        ],
+    )
+    def test_rev_syntax_rejected(self, monkeypatch, ref):
+        monkeypatch.setattr(git_diff_service, "_run_git", AsyncMock())
+        with pytest.raises(ValueError, match="Invalid Git revision"):
+            asyncio.run(_validate_revision(Path("."), ref))
+
     def test_invalid_ref_rejected(self, monkeypatch):
         monkeypatch.setattr(
             git_diff_service,
@@ -905,17 +931,26 @@ class TestValidateRevision:
             ),
         )
         with pytest.raises(ValueError, match="Invalid Git revision"):
-            asyncio.run(_validate_revision(Path("."), "bad ref"))
+            asyncio.run(_validate_revision(Path("."), "definitely-not-a-ref"))
 
-    def test_valid_ref_accepted(self, monkeypatch):
+    @pytest.mark.parametrize(
+        "ref",
+        [
+            "abc1234",
+            "0123456789abcdef0123456789abcdef01234567",
+            "main",
+            "feature/x-y.1",
+        ],
+    )
+    def test_valid_ref_accepted(self, monkeypatch, ref):
         monkeypatch.setattr(
             git_diff_service,
             "_run_git",
             AsyncMock(
-                return_value=ProcessResult(returncode=0, stdout="abc123", stderr="")
+                return_value=ProcessResult(returncode=0, stdout="resolved", stderr="")
             ),
         )
-        assert asyncio.run(_validate_revision(Path("."), "abc123")) is None
+        assert asyncio.run(_validate_revision(Path("."), ref)) is None
 
 
 # ── render_diff_pdf 主流程 ─────────────────────────────────────────────────

@@ -22,6 +22,8 @@ from pathlib import Path
 
 from pydantic import BaseModel, Field, model_validator
 
+from backend.utils.file_ops import atomic_write
+
 
 class ServerConfig(BaseModel):
     """服务器配置"""
@@ -521,8 +523,7 @@ def save_config() -> None:
     # 环境变量来源的 API Key 不得写入磁盘
     if _api_key_from_env:
         data["llm"]["api_key"] = ""
-    with open(_config_path, "w", encoding="utf-8") as f:
-        json.dump(data, f, indent=2, ensure_ascii=False)
+    atomic_write(_config_path, json.dumps(data, indent=2, ensure_ascii=False))
 
 
 def _deep_merge(base: dict, updates: dict) -> dict:

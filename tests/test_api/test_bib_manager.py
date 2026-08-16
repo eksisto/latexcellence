@@ -1325,6 +1325,101 @@ class TestServiceDuplicates:
         groups = service._find_duplicates(entries)
         assert len(groups) == 0
 
+    def test_title_duplicate_shared_gram_still_detected(self, service):
+        """标题仅尾部不同但共享 4-gram 时仍应命中（4-gram 预筛不漏判）。"""
+        entries = [
+            {
+                "cite_key": "a",
+                "fields": {
+                    "title": "Deep Learning for Image Recognition",
+                    "year": "2017",
+                },
+            },
+            {
+                "cite_key": "b",
+                "fields": {
+                    "title": "Deep Learning for Image Recognition Systems",
+                    "year": "2018",
+                },
+            },
+            {
+                "cite_key": "c",
+                "fields": {"title": "Completely Different Title About Something Else"},
+            },
+        ]
+        groups = service._find_duplicates(entries)
+        assert len(groups) == 1
+        assert groups[0]["reason"] == "title"
+
+    def test_transitive_duplicate_group(self, service):
+        """DOI 精确命中 + 标题精确命中应合并为同一个传递重复组。"""
+        entries = [
+            {
+                "cite_key": "a",
+                "fields": {"doi": "10.1000/x", "title": "Same DOI Paper"},
+            },
+            {
+                "cite_key": "b",
+                "fields": {"doi": "10.1000/x", "title": "Same DOI Paper"},
+            },
+            {
+                "cite_key": "c",
+                "fields": {"doi": "10.1000/y", "title": "Same DOI Paper"},
+            },
+        ]
+        groups = service._find_duplicates(entries)
+        assert len(groups) == 1
+        assert len(groups[0]["entries"]) == 3
+
+    def test_large_library_shared_grams_no_false_positives(self, service):
+        """大文献库共享常见 4-gram 时不应产生误报，且不应全量 O(n²) 比较。"""
+        import hashlib
+
+        categories = [
+            "vision",
+            "language",
+            "audio",
+            "graph",
+            "robotics",
+            "optimization",
+            "simulation",
+            "security",
+            "graphics",
+            "biomedicine",
+        ]
+        adjectives = [
+            "novel",
+            "efficient",
+            "robust",
+            "scalable",
+            "accurate",
+            "adaptive",
+            "principled",
+            "hierarchical",
+            "lightweight",
+            "end-to-end",
+        ]
+        entries = []
+        for i in range(80):
+            token = hashlib.sha256(f"entry-{i}".encode()).hexdigest()[:24]
+            entries.append(
+                {
+                    "cite_key": f"key{i:03d}",
+                    "entry_type": "article",
+                    "fields": {
+                        "doi": f"10.1000/paper{i:03d}",
+                        "title": (
+                            f"Paper {token} about {categories[i % 10]} with "
+                            f"{adjectives[i % 10]} methods"
+                        ),
+                        "year": "2020",
+                    },
+                    "_file_path": "refs.bib",
+                }
+            )
+        groups = service._find_duplicates(entries)
+        assert groups == []
+
 
 class TestServiceEntryStats:
     """条目统计测试。"""
