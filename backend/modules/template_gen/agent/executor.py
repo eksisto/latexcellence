@@ -36,6 +36,7 @@ from .constants import (
 from .sandbox import resolve_sandbox_path
 from .validation import (
     _check_body_style_commands,
+    _check_bst_output_escapes,
     _check_cjk_support,
     _check_class_option_order,
     _check_provides_date,
@@ -175,6 +176,16 @@ class _ToolExecutor(AgentFileToolExecutor):
                 msg = f"File {file_path} was rejected: {setter_accessor_error}"
                 return AgentFileToolFailure(msg)
 
+        if resolved.suffix.lower() == ".bst":
+            bst_error = _check_bst_output_escapes(content)
+            if bst_error:
+                self._logger.warning(
+                    f"write_file rejected invalid .bst escapes for "
+                    f"{file_path}: {bst_error}"
+                )
+                msg = f"File {file_path} was rejected: {bst_error}"
+                return AgentFileToolFailure(msg)
+
         if resolved.suffix.lower() in _LATEX_ENV_CHECK_SUFFIXES:
             cjk_error = _check_cjk_support(
                 content,
@@ -271,6 +282,39 @@ class _ToolExecutor(AgentFileToolExecutor):
 
     # ── compile_latex ─────────────────────────────────────────────────
 
+    @staticmethod
+    def _clean_generated_files(root: Path) -> None:
+        """编译前删除上一轮遗留的辅助文件，避免陈旧 .bbl/.aux 干扰。
+
+        latexmk 的 ``-gg`` 在某些版本/配置下不会可靠地重建已被修改
+        .bst/.bib 对应的 .bbl；显式清理辅助产物是跨发行版通用的做法。
+        保留 .log 以便测试/调试路径在 fake 编译时仍能读取上一份日志，
+        真实编译会重新生成 .log。
+        """
+        generated_suffixes = {
+            ".aux",
+            ".bbl",
+            ".bcf",
+            ".fdb_latexmk",
+            ".fls",
+            ".lof",
+            ".lot",
+            ".nav",
+            ".out",
+            ".run.xml",
+            ".snm",
+            ".synctex.gz",
+            ".toc",
+            ".vrb",
+            ".xdv",
+        }
+        for path in root.rglob("*"):
+            if path.is_file() and path.suffix.lower() in generated_suffixes:
+                try:
+                    path.unlink()
+                except OSError:
+                    continue
+
     async def _compile_latex(self, args: dict[str, Any]) -> tuple[str, dict[str, Any]]:
         main_file = args.get("main_file", "")
         fcfg = self._cfg.features.template_gen
@@ -337,6 +381,11 @@ class _ToolExecutor(AgentFileToolExecutor):
                 "log": msg,
                 "summary": msg,
             }
+
+        # 只有确认要真实编译时才清理辅助文件（already_verified /
+        # compile_skipped 分支已先返回）。这样能避免 latexmk 复用旧的
+        # .bbl/.aux，导致 .bst/.bib/class 修改后仍用上一轮产物编译。
+        await asyncio.to_thread(self._clean_generated_files, self._sandbox)
 
         timeout = fcfg.agent_compile_timeout
         self._logger.info(f"agent compile | main={main_file} | cwd={self._sandbox}")
@@ -533,6 +582,30 @@ class _ToolExecutor(AgentFileToolExecutor):
         summary = args.get("summary", "")
         main_file = args.get("main_file", "")
         files = self.list_files()
+        # 若 Agent 在最后一次编译后又改过源文件（源码哈希既不等于上次成功
+        # 编译、也不等于上次失败编译），当前 PDF 与磁盘源码不一致，不允许
+        # 直接 finish。必须再编译一次验证最新源码。
+        current_hash = self._source_hash()
+        if (
+            self._last_success_source_hash is not None
+            or self._last_failed_source_hash is not None
+        ) and current_hash not in (
+            self._last_success_source_hash,
+            self._last_failed_source_hash,
+        ):
+            msg = (
+                "Finish rejected: the project source has changed since the "
+                "last compile_latex call. Call compile_latex first to verify "
+                "the current files. If compilation fails, fix the reported "
+                "root cause, then call finish only after a successful compile "
+                "of the latest source."
+            )
+            return msg, {
+                "tool": "finish",
+                "ok": False,
+                "summary": "Finish rejected: source changed since last compile.",
+                "main_file": main_file,
+            }
         text = (
             f"Project finished. Summary: {summary}\n"
             f"Main file: {main_file}\n"

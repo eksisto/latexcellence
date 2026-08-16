@@ -70,6 +70,33 @@ def _check_provides_date(content: str) -> str | None:
     )
 
 
+def _check_bst_output_escapes(content: str) -> str | None:
+    """拒绝 .bst 字符串里把 LaTeX 命令写成双反斜杠的错误。
+
+    BibTeX 风格文件中一个反斜杠会被原样写入 .bbl；如果写成两个反斜杠
+    （``"\\\\begin{thebibliography}"``），生成的 .bbl 会是
+    ``\\\\begin{thebibliography}``，LaTeX 在 l.1 报
+    ``There's no line here to end``。这是 JSON 转义记忆导致的典型错误，
+    应在写盘阶段直接拦下。
+    """
+    for bad in (
+        "\\\\begin{thebibliography}",
+        "\\\\bibitem{",
+        "\\\\end{thebibliography}",
+    ):
+        if bad in content:
+            return (
+                "BibTeX .bst string literals must use ONE backslash for LaTeX "
+                'commands (e.g. "\\begin{thebibliography}{99}" and '
+                '"\\bibitem{"), not two. A doubled backslash in a .bst '
+                "string is written literally into the .bbl and breaks "
+                "LaTeX with 'There's no line here to end'. Fix every "
+                "LaTeX command in the .bst string literals to use a single "
+                "backslash."
+            )
+    return None
+
+
 def _check_body_style_commands(content: str) -> str | None:
     """正文 .tex 不允许定义/重定义样式命令（格式应封装在 .cls/.sty）。"""
     for line_number, line in enumerate(_strip_latex_comments(content), 1):

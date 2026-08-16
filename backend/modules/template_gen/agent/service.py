@@ -648,8 +648,11 @@ class TemplateAgentService:
                             },
                         )
 
-                # finish 工具立即终止循环
+                # finish 工具立即终止循环；但若执行器拒绝（例如源码在最后一次
+                # 编译后又变更、未经验证），不能结束，必须让模型先编译。
                 if tool_name == "finish":
+                    if result_event.get("ok") is False:
+                        continue
                     # 校验：若曾被调用过编译且最后一次仍失败，
                     # 不放任 Agent 逃避，推送 warning 提示前端（仍允许结束）
                     if compile_state["called"] and compile_state["success"] is False:

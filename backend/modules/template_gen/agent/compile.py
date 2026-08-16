@@ -508,6 +508,21 @@ def _error_hints(errors: list[dict[str, Any]]) -> list[str]:
             )
             if hint not in hints:
                 hints.append(hint)
+        if "there's no line here to end" in combined:
+            hint = (
+                "A `There's no line here to end` error at l.1 of the "
+                "bibliography usually means the .bbl starts with doubled "
+                "backslashes (`\\\\begin{thebibliography}`). This is caused "
+                "by writing `.bst` string literals with two backslashes "
+                '(`"\\\\begin..."`) instead of one (`"\\begin..."`). '
+                "Edit the .bst file so every LaTeX command in its string "
+                "literals uses a single backslash, then recompile from a "
+                "clean state so BibTeX regenerates the .bbl. If the error is "
+                "not in a .bbl, remove a stray `\\\\` at the beginning of a "
+                "line in the reported file."
+            )
+            if hint not in hints:
+                hints.append(hint)
         if "environment" in combined and "undefined" in combined:
             hint = (
                 "Environment undefined: the environment's defining package "

@@ -13,6 +13,7 @@
 | 第 2 轮 | 2026-08-13 | 机制修复，不碰评测数据 | §3.2 |
 | 第 3 轮 | 2026-08-13 | 机制补齐 + Responses 视觉评审 | §3.3 |
 | 第 4 轮 | 2026-08-14 | Windows 跨环境基线 + 循环机制补齐 | §3.4 |
+| 第 5 轮 | 2026-08-16 | 完全重测 | §3.5 |
 
 ## 1. 背景信息
 
@@ -510,6 +511,87 @@ holdout `tju18`（Windows）50 轮内未编译成功，需求 12/13，启发式 
 - 评测 tag：`base3`（Windows 基线）、`opt6`/`opt7`（中间实验）、
   `opt8`（最终对照）、`tju18`（holdout 回归）
 - 视觉审查结果：`tools/templategen_opt/results/opt8/visual_reviews.json`
+- 通用性门禁：`tools/generality_gate.py check` PASS
+
+### 3.5 第 5 轮（2026-08-16）：完全重测
+
+#### 背景
+
+本轮从零开始跑基线，诊断后再改机制，重跑对照，最后运行 holdout `tju` 做最终回归。
+
+#### 基线（base5）
+
+| 场景 | 轮数 | 编译 | 需求 | 启发式分 |
+| --- | --- | --- | --- | --- |
+| thesis | 36 | ✗ | 10/10 | 75 |
+| beamer | 7 | ✓ | 9/10 | 91 |
+| resume | 14 | ✓ | 10/10 | 90 |
+| requirements | 10 | ✓ | 10/10 | 95 |
+
+平均启发式 **87.8**；视觉审查仅 beamer/requirements/resume 有 PDF，
+平均 **8.1/10**，thesis 因编译失败无 PDF。
+
+#### 诊断出的机制缺口
+
+1. **陈旧 `.bbl` 使正确的 `.bst` 修复无法生效**：thesis 多次把手写
+   `.bst` 从双反斜杠改成单反斜杠，但每次 `compile_latex` 仍复用上一轮
+   生成的 `.bbl`，最终 Agent 在最后一次源码修改后直接 `finish` 而未再
+   编译；`latexmk -gg` 在已存在 `.bbl` 时并不总能可靠重建。
+2. **finish 放行“源码已改动但未验证”**：Agent 在最后一次编译后又改写
+   `.bst` 并直接 finish，产物与磁盘源码不一致；现有干预只覆盖“连续多次
+   写而不编”，不覆盖“最后一次写入后未编译就结束”。
+3. **`.bst` 字符串转义缺少写盘校验与错误提示**：模型受 JSON 转义规则影响，
+   可能写出 `"\\begin{thebibliography}"`（双反斜杠），生成 `.bbl` 后
+   LaTeX 在 l.1 报 `There's no line here to end`；此前没有针对性 HINT。
+4. **视觉质量仍有通用改进空间**：beamer 分节页标题贴底、论文封面后空白页、
+   会议摘要重复 “Abstract”、简历下半页空白等。
+
+#### 本轮改动（均为通用机制，无评测数据流入）
+
+| 改动 | 文件 | 为什么通用 |
+| --- | --- | --- |
+| 真实编译前清理 `.aux/.bbl/.bcf/.toc/.out/.fls/.fdb_latexmk/.xdv` 等辅助产物（保留 `.log/.blg` 便于调试） | `backend/modules/template_gen/agent/executor.py` | 任何文档切换 `.bst`/`.bib`/engine 后都必须避免陈旧辅助文件误导编译 |
+| `finish` 拒绝“最后一次编译后源码已变化”的未验证交付，要求先 `compile_latex` | 同上 + `agent/service.py` | 保证交付物与磁盘源码一致，任何长任务通用 |
+| `.bst` 写盘校验：拒绝 `"\\begin{thebibliography}"` 等双反斜杠 | `backend/modules/template_gen/agent/validation.py` + `executor.py` | BibTeX 风格文件中单反斜杠即写入 `.bbl`，双反斜杠是 JSON 转义记忆错误 |
+| `There's no line here to end` 失败签名 HINT（指向 `.bbl`/`.bst` 双反斜杠） | `backend/modules/template_gen/agent/compile.py` | 通用 LaTeX/BibTeX 错误签名 |
+| 提示词：优先使用已安装 `.bst`/biblatex，不要手写 `.bst`；新增通用 VISUAL QUALITY GATE | `backend/core/prompts.py` | 降低手写 `.bst` 风险和视觉质量方差，不依赖具体模板 |
+
+#### 结果
+
+最终代码一轮（opt10；中间 opt9 也全场景编译通过）：
+
+| 场景 | 轮数 | 编译 | 需求 | 启发式分 |
+| --- | --- | --- | --- | --- |
+| thesis | 18 | ✓ | 10/10 | 100 |
+| beamer | 14 | ✓ | 9/10 | 91 |
+| resume | 8 | ✓ | 10/10 | 90 |
+| requirements | 14 | ✓ | 10/10 | 95 |
+
+平均启发式 **87.8 → 94.0**；`compare.py base5 opt10` 对照组回归 PASS，
+Generality Gate PASS。视觉审查（全部 4 场景均有 PDF）：
+beamer 8.7、requirements 8.6、resume 8.0、thesis 8.0，平均 **8.3/10**。
+中间 opt9 平均启发式 95.5、视觉 8.0，最终 opt10 视觉更稳。
+
+holdout `tju10`：15 轮编译成功，需求 **13/13**，启发式 **100**，
+视觉 **8.2/10**（25 页 PDF）。相较上一轮 `tju18`（50 轮未编译、67 分）
+明显收敛，且未向生产提示词写入任何 TJU 专项内容。
+
+#### 经验教训
+
+- “加了 `-gg`”不等于“每次都是干净编译”；对 `.bbl` 这类会被 latexmk 缓存
+  的辅助文件，显式清理是更确定的机制。
+- 只拦截“修改后不编译”还不够，必须同时拦截“修改后 finish”：交付物必须
+  对应最后一次编译的源码快照。
+- 机制修复能直接跨越 holdout：thesis/tju 的收敛主要来自编译状态干净、
+  finish 验证和错误签名，而不是任何场景知识。
+- 视觉分单轮噪声仍较大；应结合编译成功、需求命中、holdout 与视觉趋势
+  综合判断，不因单场景视觉小幅波动否定整轮优化。
+
+#### 链接
+
+- 评测 tag：`base5`（完全重测基线）、`opt9`/`opt10`（优化轮）、
+  `tju10`（holdout 回归）
+- 视觉审查结果：`tools/templategen_opt/results/opt10/visual_reviews.json`
 - 通用性门禁：`tools/generality_gate.py check` PASS
 
 ## 4. 轮次复盘模板（新增轮次时使用）
