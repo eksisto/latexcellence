@@ -549,8 +549,8 @@ export default function ParagraphTranslatePage() {
       <ConfirmDialog
         open={confirmApplyAllOpen}
         onOpenChange={setConfirmApplyAllOpen}
-        title={t("common:applyAllConfirmTitle")}
-        description={t("common:applyAllConfirmDesc")}
+        title={t("common:applyAllConfirm")}
+        description={t("common:applyAllConfirm")}
         confirmText={t("common:applyAll")}
         onConfirm={async () => {
           setConfirmApplyAllOpen(false);

@@ -9,7 +9,7 @@ const localesDir = join(
   "../src/i18n/locales",
 );
 
-/** 递归收集 JSON 中所有叶子翻译键（如 common.applyAllConfirmTitle）。 */
+/** 递归收集 JSON 中所有叶子翻译键（如 common.applyAllConfirm）。 */
 function collectKeys(obj, prefix = "") {
   const keys = new Set();
   for (const [key, value] of Object.entries(obj)) {

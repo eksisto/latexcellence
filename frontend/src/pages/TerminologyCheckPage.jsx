@@ -589,7 +589,7 @@ export default function TerminologyCheckPage() {
       <ConfirmDialog
         open={confirmApplyAllOpen}
         onOpenChange={setConfirmApplyAllOpen}
-        title={t("common:applyAllConfirmTitle")}
+        title={t("common:applyAllConfirm")}
         description={t("common:applyAllDescription")}
         confirmText={t("common:applyAll")}
         onConfirm={async () => {
