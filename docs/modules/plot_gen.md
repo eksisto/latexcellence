@@ -102,6 +102,13 @@ backend/modules/plot_gen/
 
 除逐字相同的失败检测外，还按工具族（`python_sandbox` / `compile_tikz`）维护**失败预算**：同一工具族连续失败 3 次即注入强约束提示——`python_sandbox` 连续失败时要求简化图表（去掉误差棒/3D/花哨标注）并核对列名；`compile_tikz` 连续失败时要求先修正 `tikz_spec.json`/数据 CSV（后端自动重新渲染 figure.tex），必要时改用手写 PGFPlots。该机制可拦截"错误信息文字不同但根因相同"的隐性死循环。
 
+Agent 还维护一个**产物验证状态机**（`verified`，对应最后一次成功编译是否匹配当前源码）：
+
+- **成功后验证循环拦截**：`compile_tikz` 成功且此后没有修改任何影响产物的文件（`scripts/`、`artifacts/tikz_spec.json`、`artifacts/figure.tex`、`artifacts/data_*.csv`）时，`read_file` / `list_files` / `python_sandbox` / `compile_tikz` 会在执行前被拦截并注入 `VERIFIED-LOOP BLOCK` 提示，要求直接 `finish`——把提示词里的"无验证循环"从软约束变成确定性机制。
+- **stale finish 拦截**：最后一次成功编译后修改了影响产物的文件或重跑过脚本，再直接调用 `finish` 时，第一次会在执行前被拦截并注入 `STALE FINISH BLOCKED` 提示（要求重跑 `python_sandbox` + `compile_tikz`）；再次坚持调用则允许交付但发出 stale 警告，避免 Agent 被困在无法收尾的死循环。
+- **拦截不污染状态**：被 guard 拦截的调用不会更新 `execution_state` / `tikz_state`，也不会计入相同失败检测与失败预算，避免"拦截即失败"的误导性强约束与误报。
+- **影响产物文件判定**：覆盖 `scripts/` 前缀与 `artifacts/` 下 `.tex` / `.csv` / `.json` 后缀（手写回退允许任意 `artifacts/*.csv` / `*.tex`），路径先做 POSIX 归一化（处理 `./`、重复斜杠等），`.png` / `.log` 等不影响产物。
+
 System prompt 还包含以下约束，防止 Agent 在成功路径上产出低质量结果：
 
 - **统计真实性**：只有用户明确要求时才运行统计检验，且必须调用 `stats_test` 工具并原样引用其返回值；禁止在脚本内联计算统计量作为替代，禁止在 summary 中编造/改写任何 p 值或统计量（图中标注与 summary 数值必须一致）
@@ -114,7 +121,7 @@ System prompt 还包含以下约束，防止 Agent 在成功路径上产出低�
   允许使用（后端自动切 xelatex、风格字体链含 CJK 字体），若编译报缺失字形/
   字体则回退 ASCII 并在 summary 说明替代
 - **日期/坐标指导**：datetime 列先转成日序号（day index）再绘图或写 TikZ，避免大绝对值坐标（如 44927）触发 PGFPlots "Dimension too large"；对数坐标需求显式使用 `xmode=log` 并过滤非正剂量
-- **无验证循环**：`compile_tikz` 成功后不得重复 `read_file`/`python_sandbox`/`compile_tikz` 做无意义验证，直接调用 `finish`
+- **无验证循环**：`compile_tikz` 成功后不得重复 `read_file`/`list_files`/`python_sandbox`/`compile_tikz` 做无意义验证，直接调用 `finish`
 - **首轮必须调用工具**：`generate` 的第一个响应若只输出文字、不调用任何工具，会注入强约束 system 消息要求重试（trace 记 warning），避免 LLM 随机性导致零产物的空会话收尾
 - **布局规则**：每图一种主编码（箱线图已编码分布，不要再叠加误差棒/均值线）；图例放在不遮挡数据的空角或直接去掉；`xmin`/`xmax`/`ymin`/`ymax` 紧贴数据范围，对数轴不要留整 decade 空白
 - **省轮次**：数据画像已含列类型/样例/分位数/预览，优先依据画像写代码，避免 `read_file` 整份数据；修复刚写入的脚本时直接 `write_file` 覆盖，无需回读
@@ -146,7 +153,10 @@ System prompt 还包含以下约束，防止 Agent 在成功路径上产出低�
   - 系列 CSV 含 `category` 文本列时逐行核对 `category` 与 `bar.xticklabels[x]` 是否一致——顺序错位会导致标签与柱体错位（此前 s4 的反复问题），直接报错并指明错位行；
   - `bar.xticklabels` 缺失而系列 CSV 带 `category` 列时（`_derive_bar_labels`），按 `x` 索引推导回填 spec 并发警告，减少一类常见的手填标签遗漏。
 - **柱状图标签自动旋转**：类别 ≥5 且最长标签 ≥6 字符，或任一标签 ≥10 字符时，确定性注入 `xticklabel style={rotate=45,anchor=east}`（热力图同款规则），避免长标签水平重叠。
+- **柱状图负值轴范围**：数据含负值时（用户未显式指定 `ymin`），生成期自动注入 `ymin = min_y * 1.1`，避免 PGFPlots `ybar` 把负值柱裁掉；提示词同时要求脚本不得丢弃/替换负值。
 - **热力图整数索引与 n×n 维度校验**：`x`/`y` 必须为整数索引 `0..n-1` 且恰有 `n×n` 行；`x_labels`/`y_labels` 长度须等于 `cols`。
+- **单边数据发散色图回退**：`RdBu_r`/`RdBu` 用于全正或全负数据时只剩一半色阶，生成期确定性回退到 `viridis` 并发警告，避免热力图视觉上"一片红/一片蓝"难以区分强度。
+- **热力图标注可读性**：单元格显著性标注使用 `\scriptsize`（此前 `\tiny` 过小），刻度标签使用 `\scriptsize` 并旋转 45°，降低 12×12 热力图标签/星号不可读的概率。
 - **非 ASCII 标签警告**：`xlabel`/`ylabel`/图例/`xticklabels`/热力图标签含
   非 ASCII 字符时仅警告不阻断（xelatex + CJK 字体可渲染；未要求非 ASCII 时
   建议替换，缺失字形/字体时回退 ASCII）。

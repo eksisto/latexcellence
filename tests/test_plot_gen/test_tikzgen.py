@@ -224,7 +224,7 @@ def test_heatmap_renders_matrix_and_cells(tmp_path):
     rows = [["x", "y", "value"]]
     for i in range(4):
         for j in range(4):
-            rows.append([j, i, round(0.9 if i == j else 0.2, 3)])
+            rows.append([j, i, round(0.9 if i == j else -0.5, 3)])
     _write_csv(sandbox / "artifacts" / "data_corr.csv", ["x", "y", "value"], rows[1:])
     _write_spec(
         sandbox,
@@ -239,7 +239,7 @@ def test_heatmap_renders_matrix_and_cells(tmp_path):
                 "x_labels": ["a", "b", "c", "d"],
                 "y_labels": ["a", "b", "c", "d"],
                 "colorbar_label": "Pearson r",
-                "cell_text": [{"row": 0, "col": 1, "text": "+0.20", "color": "black"}],
+                "cell_text": [{"row": 0, "col": 1, "text": "-0.50", "color": "black"}],
             },
         },
     )
@@ -250,8 +250,41 @@ def test_heatmap_renders_matrix_and_cells(tmp_path):
     assert "colormap={mymap}{rgb255(0pt)=" in tex
     assert "colorbar style={ylabel={Pearson r}}" in tex
     assert "point meta min=-1" in tex
-    assert "\\node[font=\\tiny, text=cellcolor0_1] at (axis cs:1,0) {+0.20};" in tex
+    assert (
+        "\\node[font=\\scriptsize, text=cellcolor0_1] at (axis cs:1,0) {-0.50};" in tex
+    )
     assert "y dir=reverse" in tex
+    # 刻度字号缩小，保证 12x12 热力图标签可读
+    assert "xticklabel style={rotate=45,anchor=east,font=\\scriptsize}" in tex
+    assert "yticklabel style={font=\\scriptsize}" in tex
+
+
+def test_heatmap_one_sided_rdbu_falls_back_to_viridis(tmp_path):
+    """发散色图用于单边数据时确定性回退 viridis，避免只剩一半色阶。"""
+    sandbox = tmp_path / "s"
+    rows = [["x", "y", "value"]]
+    for i in range(4):
+        for j in range(4):
+            rows.append([j, i, round(0.2 + 0.2 * i + 0.1 * j, 3)])
+    _write_csv(sandbox / "artifacts" / "data_corr.csv", ["x", "y", "value"], rows[1:])
+    _write_spec(
+        sandbox,
+        {
+            "chart_type": "heatmap",
+            "heatmap": {
+                "matrix_file": "data_corr.csv",
+                "cols": 4,
+                "colormap": "RdBu_r",
+                "meta_min": 0,
+                "meta_max": 1,
+            },
+        },
+    )
+    r = generate_figure_tex(sandbox)
+    assert r["generated"] is True
+    tex = (sandbox / "artifacts" / "figure.tex").read_text(encoding="utf-8")
+    assert "colormap/viridis" in tex
+    assert any("switched to viridis" in w for w in r["warnings"])
 
 
 def test_bar_renders_ybar_and_xticklabels(tmp_path):
@@ -284,6 +317,66 @@ def test_bar_renders_ybar_and_xticklabels(tmp_path):
     assert "xtick={0,...,2}" in tex
     assert "xticklabels={A, B, C}" in tex
     assert "table[x=x_index, y=sales, col sep=comma]" in tex
+
+
+def test_bar_negative_values_inject_ymin(tmp_path):
+    """柱状图数据含负值时，生成期注入 ymin 防止 PGFPlots 把负值柱裁掉。"""
+    sandbox = tmp_path / "s"
+    _write_csv(
+        sandbox / "artifacts" / "data_west.csv",
+        ["x_index", "category", "sales"],
+        [[0, "A", -1200.0], [1, "B", 500.0], [2, "C", 300.0]],
+    )
+    _write_spec(
+        sandbox,
+        {
+            "chart_type": "bar",
+            "ylabel": "Sales",
+            "bar": {"xticklabels": ["A", "B", "C"]},
+            "series": [
+                {
+                    "file": "data_west.csv",
+                    "x": "x_index",
+                    "y": "sales",
+                    "label": "West",
+                }
+            ],
+        },
+    )
+    r = generate_figure_tex(sandbox)
+    assert r["generated"] is True
+    tex = (sandbox / "artifacts" / "figure.tex").read_text(encoding="utf-8")
+    assert "ymin=-1320" in tex
+
+
+def test_bar_negative_values_respects_explicit_ymin(tmp_path):
+    """用户显式指定 ymin 时，后端不覆盖该值。"""
+    sandbox = tmp_path / "s"
+    _write_csv(
+        sandbox / "artifacts" / "data_west.csv",
+        ["x_index", "category", "sales"],
+        [[0, "A", -1200.0], [1, "B", 500.0]],
+    )
+    _write_spec(
+        sandbox,
+        {
+            "chart_type": "bar",
+            "ymin": -2000,
+            "bar": {"xticklabels": ["A", "B"]},
+            "series": [
+                {
+                    "file": "data_west.csv",
+                    "x": "x_index",
+                    "y": "sales",
+                    "label": "West",
+                }
+            ],
+        },
+    )
+    r = generate_figure_tex(sandbox)
+    assert r["generated"] is True
+    tex = (sandbox / "artifacts" / "figure.tex").read_text(encoding="utf-8")
+    assert "ymin=-2000" in tex
 
 
 def test_non_ascii_label_produces_warning(tmp_path):
@@ -516,4 +609,4 @@ def test_bar_long_labels_auto_rotate(tmp_path):
     r = generate_figure_tex(sandbox)
     assert r["generated"] is True
     tex = (sandbox / "artifacts" / "figure.tex").read_text(encoding="utf-8")
-    assert "xticklabel style={rotate=45,anchor=east}" in tex
+    assert "xticklabel style={rotate=45,anchor=east,font=\\scriptsize}" in tex

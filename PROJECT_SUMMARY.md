@@ -149,7 +149,8 @@ latexcellence/
 │   ├── latex-package-rules.md       # 宏包规则表维护指南
 │   ├── duckduckgo-challenge.md      # DDG 验证码处理说明
 │   ├── function-calling-tools.md    # Function Calling 工具体系说明
-│   ├── closed-loop-optimization-lessons.md  # Agent 闭环优化复盘与通用性门禁
+│   ├── templategen-optimization-lessons.md  # template_gen 闭环优化复盘与通用性门禁
+│   ├── plotgen-optimization-lessons.md      # plot_gen 闭环优化复盘与最佳实践
 │   ├── modules/                     # 模块文档
 │   └── showcase.md                  # 展示页（showcase）说明
 ├── tests/                           # 测试用例

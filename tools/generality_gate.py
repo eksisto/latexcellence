@@ -2,7 +2,7 @@
 """Agent 闭环优化通用性门禁（Generality Gate）。
 
 用于 template_gen / plot_gen / style_modify 三个 Agent 闭环优化工具的
-防过拟合检查，对应 docs/closed-loop-optimization-lessons.md 的改进方法：
+防过拟合检查，对应 docs/templategen-optimization-lessons.md 的改进方法：
 
 1. 硬编码特征扫描（check）：提示词/Agent 代码 diff 中出现学校模板、评测
    场景数值、OS 路径等"部署事实"时拒绝；具体字体/宏包名作为弱特征提示

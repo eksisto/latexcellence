@@ -315,7 +315,9 @@ def _axis_options(spec: TikzSpec) -> list[str]:
             # 类别多或标签长时水平排布必然重叠，确定性旋转（热力图同款规则）
             max_label_len = max((len(str(x)) for x in xticklabels), default=0)
             if (len(xticklabels) >= 5 and max_label_len >= 6) or max_label_len >= 10:
-                opts.append("xticklabel style={rotate=45,anchor=east}")
+                opts.append(
+                    "xticklabel style={rotate=45,anchor=east,font=\\scriptsize}"
+                )
         elif spec.bar and spec.bar.group_labels:
             # 无 x 类别时按组标签展示
             opts.append(
@@ -348,7 +350,7 @@ def _axis_options(spec: TikzSpec) -> list[str]:
                 + ", ".join(_escape(x) for x in spec.heatmap.x_labels)
                 + "}"
             )
-            opts.append("xticklabel style={rotate=45,anchor=east}")
+            opts.append("xticklabel style={rotate=45,anchor=east,font=\\scriptsize}")
         if spec.heatmap.y_labels:
             opts.append("ytick={0,...," + str(len(spec.heatmap.y_labels) - 1) + "}")
             opts.append(
@@ -356,10 +358,13 @@ def _axis_options(spec: TikzSpec) -> list[str]:
                 + ", ".join(_escape(x) for x in spec.heatmap.y_labels)
                 + "}"
             )
+            opts.append("yticklabel style={font=\\scriptsize}")
         opts.append("y dir=reverse")
 
     if spec.legend.show and ct not in ("box", "violin"):
         opts.append(f"legend pos={spec.legend.pos}")
+        # 半透明白色底衬降低图例对数据线的遮挡，同时保持可读性
+        opts.append("legend style={fill=white, fill opacity=0.8, draw=none}")
     return opts
 
 
@@ -452,7 +457,8 @@ def _render(spec: TikzSpec) -> str:
                 f"\\definecolor{{{cell_color}}}{{RGB}}{{{rgb[0]},{rgb[1]},{rgb[2]}}}"
             )
             lines.append(
-                f"\\node[font=\\tiny, text={cell_color}] at (axis cs:{cell.col},{cell.row}) "
+                f"\\node[font=\\scriptsize, text={cell_color}] at "
+                f"(axis cs:{cell.col},{cell.row}) "
                 f"{{{_escape(cell.text)}}};"
             )
     else:
@@ -750,6 +756,21 @@ def _validate_csvs(spec: TikzSpec, artifacts_dir: Path) -> tuple[str | None, lis
                     f"column: {derived}"
                 )
         problems.extend(_validate_bar_series(spec, loaded))
+        # 负值柱状图：PGFPlots 的 ybar 默认把 ymin 裁到 0，负值柱会不可见。
+        # 数据含负值时确定性注入 ymin，保证柱体向下延伸（用户显式指定除外）。
+        if not problems:
+            y_values: list[float] = []
+            for s in spec.series:
+                df = loaded.get(s.file)
+                if df is None or s.y not in df.columns:
+                    continue
+                vals = pd.to_numeric(df[s.y], errors="coerce").dropna()
+                if len(vals):
+                    y_values.extend([float(vals.min()), float(vals.max())])
+            if y_values:
+                min_y = min(y_values)
+                if min_y < 0 and spec.ymin is None:
+                    spec.ymin = min_y * 1.1
 
     if spec.heatmap is not None:
         hm = spec.heatmap
@@ -815,6 +836,22 @@ def _validate_csvs(spec: TikzSpec, artifacts_dir: Path) -> tuple[str | None, lis
                 problems.append(
                     f"heatmap.y_labels has {len(hm.y_labels)} entries but cols={n}"
                 )
+            # 发散色图（RdBu_r/RdBu）适合正负都有且跨越零点的数据；数据
+            # 单边（全正或全负）时发散色图只剩一半色阶，视觉上难区分强度，
+            # 确定性回退到感知均匀的 viridis 并告知 Agent。
+            if not problems:
+                values = pd.to_numeric(df["value"], errors="coerce").dropna()
+                if len(values):
+                    vmin, vmax = float(values.min()), float(values.max())
+                    if hm.colormap.strip().lower() in ("rdbu_r", "rdbu") and (
+                        vmin >= 0 or vmax <= 0
+                    ):
+                        hm.colormap = "viridis"
+                        warnings.append(
+                            "heatmap colormap was 'RdBu_r'/'RdBu' but the data "
+                            f"values are one-sided ({vmin:g}..{vmax:g}); switched "
+                            "to viridis for better contrast"
+                        )
 
     if not problems:
         return None, warnings

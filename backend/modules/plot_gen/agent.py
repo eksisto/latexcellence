@@ -1,6 +1,7 @@
 """科研绘图自主 Agent。"""
 
 import json
+import posixpath
 import re
 import uuid
 from pathlib import Path
@@ -17,6 +18,28 @@ from backend.modules.plot_gen.trace import append_trace, now_iso
 from backend.utils.agent_file_tools import build_agent_file_tools_schema
 
 SESSION_ID_RE = re.compile(r"^[A-Za-z0-9_-]+$")
+
+# 影响最终图表产物的文件：脚本、spec 与数据 CSV 变更后必须重新生成/编译，
+# 其余文件（说明、日志等）不参与“产物是否已验证”判定。
+FIGURE_AFFECTING_ARTIFACT_SUFFIXES = (".tex", ".csv", ".json")
+
+
+def _is_figure_affecting_path(rel_path: str) -> bool:
+    """判断相对路径是否影响最终图表产物。
+
+    手写 PGFPlots 回退允许任意 artifacts/*.csv 与 artifacts/*.tex，因此不能
+    只精确匹配 data_ 前缀；先做 POSIX 归一化（处理 ./、重复斜杠等），再按
+    scripts/ 前缀或 artifacts/ 下的 .tex/.csv/.json 后缀判定。
+    （`..` 段会被 path_guard 在写入前拒绝，这里仍归一化以防解析规则变化。）
+    """
+    rel = posixpath.normpath((rel_path or "").replace("\\", "/"))
+    if rel == "." or not rel:
+        return False
+    if rel.startswith("scripts/"):
+        return True
+    if rel.startswith("artifacts/"):
+        return Path(rel).suffix.lower() in FIGURE_AFFECTING_ARTIFACT_SUFFIXES
+    return False
 
 
 def get_plot_output_dir(cfg: Any | None = None) -> Path:
@@ -214,6 +237,10 @@ class PlotGenAgent:
         # 防止在故障 TikZ 产物上反复小修小补形成死循环。
         fail_budget: dict[str, int] = {"python_sandbox": 0, "compile_tikz": 0}
         fail_budget_limit = 3
+        # 产物验证状态：compile_tikz 成功后为 True；任何影响产物的写入、
+        # apply_style 或 python_sandbox 重跑都会置回 False，直到再次编译成功。
+        verified = False
+        stale_finish_blocked = 0
 
         await self._append_trace(
             sandbox,
@@ -347,18 +374,95 @@ class PlotGenAgent:
                     "tool": tool_name,
                     "args": _summarize_args(tool_name, tool_args),
                 }
-                try:
-                    result_text, result_event = await executor.execute(
-                        tool_name, tool_args
+                # 成功后验证循环防呆：compile_tikz 已成功且此后没有修改任何
+                # 影响产物的文件时，read/list/rerun/compile 都是无效验证，
+                # 直接拦截并提示 finish，避免在已收敛结果上空转。
+                verified_loop_blocked = (
+                    fcfg.tikz_compile_enabled
+                    and verified
+                    and tool_name
+                    in ("read_file", "list_files", "python_sandbox", "compile_tikz")
+                )
+                # 未验证交付防呆：compile 成功后修改了影响产物的文件又直接
+                # finish 时，第一次在执行前拦截（stale_finish_blocked==0），
+                # 第二次允许但带警告，避免 Agent 被困在无法收尾的死循环。
+                blocked_stale_finish = (
+                    tool_name == "finish"
+                    and fcfg.tikz_compile_enabled
+                    and tikz_state["success"] is True
+                    and not verified
+                    and stale_finish_blocked == 0
+                )
+                # 被 guard 拦截的调用不是真实执行：不得覆盖 execution/tikz 状态，
+                # 也不得进入失败统计（last_fail / fail_budget）。
+                guard_blocked = verified_loop_blocked or blocked_stale_finish
+                if verified_loop_blocked:
+                    guard_msg = (
+                        "VERIFIED-LOOP BLOCK: `compile_tikz` already succeeded "
+                        "and no figure-affecting file was modified since. Do not "
+                        "call `read_file`/`list_files`/`python_sandbox`/"
+                        "`compile_tikz` again; call `finish` now."
                     )
-                except Exception as e:
-                    self._logger.warning("plot_gen tool exception %s: %s", tool_name, e)
-                    result_text = f"Tool execution failed: {e}"
+                    messages.append({"role": "system", "content": guard_msg})
+                    await self._append_trace(
+                        sandbox,
+                        {
+                            "ts": now_iso(),
+                            "run_id": run_id,
+                            "type": "warning",
+                            "data": {"message": guard_msg},
+                        },
+                    )
+                    yield {"type": "warning", "message": guard_msg}
+                    result_text = guard_msg
                     result_event = {
                         "tool": tool_name,
                         "ok": False,
-                        "summary": result_text,
+                        "summary": guard_msg,
                     }
+                elif blocked_stale_finish:
+                    stale_msg = (
+                        "STALE FINISH BLOCKED: figure-affecting files were "
+                        "modified or `python_sandbox` re-ran since the last "
+                        "successful `compile_tikz`, so the artifacts may no "
+                        "longer match the current source. Rerun "
+                        "`python_sandbox` and `compile_tikz`, then call "
+                        "`finish` again. If you really cannot compile, call "
+                        "`finish` once more to override with a warning."
+                    )
+                    messages.append({"role": "system", "content": stale_msg})
+                    await self._append_trace(
+                        sandbox,
+                        {
+                            "ts": now_iso(),
+                            "run_id": run_id,
+                            "type": "warning",
+                            "data": {"message": stale_msg},
+                        },
+                    )
+                    yield {"type": "warning", "message": stale_msg}
+                    result_text = stale_msg
+                    result_event = {
+                        "tool": "finish",
+                        "ok": False,
+                        "summary": stale_msg,
+                    }
+                    stale_finish_blocked += 1
+                else:
+                    try:
+                        result_text, result_event = await executor.execute(
+                            tool_name, tool_args
+                        )
+                    except Exception as e:
+                        self._logger.warning(
+                            "plot_gen tool exception %s: %s", tool_name, e
+                        )
+                        result_text = f"Tool execution failed: {e}"
+                        result_event = {
+                            "tool": tool_name,
+                            "ok": False,
+                            "summary": result_text,
+                        }
 
                 await self._append_trace(
                     sandbox,
@@ -376,8 +480,24 @@ class PlotGenAgent:
                     },
                 )
 
+                # 更新产物验证状态：影响产物的写入/风格切换/脚本重跑都会
+                # 使上一次编译结果失效，只有 compile_tikz 成功才重新验证。
+                if guard_blocked:
+                    pass
+                elif tool_name == "write_file" and result_event.get("ok") is True:
+                    if _is_figure_affecting_path(result_event.get("file_path") or ""):
+                        verified = False
+                elif tool_name == "apply_style" and result_event.get("ok") is True:
+                    verified = False
+                elif tool_name == "python_sandbox":
+                    if result_event.get("success") is True:
+                        verified = False
+                elif tool_name == "compile_tikz":
+                    if result_event.get("success") is True:
+                        verified = True
+
                 # 连续相同失败检测：阻止 Agent 盲目重试同一个失败的工具调用
-                failed = (
+                failed = not guard_blocked and (
                     result_event.get("ok") is False
                     or result_event.get("success") is False
                 )
@@ -440,7 +560,9 @@ class PlotGenAgent:
                 elif not failed and tool_name in fail_budget:
                     fail_budget[tool_name] = 0
 
-                if tool_name == "python_sandbox":
+                if guard_blocked:
+                    yield {"type": "tool_result", **result_event}
+                elif tool_name == "python_sandbox":
                     execution_state["called"] = True
                     execution_state["success"] = result_event.get("success")
                     yield {"type": "execution", **result_event}
@@ -459,7 +581,12 @@ class PlotGenAgent:
                     }
                 )
 
-                if tool_name == "finish":
+                if tool_name == "finish" and not blocked_stale_finish:
+                    stale_delivery = (
+                        fcfg.tikz_compile_enabled
+                        and tikz_state["success"] is True
+                        and not verified
+                    )
                     if fcfg.tikz_compile_enabled and (
                         not tikz_state["called"] or tikz_state["success"] is not True
                     ):
@@ -480,6 +607,23 @@ class PlotGenAgent:
                             "type": "warning",
                             "message": warning_msg,
                         }
+                    elif stale_delivery:
+                        stale_warning = (
+                            "WARNING: `finish` accepted although "
+                            "figure-affecting files changed since the last "
+                            "successful compile (override after a block); the "
+                            "artifacts may be stale."
+                        )
+                        await self._append_trace(
+                            sandbox,
+                            {
+                                "ts": now_iso(),
+                                "run_id": run_id,
+                                "type": "warning",
+                                "data": {"message": stale_warning},
+                            },
+                        )
+                        yield {"type": "warning", "message": stale_warning}
                     final_summary = tool_args.get("summary", final_summary)
                     finish_this_round = True
                     break

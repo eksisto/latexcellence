@@ -14,7 +14,8 @@
 | [latex-package-rules.md](./latex-package-rules.md) | 宏包规则表维护指南（新增规则模板 + 评审清单） |
 | [function-calling-tools.md](./function-calling-tools.md) | Function Calling 工具体系：全局/私有工具、配置结构 |
 | [duckduckgo-challenge.md](./duckduckgo-challenge.md) | DDG 验证码处理 |
-| [closed-loop-optimization-lessons.md](./closed-loop-optimization-lessons.md) | Agent 闭环优化复盘：通用性退化事故的原因、教训与改进机制 |
+| [templategen-optimization-lessons.md](./templategen-optimization-lessons.md) | template_gen 闭环优化复盘：通用性退化事故的原因、教训与改进机制 |
+| [plotgen-optimization-lessons.md](./plotgen-optimization-lessons.md) | plot_gen 闭环优化复盘与最佳实践 |
 
 ---
 
@@ -94,7 +95,7 @@ latexcellence/
 
 | 子目录 | 用途 |
 | --- | --- |
-| `tools/` 根目录 | `eval_common.py`（人工评估基座）、`tex_path.py`（TeX Live 路径发现）、`generality_gate.py`（Agent 闭环优化通用性门禁，详见 [closed-loop-optimization-lessons.md](./closed-loop-optimization-lessons.md)） |
+| `tools/` 根目录 | `eval_common.py`（人工评估基座）、`tex_path.py`（TeX Live 路径发现）、`generality_gate.py`（Agent 闭环优化通用性门禁，详见 [templategen-optimization-lessons.md](./templategen-optimization-lessons.md)） |
 | `latex_packages/` | 宏包规则表维护：离线编译验证与覆盖率报告（详见 [latex-package-rules.md](./latex-package-rules.md)） |
 | `formula_ocr_eval/` | 公式 OCR 人工评估（渲染语料 → 跑 OCR → 比对报告） |
 | `table_ocr_eval/` | 表格 OCR 人工评估 |
@@ -126,7 +127,8 @@ latexcellence/
 - `compare.py` 双 tag 模式自动执行对照组回归判定与硬编码门禁，非零退出即打回。
 
 事故复盘与改进机制详见
-[closed-loop-optimization-lessons.md](./closed-loop-optimization-lessons.md)。
+[templategen-optimization-lessons.md](./templategen-optimization-lessons.md)；
+plot_gen 的闭环复盘见 [plotgen-optimization-lessons.md](./plotgen-optimization-lessons.md)。
 
 ---
 

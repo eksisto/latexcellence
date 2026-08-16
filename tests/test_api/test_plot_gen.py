@@ -474,6 +474,688 @@ async def test_generate_first_round_text_only_is_nudged(plot_cfg, monkeypatch):
     assert events[-1]["type"] == "done"
 
 
+@pytest.mark.asyncio
+async def test_generate_blocks_verification_loop_after_success(plot_cfg, monkeypatch):
+    """compile_tikz 成功后未修改产物时，read/list/rerun/compile 应被拦截。"""
+    import backend.modules.plot_gen.agent as agent_mod
+
+    service = PlotGenService()
+    result = await service.create_session_from_upload(
+        b"group,value\nA,1\nB,2\n",
+        "data.csv",
+        description="比较两组",
+    )
+    session_id = result["session_id"]
+    executed: list[str] = []
+
+    class FakeExecutor:
+        def __init__(self, sandbox, cfg, logger=None, style_key=None):
+            pass
+
+        async def execute(self, tool_name, args):
+            executed.append(tool_name)
+            if tool_name == "write_file":
+                return (
+                    "wrote",
+                    {
+                        "tool": "write_file",
+                        "ok": True,
+                        "summary": "wrote",
+                        "file_path": args.get("file_path", ""),
+                    },
+                )
+            if tool_name == "python_sandbox":
+                return (
+                    "ok",
+                    {
+                        "tool": "python_sandbox",
+                        "ok": True,
+                        "success": True,
+                        "summary": "ok",
+                    },
+                )
+            if tool_name == "compile_tikz":
+                return (
+                    "ok",
+                    {
+                        "tool": "compile_tikz",
+                        "ok": True,
+                        "success": True,
+                        "summary": "ok",
+                    },
+                )
+            if tool_name == "finish":
+                return "finished", {
+                    "tool": "finish",
+                    "ok": True,
+                    "summary": "finished",
+                }
+            return "ok", {"tool": tool_name, "ok": True, "summary": "ok"}
+
+        def list_files(self):
+            return []
+
+        def scan_artifacts(self):
+            return []
+
+    monkeypatch.setattr(agent_mod, "PlotExecutor", FakeExecutor)
+
+    llm = MagicMock()
+    llm.chat = AsyncMock(return_value={})
+    llm.chat_with_tools = AsyncMock(
+        side_effect=[
+            _make_response(
+                content="Write script",
+                tool_calls=[
+                    _make_tool_call(
+                        "write_file",
+                        {"file_path": "scripts/plot.py", "content": "print(1)"},
+                        "w1",
+                    )
+                ],
+            ),
+            _make_response(
+                content="Run and compile",
+                tool_calls=[
+                    _make_tool_call(
+                        "python_sandbox",
+                        {"script_name": "scripts/plot.py"},
+                        "r1",
+                    ),
+                    _make_tool_call(
+                        "compile_tikz",
+                        {"tikz_file": "artifacts/figure.tex"},
+                        "c1",
+                    ),
+                ],
+            ),
+            _make_response(
+                content="Verify files",
+                tool_calls=[
+                    _make_tool_call(
+                        "read_file",
+                        {"file_path": "artifacts/tikz_spec.json"},
+                        "v1",
+                    )
+                ],
+            ),
+            _make_response(
+                content="Finish now",
+                tool_calls=[_make_tool_call("finish", {"summary": "done"}, "f1")],
+            ),
+        ]
+    )
+
+    events = await _collect(
+        service.generate(session_id, "比较两组", "nature", "zh", llm=llm)
+    )
+
+    warnings = [e["message"] for e in events if e["type"] == "warning"]
+    assert any("VERIFIED-LOOP BLOCK" in w for w in warnings)
+    # read_file 被拦截，未到达 executor
+    assert "read_file" not in executed
+    assert executed == ["write_file", "python_sandbox", "compile_tikz", "finish"]
+    assert events[-1]["type"] == "done"
+
+
+@pytest.mark.asyncio
+async def test_generate_blocks_stale_finish_after_change(plot_cfg, monkeypatch):
+    """最后一次编译后修改了影响产物的文件再 finish，应先被拒绝。"""
+    import backend.modules.plot_gen.agent as agent_mod
+
+    service = PlotGenService()
+    result = await service.create_session_from_upload(
+        b"group,value\nA,1\nB,2\n",
+        "data.csv",
+        description="比较两组",
+    )
+    session_id = result["session_id"]
+    executed: list[str] = []
+
+    class FakeExecutor:
+        def __init__(self, sandbox, cfg, logger=None, style_key=None):
+            pass
+
+        async def execute(self, tool_name, args):
+            executed.append(tool_name)
+            if tool_name == "write_file":
+                return (
+                    "wrote",
+                    {
+                        "tool": "write_file",
+                        "ok": True,
+                        "summary": "wrote",
+                        "file_path": args.get("file_path", ""),
+                    },
+                )
+            if tool_name == "python_sandbox":
+                return (
+                    "ok",
+                    {
+                        "tool": "python_sandbox",
+                        "ok": True,
+                        "success": True,
+                        "summary": "ok",
+                    },
+                )
+            if tool_name == "compile_tikz":
+                return (
+                    "ok",
+                    {
+                        "tool": "compile_tikz",
+                        "ok": True,
+                        "success": True,
+                        "summary": "ok",
+                    },
+                )
+            if tool_name == "finish":
+                return "finished", {
+                    "tool": "finish",
+                    "ok": True,
+                    "summary": "finished",
+                }
+            return "ok", {"tool": tool_name, "ok": True, "summary": "ok"}
+
+        def list_files(self):
+            return []
+
+        def scan_artifacts(self):
+            return []
+
+    monkeypatch.setattr(agent_mod, "PlotExecutor", FakeExecutor)
+
+    llm = MagicMock()
+    llm.chat = AsyncMock(return_value={})
+    llm.chat_with_tools = AsyncMock(
+        side_effect=[
+            _make_response(
+                content="Write script",
+                tool_calls=[
+                    _make_tool_call(
+                        "write_file",
+                        {"file_path": "scripts/plot.py", "content": "print(1)"},
+                        "w1",
+                    )
+                ],
+            ),
+            _make_response(
+                content="Run and compile",
+                tool_calls=[
+                    _make_tool_call(
+                        "python_sandbox",
+                        {"script_name": "scripts/plot.py"},
+                        "r1",
+                    ),
+                    _make_tool_call(
+                        "compile_tikz",
+                        {"tikz_file": "artifacts/figure.tex"},
+                        "c1",
+                    ),
+                ],
+            ),
+            _make_response(
+                content="Modify script after compile",
+                tool_calls=[
+                    _make_tool_call(
+                        "write_file",
+                        {"file_path": "scripts/plot.py", "content": "print(2)"},
+                        "w2",
+                    )
+                ],
+            ),
+            _make_response(
+                content="Try to finish stale",
+                tool_calls=[_make_tool_call("finish", {"summary": "done"}, "f1")],
+            ),
+            _make_response(
+                content="Finish after block",
+                tool_calls=[_make_tool_call("finish", {"summary": "done"}, "f2")],
+            ),
+        ]
+    )
+
+    events = await _collect(
+        service.generate(session_id, "比较两组", "nature", "zh", llm=llm)
+    )
+
+    warnings = [e["message"] for e in events if e["type"] == "warning"]
+    assert any("STALE FINISH BLOCKED" in w for w in warnings)
+    assert any("`finish` accepted although" in w for w in warnings)
+    # 第一次 finish 被拦截，第二次允许；executor 只真正执行过一次 finish
+    assert executed.count("finish") == 1
+    assert events[-1]["type"] == "done"
+
+
+def test_is_figure_affecting_path_coverage():
+    """影响产物的文件判定需覆盖手写回退的自定义文件名与路径变体。"""
+    from backend.modules.plot_gen.agent import _is_figure_affecting_path
+
+    affecting = [
+        "scripts/plot.py",
+        "scripts/helpers/load.py",
+        "artifacts/tikz_spec.json",
+        "artifacts/figure.tex",
+        "artifacts/corr.csv",
+        "artifacts/plot.tex",
+        "artifacts/./plot.tex",
+        "artifacts/../artifacts/plot.tex",
+        "scripts/../scripts/plot.py",
+        "artifacts//data_SeriesA.csv",
+    ]
+    for p in affecting:
+        assert _is_figure_affecting_path(p) is True, p
+
+    not_affecting = [
+        "",
+        ".",
+        "README.txt",
+        "data/s4_category.csv",
+        "artifacts/figure.png",
+        "artifacts/tikz_main.log",
+        "artifacts/notes.txt",
+    ]
+    for p in not_affecting:
+        assert _is_figure_affecting_path(p) is False, p
+
+
+@pytest.mark.asyncio
+async def test_generate_blocked_compile_keeps_tikz_state(plot_cfg, monkeypatch):
+    """被 VERIFIED-LOOP 拦截的 compile_tikz 不得覆盖 tikz_state 或计入失败统计。"""
+    import backend.modules.plot_gen.agent as agent_mod
+
+    service = PlotGenService()
+    result = await service.create_session_from_upload(
+        b"group,value\nA,1\nB,2\n",
+        "data.csv",
+        description="比较两组",
+    )
+    session_id = result["session_id"]
+    executed: list[str] = []
+
+    class FakeExecutor:
+        def __init__(self, sandbox, cfg, logger=None, style_key=None):
+            pass
+
+        async def execute(self, tool_name, args):
+            executed.append(tool_name)
+            if tool_name == "write_file":
+                return (
+                    "wrote",
+                    {
+                        "tool": "write_file",
+                        "ok": True,
+                        "summary": "wrote",
+                        "file_path": args.get("file_path", ""),
+                    },
+                )
+            if tool_name == "python_sandbox":
+                return (
+                    "ok",
+                    {
+                        "tool": "python_sandbox",
+                        "ok": True,
+                        "success": True,
+                        "summary": "ok",
+                    },
+                )
+            if tool_name == "compile_tikz":
+                return (
+                    "ok",
+                    {
+                        "tool": "compile_tikz",
+                        "ok": True,
+                        "success": True,
+                        "summary": "ok",
+                    },
+                )
+            if tool_name == "finish":
+                return "finished", {
+                    "tool": "finish",
+                    "ok": True,
+                    "summary": "finished",
+                }
+            return "ok", {"tool": tool_name, "ok": True, "summary": "ok"}
+
+        def list_files(self):
+            return []
+
+        def scan_artifacts(self):
+            return []
+
+    monkeypatch.setattr(agent_mod, "PlotExecutor", FakeExecutor)
+
+    llm = MagicMock()
+    llm.chat = AsyncMock(return_value={})
+    llm.chat_with_tools = AsyncMock(
+        side_effect=[
+            _make_response(
+                content="Write script",
+                tool_calls=[
+                    _make_tool_call(
+                        "write_file",
+                        {"file_path": "scripts/plot.py", "content": "print(1)"},
+                        "w1",
+                    )
+                ],
+            ),
+            _make_response(
+                content="Run and compile",
+                tool_calls=[
+                    _make_tool_call(
+                        "python_sandbox",
+                        {"script_name": "scripts/plot.py"},
+                        "r1",
+                    ),
+                    _make_tool_call(
+                        "compile_tikz",
+                        {"tikz_file": "artifacts/figure.tex"},
+                        "c1",
+                    ),
+                ],
+            ),
+            *[
+                _make_response(
+                    content=f"Blocked compile {i}",
+                    tool_calls=[
+                        _make_tool_call(
+                            "compile_tikz",
+                            {"tikz_file": "artifacts/figure.tex"},
+                            f"b{i}",
+                        )
+                    ],
+                )
+                for i in range(3)
+            ],
+            _make_response(
+                content="Finish now",
+                tool_calls=[_make_tool_call("finish", {"summary": "done"}, "f1")],
+            ),
+        ]
+    )
+
+    events = await _collect(
+        service.generate(session_id, "比较两组", "nature", "zh", llm=llm)
+    )
+
+    warnings = [e["message"] for e in events if e["type"] == "warning"]
+    assert sum("VERIFIED-LOOP BLOCK" in w for w in warnings) == 3
+    assert not any("without a successful TikZ compilation" in w for w in warnings)
+    assert not any("identical result" in w for w in warnings)
+    assert not any("has failed 3 times in a row" in w for w in warnings)
+    tikz_events = [e for e in events if e["type"] == "tikz"]
+    assert len(tikz_events) == 1
+    assert tikz_events[0]["success"] is True
+    meta = json.loads(
+        (
+            Path(plot_cfg.features.plot_gen.output_dir) / session_id / "meta.json"
+        ).read_text(encoding="utf-8")
+    )
+    assert meta["last_tikz_success"] is True
+    assert meta["last_execution_success"] is True
+    assert executed.count("finish") == 1
+    assert events[-1]["type"] == "done"
+
+
+@pytest.mark.asyncio
+async def test_generate_blocked_python_sandbox_keeps_execution_state(
+    plot_cfg, monkeypatch
+):
+    """被拦截的 python_sandbox 不得把 last_execution_success 覆盖为 None。"""
+    import backend.modules.plot_gen.agent as agent_mod
+
+    service = PlotGenService()
+    result = await service.create_session_from_upload(
+        b"group,value\nA,1\nB,2\n",
+        "data.csv",
+        description="比较两组",
+    )
+    session_id = result["session_id"]
+
+    class FakeExecutor:
+        def __init__(self, sandbox, cfg, logger=None, style_key=None):
+            pass
+
+        async def execute(self, tool_name, args):
+            if tool_name == "write_file":
+                return (
+                    "wrote",
+                    {
+                        "tool": "write_file",
+                        "ok": True,
+                        "summary": "wrote",
+                        "file_path": args.get("file_path", ""),
+                    },
+                )
+            if tool_name == "python_sandbox":
+                return (
+                    "ok",
+                    {
+                        "tool": "python_sandbox",
+                        "ok": True,
+                        "success": True,
+                        "summary": "ok",
+                    },
+                )
+            if tool_name == "compile_tikz":
+                return (
+                    "ok",
+                    {
+                        "tool": "compile_tikz",
+                        "ok": True,
+                        "success": True,
+                        "summary": "ok",
+                    },
+                )
+            if tool_name == "finish":
+                return "finished", {
+                    "tool": "finish",
+                    "ok": True,
+                    "summary": "finished",
+                }
+            return "ok", {"tool": tool_name, "ok": True, "summary": "ok"}
+
+        def list_files(self):
+            return []
+
+        def scan_artifacts(self):
+            return []
+
+    monkeypatch.setattr(agent_mod, "PlotExecutor", FakeExecutor)
+
+    llm = MagicMock()
+    llm.chat = AsyncMock(return_value={})
+    llm.chat_with_tools = AsyncMock(
+        side_effect=[
+            _make_response(
+                content="Write script",
+                tool_calls=[
+                    _make_tool_call(
+                        "write_file",
+                        {"file_path": "scripts/plot.py", "content": "print(1)"},
+                        "w1",
+                    )
+                ],
+            ),
+            _make_response(
+                content="Run and compile",
+                tool_calls=[
+                    _make_tool_call(
+                        "python_sandbox",
+                        {"script_name": "scripts/plot.py"},
+                        "r1",
+                    ),
+                    _make_tool_call(
+                        "compile_tikz",
+                        {"tikz_file": "artifacts/figure.tex"},
+                        "c1",
+                    ),
+                ],
+            ),
+            _make_response(
+                content="Rerun script after success",
+                tool_calls=[
+                    _make_tool_call(
+                        "python_sandbox",
+                        {"script_name": "scripts/plot.py"},
+                        "r2",
+                    )
+                ],
+            ),
+            _make_response(
+                content="Finish now",
+                tool_calls=[_make_tool_call("finish", {"summary": "done"}, "f1")],
+            ),
+        ]
+    )
+
+    events = await _collect(
+        service.generate(session_id, "比较两组", "nature", "zh", llm=llm)
+    )
+
+    warnings = [e["message"] for e in events if e["type"] == "warning"]
+    assert any("VERIFIED-LOOP BLOCK" in w for w in warnings)
+    assert not any("without a successful TikZ compilation" in w for w in warnings)
+    execution_events = [e for e in events if e["type"] == "execution"]
+    assert len(execution_events) == 1
+    assert execution_events[0]["success"] is True
+    meta = json.loads(
+        (
+            Path(plot_cfg.features.plot_gen.output_dir) / session_id / "meta.json"
+        ).read_text(encoding="utf-8")
+    )
+    assert meta["last_execution_success"] is True
+    assert meta["last_tikz_success"] is True
+
+
+@pytest.mark.asyncio
+async def test_generate_blocks_stale_finish_custom_artifact_name(plot_cfg, monkeypatch):
+    """手写回退的自定义 artifacts/*.csv 也应触发 stale finish 拦截。"""
+    import backend.modules.plot_gen.agent as agent_mod
+
+    service = PlotGenService()
+    result = await service.create_session_from_upload(
+        b"group,value\nA,1\nB,2\n",
+        "data.csv",
+        description="比较两组",
+    )
+    session_id = result["session_id"]
+    executed: list[str] = []
+
+    class FakeExecutor:
+        def __init__(self, sandbox, cfg, logger=None, style_key=None):
+            pass
+
+        async def execute(self, tool_name, args):
+            executed.append(tool_name)
+            if tool_name == "write_file":
+                return (
+                    "wrote",
+                    {
+                        "tool": "write_file",
+                        "ok": True,
+                        "summary": "wrote",
+                        "file_path": args.get("file_path", ""),
+                    },
+                )
+            if tool_name == "python_sandbox":
+                return (
+                    "ok",
+                    {
+                        "tool": "python_sandbox",
+                        "ok": True,
+                        "success": True,
+                        "summary": "ok",
+                    },
+                )
+            if tool_name == "compile_tikz":
+                return (
+                    "ok",
+                    {
+                        "tool": "compile_tikz",
+                        "ok": True,
+                        "success": True,
+                        "summary": "ok",
+                    },
+                )
+            if tool_name == "finish":
+                return "finished", {
+                    "tool": "finish",
+                    "ok": True,
+                    "summary": "finished",
+                }
+            return "ok", {"tool": tool_name, "ok": True, "summary": "ok"}
+
+        def list_files(self):
+            return []
+
+        def scan_artifacts(self):
+            return []
+
+    monkeypatch.setattr(agent_mod, "PlotExecutor", FakeExecutor)
+
+    llm = MagicMock()
+    llm.chat = AsyncMock(return_value={})
+    llm.chat_with_tools = AsyncMock(
+        side_effect=[
+            _make_response(
+                content="Write script",
+                tool_calls=[
+                    _make_tool_call(
+                        "write_file",
+                        {"file_path": "scripts/plot.py", "content": "print(1)"},
+                        "w1",
+                    )
+                ],
+            ),
+            _make_response(
+                content="Run and compile",
+                tool_calls=[
+                    _make_tool_call(
+                        "python_sandbox",
+                        {"script_name": "scripts/plot.py"},
+                        "r1",
+                    ),
+                    _make_tool_call(
+                        "compile_tikz",
+                        {"tikz_file": "artifacts/figure.tex"},
+                        "c1",
+                    ),
+                ],
+            ),
+            _make_response(
+                content="Write custom artifact after compile",
+                tool_calls=[
+                    _make_tool_call(
+                        "write_file",
+                        {
+                            "file_path": "artifacts/corr.csv",
+                            "content": "x,y\n1,2",
+                        },
+                        "w2",
+                    )
+                ],
+            ),
+            _make_response(
+                content="Try to finish stale",
+                tool_calls=[_make_tool_call("finish", {"summary": "done"}, "f1")],
+            ),
+            _make_response(
+                content="Finish after block",
+                tool_calls=[_make_tool_call("finish", {"summary": "done"}, "f2")],
+            ),
+        ]
+    )
+
+    events = await _collect(
+        service.generate(session_id, "比较两组", "nature", "zh", llm=llm)
+    )
+
+    warnings = [e["message"] for e in events if e["type"] == "warning"]
+    assert any("STALE FINISH BLOCKED" in w for w in warnings)
+    assert executed.count("finish") == 1
+    assert events[-1]["type"] == "done"
+
+
 class TestPlotGenTraceRouter:
     """/trace 与 /trace/download 端点测试。"""
 

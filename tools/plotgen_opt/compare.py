@@ -42,6 +42,9 @@ TAGS = [
     "opt10",
     "opt11",
     "opt11b",
+    "base4",
+    "opt12",
+    "opt12b",
 ]
 
 

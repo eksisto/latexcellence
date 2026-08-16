@@ -1,9 +1,12 @@
-# Agent 闭环优化复盘与通用性门禁
+# template_gen 闭环优化复盘与通用性门禁
 
 > 本文档同时承担两类职责：
 > 1. 沉淀通用性门禁与行为约束——所有 Agent 优化都必须遵守；
 > 2. 按轮次记录闭环优化——每轮一个独立小节，只追加、不覆盖。
 > 新增一轮时，在“优化轮次复盘”中追加下一轮小节（如 `### 3.4 第 4 轮`），并按文末模板记录。
+>
+> 本文只记录 **template_gen** 的闭环轮次；`plot_gen` 的闭环优化复盘与最佳实践
+> 见 [plotgen-optimization-lessons.md](plotgen-optimization-lessons.md)。
 
 ## 轮次索引
 

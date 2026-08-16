@@ -9,7 +9,8 @@
 Python 沙箱执行 → TikZ 编译 → finish」完整流程，并自动采集轮数 / 时长 / 成功率 /
 启发式质量评分等指标，供对比不同版本提示词 / Agent 逻辑。
 
-> 注意：本目录的脚本、数据集与报告纳入版本库管理；运行产物
+> 注意：本目录的脚本与数据集纳入版本库管理；优化复盘见
+> `docs/plotgen-optimization-lessons.md`。运行产物
 > （`results/`、`previews/`、`__pycache__/`）由目录内 `.gitignore` 忽略，不会提交。
 
 ---
@@ -27,8 +28,7 @@ tools/plotgen_opt/
 ├── compare.py        # baseline / opt1..opt10 全量对比表格
 ├── data/             # 测试数据集（gen_data.py 生成）+ manifest.json 清单
 ├── previews/         # matplotlib 与 TikZ 渲染预览 PNG
-├── results/<tag>/    # 每次运行的结果根目录（<tag> 如 baseline / opt1）
-└── report/           # 历次优化结论：optimization_report.md / best_practices.md / next_steps.md
+└── results/<tag>/    # 每次运行的结果根目录（<tag> 如 baseline / opt1）
 ```
 
 ## 评测场景与数据集（gen_data.py）
@@ -177,7 +177,7 @@ LLM 视觉质量审查。对每个场景：
 
 ```bash
 export LX_REVIEW_LLM_MODEL="gpt-5.6-luna"          # 评审模型名（必填以切换）
-export LX_REVIEW_LLM_BASE_URL="https://api.openai.com/v1"  # 留空=沿用生成端点
+export LX_REVIEW_LLM_BASE_URL="https://opencode.ai/zen/go/v1"  # OpenCode Zen（已验证可用）；留空=沿用生成端点
 export LX_REVIEW_LLM_KEY="sk-..."            # 留空=沿用生成 Key
 python tools/plotgen_opt/visual_review.py opt3
 ```
@@ -185,6 +185,11 @@ python tools/plotgen_opt/visual_review.py opt3
 评审专用客户端通过 OpenAI Responses API（`POST /responses`）发送视觉输入，
 脚本会自动将 Chat Completions 格式的消息转换为 Responses 格式。运行时会打印实际使用的评审模型与哪些环境变量生效。该环境变量约定与
 `tools/templategen_opt/visual_review.py` 完全一致，两个工具的评审模型可统一切换。
+
+> 端点提示：OpenCode Zen 的 OpenAI 兼容端点为 `https://opencode.ai/zen/v1`，
+> 本项目评审验证可用的是 `https://opencode.ai/zen/go/v1`（Responses API，
+> 模型 `gpt-5.6-luna`）。若配置了旧的 `https://opencode.ai/v1`，会返回 404
+> 网页而不是 API 响应。
 
 ### 6. `compare.py [tagA tagB] [--targets k1,k2] [--tolerance 5] [--visual-tolerance 1] [--no-gate]`
 
@@ -263,14 +268,10 @@ python -m pytest tools/plotgen_opt/test_visual_review.py -q
 > 提交前单独跑 `generality_gate.py check` 是为了在"评测结果生成之前"就拦住
 > 污染，而不是等跑完一轮才发现。
 
-## 历史优化结论（report/）
+## 历史优化结论
 
-- `report/optimization_report.md`：一次完整优化闭环的报告（基线 → opt1..opt6），
-  含逐场景改进表格、诊断出的问题分级（P1-P6）与量化收益，可作后续优化的参照基线。
-- `report/best_practices.md`：可复用的最佳实践——图内文字必须 ASCII、两级 TikZ
-  逃生通道（受控生成 / 手写 PGFPlots）、按工具族失败预算、防验证循环、固定种子
-  数据集等。
-- `report/next_steps.md`：后续可探索的优化方向。
+plot_gen 的优化历史、最佳实践、遗留项与接续工作流统一维护在
+`docs/plotgen-optimization-lessons.md`。
 
 ## 常见问题
 
@@ -278,7 +279,8 @@ python -m pytest tools/plotgen_opt/test_visual_review.py -q
 - **LLM 端点异常**：先运行 `python tools/plotgen_opt/smoke_test.py` 验证连通性，再查
   `config.json` 的 `llm` 配置。
 - **TikZ 编译失败**：查看 `trace.jsonl` 中 `compile_tikz` 的报错文本与失败次数；
-  参考 `report/best_practices.md` 的手写 PGFPlots 细节与失败预算策略。
+  参考 `docs/plotgen-optimization-lessons.md` 的既有机制清单（TikZ 回退协议、
+  失败预算、CSV 保真校验等）。
 - **`pdftoppm` 不可用**：视觉审查回退到 matplotlib PNG，或跳过该场景。
 - **LLM 随机性**：单次结果波动正常，结论至少看 2~3 次运行，或以 `compare.py`
   汇总均值判断。

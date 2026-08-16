@@ -48,7 +48,8 @@ MAX_IMAGE_DIM = 1024
 
 # 独立评审模型（默认与生成模型相同；通过环境变量切换到更强的视觉模型）：
 #   LX_REVIEW_LLM_MODEL     评审模型名，如 gpt-5.6-luna（留空 = 用生成模型）
-#   LX_REVIEW_LLM_BASE_URL  评审模型端点（留空 = 用生成模型端点）
+#   LX_REVIEW_LLM_BASE_URL  评审模型端点，如 https://opencode.ai/zen/go/v1
+#                            （OpenCode Zen，已验证可用；留空 = 用生成模型端点）
 #   LX_REVIEW_LLM_KEY       评审模型 API Key（留空 = 用生成模型 Key）
 REVIEW_MODEL = os.environ.get("LX_REVIEW_LLM_MODEL", "").strip()
 REVIEW_BASE_URL = os.environ.get("LX_REVIEW_LLM_BASE_URL", "").strip()
@@ -93,8 +94,18 @@ async def _review_chat(
             max_tokens=max_tokens,
             response_format=response_format,
         )
-        resp = await client.responses.create(**kwargs)
-        return resp.output_text or ""
+        try:
+            resp = await client.responses.create(**kwargs)
+            return resp.output_text or ""
+        except Exception as e:  # noqa: BLE001
+            text = str(e)
+            if "<!DOCTYPE" in text or "<html" in text.lower():
+                raise RuntimeError(
+                    "Review endpoint returned an HTML/404 page instead of an "
+                    "API response. Check LX_REVIEW_LLM_BASE_URL / "
+                    "LX_REVIEW_LLM_KEY / LX_REVIEW_LLM_MODEL."
+                ) from e
+            raise
     llm = get_llm_client()
     return await llm.chat(
         messages,

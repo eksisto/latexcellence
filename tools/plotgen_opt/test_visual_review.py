@@ -180,3 +180,26 @@ async def test_review_chat_uses_responses_endpoint(monkeypatch):
     assert responses.kwargs["max_output_tokens"] == 128
     assert "max_tokens" not in responses.kwargs
     assert responses.kwargs["text"] == {"format": {"type": "json_object"}}
+
+
+@pytest.mark.asyncio
+async def test_review_chat_html_error_gets_clear_message(monkeypatch):
+    """评审端点返回 HTML/404 时，给出配置提示而不是倾倒整页 HTML。"""
+
+    class BoomResponses:
+        async def create(self, **kwargs):
+            raise RuntimeError("<!DOCTYPE html><html><title>404 - Not Found</title>")
+
+    monkeypatch.setattr(visual_review, "REVIEW_MODEL", "review-model")
+    monkeypatch.setattr(visual_review, "REVIEW_BASE_URL", "")
+    monkeypatch.setattr(visual_review, "REVIEW_API_KEY", "review-key")
+    monkeypatch.setattr(
+        visual_review,
+        "_get_review_client",
+        lambda: SimpleNamespace(responses=BoomResponses()),
+    )
+
+    with pytest.raises(RuntimeError, match="HTML/404"):
+        await visual_review._review_chat(
+            [{"role": "user", "content": "Review the figure."}]
+        )
