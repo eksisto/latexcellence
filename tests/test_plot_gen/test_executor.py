@@ -46,6 +46,17 @@ def test_write_and_run_script(tmp_path, monkeypatch):
     assert any(a["path"].endswith("out.txt") for a in result_event["artifacts"])
 
 
+def test_sandbox_allows_import_ctypes(tmp_path, monkeypatch):
+    """回归：Python 3.13 的 `import ctypes` 会触发 PyDLL(None) 审计事件，
+    沙箱必须在安装审计钩子前预加载 stdlib ctypes，否则 numpy/pandas 无法导入。"""
+    _, event = _run_sandbox_script(
+        tmp_path,
+        monkeypatch,
+        "import ctypes\nprint('ctypes ok')\n",
+    )
+    assert event["success"] is True
+
+
 def test_python_sandbox_generates_tikz_from_spec(tmp_path, monkeypatch):
     """脚本写入 tikz_spec.json + 数据 CSV 后，python_sandbox 自动渲染 figure.tex。"""
     code = (
@@ -197,7 +208,7 @@ def test_sandbox_blocks_ctypes_path_load(tmp_path, monkeypatch):
 
 def test_sandbox_blocks_ctypes_dangerous_symbol(tmp_path, monkeypatch):
     """沙箱内 ctypes 解析危险符号（WinExec / system）被拦截。"""
-    lib = "kernel32" if os.name == "nt" else "c"
+    lib = "kernel32" if os.name == "nt" else "libc.so.6"
     sym = "WinExec" if os.name == "nt" else "system"
     _, event = _run_sandbox_script(
         tmp_path,

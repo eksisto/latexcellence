@@ -40,11 +40,17 @@ async def _run_process(cmd: list[str], cwd: Path, timeout: int) -> ProcessResult
         proc_kwargs["creationflags"] = subprocess.CREATE_NEW_PROCESS_GROUP
     else:
         proc_kwargs["start_new_session"] = True
+    # git 输出随用户 locale 变化，而本模块需要解析 stderr 中的固定文案
+    # （如空仓库判定）。强制 LC_ALL=C 保证机器可解析的稳定英文输出。
+    env = os.environ.copy()
+    env["LC_ALL"] = "C"
+    env["LANG"] = "C"
     process = await asyncio.create_subprocess_exec(
         *cmd,
         cwd=str(cwd),
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
+        env=env,
         **proc_kwargs,
     )
     try:

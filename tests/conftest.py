@@ -26,7 +26,13 @@ def _ensure_config():
             load_config("config.json")
     # 访问令牌属于本地运行环境配置：中间件行为由 test_security_middleware 单独
     # 覆盖，其余 API 测试统一在内存中绕过令牌校验，避免依赖开发者本机 config.json。
-    get_config().security.access_token = ""
+    cfg = get_config()
+    cfg.security.access_token = ""
+    # API Key 同理：Service 层测试统一 Mock LLM 客户端，但多数服务会先检查
+    # cfg.llm.api_key 是否为空；这里在内存中强制使用 dummy key，保证测试
+    # 不依赖本机 config.json，也绝不会在单测中发起真实 LLM 请求。
+    # 需要验证“无 Key”行为的测试可自行 monkeypatch 置空。
+    cfg.llm.api_key = "test-key"
 
 
 @pytest.fixture

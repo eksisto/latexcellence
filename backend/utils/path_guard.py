@@ -65,13 +65,15 @@ def resolve_project_path(
     if ".." in Path(file_path).parts:
         raise ValueError("file_path must not contain '..' segments")
 
-    resolved = (root / file_path).resolve()
+    raw = Path(root / file_path)
+    resolved = raw.resolve()
+    root_resolved = root.resolve()
 
-    if not resolved.is_relative_to(root.resolve()):
-        raise ValueError("file_path resolves outside the project root")
-
+    # 符号链接检测必须先于 resolve() 后的越界检查：指向项目外的链接在
+    # resolved 路径上已经越界，若先做 is_relative_to 会得到 “resolves
+    # outside” 而非精确的 “symbolic link” 错误。
     if not allow_symlink:
-        check = Path(root / file_path)
+        check = raw
         while check != root and check != check.parent:
             try:
                 if os.path.islink(check):
@@ -82,11 +84,16 @@ def resolve_project_path(
                 pass
             check = check.parent
 
+    if not resolved.is_relative_to(root_resolved):
+        raise ValueError("file_path resolves outside the project root")
+
     if allowed_suffixes is not None and resolved.suffix.lower() not in allowed_suffixes:
         allowed = "/".join(allowed_suffixes)
         raise ValueError(f"file_path must end with one of: {allowed}")
 
-    return resolved
+    # allow_symlink=True 时返回未 resolve 的链接路径本身（契约见测试）；
+    # 越界链接仍会被上面的 is_relative_to 拦截，安全性质不变。
+    return raw if allow_symlink else resolved
 
 
 def resolve_path_case_insensitive(path: str) -> Path | None:

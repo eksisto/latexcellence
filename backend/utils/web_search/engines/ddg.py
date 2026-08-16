@@ -5,7 +5,7 @@ import re
 import time
 import uuid
 from typing import Any
-from urllib.parse import parse_qs, quote, urlparse
+from urllib.parse import parse_qs, quote, urlencode, urlparse
 
 import httpx
 from bs4 import BeautifulSoup
@@ -138,7 +138,7 @@ def _cleanup_challenge_store() -> None:
 
 def _urlencode(data: dict[str, str]) -> bytes:
     """将字典编码为 URL-encoded bytes（application/x-www-form-urlencoded）。"""
-    return "&".join(f"{k}={v}" for k, v in data.items()).encode("utf-8")
+    return urlencode(data).encode("utf-8")
 
 
 # ── DDG HTML 引擎 ────────────────────────────────────────────────────────────

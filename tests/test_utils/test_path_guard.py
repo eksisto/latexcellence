@@ -127,6 +127,15 @@ class TestSymlinkRejection:
         result = resolve_project_path(project_root, "link.tex", allow_symlink=True)
         assert result == link
 
+    def test_allow_symlink_true_still_rejects_outside_symlink(self, project_root):
+        """allow_symlink=True 只放行项目内链接，指向项目外仍必须拒绝。"""
+        outside = project_root.parent / "outside-secret.txt"
+        outside.write_text("secret", encoding="utf-8")
+        link = project_root / "link-outside.tex"
+        os.symlink(str(outside), str(link))
+        with pytest.raises(ValueError, match="resolves outside"):
+            resolve_project_path(project_root, "link-outside.tex", allow_symlink=True)
+
     def test_nested_symlink_rejected(self, project_root):
         """子目录中的符号链接也应被检测。"""
         link = project_root / "chapters" / "link.tex"

@@ -50,7 +50,7 @@ class TemplateAgentService:
             llm: 可选 LLM 客户端（测试注入用）
         """
         cfg = get_config()
-        if not cfg.llm.api_key:
+        if llm is None and not cfg.llm.api_key:
             yield {"type": "error", "message": "No API key configured"}
             return
 

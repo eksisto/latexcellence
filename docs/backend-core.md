@@ -399,11 +399,15 @@ get_tool_registry().register(
 **校验规则（六层防御）**：
 
 1. 不为空 / 不含 null 字节
-2. 不是绝对路径（`os.path.isabs()`）
+2. 不是绝对路径（`os.path.isabs()` + `PureWindowsPath` 跨平台判断）
 3. 不含 `..` 路径段（快速拦截）
-4. `resolve()` 后 `is_relative_to(root.resolve())`（精确拦截符号链接逃逸）
-5. 可选：拒绝符号链接（遍历路径组件检测 `os.path.islink()`）
-6. 可选：扩展名白名单
+4. 默认拒绝符号链接：先对原始相对路径逐组件检测 `os.path.islink()`，
+   再 `resolve()` 后 `is_relative_to(root.resolve())`（精确拦截符号链接逃逸）。
+   顺序不能颠倒，否则指向项目外的链接会先命中 “resolves outside”
+   而丢失 “symbolic link” 的精确错误
+5. `allow_symlink=True` 时返回未 `resolve()` 的链接路径本身（契约），
+   但越界链接仍会被 `is_relative_to` 拦截，安全性质不变
+6. 可选：扩展名白名单（基于 `resolve()` 后的真实后缀）
 
 **核心接口**：`resolve_project_path(root, file_path, *, allowed_suffixes, allow_symlink)`
 

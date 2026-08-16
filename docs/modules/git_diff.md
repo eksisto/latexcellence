@@ -45,6 +45,9 @@
 
 **差异生成流程**：
 
+> git 子进程统一注入 `LC_ALL=C` / `LANG=C`，保证 stderr 文案可被机器解析
+> （例如空仓库 “does not have any commits yet” 判定不受用户 locale 影响）。
+
 1. 展开 base_ref 主文件（递归解析 `\input`/ `\include`/ `\subfile` 依赖）
    - include 路径只允许项目内相对路径：拒绝绝对路径和 `..` 目录穿越；
      工作区模式读取统一走 `path_guard.resolve_project_path()`

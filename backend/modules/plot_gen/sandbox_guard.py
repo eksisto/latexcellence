@@ -52,6 +52,7 @@ def _collect_font_dirs() -> list[str]:
 # 注意：模板体内不得出现裸 {} 字符（使用 .format() 渲染），
 # 因此集合一律用元组，避免大括号冲突。
 _BOOTSTRAP_TEMPLATE = r"""
+import ctypes  # noqa: F401 — 必须在安装审计钩子前预加载 stdlib ctypes
 import os
 import sys
 
