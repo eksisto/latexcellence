@@ -162,6 +162,9 @@ function FunctionCallingSection({ functionCalling, onChange }) {
                       )
                     }
                   />
+                  <p className="text-xs text-muted-foreground">
+                    {t("settings.tavilyKeylessHint")}
+                  </p>
                 </div>
               )}
             </fieldset>

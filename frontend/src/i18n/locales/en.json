@@ -866,6 +866,7 @@
       "featureWebSearch": "Web Search",
       "featureScholarlyResearch": "Scholarly Research",
       "tavilyApiKeyHint": "Get an API key at app.tavily.com",
+      "tavilyKeylessHint": "Leave the API key blank to automatically use Tavily's free keyless endpoint (rate-limited)",
       "openAlexApiKey": "OpenAlex API Key",
       "openAlexApiKeyHint": "Get a free key at openalex.org/settings/api",
       "semanticScholarApiKeyHint": "Get a free API key at semanticscholar.org",

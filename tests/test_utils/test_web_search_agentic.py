@@ -155,7 +155,7 @@ async def test_search_multi_single_query_keeps_max_results(monkeypatch):
 def test_primary_engine_falls_back_when_unavailable(monkeypatch):
     cfg = get_config().features.function_calling.web_search
     monkeypatch.setattr(cfg, "primary_engine", "tavily")
-    monkeypatch.setattr(cfg.engines.tavily, "enabled", True)
+    monkeypatch.setattr(cfg.engines.tavily, "enabled", False)
     monkeypatch.setattr(cfg.engines.tavily, "api_key", "")
     monkeypatch.setattr(cfg.engines.duckduckgo, "enabled", True)
 

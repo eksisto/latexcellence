@@ -463,7 +463,7 @@ def get_search_manager() -> SearchManager:
             engine_registry["duckduckgo"] = DuckDuckGoHtmlEngine()
         if engines_cfg.searxng.enabled:
             engine_registry["searxng"] = SearXNGEngine()
-        if engines_cfg.tavily.enabled and engines_cfg.tavily.api_key:
+        if engines_cfg.tavily.enabled:
             engine_registry["tavily"] = TavilyEngine()
 
         primary = cfg.features.function_calling.web_search.primary_engine

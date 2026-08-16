@@ -866,6 +866,7 @@
       "featureWebSearch": "联网搜索",
       "featureScholarlyResearch": "学术文献检索",
       "tavilyApiKeyHint": "在 app.tavily.com 获取 API Key",
+      "tavilyKeylessHint": "API Key 留空时自动使用 Tavily keyless 公共接口（免费、有速率限制）",
       "openAlexApiKey": "OpenAlex API Key",
       "openAlexApiKeyHint": "可在 openalex.org/settings/api 免费获取",
       "semanticScholarApiKeyHint": "可在 semanticscholar.org 获取免费 API Key",

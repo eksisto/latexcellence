@@ -20,7 +20,9 @@ class TavilyEngine(BaseSearchEngine):
     Tavily 搜索引擎。
 
     通过 Tavily Search API（POST https://api.tavily.com/search）执行搜索，
-    需要在 config.json 中配置 engines.tavily.api_key。
+    配置 engines.tavily.api_key 时使用 Bearer Token 鉴权；未配置 API Key 时
+    自动发送 X-Tavily-Access-Mode: keyless 请求头，走 Tavily 免费公共接口
+    （免费、受速率限制）。
     """
 
     name = "tavily"
@@ -54,12 +56,11 @@ class TavilyEngine(BaseSearchEngine):
 
     async def search(self, query: str, max_results: int = 5) -> SearchResponse:
         """执行搜索，返回标准化结果。"""
+        cfg = get_config()
         api_key = self._get_api_key()
         if not api_key:
-            self._logger.warning("Tavily API key not configured")
-            return SearchResponse(query=query, engine=self.name, results=[])
+            self._logger.info("Tavily API key not configured; using keyless mode")
 
-        cfg = get_config()
         timeout = cfg.features.function_calling.web_search.timeout_seconds
         return await self._do_search(
             self._get_client(), query, max_results, api_key, timeout
@@ -86,10 +87,13 @@ class TavilyEngine(BaseSearchEngine):
             "include_raw_content": True,
         }
         headers = {
-            "Authorization": f"Bearer {api_key}",
             "Content-Type": "application/json",
             "User-Agent": _get_user_agent(),
         }
+        if api_key:
+            headers["Authorization"] = f"Bearer {api_key}"
+        else:
+            headers["X-Tavily-Access-Mode"] = "keyless"
 
         self._logger.info(f"Tavily search: {query[:60]}")
         try:
@@ -100,6 +104,13 @@ class TavilyEngine(BaseSearchEngine):
             self._logger.error(f"Tavily connection failed: {e}")
             return SearchResponse(query=query, engine=self.name, results=[])
 
+        if resp.status_code == 429 and not api_key:
+            self._logger.warning(
+                "Tavily keyless rate limit exceeded (HTTP 429); falling back"
+            )
+            raise RuntimeError(
+                "Tavily keyless rate limit exceeded; search results unavailable"
+            )
         if resp.status_code != 200:
             self._logger.warning(
                 f"Tavily HTTP {resp.status_code} | body={resp.text[:200]}"
@@ -136,5 +147,5 @@ class TavilyEngine(BaseSearchEngine):
         )
 
     async def health_check(self) -> bool:
-        """健康检查：确认已配置 Tavily API Key（不发起网络请求，避免消耗额度）。"""
-        return bool(self._get_api_key())
+        """健康检查：已配置 Key 或无 Key 走 keyless 均可用（不发起网络请求，避免消耗额度）。"""
+        return True

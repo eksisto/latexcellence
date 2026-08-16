@@ -169,7 +169,7 @@ npm start        # 或 node server.js
 | `llm` | api_key, base_url, model, temperature, max_tokens, request_interval, max_concurrency, context_window_tokens, models_probe_url | LLM 连接与调用参数；`context_window_tokens`（0=自动探测）与 `models_probe_url`（直连 /models 探测地址）用于上下文窗口动态推导；探测地址与主服务不同源时不携带 API key |
 | `http` | user_agent | 外部 HTTP 请求的全局 User-Agent（web_search 引擎与 bib_manager Provider 共用） |
 | `features` | 各模块的 `enabled` + 特有配置（batch_size, output_dir, timeout 等） | 功能开关与模块级参数 |
-| `features.function_calling` | `web_search.*`、`scholarly_research.*`、`project_tools.*`、`edit_tools.*` | 全局 LLM Function Calling 工具集；学术研究支持 OpenAlex API Key、结果上限和请求超时配置；联网搜索支持 Tavily / SearXNG / DuckDuckGo 引擎与 API Key 配置，Tavily 默认 `advanced` 深度并返回合成答案/原始正文，`deep_read_pages` 默认 0（由 open_page / find_in_page 按需读取） |
+| `features.function_calling` | `web_search.*`、`scholarly_research.*`、`project_tools.*`、`edit_tools.*` | 全局 LLM Function Calling 工具集；学术研究支持 OpenAlex API Key、结果上限和请求超时配置；联网搜索支持 Tavily / SearXNG / DuckDuckGo 引擎与 API Key 配置，Tavily 未配置 Key 时自动使用 keyless 公共接口（免费、限速），默认 `advanced` 深度搜索（返回合成答案/原始正文），`deep_read_pages` 默认 0（由 open_page / find_in_page 按需读取） |
 | `features.writing_chat` | compression_threshold_tokens（0=动态）、compression_headroom_tokens、compression_keep_recent_tokens/turns、summary_token_budget、summary_model 等 | 写作助手上下文压缩触发与摘要预算；摘要旧配置 `summary_max_tokens` 自动迁移并告警 |
 | `features.style_modify.agent` | 项目 Agent 的会话目录、轮次、工具/编译上限、大小限制、shadow 编译和清理配置 | style_modify 项目 Agent 模式 |
 | `logging` | level, dir | 日志级别与存储路径 |

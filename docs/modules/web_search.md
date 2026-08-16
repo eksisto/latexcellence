@@ -28,12 +28,12 @@
 
 - **DuckDuckGo Html**：通过 POST 访问 `html.duckduckgo.com/html/`，模拟浏览器行为（Chrome UA + Sec-Fetch 头）。DDG 触发 challenge 时返回 HTTP 202，引擎解析 challenge 图片并抛出异常向上传播，前端展示验证码由用户手动提交。
 - **SearXNG**：通过 JSON API 执行搜索，无需验证码，适合自建实例。
-- **Tavily**：通过 Tavily Search API（`POST https://api.tavily.com/search`）执行搜索，使用 Bearer API Key 鉴权，无需处理验证码，适合有 Tavily 额度的用户。默认使用 `search_depth="advanced"`，并开启 `include_answer`（合成答案）与 `include_raw_content`（原始正文直接填充 `full_content`，避免 Deep Read 二次抓取）。
+- **Tavily**：通过 Tavily Search API（`POST https://api.tavily.com/search`）执行搜索，无需处理验证码。配置 API Key 时使用 Bearer Token 鉴权；未配置 Key 时自动携带 `X-Tavily-Access-Mode: keyless` 请求头走 Tavily 免费公共接口（免费、限速，响应结构与带 Key 完全一致）。默认使用 `search_depth="advanced"`，并开启 `include_answer`（合成答案）与 `include_raw_content`（原始正文直接填充 `full_content`，避免 Deep Read 二次抓取）。
 - **Mock**：空结果，用于测试和降级。
 
 ### SearchManager
 
-统一搜索接口，管理引擎优先级与自动降级。`DDGChallengeError` 不降级，直接向上传播触发前端验证。配置的主引擎未注册（如 Tavily 缺少 API Key）时自动降级到第一个可用引擎并记录警告。
+统一搜索接口，管理引擎优先级与自动降级。`DDGChallengeError` 不降级，直接向上传播触发前端验证。配置的主引擎未注册（如 Tavily 未启用）时自动降级到第一个可用引擎并记录警告。
 
 `search_multi()` 合并多条查询结果时按 URL 去重，合并上限为 `max(max_results, min(max_results × 查询数, 15))`，避免多角度查询的收益被截断回单查询数量，同时防止上下文被搜索结果淹没。
 
@@ -87,7 +87,7 @@ Function Calling 工具注册表，统一管理所有可用工具。`get_search_
 
 两级开关（`function_calling.web_search.enabled` + `writing_chat.web_search_enabled`）需同时开启才会在聊天中注入搜索工具。
 
-Tavily 引擎需要同时满足 `engines.tavily.enabled = true` 且已配置 API Key 才会注册到 `SearchManager`；未配置 Key 时自动跳过该引擎，由其他可用引擎降级兜底。
+Tavily 引擎在 `engines.tavily.enabled = true` 时注册到 `SearchManager`；已配置 API Key 时使用 Bearer 鉴权，未配置时自动以 keyless 模式调用（免费、限速）。引擎被禁用时自动跳过，由其他可用引擎降级兜底。
 
 ## 与 Writing Chat 集成
 
