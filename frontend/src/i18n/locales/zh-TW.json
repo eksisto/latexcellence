@@ -1116,6 +1116,8 @@
     "lineRangeInvalid": "讀取行號範圍無效",
     "toolCallLimitExceeded": "Agent 工具呼叫次數超過上限 {{limit}}",
     "compileLimitReached": "Agent 編譯次數超過上限 {{limit}}",
+    "finishRefusedStale": "finish 被拒絕：最後一次編譯後暫存檔案已變更（涉及：{{files}}）。請先重新編譯再完成。",
+    "maxRoundsStaleProposal": "達到最大輪數時，最後一次編譯後暫存檔案已變更（涉及：{{files}}）；自動生成的候選方案可能未反映最後一次編譯結果。",
     "agentCommandTimedOut": "指令執行逾時",
     "agentFilePathMustBeString": "file_path 參數必須是字串",
     "agentContentMustBeString": "content 參數必須是字串",

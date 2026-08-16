@@ -261,6 +261,18 @@ const PATTERN_MAP = [
     (m) => ({ limit: m[1] }),
   ],
 
+  // style_modify Agent 编译完整性
+  [
+    /^Finish refused: the staged file set changed after the last shadow compilation \(affected: (.+?)\)/,
+    "finishRefusedStale",
+    (m) => ({ files: m[1] }),
+  ],
+  [
+    /^Reached maximum rounds with the staged file set changed after the last shadow compilation \(affected: (.+?)\); the auto-generated proposal/,
+    "maxRoundsStaleProposal",
+    (m) => ({ files: m[1] }),
+  ],
+
   // Agent 私有文件工具 / 沙箱执行失败
   [
     /^Path validation failed:\s*(.+)/,

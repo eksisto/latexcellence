@@ -108,7 +108,7 @@ python tools/generality_gate.py size --baseline \
 | `trace.jsonl` | Agent 运行追踪日志副本 |
 | `session/` | 会话快照（`baseline/`、`overlay/`、`meta.json`、`trace.jsonl`） |
 | `summary.json` | 指标汇总 + 质量分 + proposal + 检查明细 |
-| `trace_analysis.json` | `analyze_trace.py` 生成的逐轮分析 |
+| `trace_analysis.json` | `analyze_trace.py` 生成的逐轮分析（含 `stale_finish_risks`，标记最后一次编译后又被改动的文件） |
 
 ### 启发式质量分（`quality.score`，0-100）
 

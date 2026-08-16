@@ -191,11 +191,23 @@ class StyleModifyAgent:
         max_rounds = fcfg.max_rounds
         max_tool_calls = fcfg.max_tool_calls
         max_compile_runs = fcfg.max_compile_runs
+        # 只有工具链可用时才以上次成功编译的快照作为本轮 stale 锚点；
+        # 工具链缺失时该快照无法刷新，继续使用只会让 finish 被无限拒绝。
+        verified_snapshot = None
+        if tex_available:
+            try:
+                verified_snapshot = self._store.load_meta(session_id).last_verified_md5s
+            except (ValueError, OSError) as e:
+                self._logger.warning(
+                    "style_modify failed to load verified overlay snapshot: %s",
+                    e,
+                )
         compile_state: dict[str, Any] = {
             "called": False,
             "success": None,
             "status": None,
             "summary": None,
+            "staged_md5s": verified_snapshot,
         }
         final_summary = ""
         run_id = uuid.uuid4().hex[:12]
@@ -366,6 +378,49 @@ class StyleModifyAgent:
                         continue
                     compile_run_count += 1
 
+                if tool_name == "finish":
+                    stale_reason = self._stale_compile_reason(
+                        session_id,
+                        compile_state,
+                    )
+                    if stale_reason:
+                        refusal_text = (
+                            "Finish refused: "
+                            + stale_reason
+                            + " Re-run compile_staged_project to verify the "
+                            "current overlay, or discard the latest "
+                            "stage_replace and do not call finish until the "
+                            "overlay is verified."
+                        )
+                        yield {
+                            "type": "tool_result",
+                            "tool": "finish",
+                            "ok": False,
+                            "summary": refusal_text,
+                        }
+                        await self._append_trace(
+                            session_id,
+                            {
+                                "ts": now_iso(),
+                                "run_id": run_id,
+                                "type": "tool_result",
+                                "data": {
+                                    "tool": "finish",
+                                    "args": tool_args,
+                                    "ok": False,
+                                    "result_text": refusal_text,
+                                },
+                            },
+                        )
+                        messages.append(
+                            {
+                                "role": "tool",
+                                "tool_call_id": tc.id,
+                                "content": refusal_text,
+                            }
+                        )
+                        continue
+
                 try:
                     result_text, result_event = await executor.execute(
                         tool_name,
@@ -401,6 +456,30 @@ class StyleModifyAgent:
                     compile_state["success"] = result_event.get("success")
                     compile_state["status"] = result_event.get("status")
                     compile_state["summary"] = result_event.get("compile")
+                    compile_status = result_event.get("status")
+                    if compile_status in ("passed", "failed"):
+                        # 真实编译尝试（成功或失败）都作为 stale 锚点：
+                        # 之后只要 overlay 再变化，finish 就必须重新编译。
+                        compile_state["staged_md5s"] = self._staged_md5_snapshot(
+                            session_id
+                        )
+                        if result_event.get("success") is True:
+                            try:
+                                meta_state = self._store.load_meta(session_id)
+                                meta_state.last_verified_md5s = compile_state[
+                                    "staged_md5s"
+                                ]
+                                self._store.save_meta(session_id, meta_state)
+                            except Exception as e:
+                                self._logger.warning(
+                                    "style_modify failed to persist verified "
+                                    "overlay snapshot: %s",
+                                    e,
+                                )
+                    else:
+                        # not_run 表示没有真实执行编译（工具链缺失 / main
+                        # 无法解析），清除锚点，避免不可编译时 finish 死锁。
+                        compile_state["staged_md5s"] = None
                     yield {"type": "compile", **result_event}
                 elif tool_name == "stage_replace":
                     yield {"type": "file_staged", **result_event}
@@ -462,6 +541,20 @@ class StyleModifyAgent:
                 "content": f"Reached maximum rounds {max_rounds}, stopping.",
             }
             if self._store.list_staged_files(session_id):
+                stale_reason = self._stale_compile_reason(
+                    session_id,
+                    compile_state,
+                )
+                if stale_reason:
+                    yield {
+                        "type": "warning",
+                        "message": (
+                            "Reached maximum rounds with "
+                            + stale_reason
+                            + "; the auto-generated proposal may not reflect "
+                            "the last shadow compilation."
+                        ),
+                    }
                 compile_summary = self._current_compile_summary(compile_state)
                 proposal = self._store.make_proposal(
                     session_id,
@@ -495,6 +588,32 @@ class StyleModifyAgent:
             "revision": meta.latest_revision,
             "summary": final_summary,
         }
+
+    def _staged_md5_snapshot(
+        self,
+        session_id: str,
+    ) -> dict[str, str]:
+        return {
+            f.path: f.candidate_md5 for f in self._store.list_staged_files(session_id)
+        }
+
+    def _stale_compile_reason(
+        self,
+        session_id: str,
+        compile_state: dict[str, Any],
+    ) -> str | None:
+        """检测 staged overlay 是否在最后一次编译后被改动。"""
+        compiled = compile_state.get("staged_md5s")
+        if compiled is None:
+            return None
+        current = self._staged_md5_snapshot(session_id)
+        if current == compiled:
+            return None
+        changed = sorted(set(compiled) | set(current))
+        return (
+            "the staged file set changed after the last shadow "
+            f"compilation (affected: {', '.join(changed) or 'none'})"
+        )
 
     def _current_compile_summary(
         self,

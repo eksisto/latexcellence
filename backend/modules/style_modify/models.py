@@ -119,4 +119,5 @@ class SessionMeta(BaseModel):
     operation_id: str | None = None
     applied_revision: int | None = None
     refinements: list[str] = Field(default_factory=list)
+    last_verified_md5s: dict[str, str] | None = None
     messages: list[dict[str, Any]] = Field(default_factory=list)

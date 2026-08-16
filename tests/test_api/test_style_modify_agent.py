@@ -1,5 +1,6 @@
 """style_modify Agent 会话、候选 overlay 与批量事务测试。"""
 
+import json
 import shutil
 import tempfile
 from pathlib import Path
@@ -630,3 +631,388 @@ class TestStyleModifyAgentLifecycle:
             for ev in events
         )
         assert any(ev["type"] == "proposal" for ev in events)
+
+    @pytest.mark.asyncio
+    async def test_finish_refused_when_staged_changed_after_last_compile(
+        self,
+        isolated_sessions,
+        open_project,
+        monkeypatch,
+    ):
+        """最后一次成功编译后又 stage_replace，finish 必须先重新编译。"""
+        workspace_id, project = open_project
+        store = get_session_store()
+        session_id = store.create_session(
+            workspace_id,
+            project.root_path,
+            "test",
+        )
+        original = (Path(project.root_path) / "mystyle.sty").read_text(encoding="utf-8")
+
+        from backend.modules.style_modify import agent as agent_mod
+        from backend.modules.style_modify.session import (
+            StyleModifySessionStore,
+        )
+
+        monkeypatch.setattr(agent_mod, "_tex_toolchain_available", lambda: True)
+
+        async def noop_trace(session_dir, event):
+            pass
+
+        monkeypatch.setattr(agent_mod, "append_trace", noop_trace)
+        executions = {"n": 0}
+
+        async def fake_compile(self, session_id, main_file=None):
+            executions["n"] += 1
+            return CompileSummary(status="passed")
+
+        monkeypatch.setattr(
+            StyleModifySessionStore,
+            "compile_staged_project",
+            fake_compile,
+        )
+
+        class SequenceLLM:
+            def __init__(self):
+                self.calls = [
+                    _FakeResponse(
+                        [
+                            _FakeToolCall(
+                                "compile_staged_project",
+                                '{"main_file": "main.tex"}',
+                            )
+                        ]
+                    ),
+                    _FakeResponse(
+                        [
+                            _FakeToolCall(
+                                "stage_replace",
+                                json.dumps(
+                                    {
+                                        "file_path": "mystyle.sty",
+                                        "content": original.replace("333333", "00539F"),
+                                    }
+                                ),
+                            )
+                        ]
+                    ),
+                    _FakeResponse(
+                        [
+                            _FakeToolCall(
+                                "finish",
+                                '{"summary": "should be refused"}',
+                            )
+                        ]
+                    ),
+                    _FakeResponse(
+                        [
+                            _FakeToolCall(
+                                "compile_staged_project",
+                                '{"main_file": "main.tex"}',
+                            )
+                        ]
+                    ),
+                    _FakeResponse(
+                        [
+                            _FakeToolCall(
+                                "finish",
+                                '{"summary": "verified after recompile"}',
+                            )
+                        ]
+                    ),
+                ]
+
+            async def chat_with_tools(self, **kwargs):
+                return self.calls.pop(0)
+
+        events = [
+            ev
+            async for ev in get_style_modify_agent().run(
+                session_id,
+                workspace_id,
+                "test",
+                "zh",
+                llm=SequenceLLM(),
+            )
+        ]
+
+        refusals = [
+            ev
+            for ev in events
+            if ev["type"] == "tool_result"
+            and ev.get("tool") == "finish"
+            and ev.get("ok") is False
+        ]
+        assert refusals, "finish should be refused when overlay is stale"
+        assert any("Finish refused" in ev["summary"] for ev in refusals)
+        assert any(ev["type"] == "proposal" for ev in events)
+        assert executions["n"] == 2
+        staged = store.list_staged_files(session_id)
+        assert staged
+        assert store.load_meta(session_id).last_verified_md5s == {
+            staged[0].path: staged[0].candidate_md5
+        }
+
+    @pytest.mark.asyncio
+    async def test_finish_refused_with_persisted_snapshot_across_runs(
+        self,
+        isolated_sessions,
+        open_project,
+        monkeypatch,
+    ):
+        """上一轮成功编译的快照持久化后，本轮改文件直接 finish 仍须拒绝。"""
+        workspace_id, project = open_project
+        store = get_session_store()
+        session_id = store.create_session(
+            workspace_id,
+            project.root_path,
+            "test",
+        )
+        original = (Path(project.root_path) / "mystyle.sty").read_text(encoding="utf-8")
+
+        from backend.modules.style_modify import agent as agent_mod
+        from backend.modules.style_modify.session import (
+            StyleModifySessionStore,
+        )
+
+        # 模拟上一轮成功编译了空 overlay。
+        meta = store.load_meta(session_id)
+        meta.last_verified_md5s = {}
+        store.save_meta(session_id, meta)
+
+        monkeypatch.setattr(agent_mod, "_tex_toolchain_available", lambda: True)
+
+        async def noop_trace(session_dir, event):
+            pass
+
+        monkeypatch.setattr(agent_mod, "append_trace", noop_trace)
+        executions = {"n": 0}
+
+        async def fake_compile(self, session_id, main_file=None):
+            executions["n"] += 1
+            return CompileSummary(status="passed")
+
+        monkeypatch.setattr(
+            StyleModifySessionStore,
+            "compile_staged_project",
+            fake_compile,
+        )
+
+        class SequenceLLM:
+            def __init__(self):
+                self.calls = [
+                    _FakeResponse(
+                        [
+                            _FakeToolCall(
+                                "stage_replace",
+                                json.dumps(
+                                    {
+                                        "file_path": "mystyle.sty",
+                                        "content": original.replace("333333", "00539F"),
+                                    }
+                                ),
+                            )
+                        ]
+                    ),
+                    _FakeResponse(
+                        [
+                            _FakeToolCall(
+                                "finish",
+                                '{"summary": "should be refused"}',
+                            )
+                        ]
+                    ),
+                    _FakeResponse(
+                        [
+                            _FakeToolCall(
+                                "compile_staged_project",
+                                '{"main_file": "main.tex"}',
+                            )
+                        ]
+                    ),
+                    _FakeResponse(
+                        [
+                            _FakeToolCall(
+                                "finish",
+                                '{"summary": "verified after recompile"}',
+                            )
+                        ]
+                    ),
+                ]
+
+            async def chat_with_tools(self, **kwargs):
+                return self.calls.pop(0)
+
+        events = [
+            ev
+            async for ev in get_style_modify_agent().run(
+                session_id,
+                workspace_id,
+                "test",
+                "zh",
+                llm=SequenceLLM(),
+            )
+        ]
+
+        refusals = [
+            ev
+            for ev in events
+            if ev["type"] == "tool_result"
+            and ev.get("tool") == "finish"
+            and ev.get("ok") is False
+        ]
+        assert refusals, "finish should be refused when overlay is stale across runs"
+        assert any("Finish refused" in ev["summary"] for ev in refusals)
+        assert any(ev["type"] == "proposal" for ev in events)
+        assert executions["n"] == 1
+        staged = store.list_staged_files(session_id)
+        assert staged
+        assert store.load_meta(session_id).last_verified_md5s == {
+            staged[0].path: staged[0].candidate_md5
+        }
+
+    @pytest.mark.asyncio
+    async def test_finish_refused_when_staged_changed_after_failed_compile(
+        self,
+        isolated_sessions,
+        open_project,
+        monkeypatch,
+    ):
+        """编译失败后再次 stage_replace，finish 同样必须重新编译。"""
+        workspace_id, project = open_project
+        store = get_session_store()
+        session_id = store.create_session(
+            workspace_id,
+            project.root_path,
+            "test",
+        )
+        original = (Path(project.root_path) / "mystyle.sty").read_text(encoding="utf-8")
+
+        from backend.modules.style_modify import agent as agent_mod
+        from backend.modules.style_modify.session import (
+            StyleModifySessionStore,
+        )
+
+        monkeypatch.setattr(agent_mod, "_tex_toolchain_available", lambda: True)
+
+        async def noop_trace(session_dir, event):
+            pass
+
+        monkeypatch.setattr(agent_mod, "append_trace", noop_trace)
+        executions = {"n": 0}
+
+        async def fake_compile(self, session_id, main_file=None):
+            executions["n"] += 1
+            if executions["n"] == 2:
+                return CompileSummary(status="failed", log="boom")
+            return CompileSummary(status="passed")
+
+        monkeypatch.setattr(
+            StyleModifySessionStore,
+            "compile_staged_project",
+            fake_compile,
+        )
+
+        class SequenceLLM:
+            def __init__(self):
+                self.calls = [
+                    _FakeResponse(
+                        [
+                            _FakeToolCall(
+                                "compile_staged_project",
+                                '{"main_file": "main.tex"}',
+                            )
+                        ]
+                    ),
+                    _FakeResponse(
+                        [
+                            _FakeToolCall(
+                                "stage_replace",
+                                json.dumps(
+                                    {
+                                        "file_path": "mystyle.sty",
+                                        "content": original.replace("333333", "00539F"),
+                                    }
+                                ),
+                            )
+                        ]
+                    ),
+                    _FakeResponse(
+                        [
+                            _FakeToolCall(
+                                "compile_staged_project",
+                                '{"main_file": "main.tex"}',
+                            )
+                        ]
+                    ),
+                    _FakeResponse(
+                        [
+                            _FakeToolCall(
+                                "stage_replace",
+                                json.dumps(
+                                    {
+                                        "file_path": "mystyle.sty",
+                                        "content": original.replace("333333", "0077CC"),
+                                    }
+                                ),
+                            )
+                        ]
+                    ),
+                    _FakeResponse(
+                        [
+                            _FakeToolCall(
+                                "finish",
+                                '{"summary": "should be refused"}',
+                            )
+                        ]
+                    ),
+                    _FakeResponse(
+                        [
+                            _FakeToolCall(
+                                "compile_staged_project",
+                                '{"main_file": "main.tex"}',
+                            )
+                        ]
+                    ),
+                    _FakeResponse(
+                        [
+                            _FakeToolCall(
+                                "finish",
+                                '{"summary": "verified after recompile"}',
+                            )
+                        ]
+                    ),
+                ]
+
+            async def chat_with_tools(self, **kwargs):
+                return self.calls.pop(0)
+
+        events = [
+            ev
+            async for ev in get_style_modify_agent().run(
+                session_id,
+                workspace_id,
+                "test",
+                "zh",
+                llm=SequenceLLM(),
+            )
+        ]
+
+        refusals = [
+            ev
+            for ev in events
+            if ev["type"] == "tool_result"
+            and ev.get("tool") == "finish"
+            and ev.get("ok") is False
+        ]
+        assert (
+            refusals
+        ), "finish should be refused when overlay changed after failed compile"
+        assert any("Finish refused" in ev["summary"] for ev in refusals)
+        assert any(ev["type"] == "proposal" for ev in events)
+        assert executions["n"] == 3
+        staged = store.list_staged_files(session_id)
+        assert staged
+        assert store.load_meta(session_id).last_verified_md5s == {
+            staged[0].path: staged[0].candidate_md5
+        }

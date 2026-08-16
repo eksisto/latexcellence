@@ -1116,6 +1116,8 @@
     "lineRangeInvalid": "The requested line range is invalid",
     "toolCallLimitExceeded": "Agent tool call limit {{limit}} exceeded",
     "compileLimitReached": "Agent compile limit {{limit}} reached",
+    "finishRefusedStale": "Finish refused: the staged file set changed after the last shadow compilation (affected: {{files}}). Recompile before finishing.",
+    "maxRoundsStaleProposal": "Reached the maximum rounds with the staged file set changed after the last shadow compilation (affected: {{files}}); the auto-generated proposal may not reflect the last shadow compilation.",
     "agentCommandTimedOut": "Command timed out",
     "agentFilePathMustBeString": "file_path must be a string",
     "agentContentMustBeString": "content must be a string",

@@ -76,6 +76,8 @@ data/style_modify_sessions/<session_id>/
 
 `compile_staged_project` 从当前项目创建受限 shadow 副本，跳过缓存、版本控制元数据、构建产物和会话目录，用当前 overlay 覆盖对应文件，然后在 shadow 内调用 `run_tex_compile()`。编译状态区分 `passed`、`failed`、`not_run`，界面不得把未执行编译伪装为成功。
 
+`finish` 前会校验 overlay 与最后一次编译（成功或失败）时的快照是否一致：只要最后一次编译后又发生 `stage_replace` / `discard_file_changes`，Agent 就拒绝 finish 并要求重新编译，避免交付与编译结果不一致的候选方案。快照按 staged 文件 MD5 计算，成功编译后持久化到会话 meta（`last_verified_md5s`），因此跨 refine 轮次同样生效；工具链缺失（`not_run`）时不以此快照拦截 finish。
+
 ### Proposal 与事务写回
 
 `finish` 生成不可变 proposal revision，包含需求、变更说明、逐文件 baseline MD5、candidate MD5、unified diff、编译摘要和可应用状态。前端 refinement 只能基于当前 revision 发起；应用前检查 workspace、项目指纹、最新 revision、路径、真实文件 MD5 和 LaTeX 内容。

@@ -104,14 +104,17 @@ def analyze(result_dir: Path) -> dict:
                         "result_head": result[:200],
                     }
                 )
-            timeline.append(
-                {
-                    "event": "tool_result",
-                    "tool": tool,
-                    "ok": ok,
-                    "args_summary": _arg_summary(args),
-                }
-            )
+            timeline_entry: dict = {
+                "event": "tool_result",
+                "tool": tool,
+                "ok": ok,
+                "args_summary": _arg_summary(args),
+            }
+            if tool == "compile_staged_project":
+                event = data.get("event") or {}
+                timeline_entry["success"] = event.get("success")
+                timeline_entry["status"] = event.get("status")
+            timeline.append(timeline_entry)
         elif typ == "warning":
             timeline.append(
                 {"event": "warning", "message": ev.get("data", {}).get("message", "")}
@@ -120,6 +123,35 @@ def analyze(result_dir: Path) -> dict:
             timeline.append(
                 {"event": "error", "message": ev.get("data", {}).get("message", "")}
             )
+
+    last_compile_idx = -1
+    for i, entry in enumerate(timeline):
+        if (
+            entry.get("event") == "tool_result"
+            and entry.get("tool") == "compile_staged_project"
+            and entry.get("status") in ("passed", "failed")
+        ):
+            last_compile_idx = i
+    first_finish_idx = -1
+    for i, entry in enumerate(timeline):
+        if entry.get("event") == "tool_result" and entry.get("tool") == "finish":
+            first_finish_idx = i
+            break
+    stale_finish_risks = [
+        {
+            "file_path": e["args_summary"].get("file_path", ""),
+            "after_last_compile": True,
+        }
+        for i, e in enumerate(timeline)
+        if (
+            last_compile_idx >= 0
+            and e.get("event") == "tool_result"
+            and e.get("tool") == "stage_replace"
+            and e.get("ok") is True
+            and i > last_compile_idx
+            and (first_finish_idx < 0 or i < first_finish_idx)
+        )
+    ]
 
     analysis = {
         "rounds": len(llm_rounds),
@@ -130,6 +162,7 @@ def analyze(result_dir: Path) -> dict:
         "compile_statuses": [c["status"] for c in compiles],
         "compile_successes": sum(1 for c in compiles if c["success"] is True),
         "compile_failures": sum(1 for c in compiles if c["success"] is False),
+        "stale_finish_risks": stale_finish_risks,
         "stage_replacements": len(stage_replacements),
         "staged_paths": sorted({s["file_path"] for s in stage_replacements}),
         "final_compile_success": (run_end.get("data") or {}).get("compile_success"),

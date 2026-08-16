@@ -1116,6 +1116,8 @@
     "lineRangeInvalid": "读取行号范围无效",
     "toolCallLimitExceeded": "Agent 工具调用次数超过上限 {{limit}}",
     "compileLimitReached": "Agent 编译次数超过上限 {{limit}}",
+    "finishRefusedStale": "finish 被拒绝：最后一次编译后暂存文件已变更（涉及：{{files}}）。请先重新编译再完成。",
+    "maxRoundsStaleProposal": "达到最大轮数时，最后一次编译后暂存文件已变更（涉及：{{files}}）；自动生成的候选方案可能未反映最后一次编译结果。",
     "agentCommandTimedOut": "命令执行超时",
     "agentFilePathMustBeString": "file_path 参数必须是字符串",
     "agentContentMustBeString": "content 参数必须是字符串",
