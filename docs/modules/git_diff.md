@@ -4,6 +4,20 @@
 
 支持两种差异引擎：内置 `difflib`（行级对比）或外部 `latexdiff`（语义对比）。
 
+### service 包拆分
+
+`git_diff` 的对外入口仍是 `backend/modules/git_diff/service`；内部按职责拆为子模块：
+
+| 文件 | 职责 |
+| --- | --- |
+| `models.py` | Pydantic 结果模型与内部 dataclass |
+| `constants.py` | 常量、正则与差异 preamble 模板 |
+| `process.py` | git / latexdiff / latexmk 子进程执行 |
+| `revisions.py` | Git revision 列表与校验 |
+| `flatten.py` | LaTeX 依赖递归展开 |
+| `diff.py` | difflib / latexdiff 差异文档生成 |
+| `render.py` | 编译目录准备、PDF 渲染与产物管理 |
+
 当 PDF 编译失败时，会调用 `compile_error_translator.translate_compile_errors()` 将错误日志翻译为中文解释和修复建议（复用 compile 模块的 LLM 错误翻译能力）。
 
 | 维度 | 差异高亮 | 其他模块 |

@@ -25,6 +25,10 @@ from backend.modules.template_gen.agent import (
     _format_error_analysis,
     _trim_log,
 )
+from backend.modules.template_gen.agent import (
+    executor as agent_executor_mod,
+    service as agent_service_mod,
+)
 from backend.modules.template_gen.trace import append_trace, read_trace
 
 
@@ -393,7 +397,6 @@ class TestToolExecutorCompile:
 
     def test_fallback_extracts_errors_from_main_log(self, tmp_path, monkeypatch):
         """latexmk 输出中没有 `!` 行时，应兜底从 <main>.log 提取结构化错误。"""
-        import backend.modules.template_gen.agent as agent_mod
         from types import SimpleNamespace
 
         cfg = get_config()
@@ -419,7 +422,7 @@ class TestToolExecutorCompile:
         async def _fake_run(*args, **kwargs):
             return fake
 
-        monkeypatch.setattr(agent_mod, "run_tex_compile", _fake_run)
+        monkeypatch.setattr(agent_executor_mod, "run_tex_compile", _fake_run)
         executor = _ToolExecutor(tmp_path, cfg, MagicMock())
 
         text, ev = asyncio.run(executor._compile_latex({"main_file": "main.tex"}))
@@ -432,7 +435,6 @@ class TestToolExecutorCompile:
         self, tmp_path, monkeypatch
     ):
         """编译输出与 .log 都无 `!` 行、但 bibtex 失败时，应追加 .blg 尾部。"""
-        import backend.modules.template_gen.agent as agent_mod
         from types import SimpleNamespace
 
         cfg = get_config()
@@ -462,7 +464,7 @@ class TestToolExecutorCompile:
         async def _fake_run(*args, **kwargs):
             return fake
 
-        monkeypatch.setattr(agent_mod, "run_tex_compile", _fake_run)
+        monkeypatch.setattr(agent_executor_mod, "run_tex_compile", _fake_run)
         executor = _ToolExecutor(tmp_path, cfg, MagicMock())
 
         text, ev = asyncio.run(executor._compile_latex({"main_file": "main.tex"}))
@@ -475,8 +477,6 @@ class TestToolExecutorCompile:
         self, tmp_path, monkeypatch
     ):
         """后续 TeX pass 已修复的首轮引用 warning 不应阻断成功。"""
-        import backend.modules.template_gen.agent as agent_mod
-
         cfg = get_config()
         cfg.features.template_gen.output_dir = str(tmp_path)
         (tmp_path / "main.tex").write_text(
@@ -506,7 +506,7 @@ class TestToolExecutorCompile:
         async def _fake_run(*args, **kwargs):
             return fake
 
-        monkeypatch.setattr(agent_mod, "run_tex_compile", _fake_run)
+        monkeypatch.setattr(agent_executor_mod, "run_tex_compile", _fake_run)
         executor = _ToolExecutor(tmp_path, cfg, MagicMock())
 
         text, event = asyncio.run(executor._compile_latex({"main_file": "main.tex"}))
@@ -1009,7 +1009,6 @@ class TestToolExecutorWriteFile:
         self, tmp_path, monkeypatch
     ):
         """失败后源码未变时不应反复执行相同的 latexmk。"""
-        import backend.modules.template_gen.agent as agent_mod
         from types import SimpleNamespace
 
         cfg = get_config()
@@ -1033,7 +1032,7 @@ class TestToolExecutorWriteFile:
             calls += 1
             return fake
 
-        monkeypatch.setattr(agent_mod, "run_tex_compile", _fake_run)
+        monkeypatch.setattr(agent_executor_mod, "run_tex_compile", _fake_run)
         executor = _ToolExecutor(tmp_path, cfg, MagicMock())
 
         _first_text, first_event = asyncio.run(
@@ -1051,7 +1050,6 @@ class TestToolExecutorWriteFile:
         self, tmp_path, monkeypatch
     ):
         """失败摘要只有外层行号时，结构化错误应优先来自完整 .log。"""
-        import backend.modules.template_gen.agent as agent_mod
         from types import SimpleNamespace
 
         cfg = get_config()
@@ -1075,9 +1073,9 @@ class TestToolExecutorWriteFile:
         async def _fake_run(*args, **kwargs):
             return fake
 
-        monkeypatch.setattr(agent_mod, "run_tex_compile", _fake_run)
+        monkeypatch.setattr(agent_executor_mod, "run_tex_compile", _fake_run)
         monkeypatch.setattr(
-            agent_mod,
+            agent_executor_mod,
             "_read_log_text",
             lambda path, max_chars=262144: (
                 "(./chapters/intro.tex\n"
@@ -1408,8 +1406,6 @@ class TestCompileFailureWarning:
             }
             return llm_text, event
 
-        import backend.modules.template_gen.agent as agent_mod
-
         monkeypatch.setattr(_ToolExecutor, "_compile_latex", _fake_compile)
 
         events = _collect(svc, "test warning", llm)
@@ -1541,12 +1537,11 @@ class TestTraceRecording:
 
     def test_trace_failure_does_not_abort_generation(self, tmp_path, monkeypatch):
         """append_trace 写入失败时仅记录日志，不中断生成主流程。"""
-        import backend.modules.template_gen.agent as agent_mod
 
         async def _boom(*args, **kwargs):
             raise OSError("disk full")
 
-        monkeypatch.setattr(agent_mod, "append_trace", _boom)
+        monkeypatch.setattr(agent_service_mod, "append_trace", _boom)
         svc = TemplateAgentService()
         llm = MagicMock()
         responses = [

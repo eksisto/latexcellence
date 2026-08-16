@@ -1,77 +1,32 @@
-"""
-写作助手业务逻辑。
+"""写作助手服务：RS1 对话流与 Function Calling 工具编排。"""
 
-核心设计：
-    1. 无 marker 保护：整个 writing_chat 作为特例，不采用 LaTeX → marker → 纯文本 的剥离/还原流程。
-       LLM 直接接收原始 LaTeX 源码，包括所有命令、环境、公式，能够充分理解文档结构与内容。
-    2. 双轮协议：
-        - RS1: chat_stream_with_usage 流式输出 Markdown 回复给用户看
-        - RS2: 仅当用户点击"生成编辑"按钮后，发起独立的编辑请求
-          （分隔符协议：<<<LATEX>>>...<<<END>>> 纯文本块 + 可选
-          <<<REASON>>>...<<<END>>>），得到编辑操作建议附挂到该 assistant
-          消息上（不直接写回 .tex，等用户再点应用）。
-          不用 JSON 传输 LaTeX，避免反斜杠转义静默损坏。
-    3. 上下文压缩：
-        - 每次发送消息前判断 cumulative_tokens 是否达到阈值（固定配置或按
-          模型上下文窗口动态推导）
-        - 触发时只摘要真正需要遗忘的旧历史，最近若干轮消息原样保留，本轮
-          user 消息始终以真实 user 角色进入 LLM
-        - 摘要输入剔除 tool 原始结果与 assistant+tool_calls 对，避免压缩
-          请求自身超限；摘要 tokens 优先使用真实 usage
-        - 摘要失败时确定性裁剪兜底，上下文超限时先裁剪再压缩重试
-        - 被压缩的原始消息保存在 summary 的 snapshot 字段，删除 summary 时还原
-
-事件流（RS1）通过 SSE 推送：
-    { type: "token", content: "..." }       # 流式 Markdown 片段
-    { type: "compressed" }                  # 本轮触发了压缩（前端提示）
-    { type: "done", session_id, message_id, tokens }
-    { type: "error", message: "..." }
-"""
-
-import asyncio
-import difflib
 import json
 import re
-import time
 import uuid
 from typing import Any, AsyncIterator
 from urllib.parse import urlparse, urlunparse
 
 from backend.core.config import get_config
-from backend.core.logger import get_logger
-from backend.core.llm_client import get_llm_client
+from backend.core.prompts import get_prompt
 from backend.core.tool_registry import get_tool_registry
 from backend.core.workspace_manager import get_project_manager_for_workspace
-from backend.core.prompts import get_prompt
-from backend.utils.latex_json_guard import validate_latex_field
-from backend.utils.latex_literals import extract_delimited_block
-from backend.utils.time_utils import get_current_time_context
-from backend.utils.web_search import DDGChallengeError, get_search_manager
-from backend.utils.project_tools import get_project_tools_manager
-from backend.utils.project_tools.edit_tools_manager import get_edit_tools_manager
 from backend.modules.writing_chat.context import (
     ConversationContext,
     _NOPROJECT_SCOPE,
     compute_scope,
 )
-from backend.modules.writing_chat.models import (
-    ApplyEditRequest,
-    ChatMessage,
-    ChatSendRequest,
-    DeleteMessageRequest,
-    EditOp,
-    GenerateEditRequest,
-)
+from backend.modules.writing_chat.models import ChatSendRequest
+from backend.utils.project_tools import get_project_tools_manager
+from backend.utils.project_tools.edit_tools_manager import get_edit_tools_manager
+from backend.utils.time_utils import get_current_time_context
+from backend.utils.web_search import DDGChallengeError, get_search_manager
 
-# ── Service ────────────────────────────────────────────────────────────────
+from . import _deps
 
 
-class WritingChatService:
-    """
-    写作助手服务（单例）。
-    """
+class ConversationMixin:
+    """RS1 主对话流与工具执行。"""
 
-    # 工具名 → i18n label 映射，前端通过 label 查找 toolStatus 翻译
     _TOOL_LABELS: dict[str, str] = {
         "web_search": "searching",
         "open_page": "reading_page",
@@ -104,26 +59,6 @@ class WritingChatService:
 
     # 正文内 Markdown 链接提取正则（URL 不含空格与右括号）
     _MARKDOWN_LINK_RE = re.compile(r"\[[^\]]*\]\((https?://[^)\s]+)\)")
-
-    def __init__(self):
-        self._logger = get_logger("writing_chat.service")
-        # 会话级写锁：同一 session 的 send / 编辑 / 压缩等操作互斥，
-        # 防止双标签页并发 save_to_disk 最后写者胜导致丢消息。
-        self._session_locks: dict[str, asyncio.Lock] = {}
-        # 待用户确认的工具调用（写操作：edit_paragraph / undo_last_edit）
-        # key: pending_id, value: {event: asyncio.Event, confirmed: bool | None, tool_name: str, ...}
-        self._pending_confirms: dict[str, dict[str, Any]] = {}
-        # 待用户回复的澄清请求（request_clarification）
-        # key: clarify_id, value: {event: asyncio.Event, answered: bool, answer: str, created_at: float}
-        self._pending_clarifications: dict[str, dict[str, Any]] = {}
-
-    def _session_lock(self, session_id: str) -> asyncio.Lock:
-        """获取指定会话的串行化锁（会话删除时由 delete_session 清理）。"""
-        lock = self._session_locks.get(session_id)
-        if lock is None:
-            lock = asyncio.Lock()
-            self._session_locks[session_id] = lock
-        return lock
 
     @staticmethod
     def _normalize_citation_url(url: str) -> str:
@@ -216,147 +151,12 @@ class WritingChatService:
 
     @staticmethod
     def _get_tool_label(tool_name: str, _tool_args: dict) -> str:
-        return WritingChatService._TOOL_LABELS.get(tool_name, "running_tool")
+        return ConversationMixin._TOOL_LABELS.get(tool_name, "running_tool")
 
     @staticmethod
     def _is_sensitive_tool(tool_name: str) -> bool:
         """判断工具是否属于敏感操作（需要用户确认）。"""
         return tool_name in ("edit_paragraph", "undo_last_edit")
-
-    async def _request_tool_confirmation(
-        self,
-        pending_id: str,
-        tool_name: str,
-        tool_args: dict,
-    ) -> dict | None:
-        """
-        发出工具确认请求，等待前端用户确认。
-
-        返回：
-            - None: 超时或被拒绝
-            - dict: 确认后的参数（可能已被前端修改）
-        """
-        self._cleanup_stale_pending()
-        event = asyncio.Event()
-        self._pending_confirms[pending_id] = {
-            "event": event,
-            "confirmed": None,
-            "tool_name": tool_name,
-            "tool_args": dict(tool_args),
-            "created_at": time.time(),
-        }
-        try:
-            await asyncio.wait_for(event.wait(), timeout=120)
-        except asyncio.TimeoutError:
-            self._pending_confirms.pop(pending_id, None)
-            return None
-
-        pending = self._pending_confirms.pop(pending_id, {})
-        if not pending.get("confirmed"):
-            return None
-        return pending.get("tool_args", tool_args)
-
-    def _cleanup_stale_pending(self, max_age: float = 120) -> None:
-        """清理超过 TTL 的待确认请求。"""
-        now = time.time()
-        stale = [
-            pid
-            for pid, p in self._pending_confirms.items()
-            if now - p.get("created_at", 0) > max_age
-        ]
-        for pid in stale:
-            p = self._pending_confirms.pop(pid, None)
-            if p and not p.get("event").is_set():
-                p["confirmed"] = False
-                p["event"].set()
-
-    def confirm_pending_tool(
-        self, pending_id: str, modified_args: dict | None = None
-    ) -> bool:
-        """确认待定工具调用。"""
-        pending = self._pending_confirms.get(pending_id)
-        if not pending or pending["event"].is_set():
-            return False
-        if modified_args:
-            pending["tool_args"] = modified_args
-        pending["confirmed"] = True
-        pending["event"].set()
-        return True
-
-    def cancel_pending_tool(self, pending_id: str) -> bool:
-        """取消待定工具调用。"""
-        pending = self._pending_confirms.get(pending_id)
-        if not pending or pending["event"].is_set():
-            return False
-        pending["confirmed"] = False
-        pending["event"].set()
-        return True
-
-    # ── 澄清请求（request_clarification） ─────────────────────────────
-
-    async def _request_clarification(
-        self,
-        clarify_id: str,
-    ) -> str:
-        """
-        发出澄清请求，等待前端用户回复。
-
-        返回：
-            - str: 用户的回复内容。超时或取消时返回提示文本。
-        """
-        self._cleanup_stale_clarifications()
-        event = asyncio.Event()
-        self._pending_clarifications[clarify_id] = {
-            "event": event,
-            "answered": False,
-            "answer": "",
-            "created_at": time.time(),
-        }
-        try:
-            await asyncio.wait_for(event.wait(), timeout=120)
-        except asyncio.TimeoutError:
-            self._pending_clarifications.pop(clarify_id, None)
-            return "（用户未在时限内回复，请根据已有信息自行判断并继续）"
-
-        pending = self._pending_clarifications.pop(clarify_id, {})
-        if not pending.get("answered"):
-            return "（用户已取消此澄清请求，请根据已有信息自行判断并继续）"
-        return pending.get("answer", "")
-
-    def submit_clarification(self, clarify_id: str, answer: str) -> bool:
-        """提交澄清请求的回复。"""
-        pending = self._pending_clarifications.get(clarify_id)
-        if not pending or pending["event"].is_set():
-            return False
-        pending["answer"] = answer
-        pending["answered"] = True
-        pending["event"].set()
-        return True
-
-    def cancel_clarification(self, clarify_id: str) -> bool:
-        """取消待定的澄清请求。"""
-        pending = self._pending_clarifications.get(clarify_id)
-        if not pending or pending["event"].is_set():
-            return False
-        pending["answered"] = False
-        pending["event"].set()
-        return True
-
-    def _cleanup_stale_clarifications(self, max_age: float = 120) -> None:
-        """清理超过 TTL 的待定澄清请求。"""
-        now = time.time()
-        stale = [
-            cid
-            for cid, c in self._pending_clarifications.items()
-            if now - c.get("created_at", 0) > max_age
-        ]
-        for cid in stale:
-            c = self._pending_clarifications.pop(cid, None)
-            if c and not c.get("event").is_set():
-                c["answered"] = False
-                c["event"].set()
-
-    # ── 工具方法 ──────────────────────────────────────────────────────────
 
     @staticmethod
     def _no_api_key() -> bool:
@@ -376,52 +176,6 @@ class WritingChatService:
         return _NOPROJECT_SCOPE
 
     # ── 会话管理 ──────────────────────────────────────────────────────────
-
-    def list_sessions(self, workspace_id: str = "") -> list[dict[str, Any]]:
-        scope = self._get_scope(workspace_id) if workspace_id else ""
-        return ConversationContext.list_sessions(scope)
-
-    def load_session(self, session_id: str) -> ConversationContext | None:
-        return ConversationContext.load_from_disk(session_id)
-
-    async def delete_session(self, session_id: str) -> bool:
-        async with self._session_lock(session_id):
-            ctx = ConversationContext.load_from_disk(session_id)
-            if ctx is None:
-                return False
-            result = ctx.delete_from_disk()
-            self._session_locks.pop(session_id, None)
-            return result
-
-    async def rename_session(self, session_id: str, title: str) -> dict:
-        async with self._session_lock(session_id):
-            ctx = ConversationContext.load_from_disk(session_id)
-            if ctx is None:
-                raise ValueError(f"Session not found: {session_id}")
-            ctx.rename(title)
-            return {"status": "ok", "title": ctx.title}
-
-    async def compact_session(self, session_id: str) -> dict:
-        """
-        手动压缩会话（复用自动压缩逻辑，不追加 user 消息）。
-
-        消息过少或压缩失败时返回 compressed=False，不改变会话结构。
-        """
-        async with self._session_lock(session_id):
-            ctx = ConversationContext.load_from_disk(session_id)
-            if ctx is None:
-                raise ValueError(f"Session not found: {session_id}")
-            compressed = await self._maybe_compress(ctx)
-            ctx.save_to_disk()
-            return {
-                "status": "ok",
-                "compressed": compressed,
-                "session_id": ctx.session_id,
-                "message_count": len(ctx.messages),
-                "cumulative_tokens": ctx.cumulative_tokens,
-            }
-
-    # ── 发送消息（RS1，SSE 流式） ────────────────────────────────────────
 
     async def send(
         self, req: ChatSendRequest, workspace_id: str = ""
@@ -482,7 +236,7 @@ class WritingChatService:
         ctx.save_to_disk()
 
         # 4. 调用 LLM 流式（支持 Function Calling 工具调用）
-        llm = get_llm_client()
+        llm = _deps.get_llm_client()
         system_prompt = get_prompt(
             "writing_chat",
             "chat_system",
@@ -1003,254 +757,6 @@ class WritingChatService:
             "tokens": last_usage_tokens,
         }
 
-    # ── 生成编辑（RS2，分隔符协议） ─────────────────────────────────
-
-    async def generate_edit(
-        self, req: GenerateEditRequest, workspace_id: str = ""
-    ) -> dict:
-        """基于用户对话指令生成编辑建议（会话写操作串行化）。"""
-        if self._no_api_key():
-            raise RuntimeError("No API key configured")
-        async with self._session_lock(req.session_id):
-            return await self._generate_edit_locked(req, workspace_id)
-
-    async def _generate_edit_locked(
-        self, req: GenerateEditRequest, workspace_id: str = ""
-    ) -> dict:
-        """
-        生成编辑操作建议实现（调用方已持有会话级锁）。
-
-        基于用户对话指令，对指定段落生成编辑操作建议。
-
-        直接发送原始 LaTeX 源码给 LLM，LLM 返回修改后的 LaTeX 源码，
-        无需 marker pipeline（writing_chat 是特例，不用 marker 保护）。
-
-        LLM 输出走分隔符协议（<<<LATEX>>>...<<<END>>>）而非 JSON：
-        反斜杠原样传输，避免 JSON 转义静默损坏；original 由后端从段落
-        原文填充，不再要求 LLM 回显，减少误报与 token 消耗。
-        """
-        ctx = ConversationContext.load_from_disk(req.session_id)
-        if ctx is None:
-            raise ValueError(f"Session not found: {req.session_id}")
-
-        pm = get_project_manager_for_workspace(workspace_id)
-        paragraphs = pm.get_paragraphs(req.file_path)
-        if req.paragraph_index < 0 or req.paragraph_index >= len(paragraphs):
-            raise IndexError(
-                f"Paragraph index {req.paragraph_index} out of range "
-                f"(0-{len(paragraphs) - 1})"
-            )
-        para = paragraphs[req.paragraph_index]
-        if not para.text.strip():
-            raise ValueError("Target paragraph is empty")
-
-        llm = get_llm_client()
-        system_prompt = get_prompt(
-            "writing_chat",
-            "edit_system",
-            instruction=req.instruction,
-            language=req.language,
-        )
-        messages = [
-            {"role": "system", "content": system_prompt},
-            {
-                "role": "user",
-                "content": (
-                    f"Rewrite paragraph {req.paragraph_index} of the paper.\n\n"
-                    f"RAW LATEX:\n{para.text}"
-                ),
-            },
-        ]
-
-        optimized_latex, reason = await self._generate_edit_with_llm(llm, messages)
-
-        # 构造 unified diff（基于原始 LaTeX）
-        diff_text = "\n".join(
-            difflib.unified_diff(
-                para.text.splitlines(keepends=False),
-                optimized_latex.splitlines(keepends=False),
-                fromfile=f"paragraph-{req.paragraph_index}-original.tex",
-                tofile=f"paragraph-{req.paragraph_index}-new.tex",
-                lineterm="",
-            )
-        )
-
-        edit_op = EditOp(
-            file_path=req.file_path,
-            paragraph_index=req.paragraph_index,
-            original_latex=para.text,
-            new_latex=optimized_latex,
-            diff_text=diff_text,
-            applied=False,
-        )
-
-        # 尝试附挂到一条最近的 assistant 消息（如有），否则就返回给 router
-        attached = None
-        for m in reversed(ctx.messages):
-            if m.role == "assistant":
-                ctx.attach_edit_op(m.id, edit_op)
-                attached = m.id
-                break
-        ctx.save_to_disk()
-
-        return {
-            "session_id": ctx.session_id,
-            "attached_message_id": attached,
-            "edit_op": edit_op.model_dump(mode="json"),
-            "reason": reason,
-        }
-
-    # ── 分隔符协议：提取 + 校验 + 重试 ───────────────────────────────
-
-    _MAX_EDIT_RETRIES = 3
-
-    async def _generate_edit_with_llm(
-        self, llm, messages: list[dict[str, Any]]
-    ) -> tuple[str, str]:
-        """
-        按分隔符协议调用 LLM 生成编辑结果。
-
-        返回 (optimized_latex, reason)。提取的 LaTeX 过内容校验
-        （非 JSON 宽松模式，放行 \\t / \\r），失败时把错误回喂 LLM 重试，
-        最多 3 次；重试耗尽后抛 RuntimeError（与 style_modify 行为一致）。
-        """
-        max_tokens = max(get_config().llm.max_tokens, 4096)
-        last_error: str | None = None
-        for attempt in range(self._MAX_EDIT_RETRIES):
-            try:
-                response_text = await llm.chat(
-                    messages,
-                    temperature=0.3,
-                    max_tokens=max_tokens,
-                )
-                optimized = self._extract_edit_latex_block(response_text)
-                if optimized is None:
-                    raise ValueError(
-                        "Response did not contain a <<<LATEX>>>...<<<END>>> block. "
-                        "Output the complete rewritten paragraph strictly between "
-                        "those two markers, with NO JSON and NO markdown fences."
-                    )
-                if not optimized.strip():
-                    raise ValueError(
-                        "The <<<LATEX>>> block is empty. Output the complete "
-                        "rewritten paragraph between the markers."
-                    )
-                validate_latex_field(optimized, relaxed=True)
-                reason = self._extract_edit_reason_block(response_text) or ""
-                self._logger.info(
-                    f"generate_edit succeeded: {len(optimized)} chars "
-                    f"on attempt {attempt + 1}"
-                )
-                return optimized, reason
-
-            except ValueError as e:
-                last_error = str(e)
-                self._logger.warning(
-                    f"generate_edit protocol/validation failed on attempt "
-                    f"{attempt + 1}/{self._MAX_EDIT_RETRIES}: {last_error}"
-                )
-            except Exception as e:
-                self._logger.error(f"generate_edit LLM call failed: {e}")
-                raise RuntimeError(f"Edit generation failed: {e}")
-
-            messages = messages + [
-                {
-                    "role": "user",
-                    "content": (
-                        "Your previous response failed the output protocol. "
-                        f"Error: {last_error}\n\n"
-                        "Please output exactly:\n"
-                        "<<<LATEX>>>\n<complete rewritten paragraph as raw LaTeX>\n"
-                        "<<<END>>>\n"
-                        "<<<REASON>>>\n<brief explanation>\n<<<END>>>"
-                    ),
-                }
-            ]
-
-        raise RuntimeError(
-            f"Edit generation failed: all {self._MAX_EDIT_RETRIES} attempts "
-            f"failed. Last error: {last_error}"
-        )
-
-    @staticmethod
-    def _extract_edit_latex_block(response_text: str) -> str | None:
-        """提取 <<<LATEX>>>...<<<END>>> 块内容；缺失返回 None。
-
-        逐字内容（\\verb / \\lstinline 等）中的 <<<END>>> 不是协议结束，
-        提取由 latex_literals.extract_delimited_block 统一处理。
-        """
-        block = extract_delimited_block(response_text, "<<<LATEX>>>", "<<<END>>>")
-        if block is None:
-            return None
-        return block.strip()
-
-    @staticmethod
-    def _extract_edit_reason_block(response_text: str) -> str | None:
-        """提取 <<<REASON>>>...<<<END>>> 块内容；缺失返回 None。"""
-        block = extract_delimited_block(response_text, "<<<REASON>>>", "<<<END>>>")
-        if block is None:
-            return None
-        return block.strip()
-
-    # ── 应用编辑 ──────────────────────────────────────────────────────
-
-    async def apply_edit(self, req: ApplyEditRequest, workspace_id: str = "") -> dict:
-        """应用编辑操作（会话写操作串行化）。"""
-        async with self._session_lock(req.session_id):
-            return self._apply_edit_locked(req, workspace_id)
-
-    def _apply_edit_locked(self, req: ApplyEditRequest, workspace_id: str = "") -> dict:
-        """应用编辑操作实现（调用方已持有会话级锁）。"""
-        ctx = ConversationContext.load_from_disk(req.session_id)
-        if ctx is None:
-            raise ValueError(f"Session not found: {req.session_id}")
-
-        edit_op: EditOp | None = None
-        for m in ctx.messages:
-            if m.id == req.edit_message_id and m.edit_op is not None:
-                edit_op = m.edit_op
-                break
-        if edit_op is None:
-            raise ValueError(f"No edit op attached to message {req.edit_message_id}")
-        if edit_op.applied:
-            return {"applied": True, "already_applied": True}
-
-        # 优先使用请求中携带的 new_latex（用户手动编辑的内容）
-        target_latex = req.new_latex if req.new_latex is not None else edit_op.new_latex
-        pm = get_project_manager_for_workspace(workspace_id)
-        pm.apply_change(
-            edit_op.file_path,
-            edit_op.paragraph_index,
-            target_latex,
-            expected_md5=req.expected_md5,
-        )
-
-        ctx.mark_edit_applied(req.edit_message_id)
-        ctx.save_to_disk()
-        self._logger.info(
-            f"Applied edit: {edit_op.file_path} paragraph[{edit_op.paragraph_index}]"
-        )
-        return {"applied": True, "already_applied": False}
-
-    # ── 删除消息 ────────────────────────────────────────────────────────────
-
-    async def delete_message(self, req: DeleteMessageRequest) -> dict:
-        """删除消息（会话写操作串行化）。"""
-        async with self._session_lock(req.session_id):
-            return self._delete_message_locked(req)
-
-    def _delete_message_locked(self, req: DeleteMessageRequest) -> dict:
-        """删除消息实现（调用方已持有会话级锁）。"""
-        ctx = ConversationContext.load_from_disk(req.session_id)
-        if ctx is None:
-            raise ValueError(f"Session not found: {req.session_id}")
-        result = ctx.delete_message(req.message_id)
-        if result["restored"] or result["removed"]:
-            ctx.save_to_disk()
-        return result
-
-    # ── 内部辅助 ────────────────────────────────────────────────────────────
-
     def _build_context_block(
         self, file_path: str, paragraph_index: int | None, workspace_id: str = ""
     ) -> str:
@@ -1371,195 +877,3 @@ class WritingChatService:
                 self._logger.warning("Failed to load scholarly research tools: %s", e)
 
         return tools
-
-    @staticmethod
-    def _is_context_overflow_error(exc: Exception) -> bool:
-        """判断异常是否属于上下文超限（可恢复）。"""
-        text = str(exc).lower()
-        return any(
-            token in text
-            for token in (
-                "context length",
-                "context_length",
-                "maximum context",
-                "context window",
-                "context_window",
-                "too many tokens",
-                "token limit",
-                "input length",
-                "sequence length",
-            )
-        )
-
-    @staticmethod
-    def _build_summary_transcript(messages: list[ChatMessage]) -> str:
-        """
-        把待摘要消息转为摘要请求文本。
-
-        剔除 role=tool 原始结果与 assistant+tool_calls 对的原始内容，
-        只保留 user / assistant / summary 的对话文本，避免压缩请求本身超限。
-        """
-        parts: list[str] = []
-        for m in messages:
-            if m.role == "tool":
-                continue
-            if m.role == "assistant" and m.tool_calls:
-                continue
-            role = "summary" if m.role == "summary" else m.role
-            parts.append(f"[{role.upper()}]\n{m.content or ''}")
-        return "\n\n".join(parts)
-
-    def _fallback_compact(self, ctx: ConversationContext) -> bool:
-        """
-        确定性兜底压缩：保留最近 N 轮原样，丢弃旧工具对，插入简短说明。
-
-        与 template_gen.agent._compact_messages 风格一致，保证 LLM 摘要
-        失败/超时/空摘要时上下文仍可继续。
-        """
-        to_summarize, to_keep = ctx.split_for_compression()
-        if len(to_summarize) < 4:
-            return False
-        note = (
-            "[Earlier conversation was compacted to fit the context window. "
-            "The current project files on disk are the source of truth; "
-            "continue from the retained messages below.]"
-        )
-        note_tokens = int(len(note) / 3.5) + 50
-        ctx.replace_with_summary(note, note_tokens, keep_messages=to_keep)
-        self._logger.info(
-            "Session %s fallback-compacted (kept %s messages)",
-            ctx.session_id,
-            len(to_keep),
-        )
-        return True
-
-    async def _recover_from_context_overflow(
-        self,
-        ctx: ConversationContext,
-        system_prompt: str,
-        persisted_tool_msg_refs: list[dict[str, Any]],
-        tool_messages: list[dict],
-    ) -> tuple[list[dict], list[dict], bool] | None:
-        """
-        工具循环上下文超限时的确定性恢复：
-
-        1. 优先裁剪旧工具对（完整对、保留当前轮），不改变持久化；
-        2. 仍超限：把已完成的历史工具轮次持久化到会话 → LLM 摘要，失败则
-           确定性裁剪兜底；
-        3. 用压缩后的会话重建 messages（不动当前正在执行的轮次）。
-
-        返回 (tool_messages, 新的 persisted_refs, 是否发生压缩)；
-        彻底失败返回 None。
-        """
-        try:
-            # 1) 裁剪旧工具对：完整对整体删除，保留当前轮；列表变化即直接重试
-            trimmed = self._trim_tool_messages(
-                list(tool_messages),
-                max_chars=self._MAX_TOOL_CONTEXT_CHARS // 2,
-            )
-            if len(trimmed) != len(tool_messages):
-                return trimmed, persisted_tool_msg_refs, False
-
-            # 2) 裁剪不够：先持久化已完成的历史工具轮次，再压缩旧历史
-            if persisted_tool_msg_refs:
-                ctx.append_tool_messages(persisted_tool_msg_refs)
-            compressed = await self._maybe_compress(ctx)
-            if not compressed:
-                compressed = self._fallback_compact(ctx)
-            if not compressed:
-                return None
-            ctx.save_to_disk()
-            tool_messages = [
-                {"role": "system", "content": system_prompt}
-            ] + ctx.to_llm_messages()
-            return tool_messages, [], True
-        except Exception as e:
-            self._logger.error(f"Context overflow recovery failed: {e}")
-            return None
-
-    async def _maybe_compress(
-        self, ctx: ConversationContext, keep_multiplier: float = 1.0
-    ) -> bool:
-        """
-        调用 LLM 生成摘要并替换旧历史（最近轮次原样保留）。
-
-        - 摘要输入剔除 tool 原始结果，体积显著小于全量历史；
-        - 摘要 tokens 优先使用真实 usage，无 usage 时按字符降级估算；
-        - 上下文超限时扩大保留预算重试（摘要更少内容）；
-        - LLM 失败/空摘要时回退到 _fallback_compact()，不阻塞对话。
-        """
-        cfg = get_config().features.writing_chat
-        llm = get_llm_client()
-        for attempt in range(self._MAX_SUMMARY_RETRIES):
-            keep_tokens = int(cfg.compression_keep_recent_tokens * keep_multiplier)
-            keep_turns = max(
-                1, int(cfg.compression_keep_recent_turns * keep_multiplier)
-            )
-            to_summarize, to_keep = ctx.split_for_compression(
-                keep_tokens=keep_tokens, keep_turns=keep_turns
-            )
-            if len(to_summarize) < 4:
-                return False  # 太短不值得压缩
-            transcript = self._build_summary_transcript(to_summarize)
-            if not transcript.strip():
-                return False
-            messages = [
-                {
-                    "role": "system",
-                    "content": get_prompt("writing_chat", "summary_system"),
-                },
-                {"role": "user", "content": f"CONVERSATION:\n{transcript}"},
-            ]
-            try:
-                summary_text, usage = await llm.chat_with_usage(
-                    messages,
-                    temperature=cfg.summary_temperature,
-                    max_tokens=cfg.summary_token_budget,
-                    model=cfg.summary_model or None,
-                )
-            except Exception as e:
-                self._logger.warning(
-                    "Compression LLM failed (attempt %s): %s", attempt + 1, e
-                )
-                if (
-                    self._is_context_overflow_error(e)
-                    and attempt < self._MAX_SUMMARY_RETRIES - 1
-                ):
-                    keep_multiplier *= 2
-                    continue
-                return self._fallback_compact(ctx)
-
-            if not summary_text or not summary_text.strip():
-                self._logger.warning("Compression LLM returned empty summary, fallback")
-                return self._fallback_compact(ctx)
-            summary_text = summary_text.strip()
-
-            if usage is not None and usage.completion_tokens > 0:
-                summary_tokens = usage.completion_tokens
-            else:
-                summary_tokens = int(len(summary_text) / 3.5) + 50
-            ctx.replace_with_summary(
-                summary_text, summary_tokens, keep_messages=to_keep
-            )
-            self._logger.info(
-                "Session %s compressed: summary=%s tokens, kept=%s messages, "
-                "snapshot saved",
-                ctx.session_id,
-                summary_tokens,
-                len(to_keep),
-            )
-            return True
-        return self._fallback_compact(ctx)
-
-
-# ── 单例 ─────────────────────────────────────────────────────────────────
-
-
-_service: WritingChatService | None = None
-
-
-def get_writing_chat_service() -> WritingChatService:
-    global _service
-    if _service is None:
-        _service = WritingChatService()
-    return _service

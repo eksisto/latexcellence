@@ -4,13 +4,19 @@
 
 ## 模块分层
 
-遵循 `router.py`（薄路由）→ `service.py`（业务编排）→ `agent.py`（Agent 主循环）的三层结构：
+遵循 `router.py`（薄路由）→ `service.py`（业务编排）→ `agent/`（Agent 主循环包）的三层结构：
 
 | 文件 | 职责 |
 | --- | --- |
 | `router.py` | 薄路由：参数校验、SSE 响应与状态码映射 |
 | `service.py` | `TemplateGenService`：创建沙箱工作区、驱动 Agent、产物浏览（`list_session_files` / `read_session_file` / `zip_session` / `get_session_trace`） |
-| `agent.py` | `TemplateAgentService`：Function Calling 主循环、模块文件校验策略、编译日志错误解析 |
+| `agent/service.py` | `TemplateAgentService`：Function Calling 主循环与工具 schema |
+| `agent/executor.py` | `_ToolExecutor`：沙箱文件 I/O、内容校验与编译执行 |
+| `agent/validation.py` | 写盘静态校验（CJK / 私有命令 / Provides 日期 / 环境配对等） |
+| `agent/compile.py` | 编译日志解析、错误提取、修复提示与质量门禁 |
+| `agent/sandbox.py` | 沙箱路径解析与安全读取 |
+| `agent/loop.py` | 对话历史压缩与失败干预辅助函数 |
+| `agent/constants.py` | 扩展名白名单、正则与截断阈值等共享常量 |
 | `trace.py` | Agent 运行追踪（`trace.jsonl` 记录与读取） |
 | `cleanup.py` | 过期沙箱自动清理（后台任务） |
 
@@ -32,7 +38,7 @@ Agent 自主规划文件结构 → 逐个 `write_file` → 调用 `compile_latex
 
 ## 沙箱与路径安全
 
-每次生成由 `service.py` 在 `output_dir/<session_id>/` 下创建独立目录。所有 `file_path` 参数经 `TemplateAgentService._resolve_sandbox_path()` 校验：
+每次生成由 `service.py` 在 `output_dir/<session_id>/` 下创建独立目录。所有 `file_path` 参数经 `TemplateAgentService._resolve_sandbox_path()`（委托 `agent/sandbox.py`）校验：
 
 - 禁止空、null 字节、绝对路径
 - 禁止 `..` 路径段
@@ -182,7 +188,7 @@ latexmk 的 stdout/stderr 有时不含 `!` 错误行（错误只写进了 `<main
 
 ## 编译日志结构化错误提取
 
-编译失败时由 `backend/modules/template_gen/agent.py` 中的两个辅助函数处理：
+编译失败时由 `backend/modules/template_gen/agent/` 中的两个辅助函数处理：
 
 **`_extract_errors(log)`**：从 latexmk 日志中提取结构化错误列表，每个错误包含：
 
@@ -258,7 +264,7 @@ Prefix: `/api/template-gen`, Tag: `template_gen`
 
 ## 运行追踪
 
-`agent.py` 在每次生成时把 Agent 主循环的完整交互按时间顺序逐条追加到 session 沙箱的 `trace.jsonl`，用于分析、改进 prompt 与复现调试。
+`agent/service.py` 在每次生成时把 Agent 主循环的完整交互按时间顺序逐条追加到 session 沙箱的 `trace.jsonl`，用于分析、改进 prompt 与复现调试。
 
 - 由 `trace.py` 提供追加与读取：`append_trace()`（沙箱级锁 + 线程内写文件，防并发交错）、`read_trace()`
 - 事件类型：`run_start`（描述/语言/system prompt/初始 messages/最大轮数）、`llm`（每次 LLM 回复含 tool_calls）、`tool_result`（工具名/完整参数/结果文本/前端事件）、`warning`、`error`、`run_end`（总结/轮数/最终编译状态）

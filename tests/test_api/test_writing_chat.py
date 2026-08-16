@@ -32,7 +32,7 @@ from backend.modules.writing_chat.models import (
 )
 from backend.modules.writing_chat.service import WritingChatService
 
-_LLM_CLIENT_PATH = "backend.modules.writing_chat.service.get_llm_client"
+_LLM_CLIENT_PATH = "backend.modules.writing_chat.service._deps.get_llm_client"
 
 
 # ── fixtures ──────────────────────────────────────────────────────────────
@@ -1409,7 +1409,9 @@ class TestServiceMessageOps:
 # ── Web search tool integration tests ─────────────────────────────────────
 
 
-_TOOL_REGISTRY_PATH = "backend.modules.writing_chat.service.get_tool_registry"
+_TOOL_REGISTRY_PATH = (
+    "backend.modules.writing_chat.service.conversation.get_tool_registry"
+)
 
 
 def _make_tool_call(call_id: str = "call_ws", query: str = "latex tutorial"):

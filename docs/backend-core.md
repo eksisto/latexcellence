@@ -261,7 +261,7 @@ registry.register(
 
 **3. 在消费端启用**
 
-已在用 `chat_with_tools()` 的模块（如 `writing_chat/service.py`）中：
+已在用 `chat_with_tools()` 的模块（如 `writing_chat/service/`）中：
 
 ```python
 # writing_chat 的 _get_enabled_tools()
@@ -337,7 +337,7 @@ get_tool_registry().register(
 - `schema` 是整个 OpenAI function schema（包含 `type` 和 `function`），不含外层 `tools` 数组
 - 注册时机避免在模块 `__init__` 中执行，宜在首次调用时或 FastAPI `lifespan` 中注册
 - 敏感工具（如写文件）建议添加用户确认环节：工具执行前推 SSE `confirmation_required` 事件
-- 若工具需要私有不暴露给其他模块，可在模块内部维护私有 executor（如 `template_gen/agent.py` 的 `_ToolExecutor`），不注册到全局 `ToolRegistry`
+- 若工具需要私有不暴露给其他模块，可在模块内部维护私有 executor（如 `template_gen/agent/executor.py` 的 `_ToolExecutor`），不注册到全局 `ToolRegistry`
 
 ### `backend/core/workspace_manager.py` — 多工作区管理器
 
@@ -531,8 +531,8 @@ raise ValueError("Validation failed after N attempts")        # ❌ 耗尽
 | 模块 | 场景 |
 | --- | --- |
 | `compile/service.py` | `compile_latex()` 调用 |
-| `git_diff/service.py` | `_compile_diff()` 调用 |
-| `template_gen/agent.py` | `_ToolExecutor._compile_latex()` 调用 |
+| `git_diff/service/` | `_compile_diff()` 调用 |
+| `template_gen/agent/executor.py` | `_ToolExecutor._compile_latex()` 调用 |
 | `style_modify/session.py` | `compile_staged_project()` 调用 |
 
 ### `compile_error_translator.py` — LaTeX 编译错误 LLM 翻译
@@ -550,7 +550,7 @@ raise ValueError("Validation failed after N attempts")        # ❌ 耗尽
 | 模块 | 场景 |
 | --- | --- |
 | `compile/service.py` | `compile_latex()` 编译失败时调用 |
-| `git_diff/service.py` | `render_diff_pdf()` 编译失败时调用 |
+| `git_diff/service/` | `render_diff_pdf()` 编译失败时调用 |
 
 ### `latexindent_utils.py` — latexindent.pl 调用封装
 

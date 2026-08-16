@@ -74,8 +74,8 @@ LateXcellence 是一个 AI 驱动的 LaTeX 文档助手，其中：
 | MISSING RESOURCE PROTOCOL（缺失资源协议） | `backend/core/prompts.py` | 不假设环境有哪些字体/宏包；缺失时便携回退 + README 记录 + summary 说明 |
 | Walking Skeleton 分层构建流程 | `backend/core/prompts.py` | 先最小骨架编译、再逐层丰富，任何项目通用 |
 | 禁止重定义已有命令/环境、单文件体积约束 | `backend/core/prompts.py` | 通用 LaTeX 工程纪律 |
-| 大文件输出 token 上限放宽 | `backend/modules/template_gen/agent.py` | 解决通用的大文件截断问题 |
-| 同一被拒内容重发 3 次注入纠正 | `backend/modules/template_gen/agent.py` | 通用防退化循环 |
+| 大文件输出 token 上限放宽 | `backend/modules/template_gen/agent/` | 解决通用的大文件截断问题 |
+| 同一被拒内容重发 3 次注入纠正 | `backend/modules/template_gen/agent/` | 通用防退化循环 |
 | 花括号不配平错误带位置/行号/上下文 | `backend/utils/latex_json_guard.py` | 共享校验器的通用诊断改进 |
 | plot_gen ASCII 硬限制改为自适应 | prompts / agent / executor / tikzgen | 与后端 xelatex+CJK 能力对齐 |
 | `tju` 评测场景与基准文档 | `tools/templategen_opt/` | 只属于评测工具，不进运行时 |
@@ -248,7 +248,7 @@ FACTS、matplotlib 字体链调整。
 ### 2.6 第 1 轮涉及文件
 
 - `backend/core/prompts.py`（template_gen / plot_gen 提示词）
-- `backend/modules/template_gen/agent.py`
+- `backend/modules/template_gen/agent/`
 - `backend/modules/plot_gen/agent.py` / `executor.py` / `tikzgen.py`
 - `backend/utils/latex_json_guard.py`
 - `tools/templategen_opt/descriptions.py` / `reference_benchmarks.md`
@@ -310,11 +310,11 @@ holdout `tju` 做最终回归。
 | --- | --- | --- |
 | CJK 字体协议修正：不手动 `\setCJK*font`、不对 CJK 字族名用 `\IfFontExistsTF`，交给 ctex 自动平台字体集 | `backend/core/prompts.py` | 任何环境都成立，删除的是"探测具体字体"这一错误动作 |
 | 正文禁用 `\@...` 内部宏，类需提供公开访问命令或 `\maketitlepage` | `backend/core/prompts.py` | LaTeX catcode 机制层面，与具体模板无关 |
-| 文件预算按**不同文件数**计数，重写不消耗 | `backend/modules/template_gen/agent.py` | 任何长修复迭代都需要；防止预算卡死 |
-| `read_file` 允许读取 `.log/.aux/.toc` 等生成文件（只读） | `backend/modules/template_gen/agent.py` | 通用调试能力 |
-| 编译失败无 `!` 行时从 `<main>.log` 兜底提取错误 | `backend/modules/template_gen/agent.py` | 通用日志协议 |
-| 错误分析追加 HINTS（`\spacefactor` / 缺字体 / `already defined` / 字面 `#`） | `backend/modules/template_gen/agent.py` | 按失败签名给通用修复指引，不是背答案 |
-| 同一编译错误连续 3 次注入干预 | `backend/modules/template_gen/agent.py` | 通用防循环 |
+| 文件预算按**不同文件数**计数，重写不消耗 | `backend/modules/template_gen/agent/` | 任何长修复迭代都需要；防止预算卡死 |
+| `read_file` 允许读取 `.log/.aux/.toc` 等生成文件（只读） | `backend/modules/template_gen/agent/` | 通用调试能力 |
+| 编译失败无 `!` 行时从 `<main>.log` 兜底提取错误 | `backend/modules/template_gen/agent/` | 通用日志协议 |
+| 错误分析追加 HINTS（`\spacefactor` / 缺字体 / `already defined` / 字面 `#`） | `backend/modules/template_gen/agent/` | 按失败签名给通用修复指引，不是背答案 |
+| 同一编译错误连续 3 次注入干预 | `backend/modules/template_gen/agent/` | 通用防循环 |
 
 **未改动**：`tju` 评测场景与基准（仍只在 `tools/`）；未向生产提示词写入任何
 TJU 专项内容（边距、类选项、学校名、字体名清单）。
@@ -386,7 +386,7 @@ API（`tools/visual_review_api.py`），result 目录清空后完全重测。
 
 | 改动 | 文件 |
 | --- | --- |
-| 质量门禁只从最后一次主 `.log` 提取未解析引用/缺字/版面警告；成功回传不再复述 stdout 旧 warning | `backend/modules/template_gen/agent.py` |
+| 质量门禁只从最后一次主 `.log` 提取未解析引用/缺字/版面警告；成功回传不再复述 stdout 旧 warning | `backend/modules/template_gen/agent/` |
 | `.cls/.sty` 写盘校验 `\ProvidesClass`/`\ProvidesPackage` 日期必须 `YYYY/MM/DD` | 同上 |
 | 公开命令体不得 `\def`/`\gdef` 含 `@` 的名字（可 `\makeatletter` 包裹） | 同上 |
 | `.cls` 校验类选项声明顺序；setter 的 accessor 必须已有 `\newcommand` 默认值 | 同上 |
@@ -394,7 +394,7 @@ API（`tools/visual_review_api.py`），result 目录清空后完全重测。
 | 会话历史按最近 N 轮压缩，防止超大 tool_call 撑爆上下文 | 同上 |
 | 同一文件重复拒绝计数忽略空路径调用，不被无效调用打断 | 同上 |
 | 提示词补充通用 API 契约：类选项顺序、accessor 默认值、beamer 标题页/进度条、会议论文共享 counter 与真实标题、简历显式图标/无衬线 | `backend/core/prompts.py` |
-| 新增 `_extract_unresolved_reference_errors` 只检查最终 pass、TeX capacity 提示等 | `backend/modules/template_gen/agent.py` |
+| 新增 `_extract_unresolved_reference_errors` 只检查最终 pass、TeX capacity 提示等 | `backend/modules/template_gen/agent/` |
 
 #### 结果
 
@@ -462,7 +462,7 @@ thesis/requirements 因编译失败无 PDF 可审。
 
 | 改动 | 文件 | 为什么通用 |
 | --- | --- | --- |
-| 首次编译后连续 5 次写文件未编译 → 提示立即编译；同一文件重写 5 次 → 提示停止盲改 | `backend/modules/template_gen/agent.py` | 任何长修复迭代都需要验证闭环，与模板/环境无关 |
+| 首次编译后连续 5 次写文件未编译 → 提示立即编译；同一文件重写 5 次 → 提示停止盲改 | `backend/modules/template_gen/agent/` | 任何长修复迭代都需要验证闭环，与模板/环境无关 |
 | natbib 与 `.bbl` 风格不匹配的错误签名 HINT（对齐 natbib 模式与 `.bst`，不删 `.bbl`） | 同上 | 通用 LaTeX 引用机制 |
 | `Undefined color` 错误签名 HINT（先 `\definecolor` 再使用、检查大小写） | 同上 | 通用 xcolor/主题机制 |
 | 源码未变时跳过"重复成功编译"并提示 finish；连续 2 次触发 `success_recompile_loop` 干预 | 同上 | 防"已验证仍空转"的通用防呆 |
@@ -470,7 +470,7 @@ thesis/requirements 因编译失败无 PDF 可审。
 | `generality_gate.py` 的 `git diff` 子进程显式 UTF-8 解码 | `tools/generality_gate.py` | Windows/非 UTF-8 控制台可移植性 |
 | `compare.py --targets/--tolerance/--visual-tolerance` 参数值不再混入位置参数 | `tools/templategen_opt/compare.py` | 工具自身参数解析缺陷 |
 | `visual_review.py` 汇总文件先加载旧结果再合并，单场景重跑不再覆盖其他场景 | `tools/templategen_opt/visual_review.py` | 工具自身状态合并缺陷 |
-| ~~`.cls/.sty` 手动 CJK 字体整文件拒绝~~（实验后撤销） | `backend/modules/template_gen/agent.py` | 整文件拒绝式校验对强先验模型制造更差循环 |
+| ~~`.cls/.sty` 手动 CJK 字体整文件拒绝~~（实验后撤销） | `backend/modules/template_gen/agent/` | 整文件拒绝式校验对强先验模型制造更差循环 |
 
 #### 结果
 

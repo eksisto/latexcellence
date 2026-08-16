@@ -156,7 +156,7 @@
 
 ### 模板生成 Agent
 
-定义在 `backend/modules/template_gen/agent.py`，由 `TemplateAgentService._build_tools_schema()` 构建，**不注册到全局 ToolRegistry**。这些工具在 session 级沙箱内运行，通过 `_ToolExecutor` 私有类分发。
+定义在 `backend/modules/template_gen/agent/`，由 `TemplateAgentService._build_tools_schema()` 构建，**不注册到全局 ToolRegistry**。这些工具在 session 级沙箱内运行，通过 `_ToolExecutor` 私有类分发。
 
 | # | 名称 | 描述 | 必填参数 | 条件 |
 |---|------|------|----------|------|
@@ -211,7 +211,7 @@
 | **名称** | `request_clarification` |
 | **描述** | 向用户提问以补充信息或做出选择。当关键参数缺失、需求存在歧义、需要执行高风险操作前确认，或多个合理方案会导致明显不同结果时使用。用户回答将作为工具结果返回。 |
 | **参数** | `question` (string, 必填), `options` (string[], 可选) |
-| **定义位置** | `backend/modules/writing_chat/service.py` (`_get_enabled_tools()`) |
+| **定义位置** | `backend/modules/writing_chat/service/` (`_get_enabled_tools()`) |
 | **配置路径** | 始终可用，无条件注入，无配置开关 |
 | **说明** | 返回用户回答的原始文本。可选的 `options` 数组让 LLM 提供预设候选项，用户在对话框中选择或自行输入。超时 120 秒无回复则返回提示文本让 LLM 自行判断。 |
 

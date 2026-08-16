@@ -8,7 +8,7 @@
 
 工作区上下文：
     所有 executor 通过 arguments 中的 _workspace_id 内部参数获取 ProjectManager，
-    _workspace_id 由调用方（如 writing_chat/service.py）在调用 execute() 前注入，
+    _workspace_id 由调用方（如 writing_chat/service/）在调用 execute() 前注入，
     不暴露给 LLM。
 """
 

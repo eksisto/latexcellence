@@ -84,12 +84,15 @@ latexcellence/
 │       ├── code_review/              # LaTeX 代码审查
 │       ├── compile/                 # 自动编译
 │       ├── git_diff/                # Git 差异高亮
+│       │   └── service/             # 服务包（models/constants/process/revisions/flatten/diff/render）
 │       ├── template_gen/            # 模板生成（自主 Agent）
+│       │   └── agent/               # Agent 包（service/executor/validation/compile/sandbox/loop/constants）
 │       ├── formula_ocr/             # 公式 OCR（含 visual_inline.py 视觉 inline/display 判定）
 │       ├── table_ocr/               # 表格 OCR
 │       ├── format_converter/        # 格式转换
 │       ├── style_modify/            # 样式修改（粘贴代码 + 项目 Agent）
 │       ├── writing_chat/            # 写作助手聊天
+│       │   └── service/             # 业务逻辑包（state/sessions/conversation/edits/compaction/_deps）
 │       ├── bib_manager/             # 参考文献管理（格式规则层 + DOI 多数据源查询 + 重复检测 + 文献库管理）
 │       │   └── providers/           # 可插拔 DOI 数据源
 │       ├── plot_gen/                # 科研绘图（上传数据 -> 矢量图 + TikZ）
@@ -196,13 +199,13 @@ latexcellence/
 | terminology_check | 术语一致性检查 | router.py, service.py, extractor.py, models.py | ✓ | ✓ |
 | paragraph_translate | 逐段翻译 | router.py, service.py | ✓ | ✓ |
 | compile | 编译 + 错误翻译 + 引擎自动检测 + PDF/A 支持 | router.py, service.py | ✓(错误翻译) | ✗ |
-| git_diff | Git 版本差异 PDF | router.py, service.py | ✓(编译失败时翻译错误) | ✗ |
-| template_gen | 模板生成（自主 Agent） | router.py, service.py, agent.py, trace.py, cleanup.py | ✓ | ✗ |
+| git_diff | Git 版本差异 PDF | router.py, service/ | ✓(编译失败时翻译错误) | ✗ |
+| template_gen | 模板生成（自主 Agent） | router.py, service.py, agent/, trace.py, cleanup.py | ✓ | ✗ |
 | formula_ocr | 图片→LaTeX 公式 | router.py, service.py, visual_inline.py | ✓(Vision) | ✗ |
 | table_ocr | 图片→LaTeX 表格 | router.py, service.py | ✓(Vision) | ✗ |
 | format_converter | 格式转换(pandoc) | router.py, service.py | ✓(宏包分析仅兜底) | ✗ |
 | style_modify | 粘贴代码 / 项目 Agent 修改样式，支持 shadow 编译、proposal 审核、批量事务与撤销 | router.py, service.py, agent.py, models.py, session.py, trace.py, cleanup.py | ✓ | ✗ |
-| writing_chat | 写作助手对话（含联网搜索、学术检索与引文追踪、项目浏览、段落编辑和工具确认） | router.py, service.py, context.py, models.py, prompt_manager.py | ✓ | ✗ |
+| writing_chat | 写作助手对话（含联网搜索、学术检索与引文追踪、项目浏览、段落编辑和工具确认） | router.py, service/, context.py, models.py, prompt_manager.py | ✓ | ✗ |
 | bib_manager | 参考文献管理 + 格式规则层 + DOI 多数据源查询 + 重复检测 + 文献库 | router.py, service.py, models.py, bib_parser.py, format_rules.py, style_registry.py, provider_manager.py, providers/ | ✓(格式规则命中不依赖 LLM；DOI 查询不依赖 LLM) | ✗ |
 | plot_gen | 科研绘图 Agent（数据画像 -> 图表推荐 -> Python 执行 -> TikZ 编译） | router.py, service.py, agent.py, models.py, data_parser.py, recommender.py, styles.py, executor.py, tikzgen.py, sandbox_guard.py, trace.py, cleanup.py | ✓ | ✗ |
 

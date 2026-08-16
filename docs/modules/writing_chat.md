@@ -4,6 +4,19 @@
 
 多轮对话界面，帮助用户讨论 LaTeX 文档内容、获取写作建议、直接修改指定段落。
 
+### service 包拆分
+
+`WritingChatService` 对外仍从 `backend/modules/writing_chat/service` 导入；内部按职责拆为多个 mixin 子模块，避免单文件超过 1000 行：
+
+| 文件 | 职责 |
+| --- | --- |
+| `state.py` | 会话级写锁、工具确认、澄清请求等待状态 |
+| `sessions.py` | 会话 CRUD 与手动压缩 |
+| `conversation.py` | RS1 对话流、工具编排、引用校验 |
+| `edits.py` | RS2 编辑建议、应用与消息删除 |
+| `compaction.py` | 上下文超限判断、兜底裁剪与 LLM 摘要压缩 |
+| `_deps.py` | 共享依赖（LLM 客户端）统一出口，便于测试 patch |
+
 ### 核心差异
 
 | 维度 | typo_check / expression_opt | writing_chat |

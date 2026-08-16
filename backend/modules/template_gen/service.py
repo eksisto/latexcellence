@@ -2,7 +2,7 @@
 模板生成业务编排。
 
 本模块遵循分层约束：router.py（薄路由） → service.py（业务逻辑/LLM 编排） →
-agent.py（Function Calling Agent 主循环与工具执行）。
+agent/（Function Calling Agent 主循环与工具执行）。
 
 - generate()：创建沙箱工作区后驱动自主 Agent（SSE 事件流），并向上转发事件
 - list_session_files / read_session_file / zip_session：Agent 产物浏览与打包下载

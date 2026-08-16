@@ -1,7 +1,7 @@
 """
 模板生成 API 路由。
 
-薄路由层：仅做参数校验与状态码映射，业务逻辑在 service.py，Agent 主循环在 agent.py。
+薄路由层：仅做参数校验与状态码映射，业务逻辑在 service.py，Agent 主循环在 agent/。
 """
 
 import io

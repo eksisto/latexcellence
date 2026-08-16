@@ -37,6 +37,12 @@ import pytest
 
 import backend.modules.git_diff.router as git_diff_router
 import backend.modules.git_diff.service as git_diff_service
+import backend.modules.git_diff.service.constants as git_diff_constants
+import backend.modules.git_diff.service.diff as git_diff_diff
+import backend.modules.git_diff.service.flatten as git_diff_flatten
+import backend.modules.git_diff.service.process as git_diff_process
+import backend.modules.git_diff.service.render as git_diff_render
+import backend.modules.git_diff.service.revisions as git_diff_revisions
 from backend.core.workspace_manager import (
     get_project_manager_for_workspace,
     get_workspace_manager,
@@ -103,6 +109,10 @@ def _make_git_repo(repo: Path, files: dict[str, str], message: str = "init") -> 
             "git",
             "-c",
             f"safe.directory={repo}",
+            "-c",
+            "user.name=LateXcellence Test",
+            "-c",
+            "user.email=latexcellence@example.com",
             "-C",
             str(repo),
             "commit",
@@ -553,7 +563,7 @@ class TestPruneJobDirs:
     def test_keeps_newest_and_removes_old(self, monkeypatch):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
-            monkeypatch.setattr(git_diff_service, "PDF_OUTPUT_ROOT", root)
+            monkeypatch.setattr(git_diff_constants, "PDF_OUTPUT_ROOT", root)
             for i in range(25):
                 job = root / f"{i:032x}"
                 job.mkdir()
@@ -664,7 +674,7 @@ class TestGetPdfPath:
             job = root / ("b" * 32)
             job.mkdir()
             (job / "diff-highlight.pdf").write_bytes(b"%PDF-1.4 fake")
-            monkeypatch.setattr(git_diff_service, "PDF_OUTPUT_ROOT", root)
+            monkeypatch.setattr(git_diff_constants, "PDF_OUTPUT_ROOT", root)
             pdf_path = get_pdf_path("b" * 32)
             assert pdf_path.name == "diff-highlight.pdf"
             assert pdf_path.exists()
@@ -899,7 +909,7 @@ class TestValidateRevision:
             asyncio.run(_validate_revision(Path("."), ""))
 
     def test_option_like_ref_rejected(self, monkeypatch):
-        monkeypatch.setattr(git_diff_service, "_run_git", AsyncMock())
+        monkeypatch.setattr(git_diff_process, "_run_git", AsyncMock())
         with pytest.raises(ValueError, match="must not start with '-'"):
             asyncio.run(_validate_revision(Path("."), "--output=x"))
 
@@ -916,13 +926,13 @@ class TestValidateRevision:
         ],
     )
     def test_rev_syntax_rejected(self, monkeypatch, ref):
-        monkeypatch.setattr(git_diff_service, "_run_git", AsyncMock())
+        monkeypatch.setattr(git_diff_process, "_run_git", AsyncMock())
         with pytest.raises(ValueError, match="Invalid Git revision"):
             asyncio.run(_validate_revision(Path("."), ref))
 
     def test_invalid_ref_rejected(self, monkeypatch):
         monkeypatch.setattr(
-            git_diff_service,
+            git_diff_process,
             "_run_git",
             AsyncMock(
                 return_value=ProcessResult(
@@ -944,7 +954,7 @@ class TestValidateRevision:
     )
     def test_valid_ref_accepted(self, monkeypatch, ref):
         monkeypatch.setattr(
-            git_diff_service,
+            git_diff_process,
             "_run_git",
             AsyncMock(
                 return_value=ProcessResult(returncode=0, stdout="resolved", stderr="")
@@ -961,15 +971,15 @@ class TestRenderDiffPdf:
 
     @staticmethod
     def _patch_common(monkeypatch, tmp_path: Path, project_dir: Path, config):
-        monkeypatch.setattr(git_diff_service, "PDF_OUTPUT_ROOT", tmp_path / "jobs")
-        monkeypatch.setattr(git_diff_service, "get_config", lambda: config)
-        monkeypatch.setattr(git_diff_service, "_get_project_context", AsyncMock())
+        monkeypatch.setattr(git_diff_constants, "PDF_OUTPUT_ROOT", tmp_path / "jobs")
+        monkeypatch.setattr(git_diff_render, "get_config", lambda: config)
+        monkeypatch.setattr(git_diff_revisions, "_get_project_context", AsyncMock())
         monkeypatch.setattr(
-            git_diff_service, "_validate_project_path", Mock(return_value="main.tex")
+            git_diff_render, "_validate_project_path", Mock(return_value="main.tex")
         )
-        monkeypatch.setattr(git_diff_service, "_validate_revision", AsyncMock())
+        monkeypatch.setattr(git_diff_revisions, "_validate_revision", AsyncMock())
         monkeypatch.setattr(
-            git_diff_service,
+            git_diff_flatten,
             "_flatten_main_document",
             AsyncMock(
                 side_effect=[
@@ -984,7 +994,7 @@ class TestRenderDiffPdf:
             job_dir.mkdir(parents=True, exist_ok=True)
             return project_dir
 
-        monkeypatch.setattr(git_diff_service, "_prepare_target_project", fake_prepare)
+        monkeypatch.setattr(git_diff_render, "_prepare_target_project", fake_prepare)
 
     def test_success_copies_pdf(self, monkeypatch):
         with tempfile.TemporaryDirectory() as tmp:
@@ -995,7 +1005,7 @@ class TestRenderDiffPdf:
                 monkeypatch, tmp_path, project_dir, _git_diff_config_stub()
             )
             monkeypatch.setattr(
-                git_diff_service,
+                git_diff_diff,
                 "_build_diff_document",
                 Mock(
                     return_value=DiffDocument(
@@ -1009,7 +1019,7 @@ class TestRenderDiffPdf:
                 pdf.write_bytes(b"%PDF-1.4 fake")
                 return TexCompileResult(success=True, filtered_output="", raw_output="")
 
-            monkeypatch.setattr(git_diff_service, "_compile_diff", fake_compile)
+            monkeypatch.setattr(git_diff_render, "_compile_diff", fake_compile)
 
             result = asyncio.run(
                 git_diff_service.render_diff_pdf("main.tex", "HEAD~1", "HEAD")
@@ -1030,7 +1040,7 @@ class TestRenderDiffPdf:
                 monkeypatch, tmp_path, project_dir, _git_diff_config_stub()
             )
             monkeypatch.setattr(
-                git_diff_service,
+                git_diff_diff,
                 "_build_diff_document",
                 Mock(
                     return_value=DiffDocument(
@@ -1044,9 +1054,9 @@ class TestRenderDiffPdf:
                     success=False, filtered_output="boom", raw_output="boom"
                 )
 
-            monkeypatch.setattr(git_diff_service, "_compile_diff", fake_compile)
+            monkeypatch.setattr(git_diff_render, "_compile_diff", fake_compile)
             monkeypatch.setattr(
-                git_diff_service,
+                git_diff_render,
                 "translate_compile_errors",
                 AsyncMock(return_value=("中文解释", ["修复建议"])),
             )
@@ -1071,7 +1081,7 @@ class TestRenderDiffPdf:
             )
             latexdiff_mock = AsyncMock(return_value=("diff", 5, 2))
             monkeypatch.setattr(
-                git_diff_service, "_build_latexdiff_document", latexdiff_mock
+                git_diff_diff, "_build_latexdiff_document", latexdiff_mock
             )
 
             async def fake_compile(_dir, rel):
@@ -1079,7 +1089,7 @@ class TestRenderDiffPdf:
                 pdf.write_bytes(b"%PDF-1.4 fake")
                 return TexCompileResult(success=True, filtered_output="", raw_output="")
 
-            monkeypatch.setattr(git_diff_service, "_compile_diff", fake_compile)
+            monkeypatch.setattr(git_diff_render, "_compile_diff", fake_compile)
 
             result = asyncio.run(
                 git_diff_service.render_diff_pdf("main.tex", "HEAD~1", "HEAD")
@@ -1098,7 +1108,7 @@ class TestLatexdiffMissing:
         async def missing(*args, **kwargs):
             raise FileNotFoundError("latexdiff")
 
-        monkeypatch.setattr(git_diff_service, "_run_latexdiff", missing)
+        monkeypatch.setattr(git_diff_diff, "_run_latexdiff", missing)
         with pytest.raises(RuntimeError, match="latexdiff command not found"):
             asyncio.run(git_diff_service._build_latexdiff_document("old", "new"))
 
