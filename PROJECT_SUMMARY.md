@@ -15,7 +15,6 @@ latexcellence/
 ├── pytest.ini                       # pytest 配置
 ├── .pre-commit-config.yaml          # pre-commit 钩子配置
 ├── AGENTS.md                        # AI 编程助手规范
-├── CLAUDE.md                        # Claude 项目说明
 ├── DEVELOPMENT.md                   # 开发文档索引（指向 docs/ 目录）
 ├── DESIGN.md                        # 设计文档
 ├── PROJECT_SUMMARY.md               # ← 本文件：项目概要（供 AI 快速读取）
