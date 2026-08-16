@@ -12,6 +12,8 @@
     project.open("/path/to/project")
 """
 
+import threading
+
 from backend.core.logger import get_logger
 from backend.core.project_manager import LatexProject
 from backend.utils.file_ops import BackupManager
@@ -27,6 +29,7 @@ class WorkspaceManager:
 
     def __init__(self):
         self._workspaces: dict[str, LatexProject] = {}
+        self._lock = threading.RLock()
         self._logger = get_logger("workspace_manager")
 
     def get_or_create(self, workspace_id: str) -> LatexProject:
@@ -39,15 +42,16 @@ class WorkspaceManager:
         返回：
             工作区专属的 LatexProject 实例
         """
-        if workspace_id not in self._workspaces:
-            backup_mgr = BackupManager()
-            project = LatexProject(backup_mgr=backup_mgr)
-            self._workspaces[workspace_id] = project
-            self._logger.info(
-                f"Created new workspace: {workspace_id} "
-                f"(total workspaces: {len(self._workspaces)})"
-            )
-        return self._workspaces[workspace_id]
+        with self._lock:
+            if workspace_id not in self._workspaces:
+                backup_mgr = BackupManager()
+                project = LatexProject(backup_mgr=backup_mgr)
+                self._workspaces[workspace_id] = project
+                self._logger.info(
+                    f"Created new workspace: {workspace_id} "
+                    f"(total workspaces: {len(self._workspaces)})"
+                )
+            return self._workspaces[workspace_id]
 
     def get(self, workspace_id: str) -> LatexProject | None:
         """
@@ -59,7 +63,8 @@ class WorkspaceManager:
         返回：
             LatexProject 实例，不存在则返回 None
         """
-        return self._workspaces.get(workspace_id)
+        with self._lock:
+            return self._workspaces.get(workspace_id)
 
     def remove(self, workspace_id: str) -> bool:
         """
@@ -71,14 +76,15 @@ class WorkspaceManager:
         返回：
             True 表示成功移除，False 表示工作区不存在
         """
-        if workspace_id in self._workspaces:
-            del self._workspaces[workspace_id]
-            self._logger.info(
-                f"Removed workspace: {workspace_id} "
-                f"(remaining workspaces: {len(self._workspaces)})"
-            )
-            return True
-        return False
+        with self._lock:
+            if workspace_id in self._workspaces:
+                del self._workspaces[workspace_id]
+                self._logger.info(
+                    f"Removed workspace: {workspace_id} "
+                    f"(remaining workspaces: {len(self._workspaces)})"
+                )
+                return True
+            return False
 
     def list_workspaces(self) -> list[dict]:
         """
@@ -87,8 +93,10 @@ class WorkspaceManager:
         返回：
             包含 workspace_id 和项目路径的列表
         """
+        with self._lock:
+            items = list(self._workspaces.items())
         result = []
-        for ws_id, project in self._workspaces.items():
+        for ws_id, project in items:
             info = {
                 "workspace_id": ws_id,
                 "is_open": project.is_open,

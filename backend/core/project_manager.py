@@ -106,6 +106,8 @@ class LatexProject:
         self._logger = get_logger("project_manager")
         self._backup_mgr = backup_mgr or get_backup_manager()
         self._transaction_lock = threading.RLock()
+        # 保护 _file_md5 字典读写：同一工作区可能被多个并发请求访问
+        self._file_md5_lock = threading.RLock()
         # { file_path_abs: md5_hex }  记录解析时的文件哈希
         self._file_md5: dict[str, str] = {}
 
@@ -190,7 +192,8 @@ class LatexProject:
 
         md5 = compute_md5(full_path)
         abs_path = str(full_path)
-        self._file_md5[abs_path] = md5
+        with self._file_md5_lock:
+            self._file_md5[abs_path] = md5
         return md5
 
     def get_paragraphs(self, file_path: str) -> list[Paragraph]:
@@ -222,7 +225,9 @@ class LatexProject:
 
         # 记录解析时的文件 MD5，供后续 apply_change 校验
         # 使用 compute_md5（二进制读取）与 apply_change 中保持一致
-        self._file_md5[str(full_path)] = compute_md5(full_path)
+        md5 = compute_md5(full_path)
+        with self._file_md5_lock:
+            self._file_md5[str(full_path)] = md5
 
         paragraphs = []
         lines = content.split("\n")
@@ -302,9 +307,9 @@ class LatexProject:
         # 乐观锁校验：比较预期 MD5 与文件当前 MD5
         # 优先使用调用方传入的 expected_md5（跨工作区乐观锁）
         # 否则退回到实例内部缓存的 MD5（单工作区内校验）
-        md5_to_check = (
-            expected_md5 if expected_md5 is not None else self._file_md5.get(abs_path)
-        )
+        with self._file_md5_lock:
+            cached_md5 = self._file_md5.get(abs_path)
+        md5_to_check = expected_md5 if expected_md5 is not None else cached_md5
         if md5_to_check is not None:
             current_md5 = compute_md5(full_path)
             if current_md5 != md5_to_check:
@@ -344,7 +349,9 @@ class LatexProject:
         atomic_write(full_path, content)
 
         # 更新 MD5 缓存
-        self._file_md5[abs_path] = compute_md5(full_path)
+        md5 = compute_md5(full_path)
+        with self._file_md5_lock:
+            self._file_md5[abs_path] = md5
 
         self._logger.info(
             f"Applied change: {file_path} paragraph[{paragraph_index}] "
@@ -426,7 +433,8 @@ class LatexProject:
             result: dict[str, str] = {}
             for file_path, full_path, _, _ in prepared:
                 md5 = compute_md5(full_path)
-                self._file_md5[str(full_path)] = md5
+                with self._file_md5_lock:
+                    self._file_md5[str(full_path)] = md5
                 result[file_path] = md5
             self._logger.info(
                 "Applied whole-file batch: %d file(s)",
@@ -453,7 +461,9 @@ class LatexProject:
         result = self._backup_mgr.undo(full_path)
         if result:
             abs_path = str(full_path)
-            self._file_md5[abs_path] = compute_md5(full_path)
+            md5 = compute_md5(full_path)
+            with self._file_md5_lock:
+                self._file_md5[abs_path] = md5
         return result
 
     def redo(self, file_path: str) -> bool:
@@ -475,7 +485,9 @@ class LatexProject:
         result = self._backup_mgr.redo(full_path)
         if result:
             abs_path = str(full_path)
-            self._file_md5[abs_path] = compute_md5(full_path)
+            md5 = compute_md5(full_path)
+            with self._file_md5_lock:
+                self._file_md5[abs_path] = md5
         return result
 
     def set_main_file(self, file_path: str) -> None:

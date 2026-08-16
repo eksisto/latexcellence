@@ -529,7 +529,9 @@ async def run_tex_compile(
                 # PDF/A 编译生成的 PDF 文件名是 {stem}_pdfa.pdf
                 pdfa_pdf_name = Path(actual_main_file).with_suffix(".pdf").name
                 pdfa_pdf_path = temp_dir / pdfa_pdf_name
-                original_pdf_path = cwd_path / main_tex_path.with_suffix(".pdf").name
+                # 保留主文件所在子目录：main_file 为 chapters/main.tex 时，
+                # 原 PDF 路径应为 chapters/main.pdf，而不是项目根目录 main.pdf。
+                original_pdf_path = main_tex_path.with_suffix(".pdf")
 
                 if pdfa_pdf_path.exists():
                     shutil.copy2(pdfa_pdf_path, original_pdf_path)

@@ -9,6 +9,7 @@
 """
 
 import hashlib
+import os
 import shutil
 import tempfile
 from collections import deque
@@ -108,9 +109,10 @@ def atomic_write(file_path: str | Path, content: str, encoding: str = "utf-8") -
         suffix=".tmp", prefix=f".{path.name}.", dir=path.parent
     )
     try:
-        with open(fd, "w", encoding=encoding) as f:
+        with os.fdopen(fd, "w", encoding=encoding) as f:
             f.write(content)
             f.flush()
+            os.fsync(f.fileno())
         # 原子替换
         tmp_path_obj = Path(tmp_path)
         tmp_path_obj.replace(path)

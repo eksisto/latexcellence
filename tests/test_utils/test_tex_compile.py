@@ -10,6 +10,7 @@ tex_compile 单元测试。
 """
 
 import asyncio
+import tempfile
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -750,6 +751,51 @@ class TestRunTexCompileWithEngineAndPdfa:
 
         cmd = mock_exec.call_args[0]
         assert "-xelatex" in cmd
+
+    @pytest.mark.asyncio
+    async def test_pdfa_subdir_output_copied_to_subdir(self, tmp_path):
+        """PDF/A 模式下子目录主文件的 PDF 应回拷到原目录，而不是项目根目录。"""
+        chapters = tmp_path / "chapters"
+        chapters.mkdir()
+        tex_file = chapters / "main.tex"
+        tex_file.write_text(
+            r"\documentclass{article}"
+            "\n"
+            r"\begin{document}"
+            "\n"
+            r"Hello"
+            "\n"
+            r"\end{document}",
+            encoding="utf-8",
+        )
+
+        # run_tex_compile 内部会创建临时目录并在 finally 中清理；这里提前
+        # 创建好该目录并放入模拟的 PDF/A 产物，最后断言被回拷到 chapters/。
+        pdfa_tmp = Path(tempfile.mkdtemp(prefix="latexcellence_test_pdfa_"))
+        (pdfa_tmp / "main_pdfa.pdf").write_bytes(b"%PDF-1.4 test")
+
+        process = self._make_process(0, b"ok")
+        try:
+            with patch("tempfile.mkdtemp", return_value=str(pdfa_tmp)):
+                with patch("shutil.which", return_value="/usr/bin/texfot"):
+                    with patch("asyncio.create_subprocess_exec", return_value=process):
+                        with patch("asyncio.wait_for", new=_fake_wait_for):
+                            await run_tex_compile(
+                                "chapters/main.tex",
+                                tmp_path,
+                                60,
+                                engine="pdflatex",
+                                pdfa=True,
+                            )
+        finally:
+            # 正常情况下 run_tex_compile 的 finally 已清理临时目录；
+            # 此处兜底，避免测试失败时残留。
+            import shutil
+
+            shutil.rmtree(pdfa_tmp, ignore_errors=True)
+
+        assert (tmp_path / "chapters" / "main.pdf").exists()
+        assert not (tmp_path / "main.pdf").exists()
 
     @pytest.mark.asyncio
     async def test_engine_lualatex(self, tmp_path):

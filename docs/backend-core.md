@@ -345,6 +345,8 @@ get_tool_registry().register(
 
 **核心接口**：`get_workspace_manager()` / `get_project_manager_for_workspace(workspace_id)` / `WorkspaceManager.remove()` / `WorkspaceManager.list_workspaces()`
 
+**并发保护**：工作区表由 `RLock` 保护，`get_or_create()` / `get()` / `remove()` / `list_workspaces()` 为线程安全操作；每个 `LatexProject` 实例内部用独立锁保护 `_file_md5` 缓存读写。
+
 **workspace_id** 通过查询参数传递，前端在 localStorage 生成唯一 ID。
 
 ---
@@ -366,7 +368,7 @@ get_tool_registry().register(
 | `compute_md5(file_path)` | 二进制 MD5 哈希（避免 Windows `\r\n` 差异导致文本模式不一致） |
 | `safe_read(file_path)` | UTF-8 读取，含 UnicodeDecodeError 详细报告 |
 | `safe_read_lines(file_path)` | 逐行读取，保留换行符 |
-| `atomic_write(file_path, content)` | 写临时文件 → flush → rename 原子覆盖（防止写中断损坏） |
+| `atomic_write(file_path, content)` | 写临时文件 → flush + fsync → rename 原子覆盖（防止写中断损坏） |
 | `replace_lines_in_place(path, start, end, lines)` | 替换指定行范围后原子写入 |
 
 **BackupManager**：每文件维护 `undo: deque` 和 `redo: deque`，最大 50 层历史。
