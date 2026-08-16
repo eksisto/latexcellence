@@ -19,22 +19,20 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import {
-  BookOpen,
-  BookOpenText,
-  Copy,
-  FileText,
-  Loader2,
-  Save,
-  Search,
-  Upload,
-  X,
-  Edit3,
-  Check,
-  Trash2,
-  Library,
-  Plus,
-} from "lucide-react";
+import BookOpen from "lucide-react/dist/esm/icons/book-open.mjs";
+import BookOpenText from "lucide-react/dist/esm/icons/book-open-text.mjs";
+import Copy from "lucide-react/dist/esm/icons/copy.mjs";
+import FileText from "lucide-react/dist/esm/icons/file-text.mjs";
+import Loader2 from "lucide-react/dist/esm/icons/loader-circle.mjs";
+import Save from "lucide-react/dist/esm/icons/save.mjs";
+import Search from "lucide-react/dist/esm/icons/search.mjs";
+import Upload from "lucide-react/dist/esm/icons/upload.mjs";
+import X from "lucide-react/dist/esm/icons/x.mjs";
+import Edit3 from "lucide-react/dist/esm/icons/pen-line.mjs";
+import Check from "lucide-react/dist/esm/icons/check.mjs";
+import Trash2 from "lucide-react/dist/esm/icons/trash-2.mjs";
+import Library from "lucide-react/dist/esm/icons/library.mjs";
+import Plus from "lucide-react/dist/esm/icons/plus.mjs";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import BibManagerLibrary from "@/components/BibManagerLibrary";
 import PageHeader from "@/components/PageHeader";

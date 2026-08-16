@@ -20,7 +20,11 @@ import { Switch } from "@/components/ui/switch";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { Languages, Eye, Loader2, ListChecks, FolderOpen } from "lucide-react";
+import Languages from "lucide-react/dist/esm/icons/languages.mjs";
+import Eye from "lucide-react/dist/esm/icons/eye.mjs";
+import Loader2 from "lucide-react/dist/esm/icons/loader-circle.mjs";
+import ListChecks from "lucide-react/dist/esm/icons/list-checks.mjs";
+import FolderOpen from "lucide-react/dist/esm/icons/folder-open.mjs";
 import PageHeader from "@/components/PageHeader";
 import EmptyState from "@/components/EmptyState";
 import UndoRedoButtons from "@/components/UndoRedoButtons";
@@ -74,6 +78,23 @@ export default function ParagraphTranslatePage() {
   const isOther = targetLanguage === OTHER_LANGUAGE;
   const effectiveTargetLanguage = isOther ? customLanguage : targetLanguage;
 
+  // 稳定 apiModule 引用：目标语言变化才重建，避免 useParagraphCheck 回调
+  // 随页面重渲染反复换身份
+  const apiModule = useMemo(
+    () => ({
+      preview: api.paragraphTranslate.preview,
+      apply: api.paragraphTranslate.apply,
+      stream: (wsId, filePath, ri) =>
+        api.paragraphTranslate.stream(
+          wsId,
+          filePath,
+          ri,
+          effectiveTargetLanguage,
+        ),
+    }),
+    [effectiveTargetLanguage],
+  );
+
   const {
     projectPath,
     workspaceId,
@@ -100,17 +121,7 @@ export default function ParagraphTranslatePage() {
     handleIgnoreChange,
     handleFileChange,
   } = useParagraphCheck({
-    apiModule: {
-      preview: api.paragraphTranslate.preview,
-      apply: api.paragraphTranslate.apply,
-      stream: (wsId, filePath, ri) =>
-        api.paragraphTranslate.stream(
-          wsId,
-          filePath,
-          ri,
-          effectiveTargetLanguage,
-        ),
-    },
+    apiModule,
     checkMethodName: "translate",
     correctedTextField: "translated",
     storeSlice: {
@@ -163,6 +174,7 @@ export default function ParagraphTranslatePage() {
       <Card
         key={`${result.file_path}-${result.paragraph_index}`}
         id={`${result.file_path}-P${result.paragraph_index}`}
+        className="[content-visibility:auto] [contain-intrinsic-size:auto_180px]"
       >
         <CardHeader className="pb-2">
           <div className="flex items-center justify-between">

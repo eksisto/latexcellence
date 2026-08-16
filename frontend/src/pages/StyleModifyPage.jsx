@@ -1,20 +1,18 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import {
-  Check,
-  Download,
-  FileDiff,
-  FolderOpen,
-  Loader2,
-  Play,
-  RefreshCw,
-  ScrollText,
-  Square,
-  Trash2,
-  Undo2,
-  Wand2,
-} from "lucide-react";
+import Check from "lucide-react/dist/esm/icons/check.mjs";
+import Download from "lucide-react/dist/esm/icons/download.mjs";
+import FileDiff from "lucide-react/dist/esm/icons/file-diff.mjs";
+import FolderOpen from "lucide-react/dist/esm/icons/folder-open.mjs";
+import Loader2 from "lucide-react/dist/esm/icons/loader-circle.mjs";
+import Play from "lucide-react/dist/esm/icons/play.mjs";
+import RefreshCw from "lucide-react/dist/esm/icons/refresh-cw.mjs";
+import ScrollText from "lucide-react/dist/esm/icons/scroll-text.mjs";
+import Square from "lucide-react/dist/esm/icons/square.mjs";
+import Trash2 from "lucide-react/dist/esm/icons/trash-2.mjs";
+import Undo2 from "lucide-react/dist/esm/icons/undo-2.mjs";
+import Wand2 from "lucide-react/dist/esm/icons/wand-sparkles.mjs";
 import { Button } from "@/components/ui/button";
 import {
   Card,

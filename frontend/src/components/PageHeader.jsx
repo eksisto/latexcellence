@@ -1,6 +1,6 @@
 import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { ArrowLeft } from "lucide-react";
+import ArrowLeft from "lucide-react/dist/esm/icons/arrow-left.mjs";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { SECTION_BY_GROUP } from "@/lib/writingFlow";

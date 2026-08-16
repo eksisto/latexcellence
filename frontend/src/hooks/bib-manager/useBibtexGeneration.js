@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useRef } from "react";
+import { useState, useCallback, useRef } from "react";
 import { toast } from "sonner";
 import { useTranslation } from "react-i18next";
 import { api } from "@/api/index";
@@ -12,20 +12,30 @@ export default function useBibtexGeneration({ editedMetadata, formatResult }) {
   const [step3Loading, setStep3Loading] = useState(false);
   const prevCiteKeyRef = useRef("");
 
-  useEffect(() => {
-    const prevKey = prevCiteKeyRef.current;
-    const newKey = editedCiteKey.trim();
-    if (!editedBibtex || !newKey || !prevKey || newKey === prevKey) return;
-    setEditedBibtex((prev) =>
-      prev.replace(
-        new RegExp(
-          `@(\\w+)\\{${prevKey.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")},`,
-        ),
-        `@$1{${newKey},`,
-      ),
-    );
-    prevCiteKeyRef.current = newKey;
-  }, [editedCiteKey]);
+  /**
+   * cite key 受控更新：在事件处理中同步修正 BibTeX 中的 @entry{旧key}，
+   * 避免用 effect 响应状态变化造成额外渲染与状态漂移。
+   */
+  const handleCiteKeyChange = useCallback(
+    (value) => {
+      const next = String(value ?? "");
+      const nextKey = next.trim();
+      const prevKey = prevCiteKeyRef.current;
+      setEditedCiteKey(next);
+      if (editedBibtex && prevKey && nextKey && nextKey !== prevKey) {
+        setEditedBibtex((prev) =>
+          prev.replace(
+            new RegExp(
+              `@(\\w+)\\{${prevKey.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")},`,
+            ),
+            `@$1{${nextKey},`,
+          ),
+        );
+        prevCiteKeyRef.current = nextKey;
+      }
+    },
+    [editedBibtex],
+  );
 
   const handleGenerateBibtex = useCallback(async () => {
     if (!editedMetadata) return;
@@ -68,7 +78,7 @@ export default function useBibtexGeneration({ editedMetadata, formatResult }) {
     editedBibtex,
     setEditedBibtex,
     editedCiteKey,
-    setEditedCiteKey,
+    setEditedCiteKey: handleCiteKeyChange,
     step3Loading,
     handleGenerateBibtex,
     handleCopyBibtex,

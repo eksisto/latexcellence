@@ -33,16 +33,14 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import {
-  Library,
-  Loader2,
-  Search,
-  Trash2,
-  Edit3,
-  AlertTriangle,
-  CheckCircle,
-  Filter,
-} from "lucide-react";
+import Library from "lucide-react/dist/esm/icons/library.mjs";
+import Loader2 from "lucide-react/dist/esm/icons/loader-circle.mjs";
+import Search from "lucide-react/dist/esm/icons/search.mjs";
+import Trash2 from "lucide-react/dist/esm/icons/trash-2.mjs";
+import Edit3 from "lucide-react/dist/esm/icons/pen-line.mjs";
+import AlertTriangle from "lucide-react/dist/esm/icons/triangle-alert.mjs";
+import CheckCircle from "lucide-react/dist/esm/icons/circle-check-big.mjs";
+import Filter from "lucide-react/dist/esm/icons/funnel.mjs";
 import ConfirmDialog from "@/components/ConfirmDialog";
 import UndoRedoButtons from "@/components/UndoRedoButtons";
 import { api } from "@/api/index";

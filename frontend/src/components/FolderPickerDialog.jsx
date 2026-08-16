@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import {
   Dialog,
@@ -10,7 +10,10 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Folder, ChevronUp, Loader2, FolderOpen } from "lucide-react";
+import Folder from "lucide-react/dist/esm/icons/folder.mjs";
+import ChevronUp from "lucide-react/dist/esm/icons/chevron-up.mjs";
+import Loader2 from "lucide-react/dist/esm/icons/loader-circle.mjs";
+import FolderOpen from "lucide-react/dist/esm/icons/folder-open.mjs";
 import { api } from "@/api/index";
 
 /**
@@ -37,21 +40,28 @@ export default function FolderPickerDialog({
   const [parentPath, setParentPath] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  // 目录浏览请求序号：快速连续导航时丢弃过期响应，避免旧目录覆盖新目录
+  const browseSeqRef = useRef(0);
 
   const fetchDirectories = useCallback(async (path) => {
+    const seq = ++browseSeqRef.current;
     setLoading(true);
     setError(null);
     try {
       const data = await api.project.browse(path);
+      if (seq !== browseSeqRef.current) return;
       setCurrentPath(data.current);
       setInputValue(data.current);
       setParentPath(data.parent);
       setDirectories(data.directories);
     } catch (e) {
+      if (seq !== browseSeqRef.current) return;
       setError(e.message);
       setDirectories([]);
     } finally {
-      setLoading(false);
+      if (seq === browseSeqRef.current) {
+        setLoading(false);
+      }
     }
   }, []);
 
@@ -142,7 +152,6 @@ export default function FolderPickerDialog({
                   <button
                     key={dir.path}
                     className="flex items-center gap-2 w-full px-3 py-2 text-sm hover:bg-accent/50 transition-colors text-left"
-                    onDoubleClick={() => handleNavigate(dir.path)}
                     onClick={() => handleNavigate(dir.path)}
                   >
                     <Folder className="size-4 text-primary/70 shrink-0" />

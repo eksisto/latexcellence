@@ -15,7 +15,9 @@ import {
 } from "@/components/ui/tooltip";
 import { Button } from "@/components/ui/button";
 import { Toaster } from "@/components/ui/sonner";
-import { Loader2, Settings, SquareKanban } from "lucide-react";
+import Loader2 from "lucide-react/dist/esm/icons/loader-circle.mjs";
+import Settings from "lucide-react/dist/esm/icons/settings.mjs";
+import SquareKanban from "lucide-react/dist/esm/icons/square-kanban.mjs";
 import { useTranslation } from "react-i18next";
 import ThemeToggle from "@/components/ThemeToggle";
 import ThemeSwitcher from "@/components/ThemeSwitcher";

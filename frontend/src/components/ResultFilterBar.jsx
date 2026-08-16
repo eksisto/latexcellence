@@ -9,7 +9,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Search, Filter, CornerDownRight, X } from "lucide-react";
+import Search from "lucide-react/dist/esm/icons/search.mjs";
+import Filter from "lucide-react/dist/esm/icons/funnel.mjs";
+import CornerDownRight from "lucide-react/dist/esm/icons/corner-down-right.mjs";
+import X from "lucide-react/dist/esm/icons/x.mjs";
 
 /**
  * 段落检查结果过滤工具栏。

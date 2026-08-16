@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Loader2, ShieldCheck, Check } from "lucide-react";
+import Loader2 from "lucide-react/dist/esm/icons/loader-circle.mjs";
+import ShieldCheck from "lucide-react/dist/esm/icons/shield-check.mjs";
+import Check from "lucide-react/dist/esm/icons/check.mjs";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -17,7 +19,7 @@ export default function CaptchaDialog({
   onDismiss,
 }) {
   const { t } = useTranslation(["pages", "common"]);
-  const [selected, setSelected] = useState(new Set());
+  const [selected, setSelected] = useState(() => new Set());
 
   const toggle = (hash) => {
     setSelected((prev) => {
@@ -108,7 +110,9 @@ export default function CaptchaDialog({
             onClick={() => onSubmit(Array.from(selected))}
             disabled={submitting || selected.size === 0}
           >
-            {submitting && <Loader2 className="size-3 animate-spin mr-1" />}
+            {submitting ? (
+              <Loader2 className="size-3 animate-spin mr-1" />
+            ) : null}
             {t("pages:writingChat.captchaSubmit")}
           </Button>
         </DialogFooter>

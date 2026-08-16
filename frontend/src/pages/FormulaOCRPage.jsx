@@ -1,6 +1,6 @@
 import { useCallback } from "react";
 import { useTranslation } from "react-i18next";
-import { ScanText } from "lucide-react";
+import ScanText from "lucide-react/dist/esm/icons/scan-text.mjs";
 import { api } from "@/api/index";
 import ImageOCRPage from "@/components/ImageOCRPage";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";

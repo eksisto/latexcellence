@@ -2,14 +2,14 @@ import { useState, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { cn } from "@/lib/utils";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import {
-  Folder,
-  FolderOpen,
-  File,
-  FileText,
-  Image,
-  ChevronRight,
-} from "lucide-react";
+import Folder from "lucide-react/dist/esm/icons/folder.mjs";
+import FolderOpen from "lucide-react/dist/esm/icons/folder-open.mjs";
+import File from "lucide-react/dist/esm/icons/file.mjs";
+import FileText from "lucide-react/dist/esm/icons/file-text.mjs";
+import Image from "lucide-react/dist/esm/icons/image.mjs";
+import ChevronRight from "lucide-react/dist/esm/icons/chevron-right.mjs";
+
+const IMAGE_FILE_RE = /\.(png|jpg|jpeg|webp|pdf)$/i;
 
 function getFileIcon(name, isDir, isExpanded) {
   if (isDir) {
@@ -18,7 +18,7 @@ function getFileIcon(name, isDir, isExpanded) {
   }
   if (name.endsWith(".tex"))
     return <FileText className="size-4 text-muted-foreground" />;
-  if (/\.(png|jpg|jpeg|webp|pdf)$/i.test(name))
+  if (IMAGE_FILE_RE.test(name))
     return <Image className="size-4 text-muted-foreground" />;
   return <File className="size-4 text-muted-foreground" />;
 }

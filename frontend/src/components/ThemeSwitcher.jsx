@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useTranslation } from "react-i18next";
-import { Palette, Check } from "lucide-react";
+import Palette from "lucide-react/dist/esm/icons/palette.mjs";
+import Check from "lucide-react/dist/esm/icons/check.mjs";
 import { Button } from "@/components/ui/button";
 import {
   Tooltip,

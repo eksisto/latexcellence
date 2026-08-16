@@ -1,20 +1,18 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import {
-  Check,
-  CircleX,
-  Download,
-  Expand,
-  FileDiff,
-  GitBranch,
-  GitCommit,
-  Loader2,
-  Minimize,
-  RefreshCw,
-  Settings2,
-  Tag,
-} from "lucide-react";
+import Check from "lucide-react/dist/esm/icons/check.mjs";
+import CircleX from "lucide-react/dist/esm/icons/circle-x.mjs";
+import Download from "lucide-react/dist/esm/icons/download.mjs";
+import Expand from "lucide-react/dist/esm/icons/expand.mjs";
+import FileDiff from "lucide-react/dist/esm/icons/file-diff.mjs";
+import GitBranch from "lucide-react/dist/esm/icons/git-branch.mjs";
+import GitCommit from "lucide-react/dist/esm/icons/git-commit-horizontal.mjs";
+import Loader2 from "lucide-react/dist/esm/icons/loader-circle.mjs";
+import Minimize from "lucide-react/dist/esm/icons/minimize.mjs";
+import RefreshCw from "lucide-react/dist/esm/icons/refresh-cw.mjs";
+import Settings2 from "lucide-react/dist/esm/icons/settings-2.mjs";
+import Tag from "lucide-react/dist/esm/icons/tag.mjs";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -270,6 +268,7 @@ export default function GitDiffPage() {
     colorDel,
     excludeSafecmd,
     excludeTextcmd,
+    workspaceId,
   ]);
 
   if (!projectPath) {
@@ -636,7 +635,9 @@ export default function GitDiffPage() {
                 </div>
               </div>
 
-              {error && <p className="text-sm text-destructive">{error}</p>}
+              {error ? (
+                <p className="text-sm text-destructive">{error}</p>
+              ) : null}
 
               <Button
                 className="w-full"
@@ -766,7 +767,7 @@ export default function GitDiffPage() {
         </div>
 
         <div className="relative h-[720px]">
-          {!pdfFullscreen && <PDFPreview url={pdfUrl} />}
+          {!pdfFullscreen ? <PDFPreview url={pdfUrl} /> : null}
           {pdfUrl && !pdfFullscreen && (
             <Button
               variant="outline"

@@ -1,14 +1,12 @@
 import { useTranslation } from "react-i18next";
-import {
-  Globe,
-  FileText,
-  Search,
-  PencilLine,
-  Undo2,
-  HelpCircle,
-  FolderOpen,
-  GraduationCap,
-} from "lucide-react";
+import Globe from "lucide-react/dist/esm/icons/globe.mjs";
+import FileText from "lucide-react/dist/esm/icons/file-text.mjs";
+import Search from "lucide-react/dist/esm/icons/search.mjs";
+import PencilLine from "lucide-react/dist/esm/icons/pencil-line.mjs";
+import Undo2 from "lucide-react/dist/esm/icons/undo-2.mjs";
+import HelpCircle from "lucide-react/dist/esm/icons/circle-question-mark.mjs";
+import FolderOpen from "lucide-react/dist/esm/icons/folder-open.mjs";
+import GraduationCap from "lucide-react/dist/esm/icons/graduation-cap.mjs";
 
 const scholarlyTools = [
   "search_scholarly_works",

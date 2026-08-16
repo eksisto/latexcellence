@@ -22,16 +22,14 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import {
-  PencilLine,
-  PencilSparkles,
-  Eye,
-  Loader2,
-  Plus,
-  Trash2,
-  FolderOpen,
-  ListChecks,
-} from "lucide-react";
+import PencilLine from "lucide-react/dist/esm/icons/pencil-line.mjs";
+import PencilSparkles from "lucide-react/dist/esm/icons/pencil-sparkles.mjs";
+import Eye from "lucide-react/dist/esm/icons/eye.mjs";
+import Loader2 from "lucide-react/dist/esm/icons/loader-circle.mjs";
+import Plus from "lucide-react/dist/esm/icons/plus.mjs";
+import Trash2 from "lucide-react/dist/esm/icons/trash-2.mjs";
+import FolderOpen from "lucide-react/dist/esm/icons/folder-open.mjs";
+import ListChecks from "lucide-react/dist/esm/icons/list-checks.mjs";
 import { api } from "@/api/index";
 import PageHeader from "@/components/PageHeader";
 import EmptyState from "@/components/EmptyState";
@@ -620,6 +618,7 @@ export default function ExpressionOptPage() {
                                 <Card
                                   key={`${result.file_path}-expr-result-P${result.paragraph_index}`}
                                   id={`expr-result-P${result.paragraph_index}`}
+                                  className="[content-visibility:auto] [contain-intrinsic-size:auto_180px]"
                                 >
                                   <CardHeader className="pb-2">
                                     <div className="flex items-center justify-between">

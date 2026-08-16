@@ -11,14 +11,12 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import {
-  ArrowRightLeft,
-  FileText,
-  Loader2,
-  Copy,
-  Download,
-  Upload,
-} from "lucide-react";
+import ArrowRightLeft from "lucide-react/dist/esm/icons/arrow-right-left.mjs";
+import FileText from "lucide-react/dist/esm/icons/file-text.mjs";
+import Loader2 from "lucide-react/dist/esm/icons/loader-circle.mjs";
+import Copy from "lucide-react/dist/esm/icons/copy.mjs";
+import Download from "lucide-react/dist/esm/icons/download.mjs";
+import Upload from "lucide-react/dist/esm/icons/upload.mjs";
 import { api } from "@/api/index";
 import PageHeader from "@/components/PageHeader";
 import CodeBlock, { latexEditorClass } from "@/components/CodeBlock";
@@ -340,7 +338,7 @@ export default function FormatConvertPage() {
                 </a>
               </span>
             </div>
-            {error && <p className="text-sm text-destructive">{error}</p>}
+            {error ? <p className="text-sm text-destructive">{error}</p> : null}
           </CardContent>
         </Card>
 

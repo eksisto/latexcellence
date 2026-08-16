@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Loader2, PencilLine, Check } from "lucide-react";
+import Loader2 from "lucide-react/dist/esm/icons/loader-circle.mjs";
+import PencilLine from "lucide-react/dist/esm/icons/pencil-line.mjs";
+import Check from "lucide-react/dist/esm/icons/check.mjs";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import CodeBlock, { latexEditorClass } from "@/components/CodeBlock";
@@ -31,7 +33,9 @@ export default function EditOpCard({ edit_op, reason, onApply, applying }) {
         </CardTitle>
       </CardHeader>
       <CardContent className="pt-1 space-y-2">
-        {reason && <p className="text-xs text-muted-foreground">{reason}</p>}
+        {reason ? (
+          <p className="text-xs text-muted-foreground">{reason}</p>
+        ) : null}
         <div
           className={`grid grid-cols-1 ${isEditing ? "" : "md:grid-cols-2"} gap-2`}
         >
@@ -104,7 +108,7 @@ export default function EditOpCard({ edit_op, reason, onApply, applying }) {
                   : t("pages:writingChat.manualEdit")}
               </Button>
               <Button size="sm" onClick={handleApply} disabled={applying}>
-                {applying && <Loader2 className="size-3 animate-spin" />}
+                {applying ? <Loader2 className="size-3 animate-spin" /> : null}
                 {t("pages:writingChat.applyToTex")}
               </Button>
             </>

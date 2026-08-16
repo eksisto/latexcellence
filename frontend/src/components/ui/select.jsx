@@ -2,7 +2,9 @@ import * as React from "react";
 import { Select as SelectPrimitive } from "@base-ui/react/select";
 
 import { cn } from "@/lib/utils";
-import { ChevronDownIcon, CheckIcon, ChevronUpIcon } from "lucide-react";
+import ChevronDownIcon from "lucide-react/dist/esm/icons/chevron-down.mjs";
+import CheckIcon from "lucide-react/dist/esm/icons/check.mjs";
+import ChevronUpIcon from "lucide-react/dist/esm/icons/chevron-up.mjs";
 
 const LabelMapContext = React.createContext(null);
 if (process.env.NODE_ENV !== "production") {

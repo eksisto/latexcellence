@@ -26,18 +26,16 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import {
-  FolderOpen,
-  SpellCheck,
-  Play,
-  Loader2,
-  Check,
-  CircleX,
-  ChevronDown,
-  ChevronRight,
-  FileDiff,
-  FileTypeCorner,
-} from "lucide-react";
+import FolderOpen from "lucide-react/dist/esm/icons/folder-open.mjs";
+import SpellCheck from "lucide-react/dist/esm/icons/spell-check.mjs";
+import Play from "lucide-react/dist/esm/icons/play.mjs";
+import Loader2 from "lucide-react/dist/esm/icons/loader-circle.mjs";
+import Check from "lucide-react/dist/esm/icons/check.mjs";
+import CircleX from "lucide-react/dist/esm/icons/circle-x.mjs";
+import ChevronDown from "lucide-react/dist/esm/icons/chevron-down.mjs";
+import ChevronRight from "lucide-react/dist/esm/icons/chevron-right.mjs";
+import FileDiff from "lucide-react/dist/esm/icons/file-diff.mjs";
+import FileTypeCorner from "lucide-react/dist/esm/icons/file-type-corner.mjs";
 import { api } from "@/api/index";
 import { translateError } from "@/utils/errorMessages";
 import useStore from "@/store/useStore";
@@ -77,6 +75,7 @@ export default function WorkspacePage() {
   const setActiveFile = useStore((s) => s.setActiveFile);
   const setMainFile = useStore((s) => s.setMainFile);
   const clearProject = useStore((s) => s.clearProject);
+  const hydrated = useStore((s) => s.hydrated);
   const enabledFeatures = useEnabledFeatures();
   const compileResult = useStore((s) => s.compileResult);
   const compileLoading = useStore((s) => s.compileLoading);
@@ -143,17 +142,14 @@ export default function WorkspacePage() {
     ],
   );
 
-  // 启动时：从 Zustand persist 恢复项目
+  // 启动时：从 Zustand persist 恢复项目（等水合完成后再恢复）
   useEffect(() => {
-    const restore = async () => {
-      if (restoredRef.current) return;
-      if (projectPath && fileTree.length === 0) {
-        restoredRef.current = true;
-        await doOpenProject(projectPath);
-      }
-    };
-    restore();
-  }, []);
+    if (!hydrated || restoredRef.current) return;
+    if (projectPath && fileTree.length === 0) {
+      restoredRef.current = true;
+      doOpenProject(projectPath);
+    }
+  }, [hydrated, projectPath, fileTree.length, doOpenProject]);
 
   const handleOpenProject = useCallback(async () => {
     if (!openPath.trim()) return;
@@ -181,7 +177,7 @@ export default function WorkspacePage() {
         // 忽略
       }
     },
-    [setMainFile],
+    [setMainFile, workspaceId],
   );
 
   const handleCompile = useCallback(async () => {
@@ -227,16 +223,19 @@ export default function WorkspacePage() {
     workspaceId,
   ]);
 
-  const handleSelectFile = useCallback(async (node) => {
-    if (node.is_dir) return;
-    setActiveFile(node.path);
-    try {
-      const data = await api.project.paragraphs(node.path, workspaceId);
-      setParagraphs(data.paragraphs || []);
-    } catch (e) {
-      setParagraphs([]);
-    }
-  }, []);
+  const handleSelectFile = useCallback(
+    async (node) => {
+      if (node.is_dir) return;
+      setActiveFile(node.path);
+      try {
+        const data = await api.project.paragraphs(node.path, workspaceId);
+        setParagraphs(data.paragraphs || []);
+      } catch (e) {
+        setParagraphs([]);
+      }
+    },
+    [setActiveFile, workspaceId],
+  );
 
   const reloadActiveFileParagraphs = useCallback(async () => {
     if (!activeFile) return;
@@ -246,7 +245,7 @@ export default function WorkspacePage() {
     } catch (_) {
       setParagraphs([]);
     }
-  }, [activeFile]);
+  }, [activeFile, workspaceId]);
 
   return (
     <div className="min-h-screen p-8 animate-tab-enter">
@@ -290,7 +289,9 @@ export default function WorkspacePage() {
                     {t("pages:workspace.pathHint")}
                   </p>
                 </div>
-                {error && <p className="text-destructive text-sm">{error}</p>}
+                {error ? (
+                  <p className="text-destructive text-sm">{error}</p>
+                ) : null}
                 <Button
                   className="w-full"
                   onClick={handleOpenProject}

@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useTranslation } from "react-i18next";
-import { HelpCircle } from "lucide-react";
+import HelpCircle from "lucide-react/dist/esm/icons/circle-question-mark.mjs";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import {

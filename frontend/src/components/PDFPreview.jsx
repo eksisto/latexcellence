@@ -1,6 +1,6 @@
 import { useTranslation } from "react-i18next";
 import { Card, CardContent } from "@/components/ui/card";
-import { FileWarning } from "lucide-react";
+import FileWarning from "lucide-react/dist/esm/icons/file-exclamation-point.mjs";
 
 export default function PDFPreview({ url }) {
   const { t } = useTranslation("components");

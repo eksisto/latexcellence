@@ -1,6 +1,6 @@
 import { useCallback, useState, useEffect } from "react";
 import { toast } from "sonner";
-import { Settings } from "lucide-react";
+import Settings from "lucide-react/dist/esm/icons/settings.mjs";
 import { useTranslation } from "react-i18next";
 import {
   Dialog,

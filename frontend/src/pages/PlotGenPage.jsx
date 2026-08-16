@@ -27,23 +27,21 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  AlertTriangle,
-  ChartSpline,
-  CheckCircle2,
-  Copy,
-  Download,
-  Eye,
-  FileText,
-  FolderTree,
-  Loader2,
-  ScrollText,
-  Send,
-  Upload,
-  Wand2,
-  Wrench,
-  CircleX,
-} from "lucide-react";
+import AlertTriangle from "lucide-react/dist/esm/icons/triangle-alert.mjs";
+import ChartSpline from "lucide-react/dist/esm/icons/chart-spline.mjs";
+import CheckCircle2 from "lucide-react/dist/esm/icons/circle-check.mjs";
+import Copy from "lucide-react/dist/esm/icons/copy.mjs";
+import Download from "lucide-react/dist/esm/icons/download.mjs";
+import Eye from "lucide-react/dist/esm/icons/eye.mjs";
+import FileText from "lucide-react/dist/esm/icons/file-text.mjs";
+import FolderTree from "lucide-react/dist/esm/icons/folder-tree.mjs";
+import Loader2 from "lucide-react/dist/esm/icons/loader-circle.mjs";
+import ScrollText from "lucide-react/dist/esm/icons/scroll-text.mjs";
+import Send from "lucide-react/dist/esm/icons/send.mjs";
+import Upload from "lucide-react/dist/esm/icons/upload.mjs";
+import Wand2 from "lucide-react/dist/esm/icons/wand-sparkles.mjs";
+import Wrench from "lucide-react/dist/esm/icons/wrench.mjs";
+import CircleX from "lucide-react/dist/esm/icons/circle-x.mjs";
 import {
   Dialog,
   DialogContent,
@@ -650,7 +648,7 @@ function ChartPlanCard({ plan, t }) {
                 </span>
               )}
             </div>
-            {plan.rationale && <p>{plan.rationale}</p>}
+            {plan.rationale ? <p>{plan.rationale}</p> : null}
             {plan.risks?.length > 0 && (
               <ul className="list-disc pl-4 space-y-0.5">
                 {plan.risks.map((risk) => (

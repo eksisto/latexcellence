@@ -5,7 +5,9 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import PageHeader from "@/components/PageHeader";
 import CodeBlock from "@/components/CodeBlock";
-import { Upload, Loader2, Copy } from "lucide-react";
+import Upload from "lucide-react/dist/esm/icons/upload.mjs";
+import Loader2 from "lucide-react/dist/esm/icons/loader-circle.mjs";
+import Copy from "lucide-react/dist/esm/icons/copy.mjs";
 
 const ACCEPTED_TYPES = ["image/png", "image/jpeg", "image/webp"];
 
@@ -39,21 +41,24 @@ export default function ImageOCRPage({
   const [dragging, setDragging] = useState(false);
   const fileInputRef = useRef(null);
 
-  const handleFile = useCallback((f) => {
-    if (!f) return;
-    if (!ACCEPTED_TYPES.includes(f.type)) {
-      toast.error(t("imageOcr.unsupportedFormat"), {
-        description: t("imageOcr.unsupportedFormatDesc"),
-      });
-      return;
-    }
-    setFile(f);
-    setResult(null);
+  const handleFile = useCallback(
+    (f) => {
+      if (!f) return;
+      if (!ACCEPTED_TYPES.includes(f.type)) {
+        toast.error(t("imageOcr.unsupportedFormat"), {
+          description: t("imageOcr.unsupportedFormatDesc"),
+        });
+        return;
+      }
+      setFile(f);
+      setResult(null);
 
-    const reader = new FileReader();
-    reader.onload = (e) => setPreview(e.target.result);
-    reader.readAsDataURL(f);
-  }, []);
+      const reader = new FileReader();
+      reader.onload = (e) => setPreview(e.target.result);
+      reader.readAsDataURL(f);
+    },
+    [t],
+  );
 
   const handleInputChange = useCallback(
     (e) => {

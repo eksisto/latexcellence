@@ -1,5 +1,5 @@
 import { Toaster as SonnerToaster } from "sonner";
-import { X } from "lucide-react";
+import X from "lucide-react/dist/esm/icons/x.mjs";
 import { useTheme } from "@/hooks/useTheme";
 
 function SolidCheck({ className }) {

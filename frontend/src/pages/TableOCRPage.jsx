@@ -1,6 +1,6 @@
 import { useCallback } from "react";
 import { useTranslation } from "react-i18next";
-import { Table2 } from "lucide-react";
+import Table2 from "lucide-react/dist/esm/icons/table-2.mjs";
 import { api } from "@/api/index";
 import ImageOCRPage from "@/components/ImageOCRPage";
 

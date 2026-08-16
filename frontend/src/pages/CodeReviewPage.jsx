@@ -25,7 +25,11 @@ import {
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { Eye, ListChecks, Loader2, Search, FolderOpen } from "lucide-react";
+import Eye from "lucide-react/dist/esm/icons/eye.mjs";
+import ListChecks from "lucide-react/dist/esm/icons/list-checks.mjs";
+import Loader2 from "lucide-react/dist/esm/icons/loader-circle.mjs";
+import Search from "lucide-react/dist/esm/icons/search.mjs";
+import FolderOpen from "lucide-react/dist/esm/icons/folder-open.mjs";
 import PageHeader from "@/components/PageHeader";
 import EmptyState from "@/components/EmptyState";
 import UndoRedoButtons from "@/components/UndoRedoButtons";
@@ -148,6 +152,7 @@ const CodeReviewResultCard = React.memo(function CodeReviewResultCard({
     <Card
       key={`${result.file_path}-cr-result-P${result.paragraph_index}`}
       id={`cr-result-P${result.paragraph_index}`}
+      className="[content-visibility:auto] [contain-intrinsic-size:auto_180px]"
     >
       <CardHeader className="pb-2">
         <div className="flex items-baseline justify-between gap-3">

@@ -1,20 +1,18 @@
 import { useEffect, useState, memo, useDeferredValue } from "react";
 import { useTranslation } from "react-i18next";
-import {
-  Loader2,
-  Lightbulb,
-  ChevronDown,
-  User,
-  Bot,
-  Globe,
-  Copy,
-  CopyCheck,
-  PencilLine,
-  Trash2,
-  Undo2,
-  History,
-  GraduationCap,
-} from "lucide-react";
+import Loader2 from "lucide-react/dist/esm/icons/loader-circle.mjs";
+import Lightbulb from "lucide-react/dist/esm/icons/lightbulb.mjs";
+import ChevronDown from "lucide-react/dist/esm/icons/chevron-down.mjs";
+import User from "lucide-react/dist/esm/icons/user.mjs";
+import Bot from "lucide-react/dist/esm/icons/bot.mjs";
+import Globe from "lucide-react/dist/esm/icons/globe.mjs";
+import Copy from "lucide-react/dist/esm/icons/copy.mjs";
+import CopyCheck from "lucide-react/dist/esm/icons/copy-check.mjs";
+import PencilLine from "lucide-react/dist/esm/icons/pencil-line.mjs";
+import Trash2 from "lucide-react/dist/esm/icons/trash-2.mjs";
+import Undo2 from "lucide-react/dist/esm/icons/undo-2.mjs";
+import History from "lucide-react/dist/esm/icons/history.mjs";
+import GraduationCap from "lucide-react/dist/esm/icons/graduation-cap.mjs";
 import { Button } from "@/components/ui/button";
 import MarkdownRenderer from "@/components/MarkdownRenderer";
 

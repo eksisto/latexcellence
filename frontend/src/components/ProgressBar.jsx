@@ -1,6 +1,8 @@
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Pause, Play, Square } from "lucide-react";
+import Pause from "lucide-react/dist/esm/icons/pause.mjs";
+import Play from "lucide-react/dist/esm/icons/play.mjs";
+import Square from "lucide-react/dist/esm/icons/square.mjs";
 import { useTranslation } from "react-i18next";
 
 export default function ProgressBar({

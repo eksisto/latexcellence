@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Undo2, Redo2 } from "lucide-react";
+import Undo2 from "lucide-react/dist/esm/icons/undo-2.mjs";
+import Redo2 from "lucide-react/dist/esm/icons/redo-2.mjs";
 import { Button } from "@/components/ui/button";
 import {
   Tooltip,

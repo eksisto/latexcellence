@@ -1,18 +1,16 @@
 import { useEffect, useRef, useMemo, useState, lazy, Suspense } from "react";
 import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import {
-  Loader2,
-  ArrowUp,
-  Plus,
-  Trash2,
-  PencilLine,
-  TextAlignStart,
-  Sparkles,
-  X,
-  FolderOpen,
-  Shrink,
-} from "lucide-react";
+import Loader2 from "lucide-react/dist/esm/icons/loader-circle.mjs";
+import ArrowUp from "lucide-react/dist/esm/icons/arrow-up.mjs";
+import Plus from "lucide-react/dist/esm/icons/plus.mjs";
+import Trash2 from "lucide-react/dist/esm/icons/trash-2.mjs";
+import PencilLine from "lucide-react/dist/esm/icons/pencil-line.mjs";
+import TextAlignStart from "lucide-react/dist/esm/icons/text-align-start.mjs";
+import Sparkles from "lucide-react/dist/esm/icons/sparkles.mjs";
+import X from "lucide-react/dist/esm/icons/x.mjs";
+import FolderOpen from "lucide-react/dist/esm/icons/folder-open.mjs";
+import Shrink from "lucide-react/dist/esm/icons/shrink.mjs";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
@@ -37,6 +35,8 @@ const ToolConfirmDialog = lazy(
   () => import("./writing-chat/ToolConfirmDialog"),
 );
 const ClarifyDialog = lazy(() => import("./writing-chat/ClarifyDialog"));
+
+const NEWLINE_RE = /\n/g;
 
 export default function WritingChatPage() {
   const { t } = useTranslation(["pages", "common"]);
@@ -334,7 +334,7 @@ export default function WritingChatPage() {
                   {paragraphs.map((p) => (
                     <SelectItem key={p.index} value={String(p.index)}>
                       P{p.index} ·{" "}
-                      {(p.text || "").slice(0, 30).replace(/\n/g, " ")}
+                      {(p.text || "").slice(0, 30).replace(NEWLINE_RE, " ")}
                       {(p.text || "").length > 30 ? "..." : ""}
                     </SelectItem>
                   ))}

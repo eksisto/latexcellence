@@ -1,27 +1,25 @@
 import { useMemo } from "react";
 import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { FolderOpen } from "lucide-react";
+import FolderOpen from "lucide-react/dist/esm/icons/folder-open.mjs";
 import { Button } from "@/components/ui/button";
 import Wordmark from "@/components/Wordmark";
 import useEnabledFeatures from "@/hooks/useEnabledFeatures";
 import { SECTION_BY_GROUP } from "@/lib/writingFlow";
-import {
-  ScanText,
-  Table2,
-  Scroll,
-  SpellCheck,
-  PencilSparkles,
-  ListChecks,
-  ArrowLeftRight,
-  FileDiff,
-  PencilRuler,
-  FileTypeCorner,
-  MessagesSquare,
-  Album,
-  Languages,
-  ChartSpline,
-} from "lucide-react";
+import ScanText from "lucide-react/dist/esm/icons/scan-text.mjs";
+import Table2 from "lucide-react/dist/esm/icons/table-2.mjs";
+import Scroll from "lucide-react/dist/esm/icons/scroll.mjs";
+import SpellCheck from "lucide-react/dist/esm/icons/spell-check.mjs";
+import PencilSparkles from "lucide-react/dist/esm/icons/pencil-sparkles.mjs";
+import ListChecks from "lucide-react/dist/esm/icons/list-checks.mjs";
+import ArrowLeftRight from "lucide-react/dist/esm/icons/arrow-left-right.mjs";
+import FileDiff from "lucide-react/dist/esm/icons/file-diff.mjs";
+import PencilRuler from "lucide-react/dist/esm/icons/pencil-ruler.mjs";
+import FileTypeCorner from "lucide-react/dist/esm/icons/file-type-corner.mjs";
+import MessagesSquare from "lucide-react/dist/esm/icons/messages-square.mjs";
+import Album from "lucide-react/dist/esm/icons/album.mjs";
+import Languages from "lucide-react/dist/esm/icons/languages.mjs";
+import ChartSpline from "lucide-react/dist/esm/icons/chart-spline.mjs";
 
 const featureGroups = [
   {

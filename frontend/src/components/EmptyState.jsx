@@ -31,7 +31,7 @@ export default function EmptyState({
           </p>
         )}
       </div>
-      {children && <div className="mt-1">{children}</div>}
+      {children ? <div className="mt-1">{children}</div> : null}
     </div>
   );
 }

@@ -19,7 +19,11 @@ import {
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { CheckCheck, Eye, Loader2, ListChecks, FolderOpen } from "lucide-react";
+import CheckCheck from "lucide-react/dist/esm/icons/check-check.mjs";
+import Eye from "lucide-react/dist/esm/icons/eye.mjs";
+import Loader2 from "lucide-react/dist/esm/icons/loader-circle.mjs";
+import ListChecks from "lucide-react/dist/esm/icons/list-checks.mjs";
+import FolderOpen from "lucide-react/dist/esm/icons/folder-open.mjs";
 import { api } from "@/api/index";
 import PageHeader from "@/components/PageHeader";
 import EmptyState from "@/components/EmptyState";
@@ -122,6 +126,7 @@ export default function TypoCheckPage() {
       <Card
         key={`${result.file_path}-${result.paragraph_index}`}
         id={`${result.file_path}-P${result.paragraph_index}`}
+        className="[content-visibility:auto] [contain-intrinsic-size:auto_180px]"
       >
         <CardHeader className="pb-2">
           <div className="flex items-center justify-between">

@@ -1,5 +1,6 @@
 import { useTranslation } from "react-i18next";
-import { PencilLine, Undo2 } from "lucide-react";
+import PencilLine from "lucide-react/dist/esm/icons/pencil-line.mjs";
+import Undo2 from "lucide-react/dist/esm/icons/undo-2.mjs";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,

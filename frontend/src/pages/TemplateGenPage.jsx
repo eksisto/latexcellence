@@ -10,21 +10,19 @@ import {
 } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import {
-  FileText,
-  Loader2,
-  Copy,
-  Download,
-  Eye,
-  FolderTree,
-  FileCheck2,
-  AlertTriangle,
-  CircleX,
-  ScrollText,
-  Wand2,
-  Wrench,
-  CheckCircle2,
-} from "lucide-react";
+import FileText from "lucide-react/dist/esm/icons/file-text.mjs";
+import Loader2 from "lucide-react/dist/esm/icons/loader-circle.mjs";
+import Copy from "lucide-react/dist/esm/icons/copy.mjs";
+import Download from "lucide-react/dist/esm/icons/download.mjs";
+import Eye from "lucide-react/dist/esm/icons/eye.mjs";
+import FolderTree from "lucide-react/dist/esm/icons/folder-tree.mjs";
+import FileCheck2 from "lucide-react/dist/esm/icons/file-check-corner.mjs";
+import AlertTriangle from "lucide-react/dist/esm/icons/triangle-alert.mjs";
+import CircleX from "lucide-react/dist/esm/icons/circle-x.mjs";
+import ScrollText from "lucide-react/dist/esm/icons/scroll-text.mjs";
+import Wand2 from "lucide-react/dist/esm/icons/wand-sparkles.mjs";
+import Wrench from "lucide-react/dist/esm/icons/wrench.mjs";
+import CheckCircle2 from "lucide-react/dist/esm/icons/circle-check.mjs";
 import {
   Dialog,
   DialogContent,
