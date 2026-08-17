@@ -2,6 +2,7 @@
 config.json
 
 # Agent
+.agents/
 .codex/
 .claude/
 .opencode/
