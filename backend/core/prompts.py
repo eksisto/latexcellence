@@ -1379,13 +1379,13 @@ _PROMPTS: dict[str, dict[str, str]] = {
                 "  xticklabels={GroupA, GroupB, GroupC, GroupD},\n"
                 "  ymin=0,\n"
                 "]\n"
-                "\\addplot+[boxplot] table[y=measurement, col sep=comma] "
+                "\\addplot+[boxplot] table[x=index, y=measurement, col sep=comma] "
                 "{data_GroupA.csv};\n"
-                "\\addplot+[boxplot] table[y=measurement, col sep=comma] "
+                "\\addplot+[boxplot] table[x=index, y=measurement, col sep=comma] "
                 "{data_GroupB.csv};\n"
-                "\\addplot+[boxplot] table[y=measurement, col sep=comma] "
+                "\\addplot+[boxplot] table[x=index, y=measurement, col sep=comma] "
                 "{data_GroupC.csv};\n"
-                "\\addplot+[boxplot] table[y=measurement, col sep=comma] "
+                "\\addplot+[boxplot] table[x=index, y=measurement, col sep=comma] "
                 "{data_GroupD.csv};\n"
                 "\\end{axis}\n"
                 "\\end{tikzpicture}"
@@ -1435,7 +1435,7 @@ _PROMPTS: dict[str, dict[str, str]] = {
                 "\\end{tikzpicture}"
             ),
             "heatmap": (
-                "Heatmap template (CSV with columns x, y, corr; x and y MUST be "
+                "Heatmap template (CSV with columns x, y, value; x and y MUST be "
                 "integer indices 0..n-1 (column/row index), NOT variable names; "
                 "display names go into x_labels/y_labels; mesh/cols must equal "
                 "the number of x values):\n"
@@ -1448,7 +1448,7 @@ _PROMPTS: dict[str, dict[str, str]] = {
                 "  xlabel={Variable}, ylabel={Variable},\n"
                 "]\n"
                 "\\addplot[matrix plot, mesh/cols=12] table[x=x, y=y, "
-                "meta=corr, col sep=comma] {data_corr.csv};\n"
+                "meta=value, col sep=comma] {data_corr.csv};\n"
                 "\\end{axis}\n"
                 "\\end{tikzpicture}"
             ),
@@ -1587,12 +1587,15 @@ _PROMPTS: dict[str, dict[str, str]] = {
             "order across all series (x index i = xticklabels[i]), and a text "
             "'category' column so the backend can verify label alignment. Do "
             "NOT drop or replace negative values — bars extend below zero.\n"
-            "   - box/violin: one series entry per group with y = value "
-            'column; add "box": {{"xticklabels": ["G1", ...]}}.\n'
+            "   - box/violin: one series entry per group with x = an integer "
+            "index column (for example `index`) and y = value column; include "
+            "the x column in every CSV even though the renderer uses the group "
+            'position; add "box": {{"xticklabels": ["G1", ...]}}.\n'
             '   - heatmap: add "heatmap": {{"matrix_file": "data_corr.csv", '
             '"cols": <n>, "x_labels": [...], "y_labels": [...], '
             '"colormap": "RdBu_r|viridis", "meta_min": -1, "meta_max": 1, '
-            '"colorbar_label": "Pearson r", "cell_text": [...]}}. The matrix '
+            '"colorbar_label": "Pearson r", "cell_text": [{{"row": 0, '
+            '"col": 0, "text": "0.85", "color": "black"}}]}}. The matrix '
             "CSV is a long table with columns x, y, value where x and y are "
             "INTEGER indices 0..n-1 (row/column position, not variable names) "
             "and there are exactly n*n rows.\n"
