@@ -80,7 +80,7 @@ data/style_modify_sessions/<session_id>/
 
 ### Proposal 与事务写回
 
-`finish` 生成不可变 proposal revision，包含需求、变更说明、逐文件 baseline MD5、candidate MD5、unified diff、编译摘要和可应用状态。前端 refinement 只能基于当前 revision 发起；应用前检查 workspace、项目指纹、最新 revision、路径、真实文件 MD5 和 LaTeX 内容。
+`finish` 生成不可变 proposal revision，包含需求、变更说明、逐文件 baseline MD5、candidate MD5、unified diff、编译摘要和可应用状态。finish 前还会拒绝摘要中承认未完成样式需求、声称可稍后添加，或以默认值替代显式设置的交付；Agent 必须继续修改并重新编译。前端 refinement 只能基于当前 revision 发起；应用前检查 workspace、项目指纹、最新 revision、路径、真实文件 MD5 和 LaTeX 内容。
 
 写回通过 `LatexProject.apply_whole_files()` 完成：
 

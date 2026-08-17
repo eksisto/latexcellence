@@ -10,7 +10,7 @@ import pytest
 
 from backend.core.config import get_config
 from backend.core.project_manager import FileConflictError, LatexProject
-from backend.modules.style_modify.agent import get_style_modify_agent
+from backend.modules.style_modify.agent import StyleModifyAgent, get_style_modify_agent
 from backend.modules.style_modify.models import CompileSummary
 from backend.modules.style_modify.session import (
     StyleModifySessionStore,
@@ -752,6 +752,19 @@ class TestStyleModifyAgentLifecycle:
         assert store.load_meta(session_id).last_verified_md5s == {
             staged[0].path: staged[0].candidate_md5
         }
+
+
+def test_finish_summary_rejects_unimplemented_style_requirement():
+    """不应接受用默认值或未来承诺掩盖未完成的样式需求。"""
+    assert StyleModifyAgent._incomplete_finish_reason(
+        {"summary": "纸张使用 A4，无需额外指定"}
+    )
+    assert StyleModifyAgent._incomplete_finish_reason(
+        {"summary": "如需设置 margin，可后续添加"}
+    )
+    assert not StyleModifyAgent._incomplete_finish_reason(
+        {"summary": "正文和 label 未变动，编译通过"}
+    )
 
     @pytest.mark.asyncio
     async def test_finish_refused_with_persisted_snapshot_across_runs(

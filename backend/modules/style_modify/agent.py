@@ -7,6 +7,7 @@ service 层通过 LatexProject 批量事务写回。
 """
 
 import json
+import re
 import shutil
 import uuid
 from typing import Any, AsyncIterator
@@ -379,6 +380,42 @@ class StyleModifyAgent:
                     compile_run_count += 1
 
                 if tool_name == "finish":
+                    incomplete_reason = self._incomplete_finish_reason(tool_args)
+                    if incomplete_reason:
+                        refusal_text = (
+                            "Finish refused: "
+                            + incomplete_reason
+                            + " Complete every explicit style requirement in the "
+                            "staged overlay before calling finish."
+                        )
+                        yield {
+                            "type": "tool_result",
+                            "tool": "finish",
+                            "ok": False,
+                            "summary": refusal_text,
+                        }
+                        await self._append_trace(
+                            session_id,
+                            {
+                                "ts": now_iso(),
+                                "run_id": run_id,
+                                "type": "tool_result",
+                                "data": {
+                                    "tool": "finish",
+                                    "args": tool_args,
+                                    "ok": False,
+                                    "result_text": refusal_text,
+                                },
+                            },
+                        )
+                        messages.append(
+                            {
+                                "role": "tool",
+                                "tool_call_id": tc.id,
+                                "content": refusal_text,
+                            }
+                        )
+                        continue
                     stale_reason = self._stale_compile_reason(
                         session_id,
                         compile_state,
@@ -614,6 +651,35 @@ class StyleModifyAgent:
             "the staged file set changed after the last shadow "
             f"compilation (affected: {', '.join(changed) or 'none'})"
         )
+
+    @staticmethod
+    def _incomplete_finish_reason(tool_args: dict[str, Any]) -> str | None:
+        """Reject summaries that explicitly admit an unfinished style request."""
+        summary = str(tool_args.get("summary", ""))
+        if not summary:
+            return None
+        style_terms = (
+            r"(?:paper|page|font|margin|color|theme|option|package|纸张|字号|"
+            r"页边距|颜色|主题|选项|宏包|样式)"
+        )
+        incomplete = (
+            rf"(?:未(?:指定|设置|添加|修改|实现|完成)[^。；\n]{{0,30}}{style_terms})"
+            rf"|(?:{style_terms}[^。；\n]{{0,30}}未(?:指定|设置|添加|修改|实现|完成))"
+            rf"|(?:如需|若需|可(?:以)?(?:再)?(?:添加|增加|设置|修改))[^。；\n]{{0,30}}"
+            rf"{style_terms}"
+            rf"|(?:if needed|could be added|not (?:implemented|specified|set|added|changed))"
+        )
+        no_explicit_style_change = (
+            r"(?:无需|不必|不需要)[^。；\n]{0,30}" r"(?:指定|设置|添加|修改)"
+        )
+        if re.search(incomplete, summary, flags=re.IGNORECASE) or (
+            re.search(no_explicit_style_change, summary, flags=re.IGNORECASE)
+            and re.search(style_terms, summary, flags=re.IGNORECASE)
+        ):
+            return (
+                "the finish summary reports an explicit style requirement as incomplete"
+            )
+        return None
 
     def _current_compile_summary(
         self,

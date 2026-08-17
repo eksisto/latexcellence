@@ -109,7 +109,53 @@
 - 运行器新增 TeX 自动发现：扫描 `/usr/local/texlive/*/bin/*/latexmk` 并加入
   PATH，避免 shell PATH 未配置时误判工具链不可用；评分权重修正为满分 100。
 
-## 5. 后续优化方向
+## 5. 本轮闭环复盘（2026-08-18）：显式需求完成闸门
+
+### 背景与基线
+
+提示词重构后的完整基线中，常规场景均通过，但 holdout 的文档类选项场景出现
+“字号和边距已改、A4 作为可选项未写入”的部分完成 proposal；模型甚至在摘要中
+承认未显式设置 A4，仍调用 `finish`。基线五场景均值为 99/100，需求全命中为 4/5。
+
+### 本轮改动
+
+| 改动 | 文件 | 为什么通用 |
+| --- | --- | --- |
+| 强化显式需求优先于最小修改的提示词约束，并要求逐项核对 staged 内容 | `backend/core/prompts.py` | 防止“最小修改”被解释为可以省略用户明确要求 |
+| finish 前拒绝承认未完成、未来再添加、或以默认值替代显式设置的样式摘要 | `backend/modules/style_modify/agent.py` | 在 LLM 自检不可靠时，阻止部分完成 proposal 进入交付阶段 |
+| 增加不误判正文未变动的单元测试 | `tests/test_api/test_style_modify_agent.py` | 固化交付闸门的正例与负例 |
+| 同步记录 Agent finish 校验行为 | `docs/modules/style_modify.md` | 让模块文档反映实际交付流程 |
+
+### 结果
+
+| 场景 | 基线 | opt4 | 编译 | 需求 |
+| --- | --- | --- | --- | --- |
+| s1_theme_color | 100 | 100 | ✓ | 4/4 |
+| s2_section_format | 100 | 100 | ✓ | 5/5 |
+| s3_table_style | 100 | 100 | ✓ | 5/5 |
+| s4_beamer_color | 100 | 100 | ✓ | 4/4 |
+| s5_class_options（holdout） | 95 | 100 | ✓ | 6/6 |
+
+opt4 完整评测平均启发式分 **99.0 → 100.0**，平均轮数 5.8 → 6.4；内容保留、proposal
+应用/撤销和编译全部通过。对照组无回退，Generality Gate PASS。
+
+### 经验教训
+
+- 提示词要求“逐项核对”不能完全替代确定性闸门；模型可能用“默认值已满足”重新解释
+  显式要求。
+- finish 摘要是低成本的最后一致性信号；检测未完成承诺后拒绝交付，能促使 Agent
+  重新 stage 并编译，而不需要把某个场景答案写进生产逻辑。
+- 闸门必须避开“正文和 label 未变动”这类成功的保留声明，测试需要同时覆盖误判排除。
+
+### 验证
+
+- `python tools/stylemodify_opt/run_stylemodify.py opt4 --include-holdout`
+- `python tools/stylemodify_opt/compare.py baseline_full opt4`：PASS
+- `python tools/generality_gate.py size`：`style_modify_chars=4940`，PASS
+- `python tools/generality_gate.py check --full`：PASS
+- `python -m pytest tests/ -q`：1678 passed, 5 skipped
+
+## 6. 后续优化方向
 
 - 可多轮采样取中位数，降低 LLM 随机性影响。
 - 增加 refinement 场景（对已生成 proposal 追加需求），覆盖 `refine` 路径。
