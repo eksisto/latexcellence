@@ -87,12 +87,35 @@ class TemplateAgentService:
                 ),
             },
         ]
+        # 阶段 3：长提示词拆分。核心 system 只保留强制工作流/失败预算/
+        # 禁止臆造；规划细节（架构原则、构建安全、类别 playbook）在开始时
+        # 注入一次，编译恢复协议与视觉质量门禁分别在首次编译与首次成功编译
+        # 后注入，避免长清单从头到尾稀释指令。
+        messages.append(
+            {
+                "role": "system",
+                "content": get_prompt("template_gen", "planning_system"),
+            }
+        )
+        compile_enabled = cfg.features.template_gen.agent_compile_enabled
+        if not compile_enabled:
+            # 工具链不可用时没有编译阶段，质量门禁直接前置，保证 finish 前
+            # 仍会执行验证步骤。
+            messages.append(
+                {
+                    "role": "system",
+                    "content": get_prompt("template_gen", "validation_phase_system"),
+                }
+            )
 
         # 3. Agent 循环
         max_rounds = cfg.features.template_gen.agent_max_rounds
         final_summary = ""
         # 跟踪编译状态：不允许 Agent 在最后一次编译仍失败时静默 finish
         compile_state = {"called": False, "success": None}
+        # 阶段块注入标记：每个阶段指令只在首次触达对应事件时注入一次。
+        compile_phase_injected = False
+        validation_phase_injected = not compile_enabled
         run_id = uuid.uuid4().hex[:12]
         rounds_used = 0
         # 连续出现"只输出文本、不调用工具"的次数（规划瘫痪防护）
@@ -266,6 +289,7 @@ class TemplateAgentService:
 
             # 本轮是否触发了 finish（finish 后立即跳出循环）
             finish_this_round = False
+            validation_injected_this_round = False
             # 依次执行每个 tool_call
             for tc in tool_calls:
                 tool_name = tc.function.name
@@ -280,19 +304,32 @@ class TemplateAgentService:
                     "args": _summarize_args(tool_name, tool_args),
                 }
 
-                try:
-                    result_text, result_event = await executor.execute(
-                        tool_name,
-                        tool_args,
+                if tool_name == "finish" and validation_injected_this_round:
+                    result_text = (
+                        "Finish deferred: review the newly injected validation "
+                        "guidance, then call finish in the next round."
                     )
-                except Exception as e:
-                    self._logger.warning(f"Tool execution exception {tool_name}: {e}")
-                    result_text = f"Tool execution failed: {e}"
                     result_event = {
-                        "tool": tool_name,
+                        "tool": "finish",
                         "ok": False,
                         "summary": result_text,
                     }
+                else:
+                    try:
+                        result_text, result_event = await executor.execute(
+                            tool_name,
+                            tool_args,
+                        )
+                    except Exception as e:
+                        self._logger.warning(
+                            f"Tool execution exception {tool_name}: {e}"
+                        )
+                        result_text = f"Tool execution failed: {e}"
+                        result_event = {
+                            "tool": tool_name,
+                            "ok": False,
+                            "summary": result_text,
+                        }
 
                 await self._append_trace(
                     sandbox,
@@ -425,6 +462,32 @@ class TemplateAgentService:
                     writes_without_compile = 0
                     same_file_writes = 0
                     last_write_file = None
+                    # 首次编译后注入错误恢复协议，指导后续修复轮次。
+                    if not compile_phase_injected:
+                        compile_phase_injected = True
+                        messages.append(
+                            {
+                                "role": "system",
+                                "content": get_prompt(
+                                    "template_gen", "compile_phase_system"
+                                ),
+                            }
+                        )
+                    # 首次成功编译后注入质量门禁，供 finish 前的验证使用。
+                    if (
+                        result_event.get("success") is True
+                        and not validation_phase_injected
+                    ):
+                        validation_phase_injected = True
+                        validation_injected_this_round = True
+                        messages.append(
+                            {
+                                "role": "system",
+                                "content": get_prompt(
+                                    "template_gen", "validation_phase_system"
+                                ),
+                            }
+                        )
                     if result_event.get("success") is True and not result_event.get(
                         "already_verified"
                     ):

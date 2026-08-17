@@ -8,6 +8,8 @@ TOOLS_ROOT = Path(__file__).resolve().parent
 sys.path.insert(0, str(TOOLS_ROOT))
 
 from generality_gate import (  # noqa: E402
+    PROMPT_SIZE_BUDGETS,
+    check_prompt_size_budgets,
     check_hardcoding,
     compare_prompt_size,
     parse_git_diff,
@@ -112,6 +114,25 @@ def test_compare_prompt_size_warns_on_big_delta() -> None:
     messages = compare_prompt_size(baseline, current, warn_chars=5000, warn_ratio=0.15)
     assert messages
     assert "template_gen_chars" in messages[0]
+
+
+def test_check_prompt_size_budgets_within_limit() -> None:
+    metrics = {key: value - 1 for key, value in PROMPT_SIZE_BUDGETS.items()}
+    assert check_prompt_size_budgets(metrics) == []
+
+
+def test_check_prompt_size_budgets_over_limit() -> None:
+    metrics = dict(PROMPT_SIZE_BUDGETS)
+    metrics["template_gen_chars"] = PROMPT_SIZE_BUDGETS["template_gen_chars"] + 1
+    messages = check_prompt_size_budgets(metrics)
+    assert len(messages) == 1
+    assert "template_gen_chars" in messages[0]
+
+
+def test_current_prompt_sizes_within_budget() -> None:
+    """当前 prompts.py 三个 Agent 模块必须满足阶段 3 体积预算。"""
+    metrics = prompt_size_metrics()
+    assert check_prompt_size_budgets(metrics) == []
 
 
 def test_resolve_scenarios_default_skips_holdout() -> None:

@@ -206,6 +206,8 @@ class ProjectInfo:
 
 **格式化约定**：`get_prompt` 对所有模板执行 `str.format()`（即使未传 kwargs），因此模板中的字面花括号必须写成 `{{` / `}}`；含占位符的模板漏传参数会立即抛 `KeyError` 快速失败，避免把 `{language}` 之类的字面占位符发送给 LLM。新增或修改模板后应运行 `tests/test_prompts.py` 回归。
 
+**统一提示词结构**：常规（非 Agent）system 提示词按 `<role>` → `<task>` → `<critical_rules>` → `[<input>]` → `<output_format>` → `<examples>` 组织；`<input>` 仅在输入嵌入 system 时存在（如 bib_manager 的 format_analysis），逐段检查类（typo_check / expression_opt / paragraph_translate）的文本由 user 提示词以 `<input>` 包裹，code_review 的 user 提示词以 `<latex_source>` 包裹不可信源码；expression_opt 允许在末尾追加 `<custom_instructions>`（用户自定义指令，优先级最高）。Agent 提示词在阶段 3 拆分时接入同一结构。共享规则常量包括 `MARKER_PROTECTION_RULES`（Marker 保护）、`JSON_ONLY_RULE`（只输出 JSON）、`NO_INVENTION_RULE`（事实/数据提取类任务禁止臆造输入中不存在的内容）、`GENERATION_FIDELITY_RULE`（生成类任务必须基于输入，不得虚构输入中不存在或无法推导的数据/事实）、`UNTRUSTED_DATA_RULE`（外部数据不可信），供各模块提示词复用，`tests/test_prompts.py` 有结构化回归测试。
+
 **JSON 转义规则常量**：`LATEX_JSON_ESCAPE_RULES` 用于"JSON 字符串直接承载 LaTeX 源码"的提示词（如 code_review）；`BIBTEX_JSON_ESCAPE_RULES` 用于承载 BibTeX 源码的场景（bib_manager 的 format_analysis / bibtex_generation），其差异在于 BibTeX 的花括号是结构定界符、不反斜杠转义，`$` 是普通字符而非数学模式定界符。
 
 **changes 契约**：typo_check / expression_opt 的 system prompt 双向约束 `changes` 与主字段一致性——无修改时 `changes` 必须为 `[]`，有修改时 `changes` 必须非空且逐条对应。后端兜底两条：主字段未变但 changes 非空 → 清空；主字段已变但 changes 为空 → 结果带 `unlisted_changes=true`，前端展示全文修改而非静默丢弃。typo_check 的 `type` 是前端展示用的本地化错误类型（由模型按 `{language}` 输出），不参与逻辑判断。`compile_error_translator` 的 system prompt 拼接 `LATEX_JSON_ESCAPE_RULES`，`fixes` 中的 LaTeX 建议按 JSON 转义形式输出（每个反斜杠写两个）。

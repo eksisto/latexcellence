@@ -16,6 +16,7 @@
 | [duckduckgo-challenge.md](./duckduckgo-challenge.md) | DDG 验证码处理 |
 | [templategen-optimization-lessons.md](./templategen-optimization-lessons.md) | template_gen 闭环优化复盘：通用性退化事故的原因、教训与改进机制 |
 | [plotgen-optimization-lessons.md](./plotgen-optimization-lessons.md) | plot_gen 闭环优化复盘与最佳实践 |
+| [prompt-optimization-plan.md](./prompt-optimization-plan.md) | 提示词优化计划：Claude 提示词分析、分阶段改造与验收标准 |
 
 ---
 
@@ -123,7 +124,8 @@ latexcellence/
 - 每个闭环工具维护 `HOLDOUT_SCENARIOS`：日常调优默认排除 holdout，仅最终
   回归可运行；
 - 优化提交前运行 `python tools/generality_gate.py check`（提示词体积用
-  `size` 子命令跟踪基线）；
+  `size` 子命令跟踪基线，并受每个 Agent 模块的体积预算约束，任一模块
+  超限时 `size` 以非零退出）；
 - `compare.py` 双 tag 模式自动执行对照组回归判定与硬编码门禁，非零退出即打回。
 
 事故复盘与改进机制详见
@@ -244,6 +246,20 @@ core/ + utils/ (基础设施：配置、LLM 客户端、项目管理、文件 IO
 ### 错误处理
 
 前置条件检查（快速失败）→ try/except + 指数退避重试 → 日志后重抛。复用标准异常，禁止自定义异常类。
+
+### 提示词管理
+
+所有 LLM 提示词集中存放于 `backend/core/prompts.py`，通过 `get_prompt(module, key, **kwargs)` 参数化获取。当前按 Qwen3.6-35B-A3B 优化。
+
+**结构规范**：
+
+- 常规提示词顺序固定为 <role> → <task> → <critical_rules> → [<input>] → <output_format> → <examples>
+- 共享规则常量（MARKER_PROTECTION_RULES、JSON_ONLY_RULE 等）避免跨模块重复书写
+- Agent system prompt 采用阶段注入策略：核心 system 只保留强制工作流与硬约束，规划细节（`planning_system`）在开始时注入，编译恢复协议（`compile_phase_system`）在首次编译后注入，视觉质量门禁（`validation_phase_system`）在首次成功编译后注入
+- 每个 Agent 模块设体积预算（template_gen ≤ 22000、plot_gen ≤ 15000、style_modify ≤ 5000 字符），由 `tools/generality_gate.py size` 门禁
+
+**评测约束**：修改提示词必须通过 prompt_comprehension_eval 回归验证；Agent 提示词瘦身必须维持或改善 generality_gate check 结果。
+
 
 ---
 

@@ -18,6 +18,7 @@
     python tools/generality_gate.py check [--full] [--base <rev>]
                                           [--fail-on-warning] [--report out.json]
     python tools/generality_gate.py size [--baseline base.json] [--write]
+                                         [--allow-over-budget]
 """
 
 import ast
@@ -40,6 +41,15 @@ DEFAULT_SCAN_PATHS: list[str] = [
 ]
 
 PROMPT_MODULES = ("template_gen", "style_modify", "plot_gen")
+
+# 阶段 3：各 Agent system 提示词体积预算（字符，按 prompt_size_metrics 的
+# 模块字符串体积统计）。超过预算时 `size` 命令以非零退出，防止 system
+# prompt 重新膨胀为"知识倾倒场"。调整预算必须同时说明理由并跑评测。
+PROMPT_SIZE_BUDGETS: dict[str, int] = {
+    "template_gen_chars": 22000,
+    "plot_gen_chars": 15000,
+    "style_modify_chars": 5000,
+}
 
 # 强特征：命中即拒绝（fail）。这些是"部署事实/评测数据"，不属于通用能力。
 STRONG_PATTERNS: list[tuple[str, str]] = [
@@ -285,6 +295,20 @@ def compare_prompt_size(
     return messages
 
 
+def check_prompt_size_budgets(
+    metrics: dict[str, Any],
+    budgets: dict[str, int] | None = None,
+) -> list[str]:
+    """返回超出体积预算的模块说明；全部在预算内时返回空列表。"""
+    budgets = budgets or PROMPT_SIZE_BUDGETS
+    messages: list[str] = []
+    for key, limit in sorted(budgets.items()):
+        size = int(metrics.get(key, 0))
+        if size > limit:
+            messages.append(f"{key} 超出体积预算：{size} 字符 > {limit} 字符")
+    return messages
+
+
 def resolve_scenarios(
     all_keys: list[str],
     holdout_keys: list[str] | set[str],
@@ -475,7 +499,7 @@ def _cmd_size(argv: list[str]) -> int:
         if arg == "--baseline" and i + 1 < len(argv):
             baseline_path = Path(argv[i + 1])
             consumed.update((i, i + 1))
-        elif arg == "--write":
+        elif arg in ("--write", "--allow-over-budget"):
             consumed.add(i)
     rest = [a for j, a in enumerate(argv) if j not in consumed]
     if rest:
@@ -491,8 +515,18 @@ def _cmd_size(argv: list[str]) -> int:
         f"  prompts.py 总行数: {current['lines']}，文件总字符: {current['total_chars']}"
     )
 
+    violations = check_prompt_size_budgets(current)
+    if violations:
+        print("\n=== 体积预算超限 ===")
+        for msg in violations:
+            print(f"  FAIL：{msg}")
+        print(
+            "  请压缩提示词或人工确认后调整 PROMPT_SIZE_BUDGETS；"
+            "确需超限可使用 --allow-over-budget 跳过。"
+        )
+
     if baseline_path is None:
-        return 0
+        return 1 if violations and "--allow-over-budget" not in argv else 0
     baseline: dict[str, Any] = {}
     if baseline_path.exists():
         try:
@@ -511,7 +545,7 @@ def _cmd_size(argv: list[str]) -> int:
             json.dumps(current, ensure_ascii=False, indent=2), encoding="utf-8"
         )
         print(f"  已写入基线：{baseline_path}")
-    return 0
+    return 1 if violations and "--allow-over-budget" not in argv else 0
 
 
 def main(argv: list[str] | None = None) -> int:

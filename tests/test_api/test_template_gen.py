@@ -160,10 +160,114 @@ class TestAgentLoop:
             .startswith(r"\documentclass")
         )
 
+    def test_phase_system_injected_at_phase_transitions(self, tmp_path, monkeypatch):
+        """阶段 3：planning 在开始时注入，compile/validation 阶段块在首次
+        编译后注入，且不会在编译前出现在上下文中。"""
+        load_config("config.json")
+        cfg = get_config()
+        monkeypatch.setattr(
+            cfg.features.template_gen,
+            "output_dir",
+            str(tmp_path / "templates"),
+        )
+        monkeypatch.setattr(cfg.features.template_gen, "agent_max_rounds", 8)
+        monkeypatch.setattr(cfg.features.template_gen, "agent_max_files", 10)
+        monkeypatch.setattr(cfg.features.template_gen, "agent_max_file_size_kb", 64)
+        monkeypatch.setattr(cfg.features.template_gen, "agent_compile_enabled", True)
+        monkeypatch.setattr(cfg.features.template_gen, "agent_compile_timeout", 30)
+
+        svc = TemplateAgentService()
+        llm = MagicMock()
+        responses = [
+            _make_response(
+                tool_calls=[
+                    _make_tool_call(
+                        "write_file",
+                        {
+                            "file_path": "main.tex",
+                            "content": r"\documentclass{article}\begin{document}hi\end{document}",
+                        },
+                        "w1",
+                    )
+                ]
+            ),
+            _make_response(
+                tool_calls=[
+                    _make_tool_call("compile_latex", {"main_file": "main.tex"}, "c1"),
+                    _make_tool_call(
+                        "finish",
+                        {"summary": "premature", "main_file": "main.tex"},
+                        "f0",
+                    ),
+                ]
+            ),
+            _make_response(
+                tool_calls=[
+                    _make_tool_call(
+                        "finish",
+                        {"summary": "ok", "main_file": "main.tex"},
+                        "f1",
+                    )
+                ]
+            ),
+        ]
+        captured: list[list[dict]] = []
+
+        async def _chat(messages, **kwargs):
+            # chat_with_tools 的 messages 参数是同一可变列表，后续阶段注入会
+            # 原地修改；这里在每次调用时深拷贝快照，才能断言阶段块注入时机。
+            captured.append([dict(m) for m in messages])
+            return responses[len(captured) - 1]
+
+        llm.chat_with_tools = AsyncMock(side_effect=_chat)
+
+        async def _fake_compile(self_exec, args):
+            return "Compilation succeeded.", {
+                "tool": "compile_latex",
+                "ok": True,
+                "success": True,
+                "log": "no errors",
+                "errors": [],
+                "summary": "Compilation succeeded",
+            }
+
+        monkeypatch.setattr(_ToolExecutor, "_compile_latex", _fake_compile)
+
+        _collect(svc, "a simple article", llm)
+
+        assert len(captured) == 3
+        first_msgs = captured[0]
+        assert first_msgs[0]["role"] == "system"
+        assert "WORKFLOW" in first_msgs[0]["content"]
+        assert first_msgs[1]["role"] == "user"
+        assert first_msgs[2]["role"] == "system"
+        assert "<planning_guidance>" in first_msgs[2]["content"]
+        # 编译前不注入编译/验证阶段块
+        second_msgs = captured[1]
+        assert not any(
+            "COMPILATION ERROR RECOVERY PROTOCOL" in (m.get("content") or "")
+            for m in second_msgs
+        )
+        # 首次编译成功后注入编译协议与质量门禁
+        third_msgs = captured[2]
+        assert any(
+            "COMPILATION ERROR RECOVERY PROTOCOL" in (m.get("content") or "")
+            for m in third_msgs
+        )
+        assert any(
+            "VISUAL QUALITY GATE" in (m.get("content") or "") for m in third_msgs
+        )
+        assert any(
+            m.get("role") == "tool" and "Finish deferred" in (m.get("content") or "")
+            for m in third_msgs
+        )
+
     def test_context_compaction_keeps_recent_rounds(self):
         messages = [
             {"role": "system", "content": "sys"},
             {"role": "user", "content": "req"},
+            {"role": "system", "content": "planning"},
+            {"role": "system", "content": "validation"},
         ]
         for i in range(30):
             messages.append(
@@ -188,10 +292,40 @@ class TestAgentLoop:
 
         assert compacted[0] == messages[0]
         assert compacted[1] == messages[1]
+        # 阶段 3 注入的 system 阶段块在压缩后仍然保留
+        assert any(
+            m.get("role") == "system" and m.get("content") == "planning"
+            for m in compacted
+        )
+        assert any(
+            m.get("role") == "system" and m.get("content") == "validation"
+            for m in compacted
+        )
         assert any(
             m.get("role") == "user" and "compacted" in m.get("content", "")
             for m in compacted
         )
+
+    def test_context_compaction_does_not_duplicate_recent_phase_blocks(self):
+        messages = [
+            {"role": "system", "content": "core"},
+            {"role": "user", "content": "request"},
+        ]
+        for i in range(15):
+            messages.extend(
+                [
+                    {"role": "assistant", "content": f"round {i}"},
+                    {"role": "tool", "content": f"result {i}"},
+                ]
+            )
+            if i == 10:
+                messages.append({"role": "system", "content": "validation"})
+
+        compacted = _compact_messages(messages, keep_rounds=5)
+
+        assert [m for m in compacted if m.get("content") == "validation"] == [
+            {"role": "system", "content": "validation"}
+        ]
         assert compacted[-1] == messages[-1]
         assert len(compacted) < len(messages)
 

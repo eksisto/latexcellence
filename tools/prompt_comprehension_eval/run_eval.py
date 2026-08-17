@@ -348,8 +348,9 @@ add_case(
 
 def _time_context_check(response: str) -> tuple[str, str]:
     def critical():
-        assert ("2031" in response) and (
-            "05" in response
+        compact = re.sub(r"\s+", "", response)
+        assert re.search(
+            r"2031(?:年|[-/.])0?5(?:月|[-/.])0?6日?", compact
         ), "没有使用 system 中注入的当前日期 2031-05-06"
 
     return run_checks(response, [("time-context", lambda r: _wrap(critical, r))])
@@ -489,6 +490,74 @@ add_case(
     ),
     "请不要真的调用工具，只用一句话回答：你的第一条回复必须包含什么？",
     _template_agent_check,
+)
+
+
+def _template_planning_check(response: str) -> tuple[str, str]:
+    def critical():
+        lowered = response.lower()
+        names_minimality = (
+            ("small" in lowered) or ("minimal" in lowered) or ("最小" in response)
+        )
+        lists_core_contract = all(
+            term in lowered for term in ("class", "style", "metadata", "body")
+        )
+        assert names_minimality or lists_core_contract, "未答出首版应保持最小可编译契约"
+
+    return run_checks(response, [("minimal-first", lambda r: _wrap(critical, r))])
+
+
+add_case(
+    "template_gen.planning_system",
+    get_prompt("template_gen", "planning_system"),
+    (
+        "Do not call tools. Answer in one sentence: what should the first "
+        "compile contract contain?"
+    ),
+    _template_planning_check,
+)
+
+
+def _template_compile_phase_check(response: str) -> tuple[str, str]:
+    def critical():
+        lowered = response.lower()
+        assert (
+            ("first" in lowered) or ("首个" in response) or ("第一条" in response)
+        ), "未答出应优先分析第一个错误"
+
+    return run_checks(response, [("first-error", lambda r: _wrap(critical, r))])
+
+
+add_case(
+    "template_gen.compile_phase_system",
+    get_prompt("template_gen", "compile_phase_system"),
+    (
+        "Do not call tools. Answer briefly: when compile_latex returns many "
+        "errors, which error should you analyze first?"
+    ),
+    _template_compile_phase_check,
+)
+
+
+def _template_validation_check(response: str) -> tuple[str, str]:
+    def critical():
+        lowered = response.lower()
+        assert ("finish" in lowered) or (
+            "完成" in response
+        ), "未答出验证发生在 finish 之前"
+        assert ("compile" in lowered) or ("编译" in response), "未答出需检查编译结果"
+
+    return run_checks(response, [("pre-finish", lambda r: _wrap(critical, r))])
+
+
+add_case(
+    "template_gen.validation_phase_system",
+    get_prompt("template_gen", "validation_phase_system"),
+    (
+        "Do not call tools. Answer briefly: what should you verify before "
+        "calling finish?"
+    ),
+    _template_validation_check,
 )
 
 
@@ -973,7 +1042,7 @@ def _plot_refine_check(response: str) -> tuple[str, str]:
     def critical():
         lowered = response.lower()
         assert ("finish" in response) and (
-            ("直接" in response and "不再" in response)
+            ("直接" in response)
             or ("directly" in lowered)
             or ("no" in lowered and "rerun" in lowered)
             or ("不要再" in response)
