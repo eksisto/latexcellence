@@ -109,7 +109,12 @@ def atomic_write(file_path: str | Path, content: str, encoding: str = "utf-8") -
         suffix=".tmp", prefix=f".{path.name}.", dir=path.parent
     )
     try:
-        with os.fdopen(fd, "w", encoding=encoding) as f:
+        try:
+            temp_file = os.fdopen(fd, "w", encoding=encoding)
+        except Exception:
+            os.close(fd)
+            raise
+        with temp_file as f:
             f.write(content)
             f.flush()
             os.fsync(f.fileno())

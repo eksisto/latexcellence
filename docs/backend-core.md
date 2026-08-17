@@ -370,7 +370,7 @@ get_tool_registry().register(
 | `compute_md5(file_path)` | 二进制 MD5 哈希（避免 Windows `\r\n` 差异导致文本模式不一致） |
 | `safe_read(file_path)` | UTF-8 读取，含 UnicodeDecodeError 详细报告 |
 | `safe_read_lines(file_path)` | 逐行读取，保留换行符 |
-| `atomic_write(file_path, content)` | 写临时文件 → flush + fsync → rename 原子覆盖（防止写中断损坏） |
+| `atomic_write(file_path, content)` | 写临时文件 → flush + fsync → rename 原子覆盖（防止写中断损坏）；文件流接管失败时关闭底层描述符并清理临时文件 |
 | `replace_lines_in_place(path, start, end, lines)` | 替换指定行范围后原子写入 |
 
 **BackupManager**：每文件维护 `undo: deque` 和 `redo: deque`，最大 50 层历史。
