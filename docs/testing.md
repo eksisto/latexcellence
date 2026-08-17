@@ -6,6 +6,14 @@
 
 在禁用 AF_UNIX socket 写入的受限沙箱（如网络受限的 Codex Linux 沙箱）中，`TestClient` 会在首次请求处挂起，属环境限制而非代码问题。解决方式：`~/.codex/config.toml` 开启 `network_access` 等。
 
+## Windows 沙箱与 pytest 临时目录
+
+Windows 上 Codex 沙箱以专用用户执行命令，pytest 的临时目录若跨会话、跨
+主体复用，可能因 ACL 权限不足报 `PermissionError`（WinError 5）。仓库已改为
+每次 pytest 会话使用独立的 `.pytest_tmp/session-*` 目录（根 `conftest.py`
+负责创建，并在下次会话自动清理旧会话目录）。完整现象、根因、排查步骤与
+修复手段见 [windows-temp-permissions.md](windows-temp-permissions.md)。
+
 ## 测试文件一览
 
 | 测试文件 | 覆盖内容 |

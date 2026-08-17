@@ -17,5 +17,6 @@
 | [docs/templategen-optimization-lessons.md](docs/templategen-optimization-lessons.md) | template_gen 闭环优化复盘与通用性门禁说明 |
 | [docs/plotgen-optimization-lessons.md](docs/plotgen-optimization-lessons.md) | plot_gen 闭环优化复盘与最佳实践说明 |
 | [docs/prompt-optimization-plan.md](docs/prompt-optimization-plan.md) | 提示词优化计划（Qwen3.6-35B-A3B） |
+| [docs/windows-temp-permissions.md](docs/windows-temp-permissions.md) | Windows 下 Codex 沙箱临时目录权限问题排查（pytest basetemp / ACL / 清理） |
 | [docs/showcase.md](docs/showcase.md) | 独立展示页 |
 | [tools/visual_review_api.py](tools/visual_review_api.py) | 视觉评审工具的 Chat Completions → Responses API 请求适配 |

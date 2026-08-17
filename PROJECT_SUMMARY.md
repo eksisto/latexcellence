@@ -152,6 +152,7 @@ latexcellence/
 │   ├── templategen-optimization-lessons.md  # template_gen 闭环优化复盘与通用性门禁
 │   ├── plotgen-optimization-lessons.md      # plot_gen 闭环优化复盘与最佳实践
 │   ├── prompt-optimization-plan.md          # 提示词优化计划
+│   ├── windows-temp-permissions.md          # Windows 沙箱临时目录权限排查（pytest basetemp/ACL/清理）
 │   ├── modules/                     # 模块文档
 │   └── showcase.md                  # 展示页（showcase）说明
 ├── tests/                           # 测试用例

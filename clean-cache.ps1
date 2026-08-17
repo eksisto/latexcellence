@@ -86,11 +86,12 @@ function Invoke-CleanPattern {
 function Remove-PytestTmp {
     param([string]$Target)
 
-    # .pytest_tmp 是 pytest 的 basetemp（pytest.ini 里 --basetemp=.pytest_tmp）。
-    # 它在每个 pytest 会话结束时应被 pytest 自行删除；若会话异常中断/ACL 损坏，
-    # 会残留成普通权限无法删除的目录（连 listdir 都拒绝），进而导致后续每次
-    # pytest 会话结束时清理报 PermissionError。这里补清理，并在普通删除失败时
-    # 自动提权重试（仅该目录、仅失败时才弹 UAC）。
+    # .pytest_tmp 是 pytest 会话级 basetemp 根目录（由根 conftest.py 为每次
+    # 会话生成 session-* 独立子目录，详见 docs/windows-temp-permissions.md）。
+    # 正常会话会保留最近若干次、由下次会话自动清理更早目录；若会话异常中断
+    # 或跨 Codex 沙箱主体运行，会残留成普通权限无法删除的目录（连 listdir
+    # 都拒绝），进而导致后续 pytest 会话无法创建新目录。这里补清理，并在
+    # 普通删除失败时自动提权重试（仅该目录、仅失败时才弹 UAC）。
 
     if (-not (Test-Path -LiteralPath $Target)) {
         Write-Host "  --     .pytest_tmp (不存在，跳过)"
@@ -156,7 +157,7 @@ else {
 Write-Host "[4/5] 清理 .pytest_cache ..."
 Invoke-CleanPattern -Description ".pytest_cache" -NamePattern ".pytest_cache" -SearchRoot $Root
 
-Write-Host "[5/5] 清理 .pytest_tmp ..."
+Write-Host "[5/5] 清理 .pytest_tmp（pytest 会话级临时目录）..."
 Remove-PytestTmp -Target (Join-Path $Root ".pytest_tmp")
 
 Write-Host ""

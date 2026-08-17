@@ -67,10 +67,12 @@ fi
 echo "[4/5] 清理 .pytest_cache ..."
 clean_pattern ".pytest_cache" ".pytest_cache" "$ROOT"
 
-echo "[5/5] 清理 .pytest_tmp ..."
-# pytest 的 basetemp（pytest.ini 里 --basetemp=.pytest_tmp），会话异常中断后
-# 可能残留为普通权限无法删除的目录（Windows ACL 损坏），导致后续 pytest 每次
-# 会话结束清理报 PermissionError。这里补清理；删除失败时提示改用 clean-cache.ps1
+echo "[5/5] 清理 .pytest_tmp（pytest 会话级临时目录）..."
+# pytest 会话级 basetemp 根目录：根 conftest.py 为每次会话生成
+# session-* 独立子目录（详见 docs/windows-temp-permissions.md），正常会话
+# 保留最近若干次、下次会话自动清理更早目录。会话异常中断或跨 Codex 沙箱
+# 主体运行会残留为普通权限无法删除的目录（Windows ACL 损坏），导致后续
+# pytest 会话无法创建新目录。这里补清理；删除失败时提示改用 clean-cache.ps1
 # （其会自动提权）。Linux 下该目录为用户所有，普通 rm -rf 即可。
 pytest_tmp="$ROOT/.pytest_tmp"
 if [ -d "$pytest_tmp" ]; then

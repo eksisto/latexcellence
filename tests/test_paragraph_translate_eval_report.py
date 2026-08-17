@@ -80,8 +80,9 @@ def _result(
 class TestRenderReport:
     @staticmethod
     def _render(results: list[dict]) -> str:
-        # 不用 tmp_path：pytest.ini 把 basetemp 固定在项目根 .pytest_tmp，
-        # 残留目录被锁时 tmp_path 会直接报错；这里走系统临时目录。
+        # 不用 tmp_path：报告渲染与 pytest 会话级 basetemp 解耦，避免在
+        # 工作区 .pytest_tmp/session-* 下堆积大目录；这里走系统临时目录。
+        # Windows 沙箱 ACL 排查见 docs/windows-temp-permissions.md。
         with tempfile.TemporaryDirectory(
             prefix="paragraph_translate_eval_report_"
         ) as tmp:

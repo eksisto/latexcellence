@@ -17,6 +17,7 @@
 | [templategen-optimization-lessons.md](./templategen-optimization-lessons.md) | template_gen 闭环优化复盘：通用性退化事故的原因、教训与改进机制 |
 | [plotgen-optimization-lessons.md](./plotgen-optimization-lessons.md) | plot_gen 闭环优化复盘与最佳实践 |
 | [prompt-optimization-plan.md](./prompt-optimization-plan.md) | 提示词优化计划：Claude 提示词分析、分阶段改造与验收标准 |
+| [windows-temp-permissions.md](./windows-temp-permissions.md) | Windows 下 Codex 沙箱临时目录权限问题排查：pytest 会话级 basetemp、ACL 清理与预防 |
 
 ---
 

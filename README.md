@@ -242,7 +242,7 @@ latexcellence/
 
 ## 维护
 
-- `clean-cache.sh`（Windows 下可用 `clean-cache.ps1`）：清理 `__pycache__`、`.pytest_cache`、前端 `node_modules/.cache` 等缓存。
+- `clean-cache.sh`（Windows 下可用 `clean-cache.ps1`）：清理 `__pycache__`、`.pytest_cache`、`.pytest_tmp`（pytest 会话级临时目录）、前端 `node_modules/.cache` 等缓存。
 
 ## 鸣谢
 
