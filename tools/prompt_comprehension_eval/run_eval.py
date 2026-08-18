@@ -9,34 +9,45 @@
     python tools/prompt_comprehension_eval/run_eval.py --only typo_check
     python tools/prompt_comprehension_eval/run_eval.py --limit 5
     python tools/prompt_comprehension_eval/run_eval.py --dry-run
+    python tools/prompt_comprehension_eval/run_eval.py --repeat 3
+    python tools/prompt_comprehension_eval/run_eval.py --baseline logs/.../results.json
+    python tools/prompt_comprehension_eval/run_eval.py --concurrency 2
 
 说明：
     - pgfplots_templates 是注入 plot_gen.agent_system 的数据模板，不会单独
       发给模型，因此不单独作为 LLM 用例。
     - 该工具依赖 config.json 中的真实 LLM 配置，默认输出到
       logs/prompt_comprehension_eval/results.json。
+    - 每次运行自动写入 runs/<timestamp>/results.json 和 latest.json。
 """
 
 from __future__ import annotations
 
 import argparse
 import asyncio
+import hashlib
 import json
 import re
+import subprocess
 import sys
+import time
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 
-from backend.core.config import load_config
-from backend.core.llm_client import LLMClient
+from backend.core.config import get_config, load_config
+from backend.core.llm_client import LLMClient, UsageInfo
+from backend.core.logger import get_logger
 from backend.core.prompts import (
     _PROMPTS,
     get_prompt,
     render_pgfplots_reference,
 )
+
+logger = get_logger("prompt_eval")
 
 # ── 通用检查工具 ──────────────────────────────────────────────────────────
 
@@ -105,6 +116,126 @@ def run_checks(
 
 def contains_count(text: str, needle: str) -> int:
     return len(re.findall(re.escape(needle), text))
+
+
+# ── 元数据与历史追踪 ──────────────────────────────────────────────────────
+
+
+def _git_info() -> tuple[str, str]:
+    """返回 (commit_sha, commit_msg)。"""
+    try:
+        result = subprocess.run(
+            ["git", "log", "-1", "--format=%h %s"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+            check=True,
+        )
+        parts = result.stdout.strip().split(" ", 1)
+        sha = parts[0] if parts else "unknown"
+        msg = parts[1] if len(parts) > 1 else ""
+        return sha, msg
+    except Exception as exc:  # noqa: BLE001
+        logger.debug("git log 不可用，跳过 commit 元数据: %s", exc)
+        return "unknown", ""
+
+
+def _prompt_hash(cases: list[dict[str, Any]]) -> str:
+    """对所有用例的 (system, user) 计算 SHA-256 前 8 位。"""
+    h = hashlib.sha256()
+    for case in cases:
+        h.update(case["system"].encode("utf-8"))
+        h.update(b"\n")
+        h.update(case["user"].encode("utf-8"))
+        h.update(b"\n")
+    return h.hexdigest()[:8]
+
+
+def wilson_ci(successes: int, n: int, z: float = 1.96) -> tuple[float, float]:
+    """Wilson score interval for binomial proportion."""
+    if n == 0:
+        return (0.0, 1.0)
+    p = successes / n
+    denom = 1 + z**2 / n
+    center = (p + z**2 / (2 * n)) / denom
+    spread = z * ((p * (1 - p) / n + z**2 / (4 * n**2)) ** 0.5) / denom
+    return (max(0.0, center - spread), min(1.0, center + spread))
+
+
+def _load_history(runs_dir: Path, limit: int = 10) -> list[dict[str, Any]]:
+    """加载最近 N 次运行的 metadata + summary。"""
+    if not runs_dir.is_dir():
+        return []
+    dirs = sorted(
+        (d for d in runs_dir.iterdir() if d.is_dir()),
+        key=lambda d: d.name,
+        reverse=True,
+    )
+    history: list[dict[str, Any]] = []
+    for d in dirs[:limit]:
+        results_file = d / "results.json"
+        if not results_file.is_file():
+            continue
+        try:
+            data = json.loads(results_file.read_text(encoding="utf-8"))
+            history.append(
+                {
+                    "timestamp": data.get("metadata", {}).get("timestamp", d.name),
+                    "model": data.get("metadata", {}).get("model", "unknown"),
+                    "summary": data.get("summary", {}),
+                }
+            )
+        except (json.JSONDecodeError, KeyError):
+            continue
+    return history
+
+
+def _print_trend(history: list[dict[str, Any]], current: dict[str, Any]) -> None:
+    """打印最近 N 次运行的通过率趋势。"""
+    if not history:
+        return
+    print("\n最近运行趋势：")
+    prev_rate: float | None = None
+    for i, entry in enumerate(history):
+        ts = entry["timestamp"][:10]
+        model = entry["model"]
+        summary = entry.get("summary", {})
+        total = summary.get("total", 0)
+        passed = summary.get("PASS", 0)
+        rate = summary["pass_rate"]
+        if prev_rate is not None:
+            delta = rate - prev_rate
+            if delta > 0:
+                arrow = f" ↑ +{delta:.1%}"
+            elif delta < 0:
+                arrow = f" ↓ {delta:.1%}"
+            else:
+                arrow = " → +0.0%"
+        else:
+            arrow = ""
+        print(f"  {ts}  {model:<20s}  " f"PASS {passed}/{total} ({rate:.1%}){arrow}")
+        prev_rate = rate
+    # 打印当前运行，与最近一次历史记录对比
+    cur_summary = current.get("summary", {})
+    cur_total = cur_summary.get("total", 0)
+    cur_passed = cur_summary.get("PASS", 0)
+    cur_rate = cur_summary.get("pass_rate", 0.0)
+    cur_ts = current.get("metadata", {}).get("timestamp", "")[:10]
+    cur_model = current.get("metadata", {}).get("model", "")
+    if prev_rate is not None:
+        delta = cur_rate - prev_rate
+        if delta > 0:
+            arrow = f" ↑ +{delta:.1%}"
+        elif delta < 0:
+            arrow = f" ↓ {delta:.1%}"
+        else:
+            arrow = " → +0.0%"
+    else:
+        arrow = ""
+    print(
+        f"  {cur_ts}  {cur_model:<20s}  "
+        f"PASS {cur_passed}/{cur_total} ({cur_rate:.1%}){arrow} ← 当前"
+    )
 
 
 # ── 用例定义 ──────────────────────────────────────────────────────────────
@@ -1070,38 +1201,279 @@ add_case(
 # ── 运行器 ────────────────────────────────────────────────────────────────
 
 
-async def run_case(llm: LLMClient, case: dict[str, Any]) -> dict[str, Any]:
+async def run_case(
+    llm: LLMClient,
+    case: dict[str, Any],
+    *,
+    repeat: int = 1,
+) -> dict[str, Any]:
     messages = [
         {"role": "system", "content": case["system"]},
         {"role": "user", "content": case["user"]},
     ]
-    try:
-        response = await llm.chat(
-            messages,
-            temperature=0.2,
-            max_tokens=case["max_tokens"],
+    repeats_data: list[dict[str, Any]] = []
+    last_response = ""
+    last_status = ""
+    last_detail = ""
+
+    for _ in range(repeat):
+        try:
+            t0 = time.monotonic()
+            response, usage = await llm.chat_with_usage(
+                messages,
+                temperature=0.2,
+                max_tokens=case["max_tokens"],
+            )
+            latency_ms = int((time.monotonic() - t0) * 1000)
+        except Exception as exc:  # noqa: BLE001
+            repeats_data.append(
+                {
+                    "status": "ERROR",
+                    "prompt_tokens": 0,
+                    "completion_tokens": 0,
+                    "latency_ms": 0,
+                }
+            )
+            last_response = ""
+            last_status = "ERROR"
+            last_detail = f"LLM 调用失败: {exc}"
+            continue
+
+        status, detail = case["check"](response)
+        repeats_data.append(
+            {
+                "status": status,
+                "prompt_tokens": usage.prompt_tokens if usage else 0,
+                "completion_tokens": usage.completion_tokens if usage else 0,
+                "latency_ms": latency_ms,
+            }
         )
-    except Exception as exc:  # noqa: BLE001
-        return {
-            "name": case["name"],
-            "status": "ERROR",
-            "detail": f"LLM 调用失败: {exc}",
-            "response": "",
-        }
-    status, detail = case["check"](response)
-    return {
+        last_response = response
+        last_status = status
+        last_detail = detail
+
+    result: dict[str, Any] = {
         "name": case["name"],
-        "status": status,
-        "detail": detail,
-        "response": response,
+        "status": last_status,
+        "detail": last_detail,
+        "response": last_response,
+    }
+    if repeats_data:
+        last = repeats_data[-1]
+        result["prompt_tokens"] = last["prompt_tokens"]
+        result["completion_tokens"] = last["completion_tokens"]
+        result["latency_ms"] = last["latency_ms"]
+    if repeat > 1:
+        result["repeats"] = repeats_data
+    return result
+
+
+def build_report(
+    results: list[dict[str, Any]],
+    *,
+    model: str = "",
+    commit_sha: str = "",
+    commit_msg: str = "",
+    prompt_hash: str = "",
+    repeat: int = 1,
+    duration_seconds: float = 0.0,
+) -> dict[str, Any]:
+    total = len(results)
+    counts: dict[str, int] = {"PASS": 0, "PARTIAL": 0, "FAIL": 0, "ERROR": 0}
+    total_prompt = 0
+    total_completion = 0
+    for r in results:
+        counts[r["status"]] = counts.get(r["status"], 0) + 1
+        total_prompt += r.get("prompt_tokens", 0)
+        total_completion += r.get("completion_tokens", 0)
+
+    successes = counts["PASS"]
+    pass_rate = successes / total if total else 0.0
+    ci = wilson_ci(successes, total) if repeat > 1 else None
+
+    summary: dict[str, Any] = {
+        "total": total,
+        **counts,
+        "pass_rate": round(pass_rate, 4),
+    }
+    if ci:
+        summary["pass_rate_ci95"] = [round(ci[0], 4), round(ci[1], 4)]
+
+    return {
+        "metadata": {
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "model": model,
+            "commit_sha": commit_sha,
+            "commit_msg": commit_msg,
+            "prompt_hash": prompt_hash,
+            "repeat": repeat,
+            "duration_seconds": round(duration_seconds, 1),
+            "total_prompt_tokens": total_prompt,
+            "total_completion_tokens": total_completion,
+            "total_tokens": total_prompt + total_completion,
+        },
+        "summary": summary,
+        "cases": results,
     }
 
 
-def build_report(results: list[dict[str, Any]]) -> dict[str, Any]:
-    counts: dict[str, int] = {"PASS": 0, "PARTIAL": 0, "FAIL": 0, "ERROR": 0}
-    for r in results:
-        counts[r["status"]] = counts.get(r["status"], 0) + 1
-    return {"summary": counts, "cases": results}
+def compare_reports(
+    baseline: dict[str, Any], current: dict[str, Any]
+) -> dict[str, Any]:
+    """对比两份报告，返回回归分析结果。"""
+    baseline_cases = {c["name"]: c for c in baseline.get("cases", [])}
+    current_cases = {c["name"]: c for c in current.get("cases", [])}
+
+    regressions: list[dict[str, str]] = []
+    improvements: list[dict[str, str]] = []
+    unchanged = 0
+    new_cases: list[str] = []
+    removed_cases: list[str] = []
+
+    all_names = sorted(set(baseline_cases) | set(current_cases))
+    for name in all_names:
+        if name in baseline_cases and name not in current_cases:
+            removed_cases.append(name)
+            continue
+        if name not in baseline_cases and name in current_cases:
+            new_cases.append(name)
+            continue
+
+        b_status = baseline_cases[name]["status"]
+        c_status = current_cases[name]["status"]
+        detail = current_cases[name].get("detail", "")
+
+        if b_status == "PASS" and c_status == "FAIL":
+            regressions.append(
+                {
+                    "name": name,
+                    "baseline": b_status,
+                    "current": c_status,
+                    "detail": detail,
+                }
+            )
+        elif b_status == "FAIL" and c_status == "PASS":
+            improvements.append(
+                {"name": name, "baseline": b_status, "current": c_status}
+            )
+        elif b_status == "PASS" and c_status == "PARTIAL":
+            regressions.append(
+                {
+                    "name": name,
+                    "baseline": b_status,
+                    "current": c_status,
+                    "detail": detail,
+                }
+            )
+        elif b_status == "PARTIAL" and c_status == "FAIL":
+            regressions.append(
+                {
+                    "name": name,
+                    "baseline": b_status,
+                    "current": c_status,
+                    "detail": detail,
+                }
+            )
+        # FAIL→PARTIAL 视为改善（PARTIAL 优于 FAIL），不在此处处理，
+        # 落入 else 算 unchanged，与 PARTIAL→PASS 一致
+        else:
+            unchanged += 1
+
+    if regressions:
+        verdict = "REGRESSION"
+    elif improvements and unchanged == 0 and not new_cases:
+        verdict = "IMPROVED"
+    else:
+        verdict = "PASS"
+
+    baseline_meta = baseline.get("metadata", {})
+    current_meta = current.get("metadata", {})
+    baseline_summary = baseline.get("summary", {})
+    current_summary = current.get("summary", {})
+
+    return {
+        "baseline": {
+            "model": baseline_meta.get("model", "unknown"),
+            "timestamp": baseline_meta.get("timestamp", ""),
+            "pass_rate": baseline_summary.get("pass_rate", 0),
+        },
+        "current": {
+            "model": current_meta.get("model", "unknown"),
+            "timestamp": current_meta.get("timestamp", ""),
+            "pass_rate": current_summary.get("pass_rate", 0),
+        },
+        "summary": {
+            "regressions": len(regressions),
+            "improvements": len(improvements),
+            "unchanged": unchanged,
+            "new_cases": len(new_cases),
+            "removed_cases": len(removed_cases),
+        },
+        "regressions": regressions,
+        "improvements": improvements,
+        "verdict": verdict,
+    }
+
+
+def print_comparison(
+    comparison: dict[str, Any], *, regressions_only: bool = False
+) -> None:
+    """终端彩色输出对比结果。"""
+    RED = "\033[91m"
+    GREEN = "\033[92m"
+    GRAY = "\033[90m"
+    RESET = "\033[0m"
+    BOLD = "\033[1m"
+
+    baseline = comparison["baseline"]
+    current = comparison["current"]
+    summary = comparison["summary"]
+
+    print(f"\n{BOLD}=== 基线对比 ==={RESET}")
+    print(
+        f"  基线: {baseline['model']}  ({baseline['timestamp'][:10]})  "
+        f"通过率 {baseline['pass_rate']:.1%}"
+    )
+    print(
+        f"  当前: {current['model']}  ({current['timestamp'][:10]})  "
+        f"通过率 {current['pass_rate']:.1%}"
+    )
+
+    verdict = comparison["verdict"]
+    if verdict == "REGRESSION":
+        print(f"\n  {RED}{BOLD}结论: REGRESSION (存在回归){RESET}")
+    elif verdict == "IMPROVED":
+        print(f"\n  {GREEN}{BOLD}结论: IMPROVED (全部改善){RESET}")
+    else:
+        print(f"\n  {GREEN}{BOLD}结论: PASS (无回归){RESET}")
+
+    print(
+        f"\n  回归: {summary['regressions']}  改善: {summary['improvements']}  "
+        f"无变化: {summary['unchanged']}  "
+        f"新增: {summary['new_cases']}  移除: {summary['removed_cases']}"
+    )
+
+    if not regressions_only:
+        for item in comparison.get("improvements", []):
+            print(
+                f"  {GREEN}↑ 改善: {item['name']}  "
+                f"({item['baseline']} → {item['current']}){RESET}"
+            )
+
+    for item in comparison.get("regressions", []):
+        print(
+            f"  {RED}↓ 回归: {item['name']}  "
+            f"({item['baseline']} → {item['current']}){RESET}"
+        )
+        if item.get("detail"):
+            print(f"    {GRAY}{item['detail']}{RESET}")
+
+    if not regressions_only and summary["new_cases"]:
+        print(
+            f"  {GRAY}+ 新增: {', '.join(comparison.get('new_cases', [])) if isinstance(comparison.get('new_cases'), list) else summary['new_cases']} 个用例{RESET}"
+        )
+    if not regressions_only and summary["removed_cases"]:
+        print(f"  {GRAY}- 移除: {summary['removed_cases']} 个用例{RESET}")
 
 
 async def main(argv: list[str] | None = None) -> int:
@@ -1116,6 +1488,13 @@ async def main(argv: list[str] | None = None) -> int:
         default=str(ROOT / "logs" / "prompt_comprehension_eval" / "results.json"),
     )
     parser.add_argument("--dry-run", action="store_true", help="只列出用例，不调用 LLM")
+    parser.add_argument("--repeat", type=int, default=1, help="每个用例重复运行次数")
+    parser.add_argument(
+        "--baseline", type=str, default=None, help="基线 results.json 路径"
+    )
+    parser.add_argument(
+        "--concurrency", type=int, default=1, help="并发执行数（默认串行）"
+    )
     args = parser.parse_args(argv)
 
     cases = CASES
@@ -1133,23 +1512,73 @@ async def main(argv: list[str] | None = None) -> int:
     load_config(args.config)
     llm = LLMClient()
 
-    results: list[dict[str, Any]] = []
-    for i, case in enumerate(cases, 1):
-        print(f"\n[{i}/{len(cases)}] {case['name']}")
-        result = await run_case(llm, case)
-        print(f"  -> {result['status']}: {result['detail']}")
-        results.append(result)
+    sha, msg = _git_info()
+    prompt_hash = _prompt_hash(cases)
 
-    report = build_report(results)
+    t_start = time.monotonic()
+
+    if args.concurrency > 1:
+        sem = asyncio.Semaphore(args.concurrency)
+
+        async def _run_with_sem(c: dict[str, Any]) -> dict[str, Any]:
+            async with sem:
+                return await run_case(llm, c, repeat=args.repeat)
+
+        tasks = [_run_with_sem(c) for c in cases]
+        raw = await asyncio.gather(*tasks)
+        results = list(raw)
+    else:
+        results = []
+        for i, case in enumerate(cases, 1):
+            print(f"\n[{i}/{len(cases)}] {case['name']}")
+            result = await run_case(llm, case, repeat=args.repeat)
+            print(f"  -> {result['status']}: {result['detail']}")
+            results.append(result)
+
+    duration = time.monotonic() - t_start
+
+    report = build_report(
+        results,
+        model=get_config().llm.model,
+        commit_sha=sha,
+        commit_msg=msg,
+        prompt_hash=prompt_hash,
+        repeat=args.repeat,
+        duration_seconds=duration,
+    )
+
     out_path = Path(args.out)
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    out_path.write_text(
-        json.dumps(report, ensure_ascii=False, indent=2),
-        encoding="utf-8",
-    )
+    report_json = json.dumps(report, ensure_ascii=False, indent=2)
+    out_path.write_text(report_json, encoding="utf-8")
+
+    runs_dir = out_path.parent / "runs"
+    run_dir = runs_dir / datetime.now().strftime("%Y-%m-%dT%H-%M-%S")
+    run_dir.mkdir(parents=True, exist_ok=True)
+    (run_dir / "results.json").write_text(report_json, encoding="utf-8")
+
+    latest_path = out_path.parent / "latest.json"
+    latest_path.write_text(report_json, encoding="utf-8")
+
     print("\n报告已写入:", out_path)
     print("汇总:", report["summary"])
-    return 0
+
+    history = _load_history(runs_dir, limit=5)
+    _print_trend(history, report)
+
+    exit_code = 0
+    if args.baseline:
+        baseline_path = Path(args.baseline)
+        if baseline_path.is_file():
+            baseline_data = json.loads(baseline_path.read_text(encoding="utf-8"))
+            comparison = compare_reports(baseline_data, report)
+            print_comparison(comparison)
+            if comparison["verdict"] == "REGRESSION":
+                exit_code = 1
+        else:
+            print(f"\n警告: 基线文件不存在: {args.baseline}")
+
+    return exit_code
 
 
 if __name__ == "__main__":

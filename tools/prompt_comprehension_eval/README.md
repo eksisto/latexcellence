@@ -21,9 +21,37 @@
 
 # 只列出用例，不调用 LLM
 .venv/bin/python tools/prompt_comprehension_eval/run_eval.py --dry-run
+
+# 每个用例重复运行 N 次，计算通过率和置信区间
+.venv/bin/python tools/prompt_comprehension_eval/run_eval.py --repeat 3
+
+# 与基线结果对比，检测回归
+.venv/bin/python tools/prompt_comprehension_eval/run_eval.py \
+    --baseline logs/prompt_comprehension_eval/results.json
+
+# 并发执行（默认串行）
+.venv/bin/python tools/prompt_comprehension_eval/run_eval.py --concurrency 2
 ```
 
 默认输出：`logs/prompt_comprehension_eval/results.json`。
+
+每次运行同时写入 `logs/prompt_comprehension_eval/runs/<timestamp>/results.json`
+和 `latest.json`，支持历史回溯。
+
+## 对比两次运行
+
+```bash
+# 对比最近两次运行
+.venv/bin/python tools/prompt_comprehension_eval/compare.py
+
+# 对比指定两个结果
+.venv/bin/python tools/prompt_comprehension_eval/compare.py \
+    logs/prompt_comprehension_eval/runs/2026-08-14T10-00-00/results.json \
+    logs/prompt_comprehension_eval/runs/2026-08-18T14-30-00/results.json
+
+# 只显示回归项
+.venv/bin/python tools/prompt_comprehension_eval/compare.py --regressions-only
+```
 
 ## 覆盖范围
 
@@ -50,3 +78,6 @@
 `results.json` 中每条用例包含 `status`（PASS / PARTIAL / FAIL / ERROR）、
 `detail` 与完整 `response`。PARTIAL 表示关键检查通过但有建议人工复核项。
 由于探测输入是单次抽样，结论应作为回归信号，不建议仅凭一次结果下绝对结论。
+
+使用 `--repeat N` 多次采样时，可通过通过率和 Wilson 置信区间更可靠地评估
+提示词质量，区分 LLM 输出噪声与真实退化。

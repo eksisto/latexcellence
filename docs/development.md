@@ -105,7 +105,7 @@ latexcellence/
 | `expression_opt_eval/` | 表达优化人工评估 |
 | `terminology_check_eval/` | 术语一致性人工评估 |
 | `paragraph_translate_eval/` | 逐段翻译人工评估 |
-| `prompt_comprehension_eval/` | Prompt 理解评测 |
+| `prompt_comprehension_eval/` | Prompt 理解评测：自动回归检测、多次采样置信区间、历史追踪（详见其 `README.md`） |
 | `plotgen_opt/` | plot_gen Agent 闭环优化评测工作区 |
 | `templategen_opt/` | template_gen Agent 闭环优化评测工作区 |
 | `stylemodify_opt/` | style_modify Agent 闭环优化评测工作区 |
