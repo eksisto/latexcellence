@@ -406,7 +406,12 @@ def _error_hints(errors: list[dict[str, Any]]) -> list[str]:
                 "must change, or define a NEW name; never \\newcommand over "
                 "an existing command. For theorem/abstract/list infrastructure, "
                 "prefer the inherited environment or a project-specific name "
-                "instead of replacing the class interface."
+                "instead of replacing the class interface. If the error names "
+                "a counter (\\c@...), do not keep guessing counter names: define "
+                "one project-prefixed counter exactly once in the style file, "
+                "make all related environments share it, and remove duplicate "
+                "definitions from the body and other style files. Read the "
+                "current style and all callers before changing its public API."
             )
             if hint not in hints:
                 hints.append(hint)
@@ -493,6 +498,20 @@ def _error_hints(errors: list[dict[str, Any]]) -> list[str]:
                 "names like `\\wuhao` are NOT commands — use `\\zihao{5}` "
                 "(or `font=small` in \\captionsetup). Check every control "
                 "sequence in the reported line and the key it belongs to."
+            )
+            if hint not in hints:
+                hints.append(hint)
+        if "missing number, treated as zero" in combined and (
+            "begin{document}" in combined or "spacefactor" in combined
+        ):
+            hint = (
+                "Early document-start number/spacefactor error: inspect the "
+                "complete preamble and the first class/style expansion instead "
+                "of patching the body. Remove explicit CJK font selection and "
+                "font-probing commands, let ctex/xeCJK use its automatic fontset, "
+                "and replace malformed custom size expressions with standard "
+                "LaTeX size commands. Read the reported source and log before "
+                "changing the public metadata API."
             )
             if hint not in hints:
                 hints.append(hint)

@@ -17,6 +17,7 @@
 | 第 3 轮 | 2026-08-13 | 机制补齐 + Responses 视觉评审 | §3.3 |
 | 第 4 轮 | 2026-08-14 | Windows 跨环境基线 + 循环机制补齐 | §3.4 |
 | 第 5 轮 | 2026-08-16 | 完全重测 | §3.5 |
+| 第 6 轮 | 2026-08-18 | 写盘错误协议澄清 + 通用编译错误 HINT | §3.6 |
 
 ## 1. 背景信息
 
@@ -596,6 +597,72 @@ holdout `tju10`：15 轮编译成功，需求 **13/13**，启发式 **100**，
   `tju10`（holdout 回归）
 - 视觉审查结果：`tools/templategen_opt/results/opt10/visual_reviews.json`
 - 通用性门禁：`tools/generality_gate.py check` PASS
+
+### 3.6 第 6 轮（2026-08-18）：写盘错误协议澄清 + 通用编译错误 HINT
+
+#### 背景
+
+本轮针对提示词重构后的当前代码从零重测非 holdout 场景（`base11`），并按
+trace 诊断后进行最小机制修复。基线平均启发式分为 **76.5**：thesis 编译
+成功，beamer/requirements 未编译成功；失败 trace 暴露出模型把 LaTeX 结构
+花括号校验错误误解为 JSON 转义问题，并在 counter/字体相关错误上反复猜测。
+
+#### 基线/诊断出的机制缺口
+
+1. 花括号校验错误同时给出“字面花括号应写成 `\\{`/`\\}`”的说明，未明确
+   区分 LaTeX 结构括号与 JSON 传输，beamer Agent 因此反复改坏合法结构。
+2. `already defined` 对 counter/theorem 冲突只给出换名建议，模型可能在多个
+   样式文件和正文间随机改接口，导致长循环。
+3. `Missing number` / `spacefactor` 出现在文档开始位置时，缺少针对字体/前导
+   码的通用诊断指引，resume 可能持续修补正文而不处理根因。
+
+#### 本轮改动
+
+| 改动 | 文件 | 为什么通用 |
+| --- | --- | --- |
+| 花括号错误消息明确这是 LaTeX 源码校验，不是 JSON 解析；仅允许对需要打印的字面花括号使用 `\\{`/`\\}` | `backend/utils/latex_json_guard.py` | 防止任何 LaTeX Agent 把命令、环境和 key-value 的结构括号改成字面字符 |
+| `already defined` 且涉及 `\\c@` 时，要求读取现有接口、只定义一次项目级 counter | `backend/modules/template_gen/agent/compile.py` | 适用于 theorem、计数器及各类 class/package 接口冲突，不依赖具体模板 |
+| 文档开始处 `Missing number`/`spacefactor` 错误提示检查前导码并移除显式 CJK 字体探测 | `backend/modules/template_gen/agent/compile.py` | 覆盖 XeLaTeX/ctex 常见的字体与 catcode 连锁错误 |
+| 为花括号错误协议增加回归断言 | `tests/test_api/test_template_gen.py` | 防止后续错误消息重新诱导模型误解传输层 |
+
+#### 结果
+
+最终对照轮使用 `opt13`（中间 `opt11`/`opt12` 结果保留在评测目录，未作为
+最终结论）：
+
+| 场景 | 轮数 | 编译 | 需求 | 启发式分 |
+| --- | --- | --- | --- | --- |
+| thesis | 50 | ✓ | 10/10 | 100 |
+| beamer | 50 | ✗ | 9/10 | 51 |
+| resume | 41 | ✓ | 10/10 | 90 |
+| requirements | 13 | ✓ | 10/10 | 95 |
+
+平均启发式 **76.5 → 84.0**；`compare.py base11 opt13 --tolerance 15`
+对照组回归 PASS（beamer -14，在容差内；requirements +40，resume +4，
+thesis 持平）。Generality Gate PASS。
+
+holdout `tju13`：43 轮编译成功，需求 **13/13**，启发式 **100**。
+opt13 视觉评审中有 PDF 的场景平均 **6.5/10**（requirements 6.0、resume
+7.0、thesis 6.5；beamer 无 PDF）；holdout 视觉评审 **4.0/10**，说明编译
+和需求收敛并不等于版式质量达标。
+
+#### 经验教训
+
+- 写盘错误消息是 Agent 工具协议的一部分；即使校验逻辑正确，歧义的错误
+  归因也会把模型引入结构破坏循环。
+- 条件化错误 HINT 比常驻 prompt 规则更稳定。本轮曾试验把花括号说明加入
+  `agent_system`，但对照轮出现 resume 显著回退，随后撤回；最终只保留工具
+  错误消息和编译失败签名 HINT。
+- 单轮视觉和启发式分仍有采样噪声；本轮应以对照容差、编译成功率和 holdout
+  一起判断，不把 beamer 的单场景失败解释为机制已完全失效，也不宣称视觉
+  质量已经解决。
+
+#### 链接
+
+- 评测 tag：`base11`、`opt11`、`opt12`、`opt13`、`tju13`
+- 视觉审查结果：`tools/templategen_opt/results/opt13/visual_reviews.json`、
+  `tools/templategen_opt/results/tju13/visual_reviews.json`
+- 通用性门禁：`tools/generality_gate.py check --full` PASS
 
 ## 4. 轮次复盘模板（新增轮次时使用）
 

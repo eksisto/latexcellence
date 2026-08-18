@@ -1012,6 +1012,7 @@ class TestToolExecutorWriteFile:
 
         assert ev["ok"] is False
         assert "unbalanced braces" in text
+        assert "not a JSON parsing error" in text
         assert not (tmp_path / "main.tex").exists()
 
     def test_rejects_private_command_in_body_file(self, tmp_path):

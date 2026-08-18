@@ -190,7 +190,10 @@ def _brace_error(code: str, pos: int, kind: str) -> str:
     snippet = " ".join(code[start:end].split())
     return (
         "LaTeX text has unbalanced braces; check for unmatched { or } — "
-        "literal braces should be written as \\{ and \\}. "
+        "this is a LaTeX source validation error, not a JSON parsing error. "
+        "Do not replace structural braces in commands, environments, or "
+        "key-value arguments with \\{ or \\}; only braces that should appear "
+        "as printed text may be escaped that way. "
         f"First issue: {kind} at position {pos} (line {line}) near "
         f'"{snippet}"'
     )
