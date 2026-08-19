@@ -5,7 +5,7 @@
 ## 目录
 
 - [后端核心模块](#后端核心模块)：config、security_middleware、llm_client、logger、project_manager、base_paragraph_check、prompts、tool_registry、workspace_manager
-- [后端工具模块](#后端工具模块)：scholarly_research、file_ops、path_guard、json_utils、latex_json_guard、tex_compile、compile_error_translator、latex_formatter、latex_parser、latex_literals、latex_package_analyzer、input_resolver 等
+- [后端工具模块](#后端工具模块)：scholarly_research、tool_result_protocol、file_ops、path_guard、json_utils、latex_json_guard、tex_compile、compile_error_translator、latex_formatter、latex_parser、latex_literals、latex_package_analyzer、input_resolver 等
 - [项目管理路由 project_router.py](#项目管理路由-project_routerpy)
 
 ---
@@ -206,7 +206,7 @@ class ProjectInfo:
 
 **格式化约定**：`get_prompt` 对所有模板执行 `str.format()`（即使未传 kwargs），因此模板中的字面花括号必须写成 `{{` / `}}`；含占位符的模板漏传参数会立即抛 `KeyError` 快速失败，避免把 `{language}` 之类的字面占位符发送给 LLM。新增或修改模板后应运行 `tests/test_prompts.py` 回归。
 
-**统一提示词结构**：常规（非 Agent）system 提示词按 `<role>` → `<task>` → `<critical_rules>` → `[<input>]` → `<output_format>` → `<examples>` 组织；`<input>` 仅在输入嵌入 system 时存在（如 bib_manager 的 format_analysis），逐段检查类（typo_check / expression_opt / paragraph_translate）的文本由 user 提示词以 `<input>` 包裹，code_review 的 user 提示词以 `<latex_source>` 包裹不可信源码；expression_opt 允许在末尾追加 `<custom_instructions>`（用户自定义指令，优先级最高）。Agent 提示词在阶段 3 拆分时接入同一结构。共享规则常量包括 `MARKER_PROTECTION_RULES`（Marker 保护）、`JSON_ONLY_RULE`（只输出 JSON）、`NO_INVENTION_RULE`（事实/数据提取类任务禁止臆造输入中不存在的内容）、`GENERATION_FIDELITY_RULE`（生成类任务必须基于输入，不得虚构输入中不存在或无法推导的数据/事实）、`UNTRUSTED_DATA_RULE`（外部数据不可信），供各模块提示词复用，`tests/test_prompts.py` 有结构化回归测试。
+**统一提示词结构**：常规（非 Agent）system 提示词按 `<role>` → `<task>` → `<critical_rules>` → `[<input>]` → `<output_format>` → `<examples>` 组织；`<input>` 仅在输入嵌入 system 时存在（如 bib_manager 的 format_analysis），逐段检查类（typo_check / expression_opt / paragraph_translate）的文本由 user 提示词以 `<input>` 包裹，code_review 的 user 提示词以 `<latex_source>` 包裹不可信源码；expression_opt 允许在末尾追加 `<custom_instructions>`（用户自定义指令，优先级最高）。Agent 提示词在阶段 3 拆分时接入同一结构。共享规则常量包括 `MARKER_PROTECTION_RULES`（Marker 保护）、`JSON_ONLY_RULE`（只输出 JSON）、`NO_INVENTION_RULE`（事实/数据提取类任务禁止臆造输入中不存在的内容）、`GENERATION_FIDELITY_RULE`（生成类任务必须基于输入，不得虚构输入中不存在或无法推导的数据/事实）、`UNTRUSTED_DATA_RULE`（外部数据不可信）、`TOOL_RESULT_PROTOCOL_RULE`（工具结果统一协议：`shown`/`total`/`truncated`/`next_step` 状态块，`truncated=yes` 时按 `next_step` 缩小范围或继续读取），供各模块提示词复用，`tests/test_prompts.py` 有结构化回归测试。
 
 **JSON 转义规则常量**：`LATEX_JSON_ESCAPE_RULES` 用于"JSON 字符串直接承载 LaTeX 源码"的提示词（如 code_review）；`BIBTEX_JSON_ESCAPE_RULES` 用于承载 BibTeX 源码的场景（bib_manager 的 format_analysis / bibtex_generation），其差异在于 BibTeX 的花括号是结构定界符、不反斜杠转义，`$` 是普通字符而非数学模式定界符。
 
@@ -333,6 +333,31 @@ get_tool_registry().register(
 | `ProjectToolsManager` | `list_files` / `read_file_content` / `get_section_structure` / `search_across_files` | `features.function_calling.project_tools.enabled` | 项目文件浏览 |
 | `EditToolsManager` | `edit_paragraph` / `undo_last_edit` | `features.function_calling.edit_tools.enabled` | 段落编辑（敏感操作需用户确认） |
 | `ResearchManager` | 学术检索、详情、关联作品、摘要/OA 定位、数据资源检索 | `features.function_calling.scholarly_research.enabled` | 多 Provider 联邦学术研究，默认 OpenAlex |
+
+### 工具结果统一协议（Tool Result Protocol）
+
+`backend/utils/tool_result_protocol.py` 提供 `format_result_status()`，为可能返回不完整结果的工具在结果末尾追加统一状态块：
+
+```
+────────────────────────────────────────────
+shown: 50
+source: ...
+total: 312
+truncated: yes
+next_step: ...
+```
+
+- 字段固定为英文 key：`shown`（本次返回数）、`total`（结果总数，未知为 `?`）、
+  `truncated`（`yes`/`no`，结果是否被截断）、`next_step`（下一步动作），
+  可选 `source` 与附加说明行。
+- 已接入工具：`list_files`（上限 200 个文件）、`read_file_content`（未指定
+  `end_line` 时按 200 行预算，超限给出下一段 `start_line`；单行 500 字符截断）、
+  `search_across_files`（匹配总数统计上限 1000，截断时提示缩小范围）、
+  `search_scholarly_works` / `find_related_works` / `search_research_data_resources`
+  （`total_estimated` / `total` 大于展示数时标记截断）。
+- `prompts.py` 的共享常量 `TOOL_RESULT_PROTOCOL_RULE` 注入 `writing_chat.chat_system`
+  与 `scholarly_research_tool_guide`，要求模型在 `truncated=yes` 时按 `next_step`
+  缩小范围、继续读取或换用工具，不能把截断结果当成完整集合。
 
 ### SearchManager 聚合策略
 

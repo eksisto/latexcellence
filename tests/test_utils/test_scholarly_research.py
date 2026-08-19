@@ -419,6 +419,59 @@ def test_result_format_includes_stable_identifiers():
     assert json.dumps(result.model_dump())
 
 
+def test_search_result_format_reports_truncated_when_more_remain():
+    from backend.utils.scholarly_research.models import SearchScholarlyResult
+
+    works = [_build_work_from_openalex(_openalex_work(f"W{i}")) for i in range(12)]
+    result = SearchScholarlyResult(
+        query="test",
+        results=works,
+        total_estimated=120,
+        per_page=20,
+    )
+    formatted = result.format_for_llm()  # 默认只展示前 10 条
+
+    assert "truncated: yes" in formatted
+    assert "shown: 10" in formatted
+    assert "total: 120" in formatted
+    assert "next_step:" in formatted
+    # 示例保留稳定标识符
+    assert "OpenAlex ID: W1" in formatted
+
+
+def test_search_result_format_not_truncated_when_complete():
+    from backend.utils.scholarly_research.models import SearchScholarlyResult
+
+    result = SearchScholarlyResult(
+        query="test",
+        results=[_build_work_from_openalex(_openalex_work())],
+        total_estimated=1,
+    )
+    formatted = result.format_for_llm()
+
+    assert "truncated: no" in formatted
+    assert "total: 1" in formatted
+
+
+def test_related_works_format_reports_truncation():
+    from backend.utils.scholarly_research.models import RelatedWorksResult
+
+    works = [_build_work_from_openalex(_openalex_work(f"W{i}")) for i in range(20)]
+    result = RelatedWorksResult(
+        seed_id="W1", relation_type="references", works=works, total=80
+    )
+    formatted = result.format_for_llm(max_results=15)
+
+    assert "truncated: yes" in formatted
+    assert "total: 80" in formatted
+    assert "next_step:" in formatted
+
+    complete = RelatedWorksResult(
+        seed_id="W1", relation_type="references", works=works[:3], total=3
+    )
+    assert "truncated: no" in complete.format_for_llm(max_results=15)
+
+
 @pytest.mark.asyncio
 async def test_shared_http_client_lifecycle():
     await manager_module.close_research_http_client()

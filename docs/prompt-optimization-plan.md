@@ -1,6 +1,6 @@
 # LateXcellence 提示词优化计划
 
-> 状态：阶段 0 至阶段 4 已完成；阶段 5 审查已完成，计划 A、B、C 已实施。
+> 状态：阶段 0 至阶段 4 已完成；阶段 5 审查已完成，计划 A、B、C、D 已实施。
 >
 > 建立日期：2026-08-17
 
@@ -458,13 +458,49 @@ Agent 阶段拆分；短板是上下文元数据、长文档检索策略、高�
    `check --full` 通过（Agent 提示词未改动）；全量 `pytest tests/ -q`
    1777 通过 / 5 跳过，无回归。
 
-##### 计划 D：工具结果协议统一（P1）
+##### 计划 D：工具结果协议统一（P1） ✅
 
 1. 为文件搜索、文件列表和学术检索设计统一的截断字段和 continuation 语义。
 2. 对无法一次返回完整结果的工具，返回明确的 `truncated` 状态、后续查询方式或 cursor。
 3. 为 `read_file_content` 设置字符或行预算，并在结果中提供文件、行范围和截断信息。
 4. 统一工具结果的来源、行号、数量、截断状态和下一步动作表达。
 5. 更新工具 schema 描述，使模型知道何时缩小范围、继续读取或换用搜索工具。
+
+###### 计划 D 完成情况（2026-08-20）
+
+- 新增共享模块 `backend/utils/tool_result_protocol.py`：统一状态块构建器
+  `format_result_status()`，固定字段 `shown` / `total` / `truncated` /
+  `next_step`（可选 `source` 与附加说明行）。工具正文保持原有语言，
+  末尾追加该状态块，模型据此判断结果是否完整及下一步动作。
+- **list_files**：单次返回上限 200 个文件，超出时截断并标注
+  `truncated: yes`、`total` 与"缩小 pattern 范围"提示。
+- **read_file_content**：未显式指定 `end_line` 时按 200 行预算读取，
+  超限截断并在 `next_step` 给出下一段起始行（`start_line=N`）；单行
+  超过 500 字符截断并在状态块附注说明；头部保留文件、行范围与字符数。
+- **search_across_files**：匹配总数统计上限 1000（`total` 未知时显示
+  `?`），结果被截断时明确 `truncated: yes` 并提示用更精确的
+  pattern / file_pattern 缩小范围或调高 `max_results`；每条匹配保持
+  `文件:行号` 前缀。
+- **学术检索**：`SearchScholarlyResult` / `RelatedWorksResult` 的
+  `format_for_llm()` 增加统一状态块，`total_estimated` / `total` 大于
+  展示条数时标记 `truncated: yes` 并提示细化查询或增大 `max_results`；
+  覆盖 `search_scholarly_works`、`find_related_works`、
+  `search_research_data_resources` 三个工具。
+- **schema 描述**：`list_files` / `read_file_content` /
+  `search_across_files` 与学术检索三个可截断工具的描述补充截断语义与
+  继续检索方式。
+- **提示词接入**：`prompts.py` 新增共享常量 `TOOL_RESULT_PROTOCOL_RULE`，
+  注入 `writing_chat.chat_system` 的 `<context>` 与
+  `scholarly_research_tool_guide`，指导模型读取状态块并遵循 `next_step`；
+  `check_prompt_structure.py` 的 `SHARED_NAMES` 已同步注册。
+- **回归**：`tests/test_prompts.py` 新增 5 个计划 D 测试（共享规则字段、
+  chat_system / 学术指南注入、项目工具与学术工具 schema 截断描述）全部
+  通过；`tests/test_utils/test_project_tools_manager.py` 新增 list 截断、
+  read 行预算 / 显式行范围 / 长行截断、search 截断状态等 8 个测试并
+  修正 2 个受格式变化影响的既有断言；`tests/test_utils/
+  test_scholarly_research.py` 新增 3 个截断状态测试；
+  `check_prompt_structure.py` 通过；`prompt_comprehension_eval --dry-run`
+  31 例通过；全量 `pytest tests/ -q` 1792 通过 / 5 跳过，无回归。
 
 ##### 计划 E：Agent 分区和最小充分信息治理（P2）
 

@@ -17,6 +17,7 @@ from backend.core.prompts import (
     JSON_ONLY_RULE,
     MARKER_PROTECTION_RULES,
     NO_INVENTION_RULE,
+    TOOL_RESULT_PROTOCOL_RULE,
     UNTRUSTED_DATA_RULE,
     _PROMPTS,
     get_prompt,
@@ -673,6 +674,60 @@ def test_writing_chat_chat_system_no_edit_contract_unchanged():
     assert "Never invent URLs, references, DOIs, citations, or data" in chat
     assert "insufficient" in chat
     assert "cannot modify" in chat.lower() or "修改" in chat
+
+
+# ── 阶段 5 计划 D：工具结果协议统一 ─────────────────────────────────────────
+
+
+def test_tool_result_protocol_rule_lists_status_fields():
+    """共享规则明确 truncated / next_step 等统一状态字段与截断处理。"""
+    rule = TOOL_RESULT_PROTOCOL_RULE
+    assert "shown:" in rule
+    assert "total:" in rule
+    assert "truncated" in rule
+    assert "next_step" in rule
+    assert "INCOMPLETE" in rule or "incomplete" in rule
+
+
+def test_chat_system_injects_tool_result_protocol():
+    """写作助手 chat_system 注入工具结果协议，指导模型处理截断结果。"""
+    rendered = _render("writing_chat", "chat_system")
+    assert TOOL_RESULT_PROTOCOL_RULE in rendered
+    assert "next_step" in rendered
+
+
+def test_scholarly_tool_guide_injects_tool_result_protocol():
+    """学术检索工具指南注入工具结果协议。"""
+    guide = _render("writing_chat", "scholarly_research_tool_guide")
+    assert TOOL_RESULT_PROTOCOL_RULE in guide
+
+
+def test_project_tools_schema_describe_truncation():
+    """项目浏览工具 schema 描述截断语义与下一步动作。"""
+    from backend.utils.project_tools.manager import ProjectToolsManager
+
+    schemas = ProjectToolsManager.get_tools_schema()
+    descriptions = {
+        s["function"]["name"]: s["function"]["description"] for s in schemas
+    }
+    assert "truncated" in descriptions["list_files"]
+    assert "start_line" in descriptions["read_file_content"]
+    assert "truncated" in descriptions["search_across_files"]
+    assert "max_results" in descriptions["search_across_files"]
+
+
+def test_scholarly_schema_describe_truncation():
+    """学术检索工具 schema 描述截断语义与继续检索方式。"""
+    from backend.utils.scholarly_research.manager import ResearchManager
+
+    descriptions = {
+        s["function"]["name"]: s["function"]["description"]
+        for s in ResearchManager.get_tools_schema()
+    }
+    assert "truncated" in descriptions["search_scholarly_works"]
+    assert "max_results" in descriptions["search_scholarly_works"]
+    assert "truncated" in descriptions["find_related_works"]
+    assert "truncated" in descriptions["search_research_data_resources"]
 
 
 # ── 阶段 5 计划 C：结构化输出与示例补齐 ──────────────────────────────────────

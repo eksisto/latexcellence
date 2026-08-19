@@ -2,6 +2,8 @@
 
 from pydantic import BaseModel, Field
 
+from backend.utils.tool_result_protocol import format_result_status
+
 
 class FieldProvenance(BaseModel):
     """字段值的来源与冲突状态。"""
@@ -101,10 +103,9 @@ class SearchScholarlyResult(BaseModel):
         items = self.results[:max_results]
         if not items:
             return f'No scholarly works found for "{self.query}".'
-        lines = [
-            f'Search "{self.query}" returned approximately '
-            f"{self.total_estimated} result(s):"
-        ]
+        total = self.total_estimated or len(self.results)
+        truncated = total > len(items) or len(self.results) > len(items)
+        lines = [f'Search "{self.query}" returned approximately ' f"{total} result(s):"]
         for index, work in enumerate(items, 1):
             authors = ", ".join(author.name for author in work.authors[:3])
             if len(work.authors) > 3:
@@ -123,6 +124,17 @@ class SearchScholarlyResult(BaseModel):
                 suffix = "..." if len(work.abstract) > 300 else ""
                 lines.append(f"    Abstract: {work.abstract[:300]}{suffix}")
             lines.append("")
+        lines.append(
+            format_result_status(
+                shown=len(items),
+                total=total,
+                truncated=truncated,
+                next_step=(
+                    "Refine the query or increase max_results to fetch more; "
+                    "or call get_work_details for a specific work."
+                ),
+            )
+        )
         return "\n".join(lines)
 
 
@@ -178,9 +190,10 @@ class RelatedWorksResult(BaseModel):
             "cited_by": "Cited by",
             "similar": "Similar works",
         }
+        total = self.total if self.total else len(self.works)
+        truncated = total > len(items) or len(self.works) > len(items)
         lines = [
-            f"{labels.get(self.relation_type, self.relation_type)} "
-            f"({self.total} total):"
+            f"{labels.get(self.relation_type, self.relation_type)} " f"({total} total):"
         ]
         for index, work in enumerate(items, 1):
             authors = ", ".join(author.name for author in work.authors[:3])
@@ -195,6 +208,17 @@ class RelatedWorksResult(BaseModel):
             if work.doi:
                 lines.append(f"    DOI: {work.doi}")
             lines.append("")
+        lines.append(
+            format_result_status(
+                shown=len(items),
+                total=total,
+                truncated=truncated,
+                next_step=(
+                    "Increase max_results or narrow the query to fetch more "
+                    "related works."
+                ),
+            )
+        )
         return "\n".join(lines)
 
 

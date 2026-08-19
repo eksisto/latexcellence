@@ -1,5 +1,6 @@
 """测试 ProjectToolsManager（项目文件浏览工具集）。"""
 
+import re
 import tempfile
 from pathlib import Path
 
@@ -14,6 +15,12 @@ from backend.utils.project_tools.manager import (
     _get_section_structure_executor,
     _search_across_files_executor,
 )
+
+
+def _match_lines(result: str) -> list[str]:
+    """从搜索结果中提取形如 file:line 的匹配行（排除 header / 状态块）。"""
+    return [line for line in result.split("\n") if re.match(r"^\S+:\d+\s", line)]
+
 
 # ── fixture ──────────────────────────────────────────────────────────────
 
@@ -149,6 +156,25 @@ class TestListFiles:
         )
         assert "无效" in result or "invalid" in result.lower()
 
+    @pytest.mark.asyncio
+    async def test_list_truncates_when_too_many_files(self, tmp_path):
+        ws_id = "test-list-trunc"
+        _open_project(ws_id, tmp_path)
+        for i in range(205):
+            (tmp_path / f"f{i:03d}.tex").write_text("x", encoding="utf-8")
+        result = await _list_files_executor("list_files", {"_workspace_id": ws_id})
+        assert "truncated: yes" in result
+        assert "total: 205" in result
+        assert result.count("- f") <= 200
+
+    @pytest.mark.asyncio
+    async def test_list_reports_count_and_no_truncation(self, project_dir):
+        ws_id = "test-list-count"
+        _open_project(ws_id, project_dir)
+        result = await _list_files_executor("list_files", {"_workspace_id": ws_id})
+        assert "共 3 个文件" in result
+        assert "truncated: no" in result
+
 
 # ── read_file_content ───────────────────────────────────────────────────
 
@@ -240,6 +266,52 @@ class TestReadFileContent:
         )
         assert "secret" not in result
         assert "路径验证失败" in result or "path" in result.lower()
+
+    @pytest.mark.asyncio
+    async def test_default_read_capped_at_line_budget(self, tmp_path):
+        ws_id = "test-read-budget"
+        _open_project(ws_id, tmp_path)
+        content = "\n".join(f"line {i}" for i in range(1, 301))
+        (tmp_path / "big.tex").write_text(content, encoding="utf-8")
+        result = await _read_file_content_executor(
+            "read_file_content",
+            {"_workspace_id": ws_id, "file_path": "big.tex"},
+        )
+        assert "truncated: yes" in result
+        assert "total: 300" in result
+        assert "start_line=201" in result
+        assert "| line 1" in result
+        assert "| line 200" in result
+        assert "| line 201" not in result
+
+    @pytest.mark.asyncio
+    async def test_explicit_end_line_ignores_budget(self, tmp_path):
+        ws_id = "test-read-explicit"
+        _open_project(ws_id, tmp_path)
+        content = "\n".join(f"line {i}" for i in range(1, 301))
+        (tmp_path / "big.tex").write_text(content, encoding="utf-8")
+        result = await _read_file_content_executor(
+            "read_file_content",
+            {
+                "_workspace_id": ws_id,
+                "file_path": "big.tex",
+                "start_line": 1,
+                "end_line": 300,
+            },
+        )
+        assert "truncated: no" in result
+        assert "| line 300" in result
+
+    @pytest.mark.asyncio
+    async def test_long_lines_truncated_and_noted(self, tmp_path):
+        ws_id = "test-read-longline"
+        _open_project(ws_id, tmp_path)
+        (tmp_path / "long.tex").write_text("x" * 600, encoding="utf-8")
+        result = await _read_file_content_executor(
+            "read_file_content",
+            {"_workspace_id": ws_id, "file_path": "long.tex"},
+        )
+        assert "长行已按 500 字符截断" in result
 
 
 # ── get_section_structure ───────────────────────────────────────────────
@@ -372,10 +444,34 @@ class TestSearchAcrossFiles:
                 "max_results": 3,
             },
         )
-        lines = [
-            l for l in result.split("\n") if l.strip() and not l.startswith("搜索")
-        ]
-        assert len(lines) <= 4  # 3 results + header
+        assert len(_match_lines(result)) <= 3
+
+    @pytest.mark.asyncio
+    async def test_truncated_status_when_results_exceed_limit(self, project_dir):
+        ws_id = "test-search-trunc"
+        _open_project(ws_id, project_dir)
+        result = await _search_across_files_executor(
+            "search_across_files",
+            {
+                "_workspace_id": ws_id,
+                "pattern": r".",
+                "max_results": 2,
+            },
+        )
+        assert "truncated: yes" in result
+        assert "total: " in result
+        assert "next_step:" in result
+        assert len(_match_lines(result)) == 2
+
+    @pytest.mark.asyncio
+    async def test_not_truncated_when_all_matches_shown(self, project_dir):
+        ws_id = "test-search-notrunc"
+        _open_project(ws_id, project_dir)
+        result = await _search_across_files_executor(
+            "search_across_files",
+            {"_workspace_id": ws_id, "pattern": r"\\label"},
+        )
+        assert "truncated: no" in result
 
     @pytest.mark.asyncio
     async def test_file_pattern_traversal_rejected(self, project_dir):
@@ -424,10 +520,7 @@ class TestSearchAcrossFiles:
                 "max_results": 10**9,
             },
         )
-        lines = [
-            l for l in result.split("\n") if l.strip() and not l.startswith("搜索")
-        ]
-        assert len(lines) <= 201  # 上限 200 条 + header
+        assert len(_match_lines(result)) <= 200  # 上限 200 条
 
 
 # ── 全局单例与注册 ─────────────────────────────────────────────────────

@@ -329,7 +329,9 @@ class ResearchManager:
                     "name": "search_scholarly_works",
                     "description": (
                         "Search for papers across multiple academic data sources. Support searching by topic, author, year, document type, and other criteria, "
-                        "and return structured records containing stable identifiers such as DOI and OpenAlex ID."
+                        "and return structured records containing stable identifiers such as DOI and OpenAlex ID. "
+                        "Results may be truncated: the output ends with a status block (truncated: yes/no). "
+                        "When truncated, refine the query or increase max_results to fetch more."
                     ),
                     "parameters": {
                         "type": "object",
@@ -397,7 +399,9 @@ class ResearchManager:
                     "name": "find_related_works",
                     "description": (
                         "Find related works based on a seed paper: references, papers that cite the seed paper, or similar papers."
-                        "Utilize citation graphs from multiple data sources."
+                        "Utilize citation graphs from multiple data sources. "
+                        "Results may be truncated: the output ends with a status block (truncated: yes/no). "
+                        "When truncated, increase max_results or narrow the query."
                     ),
                     "parameters": {
                         "type": "object",
@@ -457,7 +461,9 @@ class ResearchManager:
                 "function": {
                     "name": "search_research_data_resources",
                     "description": (
-                        "Search for datasets and research data related to a research topic. Search across multiple data sources."
+                        "Search for datasets and research data related to a research topic. Search across multiple data sources. "
+                        "Results may be truncated: the output ends with a status block (truncated: yes/no). "
+                        "When truncated, refine the query or increase max_results."
                     ),
                     "parameters": {
                         "type": "object",

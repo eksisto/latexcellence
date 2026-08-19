@@ -23,10 +23,10 @@
 | 属性 | 值 |
 |------|-----|
 | **名称** | `list_files` |
-| **描述** | 列出项目文件（glob 模式匹配，默认 `**/*.tex`），返回相对路径 |
+| **描述** | 列出项目文件（glob 模式匹配，默认 `**/*.tex`），返回相对路径。文件超过 200 个时结果截断，末尾标注 `truncated` 状态，需用更精确的 `pattern` 缩小范围 |
 | **参数** | `pattern` (string, 可选, 默认 `"**/*.tex"`) |
-| **定义位置** | `backend/utils/project_tools/manager.py:59` |
-| **执行函数** | `_list_files_executor()` (同文件:180) |
+| **定义位置** | `backend/utils/project_tools/manager.py:117` |
+| **执行函数** | `_list_files_executor()` (同文件:249) |
 | **配置路径** | `features.function_calling.project_tools.enabled` |
 
 ---
@@ -34,10 +34,10 @@
 | 属性 | 值 |
 |------|-----|
 | **名称** | `read_file_content` |
-| **描述** | 读取指定文件内容（可指定行范围），行号从 1 开始 |
+| **描述** | 读取指定文件内容（可指定行范围），行号从 1 开始。省略 `end_line` 时单次最多读取 200 行，截断时末尾给出下一段 `start_line`；单行超过 500 字符截断并附注说明 |
 | **参数** | `file_path` (string, 必填), `start_line` (integer, 可选), `end_line` (integer, 可选) |
-| **定义位置** | `backend/utils/project_tools/manager.py:84` |
-| **执行函数** | `_read_file_content_executor()` (同文件:201) |
+| **定义位置** | `backend/utils/project_tools/manager.py:143` |
+| **执行函数** | `_read_file_content_executor()` (同文件:293) |
 | **配置路径** | `features.function_calling.project_tools.enabled` |
 
 ---
@@ -47,8 +47,8 @@
 | **名称** | `get_section_structure` |
 | **描述** | 获取文档的章节树（`\chapter`/`\section`/`\subsection` 等），返回层级+标题+所在文件+行号 |
 | **参数** | `file_path` (string, 可选) |
-| **定义位置** | `backend/utils/project_tools/manager.py:116` |
-| **执行函数** | `_get_section_structure_executor()` (同文件:248) |
+| **定义位置** | `backend/utils/project_tools/manager.py:180` |
+| **执行函数** | `_get_section_structure_executor()` (同文件:377) |
 | **配置路径** | `features.function_calling.project_tools.enabled` |
 
 ---
@@ -56,11 +56,16 @@
 | 属性 | 值 |
 |------|-----|
 | **名称** | `search_across_files` |
-| **描述** | 跨项目文件搜索正则表达式模式，用于查找 `\label`、`\cite` 等 |
-| **参数** | `pattern` (string, 必填), `file_pattern` (string, 可选), `max_results` (integer, 默认 50) |
-| **定义位置** | `backend/utils/project_tools/manager.py:140` |
-| **执行函数** | `_search_across_files_executor()` (同文件:307) |
+| **描述** | 跨项目文件搜索正则表达式模式，用于查找 `\label`、`\cite` 等。匹配总数统计上限 1000，结果截断时明确标注 `truncated` 状态并提示缩小范围或调高 `max_results` |
+| **参数** | `pattern` (string, 必填), `file_pattern` (string, 可选), `max_results` (integer, 默认 50, 上限 200) |
+| **定义位置** | `backend/utils/project_tools/manager.py:204` |
+| **执行函数** | `_search_across_files_executor()` (同文件:436) |
 | **配置路径** | `features.function_calling.project_tools.enabled` |
+
+> **工具结果统一协议**：以上项目浏览工具及学术检索工具在结果末尾追加统一状态块
+> （`shown` / `total` / `truncated` / `next_step`），见
+> `docs/backend-core.md` 的"工具结果统一协议"一节。`truncated=yes` 时模型应
+> 依据 `next_step` 缩小范围、继续读取或换用工具。
 
 ### 段落编辑工具
 
@@ -92,10 +97,10 @@
 | 属性 | 值 |
 |------|-----|
 | **名称** | `search_scholarly_works` |
-| **描述** | 跨多个学术数据源检索论文，支持按主题、作者、年份、文献类型筛选，返回含 DOI / OpenAlex ID 等稳定标识的结构化记录 |
+| **描述** | 跨多个学术数据源检索论文，支持按主题、作者、年份、文献类型筛选，返回含 DOI / OpenAlex ID 等稳定标识的结构化记录。结果超过展示上限时末尾标注 `truncated` 状态并提示细化查询或调高 `max_results` |
 | **参数** | `query` (string, 必填), `year_from` / `year_to` (integer, 可选), `authors` (string[], 可选), `work_types` (string[], 可选), `sort_by` (enum: `relevance`/`citation_count`/`publication_date`, 默认 `relevance`), `max_results` (integer, 默认 20) |
-| **定义位置** | `backend/utils/scholarly_research/manager.py:233` |
-| **执行函数** | `_scholarly_research_executor()` (同文件:378) |
+| **定义位置** | `backend/utils/scholarly_research/manager.py:329` |
+| **执行函数** | `_scholarly_research_executor()` (同文件:489) |
 | **配置路径** | `features.function_calling.scholarly_research.enabled` |
 | **说明** | 联邦搜索：并发查询所有启用的 Provider，结果去重、排序后合并 |
 
@@ -106,8 +111,8 @@
 | **名称** | `get_work_details` |
 | **描述** | 获取某篇论文的完整详细信息：摘要、作者、机构、期刊、DOI、被引数、主题与开放获取信息，支持多数据源 |
 | **参数** | `work_id` (string, 必填) |
-| **定义位置** | `backend/utils/scholarly_research/manager.py:275` |
-| **执行函数** | `_scholarly_research_executor()` (同文件:378) |
+| **定义位置** | `backend/utils/scholarly_research/manager.py:379` |
+| **执行函数** | `_scholarly_research_executor()` (同文件:489) |
 | **配置路径** | `features.function_calling.scholarly_research.enabled` |
 
 ---
@@ -115,10 +120,10 @@
 | 属性 | 值 |
 |------|-----|
 | **名称** | `find_related_works` |
-| **描述** | 基于种子论文检索相关文献：参考文献（references）、施引文献（cited_by）、相似论文（similar），利用多数据源引文图 |
+| **描述** | 基于种子论文检索相关文献：参考文献（references）、施引文献（cited_by）、相似论文（similar），利用多数据源引文图。结果被截断时末尾标注 `truncated` 状态并提示继续检索 |
 | **参数** | `work_id` (string, 必填), `relation_type` (enum: `references`/`cited_by`/`similar`, 必填), `max_results` (integer, 默认 20), `sort_by` (enum, 默认 `citation_count`) |
-| **定义位置** | `backend/utils/scholarly_research/manager.py:295` |
-| **执行函数** | `_scholarly_research_executor()` (同文件:378) |
+| **定义位置** | `backend/utils/scholarly_research/manager.py:399` |
+| **执行函数** | `_scholarly_research_executor()` (同文件:489) |
 | **配置路径** | `features.function_calling.scholarly_research.enabled` |
 
 ---
@@ -128,8 +133,8 @@
 | **名称** | `get_full_text_or_sections` |
 | **描述** | 获取论文的摘要与开放获取（OA）全文位置信息，跨数据源提供最全的 OA 链接 |
 | **参数** | `work_id` (string, 必填), `requested_sections` (string[], 可选, 如 `abstract`/`methods`/`results`) |
-| **定义位置** | `backend/utils/scholarly_research/manager.py:329` |
-| **执行函数** | `_scholarly_research_executor()` (同文件:378) |
+| **定义位置** | `backend/utils/scholarly_research/manager.py:435` |
+| **执行函数** | `_scholarly_research_executor()` (同文件:489) |
 | **配置路径** | `features.function_calling.scholarly_research.enabled` |
 | **说明** | 目前仅 `abstract` 章节实际可取，其余章节返回不可用提示并注明 OA 位置 |
 
@@ -138,10 +143,10 @@
 | 属性 | 值 |
 |------|-----|
 | **名称** | `search_research_data_resources` |
-| **描述** | 检索与研究主题相关的数据集与研究数据，跨多数据源搜索 |
+| **描述** | 检索与研究主题相关的数据集与研究数据，跨多数据源搜索。结果被截断时末尾标注 `truncated` 状态并提示细化查询 |
 | **参数** | `query` (string, 必填), `resource_type` (enum: `dataset`, 默认 `dataset`), `max_results` (integer, 默认 10) |
-| **定义位置** | `backend/utils/scholarly_research/manager.py:356` |
-| **执行函数** | `_scholarly_research_executor()` (同文件:378) |
+| **定义位置** | `backend/utils/scholarly_research/manager.py:462` |
+| **执行函数** | `_scholarly_research_executor()` (同文件:489) |
 | **配置路径** | `features.function_calling.scholarly_research.enabled` |
 
 ---

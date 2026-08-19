@@ -84,6 +84,7 @@ latexcellence/
 │   │   │   ├── manager.py             # ResearchManager + Provider 编排 + Function Calling 工具
 │   │   │   ├── _utils.py              # 内部共享工具（DOI/URL 归一化等）
 │   │   │   └── providers/             # 可插拔学术数据源
+│   │   ├── tool_result_protocol.py  # 工具结果统一协议（shown/total/truncated/next_step 状态块）
 │   │   ├── project_tools/            # LLM Function Calling 工具集（浏览 + 编辑）
 │   │   │   ├── __init__.py
 │   │   │   ├── manager.py            # ProjectToolsManager — 浏览工具（list_files/read_file_content/get_section_structure/search_across_files）
@@ -244,6 +245,7 @@ latexcellence/
 | 乐观锁 | 读取时返回文件 MD5，写回时校验；不一致抛 `FileConflictError`（HTTP 409），前端刷新 MD5 后重试 | [DESIGN.md §4.2](DESIGN.md) |
 | SSE 流式 | 段落检查、Agent 运行、写作助手均通过 SSE 推送 `progress` / `result` / `error` / `done` 等事件 | [modules.md](docs/modules.md) |
 | Function Calling 工具体系 | `ToolRegistry` 统一注册与管理工具开关；SearchManager / ProjectToolsManager / EditToolsManager / ResearchManager 自注册；template_gen / plot_gen / style_modify 使用 session 私有工具 | [function-calling-tools.md](docs/function-calling-tools.md) |
+| 工具结果统一协议 | list_files / read_file_content / search_across_files 与学术检索工具在结果末尾追加 `shown` / `total` / `truncated` / `next_step` 状态块，指导模型在结果被截断时缩小范围、继续读取或换用工具 | [backend-core.md](docs/backend-core.md) |
 | 通用搜索聚合 | `SearchQueryPlan` 经统一 JSON 校验重试生成；`SearchManager` 可并发查询多个引擎，按 URL/近重复合并后使用 RRF、来源加权和域名上限排序，并保留 legacy 回滚路径 | [backend-core.md](docs/backend-core.md) |
 | 宏包规则表检测 | 确定性规则表（命令/环境/列说明符 → 宏包）优先，零 LLM 开销；规则表未命中才 LLM 兜底 | [latex-package-rules.md](docs/latex-package-rules.md) |
 | 多文件 \input 展开 | 递归解析 `\input` / `\include` / `\subfile`，段落索引为文件内局部索引，结果按文件分组展示与写回 | [backend-core.md](docs/backend-core.md) |

@@ -19,6 +19,7 @@ from typing import Any
 from backend.core.logger import get_logger
 from backend.core.workspace_manager import get_project_manager_for_workspace
 from backend.utils.path_guard import resolve_project_path
+from backend.utils.tool_result_protocol import format_result_status
 
 # ── 章节命令优先级 ────────────────────────────────────────────────────────
 
@@ -42,6 +43,14 @@ _SECTION_RE = re.compile(
 _READ_SUFFIXES = (".tex", ".bib", ".cls", ".sty", ".md", ".markdown", ".txt")
 # search_across_files 结果条数上限
 _MAX_SEARCH_RESULTS = 200
+# search_across_files 统计匹配总数时的扫描上限（避免超大项目全量扫描）
+_MAX_SEARCH_TOTAL_CAP = 1000
+# list_files 单次返回的文件数上限
+_MAX_LIST_RESULTS = 200
+# read_file_content 未显式指定 end_line 时的单次行数预算
+_READ_MAX_LINES = 200
+# read_file_content 单行显示长度上限（超长行截断保护上下文）
+_READ_MAX_LINE_CHARS = 500
 
 
 def _normalize_glob_pattern(pattern: str, default: str) -> str:
@@ -110,6 +119,8 @@ class ProjectToolsManager:
                         "列出项目中所有匹配 glob 模式的文件（默认 *.tex）。"
                         "返回相对项目根目录的路径列表。"
                         "当你需要了解项目包含哪些文件时使用。"
+                        "文件过多时结果会被截断并在末尾标注 truncated 状态，"
+                        "此时请用更精确的 pattern 缩小范围。"
                     ),
                     "parameters": {
                         "type": "object",
@@ -132,7 +143,9 @@ class ProjectToolsManager:
                     "name": "read_file_content",
                     "description": (
                         "读取项目内指定文本文件的内容（可指定行范围）。"
-                        "行号从 1 开始。省略 end_line 将读到文件末尾。"
+                        "行号从 1 开始。省略 end_line 时单次最多读取 200 行，"
+                        "超出的部分会截断并在末尾标注 truncated 状态与下一段起始行，"
+                        "按 next_step 提示以 start_line 继续读取。"
                         "当你需要查看某个文件的具体内容时使用。"
                     ),
                     "parameters": {
@@ -152,7 +165,9 @@ class ProjectToolsManager:
                             },
                             "end_line": {
                                 "type": "integer",
-                                "description": "结束行号（1-indexed，包含），省略则读到末尾",
+                                "description": (
+                                    "结束行号（1-indexed，包含），省略则按 200 行预算读取"
+                                ),
                             },
                         },
                         "required": ["file_path"],
@@ -192,6 +207,9 @@ class ProjectToolsManager:
                         "用于查找 \\\\label{fig:...} 定义位置、\\\\cite 引用、"
                         "或任何 LaTeX 命令/文本模式的分布。"
                         "只在 .tex/.bib/.cls/.sty/.md/.txt 文本文件中搜索。"
+                        "结果过多时会被截断并在末尾标注 truncated 状态与总匹配数，"
+                        "此时请用更精确的 pattern 或 file_pattern 缩小范围，"
+                        "或调高 max_results 后重试。"
                     ),
                     "parameters": {
                         "type": "object",
@@ -212,7 +230,10 @@ class ProjectToolsManager:
                             },
                             "max_results": {
                                 "type": "integer",
-                                "description": "返回的最大匹配条数，默认 50",
+                                "description": (
+                                    "返回的最大匹配条数，默认 50，上限 200。"
+                                    "结果截断时可用更精确的 pattern 缩小范围。"
+                                ),
                             },
                         },
                         "required": ["pattern"],
@@ -251,7 +272,22 @@ async def _list_files_executor(tool_name: str, arguments: dict[str, Any]) -> str
         return f"项目中没有匹配 '{pattern}' 的文件。"
 
     rel = [str(p.relative_to(root)) for p in matched]
-    return "文件列表：\n" + "\n".join(f"- {f}" for f in rel)
+    total = len(rel)
+    truncated = total > _MAX_LIST_RESULTS
+    shown = rel[:_MAX_LIST_RESULTS]
+    body = f"文件列表（共 {total} 个文件）：\n" + "\n".join(f"- {f}" for f in shown)
+    if truncated:
+        body += f"\n… 另有 {total - _MAX_LIST_RESULTS} 个文件未显示。"
+    footer = format_result_status(
+        shown=len(shown),
+        total=total,
+        truncated=truncated,
+        next_step=(
+            "使用更精确的 pattern 缩小范围（如 'chapters/*.tex' 或 "
+            "'**/chapter*.tex'），或调用 search_across_files 定位具体内容。"
+        ),
+    )
+    return body + "\n" + footer
 
 
 async def _read_file_content_executor(tool_name: str, arguments: dict[str, Any]) -> str:
@@ -294,15 +330,48 @@ async def _read_file_content_executor(tool_name: str, arguments: dict[str, Any])
     if start > total:
         return f"起始行 {start} 超出文件总行数 {total}。"
 
+    truncated = False
+    if arguments.get("end_line") is None and (end - start + 1) > _READ_MAX_LINES:
+        end = start + _READ_MAX_LINES - 1
+        truncated = True
+
     selected = lines[start - 1 : end]
     line_width = len(str(end))
-    numbered = "\n".join(
-        f"{i + start:>{line_width}} | {line}" for i, line in enumerate(selected)
-    )
-    return (
-        f"文件：{file_path}（共 {total} 行，显示 {start}–{end} 行）\n"
+    line_truncated = False
+    numbered_lines: list[str] = []
+    for i, line in enumerate(selected):
+        if len(line) > _READ_MAX_LINE_CHARS:
+            line = line[:_READ_MAX_LINE_CHARS] + "…"
+            line_truncated = True
+        numbered_lines.append(f"{i + start:>{line_width}} | {line}")
+    numbered = "\n".join(numbered_lines)
+
+    body = (
+        f"文件：{file_path}（共 {total} 行，显示 {start}–{end} 行，"
+        f"约 {sum(len(line) for line in selected)} 字符）\n"
         f"{'─' * 60}\n{numbered}"
     )
+
+    if truncated:
+        footer = format_result_status(
+            shown=len(selected),
+            total=total,
+            truncated=True,
+            next_step=(
+                f"文件较大，仅显示 {start}–{end} 行。继续读取后续内容："
+                f"以 start_line={end + 1} 再次调用 read_file_content。"
+            ),
+            extra=["note: 长行已按 500 字符截断。"] if line_truncated else None,
+        )
+    else:
+        footer = format_result_status(
+            shown=len(selected),
+            total=total,
+            truncated=False,
+            next_step="如需查看其他部分，用 start_line / end_line 指定行范围。",
+            extra=["note: 长行已按 500 字符截断。"] if line_truncated else None,
+        )
+    return body + "\n" + footer
 
 
 async def _get_section_structure_executor(
@@ -404,6 +473,8 @@ async def _search_across_files_executor(
         return f"没有匹配 '{file_pattern}' 的文件。"
 
     results: list[str] = []
+    total_matches = 0
+    total_capped = False
     for fp in matched_files:
         try:
             lines = fp.read_text(encoding="utf-8").split("\n")
@@ -412,22 +483,42 @@ async def _search_across_files_executor(
         rel = str(fp.relative_to(root))
         for i, line in enumerate(lines, 1):
             if pat.search(line):
-                stripped = line.strip()
-                if len(stripped) > 200:
-                    stripped = stripped[:200] + "…"
-                results.append(f"{rel}:{i}  {stripped}")
-                if len(results) >= max_results:
+                total_matches += 1
+                if len(results) < max_results:
+                    stripped = line.strip()
+                    if len(stripped) > 200:
+                        stripped = stripped[:200] + "…"
+                    results.append(f"{rel}:{i}  {stripped}")
+                if total_matches >= _MAX_SEARCH_TOTAL_CAP:
+                    total_capped = True
                     break
-        if len(results) >= max_results:
+        if total_capped:
             break
 
     if not results:
         return f"未找到匹配 '{pattern_str}' 的内容。"
 
-    return (
-        f"搜索结果（共 {len(results)} 条，显示前 {min(len(results), max_results)} 条）：\n"
-        + "\n".join(results)
+    truncated = total_capped or len(results) < total_matches
+    total_text = None if total_capped else total_matches
+    total_display = f"≥{_MAX_SEARCH_TOTAL_CAP}" if total_capped else str(total_matches)
+    body = (
+        f"搜索结果（显示 {len(results)} 条，共 {total_display} 条匹配，"
+        f"{len(matched_files)} 个文件）：\n" + "\n".join(results)
     )
+    if truncated:
+        next_step = (
+            "结果被截断：用更精确的 pattern 或 file_pattern 缩小范围，"
+            "或调高 max_results 后重试。"
+        )
+    else:
+        next_step = "如需更广的匹配，可调高 max_results 或换用其他 pattern。"
+    footer = format_result_status(
+        shown=len(results),
+        total=total_text,
+        truncated=truncated,
+        next_step=next_step,
+    )
+    return body + "\n" + footer
 
 
 # ── 辅助 ────────────────────────────────────────────────────────────────────
