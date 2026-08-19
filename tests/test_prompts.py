@@ -800,3 +800,125 @@ def test_plan_c_bibtex_examples_cover_normal_and_missing():
     assert "@article{he2016deep,\\n" in prompt
     # 缺失的可选字段不进入 raw_bibtex（journal 为必填故保留为空字符串）
     assert '"journal": ""' in prompt
+
+
+# ── 阶段 5 计划 E：Agent 分区与最小充分信息治理 ──────────────────────────────
+
+_STAGE_CONTRACT_FIELDS = ("- entry:", "- input:", "- output:", "- done:", "- fallback:")
+
+
+def _has_balanced_tag(text: str, tag: str) -> bool:
+    return text.count(f"<{tag}>") == 1 and text.count(f"</{tag}>") == 1
+
+
+def test_plan_e_template_gen_core_has_four_xml_partitions():
+    """template_gen 核心 system 将 workflow / quality gate / failure budget /
+    tool protocol 改为一致 XML 分区。"""
+    core = _render("template_gen", "agent_system")
+    for tag in ("workflow", "quality_gate", "failure_budget", "tool_protocol"):
+        assert _has_balanced_tag(core, tag), f"核心 system 缺少平衡的 <{tag}> 分区"
+    # quality gate 摘要不重复 validation 阶段的详细清单
+    assert "VISUAL QUALITY GATE" not in core
+    assert "detailed visual checklist" in core
+
+
+def test_plan_e_stage_contracts_record_entry_input_output_done_fallback():
+    """每个阶段块用 stage_contract 记录进入条件/输入/输出/完成条件/失败回退。"""
+    for module, key in (
+        ("template_gen", "planning_system"),
+        ("template_gen", "compile_phase_system"),
+        ("template_gen", "validation_phase_system"),
+        ("plot_gen", "refine_system"),
+        ("style_modify", "refine_system"),
+    ):
+        rendered = _render(module, key)
+        assert _has_balanced_tag(
+            rendered, "stage_contract"
+        ), f"{module}.{key} 缺少平衡的 <stage_contract>"
+        for field in _STAGE_CONTRACT_FIELDS:
+            assert field in rendered, f"{module}.{key} 缺少字段 {field}"
+
+
+def test_plan_e_template_gen_phase_partitions_balanced():
+    """template_gen 三个阶段块的内部分区标签均成对闭合。"""
+    phase_tags = {
+        "planning_system": (
+            "architecture_principles",
+            "build_safety",
+            "requirement_checklist",
+            "category_playbooks",
+        ),
+        "compile_phase_system": (
+            "recovery_protocol",
+            "error_patterns",
+            "missing_resource_protocol",
+        ),
+        "validation_phase_system": ("visual_quality_gate", "pre_finish_check"),
+    }
+    for key, tags in phase_tags.items():
+        rendered = _render("template_gen", key)
+        for tag in tags:
+            assert _has_balanced_tag(rendered, tag), f"{key} 缺少平衡的 <{tag}>"
+
+
+def test_plan_e_plot_gen_agent_partitions_and_refine_stage_contract():
+    """plot_gen agent 关键规则改为 XML 分区；refine 增加 stage_contract。"""
+    agent = get_prompt(
+        "plot_gen",
+        "agent_system",
+        profile="x",
+        chart_plan="y",
+        pgfplots_reference="z",
+        style="nature",
+        language="zh",
+        max_rounds=30,
+    )
+    for tag in (
+        "critical_rules",
+        "style_note",
+        "figure_text_language",
+        "axis_guidance",
+        "layout_rules",
+        "outputs",
+        "tikz_protocol",
+        "workflow",
+        "quality_gate",
+        "statistics",
+        "failure_budget",
+    ):
+        assert _has_balanced_tag(agent, tag), f"plot_gen agent 缺少平衡的 <{tag}>"
+    refine = _render("plot_gen", "refine_system")
+    assert _has_balanced_tag(refine, "stage_contract")
+
+
+def test_plan_e_style_modify_agent_partitions_and_refine_stage_contract():
+    """style_modify agent 各规则分区改为 XML；refine 增加 stage_contract。"""
+    agent = _render("style_modify", "agent_system")
+    for tag in (
+        "project_boundary",
+        "compile_availability",
+        "minimal_edit",
+        "finish_integrity",
+        "workflow",
+        "tool_protocol",
+    ):
+        assert _has_balanced_tag(agent, tag), f"style_modify agent 缺少平衡的 <{tag}>"
+    refine = _render("style_modify", "refine_system")
+    assert _has_balanced_tag(refine, "stage_contract")
+
+
+def test_plan_e_duplicate_tool_constraint_removed_from_compile_phase():
+    """“禁止创建辅助测试文档”只保留在核心 system，编译阶段不再重复。"""
+    core = _render("template_gen", "agent_system")
+    compile_phase = _render("template_gen", "compile_phase_system")
+    assert "NEVER create auxiliary test documents" in core
+    assert "NEVER create auxiliary test documents" not in compile_phase
+
+
+def test_plan_e_agent_size_budgets_still_hold():
+    """计划 E 分区重构后三个 Agent 模块仍处于体积预算内。"""
+    from tools.generality_gate import check_prompt_size_budgets, prompt_size_metrics
+
+    metrics = prompt_size_metrics()
+    violations = check_prompt_size_budgets(metrics)
+    assert not violations, violations

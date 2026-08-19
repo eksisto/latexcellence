@@ -261,6 +261,7 @@ core/ + utils/ (基础设施：配置、LLM 客户端、项目管理、文件 IO
 - 常规提示词顺序固定为 <role> → <task> → <critical_rules> → [<input>] → <output_format> → <examples>
 - 共享规则常量（MARKER_PROTECTION_RULES、JSON_ONLY_RULE 等）避免跨模块重复书写
 - Agent system prompt 采用阶段注入策略：核心 system 只保留强制工作流与硬约束，规划细节（`planning_system`）在开始时注入，编译恢复协议（`compile_phase_system`）在首次编译后注入，视觉质量门禁（`validation_phase_system`）在首次成功编译后注入
+- Agent 规则用一致的 XML 分区：workflow / quality gate / tool protocol / failure budget 各占一个成对闭合标签；每个阶段块用 `<stage_contract>` 记录 entry（进入条件）、input（输入）、output（输出）、done（完成条件）、fallback（失败回退）
 - 每个 Agent 模块设体积预算（template_gen ≤ 22000、plot_gen ≤ 15000、style_modify ≤ 5000 字符），由 `tools/generality_gate.py size` 门禁
 
 **评测约束**：修改提示词必须通过 prompt_comprehension_eval 回归验证；Agent 提示词瘦身必须维持或改善 generality_gate check 结果。

@@ -1,6 +1,6 @@
 # LateXcellence 提示词优化计划
 
-> 状态：阶段 0 至阶段 4 已完成；阶段 5 审查已完成，计划 A、B、C、D 已实施。
+> 状态：阶段 0 至阶段 4 已完成；阶段 5 审查已完成，计划 A、B、C、D、E 已实施。
 >
 > 建立日期：2026-08-17
 
@@ -502,14 +502,46 @@ Agent 阶段拆分；短板是上下文元数据、长文档检索策略、高�
   `check_prompt_structure.py` 通过；`prompt_comprehension_eval --dry-run`
   31 例通过；全量 `pytest tests/ -q` 1792 通过 / 5 跳过，无回归。
 
-##### 计划 E：Agent 分区和最小充分信息治理（P2）
+##### 计划 E：Agent 分区和最小充分信息治理（P2） ✅
 
 1. 在不合并阶段提示词的前提下，将 Agent 中的 workflow、quality gate、tool protocol
    和 failure budget 改为一致的 XML 分区。
 2. 使用现有体积门禁，先删除重复约束，再根据闭环评测的失败模式增加规则或示例。
-3. 为每个阶段记录“进入条件、输入、输出、完成条件和失败回退”，避免只依赖自然语言
+3. 为每个阶段记录"进入条件、输入、输出、完成条件和失败回退"，避免只依赖自然语言
    中的顺序描述。
 4. 保持阶段提示词延迟注入，避免把只在特定阶段需要的信息提前放入所有请求。
+
+###### 计划 E 完成情况（2026-08-20）
+
+- **统一 XML 分区**：三个 Agent 的核心/常驻 system 均把 workflow、quality gate、
+  tool protocol、failure budget 拆成成对闭合的 XML 分区：
+  - template_gen `agent_system`：`<workflow>`（首回复必带 tool_call、walking
+    skeleton、逐步重编译、finish 时机）、`<quality_gate>`（压缩版，指向
+    validation 阶段注入的详细清单）、`<failure_budget>`、`<tool_protocol>`。
+  - plot_gen `agent_system`：输入数据包为 `<data_profile>` / `<chart_plan>` /
+    `<chart_style>`，规则部分统一 `<style_note>` / `<figure_text_language>` /
+    `<axis_guidance>` / `<layout_rules>` / `<outputs>` / `<tikz_protocol>` /
+    `<workflow>` / `<statistics>` / `<quality_gate>` / `<failure_budget>`。
+  - style_modify `agent_system`：`<project_boundary>` / `<compile_availability>` /
+    `<minimal_edit>` / `<finish_integrity>` / `<workflow>` / `<tool_protocol>`。
+- **阶段契约（stage_contract）**：为每个阶段块（template_gen 的 planning /
+  compile_phase / validation_phase，plot_gen 与 style_modify 的 refine_system）
+  增加 `<stage_contract>`，统一记录 `entry`（进入条件）、`input`（输入）、
+  `output`（输出）、`done`（完成条件）、`fallback`（失败回退），不再只依赖自然
+  语言顺序描述。
+- **去重**：compile_phase 的缺失资源协议删除与核心 system 重复的"禁止创建辅助
+  测试文档"；quality gate 摘要不再完整重复 validation 阶段的详细清单；plot_gen
+  refine 删除被 stage_contract fallback 覆盖的重复修复规则；style_modify 合并
+  finish integrity 中重复的"逐条核对需求"表述与 refine 中重复的编译段落。
+- **体积控制**：分区重构后 `tools/generality_gate.py size` 全部通过：template_gen
+  17597 → 19370、plot_gen 14089 → 14773、style_modify 4940 → 4994（均在预算
+  22000 / 15000 / 5000 内）。style_modify 通过压缩冗余文本抵销分区与阶段契约的
+  增量。
+- **回归**：`tests/test_prompts.py` 新增 7 个计划 E 测试（四分区存在且成对闭合、
+  五阶段块均含 stage_contract 五字段、阶段块内部分区平衡、plot_gen / style_modify
+  分区、编译阶段去重、体积预算仍在预算内）全部通过；`check_prompt_structure.py`
+  通过；`prompt_comprehension_eval --dry-run` 31 例通过；`generality_gate.py size`
+  与 `check --full` 通过；全量 `pytest tests/ -q` 1799 通过 / 5 跳过，无回归。
 
 #### 实施顺序与回归要求
 
