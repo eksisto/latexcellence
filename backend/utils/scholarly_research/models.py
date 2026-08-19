@@ -3,6 +3,24 @@
 from pydantic import BaseModel, Field
 
 
+class FieldProvenance(BaseModel):
+    """字段值的来源与冲突状态。"""
+
+    field: str
+    provider: str
+    value: str = ""
+    conflict: bool = False
+
+
+class WorkVersion(BaseModel):
+    """同一作品的预印本、会议版或正式版。"""
+
+    identifier: str
+    version_type: str = "unknown"
+    provider: str = ""
+    title: str = ""
+
+
 class Author(BaseModel):
     """论文作者及其可追溯身份信息。"""
 
@@ -59,6 +77,13 @@ class ScholarlyWork(BaseModel):
     referenced_works_count: int = 0
     cited_by_count: int = 0
 
+    identifiers: dict[str, str] = Field(default_factory=dict)
+    versions: list[WorkVersion] = Field(default_factory=list)
+    field_provenance: list[FieldProvenance] = Field(default_factory=list)
+    publication_status: str = "unknown"
+    retraction_status: str = "unknown"
+    ranking_explanation: dict[str, float | str] = Field(default_factory=dict)
+
 
 class SearchScholarlyResult(BaseModel):
     """学术作品检索结果。"""
@@ -70,6 +95,7 @@ class SearchScholarlyResult(BaseModel):
     per_page: int = 20
     source: str = "openalex"
     search_time_ms: float = 0.0
+    unsupported_filters: list[str] = Field(default_factory=list)
 
     def format_for_llm(self, max_results: int = 10) -> str:
         items = self.results[:max_results]
@@ -179,6 +205,10 @@ class FullTextResult(BaseModel):
     sections: dict[str, str] = Field(default_factory=dict)
     oa_url: str = ""
     note: str = ""
+    available_sections: list[str] = Field(default_factory=list)
+    missing_sections: list[str] = Field(default_factory=list)
+    extraction_confidence: float = 0.0
+    source_kind: str = "metadata"
 
     def format_for_llm(self) -> str:
         lines = [f"Work ID: {self.work_id}"]

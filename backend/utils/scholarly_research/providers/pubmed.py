@@ -140,6 +140,7 @@ def _build_work_from_pubmed(article: dict[str, Any]) -> ScholarlyWork:
 
 class PubMedProvider(BaseResearchProvider):
     name = "pubmed"
+    capabilities = frozenset({"search", "details", "references", "citations"})
 
     def __init__(self, client: httpx.AsyncClient) -> None:
         self._client = client

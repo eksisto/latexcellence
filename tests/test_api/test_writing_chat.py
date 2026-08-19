@@ -1734,6 +1734,23 @@ class TestWebSearchToolEvent:
         assert final_msgs[0].search_results[1].url == "https://overleaf.com"
         assert final_msgs[0].search_query == "latex 公式写法"
 
+    def test_legacy_chat_message_loads_without_evidence_fields(self):
+        """旧会话 JSON 不含阶段 5 字段时应自动使用空证据集合。"""
+        message = ChatMessage.model_validate(
+            {"id": "legacy", "role": "assistant", "content": "旧回复"}
+        )
+        assert message.evidence_sources == []
+        assert message.page_reads == []
+        assert message.cited_evidence_ids == []
+
+    def test_evidence_citation_validation_accepts_only_known_ids(self):
+        cited, unverified = WritingChatService._validate_evidence_citations(
+            "事实 [EVIDENCE doc#chunk-1] [EVIDENCE forged]",
+            {"doc#chunk-1"},
+        )
+        assert cited == ["doc#chunk-1", "forged"]
+        assert unverified == ["forged"]
+
     @pytest.mark.asyncio
     async def test_send_web_search_no_results(
         self, temp_session_dir, open_project, service, monkeypatch

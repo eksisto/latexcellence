@@ -110,6 +110,9 @@ def _build_work_from_s2(paper: dict[str, Any]) -> ScholarlyWork:
 
 class SemanticScholarProvider(BaseResearchProvider):
     name = "semantic_scholar"
+    capabilities = frozenset(
+        {"search", "details", "references", "citations", "similar"}
+    )
 
     def __init__(self, client: httpx.AsyncClient) -> None:
         self._client = client

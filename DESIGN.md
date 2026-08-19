@@ -79,7 +79,7 @@
 | 参考文献格式识别等可枚举判断 | 确定性规则表优先（文献类型标识、期刊缩写、DOI 前缀、版式特征），LLM 仅兜底并附带规范样例 |
 | LaTeX 项目通常拆分为多个 \input 文件 | `input_resolver.py` 递归展开，按文件分组结果 |
 | 多浏览器同时处理不同项目 | `workspace_manager.py` 隔离各工作区 LatexProject 实例 |
-| 联网搜索 | DuckDuckGo HTML 引擎 + 验证码转发；SearXNG 自建实例 JSON API；Tavily Search API（Bearer API Key）；工具通过 `ToolRegistry` 注册，LLM 自动调用 |
+| 联网搜索 | DuckDuckGo HTML、SearXNG JSON API 与 Tavily Search API；搜索支持 legacy/aggregate 双路径，读页支持 legacy DeepReader、结构化抓取/抽取/缓存；结构化文档按标题切块并通过 BM25/MMR 选择可追溯证据；工具通过 `ToolRegistry` 注册，LLM 自动调用 |
 
 ### 1.3 核心架构组件：BaseParagraphCheckService
 
@@ -583,4 +583,5 @@ Mock 返回值必须符合 Pydantic schema，确保测试的可重复性。
 | 参考文献元数据结构 | 动态 dict（非固定 Pydantic 字段） | 不同格式（GB/T、APA、IEEE）字段集不同，固定模型无法覆盖；`fields: dict[str, str]` 避免字段映射 |
 | 缺失字段检测 | 基于 `raw_observed_fields` 过滤 | 只报告输入中实际出现的必填字段缺失，不报输入中没有的字段（如 abstract），减少误报 |
 | 格式配置持久化 | JSON 文件，文件名由 `format_name` 自动生成 | 无需用户手动命名；合法字符替换为 `-`；支持 CRUD 加载复用 |
-| 联网搜索引擎 | DuckDuckGo HTML + SearXNG JSON API + Tavily Search API | DDG 免费无 API Key，HTTP 202 验证码转发；SearXNG 自建实例通过 `/search?format=json` 获取结果，无验证码；Tavily 通过 `POST /search` 获取结果，需 API Key；工具通过 ToolRegistry 注册，LLM 可自动调用；前端设置页面可切换引擎 |
+| 联网搜索引擎 | DuckDuckGo HTML + SearXNG JSON API + Tavily Search API | `legacy` 保持主引擎串行降级；`aggregate` 在统一截止时间内并发运行可用引擎，失败 lane 返回 `EngineStatus`，成功候选经安全 URL 规范化、近重复抑制、RRF、来源加权和域名上限得到稳定部分结果；显式指定引擎仍走单引擎路径 |
+| 网页读取 | DeepReader + FetchCoordinator/ExtractorRegistry | `page_reading.strategy=legacy` 保留纯文本兼容路径；`structured` 使用公网 HTTPS 策略、原始/抽取缓存、条件请求、MIME 路由、多候选 HTML 质量评分、标题感知切块与 BM25/MMR 证据选择；抽取版本进入缓存键，配置可热重载回滚 |

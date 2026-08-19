@@ -56,6 +56,7 @@ def _build_work_from_datacite(item: dict[str, Any]) -> ScholarlyWork:
 
 class DataCiteProvider(BaseResearchProvider):
     name = "datacite"
+    capabilities = frozenset({"search", "details", "dataset_search"})
 
     def __init__(self, client: httpx.AsyncClient) -> None:
         self._client = client

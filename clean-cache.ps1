@@ -139,13 +139,13 @@ function Remove-PytestTmp {
     }
 }
 
-Write-Host "[1/5] 清理 __pycache__ ..."
+Write-Host "[1/6] 清理 __pycache__ ..."
 Invoke-CleanPattern -Description "__pycache__" -NamePattern "__pycache__" -SearchRoot $Root
 
-Write-Host "[2/5] 清理 *.pyc ..."
+Write-Host "[2/6] 清理 *.pyc ..."
 Invoke-CleanPattern -Description "*.pyc" -NamePattern "*.pyc" -SearchRoot $Root
 
-Write-Host "[3/5] 清理 node_modules/.cache ..."
+Write-Host "[3/6] 清理 node_modules/.cache ..."
 $cache = Join-Path $Root "frontend\node_modules\.cache"
 if (Test-Path -LiteralPath $cache) {
     Remove-CacheItem -Item $cache
@@ -154,10 +154,19 @@ else {
     Write-Host "  --     node_modules/.cache (不存在，跳过)"
 }
 
-Write-Host "[4/5] 清理 .pytest_cache ..."
+Write-Host "[4/6] 清理 .pytest_cache ..."
 Invoke-CleanPattern -Description ".pytest_cache" -NamePattern ".pytest_cache" -SearchRoot $Root
 
-Write-Host "[5/5] 清理 .pytest_tmp（pytest 会话级临时目录）..."
+Write-Host "[5/6] 清理网页抓取缓存 ..."
+$webCache = Join-Path $Root "data\web_cache"
+if (Test-Path -LiteralPath $webCache) {
+    Remove-CacheItem -Item $webCache
+}
+else {
+    Write-Host "  --     data/web_cache (不存在，跳过)"
+}
+
+Write-Host "[6/6] 清理 .pytest_tmp（pytest 会话级临时目录）..."
 Remove-PytestTmp -Target (Join-Path $Root ".pytest_tmp")
 
 Write-Host ""

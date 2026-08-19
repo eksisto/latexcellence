@@ -25,7 +25,7 @@
   - `StyleModifyAgentConfig` 包含项目 Agent 会话目录、轮次、大小、shadow 编译和清理配置
 - `ProjectToolsConfig` / `EditToolsConfig` / `WebSearchConfig` / `ScholarlyResearchConfig` — Function Calling 工具配置
   - `EditToolsConfig` 包含 `require_confirmation`（敏感操作是否需要前端确认弹窗）
-  - `ScholarlyResearchConfig` 包含 OpenAlex 数据源开关、API Key、结果上限与请求超时
+  - `ScholarlyResearchConfig` 包含多 Provider 数据源开关、API Key、结果上限与请求超时，默认启用 OpenAlex
 - `FeaturesConfig` — 功能聚合
 - `LoggingConfig` — 日志配置
 - `HttpConfig` — 外部 HTTP 请求全局配置（user_agent）
@@ -329,10 +329,24 @@ get_tool_registry().register(
 
 | 管理器 | 工具 | 配置路径 | 说明 |
 | --- | --- | --- | --- |
-| `SearchManager` | `web_search` | `features.function_calling.web_search.enabled` | 联网搜索 |
+| `SearchManager` | `web_search` / `open_page` / `find_in_page` / 条件启用的 `read_page_sections` | `features.function_calling.web_search.enabled` | 联网搜索与网页读取 |
 | `ProjectToolsManager` | `list_files` / `read_file_content` / `get_section_structure` / `search_across_files` | `features.function_calling.project_tools.enabled` | 项目文件浏览 |
 | `EditToolsManager` | `edit_paragraph` / `undo_last_edit` | `features.function_calling.edit_tools.enabled` | 段落编辑（敏感操作需用户确认） |
-| `ResearchManager` | 学术检索、详情、关联作品、摘要/OA 定位、数据资源检索 | `features.function_calling.scholarly_research.enabled` | OpenAlex 学术研究 |
+| `ResearchManager` | 学术检索、详情、关联作品、摘要/OA 定位、数据资源检索 | `features.function_calling.scholarly_research.enabled` | 多 Provider 联邦学术研究，默认 OpenAlex |
+
+### SearchManager 聚合策略
+
+`web_search.strategy` 决定搜索运行时：`legacy` 保留主引擎失败后串行降级的既有行为；`aggregate` 将已启用引擎与结构化查询计划的变体组成 lane，在总截止时间内并发执行。每个 lane 返回 `EngineStatus`，单个引擎超时、限流或失败只把响应标为 `partial`，不会丢弃其他引擎的成功结果。连续失败会短时打开进程内熔断器；配置热重载重建 `SearchManager` 时熔断状态随之清空。
+
+聚合候选先通过 `url_utils.py` 仅保留公开 HTTP(S) URL，移除 fragment、默认端口和常见跟踪参数，并拒绝凭据、私网地址及非标准私网 IP 写法。`ranking.py` 合并规范 URL和近重复文本，记录各 lane 原始名次与来源，再按 RRF、跨引擎共识、来源类型权重排序，并应用单域名结果上限。`ranking.mode=legacy` 可保留聚合 lane 的稳定旧版顺序；显式传入 `engine_name` 始终绕过聚合，提供单引擎兼容路径。
+
+查询重写由 `SearchQueryPlanner` 生成 `SearchQueryPlan`，LLM JSON 必须经过 `retry_with_validation()` 和 Pydantic 严格校验。重试耗尽或 LLM 不可用时使用只保留原查询的规则计划，搜索本身仍可继续。
+
+### 结构化网页读取
+
+`web_search.page_reading.strategy=structured` 时，`page_reader.py` 编排 `fetch/` 与 `extract/`：`FetchCoordinator` 只访问公网 HTTPS，逐跳复核重定向，限制响应大小，并通过阻断检测、域名调度、`Retry-After`、退避和熔断返回带诊断信息的 `FetchFailure`；原始缓存使用 URL 哈希键，只保存正文及 ETag、Last-Modified、Content-Type 等安全元数据。新鲜条目直接命中，过期条目发送条件请求。抽取缓存键包含内容 hash 与 `extractor_version`，算法版本变化会自然失效。启用浏览器回退时，JavaScript shell 或低质量 HTTP 页面进入隔离的 Playwright context；导航和子资源继续执行 SSRF 校验，登录、验证码、挑战和付费墙只返回明确阻断状态。网页读取处于 `structured` 时，`read_page_sections` 工具注册并可用；切回 `legacy` 后 `open_page` / `find_in_page` 继续使用 DeepReader，`read_page_sections` 不注册。
+
+ExtractorRegistry 先处理已知公开端点（当前代码托管页面使用 GitHub 官方 raw 端点），再按 MIME 分派。HTML 抽取比较语义 DOM 与 Trafilatura 候选，通过确定性质量分选优；`ContentBlock` 保留块类型、标题路径、链接和稳定块 ID，`DocumentSection` 构成大纲。`chunking.py` 不拆散普通块，先用 BM25 召回，再用 MMR 抑制重复，并把 block ID 写入 `EvidenceChunk`。CPU 密集型解析通过 `asyncio.to_thread()` 执行。切回 `legacy` 后 `open_page` / `find_in_page` 继续使用 DeepReader，`read_page_sections` 不注册。
 
 **注意事项**：
 
@@ -355,11 +369,11 @@ get_tool_registry().register(
 
 ## 后端工具模块
 
-### `scholarly_research/` — OpenAlex 学术研究
+### `scholarly_research/` — 多 Provider 学术研究
 
-`models.py` 定义统一的作者、主题、作品和结果模型；`base.py` 定义可插拔数据源接口；`manager.py` 实现 OpenAlex 请求、元数据映射、去重、引文追踪和 Function Calling 注册。共享 `httpx.AsyncClient` 在 FastAPI lifespan 中创建和关闭，方法内实时读取超时、结果上限和 API Key 配置。
+`models.py` 定义统一的作者、主题、作品和结果模型；`base.py` 定义可插拔数据源接口；`manager.py` 并发调用启用的 Provider，执行去重、排序、详情/关联作品降级和 Function Calling 注册。`providers/` 包含 OpenAlex、Semantic Scholar、Crossref、arXiv、CORE、Unpaywall、PubMed 与 DataCite 适配器；默认只启用 OpenAlex。共享 `httpx.AsyncClient` 在 FastAPI lifespan 中创建和关闭，方法内实时读取超时、结果上限、Provider 开关和 API Key 配置。
 
-检索支持主题、年份、作者、作品类型与排序；作者姓名先解析为稳定 Author ID。引用该论文的工作通过 `filter=cites:<OpenAlex ID>` 查询，参考文献和相似工作根据 OpenAlex 提供的 ID 列表批量获取。当前 `get_full_text_or_sections` 仅返回 OpenAlex 摘要和开放获取链接。
+检索支持主题、年份、作者、作品类型与排序；各 Provider 把请求映射到自身 API，结果按稳定标识符或题名年份关联。`ranking_mode=legacy` 保留 Provider 顺序兼容排序，`rrf` 启用跨源 RRF、版本族与字段溯源；`full_text_enabled=false` 只返回摘要和开放获取定位，启用后通过结构化页面读取器返回实际获得的章节及缺失状态。灰度和回滚流程见 [网络访问灰度与运维](web-access-operations.md)。
 
 ### `file_ops.py` — 文件安全操作与撤销栈
 

@@ -44,7 +44,7 @@
 | 模块 | 文档 | 说明 |
 | --- | --- | --- |
 | 联网搜索 | [web_search.md](modules/web_search.md) | 多引擎搜索 + Function Calling |
-| 学术研究 | [function-calling-tools.md](function-calling-tools.md) 与 [backend-core.md](backend-core.md) | OpenAlex 论文检索、详情、引文追踪与开放获取定位（`ResearchManager` 工具，写作助手内集成） |
+| 学术研究 | [function-calling-tools.md](function-calling-tools.md) 与 [backend-core.md](backend-core.md) | 多 Provider 联邦检索、详情、引文追踪与开放获取定位（默认启用 OpenAlex，`ResearchManager` 工具，写作助手内集成） |
 | 项目文件浏览 | [function-calling-tools.md](function-calling-tools.md) | LLM 浏览工具（list_files / read_file_content / get_section_structure / search_across_files），让 LLM 浏览项目结构和文件内容 |
 | 段落编辑 | [function-calling-tools.md](function-calling-tools.md) | LLM 编辑工具（edit_paragraph / undo_last_edit），允许 LLM 直接修改 .tex 文件内容 |
 
@@ -107,6 +107,6 @@ bib_manager 的 DOI 查询模块和 web_search 模块共享类似的**可插拔 
 | pandoc | format_converter |
 | git | git_diff |
 | OpenAI 兼容 API | 大部分 LLM 模块 |
-| Crossref / DataCite / OpenAlex / Europe PMC / Semantic Scholar API | bib_manager（DOI 查询数据源）与 writing_chat（OpenAlex 学术研究） |
+| Crossref / DataCite / OpenAlex / Europe PMC / Semantic Scholar 等 API | bib_manager（DOI 查询数据源）与 writing_chat（多 Provider 学术研究） |
 | arXiv API | bib_manager（预印本查询） |
 | DuckDuckGo HTML / SearXNG / Tavily API | web_search（联网搜索） |

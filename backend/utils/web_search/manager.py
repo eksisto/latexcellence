@@ -1,27 +1,39 @@
 """搜索管理器 — 统一管理引擎注册、优先级、降级与健康检查。"""
 
 import asyncio
+import hashlib
 import time
 from typing import Any
-from urllib.parse import urlparse, urlunparse
 
 from backend.core.config import get_config
 from backend.core.logger import get_logger
 from backend.utils.time_utils import get_current_time_context
 from backend.utils.web_search.base import BaseSearchEngine
 from backend.utils.web_search.deep_read import get_deep_reader
+from backend.utils.web_search.page_reader import get_structured_page_reader
 from backend.utils.web_search.engines.ddg import DDGChallengeError, DuckDuckGoHtmlEngine
 from backend.utils.web_search.engines.searxng import SearXNGEngine
 from backend.utils.web_search.engines.tavily import TavilyEngine
 from backend.utils.web_search.models import (
     FindInPageResult,
+    EngineStatus,
     PageReadResult,
     SearchResponse,
     SearchResult,
 )
+
 from backend.utils.web_search.query_rewriter import QueryRewriter
+from backend.utils.web_search.ranking import rank_responses
+from backend.utils.web_search.url_utils import canonicalize_url
 
 _FIND_IN_PAGE_MAX_CHARS = 200_000  # find_in_page 内部搜索上限（不暴露给 LLM）
+
+
+def _anonymize(query: str, _length: int = 8) -> str:
+    """将查询截断并附加短哈希，用于日志脱敏。"""
+    digest = hashlib.sha256(query.encode()).hexdigest()[:_length]
+    truncated = query[:20] + ("…" if len(query) > 20 else "")
+    return f"{truncated} [{digest}]"
 
 
 def _clamp_int(value: Any, default: int, low: int, high: int) -> int:
@@ -33,22 +45,8 @@ def _clamp_int(value: Any, default: int, low: int, high: int) -> int:
     return max(low, min(high, n))
 
 
-def _normalize_url(url: str) -> str:
-    """URL 去规范化（去 fragment、小写 scheme/host、去尾部斜杠），用于去重。"""
-    try:
-        p = urlparse(url)
-        return urlunparse(
-            (
-                p.scheme.lower(),
-                p.netloc.lower(),
-                p.path.rstrip("/") or "/",
-                "",
-                "",
-                "",
-            )
-        )
-    except Exception:
-        return url
+_CIRCUIT_FAILURE_THRESHOLD = 3
+_CIRCUIT_COOLDOWN_SECONDS = 30.0
 
 
 class SearchManager:
@@ -65,6 +63,8 @@ class SearchManager:
         self._engines: list[BaseSearchEngine] = []
         self._primary: BaseSearchEngine | None = None
         self._logger = get_logger("web_search")
+        self._engine_failures: dict[str, int] = {}
+        self._circuit_open_until: dict[str, float] = {}
 
     def register_engine(self, engine: BaseSearchEngine, primary: bool = False) -> None:
         """注册搜索引擎。primary=True 时设为主引擎。"""
@@ -118,6 +118,15 @@ class SearchManager:
                 )
             return await self._search_with_engine(engine, query, max_results)
 
+        strategy = cfg.features.function_calling.web_search.strategy
+        if strategy == "aggregate":
+            return await self._search_aggregate([query], max_results)
+
+        return await self._search_legacy(query, max_results)
+
+    async def _search_legacy(self, query: str, max_results: int) -> SearchResponse:
+        """Run the compatibility search path used for rollback."""
+
         # 使用主引擎 + 降级
         if self._primary:
             try:
@@ -158,7 +167,25 @@ class SearchManager:
         if max_results is None:
             max_results = cfg.features.function_calling.web_search.max_results
 
-        tasks = [self.search(q, max_results) for q in queries]
+        strategy = cfg.features.function_calling.web_search.strategy
+        if strategy == "aggregate":
+            capped_queries = queries[
+                : cfg.features.function_calling.web_search.max_parallel_queries
+            ]
+            result = await self._search_aggregate(capped_queries, max_results)
+            result.query = " | ".join(capped_queries)
+            result.rewritten_queries = capped_queries
+            return result
+
+        return await self._search_multi_legacy(queries, max_results)
+
+    async def _search_multi_legacy(
+        self, queries: list[str], max_results: int, *, direct: bool = False
+    ) -> SearchResponse:
+        """Merge legacy multi-query responses."""
+        search = self._search_legacy if direct else self.search
+        tasks = [search(q, max_results) for q in queries]
+
         responses = await asyncio.gather(*tasks, return_exceptions=True)
 
         seen_urls: set[str] = set()
@@ -172,7 +199,7 @@ class SearchManager:
         all_results: list[SearchResult] = []
         for resp in merged:
             for r in resp.results:
-                key = _normalize_url(r.url)
+                key = canonicalize_url(r.url) or r.url
                 if key not in seen_urls:
                     seen_urls.add(key)
                     all_results.append(r)
@@ -186,6 +213,215 @@ class SearchManager:
             total_results=len(all_results),
         )
 
+    async def _search_aggregate(
+        self, queries: list[str], max_results: int
+    ) -> SearchResponse:
+        """在总截止时间内并发执行所有引擎 lane，并确定性合并部分结果。"""
+        cfg = get_config().features.function_calling.web_search
+        started = time.monotonic()
+        lane_specs = [
+            (f"{engine.name}:{query_index}", engine, query)
+            for query_index, query in enumerate(queries)
+            for engine in self._engines
+        ]
+        outcomes: dict[
+            int, tuple[EngineStatus, SearchResponse | None, Exception | None]
+        ] = {}
+        tasks: dict[asyncio.Task, int] = {}
+
+        for index, (_lane_name, engine, query) in enumerate(lane_specs):
+            if self._is_circuit_open(engine.name):
+                outcomes[index] = (
+                    EngineStatus(
+                        engine=engine.name,
+                        query=query,
+                        status="error",
+                        elapsed_ms=0,
+                        result_count=0,
+                        retryable=True,
+                        error_code="circuit_open",
+                        circuit_open=True,
+                    ),
+                    None,
+                    None,
+                )
+                continue
+            task = asyncio.create_task(
+                self._run_aggregate_lane(
+                    engine, query, max_results, cfg.per_engine_timeout_seconds
+                )
+            )
+            tasks[task] = index
+
+        if tasks:
+            done, pending = await asyncio.wait(
+                tasks,
+                timeout=cfg.overall_timeout_seconds,
+            )
+            for task in done:
+                outcomes[tasks[task]] = task.result()
+            for task in pending:
+                task.cancel()
+            if pending:
+                await asyncio.gather(*pending, return_exceptions=True)
+                elapsed_ms = (time.monotonic() - started) * 1000
+                for task in pending:
+                    index = tasks[task]
+                    _lane_name, engine, query = lane_specs[index]
+                    outcomes[index] = (
+                        EngineStatus(
+                            engine=engine.name,
+                            query=query,
+                            status="timeout",
+                            elapsed_ms=elapsed_ms,
+                            result_count=0,
+                            retryable=True,
+                            error_code="overall_timeout",
+                        ),
+                        None,
+                        None,
+                    )
+
+        statuses = [outcomes[index][0] for index in range(len(lane_specs))]
+        self._update_circuits(statuses)
+        blocked = [
+            outcome[2]
+            for outcome in outcomes.values()
+            if isinstance(outcome[2], DDGChallengeError)
+        ]
+        lanes = [
+            (lane_specs[index][0], outcome[1])
+            for index, outcome in sorted(outcomes.items())
+            if outcome[1] is not None
+        ]
+        if not lanes and blocked:
+            raise blocked[0]
+
+        candidates, _valid_count = rank_responses(
+            lanes,
+            mode=cfg.ranking.mode,
+            domain_result_cap=cfg.domain_result_cap,
+            source_type_boosts=cfg.ranking.source_type_boosts,
+        )
+        source_results = {
+            canonical: result
+            for _lane, response in lanes
+            for result in response.results
+            if (canonical := canonicalize_url(result.url)) is not None
+        }
+        results = [
+            SearchResult(
+                title=candidate.title,
+                snippet=candidate.snippet,
+                url=candidate.url,
+                source=",".join(candidate.transport_sources),
+                full_content=source_results[candidate.canonical_url].full_content,
+            )
+            for candidate in candidates[:max_results]
+        ]
+        engines = sorted(
+            {status.engine for status in statuses if status.status in {"ok", "empty"}}
+        )
+        answers = [response.answer for _lane, response in lanes if response.answer]
+        return SearchResponse(
+            query=" | ".join(queries),
+            results=results,
+            engine=",".join(engines),
+            total_results=len(candidates),
+            search_time_ms=(time.monotonic() - started) * 1000,
+            answer=answers[0] if answers else "",
+            strategy="aggregate",
+            partial=any(status.status not in {"ok", "empty"} for status in statuses),
+            engine_statuses=statuses,
+            candidates=candidates[:max_results],
+        )
+
+    async def _run_aggregate_lane(
+        self,
+        engine: BaseSearchEngine,
+        query: str,
+        max_results: int,
+        timeout_seconds: float,
+    ) -> tuple[EngineStatus, SearchResponse | None, Exception | None]:
+        started = time.monotonic()
+        try:
+            response = await asyncio.wait_for(
+                self._search_with_engine(engine, query, max_results),
+                timeout=timeout_seconds,
+            )
+            status = "ok" if response.results else "empty"
+            return (
+                EngineStatus(
+                    engine=engine.name,
+                    query=query,
+                    status=status,
+                    elapsed_ms=(time.monotonic() - started) * 1000,
+                    result_count=len(response.results),
+                    retryable=False,
+                ),
+                response,
+                None,
+            )
+        except Exception as exc:
+            state, code, retryable = self._classify_engine_error(exc)
+            return (
+                EngineStatus(
+                    engine=engine.name,
+                    query=query,
+                    status=state,
+                    elapsed_ms=(time.monotonic() - started) * 1000,
+                    result_count=0,
+                    retryable=retryable,
+                    error_code=code,
+                    circuit_open=self._is_circuit_open(engine.name),
+                ),
+                None,
+                exc,
+            )
+
+    @staticmethod
+    def _classify_engine_error(exc: Exception) -> tuple[str, str, bool]:
+        if isinstance(exc, asyncio.TimeoutError):
+            return "timeout", "engine_timeout", True
+        if isinstance(exc, DDGChallengeError):
+            return "blocked", "challenge_required", True
+        status_code = getattr(exc, "status_code", None)
+        if status_code == 429 or "rate limit" in str(exc).casefold():
+            return "rate_limited", "rate_limited", True
+        return "error", "engine_error", True
+
+    def _is_circuit_open(self, engine_name: str) -> bool:
+        return self._circuit_open_until.get(engine_name, 0.0) > time.monotonic()
+
+    def _record_engine_success(self, engine_name: str) -> None:
+        self._engine_failures[engine_name] = 0
+        self._circuit_open_until.pop(engine_name, None)
+
+    def _record_engine_failure(self, engine_name: str) -> None:
+        failures = self._engine_failures.get(engine_name, 0) + 1
+        self._engine_failures[engine_name] = failures
+        if failures >= _CIRCUIT_FAILURE_THRESHOLD:
+            self._circuit_open_until[engine_name] = (
+                time.monotonic() + _CIRCUIT_COOLDOWN_SECONDS
+            )
+
+    def _update_circuits(self, statuses: list[EngineStatus]) -> None:
+        """按一次聚合请求统一结算引擎健康，避免并发 lane 完成顺序影响状态。"""
+        engine_names = dict.fromkeys(status.engine for status in statuses)
+        for engine_name in engine_names:
+            engine_statuses = [
+                status for status in statuses if status.engine == engine_name
+            ]
+            if any(status.status in {"ok", "empty"} for status in engine_statuses):
+                self._record_engine_success(engine_name)
+            elif not all(
+                status.error_code == "circuit_open" for status in engine_statuses
+            ):
+                self._record_engine_failure(engine_name)
+            circuit_open = self._is_circuit_open(engine_name)
+            for status in engine_statuses:
+                status.circuit_open = circuit_open
+
     async def _search_with_engine(
         self, engine: BaseSearchEngine, query: str, max_results: int
     ) -> SearchResponse:
@@ -195,9 +431,13 @@ class SearchManager:
         elapsed_ms = (time.monotonic() - start) * 1000
         result.search_time_ms = elapsed_ms
         result.engine = engine.name
+
         self._logger.info(
-            f"Search completed | engine={engine.name} | query={query[:50]} | "
-            f"results={result.total_results} | time={elapsed_ms:.0f}ms"
+            "Search completed | engine=%s | query_hash=%s | results=%s | time=%.0fms",
+            engine.name,
+            _anonymize(query),
+            result.total_results,
+            elapsed_ms,
         )
         return result
 
@@ -314,7 +554,55 @@ class SearchManager:
                 },
             },
         }
-        return [web_search_schema, open_page_schema, find_in_page_schema]
+        structured_reading = (
+            get_config().features.function_calling.web_search.page_reading.strategy
+            == "structured"
+        )
+        if structured_reading:
+            open_page_schema["function"]["parameters"]["properties"].update(
+                {
+                    "mode": {
+                        "type": "string",
+                        "enum": ["outline", "relevant", "full"],
+                        "default": "outline",
+                        "description": "outline returns metadata; relevant selects evidence for query; full returns bounded text.",
+                    },
+                    "query": {
+                        "type": "string",
+                        "description": "Question used to select relevant evidence when mode is relevant.",
+                    },
+                }
+            )
+        read_sections_schema = {
+            "type": "function",
+            "function": {
+                "name": "read_page_sections",
+                "description": "Read specific section IDs returned by open_page outline mode.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "url": {"type": "string"},
+                        "section_ids": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                            "minItems": 1,
+                            "maxItems": 10,
+                        },
+                        "max_chars": {
+                            "type": "integer",
+                            "default": 10000,
+                            "minimum": 500,
+                            "maximum": 20000,
+                        },
+                    },
+                    "required": ["url", "section_ids"],
+                },
+            },
+        }
+        schemas = [web_search_schema, open_page_schema, find_in_page_schema]
+        if structured_reading:
+            schemas.insert(2, read_sections_schema)
+        return schemas
 
 
 # ── 全局单例 ────────────────────────────────────────────────────────────────
@@ -378,13 +666,54 @@ async def _open_page_executor(
     if not url:
         return PageReadResult(url="", error="Missing required argument: url")
     cfg = get_config()
-    reader = get_deep_reader()
     max_chars = _clamp_int(
         arguments.get("max_chars"),
         cfg.features.function_calling.web_search.deep_read_max_chars,
         500,
         20000,
     )
+    strategy = cfg.features.function_calling.web_search.page_reading.strategy
+    if strategy == "structured":
+        return await _open_page_structured(url, arguments, max_chars)
+    return await _open_page_legacy(url, max_chars)
+
+
+async def _open_page_structured(
+    url: str, arguments: dict[str, Any], max_chars: int
+) -> PageReadResult:
+    """Read a page through the v2 structured extraction path."""
+    reader = await get_structured_page_reader()
+    mode = arguments.get("mode", "outline")
+    if mode not in {"outline", "relevant", "full"}:
+        mode = "outline"
+    document, evidence, content, failure, cache_hit = await reader.read(
+        url, mode=mode, query=str(arguments.get("query", "")), max_chars=max_chars
+    )
+    if document is None:
+        return PageReadResult(
+            url=url,
+            error=failure.message if failure else "Page read failed",
+            error_code=failure.code if failure else "page_read_failed",
+        )
+    return PageReadResult(
+        url=document.url,
+        title=document.title,
+        content=content,
+        document_id=document.document_id,
+        outline=[section.model_dump() for section in document.outline],
+        evidence=[item.model_dump() for item in evidence],
+        extraction_strategy=document.extraction_strategy,
+        quality=document.quality,
+        cache_hit=cache_hit,
+        partial=failure is not None,
+        error_code=failure.code if failure else "",
+    )
+
+
+async def _open_page_legacy(url: str, max_chars: int) -> PageReadResult:
+    """Read a page through DeepReader for compatibility output."""
+    cfg = get_config()
+    reader = get_deep_reader()
     title, content = await reader.fetch_page(
         url,
         max_chars=max_chars,
@@ -395,6 +724,51 @@ async def _open_page_executor(
             url=url, error="Page could not be fetched or has no extractable text"
         )
     return PageReadResult(url=url, title=title, content=content)
+
+
+async def _read_page_sections_executor(
+    tool_name: str, arguments: dict[str, Any]
+) -> PageReadResult:
+    """Read selected structured section IDs from a previously outlined page."""
+    url = str(arguments.get("url", "")).strip()
+    section_ids = [
+        str(value).strip()
+        for value in arguments.get("section_ids", [])
+        if str(value).strip()
+    ]
+    if not url or not section_ids:
+        return PageReadResult(
+            url=url, error="Missing required arguments: url and section_ids"
+        )
+    max_chars = _clamp_int(arguments.get("max_chars"), 10000, 500, 20000)
+    (
+        document,
+        evidence,
+        content,
+        failure,
+        cache_hit,
+    ) = await (
+        await get_structured_page_reader()
+    ).read(url, max_chars=max_chars, section_ids=section_ids[:10])
+    if document is None:
+        return PageReadResult(
+            url=url,
+            error=failure.message if failure else "Page read failed",
+            error_code=failure.code if failure else "page_read_failed",
+        )
+    return PageReadResult(
+        url=document.url,
+        title=document.title,
+        content=content,
+        document_id=document.document_id,
+        outline=[section.model_dump() for section in document.outline],
+        evidence=[item.model_dump() for item in evidence],
+        extraction_strategy=document.extraction_strategy,
+        quality=document.quality,
+        cache_hit=cache_hit,
+        partial=failure is not None,
+        error_code=failure.code if failure else "",
+    )
 
 
 async def _find_in_page_executor(
@@ -410,6 +784,36 @@ async def _find_in_page_executor(
             error="Missing required arguments: url and query",
         )
     cfg = get_config()
+    if cfg.features.function_calling.web_search.page_reading.strategy == "structured":
+        (
+            document,
+            evidence,
+            _content,
+            failure,
+            _cache_hit,
+        ) = await (
+            await get_structured_page_reader()
+        ).read(url, mode="relevant", query=query, max_chars=_FIND_IN_PAGE_MAX_CHARS)
+        if document is None:
+            return FindInPageResult(
+                url=url,
+                query=query,
+                error=failure.message if failure else "Page read failed",
+                error_code=failure.code if failure else "page_read_failed",
+            )
+        return FindInPageResult(
+            url=document.url,
+            query=query,
+            matches=[
+                item.text[: _clamp_int(arguments.get("context_chars"), 600, 50, 2000)]
+                for item in evidence[
+                    : _clamp_int(arguments.get("max_matches"), 5, 1, 20)
+                ]
+            ],
+            document_id=document.document_id,
+            evidence=[item.model_dump() for item in evidence],
+            error_code=failure.code if failure else "",
+        )
     reader = get_deep_reader()
     # 先确认页面可抓取，避免"抓取失败"被误报为"无匹配"
     _title, content = await reader.fetch_page(
@@ -486,9 +890,12 @@ def get_search_manager() -> SearchManager:
         from backend.core.tool_registry import get_tool_registry
 
         registry = get_tool_registry()
+        # A structured -> legacy hot reload must hide this structured-only tool.
+        registry.set_enabled("read_page_sections", False)
         executors = {
             "web_search": _web_search_executor,
             "open_page": _open_page_executor,
+            "read_page_sections": _read_page_sections_executor,
             "find_in_page": _find_in_page_executor,
         }
         for schema in _search_manager.get_tools_schema():

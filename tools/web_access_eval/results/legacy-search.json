@@ -1,0 +1,193 @@
+{
+  "schema_version": 1,
+  "suite": "search",
+  "system": "legacy",
+  "cases": [
+    {
+      "case_id": "search-official-fastapi-lifespan",
+      "results": [
+        {
+          "url": "https://fastapi.tiangolo.com/reference/fastapi",
+          "canonical_url": "",
+          "title": "FastAPI class"
+        },
+        {
+          "url": "https://www.getorchestra.io/guides/tutorial-understanding-and-using-fastapi-lifespan-events",
+          "canonical_url": "",
+          "title": "Tutorial: Understanding and Using FastAPI Lifespan Events | Orchestra"
+        },
+        {
+          "url": "https://www.reddit.com/r/FastAPI/comments/1mq7ed8/lifespan_on_fastapi",
+          "canonical_url": "",
+          "title": "Lifespan on Fastapi"
+        },
+        {
+          "url": "https://www.logiclooptech.dev/fastapi-lifespan-vs-startup-events",
+          "canonical_url": "",
+          "title": "FastAPI lifespan docs - replace deprecated @app.on_event · LogicLoopTech"
+        },
+        {
+          "url": "https://github.com/uriyyo/fastapi-lifespan-manager",
+          "canonical_url": "",
+          "title": "GitHub - uriyyo/fastapi-lifespan-manager: FastAPI LifespanManager 🧑‍⚖️ · GitHub"
+        },
+        {
+          "url": "https://github.com/fastapi/fastapi/discussions/11017",
+          "canonical_url": "",
+          "title": "Example code for lifespan doesn't work, scope issue? · fastapi/fastapi · Discussion #11017 · GitHub"
+        },
+        {
+          "url": "https://medium.com/@life-is-short-so-enjoy-it/fastapi-experiment-lifespan-feature-7f87de5601db",
+          "canonical_url": "",
+          "title": "FastAPI: experiment lifespan feature"
+        },
+        {
+          "url": "https://fastapi.tiangolo.com/advanced/testing-events",
+          "canonical_url": "",
+          "title": "Testing Events: lifespan and startup - shutdown - FastAPI"
+        },
+        {
+          "url": "https://vercel.com/changelog/fastapi-lifespan-events-are-now-supported-on-vercel",
+          "canonical_url": "",
+          "title": "FastAPI Lifespan Events are now supported on Vercel - Vercel"
+        },
+        {
+          "url": "https://www.youtube.com/watch?v=Y50PCj5DkRU",
+          "canonical_url": "",
+          "title": "Python FastAPI Tutorial #47  Lifespan Events Context Manager Tutorial 🚀"
+        },
+        {
+          "url": "https://fastapi.tiangolo.com/advanced/events",
+          "canonical_url": "",
+          "title": "Lifespan Events - FastAPI"
+        },
+        {
+          "url": "https://www.youtube.com/watch?v=NYY6JeqS5h0",
+          "canonical_url": "",
+          "title": "FastAPI Lifespan Events: The Right Way to Handle Startup & Shutdown"
+        },
+        {
+          "url": "https://medium.com/@marcnealer/fastapi-after-the-getting-started-867ecaa99de9",
+          "canonical_url": "",
+          "title": "FastAPI: After the Getting Started"
+        },
+        {
+          "url": "https://stackoverflow.com/questions/77362216/add-startup-shutdown-handlers-to-fastapi-app-with-lifespan-api",
+          "canonical_url": "",
+          "title": "python - Add startup/shutdown handlers to FastAPI app ..."
+        }
+      ],
+      "latency_ms": 9047.599400000763,
+      "engine_failures": {},
+      "measurement_gaps": ["legacy_manager_does_not_expose_per_engine_failures"]
+    },
+    {
+      "case_id": "search-zh-python-pathlib",
+      "results": [
+        {
+          "url": "https://zhuanlan.zhihu.com/p/1949029854323380690",
+          "canonical_url": "",
+          "title": "还在用os.path 做文件路径拼接？Python 官方推荐的Pathlib 才是 ..."
+        },
+        {
+          "url": "https://cloud.tencent.com/developer/article/2333946",
+          "canonical_url": "",
+          "title": "pathlib：Python面向对象的文件路径处理-腾讯云开发者社区-腾讯云"
+        },
+        {
+          "url": "https://blog.csdn.net/weixin_30678347/article/details/112698129",
+          "canonical_url": "",
+          "title": "拼接路径优雅方式_pathlib介绍-比os.path更好的路径处理方式原创"
+        },
+        {
+          "url": "https://www.cnblogs.com/guyuyun/p/18117563",
+          "canonical_url": "",
+          "title": "Python内置库：pathlib（文件路径操作） - 山上下了雪-bky - 博客园"
+        },
+        {
+          "url": "https://docs.python.org/3/library/pathlib.html",
+          "canonical_url": "",
+          "title": "pathlib — Object-oriented filesystem paths — Python 3.14.7 documentation"
+        },
+        {
+          "url": "https://pathlib.readthedocs.io",
+          "canonical_url": "",
+          "title": "pathlib — pathlib 1.0.1 documentation"
+        },
+        {
+          "url": "https://realpython.com/python-pathlib",
+          "canonical_url": "",
+          "title": "Python's pathlib Module: Taming the File System – Real Python"
+        },
+        {
+          "url": "https://switowski.com/blog/pathlib",
+          "canonical_url": "",
+          "title": "Pathlib for Path Manipulations"
+        },
+        {
+          "url": "https://medium.com/@favourphilic/a-simple-guide-to-pathlib-python-8c6d8fc3061",
+          "canonical_url": "",
+          "title": "A simple Guide to Pathlib Module"
+        },
+        {
+          "url": "https://nhsdigital.github.io/rap-community-of-practice/training_resources/python/handling-file-paths",
+          "canonical_url": "",
+          "title": "Handling file paths - RAP Community of Practice"
+        },
+        {
+          "url": "https://www.geeksforgeeks.org/python/pathlib-module-in-python",
+          "canonical_url": "",
+          "title": "Pathlib Module in Python - GeeksforGeeks"
+        },
+        {
+          "url": "https://stackoverflow.com/questions/61321503/is-there-a-pathlib-alternate-for-os-path-join",
+          "canonical_url": "",
+          "title": "Is there a Pathlib alternate for os.path.join? - Stack Overflow"
+        },
+        {
+          "url": "https://chwang12341.medium.com/coding%E8%B5%B7%E4%BE%86-python-pathlib%E6%A8%A1%E7%B5%84-%E5%BF%AB%E4%BE%86%E5%AD%B8%E7%BF%92%E8%B6%85%E5%A5%BD%E7%94%A8%E7%9A%84%E6%AA%94%E6%A1%88%E8%88%87%E8%B3%87%E6%96%99%E5%A4%BE%E6%93%8D%E4%BD%9C%E6%A8%A1%E7%B5%84-9b4cdd0187da",
+          "canonical_url": "",
+          "title": "Coding起來— Python pathlib模組— 快來學習超好用的檔案與資料夾操作模組"
+        },
+        {
+          "url": "https://treyhunner.com/2019/01/no-really-pathlib-is-great",
+          "canonical_url": "",
+          "title": "No really, pathlib is great"
+        },
+        {
+          "url": "https://www.w3schools.com/python/ref_module_pathlib.asp",
+          "canonical_url": "",
+          "title": "Python pathlib Module"
+        },
+        {
+          "url": "https://www.youtube.com/watch?v=yxa-DJuuTBI",
+          "canonical_url": "",
+          "title": "Python Tutorial: Pathlib - The Modern Way to Handle File Paths"
+        },
+        {
+          "url": "https://www.reddit.com/r/Python/comments/1guhphv/using_pythons_pathlib_module",
+          "canonical_url": "",
+          "title": "Using Python's pathlib module - Reddit"
+        },
+        {
+          "url": "https://dzdata.medium.com/pathlib-a-better-way-to-work-with-paths-in-python-4f24dea14fab",
+          "canonical_url": "",
+          "title": "Medium"
+        },
+        {
+          "url": "https://zhuanlan.zhihu.com/p/1962109569724572942",
+          "canonical_url": "",
+          "title": "Python 文件路径处理：os vs pathlib 完全指南 - 知乎专栏"
+        },
+        {
+          "url": "https://stackoverflow.com/questions/39894698/path-manipulation-in-python",
+          "canonical_url": "",
+          "title": "Path manipulation in python - Stack Overflow"
+        }
+      ],
+      "latency_ms": 9219.57160000602,
+      "engine_failures": {},
+      "measurement_gaps": ["legacy_manager_does_not_expose_per_engine_failures"]
+    }
+  ]
+}

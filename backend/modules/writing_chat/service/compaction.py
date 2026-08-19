@@ -47,7 +47,17 @@ class CompactionMixin:
             if m.role == "assistant" and m.tool_calls:
                 continue
             role = "summary" if m.role == "summary" else m.role
-            parts.append(f"[{role.upper()}]\n{m.content or ''}")
+            content = m.content or ""
+            if m.evidence_sources:
+                evidence_lines = ["[PRESERVED WEB EVIDENCE]"]
+                for item in m.evidence_sources:
+                    evidence_lines.append(
+                        f"[EVIDENCE {item.evidence_id}] {item.title} | "
+                        f"{item.source_url} | {' > '.join(item.heading_path)}\n"
+                        f"{item.text}"
+                    )
+                content += "\n\n" + "\n".join(evidence_lines)
+            parts.append(f"[{role.upper()}]\n{content}")
         return "\n\n".join(parts)
 
     def _fallback_compact(self, ctx: ConversationContext) -> bool:

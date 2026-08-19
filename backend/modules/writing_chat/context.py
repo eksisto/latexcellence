@@ -40,6 +40,10 @@ _NOPROJECT_SCOPE = "_noproject"
 _SCOPE_RE = re.compile(r"^[A-Za-z0-9_-]+$")
 _ID_PART_RE = re.compile(r"^[A-Za-z0-9_-]+$")
 
+# list_sessions() 文件级元数据缓存：path -> (mtime, meta_dict)
+# 仅缓存轻量字段（不含 messages），由 save/delete 操作主动失效。
+_session_meta_cache: dict[str, tuple[float, dict[str, Any]]] = {}
+
 
 def compute_scope(project_root_path: str) -> str:
     """将项目根路径哈希为稳定的 scope 标识符。"""
@@ -186,11 +190,13 @@ class ConversationContext:
         }
         path = self._session_path(self.session_id)
         atomic_write(path, json.dumps(data, ensure_ascii=False, indent=2))
+        _session_meta_cache.pop(str(path), None)
 
     def delete_from_disk(self) -> bool:
         path = self._session_path(self.session_id)
         if path.exists():
             path.unlink()
+            _session_meta_cache.pop(str(path), None)
             return True
         return False
 
@@ -199,10 +205,12 @@ class ConversationContext:
         """
         列出持久化会话的元信息，按 last_updated_at 降序。
 
-        参数：
+        使用文件 mtime 缓存避免每次调用都解析全部 JSON；仅在文件修改时间
+        变化时重新读取。参数：
             scope: 为 "" 时列出所有 scope 下的会话；
                    非空时仅列出该 scope 下的会话。
         """
+        global _session_meta_cache
         metas: list[dict[str, Any]] = []
 
         if scope:
@@ -213,21 +221,30 @@ class ConversationContext:
 
         for d in dirs_to_scan:
             for f in d.glob("*.json"):
+                fpath = str(f)
+                try:
+                    mtime = f.stat().st_mtime
+                except OSError:
+                    continue
+                cached = _session_meta_cache.get(fpath)
+                if cached and cached[0] == mtime:
+                    metas.append(cached[1])
+                    continue
                 try:
                     data = json.loads(safe_read(f))
                     session_id = data.get("id", "")
-                    metas.append(
-                        {
-                            "id": session_id,
-                            "created_at": data.get("created_at", 0.0),
-                            "last_updated_at": data.get("last_updated_at", 0.0),
-                            "message_count": len(data.get("messages", [])),
-                            "cumulative_tokens": data.get("cumulative_tokens", 0),
-                            "file_path": data.get("file_path"),
-                            "title": data.get("title")
-                            or _derive_title(data.get("messages", [])),
-                        }
-                    )
+                    meta = {
+                        "id": session_id,
+                        "created_at": data.get("created_at", 0.0),
+                        "last_updated_at": data.get("last_updated_at", 0.0),
+                        "message_count": len(data.get("messages", [])),
+                        "cumulative_tokens": data.get("cumulative_tokens", 0),
+                        "file_path": data.get("file_path"),
+                        "title": data.get("title")
+                        or _derive_title(data.get("messages", [])),
+                    }
+                    _session_meta_cache[fpath] = (mtime, meta)
+                    metas.append(meta)
                 except Exception:
                     continue
         metas.sort(key=lambda m: m["last_updated_at"], reverse=True)
@@ -273,6 +290,10 @@ class ConversationContext:
         rewritten_queries: list[str] | None = None,
         citation_note: str = "",
         unverified_citations: list[str] | None = None,
+        evidence_sources: list[dict[str, Any]] | None = None,
+        page_reads: list[dict[str, Any]] | None = None,
+        cited_evidence_ids: list[str] | None = None,
+        unverified_evidence_ids: list[str] | None = None,
     ) -> ChatMessage:
         """
         追加 assistant 回复消息。
@@ -296,6 +317,10 @@ class ConversationContext:
             rewritten_queries=rewritten_queries or [],
             citation_note=citation_note,
             unverified_citations=unverified_citations or [],
+            evidence_sources=evidence_sources or [],
+            page_reads=page_reads or [],
+            cited_evidence_ids=cited_evidence_ids or [],
+            unverified_evidence_ids=unverified_evidence_ids or [],
             created_at=time.time(),
         )
         self.messages.append(msg)
@@ -546,10 +571,22 @@ class ConversationContext:
         for m in self.messages:
             role = m.role
             if role == "summary":
+                evidence_appendix = ""
+                if m.evidence_sources:
+                    lines = ["", "[Preserved Web Evidence]"]
+                    for item in m.evidence_sources:
+                        heading = " > ".join(item.heading_path)
+                        lines.append(
+                            f"[EVIDENCE {item.evidence_id}] {item.title} | "
+                            f"{item.source_url} | {heading}\n{item.text}"
+                        )
+                    evidence_appendix = "\n".join(lines)
                 result.append(
                     {
                         "role": "assistant",
-                        "content": f"[Conversation Summary]\n{m.content}",
+                        "content": (
+                            f"[Conversation Summary]\n{m.content}{evidence_appendix}"
+                        ),
                     }
                 )
             elif role == "tool":
@@ -603,6 +640,31 @@ class ConversationContext:
         else:
             snapshot = self.snapshot_for_compression()
             kept = []
+        evidence_sources = []
+        page_reads = []
+        seen_evidence: set[str] = set()
+        seen_pages: set[tuple[str, str]] = set()
+        cfg = get_config().features.writing_chat
+        evidence_chars = 0
+        for message in snapshot:
+            for item in message.evidence_sources:
+                if item.evidence_id in seen_evidence:
+                    continue
+                if len(evidence_sources) >= cfg.evidence_max_items:
+                    break
+                remaining = cfg.evidence_max_chars - evidence_chars
+                if remaining <= 0:
+                    break
+                copied = item.model_copy(deep=True)
+                copied.text = copied.text[:remaining]
+                evidence_sources.append(copied)
+                seen_evidence.add(copied.evidence_id)
+                evidence_chars += len(copied.text)
+            for page in message.page_reads:
+                key = (page.document_id, page.url)
+                if key not in seen_pages:
+                    page_reads.append(page.model_copy(deep=True))
+                    seen_pages.add(key)
         summary_msg = ChatMessage(
             id=uuid.uuid4().hex,
             role="summary",
@@ -610,6 +672,8 @@ class ConversationContext:
             tokens=summary_tokens,
             compressed=True,
             snapshot=snapshot,
+            evidence_sources=evidence_sources,
+            page_reads=page_reads,
             created_at=time.time(),
         )
         self.messages = [summary_msg] + kept

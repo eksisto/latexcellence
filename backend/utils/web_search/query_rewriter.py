@@ -1,14 +1,12 @@
 """查询重写 — 将用户自然语言搜索意图拆解为多条精准查询。"""
 
-import json
 import re
 from typing import Any
 
 from pydantic import BaseModel, Field
 
-from backend.core.llm_client import get_llm_client
 from backend.core.logger import get_logger
-from backend.core.prompts import get_prompt
+from backend.utils.web_search.planner import SearchQueryPlanner
 
 # ── 数据模型 ──────────────────────────────────────────────────────────────────
 
@@ -61,39 +59,9 @@ class QueryRewriter:
         return self._rewrite_rule_based(query)
 
     async def _rewrite_with_llm(self, query: str) -> list[str]:
-        """使用 LLM 解析意图并生成查询变体。"""
-        llm = get_llm_client()
-        content = await llm.chat(
-            messages=[
-                {
-                    "role": "system",
-                    "content": get_prompt("web_search", "query_rewriting_system"),
-                },
-                {"role": "user", "content": query},
-            ],
-            temperature=0.3,
-            max_tokens=1024,
-            response_format={"type": "json_object"},
-        )
-
-        data = json.loads(content)
-        variants: list[str] = data.get("variants", [])
-
-        valid = [v.strip() for v in variants if v and v.strip()]
-        if not valid:
-            self._logger.warning("LLM returned empty variants")
-            return []
-
-        # 去重（大小写不敏感）
-        seen: set[str] = set()
-        deduped: list[str] = []
-        for v in valid:
-            key = v.lower().strip()
-            if key not in seen:
-                seen.add(key)
-                deduped.append(v)
-
-        return deduped
+        """使用统一查询规划器生成已校验的查询变体。"""
+        plan = await SearchQueryPlanner().plan(query)
+        return plan.variants
 
     def _rewrite_rule_based(self, query: str) -> list[str]:
         """规则兜底：关键词提取 + 简单变体。"""

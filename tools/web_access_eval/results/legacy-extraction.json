@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "suite": "extraction",
+  "system": "legacy",
+  "cases": [
+    {
+      "case_id": "extract-authored-technical-page",
+      "status": "ok",
+      "strategy": "legacy_trafilatura",
+      "blocks": [
+        {
+          "block_id": "legacy-content",
+          "kind": "paragraph",
+          "text": "Reproducible builds\nA reproducible build produces identical artifacts from the same source and declared inputs.\nVerification\n- Pin tool versions.\n- Normalize timestamps.\n- Compare artifact hashes.\nsha256sum dist/app.tar.gzCompare the SHA-256 hash of each artifact.",
+          "heading_path": []
+        }
+      ],
+      "latency_ms": 4.05779999709921,
+      "measurement_gaps": ["legacy_extractor_returns_plain_text_without_blocks"]
+    }
+  ]
+}

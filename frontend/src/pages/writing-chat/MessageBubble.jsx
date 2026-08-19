@@ -13,6 +13,8 @@ import Trash2 from "lucide-react/dist/esm/icons/trash-2.mjs";
 import Undo2 from "lucide-react/dist/esm/icons/undo-2.mjs";
 import History from "lucide-react/dist/esm/icons/history.mjs";
 import GraduationCap from "lucide-react/dist/esm/icons/graduation-cap.mjs";
+import BookOpenText from "lucide-react/dist/esm/icons/book-open-text.mjs";
+import ShieldAlert from "lucide-react/dist/esm/icons/shield-alert.mjs";
 import { Button } from "@/components/ui/button";
 import MarkdownRenderer from "@/components/MarkdownRenderer";
 
@@ -60,6 +62,10 @@ const areMessageBubblesEqual = (prevProps, nextProps) => {
     a.scholarlyResults !== b.scholarlyResults ||
     a.scholarlyTotal !== b.scholarlyTotal ||
     a.scholarlyQuery !== b.scholarlyQuery ||
+    a.evidenceSources !== b.evidenceSources ||
+    a.pageReads !== b.pageReads ||
+    a.citedEvidenceIds !== b.citedEvidenceIds ||
+    a.unverifiedEvidenceIds !== b.unverifiedEvidenceIds ||
     a.compressed !== b.compressed
   ) {
     return false;
@@ -143,6 +149,7 @@ function MessageBubble({ message, actions }) {
     editingMessageId,
     applyingMessageId,
     canEdit,
+    prepareSectionRead,
   } = actions;
 
   const isUser = message.role === "user";
@@ -154,6 +161,8 @@ function MessageBubble({ message, actions }) {
   );
   const [searchExpanded, setSearchExpanded] = useState(true);
   const [scholarlyExpanded, setScholarlyExpanded] = useState(true);
+  const [evidenceExpanded, setEvidenceExpanded] = useState(true);
+  const [pagesExpanded, setPagesExpanded] = useState(false);
   // 流式期间内容高频变化，Markdown 解析延迟到空闲帧，输入与滚动保持流畅
   const markdownContent = message.displayContent || message.content;
   const deferredMarkdownContent = useDeferredValue(markdownContent);
@@ -372,6 +381,173 @@ function MessageBubble({ message, actions }) {
                 </div>
               )}
               {/* 引用校验提示 */}
+              {message.pageReads?.length > 0 && (
+                <div className="mb-2 rounded border border-cyan-500/20 bg-cyan-500/5 p-2">
+                  <button
+                    type="button"
+                    className="flex w-full cursor-pointer select-none items-center gap-1 text-left text-xs font-medium text-cyan-700 dark:text-cyan-300"
+                    onClick={() => setPagesExpanded((value) => !value)}
+                  >
+                    <BookOpenText className="size-3 shrink-0" />
+                    {t("pages:writingChat.pageOutline")}
+                    <span className="font-normal text-muted-foreground">
+                      · {message.pageReads.length}
+                    </span>
+                    <ChevronDown
+                      className={`ml-auto size-3 transition-transform duration-300 ${pagesExpanded ? "rotate-180" : ""}`}
+                    />
+                  </button>
+                  <div
+                    className="grid transition-[grid-template-rows] duration-300 ease-in-out"
+                    style={{ gridTemplateRows: pagesExpanded ? "1fr" : "0fr" }}
+                  >
+                    <div className="overflow-hidden">
+                      <div className="mt-2 space-y-2 text-xs">
+                        {message.pageReads.map((page, pageIndex) => {
+                          const readIds = new Set(
+                            message.pageReads
+                              .filter(
+                                (item) =>
+                                  (item.document_id || item.url) ===
+                                  (page.document_id || page.url),
+                              )
+                              .flatMap((item) => item.read_section_ids || []),
+                          );
+                          const unreadIds = (page.outline || [])
+                            .map((section) => section.section_id)
+                            .filter((sectionId) => !readIds.has(sectionId));
+                          return (
+                            <div
+                              key={`${page.document_id || page.url}-${pageIndex}`}
+                              className="border-t border-border/50 pt-2 first:border-t-0 first:pt-0"
+                            >
+                              <a
+                                href={page.url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="font-medium text-cyan-700 hover:underline dark:text-cyan-300"
+                              >
+                                {page.title || page.url}
+                              </a>
+                              {page.error_code && (
+                                <div className="mt-1 flex items-start gap-1 text-amber-600 dark:text-amber-400">
+                                  <ShieldAlert className="mt-0.5 size-3 shrink-0" />
+                                  <span>
+                                    {t("pages:writingChat.pageReadError", {
+                                      code: page.error_code,
+                                      message: page.error_message,
+                                    })}
+                                  </span>
+                                </div>
+                              )}
+                              {page.outline?.length > 0 && (
+                                <ul className="mt-1 space-y-1 text-muted-foreground">
+                                  {page.outline.map((section) => (
+                                    <li
+                                      key={section.section_id}
+                                      className="flex items-start gap-1"
+                                    >
+                                      <span className="font-mono text-[10px]">
+                                        {readIds.has(section.section_id)
+                                          ? "●"
+                                          : "○"}
+                                      </span>
+                                      <span>
+                                        {section.heading_path?.join(" › ") ||
+                                          section.title}
+                                      </span>
+                                    </li>
+                                  ))}
+                                </ul>
+                              )}
+                              {unreadIds.length > 0 && (
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  variant="outline"
+                                  className="mt-2 h-7 text-xs"
+                                  onClick={() =>
+                                    prepareSectionRead(
+                                      page,
+                                      unreadIds.slice(0, 5),
+                                    )
+                                  }
+                                >
+                                  {t("pages:writingChat.readMoreSections")}
+                                </Button>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+              {message.evidenceSources?.length > 0 && (
+                <div className="mb-2 rounded border border-emerald-500/20 bg-emerald-500/5 p-2">
+                  <button
+                    type="button"
+                    className="flex w-full cursor-pointer select-none items-center gap-1 text-left text-xs font-medium text-emerald-700 dark:text-emerald-300"
+                    onClick={() => setEvidenceExpanded((value) => !value)}
+                  >
+                    <Globe className="size-3 shrink-0" />
+                    {t("pages:writingChat.evidenceSources")}
+                    <span className="font-normal text-muted-foreground">
+                      · {message.evidenceSources.length}
+                    </span>
+                    <ChevronDown
+                      className={`ml-auto size-3 transition-transform duration-300 ${evidenceExpanded ? "rotate-180" : ""}`}
+                    />
+                  </button>
+                  <div
+                    className="grid transition-[grid-template-rows] duration-300 ease-in-out"
+                    style={{
+                      gridTemplateRows: evidenceExpanded ? "1fr" : "0fr",
+                    }}
+                  >
+                    <div className="overflow-hidden">
+                      <ul className="mt-2 space-y-2 text-xs">
+                        {message.evidenceSources.map((evidence) => (
+                          <li
+                            key={evidence.evidence_id}
+                            className="border-t border-border/50 pt-2 first:border-t-0 first:pt-0"
+                          >
+                            <div className="flex items-start justify-between gap-2">
+                              <a
+                                href={evidence.source_url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="font-medium text-emerald-700 hover:underline dark:text-emerald-300"
+                              >
+                                {evidence.title || evidence.source_url}
+                              </a>
+                              {message.citedEvidenceIds?.includes(
+                                evidence.evidence_id,
+                              ) && (
+                                <span className="shrink-0 text-[10px] text-emerald-600 dark:text-emerald-400">
+                                  {t("pages:writingChat.evidenceCited")}
+                                </span>
+                              )}
+                            </div>
+                            {evidence.heading_path?.length > 0 && (
+                              <div className="mt-0.5 text-[10px] text-muted-foreground">
+                                {evidence.heading_path.join(" › ")}
+                              </div>
+                            )}
+                            <p className="mt-1 line-clamp-4 text-muted-foreground">
+                              {evidence.text}
+                            </p>
+                            <code className="mt-1 block break-all text-[10px] text-muted-foreground">
+                              {evidence.evidence_id}
+                            </code>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  </div>
+                </div>
+              )}
               {message.citationNote && (
                 <div className="mb-2 rounded border border-amber-500/25 bg-amber-500/10 p-2">
                   <div className="text-xs font-medium text-amber-600 dark:text-amber-400">

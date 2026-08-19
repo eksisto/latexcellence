@@ -19,7 +19,12 @@ from backend.modules.writing_chat.models import ChatSendRequest
 from backend.utils.project_tools import get_project_tools_manager
 from backend.utils.project_tools.edit_tools_manager import get_edit_tools_manager
 from backend.utils.time_utils import get_current_time_context
-from backend.utils.web_search import DDGChallengeError, get_search_manager
+from backend.utils.web_search import (
+    DDGChallengeError,
+    EvidenceBundle,
+    EvidenceChunk,
+    get_search_manager,
+)
 
 from . import _deps
 
@@ -30,6 +35,7 @@ class ConversationMixin:
     _TOOL_LABELS: dict[str, str] = {
         "web_search": "searching",
         "open_page": "reading_page",
+        "read_page_sections": "reading_page_sections",
         "find_in_page": "searching_in_page",
         "list_files": "browsing_files",
         "read_file_content": "reading_file",
@@ -57,8 +63,17 @@ class ConversationMixin:
     # 摘要请求的最大尝试次数（超限时扩大保留预算重试）
     _MAX_SUMMARY_RETRIES = 3
 
+    # web_stage 事件的阶段名称映射（tool_name → stage）
+    _WEB_STAGE_MAP: dict[str, str] = {
+        "web_search": "search",
+        "open_page": "fetch",
+        "read_page_sections": "sections",
+        "find_in_page": "evidence",
+    }
+
     # 正文内 Markdown 链接提取正则（URL 不含空格与右括号）
     _MARKDOWN_LINK_RE = re.compile(r"\[[^\]]*\]\((https?://[^)\s]+)\)")
+    _EVIDENCE_CITATION_RE = re.compile(r"\[EVIDENCE\s+([^\]\s]+)\]")
 
     @staticmethod
     def _normalize_citation_url(url: str) -> str:
@@ -96,6 +111,42 @@ class ConversationMixin:
         if not unverified:
             return [], ""
         return unverified, "".join(f"[{i}] {u}\n" for i, u in enumerate(unverified, 1))
+
+    @classmethod
+    def _validate_evidence_citations(
+        cls, content: str, allowed_ids: set[str]
+    ) -> tuple[list[str], list[str]]:
+        """返回回答中引用的 evidence ID 及不在当轮证据白名单中的 ID。"""
+        cited = list(dict.fromkeys(cls._EVIDENCE_CITATION_RE.findall(content or "")))
+        return cited, [
+            evidence_id for evidence_id in cited if evidence_id not in allowed_ids
+        ]
+
+    @staticmethod
+    def _append_evidence_with_budget(
+        persisted: list[dict[str, Any]], evidence: list[dict[str, Any]]
+    ) -> list[dict[str, Any]]:
+        """按 Writing Chat 配置去重并裁剪证据，返回本次实际接纳的片段。"""
+        cfg = get_config().features.writing_chat
+        if not cfg.evidence_bundle_enabled:
+            return []
+        seen = {item["evidence_id"] for item in persisted}
+        used_chars = sum(len(item.get("text", "")) for item in persisted)
+        accepted: list[dict[str, Any]] = []
+        for raw in evidence:
+            item = EvidenceChunk.model_validate(raw)
+            if item.evidence_id in seen or len(persisted) >= cfg.evidence_max_items:
+                continue
+            remaining = cfg.evidence_max_chars - used_chars
+            if remaining <= 0:
+                break
+            dumped = item.model_dump(mode="json")
+            dumped["text"] = dumped["text"][:remaining]
+            persisted.append(dumped)
+            accepted.append(dumped)
+            seen.add(item.evidence_id)
+            used_chars += len(dumped["text"])
+        return accepted
 
     @staticmethod
     def _trim_tool_messages(
@@ -177,6 +228,279 @@ class ConversationMixin:
 
     # ── 会话管理 ──────────────────────────────────────────────────────────
 
+    def _build_system_prompt(
+        self,
+        context_block: str,
+        language: str,
+        assistant_prompt: str = "",
+    ) -> str:
+        """构造 system prompt：基础指令 + 时间上下文 + 助手指令 + 学术工具指南。"""
+        prompt = get_prompt(
+            "writing_chat",
+            "chat_system",
+            context_block=context_block,
+            language=language,
+        )
+        t = get_current_time_context()
+        prompt += get_prompt(
+            "writing_chat",
+            "chat_system_time_context",
+            date=t["date"],
+            weekday=t["weekday"],
+            time=t["time"],
+        )
+        if assistant_prompt:
+            prompt = assistant_prompt + "\n\n" + prompt
+        research_cfg = get_config().features.function_calling.scholarly_research
+        if research_cfg.enabled and research_cfg.providers.openalex.enabled:
+            prompt += "\n\n" + get_prompt(
+                "writing_chat", "scholarly_research_tool_guide"
+            )
+        return prompt
+
+    @staticmethod
+    def _build_tool_event(
+        tool_name: str,
+        tool_result: Any,
+        tool_args: dict[str, Any],
+        persisted_evidence_sources: list[dict[str, Any]],
+        default_query: str,
+    ) -> tuple[dict[str, Any], dict[str, Any]]:
+        """
+        处理工具执行结果，构建 tool_result SSE 事件字典。
+
+        返回 (event_dict, state_updates)，state_updates 包含需要回写到
+        调用方持久化状态的变更（搜索结果、证据、页面读取、学术结果等）。
+        """
+        tool_event: dict[str, Any] = {
+            "type": "tool_result",
+            "tool": tool_name,
+            "result_count": (
+                len(tool_result.results)
+                if hasattr(tool_result, "results")
+                else (len(tool_result.works) if hasattr(tool_result, "works") else 0)
+            ),
+        }
+        updates: dict[str, Any] = {}
+
+        # 证据累积
+        raw_evidence = getattr(tool_result, "evidence", [])
+        accepted_evidence = ConversationMixin._append_evidence_with_budget(
+            persisted_evidence_sources, raw_evidence
+        )
+        if accepted_evidence:
+            bundle_kwargs: dict[str, Any] = {
+                "bundle_id": uuid.uuid4().hex,
+                "query": str(
+                    tool_args.get("query") or tool_args.get("url") or default_query
+                ),
+                "evidence": [
+                    EvidenceChunk.model_validate(item) for item in accepted_evidence
+                ],
+                "failures": [],
+                "omitted_count": max(0, len(raw_evidence) - len(accepted_evidence)),
+                "partial": bool(getattr(tool_result, "partial", False)),
+            }
+            if tool_name == "web_search" and hasattr(tool_result, "engine_statuses"):
+                bundle_kwargs["engine_statuses"] = tool_result.engine_statuses
+            bundle = EvidenceBundle(**bundle_kwargs)
+            tool_event["evidence_bundle"] = bundle.model_dump(mode="json")
+
+        # 搜索结果摘要
+        if tool_name == "web_search" and hasattr(tool_result, "results"):
+            search_results = tool_result.results[:5]
+            tool_event["search_results"] = [
+                {
+                    "index": i,
+                    "title": r.title,
+                    "snippet": r.snippet,
+                    "url": r.url,
+                }
+                for i, r in enumerate(search_results, 1)
+            ]
+            tool_event["query"] = tool_args.get("query", "")
+            deep_read_pages = sum(1 for r in search_results if r.full_content)
+            if deep_read_pages > 0:
+                tool_event["deep_read_pages"] = deep_read_pages
+            if (
+                hasattr(tool_result, "rewritten_queries")
+                and tool_result.rewritten_queries
+            ):
+                tool_event["rewritten_queries"] = tool_result.rewritten_queries
+            updates["search_results"] = tool_event["search_results"]
+            updates["search_query"] = tool_event["query"]
+            updates["deep_read_pages"] = tool_event.get("deep_read_pages", 0)
+            updates["rewritten_queries"] = tool_event.get("rewritten_queries", [])
+            source_urls = set()
+            for r in tool_result.results:
+                if r.url:
+                    source_urls.add(r.url)
+            updates["source_urls"] = source_urls
+
+        # open_page 结果
+        if tool_name == "open_page":
+            url = getattr(tool_result, "url", "")
+            error_message = getattr(tool_result, "error", "")
+            if url:
+                page_read = {
+                    "url": url,
+                    "title": getattr(tool_result, "title", ""),
+                    "document_id": getattr(tool_result, "document_id", ""),
+                    "outline": getattr(tool_result, "outline", []),
+                    "read_section_ids": [],
+                    "extraction_strategy": getattr(
+                        tool_result, "extraction_strategy", ""
+                    ),
+                    "cache_hit": getattr(tool_result, "cache_hit", False),
+                    "partial": getattr(tool_result, "partial", False),
+                    "error_code": getattr(tool_result, "error_code", ""),
+                    "error_message": error_message,
+                }
+                updates.setdefault("page_reads", []).append(page_read)
+                tool_event["page_read"] = page_read
+            if url and not error_message:
+                updates.setdefault("source_urls", set()).add(url)
+                tool_event["url"] = url
+                tool_event["title"] = getattr(tool_result, "title", "")
+                tool_event["chars"] = len(getattr(tool_result, "content", ""))
+                tool_event["document_id"] = getattr(tool_result, "document_id", "")
+                tool_event["outline"] = getattr(tool_result, "outline", [])
+                tool_event["extraction_strategy"] = getattr(
+                    tool_result, "extraction_strategy", ""
+                )
+                tool_event["cache_hit"] = getattr(tool_result, "cache_hit", False)
+                tool_event["partial"] = getattr(tool_result, "partial", False)
+                updates["opened_page"] = url
+
+        # read_page_sections 结果
+        if tool_name == "read_page_sections":
+            url = getattr(tool_result, "url", "")
+            error_message = getattr(tool_result, "error", "")
+            if url:
+                page_read = {
+                    "url": url,
+                    "title": getattr(tool_result, "title", ""),
+                    "document_id": getattr(tool_result, "document_id", ""),
+                    "outline": getattr(tool_result, "outline", []),
+                    "read_section_ids": tool_args.get("section_ids", []),
+                    "extraction_strategy": getattr(
+                        tool_result, "extraction_strategy", ""
+                    ),
+                    "cache_hit": getattr(tool_result, "cache_hit", False),
+                    "partial": getattr(tool_result, "partial", False),
+                    "error_code": getattr(tool_result, "error_code", ""),
+                    "error_message": error_message,
+                }
+                updates.setdefault("page_reads", []).append(page_read)
+                tool_event["page_read"] = page_read
+            if url and not error_message:
+                updates.setdefault("source_urls", set()).add(url)
+                tool_event["url"] = url
+                tool_event["title"] = getattr(tool_result, "title", "")
+                tool_event["chars"] = len(getattr(tool_result, "content", ""))
+
+        # find_in_page 结果
+        if tool_name == "find_in_page":
+            url = getattr(tool_result, "url", "")
+            if url and not getattr(tool_result, "error", ""):
+                updates.setdefault("source_urls", set()).add(url)
+                tool_event["url"] = url
+                tool_event["match_count"] = len(getattr(tool_result, "matches", []))
+
+        # Web 工具阶段状态
+        if tool_name in ConversationMixin._WEB_STAGE_MAP:
+            error_code = getattr(tool_result, "error_code", "")
+            error_message = getattr(tool_result, "error", "")
+            tool_event["stage"] = ConversationMixin._WEB_STAGE_MAP[tool_name]
+            tool_event["status"] = "error" if error_message else "complete"
+            if error_code:
+                tool_event["error_code"] = error_code
+            if error_message:
+                tool_event["error_message"] = error_message
+
+        # 学术检索结果
+        if tool_name in {
+            "search_scholarly_works",
+            "find_related_works",
+            "search_research_data_resources",
+        }:
+            scholarly_results = getattr(
+                tool_result,
+                "results",
+                getattr(tool_result, "works", []),
+            )
+            tool_event["scholarly_results"] = [
+                {
+                    "id": result.openalex_id or result.doi,
+                    "title": result.title,
+                    "authors": [author.name for author in result.authors[:3]],
+                    "year": result.year,
+                    "journal": result.journal,
+                    "citation_count": result.citation_count,
+                    "doi": result.doi,
+                    "is_oa": result.is_oa,
+                    "oa_url": result.oa_url,
+                    "work_type": result.work_type,
+                }
+                for result in scholarly_results[:5]
+            ]
+            tool_event["query"] = tool_args.get("query", "")
+            tool_event["total_estimated"] = getattr(
+                tool_result,
+                "total_estimated",
+                getattr(tool_result, "total", len(scholarly_results)),
+            )
+            updates["scholarly_results"] = tool_event["scholarly_results"]
+            updates["scholarly_query"] = tool_event["query"]
+            updates["scholarly_total"] = tool_event["total_estimated"]
+
+        return tool_event, updates
+
+    def _validate_response_citations(
+        self,
+        content: str,
+        persisted_source_urls: set[str],
+        persisted_evidence_sources: list[dict[str, Any]],
+    ) -> tuple[list[str], str, list[str], list[str]]:
+        """
+        校验回复中的 URL 引用和 evidence 引用。
+
+        返回 (unverified_urls, citation_note, cited_evidence_ids, unverified_evidence_ids)。
+        """
+        unverified_citations: list[str] = []
+        citation_note = ""
+        cited_evidence_ids: list[str] = []
+        unverified_evidence_ids: list[str] = []
+
+        if persisted_source_urls:
+            unverified_citations, citation_note = self._validate_citations(
+                content, persisted_source_urls
+            )
+            if unverified_citations:
+                self._logger.warning(
+                    "Unverified citations in response: %s",
+                    ", ".join(unverified_citations[:5]),
+                )
+        if persisted_evidence_sources:
+            cited_evidence_ids, unverified_evidence_ids = (
+                self._validate_evidence_citations(
+                    content,
+                    {item["evidence_id"] for item in persisted_evidence_sources},
+                )
+            )
+            if unverified_evidence_ids:
+                evidence_note = "".join(
+                    f"[EVIDENCE {eid}]\n" for eid in unverified_evidence_ids
+                )
+                citation_note = (citation_note + "\n" + evidence_note).strip()
+
+        return (
+            unverified_citations,
+            citation_note,
+            cited_evidence_ids,
+            unverified_evidence_ids,
+        )
+
     async def send(
         self, req: ChatSendRequest, workspace_id: str = ""
     ) -> AsyncIterator[dict]:
@@ -237,31 +561,11 @@ class ConversationMixin:
 
         # 4. 调用 LLM 流式（支持 Function Calling 工具调用）
         llm = _deps.get_llm_client()
-        system_prompt = get_prompt(
-            "writing_chat",
-            "chat_system",
-            context_block=context_block,
-            language=req.language,
+        system_prompt = self._build_system_prompt(
+            context_block,
+            req.language,
+            req.assistant_prompt,
         )
-
-        # 注入当前时间上下文，帮助 LLM 理解相对时间概念
-        t = get_current_time_context()
-        system_prompt += get_prompt(
-            "writing_chat",
-            "chat_system_time_context",
-            date=t["date"],
-            weekday=t["weekday"],
-            time=t["time"],
-        )
-
-        # 助手指令注入 system prompt（不写入 user message，界面上不可见）
-        if req.assistant_prompt:
-            system_prompt = req.assistant_prompt + "\n\n" + system_prompt
-        research_cfg = get_config().features.function_calling.scholarly_research
-        if research_cfg.enabled and research_cfg.providers.openalex.enabled:
-            system_prompt += "\n\n" + get_prompt(
-                "writing_chat", "scholarly_research_tool_guide"
-            )
         messages = [
             {"role": "system", "content": system_prompt}
         ] + ctx.to_llm_messages()
@@ -278,8 +582,12 @@ class ConversationMixin:
         persisted_rewritten_queries: list[str] = []
         persisted_source_urls: set[str] = set()
         persisted_opened_pages: set[str] = set()
+        persisted_evidence_sources: list[dict[str, Any]] = []
+        persisted_page_reads: list[dict[str, Any]] = []
         citation_note = ""
         unverified_citations: list[str] = []
+        cited_evidence_ids: list[str] = []
+        unverified_evidence_ids: list[str] = []
 
         # 工具调用循环：流式检测 tool_call，实时输出文本
         if tools:
@@ -416,6 +724,14 @@ class ConversationMixin:
                         "label": self._get_tool_label(tool_name, tool_args),
                         "args": tool_args,
                     }
+                    if tool_name in self._WEB_STAGE_MAP:
+                        yield {
+                            "type": "web_stage",
+                            "stage": self._WEB_STAGE_MAP[tool_name],
+                            "status": "running",
+                            "tool": tool_name,
+                            "args": tool_args,
+                        }
 
                     # ── request_clarification：向用户提问 ──────────────
                     if tool_name == "request_clarification":
@@ -491,134 +807,58 @@ class ConversationMixin:
                         tool_result = await get_tool_registry().execute(
                             tool_name, tool_args
                         )
-                        # 将搜索结果格式化为文本
                         if hasattr(tool_result, "format_for_llm"):
                             result_text = tool_result.format_for_llm()
                         else:
                             result_text = str(tool_result)
 
-                        # 构建搜索结果事件
-                        tool_event = {
-                            "type": "tool_result",
-                            "tool": tool_name,
-                            "result_count": (
-                                len(tool_result.results)
-                                if hasattr(tool_result, "results")
-                                else (
-                                    len(tool_result.works)
-                                    if hasattr(tool_result, "works")
-                                    else 0
-                                )
-                            ),
-                        }
-                        # 搜索结果摘要（供前端折叠框展示）
-                        if tool_name == "web_search" and hasattr(
-                            tool_result, "results"
-                        ):
-                            search_results = tool_result.results[:5]  # 限制最多5条
-                            tool_event["search_results"] = [
-                                {
-                                    "index": i,
-                                    "title": r.title,
-                                    "snippet": r.snippet,
-                                    "url": r.url,
-                                }
-                                for i, r in enumerate(search_results, 1)
+                        tool_event, state_updates = self._build_tool_event(
+                            tool_name,
+                            tool_result,
+                            tool_args,
+                            persisted_evidence_sources,
+                            req.user_message,
+                        )
+                        # 应用 _build_tool_event 返回的状态更新
+                        if "search_results" in state_updates:
+                            persisted_search_results = state_updates["search_results"]
+                            persisted_search_query = state_updates["search_query"]
+                            persisted_deep_read_pages = state_updates["deep_read_pages"]
+                            persisted_rewritten_queries = state_updates[
+                                "rewritten_queries"
                             ]
-                            tool_event["query"] = tool_args.get("query", "")
-                            deep_read_pages = sum(
-                                1 for r in search_results if r.full_content
-                            )
-                            if deep_read_pages > 0:
-                                tool_event["deep_read_pages"] = deep_read_pages
-                            if (
-                                hasattr(tool_result, "rewritten_queries")
-                                and tool_result.rewritten_queries
-                            ):
-                                tool_event["rewritten_queries"] = (
-                                    tool_result.rewritten_queries
-                                )
-                            # 持久化到 assistant 消息：与 tool_result 事件同构，
-                            # 刷新后搜索卡片与实时展示一致。前端多轮搜索覆盖显示，
-                            # 这里同样覆盖保留最后一轮的结果。
-                            persisted_search_results = tool_event["search_results"]
-                            persisted_search_query = tool_event["query"]
-                            persisted_deep_read_pages = tool_event.get(
-                                "deep_read_pages", 0
-                            )
-                            persisted_rewritten_queries = tool_event.get(
-                                "rewritten_queries", []
-                            )
-                            for r in tool_result.results:
-                                if r.url:
-                                    persisted_source_urls.add(r.url)
-                        if tool_name == "open_page":
-                            url = getattr(tool_result, "url", "")
-                            if url and not getattr(tool_result, "error", ""):
-                                persisted_source_urls.add(url)
-                                if url not in persisted_opened_pages:
-                                    persisted_opened_pages.add(url)
-                                    persisted_deep_read_pages += 1
-                                tool_event["url"] = url
-                                tool_event["title"] = getattr(tool_result, "title", "")
-                                tool_event["chars"] = len(
-                                    getattr(tool_result, "content", "")
-                                )
-                        if tool_name == "find_in_page":
-                            url = getattr(tool_result, "url", "")
-                            if url and not getattr(tool_result, "error", ""):
-                                persisted_source_urls.add(url)
-                                tool_event["url"] = url
-                                tool_event["match_count"] = len(
-                                    getattr(tool_result, "matches", [])
-                                )
-                        if tool_name in {
-                            "search_scholarly_works",
-                            "find_related_works",
-                            "search_research_data_resources",
-                        }:
-                            scholarly_results = getattr(
-                                tool_result,
-                                "results",
-                                getattr(tool_result, "works", []),
-                            )
-                            tool_event["scholarly_results"] = [
-                                {
-                                    "id": result.openalex_id or result.doi,
-                                    "title": result.title,
-                                    "authors": [
-                                        author.name for author in result.authors[:3]
-                                    ],
-                                    "year": result.year,
-                                    "journal": result.journal,
-                                    "citation_count": result.citation_count,
-                                    "doi": result.doi,
-                                    "is_oa": result.is_oa,
-                                    "oa_url": result.oa_url,
-                                    "work_type": result.work_type,
-                                }
-                                for result in scholarly_results[:5]
-                            ]
-                            tool_event["query"] = tool_args.get("query", "")
-                            tool_event["total_estimated"] = getattr(
-                                tool_result,
-                                "total_estimated",
-                                getattr(tool_result, "total", len(scholarly_results)),
-                            )
+                        if "source_urls" in state_updates:
+                            persisted_source_urls |= state_updates["source_urls"]
+                        if "page_reads" in state_updates:
+                            persisted_page_reads.extend(state_updates["page_reads"])
+                        if "opened_page" in state_updates:
+                            opened = state_updates["opened_page"]
+                            if opened not in persisted_opened_pages:
+                                persisted_opened_pages.add(opened)
+                                persisted_deep_read_pages += 1
+                        if "scholarly_results" in state_updates:
                             existing_ids = {
                                 item["id"] for item in persisted_scholarly_results
                             }
                             persisted_scholarly_results.extend(
                                 item
-                                for item in tool_event["scholarly_results"]
+                                for item in state_updates["scholarly_results"]
                                 if item["id"] not in existing_ids
                             )
-                            persisted_scholarly_query = tool_event["query"]
+                            persisted_scholarly_query = state_updates["scholarly_query"]
                             persisted_scholarly_total = max(
                                 persisted_scholarly_total,
-                                tool_event["total_estimated"],
+                                state_updates["scholarly_total"],
                             )
                         yield tool_event
+                        if tool_name in self._WEB_STAGE_MAP:
+                            yield {
+                                "type": "web_stage",
+                                "stage": tool_event.get("stage", ""),
+                                "status": tool_event.get("status", "complete"),
+                                "tool": tool_name,
+                                "error_code": tool_event.get("error_code", ""),
+                            }
                     except DDGChallengeError as ce:
                         # DDG Challenge：推送 captcha 到前端，终止本轮搜索
                         self._logger.info(
@@ -713,15 +953,16 @@ class ConversationMixin:
 
         # 5. 引用校验：回复中的链接必须来自当轮工具返回的真实来源
         content = "".join(full_content_parts)
-        if persisted_source_urls:
-            unverified_citations, citation_note = self._validate_citations(
-                content, persisted_source_urls
-            )
-            if unverified_citations:
-                self._logger.warning(
-                    "Unverified citations in response: %s",
-                    ", ".join(unverified_citations[:5]),
-                )
+        (
+            unverified_citations,
+            citation_note,
+            cited_evidence_ids,
+            unverified_evidence_ids,
+        ) = self._validate_response_citations(
+            content,
+            persisted_source_urls,
+            persisted_evidence_sources,
+        )
 
         # 6. 写入 assistant 消息并落盘
         assistant_tokens = 0
@@ -739,6 +980,10 @@ class ConversationMixin:
             rewritten_queries=persisted_rewritten_queries,
             citation_note=citation_note,
             unverified_citations=unverified_citations,
+            evidence_sources=persisted_evidence_sources,
+            page_reads=persisted_page_reads,
+            cited_evidence_ids=cited_evidence_ids,
+            unverified_evidence_ids=unverified_evidence_ids,
         )
         ctx.update_last_message_tokens(last_usage_tokens)
         ctx.save_to_disk()

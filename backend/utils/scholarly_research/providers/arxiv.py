@@ -55,6 +55,7 @@ def _build_work_from_arxiv(entry: dict[str, Any]) -> ScholarlyWork:
 
 class ArxivProvider(BaseResearchProvider):
     name = "arxiv"
+    capabilities = frozenset({"search", "details", "full_text"})
 
     def __init__(self, client: httpx.AsyncClient) -> None:
         self._client = client

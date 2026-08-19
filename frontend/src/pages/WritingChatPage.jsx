@@ -123,6 +123,13 @@ export default function WritingChatPage() {
       editingMessageId,
       applyingMessageId,
       canEdit,
+      prepareSectionRead: (page, sectionIds) =>
+        setInput(
+          t("pages:writingChat.readSectionsRequest", {
+            title: page.title || page.url,
+            sections: sectionIds.join(", "),
+          }),
+        ),
     }),
     [
       generateEdit,
@@ -131,6 +138,8 @@ export default function WritingChatPage() {
       editingMessageId,
       applyingMessageId,
       canEdit,
+      setInput,
+      t,
     ],
   );
 

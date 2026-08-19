@@ -72,6 +72,7 @@ def _build_work_from_crossref(item: dict[str, Any]) -> ScholarlyWork:
 
 class CrossrefProvider(BaseResearchProvider):
     name = "crossref"
+    capabilities = frozenset({"search", "details"})
 
     def __init__(self, client: httpx.AsyncClient) -> None:
         self._client = client

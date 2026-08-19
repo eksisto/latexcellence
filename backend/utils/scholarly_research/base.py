@@ -10,6 +10,10 @@ class BaseResearchProvider(ABC):
     """可插拔学术数据源的最小接口。"""
 
     name: str = "base"
+    capabilities: frozenset[str] = frozenset({"search", "details"})
+
+    def supports(self, capability: str) -> bool:
+        return capability in self.capabilities
 
     @abstractmethod
     async def search(self, query: str, **filters: Any) -> SearchScholarlyResult:

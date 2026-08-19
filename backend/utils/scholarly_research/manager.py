@@ -9,7 +9,7 @@ from backend.core.config import get_config
 from backend.core.logger import get_logger
 from backend.core.tool_registry import get_tool_registry
 
-from ._utils import _dedup_works, _limit_results, _sort_works
+from ._utils import _dedup_works, _limit_results, _rrf_rank, _sort_works
 from .base import BaseResearchProvider
 from .models import (
     FullTextResult,
@@ -17,6 +17,8 @@ from .models import (
     SearchScholarlyResult,
     WorkDetailResult,
 )
+from .planner import ScholarlyQueryPlan
+from backend.utils.web_search.page_reader import get_structured_page_reader
 from .providers.arxiv import ArxivProvider
 from .providers.core import COREProvider
 from .providers.crossref import CrossrefProvider
@@ -87,7 +89,8 @@ class ResearchManager:
         providers = self._active()
         limit = _limit_results(max_results, 20)
         tasks = []
-        for provider in providers:
+        searchable = [provider for provider in providers if provider.supports("search")]
+        for provider in searchable:
             try:
                 tasks.append(provider.search(query, max_results=limit, **filters))
             except Exception:
@@ -97,16 +100,23 @@ class ResearchManager:
 
         responses = await asyncio.gather(*tasks, return_exceptions=True)
         all_works: list[ScholarlyWork] = []
+        provider_works: list[list[ScholarlyWork]] = []
         total = 0
         search_time_ms = 0.0
         for resp in responses:
             if isinstance(resp, Exception):
                 continue
             all_works.extend(resp.results)
+            provider_works.append(resp.results)
             total += resp.total_estimated
             search_time_ms = max(search_time_ms, resp.search_time_ms)
 
-        merged = _dedup_works(all_works)
+        ranking_mode = (
+            get_config().features.function_calling.scholarly_research.ranking_mode
+        )
+        merged = _dedup_works(
+            _rrf_rank(provider_works) if ranking_mode == "rrf" else all_works
+        )
         sort_by = filters.get("sort_by", "relevance")
         merged = _sort_works(merged, sort_by)[:limit]
 
@@ -128,8 +138,25 @@ class ResearchManager:
         work_types: list[str] | None = None,
         sort_by: str = "relevance",
         max_results: int | None = None,
+        query_plan: ScholarlyQueryPlan | None = None,
     ) -> SearchScholarlyResult:
-        return await self._federated_search(
+        unsupported_filters: list[str] = []
+        if query_plan is not None:
+            query = " ".join(query_plan.topic_terms)
+            unsupported_filters = sorted(
+                {
+                    item
+                    for provider in self._active()
+                    for item in query_plan.provider_filters(provider.name)[1]
+                }
+            )
+            year_from, year_to, authors, work_types = (
+                query_plan.year_from,
+                query_plan.year_to,
+                query_plan.authors,
+                query_plan.work_types,
+            )
+        result = await self._federated_search(
             query=query,
             year_from=year_from,
             year_to=year_to,
@@ -138,6 +165,8 @@ class ResearchManager:
             sort_by=sort_by,
             max_results=max_results,
         )
+        result.unsupported_filters = unsupported_filters
+        return result
 
     async def get_details(self, work_id: str) -> WorkDetailResult | None:
         for provider in self._active():
@@ -157,7 +186,18 @@ class ResearchManager:
         sort_by: str = "citation_count",
     ) -> RelatedWorksResult:
         last_error: Exception | None = None
+        relation_capability = {
+            "references": "references",
+            "cited_by": "citations",
+            "similar": "similar",
+        }.get(relation_type, relation_type)
+        results: list[RelatedWorksResult] = []
+        ranking_mode = (
+            get_config().features.function_calling.scholarly_research.ranking_mode
+        )
         for provider in self._active():
+            if not provider.supports(relation_capability):
+                continue
             try:
                 result = await provider.find_related_works(
                     work_id=work_id,
@@ -165,13 +205,23 @@ class ResearchManager:
                     max_results=max_results,
                     sort_by=sort_by,
                 )
-                if result is not None and result.works:
-                    return result
+                if result is not None:
+                    if ranking_mode == "legacy" and result.works:
+                        return result
+                    results.append(result)
             except NotImplementedError:
                 continue
             except Exception as exc:
                 last_error = exc
                 continue
+        if results:
+            works = _dedup_works(_rrf_rank([item.works for item in results]))
+            return RelatedWorksResult(
+                seed_id=work_id,
+                relation_type=relation_type,
+                works=works[: _limit_results(max_results, 20)],
+                total=sum(item.total for item in results),
+            )
         if last_error:
             raise last_error
         return RelatedWorksResult(seed_id=work_id, relation_type=relation_type)
@@ -203,13 +253,59 @@ class ResearchManager:
                             break
                     except Exception:
                         continue
-        if unsupported:
-            note += f" Sections not available: {', '.join(unsupported)}."
+        full_text_enabled = (
+            get_config().features.function_calling.scholarly_research.full_text_enabled
+        )
+        if not full_text_enabled:
+            if unsupported:
+                note += f" Sections not available: {', '.join(unsupported)}."
+            return FullTextResult(
+                work_id=work.openalex_id or work.doi,
+                sections=sections,
+                oa_url=oa_url,
+                note=note,
+            )
+
+        note = ""
+        source_kind = "metadata"
+        confidence = 0.0
+        available = list(sections)
+        if oa_url and unsupported:
+            try:
+                reader = await get_structured_page_reader()
+                document, _, _, failure, _ = await reader.read(
+                    oa_url, mode="full", max_chars=30000
+                )
+                if document is not None:
+                    for section in document.outline:
+                        text = "\n\n".join(
+                            block.text
+                            for block in document.blocks
+                            if block.block_id in section.block_ids
+                        )
+                        if text:
+                            sections.setdefault(section.title, text)
+                    available = list(sections)
+                    source_kind = "structured_full_text"
+                    confidence = float(document.quality.get("overall", 0.0))
+                if failure:
+                    note = failure.message
+            except Exception as exc:
+                self._logger.info("Scholarly full-text extraction failed: %s", exc)
+        missing = sorted(requested - set(available))
+        if missing:
+            note = (
+                note + " " if note else ""
+            ) + f"Sections unavailable: {', '.join(missing)}."
         return FullTextResult(
             work_id=work.openalex_id or work.doi,
             sections=sections,
             oa_url=oa_url,
             note=note,
+            available_sections=available,
+            missing_sections=missing,
+            extraction_confidence=confidence,
+            source_kind=source_kind,
         )
 
     async def search_resources(

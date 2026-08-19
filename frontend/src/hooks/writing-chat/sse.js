@@ -50,6 +50,8 @@ export function createSSEEventHandler({
     } else if (event.type === "tool_status") {
       // web_search / project_tools 调用中 → 显示工具状态指示器
       setToolStatus(event);
+    } else if (event.type === "web_stage") {
+      setToolStatus(event.status === "complete" ? null : event);
     } else if (event.type === "tool_pending") {
       // 敏感工具等待用户确认
       setToolStatus(null);
@@ -111,6 +113,37 @@ export function createSSEEventHandler({
           }),
         );
       }
+      if (event.evidence_bundle?.evidence?.length > 0 || event.page_read) {
+        setWritingChatMessages((prev) =>
+          prev.map((m) => {
+            if (m.id !== tmpAssistantId) return m;
+            const evidence = [
+              ...(m.evidenceSources || []),
+              ...(event.evidence_bundle?.evidence || []),
+            ];
+            const uniqueEvidence = Array.from(
+              new Map(
+                evidence.map((item) => [item.evidence_id, item]),
+              ).values(),
+            );
+            const pageRead = event.page_read
+              ? {
+                  ...event.page_read,
+                  error_message: event.page_read.error_message
+                    ? translateError(event.page_read.error_message)
+                    : "",
+                }
+              : null;
+            return {
+              ...m,
+              evidenceSources: uniqueEvidence,
+              pageReads: pageRead
+                ? [...(m.pageReads || []), pageRead]
+                : m.pageReads || [],
+            };
+          }),
+        );
+      }
     } else if (event.type === "captcha_challenge") {
       setToolStatus(null);
       setCaptchaChallenge({
@@ -139,6 +172,7 @@ export function createSSEEventHandler({
         ),
       );
     } else if (event.type === "done") {
+      setToolStatus(null);
       if (event.captcha_pending) {
         // 验证码流程中止：后端未持久化 assistant 消息，移除占位消息，
         // 避免刷新后出现 JSON 中不存在的"幽灵"回复

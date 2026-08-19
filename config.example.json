@@ -120,7 +120,10 @@
       "summary_temperature": 0.2,
       "summary_token_budget": 6000,
       "summary_model": "",
-      "web_search_enabled": true
+      "web_search_enabled": true,
+      "evidence_bundle_enabled": true,
+      "evidence_max_chars": 24000,
+      "evidence_max_items": 12
     },
     "bib_manager": {
       "enabled": true,
@@ -156,8 +159,13 @@
       "web_search": {
         "enabled": false,
         "primary_engine": "tavily",
+        "strategy": "legacy",
         "max_results": 10,
         "timeout_seconds": 10,
+        "overall_timeout_seconds": 12,
+        "per_engine_timeout_seconds": 8,
+        "max_parallel_queries": 4,
+        "domain_result_cap": 3,
         "engines": {
           "duckduckgo": {
             "enabled": true
@@ -175,6 +183,39 @@
         "deep_read_max_chars": 10000,
         "query_rewriting": {
           "enabled": true
+        },
+        "ranking": {
+          "mode": "rrf",
+          "source_type_boosts": {
+            "government": 0.015,
+            "official_docs": 0.01,
+            "academic": 0.01
+          }
+        },
+        "page_reading": {
+          "strategy": "legacy",
+          "cache_enabled": true,
+          "cache_dir": "data/web_cache/",
+          "cache_ttl_seconds": 3600,
+          "max_cache_entry_mb": 5,
+          "max_response_mb": 10,
+          "extractor_version": "html-v1",
+          "quality_threshold": 0.35,
+          "max_redirects": 5,
+          "max_retries": 2,
+          "backoff_base_seconds": 0.25,
+          "max_retry_after_seconds": 10,
+          "per_domain_concurrency": 2,
+          "min_domain_interval_ms": 100,
+          "circuit_failure_threshold": 3,
+          "circuit_cooldown_seconds": 30,
+          "browser": {
+            "enabled": false,
+            "pool_size": 1,
+            "page_timeout_seconds": 15,
+            "max_pages_per_request": 1,
+            "stable_window_ms": 750
+          }
         }
       },
       "project_tools": {
@@ -187,6 +228,8 @@
       "scholarly_research": {
         "enabled": false,
         "primary_source": "openalex",
+        "ranking_mode": "legacy",
+        "full_text_enabled": false,
         "max_results": 20,
         "timeout_seconds": 30,
         "providers": {

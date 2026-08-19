@@ -315,6 +315,72 @@ async def test_get_full_text_returns_abstract_and_oa_url():
 
 
 @pytest.mark.asyncio
+async def test_full_text_rollout_flag_keeps_legacy_path(monkeypatch):
+    cfg = get_config().features.function_calling.scholarly_research
+    monkeypatch.setattr(cfg, "full_text_enabled", False)
+    manager = ResearchManager()
+    manager.get_details = AsyncMock(
+        return_value=manager_module.WorkDetailResult(
+            work=ScholarlyWork(
+                title="Paper",
+                openalex_id="W1",
+                abstract="Abstract",
+                oa_url="https://example.test/paper",
+            )
+        )
+    )
+    reader = AsyncMock()
+    monkeypatch.setattr(
+        "backend.utils.scholarly_research.manager.get_structured_page_reader",
+        lambda: reader,
+    )
+
+    result = await manager.get_full_text("W1", requested_sections=["methods"])
+
+    assert result.sections == {}
+    assert "methods" in result.note
+    reader.read.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_scholarly_ranking_mode_can_roll_back_to_provider_order(monkeypatch):
+    from backend.utils.scholarly_research.models import SearchScholarlyResult
+
+    cfg = get_config().features.function_calling.scholarly_research
+    first = ScholarlyWork(title="First", doi="10.1/first")
+    shared_a = ScholarlyWork(
+        title="Shared", doi="10.1/shared", source_records=["first"]
+    )
+    shared_b = ScholarlyWork(
+        title="Shared", doi="10.1/shared", source_records=["second"]
+    )
+    second = ScholarlyWork(title="Second", doi="10.1/second")
+
+    class StubProvider:
+        def __init__(self, name, works):
+            self.name = name
+            self.works = works
+
+        def supports(self, capability):
+            return capability == "search"
+
+        async def search(self, query, max_results=20, **filters):
+            return SearchScholarlyResult(query=query, results=self.works)
+
+    manager = ResearchManager()
+    manager.register(StubProvider("first", [first, shared_a]))
+    manager.register(StubProvider("second", [shared_b, second]))
+
+    monkeypatch.setattr(cfg, "ranking_mode", "legacy")
+    legacy = await manager.search_works("query")
+    monkeypatch.setattr(cfg, "ranking_mode", "rrf")
+    v2 = await manager.search_works("query")
+
+    assert legacy.results[0].doi == "10.1/first"
+    assert v2.results[0].doi == "10.1/shared"
+
+
+@pytest.mark.asyncio
 async def test_search_resources_rejects_unsupported_type():
     with pytest.raises(ValueError, match="resource_type must be dataset"):
         await ResearchManager().search_resources("benchmark", resource_type="code")

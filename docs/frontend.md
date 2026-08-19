@@ -141,6 +141,7 @@ highlight.js 的按需注册与统一入口：
 | `useTheme.js` | 暗/亮主题切换，支持 View Transitions API 平滑过渡。 |
 | `useUndoRedo.js` | 撤销/重做状态管理：挂载、文件切换与操作后刷新后端 undo-status 状态；请求带 AbortController 取消（防止重叠与过期响应覆盖），撤销/重做执行期间跳过轮询。由 UndoRedoButtons 组件统一封装使用。 |
 | `useResultFilter.js` | 段落检查结果搜索/过滤/跳转，与 ResultFilterBar 配套使用。 |
+| `usePlotGen.js` | 封装科研绘图 Agent：数据上传、生成/微调 SSE 流、会话管理、trace 查看导出。 |
 | `useFormatAnalysis.js` | BibManager Step 1：格式识别状态与处理器 |
 | `useMetadataExtraction.js` | BibManager Step 2：元数据提取状态与处理器（含 DOI 查询） |
 | `useBibtexGeneration.js` | BibManager Step 3：BibTeX 生成与编辑状态 |

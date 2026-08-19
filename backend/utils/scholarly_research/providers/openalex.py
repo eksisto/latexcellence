@@ -173,6 +173,9 @@ def _build_work_from_openalex(data: dict[str, Any]) -> ScholarlyWork:
 
 class OpenAlexProvider(BaseResearchProvider):
     name = "openalex"
+    capabilities = frozenset(
+        {"search", "details", "references", "citations", "similar"}
+    )
 
     def __init__(self, client: httpx.AsyncClient) -> None:
         self._client = client

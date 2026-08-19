@@ -16,6 +16,8 @@
 
 from backend.utils.web_search.base import BaseSearchEngine
 from backend.utils.web_search.deep_read import DeepReader, close_deep_reader
+from backend.utils.web_search.errors import FetchArtifact, FetchFailure
+from backend.utils.web_search.fetch.browser import BrowserHealth
 from backend.utils.web_search.engines.ddg import (
     DDGChallengeError,
     DDGChallengeSubmitRequest,
@@ -26,6 +28,21 @@ from backend.utils.web_search.engines.ddg import (
 from backend.utils.web_search.engines.mock import MockSearchEngine
 from backend.utils.web_search.engines.searxng import SearXNGEngine
 from backend.utils.web_search.engines.tavily import TavilyEngine
+from backend.utils.web_search.extract import (
+    ContentBlock,
+    DocumentSection,
+    DocumentChunk,
+    EvidenceBundle,
+    EvidenceChunk,
+    ExtractedDocument,
+    LinkRef,
+)
+from backend.utils.web_search.page_reader import (
+    StructuredPageReader,
+    close_structured_page_reader,
+    get_structured_page_reader,
+    initialize_structured_page_reader,
+)
 from backend.utils.web_search.manager import (
     SearchManager,
     close_search_manager,
@@ -33,10 +50,19 @@ from backend.utils.web_search.manager import (
     reset_search_manager,
 )
 from backend.utils.web_search.models import (
+    EngineStatus,
     FindInPageResult,
     PageReadResult,
+    SearchCandidate,
     SearchResponse,
     SearchResult,
+)
+from backend.utils.web_search.planner import SearchQueryPlan, SearchQueryPlanner
+from backend.utils.web_search.ranking import rank_responses
+from backend.utils.web_search.url_utils import (
+    canonicalize_url,
+    classify_source,
+    url_is_safe,
 )
 from backend.utils.web_search.query_rewriter import QueryRewriter, SearchIntent
 
@@ -45,11 +71,29 @@ __all__ = [
     "SearchResult",
     "SearchResponse",
     "SearchIntent",
+    "SearchQueryPlan",
+    "SearchQueryPlanner",
+    "SearchCandidate",
+    "EngineStatus",
+    "FetchArtifact",
+    "FetchFailure",
+    "BrowserHealth",
+    "ContentBlock",
+    "DocumentSection",
+    "DocumentChunk",
+    "EvidenceBundle",
+    "EvidenceChunk",
+    "ExtractedDocument",
+    "LinkRef",
     "PageReadResult",
     "FindInPageResult",
     # Deep Read
     "DeepReader",
     "close_deep_reader",
+    "StructuredPageReader",
+    "get_structured_page_reader",
+    "close_structured_page_reader",
+    "initialize_structured_page_reader",
     # 查询重写
     "QueryRewriter",
     # 引擎基类
@@ -69,4 +113,8 @@ __all__ = [
     "close_search_manager",
     "get_search_manager",
     "reset_search_manager",
+    "rank_responses",
+    "canonicalize_url",
+    "classify_source",
+    "url_is_safe",
 ]

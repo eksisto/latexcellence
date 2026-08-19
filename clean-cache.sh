@@ -44,13 +44,13 @@ clean_pattern() {
     fi
 }
 
-echo "[1/5] 清理 __pycache__ ..."
+echo "[1/6] 清理 __pycache__ ..."
 clean_pattern "__pycache__" "__pycache__" "$ROOT"
 
-echo "[2/5] 清理 *.pyc ..."
+echo "[2/6] 清理 *.pyc ..."
 clean_pattern "*.pyc" "*.pyc" "$ROOT"
 
-echo "[3/5] 清理 node_modules/.cache ..."
+echo "[3/6] 清理 node_modules/.cache ..."
 cache="$ROOT/frontend/node_modules/.cache"
 if [ -d "$cache" ]; then
     if rm -rf "$cache" 2>/dev/null; then
@@ -64,10 +64,13 @@ else
     echo "  --     node_modules/.cache (不存在，跳过)"
 fi
 
-echo "[4/5] 清理 .pytest_cache ..."
+echo "[4/6] 清理 .pytest_cache ..."
 clean_pattern ".pytest_cache" ".pytest_cache" "$ROOT"
 
-echo "[5/5] 清理 .pytest_tmp（pytest 会话级临时目录）..."
+echo "[5/6] 清理网页抓取缓存 ..."
+clean_dir "$ROOT/data/web_cache"
+
+echo "[6/6] 清理 .pytest_tmp（pytest 会话级临时目录）..."
 # pytest 会话级 basetemp 根目录：根 conftest.py 为每次会话生成
 # session-* 独立子目录（详见 docs/windows-temp-permissions.md），正常会话
 # 保留最近若干次、下次会话自动清理更早目录。会话异常中断或跨 Codex 沙箱

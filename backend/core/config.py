@@ -18,6 +18,7 @@ import copy
 import json
 import os
 from pathlib import Path
+from typing import Literal
 
 
 from pydantic import BaseModel, Field, model_validator
@@ -237,6 +238,12 @@ class WritingChatConfig(BaseModel):
     summary_model: str = ""
     # 是否在聊天中启用联网搜索（受全局 web_search.enabled 约束）
     web_search_enabled: bool = True
+    # 是否将结构化网页证据接入工具上下文、会话持久化和引用校验
+    evidence_bundle_enabled: bool = True
+    # 单轮持久化并注入 LLM 的网页证据字符预算
+    evidence_max_chars: int = Field(24000, ge=2000, le=100000)
+    # 单轮持久化的证据片段数量上限
+    evidence_max_items: int = Field(12, ge=1, le=50)
 
     @model_validator(mode="before")
     @classmethod
@@ -289,19 +296,71 @@ class QueryRewritingConfig(BaseModel):
     enabled: bool = True  # 是否启用 LLM 查询重写
 
 
+class WebSearchRankingConfig(BaseModel):
+    """搜索聚合的确定性排序配置。"""
+
+    mode: Literal["rrf", "legacy"] = "rrf"
+    source_type_boosts: dict[str, float] = Field(
+        default_factory=lambda: {
+            "government": 0.015,
+            "official_docs": 0.01,
+            "academic": 0.01,
+        }
+    )
+
+
+class WebBrowserConfig(BaseModel):
+    """可选浏览器回退的资源边界。"""
+
+    enabled: bool = False
+    pool_size: int = Field(1, ge=1, le=4)
+    page_timeout_seconds: int = Field(15, ge=3, le=60)
+    max_pages_per_request: int = Field(1, ge=1, le=3)
+    stable_window_ms: int = Field(750, ge=200, le=5000)
+
+
+class WebPageReadingConfig(BaseModel):
+    """网页结构化抓取、抽取和缓存配置。"""
+
+    strategy: Literal["legacy", "structured"] = "legacy"
+    cache_enabled: bool = True
+    cache_dir: str = "data/web_cache/"
+    cache_ttl_seconds: int = Field(3600, ge=60, le=604800)
+    max_cache_entry_mb: int = Field(5, ge=1, le=50)
+    max_response_mb: int = Field(10, ge=1, le=50)
+    extractor_version: str = "html-v1"
+    quality_threshold: float = Field(0.35, ge=0, le=1)
+    max_redirects: int = Field(5, ge=0, le=10)
+    max_retries: int = Field(2, ge=0, le=5)
+    backoff_base_seconds: float = Field(0.25, ge=0, le=5)
+    max_retry_after_seconds: float = Field(10, ge=0, le=60)
+    per_domain_concurrency: int = Field(2, ge=1, le=8)
+    min_domain_interval_ms: int = Field(100, ge=0, le=10000)
+    circuit_failure_threshold: int = Field(3, ge=1, le=20)
+    circuit_cooldown_seconds: float = Field(30, ge=1, le=600)
+    browser: WebBrowserConfig = WebBrowserConfig()
+
+
 class WebSearchConfig(BaseModel):
     """联网搜索模块配置"""
 
     enabled: bool = False  # 是否启用（默认关闭，用户手动开启）
     primary_engine: str = "tavily"  # 主搜索引擎标识（tavily / searxng / duckduckgo）
+    strategy: Literal["legacy", "aggregate"] = "legacy"
     max_results: int = Field(10, ge=1, le=20)  # 默认返回结果数上限
     timeout_seconds: int = Field(10, ge=1)  # 单次搜索超时（秒）
+    overall_timeout_seconds: float = Field(12.0, ge=1, le=120)
+    per_engine_timeout_seconds: float = Field(8.0, ge=0.5, le=60)
+    max_parallel_queries: int = Field(4, ge=1, le=8)
+    domain_result_cap: int = Field(3, ge=1, le=20)
     engines: WebSearchEnginesConfig = WebSearchEnginesConfig()
     deep_read_pages: int = Field(
         0, ge=0, le=5
     )  # 自动 Deep Read 前 N 条（0=禁用，由 open_page 按需读取）
     deep_read_max_chars: int = Field(10000, ge=500, le=20000)  # 每页最大抓取字符数
     query_rewriting: QueryRewritingConfig = QueryRewritingConfig()
+    ranking: WebSearchRankingConfig = WebSearchRankingConfig()
+    page_reading: WebPageReadingConfig = WebPageReadingConfig()
 
 
 class ScholarlyResearchProviderConfig(BaseModel):
@@ -343,6 +402,8 @@ class ScholarlyResearchConfig(BaseModel):
 
     enabled: bool = False
     primary_source: str = "openalex"
+    ranking_mode: Literal["legacy", "rrf"] = "legacy"
+    full_text_enabled: bool = False
     max_results: int = Field(20, ge=1, le=100)
     timeout_seconds: int = Field(30, ge=1)
     providers: ScholarlyResearchProvidersConfig = ScholarlyResearchProvidersConfig()

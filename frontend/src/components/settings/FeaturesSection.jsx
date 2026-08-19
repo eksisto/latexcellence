@@ -473,6 +473,51 @@ function FeaturesSection({ features, onChange, diffOptions }) {
               onChange("features.writing_chat.web_search_enabled", v)
             }
           />
+          <CheckboxField
+            label={t("settings.writingChatEvidenceBundle")}
+            checked={features.writing_chat.evidence_bundle_enabled}
+            onChange={(v) =>
+              onChange("features.writing_chat.evidence_bundle_enabled", v)
+            }
+          />
+          {features.writing_chat.evidence_bundle_enabled && (
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label className="text-xs">
+                  {t("settings.writingChatEvidenceChars")}
+                </Label>
+                <Input
+                  type="number"
+                  min="2000"
+                  max="100000"
+                  value={features.writing_chat.evidence_max_chars}
+                  onChange={(e) =>
+                    onChange(
+                      "features.writing_chat.evidence_max_chars",
+                      parseInt(e.target.value, 10) || 2000,
+                    )
+                  }
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs">
+                  {t("settings.writingChatEvidenceItems")}
+                </Label>
+                <Input
+                  type="number"
+                  min="1"
+                  max="50"
+                  value={features.writing_chat.evidence_max_items}
+                  onChange={(e) =>
+                    onChange(
+                      "features.writing_chat.evidence_max_items",
+                      parseInt(e.target.value, 10) || 1,
+                    )
+                  }
+                />
+              </div>
+            </div>
+          )}
           <div className="grid grid-cols-2 gap-3 pt-1">
             <div className="space-y-1.5">
               <Label className="text-xs">

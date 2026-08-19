@@ -60,6 +60,43 @@ class SearchResultSummary(BaseModel):
     url: str = ""
 
 
+class EvidenceSourceSummary(BaseModel):
+    """可独立于网页缓存持久化的证据片段。"""
+
+    evidence_id: str
+    document_id: str = ""
+    source_url: str
+    title: str = ""
+    heading_path: list[str] = Field(default_factory=list)
+    block_ids: list[str] = Field(default_factory=list)
+    text: str = ""
+    retrieval_score: float = 0.0
+
+
+class PageSectionSummary(BaseModel):
+    """页面大纲中的单个章节。"""
+
+    section_id: str
+    title: str = ""
+    level: int = 1
+    heading_path: list[str] = Field(default_factory=list)
+
+
+class PageReadSummary(BaseModel):
+    """Writing Chat 中一次页面读取的可恢复摘要。"""
+
+    url: str
+    title: str = ""
+    document_id: str = ""
+    outline: list[PageSectionSummary] = Field(default_factory=list)
+    read_section_ids: list[str] = Field(default_factory=list)
+    extraction_strategy: str = ""
+    cache_hit: bool = False
+    partial: bool = False
+    error_code: str = ""
+    error_message: str = ""
+
+
 class ChatMessage(BaseModel):
     """
     单条对话消息。
@@ -105,6 +142,10 @@ class ChatMessage(BaseModel):
     rewritten_queries: list[str] = Field(default_factory=list)
     citation_note: str = ""  # 引用校验备注（存在未在搜索结果中出现的链接时非空）
     unverified_citations: list[str] = Field(default_factory=list)
+    evidence_sources: list[EvidenceSourceSummary] = Field(default_factory=list)
+    page_reads: list[PageReadSummary] = Field(default_factory=list)
+    cited_evidence_ids: list[str] = Field(default_factory=list)
+    unverified_evidence_ids: list[str] = Field(default_factory=list)
 
 
 ChatMessage.model_rebuild()

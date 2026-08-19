@@ -79,8 +79,9 @@ def test_literal_braces_render_single():
     assert "\\begin{equation}" in analyzer
 
     rewriting = get_prompt("web_search", "query_rewriting_system")
-    assert '"intent": {' in rewriting
-    assert '"filters": {"target_users"' in rewriting
+    assert '"original_query": "the exact user query"' in rewriting
+    assert '"intent": "fact"' in rewriting
+    assert '"languages": ["zh", "en"]' in rewriting
 
     bibtex = get_prompt("bib_manager", "bibtex_generation")
     assert "title = {...}" in bibtex
@@ -418,7 +419,7 @@ def test_phase2_unclear_input_contracts():
     assert "Never invent package names" in analyzer
 
     rewriting = get_prompt("web_search", "query_rewriting_system")
-    assert "never fabricate keywords or variants" in rewriting
+    assert "never fabricate required terms" in rewriting
 
     format_analysis = get_prompt(
         "bib_manager", "format_analysis", reference_entry="test"
@@ -447,6 +448,8 @@ def test_phase2_writing_chat_contracts():
     )
     assert "Never invent URLs, references, DOIs, citations, or data" in chat
     assert "insufficient" in chat
+    assert "[EVIDENCE document_id#chunk_id]" in chat
+    assert "page outline first" in chat
     edit = get_prompt(
         "writing_chat", "edit_system", instruction="x", language="Chinese"
     )

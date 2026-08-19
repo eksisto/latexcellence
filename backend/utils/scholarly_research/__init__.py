@@ -17,6 +17,7 @@ from .models import (
     SearchScholarlyResult,
     WorkDetailResult,
 )
+from .planner import ScholarlyQueryPlan
 
 __all__ = [
     "Author",
@@ -26,6 +27,7 @@ __all__ = [
     "ResearchDataResource",
     "ResearchManager",
     "ScholarlyWork",
+    "ScholarlyQueryPlan",
     "SearchScholarlyResult",
     "WorkDetailResult",
     "close_research_http_client",

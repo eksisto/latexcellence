@@ -84,7 +84,7 @@
 | [FastAPI](https://fastapi.tiangolo.com) | >=0.115.0 | MIT | Copyright (c) 2018 Sebastián Ramírez | Web 框架 |
 | [uvicorn](https://uvicorn.dev) | >=0.30.0 | BSD-3-Clause | Copyright (c) 2017-present Encode OSS Ltd. | ASGI 服务器 |
 | [httpx](https://www.python-httpx.org) | >=0.27.0 | BSD-3-Clause | Copyright (c) 2019 Encode OSS Ltd. | HTTP 客户端 |
-| [openai](https://github.com/openai/openai-python) | >=1.50.0 | Apache-2.0 | Copyright (c) OpenAI | OpenAI API SDK |
+| [openai](https://github.com/openai/openai-python) | >=1.66.0 | Apache-2.0 | Copyright (c) OpenAI | OpenAI API SDK |
 | [pydantic](https://docs.pydantic.dev) | >=2.0.0 | MIT | Copyright (c) 2017 to present Pydantic Services Inc. and individual contributors | 数据模型校验 |
 | [pydantic-settings](https://github.com/pydantic/pydantic-settings) | >=2.0.0 | MIT | Copyright (c) 2022 Samuel Colvin and other contributors | 配置管理 |
 | [python-multipart](https://github.com/andrew-d/python-multipart) | >=0.0.9 | Apache-2.0 | Copyright (c) Andrew Dunham | 文件上传 |
@@ -92,6 +92,7 @@
 | [aiofiles](https://github.com/Tinche/aiofiles) | >=24.0.0 | Apache-2.0 | Copyright (c) Tin Tvrtković | 异步文件 I/O |
 | [trafilatura](https://trafilatura.readthedocs.io) | >=2.1.0 | Apache-2.0 | Copyright (c) Adrien Barbaresi | 网页正文抽取 |
 | [beautifulsoup4](https://www.crummy.com/software/BeautifulSoup/) | >=4.15.0 | MIT | Copyright (c) Leonard Richardson | HTML 解析（网页正文抽取辅助） |
+| [Playwright Python](https://playwright.dev/python/) | >=1.55.0 | Apache-2.0 | Copyright (c) Microsoft Corporation | 可选的 JavaScript 网页渲染回退；浏览器二进制需单独安装 |
 | [numpy](https://numpy.org) | >=2.0.0 | BSD-3-Clause | Copyright (c) 2005-2025 NumPy Developers | 数值计算 |
 | [pandas](https://pandas.pydata.org) | >=2.0.0 | BSD-3-Clause | Copyright (c) 2008-2011 AQR Capital Management, LLC, Lambda Foundry, Inc. and PyData Development Team; 2011-2026 Open source contributors | 数据表格读取与解析 |
 | [scipy](https://scipy.org) | >=1.14.0 | BSD-3-Clause | Copyright (c) 2001-2002 Enthought, Inc.; 2003- SciPy Developers | 统计检验 |

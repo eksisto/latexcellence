@@ -17,6 +17,7 @@ class COREProvider(BaseResearchProvider):
     """CORE 仅用于根据 DOI 查找开放获取全文 URL，不提供搜索或引文关系。"""
 
     name = "core"
+    capabilities = frozenset({"oa_resolve", "full_text"})
 
     def __init__(self, client: httpx.AsyncClient) -> None:
         self._client = client

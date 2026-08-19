@@ -11,6 +11,14 @@ import i18n from "@/i18n";
 
 // ── 静态消息（精确匹配）──────────────────────────────────────────
 const EXACT_MAP = {
+  "rate limited": "webRateLimited",
+  "challenge required": "webChallengeRequired",
+  "captcha required": "webCaptchaRequired",
+  "javascript required": "webJavascriptRequired",
+  "access controlled": "webAccessControlled",
+  "paywall detected": "webPaywallDetected",
+  "browser unavailable": "webBrowserUnavailable",
+  "circuit open": "webCircuitOpen",
   // 网络 / 服务不可达
   "Failed to fetch": "fetchFailed",
   "NetworkError when attempting to fetch resource.": "fetchFailed",

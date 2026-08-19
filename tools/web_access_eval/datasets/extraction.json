@@ -1,0 +1,44 @@
+{
+  "schema_version": 1,
+  "suite": "extraction",
+  "cases": [
+    {
+      "case_id": "extract-authored-technical-page",
+      "fixture_path": "pages/technical_article.html",
+      "page_type": "technical_documentation",
+      "expected_status": "ok",
+      "expected_strategy": "html",
+      "gold_blocks": [
+        {
+          "block_id": "overview-heading",
+          "kind": "heading",
+          "text": "Reproducible builds",
+          "heading_path": ["Reproducible builds"]
+        },
+        {
+          "block_id": "overview-body",
+          "kind": "paragraph",
+          "text": "A reproducible build produces identical artifacts from the same source and declared inputs.",
+          "heading_path": ["Reproducible builds"]
+        },
+        {
+          "block_id": "checks-list",
+          "kind": "list",
+          "text": "Pin tool versions. Normalize timestamps. Compare artifact hashes.",
+          "heading_path": ["Reproducible builds", "Verification"]
+        },
+        {
+          "block_id": "hash-command",
+          "kind": "code",
+          "text": "sha256sum dist/app.tar.gz",
+          "heading_path": ["Reproducible builds", "Verification"]
+        }
+      ],
+      "boilerplate_text": [
+        "Products Pricing Sign in",
+        "Accept all cookies",
+        "More stories you may like"
+      ]
+    }
+  ]
+}

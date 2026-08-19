@@ -1,0 +1,345 @@
+{
+  "schema_version": 1,
+  "suite": "scholarly",
+  "system": "legacy",
+  "cases": [
+    {
+      "case_id": "scholarly-known-attention",
+      "results": [
+        {
+          "title": "Attention Is All You Need",
+          "identifiers": {
+            "doi": "10.65215/2q58a426",
+            "openalex": "W2626778328"
+          },
+          "open_access": true
+        },
+        {
+          "title": "Attention Is All You Need In Speech Separation",
+          "identifiers": {
+            "doi": "10.1109/icassp39728.2021.9413901",
+            "openalex": "W3163652268"
+          },
+          "open_access": false
+        },
+        {
+          "title": "Channel Attention Is All You Need for Video Frame Interpolation",
+          "identifiers": {
+            "doi": "10.1609/aaai.v34i07.6693",
+            "openalex": "W2997150500"
+          },
+          "open_access": true
+        },
+        {
+          "title": "Attention is all you need: utilizing attention in AI-enabled drug discovery",
+          "identifiers": {
+            "doi": "10.1093/bib/bbad467",
+            "pmid": "38189543",
+            "openalex": "W4390678101"
+          },
+          "open_access": true
+        },
+        {
+          "title": "Is Space-Time Attention All You Need for Video Understanding?",
+          "identifiers": {
+            "doi": "10.48550/arxiv.2102.05095",
+            "openalex": "W3126721948"
+          },
+          "open_access": true
+        },
+        {
+          "title": "Cross-Attention is All You Need: Adapting Pretrained Transformers for Machine Translation",
+          "identifiers": {
+            "doi": "10.18653/v1/2021.emnlp-main.132",
+            "openalex": "W3199258042"
+          },
+          "open_access": true
+        },
+        {
+          "title": "Attention is not all you need: the complicated case of ethically using large language models in healthcare and medicine",
+          "identifiers": {
+            "doi": "10.1016/j.ebiom.2023.104512",
+            "pmid": "36924620",
+            "openalex": "W4324373918"
+          },
+          "open_access": true
+        },
+        {
+          "title": "Attention Is All You Need for Chinese Word Segmentation",
+          "identifiers": {
+            "doi": "10.18653/v1/2020.emnlp-main.317",
+            "openalex": "W3099527960"
+          },
+          "open_access": true
+        },
+        {
+          "title": "Attention is all you need: An interpretable transformer-based asset allocation approach",
+          "identifiers": {
+            "doi": "10.1016/j.irfa.2023.102876",
+            "openalex": "W4385478480"
+          },
+          "open_access": false
+        },
+        {
+          "title": "Yes, \"Attention Is All You Need\", for Exemplar based Colorization",
+          "identifiers": {
+            "doi": "10.1145/3474085.3475385",
+            "openalex": "W3207381926"
+          },
+          "open_access": false
+        },
+        {
+          "title": "Cross attention is all you need: relational remote sensing change detection with transformer",
+          "identifiers": {
+            "doi": "10.1080/15481603.2024.2380126",
+            "openalex": "W4400867263"
+          },
+          "open_access": true
+        },
+        {
+          "title": "Equity‐premium prediction: Attention is all you need",
+          "identifiers": {
+            "doi": "10.1002/jae.2939",
+            "openalex": "W4295763107"
+          },
+          "open_access": false
+        },
+        {
+          "title": "Is Attention All You Need?",
+          "identifiers": {
+            "doi": "10.1007/978-3-031-84300-6_13",
+            "openalex": "W4412428247"
+          },
+          "open_access": false
+        },
+        {
+          "title": "Not All Attention Is All You Need",
+          "identifiers": {
+            "doi": "10.48550/arxiv.2104.04692",
+            "openalex": "W3155713635"
+          },
+          "open_access": true
+        },
+        {
+          "title": "Attention is All You Need in Speech Separation",
+          "identifiers": {
+            "doi": "10.48550/arxiv.2010.13154",
+            "openalex": "W3094280184"
+          },
+          "open_access": true
+        },
+        {
+          "title": "Fastformer: Additive Attention Can Be All You Need",
+          "identifiers": {
+            "doi": "10.48550/arxiv.2108.09084",
+            "openalex": "W3194203264"
+          },
+          "open_access": true
+        },
+        {
+          "title": "Is Attention all You Need in Medical Image Analysis? A Review",
+          "identifiers": {
+            "doi": "10.1109/jbhi.2023.3348436",
+            "pmid": "38157463",
+            "openalex": "W4390421984"
+          },
+          "open_access": true
+        },
+        {
+          "title": "Moral Attention Is All You Need",
+          "identifiers": {
+            "doi": "10.1080/14746700.2025.2472118",
+            "openalex": "W4408534178"
+          },
+          "open_access": true
+        },
+        {
+          "title": "Sparse attention is all you need for pre-training on tabular data",
+          "identifiers": {
+            "doi": "10.1007/s00521-024-10698-x",
+            "openalex": "W4404545263"
+          },
+          "open_access": true
+        },
+        {
+          "title": "Attention is Not All You Need: Pure Attention Loses Rank Doubly\\n Exponentially with Depth",
+          "identifiers": {
+            "doi": "10.48550/arxiv.2103.03404",
+            "openalex": "W3172099915"
+          },
+          "open_access": true
+        }
+      ],
+      "latency_ms": 2425.518199997896,
+      "provider_failures": {},
+      "measurement_gaps": [
+        "legacy_manager_does_not_expose_per_provider_failures"
+      ]
+    },
+    {
+      "case_id": "scholarly-known-bert",
+      "results": [
+        {
+          "title": "BioBERT: a pre-trained biomedical language representation model for biomedical text mining",
+          "identifiers": {
+            "doi": "10.1093/bioinformatics/btz682",
+            "pmid": "31501885",
+            "openalex": "W2911489562"
+          },
+          "open_access": true
+        },
+        {
+          "title": "Sentence-BERT: Sentence Embeddings using Siamese BERT-Networks",
+          "identifiers": {
+            "doi": "10.18653/v1/d19-1410",
+            "openalex": "W2970641574"
+          },
+          "open_access": true
+        },
+        {
+          "title": "Exploring the Limits of Transfer Learning with a Unified Text-to-Text\\n Transformer",
+          "identifiers": {
+            "doi": "10.48550/arxiv.1910.10683",
+            "openalex": "W4288089799"
+          },
+          "open_access": true
+        },
+        {
+          "title": "BEiT: BERT Pre-Training of Image Transformers",
+          "identifiers": {
+            "doi": "10.48550/arxiv.2106.08254",
+            "openalex": "W3170863103"
+          },
+          "open_access": true
+        },
+        {
+          "title": "AI-Assisted Pipeline for Dynamic Generation of Trustworthy Health Supplement Content at Scale",
+          "identifiers": {
+            "doi": "10.4230/lipics.cosit.2022.18",
+            "openalex": "W2896457183"
+          },
+          "open_access": true
+        },
+        {
+          "title": "Informer: Beyond Efficient Transformer for Long Sequence Time-Series Forecasting",
+          "identifiers": {
+            "doi": "10.1609/aaai.v35i12.17325",
+            "openalex": "W3177318507"
+          },
+          "open_access": true
+        },
+        {
+          "title": "Highly accurate protein structure prediction with AlphaFold",
+          "identifiers": {
+            "doi": "10.1038/s41586-021-03819-2",
+            "pmid": "34265844",
+            "openalex": "W3177828909"
+          },
+          "open_access": true
+        },
+        {
+          "title": "ET-BERT: A Contextualized Datagram Representation with Pre-training Transformers for Encrypted Traffic Classification",
+          "identifiers": {
+            "doi": "10.1145/3485447.3512217",
+            "openalex": "W4224315052"
+          },
+          "open_access": true
+        },
+        {
+          "title": "ALBERT: A Lite BERT for Self-supervised Learning of Language\\n Representations",
+          "identifiers": {
+            "doi": "10.48550/arxiv.1909.11942",
+            "openalex": "W2996428491"
+          },
+          "open_access": true
+        },
+        {
+          "title": "TinyBERT: Distilling BERT for Natural Language Understanding",
+          "identifiers": {
+            "doi": "10.18653/v1/2020.findings-emnlp.372",
+            "openalex": "W3105966348"
+          },
+          "open_access": true
+        },
+        {
+          "title": "Are Transformers Effective for Time Series Forecasting?",
+          "identifiers": {
+            "doi": "10.1609/aaai.v37i9.26317",
+            "openalex": "W4382203079"
+          },
+          "open_access": true
+        },
+        {
+          "title": "TransUNet: Transformers Make Strong Encoders for Medical Image Segmentation",
+          "identifiers": {
+            "doi": "10.48550/arxiv.2102.04306",
+            "openalex": "W3127751679"
+          },
+          "open_access": true
+        },
+        {
+          "title": "Rethinking Semantic Segmentation from a Sequence-to-Sequence Perspective with Transformers",
+          "identifiers": {
+            "doi": "10.1109/cvpr46437.2021.00681",
+            "openalex": "W3170841864"
+          },
+          "open_access": false
+        },
+        {
+          "title": "FAD-BERT: Improved prediction of FAD binding sites using pre-training of deep bidirectional transformers",
+          "identifiers": {
+            "doi": "10.1016/j.compbiomed.2021.104258",
+            "pmid": "33601085",
+            "openalex": "W3129155125"
+          },
+          "open_access": false
+        },
+        {
+          "title": "Transformer-XL: Attentive Language Models beyond a Fixed-Length Context",
+          "identifiers": {
+            "doi": "10.18653/v1/p19-1285",
+            "openalex": "W2964110616"
+          },
+          "open_access": true
+        },
+        {
+          "title": "mT5: A Massively Multilingual Pre-trained Text-to-Text Transformer",
+          "identifiers": {
+            "doi": "10.18653/v1/2021.naacl-main.41",
+            "openalex": "W3169483174"
+          },
+          "open_access": true
+        },
+        {
+          "title": "BERTScore: Evaluating Text Generation with BERT",
+          "identifiers": {
+            "doi": "10.48550/arxiv.1904.09675",
+            "openalex": "W2936695845"
+          },
+          "open_access": true
+        },
+        {
+          "title": "PCT: Point cloud transformer",
+          "identifiers": {
+            "doi": "10.1007/s41095-021-0229-5",
+            "openalex": "W3111535274"
+          },
+          "open_access": true
+        },
+        {
+          "title": "LXMERT: Learning Cross-Modality Encoder Representations from Transformers",
+          "identifiers": {
+            "doi": "10.18653/v1/d19-1514",
+            "openalex": "W2970231061"
+          },
+          "open_access": true
+        }
+      ],
+      "latency_ms": 1150.492699998722,
+      "provider_failures": {},
+      "measurement_gaps": [
+        "legacy_manager_does_not_expose_per_provider_failures"
+      ]
+    }
+  ]
+}

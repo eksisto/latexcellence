@@ -100,6 +100,11 @@ export function processLoadedMessages(messages) {
       citationNote: msg.citation_note || msg.citationNote || "",
       unverifiedCitations:
         msg.unverified_citations || msg.unverifiedCitations || [],
+      evidenceSources: msg.evidence_sources || msg.evidenceSources || [],
+      pageReads: msg.page_reads || msg.pageReads || [],
+      citedEvidenceIds: msg.cited_evidence_ids || msg.citedEvidenceIds || [],
+      unverifiedEvidenceIds:
+        msg.unverified_evidence_ids || msg.unverifiedEvidenceIds || [],
     };
     if (msg.role !== "assistant" || !msg.content) return normalized;
     if (!/<thinking>[\s\S]*?<\/thinking>/.test(msg.content)) return normalized;

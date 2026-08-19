@@ -53,21 +53,35 @@ latexcellence/
 │   │   ├── builtin_formatter.py     # 内置轻量 LaTeX 格式化器（latex_formatter 兜底）
 │   │   ├── web_search/               # 联网搜索模块（多引擎抽象包）
 │   │   │   ├── __init__.py           # 模块入口，向后兼容导出
-│   │   │   ├── models.py             # SearchResult / SearchResponse 数据模型
+│   │   │   ├── models.py             # legacy 搜索响应 + v2 搜索候选/引擎状态契约
+│   │   │   ├── planner.py            # 结构化查询计划契约 + 校验重试 + 规则回退
+│   │   │   ├── ranking.py            # 多引擎候选合并、RRF 与域名多样性
+│   │   │   ├── url_utils.py           # URL 安全规范化、跟踪参数清理与来源分类
+│   │   │   ├── errors.py             # v2 类型化抓取失败与产物契约
 │   │   │   ├── base.py               # BaseSearchEngine 抽象基类
-│   │   │   ├── manager.py            # SearchManager + 全局单例 + 查询重写/Deep Read 编排
+│   │   │   ├── manager.py            # SearchManager + legacy/聚合策略 + 截止时间/熔断编排
 │   │   │   ├── deep_read.py          # DeepReader — 搜索结果页面正文抓取
+│   │   │   ├── page_reader.py         # v2 结构化读页、抽取缓存与证据编排
 │   │   │   ├── query_rewriter.py     # QueryRewriter — LLM 搜索查询重写
+│   │   │   ├── fetch/                # v2 抓取策略、条件请求与原始响应缓存
+│   │   │   │   ├── browser.py       # 可选 Playwright 回退池、健康状态与资源隔离
+│   │   │   │   ├── detector.py      # 页面阻断/挑战/付费墙/JS shell 分类
+│   │   │   │   ├── scheduler.py     # 域名并发、请求间隔与熔断调度
+│   │   │   │   ├── coordinator.py   # 抓取协调器
+│   │   │   │   ├── cache.py         # 原始响应缓存
+│   │   │   │   └── policy.py        # 抓取策略（条件请求）
+│   │   │   ├── extract/              # v2 MIME 路由、多候选抽取、质量评分、切块与证据选择
 │   │   │   └── engines/              # 具体搜索引擎实现
 │   │   │       ├── ddg.py            # DuckDuckGo HTML 引擎 + DDG Challenge 处理
 │   │   │       ├── searxng.py        # SearXNG 引擎
 │   │   │       ├── tavily.py         # Tavily Search API 引擎
 │   │   │       └── mock.py           # Mock 引擎（测试/降级）
-│   │   ├── scholarly_research/        # 学术研究工具（OpenAlex 检索、详情、引文追踪、OA 定位）
+│   │   ├── scholarly_research/        # 学术研究工具（多 Provider 联邦检索、详情、引文追踪、OA 定位）
 │   │   │   ├── __init__.py            # 包入口与生命周期 API
 │   │   │   ├── models.py              # 统一作品、作者、主题和结果模型
+│   │   │   ├── planner.py             # v2 学术查询计划契约（尚未接入运行时）
 │   │   │   ├── base.py                # 学术数据源抽象接口
-│   │   │   ├── manager.py             # ResearchManager + OpenAlex + Function Calling 工具
+│   │   │   ├── manager.py             # ResearchManager + Provider 编排 + Function Calling 工具
 │   │   │   ├── _utils.py              # 内部共享工具（DOI/URL 归一化等）
 │   │   │   └── providers/             # 可插拔学术数据源
 │   │   ├── project_tools/            # LLM Function Calling 工具集（浏览 + 编辑）
@@ -153,6 +167,7 @@ latexcellence/
 │   ├── plotgen-optimization-lessons.md      # plot_gen 闭环优化复盘与最佳实践
 │   ├── prompt-optimization-plan.md          # 提示词优化计划
 │   ├── windows-temp-permissions.md          # Windows 沙箱临时目录权限排查（pytest basetemp/ACL/清理）
+│   ├── web-access-operations.md              # 网络访问灰度、观测、容量与回滚运维
 │   ├── modules/                     # 模块文档
 │   └── showcase.md                  # 展示页（showcase）说明
 ├── tests/                           # 测试用例
@@ -167,10 +182,12 @@ latexcellence/
 │   ├── prompts/                     # 自定义提示词（expression/ 风格预设与 writing_chat/ 角色预设）
 │   ├── style_modify_sessions/       # style_modify Agent 会话缓存
 │   ├── templates/                   # 生成的 LaTeX 模板（<session_id>/ 沙箱产物）
-│   └── writing_chat_sessions/       # 写作助手聊天持久化数据
+│   ├── writing_chat_sessions/       # 写作助手聊天持久化数据
+│   └── web_cache/                   # 结构化网页原始/抽取缓存（运行时生成，可清理）
 ├── logs/                            # 运行时日志
 ├── tools/                         # 维护者工具（开发/评测/维护用脚本与 Agent 评测工作区，不进入运行时）
 │   ├── eval_common.py             # 人工评估工具共享基座（语料加载/工作区/marker 还原/命中判定/CLI 骨架）
+│   ├── web_access_eval/            # Writing Chat 网络访问评测（离线重放、legacy 手动采集、阶段 6 容量/回滚检查）
 │   ├── visual_review_api.py       # 视觉评审工具的 Responses API 请求适配
 │   ├── generality_gate.py         # Agent 闭环优化通用性门禁（硬编码特征扫描/提示词体积监控/holdout 解析/对照组回归判定）
 │   ├── tex_path.py                # 评测工具共享：TeX Live 路径自动发现（非交互 shell 也能定位 latexmk）
@@ -227,6 +244,7 @@ latexcellence/
 | 乐观锁 | 读取时返回文件 MD5，写回时校验；不一致抛 `FileConflictError`（HTTP 409），前端刷新 MD5 后重试 | [DESIGN.md §4.2](DESIGN.md) |
 | SSE 流式 | 段落检查、Agent 运行、写作助手均通过 SSE 推送 `progress` / `result` / `error` / `done` 等事件 | [modules.md](docs/modules.md) |
 | Function Calling 工具体系 | `ToolRegistry` 统一注册与管理工具开关；SearchManager / ProjectToolsManager / EditToolsManager / ResearchManager 自注册；template_gen / plot_gen / style_modify 使用 session 私有工具 | [function-calling-tools.md](docs/function-calling-tools.md) |
+| 通用搜索聚合 | `SearchQueryPlan` 经统一 JSON 校验重试生成；`SearchManager` 可并发查询多个引擎，按 URL/近重复合并后使用 RRF、来源加权和域名上限排序，并保留 legacy 回滚路径 | [backend-core.md](docs/backend-core.md) |
 | 宏包规则表检测 | 确定性规则表（命令/环境/列说明符 → 宏包）优先，零 LLM 开销；规则表未命中才 LLM 兜底 | [latex-package-rules.md](docs/latex-package-rules.md) |
 | 多文件 \input 展开 | 递归解析 `\input` / `\include` / `\subfile`，段落索引为文件内局部索引，结果按文件分组展示与写回 | [backend-core.md](docs/backend-core.md) |
 | 编译与错误翻译 | `tex_compile.py` 统一编译执行（texfot + 引擎自动检测 + PDF/A），`compile_error_translator.py` 把失败日志翻译为修复建议 | [compile.md](docs/modules/compile.md) |

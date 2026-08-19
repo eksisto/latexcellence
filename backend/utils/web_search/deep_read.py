@@ -1,8 +1,6 @@
 """Deep Read — 抓取搜索结果页面正文并提取主要内容。"""
 
 import asyncio
-import ipaddress
-import socket
 import time
 from urllib.parse import urljoin, urlparse
 
@@ -11,64 +9,10 @@ import trafilatura
 
 from backend.core.config import get_config
 from backend.core.logger import get_logger
+from backend.utils.web_search.url_utils import url_is_safe
 
 #: 手动跟随重定向的最大跳数（每跳都重新做 SSRF 校验）
 _MAX_REDIRECTS = 5
-
-
-def _ip_is_blocked(ip_text: str) -> bool:
-    """判断 IP 是否属于不应抓取的私网/环回/保留地址。"""
-    try:
-        ip = ipaddress.ip_address(ip_text)
-    except ValueError:
-        return True  # 非 IP 文本由调用方按 hostname 解析处理
-    if isinstance(ip, ipaddress.IPv6Address) and ip.ipv4_mapped:
-        return _ip_is_blocked(str(ip.ipv4_mapped))
-    return (
-        ip.is_private
-        or ip.is_loopback
-        or ip.is_link_local
-        or ip.is_reserved
-        or ip.is_multicast
-        or ip.is_unspecified
-    )
-
-
-async def _host_is_blocked(host: str) -> bool:
-    """
-    判断 host 是否指向内网/环回/保留地址。
-
-    hostname 会做 DNS 解析并逐个检查解析结果，任一地址落在私网段即拦截；
-    解析失败按不安全处理（fail closed）。
-    """
-    host = (host or "").strip().rstrip(".").lower()
-    if not host:
-        return True
-    if host == "localhost" or host.endswith(".localhost") or host.endswith(".local"):
-        return True
-    try:
-        ipaddress.ip_address(host)
-    except ValueError:
-        pass
-    else:
-        return _ip_is_blocked(host)
-    try:
-        infos = await asyncio.to_thread(socket.getaddrinfo, host, None)
-    except Exception:
-        return True
-    return any(_ip_is_blocked(info[4][0]) for info in infos)
-
-
-async def _url_is_safe(url: str) -> bool:
-    """open_page / Deep Read 只允许抓取公网 HTTPS 页面，防 SSRF。"""
-    try:
-        parsed = urlparse(url)
-        if parsed.scheme != "https":
-            return False
-        host = parsed.hostname or ""
-        return bool(host) and not await _host_is_blocked(host)
-    except Exception:
-        return False
 
 
 class DeepReader:
@@ -121,7 +65,7 @@ class DeepReader:
         """
         current = url
         for _ in range(_MAX_REDIRECTS):
-            if not await _url_is_safe(current):
+            if not await url_is_safe(current):
                 self._logger.warning(f"Deep read blocked unsafe URL: {current[:80]}")
                 return "", ""
 

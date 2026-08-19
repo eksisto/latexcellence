@@ -191,6 +191,22 @@ def test_tools_schema_has_parameter_bounds():
     assert schemas["find_in_page"]["properties"]["max_matches"]["maximum"] == 20
 
 
+def test_structured_page_reading_adds_section_tool(monkeypatch):
+    page_reading = get_config().features.function_calling.web_search.page_reading
+    monkeypatch.setattr(page_reading, "strategy", "structured")
+    schemas = {
+        item["function"]["name"]: item["function"]["parameters"]
+        for item in get_search_manager().get_tools_schema()
+    }
+
+    assert "read_page_sections" in schemas
+    assert schemas["open_page"]["properties"]["mode"]["enum"] == [
+        "outline",
+        "relevant",
+        "full",
+    ]
+
+
 # ── open_page / find_in_page 执行器 ────────────────────────────────────────
 
 

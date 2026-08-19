@@ -1,0 +1,52 @@
+{
+  "schema_version": 1,
+  "suite": "extraction",
+  "system": "structured-html-v1",
+  "cases": [
+    {
+      "case_id": "extract-authored-technical-page",
+      "status": "ok",
+      "strategy": "html",
+      "blocks": [
+        {
+          "block_id": "b0000-fac482441a06",
+          "kind": "heading",
+          "text": "Reproducible builds",
+          "heading_path": ["Reproducible builds"]
+        },
+        {
+          "block_id": "b0001-2498dd193b4e",
+          "kind": "paragraph",
+          "text": "A reproducible build produces identical artifacts from the same source and declared inputs.",
+          "heading_path": ["Reproducible builds"]
+        },
+        {
+          "block_id": "b0002-52495aacf6db",
+          "kind": "heading",
+          "text": "Verification",
+          "heading_path": ["Reproducible builds", "Verification"]
+        },
+        {
+          "block_id": "b0003-aa87275e09eb",
+          "kind": "list",
+          "text": "Pin tool versions. Normalize timestamps. Compare artifact hashes.",
+          "heading_path": ["Reproducible builds", "Verification"]
+        },
+        {
+          "block_id": "b0004-504e9729babe",
+          "kind": "code",
+          "text": "sha256sum dist/app.tar.gz",
+          "heading_path": ["Reproducible builds", "Verification"]
+        },
+        {
+          "block_id": "b0005-2c13fc904cd4",
+          "kind": "paragraph",
+          "text": "Compare the SHA-256 hash of each artifact.",
+          "heading_path": ["Reproducible builds", "Verification"]
+        }
+      ],
+      "latency_ms": 5.7983,
+      "measurement_gaps": []
+    }
+  ]
+}

@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "suite": "grounding",
+  "cases": [
+    {
+      "case_id": "grounding-reproducible-build",
+      "question": "How should the build artifact be verified?",
+      "expected_answer_terms": ["SHA-256", "compare"],
+      "evidence": [
+        {
+          "evidence_id": "hash-command",
+          "url": "https://fixtures.latexcellence.local/technical-article#verification",
+          "text": "Compare the SHA-256 hash of each artifact."
+        }
+      ]
+    }
+  ]
+}

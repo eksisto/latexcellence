@@ -1,0 +1,36 @@
+{
+  "schema_version": 1,
+  "suite": "scholarly",
+  "cases": [
+    {
+      "case_id": "scholarly-known-attention",
+      "query": "Attention Is All You Need",
+      "goal": "known_work",
+      "judgments": [
+        {
+          "title": "Attention Is All You Need",
+          "identifiers": {
+            "arxiv": "1706.03762"
+          },
+          "relevance": 3,
+          "open_access": true
+        }
+      ]
+    },
+    {
+      "case_id": "scholarly-known-bert",
+      "query": "BERT pre-training of deep bidirectional transformers",
+      "goal": "known_work",
+      "judgments": [
+        {
+          "title": "BERT: Pre-training of Deep Bidirectional Transformers for Language Understanding",
+          "identifiers": {
+            "arxiv": "1810.04805"
+          },
+          "relevance": 3,
+          "open_access": true
+        }
+      ]
+    }
+  ]
+}

@@ -57,7 +57,7 @@ Word 则相反。对它“简单”的印象来自把结构藏进 GUI：样式�
 ### 写作与检索
 
 - **写作助手**：上下文感知的多轮对话，能直接修改指定段落；深度思考折叠框、助手提示词预设、会话持久化、Markdown + KaTeX 渲染、流式回复与结构化编辑建议；上下文超限时自动压缩历史（保留最近轮次 + 摘要旧内容），也支持手动压缩会话
-- **联网检索与学术研究**：agentic 联网搜索（搜索 → 按需读页 → 页内查找，Tavily / SearXNG / DuckDuckGo）、OpenAlex 学术论文检索、引文追踪和开放获取定位，回复引用自动校验
+- **联网检索与学术研究**：agentic 联网搜索（搜索 → 按需读页 → 页内查找，Tavily / SearXNG / DuckDuckGo），可选多引擎聚合以及结构化网页抽取、标题大纲、章节读取和 BM25/MMR 证据选择；多 Provider 学术论文检索（默认 OpenAlex）、引文追踪和开放获取定位，回复引用自动校验；提供容量检查与回滚开关
 
 ### 审校与质检
 
@@ -152,7 +152,7 @@ cp config.example.json config.json
 
 环境变量 `LX_LLM_KEY` 优先级高于配置文件中的 `api_key`。
 
-学术文献检索默认关闭。可在设置页启用并填写免费的 OpenAlex API Key；Key 可从 [OpenAlex 设置页](https://openalex.org/settings/api) 获取。
+学术文献检索默认关闭。可在设置页启用各学术 Provider；默认数据源为 OpenAlex，也可填写对应 Provider 的 API Key。OpenAlex Key 可从 [OpenAlex 设置页](https://openalex.org/settings/api) 获取。
 
 ### 启动
 

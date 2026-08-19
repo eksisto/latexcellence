@@ -310,6 +310,10 @@ export default function useWritingChat() {
           thinkingClosed: true,
           tokens: 0,
           streaming: true,
+          evidenceSources: [],
+          pageReads: [],
+          citedEvidenceIds: [],
+          unverifiedEvidenceIds: [],
         },
       ]);
 

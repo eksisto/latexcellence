@@ -40,6 +40,9 @@ RS2 不直接写回 `.tex`，用户再点"应用到 .tex"才调用 `project_mana
   - `role` 中 tool 角色用于持久化工具调用结果
   - `tool_calls`（仅 assistant 角色）：LLM 请求调用的工具列表（OpenAI tool_calls 格式）
   - `tool_call_id`（仅 tool 角色）：关联到触发该结果的工具调用 ID
+  - `evidence_sources`：带 `evidence_id`、`document_id`、URL、heading path 和 block ID 的证据片段；不依赖完整网页缓存即可恢复
+  - `page_reads`：页面读取摘要与 outline，包含已读取章节、抽取策略、缓存命中和类型化失败状态
+  - `cited_evidence_ids` / `unverified_evidence_ids`：回答中的证据引用及校验结果
 - RS2 无独立 LLM 输出模型：LLM 按分隔符协议输出 `<<<LATEX>>>...<<<END>>>`（必选）+ `<<<REASON>>>...<<<END>>>`（可选）纯文本块。提取出的修改段落经 `latex_json_guard.py` 的 `validate_latex_field(relaxed=True)` 宽松校验（放行 `\t` / `\r` 等合法 LaTeX 空白），失败时回喂 LLM 重试（最多 3 次）
 - `ChatSendRequest` / `GenerateEditRequest` / `ApplyEditRequest` / `RenameSessionRequest` / `ConfirmToolRequest` / `CancelToolRequest` / `ClarifyRequest` / `CancelClarifyRequest` — 请求体
 
@@ -69,7 +72,9 @@ RS2 不直接写回 `.tex`，用户再点"应用到 .tex"才调用 `project_mana
 
 **多轮工具调用与内容一致性**：工具调用循环中，`round_idx > 0` 的每一轮在流开始前推送 `round_start`，前端收到后重置流式消息的累积文本；无工具调用的一轮内容即最终落盘回复，不再重复生成。工具调用循环上限为 6 轮（`_MAX_TOOL_ROUNDS`），支持"搜索 → 读页 → 再搜索"的 agentic 检索；仅当轮数用尽、最后一轮仍请求工具调用时，才在额外生成的最终回复流前再推送一次 `round_start`。工具证据按 `_MAX_TOOL_CONTEXT_CHARS`（60000 字符）滚动预算裁剪：只裁剪已收齐结果的旧"assistant tool_calls + tool 结果"对，始终保留当前轮（正在执行或刚完成的轮次），避免多轮搜索撑爆上下文或拆散同一轮的多工具调用。`parseThinking` 同时会剥离正文中残留的完整 thinking 块。web_search 结果（`search_results` / `search_query` / `deep_read_pages` / `rewritten_queries`）随 assistant 消息一并落盘，刷新后搜索卡片与实时展示一致。
 
-**引用校验与 untrusted 防护**：System Prompt 强制要求只能引用工具结果中真实出现的 URL；回复落盘前 `_validate_citations()` 提取正文 Markdown 链接并与当轮搜索/读页来源集合比对，未验证链接通过 `citation_note` 落盘并推送 `citation_note` SSE 事件，前端在消息气泡中展示警示。搜索结果与页面正文经 `format_for_llm()` 统一以 `UNTRUSTED DATA` 包装头注入，提示模型网页内容是数据而非指令。
+**EvidenceBundle、引用校验与 untrusted 防护**：结构化 `open_page`、`read_page_sections` 和 `find_in_page` 返回的证据片段会按 `features.writing_chat.evidence_*` 预算去重、裁剪，并以稳定 `evidence_id` 组成 `EvidenceBundle`。System Prompt 要求 URL 使用工具返回的原值，并在事实句后附 `[EVIDENCE document_id#chunk_id]`；回复落盘前同时校验 Markdown URL 和 evidence ID，结果写入 assistant 消息并通过 `citation_note` SSE 事件提示。压缩摘要会保留证据附录和页面大纲。搜索结果与页面正文经 `format_for_llm()` 统一以 `UNTRUSTED DATA` 包装头注入，提示模型网页内容是数据而非指令。
+
+**网络访问 v2 实施状态**：阶段 0-5 的契约、搜索/抽取/浏览器/学术能力与端到端证据链已经接入。`web_search.strategy` 独立控制搜索聚合，`web_search.page_reading.strategy` 控制读页链路：默认 `legacy` 使用兼容路径；`aggregate` / `structured` 分别启用 v2 搜索与结构化读取。浏览器回退默认关闭。学术全文结果会区分实际获得、缺失章节和抽取置信度，不会把摘要冒充全文。完整架构说明见 [网络访问架构](../writing-chat-web-access-architecture.md)，灰度和回滚步骤见 [运维说明](../web-access-operations.md)。
 
 **消息转换**：`to_openai_messages()` 已扩展以支持 tool 角色和 assistant+tool_calls 格式，将 `ChatMessage` 正确地转换为 OpenAI messages API 格式。
 
@@ -95,10 +100,10 @@ System Prompt 分三类：聊天角色、编辑操作、压缩摘要。
 `send()` 方法在 RS1 中通过 `_get_enabled_tools()` 动态注入工具 schema：
 
 1. **请求澄清**（内置）：`request_clarification` — 向用户提问以补充信息或做出选择（始终可用，无条件注入）
-2. **联网搜索**（`SearchManager`）：`web_search`（搜索，返回 10-15 条标题/摘要/URL）→ `open_page`（读指定页面全文）/ `find_in_page`（页内定位关键词）— 由模型按需深入阅读
+2. **联网搜索**（`SearchManager`）：`web_search` 返回标题/摘要/URL；`open_page` 读取大纲、相关证据或受限全文；结构化模式可继续调用 `read_page_sections`，`find_in_page` 基于 BM25/MMR 返回可追溯证据；legacy 模式保留原 DeepReader 行为
 3. **项目浏览**（`ProjectToolsManager`）：`list_files` / `read_file_content` / `get_section_structure` / `search_across_files` — 浏览项目文件
 4. **段落编辑**（`EditToolsManager`）：`edit_paragraph` / `undo_last_edit` — 直接修改 .tex 文件
-5. **学术研究**（`ResearchManager`）：`search_scholarly_works` / `get_work_details` / `find_related_works` / `get_full_text_or_sections` / `search_research_data_resources` — OpenAlex 论文检索、详情、引文追踪和 OA 定位
+5. **学术研究**（`ResearchManager`）：`search_scholarly_works` / `get_work_details` / `find_related_works` / `get_full_text_or_sections` / `search_research_data_resources` — 多 Provider 联邦检索、详情、引文追踪和 OA 定位；默认只启用 OpenAlex
 
 `send()` 全程使用 `chat_stream_with_tools` 流式调用 LLM。文本 token 一到即推送给前端，工具调用在流末尾累积完整后一并解析。当检测到 `tool_call` 时，service 执行以下流程：
 
@@ -186,6 +191,7 @@ writing_chat 是 `chat_stream_with_tools` 方法的主要消费者。该方法�
 | `captcha_challenge` | DDG 验证码挑战 |
 | `tool_result.search_results` | 联网搜索结果（包含在 `tool_result` 事件中） |
 | `citation_note` | 回复中存在未验证引用链接的警示 |
+| `web_stage` | 搜索、抓取、抽取、章节读取和证据选择的阶段状态 |
 | `done` | 流式结束（含 token 用量、session_id） |
 | `error` | 错误信息 |
 
@@ -202,12 +208,24 @@ writing_chat 是 `chat_stream_with_tools` 方法的主要消费者。该方法�
 | summary_temperature | 0.2 | 摘要 LLM 温度 |
 | summary_token_budget | 6000 | 摘要最大 token 数（旧配置 `summary_max_tokens` 自动迁移并告警） |
 | summary_model | 空 | 独立摘要模型；为空时跟随主模型 |
+| evidence_bundle_enabled | true | 是否持久化结构化网页证据并校验证据 ID |
+| evidence_max_chars | 24000 | 单轮证据字符预算 |
+| evidence_max_items | 12 | 单轮证据片段上限 |
 | llm.context_window_tokens | 0 | 模型上下文窗口；0=自动探测，非 0 跳过探测直接使用 |
 | llm.models_probe_url | 空 | 可选的 /models 直连探测地址，绕过不透传 /models 的网关 |
 | features.function_calling.scholarly_research.enabled | false | 学术研究工具总开关 |
 | features.function_calling.scholarly_research.max_results | 20 | 单次工具返回结果上限 |
-| features.function_calling.scholarly_research.timeout_seconds | 30 | OpenAlex 请求超时 |
-| features.function_calling.scholarly_research.providers.openalex.api_key | 空 | OpenAlex API Key；设置接口返回脱敏值 |
+| features.function_calling.scholarly_research.timeout_seconds | 30 | 学术 Provider 请求超时 |
+| features.function_calling.scholarly_research.primary_source | openalex | 兼容保留的主数据源标识；当前联邦搜索会调用所有启用的 Provider，不根据该字段改变顺序 |
+| features.function_calling.scholarly_research.providers.*.enabled | 依 Provider 而定 | 各学术数据源开关；默认启用 OpenAlex，其余默认关闭 |
+| features.function_calling.scholarly_research.providers.*.api_key | 空 | 各 Provider 的可选 API Key；设置接口返回脱敏值 |
+| features.function_calling.web_search.page_reading.strategy | legacy | `legacy` 使用 DeepReader；`structured` 启用结构化抓取、抽取、缓存与章节读取 |
+| features.function_calling.scholarly_research.ranking_mode | legacy | `legacy` 保留兼容排序；`rrf` 启用跨 Provider RRF |
+| features.function_calling.scholarly_research.full_text_enabled | false | 是否从开放获取页面结构化读取实际章节 |
+| features.function_calling.web_search.page_reading.cache_* | 见 config.example.json | 原始/抽取缓存目录、开关、TTL 与单条目大小限制 |
+| features.function_calling.web_search.page_reading.max_response_mb | 10 | 单页 HTTP 响应大小硬上限 |
+| features.function_calling.web_search.page_reading.extractor_version | html-v1 | 抽取缓存版本键；变更后旧抽取缓存自动失效 |
+| features.function_calling.web_search.page_reading.quality_threshold | 0.35 | 低于阈值时返回 `low_quality_extraction` 部分状态 |
 
 ## 前端 `useWritingChat` hook
 
@@ -225,7 +243,7 @@ writing_chat 是 `chat_stream_with_tools` 方法的主要消费者。该方法�
 - `submitClarification(answer)` 调用 `/clarify` 接口提交用户回答
 - `cancelClarification()` 调用 `/cancel-clarify` 接口取消
 
-SSE 事件处理器处理 `tool_pending`、`tool_cancelled`、`clarification_request`，并把 `scholarly_results` 存入 assistant 消息。`MessageBubble` 使用紫色折叠卡展示学术记录、文献类型、被引数、开放获取状态和 DOI 链接。
+SSE 事件处理器处理 `tool_pending`、`tool_cancelled`、`clarification_request`、`web_stage`，并把 `scholarly_results`、证据片段和页面读取摘要存入 assistant 消息。`MessageBubble` 使用折叠卡展示学术记录、页面 outline、错误分类、证据片段和 evidence ID；可将未读章节生成下一条读取请求。
 
 **会话重载一致性**：页面刷新水合后，`useWritingChat` 清空持久化的 `writingChatMessages` 并以后端会话 JSON 为准重新拉取当前会话（草稿会话除外），避免 localStorage 中的陈旧消息与磁盘 JSON 不一致；删除消息后的重载同样经过 `processLoadedMessages` 解析 thinking。
 

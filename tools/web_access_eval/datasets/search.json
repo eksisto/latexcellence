@@ -1,0 +1,37 @@
+{
+  "schema_version": 1,
+  "suite": "search",
+  "cases": [
+    {
+      "case_id": "search-official-fastapi-lifespan",
+      "query": "FastAPI lifespan official documentation",
+      "category": "official_docs",
+      "language": "en",
+      "judgments": [
+        {
+          "url": "https://fastapi.tiangolo.com/advanced/events/",
+          "relevance": 3,
+          "authoritative": true
+        },
+        {
+          "url": "https://fastapi.tiangolo.com/reference/fastapi/",
+          "relevance": 1,
+          "authoritative": true
+        }
+      ]
+    },
+    {
+      "case_id": "search-zh-python-pathlib",
+      "query": "Python pathlib 官方文档 路径拼接",
+      "category": "official_docs",
+      "language": "zh-CN",
+      "judgments": [
+        {
+          "url": "https://docs.python.org/3/library/pathlib.html",
+          "relevance": 3,
+          "authoritative": true
+        }
+      ]
+    }
+  ]
+}

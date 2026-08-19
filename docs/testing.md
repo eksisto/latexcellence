@@ -25,6 +25,7 @@ Windows 上 Codex 沙箱以专用用户执行命令，pytest 的临时目录若�
 | `test_llm_client.py` | chat_stream_with_usage 用量追踪与降级 |
 | `test_config_security.py` | 环境变量 API Key 防落盘、手动 Key 持久化、掩码保持 |
 | `test_utils/test_path_guard.py` | resolve_project_path 六层校验 |
+| `test_core/test_security_middleware.py` | CORS 白名单、访问令牌校验、同源放行与中间件拦截 |
 | `test_utils/test_input_resolver.py` | 递归展开路径穿越检测 |
 | `test_utils/test_compile_error_translator.py` | ErrorTranslation 模型、错误提取、LLM 流程、filtered_output |
 | `test_utils/test_tex_compile.py` | TexCompileResult 模型、texfot 成功/失败/超时、引擎自动检测、PDF/A 注入 |
@@ -35,6 +36,14 @@ Windows 上 Codex 沙箱以专用用户执行命令，pytest 的临时目录若�
 | `test_utils/test_project_tools_manager.py` | 项目浏览工具（list_files / read_file_content / get_section_structure / search_across_files）执行与路径保护 |
 | `test_utils/test_agent_file_tools.py` | template_gen / plot_gen / style_modify 私有文件工具共享执行层与 `line_range` schema 契约 |
 | `test_utils/test_web_search_agentic.py` / `test_web_search_tavily.py` | 联网搜索：查询重写、引擎路由、Tavily 请求与结果解析 |
+| `test_utils/test_web_access_contracts.py` | 网络访问 v2 契约：查询计划、UTC 时间、类型化抓取失败、结构化文档块引用、证据 ID 与 legacy 兼容性；纯离线运行 |
+| `test_utils/test_web_access_eval.py` | 网络访问离线评测集校验、URL/标识符归一化、重复抑制、块顺序、grounding 引用和 suite 隔离 |
+| `test_utils/test_web_search_aggregation.py` | 搜索聚合：URL 安全规范化、跟踪参数清理、来源分类、RRF、近重复、域名上限、并发超时部分结果、熔断与查询计划校验重试；纯离线运行 |
+| `test_utils/test_web_page_reading.py` | 结构化读页：HTML 标题/链接/列表/表格保留、boilerplate 清理、heading-aware chunks、BM25/MMR 证据、缓存命中、条件请求隐私和抽取版本失效；纯离线运行 |
+| `test_utils/test_web_access_stage6.py` | 网络访问阶段 6：回滚开关与本地容量检查；纯离线运行 |
+| `test_utils/test_web_fetch_resilience.py` | 阻断分类、重试/熔断、浏览器 URL 策略和浏览器关闭降级；纯离线运行 |
+| `tools/web_access_eval/legacy.py` | 维护者手动采集 legacy/aggregate 搜索、legacy 学术结果或脱敏 grounding trace；aggregate 会保存 v2 引擎失败状态，需要显式 `--allow-network` 才访问外部服务 |
+| `tools/web_access_eval/spike.py` | 离线比较 BeautifulSoup/trafilatura、Playwright 本地页面和 `pdftotext`，不属于生产运行时 |
 | `test_utils/test_bib_manager_format_rules.py` | 参考文献格式确定性规则语料（格式识别命中与预期） |
 | `test_utils/test_latex_package_analyzer.py` / `test_latex_package_rules.py` / `test_latex_package_corpus.py` / `test_latex_package_compile_verification.py` | 宏包规则表：分析器、规则数据完整性、语料查准/查全基线、离线编译验证 |
 | `test_api/test_typo_check.py` | 模型校验、LLM mock、marker 保护、写回 |
@@ -54,6 +63,7 @@ Windows 上 Codex 沙箱以专用用户执行命令，pytest 的临时目录若�
 | `test_api/test_paragraph_translate.py` | 模型校验、LLM mock、marker 保护、翻译写回 |
 | `test_api/test_plot_gen.py` | 数据上传、Agent 生成/微调 SSE、沙箱校验、会话文件与 trace |
 | `test_api/test_project_browse.py` | 项目目录浏览与路径解析 |
+| `test_api/test_project_undo.py` | 项目撤销/重做操作与状态检查 |
 | `test_api/test_latex_formatter.py` | 统一格式化入口（latexindent / 内置兜底） |
 | `test_changes_contract.py` / `test_prompts.py` | changes 契约（主字段与 changes 一致性）与提示词模板回归 |
 

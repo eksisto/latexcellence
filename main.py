@@ -69,12 +69,20 @@ async def lifespan(app: FastAPI):
     from backend.utils.web_search import (
         close_deep_reader,
         close_search_manager,
+        close_structured_page_reader,
+        initialize_structured_page_reader,
     )
     from backend.modules.bib_manager.provider_manager import (
         close_provider_manager,
     )
 
     await initialize_research_http_client()
+    browser_health = await initialize_structured_page_reader()
+    if browser_health.enabled and not browser_health.ready:
+        logger.warning(
+            "Browser page reading is enabled but unavailable: %s",
+            browser_health.last_error,
+        )
     cleanup_task = asyncio.create_task(cleanup_loop())
     plot_cleanup_task = asyncio.create_task(plot_cleanup_loop())
     style_modify_cleanup_task = asyncio.create_task(style_modify_cleanup_loop())
@@ -104,6 +112,10 @@ async def lifespan(app: FastAPI):
             await close_deep_reader()
         except Exception as e:
             logger.warning("Failed to close deep reader: %s", e)
+        try:
+            await close_structured_page_reader()
+        except Exception as e:
+            logger.warning("Failed to close structured page reader: %s", e)
         try:
             await close_provider_manager()
         except Exception as e:

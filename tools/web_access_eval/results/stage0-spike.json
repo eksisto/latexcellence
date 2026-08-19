@@ -1,0 +1,27 @@
+{
+  "system": "stage0-spike",
+  "html": {
+    "fixture": "tools\\web_access_eval\\datasets\\pages\\technical_article.html",
+    "beautifulsoup": {
+      "status": "ok",
+      "block_count": 8,
+      "text_chars": 259,
+      "latency_ms": 1.583
+    },
+    "trafilatura_legacy": {
+      "status": "ok",
+      "text_chars": 264,
+      "latency_ms": 3.814
+    }
+  },
+  "browser": {
+    "status": "unavailable",
+    "reason": "browser_executable_missing"
+  },
+  "pdf": {
+    "status": "ok",
+    "parser": "pdftotext",
+    "text_chars": 1,
+    "latency_ms": 11.319
+  }
+}

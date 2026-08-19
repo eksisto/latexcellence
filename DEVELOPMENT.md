@@ -18,5 +18,7 @@
 | [docs/plotgen-optimization-lessons.md](docs/plotgen-optimization-lessons.md) | plot_gen 闭环优化复盘与最佳实践说明 |
 | [docs/prompt-optimization-plan.md](docs/prompt-optimization-plan.md) | 提示词优化计划（Qwen3.6-35B-A3B） |
 | [docs/windows-temp-permissions.md](docs/windows-temp-permissions.md) | Windows 下 Codex 沙箱临时目录权限问题排查（pytest basetemp / ACL / 清理） |
+| [docs/web-access-operations.md](docs/web-access-operations.md) | Writing Chat 网络访问灰度、观测、容量检查、缓存维护与回滚 |
+| [docs/writing-chat-web-access-architecture.md](docs/writing-chat-web-access-architecture.md) | Writing Chat 网络访问架构：搜索、学术检索、分级抓取、结构化抽取与证据链 |
 | [docs/showcase.md](docs/showcase.md) | 独立展示页 |
 | [tools/visual_review_api.py](tools/visual_review_api.py) | 视觉评审工具的 Chat Completions → Responses API 请求适配 |
