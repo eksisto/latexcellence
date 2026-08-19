@@ -339,16 +339,18 @@ async def _read_file_content_executor(tool_name: str, arguments: dict[str, Any])
     line_width = len(str(end))
     line_truncated = False
     numbered_lines: list[str] = []
+    display_lines: list[str] = []
     for i, line in enumerate(selected):
         if len(line) > _READ_MAX_LINE_CHARS:
             line = line[:_READ_MAX_LINE_CHARS] + "…"
             line_truncated = True
+        display_lines.append(line)
         numbered_lines.append(f"{i + start:>{line_width}} | {line}")
     numbered = "\n".join(numbered_lines)
 
     body = (
         f"文件：{file_path}（共 {total} 行，显示 {start}–{end} 行，"
-        f"约 {sum(len(line) for line in selected)} 字符）\n"
+        f"约 {sum(len(line) for line in display_lines)} 字符）\n"
         f"{'─' * 60}\n{numbered}"
     )
 

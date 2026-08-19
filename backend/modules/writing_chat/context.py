@@ -778,7 +778,13 @@ def _select_sample(
 
 
 def _paragraph_xml(index: int, text: str) -> str:
-    """将单个段落渲染为 <paragraph> XML 标签。"""
+    """将单个段落渲染为 <paragraph> XML 标签。
+
+    注意：段落正文（LaTeX 源码）刻意不做 XML 转义——该信封由 LLM 作为
+    文本消费而非机器解析，转义 `&` / `<` 会破坏 LaTeX 可读性；正文出现
+    字面 `<`（如数学模式 `$a<b$`）时信封不是严格 well-formed XML，属
+    可接受的取舍。仅对 source 属性与错误消息等元数据做转义。
+    """
     return f'<paragraph index="{index}">\n{text}\n</paragraph>'
 
 

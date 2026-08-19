@@ -312,6 +312,9 @@ class TestReadFileContent:
             {"_workspace_id": ws_id, "file_path": "long.tex"},
         )
         assert "长行已按 500 字符截断" in result
+        # 头部字符统计按截断后的实际显示内容计算（500 字符 + 省略号）
+        assert "约 501 字符" in result
+        assert "约 600 字符" not in result
 
 
 # ── get_section_structure ───────────────────────────────────────────────
