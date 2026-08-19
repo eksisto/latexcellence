@@ -636,3 +636,40 @@ def test_custom_instructions_styles_must_not_ambiguate():
     assert "style" in rule
     assert "tone" in rule
     assert "terminology" in rule
+
+
+# ── 阶段 5 计划 B：写作助手长上下文改造 ──────────────────────────────────────
+
+
+def test_chat_system_describes_xml_context_format():
+    """chat_system 提示词描述了 XML 信封上下文格式。"""
+    rendered = _render("writing_chat", "chat_system")
+    assert "<documents>" in rendered
+    assert "<document source=" in rendered
+    assert "<document_content>" in rendered
+    assert "<paragraph index=" in rendered
+    assert "<context_note>" in rendered
+
+
+def test_chat_system_has_reference_protocol():
+    """chat_system 提示词要求模型先定位段落再引用。"""
+    rendered = _render("writing_chat", "chat_system")
+    assert "locate" in rendered or "relevant" in rendered
+    assert "Paragraph" in rendered
+    assert "read_file_content" in rendered or "search_across_files" in rendered
+
+
+def test_chat_system_mentions_truncation_handling():
+    """chat_system 提示词说明上下文可能截断。"""
+    rendered = _render("writing_chat", "chat_system")
+    assert "truncated" in rendered.lower() or "incomplete" in rendered.lower()
+
+
+def test_writing_chat_chat_system_no_edit_contract_unchanged():
+    """chat_system 仍然包含不能直接修改文件的核心契约。"""
+    chat = get_prompt(
+        "writing_chat", "chat_system", context_block="", language="Chinese"
+    )
+    assert "Never invent URLs, references, DOIs, citations, or data" in chat
+    assert "insufficient" in chat
+    assert "cannot modify" in chat.lower() or "修改" in chat

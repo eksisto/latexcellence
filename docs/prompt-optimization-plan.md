@@ -1,6 +1,6 @@
 # LateXcellence 提示词优化计划
 
-> 状态：阶段 0 至阶段 4 已完成；阶段 5 审查已完成，计划 A 已实施。
+> 状态：阶段 0 至阶段 4 已完成；阶段 5 审查已完成，计划 A 和 B 已实施。
 >
 > 建立日期：2026-08-17
 
@@ -372,15 +372,43 @@ Agent 阶段拆分；短板是上下文元数据、长文档检索策略、高�
   `prompt_comprehension_eval --dry-run` 29 例通过；`check_prompt_structure.py`
   通过；全量 `pytest tests/ -q` 1755 通过 / 5 跳过，无回归。
 
-##### 计划 B：写作助手长上下文改造（P0）
+##### 计划 B：写作助手长上下文改造（P0） ✅
 
 1. 将文件上下文改为稳定的 XML 信封，例如 `<documents>`、`<document>`、`<source>`、
    `<document_content>` 和带索引的段落标签。
 2. 保留文件路径、段落索引、章节信息和上下文截断状态等元数据。
 3. 在写作 system prompt 中要求模型先定位并引用相关段落，再回答文档相关问题。
-4. 将“文件开头固定截取”改为“目标段落锚点 + 相关内容检索 + 明确预算”的策略；不能
+4. 将"文件开头固定截取"改为"目标段落锚点 + 相关内容检索 + 明确预算"的策略；不能
    获取完整相关内容时，明确告诉模型上下文不完整。
 5. 为文档后半部分、跨段落问题、无相关命中和截断状态增加评测语料。
+
+###### 计划 B 完成情况（2026-08-19）
+
+- `context.py` 的 `build_file_context_text` 改为 XML 信封格式：`<documents>` →
+  `<document source="path">` → `<total_paragraphs>` + `<document_content>` →
+  `<paragraph index="N">` + 可选 `<context_note>`（截断状态）。
+- 无指定段落时：从 head（前 3 段）、middle（中间 3 段）、tail（后 3 段）采样，
+  覆盖全文；段落总数 ≤ 9 时全量展示。旧策略为固定取文件开头最多 12 段，长文档
+  后半部分系统性丢失。
+- 指定段落时：以该段为锚点取 ±2 范围（旧策略为 ±1），提供更多上下文。
+- `prompts.py` 的 `chat_system` 新增 `<context>` 区的 XML 格式说明、段落引用协议
+  （"先定位段落编号，再引用"）和截断处理指令（使用工具检索额外段落或声明上下文
+  不完整）。
+- `tests/test_prompts.py` 新增 4 个阶段 5 计划 B 测试（XML 格式描述、引用协议、
+  截断处理说明、核心契约不变）。
+- `tests/test_api/test_writing_chat.py` 新增 `TestContextXmlEnvelope` 类，覆盖 XML
+  信封结构、截断注释、错误状态、XML 转义、锚点选择（±2 半径、边界不越界）、
+  head/middle/tail 采样（小文件不截断、大文件截断）、`paragraph_index=-1` 返回空、
+  指定段落返回锚点范围段落等场景。
+- `tools/prompt_comprehension_eval/run_eval.py` 新增 2 个评测用例：
+  `writing_chat.doc_reference_protocol`（模型应引用段落编号）和
+  `writing_chat.truncated_context_awareness`（模型应识别截断状态）；现有
+  `writing_chat.chat_system` 用例的 context_block 升级为 XML 格式。
+- `docs/modules/writing_chat.md` 的上下文锚点说明已同步更新。
+- 回归：`tests/test_prompts.py` 48 通过；`tests/test_api/test_writing_chat.py`
+  60 通过；全量 `pytest tests/ -q` 1770 通过 / 5 跳过，无回归；
+  `tools/generality_gate.py size` 与 `check --full` 通过；
+  `prompt_comprehension_eval --dry-run` 31 例通过（含 2 新增）。
 
 ##### 计划 C：结构化输出和示例补齐（P1）
 

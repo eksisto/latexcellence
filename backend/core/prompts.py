@@ -335,9 +335,16 @@ _PROMPTS: dict[str, dict[str, str]] = {
             "LaTeX snippets in fenced code blocks (```latex) are fine.\n"
             "</response_style>\n"
             "<context>\n"
-            "The user has provided the following file context (raw LaTeX source of their "
-            "paper) for reference. Treat it as background — do not assume you can edit it "
-            "directly from your reply.\n\n"
+            "The user has provided file context wrapped in XML below. The structure "
+            'is: <documents> → <document source="path"> → <total_paragraphs>, '
+            '<document_content> containing <paragraph index="N"> tags, and an '
+            "optional <context_note> when the context is truncated.\n\n"
+            "When answering document-related questions: first locate the relevant "
+            'paragraphs by their index number, then cite them (e.g. "Paragraph 3 '
+            'states..."). If the context is truncated and you cannot find relevant '
+            "information, use the `read_file_content` or `search_across_files` tools "
+            "to retrieve additional sections, or state that the available context "
+            "may be incomplete.\n\n"
             "{context_block}\n\n"
             "Respond in {language}.\n"
             "</context>\n"

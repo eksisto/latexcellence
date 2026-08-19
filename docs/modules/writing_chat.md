@@ -66,7 +66,7 @@ RS2 不直接写回 `.tex`，用户再点"应用到 .tex"才调用 `project_mana
 
 **删除消息**：summary 消息删除时还原 snapshot（恢复原始对话）；普通消息直接移除。
 
-**上下文锚点**：`build_file_context_text` 构造纯文本上下文（全文最多 12 段，或当前段 ±1 段）。
+**上下文锚点**：`build_file_context_text` 构造 XML 信封格式的文件上下文（`<documents>` → `<document>` → `<document_content>` → `<paragraph index="N">`），包含源文件路径、段落总数和截断状态元数据。指定段落时以该段为锚点取 ±2 范围内的段落；未指定时采用 head/middle/tail 采样策略（各 3 段），确保全文覆盖面。截断时在 `<context_note>` 中告知模型上下文不完整，建议使用工具检索额外段落。
 
 **工具消息持久化**：`append_tool_messages()` 将 Function Calling 工具调用循环产生的 assistant（含 tool_calls）和 tool 角色消息持久化到上下文，确保工具调用历史在会话间可追溯。tool 角色消息是内部上下文（仅用于回传 LLM），前端聊天区不直接展示（`isVisibleChatMessage` 过滤），工具活动由 `ToolStatusBar` 指示器呈现。
 

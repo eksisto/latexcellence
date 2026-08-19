@@ -464,16 +464,94 @@ def _chat_system_check(response: str) -> tuple[str, str]:
     return run_checks(response, [("chat-no-edit", lambda r: _wrap(critical, r))])
 
 
+_XML_CONTEXT_BLOCK = (
+    "<documents>\n"
+    '<document source="main.tex">\n'
+    "<total_paragraphs>5</total_paragraphs>\n"
+    "<document_content>\n"
+    '<paragraph index="0">\n'
+    "\\section{Introduction}\n"
+    "This paper presents a novel approach.\n"
+    "</paragraph>\n"
+    '<paragraph index="1">\n'
+    "We evaluate the method on three benchmarks.\n"
+    "</paragraph>\n"
+    "</document_content>\n"
+    "<context_note>Context is truncated: 3 of 5 paragraphs omitted. "
+    "The shown paragraphs may not cover all relevant content. "
+    "Use the read_file_content or search_across_files tools to "
+    "retrieve additional sections if needed.</context_note>\n"
+    "</document>\n"
+    "</documents>"
+)
+
 add_case(
     "writing_chat.chat_system",
     get_prompt(
         "writing_chat",
         "chat_system",
-        context_block="FILE: main.tex\nCONTEXT: \\section{Introduction}\n...",
+        context_block=_XML_CONTEXT_BLOCK,
         language="Chinese",
     ),
     "请用一句话回答：你能否在这个回复中直接修改我的 main.tex？",
     _chat_system_check,
+)
+
+
+def _doc_reference_check(response: str) -> tuple[str, str]:
+    """模型应在回答中引用具体段落编号。"""
+
+    def critical():
+        assert has_cjk(response), "language=Chinese 但响应不是中文"
+        has_paragraph_ref = (
+            "Paragraph" in response or "段落" in response or "第" in response
+        )
+        assert has_paragraph_ref, "回答未引用具体段落编号"
+
+    return run_checks(response, [("doc-reference", lambda r: _wrap(critical, r))])
+
+
+add_case(
+    "writing_chat.doc_reference_protocol",
+    get_prompt(
+        "writing_chat",
+        "chat_system",
+        context_block=_XML_CONTEXT_BLOCK,
+        language="Chinese",
+    ),
+    "文档中提到了哪些评估基准？请引用相关段落回答。",
+    _doc_reference_check,
+)
+
+
+def _truncation_check(response: str) -> tuple[str, str]:
+    """模型应识别截断状态并告知用户上下文可能不完整。"""
+
+    def critical():
+        assert has_cjk(response), "language=Chinese 但响应不是中文"
+        mentions_incomplete = (
+            "不完整" in response
+            or "截断" in response
+            or "不全" in response
+            or "部分" in response
+            or "可能" in response
+            or "additional" in response.lower()
+        )
+        assert mentions_incomplete, "回答未提及上下文可能不完整或截断"
+
+    return run_checks(response, [("truncation-aware", lambda r: _wrap(critical, r))])
+
+
+add_case(
+    "writing_chat.truncated_context_awareness",
+    get_prompt(
+        "writing_chat",
+        "chat_system",
+        context_block=_XML_CONTEXT_BLOCK,
+        language="Chinese",
+    ),
+    "请告诉我文档的结论部分讨论了什么。",
+    _truncation_check,
 )
 
 

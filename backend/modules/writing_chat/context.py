@@ -685,16 +685,26 @@ class ConversationContext:
 
     # ── 上下文锚点 ─────────────────────────────────────────────────────────
 
+    # 无指定段落时的采样预算（head / middle / tail 各取多少段）
+    _SAMPLE_HEAD = 3
+    _SAMPLE_MIDDLE = 3
+    _SAMPLE_TAIL = 3
+    # 指定段落时的上下文扩展半径
+    _ANCHOR_RADIUS = 2
+
     @staticmethod
     def build_file_context_text(
         file_path: str, paragraph_index: int | None, workspace_id: str = ""
     ) -> str:
         """
-        构造文件段落上下文文本（原始 LaTeX 源码，无 marker 剥离）。
+        构造文件段落上下文 XML 信封（原始 LaTeX 源码，无 marker 剥离）。
 
-        若 paragraph_index 为 None，加载全文段落拼接（最多 12 段，超过则截断并标注省略）。
-        若指定 paragraph_index，则只返回该段及其上下文相邻段。
+        返回 <documents> 包裹的 XML，包含 <document>（源路径、段落统计）、
+        <document_content>（带索引的 <paragraph> 标签）和 <context_note>（截断状态）。
+
         若 paragraph_index 为 -1，返回空字符串（表示不注入上下文内容）。
+        若指定 paragraph_index ≥ 0，以该段为锚点取 ±ANCHOR_RADIUS 范围的段落。
+        若 paragraph_index 为 None，采用 head + middle + tail 采样策略覆盖全文。
         """
         # -1 表示显式关闭上下文锚点，不注入任何文件内容
         if paragraph_index == -1:
@@ -706,35 +716,125 @@ class ConversationContext:
         try:
             paragraphs = pm.get_paragraphs(file_path)
         except Exception as e:
-            return f"(failed to load paragraphs: {e})"
+            return _documents_envelope(file_path, [], 0, truncated=False, error=str(e))
         raw_paras: list[tuple[int, str]] = [(p.index, p.text) for p in paragraphs]
+        total = len(raw_paras)
 
         if paragraph_index is not None:
-            selected = [
-                (i, t)
-                for (i, t) in raw_paras
-                if i == paragraph_index
-                or i == paragraph_index - 1
-                or i == paragraph_index + 1
-            ]
+            selected, selected_indices = _select_anchor(
+                raw_paras, paragraph_index, ConversationContext._ANCHOR_RADIUS
+            )
+            truncated = len(selected) < total
         else:
-            if len(raw_paras) > 12:
-                selected = raw_paras[:12]
-                omitted = len(raw_paras) - 12
-                note = f"\n... ({omitted} paragraphs omitted) ..."
-            else:
-                selected = raw_paras
-                note = ""
-            return _format_paragraphs(selected) + note
+            selected, selected_indices, truncated = _select_sample(
+                raw_paras,
+                ConversationContext._SAMPLE_HEAD,
+                ConversationContext._SAMPLE_MIDDLE,
+                ConversationContext._SAMPLE_TAIL,
+            )
 
-        return _format_paragraphs(selected)
+        return _documents_envelope(file_path, selected, total, truncated=truncated)
 
 
-def _format_paragraphs(items: list[tuple[int, str]]) -> str:
-    lines = []
-    for idx, text in items:
-        lines.append(f"[Paragraph {idx}]\n{text}")
-    return "\n\n".join(lines)
+# ── 上下文格式化辅助函数 ─────────────────────────────────────────────────────
+
+
+def _select_anchor(
+    raw_paras: list[tuple[int, str]],
+    paragraph_index: int,
+    radius: int,
+) -> tuple[list[tuple[int, str]], set[int]]:
+    """以 paragraph_index 为中心取 ±radius 的段落（基于 index 值，非位置）。"""
+    selected = [(i, t) for (i, t) in raw_paras if abs(i - paragraph_index) <= radius]
+    indices = {i for i, _ in selected}
+    return selected, indices
+
+
+def _select_sample(
+    raw_paras: list[tuple[int, str]],
+    head_n: int,
+    middle_n: int,
+    tail_n: int,
+) -> tuple[list[tuple[int, str]], set[int], bool]:
+    """无指定段落时，从头/中/尾采样，返回 (selected, selected_indices, truncated)。"""
+    total = len(raw_paras)
+    if total <= head_n + middle_n + tail_n:
+        indices = {i for i, _ in raw_paras}
+        return raw_paras, indices, False
+
+    head = raw_paras[:head_n]
+    mid_start = max(head_n, (total - middle_n) // 2)
+    middle = raw_paras[mid_start : mid_start + middle_n]
+    tail = raw_paras[-tail_n:]
+
+    # 去重保序
+    seen: set[int] = set()
+    selected: list[tuple[int, str]] = []
+    for item in head + middle + tail:
+        if item[0] not in seen:
+            selected.append(item)
+            seen.add(item[0])
+    return selected, seen, True
+
+
+def _paragraph_xml(index: int, text: str) -> str:
+    """将单个段落渲染为 <paragraph> XML 标签。"""
+    return f'<paragraph index="{index}">\n{text}\n</paragraph>'
+
+
+def _documents_envelope(
+    file_path: str,
+    paragraphs: list[tuple[int, str]],
+    total_paragraphs: int,
+    *,
+    truncated: bool = False,
+    error: str = "",
+) -> str:
+    """构造完整的 <documents> XML 信封。"""
+    if error:
+        return (
+            "<documents>\n"
+            f'<document source="{_xml_attr(file_path)}">\n'
+            f"<context_note>Error loading file: {_xml_text(error)}</context_note>\n"
+            "</document>\n"
+            "</documents>"
+        )
+
+    para_count = len(paragraphs)
+    omitted = total_paragraphs - para_count
+
+    parts: list[str] = [
+        "<documents>",
+        f'<document source="{_xml_attr(file_path)}">',
+        f"<total_paragraphs>{total_paragraphs}</total_paragraphs>",
+        "<document_content>",
+    ]
+    for idx, text in paragraphs:
+        parts.append(_paragraph_xml(idx, text))
+    parts.append("</document_content>")
+
+    if truncated:
+        parts.append(
+            f"<context_note>Context is truncated: {omitted} of "
+            f"{total_paragraphs} paragraphs omitted. "
+            "The shown paragraphs may not cover all relevant content. "
+            "Use the read_file_content or search_across_files tools to "
+            "retrieve additional sections if needed.</context_note>"
+        )
+
+    parts.append("</document>")
+    parts.append("</documents>")
+    return "\n".join(parts)
+
+
+def _xml_attr(s: str) -> str:
+    """转义 XML 属性中的特殊字符。"""
+    return s.replace("&", "&amp;").replace('"', "&quot;").replace("<", "&lt;")
+
+
+def _xml_text(s: str) -> str:
+    """转义 XML 文本内容中的特殊字符。"""
+    return s.replace("&", "&amp;").replace("<", "&lt;")
 
 
 def _derive_title(messages: list[dict]) -> str:

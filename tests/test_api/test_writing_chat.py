@@ -411,6 +411,164 @@ class TestContext:
         assert ctx.should_compress()
 
 
+# ── Context XML envelope tests ─────────────────────────────────────────────
+
+
+class TestContextXmlEnvelope:
+    """测试 build_file_context_text 的 XML 信封格式和检索策略。"""
+
+    def test_xml_envelope_basic_structure(self, open_project):
+        """XML 信封包含 <documents> → <document> → <document_content> → <paragraph>。"""
+        from backend.modules.writing_chat.context import (
+            _documents_envelope,
+        )
+
+        result = _documents_envelope(
+            "main.tex",
+            [(0, "Hello"), (1, "World")],
+            total_paragraphs=2,
+            truncated=False,
+        )
+        assert result.startswith("<documents>")
+        assert result.endswith("</documents>")
+        assert '<document source="main.tex">' in result
+        assert "<total_paragraphs>2</total_paragraphs>" in result
+        assert "<document_content>" in result
+        assert "</document_content>" in result
+        assert '<paragraph index="0">' in result
+        assert '<paragraph index="1">' in result
+        assert "Hello" in result
+        assert "World" in result
+
+    def test_truncation_note_present_when_truncated(self, open_project):
+        """截断时包含 <context_note>。"""
+        from backend.modules.writing_chat.context import (
+            _documents_envelope,
+        )
+
+        result = _documents_envelope(
+            "main.tex",
+            [(0, "A"), (1, "B")],
+            total_paragraphs=20,
+            truncated=True,
+        )
+        assert "<context_note>" in result
+        assert "18 of 20" in result
+        assert "truncated" in result.lower() or "Truncated" in result
+        assert "read_file_content" in result
+
+    def test_no_truncation_note_when_not_truncated(self, open_project):
+        """未截断时无 <context_note>。"""
+        from backend.modules.writing_chat.context import (
+            _documents_envelope,
+        )
+
+        result = _documents_envelope(
+            "main.tex",
+            [(0, "A"), (1, "B")],
+            total_paragraphs=2,
+            truncated=False,
+        )
+        assert "<context_note>" not in result
+
+    def test_error_state_in_envelope(self, open_project):
+        """加载失败时信封包含错误信息。"""
+        from backend.modules.writing_chat.context import (
+            _documents_envelope,
+        )
+
+        result = _documents_envelope(
+            "missing.tex",
+            [],
+            0,
+            error="file not found",
+        )
+        assert "<context_note>Error loading file:" in result
+        assert "file not found" in result
+
+    def test_xml_attr_escaping(self, open_project):
+        """文件路径中的特殊字符被正确转义。"""
+        from backend.modules.writing_chat.context import (
+            _documents_envelope,
+        )
+
+        result = _documents_envelope(
+            'path with "quotes" & <brackets>',
+            [(0, "text")],
+            total_paragraphs=1,
+        )
+        assert "&quot;" in result
+        assert "&amp;" in result
+        assert "&lt;" in result
+
+    def test_anchor_selection_radius(self, open_project):
+        """指定段落时取 ±ANCHOR_RADIUS 范围内的段落。"""
+        from backend.modules.writing_chat.context import (
+            _select_anchor,
+        )
+
+        paras = [(i, f"para{i}") for i in range(20)]
+        selected, indices = _select_anchor(paras, 10, radius=2)
+        assert indices == {8, 9, 10, 11, 12}
+        assert len(selected) == 5
+
+    def test_anchor_selection_at_boundary(self, open_project):
+        """锚点在边界时不越界。"""
+        from backend.modules.writing_chat.context import (
+            _select_anchor,
+        )
+
+        paras = [(i, f"para{i}") for i in range(5)]
+        selected, indices = _select_anchor(paras, 0, radius=2)
+        assert indices == {0, 1, 2}
+        selected2, indices2 = _select_anchor(paras, 4, radius=2)
+        assert indices2 == {2, 3, 4}
+
+    def test_sample_selection_head_middle_tail(self, open_project):
+        """无指定段落时从 head/middle/tail 采样。"""
+        from backend.modules.writing_chat.context import (
+            _select_sample,
+        )
+
+        paras = [(i, f"para{i}") for i in range(30)]
+        selected, indices, truncated = _select_sample(paras, 3, 3, 3)
+        assert truncated is True
+        assert len(selected) <= 9
+        # head 段：0, 1, 2
+        assert 0 in indices and 1 in indices and 2 in indices
+        # tail 段：27, 28, 29
+        assert 27 in indices and 28 in indices and 29 in indices
+
+    def test_sample_selection_small_file_no_truncation(self, open_project):
+        """段落总数 <= head+middle+tail 时不截断。"""
+        from backend.modules.writing_chat.context import (
+            _select_sample,
+        )
+
+        paras = [(i, f"para{i}") for i in range(5)]
+        selected, indices, truncated = _select_sample(paras, 3, 3, 3)
+        assert truncated is False
+        assert len(selected) == 5
+
+    def test_paragraph_index_minus1_returns_empty(self, open_project):
+        """paragraph_index=-1 返回空字符串。"""
+        result = ConversationContext.build_file_context_text(
+            "main.tex", -1, workspace_id="test-ws"
+        )
+        assert result == ""
+
+    def test_paragraph_index_specific_returns_anchored_paras(self, open_project):
+        """指定段落返回锚点 ±2 范围的段落 XML。"""
+        result = ConversationContext.build_file_context_text(
+            "main.tex", 1, workspace_id="test-ws"
+        )
+        assert "<documents>" in result
+        assert '<paragraph index="1">' in result
+        # 应该包含附近的段落 (0, 1, 2)
+        assert '<paragraph index="0">' in result
+        assert '<paragraph index="2">' in result
+
+
 # ── Service.send tests (mock chat_stream_with_usage) ──────────────────────
 
 
