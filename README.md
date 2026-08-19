@@ -2,7 +2,7 @@
 
 <img align="right" width="150" height="150" alt="latexcellence logo" src="frontend/public/favicon.svg">
 
-让排版隐于无形，让思考回归本身。
+让技术退居幕后，让思想落于纸上。
 
 LateXcellence 是一个由 LLM 驱动的智能体论文写作助手：面向高校理工科学生，覆盖从文献检索、写作、校对到排版的论文创作全流程。后端 FastAPI + 前端 React/Vite，智能体通过工具调用真正打开项目、读写文件、编译验证，而不是只停留在对话。
 

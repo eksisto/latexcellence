@@ -126,7 +126,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="LaTeXcellence",
-    description="让排版隐于无形，让思考回归本身",
+    description="让技术退居幕后，让思想落于纸上",
     version="0.1.0",
     lifespan=lifespan,
 )

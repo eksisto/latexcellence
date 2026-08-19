@@ -34,7 +34,7 @@ export const TYPE_LINES = [
   "% slogan.tex",
   "\\documentclass{ctexart}",
   "\\begin{document}",
-  "让排版隐于无形，让思考回归本身",
+  "让技术退居幕后，让思想落于纸上",
   "\\end{document}",
 ];
 
@@ -79,7 +79,7 @@ export const SCENES = [
     ],
     eyebrow: "AI · LaTeX · Academic Writing",
     wordmark: "LaTeXcellence",
-    slogan: "让排版隐于无形，让思考回归本身",
+    slogan: "让技术退居幕后，让思想落于纸上",
     lead:
       "由 LLM 驱动的智能体论文写作助手：面向理工科学术写作，从检索文献、执笔成文，到校对与排版，陪你走完论文的每一步。" +
       " 它真正走进你的工程，打开项目、读写文件、编译验证，把想法一步步落成纸面。",
@@ -626,7 +626,7 @@ export const SCENES = [
     label: "尾声",
     glyphs: [{ cls: "g1", parallax: "-0.15", text: "\\end{document}" }],
     eyebrow: "Compiled.",
-    title: "让排版隐于无形<br>让思考回归本身",
+    title: "让技术退居幕后<br>让思想落于纸上",
     desc: "从内容导入到 AI 辅助，从文本校对到版本控制。此刻，打开你的 .tex 工程，把排版交给 Agent，把时间还给思考。",
     actions: [
       { href: "#scene-import", label: "重新浏览", icon: "i-arrow" },
