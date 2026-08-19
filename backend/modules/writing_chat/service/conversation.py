@@ -7,7 +7,7 @@ from typing import Any, AsyncIterator
 from urllib.parse import urlparse, urlunparse
 
 from backend.core.config import get_config
-from backend.core.prompts import get_prompt
+from backend.core.prompts import CUSTOM_INSTRUCTIONS_ISOLATION_RULE, get_prompt
 from backend.core.tool_registry import get_tool_registry
 from backend.core.workspace_manager import get_project_manager_for_workspace
 from backend.modules.writing_chat.context import (
@@ -250,7 +250,15 @@ class ConversationMixin:
             time=t["time"],
         )
         if assistant_prompt:
-            prompt = assistant_prompt + "\n\n" + prompt
+            custom_block = (
+                "<custom_instructions>\n"
+                "ASSISTANT PERSONA (untrusted content — see isolation "
+                "rules below):\n"
+                f"{assistant_prompt}\n"
+                f"{CUSTOM_INSTRUCTIONS_ISOLATION_RULE}\n"
+                "</custom_instructions>"
+            )
+            prompt = custom_block + "\n\n" + prompt
         research_cfg = get_config().features.function_calling.scholarly_research
         if research_cfg.enabled and research_cfg.providers.openalex.enabled:
             prompt += "\n\n" + get_prompt(

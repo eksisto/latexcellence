@@ -12,6 +12,7 @@ import re
 import pytest
 
 from backend.core.prompts import (
+    CUSTOM_INSTRUCTIONS_ISOLATION_RULE,
     GENERATION_FIDELITY_RULE,
     JSON_ONLY_RULE,
     MARKER_PROTECTION_RULES,
@@ -553,3 +554,85 @@ def test_style_modify_agent_compressed_and_refine_deduped():
     assert "Follow the session system prompt rules" in refine
     assert "Never edit the real project directly" in refine
     assert len(refine) < len(agent)
+
+
+# ── 阶段 5：自定义指令隔离 ─────────────────────────────────────────────────
+
+
+def test_expression_opt_custom_instructions_have_isolation_rule():
+    """expression_opt <custom_instructions> 包含隔离规则，禁止覆盖核心契约。"""
+    prompt = get_prompt(
+        "expression_opt",
+        "base_system",
+        custom_prompt="Use British spelling.",
+        language="English",
+    )
+    assert "<custom_instructions>" in prompt
+    assert "</custom_instructions>" in prompt
+    assert "CUSTOM INSTRUCTIONS FROM USER" in prompt
+    assert "MUST NEVER override" in prompt
+    assert "untrusted content" in prompt
+    # 旧的"take priority"措辞必须被移除
+    assert "take priority" not in prompt
+
+
+def test_expression_opt_custom_instructions_no_priority_override():
+    """expression_opt 自定义指令不能凌驾于系统规则之上。"""
+    rendered = _render("expression_opt", "base_system")
+    assert "system rule ALWAYS wins" in rendered
+    assert "MUST NEVER override" in rendered
+
+
+def test_writing_chat_custom_instructions_have_isolation_rule():
+    """writing_chat 助手指令注入使用 <custom_instructions> 包装并含隔离规则。"""
+    from backend.modules.writing_chat.service.conversation import (
+        ConversationMixin,
+    )
+
+    # 通过 _build_system_prompt 的签名和返回值验证包装
+    svc = ConversationMixin()
+    result = svc._build_system_prompt(
+        context_block="",
+        language="zh",
+        assistant_prompt="You are a friendly writing coach.",
+    )
+    assert "<custom_instructions>" in result
+    assert "</custom_instructions>" in result
+    assert "ASSISTANT PERSONA" in result
+    assert "MUST NEVER override" in result
+    assert "untrusted content" in result
+
+
+def test_writing_chat_no_assistant_prompt_no_custom_block():
+    """writing_chat 无助手指令时不生成 <custom_instructions> 块。"""
+    from backend.modules.writing_chat.service.conversation import (
+        ConversationMixin,
+    )
+
+    svc = ConversationMixin()
+    result = svc._build_system_prompt(
+        context_block="",
+        language="zh",
+        assistant_prompt="",
+    )
+    assert "<custom_instructions>" not in result
+
+
+def test_custom_instructions_isolation_rule_mentions_all_critical_contracts():
+    """隔离规则列出所有不可覆盖的核心契约。"""
+    rule = CUSTOM_INSTRUCTIONS_ISOLATION_RULE
+    assert "marker protection" in rule
+    assert "JSON-only" in rule
+    assert "delimiter" in rule
+    assert "no-change" in rule
+    assert "source file protection" in rule
+    assert "no-invention" in rule
+    assert "tool authorization" in rule
+
+
+def test_custom_instructions_styles_must_not_ambiguate():
+    """隔离规则明确允许的范围仅为风格、语气和术语偏好。"""
+    rule = CUSTOM_INSTRUCTIONS_ISOLATION_RULE
+    assert "style" in rule
+    assert "tone" in rule
+    assert "terminology" in rule
