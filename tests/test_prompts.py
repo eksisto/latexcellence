@@ -673,3 +673,75 @@ def test_writing_chat_chat_system_no_edit_contract_unchanged():
     assert "Never invent URLs, references, DOIs, citations, or data" in chat
     assert "insufficient" in chat
     assert "cannot modify" in chat.lower() or "修改" in chat
+
+
+# ── 阶段 5 计划 C：结构化输出与示例补齐 ──────────────────────────────────────
+
+
+def test_plan_c_target_prompts_have_examples():
+    """计划 C 覆盖的五个模块均含紧凑示例。"""
+    for module, key in (
+        ("formula_ocr", "vision_system"),
+        ("table_ocr", "system"),
+        ("compile_error_translator", "system"),
+        ("bib_manager", "metadata_extraction"),
+        ("bib_manager", "bibtex_generation"),
+    ):
+        assert "<examples>" in _render(module, key), f"{module}.{key} 缺少 <examples>"
+
+
+def test_plan_c_ocr_examples_cover_normal_and_failure():
+    """OCR 示例至少覆盖一个正常案例和一个无法识别案例。"""
+    formula = get_prompt("formula_ocr", "vision_system")
+    assert "Normal case" in formula
+    assert "Failure case" in formula
+    assert "CONFIDENCE: 0.95" in formula
+    assert "CONFIDENCE: 0.0" in formula
+    # 示例中的 LaTeX 使用字面反斜杠，不允许双重转义
+    assert "\\\\frac" not in formula
+
+    table = get_prompt("table_ocr", "system")
+    assert "Normal case" in table
+    assert "Failure case" in table
+    assert "\\toprule" in table
+    assert "CONFIDENCE: 0.92" in table
+    assert "CONFIDENCE: 0.0" in table
+
+
+def test_plan_c_compile_error_examples_cover_normal_and_unidentifiable():
+    """编译错误翻译示例覆盖正常错误和无法识别两类。"""
+    prompt = get_prompt("compile_error_translator", "system", language="Chinese")
+    assert "Normal case" in prompt
+    assert "Unidentifiable case" in prompt
+    # 正常案例必须演示 JSON 双重转义
+    assert "\\\\usepackage{amsmath}" in prompt
+    # 无法识别案例返回空 fixes
+    assert '"fixes": []' in prompt
+    # 示例明确说明输出语言由 {language} 控制
+    assert (
+        "in {language} in your actual output"
+        in _PROMPTS["compile_error_translator"]["system"]
+    )
+
+
+def test_plan_c_metadata_examples_cover_normal_and_missing():
+    """元数据提取示例覆盖正常提取与字段缺失两类。"""
+    prompt = get_prompt("bib_manager", "metadata_extraction")
+    assert "Normal case" in prompt
+    assert "Missing field" in prompt
+    # 缺失字段必须输出空字符串，不臆造
+    assert '"doi": ""' in prompt
+    assert "he2016" not in prompt
+
+
+def test_plan_c_bibtex_examples_cover_normal_and_missing():
+    """BibTeX 生成示例覆盖完整元数据与缺失可选字段两类。"""
+    prompt = get_prompt("bib_manager", "bibtex_generation")
+    assert "Normal case" in prompt
+    assert "Missing optional field" in prompt
+    assert "he2016deep" in prompt
+    assert "vaswani2017attention" in prompt
+    # raw_bibtex 使用 JSON 字符串承载换行（\\n），不允许出现真实换行破坏 JSON
+    assert "@article{he2016deep,\\n" in prompt
+    # 缺失的可选字段不进入 raw_bibtex（journal 为必填故保留为空字符串）
+    assert '"journal": ""' in prompt

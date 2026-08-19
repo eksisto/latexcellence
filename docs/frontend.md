@@ -123,7 +123,7 @@ highlight.js 的按需注册与统一入口：
 | `ResultFilterBar.jsx` | 结果过滤工具栏（搜索框 + 类型下拉 + 段落跳转 + 重置） |
 | `UndoRedoButtons.jsx` | 可复用撤销/重做按钮组：内部使用 `useUndoRedo`，轮询 undo-status（页面不可见时暂停），支持 Ctrl+Z / Ctrl+Shift+Z / Ctrl+Y 快捷键与撤销确认弹窗；快捷键由组件级共享监听处理（仅最近挂载实例响应）；用于 workspace、逐段检查各页与参考文献管理（文献库） |
 | `ProgressBar.jsx` | 检查进度条组件 |
-| `UnlistedChanges.jsx` | 展示「模型修改了全文但未列出条目」（unlisted_changes）的琥珀色提示：`UnlistedChangesBadge`（卡片头标记）+ `UnlistedChangesBody`（全文预览 + 应用/忽略），typo_check / expression_opt 共用，全文经 MarkerText 渲染 |
+| `UnlistedChanges.jsx` | 展示「模型修改了全文但未列出条目」（unlisted_changes）的琥珀色提示：`UnlistedChangesBadge`（卡片头标记）+ `UnlistedChangesBody`（全文预览 + 应用/忽略），typo_check / expression_opt / paragraph_translate 共用，全文经 MarkerText 渲染 |
 | `ColorField.jsx` | 颜色选择器组件 |
 | `BibManagerLibrary.jsx` | 参考文献库管理面板（文件列表、条目 CRUD、重复检测、统计） |
 | `FormatResultCard` | 格式识别结果展示卡片（`React.memo` 组件，展示格式名称、置信度、字段列表、LaTeX 样式推荐） |

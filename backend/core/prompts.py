@@ -850,7 +850,18 @@ _PROMPTS: dict[str, dict[str, str]] = {
             "<LaTeX code here>\n"
             "<<<END>>>\n"
             "CONFIDENCE: <float between 0 and 1>\n"
-            "</output_format>"
+            "</output_format>\n"
+            "<examples>\n"
+            "Normal case (clear fraction formula):\n"
+            "<<<LATEX>>>\n"
+            "\\frac{{1}}{{1+e^{{-x}}}}\n"
+            "<<<END>>>\n"
+            "CONFIDENCE: 0.95\n\n"
+            "Failure case (image is not a formula):\n"
+            "<<<LATEX>>>\n"
+            "<<<END>>>\n"
+            "CONFIDENCE: 0.0\n"
+            "</examples>"
         ),
     },
     # ── table_ocr 模块 ───────────────────────────────────────────────────────
@@ -906,7 +917,30 @@ _PROMPTS: dict[str, dict[str, str]] = {
             "CONFIDENCE: <float between 0 and 1>\n\n"
             "Additional rule: backslashes are literal characters — write \\begin, \\toprule "
             "exactly as-is; never escape or double them.\n"
-            "</output_format>"
+            "</output_format>\n"
+            "<examples>\n"
+            "Normal case (2-column data table, three-line style):\n"
+            "<<<LATEX>>>\n"
+            "\\begin{{table}}[htbp]\n"
+            "\\centering\n"
+            "\\caption{{Experiment Results}}\n"
+            "\\label{{tab:results}}\n"
+            "\\begin{{tabular}}{{lr}}\n"
+            "\\toprule\n"
+            "Method & Accuracy \\\\\n"
+            "\\midrule\n"
+            "Baseline & 85.2\\% \\\\\n"
+            "Ours & 91.7\\% \\\\\n"
+            "\\bottomrule\n"
+            "\\end{{tabular}}\n"
+            "\\end{{table}}\n"
+            "<<<END>>>\n"
+            "CONFIDENCE: 0.92\n\n"
+            "Failure case (image is not a table):\n"
+            "<<<LATEX>>>\n"
+            "<<<END>>>\n"
+            "CONFIDENCE: 0.0\n"
+            "</examples>"
         ),
     },
     # ── style_modify 模块 ────────────────────────────────────────────────────
@@ -1142,7 +1176,20 @@ _PROMPTS: dict[str, dict[str, str]] = {
             '    "<field_name_2>": "<extracted value>"\n'
             "  }}\n"
             "}}\n"
-            "</output_format>"
+            "</output_format>\n"
+            "<examples>\n"
+            "Normal case (all requested fields found):\n"
+            'Input: "Deep Residual Learning for Image Recognition. K. He, X. Zhang, '
+            'S. Ren, J. Sun. CVPR 2016."\n'
+            "Fields: title, author, year\n"
+            'Output: {{"fields": {{"title": "Deep Residual Learning for Image Recognition", '
+            '"author": "K. He and X. Zhang and S. Ren and J. Sun", "year": "2016"}}}}\n\n'
+            "Missing field (DOI not present in input):\n"
+            'Input: "Attention Is All You Need. Vaswani et al., NeurIPS 2017."\n'
+            "Fields: title, author, year, doi\n"
+            'Output: {{"fields": {{"title": "Attention Is All You Need", '
+            '"author": "Vaswani et al.", "year": "2017", "doi": ""}}}}\n'
+            "</examples>"
         ),
         "bibtex_generation": (
             "<role>\n"
@@ -1186,7 +1233,25 @@ _PROMPTS: dict[str, dict[str, str]] = {
             "  }},\n"
             '  "raw_bibtex": "<complete formatted BibTeX code as a single string with \\\\n line breaks>"\n'
             "}}\n"
-            "</output_format>"
+            "</output_format>\n"
+            "<examples>\n"
+            "Normal case (complete metadata):\n"
+            'Input: author="K. He and X. Zhang and S. Ren and J. Sun", '
+            'title="Deep Residual Learning for Image Recognition", '
+            'journal="CVPR", year="2016"\n'
+            'Output: {{"cite_key": "he2016deep", "entry_type": "article", '
+            '"fields": {{"author": "K. He and X. Zhang and S. Ren and J. Sun", '
+            '"title": "Deep Residual Learning for Image Recognition", '
+            '"journal": "CVPR", "year": "2016"}}, '
+            '"raw_bibtex": "@article{{he2016deep,\\n  author = {{K. He and X. Zhang and S. Ren and J. Sun}},\\n  title = {{Deep Residual Learning for Image Recognition}},\\n  journal = {{CVPR}},\\n  year = {{2016}}\\n}}"}}\n\n'
+            "Missing optional field (no DOI provided):\n"
+            'Input: author="Vaswani et al.", title="Attention Is All You Need", '
+            'year="2017"\n'
+            'Output: {{"cite_key": "vaswani2017attention", "entry_type": "article", '
+            '"fields": {{"author": "Vaswani et al.", "title": "Attention Is All You Need", '
+            '"journal": "", "year": "2017"}}, '
+            '"raw_bibtex": "@article{{vaswani2017attention,\\n  author = {{Vaswani et al.}},\\n  title = {{Attention Is All You Need}},\\n  journal = {{}},\\n  year = {{2017}}\\n}}"}}\n'
+            "</examples>"
         ),
     },
     # ── paragraph_translate 模块 ──────────────────────────────────────────────
@@ -1275,7 +1340,21 @@ _PROMPTS: dict[str, dict[str, str]] = {
             '    "<string: specific fix suggestion 2>"\n'
             "  ]\n"
             "}}\n"
-            "</output_format>"
+            "</output_format>\n"
+            "<examples>\n"
+            "Note: the example text only demonstrates the format; write "
+            "explanations in {language} in your actual output. Suggestions "
+            "must be JSON-escaped — each LaTeX backslash becomes TWO "
+            "backslashes in JSON strings.\n\n"
+            "Normal case (file not found — missing package):\n"
+            "Input: ! LaTeX Error: File `amsmath.sty' not found.\n\n"
+            'Output: {{"explanation": "缺少宏包 amsmath。请在导言区添加 \\\\usepackage{{amsmath}}。", '
+            '"fixes": ["在导言区添加 \\\\usepackage{{amsmath}}"]}}\n\n'
+            "Unidentifiable case (only warnings, no fatal error):\n"
+            "Input: Package hyperref Warning: Token not allowed in a PDF string.\n\n"
+            'Output: {{"explanation": "日志中未发现导致编译失败的致命错误，仅有警告信息。", '
+            '"fixes": []}}\n'
+            "</examples>"
         ),
     },
     # ── web_search 模块 ───────────────────────────────────────────────────────

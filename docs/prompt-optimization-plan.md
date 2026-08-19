@@ -1,6 +1,6 @@
 # LateXcellence 提示词优化计划
 
-> 状态：阶段 0 至阶段 4 已完成；阶段 5 审查已完成，计划 A 和 B 已实施。
+> 状态：阶段 0 至阶段 4 已完成；阶段 5 审查已完成，计划 A、B、C 已实施。
 >
 > 建立日期：2026-08-17
 
@@ -410,7 +410,7 @@ Agent 阶段拆分；短板是上下文元数据、长文档检索策略、高�
   `tools/generality_gate.py size` 与 `check --full` 通过；
   `prompt_comprehension_eval --dry-run` 31 例通过（含 2 新增）。
 
-##### 计划 C：结构化输出和示例补齐（P1）
+##### 计划 C：结构化输出和示例补齐（P1） ✅
 
 1. 盘点各 LLM 调用是否支持原生 JSON schema 或 response format；支持时优先使用原生
    结构化输出，同时保留 `retry_with_validation()` 作为后备校验。
@@ -422,6 +422,41 @@ Agent 阶段拆分；短板是上下文元数据、长文档检索策略、高�
    使用真实边界，不能加入部署环境或评测场景硬编码。
 5. 为表达优化和翻译增加确定性检查或轻量复核，优先检查遗漏、过度改写、Marker 和主字段
    一致性，不默认增加第二次 LLM 调用。
+
+###### 计划 C 完成情况（2026-08-19）
+
+1. **盘点原生 JSON schema / response_format 支持**：所有稳定 JSON 任务目前统一使用
+   `response_format={"type": "json_object"}`（OpenAI 兼容客户端 legacy JSON 模式）。
+   SDK 版本 openai 2.44.0 支持 `{"type": "json_schema"}` 结构化输出，但 TJU 端点
+   （`deepseek-flash`，自定义 OpenAI 兼容实现）未确认支持原生 schema 校验；因此保持现状，
+   继续以 `retry_with_validation()` + Pydantic 校验作为唯一防线，不向端点下发
+   `json_schema` 类型（避免不支持时整链路失败）。
+2. **Prefill 评估**：底层客户端与端点均无原生 Prefill 支持，不在提示词中以“JSON
+   only”冒充 Prefill 能力；现有 `JSON_ONLY_RULE` 仅声明输出格式，语义正确。
+3. **示例补齐**：为 formula_ocr、table_ocr、compile_error_translator、
+   metadata_extraction、bibtex_generation 五个模块各增加紧凑 `<examples>`：
+   - formula_ocr / table_ocr：正常识别（含真实 LaTeX 结构）与“无法辨认返回空块 +
+     CONFIDENCE 0.0”各一例，按分隔符协议书写。
+   - compile_error_translator：正常错误（演示 JSON 双重转义 `\\usepackage`）与
+     “仅警告无法定位根因 → fixes 为空数组”各一例，并注明示例语言仅作格式演示、
+     实际输出语言由 `{language}` 控制。
+   - metadata_extraction：全部字段命中与 DOI 缺失返回空字符串各一例。
+   - bibtex_generation：完整元数据与缺失可选字段（raw_bibtex 中不含臆造字段）
+     各一例，示例内换行按 JSON 字符串 `\n` 转义书写。
+   示例均使用真实边界（真实论文元数据、真实 LaTeX 结构），不加入部署环境或评测
+   场景硬编码。
+4. **确定性检查 / 轻量复核**：`paragraph_translate` 复用 expression_opt / typo_check
+   已有的 changes 契约校验——`normalize_changes_contract()`（主字段与原文一致但
+   changes 非空 → 清空虚假条目）与 `has_unlisted_changes()`（主字段已修改但
+   changes 为空 → 标记 `unlisted_changes=true`），结果字段同步输出
+   `unlisted_changes`；不新增第二次 LLM 调用。expression_opt 此前已具备这两项检查。
+5. **回归**：`tests/test_prompts.py` 新增 5 个计划 C 测试（五模块示例存在、
+   OCR 正常/失败双例、编译翻译正常/无法识别双例 + JSON 双重转义、元数据正常/
+   缺失双例、BibTeX 正常/缺失双例）；`tests/test_api/test_paragraph_translate.py`
+   新增 2 个确定性校验测试；`check_prompt_structure.py` 通过；
+   `prompt_comprehension_eval --dry-run` 31 例通过；`generality_gate.py size` /
+   `check --full` 通过（Agent 提示词未改动）；全量 `pytest tests/ -q`
+   1777 通过 / 5 跳过，无回归。
 
 ##### 计划 D：工具结果协议统一（P1）
 

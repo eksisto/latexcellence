@@ -195,6 +195,8 @@
       "translating": "翻译中...",
       "paragraphPreviewTitle": "段落预览（{{count}}）",
       "paragraphPreviewDesc": "以下是即将翻译的段落，点击「开始翻译」以执行",
+      "unlistedChangesBadge": "全文翻译",
+      "unlistedChanges": "模型翻译了全文但未列出具体条目，请核对后再应用",
       "features": {
         "title": "逐段翻译",
         "desc": "按段落逐一翻译，保留 LaTeX 结构不被破坏"

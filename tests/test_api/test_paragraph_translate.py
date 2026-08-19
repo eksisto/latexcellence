@@ -221,3 +221,53 @@ class TestCheckOneParagraph:
         assert result["translated"] == translated
         assert "marker_error" not in result
         assert mock_llm.chat.call_count == 1
+
+    @pytest.mark.asyncio
+    async def test_fabricated_changes_cleared_when_no_translation(
+        self, mock_llm, service
+    ):
+        """主字段与原文一致但 changes 非空 → 丢弃 LLM 编造的虚假条目（确定性校验）。"""
+        plain = r"Hello __CMD_0000__ world."
+        original_tex = r"Hello \textbf{world}."
+
+        mock_llm.chat = AsyncMock(
+            return_value={
+                "translated": plain,
+                "changes": [
+                    {
+                        "type": "translation",
+                        "original": "Hello",
+                        "translated": "Bonjour",
+                        "explanation": "invented",
+                    }
+                ],
+            }
+        )
+
+        result = await service._check_one_paragraph(
+            mock_llm, 0, 0, plain, original_tex, "main.tex"
+        )
+
+        assert result["translated"] == plain
+        assert result["changes"] == []
+
+    @pytest.mark.asyncio
+    async def test_translated_changed_but_changes_empty_marked(self, mock_llm, service):
+        """模型改了文本却没输出 changes → 标记 unlisted_changes，不伪造条目。"""
+        plain = r"Hello __CMD_0000__ world."
+        original_tex = r"Hello \textbf{world}."
+
+        mock_llm.chat = AsyncMock(
+            return_value={
+                "translated": r"你好 __CMD_0000__ 世界。",
+                "changes": [],
+            }
+        )
+
+        result = await service._check_one_paragraph(
+            mock_llm, 0, 0, plain, original_tex, "main.tex"
+        )
+
+        assert result["translated"] == r"你好 __CMD_0000__ 世界。"
+        assert result["changes"] == []
+        assert result["unlisted_changes"] is True

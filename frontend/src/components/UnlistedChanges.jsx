@@ -4,7 +4,7 @@ import MarkerText from "./MarkerText";
 
 /**
  * 「模型修改了全文但未列出具体条目」（unlisted_changes）的展示组件，
- * typo_check / expression_opt 两页共用。
+ * typo_check / expression_opt / paragraph_translate 共用。
  *
  * - UnlistedChangesBadge：卡片头部的琥珀色标记
  * - UnlistedChangesBody：正文琥珀色提示 + 全文修改预览 + 应用/忽略操作

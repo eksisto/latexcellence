@@ -4,7 +4,7 @@
 
 ## 设计思路
 
-与其他逐段检查模块（typo_check / expression_opt 等）共享 `BaseParagraphCheckService` 基类，仅实现 hooks 定制翻译行为。无需额外的后处理逻辑（如术语替换、聚类），流程最简洁。
+与其他逐段检查模块（typo_check / expression_opt 等）共享 `BaseParagraphCheckService` 基类，仅实现 hooks 定制翻译行为。与 typo_check / expression_opt 一致，`_build_success_result` 在 marker 还原前执行 changes 契约的确定性校验（见下方"四层防护"），保证主字段与 changes 列表一致。
 
 | 维度 | paragraph_translate | typo_check / expression_opt |
 | --- | --- | --- |
@@ -46,13 +46,14 @@ User prompt 将待翻译纯文本和目标语言注入模板。
 | `translate_stream` | SSE 流式推送翻译进度和结果 |
 | `apply_changes` | 还原 marker + 原子写回 |
 
-### 三层防护（与其他逐段检查模块一致）
+### 四层防护（与其他逐段检查模块一致）
 
 | 层级 | 防护内容 | 失败处理 |
 | --- | --- | --- |
 | 第 1 层 | `retry_with_validation()`（最多 3 次） | LLM 输出不符 schema 时反馈重试 |
 | 第 2 层 | Marker 匹配验证 | 不一致时回退到原文 |
-| 第 3 层 | 异常兜底 | LLM 调用异常时返回原文 + 空 changes |
+| 第 3 层 | changes 契约确定性校验：主字段与原文逐字符一致但 changes 非空 → 清空虚假条目（`normalize_changes_contract`）；主字段已修改但 changes 为空 → 标记 `unlisted_changes=true`（`has_unlisted_changes`） | 清空/标记，由前端展示全文修改而非静默丢失 |
+| 第 4 层 | 异常兜底 | LLM 调用异常时返回原文 + 空 changes |
 
 ## API 路由
 
@@ -85,6 +86,8 @@ Prefix: `/api/paragraph-translate`, Tag: `paragraph_translate`
 - 目标语言选择（支持多种语言）
 - 翻译结果中原文与译文对照展示
 - 多文件模式下按文件 Tab 分组显示
+- `unlisted_changes` 段落（模型改了全文但未列出条目）复用 `UnlistedChangesBadge` /
+  `UnlistedChangesBody` 琥珀色提示，与 typo_check / expression_opt 一致
 
 配置同步：`config.json` 的 `features.paragraph_translate`（`enabled` + `batch_size`）。
 

@@ -32,6 +32,10 @@ import { api } from "@/api/index";
 import useParagraphCheck, { groupByFile } from "@/hooks/useParagraphCheck";
 import MarkerText from "@/components/MarkerText";
 import ParagraphContext from "@/components/ParagraphContext";
+import {
+  UnlistedChangesBadge,
+  UnlistedChangesBody,
+} from "@/components/UnlistedChanges";
 import ProgressBar from "@/components/ProgressBar";
 import ConfirmDialog from "@/components/ConfirmDialog";
 import ResultFilterBar from "@/components/ResultFilterBar";
@@ -170,6 +174,7 @@ export default function ParagraphTranslatePage() {
     // 而 plain_text 仍含 marker。若用 plain_text 比较，"__CMD_0001__" ≠ "\\textbf"，
     // 任何含 LaTeX 命令的段落都会被误判为 hasTranslation=true
     const hasTranslation = result.translated !== result.original;
+    const hasUnlistedChanges = result.unlisted_changes === true;
     return (
       <Card
         key={`${result.file_path}-${result.paragraph_index}`}
@@ -186,11 +191,32 @@ export default function ParagraphTranslatePage() {
                 {t("pages:paragraphTranslate.translated")}
               </span>
             )}
+            {hasUnlistedChanges && (
+              <UnlistedChangesBadge
+                label={t("pages:paragraphTranslate.unlistedChangesBadge")}
+              />
+            )}
           </div>
         </CardHeader>
         <CardContent>
           <div className="space-y-3">
-            {hasTranslation ? (
+            {hasUnlistedChanges ? (
+              <UnlistedChangesBody
+                text={result.translated}
+                message={t("pages:paragraphTranslate.unlistedChanges")}
+                applyLabel={t("common:applyChange")}
+                onApply={() =>
+                  handleApplyChange(
+                    result.paragraph_index,
+                    result.translated,
+                    result.file_path,
+                  )
+                }
+                onIgnore={() =>
+                  handleIgnoreChange(result.paragraph_index, result.file_path)
+                }
+              />
+            ) : hasTranslation ? (
               <>
                 <div className="rounded border border-border p-2 text-sm space-y-2">
                   <div>

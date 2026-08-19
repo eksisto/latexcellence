@@ -195,6 +195,8 @@
       "translating": "Translating...",
       "paragraphPreviewTitle": "Paragraph Preview ({{count}})",
       "paragraphPreviewDesc": "These paragraphs will be translated. Click \"Start Translation\" to begin",
+      "unlistedChangesBadge": "Full-text translation",
+      "unlistedChanges": "The model translated the full text without itemized changes; review before applying",
       "features": {
         "title": "Paragraph Translation",
         "desc": "Translate paragraphs one by one while preserving LaTeX structure"

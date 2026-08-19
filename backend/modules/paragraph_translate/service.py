@@ -17,7 +17,11 @@ from typing import Any
 from pydantic import BaseModel
 
 from backend.core.config import get_config
-from backend.core.base_paragraph_check import BaseParagraphCheckService
+from backend.core.base_paragraph_check import (
+    BaseParagraphCheckService,
+    has_unlisted_changes,
+    normalize_changes_contract,
+)
 from backend.core.prompts import get_prompt
 from backend.utils.latex_json_guard import LatexTextLite
 
@@ -138,8 +142,19 @@ class ParagraphTranslateService(BaseParagraphCheckService):
         # （而非 change 片段），因此除 changes[] 外还需还原顶层 original 和
         # translated 字段的 marker。marker_map 由 _restore_change_markers 返回，
         # 避免对 self._marker_maps 重复 get().get() 查询。
-        changes, marker_map = self._restore_change_markers(
+        # 先做确定性契约校验（与 expression_opt 一致）：
+        #   1) 主字段与原文逐字符一致时，丢弃 LLM 编造的虚假 changes
+        #   2) 主字段已修改但 changes 为空时，标记为 unlisted_changes
+        changes = normalize_changes_contract(
             [c.model_dump() for c in validated.changes],
+            output_text=validated.translated,
+            plain_text=plain_text,
+        )
+        unlisted_changes = has_unlisted_changes(
+            changes, validated.translated, plain_text
+        )
+        changes, marker_map = self._restore_change_markers(
+            changes,
             file_path,
             idx,
             ("original", "translated"),
@@ -157,6 +172,7 @@ class ParagraphTranslateService(BaseParagraphCheckService):
                 else validated.translated
             ),
             "changes": changes,
+            "unlisted_changes": unlisted_changes,
             "text": original_text,
             # plain_text 保留 marker（不再用于前端对比），
             # 前端 hasTranslation 改为比较 translated !== original
