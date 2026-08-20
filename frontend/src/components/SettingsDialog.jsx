@@ -21,6 +21,7 @@ import FunctionCallingSection from "@/components/settings/FunctionCallingSection
 import HttpSection from "@/components/settings/HttpSection";
 import LoggingSection from "@/components/settings/LoggingSection";
 import LanguageSection from "@/components/settings/LanguageSection";
+import MultiUserSection from "@/components/settings/MultiUserSection";
 import useStore from "@/store/useStore";
 
 export default function SettingsDialog() {
@@ -175,6 +176,7 @@ export default function SettingsDialog() {
           />
           <HttpSection http={config.http} onChange={set} />
           <LoggingSection logging={config.logging} onChange={set} />
+          <MultiUserSection multiUser={config.multi_user} onChange={set} />
           <LanguageSection />
         </div>
         <DialogFooter className="mt-4">

@@ -162,6 +162,7 @@ async def config_status():
         "model": cfg.llm.model,
         "has_api_key": has_api_key,  # 前端据此决定是否显示 LLM 功能入口
         "dev_mode": cfg.server.dev_mode,
+        "multi_user": cfg.multi_user.enabled,  # 多用户模式开关（登录页据此判断模式）
         "features": {
             name: getattr(cfg.features, name).enabled
             for name in [

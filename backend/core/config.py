@@ -21,7 +21,7 @@ from pathlib import Path
 from typing import Literal
 
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from backend.utils.file_ops import atomic_write
 
@@ -485,6 +485,40 @@ class FeaturesConfig(BaseModel):
     function_calling: FunctionCallingConfig = FunctionCallingConfig()
 
 
+class MultiUserConfig(BaseModel):
+    """多用户模式配置（默认关闭；开启后强制登录、用户空间隔离）
+
+    安全相关字段（路径、配额、限流）实行严格校验：未知键报错（extra=forbid），
+    防止部署时因配置项拼写错误而静默使用默认值导致安全预期失效。
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    enabled: bool = False  # 是否启用多用户模式
+    db_path: str = "data/latexcellence.db"  # SQLite 数据库路径
+    users_root: str = "data/users/"  # 用户空间根目录（<users_root>/<user_id>/）
+    staging_root: str = "data/staging/"  # 上传解压暂存区
+    default_project_quota_mb: int = Field(500, ge=1)  # 默认项目空间配额（MB）
+    default_derived_quota_mb: int = Field(100, ge=1)  # 默认衍生数据配额（MB）
+    max_upload_archive_mb: int = Field(500, ge=1)  # 压缩包大小上限（MB）
+    max_upload_files: int = Field(20000, ge=1)  # 解压文件数上限
+    max_upload_file_size_mb: int = Field(100, ge=1)  # 单文件大小上限（MB）
+    max_compression_ratio: int = Field(1000, ge=1)  # 压缩比上限（防压缩炸弹）
+    recycle_bin_days: int = Field(7, ge=1)  # 回收站保留天数
+    session_ttl_days: int = Field(7, ge=1)  # 会话默认有效期（天）
+    remember_ttl_days: int = Field(30, ge=1)  # “记住我”会话有效期（天）
+    llm_rate_limit_per_minute: int = Field(20, ge=1)  # 每用户 LLM 请求限流（次/分钟）
+    llm_max_concurrency_per_user: int = Field(2, ge=1)  # 每用户最大并发 LLM 任务数
+    login_rate_limit_per_minute: int = Field(
+        5, ge=1
+    )  # 登录限流（次/分钟，按用户名+IP）
+    registration_enabled: bool = True  # 是否开放注册（需管理员审批）
+    admin_username_env: str = (
+        "LATEXCELLENCE_ADMIN_USERNAME"  # 首个管理员用户名环境变量名
+    )
+    admin_password_env: str = "LATEXCELLENCE_ADMIN_PASSWORD"  # 首个管理员密码环境变量名
+
+
 class LoggingConfig(BaseModel):
     """日志系统配置"""
 
@@ -510,6 +544,7 @@ class AppConfig(BaseModel):
     http: HttpConfig = HttpConfig()
     features: FeaturesConfig = FeaturesConfig()
     logging: LoggingConfig = LoggingConfig()
+    multi_user: MultiUserConfig = MultiUserConfig()
 
 
 # 模块级全局变量：单例模式存储配置对象和路径

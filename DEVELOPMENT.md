@@ -21,4 +21,5 @@
 | [docs/web-access-operations.md](docs/web-access-operations.md) | Writing Chat 网络访问灰度、观测、容量检查、缓存维护与回滚 |
 | [docs/writing-chat-web-access-architecture.md](docs/writing-chat-web-access-architecture.md) | Writing Chat 网络访问架构：搜索、学术检索、分级抓取、结构化抽取与证据链 |
 | [docs/showcase.md](docs/showcase.md) | 独立展示页 |
+| [docs/multi-user-plan.md](docs/multi-user-plan.md) | 多用户模式设计方案（双模式/认证/用户空间/配额/权限协作/管理后台/迁移） |
 | [tools/visual_review_api.py](tools/visual_review_api.py) | 视觉评审工具的 Chat Completions → Responses API 请求适配 |

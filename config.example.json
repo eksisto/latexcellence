@@ -272,5 +272,26 @@
   "logging": {
     "level": "DEBUG",
     "dir": "logs/"
+  },
+  "multi_user": {
+    "enabled": false,
+    "db_path": "data/latexcellence.db",
+    "users_root": "data/users/",
+    "staging_root": "data/staging/",
+    "default_project_quota_mb": 500,
+    "default_derived_quota_mb": 100,
+    "max_upload_archive_mb": 500,
+    "max_upload_files": 20000,
+    "max_upload_file_size_mb": 100,
+    "max_compression_ratio": 1000,
+    "recycle_bin_days": 7,
+    "session_ttl_days": 7,
+    "remember_ttl_days": 30,
+    "llm_rate_limit_per_minute": 20,
+    "llm_max_concurrency_per_user": 2,
+    "login_rate_limit_per_minute": 5,
+    "registration_enabled": true,
+    "admin_username_env": "LATEXCELLENCE_ADMIN_USERNAME",
+    "admin_password_env": "LATEXCELLENCE_ADMIN_PASSWORD"
   }
 }

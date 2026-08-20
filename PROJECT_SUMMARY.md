@@ -169,6 +169,7 @@ latexcellence/
 │   ├── prompt-optimization-plan.md          # 提示词优化计划
 │   ├── windows-temp-permissions.md          # Windows 沙箱临时目录权限排查（pytest basetemp/ACL/清理）
 │   ├── web-access-operations.md              # 网络访问灰度、观测、容量与回滚运维
+│   ├── multi-user-plan.md                    # 多用户模式设计方案（双模式/认证/用户空间/配额/权限协作/管理后台/迁移）
 │   ├── modules/                     # 模块文档
 │   └── showcase.md                  # 展示页（showcase）说明
 ├── tests/                           # 测试用例
