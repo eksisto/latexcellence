@@ -208,7 +208,7 @@ async def get_structured_page_reader() -> StructuredPageReader:
 
 
 async def initialize_structured_page_reader() -> BrowserHealth:
-    return await get_structured_page_reader().initialize()
+    return await (await get_structured_page_reader()).initialize()
 
 
 async def close_structured_page_reader() -> None:
