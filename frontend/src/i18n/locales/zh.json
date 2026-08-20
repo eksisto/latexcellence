@@ -38,7 +38,7 @@
   "pages": {
     "welcome": {
       "slogan": "让技术退居幕后，让思想落于纸上",
-      "version": "v1.0.0",
+      "version": "v1.0.1",
       "tocLabel": "功能目录",
       "groups": {
         "contentImport": "内容导入",

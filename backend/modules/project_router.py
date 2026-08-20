@@ -43,7 +43,6 @@ async def open_project(
     """
     打开一个 LaTeX 项目目录。
     返回项目信息（文件树、主文档、依赖图）。
-    同时将路径持久化保存到 config.json，下次启动时可自动恢复。
     """
     project = get_project_manager_for_workspace(workspace_id)
     try:

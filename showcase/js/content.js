@@ -81,8 +81,8 @@ export const SCENES = [
     wordmark: "LaTeXcellence",
     slogan: "让技术退居幕后，让思想落于纸上",
     lead:
-      "由 LLM 驱动的智能体论文写作助手：面向理工科学术写作，从检索文献、执笔成文，到校对与排版，陪你走完论文的每一步。" +
-      " 它真正走进你的工程，打开项目、读写文件、编译验证，把想法一步步落成纸面。",
+      "我们不追求改变习惯，只致力于解放那些深陷 LaTeX 繁琐之中的灵魂。真正的创作，不应被编译错误与排版细节所打断。" +
+      "LateXcellence 用 AI 消除工具的存在感，让“心想”即是“事成”。",
     actions: [
       { href: "#scene-import", label: "开始浏览", icon: "i-arrow" },
       { href: "#scene-principles", label: "设计理念" },
@@ -105,7 +105,7 @@ export const SCENES = [
     ],
     ghost: "00",
     kicker: "Act 1 · Friction",
-    title: "排版不该是写作的绊脚石",
+    title: "LaTeX 不该是写作的绊脚石",
     desc: [
       "公式、表格、引用、编译报错……每一处都在打断思考。",
       "只会在对话框空谈的“AI 助手”，帮不上真正的忙：",
@@ -114,7 +114,7 @@ export const SCENES = [
     points: [
       "编译报错看不懂，日志像天书",
       "宏包总缺、表格对齐全靠手调",
-      "修一处，碰坏另一处，越改越乱",
+      "参考文献编译半天，最后还是一串问号",
     ],
     stage: {
       tpl: "friction",
@@ -156,10 +156,10 @@ export const SCENES = [
     ],
     ghost: "✓",
     kicker: "Act 2 · The Fix",
-    title: "把 LaTeX，交给真正动手的 Agent",
+    title: "让 Agent 在你的工程里完成闭环",
     desc: [
-      "规划 → 写文件 → 编译 → 读日志 → 修错 → 再编译；",
-      "每一步都真实落在你的项目里。",
+      "描述目标后，Agent 会规划步骤、修改文件、运行编译并读取日志。",
+      "遇到错误，它继续修复并验证结果，直到交付可用产物。",
     ],
     points: [
       "工具调用真正读写文件、编译验证",
@@ -216,13 +216,13 @@ export const SCENES = [
         id: "feature-table-ocr",
         icon: "i-table",
         title: "表格 OCR 识别",
-        desc: "读懂截图里的表格骨架，还原成可编译的 tabular，支持列对齐与合并单元格。",
+        desc: "从图片识别表格结构，生成可编译的 tabular，并保留列对齐与合并单元格。",
       },
       {
         id: "feature-format-convert",
         icon: "i-swap",
         title: "格式转换",
-        desc: "Markdown 与 LaTeX 双向互通，宏包分析自动补齐依赖。",
+        desc: "在 Markdown 与 LaTeX 之间转换，并根据内容分析所需宏包。",
       },
     ],
     feature: {
@@ -230,7 +230,7 @@ export const SCENES = [
       icon: "i-scan",
       title: "公式 OCR 识别",
       tag: "formula_ocr",
-      desc: "上传公式截图，通过 LLM Vision 识别为 LaTeX 代码；行内、行间公式由后端判定，一键复制。",
+      desc: "上传公式截图，识别为 LaTeX 代码；系统自动判断行内或行间格式，复制后即可继续编辑。",
       mock: {
         bar: "formula_ocr",
         badge: "行间公式",
@@ -257,7 +257,7 @@ export const SCENES = [
     ghost: "§2",
     kicker: "§2 · Content Generation",
     title: "内容生成",
-    desc: "从一句描述到可编译的工程、从数据到矢量图、从 DOI 到参考文献——生成类模块都是会规划、会执行的 Agent。",
+    desc: "从一句需求生成可编译工程，从数据生成矢量图，从 DOI 整理参考文献。",
     glyphs: [
       { cls: "g1", parallax: "-0.12", text: "\\documentclass{ctexart}" },
       { cls: "g2", parallax: "-0.2", text: "\\bibliography{refs}" },
@@ -267,13 +267,13 @@ export const SCENES = [
         id: "feature-plot-gen",
         icon: "i-chart",
         title: "科研绘图",
-        desc: "数据画像、图表类型推荐、Python 脚本沙箱执行，输出 PDF / SVG / TikZ。",
+        desc: "分析数据并推荐图表，隔离执行 Python 脚本，输出 PDF、SVG 或 TikZ。",
       },
       {
         id: "feature-bib-manager",
         icon: "i-book",
         title: "参考文献管理",
-        desc: "DOI 多数据源查询、重复检测，自动生成规范 BibTeX 条目。",
+        desc: "从多个数据源查询 DOI，识别重复文献，并生成规范 BibTeX 条目。",
       },
     ],
     feature: {
@@ -281,7 +281,7 @@ export const SCENES = [
       icon: "i-scroll",
       title: "模板生成",
       tag: "template_gen",
-      desc: "只凭一句描述，便规划出可编译的多文件工程：逐个写盘、编译、读日志、修错，直至构建成功。",
+      desc: "输入排版要求，生成多文件工程，并逐步写入、编译、读日志、修错，交付通过构建的项目。",
       mock: {
         bar: "template_gen · Agent 轨迹",
         badge: "编译通过",
@@ -326,7 +326,7 @@ export const SCENES = [
     ghost: "§3",
     kicker: "§3 · Text Review",
     title: "文本审查与优化",
-    desc: "逐段审查、逐项确认：LaTeX 结构被替换为不可见 marker，LLM 只修改纯文本，绝不碰坏源码。",
+    desc: "按段落发现问题、查看建议、确认修改。LaTeX 结构由 marker 保护，LLM 只处理纯文本。",
     glyphs: [
       { cls: "g1", parallax: "-0.12", text: "\\subsection{实验设置}" },
       { cls: "g2", parallax: "-0.2", text: "[已修复]" },
@@ -336,19 +336,19 @@ export const SCENES = [
         id: "feature-expression-opt",
         icon: "i-pencil",
         title: "表达优化",
-        desc: "让句子更清晰、更简洁、更具学术语气，风格也可由你定义。",
+        desc: "明确句意、收紧表达、调整学术语气，风格也可由你定义。",
       },
       {
         id: "feature-terminology-check",
         icon: "i-list",
         title: "术语一致性检查",
-        desc: "LLM 提取全文术语、语义聚类，让大小写与缩写各归其位。",
+        desc: "提取全文术语并按语义归类，检查大小写、译法和缩写是否统一。",
       },
       {
         id: "feature-paragraph-translate",
         icon: "i-lang",
         title: "逐段翻译",
-        desc: "段落级中英互译，译文同样受 marker 守护，逐段审阅后再落笔。",
+        desc: "按段落完成中英互译，保留 LaTeX 结构，审阅后再应用译文。",
       },
     ],
     feature: {
@@ -356,7 +356,7 @@ export const SCENES = [
       icon: "i-spell",
       title: "文本校对",
       tag: "typo_check",
-      desc: "逐段找出错别字，给出定位与修正；LaTeX 结构分毫不动，批量应用亦可撤回。",
+      desc: "逐段标出错别字并给出修改建议。你可以逐项确认、批量应用，也可以随时撤回。",
       mock: {
         bar: "typo_check",
         badge: "段落 3 · 已修复",
@@ -384,7 +384,7 @@ export const SCENES = [
     ghost: "§4",
     kicker: "§4 · Code Review & Formatting",
     title: "代码审查与排版",
-    desc: "把 LaTeX 当作代码来治理：先格式化，再审查；一句话改样式，全程可读、可回退。",
+    desc: "让代码结构更清楚，让样式修改更直接。先格式化、再审查，所有改动都可查看和回退。",
     glyphs: [
       { cls: "g1", parallax: "-0.12", text: "latexindent -w main.tex" },
       { cls: "g2", parallax: "-0.2", text: "\\color{primary}" },
@@ -394,7 +394,7 @@ export const SCENES = [
         id: "feature-code-review",
         icon: "i-list",
         title: "LaTeX 代码审查",
-        desc: "先经 latexindent 格式化，再由 LLM 给出只读建议，从不写回文件。",
+        desc: "先经 latexindent 格式化，再由 LLM 给出只读建议，不自动改写文件。",
       },
     ],
     feature: {
@@ -402,7 +402,7 @@ export const SCENES = [
       icon: "i-ruler",
       title: "LaTeX 样式修改",
       tag: "style_modify",
-      desc: "一句话描述想要的样式，后端便定位代码、精准改写。",
+      desc: "描述描述想要的样式，后端便定位代码、精准改写。",
       mock: {
         bar: "style_modify",
         badge: "“章节标题改为主题蓝色”",
@@ -436,7 +436,7 @@ export const SCENES = [
       icon: "i-diff",
       title: "Git 差异高亮",
       tag: "git_diff",
-      desc: "任选两个 Git 版本，latexdiff 把差异化作高亮的语义 diff，一键编译差异 PDF。",
+      desc: "选择两个 Git 版本，用 latexdiff 高亮文本变化，并编译一份差异 PDF 供审阅。",
       mock: {
         bar: "git_diff · HEAD~2 → HEAD",
         badge: "PDF 已生成",
@@ -462,7 +462,7 @@ export const SCENES = [
     ghost: "§6",
     kicker: "§6 · AI Assistance",
     title: "AI 辅助",
-    desc: "一个真正会动手的写作伙伴：能检索文献、读懂项目、修改段落，每一步都清晰可见，随时回放。",
+    desc: "让写作助手理解你的项目上下文，帮你检索文献、追踪引文和修改段落。每次操作都清晰可见。",
     glyphs: [
       { cls: "g1", parallax: "-0.12", text: "web_search" },
       { cls: "g2", parallax: "-0.2", text: "openalex" },
@@ -521,8 +521,8 @@ export const SCENES = [
       },
       {
         icon: "i-shield",
-        title: "不搞坏文件",
-        desc: "LaTeX 的结构由 marker 守护，LLM 只能修改纯文本；写回之前，JSON 校验、内容校验、乐观锁与原子写入层层把关。",
+        title: "修改始终可控",
+        desc: "marker 保护 LaTeX 结构，LLM 只修改纯文本；写回前经过内容校验、乐观锁与原子写入。",
         points: [
           "结构替换为不可见 marker，按长度降序还原",
           "MD5 乐观锁检测多端并发冲突",
@@ -532,7 +532,7 @@ export const SCENES = [
       {
         icon: "i-gauge",
         title: "可靠可验证",
-        desc: "LLM 的输出要过结构化校验与重试闭环；内置的人工评测，让效果有数据为证。",
+        desc: "结构化校验和重试机制检查模型输出；内置人工评测，让效果有数据为证。",
         points: [
           "JSON 容错解析 + Pydantic 严格校验 + 重试",
           "LaTeX 内容校验：括号配平、转义防护",
@@ -627,7 +627,7 @@ export const SCENES = [
     glyphs: [{ cls: "g1", parallax: "-0.15", text: "\\end{document}" }],
     eyebrow: "Compiled.",
     title: "让技术退居幕后<br>让思想落于纸上",
-    desc: "从内容导入到 AI 辅助，从文本校对到版本控制。此刻，打开你的 .tex 工程，把排版交给 Agent，把时间还给思考。",
+    desc: "从内容导入到 AI 辅助，从文本校对到版本控制。此刻，打开你的 .tex 工程，把形式的琐碎交给 AI，把时间还给思考。",
     actions: [
       { href: "#scene-import", label: "重新浏览", icon: "i-arrow" },
       { href: "#", label: "回到顶部", icon: "i-up", id: "toTopBtn" },
