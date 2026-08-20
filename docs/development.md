@@ -227,7 +227,24 @@ python -m backend.manage set-status <username> pending|active|disabled
 - 工作区绑定：`/api/project/open` 在多用户模式下仅接受 `project_id`，打开时写入 `workspace_id → (user_id, project_id, root_path)`；后续所有 `/api/project/*` 请求经 `require_workspace` 实时校验访问权限；
 - 端点收紧：`/api/project/browse` 多用户模式返回 403（任意磁盘浏览失效）；`/api/project/open` 拒绝 `path` 字段（任意路径打开失效）；写操作（apply-change / set-main-file / undo / redo）要求非 viewer 权限；共享项目（存在协作者）v1 禁用撤销/重做（`undo`/`redo` 403，`can-undo`/`can-redo` 恒 False）。
 
-基础设施与认证实现的详细说明见 [docs/backend-core.md](backend-core.md)，完整设计见 [docs/multi-user-plan.md](multi-user-plan.md)。
+**P3 上传与配额**（§8 / §9）：
+
+| 端点 | 说明 |
+| --- | --- |
+| `GET /api/projects` | 我的项目 + 被共享的项目（含 role / owner / 用量，过滤回收站） |
+| `POST /api/projects` | multipart 上传 `.zip` / `.7z` 创建项目（流式写暂存区、安全解压、命名去重 `xx (2)`、配额校验） |
+| `GET /api/projects/{id}/download` | 打包下载 zip（owner / editor / viewer 均可） |
+| `PUT /api/projects/{id}` | 重命名（owner，同名冲突 409） |
+| `DELETE /api/projects/{id}` | 项目进回收站（owner，删除即腾出配额） |
+| `POST /api/projects/{id}/restore` | 恢复（owner；超限禁止恢复，413） |
+| `DELETE /api/projects/{id}/permanent` | 提前永久删除回收站项目（owner） |
+
+- 上传解压安全：拒绝路径穿越 / 绝对路径 / 符号链接 / 设备文件 / 加密包 / 分卷包 / 压缩炸弹（压缩比超限）/ 大小写不敏感重名；限制压缩包大小、文件数、单文件大小、解压总量（≤ 剩余配额）并限时。
+- 项目根归一化兼容两种打包布局（含顶层目录 / 直接内容），项目目录固定为 `data/users/<owner_id>/projects/<project_id>/`。
+- 配额记账核心在 `backend/core/multiuser/quota.py`：项目空间按活动项目 `size_bytes` 之和统计；衍生数据按磁盘实时统计；后台周期对账（`reconcile_project_sizes`）修正缓存漂移并清理过期回收站 / 暂存区（`maintenance.py`）。
+- `apply-change` 多用户写回后刷新配额记账，超限自动回滚并返回 413 `quota_exceeded`。
+
+基础设施、认证与项目实现的详细说明见 [docs/backend-core.md](backend-core.md)，完整设计见 [docs/multi-user-plan.md](multi-user-plan.md)。
 
 > 运维提示：登录限流按"用户名 + 客户端 IP"计数；若部署在反向代理（nginx 等）之后，`request.client.host` 恒为代理 IP，"每 IP"维度会退化，需按部署接入受信代理 / 真实 IP 传递后才会生效。
 

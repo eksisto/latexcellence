@@ -21,6 +21,7 @@ from backend.core.workspace_manager import (
     get_project_manager_for_workspace,
     get_workspace_manager,
 )
+from backend.modules.projects import service as projects_service
 from backend.utils.path_guard import resolve_path_case_insensitive
 
 router = APIRouter(prefix="/api/project", tags=["project"])
@@ -270,9 +271,13 @@ async def get_file_md5(
 async def apply_change(
     request: ApplyChangeRequest,
     workspace_id: str = Query(..., description="工作区唯一标识符"),
-    _: dict = Depends(access_control.require_workspace_write),
+    binding: dict = Depends(access_control.require_workspace_write),
 ):
-    """原地修改指定段落的文本。"""
+    """原地修改指定段落的文本。
+
+    多用户模式下写回后刷新项目配额记账；若该写操作导致项目空间超限，
+    则回滚本次修改并返回 413 quota_exceeded（不允许部分写入）。
+    """
     project = get_project_manager_for_workspace(workspace_id)
     try:
         project.apply_change(
@@ -281,6 +286,7 @@ async def apply_change(
             request.new_text,
             expected_md5=request.expected_md5,
         )
+        await projects_service.enforce_write_quota(binding, project, request.file_path)
         return {"status": "ok"}
     except FileConflictError as e:
         raise HTTPException(

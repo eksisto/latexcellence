@@ -400,7 +400,7 @@ ExtractorRegistry 先处理已知公开端点（当前代码托管页面使用 G
 
 ### 多用户模式基础设施（`backend/core/multiuser/` + `backend/core/access_control.py` + `backend/modules/auth/` + `backend/manage.py`）
 
-多用户模式（`multi_user.enabled=true`）的后端基础设施，按阶段（见 [docs/multi-user-plan.md](multi-user-plan.md)）实施。P1 已完成：SQLite 初始化、注册/审批/登录/会话/Cookie/CSRF、管理员引导与 CLI；P2 已完成：用户空间目录、统一路径解析、项目访问控制、workspace 绑定与现有端点收紧。
+多用户模式（`multi_user.enabled=true`）的后端基础设施，按阶段（见 [docs/multi-user-plan.md](multi-user-plan.md)）实施。P1 已完成：SQLite 初始化、注册/审批/登录/会话/Cookie/CSRF、管理员引导与 CLI；P2 已完成：用户空间目录、统一路径解析、项目访问控制、workspace 绑定与现有端点收紧；P3 已完成：上传/解压管线、项目命名、配额记账、回收站与下载。
 
 **包结构**：
 
@@ -410,7 +410,12 @@ ExtractorRegistry 先处理已知公开端点（当前代码托管页面使用 G
 | `backend/core/multiuser/userspace.py` | 用户空间目录布局（`<users_root>/<user_id>/{projects, writing_chat_sessions, style_modify_sessions, templates, plots}`），`ensure_user_dirs()` 注册时创建 |
 | `backend/core/multiuser/auth.py` | 密码哈希（argon2id）、会话令牌（库只存 SHA-256 哈希）、用户管理（注册 pending / 审批 / 禁用 / 重置密码 / 配额覆盖）、登录限流（每用户名+每 IP 分钟级）、`ensure_bootstrap_admin()` |
 | `backend/core/multiuser/dependencies.py` | FastAPI 认证依赖：`get_current_user`（401）、`require_admin`（403）、`get_current_user_optional`、`require_admin_if_multiuser` |
+| `backend/core/multiuser/quota.py` | 配额记账核心：有效额度解析（用户覆盖优先）、项目/衍生用量统计、上传/写回/恢复前置校验（超限抛 413 `quota_exceeded`）、项目唯一命名与建行（`xx (2)`）、对账（`reconcile_project_sizes`）、回收站过期清理 |
+| `backend/core/multiuser/upload.py` | 上传解压管线核心：zip（UTF-8/GBK/cp437 编码、路径穿越/符号链接/加密/炸弹拦截）与 7z（py7zr）安全解压、项目根归一化、`move_into_user_space()` 落位 |
+| `backend/core/multiuser/maintenance.py` | 后台维护循环：配额对账 + 回收站/暂存区清理（`main.py` lifespan 启动） |
 | `backend/core/access_control.py` | 统一访问控制：`owner/editor/viewer` 权限矩阵、`require_project_access()` / `get_projects_for_user()` / `get_user_role_for_project()` / `is_shared_project()`、基于 workspace 绑定的请求级依赖 `require_workspace(write=...)`；权限实时查库不缓存 |
+| `backend/modules/projects/router.py` | 薄路由层：`/api/projects`（列表 / 上传创建）与 `/api/projects/{id}`（重命名 / 回收站 / 恢复 / 永久删除 / 下载） |
+| `backend/modules/projects/service.py` | 项目业务逻辑：流式接收压缩包、安全解压（`asyncio.to_thread`）、配额校验、唯一命名、落位、回收站流转、打包下载 |
 | `backend/modules/auth/router.py` | 薄路由层：`/api/auth/*`（register/login/logout/me）与 `/api/admin/*`（用户列表/审批/禁用/重置密码/配额） |
 | `backend/modules/auth/service.py` | 认证业务逻辑（`asyncio.to_thread` 调度压库操作；错误映射为结构化 `{"error": code, "message": ...}`） |
 | `backend/manage.py` | CLI：`python -m backend.manage create-admin / reset-password / list-users / set-status` |
@@ -430,6 +435,17 @@ ExtractorRegistry 先处理已知公开端点（当前代码托管页面使用 G
 - `WorkspaceManager` 增加 `bind()/get_binding()/unbind()`：多用户模式下 `/api/project/open` 打开项目时写入 `workspace_id → (user_id, project_id, owner_id, root_path)`；`/remove` 时一并清理绑定。
 - `access_control.require_workspace(write=...)` 为请求级 FastAPI 依赖（`require_workspace_read` / `require_workspace_write`）：单用户模式直接放行；多用户模式按当前登录用户**实时查库**校验所属项目角色，写操作要求 `viewer` 之外的权限；未绑定工作区返回 400 `invalid_workspace`。
 - 端点收紧（多用户模式）：`POST /api/project/open` 仅接受 `project_id`（携带 `path` 返回 400 `path_disabled`，无 `project_id` 返回 400 `invalid_request`）；`GET /api/project/browse` 返回 403 `no_permission`；`apply-change` / `set-main-file` / `undo` / `redo` 经 `require_workspace_write` 校验；共享项目（存在任意协作者）v1 禁用撤销/重做（`undo`/`redo` 403，`can-undo`/`can-redo`/`undo-status` 恒为 False）。
+
+**P3 上传与配额要点**：
+
+- 上传入口 `POST /api/projects`（multipart 字段 `archive`，可选 `name`；也支持 `ProjectId` 之外的命名表单字段）。压缩包**流式写入** `data/staging/<upload_id>/`，不整包载入内存；支持 `.zip` 与 `.7z`（`py7zr`）。
+- 解压校验（失败即拒绝，不落用户空间）：压缩包大小、文件数、单文件大小、解压总量 ≤ 剩余配额、压缩比（炸弹拦截）、拒绝绝对路径 / `..` / 符号链接 / 设备文件 / 加密包 / 分卷包、大小写不敏感重名、解压限时；zip 文件名按 UTF-8 标志优先、GBK 回退、cp437 兜底。
+- 项目根归一化：暂存区仅一个顶层目录 → 以该目录为项目根（兼容“打包上层目录”）；否则暂存区本身为项目根（兼容“直接打包内容”）。
+- 项目命名：与同 owner 活动项目去重，自动生成 `xx (2)`；唯一索引（`UNIQUE(owner_id, name) WHERE active`）+ 捕获 `IntegrityError` 重试保证并发安全。
+- 配额记账：项目空间算 `projects.size_bytes`（活动项目之和，回收站不计入）；`/api/auth/me` 与项目列表实时返回用量；后台 `reconcile_project_sizes()` 周期对账修正缓存漂移。上传、恢复、写回（`apply-change`）超限统一返回 413 `quota_exceeded`；写回超限会**回滚本次修改**（不允许部分写入）。
+- 回收站：`DELETE /api/projects/{id}` 进回收站（`status='deleted'`，删除即腾出配额）；`restore` 恢复（超限禁止）；`permanent` 提前永久删除；后台按 `recycle_bin_days` 清理过期回收站项目。
+- 下载：`GET /api/projects/{id}/download` 打包 zip，owner / editor / viewer 均可，临时文件由 `BackgroundTasks` 清理。
+- 项目 API 均只在校验读/写/owner 权限（`access_control`）后执行；管理型动作（重命名/删除/恢复/永久删除）仅 owner。
 
 ---
 

@@ -99,7 +99,7 @@ async def logout(
 @auth_router.get("/me")
 async def me(user: dict = Depends(get_current_user)):
     """当前用户信息、角色、配额与用量。"""
-    return service.build_me(user)
+    return await service.build_me(user)
 
 
 # ── 管理员端点 ──────────────────────────────────────────────────

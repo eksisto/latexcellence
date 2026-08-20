@@ -35,7 +35,7 @@ latexcellence/
 │   │   ├── prompts.py               # 中央提示词管理模块（集中存储所有 LLM 提示词）
 │   │   ├── base_paragraph_check.py  # 逐段检查服务基类（typo/expression/code_review/terminology 共享）
 │   │   ├── access_control.py        # 统一访问控制：项目权限矩阵 + workspace 绑定校验依赖
-│   │   └── multiuser/               # 多用户模式基础设施包（db/userspace/auth/dependencies）
+│   │   └── multiuser/               # 多用户模式基础设施包（db/userspace/auth/dependencies/quota/upload/maintenance）
 │   ├── utils/
 │   │   ├── json_utils.py            # LLM JSON 解析/校验/重试
 │   │   ├── file_ops.py              # 原子写入/备份/MD5
@@ -95,6 +95,7 @@ latexcellence/
 │   │   └── search_router.py         # 通用搜索 API 路由（/api/search/ddg-challenge）
 │   └── modules/                     # 功能模块目录
 │       ├── auth/                    # 多用户认证与管理路由（/api/auth、/api/admin）
+│       ├── projects/                # 多用户项目（上传/下载/回收站/配额，/api/projects）
 │       ├── typo_check/              # 错字查找
 │       ├── expression_opt/          # 表达优化
 │       ├── terminology_check/       # 术语一致性
@@ -222,6 +223,7 @@ latexcellence/
 | Module | 目的 | 关键文件 | 依赖 LLM | Marker |
 | --- | --- | --- | --- | --- |
 | auth | 多用户认证与管理（注册/审批/登录/会话/管理员路由） | router.py, service.py, core/multiuser/* | ✗ | ✗ |
+| projects | 多用户项目：上传/解压、命名去重、配额记账、回收站、下载（/api/projects） | modules/projects/*, core/multiuser/quota.py, upload.py, maintenance.py | ✗ | ✗ |
 | typo_check | 错字/拼写检查 | router.py, service.py | ✓ | ✓ |
 | expression_opt | 学术表达优化 | router.py, service.py, prompt_manager.py | ✓ | ✓ |
 | code_review | LaTeX 代码审查（工具格式化 + LLM 质量审查） | router.py, service.py | ✓ | ✗ |
@@ -267,6 +269,7 @@ latexcellence/
 | 主题系统 | 主题 CSS 自动发现，亮/暗模式独立；`--primary` / `--accent` 等由单一色相派生 | [frontend.md](docs/frontend.md) |
 | 多用户双模式 | `multi_user.enabled` 开关；单用户保持现状（本地目录 + 共享令牌），多用户强制会话认证、CSRF、禁用任意路径打开/浏览 | [multi-user-plan.md](docs/multi-user-plan.md) |
 | 多用户认证 | argon2id 密码哈希、HttpOnly 会话 Cookie（库只存 SHA-256）、注册审批流、登录限流、管理员引导（env/CLI） | [backend-core.md](docs/backend-core.md) |
+| 多用户项目与配额 | 上传 zip/7z 安全解压、项目命名去重、项目空间配额记账、回收站（7 天）、打包下载；写回超限回滚 | [backend-core.md](docs/backend-core.md)、[multi-user-plan.md](docs/multi-user-plan.md) |
 | i18n 多语言 | i18next 简中 / 繁中 / 英语，按 `common` / `pages` / `components` / `hooks` / `errors` 命名空间拆分 | [frontend.md](docs/frontend.md) |
 
 各功能模块的单模块设计（数据流、Pydantic 模型、API、配置）见 [docs/modules.md](docs/modules.md)。

@@ -91,8 +91,10 @@ async def logout(token: str) -> None:
         await asyncio.to_thread(auth_core.delete_session, token)
 
 
-def build_me(user: dict) -> dict:
+async def build_me(user: dict) -> dict:
     """组装 /api/auth/me 响应（用户信息 + 配额与用量）。"""
+    from backend.core.multiuser.quota import user_usage
+
     cfg = get_config().multi_user
     project_quota = (
         user["project_quota_bytes"]
@@ -104,6 +106,7 @@ def build_me(user: dict) -> dict:
         if user["derived_quota_bytes"] is not None
         else cfg.default_derived_quota_mb * 1024 * 1024
     )
+    usage = await asyncio.to_thread(user_usage, user["id"])
     return {
         "user": {
             "id": user["id"],
@@ -116,11 +119,7 @@ def build_me(user: dict) -> dict:
             "project_quota_bytes": project_quota,
             "derived_quota_bytes": derived_quota,
         },
-        "usage": {
-            # P3 配额记账后填充真实用量；当前阶段返回 0
-            "project_usage_bytes": 0,
-            "derived_usage_bytes": 0,
-        },
+        "usage": usage,
     }
 
 

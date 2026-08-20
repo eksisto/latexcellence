@@ -49,6 +49,7 @@ from backend.modules.auth.router import (
     admin_router as auth_admin_router,
     auth_router,
 )
+from backend.modules.projects.router import router as projects_router
 from backend.utils.search_router import router as search_router
 
 
@@ -104,12 +105,19 @@ async def lifespan(app: FastAPI):
     cleanup_task = asyncio.create_task(cleanup_loop())
     plot_cleanup_task = asyncio.create_task(plot_cleanup_loop())
     style_modify_cleanup_task = asyncio.create_task(style_modify_cleanup_loop())
+    mu_maintenance_task = None
+    if get_config().multi_user.enabled:
+        from backend.core.multiuser.maintenance import maintenance_loop
+
+        mu_maintenance_task = asyncio.create_task(maintenance_loop())
     try:
         yield
     finally:
         cleanup_task.cancel()
         plot_cleanup_task.cancel()
         style_modify_cleanup_task.cancel()
+        if mu_maintenance_task is not None:
+            mu_maintenance_task.cancel()
         try:
             await cleanup_task
         except asyncio.CancelledError:
@@ -122,6 +130,11 @@ async def lifespan(app: FastAPI):
             await style_modify_cleanup_task
         except asyncio.CancelledError:
             pass
+        if mu_maintenance_task is not None:
+            try:
+                await mu_maintenance_task
+            except asyncio.CancelledError:
+                pass
         try:
             await close_search_manager()
         except Exception as e:
@@ -298,6 +311,8 @@ app.include_router(plot_gen_router)
 # 多用户模式认证与管理员路由（未开启模式时各端点返回 404）
 app.include_router(auth_router)
 app.include_router(auth_admin_router)
+# 多用户模式项目路由（上传 / 下载 / 回收站 / 配额；未开启模式时 404）
+app.include_router(projects_router)
 
 
 def main():
