@@ -29,6 +29,10 @@ class WorkspaceManager:
 
     def __init__(self):
         self._workspaces: dict[str, LatexProject] = {}
+        # 多用户模式下 workspace_id → (user_id, project_id, root_path) 的绑定。
+        # 绑定在 /api/project/open 时写入；每次请求由 access_control 实时查库
+        # 校验权限（不缓存权限结果），因此绑定信息可安全复用。
+        self._bindings: dict[str, dict] = {}
         self._lock = threading.RLock()
         self._logger = get_logger("workspace_manager")
 
@@ -66,9 +70,45 @@ class WorkspaceManager:
         with self._lock:
             return self._workspaces.get(workspace_id)
 
+    def bind(
+        self,
+        workspace_id: str,
+        *,
+        user_id: str | None = None,
+        project_id: str | None = None,
+        owner_id: str | None = None,
+        root_path: str | None = None,
+    ) -> dict:
+        """
+        绑定工作区与（多用户模式下的）用户/项目映射。
+
+        单用户模式调用时可以不传或传 None（不参与权限校验）；
+        多用户模式下必须传 user_id / project_id / owner_id / root_path。
+        返回绑定信息的副本。
+        """
+        with self._lock:
+            self._bindings[workspace_id] = {
+                "user_id": user_id,
+                "project_id": project_id,
+                "owner_id": owner_id,
+                "root_path": root_path,
+            }
+            return dict(self._bindings[workspace_id])
+
+    def get_binding(self, workspace_id: str) -> dict | None:
+        """返回指定工作区的绑定信息（副本）；未绑定返回 None。"""
+        with self._lock:
+            b = self._bindings.get(workspace_id)
+            return dict(b) if b else None
+
+    def unbind(self, workspace_id: str) -> None:
+        """移除指定工作区的绑定信息（不删除工作区实例）。"""
+        with self._lock:
+            self._bindings.pop(workspace_id, None)
+
     def remove(self, workspace_id: str) -> bool:
         """
-        移除指定工作区，释放资源。
+        移除指定工作区，释放资源（同时清除绑定信息）。
 
         参数：
             workspace_id: 工作区唯一标识符
@@ -77,14 +117,15 @@ class WorkspaceManager:
             True 表示成功移除，False 表示工作区不存在
         """
         with self._lock:
-            if workspace_id in self._workspaces:
-                del self._workspaces[workspace_id]
+            existed = workspace_id in self._workspaces
+            self._workspaces.pop(workspace_id, None)
+            self._bindings.pop(workspace_id, None)
+            if existed:
                 self._logger.info(
                     f"Removed workspace: {workspace_id} "
                     f"(remaining workspaces: {len(self._workspaces)})"
                 )
-                return True
-            return False
+            return existed
 
     def list_workspaces(self) -> list[dict]:
         """
@@ -103,6 +144,10 @@ class WorkspaceManager:
             }
             if project.is_open:
                 info["root_path"] = project.root_path
+            binding = self._bindings.get(ws_id)
+            if binding and binding.get("project_id"):
+                info["user_id"] = binding.get("user_id")
+                info["project_id"] = binding.get("project_id")
             result.append(info)
         return result
 

@@ -12,15 +12,20 @@
 
 约束：
     - users_root 来自 multi_user.users_root（服务器配置，非用户输入）
-    - user_id 一律为服务端生成的 UUID hex，绝不采用用户提交值，因此
-      此处不做路径穿越校验；对用户可控的（相对项目）路径，P2 将新增
-      基于 path_guard.resolve_project_path() 的统一解析入口 resolve_user_path()
+    - user_id / project_id 生产环境均为服务端生成的 UUID hex；user_root() /
+      project_dir() 仍对组件做防穿越校验（防御纵深）：即使未来出现直接
+      拼接用户输入的代码，也无法借 id 组件逃逸出用户空间
     - 方法内实时调用 get_config()，不在 __init__ 缓存路径
 """
 
+import re
 from pathlib import Path
 
 from backend.core.config import get_config
+
+# id 组件安全模式：字母/数字/下划线/连字符（覆盖 UUID hex 与测试用简单 id），
+# 拒绝空值、路径分隔符、'..'、点开头等一切可造成路径逃逸的形态
+_SAFE_ID_RE = re.compile(r"^[A-Za-z0-9_-]+$")
 
 # 衍生数据子目录（与方案 §9.2 统计口径一致）
 DERIVED_SUBDIRS = (
@@ -41,14 +46,26 @@ def get_staging_root() -> Path:
     return Path(get_config().multi_user.staging_root)
 
 
+def _validate_id_component(kind: str, value: str) -> str:
+    """校验路径组件（user_id / project_id）不含路径穿越形态，违规抛 ValueError。"""
+    if not value or not _SAFE_ID_RE.fullmatch(value):
+        raise ValueError(f"Unsafe {kind} component: {value!r}")
+    return value
+
+
 def user_root(user_id: str) -> Path:
     """返回指定用户的根目录。"""
-    return get_users_root() / user_id
+    return get_users_root() / _validate_id_component("user_id", user_id)
 
 
 def project_dir(user_id: str, project_id: str) -> Path:
     """返回指定用户某项目的根目录。"""
-    return user_root(user_id) / "projects" / project_id
+    return (
+        get_users_root()
+        / _validate_id_component("user_id", user_id)
+        / "projects"
+        / _validate_id_component("project_id", project_id)
+    )
 
 
 def derived_dir(user_id: str, subdir_name: str) -> Path:

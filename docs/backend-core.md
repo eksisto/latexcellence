@@ -398,9 +398,9 @@ ExtractorRegistry 先处理已知公开端点（当前代码托管页面使用 G
 
 **workspace_id** 通过查询参数传递，前端在 localStorage 生成唯一 ID。
 
-### 多用户模式基础设施（`backend/core/multiuser/` + `backend/modules/auth/` + `backend/manage.py`）
+### 多用户模式基础设施（`backend/core/multiuser/` + `backend/core/access_control.py` + `backend/modules/auth/` + `backend/manage.py`）
 
-多用户模式（`multi_user.enabled=true`）的后端基础设施，按阶段（见 [docs/multi-user-plan.md](multi-user-plan.md)）实施。P1 已完成：SQLite 初始化、注册/审批/登录/会话/Cookie/CSRF、管理员引导与 CLI。
+多用户模式（`multi_user.enabled=true`）的后端基础设施，按阶段（见 [docs/multi-user-plan.md](multi-user-plan.md)）实施。P1 已完成：SQLite 初始化、注册/审批/登录/会话/Cookie/CSRF、管理员引导与 CLI；P2 已完成：用户空间目录、统一路径解析、项目访问控制、workspace 绑定与现有端点收紧。
 
 **包结构**：
 
@@ -409,7 +409,8 @@ ExtractorRegistry 先处理已知公开端点（当前代码托管页面使用 G
 | `backend/core/multiuser/db.py` | SQLite 初始化（users/sessions/projects/project_collaborators 表 + WAL + 外键）、连接管理与统一查询入口（`db_execute` / `db_query_one` / `db_query_all`，同步线程安全） |
 | `backend/core/multiuser/userspace.py` | 用户空间目录布局（`<users_root>/<user_id>/{projects, writing_chat_sessions, style_modify_sessions, templates, plots}`），`ensure_user_dirs()` 注册时创建 |
 | `backend/core/multiuser/auth.py` | 密码哈希（argon2id）、会话令牌（库只存 SHA-256 哈希）、用户管理（注册 pending / 审批 / 禁用 / 重置密码 / 配额覆盖）、登录限流（每用户名+每 IP 分钟级）、`ensure_bootstrap_admin()` |
-| `backend/core/multiuser/dependencies.py` | FastAPI 认证依赖：`get_current_user`（401）、`require_admin`（403） |
+| `backend/core/multiuser/dependencies.py` | FastAPI 认证依赖：`get_current_user`（401）、`require_admin`（403）、`get_current_user_optional`、`require_admin_if_multiuser` |
+| `backend/core/access_control.py` | 统一访问控制：`owner/editor/viewer` 权限矩阵、`require_project_access()` / `get_projects_for_user()` / `get_user_role_for_project()` / `is_shared_project()`、基于 workspace 绑定的请求级依赖 `require_workspace(write=...)`；权限实时查库不缓存 |
 | `backend/modules/auth/router.py` | 薄路由层：`/api/auth/*`（register/login/logout/me）与 `/api/admin/*`（用户列表/审批/禁用/重置密码/配额） |
 | `backend/modules/auth/service.py` | 认证业务逻辑（`asyncio.to_thread` 调度压库操作；错误映射为结构化 `{"error": code, "message": ...}`） |
 | `backend/manage.py` | CLI：`python -m backend.manage create-admin / reset-password / list-users / set-status` |
@@ -422,6 +423,13 @@ ExtractorRegistry 先处理已知公开端点（当前代码托管页面使用 G
 - 登录失败统一返回 401 `unauthorized`（避免用户名枚举）；**登录采用恒定时长校验**：用户名不存在时也对占位哈希执行 argon2 验证，用户名枚举响应耗时一致，封堵时序侧信道；待审批返回 403 `account_pending`，禁用返回 403 `account_disabled`。
 - 管理员引导：首次启动且用户表为空时，从环境变量（`LATEXCELLENCE_ADMIN_USERNAME` / `LATEXCELLENCE_ADMIN_PASSWORD`）创建管理员；未设置则等待 CLI `create-admin`。
 - 端到端注册审批流程：注册（pending）→ 管理员审批（active）→ 登录 → 会话访问；未登录访问受保护接口 / 会话过期返回 401。
+
+**P2 用户空间与访问控制要点**：
+
+- 项目目录由 `project_id` 派生（`data/users/<owner_id>/projects/<project_id>/`）；项目文件读写统一经 `resolve_user_path()`（`path_guard`，基于 `resolve_project_path`）解析，禁止直接拼接路径；符号链接默认拒绝。
+- `WorkspaceManager` 增加 `bind()/get_binding()/unbind()`：多用户模式下 `/api/project/open` 打开项目时写入 `workspace_id → (user_id, project_id, owner_id, root_path)`；`/remove` 时一并清理绑定。
+- `access_control.require_workspace(write=...)` 为请求级 FastAPI 依赖（`require_workspace_read` / `require_workspace_write`）：单用户模式直接放行；多用户模式按当前登录用户**实时查库**校验所属项目角色，写操作要求 `viewer` 之外的权限；未绑定工作区返回 400 `invalid_workspace`。
+- 端点收紧（多用户模式）：`POST /api/project/open` 仅接受 `project_id`（携带 `path` 返回 400 `path_disabled`，无 `project_id` 返回 400 `invalid_request`）；`GET /api/project/browse` 返回 403 `no_permission`；`apply-change` / `set-main-file` / `undo` / `redo` 经 `require_workspace_write` 校验；共享项目（存在任意协作者）v1 禁用撤销/重做（`undo`/`redo` 403，`can-undo`/`can-redo`/`undo-status` 恒为 False）。
 
 ---
 

@@ -219,6 +219,14 @@ python -m backend.manage list-users
 python -m backend.manage set-status <username> pending|active|disabled
 ```
 
+**P2 用户空间与访问控制**（§4.3 / §7）：
+
+- 用户空间目录布局在 `backend/core/multiuser/userspace.py`（项目永久落在 `data/users/<user_id>/projects/<project_id>/`，衍生数据目录按用户隔离）；
+- 多用户模式下统一路径解析入口 `path_guard.resolve_user_path(user_id, project_id, file_path)`（基于 `resolve_project_path` 的封装，禁止直接拼接路径）；
+- 统一访问控制模块 `backend/core/access_control.py`：`owner / editor / viewer` 三档权限矩阵、`require_project_access()` / `get_projects_for_user()`、基于 workspace 绑定的请求级依赖 `require_workspace(write=...)`，权限**实时查库**（不缓存，变更立即生效）；
+- 工作区绑定：`/api/project/open` 在多用户模式下仅接受 `project_id`，打开时写入 `workspace_id → (user_id, project_id, root_path)`；后续所有 `/api/project/*` 请求经 `require_workspace` 实时校验访问权限；
+- 端点收紧：`/api/project/browse` 多用户模式返回 403（任意磁盘浏览失效）；`/api/project/open` 拒绝 `path` 字段（任意路径打开失效）；写操作（apply-change / set-main-file / undo / redo）要求非 viewer 权限；共享项目（存在协作者）v1 禁用撤销/重做（`undo`/`redo` 403，`can-undo`/`can-redo` 恒 False）。
+
 基础设施与认证实现的详细说明见 [docs/backend-core.md](backend-core.md)，完整设计见 [docs/multi-user-plan.md](multi-user-plan.md)。
 
 > 运维提示：登录限流按"用户名 + 客户端 IP"计数；若部署在反向代理（nginx 等）之后，`request.client.host` 恒为代理 IP，"每 IP"维度会退化，需按部署接入受信代理 / 真实 IP 传递后才会生效。

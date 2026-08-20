@@ -138,3 +138,48 @@ def resolve_path_case_insensitive(path: str) -> Path | None:
         return None
 
     return _match(Path(p.anchor), list(p.parts[1:]))
+
+
+def resolve_user_path(
+    user_id: str,
+    project_id: str,
+    file_path: str,
+    *,
+    allowed_suffixes: tuple[str, ...] | None = None,
+    allow_symlink: bool = False,
+) -> Path:
+    """
+    多用户模式统一路径解析入口（基于 resolve_project_path 的封装）。
+
+    将 file_path 解析为 用户项目根目录（data/users/<user_id>/projects/<project_id>/）
+    内的绝对路径，并执行与 resolve_project_path 相同的安全校验（拒绝绝对路径、
+    '..'、符号链接与越界逃逸）。
+
+    用途：
+        - 多用户模式下的项目文件读写，禁止直接使用 `root / file_path` 拼接；
+        - 单用户模式仍使用 resolve_project_path()（以用户选择的本地目录为根）；
+        - project_id 一律来自服务端生成的 UUID，绝不由用户直接拼接。
+
+    参数：
+        user_id: 当前用户 ID（服务端 UUID）
+        project_id: 项目 ID（服务端 UUID，同时是目录名）
+        file_path: 项目内相对路径（如 "chapters/intro.tex"）
+        allowed_suffixes: 允许的文件扩展名白名单
+        allow_symlink: 是否允许符号链接（默认 False，拒绝）
+
+    返回：
+        校验通过的项目内绝对路径
+
+    异常：
+        ValueError: 路径不合法或超出用户项目根目录
+    """
+    # 延迟导入避免模块加载期循环依赖（userspace 依赖 config，config 不依赖 path_guard）
+    from backend.core.multiuser import userspace
+
+    root = userspace.project_dir(user_id, project_id)
+    return resolve_project_path(
+        root,
+        file_path,
+        allowed_suffixes=allowed_suffixes,
+        allow_symlink=allow_symlink,
+    )
