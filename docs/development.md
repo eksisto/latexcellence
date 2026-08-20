@@ -190,6 +190,41 @@ npm start        # 或 node server.js
 
 ---
 
+## 多用户模式（可选）
+
+将 `multi_user.enabled` 设为 `true` 即开启多用户模式（默认关闭，单用户行为完全保持）。**需重启服务**：启动时初始化 SQLite 数据库、创建用户空间根目录并引导首个管理员。开启后：
+
+- 全部 `/api/*`（公开端点除外）强制会话 Cookie 认证，变更类请求需携带 `X-Latexcellence-CSRF` 请求头且其值与会话下发的 CSRF Cookie（`latexcellence_csrf`）一致（双提交防 CSRF）；共享访问令牌逻辑与任意路径打开/磁盘浏览被关闭；
+- 首次启动且用户表为空时，从环境变量 `LATEXCELLENCE_ADMIN_USERNAME` / `LATEXCELLENCE_ADMIN_PASSWORD` 引导首个管理员；未设置时使用 CLI 创建；
+- 认证依赖 argon2id 密码哈希（登录校验为恒定时长，防时序枚举用户名），会话令牌仅存哈希到 SQLite（WAL 模式）。
+
+**认证/管理 API**（多用户模式下生效，单用户模式返回 404）：
+
+| 端点 | 说明 |
+| --- | --- |
+| `POST /api/auth/register` | 注册（`registration_enabled=true` 时），写入 `pending` 等待审批 |
+| `POST /api/auth/login` / `POST /api/auth/logout` | 登录设置 HttpOnly 会话 Cookie / 登出 |
+| `GET /api/auth/me` | 当前用户信息、角色、配额与用量 |
+| `GET /api/admin/users` | 用户列表（仅 admin） |
+| `POST /api/admin/users/{id}/approve` `/reject` `/disable` `/enable` | 审批 / 拒绝 / 禁用 / 启用 |
+| `POST /api/admin/users/{id}/reset-password` | 重置为临时密码（一次性返回明文）并吊销会话 |
+| `PUT /api/admin/users/{id}/quota` | 调整用户配额覆盖（null 跟随全局默认） |
+
+**CLI 管理工具**（无需启动服务器）：
+
+```bash
+python -m backend.manage create-admin <username> [--password xxx]
+python -m backend.manage reset-password <username> [--password xxx]
+python -m backend.manage list-users
+python -m backend.manage set-status <username> pending|active|disabled
+```
+
+基础设施与认证实现的详细说明见 [docs/backend-core.md](backend-core.md)，完整设计见 [docs/multi-user-plan.md](multi-user-plan.md)。
+
+> 运维提示：登录限流按"用户名 + 客户端 IP"计数；若部署在反向代理（nginx 等）之后，`request.client.host` 恒为代理 IP，"每 IP"维度会退化，需按部署接入受信代理 / 真实 IP 传递后才会生效。
+
+---
+
 ## 开发/生产模式
 
 | 模式 | `dev_mode` | FastAPI 行为 | 前端行为 |

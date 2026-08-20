@@ -23,16 +23,18 @@ latexcellence/
 ├── clean-cache.sh / clean-cache.ps1 # 缓存清理脚本（Bash / PowerShell）
 ├── venv-shell.sh                   # 打开一个已激活 .venv 的交互式 bash
 ├── backend/
+│   ├── manage.py                    # 多用户模式 CLI 管理工具（python -m backend.manage）
 │   ├── core/
 │   │   ├── config.py                # Pydantic 配置模型 + 热重载
 │   │   ├── llm_client.py            # AsyncOpenAI 封装（流式 + 重试 + 限流 + Function Calling）
-│   │   ├── security_middleware.py   # CORS 白名单 + 共享访问令牌中间件（支持热重载）
+│   │   ├── security_middleware.py   # CORS 白名单 + 共享访问令牌中间件（多用户模式：会话 + CSRF）
 │   │   ├── logger.py                # TimedRotatingFileHandler 日志
 │   │   ├── workspace_manager.py     # 多工作区管理（workspace_id → LatexProject）
 │   │   ├── project_manager.py       # LaTeX 项目管理（文件树/段落/撤销）
 │   │   ├── tool_registry.py         # Function Calling 工具注册表
 │   │   ├── prompts.py               # 中央提示词管理模块（集中存储所有 LLM 提示词）
-│   │   └── base_paragraph_check.py  # 逐段检查服务基类（typo/expression/code_review/terminology 共享）
+│   │   ├── base_paragraph_check.py  # 逐段检查服务基类（typo/expression/code_review/terminology 共享）
+│   │   └── multiuser/               # 多用户模式基础设施包（db/userspace/auth/dependencies）
 │   ├── utils/
 │   │   ├── json_utils.py            # LLM JSON 解析/校验/重试
 │   │   ├── file_ops.py              # 原子写入/备份/MD5
@@ -91,6 +93,7 @@ latexcellence/
 │   │   │   └── edit_tools_manager.py # EditToolsManager — 段落编辑工具（edit_paragraph/undo_last_edit）
 │   │   └── search_router.py         # 通用搜索 API 路由（/api/search/ddg-challenge）
 │   └── modules/                     # 功能模块目录
+│       ├── auth/                    # 多用户认证与管理路由（/api/auth、/api/admin）
 │       ├── typo_check/              # 错字查找
 │       ├── expression_opt/          # 表达优化
 │       ├── terminology_check/       # 术语一致性
@@ -179,6 +182,9 @@ latexcellence/
 │   ├── test_utils/                  # 后端工具单元测试（路径/JSON/宏包/搜索/学术检索/编译等）
 │   └── fixtures/                    # 测试数据（宏包规则表、公式/表格 OCR、错字查找/表达优化语料等）
 ├── data/                            # 应用运行期与用户数据统一目录
+│   ├── latexcellence.db             # 多用户模式 SQLite 数据库（运行时生成）
+│   ├── users/                       # 多用户模式用户空间（<user_id>/ 下 projects 与衍生数据目录）
+│   ├── staging/                     # 多用户模式上传解压暂存区（运行时生成）
 │   ├── formats/                     # 参考文献格式定义
 │   ├── plots/                       # plot_gen 绘图运行输出（运行时生成）
 │   ├── prompts/                     # 自定义提示词（expression/ 风格预设与 writing_chat/ 角色预设）
@@ -214,6 +220,7 @@ latexcellence/
 
 | Module | 目的 | 关键文件 | 依赖 LLM | Marker |
 | --- | --- | --- | --- | --- |
+| auth | 多用户认证与管理（注册/审批/登录/会话/管理员路由） | router.py, service.py, core/multiuser/* | ✗ | ✗ |
 | typo_check | 错字/拼写检查 | router.py, service.py | ✓ | ✓ |
 | expression_opt | 学术表达优化 | router.py, service.py, prompt_manager.py | ✓ | ✓ |
 | code_review | LaTeX 代码审查（工具格式化 + LLM 质量审查） | router.py, service.py | ✓ | ✗ |
@@ -257,6 +264,8 @@ latexcellence/
 | 逐段检查前端流程 | `useParagraphCheck` 统一封装恢复、预览、检查、排序、应用与持久化；`useResultFilter` 负责排序过滤 | [frontend.md](docs/frontend.md) |
 | 写作助手 | `useWritingChat` 管理会话、SSE 流式、工具确认、编辑建议双轮协议 | [writing_chat.md](docs/modules/writing_chat.md) |
 | 主题系统 | 主题 CSS 自动发现，亮/暗模式独立；`--primary` / `--accent` 等由单一色相派生 | [frontend.md](docs/frontend.md) |
+| 多用户双模式 | `multi_user.enabled` 开关；单用户保持现状（本地目录 + 共享令牌），多用户强制会话认证、CSRF、禁用任意路径打开/浏览 | [multi-user-plan.md](docs/multi-user-plan.md) |
+| 多用户认证 | argon2id 密码哈希、HttpOnly 会话 Cookie（库只存 SHA-256）、注册审批流、登录限流、管理员引导（env/CLI） | [backend-core.md](docs/backend-core.md) |
 | i18n 多语言 | i18next 简中 / 繁中 / 英语，按 `common` / `pages` / `components` / `hooks` / `errors` 命名空间拆分 | [frontend.md](docs/frontend.md) |
 
 各功能模块的单模块设计（数据流、Pydantic 模型、API、配置）见 [docs/modules.md](docs/modules.md)。

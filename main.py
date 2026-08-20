@@ -15,7 +15,7 @@ import sys
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException
+from fastapi import Depends, FastAPI, HTTPException
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from pydantic import ValidationError
@@ -23,6 +23,7 @@ import uvicorn
 
 from backend.core.config import load_config, get_config, update_config_from_dict
 from backend.core.logger import setup_logging, get_logger
+from backend.core.multiuser.dependencies import require_admin_if_multiuser
 from backend.core.security_middleware import AccessSecurityMiddleware
 from backend.modules.project_router import router as project_router
 from backend.modules.typo_check.router import router as typo_check_router
@@ -44,6 +45,10 @@ from backend.modules.paragraph_translate.router import (
 from backend.modules.writing_chat.router import router as writing_chat_router
 from backend.modules.bib_manager.router import router as bib_manager_router
 from backend.modules.plot_gen.router import router as plot_gen_router
+from backend.modules.auth.router import (
+    admin_router as auth_admin_router,
+    auth_router,
+)
 from backend.utils.search_router import router as search_router
 
 
@@ -56,6 +61,19 @@ async def lifespan(app: FastAPI):
     """
     logger = get_logger("main")
     logger.info("Starting LaTeXcellence server")
+
+    # 多用户模式：初始化 SQLite 数据库并引导首个管理员账号（阻塞 I/O 走线程池）
+    if get_config().multi_user.enabled:
+        from backend.core.multiuser import auth as multiuser_auth
+        from backend.core.multiuser.db import init_db
+
+        await asyncio.to_thread(init_db)
+        admin = await asyncio.to_thread(multiuser_auth.ensure_bootstrap_admin)
+        if admin is not None:
+            logger.info(
+                "Bootstrap admin '%s' ready — multi-user mode is live",
+                admin["username"],
+            )
 
     from backend.modules.template_gen.cleanup import cleanup_loop
     from backend.modules.plot_gen.cleanup import cleanup_loop as plot_cleanup_loop
@@ -192,12 +210,15 @@ async def config_status():
 
 
 @app.get("/api/config")
-async def get_full_config():
+async def get_full_config(
+    _: None = Depends(require_admin_if_multiuser),
+):
     """
     获取完整配置（api_key 脱敏处理）。
 
     返回所有配置项供前端设置页面使用。LLM api_key 仅展示后 4 位，
     前端以掩码形式（***xxxx）显示。
+    多用户模式下仅管理员可访问（单用户模式保持原行为）。
     """
     cfg = get_config()
     data = cfg.model_dump()
@@ -233,10 +254,14 @@ async def get_full_config():
 
 
 @app.post("/api/config")
-async def update_config(payload: dict):
+async def update_config(
+    payload: dict,
+    _: None = Depends(require_admin_if_multiuser),
+):
     """
     更新配置并持久化到 config.json。
     支持部分更新——只需传入需要修改的字段即可。
+    多用户模式下仅管理员可访问（单用户模式保持原行为）。
     """
     try:
         update_config_from_dict(payload)
@@ -270,6 +295,9 @@ app.include_router(search_router)
 app.include_router(writing_chat_router)
 app.include_router(bib_manager_router)
 app.include_router(plot_gen_router)
+# 多用户模式认证与管理员路由（未开启模式时各端点返回 404）
+app.include_router(auth_router)
+app.include_router(auth_admin_router)
 
 
 def main():

@@ -47,16 +47,24 @@
 - 用户通过 UI 手动输入的新 Key 解除环境变量标记，正常持久化到磁盘
 - 前端提交的 `api_key` 若以 `***` 开头（掩码），保留原值不更新
 
-### `backend/core/security_middleware.py` — CORS 白名单与访问令牌
+### `backend/core/security_middleware.py` — CORS 白名单与访问令牌 / 会话
 
-统一处理跨域与本地后端的访问控制：
+统一处理跨域与访问控制：
 
 - CORS 白名单来自 `server.allowed_origins`，白名单外的 `Origin` 一律返回 403，避免任意网页驱动用户本地后端（读取/修改 `.tex`、消耗 API Key）；空列表表示拒绝所有跨域来源（fail-closed）。
 - 配置未加载时中间件拒绝所有请求（503），不降级为放行。
 - 与请求 `Host` 同源的 `Origin` 自动放行——浏览器对同源 POST 也会携带 `Origin`，保证 FastAPI 直接托管 `static/` 的同源生产模式可用；白名单仍覆盖跨域部署场景。
-- `security.access_token` 非空时，所有 `/api/*` 请求（`/api/health` 除外）必须携带 `X-Latexcellence-Token` 请求头；仅 EventSource 等确实无法自定义请求头的流式场景通过 `?token=` 查询参数传递。下载与 PDF/图片预览均通过带令牌头的 fetch + Blob 完成，避免令牌进入访问日志。
 - 每次请求实时读取 `get_config()`，配置热重载后立即生效。
 - 前端 `api/index.js` 提供 `resolveUrl()` 解析后端返回的相对路径（不追加令牌）；第三方绝对 URL 原样返回，避免令牌泄漏给外部站点。
+
+**单用户模式**：`security.access_token` 非空时，所有 `/api/*` 请求（`/api/health` 除外）必须携带 `X-Latexcellence-Token` 请求头；仅 EventSource 等确实无法自定义请求头的流式场景通过 `?token=` 查询参数传递。下载与 PDF/图片预览均通过带令牌头的 fetch + Blob 完成，避免令牌进入访问日志。
+
+**多用户模式**（`multi_user.enabled=true`）：跳过共享访问令牌逻辑，改为会话认证——
+
+- 公开端点：`/api/health`、`/api/config/status`、`/api/auth/login`、`/api/auth/register`；
+- 其余所有 `/api/*` 请求必须携带有效的 HttpOnly 会话 Cookie（`latexcellence_session`），会话过期或账号被禁用即时失效（返回 401 `unauthorized`）；
+- **双提交 CSRF**：登录时额外下发可被 JS 读取的 CSRF Cookie（`latexcellence_csrf`），变更类请求（POST/PUT/PATCH/DELETE）必须携带 `X-Latexcellence-CSRF` 请求头且其值与会话携带的 CSRF Cookie 一致（常量时间比较）；缺失或不一致返回 403 `invalid_csrf`。与 `SameSite=Lax` 配合，覆盖同站子域/放宽同站点等场景；
+- 多用户模式使用 Cookie 会话，允许的跨源响应（如 Vite dev `localhost:5173`→`8000`）会携带 `Access-Control-Allow-Credentials: true`（origin 仍回显具体值而非 `*`）。
 
 ### `backend/core/llm_client.py` — LLM API 客户端
 
@@ -389,6 +397,31 @@ ExtractorRegistry 先处理已知公开端点（当前代码托管页面使用 G
 **并发保护**：工作区表由 `RLock` 保护，`get_or_create()` / `get()` / `remove()` / `list_workspaces()` 为线程安全操作；每个 `LatexProject` 实例内部用独立锁保护 `_file_md5` 缓存读写。
 
 **workspace_id** 通过查询参数传递，前端在 localStorage 生成唯一 ID。
+
+### 多用户模式基础设施（`backend/core/multiuser/` + `backend/modules/auth/` + `backend/manage.py`）
+
+多用户模式（`multi_user.enabled=true`）的后端基础设施，按阶段（见 [docs/multi-user-plan.md](multi-user-plan.md)）实施。P1 已完成：SQLite 初始化、注册/审批/登录/会话/Cookie/CSRF、管理员引导与 CLI。
+
+**包结构**：
+
+| 文件 | 职责 |
+| --- | --- |
+| `backend/core/multiuser/db.py` | SQLite 初始化（users/sessions/projects/project_collaborators 表 + WAL + 外键）、连接管理与统一查询入口（`db_execute` / `db_query_one` / `db_query_all`，同步线程安全） |
+| `backend/core/multiuser/userspace.py` | 用户空间目录布局（`<users_root>/<user_id>/{projects, writing_chat_sessions, style_modify_sessions, templates, plots}`），`ensure_user_dirs()` 注册时创建 |
+| `backend/core/multiuser/auth.py` | 密码哈希（argon2id）、会话令牌（库只存 SHA-256 哈希）、用户管理（注册 pending / 审批 / 禁用 / 重置密码 / 配额覆盖）、登录限流（每用户名+每 IP 分钟级）、`ensure_bootstrap_admin()` |
+| `backend/core/multiuser/dependencies.py` | FastAPI 认证依赖：`get_current_user`（401）、`require_admin`（403） |
+| `backend/modules/auth/router.py` | 薄路由层：`/api/auth/*`（register/login/logout/me）与 `/api/admin/*`（用户列表/审批/禁用/重置密码/配额） |
+| `backend/modules/auth/service.py` | 认证业务逻辑（`asyncio.to_thread` 调度压库操作；错误映射为结构化 `{"error": code, "message": ...}`） |
+| `backend/manage.py` | CLI：`python -m backend.manage create-admin / reset-password / list-users / set-status` |
+
+**关键约定**：
+
+- `init_db()` 与各业务函数实时读取 `get_config()`，不缓存路径/阈值；数据库路径在测试/换配置时变化会自动重连。
+- 所有 SQLite 压库操作为同步函数，事件循环中通过 `asyncio.to_thread` 调用，禁止阻塞事件循环（v1 单进程，SQLite WAL 足够）。
+- 会话 Cookie：`HttpOnly` + `SameSite=Lax`，HTTPS 请求下 `Secure`；默认 7 天、记住我 30 天；会话吊销在禁用/重置密码时立即生效。
+- 登录失败统一返回 401 `unauthorized`（避免用户名枚举）；**登录采用恒定时长校验**：用户名不存在时也对占位哈希执行 argon2 验证，用户名枚举响应耗时一致，封堵时序侧信道；待审批返回 403 `account_pending`，禁用返回 403 `account_disabled`。
+- 管理员引导：首次启动且用户表为空时，从环境变量（`LATEXCELLENCE_ADMIN_USERNAME` / `LATEXCELLENCE_ADMIN_PASSWORD`）创建管理员；未设置则等待 CLI `create-admin`。
+- 端到端注册审批流程：注册（pending）→ 管理员审批（active）→ 登录 → 会话访问；未登录访问受保护接口 / 会话过期返回 401。
 
 ---
 

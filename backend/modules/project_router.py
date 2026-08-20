@@ -7,9 +7,10 @@
 from pathlib import Path
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 
+from backend.core.multiuser.dependencies import require_admin_if_multiuser
 from backend.core.project_manager import FileConflictError
 from backend.core.workspace_manager import (
     get_project_manager_for_workspace,
@@ -278,16 +279,27 @@ async def undo_status(
 
 
 @router.delete("/workspace/{workspace_id}")
-async def close_workspace(workspace_id: str):
-    """关闭指定工作区，释放相关资源。"""
+async def close_workspace(
+    workspace_id: str,
+    _: None = Depends(require_admin_if_multiuser),
+):
+    """关闭指定工作区，释放相关资源。
+
+    多用户模式下仅管理员可见（调试用途）；单用户模式保持原行为。
+    """
     wm = get_workspace_manager()
     removed = wm.remove(workspace_id)
     return {"status": "ok", "removed": removed}
 
 
 @router.get("/workspaces")
-async def list_workspaces():
-    """列出所有活跃的工作区。"""
+async def list_workspaces(
+    _: None = Depends(require_admin_if_multiuser),
+):
+    """列出所有活跃的工作区。
+
+    多用户模式下仅管理员可见（调试用途）；单用户模式保持原行为。
+    """
     wm = get_workspace_manager()
     return {"workspaces": wm.list_workspaces()}
 

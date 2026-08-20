@@ -562,6 +562,19 @@ Mock 返回值必须符合 Pydantic schema，确保测试的可重复性。
 
 测试用的 LaTeX 字符串使用原始字符串 `r"..."`，避免转义问题。
 
+### 9.4 多用户模式（P1 基础设施）
+
+多用户模式（`multi_user.enabled=true`，默认关闭）通过**中间件 + 依赖**两条路径实现双模式共存，设计要点：
+
+- **双模式中间件**（`security_middleware.py`）：`enabled=false` 时完全保持单用户现状（本地目录 + 共享访问令牌）；`enabled=true` 时对全部 `/api/*`（公开端点 `/api/health`、`/api/config/status`、`/api/auth/login`、`/api/auth/register` 除外）强制会话 Cookie 认证，变更类方法（POST/PUT/PATCH/DELETE）强制 `X-Latexcellence-CSRF` 请求头，会话校验实时查库（禁用账号即时失效）。
+- **认证核心**（`backend/core/multiuser/auth.py`，同步函数）：argon2id 密码哈希；会话令牌为 32 字节随机数，数据库仅存 SHA-256 哈希，过期时间由配置（默认 7 天 / 记住我 30 天）决定；用户名大小写不敏感唯一（`COLLATE NOCASE` 唯一索引 + 注册事务）；登录限流按（用户名小写, IP）分钟级计数。
+- **存储**：SQLite（WAL + 外键 + 部分唯一索引）单进程共享连接，`RLock` 串行化事务；所有压库操作经 `asyncio.to_thread` 调出事件循环。
+- **错误契约**：认证/管理接口统一返回结构化 `detail={"error": code, "message": ...}`，错误码见方案 §10.5（`unauthorized` / `no_permission` / `invalid_csrf` / `account_pending` / `account_disabled` / `rate_limited` 等）。
+- **管理员引导**：首次启动且用户表为空时从环境变量创建管理员，否则由 CLI（`python -m backend.manage create-admin`）创建；CLI 覆盖创建/重置密码/列表/状态流转。
+- **执行安全前提**：v1 不做强沙箱，多用户部署限定可信团队内部（HTTPS + 账号审批制 + 管理员管控），外部命令执行路径的 Docker 沙箱列入 v2。
+
+完整方案、数据模型与阶段划分见 [docs/multi-user-plan.md](docs/multi-user-plan.md)，实现细节见 [docs/backend-core.md](docs/backend-core.md)。
+
 ---
 
 ## 10. 关键设计决策总结
@@ -585,3 +598,9 @@ Mock 返回值必须符合 Pydantic schema，确保测试的可重复性。
 | 格式配置持久化 | JSON 文件，文件名由 `format_name` 自动生成 | 无需用户手动命名；合法字符替换为 `-`；支持 CRUD 加载复用 |
 | 联网搜索引擎 | DuckDuckGo HTML + SearXNG JSON API + Tavily Search API | `legacy` 保持主引擎串行降级；`aggregate` 在统一截止时间内并发运行可用引擎，失败 lane 返回 `EngineStatus`，成功候选经安全 URL 规范化、近重复抑制、RRF、来源加权和域名上限得到稳定部分结果；显式指定引擎仍走单引擎路径 |
 | 网页读取 | DeepReader + FetchCoordinator/ExtractorRegistry | `page_reading.strategy=legacy` 保留纯文本兼容路径；`structured` 使用公网 HTTPS 策略、原始/抽取缓存、条件请求、MIME 路由、多候选 HTML 质量评分、标题感知切块与 BM25/MMR 证据选择；抽取版本进入缓存键，配置可热重载回滚 |
+| 多用户认证 | argon2id + HttpOnly 会话 Cookie（库只存哈希）+ 注册审批流 | 共享令牌只适合单用户本地部署；多用户模式强制会话认证与 CSRF 头，管理员审批制配合登录限流控制滥用 |
+| 多用户执行安全 | v1 可信团队部署（不沙箱）；Docker 沙箱列入 v2 | latexmk / Python / pandoc / git 等面向不可信上传内容，隔离是开放部署的前提 |
+
+## 11. 多用户模式设计决策记录
+
+多用户模式的完整关键决策记录（双模式、认证、存储、配额、权限、上传、迁移等）见 [docs/multi-user-plan.md §3](docs/multi-user-plan.md)。P1 落地为 `backend/core/multiuser/`（db/userspace/auth/dependencies）、`backend/modules/auth/`（`/api/auth` 与 `/api/admin`）与 `backend/manage.py`（CLI），设计与实现见 §9.4 与 [docs/backend-core.md](docs/backend-core.md)。
