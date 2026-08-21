@@ -65,8 +65,8 @@ const useStore = create(
           quota: me?.quota || null,
           usage: me?.usage || null,
         }),
-      setQuota: (quota) => set({ quota }),
-      setUsage: (usage) => set({ usage }),
+      // 配额/用量的更新统一走 setAuthMe（/auth/me 一次带回用户+配额+用量），
+      // 不单独提供 setQuota/setUsage——孤立 setter 只会制造陈旧数据（审查 M2）
       /**
        * 多用户模式当前项目身份（持久化，刷新后据此恢复）。
        * 权限实时查库可能变化，进入工作区时按需重新同步 projectRole。

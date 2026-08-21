@@ -164,6 +164,7 @@ export default function ProjectWorkbenchPage() {
   const authUser = useStore((s) => s.authUser);
   const quota = useStore((s) => s.quota);
   const usage = useStore((s) => s.usage);
+  const setAuthMe = useStore((s) => s.setAuthMe);
   const setOpenedProject = useStore((s) => s.setOpenedProject);
   const clearProject = useStore((s) => s.clearProject);
 
@@ -200,9 +201,16 @@ export default function ProjectWorkbenchPage() {
 
   const loadAll = useCallback(async () => {
     setLoading(true);
-    await loadProjects();
+    // 上传/删除/恢复/转交都会改变项目空间占用：并行补一次 /auth/me 刷新
+    // 用户、配额与用量，避免用量条一直显示启动/登录时的旧值（审查 M2）。
+    // me() 失败不阻塞列表加载（会话失效由全局 401 回调处理）。
+    const [me] = await Promise.all([
+      api.auth.me().catch(() => null),
+      loadProjects(),
+    ]);
+    if (me) setAuthMe(me);
     setLoading(false);
-  }, [loadProjects]);
+  }, [loadProjects, setAuthMe]);
 
   useEffect(() => {
     if (loadRef.current) return;
