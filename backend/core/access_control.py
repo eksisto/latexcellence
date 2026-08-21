@@ -16,7 +16,7 @@
 
 import asyncio
 
-from fastapi import Depends, HTTPException, Query
+from fastapi import Depends, HTTPException, Request
 
 from backend.core.config import get_config
 from backend.core.logger import get_logger
@@ -210,14 +210,111 @@ def is_multiuser() -> bool:
 
 
 # ── 基于 workspace 绑定的请求级访问依赖 ────────────────────────────────────
-def require_workspace(write: bool = False):
+def _enforce_workspace_access(
+    workspace_id: str | None,
+    user: dict | None,
+    write: bool,
+    *,
+    required: bool,
+) -> dict:
+    """
+    workspace 访问判定核心（单用户放行；多用户实时校验）。
+
+    required=True 时：未登录 → 401；缺 workspace_id 或未绑定 → 400 invalid_workspace；
+    无项目权限 → 403 no_permission；write=True 且 viewer → 403。
+    required=False 时：多用户模式下缺 workspace_id 直接放行（供可选的
+    workspace 参数端点使用，如 session-only 的写作助手），其余判定同 required=True。
+    """
+    if not is_multiuser():
+        return {
+            "workspace_id": workspace_id or "",
+            "project_id": None,
+            "owner_id": None,
+            "role": None,
+            "root_path": None,
+            "multi_user": False,
+        }
+    if user is None:
+        logger.warning(
+            "DENY workspace access: workspace=%s reason=unauthenticated",
+            workspace_id,
+        )
+        raise unauthorized("Not logged in")
+    if not workspace_id:
+        if not required:
+            return {
+                "workspace_id": "",
+                "project_id": None,
+                "owner_id": None,
+                "role": None,
+                "root_path": None,
+                "multi_user": True,
+            }
+        logger.warning(
+            "DENY workspace access: user=%s workspace=<empty> reason=missing",
+            user["id"],
+        )
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "error": "invalid_workspace",
+                "message": "Workspace is not open or not bound to a project",
+            },
+        )
+    binding = get_workspace_manager().get_binding(workspace_id)
+    if binding is None:
+        logger.warning(
+            "DENY workspace access: user=%s workspace=%s reason=not_bound",
+            user["id"],
+            workspace_id,
+        )
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "error": "invalid_workspace",
+                "message": "Workspace is not open or not bound to a project",
+            },
+        )
+    project_id = binding.get("project_id")
+    role = get_user_role_for_project(user["id"], project_id) if project_id else None
+    if role is None:
+        logger.warning(
+            "DENY workspace access: user=%s workspace=%s project=%s "
+            "reason=no_role write=%s",
+            user["id"],
+            workspace_id,
+            project_id,
+            write,
+        )
+        raise forbidden("no_permission", "No access to this project")
+    if write and role == "viewer":
+        logger.warning(
+            "DENY workspace access: user=%s workspace=%s project=%s "
+            "role=viewer reason=write_forbidden",
+            user["id"],
+            workspace_id,
+            project_id,
+        )
+        raise forbidden("no_permission", "Viewer cannot modify project files")
+    return {
+        "workspace_id": workspace_id,
+        "project_id": project_id,
+        "owner_id": binding.get("owner_id"),
+        "role": role,
+        "root_path": binding.get("root_path"),
+        "multi_user": True,
+    }
+
+
+def require_workspace(write: bool = False, *, required: bool = True):
     """
     生成一个 FastAPI 依赖，按当前登录用户实时校验其对该工作区所绑定项目的访问。
 
+    workspace_id 取自查询参数或路径参数（query 优先，其次 path）。
     单用户模式：直接放行（返回空绑定，保持既有行为不变）。
     多用户模式：
         - 未登录 → 401 unauthorized
-        - 工作区未绑定项目 → 400 invalid_workspace
+        - 工作区未绑定项目（required=True）→ 400 invalid_workspace
         - 无项目权限 → 403 no_permission
         - write=True 且角色为 viewer → 403 no_permission
 
@@ -225,73 +322,46 @@ def require_workspace(write: bool = False):
     """
 
     async def _dependency(
-        workspace_id: str = Query(..., description="工作区唯一标识符"),
+        request: Request,
         user: dict | None = Depends(get_current_user_optional),
     ) -> dict:
-        if not is_multiuser():
-            return {
-                "workspace_id": workspace_id,
-                "project_id": None,
-                "owner_id": None,
-                "role": None,
-                "root_path": None,
-                "multi_user": False,
-            }
-        if user is None:
-            logger.warning(
-                "DENY workspace access: workspace=%s reason=unauthenticated",
-                workspace_id,
-            )
-            raise unauthorized("Not logged in")
-        binding = get_workspace_manager().get_binding(workspace_id)
-        if binding is None:
-            logger.warning(
-                "DENY workspace access: user=%s workspace=%s reason=not_bound",
-                user["id"],
-                workspace_id,
-            )
-            raise HTTPException(
-                status_code=400,
-                detail={
-                    "error": "invalid_workspace",
-                    "message": "Workspace is not open or not bound to a project",
-                },
-            )
-        project_id = binding.get("project_id")
-        role = get_user_role_for_project(user["id"], project_id) if project_id else None
-        if role is None:
-            logger.warning(
-                "DENY workspace access: user=%s workspace=%s project=%s "
-                "reason=no_role write=%s",
-                user["id"],
-                workspace_id,
-                project_id,
-                write,
-            )
-            raise forbidden("no_permission", "No access to this project")
-        if write and role == "viewer":
-            logger.warning(
-                "DENY workspace access: user=%s workspace=%s project=%s "
-                "role=viewer reason=write_forbidden",
-                user["id"],
-                workspace_id,
-                project_id,
-            )
-            raise forbidden("no_permission", "Viewer cannot modify project files")
-        return {
-            "workspace_id": workspace_id,
-            "project_id": project_id,
-            "owner_id": binding.get("owner_id"),
-            "role": role,
-            "root_path": binding.get("root_path"),
-            "multi_user": True,
-        }
+        # 从 query 或 path 提取 workspace_id（不在依赖中声明 Query 参数：
+        # workspace_id 同时作为路径参数的端点（如 /stream/{workspace_id}）
+        # 会与 Query 声明冲突，且 Path 参数无法用 Query 表达）
+        ws = request.query_params.get("workspace_id")
+        if not ws:
+            ws = request.path_params.get("workspace_id")
+        return _enforce_workspace_access(ws, user, write, required=required)
+
+    return _dependency
+
+
+def require_workspace_json(write: bool = False, *, required: bool = True):
+    """
+    与 require_workspace 相同，但 workspace_id 取自 JSON 请求体字段
+    （用于 style_modify 等把 workspace_id 放在 body 的路由）。"""
+
+    async def _dependency(
+        request: Request,
+        user: dict | None = Depends(get_current_user_optional),
+    ) -> dict:
+        data = None
+        try:
+            data = await request.json()
+        except Exception:
+            data = None
+        ws = None
+        if isinstance(data, dict):
+            ws = data.get("workspace_id")
+        return _enforce_workspace_access(ws, user, write, required=required)
 
     return _dependency
 
 
 require_workspace_read = require_workspace(write=False)
 require_workspace_write = require_workspace(write=True)
+require_workspace_read_json = require_workspace_json(write=False)
+require_workspace_write_json = require_workspace_json(write=True)
 
 
 async def reject_undo_redo_if_shared(binding: dict) -> None:

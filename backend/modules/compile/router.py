@@ -6,10 +6,11 @@
 
 from pathlib import Path
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, field_validator
 
+from backend.core import access_control
 from backend.core.logger import get_logger
 from backend.core.workspace_manager import get_project_manager_for_workspace
 from backend.modules.compile.service import compile_latex, _validate_main_file
@@ -49,6 +50,7 @@ class CompileRequest(BaseModel):
 async def run_compile(
     request: CompileRequest,
     workspace_id: str = Query(..., description="工作区唯一标识符"),
+    _: dict = Depends(access_control.require_workspace_read),
 ):
     """
     编译 LaTeX 项目。
@@ -75,6 +77,7 @@ async def run_compile(
 async def get_compiled_pdf(
     main_file: str = Query(..., description="主 .tex 文件相对路径"),
     workspace_id: str = Query(..., description="工作区唯一标识符"),
+    _: dict = Depends(access_control.require_workspace_read),
 ):
     """
     返回最近一次编译产出的 PDF 文件。

@@ -7,9 +7,10 @@
 import json
 
 
-from fastapi import APIRouter, File, Form, HTTPException, Query, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
 from pydantic import BaseModel
 
+from backend.core import access_control
 from backend.core.project_manager import FileConflictError
 from backend.modules.bib_manager.models import (
     DeleteEntryRequest,
@@ -158,6 +159,7 @@ async def generate_from_doi(request: GenerateBibtexRequest):
 async def read_bib_file(
     request: ReadBibRequest,
     workspace_id: str = Query(..., description="工作区唯一标识符"),
+    _: dict = Depends(access_control.require_workspace_read),
 ):
     """读取项目中的 .bib 文件内容。"""
     try:
@@ -173,6 +175,7 @@ async def read_bib_file(
 async def save_bib_entry(
     request: SaveBibRequest,
     workspace_id: str = Query(..., description="工作区唯一标识符"),
+    _: dict = Depends(access_control.require_workspace_write),
 ):
     """将 BibTeX 条目写入或更新到 .bib 文件。"""
     if not request.bibtex_code.strip():
@@ -203,7 +206,8 @@ async def save_bib_entry(
 
 @router.get("/list-bib-files")
 async def list_bib_files(
-    workspace_id: str = Query(..., description="工作区唯一标识符")
+    workspace_id: str = Query(..., description="工作区唯一标识符"),
+    _: dict = Depends(access_control.require_workspace_read),
 ):
     """列出当前项目中的所有 .bib 文件。"""
     try:
@@ -306,6 +310,7 @@ async def generate_latex_code(request: GenerateLatexRequest):
 async def parse_entries(
     request: ParseBibRequest,
     workspace_id: str = Query(..., description="工作区唯一标识符"),
+    _: dict = Depends(access_control.require_workspace_read),
 ):
     """解析 .bib 文件为结构化条目列表。"""
     try:
@@ -323,6 +328,7 @@ async def parse_entries(
 async def detect_duplicates(
     request: DetectDuplicatesRequest,
     workspace_id: str = Query(..., description="工作区唯一标识符"),
+    _: dict = Depends(access_control.require_workspace_read),
 ):
     """检测 .bib 文件中的重复条目。"""
     try:
@@ -338,6 +344,7 @@ async def detect_duplicates(
 async def delete_entry(
     request: DeleteEntryRequest,
     workspace_id: str = Query(..., description="工作区唯一标识符"),
+    _: dict = Depends(access_control.require_workspace_write),
 ):
     """从 .bib 文件中删除指定条目。"""
     try:
@@ -368,6 +375,7 @@ async def delete_entry(
 async def update_entry(
     request: UpdateEntryRequest,
     workspace_id: str = Query(..., description="工作区唯一标识符"),
+    _: dict = Depends(access_control.require_workspace_write),
 ):
     """更新 .bib 文件中的指定条目。"""
     if not request.bibtex_code.strip():
@@ -400,6 +408,7 @@ async def update_entry(
 async def get_entry_stats(
     file_path: str = Query(..., description=".bib 文件路径"),
     workspace_id: str = Query(..., description="工作区唯一标识符"),
+    _: dict = Depends(access_control.require_workspace_read),
 ):
     """获取 .bib 文件的条目统计信息。"""
     try:

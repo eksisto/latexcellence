@@ -7,10 +7,11 @@
 import json
 
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
+from backend.core import access_control
 from backend.core.base_paragraph_check import ApplyChangeItem, inject_expected_md5s
 from backend.modules.expression_opt.service import ExpressionOptService
 from backend.modules.expression_opt.prompt_manager import get_prompt_manager
@@ -49,6 +50,7 @@ async def preview_paragraphs(
     file_path: str = Query(..., description="文件路径（相对于项目根目录）"),
     resolve_input: bool = Query(False, description="是否递归展开 \\input 引用"),
     workspace_id: str = Query(..., description="工作区唯一标识符"),
+    _: dict = Depends(access_control.require_workspace_read),
 ):
     """
     预览指定文件的段落（含 LaTeX 剥离后的纯文本）。
@@ -74,6 +76,7 @@ async def preview_paragraphs(
 async def optimize_expression(
     request: ExpressionOptRequest,
     workspace_id: str = Query(..., description="工作区唯一标识符"),
+    _: dict = Depends(access_control.require_workspace_read),
 ):
     """
     对指定段落的纯文本进行表达优化。
@@ -104,6 +107,7 @@ async def optimize_expression(
 async def apply_changes(
     request: ExpressionApplyRequest,
     workspace_id: str = Query(..., description="工作区唯一标识符"),
+    _: dict = Depends(access_control.require_workspace_write),
 ):
     """
     将用户审核确认的修改写回源文件。
@@ -136,6 +140,7 @@ async def stream_optimize(
     file_path: str = Query(..., description="文件路径（相对于项目根目录）"),
     resolve_input: bool = Query(False, description="是否递归展开 \\input 引用"),
     language: str = Query("zh", description="前端 UI 语言"),
+    _: dict = Depends(access_control.require_workspace_read),
 ):
     """SSE 流式端点：按段落逐批推送优化进度和结果。"""
 

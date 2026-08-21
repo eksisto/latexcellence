@@ -7,10 +7,11 @@
 import json
 
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
+from backend.core import access_control
 from backend.core.base_paragraph_check import ApplyChangeItem, inject_expected_md5s
 from backend.modules.terminology_check.service import TerminologyCheckService
 
@@ -40,6 +41,7 @@ async def preview_paragraphs(
     file_path: str = Query(..., description="文件路径（相对于项目根目录）"),
     resolve_input: bool = Query(False, description="是否递归展开 \\input 引用"),
     workspace_id: str = Query(..., description="工作区唯一标识符"),
+    _: dict = Depends(access_control.require_workspace_read),
 ):
     """
     预览指定文件的段落（含 LaTeX 剥离后的纯文本）。
@@ -62,6 +64,7 @@ async def preview_paragraphs(
 async def check_terminology(
     request: TerminologyCheckRequest,
     workspace_id: str = Query(..., description="工作区唯一标识符"),
+    _: dict = Depends(access_control.require_workspace_read),
 ):
     """
     对项目进行术语一致性检查。
@@ -89,6 +92,7 @@ async def check_terminology(
 async def apply_changes(
     request: TerminologyApplyRequest,
     workspace_id: str = Query(..., description="工作区唯一标识符"),
+    _: dict = Depends(access_control.require_workspace_write),
 ):
     """
     将用户审核确认的术语修改写回源文件。
@@ -115,6 +119,7 @@ async def stream_terminology_check(
     workspace_id: str,
     file_path: str = Query(..., description="文件路径（相对于项目根目录）"),
     resolve_input: bool = Query(False, description="是否递归展开 \\input 引用"),
+    _: dict = Depends(access_control.require_workspace_read),
 ):
     """
     SSE 流式端点：逐段推送术语检查进度和结果。

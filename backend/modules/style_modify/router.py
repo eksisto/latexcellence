@@ -14,6 +14,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, field_validator
 from starlette.background import BackgroundTask
 
+from backend.core import access_control
 from backend.core.logger import get_logger
 from backend.core.multiuser.dependencies import current_user_context
 from backend.modules.style_modify.service import StyleModifyService
@@ -124,7 +125,10 @@ async def modify_latex(request: ModifyRequest):
 
 
 @router.post("/agent/run")
-async def agent_run(request: AgentRunRequest):
+async def agent_run(
+    request: AgentRunRequest,
+    _: dict = Depends(access_control.require_workspace_read_json),
+):
     """创建 style_modify Agent session 并通过 SSE 执行。"""
 
     async def event_stream():
@@ -135,6 +139,15 @@ async def agent_run(request: AgentRunRequest):
                 request.language,
             ):
                 yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
+        except HTTPException as e:
+            # 结构化错误（如衍生配额超限 413）：透传 error 错误码供前端 translateError
+            detail = e.detail
+            payload = (
+                {"type": "error", "message": detail}
+                if isinstance(detail, dict)
+                else {"type": "error", "message": str(detail)}
+            )
+            yield f"data: {json.dumps(payload, ensure_ascii=False)}\n\n"
         except Exception as e:
             yield f"data: {json.dumps({'type': 'error', 'message': str(e)}, ensure_ascii=False)}\n\n"
 
@@ -150,7 +163,11 @@ async def agent_run(request: AgentRunRequest):
 
 
 @router.post("/agent/sessions/{session_id}/refine")
-async def agent_refine(session_id: str, request: AgentRefineRequest):
+async def agent_refine(
+    session_id: str,
+    request: AgentRefineRequest,
+    _: dict = Depends(access_control.require_workspace_read_json),
+):
     """基于最新 proposal 追加要求并流式生成新 revision。"""
 
     async def event_stream():
@@ -162,6 +179,14 @@ async def agent_refine(session_id: str, request: AgentRefineRequest):
                 request.language,
             ):
                 yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
+        except HTTPException as e:
+            detail = e.detail
+            payload = (
+                {"type": "error", "message": detail}
+                if isinstance(detail, dict)
+                else {"type": "error", "message": str(detail)}
+            )
+            yield f"data: {json.dumps(payload, ensure_ascii=False)}\n\n"
         except Exception as e:
             yield f"data: {json.dumps({'type': 'error', 'message': str(e)}, ensure_ascii=False)}\n\n"
 
@@ -180,6 +205,7 @@ async def agent_refine(session_id: str, request: AgentRefineRequest):
 async def get_agent_session(
     session_id: str,
     workspace_id: str = Query(..., description="工作区唯一标识符"),
+    _: dict = Depends(access_control.require_workspace_read),
 ):
     """恢复 session 和最新 proposal。"""
     try:
@@ -192,6 +218,7 @@ async def get_agent_session(
 async def get_agent_trace(
     session_id: str,
     workspace_id: str = Query(..., description="工作区唯一标识符"),
+    _: dict = Depends(access_control.require_workspace_read),
 ):
     """获取脱敏后的结构化执行轨迹。"""
     try:
@@ -204,6 +231,7 @@ async def get_agent_trace(
 async def download_agent_trace(
     session_id: str,
     workspace_id: str = Query(..., description="工作区唯一标识符"),
+    _: dict = Depends(access_control.require_workspace_read),
 ):
     """下载完整可公开轨迹。"""
     try:
@@ -233,7 +261,11 @@ async def download_agent_trace(
 
 
 @router.post("/agent/sessions/{session_id}/apply")
-async def apply_agent_proposal(session_id: str, request: AgentApplyRequest):
+async def apply_agent_proposal(
+    session_id: str,
+    request: AgentApplyRequest,
+    _: dict = Depends(access_control.require_workspace_write_json),
+):
     """提交指定 revision 的完整 proposal。"""
     try:
         return await get_service().apply_agent_proposal(
@@ -251,6 +283,7 @@ async def apply_agent_proposal(session_id: str, request: AgentApplyRequest):
 async def undo_agent_operation(
     operation_id: str,
     request: AgentUndoRequest,
+    _: dict = Depends(access_control.require_workspace_write_json),
 ):
     """安全撤销已应用操作。"""
     try:
@@ -268,6 +301,7 @@ async def undo_agent_operation(
 async def delete_agent_session(
     session_id: str,
     workspace_id: str = Query(..., description="工作区唯一标识符"),
+    _: dict = Depends(access_control.require_workspace_read),
 ):
     """删除未运行中的 session 和临时文件。"""
     try:

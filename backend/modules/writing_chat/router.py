@@ -18,6 +18,7 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
 
+from backend.core import access_control
 from backend.core.multiuser.dependencies import current_user_context
 from backend.modules.writing_chat.models import (
     ApplyEditRequest,
@@ -51,6 +52,7 @@ router = APIRouter(
 async def send_message(
     request: ChatSendRequest,
     workspace_id: str = Query(default="", description="工作区唯一标识符"),
+    _: dict = Depends(access_control.require_workspace(write=False, required=False)),
 ):
     """流式发送对话消息。返回 SSE，事件为 data: {json}\\n\\n。"""
     service = get_writing_chat_service()
@@ -59,6 +61,16 @@ async def send_message(
         try:
             async for event in service.send(request, workspace_id):
                 yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
+        except HTTPException as e:
+            # 结构化错误（如衍生配额超限 413）：透传 {error, message} 供前端
+            # translateError 按错误码翻译
+            detail = e.detail
+            payload = (
+                {"type": "error", "message": detail}
+                if isinstance(detail, dict)
+                else {"type": "error", "message": str(detail)}
+            )
+            yield f"data: {json.dumps(payload, ensure_ascii=False)}\n\n"
         except Exception as e:
             yield (
                 f"data: {json.dumps({'type': 'error', 'message': str(e)}, ensure_ascii=False)}\n\n"
@@ -82,6 +94,7 @@ async def send_message(
 async def generate_edit(
     request: GenerateEditRequest,
     workspace_id: str = Query(..., description="工作区唯一标识符"),
+    _: dict = Depends(access_control.require_workspace_read),
 ):
     """基于对话指令生成段落编辑建议。"""
     service = get_writing_chat_service()
@@ -103,6 +116,7 @@ async def generate_edit(
 async def apply_edit(
     request: ApplyEditRequest,
     workspace_id: str = Query(..., description="工作区唯一标识符"),
+    _: dict = Depends(access_control.require_workspace_write),
 ):
     """把某条 assistant 消息附带的编辑操作写回源文件。"""
     from backend.core.project_manager import FileConflictError
@@ -208,7 +222,8 @@ async def delete_message(request: DeleteMessageRequest):
 async def list_sessions(
     workspace_id: str = Query(
         default="", description="工作区唯一标识符，用于按项目隔离会话"
-    )
+    ),
+    _: dict = Depends(access_control.require_workspace(write=False, required=False)),
 ):
     service = get_writing_chat_service()
     return {"sessions": service.list_sessions(workspace_id)}

@@ -1,9 +1,10 @@
 """Git 差异高亮 API 路由。"""
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, ConfigDict
 
+from backend.core import access_control
 from backend.core.config import get_config
 from backend.core.logger import get_logger
 from backend.modules.git_diff.service import (
@@ -63,7 +64,10 @@ class DiffRenderRequest(BaseModel):
 
 
 @router.get("/refs")
-async def get_refs(workspace_id: str = Query(..., description="工作区唯一标识符")):
+async def get_refs(
+    workspace_id: str = Query(..., description="工作区唯一标识符"),
+    _: dict = Depends(access_control.require_workspace_read),
+):
     """获取当前项目可用于差异比较的 Git revision。"""
 
     try:
@@ -77,6 +81,7 @@ async def get_refs(workspace_id: str = Query(..., description="工作区唯一�
 async def render_pdf(
     request: DiffRenderRequest,
     workspace_id: str = Query(..., description="工作区唯一标识符"),
+    _: dict = Depends(access_control.require_workspace_read),
 ):
     """生成差异高亮 PDF。"""
 
