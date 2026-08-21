@@ -36,6 +36,9 @@ import EmptyState from "@/components/EmptyState";
 import UndoRedoButtons from "@/components/UndoRedoButtons";
 import ProofDiff from "@/components/ProofDiff";
 import useParagraphCheck, { groupByFile } from "@/hooks/useParagraphCheck";
+import useIsOpened from "@/hooks/useIsOpened";
+import { emptyStateCta } from "@/utils/projectAccess";
+import { isMultiUser } from "@/api/connection";
 import MarkerText from "@/components/MarkerText";
 import {
   UnlistedChangesBadge,
@@ -49,6 +52,8 @@ import useResultFilter from "@/hooks/useResultFilter";
 
 export default function ExpressionOptPage() {
   const { t } = useTranslation(["pages", "common"]);
+  const isOpened = useIsOpened();
+  const cta = emptyStateCta(isMultiUser());
   const paragraphCheckMessages = useMemo(
     () => ({
       checkLoading: t("pages:expressionOpt.checkLoading"),
@@ -61,7 +66,6 @@ export default function ExpressionOptPage() {
     [t],
   );
   const {
-    projectPath,
     workspaceId,
     activeFile,
     texFiles,
@@ -277,15 +281,15 @@ export default function ExpressionOptPage() {
           <EmptyState title={t("common:restoring")} className="mt-12">
             <Loader2 className="animate-spin size-6 text-muted-foreground" />
           </EmptyState>
-        ) : !projectPath || texFiles.length === 0 ? (
+        ) : !isOpened || texFiles.length === 0 ? (
           <EmptyState
             icon={FolderOpen}
             title={t("pages:expressionOpt.noProjectTitle")}
             description={t("pages:expressionOpt.noProjectDesc")}
             className="mt-12"
           >
-            <Button nativeButton={false} render={<Link to="/workspace" />}>
-              {t("common:openWorkspace")}
+            <Button nativeButton={false} render={<Link to={cta.to} />}>
+              {t(`common:${cta.labelKey}`)}
             </Button>
           </EmptyState>
         ) : (

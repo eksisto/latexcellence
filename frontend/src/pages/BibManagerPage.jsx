@@ -41,6 +41,9 @@ import { cn } from "@/lib/utils";
 import EmptyState from "@/components/EmptyState";
 import useStore from "@/store/useStore";
 import useCanWrite from "@/hooks/useCanWrite";
+import useIsOpened from "@/hooks/useIsOpened";
+import { emptyStateCta } from "@/utils/projectAccess";
+import { isMultiUser } from "@/api/connection";
 import useFormatAnalysis from "@/hooks/bib-manager/useFormatAnalysis";
 import useMetadataExtraction from "@/hooks/bib-manager/useMetadataExtraction";
 import useBibtexGeneration from "@/hooks/bib-manager/useBibtexGeneration";
@@ -337,6 +340,8 @@ export default function BibManagerPage() {
   const { t } = useTranslation(["pages", "common"]);
   const projectPath = useStore((s) => s.projectPath);
   const workspaceId = useStore((s) => s.workspaceId);
+  const isOpened = useIsOpened();
+  const cta = emptyStateCta(isMultiUser());
   // 多用户模式：viewer 只读，禁用 .bib 保存按钮（后端 403 兜底）
   const canWrite = useCanWrite();
 
@@ -437,15 +442,15 @@ export default function BibManagerPage() {
         />
       </div>
 
-      {!projectPath ? (
+      {!isOpened ? (
         <div className="max-w-4xl mx-auto">
           <EmptyState
             icon={Library}
             title={t("pages:bibManager.noProjectTitle")}
             description={t("pages:bibManager.noProjectDesc")}
           >
-            <Button nativeButton={false} render={<Link to="/workspace" />}>
-              {t("common:openWorkspace")}
+            <Button nativeButton={false} render={<Link to={cta.to} />}>
+              {t(`common:${cta.labelKey}`)}
             </Button>
           </EmptyState>
         </div>

@@ -43,6 +43,9 @@ import { api, downloadBlob, fetchBlobUrl, resolveUrl } from "@/api/index";
 import { cn } from "@/lib/utils";
 import useStore from "@/store/useStore";
 import { translateError } from "@/utils/errorMessages";
+import { openMultiUserProject } from "@/utils/multiUserProject";
+import useIsOpened from "@/hooks/useIsOpened";
+import { isMultiUser } from "@/api/connection";
 
 const WORKTREE_REF = "__WORKTREE__";
 
@@ -84,6 +87,7 @@ function revisionLabel(revision, t) {
 export default function GitDiffPage() {
   const { t } = useTranslation(["pages", "common"]);
   const projectPath = useStore((s) => s.projectPath);
+  const projectId = useStore((s) => s.projectId);
   const workspaceId = useStore((s) => s.workspaceId);
   const rootPath = useStore((s) => s.rootPath);
   const fileTree = useStore((s) => s.fileTree);
@@ -93,6 +97,10 @@ export default function GitDiffPage() {
   const setFileTree = useStore((s) => s.setFileTree);
   const setMainFile = useStore((s) => s.setMainFile);
   const setActiveFile = useStore((s) => s.setActiveFile);
+  // 模式感知"项目已打开"：单用户看 projectPath，多用户看 projectId
+  const isOpened = useIsOpened();
+  // 切换项目判定键：多用户无 projectPath，用 projectId
+  const projectKey = projectId || projectPath;
 
   const [refs, setRefs] = useState([]);
   const [gitRoot, setGitRoot] = useState("");
@@ -145,26 +153,48 @@ export default function GitDiffPage() {
   const formatRefValue = useCallback((val) => labelMap[val] || val, [labelMap]);
 
   useEffect(() => {
-    if (!projectPath || fileTree.length > 0) return;
+    if (!isOpened || fileTree.length > 0) return;
 
     let cancelled = false;
-    api.project
-      .open(projectPath, workspaceId)
-      .then((data) => {
-        if (cancelled) return;
-        setRootPath(data.root_path);
-        setProjectPath(projectPath);
-        setFileTree(data.file_tree);
-        setMainFile(data.main_file);
-        setActiveFile(data.main_file);
-        setSelectedMainFile(data.main_file || "");
-      })
-      .catch((err) => setError(err.message));
+    // 多用户按 projectId 恢复（统一入口 openById + 角色同步），
+    // 单用户按 projectPath 恢复；多用户下 projectPath 恒为 null
+    const task = isMultiUser()
+      ? openMultiUserProject(projectId, workspaceId).then(({ data }) => {
+          if (cancelled) return;
+          setRootPath(data.root_path);
+          setFileTree(data.file_tree);
+          setMainFile(data.main_file);
+          setActiveFile(data.main_file);
+          setSelectedMainFile(data.main_file || "");
+        })
+      : api.project.open(projectPath, workspaceId).then((data) => {
+          if (cancelled) return;
+          setRootPath(data.root_path);
+          setProjectPath(projectPath);
+          setFileTree(data.file_tree);
+          setMainFile(data.main_file);
+          setActiveFile(data.main_file);
+          setSelectedMainFile(data.main_file || "");
+        });
+    task.catch((err) => {
+      if (!cancelled) setError(translateError(err.message));
+    });
 
     return () => {
       cancelled = true;
     };
-  }, [fileTree.length, projectPath]);
+  }, [
+    fileTree.length,
+    isOpened,
+    projectId,
+    projectPath,
+    workspaceId,
+    setRootPath,
+    setProjectPath,
+    setFileTree,
+    setMainFile,
+    setActiveFile,
+  ]);
 
   useEffect(() => {
     if (!selectedMainFile && mainFile) {
@@ -183,7 +213,7 @@ export default function GitDiffPage() {
   }, [pdfFullscreen]);
 
   const loadRefs = useCallback(async () => {
-    if (!projectPath) return;
+    if (!isOpened) return;
     setLoadingRefs(true);
     setError("");
     try {
@@ -193,18 +223,18 @@ export default function GitDiffPage() {
       setGitRoot(data.git_root || "");
       setIsDirty(Boolean(data.is_dirty));
       // 只在项目首次加载（或切换项目）时设置默认 base/target
-      if (defaultsInitializedFor.current !== projectPath) {
+      if (defaultsInitializedFor.current !== projectKey) {
         const head = revisions.find((item) => item.kind === "commit");
         setBaseRef(head?.value || "");
         setTargetRef(WORKTREE_REF);
-        defaultsInitializedFor.current = projectPath;
+        defaultsInitializedFor.current = projectKey;
       }
     } catch (err) {
-      setError(err.message);
+      setError(translateError(err.message));
     } finally {
       setLoadingRefs(false);
     }
-  }, [projectPath, workspaceId]);
+  }, [isOpened, projectKey, workspaceId]);
 
   useEffect(() => {
     loadRefs();
@@ -271,7 +301,7 @@ export default function GitDiffPage() {
     workspaceId,
   ]);
 
-  if (!projectPath) {
+  if (!isOpened) {
     return (
       <div className="min-h-screen p-8 animate-tab-enter">
         <div className="max-w-3xl mx-auto">
@@ -284,8 +314,13 @@ export default function GitDiffPage() {
             title={t("pages:gitDiff.noProjectTitle")}
             description={t("pages:gitDiff.noProjectDesc")}
           >
-            <Button nativeButton={false} render={<Link to="/workspace" />}>
-              {t("pages:gitDiff.openProjectWorkspace")}
+            <Button
+              nativeButton={false}
+              render={<Link to={isMultiUser() ? "/projects" : "/workspace"} />}
+            >
+              {isMultiUser()
+                ? t("common:openProjects")
+                : t("pages:gitDiff.openProjectWorkspace")}
             </Button>
           </EmptyState>
         </div>

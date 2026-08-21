@@ -5,6 +5,7 @@ import { isMultiUser } from "@/api/connection";
 import useStore from "@/store/useStore";
 import { openMultiUserProject } from "@/utils/multiUserProject";
 import useCanWrite from "@/hooks/useCanWrite";
+import useIsOpened from "@/hooks/useIsOpened";
 import { translateError } from "@/utils/errorMessages";
 import i18n from "@/i18n";
 
@@ -111,6 +112,9 @@ export default function useParagraphCheck({
   const [isPaused, setIsPaused] = useState(false);
   // 多用户模式写权限：viewer 只读，写操作（应用更改/全部应用）直接拒绝
   const canWrite = useCanWrite();
+  // 模式感知"项目已打开"：单用户看 projectPath，多用户看 projectId
+  // （多用户下 projectPath 恒为 null，直接判会导致检查流程无法启动）
+  const isOpened = useIsOpened();
   const restoredRef = useRef(false);
   const eventSourceRef = useRef(null);
   const resultsWithChangesRef = useRef(0);
@@ -332,7 +336,7 @@ export default function useParagraphCheck({
   }, [finalizeCheck, drainBuffer, messages]);
 
   const handleCheck = useCallback(() => {
-    if (!activeFile || !projectPath) return;
+    if (!activeFile || !isOpened) return;
 
     if (eventSourceRef.current) {
       eventSourceRef.current.close();
@@ -415,7 +419,7 @@ export default function useParagraphCheck({
     };
   }, [
     activeFile,
-    projectPath,
+    isOpened,
     resolveInput,
     apiModule,
     storeSlice.loadingKey,
@@ -428,6 +432,7 @@ export default function useParagraphCheck({
     finalizeCheck,
     scheduleFlush,
     drainBuffer,
+    isOpened,
   ]);
 
   const refreshConflictMd5s = useCallback(

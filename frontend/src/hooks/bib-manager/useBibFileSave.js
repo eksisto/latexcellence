@@ -2,6 +2,9 @@ import { useState, useCallback, useEffect } from "react";
 import { toast } from "sonner";
 import { useTranslation } from "react-i18next";
 import { api } from "@/api/index";
+import useStore from "@/store/useStore";
+import { isMultiUser } from "@/api/connection";
+import { isProjectOpened } from "@/utils/projectAccess";
 
 export default function useBibFileSave({
   projectPath,
@@ -10,13 +13,21 @@ export default function useBibFileSave({
   editedCiteKey,
 }) {
   const { t } = useTranslation(["pages", "common"]);
+  const projectId = useStore((s) => s.projectId);
 
   const [bibFiles, setBibFiles] = useState([]);
   const [selectedBibFile, setSelectedBibFile] = useState("");
   const [saving, setSaving] = useState(false);
 
+  // 模式感知"项目已打开"（多用户下 projectPath 恒为 null，按 projectId 判定）
+  const isOpened = isProjectOpened({
+    multiUser: isMultiUser(),
+    projectPath,
+    projectId,
+  });
+
   useEffect(() => {
-    if (!projectPath) return;
+    if (!isOpened) return;
     api.bibManager
       .listBibFiles(workspaceId)
       .then((data) => {
@@ -26,7 +37,7 @@ export default function useBibFileSave({
         }
       })
       .catch(() => {});
-  }, [projectPath, workspaceId]);
+  }, [isOpened, workspaceId]);
 
   const handleSaveBib = useCallback(async () => {
     if (!editedBibtex.trim() || !selectedBibFile) return;

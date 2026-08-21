@@ -39,6 +39,9 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { api } from "@/api/index";
 import useParagraphCheck, { groupByFile } from "@/hooks/useParagraphCheck";
+import useIsOpened from "@/hooks/useIsOpened";
+import { emptyStateCta } from "@/utils/projectAccess";
+import { isMultiUser } from "@/api/connection";
 import ParagraphContext from "@/components/ParagraphContext";
 import ProgressBar from "@/components/ProgressBar";
 import ConfirmDialog from "@/components/ConfirmDialog";
@@ -380,6 +383,8 @@ const CodeReviewResultCard = React.memo(function CodeReviewResultCard({
 
 export default function CodeReviewPage() {
   const { t } = useTranslation(["pages"]);
+  const isOpened = useIsOpened();
+  const cta = emptyStateCta(isMultiUser());
   const [confirmApplyAllOpen, setConfirmApplyAllOpen] = useState(false);
   const hasResultIssue = useCallback((r) => {
     const hasChanges = r.changes && r.changes.length > 0;
@@ -401,7 +406,6 @@ export default function CodeReviewPage() {
     [t],
   );
   const {
-    projectPath,
     workspaceId,
     activeFile,
     texFiles,
@@ -501,15 +505,15 @@ export default function CodeReviewPage() {
           <EmptyState title={t("common:restoring")} className="mt-12">
             <Loader2 className="animate-spin size-6 text-muted-foreground" />
           </EmptyState>
-        ) : !projectPath || texFiles.length === 0 ? (
+        ) : !isOpened || texFiles.length === 0 ? (
           <EmptyState
             icon={FolderOpen}
             title={t("pages:code_review.noProjectTitle")}
             description={t("pages:code_review.noProjectDesc")}
             className="mt-12"
           >
-            <Button nativeButton={false} render={<Link to="/workspace" />}>
-              {t("common:openWorkspace")}
+            <Button nativeButton={false} render={<Link to={cta.to} />}>
+              {t(`common:${cta.labelKey}`)}
             </Button>
           </EmptyState>
         ) : (

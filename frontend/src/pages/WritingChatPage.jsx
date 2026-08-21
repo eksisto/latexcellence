@@ -27,6 +27,9 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import PageHeader from "@/components/PageHeader";
 import EmptyState from "@/components/EmptyState";
 import useWritingChat from "@/hooks/useWritingChat";
+import useIsOpened from "@/hooks/useIsOpened";
+import { emptyStateCta } from "@/utils/projectAccess";
+import { isMultiUser } from "@/api/connection";
 import { isVisibleChatMessage } from "@/hooks/writing-chat";
 import MessageBubble from "./writing-chat/MessageBubble";
 import CaptchaDialog from "./writing-chat/CaptchaDialog";
@@ -40,8 +43,9 @@ const NEWLINE_RE = /\n/g;
 
 export default function WritingChatPage() {
   const { t } = useTranslation(["pages", "common"]);
+  const isOpened = useIsOpened();
+  const cta = emptyStateCta(isMultiUser());
   const {
-    projectPath,
     activeFile,
     texFiles,
     paragraphs,
@@ -152,15 +156,15 @@ export default function WritingChatPage() {
         <PageHeader title={t("pages:writingChat.title")} groupKey="aiAssist" />
       </div>
 
-      {!projectPath || texFiles.length === 0 ? (
+      {!isOpened || texFiles.length === 0 ? (
         <div className="max-w-7xl mx-auto">
           <EmptyState
             icon={FolderOpen}
             title={t("pages:writingChat.noProjectTitle")}
             className="mt-12"
           >
-            <Button nativeButton={false} render={<Link to="/workspace" />}>
-              {t("common:openWorkspace")}
+            <Button nativeButton={false} render={<Link to={cta.to} />}>
+              {t(`common:${cta.labelKey}`)}
             </Button>
           </EmptyState>
         </div>
