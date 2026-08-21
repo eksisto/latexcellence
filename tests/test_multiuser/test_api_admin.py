@@ -127,21 +127,44 @@ class TestApprovalLifecycle:
 
 
 class TestResetPassword:
-    def test_reset_returns_temp_password(self, mu_client):
+    def test_two_step_reset_flow(self, mu_client):
         auth_core.create_user(ADMIN_U, ADMIN_P, role="admin", status="active")
         user = auth_core.create_user(
             "alice", "password-123", role="user", status="active"
         )
         _login(mu_client, ADMIN_U, ADMIN_P)
 
+        # 第一步：预览仅生成临时密码，用户密码不变
         r = mu_client.post(
-            f"/api/admin/users/{user['id']}/reset-password", headers=csrf(mu_client)
+            f"/api/admin/users/{user['id']}/reset-password/preview",
+            headers=csrf(mu_client),
         )
         assert r.status_code == 200
         temp = r.json()["temp_password"]
         assert len(temp) >= 8
+        assert (
+            mu_client.post(
+                "/api/auth/login", json={"username": "alice", "password": temp}
+            ).status_code
+            == 401
+        )
+        assert (
+            mu_client.post(
+                "/api/auth/login",
+                json={"username": "alice", "password": "password-123"},
+            ).status_code
+            == 200
+        )
 
-        # 旧密码失效，临时密码可登录
+        # 第二步：确认后才写入临时密码并吊销会话
+        _login(mu_client, ADMIN_U, ADMIN_P)
+        r = mu_client.post(
+            f"/api/admin/users/{user['id']}/reset-password/confirm",
+            json={"temp_password": temp},
+            headers=csrf(mu_client),
+        )
+        assert r.status_code == 200
+
         assert (
             mu_client.post(
                 "/api/auth/login",
@@ -153,6 +176,50 @@ class TestResetPassword:
             "/api/auth/login", json={"username": "alice", "password": temp}
         )
         assert r.status_code == 200
+
+    def test_preview_does_not_touch_password(self, mu_client):
+        """多次预览生成不同候选密码，且均不改变登录凭据。"""
+        auth_core.create_user(ADMIN_U, ADMIN_P, role="admin", status="active")
+        user = auth_core.create_user(
+            "bob", "password-123", role="user", status="active"
+        )
+        _login(mu_client, ADMIN_U, ADMIN_P)
+        temps = set()
+        for _ in range(2):
+            r = mu_client.post(
+                f"/api/admin/users/{user['id']}/reset-password/preview",
+                headers=csrf(mu_client),
+            )
+            temps.add(r.json()["temp_password"])
+        assert len(temps) == 2
+        assert (
+            mu_client.post(
+                "/api/auth/login",
+                json={"username": "bob", "password": "password-123"},
+            ).status_code
+            == 200
+        )
+
+    def test_confirm_rejects_weak_password(self, mu_client):
+        auth_core.create_user(ADMIN_U, ADMIN_P, role="admin", status="active")
+        user = auth_core.create_user(
+            "carol", "password-123", role="user", status="active"
+        )
+        _login(mu_client, ADMIN_U, ADMIN_P)
+        r = mu_client.post(
+            f"/api/admin/users/{user['id']}/reset-password/confirm",
+            json={"temp_password": "x"},
+            headers=csrf(mu_client),
+        )
+        assert r.status_code == 400
+        # 原密码仍然有效
+        assert (
+            mu_client.post(
+                "/api/auth/login",
+                json={"username": "carol", "password": "password-123"},
+            ).status_code
+            == 200
+        )
 
 
 class TestQuotaManagement:

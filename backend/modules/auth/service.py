@@ -136,13 +136,21 @@ async def admin_set_status(user_id: str, status: str, action: str) -> dict:
     return {"action": action, "user": user}
 
 
-async def admin_reset_password(user_id: str) -> dict:
-    """生成临时密码并更新哈希；返回一次性明文临时密码。"""
+async def admin_preview_reset_password(user_id: str) -> dict:
+    """生成候选临时密码（仅预览，不修改用户密码）。"""
     if await asyncio.to_thread(auth_core.get_user_by_id, user_id) is None:
         raise _not_found()
     temp = secrets.token_urlsafe(12)  # 16+ 字符
-    user = await asyncio.to_thread(auth_core.reset_password, user_id, temp)
-    return {"user": user, "temp_password": temp}
+    return {"temp_password": temp}
+
+
+async def admin_confirm_reset_password(user_id: str, temp_password: str) -> dict:
+    """确认重置：将密码写入为预览的临时密码，并吊销该用户全部会话。"""
+    try:
+        user = await asyncio.to_thread(auth_core.reset_password, user_id, temp_password)
+    except ValueError as e:
+        raise _http(400, "invalid_password", str(e))
+    return {"user": user}
 
 
 async def admin_set_quota(

@@ -209,7 +209,8 @@ npm start        # 或 node server.js
 | `GET /api/auth/me` | 当前用户信息、角色、配额与用量 |
 | `GET /api/admin/users` | 用户列表（仅 admin） |
 | `POST /api/admin/users/{id}/approve` `/reject` `/disable` `/enable` | 审批 / 拒绝 / 禁用 / 启用 |
-| `POST /api/admin/users/{id}/reset-password` | 重置为临时密码（一次性返回明文）并吊销会话 |
+| `POST /api/admin/users/{id}/reset-password/preview` | 生成临时密码预览（一次性返回明文，不修改用户密码） |
+| `POST /api/admin/users/{id}/reset-password/confirm` | 确认后写入临时密码并吊销该用户全部会话 |
 | `PUT /api/admin/users/{id}/quota` | 调整用户配额覆盖（null 跟随全局默认） |
 
 **CLI 管理工具**（无需启动服务器）：

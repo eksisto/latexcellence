@@ -214,7 +214,7 @@ data/
 
 - 首次启动且用户表为空时，从环境变量 `LATEXCELLENCE_ADMIN_USERNAME` / `LATEXCELLENCE_ADMIN_PASSWORD` 创建管理员；未设置则日志警告并等待 CLI 创建；
 - CLI：`python -m backend.manage create-admin`、`reset-password <username>`、`list-users`、`migrate-legacy`；
-- 管理面板能力：待审批列表、启用/禁用、重置密码（生成临时密码）、调整配额、查看用量、删除用户；
+- 管理面板能力：待审批列表、启用/禁用、重置密码（两步式：先生成临时密码预览，管理员确认后才写入）、调整配额、查看用量、删除用户；
 - 删除用户：项目转交管理员并保留 30 天，衍生数据归档 30 天后清理，会话立即吊销。
 
 ## 7. 权限与协作
@@ -339,7 +339,8 @@ data/
 | `GET /api/admin/users` | 用户列表（含待审批、用量） |
 | `POST /api/admin/users/{id}/approve` / `reject` | 审批 |
 | `POST /api/admin/users/{id}/disable` / `enable` | 禁用/启用 |
-| `POST /api/admin/users/{id}/reset-password` | 重置为临时密码 |
+| `POST /api/admin/users/{id}/reset-password/preview` | 生成临时密码预览（不修改用户密码） |
+| `POST /api/admin/users/{id}/reset-password/confirm` | 确认后写入临时密码并吊销会话 |
 | `PUT /api/admin/users/{id}/quota` | 调整配额 |
 | `DELETE /api/admin/users/{id}` | 删除用户（项目转管理员、数据归档 30 天） |
 

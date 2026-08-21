@@ -1054,10 +1054,21 @@ export const api = {
       request(`/admin/users/${encodeURIComponent(userId)}/enable`, {
         method: "POST",
       }),
-    resetPassword: (userId) =>
-      request(`/admin/users/${encodeURIComponent(userId)}/reset-password`, {
-        method: "POST",
-      }),
+    resetPasswordPreview: (userId) =>
+      request(
+        `/admin/users/${encodeURIComponent(userId)}/reset-password/preview`,
+        {
+          method: "POST",
+        },
+      ),
+    resetPasswordConfirm: (userId, tempPassword) =>
+      request(
+        `/admin/users/${encodeURIComponent(userId)}/reset-password/confirm`,
+        {
+          method: "POST",
+          body: JSON.stringify({ temp_password: tempPassword }),
+        },
+      ),
     setQuota: (userId, data) =>
       request(`/admin/users/${encodeURIComponent(userId)}/quota`, {
         method: "PUT",

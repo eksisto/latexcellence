@@ -171,7 +171,8 @@ const AdminUserRow = memo(function AdminUserRow({
 
 /**
  * 多用户模式管理面板（P5，仅 admin）。
- * 待审批列表、启用/禁用、重置密码（一次性临时密码）、配额调整、删除用户。
+ * 待审批列表、启用/禁用、重置密码（两步式：先生成临时密码预览，
+ * 管理员确认后才写入）、配额调整、删除用户。
  */
 export default function AdminPage() {
   const { t } = useTranslation(["pages", "common"]);
@@ -187,7 +188,7 @@ export default function AdminPage() {
   // 只重渲染目标行；对话框类操作用 busyUserId !== null 表示进行中）
   const [busyUserId, setBusyUserId] = useState(null);
 
-  // 重置密码：展示一次性临时密码
+  // 重置密码：两步式——先展示生成的临时密码（尚未生效），确认后才写入
   const [tempPwd, setTempPwd] = useState(null);
   // 配额编辑
   const [quotaTarget, setQuotaTarget] = useState(null);
@@ -312,12 +313,14 @@ export default function AdminPage() {
     }
   };
 
+  // 第一步：仅生成并预览临时密码，不修改用户密码
   const resetPassword = useCallback(
     async (u) => {
       setBusyUserId(u.id);
       try {
-        const res = await api.admin.resetPassword(u.id);
+        const res = await api.admin.resetPasswordPreview(u.id);
         setTempPwd({
+          id: u.id,
           username: u.username,
           temp_password: res.temp_password,
         });
@@ -331,6 +334,25 @@ export default function AdminPage() {
     },
     [t],
   );
+
+  // 第二步：管理员确认后，才将用户密码写入为该临时密码
+  const confirmResetPassword = async () => {
+    if (!tempPwd) return;
+    setBusyUserId(tempPwd.id);
+    try {
+      await api.admin.resetPasswordConfirm(tempPwd.id, tempPwd.temp_password);
+      toast.success(
+        t("pages:admin.resetSuccess", { username: tempPwd.username }),
+      );
+      setTempPwd(null);
+    } catch (err) {
+      toast.error(t("pages:admin.resetFailed"), {
+        description: translateError(err.message),
+      });
+    } finally {
+      setBusyUserId(null);
+    }
+  };
 
   const deleteUser = useCallback(
     async (u) => {
@@ -422,7 +444,7 @@ export default function AdminPage() {
           )}
         </div>
 
-        {/* 临时密码展示 */}
+        {/* 临时密码确认（两步式）：确认前用户密码未被修改 */}
         <Dialog open={!!tempPwd} onOpenChange={(o) => !o && setTempPwd(null)}>
           <DialogContent className="sm:max-w-md">
             <DialogHeader>
@@ -449,9 +471,24 @@ export default function AdminPage() {
                 <Copy />
               </Button>
             </div>
+            <p className="text-xs text-muted-foreground">
+              {t("pages:admin.tempPwdHint")}
+            </p>
             <DialogFooter>
-              <Button onClick={() => setTempPwd(null)}>
-                {t("pages:admin.close")}
+              <Button
+                variant="outline"
+                onClick={() => setTempPwd(null)}
+                disabled={busyUserId !== null}
+              >
+                {t("common:cancel")}
+              </Button>
+              <Button
+                onClick={confirmResetPassword}
+                disabled={busyUserId !== null}
+              >
+                {busyUserId !== null
+                  ? t("pages:admin.resetting")
+                  : t("pages:admin.confirmReset")}
               </Button>
             </DialogFooter>
           </DialogContent>

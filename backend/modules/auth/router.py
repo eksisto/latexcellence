@@ -17,6 +17,7 @@ from backend.modules.auth.models import (
     LoginRequest,
     QuotaUpdateRequest,
     RegisterRequest,
+    ResetPasswordConfirmRequest,
 )
 
 auth_router = APIRouter(prefix="/api/auth", tags=["auth"])
@@ -130,10 +131,18 @@ async def admin_enable(user_id: str, _: dict = Depends(require_admin)):
     return await service.admin_set_status(user_id, "active", "enable")
 
 
-@admin_router.post("/users/{user_id}/reset-password")
-async def admin_reset_password(user_id: str, _: dict = Depends(require_admin)):
-    """重置为临时密码（一次性返回明文），并吊销该用户全部会话。"""
-    return await service.admin_reset_password(user_id)
+@admin_router.post("/users/{user_id}/reset-password/preview")
+async def admin_reset_password_preview(user_id: str, _: dict = Depends(require_admin)):
+    """生成候选临时密码（仅预览返回明文，不修改用户密码）。"""
+    return await service.admin_preview_reset_password(user_id)
+
+
+@admin_router.post("/users/{user_id}/reset-password/confirm")
+async def admin_reset_password_confirm(
+    user_id: str, req: ResetPasswordConfirmRequest, _: dict = Depends(require_admin)
+):
+    """确认重置：将密码写入为预览的临时密码，并吊销该用户全部会话。"""
+    return await service.admin_confirm_reset_password(user_id, req.temp_password)
 
 
 @admin_router.put("/users/{user_id}/quota")

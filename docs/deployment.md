@@ -294,7 +294,7 @@ python -m backend.manage set-status <username> pending|active|disabled
 python -m backend.manage migrate-legacy [--dry-run]                 # 存量数据迁移（幂等）
 ```
 
-网页管理面板（admin 登录后可见）覆盖同样能力：待审批列表、批准/拒绝、禁用/启用、重置密码（一次性临时密码）、配额调整、删除用户（项目转交管理员、衍生数据归档 30 天后清理）。
+网页管理面板（admin 登录后可见）覆盖同样能力：待审批列表、批准/拒绝、禁用/启用、重置密码（两步式：先仅生成临时密码预览，管理员确认后才写入并吊销会话）、配额调整、删除用户（项目转交管理员、衍生数据归档 30 天后清理）。
 
 ### 日志
 

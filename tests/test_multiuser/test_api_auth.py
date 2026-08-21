@@ -162,7 +162,16 @@ class TestRegisterApproveLoginFlow:
         assert "password_hash" not in r.text
 
         r = mu_client.post(
-            f"/api/admin/users/{alice_id}/reset-password", headers=csrf(mu_client)
+            f"/api/admin/users/{alice_id}/reset-password/preview",
+            headers=csrf(mu_client),
+        )
+        assert r.status_code == 200
+        assert "password_hash" not in r.text
+
+        r = mu_client.post(
+            f"/api/admin/users/{alice_id}/reset-password/confirm",
+            json={"temp_password": r.json()["temp_password"]},
+            headers=csrf(mu_client),
         )
         assert r.status_code == 200
         assert "password_hash" not in r.text

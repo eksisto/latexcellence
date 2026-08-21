@@ -18,3 +18,7 @@ class LoginRequest(BaseModel):
 class QuotaUpdateRequest(BaseModel):
     project_quota_bytes: int | None = None
     derived_quota_bytes: int | None = None
+
+
+class ResetPasswordConfirmRequest(BaseModel):
+    temp_password: str = Field(..., min_length=1, max_length=128)
