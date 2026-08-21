@@ -149,7 +149,9 @@ latexcellence/
 │       │   ├── usePlotGen.js        # 科研绘图 Agent hook
 │       │   ├── useStyleModifyAgent.js # 样式修改项目 Agent hook
 │       │   ├── useAuth.js           # 多用户认证引导（模式探测 → /api/auth/me 恢复会话）
-│       │   ├── useCanWrite.js       # 多用户写权限 hook（viewer 只读，单一事实源）
+│       │   ├── useCanWrite.js       # 多用户写权限 hook（owner/editor 白名单，单一事实源）
+│       │   ├── useIsOpened.js       # 模式感知"项目已打开"hook（单用户看 projectPath，多用户看 projectId）
+│       │   ├── useRegistrationEnabled.js # 多用户注册开放状态 hook（registration_enabled=false 时隐藏注册入口）
 │       │   ├── useEnabledFeatures.js # 功能开关加载 hook（幂等）
 │       │   ├── useUndoRedo.js        # 撤销/重做状态 hook
 │       │   ├── useResultFilter.js    # 检查结果排序过滤 hook
@@ -167,7 +169,7 @@ latexcellence/
 │       ├── fonts/                   # 字体加载（dev 本地 npm 包 / build 走 cdnjs）
 │       ├── api/index.js             # 统一 API 层（接口分组封装）
 │       ├── api/connection.js        # 后端连接配置（基地址/令牌/认证头/连接测试）
-│       ├── utils/                   # 前端工具（errorMessages.js 错误翻译 / formulaWrap.js 公式包裹重写 / highlight.js 高亮入口 / multiUserProject.js 多用户项目打开统一入口）
+│       ├── utils/                   # 前端工具（errorMessages.js 错误翻译 / formulaWrap.js 公式包裹重写 / highlight.js 高亮入口 / multiUserProject.js 多用户项目打开统一入口 / projectAccess.js 双模式打开与写角色白名单纯函数）
 │       ├── styles/                  # 前端样式（code-highlight.css：高亮颜色独立文件，按需引入）
 │       └── store/useStore.js        # Zustand 全局状态
 │

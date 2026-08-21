@@ -67,6 +67,10 @@ API 按功能分组暴露（health、config、project、typoCheck、expressionOp
 
 ## 工具模块
 
+### utils/projectAccess.js
+
+多用户/单用户双模式的打开与写权限判定纯函数（无副作用，`node --test` 直接单测）：`isProjectOpened`（模式感知的项目已打开判定）、`hasWriteRole`（写角色白名单 owner/editor，角色未知按只读兜底）、`emptyStateCta`（空态按钮按模式指向 `/workspace` 或 `/projects`）。由 `useIsOpened` / `useCanWrite` 及各模块页引用；回归测试见 `test/multiUserGuards.test.mjs`。
+
 ### utils/errorMessages.js
 
 后端英文错误消息 → 当前语言翻译。精确匹配 + 正则模式匹配，翻译资源位于 `errors` 命名空间。调用点包括 `request()`、`requestForm()`、`useParagraphCheck.js`、`useWritingChat.js`。
@@ -127,7 +131,7 @@ highlight.js 的按需注册与统一入口：
 | `ProgressBar.jsx` | 检查进度条组件 |
 | `UnlistedChanges.jsx` | 展示「模型修改了全文但未列出条目」（unlisted_changes）的琥珀色提示：`UnlistedChangesBadge`（卡片头标记）+ `UnlistedChangesBody`（全文预览 + 应用/忽略），typo_check / expression_opt / paragraph_translate 共用，全文经 MarkerText 渲染 |
 | `ColorField.jsx` | 颜色选择器组件 |
-| `BibManagerLibrary.jsx` | 参考文献库管理面板（文件列表、条目 CRUD、重复检测、统计） |
+| `BibManagerLibrary.jsx` | 参考文献库管理面板（文件列表、条目 CRUD、重复检测、统计）；写操作入口（撤销/重做、条目编辑/删除）经 `useCanWrite` 门控，viewer 只读 |
 | `FormatResultCard` | 格式识别结果展示卡片（`React.memo` 组件，展示格式名称、置信度、字段列表、LaTeX 样式推荐） |
 
 ## 核心 Hook
@@ -136,6 +140,9 @@ highlight.js 的按需注册与统一入口：
 | --- | --- |
 | `useParagraphCheck.js` | 封装逐段 LLM 检查公共逻辑（预览、检查/优化、排序、暂停/继续/停止、应用、refresh 持久化）。支持 `resolveInput` 多文件模式。内置乐观锁：读取段落时缓存文件 MD5，应用修改时传回，冲突（409）后自动刷新 MD5 并提示重试。SSE 结果通过 rAF 微批次合并；`done` 事件到达时先排空待 flush 缓冲再收尾，避免一次性推送全部结果的模块（如术语一致性检查）在流结束时丢失结果。 |
 | `useEnabledFeatures.js` | 从后端加载功能开关到 Zustand store，幂等。 |
+| `useIsOpened.js` | 模式感知「项目已打开」判定（`utils/projectAccess.js` 的 `isProjectOpened`）：单用户看 `projectPath`，多用户看 `projectId`（多用户下 projectPath 恒为 null）。模块页空态守卫与检查启动守卫统一引用，避免各页复制同形条件漏改。 |
+| `useCanWrite.js` | 多用户写权限单一事实源：白名单 owner / editor 可写，viewer 及角色未知一律只读；单用户恒可写。内部复用 `utils/projectAccess.js` 的 `hasWriteRole`。 |
+| `useRegistrationEnabled.js` | 探测 `/config/status` 的 `registration_enabled`；仅明确 false 时调用方隐藏注册入口（登录页隐藏链接、注册页展示未开放提示），未知时保持入口由后端 400 兜底。 |
 | `useFavicon.js` | 按亮/暗模式切换浏览器标签页图标（MutationObserver 监听 `<html>` class）。 |
 | `useWritingChat.js` | 封装写作助手 Chat 全部逻辑（会话管理、SSE 流式、搜索/学术结果、深度思考解析、生成编辑、应用编辑、助手管理）。内部使用子 hooks。 |
 | `useStyleModifyAgent.js` | 封装 style_modify 项目 Agent：创建/恢复/删除 session、SSE 生命周期、refinement、proposal、apply/undo、trace 查看导出和 `translateError()` 处理。 |
