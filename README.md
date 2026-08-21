@@ -91,7 +91,7 @@ Word 则相反。对它“简单”的印象来自把结构藏进 GUI：样式�
 
 ### 多用户模式
 
-- **团队协作（多用户模式）**：`multi_user.enabled` 一键开启后，支持注册/审批、用户名+密码会话登录、独立项目空间与配额、zip/7z/目录上传、owner/editor/viewer 权限协作与回收站；前端提供登录/注册、项目工作台与管理后台页面。适配可信团队内部部署（详见 [docs/multi-user-plan.md](docs/multi-user-plan.md)）。
+- **团队协作（多用户模式）**：`multi_user.enabled` 一键开启后，支持注册/审批、用户名+密码会话登录、独立项目空间与配额、zip/7z/目录上传、owner/editor/viewer 权限协作与回收站；写作会话/样式会话/模板/绘图等衍生数据按用户隔离，并提供存量数据迁移工具（`python -m backend.manage migrate-legacy`）；前端提供登录/注册、项目工作台与管理后台页面。适配可信团队内部部署（详见 [docs/multi-user-plan.md](docs/multi-user-plan.md)）。
 
 ### 交互体验
 

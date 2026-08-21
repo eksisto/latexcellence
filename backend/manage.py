@@ -103,6 +103,67 @@ def cmd_set_status(args: argparse.Namespace) -> None:
     print(f"'{args.username}' status -> {args.status}.")
 
 
+def cmd_migrate_legacy(args: argparse.Namespace) -> None:
+    """将存量 data/ 全局数据复制到管理员用户空间（幂等，详见 migrate.py）。"""
+    from backend.core.multiuser import migrate as migrate_core
+
+    _init(args.config)
+    admin = migrate_core.find_first_admin()
+    if admin is None:
+        print(
+            "No admin account exists yet. Create one first with "
+            "'python -m backend.manage create-admin <username>'.",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+    report = migrate_core.migrate_legacy(
+        admin["id"], dry_run=bool(getattr(args, "dry_run", False))
+    )
+    print(f"Migration report (admin: {admin['username']} / {admin['id']})")
+    print(f"{'DIR':<24} {'STATUS':<14} COPIED  SKIPPED  FILES  VERIFIED")
+    print("-" * 78)
+    for d in report["dirs"]:
+        verify = d.get("verify", {})
+        verified = (
+            f"{verify.get('present', 0)}/"
+            f"{(verify.get('present', 0) + verify.get('missing', 0) + verify.get('mismatch', 0))}"
+            if d["status"] == "copied" and not report["dry_run"]
+            else "-"
+        )
+        print(
+            f"{d['name']:<24} {d['status']:<14} "
+            f"{d.get('copied', 0):<6} {d.get('skipped', 0):<7} "
+            f"{d.get('files', 0):<5} {verified}"
+        )
+    print("-" * 78)
+    print(
+        f"total copied: {report['total_copied']}, skipped (already present): "
+        f"{report['total_skipped']}, all_verified: {report['all_verified']}"
+    )
+    mismatched = [d for d in report["dirs"] if d.get("verify", {}).get("mismatch")]
+    if mismatched:
+        print(
+            "\nWARNING: some target files differ in size from their source "
+            "(leftover of an interrupted earlier run, or modified after "
+            "migration):",
+            file=sys.stderr,
+        )
+        for d in mismatched:
+            v = d["verify"]
+            print(
+                f"  {d['name']}: {v['mismatch']} file(s), e.g. "
+                f"{', '.join(v['mismatch_samples'])}",
+                file=sys.stderr,
+            )
+        print(
+            "Fix manually (delete the corrupt target file and re-run "
+            "'migrate-legacy') BEFORE removing any source data.",
+            file=sys.stderr,
+        )
+    if report["dry_run"]:
+        print("This was a dry run — no files were written.")
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="python -m backend.manage", description="多用户模式管理工具"
@@ -131,6 +192,14 @@ def build_parser() -> argparse.ArgumentParser:
     p_status.add_argument("username")
     p_status.add_argument("status", choices=("pending", "active", "disabled"))
     p_status.set_defaults(func=cmd_set_status)
+
+    p_migrate = sub.add_parser(
+        "migrate-legacy", help="将存量 data/ 数据复制到管理员用户空间（幂等）"
+    )
+    p_migrate.add_argument(
+        "--dry-run", action="store_true", help="仅预演统计，不实际复制"
+    )
+    p_migrate.set_defaults(func=cmd_migrate_legacy)
     return parser
 
 

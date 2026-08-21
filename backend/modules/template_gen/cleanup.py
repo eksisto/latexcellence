@@ -35,13 +35,20 @@ def cleanup_expired_sandboxes() -> int:
     if not tg.cleanup_enabled:
         return 0
 
-    output_dir = Path(tg.output_dir)
-    if not output_dir.is_absolute():
-        output_dir = Path.cwd() / output_dir
-    sandbox_root = output_dir
+    # 收集待扫描的沙箱根目录：
+    #   - 单用户模式：存量全局目录（保持既有行为）
+    #   - 多用户模式：每个用户的 templates 目录
+    from backend.core.multiuser import userspace
 
-    if not sandbox_root.is_dir():
-        return 0
+    roots: list[Path] = []
+    if not userspace.is_multiuser():
+        legacy = Path(tg.output_dir)
+        if not legacy.is_absolute():
+            legacy = Path.cwd() / legacy
+        if legacy.is_dir():
+            roots.append(legacy)
+    else:
+        roots = userspace.iterate_user_resource_roots("templates")
 
     import time
 
@@ -49,29 +56,32 @@ def cleanup_expired_sandboxes() -> int:
     cutoff = now - tg.cleanup_retention_days * 86400
     removed = 0
 
-    for child in sorted(sandbox_root.iterdir()):
-        if not child.is_dir():
+    for sandbox_root in roots:
+        if not sandbox_root.is_dir():
             continue
+        for child in sorted(sandbox_root.iterdir()):
+            if not child.is_dir():
+                continue
 
-        # 取目录内所有文件的最大 mtime
-        try:
-            latest_mtime = _latest_mtime(child)
-        except OSError as e:
-            logger.warning("Could not read sandbox mtime: %s — %s", child.name, e)
-            continue
-
-        if latest_mtime < cutoff:
+            # 取目录内所有文件的最大 mtime
             try:
-                shutil.rmtree(child)
-                removed += 1
-                logger.info(
-                    "Expired sandbox cleaned: %s (last modified: %s, retention days: %d)",
-                    child.name,
-                    _format_mtime(latest_mtime),
-                    tg.cleanup_retention_days,
-                )
+                latest_mtime = _latest_mtime(child)
             except OSError as e:
-                logger.error("Failed to clean sandbox: %s — %s", child.name, e)
+                logger.warning("Could not read sandbox mtime: %s — %s", child.name, e)
+                continue
+
+            if latest_mtime < cutoff:
+                try:
+                    shutil.rmtree(child)
+                    removed += 1
+                    logger.info(
+                        "Expired sandbox cleaned: %s (last modified: %s, retention days: %d)",
+                        child.name,
+                        _format_mtime(latest_mtime),
+                        tg.cleanup_retention_days,
+                    )
+                except OSError as e:
+                    logger.error("Failed to clean sandbox: %s — %s", child.name, e)
 
     if removed > 0:
         logger.info("This cleanup removed %d expired sandboxes", removed)

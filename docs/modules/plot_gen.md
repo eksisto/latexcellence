@@ -47,6 +47,7 @@ backend/modules/plot_gen/
 - 上传数据写入 `data/plots/<session_id>/data/`
 - Agent 脚本写入 `data/plots/<session_id>/scripts/`
 - 产物写入 `data/plots/<session_id>/artifacts/`
+- 多用户模式（P6）：输出根目录按当前用户隔离到 `<users_root>/<user_id>/plots/`（经 `userspace.user_resource_root` 解析；单用户模式仍为 `data/plots/`，行为不变）
 - Python 子进程使用 `-I -B`（隐含 `-E`/`-s`，忽略 `PYTHON*` 环境变量与 user site），设置 `MPLBACKEND=Agg`
 - 每次执行前在 `scripts/_run_plot.py` 头部注入 `sandbox_guard.render_guard_bootstrap()` 的防护引导代码：先在安装审计钩子之前预加载 stdlib `ctypes`（避免 Python 3.13 `PyDLL(None)` 初始化事件误伤 numpy/pandas），再安装审计钩子，然后执行风格注入与用户脚本
 - 临时目录（`TMPDIR`/`TEMP`/`TMP`）重定向到 `tmp/`、matplotlib 缓存（`MPLCONFIGDIR`）重定向到 `.cache/matplotlib/`，均在沙箱内部

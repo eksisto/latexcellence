@@ -9,15 +9,22 @@ LaTeX 样式修改 API 路由。
 import io
 import json
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, field_validator
 from starlette.background import BackgroundTask
 
 from backend.core.logger import get_logger
+from backend.core.multiuser.dependencies import current_user_context
 from backend.modules.style_modify.service import StyleModifyService
 
-router = APIRouter(prefix="/api/style-modify", tags=["style_modify"])
+# 会话类资源按用户隔离（P6）：依赖注入当前用户上下文，
+# 多用户模式资源定向到当前用户衍生目录，单用户模式回退存量全局路径行为不变。
+router = APIRouter(
+    prefix="/api/style-modify",
+    tags=["style_modify"],
+    dependencies=[Depends(current_user_context)],
+)
 logger = get_logger(__name__)
 
 _service: StyleModifyService | None = None

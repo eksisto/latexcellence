@@ -3,18 +3,25 @@
 import io
 import json
 
-from fastapi import APIRouter, File, Form, HTTPException, Query, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
 from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel, Field
 from starlette.background import BackgroundTask
 
 from backend.core.config import get_config
-from backend.modules.plot_gen.agent import load_plot_sandbox
+from backend.core.multiuser.dependencies import current_user_context
+from backend.modules.plot_gen.agent import get_plot_output_dir, load_plot_sandbox
 from backend.modules.plot_gen.models import GeneratePlotRequest, RefinePlotRequest
 from backend.modules.plot_gen.service import get_plot_gen_service
 from backend.utils.path_guard import resolve_project_path
 
-router = APIRouter(prefix="/api/plot-gen", tags=["plot_gen"])
+# 会话类资源按用户隔离（P6）：依赖注入当前用户上下文，
+# 多用户模式资源定向到当前用户衍生目录，单用户模式回退存量全局路径行为不变。
+router = APIRouter(
+    prefix="/api/plot-gen",
+    tags=["plot_gen"],
+    dependencies=[Depends(current_user_context)],
+)
 
 _service = None
 
@@ -189,7 +196,7 @@ async def preview_session_file(
 ):
     cfg = get_config()
     try:
-        sandbox = load_plot_sandbox(cfg.features.plot_gen.output_dir, session_id)
+        sandbox = load_plot_sandbox(get_plot_output_dir(cfg), session_id)
         resolved = resolve_project_path(
             sandbox,
             path,

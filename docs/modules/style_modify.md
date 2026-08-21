@@ -39,7 +39,7 @@ LaTeX 不放在 JSON 字符串中传输，采用与 OCR 模块一致的分隔符
 
 ### 会话目录
 
-会话目录位于应用缓存目录，不放入用户项目。默认根目录为 `data/style_modify_sessions/`。
+会话目录位于应用缓存目录，不放入用户项目。单用户模式默认根目录为 `data/style_modify_sessions/`；多用户模式（P6）按当前用户隔离到 `<users_root>/<user_id>/style_modify_sessions/`（经 `userspace.user_resource_root` 解析，单用户行为不变）。
 
 ```text
 data/style_modify_sessions/<session_id>/

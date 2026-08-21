@@ -15,9 +15,10 @@
 import json
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
 
+from backend.core.multiuser.dependencies import current_user_context
 from backend.modules.writing_chat.models import (
     ApplyEditRequest,
     AssistantSaveRequest,
@@ -34,7 +35,13 @@ from backend.modules.writing_chat.models import (
 from backend.modules.writing_chat.prompt_manager import get_prompt_manager
 from backend.modules.writing_chat.service import get_writing_chat_service
 
-router = APIRouter(prefix="/api/writing-chat", tags=["writing_chat"])
+# 会话类资源按用户隔离（P6）：依赖注入当前用户上下文，
+# 多用户模式资源定向到当前用户衍生目录，单用户模式回退存量全局路径行为不变。
+router = APIRouter(
+    prefix="/api/writing-chat",
+    tags=["writing_chat"],
+    dependencies=[Depends(current_user_context)],
+)
 
 
 # ── send：SSE 流式 ───────────────────────────────────────────────────────

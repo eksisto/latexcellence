@@ -203,7 +203,7 @@ writing_chat 是 `chat_stream_with_tools` 方法的主要消费者。该方法�
 | compression_headroom_tokens | 30000 | 动态推导触发值时保留的窗口余量 |
 | compression_keep_recent_tokens | 20000 | 压缩时原样保留的最近消息 token 预算 |
 | compression_keep_recent_turns | 5 | 压缩时原样保留的最近轮数（与 token 预算取先满足者） |
-| sessions_dir | data/writing_chat_sessions/ | 会话持久化目录 |
+| sessions_dir | data/writing_chat_sessions/ | 会话持久化目录（多用户模式 P6 按当前用户隔离到 `<users_root>/<user_id>/writing_chat_sessions/`，单用户行为不变） |
 | custom_prompts_dir | data/prompts/writing_chat/ | 助手提示词目录 |
 | summary_temperature | 0.2 | 摘要 LLM 温度 |
 | summary_token_budget | 6000 | 摘要最大 token 数（旧配置 `summary_max_tokens` 自动迁移并告警） |

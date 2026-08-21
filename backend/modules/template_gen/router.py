@@ -7,17 +7,24 @@
 import io
 import json
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import Response, StreamingResponse
 from pydantic import BaseModel
 from starlette.background import BackgroundTask
 
 from backend.core.logger import get_logger
+from backend.core.multiuser.dependencies import current_user_context
 from backend.modules.template_gen.service import get_template_gen_service
 
 logger = get_logger(__name__)
 
-router = APIRouter(prefix="/api/template-gen", tags=["template_gen"])
+# 会话类资源按用户隔离（P6）：依赖注入当前用户上下文，
+# 多用户模式资源定向到当前用户衍生目录，单用户模式回退存量全局路径行为不变。
+router = APIRouter(
+    prefix="/api/template-gen",
+    tags=["template_gen"],
+    dependencies=[Depends(current_user_context)],
+)
 
 
 class GenerateRequest(BaseModel):

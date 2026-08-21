@@ -35,7 +35,7 @@ latexcellence/
 │   │   ├── prompts.py               # 中央提示词管理模块（集中存储所有 LLM 提示词）
 │   │   ├── base_paragraph_check.py  # 逐段检查服务基类（typo/expression/code_review/terminology 共享）
 │   │   ├── access_control.py        # 统一访问控制：项目权限矩阵 + workspace 绑定校验依赖
-│   │   └── multiuser/               # 多用户模式基础设施包（db/userspace/auth/dependencies/quota/upload/maintenance）
+│   │   └── multiuser/               # 多用户模式基础设施包（db/userspace/auth/dependencies/quota/upload/maintenance/migrate）
 │   ├── utils/
 │   │   ├── json_utils.py            # LLM JSON 解析/校验/重试
 │   │   ├── file_ops.py              # 原子写入/备份/MD5

@@ -223,6 +223,8 @@ latexmk 的 stdout/stderr 有时不含 `!` 错误行（错误只写进了 `<main
 - `session_id` 仅允许字母数字 / `-` / `_`，杜绝 `..` / `/` 注入
 - 解析后必须严格位于 `output_dir/` 子目录内，无法逃逸到其他模板或兄弟会话目录
 
+多用户模式（P6）：输出根目录按当前用户隔离到 `<users_root>/<user_id>/templates/`（经 `userspace.user_resource_root` 解析；单用户模式仍为 `data/templates/`，行为不变）。
+
 ## 配置项（`features.template_gen`）
 
 | 字段 | 默认 | 说明 |

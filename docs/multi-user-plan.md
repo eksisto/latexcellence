@@ -1,6 +1,6 @@
 # 多用户模式设计方案
 
-> 状态：实施中（P0 文档与配置已完成；P1 基础设施已实施并通过登录/审批全流程 API 测试；P2 用户空间与访问控制已实施并通过权限矩阵测试；P3 上传与配额已实施并通过上传安全用例与配额边界测试；P4 权限协作已实施并通过协作场景集成测试；P5 前端已实施并通过构建 + 前端测试 + 端到端 API 联调；P6/P7 待实施）
+> 状态：实施中（P0 文档与配置已完成；P1 基础设施已实施并通过登录/审批全流程 API 测试；P2 用户空间与访问控制已实施并通过权限矩阵测试；P3 上传与配额已实施并通过上传安全用例与配额边界测试；P4 权限协作已实施并通过协作场景集成测试；P5 前端已实施并通过构建 + 前端测试 + 端到端 API 联调；P6 迁移与存量隔离已实施并通过迁移幂等 + 会话归属校验 + 存量回归测试；P7 待实施）
 > 日期：2026-08-20
 > 适用范围：后端双模式（单用户/多用户）、用户空间与上传、配额、权限协作、管理后台、迁移
 
@@ -245,6 +245,8 @@ data/
 - 项目根目录由 `project_id` 派生（`data/users/<owner_id>/projects/<project_id>/`），协作者访问时不复制文件、不生成个人副本，直接读写同一份数据；
 - 会话类资源（写作会话、style_modify 会话、绘图、模板）按 `user_id` 目录隔离，服务端按“资源路径必须位于当前用户衍生目录内”校验归属。
 
+> P6 落地说明：在 `userspace.py` 提供请求级当前用户上下文（`set/get_current_user_id`）与统一解析入口 `user_resource_root(subdir, legacy_root)`；写作会话 / style_modify 会话 / 模板 / 绘图四类模块在解析资源根时调用它——多用户模式定向到 `<users_root>/<user_id>/<子目录>/` 并按用户隔离，单用户模式回退存量全局路径（行为不变）。依赖 `dependencies.current_user_context` 从认证会话注入当前用户，四个路由（writing-chat / style-modify / template-gen / plot-gen）统一挂载；后台清理任务通过 `userspace.iterate_user_resource_roots()` 枚举全部用户的资源目录。
+
 ## 8. 上传与解压管线
 
 ### 8.1 入口
@@ -429,16 +431,20 @@ v1 **不做强沙箱**。多用户部署后，上传的 LaTeX 项目属于不可
 
 ### 13.2 迁移工具（`python -m backend.manage migrate-legacy`）
 
-1. 确保管理员账号存在（自动创建或提示先 `create-admin`）；
-2. 将存量 `data/writing_chat_sessions/`、`data/style_modify_sessions/`、`data/templates/`、`data/plots/`、`data/formats/`、`data/prompts/` 复制到管理员用户空间对应目录；
-3. 复制完成后校验目录树与关键文件，输出迁移报告；源目录默认保留，确认无误后人工清理；
-4. 迁移可重复执行（幂等），不覆盖已迁移目标中的新数据。
+1. 确保管理员账号存在（不存在则提示先 `create-admin`，工具自动取第一个管理员账号为目标）；
+2. 将存量 `data/writing_chat_sessions/`、`data/style_modify_sessions/`、`data/templates/`、`data/plots/`、`data/formats/`、`data/prompts/` 复制到管理员用户空间对应目录（源路径取自对应配置项，prompts 取 `data/prompts/` 公共父目录）；
+3. 复制完成后校验目录树（逐文件核对目标侧存在性），输出迁移报告；源目录默认保留，确认无误后人工清理；
+4. 迁移可重复执行（幂等），目标已存在文件全部跳过，**不覆盖迁移后新产生的数据**；
+5. 支持 `--dry-run` 预演（只统计不写盘）。
+
+> P6 已落地：`backend/core/multiuser/migrate.py` + `python -m backend.manage migrate-legacy`，幂等与报告输出见 `tests/test_multiuser/test_p6_legacy_and_migrate.py`。
 
 单用户模式不受影响，旧本地项目路径在单用户模式下继续可用。
 
 ## 14. 测试
 
 > P1 已落地：`tests/test_multiuser/`（db schema、auth 核心、注册/审批/登录/CSRF API、管理员 API、CLI）。
+> P6 已落地：`tests/test_multiuser/test_p6_legacy_and_migrate.py`（迁移幂等、会话资源按用户隔离、存量单用户回归）+ `test_manage_cli.py` 增补 migrate-legacy 用例。
 
 ### 后端单元测试
 
@@ -471,7 +477,7 @@ v1 **不做强沙箱**。多用户部署后，上传的 LaTeX 项目属于不可
 | P3 上传与配额（✅ 已完成） | 上传/解压管线、项目命名、配额记账、回收站、下载 | 上传安全用例全绿，配额边界行为正确 |
 | P4 权限协作（✅ 已完成） | 协作者管理、转交、viewer 写保护、共享项目撤销禁用 | 协作场景集成测试通过 |
 | P5 前端（✅ 已完成） | 登录/注册/工作台/上传/权限/管理面板、路由守卫、i18n、auth 切片 | 构建通过 + 前端测试通过 + 端到端 API 联调（登录/审批/上传/回收站/viewer 写保护） |
-| P6 迁移与存量隔离 | migrate-legacy、会话类资源归属校验、存量路径改造 | 迁移工具幂等验证通过，存量功能回归通过 |
+| P6 迁移与存量隔离（✅ 已完成） | migrate-legacy、会话类资源归属校验、存量路径改造 | 迁移工具幂等验证通过，存量功能回归通过 |
 | P7 部署与文档 | 部署文档（HTTPS、风险声明）、README/DESIGN/模块文档同步 | 文档评审通过 |
 
 ## 16. v2 预留（明确记录）

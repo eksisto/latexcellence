@@ -11,6 +11,7 @@ from fastapi import Cookie, Depends, HTTPException
 
 from backend.core.config import get_config
 from . import auth as auth_core
+from . import userspace
 
 SESSION_COOKIE_NAME = auth_core.SESSION_COOKIE_NAME
 
@@ -80,3 +81,16 @@ async def require_admin_if_multiuser(
         raise unauthorized("Not logged in")
     if user["role"] != "admin":
         raise forbidden("no_permission", "Admin privileges required")
+
+
+async def current_user_context(
+    user: dict | None = Depends(get_current_user_optional),
+) -> dict | None:
+    """注入请求级当前用户上下文（P6 会话类资源归属校验）。
+
+    会话类资源模块（写作会话 / style_modify 会话 / 模板 / 绘图）在解析资源根
+    目录时读取该上下文，将资源定向到当前用户的衍生数据目录，实现按用户隔离。
+    单用户模式 / 未登录时注入 None（模块回退到存量全局路径）。
+    """
+    userspace.set_current_user_id(user["id"] if user else None)
+    return user

@@ -17,30 +17,43 @@ def cleanup_expired_sandboxes() -> int:
     pg = cfg.features.plot_gen
     if not pg.cleanup_enabled:
         return 0
-    output_dir = Path(pg.output_dir)
-    if not output_dir.is_absolute():
-        output_dir = Path.cwd() / output_dir
-    if not output_dir.is_dir():
-        return 0
+
+    # 收集待扫描的沙箱根目录：
+    #   - 单用户模式：存量全局目录（保持既有行为）
+    #   - 多用户模式：每个用户的 plots 目录
+    from backend.core.multiuser import userspace
+
+    roots: list[Path] = []
+    if not userspace.is_multiuser():
+        legacy = Path(pg.output_dir)
+        if not legacy.is_absolute():
+            legacy = Path.cwd() / legacy
+        if legacy.is_dir():
+            roots.append(legacy)
+    else:
+        roots = userspace.iterate_user_resource_roots("plots")
 
     now = time.time()
     cutoff = now - pg.cleanup_retention_days * 86400
     removed = 0
-    for child in sorted(output_dir.iterdir()):
-        if not child.is_dir():
+    for output_dir in roots:
+        if not output_dir.is_dir():
             continue
-        latest_mtime = _latest_mtime(child)
-        if latest_mtime < cutoff:
-            try:
-                shutil.rmtree(child)
-                removed += 1
-                logger.info(
-                    "Expired plot session cleaned: %s (last modified: %s)",
-                    child.name,
-                    _format_mtime(latest_mtime),
-                )
-            except OSError as e:
-                logger.error("Failed to clean plot session %s: %s", child.name, e)
+        for child in sorted(output_dir.iterdir()):
+            if not child.is_dir():
+                continue
+            latest_mtime = _latest_mtime(child)
+            if latest_mtime < cutoff:
+                try:
+                    shutil.rmtree(child)
+                    removed += 1
+                    logger.info(
+                        "Expired plot session cleaned: %s (last modified: %s)",
+                        child.name,
+                        _format_mtime(latest_mtime),
+                    )
+                except OSError as e:
+                    logger.error("Failed to clean plot session %s: %s", child.name, e)
     return removed
 
 

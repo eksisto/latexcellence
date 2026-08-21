@@ -67,12 +67,18 @@ def now_iso() -> str:
 
 
 def get_sessions_root(cfg: Any | None = None) -> Path:
-    """返回 style_modify 会话根目录（应用缓存目录，不是用户项目）。"""
+    """返回 style_modify 会话根目录（应用缓存目录，不是用户项目）。
+
+    多用户模式：按当前用户隔离到 <users_root>/<user_id>/style_modify_sessions/；
+    单用户模式：返回存量全局路径（cfg.features.style_modify.agent.sessions_dir），行为不变。
+    """
+    from backend.core.multiuser import userspace
+
     cfg = cfg or get_config()
-    output_dir = Path(cfg.features.style_modify.agent.sessions_dir)
-    if not output_dir.is_absolute():
-        output_dir = Path.cwd() / output_dir
-    return output_dir.resolve()
+    legacy_root = Path(cfg.features.style_modify.agent.sessions_dir)
+    if not legacy_root.is_absolute():
+        legacy_root = Path.cwd() / legacy_root
+    return userspace.user_resource_root("style_modify_sessions", legacy_root).resolve()
 
 
 def validate_session_id(session_id: str) -> None:

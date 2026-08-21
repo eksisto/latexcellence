@@ -43,12 +43,18 @@ def _is_figure_affecting_path(rel_path: str) -> bool:
 
 
 def get_plot_output_dir(cfg: Any | None = None) -> Path:
-    """返回 plot_gen session 输出根目录。"""
+    """返回 plot_gen session 输出根目录。
+
+    多用户模式：按当前用户隔离到 <users_root>/<user_id>/plots/；
+    单用户模式：返回存量全局路径（cfg.features.plot_gen.output_dir），行为不变。
+    """
+    from backend.core.multiuser import userspace
+
     cfg = cfg or get_config()
-    output_dir = Path(cfg.features.plot_gen.output_dir)
-    if not output_dir.is_absolute():
-        output_dir = Path.cwd() / output_dir
-    return output_dir
+    legacy_root = Path(cfg.features.plot_gen.output_dir)
+    if not legacy_root.is_absolute():
+        legacy_root = Path.cwd() / legacy_root
+    return userspace.user_resource_root("plots", legacy_root)
 
 
 def load_plot_sandbox(output_dir: str | Path, session_id: str) -> Path:
@@ -127,7 +133,7 @@ class PlotGenAgent:
         if llm is None:
             llm = get_llm_client()
 
-        sandbox = load_plot_sandbox(cfg.features.plot_gen.output_dir, session_id)
+        sandbox = load_plot_sandbox(get_plot_output_dir(cfg), session_id)
         meta = read_session_meta(sandbox)
         meta.description = description or meta.description
         meta.style = style or meta.style
@@ -190,7 +196,7 @@ class PlotGenAgent:
         cfg = get_config()
         if llm is None:
             llm = get_llm_client()
-        sandbox = load_plot_sandbox(cfg.features.plot_gen.output_dir, session_id)
+        sandbox = load_plot_sandbox(get_plot_output_dir(cfg), session_id)
         meta = read_session_meta(sandbox)
         messages = list(meta.messages)
         refine_prompt = get_prompt(
@@ -221,7 +227,7 @@ class PlotGenAgent:
     ) -> AsyncIterator[dict[str, Any]]:
         cfg = get_config()
         fcfg = cfg.features.plot_gen
-        sandbox = load_plot_sandbox(cfg.features.plot_gen.output_dir, session_id)
+        sandbox = load_plot_sandbox(get_plot_output_dir(cfg), session_id)
         executor = PlotExecutor(sandbox, cfg, self._logger, style_key=style)
         tools = self._build_tools_schema()
         max_rounds = fcfg.agent_max_rounds

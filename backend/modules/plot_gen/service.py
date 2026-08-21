@@ -102,7 +102,7 @@ class PlotGenService:
         llm: Any | None = None,
     ) -> AsyncIterator[dict[str, Any]]:
         cfg = get_config()
-        sandbox = load_plot_sandbox(cfg.features.plot_gen.output_dir, session_id)
+        sandbox = load_plot_sandbox(get_plot_output_dir(cfg), session_id)
         meta = read_session_meta(sandbox)
         meta.description = description or meta.description
         meta.style = style or meta.style
@@ -151,7 +151,7 @@ class PlotGenService:
 
     def list_session_files(self, session_id: str) -> list[dict[str, Any]]:
         cfg = get_config()
-        sandbox = load_plot_sandbox(cfg.features.plot_gen.output_dir, session_id)
+        sandbox = load_plot_sandbox(get_plot_output_dir(cfg), session_id)
         result: list[dict[str, Any]] = []
         root = sandbox.resolve()
         for p in sorted(root.rglob("*")):
@@ -171,13 +171,13 @@ class PlotGenService:
         self, session_id: str, rel_path: str
     ) -> tuple[str | None, str | None]:
         cfg = get_config()
-        sandbox = load_plot_sandbox(cfg.features.plot_gen.output_dir, session_id)
+        sandbox = load_plot_sandbox(get_plot_output_dir(cfg), session_id)
         return safe_read_plot_file(sandbox, rel_path)
 
     def get_session_trace(self, session_id: str) -> dict[str, Any]:
         """读取 Agent 运行追踪（完整交互日志），用于分析与改进。"""
         cfg = get_config()
-        sandbox = load_plot_sandbox(cfg.features.plot_gen.output_dir, session_id)
+        sandbox = load_plot_sandbox(get_plot_output_dir(cfg), session_id)
         events = read_trace(sandbox)
         meta_info: dict[str, Any] = {}
         try:
@@ -202,7 +202,7 @@ class PlotGenService:
 
     def zip_session(self, session_id: str) -> tuple[bytes, list[Path]]:
         cfg = get_config()
-        sandbox = load_plot_sandbox(cfg.features.plot_gen.output_dir, session_id)
+        sandbox = load_plot_sandbox(get_plot_output_dir(cfg), session_id)
         root = sandbox.resolve()
         files = [
             p

@@ -158,14 +158,18 @@ class ConversationContext:
 
     @staticmethod
     def _sessions_dir(scope: str = "") -> Path:
+        from backend.core.multiuser import userspace
+
         cfg = get_config()
-        d = Path(cfg.features.writing_chat.sessions_dir)
-        if not d.is_absolute():
-            d = Path.cwd() / d
+        legacy = Path(cfg.features.writing_chat.sessions_dir)
+        if not legacy.is_absolute():
+            legacy = Path.cwd() / legacy
+        # 多用户模式：按当前用户隔离到 <users_root>/<user_id>/writing_chat_sessions/
+        base = userspace.user_resource_root("writing_chat_sessions", legacy)
         if scope:
-            d = d / scope
-        d.mkdir(parents=True, exist_ok=True)
-        return d
+            base = base / scope
+        base.mkdir(parents=True, exist_ok=True)
+        return base
 
     @classmethod
     def _session_path(cls, session_id: str) -> Path:

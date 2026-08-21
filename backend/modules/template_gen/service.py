@@ -48,10 +48,8 @@ class TemplateGenService:
         """
         cfg = get_config()
 
-        # 创建沙箱工作区
-        output_dir = Path(cfg.features.template_gen.output_dir)
-        if not output_dir.is_absolute():
-            output_dir = Path.cwd() / output_dir
+        # 创建沙箱工作区（多用户模式按当前用户隔离到 <users_root>/<user_id>/templates/）
+        output_dir = self._output_root(cfg)
         session_id = uuid.uuid4().hex[:12]
         sandbox = output_dir / session_id
         sandbox.mkdir(parents=True, exist_ok=True)
@@ -134,9 +132,22 @@ class TemplateGenService:
 
     # ── 内部辅助 ─────────────────────────────────────────────────────
 
+    def _output_root(self, cfg: Any) -> Path:
+        """返回模板生成输出根目录。
+
+        多用户模式：按当前用户隔离到 <users_root>/<user_id>/templates/；
+        单用户模式：返回存量全局路径（cfg.features.template_gen.output_dir），行为不变。
+        """
+        from backend.core.multiuser import userspace
+
+        legacy_root = Path(cfg.features.template_gen.output_dir)
+        if not legacy_root.is_absolute():
+            legacy_root = Path.cwd() / legacy_root
+        return userspace.user_resource_root("templates", legacy_root)
+
     def _load_sandbox(self, cfg: Any, session_id: str) -> Path:
         """解析沙箱路径并校验存在性（不存在时抛出 ValueError）。"""
-        sandbox = load_sandbox(cfg.features.template_gen.output_dir, session_id)
+        sandbox = load_sandbox(str(self._output_root(cfg)), session_id)
         if not sandbox.exists():
             raise ValueError("Session not found")
         return sandbox

@@ -259,6 +259,11 @@ python -m backend.manage set-status <username> pending|active|disabled
 - 转交前校验接收方项目空间配额（超限 413 `quota_exceeded`，目录与归属不变）；转交时项目目录迁移到新 owner 空间（`data/users/<new_owner_id>/projects/<project_id>/`），新 owner 同名项目自动生成 `xx (2)`，已打开该项目的 workspace 绑定与文件树同步更新。
 - viewer 写保护与共享项目撤销禁用（P2 已落地）：viewer 写操作 403；共享项目（存在协作者）v1 禁用撤销/重做。
 
+**P6 迁移与存量隔离**（§7.2 / §13）：
+
+- 会话类资源（写作会话 / style_modify 会话 / 模板 / 绘图）按用户隔离：`userspace.user_resource_root(subdir, legacy_root)` 统一解析入口——多用户模式按请求级当前用户返回 `<users_root>/<user_id>/<子目录>/`，单用户模式回退存量全局路径（行为不变）。当前用户由路由依赖 `current_user_context` 注入（writing-chat / style-modify / template-gen / plot-gen 四个路由挂载）；后台清理任务经 `userspace.iterate_user_resource_roots()` 枚举全部用户资源目录。
+- 存量数据迁移：`python -m backend.manage migrate-legacy [--dry-run]` 把存量全局目录（`data/writing_chat_sessions/`、`data/style_modify_sessions/`、`data/templates/`、`data/plots/`、`data/formats/`、`data/prompts/`）幂等复制到管理员用户空间对应子目录；目标文件已存在则跳过（不覆盖迁移后新数据）；复制后逐文件校验并输出报告。核心逻辑在 `backend/core/multiuser/migrate.py`。
+
 基础设施、认证与项目实现的详细说明见 [docs/backend-core.md](backend-core.md)，完整设计见 [docs/multi-user-plan.md](multi-user-plan.md)。
 
 > 运维提示：登录限流按"用户名 + 客户端 IP"计数；若部署在反向代理（nginx 等）之后，`request.client.host` 恒为代理 IP，"每 IP"维度会退化，需按部署接入受信代理 / 真实 IP 传递后才会生效。
