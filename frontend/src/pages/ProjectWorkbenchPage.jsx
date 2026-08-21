@@ -25,23 +25,7 @@ import ProjectPermissionsDialog from "@/components/ProjectPermissionsDialog";
 import { api } from "@/api/index";
 import useStore from "@/store/useStore";
 import { translateError } from "@/utils/errorMessages";
-
-function formatBytes(bytes) {
-  const n = Number(bytes) || 0;
-  if (n <= 0) return "0 B";
-  const units = ["B", "KB", "MB", "GB"];
-  const i = Math.min(
-    Math.floor(Math.log(n) / Math.log(1024)),
-    units.length - 1,
-  );
-  return `${(n / 1024 ** i).toFixed(i === 0 ? 0 : 1)} ${units[i]}`;
-}
-
-function formatDate(iso) {
-  if (!iso) return "—";
-  const d = new Date(iso);
-  return Number.isNaN(d.getTime()) ? "—" : d.toLocaleString();
-}
+import { formatBytes, formatDate } from "@/utils/format";
 
 // 角色→i18n key 映射提升为模块级常量：避免每行渲染时重建（rerender / hoist）
 const ROLE_LABEL_KEYS = {
@@ -375,7 +359,7 @@ export default function ProjectWorkbenchPage() {
                 </span>
                 {isAdmin && (
                   <Badge variant="secondary">
-                    <Crown className="size-3" /> Admin
+                    <Crown className="size-3" /> {t("common:role.admin")}
                   </Badge>
                 )}
               </span>

@@ -169,7 +169,7 @@ latexcellence/
 │       ├── fonts/                   # 字体加载（dev 本地 npm 包 / build 走 cdnjs）
 │       ├── api/index.js             # 统一 API 层（接口分组封装）
 │       ├── api/connection.js        # 后端连接配置（基地址/令牌/认证头/连接测试）
-│       ├── utils/                   # 前端工具（errorMessages.js 错误翻译 / formulaWrap.js 公式包裹重写 / highlight.js 高亮入口 / multiUserProject.js 多用户项目打开统一入口 / projectAccess.js 双模式打开与写角色白名单纯函数）
+│       ├── utils/                   # 前端工具（errorMessages.js 错误翻译 / format.js 字节与时间展示格式化 / formulaWrap.js 公式包裹重写 / highlight.js 高亮入口 / multiUserProject.js 多用户项目打开统一入口 / projectAccess.js 双模式打开与写角色白名单纯函数）
 │       ├── styles/                  # 前端样式（code-highlight.css：高亮颜色独立文件，按需引入）
 │       └── store/useStore.js        # Zustand 全局状态
 │

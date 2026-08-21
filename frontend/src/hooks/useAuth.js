@@ -12,7 +12,7 @@
  * /api/auth/me 返回 401 时也会触发 api/index.js 的全局 401 回调（handleUnauthorized）。
  */
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { api } from "@/api/index";
 import {
   authHeaders,
@@ -100,8 +100,14 @@ function withTimeout(promise, ms) {
 export default function useAuthBootstrap() {
   const setAuthStatus = useStore((s) => s.setAuthStatus);
   const setAuthMe = useStore((s) => s.setAuthMe);
+  const bootedRef = useRef(false);
 
   useEffect(() => {
+    // StrictMode dev 下 effect 会执行两次：引导只允许跑一次，否则双份模式探测
+    // + 双份 /auth/me（审查 L6，生产环境无影响）。依赖均为 store 稳定引用，
+    // 正常生命周期内 effect 不会重跑，守卫只拦截 StrictMode 的二次执行。
+    if (bootedRef.current) return;
+    bootedRef.current = true;
     (async () => {
       // 持久化标志表明上次会话是多用户模式：会话恢复（/auth/me）与模式探测并行
       // 发出，启动从「探测 RTT → /auth/me RTT」两段串行降为一次并行往返（审查 M4）。
@@ -155,11 +161,13 @@ export default function useAuthBootstrap() {
   }, [setAuthStatus, setAuthMe]);
 }
 
-/** 登出：吊销会话并清空本地认证/项目状态（多用户模式） */
+/**
+ * 登出：吊销会话并清空本地认证/项目状态（多用户模式）。
+ * api / useStore 均为本文件顶部已有的静态导入，直接使用即可——
+ * 再动态 import() 只是多余的异步边界（审查 L5）。
+ */
 export async function logoutUser() {
-  const useStore = (await import("@/store/useStore")).default;
   try {
-    const { api } = await import("@/api/index");
     await api.auth.logout();
   } catch {
     // 后端不可达时仍清空本地状态

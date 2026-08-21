@@ -80,6 +80,7 @@ const REQUIRED_PATHS = [
   "common.role.owner",
   "common.role.editor",
   "common.role.viewer",
+  "common.role.admin",
   "pages.auth.loginTitle",
   "pages.auth.rememberMe",
   "pages.auth.registerSubmittedTitle",
@@ -98,7 +99,12 @@ const REQUIRED_PATHS = [
   "components.uploadProject.dirReadFailed",
   "components.uploadProject.dirReadFailedHint",
   "components.uploadProject.dirPackFailed",
+  "components.uploadProject.dirTooManyFiles",
+  "components.uploadProject.dirFileTooLarge",
+  "components.uploadProject.dirQuotaExceeded",
   "components.permissions.title",
+  "components.permissions.removeConfirmTitle",
+  "components.permissions.removeConfirmDesc",
 ];
 
 test("所有语言含全部分用户错误码与 P5 页面翻译键", () => {

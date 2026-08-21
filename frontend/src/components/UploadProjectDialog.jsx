@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import FolderUp from "lucide-react/dist/esm/icons/folder-up.mjs";
@@ -16,7 +16,9 @@ import {
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { api } from "@/api/index";
+import useStore from "@/store/useStore";
 import { translateError } from "@/utils/errorMessages";
+import { formatBytes } from "@/utils/format";
 
 /**
  * 目录模式：收集 webkitdirectory 文件列表，zip 内路径用 webkitRelativePath
@@ -37,23 +39,22 @@ function collectDirectoryFiles(fileList) {
  * 配合 vite manualChunks 的 vendor-jszip 规则拆成独立 chunk，仅在用户
  * 选择目录打包时加载，避免进入首屏 vendor。
  */
-async function zipFiles(files) {
+async function zipFiles(files, onProgress) {
   const { default: JSZip } = await import("jszip");
   const zip = new JSZip();
   for (const f of files) {
     zip.file(f.name, f.file);
   }
-  return zip.generateAsync({ type: "blob", compression: "DEFLATE" });
-}
-
-function humanSize(bytes) {
-  if (!Number.isFinite(bytes) || bytes <= 0) return "0 B";
-  const units = ["B", "KB", "MB", "GB"];
-  const i = Math.min(
-    Math.floor(Math.log(bytes) / Math.log(1024)),
-    units.length - 1,
-  );
-  return `${(bytes / 1024 ** i).toFixed(i === 0 ? 0 : 1)} ${units[i]}`;
+  // onUpdate 高频触发：按整数百分比去重后再上报，避免无谓重渲染（审查 L13，
+  // 此前大目录打包只有一个无限 spinner）
+  let lastPct = -1;
+  return zip.generateAsync({ type: "blob", compression: "DEFLATE" }, (meta) => {
+    const pct = Math.round(meta.percent);
+    if (onProgress && pct !== lastPct) {
+      lastPct = pct;
+      onProgress(pct);
+    }
+  });
 }
 
 /**
@@ -67,6 +68,10 @@ export default function UploadProjectDialog({
 }) {
   const { t } = useTranslation(["components", "pages"]);
 
+  // 剩余项目空间（配额与用量来自 /auth/me，工作台每次 loadAll 都会刷新）
+  const projectQuota = useStore((s) => s.quota?.project_quota_bytes);
+  const projectUsage = useStore((s) => s.usage?.project_usage_bytes);
+
   const [mode, setMode] = useState("file");
   const [file, setFile] = useState(null);
   const [dirFiles, setDirFiles] = useState([]);
@@ -74,6 +79,8 @@ export default function UploadProjectDialog({
 
   const [phase, setPhase] = useState("idle"); // idle | reading | packing | uploading
   const [progress, setProgress] = useState(0);
+  // 后端上传上限（config/status 只读透出）：目录模式浏览器侧前置校验用
+  const [uploadLimits, setUploadLimits] = useState(null);
 
   const fileInputRef = useRef(null);
   const dirInputRef = useRef(null);
@@ -86,7 +93,34 @@ export default function UploadProjectDialog({
     setProgress(0);
   };
 
+  // 目录模式前置校验需要后端上传上限：打开时拉取一次 config/status；
+  // 失败保持 null → 跳过数量/单文件校验，提交时由后端 413 兜底（错误码可翻译）
+  useEffect(() => {
+    if (!open || uploadLimits) return;
+    let mounted = true;
+    api
+      .configStatus()
+      .then((data) => {
+        if (mounted && data?.max_upload_files) {
+          setUploadLimits({
+            maxFiles: data.max_upload_files,
+            maxFileBytes: (data.max_upload_file_size_mb || 0) * 1024 * 1024,
+          });
+        }
+      })
+      .catch(() => {
+        // 探测失败保持 null：前置校验降级，后端仍兜底
+      });
+    return () => {
+      mounted = false;
+    };
+  }, [open, uploadLimits]);
+
   const handleClose = (openNow) => {
+    // busy（读取/打包/上传）期间禁止关闭（审查 L7）：底层 XHR/打包仍在进行，
+    // 关闭会 reset() 界面但完成回调照常触发，UI 与实际状态脱节。
+    // ESC / 遮罩 / 右上角 X 都会经 onOpenChange(false) 走到这里。
+    if (!openNow && busy) return;
     if (!openNow) reset();
     onOpenChange(openNow);
   };
@@ -103,6 +137,50 @@ export default function UploadProjectDialog({
     try {
       setPhase("reading");
       const files = collectDirectoryFiles(list);
+
+      // 浏览器侧前置校验（审查 L13）：文件数 / 单文件大小 / 总字节超剩余
+      // 项目空间时直接拦截，避免打包上传整个目录后才被后端 413/403 拒绝。
+      // 校验必须先于 setDirFiles：被拒的目录不得进入 state（否则上传按钮
+      // 仍可用，前置拦截被绕过）。上限未知（探测失败）时跳过对应检查，由
+      // 后端兜底。
+      if (uploadLimits && files.length > uploadLimits.maxFiles) {
+        toast.error(
+          t("components:uploadProject.dirTooManyFiles", {
+            count: files.length,
+            max: uploadLimits.maxFiles,
+          }),
+        );
+        return;
+      }
+      if (uploadLimits?.maxFileBytes) {
+        const overSizeFile = files.find(
+          (f) => f.file.size > uploadLimits.maxFileBytes,
+        );
+        if (overSizeFile) {
+          toast.error(
+            t("components:uploadProject.dirFileTooLarge", {
+              name: overSizeFile.name,
+              max: Math.floor(uploadLimits.maxFileBytes / 1024 / 1024),
+            }),
+          );
+          return;
+        }
+      }
+      const totalBytes = files.reduce((sum, f) => sum + f.file.size, 0);
+      const remainingBytes =
+        projectQuota != null && projectUsage != null
+          ? projectQuota - projectUsage
+          : null;
+      if (remainingBytes != null && totalBytes > remainingBytes) {
+        toast.error(
+          t("components:uploadProject.dirQuotaExceeded", {
+            size: formatBytes(totalBytes),
+            quota: formatBytes(Math.max(remainingBytes, 0)),
+          }),
+        );
+        return;
+      }
+
       setDirFiles(files);
       const label =
         files[0]?.name?.split("/")[0] ||
@@ -121,19 +199,16 @@ export default function UploadProjectDialog({
     }
   };
 
-  const nameFromFile = (f) => {
-    const base = f.name.replace(/\.(zip|7z)$/i, "");
-    return base.replace(/[\\/]+/g, "_").trim() || undefined;
-  };
-
   const handleUpload = async () => {
     let archive;
     let archiveName;
     if (mode === "directory") {
       if (dirFiles.length === 0) return;
       setPhase("packing");
+      setProgress(0);
       try {
-        archive = await zipFiles(dirFiles);
+        // 打包进度经 onUpdate 上报，复用进度条展示（审查 L13）
+        archive = await zipFiles(dirFiles, setProgress);
         archiveName = `${dirLabel || "project"}.zip`;
       } catch {
         // 同上：客户端打包错误用 i18n key，不走 translateError
@@ -217,7 +292,7 @@ export default function UploadProjectDialog({
             >
               <FileArchive />
               {file
-                ? `${file.name} · ${humanSize(file.size)}`
+                ? `${file.name} · ${formatBytes(file.size)}`
                 : t("components:uploadProject.chooseArchive")}
             </Button>
           </TabsContent>
@@ -258,13 +333,8 @@ export default function UploadProjectDialog({
           </TabsContent>
         </Tabs>
 
-        {phase === "packing" && (
-          <p className="text-sm text-muted-foreground">
-            <Loader className="mr-1 inline size-4 animate-spin" />
-            {t("components:uploadProject.packing")}
-          </p>
-        )}
-        {phase === "uploading" && (
+        {/* 打包与上传共用进度条：打包进度来自 JSZip onUpdate（审查 L13） */}
+        {(phase === "packing" || phase === "uploading") && (
           <div className="space-y-1">
             <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
               <div
@@ -273,7 +343,10 @@ export default function UploadProjectDialog({
               />
             </div>
             <p className="text-xs text-muted-foreground">
-              {t("components:uploadProject.uploading")} {progress}%
+              {phase === "packing"
+                ? t("components:uploadProject.packing")
+                : t("components:uploadProject.uploading")}{" "}
+              {progress}%
             </p>
           </div>
         )}

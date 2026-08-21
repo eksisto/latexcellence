@@ -75,6 +75,10 @@ API 按功能分组暴露（health、config、project、typoCheck、expressionOp
 
 后端英文错误消息 → 当前语言翻译。精确匹配 + 正则模式匹配，翻译资源位于 `errors` 命名空间。调用点包括 `request()`、`requestForm()`、`useParagraphCheck.js`、`useWritingChat.js`。
 
+### utils/format.js
+
+展示格式化共享工具：`formatBytes`（字节数人性化展示，B/KB/MB/GB 1024 进制）、`formatDate`（ISO 时间 → 本地化字符串，无法解析返回 "—"）。项目工作台、管理面板、上传对话框等处共用，避免各页维护逐行等价的副本。
+
 ### utils/formulaWrap.js
 
 公式行内/行间包裹重写工具（与后端 `formula_ocr/service.py` 的 `_strip_math_wrappers` / `_wrap_latex_for_paste` 语义一致）：剥离 `$$` / `\[ \]` / `\( \)` / `$` / 空壳显示环境包裹，并按 `inline` 标志重写为 `$...$` / `\[...\]`；独立显示环境原样保留，宏包注释前缀（`% \usepackage{...}`）在重写时保留。由 `FormulaOCRPage.jsx` 的行内/行间切换使用；`npm test`（`node --test`）覆盖回归用例。

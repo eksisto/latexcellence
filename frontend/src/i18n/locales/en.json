@@ -38,7 +38,8 @@
     "role": {
       "owner": "Owner",
       "editor": "Editor",
-      "viewer": "Viewer"
+      "viewer": "Viewer",
+      "admin": "Admin"
     }
   },
   "pages": {
@@ -1224,7 +1225,10 @@
       "uploadFailed": "Upload failed",
       "dirReadFailed": "Failed to read the selected directory",
       "dirReadFailedHint": "Try archiving the folder as a zip and upload again",
-      "dirPackFailed": "Failed to pack the folder; please retry or upload a zip archive"
+      "dirPackFailed": "Failed to pack the folder; please retry or upload a zip archive",
+      "dirTooManyFiles": "Too many files in the folder ({{count}} > {{max}}); please reduce and retry",
+      "dirFileTooLarge": "File “{{name}}” exceeds the per-file size limit ({{max}} MB)",
+      "dirQuotaExceeded": "Folder size {{size}} exceeds the remaining project space ({{quota}})"
     },
     "permissions": {
       "title": "Project permissions",
@@ -1240,6 +1244,8 @@
       "updateFailed": "Failed to update role",
       "removed": "Collaborator removed",
       "removeFailed": "Failed to remove collaborator",
+      "removeConfirmTitle": "Remove collaborator",
+      "removeConfirmDesc": "Revoke “{{name}}”'s access to this project?",
       "transferTitle": "Transfer project ownership",
       "transferPlaceholder": "Enter recipient username",
       "transfer": "Transfer",

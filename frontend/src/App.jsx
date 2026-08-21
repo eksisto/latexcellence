@@ -116,6 +116,17 @@ function RequireAuth({ children }) {
   return children;
 }
 
+/** 多用户专属页门控：单用户模式访问多用户路由一律回首页（审查 L8，
+ * 与 /admin、/waiting 等守卫的单模式拦截行为保持一致） */
+function RequireMultiUser({ children }) {
+  const authStatus = useStore((s) => s.authStatus);
+  if (authStatus === "loading") return <FullscreenLoader />;
+  if (authStatus === "single") return <Navigate to="/" replace />;
+  if (authStatus === "unauthenticated") return <Navigate to="/login" replace />;
+  if (authStatus === "pending") return <Navigate to="/waiting" replace />;
+  return children;
+}
+
 /** 认证页（登录/注册）：已登录 / 待审批时跳转工作台；单用户模式无需认证页 */
 function LoginRegisterGuard({ children }) {
   const authStatus = useStore((s) => s.authStatus);
@@ -352,9 +363,9 @@ export default function App() {
             <Route
               path="/projects"
               element={
-                <RequireAuth>
+                <RequireMultiUser>
                   <ProjectWorkbenchPage />
-                </RequireAuth>
+                </RequireMultiUser>
               }
             />
 

@@ -29,8 +29,17 @@ import ConfirmDialog from "@/components/ConfirmDialog";
 import { api } from "@/api/index";
 import useStore from "@/store/useStore";
 import { translateError } from "@/utils/errorMessages";
+import { formatDate } from "@/utils/format";
 
 const MB = 1024 * 1024;
+
+// 状态→i18n key 映射提升为模块级常量：每行渲染不再重建 3 键对象（审查 L4，
+// 原实现还有从未被读取的 cls 死字段，一并移除）
+const STATUS_LABEL_KEYS = {
+  pending: "pages:admin.statusPending",
+  active: "pages:admin.statusActive",
+  disabled: "pages:admin.statusDisabled",
+};
 
 function mbText(bytes) {
   if (bytes == null) return null;
@@ -38,12 +47,6 @@ function mbText(bytes) {
   // 非整 MB 时保留小数（去尾零），避免 Math.round 把 0.5 MiB 回显成 "1"，
   // 管理员不改输入直接保存时配额被静默翻倍
   return String(Number.isInteger(mb) ? mb : Number(mb.toFixed(3)));
-}
-
-function formatDate(iso) {
-  if (!iso) return "—";
-  const d = new Date(iso);
-  return Number.isNaN(d.getTime()) ? "—" : d.toLocaleString();
 }
 
 /**
@@ -64,16 +67,11 @@ const AdminUserRow = memo(function AdminUserRow({
 }) {
   const { t } = useTranslation(["pages", "common"]);
   const statusBadge = (status) => {
-    const map = {
-      pending: { label: t("pages:admin.statusPending"), cls: "" },
-      active: { label: t("pages:admin.statusActive"), cls: "" },
-      disabled: { label: t("pages:admin.statusDisabled"), cls: "" },
-    };
-    const s = map[status] || { label: status, cls: "" };
+    const labelKey = STATUS_LABEL_KEYS[status];
     return (
       <Badge variant={status === "active" ? "secondary" : "outline"}>
         {status === "pending" ? "⏳ " : ""}
-        {s.label}
+        {labelKey ? t(labelKey) : status}
       </Badge>
     );
   };
@@ -85,7 +83,7 @@ const AdminUserRow = memo(function AdminUserRow({
           <p className="truncate text-sm font-medium">{u.username}</p>
           {u.role === "admin" && (
             <Badge variant="secondary">
-              <Crown className="size-3" /> Admin
+              <Crown className="size-3" /> {t("common:role.admin")}
             </Badge>
           )}
           {statusBadge(u.status)}

@@ -38,7 +38,8 @@
     "role": {
       "owner": "擁有者",
       "editor": "可編輯",
-      "viewer": "唯讀"
+      "viewer": "唯讀",
+      "admin": "管理員"
     }
   },
   "pages": {
@@ -1224,7 +1225,10 @@
       "uploadFailed": "上傳失敗",
       "dirReadFailed": "讀取目錄失敗",
       "dirReadFailedHint": "讀取所選目錄失敗，可嘗試壓縮為 zip 後上傳",
-      "dirPackFailed": "目錄打包失敗，請重試或改用壓縮檔上傳"
+      "dirPackFailed": "目錄打包失敗，請重試或改用壓縮檔上傳",
+      "dirTooManyFiles": "目錄檔案數超出上限（{{count}} > {{max}}），請精簡後重試",
+      "dirFileTooLarge": "檔案「{{name}}」超過單檔大小上限（{{max}} MB）",
+      "dirQuotaExceeded": "目錄總大小 {{size}} 超出剩餘專案空間（{{quota}}）"
     },
     "permissions": {
       "title": "專案權限",
@@ -1240,6 +1244,8 @@
       "updateFailed": "修改角色失敗",
       "removed": "已移除協作者",
       "removeFailed": "移除協作者失敗",
+      "removeConfirmTitle": "確認移除協作者",
+      "removeConfirmDesc": "確定移除「{{name}}」對此專案的存取權限嗎？",
       "transferTitle": "轉交專案擁有者",
       "transferPlaceholder": "輸入接收者使用者名稱",
       "transfer": "轉交",

@@ -38,7 +38,8 @@
     "role": {
       "owner": "所有者",
       "editor": "可编辑",
-      "viewer": "只读"
+      "viewer": "只读",
+      "admin": "管理员"
     }
   },
   "pages": {
@@ -1224,7 +1225,10 @@
       "uploadFailed": "上传失败",
       "dirReadFailed": "读取目录失败",
       "dirReadFailedHint": "读取所选目录失败，可尝试压缩为 zip 后上传",
-      "dirPackFailed": "目录打包失败，请重试或改用压缩包上传"
+      "dirPackFailed": "目录打包失败，请重试或改用压缩包上传",
+      "dirTooManyFiles": "目录文件数超出上限（{{count}} > {{max}}），请精简后重试",
+      "dirFileTooLarge": "文件「{{name}}」超过单文件大小上限（{{max}} MB）",
+      "dirQuotaExceeded": "目录总大小 {{size}} 超出剩余项目空间（{{quota}}）"
     },
     "permissions": {
       "title": "项目权限",
@@ -1240,6 +1244,8 @@
       "updateFailed": "修改角色失败",
       "removed": "已移除协作者",
       "removeFailed": "移除协作者失败",
+      "removeConfirmTitle": "确认移除协作者",
+      "removeConfirmDesc": "确定移除「{{name}}」对此项目的访问权限吗？",
       "transferTitle": "转交项目所有者",
       "transferPlaceholder": "输入接收者用户名",
       "transfer": "转交",
