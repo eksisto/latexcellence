@@ -400,7 +400,7 @@ ExtractorRegistry 先处理已知公开端点（当前代码托管页面使用 G
 
 ### 多用户模式基础设施（`backend/core/multiuser/` + `backend/core/access_control.py` + `backend/modules/auth/` + `backend/manage.py`）
 
-多用户模式（`multi_user.enabled=true`）的后端基础设施，按阶段（见 [docs/multi-user-plan.md](multi-user-plan.md)）实施。P1 已完成：SQLite 初始化、注册/审批/登录/会话/Cookie/CSRF、管理员引导与 CLI；P2 已完成：用户空间目录、统一路径解析、项目访问控制、workspace 绑定与现有端点收紧；P3 已完成：上传/解压管线、项目命名、配额记账、回收站与下载；P4 已完成：协作者管理、转交、viewer 写保护与共享项目撤销禁用；P5 已完成：前端登录/注册/工作台/上传/权限/管理面板全套；P6 已完成：migrate-legacy 存量迁移、会话类资源按用户归属校验与存量路径改造。
+多用户模式（`multi_user.enabled=true`）的后端基础设施，按阶段（见 [docs/multi-user-plan.md](multi-user-plan.md)）实施。P1 已完成：SQLite 初始化、注册/审批/登录/会话/Cookie/CSRF、管理员引导与 CLI；P2 已完成：用户空间目录、统一路径解析、项目访问控制、workspace 绑定与现有端点收紧；P3 已完成：上传/解压管线、项目命名、配额记账、回收站与下载；P4 已完成：协作者管理、转交、viewer 写保护与共享项目撤销禁用；P5 已完成：前端登录/注册/工作台/上传/权限/管理面板全套；P6 已完成：migrate-legacy 存量迁移、会话类资源按用户归属校验与存量路径改造；P7 已完成：部署指南（HTTPS、风险声明，见 [deployment.md](deployment.md)）与全量文档同步。
 
 **包结构**：
 

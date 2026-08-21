@@ -21,6 +21,8 @@
 | [adr/0001-web-access-evaluation.md](./adr/0001-web-access-evaluation.md) | 网络访问阶段 0 的离线评测工具与依赖边界决策 |
 | [adr/0002-web-access-stage0-dependencies.md](./adr/0002-web-access-stage0-dependencies.md) | 网络访问阶段 0 的浏览器、HTML 抽取和 PDF 解析依赖验证决策 |
 | [windows-temp-permissions.md](./windows-temp-permissions.md) | Windows 下 Codex 沙箱临时目录权限问题排查：pytest 会话级 basetemp、ACL 清理与预防 |
+| [multi-user-plan.md](./multi-user-plan.md) | 多用户模式设计方案（双模式/认证/用户空间/配额/权限协作/管理后台/迁移） |
+| [deployment.md](./deployment.md) | 部署指南（单用户/多用户部署、HTTPS 反向代理、安全风险声明、备份与运维） |
 
 ---
 
@@ -264,7 +266,7 @@ python -m backend.manage set-status <username> pending|active|disabled
 - 会话类资源（写作会话 / style_modify 会话 / 模板 / 绘图）按用户隔离：`userspace.user_resource_root(subdir, legacy_root)` 统一解析入口——多用户模式按请求级当前用户返回 `<users_root>/<user_id>/<子目录>/`，单用户模式回退存量全局路径（行为不变）。当前用户由路由依赖 `current_user_context` 注入（writing-chat / style-modify / template-gen / plot-gen 四个路由挂载）；后台清理任务经 `userspace.iterate_user_resource_roots()` 枚举全部用户资源目录。
 - 存量数据迁移：`python -m backend.manage migrate-legacy [--dry-run]` 把存量全局目录（`data/writing_chat_sessions/`、`data/style_modify_sessions/`、`data/templates/`、`data/plots/`、`data/formats/`、`data/prompts/`）幂等复制到管理员用户空间对应子目录；目标文件已存在则跳过（不覆盖迁移后新数据）；复制后逐文件校验并输出报告。核心逻辑在 `backend/core/multiuser/migrate.py`。
 
-基础设施、认证与项目实现的详细说明见 [docs/backend-core.md](backend-core.md)，完整设计见 [docs/multi-user-plan.md](multi-user-plan.md)。
+基础设施、认证与项目实现的详细说明见 [docs/backend-core.md](backend-core.md)，完整设计见 [docs/multi-user-plan.md](multi-user-plan.md)，服务器部署指南（HTTPS、风险声明、备份与运维）见 [docs/deployment.md](deployment.md)。
 
 > 运维提示：登录限流按"用户名 + 客户端 IP"计数；若部署在反向代理（nginx 等）之后，`request.client.host` 恒为代理 IP，"每 IP"维度会退化，需按部署接入受信代理 / 真实 IP 传递后才会生效。
 
