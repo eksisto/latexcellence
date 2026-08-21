@@ -37,6 +37,12 @@ async def list_projects(user: dict = Depends(get_current_user)):
     return await service.list_projects(user)
 
 
+@router.get("/recycle-bin")
+async def list_recycle_bin(user: dict = Depends(get_current_user)):
+    """回收站列表（当前用户已删除项目），供工作台回收站入口使用。"""
+    return await service.list_recycle_bin(user["id"])
+
+
 @router.post("", status_code=201)
 async def upload_project(
     archive: UploadFile = File(..., description="zip / 7z 压缩包"),

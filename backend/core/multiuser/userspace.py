@@ -53,6 +53,11 @@ def _validate_id_component(kind: str, value: str) -> str:
     return value
 
 
+def get_archive_root() -> Path:
+    """返回用户删除时的衍生数据归档根目录（<users_root 的父目录>/archive）。"""
+    return get_users_root().parent / "archive"
+
+
 def user_root(user_id: str) -> Path:
     """返回指定用户的根目录。"""
     return get_users_root() / _validate_id_component("user_id", user_id)

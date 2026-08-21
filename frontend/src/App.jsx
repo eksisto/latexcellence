@@ -1,4 +1,4 @@
-import { lazy, Suspense, memo, useCallback } from "react";
+import { lazy, Suspense, memo, useCallback, useEffect } from "react";
 import {
   BrowserRouter,
   Routes,
@@ -18,10 +18,17 @@ import { Toaster } from "@/components/ui/sonner";
 import Loader2 from "lucide-react/dist/esm/icons/loader-circle.mjs";
 import Settings from "lucide-react/dist/esm/icons/settings.mjs";
 import SquareKanban from "lucide-react/dist/esm/icons/square-kanban.mjs";
+import LogOut from "lucide-react/dist/esm/icons/log-out.mjs";
+import LogIn from "lucide-react/dist/esm/icons/log-in.mjs";
+import ShieldCheck from "lucide-react/dist/esm/icons/shield-check.mjs";
+import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import ThemeToggle from "@/components/ThemeToggle";
 import ThemeSwitcher from "@/components/ThemeSwitcher";
 import useFavicon from "./hooks/useFavicon";
+import useAuthBootstrap, { logoutUser } from "./hooks/useAuth";
+import useStore from "./store/useStore";
+import { isMultiUser, setUnauthorizedHandler } from "./api/connection";
 
 const WelcomePage = lazy(() => import("./pages/WelcomePage"));
 const WorkspacePage = lazy(() => import("./pages/WorkspacePage"));
@@ -41,6 +48,11 @@ const ParagraphTranslatePage = lazy(
 const WritingChatPage = lazy(() => import("./pages/WritingChatPage"));
 const BibManagerPage = lazy(() => import("./pages/BibManagerPage"));
 const PlotGenPage = lazy(() => import("./pages/PlotGenPage"));
+const LoginPage = lazy(() => import("./pages/LoginPage"));
+const RegisterPage = lazy(() => import("./pages/RegisterPage"));
+const PendingApprovalPage = lazy(() => import("./pages/PendingApprovalPage"));
+const ProjectWorkbenchPage = lazy(() => import("./pages/ProjectWorkbenchPage"));
+const AdminPage = lazy(() => import("./pages/AdminPage"));
 const SettingsDialog = lazy(() => import("@/components/SettingsDialog"));
 
 const bgSvg = (
@@ -84,13 +96,66 @@ const bgSvg = (
   </svg>
 );
 
-/** 欢迎页/工作区页外的「打开工作区」快捷入口。独立成组件，让 useLocation 订阅只影响它自身。 */
+function FullscreenLoader() {
+  return (
+    <div className="flex min-h-screen items-center justify-center">
+      <Loader2 className="size-6 animate-spin text-muted-foreground" />
+    </div>
+  );
+}
+
+/** 认证状态门控（P5）：单用户直接放行；多用户按 authStatus 判定 */
+function RequireAuth({ children }) {
+  const authStatus = useStore((s) => s.authStatus);
+  if (authStatus === "loading") return <FullscreenLoader />;
+  if (authStatus === "single") return children;
+  if (authStatus === "unauthenticated") return <Navigate to="/login" replace />;
+  if (authStatus === "pending") return <Navigate to="/waiting" replace />;
+  return children;
+}
+
+/** 认证页（登录/注册）：已登录 / 待审批时跳转工作台；单用户模式无需认证页 */
+function LoginRegisterGuard({ children }) {
+  const authStatus = useStore((s) => s.authStatus);
+  if (authStatus === "loading") return <FullscreenLoader />;
+  if (authStatus === "single") return <Navigate to="/" replace />;
+  if (authStatus === "authenticated" || authStatus === "pending") {
+    return <Navigate to="/projects" replace />;
+  }
+  return children;
+}
+
+/** 待审批页：pending 用户可见，其余重定向 */
+function WaitingGuard({ children }) {
+  const authStatus = useStore((s) => s.authStatus);
+  if (authStatus === "loading") return <FullscreenLoader />;
+  if (authStatus === "single") return <Navigate to="/" replace />;
+  if (authStatus === "authenticated")
+    return <Navigate to="/projects" replace />;
+  if (authStatus === "unauthenticated") return <Navigate to="/login" replace />;
+  return children;
+}
+
+/** 管理面板：仅 admin（多用户模式） */
+function RequireAdmin({ children }) {
+  const authStatus = useStore((s) => s.authStatus);
+  const authUser = useStore((s) => s.authUser);
+  if (authStatus === "loading") return <FullscreenLoader />;
+  if (authStatus === "single") return <Navigate to="/" replace />;
+  if (authStatus === "unauthenticated") return <Navigate to="/login" replace />;
+  if (authStatus === "pending") return <Navigate to="/waiting" replace />;
+  if (authUser?.role !== "admin") return <Navigate to="/projects" replace />;
+  return children;
+}
+
+/** 欢迎页/工作区页外的「打开工作区」快捷入口（多用户模式下隐藏，改用项目工作台）。 */
 const WorkspaceShortcut = memo(function WorkspaceShortcut() {
   const navigate = useNavigate();
   const { pathname } = useLocation();
   const { t } = useTranslation("components");
   const handleNavigate = useCallback(() => navigate("/workspace"), [navigate]);
 
+  if (isMultiUser()) return null;
   if (pathname === "/" || pathname === "/workspace") return null;
 
   return (
@@ -106,34 +171,91 @@ const WorkspaceShortcut = memo(function WorkspaceShortcut() {
   );
 });
 
+/** 多用户模式工具栏：登录/登出 + 用户名 + admin 入口 */
+const AuthToolbar = memo(function AuthToolbar() {
+  const authStatus = useStore((s) => s.authStatus);
+  const authUser = useStore((s) => s.authUser);
+  const { t } = useTranslation("components");
+  const navigate = useNavigate();
+
+  if (authStatus === "single") return null;
+  if (authStatus !== "authenticated") {
+    if (authStatus === "unauthenticated") {
+      return (
+        <Button variant="ghost" size="sm" onClick={() => navigate("/login")}>
+          <LogIn /> {t("auth.login")}
+        </Button>
+      );
+    }
+    return null;
+  }
+  return (
+    <>
+      {authUser?.role === "admin" && (
+        <Button
+          variant="ghost"
+          size="sm"
+          nativeButton={false}
+          render={<Link to="/admin" />}
+        >
+          <ShieldCheck /> {t("auth.admin")}
+        </Button>
+      )}
+      <Button
+        variant="ghost"
+        size="sm"
+        onClick={async () => {
+          await logoutUser();
+          navigate("/login", { replace: true });
+        }}
+      >
+        <LogOut /> {authUser?.username || ""}
+      </Button>
+    </>
+  );
+});
+
 const AppToolbar = memo(function AppToolbar() {
+  const authStatus = useStore((s) => s.authStatus);
+  const authUser = useStore((s) => s.authUser);
   return (
     <div className="fixed top-4 right-4 z-50 flex items-center gap-1">
       {/* 欢迎页已有「打开工作区」主按钮、工作区页本身就在工作区，右上角不再显示工作区快捷入口 */}
       <WorkspaceShortcut />
+      <AuthToolbar />
       <ThemeSwitcher />
       <ThemeToggle />
-      <Suspense
-        fallback={
-          <Button
-            variant="ghost"
-            size="icon"
-            disabled
-            aria-hidden="true"
-            tabIndex={-1}
-          >
-            <Settings className="size-5" />
-          </Button>
-        }
-      >
-        <SettingsDialog />
-      </Suspense>
+      {/* 设置（后端配置）：单用户模式对所有用户可见；多用户模式仅管理员（配置接口仅管理员可访问） */}
+      {authStatus === "single" ||
+      (authStatus === "authenticated" && authUser?.role === "admin") ? (
+        <Suspense
+          fallback={
+            <Button
+              variant="ghost"
+              size="icon"
+              disabled
+              aria-hidden="true"
+              tabIndex={-1}
+            >
+              <Settings className="size-5" />
+            </Button>
+          }
+        >
+          <SettingsDialog />
+        </Suspense>
+      ) : null}
     </div>
   );
 });
 
 export default function App() {
   useFavicon();
+  useAuthBootstrap();
+
+  useEffect(() => {
+    // 401（会话过期/未登录）→ 清空认证与项目状态，路由守卫自动跳转登录页
+    setUnauthorizedHandler(() => useStore.getState().handleUnauthorized);
+  }, []);
 
   return (
     <TooltipProvider>
@@ -149,28 +271,177 @@ export default function App() {
           }
         >
           <Routes>
-            <Route path="/" element={<WelcomePage />} />
-            <Route path="/workspace" element={<WorkspacePage />} />
-            <Route path="/formula-ocr" element={<FormulaOCRPage />} />
-            <Route path="/table-ocr" element={<TableOCRPage />} />
-            <Route path="/style-modify" element={<StyleModifyPage />} />
-            <Route path="/template-gen" element={<TemplateGenPage />} />
-            <Route path="/typo-check" element={<TypoCheckPage />} />
-            <Route path="/expression-opt" element={<ExpressionOptPage />} />
+            {/* 认证页（多用户模式） */}
+            <Route
+              path="/login"
+              element={
+                <LoginRegisterGuard>
+                  <LoginPage />
+                </LoginRegisterGuard>
+              }
+            />
+            <Route
+              path="/register"
+              element={
+                <LoginRegisterGuard>
+                  <RegisterPage />
+                </LoginRegisterGuard>
+              }
+            />
+            <Route
+              path="/waiting"
+              element={
+                <WaitingGuard>
+                  <PendingApprovalPage />
+                </WaitingGuard>
+              }
+            />
+            <Route
+              path="/admin"
+              element={
+                <RequireAdmin>
+                  <AdminPage />
+                </RequireAdmin>
+              }
+            />
+            <Route
+              path="/projects"
+              element={
+                <RequireAuth>
+                  <ProjectWorkbenchPage />
+                </RequireAuth>
+              }
+            />
+
+            {/* 业务页面（多用户模式下需登录） */}
+            <Route
+              path="/"
+              element={
+                <RequireAuth>
+                  <WelcomePage />
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="/workspace"
+              element={
+                <RequireAuth>
+                  <WorkspacePage />
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="/formula-ocr"
+              element={
+                <RequireAuth>
+                  <FormulaOCRPage />
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="/table-ocr"
+              element={
+                <RequireAuth>
+                  <TableOCRPage />
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="/style-modify"
+              element={
+                <RequireAuth>
+                  <StyleModifyPage />
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="/template-gen"
+              element={
+                <RequireAuth>
+                  <TemplateGenPage />
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="/typo-check"
+              element={
+                <RequireAuth>
+                  <TypoCheckPage />
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="/expression-opt"
+              element={
+                <RequireAuth>
+                  <ExpressionOptPage />
+                </RequireAuth>
+              }
+            />
             <Route
               path="/paragraph-translate"
-              element={<ParagraphTranslatePage />}
+              element={
+                <RequireAuth>
+                  <ParagraphTranslatePage />
+                </RequireAuth>
+              }
             />
-            <Route path="/code-review" element={<CodeReviewPage />} />
-            <Route path="/format-convert" element={<FormatConvertPage />} />
-            <Route path="/git-diff" element={<GitDiffPage />} />
+            <Route
+              path="/code-review"
+              element={
+                <RequireAuth>
+                  <CodeReviewPage />
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="/format-convert"
+              element={
+                <RequireAuth>
+                  <FormatConvertPage />
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="/git-diff"
+              element={
+                <RequireAuth>
+                  <GitDiffPage />
+                </RequireAuth>
+              }
+            />
             <Route
               path="/terminology-check"
-              element={<TerminologyCheckPage />}
+              element={
+                <RequireAuth>
+                  <TerminologyCheckPage />
+                </RequireAuth>
+              }
             />
-            <Route path="/writing-chat" element={<WritingChatPage />} />
-            <Route path="/bib-manager" element={<BibManagerPage />} />
-            <Route path="/plot-gen" element={<PlotGenPage />} />
+            <Route
+              path="/writing-chat"
+              element={
+                <RequireAuth>
+                  <WritingChatPage />
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="/bib-manager"
+              element={
+                <RequireAuth>
+                  <BibManagerPage />
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="/plot-gen"
+              element={
+                <RequireAuth>
+                  <PlotGenPage />
+                </RequireAuth>
+              }
+            />
           </Routes>
         </Suspense>
       </BrowserRouter>

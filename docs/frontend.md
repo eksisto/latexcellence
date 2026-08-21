@@ -221,3 +221,49 @@ highlight.js 的按需注册与统一入口：
 亮/暗模式：读取 localStorage → 回退到系统偏好 → `document.startViewTransition()` → 切换 `<html>` 的 `.dark` class。`:root` 层面过渡 CSS 自定义属性，避免逐元素过渡的性能问题。
 
 配色主题：`theme/` 目录 CSS 文件自动发现 → Zustand store 持久化 `currentTheme` → `data-theme` 属性 → CSS 选择器生效。与亮暗模式完全独立。
+
+## 多用户模式前端（P5）
+
+> 详细设计见 [multi-user-plan.md](multi-user-plan.md)。
+
+多用户模式（`/api/config/status` 返回 `multi_user: true` 时）下，前端切换为"登录 + 项目工作台"形态；单用户模式保持原有行为（本地目录 + 共享令牌 + 可配置 API 基地址）。
+
+### 请求层与认证（connection.js / api/index.js）
+
+- `multi_user.enabled` 由 `useAuthBootstrap`（`hooks/useAuth.js`）启动时探测：优先同源 `/api/config/status`，失败回退按配置 API 基地址探测；
+- 多用户模式下 `getApiBase()` 固定返回同源 `/api`（生产由 FastAPI 挂载 static/ 同源提供，dev 走 Vite `/api` 代理），`getApiToken()` 返回空串，`authHeaders()` 附加双提交 CSRF 头 `X-Latexcellence-CSRF`（值取自可读 Cookie `latexcellence_csrf`），`appendToken()` 不再追加 `?token=`（SSE 同源自动携带 Cookie）；
+- `api/index.js` 新增 `auth`（register/login/logout/me）、`admin`（list/approve/reject/disable/enable/reset-password/quota/delete）、`projects`（list/recycle-bin/upload/rename/remove/restore/permanentDelete/download/permissions/transfer）分组；`project.openById` 供按 `project_id` 打开；
+- 请求层 401 → `notifyUnauthorized()` → store `handleUnauthorized()` 清空认证与项目状态，路由守卫自动跳转登录页；
+- `translateError()` 支持结构化错误 `{ error, message }`，并收录全部多用户错误码（unauthorized/no_permission/quota_exceeded/invalid_csrf 等）。
+
+### 状态（useStore.js auth 切片）
+
+- `authStatus`（loading/single/authenticated/pending/unauthenticated）、`authUser`、`quota`、`usage`（来自 `/api/auth/me`）；
+- `projectId` / `projectRole`（owner/editor/viewer）持久化，刷新后按 `project_id` 恢复项目；
+- `clearAuth` / `handleUnauthorized` / `logoutUser`（吊销会话 + 清空项目）。
+
+### 路由守卫（App.jsx）
+
+- `/login`、`/register`、`/waiting`：认证页守卫（已登录 → `/projects`）；
+- `/projects`（项目工作台）、`/admin`（仅 admin）及所有业务页面：`RequireAuth`（未登录 → `/login`）；
+- 单用户模式 `authStatus === "single"` 全部放行，行为不变；
+- 工具栏：多用户模式显示登录/登出/用户名/管理入口；设置按钮仅 admin 可见（配置接口仅管理员可访问）；`ConnectionPanel` 在多用户模式下被注释说明替代。
+
+### 页面
+
+| 页面 | 功能 |
+| --- | --- |
+| `pages/LoginPage.jsx` | 用户名/密码/记住我，登录成功后经 `/api/auth/me` 恢复并跳转工作台 |
+| `pages/RegisterPage.jsx` | 注册（用户名/密码/确认/邮箱），提交成功展示"待审批"提交态 |
+| `pages/PendingApprovalPage.jsx` | 待管理员批准占位页 |
+| `pages/ProjectWorkbenchPage.jsx` | 项目列表（我的/共享给我，含 owner 与 role）、配额用量条、上传、回收站、打开/下载/重命名/权限/删除；owner 专属操作 |
+| `pages/AdminPage.jsx` | 用户列表（待审批筛选）、批准/拒绝/禁用/启用、重置密码（一次性临时密码）、配额调整、删除用户 |
+
+配套组件：`components/AuthShell.jsx`（认证页外壳）、`components/UploadProjectDialog.jsx`（zip/7z 文件或 `webkitdirectory` 目录 → JSZip 客户端打包 → XHR 进度上传）、`components/ProjectPermissionsDialog.jsx`（按用户名添加协作者、改角色、移除、转交 owner）。
+
+### viewer 写保护（前端）
+
+- 工作区：viewer 隐藏撤销/重做按钮、禁用主文件切换；
+- 逐段检查：`useParagraphCheck` 暴露 `canWrite`，viewer 的 `handleApplyChange` / `handleApplyAll` 直接拒绝并提示；
+- 写作助手：`useWritingChat.applyEdit` 对 viewer 拒绝；
+- 后端 403 `no_permission` 始终兜底。

@@ -29,6 +29,35 @@ const EXACT_MAP = {
   "Access token required or invalid": "accessTokenRequired",
   "Origin not allowed by CORS policy": "originNotAllowed",
 
+  // 多用户模式（P1–P5）错误码（后端 detail.error）
+  unauthorized: "unauthorized",
+  no_permission: "noPermission",
+  invalid_csrf: "invalidCsrf",
+  quota_exceeded: "quotaExceeded",
+  upload_too_large: "uploadTooLarge",
+  invalid_archive: "invalidArchive",
+  archive_unsafe: "archiveUnsafe",
+  account_pending: "accountPending",
+  account_disabled: "accountDisabled",
+  registration_disabled: "registrationDisabled",
+  invalid_username: "invalidUsername",
+  invalid_password: "invalidPassword",
+  username_taken: "usernameTaken",
+  rate_limited: "rateLimited",
+  not_found: "notFound",
+  invalid_request: "invalidRequest",
+  path_disabled: "pathDisabled",
+  invalid_workspace: "invalidWorkspace",
+  invalid_state: "invalidState",
+  user_not_found: "userNotFound",
+  invalid_user: "invalidUser",
+  invalid_role: "invalidRole",
+  name_conflict: "nameConflict",
+  invalid_name: "invalidName",
+  download_failed: "downloadFailed",
+  transfer_failed: "transferFailed",
+  invalid_quota: "invalidQuota",
+
   // 项目管理
   "No project opened": "noProjectOpened",
 
@@ -423,12 +452,25 @@ const PATTERN_MAP = [
 ];
 
 /**
- * 将后端英文错误消息翻译为当前语言
- * @param {string} msg 原始错误消息
+ * 将后端错误消息翻译为当前语言
+ * @param {string|object} msg 原始错误消息（或结构化 detail：{ error, message, ... }）
  * @returns {string} 翻译后的错误消息（无法匹配时原样返回）
  */
 export function translateError(msg) {
   if (!msg) return i18n.t("errors:unknown");
+
+  // 结构化后端错误：detail = { error: code, message: text }
+  // 优先按错误码精确翻译（如 file_conflict / no_permission），
+  // 错误码未收录时回落到 message 文本（可能为英文，走精确/模式匹配）。
+  if (msg && typeof msg === "object") {
+    const code = msg.error;
+    const message = msg.message || "";
+    if (code && typeof code === "string") {
+      const translated = translateError(code);
+      if (translated !== code) return translated;
+    }
+    return translateError(message);
+  }
 
   // 1. 精确匹配
   if (msg in EXACT_MAP) {

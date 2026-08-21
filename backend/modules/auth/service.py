@@ -156,3 +156,15 @@ async def admin_set_quota(
     except ValueError as e:
         raise _http(400, "invalid_quota", str(e))
     return {"user": user}
+
+
+async def admin_delete_user(user_id: str, acting_user: dict) -> dict:
+    """删除用户：项目转交管理员、衍生数据归档、会话吊销（仅 admin）。"""
+    if await asyncio.to_thread(auth_core.get_user_by_id, user_id) is None:
+        raise _not_found()
+    try:
+        return await asyncio.to_thread(
+            auth_core.delete_user, user_id, acting_user["id"]
+        )
+    except ValueError as e:
+        raise _http(400, "invalid_user", str(e))

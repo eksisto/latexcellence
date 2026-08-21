@@ -135,6 +135,11 @@ latexcellence/
 │       │   └── locales/             # 翻译 JSON 文件
 │       ├── lib/                     # 通用前端工具
 │       ├── pages/                   # 页面组件
+│       │   ├── LoginPage.jsx        # 多用户登录页
+│       │   ├── RegisterPage.jsx     # 多用户注册页（含待审批提交态）
+│       │   ├── PendingApprovalPage.jsx # 待管理员批准占位页
+│       │   ├── ProjectWorkbenchPage.jsx # 项目工作台（列表/上传/配额/回收站/协作）
+│       │   ├── AdminPage.jsx        # 管理面板（审批/禁用/重置密码/配额/删除）
 │       │   ├── code-review/         # 代码审查子组件
 │       │   └── writing-chat/        # 写作聊天子组件
 │       ├── hooks/                   # 自定义 hook
@@ -142,6 +147,7 @@ latexcellence/
 │       │   ├── useWritingChat.js    # 写作聊天生命周期 hook
 │       │   ├── usePlotGen.js        # 科研绘图 Agent hook
 │       │   ├── useStyleModifyAgent.js # 样式修改项目 Agent hook
+│       │   ├── useAuth.js           # 多用户认证引导（模式探测 → /api/auth/me 恢复会话）
 │       │   ├── useEnabledFeatures.js # 功能开关加载 hook（幂等）
 │       │   ├── useUndoRedo.js        # 撤销/重做状态 hook
 │       │   ├── useResultFilter.js    # 检查结果排序过滤 hook
@@ -150,6 +156,9 @@ latexcellence/
 │       │   ├── writing-chat/        # 写作聊天子 hooks（sessions/assistants/captcha/sse/utils）
 │       │   └── bib-manager/         # 参考文献管理子 hooks（format_analysis/metadata_extraction/bibtex_generation/bib_file_save/latex_generation）
 │       ├── components/              # 共享组件 + ui 基座组件
+│       │   ├── AuthShell.jsx        # 多用户认证页公共外壳
+│       │   ├── UploadProjectDialog.jsx # 上传项目对话框（zip/7z 或目录 JSZip 打包 + 进度）
+│       │   ├── ProjectPermissionsDialog.jsx # 项目权限对话框（协作者管理/转交）
 │       │   └── settings/            # 设置对话框分区配置组件
 │       ├── theme/                   # 主题 CSS + useThemeManager.js
 │       ├── fonts/                   # 字体加载（dev 本地 npm 包 / build 走 cdnjs）
@@ -271,6 +280,7 @@ latexcellence/
 | 多用户认证 | argon2id 密码哈希、HttpOnly 会话 Cookie（库只存 SHA-256）、注册审批流、登录限流、管理员引导（env/CLI） | [backend-core.md](docs/backend-core.md) |
 | 多用户项目与配额 | 上传 zip/7z 安全解压、项目命名去重、项目空间配额记账、回收站（7 天）、打包下载；写回超限回滚 | [backend-core.md](docs/backend-core.md)、[multi-user-plan.md](docs/multi-user-plan.md) |
 | 多用户权限协作 | 协作者管理（按用户名添加/改角色/移除）、项目转交（原 owner 变 viewer 或退出）、viewer 写保护、共享项目撤销禁用；权限实时查库即时生效 | [backend-core.md](docs/backend-core.md)、[multi-user-plan.md](docs/multi-user-plan.md) |
+| 多用户前端 | 登录/注册/待审批页、项目工作台（上传 zip·7z·目录、配额、回收站、权限）、管理面板、路由守卫、auth 切片；多用户模式固定同源 + CSRF 头 + Cookie 会话，SSE 不再追加 token | [frontend.md](docs/frontend.md)、[multi-user-plan.md](docs/multi-user-plan.md) |
 | i18n 多语言 | i18next 简中 / 繁中 / 英语，按 `common` / `pages` / `components` / `hooks` / `errors` 命名空间拆分 | [frontend.md](docs/frontend.md) |
 
 各功能模块的单模块设计（数据流、Pydantic 模型、API、配置）见 [docs/modules.md](docs/modules.md)。

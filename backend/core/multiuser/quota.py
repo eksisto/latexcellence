@@ -252,6 +252,31 @@ def clean_staging() -> int:
     return removed
 
 
+# 用户删除后的衍生数据归档保留天数（方案 §6.3：归档 30 天后清理）
+ARCHIVE_RETENTION_DAYS = 30
+
+
+def clean_expired_archives() -> int:
+    """清理超过 ARCHIVE_RETENTION_DAYS 的用户归档目录（删除用户后的衍生数据）。"""
+    import time
+
+    archive = userspace.get_archive_root()
+    if not archive.is_dir():
+        return 0
+    cutoff = time.time() - ARCHIVE_RETENTION_DAYS * 86400
+    removed = 0
+    for child in archive.iterdir():
+        try:
+            if child.is_dir() and child.stat().st_mtime < cutoff:
+                shutil.rmtree(child, ignore_errors=True)
+                removed += 1
+        except OSError:
+            continue
+    if removed:
+        logger.info("Removed %d expired user archives", removed)
+    return removed
+
+
 # ── 项目行写入（唯一命名 + 配额 + 落库）──────────────────────────
 def next_available_name(owner_id: str, base_name: str, max_tries: int = 100) -> str:
     """为同名冲突生成 `xx (2)`、`xx (3)`…，返回第一个未被使用的活动项目名。"""

@@ -23,6 +23,23 @@ import LoggingSection from "@/components/settings/LoggingSection";
 import LanguageSection from "@/components/settings/LanguageSection";
 import MultiUserSection from "@/components/settings/MultiUserSection";
 import useStore from "@/store/useStore";
+import { isMultiUser } from "@/api/connection";
+
+/** 多用户模式：连接（基地址/令牌）由服务器统一管理，隐藏设置入口 */
+function ConnectionSettingsSlot({ open }) {
+  const { t } = useTranslation("components");
+  if (!isMultiUser()) return <ConnectionPanel open={open} />;
+  return (
+    <div className="rounded-lg border border-border bg-muted/40 p-3">
+      <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+        {t("settings.connection")}
+      </span>
+      <p className="mt-1.5 text-xs text-muted-foreground">
+        {t("settings.multiUserConnectionNote")}
+      </p>
+    </div>
+  );
+}
 
 export default function SettingsDialog() {
   const [open, setOpen] = useState(false);
@@ -125,7 +142,7 @@ export default function SettingsDialog() {
               <p className="text-sm text-muted-foreground">
                 {t("settings.configLoadFailed")}
               </p>
-              <ConnectionPanel open={open} />
+              <ConnectionSettingsSlot open={open} />
             </div>
           ) : (
             <div className="flex items-center justify-center py-12">
@@ -151,8 +168,8 @@ export default function SettingsDialog() {
         </DialogHeader>
 
         <div className="mt-2 min-h-0 flex-1 space-y-4 overflow-y-auto pr-1 -mr-1">
-          {/* 后端连接 */}
-          <ConnectionPanel open={open} />
+          {/* 后端连接（多用户模式隐藏编辑入口） */}
+          <ConnectionSettingsSlot open={open} />
 
           {/* 后端配置：标签 + 分隔线 */}
           <div className="flex items-center gap-3 pl-3">

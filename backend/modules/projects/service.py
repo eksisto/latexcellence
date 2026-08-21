@@ -69,6 +69,16 @@ async def list_projects(user: dict) -> dict:
     return {"projects": projects}
 
 
+async def list_recycle_bin(user_id: str) -> dict:
+    """回收站列表：当前用户已删除（回收站）的项目，按删除时间倒序。"""
+    rows = db_query_all(
+        "SELECT * FROM projects WHERE owner_id = ? AND status = 'deleted' "
+        "ORDER BY deleted_at DESC, id",
+        (user_id,),
+    )
+    return {"projects": [_project_row_view(r) for r in rows]}
+
+
 async def upload_create_project(
     user: dict, archive: UploadFile, requested_name: str | None = None
 ) -> dict:

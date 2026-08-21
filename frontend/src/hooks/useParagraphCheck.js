@@ -1,6 +1,7 @@
 import { useState, useCallback, useMemo, useEffect, useRef } from "react";
 import { toast } from "sonner";
 import { api } from "@/api/index";
+import { isMultiUser } from "@/api/connection";
 import useStore from "@/store/useStore";
 import { translateError } from "@/utils/errorMessages";
 import i18n from "@/i18n";
@@ -82,6 +83,7 @@ export default function useParagraphCheck({
 }) {
   const fileTree = useStore((s) => s.fileTree);
   const projectPath = useStore((s) => s.projectPath);
+  const projectRole = useStore((s) => s.projectRole);
   const activeFile = useStore((s) => s.activeFile);
   const workspaceId = useStore((s) => s.workspaceId);
   const setActiveFile = useStore((s) => s.setActiveFile);
@@ -105,6 +107,8 @@ export default function useParagraphCheck({
   const [applyingAll, setApplyingAll] = useState(false);
   const [resolveInput, setResolveInput] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
+  // 多用户模式写权限：viewer 只读，写操作（应用更改/全部应用）直接拒绝
+  const canWrite = !isMultiUser() || projectRole !== "viewer";
   const restoredRef = useRef(false);
   const eventSourceRef = useRef(null);
   const resultsWithChangesRef = useRef(0);
@@ -435,6 +439,10 @@ export default function useParagraphCheck({
 
   const handleApplyChange = useCallback(
     async (idx, newText, filePath) => {
+      if (!canWrite) {
+        toast.error(i18n.t("errors:noPermission"));
+        return;
+      }
       try {
         const targetFile = filePath || activeFile;
         const result = await apiModule.apply(
@@ -516,6 +524,10 @@ export default function useParagraphCheck({
 
   const handleApplyAll = useCallback(
     async (onConfirm) => {
+      if (!canWrite) {
+        toast.error(i18n.t("errors:noPermission"));
+        return;
+      }
       if (typeof onConfirm === "function") {
         const approved = await onConfirm();
         if (!approved) return;
@@ -668,6 +680,7 @@ export default function useParagraphCheck({
     setResolveInput,
     activeFiles,
     operationId: operationIdRef,
+    canWrite,
     handlePreview,
     handleCheck,
     handlePauseResume,

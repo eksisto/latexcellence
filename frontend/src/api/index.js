@@ -20,12 +20,24 @@ import {
   checkConnection,
   getApiBase,
   getApiToken,
+  notifyUnauthorized,
   resolveUrl,
   setApiConnection,
 } from "./connection";
 
 // 兼容导出：连接相关能力统一实现在 ./connection，外部仍可经 "@/api" 引入
-export { getApiBase, getApiToken, resolveUrl, setApiConnection };
+export {
+  getApiBase,
+  getApiToken,
+  resolveUrl,
+  setApiConnection,
+  isMultiUser as getMultiUserMode,
+} from "./connection";
+
+/** 401 响应：通知全局（会话过期 → 登出并跳转登录页） */
+function checkUnauthorized(res) {
+  if (res && res.status === 401) notifyUnauthorized();
+}
 
 /**
  * 通用 FormData 请求函数（用于文件上传场景）
@@ -46,6 +58,7 @@ async function requestForm(url, formData, method = "POST") {
     throw new Error(translateError(e.message || "Request timed out"));
   }
   if (!res.ok) {
+    checkUnauthorized(res);
     const err = await res.json().catch(() => ({ detail: res.statusText }));
     throw new Error(translateError(err.detail || `HTTP ${res.status}`));
   }
@@ -106,6 +119,7 @@ async function consumeSse(res, onEvent, onError) {
 export async function fetchBlobUrl(url) {
   const res = await fetch(url, { headers: authHeaders() });
   if (!res.ok) {
+    checkUnauthorized(res);
     const err = await res.json().catch(() => ({ detail: res.statusText }));
     throw new Error(translateError(err.detail || `HTTP ${res.status}`));
   }
@@ -115,6 +129,7 @@ export async function fetchBlobUrl(url) {
 export async function downloadBlob(url, fallbackName) {
   const res = await fetch(url, { headers: authHeaders() });
   if (!res.ok) {
+    checkUnauthorized(res);
     const err = await res.json().catch(() => ({ detail: res.statusText }));
     throw new Error(translateError(err.detail || `HTTP ${res.status}`));
   }
@@ -155,6 +170,7 @@ async function request(url, options = {}) {
     throw new Error(translateError(e.message || "Request timed out"));
   }
   if (!res.ok) {
+    checkUnauthorized(res);
     const err = await res.json().catch(() => ({ detail: res.statusText }));
     throw new Error(translateError(err.detail || `HTTP ${res.status}`));
   }
@@ -184,6 +200,12 @@ export const api = {
       request(appendWs("/project/open", workspaceId), {
         method: "POST",
         body: JSON.stringify({ path }),
+      }),
+    /** 多用户模式：按 project_id 打开项目（拒绝任意路径） */
+    openById: (projectId, workspaceId) =>
+      request(appendWs("/project/open", workspaceId), {
+        method: "POST",
+        body: JSON.stringify({ project_id: projectId }),
       }),
     browse: (path = "") =>
       request(`/project/browse?path=${encodeURIComponent(path)}`),
@@ -347,6 +369,7 @@ export const api = {
           signal,
         });
         if (!res.ok) {
+          checkUnauthorized(res);
           const err = await res
             .json()
             .catch(() => ({ detail: res.statusText }));
@@ -376,6 +399,7 @@ export const api = {
           },
         );
         if (!res.ok) {
+          checkUnauthorized(res);
           const err = await res
             .json()
             .catch(() => ({ detail: res.statusText }));
@@ -449,6 +473,7 @@ export const api = {
         }),
       });
       if (!res.ok) {
+        checkUnauthorized(res);
         const err = await res.json().catch(() => ({ detail: res.statusText }));
         throw new Error(translateError(err.detail || `HTTP ${res.status}`));
       }
@@ -771,6 +796,7 @@ export const api = {
         signal,
       });
       if (!res.ok) {
+        checkUnauthorized(res);
         const err = await res.json().catch(() => ({ detail: res.statusText }));
         throw new Error(translateError(err.detail || `HTTP ${res.status}`));
       }
@@ -790,6 +816,7 @@ export const api = {
         },
       );
       if (!res.ok) {
+        checkUnauthorized(res);
         const err = await res.json().catch(() => ({ detail: res.statusText }));
         throw new Error(translateError(err.detail || `HTTP ${res.status}`));
       }
@@ -852,6 +879,7 @@ export const api = {
         throw new Error(translateError(e.message || "Request timed out"));
       }
       if (!res.ok) {
+        checkUnauthorized(res);
         const err = await res.json().catch(() => ({ detail: res.statusText }));
         throw new Error(translateError(err.detail || `HTTP ${res.status}`));
       }
@@ -937,6 +965,160 @@ export const api = {
         body: JSON.stringify({
           pending_id: pendingId,
         }),
+      }),
+  },
+
+  /* ---- 多用户认证（/api/auth） ---- */
+  auth: {
+    register: (data) =>
+      request("/auth/register", {
+        method: "POST",
+        body: JSON.stringify(data),
+      }),
+    login: (data) =>
+      request("/auth/login", {
+        method: "POST",
+        body: JSON.stringify({
+          username: data.username,
+          password: data.password,
+          remember: !!data.remember,
+        }),
+      }),
+    logout: () =>
+      request("/auth/logout", {
+        method: "POST",
+      }),
+    me: () => request("/auth/me"),
+  },
+
+  /* ---- 多用户管理后台（/api/admin，仅 admin） ---- */
+  admin: {
+    listUsers: () => request("/admin/users"),
+    approve: (userId) =>
+      request(`/admin/users/${encodeURIComponent(userId)}/approve`, {
+        method: "POST",
+      }),
+    reject: (userId) =>
+      request(`/admin/users/${encodeURIComponent(userId)}/reject`, {
+        method: "POST",
+      }),
+    disable: (userId) =>
+      request(`/admin/users/${encodeURIComponent(userId)}/disable`, {
+        method: "POST",
+      }),
+    enable: (userId) =>
+      request(`/admin/users/${encodeURIComponent(userId)}/enable`, {
+        method: "POST",
+      }),
+    resetPassword: (userId) =>
+      request(`/admin/users/${encodeURIComponent(userId)}/reset-password`, {
+        method: "POST",
+      }),
+    setQuota: (userId, data) =>
+      request(`/admin/users/${encodeURIComponent(userId)}/quota`, {
+        method: "PUT",
+        body: JSON.stringify({
+          project_quota_bytes: data.projectQuotaBytes,
+          derived_quota_bytes: data.derivedQuotaBytes,
+        }),
+      }),
+    deleteUser: (userId) =>
+      request(`/admin/users/${encodeURIComponent(userId)}`, {
+        method: "DELETE",
+      }),
+  },
+
+  /* ---- 多用户项目（/api/projects） ---- */
+  projects: {
+    list: () => request("/projects"),
+    recycleBin: () => request("/projects/recycle-bin"),
+    /** 上传压缩包创建项目（zip/7z，FormData；name 可选） */
+    upload: (file, name, onProgress) => {
+      const formData = new FormData();
+      formData.append("archive", file);
+      if (name) formData.append("name", name);
+      return new Promise((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhr.open("POST", `${getApiBase()}/projects`);
+        const headers = authHeaders();
+        Object.entries(headers).forEach(([k, v]) => xhr.setRequestHeader(k, v));
+        xhr.upload.onprogress = (e) => {
+          if (onProgress && e.lengthComputable) {
+            onProgress(Math.round((e.loaded / e.total) * 100));
+          }
+        };
+        xhr.onload = () => {
+          const parse = () => {
+            try {
+              return JSON.parse(xhr.responseText || "{}");
+            } catch {
+              return {};
+            }
+          };
+          if (xhr.status >= 200 && xhr.status < 300) {
+            resolve(parse());
+          } else {
+            if (xhr.status === 401) notifyUnauthorized();
+            reject(
+              new Error(translateError(parse().detail || `HTTP ${xhr.status}`)),
+            );
+          }
+        };
+        xhr.onerror = () =>
+          reject(new Error(translateError("Failed to fetch")));
+        xhr.send(formData);
+      });
+    },
+    rename: (projectId, name) =>
+      request(`/projects/${encodeURIComponent(projectId)}`, {
+        method: "PUT",
+        body: JSON.stringify({ name }),
+      }),
+    /** 进回收站 */
+    remove: (projectId) =>
+      request(`/projects/${encodeURIComponent(projectId)}`, {
+        method: "DELETE",
+      }),
+    restore: (projectId) =>
+      request(`/projects/${encodeURIComponent(projectId)}/restore`, {
+        method: "POST",
+      }),
+    permanentDelete: (projectId) =>
+      request(`/projects/${encodeURIComponent(projectId)}/permanent`, {
+        method: "DELETE",
+      }),
+    download: async (projectId, fallbackName) => {
+      await downloadBlob(
+        `${getApiBase()}/projects/${encodeURIComponent(projectId)}/download`,
+        fallbackName || "project.zip",
+      );
+    },
+    permissions: {
+      list: (projectId) =>
+        request(`/projects/${encodeURIComponent(projectId)}/permissions`),
+      add: (projectId, username, role) =>
+        request(`/projects/${encodeURIComponent(projectId)}/permissions`, {
+          method: "POST",
+          body: JSON.stringify({ username, role }),
+        }),
+      update: (projectId, collabUserId, role) =>
+        request(
+          `/projects/${encodeURIComponent(projectId)}/permissions/${encodeURIComponent(collabUserId)}`,
+          {
+            method: "PUT",
+            body: JSON.stringify({ role }),
+          },
+        ),
+      remove: (projectId, collabUserId) =>
+        request(
+          `/projects/${encodeURIComponent(projectId)}/permissions/${encodeURIComponent(collabUserId)}`,
+          { method: "DELETE" },
+        ),
+    },
+    transfer: (projectId, username, keepAccess) =>
+      request(`/projects/${encodeURIComponent(projectId)}/transfer`, {
+        method: "POST",
+        body: JSON.stringify({ username, keep_access: !!keepAccess }),
       }),
   },
 };

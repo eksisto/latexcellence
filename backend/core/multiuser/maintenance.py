@@ -29,12 +29,15 @@ async def maintenance_loop() -> None:
             reconciled = await asyncio.to_thread(quota.reconcile_project_sizes)
             purged = await asyncio.to_thread(quota.clean_expired_recycle_bin)
             cleaned = await asyncio.to_thread(quota.clean_staging)
-            if reconciled or purged or cleaned:
+            archived = await asyncio.to_thread(quota.clean_expired_archives)
+            if reconciled or purged or cleaned or archived:
                 logger.info(
-                    "Multi-user maintenance done: reconciled=%d purged=%d cleaned_staging=%d",
+                    "Multi-user maintenance done: reconciled=%d purged=%d "
+                    "cleaned_staging=%d cleaned_archives=%d",
                     reconciled,
                     purged,
                     cleaned,
+                    archived,
                 )
         except Exception:
             logger.exception("Multi-user maintenance cycle failed")

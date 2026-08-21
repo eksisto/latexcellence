@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect, useRef, useMemo } from "react";
 import { toast } from "sonner";
 import { api } from "@/api/index";
+import { isMultiUser } from "@/api/connection";
 import useStore from "@/store/useStore";
 import i18n, { getUiLanguage } from "@/i18n";
 import { flattenTexFiles } from "@/hooks/useParagraphCheck";
@@ -428,6 +429,13 @@ export default function useWritingChat() {
   // ── 应用编辑 ────────────────────────────────────────────────────
   const applyEdit = useCallback(
     async (messageId, customText) => {
+      // 多用户模式：viewer 只读，禁止应用编辑
+      const projectRole = useStore.getState().projectRole;
+      if (isMultiUser() && projectRole === "viewer") {
+        setError(i18n.t("errors:noPermission"));
+        toast.error(i18n.t("errors:noPermission"));
+        return;
+      }
       const currentSessionId = sessionIdRef.current;
       if (!currentSessionId) return;
       // 若有自定义文本，先更新消息中的 new_latex

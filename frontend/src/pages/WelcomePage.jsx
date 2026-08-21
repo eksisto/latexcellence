@@ -5,6 +5,7 @@ import FolderOpen from "lucide-react/dist/esm/icons/folder-open.mjs";
 import { Button } from "@/components/ui/button";
 import Wordmark from "@/components/Wordmark";
 import useEnabledFeatures from "@/hooks/useEnabledFeatures";
+import { isMultiUser } from "@/api/connection";
 import { SECTION_BY_GROUP } from "@/lib/writingFlow";
 import ScanText from "lucide-react/dist/esm/icons/scan-text.mjs";
 import Table2 from "lucide-react/dist/esm/icons/table-2.mjs";
@@ -181,10 +182,14 @@ export default function WelcomePage() {
               <Button
                 size="lg"
                 nativeButton={false}
-                render={<Link to="/workspace" />}
+                render={
+                  <Link to={isMultiUser() ? "/projects" : "/workspace"} />
+                }
               >
                 <FolderOpen />
-                {t("common:openWorkspace")}
+                {isMultiUser()
+                  ? t("common:openProjects")
+                  : t("common:openWorkspace")}
               </Button>
             </div>
           </div>

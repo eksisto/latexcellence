@@ -156,6 +156,29 @@ class TestListProjects:
         r = alice_client.get("/api/projects")
         assert r.json()["projects"] == []
 
+    def test_recycle_bin_lists_deleted_only(self, env, alice_client):
+        """GET /api/projects/recycle-bin：仅返回当前用户已删除（回收站）项目。"""
+        active = _make_project(env, env["alice"]["id"], "Active", {"a.tex": "x"})
+        deleted = _make_project(env, env["alice"]["id"], "Deleted", {"b.tex": "y"})
+        bob_deleted = _make_project(env, env["bob"]["id"], "BobTrashed", {"c.tex": "z"})
+        for pid in (deleted, bob_deleted):
+            db_module.db_execute(
+                "UPDATE projects SET status='deleted', deleted_at=? WHERE id=?",
+                (db_module.utcnow(), pid),
+            )
+        r = alice_client.get("/api/projects/recycle-bin")
+        assert r.status_code == 200
+        names = {p["project_id"]: p for p in r.json()["projects"]}
+        # 只含 alice 自己删除的项目，且不包含 bob 的回收站项目
+        assert active not in names
+        assert deleted in names
+        assert bob_deleted not in names
+        assert names[deleted]["name"] == "Deleted"
+
+    def test_recycle_bin_requires_login(self, env, client):
+        r = client.get("/api/projects/recycle-bin")
+        assert r.status_code == 401
+
     def test_requires_login(self, env, client):
         r = client.get("/api/projects")
         assert r.status_code == 401

@@ -144,3 +144,9 @@ async def admin_update_quota(
     return await service.admin_set_quota(
         user_id, req.project_quota_bytes, req.derived_quota_bytes
     )
+
+
+@admin_router.delete("/users/{user_id}")
+async def admin_delete_user(user_id: str, user: dict = Depends(require_admin)):
+    """删除用户：项目转交管理员并保留 30 天，衍生数据归档，会话吊销。"""
+    return await service.admin_delete_user(user_id, user)

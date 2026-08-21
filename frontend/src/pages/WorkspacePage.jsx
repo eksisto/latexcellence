@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect, useRef, useMemo } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -37,6 +37,7 @@ import ChevronRight from "lucide-react/dist/esm/icons/chevron-right.mjs";
 import FileDiff from "lucide-react/dist/esm/icons/file-diff.mjs";
 import FileTypeCorner from "lucide-react/dist/esm/icons/file-type-corner.mjs";
 import { api } from "@/api/index";
+import { isMultiUser } from "@/api/connection";
 import { translateError } from "@/utils/errorMessages";
 import useStore from "@/store/useStore";
 import useEnabledFeatures from "@/hooks/useEnabledFeatures";
@@ -63,7 +64,12 @@ function flattenTexFiles(nodes) {
 
 export default function WorkspacePage() {
   const { t } = useTranslation(["pages", "common"]);
+  const navigate = useNavigate();
+  const multiUser = isMultiUser();
   const projectPath = useStore((s) => s.projectPath);
+  const projectId = useStore((s) => s.projectId);
+  const projectRole = useStore((s) => s.projectRole);
+  const setOpenedProject = useStore((s) => s.setOpenedProject);
   const workspaceId = useStore((s) => s.workspaceId);
   const rootPath = useStore((s) => s.rootPath);
   const fileTree = useStore((s) => s.fileTree);
@@ -71,6 +77,8 @@ export default function WorkspacePage() {
   const mainFile = useStore((s) => s.mainFile);
   const setProjectPath = useStore((s) => s.setProjectPath);
   const setRootPath = useStore((s) => s.setRootPath);
+  const setProjectId = useStore((s) => s.setProjectId);
+  const setProjectRole = useStore((s) => s.setProjectRole);
   const setFileTree = useStore((s) => s.setFileTree);
   const setActiveFile = useStore((s) => s.setActiveFile);
   const setMainFile = useStore((s) => s.setMainFile);
@@ -111,6 +119,8 @@ export default function WorkspacePage() {
         const data = await api.project.open(path, workspaceId);
         setRootPath(data.root_path);
         setProjectPath(path);
+        setProjectId(null);
+        setProjectRole(null);
         setFileTree(data.file_tree);
         setMainFile(data.main_file);
         setActiveFile(data.main_file);
@@ -136,20 +146,92 @@ export default function WorkspacePage() {
       workspaceId,
       setRootPath,
       setProjectPath,
+      setProjectId,
+      setProjectRole,
       setFileTree,
       setMainFile,
       setActiveFile,
     ],
   );
 
+  /** 多用户模式：按 project_id 打开（拒绝任意路径），并同步最新角色 */
+  const doOpenProjectById = useCallback(
+    async (projectIdToOpen) => {
+      setLoading(true);
+      setError(null);
+      try {
+        const data = await api.project.openById(projectIdToOpen, workspaceId);
+        setRootPath(data.root_path);
+        setProjectPath(null);
+        setFileTree(data.file_tree);
+        setMainFile(data.main_file);
+        setActiveFile(data.main_file);
+        // 权限实时查库可能变化，打开后从项目列表同步最新角色
+        try {
+          const list = await api.projects.list();
+          const p = (list.projects || []).find(
+            (x) => x.project_id === projectIdToOpen,
+          );
+          setOpenedProject({
+            projectId: projectIdToOpen,
+            projectRole: p?.role || "viewer",
+          });
+        } catch {
+          setOpenedProject({ projectId: projectIdToOpen, projectRole: null });
+        }
+        try {
+          const p = await api.project.paragraphs(data.main_file, workspaceId);
+          setParagraphs(p.paragraphs || []);
+        } catch {
+          setParagraphs([]);
+        }
+        toast.success(t("pages:workspace.projectOpened"), {
+          description: data.root_path,
+        });
+      } catch (e) {
+        const msg = translateError(e.message);
+        setError(msg);
+        toast.error(t("pages:workspace.openFailed"), { description: msg });
+      } finally {
+        setLoading(false);
+      }
+    },
+    [
+      t,
+      workspaceId,
+      setRootPath,
+      setProjectPath,
+      setFileTree,
+      setMainFile,
+      setActiveFile,
+      setOpenedProject,
+    ],
+  );
+
+  const isOpened = multiUser ? !!projectId : !!projectPath;
+  const canWrite = !multiUser || projectRole !== "viewer";
+
   // 启动时：从 Zustand persist 恢复项目（等水合完成后再恢复）
   useEffect(() => {
     if (!hydrated || restoredRef.current) return;
-    if (projectPath && fileTree.length === 0) {
+    if (isOpened && fileTree.length === 0) {
       restoredRef.current = true;
-      doOpenProject(projectPath);
+      if (multiUser && projectId) {
+        doOpenProjectById(projectId);
+      } else if (projectPath) {
+        doOpenProject(projectPath);
+      }
     }
-  }, [hydrated, projectPath, fileTree.length, doOpenProject]);
+  }, [
+    hydrated,
+    isOpened,
+    multiUser,
+    projectId,
+    projectPath,
+    fileTree.length,
+    doOpenProject,
+    doOpenProjectById,
+  ]);
 
   const handleOpenProject = useCallback(async () => {
     if (!openPath.trim()) return;
@@ -254,55 +336,71 @@ export default function WorkspacePage() {
       </div>
 
       <div className="max-w-6xl mx-auto">
-        {!projectPath ? (
+        {!isOpened ? (
           <div className="flex justify-center mt-12">
             <Card className="max-w-lg w-full">
               <CardHeader>
                 <CardTitle>{t("pages:workspace.openProject")}</CardTitle>
               </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="project-path">
-                    {t("pages:workspace.projectPath")}
-                  </Label>
-                  <div className="flex gap-2">
-                    <Input
-                      id="project-path"
-                      className="flex-1"
-                      value={openPath}
-                      onChange={(e) => setOpenPath(e.target.value)}
-                      placeholder={t("pages:workspace.pathPlaceholder")}
-                      onKeyDown={(e) =>
-                        e.key === "Enter" && handleOpenProject()
-                      }
-                    />
-                    <Button
-                      variant="outline"
-                      onClick={handleBrowseFolder}
-                      disabled={loading}
-                      type="button"
-                    >
-                      {t("pages:workspace.browse")}
-                    </Button>
-                  </div>
-                  <p className="text-xs text-muted-foreground">
-                    {t("pages:workspace.pathHint")}
+              {multiUser ? (
+                <CardContent className="space-y-4">
+                  <p className="text-sm text-muted-foreground">
+                    {t("pages:workspace.multiUserOpenHint")}
                   </p>
-                </div>
-                {error ? (
-                  <p className="text-destructive text-sm">{error}</p>
-                ) : null}
-                <Button
-                  className="w-full"
-                  onClick={handleOpenProject}
-                  disabled={loading || !openPath.trim()}
-                >
-                  <FolderOpen />
-                  {loading
-                    ? t("pages:workspace.openBtnLoading")
-                    : t("pages:workspace.openBtn")}
-                </Button>
-              </CardContent>
+                  <Button
+                    className="w-full"
+                    nativeButton={false}
+                    render={<Link to="/projects" />}
+                  >
+                    <FolderOpen />
+                    {t("pages:workspace.openFromProjects")}
+                  </Button>
+                </CardContent>
+              ) : (
+                <CardContent className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="project-path">
+                      {t("pages:workspace.projectPath")}
+                    </Label>
+                    <div className="flex gap-2">
+                      <Input
+                        id="project-path"
+                        className="flex-1"
+                        value={openPath}
+                        onChange={(e) => setOpenPath(e.target.value)}
+                        placeholder={t("pages:workspace.pathPlaceholder")}
+                        onKeyDown={(e) =>
+                          e.key === "Enter" && handleOpenProject()
+                        }
+                      />
+                      <Button
+                        variant="outline"
+                        onClick={handleBrowseFolder}
+                        disabled={loading}
+                        type="button"
+                      >
+                        {t("pages:workspace.browse")}
+                      </Button>
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      {t("pages:workspace.pathHint")}
+                    </p>
+                  </div>
+                  {error ? (
+                    <p className="text-destructive text-sm">{error}</p>
+                  ) : null}
+                  <Button
+                    className="w-full"
+                    onClick={handleOpenProject}
+                    disabled={loading || !openPath.trim()}
+                  >
+                    <FolderOpen />
+                    {loading
+                      ? t("pages:workspace.openBtnLoading")
+                      : t("pages:workspace.openBtn")}
+                  </Button>
+                </CardContent>
+              )}
             </Card>
           </div>
         ) : (
@@ -315,6 +413,7 @@ export default function WorkspacePage() {
               <Select
                 value={mainFile || ""}
                 onValueChange={handleMainFileChange}
+                disabled={!canWrite}
               >
                 <SelectTrigger className="w-64">
                   <SelectValue
@@ -347,7 +446,7 @@ export default function WorkspacePage() {
                   )}
                 </Button>
               )}
-              {activeFile && (
+              {activeFile && canWrite && (
                 <UndoRedoButtons
                   activeFile={activeFile}
                   workspaceId={workspaceId}

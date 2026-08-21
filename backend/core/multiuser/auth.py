@@ -19,11 +19,13 @@ import hashlib
 import os
 import re
 import secrets
+import shutil
 import sqlite3
 import threading
 import time
 import uuid
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 
 from argon2 import PasswordHasher
 from argon2.exceptions import InvalidHashError, VerifyMismatchError
@@ -288,6 +290,84 @@ def set_user_role(user_id: str, role: str) -> dict:
         (role, utcnow(), user_id),
     )
     return to_public_user(get_user_by_id(user_id))
+
+
+def _move_tree(src: Path, dst: Path) -> None:
+    """把用户空间内的目录迁移到目标（同分区 rename，跨分区复制兜底）。"""
+    if src == dst:
+        return
+    dst.parent.mkdir(parents=True, exist_ok=True)
+    if src.exists() or src.is_symlink():
+        shutil.move(str(src), str(dst))
+    else:
+        dst.mkdir(parents=True, exist_ok=True)
+
+
+def delete_user(user_id: str, acting_admin_id: str) -> dict:
+    """删除用户（对应方案 §6.3）。
+
+    1. 用户拥有的项目全部转交给定管理员（活动项目同名去重为 `xx (2)`）；
+    2. 移除该用户的协作者关系；
+    3. 立即吊销其全部会话；
+    4. 用户空间（剩余衍生数据）归档到 <users_root 父目录>/archive/<user_id>_<时间戳>，
+       由维护任务在保留期后清理；
+    5. 删除 users 行。
+
+    业务失败抛 ValueError（由 service 层映射为 HTTP 错误）。
+    """
+    user = get_user_by_id(user_id)
+    if user is None:
+        raise ValueError("User not found")
+    if user_id == acting_admin_id:
+        raise ValueError("Cannot delete the current account")
+    admin = get_user_by_id(acting_admin_id)
+    if admin is None or admin["role"] != "admin":
+        raise ValueError("Only an admin can delete users")
+
+    from .quota import next_available_name
+
+    now = utcnow()
+    # 项目转交管理员（活动 + 回收站项目；回收站项目保留原删除状态）
+    for row in db_query_all(
+        "SELECT id, name, status FROM projects WHERE owner_id = ?", (user_id,)
+    ):
+        new_name = row["name"]
+        if row["status"] == "active":
+            new_name = next_available_name(acting_admin_id, row["name"])
+        _move_tree(
+            userspace.project_dir(user_id, row["id"]),
+            userspace.project_dir(acting_admin_id, row["id"]),
+        )
+        db_execute(
+            "UPDATE projects SET owner_id = ?, name = ?, updated_at = ? WHERE id = ?",
+            (acting_admin_id, new_name, now, row["id"]),
+        )
+    db_execute("DELETE FROM project_collaborators WHERE user_id = ?", (user_id,))
+    revoke_user_sessions(user_id)
+
+    # 归档剩余用户空间（衍生数据；projects 已迁走）
+    user_root = userspace.user_root(user_id)
+    if user_root.exists():
+        stamp = datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S")
+        archive_dir = userspace.get_archive_root() / f"{user_id}_{stamp}"
+        _move_tree(user_root, archive_dir)
+        # rename 保留旧 mtime（≈账号开通时间），而清理任务按 mtime 判保留期；
+        # 必须重置为删除时刻，否则老账号的归档会立即被当作过期清除
+        os.utime(archive_dir, None)
+        logger.info(
+            "Archived deactivated user data of %s to %s",
+            user["username"],
+            archive_dir,
+        )
+
+    db_execute("DELETE FROM users WHERE id = ?", (user_id,))
+    logger.info(
+        "User deleted: %s (id=%s) by admin %s",
+        user["username"],
+        user_id,
+        acting_admin_id,
+    )
+    return {"status": "ok", "user_id": user_id, "username": user["username"]}
 
 
 def reset_password(user_id: str, new_password: str) -> dict:

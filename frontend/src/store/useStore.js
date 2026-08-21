@@ -52,6 +52,55 @@ const useStore = create(
       currentTheme: "youminghei",
       setCurrentTheme: (theme) => set({ currentTheme: theme }),
 
+      /* ===== 多用户认证（P5，不持久化——会话 Cookie 为准，启动时经 /api/auth/me 恢复） ===== */
+      authStatus: "loading", // loading | authenticated | pending | unauthenticated
+      authUser: null, // { id, username, email, role, status }
+      quota: null, // { project_quota_bytes, derived_quota_bytes }
+      usage: null, // { project_usage_bytes, derived_usage_bytes }
+      setAuthStatus: (status) => set({ authStatus: status }),
+      setAuthUser: (user) => set({ authUser: user }),
+      setAuthMe: (me) =>
+        set({
+          authUser: me?.user || null,
+          quota: me?.quota || null,
+          usage: me?.usage || null,
+        }),
+      setQuota: (quota) => set({ quota }),
+      setUsage: (usage) => set({ usage }),
+      /**
+       * 多用户模式当前项目身份（持久化，刷新后据此恢复）。
+       * 权限实时查库可能变化，进入工作区时按需重新同步 projectRole。
+       */
+      projectId: null,
+      projectRole: null, // owner | editor | viewer
+      setProjectId: (id) => set({ projectId: id }),
+      setProjectRole: (role) => set({ projectRole: role }),
+      setOpenedProject: ({ projectId, projectRole }) =>
+        set({ projectId, projectRole }),
+      /** 会话失效 / 未登录：清空认证状态与项目状态（ConnectPanel 401 回调） */
+      handleUnauthorized: () =>
+        set({
+          authStatus: "unauthenticated",
+          authUser: null,
+          quota: null,
+          usage: null,
+          projectPath: null,
+          rootPath: null,
+          projectId: null,
+          projectRole: null,
+          activeFile: null,
+          mainFile: null,
+          fileTree: [],
+        }),
+      /** 登出（不发起网络请求，仅清空本地状态；调用方负责调用 api.auth.logout） */
+      clearAuth: () =>
+        set({
+          authStatus: "unauthenticated",
+          authUser: null,
+          quota: null,
+          usage: null,
+        }),
+
       /* ===== 工作区标识（持久化） ===== */
       workspaceId: getOrCreateWorkspaceId(),
       setWorkspaceId: (id) => set({ workspaceId: id }),
@@ -262,6 +311,8 @@ const useStore = create(
         set({
           projectPath: null,
           rootPath: null,
+          projectId: null,
+          projectRole: null,
           fileTree: [],
           activeFile: null,
           mainFile: null,
@@ -297,6 +348,8 @@ const useStore = create(
         workspaceId: state.workspaceId,
         projectPath: state.projectPath,
         rootPath: state.rootPath,
+        projectId: state.projectId,
+        projectRole: state.projectRole,
         activeFile: state.activeFile,
         mainFile: state.mainFile,
         styleModifySessionId: state.styleModifySessionId,
