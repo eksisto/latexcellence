@@ -1,5 +1,5 @@
 """
-多用户项目路由（薄路由层，P3）。
+多用户项目路由（薄路由层，P3 / P4）。
 
 - GET/POST /api/projects：项目列表 / 上传创建
 - PUT /api/projects/{project_id}：重命名（owner）
@@ -7,6 +7,9 @@
 - POST /api/projects/{project_id}/restore：恢复（owner，超限禁止）
 - DELETE /api/projects/{project_id}/permanent：永久删除（owner）
 - GET /api/projects/{project_id}/download：打包下载 zip（读权限）
+- GET/POST /api/projects/{project_id}/permissions：协作者列表 / 按用户名添加（owner）
+- PUT/DELETE /api/projects/{project_id}/permissions/{user_id}：改角色 / 移除（owner）
+- POST /api/projects/{project_id}/transfer：转交 owner（owner）
 
 业务逻辑见 service.py；权限依赖只做最外层拦截，细分（owner-only）在 service 内实时校验。
 """
@@ -18,7 +21,12 @@ from fastapi.responses import FileResponse
 
 from backend.core.multiuser.dependencies import get_current_user
 from backend.modules.projects import service
-from backend.modules.projects.models import RenameProjectRequest
+from backend.modules.projects.models import (
+    AddCollaboratorRequest,
+    RenameProjectRequest,
+    TransferProjectRequest,
+    UpdateCollaboratorRequest,
+)
 
 router = APIRouter(prefix="/api/projects", tags=["projects"])
 
@@ -92,6 +100,63 @@ async def download_project(
         filename=download_name,
         media_type="application/zip",
         background=background_tasks,
+    )
+
+
+# ── P4 权限协作 ───────────────────────────────────────────────────────
+@router.get("/{project_id}/permissions")
+async def list_permissions(
+    project_id: str,
+    user: dict = Depends(get_current_user),
+):
+    """协作者列表（owner 专属管理界面）。"""
+    return await service.list_permissions(user["id"], project_id)
+
+
+@router.post("/{project_id}/permissions", status_code=201)
+async def add_collaborator(
+    project_id: str,
+    req: AddCollaboratorRequest,
+    user: dict = Depends(get_current_user),
+):
+    """按用户名添加协作者（已存在则更新角色），owner 专属。"""
+    return await service.add_collaborator(
+        user["id"], project_id, req.username, req.role
+    )
+
+
+@router.put("/{project_id}/permissions/{collab_user_id}")
+async def update_collaborator(
+    project_id: str,
+    collab_user_id: str,
+    req: UpdateCollaboratorRequest,
+    user: dict = Depends(get_current_user),
+):
+    """修改协作者角色，owner 专属。"""
+    return await service.update_collaborator(
+        user["id"], project_id, collab_user_id, req.role
+    )
+
+
+@router.delete("/{project_id}/permissions/{collab_user_id}")
+async def remove_collaborator(
+    project_id: str,
+    collab_user_id: str,
+    user: dict = Depends(get_current_user),
+):
+    """移除协作者，owner 专属。"""
+    return await service.remove_collaborator(user["id"], project_id, collab_user_id)
+
+
+@router.post("/{project_id}/transfer")
+async def transfer_project(
+    project_id: str,
+    req: TransferProjectRequest,
+    user: dict = Depends(get_current_user),
+):
+    """转交项目 owner 给其他用户（原 owner 转后 viewer 或退出，由 keep_access 决定）。"""
+    return await service.transfer_project(
+        user["id"], project_id, req.username, req.keep_access
     )
 
 

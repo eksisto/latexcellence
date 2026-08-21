@@ -1277,6 +1277,10 @@
     "name_conflict": "A project with the same name already exists",
     "invalid_name": "Invalid project name",
     "invalid_state": "Operation is not allowed in the current project state",
-    "download_failed": "Failed to package project; please try again later"
+    "download_failed": "Failed to package project; please try again later",
+    "user_not_found": "User not found",
+    "invalid_user": "Invalid target user (must be another active user)",
+    "invalid_role": "Invalid collaborator role",
+    "transfer_failed": "Project transfer failed; please try again later"
   }
 }

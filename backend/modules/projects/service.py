@@ -12,6 +12,7 @@
 import asyncio
 import re
 import shutil
+import sqlite3
 import tempfile
 import uuid
 import zipfile
@@ -22,8 +23,9 @@ from fastapi import HTTPException, UploadFile
 from backend.core import access_control
 from backend.core.config import get_config
 from backend.core.logger import get_logger
+from backend.core.multiuser import auth as auth_core
 from backend.core.multiuser import userspace
-from backend.core.multiuser.db import db_query_one
+from backend.core.multiuser.db import db_execute, db_query_all, db_query_one, utcnow
 from backend.core.multiuser.quota import (
     create_project_row,
     dir_size,
@@ -39,6 +41,8 @@ from backend.core.multiuser.upload import (
     move_into_user_space,
 )
 from backend.core.multiuser.dependencies import forbidden
+from backend.core.workspace_manager import get_workspace_manager
+from backend.modules.projects.models import COLLABORATOR_ROLES
 
 logger = get_logger("projects.service")
 
@@ -564,18 +568,49 @@ async def transfer_project(
     # 接收方配额校验：转交是项目空间的一条 ingress 路径，超限拒绝（与恢复一致）
     enforce_project_quota(target["id"], int(row["size_bytes"]))
 
-    # 新 owner 同名去重（与 P3 唯一命名一致）
-    new_name = next_available_name(target["id"], row["name"])
-
     old_root = userspace.project_dir(user_id, project_id)
     new_root = userspace.project_dir(target["id"], project_id)
-    await asyncio.to_thread(_move_project_dir, old_root, new_root)
 
+    # 守卫式 UPDATE（DB 先行）：仅当项目仍为 active 且归属未变时生效——
+    # 与删除/恢复并发时拒绝转交，避免把已入回收站的项目改归属；
+    # 同名唯一索引冲突（预检后的并发窗口）则重取名称重试。
     now = utcnow()
-    db_execute(
-        "UPDATE projects SET owner_id = ?, name = ?, updated_at = ? WHERE id = ?",
-        (target["id"], new_name, now, project_id),
-    )
+    new_name = row["name"]
+    updated = False
+    for _ in range(3):
+        new_name = next_available_name(target["id"], row["name"])
+        try:
+            rowcount = db_execute(
+                "UPDATE projects SET owner_id = ?, name = ?, updated_at = ? "
+                "WHERE id = ? AND status = 'active' AND owner_id = ?",
+                (target["id"], new_name, now, project_id, user_id),
+            )
+        except sqlite3.IntegrityError:
+            continue  # 并发命中唯一命名，重取名称重试
+        if rowcount != 1:
+            # 项目已被删除/恢复/转交，当前状态不再可转交
+            raise _http(404, "not_found", "Project not found")
+        updated = True
+        break
+    if not updated:
+        raise _http(409, "file_conflict", "Project rename conflict; try again")
+
+    # 目录迁移后置：UPDATE 成功而迁移失败时回滚 DB（补偿），避免
+    # "文件已搬 / 库未改"的失联中间态
+    try:
+        await asyncio.to_thread(_move_project_dir, old_root, new_root)
+    except Exception:
+        db_execute(
+            "UPDATE projects SET owner_id = ?, name = ?, updated_at = ? "
+            "WHERE id = ? AND owner_id = ?",
+            (user_id, row["name"], utcnow(), project_id, target["id"]),
+        )
+        logger.exception(
+            "Transfer directory move failed, reverted DB ownership: project=%s",
+            project_id,
+        )
+        raise
+
     # 新 owner 此前若是协作者，转正后移除其协作者行
     db_execute(
         "DELETE FROM project_collaborators WHERE project_id = ? AND user_id = ?",

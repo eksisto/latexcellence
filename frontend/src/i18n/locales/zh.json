@@ -1277,6 +1277,10 @@
     "name_conflict": "同名项目已存在",
     "invalid_name": "项目名称无效",
     "invalid_state": "当前项目状态不允许此操作",
-    "download_failed": "项目打包失败，请稍后重试"
+    "download_failed": "项目打包失败，请稍后重试",
+    "user_not_found": "用户不存在",
+    "invalid_user": "目标用户无效（须为其他已激活用户）",
+    "invalid_role": "协作者角色无效",
+    "transfer_failed": "项目转交失败，请稍后重试"
   }
 }

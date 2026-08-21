@@ -400,7 +400,7 @@ ExtractorRegistry 先处理已知公开端点（当前代码托管页面使用 G
 
 ### 多用户模式基础设施（`backend/core/multiuser/` + `backend/core/access_control.py` + `backend/modules/auth/` + `backend/manage.py`）
 
-多用户模式（`multi_user.enabled=true`）的后端基础设施，按阶段（见 [docs/multi-user-plan.md](multi-user-plan.md)）实施。P1 已完成：SQLite 初始化、注册/审批/登录/会话/Cookie/CSRF、管理员引导与 CLI；P2 已完成：用户空间目录、统一路径解析、项目访问控制、workspace 绑定与现有端点收紧；P3 已完成：上传/解压管线、项目命名、配额记账、回收站与下载。
+多用户模式（`multi_user.enabled=true`）的后端基础设施，按阶段（见 [docs/multi-user-plan.md](multi-user-plan.md)）实施。P1 已完成：SQLite 初始化、注册/审批/登录/会话/Cookie/CSRF、管理员引导与 CLI；P2 已完成：用户空间目录、统一路径解析、项目访问控制、workspace 绑定与现有端点收紧；P3 已完成：上传/解压管线、项目命名、配额记账、回收站与下载；P4 已完成：协作者管理、转交、viewer 写保护与共享项目撤销禁用。
 
 **包结构**：
 
@@ -414,8 +414,8 @@ ExtractorRegistry 先处理已知公开端点（当前代码托管页面使用 G
 | `backend/core/multiuser/upload.py` | 上传解压管线核心：zip（UTF-8/GBK/cp437 编码、路径穿越/符号链接/加密/炸弹拦截）与 7z（py7zr）安全解压、项目根归一化、`move_into_user_space()` 落位 |
 | `backend/core/multiuser/maintenance.py` | 后台维护循环：配额对账 + 回收站/暂存区清理（`main.py` lifespan 启动） |
 | `backend/core/access_control.py` | 统一访问控制：`owner/editor/viewer` 权限矩阵、`require_project_access()` / `get_projects_for_user()` / `get_user_role_for_project()` / `is_shared_project()`、基于 workspace 绑定的请求级依赖 `require_workspace(write=...)`；权限实时查库不缓存 |
-| `backend/modules/projects/router.py` | 薄路由层：`/api/projects`（列表 / 上传创建）与 `/api/projects/{id}`（重命名 / 回收站 / 恢复 / 永久删除 / 下载） |
-| `backend/modules/projects/service.py` | 项目业务逻辑：流式接收压缩包、安全解压（`asyncio.to_thread`）、配额校验、唯一命名、落位、回收站流转、打包下载 |
+| `backend/modules/projects/router.py` | 薄路由层：`/api/projects`（列表 / 上传创建）与 `/api/projects/{id}`（重命名 / 回收站 / 恢复 / 永久删除 / 下载 / 权限协作 / 转交） |
+| `backend/modules/projects/service.py` | 项目业务逻辑：流式接收压缩包、安全解压（`asyncio.to_thread`）、配额校验、唯一命名、落位、回收站流转、打包下载、协作者管理与项目转交 |
 | `backend/modules/auth/router.py` | 薄路由层：`/api/auth/*`（register/login/logout/me）与 `/api/admin/*`（用户列表/审批/禁用/重置密码/配额） |
 | `backend/modules/auth/service.py` | 认证业务逻辑（`asyncio.to_thread` 调度压库操作；错误映射为结构化 `{"error": code, "message": ...}`） |
 | `backend/manage.py` | CLI：`python -m backend.manage create-admin / reset-password / list-users / set-status` |
@@ -446,6 +446,15 @@ ExtractorRegistry 先处理已知公开端点（当前代码托管页面使用 G
 - 回收站：`DELETE /api/projects/{id}` 进回收站（`status='deleted'`，删除即腾出配额）；`restore` 恢复（超限禁止）；`permanent` 提前永久删除；后台按 `recycle_bin_days` 清理过期回收站项目。
 - 下载：`GET /api/projects/{id}/download` 打包 zip，owner / editor / viewer 均可，临时文件由 `BackgroundTasks` 清理。
 - 项目 API 均只在校验读/写/owner 权限（`access_control`）后执行；管理型动作（重命名/删除/恢复/永久删除）仅 owner。
+
+**P4 权限协作要点**：
+
+- 协作者管理端点（owner 专属，`/api/projects/{id}/permissions`）：`GET` 列表（owner + 协作者及其角色/加入时间）；`POST` 按用户名添加（已存在则更新角色，`editor` / `viewer`）；`PUT /{user_id}` 改角色；`DELETE /{user_id}` 移除。
+- 校验规则：协作者必须是 `active` 用户、不能是 owner 自身；非 owner 访问返回 403 `no_permission`；未知用户 404 `user_not_found`；非 active 400 `invalid_user`；非法角色由 Pydantic `Literal` 校验（422）。
+- 权限**实时查库**：添加 / 改角色 / 移除后，下一次请求立即生效（对端体验可即时验证，如被移除的协作者下一次读请求即 403）。
+- 转交端点 `POST /api/projects/{id}/transfer`（body：`username` + `keep_access`）：owner 将项目转给其他 `active` 用户；`keep_access=True` 时原 owner 转后保留为 viewer，否则直接退出协作。
+- 转交实现要点：转交前校验**接收方项目空间配额**（超限 413 `quota_exceeded`，与上传/恢复同口径）；项目目录沿 `data/users/<owner_id>/projects/<project_id>/` 规范**迁移到新 owner 空间**（保证 `root_path` 派生、配额记账与对账一致）；新 owner 有同名活动项目时自动生成 `xx (2)`（复用 `next_available_name`）；新 owner 原为协作者则转正并移除其协作者行；已打开该项目的 workspace 绑定同步更新 `owner_id` / `root_path` 并重新打开文件树。
+- viewer 写保护与共享项目撤销禁用（P2 已落地）：viewer 的 `apply-change` / `set-main-file` / `undo` / `redo` 返回 403；共享项目（存在任意协作者）v1 禁用撤销/重做。
 
 ---
 

@@ -244,6 +244,21 @@ python -m backend.manage set-status <username> pending|active|disabled
 - 配额记账核心在 `backend/core/multiuser/quota.py`：项目空间按活动项目 `size_bytes` 之和统计；衍生数据按磁盘实时统计；后台周期对账（`reconcile_project_sizes`）修正缓存漂移并清理过期回收站 / 暂存区（`maintenance.py`）。
 - `apply-change` 多用户写回后刷新配额记账，超限自动回滚并返回 413 `quota_exceeded`。
 
+**P4 权限协作**（§7）：
+
+| 端点 | 说明 |
+| --- | --- |
+| `GET /api/projects/{id}/permissions` | 项目权限列表（owner + 协作者，owner 专属） |
+| `POST /api/projects/{id}/permissions` | 按用户名添加协作者（已存在则更新角色；`editor` / `viewer`；owner 专属） |
+| `PUT /api/projects/{id}/permissions/{user_id}` | 修改协作者角色（owner 专属） |
+| `DELETE /api/projects/{id}/permissions/{user_id}` | 移除协作者（owner 专属，权限即时生效） |
+| `POST /api/projects/{id}/transfer` | 转交项目 owner（`username` + `keep_access`；原 owner 转后 viewer 或退出） |
+
+- 协作者必须是 `active` 用户，不能是 owner 自身；未知用户 404 `user_not_found`，非 active 400 `invalid_user`；非 owner 管理操作一律 403 `no_permission`。
+- 权限实时查库：添加 / 改角色 / 移除后下一次请求立即生效（被移除者立即失去访问）。
+- 转交前校验接收方项目空间配额（超限 413 `quota_exceeded`，目录与归属不变）；转交时项目目录迁移到新 owner 空间（`data/users/<new_owner_id>/projects/<project_id>/`），新 owner 同名项目自动生成 `xx (2)`，已打开该项目的 workspace 绑定与文件树同步更新。
+- viewer 写保护与共享项目撤销禁用（P2 已落地）：viewer 写操作 403；共享项目（存在协作者）v1 禁用撤销/重做。
+
 基础设施、认证与项目实现的详细说明见 [docs/backend-core.md](backend-core.md)，完整设计见 [docs/multi-user-plan.md](multi-user-plan.md)。
 
 > 运维提示：登录限流按"用户名 + 客户端 IP"计数；若部署在反向代理（nginx 等）之后，`request.client.host` 恒为代理 IP，"每 IP"维度会退化，需按部署接入受信代理 / 真实 IP 传递后才会生效。

@@ -562,7 +562,7 @@ Mock 返回值必须符合 Pydantic schema，确保测试的可重复性。
 
 测试用的 LaTeX 字符串使用原始字符串 `r"..."`，避免转义问题。
 
-### 9.4 多用户模式（P1 基础设施 + P2 用户空间与访问控制）
+### 9.4 多用户模式（P1 基础设施 + P2 用户空间与访问控制 + P3 上传与配额 + P4 权限协作）
 
 多用户模式（`multi_user.enabled=true`，默认关闭）通过**中间件 + 依赖**两条路径实现双模式共存，设计要点：
 
@@ -574,6 +574,7 @@ Mock 返回值必须符合 Pydantic schema，确保测试的可重复性。
 - **用户空间与路径隔离（P2）**：项目目录由 `project_id` 派生（`data/users/<owner_id>/projects/<project_id>/`）；统一入口 `resolve_user_path()`（`path_guard` 封装）解析项目内路径，禁止直接拼接；符号链接默认拒绝。
 - **访问控制（P2）**：`backend/core/access_control.py` 提供 `owner / editor / viewer` 权限矩阵、`require_project_access()` / `get_projects_for_user()` 与基于 workspace 绑定的请求级依赖 `require_workspace(write=...)`，权限实时查库不缓存。
 - **workspace 绑定与端点收紧（P2）**：`/api/project/open` 多用户模式仅接受 `project_id`（拒绝 `path`），打开时写入 `workspace_id → (user_id, project_id, root_path)`；`/api/project/browse` 返回 403；写操作要求非 viewer；共享项目 v1 禁用撤销/重做。
+- **权限协作（P4）**：`/api/projects/{id}/permissions` 提供协作者列表 / 按用户名添加 / 改角色 / 移除（owner 专属，权限实时查库即时生效）；`/api/projects/{id}/transfer` 支持转交 owner（原 owner 转后 viewer 或退出）。转交前校验接收方配额（超限拒绝）；转交时项目目录迁移到新 owner 空间、新 owner 同名项目自动 `xx (2)`、已打开 workspace 绑定与文件树同步更新。
 
 完整方案、数据模型与阶段划分见 [docs/multi-user-plan.md](docs/multi-user-plan.md)，实现细节见 [docs/backend-core.md](docs/backend-core.md)。
 
@@ -605,4 +606,4 @@ Mock 返回值必须符合 Pydantic schema，确保测试的可重复性。
 
 ## 11. 多用户模式设计决策记录
 
-多用户模式的完整关键决策记录（双模式、认证、存储、配额、权限、上传、迁移等）见 [docs/multi-user-plan.md §3](docs/multi-user-plan.md)。P1 落地为 `backend/core/multiuser/`（db/userspace/auth/dependencies）、`backend/modules/auth/`（`/api/auth` 与 `/api/admin`）与 `backend/manage.py`（CLI），设计与实现见 §9.4 与 [docs/backend-core.md](docs/backend-core.md)。
+多用户模式的完整关键决策记录（双模式、认证、存储、配额、权限、上传、迁移等）见 [docs/multi-user-plan.md §3](docs/multi-user-plan.md)。P1-P4 落地为 `backend/core/multiuser/`（db/userspace/auth/dependencies/quota/upload/maintenance）、`backend/modules/auth/`（`/api/auth` 与 `/api/admin`）、`backend/modules/projects/`（`/api/projects` 与权限协作）与 `backend/manage.py`（CLI），设计与实现见 §9.4 与 [docs/backend-core.md](docs/backend-core.md)。

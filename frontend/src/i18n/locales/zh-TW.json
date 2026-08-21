@@ -1277,6 +1277,10 @@
     "name_conflict": "同名專案已存在",
     "invalid_name": "專案名稱無效",
     "invalid_state": "目前專案狀態不允許此操作",
-    "download_failed": "專案打包失敗，請稍後重試"
+    "download_failed": "專案打包失敗，請稍後重試",
+    "user_not_found": "使用者不存在",
+    "invalid_user": "目標使用者無效（須為其他已啟用使用者）",
+    "invalid_role": "協作者角色無效",
+    "transfer_failed": "專案轉交失敗，請稍後重試"
   }
 }
