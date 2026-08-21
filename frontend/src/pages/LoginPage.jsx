@@ -18,6 +18,7 @@ import AuthShell from "@/components/AuthShell";
 import { api } from "@/api/index";
 import useStore from "@/store/useStore";
 import { translateError } from "@/utils/errorMessages";
+import useRegistrationEnabled from "@/hooks/useRegistrationEnabled";
 
 /**
  * 多用户模式登录页（P5）。
@@ -25,6 +26,8 @@ import { translateError } from "@/utils/errorMessages";
  */
 export default function LoginPage() {
   const { t } = useTranslation(["pages", "common"]);
+  // registration_enabled=false 时隐藏注册入口（null=未知时不隐藏，后端兜底）
+  const registrationEnabled = useRegistrationEnabled();
   const navigate = useNavigate();
   const setAuthStatus = useStore((s) => s.setAuthStatus);
   const setAuthMe = useStore((s) => s.setAuthMe);
@@ -138,15 +141,17 @@ export default function LoginPage() {
           </form>
         </CardContent>
       </Card>
-      <div className="mt-4 flex items-center justify-center gap-4 text-sm text-muted-foreground">
-        <Link
-          to="/register"
-          className="link-shrink inline-flex items-center gap-1.5 hover:text-foreground"
-        >
-          <LockKeyhole className="size-4" />
-          {t("pages:auth.needAccount")}
-        </Link>
-      </div>
+      {registrationEnabled !== false && (
+        <div className="mt-4 flex items-center justify-center gap-4 text-sm text-muted-foreground">
+          <Link
+            to="/register"
+            className="link-shrink inline-flex items-center gap-1.5 hover:text-foreground"
+          >
+            <LockKeyhole className="size-4" />
+            {t("pages:auth.needAccount")}
+          </Link>
+        </div>
+      )}
     </AuthShell>
   );
 }

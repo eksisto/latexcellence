@@ -16,6 +16,7 @@ import {
 import AuthShell from "@/components/AuthShell";
 import { api } from "@/api/index";
 import { translateError } from "@/utils/errorMessages";
+import useRegistrationEnabled from "@/hooks/useRegistrationEnabled";
 
 /**
  * 多用户模式注册页（P5）。
@@ -23,6 +24,8 @@ import { translateError } from "@/utils/errorMessages";
  */
 export default function RegisterPage() {
   const { t } = useTranslation("pages");
+  // registration_enabled=false 时直接展示未开放提示，不再渲染注册表单
+  const registrationEnabled = useRegistrationEnabled();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
@@ -74,6 +77,28 @@ export default function RegisterPage() {
               {t("auth.registerSubmittedHint")}
             </p>
           </CardContent>
+        </Card>
+        <div className="mt-4">
+          <Button
+            variant="outline"
+            nativeButton={false}
+            render={<Link to="/login" />}
+          >
+            {t("auth.backToLogin")}
+          </Button>
+        </div>
+      </AuthShell>
+    );
+  }
+
+  if (registrationEnabled === false) {
+    return (
+      <AuthShell>
+        <Card className="w-full max-w-sm gap-6">
+          <CardHeader>
+            <CardTitle>{t("auth.registerClosedTitle")}</CardTitle>
+            <CardDescription>{t("auth.registerClosedDesc")}</CardDescription>
+          </CardHeader>
         </Card>
         <div className="mt-4">
           <Button
