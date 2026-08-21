@@ -19,6 +19,7 @@ from typing import Any
 
 from backend.core.config import get_config
 from backend.core.logger import get_logger
+from backend.core.multiuser.quota import enforce_derived_quota_for_current_user
 from backend.core.workspace_manager import get_project_manager_for_workspace
 from backend.modules.style_modify.models import (
     CompileError,
@@ -257,6 +258,8 @@ class StyleModifySessionStore:
     ) -> str:
         cfg = get_config()
         root = get_sessions_root(cfg)
+        # 多用户模式：新建会话前检查衍生数据配额（超限抛 413，方案 §9.2）
+        enforce_derived_quota_for_current_user()
         session_id = uuid.uuid4().hex[:12]
         session_dir = root / session_id
         (session_dir / "baseline").mkdir(parents=True, exist_ok=True)

@@ -51,6 +51,8 @@ async def upload_data(
             language=language,
         )
         return result
+    except HTTPException:  # 结构化错误（如衍生配额超限 413）原样透传
+        raise
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:

@@ -163,6 +163,25 @@ def enforce_derived_quota(user_id: str, extra_bytes: int) -> None:
         )
 
 
+def enforce_derived_quota_for_current_user(extra_bytes: int = 0) -> None:
+    """多用户模式下按请求级当前用户执行衍生数据配额检查（超限抛 413）。
+
+    供写作会话 / style_modify 会话 / 模板 / 绘图四类模块在会话或输出创建时
+    调用（方案 §9.2“创建时检查”落地）。单用户模式或无当前用户上下文
+    （session-only 等）时跳过，不设配额语义。
+
+    extra_bytes 为本次新建产物的已知增量（如绘图数据文件大小）；会话类资源
+    创建时无法预知最终体积，按 0 计——即用户衍生空间已满/超限时拒绝新建。
+    用量口径与维护任务一致：四个衍生目录实时磁盘扫描（derived_usage_for_user）。
+    """
+    if not userspace.is_multiuser():
+        return
+    user_id = userspace.get_current_user_id()
+    if not user_id:
+        return
+    enforce_derived_quota(user_id, extra_bytes)
+
+
 def update_project_size(project_id: str) -> int:
     """重算单个项目磁盘大小并写回 size_bytes，返回尺寸。"""
     size = project_size_on_disk(project_id)

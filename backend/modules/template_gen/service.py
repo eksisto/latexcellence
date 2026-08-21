@@ -16,6 +16,7 @@ from typing import Any, AsyncIterator
 
 from backend.core.config import get_config
 from backend.core.logger import get_logger
+from backend.core.multiuser.quota import enforce_derived_quota_for_current_user
 from backend.modules.template_gen.agent import (
     get_template_agent_service,
     load_sandbox,
@@ -47,6 +48,9 @@ class TemplateGenService:
             llm: 可选 LLM 客户端（测试注入用）
         """
         cfg = get_config()
+
+        # 多用户模式：新建模板会话前检查衍生数据配额（超限抛 413，方案 §9.2）
+        enforce_derived_quota_for_current_user()
 
         # 创建沙箱工作区（多用户模式按当前用户隔离到 <users_root>/<user_id>/templates/）
         output_dir = self._output_root(cfg)

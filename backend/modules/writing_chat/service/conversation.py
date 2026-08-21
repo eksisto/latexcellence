@@ -7,6 +7,7 @@ from typing import Any, AsyncIterator
 from urllib.parse import urlparse, urlunparse
 
 from backend.core.config import get_config
+from backend.core.multiuser.quota import enforce_derived_quota_for_current_user
 from backend.core.prompts import CUSTOM_INSTRUCTIONS_ISOLATION_RULE, get_prompt
 from backend.core.tool_registry import get_tool_registry
 from backend.core.workspace_manager import get_project_manager_for_workspace
@@ -542,6 +543,9 @@ class ConversationMixin:
             else None
         )
         if ctx is None:
+            # 多用户模式：新建会话前检查衍生数据配额（超限抛 413 quota_exceeded，
+            # 方案 §9.2“会话创建时检查”）；单用户模式跳过
+            enforce_derived_quota_for_current_user()
             ctx = ConversationContext.create_session(
                 file_path=req.file_path, scope=scope
             )

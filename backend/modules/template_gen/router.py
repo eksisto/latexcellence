@@ -46,6 +46,15 @@ async def generate(request: GenerateRequest):
         try:
             async for event in service.generate(request.description, request.language):
                 yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
+        except HTTPException as e:
+            # 结构化错误（如衍生配额超限 413）：透传 error 错误码供前端 translateError
+            detail = e.detail
+            payload = (
+                {"type": "error", "message": detail}
+                if isinstance(detail, dict)
+                else {"type": "error", "message": str(detail)}
+            )
+            yield f"data: {json.dumps(payload, ensure_ascii=False)}\n\n"
         except Exception as e:
             yield (
                 f"data: {json.dumps({'type': 'error', 'message': str(e)}, ensure_ascii=False)}\n\n"

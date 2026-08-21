@@ -10,6 +10,7 @@ from typing import Any, AsyncIterator
 
 from backend.core.config import get_config
 from backend.core.logger import get_logger
+from backend.core.multiuser.quota import enforce_derived_quota_for_current_user
 from backend.modules.plot_gen.agent import (
     get_plot_gen_agent,
     get_plot_output_dir,
@@ -61,6 +62,10 @@ class PlotGenService:
                 f"File too large: {len(file_bytes) / 1024 / 1024:.1f}MB. "
                 f"Maximum: {fcfg.max_data_size_mb}MB"
             )
+
+        # 多用户模式：新建制图会话前检查衍生数据配额（按实际数据文件大小计，
+        # 超限抛 413，方案 §9.2“输出写入时检查”）
+        enforce_derived_quota_for_current_user(len(file_bytes))
 
         session_id = uuid.uuid4().hex[:12]
         sandbox = get_plot_output_dir(cfg) / session_id
