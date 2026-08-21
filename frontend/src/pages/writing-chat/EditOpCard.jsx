@@ -8,7 +8,13 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import CodeBlock, { latexEditorClass } from "@/components/CodeBlock";
 import { cn } from "@/lib/utils";
 
-export default function EditOpCard({ edit_op, reason, onApply, applying }) {
+export default function EditOpCard({
+  edit_op,
+  reason,
+  onApply,
+  applying,
+  applyDisabled = false,
+}) {
   const { t } = useTranslation(["pages", "common"]);
   const [isEditing, setIsEditing] = useState(false);
   const [editedText, setEditedText] = useState(edit_op.new_latex);
@@ -107,7 +113,11 @@ export default function EditOpCard({ edit_op, reason, onApply, applying }) {
                   ? t("pages:writingChat.cancelEdit")
                   : t("pages:writingChat.manualEdit")}
               </Button>
-              <Button size="sm" onClick={handleApply} disabled={applying}>
+              <Button
+                size="sm"
+                onClick={handleApply}
+                disabled={applyDisabled || applying}
+              >
                 {applying ? <Loader2 className="size-3 animate-spin" /> : null}
                 {t("pages:writingChat.applyToTex")}
               </Button>

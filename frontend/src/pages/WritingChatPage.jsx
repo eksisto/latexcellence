@@ -80,6 +80,7 @@ export default function WritingChatPage() {
     deleteMessage,
     compactSession,
     handleFileChange,
+    canWrite,
     // 助手
     assistants,
     activeAssistant,
@@ -123,6 +124,7 @@ export default function WritingChatPage() {
       editingMessageId,
       applyingMessageId,
       canEdit,
+      canApplyEdit: canWrite,
       prepareSectionRead: (page, sectionIds) =>
         setInput(
           t("pages:writingChat.readSectionsRequest", {
@@ -138,6 +140,7 @@ export default function WritingChatPage() {
       editingMessageId,
       applyingMessageId,
       canEdit,
+      canWrite,
       setInput,
       t,
     ],

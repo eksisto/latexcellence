@@ -83,6 +83,7 @@ export default function useParagraphCheck({
 }) {
   const fileTree = useStore((s) => s.fileTree);
   const projectPath = useStore((s) => s.projectPath);
+  const projectId = useStore((s) => s.projectId);
   const projectRole = useStore((s) => s.projectRole);
   const activeFile = useStore((s) => s.activeFile);
   const workspaceId = useStore((s) => s.workspaceId);
@@ -158,16 +159,22 @@ export default function useParagraphCheck({
   const resultFiles = useMemo(() => extractFileList(results), [results]);
   const activeFiles = resultFiles.length > 0 ? resultFiles : paragraphFiles;
 
-  // 项目恢复逻辑
+  // 项目恢复逻辑：多用户模式按 projectId 恢复（projectPath 为空），
+  // 单用户模式按 projectPath 恢复；两套逻辑按模式分支（方案 §11.2）。
   useEffect(() => {
     if (restoredRef.current) return;
-    if (!projectPath || fileTree.length > 0) return;
+    const multi = isMultiUser();
+    const canRestore = multi ? !!projectId : !!projectPath;
+    if (!canRestore || fileTree.length > 0) return;
 
     const restore = async () => {
       restoredRef.current = true;
       setRestoring(true);
       try {
-        const data = await api.project.open(projectPath, workspaceId);
+        // 多用户：/project/open 仅接受 project_id；单用户：本地路径
+        const data = multi
+          ? await api.project.openById(projectId, workspaceId)
+          : await api.project.open(projectPath, workspaceId);
         setRootPath(data.root_path);
         setProjectPath(projectPath);
         setFileTree(data.file_tree);
@@ -184,6 +191,7 @@ export default function useParagraphCheck({
 
     restore();
   }, [
+    projectId,
     projectPath,
     fileTree.length,
     activeFile,

@@ -85,6 +85,7 @@ export default function ExpressionOptPage() {
     resolveInput,
     setResolveInput,
     activeFiles,
+    canWrite,
   } = useParagraphCheck({
     apiModule: api.expressionOpt,
     checkMethodName: "optimize",
@@ -347,11 +348,13 @@ export default function ExpressionOptPage() {
                       : t("pages:expressionOpt.startOptimize")}
                   </Button>
                   <div className="ml-auto">
-                    <UndoRedoButtons
-                      activeFile={activeFile}
-                      workspaceId={workspaceId}
-                      onAfterUndoRedo={handlePreview}
-                    />
+                    {canWrite && (
+                      <UndoRedoButtons
+                        activeFile={activeFile}
+                        workspaceId={workspaceId}
+                        onAfterUndoRedo={handlePreview}
+                      />
+                    )}
                   </div>
                 </div>
                 {message && (
@@ -567,7 +570,7 @@ export default function ExpressionOptPage() {
                       variant="secondary"
                       size="sm"
                       onClick={() => setConfirmApplyAllOpen(true)}
-                      disabled={applyingAll || isLoading}
+                      disabled={applyingAll || isLoading || !canWrite}
                     >
                       {applyingAll ? (
                         <Loader2 className="animate-spin" />
@@ -680,6 +683,7 @@ export default function ExpressionOptPage() {
                                                   result.file_path,
                                                 )
                                               }
+                                              disabled={!canWrite}
                                             >
                                               {t(
                                                 "pages:expressionOpt.applyOptimization",
@@ -708,6 +712,7 @@ export default function ExpressionOptPage() {
                                           applyLabel={t(
                                             "pages:expressionOpt.applyOptimization",
                                           )}
+                                          applyDisabled={!canWrite}
                                           onApply={() =>
                                             handleApplyChange(
                                               result.paragraph_index,
@@ -808,6 +813,7 @@ export default function ExpressionOptPage() {
                                         result.file_path,
                                       )
                                     }
+                                    disabled={!canWrite}
                                   >
                                     {t("pages:expressionOpt.applyOptimization")}
                                   </Button>

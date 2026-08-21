@@ -27,6 +27,7 @@ export function UnlistedChangesBody({
   applyLabel,
   onApply,
   onIgnore,
+  applyDisabled = false,
 }) {
   const { t } = useTranslation("common");
   return (
@@ -38,7 +39,7 @@ export function UnlistedChangesBody({
         </div>
       </div>
       <div className="flex items-center gap-2">
-        <Button size="sm" onClick={onApply}>
+        <Button size="sm" onClick={onApply} disabled={applyDisabled}>
           {applyLabel}
         </Button>
         <Button size="sm" variant="outline" onClick={onIgnore}>

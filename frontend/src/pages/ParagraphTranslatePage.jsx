@@ -124,6 +124,7 @@ export default function ParagraphTranslatePage() {
     handleApplyAll,
     handleIgnoreChange,
     handleFileChange,
+    canWrite,
   } = useParagraphCheck({
     apiModule,
     checkMethodName: "translate",
@@ -205,6 +206,7 @@ export default function ParagraphTranslatePage() {
                 text={result.translated}
                 message={t("pages:paragraphTranslate.unlistedChanges")}
                 applyLabel={t("common:applyChange")}
+                applyDisabled={!canWrite}
                 onApply={() =>
                   handleApplyChange(
                     result.paragraph_index,
@@ -246,6 +248,7 @@ export default function ParagraphTranslatePage() {
                         result.file_path,
                       )
                     }
+                    disabled={!canWrite}
                   >
                     {t("common:applyChange")}
                   </Button>
@@ -351,11 +354,13 @@ export default function ParagraphTranslatePage() {
                     <Eye />
                     {t("common:loadAndPreview")}
                   </Button>
-                  <UndoRedoButtons
-                    activeFile={activeFile}
-                    workspaceId={workspaceId}
-                    onAfterUndoRedo={handlePreview}
-                  />
+                  {canWrite && (
+                    <UndoRedoButtons
+                      activeFile={activeFile}
+                      workspaceId={workspaceId}
+                      onAfterUndoRedo={handlePreview}
+                    />
+                  )}
                   <div className="flex-1" />
                   <div className="flex items-center gap-2">
                     <Label className="text-sm whitespace-nowrap">
@@ -510,7 +515,7 @@ export default function ParagraphTranslatePage() {
                       variant="secondary"
                       size="sm"
                       onClick={() => setConfirmApplyAllOpen(true)}
-                      disabled={applyingAll || isLoading}
+                      disabled={applyingAll || isLoading || !canWrite}
                     >
                       {applyingAll ? (
                         <Loader2 className="animate-spin" />

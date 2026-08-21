@@ -40,6 +40,7 @@ import { latexEditorClass } from "@/components/CodeBlock";
 import { cn } from "@/lib/utils";
 import EmptyState from "@/components/EmptyState";
 import useStore from "@/store/useStore";
+import { isMultiUser } from "@/api/connection";
 import useFormatAnalysis from "@/hooks/bib-manager/useFormatAnalysis";
 import useMetadataExtraction from "@/hooks/bib-manager/useMetadataExtraction";
 import useBibtexGeneration from "@/hooks/bib-manager/useBibtexGeneration";
@@ -336,6 +337,9 @@ export default function BibManagerPage() {
   const { t } = useTranslation(["pages", "common"]);
   const projectPath = useStore((s) => s.projectPath);
   const workspaceId = useStore((s) => s.workspaceId);
+  const projectRole = useStore((s) => s.projectRole);
+  // 多用户模式：viewer 只读，禁用 .bib 保存按钮（后端 403 兜底）
+  const canWrite = !isMultiUser() || projectRole !== "viewer";
 
   const [activeTab, setActiveTab] = useState("add");
 
@@ -915,7 +919,10 @@ export default function BibManagerPage() {
                           <Button
                             onClick={handleSaveBib}
                             disabled={
-                              saving || !selectedBibFile || !editedBibtex.trim()
+                              !canWrite ||
+                              saving ||
+                              !selectedBibFile ||
+                              !editedBibtex.trim()
                             }
                           >
                             {saving ? (

@@ -82,6 +82,7 @@ export default function TerminologyCheckPage() {
     handleApplyAll,
     handleIgnoreChange,
     handleFileChange,
+    canWrite,
   } = useParagraphCheck({
     apiModule: api.terminologyCheck,
     checkMethodName: "check",
@@ -354,6 +355,7 @@ export default function TerminologyCheckPage() {
                   <Button
                     size="sm"
                     onClick={() => handleApplyWithCustom(result)}
+                    disabled={!canWrite}
                   >
                     {t("common:applyChange")}
                   </Button>
@@ -473,11 +475,13 @@ export default function TerminologyCheckPage() {
                       : t("pages:terminologyCheck.checkButton")}
                   </Button>
                   <div className="ml-auto">
-                    <UndoRedoButtons
-                      activeFile={activeFile}
-                      workspaceId={workspaceId}
-                      onAfterUndoRedo={handlePreview}
-                    />
+                    {canWrite && (
+                      <UndoRedoButtons
+                        activeFile={activeFile}
+                        workspaceId={workspaceId}
+                        onAfterUndoRedo={handlePreview}
+                      />
+                    )}
                   </div>
                 </div>
                 {message && (
@@ -528,7 +532,7 @@ export default function TerminologyCheckPage() {
                       variant="secondary"
                       size="sm"
                       onClick={() => setConfirmApplyAllOpen(true)}
-                      disabled={applyingAll || isLoading}
+                      disabled={applyingAll || isLoading || !canWrite}
                     >
                       {applyingAll ? (
                         <Loader2 className="animate-spin" />

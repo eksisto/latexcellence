@@ -18,6 +18,8 @@ import {
 
 export default function useWritingChat() {
   const projectPath = useStore((s) => s.projectPath);
+  const projectId = useStore((s) => s.projectId);
+  const projectRole = useStore((s) => s.projectRole);
   const workspaceId = useStore((s) => s.workspaceId);
   const fileTree = useStore((s) => s.fileTree);
   const activeFile = useStore((s) => s.activeFile);
@@ -205,14 +207,19 @@ export default function useWritingChat() {
     messagesRef.current = writingChatMessages;
   });
 
-  // ── 项目恢复 ──────────────────────────────────────────────────────
+  // ── 项目恢复：多用户模式按 projectId 恢复（projectPath 为空），
+  // 单用户模式按 projectPath 恢复（方案 §11.2） ──────────────────────
   useEffect(() => {
     if (restoringRef.current) return;
-    if (!projectPath || fileTree.length > 0) return;
+    const multi = isMultiUser();
+    const canRestore = multi ? !!projectId : !!projectPath;
+    if (!canRestore || fileTree.length > 0) return;
     restoringRef.current = true;
     (async () => {
       try {
-        const data = await api.project.open(projectPath, workspaceId);
+        const data = multi
+          ? await api.project.openById(projectId, workspaceId)
+          : await api.project.open(projectPath, workspaceId);
         setRootPath(data.root_path);
         setProjectPath(projectPath);
         setFileTree(data.file_tree);
@@ -223,6 +230,7 @@ export default function useWritingChat() {
       }
     })();
   }, [
+    projectId,
     projectPath,
     fileTree.length,
     activeFile,
@@ -587,6 +595,9 @@ export default function useWritingChat() {
   return {
     // store
     projectPath,
+    projectRole,
+    // 多用户模式写权限：viewer 只读（页面据此禁用应用编辑等写按钮）
+    canWrite: !isMultiUser() || projectRole !== "viewer",
     activeFile,
     texFiles,
     paragraphs,

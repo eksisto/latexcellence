@@ -64,6 +64,7 @@ const CodeReviewResultCard = React.memo(function CodeReviewResultCard({
   result,
   onApply,
   onIgnore,
+  applyDisabled = false,
   paragraphs,
   paragraphMap,
   typeLabels,
@@ -347,6 +348,7 @@ const CodeReviewResultCard = React.memo(function CodeReviewResultCard({
                           result.file_path,
                         )
                       }
+                      disabled={applyDisabled}
                     >
                       {t("common:applyChange")}
                     </Button>
@@ -423,6 +425,7 @@ export default function CodeReviewPage() {
     handleApplyAll,
     handleIgnoreChange,
     handleFileChange,
+    canWrite,
   } = useParagraphCheck({
     apiModule: api.codeReview,
     checkMethodName: "check",
@@ -570,11 +573,13 @@ export default function CodeReviewPage() {
                       : t("pages:code_review.start")}
                   </Button>
                   <div className="ml-auto">
-                    <UndoRedoButtons
-                      activeFile={activeFile}
-                      workspaceId={workspaceId}
-                      onAfterUndoRedo={handlePreview}
-                    />
+                    {canWrite && (
+                      <UndoRedoButtons
+                        activeFile={activeFile}
+                        workspaceId={workspaceId}
+                        onAfterUndoRedo={handlePreview}
+                      />
+                    )}
                   </div>
                 </div>
                 {message && (
@@ -678,7 +683,7 @@ export default function CodeReviewPage() {
                       variant="secondary"
                       size="sm"
                       onClick={() => setConfirmApplyAllOpen(true)}
-                      disabled={applyingAll || isLoading}
+                      disabled={applyingAll || isLoading || !canWrite}
                     >
                       {applyingAll ? (
                         <Loader2 className="animate-spin" />
@@ -722,6 +727,7 @@ export default function CodeReviewPage() {
                               result={result}
                               onApply={handleApplyChange}
                               onIgnore={handleIgnoreChange}
+                              applyDisabled={!canWrite}
                               paragraphs={codeReviewParagraphs}
                               paragraphMap={paragraphMap}
                               typeLabels={suggestionTypeLabels}
@@ -739,6 +745,7 @@ export default function CodeReviewPage() {
                       result={result}
                       onApply={handleApplyChange}
                       onIgnore={handleIgnoreChange}
+                      applyDisabled={!canWrite}
                       paragraphs={codeReviewParagraphs}
                       paragraphMap={paragraphMap}
                       typeLabels={suggestionTypeLabels}

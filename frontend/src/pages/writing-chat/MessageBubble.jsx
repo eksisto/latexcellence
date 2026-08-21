@@ -149,6 +149,7 @@ function MessageBubble({ message, actions }) {
     editingMessageId,
     applyingMessageId,
     canEdit,
+    canApplyEdit = true,
     prepareSectionRead,
   } = actions;
 
@@ -627,6 +628,7 @@ function MessageBubble({ message, actions }) {
             reason={message.edit_reason}
             onApply={(customText) => applyEdit(message.id, customText)}
             applying={applyingMessageId === message.id}
+            applyDisabled={!canApplyEdit}
           />
         )}
 

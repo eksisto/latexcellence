@@ -80,6 +80,7 @@ export default function TypoCheckPage() {
     handleApplyAll,
     handleIgnoreChange,
     handleFileChange,
+    canWrite,
   } = useParagraphCheck({
     apiModule: api.typoCheck,
     checkMethodName: "check",
@@ -182,6 +183,7 @@ export default function TypoCheckPage() {
                         result.file_path,
                       )
                     }
+                    disabled={!canWrite}
                   >
                     {t("common:applyChange")}
                   </Button>
@@ -204,6 +206,7 @@ export default function TypoCheckPage() {
                 text={result.corrected}
                 message={t("pages:typoCheck.unlistedChanges")}
                 applyLabel={t("common:applyChange")}
+                applyDisabled={!canWrite}
                 onApply={() =>
                   handleApplyChange(
                     result.paragraph_index,
@@ -314,11 +317,13 @@ export default function TypoCheckPage() {
                       : t("pages:typoCheck.checkButton")}
                   </Button>
                   <div className="ml-auto">
-                    <UndoRedoButtons
-                      activeFile={activeFile}
-                      workspaceId={workspaceId}
-                      onAfterUndoRedo={handlePreview}
-                    />
+                    {canWrite && (
+                      <UndoRedoButtons
+                        activeFile={activeFile}
+                        workspaceId={workspaceId}
+                        onAfterUndoRedo={handlePreview}
+                      />
+                    )}
                   </div>
                 </div>
                 {message && (
@@ -422,7 +427,7 @@ export default function TypoCheckPage() {
                       variant="secondary"
                       size="sm"
                       onClick={() => setConfirmApplyAllOpen(true)}
-                      disabled={applyingAll || isLoading}
+                      disabled={applyingAll || isLoading || !canWrite}
                     >
                       {applyingAll ? (
                         <Loader2 className="animate-spin" />

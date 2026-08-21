@@ -29,6 +29,7 @@ import CodeBlock from "@/components/CodeBlock";
 import CodeEditorInput from "@/components/CodeEditorInput";
 import useStore from "@/store/useStore";
 import useStyleModifyAgent from "@/hooks/useStyleModifyAgent";
+import { isMultiUser } from "@/api/connection";
 
 function compileLabel(t, status) {
   if (status === "passed") return t("pages:styleModify.compilePassed");
@@ -40,6 +41,9 @@ export default function StyleModifyPage() {
   const { t } = useTranslation(["pages", "common"]);
   const agent = useStyleModifyAgent();
   const rootPath = useStore((state) => state.rootPath);
+  const projectRole = useStore((state) => state.projectRole);
+  // 多用户模式：viewer 只读，禁用 Agent 提案应用 / 撤销按钮（后端 403 兜底）
+  const canWrite = !isMultiUser() || projectRole !== "viewer";
 
   const [pasteLatex, setPasteLatex] = useState("");
   const [pasteDescription, setPasteDescription] = useState("");
@@ -383,6 +387,7 @@ export default function StyleModifyPage() {
                       <Button
                         onClick={agent.apply}
                         disabled={
+                          !canWrite ||
                           !agent.proposal?.applicable ||
                           agent.applying ||
                           agent.running
@@ -401,7 +406,7 @@ export default function StyleModifyPage() {
                         <Button
                           variant="outline"
                           onClick={agent.undo}
-                          disabled={agent.applying}
+                          disabled={!canWrite || agent.applying}
                         >
                           <Undo2 />
                           {t("pages:styleModify.undoOperation")}
