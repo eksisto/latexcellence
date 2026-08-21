@@ -809,7 +809,7 @@
       "passwordHint": "Password must be at least 8 characters",
       "email": "Email",
       "emailPlaceholder": "Optional, display only",
-      "optional": "(optional)",
+      "optional": " (optional)",
       "haveAccount": "Already have an account?",
       "backToLogin": "Back to sign in",
       "registerClosedTitle": "Registration Closed",
@@ -827,8 +827,6 @@
       "desc": "Manage your projects, uploads and sharing",
       "upload": "Upload project",
       "refresh": "Refresh",
-      "admin": "Admin",
-      "logout": "Sign out",
       "userLabel": "Current user",
       "projectQuota": "Project space usage",
       "tabMine": "My projects",
@@ -879,7 +877,7 @@
       "statusPending": "Pending",
       "statusActive": "Active",
       "statusDisabled": "Disabled",
-      "you": "(you)",
+      "you": "you",
       "createdAt": "registered {{date}}",
       "quotaLabel": "Quota override",
       "filter": {
@@ -1200,8 +1198,9 @@
     },
     "auth": {
       "login": "Sign in",
-      "admin": "Admin",
-      "logout": "Sign out"
+      "admin": "Admin Panel",
+      "logout": "Sign out",
+      "logoutWithUsername": "Sign out {{username}}"
     },
     "uploadProject": {
       "title": "Upload project",

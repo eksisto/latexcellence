@@ -168,7 +168,8 @@ export default function RegisterPage() {
             <div className="space-y-1.5">
               <Label htmlFor="reg-email">
                 {t("auth.email")}
-                <span className="ml-1 text-muted-foreground/60">
+                {/* 间距由各语言译文自带（中文全角括号有天然间距；英文在括号两侧加空格），组件不再额外加 margin */}
+                <span className="text-muted-foreground/60">
                   {t("auth.optional")}
                 </span>
               </Label>

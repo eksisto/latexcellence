@@ -28,7 +28,6 @@ import PageHeader from "@/components/PageHeader";
 import ConfirmDialog from "@/components/ConfirmDialog";
 import { api } from "@/api/index";
 import useStore from "@/store/useStore";
-import { logoutUser } from "@/hooks/useAuth";
 import { translateError } from "@/utils/errorMessages";
 
 const MB = 1024 * 1024;
@@ -397,14 +396,7 @@ export default function AdminPage() {
             <RefreshCw className={loading ? "animate-spin" : ""} />
             {t("pages:admin.refresh")}
           </Button>
-          <Button
-            variant="ghost"
-            onClick={async () => {
-              await logoutUser();
-            }}
-          >
-            {t("pages:workbench.logout")}
-          </Button>
+          {/* 退出登录入口统一收在右上角工具栏图标（带悬浮提示），页头不再重复 */}
         </PageHeader>
 
         {error ? (

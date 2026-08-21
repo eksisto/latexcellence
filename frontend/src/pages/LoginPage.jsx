@@ -2,11 +2,11 @@ import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
-import LockKeyhole from "lucide-react/dist/esm/icons/lock-keyhole.mjs";
 import LogIn from "lucide-react/dist/esm/icons/log-in.mjs";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Card,
   CardContent,
@@ -107,16 +107,20 @@ export default function LoginPage() {
                 disabled={loading}
               />
             </div>
-            <label className="flex items-center gap-2 text-sm text-muted-foreground">
-              <input
-                type="checkbox"
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <Checkbox
+                id="login-remember"
                 checked={remember}
-                onChange={(e) => setRemember(e.target.checked)}
+                onCheckedChange={setRemember}
                 disabled={loading}
-                className="size-4"
               />
-              {t("pages:auth.rememberMe")}
-            </label>
+              <Label
+                htmlFor="login-remember"
+                className="cursor-pointer font-normal"
+              >
+                {t("pages:auth.rememberMe")}
+              </Label>
+            </div>
             {error ? (
               <p className="text-sm text-destructive" role="alert">
                 {error}
@@ -142,12 +146,11 @@ export default function LoginPage() {
         </CardContent>
       </Card>
       {registrationEnabled !== false && (
-        <div className="mt-4 flex items-center justify-center gap-4 text-sm text-muted-foreground">
+        <div className="mt-4 flex items-center justify-center text-sm text-muted-foreground">
           <Link
             to="/register"
-            className="link-shrink inline-flex items-center gap-1.5 hover:text-foreground"
+            className="link-shrink inline-block hover:text-foreground"
           >
-            <LockKeyhole className="size-4" />
             {t("pages:auth.needAccount")}
           </Link>
         </div>

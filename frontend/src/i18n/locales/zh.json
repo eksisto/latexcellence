@@ -827,8 +827,6 @@
       "desc": "管理您的项目空间、上传与协作权限",
       "upload": "上传项目",
       "refresh": "刷新",
-      "admin": "管理后台",
-      "logout": "退出登录",
       "userLabel": "当前用户",
       "projectQuota": "项目空间使用",
       "tabMine": "我的项目",
@@ -879,7 +877,7 @@
       "statusPending": "待审批",
       "statusActive": "已启用",
       "statusDisabled": "已禁用",
-      "you": "（当前账号）",
+      "you": "当前账号",
       "createdAt": "注册于 {{date}}",
       "quotaLabel": "配额覆盖",
       "filter": {
@@ -1200,8 +1198,9 @@
     },
     "auth": {
       "login": "登录",
-      "admin": "管理",
-      "logout": "退出登录"
+      "admin": "管理后台",
+      "logout": "退出登录",
+      "logoutWithUsername": "退出登录 {{username}}"
     },
     "uploadProject": {
       "title": "上传项目",

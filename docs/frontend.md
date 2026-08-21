@@ -256,7 +256,7 @@ highlight.js 的按需注册与统一入口：
 - `/login`、`/register`、`/waiting`：认证页守卫（已登录 → `/projects`）；
 - `/projects`（项目工作台）、`/admin`（仅 admin）及所有业务页面：`RequireAuth`（未登录 → `/login`）；
 - 单用户模式 `authStatus === "single"` 全部放行，行为不变；
-- 工具栏：多用户模式显示登录/登出/用户名/管理入口；设置按钮仅 admin 可见（配置接口仅管理员可访问）；`ConnectionPanel` 在多用户模式下被注释说明替代。
+- 工具栏：多用户模式以图标按钮 + 悬浮提示显示登录 / 登出（提示含用户名）/ 管理入口（admin 可见），样式与主题切换等图标一致；设置按钮仅 admin 可见（配置接口仅管理员可访问）；`ConnectionPanel` 在多用户模式下被注释说明替代。
 
 ### 页面
 

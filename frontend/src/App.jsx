@@ -172,7 +172,7 @@ const WorkspaceShortcut = memo(function WorkspaceShortcut() {
   );
 });
 
-/** 多用户模式工具栏：登录/登出 + 用户名 + admin 入口 */
+/** 多用户模式工具栏：登录/登出 + admin 入口（图标按钮 + 悬浮提示，与其他工具栏图标一致） */
 const AuthToolbar = memo(function AuthToolbar() {
   const authStatus = useStore((s) => s.authStatus);
   const authUser = useStore((s) => s.authUser);
@@ -202,28 +202,49 @@ const AuthToolbar = memo(function AuthToolbar() {
     }
     return null;
   }
+
+  const logoutLabel = authUser?.username
+    ? t("auth.logoutWithUsername", { username: authUser.username })
+    : t("auth.logout");
+
   return (
     <>
       {authUser?.role === "admin" && (
-        <Button
-          variant="ghost"
-          size="sm"
-          nativeButton={false}
-          render={<Link to="/admin" />}
-        >
-          <ShieldCheck /> {t("auth.admin")}
-        </Button>
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              <Button
+                variant="ghost"
+                size="icon"
+                nativeButton={false}
+                render={<Link to="/admin" />}
+              />
+            }
+          >
+            <ShieldCheck className="size-5" />
+            <span className="sr-only">{t("auth.admin")}</span>
+          </TooltipTrigger>
+          <TooltipContent>{t("auth.admin")}</TooltipContent>
+        </Tooltip>
       )}
-      <Button
-        variant="ghost"
-        size="sm"
-        onClick={async () => {
-          await logoutUser();
-          navigate("/login", { replace: true });
-        }}
-      >
-        <LogOut /> {authUser?.username || ""}
-      </Button>
+      <Tooltip>
+        <TooltipTrigger
+          render={
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={async () => {
+                await logoutUser();
+                navigate("/login", { replace: true });
+              }}
+            />
+          }
+        >
+          <LogOut className="size-5" />
+          <span className="sr-only">{logoutLabel}</span>
+        </TooltipTrigger>
+        <TooltipContent>{logoutLabel}</TooltipContent>
+      </Tooltip>
     </>
   );
 });

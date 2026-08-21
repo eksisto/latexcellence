@@ -10,10 +10,8 @@ import ShieldCheck from "lucide-react/dist/esm/icons/shield-check.mjs";
 import Trash2 from "lucide-react/dist/esm/icons/trash-2.mjs";
 import RotateCcw from "lucide-react/dist/esm/icons/rotate-ccw.mjs";
 import ArchiveRestore from "lucide-react/dist/esm/icons/archive-restore.mjs";
-import LogOut from "lucide-react/dist/esm/icons/log-out.mjs";
 import RefreshCw from "lucide-react/dist/esm/icons/refresh-cw.mjs";
 import Loader from "lucide-react/dist/esm/icons/loader-circle.mjs";
-import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -25,7 +23,6 @@ import UploadProjectDialog from "@/components/UploadProjectDialog";
 import ProjectPermissionsDialog from "@/components/ProjectPermissionsDialog";
 import { api } from "@/api/index";
 import useStore from "@/store/useStore";
-import { logoutUser } from "@/hooks/useAuth";
 import { translateError } from "@/utils/errorMessages";
 
 function formatBytes(bytes) {
@@ -355,24 +352,7 @@ export default function ProjectWorkbenchPage() {
             <RefreshCw className={loading ? "animate-spin" : ""} />
             {t("pages:workbench.refresh")}
           </Button>
-          {isAdmin && (
-            <Button
-              variant="outline"
-              nativeButton={false}
-              render={<Link to="/admin" />}
-            >
-              <ShieldCheck /> {t("pages:workbench.admin")}
-            </Button>
-          )}
-          <Button
-            variant="ghost"
-            onClick={async () => {
-              await logoutUser();
-              navigate("/login", { replace: true });
-            }}
-          >
-            <LogOut /> {t("pages:workbench.logout")}
-          </Button>
+          {/* 退出登录与管理后台入口统一收在右上角工具栏图标（带悬浮提示），页头不再重复 */}
         </PageHeader>
 
         {/* 配额用量条 */}
