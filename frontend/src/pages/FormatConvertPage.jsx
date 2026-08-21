@@ -332,7 +332,7 @@ export default function FormatConvertPage() {
                   href="https://pandoc.org/installing.html"
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="relative inline-block no-underline after:content-[''] after:absolute after:left-0 after:bottom-0 after:h-[0.5px] after:w-full after:bg-current after:origin-left after:transition-transform after:duration-300 hover:after:scale-x-0"
+                  className="link-shrink inline-block"
                 >
                   Pandoc
                 </a>

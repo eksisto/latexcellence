@@ -187,7 +187,7 @@ export default function RegisterPage() {
         {t("auth.haveAccount")}{" "}
         <Link
           to="/login"
-          className="underline underline-offset-3 hover:text-foreground"
+          className="link-shrink inline-block hover:text-foreground"
         >
           {t("auth.backToLogin")}
         </Link>

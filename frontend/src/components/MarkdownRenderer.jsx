@@ -34,7 +34,7 @@ const components = {
   },
   a: ({ node, ...props }) => (
     <a
-      className="text-primary relative inline-block no-underline after:content-[''] after:absolute after:left-0 after:bottom-0.5 after:h-[0.7px] after:w-full after:bg-primary after:origin-left after:transition-transform after:duration-300 hover:after:scale-x-0"
+      className="link-shrink inline-block text-primary"
       {...props}
       target="_blank"
       rel="noopener noreferrer"

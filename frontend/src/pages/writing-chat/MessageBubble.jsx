@@ -120,7 +120,7 @@ const ScholarlyResultItem = memo(({ result, t }) => {
             href={`https://doi.org/${result.doi}`}
             target="_blank"
             rel="noopener noreferrer"
-            className="rounded bg-zinc-500/10 px-1 py-0.5 font-mono text-[10px] text-zinc-600 hover:underline dark:text-zinc-400"
+            className="link-shrink rounded bg-zinc-500/10 px-1 py-0.5 font-mono text-[10px] text-zinc-600 dark:text-zinc-400"
           >
             DOI
           </a>
@@ -130,7 +130,7 @@ const ScholarlyResultItem = memo(({ result, t }) => {
             href={result.oa_url}
             target="_blank"
             rel="noopener noreferrer"
-            className="rounded bg-green-500/10 px-1 py-0.5 text-[10px] font-medium text-green-600 hover:underline dark:text-green-400"
+            className="link-shrink rounded bg-green-500/10 px-1 py-0.5 text-[10px] font-medium text-green-600 dark:text-green-400"
           >
             {t("pages:writingChat.scholarlyOpen")}
           </a>
@@ -368,7 +368,7 @@ function MessageBubble({ message, actions }) {
                                   href={result.url}
                                   target="_blank"
                                   rel="noopener noreferrer"
-                                  className="text-blue-500 hover:underline truncate"
+                                  className="link-shrink text-blue-500 truncate"
                                 >
                                   {result.url}
                                 </a>
@@ -426,7 +426,7 @@ function MessageBubble({ message, actions }) {
                                 href={page.url}
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className="font-medium text-cyan-700 hover:underline dark:text-cyan-300"
+                                className="link-shrink font-medium text-cyan-700 dark:text-cyan-300"
                               >
                                 {page.title || page.url}
                               </a>
@@ -519,7 +519,7 @@ function MessageBubble({ message, actions }) {
                                 href={evidence.source_url}
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className="font-medium text-emerald-700 hover:underline dark:text-emerald-300"
+                                className="link-shrink font-medium text-emerald-700 dark:text-emerald-300"
                               >
                                 {evidence.title || evidence.source_url}
                               </a>

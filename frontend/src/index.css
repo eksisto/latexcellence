@@ -227,6 +227,41 @@ input[type="number"]::-moz-number-spinbox {
 }
 
 /*
+ * link-shrink：全站超链接统一下划线样式。
+ * 以 ::after 绘制下划线，悬浮时从右向左缩短消失；颜色跟随 currentColor。
+ * 注意：高度必须保持 1px。更小的亚像素高度（如 0.5px）在部分 DPR/缩放组合下
+ * 会被背景绘制的像素对齐取整为 0，导致细线在特定缩放比例下整根消失。
+ * 不含 display，由使用处自行决定（纯文本链加 inline-block，带图标的用 inline-flex）。
+ * 定义为 @utility 以支持 hover: / *:[a]: 等变体组合。
+ */
+@utility link-shrink {
+  position: relative;
+  text-decoration-line: none;
+
+  &::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    bottom: 0;
+    height: 1px;
+    width: 100%;
+    background-color: currentColor;
+    transform-origin: left;
+    transition: transform 300ms cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  &:hover::after {
+    transform: scaleX(0);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    &::after {
+      transition: none;
+    }
+  }
+}
+
+/*
  * 代码展示统一样式
  * .code-block：带 chrome 的块级代码（背景/边框/圆角/溢出）
  * .code-block-bare：无 chrome 的块级代码（仅排版，用于已带卡片容器的场景）

@@ -132,7 +132,7 @@ export default function LoginPage() {
       <div className="mt-4 flex items-center justify-center gap-4 text-sm text-muted-foreground">
         <Link
           to="/register"
-          className="inline-flex items-center gap-1.5 underline underline-offset-3 hover:text-foreground"
+          className="link-shrink inline-flex items-center gap-1.5 hover:text-foreground"
         >
           <LockKeyhole className="size-4" />
           {t("pages:auth.needAccount")}
