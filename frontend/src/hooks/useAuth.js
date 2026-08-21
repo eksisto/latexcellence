@@ -16,8 +16,6 @@ import { api } from "@/api/index";
 import { authHeaders, setMultiUserMode } from "@/api/connection";
 import useStore from "@/store/useStore";
 
-let bootStarted = false;
-
 /** 探测后端是否处于多用户模式：先同源，再按配置基地址回退 */
 async function detectMultiUserMode() {
   try {
@@ -45,13 +43,8 @@ export default function useAuthBootstrap() {
   const setAuthMe = useStore((s) => s.setAuthMe);
 
   useEffect(() => {
-    if (bootStarted) return;
-    bootStarted = true;
-    let cancelled = false;
-
     (async () => {
       const multi = await detectMultiUserMode();
-      if (cancelled) return;
       setMultiUserMode(multi);
       // 模式可能被探测修正（首访无持久化标志时 base 曾指向默认地址）：
       // 重置功能开关，让 useEnabledFeatures 以正确基地址重新拉取
@@ -63,7 +56,6 @@ export default function useAuthBootstrap() {
       }
       try {
         const me = await api.auth.me();
-        if (cancelled) return;
         if (me?.user?.status === "pending") {
           setAuthStatus("pending");
         } else {
@@ -71,15 +63,10 @@ export default function useAuthBootstrap() {
           setAuthStatus("authenticated");
         }
       } catch {
-        if (cancelled) return;
         // 401（未登录/会话过期）→ unauthenticated；其他异常同样视为未登录
         setAuthStatus("unauthenticated");
       }
     })();
-
-    return () => {
-      cancelled = true;
-    };
   }, [setAuthStatus, setAuthMe]);
 }
 
