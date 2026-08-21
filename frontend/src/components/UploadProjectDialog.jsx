@@ -149,8 +149,11 @@ export default function UploadProjectDialog({
     setPhase("uploading");
     setProgress(0);
     try {
-      const data = await api.projects.upload(archive, undefined, (p) =>
-        setProgress(p),
+      const data = await api.projects.upload(
+        archive,
+        // 目录打包产物是匿名 Blob，显式传名（后端 sanitize 后作为项目名）
+        mode === "directory" ? dirLabel || undefined : undefined,
+        (p) => setProgress(p),
       );
       toast.success(t("components:uploadProject.uploaded"), {
         description: data?.project?.name || archiveName,

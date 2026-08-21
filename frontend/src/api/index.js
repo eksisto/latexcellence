@@ -1090,7 +1090,9 @@ export const api = {
     /** 上传压缩包创建项目（zip/7z，FormData；name 可选） */
     upload: (file, name, onProgress) => {
       const formData = new FormData();
-      formData.append("archive", file);
+      // 目录打包产物是 Blob（无 name），必须显式给 filename，
+      // 否则浏览器默认填 "blob"，后端按扩展名白名单拒绝（400 invalid_archive）
+      formData.append("archive", file, file.name || "upload.zip");
       if (name) formData.append("name", name);
       return new Promise((resolve, reject) => {
         const xhr = new XMLHttpRequest();
