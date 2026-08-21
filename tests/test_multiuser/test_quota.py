@@ -105,6 +105,50 @@ class TestEnforce:
             quota.enforce_derived_quota(env["user"]["id"], 20)
         assert ei.value.status_code == 413
 
+    # ── R1：derived quota 创建时检查（多用户模式 + 请求级当前用户上下文）──
+
+    def test_enforce_derived_for_current_user_over_quota(self, env):
+        """多用户 + 请求级上下文：用量已满时拒绝创建（超限抛 413）。"""
+        auth_core.set_user_quota(env["user"]["id"], None, 10)
+        (userspace.derived_dir(env["user"]["id"], "plots") / "p.bin").write_bytes(
+            b"x" * 20
+        )
+        userspace.set_current_user_id(env["user"]["id"])
+        try:
+            with pytest.raises(HTTPException) as ei:
+                quota.enforce_derived_quota_for_current_user()
+            assert ei.value.status_code == 413
+            assert ei.value.detail["error"] == "quota_exceeded"
+        finally:
+            userspace.set_current_user_id(None)
+
+    def test_enforce_derived_for_current_user_within_limit(self, env):
+        auth_core.set_user_quota(env["user"]["id"], None, 1000)
+        userspace.set_current_user_id(env["user"]["id"])
+        try:
+            quota.enforce_derived_quota_for_current_user()  # 不抛
+        finally:
+            userspace.set_current_user_id(None)
+
+    def test_enforce_derived_for_current_user_no_context_skipped(self, env):
+        """无当前用户上下文（session-only / 未登录路径）→ 跳过检查。"""
+        auth_core.set_user_quota(env["user"]["id"], None, 10)
+        (userspace.derived_dir(env["user"]["id"], "plots") / "p.bin").write_bytes(
+            b"y" * 20
+        )
+        userspace.set_current_user_id(None)
+        quota.enforce_derived_quota_for_current_user()  # 不抛
+
+    def test_enforce_derived_for_current_user_single_user_mode(self, tmp_path):
+        """单用户模式（无配额语义）→ 无条件跳过。"""
+        build_mu_env(tmp_path, enabled=False)
+        userspace.set_current_user_id("any-id")
+        try:
+            quota.enforce_derived_quota_for_current_user(10**9)  # 不抛
+        finally:
+            userspace.set_current_user_id(None)
+            _reset_config_state()
+
 
 class TestProjectRow:
     def test_create_project_row_and_unique_name(self, env):
@@ -123,6 +167,57 @@ class TestProjectRow:
     def test_next_available_name(self, env):
         quota.create_project_row(env["user"]["id"], "P", 1)
         assert quota.next_available_name(env["user"]["id"], "P") == "P (2)"
+
+    # ── R4：xx (2) 命名并发 / 唯一索引重试路径 ─────────────────────────
+
+    def test_concurrent_create_project_row_unique_names(self, env):
+        """真并发（多线程）调用 create_project_row：全部成功且名称唯一。"""
+        import threading
+
+        owner_id = env["user"]["id"]
+        results: list[str] = []
+        errors: list[BaseException] = []
+        lock = threading.Lock()
+
+        def worker() -> None:
+            try:
+                row = quota.create_project_row(owner_id, "Same", 1)
+                with lock:
+                    results.append(row["name"])
+            except BaseException as e:  # noqa: BLE001
+                with lock:
+                    errors.append(e)
+
+        threads = [threading.Thread(target=worker) for _ in range(8)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+
+        assert not errors, f"concurrent creation failed: {errors}"
+        assert len(results) == 8
+        assert len(set(results)) == 8, f"duplicate names: {sorted(results)}"
+        # 名称应为 Same / Same (2) … Same (8)（顺序无关，仅校验集合）
+        expected = {"Same", *(f"Same ({i})" for i in range(2, 9))}
+        assert set(results) == expected
+
+    def test_create_project_row_integrity_retry_path(self, env, monkeypatch):
+        """唯一索引冲突（并发窗口中的过期预检）→ 重试分支生成 xx (2)。"""
+        owner_id = env["user"]["id"]
+        quota.create_project_row(owner_id, "Doc", 1)  # 已存在 "Doc"
+        real_next = quota.next_available_name
+        calls = {"n": 0}
+
+        def fake_next(owner: str, base: str) -> str:
+            calls["n"] += 1
+            if calls["n"] == 1:
+                return "Doc"  # 模拟过期预检：命中唯一索引
+            return real_next(owner, base)
+
+        monkeypatch.setattr(quota, "next_available_name", fake_next)
+        row = quota.create_project_row(owner_id, "Doc", 1)
+        assert calls["n"] == 2  # 预检冲突 → 重试取新名
+        assert row["name"] == "Doc (2)"
 
 
 class TestReconcile:
