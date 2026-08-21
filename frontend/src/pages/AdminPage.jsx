@@ -35,7 +35,10 @@ const MB = 1024 * 1024;
 
 function mbText(bytes) {
   if (bytes == null) return null;
-  return String(Math.round(bytes / MB));
+  const mb = bytes / MB;
+  // 非整 MB 时保留小数（去尾零），避免 Math.round 把 0.5 MiB 回显成 "1"，
+  // 管理员不改输入直接保存时配额被静默翻倍
+  return String(Number.isInteger(mb) ? mb : Number(mb.toFixed(3)));
 }
 
 function formatDate(iso) {
@@ -284,22 +287,29 @@ export default function AdminPage() {
     setQuotaDerived(mbText(u.derived_quota_bytes) ?? "");
   }, []);
 
+  // 配额输入未改动时透传原始字节数：即使回显有舍入，保存也不会漂移
+  const quotaBytes = (text, originalBytes) => {
+    if (text.trim() === "") return null;
+    const n = Number(text);
+    if (!Number.isFinite(n)) return NaN;
+    return text === (mbText(originalBytes) ?? "")
+      ? originalBytes
+      : Math.round(n * MB);
+  };
+
   const saveQuota = async () => {
     if (!quotaTarget) return;
-    const pj = quotaPj.trim() === "" ? null : Number(quotaPj);
-    const dv = quotaDerived.trim() === "" ? null : Number(quotaDerived);
-    if (
-      (pj !== null && !Number.isFinite(pj)) ||
-      (dv !== null && !Number.isFinite(dv))
-    ) {
+    const pj = quotaBytes(quotaPj, quotaTarget.project_quota_bytes);
+    const dv = quotaBytes(quotaDerived, quotaTarget.derived_quota_bytes);
+    if (Number.isNaN(pj) || Number.isNaN(dv)) {
       toast.error(t("pages:admin.quotaInvalid"));
       return;
     }
     setBusyUserId(quotaTarget.id);
     try {
       await api.admin.setQuota(quotaTarget.id, {
-        projectQuotaBytes: pj === null ? null : Math.round(pj * MB),
-        derivedQuotaBytes: dv === null ? null : Math.round(dv * MB),
+        projectQuotaBytes: pj,
+        derivedQuotaBytes: dv,
       });
       toast.success(t("pages:admin.quotaSaved"));
       setQuotaTarget(null);
