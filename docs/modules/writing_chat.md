@@ -234,7 +234,7 @@ writing_chat 是 `chat_stream_with_tools` 方法的主要消费者。该方法�
 **工具确认流程**：
 
 - `pendingTool` state 存储待确认的工具调用
-- `confirmPendingTool(modifiedArgs)` 调用 `/confirm-tool` 接口，可选修改工具参数后确认
+- `confirmPendingTool(modifiedArgs)` 调用 `/confirm-tool` 接口，可选修改工具参数后确认；受 `canWrite` 守卫（viewer 只读，与 `applyEdit` 同权，后端 403 兜底）
 - `cancelPendingTool()` 调用 `/cancel-tool` 接口取消
 
 **澄清请求流程**：

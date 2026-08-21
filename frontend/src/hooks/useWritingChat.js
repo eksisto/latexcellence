@@ -87,19 +87,29 @@ export default function useWritingChat() {
     pendingToolRef.current = pendingTool;
   }, [pendingTool]);
 
-  const confirmPendingTool = useCallback(async (modifiedArgs) => {
-    const tool = pendingToolRef.current;
-    if (!tool || !tool.pending_id) return;
-    try {
-      await api.writingChat.confirmTool(
-        tool.pending_id,
-        modifiedArgs ?? undefined,
-      );
-    } catch (e) {
-      // silent
-    }
-    _setPendingTool(null);
-  }, []);
+  const confirmPendingTool = useCallback(
+    async (modifiedArgs) => {
+      // 写权限守卫：agent 写工具（edit_paragraph / undo_last_edit）确认
+      // 与 applyEdit 同权，viewer 只读（后端 403 兜底）
+      if (!canWrite) {
+        setError(i18n.t("errors:noPermission"));
+        toast.error(i18n.t("errors:noPermission"));
+        return;
+      }
+      const tool = pendingToolRef.current;
+      if (!tool || !tool.pending_id) return;
+      try {
+        await api.writingChat.confirmTool(
+          tool.pending_id,
+          modifiedArgs ?? undefined,
+        );
+      } catch (e) {
+        // silent
+      }
+      _setPendingTool(null);
+    },
+    [canWrite],
+  );
 
   const cancelPendingTool = useCallback(async () => {
     const tool = pendingToolRef.current;

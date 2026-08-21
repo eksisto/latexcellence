@@ -45,10 +45,13 @@ import ConfirmDialog from "@/components/ConfirmDialog";
 import UndoRedoButtons from "@/components/UndoRedoButtons";
 import { api } from "@/api/index";
 import useStore from "@/store/useStore";
+import useCanWrite from "@/hooks/useCanWrite";
 
 export default function BibManagerLibrary() {
   const { t } = useTranslation(["pages", "common"]);
   const workspaceId = useStore((s) => s.workspaceId);
+  // 多用户模式写权限：viewer 隐藏撤销/重做与条目编辑/删除入口（后端 403 兜底）
+  const canWrite = useCanWrite();
 
   const [bibFiles, setBibFiles] = useState([]);
   const [selectedBibFile, setSelectedBibFile] = useState("");
@@ -453,11 +456,13 @@ export default function BibManagerLibrary() {
                 <span className="ml-1">×</span>
               </Badge>
             )}
-            <UndoRedoButtons
-              activeFile={selectedBibFile}
-              workspaceId={workspaceId}
-              onAfterUndoRedo={handleAfterUndoRedo}
-            />
+            {canWrite && (
+              <UndoRedoButtons
+                activeFile={selectedBibFile}
+                workspaceId={workspaceId}
+                onAfterUndoRedo={handleAfterUndoRedo}
+              />
+            )}
             <Button
               variant="outline"
               size="sm"
@@ -547,22 +552,26 @@ export default function BibManagerLibrary() {
                           )}
                         </div>
                         <div className="flex items-center gap-1 shrink-0">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="size-8"
-                            onClick={() => handleStartEdit(entry)}
-                          >
-                            <Edit3 className="size-3.5" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="size-8 text-destructive hover:text-destructive"
-                            onClick={() => setDeleteTarget(entry)}
-                          >
-                            <Trash2 className="size-3.5" />
-                          </Button>
+                          {canWrite && (
+                            <>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="size-8"
+                                onClick={() => handleStartEdit(entry)}
+                              >
+                                <Edit3 className="size-3.5" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="size-8 text-destructive hover:text-destructive"
+                                onClick={() => setDeleteTarget(entry)}
+                              >
+                                <Trash2 className="size-3.5" />
+                              </Button>
+                            </>
+                          )}
                         </div>
                       </div>
                     </CardContent>
@@ -728,21 +737,23 @@ export default function BibManagerLibrary() {
                                 DOI
                               </Badge>
                             )}
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="size-6 shrink-0 text-muted-foreground hover:text-destructive opacity-0 group-hover/dup:opacity-100 transition-opacity"
-                              onClick={() =>
-                                handleDeleteFromDuplicates(e.cite_key)
-                              }
-                              disabled={deletingDupKey === e.cite_key}
-                            >
-                              {deletingDupKey === e.cite_key ? (
-                                <Loader2 className="size-3 animate-spin" />
-                              ) : (
-                                <Trash2 className="size-3" />
-                              )}
-                            </Button>
+                            {canWrite && (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="size-6 shrink-0 text-muted-foreground hover:text-destructive opacity-0 group-hover/dup:opacity-100 transition-opacity"
+                                onClick={() =>
+                                  handleDeleteFromDuplicates(e.cite_key)
+                                }
+                                disabled={deletingDupKey === e.cite_key}
+                              >
+                                {deletingDupKey === e.cite_key ? (
+                                  <Loader2 className="size-3 animate-spin" />
+                                ) : (
+                                  <Trash2 className="size-3" />
+                                )}
+                              </Button>
+                            )}
                           </div>
                         ))}
                       </div>
