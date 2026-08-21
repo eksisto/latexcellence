@@ -12,6 +12,7 @@ import RotateCcw from "lucide-react/dist/esm/icons/rotate-ccw.mjs";
 import ArchiveRestore from "lucide-react/dist/esm/icons/archive-restore.mjs";
 import RefreshCw from "lucide-react/dist/esm/icons/refresh-cw.mjs";
 import Loader from "lucide-react/dist/esm/icons/loader-circle.mjs";
+import Crown from "lucide-react/dist/esm/icons/crown.mjs";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -364,7 +365,11 @@ export default function ProjectWorkbenchPage() {
                 <span className="font-medium text-foreground">
                   {authUser?.username || "—"}
                 </span>
-                {isAdmin && <Badge variant="secondary">Admin</Badge>}
+                {isAdmin && (
+                  <Badge variant="secondary">
+                    <Crown className="size-3" /> Admin
+                  </Badge>
+                )}
               </span>
               <span className="text-xs text-muted-foreground">
                 {formatBytes(projectUsage)} / {formatBytes(projectQuota)} ·{" "}
