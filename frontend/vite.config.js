@@ -1,4 +1,4 @@
-import { defineConfig } from "vite";
+import { defineConfig, loadEnv } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import path from "path";
@@ -40,60 +40,74 @@ function fontSourcePlugin() {
   };
 }
 
-export default defineConfig({
-  plugins: [fontSourcePlugin(), react(), tailwindcss()],
-  resolve: {
-    alias: {
-      "@": path.resolve(__dirname, "./src"),
-    },
-  },
-  server: {
-    port: 5173,
-    proxy: {
-      "/api": {
-        target: "http://localhost:8000",
-        changeOrigin: true,
+// 默认后端地址可由维护者通过 .env 的 VITE_API_BASE_URL 配置（见 .env.example）；
+// dev 代理目标从该地址派生（去掉末尾 /api），便于 npm run dev 直连远程后端。
+function resolveDevProxyTarget(env) {
+  const base = (env.VITE_API_BASE_URL || "").trim();
+  if (!/^https?:\/\//i.test(base)) return "http://localhost:8000";
+  const stripped = base.replace(/\/+$/, "").replace(/\/api$/i, "");
+  return stripped || "http://localhost:8000";
+}
+
+export default defineConfig(({ mode }) => {
+  const env = loadEnv(mode, __dirname, "");
+  const devProxyTarget = resolveDevProxyTarget(env);
+
+  return {
+    plugins: [fontSourcePlugin(), react(), tailwindcss()],
+    resolve: {
+      alias: {
+        "@": path.resolve(__dirname, "./src"),
       },
     },
-  },
-  build: {
-    outDir: "../static",
-    emptyOutDir: true,
-    rollupOptions: {
-      output: {
-        assetFileNames: (assetInfo) => {
-          const name = assetInfo.name || "";
-          if (/\.(woff2?|ttf|otf|eot)$/i.test(name)) {
-            return "assets/fonts/[name]-[hash][extname]";
-          }
-          return "assets/[name]-[hash][extname]";
+    server: {
+      port: 5173,
+      proxy: {
+        "/api": {
+          target: devProxyTarget,
+          changeOrigin: true,
         },
-        manualChunks(id) {
-          if (id.includes("node_modules")) {
-            if (
-              /\/node_modules\/react(-dom)?\//.test(id) ||
-              /\/node_modules\/scheduler\//.test(id)
-            )
-              return "vendor-react";
-            if (/@base-ui|@radix-ui/.test(id)) return "vendor-ui";
-            if (/react-router|@remix-run\/router/.test(id))
-              return "vendor-router";
-            if (/lucide-react/.test(id)) return "vendor-icons";
-            if (/sonner/.test(id)) return "vendor-sonner";
-            if (/katex/.test(id)) return "vendor-katex";
-            // 以下库只被懒加载路由使用（MarkdownRenderer / CodeBlock 等），
-            // 独立分包，避免随 i18next/zustand 等首屏依赖一起进入初始 vendor chunk。
-            if (/highlight\.js/.test(id)) return "vendor-highlight";
-            if (
-              /react-markdown|remark-|rehype-|unified|hast-util-|mdast-util-|unist-util-|micromark|vfile|property-information|character-entities|comma-separated-tokens|space-separated-tokens|decode-named-character-reference|escape-string-regexp|is-plain-obj|trough|bail|extend|trim-lines|ccount|zwitch|devlop|dequal|markdown-table|longest-streak|web-namespaces|html-void-elements|stringify-entities|parse-entities|hastscript|style-to-js|style-to-object|inline-style-parser/.test(
-                id,
+      },
+    },
+    build: {
+      outDir: "../static",
+      emptyOutDir: true,
+      rollupOptions: {
+        output: {
+          assetFileNames: (assetInfo) => {
+            const name = assetInfo.name || "";
+            if (/\.(woff2?|ttf|otf|eot)$/i.test(name)) {
+              return "assets/fonts/[name]-[hash][extname]";
+            }
+            return "assets/[name]-[hash][extname]";
+          },
+          manualChunks(id) {
+            if (id.includes("node_modules")) {
+              if (
+                /\/node_modules\/react(-dom)?\//.test(id) ||
+                /\/node_modules\/scheduler\//.test(id)
               )
-            )
-              return "vendor-markdown";
-            return "vendor";
-          }
+                return "vendor-react";
+              if (/@base-ui|@radix-ui/.test(id)) return "vendor-ui";
+              if (/react-router|@remix-run\/router/.test(id))
+                return "vendor-router";
+              if (/lucide-react/.test(id)) return "vendor-icons";
+              if (/sonner/.test(id)) return "vendor-sonner";
+              if (/katex/.test(id)) return "vendor-katex";
+              // 以下库只被懒加载路由使用（MarkdownRenderer / CodeBlock 等），
+              // 独立分包，避免随 i18next/zustand 等首屏依赖一起进入初始 vendor chunk。
+              if (/highlight\.js/.test(id)) return "vendor-highlight";
+              if (
+                /react-markdown|remark-|rehype-|unified|hast-util-|mdast-util-|unist-util-|micromark|vfile|property-information|character-entities|comma-separated-tokens|space-separated-tokens|decode-named-character-reference|escape-string-regexp|is-plain-obj|trough|bail|extend|trim-lines|ccount|zwitch|devlop|dequal|markdown-table|longest-streak|web-namespaces|html-void-elements|stringify-entities|parse-entities|hastscript|style-to-js|style-to-object|inline-style-parser/.test(
+                  id,
+                )
+              )
+                return "vendor-markdown";
+              return "vendor";
+            }
+          },
         },
       },
     },
-  },
+  };
 });

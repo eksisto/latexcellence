@@ -930,7 +930,7 @@
       "saveConfig": "保存配置",
       "connection": "后端连接",
       "apiBase": "后端 API 地址",
-      "apiBaseHint": "浏览器访问的后端地址；默认 http://localhost:8000/api，前后端分离部署时填写完整地址",
+      "apiBaseHint": "浏览器访问的后端地址；默认 {{default}}，前后端分离部署时填写完整地址",
       "apiToken": "访问令牌",
       "apiTokenPlaceholder": "后端未启用令牌校验时留空",
       "apiTokenHint": "需与后端 config.json 中 security.access_token 一致",

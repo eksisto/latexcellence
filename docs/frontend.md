@@ -61,6 +61,8 @@ WelcomePage 采用「标题页 + 点线目录」构图：字标、slogan、「�
 
 后端连接配置（API 基地址 / 访问令牌的运行时读写、认证请求头、EventSource 令牌追加、连接测试）集中在 `api/connection.js`，`api/index.js` 从该模块导入并保持兼容导出；纯 URL 计算（`normalizeApiBase` / `appendTokenToUrl` / `resolveUrlPath`）仍位于 `utils/apiUrl.js`，可被 `node --test` 直接单测。
 
+默认后端地址可由维护者构建时配置：在 `frontend/.env`（模板见 `.env.example`）中设置 `VITE_API_BASE_URL` 后重新 `npm run build`，产物默认即连接该地址，用户打开前端无需手动填写。运行时优先级：设置页（localStorage）→ `VITE_API_BASE_URL` → 内置默认 `http://localhost:8000/api`；dev 模式下 Vite 代理目标也从该变量派生（去掉末尾 `/api`）。
+
 API 按功能分组暴露（health、config、project、typoCheck、expressionOpt、terminologyCheck、paragraphTranslate、formulaOCR、tableOCR、templateGen、codeReview、compile、gitDiff、styleModify、formatConverter、bibManager、writingChat），LLM 相关接口自动注入 `language` 参数。`templateGen.generate` 通过 `fetch` reader 解析 SSE 流（与 `writingChat.send` 同模式），实时推送 `plan`/`tool_call`/`tool_result`/`compile`/`warning`/`done`/`error` 事件；`templateGen.download` 支持下载整个沙箱为 ZIP 文件；`templateGen.trace` / `templateGen.downloadTrace` 支持查看与导出 Agent 运行追踪日志。`styleModify.agent` 分组提供 run、refine、session、trace、apply、undo、delete 接口，run/refine 使用 SSE，其余使用 JSON。
 
 ## 工具模块

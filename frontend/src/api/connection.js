@@ -3,7 +3,7 @@
  *
  * 职责：
  * - 管理 API 基地址 / 访问令牌的运行时配置
- *   （优先级：设置页 localStorage → VITE_API_BASE_URL → 默认 http://localhost:8000/api）
+ *   （优先级：设置页 localStorage → VITE_API_BASE_URL（.env，维护者构建时配置）→ 默认 http://localhost:8000/api）
  * - 统一构造认证请求头，并为无法自定义请求头的 URL（EventSource 等）追加令牌
  * - 提供连接测试（health 验证可达性，config/status 验证令牌是否有效）
  * - 多用户模式（P5）：API 基地址固定为同源 /api（生产由 FastAPI 挂载 static/、
@@ -29,6 +29,14 @@ const TOKEN_HEADER = "X-Latexcellence-Token";
 const MULTIUSER_MODE_KEY = "latexcellence_multiuser";
 const CSRF_COOKIE_NAME = "latexcellence_csrf";
 const CSRF_HEADER = "X-Latexcellence-CSRF";
+
+/**
+ * 构建时固化的默认后端地址（维护者通过 .env 的 VITE_API_BASE_URL 配置，
+ * 未设置时回退 http://localhost:8000/api）；供设置页展示默认值。
+ */
+export function getDefaultApiBase() {
+  return DEFAULT_API_BASE;
+}
 
 // localStorage 读取是同步 I/O，请求路径上会高频调用（authHeaders / resolveUrl / appendToken），
 // 用内存缓存减少重复读取；setApiConnection 同步更新缓存，其他标签页改动由 storage 事件失效。

@@ -293,6 +293,7 @@ python -m backend.manage set-status <username> pending|active|disabled
 前端可独立部署为静态站点（如 `https://latexcellence.example.com`），用户浏览器直接访问网站、自行下载并本地运行后端。此模式下：
 
 - 前端 API 地址运行时可配置（设置页 → localStorage → `VITE_API_BASE_URL` → 默认 `http://localhost:8000/api`）；前后端分离部署时在设置页填写完整后端地址（如 `http://localhost:8000/api`）。
+- 维护者可在 `frontend/.env`（模板见 `.env.example`）中设置 `VITE_API_BASE_URL` 为自己的后端地址并重新构建，用户打开前端即默认连接该地址，无需逐个在设置页填写。
 - 后端返回的相对 URL（如 git-diff 的 `pdf_url`）由前端统一补全为完整后端地址并追加令牌参数。
 - `server.allowed_origins` 必须包含前端域名；`security.access_token` 建议设置随机长字符串，前端在设置页填写同名令牌。
 - 后端应保持绑定 `127.0.0.1`，只服务本机浏览器。

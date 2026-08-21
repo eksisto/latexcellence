@@ -119,7 +119,8 @@ latexcellence/
 │
 ├── frontend/
 │   ├── package.json                 # npm 依赖与脚本
-│   ├── vite.config.js               # Vite 配置
+│   ├── vite.config.js               # Vite 配置（dev 代理目标随 VITE_API_BASE_URL 派生）
+│   ├── .env.example                 # 环境变量模板（VITE_API_BASE_URL：维护者默认后端地址）
 │   ├── index.html                   # 入口 HTML
 │   ├── components.json              # shadcn/ui 组件配置
 │   ├── jsconfig.json                # JS 路径别名配置
@@ -156,7 +157,7 @@ latexcellence/
 │       │   ├── writing-chat/        # 写作聊天子 hooks（sessions/assistants/captcha/sse/utils）
 │       │   └── bib-manager/         # 参考文献管理子 hooks（format_analysis/metadata_extraction/bibtex_generation/bib_file_save/latex_generation）
 │       ├── components/              # 共享组件 + ui 基座组件
-│       │   ├── AuthShell.jsx        # 多用户认证页公共外壳
+│       │       ├── AuthShell.jsx        # 多用户认证页公共外壳
 │       │   ├── UploadProjectDialog.jsx # 上传项目对话框（zip/7z 或目录 JSZip 打包 + 进度）
 │       │   ├── ProjectPermissionsDialog.jsx # 项目权限对话框（协作者管理/转交）
 │       │   └── settings/            # 设置对话框分区配置组件

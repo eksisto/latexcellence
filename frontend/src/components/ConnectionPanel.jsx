@@ -2,6 +2,7 @@ import { memo, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
   checkConnection,
+  getDefaultApiBase,
   getApiBase,
   getApiToken,
   setApiConnection,
@@ -17,6 +18,7 @@ import { Label } from "@/components/ui/label";
  * 用户在面板中修改地址 / 令牌后会丢弃过期的自动探测结果。
  */
 function ConnectionPanel({ open = true }) {
+  const defaultApiBase = getDefaultApiBase();
   const [apiBase, setApiBase] = useState(getApiBase);
   const [apiToken, setApiToken] = useState(getApiToken);
   const [testing, setTesting] = useState(false);
@@ -131,13 +133,13 @@ function ConnectionPanel({ open = true }) {
         <div className="space-y-1.5">
           <Label className="text-xs">{t("settings.apiBase")}</Label>
           <Input
-            placeholder="http://localhost:8000/api"
+            placeholder={defaultApiBase}
             value={apiBase}
             onChange={(e) => handleApiBaseChange(e.target.value)}
             onBlur={persistConnection}
           />
           <p className="text-xs text-muted-foreground">
-            {t("settings.apiBaseHint")}
+            {t("settings.apiBaseHint", { default: defaultApiBase })}
           </p>
         </div>
         <div className="space-y-1.5">

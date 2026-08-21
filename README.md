@@ -202,6 +202,8 @@ python main.py config.json
 3. 后端在配置 `server.allowed_origins` 中加入前端域名（默认已含 `https://latexcellence.example.com`）。
 4. 用户打开网站，在设置页填写后端地址（如 `http://localhost:8000/api`）和访问令牌，点击「测试连接」后即可使用。
 
+> 维护者可在构建前把默认后端地址固化为自己的后端：复制 `frontend/.env.example` 为 `frontend/.env`，修改 `VITE_API_BASE_URL` 后重新 `npm run build`。这样用户打开前端即默认连接该地址，无需逐个在设置页填写（设置页仍可覆盖）。
+
 此模式下用户的 `.tex` 文件、TeX 工具链和 API Key 全部留在本地，前端服务器不接触用户数据；`/api/health` 保持公开以便连接测试，其余 `/api/*` 接口均校验访问令牌。
 
 ### 展示页（Showcase）

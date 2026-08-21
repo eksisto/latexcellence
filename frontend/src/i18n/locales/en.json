@@ -930,7 +930,7 @@
       "saveConfig": "Save Configuration",
       "connection": "Backend Connection",
       "apiBase": "Backend API URL",
-      "apiBaseHint": "URL the browser uses to reach the backend; default is http://localhost:8000/api. Use a full URL pointing to the backend for split deployment",
+      "apiBaseHint": "URL the browser uses to reach the backend; default is {{default}}. Use a full URL pointing to the backend for split deployment",
       "apiToken": "Access Token",
       "apiTokenPlaceholder": "Leave empty if the backend does not require a token",
       "apiTokenHint": "Must match security.access_token in the backend config.json",
