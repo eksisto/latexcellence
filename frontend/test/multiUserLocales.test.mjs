@@ -34,9 +34,14 @@ const exactMapBlock = errorMessagesSrc.match(
 );
 if (!exactMapBlock)
   throw new Error("cannot parse EXACT_MAP from errorMessages.js");
-const EXACT_MAP_SOURCE_KEYS = [
-  ...exactMapBlock[1].matchAll(/^\s*(?:"([^"]+)"|(\w+)):\s*"[^"]+"/gm),
-].map((m) => m[1] ?? m[2]);
+// 后端错误码 → errors 命名空间翻译键（camelCase）。
+// 单一事实源仍是 errorMessages.js 的 EXACT_MAP：源键为后端错误码，
+// 值为 locale 的 errors 翻译键（如 no_permission → noPermission）。
+const ERROR_CODE_TO_LOCALE_KEY = Object.fromEntries(
+  [...exactMapBlock[1].matchAll(/^\s*(?:"([^"]+)"|(\w+)):\s*"([^"]+)"/gm)].map(
+    (m) => [m[1] ?? m[2], m[3]],
+  ),
+);
 
 // 后端多用户错误码必须全部进入 errors 命名空间（translateError 依赖）
 const ERROR_CODES = [
@@ -96,18 +101,19 @@ const REQUIRED_PATHS = [
 test("所有语言含全部分用户错误码与 P5 页面翻译键", () => {
   // 绑定：多用户错误码必须已在 errorMessages.js 的 EXACT_MAP 中登记，
   // 防止"映射表加了码但测试列表没加"或反向漂移
-  const exactMapKeySet = new Set(EXACT_MAP_SOURCE_KEYS);
+  const errorCodeKeySet = new Set(Object.keys(ERROR_CODE_TO_LOCALE_KEY));
   for (const code of ERROR_CODES) {
     assert.ok(
-      exactMapKeySet.has(code),
+      errorCodeKeySet.has(code),
       `ERROR_CODES 中的 ${code} 未在 errorMessages.js EXACT_MAP 中登记`,
     );
   }
   for (const [i, locale] of locales.entries()) {
     for (const code of ERROR_CODES) {
+      const localeKey = ERROR_CODE_TO_LOCALE_KEY[code];
       assert.ok(
-        getPath(locale, `errors.${code}`),
-        `locale[${i}] missing errors.${code}`,
+        getPath(locale, `errors.${localeKey}`),
+        `locale[${i}] missing errors.${localeKey} (${code})`,
       );
     }
     for (const path of REQUIRED_PATHS) {
