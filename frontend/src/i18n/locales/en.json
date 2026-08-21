@@ -1446,6 +1446,7 @@
     "ipBlocked": "IP has been blocked, please try again later",
     "fileConflict": "File has been modified by another browser, please refresh and try again",
     "unauthorized": "Not signed in or session expired — please sign in again",
+    "invalid_credentials": "Invalid username or password",
     "no_permission": "You do not have permission to perform this action",
     "invalid_csrf": "Request rejected: CSRF validation failed",
     "rate_limited": "Too many requests; please try again later",

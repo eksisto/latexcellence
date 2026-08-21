@@ -1446,6 +1446,7 @@
     "ipBlocked": "IP 已被封鎖，請稍後重試",
     "fileConflict": "檔案已被其他瀏覽器修改，請刷新後重試",
     "unauthorized": "未登入或工作階段已過期，請重新登入",
+    "invalid_credentials": "使用者名稱或密碼錯誤",
     "no_permission": "沒有權限執行此操作",
     "invalid_csrf": "請求被拒絕：CSRF 驗證失敗",
     "rate_limited": "請求過於頻繁，請稍後再試",

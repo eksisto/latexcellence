@@ -17,7 +17,6 @@ from backend.core.config import get_config
 from backend.core.multiuser import auth as auth_core
 from backend.core.multiuser.dependencies import (
     forbidden,
-    unauthorized,
 )
 
 
@@ -74,13 +73,15 @@ async def login(username: str, password: str, remember: bool, ip: str) -> dict:
     # 恒定时长校验：用户不存在与密码错误耗时一致，避免时序侧信道枚举用户名
     ok = await asyncio.to_thread(auth_core.check_credentials, hashed, password)
     if not ok:
-        raise unauthorized("Invalid username or password")
+        # 独立错误码：凭据错误 ≠ 会话过期（unauthorized），前端据此展示
+        # 「用户名或密码错误」且不触发全局登出回调
+        raise _http(401, "invalid_credentials", "Invalid username or password")
     if user["status"] == "pending":
         raise forbidden("account_pending", "Account is pending admin approval")
     if user["status"] == "disabled":
         raise forbidden("account_disabled", "Account is disabled")
     if user["status"] != "active":
-        raise unauthorized("Invalid username or password")
+        raise _http(401, "invalid_credentials", "Invalid username or password")
 
     token = await asyncio.to_thread(auth_core.create_session, user["id"], remember)
     return {"token": token, "user": auth_core.to_public_user(user)}

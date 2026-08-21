@@ -199,9 +199,18 @@ async function request(url, options = {}) {
     throw new Error(translateError(e.message || "Request timed out"));
   }
   if (!res.ok) {
-    checkUnauthorized(res);
-    const err = await res.json().catch(() => ({ detail: res.statusText }));
-    throw buildRequestError(err, res.status);
+    const err = await res.json().catch(() => null);
+    const detail = err?.detail ?? res.statusText;
+    // 登录凭据错误（401 invalid_credentials）是登录失败而非会话过期，
+    // 不触发全局登出回调（否则登录页会被误清状态）
+    if (detail?.error !== "invalid_credentials") {
+      checkUnauthorized(res);
+    }
+    // 必须继续经 buildRequestError 抛出：结构化 detail.error 会挂到
+    // error.code，登录页 account_pending 分支依赖它导向 /waiting 待审批页。
+    // 裸 new Error(translateError(...)) 会丢掉 code，使 pending 状态机失联；
+    // { detail } 包装在 detail 兜底为 statusText 时保持错误消息行为不变。
+    throw buildRequestError({ detail }, res.status);
   }
   return res.json();
 }

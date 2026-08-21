@@ -426,7 +426,7 @@ ExtractorRegistry 先处理已知公开端点（当前代码托管页面使用 G
 - `init_db()` 与各业务函数实时读取 `get_config()`，不缓存路径/阈值；数据库路径在测试/换配置时变化会自动重连。
 - 所有 SQLite 压库操作为同步函数，事件循环中通过 `asyncio.to_thread` 调用，禁止阻塞事件循环（v1 单进程，SQLite WAL 足够）。
 - 会话 Cookie：`HttpOnly` + `SameSite=Lax`，HTTPS 请求下 `Secure`；默认 7 天、记住我 30 天；会话吊销在禁用/重置密码时立即生效。
-- 登录失败统一返回 401 `unauthorized`（避免用户名枚举）；**登录采用恒定时长校验**：用户名不存在时也对占位哈希执行 argon2 验证，用户名枚举响应耗时一致，封堵时序侧信道；待审批返回 403 `account_pending`，禁用返回 403 `account_disabled`。
+- 登录凭据错误返回 401 `invalid_credentials`（独立于会话过期的 `unauthorized`，前端据此展示「用户名或密码错误」且不触发全局登出；避免用户名枚举）；**登录采用恒定时长校验**：用户名不存在时也对占位哈希执行 argon2 验证，用户名枚举响应耗时一致，封堵时序侧信道；待审批返回 403 `account_pending`，禁用返回 403 `account_disabled`。
 - 管理员引导：首次启动且用户表为空时，从环境变量（`LATEXCELLENCE_ADMIN_USERNAME` / `LATEXCELLENCE_ADMIN_PASSWORD`）创建管理员；未设置则等待 CLI `create-admin`。
 - 端到端注册审批流程：注册（pending）→ 管理员审批（active）→ 登录 → 会话访问；未登录访问受保护接口 / 会话过期返回 401。
 

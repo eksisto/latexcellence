@@ -31,6 +31,7 @@ const EXACT_MAP = {
 
   // 多用户模式（P1–P5）错误码（后端 detail.error）
   unauthorized: "unauthorized",
+  invalid_credentials: "invalidCredentials",
   no_permission: "noPermission",
   invalid_csrf: "invalidCsrf",
   quota_exceeded: "quotaExceeded",

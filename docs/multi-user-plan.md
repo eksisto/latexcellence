@@ -359,6 +359,7 @@ data/
 | 场景 | 状态码 | 错误码 |
 | --- | --- | --- |
 | 未登录/会话过期 | 401 | `unauthorized` |
+| 登录凭据错误（用户名或密码错误） | 401 | `invalid_credentials` |
 | 无项目权限 / viewer 写操作 | 403 | `no_permission` |
 | 文件被他人修改 | 409 | `file_conflict`（沿用） |
 | 配额/上传超限 | 413 | `quota_exceeded` / `upload_too_large` |

@@ -215,13 +215,15 @@ class TestRegisterApproveLoginFlow:
             "/api/auth/login", json={"username": "alice", "password": "bad-pass-xyz"}
         )
         assert r.status_code == 401
-        assert r.json()["detail"]["error"] == "unauthorized"
+        # 凭据错误使用独立错误码，与会话过期（unauthorized）区分
+        assert r.json()["detail"]["error"] == "invalid_credentials"
 
     def test_login_invalid_username_same_error(self, mu_client):
         r = mu_client.post(
             "/api/auth/login", json={"username": "missing", "password": "whatever"}
         )
         assert r.status_code == 401
+        assert r.json()["detail"]["error"] == "invalid_credentials"
 
     def test_logout_revokes(self, mu_client):
         _make_admin(mu_client, mu_client)
