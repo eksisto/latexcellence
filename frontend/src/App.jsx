@@ -25,6 +25,7 @@ import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import ThemeToggle from "@/components/ThemeToggle";
 import ThemeSwitcher from "@/components/ThemeSwitcher";
+import LanguageSwitcher from "@/components/LanguageSwitcher";
 import AuthConnectionButton from "@/components/AuthConnectionButton";
 import useFavicon from "./hooks/useFavicon";
 import useAuthBootstrap, { logoutUser } from "./hooks/useAuth";
@@ -257,6 +258,8 @@ const AppToolbar = memo(function AppToolbar() {
       {/* 欢迎页已有「打开工作区」主按钮、工作区页本身就在工作区，右上角不再显示工作区快捷入口 */}
       <WorkspaceShortcut />
       <AuthToolbar />
+      {/* 界面语言为纯前端设置：不依赖后端连接与登录状态，始终可切换 */}
+      <LanguageSwitcher />
       <ThemeSwitcher />
       <ThemeToggle />
       {/* 认证页改绑后端：未登录/待审批时显示，避免被绑定后端的登录页卡死 */}

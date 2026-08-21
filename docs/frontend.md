@@ -39,7 +39,7 @@
 | `/bib-manager` | BibManagerPage | JSON request |
 | `/plot-gen` | PlotGenPage | **SSE Agent 流**（手写 fetch reader，无 hook） |
 
-全局右上角工具栏（AppToolbar）包含 ThemeSwitcher、ThemeToggle、工作区入口、SettingsDialog，以及认证页改绑后端入口（AuthConnectionButton：未登录/待审批时显示）；`App.jsx` 内联了一份全站共享的右下角 `\LaTeX` 字标背景装饰（`bgSvg`，含 `--primary` 圆形 + 双色字标路径），所有路由共享。
+全局右上角工具栏（AppToolbar）包含 LanguageSwitcher、ThemeSwitcher、ThemeToggle、工作区入口、SettingsDialog，以及认证页改绑后端入口（AuthConnectionButton：未登录/待审批时显示）；`App.jsx` 内联了一份全站共享的右下角 `\LaTeX` 字标背景装饰（`bgSvg`，含 `--primary` 圆形 + 双色字标路径），所有路由共享。
 
 `TemplateGenPage` 不使用 `useParagraphCheck` 或 `useWritingChat` hook，而是手写 `fetch` reader 对接 `/api/template-gen/generate` SSE 流，在本地 `steps` state 中累积 `plan`/`tool_call`/`tool_result`/`compile`/`warning`/`done` 事件并逐条渲染时间线。文件结果在 `done` 事件后通过 `/files` 和 `/file` 端点按需加载，支持通过 `/download` 下载整个沙箱为 ZIP 文件。生成完成后提供 Agent 日志卡片，可查看（弹窗内逐条展示 `trace.jsonl` 事件）或导出（下载 JSON），对应 `/trace` 与 `/trace/download` 端点。
 
@@ -95,9 +95,11 @@ highlight.js 的按需注册与统一入口：
 
 基于 `i18next` + `react-i18next` + `i18next-browser-languagedetector`。支持简体中文（`zh`）、繁體中文（`zh-TW`）、英文（`en`），翻译按命名空间拆分：`common`、`pages`、`components`、`hooks`、`errors`。Fallback 语言为简体中文。
 
-语言检测会将浏览器返回的完整语言标签归一为受支持代码（`en-US` → `en`，`zh-CN` → `zh`，`zh-TW` / `zh-HK` / `zh-Hant` → `zh-TW`），避免设置页显示未匹配的原始标签；归一化逻辑与后端语言名映射集中在 `src/i18n/language.js`。
+语言检测会将浏览器返回的完整语言标签归一为受支持代码（`en-US` → `en`，`zh-CN` → `zh`，`zh-TW` / `zh-HK` / `zh-Hant` → `zh-TW`），避免切换器显示未匹配的原始标签；归一化逻辑与后端语言名映射集中在 `src/i18n/language.js`。
 
 核心接口：`getUiLanguage()` 返回完整语言名称（`Chinese` / `Traditional Chinese` / `English`）供后端 LLM 输出语言控制；`i18n.language` 返回归一后的语言代码用于前端 UI 判断。
+
+界面语言是纯前端设置：由工具栏的 `LanguageSwitcher.jsx` 切换（与主题控件同款下拉交互），选择结果经 i18next LanguageDetector 缓存到 localStorage。它不属于后端 config.json，因此后端未连接、未登录（含多用户非管理员）时同样可以切换。
 
 新增中文文案时，需同步更新 `zh.json` 与 `zh-TW.json`。
 
@@ -113,12 +115,13 @@ highlight.js 的按需注册与统一入口：
 | `PDFPreview.jsx` | iframe 嵌入 PDF 预览 |
 | `PromptEditor.jsx` | 自定义提示词编辑框 |
 | `ConnectionPanel.jsx` | 后端连接面板：编辑 API 基地址 / 访问令牌并测试连接，打开对话框时自动探测一次连接状态 |
-| `settings/` 分区组件 | 设置对话框各配置分区（Server / Security / LLM / Features / Function Calling / HTTP / Logging / Language）与共享原语（`ConfigSection` / `CheckboxField`） |
+| `settings/` 分区组件 | 设置对话框各配置分区（Server / Security / LLM / Features / Function Calling / HTTP / Logging / MultiUser）与共享原语（`ConfigSection` / `CheckboxField`） |
 | `SettingsDialog.jsx` | 设置对话框外壳：加载/保存 config.json、后端连接面板与各配置分区组装；功能开关保存后同步全局 Store |
 | `FolderPickerDialog.jsx` | 文件夹选择对话框，逐级进入子文件夹 |
 | `MarkdownRenderer.jsx` | 基于 react-markdown + remark + rehype-katex |
 | `ThemeToggle.jsx` | 亮/暗模式切换 |
 | `ThemeSwitcher.jsx` | 配色主题切换下拉，自动发现主题文件 |
+| `LanguageSwitcher.jsx` | 界面语言切换下拉（简中 / 繁中 / 英语）：纯前端设置，常驻右上角工具栏，不依赖后端连接与登录状态；选择经 i18next LanguageDetector 持久化到 localStorage |
 | `components/ui/sonner.jsx` | 全局提示入口：使用内联 SVG 面图标、主题感知的 Toast classNames 与统一间距 |
 | `ConfirmDialog.jsx` | 通用确认对话框（destructive 样式 + 禁止遮罩关闭） |
 | `ImageOCRPage.jsx` | 通用图片 OCR 页面组件（拖拽/粘贴/识别/复制；`renderResultMeta` 可接收 `(result, setResult)` 第二参数更新结果，FormulaOCR 未判定切换控件依赖此透传） |

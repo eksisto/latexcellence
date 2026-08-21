@@ -1087,7 +1087,6 @@
       "logging": "記錄",
       "logLevel": "層級",
       "logDir": "記錄目錄",
-      "language": "語言",
       "multiUser": "多使用者模式",
       "multiUserEnabled": "啟用多使用者模式",
       "multiUserEnabledHint": "開啟後強制登入、使用者空間隔離，關閉任意路徑開啟與磁碟瀏覽",
@@ -1185,6 +1184,10 @@
     "themeSwitcher": {
       "switchTheme": "切換配色主題",
       "themeLabel": "配色主題"
+    },
+    "languageSwitcher": {
+      "switchLanguage": "切換介面語言",
+      "languageLabel": "介面語言"
     },
     "workspace": "專案工作區",
     "themeNames": {

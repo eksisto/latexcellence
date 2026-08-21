@@ -1087,7 +1087,6 @@
       "logging": "日志",
       "logLevel": "级别",
       "logDir": "日志目录",
-      "language": "语言",
       "multiUser": "多用户模式",
       "multiUserEnabled": "启用多用户模式",
       "multiUserEnabledHint": "开启后强制登录、用户空间隔离，关闭任意路径打开与磁盘浏览",
@@ -1185,6 +1184,10 @@
     "themeSwitcher": {
       "switchTheme": "切换配色主题",
       "themeLabel": "配色主题"
+    },
+    "languageSwitcher": {
+      "switchLanguage": "切换界面语言",
+      "languageLabel": "界面语言"
     },
     "workspace": "项目工作区",
     "themeNames": {

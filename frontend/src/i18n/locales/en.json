@@ -1087,7 +1087,6 @@
       "logging": "Logging",
       "logLevel": "Level",
       "logDir": "Log Directory",
-      "language": "Language",
       "multiUser": "Multi-user Mode",
       "multiUserEnabled": "Enable multi-user mode",
       "multiUserEnabledHint": "Forces login and per-user storage isolation, disables arbitrary-path open and disk browsing",
@@ -1185,6 +1184,10 @@
     "themeSwitcher": {
       "switchTheme": "Switch Theme",
       "themeLabel": "Theme"
+    },
+    "languageSwitcher": {
+      "switchLanguage": "Switch UI Language",
+      "languageLabel": "UI Language"
     },
     "workspace": "Project Workspace",
     "themeNames": {
