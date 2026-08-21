@@ -253,8 +253,12 @@ export default function App() {
   useAuthBootstrap();
 
   useEffect(() => {
-    // 401（会话过期/未登录）→ 清空认证与项目状态，路由守卫自动跳转登录页
-    setUnauthorizedHandler(() => useStore.getState().handleUnauthorized);
+    // 401（会话过期/未登录）→ 清空认证与项目状态，路由守卫自动跳转登录页。
+    // 注意：这里必须真正调用 handleUnauthorized()；仅返回方法引用会导致
+    // notifyUnauthorized() 得到的是函数本身而不是其执行结果，401 永不生效。
+    setUnauthorizedHandler(() => {
+      useStore.getState().handleUnauthorized();
+    });
   }, []);
 
   return (
