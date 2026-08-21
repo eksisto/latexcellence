@@ -339,6 +339,14 @@ const useStore = create(
     }),
     {
       name: "latexcellence-project",
+      // localStorage 结构版本（client-localstorage-schema）：结构变更时 +1 并补 migrate
+      version: 1,
+      // v0 → v1：多用户模式新增 projectId/projectRole 持久化字段
+      migrate: (persistedState) => ({
+        ...persistedState,
+        projectId: persistedState?.projectId ?? null,
+        projectRole: persistedState?.projectRole ?? null,
+      }),
       onRehydrateStorage: () => (state, error) => {
         if (!error) {
           useStore.setState({ hydrated: true });

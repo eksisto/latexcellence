@@ -1,6 +1,5 @@
 import { useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import JSZip from "jszip";
 import { toast } from "sonner";
 import FolderUp from "lucide-react/dist/esm/icons/folder-up.mjs";
 import FileArchive from "lucide-react/dist/esm/icons/file-archive.mjs";
@@ -32,8 +31,14 @@ function collectDirectoryFiles(fileList) {
   return files;
 }
 
-/** 目录模式：客户端打包为 zip Blob（前端 JSZip，走同一上传管线） */
+/**
+ * 目录模式：客户端打包为 zip Blob（前端 JSZip，走同一上传管线）。
+ * JSZip 体积较大且仅目录直传用到，延迟到此处动态导入：
+ * 配合 vite manualChunks 的 vendor-jszip 规则拆成独立 chunk，仅在用户
+ * 选择目录打包时加载，避免进入首屏 vendor。
+ */
 async function zipFiles(files) {
+  const { default: JSZip } = await import("jszip");
   const zip = new JSZip();
   for (const f of files) {
     zip.file(f.name, f.file);

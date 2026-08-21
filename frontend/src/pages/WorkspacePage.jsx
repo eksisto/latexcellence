@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect, useRef, useMemo } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -39,6 +39,8 @@ import FileTypeCorner from "lucide-react/dist/esm/icons/file-type-corner.mjs";
 import { api } from "@/api/index";
 import { isMultiUser } from "@/api/connection";
 import { translateError } from "@/utils/errorMessages";
+import { openMultiUserProject } from "@/utils/multiUserProject";
+import useCanWrite from "@/hooks/useCanWrite";
 import useStore from "@/store/useStore";
 import useEnabledFeatures from "@/hooks/useEnabledFeatures";
 import UndoRedoButtons from "@/components/UndoRedoButtons";
@@ -64,12 +66,10 @@ function flattenTexFiles(nodes) {
 
 export default function WorkspacePage() {
   const { t } = useTranslation(["pages", "common"]);
-  const navigate = useNavigate();
   const multiUser = isMultiUser();
   const projectPath = useStore((s) => s.projectPath);
   const projectId = useStore((s) => s.projectId);
-  const projectRole = useStore((s) => s.projectRole);
-  const setOpenedProject = useStore((s) => s.setOpenedProject);
+  const canWrite = useCanWrite();
   const workspaceId = useStore((s) => s.workspaceId);
   const rootPath = useStore((s) => s.rootPath);
   const fileTree = useStore((s) => s.fileTree);
@@ -160,31 +160,14 @@ export default function WorkspacePage() {
       setLoading(true);
       setError(null);
       try {
-        const data = await api.project.openById(projectIdToOpen, workspaceId);
-        setRootPath(data.root_path);
-        setProjectPath(null);
-        setFileTree(data.file_tree);
-        setMainFile(data.main_file);
-        setActiveFile(data.main_file);
-        // 权限实时查库可能变化，打开后从项目列表同步最新角色
-        try {
-          const list = await api.projects.list();
-          const p = (list.projects || []).find(
-            (x) => x.project_id === projectIdToOpen,
-          );
-          setOpenedProject({
-            projectId: projectIdToOpen,
-            projectRole: p?.role || "viewer",
-          });
-        } catch {
-          setOpenedProject({ projectId: projectIdToOpen, projectRole: null });
-        }
-        try {
-          const p = await api.project.paragraphs(data.main_file, workspaceId);
-          setParagraphs(p.paragraphs || []);
-        } catch {
-          setParagraphs([]);
-        }
+        // 统一打开入口：openById + 项目列表（同步角色）与主文档段落并行，
+        // 消除"打开 → 列表 → 段落"的串行瀑布（原实现为 3 次串行往返）
+        const { data, paragraphs } = await openMultiUserProject(
+          projectIdToOpen,
+          workspaceId,
+          { withParagraphs: true },
+        );
+        setParagraphs(paragraphs);
         toast.success(t("pages:workspace.projectOpened"), {
           description: data.root_path,
         });
@@ -196,20 +179,10 @@ export default function WorkspacePage() {
         setLoading(false);
       }
     },
-    [
-      t,
-      workspaceId,
-      setRootPath,
-      setProjectPath,
-      setFileTree,
-      setMainFile,
-      setActiveFile,
-      setOpenedProject,
-    ],
+    [t, workspaceId],
   );
 
   const isOpened = multiUser ? !!projectId : !!projectPath;
-  const canWrite = !multiUser || projectRole !== "viewer";
 
   // 启动时：从 Zustand persist 恢复项目（等水合完成后再恢复）
   useEffect(() => {

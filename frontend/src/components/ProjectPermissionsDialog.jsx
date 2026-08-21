@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import UserPlus from "lucide-react/dist/esm/icons/user-plus.mjs";
@@ -55,17 +55,25 @@ export default function ProjectPermissionsDialog({
   const [transferLoading, setTransferLoading] = useState(false);
   const [transferConfirmOpen, setTransferConfirmOpen] = useState(false);
 
+  // 请求序号守卫：快速"打开 A → 关闭 → 打开 B"时，在途的旧响应不得覆盖新数据；
+  // 组件卸载/重开时递增序号使旧请求作废（同时消除 StrictMode 下开发期双请求
+  // 中第一个请求写入状态的竞态——首个 effect 的 cleanup 即作废它）。
+  const loadSeqRef = useRef(0);
+
   const load = async () => {
     if (!projectId) return;
+    const seq = ++loadSeqRef.current;
     setLoading(true);
     setError(null);
     try {
       const res = await api.projects.permissions.list(projectId);
+      if (seq !== loadSeqRef.current) return; // 已有更新的请求/已关闭
       setData(res);
     } catch (err) {
+      if (seq !== loadSeqRef.current) return;
       setError(translateError(err.message));
     } finally {
-      setLoading(false);
+      if (seq === loadSeqRef.current) setLoading(false);
     }
   };
 
@@ -76,6 +84,10 @@ export default function ProjectPermissionsDialog({
       setKeepAccess(false);
       load();
     }
+    return () => {
+      // 关闭/切换项目：作废在途请求
+      loadSeqRef.current++;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, projectId]);
 

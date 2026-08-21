@@ -75,7 +75,8 @@ const areMessageBubblesEqual = (prevProps, nextProps) => {
   return (
     pa.editingMessageId === na.editingMessageId &&
     pa.applyingMessageId === na.applyingMessageId &&
-    pa.canEdit === na.canEdit
+    pa.canEdit === na.canEdit &&
+    pa.canApplyEdit === na.canApplyEdit
   );
 };
 

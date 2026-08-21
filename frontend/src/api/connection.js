@@ -175,14 +175,23 @@ export function getApiToken() {
   return cachedApiToken;
 }
 
+// 模块级常量：解析 CSRF Cookie 的正则只构建一次（请求路径高频调用，js-hoist-regexp）
+const CSRF_COOKIE_RE = new RegExp(
+  "(?:^|;\\s*)" + CSRF_COOKIE_NAME + "=([^;]*)",
+);
+// document.cookie 很短且只在登录/登出时变化：按 cookie 串缓存解析结果（js-cache-storage）
+let csrfCookieCache = { cookieStr: "", token: "" };
+
 /** 读取可被 JS 读取的 CSRF Cookie（双提交模式，仅多用户模式使用） */
 export function getCsrfToken() {
   if (typeof document === "undefined") return "";
   try {
-    const m = document.cookie.match(
-      new RegExp("(?:^|;\\s*)" + CSRF_COOKIE_NAME + "=([^;]*)"),
-    );
-    return m ? decodeURIComponent(m[1]) : "";
+    const cookieStr = document.cookie;
+    if (csrfCookieCache.cookieStr === cookieStr) return csrfCookieCache.token;
+    const m = cookieStr.match(CSRF_COOKIE_RE);
+    const token = m ? decodeURIComponent(m[1]) : "";
+    csrfCookieCache = { cookieStr, token };
+    return token;
   } catch {
     return "";
   }
@@ -257,13 +266,19 @@ async function parseConnectionResponse(response) {
  * @returns {Promise<object>} health 与 config/status 合并后的信息
  */
 export async function checkConnection(apiBase, apiToken, signal) {
-  const base = isMultiUser()
-    ? multiuserApiBase()
-    : (apiBase || getApiBase()).replace(/\/+$/, "");
+  const explicit = (apiBase || "").trim();
+  const base = (
+    explicit || (isMultiUser() ? multiuserApiBase() : getApiBase())
+  ).replace(/\/+$/, "");
   const headers = { "Content-Type": "application/json" };
   if (isMultiUser()) {
-    const csrf = getCsrfToken();
-    if (csrf) headers[CSRF_HEADER] = csrf;
+    // 显式指定待测地址（认证页改绑后端）时不携带当前后端的 CSRF 头：
+    // 跨后端探活仅发 GET（health/config/status，无需 CSRF），
+    // 避免旧后端 Cookie 干扰对新地址的测试。
+    if (!explicit) {
+      const csrf = getCsrfToken();
+      if (csrf) headers[CSRF_HEADER] = csrf;
+    }
   } else if (apiToken) {
     headers[TOKEN_HEADER] = apiToken;
   }

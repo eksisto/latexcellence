@@ -3,6 +3,8 @@ import { toast } from "sonner";
 import { api } from "@/api/index";
 import { isMultiUser } from "@/api/connection";
 import useStore from "@/store/useStore";
+import { openMultiUserProject } from "@/utils/multiUserProject";
+import useCanWrite from "@/hooks/useCanWrite";
 import i18n, { getUiLanguage } from "@/i18n";
 import { flattenTexFiles } from "@/hooks/useParagraphCheck";
 import { translateError } from "@/utils/errorMessages";
@@ -19,7 +21,7 @@ import {
 export default function useWritingChat() {
   const projectPath = useStore((s) => s.projectPath);
   const projectId = useStore((s) => s.projectId);
-  const projectRole = useStore((s) => s.projectRole);
+  const canWrite = useCanWrite();
   const workspaceId = useStore((s) => s.workspaceId);
   const fileTree = useStore((s) => s.fileTree);
   const activeFile = useStore((s) => s.activeFile);
@@ -217,14 +219,19 @@ export default function useWritingChat() {
     restoringRef.current = true;
     (async () => {
       try {
-        const data = multi
-          ? await api.project.openById(projectId, workspaceId)
-          : await api.project.open(projectPath, workspaceId);
-        setRootPath(data.root_path);
-        setProjectPath(projectPath);
-        setFileTree(data.file_tree);
-        setMainFile(data.main_file);
-        if (!activeFile) setActiveFile(data.main_file);
+        if (multi) {
+          // 多用户：统一打开入口（openById + 并行角色同步），角色实时刷新
+          await openMultiUserProject(projectId, workspaceId, {
+            preserveActiveFile: true,
+          });
+        } else {
+          const data = await api.project.open(projectPath, workspaceId);
+          setRootPath(data.root_path);
+          setProjectPath(projectPath);
+          setFileTree(data.file_tree);
+          setMainFile(data.main_file);
+          if (!activeFile) setActiveFile(data.main_file);
+        }
       } catch (_) {
         // silent
       }
@@ -595,9 +602,8 @@ export default function useWritingChat() {
   return {
     // store
     projectPath,
-    projectRole,
     // 多用户模式写权限：viewer 只读（页面据此禁用应用编辑等写按钮）
-    canWrite: !isMultiUser() || projectRole !== "viewer",
+    canWrite,
     activeFile,
     texFiles,
     paragraphs,

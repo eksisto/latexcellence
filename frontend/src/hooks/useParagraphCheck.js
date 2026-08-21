@@ -3,6 +3,8 @@ import { toast } from "sonner";
 import { api } from "@/api/index";
 import { isMultiUser } from "@/api/connection";
 import useStore from "@/store/useStore";
+import { openMultiUserProject } from "@/utils/multiUserProject";
+import useCanWrite from "@/hooks/useCanWrite";
 import { translateError } from "@/utils/errorMessages";
 import i18n from "@/i18n";
 
@@ -84,7 +86,6 @@ export default function useParagraphCheck({
   const fileTree = useStore((s) => s.fileTree);
   const projectPath = useStore((s) => s.projectPath);
   const projectId = useStore((s) => s.projectId);
-  const projectRole = useStore((s) => s.projectRole);
   const activeFile = useStore((s) => s.activeFile);
   const workspaceId = useStore((s) => s.workspaceId);
   const setActiveFile = useStore((s) => s.setActiveFile);
@@ -109,7 +110,7 @@ export default function useParagraphCheck({
   const [resolveInput, setResolveInput] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
   // 多用户模式写权限：viewer 只读，写操作（应用更改/全部应用）直接拒绝
-  const canWrite = !isMultiUser() || projectRole !== "viewer";
+  const canWrite = useCanWrite();
   const restoredRef = useRef(false);
   const eventSourceRef = useRef(null);
   const resultsWithChangesRef = useRef(0);
@@ -171,16 +172,21 @@ export default function useParagraphCheck({
       restoredRef.current = true;
       setRestoring(true);
       try {
-        // 多用户：/project/open 仅接受 project_id；单用户：本地路径
-        const data = multi
-          ? await api.project.openById(projectId, workspaceId)
-          : await api.project.open(projectPath, workspaceId);
-        setRootPath(data.root_path);
-        setProjectPath(projectPath);
-        setFileTree(data.file_tree);
-        setMainFile(data.main_file);
-        if (!activeFile) {
-          setActiveFile(data.main_file);
+        if (multi) {
+          // 多用户：统一打开入口（openById + 并行角色同步），角色实时刷新，
+          // 避免刷新直达模块页时 canWrite 依赖陈旧的持久化 projectRole
+          await openMultiUserProject(projectId, workspaceId, {
+            preserveActiveFile: true,
+          });
+        } else {
+          const data = await api.project.open(projectPath, workspaceId);
+          setRootPath(data.root_path);
+          setProjectPath(projectPath);
+          setFileTree(data.file_tree);
+          setMainFile(data.main_file);
+          if (!activeFile) {
+            setActiveFile(data.main_file);
+          }
         }
       } catch (_) {
         // 忽略错误

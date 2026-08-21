@@ -46,17 +46,26 @@ export default function LoginPage() {
         password,
         remember,
       });
+      // 登录成功即代表账号已激活（pending/disabled 账号会被后端拒绝，见下方 catch），
+      // 直接恢复 /auth/me 进入工作台
       const me = await api.auth.me();
       setAuthMe(me);
-      const pending = me?.user?.status === "pending";
-      setAuthStatus(pending ? "pending" : "authenticated");
+      setAuthStatus("authenticated");
       toast.success(
         t("pages:auth.loginSuccess", {
           username: data?.user?.username || username.trim(),
         }),
       );
-      navigate(pending ? "/waiting" : "/projects", { replace: true });
+      navigate("/projects", { replace: true });
     } catch (err) {
+      // 待审批账号：后端登录返回 403 account_pending（§6.1 批准后用户可登录）。
+      // 置 pending 态并导向等待页（此前该分支不可达，/waiting 路由是死代码；
+      // PendingApprovalPage 设计意图即"登录被拒时导向本页"）。
+      if (err.code === "account_pending") {
+        setAuthStatus("pending");
+        navigate("/waiting", { replace: true });
+        return;
+      }
       setError(translateError(err.message));
     } finally {
       setLoading(false);

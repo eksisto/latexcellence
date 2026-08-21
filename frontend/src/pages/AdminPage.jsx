@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useRef } from "react";
+import { memo, useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import Check from "lucide-react/dist/esm/icons/check.mjs";
@@ -45,6 +45,131 @@ function formatDate(iso) {
 }
 
 /**
+ * 用户行（memo 化）：props 全部为原始值/稳定回调，父级状态变化（busy、筛选、加载）
+ * 时只有目标行重渲染；busy 按行独立传递，单行操作不再带动全列表重建。
+ */
+const AdminUserRow = memo(function AdminUserRow({
+  user: u,
+  isCurrentUser,
+  busy,
+  onApprove,
+  onReject,
+  onDisable,
+  onEnable,
+  onResetPwd,
+  onOpenQuota,
+  onDelete,
+}) {
+  const { t } = useTranslation(["pages", "common"]);
+  const statusBadge = (status) => {
+    const map = {
+      pending: { label: t("pages:admin.statusPending"), cls: "" },
+      active: { label: t("pages:admin.statusActive"), cls: "" },
+      disabled: { label: t("pages:admin.statusDisabled"), cls: "" },
+    };
+    const s = map[status] || { label: status, cls: "" };
+    return (
+      <Badge variant={status === "active" ? "secondary" : "outline"}>
+        {status === "pending" ? "⏳ " : ""}
+        {s.label}
+      </Badge>
+    );
+  };
+
+  return (
+    <div className="flex flex-col gap-3 rounded-lg border p-4 sm:flex-row sm:items-center sm:justify-between">
+      <div className="min-w-0 flex-1">
+        <div className="flex flex-wrap items-center gap-2">
+          <p className="truncate text-sm font-medium">{u.username}</p>
+          {u.role === "admin" && (
+            <Badge variant="secondary">
+              <Crown className="size-3" /> Admin
+            </Badge>
+          )}
+          {statusBadge(u.status)}
+          {isCurrentUser && (
+            <Badge variant="outline">{t("pages:admin.you")}</Badge>
+          )}
+        </div>
+        <p className="mt-1 text-xs text-muted-foreground">
+          {u.email || "—"} ·{" "}
+          {t("pages:admin.createdAt", { date: formatDate(u.created_at) })}
+        </p>
+        <p className="mt-0.5 text-xs text-muted-foreground">
+          {t("pages:admin.quotaLabel")}:{" "}
+          {u.project_quota_bytes != null
+            ? mbText(u.project_quota_bytes) + " MB"
+            : "—"}
+          {" / "}
+          {u.derived_quota_bytes != null
+            ? mbText(u.derived_quota_bytes) + " MB"
+            : "—"}
+        </p>
+      </div>
+      <div className="flex shrink-0 flex-wrap items-center gap-1.5">
+        {u.status === "pending" && (
+          <>
+            <Button size="sm" onClick={() => onApprove(u)} disabled={busy}>
+              <Check /> {t("pages:admin.approve")}
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => onReject(u)}
+              disabled={busy}
+            >
+              <X /> {t("pages:admin.reject")}
+            </Button>
+          </>
+        )}
+        {u.status === "active" && !isCurrentUser && (
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => onDisable(u)}
+            disabled={busy}
+          >
+            <Ban /> {t("pages:admin.disable")}
+          </Button>
+        )}
+        {u.status === "disabled" && (
+          <Button size="sm" onClick={() => onEnable(u)} disabled={busy}>
+            <Play /> {t("pages:admin.enable")}
+          </Button>
+        )}
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={() => onResetPwd(u)}
+          disabled={busy}
+        >
+          <KeyRound /> {t("pages:admin.resetPassword")}
+        </Button>
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={() => onOpenQuota(u)}
+          disabled={busy}
+        >
+          <Gauge /> {t("pages:admin.quota")}
+        </Button>
+        {!isCurrentUser && (
+          <Button
+            size="sm"
+            variant="ghost"
+            className="text-destructive"
+            onClick={() => onDelete(u)}
+            disabled={busy}
+          >
+            <Trash2 /> {t("pages:admin.delete")}
+          </Button>
+        )}
+      </div>
+    </div>
+  );
+});
+
+/**
  * 多用户模式管理面板（P5，仅 admin）。
  * 待审批列表、启用/禁用、重置密码（一次性临时密码）、配额调整、删除用户。
  */
@@ -58,7 +183,9 @@ export default function AdminPage() {
   const [filter, setFilter] = useState("all");
   const loadRef = useRef(false);
 
-  const [actionLoading, setActionLoading] = useState(false);
+  // 行级操作状态：记录当前操作的目标用户 id，仅目标行进入 busy（统计类操作时
+  // 只重渲染目标行；对话框类操作用 busyUserId !== null 表示进行中）
+  const [busyUserId, setBusyUserId] = useState(null);
 
   // 重置密码：展示一次性临时密码
   const [tempPwd, setTempPwd] = useState(null);
@@ -88,33 +215,59 @@ export default function AdminPage() {
     loadUsers();
   }, [loadUsers]);
 
-  const run = async (fn, successMsg) => {
-    setActionLoading(true);
-    try {
-      await fn();
-      if (successMsg) toast.success(successMsg);
-      await loadUsers();
-    } catch (err) {
-      toast.error(translateError(err.message));
-    } finally {
-      setActionLoading(false);
-    }
-  };
+  const run = useCallback(
+    async (fn, successMsg, userId) => {
+      setBusyUserId(userId);
+      try {
+        await fn();
+        if (successMsg) toast.success(successMsg);
+        await loadUsers();
+      } catch (err) {
+        toast.error(translateError(err.message));
+      } finally {
+        setBusyUserId(null);
+      }
+    },
+    [loadUsers],
+  );
 
-  const statusBadge = (status) => {
-    const map = {
-      pending: { label: t("pages:admin.statusPending"), cls: "" },
-      active: { label: t("pages:admin.statusActive"), cls: "" },
-      disabled: { label: t("pages:admin.statusDisabled"), cls: "" },
-    };
-    const s = map[status] || { label: status, cls: "" };
-    return (
-      <Badge variant={status === "active" ? "secondary" : "outline"}>
-        {status === "pending" ? "⏳ " : ""}
-        {s.label}
-      </Badge>
-    );
-  };
+  // 行级动作回调：稳定引用（仅依赖 run / t），配合 AdminUserRow memo 生效
+  const handleApprove = useCallback(
+    (u) =>
+      run(
+        () => api.admin.approve(u.id),
+        t("pages:admin.approved", { username: u.username }),
+        u.id,
+      ),
+    [run, t],
+  );
+  const handleReject = useCallback(
+    (u) =>
+      run(
+        () => api.admin.reject(u.id),
+        t("pages:admin.rejected", { username: u.username }),
+        u.id,
+      ),
+    [run, t],
+  );
+  const handleDisable = useCallback(
+    (u) =>
+      run(
+        () => api.admin.disable(u.id),
+        t("pages:admin.disabled", { username: u.username }),
+        u.id,
+      ),
+    [run, t],
+  );
+  const handleEnable = useCallback(
+    (u) =>
+      run(
+        () => api.admin.enable(u.id),
+        t("pages:admin.enabled", { username: u.username }),
+        u.id,
+      ),
+    [run, t],
+  );
 
   const filtered = users.filter(
     (u) =>
@@ -124,11 +277,11 @@ export default function AdminPage() {
       (filter === "disabled" && u.status === "disabled"),
   );
 
-  const openQuota = (u) => {
+  const openQuota = useCallback((u) => {
     setQuotaTarget(u);
     setQuotaPj(mbText(u.project_quota_bytes) ?? "");
     setQuotaDerived(mbText(u.derived_quota_bytes) ?? "");
-  };
+  }, []);
 
   const saveQuota = async () => {
     if (!quotaTarget) return;
@@ -141,7 +294,7 @@ export default function AdminPage() {
       toast.error(t("pages:admin.quotaInvalid"));
       return;
     }
-    setActionLoading(true);
+    setBusyUserId(quotaTarget.id);
     try {
       await api.admin.setQuota(quotaTarget.id, {
         projectQuotaBytes: pj === null ? null : Math.round(pj * MB),
@@ -155,39 +308,48 @@ export default function AdminPage() {
         description: translateError(err.message),
       });
     } finally {
-      setActionLoading(false);
+      setBusyUserId(null);
     }
   };
 
-  const resetPassword = async (u) => {
-    setActionLoading(true);
-    try {
-      const res = await api.admin.resetPassword(u.id);
-      setTempPwd({ username: u.username, temp_password: res.temp_password });
-    } catch (err) {
-      toast.error(t("pages:admin.resetFailed"), {
-        description: translateError(err.message),
-      });
-    } finally {
-      setActionLoading(false);
-    }
-  };
+  const resetPassword = useCallback(
+    async (u) => {
+      setBusyUserId(u.id);
+      try {
+        const res = await api.admin.resetPassword(u.id);
+        setTempPwd({
+          username: u.username,
+          temp_password: res.temp_password,
+        });
+      } catch (err) {
+        toast.error(t("pages:admin.resetFailed"), {
+          description: translateError(err.message),
+        });
+      } finally {
+        setBusyUserId(null);
+      }
+    },
+    [t],
+  );
 
-  const deleteUser = async (u) => {
-    setActionLoading(true);
-    try {
-      await api.admin.deleteUser(u.id);
-      toast.success(t("pages:admin.deleted", { username: u.username }));
-      setDeleteTarget(null);
-      await loadUsers();
-    } catch (err) {
-      toast.error(t("pages:admin.deleteFailed"), {
-        description: translateError(err.message),
-      });
-    } finally {
-      setActionLoading(false);
-    }
-  };
+  const deleteUser = useCallback(
+    async (u) => {
+      setBusyUserId(u.id);
+      try {
+        await api.admin.deleteUser(u.id);
+        toast.success(t("pages:admin.deleted", { username: u.username }));
+        setDeleteTarget(null);
+        await loadUsers();
+      } catch (err) {
+        toast.error(t("pages:admin.deleteFailed"), {
+          description: translateError(err.message),
+        });
+      } finally {
+        setBusyUserId(null);
+      }
+    },
+    [t, loadUsers],
+  );
 
   const isSelf = (u) => u.id === authUser?.id;
 
@@ -243,128 +405,19 @@ export default function AdminPage() {
             </p>
           ) : (
             filtered.map((u) => (
-              <div
+              <AdminUserRow
                 key={u.id}
-                className="flex flex-col gap-3 rounded-lg border p-4 sm:flex-row sm:items-center sm:justify-between"
-              >
-                <div className="min-w-0 flex-1">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <p className="truncate text-sm font-medium">{u.username}</p>
-                    {u.role === "admin" && (
-                      <Badge variant="secondary">
-                        <Crown className="size-3" /> Admin
-                      </Badge>
-                    )}
-                    {statusBadge(u.status)}
-                    {isSelf(u) && (
-                      <Badge variant="outline">{t("pages:admin.you")}</Badge>
-                    )}
-                  </div>
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    {u.email || "—"} ·{" "}
-                    {t("pages:admin.createdAt", {
-                      date: formatDate(u.created_at),
-                    })}
-                  </p>
-                  <p className="mt-0.5 text-xs text-muted-foreground">
-                    {t("pages:admin.quotaLabel")}:{" "}
-                    {u.project_quota_bytes != null
-                      ? mbText(u.project_quota_bytes) + " MB"
-                      : "—"}
-                    {" / "}
-                    {u.derived_quota_bytes != null
-                      ? mbText(u.derived_quota_bytes) + " MB"
-                      : "—"}
-                  </p>
-                </div>
-                <div className="flex shrink-0 flex-wrap items-center gap-1.5">
-                  {u.status === "pending" && (
-                    <>
-                      <Button
-                        size="sm"
-                        onClick={() =>
-                          run(
-                            () => api.admin.approve(u.id),
-                            t("pages:admin.approved", { username: u.username }),
-                          )
-                        }
-                        disabled={actionLoading}
-                      >
-                        <Check /> {t("pages:admin.approve")}
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() =>
-                          run(
-                            () => api.admin.reject(u.id),
-                            t("pages:admin.rejected", { username: u.username }),
-                          )
-                        }
-                        disabled={actionLoading}
-                      >
-                        <X /> {t("pages:admin.reject")}
-                      </Button>
-                    </>
-                  )}
-                  {u.status === "active" && !isSelf(u) && (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() =>
-                        run(
-                          () => api.admin.disable(u.id),
-                          t("pages:admin.disabled", { username: u.username }),
-                        )
-                      }
-                      disabled={actionLoading}
-                    >
-                      <Ban /> {t("pages:admin.disable")}
-                    </Button>
-                  )}
-                  {u.status === "disabled" && (
-                    <Button
-                      size="sm"
-                      onClick={() =>
-                        run(
-                          () => api.admin.enable(u.id),
-                          t("pages:admin.enabled", { username: u.username }),
-                        )
-                      }
-                      disabled={actionLoading}
-                    >
-                      <Play /> {t("pages:admin.enable")}
-                    </Button>
-                  )}
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => resetPassword(u)}
-                    disabled={actionLoading}
-                  >
-                    <KeyRound /> {t("pages:admin.resetPassword")}
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => openQuota(u)}
-                    disabled={actionLoading}
-                  >
-                    <Gauge /> {t("pages:admin.quota")}
-                  </Button>
-                  {!isSelf(u) && (
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      className="text-destructive"
-                      onClick={() => setDeleteTarget(u)}
-                      disabled={actionLoading}
-                    >
-                      <Trash2 /> {t("pages:admin.delete")}
-                    </Button>
-                  )}
-                </div>
-              </div>
+                user={u}
+                isCurrentUser={isSelf(u)}
+                busy={busyUserId === u.id}
+                onApprove={handleApprove}
+                onReject={handleReject}
+                onDisable={handleDisable}
+                onEnable={handleEnable}
+                onResetPwd={resetPassword}
+                onOpenQuota={openQuota}
+                onDelete={setDeleteTarget}
+              />
             ))
           )}
         </div>
@@ -447,8 +500,8 @@ export default function AdminPage() {
               <Button variant="outline" onClick={() => setQuotaTarget(null)}>
                 {t("pages:admin.close")}
               </Button>
-              <Button onClick={saveQuota} disabled={actionLoading}>
-                {actionLoading
+              <Button onClick={saveQuota} disabled={busyUserId !== null}>
+                {busyUserId !== null
                   ? t("pages:admin.saving")
                   : t("pages:admin.saveQuota")}
               </Button>
@@ -467,7 +520,7 @@ export default function AdminPage() {
           confirmText={t("pages:admin.delete")}
           variant="destructive"
           onConfirm={() => deleteUser(deleteTarget)}
-          confirmLoading={actionLoading}
+          confirmLoading={busyUserId !== null}
         />
       </div>
     </div>

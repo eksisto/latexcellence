@@ -467,7 +467,12 @@ export function translateError(msg) {
     const message = msg.message || "";
     if (code && typeof code === "string") {
       const translated = translateError(code);
-      if (translated !== code) return translated;
+      // 仅当错误码确实命中映射表时才视为翻译成功：translated === code
+      // 既可能是"码未收录原样返回"，也可能是"译文恰好等于码字符串"，
+      // 一律继续回落 message 文本会丢掉后者，这里按映射表命中判定。
+      if (translated !== code || EXACT_MAP[code] !== undefined) {
+        return translated;
+      }
     }
     return translateError(message);
   }

@@ -31,7 +31,10 @@ function ConnectionPanel({ open = true, onSaved }) {
   tRef.current = t;
 
   useEffect(() => {
-    if (!open) return;
+    // onSaved 形态（认证页改绑后端）：输入框预填当前值即可，不自动探测——
+    // 否则慢网络下旧后端探测结果可能覆盖用户输入新地址后的清空状态，
+    // 且探测守卫（持久化值比较）在 onSaved 形态下不落盘而恒真、失去过期保护。
+    if (!open || onSaved) return;
     setApiBase(getApiBase());
     setApiToken(getApiToken());
     setConnectionResult(null);
@@ -60,7 +63,7 @@ function ConnectionPanel({ open = true, onSaved }) {
       });
 
     return () => controller.abort();
-  }, [open]);
+  }, [open, onSaved]);
 
   function handleApiBaseChange(value) {
     setApiBase(value);
@@ -182,7 +185,8 @@ function ConnectionPanel({ open = true, onSaved }) {
             {onSaved && (
               <Button
                 size="sm"
-                disabled={testing || !apiBase.trim()}
+                // 允许空地址保存：清空显式绑定、恢复自动探测（同源 → 配置默认）
+                disabled={testing}
                 onClick={() => onSaved(apiBase.trim(), apiToken)}
               >
                 {t("settings.saveAndReload")}

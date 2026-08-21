@@ -40,6 +40,24 @@ function checkUnauthorized(res) {
 }
 
 /**
+ * 构造带错误码的请求错误：message 为翻译后的错误文本；
+ * code 为后端结构化 detail.error（如 account_pending / no_permission），
+ * 供调用方按错误码分支（如登录失败时区分"待审批"与"密码错误"）。
+ */
+function buildRequestError(err, status) {
+  const error = new Error(translateError(err?.detail || `HTTP ${status}`));
+  const detail = err?.detail;
+  if (
+    detail &&
+    typeof detail === "object" &&
+    typeof detail.error === "string"
+  ) {
+    error.code = detail.error;
+  }
+  return error;
+}
+
+/**
  * 通用 FormData 请求函数（用于文件上传场景）
  * @param {string} url      API 路径
  * @param {FormData} formData  表单数据
@@ -63,7 +81,7 @@ async function requestForm(url, formData, method = "POST") {
   if (!res.ok) {
     checkUnauthorized(res);
     const err = await res.json().catch(() => ({ detail: res.statusText }));
-    throw new Error(translateError(err.detail || `HTTP ${res.status}`));
+    throw buildRequestError(err, res.status);
   }
   return res.json();
 }
@@ -127,7 +145,7 @@ export async function fetchBlobUrl(url) {
   if (!res.ok) {
     checkUnauthorized(res);
     const err = await res.json().catch(() => ({ detail: res.statusText }));
-    throw new Error(translateError(err.detail || `HTTP ${res.status}`));
+    throw buildRequestError(err, res.status);
   }
   return URL.createObjectURL(await res.blob());
 }
@@ -140,7 +158,7 @@ export async function downloadBlob(url, fallbackName) {
   if (!res.ok) {
     checkUnauthorized(res);
     const err = await res.json().catch(() => ({ detail: res.statusText }));
-    throw new Error(translateError(err.detail || `HTTP ${res.status}`));
+    throw buildRequestError(err, res.status);
   }
   const blob = await res.blob();
   const cd = res.headers.get("content-disposition") || "";
@@ -183,7 +201,7 @@ async function request(url, options = {}) {
   if (!res.ok) {
     checkUnauthorized(res);
     const err = await res.json().catch(() => ({ detail: res.statusText }));
-    throw new Error(translateError(err.detail || `HTTP ${res.status}`));
+    throw buildRequestError(err, res.status);
   }
   return res.json();
 }
@@ -385,7 +403,7 @@ export const api = {
           const err = await res
             .json()
             .catch(() => ({ detail: res.statusText }));
-          throw new Error(translateError(err.detail || `HTTP ${res.status}`));
+          throw buildRequestError(err, res.status);
         }
         await consumeSse(res, onEvent, onError);
       },
@@ -416,7 +434,7 @@ export const api = {
           const err = await res
             .json()
             .catch(() => ({ detail: res.statusText }));
-          throw new Error(translateError(err.detail || `HTTP ${res.status}`));
+          throw buildRequestError(err, res.status);
         }
         await consumeSse(res, onEvent, onError);
       },
@@ -489,7 +507,7 @@ export const api = {
       if (!res.ok) {
         checkUnauthorized(res);
         const err = await res.json().catch(() => ({ detail: res.statusText }));
-        throw new Error(translateError(err.detail || `HTTP ${res.status}`));
+        throw buildRequestError(err, res.status);
       }
       await consumeSse(res, onEvent, onError);
     },
@@ -813,7 +831,7 @@ export const api = {
       if (!res.ok) {
         checkUnauthorized(res);
         const err = await res.json().catch(() => ({ detail: res.statusText }));
-        throw new Error(translateError(err.detail || `HTTP ${res.status}`));
+        throw buildRequestError(err, res.status);
       }
       await consumeSse(res, onEvent, onError);
     },
@@ -834,7 +852,7 @@ export const api = {
       if (!res.ok) {
         checkUnauthorized(res);
         const err = await res.json().catch(() => ({ detail: res.statusText }));
-        throw new Error(translateError(err.detail || `HTTP ${res.status}`));
+        throw buildRequestError(err, res.status);
       }
       await consumeSse(res, onEvent, onError);
     },
@@ -898,7 +916,7 @@ export const api = {
       if (!res.ok) {
         checkUnauthorized(res);
         const err = await res.json().catch(() => ({ detail: res.statusText }));
-        throw new Error(translateError(err.detail || `HTTP ${res.status}`));
+        throw buildRequestError(err, res.status);
       }
       await consumeSse(res, onEvent, onError);
     },
@@ -1061,9 +1079,16 @@ export const api = {
         xhr.withCredentials = true;
         const headers = authHeaders();
         Object.entries(headers).forEach(([k, v]) => xhr.setRequestHeader(k, v));
+        // onprogress 高频触发（高速网络可达几十毫秒一次），按取整百分比去重，
+        // 避免大文件上传期间调用方（对话框 setProgress）无谓高频重渲染
+        let lastProgress = -1;
         xhr.upload.onprogress = (e) => {
           if (onProgress && e.lengthComputable) {
-            onProgress(Math.round((e.loaded / e.total) * 100));
+            const pct = Math.round((e.loaded / e.total) * 100);
+            if (pct !== lastProgress) {
+              lastProgress = pct;
+              onProgress(pct);
+            }
           }
         };
         xhr.onload = () => {
@@ -1078,9 +1103,7 @@ export const api = {
             resolve(parse());
           } else {
             if (xhr.status === 401) notifyUnauthorized();
-            reject(
-              new Error(translateError(parse().detail || `HTTP ${xhr.status}`)),
-            );
+            reject(buildRequestError(parse(), xhr.status));
           }
         };
         xhr.onerror = () =>

@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useRef } from "react";
+import { memo, useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
@@ -45,6 +45,115 @@ function formatDate(iso) {
   return Number.isNaN(d.getTime()) ? "—" : d.toLocaleString();
 }
 
+// 角色→i18n key 映射提升为模块级常量：避免每行渲染时重建（rerender / hoist）
+const ROLE_LABEL_KEYS = {
+  owner: "common:role.owner",
+  editor: "common:role.editor",
+  viewer: "common:role.viewer",
+};
+
+/**
+ * 项目行（memo 化）：props 为原始值 + 稳定回调，父级状态变化（busyAction、
+ * tab 切换、配额条等）时仅依赖变化的行重渲染。Tabs 激活过的 Panel 会保持挂载，
+ * 因此三个列表所有访问过的行都会在父级每次重渲染时被 memo 拦截。
+ */
+const ProjectRow = memo(function ProjectRow({
+  project: p,
+  onOpen,
+  onDownload,
+  onRename,
+  onPerms,
+  onDelete,
+}) {
+  const { t } = useTranslation(["pages", "common"]);
+  const isOwner = p.role === "owner";
+  const roleKey = ROLE_LABEL_KEYS[p.role];
+  return (
+    <div className="flex flex-col gap-3 rounded-lg border p-4 sm:flex-row sm:items-center sm:justify-between">
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-2">
+          <p className="truncate text-sm font-medium">{p.name}</p>
+          {roleKey && <Badge variant="secondary">{t(roleKey)}</Badge>}
+          {p.is_shared && (
+            <Badge variant="outline">{t("pages:workbench.sharedTag")}</Badge>
+          )}
+        </div>
+        <p className="mt-1 text-xs text-muted-foreground">
+          {isOwner
+            ? `${t("pages:workbench.ownerLabel")} · ${p.owner_username || "—"}`
+            : `${t("pages:workbench.ownerBy", {
+                username: p.owner_username || "—",
+              })}`}{" "}
+          · {formatBytes(p.size_bytes)} ·{" "}
+          {t("pages:workbench.createdAt", {
+            date: formatDate(p.created_at),
+          })}
+        </p>
+      </div>
+      <div className="flex shrink-0 flex-wrap items-center gap-1.5">
+        <Button size="sm" onClick={() => onOpen(p)}>
+          <FolderOpen /> {t("pages:workbench.open")}
+        </Button>
+        <Button size="sm" variant="outline" onClick={() => onDownload(p)}>
+          <Download /> {t("pages:workbench.download")}
+        </Button>
+        {isOwner && (
+          <>
+            <Button size="sm" variant="ghost" onClick={() => onRename(p)}>
+              <Pencil /> {t("pages:workbench.rename")}
+            </Button>
+            <Button size="sm" variant="ghost" onClick={() => onPerms(p)}>
+              <ShieldCheck /> {t("pages:workbench.permissions")}
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              className="text-destructive"
+              onClick={() => onDelete(p)}
+            >
+              <Trash2 /> {t("pages:workbench.delete")}
+            </Button>
+          </>
+        )}
+      </div>
+    </div>
+  );
+});
+
+/** 回收站行（memo 化，同 ProjectRow 理由） */
+const RecycleRow = memo(function RecycleRow({
+  project: p,
+  onRestore,
+  onPermanent,
+}) {
+  const { t } = useTranslation("pages");
+  return (
+    <div className="flex flex-col gap-3 rounded-lg border p-4 opacity-80 sm:flex-row sm:items-center sm:justify-between">
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-sm font-medium">{p.name}</p>
+        <p className="mt-1 text-xs text-muted-foreground">
+          {formatBytes(p.size_bytes)} ·{" "}
+          {t("workbench.deletedAt", { date: formatDate(p.deleted_at) })}
+        </p>
+      </div>
+      <div className="flex shrink-0 gap-1.5">
+        <Button size="sm" variant="outline" onClick={() => onRestore(p)}>
+          <ArchiveRestore /> {t("workbench.restore")}
+        </Button>
+        <Button
+          size="sm"
+          variant="ghost"
+          className="text-destructive"
+          onClick={() => onPermanent(p)}
+        >
+          <RotateCcw className="rotate-180" />
+          {t("workbench.permanentDelete")}
+        </Button>
+      </div>
+    </div>
+  );
+});
+
 /**
  * 多用户模式项目工作台（P5）。
  * 项目列表（我的 / 共享给我的，展示 owner 与 role）、上传入口、配额用量、回收站入口、
@@ -59,7 +168,6 @@ export default function ProjectWorkbenchPage() {
   const usage = useStore((s) => s.usage);
   const setOpenedProject = useStore((s) => s.setOpenedProject);
   const clearProject = useStore((s) => s.clearProject);
-  const workspaceId = useStore((s) => s.workspaceId);
 
   const [tab, setTab] = useState("mine");
   const [projects, setProjects] = useState([]);
@@ -108,35 +216,6 @@ export default function ProjectWorkbenchPage() {
   const shared = projects.filter((p) => p.role !== "owner");
 
   const isAdmin = authUser?.role === "admin";
-
-  const handleOpen = useCallback(
-    (project) => {
-      clearProject();
-      setOpenedProject({
-        projectId: project.project_id,
-        projectRole: project.role,
-      });
-      navigate("/workspace");
-    },
-    [clearProject, setOpenedProject, navigate],
-  );
-
-  const handleDownload = useCallback(
-    async (project) => {
-      try {
-        await api.projects.download(
-          project.project_id,
-          `${project.name || "project"}.zip`,
-        );
-        toast.success(t("pages:workbench.downloadStarted"));
-      } catch (err) {
-        toast.error(t("pages:workbench.downloadFailed"), {
-          description: translateError(err.message),
-        });
-      }
-    },
-    [t],
-  );
 
   const handleRename = useCallback(async () => {
     if (!renameProject || !renameValue.trim()) return;
@@ -213,83 +292,53 @@ export default function ProjectWorkbenchPage() {
       ? Math.min(100, Math.round((projectUsage / projectQuota) * 100))
       : 0;
 
-  const roleBadge = (role) => {
-    const map = {
-      owner: { label: t("common:role.owner"), cls: "" },
-      editor: { label: t("common:role.editor"), cls: "" },
-      viewer: { label: t("common:role.viewer"), cls: "" },
-    };
-    const r = map[role] || { label: role, cls: "" };
-    return <Badge variant="secondary">{r.label}</Badge>;
-  };
+  // 行级动作回调：稳定引用（rerender-memo），配合 ProjectRow/RecycleRow memo 生效
+  const handleOpen = useCallback(
+    (project) => {
+      clearProject();
+      setOpenedProject({
+        projectId: project.project_id,
+        projectRole: project.role,
+      });
+      navigate("/workspace");
+    },
+    [clearProject, setOpenedProject, navigate],
+  );
 
-  const renderProjectRow = (p) => {
-    const isOwner = p.role === "owner";
-    return (
-      <div
-        key={p.project_id}
-        className="flex flex-col gap-3 rounded-lg border p-4 sm:flex-row sm:items-center sm:justify-between"
-      >
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2">
-            <p className="truncate text-sm font-medium">{p.name}</p>
-            {roleBadge(p.role)}
-            {p.is_shared && (
-              <Badge variant="outline">{t("pages:workbench.sharedTag")}</Badge>
-            )}
-          </div>
-          <p className="mt-1 text-xs text-muted-foreground">
-            {isOwner
-              ? `${t("pages:workbench.ownerLabel")} · ${p.owner_username || "—"}`
-              : `${t("pages:workbench.ownerBy", {
-                  username: p.owner_username || "—",
-                })}`}{" "}
-            · {formatBytes(p.size_bytes)} ·{" "}
-            {t("pages:workbench.createdAt", {
-              date: formatDate(p.created_at),
-            })}
-          </p>
-        </div>
-        <div className="flex shrink-0 flex-wrap items-center gap-1.5">
-          <Button size="sm" onClick={() => handleOpen(p)}>
-            <FolderOpen /> {t("pages:workbench.open")}
-          </Button>
-          <Button size="sm" variant="outline" onClick={() => handleDownload(p)}>
-            <Download /> {t("pages:workbench.download")}
-          </Button>
-          {isOwner && (
-            <>
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={() => {
-                  setRenameProject(p);
-                  setRenameValue(p.name);
-                }}
-              >
-                <Pencil /> {t("pages:workbench.rename")}
-              </Button>
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={() => setPermsProject(p)}
-              >
-                <ShieldCheck /> {t("pages:workbench.permissions")}
-              </Button>
-              <Button
-                size="sm"
-                variant="ghost"
-                className="text-destructive"
-                onClick={() => setDeleteProject(p)}
-              >
-                <Trash2 /> {t("pages:workbench.delete")}
-              </Button>
-            </>
-          )}
-        </div>
-      </div>
-    );
-  };
+  const handleDownload = useCallback(
+    async (project) => {
+      try {
+        await api.projects.download(
+          project.project_id,
+          `${project.name || "project"}.zip`,
+        );
+        toast.success(t("pages:workbench.downloadStarted"));
+      } catch (err) {
+        toast.error(t("pages:workbench.downloadFailed"), {
+          description: translateError(err.message),
+        });
+      }
+    },
+    [t],
+  );
+
+  const handleStartRename = useCallback((project) => {
+    setRenameProject(project);
+    setRenameValue(project.name);
+  }, []);
+
+  const handleOpenPerms = useCallback((project) => {
+    setPermsProject(project);
+  }, []);
+  const handleStartDelete = useCallback((project) => {
+    setDeleteProject(project);
+  }, []);
+  const handleStartRestore = useCallback((project) => {
+    setRestoreProject(project);
+  }, []);
+  const handleStartPermanent = useCallback((project) => {
+    setPermanentProject(project);
+  }, []);
 
   return (
     <div className="min-h-screen p-8 animate-tab-enter">
@@ -377,60 +426,68 @@ export default function ProjectWorkbenchPage() {
             ) : mine.length === 0 ? (
               <EmptyHint onUpload={() => setUploadOpen(true)} />
             ) : (
-              <div className="space-y-3">{mine.map(renderProjectRow)}</div>
+              <div className="space-y-3">
+                {mine.map((p) => (
+                  <ProjectRow
+                    key={p.project_id}
+                    project={p}
+                    onOpen={handleOpen}
+                    onDownload={handleDownload}
+                    onRename={handleStartRename}
+                    onPerms={handleOpenPerms}
+                    onDelete={handleStartDelete}
+                  />
+                ))}
+              </div>
             )}
           </TabsContent>
 
           <TabsContent value="shared" className="pt-4">
-            {shared.length === 0 ? (
+            {loading && shared.length === 0 ? (
+              <p className="py-10 text-center text-sm text-muted-foreground">
+                <Loader className="mr-2 inline size-4 animate-spin" />
+                {t("pages:workbench.loading")}
+              </p>
+            ) : shared.length === 0 ? (
               <p className="py-10 text-center text-sm text-muted-foreground">
                 {t("pages:workbench.noShared")}
               </p>
             ) : (
-              <div className="space-y-3">{shared.map(renderProjectRow)}</div>
+              <div className="space-y-3">
+                {shared.map((p) => (
+                  <ProjectRow
+                    key={p.project_id}
+                    project={p}
+                    onOpen={handleOpen}
+                    onDownload={handleDownload}
+                    onRename={handleStartRename}
+                    onPerms={handleOpenPerms}
+                    onDelete={handleStartDelete}
+                  />
+                ))}
+              </div>
             )}
           </TabsContent>
 
           <TabsContent value="recycle" className="pt-4">
-            {recycle.length === 0 ? (
+            {loading && recycle.length === 0 ? (
+              <p className="py-10 text-center text-sm text-muted-foreground">
+                <Loader className="mr-2 inline size-4 animate-spin" />
+                {t("pages:workbench.loading")}
+              </p>
+            ) : recycle.length === 0 ? (
               <p className="py-10 text-center text-sm text-muted-foreground">
                 {t("pages:workbench.noRecycle")}
               </p>
             ) : (
               <div className="space-y-3">
                 {recycle.map((p) => (
-                  <div
+                  <RecycleRow
                     key={p.project_id}
-                    className="flex flex-col gap-3 rounded-lg border p-4 opacity-80 sm:flex-row sm:items-center sm:justify-between"
-                  >
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-medium">{p.name}</p>
-                      <p className="mt-1 text-xs text-muted-foreground">
-                        {formatBytes(p.size_bytes)} ·{" "}
-                        {t("pages:workbench.deletedAt", {
-                          date: formatDate(p.deleted_at),
-                        })}
-                      </p>
-                    </div>
-                    <div className="flex shrink-0 gap-1.5">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => setRestoreProject(p)}
-                      >
-                        <ArchiveRestore /> {t("pages:workbench.restore")}
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        className="text-destructive"
-                        onClick={() => setPermanentProject(p)}
-                      >
-                        <RotateCcw className="rotate-180" />
-                        {t("pages:workbench.permanentDelete")}
-                      </Button>
-                    </div>
-                  </div>
+                    project={p}
+                    onRestore={handleStartRestore}
+                    onPermanent={handleStartPermanent}
+                  />
                 ))}
               </div>
             )}

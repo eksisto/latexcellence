@@ -1,4 +1,4 @@
-import { memo } from "react";
+import { memo, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -6,16 +6,42 @@ import ConfigSection, {
   CheckboxField,
 } from "@/components/settings/ConfigSection";
 
-/** 数字输入：空值/非法值回退为 1（所有多用户字段均 ≥ 1） */
+/**
+ * 数字输入（所有多用户字段均 ≥ 1）。
+ * 用本地草稿态承载自由输入：清空/删除中间态不会立即回弹 1，
+ * 仅在失焦时把空/非法值归一化为 1，避免输入体验卡顿（原有实现每次按键立即 ||1）。
+ */
 function NumberField({ label, value, onChange, hint }) {
+  const [draft, setDraft] = useState(() => String(value ?? 1));
+
+  // 外部值变化（如重置/保存后回填）时同步草稿
+  useEffect(() => {
+    setDraft(String(value ?? 1));
+  }, [value]);
+
+  const commit = () => {
+    const n = parseInt(draft, 10);
+    const safe = Number.isNaN(n) || n < 1 ? 1 : n;
+    if (String(safe) !== draft) setDraft(String(safe));
+    onChange(safe);
+  };
+
   return (
     <div className="space-y-1">
       <Label className="text-xs">{label}</Label>
       <Input
         type="number"
         min="1"
-        value={value}
-        onChange={(e) => onChange(parseInt(e.target.value, 10) || 1)}
+        value={draft}
+        onChange={(e) => {
+          const raw = e.target.value;
+          setDraft(raw);
+          // 输入中仅当是有效正整数才即时提交（合法中间态如 "" 不阻塞输入）
+          if (/^\d+$/.test(raw) && Number(raw) >= 1) {
+            onChange(Number(raw));
+          }
+        }}
+        onBlur={commit}
       />
       {hint && <p className="text-xs text-muted-foreground">{hint}</p>}
     </div>

@@ -29,7 +29,7 @@ import CodeBlock from "@/components/CodeBlock";
 import CodeEditorInput from "@/components/CodeEditorInput";
 import useStore from "@/store/useStore";
 import useStyleModifyAgent from "@/hooks/useStyleModifyAgent";
-import { isMultiUser } from "@/api/connection";
+import useCanWrite from "@/hooks/useCanWrite";
 
 function compileLabel(t, status) {
   if (status === "passed") return t("pages:styleModify.compilePassed");
@@ -41,9 +41,8 @@ export default function StyleModifyPage() {
   const { t } = useTranslation(["pages", "common"]);
   const agent = useStyleModifyAgent();
   const rootPath = useStore((state) => state.rootPath);
-  const projectRole = useStore((state) => state.projectRole);
   // 多用户模式：viewer 只读，禁用 Agent 提案应用 / 撤销按钮（后端 403 兜底）
-  const canWrite = !isMultiUser() || projectRole !== "viewer";
+  const canWrite = useCanWrite();
 
   const [pasteLatex, setPasteLatex] = useState("");
   const [pasteDescription, setPasteDescription] = useState("");
