@@ -91,13 +91,14 @@ def _origin_allowed(origin: str, allowed_origins: list[str], scope: dict) -> boo
     return origin in allowed_origins or _is_same_origin(origin, scope)
 
 
-def _cors_headers(origin: str, allowed: bool, credentials: bool = False):
+def _cors_headers(origin: str, allowed: bool, credentials: bool = True):
     headers = []
     if origin and allowed:
         headers.append((b"access-control-allow-origin", origin.encode("latin-1")))
         headers.append((b"vary", b"Origin"))
-        # 多用户模式使用 Cookie 会话；跨源（如 Vite dev）下浏览器需要凭据头
-        # 才接受响应。已回显具体 origin（非 `*`），配合凭据头是安全组合。
+        # 前端所有请求统一携带凭据（fetch credentials: "include"，多用户
+        # 模式依赖 Cookie 会话）。已回显具体 origin（非 `*`），配合凭据头
+        # 是安全组合；不在白名单的来源本就被拒绝。
         if credentials:
             headers.append((b"access-control-allow-credentials", b"true"))
     return headers
@@ -161,7 +162,7 @@ class AccessSecurityMiddleware:
             origin, allowed_origins, scope
         )
         # 多用户模式使用 Cookie 会话：允许的跨源响应需携带凭据头（dev：Vite 5173）
-        credentials = multi_user
+        credentials = True
 
         async def send_with_cors(message):
             if message["type"] == "http.response.start":
@@ -238,7 +239,7 @@ class AccessSecurityMiddleware:
                     send,
                     401,
                     {"detail": "Access token required or invalid"},
-                    _cors_headers(origin, origin_allowed),
+                    _cors_headers(origin, origin_allowed, True),
                 )
                 return
 

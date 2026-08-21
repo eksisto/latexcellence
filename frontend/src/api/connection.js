@@ -3,12 +3,13 @@
  *
  * 职责：
  * - 管理 API 基地址 / 访问令牌的运行时配置
- *   （优先级：设置页 localStorage → VITE_API_BASE_URL（.env，维护者构建时配置）→ 默认 http://localhost:8000/api）
+ *   （优先级：显式绑定 localStorage → VITE_API_BASE_URL（.env，维护者构建时配置）→ 默认 http://localhost:8000/api）
  * - 统一构造认证请求头，并为无法自定义请求头的 URL（EventSource 等）追加令牌
  * - 提供连接测试（health 验证可达性，config/status 验证令牌是否有效）
- * - 多用户模式（P5）：API 基地址固定为同源 /api（生产由 FastAPI 挂载 static/、
+ * - 多用户模式（P5）：默认 API 基地址为同源 /api（生产由 FastAPI 挂载 static/、
  *   dev 由 Vite 代理转发），认证改为 HttpOnly 会话 Cookie + 双提交 CSRF 头，
- *   SSE 同源自动携带 Cookie，不再追加 token 查询参数
+ *   SSE 同源自动携带 Cookie，不再追加 token 查询参数；
+ *   用户可在认证页连接面板显式改绑其他后端地址（多用户后端需与前端同源部署）
  *
  * 纯 URL 计算逻辑（normalizeApiBase / appendTokenToUrl / resolveUrlPath）
  * 在 utils/apiUrl.js 中，本模块只负责与运行时环境（localStorage / fetch）交互。
@@ -44,6 +45,8 @@ let cachedApiBase = DEFAULT_API_BASE;
 let apiBaseLoaded = false;
 let cachedApiToken = null;
 let multiUserMode = null; // null=尚未确定（默认按单用户路径缓存 base/token）
+// 多用户模式探测命中的基地址（"/api" 或配置的绝对地址），由 setMultiUserMode 记录
+let multiUserResolvedBase = null;
 
 /** 多用户模式下可选的 401 全局回调（App 挂载时注册 → 登出/跳转登录页） */
 let unauthorizedHandler = null;
@@ -81,10 +84,18 @@ export function isMultiUser() {
 
 /**
  * 设置多用户模式标志（应用启动时根据 /api/config/status 的 multi_user 调用）。
- * 持久化到 localStorage，让刷新后的首帧请求立即使用正确的同源基地址与认证路径。
+ *
+ * @param {boolean} enabled      是否多用户模式
+ * @param {string} [resolvedBase] 探测命中的基地址（"/api" 或配置的绝对地址），
+ *   多用户模式下作为默认基地址；用户显式绑定的地址（localStorage）优先级更高。
+ *   持久化到 localStorage 的模式标志让刷新后的首帧请求立即走正确路径；
+ *   resolvedBase 每次启动由引导探测重新确定，无需持久化。
  */
-export function setMultiUserMode(enabled) {
+export function setMultiUserMode(enabled, resolvedBase = null) {
   multiUserMode = !!enabled;
+  multiUserResolvedBase = enabled
+    ? normalizeApiBase(resolvedBase || "") || null
+    : null;
   try {
     if (enabled) localStorage.setItem(MULTIUSER_MODE_KEY, "1");
     else localStorage.removeItem(MULTIUSER_MODE_KEY);
@@ -110,12 +121,31 @@ export function notifyUnauthorized() {
   }
 }
 
+/**
+ * 用户显式绑定的 API 基地址（认证页/设置页连接面板保存的值），未绑定时返回 null。
+ *
+ * 与 getApiBase() 的区别：本函数无视多用户模式标志，只反映显式配置，
+ * 供启动探测在模式未定前确定探测顺序。
+ */
+export function getStoredApiBase() {
+  try {
+    const raw = localStorage.getItem(STORAGE_BASE_KEY);
+    return raw ? normalizeApiBase(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
 function multiuserApiBase() {
-  // 同源固定路径：生产由 FastAPI 挂载 static/ 同源提供；dev 由 Vite 代理 /api → 8000
+  // 优先级：用户显式绑定（独立部署的前端可改连其他后端）
+  //   → 启动探测命中的基地址 → 同源 /api（生产由 FastAPI 挂载 static/，dev 由 Vite 代理转发）
+  const explicit = getStoredApiBase();
+  if (explicit) return explicit;
+  if (multiUserResolvedBase) return multiUserResolvedBase;
   return "/api";
 }
 
-/** 当前后端 API 基地址（多用户模式固定同源 /api） */
+/** 当前后端 API 基地址（多用户模式：显式绑定 → 探测命中 → 同源 /api） */
 export function getApiBase() {
   if (isMultiUser()) return multiuserApiBase();
   if (!apiBaseLoaded) {
@@ -158,20 +188,29 @@ export function getCsrfToken() {
   }
 }
 
-/** 保存后端连接配置（设置页调用，立即生效；多用户模式调用无效） */
+/**
+ * 保存后端连接配置（连接面板调用，立即生效）。
+ *
+ * 地址留空表示清除显式绑定、恢复自动探测（同源 → 配置默认）；
+ * 认证页连接面板借此从多用户登录页改连其他后端。
+ */
 export function setApiConnection(apiBase, apiToken) {
-  if (isMultiUser()) return;
-  const base = normalizeApiBase(apiBase, DEFAULT_API_BASE);
   const token = apiToken || "";
   try {
-    localStorage.setItem(STORAGE_BASE_KEY, base);
+    if ((apiBase || "").trim()) {
+      localStorage.setItem(
+        STORAGE_BASE_KEY,
+        normalizeApiBase(apiBase, DEFAULT_API_BASE),
+      );
+    } else {
+      localStorage.removeItem(STORAGE_BASE_KEY);
+    }
     localStorage.setItem(STORAGE_TOKEN_KEY, token);
   } catch {
     // 隐私模式等场景 localStorage 不可用，忽略
   }
-  cachedApiBase = base;
-  apiBaseLoaded = true;
   cachedApiToken = token;
+  invalidateConnectionCache();
 }
 
 /** 合并认证请求头（多用户模式：附加 CSRF 头；单用户模式：附加访问令牌） */

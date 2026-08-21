@@ -16,8 +16,11 @@ import { Label } from "@/components/ui/label";
  *
  * 仅在设置对话框打开时自动探测一次连接状态；open 为 false 时不发起请求，
  * 用户在面板中修改地址 / 令牌后会丢弃过期的自动探测结果。
+ *
+ * 传入 onSaved 时切换为「认证页改绑后端」形态：不再失焦静默持久化，
+ * 改为显示「保存并刷新」按钮，由调用方决定保存后的行为（如刷新页面重新探测）。
  */
-function ConnectionPanel({ open = true }) {
+function ConnectionPanel({ open = true, onSaved }) {
   const defaultApiBase = getDefaultApiBase();
   const [apiBase, setApiBase] = useState(getApiBase);
   const [apiToken, setApiToken] = useState(getApiToken);
@@ -69,8 +72,10 @@ function ConnectionPanel({ open = true }) {
     setConnectionResult(null);
   }
 
-  /** 失焦时统一持久化，避免每个按键都同步写 localStorage */
+  /** 失焦时统一持久化，避免每个按键都同步写 localStorage；
+   *  onSaved 形态下改为显式按钮保存，失焦不落盘 */
   function persistConnection() {
+    if (onSaved) return;
     setApiConnection(apiBase, apiToken);
   }
 
@@ -165,15 +170,25 @@ function ConnectionPanel({ open = true }) {
               {connectionResult.message}
             </span>
           )}
-          <Button
-            className="ml-auto shrink-0"
-            variant="outline"
-            size="sm"
-            onClick={handleTestConnection}
-            disabled={testing || !apiBase.trim()}
-          >
-            {testing ? t("settings.testing") : t("settings.testConnection")}
-          </Button>
+          <div className="ml-auto flex shrink-0 items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleTestConnection}
+              disabled={testing || !apiBase.trim()}
+            >
+              {testing ? t("settings.testing") : t("settings.testConnection")}
+            </Button>
+            {onSaved && (
+              <Button
+                size="sm"
+                disabled={testing || !apiBase.trim()}
+                onClick={() => onSaved(apiBase.trim(), apiToken)}
+              >
+                {t("settings.saveAndReload")}
+              </Button>
+            )}
+          </div>
         </div>
       </div>
     </div>

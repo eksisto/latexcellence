@@ -25,6 +25,7 @@ import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import ThemeToggle from "@/components/ThemeToggle";
 import ThemeSwitcher from "@/components/ThemeSwitcher";
+import AuthConnectionButton from "@/components/AuthConnectionButton";
 import useFavicon from "./hooks/useFavicon";
 import useAuthBootstrap, { logoutUser } from "./hooks/useAuth";
 import useStore from "./store/useStore";
@@ -225,6 +226,10 @@ const AppToolbar = memo(function AppToolbar() {
       <AuthToolbar />
       <ThemeSwitcher />
       <ThemeToggle />
+      {/* 认证页改绑后端：未登录/待审批时显示，避免被绑定后端的登录页卡死 */}
+      {authStatus === "unauthenticated" || authStatus === "pending" ? (
+        <AuthConnectionButton />
+      ) : null}
       {/* 设置（后端配置）：单用户模式对所有用户可见；多用户模式仅管理员（配置接口仅管理员可访问） */}
       {authStatus === "single" ||
       (authStatus === "authenticated" && authUser?.role === "admin") ? (

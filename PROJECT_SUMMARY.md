@@ -158,6 +158,7 @@ latexcellence/
 │       │   └── bib-manager/         # 参考文献管理子 hooks（format_analysis/metadata_extraction/bibtex_generation/bib_file_save/latex_generation）
 │       ├── components/              # 共享组件 + ui 基座组件
 │       │       ├── AuthShell.jsx        # 多用户认证页公共外壳
+│       ├── AuthConnectionButton.jsx # 认证页工具栏「后端连接设置」入口（改绑后端）
 │       │   ├── UploadProjectDialog.jsx # 上传项目对话框（zip/7z 或目录 JSZip 打包 + 进度）
 │       │   ├── ProjectPermissionsDialog.jsx # 项目权限对话框（协作者管理/转交）
 │       │   └── settings/            # 设置对话框分区配置组件

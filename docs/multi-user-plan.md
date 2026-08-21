@@ -42,7 +42,7 @@ LateXcellence 目前是单用户本地部署形态：
 | 主题 | 决策 |
 | --- | --- |
 | 双模式 | `multi_user.enabled` 配置开关；单用户模式保持本地目录 + 共享令牌；多用户模式强制登录 |
-| 前端连接 | 生产模式由 FastAPI 挂载 `static/` 同源提供；多用户模式下隐藏自定义 API 基地址设置 |
+| 前端连接 | 生产模式由 FastAPI 挂载 `static/` 同源提供；多用户模式下工作台隐藏自定义 API 基地址设置，认证页保留「后端连接设置」入口供改绑其他后端（多用户后端需与前端同源部署） |
 | 注册 | 开放注册但需管理员批准（pending → active）；管理员也可直接创建用户；无邀请码 |
 | 认证 | 用户名 + 密码（argon2id）；HttpOnly + SameSite=Lax Cookie 会话；默认 7 天，记住我 30 天；CSRF 用自定义请求头 |
 | 存储 | SQLite（WAL）+ 单进程 uvicorn（`workers=1`）；10k 注册量、同时在线规模较小 |

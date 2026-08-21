@@ -53,6 +53,9 @@ async function requestForm(url, formData, method = "POST") {
       method,
       body: formData,
       headers: authHeaders(),
+      // 多用户模式认证依赖 Cookie 会话；跨源部署（如 Vite dev 直连后端）
+      // 时默认的 "same-origin" 不会携带/写入 Cookie，必须显式 include
+      credentials: "include",
     });
   } catch (e) {
     throw new Error(translateError(e.message || "Request timed out"));
@@ -117,7 +120,10 @@ async function consumeSse(res, onEvent, onError) {
  */
 /** 以带认证头的 fetch 获取二进制资源，返回临时 blob URL（调用方负责 revoke） */
 export async function fetchBlobUrl(url) {
-  const res = await fetch(url, { headers: authHeaders() });
+  const res = await fetch(url, {
+    headers: authHeaders(),
+    credentials: "include",
+  });
   if (!res.ok) {
     checkUnauthorized(res);
     const err = await res.json().catch(() => ({ detail: res.statusText }));
@@ -127,7 +133,10 @@ export async function fetchBlobUrl(url) {
 }
 
 export async function downloadBlob(url, fallbackName) {
-  const res = await fetch(url, { headers: authHeaders() });
+  const res = await fetch(url, {
+    headers: authHeaders(),
+    credentials: "include",
+  });
   if (!res.ok) {
     checkUnauthorized(res);
     const err = await res.json().catch(() => ({ detail: res.statusText }));
@@ -163,6 +172,8 @@ async function request(url, options = {}) {
         "Content-Type": "application/json",
         ...optionHeaders,
       }),
+      // 多用户模式认证依赖 Cookie 会话；跨源部署时必须显式携带凭据
+      credentials: "include",
     });
   } catch (e) {
     // 保留取消信号（AbortController）的原始错误，让调用方区分“主动取消”和“真的失败”
@@ -367,6 +378,7 @@ export const api = {
             language: getUiLanguage(),
           }),
           signal,
+          credentials: "include",
         });
         if (!res.ok) {
           checkUnauthorized(res);
@@ -396,6 +408,7 @@ export const api = {
               language: getUiLanguage(),
             }),
             signal,
+            credentials: "include",
           },
         );
         if (!res.ok) {
@@ -471,6 +484,7 @@ export const api = {
           description,
           language: language ?? getUiLanguage(),
         }),
+        credentials: "include",
       });
       if (!res.ok) {
         checkUnauthorized(res);
@@ -794,6 +808,7 @@ export const api = {
           language: getUiLanguage(),
         }),
         signal,
+        credentials: "include",
       });
       if (!res.ok) {
         checkUnauthorized(res);
@@ -813,6 +828,7 @@ export const api = {
             language: getUiLanguage(),
           }),
           signal,
+          credentials: "include",
         },
       );
       if (!res.ok) {
@@ -874,6 +890,7 @@ export const api = {
             assistant_prompt: assistantPrompt ?? null,
             language: getUiLanguage(),
           }),
+          credentials: "include",
         });
       } catch (e) {
         throw new Error(translateError(e.message || "Request timed out"));
@@ -1040,6 +1057,8 @@ export const api = {
       return new Promise((resolve, reject) => {
         const xhr = new XMLHttpRequest();
         xhr.open("POST", `${getApiBase()}/projects`);
+        // 跨源部署时携带 Cookie（多用户会话认证）
+        xhr.withCredentials = true;
         const headers = authHeaders();
         Object.entries(headers).forEach(([k, v]) => xhr.setRequestHeader(k, v));
         xhr.upload.onprogress = (e) => {

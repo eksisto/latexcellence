@@ -345,7 +345,8 @@ export default function useParagraphCheck({
 
     const url = apiModule.stream(workspaceId, activeFile, resolveInput);
 
-    const es = new EventSource(url);
+    // 跨源部署时携带 Cookie（多用户会话认证）；同源下无副作用
+    const es = new EventSource(url, { withCredentials: true });
     eventSourceRef.current = es;
 
     es.onmessage = (event) => {
