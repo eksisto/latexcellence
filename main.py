@@ -196,6 +196,10 @@ async def config_status():
         "multi_user": cfg.multi_user.enabled,  # 多用户模式开关（登录页据此判断模式）
         # 是否开放注册（登录/注册页据此隐藏注册入口，避免点了才被 400 拒绝）
         "registration_enabled": cfg.multi_user.registration_enabled,
+        # 多用户上传上限（前端目录直传据此做浏览器侧前置校验，
+        # 避免打包上传整个目录后才被 413 拒绝；只读透出既有配置，非新增配置项）
+        "max_upload_files": cfg.multi_user.max_upload_files,
+        "max_upload_file_size_mb": cfg.multi_user.max_upload_file_size_mb,
         "features": {
             name: getattr(cfg.features, name).enabled
             for name in [
