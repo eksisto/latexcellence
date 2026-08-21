@@ -183,9 +183,21 @@ const AuthToolbar = memo(function AuthToolbar() {
   if (authStatus !== "authenticated") {
     if (authStatus === "unauthenticated") {
       return (
-        <Button variant="ghost" size="sm" onClick={() => navigate("/login")}>
-          <LogIn /> {t("auth.login")}
-        </Button>
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => navigate("/login")}
+              />
+            }
+          >
+            <LogIn className="size-5" />
+            <span className="sr-only">{t("auth.login")}</span>
+          </TooltipTrigger>
+          <TooltipContent>{t("auth.login")}</TooltipContent>
+        </Tooltip>
       );
     }
     return null;
