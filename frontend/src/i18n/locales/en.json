@@ -1221,7 +1221,10 @@
       "busy": "Working…",
       "cancel": "Cancel",
       "uploaded": "Project uploaded",
-      "uploadFailed": "Upload failed"
+      "uploadFailed": "Upload failed",
+      "dirReadFailed": "Failed to read the selected directory",
+      "dirReadFailedHint": "Try archiving the folder as a zip and upload again",
+      "dirPackFailed": "Failed to pack the folder; please retry or upload a zip archive"
     },
     "permissions": {
       "title": "Project permissions",

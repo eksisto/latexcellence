@@ -95,6 +95,9 @@ const REQUIRED_PATHS = [
   "pages.admin.quotaTitle",
   "components.auth.login",
   "components.uploadProject.title",
+  "components.uploadProject.dirReadFailed",
+  "components.uploadProject.dirReadFailedHint",
+  "components.uploadProject.dirPackFailed",
   "components.permissions.title",
 ];
 

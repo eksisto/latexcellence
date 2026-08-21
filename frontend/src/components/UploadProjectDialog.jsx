@@ -109,11 +109,11 @@ export default function UploadProjectDialog({
         list[0]?.webkitRelativePath?.split("/")[0] ||
         "folder";
       setDirLabel(label);
-    } catch (err) {
-      toast.error(translateError(err.message || "Failed to read directory"), {
-        description: translateError(
-          "Failed to read the selected directory; try archiving it as a zip instead",
-        ),
+    } catch {
+      // 客户端自产错误不走 translateError（其映射表只收录后端错误），
+      // 直接用 i18n key 展示当前语言文案（审查 M7）
+      toast.error(t("components:uploadProject.dirReadFailed"), {
+        description: t("components:uploadProject.dirReadFailedHint"),
       });
     } finally {
       setPhase("idle");
@@ -135,8 +135,9 @@ export default function UploadProjectDialog({
       try {
         archive = await zipFiles(dirFiles);
         archiveName = `${dirLabel || "project"}.zip`;
-      } catch (err) {
-        toast.error(translateError(err.message || "Failed to pack directory"));
+      } catch {
+        // 同上：客户端打包错误用 i18n key，不走 translateError
+        toast.error(t("components:uploadProject.dirPackFailed"));
         setPhase("idle");
         return;
       }

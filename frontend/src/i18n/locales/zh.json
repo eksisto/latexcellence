@@ -1221,7 +1221,10 @@
       "busy": "处理中…",
       "cancel": "取消",
       "uploaded": "项目上传成功",
-      "uploadFailed": "上传失败"
+      "uploadFailed": "上传失败",
+      "dirReadFailed": "读取目录失败",
+      "dirReadFailedHint": "读取所选目录失败，可尝试压缩为 zip 后上传",
+      "dirPackFailed": "目录打包失败，请重试或改用压缩包上传"
     },
     "permissions": {
       "title": "项目权限",

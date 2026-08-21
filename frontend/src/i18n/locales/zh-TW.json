@@ -1221,7 +1221,10 @@
       "busy": "處理中…",
       "cancel": "取消",
       "uploaded": "專案上傳成功",
-      "uploadFailed": "上傳失敗"
+      "uploadFailed": "上傳失敗",
+      "dirReadFailed": "讀取目錄失敗",
+      "dirReadFailedHint": "讀取所選目錄失敗，可嘗試壓縮為 zip 後上傳",
+      "dirPackFailed": "目錄打包失敗，請重試或改用壓縮檔上傳"
     },
     "permissions": {
       "title": "專案權限",
