@@ -812,12 +812,14 @@
       "optional": "(optional)",
       "haveAccount": "Already have an account?",
       "backToLogin": "Back to sign in",
+      "registerClosedTitle": "Registration Closed",
+      "registerClosedDesc": "Registration is disabled on this instance. Please contact an administrator to create an account.",
       "registerSubmittedTitle": "Registration submitted",
       "registerSubmittedDesc": "Account “{{username}}” has been submitted and awaits administrator approval.",
       "registerSubmittedHint": "You can sign in once approved; the administrator handles this in the admin panel.",
       "pendingTitle": "Awaiting approval",
       "pendingDesc": "Account “{{username}}” is awaiting administrator approval.",
-      "pendingHint": "You can sign in after approval; you will be redirected automatically.",
+      "pendingHint": "You can sign in once approved. This page does not update automatically; please return to the sign-in page afterwards.",
       "pendingLogout": "Sign out"
     },
     "workbench": {

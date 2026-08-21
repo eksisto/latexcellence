@@ -812,12 +812,14 @@
       "optional": "（選填）",
       "haveAccount": "已有帳號？",
       "backToLogin": "返回登入",
+      "registerClosedTitle": "註冊未開放",
+      "registerClosedDesc": "目前實例未開放註冊，請聯絡管理員建立帳號。",
       "registerSubmittedTitle": "註冊已提交",
       "registerSubmittedDesc": "帳號「{{username}}」已提交，等待管理員批准。",
       "registerSubmittedHint": "批准後即可登入；管理員會在管理面板處理。",
       "pendingTitle": "等待管理員批准",
       "pendingDesc": "帳號「{{username}}」正在等待管理員批准。",
-      "pendingHint": "批准後即可正常登入使用；此頁面會自動跳轉。",
+      "pendingHint": "批准後即可正常登入使用；目前不會自動跳轉，批准後請返回登入頁。",
       "pendingLogout": "登出"
     },
     "workbench": {

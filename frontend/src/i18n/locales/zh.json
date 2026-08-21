@@ -812,12 +812,14 @@
       "optional": "（可选）",
       "haveAccount": "已有账号？",
       "backToLogin": "返回登录",
+      "registerClosedTitle": "注册未开放",
+      "registerClosedDesc": "当前实例未开放注册，请联系管理员创建账号。",
       "registerSubmittedTitle": "注册已提交",
       "registerSubmittedDesc": "账号「{{username}}」已提交，等待管理员批准。",
       "registerSubmittedHint": "批准后即可登录；您会由管理员通过管理面板处理。",
       "pendingTitle": "等待管理员批准",
       "pendingDesc": "账号「{{username}}」正在等待管理员批准。",
-      "pendingHint": "批准后即可正常登录使用；此页面会自动跳转。",
+      "pendingHint": "批准后即可正常登录使用；当前不会自动跳转，批准后请返回登录页。",
       "pendingLogout": "退出登录"
     },
     "workbench": {
