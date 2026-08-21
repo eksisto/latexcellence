@@ -13,7 +13,6 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import Wordmark from "@/components/Wordmark";
 import AuthShell from "@/components/AuthShell";
 import { api } from "@/api/index";
 import { translateError } from "@/utils/errorMessages";
@@ -60,10 +59,9 @@ export default function RegisterPage() {
   if (submitted) {
     return (
       <AuthShell>
-        <Card className="w-full max-w-sm">
+        <Card className="w-full max-w-sm gap-6">
           <CardHeader>
-            <Wordmark className="text-xl" />
-            <CardTitle className="mt-2 flex items-center gap-2">
+            <CardTitle className="flex items-center gap-2">
               <CheckCircle className="size-5 text-emerald-600" />
               {t("auth.registerSubmittedTitle")}
             </CardTitle>
@@ -92,10 +90,9 @@ export default function RegisterPage() {
 
   return (
     <AuthShell>
-      <Card className="w-full max-w-sm">
+      <Card className="w-full max-w-sm gap-6">
         <CardHeader>
-          <Wordmark className="text-xl" />
-          <CardTitle className="mt-2">{t("auth.registerTitle")}</CardTitle>
+          <CardTitle>{t("auth.registerTitle")}</CardTitle>
           <CardDescription>{t("auth.registerDesc")}</CardDescription>
         </CardHeader>
         <CardContent>

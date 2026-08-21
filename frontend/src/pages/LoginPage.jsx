@@ -14,7 +14,6 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import Wordmark from "@/components/Wordmark";
 import AuthShell from "@/components/AuthShell";
 import { api } from "@/api/index";
 import useStore from "@/store/useStore";
@@ -66,10 +65,9 @@ export default function LoginPage() {
 
   return (
     <AuthShell>
-      <Card className="w-full max-w-sm">
+      <Card className="w-full max-w-sm gap-6">
         <CardHeader>
-          <Wordmark className="text-xl" />
-          <CardTitle className="mt-2">{t("pages:auth.loginTitle")}</CardTitle>
+          <CardTitle>{t("pages:auth.loginTitle")}</CardTitle>
           <CardDescription>{t("pages:auth.loginDesc")}</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
