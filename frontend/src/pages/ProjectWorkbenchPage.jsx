@@ -34,6 +34,53 @@ const ROLE_LABEL_KEYS = {
   viewer: "common:role.viewer",
 };
 
+// 衍生数据分类（与后端 userspace.DERIVED_SUBDIRS 对齐，v2 P4）
+const DERIVED_CATEGORIES = [
+  { key: "writing_chat_sessions", labelKey: "derivedWritingChat" },
+  { key: "style_modify_sessions", labelKey: "derivedStyleModify" },
+  { key: "templates", labelKey: "derivedTemplates" },
+  { key: "plots", labelKey: "derivedPlots" },
+];
+
+/**
+ * 衍生数据分类用量行（memo 化）：单类用量条 + 「清理」按钮。
+ */
+const DerivedUsageRow = memo(function DerivedUsageRow({
+  label,
+  bytes,
+  quotaBytes,
+  cleanupLabel,
+  onCleanup,
+}) {
+  const pct =
+    quotaBytes > 0 ? Math.min(100, Math.round((bytes / quotaBytes) * 100)) : 0;
+  return (
+    <div className="space-y-1">
+      <div className="flex items-center justify-between gap-2 text-xs">
+        <span className="text-muted-foreground">{label}</span>
+        <span className="flex items-center gap-2 text-muted-foreground">
+          {formatBytes(bytes)}
+          <Button
+            size="sm"
+            variant="ghost"
+            disabled={bytes <= 0}
+            className="h-6 px-2 text-xs text-destructive hover:text-destructive"
+            onClick={onCleanup}
+          >
+            <Trash2 className="size-3" /> {cleanupLabel}
+          </Button>
+        </span>
+      </div>
+      <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
+        <div
+          className="h-full rounded-full bg-primary/70"
+          style={{ width: `${pct}%` }}
+        />
+      </div>
+    </div>
+  );
+});
+
 /**
  * 项目行（memo 化）：props 为原始值 + 稳定回调，父级状态变化（busyAction、
  * tab 切换、配额条等）时仅依赖变化的行重渲染。Tabs 激活过的 Panel 会保持挂载，
@@ -165,6 +212,7 @@ export default function ProjectWorkbenchPage() {
   const [deleteProject, setDeleteProject] = useState(null);
   const [restoreProject, setRestoreProject] = useState(null);
   const [permanentProject, setPermanentProject] = useState(null);
+  const [cleanupCategory, setCleanupCategory] = useState(null);
   const [busyAction, setBusyAction] = useState(false);
 
   const loadRef = useRef(false);
@@ -282,6 +330,36 @@ export default function ProjectWorkbenchPage() {
       ? Math.min(100, Math.round((projectUsage / projectQuota) * 100))
       : 0;
 
+  // 衍生数据分类用量与配额（v2 P4：/api/auth/me usage.derived_usage 明细）
+  const derivedQuota = quota?.derived_quota_bytes;
+  const derivedUsage = usage?.derived_usage || null;
+  const cleanupTarget = DERIVED_CATEGORIES.find(
+    (c) => c.key === cleanupCategory,
+  );
+
+  const handleStartCleanupDerived = useCallback((category) => {
+    setCleanupCategory(category);
+  }, []);
+
+  const handleCleanupDerived = useCallback(async () => {
+    if (!cleanupCategory) return;
+    setBusyAction(true);
+    try {
+      await api.auth.cleanupDerivedData(cleanupCategory);
+      toast.success(t("pages:workbench.derivedCleaned"));
+      setCleanupCategory(null);
+      // 清理即时刷新了服务端缓存，这里同步拉取最新用量（me 失败不阻塞）
+      const me = await api.auth.me().catch(() => null);
+      if (me) setAuthMe(me);
+    } catch (err) {
+      toast.error(t("pages:workbench.derivedCleanFailed"), {
+        description: translateError(err.message),
+      });
+    } finally {
+      setBusyAction(false);
+    }
+  }, [cleanupCategory, t, setAuthMe]);
+
   // 行级动作回调：稳定引用（rerender-memo），配合 ProjectRow/RecycleRow memo 生效
   const handleOpen = useCallback(
     (project) => {
@@ -374,6 +452,26 @@ export default function ProjectWorkbenchPage() {
                 style={{ width: `${usagePct}%` }}
               />
             </div>
+
+            {/* 衍生数据分类用量条 + 自助清理（v2 P4） */}
+            {derivedUsage && (
+              <div className="space-y-2.5 border-t pt-3">
+                <p className="text-xs font-medium text-muted-foreground">
+                  {t("pages:workbench.derivedUsageTitle")} ·{" "}
+                  {formatBytes(derivedQuota)}
+                </p>
+                {DERIVED_CATEGORIES.map((c) => (
+                  <DerivedUsageRow
+                    key={c.key}
+                    label={t(`pages:workbench.${c.labelKey}`)}
+                    bytes={derivedUsage[c.key] || 0}
+                    quotaBytes={derivedQuota || 0}
+                    cleanupLabel={t("pages:workbench.derivedCleanup")}
+                    onCleanup={() => handleStartCleanupDerived(c.key)}
+                  />
+                ))}
+              </div>
+            )}
           </CardContent>
         </Card>
 
@@ -539,6 +637,29 @@ export default function ProjectWorkbenchPage() {
           confirmText={t("pages:workbench.permanentDelete")}
           variant="destructive"
           onConfirm={handlePermanent}
+          confirmLoading={busyAction}
+        />
+
+        {/* 衍生数据自助清理二次确认（v2 P4） */}
+        <ConfirmDialog
+          open={!!cleanupCategory}
+          onOpenChange={(o) => !o && setCleanupCategory(null)}
+          title={t("pages:workbench.derivedCleanupTitle", {
+            name: cleanupTarget
+              ? t(`pages:workbench.${cleanupTarget.labelKey}`)
+              : "",
+          })}
+          description={t("pages:workbench.derivedCleanupDesc", {
+            name: cleanupTarget
+              ? t(`pages:workbench.${cleanupTarget.labelKey}`)
+              : "",
+            size: formatBytes(
+              cleanupTarget ? derivedUsage?.[cleanupTarget.key] || 0 : 0,
+            ),
+          })}
+          confirmText={t("pages:workbench.derivedCleanup")}
+          variant="destructive"
+          onConfirm={handleCleanupDerived}
           confirmLoading={busyAction}
         />
       </div>

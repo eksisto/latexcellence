@@ -409,13 +409,13 @@ ExtractorRegistry 先处理已知公开端点（当前代码托管页面使用 G
 
 | 文件 | 职责 |
 | --- | --- |
-| `backend/core/multiuser/db.py` | SQLite 初始化（v1 业务表 + v2 沙箱/治理/编辑日志表，WAL + 外键）、连接管理与统一查询入口（`db_execute` / `db_query_one` / `db_query_all`，同步线程安全）、版本迁移框架（PRAGMA `user_version` + 有序幂等步骤） |
+| `backend/core/multiuser/db.py` | SQLite 初始化（v1 业务表 + v2 沙箱/治理/编辑日志/衍生用量缓存表，WAL + 外键）、连接管理与统一查询入口（`db_execute` / `db_query_one` / `db_query_all`，同步线程安全）、版本迁移框架（PRAGMA `user_version` + 有序幂等步骤） |
 | `backend/core/multiuser/userspace.py` | 用户空间目录布局（`<users_root>/<user_id>/{projects, writing_chat_sessions, style_modify_sessions, templates, plots}`），`ensure_user_dirs()` 注册时创建；P6 新增请求级当前用户上下文（`set/get_current_user_id`）与统一会话资源根解析 `user_resource_root(subdir, legacy_root)`（单用户回退存量全局路径）、`iterate_user_resource_roots()`（后台清理枚举各用户资源目录） |
 | `backend/core/multiuser/auth.py` | 密码哈希（argon2id）、会话令牌（库只存 SHA-256 哈希）、用户管理（注册 pending / 审批 / 禁用 / 重置密码 / 配额覆盖）、登录限流（每用户名+每 IP 分钟级；v2 P1b 起计数入 `rate_limit_events` 表 kind='login'，替代进程内字典）、`ensure_bootstrap_admin()` |
 | `backend/core/multiuser/dependencies.py` | FastAPI 认证依赖：`get_current_user`（401）、`require_admin`（403）、`get_current_user_optional`、`require_admin_if_multiuser`；P6 新增 `current_user_context`（注入请求级当前用户用于会话类资源归属校验） |
-| `backend/core/multiuser/quota.py` | 配额记账核心：有效额度解析（用户覆盖优先）、项目/衍生用量统计、上传/写回/恢复前置校验（超限抛 413 `quota_exceeded`）、项目唯一命名与建行（`xx (2)`）、对账（`reconcile_project_sizes`）、回收站过期清理 |
-| `backend/core/multiuser/upload.py` | 上传解压管线核心：zip（UTF-8/GBK/cp437 编码、路径穿越/符号链接/加密/炸弹拦截）与 7z（py7zr）安全解压、rar（外部 unar 管线，多用户 v2 P2：进程组限时/超配额击杀、RAR4 加密与分卷标志预扫、受保护包输出关键词兜底、零产物兜底）、项目根归一化、`move_into_user_space()` 落位 |
-| `backend/core/multiuser/maintenance.py` | 后台维护循环：配额对账 + 回收站/暂存区清理 + 沙箱/LLM 租约与限流事件清理 + 编辑日志 TTL 清理（`main.py` lifespan 启动） |
+| `backend/core/multiuser/quota.py` | 配额记账核心（v2 P4 重构衍生记账）：有效额度解析（用户覆盖优先）、项目用量统计、衍生用量读 `user_derived_usage` 缓存（检查点增量刷新 `refresh_derived_usage` / `checkpoint_derived_usage*`、全量对账 `reconcile_derived_usage`、分类重扫 `resync_category_all_users`）、上传/写回/恢复前置校验（超限抛 413 `quota_exceeded`，带 subdir 先刷新被触达分类）、自助清理（`cleanup_derived_category`）、项目唯一命名与建行（`xx (2)`）、项目尺寸对账（`reconcile_project_sizes`）、回收站过期清理 |
+| `backend/core/multiuser/upload.py` | 上传解压管线核心：zip（UTF-8/GBK/cp437 编码、路径穿越/符号链接/加密/炸弹拦截）与 7z（py7zr）安全解压、rar（外部 unar 管线，多用户 v2 P2：进程组限时/超配额击杀、RAR4 加密与分卷标志预扫、受保护包输出关键词兜底、零产物兜底）、项目根归一化、`move_into_user_space()` 落位；7z 监视线程以 `_sample_written_bytes()` 采样计数器替代周期 `dir_size` 全遍历（v2 P4：scandir 单趟 lstat + 超限短路） |
+| `backend/core/multiuser/maintenance.py` | 后台维护循环：项目/衍生用量双对账 + 回收站/暂存区清理 + 沙箱/LLM 租约与限流事件清理 + 编辑日志 TTL 清理 + 过期登录会话删除 + 写作会话保留期清理（v2 P4；`main.py` lifespan 启动） |
 | `backend/core/multiuser/sandbox_leases.py` | 沙箱并发池租约（v2 P1a）：`sandbox_slots` 表原子获取/释放，TTL 清理崩溃残留 |
 | `backend/core/multiuser/llm_governance.py` | LLM 每用户治理（v2 P1b）：60s 滑动窗口限流（`rate_limit_events` kind='llm'）+ 并发租约（`llm_concurrency_leases`，TTL 900s），单事务原子准入；超限抛带 `gov_code` 的 RuntimeError（429），`governance_http_response()` 翻译为 429 + Retry-After + `detail` 包装结构化错误体，`register_governance_handler()` 供 main.py 与测试注册同一处理器；`admission_gate()` 供 `llm_client` 各入口包裹，单用户/无用户上下文直通；维护入口 `purge_expired_llm_leases()` / `purge_old_rate_limit_events()` |
 | `backend/core/multiuser/migrate.py` | 存量数据迁移工具（P6）：`migrate_legacy()` 把存量全局目录（writing_chat_sessions / style_modify_sessions / templates / plots / formats / prompts）幂等复制到管理员用户空间，`--dry-run` 预演，报告 + 目录树校验 |
@@ -449,7 +449,8 @@ ExtractorRegistry 先处理已知公开端点（当前代码托管页面使用 G
 - 解压校验（失败即拒绝，不落用户空间）：压缩包大小、文件数、单文件大小、解压总量 ≤ 剩余配额、压缩比（炸弹拦截）、拒绝绝对路径 / `..` / 符号链接 / 设备文件 / 加密包 / 分卷包、大小写不敏感重名、解压限时；zip 文件名按 UTF-8 标志优先、GBK 回退、cp437 兜底。rar 解压前对 RAR4 头链做最小预扫，命中加密 / 分卷标志即确定性拒绝（`archive_unsafe`）；RAR5 由 unar 失败输出关键词（password 等）与“成功但零产物”（多卷集第一卷单独上传的静默形态）兜底拒绝。已知差异：unar 对非 UTF-8 文件名依赖字符集探测，解码结果可能与 zip 管线不一致（GBK 名字可能被还原为其他字符），不影响安全校验与配额记账。
 - 项目根归一化：暂存区仅一个顶层目录 → 以该目录为项目根（兼容“打包上层目录”）；否则暂存区本身为项目根（兼容“直接打包内容”）。
 - 项目命名：与同 owner 活动项目去重，自动生成 `xx (2)`；唯一索引（`UNIQUE(owner_id, name) WHERE active`）+ 捕获 `IntegrityError` 重试保证并发安全。
-- 配额记账：项目空间算 `projects.size_bytes`（活动项目之和，回收站不计入）；`/api/auth/me` 与项目列表实时返回用量；后台 `reconcile_project_sizes()` 周期对账修正缓存漂移。上传、恢复、写回（`apply-change`）超限统一返回 413 `quota_exceeded`；写回超限会**回滚本次修改**（不允许部分写入）。
+- 配额记账：项目空间算 `projects.size_bytes`（活动项目之和，回收站不计入）；`/api/auth/me` 与项目列表实时返回用量；后台 `reconcile_project_sizes()` 周期对账修正缓存漂移。衍生数据空间读 `user_derived_usage` 缓存表（v2 P4，O(1)，不再逐请求全盘扫描）：检查点增量刷新（会话/模板/绘图创建删除、TTL 与自助清理触达某分类时只重扫该目录）+ 维护循环 `reconcile_derived_usage()` 每小时全量纠偏，配额前置校验携带 subdir 时先刷新被触达分类保证创建时刻边界严格。上传、恢复、写回（`apply-change`）超限统一返回 413 `quota_exceeded`；写回超限会**回滚本次修改**（不允许部分写入）。
+- 衍生数据自助清理（v2 P4）：`POST /api/auth/cleanup-derived-data {category}` 删除当前用户某分类（writing_chat_sessions / style_modify_sessions / templates / plots）下全部内容并即时重扫本人全部分类刷新缓存，未知分类 400 `invalid_category`；`GET /api/auth/me` 的 usage 携带 `derived_usage` 分类明细供工作台用量条展示。后台维护循环另负责过期登录会话行删除与 `writing_chat_retention_days`（默认 0 = 仅统计不删）闲置写作会话清理。
 - 回收站：`DELETE /api/projects/{id}` 进回收站（`status='deleted'`，删除即腾出配额）；`restore` 恢复（超限禁止）；`permanent` 提前永久删除；后台按 `recycle_bin_days` 清理过期回收站项目。
 - 下载：`GET /api/projects/{id}/download` 打包 zip，owner / editor / viewer 均可，临时文件由 `BackgroundTasks` 清理。
 - 项目 API 均只在校验读/写/owner 权限（`access_control`）后执行；管理型动作（重命名/删除/恢复/永久删除）仅 owner。

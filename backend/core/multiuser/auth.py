@@ -181,6 +181,17 @@ def revoke_user_sessions(user_id: str) -> int:
     return db_execute("DELETE FROM sessions WHERE user_id = ?", (user_id,))
 
 
+def purge_expired_sessions() -> int:
+    """删除已过期的会话行（v2 P4：并入维护循环，修复 sessions 表无限增长）。
+
+    validate_session 本身按 expires_at 过滤，过期行不影响鉴权正确性；
+    本函数只负责回收存储。返回删除的行数。"""
+    removed = db_execute("DELETE FROM sessions WHERE expires_at < ?", (utcnow(),))
+    if removed:
+        logger.info("Purged %d expired session(s)", removed)
+    return removed
+
+
 # ── 用户管理 ────────────────────────────────────────────────────
 def _row_to_public_user(row: dict) -> dict:
     return {

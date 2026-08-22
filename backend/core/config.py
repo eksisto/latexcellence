@@ -528,6 +528,9 @@ class MultiUserConfig(BaseModel):
     edit_log_ttl_hours: int = Field(
         24, ge=1
     )  # 编辑日志栈无活动保留时长（小时），超时由维护循环整栈清理
+    # 写作会话保留期（v2 P4）：0 = 不自动删，仅统计用量；>0 时由维护循环
+    # 删除超过该天数未活动的 writing_chat 会话文件
+    writing_chat_retention_days: int = Field(0, ge=0)
 
 
 class SandboxConfig(BaseModel):

@@ -578,6 +578,8 @@ Mock 返回值必须符合 Pydantic schema，确保测试的可重复性。
 - **访问控制（P2）**：`backend/core/access_control.py` 提供 `owner / editor / viewer` 权限矩阵、`require_project_access()` / `get_projects_for_user()` 与基于 workspace 绑定的请求级依赖 `require_workspace(write=...)`，权限实时查库不缓存。
 - **workspace 绑定与端点收紧（P2）**：`/api/project/open` 多用户模式仅接受 `project_id`（拒绝 `path`），打开时写入 `workspace_id → (user_id, project_id, root_path)`；`/api/project/browse` 返回 403；写操作要求非 viewer；共享项目 v1 撤销禁令已在 v2 P3 由反向补丁取代（见 §14）。
 - **权限协作（P4）**：`/api/projects/{id}/permissions` 提供协作者列表 / 按用户名添加 / 改角色 / 移除（owner 专属，权限实时查库即时生效）；`/api/projects/{id}/transfer` 支持转交 owner（原 owner 转后 viewer 或退出）。转交前校验接收方配额（超限拒绝）；转交时项目目录迁移到新 owner 空间、新 owner 同名项目自动 `xx (2)`、已打开 workspace 绑定与文件树同步更新。
+- **衍生数据记账（v2 P4）**：四类衍生目录（写作会话 / 样式会话 / 模板 / 绘图）的用量缓存在 `user_derived_usage` 表（`(user_id, subdir)` 主键），配额校验与 `/api/auth/me` 用量读取为 O(1) 数据库查询，不再逐请求 rglob 全盘扫描。准确性由两级机制维护：**检查点增量刷新**（会话/模板/绘图创建删除、TTL 与自助清理触达某分类时，仅重扫该用户该分类目录）+ **维护循环每小时全量对账纠偏**（缓存表全空时首读自动引导，冷启动读数即准）。配额前置校验携带被触达分类时先刷新该分类缓存行再比较——创建时刻的边界严格性不放松（超限仍 413 `quota_exceeded`），纯缓存读对跨分类漂移容忍、由对账最终一致。
+- **后台清理扩充（v2 P4）**：维护循环并入过期登录会话删除（修复 sessions 表无限增长）与写作会话保留期清理（`multi_user.writing_chat_retention_days`，默认 0 = 不自动删仅统计；按文件 mtime 判定，与既有 TTL 清理口径一致）；用户可在工作台按分类自助清理本人衍生数据（`POST /api/auth/cleanup-derived-data`，未知分类 400 `invalid_category`，二次确认由前端承担），不做管理员强制清理。
 
 完整方案、数据模型与阶段划分见 [docs/multi-user-plan.md](docs/multi-user-plan.md)，实现细节见 [docs/backend-core.md](docs/backend-core.md)，部署指南（HTTPS、风险声明）见 [docs/deployment.md](docs/deployment.md)。
 

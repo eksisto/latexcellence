@@ -867,7 +867,17 @@
       "permanentDeleted": "專案已永久刪除",
       "permanentDeleteFailed": "永久刪除失敗",
       "downloadStarted": "已開始下載",
-      "downloadFailed": "下載失敗"
+      "downloadFailed": "下載失敗",
+      "derivedUsageTitle": "衍生資料用量",
+      "derivedWritingChat": "寫作會話",
+      "derivedStyleModify": "樣式會話",
+      "derivedTemplates": "範本",
+      "derivedPlots": "繪圖",
+      "derivedCleanup": "清理",
+      "derivedCleanupTitle": "清理{{name}}",
+      "derivedCleanupDesc": "將不可復原地刪除您名下全部{{name}}資料（共 {{size}}），確定繼續嗎？",
+      "derivedCleaned": "已清理",
+      "derivedCleanFailed": "清理失敗"
     },
     "admin": {
       "title": "管理面板",
@@ -1113,6 +1123,8 @@
       "multiUserEditLogMaxOps": "編輯日誌條數上限/專案",
       "multiUserEditLogMaxOpMb": "編輯日誌單操作上限 (MB)",
       "multiUserEditLogTtlHours": "編輯日誌保留時長（小時）",
+      "multiUserWritingChatRetentionDays": "寫作會話保留期（天）",
+      "multiUserWritingChatRetentionHint": "0 = 不自動刪除，僅統計用量；大於 0 時自動清理超過該天數未活動的寫作會話",
       "multiUserConnectionNote": "多使用者模式下連線與登入由伺服器統一管理，此處無需設定 API 位址或存取權杖。",
       "sandbox": "編譯沙箱",
       "sandboxRestartHint": "修改本分割區設定後需重新啟動後端生效",
@@ -1522,6 +1534,7 @@
     "sandboxBusy": "沙箱並行已滿，請稍後重試",
     "sandboxKilledOom": "編譯因超出沙箱記憶體限制被終止，可簡化文件或調大 sandbox.memory_mb",
     "llmRateLimited": "LLM 請求過於頻繁，請 {{retry_after}} 秒後重試",
-    "llmConcurrencyLimited": "LLM 並行任務數已達上限，請 {{retry_after}} 秒後重試"
+    "llmConcurrencyLimited": "LLM 並行任務數已達上限，請 {{retry_after}} 秒後重試",
+    "invalidCategory": "未知的資料類別"
   }
 }

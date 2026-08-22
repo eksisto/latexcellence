@@ -295,7 +295,8 @@
     "admin_password_env": "LATEXCELLENCE_ADMIN_PASSWORD",
     "edit_log_max_ops": 50,
     "edit_log_max_op_mb": 8,
-    "edit_log_ttl_hours": 24
+    "edit_log_ttl_hours": 24,
+    "writing_chat_retention_days": 0
   },
   "sandbox": {
     "mode": "auto",

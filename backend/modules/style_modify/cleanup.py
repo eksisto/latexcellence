@@ -79,6 +79,12 @@ def cleanup_expired_sessions() -> int:
                             child.name,
                             e,
                         )
+    if removed:
+        # v2 P4 检查点：TTL 清理触达 style_modify_sessions 分类，
+        # 重扫受影响用户的缓存行
+        from backend.core.multiuser.quota import resync_category_all_users
+
+        resync_category_all_users("style_modify_sessions")
     return removed
 
 

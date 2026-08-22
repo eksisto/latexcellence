@@ -10,7 +10,10 @@ from typing import Any, AsyncIterator
 
 from backend.core.config import get_config
 from backend.core.logger import get_logger
-from backend.core.multiuser.quota import enforce_derived_quota_for_current_user
+from backend.core.multiuser.quota import (
+    checkpoint_derived_usage_for_current_user,
+    enforce_derived_quota_for_current_user,
+)
 from backend.modules.plot_gen.agent import (
     get_plot_gen_agent,
     get_plot_output_dir,
@@ -65,8 +68,11 @@ class PlotGenService:
 
         # 多用户模式：新建制图会话前检查衍生数据配额（按实际数据文件大小计，
         # 超限抛 413，方案 §9.2“输出写入时检查”）。
-        # 配额检查含衍生目录递归扫描（磁盘 I/O），入线程池避免阻塞事件循环
-        await asyncio.to_thread(enforce_derived_quota_for_current_user, len(file_bytes))
+        # v2 P4：检查读 user_derived_usage 缓存，先对本分类做检查点增量刷新
+        # （仅扫 plots 单个目录），入线程池避免阻塞事件循环
+        await asyncio.to_thread(
+            enforce_derived_quota_for_current_user, len(file_bytes), "plots"
+        )
 
         session_id = uuid.uuid4().hex[:12]
         sandbox = get_plot_output_dir(cfg) / session_id
@@ -92,6 +98,9 @@ class PlotGenService:
             updated_at=now,
         )
         write_session_meta(sandbox, meta)
+        # v2 P4 检查点：新会话落盘后刷新该用户 plots 缓存行（后续生成产物的
+        # 增长由下一次配额前置刷新与每小时对账覆盖）
+        await asyncio.to_thread(checkpoint_derived_usage_for_current_user, "plots")
         logger.info("plot_gen session created: %s (%s)", session_id, safe_name)
         return {
             "session_id": session_id,

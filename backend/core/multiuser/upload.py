@@ -341,6 +341,47 @@ def _extract_7z(
 _WATCH_INTERVAL_SECONDS = 1.0
 
 
+def _sample_written_bytes(extract_dir: Path, remaining_quota_bytes: int) -> int:
+    """单趟 os.scandir 统计解压已写盘字节（v2 P4 采样计数器）。
+
+    与 quota.dir_size 同口径（符号链接不计入），用于替代监视线程每秒一次
+    的 rglob 全遍历：
+    - os.scandir 单趟遍历，条目类型由目录项 d_type 直接给出，每文件只做
+      一次必要的 lstat（Path.rglob 需 is_file / is_symlink / stat 多次
+      系统调用与对象构造开销）；
+    - 累计超过 remaining_quota_bytes 立即短路返回——超限快速路径无需
+      完成全树扫描。
+    文件系统不提供写入推送通知，最坏复杂度仍与产物规模线性；7z 走 py7zr
+    整包写出、解压侧无逐写入回调可挂，这是不引入 OS 钩子前提下每采样周期
+    的最小观测开销。"""
+
+    def _walk(stack: list[Path]) -> int:
+        total = 0
+        while stack:
+            d = stack.pop()
+            try:
+                with os.scandir(d) as it:
+                    for entry in it:
+                        try:
+                            if entry.is_symlink():
+                                continue
+                            if entry.is_dir(follow_symlinks=False):
+                                stack.append(Path(entry.path))
+                                continue
+                            if not entry.is_file(follow_symlinks=False):
+                                continue
+                            total += entry.stat(follow_symlinks=False).st_size
+                            if total > remaining_quota_bytes:
+                                return total  # 已确定超限：立即短路
+                        except OSError:
+                            continue
+            except OSError:
+                continue
+        return total
+
+    return _walk([extract_dir])
+
+
 def _start_extract_watch(
     fp,
     extract_dir: Path,
@@ -351,12 +392,13 @@ def _start_extract_watch(
 ) -> threading.Thread:
     """后台监视 7z 解压的实时写盘总量与限时（方案 §8.2）。
 
-    周期采样 extract_dir 已写盘量（符号链接不计），超过剩余配额或超过
-    限时即关闭归档文件句柄中断解压，并把错误码追加到 breach。"""
+    周期采样 extract_dir 已写盘量（符号链接不计；v2 P4 起走
+    _sample_written_bytes 采样计数器，不再每秒全量 rglob），超过剩余配额
+    或超过限时即关闭归档文件句柄中断解压，并把错误码追加到 breach。"""
 
     def watch() -> None:
         while not stop.wait(_WATCH_INTERVAL_SECONDS):
-            used = dir_size(extract_dir)
+            used = _sample_written_bytes(extract_dir, limits.remaining_quota_bytes)
             if used > limits.remaining_quota_bytes:
                 code = "quota_exceeded"
             elif time.monotonic() > deadline:

@@ -22,3 +22,9 @@ class QuotaUpdateRequest(BaseModel):
 
 class ResetPasswordConfirmRequest(BaseModel):
     temp_password: str = Field(..., min_length=1, max_length=128)
+
+
+class CleanupDerivedDataRequest(BaseModel):
+    """自助清理衍生数据的请求体：category 为四类衍生目录名之一。"""
+
+    category: str = Field(..., min_length=1, max_length=64)

@@ -1033,6 +1033,12 @@ export const api = {
         method: "POST",
       }),
     me: () => request("/auth/me"),
+    // 自助清理本人指定类别衍生数据（写作会话/样式会话/模板/绘图）
+    cleanupDerivedData: (category) =>
+      request("/auth/cleanup-derived-data", {
+        method: "POST",
+        body: JSON.stringify({ category }),
+      }),
   },
 
   /* ---- 多用户管理后台（/api/admin，仅 admin） ---- */

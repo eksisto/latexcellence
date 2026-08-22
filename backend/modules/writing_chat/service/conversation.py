@@ -8,7 +8,10 @@ from typing import Any, AsyncIterator
 from urllib.parse import urlparse, urlunparse
 
 from backend.core.config import get_config
-from backend.core.multiuser.quota import enforce_derived_quota_for_current_user
+from backend.core.multiuser.quota import (
+    checkpoint_derived_usage_for_current_user,
+    enforce_derived_quota_for_current_user,
+)
 from backend.core.prompts import CUSTOM_INSTRUCTIONS_ISOLATION_RULE, get_prompt
 from backend.core.tool_registry import get_tool_registry
 from backend.core.workspace_manager import get_project_manager_for_workspace
@@ -538,6 +541,7 @@ class ConversationMixin:
 
         # 1. 加载或创建会话
         scope = self._get_scope(workspace_id)
+        created_new_session = False
         ctx = (
             ConversationContext.load_from_disk(req.session_id)
             if req.session_id
@@ -546,11 +550,15 @@ class ConversationMixin:
         if ctx is None:
             # 多用户模式：新建会话前检查衍生数据配额（超限抛 413 quota_exceeded，
             # 方案 §9.2“会话创建时检查”）；单用户模式跳过。
-            # 配额检查含衍生目录递归扫描（磁盘 I/O），入线程池避免阻塞事件循环
-            await asyncio.to_thread(enforce_derived_quota_for_current_user)
+            # v2 P4：检查读 user_derived_usage 缓存，先对本分类做检查点增量
+            # 刷新（仅扫 writing_chat_sessions 单个目录）保证准确性
+            await asyncio.to_thread(
+                enforce_derived_quota_for_current_user, 0, "writing_chat_sessions"
+            )
             ctx = ConversationContext.create_session(
                 file_path=req.file_path, scope=scope
             )
+            created_new_session = True
 
         # 2. 压缩检测：若发送前累积 token 已超阈值，先压缩旧消息（不含本轮
         #    user 当前批），确保本轮 user 消息始终以真实 user 角色进入 LLM
@@ -572,6 +580,11 @@ class ConversationMixin:
             referenced_paragraph=req.paragraph_index,
         )
         ctx.save_to_disk()
+        if created_new_session:
+            # v2 P4 检查点：新会话落盘后刷新该用户 writing_chat_sessions 缓存行
+            await asyncio.to_thread(
+                checkpoint_derived_usage_for_current_user, "writing_chat_sessions"
+            )
 
         # 4. 调用 LLM 流式（支持 Function Calling 工具调用）
         llm = _deps.get_llm_client()

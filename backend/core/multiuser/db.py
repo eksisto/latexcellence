@@ -159,9 +159,31 @@ def _migration_v4_workspace_edit_ops(conn: sqlite3.Connection) -> None:
         """)
 
 
+def _migration_v5_user_derived_usage(conn: sqlite3.Connection) -> None:
+    """v2 P4：衍生数据用量缓存表（方案 §9.1）。
+
+    按 (user_id, subdir) 缓存四类衍生目录（writing_chat_sessions /
+    style_modify_sessions / templates / plots）的磁盘占用，使配额校验与
+    /api/auth/me 用量读取为 O(1) 数据库查询；准确性由"检查点增量刷新
+    （触达某分类时仅重扫该目录）+ 每小时对账全量重算"两级机制维护。
+    行随用户删除级联清理。
+    """
+    conn.executescript("""
+        CREATE TABLE IF NOT EXISTS user_derived_usage (
+            user_id    TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            subdir     TEXT NOT NULL,
+            size_bytes INTEGER NOT NULL DEFAULT 0,
+            updated_at TEXT NOT NULL,
+            PRIMARY KEY (user_id, subdir)
+        );
+        CREATE INDEX IF NOT EXISTS ix_user_derived_usage_user
+            ON user_derived_usage (user_id);
+        """)
+
+
 # 当前 schema 最新版本号。新增迁移时：追加实现函数并在列表末尾登记
 # (target_version, description, fn)，同时递增此常量；每个步骤必须幂等可重入。
-SCHEMA_VERSION = 4
+SCHEMA_VERSION = 5
 
 # 有序迁移步骤：(目标版本, 描述, 执行函数)。版本从 2 起（1 为 v1 基线，
 # 对老库存量数据无破坏性变更，仅补齐 IF NOT EXISTS 建表）。
@@ -181,6 +203,11 @@ MIGRATIONS: list[tuple[int, str, Callable[[sqlite3.Connection], None]]] = [
         4,
         "v2 P3 reverse-patch edit log index table",
         _migration_v4_workspace_edit_ops,
+    ),
+    (
+        5,
+        "v2 P4 derived data usage cache table",
+        _migration_v5_user_derived_usage,
     ),
 ]
 

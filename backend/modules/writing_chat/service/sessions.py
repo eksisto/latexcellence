@@ -1,7 +1,9 @@
 """写作助手服务：会话 CRUD 与手动压缩。"""
 
+import asyncio
 from typing import Any
 
+from backend.core.multiuser.quota import checkpoint_derived_usage_for_current_user
 from backend.modules.writing_chat.context import ConversationContext
 
 
@@ -22,6 +24,13 @@ class SessionMixin:
                 return False
             result = ctx.delete_from_disk()
             self._session_locks.pop(session_id, None)
+            if result:
+                # v2 P4 检查点：删除触达 writing_chat_sessions 分类，
+                # 刷新该用户该分类的用量缓存行（多用户模式；无上下文静默跳过）
+                await asyncio.to_thread(
+                    checkpoint_derived_usage_for_current_user,
+                    "writing_chat_sessions",
+                )
             return result
 
     async def rename_session(self, session_id: str, title: str) -> dict:

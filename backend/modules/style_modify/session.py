@@ -19,7 +19,10 @@ from typing import Any
 
 from backend.core.config import get_config
 from backend.core.logger import get_logger
-from backend.core.multiuser.quota import enforce_derived_quota_for_current_user
+from backend.core.multiuser.quota import (
+    checkpoint_derived_usage_for_current_user,
+    enforce_derived_quota_for_current_user,
+)
 from backend.core.workspace_manager import get_project_manager_for_workspace
 from backend.modules.style_modify.models import (
     CompileError,
@@ -258,8 +261,9 @@ class StyleModifySessionStore:
     ) -> str:
         cfg = get_config()
         root = get_sessions_root(cfg)
-        # 多用户模式：新建会话前检查衍生数据配额（超限抛 413，方案 §9.2）
-        enforce_derived_quota_for_current_user()
+        # 多用户模式：新建会话前检查衍生数据配额（超限抛 413，方案 §9.2）。
+        # v2 P4：先对本分类做检查点增量刷新（仅扫 style_modify_sessions 目录）
+        enforce_derived_quota_for_current_user(subdir="style_modify_sessions")
         session_id = uuid.uuid4().hex[:12]
         session_dir = root / session_id
         (session_dir / "baseline").mkdir(parents=True, exist_ok=True)
@@ -278,6 +282,8 @@ class StyleModifySessionStore:
             updated_at=now_iso(),
         )
         _write_meta(session_dir / "meta.json", meta)
+        # v2 P4 检查点：新会话落盘后刷新该用户该分类的用量缓存行
+        checkpoint_derived_usage_for_current_user("style_modify_sessions")
         self._logger.info(
             "style_modify session created: %s workspace=%s project=%s",
             session_id,
@@ -919,6 +925,8 @@ class StyleModifySessionStore:
         shutil.rmtree(session_dir)
         self._locks.pop(session_id, None)
         forget_trace_lock(session_dir)
+        # v2 P4 检查点：删除触达 style_modify_sessions 分类，刷新用量缓存行
+        checkpoint_derived_usage_for_current_user("style_modify_sessions")
         self._logger.info("style_modify session deleted: %s", session_id)
         return True
 

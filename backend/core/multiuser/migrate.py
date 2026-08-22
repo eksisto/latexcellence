@@ -258,6 +258,20 @@ def migrate_legacy(admin_id: str, dry_run: bool = False) -> dict[str, Any]:
         for d in dirs_report
         if d["status"] == "copied"
     )
+    if not dry_run:
+        # v2 P4 检查点：本次复制向管理员用户空间的四类衍生目录写入了数据，
+        # 即时重扫刷新 user_derived_usage 缓存行——否则在缓存表非空时
+        # （无首读引导可依赖），迁移量要到下一次维护循环对账才可见，
+        # 期间衍生配额校验会读到偏小的旧值
+        from .quota import resync_user_derived_usage
+
+        total = resync_user_derived_usage(admin_id)
+        logger.info(
+            "migrate-legacy: refreshed derived usage cache for admin "
+            "%s (total=%d bytes)",
+            admin_id,
+            total,
+        )
     return {
         "admin_id": admin_id,
         "dry_run": dry_run,

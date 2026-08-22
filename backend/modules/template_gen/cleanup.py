@@ -85,6 +85,10 @@ def cleanup_expired_sandboxes() -> int:
 
     if removed > 0:
         logger.info("This cleanup removed %d expired sandboxes", removed)
+        # v2 P4 检查点：TTL 清理触达 templates 分类，重扫受影响用户的缓存行
+        from backend.core.multiuser.quota import resync_category_all_users
+
+        resync_category_all_users("templates")
 
     return removed
 

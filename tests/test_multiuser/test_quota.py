@@ -80,11 +80,24 @@ class TestUsage:
         (userspace.derived_dir(env["user"]["id"], "templates") / "t.txt").write_text(
             "ab", encoding="utf-8"
         )
+        # v2 P4 起用量读 DB 缓存：触达分类后由检查点刷新缓存行
+        quota.refresh_derived_usage(env["user"]["id"], "plots")
+        quota.refresh_derived_usage(env["user"]["id"], "templates")
         assert quota.derived_usage_for_user(env["user"]["id"]) == 7
 
     def test_user_usage_shape(self, env):
         usage = quota.user_usage(env["user"]["id"])
-        assert usage == {"project_usage_bytes": 0, "derived_usage_bytes": 0}
+        assert usage == {
+            "project_usage_bytes": 0,
+            "derived_usage_bytes": 0,
+            # v2 P4：分类明细（category → bytes）
+            "derived_usage": {
+                "writing_chat_sessions": 0,
+                "style_modify_sessions": 0,
+                "templates": 0,
+                "plots": 0,
+            },
+        }
 
 
 class TestEnforce:
@@ -108,7 +121,10 @@ class TestEnforce:
     # ── R1：derived quota 创建时检查（多用户模式 + 请求级当前用户上下文）──
 
     def test_enforce_derived_for_current_user_over_quota(self, env):
-        """多用户 + 请求级上下文：用量已满时拒绝创建（超限抛 413）。"""
+        """多用户 + 请求级上下文：用量已满时拒绝创建（超限抛 413）。
+
+        v2 P4：传入 subdir 时先对该分类做检查点增量刷新再校验，
+        磁盘上的既有占用在检查时即时可见。"""
         auth_core.set_user_quota(env["user"]["id"], None, 10)
         (userspace.derived_dir(env["user"]["id"], "plots") / "p.bin").write_bytes(
             b"x" * 20
@@ -116,7 +132,7 @@ class TestEnforce:
         userspace.set_current_user_id(env["user"]["id"])
         try:
             with pytest.raises(HTTPException) as ei:
-                quota.enforce_derived_quota_for_current_user()
+                quota.enforce_derived_quota_for_current_user(subdir="plots")
             assert ei.value.status_code == 413
             assert ei.value.detail["error"] == "quota_exceeded"
         finally:

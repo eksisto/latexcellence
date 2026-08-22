@@ -126,6 +126,27 @@ async def build_me(user: dict) -> dict:
     }
 
 
+# ── 自助清理（v2 P4）────────────────────────────────────────────
+async def cleanup_derived_data(user: dict, category: str) -> dict:
+    """删除当前用户某分类衍生目录下的全部内容并即时刷新用量缓存。
+
+    仅作用于本人数据（user 来自会话，无跨用户参数面）；未知分类返回
+    400 invalid_category。返回刷新后的分类用量明细供前端即时更新。
+    """
+    from backend.core.multiuser import quota, userspace
+
+    if category not in userspace.DERIVED_SUBDIRS:
+        raise _http(
+            400,
+            "invalid_category",
+            f"Unknown derived data category: {category}",
+        )
+    derived_usage = await asyncio.to_thread(
+        quota.cleanup_derived_category, user["id"], category
+    )
+    return {"status": "ok", "category": category, "derived_usage": derived_usage}
+
+
 # ── 管理员：用户管理 ────────────────────────────────────────────
 async def admin_list_users() -> list[dict]:
     return await asyncio.to_thread(auth_core.list_users)

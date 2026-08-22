@@ -184,7 +184,7 @@ npm start        # 或 node server.js
 | `features.writing_chat` | compression_threshold_tokens（0=动态）、compression_headroom_tokens、compression_keep_recent_tokens/turns、summary_token_budget、summary_model 等 | 写作助手上下文压缩触发与摘要预算；摘要旧配置 `summary_max_tokens` 自动迁移并告警 |
 | `features.style_modify.agent` | 项目 Agent 的会话目录、轮次、工具/编译上限、大小限制、shadow 编译和清理配置 | style_modify 项目 Agent 模式 |
 | `logging` | level, dir | 日志级别与存储路径 |
-| `multi_user` | enabled, db_path, users_root, staging_root、默认配额、上传限制、会话/回收站 TTL、LLM/登录限流、registration_enabled、admin_*_env、edit_log_*（反向补丁撤销日志：条数上限 / 单操作体积上限 / 保留时长） | 多用户模式（默认关闭）；开启后强制登录、用户空间隔离、关闭任意路径打开与磁盘浏览，详见 [multi-user-plan.md](multi-user-plan.md)；共享项目反向补丁撤销见 [multi-user-v2-plan.md](multi-user-v2-plan.md) §8 |
+| `multi_user` | enabled, db_path, users_root, staging_root、默认配额、上传限制、会话/回收站 TTL、LLM/登录限流、registration_enabled、admin_*_env、edit_log_*（反向补丁撤销日志：条数上限 / 单操作体积上限 / 保留时长）、writing_chat_retention_days（0 = 不自动删仅统计） | 多用户模式（默认关闭）；开启后强制登录、用户空间隔离、关闭任意路径打开与磁盘浏览，详见 [multi-user-plan.md](multi-user-plan.md)；共享项目反向补丁撤销见 [multi-user-v2-plan.md](multi-user-v2-plan.md) §8，衍生数据记账与细粒度清理见同文档 §9 |
 
 所有字段有 Pydantic 默认值，可部分配置。`LX_LLM_KEY` 环境变量优先于 `config.json` 中的 `api_key`。
 

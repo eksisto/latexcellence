@@ -867,7 +867,17 @@
       "permanentDeleted": "Project permanently deleted",
       "permanentDeleteFailed": "Permanent delete failed",
       "downloadStarted": "Download started",
-      "downloadFailed": "Download failed"
+      "downloadFailed": "Download failed",
+      "derivedUsageTitle": "Derived data usage",
+      "derivedWritingChat": "Writing chats",
+      "derivedStyleModify": "Style sessions",
+      "derivedTemplates": "Templates",
+      "derivedPlots": "Plots",
+      "derivedCleanup": "Clean up",
+      "derivedCleanupTitle": "Clean up {{name}}",
+      "derivedCleanupDesc": "All your {{name}} data ({{size}} in total) will be permanently deleted. Continue?",
+      "derivedCleaned": "Cleaned up",
+      "derivedCleanFailed": "Cleanup failed"
     },
     "admin": {
       "title": "Admin panel",
@@ -1113,6 +1123,8 @@
       "multiUserEditLogMaxOps": "Edit Log Max Ops/Project",
       "multiUserEditLogMaxOpMb": "Edit Log Max Op Size (MB)",
       "multiUserEditLogTtlHours": "Edit Log Retention (hours)",
+      "multiUserWritingChatRetentionDays": "Writing Chat Retention (days)",
+      "multiUserWritingChatRetentionHint": "0 = keep forever (usage is counted only); when > 0, writing chat sessions idle beyond this many days are purged automatically",
       "multiUserConnectionNote": "In multi-user mode, connection and sign-in are managed by the server; no API base or access token settings are needed here.",
       "sandbox": "Compile Sandbox",
       "sandboxRestartHint": "Changes in this section take effect after restarting the backend",
@@ -1522,6 +1534,7 @@
     "sandboxBusy": "Sandbox concurrency pool is full, please retry later",
     "sandboxKilledOom": "Compilation was killed because it exceeded the sandbox memory limit; simplify the document or increase sandbox.memory_mb",
     "llmRateLimited": "Too many LLM requests; retry after {{retry_after}}s",
-    "llmConcurrencyLimited": "LLM concurrency limit reached; retry after {{retry_after}}s"
+    "llmConcurrencyLimited": "LLM concurrency limit reached; retry after {{retry_after}}s",
+    "invalidCategory": "Unknown data category"
   }
 }

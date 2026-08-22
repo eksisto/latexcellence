@@ -54,6 +54,11 @@ def cleanup_expired_sandboxes() -> int:
                     )
                 except OSError as e:
                     logger.error("Failed to clean plot session %s: %s", child.name, e)
+    if removed:
+        # v2 P4 检查点：TTL 清理触达 plots 分类，重扫受影响用户的缓存行
+        from backend.core.multiuser.quota import resync_category_all_users
+
+        resync_category_all_users("plots")
     return removed
 
 

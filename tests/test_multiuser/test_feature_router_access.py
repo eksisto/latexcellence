@@ -405,12 +405,15 @@ class TestDerivedQuotaEnforcement:
         assert r.json()["detail"]["error"] == "quota_exceeded"
 
     def test_template_generate_sse_quota_error_event(self, env):
-        """模板生成（SSE）会话创建：衍生配额超限 → 流内首事件为结构化 quota 错误。"""
+        """模板生成（SSE）会话创建：衍生配额超限 → 流内首事件为结构化 quota 错误。
+
+        v2 P4 起创建前校验对被触达分类（templates）做检查点增量刷新，
+        因此占用须落在同一分类；跨分类总量由缓存 + 每小时对账最终一致。"""
         client = _client(env)
         _login(client, "owner")
         auth_core.set_user_quota(env["owner"]["id"], None, 10)
-        # 先占用衍生空间（用量 >= 配额，拒绝新建会话）
-        (userspace.derived_dir(env["owner"]["id"], "plots") / "p.bin").write_bytes(
+        # 先占用 templates 分类（用量 >= 配额，拒绝新建会话）
+        (userspace.derived_dir(env["owner"]["id"], "templates") / "t.bin").write_bytes(
             b"z" * 20
         )
         r = client.post(

@@ -111,7 +111,7 @@ latexcellence/
 │       ├── table_ocr/               # 表格 OCR
 │       ├── format_converter/        # 格式转换
 │       ├── style_modify/            # 样式修改（粘贴代码 + 项目 Agent）
-│       ├── writing_chat/            # 写作助手聊天
+│       ├── writing_chat/            # 写作助手聊天（cleanup.py 保留期清理）
 │       │   └── service/             # 业务逻辑包（state/sessions/conversation/edits/compaction/_deps）
 │       ├── bib_manager/             # 参考文献管理（格式规则层 + DOI 多数据源查询 + 重复检测 + 文献库管理）
 │       │   └── providers/           # 可插拔 DOI 数据源
@@ -140,7 +140,7 @@ latexcellence/
 │       │   ├── LoginPage.jsx        # 多用户登录页
 │       │   ├── RegisterPage.jsx     # 多用户注册页（含待审批提交态）
 │       │   ├── PendingApprovalPage.jsx # 待管理员批准占位页
-│       │   ├── ProjectWorkbenchPage.jsx # 项目工作台（列表/上传/配额/回收站/协作）
+│       │   ├── ProjectWorkbenchPage.jsx # 项目工作台（列表/上传/配额/分类用量与清理/回收站/协作）
 │       │   ├── AdminPage.jsx        # 管理面板（审批/禁用/重置密码/配额/删除）
 │       │   ├── code-review/         # 代码审查子组件
 │       │   └── writing-chat/        # 写作聊天子组件
@@ -198,7 +198,7 @@ latexcellence/
 ├── tests/                           # 测试用例
 │   ├── conftest.py                  # pytest 共享 fixture
 │   ├── test_api/                    # 各模块 API 集成测试
-│   ├── test_multiuser/              # 多用户模式测试（认证/项目/配额/协作/DB 迁移/沙箱租约/LLM 治理/rar 上传）
+│   ├── test_multiuser/              # 多用户模式测试（认证/项目/配额/协作/DB 迁移/沙箱租约/LLM 治理/rar 上传/衍生数据记账与清理）
 │   ├── test_plot_gen/               # plot_gen 单元测试
 │   ├── test_docker/                 # Docker 沙箱真容器冒烟（marker docker，无 daemon 自动 skip）
 │   ├── test_utils/                  # 后端工具单元测试（路径/JSON/宏包/搜索/学术检索/编译/sandbox 契约等）
@@ -295,6 +295,7 @@ latexcellence/
 | 多用户权限协作 | 协作者管理（按用户名添加/改角色/移除）、项目转交（原 owner 变 viewer 或退出）、viewer 写保护；权限实时查库即时生效 | [backend-core.md](docs/backend-core.md)、[multi-user-plan.md](docs/multi-user-plan.md) |
 | 共享项目反向补丁撤销 | 多用户模式写路径统一记账（workspace_edit_ops + .edit_logs 快照），undo/redo 只回退当前用户自己的修改：冲突即拒绝（409）、恢复超配额拒绝（413）、LIFO 整组回滚、redo 对称；共享项目 v1 禁令解除 | [DESIGN.md §14](DESIGN.md)、[multi-user-v2-plan.md](docs/multi-user-v2-plan.md) §8 |
 | 多用户 LLM 治理 | 每用户滑动窗口限流 + 并发租约（`llm_governance.py`，单事务原子准入），超限 429 + Retry-After；登录限流同表计数；仅多用户模式生效，单用户零依赖直通 | [backend-core.md](docs/backend-core.md)、[multi-user-v2-plan.md](docs/multi-user-v2-plan.md) §6 |
+| 衍生数据记账与自助清理 | 四类衍生目录用量缓存（user_derived_usage 表）+ 检查点增量刷新 + 维护循环对账纠偏，配额校验与 /me 用量 O(1)；工作台分类用量条 + 自助清理（仅本人）；过期会话删除与写作会话保留期清理并入维护循环 | [backend-core.md](docs/backend-core.md)、[multi-user-v2-plan.md](docs/multi-user-v2-plan.md) §9 |
 | 多用户前端 | 登录/注册/待审批页、项目工作台（上传 zip·7z·目录、配额、回收站、权限）、管理面板、路由守卫、auth 切片；多用户模式固定同源 + CSRF 头 + Cookie 会话，SSE 不再追加 token | [frontend.md](docs/frontend.md)、[multi-user-plan.md](docs/multi-user-plan.md) |
 | i18n 多语言 | i18next 简中 / 繁中 / 英语，按 `common` / `pages` / `components` / `hooks` / `errors` 命名空间拆分 | [frontend.md](docs/frontend.md) |
 

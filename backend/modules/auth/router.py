@@ -14,6 +14,7 @@ from backend.core.multiuser import auth as auth_core
 from backend.core.multiuser.dependencies import get_current_user, require_admin
 from backend.modules.auth import service
 from backend.modules.auth.models import (
+    CleanupDerivedDataRequest,
     LoginRequest,
     QuotaUpdateRequest,
     RegisterRequest,
@@ -99,8 +100,19 @@ async def logout(
 
 @auth_router.get("/me")
 async def me(user: dict = Depends(get_current_user)):
-    """当前用户信息、角色、配额与用量。"""
+    """当前用户信息、角色、配额与用量（usage 含 derived_usage 分类明细）。"""
     return await service.build_me(user)
+
+
+@auth_router.post("/cleanup-derived-data")
+async def cleanup_derived_data(
+    req: CleanupDerivedDataRequest, user: dict = Depends(get_current_user)
+):
+    """自助清理本人指定类别的衍生数据（写作会话/样式会话/模板/绘图）。
+
+    仅作用于当前会话用户；未知 category 返回 400 invalid_category。
+    二次确认由前端承担。"""
+    return await service.cleanup_derived_data(user, req.category)
 
 
 # ── 管理员端点 ──────────────────────────────────────────────────

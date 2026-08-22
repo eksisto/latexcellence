@@ -73,6 +73,9 @@ const EXACT_MAP = {
   quota_exceeded_recover: "quotaExceededRecover",
   op_not_undoable: "opNotUndoable",
 
+  // 衍生数据记账与自助清理（多用户 v2 P4）错误码
+  invalid_category: "invalidCategory",
+
   // 项目管理
   "No project opened": "noProjectOpened",
 

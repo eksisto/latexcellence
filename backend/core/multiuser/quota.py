@@ -1,12 +1,16 @@
 """
-多用户模式配额记账与项目维护核心（纯同步函数层，P3）。
+多用户模式配额记账与项目维护核心（纯同步函数层，P3 / P4）。
 
 职责：
     1. 配额解析：项目空间 / 衍生数据空间的有效额度（用户覆盖优先于全局默认）
-    2. 用量统计：项目空间按 projects.size_bytes（缓存）汇总；衍生数据按磁盘实时扫描
-    3. 上传 / 写回 / 恢复前置校验（超限抛 HTTPException 413 quota_exceeded）
-    4. 项目尺寸对账（reconcile_project_sizes，后台周期修正缓存漂移）
-    5. 回收站清理（clean_expired_recycle_bin，按 recycle_bin_days 永久删除）
+    2. 用量统计：项目空间按 projects.size_bytes（缓存）汇总；衍生数据按
+       user_derived_usage 表缓存读取（v2 P4 起 O(1)，不再每请求全盘扫描）
+    3. 衍生数据记账：检查点增量刷新（触达某分类时仅重扫该用户该分类子目录）
+       + 每小时对账全量重算校正漂移（reconcile_derived_usage）
+    4. 上传 / 写回 / 恢复前置校验（超限抛 HTTPException 413 quota_exceeded）
+    5. 项目尺寸对账（reconcile_project_sizes，后台周期修正缓存漂移）
+    6. 回收站清理（clean_expired_recycle_bin，按 recycle_bin_days 永久删除）
+    7. 用户自助清理（cleanup_derived_category，删除指定分类全部内容并即时刷新缓存）
 
 约定：
     - 本模块为同步核心；FastAPI 层通过 asyncio.to_thread 调度，禁止阻塞事件循环
@@ -68,25 +72,132 @@ def project_usage_for_user(user_id: str) -> int:
     )
 
 
-def derived_usage_for_user(user_id: str) -> int:
-    """实时统计用户四个衍生数据目录的总大小（writing_chat / style_modify /
-    templates / plots）。目录不存在返回 0。"""
+# ── 衍生数据用量缓存（v2 P4）──────────────────────────────────────
+def _derived_cache_is_empty() -> bool:
+    return db_query_one("SELECT COUNT(*) AS n FROM user_derived_usage")["n"] == 0
+
+
+def resync_user_derived_usage(user_id: str) -> int:
+    """重扫单个用户全部四类衍生目录并刷新缓存行，返回总字节数。
+
+    供自助清理 / 存量迁移 / 缓存引导使用；单分类的增量刷新走
+    refresh_derived_usage，全量对账走 reconcile_derived_usage（含逐行
+    变更检测，避免无谓写放大）。"""
     total = 0
-    root = userspace.user_root(user_id)
-    if not root.is_dir():
-        return 0
     for sub in userspace.DERIVED_SUBDIRS:
-        d = root / sub
-        if d.is_dir():
-            total += dir_size(d)
+        total += refresh_derived_usage(user_id, sub)
     return total
 
 
+def reconcile_derived_usage() -> int:
+    """对账：全量重算所有用户的衍生数据用量并校正缓存漂移。
+
+    返回发生变化的缓存行数。由维护循环每小时调用；也承担冷启动引导
+    （缓存表全空时 derived_usage_breakdown 首读会触发一次本函数）。"""
+    rows = db_query_all("SELECT id FROM users")
+    updated = 0
+    for row in rows:
+        for sub in userspace.DERIVED_SUBDIRS:
+            size = _scan_derived_dir(row["id"], sub)
+            cur = db_query_one(
+                "SELECT size_bytes FROM user_derived_usage "
+                "WHERE user_id = ? AND subdir = ?",
+                (row["id"], sub),
+            )
+            if cur is None or int(cur["size_bytes"]) != size:
+                _upsert_derived_usage(row["id"], sub, size)
+                updated += 1
+    if updated:
+        logger.info("Reconciled %d derived usage entries", updated)
+    return updated
+
+
+def refresh_derived_usage(user_id: str, subdir: str) -> int:
+    """检查点增量刷新：仅扫描该用户该分类子目录并更新缓存行（v2 P4）。
+
+    范围从"全部分类全盘扫描"缩到"被触达的单个目录"；返回刷新后的字节数。
+    """
+    size = _scan_derived_dir(user_id, subdir)
+    _upsert_derived_usage(user_id, subdir, size)
+    return size
+
+
+def checkpoint_derived_usage(user_id: str, subdir: str) -> None:
+    """会话/模板/绘图创建、会话删除、自助清理等触达某分类后的记账钩子。
+
+    仅在多用户模式下生效；失败不阻断业务主流程（漂移由对账兜底）。"""
+    if not userspace.is_multiuser():
+        return
+    try:
+        refresh_derived_usage(user_id, subdir)
+    except Exception as e:  # noqa: BLE001 - 记账失败不影响主流程
+        logger.warning(
+            "Derived usage checkpoint failed (user=%s subdir=%s): %s",
+            user_id,
+            subdir,
+            e,
+        )
+
+
+def checkpoint_derived_usage_for_current_user(subdir: str) -> None:
+    """按请求级当前用户执行检查点刷新（无上下文时静默跳过）。"""
+    if not userspace.is_multiuser():
+        return
+    user_id = userspace.get_current_user_id()
+    if not user_id:
+        return
+    checkpoint_derived_usage(user_id, subdir)
+
+
+def resync_category_all_users(subdir: str) -> int:
+    """某分类被后台 TTL 清理批量删除后，重扫所有用户该分类并刷新缓存。
+
+    返回刷新的用户数；单用户模式返回 0（存量全局路径清理由对账覆盖口径外，
+    本函数只服务多用户缓存）。"""
+    if not userspace.is_multiuser():
+        return 0
+    count = 0
+    for d in userspace.iterate_user_resource_roots(subdir):
+        user_id = d.parent.name
+        try:
+            refresh_derived_usage(user_id, subdir)
+        except ValueError:
+            continue  # 目录名非安全 id（异常数据），跳过
+        count += 1
+    return count
+
+
+def derived_usage_breakdown(user_id: str) -> dict[str, int]:
+    """读取用户各分类衍生用量的缓存明细（category → bytes）。
+
+    缓存表为空时先做一次全量引导（冷启动 / 迁移后首读），保证读数即准确；
+    之后一律 O(分类数) 数据库查询，不再触盘。"""
+    if _derived_cache_is_empty():
+        logger.info("Derived usage cache empty; bootstrapping from disk scan")
+        reconcile_derived_usage()
+    rows = db_query_all(
+        "SELECT subdir, size_bytes FROM user_derived_usage WHERE user_id = ?",
+        (user_id,),
+    )
+    cached = {row["subdir"]: int(row["size_bytes"]) for row in rows}
+    return {sub: cached.get(sub, 0) for sub in userspace.DERIVED_SUBDIRS}
+
+
+def derived_usage_for_user(user_id: str) -> int:
+    """返回用户衍生数据总用量（读 DB 缓存，O(1)；口径见 derived_usage_breakdown）。"""
+    return sum(derived_usage_breakdown(user_id).values())
+
+
 def user_usage(user_id: str) -> dict:
-    """一次返回用户项目/衍生数据用量（用于 /api/auth/me 等）。"""
+    """一次返回用户项目/衍生数据用量（用于 /api/auth/me 等）。
+
+    v2 P4 起 usage 额外携带 derived_usage 分类明细，供前端展示分类用量条；
+    明细只算一次，总量由同一份明细求和（避免重复查询与重复引导判定）。"""
+    derived = derived_usage_breakdown(user_id)
     return {
         "project_usage_bytes": project_usage_for_user(user_id),
-        "derived_usage_bytes": derived_usage_for_user(user_id),
+        "derived_usage_bytes": sum(derived.values()),
+        "derived_usage": derived,
     }
 
 
@@ -103,6 +214,24 @@ def dir_size(path: Path) -> int:
     except OSError:
         pass
     return total
+
+
+def _scan_derived_dir(user_id: str, subdir: str) -> int:
+    """扫描用户单个衍生分类目录的实际磁盘占用（不存在返回 0）。"""
+    d = userspace.derived_dir(user_id, subdir)
+    if not d.is_dir():
+        return 0
+    return dir_size(d)
+
+
+def _upsert_derived_usage(user_id: str, subdir: str, size_bytes: int) -> None:
+    db_execute(
+        "INSERT INTO user_derived_usage (user_id, subdir, size_bytes, updated_at) "
+        "VALUES (?, ?, ?, ?) "
+        "ON CONFLICT(user_id, subdir) DO UPDATE SET "
+        "size_bytes = excluded.size_bytes, updated_at = excluded.updated_at",
+        (user_id, subdir, int(size_bytes), utcnow()),
+    )
 
 
 def project_size_on_disk(project_id: str) -> int:
@@ -150,10 +279,16 @@ def enforce_project_quota(user_id: str, extra_bytes: int) -> None:
         )
 
 
-def enforce_derived_quota(user_id: str, extra_bytes: int) -> None:
-    """在计入 extra_bytes 后衍生数据未超限则通过，否则抛 413 quota_exceeded。"""
+def enforce_derived_quota(user_id: str, extra_bytes: int, subdir: str = "") -> None:
+    """在计入 extra_bytes 后衍生数据未超限则通过，否则抛 413 quota_exceeded。
+
+    v2 P4 起用量一律读 user_derived_usage 缓存（O(1)）。subdir 传入被触达
+    的分类时，先对该用户该分类做一次检查点刷新（仅扫单个目录），保证创建
+    前置校验的准确性不因缓存漂移而放松；未传则纯读缓存。"""
     if extra_bytes < 0:
         extra_bytes = 0
+    if subdir:
+        refresh_derived_usage(user_id, subdir)
     used = derived_usage_for_user(user_id)
     quota = effective_derived_quota(user_id)
     if used + extra_bytes > quota:
@@ -163,7 +298,9 @@ def enforce_derived_quota(user_id: str, extra_bytes: int) -> None:
         )
 
 
-def enforce_derived_quota_for_current_user(extra_bytes: int = 0) -> None:
+def enforce_derived_quota_for_current_user(
+    extra_bytes: int = 0, subdir: str = ""
+) -> None:
     """多用户模式下按请求级当前用户执行衍生数据配额检查（超限抛 413）。
 
     供写作会话 / style_modify 会话 / 模板 / 绘图四类模块在会话或输出创建时
@@ -172,14 +309,15 @@ def enforce_derived_quota_for_current_user(extra_bytes: int = 0) -> None:
 
     extra_bytes 为本次新建产物的已知增量（如绘图数据文件大小）；会话类资源
     创建时无法预知最终体积，按 0 计——即用户衍生空间已满/超限时拒绝新建。
-    用量口径与维护任务一致：四个衍生目录实时磁盘扫描（derived_usage_for_user）。
+    用量口径与维护任务一致：user_derived_usage 缓存；subdir 传入时先刷新
+    该分类缓存行（检查点增量扫描，v2 P4）。
     """
     if not userspace.is_multiuser():
         return
     user_id = userspace.get_current_user_id()
     if not user_id:
         return
-    enforce_derived_quota(user_id, extra_bytes)
+    enforce_derived_quota(user_id, extra_bytes, subdir)
 
 
 def update_project_size(project_id: str) -> int:
@@ -204,6 +342,30 @@ def refresh_owner_usage_after_write(project_id: str) -> int:
 
 
 # ── 回收站维护 ───────────────────────────────────────────────────
+def cleanup_derived_category(user_id: str, category: str) -> dict[str, int]:
+    """用户自助清理：删除该用户某分类衍生目录下的全部内容并即时刷新缓存。
+
+    category 必须属于 DERIVED_SUBDIRS（未知分类抛 ValueError，由服务层映射
+    400 invalid_category）；目录本身保留（后续创建仍落此处）。清理属低频
+    用户动作，返回前对该用户全部分类做一次重扫，保证返回的用量明细整体
+    准确（其余分类可能存在自上次对账以来的漂移）。"""
+    if category not in userspace.DERIVED_SUBDIRS:
+        raise ValueError(f"Unknown derived data category: {category}")
+    d = userspace.derived_dir(user_id, category)
+    if d.is_dir():
+        for child in d.iterdir():
+            try:
+                if child.is_dir() and not child.is_symlink():
+                    shutil.rmtree(child)
+                else:
+                    child.unlink()
+            except OSError as e:
+                logger.warning("Self-service cleanup skipped %s: %s", child, e)
+    resync_user_derived_usage(user_id)
+    logger.info("Derived data self-cleanup: user=%s category=%s", user_id, category)
+    return derived_usage_breakdown(user_id)
+
+
 def clean_expired_recycle_bin() -> int:
     """永久删除超过 recycle_bin_days 的回收站项目（目录 + 数据行 + 协作者级联）。
 

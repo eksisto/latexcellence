@@ -17,7 +17,10 @@ from typing import Any, AsyncIterator
 
 from backend.core.config import get_config
 from backend.core.logger import get_logger
-from backend.core.multiuser.quota import enforce_derived_quota_for_current_user
+from backend.core.multiuser.quota import (
+    checkpoint_derived_usage_for_current_user,
+    enforce_derived_quota_for_current_user,
+)
 from backend.modules.template_gen.agent import (
     get_template_agent_service,
     load_sandbox,
@@ -51,14 +54,18 @@ class TemplateGenService:
         cfg = get_config()
 
         # 多用户模式：新建模板会话前检查衍生数据配额（超限抛 413，方案 §9.2）。
-        # 配额检查含衍生目录递归扫描（磁盘 I/O），入线程池避免阻塞事件循环
-        await asyncio.to_thread(enforce_derived_quota_for_current_user)
+        # v2 P4：检查读 user_derived_usage 缓存，先对本分类做检查点增量刷新
+        # （仅扫 templates 单个目录）保证准确性，入线程池避免阻塞事件循环
+        await asyncio.to_thread(enforce_derived_quota_for_current_user, 0, "templates")
 
         # 创建沙箱工作区（多用户模式按当前用户隔离到 <users_root>/<user_id>/templates/）
         output_dir = self._output_root(cfg)
         session_id = uuid.uuid4().hex[:12]
         sandbox = output_dir / session_id
         sandbox.mkdir(parents=True, exist_ok=True)
+        # v2 P4 检查点：新沙箱落盘后刷新该用户 templates 缓存行（生成期间的
+        # 增长由下一次配额前置刷新与每小时对账覆盖）
+        await asyncio.to_thread(checkpoint_derived_usage_for_current_user, "templates")
         logger.info(f"Agent sandbox has been created: {sandbox}")
 
         agent = get_template_agent_service()
