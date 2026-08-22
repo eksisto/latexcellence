@@ -81,6 +81,10 @@ async def lifespan(app: FastAPI):
     from backend.modules.style_modify.cleanup import (
         cleanup_loop as style_modify_cleanup_loop,
     )
+    from backend.utils.sandbox import (
+        close_sandbox_runner,
+        initialize_sandbox_runner,
+    )
     from backend.utils.scholarly_research import (
         close_research_http_client,
         initialize_research_http_client,
@@ -94,6 +98,12 @@ async def lifespan(app: FastAPI):
     from backend.modules.bib_manager.provider_manager import (
         close_provider_manager,
     )
+
+    # 沙箱运行时预热：探测 Docker daemon 可达性（auto 模式据此决定首请求走向）
+    try:
+        await initialize_sandbox_runner()
+    except Exception as e:
+        logger.warning("Sandbox runtime initialization failed: %s", e)
 
     await initialize_research_http_client()
     browser_health = await initialize_structured_page_reader()
@@ -151,6 +161,10 @@ async def lifespan(app: FastAPI):
             await close_provider_manager()
         except Exception as e:
             logger.warning("Failed to close bib providers: %s", e)
+        try:
+            await close_sandbox_runner()
+        except Exception as e:
+            logger.warning("Failed to close sandbox runner: %s", e)
         await close_research_http_client()
         logger.info("Shutting down LaTeXcellence server")
 

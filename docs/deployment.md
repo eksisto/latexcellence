@@ -13,6 +13,7 @@
   - [管理员引导](#管理员引导)
   - [存量数据迁移](#存量数据迁移)
 - [CPU 架构支持（amd64 / arm64）](#cpu-架构支持amd64--arm64)
+- [Docker 沙箱（v2 P1a）](#docker-沙箱v2-p1a)
 - [HTTPS 与反向代理](#https-与反向代理)
 - [安全风险声明（必读）](#安全风险声明必读)
 - [数据目录与备份](#数据目录与备份)
@@ -149,7 +150,46 @@ python -m backend.manage migrate-legacy [--dry-run]
 
 - **联网搜索的浏览器回退池（Playwright，可选功能）**：arm64 Linux 上 Chromium/Firefox 可用，WebKit 的 arm64 支持随版本变动；该能力初始化失败仅降级并记 warning，不影响主流程。部署后建议跑一次写作助手联网搜索冒烟，确认实际可用性；
 - **发布冒烟**：若构建/发布环境与生产架构不同，建议在目标架构上完成一次最小冒烟（启动 → 登录 → 上传 → 编译）再对外提供服务；
-- v2 的 Docker 沙箱镜像同样支持在 arm64 上构建（TeX Live 与 pandoc 均有 arm64 发布物），多架构构建说明见 [multi-user-v2-plan.md](multi-user-v2-plan.md)。
+- v2 的 Docker 沙箱镜像同样支持在 arm64 上原生构建（TeX Live `aarch64-linux` 二进制集与 pandoc 官方 arm64 发布物），多架构 buildx 构建见 [docker/README.md](../docker/README.md)。
+
+---
+
+## Docker 沙箱（v2 P1a）
+
+v2 起全部外部命令执行（latexmk/texfot 编译、git/latexdiff、pandoc、Python 绘图、latexindent）统一经 SandboxRunner，可进 Docker 容器隔离执行。由顶层 `sandbox` 配置节控制：
+
+| 配置项 | 默认值 | 说明 |
+| --- | --- | --- |
+| `mode` | `auto` | `auto`：探测到 Docker daemon 即容器执行，不可达回落本地进程并告警；`docker`：强制容器执行，daemon 不可达返回 503 `sandbox_unavailable`（不静默回落）；`local`：保持本地子进程（行为与 v1 一致） |
+| `image_tex` / `image_convert` / `image_plot` | `latexcellence-*:latest` | 三类沙箱镜像名（tex=编译/git/latexdiff/latexindent；convert=pandoc；plot=Python 绘图） |
+| `cpus` / `memory_mb` / `pids_limit` / `tmpfs_mb` | 1.0 / 1024 / 256 / 512 | 单容器资源上限 |
+| `max_concurrent_global` / `max_concurrent_per_user` | 4 / 1 | 沙箱并发池上限（每用户租约存 SQLite，超限返回 429 `sandbox_busy`） |
+| `startup_grace_seconds` | 10 | 容器冷启动宽限（叠加在各功能既有超时之上） |
+
+### 镜像构建
+
+```bash
+cd docker/
+./build.sh                 # 构建全部四镜像，tag 为 latexcellence-*:YYYY.MM + latest
+./build.sh tex             # 只构建 tex 镜像
+BUILDX_MULTI_ARCH=1 ./build.sh --load tex   # buildx 双架构（amd64+arm64）
+```
+
+镜像体系、离线导入导出（`docker save/load`）、升级流程与缺 TeX 宏包排查指南见 [docker/README.md](../docker/README.md)。TeX 宏包清单在 `docker/tex/Dockerfile` 的 `EXTRA_TL_PACKAGES` 构建参数中维护——运行期不装包（沙箱无网络原则），缺宏包时改清单重建镜像。
+
+### 容器安全基线（后端强制注入）
+
+- `--network none`：无网络；
+- 根文件系统只读 + tmpfs `/tmp`（容量 `tmpfs_mb`）：产物只能落在挂载的项目目录；
+- `--memory` / `--cpus` / `--pids-limit` 资源限额，OOM 终止翻译为明确错误提示；
+- `--security-opt no-new-privileges`、drop ALL capabilities、非 root（与宿主后端同 uid:gid，产物属主一致）。
+
+### 平台支持矩阵与前提
+
+- **支持**：Linux 原生 amd64 / arm64；
+- **Windows**：建议 WSL2 内部署（Docker Desktop 的路径翻译会破坏"容器内外同绝对路径"挂载语义，不受支持）；
+- **macOS**：Docker Desktop 同理不支持同路径挂载，请保持 `mode=local` 或 `auto`（自动回落）；
+- 后端需能访问 `/var/run/docker.sock`（部署在容器内时以只读方式挂载该 socket）。
 
 ---
 
@@ -236,6 +276,7 @@ latex.example.com {
 ## 安全风险声明（必读）
 
 > **v1 不提供沙箱隔离，适用范围为可信团队内部部署。**
+> **v2 P1a 起提供 Docker 沙箱**：`sandbox.mode=auto`（探测到 Docker 即用）或 `docker` 时，下列外部命令全部在无网络、只读根文件系统、资源限额的容器内执行，适用范围可相应放宽；`local` 模式（含 auto 回落）不改变 v1 风险结论。
 
 多用户模式下，用户上传的 LaTeX 项目属于**不可信内容**，而以下功能会在服务器上执行外部命令：
 
@@ -255,7 +296,9 @@ v1 通过以下措施收敛攻击面，但**不能替代沙箱**：
 - 上传安全管线（路径穿越 / 符号链接 / 加密包 / 分卷包 / 压缩炸弹 / 大小写冲突拦截，大小、文件数、解压总量、时长受限）；
 - 项目 / 衍生数据双配额，写回超限硬失败。
 
-**部署要求**：仅向可信成员开放（团队 / 课题组内部），配合 HTTPS 与账号审批使用；不要面向公网匿名用户提供服务。面向更大范围开放部署需等待 v2 的 Docker 沙箱方案（隔离 latexmk / Python / pandoc / git 等全部外部命令，按用户/项目限制 CPU、内存、超时与网络）。
+**部署要求**：`sandbox.mode=local`（或 auto 回落生效）时，仅向可信成员开放（团队 / 课题组内部），配合 HTTPS 与账号审批使用；不要面向公网匿名用户提供服务。启用 Docker 沙箱（auto 命中 / docker 模式）后，外部命令已在容器内隔离，但仍建议保持账号审批与 HTTPS——沙箱隔离的是"命令执行"，不改变认证、配额与数据隔离的必要性。
+
+**Docker socket 风险（启用沙箱时必读）**：后端驱动沙箱容器需要访问 `/var/run/docker.sock`，该权限等价于授予 root 级能力（可创建任意容器挂载宿主文件系统）。缓解措施：镜像最小化且不含凭证、socket 以只读方式挂载、宿主 Docker daemon 保持最新安全补丁。rootless Docker / Podman 作为后续演进方向（v2 不承诺）。沙箱不可用时的降级路径见上文 `mode=local` 的风险口径。
 
 另请注意：LLM API Key 存于服务器 `config.json`，所有用户的 LLM 调用共用该 Key 出口，请自行评估用量与成本归属。
 
@@ -299,7 +342,7 @@ v1 通过以下措施收敛攻击面，但**不能替代沙箱**：
 | `llm_rate_limit_per_minute` | 20 | 每用户 LLM 请求限流（次/分钟）。**注意**：当前版本该阈值的每用户强制执行尚未落地，实际并发由全局 `llm.max_n` 控制，此配置为 v2 预留 |
 | `llm_max_concurrency_per_user` | 2 | 每用户最大并发 LLM 任务数。同上，为 v2 预留 |
 
-后台维护循环每小时执行一次：项目大小对账（修正缓存漂移）、回收站过期清理、暂存区清理、删除用户归档清理。
+后台维护循环每小时执行一次：项目大小对账（修正缓存漂移）、回收站过期清理、暂存区清理、删除用户归档清理、沙箱并发租约（`sandbox_slots`）过期清理。
 
 ---
 

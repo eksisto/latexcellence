@@ -5,7 +5,7 @@
 ## 目录
 
 - [后端核心模块](#后端核心模块)：config、security_middleware、llm_client、logger、project_manager、base_paragraph_check、prompts、tool_registry、workspace_manager
-- [后端工具模块](#后端工具模块)：scholarly_research、tool_result_protocol、file_ops、path_guard、json_utils、latex_json_guard、tex_compile、compile_error_translator、latex_formatter、latex_parser、latex_literals、latex_package_analyzer、input_resolver 等
+- [后端工具模块](#后端工具模块)：scholarly_research、tool_result_protocol、file_ops、path_guard、json_utils、latex_json_guard、sandbox（Docker 沙箱执行）、tex_compile、compile_error_translator、latex_formatter、latex_parser、latex_literals、latex_package_analyzer、input_resolver 等
 - [项目管理路由 project_router.py](#项目管理路由-project_routerpy)
 
 ---
@@ -644,7 +644,9 @@ raise ValueError("Validation failed after N attempts")        # ❌ 耗尽
 | `_check_texfot_available()` | 检测 texfot 是否在 PATH 中可用（模块级缓存） |
 | `_filter_with_regex(raw_output)` | 降级路径：用正则从原始日志中提取关键错误行 |
 
-**Pydantic 模型**：`TexCompileResult`（success, filtered_output, raw_output, timed_out, used_texfot）
+**Pydantic 模型**：`TexCompileResult`（success, filtered_output, raw_output, timed_out, oom_killed, used_texfot）
+
+> v2 P1a 起，`run_tex_compile` 的实际执行统一经 `backend/utils/sandbox/` 的 SandboxRunner：sandbox docker 模式进 tex 镜像容器（texfot 内置），auto 探测失败或 local 模式回落本地子进程（行为不变）；`oom_killed` 标志由容器 OOM 翻译而来，compile 服务据此返回 `error_code=sandbox_killed_oom`。详见[沙箱执行模块](#sandbox-包--docker-沙箱执行模块v2-p1a)。
 
 **调用方**：
 
@@ -654,6 +656,57 @@ raise ValueError("Validation failed after N attempts")        # ❌ 耗尽
 | `git_diff/service/` | `_compile_diff()` 调用 |
 | `template_gen/agent/executor.py` | `_ToolExecutor._compile_latex()` 调用 |
 | `style_modify/session.py` | `compile_staged_project()` 调用 |
+| `plot_gen/executor.py` | TikZ 编译（`_compile_tikz`）调用 |
+
+### `sandbox/` 包 — Docker 沙箱执行模块（v2 P1a）
+
+**设计理念**：全部外部命令执行（latexmk/texfot 编译、git/latexdiff、pandoc、Python 绘图、latexindent）收口到统一入口，按配置选择 Docker 容器或本地子进程执行，实现多用户环境下的隔离与资源治理。调用方只描述"命令 + 工作目录 + 超时"（ExecSpec），不感知后端差异；结果统一为 ExecResult（returncode/stdout/stderr/timed_out/oom_killed），上层错误管线零改动。
+
+```
+backend/utils/sandbox/
+├── models.py          # ExecSpec / ExecResult / SandboxMount / SandboxLimits 契约
+├── errors.py          # sandbox_unavailable(503) / sandbox_busy(429)：RuntimeError + sandbox_code 属性（遵守"禁止自定义异常类"规范）
+├── runner.py          # SandboxRunner 单例：模式解析、daemon 探测（TTL 缓存）、并发租约、生命周期
+├── local_backend.py   # 本地后端 = 既有 subprocess 行为封装（进程组建组 + 超时整树击杀），回落路径零行为变化
+└── docker_backend.py  # Docker 后端：一次性容器，安全基线由 runner 注入
+```
+
+**模式语义**（`config.sandbox.mode`，实时读取支持热重载）：
+
+| mode | 行为 |
+| --- | --- |
+| `local` | 始终本地子进程（开发机无 Docker 的确定性路径） |
+| `auto`（默认） | 探测到 daemon 即容器执行；不可达回落本地并告警 |
+| `docker` | daemon 不可达直接抛 `sandbox_unavailable`（503），不静默回落 |
+
+**Docker 容器安全基线**（runner 强制注入）：`--network none`、根文件系统只读 + tmpfs `/tmp`（容量 `tmpfs_mb`）、`--memory`/`--cpus`/`--pids-limit`、`no-new-privileges`、drop ALL capabilities、以宿主后端同 uid:gid 运行（产物属主一致）。挂载使用**同绝对路径**（host_path 即容器内路径），保证 template_gen 等解析 .log 中文件路径的逻辑零改动。超时强杀容器并标记 `timed_out`；退出码 137 或 inspect OOMKilled 标志翻译为 `oom_killed`。
+
+**并发治理**：全局进程内信号量（`max_concurrent_global`，单/多用户均生效）+ 多用户模式每用户 DB 租约（`core/multiuser/sandbox_leases.py`，`sandbox_slots` 表，TTL = 执行超时 + 120s，崩溃残留由维护循环清理；P7 多实例阶段在同一共享卷上跨副本生效）。租约满抛 `sandbox_busy`（429）。
+
+**接入的调用点**：
+
+| 调用点 | 镜像类别 |
+| --- | --- |
+| `utils/tex_compile.run_tex_compile`（compile / git_diff / template_gen / style_modify / plot_gen 共用） | tex |
+| `modules/git_diff/service/process.py::_run_process`（git 子命令 + latexdiff） | tex |
+| `modules/format_converter/service.py`（pandoc 文本/文件转换，输入统一走临时文件——契约不含 stdin） | convert |
+| `utils/latexindent_utils.format_with_latexindent` | tex |
+| `modules/plot_gen/executor._run_script`（LLM 生成的绘图脚本；审计钩子保留为纵深防御） | plot |
+
+**镜像体系**：仓库 `docker/` 目录提供四镜像（backend/tex/convert/plot）Dockerfile 与 `build.sh`（支持 buildx amd64/arm64 双架构），详见 [deployment.md](deployment.md) 与 [docker/README.md](../docker/README.md)。缺 TeX 宏包时改 `docker/tex/Dockerfile` 的 `EXTRA_TL_PACKAGES` 清单重建镜像（运行期不装包，沙箱无网络原则）。
+
+**核心接口**：
+
+| 函数/类 | 功能 |
+| --- | --- |
+| `get_sandbox_runner()` / `reset_sandbox_runner()` | 进程级单例获取 / 重置（测试） |
+| `SandboxRunner.execute(spec, user_id=None)` | 统一执行入口：选后端 → 并发治理 → 结果归一 |
+| `initialize_sandbox_runner()` / `close_sandbox_runner()` | lifespan 启动预热探测 / 关闭释放 |
+| `cached_backend_for(kind)` | 同步读取最近一次后端解析结果（pandoc/texfot/latexindent 可用性门控："docker" 表示工具由镜像提供，宿主无需安装） |
+| `to_http_exception(err)` | 把带 `sandbox_code` 的错误翻译为 HTTPException（503/429），供路由层优先匹配 |
+| `current_sandbox_user_id()` | 读取多用户上下文当前用户（每用户租约归属） |
+
+**测试**：契约与租约测试见 `tests/test_utils/test_sandbox_models.py`、`tests/test_utils/test_sandbox_runner.py`、`tests/test_multiuser/test_sandbox_leases.py`；真容器冒烟见 `tests/test_docker/`（marker `docker`，无 daemon 自动 skip）。
 
 ### `compile_error_translator.py` — LaTeX 编译错误 LLM 翻译
 
@@ -674,15 +727,15 @@ raise ValueError("Validation failed after N attempts")        # ❌ 耗尽
 
 ### `latexindent_utils.py` — latexindent.pl 调用封装
 
-供统一格式化工具 `latex_formatter` 使用（`code_review` / `formula_ocr` / `table_ocr` 共用）。负责检测系统是否安装 `latexindent`，并将 LaTeX 源码片段写入临时文件后调用 `latexindent` 进行格式化。默认加载项目内置 `backend/utils/latexindent.yaml`（`defaultIndent` 为每层 4 个空格），覆盖 latexindent 默认的制表符缩进；`config_path` 参数可传入自定义配置覆盖。
+供统一格式化工具 `latex_formatter` 使用（`code_review` / `formula_ocr` / `table_ocr` 共用）。负责检测 `latexindent` 是否可用，并将 LaTeX 源码片段写入临时文件后调用 `latexindent` 进行格式化。默认加载项目内置 `backend/utils/latexindent.yaml`（`defaultIndent` 为每层 4 个空格），覆盖 latexindent 默认的制表符缩进；`config_path` 参数可传入自定义配置覆盖。
 
-调用时通过 `-c` 把备份文件（`*.bak*`）与日志统一写入临时目录，并用 `-g` 指定每次运行独立的日志名；运行结束后统一清理，避免在项目目录残留文件。
+调用时通过 `-c` 把备份文件（`*.bak*`）与日志统一写入临时目录，并用 `-g` 指定每次运行独立的日志名；运行结束后整目录清理（Windows 上短暂重试应对句柄延迟释放），避免在项目目录残留文件。v2 P1a 起执行经 SandboxRunner：docker 后端下 latexindent 由 tex 镜像提供（宿主无需安装），配置文件随临时目录挂载进容器。
 
 **核心接口**：
 
 | 函数 | 功能 |
 | --- | --- |
-| `is_latexindent_available()` | 检测 `latexindent` 是否在 PATH 中可用 |
+| `is_latexindent_available()` | 检测 `latexindent` 是否可用（sandbox docker 后端下恒为 True） |
 | `format_with_latexindent(source, file_path=None, config_path=None)` | 异步调用 `latexindent` 格式化 LaTeX 源码 |
 
 ### `builtin_formatter.py` — 内置轻量 LaTeX 格式化器

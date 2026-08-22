@@ -164,6 +164,30 @@ def cmd_migrate_legacy(args: argparse.Namespace) -> None:
         print("This was a dry run — no files were written.")
 
 
+def cmd_db_status(args: argparse.Namespace) -> None:
+    """查看 schema 版本与待应用迁移步骤（v2 P0 迁移框架自检）。"""
+    _init(args.config)
+    # 说明：_init 已通过 init_db() 幂等应用全部迁移，正常情况下此处恒为最新；
+    # pending 非空只可能出现在"代码版本回退到旧 schema"等异常场景。
+    status = db.schema_status()
+    print(f"schema user_version: {status['user_version']}")
+    print(f"latest schema version: {status['latest_version']}")
+    if status["up_to_date"]:
+        print("Database schema is up to date.")
+    else:
+        print(
+            "WARNING: database is OLDER than this code's schema version "
+            "(unexpected after init_db). Pending migrations:"
+        )
+        for step in status["pending"]:
+            print(f"  v{step['version']}: {step['description']}")
+        print(
+            "Re-run any manage command (or restart the server) to apply "
+            "pending migrations; if it persists, check whether multiple "
+            "code versions share the same data directory."
+        )
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="python -m backend.manage", description="多用户模式管理工具"
@@ -200,6 +224,11 @@ def build_parser() -> argparse.ArgumentParser:
         "--dry-run", action="store_true", help="仅预演统计，不实际复制"
     )
     p_migrate.set_defaults(func=cmd_migrate_legacy)
+
+    p_dbstatus = sub.add_parser(
+        "db-status", help="查看 schema 版本与待应用的数据库迁移步骤"
+    )
+    p_dbstatus.set_defaults(func=cmd_db_status)
     return parser
 
 

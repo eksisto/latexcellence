@@ -51,6 +51,8 @@ class CompileResult(BaseModel):
     stderr: str = ""
     explanation: str = ""
     fixes: list[str] = []
+    # 结构化错误码（如 sandbox_killed_oom），前端据此做 i18n 翻译
+    error_code: str = ""
 
 
 async def compile_latex(
@@ -109,6 +111,19 @@ async def compile_latex(
                 "Check for missing \\end{document} or unclosed environments",
                 "Increase features.compile.latexmk_timeout in config.json",
                 "Run latexmk -xelatex manually in a terminal to diagnose",
+            ],
+        )
+
+    if tex_result.oom_killed:
+        logger.warning(f"Compilation killed by sandbox memory limit for {main_file}")
+        return CompileResult(
+            success=False,
+            stderr=tex_result.raw_output,
+            error_code="sandbox_killed_oom",
+            explanation="Compilation was killed because it exceeded the sandbox memory limit.",
+            fixes=[
+                "Reduce document complexity (large images, huge tables, excessive TikZ)",
+                "Increase sandbox.memory_mb in config.json and restart the server",
             ],
         )
 

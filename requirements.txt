@@ -15,6 +15,9 @@ argon2-cffi>=23.1.0
 # ── 多用户上传（7z 解压）──
 py7zr>=1.1.0
 
+# ── Docker 沙箱（多用户 v2 P1a；sandbox.mode=auto/docker 时使用）──
+docker>=7.0.0
+
 # ── 文件处理与网页抓取 ─────────────────────────
 Pillow>=10.0.0
 aiofiles>=24.0.0

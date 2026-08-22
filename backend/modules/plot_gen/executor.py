@@ -2,11 +2,8 @@
 
 import ast
 import asyncio
-import os
 import re
 import shutil
-import signal
-import subprocess
 import sys
 from pathlib import Path
 from typing import Any
@@ -36,6 +33,12 @@ from backend.utils.agent_file_tools import (
     AgentFileWrite,
 )
 from backend.utils.path_guard import resolve_project_path
+from backend.utils.sandbox import (
+    ExecSpec,
+    cached_backend_for,
+    current_sandbox_user_id,
+    get_sandbox_runner,
+)
 from backend.utils.tex_compile import detect_engine_from_file, run_tex_compile
 
 WRITE_SUFFIXES = (".py", ".tex", ".txt", ".md", ".json", ".log", ".csv", ".tsv")
@@ -205,33 +208,6 @@ def is_internal_rel_path(rel_path: str) -> bool:
     """判断沙箱内相对路径是否位于内部运行目录（.cache / tmp）。"""
     parts = rel_path.split("/")
     return any(part in INTERNAL_DIRS for part in parts[:-1])
-
-
-def _kill_process_tree(proc: asyncio.subprocess.Process) -> None:
-    """终止子进程及其子孙进程，防止超时后残留孤儿进程。"""
-    pid = proc.pid
-    # pid<=1 是无效/危险目标（MagicMock 缺省 pid 也可能是 1），
-    # 误杀 PID 1 进程组会带走当前进程组
-    if not pid or pid <= 1:
-        return
-    if os.name == "nt":
-        try:
-            subprocess.run(
-                ["taskkill", "/F", "/T", "/PID", str(proc.pid)],
-                capture_output=True,
-                timeout=10,
-            )
-            return
-        except Exception:
-            pass
-    try:
-        # POSIX：子进程以 start_new_session=True 启动，进程组 ID == 子进程 PID
-        os.killpg(proc.pid, signal.SIGKILL)
-    except (ProcessLookupError, AttributeError):
-        try:
-            proc.kill()
-        except ProcessLookupError:
-            pass
 
 
 def _extract_tikz_issues(raw_output: str, limit: int = 8) -> list[dict[str, str]]:
@@ -450,10 +426,8 @@ class PlotExecutor(AgentFileToolExecutor):
         )
 
         fcfg = self._cfg.features.plot_gen
-        python = fcfg.python_interpreter or sys.executable
-        env = os.environ.copy()
-        # -I 已隐含 -E/-s（忽略 PYTHON* 环境变量与 user site），无需再显式设置。
-        # MPLBACKEND 不属 PYTHON* 前缀，仍会被 matplotlib 读取。
+        env: dict[str, str] = {}
+        # MPLBACKEND 不属 PYTHON* 前缀，仍会被 matplotlib 读取（-I 不屏蔽）。
         env["MPLBACKEND"] = "Agg"
         # 临时目录与 matplotlib 缓存重定向进沙箱，避免正常绘图流程被防护误拦。
         cache_dir = self._sandbox / ".cache" / "matplotlib"
@@ -465,30 +439,28 @@ class PlotExecutor(AgentFileToolExecutor):
         env["TEMP"] = str(tmp_dir.resolve())
         env["TMP"] = str(tmp_dir.resolve())
 
+        # sandbox docker 后端：容器自带 python3，宿主解释器配置不适用
+        if cached_backend_for("plot") == "docker":
+            command = ["python3", "-I", "-B", str(run_path.resolve())]
+        else:
+            python = fcfg.python_interpreter or sys.executable
+            command = [python, "-I", "-B", str(run_path.resolve())]
+
+        spec = ExecSpec(
+            command=command,
+            cwd=str(self._sandbox.resolve()),
+            image_kind="plot",
+            env=env,
+            timeout_seconds=float(fcfg.sandbox_exec_timeout),
+        )
+
         self._logger.info(
             "plot python_sandbox | script=%s | cwd=%s", script_name, self._sandbox
         )
-        try:
-            proc = await asyncio.create_subprocess_exec(
-                python,
-                "-I",
-                "-B",
-                str(run_path.resolve()),
-                cwd=str(self._sandbox.resolve()),
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
-                env=env,
-                start_new_session=os.name != "nt",
-                creationflags=(
-                    subprocess.CREATE_NEW_PROCESS_GROUP if os.name == "nt" else 0
-                ),
-            )
-            stdout_b, stderr_b = await asyncio.wait_for(
-                proc.communicate(), timeout=fcfg.sandbox_exec_timeout
-            )
-        except asyncio.TimeoutError:
-            _kill_process_tree(proc)
-            stdout_b, stderr_b = await proc.communicate()
+        result_exec = await get_sandbox_runner().execute(
+            spec, user_id=current_sandbox_user_id()
+        )
+        if result_exec.timed_out:
             result = ExecutionResult(
                 success=False,
                 stdout="",
@@ -498,13 +470,28 @@ class PlotExecutor(AgentFileToolExecutor):
                 summary="Command timed out",
             )
             return self._format_execution_result(result)
+        if result_exec.oom_killed:
+            result = ExecutionResult(
+                success=False,
+                stdout=result_exec.stdout[: fcfg.sandbox_max_stdout_chars],
+                stderr=result_exec.stderr[: fcfg.sandbox_max_stdout_chars],
+                traceback=(
+                    "Memory limit exceeded: the plotting process was killed by "
+                    "the sandbox OOM guard. Reduce data size or figure DPI."
+                ),
+                timed_out=False,
+                artifacts=self.scan_artifacts(),
+                summary="Execution killed by memory limit",
+            )
+            return self._format_execution_result(result)
 
-        stdout = stdout_b.decode("utf-8", errors="replace")
-        stderr = stderr_b.decode("utf-8", errors="replace")
+        stdout = result_exec.stdout
+        stderr = result_exec.stderr
+        returncode = result_exec.returncode
         artifacts = self.scan_artifacts()
-        traceback = stderr[-2000:] if not proc.returncode == 0 else ""
+        traceback = stderr[-2000:] if not returncode == 0 else ""
         result = ExecutionResult(
-            success=proc.returncode == 0,
+            success=returncode == 0,
             stdout=stdout[: fcfg.sandbox_max_stdout_chars],
             stderr=stderr[: fcfg.sandbox_max_stdout_chars],
             traceback=traceback,
@@ -512,7 +499,7 @@ class PlotExecutor(AgentFileToolExecutor):
             artifacts=artifacts,
             summary=(
                 "Execution succeeded"
-                if proc.returncode == 0
+                if returncode == 0
                 else "Execution failed; analyze the traceback, fix the script, and rerun"
             ),
         )
@@ -522,7 +509,7 @@ class PlotExecutor(AgentFileToolExecutor):
         # generate_figure_tex 涉及 pandas 读 CSV 与文件写入等同步阻塞 I/O，
         # 必须放入线程池，避免阻塞事件循环。
         tikz_info: dict[str, Any] | None = None
-        if proc.returncode == 0:
+        if returncode == 0:
             tikz_info = await asyncio.to_thread(generate_figure_tex, self._sandbox)
             if tikz_info.get("generated"):
                 result.artifacts = self.scan_artifacts()

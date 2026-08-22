@@ -1110,7 +1110,29 @@
       "multiUserRegistrationEnabled": "开放注册（需管理员审批）",
       "multiUserAdminUsernameEnv": "管理员用户名环境变量",
       "multiUserAdminPasswordEnv": "管理员密码环境变量",
-      "multiUserConnectionNote": "多用户模式下连接与登录由服务器统一管理，此处无需配置 API 地址或访问令牌。"
+      "multiUserConnectionNote": "多用户模式下连接与登录由服务器统一管理，此处无需配置 API 地址或访问令牌。",
+      "sandbox": "编译沙箱",
+      "sandboxRestartHint": "修改本分区配置后需重启后端生效",
+      "sandboxMode": "执行模式",
+      "sandboxModeAuto": "auto · 自动探测",
+      "sandboxModeDocker": "docker · 强制容器",
+      "sandboxModeLocal": "local · 本地进程",
+      "sandboxModeAutoHint": "探测到 Docker 可用时在容器内编译，否则自动回落本地进程执行",
+      "sandboxModeDockerHint": "强制在 Docker 容器内执行；Docker 服务不可达时编译直接报错",
+      "sandboxModeLocalHint": "保持本地子进程执行，不启用容器隔离",
+      "sandboxImageTex": "LaTeX 编译镜像",
+      "sandboxImageConvert": "文档转换镜像",
+      "sandboxImagePlot": "Python 绘图镜像",
+      "sandboxImagesHint": "自定义容器镜像名（如 texlive 官方镜像），留空使用后端内置默认值",
+      "sandboxCpus": "CPU 上限（核）",
+      "sandboxCpusHint": "支持小数，最小 0.1",
+      "sandboxMemoryMb": "内存限额（MB）",
+      "sandboxMemoryMbHint": "编译超出内存限额时进程会被强制终止并报 OOM 错误",
+      "sandboxPidsLimit": "最大进程数",
+      "sandboxTmpfsMb": "tmpfs 容量上限（MB）",
+      "sandboxMaxConcurrentGlobal": "全局最大并发数",
+      "sandboxMaxConcurrentPerUser": "单用户最大并发数",
+      "sandboxStartupGraceSeconds": "容器启动等待（秒）"
     },
     "markerText": {
       "math": "公式",
@@ -1489,6 +1511,9 @@
     "invalidName": "项目名不能为空",
     "downloadFailed": "打包下载失败",
     "transferFailed": "项目转交失败",
-    "invalidQuota": "配额数值不合法"
+    "invalidQuota": "配额数值不合法",
+    "sandboxUnavailable": "沙箱不可用：Docker 服务未运行或无法连接",
+    "sandboxBusy": "沙箱并发已满，请稍后重试",
+    "sandboxKilledOom": "编译因超出沙箱内存限额被终止，可简化文档或调大 sandbox.memory_mb"
   }
 }

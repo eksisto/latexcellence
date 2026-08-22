@@ -490,8 +490,8 @@ docker/
 
 | 阶段 | 内容 | 完成标准 |
 | --- | --- | --- |
-| P0 配置与迁移骨架（✅ 前置） | `sandbox`/`smtp` 配置节与 multi_user 新字段、config.example、设置分区 UI、schema 版本迁移框架 + `db-status` CLI | 配置校验与迁移框架测试绿，文档评审通过 |
-| P1a Docker 沙箱 | 四镜像 + build.sh、SandboxRunner 双后端、六类调用点接入、资源租约池、退出码翻译、降级探测 | 有 Docker：编译/绘图/转换/git diff 全链路容器内执行 + 安全冒烟通过；无 Docker：回落回归全绿 |
+| P0 配置与迁移骨架（✅ 前置） | `sandbox`/`smtp` 配置节与 multi_user 新字段、config.example、设置分区 UI、schema 版本迁移框架 + `db-status` CLI | 配置校验与迁移框架测试绿，文档评审通过（P1a 实施时已落地 sandbox 节 + 迁移框架 + db-status；smtp 节随 P6） |
+| P1a Docker 沙箱（✅ 已完成） | 四镜像 + build.sh、SandboxRunner 双后端、六类调用点接入、资源租约池、退出码翻译、降级探测 | 有 Docker：编译/绘图/转换/git diff 全链路容器内执行 + 安全冒烟通过；无 Docker：回落回归全绿。评审修复记录：移除 stdin 协议（pandoc 文本转换改临时文件输入）、convert 镜像不设 ENTRYPOINT（补容器冒烟哨兵）、启动预热填充后端解析缓存 |
 | P1b LLM 治理 | 滑动窗口 + 并发租约、429 与 Retry-After、i18n | 限流/并发用例绿；双副本下计数正确 |
 | P2 rar 支持 | unar 管线 + 错误映射 + fixtures | rar 正常/加密/分卷用例绿；缺二进制报错明确 |
 | P3 反向补丁撤销 | 补丁日志、undo/redo 重写、解禁与旁路覆盖、配额回滚改造、前端/i18n | §8.6 场景测试全绿；v1 禁令测试反转 |

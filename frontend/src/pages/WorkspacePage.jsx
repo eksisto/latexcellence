@@ -248,14 +248,23 @@ export default function WorkspacePage() {
         setPdfUrl(url);
         toast.success(t("pages:workspace.compileSuccessToast"));
       } else {
+        // 沙箱等新增错误码（如 sandbox_killed_oom）优先按码翻译；
+        // translateError 的结构化入参在错误码未收录时自动回落 message 文本
+        const reason =
+          data.error_code || data.explanation
+            ? translateError({
+                error: data.error_code,
+                message: data.explanation,
+              })
+            : "";
         toast.error(t("pages:workspace.compileFailedToast"), {
-          description:
-            (data.explanation && translateError(data.explanation)) ||
-            t("pages:workspace.compileFailedToast"),
+          description: reason || t("pages:workspace.compileFailedToast"),
         });
       }
     } catch (e) {
-      const msg = translateError(e.message);
+      // request() 会把结构化 detail.error 挂到 e.code（如 sandbox_unavailable），
+      // 同样走结构化入参让错误码优先翻译，未收录时回落原消息文本
+      const msg = translateError({ error: e.code, message: e.message });
       setCompileResult({
         success: false,
         explanation: msg,
@@ -595,7 +604,11 @@ export default function WorkspacePage() {
                         {t("pages:workspace.errorExplanation")}
                       </Label>
                       <p className="text-sm mt-1 whitespace-pre-wrap">
-                        {translateError(compileResult.explanation)}
+                        {/* 结构化错误码（如 sandbox_killed_oom）优先翻译，未收录回落说明文本 */}
+                        {translateError({
+                          error: compileResult.error_code,
+                          message: compileResult.explanation,
+                        })}
                       </p>
                     </div>
                   )}

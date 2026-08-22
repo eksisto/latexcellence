@@ -4,7 +4,8 @@
 职责：
     1. 负责数据库文件的初始化（表结构、索引、WAL、外键约束）
     2. 提供进程内线程安全的连接管理与统一的同步查询入口
-    3. 供服务层 / 中间件 / CLI 调用；事件循环线程内调用方须用
+    3. 版本迁移机制（PRAGMA user_version + 有序幂等迁移步骤，v2 P0 引入）
+    4. 供服务层 / 中间件 / CLI 调用；事件循环线程内调用方须用
        asyncio.to_thread 调度（禁止阻塞事件循环）
 
 约束（与方案 P1 一致）：
@@ -16,7 +17,9 @@
 
 import sqlite3
 import threading
-from datetime import datetime, timezone
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from backend.core.config import get_config
@@ -75,6 +78,74 @@ CREATE TABLE IF NOT EXISTS project_collaborators (
 );
 """
 
+
+def _migration_v1_baseline(conn: sqlite3.Connection) -> None:
+    """v1 基线：业务主表。全部 CREATE IF NOT EXISTS，对存量库幂等。"""
+    conn.executescript(SCHEMA)
+
+
+def _migration_v2_sandbox_slots(conn: sqlite3.Connection) -> None:
+    """v2 P1a：沙箱并发池租约表（崩溃残留租约由 TTL 清理兜底）。"""
+    conn.executescript("""
+        CREATE TABLE IF NOT EXISTS sandbox_slots (
+            slot_id     TEXT PRIMARY KEY,
+            user_id     TEXT NOT NULL,
+            acquired_at TEXT NOT NULL,
+            expires_at  TEXT NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS ix_sandbox_slots_expires
+            ON sandbox_slots (expires_at);
+        CREATE INDEX IF NOT EXISTS ix_sandbox_slots_user
+            ON sandbox_slots (user_id);
+        """)
+
+
+# 当前 schema 最新版本号。新增迁移时：追加实现函数并在列表末尾登记
+# (target_version, description, fn)，同时递增此常量；每个步骤必须幂等可重入。
+SCHEMA_VERSION = 2
+
+# 有序迁移步骤：(目标版本, 描述, 执行函数)。版本从 2 起（1 为 v1 基线，
+# 对老库存量数据无破坏性变更，仅补齐 IF NOT EXISTS 建表）。
+MIGRATIONS: list[tuple[int, str, Callable[[sqlite3.Connection], None]]] = [
+    (
+        1,
+        "v1 baseline tables (users/sessions/projects/project_collaborators)",
+        _migration_v1_baseline,
+    ),
+    (2, "v2 P1a sandbox concurrency lease table", _migration_v2_sandbox_slots),
+]
+
+
+def _set_user_version(conn: sqlite3.Connection, version: int) -> None:
+    conn.execute(f"PRAGMA user_version = {int(version)}")
+
+
+def read_user_version(conn: sqlite3.Connection) -> int:
+    """读取当前 schema 版本（PRAGMA user_version）。"""
+    row = conn.execute("PRAGMA user_version").fetchone()
+    return int(row[0]) if row is not None else 0
+
+
+def apply_migrations(conn: sqlite3.Connection) -> list[int]:
+    """把数据库按序推进到 SCHEMA_VERSION，返回本次实际执行的版本列表。
+
+    每个步骤在独立事务中执行并立即推进版本号，保证任一步骤失败后
+    重启可以从中断处继续（步骤自身幂等）。
+    """
+    current = read_user_version(conn)
+    applied: list[int] = []
+    for target, description, fn in MIGRATIONS:
+        if current >= target:
+            continue
+        logger.info("Applying DB migration v%d: %s", target, description)
+        fn(conn)
+        _set_user_version(conn, target)
+        conn.commit()
+        current = target
+        applied.append(target)
+    return applied
+
+
 # 进程内共享连接。单进程 + WAL + RLock 串行化事务即可保证线程安全；
 # 数据库文件较小，查询均很短，无需逐请求开新连接。
 _conn: sqlite3.Connection | None = None
@@ -88,6 +159,13 @@ def utcnow() -> str:
     return datetime.now(timezone.utc).replace(microsecond=0).isoformat()
 
 
+def utcnow_after(seconds: int) -> str:
+    """当前 UTC 时间加 seconds 秒（ISO 8601，秒级），用于租约/TTL 过期时间。"""
+    return (
+        datetime.now(timezone.utc).replace(microsecond=0) + timedelta(seconds=seconds)
+    ).isoformat()
+
+
 def _resolve_db_path() -> Path:
     """实时读取配置，返回数据库路径（相对路径相对于当前工作目录解析）。"""
     cfg = get_config()
@@ -96,7 +174,7 @@ def _resolve_db_path() -> Path:
 
 def init_db() -> None:
     """
-    初始化数据库：创建父目录、连接并执行 schema、开启 WAL，并确保
+    初始化数据库：创建父目录、连接并执行版本迁移、开启 WAL，并确保
     用户空间 / 暂存区根目录存在。可重复调用（幂等）。
     """
     global _conn, _db_path, _initialized
@@ -123,10 +201,37 @@ def init_db() -> None:
             conn.execute("PRAGMA synchronous=NORMAL")
             _conn = conn
             _db_path = db_path
-        _conn.executescript(SCHEMA)
-        _conn.commit()
+        applied = apply_migrations(_conn)
+        if applied:
+            logger.info(
+                "Multi-user database migrated to schema v%s (applied: %s)",
+                read_user_version(_conn),
+                applied,
+            )
         _initialized = True
     logger.info("Multi-user database initialized at %s", db_path)
+
+
+def is_initialized() -> bool:
+    """数据库是否已在本进程完成初始化（供沙箱租约等模块前置判断）。"""
+    return _initialized
+
+
+def schema_status() -> dict:
+    """返回 schema 迁移状态（db-status CLI 使用）。须先 init_db()。"""
+    with _lock:
+        conn = _require_conn()
+        current = read_user_version(conn)
+        return {
+            "user_version": current,
+            "latest_version": SCHEMA_VERSION,
+            "up_to_date": current >= SCHEMA_VERSION,
+            "pending": [
+                {"version": target, "description": description}
+                for target, description, _fn in MIGRATIONS
+                if current < target
+            ],
+        }
 
 
 def _close_conn_unlocked() -> None:
@@ -196,3 +301,22 @@ def db_count(sql: str, params: tuple | list = ()) -> int:
         cur = conn.execute(sql, params)
         row = cur.fetchone()
         return int(row[0]) if row is not None else 0
+
+
+@contextmanager
+def transaction() -> Iterator[sqlite3.Connection]:
+    """显式事务上下文：持有全局锁并 BEGIN IMMEDIATE。
+
+    成功提交、异常回滚。供"读-校验-写"必须原子完成的多语句场景
+    （如沙箱并发租约）使用；单条写语句直接用 db_execute 即可。
+    """
+    with _lock:
+        conn = _require_conn()
+        conn.execute("BEGIN IMMEDIATE")
+        try:
+            yield conn
+        except BaseException:
+            conn.rollback()
+            raise
+        else:
+            conn.commit()

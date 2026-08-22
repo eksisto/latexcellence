@@ -12,6 +12,7 @@ from backend.modules.format_converter.service import (
     FormatConverterService,
     SUPPORTED_FORMATS,
 )
+from backend.utils.sandbox import to_http_exception
 
 router = APIRouter(prefix="/api/format-converter", tags=["format_converter"])
 
@@ -56,6 +57,10 @@ async def convert_markdown(request: ConvertRequest):
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except RuntimeError as e:
+        # 沙箱基础设施错误（503/429）优先于通用 500 映射
+        sandbox_http = to_http_exception(e)
+        if sandbox_http is not None:
+            raise sandbox_http from e
         raise HTTPException(status_code=500, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -81,6 +86,10 @@ async def convert_text(request: ConvertTextRequest):
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except RuntimeError as e:
+        # 沙箱基础设施错误（503/429）优先于通用 500 映射
+        sandbox_http = to_http_exception(e)
+        if sandbox_http is not None:
+            raise sandbox_http from e
         raise HTTPException(status_code=500, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -125,6 +134,10 @@ async def convert_file(
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except RuntimeError as e:
+        # 沙箱基础设施错误（503/429）优先于通用 500 映射
+        sandbox_http = to_http_exception(e)
+        if sandbox_http is not None:
+            raise sandbox_http from e
         raise HTTPException(status_code=500, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

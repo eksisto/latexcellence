@@ -18,6 +18,24 @@ from backend.modules.format_converter.service import (
     FormatConverterService,
     SUPPORTED_FORMATS,
 )
+from backend.utils.sandbox.models import ExecResult
+
+
+def make_fake_runner(
+    stdout: str = "", stderr: str = "", returncode: int = 0
+) -> MagicMock:
+    """构造带 execute() 的假 SandboxRunner（Service 层测试统一在此接缝 mock）。"""
+    fake = MagicMock()
+    fake.execute = AsyncMock(
+        return_value=ExecResult(
+            returncode=returncode,
+            stdout=stdout,
+            stderr=stderr,
+            backend="local",
+        )
+    )
+    return fake
+
 
 # ── FormatConverterService.convert_text ──────────────────────────────────
 
@@ -75,12 +93,10 @@ class TestConvertTextWithPandoc:
         return llm
 
     def _patch_pandoc(self, stdout: str):
-        mock_proc = MagicMock()
-        mock_proc.returncode = 0
-        mock_proc.stdout = stdout
-        mock_proc.stderr = ""
+        fake_runner = make_fake_runner(stdout=stdout)
         return patch("shutil.which", return_value="/usr/bin/pandoc"), patch(
-            "subprocess.run", return_value=mock_proc
+            "backend.modules.format_converter.service.get_sandbox_runner",
+            return_value=fake_runner,
         )
 
     @pytest.mark.asyncio
@@ -172,12 +188,10 @@ class TestConvertFile:
         return FormatConverterService()
 
     def _patch_pandoc(self, stdout: str):
-        mock_proc = MagicMock()
-        mock_proc.returncode = 0
-        mock_proc.stdout = stdout
-        mock_proc.stderr = ""
+        fake_runner = make_fake_runner(stdout=stdout)
         return patch("shutil.which", return_value="/usr/bin/pandoc"), patch(
-            "subprocess.run", return_value=mock_proc
+            "backend.modules.format_converter.service.get_sandbox_runner",
+            return_value=fake_runner,
         )
 
     @pytest.mark.asyncio
@@ -219,12 +233,13 @@ class TestConvertFile:
 
     @pytest.mark.asyncio
     async def test_pandoc_error_raises(self, service):
-        mock_proc = MagicMock()
-        mock_proc.returncode = 1
-        mock_proc.stderr = "pandoc: error"
+        fake_runner = make_fake_runner(stderr="pandoc: error", returncode=1)
 
         with patch("shutil.which", return_value="/usr/bin/pandoc"):
-            with patch("subprocess.run", return_value=mock_proc):
+            with patch(
+                "backend.modules.format_converter.service.get_sandbox_runner",
+                return_value=fake_runner,
+            ):
                 with pytest.raises(RuntimeError, match="Pandoc conversion failed"):
                     await service.convert_file(b"data", "test.md", "markdown", "latex")
 
@@ -265,12 +280,10 @@ class TestConvertCompatWithPandoc:
         return llm
 
     def _patch_pandoc(self, stdout: str):
-        mock_proc = MagicMock()
-        mock_proc.returncode = 0
-        mock_proc.stdout = stdout
-        mock_proc.stderr = ""
+        fake_runner = make_fake_runner(stdout=stdout)
         return patch("shutil.which", return_value="/usr/bin/pandoc"), patch(
-            "subprocess.run", return_value=mock_proc
+            "backend.modules.format_converter.service.get_sandbox_runner",
+            return_value=fake_runner,
         )
 
     @pytest.mark.asyncio
@@ -301,36 +314,36 @@ class TestPandocErrors:
 
     @pytest.mark.asyncio
     async def test_pandoc_error_raises(self, service):
-        mock_proc = MagicMock()
-        mock_proc.returncode = 1
-        mock_proc.stderr = "pandoc: syntax error"
-
+        fake_runner = make_fake_runner(stderr="pandoc: syntax error", returncode=1)
         with patch("shutil.which", return_value="/usr/bin/pandoc"):
-            with patch("subprocess.run", return_value=mock_proc):
+            with patch(
+                "backend.modules.format_converter.service.get_sandbox_runner",
+                return_value=fake_runner,
+            ):
                 with pytest.raises(RuntimeError, match="Pandoc conversion failed"):
                     await service.convert_text("# Hello", "markdown", "latex")
 
     @pytest.mark.asyncio
     async def test_pandoc_empty_output_raises(self, service):
-        mock_proc = MagicMock()
-        mock_proc.returncode = 0
-        mock_proc.stdout = ""
-        mock_proc.stderr = ""
-
+        fake_runner = make_fake_runner(stdout="", stderr="")
         with patch("shutil.which", return_value="/usr/bin/pandoc"):
-            with patch("subprocess.run", return_value=mock_proc):
+            with patch(
+                "backend.modules.format_converter.service.get_sandbox_runner",
+                return_value=fake_runner,
+            ):
                 with pytest.raises(RuntimeError, match="empty output"):
                     await service.convert_text("# Hello", "markdown", "latex")
 
     @pytest.mark.asyncio
     async def test_pandoc_stderr_warning(self, service):
-        mock_proc = MagicMock()
-        mock_proc.returncode = 0
-        mock_proc.stdout = r"\textbf{bold}"
-        mock_proc.stderr = "warning: something"
-
+        fake_runner = make_fake_runner(
+            stdout=r"\textbf{bold}", stderr="warning: something"
+        )
         with patch("shutil.which", return_value="/usr/bin/pandoc"):
-            with patch("subprocess.run", return_value=mock_proc):
+            with patch(
+                "backend.modules.format_converter.service.get_sandbox_runner",
+                return_value=fake_runner,
+            ):
                 result = await service.convert_text("**bold**", "markdown", "latex")
 
         assert result["result"] == r"\textbf{bold}"

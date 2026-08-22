@@ -519,6 +519,37 @@ class MultiUserConfig(BaseModel):
     admin_password_env: str = "LATEXCELLENCE_ADMIN_PASSWORD"  # 首个管理员密码环境变量名
 
 
+class SandboxConfig(BaseModel):
+    """Docker 沙箱配置（多用户 v2 P1a）
+
+    外部命令执行（latexmk/texfot、git/latexdiff、pandoc、Python 绘图、
+    latexindent）统一经 SandboxRunner 执行：
+
+    - mode=auto：探测到 Docker daemon 即用容器执行，不可达时回落本地进程；
+    - mode=docker：daemon 不可达直接报错（503 sandbox_unavailable），不静默回落，
+      保证生产环境隔离承诺明确；
+    - mode=local：保持既有 subprocess 行为（开发机无 Docker 的默认路径）。
+
+    安全相关字段实行严格校验（extra=forbid），防止拼写错误静默使用默认值。
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    mode: Literal["auto", "docker", "local"] = "auto"  # 沙箱运行模式
+    image_tex: str = (
+        "latexcellence-tex:latest"  # TeX 编译/git/latexdiff/latexindent 镜像
+    )
+    image_convert: str = "latexcellence-convert:latest"  # pandoc 转换镜像
+    image_plot: str = "latexcellence-plot:latest"  # Python 绘图镜像
+    cpus: float = Field(1.0, gt=0)  # 单容器 CPU 上限（核数）
+    memory_mb: int = Field(1024, ge=64)  # 单容器内存上限（MB）
+    pids_limit: int = Field(256, ge=16)  # 单容器进程数上限
+    tmpfs_mb: int = Field(512, ge=32)  # 容器内 /tmp tmpfs 容量（MB）
+    max_concurrent_global: int = Field(4, ge=1)  # 全局并发沙箱上限
+    max_concurrent_per_user: int = Field(1, ge=1)  # 每用户并发沙箱上限（多用户模式）
+    startup_grace_seconds: int = Field(10, ge=1)  # 容器启动宽限期（秒）
+
+
 class LoggingConfig(BaseModel):
     """日志系统配置"""
 
@@ -545,6 +576,7 @@ class AppConfig(BaseModel):
     features: FeaturesConfig = FeaturesConfig()
     logging: LoggingConfig = LoggingConfig()
     multi_user: MultiUserConfig = MultiUserConfig()
+    sandbox: SandboxConfig = SandboxConfig()
 
 
 # 模块级全局变量：单例模式存储配置对象和路径

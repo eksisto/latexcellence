@@ -8,17 +8,16 @@
     3. 当 texfot 不可用时，静默降级为原始 latexmk 输出 + 正则 fallback。
     4. 支持引擎自动检测（根据 .tex 文件内容选择 pdflatex/xelatex/lualatex）。
     5. 支持 PDF/A-2b 归档格式输出（自动注入 pdfx 宏包）。
+    6. 执行统一经 SandboxRunner（v2 P1a）：sandbox 模式下进 Docker 容器，
+       auto 探测失败或 local 模式回落本地子进程（行为与历史完全一致）。
 
 供 compile 模块（自动编译）、git_diff 模块（差异高亮）、
-template_gen 模块（模板生成）复用。
+template_gen 模块（模板生成）、style_modify（shadow 编译）、
+plot_gen（TikZ 编译）复用。
 """
 
-import asyncio
-import os
 import re
 import shutil
-import signal
-import subprocess
 import tempfile
 from pathlib import Path
 
@@ -26,6 +25,16 @@ from pydantic import BaseModel, ConfigDict
 
 from backend.core.logger import get_logger
 from backend.utils.latex_json_guard import strip_latex_comments
+from backend.utils.sandbox import (
+    ExecSpec,
+    cached_backend_for,
+    current_sandbox_user_id,
+    get_sandbox_runner,
+)
+
+# 向后兼容再导出：git_diff 等模块历史上从本模块导入进程树终止工具，
+# 实现已随本地执行后端收口到 sandbox.local_backend。
+from backend.utils.sandbox.local_backend import terminate_process_tree  # noqa: F401
 
 logger = get_logger(__name__)
 
@@ -41,6 +50,7 @@ class TexCompileResult(BaseModel):
     filtered_output: str
     raw_output: str
     timed_out: bool = False
+    oom_killed: bool = False  # 沙箱内存超限被杀（docker 后端；local 恒为 False）
     used_texfot: bool = True
 
 
@@ -56,47 +66,11 @@ def _check_texfot_available() -> bool:
     return _texfot_available
 
 
-async def terminate_process_tree(process: asyncio.subprocess.Process) -> None:
-    """终止进程及其子进程树，供 latexmk / latexdiff 等会派生子进程的命令使用。
-
-    只 kill 顶层进程时，Windows 上 xelatex / bibtex 等子进程会残留并占用
-    文件锁。子进程创建时已通过 ``creationflags`` / ``start_new_session``
-    建立独立进程组，这里整组终止。taskkill 不可用或失败时回退为只杀
-    顶层进程（与旧行为一致）。
-    """
-    pid = process.pid
-    # pid<=1（0/1 或 MagicMock 缺省值）绝不能作为 killpg 目标：
-    # PID 1 的进程组可能正是当前进程组，误杀会带走整个服务/测试进程
-    if not pid or pid <= 1:
-        return
-
-    def _kill() -> None:
-        if os.name == "nt":
-            try:
-                result = subprocess.run(
-                    ["taskkill", "/F", "/T", "/PID", str(pid)],
-                    capture_output=True,
-                    timeout=10,
-                )
-                if result.returncode == 0:
-                    return
-            except Exception:
-                pass
-            try:
-                process.kill()
-            except ProcessLookupError:
-                pass
-            return
-
-        try:
-            os.killpg(os.getpgid(pid), signal.SIGKILL)
-        except (ProcessLookupError, PermissionError, OSError):
-            try:
-                process.kill()
-            except ProcessLookupError:
-                pass
-
-    await asyncio.to_thread(_kill)
+def _resolve_use_texfot() -> bool:
+    """决定是否用 texfot 包装：容器内必然内置；宿主按 PATH 检测。"""
+    if cached_backend_for("tex") == "docker":
+        return True
+    return _check_texfot_available()
 
 
 def _filter_with_regex(raw_output: str, max_chars: int = 3000) -> str:
@@ -442,85 +416,49 @@ async def run_tex_compile(
         latexmk_base.extend(extra_args)
     latexmk_base.append(actual_main_file)
 
+    # texfot 包装决策：docker 后端镜像内置 texfot；本地按 PATH 检测
+    use_texfot = _resolve_use_texfot()
+    cmd = (
+        ["texfot", "--quiet", "--no-interactive"] + latexmk_base
+        if use_texfot
+        else latexmk_base
+    )
+
     try:
-        if _check_texfot_available():
-            cmd = ["texfot", "--quiet", "--no-interactive"] + latexmk_base
-            logger.debug(f"Running: {' '.join(cmd)} in {cwd_str}")
-            try:
-                proc_kwargs: dict = {}
-                if os.name == "nt":
-                    proc_kwargs["creationflags"] = subprocess.CREATE_NEW_PROCESS_GROUP
-                else:
-                    proc_kwargs["start_new_session"] = True
-                process = await asyncio.create_subprocess_exec(
-                    *cmd,
-                    cwd=cwd_str,
-                    stdout=asyncio.subprocess.PIPE,
-                    stderr=asyncio.subprocess.PIPE,
-                    **proc_kwargs,
-                )
-                stdout_b, stderr_b = await asyncio.wait_for(
-                    process.communicate(), timeout=timeout
-                )
-            except asyncio.TimeoutError:
-                await terminate_process_tree(process)
-                stdout_b, stderr_b = await process.communicate()
-                raw = _decode(stdout_b, stderr_b)
-                return TexCompileResult(
-                    success=False,
-                    filtered_output="",
-                    raw_output=raw,
-                    timed_out=True,
-                )
+        spec = ExecSpec(
+            command=cmd,
+            cwd=cwd_str,
+            image_kind="tex",
+            timeout_seconds=float(timeout),
+        )
+        logger.debug(f"Running: {' '.join(cmd)} in {cwd_str}")
+        res = await get_sandbox_runner().execute(
+            spec, user_id=current_sandbox_user_id()
+        )
 
-            raw = _decode(stdout_b, stderr_b)
-            filtered = raw
-            success = process.returncode == 0
-            return TexCompileResult(
-                success=success,
-                filtered_output=filtered,
-                raw_output=raw,
-                used_texfot=True,
-            )
-
-        # ── 降级路径：直接 latexmk + 正则过滤 ──
-        logger.debug(f"Running (fallback): {' '.join(latexmk_base)} in {cwd_str}")
-        try:
-            proc_kwargs: dict = {}
-            if os.name == "nt":
-                proc_kwargs["creationflags"] = subprocess.CREATE_NEW_PROCESS_GROUP
-            else:
-                proc_kwargs["start_new_session"] = True
-            process = await asyncio.create_subprocess_exec(
-                *latexmk_base,
-                cwd=cwd_str,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
-                **proc_kwargs,
-            )
-            stdout_b, stderr_b = await asyncio.wait_for(
-                process.communicate(), timeout=timeout
-            )
-        except asyncio.TimeoutError:
-            await terminate_process_tree(process)
-            stdout_b, stderr_b = await process.communicate()
-            raw = _decode(stdout_b, stderr_b)
+        raw = res.stdout + ("\n" + res.stderr if res.stderr else "")
+        if res.timed_out:
+            logger.warning(f"Compilation timed out after {timeout}s in {cwd_str}")
             return TexCompileResult(
                 success=False,
                 filtered_output="",
                 raw_output=raw,
                 timed_out=True,
-                used_texfot=False,
+                oom_killed=res.oom_killed,
+                used_texfot=use_texfot,
             )
-
-        raw = _decode(stdout_b, stderr_b)
-        success = process.returncode == 0
-        filtered = raw if success else _filter_with_regex(raw)
+        if res.oom_killed:
+            logger.error(
+                f"Compilation killed by sandbox memory limit (OOM) in {cwd_str}"
+            )
+        success = res.returncode == 0
+        filtered = raw if (use_texfot or success) else _filter_with_regex(raw)
         return TexCompileResult(
             success=success,
             filtered_output=filtered,
             raw_output=raw,
-            used_texfot=False,
+            oom_killed=res.oom_killed,
+            used_texfot=use_texfot,
         )
     finally:
         # PDF/A 模式：将生成的 PDF 复制回原始目录
@@ -544,12 +482,3 @@ async def run_tex_compile(
                 # 清理临时目录
                 shutil.rmtree(temp_dir, ignore_errors=True)
                 logger.debug(f"Cleaned up PDF/A temp dir: {temp_dir}")
-
-
-def _decode(stdout_b: bytes, stderr_b: bytes) -> str:
-    """合并解码 stdout + stderr。"""
-    stdout_str = stdout_b.decode("utf-8", errors="replace")
-    stderr_str = stderr_b.decode("utf-8", errors="replace")
-    if stderr_str:
-        return stdout_str + "\n" + stderr_str
-    return stdout_str

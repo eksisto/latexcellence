@@ -89,6 +89,7 @@
 | [pydantic-settings](https://github.com/pydantic/pydantic-settings) | >=2.0.0 | MIT | Copyright (c) 2022 Samuel Colvin and other contributors | 配置管理 |
 | [python-multipart](https://github.com/andrew-d/python-multipart) | >=0.0.9 | Apache-2.0 | Copyright (c) Andrew Dunham | 文件上传 |
 | [argon2-cffi](https://github.com/hynek/argon2-cffi) | >=23.1.0 | MIT | Copyright (c) 2023 Hynek Schlawack | 多用户模式密码哈希（argon2id） |
+| [docker SDK for Python](https://github.com/docker/docker-py) | >=7.0.0 | Apache-2.0 | Copyright (c) 2016-2022 Docker Inc. | Docker 沙箱执行后端（v2 P1a；sandbox.mode=auto/docker 时使用） |
 | [Pillow](https://python-pillow.github.io) | >=10.0.0 | Pillow license | Copyright (c) 1997-2011 Secret Labs AB; 1995-2011 Fredrik Lundh; 2010- Jeffrey A. Clark (Alex) and contributors | 图片处理 |
 | [aiofiles](https://github.com/Tinche/aiofiles) | >=24.0.0 | Apache-2.0 | Copyright (c) Tin Tvrtković | 异步文件 I/O |
 | [trafilatura](https://trafilatura.readthedocs.io) | >=2.1.0 | Apache-2.0 | Copyright (c) Adrien Barbaresi | 网页正文抽取 |

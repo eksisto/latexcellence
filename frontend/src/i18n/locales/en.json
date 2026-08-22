@@ -1110,7 +1110,29 @@
       "multiUserRegistrationEnabled": "Open registration (admin approval required)",
       "multiUserAdminUsernameEnv": "Admin Username Env Var",
       "multiUserAdminPasswordEnv": "Admin Password Env Var",
-      "multiUserConnectionNote": "In multi-user mode, connection and sign-in are managed by the server; no API base or access token settings are needed here."
+      "multiUserConnectionNote": "In multi-user mode, connection and sign-in are managed by the server; no API base or access token settings are needed here.",
+      "sandbox": "Compile Sandbox",
+      "sandboxRestartHint": "Changes in this section take effect after restarting the backend",
+      "sandboxMode": "Execution Mode",
+      "sandboxModeAuto": "auto · Detect automatically",
+      "sandboxModeDocker": "docker · Force container",
+      "sandboxModeLocal": "local · Local process",
+      "sandboxModeAutoHint": "Compiles inside a container when Docker is available, otherwise automatically falls back to local process execution",
+      "sandboxModeDockerHint": "Always executes in a Docker container; compilation fails with an error when the Docker service is unreachable",
+      "sandboxModeLocalHint": "Keeps running compilation as local child processes without container isolation",
+      "sandboxImageTex": "LaTeX Compile Image",
+      "sandboxImageConvert": "Document Conversion Image",
+      "sandboxImagePlot": "Python Plotting Image",
+      "sandboxImagesHint": "Custom container image names (e.g. official texlive images); leave blank to use the built-in defaults",
+      "sandboxCpus": "CPU Limit (cores)",
+      "sandboxCpusHint": "Decimals allowed, minimum 0.1",
+      "sandboxMemoryMb": "Memory Limit (MB)",
+      "sandboxMemoryMbHint": "Compilation processes exceeding this limit are killed and reported as OOM",
+      "sandboxPidsLimit": "Max Processes",
+      "sandboxTmpfsMb": "tmpfs Size Limit (MB)",
+      "sandboxMaxConcurrentGlobal": "Global Max Concurrency",
+      "sandboxMaxConcurrentPerUser": "Per-user Max Concurrency",
+      "sandboxStartupGraceSeconds": "Container Startup Grace (s)"
     },
     "markerText": {
       "math": "Formula",
@@ -1489,6 +1511,9 @@
     "invalidName": "Project name cannot be empty",
     "downloadFailed": "Failed to package download",
     "transferFailed": "Project transfer failed",
-    "invalidQuota": "Invalid quota value"
+    "invalidQuota": "Invalid quota value",
+    "sandboxUnavailable": "Sandbox unavailable: the Docker service is not running or unreachable",
+    "sandboxBusy": "Sandbox concurrency pool is full, please retry later",
+    "sandboxKilledOom": "Compilation was killed because it exceeded the sandbox memory limit; simplify the document or increase sandbox.memory_mb"
   }
 }

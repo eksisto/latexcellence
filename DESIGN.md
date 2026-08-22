@@ -17,6 +17,8 @@
 8. [错误处理策略](#8-错误处理策略)
 9. [测试策略](#9-测试策略)
 10. [关键设计决策总结](#10-关键设计决策总结)
+11. [多用户模式设计决策记录](#11-多用户模式设计决策记录)
+12. [Docker 沙箱执行模型（v2 P1a）](#12-docker-沙箱执行模型v2-p1a)
 
 ---
 ## 1. 架构概览
@@ -607,3 +609,43 @@ Mock 返回值必须符合 Pydantic schema，确保测试的可重复性。
 ## 11. 多用户模式设计决策记录
 
 多用户模式的完整关键决策记录（双模式、认证、存储、配额、权限、上传、迁移等）见 [docs/multi-user-plan.md §3](docs/multi-user-plan.md)。P0–P7 全部落地为 `backend/core/multiuser/`（db/userspace/auth/dependencies/quota/upload/maintenance/migrate）、`backend/modules/auth/`（`/api/auth` 与 `/api/admin`）、`backend/modules/projects/`（`/api/projects` 与权限协作）与 `backend/manage.py`（CLI），设计与实现见 §9.4 与 [docs/backend-core.md](docs/backend-core.md)，部署见 [docs/deployment.md](docs/deployment.md)。
+
+## 12. Docker 沙箱执行模型（v2 P1a）
+
+多用户 v2 的完整设计见 [docs/multi-user-v2-plan.md](docs/multi-user-v2-plan.md)；本节记录已落地的沙箱执行模型（P1a 阶段）。
+
+### 12.1 统一执行入口
+
+全部外部命令执行（latexmk/texfot 编译、git/latexdiff、pandoc、Python 绘图、latexindent）收口到 `backend/utils/sandbox/` 的 SandboxRunner。调用方把"命令 + 工作目录 + 超时"描述为 ExecSpec，不感知后端；结果归一为 ExecResult（returncode / stdout / stderr / timed_out / oom_killed），既有错误翻译管线零改动。
+
+```
+调用点（ExecSpec）──▶ SandboxRunner.execute()
+                         │ mode 解析（实时读配置，支持热重载）
+                         │   local  ──▶ 本地子进程（进程组建组 + 超时整树击杀，与 v1 行为逐项一致）
+                         │   auto   ──▶ daemon 探测（TTL 缓存）命中即容器，否则回落 local 并告警
+                         │   docker ──▶ 强制容器；daemon 不可达 → sandbox_unavailable（503）
+                         ├─ 全局并发：进程内 Semaphore(max_concurrent_global)
+                         ├─ 每用户并发：sandbox_slots 表租约（多用户模式；BEGIN IMMEDIATE 原子校验，
+                         │              TTL = 超时+120s，崩溃残留由维护循环清理，P7 起跨副本生效）
+                         └─ docker 后端：一次性容器（无网络 / 只读根 fs + tmpfs /tmp /
+                                        memory·cpus·pids 限额 / no-new-privileges /
+                                        drop ALL caps / 宿主同 uid:gid），超时强杀，
+                                        OOMKilled 或退出码 137 翻译为 oom_killed
+```
+
+### 12.2 关键决策
+
+| 决策 | 说明 |
+| --- | --- |
+| 同绝对路径挂载 | bind mount 使用 host_path 即容器内路径：template_gen 等解析 .log 文件路径的逻辑零改动；产物属主一致（容器以宿主后端同 uid:gid 运行）。代价：Docker Desktop 的路径翻译不受支持（Linux/WSL2 一等支持） |
+| 错误表达不新增异常类 | 沙箱基础设施错误复用 RuntimeError 实例 + `sandbox_code` 属性（遵守 AGENTS.md "禁止自定义异常类"）；路由层经 `to_http_exception()` 映射为 503/429 + `detail.error` 错误码，前端走统一 translateError |
+| 可用性门控跟随后端 | pandoc/texfot/latexindent 的本地 PATH 探测在 docker 后端下跳过（工具由镜像提供），经 `cached_backend_for(kind)` 同步读取最近一次解析结果，不触发 I/O |
+| plot_gen 双层防御 | LLM 脚本进 plot 容器执行的同时保留进程内审计钩子（sandbox_guard）：容器是边界，钩子是纵深 |
+| 回落零行为变化 | local 后端完整复刻历史 subprocess 语义（环境变量合并、进程组建组、超时整组击杀），既有测试全量回归通过 |
+| 契约不支持 stdin | ExecSpec 无 stdin 协议：需要输入数据的调用方（pandoc 文本转换）一律落工作目录内临时文件后以路径传入——docker 后端不注入标准输入，文件化让两条后端行为天然一致，避免"仅本地可用"的半支持协议（评审发现的 Critical 缺陷根因） |
+| 沙箱镜像不设 ENTRYPOINT | runner 统一以完整 argv 驱动容器；镜像若设 ENTRYPOINT 会与完整 argv 叠加成错误命令（如 `pandoc pandoc ...`）。convert 冒烟测试含 ENTRYPOINT 回归哨兵 |
+
+### 12.3 与 v2 后续阶段的衔接
+
+- **P1b**：LLM 每用户限流/并发复用本阶段的 DB 访问模式与租约思路（rate_limit_events / llm_concurrency_leases 表）；
+- **P7**：sandbox_slots 租约基于 BEGIN IMMEDIATE，在同一共享卷上天然跨副本生效；daemon 探测缓存为进程内状态，多副本各自探测互不影响。

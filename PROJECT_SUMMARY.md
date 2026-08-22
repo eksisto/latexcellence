@@ -35,7 +35,7 @@ latexcellence/
 │   │   ├── prompts.py               # 中央提示词管理模块（集中存储所有 LLM 提示词）
 │   │   ├── base_paragraph_check.py  # 逐段检查服务基类（typo/expression/code_review/terminology 共享）
 │   │   ├── access_control.py        # 统一访问控制：项目权限矩阵 + workspace 绑定校验依赖
-│   │   └── multiuser/               # 多用户模式基础设施包（db/userspace/auth/dependencies/quota/upload/maintenance/migrate）
+│   │   └── multiuser/               # 多用户模式基础设施包（db/userspace/auth/dependencies/quota/upload/maintenance/migrate/sandbox_leases）
 │   ├── utils/
 │   │   ├── json_utils.py            # LLM JSON 解析/校验/重试
 │   │   ├── file_ops.py              # 原子写入/备份/MD5
@@ -44,6 +44,7 @@ latexcellence/
 │   │   ├── time_utils.py            # 时间工具：当前日期/时间/星期格式化
 │   │   ├── path_guard.py            # 项目路径安全校验唯一入口 resolve_project_path()
 │   │   ├── tex_compile.py           # 统一 TeX 编译执行（texfot+latexmk、引擎自动检测、PDF/A）
+│   │   ├── sandbox/                 # Docker 沙箱执行包（v2 P1a：SandboxRunner 双后端、并发租约、ExecSpec/ExecResult 契约）
 │   │   ├── latex_parser.py          # LaTeX 源码↔纯文本转换（Marker 保护）
 │   │   ├── latex_json_guard.py      # LaTeX×JSON 转义防护（内容校验器，跨模块共享）
 │   │   ├── latex_literals.py        # LaTeX 字面内容识别（逐字命令/URL 参数，parser 与 guard 共享）
@@ -174,6 +175,7 @@ latexcellence/
 │       └── store/useStore.js        # Zustand 全局状态
 │
 ├── showcase/                        # 独立展示页（零依赖静态站，详见 docs/showcase.md）
+├── docker/                          # Docker 沙箱镜像体系（v2 P1a：backend/tex/convert/plot 四镜像 + build.sh + README）
 ├── docs/                            # 开发文档
 │   ├── development.md               # 项目概述/技术栈/启动
 │   ├── backend-core.md              # 后端核心模块
@@ -196,8 +198,10 @@ latexcellence/
 ├── tests/                           # 测试用例
 │   ├── conftest.py                  # pytest 共享 fixture
 │   ├── test_api/                    # 各模块 API 集成测试
+│   ├── test_multiuser/              # 多用户模式测试（认证/项目/配额/协作/DB 迁移/沙箱租约）
 │   ├── test_plot_gen/               # plot_gen 单元测试
-│   ├── test_utils/                  # 后端工具单元测试（路径/JSON/宏包/搜索/学术检索/编译等）
+│   ├── test_docker/                 # Docker 沙箱真容器冒烟（marker docker，无 daemon 自动 skip）
+│   ├── test_utils/                  # 后端工具单元测试（路径/JSON/宏包/搜索/学术检索/编译/sandbox 契约等）
 │   └── fixtures/                    # 测试数据（宏包规则表、公式/表格 OCR、错字查找/表达优化语料等）
 ├── data/                            # 应用运行期与用户数据统一目录
 │   ├── latexcellence.db             # 多用户模式 SQLite 数据库（运行时生成）
@@ -277,6 +281,7 @@ latexcellence/
 | 宏包规则表检测 | 确定性规则表（命令/环境/列说明符 → 宏包）优先，零 LLM 开销；规则表未命中才 LLM 兜底 | [latex-package-rules.md](docs/latex-package-rules.md) |
 | 多文件 \input 展开 | 递归解析 `\input` / `\include` / `\subfile`，段落索引为文件内局部索引，结果按文件分组展示与写回 | [backend-core.md](docs/backend-core.md) |
 | 编译与错误翻译 | `tex_compile.py` 统一编译执行（texfot + 引擎自动检测 + PDF/A），`compile_error_translator.py` 把失败日志翻译为修复建议 | [compile.md](docs/modules/compile.md) |
+| Docker 沙箱执行 | 全部外部命令经 SandboxRunner（docker/local 双后端）：容器无网络、只读根 fs + tmpfs、资源限额与并发租约；auto 探测失败回落本地零行为变化 | [backend-core.md](docs/backend-core.md)、[deployment.md](docs/deployment.md) |
 | DOI 多数据源查询 | Crossref 主索引 + arXiv 专用路由 + 补全层，`ProviderManager` 全局单例管理可插拔数据源 | [bib_manager.md](docs/modules/bib_manager.md) |
 | 自主 Agent | template_gen / plot_gen / style_modify 项目 Agent 基于 Function Calling 自主规划、执行、验证、自修，`trace.jsonl` 全程回放；私有文件工具复用 `agent_file_tools.py` 的 schema、调度与范围读取契约 | [function-calling-tools.md](docs/function-calling-tools.md)、[template_gen.md](docs/modules/template_gen.md) 等模块文档 |
 | 代码展示与高亮 | CodeBlock / MarkerText / CodeEditorInput 统一 LaTeX 源码展示，token 颜色由 `--code-token-*` 变量控制 | [frontend.md](docs/frontend.md) |

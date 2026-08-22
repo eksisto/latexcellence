@@ -59,6 +59,11 @@ const EXACT_MAP = {
   transfer_failed: "transferFailed",
   invalid_quota: "invalidQuota",
 
+  // 编译沙箱（多用户 v2 P1a）错误码
+  sandbox_unavailable: "sandboxUnavailable",
+  sandbox_busy: "sandboxBusy",
+  sandbox_killed_oom: "sandboxKilledOom",
+
   // 项目管理
   "No project opened": "noProjectOpened",
 

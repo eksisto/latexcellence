@@ -1,12 +1,15 @@
-"""Git 子进程执行工具。"""
+"""Git 子进程执行工具。
 
-import asyncio
-import os
-import subprocess
+v2 P1a：执行统一经 SandboxRunner —— sandbox 模式下 git/latexdiff 进
+容器（tex 镜像内置 git 与 latexdiff，项目目录同绝对路径挂载），
+auto 探测失败或 local 模式回落本地子进程（行为与历史完全一致，
+含 LC_ALL=C 的稳定英文输出约定与超时语义）。
+"""
+
 from pathlib import Path
 
 from backend.core.logger import get_logger
-from backend.utils.tex_compile import terminate_process_tree
+from backend.utils.sandbox import ExecSpec, current_sandbox_user_id, get_sandbox_runner
 
 from .models import ProcessResult
 
@@ -35,42 +38,26 @@ async def _run_git(cwd: Path, args: list[str], timeout: int = 30) -> ProcessResu
 
 
 async def _run_process(cmd: list[str], cwd: Path, timeout: int) -> ProcessResult:
-    proc_kwargs: dict = {}
-    if os.name == "nt":
-        proc_kwargs["creationflags"] = subprocess.CREATE_NEW_PROCESS_GROUP
-    else:
-        proc_kwargs["start_new_session"] = True
     # git 输出随用户 locale 变化，而本模块需要解析 stderr 中的固定文案
     # （如空仓库判定）。强制 LC_ALL=C 保证机器可解析的稳定英文输出。
-    env = os.environ.copy()
-    env["LC_ALL"] = "C"
-    env["LANG"] = "C"
-    process = await asyncio.create_subprocess_exec(
-        *cmd,
+    spec = ExecSpec(
+        command=list(cmd),
         cwd=str(cwd),
-        stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.PIPE,
-        env=env,
-        **proc_kwargs,
+        image_kind="tex",
+        env={"LC_ALL": "C", "LANG": "C"},
+        timeout_seconds=float(timeout),
     )
-    try:
-        stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=timeout)
-    except asyncio.TimeoutError:
-        await terminate_process_tree(process)
-        stdout, stderr = await process.communicate()
+    result = await get_sandbox_runner().execute(spec, user_id=current_sandbox_user_id())
+    if result.timed_out:
         return ProcessResult(
             returncode=-1,
-            stdout=stdout.decode("utf-8", errors="replace"),
-            stderr=(
-                stderr.decode("utf-8", errors="replace")
-                + f"\nCommand timed out after {timeout} seconds."
-            ),
+            stdout=result.stdout,
+            stderr=(result.stderr + f"\nCommand timed out after {timeout} seconds."),
         )
-
     return ProcessResult(
-        returncode=process.returncode or 0,
-        stdout=stdout.decode("utf-8", errors="replace"),
-        stderr=stderr.decode("utf-8", errors="replace"),
+        returncode=result.returncode,
+        stdout=result.stdout,
+        stderr=result.stderr,
     )
 
 

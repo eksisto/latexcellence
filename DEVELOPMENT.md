@@ -23,5 +23,6 @@
 | [docs/showcase.md](docs/showcase.md) | 独立展示页 |
 | [docs/multi-user-plan.md](docs/multi-user-plan.md) | 多用户模式设计方案（双模式/认证/用户空间/配额/权限协作/管理后台/迁移） |
 | [docs/multi-user-v2-plan.md](docs/multi-user-v2-plan.md) | 多用户模式 v2 设计方案（Docker 沙箱、rar、共享撤销反向补丁、分片上传、SMTP、衍生记账优化、多实例部署） |
+| [docker/README.md](docker/README.md) | Docker 沙箱镜像体系（四镜像构建、多架构、离线导入导出、缺宏包排查） |
 | [docs/deployment.md](docs/deployment.md) | 部署指南（单用户/多用户部署、HTTPS 反向代理、安全风险声明、备份与运维） |
 | [tools/visual_review_api.py](tools/visual_review_api.py) | 视觉评审工具的 Chat Completions → Responses API 请求适配 |

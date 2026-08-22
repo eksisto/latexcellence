@@ -293,5 +293,18 @@
     "registration_enabled": true,
     "admin_username_env": "LATEXCELLENCE_ADMIN_USERNAME",
     "admin_password_env": "LATEXCELLENCE_ADMIN_PASSWORD"
+  },
+  "sandbox": {
+    "mode": "auto",
+    "image_tex": "latexcellence-tex:latest",
+    "image_convert": "latexcellence-convert:latest",
+    "image_plot": "latexcellence-plot:latest",
+    "cpus": 1.0,
+    "memory_mb": 1024,
+    "pids_limit": 256,
+    "tmpfs_mb": 512,
+    "max_concurrent_global": 4,
+    "max_concurrent_per_user": 1,
+    "startup_grace_seconds": 10
   }
 }

@@ -14,6 +14,7 @@ from backend.core import access_control
 from backend.core.logger import get_logger
 from backend.core.workspace_manager import get_project_manager_for_workspace
 from backend.modules.compile.service import compile_latex, _validate_main_file
+from backend.utils.sandbox import to_http_exception
 
 router = APIRouter(prefix="/api/compile", tags=["compile"])
 logger = get_logger(__name__)
@@ -68,6 +69,10 @@ async def run_compile(
         )
         return result.model_dump()
     except RuntimeError as e:
+        # 沙箱基础设施错误（503/429）优先于通用 400 映射
+        sandbox_http = to_http_exception(e)
+        if sandbox_http is not None:
+            raise sandbox_http from e
         raise HTTPException(status_code=400, detail=str(e))
     except FileNotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))

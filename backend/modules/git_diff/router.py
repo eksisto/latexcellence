@@ -14,6 +14,7 @@ from backend.modules.git_diff.service import (
     list_git_revisions,
     render_diff_pdf,
 )
+from backend.utils.sandbox import to_http_exception
 
 router = APIRouter(prefix="/api/git-diff", tags=["git-diff"])
 logger = get_logger(__name__)
@@ -74,6 +75,10 @@ async def get_refs(
         result = await list_git_revisions(workspace_id)
         return result.model_dump()
     except RuntimeError as e:
+        # 沙箱基础设施错误（503/429）优先于通用 400 映射
+        sandbox_http = to_http_exception(e)
+        if sandbox_http is not None:
+            raise sandbox_http from e
         raise HTTPException(status_code=400, detail=str(e))
 
 
@@ -103,6 +108,10 @@ async def render_pdf(
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except RuntimeError as e:
+        # 沙箱基础设施错误（503/429）优先于通用 400 映射
+        sandbox_http = to_http_exception(e)
+        if sandbox_http is not None:
+            raise sandbox_http from e
         raise HTTPException(status_code=400, detail=str(e))
     except FileNotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
