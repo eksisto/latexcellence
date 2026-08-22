@@ -27,6 +27,7 @@ from backend.core.multiuser.dependencies import (
     get_current_user_optional,
     unauthorized,
 )
+from backend.core.multiuser.quota import refresh_owner_usage_after_write
 from backend.core.workspace_manager import get_workspace_manager
 
 logger = get_logger("access_control")
@@ -331,7 +332,11 @@ def require_workspace(write: bool = False, *, required: bool = True):
         ws = request.query_params.get("workspace_id")
         if not ws:
             ws = request.path_params.get("workspace_id")
-        return _enforce_workspace_access(ws, user, write, required=required)
+        # 权限判定含 SQLite 查库（WAL busy_timeout 最坏 5s），整体入线程池
+        # 执行，避免阻塞事件循环
+        return await asyncio.to_thread(
+            _enforce_workspace_access, ws, user, write, required=required
+        )
 
     return _dependency
 
@@ -353,7 +358,10 @@ def require_workspace_json(write: bool = False, *, required: bool = True):
         ws = None
         if isinstance(data, dict):
             ws = data.get("workspace_id")
-        return _enforce_workspace_access(ws, user, write, required=required)
+        # 同 require_workspace：压库判定入线程池
+        return await asyncio.to_thread(
+            _enforce_workspace_access, ws, user, write, required=required
+        )
 
     return _dependency
 
@@ -373,3 +381,42 @@ async def reject_undo_redo_if_shared(binding: dict) -> None:
         raise forbidden(
             "no_permission", "Undo/redo is disabled for shared projects (v1)"
         )
+
+
+# ── 写盘后配额记账刷新 ────────────────────────────────────────────────────
+def get_binding_project_id(workspace_id: str) -> str | None:
+    """返回工作区绑定的多用户项目 id；单用户模式 / 未绑定返回 None。
+
+    注意：workspace_manager 存储的绑定只含 user_id/project_id/owner_id/
+    root_path（"multi_user" 是 require_workspace 依赖返回值的增强字段），
+    因此这里以实时配置判定模式，而非读取绑定字典。"""
+    if not is_multiuser():
+        return None
+    binding = get_workspace_manager().get_binding(workspace_id)
+    if not binding:
+        return None
+    return binding.get("project_id") or None
+
+
+async def refresh_workspace_project_usage(workspace_id: str) -> None:
+    """多用户模式写盘后按工作区绑定刷新项目用量记账（size_bytes）。
+
+    供各异步写盘服务（写作助手编辑、style_modify 提案应用等）在成功写回后
+    调用，保证多用户项目用量缓存与磁盘一致（方案 §9.1）；单用户模式或
+    未绑定项目时静默跳过。压库操作经 asyncio.to_thread 调度。
+    """
+    project_id = get_binding_project_id(workspace_id)
+    if project_id:
+        await asyncio.to_thread(refresh_owner_usage_after_write, project_id)
+
+
+def refresh_workspace_project_usage_sync(workspace_id: str) -> None:
+    """refresh_workspace_project_usage 的同步版。
+
+    供同步写路径直接调用（base_paragraph_check / code_review 的
+    apply_changes 为同步方法，路由层本就以同步方式执行）；使用同步查库
+    避免为一条索引 UPDATE 再起线程。单用户模式或未绑定项目时静默跳过。
+    """
+    project_id = get_binding_project_id(workspace_id)
+    if project_id:
+        refresh_owner_usage_after_write(project_id)

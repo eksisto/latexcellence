@@ -23,6 +23,7 @@ LaTeX 样式修改业务逻辑。
 import asyncio
 from typing import Any, AsyncIterator
 
+from backend.core import access_control
 from backend.core.config import get_config
 from backend.core.llm_client import get_llm_client
 from backend.core.logger import get_logger
@@ -169,7 +170,10 @@ class StyleModifyService:
             yield {"type": "error", "message": "No API key configured"}
             return
 
-        session_id = self._store.create_session(
+        # create_session 内含衍生配额检查（目录递归扫描）+ 会话目录创建 +
+        # meta 落盘，均为阻塞 I/O，整体入线程池避免阻塞事件循环
+        session_id = await asyncio.to_thread(
+            self._store.create_session,
             workspace_id,
             project.root_path,
             description,
@@ -234,6 +238,8 @@ class StyleModifyService:
                 workspace_id,
                 revision,
             )
+        # 多用户模式：批量事务写盘后刷新项目用量记账（单用户无绑定，静默跳过）
+        await access_control.refresh_workspace_project_usage(workspace_id)
         return operation.model_dump()
 
     async def undo_agent_operation(
@@ -246,6 +252,8 @@ class StyleModifyService:
             operation_id,
             workspace_id,
         )
+        # 撤销同样改变项目磁盘占用，记账需同步回刷
+        await access_control.refresh_workspace_project_usage(workspace_id)
         return operation.model_dump()
 
     async def delete_agent_session(

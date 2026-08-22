@@ -341,37 +341,34 @@ def create_project_row(
 
     from .db import db_query_one as _q
 
-    name = next_available_name(owner_id, base_name)
-    attempts = name
     project_id = project_id or uuid.uuid4().hex
     now = utcnow()
-    try:
-        db_execute(
-            "INSERT INTO projects (id, owner_id, name, size_bytes, status, deleted_at, "
-            "created_at, updated_at) VALUES (?, ?, ?, ?, 'active', NULL, ?, ?)",
-            (project_id, owner_id, attempts, size_bytes, now, now),
-        )
-    except sqlite3.IntegrityError:
-        if not retry_name:
-            raise
-        # 并发冲突：重新取一个可用名称后重试一次（id 不变，仍与磁盘目录一致）
-        name2 = next_available_name(owner_id, base_name)
+    attempts = base_name
+    # 预检与插入非原子（db 锁按语句粒度）：并发下预检结果可能过期而命中
+    # 唯一索引。每次冲突后重取"当前最低可用名"再试——提交序保证最终名称
+    # 连续（Same、Same (2)…），有界重试耗尽才判定失败。
+    for _ in range(5):
+        attempts = next_available_name(owner_id, base_name)
         try:
             db_execute(
                 "INSERT INTO projects (id, owner_id, name, size_bytes, status, "
                 "deleted_at, created_at, updated_at) "
                 "VALUES (?, ?, ?, ?, 'active', NULL, ?, ?)",
-                (project_id, owner_id, name2, size_bytes, now, now),
+                (project_id, owner_id, attempts, size_bytes, now, now),
             )
+            break
         except sqlite3.IntegrityError:
-            raise HTTPException(
-                status_code=400,
-                detail={
-                    "error": "invalid_archive",
-                    "message": "Failed to allocate a unique project name",
-                },
-            )
-        attempts = name2
+            if not retry_name:
+                raise
+            continue  # 并发冲突：重取名称重试（id 不变，仍与磁盘目录一致）
+    else:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "error": "invalid_archive",
+                "message": "Failed to allocate a unique project name",
+            },
+        )
 
     row = _q("SELECT * FROM projects WHERE id = ?", (project_id,))
     logger.info(

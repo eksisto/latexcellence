@@ -8,6 +8,7 @@ agent/（Function Calling Agent 主循环与工具执行）。
 - list_session_files / read_session_file / zip_session：Agent 产物浏览与打包下载
 """
 
+import asyncio
 import io
 import uuid
 import zipfile
@@ -49,8 +50,9 @@ class TemplateGenService:
         """
         cfg = get_config()
 
-        # 多用户模式：新建模板会话前检查衍生数据配额（超限抛 413，方案 §9.2）
-        enforce_derived_quota_for_current_user()
+        # 多用户模式：新建模板会话前检查衍生数据配额（超限抛 413，方案 §9.2）。
+        # 配额检查含衍生目录递归扫描（磁盘 I/O），入线程池避免阻塞事件循环
+        await asyncio.to_thread(enforce_derived_quota_for_current_user)
 
         # 创建沙箱工作区（多用户模式按当前用户隔离到 <users_root>/<user_id>/templates/）
         output_dir = self._output_root(cfg)

@@ -64,8 +64,9 @@ class PlotGenService:
             )
 
         # 多用户模式：新建制图会话前检查衍生数据配额（按实际数据文件大小计，
-        # 超限抛 413，方案 §9.2“输出写入时检查”）
-        enforce_derived_quota_for_current_user(len(file_bytes))
+        # 超限抛 413，方案 §9.2“输出写入时检查”）。
+        # 配额检查含衍生目录递归扫描（磁盘 I/O），入线程池避免阻塞事件循环
+        await asyncio.to_thread(enforce_derived_quota_for_current_user, len(file_bytes))
 
         session_id = uuid.uuid4().hex[:12]
         sandbox = get_plot_output_dir(cfg) / session_id

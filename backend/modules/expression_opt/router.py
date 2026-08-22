@@ -13,6 +13,7 @@ from pydantic import BaseModel
 
 from backend.core import access_control
 from backend.core.base_paragraph_check import ApplyChangeItem, inject_expected_md5s
+from backend.core.multiuser.dependencies import require_admin_if_multiuser
 from backend.modules.expression_opt.service import ExpressionOptService
 from backend.modules.expression_opt.prompt_manager import get_prompt_manager
 
@@ -197,8 +198,14 @@ async def load_prompt(name: str):
 
 
 @router.post("/prompts")
-async def save_prompt(request: PromptSaveRequest):
-    """保存（创建或更新）提示词。"""
+async def save_prompt(
+    request: PromptSaveRequest,
+    _: None = Depends(require_admin_if_multiuser),
+):
+    """保存（创建或更新）提示词。
+
+    自定义提示词为全局共享资源：多用户模式下写操作仅限管理员
+    （单用户模式不受影响）；读取保持对所有登录用户开放。"""
     pm = get_prompt_manager()
     try:
         pm.save_prompt(request.name, request.content)
@@ -208,8 +215,11 @@ async def save_prompt(request: PromptSaveRequest):
 
 
 @router.delete("/prompts/{name}")
-async def delete_prompt(name: str):
-    """删除指定提示词。"""
+async def delete_prompt(
+    name: str,
+    _: None = Depends(require_admin_if_multiuser),
+):
+    """删除指定提示词（多用户模式仅管理员，见 save_prompt 说明）。"""
     pm = get_prompt_manager()
     try:
         deleted = pm.delete_prompt(name)
@@ -221,8 +231,11 @@ async def delete_prompt(name: str):
 
 
 @router.post("/prompts/active")
-async def set_active_prompt(request: PromptSetActiveRequest):
-    """设置当前激活的提示词。"""
+async def set_active_prompt(
+    request: PromptSetActiveRequest,
+    _: None = Depends(require_admin_if_multiuser),
+):
+    """设置当前激活的提示词（多用户模式仅管理员，见 save_prompt 说明）。"""
     pm = get_prompt_manager()
     try:
         pm.set_active(request.name)

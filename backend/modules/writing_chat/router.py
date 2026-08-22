@@ -19,7 +19,10 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
 
 from backend.core import access_control
-from backend.core.multiuser.dependencies import current_user_context
+from backend.core.multiuser.dependencies import (
+    current_user_context,
+    require_admin_if_multiuser,
+)
 from backend.modules.writing_chat.models import (
     ApplyEditRequest,
     AssistantSaveRequest,
@@ -297,8 +300,14 @@ async def load_prompt(name: str):
 
 
 @router.post("/prompts")
-async def save_prompt(request: AssistantSaveRequest):
-    """保存（创建或更新）助手提示词。"""
+async def save_prompt(
+    request: AssistantSaveRequest,
+    _: None = Depends(require_admin_if_multiuser),
+):
+    """保存（创建或更新）助手提示词。
+
+    自定义提示词为全局共享资源：多用户模式下写操作仅限管理员
+    （单用户模式不受影响）；读取保持对所有登录用户开放。"""
     pm = get_prompt_manager()
     try:
         pm.save_prompt(request.name, request.content)
@@ -308,8 +317,11 @@ async def save_prompt(request: AssistantSaveRequest):
 
 
 @router.delete("/prompts/{name}")
-async def delete_prompt(name: str):
-    """删除指定助手提示词。"""
+async def delete_prompt(
+    name: str,
+    _: None = Depends(require_admin_if_multiuser),
+):
+    """删除指定助手提示词（多用户模式仅管理员，见 save_prompt 说明）。"""
     pm = get_prompt_manager()
     try:
         deleted = pm.delete_prompt(name)
@@ -321,8 +333,11 @@ async def delete_prompt(name: str):
 
 
 @router.post("/prompts/active")
-async def set_active_prompt(request: AssistantSetActiveRequest):
-    """设置当前激活的助手。"""
+async def set_active_prompt(
+    request: AssistantSetActiveRequest,
+    _: None = Depends(require_admin_if_multiuser),
+):
+    """设置当前激活的助手（多用户模式仅管理员，见 save_prompt 说明）。"""
     pm = get_prompt_manager()
     try:
         pm.set_active(request.name)

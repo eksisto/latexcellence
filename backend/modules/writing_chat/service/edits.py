@@ -3,6 +3,7 @@
 import difflib
 from typing import Any
 
+from backend.core import access_control
 from backend.core.config import get_config
 from backend.core.prompts import get_prompt
 from backend.core.workspace_manager import get_project_manager_for_workspace
@@ -214,7 +215,11 @@ class EditMixin:
     async def apply_edit(self, req: ApplyEditRequest, workspace_id: str = "") -> dict:
         """应用编辑操作（会话写操作串行化）。"""
         async with self._session_lock(req.session_id):
-            return self._apply_edit_locked(req, workspace_id)
+            result = self._apply_edit_locked(req, workspace_id)
+        if not result.get("already_applied"):
+            # 多用户模式：写盘后刷新项目用量记账（单用户无绑定，静默跳过）
+            await access_control.refresh_workspace_project_usage(workspace_id)
+        return result
 
     def _apply_edit_locked(self, req: ApplyEditRequest, workspace_id: str = "") -> dict:
         """应用编辑操作实现（调用方已持有会话级锁）。"""

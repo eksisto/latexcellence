@@ -1,5 +1,6 @@
 """写作助手服务：RS1 对话流与 Function Calling 工具编排。"""
 
+import asyncio
 import json
 import re
 import uuid
@@ -544,8 +545,9 @@ class ConversationMixin:
         )
         if ctx is None:
             # 多用户模式：新建会话前检查衍生数据配额（超限抛 413 quota_exceeded，
-            # 方案 §9.2“会话创建时检查”）；单用户模式跳过
-            enforce_derived_quota_for_current_user()
+            # 方案 §9.2“会话创建时检查”）；单用户模式跳过。
+            # 配额检查含衍生目录递归扫描（磁盘 I/O），入线程池避免阻塞事件循环
+            await asyncio.to_thread(enforce_derived_quota_for_current_user)
             ctx = ConversationContext.create_session(
                 file_path=req.file_path, scope=scope
             )

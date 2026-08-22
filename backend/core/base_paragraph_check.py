@@ -30,6 +30,7 @@ from typing import Any, ClassVar
 
 from pydantic import BaseModel
 
+from backend.core import access_control
 from backend.core.logger import get_logger
 from backend.core.project_manager import FileConflictError
 from backend.core.workspace_manager import get_project_manager_for_workspace
@@ -764,6 +765,11 @@ class BaseParagraphCheckService:
                         "current_md5": e.current_md5,
                     }
                 )
+
+        if applied:
+            # 多用户模式：写盘后刷新项目用量记账（单用户无绑定，静默跳过）。
+            # 本方法为同步执行，使用同步版刷新避免再起线程
+            access_control.refresh_workspace_project_usage_sync(workspace_id)
 
         return {"applied": applied, "total": len(changes), "errors": errors}
 

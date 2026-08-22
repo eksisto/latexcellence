@@ -21,6 +21,7 @@ from typing import Any, ClassVar, Literal
 
 from pydantic import BaseModel, model_validator
 
+from backend.core import access_control
 from backend.core.config import get_config
 from backend.core.workspace_manager import get_project_manager_for_workspace
 from backend.core.base_paragraph_check import BaseParagraphCheckService
@@ -301,6 +302,11 @@ class CodeReviewService(BaseParagraphCheckService):
                         "current_md5": e.current_md5,
                     }
                 )
+
+        if applied:
+            # 多用户模式：写盘后刷新项目用量记账（单用户无绑定，静默跳过）。
+            # 本方法为同步执行，使用同步版刷新避免再起线程
+            access_control.refresh_workspace_project_usage_sync(workspace_id)
 
         return {"applied": applied, "total": len(changes), "errors": errors}
 
