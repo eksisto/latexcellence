@@ -100,9 +100,36 @@ def _migration_v2_sandbox_slots(conn: sqlite3.Connection) -> None:
         """)
 
 
+def _migration_v3_llm_governance(conn: sqlite3.Connection) -> None:
+    """v2 P1b：LLM 每用户治理表（滑动窗口事件 + 并发租约，方案 §6）。
+
+    rate_limit_events 为登录限流（kind='login'）与 LLM 限流（kind='llm'）
+    共用的滑动窗口事件表；崩溃残留租约由 TTL 过滤 + 维护循环清理兜底。
+    """
+    conn.executescript("""
+        CREATE TABLE IF NOT EXISTS rate_limit_events (
+            kind     TEXT NOT NULL,
+            identity TEXT NOT NULL,
+            ts       TEXT NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS ix_rate_limit_events_window
+            ON rate_limit_events (kind, identity, ts);
+        CREATE TABLE IF NOT EXISTS llm_concurrency_leases (
+            task_id     TEXT PRIMARY KEY,
+            user_id     TEXT NOT NULL,
+            acquired_at TEXT NOT NULL,
+            expires_at  TEXT NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS ix_llm_concurrency_leases_expires
+            ON llm_concurrency_leases (expires_at);
+        CREATE INDEX IF NOT EXISTS ix_llm_concurrency_leases_user
+            ON llm_concurrency_leases (user_id);
+        """)
+
+
 # 当前 schema 最新版本号。新增迁移时：追加实现函数并在列表末尾登记
 # (target_version, description, fn)，同时递增此常量；每个步骤必须幂等可重入。
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 
 # 有序迁移步骤：(目标版本, 描述, 执行函数)。版本从 2 起（1 为 v1 基线，
 # 对老库存量数据无破坏性变更，仅补齐 IF NOT EXISTS 建表）。
@@ -113,6 +140,11 @@ MIGRATIONS: list[tuple[int, str, Callable[[sqlite3.Connection], None]]] = [
         _migration_v1_baseline,
     ),
     (2, "v2 P1a sandbox concurrency lease table", _migration_v2_sandbox_slots),
+    (
+        3,
+        "v2 P1b LLM governance tables (rate limit events + concurrency leases)",
+        _migration_v3_llm_governance,
+    ),
 ]
 
 

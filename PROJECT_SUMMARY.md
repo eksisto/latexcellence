@@ -27,7 +27,7 @@ latexcellence/
 │   ├── core/
 │   │   ├── config.py                # Pydantic 配置模型 + 热重载
 │   │   ├── llm_client.py            # AsyncOpenAI 封装（流式 + 重试 + 限流 + Function Calling）
-│   │   ├── security_middleware.py   # CORS 白名单 + 共享访问令牌中间件（多用户模式：会话 + CSRF）
+│   │   ├── security_middleware.py   # CORS 白名单 + 共享访问令牌中间件（多用户模式：会话 + CSRF + 请求级用户上下文全局注入）
 │   │   ├── logger.py                # TimedRotatingFileHandler 日志
 │   │   ├── workspace_manager.py     # 多工作区管理（workspace_id → LatexProject）
 │   │   ├── project_manager.py       # LaTeX 项目管理（文件树/段落/撤销）
@@ -35,7 +35,7 @@ latexcellence/
 │   │   ├── prompts.py               # 中央提示词管理模块（集中存储所有 LLM 提示词）
 │   │   ├── base_paragraph_check.py  # 逐段检查服务基类（typo/expression/code_review/terminology 共享）
 │   │   ├── access_control.py        # 统一访问控制：项目权限矩阵 + workspace 绑定校验依赖
-│   │   └── multiuser/               # 多用户模式基础设施包（db/userspace/auth/dependencies/quota/upload/maintenance/migrate/sandbox_leases）
+│   │   └── multiuser/               # 多用户模式基础设施包（db/userspace/auth/dependencies/quota/upload/maintenance/migrate/sandbox_leases/llm_governance）
 │   ├── utils/
 │   │   ├── json_utils.py            # LLM JSON 解析/校验/重试
 │   │   ├── file_ops.py              # 原子写入/备份/MD5
@@ -198,7 +198,7 @@ latexcellence/
 ├── tests/                           # 测试用例
 │   ├── conftest.py                  # pytest 共享 fixture
 │   ├── test_api/                    # 各模块 API 集成测试
-│   ├── test_multiuser/              # 多用户模式测试（认证/项目/配额/协作/DB 迁移/沙箱租约）
+│   ├── test_multiuser/              # 多用户模式测试（认证/项目/配额/协作/DB 迁移/沙箱租约/LLM 治理）
 │   ├── test_plot_gen/               # plot_gen 单元测试
 │   ├── test_docker/                 # Docker 沙箱真容器冒烟（marker docker，无 daemon 自动 skip）
 │   ├── test_utils/                  # 后端工具单元测试（路径/JSON/宏包/搜索/学术检索/编译/sandbox 契约等）
@@ -292,6 +292,7 @@ latexcellence/
 | 多用户认证 | argon2id 密码哈希、HttpOnly 会话 Cookie（库只存 SHA-256）、注册审批流、登录限流、管理员引导（env/CLI） | [backend-core.md](docs/backend-core.md) |
 | 多用户项目与配额 | 上传 zip/7z 安全解压、项目命名去重、项目空间配额记账、回收站（7 天）、打包下载；写回超限回滚 | [backend-core.md](docs/backend-core.md)、[multi-user-plan.md](docs/multi-user-plan.md) |
 | 多用户权限协作 | 协作者管理（按用户名添加/改角色/移除）、项目转交（原 owner 变 viewer 或退出）、viewer 写保护、共享项目撤销禁用；权限实时查库即时生效 | [backend-core.md](docs/backend-core.md)、[multi-user-plan.md](docs/multi-user-plan.md) |
+| 多用户 LLM 治理 | 每用户滑动窗口限流 + 并发租约（`llm_governance.py`，单事务原子准入），超限 429 + Retry-After；登录限流同表计数；仅多用户模式生效，单用户零依赖直通 | [backend-core.md](docs/backend-core.md)、[multi-user-v2-plan.md](docs/multi-user-v2-plan.md) §6 |
 | 多用户前端 | 登录/注册/待审批页、项目工作台（上传 zip·7z·目录、配额、回收站、权限）、管理面板、路由守卫、auth 切片；多用户模式固定同源 + CSRF 头 + Cookie 会话，SSE 不再追加 token | [frontend.md](docs/frontend.md)、[multi-user-plan.md](docs/multi-user-plan.md) |
 | i18n 多语言 | i18next 简中 / 繁中 / 英语，按 `common` / `pages` / `components` / `hooks` / `errors` 命名空间拆分 | [frontend.md](docs/frontend.md) |
 

@@ -484,7 +484,7 @@ v1 **不做强沙箱**。多用户部署后，上传的 LaTeX 项目属于不可
 
 > P7 已落地：部署指南见 [docs/deployment.md](deployment.md)（单用户/多用户双形态、HTTPS 与反向代理配置、安全风险声明、数据备份、限流配置与运维 FAQ），并同步 README / DESIGN / backend-core / development / PROJECT_SUMMARY 等文档。
 >
-> P7 评审偏差记录：§12.5 的每用户 LLM 治理（`llm_rate_limit_per_minute` / `llm_max_concurrency_per_user`）当前仅有配置项与设置界面，**每用户强制执行尚未落地**，实际 LLM 并发由全局 `llm.max_n` 控制；登录限流（`login_rate_limit_per_minute`）已强制执行。该缺口已在 deployment.md 中如实标注，列入 v2 与 Docker 沙箱一并实施。
+> P7 评审偏差记录：§12.5 的每用户 LLM 治理（`llm_rate_limit_per_minute` / `llm_max_concurrency_per_user`）当前仅有配置项与设置界面，**每用户强制执行尚未落地**，实际 LLM 并发由全局 `llm.max_n` 控制；登录限流（`login_rate_limit_per_minute`）已强制执行。该缺口已在 deployment.md 中如实标注，列入 v2 与 Docker 沙箱一并实施。（✅ 已闭环：v2 P1b 落地 `core/multiuser/llm_governance.py`，两配置项真实生效，见 [multi-user-v2-plan.md](multi-user-v2-plan.md) §6 与 §14。）
 
 ## 16. v2 预留（明确记录）
 

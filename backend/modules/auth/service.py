@@ -65,7 +65,9 @@ async def login(username: str, password: str, remember: bool, ip: str) -> dict:
     cfg = get_config()
     if not cfg.multi_user.enabled:
         raise _not_found()
-    if auth_core.login_rate_limited(username, ip):
+    # v2 P1b 起限流计数落 SQLite（rate_limit_events 表）：写事务必须调度到
+    # 线程池，禁止在事件循环内同步压库
+    if await asyncio.to_thread(auth_core.login_rate_limited, username, ip):
         raise _http(429, "rate_limited", "Too many login attempts; please retry later")
 
     user = await asyncio.to_thread(auth_core.get_user_by_username, username)

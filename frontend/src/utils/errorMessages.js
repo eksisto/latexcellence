@@ -64,6 +64,10 @@ const EXACT_MAP = {
   sandbox_busy: "sandboxBusy",
   sandbox_killed_oom: "sandboxKilledOom",
 
+  // LLM 每用户治理（多用户 v2 P1b）错误码
+  llm_rate_limited: "llmRateLimited",
+  llm_concurrency_limited: "llmConcurrencyLimited",
+
   // 项目管理
   "No project opened": "noProjectOpened",
 
@@ -168,6 +172,19 @@ const PATTERN_MAP = [
     (m) => ({ seconds: m[1] }),
   ],
   [/timed out/, "timeout", () => ({})],
+
+  // LLM 每用户治理（多用户 v2 P1b）：SSE error 事件携带英文原文时按模式翻译；
+  // 占位符与后端 detail.retry_after 字段同名，结构化路径直接透传即可插值
+  [
+    /^LLM rate limit exceeded \(\d+\/\d+ per \d+s\); retry after (\d+)s/,
+    "llmRateLimited",
+    (m) => ({ retry_after: m[1] }),
+  ],
+  [
+    /^LLM concurrency limit reached \(\d+\/\d+\); retry after (\d+)s/,
+    "llmConcurrencyLimited",
+    (m) => ({ retry_after: m[1] }),
+  ],
 
   // 项目管理
   [
@@ -468,15 +485,22 @@ export function translateError(msg) {
   // 结构化后端错误：detail = { error: code, message: text }
   // 优先按错误码精确翻译（如 file_conflict / no_permission），
   // 错误码未收录时回落到 message 文本（可能为英文，走精确/模式匹配）。
+  // 命中映射表时，detail 中的额外字段（如 LLM 治理的 retry_after）会作为
+  // i18n 插值参数传入，支持带 {{占位符}} 的错误文案。
   if (msg && typeof msg === "object") {
     const code = msg.error;
     const message = msg.message || "";
     if (code && typeof code === "string") {
+      const key = EXACT_MAP[code];
+      if (key !== undefined) {
+        const params = { ...msg };
+        delete params.error;
+        delete params.message;
+        return i18n.t(`errors:${key}`, params);
+      }
       const translated = translateError(code);
-      // 仅当错误码确实命中映射表时才视为翻译成功：translated === code
-      // 既可能是"码未收录原样返回"，也可能是"译文恰好等于码字符串"，
-      // 一律继续回落 message 文本会丢掉后者，这里按映射表命中判定。
-      if (translated !== code || EXACT_MAP[code] !== undefined) {
+      // 码未收录但恰好命中精确/模式表时（译文 ≠ 码字符串）视为翻译成功
+      if (translated !== code) {
         return translated;
       }
     }

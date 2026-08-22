@@ -19,6 +19,7 @@
 10. [关键设计决策总结](#10-关键设计决策总结)
 11. [多用户模式设计决策记录](#11-多用户模式设计决策记录)
 12. [Docker 沙箱执行模型（v2 P1a）](#12-docker-沙箱执行模型v2-p1a)
+13. [LLM 每用户治理模型（v2 P1b）](#13-llm-每用户治理模型v2-p1b)
 
 ---
 ## 1. 架构概览
@@ -649,3 +650,32 @@ Mock 返回值必须符合 Pydantic schema，确保测试的可重复性。
 
 - **P1b**：LLM 每用户限流/并发复用本阶段的 DB 访问模式与租约思路（rate_limit_events / llm_concurrency_leases 表）；
 - **P7**：sandbox_slots 租约基于 BEGIN IMMEDIATE，在同一共享卷上天然跨副本生效；daemon 探测缓存为进程内状态，多副本各自探测互不影响。
+
+## 13. LLM 每用户治理模型（v2 P1b）
+
+多用户模式下 `llm.max_concurrency` 全局信号量之外的第二层治理：每用户速率与并发上限强制执行（`multi_user.llm_rate_limit_per_minute` / `llm_max_concurrency_per_user`），补齐 v1 P7 缺口。
+
+### 13.1 准入流程
+
+```
+请求 ──▶ AccessSecurityMiddleware（多用户模式会话验证成功后全局注入
+         userspace.set_current_user_id：纯 ASGI 中间件与下游路由/SSE 同任务
+         上下文，覆盖全部 /api 端点，不依赖各路由单独声明依赖）
+   └─▶ LLM 调用（chat / chat_stream / *_with_tools 等全部公共入口）
+        └─▶ llm_governance.admission_gate()      # 注入点在 llm_client 最外层
+             │ governed_user_id()：多用户关闭 或 无请求级用户上下文 → 直通（零 DB 依赖）
+             ▼ 单事务 BEGIN IMMEDIATE（asyncio.to_thread 调度）
+             ├─ 惰性清理过期租约
+             ├─ 速率：COUNT(rate_limit_events, kind='llm', identity=user_id, ts ≥ now-60s)
+             │        ≥ 阈值 → 抛 llm_rate_limited（Retry-After = 窗口内最老事件到期秒数）
+             ├─ 并发：COUNT(llm_concurrency_leases WHERE user_id) ≥ 阈值
+             │        → 抛 llm_concurrency_limited（Retry-After = 最早租约到期秒数）
+             └─ 通过 → INSERT 限流事件 + INSERT 租约(task_id=uuid, TTL 900s)
+                   调用结束 finally DELETE 租约（流式提前断开经 GeneratorExit 同样覆盖）
+```
+
+被拒绝的调用不落任何行——速率窗口只统计已准入调用、并发等待不消耗速率配额。逐段检查共享基类（`base_paragraph_check`）对治理超限原样重抛而非静默降级：流式路径转为 error 事件、批量路径直达 429。错误表达沿用沙箱约定：RuntimeError 实例 + `gov_code`/`retry_after` 属性（不新增异常类），main.py 经 `register_governance_handler()` 注册的全局异常处理器把带标记的异常翻译为 HTTP 429 + Retry-After 头 + 应用既有 `detail` 包装的结构化错误体；SSE error 事件中的英文原文由前端 PATTERN_MAP 兜底翻译。
+
+### 13.2 与登录限流的关系
+
+登录限流自 v2 P1b 起从进程内字典迁移到同一张 `rate_limit_events` 表（kind='login'，pair/user 双维度各落一行），修复多实例部署下阈值被副本数放大的问题；维护循环按保留期统一清理两类事件，`purge_expired_llm_leases()` 清理崩溃残留租约。P7 多实例阶段同一共享卷上天然跨副本生效，本模块无需修改。

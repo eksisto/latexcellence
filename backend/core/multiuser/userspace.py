@@ -55,7 +55,12 @@ def is_multiuser() -> bool:
 
 
 def set_current_user_id(user_id: str | None) -> None:
-    """设置请求级当前用户上下文（由路由依赖注入）。None 表示未登录/单用户模式。"""
+    """设置请求级当前用户上下文。None 表示未登录/单用户模式。
+
+    v2 P1b 起由 AccessSecurityMiddleware 在多用户模式会话验证成功后全局
+    注入（覆盖全部 /api 端点）；P6 的 current_user_context 路由依赖保留
+    （幂等重设，兼容测试与无中间件场景）。
+    """
     _current_user_id.set(user_id)
 
 

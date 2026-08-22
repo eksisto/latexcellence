@@ -212,7 +212,7 @@ users 表变更：新增非空邮箱部分唯一索引（`UNIQUE(email COLLATE N
 | `POST /api/project/undo` / `redo`（行为变更） | P3 | 多用户模式改为反向补丁回滚/重放；共享项目禁令解除；409 语义见 §8 |
 | `GET /api/project/can-undo` / `can-redo` / `undo-status`（行为变更） | P3 | 返回基于补丁日志的真实可撤销/可重做状态 |
 
-新增错误码（同步前端 zh / zh-TW / en 三语言 `errors` 命名空间）：`sandbox_unavailable`（503）、`sandbox_busy`（429，沙箱并发池满）、`upload_session_not_found`（404）、`upload_session_expired`（410）、`reset_token_invalid`（400）、`email_not_available`（400，未绑邮箱/重复邮箱时的找回降级提示）、`quota_exceeded_recover`（413，撤销导致超配额）等。
+新增错误码（同步前端 zh / zh-TW / en 三语言 `errors` 命名空间）：`sandbox_unavailable`（503）、`sandbox_busy`（429，沙箱并发池满）、`upload_session_not_found`（404）、`upload_session_expired`（410）、`reset_token_invalid`（400）、`email_not_available`（400，未绑邮箱/重复邮箱时的找回降级提示）、`quota_exceeded_recover`（413，撤销导致超配额）等。P1b 补充：`llm_rate_limited`（429，LLM 限流）与 `llm_concurrency_limited`（429，LLM 并发满），均附 `Retry-After` 头与 `retry_after` 秒数明细。
 
 ### 4.5 与现有代码的衔接点
 
@@ -492,7 +492,7 @@ docker/
 | --- | --- | --- |
 | P0 配置与迁移骨架（✅ 前置） | `sandbox`/`smtp` 配置节与 multi_user 新字段、config.example、设置分区 UI、schema 版本迁移框架 + `db-status` CLI | 配置校验与迁移框架测试绿，文档评审通过（P1a 实施时已落地 sandbox 节 + 迁移框架 + db-status；smtp 节随 P6） |
 | P1a Docker 沙箱（✅ 已完成） | 四镜像 + build.sh、SandboxRunner 双后端、六类调用点接入、资源租约池、退出码翻译、降级探测 | 有 Docker：编译/绘图/转换/git diff 全链路容器内执行 + 安全冒烟通过；无 Docker：回落回归全绿。评审修复记录：移除 stdin 协议（pandoc 文本转换改临时文件输入）、convert 镜像不设 ENTRYPOINT（补容器冒烟哨兵）、启动预热填充后端解析缓存 |
-| P1b LLM 治理 | 滑动窗口 + 并发租约、429 与 Retry-After、i18n | 限流/并发用例绿；双副本下计数正确 |
+| P1b LLM 治理（✅ 已完成） | `rate_limit_events(kind='llm')` 滑动窗口 + `llm_concurrency_leases` 租约（迁移 v3）、`llm_client` 全入口 `admission_gate()` 注入、登录限流迁同表（kind='login'）、维护循环清理、429 + Retry-After（main.py 全局异常处理器）、前端三语言文案 | 限流/并发/TTL 清理用例绿；被拒调用不落行不耗配额；单事务 BEGIN IMMEDIATE 准入，P7 多实例同卷天然跨副本生效 |
 | P2 rar 支持 | unar 管线 + 错误映射 + fixtures | rar 正常/加密/分卷用例绿；缺二进制报错明确 |
 | P3 反向补丁撤销 | 补丁日志、undo/redo 重写、解禁与旁路覆盖、配额回滚改造、前端/i18n | §8.6 场景测试全绿；v1 禁令测试反转 |
 | P4 记账与清理 | 用量缓存 + 检查点 + 对账、自助清理 API/UI、sessions 清理 | 消除每请求全盘扫描（基准对比达标）；缓存一致性与清理用例绿 |

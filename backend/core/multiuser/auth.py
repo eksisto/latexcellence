@@ -21,8 +21,6 @@ import re
 import secrets
 import shutil
 import sqlite3
-import threading
-import time
 import uuid
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -33,7 +31,15 @@ from argon2.exceptions import InvalidHashError, VerifyMismatchError
 from backend.core.config import get_config
 from backend.core.logger import get_logger
 from . import userspace
-from .db import db_count, db_execute, db_query_all, db_query_one, utcnow
+from .db import (
+    db_count,
+    db_execute,
+    db_query_all,
+    db_query_one,
+    is_initialized,
+    transaction,
+    utcnow,
+)
 
 logger = get_logger("multiuser.auth")
 
@@ -49,14 +55,6 @@ CSRF_COOKIE_NAME = "latexcellence_csrf"
 CSRF_HEADER_NAME = "X-Latexcellence-CSRF"
 
 _hasher = PasswordHasher()
-
-# 登录限流：{(username_lower, ip): [timestamp, ...]} 与
-# {username_lower: [timestamp, ...]}（进程内，窗口 60s）。
-# 用户名维度为全局计数：防止持有多个出口 IP 的攻击者对单账号线性放大在线爆破
-_rate_lock = threading.Lock()
-_login_records: dict[tuple[str, str], list[float]] = {}
-_username_records: dict[str, list[float]] = {}
-_last_rate_sweep = 0.0
 
 # 恒定时长占位哈希（防时序侧信道枚举用户名），懒加载缓存
 _dummy_hash: str | None = None
@@ -432,47 +430,56 @@ def ensure_bootstrap_admin() -> dict | None:
 
 
 # ── 登录限流 ────────────────────────────────────────────────────
+#
+# v2 P1b：进程内字典计数器迁移至 rate_limit_events 表（kind='login'），
+# 修复多实例部署下阈值被副本数放大的问题（P7 起跨副本天然生效）。
+# 同一行登录尝试落两条事件：pair 维度（用户名小写+IP）与 user 全局维度
+# （用户名小写），任一维度窗口计数达到阈值即拒绝；被拒绝的尝试不落行。
+_LOGIN_WINDOW_SECONDS = 60
+
+
 def login_rate_limited(username: str, ip: str) -> bool:
     """
     记录一次登录尝试；在窗口（60s）内超过配置上限返回 True。
 
     双维度独立计数：(username 小写, IP) 与 username 全局，任一超限即拒绝。
-    定期裁剪过期条目，避免字典无界增长。
+    用户名维度为全局计数：防止持有多个出口 IP 的攻击者对单账号线性放大
+    在线爆破。须先 init_db()（多用户模式 lifespan 保证）。
     """
-    global _last_rate_sweep
     cfg = get_config().multi_user
     limit = cfg.login_rate_limit_per_minute
     uname = username.strip().lower()
-    pair_key = (uname, ip or "")
-    now = time.time()
-    with _rate_lock:
-        # 周期清理：删除 60s 内无新的键，保证内存有界
-        if now - _last_rate_sweep > 60.0:
-            cutoff = now - 60.0
-            for k in list(_login_records):
-                stamps = _login_records[k]
-                if not stamps or stamps[-1] < cutoff:
-                    del _login_records[k]
-            for k in list(_username_records):
-                stamps = _username_records[k]
-                if not stamps or stamps[-1] < cutoff:
-                    del _username_records[k]
-            _last_rate_sweep = now
-        alive_pair = [t for t in _login_records.get(pair_key, []) if t >= now - 60.0]
-        alive_user = [t for t in _username_records.get(uname, []) if t >= now - 60.0]
-        if len(alive_pair) >= limit or len(alive_user) >= limit:
-            _login_records[pair_key] = alive_pair
-            _username_records[uname] = alive_user
+    pair_identity = f"pair:{uname}|{ip or ''}"
+    user_identity = f"user:{uname}"
+    now = datetime.now(timezone.utc)
+    now_iso = now.replace(microsecond=0).isoformat()
+    window_start = (
+        (now - timedelta(seconds=_LOGIN_WINDOW_SECONDS))
+        .replace(microsecond=0)
+        .isoformat()
+    )
+    with transaction() as conn:
+        pair_count = conn.execute(
+            "SELECT COUNT(*) FROM rate_limit_events "
+            "WHERE kind = 'login' AND identity = ? AND ts >= ?",
+            (pair_identity, window_start),
+        ).fetchone()[0]
+        user_count = conn.execute(
+            "SELECT COUNT(*) FROM rate_limit_events "
+            "WHERE kind = 'login' AND identity = ? AND ts >= ?",
+            (user_identity, window_start),
+        ).fetchone()[0]
+        if pair_count >= limit or user_count >= limit:
             return True
-        alive_pair.append(now)
-        alive_user.append(now)
-        _login_records[pair_key] = alive_pair
-        _username_records[uname] = alive_user
+        conn.executemany(
+            "INSERT INTO rate_limit_events (kind, identity, ts) VALUES ('login', ?, ?)",
+            [(pair_identity, now_iso), (user_identity, now_iso)],
+        )
         return False
 
 
 def reset_login_rate_limits() -> None:
-    """清空登录限流记录（测试隔离 / 运维使用）。"""
-    with _rate_lock:
-        _login_records.clear()
-        _username_records.clear()
+    """清空登录限流记录（测试隔离 / 运维使用）；库未初始化时静默跳过。"""
+    if not is_initialized():
+        return
+    db_execute("DELETE FROM rate_limit_events WHERE kind = 'login'")

@@ -1514,6 +1514,8 @@
     "invalidQuota": "Invalid quota value",
     "sandboxUnavailable": "Sandbox unavailable: the Docker service is not running or unreachable",
     "sandboxBusy": "Sandbox concurrency pool is full, please retry later",
-    "sandboxKilledOom": "Compilation was killed because it exceeded the sandbox memory limit; simplify the document or increase sandbox.memory_mb"
+    "sandboxKilledOom": "Compilation was killed because it exceeded the sandbox memory limit; simplify the document or increase sandbox.memory_mb",
+    "llmRateLimited": "Too many LLM requests; retry after {{retry_after}}s",
+    "llmConcurrencyLimited": "LLM concurrency limit reached; retry after {{retry_after}}s"
   }
 }

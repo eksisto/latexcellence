@@ -27,6 +27,7 @@ from openai.types.chat import ChatCompletion
 
 from backend.core.config import get_config
 from backend.core.logger import get_logger
+from backend.core.multiuser import llm_governance
 
 
 @dataclass
@@ -401,16 +402,21 @@ class LLMClient:
         max_retries: int = 3,
         model: str | None = None,
     ) -> tuple[str, UsageInfo | None]:
-        """非流式 LLM 对话调用，返回 (文本, usage)。受全局并发上限约束。"""
-        async with self._get_semaphore():
-            return await self._chat_with_usage_impl(
-                messages=messages,
-                temperature=temperature,
-                max_tokens=max_tokens,
-                response_format=response_format,
-                max_retries=max_retries,
-                model=model,
-            )
+        """非流式 LLM 对话调用，返回 (文本, usage)。
+
+        受全局并发上限约束；多用户模式下另受每用户 LLM 治理约束
+        （滑动窗口限流 + 并发租约，超限抛 429 语义 RuntimeError）。
+        """
+        async with llm_governance.admission_gate():
+            async with self._get_semaphore():
+                return await self._chat_with_usage_impl(
+                    messages=messages,
+                    temperature=temperature,
+                    max_tokens=max_tokens,
+                    response_format=response_format,
+                    max_retries=max_retries,
+                    model=model,
+                )
 
     async def _chat_with_usage_impl(
         self,
@@ -487,14 +493,18 @@ class LLMClient:
         temperature: float | None = None,
         max_tokens: int | None = None,
     ) -> AsyncIterator[str]:
-        """流式 LLM 对话调用（Server-Sent Events）。受全局并发上限约束。"""
-        async with self._get_semaphore():
-            async for chunk in self._chat_stream_impl(
-                messages=messages,
-                temperature=temperature,
-                max_tokens=max_tokens,
-            ):
-                yield chunk
+        """流式 LLM 对话调用（Server-Sent Events）。
+
+        受全局并发上限约束；多用户模式下另受每用户 LLM 治理约束。
+        """
+        async with llm_governance.admission_gate():
+            async with self._get_semaphore():
+                async for chunk in self._chat_stream_impl(
+                    messages=messages,
+                    temperature=temperature,
+                    max_tokens=max_tokens,
+                ):
+                    yield chunk
 
     async def _chat_stream_impl(
         self,
@@ -544,15 +554,19 @@ class LLMClient:
         max_tokens: int | None = None,
         max_retries: int = 3,
     ) -> ChatCompletion:
-        """带 Function Calling 的非流式 LLM 调用。受全局并发上限约束。"""
-        async with self._get_semaphore():
-            return await self._chat_with_tools_impl(
-                messages=messages,
-                tools=tools,
-                temperature=temperature,
-                max_tokens=max_tokens,
-                max_retries=max_retries,
-            )
+        """带 Function Calling 的非流式 LLM 调用。
+
+        受全局并发上限约束；多用户模式下另受每用户 LLM 治理约束。
+        """
+        async with llm_governance.admission_gate():
+            async with self._get_semaphore():
+                return await self._chat_with_tools_impl(
+                    messages=messages,
+                    tools=tools,
+                    temperature=temperature,
+                    max_tokens=max_tokens,
+                    max_retries=max_retries,
+                )
 
     async def _chat_with_tools_impl(
         self,
@@ -633,14 +647,18 @@ class LLMClient:
         temperature: float | None = None,
         max_tokens: int | None = None,
     ) -> AsyncIterator["StreamChunk"]:
-        """流式 LLM 对话调用，并在流末尾附带 token 用量。受全局并发上限约束。"""
-        async with self._get_semaphore():
-            async for chunk in self._chat_stream_with_usage_impl(
-                messages=messages,
-                temperature=temperature,
-                max_tokens=max_tokens,
-            ):
-                yield chunk
+        """流式 LLM 对话调用，并在流末尾附带 token 用量。
+
+        受全局并发上限约束；多用户模式下另受每用户 LLM 治理约束。
+        """
+        async with llm_governance.admission_gate():
+            async with self._get_semaphore():
+                async for chunk in self._chat_stream_with_usage_impl(
+                    messages=messages,
+                    temperature=temperature,
+                    max_tokens=max_tokens,
+                ):
+                    yield chunk
 
     async def _chat_stream_with_usage_impl(
         self,
@@ -718,15 +736,19 @@ class LLMClient:
         temperature: float | None = None,
         max_tokens: int | None = None,
     ) -> AsyncIterator["StreamChunk"]:
-        """流式 LLM 对话调用，支持 Function Calling 工具检测。受全局并发上限约束。"""
-        async with self._get_semaphore():
-            async for chunk in self._chat_stream_with_tools_impl(
-                messages=messages,
-                tools=tools,
-                temperature=temperature,
-                max_tokens=max_tokens,
-            ):
-                yield chunk
+        """流式 LLM 对话调用，支持 Function Calling 工具检测。
+
+        受全局并发上限约束；多用户模式下另受每用户 LLM 治理约束。
+        """
+        async with llm_governance.admission_gate():
+            async with self._get_semaphore():
+                async for chunk in self._chat_stream_with_tools_impl(
+                    messages=messages,
+                    tools=tools,
+                    temperature=temperature,
+                    max_tokens=max_tokens,
+                ):
+                    yield chunk
 
     async def _chat_stream_with_tools_impl(
         self,

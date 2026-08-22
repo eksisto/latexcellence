@@ -87,13 +87,15 @@ def build_mu_env(
     enabled: bool = True,
     registration_enabled: bool = True,
     login_limit: int = 5,
+    llm_rate_limit_per_minute: int | None = None,
+    llm_max_concurrency_per_user: int | None = None,
 ) -> dict:
     """写入并加载多用户配置，初始化数据库。返回环境字典。"""
     db_path = tmp_path / "multiuser.db"
     users_root = tmp_path / "users"
     staging = tmp_path / "staging"
     data = dict(MINIMAL_CONFIG)
-    data["multi_user"] = {
+    mu_config = {
         "enabled": enabled,
         "db_path": str(db_path),
         "users_root": str(users_root) + "/",
@@ -105,6 +107,11 @@ def build_mu_env(
         "login_rate_limit_per_minute": login_limit,
         "registration_enabled": registration_enabled,
     }
+    if llm_rate_limit_per_minute is not None:
+        mu_config["llm_rate_limit_per_minute"] = llm_rate_limit_per_minute
+    if llm_max_concurrency_per_user is not None:
+        mu_config["llm_max_concurrency_per_user"] = llm_max_concurrency_per_user
+    data["multi_user"] = mu_config
     config_path = tmp_path / "config.json"
     with open(config_path, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=2)

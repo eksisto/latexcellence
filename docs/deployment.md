@@ -338,11 +338,13 @@ v1 通过以下措施收敛攻击面，但**不能替代沙箱**：
 | `max_compression_ratio` | 1000 | 压缩比上限（防压缩炸弹） |
 | `recycle_bin_days` | 7 | 回收站保留天数 |
 | `session_ttl_days` / `remember_ttl_days` | 7 / 30 | 会话有效期（天） |
-| `login_rate_limit_per_minute` | 5 | 登录限流（次/分钟，按用户名+IP） |
-| `llm_rate_limit_per_minute` | 20 | 每用户 LLM 请求限流（次/分钟）。**注意**：当前版本该阈值的每用户强制执行尚未落地，实际并发由全局 `llm.max_n` 控制，此配置为 v2 预留 |
-| `llm_max_concurrency_per_user` | 2 | 每用户最大并发 LLM 任务数。同上，为 v2 预留 |
+| `login_rate_limit_per_minute` | 5 | 登录限流（次/分钟，按用户名+IP；v2 P1b 起计数入 `rate_limit_events` 表，多实例部署不再被副本数放大） |
+| `llm_rate_limit_per_minute` | 20 | 每用户 LLM 请求限流（次/分钟，60s 滑动窗口；超限返回 429 并附 Retry-After。多用户模式强制执行） |
+| `llm_max_concurrency_per_user` | 2 | 每用户最大并发 LLM 任务数（租约制，超限直接 429 不排队；仅多用户模式生效） |
 
-后台维护循环每小时执行一次：项目大小对账（修正缓存漂移）、回收站过期清理、暂存区清理、删除用户归档清理、沙箱并发租约（`sandbox_slots`）过期清理。
+后台维护循环每小时执行一次：项目大小对账（修正缓存漂移）、回收站过期清理、暂存区清理、删除用户归档清理、沙箱并发租约（`sandbox_slots`）过期清理、LLM 并发租约（`llm_concurrency_leases`）过期清理与限流事件（`rate_limit_events`）保留期清理。
+
+LLM 每用户治理（v2 P1b）：多用户模式下每次 LLM 调用前在单事务内完成"滑动窗口限流校验 + 事件落账 + 并发租约获取"（`core/multiuser/llm_governance.py`），请求级用户上下文由 `AccessSecurityMiddleware` 会话验证成功后全局注入，覆盖全部 `/api` 端点；被拒绝的调用不落行、不消耗配额。429 响应遵循既有结构化错误约定（`detail.error` = `llm_rate_limited` / `llm_concurrency_limited`）、附 `Retry-After` 头与秒数明细，前端三语言文案展示等待时间。单用户模式完全跳过治理（零数据库依赖）。P7 多实例阶段同一共享卷上天然跨副本生效，无需修改。
 
 ---
 

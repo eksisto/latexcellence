@@ -32,6 +32,7 @@ from pydantic import BaseModel
 
 from backend.core import access_control
 from backend.core.logger import get_logger
+from backend.core.multiuser import llm_governance
 from backend.core.project_manager import FileConflictError
 from backend.core.workspace_manager import get_project_manager_for_workspace
 from backend.core.llm_client import get_llm_client
@@ -485,6 +486,11 @@ class BaseParagraphCheckService:
             )
             return self._make_fallback(idx, text, original_text, file_path)
         except Exception as e:
+            # LLM 每用户治理超限（429 语义）不属于"段落检查失败"，原样重抛：
+            # 流式路径由调用方转为 error 事件（前端按码翻译），批量路径直达
+            # 路由层映射为 429 + Retry-After；静默降级会让用户误以为无建议
+            if llm_governance.governance_code_of(e) is not None:
+                raise
             self._logger.error(f"Paragraph {idx} in {file_path}: LLM call failed — {e}")
             return self._make_fallback(idx, text, original_text, file_path)
 

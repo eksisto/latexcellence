@@ -27,6 +27,7 @@ from urllib.parse import parse_qs, urlparse
 from backend.core.config import get_config
 from backend.core.logger import get_logger
 from backend.core.multiuser import auth as multiuser_auth
+from backend.core.multiuser import userspace
 
 TOKEN_HEADER = "X-Latexcellence-Token"
 TOKEN_QUERY = "token"
@@ -291,6 +292,13 @@ class AccessSecurityMiddleware:
                 cors,
             )
             return
+
+        # v2 P1b：请求级当前用户上下文全局注入。本中间件为纯 ASGI，此处
+        # 设置的 ContextVar 与下游路由/依赖/SSE 生成器同任务上下文，对全部
+        # /api 端点可见——LLM 每用户治理（llm_governance）与 P6 会话类资源
+        # 归属校验因此不再依赖各路由单独声明 current_user_context 依赖。
+        # 单用户模式不进入本分支，上下文保持 None（治理直通）。
+        userspace.set_current_user_id(user["id"])
 
         # 变更类请求：校验双提交 CSRF——请求头 X-Latexcellence-CSRF 必须与
         # CSRF Cookie（latexcellence_csrf）的值一致（常量时间比较）。

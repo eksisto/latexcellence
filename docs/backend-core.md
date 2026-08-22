@@ -63,6 +63,7 @@
 
 - 公开端点：`/api/health`、`/api/config/status`、`/api/auth/login`、`/api/auth/register`；
 - 其余所有 `/api/*` 请求必须携带有效的 HttpOnly 会话 Cookie（`latexcellence_session`），会话过期或账号被禁用即时失效（返回 401 `unauthorized`）；
+- **请求级用户上下文全局注入（v2 P1b）**：会话验证成功后中间件即调用 `userspace.set_current_user_id(user.id)`——本中间件为纯 ASGI，设置的 ContextVar 与下游路由/依赖/SSE 生成器同任务上下文，对全部端点可见；LLM 每用户治理与 P6 会话类资源归属校验均依赖该上下文，不再要求各路由单独声明 `current_user_context` 依赖；
 - **双提交 CSRF**：登录时额外下发可被 JS 读取的 CSRF Cookie（`latexcellence_csrf`），变更类请求（POST/PUT/PATCH/DELETE）必须携带 `X-Latexcellence-CSRF` 请求头且其值与会话携带的 CSRF Cookie 一致（常量时间比较）；缺失或不一致返回 403 `invalid_csrf`。与 `SameSite=Lax` 配合，覆盖同站子域/放宽同站点等场景；
 - 多用户模式使用 Cookie 会话，允许的跨源响应（如 Vite dev `localhost:5173`→`8000`）会携带 `Access-Control-Allow-Credentials: true`（origin 仍回显具体值而非 `*`）。
 
@@ -100,6 +101,8 @@
 - 仅网络/API 异常触发重试（`json.JSONDecodeError` 不再由客户端处理）
 
 **单例模式**：全局 `_llm_client` 通过 `get_llm_client()` 访问，使用 `threading.Lock` 双检锁保护多线程场景。`client` 属性首次访问时读取 `get_config().llm` 创建实例并缓存；当用户通过 SettingsDialog 更新 `llm` 配置时，`config.update_config_from_dict()` 会调用 `get_llm_client().reset()` 清除缓存，使下一次访问 `client` 时按新配置重新创建，从而支持运行时热重载 `api_key` / `base_url`。
+
+**每用户治理门（多用户 v2 P1b）**：全部公共入口（`chat_with_usage` / `chat_stream` / `chat_with_tools` / `chat_stream_with_usage` / `chat_stream_with_tools`）在最外层套 `core/multiuser/llm_governance.py` 的 `admission_gate()`：多用户模式下读取请求级当前用户上下文（由 `AccessSecurityMiddleware` 会话验证成功后全局注入，覆盖全部 `/api` 端点），在单事务内完成"滑动窗口限流校验 + 事件落账 + 并发租约获取"，超限抛 429 语义 RuntimeError（`gov_code` = `llm_rate_limited` / `llm_concurrency_limited`，携带 `retry_after`），由 main.py 注册的全局异常处理器（`register_governance_handler`）翻译为 HTTP 429 + Retry-After + 既有 `detail` 包装的结构化错误体；调用结束 finally 释放租约（流式提前断开同样覆盖）。单用户模式或无用户上下文（后台任务）直通且零数据库依赖。实现细节见下方"多用户模式基础设施"一节的 `llm_governance.py` 行。
 
 ### `backend/core/logger.py` — 日志系统
 
@@ -406,13 +409,15 @@ ExtractorRegistry 先处理已知公开端点（当前代码托管页面使用 G
 
 | 文件 | 职责 |
 | --- | --- |
-| `backend/core/multiuser/db.py` | SQLite 初始化（users/sessions/projects/project_collaborators 表 + WAL + 外键）、连接管理与统一查询入口（`db_execute` / `db_query_one` / `db_query_all`，同步线程安全） |
+| `backend/core/multiuser/db.py` | SQLite 初始化（v1 业务表 + v2 沙箱/治理表，WAL + 外键）、连接管理与统一查询入口（`db_execute` / `db_query_one` / `db_query_all`，同步线程安全）、版本迁移框架（PRAGMA `user_version` + 有序幂等步骤） |
 | `backend/core/multiuser/userspace.py` | 用户空间目录布局（`<users_root>/<user_id>/{projects, writing_chat_sessions, style_modify_sessions, templates, plots}`），`ensure_user_dirs()` 注册时创建；P6 新增请求级当前用户上下文（`set/get_current_user_id`）与统一会话资源根解析 `user_resource_root(subdir, legacy_root)`（单用户回退存量全局路径）、`iterate_user_resource_roots()`（后台清理枚举各用户资源目录） |
-| `backend/core/multiuser/auth.py` | 密码哈希（argon2id）、会话令牌（库只存 SHA-256 哈希）、用户管理（注册 pending / 审批 / 禁用 / 重置密码 / 配额覆盖）、登录限流（每用户名+每 IP 分钟级）、`ensure_bootstrap_admin()` |
+| `backend/core/multiuser/auth.py` | 密码哈希（argon2id）、会话令牌（库只存 SHA-256 哈希）、用户管理（注册 pending / 审批 / 禁用 / 重置密码 / 配额覆盖）、登录限流（每用户名+每 IP 分钟级；v2 P1b 起计数入 `rate_limit_events` 表 kind='login'，替代进程内字典）、`ensure_bootstrap_admin()` |
 | `backend/core/multiuser/dependencies.py` | FastAPI 认证依赖：`get_current_user`（401）、`require_admin`（403）、`get_current_user_optional`、`require_admin_if_multiuser`；P6 新增 `current_user_context`（注入请求级当前用户用于会话类资源归属校验） |
 | `backend/core/multiuser/quota.py` | 配额记账核心：有效额度解析（用户覆盖优先）、项目/衍生用量统计、上传/写回/恢复前置校验（超限抛 413 `quota_exceeded`）、项目唯一命名与建行（`xx (2)`）、对账（`reconcile_project_sizes`）、回收站过期清理 |
 | `backend/core/multiuser/upload.py` | 上传解压管线核心：zip（UTF-8/GBK/cp437 编码、路径穿越/符号链接/加密/炸弹拦截）与 7z（py7zr）安全解压、项目根归一化、`move_into_user_space()` 落位 |
-| `backend/core/multiuser/maintenance.py` | 后台维护循环：配额对账 + 回收站/暂存区清理（`main.py` lifespan 启动） |
+| `backend/core/multiuser/maintenance.py` | 后台维护循环：配额对账 + 回收站/暂存区清理 + 沙箱/LLM 租约与限流事件清理（`main.py` lifespan 启动） |
+| `backend/core/multiuser/sandbox_leases.py` | 沙箱并发池租约（v2 P1a）：`sandbox_slots` 表原子获取/释放，TTL 清理崩溃残留 |
+| `backend/core/multiuser/llm_governance.py` | LLM 每用户治理（v2 P1b）：60s 滑动窗口限流（`rate_limit_events` kind='llm'）+ 并发租约（`llm_concurrency_leases`，TTL 900s），单事务原子准入；超限抛带 `gov_code` 的 RuntimeError（429），`governance_http_response()` 翻译为 429 + Retry-After + `detail` 包装结构化错误体，`register_governance_handler()` 供 main.py 与测试注册同一处理器；`admission_gate()` 供 `llm_client` 各入口包裹，单用户/无用户上下文直通；维护入口 `purge_expired_llm_leases()` / `purge_old_rate_limit_events()` |
 | `backend/core/multiuser/migrate.py` | 存量数据迁移工具（P6）：`migrate_legacy()` 把存量全局目录（writing_chat_sessions / style_modify_sessions / templates / plots / formats / prompts）幂等复制到管理员用户空间，`--dry-run` 预演，报告 + 目录树校验 |
 | `backend/core/access_control.py` | 统一访问控制：`owner/editor/viewer` 权限矩阵、`require_project_access()` / `get_projects_for_user()` / `get_user_role_for_project()` / `is_shared_project()`、基于 workspace 绑定的请求级依赖 `require_workspace(write=...)`；权限实时查库不缓存 |
 | `backend/modules/projects/router.py` | 薄路由层：`/api/projects`（列表 / 上传创建）与 `/api/projects/{id}`（重命名 / 回收站 / 恢复 / 永久删除 / 下载 / 权限协作 / 转交） |

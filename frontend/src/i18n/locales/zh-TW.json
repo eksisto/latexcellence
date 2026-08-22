@@ -1514,6 +1514,8 @@
     "invalidQuota": "配額數值不合法",
     "sandboxUnavailable": "沙箱不可用：Docker 服務未執行或無法連線",
     "sandboxBusy": "沙箱並行已滿，請稍後重試",
-    "sandboxKilledOom": "編譯因超出沙箱記憶體限制被終止，可簡化文件或調大 sandbox.memory_mb"
+    "sandboxKilledOom": "編譯因超出沙箱記憶體限制被終止，可簡化文件或調大 sandbox.memory_mb",
+    "llmRateLimited": "LLM 請求過於頻繁，請 {{retry_after}} 秒後重試",
+    "llmConcurrencyLimited": "LLM 並行任務數已達上限，請 {{retry_after}} 秒後重試"
   }
 }

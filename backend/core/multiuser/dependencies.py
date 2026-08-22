@@ -88,9 +88,12 @@ async def current_user_context(
 ) -> dict | None:
     """注入请求级当前用户上下文（P6 会话类资源归属校验）。
 
-    会话类资源模块（写作会话 / style_modify 会话 / 模板 / 绘图）在解析资源根
-    目录时读取该上下文，将资源定向到当前用户的衍生数据目录，实现按用户隔离。
-    单用户模式 / 未登录时注入 None（模块回退到存量全局路径）。
+    v2 P1b 起 AccessSecurityMiddleware 已在会话验证成功后全局注入同一
+    上下文，本依赖保留为幂等重设：供无中间件栈的测试场景与显式声明该
+    依赖的路由使用。会话类资源模块（写作会话 / style_modify 会话 / 模板 /
+    绘图）在解析资源根目录时读取该上下文，将资源定向到当前用户的衍生数据
+    目录，实现按用户隔离。单用户模式 / 未登录时注入 None（模块回退到存量
+    全局路径）。
     """
     userspace.set_current_user_id(user["id"] if user else None)
     return user

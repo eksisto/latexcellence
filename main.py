@@ -24,6 +24,7 @@ import uvicorn
 from backend.core.config import load_config, get_config, update_config_from_dict
 from backend.core.logger import setup_logging, get_logger
 from backend.core.multiuser.dependencies import require_admin_if_multiuser
+from backend.core.multiuser.llm_governance import register_governance_handler
 from backend.core.security_middleware import AccessSecurityMiddleware
 from backend.modules.project_router import router as project_router
 from backend.modules.typo_check.router import router as typo_check_router
@@ -177,8 +178,14 @@ app = FastAPI(
 )
 
 # CORS + 访问令牌中间件：白名单来自 server.allowed_origins，
-# 令牌校验来自 security.access_token，均每次请求实时读取（支持热重载）
+# 令牌校验来自 security.access_token，均每次请求实时读取（支持热重载）。
+# 多用户模式会话验证成功时，中间件同时注入请求级当前用户上下文
+# （LLM 治理 / 会话类资源归属依赖）。
 app.add_middleware(AccessSecurityMiddleware)
+
+# LLM 每用户治理错误 → HTTP 429 + Retry-After（v2 P1b，注册逻辑见
+# llm_governance.register_governance_handler；普通 RuntimeError 原样重抛）
+register_governance_handler(app)
 
 
 @app.get("/api/health")

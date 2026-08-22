@@ -5,6 +5,8 @@
 - clean_expired_recycle_bin()：永久删除超过 recycle_bin_days 的回收站项目
 - clean_staging()：清理上传中断/失败遗留的暂存目录
 - purge_expired_sandbox_slots()：清理崩溃残留的沙箱并发租约（v2 P1a）
+- purge_expired_llm_leases() / purge_old_rate_limit_events()：
+  清理过期 LLM 并发租约与超过保留期的限流事件（v2 P1b）
 
 由 main.py lifespan 通过 asyncio.Task 启动；方法内实时读取配置。
 """
@@ -14,6 +16,10 @@ import asyncio
 from backend.core.logger import get_logger
 from . import quota
 from .db import init_db
+from .llm_governance import (
+    purge_expired_llm_leases,
+    purge_old_rate_limit_events,
+)
 from .sandbox_leases import purge_expired_sandbox_slots
 
 logger = get_logger("multiuser.maintenance")
@@ -22,7 +28,7 @@ DEFAULT_INTERVAL_SECONDS = 3600
 
 
 async def maintenance_loop() -> None:
-    """后台循环：周期执行配额对账与回收站/暂存区/沙箱租约清理。"""
+    """后台循环：周期执行配额对账与回收站/暂存区/租约与限流事件清理。"""
     logger.info("Multi-user maintenance loop started")
     while True:
         interval = DEFAULT_INTERVAL_SECONDS
@@ -33,15 +39,28 @@ async def maintenance_loop() -> None:
             cleaned = await asyncio.to_thread(quota.clean_staging)
             archived = await asyncio.to_thread(quota.clean_expired_archives)
             slots = await asyncio.to_thread(purge_expired_sandbox_slots)
-            if reconciled or purged or cleaned or archived or slots:
+            llm_leases = await asyncio.to_thread(purge_expired_llm_leases)
+            rl_events = await asyncio.to_thread(purge_old_rate_limit_events)
+            if (
+                reconciled
+                or purged
+                or cleaned
+                or archived
+                or slots
+                or llm_leases
+                or rl_events
+            ):
                 logger.info(
                     "Multi-user maintenance done: reconciled=%d purged=%d "
-                    "cleaned_staging=%d cleaned_archives=%d sandbox_slots=%d",
+                    "cleaned_staging=%d cleaned_archives=%d sandbox_slots=%d "
+                    "llm_leases=%d rate_limit_events=%d",
                     reconciled,
                     purged,
                     cleaned,
                     archived,
                     slots,
+                    llm_leases,
+                    rl_events,
                 )
         except Exception:
             logger.exception("Multi-user maintenance cycle failed")
