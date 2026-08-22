@@ -414,7 +414,7 @@ ExtractorRegistry 先处理已知公开端点（当前代码托管页面使用 G
 | `backend/core/multiuser/auth.py` | 密码哈希（argon2id）、会话令牌（库只存 SHA-256 哈希）、用户管理（注册 pending / 审批 / 禁用 / 重置密码 / 配额覆盖）、登录限流（每用户名+每 IP 分钟级；v2 P1b 起计数入 `rate_limit_events` 表 kind='login'，替代进程内字典）、`ensure_bootstrap_admin()` |
 | `backend/core/multiuser/dependencies.py` | FastAPI 认证依赖：`get_current_user`（401）、`require_admin`（403）、`get_current_user_optional`、`require_admin_if_multiuser`；P6 新增 `current_user_context`（注入请求级当前用户用于会话类资源归属校验） |
 | `backend/core/multiuser/quota.py` | 配额记账核心：有效额度解析（用户覆盖优先）、项目/衍生用量统计、上传/写回/恢复前置校验（超限抛 413 `quota_exceeded`）、项目唯一命名与建行（`xx (2)`）、对账（`reconcile_project_sizes`）、回收站过期清理 |
-| `backend/core/multiuser/upload.py` | 上传解压管线核心：zip（UTF-8/GBK/cp437 编码、路径穿越/符号链接/加密/炸弹拦截）与 7z（py7zr）安全解压、项目根归一化、`move_into_user_space()` 落位 |
+| `backend/core/multiuser/upload.py` | 上传解压管线核心：zip（UTF-8/GBK/cp437 编码、路径穿越/符号链接/加密/炸弹拦截）与 7z（py7zr）安全解压、rar（外部 unar 管线，多用户 v2 P2：进程组限时/超配额击杀、RAR4 加密与分卷标志预扫、受保护包输出关键词兜底、零产物兜底）、项目根归一化、`move_into_user_space()` 落位 |
 | `backend/core/multiuser/maintenance.py` | 后台维护循环：配额对账 + 回收站/暂存区清理 + 沙箱/LLM 租约与限流事件清理（`main.py` lifespan 启动） |
 | `backend/core/multiuser/sandbox_leases.py` | 沙箱并发池租约（v2 P1a）：`sandbox_slots` 表原子获取/释放，TTL 清理崩溃残留 |
 | `backend/core/multiuser/llm_governance.py` | LLM 每用户治理（v2 P1b）：60s 滑动窗口限流（`rate_limit_events` kind='llm'）+ 并发租约（`llm_concurrency_leases`，TTL 900s），单事务原子准入；超限抛带 `gov_code` 的 RuntimeError（429），`governance_http_response()` 翻译为 429 + Retry-After + `detail` 包装结构化错误体，`register_governance_handler()` 供 main.py 与测试注册同一处理器；`admission_gate()` 供 `llm_client` 各入口包裹，单用户/无用户上下文直通；维护入口 `purge_expired_llm_leases()` / `purge_old_rate_limit_events()` |
@@ -444,8 +444,8 @@ ExtractorRegistry 先处理已知公开端点（当前代码托管页面使用 G
 
 **P3 上传与配额要点**：
 
-- 上传入口 `POST /api/projects`（multipart 字段 `archive`，可选 `name`；也支持 `ProjectId` 之外的命名表单字段）。压缩包**流式写入** `data/staging/<upload_id>/`，不整包载入内存；支持 `.zip` 与 `.7z`（`py7zr`）。
-- 解压校验（失败即拒绝，不落用户空间）：压缩包大小、文件数、单文件大小、解压总量 ≤ 剩余配额、压缩比（炸弹拦截）、拒绝绝对路径 / `..` / 符号链接 / 设备文件 / 加密包 / 分卷包、大小写不敏感重名、解压限时；zip 文件名按 UTF-8 标志优先、GBK 回退、cp437 兜底。
+- 上传入口 `POST /api/projects`（multipart 字段 `archive`，可选 `name`；也支持 `ProjectId` 之外的命名表单字段）。压缩包**流式写入** `data/staging/<upload_id>/`，不整包载入内存；支持 `.zip`、`.7z`（`py7zr`）与 `.rar`（外部 `unar`，v2 P2；二进制缺失返回 400 `unar_missing`，Docker 部署由后端镜像内置）。
+- 解压校验（失败即拒绝，不落用户空间）：压缩包大小、文件数、单文件大小、解压总量 ≤ 剩余配额、压缩比（炸弹拦截）、拒绝绝对路径 / `..` / 符号链接 / 设备文件 / 加密包 / 分卷包、大小写不敏感重名、解压限时；zip 文件名按 UTF-8 标志优先、GBK 回退、cp437 兜底。rar 解压前对 RAR4 头链做最小预扫，命中加密 / 分卷标志即确定性拒绝（`archive_unsafe`）；RAR5 由 unar 失败输出关键词（password 等）与“成功但零产物”（多卷集第一卷单独上传的静默形态）兜底拒绝。已知差异：unar 对非 UTF-8 文件名依赖字符集探测，解码结果可能与 zip 管线不一致（GBK 名字可能被还原为其他字符），不影响安全校验与配额记账。
 - 项目根归一化：暂存区仅一个顶层目录 → 以该目录为项目根（兼容“打包上层目录”）；否则暂存区本身为项目根（兼容“直接打包内容”）。
 - 项目命名：与同 owner 活动项目去重，自动生成 `xx (2)`；唯一索引（`UNIQUE(owner_id, name) WHERE active`）+ 捕获 `IntegrityError` 重试保证并发安全。
 - 配额记账：项目空间算 `projects.size_bytes`（活动项目之和，回收站不计入）；`/api/auth/me` 与项目列表实时返回用量；后台 `reconcile_project_sizes()` 周期对账修正缓存漂移。上传、恢复、写回（`apply-change`）超限统一返回 413 `quota_exceeded`；写回超限会**回滚本次修改**（不允许部分写入）。

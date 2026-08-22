@@ -493,7 +493,7 @@ docker/
 | P0 配置与迁移骨架（✅ 前置） | `sandbox`/`smtp` 配置节与 multi_user 新字段、config.example、设置分区 UI、schema 版本迁移框架 + `db-status` CLI | 配置校验与迁移框架测试绿，文档评审通过（P1a 实施时已落地 sandbox 节 + 迁移框架 + db-status；smtp 节随 P6） |
 | P1a Docker 沙箱（✅ 已完成） | 四镜像 + build.sh、SandboxRunner 双后端、六类调用点接入、资源租约池、退出码翻译、降级探测 | 有 Docker：编译/绘图/转换/git diff 全链路容器内执行 + 安全冒烟通过；无 Docker：回落回归全绿。评审修复记录：移除 stdin 协议（pandoc 文本转换改临时文件输入）、convert 镜像不设 ENTRYPOINT（补容器冒烟哨兵）、启动预热填充后端解析缓存 |
 | P1b LLM 治理（✅ 已完成） | `rate_limit_events(kind='llm')` 滑动窗口 + `llm_concurrency_leases` 租约（迁移 v3）、`llm_client` 全入口 `admission_gate()` 注入、登录限流迁同表（kind='login'）、维护循环清理、429 + Retry-After（main.py 全局异常处理器）、前端三语言文案 | 限流/并发/TTL 清理用例绿；被拒调用不落行不耗配额；单事务 BEGIN IMMEDIATE 准入，P7 多实例同卷天然跨副本生效 |
-| P2 rar 支持 | unar 管线 + 错误映射 + fixtures | rar 正常/加密/分卷用例绿；缺二进制报错明确 |
+| P2 rar 支持（✅ 已完成） | unar 管线 + 错误映射 + fixtures | rar 正常/加密/分卷用例绿；缺二进制报错明确。实施记录：调用形如 `unar -f -q -D -o <dir> -- <file>`（`-D` 阻止 unar 在解压根外再包一层归档名目录，保持与 zip 管线一致的根归一化语义）；stdin 接 `/dev/null` + `start_new_session` 进程组限时/超配额 SIGKILL；加密/分卷在解压前经 RAR4 头链最小预扫确定性拒绝（不依赖失败输出措辞，头链遍历受 `max_files` 派生的块数上限约束防止超小块垃圾包 CPU 空转），RAR5 由输出关键词（password 等）与“成功但零产物”兜底；缺二进制返回独立错误码 `unar_missing`（400，三语言 i18n）而非复用 `invalid_archive`——前端结构化错误优先按码翻译，独立码才能让细分文案到达用户；fixtures 为纯字节手工构造的 RAR4 store 样例（`tools/rar_fixtures/make_fixtures.py` 生成入库），真实 unar 用例无二进制自动 skip，预扫/接线/监视线程用例任何环境都跑 |
 | P3 反向补丁撤销 | 补丁日志、undo/redo 重写、解禁与旁路覆盖、配额回滚改造、前端/i18n | §8.6 场景测试全绿；v1 禁令测试反转 |
 | P4 记账与清理 | 用量缓存 + 检查点 + 对账、自助清理 API/UI、sessions 清理 | 消除每请求全盘扫描（基准对比达标）；缓存一致性与清理用例绿 |
 | P5 分片上传 | 五端点 + 会话模型 + 前端分片队列 + TTL 清理 | 断点续传/大文件/目录直传/中止用例绿；并发分片安全 |

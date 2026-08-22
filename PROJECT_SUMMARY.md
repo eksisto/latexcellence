@@ -163,7 +163,7 @@ latexcellence/
 │       ├── components/              # 共享组件 + ui 基座组件
 │       │       ├── AuthShell.jsx        # 多用户认证页公共外壳
 │       ├── AuthConnectionButton.jsx # 认证页工具栏「后端连接设置」入口（改绑后端）
-│       │   ├── UploadProjectDialog.jsx # 上传项目对话框（zip/7z 或目录 JSZip 打包 + 进度）
+│       │   ├── UploadProjectDialog.jsx # 上传项目对话框（zip/7z/rar 或目录 JSZip 打包 + 进度）
 │       │   ├── ProjectPermissionsDialog.jsx # 项目权限对话框（协作者管理/转交）
 │       │   └── settings/            # 设置对话框分区配置组件
 │       ├── theme/                   # 主题 CSS + useThemeManager.js
@@ -198,7 +198,7 @@ latexcellence/
 ├── tests/                           # 测试用例
 │   ├── conftest.py                  # pytest 共享 fixture
 │   ├── test_api/                    # 各模块 API 集成测试
-│   ├── test_multiuser/              # 多用户模式测试（认证/项目/配额/协作/DB 迁移/沙箱租约/LLM 治理）
+│   ├── test_multiuser/              # 多用户模式测试（认证/项目/配额/协作/DB 迁移/沙箱租约/LLM 治理/rar 上传）
 │   ├── test_plot_gen/               # plot_gen 单元测试
 │   ├── test_docker/                 # Docker 沙箱真容器冒烟（marker docker，无 daemon 自动 skip）
 │   ├── test_utils/                  # 后端工具单元测试（路径/JSON/宏包/搜索/学术检索/编译/sandbox 契约等）
@@ -232,6 +232,7 @@ latexcellence/
 │   ├── terminology_check_eval/    # 术语一致性人工评估工具（加载多段术语语料 → 跑检查 → 生成比对报告）
 │   ├── paragraph_translate_eval/  # 逐段翻译人工评估工具（加载语料 → 跑翻译 → 生成比对报告）
 │   ├── prompt_comprehension_eval/ # Prompt 理解评测工具（逐一探测 + 历史追踪 + 回归检测）
+│   ├── rar_fixtures/               # rar 测试样例生成器（纯字节手工构造 RAR4 fixtures 入库，不依赖构建环境装包）
 │   ├── plotgen_opt/               # plot_gen Agent 优化评测工作区（脚本/数据集/报告入库，results、previews 忽略）
 │   ├── templategen_opt/           # template_gen Agent 优化评测工作区（脚本/场景定义/参考资料入库，results 忽略）
 │   └── stylemodify_opt/           # style_modify Agent 优化评测工作区（脚本/场景定义/报告入库，results、runtime 忽略）
@@ -290,7 +291,7 @@ latexcellence/
 | 主题系统 | 主题 CSS 自动发现，亮/暗模式独立；`--primary` / `--accent` 等由单一色相派生 | [frontend.md](docs/frontend.md) |
 | 多用户双模式 | `multi_user.enabled` 开关；单用户保持现状（本地目录 + 共享令牌），多用户强制会话认证、CSRF、禁用任意路径打开/浏览 | [multi-user-plan.md](docs/multi-user-plan.md)、[deployment.md](docs/deployment.md) |
 | 多用户认证 | argon2id 密码哈希、HttpOnly 会话 Cookie（库只存 SHA-256）、注册审批流、登录限流、管理员引导（env/CLI） | [backend-core.md](docs/backend-core.md) |
-| 多用户项目与配额 | 上传 zip/7z 安全解压、项目命名去重、项目空间配额记账、回收站（7 天）、打包下载；写回超限回滚 | [backend-core.md](docs/backend-core.md)、[multi-user-plan.md](docs/multi-user-plan.md) |
+| 多用户项目与配额 | 上传 zip/7z/rar 安全解压（rar 走 unar 外部管线）、项目命名去重、项目空间配额记账、回收站（7 天）、打包下载；写回超限回滚 | [backend-core.md](docs/backend-core.md)、[multi-user-plan.md](docs/multi-user-plan.md) |
 | 多用户权限协作 | 协作者管理（按用户名添加/改角色/移除）、项目转交（原 owner 变 viewer 或退出）、viewer 写保护、共享项目撤销禁用；权限实时查库即时生效 | [backend-core.md](docs/backend-core.md)、[multi-user-plan.md](docs/multi-user-plan.md) |
 | 多用户 LLM 治理 | 每用户滑动窗口限流 + 并发租约（`llm_governance.py`，单事务原子准入），超限 429 + Retry-After；登录限流同表计数；仅多用户模式生效，单用户零依赖直通 | [backend-core.md](docs/backend-core.md)、[multi-user-v2-plan.md](docs/multi-user-v2-plan.md) §6 |
 | 多用户前端 | 登录/注册/待审批页、项目工作台（上传 zip·7z·目录、配额、回收站、权限）、管理面板、路由守卫、auth 切片；多用户模式固定同源 + CSRF 头 + Cookie 会话，SSE 不再追加 token | [frontend.md](docs/frontend.md)、[multi-user-plan.md](docs/multi-user-plan.md) |

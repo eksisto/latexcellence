@@ -56,6 +56,7 @@
 | TeX Live | 含 xelatex、latexmk、latexindent、latexdiff | 编译、代码审查、git diff 功能需要 |
 | Pandoc | 可选 | Markdown 转 LaTeX 功能需要 |
 | Python 包 | `pip install -r requirements.txt` | 已含 `argon2-cffi`（密码哈希）与 `py7zr`（7z 上传解压） |
+| unar | 多用户模式接收 rar 上传时必需 | 系统包（如 Debian `apt install unar`）；缺失时 rar 上传返回明确错误（`unar_missing`），zip/7z 不受影响；Docker 后端镜像已内置 |
 
 ### 构建与启动
 
@@ -286,6 +287,9 @@ latex.example.com {
 | 科研绘图 | Python（matplotlib 等绘图脚本） | 上传数据驱动的脚本执行 |
 | 格式转换 | pandoc | 转换器漏洞或嵌入脚本 |
 | 源码格式化 | latexindent.pl | Perl 执行环境 |
+| rar 上传解压（多用户 v2 P2） | unar | 解析攻击者完全可控的压缩包字节流，转换器漏洞风险与 pandoc 同级 |
+
+> **已知例外**：unar 目前**不在** SandboxRunner 沙箱内执行（v2 P2 例外项）。缓解措施：stdin 关闭防交互挂起、进程组限时/超配额 SIGKILL、解压只写入暂存区且落位前全量复核、RAR4 加密/分卷标志预扫。若 `sandbox.mode` 可用，后续版本可将 unar 一并纳入容器执行；在此之前，该例外与上表其他命令共享同一部署风险口径。
 
 v1 通过以下措施收敛攻击面，但**不能替代沙箱**：
 

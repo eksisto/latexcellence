@@ -27,6 +27,7 @@
 | Pillow license (MIT-CMU) | https://github.com/python-pillow/Pillow/blob/main/LICENSE |
 | BSD（xlrd，含 BSD-2/3 与广告条款变体） | https://xlrd.readthedocs.io/en/latest/licenses.html |
 | GPL-2.0-or-later | https://www.gnu.org/licenses/old-licenses/gpl-2.0.html |
+| LGPL-2.1-or-later | https://www.gnu.org/licenses/old-licenses/lgpl-2.1.html |
 
 ---
 
@@ -123,6 +124,7 @@
 | --- | --- | --- | --- | --- |
 | [TeX Live](https://tug.org/texlive) | 2026 (xelatex/latexmk/latexindent.pl) | GPL-2.0-or-later | Copyright (c) TeX Live / DANTE e.V. 及各组件作者 | LaTeX 编译 |
 | [Pandoc](https://pandoc.org) | 3.10.1 | GPL-2.0-or-later | Copyright (c) 2006- John MacFarlane | 格式转换 |
+| [unar / The Unarchiver](https://theunarchiver.com) | 1.10.8（Debian main 源） | LGPL-2.1-or-later | Copyright (c) 2017-present, MacPaw Inc.; upstream Dag Ågren 及 XADMaster 贡献者 | 多用户模式 rar 压缩包解压（多用户 v2 P2；后端镜像内置） |
 
 ### Pandoc 许可证说明
 
@@ -131,6 +133,10 @@ Pandoc 的版权归属 John MacFarlane，使用 GPL-2.0-or-later 许可证。本
 ### TeX Live 许可证说明
 
 TeX Live 包含多个组件（xelatex、latexmk、latexindent.pl、latexdiff 等），整体以 GPL-2.0-or-later 发布。本项目通过子进程调用 TeX 引擎编译 LaTeX 文档，不包含或修改其源代码。
+
+### unar 许可证说明
+
+unar 是 The Unarchiver 项目的命令行工具，核心库 XADMaster 以 LGPL-2.1-or-later 发布。本项目通过子进程调用 unar 解压用户上传的 rar 压缩包（仅多用户模式），不包含或修改其源代码；二进制经 Docker 后端镜像由 Debian main 源安装，不随本项目再分发。
 
 ## 六、主题资源
 

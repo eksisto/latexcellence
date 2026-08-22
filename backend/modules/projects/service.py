@@ -214,22 +214,26 @@ def _write_upload(archive: UploadFile, archive_path: Path, mu_cfg) -> None:
 def _stem_from_filename(filename: str) -> str:
     """从上传文件名提取项目基名（去扩展名）。"""
     name = filename.replace("\\", "/").rsplit("/", 1)[-1]
-    for suffix in (".zip", ".7z"):
+    for suffix in (".zip", ".7z", ".rar"):
         if name.lower().endswith(suffix):
             name = name[: -len(suffix)]
     return name.strip()
 
 
 def _archive_suffix(filename: str) -> str:
-    """校验并返回上传文件扩展名（.zip / .7z），否则抛 ArchiveError。"""
+    """校验并返回上传文件扩展名（.zip / .7z / .rar），否则抛 ArchiveError。"""
     low = filename.lower()
     if low.endswith(".zip"):
         return ".zip"
     if low.endswith(".7z") or low.endswith(".7z.001"):
         # 分卷 7z（.001 起始卷）不提供；命名按 .7z 保存后由解压管线拒绝
         return ".7z"
+    if low.endswith(".rar"):
+        # 分卷 rar（.partN.rar 起始卷）按 .rar 保存后由解压管线拒绝
+        return ".rar"
     raise ArchiveError(
-        "invalid_archive", "Unsupported archive type (only .zip and .7z)"
+        "invalid_archive",
+        "Unsupported archive type (only .zip, .7z and .rar)",
     )
 
 

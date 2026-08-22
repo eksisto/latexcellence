@@ -1087,7 +1087,7 @@ export const api = {
   projects: {
     list: () => request("/projects"),
     recycleBin: () => request("/projects/recycle-bin"),
-    /** 上传压缩包创建项目（zip/7z，FormData；name 可选） */
+    /** 上传压缩包创建项目（zip/7z/rar，FormData；name 可选） */
     upload: (file, name, onProgress) => {
       const formData = new FormData();
       // 目录打包产物是 Blob（无 name），必须显式给 filename，

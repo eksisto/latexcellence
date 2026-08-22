@@ -58,7 +58,7 @@ async function zipFiles(files, onProgress) {
 }
 
 /**
- * 上传项目对话框（P5）：选择 zip/7z 压缩包，或选择本地目录（webkitdirectory → JSZip 打包）。
+ * 上传项目对话框（P5）：选择 zip/7z/rar 压缩包，或选择本地目录（webkitdirectory → JSZip 打包）。
  * 走 /api/projects 上传管线，展示打包/上传进度；成功后回调 onUploaded(project)。
  */
 export default function UploadProjectDialog({
@@ -280,7 +280,7 @@ export default function UploadProjectDialog({
             <input
               ref={fileInputRef}
               type="file"
-              accept=".zip,.7z"
+              accept=".zip,.7z,.rar"
               className="hidden"
               onChange={handleFileChange}
             />
