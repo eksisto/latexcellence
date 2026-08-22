@@ -346,9 +346,33 @@ v1 通过以下措施收敛攻击面，但**不能替代沙箱**：
 | `llm_rate_limit_per_minute` | 20 | 每用户 LLM 请求限流（次/分钟，60s 滑动窗口；超限返回 429 并附 Retry-After。多用户模式强制执行） |
 | `llm_max_concurrency_per_user` | 2 | 每用户最大并发 LLM 任务数（租约制，超限直接 429 不排队；仅多用户模式生效） |
 
-后台维护循环每小时执行一次：项目大小对账（修正缓存漂移）、回收站过期清理、暂存区清理、删除用户归档清理、沙箱并发租约（`sandbox_slots`）过期清理、LLM 并发租约（`llm_concurrency_leases`）过期清理与限流事件（`rate_limit_events`）保留期清理。
+后台维护循环每小时执行一次：项目大小对账（修正缓存漂移）、衍生用量对账与配额预警检查、回收站过期清理、暂存区清理、删除用户归档清理、沙箱并发租约（`sandbox_slots`）过期清理、LLM 并发租约（`llm_concurrency_leases`）过期清理与限流事件（`rate_limit_events`）保留期清理、自助找回令牌与邮件留档清理。
 
 LLM 每用户治理（v2 P1b）：多用户模式下每次 LLM 调用前在单事务内完成"滑动窗口限流校验 + 事件落账 + 并发租约获取"（`core/multiuser/llm_governance.py`），请求级用户上下文由 `AccessSecurityMiddleware` 会话验证成功后全局注入，覆盖全部 `/api` 端点；被拒绝的调用不落行、不消耗配额。429 响应遵循既有结构化错误约定（`detail.error` = `llm_rate_limited` / `llm_concurrency_limited`）、附 `Retry-After` 头与秒数明细，前端三语言文案展示等待时间。单用户模式完全跳过治理（零数据库依赖）。P7 多实例阶段同一共享卷上天然跨副本生效，无需修改。
+
+## SMTP 邮件通知（v2 P6）
+
+`smtp` 配置段（设置页管理员分区或直接编辑 config.json；保存即生效，无需重启）：
+
+| 配置项 | 默认值 | 说明 |
+| --- | --- | --- |
+| `enabled` | false | 总开关；false 时全部通知静默跳过、登录页隐藏找回入口 |
+| `host` / `port` | "" / 465 | SMTP 服务器地址与端口（host 为空同样视为未启用） |
+| `encryption` | ssl | `ssl`（隐式 TLS）/ `starttls` / `none`（仅本地调试） |
+| `username` / `password` | "" | 认证凭据；password 走 `***` 掩码协议（设置页回显掩码，原样保存即保留原值） |
+| `from_address` / `from_name` | "" / LateXcellence | 发件人（from_address 留空回退 username） |
+| `site_base_url` | "" | 站点对外地址，用于拼接找回链接；留空时邮件退化为相对路径提示，**建议配置**否则找回链接不可直接点击 |
+| `max_send_per_minute` / `retry_attempts` | 10 / 3 | 发送限速（滚动 60s 窗口）与失败重试次数（指数退避） |
+| `template_language` | zh | 邮件模板语言（zh/en） |
+
+启用后行为：注册待审批（全部管理员，5 分钟聚合）、审批通过/拒绝/禁用、管理员重置密码（含临时密码）、自助找回令牌（每邮箱 5 分钟 1 次）、配额预警 80%/95%（迟滞，低于 75% 重置）均经 `email_outbox` 队列异步投递。
+
+**运维要点**：
+
+- 投递失败重试 `retry_attempts` 次后留档 failed（`email_outbox.last_error`），排查 SQL：`SELECT recipient, subject, last_error, attempts FROM email_outbox WHERE status='failed'`；sent/failed 留档保留 7 天自动清理。
+- 邮件发送依赖后端进程出站网络可达 SMTP 服务器；容器部署需放行对应出站端口（465/587）。
+- `site_base_url` 必须是用户浏览器可达的地址（经反向代理时填对外域名），否则找回邮件中的链接无法直接使用。
+- 未启用 SMTP 不影响任何主流程：注册/审批/登录/上传照常，找回入口自动隐藏，忘记密码的用户由管理员经管理面板重置。
 
 ---
 

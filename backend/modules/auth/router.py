@@ -15,10 +15,13 @@ from backend.core.multiuser.dependencies import get_current_user, require_admin
 from backend.modules.auth import service
 from backend.modules.auth.models import (
     CleanupDerivedDataRequest,
+    ForgotPasswordRequest,
     LoginRequest,
+    ProfileUpdateRequest,
     QuotaUpdateRequest,
     RegisterRequest,
     ResetPasswordConfirmRequest,
+    ResetPasswordRequest,
 )
 
 auth_router = APIRouter(prefix="/api/auth", tags=["auth"])
@@ -113,6 +116,33 @@ async def cleanup_derived_data(
     仅作用于当前会话用户；未知 category 返回 400 invalid_category。
     二次确认由前端承担。"""
     return await service.cleanup_derived_data(user, req.category)
+
+
+# ── 自助找回密码（v2 P6，公开端点；见 MULTIUSER_PUBLIC_PATHS）─────
+@auth_router.post("/forgot-password")
+async def forgot_password(req: ForgotPasswordRequest, request: Request):
+    """忘记密码：输入用户名或邮箱，命中且唯一则投递重置令牌邮件。
+
+    响应恒定时长与统一语义（delivery=sent/unavailable），不泄露账号
+    存在性；unavailable 时前端引导联系管理员（email_not_available）。"""
+    ip = request.client.host if request.client else ""
+    return await service.forgot_password(req.identifier, ip)
+
+
+@auth_router.post("/reset-password")
+async def reset_password(req: ResetPasswordRequest, request: Request):
+    """凭邮件令牌设置新密码：argon2id 写入 + 吊销全部会话 + 令牌单次有效。"""
+    ip = request.client.host if request.client else ""
+    return await service.reset_password_with_token(req.token, req.new_password, ip)
+
+
+# ── 个人资料（v2 P6）───────────────────────────────────────────
+@auth_router.put("/profile")
+async def update_profile(
+    req: ProfileUpdateRequest, user: dict = Depends(get_current_user)
+):
+    """绑定/修改邮箱：需当前密码确认；唯一校验冲突返回 409 email_taken。"""
+    return await service.update_profile_email(user, req.current_password, req.email)
 
 
 # ── 管理员端点 ──────────────────────────────────────────────────

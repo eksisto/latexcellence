@@ -187,9 +187,10 @@ def _session_dir(sid: str):
 # ── 迁移 ─────────────────────────────────────────────────────────
 class TestMigration:
     def test_schema_version_and_table(self, env):
-        assert db_module.SCHEMA_VERSION == 6
+        # v6 为 upload_sessions 引入版本；当前最新版本可能更高（后续阶段追加）
+        assert db_module.SCHEMA_VERSION >= 6
         status = db_module.schema_status()
-        assert status["user_version"] == 6
+        assert status["user_version"] == db_module.SCHEMA_VERSION
         assert status["up_to_date"]
         row = db_module.db_query_one(
             "SELECT name FROM sqlite_master WHERE type='table' AND name='upload_sessions'"

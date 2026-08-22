@@ -403,20 +403,21 @@ ExtractorRegistry 先处理已知公开端点（当前代码托管页面使用 G
 
 ### 多用户模式基础设施（`backend/core/multiuser/` + `backend/core/access_control.py` + `backend/modules/auth/` + `backend/manage.py`）
 
-多用户模式（`multi_user.enabled=true`）的后端基础设施，按阶段（见 [docs/multi-user-plan.md](multi-user-plan.md) 与 [docs/multi-user-v2-plan.md](multi-user-v2-plan.md)）实施。P1 已完成：SQLite 初始化、注册/审批/登录/会话/Cookie/CSRF、管理员引导与 CLI；P2 已完成：用户空间目录、统一路径解析、项目访问控制、workspace 绑定与现有端点收紧；P3 已完成：上传/解压管线、项目命名、配额记账、回收站与下载；P4 已完成：协作者管理、转交、viewer 写保护与共享项目撤销禁用；P5 已完成：前端登录/注册/工作台/上传/权限/管理面板全套；P6 已完成：migrate-legacy 存量迁移、会话类资源按用户归属校验与存量路径改造；P7 已完成：部署指南（HTTPS、风险声明，见 [deployment.md](deployment.md)）与全量文档同步。v2 P1a/P1b/P2 已完成 Docker 沙箱、LLM 每用户治理与 rar 支持（见 [multi-user-v2-plan.md](multi-user-v2-plan.md)）；v2 P3 已完成共享项目反向补丁撤销（见下文「反向补丁撤销要点」与 [DESIGN.md §14](../DESIGN.md)）；v2 P4 已完成衍生数据用量缓存记账与细粒度清理；v2 P5 已完成大文件分片上传与断点续传（见下文「分片上传要点」）。
+多用户模式（`multi_user.enabled=true`）的后端基础设施，按阶段（见 [docs/multi-user-plan.md](multi-user-plan.md) 与 [docs/multi-user-v2-plan.md](multi-user-v2-plan.md)）实施。P1 已完成：SQLite 初始化、注册/审批/登录/会话/Cookie/CSRF、管理员引导与 CLI；P2 已完成：用户空间目录、统一路径解析、项目访问控制、workspace 绑定与现有端点收紧；P3 已完成：上传/解压管线、项目命名、配额记账、回收站与下载；P4 已完成：协作者管理、转交、viewer 写保护与共享项目撤销禁用；P5 已完成：前端登录/注册/工作台/上传/权限/管理面板全套；P6 已完成：migrate-legacy 存量迁移、会话类资源按用户归属校验与存量路径改造；P7 已完成：部署指南（HTTPS、风险声明，见 [deployment.md](deployment.md)）与全量文档同步。v2 P1a/P1b/P2 已完成 Docker 沙箱、LLM 每用户治理与 rar 支持（见 [multi-user-v2-plan.md](multi-user-v2-plan.md)）；v2 P3 已完成共享项目反向补丁撤销（见下文「反向补丁撤销要点」与 [DESIGN.md §14](../DESIGN.md)）；v2 P4 已完成衍生数据用量缓存记账与细粒度清理；v2 P5 已完成大文件分片上传与断点续传（见下文「分片上传要点」）；v2 P6 已完成 SMTP 邮件通知与自助找回（见下文「邮件与自助找回要点」）。
 
 **包结构**：
 
 | 文件 | 职责 |
 | --- | --- |
-| `backend/core/multiuser/db.py` | SQLite 初始化（v1 业务表 + v2 沙箱/治理/编辑日志/衍生用量缓存/分片上传会话表，WAL + 外键）、连接管理与统一查询入口（`db_execute` / `db_query_one` / `db_query_all`，同步线程安全）、版本迁移框架（PRAGMA `user_version` + 有序幂等步骤） |
+| `backend/core/multiuser/db.py` | SQLite 初始化（v1 业务表 + v2 沙箱/治理/编辑日志/衍生用量缓存/分片上传会话/邮件队列·找回令牌·预警状态表，WAL + 外键）、连接管理与统一查询入口（`db_execute` / `db_query_one` / `db_query_all`，同步线程安全）、版本迁移框架（PRAGMA `user_version` + 有序幂等步骤）、users.email 部分唯一索引幂等补建（`ensure_email_unique_index`，存量重复告警跳过、人工处理后重启自愈） |
 | `backend/core/multiuser/userspace.py` | 用户空间目录布局（`<users_root>/<user_id>/{projects, writing_chat_sessions, style_modify_sessions, templates, plots}`），`ensure_user_dirs()` 注册时创建；P6 新增请求级当前用户上下文（`set/get_current_user_id`）与统一会话资源根解析 `user_resource_root(subdir, legacy_root)`（单用户回退存量全局路径）、`iterate_user_resource_roots()`（后台清理枚举各用户资源目录） |
-| `backend/core/multiuser/auth.py` | 密码哈希（argon2id）、会话令牌（库只存 SHA-256 哈希）、用户管理（注册 pending / 审批 / 禁用 / 重置密码 / 配额覆盖）、登录限流（每用户名+每 IP 分钟级；v2 P1b 起计数入 `rate_limit_events` 表 kind='login'，替代进程内字典）、`ensure_bootstrap_admin()` |
+| `backend/core/multiuser/auth.py` | 密码哈希（argon2id）、会话令牌（库只存 SHA-256 哈希）、用户管理（注册 pending / 审批 / 禁用 / 重置密码 / 配额覆盖 / 邮箱绑定改绑）、登录限流（每用户名+每 IP 分钟级；v2 P1b 起计数入 `rate_limit_events` 表 kind='login'，替代进程内字典）、自助找回令牌（v2 P6：只存 SHA-256、TTL 1 小时、条件 UPDATE 原子消费防重放）、通用滑动窗口限流 `sliding_window_rate_limited()`、`ensure_bootstrap_admin()` |
 | `backend/core/multiuser/dependencies.py` | FastAPI 认证依赖：`get_current_user`（401）、`require_admin`（403）、`get_current_user_optional`、`require_admin_if_multiuser`；P6 新增 `current_user_context`（注入请求级当前用户用于会话类资源归属校验） |
 | `backend/core/multiuser/quota.py` | 配额记账核心（v2 P4 重构衍生记账）：有效额度解析（用户覆盖优先）、项目用量统计、衍生用量读 `user_derived_usage` 缓存（检查点增量刷新 `refresh_derived_usage` / `checkpoint_derived_usage*`、全量对账 `reconcile_derived_usage`、分类重扫 `resync_category_all_users`）、上传/写回/恢复前置校验（超限抛 413 `quota_exceeded`，带 subdir 先刷新被触达分类）、自助清理（`cleanup_derived_category`）、项目唯一命名与建行（`xx (2)`）、项目尺寸对账（`reconcile_project_sizes`）、回收站过期清理 |
 | `backend/core/multiuser/upload.py` | 上传解压管线核心：zip（UTF-8/GBK/cp437 编码、路径穿越/符号链接/加密/炸弹拦截）与 7z（py7zr）安全解压、rar（外部 unar 管线，多用户 v2 P2：进程组限时/超配额击杀、RAR4 加密与分卷标志预扫、受保护包输出关键词兜底、零产物兜底）、项目根归一化、`move_into_user_space()` 落位；7z 监视线程以 `_sample_written_bytes()` 采样计数器替代周期 `dir_size` 全遍历（v2 P4：scandir 单趟 lstat + 超限短路）；v2 P5 起公开 `validate_member_path()` / `validate_no_case_conflicts()` / `finalize_directory_layout()` 供分片上传会话复用同一校验链 |
 | `backend/core/multiuser/upload_sessions.py` | 分片上传会话核心（v2 P5）：init manifest 结构与剩余配额预检、part 幂等落盘（`X-Part-MD5` 校验 + 体积上限 + 成功续期）、status 位图对位、complete 条件态拼装落位（齐全校验 + 全量 MD5 复核 + 配额二次复核，可续传失败保留现场 / 拼装失败整包清场）、abort 清理、TTL 过期会话与孤儿 staging 目录清理（`purge_expired_upload_sessions`，并入维护循环） |
-| `backend/core/multiuser/maintenance.py` | 后台维护循环：项目/衍生用量双对账 + 回收站/暂存区清理 + 沙箱/LLM 租约与限流事件清理 + 编辑日志 TTL 清理 + 过期登录会话删除 + 写作会话保留期清理 + 分片上传过期会话与孤儿目录清理（v2 P4/P5；`main.py` lifespan 启动） |
+| `backend/core/multiuser/mail.py` | 邮件服务（v2 P6）：`email_outbox` 队列投递（业务方入队即返回）+ aiosmtplib 异步发送协程（指数退避重试、失败留档 failed、滚动窗口全局限速）、中英事件模板集中管理（待审批聚合 / 审批结果 / 管理员重置密码 / 找回令牌 / 配额预警）、`smtp.enabled=false` 优雅降级、配额预警迟滞检查（`evaluate_quota_alerts`，读用量缓存）、找回令牌每邮箱去抖（`reset_target_debounced`）、outbox 留档清理 |
+| `backend/core/multiuser/maintenance.py` | 后台维护循环：项目/衍生用量双对账 + 配额预警检查（对账后执行）+ 回收站/暂存区清理 + 沙箱/LLM 租约与限流事件清理 + 编辑日志 TTL 清理 + 过期登录会话删除 + 写作会话保留期清理 + 分片上传过期会话与孤儿目录清理 + 找回令牌与邮件留档清理（v2 P4/P5/P6；`main.py` lifespan 启动） |
 | `backend/core/multiuser/sandbox_leases.py` | 沙箱并发池租约（v2 P1a）：`sandbox_slots` 表原子获取/释放，TTL 清理崩溃残留 |
 | `backend/core/multiuser/llm_governance.py` | LLM 每用户治理（v2 P1b）：60s 滑动窗口限流（`rate_limit_events` kind='llm'）+ 并发租约（`llm_concurrency_leases`，TTL 900s），单事务原子准入；超限抛带 `gov_code` 的 RuntimeError（429），`governance_http_response()` 翻译为 429 + Retry-After + `detail` 包装结构化错误体，`register_governance_handler()` 供 main.py 与测试注册同一处理器；`admission_gate()` 供 `llm_client` 各入口包裹，单用户/无用户上下文直通；维护入口 `purge_expired_llm_leases()` / `purge_old_rate_limit_events()` |
 | `backend/core/multiuser/migrate.py` | 存量数据迁移工具（P6）：`migrate_legacy()` 把存量全局目录（writing_chat_sessions / style_modify_sessions / templates / plots / formats / prompts）幂等复制到管理员用户空间，`--dry-run` 预演，报告 + 目录树校验 |
@@ -424,8 +425,8 @@ ExtractorRegistry 先处理已知公开端点（当前代码托管页面使用 G
 | `backend/core/access_control.py` | 统一访问控制：`owner/editor/viewer` 权限矩阵、`require_project_access()` / `get_projects_for_user()` / `get_user_role_for_project()` / `is_shared_project()`、基于 workspace 绑定的请求级依赖 `require_workspace(write=...)`；权限实时查库不缓存 |
 | `backend/modules/projects/router.py` | 薄路由层：`/api/projects`（列表 / 上传创建 / 分片上传会话五端点）与 `/api/projects/{id}`（重命名 / 回收站 / 恢复 / 永久删除 / 下载 / 权限协作 / 转交） |
 | `backend/modules/projects/service.py` | 项目业务逻辑：流式接收压缩包、安全解压（`asyncio.to_thread`）、配额校验、唯一命名、落位、回收站流转、打包下载、协作者管理与项目转交；分片上传会话服务编排（v2 P5：init/part/status/complete/abort，二进制体流式读取与体积上限） |
-| `backend/modules/auth/router.py` | 薄路由层：`/api/auth/*`（register/login/logout/me）与 `/api/admin/*`（用户列表/审批/禁用/重置密码/配额） |
-| `backend/modules/auth/service.py` | 认证业务逻辑（`asyncio.to_thread` 调度压库操作；错误映射为结构化 `{"error": code, "message": ...}`） |
+| `backend/modules/auth/router.py` | 薄路由层：`/api/auth/*`（register/login/logout/me/forgot-password/reset-password/profile）与 `/api/admin/*`（用户列表/审批/禁用/重置密码/配额） |
+| `backend/modules/auth/service.py` | 认证业务逻辑（`asyncio.to_thread` 调度压库操作；错误映射为结构化 `{"error": code, "message": ...}`）；v2 P6 起挂接邮件通知（注册待审批聚合 / 审批结果 / 管理员重置密码，失败不阻断主流程）与自助找回 / 邮箱改绑业务 |
 | `backend/manage.py` | CLI：`python -m backend.manage create-admin / reset-password / list-users / set-status / migrate-legacy` |
 
 **关键约定**：
@@ -485,6 +486,15 @@ ExtractorRegistry 先处理已知公开端点（当前代码托管页面使用 G
 - 解禁与覆盖面：`reject_undo_redo_if_shared` 已移除，AI 旁路（写作助手工具/apply-edit、style_modify apply/undo）经统一记账自然合规；style_modify 自身提案级撤销保留。
 - 配额回滚改造：`apply-change` 超限回滚不再调用撤销通道，改为写前捕获全文，以本次 op 的 after_md5 作版本守卫经抑制记账的 `apply_whole_files(expected_md5s=...)` 恢复（配额检查窗口内他人已落盘新修改则放弃覆盖、只 `discard_op()` 撤销本次记账并如实报错；无记账清单可用的罕见场景才退化为 `restore_project_file()` 直接恢复并告警）——失败写入不在撤销栈留痕。
 - 生命周期：每 (project, actor) 保留最近 `edit_log_max_ops` 条（按组整体淘汰、连带删快照）；维护循环清理超过 `edit_log_ttl_hours` 无活动的整栈；项目永久删除 / 回收站过期清理级联删除该项目全部 ops。
+
+**邮件与自助找回要点（v2 P6）**：
+
+- 队列化发送：业务方 `mail.enqueue*()` 写 `email_outbox` 行即返回（`smtp.enabled=false` 或缺 host 时静默跳过并 debug 日志）；发送协程 `outbox_loop()` 由 lifespan 启动，经 aiosmtplib 异步发送——加密方式 `ssl`（隐式 TLS）/`starttls`/`none`，失败按指数退避重试 `retry_attempts` 次后留档 failed（last_error 供运维排查），滚动 60s 窗口内已发条数达 `max_send_per_minute` 即暂停；sent/failed 留档保留 7 天由维护循环清理。
+- 事件矩阵与去抖：新用户待审批 → 全部 admin，每 5 分钟聚合为一封（去抖状态存 `user_alert_state` kind='pending_digest'，取 MAX(sent_at) 判定窗口；admin 均未绑邮箱时不留标记，补绑后可发出）；审批通过/拒绝/禁用与管理员重置密码（正文含临时密码与改密提醒）→ 该用户即时；找回令牌 → 该用户邮箱，每邮箱 5 分钟 1 次（`reset_target_debounced` 复用 `rate_limit_events` 滑动窗口，判定先于令牌创建避免累积无用行）。enable 不在事件矩阵内不发信。
+- 配额预警迟滞：维护循环在双对账之后调用 `evaluate_quota_alerts()`，对每个 active 用户的 project / derived 两维度读 `projects.size_bytes` 与 `user_derived_usage` 缓存（不新增全盘扫描）：≥ `quota_critical_percent` 发 critical（用户 + 全部 admin）、≥ `quota_warn_percent` 发 warn（用户），迟滞标记存 `user_alert_state`（kind=`<维度>_<级别>`）；低于 `quota_alert_reset_percent` 清除标记，再次越线可重发。
+- 自助找回流程：登录页入口（`email_available=false` 时隐藏）→ 输入用户名或邮箱 → `POST /api/auth/forgot-password`（公开端点）：按用户名查邮箱或按邮箱查用户（多用户同邮箱无法唯一定位）→ 命中且 SMTP 可用时创建随机令牌（只存 SHA-256，TTL 1 小时、条件 UPDATE 单次消费防重放）并投递邮件（链接前缀取 `site_base_url`，未配置退化为相对路径提示）；`POST /api/auth/reset-password` 校验令牌 → argon2id 写入 + 吊销全部会话。
+- 防枚举口径：forgot 响应恒定时长（无论命中与否均执行一次占位 argon2 校验拉平耗时）+ 统一语义——仅返回 `delivery=sent/unavailable` 两种结果，unavailable 不区分账号不存在/未绑邮箱/重复邮箱/SMTP 未配置，不泄露账号存在性，前端据此展示「请联系管理员」（错误码 `email_not_available` 的引导语义）。forgot/reset 均 IP 维度滑动窗口限流（复用 `rate_limit_events`，kind='forgot_ip'/'reset_ip'），超限 429 `rate_limited`。
+- 邮箱唯一性：users.email 部分唯一索引 `ux_users_email_unique`（COLLATE NOCASE，空值豁免）不在迁移步骤内硬建——`ensure_email_unique_index()` 每次 `init_db` 幂等补建：存量重复时告警并列出冲突行后跳过（不自动改数据，主流程不受影响），管理员人工修正后重启自愈。注册前置查重（409 `email_taken`，并发窗口由索引兜底）；`PUT /api/auth/profile` 绑定/改绑需当前密码确认（401 `invalid_credentials`），格式校验 400 `invalid_email`、冲突 409 `email_taken`，空串解绑。
 
 **P6 迁移与存量隔离要点**：
 

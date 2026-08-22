@@ -35,7 +35,16 @@ PUBLIC_PATHS = {"/api/health"}
 
 # 多用户模式的公开端点（登录页判断模式 + 注册/登录）
 MULTIUSER_PUBLIC_PATHS = frozenset(
-    {"/api/health", "/api/config/status", "/api/auth/login", "/api/auth/register"}
+    {
+        "/api/health",
+        "/api/config/status",
+        "/api/auth/login",
+        "/api/auth/register",
+        # v2 P6：自助找回（未登录可访问；端点自带 IP 维度限流与恒定时长
+        # 防枚举，无需会话）
+        "/api/auth/forgot-password",
+        "/api/auth/reset-password",
+    }
 )
 MUTATING_METHODS = {"POST", "PUT", "PATCH", "DELETE"}
 

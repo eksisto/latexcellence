@@ -82,6 +82,12 @@ const EXACT_MAP = {
   part_md5_mismatch: "partMd5Mismatch",
   part_missing: "partMissing",
 
+  // SMTP 邮件与自助找回（多用户 v2 P6）错误码
+  email_not_available: "emailNotAvailable",
+  reset_token_invalid: "resetTokenInvalid",
+  email_taken: "emailTaken",
+  invalid_email: "invalidEmail",
+
   // 项目管理
   "No project opened": "noProjectOpened",
 

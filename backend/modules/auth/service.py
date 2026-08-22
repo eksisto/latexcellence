@@ -14,10 +14,14 @@ import secrets
 from fastapi import HTTPException
 
 from backend.core.config import get_config
+from backend.core.logger import get_logger
 from backend.core.multiuser import auth as auth_core
+from backend.core.multiuser import mail
 from backend.core.multiuser.dependencies import (
     forbidden,
 )
+
+logger = get_logger("multiuser.auth.service")
 
 
 def _http(status: int, code: str, message: str) -> HTTPException:
@@ -52,8 +56,15 @@ async def register(username: str, password: str, email: str = "") -> dict:
             status="pending",
         )
     except ValueError as e:
+        if "Email already taken" in str(e):
+            raise _http(409, "email_taken", str(e))
         # create_user 已通过前置校验，唯一剩余 ValueError 为用户名重复
         raise _http(409, "username_taken", str(e))
+    # 新用户待审批通知（v2 P6，全部 admin 每 5 分钟聚合）：邮件失败不影响注册
+    try:
+        await asyncio.to_thread(mail.notify_pending_registrations)
+    except Exception as e:  # noqa: BLE001
+        logger.warning("Pending registration notification failed: %s", e)
     return {
         "user": user,
         "message": "Registration submitted; waiting for admin approval",
@@ -147,6 +158,121 @@ async def cleanup_derived_data(user: dict, category: str) -> dict:
     return {"status": "ok", "category": category, "derived_usage": derived_usage}
 
 
+# ── 自助找回密码与邮箱绑定（v2 P6）──────────────────────────────
+#
+# 安全口径：
+# - forgot-password 响应恒定时长：无论命中与否都执行一次 argon2 占位校验
+#   （与 login 同一防时序枚举手段），响应语义统一——只有「邮件已投递」
+#   与「无法投递」两种结果，后者不区分账号不存在/未绑邮箱/重复邮箱/SMTP
+#   未启用，不泄露账号存在性。与 login 同口径：IP 限流先于 argon2 校验，
+#   被限流的请求不执行占位校验（未限流请求每 IP 每分钟至多
+#   FORGOT_IP_LIMIT_PER_MINUTE 次 argon2 开销）。
+# - IP 维度限流复用 rate_limit_events 表（kind='forgot_ip' / 'reset_ip'），
+#   目标维度去抖由 mail.reset_target_debounced（每邮箱 5 分钟 1 次）承担。
+_FORGOT_TIMING_GUARD_PASSWORD = "forgot-password-timing-equalizer"
+
+
+async def forgot_password(identifier: str, ip: str) -> dict:
+    """自助找回入口：按用户名查邮箱或按邮箱查用户，命中且唯一则投递令牌。
+
+    始终返回 200 + {"delivery": "sent"|"unavailable"}；unavailable 时前端
+    展示「请联系管理员」文案（对应错误码 email_not_available 的引导语义）。
+    """
+    cfg = get_config()
+    if not cfg.multi_user.enabled:
+        raise _not_found()
+    identity = (identifier or "").strip().lower()
+    if not identity:
+        raise _http(400, "invalid_request", "Identifier is required")
+    # 先限流（与 login 同序）：被拒绝的请求不落行、不执行下方 argon2 占位校验
+    if await asyncio.to_thread(
+        auth_core.sliding_window_rate_limited,
+        "forgot_ip",
+        f"ip:{ip or ''}",
+        mail.FORGOT_IP_LIMIT_PER_MINUTE,
+    ):
+        raise _http(429, "rate_limited", "Too many requests; please retry later")
+    # 恒定时长防护：命中路径的 DB 查询 + 令牌生成开销极小，统一叠加一次
+    # argon2 校验拉平耗时（占位哈希校验必然失败，仅消耗等量 CPU）
+    await asyncio.to_thread(
+        auth_core.check_credentials, None, _FORGOT_TIMING_GUARD_PASSWORD
+    )
+
+    target = None
+    user = await asyncio.to_thread(auth_core.get_user_by_username, identity)
+    if user is not None:
+        target = user
+    else:
+        matches = await asyncio.to_thread(auth_core.get_users_by_email, identity)
+        if len(matches) == 1:  # 多个同邮箱用户 → 无法唯一定位，走降级提示
+            target = matches[0]
+
+    deliverable = (
+        target is not None
+        and bool((target.get("email") or "").strip())
+        and mail.smtp_ready()
+    )
+    if not deliverable:
+        return {"status": "ok", "delivery": "unavailable"}
+    # 每邮箱 5 分钟去抖：窗口内重复请求不新建令牌、不重复投递，
+    # 对外语义保持一致（delivery=sent，即"邮件已发出过"）
+    debounced = await asyncio.to_thread(mail.reset_target_debounced, target["email"])
+    if debounced:
+        logger.debug("Reset token delivery debounced for %s", target["username"])
+        return {"status": "ok", "delivery": "sent"}
+    token, _expires = await asyncio.to_thread(
+        auth_core.create_password_reset_token, target["id"]
+    )
+    await asyncio.to_thread(mail.notify_password_reset_token, target, token)
+    return {"status": "ok", "delivery": "sent"}
+
+
+async def reset_password_with_token(token: str, new_password: str, ip: str) -> dict:
+    """凭邮件令牌自助重置密码：argon2id 写入 + 吊销全部会话 + 令牌标记 used。"""
+    if not get_config().multi_user.enabled:
+        raise _not_found()
+    if await asyncio.to_thread(
+        auth_core.sliding_window_rate_limited,
+        "reset_ip",
+        f"ip:{ip or ''}",
+        mail.RESET_IP_LIMIT_PER_MINUTE,
+    ):
+        raise _http(429, "rate_limited", "Too many requests; please retry later")
+    err = auth_core.validate_password(new_password)
+    if err:
+        raise _http(400, "invalid_password", err)
+    user_id = await asyncio.to_thread(auth_core.consume_password_reset_token, token)
+    if user_id is None:
+        raise _http(400, "reset_token_invalid", "Reset link is invalid or expired")
+    try:
+        await asyncio.to_thread(auth_core.reset_password, user_id, new_password)
+    except ValueError as e:
+        raise _http(400, "invalid_password", str(e))
+    return {"status": "ok"}
+
+
+async def update_profile_email(user: dict, current_password: str, email: str) -> dict:
+    """绑定/修改邮箱：当前密码确认 + 格式与唯一性校验（空串 = 解绑）。"""
+    fresh = await asyncio.to_thread(auth_core.get_user_by_id, user["id"])
+    if fresh is None:
+        raise _not_found()
+    ok = await asyncio.to_thread(
+        auth_core.check_credentials, fresh["password_hash"], current_password
+    )
+    if not ok:
+        raise _http(401, "invalid_credentials", "Invalid username or password")
+    err = auth_core.validate_email(email)
+    if err:
+        raise _http(400, "invalid_email", err)
+    try:
+        updated = await asyncio.to_thread(auth_core.set_user_email, user["id"], email)
+    except ValueError as e:
+        if "Email already taken" in str(e):
+            raise _http(409, "email_taken", str(e))
+        raise _http(400, "invalid_email", str(e))
+    return {"user": updated}
+
+
 # ── 管理员：用户管理 ────────────────────────────────────────────
 async def admin_list_users() -> list[dict]:
     return await asyncio.to_thread(auth_core.list_users)
@@ -156,6 +282,11 @@ async def admin_set_status(user_id: str, status: str, action: str) -> dict:
     if await asyncio.to_thread(auth_core.get_user_by_id, user_id) is None:
         raise _not_found()
     user = await asyncio.to_thread(auth_core.set_user_status, user_id, status)
+    # 审批通过/拒绝/禁用即时通知该用户（v2 P6；邮件失败不影响管理操作）
+    try:
+        await asyncio.to_thread(mail.notify_account_status, user, action)
+    except Exception as e:  # noqa: BLE001
+        logger.warning("Account status notification failed: %s", e)
     return {"action": action, "user": user}
 
 
@@ -173,6 +304,11 @@ async def admin_confirm_reset_password(user_id: str, temp_password: str) -> dict
         user = await asyncio.to_thread(auth_core.reset_password, user_id, temp_password)
     except ValueError as e:
         raise _http(400, "invalid_password", str(e))
+    # 通知该用户新临时密码与改密提醒（v2 P6；邮件失败不影响重置操作）
+    try:
+        await asyncio.to_thread(mail.notify_admin_password_reset, user, temp_password)
+    except Exception as e:  # noqa: BLE001
+        logger.warning("Admin reset password notification failed: %s", e)
     return {"user": user}
 
 

@@ -22,6 +22,7 @@ import HttpSection from "@/components/settings/HttpSection";
 import LoggingSection from "@/components/settings/LoggingSection";
 import MultiUserSection from "@/components/settings/MultiUserSection";
 import SandboxSection from "@/components/settings/SandboxSection";
+import SmtpSection from "@/components/settings/SmtpSection";
 import useStore from "@/store/useStore";
 import { isMultiUser } from "@/api/connection";
 
@@ -195,6 +196,7 @@ export default function SettingsDialog() {
           <LoggingSection logging={config.logging} onChange={set} />
           <MultiUserSection multiUser={config.multi_user} onChange={set} />
           <SandboxSection sandbox={config.sandbox} onChange={set} />
+          <SmtpSection smtp={config.smtp} onChange={set} />
         </div>
         <DialogFooter className="mt-4">
           <Button onClick={handleSave} disabled={saving}>

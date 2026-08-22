@@ -1039,6 +1039,25 @@ export const api = {
         method: "POST",
         body: JSON.stringify({ category }),
       }),
+    // 自助找回密码：输入用户名或邮箱（公开端点，响应恒定语义防枚举；
+    // delivery=sent 表示邮件已投递，unavailable 引导联系管理员）
+    forgotPassword: (identifier) =>
+      request("/auth/forgot-password", {
+        method: "POST",
+        body: JSON.stringify({ identifier }),
+      }),
+    // 凭邮件令牌设置新密码（公开端点；成功后全部会话被吊销）
+    resetPassword: (token, newPassword) =>
+      request("/auth/reset-password", {
+        method: "POST",
+        body: JSON.stringify({ token, new_password: newPassword }),
+      }),
+    // 绑定/修改邮箱：需当前密码确认（email 传空字符串表示解绑）
+    updateProfile: (currentPassword, email) =>
+      request("/auth/profile", {
+        method: "PUT",
+        body: JSON.stringify({ current_password: currentPassword, email }),
+      }),
   },
 
   /* ---- 多用户管理后台（/api/admin，仅 admin） ---- */

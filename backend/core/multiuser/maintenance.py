@@ -1,5 +1,5 @@
 """
-多用户后台维护任务（P3：配额对账 + 回收站清理 + 暂存区清理；P4 扩充）。
+多用户后台维护任务（P3：配额对账 + 回收站清理 + 暂存区清理；P4/P6 扩充）。
 
 - reconcile_project_sizes()：重算各项目磁盘大小，修正 projects.size_bytes 缓存漂移
 - reconcile_derived_usage()：全量重算四类衍生数据用量，修正 user_derived_usage
@@ -16,6 +16,10 @@
   会话（v2 P4；默认 0 = 不自动删，仅统计）
 - purge_expired_upload_sessions()：清理超过 upload_session_ttl_hours 无活动的
   分片上传会话（行 + staging 目录）与孤儿会话目录（v2 P5）
+- evaluate_quota_alerts()：配额预警检查（v2 P6，双对账之后执行；只读用量
+  缓存与 projects.size_bytes，迟滞标记存 user_alert_state，邮件经 outbox 队列）
+- purge_expired_reset_tokens() / purge_old_outbox()：自助找回令牌与邮件
+  留档清理（v2 P6）
 
 由 main.py lifespan 通过 asyncio.Task 启动；方法内实时读取配置。
 """
@@ -25,8 +29,8 @@ import asyncio
 from backend.core.logger import get_logger
 from backend.modules.writing_chat.cleanup import purge_expired_writing_chats
 
-from . import quota
-from .auth import purge_expired_sessions
+from . import mail, quota
+from .auth import purge_expired_reset_tokens, purge_expired_sessions
 from .db import init_db
 from .edit_log import purge_expired_edit_logs
 from .llm_governance import (
@@ -43,7 +47,7 @@ DEFAULT_INTERVAL_SECONDS = 3600
 
 async def maintenance_loop() -> None:
     """后台循环：周期执行配额对账与回收站/暂存区/租约/限流事件/编辑日志/
-    过期会话/闲置写作会话/分片上传会话清理。"""
+    过期会话/闲置写作会话/分片上传会话/找回令牌/邮件留档清理与配额预警检查。"""
     logger.info("Multi-user maintenance loop started")
     while True:
         interval = DEFAULT_INTERVAL_SECONDS
@@ -51,6 +55,9 @@ async def maintenance_loop() -> None:
             await asyncio.to_thread(init_db)
             reconciled = await asyncio.to_thread(quota.reconcile_project_sizes)
             derived_fixed = await asyncio.to_thread(quota.reconcile_derived_usage)
+            # 配额预警检查挂在双对账之后：直接读刚修正过的 size_bytes 与
+            # 衍生用量缓存，不新增全盘扫描（v2 P6）
+            quota_alerts = await asyncio.to_thread(mail.evaluate_quota_alerts)
             purged = await asyncio.to_thread(quota.clean_expired_recycle_bin)
             cleaned = await asyncio.to_thread(quota.clean_staging)
             archived = await asyncio.to_thread(quota.clean_expired_archives)
@@ -63,6 +70,8 @@ async def maintenance_loop() -> None:
             upload_sessions_purged = await asyncio.to_thread(
                 purge_expired_upload_sessions
             )
+            reset_tokens = await asyncio.to_thread(purge_expired_reset_tokens)
+            outbox_purged = await asyncio.to_thread(mail.purge_old_outbox)
             if (
                 reconciled
                 or derived_fixed
@@ -76,13 +85,16 @@ async def maintenance_loop() -> None:
                 or sessions
                 or chats
                 or upload_sessions_purged
+                or reset_tokens
+                or outbox_purged
             ):
                 logger.info(
                     "Multi-user maintenance done: reconciled=%d derived_fixed=%d "
                     "purged=%d cleaned_staging=%d cleaned_archives=%d "
                     "sandbox_slots=%d llm_leases=%d rate_limit_events=%d "
                     "edit_log_ops=%d expired_sessions=%d writing_chats=%d "
-                    "upload_sessions=%d",
+                    "upload_sessions=%d reset_tokens=%d outbox=%d "
+                    "quota_alert_mails=%d",
                     reconciled,
                     derived_fixed,
                     purged,
@@ -95,6 +107,9 @@ async def maintenance_loop() -> None:
                     sessions,
                     chats,
                     upload_sessions_purged,
+                    reset_tokens,
+                    outbox_purged,
+                    quota_alerts,
                 )
         except Exception:
             logger.exception("Multi-user maintenance cycle failed")

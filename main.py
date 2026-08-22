@@ -117,10 +117,15 @@ async def lifespan(app: FastAPI):
     plot_cleanup_task = asyncio.create_task(plot_cleanup_loop())
     style_modify_cleanup_task = asyncio.create_task(style_modify_cleanup_loop())
     mu_maintenance_task = None
+    mail_outbox_task = None
     if get_config().multi_user.enabled:
         from backend.core.multiuser.maintenance import maintenance_loop
+        from backend.core.multiuser.mail import outbox_loop
 
         mu_maintenance_task = asyncio.create_task(maintenance_loop())
+        # SMTP 邮件发送协程（v2 P6）：消费 email_outbox 队列；未启用 SMTP 时
+        # 循环空转零开销（process_outbox 前置就绪判断直接返回）
+        mail_outbox_task = asyncio.create_task(outbox_loop())
     try:
         yield
     finally:
@@ -129,6 +134,8 @@ async def lifespan(app: FastAPI):
         style_modify_cleanup_task.cancel()
         if mu_maintenance_task is not None:
             mu_maintenance_task.cancel()
+        if mail_outbox_task is not None:
+            mail_outbox_task.cancel()
         try:
             await cleanup_task
         except asyncio.CancelledError:
@@ -144,6 +151,11 @@ async def lifespan(app: FastAPI):
         if mu_maintenance_task is not None:
             try:
                 await mu_maintenance_task
+            except asyncio.CancelledError:
+                pass
+        if mail_outbox_task is not None:
+            try:
+                await mail_outbox_task
             except asyncio.CancelledError:
                 pass
         try:
@@ -223,6 +235,8 @@ async def config_status():
         "max_upload_file_size_mb": cfg.multi_user.max_upload_file_size_mb,
         # 分片上传切片大小（v2 P5）：前端按该值切片以对齐后端 PUT 校验上限
         "chunk_part_max_mb": cfg.multi_user.chunk_part_max_mb,
+        # SMTP 邮件能力（v2 P6）：登录页据此隐藏/展示「忘记密码」入口
+        "email_available": bool(cfg.smtp.enabled and cfg.smtp.host.strip()),
         "features": {
             name: getattr(cfg.features, name).enabled
             for name in [
@@ -291,6 +305,12 @@ async def get_full_config(
     if token:
         data["security"]["access_token"] = (
             "***" + token[-4:] if len(token) > 4 else "****"
+        )
+    # SMTP 密码（v2 P6）同口径脱敏：仅展示后 4 位
+    smtp_password = data.get("smtp", {}).get("password", "")
+    if smtp_password:
+        data["smtp"]["password"] = (
+            "***" + smtp_password[-4:] if len(smtp_password) > 4 else "****"
         )
     return data
 

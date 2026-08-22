@@ -99,11 +99,14 @@ def build_mu_env(
     llm_rate_limit_per_minute: int | None = None,
     llm_max_concurrency_per_user: int | None = None,
     mu_extra: dict | None = None,
+    smtp_extra: dict | None = None,
 ) -> dict:
     """写入并加载多用户配置，初始化数据库。返回环境字典。
 
     mu_extra：追加/覆盖 multi_user 节字段（如分片上传测试的
-    chunk_part_max_mb），键须为 MultiUserConfig 合法字段。"""
+    chunk_part_max_mb），键须为 MultiUserConfig 合法字段。
+    smtp_extra：追加/覆盖 smtp 节字段（v2 P6 邮件测试；None 时使用默认值
+    ——enabled=False，即全部通知静默跳过的降级形态）。"""
     db_path = tmp_path / "multiuser.db"
     users_root = tmp_path / "users"
     staging = tmp_path / "staging"
@@ -127,6 +130,20 @@ def build_mu_env(
     if mu_extra:
         mu_config.update(mu_extra)
     data["multi_user"] = mu_config
+    smtp_config = {
+        "enabled": False,
+        "host": "",
+        "port": 465,
+        "encryption": "none",
+        "from_address": "noreply@latexcellence.test",
+        "from_name": "LateXcellence Test",
+        "site_base_url": "",
+        "max_send_per_minute": 100,
+        "retry_attempts": 3,
+    }
+    if smtp_extra:
+        smtp_config.update(smtp_extra)
+    data["smtp"] = smtp_config
     config_path = tmp_path / "config.json"
     with open(config_path, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=2)
@@ -180,3 +197,66 @@ def csrf(client, headers: dict | None = None) -> dict:
     token = client.cookies.get(CSRF_COOKIE, "")
     h[CSRF_HEADER] = token
     return h
+
+
+# ── v2 P6 邮件测试支持 ─────────────────────────────────────────
+class _MailCollector:
+    """aiosmtpd DATA 处理器：收集投递的信封（content / mail_from / rcpt_tos）。"""
+
+    def __init__(self):
+        self.messages = []
+
+    async def handle_DATA(self, server, session, envelope):
+        self.messages.append(
+            {
+                "content": envelope.content.decode("utf-8", errors="replace"),
+                "mail_from": envelope.mail_from,
+                "rcpt_tos": list(envelope.rcpt_tos),
+            }
+        )
+        return "250 Message accepted"
+
+
+@pytest.fixture
+def smtp_server():
+    """本地 mock SMTP server（aiosmtpd Controller，随机空闲端口）。
+
+    yield {"port": int, "messages": [envelope_dict]}；测试经 messages 断言
+    投递结果。失败注入用 fail_times：handle_DATA 前 N 次返回临时失败。
+    """
+    import socket
+
+    from aiosmtpd.controller import Controller
+
+    sock = socket.socket()
+    sock.bind(("127.0.0.1", 0))
+    port = sock.getsockname()[1]
+    sock.close()
+    collector = _MailCollector()
+    controller = Controller(collector, hostname="127.0.0.1", port=port)
+    controller.start()
+    try:
+        yield {"port": port, "messages": collector.messages}
+    finally:
+        controller.stop()
+
+
+def smtp_enabled_extra(port: int, **overrides) -> dict:
+    """构造指向本地 mock SMTP 的 smtp 节配置（供 build_mu_env(smtp_extra=...)）。"""
+    cfg = {
+        "enabled": True,
+        "host": "127.0.0.1",
+        "port": port,
+        "encryption": "none",
+    }
+    cfg.update(overrides)
+    return cfg
+
+
+def last_outbox_row() -> dict | None:
+    """读取最近一条 outbox 行（找回令牌测试从 body_text 解析明文令牌）。"""
+    from backend.core.multiuser.db import db_query_one
+
+    return db_query_one(
+        "SELECT * FROM email_outbox ORDER BY created_at DESC, id DESC LIMIT 1"
+    )

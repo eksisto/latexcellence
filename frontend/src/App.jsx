@@ -52,6 +52,8 @@ const BibManagerPage = lazy(() => import("./pages/BibManagerPage"));
 const PlotGenPage = lazy(() => import("./pages/PlotGenPage"));
 const LoginPage = lazy(() => import("./pages/LoginPage"));
 const RegisterPage = lazy(() => import("./pages/RegisterPage"));
+const ForgotPasswordPage = lazy(() => import("./pages/ForgotPasswordPage"));
+const ResetPasswordPage = lazy(() => import("./pages/ResetPasswordPage"));
 const PendingApprovalPage = lazy(() => import("./pages/PendingApprovalPage"));
 const ProjectWorkbenchPage = lazy(() => import("./pages/ProjectWorkbenchPage"));
 const AdminPage = lazy(() => import("./pages/AdminPage"));
@@ -348,6 +350,23 @@ export default function App() {
               element={
                 <LoginRegisterGuard>
                   <RegisterPage />
+                </LoginRegisterGuard>
+              }
+            />
+            {/* 自助找回（v2 P6，公开页）：已登录用户无需找回，导向工作台 */}
+            <Route
+              path="/forgot-password"
+              element={
+                <LoginRegisterGuard>
+                  <ForgotPasswordPage />
+                </LoginRegisterGuard>
+              }
+            />
+            <Route
+              path="/reset-password"
+              element={
+                <LoginRegisterGuard>
+                  <ResetPasswordPage />
                 </LoginRegisterGuard>
               }
             />

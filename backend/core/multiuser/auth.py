@@ -48,11 +48,19 @@ USER_STATUSES = ("pending", "active", "disabled")
 ROLES = ("admin", "user")
 USERNAME_RE = re.compile(r"^[A-Za-z0-9_.@\-\u4e00-\u9fff]{2,32}$")
 MIN_PASSWORD_LENGTH = 8
+# 邮箱格式校验（宽松实用型：local@domain.tld；拒绝空白与 C0/C1 控制字符，
+# 防止经 To 头 / SMTP 信封注入；大小写不敏感唯一性由 ux_users_email_unique
+# 部分唯一索引保证）
+EMAIL_RE = re.compile(
+    r"^[^\x00-\x20@\x7f-\x9f]+@[^\x00-\x20@\x7f-\x9f]+\.[A-Za-z]{2,}$"
+)
 SESSION_COOKIE_NAME = "latexcellence_session"
 # 双提交 CSRF：登录时下发可被 JS 读取的 CSRF Cookie，中间件校验请求头与其值一致。
 # 该 Cookie 不设 HttpOnly，SPA 读取其值放入 X-Latexcellence-CSRF 头。
 CSRF_COOKIE_NAME = "latexcellence_csrf"
 CSRF_HEADER_NAME = "X-Latexcellence-CSRF"
+# 自助找回令牌 TTL（v2 P6）：1 小时、单次有效（只存 SHA-256）
+PASSWORD_RESET_TTL_SECONDS = 3600
 
 _hasher = PasswordHasher()
 
@@ -109,6 +117,16 @@ def validate_password(password: str) -> str | None:
     """校验密码强度，返回错误消息（合法返回 None）。"""
     if not password or len(password) < MIN_PASSWORD_LENGTH:
         return f"Password must be at least {MIN_PASSWORD_LENGTH} characters"
+    return None
+
+
+def validate_email(email: str) -> str | None:
+    """校验邮箱格式，返回错误消息（合法返回 None）。空值合法（邮箱可选）。"""
+    email = (email or "").strip()
+    if not email:
+        return None
+    if len(email) > 254 or not EMAIL_RE.match(email):
+        return "Invalid email address"
     return None
 
 
@@ -225,10 +243,17 @@ def create_user(
     err = validate_password(password)
     if err:
         raise ValueError(err)
+    clean_email = (email or "").strip()
+    err = validate_email(clean_email)
+    if err:
+        raise ValueError(err)
     if role not in ROLES:
         raise ValueError(f"Invalid role: {role}")
     if status not in USER_STATUSES:
         raise ValueError(f"Invalid status: {status}")
+    # 邮箱唯一性前置校验（v2 P6）：给出精确错误；并发窗口由部分唯一索引兜底
+    if clean_email and get_users_by_email(clean_email):
+        raise ValueError(f"Email already taken: {clean_email}")
 
     user_id = uuid.uuid4().hex
     now = utcnow()
@@ -241,14 +266,17 @@ def create_user(
                 user_id,
                 uname,
                 hash_password(password),
-                email.strip(),
+                clean_email,
                 role,
                 status,
                 now,
                 now,
             ),
         )
-    except sqlite3.IntegrityError:  # 唯一索引冲突 -> 用户名重复（大小写不敏感）
+    except sqlite3.IntegrityError as e:  # 唯一索引冲突：区分用户名 / 邮箱
+        msg = str(e)
+        if "ux_users_email_unique" in msg or "users.email" in msg:
+            raise ValueError(f"Email already taken: {clean_email}")
         raise ValueError(f"Username already taken: {uname}")
     userspace.ensure_user_dirs(user_id)
     logger.info("User created: %s (role=%s, status=%s)", uname, role, status)
@@ -260,6 +288,38 @@ def get_user_by_username(username: str) -> dict | None:
     return db_query_one(
         "SELECT * FROM users WHERE username = ? COLLATE NOCASE", (username.strip(),)
     )
+
+
+def get_users_by_email(email: str) -> list[dict]:
+    """按邮箱查用户（大小写不敏感，可能多条——存量重复邮箱场景）。"""
+    clean = (email or "").strip()
+    if not clean:
+        return []
+    return db_query_all("SELECT * FROM users WHERE email = ? COLLATE NOCASE", (clean,))
+
+
+def set_user_email(user_id: str, email: str) -> dict:
+    """绑定/修改用户邮箱（空字符串 = 解绑）。唯一冲突抛 ValueError。"""
+    clean = (email or "").strip()
+    err = validate_email(clean)
+    if err:
+        raise ValueError(err)
+    existing = get_user_by_id(user_id)
+    if existing is None:
+        raise ValueError("User not found")
+    if clean:
+        for row in get_users_by_email(clean):
+            if row["id"] != user_id:
+                raise ValueError(f"Email already taken: {clean}")
+    try:
+        db_execute(
+            "UPDATE users SET email = ?, updated_at = ? WHERE id = ?",
+            (clean, utcnow(), user_id),
+        )
+    except sqlite3.IntegrityError:  # 部分唯一索引兜底（并发窗口）
+        raise ValueError(f"Email already taken: {clean}")
+    logger.info("Email updated for user %s", existing["username"])
+    return to_public_user(get_user_by_id(user_id))
 
 
 def get_user_by_id(user_id: str) -> dict | None:
@@ -494,3 +554,90 @@ def reset_login_rate_limits() -> None:
     if not is_initialized():
         return
     db_execute("DELETE FROM rate_limit_events WHERE kind = 'login'")
+
+
+def sliding_window_rate_limited(
+    kind: str, identity: str, limit: int, window_seconds: int = _LOGIN_WINDOW_SECONDS
+) -> bool:
+    """通用滑动窗口限流（v2 P6：自助找回 forgot/reset 的 IP 维度复用）。
+
+    窗口内该 (kind, identity) 计数达到上限返回 True（本次不落行，同登录
+    限流口径）；否则落一行事件并放行。"""
+    now_iso = datetime.now(timezone.utc).replace(microsecond=0).isoformat()
+    window_start = (
+        (datetime.now(timezone.utc) - timedelta(seconds=window_seconds))
+        .replace(microsecond=0)
+        .isoformat()
+    )
+    with transaction() as conn:
+        count = conn.execute(
+            "SELECT COUNT(*) FROM rate_limit_events "
+            "WHERE kind = ? AND identity = ? AND ts >= ?",
+            (kind, identity, window_start),
+        ).fetchone()[0]
+        if count >= limit:
+            return True
+        conn.execute(
+            "INSERT INTO rate_limit_events (kind, identity, ts) VALUES (?, ?, ?)",
+            (kind, identity, now_iso),
+        )
+        return False
+
+
+# ── 自助找回令牌（v2 P6）────────────────────────────────────────
+#
+# 随机令牌明文只在投递邮件时可见，数据库只存 SHA-256（与会话同口径）；
+# TTL 1 小时、单次有效（消费走条件 UPDATE 原子标记，天然防重放）。
+
+
+def create_password_reset_token(user_id: str) -> tuple[str, str]:
+    """为用户创建找回令牌，返回（明文令牌, 过期时间 ISO）。"""
+    token = new_token()
+    expires_at = (
+        (datetime.now(timezone.utc) + timedelta(seconds=PASSWORD_RESET_TTL_SECONDS))
+        .replace(microsecond=0)
+        .isoformat()
+    )
+    db_execute(
+        "INSERT INTO password_reset_tokens (user_id, token_hash, expires_at, "
+        "used_at, created_at) VALUES (?, ?, ?, NULL, ?)",
+        (user_id, token_hash(token), expires_at, utcnow()),
+    )
+    return token, expires_at
+
+
+def consume_password_reset_token(token: str) -> str | None:
+    """校验并消费找回令牌：有效（未过期且未使用）则原子标记 used 并返回
+    user_id；无效/过期/重放返回 None。"""
+    if not token:
+        return None
+    now = utcnow()
+    with transaction() as conn:
+        row = conn.execute(
+            "SELECT user_id FROM password_reset_tokens "
+            "WHERE token_hash = ? AND used_at IS NULL AND expires_at > ?",
+            (token_hash(token), now),
+        ).fetchone()
+        if row is None:
+            return None
+        updated = conn.execute(
+            "UPDATE password_reset_tokens SET used_at = ? "
+            "WHERE token_hash = ? AND used_at IS NULL",
+            (now, token_hash(token)),
+        ).rowcount
+        if updated != 1:  # 并发竞争：另一请求已消费
+            return None
+        return row["user_id"]
+
+
+def purge_expired_reset_tokens() -> int:
+    """清理已过期/已消费的找回令牌行（并入维护循环，修复无限增长）。"""
+    if not is_initialized():
+        return 0
+    removed = db_execute(
+        "DELETE FROM password_reset_tokens WHERE expires_at < ? OR used_at IS NOT NULL",
+        (utcnow(),),
+    )
+    if removed:
+        logger.info("Purged %d password reset token(s)", removed)
+    return removed

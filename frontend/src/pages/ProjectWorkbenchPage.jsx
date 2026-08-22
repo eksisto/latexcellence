@@ -13,6 +13,7 @@ import ArchiveRestore from "lucide-react/dist/esm/icons/archive-restore.mjs";
 import RefreshCw from "lucide-react/dist/esm/icons/refresh-cw.mjs";
 import Loader from "lucide-react/dist/esm/icons/loader-circle.mjs";
 import Crown from "lucide-react/dist/esm/icons/crown.mjs";
+import Mail from "lucide-react/dist/esm/icons/mail.mjs";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -20,6 +21,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import PageHeader from "@/components/PageHeader";
 import ConfirmDialog from "@/components/ConfirmDialog";
+import ProfileEmailDialog from "@/components/ProfileEmailDialog";
 import UploadProjectDialog from "@/components/UploadProjectDialog";
 import ProjectPermissionsDialog from "@/components/ProjectPermissionsDialog";
 import { api } from "@/api/index";
@@ -213,6 +215,7 @@ export default function ProjectWorkbenchPage() {
   const [restoreProject, setRestoreProject] = useState(null);
   const [permanentProject, setPermanentProject] = useState(null);
   const [cleanupCategory, setCleanupCategory] = useState(null);
+  const [emailDialogOpen, setEmailDialogOpen] = useState(false);
   const [busyAction, setBusyAction] = useState(false);
 
   const loadRef = useRef(false);
@@ -440,6 +443,16 @@ export default function ProjectWorkbenchPage() {
                     <Crown className="size-3" /> {t("common:role.admin")}
                   </Badge>
                 )}
+                {/* 绑定/修改邮箱（v2 P6：审批通知与自助找回依赖邮箱） */}
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-6 px-2 text-xs text-muted-foreground hover:text-foreground"
+                  onClick={() => setEmailDialogOpen(true)}
+                >
+                  <Mail className="size-3" />
+                  {authUser?.email || t("pages:workbench.emailBind")}
+                </Button>
               </span>
               <span className="text-xs text-muted-foreground">
                 {formatBytes(projectUsage)} / {formatBytes(projectQuota)} ·{" "}
@@ -661,6 +674,12 @@ export default function ProjectWorkbenchPage() {
           variant="destructive"
           onConfirm={handleCleanupDerived}
           confirmLoading={busyAction}
+        />
+
+        {/* 绑定/修改邮箱（v2 P6） */}
+        <ProfileEmailDialog
+          open={emailDialogOpen}
+          onOpenChange={setEmailDialogOpen}
         />
       </div>
     </div>

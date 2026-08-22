@@ -129,12 +129,24 @@
       "enabled": true,
       "format_configs_dir": "data/formats/",
       "providers": {
-        "crossref": { "enabled": true },
-        "arxiv": { "enabled": true },
-        "datacite": { "enabled": true },
-        "openalex": { "enabled": false },
-        "europepmc": { "enabled": false },
-        "semantic_scholar": { "enabled": false }
+        "crossref": {
+          "enabled": true
+        },
+        "arxiv": {
+          "enabled": true
+        },
+        "datacite": {
+          "enabled": true
+        },
+        "openalex": {
+          "enabled": false
+        },
+        "europepmc": {
+          "enabled": false
+        },
+        "semantic_scholar": {
+          "enabled": false
+        }
       }
     },
     "plot_gen": {
@@ -298,7 +310,10 @@
     "edit_log_ttl_hours": 24,
     "writing_chat_retention_days": 0,
     "upload_session_ttl_hours": 24,
-    "chunk_part_max_mb": 8
+    "chunk_part_max_mb": 8,
+    "quota_warn_percent": 80,
+    "quota_critical_percent": 95,
+    "quota_alert_reset_percent": 75
   },
   "sandbox": {
     "mode": "auto",
@@ -312,5 +327,19 @@
     "max_concurrent_global": 4,
     "max_concurrent_per_user": 1,
     "startup_grace_seconds": 10
+  },
+  "smtp": {
+    "enabled": false,
+    "host": "",
+    "port": 465,
+    "encryption": "ssl",
+    "username": "",
+    "password": "",
+    "from_address": "",
+    "from_name": "LateXcellence",
+    "site_base_url": "",
+    "max_send_per_minute": 10,
+    "retry_attempts": 3,
+    "template_language": "zh"
   }
 }

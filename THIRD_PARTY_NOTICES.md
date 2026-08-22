@@ -90,6 +90,7 @@
 | [pydantic-settings](https://github.com/pydantic/pydantic-settings) | >=2.0.0 | MIT | Copyright (c) 2022 Samuel Colvin and other contributors | 配置管理 |
 | [python-multipart](https://github.com/andrew-d/python-multipart) | >=0.0.9 | Apache-2.0 | Copyright (c) Andrew Dunham | 文件上传 |
 | [argon2-cffi](https://github.com/hynek/argon2-cffi) | >=23.1.0 | MIT | Copyright (c) 2023 Hynek Schlawack | 多用户模式密码哈希（argon2id） |
+| [aiosmtplib](https://github.com/cole/aiosmtplib) | >=3.0.0 | MIT | Copyright (c) 2015-2025 Cole Maclean | 多用户模式 SMTP 异步邮件发送（多用户 v2 P6：邮件通知与自助找回） |
 | [docker SDK for Python](https://github.com/docker/docker-py) | >=7.0.0 | Apache-2.0 | Copyright (c) 2016-2022 Docker Inc. | Docker 沙箱执行后端（v2 P1a；sandbox.mode=auto/docker 时使用） |
 | [Pillow](https://python-pillow.github.io) | >=10.0.0 | Pillow license | Copyright (c) 1997-2011 Secret Labs AB; 1995-2011 Fredrik Lundh; 2010- Jeffrey A. Clark (Alex) and contributors | 图片处理 |
 | [aiofiles](https://github.com/Tinche/aiofiles) | >=24.0.0 | Apache-2.0 | Copyright (c) Tin Tvrtković | 异步文件 I/O |
@@ -106,6 +107,7 @@
 | [xlrd](https://xlrd.readthedocs.io) | >=2.0.1 | BSD | Copyright (c) 2005-2009 Stephen John Machin, Lingfo Pty Ltd | 读取 .xls 数据文件 |
 | [pytest](https://pytest.org) | >=8.0.0 | MIT | Copyright (c) 2004 Holger Krekel and others | 测试框架 |
 | [pytest-asyncio](https://github.com/pytest-dev/pytest-asyncio) | >=0.24.0 | Apache-2.0 | Copyright (c) Tin Tvrtković | 异步测试支持 |
+| [aiosmtpd](https://github.com/aio-libs/aiosmtpd) | >=1.4.6 | Apache-2.0 | Copyright (c) The aiosmtpd project and individual contributors | 本地 mock SMTP server（仅测试使用，多用户 v2 P6） |
 
 ## 四、内联字体文件 (bundled)
 

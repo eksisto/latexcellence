@@ -209,9 +209,104 @@ def _migration_v6_upload_sessions(conn: sqlite3.Connection) -> None:
         """)
 
 
+def _migration_v7_mail_and_alerts(conn: sqlite3.Connection) -> None:
+    """v2 P6：邮件队列 + 自助找回令牌 + 配额预警迟滞状态表。
+
+    email_outbox 为异步发送队列（业务方投递即返回，发送协程消费）；
+    password_reset_tokens 只存令牌 SHA-256（与会话同口径），TTL 1 小时单次有效；
+    user_alert_state 以 (user_id, kind) 记录配额预警迟滞标记与聚合去抖时间戳。
+    users.email 部分唯一索引不在本迁移内创建——存量重复邮箱时不自动改数据，
+    由 ensure_email_unique_index() 在每次启动时检测并补建（见其 docstring）。
+    """
+    conn.executescript("""
+        CREATE TABLE IF NOT EXISTS email_outbox (
+            id          TEXT PRIMARY KEY,
+            recipient   TEXT NOT NULL,
+            subject     TEXT NOT NULL,
+            body_text   TEXT NOT NULL,
+            body_html   TEXT NOT NULL DEFAULT '',
+            status      TEXT NOT NULL DEFAULT 'queued',
+            attempts    INTEGER NOT NULL DEFAULT 0,
+            last_error  TEXT,
+            created_at  TEXT NOT NULL,
+            sent_at     TEXT
+        );
+        CREATE INDEX IF NOT EXISTS ix_email_outbox_status
+            ON email_outbox (status, created_at);
+        CREATE INDEX IF NOT EXISTS ix_email_outbox_sent_at
+            ON email_outbox (sent_at);
+        CREATE TABLE IF NOT EXISTS password_reset_tokens (
+            user_id    TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            token_hash TEXT NOT NULL UNIQUE,
+            expires_at TEXT NOT NULL,
+            used_at    TEXT,
+            created_at TEXT NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS ix_password_reset_tokens_user
+            ON password_reset_tokens (user_id);
+        CREATE INDEX IF NOT EXISTS ix_password_reset_tokens_expires
+            ON password_reset_tokens (expires_at);
+        CREATE TABLE IF NOT EXISTS user_alert_state (
+            user_id    TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            kind       TEXT NOT NULL,
+            sent_at    TEXT NOT NULL,
+            PRIMARY KEY (user_id, kind)
+        );
+        """)
+
+
+# 邮箱部分唯一索引名（ensure_email_unique_index 创建）。
+USERS_EMAIL_UNIQUE_INDEX = "ux_users_email_unique"
+
+
+def find_duplicate_emails(conn: sqlite3.Connection) -> list[sqlite3.Row]:
+    """返回 users 表中重复（大小写不敏感）的非空邮箱分组及冲突用户名列表。"""
+    return conn.execute(
+        "SELECT LOWER(email) AS email, COUNT(*) AS n, "
+        "GROUP_CONCAT(username, ', ') AS usernames "
+        "FROM users WHERE email != '' "
+        "GROUP BY LOWER(email) HAVING COUNT(*) > 1 ORDER BY email"
+    ).fetchall()
+
+
+def ensure_email_unique_index(conn: sqlite3.Connection) -> bool:
+    """确保 users.email 部分唯一索引存在（v2 P6，每次 init_db 调用）。
+
+    存量库存在重复邮箱时：告警并列出冲突行后跳过建索引（不自动改数据，
+    由管理员人工处理），下次重启自动重试；无冲突则幂等补建索引。
+    返回本次调用后索引是否就位。"""
+    existing = conn.execute(
+        "SELECT name FROM sqlite_master WHERE type='index' AND name=?",
+        (USERS_EMAIL_UNIQUE_INDEX,),
+    ).fetchone()
+    if existing:
+        return True
+    dups = find_duplicate_emails(conn)
+    if dups:
+        details = "; ".join(
+            f"{row['email']} x{row['n']} ({row['usernames']})" for row in dups
+        )
+        logger.warning(
+            "Duplicate user emails detected, skipping partial unique index %s — "
+            "resolve manually then restart to retry: %s",
+            USERS_EMAIL_UNIQUE_INDEX,
+            details,
+        )
+        return False
+    conn.execute(
+        f"CREATE UNIQUE INDEX IF NOT EXISTS {USERS_EMAIL_UNIQUE_INDEX} "
+        "ON users (email COLLATE NOCASE) WHERE email != ''"
+    )
+    conn.commit()
+    logger.info(
+        "Partial unique index %s ensured on users.email", USERS_EMAIL_UNIQUE_INDEX
+    )
+    return True
+
+
 # 当前 schema 最新版本号。新增迁移时：追加实现函数并在列表末尾登记
 # (target_version, description, fn)，同时递增此常量；每个步骤必须幂等可重入。
-SCHEMA_VERSION = 6
+SCHEMA_VERSION = 7
 
 # 有序迁移步骤：(目标版本, 描述, 执行函数)。版本从 2 起（1 为 v1 基线，
 # 对老库存量数据无破坏性变更，仅补齐 IF NOT EXISTS 建表）。
@@ -241,6 +336,11 @@ MIGRATIONS: list[tuple[int, str, Callable[[sqlite3.Connection], None]]] = [
         6,
         "v2 P5 chunked upload session table",
         _migration_v6_upload_sessions,
+    ),
+    (
+        7,
+        "v2 P6 mail outbox + password reset tokens + user alert state tables",
+        _migration_v7_mail_and_alerts,
     ),
 ]
 
@@ -337,6 +437,9 @@ def init_db() -> None:
                 read_user_version(_conn),
                 applied,
             )
+        # 邮箱部分唯一索引（v2 P6）：每次启动幂等补建——存量重复邮箱时跳过
+        # 并告警，管理员人工处理后下次重启自动就位（不阻塞启动与迁移）
+        ensure_email_unique_index(_conn)
         _initialized = True
     logger.info("Multi-user database initialized at %s", db_path)
 

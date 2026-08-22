@@ -536,6 +536,41 @@ class MultiUserConfig(BaseModel):
     upload_session_ttl_hours: int = Field(24, ge=1)
     # 单个分片大小上限（MB）；前端切片大小与后端 PUT 校验均以此对齐
     chunk_part_max_mb: int = Field(8, ge=1)
+    # 配额预警阈值（v2 P6）：用量百分比达到 warn/critical 时经 SMTP 通知，
+    # 迟滞回差——低于 reset 阈值后清除预警标记，再次越线可重新发送
+    quota_warn_percent: int = Field(80, ge=1, le=100)
+    quota_critical_percent: int = Field(95, ge=1, le=100)
+    quota_alert_reset_percent: int = Field(75, ge=1, le=100)
+
+
+class SmtpConfig(BaseModel):
+    """SMTP 邮件通知配置（多用户 v2 P6）
+
+    enabled=false（或 host 为空）时所有通知点静默跳过（优雅降级，
+    不阻塞注册/审批/找回以外的主流程），自助找回入口在前端隐藏。
+
+    password 为敏感项：设置页以掩码返回，保存时 `***` 前缀表示保留原值
+    （与 llm.api_key / security.access_token 同一掩码协议）。
+    安全相关字段实行严格校验（extra=forbid）。
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    enabled: bool = False  # 是否启用 SMTP 邮件通知
+    host: str = ""  # SMTP 服务器地址（空 = 未配置）
+    port: int = Field(465, ge=1, le=65535)  # SMTP 端口
+    encryption: Literal["ssl", "starttls", "none"] = (
+        "ssl"  # 加密方式：ssl(465 隐式 TLS) / starttls / none
+    )
+    username: str = ""  # 认证用户名（留空 = 匿名）
+    password: str = ""  # 认证密码（设置页掩码展示）
+    from_address: str = ""  # 发件人地址（空时回退 username）
+    from_name: str = "LateXcellence"  # 发件人显示名
+    site_base_url: str = ""  # 站点对外地址（找回链接前缀；空 = 相对路径提示）
+    max_send_per_minute: int = Field(10, ge=1)  # 全局发送限速（封/分钟）
+    retry_attempts: int = Field(3, ge=1)  # 投递失败重试次数（指数退避）
+    # 邮件模板语言（站点默认语言）：zh / en 两套模板存于 mail 模块集中管理
+    template_language: Literal["zh", "en"] = "zh"
 
 
 class SandboxConfig(BaseModel):
@@ -596,6 +631,7 @@ class AppConfig(BaseModel):
     logging: LoggingConfig = LoggingConfig()
     multi_user: MultiUserConfig = MultiUserConfig()
     sandbox: SandboxConfig = SandboxConfig()
+    smtp: SmtpConfig = SmtpConfig()
 
 
 # 模块级全局变量：单例模式存储配置对象和路径
@@ -731,6 +767,12 @@ def update_config_from_dict(updates: dict) -> AppConfig:
             token = security_updates["access_token"]
             if token.startswith("***"):
                 security_updates["access_token"] = current["security"]["access_token"]
+
+    # SMTP 密码（v2 P6）：沿用同一掩码协议——*** 前缀表示保留原值
+    if "smtp" in updates and isinstance(updates["smtp"], dict):
+        smtp_updates = updates["smtp"]
+        if smtp_updates.get("password", "").startswith("***"):
+            smtp_updates["password"] = current["smtp"]["password"]
 
     # 所有已启用 API Key 的数据源均通过设置页以掩码返回，掩码表示保留原配置。
     function_calling = updates.get("features", {}).get("function_calling", {})

@@ -19,6 +19,7 @@ import { api } from "@/api/index";
 import useStore from "@/store/useStore";
 import { translateError } from "@/utils/errorMessages";
 import useRegistrationEnabled from "@/hooks/useRegistrationEnabled";
+import useEmailAvailable from "@/hooks/useEmailAvailable";
 
 /**
  * 多用户模式登录页（P5）。
@@ -28,6 +29,9 @@ export default function LoginPage() {
   const { t } = useTranslation(["pages", "common"]);
   // registration_enabled=false 时隐藏注册入口（null=未知时不隐藏，后端兜底）
   const registrationEnabled = useRegistrationEnabled();
+  // SMTP 未配置（email_available=false）时隐藏忘记密码入口（v2 P6；
+  // null=未知时不隐藏，后端统一降级响应兜底）
+  const emailAvailable = useEmailAvailable();
   const navigate = useNavigate();
   const setAuthStatus = useStore((s) => s.setAuthStatus);
   const setAuthMe = useStore((s) => s.setAuthMe);
@@ -107,19 +111,29 @@ export default function LoginPage() {
                 disabled={loading}
               />
             </div>
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <Checkbox
-                id="login-remember"
-                checked={remember}
-                onCheckedChange={setRemember}
-                disabled={loading}
-              />
-              <Label
-                htmlFor="login-remember"
-                className="cursor-pointer font-normal"
-              >
-                {t("pages:auth.rememberMe")}
-              </Label>
+            <div className="flex items-center justify-between text-sm text-muted-foreground">
+              <div className="flex items-center gap-2">
+                <Checkbox
+                  id="login-remember"
+                  checked={remember}
+                  onCheckedChange={setRemember}
+                  disabled={loading}
+                />
+                <Label
+                  htmlFor="login-remember"
+                  className="cursor-pointer font-normal"
+                >
+                  {t("pages:auth.rememberMe")}
+                </Label>
+              </div>
+              {emailAvailable !== false && (
+                <Link
+                  to="/forgot-password"
+                  className="link-shrink inline-block hover:text-foreground"
+                >
+                  {t("pages:auth.forgotLink")}
+                </Link>
+              )}
             </div>
             {error ? (
               <p className="text-sm text-destructive" role="alert">

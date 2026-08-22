@@ -40,6 +40,28 @@ class TestValidation:
             "Password must be at least 8 characters"
         )
 
+    def test_email_validation(self):
+        # 空值合法（邮箱可选）；常规地址与中文域名标签外的实用形态放行
+        assert auth_core.validate_email("") is None
+        assert auth_core.validate_email(None) is None
+        assert auth_core.validate_email("user@example.com") is None
+        assert auth_core.validate_email("USER+tag@sub.example.io") is None
+        # 非法格式 / 超长 / 含空白
+        assert auth_core.validate_email("not-an-email") is not None
+        assert auth_core.validate_email("a@b") is not None
+        assert auth_core.validate_email("a b@example.com") is not None
+        assert auth_core.validate_email("a@" + "x" * 250 + ".com") is not None
+
+    def test_email_rejects_control_characters(self):
+        """控制字符（含 C0/C1 与 DEL）不得进入邮箱——防 To 头/SMTP 信封注入。"""
+        for bad in (
+            "a\x01b@example.com",  # SOH
+            "user@example\x7f.com",  # DEL
+            "user@exa\x1f mple.com",  # US 控制字符
+            "user\xc2\x85@example.com",  # C1 NEL（unicode \x85）
+        ):
+            assert auth_core.validate_email(bad) is not None, repr(bad)
+
 
 class TestUserManagement:
     def test_create_get(self, mu_env):

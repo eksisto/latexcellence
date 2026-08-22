@@ -35,7 +35,7 @@ latexcellence/
 │   │   ├── prompts.py               # 中央提示词管理模块（集中存储所有 LLM 提示词）
 │   │   ├── base_paragraph_check.py  # 逐段检查服务基类（typo/expression/code_review/terminology 共享）
 │   │   ├── access_control.py        # 统一访问控制：项目权限矩阵 + workspace 绑定校验依赖
-│   │   └── multiuser/               # 多用户模式基础设施包（db/userspace/auth/dependencies/quota/upload/upload_sessions/maintenance/migrate/sandbox_leases/llm_governance/edit_log）
+│   │   └── multiuser/               # 多用户模式基础设施包（db/userspace/auth/dependencies/quota/upload/upload_sessions/maintenance/migrate/sandbox_leases/llm_governance/edit_log/mail）
 │   ├── utils/
 │   │   ├── json_utils.py            # LLM JSON 解析/校验/重试
 │   │   ├── file_ops.py              # 原子写入/备份/MD5
@@ -137,8 +137,9 @@ latexcellence/
 │       │   └── locales/             # 翻译 JSON 文件
 │       ├── lib/                     # 通用前端工具
 │       ├── pages/                   # 页面组件
-│       │   ├── LoginPage.jsx        # 多用户登录页
+│       │   ├── LoginPage.jsx        # 多用户登录页（含忘记密码入口）
 │       │   ├── RegisterPage.jsx     # 多用户注册页（含待审批提交态）
+│       │   ├── ForgotPasswordPage.jsx / ResetPasswordPage.jsx # 自助找回密码（请求页 + 令牌重置页，v2 P6）
 │       │   ├── PendingApprovalPage.jsx # 待管理员批准占位页
 │       │   ├── ProjectWorkbenchPage.jsx # 项目工作台（列表/上传/配额/分类用量与清理/回收站/协作）
 │       │   ├── AdminPage.jsx        # 管理面板（审批/禁用/重置密码/配额/删除）
@@ -198,7 +199,7 @@ latexcellence/
 ├── tests/                           # 测试用例
 │   ├── conftest.py                  # pytest 共享 fixture
 │   ├── test_api/                    # 各模块 API 集成测试
-│   ├── test_multiuser/              # 多用户模式测试（认证/项目/配额/协作/DB 迁移/沙箱租约/LLM 治理/rar 上传/衍生数据记账与清理/分片上传与断点续传）
+│   ├── test_multiuser/              # 多用户模式测试（认证/项目/配额/协作/DB 迁移/沙箱租约/LLM 治理/rar 上传/衍生数据记账与清理/分片上传与断点续传/邮件队列与自助找回）
 │   ├── test_plot_gen/               # plot_gen 单元测试
 │   ├── test_docker/                 # Docker 沙箱真容器冒烟（marker docker，无 daemon 自动 skip）
 │   ├── test_utils/                  # 后端工具单元测试（路径/JSON/宏包/搜索/学术检索/编译/sandbox 契约等）
@@ -296,6 +297,7 @@ latexcellence/
 | 共享项目反向补丁撤销 | 多用户模式写路径统一记账（workspace_edit_ops + .edit_logs 快照），undo/redo 只回退当前用户自己的修改：冲突即拒绝（409）、恢复超配额拒绝（413）、LIFO 整组回滚、redo 对称；共享项目 v1 禁令解除 | [DESIGN.md §14](DESIGN.md)、[multi-user-v2-plan.md](docs/multi-user-v2-plan.md) §8 |
 | 多用户 LLM 治理 | 每用户滑动窗口限流 + 并发租约（`llm_governance.py`，单事务原子准入），超限 429 + Retry-After；登录限流同表计数；仅多用户模式生效，单用户零依赖直通 | [backend-core.md](docs/backend-core.md)、[multi-user-v2-plan.md](docs/multi-user-v2-plan.md) §6 |
 | 衍生数据记账与自助清理 | 四类衍生目录用量缓存（user_derived_usage 表）+ 检查点增量刷新 + 维护循环对账纠偏，配额校验与 /me 用量 O(1)；工作台分类用量条 + 自助清理（仅本人）；过期会话删除与写作会话保留期清理并入维护循环 | [backend-core.md](docs/backend-core.md)、[multi-user-v2-plan.md](docs/multi-user-v2-plan.md) §9 |
+| 邮件通知与自助找回 | SMTP 通知走 email_outbox 队列 + 发送协程（重试留档限速，未配置优雅降级）；找回令牌只存哈希、单次有效，forgot 响应恒定语义防枚举；邮箱部分唯一索引 + profile 改绑需当前密码；配额预警迟滞并入维护循环 | [backend-core.md](docs/backend-core.md)、[multi-user-v2-plan.md](docs/multi-user-v2-plan.md) §11、[deployment.md](docs/deployment.md) |
 | 多用户前端 | 登录/注册/待审批页、项目工作台（上传 zip·7z·目录、配额、回收站、权限）、管理面板、路由守卫、auth 切片；多用户模式固定同源 + CSRF 头 + Cookie 会话，SSE 不再追加 token | [frontend.md](docs/frontend.md)、[multi-user-plan.md](docs/multi-user-plan.md) |
 | i18n 多语言 | i18next 简中 / 繁中 / 英语，按 `common` / `pages` / `components` / `hooks` / `errors` 命名空间拆分 | [frontend.md](docs/frontend.md) |
 
