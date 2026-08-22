@@ -184,7 +184,7 @@ npm start        # 或 node server.js
 | `features.writing_chat` | compression_threshold_tokens（0=动态）、compression_headroom_tokens、compression_keep_recent_tokens/turns、summary_token_budget、summary_model 等 | 写作助手上下文压缩触发与摘要预算；摘要旧配置 `summary_max_tokens` 自动迁移并告警 |
 | `features.style_modify.agent` | 项目 Agent 的会话目录、轮次、工具/编译上限、大小限制、shadow 编译和清理配置 | style_modify 项目 Agent 模式 |
 | `logging` | level, dir | 日志级别与存储路径 |
-| `multi_user` | enabled, db_path, users_root, staging_root、默认配额、上传限制、会话/回收站 TTL、LLM/登录限流、registration_enabled、admin_*_env | 多用户模式（默认关闭）；开启后强制登录、用户空间隔离、关闭任意路径打开与磁盘浏览，详见 [multi-user-plan.md](multi-user-plan.md) |
+| `multi_user` | enabled, db_path, users_root, staging_root、默认配额、上传限制、会话/回收站 TTL、LLM/登录限流、registration_enabled、admin_*_env、edit_log_*（反向补丁撤销日志：条数上限 / 单操作体积上限 / 保留时长） | 多用户模式（默认关闭）；开启后强制登录、用户空间隔离、关闭任意路径打开与磁盘浏览，详见 [multi-user-plan.md](multi-user-plan.md)；共享项目反向补丁撤销见 [multi-user-v2-plan.md](multi-user-v2-plan.md) §8 |
 
 所有字段有 Pydantic 默认值，可部分配置。`LX_LLM_KEY` 环境变量优先于 `config.json` 中的 `api_key`。
 
@@ -228,7 +228,7 @@ python -m backend.manage set-status <username> pending|active|disabled
 - 多用户模式下统一路径解析入口 `path_guard.resolve_user_path(user_id, project_id, file_path)`（基于 `resolve_project_path` 的封装，禁止直接拼接路径）；
 - 统一访问控制模块 `backend/core/access_control.py`：`owner / editor / viewer` 三档权限矩阵、`require_project_access()` / `get_projects_for_user()`、基于 workspace 绑定的请求级依赖 `require_workspace(write=...)`，权限**实时查库**（不缓存，变更立即生效）；
 - 工作区绑定：`/api/project/open` 在多用户模式下仅接受 `project_id`，打开时写入 `workspace_id → (user_id, project_id, root_path)`；后续所有 `/api/project/*` 请求经 `require_workspace` 实时校验访问权限；
-- 端点收紧：`/api/project/browse` 多用户模式返回 403（任意磁盘浏览失效）；`/api/project/open` 拒绝 `path` 字段（任意路径打开失效）；写操作（apply-change / set-main-file / undo / redo）要求非 viewer 权限；共享项目（存在协作者）v1 禁用撤销/重做（`undo`/`redo` 403，`can-undo`/`can-redo` 恒 False）。
+- 端点收紧：`/api/project/browse` 多用户模式返回 403（任意磁盘浏览失效）；`/api/project/open` 拒绝 `path` 字段（任意路径打开失效）；写操作（apply-change / set-main-file / undo / redo）要求非 viewer 权限。共享项目撤销禁令（v1）已在 v2 P3 由反向补丁解禁——undo / redo 只回退当前用户自己的修改，冲突 409、恢复超配额 413，状态端点按当前用户补丁栈实时计算。
 
 **P3 上传与配额**（§8 / §9）：
 
@@ -260,7 +260,7 @@ python -m backend.manage set-status <username> pending|active|disabled
 - 协作者必须是 `active` 用户，不能是 owner 自身；未知用户 404 `user_not_found`，非 active 400 `invalid_user`；非 owner 管理操作一律 403 `no_permission`。
 - 权限实时查库：添加 / 改角色 / 移除后下一次请求立即生效（被移除者立即失去访问）。
 - 转交前校验接收方项目空间配额（超限 413 `quota_exceeded`，目录与归属不变）；转交时项目目录迁移到新 owner 空间（`data/users/<new_owner_id>/projects/<project_id>/`），新 owner 同名项目自动生成 `xx (2)`，已打开该项目的 workspace 绑定与文件树同步更新。
-- viewer 写保护与共享项目撤销禁用（P2 已落地）：viewer 写操作 403；共享项目（存在协作者）v1 禁用撤销/重做。
+- viewer 写保护（P2 已落地）：viewer 写操作 403。共享项目撤销已由 v2 P3 反向补丁解禁（按 actor 归属，转交后各用户只能撤销自己的修改）。
 
 **P6 迁移与存量隔离**（§7.2 / §13）：
 

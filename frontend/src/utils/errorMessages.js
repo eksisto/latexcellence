@@ -69,6 +69,10 @@ const EXACT_MAP = {
   llm_rate_limited: "llmRateLimited",
   llm_concurrency_limited: "llmConcurrencyLimited",
 
+  // 反向补丁撤销（多用户 v2 P3）错误码
+  quota_exceeded_recover: "quotaExceededRecover",
+  op_not_undoable: "opNotUndoable",
+
   // 项目管理
   "No project opened": "noProjectOpened",
 

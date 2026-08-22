@@ -187,6 +187,25 @@ function MultiUserSection({ multiUser, onChange }) {
             />
           </div>
 
+          {/* 编辑日志（反向补丁撤销） */}
+          <div className="grid grid-cols-3 gap-2">
+            <NumberField
+              label={t("settings.multiUserEditLogMaxOps")}
+              value={multiUser.edit_log_max_ops}
+              onChange={(v) => onChange("multi_user.edit_log_max_ops", v)}
+            />
+            <NumberField
+              label={t("settings.multiUserEditLogMaxOpMb")}
+              value={multiUser.edit_log_max_op_mb}
+              onChange={(v) => onChange("multi_user.edit_log_max_op_mb", v)}
+            />
+            <NumberField
+              label={t("settings.multiUserEditLogTtlHours")}
+              value={multiUser.edit_log_ttl_hours}
+              onChange={(v) => onChange("multi_user.edit_log_ttl_hours", v)}
+            />
+          </div>
+
           {/* 注册 */}
           <CheckboxField
             label={t("settings.multiUserRegistrationEnabled")}

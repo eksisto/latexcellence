@@ -576,7 +576,7 @@ Mock 返回值必须符合 Pydantic schema，确保测试的可重复性。
 - **管理员引导**：首次启动且用户表为空时从环境变量创建管理员，否则由 CLI（`python -m backend.manage create-admin`）创建；CLI 覆盖创建/重置密码/列表/状态流转。
 - **用户空间与路径隔离（P2）**：项目目录由 `project_id` 派生（`data/users/<owner_id>/projects/<project_id>/`）；统一入口 `resolve_user_path()`（`path_guard` 封装）解析项目内路径，禁止直接拼接；符号链接默认拒绝。
 - **访问控制（P2）**：`backend/core/access_control.py` 提供 `owner / editor / viewer` 权限矩阵、`require_project_access()` / `get_projects_for_user()` 与基于 workspace 绑定的请求级依赖 `require_workspace(write=...)`，权限实时查库不缓存。
-- **workspace 绑定与端点收紧（P2）**：`/api/project/open` 多用户模式仅接受 `project_id`（拒绝 `path`），打开时写入 `workspace_id → (user_id, project_id, root_path)`；`/api/project/browse` 返回 403；写操作要求非 viewer；共享项目 v1 禁用撤销/重做。
+- **workspace 绑定与端点收紧（P2）**：`/api/project/open` 多用户模式仅接受 `project_id`（拒绝 `path`），打开时写入 `workspace_id → (user_id, project_id, root_path)`；`/api/project/browse` 返回 403；写操作要求非 viewer；共享项目 v1 撤销禁令已在 v2 P3 由反向补丁取代（见 §14）。
 - **权限协作（P4）**：`/api/projects/{id}/permissions` 提供协作者列表 / 按用户名添加 / 改角色 / 移除（owner 专属，权限实时查库即时生效）；`/api/projects/{id}/transfer` 支持转交 owner（原 owner 转后 viewer 或退出）。转交前校验接收方配额（超限拒绝）；转交时项目目录迁移到新 owner 空间、新 owner 同名项目自动 `xx (2)`、已打开 workspace 绑定与文件树同步更新。
 
 完整方案、数据模型与阶段划分见 [docs/multi-user-plan.md](docs/multi-user-plan.md)，实现细节见 [docs/backend-core.md](docs/backend-core.md)，部署指南（HTTPS、风险声明）见 [docs/deployment.md](docs/deployment.md)。
@@ -609,7 +609,7 @@ Mock 返回值必须符合 Pydantic schema，确保测试的可重复性。
 
 ## 11. 多用户模式设计决策记录
 
-多用户模式的完整关键决策记录（双模式、认证、存储、配额、权限、上传、迁移等）见 [docs/multi-user-plan.md §3](docs/multi-user-plan.md)。P0–P7 全部落地为 `backend/core/multiuser/`（db/userspace/auth/dependencies/quota/upload/maintenance/migrate）、`backend/modules/auth/`（`/api/auth` 与 `/api/admin`）、`backend/modules/projects/`（`/api/projects` 与权限协作）与 `backend/manage.py`（CLI），设计与实现见 §9.4 与 [docs/backend-core.md](docs/backend-core.md)，部署见 [docs/deployment.md](docs/deployment.md)。
+多用户模式的完整关键决策记录（双模式、认证、存储、配额、权限、上传、迁移等）见 [docs/multi-user-plan.md §3](docs/multi-user-plan.md)。P0–P7 全部落地为 `backend/core/multiuser/`（db/userspace/auth/dependencies/quota/upload/maintenance/migrate/edit_log/sandbox_leases/llm_governance）、`backend/modules/auth/`（`/api/auth` 与 `/api/admin`）、`backend/modules/projects/`（`/api/projects` 与权限协作）与 `backend/manage.py`（CLI），设计与实现见 §9.4 与 [docs/backend-core.md](docs/backend-core.md)，部署见 [docs/deployment.md](docs/deployment.md)。
 
 ## 12. Docker 沙箱执行模型（v2 P1a）
 
@@ -679,3 +679,54 @@ Mock 返回值必须符合 Pydantic schema，确保测试的可重复性。
 ### 13.2 与登录限流的关系
 
 登录限流自 v2 P1b 起从进程内字典迁移到同一张 `rate_limit_events` 表（kind='login'，pair/user 双维度各落一行），修复多实例部署下阈值被副本数放大的问题；维护循环按保留期统一清理两类事件，`purge_expired_llm_leases()` 清理崩溃残留租约。P7 多实例阶段同一共享卷上天然跨副本生效，本模块无需修改。
+
+## 14. 共享项目反向补丁撤销（v2 P3）
+
+多用户模式下撤销/重做从"工作区内存快照栈"（`BackupManager`，仅单用户模式沿用）升级为**按操作者归属的反向补丁日志**：只回退当前用户自己的修改，冲突即拒绝，共享项目解禁（v1 全局禁令移除）。
+
+### 14.1 记账与快照布局
+
+```
+LatexProject.apply_change / apply_whole_files（全部项目写通道）
+  └─▶ edit_log.record_write(root, [(rel, before, after), ...])
+       │ 多用户关闭 / 无请求级当前用户 / before==after → 跳过（零开销）
+       ▼
+       ├─ SQLite workspace_edit_ops：一行一 op（seq 严格递增定序；
+       │  同一 apply_whole_files 事务共享 op_group_id，一次撤销整组回滚）
+       └─ 磁盘快照 <users_root>/<owner_id>/.edit_logs/<project_id>/<op_id>/
+            manifest.json（files: path + before/after MD5 + 尺寸）
+            <n>.before / <n>.after（全文）
+```
+
+- owner 维度放置：不进项目目录、不进下载包、不占项目/衍生配额；
+- 单 op 快照总量 > `edit_log_max_op_mb` → 只记索引（`non_undoable=1`），状态接口展示"过大不可撤"；
+- 记账失败只打日志不抛错——编辑日志绝不影响写入主流程；
+- 逐段检查 / 写作助手工具与 apply-edit / code_review / bib_manager / style_modify 全部经由上述两个写通道，自动获得记账，无需逐模块改造。
+
+### 14.2 撤销 / 重做状态机
+
+```
+            undo（校验当前 MD5 == after_md5）
+   active ────────────────────────────────▶ undone
+      ▲                                       │
+      │  redo（校验当前 MD5 == before_md5，      │
+      │  且无更新的 active op 取代）             │
+      └────────────────────────────────────────┘
+   failed（防御终态：op 记录的文件已消失，状态接口提示 failed_ops）
+```
+
+- LIFO：undo/redo 只作用于 (project, actor) 自己的栈；他人 op 不出现在自己的栈中；
+- 冲突即拒绝：组内任一文件当前 MD5 与预期不符 → 409 `file_conflict`，绝不静默覆盖他人修改；MD5 校验失败视为不可撤销但保留 op，待文件回到对应状态后可再撤；
+- 配额：恢复导致项目体积增长时先校验配额，超限 413 `quota_exceeded_recover`（op 保持原状态可重试）；
+- 恢复写回复用 `apply_whole_files`（乐观锁事务保护）并抑制记账，避免回滚自身被记成新 op；
+- redo 候选取"最近一次被撤销"的组（`undone_at` 降序），有更新的 active op 时视为已被取代；
+- 生命周期：每 (project, actor) 保留最近 `edit_log_max_ops` 条（按组整体淘汰、连带快照删除）；维护循环清理超过 `edit_log_ttl_hours` 无活动的整栈；项目永久删除 / 回收站清空级联清理。
+
+### 14.3 与既有机制的边界
+
+| 机制 | 职责边界 |
+| --- | --- |
+| `BackupManager` 内存栈 | 单用户模式撤销/重做（行为不变）；多用户模式不再暴露 |
+| style_modify `OperationMeta` | 模块内提案级撤销（四道防线）保留，与本机制语义一致 |
+| 写回配额回滚 | `apply-change` 超限以写前全文经抑制记账的 `apply_whole_files` 恢复（以本次 op 的 after_md5 作版本守卫，检查窗口内他人已写入则放弃覆盖、只撤销本次记账并如实报错）+ `discard_op` 删除本次记账——不经 undo 通道、不污染撤销栈 |
+| 乐观锁（MD5） | 单次写冲突防护（409），反向补丁的冲突校验与其同源 |

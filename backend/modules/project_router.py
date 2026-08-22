@@ -272,21 +272,38 @@ async def apply_change(
     request: ApplyChangeRequest,
     workspace_id: str = Query(..., description="工作区唯一标识符"),
     binding: dict = Depends(access_control.require_workspace_write),
+    user: dict | None = Depends(get_current_user_optional),
 ):
     """原地修改指定段落的文本。
 
     多用户模式下写回后刷新项目配额记账；若该写操作导致项目空间超限，
-    则回滚本次修改并返回 413 quota_exceeded（不允许部分写入）。
+    则以写前内容直接恢复（不经撤销通道、不产生编辑日志 op，方案 §8.4）
+    并返回 413 quota_exceeded（不允许部分写入）。
     """
     project = get_project_manager_for_workspace(workspace_id)
+    # 多用户模式：写前捕获全文，供配额超限时直接恢复（单用户走内存撤销栈）
+    before_content: str | None = None
+    actor_id: str | None = None
+    if _is_multiuser_binding(binding):
+        before_content = await asyncio.to_thread(
+            project.read_project_file, request.file_path
+        )
+        actor_id = _binding_actor(binding, user)
     try:
-        project.apply_change(
+        op_id = project.apply_change(
             request.file_path,
             request.paragraph_index,
             request.new_text,
             expected_md5=request.expected_md5,
         )
-        await projects_service.enforce_write_quota(binding, project, request.file_path)
+        await projects_service.enforce_write_quota(
+            binding,
+            project,
+            request.file_path,
+            before_content=before_content,
+            edit_op_id=op_id,
+            actor_user_id=actor_id,
+        )
         return {"status": "ok"}
     except FileConflictError as e:
         raise HTTPException(
@@ -307,15 +324,64 @@ async def apply_change(
         raise HTTPException(status_code=404, detail=str(e))
 
 
+def _binding_actor(binding: dict, user: dict | None) -> str:
+    """多用户模式下解析当前操作者 id；缺失即未认证（防御，正常由中间件注入）。"""
+    if user is not None and user.get("id"):
+        return user["id"]
+    from backend.core.multiuser import userspace
+
+    actor = userspace.get_current_user_id()
+    if not actor:
+        raise HTTPException(
+            status_code=401,
+            detail={"error": "unauthorized", "message": "Not logged in"},
+        )
+    return actor
+
+
+def _is_multiuser_binding(binding: dict) -> bool:
+    return bool(binding.get("multi_user") and binding.get("project_id"))
+
+
 @router.post("/undo")
 async def undo_change(
     request: FileActionRequest,
     workspace_id: str = Query(..., description="工作区唯一标识符"),
     binding: dict = Depends(access_control.require_workspace_write),
+    user: dict | None = Depends(get_current_user_optional),
 ):
-    """撤销对指定文件最近一次的修改（共享项目多用户模式禁用）。"""
-    await access_control.reject_undo_redo_if_shared(binding)
+    """撤销最近一次修改。
+
+    单用户模式：按工作区 BackupManager 内存栈回退指定文件（行为不变）。
+    多用户模式（v2 P3 反向补丁）：只回退当前用户在该项目的最新一组修改
+    （LIFO，共享项目已解禁）；组内任一文件当前 MD5 != after_md5 时
+    409 file_conflict（绝不静默覆盖他人修改）；恢复超配额 413
+    quota_exceeded_recover（op 保持可重试）。
+    """
     project = get_project_manager_for_workspace(workspace_id)
+    if _is_multiuser_binding(binding):
+        from backend.core.multiuser import edit_log
+
+        try:
+            result = await asyncio.to_thread(
+                edit_log.perform_undo,
+                project,
+                project_id=binding["project_id"],
+                actor_user_id=_binding_actor(binding, user),
+                root_path=binding["root_path"],
+            )
+        except FileConflictError as e:
+            # TOCTOU：MD5 校验通过后、事务落盘前被他人写入——按冲突语义
+            # 上报（而非 500），绝不静默覆盖
+            raise HTTPException(
+                status_code=409,
+                detail={"error": "file_conflict", "message": str(e)},
+            ) from e
+        return {
+            "status": "ok",
+            "undone": result["undone"],
+            **({"files": result["files"]} if result.get("undone") else {}),
+        }
     try:
         result = project.undo(request.file_path)
         return {"status": "ok", "undone": result}
@@ -328,10 +394,37 @@ async def redo_change(
     request: FileActionRequest,
     workspace_id: str = Query(..., description="工作区唯一标识符"),
     binding: dict = Depends(access_control.require_workspace_write),
+    user: dict | None = Depends(get_current_user_optional),
 ):
-    """重做对指定文件最近一次撤销的操作（共享项目多用户模式禁用）。"""
-    await access_control.reject_undo_redo_if_shared(binding)
+    """重做最近一次撤销的操作。
+
+    单用户模式：BackupManager 内存栈（行为不变）。
+    多用户模式（v2 P3）：对称重放当前用户最新一组被撤销的修改；
+    校验当前 MD5 == before_md5，冲突 409；有更新的修改时视为已被取代。
+    """
     project = get_project_manager_for_workspace(workspace_id)
+    if _is_multiuser_binding(binding):
+        from backend.core.multiuser import edit_log
+
+        try:
+            result = await asyncio.to_thread(
+                edit_log.perform_redo,
+                project,
+                project_id=binding["project_id"],
+                actor_user_id=_binding_actor(binding, user),
+                root_path=binding["root_path"],
+            )
+        except FileConflictError as e:
+            # 同 undo：校验与落盘之间的窗口被他人写入 → 409 冲突语义
+            raise HTTPException(
+                status_code=409,
+                detail={"error": "file_conflict", "message": str(e)},
+            ) from e
+        return {
+            "status": "ok",
+            "redone": result["redone"],
+            **({"files": result["files"]} if result.get("redone") else {}),
+        }
     try:
         result = project.redo(request.file_path)
         return {"status": "ok", "redone": result}
@@ -344,15 +437,24 @@ async def can_undo(
     file_path: str = Query(...),
     workspace_id: str = Query(..., description="工作区唯一标识符"),
     binding: dict = Depends(access_control.require_workspace_read),
+    user: dict | None = Depends(get_current_user_optional),
 ):
-    """检查指定文件是否有可撤销的操作（共享项目多用户模式恒为 False）。"""
+    """检查是否有可撤销的操作。
+
+    多用户模式（v2 P3）：按当前用户的反向补丁栈实时计算（MD5 校验失败
+    视为不可撤销但保留 op）；file_path 参数仅为兼容保留，不再参与判定。
+    """
+    if _is_multiuser_binding(binding):
+        from backend.core.multiuser import edit_log
+
+        status = await asyncio.to_thread(
+            edit_log.compute_status,
+            binding["project_id"],
+            _binding_actor(binding, user),
+            binding["root_path"],
+        )
+        return {"can_undo": status["can_undo"]}
     project = get_project_manager_for_workspace(workspace_id)
-    if (
-        binding.get("multi_user")
-        and binding.get("project_id")
-        and await _is_shared(binding)
-    ):
-        return {"can_undo": False}
     return {"can_undo": project.can_undo(file_path)}
 
 
@@ -361,12 +463,20 @@ async def can_redo(
     file_path: str = Query(...),
     workspace_id: str = Query(..., description="工作区唯一标识符"),
     binding: dict = Depends(access_control.require_workspace_read),
+    user: dict | None = Depends(get_current_user_optional),
 ):
-    """检查指定文件是否有可重做的操作（共享项目多用户模式恒为 False）。"""
+    """检查是否有可重做的操作（多用户模式按反向补丁栈实时计算）。"""
+    if _is_multiuser_binding(binding):
+        from backend.core.multiuser import edit_log
+
+        status = await asyncio.to_thread(
+            edit_log.compute_status,
+            binding["project_id"],
+            _binding_actor(binding, user),
+            binding["root_path"],
+        )
+        return {"can_redo": status["can_redo"]}
     project = get_project_manager_for_workspace(workspace_id)
-    if binding.get("multi_user") and binding.get("project_id"):
-        if await _is_shared(binding):
-            return {"can_redo": False}
     return {"can_redo": project.can_redo(file_path)}
 
 
@@ -375,26 +485,34 @@ async def undo_status(
     file_path: str = Query(...),
     workspace_id: str = Query(..., description="工作区唯一标识符"),
     binding: dict = Depends(access_control.require_workspace_read),
+    user: dict | None = Depends(get_current_user_optional),
 ):
-    """一次返回指定文件的可撤销/可重做状态，供前端轮询减半请求。"""
+    """一次返回可撤销/可重做状态，供前端轮询减半请求。
+
+    多用户模式（v2 P3）：基于当前用户的反向补丁栈实时计算，附带阻塞
+    原因（conflict / too_large / superseded，诊断用）。
+    """
+    if _is_multiuser_binding(binding):
+        from backend.core.multiuser import edit_log
+
+        status = await asyncio.to_thread(
+            edit_log.compute_status,
+            binding["project_id"],
+            _binding_actor(binding, user),
+            binding["root_path"],
+        )
+        return {
+            "can_undo": status["can_undo"],
+            "can_redo": status["can_redo"],
+            "undo_block_reason": status["undo_block_reason"],
+            "redo_block_reason": status["redo_block_reason"],
+            "failed_ops": status["failed_ops"],
+        }
     project = get_project_manager_for_workspace(workspace_id)
-    if (
-        binding.get("multi_user")
-        and binding.get("project_id")
-        and await _is_shared(binding)
-    ):
-        return {"can_undo": False, "can_redo": False}
     return {
         "can_undo": project.can_undo(file_path),
         "can_redo": project.can_redo(file_path),
     }
-
-
-async def _is_shared(binding: dict) -> bool:
-    """按绑定 project_id 判断项目是否共享（仅多用户模式调用）。"""
-    if not (binding.get("multi_user") and binding.get("project_id")):
-        return False
-    return await access_control.async_is_shared_project(binding["project_id"])
 
 
 @router.delete("/workspace/{workspace_id}")

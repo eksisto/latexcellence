@@ -20,6 +20,7 @@ import threading
 
 
 from backend.core.logger import get_logger
+from backend.core.multiuser import edit_log
 from backend.utils.file_ops import (
     BackupManager,
     atomic_write,
@@ -275,7 +276,7 @@ class LatexProject:
         paragraph_index: int,
         new_text: str,
         expected_md5: str | None = None,
-    ) -> None:
+    ) -> str | None:
         """
         原地修改指定段落的文本。
 
@@ -292,6 +293,10 @@ class LatexProject:
             paragraph_index: 段落索引（get_paragraphs 返回的列表中的位置）
             new_text: 修改后的新文本内容
             expected_md5: 期望的文件 MD5（乐观锁版本号），为 None 时跳过校验
+
+        返回：
+            多用户模式下本次写入对应的编辑日志 op_id（供配额回滚时撤销
+            记账，方案 §8.4）；单用户模式或无变化时返回 None
         """
         if self._project_info is None:
             raise RuntimeError("No project opened")
@@ -333,6 +338,9 @@ class LatexProject:
         # 读取源文件全部行
         lines = safe_read_lines(full_path)
 
+        # 记录写前全文（多用户模式反向补丁记账用，方案 §8.2）
+        before_content = "".join(lines)
+
         # 检测并保留原始缩进
         indent = self._detect_indent(para.text)
         new_lines_list = [indent + line for line in new_text.split("\n")]
@@ -353,10 +361,17 @@ class LatexProject:
         with self._file_md5_lock:
             self._file_md5[abs_path] = md5
 
+        # 多用户模式：写入成功后记反向补丁 op（单用户模式内部直接跳过）
+        op_id = edit_log.record_write(
+            self._project_info.root_path,
+            [(file_path, before_content, content)],
+        )
+
         self._logger.info(
             f"Applied change: {file_path} paragraph[{paragraph_index}] "
             f"lines {para.line_start}-{para.line_end}"
         )
+        return op_id
 
     def apply_whole_files(
         self,
@@ -436,6 +451,17 @@ class LatexProject:
                 with self._file_md5_lock:
                     self._file_md5[str(full_path)] = md5
                 result[file_path] = md5
+
+            # 多用户模式：整个事务的多文件写共享同一 op_group_id，
+            # 一次撤销整组回滚（方案 §8.1）；单用户模式内部直接跳过
+            edit_log.record_write(
+                self._project_info.root_path,
+                [
+                    (file_path, before, content)
+                    for file_path, _, before, content in prepared
+                ],
+            )
+
             self._logger.info(
                 "Applied whole-file batch: %d file(s)",
                 len(prepared),
@@ -489,6 +515,50 @@ class LatexProject:
             with self._file_md5_lock:
                 self._file_md5[abs_path] = md5
         return result
+
+    def read_project_file(self, file_path: str) -> str:
+        """
+        读取项目内文件的当前全文（供写前捕获回滚内容）。
+
+        参数：
+            file_path: 文件路径（相对于项目根目录）
+
+        返回：
+            文件全文文本
+        """
+        if self._project_info is None:
+            raise RuntimeError("No project opened")
+        full_path = resolve_project_path(
+            Path(self._project_info.root_path),
+            file_path,
+        )
+        return safe_read(full_path)
+
+    def restore_project_file(self, file_path: str, content: str) -> str:
+        """
+        直接把文件内容恢复为给定全文（不走撤销通道、不记编辑日志 op）。
+
+        供多用户模式写回超限的配额回滚使用（方案 §8.4：避免误回退他人
+        修改、不污染撤销栈）。单用户模式下同样只是原样恢复内容。
+
+        参数：
+            file_path: 文件路径（相对于项目根目录）
+            content: 恢复用的全文内容
+
+        返回：
+            恢复后文件的 MD5
+        """
+        if self._project_info is None:
+            raise RuntimeError("No project opened")
+        full_path = resolve_project_path(
+            Path(self._project_info.root_path),
+            file_path,
+        )
+        atomic_write(full_path, content)
+        md5 = compute_md5(full_path)
+        with self._file_md5_lock:
+            self._file_md5[str(full_path)] = md5
+        return md5
 
     def set_main_file(self, file_path: str) -> None:
         """

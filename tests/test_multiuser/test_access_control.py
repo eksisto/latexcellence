@@ -9,7 +9,7 @@
         `/open` 多用户模式拒绝 path、仅接受 project_id
         `/browse` 多用户模式返回 403
         viewer 写操作 403、owner/editor 放行
-        共享项目禁用撤销/重做
+        共享项目撤销/重做解禁（v2 P3 反向补丁，按当前用户栈实时计算）
         未绑定工作区返回 400 invalid_workspace
 """
 
@@ -499,27 +499,60 @@ class TestProjectRouterMultiuser:
         assert r2.status_code == 200, r2.text
         assert r2.json()["undone"] is True
 
-    def test_undo_disabled_for_shared_project(self, env):
-        # 给项目加一个协作者使其成为共享项目
+    def test_undo_enabled_for_shared_project(self, env):
+        """v2 P3 解禁：共享项目可撤销自己的修改（原 v1 禁令测试反转）。"""
         client = _client(env)
         _login(client, "owner")
         self._open(client, env, project_id=env["project_id"])
+        # 先做一次可撤销修改
         r = client.post(
+            "/api/project/apply-change",
+            params={"workspace_id": "ws-1"},
+            json={
+                "file_path": "main.tex",
+                "paragraph_index": 0,
+                "new_text": "Edited.",
+            },
+            headers=csrf(client),
+        )
+        assert r.status_code == 200, r.text
+        r2 = client.post(
             "/api/project/undo",
             params={"workspace_id": "ws-1"},
             json={"file_path": "main.tex"},
             headers=csrf(client),
         )
-        assert r.status_code == 403
-        assert r.json()["detail"]["error"] == "no_permission"
+        assert r2.status_code == 200, r2.text
+        assert r2.json()["undone"] is True
 
-    def test_can_undo_false_for_shared_project(self, env):
+    def test_can_undo_true_for_shared_project(self, env):
+        """v2 P3 解禁：共享项目 undo-status 按当前用户补丁栈实时计算。"""
         client = _client(env)
         _login(client, "owner")
         self._open(client, env, project_id=env["project_id"])
-        r = client.get(
+        # 无编辑时不可撤销
+        r0 = client.get(
             "/api/project/undo-status",
             params={"file_path": "main.tex", "workspace_id": "ws-1"},
         )
-        assert r.status_code == 200
-        assert r.json() == {"can_undo": False, "can_redo": False}
+        assert r0.status_code == 200
+        assert r0.json()["can_undo"] is False
+        assert r0.json()["can_redo"] is False
+        # 有自己的编辑后可撤销（共享状态不再隐藏按钮）
+        r = client.post(
+            "/api/project/apply-change",
+            params={"workspace_id": "ws-1"},
+            json={
+                "file_path": "main.tex",
+                "paragraph_index": 0,
+                "new_text": "Edited.",
+            },
+            headers=csrf(client),
+        )
+        assert r.status_code == 200, r.text
+        r1 = client.get(
+            "/api/project/undo-status",
+            params={"file_path": "main.tex", "workspace_id": "ws-1"},
+        )
+        assert r1.status_code == 200
+        assert r1.json()["can_undo"] is True

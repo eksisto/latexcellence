@@ -127,9 +127,41 @@ def _migration_v3_llm_governance(conn: sqlite3.Connection) -> None:
         """)
 
 
+def _migration_v4_workspace_edit_ops(conn: sqlite3.Connection) -> None:
+    """v2 P3：反向补丁操作索引表（方案 §8.1）。
+
+    一次 apply_change / apply_whole_files 成功写入记一条 op；同一事务内的
+    多文件写共享同一 op_group_id（一次撤销回滚整组）。before/after 全文快照
+    存磁盘（<users_root>/<owner_id>/.edit_logs/<project_id>/<op_id>/），
+    本表只做操作索引；owner_id 冗余存储用于定位快照目录（转交后归属不变）。
+    """
+    conn.executescript("""
+        CREATE TABLE IF NOT EXISTS workspace_edit_ops (
+            seq           INTEGER PRIMARY KEY AUTOINCREMENT,
+            op_id         TEXT NOT NULL UNIQUE,
+            op_group_id   TEXT NOT NULL,
+            project_id    TEXT NOT NULL,
+            owner_id      TEXT NOT NULL DEFAULT '',
+            actor_user_id TEXT NOT NULL,
+            workspace_id  TEXT NOT NULL DEFAULT '',
+            source_module TEXT NOT NULL DEFAULT '',
+            status        TEXT NOT NULL DEFAULT 'active',
+            non_undoable  INTEGER NOT NULL DEFAULT 0,
+            file_count    INTEGER NOT NULL DEFAULT 0,
+            total_bytes   INTEGER NOT NULL DEFAULT 0,
+            created_at    TEXT NOT NULL,
+            undone_at     TEXT
+        );
+        CREATE INDEX IF NOT EXISTS ix_edit_ops_stack
+            ON workspace_edit_ops (project_id, actor_user_id, status, seq);
+        CREATE INDEX IF NOT EXISTS ix_edit_ops_group
+            ON workspace_edit_ops (op_group_id);
+        """)
+
+
 # 当前 schema 最新版本号。新增迁移时：追加实现函数并在列表末尾登记
 # (target_version, description, fn)，同时递增此常量；每个步骤必须幂等可重入。
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 
 # 有序迁移步骤：(目标版本, 描述, 执行函数)。版本从 2 起（1 为 v1 基线，
 # 对老库存量数据无破坏性变更，仅补齐 IF NOT EXISTS 建表）。
@@ -144,6 +176,11 @@ MIGRATIONS: list[tuple[int, str, Callable[[sqlite3.Connection], None]]] = [
         3,
         "v2 P1b LLM governance tables (rate limit events + concurrency leases)",
         _migration_v3_llm_governance,
+    ),
+    (
+        4,
+        "v2 P3 reverse-patch edit log index table",
+        _migration_v4_workspace_edit_ops,
     ),
 ]
 

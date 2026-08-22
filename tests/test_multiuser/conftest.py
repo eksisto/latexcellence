@@ -16,6 +16,7 @@ from fastapi.testclient import TestClient
 from backend.core import config as cfg_module
 from backend.core.multiuser import auth as auth_module
 from backend.core.multiuser import db as db_module
+from backend.core.multiuser import userspace
 from backend.core.security_middleware import AccessSecurityMiddleware
 
 MINIMAL_CONFIG = {
@@ -39,6 +40,14 @@ def _clean_rate_limits():
     auth_module.reset_login_rate_limits()
     yield
     auth_module.reset_login_rate_limits()
+
+
+@pytest.fixture(autouse=True)
+def _reset_current_user_context():
+    """请求级当前用户 ContextVar 在同步测试线程内不会自动复位，
+    测试结束后显式清空，避免 actor 身份泄漏到后续用例。"""
+    yield
+    userspace.set_current_user_id(None)
 
 
 def _reset_config_state():

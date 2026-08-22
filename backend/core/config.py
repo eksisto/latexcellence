@@ -517,6 +517,17 @@ class MultiUserConfig(BaseModel):
         "LATEXCELLENCE_ADMIN_USERNAME"  # 首个管理员用户名环境变量名
     )
     admin_password_env: str = "LATEXCELLENCE_ADMIN_PASSWORD"  # 首个管理员密码环境变量名
+    # 反向补丁编辑日志（v2 P3）：快照存 <users_root>/<owner_id>/.edit_logs/，
+    # 不进项目目录、不进下载包、不占项目/衍生数据配额
+    edit_log_max_ops: int = Field(
+        50, ge=1
+    )  # 每 (project, actor) 撤销栈保留的最大操作条数（按组整体淘汰）
+    edit_log_max_op_mb: int = Field(
+        8, ge=1
+    )  # 单 op 快照总量上限（MB），超出只记索引并标记过大不可撤
+    edit_log_ttl_hours: int = Field(
+        24, ge=1
+    )  # 编辑日志栈无活动保留时长（小时），超时由维护循环整栈清理
 
 
 class SandboxConfig(BaseModel):

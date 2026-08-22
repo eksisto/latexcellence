@@ -228,6 +228,10 @@ def clean_expired_recycle_bin() -> int:
             )
             if root.is_dir():
                 shutil.rmtree(root)
+            # 级联清理反向补丁编辑日志（v2 P3：行 + .edit_logs 快照目录）
+            from . import edit_log
+
+            edit_log.purge_project_ops(row["id"])
             removed += 1
             logger.info(
                 "Recycle bin purge: project %s (owner %s) permanently deleted",

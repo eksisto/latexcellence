@@ -7,6 +7,8 @@
 - purge_expired_sandbox_slots()：清理崩溃残留的沙箱并发租约（v2 P1a）
 - purge_expired_llm_leases() / purge_old_rate_limit_events()：
   清理过期 LLM 并发租约与超过保留期的限流事件（v2 P1b）
+- purge_expired_edit_logs()：清理超过 edit_log_ttl_hours 无活动的
+  反向补丁编辑日志栈与快照目录（v2 P3）
 
 由 main.py lifespan 通过 asyncio.Task 启动；方法内实时读取配置。
 """
@@ -16,6 +18,7 @@ import asyncio
 from backend.core.logger import get_logger
 from . import quota
 from .db import init_db
+from .edit_log import purge_expired_edit_logs
 from .llm_governance import (
     purge_expired_llm_leases,
     purge_old_rate_limit_events,
@@ -28,7 +31,7 @@ DEFAULT_INTERVAL_SECONDS = 3600
 
 
 async def maintenance_loop() -> None:
-    """后台循环：周期执行配额对账与回收站/暂存区/租约与限流事件清理。"""
+    """后台循环：周期执行配额对账与回收站/暂存区/租约/限流事件/编辑日志清理。"""
     logger.info("Multi-user maintenance loop started")
     while True:
         interval = DEFAULT_INTERVAL_SECONDS
@@ -41,6 +44,7 @@ async def maintenance_loop() -> None:
             slots = await asyncio.to_thread(purge_expired_sandbox_slots)
             llm_leases = await asyncio.to_thread(purge_expired_llm_leases)
             rl_events = await asyncio.to_thread(purge_old_rate_limit_events)
+            edit_ops = await asyncio.to_thread(purge_expired_edit_logs)
             if (
                 reconciled
                 or purged
@@ -49,11 +53,12 @@ async def maintenance_loop() -> None:
                 or slots
                 or llm_leases
                 or rl_events
+                or edit_ops
             ):
                 logger.info(
                     "Multi-user maintenance done: reconciled=%d purged=%d "
                     "cleaned_staging=%d cleaned_archives=%d sandbox_slots=%d "
-                    "llm_leases=%d rate_limit_events=%d",
+                    "llm_leases=%d rate_limit_events=%d edit_log_ops=%d",
                     reconciled,
                     purged,
                     cleaned,
@@ -61,6 +66,7 @@ async def maintenance_loop() -> None:
                     slots,
                     llm_leases,
                     rl_events,
+                    edit_ops,
                 )
         except Exception:
             logger.exception("Multi-user maintenance cycle failed")

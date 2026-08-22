@@ -292,7 +292,10 @@
     "login_rate_limit_per_minute": 5,
     "registration_enabled": true,
     "admin_username_env": "LATEXCELLENCE_ADMIN_USERNAME",
-    "admin_password_env": "LATEXCELLENCE_ADMIN_PASSWORD"
+    "admin_password_env": "LATEXCELLENCE_ADMIN_PASSWORD",
+    "edit_log_max_ops": 50,
+    "edit_log_max_op_mb": 8,
+    "edit_log_ttl_hours": 24
   },
   "sandbox": {
     "mode": "auto",

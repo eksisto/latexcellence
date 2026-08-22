@@ -386,6 +386,10 @@ async def permanent_delete_project(user_id: str, project_id: str) -> dict:
         )
     root = userspace.project_dir(user_id, project_id)
     await asyncio.to_thread(shutil.rmtree, root, ignore_errors=True)
+    # 级联清理该项目的反向补丁编辑日志（行 + .edit_logs 快照目录，v2 P3）
+    from backend.core.multiuser import edit_log
+
+    await asyncio.to_thread(edit_log.purge_project_ops, project_id)
     await asyncio.to_thread(
         db_execute, "DELETE FROM projects WHERE id = ?", (project_id,)
     )
@@ -433,10 +437,24 @@ def _cleanup_staging(staging_dir: Path) -> None:
 
 
 # ── 写回配额（apply-change 超限回滚） ──────────────────────────────────────
-async def enforce_write_quota(binding: dict, project, file_path: str) -> None:
-    """写回后配额记账：超限则回滚本次修改并抛 413 quota_exceeded。
+async def enforce_write_quota(
+    binding: dict,
+    project,
+    file_path: str,
+    *,
+    before_content: str | None = None,
+    edit_op_id: str | None = None,
+    actor_user_id: str | None = None,
+) -> None:
+    """写回后配额记账：超限则以写前内容直接恢复并抛 413 quota_exceeded。
 
     仅多用户模式下生效（单用户模式不设配额，直接放行）。
+    v2 P3 起回滚不再走 project.undo 撤销通道（避免误回退他人修改），
+    改为以写前全文经抑制记账的 apply_whole_files 恢复，并以本次写入的
+    编辑日志 after_md5 作乐观锁版本守卫——配额检查窗口期内若他人已
+    落盘新修改，则放弃覆盖（绝不静默覆盖他人修改），只撤销本次记账并
+    如实报错。撤销栈不被失败写入污染（方案 §8.4），调用方须在写入前
+    捕获 before_content 并透传 apply_change 返回的 edit_op_id。
     回滚失败时记录异常并以 500 如实上报——超限写入仍在磁盘上，
     不得向客户端谎报已回滚。
     """
@@ -453,9 +471,68 @@ async def enforce_write_quota(binding: dict, project, file_path: str) -> None:
     if usage <= quota:
         return
 
-    # 超限：回滚本次写入（apply_change 已将旧内容推入撤销栈），并刷新记账
+    # 超限：以写前全文直接恢复（不经撤销通道），并删除本次写入的编辑日志 op
+    if before_content is None:
+        logger.error(
+            "Quota rollback skipped, no before-content captured: " "project=%s file=%s",
+            project_id,
+            file_path,
+        )
+        raise _http(
+            500,
+            "quota_exceeded",
+            "Project space quota exceeded; automatic rollback failed",
+        )
+    from backend.core.multiuser import edit_log
+    from backend.core.project_manager import FileConflictError
+
+    guard_md5s: dict[str, str] | None = None
+    if edit_op_id and actor_user_id:
+        # 版本守卫来源：本次写入的编辑日志清单（写入后 MD5 的权威记录）
+        guard_md5s = await asyncio.to_thread(
+            edit_log.op_after_md5s, edit_op_id, project_id, actor_user_id
+        )
+    expected_md5s = (
+        {file_path: guard_md5s[file_path]}
+        if guard_md5s and file_path in guard_md5s
+        else None
+    )
+
+    rollback_skipped_by_conflict = False
     try:
-        await asyncio.to_thread(project.undo, file_path)
+        if expected_md5s is not None:
+            try:
+                # 仅当文件仍是本次写入的结果时才覆盖；期间他人落盘新修改
+                # 则放弃覆盖，绝不静默回退他人内容（方案 §8.4）
+                with edit_log.suppress_recording():
+                    await asyncio.to_thread(
+                        project.apply_whole_files,
+                        {file_path: before_content},
+                        expected_md5s=expected_md5s,
+                    )
+            except FileConflictError:
+                rollback_skipped_by_conflict = True
+                logger.error(
+                    "Quota rollback aborted, file changed during quota check: "
+                    "project=%s file=%s",
+                    project_id,
+                    file_path,
+                )
+        else:
+            # 无记账清单可用（记录失败等罕见场景）：退化为无守卫直接恢复
+            logger.warning(
+                "Quota rollback without version guard (no edit-log manifest): "
+                "project=%s file=%s",
+                project_id,
+                file_path,
+            )
+            await asyncio.to_thread(
+                project.restore_project_file, file_path, before_content
+            )
+        if edit_op_id and actor_user_id:
+            await asyncio.to_thread(
+                edit_log.discard_op, edit_op_id, project_id, actor_user_id
+            )
     except Exception:
         logger.exception(
             "Quota rollback failed after oversized write: project=%s file=%s",
@@ -467,6 +544,15 @@ async def enforce_write_quota(binding: dict, project, file_path: str) -> None:
             500,
             "quota_exceeded",
             "Project space quota exceeded; automatic rollback failed",
+        )
+    await asyncio.to_thread(refresh_owner_usage_after_write, project_id)
+    if rollback_skipped_by_conflict:
+        # 覆盖已放弃、超限写入仍在磁盘上：如实上报，不得谎称已回滚
+        raise _http(
+            500,
+            "quota_exceeded",
+            "Project space quota exceeded; the file changed during the "
+            "quota check, so automatic rollback was skipped",
         )
     await asyncio.to_thread(refresh_owner_usage_after_write, project_id)
     raise _http(

@@ -84,7 +84,7 @@ def get_project_access(user_id: str, project_id: str) -> dict | None:
 
 
 def is_shared_project(project_id: str) -> bool:
-    """项目是否存在任意协作者（共享项目 v1 禁用撤销/重做）。"""
+    """项目是否存在任意协作者（共享项目标识；v2 P3 起共享项目可撤销自己的修改）。"""
     return (
         db_count(
             "SELECT COUNT(*) FROM project_collaborators WHERE project_id = ?",
@@ -370,17 +370,6 @@ require_workspace_read = require_workspace(write=False)
 require_workspace_write = require_workspace(write=True)
 require_workspace_read_json = require_workspace_json(write=False)
 require_workspace_write_json = require_workspace_json(write=True)
-
-
-async def reject_undo_redo_if_shared(binding: dict) -> None:
-    """共享项目 v1 禁用撤销/重做（owner 同样禁用）；单用户模式不受影响。"""
-    if not binding.get("multi_user") or not binding.get("project_id"):
-        return
-    shared = await asyncio.to_thread(is_shared_project, binding["project_id"])
-    if shared:
-        raise forbidden(
-            "no_permission", "Undo/redo is disabled for shared projects (v1)"
-        )
 
 
 # ── 写盘后配额记账刷新 ────────────────────────────────────────────────────

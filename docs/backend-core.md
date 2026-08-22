@@ -403,22 +403,23 @@ ExtractorRegistry 先处理已知公开端点（当前代码托管页面使用 G
 
 ### 多用户模式基础设施（`backend/core/multiuser/` + `backend/core/access_control.py` + `backend/modules/auth/` + `backend/manage.py`）
 
-多用户模式（`multi_user.enabled=true`）的后端基础设施，按阶段（见 [docs/multi-user-plan.md](multi-user-plan.md)）实施。P1 已完成：SQLite 初始化、注册/审批/登录/会话/Cookie/CSRF、管理员引导与 CLI；P2 已完成：用户空间目录、统一路径解析、项目访问控制、workspace 绑定与现有端点收紧；P3 已完成：上传/解压管线、项目命名、配额记账、回收站与下载；P4 已完成：协作者管理、转交、viewer 写保护与共享项目撤销禁用；P5 已完成：前端登录/注册/工作台/上传/权限/管理面板全套；P6 已完成：migrate-legacy 存量迁移、会话类资源按用户归属校验与存量路径改造；P7 已完成：部署指南（HTTPS、风险声明，见 [deployment.md](deployment.md)）与全量文档同步。
+多用户模式（`multi_user.enabled=true`）的后端基础设施，按阶段（见 [docs/multi-user-plan.md](multi-user-plan.md) 与 [docs/multi-user-v2-plan.md](multi-user-v2-plan.md)）实施。P1 已完成：SQLite 初始化、注册/审批/登录/会话/Cookie/CSRF、管理员引导与 CLI；P2 已完成：用户空间目录、统一路径解析、项目访问控制、workspace 绑定与现有端点收紧；P3 已完成：上传/解压管线、项目命名、配额记账、回收站与下载；P4 已完成：协作者管理、转交、viewer 写保护与共享项目撤销禁用；P5 已完成：前端登录/注册/工作台/上传/权限/管理面板全套；P6 已完成：migrate-legacy 存量迁移、会话类资源按用户归属校验与存量路径改造；P7 已完成：部署指南（HTTPS、风险声明，见 [deployment.md](deployment.md)）与全量文档同步。v2 P1a/P1b/P2 已完成 Docker 沙箱、LLM 每用户治理与 rar 支持（见 [multi-user-v2-plan.md](multi-user-v2-plan.md)）；v2 P3 已完成共享项目反向补丁撤销（见下文「反向补丁撤销要点」与 [DESIGN.md §14](../DESIGN.md)）。
 
 **包结构**：
 
 | 文件 | 职责 |
 | --- | --- |
-| `backend/core/multiuser/db.py` | SQLite 初始化（v1 业务表 + v2 沙箱/治理表，WAL + 外键）、连接管理与统一查询入口（`db_execute` / `db_query_one` / `db_query_all`，同步线程安全）、版本迁移框架（PRAGMA `user_version` + 有序幂等步骤） |
+| `backend/core/multiuser/db.py` | SQLite 初始化（v1 业务表 + v2 沙箱/治理/编辑日志表，WAL + 外键）、连接管理与统一查询入口（`db_execute` / `db_query_one` / `db_query_all`，同步线程安全）、版本迁移框架（PRAGMA `user_version` + 有序幂等步骤） |
 | `backend/core/multiuser/userspace.py` | 用户空间目录布局（`<users_root>/<user_id>/{projects, writing_chat_sessions, style_modify_sessions, templates, plots}`），`ensure_user_dirs()` 注册时创建；P6 新增请求级当前用户上下文（`set/get_current_user_id`）与统一会话资源根解析 `user_resource_root(subdir, legacy_root)`（单用户回退存量全局路径）、`iterate_user_resource_roots()`（后台清理枚举各用户资源目录） |
 | `backend/core/multiuser/auth.py` | 密码哈希（argon2id）、会话令牌（库只存 SHA-256 哈希）、用户管理（注册 pending / 审批 / 禁用 / 重置密码 / 配额覆盖）、登录限流（每用户名+每 IP 分钟级；v2 P1b 起计数入 `rate_limit_events` 表 kind='login'，替代进程内字典）、`ensure_bootstrap_admin()` |
 | `backend/core/multiuser/dependencies.py` | FastAPI 认证依赖：`get_current_user`（401）、`require_admin`（403）、`get_current_user_optional`、`require_admin_if_multiuser`；P6 新增 `current_user_context`（注入请求级当前用户用于会话类资源归属校验） |
 | `backend/core/multiuser/quota.py` | 配额记账核心：有效额度解析（用户覆盖优先）、项目/衍生用量统计、上传/写回/恢复前置校验（超限抛 413 `quota_exceeded`）、项目唯一命名与建行（`xx (2)`）、对账（`reconcile_project_sizes`）、回收站过期清理 |
 | `backend/core/multiuser/upload.py` | 上传解压管线核心：zip（UTF-8/GBK/cp437 编码、路径穿越/符号链接/加密/炸弹拦截）与 7z（py7zr）安全解压、rar（外部 unar 管线，多用户 v2 P2：进程组限时/超配额击杀、RAR4 加密与分卷标志预扫、受保护包输出关键词兜底、零产物兜底）、项目根归一化、`move_into_user_space()` 落位 |
-| `backend/core/multiuser/maintenance.py` | 后台维护循环：配额对账 + 回收站/暂存区清理 + 沙箱/LLM 租约与限流事件清理（`main.py` lifespan 启动） |
+| `backend/core/multiuser/maintenance.py` | 后台维护循环：配额对账 + 回收站/暂存区清理 + 沙箱/LLM 租约与限流事件清理 + 编辑日志 TTL 清理（`main.py` lifespan 启动） |
 | `backend/core/multiuser/sandbox_leases.py` | 沙箱并发池租约（v2 P1a）：`sandbox_slots` 表原子获取/释放，TTL 清理崩溃残留 |
 | `backend/core/multiuser/llm_governance.py` | LLM 每用户治理（v2 P1b）：60s 滑动窗口限流（`rate_limit_events` kind='llm'）+ 并发租约（`llm_concurrency_leases`，TTL 900s），单事务原子准入；超限抛带 `gov_code` 的 RuntimeError（429），`governance_http_response()` 翻译为 429 + Retry-After + `detail` 包装结构化错误体，`register_governance_handler()` 供 main.py 与测试注册同一处理器；`admission_gate()` 供 `llm_client` 各入口包裹，单用户/无用户上下文直通；维护入口 `purge_expired_llm_leases()` / `purge_old_rate_limit_events()` |
 | `backend/core/multiuser/migrate.py` | 存量数据迁移工具（P6）：`migrate_legacy()` 把存量全局目录（writing_chat_sessions / style_modify_sessions / templates / plots / formats / prompts）幂等复制到管理员用户空间，`--dry-run` 预演，报告 + 目录树校验 |
+| `backend/core/multiuser/edit_log.py` | 反向补丁编辑日志（v2 P3）：写入记账（apply_change / apply_whole_files 统一挂接，ContextVar 取当前用户）、快照存储（owner 维度 `.edit_logs/`）、LIFO undo/redo（冲突即拒绝、配额预检、op_group 整组回滚、redo 对称重放）、实时状态计算、条数上限淘汰 / TTL 清理 / 项目级级联清理 |
 | `backend/core/access_control.py` | 统一访问控制：`owner/editor/viewer` 权限矩阵、`require_project_access()` / `get_projects_for_user()` / `get_user_role_for_project()` / `is_shared_project()`、基于 workspace 绑定的请求级依赖 `require_workspace(write=...)`；权限实时查库不缓存 |
 | `backend/modules/projects/router.py` | 薄路由层：`/api/projects`（列表 / 上传创建）与 `/api/projects/{id}`（重命名 / 回收站 / 恢复 / 永久删除 / 下载 / 权限协作 / 转交） |
 | `backend/modules/projects/service.py` | 项目业务逻辑：流式接收压缩包、安全解压（`asyncio.to_thread`）、配额校验、唯一命名、落位、回收站流转、打包下载、协作者管理与项目转交 |
@@ -440,7 +441,7 @@ ExtractorRegistry 先处理已知公开端点（当前代码托管页面使用 G
 - 项目目录由 `project_id` 派生（`data/users/<owner_id>/projects/<project_id>/`）；项目文件读写统一经 `resolve_user_path()`（`path_guard`，基于 `resolve_project_path`）解析，禁止直接拼接路径；符号链接默认拒绝。
 - `WorkspaceManager` 增加 `bind()/get_binding()/unbind()`：多用户模式下 `/api/project/open` 打开项目时写入 `workspace_id → (user_id, project_id, owner_id, root_path)`；`/remove` 时一并清理绑定。
 - `access_control.require_workspace(write=...)` 为请求级 FastAPI 依赖（`require_workspace_read` / `require_workspace_write`）：单用户模式直接放行；多用户模式按当前登录用户**实时查库**校验所属项目角色，写操作要求 `viewer` 之外的权限；未绑定工作区返回 400 `invalid_workspace`。
-- 端点收紧（多用户模式）：`POST /api/project/open` 仅接受 `project_id`（携带 `path` 返回 400 `path_disabled`，无 `project_id` 返回 400 `invalid_request`）；`GET /api/project/browse` 返回 403 `no_permission`；`apply-change` / `set-main-file` / `undo` / `redo` 经 `require_workspace_write` 校验；共享项目（存在任意协作者）v1 禁用撤销/重做（`undo`/`redo` 403，`can-undo`/`can-redo`/`undo-status` 恒为 False）。
+- 端点收紧（多用户模式）：`POST /api/project/open` 仅接受 `project_id`（携带 `path` 返回 400 `path_disabled`，无 `project_id` 返回 400 `invalid_request`）；`GET /api/project/browse` 返回 403 `no_permission`；`apply-change` / `set-main-file` / `undo` / `redo` 经 `require_workspace_write` 校验；共享项目撤销禁令已由 v2 P3 反向补丁取代——undo/redo 只回退当前用户自己的修改（冲突 409 `file_conflict`、恢复超配额 413 `quota_exceeded_recover`），`can-undo`/`can-redo`/`undo-status` 按当前用户补丁栈实时计算。
 
 **P3 上传与配额要点**：
 
@@ -460,7 +461,17 @@ ExtractorRegistry 先处理已知公开端点（当前代码托管页面使用 G
 - 权限**实时查库**：添加 / 改角色 / 移除后，下一次请求立即生效（对端体验可即时验证，如被移除的协作者下一次读请求即 403）。
 - 转交端点 `POST /api/projects/{id}/transfer`（body：`username` + `keep_access`）：owner 将项目转给其他 `active` 用户；`keep_access=True` 时原 owner 转后保留为 viewer，否则直接退出协作。
 - 转交实现要点：转交前校验**接收方项目空间配额**（超限 413 `quota_exceeded`，与上传/恢复同口径）；项目目录沿 `data/users/<owner_id>/projects/<project_id>/` 规范**迁移到新 owner 空间**（保证 `root_path` 派生、配额记账与对账一致）；新 owner 有同名活动项目时自动生成 `xx (2)`（复用 `next_available_name`）；新 owner 原为协作者则转正并移除其协作者行；已打开该项目的 workspace 绑定同步更新 `owner_id` / `root_path` 并重新打开文件树。
-- viewer 写保护与共享项目撤销禁用（P2 已落地）：viewer 的 `apply-change` / `set-main-file` / `undo` / `redo` 返回 403；共享项目（存在任意协作者）v1 禁用撤销/重做。
+- viewer 写保护（P2 已落地）：viewer 的 `apply-change` / `set-main-file` / `undo` / `redo` 返回 403。共享项目撤销禁令（v1）已在 v2 P3 由反向补丁解禁：转交后 ops 按 actor 归属不变，各用户只能撤销自己的修改。
+
+**反向补丁撤销要点（v2 P3）**：
+
+- 写入记账：`LatexProject.apply_change` / `apply_whole_files` 成功写盘后调用 `edit_log.record_write()`——多用户模式下按请求级当前用户（ContextVar）落一条 op（SQLite `workspace_edit_ops` 表，`seq` 严格递增定序）；同一 `apply_whole_files` 事务的多文件写共享 `op_group_id`，一次撤销整组回滚；单用户模式完全不落盘（内存 `BackupManager` 栈行为不变），无当前用户上下文（后台任务）也不记账。
+- 快照布局：`<users_root>/<owner_id>/.edit_logs/<project_id>/<op_id>/`（manifest.json + `<n>.before` / `<n>.after` 全文），不进项目目录、不进下载包、不占配额；单 op 快照总量超 `edit_log_max_op_mb` 只记索引并标记 `non_undoable`（过大不可撤）。
+- undo/redo（`POST /api/project/undo` / `redo` 多用户分支）：取当前 (project, actor) 最新 active/undone op 组 → 校验组内每文件当前 MD5 == after_md5（undo）/ before_md5（redo）→ 配额预检（增长超限 413 `quota_exceeded_recover`，op 保持可重试）→ 经 `apply_whole_files(expected_md5s=...)` 事务回滚/重放（抑制再记账）→ 更新状态。文件缺失（防御性）把该 op 标记 `failed` 并在状态接口提示。
+- 实时状态：`can-undo` / `can-redo` / `undo-status` 按 (project, actor) 补丁栈实时计算，MD5 校验失败视为不可撤销但保留 op；`undo-status` 附带 `undo_block_reason` / `redo_block_reason`（conflict / too_large / superseded，诊断用）与 `failed_ops` 计数。
+- 解禁与覆盖面：`reject_undo_redo_if_shared` 已移除，AI 旁路（写作助手工具/apply-edit、style_modify apply/undo）经统一记账自然合规；style_modify 自身提案级撤销保留。
+- 配额回滚改造：`apply-change` 超限回滚不再调用撤销通道，改为写前捕获全文，以本次 op 的 after_md5 作版本守卫经抑制记账的 `apply_whole_files(expected_md5s=...)` 恢复（配额检查窗口内他人已落盘新修改则放弃覆盖、只 `discard_op()` 撤销本次记账并如实报错；无记账清单可用的罕见场景才退化为 `restore_project_file()` 直接恢复并告警）——失败写入不在撤销栈留痕。
+- 生命周期：每 (project, actor) 保留最近 `edit_log_max_ops` 条（按组整体淘汰、连带删快照）；维护循环清理超过 `edit_log_ttl_hours` 无活动的整栈；项目永久删除 / 回收站过期清理级联删除该项目全部 ops。
 
 **P6 迁移与存量隔离要点**：
 
