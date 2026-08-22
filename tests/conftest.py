@@ -38,6 +38,14 @@ def _ensure_config():
     # 不依赖本机 config.json，也绝不会在单测中发起真实 LLM 请求。
     # 需要验证“无 Key”行为的测试可自行 monkeypatch 置空。
     cfg.llm.api_key = "test-key"
+    # 沙箱模式同理强制 local：装了 docker SDK 的开发机/CI 上，auto 模式会把
+    # 单测中的命令执行劫持进真实容器（且沙箱化进程的临时目录对 daemon 不可
+    # 见），破坏测试确定性。需要真容器的用例走 docker marker（tests/test_docker/
+    # 自行强制 mode=docker 并自管跳过逻辑）。
+    from backend.utils.sandbox import reset_sandbox_runner
+
+    cfg.sandbox.mode = "local"
+    reset_sandbox_runner()
 
 
 @pytest.fixture

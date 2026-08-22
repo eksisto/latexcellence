@@ -46,6 +46,39 @@ def _decode_pair(pair: tuple[bytes, bytes]) -> tuple[str, str]:
     )
 
 
+def _demux_docker_stream(raw: bytes) -> tuple[bytes, bytes]:
+    """解复用 Docker 日志流（非 TTY 模式的帧协议）。
+
+    帧格式（Docker Engine API 稳定约定）：
+        [1B stream type][3B flags][4B big-endian payload length][payload]
+    type: 0=stdin 1=stdout 2=stderr（3/4 为 resize 等控制帧，丢弃）。
+    手动解复用而非依赖 SDK 的 demux 参数：docker-py 7.x 的 logs() 已移除
+    该参数，而帧协议跨版本稳定。首帧校验失败时按 TTY 输出整体归入 stdout。
+    """
+    if not raw:
+        return b"", b""
+    out, err = bytearray(), bytearray()
+    i, n = 0, len(raw)
+
+    def _frame_len_valid(pos: int) -> bool:
+        return pos + 8 <= n
+
+    # 首帧头校验：type 必须在 0..4 且长度不超过剩余字节，否则视为 TTY 直写流
+    if _frame_len_valid(0) and raw[0] <= 4 and int.from_bytes(raw[4:8], "big") <= n - 8:
+        while i + 8 <= n:
+            ftype = raw[i]
+            length = int.from_bytes(raw[i + 4 : i + 8], "big")
+            payload = raw[i + 8 : i + 8 + length]
+            if ftype == 1:
+                out += payload
+            elif ftype == 2:
+                err += payload
+            i += 8 + length
+        return bytes(out), bytes(err)
+
+    return raw, b""
+
+
 class DockerBackend:
     """基于 docker SDK 的执行后端（客户端惰性创建、线程安全）。"""
 
@@ -121,11 +154,10 @@ class DockerBackend:
                 await asyncio.sleep(_POLL_INTERVAL_SECONDS)
 
             state = await asyncio.to_thread(self._read_state, container)
-            stdout, stderr = _decode_pair(
-                await asyncio.to_thread(
-                    lambda: container.logs(stdout=True, stderr=True, demux=True)
-                )
+            raw_logs = await asyncio.to_thread(
+                lambda: container.logs(stdout=True, stderr=True)
             )
+            stdout, stderr = _decode_pair(_demux_docker_stream(raw_logs))
             exit_code = int(state.get("ExitCode") or 0)
             oom_killed = bool(state.get("OOMKilled")) or (
                 exit_code == 137 and not timed_out
@@ -155,11 +187,17 @@ class DockerBackend:
     def _create_and_start(self, spec: ExecSpec, image: str, limits: SandboxLimits):
         client = self._get_client()
         kwargs = self._build_container_kwargs(spec, image, limits)
-        try:
-            container = client.containers.create(**kwargs, networking_mode="none")
-        except TypeError:
-            # 兼容旧版 docker SDK：networking_mode 尚未更名
-            container = client.containers.create(**kwargs, network_mode="none")
+        # 网络隔离参数名随 SDK 版本变化（按已安装 SDK 的签名选择，
+        # 避免盲试 TypeError 掩盖真正的参数错误）：
+        #   旧版：network_mode；新版（更名后）：networking_mode
+        import inspect
+
+        create_params = inspect.signature(client.containers.create).parameters
+        net_key = (
+            "networking_mode" if "networking_mode" in create_params else "network_mode"
+        )
+        kwargs[net_key] = "none"
+        container = client.containers.create(**kwargs)
         container.start()
         logger.info(
             "sandbox container started | image=%s | cwd=%s | cmd=%s",

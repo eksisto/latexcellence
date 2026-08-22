@@ -75,6 +75,7 @@ class TestModeSelection:
         monkeypatch.setattr(
             "backend.utils.sandbox.runner.docker_sdk_available", lambda: False
         )
+        cfg.sandbox.mode = "auto"  # 显式声明：conftest 基线强制 local
         runner = SandboxRunner()
         assert await runner.resolve_backend("tex") == "local"
 
@@ -91,6 +92,7 @@ class TestModeSelection:
 
     @pytest.mark.asyncio
     async def test_docker_reachable_resolves_docker(self, cfg):
+        cfg.sandbox.mode = "auto"  # 显式声明：conftest 基线强制 local
         runner = SandboxRunner()
         _fake_docker(runner, reachable=True)
         assert await runner.resolve_backend("convert") == "docker"

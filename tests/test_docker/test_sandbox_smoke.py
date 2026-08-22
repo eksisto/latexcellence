@@ -40,10 +40,55 @@ def _image_exists(image: str) -> bool:
         return False
 
 
+@pytest.fixture(scope="module", autouse=True)
+def _ensure_config_loaded():
+    """模块级 fixture 先于函数级 conftest 加载，需自行保证配置就绪。"""
+    from backend.core.config import load_config
+
+    try:
+        get_config()
+    except RuntimeError:
+        load_config("config.json")
+
+
+def _host_tmp_visible_to_daemon() -> bool:
+    """预检：本进程创建的临时目录对 daemon 是否可见。
+
+    受限执行环境（文件沙箱的私有 /tmp、容器内测试进程）中，bind mount
+    的 source path 在 daemon 视角不存在，容器创建必然 400——这属环境
+    限制而非产品缺陷，显式 skip 以免掩盖真实回归。真实开发机 / CI 上
+    此预检恒通过。
+    """
+    import asyncio
+
+    work = Path(tempfile.mkdtemp(prefix="lx_sbx_preflight_"))
+    try:
+        spec = ExecSpec(
+            command=["true"],
+            cwd=str(work),
+            image_kind="tex",
+            timeout_seconds=30,
+        )
+        try:
+            res = _run_docker(spec)
+        except RuntimeError as e:
+            if "does not exist" in str(e) or "invalid mount" in str(e):
+                return False
+            raise
+        return res.returncode == 0
+    finally:
+        shutil.rmtree(work, ignore_errors=True)
+
+
 @pytest.fixture(scope="module")
 def docker_available():
     if not _daemon_available():
         pytest.skip("Docker daemon 不可达，跳过沙箱容器冒烟")
+    if not _host_tmp_visible_to_daemon():
+        pytest.skip(
+            "执行环境的临时目录对 Docker daemon 不可见（受限文件沙箱），"
+            "无法验证 bind mount；请在宿主会话或 CI 中运行"
+        )
     return True
 
 
