@@ -168,6 +168,13 @@ const WorkspaceShortcut = memo(function WorkspaceShortcut() {
   const { t } = useTranslation("components");
   const handleNavigate = useCallback(() => navigate("/workspace"), [navigate]);
 
+  // 多用户标志是启动引导时一次性写入的模块级状态（connection.js），并非响应式源。
+  // 本组件被 memo 包裹且无 props，父级重渲染不会传导进来；若不订阅任何会变化的值，
+  // 启动探测推翻 localStorage 旧多用户标志后将保持陈旧渲染（审查 Low-2）。
+  // 订阅 authStatus：boot 完成（loading → 终态）恰是模式裁决完成的时刻，
+  // 借此获得一次用最新 isMultiUser() 重渲染的机会；此后模式不再变化。
+  useStore((s) => s.authStatus);
+
   if (isMultiUser()) return null;
   if (pathname === "/" || pathname === "/workspace") return null;
 

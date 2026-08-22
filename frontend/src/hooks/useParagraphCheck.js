@@ -432,7 +432,6 @@ export default function useParagraphCheck({
     finalizeCheck,
     scheduleFlush,
     drainBuffer,
-    isOpened,
   ]);
 
   const refreshConflictMd5s = useCallback(
