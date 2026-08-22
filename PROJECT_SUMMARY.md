@@ -189,6 +189,7 @@ latexcellence/
 │   ├── windows-temp-permissions.md          # Windows 沙箱临时目录权限排查（pytest basetemp/ACL/清理）
 │   ├── web-access-operations.md              # 网络访问灰度、观测、容量与回滚运维
 │   ├── multi-user-plan.md                    # 多用户模式设计方案（双模式/认证/用户空间/配额/权限协作/管理后台/迁移）
+│   ├── multi-user-v2-plan.md                   # 多用户模式 v2 设计方案（Docker 沙箱/rar/反向补丁撤销/分片上传/SMTP/记账优化/多实例）
 │   ├── deployment.md                          # 部署指南（单用户/多用户部署、HTTPS 反向代理、安全风险声明、备份与运维）
 │   ├── modules/                     # 模块文档
 │   └── showcase.md                  # 展示页（showcase）说明

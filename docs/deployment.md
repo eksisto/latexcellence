@@ -12,6 +12,7 @@
   - [构建与启动](#构建与启动)
   - [管理员引导](#管理员引导)
   - [存量数据迁移](#存量数据迁移)
+- [CPU 架构支持（amd64 / arm64）](#cpu-架构支持amd64--arm64)
 - [HTTPS 与反向代理](#https-与反向代理)
 - [安全风险声明（必读）](#安全风险声明必读)
 - [数据目录与备份](#数据目录与备份)
@@ -129,6 +130,26 @@ python -m backend.manage migrate-legacy [--dry-run]
 - 覆盖存量 `data/writing_chat_sessions/`、`data/style_modify_sessions/`、`data/templates/`、`data/plots/`、`data/formats/`、`data/prompts/` 等全局目录；
 - 复制完成后逐文件校验并输出报告；源目录默认保留，确认无误后人工清理；
 - 旧 LaTeX 项目不在自动迁移范围（config 中无工作区记录），由各用户在工作台重新上传。
+
+---
+
+## CPU 架构支持（amd64 / arm64）
+
+后端在 amd64 与 arm64（aarch64）服务器上均可部署，两者均为一等支持目标。代码层面无任何 CPU 架构相关分支（唯一的平台分叉是 Windows/POSIX 进程管理路径，POSIX 路径在 aarch64 Linux 原样可用）：
+
+| 依赖 | arm64 可用性 |
+| --- | --- |
+| Python 3.12+ | 主流发行版均提供 aarch64 构建 |
+| Python 依赖（fastapi / uvicorn / pydantic / argon2-cffi / Pillow / numpy 等） | PyPI 均有 aarch64 wheel 或为纯 Python 实现，无需本地编译 |
+| TeX Live | Debian/Ubuntu 官方源全架构支持；上游 `install-tl` 提供 `aarch64-linux` 二进制集；latexmk / latexdiff / texfot 为 Perl 脚本，架构无关 |
+| Pandoc | 发行版源或官方发布物均有 arm64 版本 |
+| Node.js（仅前端构建期需要） | 官方提供 arm64 二进制；构建产物为静态文件，与运行架构无关 |
+
+注意事项：
+
+- **联网搜索的浏览器回退池（Playwright，可选功能）**：arm64 Linux 上 Chromium/Firefox 可用，WebKit 的 arm64 支持随版本变动；该能力初始化失败仅降级并记 warning，不影响主流程。部署后建议跑一次写作助手联网搜索冒烟，确认实际可用性；
+- **发布冒烟**：若构建/发布环境与生产架构不同，建议在目标架构上完成一次最小冒烟（启动 → 登录 → 上传 → 编译）再对外提供服务；
+- v2 的 Docker 沙箱镜像同样支持在 arm64 上构建（TeX Live 与 pandoc 均有 arm64 发布物），多架构构建说明见 [multi-user-v2-plan.md](multi-user-v2-plan.md)。
 
 ---
 
