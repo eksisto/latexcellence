@@ -454,9 +454,10 @@ export default function useWritingChat() {
   // ── 应用编辑 ────────────────────────────────────────────────────
   const applyEdit = useCallback(
     async (messageId, customText) => {
-      // 多用户模式：viewer 只读，禁止应用编辑
-      const projectRole = useStore.getState().projectRole;
-      if (isMultiUser() && projectRole === "viewer") {
+      // 多用户模式：写操作走 canWrite 白名单（owner/editor），未知角色
+      // 一律只读——不得用 projectRole === "viewer" 反白名单（role 为 null
+      // 时会放行写操作，违背 projectAccess 的单一事实源口径）
+      if (!canWrite) {
         setError(i18n.t("errors:noPermission"));
         toast.error(i18n.t("errors:noPermission"));
         return;
@@ -501,7 +502,7 @@ export default function useWritingChat() {
         setApplyingMessageId(null);
       }
     },
-    [setWritingChatMessages],
+    [canWrite, setWritingChatMessages],
   );
 
   // ── 删除消息（summary 消息会还原快照） ────────────────────────

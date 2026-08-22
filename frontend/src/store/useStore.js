@@ -40,6 +40,42 @@ function getOrCreateWorkspaceId() {
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 
+/**
+ * 项目相关状态的重置切片：登出（clearProject）与会话失效（handleUnauthorized）
+ * 共用，保证两条路径清空口径一致——401 后同浏览器换账号登录不得看到前一
+ * 账号的检查结果、写作会话等持久化数据（跨账号数据残留防护）。
+ * 不含 workspaceId / currentTheme（设备级状态，与账号无关）。
+ */
+function projectStateReset() {
+  return {
+    projectPath: null,
+    rootPath: null,
+    projectId: null,
+    projectRole: null,
+    fileTree: [],
+    activeFile: null,
+    mainFile: null,
+    typoResults: [],
+    typoParagraphs: [],
+    expressionResults: [],
+    expressionParagraphs: [],
+    codeReviewResults: [],
+    codeReviewParagraphs: [],
+    terminologyResults: [],
+    terminologyParagraphs: [],
+    paragraphTranslateResults: [],
+    paragraphTranslateParagraphs: [],
+    writingChatSessions: [],
+    writingChatCurrentSessionId: null,
+    writingChatMessages: [],
+    writingChatCompressed: false,
+    styleModifySessionId: null,
+    styleModifyRevision: null,
+    styleModifyOperationId: null,
+    checkProgress: null,
+  };
+}
+
 const useStore = create(
   persist(
     (set, get) => ({
@@ -77,20 +113,16 @@ const useStore = create(
       setProjectRole: (role) => set({ projectRole: role }),
       setOpenedProject: ({ projectId, projectRole }) =>
         set({ projectId, projectRole }),
-      /** 会话失效 / 未登录：清空认证状态与项目状态（ConnectPanel 401 回调） */
+      /** 会话失效 / 未登录：清空认证状态，并按登出同口径清空项目与检查结果态。
+       * 此前只清项目身份字段，persist 的检查结果/写作会话跨 401 残留，
+       * 同浏览器换账号登录会看到前一账号的数据（审查 Required#6）。 */
       handleUnauthorized: () =>
         set({
           authStatus: "unauthenticated",
           authUser: null,
           quota: null,
           usage: null,
-          projectPath: null,
-          rootPath: null,
-          projectId: null,
-          projectRole: null,
-          activeFile: null,
-          mainFile: null,
-          fileTree: [],
+          ...projectStateReset(),
         }),
       /** 登出（不发起网络请求，仅清空本地状态；调用方负责调用 api.auth.logout） */
       clearAuth: () =>
@@ -308,33 +340,7 @@ const useStore = create(
         } catch (_) {
           // 忽略
         }
-        set({
-          projectPath: null,
-          rootPath: null,
-          projectId: null,
-          projectRole: null,
-          fileTree: [],
-          activeFile: null,
-          mainFile: null,
-          typoResults: [],
-          typoParagraphs: [],
-          expressionResults: [],
-          expressionParagraphs: [],
-          codeReviewResults: [],
-          codeReviewParagraphs: [],
-          terminologyResults: [],
-          terminologyParagraphs: [],
-          paragraphTranslateResults: [],
-          paragraphTranslateParagraphs: [],
-          writingChatSessions: [],
-          writingChatCurrentSessionId: null,
-          writingChatMessages: [],
-          writingChatCompressed: false,
-          styleModifySessionId: null,
-          styleModifyRevision: null,
-          styleModifyOperationId: null,
-          checkProgress: null,
-        });
+        set(projectStateReset());
       },
     }),
     {
