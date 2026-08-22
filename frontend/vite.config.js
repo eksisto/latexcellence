@@ -94,12 +94,6 @@ export default defineConfig(({ mode }) => {
               if (/lucide-react/.test(id)) return "vendor-icons";
               if (/sonner/.test(id)) return "vendor-sonner";
               if (/katex/.test(id)) return "vendor-katex";
-              // JSZip 仅目录直传时动态导入（UploadProjectDialog.zipFiles），
-              // 独立分包，避免被下方 catch-all 并入首屏 vendor chunk。
-              if (
-                /jszip|pako|lie|immediate|readable-stream|setimmediate/.test(id)
-              )
-                return "vendor-jszip";
               // 以下库只被懒加载路由使用（MarkdownRenderer / CodeBlock 等），
               // 独立分包，避免随 i18next/zustand 等首屏依赖一起进入初始 vendor chunk。
               if (/highlight\.js/.test(id)) return "vendor-highlight";

@@ -1125,6 +1125,10 @@
       "multiUserEditLogTtlHours": "編輯日誌保留時長（小時）",
       "multiUserWritingChatRetentionDays": "寫作會話保留期（天）",
       "multiUserWritingChatRetentionHint": "0 = 不自動刪除，僅統計用量；大於 0 時自動清理超過該天數未活動的寫作會話",
+      "multiUserUploadSessionTtlHours": "分片上傳會話保留時長（小時）",
+      "multiUserUploadSessionTtlHint": "從最後活動算起；超時後未完成的分片上傳會話與暫存分片將被自動清理",
+      "multiUserChunkPartMaxMb": "分片大小上限 (MB)",
+      "multiUserChunkPartMaxMbHint": "前端按該值切片上傳大文件，修改後新上傳生效",
       "multiUserConnectionNote": "多使用者模式下連線與登入由伺服器統一管理，此處無需設定 API 位址或存取權杖。",
       "sandbox": "編譯沙箱",
       "sandboxRestartHint": "修改本分割區設定後需重新啟動後端生效",
@@ -1265,7 +1269,22 @@
       "dirPackFailed": "目錄打包失敗，請重試或改用壓縮檔上傳",
       "dirTooManyFiles": "目錄檔案數超出上限（{{count}} > {{max}}），請精簡後重試",
       "dirFileTooLarge": "檔案「{{name}}」超過單檔大小上限（{{max}} MB）",
-      "dirQuotaExceeded": "目錄總大小 {{size}} 超出剩餘專案空間（{{quota}}）"
+      "dirQuotaExceeded": "目錄總大小 {{size}} 超出剩餘專案空間（{{quota}}）",
+      "preparing": "正在準備分片…",
+      "completing": "伺服器正在校驗拼裝…",
+      "paused": "已暫停",
+      "pausing": "正在暫停…",
+      "pauseBtn": "暫停",
+      "resumeBtn": "繼續",
+      "abortUpload": "中止上傳",
+      "resumableTitle": "偵測到未完成的分片上傳「{{name}}」",
+      "resumableHint": "重新選擇相同的內容並點擊上傳即可斷點續傳；也可以放棄該會話。",
+      "discardResume": "放棄會話",
+      "resumeNeedReselect": "請先重新選擇與待續傳會話相同的內容",
+      "mismatchRestart": "所選內容與待續傳會話不一致，已放棄舊會話並重新開始",
+      "sessionExpired": "上傳會話已過期或不存在，請重新選擇檔案後再試",
+      "resumingMissing": "偵測到缺失分片，正在自動補傳…",
+      "chunkHint": "壓縮包將分片直傳（支援暫停與斷點續傳），不再於客戶端打包。"
     },
     "permissions": {
       "title": "專案權限",
@@ -1535,6 +1554,10 @@
     "sandboxKilledOom": "編譯因超出沙箱記憶體限制被終止，可簡化文件或調大 sandbox.memory_mb",
     "llmRateLimited": "LLM 請求過於頻繁，請 {{retry_after}} 秒後重試",
     "llmConcurrencyLimited": "LLM 並行任務數已達上限，請 {{retry_after}} 秒後重試",
-    "invalidCategory": "未知的資料類別"
+    "invalidCategory": "未知的資料類別",
+    "uploadSessionNotFound": "上傳會話不存在或已被清理",
+    "uploadSessionExpired": "上傳會話已過期，請重新發起上傳",
+    "partMd5Mismatch": "分片校驗失敗（MD5 不符）",
+    "partMissing": "仍有分片未上傳完成"
   }
 }

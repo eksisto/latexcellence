@@ -531,6 +531,11 @@ class MultiUserConfig(BaseModel):
     # 写作会话保留期（v2 P4）：0 = 不自动删，仅统计用量；>0 时由维护循环
     # 删除超过该天数未活动的 writing_chat 会话文件
     writing_chat_retention_days: int = Field(0, ge=0)
+    # 分片上传会话（v2 P5）：会话从最后活动算起的保留时长（小时），
+    # 超时由维护循环清理会话行与 staging 分片目录
+    upload_session_ttl_hours: int = Field(24, ge=1)
+    # 单个分片大小上限（MB）；前端切片大小与后端 PUT 校验均以此对齐
+    chunk_part_max_mb: int = Field(8, ge=1)
 
 
 class SandboxConfig(BaseModel):

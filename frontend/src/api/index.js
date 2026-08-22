@@ -1190,5 +1190,64 @@ export const api = {
         method: "POST",
         body: JSON.stringify({ username, keep_access: !!keepAccess }),
       }),
+    /**
+     * 分片上传会话（v2 P5）：大文件断点续传。
+     * init 建会话（manifest + 配额预检）→ 逐片 PUT（X-Part-MD5）→
+     * status 位图对位续传 → complete 拼装建档 → abort 中止清理。
+     */
+    uploadSessions: {
+      init: ({ name, kind, totalBytes, files }) =>
+        request("/projects/upload-sessions", {
+          method: "POST",
+          body: JSON.stringify({
+            name,
+            kind,
+            total_bytes: totalBytes,
+            files,
+          }),
+        }),
+      putPart: async (sid, fileIndex, chunkIndex, blob, partMd5, signal) => {
+        let res;
+        try {
+          res = await fetch(
+            `${getApiBase()}/projects/upload-sessions/${encodeURIComponent(sid)}/parts/${fileIndex}/${chunkIndex}`,
+            {
+              method: "PUT",
+              headers: authHeaders({ "X-Part-MD5": partMd5 }),
+              body: blob,
+              credentials: "include",
+              signal,
+            },
+          );
+        } catch (e) {
+          if (e?.name === "AbortError") throw e;
+          throw new Error(translateError(e.message || "Request timed out"));
+        }
+        if (!res.ok) {
+          checkUnauthorized(res);
+          const err = await res
+            .json()
+            .catch(() => ({ detail: res.statusText }));
+          throw buildRequestError(err, res.status);
+        }
+        return res.json();
+      },
+      status: (sid, options = {}) =>
+        request(
+          `/projects/upload-sessions/${encodeURIComponent(sid)}`,
+          options,
+        ),
+      complete: (sid) =>
+        request(
+          `/projects/upload-sessions/${encodeURIComponent(sid)}/complete`,
+          {
+            method: "POST",
+          },
+        ),
+      abort: (sid) =>
+        request(`/projects/upload-sessions/${encodeURIComponent(sid)}`, {
+          method: "DELETE",
+        }),
+    },
   },
 };

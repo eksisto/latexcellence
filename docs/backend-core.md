@@ -403,26 +403,27 @@ ExtractorRegistry 先处理已知公开端点（当前代码托管页面使用 G
 
 ### 多用户模式基础设施（`backend/core/multiuser/` + `backend/core/access_control.py` + `backend/modules/auth/` + `backend/manage.py`）
 
-多用户模式（`multi_user.enabled=true`）的后端基础设施，按阶段（见 [docs/multi-user-plan.md](multi-user-plan.md) 与 [docs/multi-user-v2-plan.md](multi-user-v2-plan.md)）实施。P1 已完成：SQLite 初始化、注册/审批/登录/会话/Cookie/CSRF、管理员引导与 CLI；P2 已完成：用户空间目录、统一路径解析、项目访问控制、workspace 绑定与现有端点收紧；P3 已完成：上传/解压管线、项目命名、配额记账、回收站与下载；P4 已完成：协作者管理、转交、viewer 写保护与共享项目撤销禁用；P5 已完成：前端登录/注册/工作台/上传/权限/管理面板全套；P6 已完成：migrate-legacy 存量迁移、会话类资源按用户归属校验与存量路径改造；P7 已完成：部署指南（HTTPS、风险声明，见 [deployment.md](deployment.md)）与全量文档同步。v2 P1a/P1b/P2 已完成 Docker 沙箱、LLM 每用户治理与 rar 支持（见 [multi-user-v2-plan.md](multi-user-v2-plan.md)）；v2 P3 已完成共享项目反向补丁撤销（见下文「反向补丁撤销要点」与 [DESIGN.md §14](../DESIGN.md)）。
+多用户模式（`multi_user.enabled=true`）的后端基础设施，按阶段（见 [docs/multi-user-plan.md](multi-user-plan.md) 与 [docs/multi-user-v2-plan.md](multi-user-v2-plan.md)）实施。P1 已完成：SQLite 初始化、注册/审批/登录/会话/Cookie/CSRF、管理员引导与 CLI；P2 已完成：用户空间目录、统一路径解析、项目访问控制、workspace 绑定与现有端点收紧；P3 已完成：上传/解压管线、项目命名、配额记账、回收站与下载；P4 已完成：协作者管理、转交、viewer 写保护与共享项目撤销禁用；P5 已完成：前端登录/注册/工作台/上传/权限/管理面板全套；P6 已完成：migrate-legacy 存量迁移、会话类资源按用户归属校验与存量路径改造；P7 已完成：部署指南（HTTPS、风险声明，见 [deployment.md](deployment.md)）与全量文档同步。v2 P1a/P1b/P2 已完成 Docker 沙箱、LLM 每用户治理与 rar 支持（见 [multi-user-v2-plan.md](multi-user-v2-plan.md)）；v2 P3 已完成共享项目反向补丁撤销（见下文「反向补丁撤销要点」与 [DESIGN.md §14](../DESIGN.md)）；v2 P4 已完成衍生数据用量缓存记账与细粒度清理；v2 P5 已完成大文件分片上传与断点续传（见下文「分片上传要点」）。
 
 **包结构**：
 
 | 文件 | 职责 |
 | --- | --- |
-| `backend/core/multiuser/db.py` | SQLite 初始化（v1 业务表 + v2 沙箱/治理/编辑日志/衍生用量缓存表，WAL + 外键）、连接管理与统一查询入口（`db_execute` / `db_query_one` / `db_query_all`，同步线程安全）、版本迁移框架（PRAGMA `user_version` + 有序幂等步骤） |
+| `backend/core/multiuser/db.py` | SQLite 初始化（v1 业务表 + v2 沙箱/治理/编辑日志/衍生用量缓存/分片上传会话表，WAL + 外键）、连接管理与统一查询入口（`db_execute` / `db_query_one` / `db_query_all`，同步线程安全）、版本迁移框架（PRAGMA `user_version` + 有序幂等步骤） |
 | `backend/core/multiuser/userspace.py` | 用户空间目录布局（`<users_root>/<user_id>/{projects, writing_chat_sessions, style_modify_sessions, templates, plots}`），`ensure_user_dirs()` 注册时创建；P6 新增请求级当前用户上下文（`set/get_current_user_id`）与统一会话资源根解析 `user_resource_root(subdir, legacy_root)`（单用户回退存量全局路径）、`iterate_user_resource_roots()`（后台清理枚举各用户资源目录） |
 | `backend/core/multiuser/auth.py` | 密码哈希（argon2id）、会话令牌（库只存 SHA-256 哈希）、用户管理（注册 pending / 审批 / 禁用 / 重置密码 / 配额覆盖）、登录限流（每用户名+每 IP 分钟级；v2 P1b 起计数入 `rate_limit_events` 表 kind='login'，替代进程内字典）、`ensure_bootstrap_admin()` |
 | `backend/core/multiuser/dependencies.py` | FastAPI 认证依赖：`get_current_user`（401）、`require_admin`（403）、`get_current_user_optional`、`require_admin_if_multiuser`；P6 新增 `current_user_context`（注入请求级当前用户用于会话类资源归属校验） |
 | `backend/core/multiuser/quota.py` | 配额记账核心（v2 P4 重构衍生记账）：有效额度解析（用户覆盖优先）、项目用量统计、衍生用量读 `user_derived_usage` 缓存（检查点增量刷新 `refresh_derived_usage` / `checkpoint_derived_usage*`、全量对账 `reconcile_derived_usage`、分类重扫 `resync_category_all_users`）、上传/写回/恢复前置校验（超限抛 413 `quota_exceeded`，带 subdir 先刷新被触达分类）、自助清理（`cleanup_derived_category`）、项目唯一命名与建行（`xx (2)`）、项目尺寸对账（`reconcile_project_sizes`）、回收站过期清理 |
-| `backend/core/multiuser/upload.py` | 上传解压管线核心：zip（UTF-8/GBK/cp437 编码、路径穿越/符号链接/加密/炸弹拦截）与 7z（py7zr）安全解压、rar（外部 unar 管线，多用户 v2 P2：进程组限时/超配额击杀、RAR4 加密与分卷标志预扫、受保护包输出关键词兜底、零产物兜底）、项目根归一化、`move_into_user_space()` 落位；7z 监视线程以 `_sample_written_bytes()` 采样计数器替代周期 `dir_size` 全遍历（v2 P4：scandir 单趟 lstat + 超限短路） |
-| `backend/core/multiuser/maintenance.py` | 后台维护循环：项目/衍生用量双对账 + 回收站/暂存区清理 + 沙箱/LLM 租约与限流事件清理 + 编辑日志 TTL 清理 + 过期登录会话删除 + 写作会话保留期清理（v2 P4；`main.py` lifespan 启动） |
+| `backend/core/multiuser/upload.py` | 上传解压管线核心：zip（UTF-8/GBK/cp437 编码、路径穿越/符号链接/加密/炸弹拦截）与 7z（py7zr）安全解压、rar（外部 unar 管线，多用户 v2 P2：进程组限时/超配额击杀、RAR4 加密与分卷标志预扫、受保护包输出关键词兜底、零产物兜底）、项目根归一化、`move_into_user_space()` 落位；7z 监视线程以 `_sample_written_bytes()` 采样计数器替代周期 `dir_size` 全遍历（v2 P4：scandir 单趟 lstat + 超限短路）；v2 P5 起公开 `validate_member_path()` / `validate_no_case_conflicts()` / `finalize_directory_layout()` 供分片上传会话复用同一校验链 |
+| `backend/core/multiuser/upload_sessions.py` | 分片上传会话核心（v2 P5）：init manifest 结构与剩余配额预检、part 幂等落盘（`X-Part-MD5` 校验 + 体积上限 + 成功续期）、status 位图对位、complete 条件态拼装落位（齐全校验 + 全量 MD5 复核 + 配额二次复核，可续传失败保留现场 / 拼装失败整包清场）、abort 清理、TTL 过期会话与孤儿 staging 目录清理（`purge_expired_upload_sessions`，并入维护循环） |
+| `backend/core/multiuser/maintenance.py` | 后台维护循环：项目/衍生用量双对账 + 回收站/暂存区清理 + 沙箱/LLM 租约与限流事件清理 + 编辑日志 TTL 清理 + 过期登录会话删除 + 写作会话保留期清理 + 分片上传过期会话与孤儿目录清理（v2 P4/P5；`main.py` lifespan 启动） |
 | `backend/core/multiuser/sandbox_leases.py` | 沙箱并发池租约（v2 P1a）：`sandbox_slots` 表原子获取/释放，TTL 清理崩溃残留 |
 | `backend/core/multiuser/llm_governance.py` | LLM 每用户治理（v2 P1b）：60s 滑动窗口限流（`rate_limit_events` kind='llm'）+ 并发租约（`llm_concurrency_leases`，TTL 900s），单事务原子准入；超限抛带 `gov_code` 的 RuntimeError（429），`governance_http_response()` 翻译为 429 + Retry-After + `detail` 包装结构化错误体，`register_governance_handler()` 供 main.py 与测试注册同一处理器；`admission_gate()` 供 `llm_client` 各入口包裹，单用户/无用户上下文直通；维护入口 `purge_expired_llm_leases()` / `purge_old_rate_limit_events()` |
 | `backend/core/multiuser/migrate.py` | 存量数据迁移工具（P6）：`migrate_legacy()` 把存量全局目录（writing_chat_sessions / style_modify_sessions / templates / plots / formats / prompts）幂等复制到管理员用户空间，`--dry-run` 预演，报告 + 目录树校验 |
 | `backend/core/multiuser/edit_log.py` | 反向补丁编辑日志（v2 P3）：写入记账（apply_change / apply_whole_files 统一挂接，ContextVar 取当前用户）、快照存储（owner 维度 `.edit_logs/`）、LIFO undo/redo（冲突即拒绝、配额预检、op_group 整组回滚、redo 对称重放）、实时状态计算、条数上限淘汰 / TTL 清理 / 项目级级联清理 |
 | `backend/core/access_control.py` | 统一访问控制：`owner/editor/viewer` 权限矩阵、`require_project_access()` / `get_projects_for_user()` / `get_user_role_for_project()` / `is_shared_project()`、基于 workspace 绑定的请求级依赖 `require_workspace(write=...)`；权限实时查库不缓存 |
-| `backend/modules/projects/router.py` | 薄路由层：`/api/projects`（列表 / 上传创建）与 `/api/projects/{id}`（重命名 / 回收站 / 恢复 / 永久删除 / 下载 / 权限协作 / 转交） |
-| `backend/modules/projects/service.py` | 项目业务逻辑：流式接收压缩包、安全解压（`asyncio.to_thread`）、配额校验、唯一命名、落位、回收站流转、打包下载、协作者管理与项目转交 |
+| `backend/modules/projects/router.py` | 薄路由层：`/api/projects`（列表 / 上传创建 / 分片上传会话五端点）与 `/api/projects/{id}`（重命名 / 回收站 / 恢复 / 永久删除 / 下载 / 权限协作 / 转交） |
+| `backend/modules/projects/service.py` | 项目业务逻辑：流式接收压缩包、安全解压（`asyncio.to_thread`）、配额校验、唯一命名、落位、回收站流转、打包下载、协作者管理与项目转交；分片上传会话服务编排（v2 P5：init/part/status/complete/abort，二进制体流式读取与体积上限） |
 | `backend/modules/auth/router.py` | 薄路由层：`/api/auth/*`（register/login/logout/me）与 `/api/admin/*`（用户列表/审批/禁用/重置密码/配额） |
 | `backend/modules/auth/service.py` | 认证业务逻辑（`asyncio.to_thread` 调度压库操作；错误映射为结构化 `{"error": code, "message": ...}`） |
 | `backend/manage.py` | CLI：`python -m backend.manage create-admin / reset-password / list-users / set-status / migrate-legacy` |
@@ -463,6 +464,17 @@ ExtractorRegistry 先处理已知公开端点（当前代码托管页面使用 G
 - 转交端点 `POST /api/projects/{id}/transfer`（body：`username` + `keep_access`）：owner 将项目转给其他 `active` 用户；`keep_access=True` 时原 owner 转后保留为 viewer，否则直接退出协作。
 - 转交实现要点：转交前校验**接收方项目空间配额**（超限 413 `quota_exceeded`，与上传/恢复同口径）；项目目录沿 `data/users/<owner_id>/projects/<project_id>/` 规范**迁移到新 owner 空间**（保证 `root_path` 派生、配额记账与对账一致）；新 owner 有同名活动项目时自动生成 `xx (2)`（复用 `next_available_name`）；新 owner 原为协作者则转正并移除其协作者行；已打开该项目的 workspace 绑定同步更新 `owner_id` / `root_path` 并重新打开文件树。
 - viewer 写保护（P2 已落地）：viewer 的 `apply-change` / `set-main-file` / `undo` / `redo` 返回 403。共享项目撤销禁令（v1）已在 v2 P3 由反向补丁解禁：转交后 ops 按 actor 归属不变，各用户只能撤销自己的修改。
+
+**分片上传要点（v2 P5）**：
+
+- 五端点（均要求登录，会话归属校验——只能操作自己的 sid，他人与不存在一律 404 `upload_session_not_found` 不泄露存在性）：`POST /api/projects/upload-sessions`（init）、`PUT .../{sid}/parts/{file_index}/{chunk_index}`、`GET .../{sid}`（status 位图）、`POST .../{sid}/complete`、`DELETE .../{sid}`（abort）。
+- init：body 携 `name` / `kind` / `total_bytes` / `files[]`（path+size+md5+chunks）。服务端校验扩展名白名单（zip→.zip、7z→.7z、rar→.rar 且恰一条清单条目；directory 无扩展名约束）、manifest 路径复用解压管线的穿越/绝对路径校验与大小写冲突检测、分块数 = ceil(size / chunk_part_max_mb)、全量 md5 格式、total_bytes 一致性、文件数/单文件大小/总大小限额，并预检剩余项目配额 ≥ total_bytes；通过后建 `upload_sessions` 行（manifest JSON 列）与 `<staging>/<sid>/{.upload_session 标记, parts/, extracted/}` 目录。
+- part：二进制体 ≤ `chunk_part_max_mb`（流式读取超限即 413），`X-Part-MD5` 头逐片校验；落 `<sid>/parts/<file>-<chunk>.part` 幂等覆盖；成功即续期 `last_activity_at` 与目录 mtime。仅 `uploading` 状态接受分片。
+- status：返回每文件已收分块位图 + 已收字节聚合，前端据此断点续传；GET 同时续期。
+- complete：以条件 UPDATE（uploading → assembling）拦截并发重复提交 → 分块数量齐全 + 逐文件流式全量 MD5 复核 → 拼装：zip/7z/rar 拼出压缩包走既有 `extract_archive` 全链路，directory 按 manifest 拼出 extracted 布局后走 `finalize_directory_layout()`（同一 `_validate_extracted` 校验链 + 项目根归一化）→ 配额二次复核 → `move_into_user_space` → 唯一命名建行（`xx (2)`）。**失败语义双轨**：分块缺失（400 `part_missing`）/ 全量 MD5 不符（400 `part_md5_mismatch`）恢复 uploading 保留现场供补传重试；进入拼装后的任何失败（解压拒绝、配额二次复核超限、落位异常）整包拒绝并清场——按确定性路径删除用户空间残留 + rmtree staging + 删会话行。
+- abort：删行 + 清 staging，后续访问 404。
+- TTL 与清理：`upload_session_ttl_hours` 从最后活动算起；过期会话在访问时即时清场（410 `upload_session_expired` 引导重新选择）；维护循环 `purge_expired_upload_sessions()` 批量清理过期行 + staging 目录，并顺带清扫"带标记无数据行"的孤儿目录。通用暂存区 mtime 兜底清理（`clean_staging`）跳过带 `.upload_session` 标记的目录——TTL 可长于暂存保留期，mtime 兜底误删会破坏断点续传。
+- 配额语义：分片阶段不占配额（init 预检 + complete 二次复核兜底，两者之间的竞争由复核兜底，失败整包拒绝）。
 
 **反向补丁撤销要点（v2 P3）**：
 

@@ -18,13 +18,13 @@ import uuid
 import zipfile
 from pathlib import Path
 
-from fastapi import HTTPException, UploadFile
+from fastapi import HTTPException, Request, UploadFile
 
 from backend.core import access_control
 from backend.core.config import get_config
 from backend.core.logger import get_logger
 from backend.core.multiuser import auth as auth_core
-from backend.core.multiuser import userspace
+from backend.core.multiuser import upload_sessions, userspace
 from backend.core.multiuser.db import db_execute, db_query_all, db_query_one, utcnow
 from backend.core.multiuser.quota import (
     create_project_row,
@@ -43,7 +43,10 @@ from backend.core.multiuser.upload import (
 )
 from backend.core.multiuser.dependencies import forbidden
 from backend.core.workspace_manager import get_workspace_manager
-from backend.modules.projects.models import COLLABORATOR_ROLES
+from backend.modules.projects.models import (
+    COLLABORATOR_ROLES,
+    UploadSessionInitRequest,
+)
 
 logger = get_logger("projects.service")
 
@@ -57,8 +60,14 @@ def _http(status: int, code: str, message: str) -> HTTPException:
 def _map_archive_error(err: ArchiveError) -> HTTPException:
     """把解压校验错误映射为稳定 HTTP 错误。
 
-    路径穿越 / 压缩炸弹 / 加密包等安全拒绝在此统一记录审计日志。"""
+    路径穿越 / 压缩炸弹 / 加密包等安全拒绝在此统一记录审计日志。
+    分片会话错误码（v2 P5）：upload_session_not_found → 404（不泄露
+    存在性）、upload_session_expired → 410（引导重新选择）。"""
     logger.warning("Upload rejected: code=%s message=%s", err.code, err.message)
+    if err.code == "upload_session_not_found":
+        return _http(404, err.code, err.message)
+    if err.code == "upload_session_expired":
+        return _http(410, err.code, err.message)
     if err.code in ("quota_exceeded", "upload_too_large"):
         return _http(413, err.code, err.message)
     return _http(400, err.code, err.message)
@@ -246,6 +255,91 @@ def sanitize_project_name(name: str, fallback: str = "project") -> str:
     if not cleaned:
         return fallback
     return cleaned[:MAX_NAME_LENGTH]
+
+
+# ── 分片上传会话（v2 P5：大文件断点续传） ──────────────────────────────────
+async def upload_session_init(user: dict, req: UploadSessionInitRequest) -> dict:
+    """创建分片上传会话（manifest 预检 + 剩余配额预检；分片阶段不占配额）。"""
+    name = sanitize_project_name(req.name)
+    if not name:
+        raise _http(400, "invalid_name", "Project name cannot be empty")
+    files = [entry.model_dump() for entry in req.files]
+    try:
+        return await asyncio.to_thread(
+            upload_sessions.create_session,
+            user["id"],
+            name,
+            req.kind,
+            int(req.total_bytes),
+            files,
+        )
+    except ArchiveError as e:
+        raise _map_archive_error(e)
+
+
+async def _read_capped_body(request: Request, cap_bytes: int) -> bytes:
+    """流式读取分片二进制体，超过 cap 立即拒绝（413 upload_too_large）。"""
+    buf = bytearray()
+    async for chunk in request.stream():
+        buf.extend(chunk)
+        if len(buf) > cap_bytes:
+            raise _http(
+                413,
+                "upload_too_large",
+                f"Part body exceeds chunk size limit ({cap_bytes} bytes)",
+            )
+    return bytes(buf)
+
+
+async def upload_session_put_part(
+    user: dict,
+    sid: str,
+    file_index: int,
+    chunk_index: int,
+    part_md5: str | None,
+    request: Request,
+) -> dict:
+    """接收单个分片（X-Part-MD5 校验、幂等覆盖、成功续期会话）。"""
+    cfg = get_config().multi_user
+    data = await _read_capped_body(request, cfg.chunk_part_max_mb * 1024 * 1024)
+    try:
+        return await asyncio.to_thread(
+            upload_sessions.store_part,
+            user["id"],
+            sid,
+            file_index,
+            chunk_index,
+            data,
+            part_md5 or "",
+        )
+    except ArchiveError as e:
+        raise _map_archive_error(e)
+
+
+async def upload_session_status(user: dict, sid: str) -> dict:
+    """查询会话状态与每文件已收分块位图（断点续传对位）；同时续期。"""
+    try:
+        return await asyncio.to_thread(upload_sessions.session_status, user["id"], sid)
+    except ArchiveError as e:
+        raise _map_archive_error(e)
+
+
+async def upload_session_complete(user: dict, sid: str) -> dict:
+    """完成会话：分块齐全 + 全量 MD5 复核 → 拼装 → 配额二次复核 → 落位建档。"""
+    try:
+        row = await asyncio.to_thread(upload_sessions.complete_session, user["id"], sid)
+    except ArchiveError as e:
+        raise _map_archive_error(e)
+    return {"project": _project_row_view(row)}
+
+
+async def upload_session_abort(user: dict, sid: str) -> dict:
+    """中止会话并清理会话行与 staging 目录。"""
+    try:
+        await asyncio.to_thread(upload_sessions.abort_session, user["id"], sid)
+    except ArchiveError as e:
+        raise _map_archive_error(e)
+    return {"status": "ok", "session_id": sid}
 
 
 def _project_row_view(row: dict) -> dict:

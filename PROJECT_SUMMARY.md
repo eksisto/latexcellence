@@ -35,7 +35,7 @@ latexcellence/
 │   │   ├── prompts.py               # 中央提示词管理模块（集中存储所有 LLM 提示词）
 │   │   ├── base_paragraph_check.py  # 逐段检查服务基类（typo/expression/code_review/terminology 共享）
 │   │   ├── access_control.py        # 统一访问控制：项目权限矩阵 + workspace 绑定校验依赖
-│   │   └── multiuser/               # 多用户模式基础设施包（db/userspace/auth/dependencies/quota/upload/maintenance/migrate/sandbox_leases/llm_governance/edit_log）
+│   │   └── multiuser/               # 多用户模式基础设施包（db/userspace/auth/dependencies/quota/upload/upload_sessions/maintenance/migrate/sandbox_leases/llm_governance/edit_log）
 │   ├── utils/
 │   │   ├── json_utils.py            # LLM JSON 解析/校验/重试
 │   │   ├── file_ops.py              # 原子写入/备份/MD5
@@ -163,14 +163,14 @@ latexcellence/
 │       ├── components/              # 共享组件 + ui 基座组件
 │       │       ├── AuthShell.jsx        # 多用户认证页公共外壳
 │       ├── AuthConnectionButton.jsx # 认证页工具栏「后端连接设置」入口（改绑后端）
-│       │   ├── UploadProjectDialog.jsx # 上传项目对话框（zip/7z/rar 或目录 JSZip 打包 + 进度）
+│       │   ├── UploadProjectDialog.jsx # 上传项目对话框（zip/7z/rar 或目录分片直传 + 断点续传 + 暂停/进度）
 │       │   ├── ProjectPermissionsDialog.jsx # 项目权限对话框（协作者管理/转交）
 │       │   └── settings/            # 设置对话框分区配置组件
 │       ├── theme/                   # 主题 CSS + useThemeManager.js
 │       ├── fonts/                   # 字体加载（dev 本地 npm 包 / build 走 cdnjs）
 │       ├── api/index.js             # 统一 API 层（接口分组封装）
 │       ├── api/connection.js        # 后端连接配置（基地址/令牌/认证头/连接测试）
-│       ├── utils/                   # 前端工具（errorMessages.js 错误翻译 / format.js 字节与时间展示格式化 / formulaWrap.js 公式包裹重写 / highlight.js 高亮入口 / multiUserProject.js 多用户项目打开统一入口 / projectAccess.js 双模式打开与写角色白名单纯函数）
+│       ├── utils/                   # 前端工具（errorMessages.js 错误翻译 / format.js 字节与时间展示格式化 / formulaWrap.js 公式包裹重写 / highlight.js 高亮入口 / md5.js 增量 MD5（分片上传校验）/ multiUserProject.js 多用户项目打开统一入口 / projectAccess.js 双模式打开与写角色白名单纯函数）
 │       ├── styles/                  # 前端样式（code-highlight.css：高亮颜色独立文件，按需引入）
 │       └── store/useStore.js        # Zustand 全局状态
 │
@@ -198,7 +198,7 @@ latexcellence/
 ├── tests/                           # 测试用例
 │   ├── conftest.py                  # pytest 共享 fixture
 │   ├── test_api/                    # 各模块 API 集成测试
-│   ├── test_multiuser/              # 多用户模式测试（认证/项目/配额/协作/DB 迁移/沙箱租约/LLM 治理/rar 上传/衍生数据记账与清理）
+│   ├── test_multiuser/              # 多用户模式测试（认证/项目/配额/协作/DB 迁移/沙箱租约/LLM 治理/rar 上传/衍生数据记账与清理/分片上传与断点续传）
 │   ├── test_plot_gen/               # plot_gen 单元测试
 │   ├── test_docker/                 # Docker 沙箱真容器冒烟（marker docker，无 daemon 自动 skip）
 │   ├── test_utils/                  # 后端工具单元测试（路径/JSON/宏包/搜索/学术检索/编译/sandbox 契约等）
@@ -244,7 +244,7 @@ latexcellence/
 | Module | 目的 | 关键文件 | 依赖 LLM | Marker |
 | --- | --- | --- | --- | --- |
 | auth | 多用户认证与管理（注册/审批/登录/会话/管理员路由） | router.py, service.py, core/multiuser/* | ✗ | ✗ |
-| projects | 多用户项目：上传/解压、命名去重、配额记账、回收站、下载、协作者管理与转交（/api/projects） | modules/projects/*, core/multiuser/quota.py, upload.py, maintenance.py | ✗ | ✗ |
+| projects | 多用户项目：整包上传/分片上传（断点续传）、安全解压、命名去重、配额记账、回收站、下载、协作者管理与转交（/api/projects） | modules/projects/*, core/multiuser/quota.py, upload.py, maintenance.py | ✗ | ✗ |
 | typo_check | 错字/拼写检查 | router.py, service.py | ✓ | ✓ |
 | expression_opt | 学术表达优化 | router.py, service.py, prompt_manager.py | ✓ | ✓ |
 | code_review | LaTeX 代码审查（工具格式化 + LLM 质量审查） | router.py, service.py | ✓ | ✗ |

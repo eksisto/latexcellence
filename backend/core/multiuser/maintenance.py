@@ -14,6 +14,8 @@
 - purge_expired_sessions()：删除已过期的登录会话行（v2 P4，修复无限增长）
 - purge_expired_writing_chats()：按 writing_chat_retention_days 清理闲置写作
   会话（v2 P4；默认 0 = 不自动删，仅统计）
+- purge_expired_upload_sessions()：清理超过 upload_session_ttl_hours 无活动的
+  分片上传会话（行 + staging 目录）与孤儿会话目录（v2 P5）
 
 由 main.py lifespan 通过 asyncio.Task 启动；方法内实时读取配置。
 """
@@ -32,6 +34,7 @@ from .llm_governance import (
     purge_old_rate_limit_events,
 )
 from .sandbox_leases import purge_expired_sandbox_slots
+from .upload_sessions import purge_expired_upload_sessions
 
 logger = get_logger("multiuser.maintenance")
 
@@ -40,7 +43,7 @@ DEFAULT_INTERVAL_SECONDS = 3600
 
 async def maintenance_loop() -> None:
     """后台循环：周期执行配额对账与回收站/暂存区/租约/限流事件/编辑日志/
-    过期会话/闲置写作会话清理。"""
+    过期会话/闲置写作会话/分片上传会话清理。"""
     logger.info("Multi-user maintenance loop started")
     while True:
         interval = DEFAULT_INTERVAL_SECONDS
@@ -57,6 +60,9 @@ async def maintenance_loop() -> None:
             edit_ops = await asyncio.to_thread(purge_expired_edit_logs)
             sessions = await asyncio.to_thread(purge_expired_sessions)
             chats = await asyncio.to_thread(purge_expired_writing_chats)
+            upload_sessions_purged = await asyncio.to_thread(
+                purge_expired_upload_sessions
+            )
             if (
                 reconciled
                 or derived_fixed
@@ -69,12 +75,14 @@ async def maintenance_loop() -> None:
                 or edit_ops
                 or sessions
                 or chats
+                or upload_sessions_purged
             ):
                 logger.info(
                     "Multi-user maintenance done: reconciled=%d derived_fixed=%d "
                     "purged=%d cleaned_staging=%d cleaned_archives=%d "
                     "sandbox_slots=%d llm_leases=%d rate_limit_events=%d "
-                    "edit_log_ops=%d expired_sessions=%d writing_chats=%d",
+                    "edit_log_ops=%d expired_sessions=%d writing_chats=%d "
+                    "upload_sessions=%d",
                     reconciled,
                     derived_fixed,
                     purged,
@@ -86,6 +94,7 @@ async def maintenance_loop() -> None:
                     edit_ops,
                     sessions,
                     chats,
+                    upload_sessions_purged,
                 )
         except Exception:
             logger.exception("Multi-user maintenance cycle failed")

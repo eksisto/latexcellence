@@ -34,3 +34,26 @@ class TransferProjectRequest(BaseModel):
 
     username: str = Field(..., min_length=1, max_length=200)
     keep_access: bool = False
+
+
+class UploadSessionFileEntry(BaseModel):
+    """分片上传 manifest 单文件条目（v2 P5）。
+
+    chunks 必须等于 ceil(size / chunk_part_max_mb)（服务端按配置复核）。"""
+
+    path: str = Field(..., min_length=1, max_length=1024)
+    size: int = Field(..., ge=0)
+    md5: str = Field(..., pattern=r"^[0-9a-f]{32}$")
+    chunks: int = Field(..., ge=0)
+
+
+class UploadSessionInitRequest(BaseModel):
+    """创建分片上传会话（v2 P5）。
+
+    kind=zip/7z/rar 时 files 恰好一条且扩展名须匹配；
+    kind=directory 时 files 为逐个相对路径条目。"""
+
+    name: str = Field(..., min_length=1, max_length=200)
+    kind: Literal["zip", "7z", "rar", "directory"]
+    total_bytes: int = Field(..., ge=1)
+    files: list[UploadSessionFileEntry] = Field(..., min_length=1)

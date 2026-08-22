@@ -648,6 +648,34 @@ def _reject_protected_rar(archive_path: Path, max_blocks: int = 65536) -> None:
 
 
 # ── 通用路径/安全校验 ────────────────────────────────────────────
+def validate_member_path(name: str) -> str:
+    """公开入口：把归档成员/分片清单路径归一化为安全的相对 POSIX 路径。
+
+    供分片上传会话（v2 P5）在 init 时复用同一套穿越/绝对路径/'..' 校验，
+    避免外部模块直接访问私有实现。目录名以 '/' 结尾（本模块内部约定）。"""
+    return _validate_relative_name(name)
+
+
+def validate_no_case_conflicts(names: list[str]) -> None:
+    """公开入口：大小写不敏感重名（含目录前缀冲突）校验。
+
+    分片上传 directory 会话在 init 时对 manifest 清单做同等校验。"""
+    _validate_no_case_conflicts(names)
+
+
+def finalize_directory_layout(
+    extract_dir: Path, limits: UploadLimits
+) -> ExtractedProject:
+    """把已按 manifest 拼装完成的 extracted 布局收尾为项目根（v2 P5）。
+
+    与 extract_archive 的尾部一致：安全兜底复核（大小/文件数/单文件上限/
+    符号链接/越界/剩余配额）→ 项目根归一化。供 directory 分片会话绕过
+    压缩包解压、直接走既有校验链。"""
+    size, count = _validate_extracted(extract_dir, limits)
+    root = normalize_project_root(extract_dir)
+    return ExtractedProject(root=root, size=size, file_count=count)
+
+
 def _validate_relative_name(name: str) -> str:
     """把归档成员名归一化为安全的相对 POSIX 路径（'/' 分隔）。
 

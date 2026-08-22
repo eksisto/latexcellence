@@ -417,8 +417,13 @@ def clean_staging() -> int:
     """清理残留暂存区目录（上传中断/失败留下的孤儿），返回清理数。
 
     只清 mtime 早于保留期的目录：写入压缩包与创建解压子目录都会刷新
-    目录 mtime，进行中的上传不会被误删。"""
+    目录 mtime，进行中的上传不会被误删。
+    分片上传会话目录（v2 P5，带 .upload_session 标记）不在本函数口径内：
+    其生命周期由 upload_sessions 的 TTL 清理与孤儿清扫接管（TTL 可长于
+    本保留期，mtime 兜底误删会破坏断点续传），此处延迟导入避免循环依赖。"""
     import time
+
+    from . import upload_sessions as _upload_sessions
 
     staging = userspace.get_staging_root()
     if not staging.is_dir():
@@ -427,7 +432,11 @@ def clean_staging() -> int:
     removed = 0
     for child in staging.iterdir():
         try:
-            if child.is_dir() and child.stat().st_mtime < cutoff:
+            if not child.is_dir():
+                continue
+            if _upload_sessions.is_session_staging_dir(child):
+                continue  # 分片会话目录：由专用 TTL 清理接管
+            if child.stat().st_mtime < cutoff:
                 shutil.rmtree(child, ignore_errors=True)
                 removed += 1
         except OSError:

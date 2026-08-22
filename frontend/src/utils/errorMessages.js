@@ -76,6 +76,12 @@ const EXACT_MAP = {
   // 衍生数据记账与自助清理（多用户 v2 P4）错误码
   invalid_category: "invalidCategory",
 
+  // 分片上传与断点续传（多用户 v2 P5）错误码
+  upload_session_not_found: "uploadSessionNotFound",
+  upload_session_expired: "uploadSessionExpired",
+  part_md5_mismatch: "partMd5Mismatch",
+  part_missing: "partMissing",
+
   // 项目管理
   "No project opened": "noProjectOpened",
 

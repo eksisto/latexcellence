@@ -1125,6 +1125,10 @@
       "multiUserEditLogTtlHours": "Edit Log Retention (hours)",
       "multiUserWritingChatRetentionDays": "Writing Chat Retention (days)",
       "multiUserWritingChatRetentionHint": "0 = keep forever (usage is counted only); when > 0, writing chat sessions idle beyond this many days are purged automatically",
+      "multiUserUploadSessionTtlHours": "Upload Session Retention (hours)",
+      "multiUserUploadSessionTtlHint": "Counted from the last activity; unfinished chunked upload sessions and staged parts are purged automatically after expiry",
+      "multiUserChunkPartMaxMb": "Chunk Part Max Size (MB)",
+      "multiUserChunkPartMaxMbHint": "The client slices large files to this size; changes apply to new uploads",
       "multiUserConnectionNote": "In multi-user mode, connection and sign-in are managed by the server; no API base or access token settings are needed here.",
       "sandbox": "Compile Sandbox",
       "sandboxRestartHint": "Changes in this section take effect after restarting the backend",
@@ -1265,7 +1269,22 @@
       "dirPackFailed": "Failed to pack the folder; please retry or upload a zip archive",
       "dirTooManyFiles": "Too many files in the folder ({{count}} > {{max}}); please reduce and retry",
       "dirFileTooLarge": "File “{{name}}” exceeds the per-file size limit ({{max}} MB)",
-      "dirQuotaExceeded": "Folder size {{size}} exceeds the remaining project space ({{quota}})"
+      "dirQuotaExceeded": "Folder size {{size}} exceeds the remaining project space ({{quota}})",
+      "preparing": "Preparing chunks…",
+      "completing": "Server is verifying and assembling…",
+      "paused": "Paused",
+      "pausing": "Pausing…",
+      "pauseBtn": "Pause",
+      "resumeBtn": "Resume",
+      "abortUpload": "Abort Upload",
+      "resumableTitle": "Unfinished chunked upload \"{{name}}\" detected",
+      "resumableHint": "Re-select the same content and click upload to resume from where it stopped, or discard the session.",
+      "discardResume": "Discard Session",
+      "resumeNeedReselect": "Please re-select the same content as the pending upload session first",
+      "mismatchRestart": "Selection does not match the pending session; the old session was discarded and a new upload started",
+      "sessionExpired": "The upload session has expired or no longer exists. Please select the files again.",
+      "resumingMissing": "Missing parts detected; resuming automatically…",
+      "chunkHint": "Archives are uploaded in chunks directly (supports pause & resumable transfers); client-side packaging removed."
     },
     "permissions": {
       "title": "Project permissions",
@@ -1535,6 +1554,10 @@
     "sandboxKilledOom": "Compilation was killed because it exceeded the sandbox memory limit; simplify the document or increase sandbox.memory_mb",
     "llmRateLimited": "Too many LLM requests; retry after {{retry_after}}s",
     "llmConcurrencyLimited": "LLM concurrency limit reached; retry after {{retry_after}}s",
-    "invalidCategory": "Unknown data category"
+    "invalidCategory": "Unknown data category",
+    "uploadSessionNotFound": "Upload session not found or already cleaned up",
+    "uploadSessionExpired": "Upload session has expired; please start a new upload",
+    "partMd5Mismatch": "Part verification failed (MD5 mismatch)",
+    "partMissing": "Some parts are still missing"
   }
 }

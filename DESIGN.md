@@ -580,6 +580,7 @@ Mock 返回值必须符合 Pydantic schema，确保测试的可重复性。
 - **权限协作（P4）**：`/api/projects/{id}/permissions` 提供协作者列表 / 按用户名添加 / 改角色 / 移除（owner 专属，权限实时查库即时生效）；`/api/projects/{id}/transfer` 支持转交 owner（原 owner 转后 viewer 或退出）。转交前校验接收方配额（超限拒绝）；转交时项目目录迁移到新 owner 空间、新 owner 同名项目自动 `xx (2)`、已打开 workspace 绑定与文件树同步更新。
 - **衍生数据记账（v2 P4）**：四类衍生目录（写作会话 / 样式会话 / 模板 / 绘图）的用量缓存在 `user_derived_usage` 表（`(user_id, subdir)` 主键），配额校验与 `/api/auth/me` 用量读取为 O(1) 数据库查询，不再逐请求 rglob 全盘扫描。准确性由两级机制维护：**检查点增量刷新**（会话/模板/绘图创建删除、TTL 与自助清理触达某分类时，仅重扫该用户该分类目录）+ **维护循环每小时全量对账纠偏**（缓存表全空时首读自动引导，冷启动读数即准）。配额前置校验携带被触达分类时先刷新该分类缓存行再比较——创建时刻的边界严格性不放松（超限仍 413 `quota_exceeded`），纯缓存读对跨分类漂移容忍、由对账最终一致。
 - **后台清理扩充（v2 P4）**：维护循环并入过期登录会话删除（修复 sessions 表无限增长）与写作会话保留期清理（`multi_user.writing_chat_retention_days`，默认 0 = 不自动删仅统计；按文件 mtime 判定，与既有 TTL 清理口径一致）；用户可在工作台按分类自助清理本人衍生数据（`POST /api/auth/cleanup-derived-data`，未知分类 400 `invalid_category`，二次确认由前端承担），不做管理员强制清理。
+- **分片上传与断点续传（v2 P5）**：大文件上传改走五端点会话协议（`POST /api/projects/upload-sessions` 建会话、`PUT .../{sid}/parts/{file}/{chunk}` 传分片、`GET .../{sid}` 位图对位、`POST .../{sid}/complete` 拼装建档、`DELETE .../{sid}` 中止）：init 携 manifest（相对路径 + size + md5 + 分块数）做结构预检（复用解压管线的路径穿越 / 大小写冲突校验）与剩余配额预检；分片幂等落盘 staging 并以 `X-Part-MD5` 逐片校验，成功即续期会话；complete 校验分块齐全 + 逐文件全量 MD5 复核后拼装——压缩包走既有解压链路、目录按 manifest 拼布局走同一校验链——再配额二次复核、落位建档。**分片阶段不占配额**（init 预检 + complete 复核兜底，复核失败整包拒绝并清场）。会话行存 `upload_sessions` 表（manifest JSON + `last_activity_at` TTL 基准），过期会话与孤儿 staging 目录由维护循环清理；通用暂存区 mtime 兜底豁免带标记的会话目录。前端并发 3 分片队列、指数退避重试、暂停/续传、localStorage 持久会话支持刷新后重新选择内容断点续传（先查位图再补缺）；JSZip 客户端打包路径移除。
 
 完整方案、数据模型与阶段划分见 [docs/multi-user-plan.md](docs/multi-user-plan.md)，实现细节见 [docs/backend-core.md](docs/backend-core.md)，部署指南（HTTPS、风险声明）见 [docs/deployment.md](docs/deployment.md)。
 
@@ -611,7 +612,7 @@ Mock 返回值必须符合 Pydantic schema，确保测试的可重复性。
 
 ## 11. 多用户模式设计决策记录
 
-多用户模式的完整关键决策记录（双模式、认证、存储、配额、权限、上传、迁移等）见 [docs/multi-user-plan.md §3](docs/multi-user-plan.md)。P0–P7 全部落地为 `backend/core/multiuser/`（db/userspace/auth/dependencies/quota/upload/maintenance/migrate/edit_log/sandbox_leases/llm_governance）、`backend/modules/auth/`（`/api/auth` 与 `/api/admin`）、`backend/modules/projects/`（`/api/projects` 与权限协作）与 `backend/manage.py`（CLI），设计与实现见 §9.4 与 [docs/backend-core.md](docs/backend-core.md)，部署见 [docs/deployment.md](docs/deployment.md)。
+多用户模式的完整关键决策记录（双模式、认证、存储、配额、权限、上传、迁移等）见 [docs/multi-user-plan.md §3](docs/multi-user-plan.md)。P0–P7 全部落地为 `backend/core/multiuser/`（db/userspace/auth/dependencies/quota/upload/upload_sessions/maintenance/migrate/edit_log/sandbox_leases/llm_governance）、`backend/modules/auth/`（`/api/auth` 与 `/api/admin`）、`backend/modules/projects/`（`/api/projects` 与权限协作）与 `backend/manage.py`（CLI），设计与实现见 §9.4 与 [docs/backend-core.md](docs/backend-core.md)，部署见 [docs/deployment.md](docs/deployment.md)。
 
 ## 12. Docker 沙箱执行模型（v2 P1a）
 

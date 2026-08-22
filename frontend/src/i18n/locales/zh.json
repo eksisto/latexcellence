@@ -1125,6 +1125,10 @@
       "multiUserEditLogTtlHours": "编辑日志保留时长（小时）",
       "multiUserWritingChatRetentionDays": "写作会话保留期（天）",
       "multiUserWritingChatRetentionHint": "0 = 不自动删除，仅统计用量；大于 0 时自动清理超过该天数未活动的写作会话",
+      "multiUserUploadSessionTtlHours": "分片上传会话保留时长（小时）",
+      "multiUserUploadSessionTtlHint": "从最后活动算起；超时后未完成的分片上传会话与暂存分片将被自动清理",
+      "multiUserChunkPartMaxMb": "分片大小上限 (MB)",
+      "multiUserChunkPartMaxMbHint": "前端按该值切片上传大文件，修改后新上传生效",
       "multiUserConnectionNote": "多用户模式下连接与登录由服务器统一管理，此处无需配置 API 地址或访问令牌。",
       "sandbox": "编译沙箱",
       "sandboxRestartHint": "修改本分区配置后需重启后端生效",
@@ -1265,7 +1269,22 @@
       "dirPackFailed": "目录打包失败，请重试或改用压缩包上传",
       "dirTooManyFiles": "目录文件数超出上限（{{count}} > {{max}}），请精简后重试",
       "dirFileTooLarge": "文件「{{name}}」超过单文件大小上限（{{max}} MB）",
-      "dirQuotaExceeded": "目录总大小 {{size}} 超出剩余项目空间（{{quota}}）"
+      "dirQuotaExceeded": "目录总大小 {{size}} 超出剩余项目空间（{{quota}}）",
+      "preparing": "正在准备分片…",
+      "completing": "服务器正在校验拼装…",
+      "paused": "已暂停",
+      "pausing": "正在暂停…",
+      "pauseBtn": "暂停",
+      "resumeBtn": "继续",
+      "abortUpload": "中止上传",
+      "resumableTitle": "检测到未完成的分片上传「{{name}}」",
+      "resumableHint": "重新选择相同的内容并点击上传即可断点续传；也可以放弃该会话。",
+      "discardResume": "放弃会话",
+      "resumeNeedReselect": "请先重新选择与待续传会话相同的内容",
+      "mismatchRestart": "所选内容与待续传会话不一致，已放弃旧会话并重新开始",
+      "sessionExpired": "上传会话已过期或不存在，请重新选择文件后再试",
+      "resumingMissing": "检测到缺失分片，正在自动补传…",
+      "chunkHint": "压缩包将分片直传（支持暂停与断点续传），不再客户端打包。"
     },
     "permissions": {
       "title": "项目权限",
@@ -1535,6 +1554,10 @@
     "sandboxKilledOom": "编译因超出沙箱内存限额被终止，可简化文档或调大 sandbox.memory_mb",
     "llmRateLimited": "LLM 请求过于频繁，请 {{retry_after}} 秒后重试",
     "llmConcurrencyLimited": "LLM 并发任务数已达上限，请 {{retry_after}} 秒后重试",
-    "invalidCategory": "未知的数据类别"
+    "invalidCategory": "未知的数据类别",
+    "uploadSessionNotFound": "上传会话不存在或已被清理",
+    "uploadSessionExpired": "上传会话已过期，请重新发起上传",
+    "partMd5Mismatch": "分片校验失败（MD5 不符）",
+    "partMissing": "仍有分片未上传完成"
   }
 }

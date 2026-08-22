@@ -216,6 +216,24 @@ function MultiUserSection({ multiUser, onChange }) {
             />
           </div>
 
+          {/* 分片上传（大文件断点续传） */}
+          <div className="grid grid-cols-2 gap-2">
+            <NumberField
+              label={t("settings.multiUserUploadSessionTtlHours")}
+              hint={t("settings.multiUserUploadSessionTtlHint")}
+              value={multiUser.upload_session_ttl_hours}
+              onChange={(v) =>
+                onChange("multi_user.upload_session_ttl_hours", v)
+              }
+            />
+            <NumberField
+              label={t("settings.multiUserChunkPartMaxMb")}
+              hint={t("settings.multiUserChunkPartMaxMbHint")}
+              value={multiUser.chunk_part_max_mb}
+              onChange={(v) => onChange("multi_user.chunk_part_max_mb", v)}
+            />
+          </div>
+
           {/* 注册 */}
           <CheckboxField
             label={t("settings.multiUserRegistrationEnabled")}

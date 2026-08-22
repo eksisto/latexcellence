@@ -68,7 +68,8 @@ def _seed(env, user_id: str, subdir: str, files: dict[str, bytes]) -> int:
 # ── 迁移 v5 ──────────────────────────────────────────────────────
 class TestMigrationV5:
     def test_schema_version_and_table(self, env):
-        assert db_module.schema_status()["user_version"] == 5
+        # schema 版本随阶段递增（P5 起 > 5），此处只断言 v5 迁移已应用
+        assert db_module.schema_status()["user_version"] >= 5
         row = db_module.db_query_one(
             "SELECT name FROM sqlite_master WHERE type='table' "
             "AND name='user_derived_usage'"

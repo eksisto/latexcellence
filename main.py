@@ -221,6 +221,8 @@ async def config_status():
         # 避免打包上传整个目录后才被 413 拒绝；只读透出既有配置，非新增配置项）
         "max_upload_files": cfg.multi_user.max_upload_files,
         "max_upload_file_size_mb": cfg.multi_user.max_upload_file_size_mb,
+        # 分片上传切片大小（v2 P5）：前端按该值切片以对齐后端 PUT 校验上限
+        "chunk_part_max_mb": cfg.multi_user.chunk_part_max_mb,
         "features": {
             name: getattr(cfg.features, name).enabled
             for name in [

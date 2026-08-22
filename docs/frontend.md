@@ -275,7 +275,7 @@ highlight.js 的按需注册与统一入口：
 | `pages/ProjectWorkbenchPage.jsx` | 项目列表（我的/共享给我，含 owner 与 role）、配额用量条、上传、回收站、打开/下载/重命名/权限/删除；owner 专属操作 |
 | `pages/AdminPage.jsx` | 用户列表（待审批筛选）、批准/拒绝/禁用/启用、重置密码（两步式：先生成临时密码预览，确认后才写入）、配额调整、删除用户 |
 
-配套组件：`components/AuthShell.jsx`（认证页外壳）、`components/AuthConnectionButton.jsx`（认证页工具栏「后端连接设置」入口 + 对话框）、`components/UploadProjectDialog.jsx`（zip/7z/rar 文件或 `webkitdirectory` 目录 → JSZip 客户端打包 → XHR 进度上传）、`components/ProjectPermissionsDialog.jsx`（按用户名添加协作者、改角色、移除、转交 owner）。
+配套组件：`components/AuthShell.jsx`（认证页外壳）、`components/AuthConnectionButton.jsx`（认证页工具栏「后端连接设置」入口 + 对话框）、`components/UploadProjectDialog.jsx`（zip/7z/rar 文件或 `webkitdirectory` 目录 → 分片直传：并发 3 队列、逐片 `X-Part-MD5` 校验（自研增量 MD5 工具 `utils/md5.js`，WebCrypto 不提供 MD5）、指数退避重试、暂停/继续、localStorage 持久会话支持刷新后重新选择相同内容断点续传）、`components/ProjectPermissionsDialog.jsx`（按用户名添加协作者、改角色、移除、转交 owner）。
 
 认证页改绑后端：前端实例绑定的后端不可用或用户没有账号时，未登录/待审批状态下 AppToolbar 右上角显示 `AuthConnectionButton`（样式与主题切换等工具栏图标一致），对话框复用 `ConnectionPanel` 的 `onSaved` 形态——显式「保存并刷新」按钮、不失焦静默持久化；保存到 localStorage 后刷新页面重新走启动探测。探测顺序为**显式绑定地址 → 同源 `/api/config/status` → 配置默认基地址**（`useAuth.js`），多用户模式下 API 基地址取「显式绑定 → 探测命中 → 同源 /api」（`connection.js` 的 `multiuserApiBase`）。注意：多用户会话依赖同源 Cookie + 双提交 CSRF，改绑的目标后端若为多用户模式需与前端同源部署；改绑单用户后端（令牌认证）无此限制。
 

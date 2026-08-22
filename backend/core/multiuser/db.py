@@ -181,9 +181,37 @@ def _migration_v5_user_derived_usage(conn: sqlite3.Connection) -> None:
         """)
 
 
+def _migration_v6_upload_sessions(conn: sqlite3.Connection) -> None:
+    """v2 P5：大文件分片上传会话表（方案 §10）。
+
+    manifest 列存 JSON（chunk_size + 逐文件 path/size/md5/chunks 清单）；
+    status 取值 uploading / assembling（complete 期间的条件态，防止并发
+    拼装）；TTL 以 last_activity_at（每次分片/状态查询续期）为基准，由
+    维护循环清理过期行与对应 staging 目录。
+    """
+    conn.executescript("""
+        CREATE TABLE IF NOT EXISTS upload_sessions (
+            id               TEXT PRIMARY KEY,
+            user_id          TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            name             TEXT NOT NULL,
+            kind             TEXT NOT NULL,
+            total_bytes      INTEGER NOT NULL DEFAULT 0,
+            file_count       INTEGER NOT NULL DEFAULT 0,
+            status           TEXT NOT NULL DEFAULT 'uploading',
+            manifest         TEXT NOT NULL DEFAULT '{}',
+            created_at       TEXT NOT NULL,
+            last_activity_at TEXT NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS ix_upload_sessions_user
+            ON upload_sessions (user_id);
+        CREATE INDEX IF NOT EXISTS ix_upload_sessions_activity
+            ON upload_sessions (last_activity_at);
+        """)
+
+
 # 当前 schema 最新版本号。新增迁移时：追加实现函数并在列表末尾登记
 # (target_version, description, fn)，同时递增此常量；每个步骤必须幂等可重入。
-SCHEMA_VERSION = 5
+SCHEMA_VERSION = 6
 
 # 有序迁移步骤：(目标版本, 描述, 执行函数)。版本从 2 起（1 为 v1 基线，
 # 对老库存量数据无破坏性变更，仅补齐 IF NOT EXISTS 建表）。
@@ -208,6 +236,11 @@ MIGRATIONS: list[tuple[int, str, Callable[[sqlite3.Connection], None]]] = [
         5,
         "v2 P4 derived data usage cache table",
         _migration_v5_user_derived_usage,
+    ),
+    (
+        6,
+        "v2 P5 chunked upload session table",
+        _migration_v6_upload_sessions,
     ),
 ]
 
