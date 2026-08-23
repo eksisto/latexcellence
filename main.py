@@ -16,13 +16,13 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import Depends, FastAPI, HTTPException
-from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from pydantic import ValidationError
 import uvicorn
 
 from backend.core.config import load_config, get_config, update_config_from_dict
 from backend.core.logger import setup_logging, get_logger
+from backend.utils.spa_static_files import SPAStaticFiles
 from backend.core.multiuser.dependencies import require_admin_if_multiuser
 from backend.core.multiuser.llm_governance import register_governance_handler
 from backend.core.security_middleware import AccessSecurityMiddleware
@@ -387,7 +387,9 @@ def main():
 
     # 按模式挂载前端：
     #   开发模式 → 期望 Vite dev server 独立运行，后端只提供 API
-    #   生产模式 → 将 Vite 构建产物（static/）作为静态文件挂载
+    #   生产模式 → 将 Vite 构建产物（static/）挂载为带 SPA 回退的静态服务：
+    #     客户端路由（如 /formula-ocr）刷新 / 直达时物理文件不存在，
+    #     SPAStaticFiles 对期望 HTML 的页面导航回退 index.html，由前端路由接管
     if cfg.server.dev_mode:
         logger.info(
             f"Dev mode enabled — expecting Vite dev server at {cfg.server.vite_dev_url}"
@@ -395,8 +397,8 @@ def main():
     else:
         static_dir = Path("static")
         if static_dir.exists() and any(static_dir.iterdir()):
-            app.mount("/", StaticFiles(directory="static", html=True), name="static")
-            logger.info("Mounted static files from static/")
+            app.mount("/", SPAStaticFiles(directory="static", html=True), name="static")
+            logger.info("Mounted static files from static/ (with SPA fallback)")
         else:
             logger.warning(
                 "Production mode but static/ is empty — run 'npm run build' in frontend/"

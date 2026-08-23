@@ -95,6 +95,7 @@ latexcellence/
 │   │   │   ├── __init__.py
 │   │   │   ├── manager.py            # ProjectToolsManager — 浏览工具（list_files/read_file_content/get_section_structure/search_across_files）
 │   │   │   └── edit_tools_manager.py # EditToolsManager — 段落编辑工具（edit_paragraph/undo_last_edit）
+│   │   ├── spa_static_files.py        # SPA 回退静态托管（history 路由刷新/直达回退 index.html；main.py 生产模式挂载 static/ 使用）
 │   │   └── search_router.py         # 通用搜索 API 路由（/api/search/ddg-challenge）
 │   └── modules/                     # 功能模块目录
 │       ├── auth/                    # 多用户认证与管理路由（/api/auth、/api/admin）

@@ -5,7 +5,7 @@
 ## 目录
 
 - [后端核心模块](#后端核心模块)：config、security_middleware、llm_client、logger、project_manager、base_paragraph_check、prompts、tool_registry、workspace_manager
-- [后端工具模块](#后端工具模块)：scholarly_research、tool_result_protocol、file_ops、path_guard、json_utils、latex_json_guard、sandbox（Docker 沙箱执行）、tex_compile、compile_error_translator、latex_formatter、latex_parser、latex_literals、latex_package_analyzer、input_resolver 等
+- [后端工具模块](#后端工具模块)：scholarly_research、tool_result_protocol、file_ops、path_guard、json_utils、latex_json_guard、sandbox（Docker 沙箱执行）、tex_compile、compile_error_translator、latex_formatter、latex_parser、latex_literals、latex_package_analyzer、input_resolver、spa_static_files 等
 - [项目管理路由 project_router.py](#项目管理路由-project_routerpy)
 
 ---
@@ -821,6 +821,21 @@ backend/utils/sandbox/
 为 LLM prompt 注入当前日期/时间/星期信息，帮助模型理解相对时间概念。
 
 **核心接口**：`get_current_time_context()` → 返回 `{date, time, weekday}`
+
+### `spa_static_files.py` — SPA 回退静态托管
+
+前端使用 React Router 的 BrowserRouter（history 路由），`/formula-ocr` 等客户端路由在 `static/` 下没有对应物理文件；原生 `StaticFiles(html=True)` 未命中时抛 404，刷新 / 直达会得到 API 风格的 `{"detail":"Not Found"}`（开发时被 Vite dev server 自带的 SPA 回退掩盖）。
+
+**设计**：`SPAStaticFiles` 继承 Starlette 的 `StaticFiles`，仅当 404 且请求同时满足以下条件时回退返回 `index.html`，由前端路由接管渲染：
+
+- Accept 头包含 `text/html`（浏览器页面导航）；脚本 / 样式 / 图片等资源缺失时保持 404，避免 HTML 被错当 JS/CSS 加载；
+- 路径不以 `api/` 开头；API 未命中保持 JSON 404，不掩盖接口路径错误。
+
+命中文件、目录索引（`html=True`）、304 协商缓存与目录重定向等行为与原生完全一致。仅在 `main.py` 生产模式挂载 `static/` 时使用。
+
+**核心接口**：`SPAStaticFiles(directory=..., html=True)`（签名同 StaticFiles）
+
+**测试**：`tests/test_utils/test_spa_static_files.py`
 
 ### `latex_parser.py` — LaTeX 文本提取与 Marker 保护
 

@@ -278,7 +278,7 @@ python -m backend.manage set-status <username> pending|active|disabled
 | 模式 | `dev_mode` | FastAPI 行为 | 前端行为 |
 | --- | --- | --- | --- |
 | 开发 | `true` | 不挂载 `static/`；CORS 白名单默认含 `localhost:5173` / `127.0.0.1:5173` | 由 Vite dev server（默认 5173）独立运行，`vite.config.js` 代理 `/api` 到 `localhost:8000` |
-| 生产 | `false` | 挂载 `static/` 目录作为静态文件服务 | 前端已构建为 `static/` 下的产物，由 FastAPI 直接提供 |
+| 生产 | `false` | 挂载 `static/` 目录作为静态文件服务（`SPAStaticFiles`，带 SPA 回退，见 `backend/utils/spa_static_files.py`） | 前端已构建为 `static/` 下的产物，由 FastAPI 直接提供 |
 
 **切换到生产模式**：
 
@@ -288,6 +288,8 @@ python -m backend.manage set-status <username> pending|active|disabled
 4. 访问 http://localhost:8000。
 
 > 注意：`main.py` 仅在 `dev_mode == false` 时挂载 `static/`；若未切换就直接访问 8000 端口，将只能看到 API 接口而非前端页面。
+
+> SPA 回退：前端使用 BrowserRouter（history 路由），生产模式下刷新 / 直达 `/formula-ocr` 等客户端路由时物理文件不存在。`SPAStaticFiles` 对期望 HTML 的页面导航回退返回 `index.html`；脚本 / 样式等资源缺失与 `/api/*` 未命中仍保持 404。详见 [backend-core.md](backend-core.md)。
 
 **前后端分离部署（远程前端 + 本地后端）**：
 
