@@ -22,7 +22,7 @@
 | [adr/0002-web-access-stage0-dependencies.md](./adr/0002-web-access-stage0-dependencies.md) | 网络访问阶段 0 的浏览器、HTML 抽取和 PDF 解析依赖验证决策 |
 | [windows-temp-permissions.md](./windows-temp-permissions.md) | Windows 下 Codex 沙箱临时目录权限问题排查：pytest 会话级 basetemp、ACL 清理与预防 |
 | [multi-user-plan.md](./multi-user-plan.md) | 多用户模式设计方案（双模式/认证/用户空间/配额/权限协作/管理后台/迁移） |
-| [deployment.md](./deployment.md) | 部署指南（单用户/多用户单进程/多实例 Compose 部署、HTTPS 反向代理、安全风险声明、备份与运维监控） |
+| [deployment.md](./deployment.md) | 后端部署指南（单用户/多用户单进程/多实例 Compose 部署、systemd 托管、HTTPS 反向代理、安全风险声明、备份、环境变量与升级回滚） |
 
 ---
 

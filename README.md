@@ -129,7 +129,7 @@ Word 则相反。对它“简单”的印象来自把结构藏进 GUI：样式�
 ### 前置条件
 
 - Python 3.12+
-- Node.js 18+
+- Node.js 20+（仅构建前端时需要，见 `frontend/package.json` 的 `engines` 约束）
 - texlive（含 xelatex、latexmk、latexindent、latexdiff，编译功能、LaTeX 代码审查功能、git diff 功能需要）
 - Pandoc（Markdown 转 LaTeX 功能需要，[下载安装](https://pandoc.org/installing.html)）
 - OpenAI API Key（或兼容的 API 端点）
@@ -138,10 +138,12 @@ Word 则相反。对它“简单”的印象来自把结构藏进 GUI：样式�
 
 ```bash
 # 克隆项目
-git clone https://github.com/eksisto/latexcellence.git
+git clone https://github.com/eksisto/latexcellence.git latexcellence
 cd latexcellence
 
-# 安装后端依赖
+# 建议使用虚拟环境，避免污染系统 Python
+python -m venv .venv
+source .venv/bin/activate
 pip install -r requirements.txt
 
 # 安装前端依赖
