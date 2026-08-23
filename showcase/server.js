@@ -1,4 +1,4 @@
-/* LateXcellence · Showcase —— 零依赖静态文件服务器（Node.js 18+） */
+/* LateXcellence · Showcase —— 零依赖静态文件服务器（Node.js 20+） */
 "use strict";
 
 const http = require("http");

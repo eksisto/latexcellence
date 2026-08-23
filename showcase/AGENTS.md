@@ -11,7 +11,7 @@
 
 ## 项目定位
 
-- 零依赖单页产品展示页（Scrollytelling），Node.js 18+ 内置 http 静态服务器，**无构建步骤、无 npm 运行时依赖**。
+- 零依赖单页产品展示页（Scrollytelling），Node.js 20+ 内置 http 静态服务器，**无构建步骤、无 npm 运行时依赖**。
 - 是 `latexcellence` 仓库的子目录 `showcase/`；主题 token 依赖父仓库 `frontend/` 的样式源。
 
 ## 架构铁律（最高优先级）
