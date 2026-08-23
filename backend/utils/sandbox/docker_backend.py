@@ -18,6 +18,8 @@ sandbox_unavailable 错误。
 
 import asyncio
 import os
+import shutil
+import tempfile
 import threading
 import time
 
@@ -110,6 +112,89 @@ class DockerBackend:
         client.ping()
         return True
 
+    # ── 挂载预检（v2 P7 收口：容器化后端部署的静默失效防护）──────
+    async def preflight_mount_check(self, image: str) -> bool:
+        """实测宿主 daemon 能否绑定本进程可见的绝对路径（一次性预检）。
+
+        同绝对路径挂载契约（models.py：host_path 即容器内路径）要求后端
+        进程与 Docker daemon 共享同一文件系统视图。后端自身容器化部署
+        （如 compose 把 data 卷挂在 /app/data）时该前提不成立——spec.cwd
+        的宿主路径不存在，容器在 create 阶段才报 "bind source path does
+        not exist"，且 auto 模式不会回落（probe 只 ping daemon）。此处以
+        最小容器对临时目录做一次真实 bind mount，失败由 runner 视同不可达。
+        """
+        return await asyncio.to_thread(self._preflight_mount_sync, image)
+
+    def _preflight_mount_sync(self, image: str) -> bool:
+        client = self._get_client()
+        probe_dir = tempfile.mkdtemp(prefix="lx-sandbox-preflight-")
+        container = None
+        try:
+            from docker.types import Mount
+
+            mounts = [
+                Mount(
+                    target=probe_dir,
+                    source=probe_dir,
+                    type="bind",
+                    read_only=True,
+                )
+            ]
+            kwargs: dict = {
+                "image": image,
+                "command": ["true"],
+                "detach": True,
+                "mounts": mounts,
+                "read_only": True,
+                "security_opt": ["no-new-privileges"],
+                "cap_drop": ["ALL"],
+                "mem_limit": "64M",
+                "pids_limit": 16,
+            }
+            kwargs[self._network_kwarg_name(client)] = "none"
+            container = client.containers.create(**kwargs)
+            container.start()
+            container.wait(timeout=20)
+            logger.info(
+                "sandbox bind-mount preflight passed | image=%s | dir=%s",
+                image,
+                probe_dir,
+            )
+            return True
+        except Exception as e:  # noqa: BLE001 — 预检失败即视同不可达，原因仅记录
+            message = str(e)
+            if "bind source path" in message or (
+                "no such file or directory" in message.lower()
+            ):
+                logger.warning(
+                    "sandbox bind-mount preflight failed: the host daemon "
+                    "cannot see this process's filesystem view (%s). A "
+                    "containerized backend must share the mounted data path "
+                    "with the host daemon; falling back / failing fast.",
+                    e,
+                )
+            else:
+                logger.warning(
+                    "sandbox bind-mount preflight failed (image=%s): %s", image, e
+                )
+            return False
+        finally:
+            if container is not None:
+                try:
+                    container.remove(force=True)
+                except Exception as e:  # noqa: BLE001 — 清理失败仅记录
+                    logger.debug("preflight container cleanup failed: %s", e)
+            shutil.rmtree(probe_dir, ignore_errors=True)
+
+    @staticmethod
+    def _network_kwarg_name(client) -> str:
+        """网络隔离参数名随 SDK 版本变化（旧版 network_mode → 新版
+        networking_mode）；按已安装 SDK 的签名选择，避免盲试 TypeError。"""
+        import inspect
+
+        params = inspect.signature(client.containers.create).parameters
+        return "networking_mode" if "networking_mode" in params else "network_mode"
+
     def close(self) -> None:
         with self._client_lock:
             if self._client is not None:
@@ -187,16 +272,9 @@ class DockerBackend:
     def _create_and_start(self, spec: ExecSpec, image: str, limits: SandboxLimits):
         client = self._get_client()
         kwargs = self._build_container_kwargs(spec, image, limits)
-        # 网络隔离参数名随 SDK 版本变化（按已安装 SDK 的签名选择，
-        # 避免盲试 TypeError 掩盖真正的参数错误）：
-        #   旧版：network_mode；新版（更名后）：networking_mode
-        import inspect
-
-        create_params = inspect.signature(client.containers.create).parameters
-        net_key = (
-            "networking_mode" if "networking_mode" in create_params else "network_mode"
-        )
-        kwargs[net_key] = "none"
+        # 网络隔离参数名随 SDK 版本变化，按已安装 SDK 的签名选择
+        # （避免盲试 TypeError 掩盖真正的参数错误）
+        kwargs[self._network_kwarg_name(client)] = "none"
         container = client.containers.create(**kwargs)
         container.start()
         logger.info(

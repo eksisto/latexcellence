@@ -28,6 +28,15 @@ logger = get_logger("sandbox.runner")
 # Docker daemon 探测结果的 TTL 缓存（秒）
 PROBE_TTL_SECONDS = 60.0
 
+# 内置默认镜像名：与 backend/core/config.py SandboxConfig 字段默认值一致。
+# 管理员在设置页把镜像名清空保存时按内置默认回落（与三语提示
+# "留空使用后端内置默认值"语义一致），而不是让全部命令 503。
+_BUILTIN_IMAGES = {
+    "tex": "latexcellence-tex:latest",
+    "convert": "latexcellence-convert:latest",
+    "plot": "latexcellence-plot:latest",
+}
+
 
 class SandboxRunner:
     """全部外部命令执行的唯一入口。"""
@@ -37,6 +46,11 @@ class SandboxRunner:
         self._probe_lock = asyncio.Lock()
         self._probe_ok: bool | None = None
         self._probe_at: float = 0.0
+        # bind-mount 预检结果（进程内固化，None=未测）：同绝对路径挂载契约
+        # 要求后端与 daemon 共享文件系统视图，后端自身容器化部署时该前提
+        # 不成立且只在 create 阶段才暴露——启动期实测一次（见
+        # DockerBackend.preflight_mount_check），失败视同不可达。
+        self._mount_ok: bool | None = None
         self._warned_fallback = False
         self._semaphore: asyncio.Semaphore | None = None
         self._semaphore_limit = 0
@@ -51,14 +65,15 @@ class SandboxRunner:
     @staticmethod
     def _image_for(kind: str) -> str:
         scfg = get_config().sandbox
+        if kind not in _BUILTIN_IMAGES:
+            raise sandbox_unavailable(f"no image configured for kind '{kind}'")
         image = {
             "tex": scfg.image_tex,
             "convert": scfg.image_convert,
             "plot": scfg.image_plot,
         }.get(kind, "")
-        if not image:
-            raise sandbox_unavailable(f"no image configured for kind '{kind}'")
-        return image
+        image = (image or "").strip()
+        return image if image else _BUILTIN_IMAGES[kind]
 
     def _limits(self) -> SandboxLimits:
         scfg = self._sandbox_cfg()
@@ -71,7 +86,11 @@ class SandboxRunner:
 
     # ── 探测与后端选择 ────────────────────────────────────────
     async def probe_docker(self) -> bool:
-        """daemon 可达性（TTL 缓存；SDK 缺失 / 非 POSIX 视为不可达）。"""
+        """daemon 可达性（TTL 缓存；SDK 缺失 / 非 POSIX 视为不可达）。
+
+        首次探测通过 ping 后追加一次 bind-mount 预检（进程内固化，不随
+        TTL 重测——部署拓扑不会在运行期变化）；mode=local 跳过预检。
+        """
         async with self._probe_lock:
             now = time.monotonic()
             if self._probe_ok is not None and now - self._probe_at < PROBE_TTL_SECONDS:
@@ -79,6 +98,23 @@ class SandboxRunner:
             reachable = bool(os.name == "posix" and docker_sdk_available()) and (
                 await self._docker.ping()
             )
+            if reachable and self._mount_ok is None:
+                if self._sandbox_cfg().mode == "local":
+                    self._mount_ok = True  # 本地后端不做容器挂载，视为满足前提
+                else:
+                    self._mount_ok = await self._docker.preflight_mount_check(
+                        self._image_for("tex")
+                    )
+                    if not self._mount_ok:
+                        logger.warning(
+                            "sandbox bind-mount preflight failed — the Docker "
+                            "daemon cannot see this process's filesystem view "
+                            "(containerized backend?). Treating Docker as "
+                            "unreachable; mode=auto falls back to local, "
+                            "mode=docker will fail fast"
+                        )
+            if self._mount_ok is False:
+                reachable = False
             if reachable != self._probe_ok:
                 logger.info(
                     "Docker daemon reachability changed: %s -> %s",
@@ -110,7 +146,8 @@ class SandboxRunner:
             self._last_backend[kind] = "local"
             return "local"
         raise sandbox_unavailable(
-            "sandbox.mode=docker but the Docker daemon is unreachable"
+            "sandbox.mode=docker but the Docker daemon is unreachable "
+            "(or the bind-mount preflight failed)"
         )
 
     def cached_backend(self, kind: str) -> str | None:

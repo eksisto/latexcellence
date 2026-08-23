@@ -13,6 +13,13 @@
 
 镜像名通过 `config.json` 的 `sandbox.image_*` 配置项引用；`backend` 镜像本身由部署形态（compose 等）引用，不占用 `sandbox.image_*`。
 
+## 部署硬性前提：同路径挂载视图（重要）
+
+沙箱采用"同绝对路径 bind mount"契约（宿主路径即容器内路径），要求**后端进程与 Docker daemon 看到同一文件系统视图**：
+
+- ✅ 支持：Linux 原生部署（后端直接跑在宿主上）。
+- ❌ 不支持：后端自身容器化且把数据卷挂在非宿主同名路径（如 compose 的 `/app/data`）——daemon 视角不存在该路径，容器创建必然失败。运行期会在启动预检（bind-mount 实测）中发现并视同不可达：`sandbox.mode=auto` 回落本地执行并告警，`mode=docker` 快速失败（503）。此形态下请改用 `mode=local`，或让后端容器以 host 路径前缀一致的方式挂载数据卷。
+
 ## 构建方法
 
 首次使用先赋可执行权限：

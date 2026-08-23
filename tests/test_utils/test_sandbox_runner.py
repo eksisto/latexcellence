@@ -47,6 +47,10 @@ def _fake_docker(runner: SandboxRunner, *, reachable: bool, result=None):
     async def fake_ping():
         return reachable
 
+    async def fake_preflight_mount_check(image):
+        # 挂载预检默认通过（预检失败分支在 test_sandbox_docker_backend.py）
+        return True
+
     async def fake_execute(spec, *, image, limits, grace_seconds=0.0):
         calls["image"] = image
         calls["limits"] = limits
@@ -57,7 +61,11 @@ def _fake_docker(runner: SandboxRunner, *, reachable: bool, result=None):
     runner._docker = type(
         "FakeDocker",
         (),
-        {"ping": staticmethod(fake_ping), "execute": staticmethod(fake_execute)},
+        {
+            "ping": staticmethod(fake_ping),
+            "preflight_mount_check": staticmethod(fake_preflight_mount_check),
+            "execute": staticmethod(fake_execute),
+        },
     )()
     return calls
 
