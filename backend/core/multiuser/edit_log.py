@@ -332,7 +332,18 @@ def record_write(
         total_bytes,
         " [non_undoable]" if non_undoable else "",
     )
-    _evict_overflow(project_id, actor_user_id)
+    # 驱逐是机会主义维护：失败只降级记 warning，绝不影响已落盘的写入主流程
+    # （否则 DB 异常会在快照落盘后从 apply_change / apply_whole_files 逃逸，
+    # 客户端收到报错但写入实际生效）；本轮未驱逐，下轮记账会再试。
+    try:
+        _evict_overflow(project_id, actor_user_id)
+    except Exception:
+        logger.warning(
+            "Edit log overflow eviction failed (non-fatal): " "project=%s actor=%s",
+            project_id[:8],
+            actor_user_id[:8],
+            exc_info=True,
+        )
     return op_id
 
 
@@ -747,19 +758,68 @@ def _group_members(conn, group_id: str, status: str) -> list[dict]:
     return [dict(r) for r in rows]
 
 
-def _newest_active_blocks_redo(conn, project_id: str, redo_group_seq_max: int) -> bool:
-    """同项目内存在比待重做组更新的 active op 时，redo 视为已被取代。
+def _group_file_paths(ops: list[dict]) -> set[str] | None:
+    """组内各 op 清单中的文件路径并集；任一清单缺失/损坏返回 None。
+
+    None 表示"相关性不可判定"，调用方（取代判定）应保守地按被取代处理。
+    """
+    paths: set[str] = set()
+    for op in ops:
+        try:
+            manifest = _read_manifest(op)
+        except HTTPException:
+            return None
+        paths.update(f["path"] for f in manifest["files"])
+    return paths
+
+
+def _newer_active_rows(conn, project_id: str, redo_group_seq_max: int) -> list[dict]:
+    """同项目内 seq 晚于待重做组的全部 active op 行（供取代判定）。
 
     注意必须按 project_id 过滤：seq 为全库自增，跨项目的新写入不应影响
     本项目栈的重做可用性。
     """
-    row = conn.execute(
-        "SELECT seq FROM workspace_edit_ops "
-        "WHERE project_id = ? AND status = 'active' AND seq > ? "
-        "LIMIT 1",
+    rows = conn.execute(
+        "SELECT op_id, op_group_id, owner_id FROM workspace_edit_ops "
+        "WHERE project_id = ? AND status = 'active' AND seq > ?",
         (project_id, redo_group_seq_max),
-    ).fetchone()
-    return row is not None
+    ).fetchall()
+    return [dict(row) for row in rows]
+
+
+def _superseded_by_related(
+    project_id: str,
+    redo_group_id: str,
+    redo_paths: set[str] | None,
+    newer_active: list[dict],
+) -> bool:
+    """取代判定（收窄语义）：仅与待重做组**相关**的更新 active op 才阻断 redo。
+
+    相关 = 同 op_group，或共享至少一个文件路径——异文件的新编辑不终止
+    本组重放链；同文件的真冲突由 apply_whole_files 落盘前按 expected_md5s
+    的 MD5 乐观锁复查兜底，安全性不受影响。快照清单缺失/损坏导致相关性
+    无法判定时保守按取代处理（与收窄前的旧行为一致，存量库无需迁移）。
+    """
+    if redo_paths is None:
+        # 待重做组自身清单不可读：无法判定相关性，维持旧语义（有更新即阻断）
+        return bool(newer_active)
+    for row in newer_active:
+        if row["op_group_id"] == redo_group_id:
+            return True
+        try:
+            manifest = _read_manifest(
+                {
+                    "owner_id": row["owner_id"],
+                    "project_id": project_id,
+                    "op_id": row["op_id"],
+                }
+            )
+        except HTTPException:
+            # 更新方的清单不可读：无法排除文件重叠，保守按取代处理
+            return True
+        if any(f["path"] in redo_paths for f in manifest["files"]):
+            return True
+    return False
 
 
 # ── 撤销 / 重做 ───────────────────────────────────────────────────────────
@@ -831,8 +891,8 @@ def perform_redo(
 ) -> dict:
     """对称重放最新一组被撤销的修改（方案 §8.3）。
 
-    校验当前 MD5 == before_md5 后重放 after 内容；有更新的 active op 时
-    重做视为已被取代（返回 redone=False）。
+    校验当前 MD5 == before_md5 后重放 after 内容；存在更新的**相关**
+    active op（同组或共享文件路径）时重做视为已被取代（返回 redone=False）。
     """
     with transaction() as conn:
         # 重放"最近一次被撤销"的组：按 undone_at 降序（同一秒内多次撤销时
@@ -850,10 +910,15 @@ def perform_redo(
             "SELECT MAX(seq) AS max_seq FROM workspace_edit_ops WHERE op_group_id = ?",
             (newest_undone["op_group_id"],),
         ).fetchone()
-        if _newest_active_blocks_redo(conn, project_id, int(group_rows["max_seq"])):
-            # 新修改已覆盖该操作的产物：不再提供重做（保留 op 供审计）
-            return {"redone": False}
         ops = _group_members(conn, newest_undone["op_group_id"], STATUS_UNDONE)
+        if _superseded_by_related(
+            project_id,
+            newest_undone["op_group_id"],
+            _group_file_paths(ops),
+            _newer_active_rows(conn, project_id, int(group_rows["max_seq"])),
+        ):
+            # 相关的新修改已覆盖该操作的产物：不再提供重做（保留 op 供审计）
+            return {"redone": False}
 
         updates, expected, grow = _load_redo_updates(ops, root_path)
 
@@ -931,21 +996,25 @@ def compute_status(project_id: str, actor_user_id: str, root_path: str) -> dict:
             "WHERE op_group_id = ?",
             (newest_undone["op_group_id"],),
         )
-        superseded = db_query_one(
-            "SELECT seq FROM workspace_edit_ops "
-            "WHERE project_id = ? AND status = 'active' AND seq > ? "
-            "LIMIT 1",
+        members = db_query_all(
+            "SELECT * FROM workspace_edit_ops WHERE op_group_id = ? "
+            "AND status = 'undone' ORDER BY seq",
+            (newest_undone["op_group_id"],),
+        )
+        newer_active = db_query_all(
+            "SELECT op_id, op_group_id, owner_id FROM workspace_edit_ops "
+            "WHERE project_id = ? AND status = 'active' AND seq > ?",
             (project_id, int(group_row["max_seq"])),
         )
-        if superseded is not None:
+        if _superseded_by_related(
+            project_id,
+            newest_undone["op_group_id"],
+            _group_file_paths(members),
+            newer_active,
+        ):
             result["redo_block_reason"] = "superseded"
             return result
         try:
-            members = db_query_all(
-                "SELECT * FROM workspace_edit_ops WHERE op_group_id = ? "
-                "AND status = 'undone' ORDER BY seq",
-                (newest_undone["op_group_id"],),
-            )
             # 轻量组级检查（聚合语义与执行路径一致；after 快照内容完整性
             # 在执行时强校验）
             _check_redo_applicable(members, root_path)

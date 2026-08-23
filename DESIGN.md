@@ -725,7 +725,7 @@ LatexProject.apply_change / apply_whole_files（全部项目写通道）
    active ────────────────────────────────▶ undone
       ▲                                       │
       │  redo（校验当前 MD5 == before_md5，      │
-      │  且无更新的 active op 取代）             │
+      │  且无相关更新的 active op 取代）          │
       └────────────────────────────────────────┘
    failed（防御终态：op 记录的文件已消失，状态接口提示 failed_ops）
 ```
@@ -734,7 +734,7 @@ LatexProject.apply_change / apply_whole_files（全部项目写通道）
 - 冲突即拒绝：组内任一文件当前 MD5 与预期不符 → 409 `file_conflict`，绝不静默覆盖他人修改；MD5 校验失败视为不可撤销但保留 op，待文件回到对应状态后可再撤；
 - 配额：恢复导致项目体积增长时先校验配额，超限 413 `quota_exceeded_recover`（op 保持原状态可重试）；
 - 恢复写回复用 `apply_whole_files`（乐观锁事务保护）并抑制记账，避免回滚自身被记成新 op；
-- redo 候选取"最近一次被撤销"的组（`undone_at` 降序），有更新的 active op 时视为已被取代；
+- redo 候选取"最近一次被撤销"的组（`undone_at` 降序），存在 seq 更大且**相关**（同 undo 组或共享文件路径）的 active op 时视为已被取代——异文件的新编辑不终止本组重放链；同文件冲突仍报 superseded，且即使判定漏放，恢复写回前的 MD5 乐观锁兜底不会静默覆盖；
 - 生命周期：每 (project, actor) 保留最近 `edit_log_max_ops` 条（按组整体淘汰、连带快照删除）；维护循环清理超过 `edit_log_ttl_hours` 无活动的整栈；项目永久删除 / 回收站清空级联清理。
 
 ### 14.3 与既有机制的边界

@@ -15,6 +15,7 @@
 """
 
 import json
+import logging
 import uuid
 from unittest import mock
 
@@ -209,6 +210,46 @@ class TestRecording:
             project.apply_change("main.tex", 0, "Edited.")
         rows = _op_rows(stack_env)
         assert rows[0]["source_module"] == "custom_origin"
+
+    def test_evict_overflow_failure_does_not_break_apply_change(
+        self, stack_env, caplog
+    ):
+        """回归（缺陷二）：_evict_overflow 是机会主义维护，抛异常时必须
+        降级为 warning 日志——绝不能从 record_write / apply_change 逃逸，
+        把已成功落盘的写入变成客户端眼中的失败。"""
+        project = _open_project(stack_env, stack_env["owner"]["id"])
+        with mock.patch.object(
+            edit_log,
+            "_evict_overflow",
+            side_effect=RuntimeError("database is locked"),
+        ):
+            with caplog.at_level(logging.WARNING, logger="multiuser.edit_log"):
+                op_id = project.apply_change("main.tex", 0, "Survives eviction outage.")
+        # 写入与记账均不受驱逐故障影响
+        assert op_id is not None
+        rows = _op_rows(stack_env)
+        assert len(rows) == 1
+        assert rows[0]["status"] == "active"
+        content = (stack_env["root"] / "main.tex").read_text(encoding="utf-8")
+        assert "Survives eviction outage." in content
+        # 驱逐失败留有 warning 级痕迹
+        assert any(
+            "eviction failed" in record.getMessage().lower()
+            for record in caplog.records
+        )
+
+    def test_evict_overflow_failure_does_not_break_apply_whole_files(self, stack_env):
+        """同缺陷二的 apply_whole_files 路径：批量事务写回后驱逐异常不逃逸。"""
+        project = _open_project(stack_env, stack_env["owner"]["id"])
+        (stack_env["root"] / "batch.tex").write_text("B0\n", encoding="utf-8")
+        with mock.patch.object(
+            edit_log,
+            "_evict_overflow",
+            side_effect=RuntimeError("database is locked"),
+        ):
+            project.apply_whole_files({"batch.tex": "B1\n"})
+        assert len(_op_rows(stack_env)) == 1
+        assert (stack_env["root"] / "batch.tex").read_text(encoding="utf-8") == "B1\n"
 
     def test_non_undoable_when_snapshot_too_large(self, stack_env):
         project = _open_project(stack_env, stack_env["owner"]["id"])
@@ -412,6 +453,82 @@ class TestUndoRedoSemantics:
             root_path=str(stack_env["root"]),
         )
         assert result["redone"] is True
+
+    def test_redo_chain_survives_unrelated_replayed_op(self, stack_env):
+        """回归（缺陷一）：多次撤销 → 异文件新编辑 → 撤销该新编辑 →
+        连续 redo 必须放行整条重放链（c → a → b）。
+
+        修复前 _newest_active_blocks_redo 以"存在 seq 更大的 active op"
+        判定取代：c 重放回活后（seq3 > seq1/seq2），继续重做 a/b 被误判为
+        superseded，合法重放链在第二步永久断裂。收窄后仅同组或共享文件
+        路径的更新 active op 才阻断 redo，异文件编辑不终止本组重放链。"""
+        owner_id = stack_env["owner"]["id"]
+        root = stack_env["root"]
+        (root / "extra.tex").write_text("Extra v0\n", encoding="utf-8")
+        project = _open_project(stack_env, owner_id)
+
+        def undo_once() -> dict:
+            return edit_log.perform_undo(
+                project,
+                project_id=stack_env["project_id"],
+                actor_user_id=owner_id,
+                root_path=str(root),
+            )
+
+        def redo_once() -> dict:
+            return edit_log.perform_redo(
+                project,
+                project_id=stack_env["project_id"],
+                actor_user_id=owner_id,
+                root_path=str(root),
+            )
+
+        # a(seq1)、b(seq2) 同文件两次编辑 → 全部撤销
+        project.apply_change("main.tex", 0, "Alpha paragraph.")
+        project.apply_change("main.tex", 1, "Beta paragraph.")
+        assert undo_once()["undone"] is True
+        assert undo_once()["undone"] is True
+        # 异文件新编辑 c(seq3) → 撤销之
+        project.apply_whole_files({"extra.tex": "Extra v1\n"})
+        assert undo_once()["undone"] is True
+        assert (root / "extra.tex").read_text(encoding="utf-8") == "Extra v0\n"
+
+        # 固定 undone_at 时序（b < a < c）确定重放顺序为 c → a → b：
+        # utcnow 为秒级精度，连续撤销可能同秒而落入 seq 破平分支
+        rows = _op_rows(stack_env, owner_id)
+        assert [r["file_count"] for r in rows] == [1, 1, 1]
+        stamps = (
+            db_module.utcnow_after(-60),  # a：居中
+            db_module.utcnow_after(-120),  # b：最早撤销
+            db_module.utcnow_after(-30),  # c：最后撤销
+        )
+        for row, stamp in zip(rows, stamps):
+            db_module.db_execute(
+                "UPDATE workspace_edit_ops SET undone_at = ? WHERE seq = ?",
+                (stamp, row["seq"]),
+            )
+
+        # 第一步：重放最后撤销的异文件编辑 c
+        first = redo_once()
+        assert first == {"redone": True, "files": ["extra.tex"]}
+        # 关键回归点：刚重放的 c（seq 更大且 active）不得把后续 a/b 的重做
+        # 误判为 superseded——状态接口与执行路径都必须继续放行整链
+        status = edit_log.compute_status(stack_env["project_id"], owner_id, str(root))
+        assert status["can_redo"] is True
+        assert status["redo_block_reason"] is None
+        second = redo_once()
+        third = redo_once()
+        assert second["redone"] is True
+        assert second["files"] == ["main.tex"]
+        assert third["redone"] is True
+        assert third["files"] == ["main.tex"]
+
+        # 终态对称：整组全部回活、内容完整重放
+        assert all(r["status"] == "active" for r in _op_rows(stack_env, owner_id))
+        assert (root / "extra.tex").read_text(encoding="utf-8") == "Extra v1\n"
+        content = (root / "main.tex").read_text(encoding="utf-8")
+        assert "Alpha paragraph." in content
+        assert "Beta paragraph." in content
 
     def test_quota_exceeded_recover_keeps_op_active(self, stack_env):
         owner_id = stack_env["owner"]["id"]
