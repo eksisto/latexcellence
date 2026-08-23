@@ -87,11 +87,56 @@ class TestWorkspaceBindingCrossInstance:
             owner_id="u1",
             root_path=str(project_root),
         )
-        # B 实例从未 open 过该工作区：get_or_create 按绑定 root 重建
+        # B 实例从未 open 过该工作区：跨副本续用走 ensure_open_for_binding
+        # （由 require_workspace 依赖在权限放行后调用；get_or_create 本身
+        # 零 I/O，不再同步重建——事件循环安全修订）
         b = _fresh_manager()
-        project = b.get_or_create("ws3")
+        project = b.ensure_open_for_binding("ws3")
         assert project.is_open
         assert project.root_path == str(project_root)
+
+    def test_get_or_create_stays_cheap_without_open(self, mu_env):
+        """get_or_create 只建空实例：多用户模式有绑定也不触发重 I/O 重建。"""
+        project_root = _make_project_dir(
+            mu_env["users_root"] / "u1" / "projects" / "p9"
+        )
+        a = _fresh_manager()
+        a.bind(
+            "ws3c",
+            user_id="u1",
+            project_id="p1",
+            owner_id="u1",
+            root_path=str(project_root),
+        )
+        b = _fresh_manager()
+        project = b.get_or_create("ws3c")
+        assert not project.is_open  # 未调用 ensure_open_for_binding 前不打开
+        assert b.ensure_open_for_binding("ws3c").is_open
+
+    def test_reopen_when_binding_root_changes(self, mu_env):
+        """绑定根变化（转交/迁移）后 ensure_open_for_binding 重开到新根。"""
+        old_root = _make_project_dir(mu_env["users_root"] / "u1" / "projects" / "pA")
+        new_root = _make_project_dir(mu_env["users_root"] / "u2" / "projects" / "pB")
+        m = _fresh_manager()
+        m.bind(
+            "ws3b",
+            user_id="u1",
+            project_id="p1",
+            owner_id="u1",
+            root_path=str(old_root),
+        )
+        first = m.ensure_open_for_binding("ws3b")
+        assert first.root_path == str(old_root)
+        m.bind(
+            "ws3b",
+            user_id="u2",
+            project_id="p1",
+            owner_id="u2",
+            root_path=str(new_root),
+        )
+        second = m.ensure_open_for_binding("ws3b")
+        assert second is first
+        assert second.root_path == str(new_root)
 
     def test_stale_root_degrades_to_empty_project(self, mu_env):
         a = _fresh_manager()
@@ -103,7 +148,7 @@ class TestWorkspaceBindingCrossInstance:
             root_path=str(mu_env["tmp_path"] / "gone"),
         )
         b = _fresh_manager()
-        project = b.get_or_create("ws4")  # 目录缺失：降级空实例不抛错
+        project = b.ensure_open_for_binding("ws4")  # 目录缺失：降级空实例不抛错
         assert not project.is_open
 
     def test_remove_clears_db_row(self, mu_env):

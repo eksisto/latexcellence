@@ -297,6 +297,12 @@ def _enforce_workspace_access(
             project_id,
         )
         raise forbidden("no_permission", "Viewer cannot modify project files")
+    # 跨副本续用（v2 P7）：权限放行后确保本副本已按绑定根打开项目。
+    # open 是秒级全树扫描的重 I/O——本函数由 require_workspace 依赖经
+    # asyncio.to_thread 调度执行，严禁改回在事件循环上同步调用。
+    get_workspace_manager().ensure_open_for_binding(
+        workspace_id, root_path=binding.get("root_path")
+    )
     return {
         "workspace_id": workspace_id,
         "project_id": project_id,

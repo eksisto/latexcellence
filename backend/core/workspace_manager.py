@@ -13,12 +13,17 @@
     project = wm.get_or_create("ws-abc-123")
     project.open("/path/to/project")
 
-多实例语义（v2 P7）：
+多实例语义（v2 P7，事件循环安全修订）：
     - bind/unbind/remove 同步写 DB（权威）+ 进程内缓存；
     - get_binding 以 DB 为权威实时读取，进程内 dict 仅作单用户模式存储与
       多用户模式的读缓存；
-    - get_or_create 进程内 miss 时按 DB 绑定的 root_path 重新 open 项目
-      （可重建缓存），使 A 副本打开的工作区 B 副本可直接续用；
+    - get_or_create 只做进程内字典操作（零 I/O），**绝不**在此重建项目：
+      项目 open 是秒级全树扫描，若在 async 路由体内同步执行会冻结事件
+      循环（历史缺陷，v2 P7 收口时移除）；
+    - 跨副本续用改由 ensure_open_for_binding() 承担：require_workspace
+      系列依赖在权限校验通过后调用它（本身已运行于 asyncio.to_thread），
+      按 DB 绑定的 root_path 重开项目——A 副本打开的工作区 B 副本可直接
+      续用，且重活全程在工作线程、不持有管理器锁；
     - 单用户模式不落表（无绑定语义），全部行为与历史版本一致。
 """
 
@@ -69,51 +74,67 @@ class WorkspaceManager:
 
     def get_or_create(self, workspace_id: str) -> LatexProject:
         """
-        获取或创建指定工作区的 LatexProject 实例。
+        获取或创建指定工作区的 LatexProject 实例（零 I/O，事件循环安全）。
 
-        多用户模式下进程内 miss（例如该工作区由另一副本打开）时，按
-        workspace_bindings 表中的 root_path 重新 open 项目——LatexProject
-        全部状态可由磁盘重建，绑定即缓存键。重建失败（目录缺失等）降级为
-        返回空实例并告警，不阻塞请求。
+        只做进程内字典操作：miss 时创建**空**实例并注册。多用户模式下
+        跨副本续用（本进程 miss 但 DB 有绑定）的重建由
+        :meth:`ensure_open_for_binding` 负责——require_workspace 系列依赖
+        已在权限校验后统一调用，路由层无需自行处理。
 
         参数：
             workspace_id: 工作区唯一标识符（前端生成的 UUID）
 
         返回：
-            工作区专属的 LatexProject 实例
+            工作区专属的 LatexProject 实例（可能尚未 open）
         """
         with self._lock:
             if workspace_id not in self._workspaces:
                 backup_mgr = BackupManager()
                 project = LatexProject(backup_mgr=backup_mgr)
                 self._workspaces[workspace_id] = project
-                self._try_rebuild_from_binding_locked(workspace_id, project)
                 self._logger.info(
                     f"Created new workspace: {workspace_id} "
                     f"(total workspaces: {len(self._workspaces)})"
                 )
             return self._workspaces[workspace_id]
 
-    def _try_rebuild_from_binding_locked(
-        self, workspace_id: str, project: LatexProject
-    ) -> None:
-        """进程内 miss 时按 DB 绑定重建项目状态（调用方必须已持有锁）。"""
+    def ensure_open_for_binding(
+        self, workspace_id: str, *, root_path: str | None = None
+    ) -> LatexProject:
+        """确保工作区实例已按绑定根目录打开（多用户跨副本续用的唯一入口）。
+
+        - 多用户模式且绑定存在时：root_path 缺省则实时读 DB 绑定行；
+          实例未打开或绑定根已变化（项目转交/迁移）时执行 ``project.open``。
+        - 单用户模式 / 无绑定 / 无 root_path：原样返回实例（保持历史行为）。
+        - 打开失败降级为返回空实例并告警，不抛异常（与历史重建语义一致）。
+
+        ⚠️ 本方法含同步文件树扫描等重 I/O，**禁止在事件循环线程直接调用**；
+        设计调用点是 require_workspace 依赖内部（已在 asyncio.to_thread 中）。
+        不持有管理器锁执行 open，避免阻塞其他工作区的字典操作。
+        """
+        project = self.get_or_create(workspace_id)
         if not _bindings_store_available():
-            return
-        binding = self._load_binding_row(workspace_id)
-        root_path = (binding or {}).get("root_path") or ""
-        if not root_path:
-            return
+            return project
+        root = root_path
+        if not root:
+            binding = self._load_binding_row(workspace_id)
+            root = (binding or {}).get("root_path") or ""
+        if not root:
+            return project
+        if project.is_open and project.root_path == root:
+            return project
         try:
-            project.open(root_path)
+            project.open(root)
             self._logger.info(
-                f"Rebuilt workspace {workspace_id} from binding root: {root_path}"
+                f"Ensured workspace {workspace_id} is open from binding root: "
+                f"{root}"
             )
-        except Exception as e:  # noqa: BLE001 - 重建失败降级为空实例
+        except Exception as e:  # noqa: BLE001 - 打开失败降级为空实例
             self._logger.warning(
-                f"Failed to rebuild workspace {workspace_id} from "
-                f"{root_path}: {e} — returning empty project"
+                f"Failed to open workspace {workspace_id} from {root}: {e} — "
+                f"returning empty project"
             )
+        return project
 
     def get(self, workspace_id: str) -> LatexProject | None:
         """
