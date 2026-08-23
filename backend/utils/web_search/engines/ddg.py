@@ -63,11 +63,28 @@ class DDGChallengeError(Exception):
         super().__init__(f"DDG challenge for query: {query}")
 
 
-# ── Challenge 存储（内存 + TTL） ─────────────────────────────────────────────
+# ── Challenge 存储 ───────────────────────────────────────────────────────────
+#
+# v2 P7 多实例外置：多用户模式下 challenge 数据存 pending_interactions 表
+# （kind='ddg_challenge'，TTL 300s），验证码解答请求可落在任意副本；
+# 单用户模式不建库，沿用进程内 dict（行为不变）。
 
 _challenge_store: dict[str, dict[str, Any]] = {}
 # 验证码提交共享客户端（懒创建，关闭时随引擎一起释放）
 _challenge_client: httpx.AsyncClient | None = None
+
+
+def _db_challenge_available() -> bool:
+    """pending_interactions 表是否可用（多用户模式且库已初始化）。"""
+    try:
+        from backend.core.config import get_config
+        from backend.core.multiuser import db
+
+        if not get_config().multi_user.enabled:
+            return False
+        return db.is_initialized()
+    except Exception:  # noqa: BLE001 - 配置未加载等场景回落进程内存储
+        return False
 
 
 def _get_challenge_client() -> httpx.AsyncClient:
@@ -99,14 +116,33 @@ async def close_challenge_client() -> None:
 
 def _store_challenge(data: dict[str, Any]) -> str:
     """存储 challenge 数据，返回 challenge_id。"""
-    _cleanup_challenge_store()
     cid = uuid.uuid4().hex[:12]
+    if _db_challenge_available():
+        from backend.core.multiuser import pending_interactions
+
+        # 入库（TTL 与进程内口径一致：5 分钟）；过期由读取路径惰性过滤 +
+        # 维护循环清理
+        pending_interactions.create(
+            cid,
+            pending_interactions.KIND_DDG_CHALLENGE,
+            data,
+            _DD_CHALLENGE_TTL,
+        )
+        return cid
+    _cleanup_challenge_store()
     _challenge_store[cid] = {**data, "created_at": time.monotonic()}
     return cid
 
 
 def get_challenge(challenge_id: str) -> dict[str, Any] | None:
     """获取 challenge 数据，过期返回 None。"""
+    if _db_challenge_available():
+        from backend.core.multiuser import pending_interactions
+
+        payload = pending_interactions.get(
+            challenge_id, pending_interactions.KIND_DDG_CHALLENGE
+        )
+        return payload
     entry = _challenge_store.get(challenge_id)
     if entry is None:
         return None
@@ -118,6 +154,13 @@ def get_challenge(challenge_id: str) -> dict[str, Any] | None:
 
 def remove_challenge(challenge_id: str) -> None:
     """提交后移除 challenge 数据。"""
+    if _db_challenge_available():
+        from backend.core.multiuser import pending_interactions
+
+        pending_interactions.delete(
+            challenge_id, pending_interactions.KIND_DDG_CHALLENGE
+        )
+        return
     _challenge_store.pop(challenge_id, None)
 
 

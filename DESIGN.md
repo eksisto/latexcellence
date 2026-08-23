@@ -20,6 +20,8 @@
 11. [多用户模式设计决策记录](#11-多用户模式设计决策记录)
 12. [Docker 沙箱执行模型（v2 P1a）](#12-docker-沙箱执行模型v2-p1a)
 13. [LLM 每用户治理模型（v2 P1b）](#13-llm-每用户治理模型v2-p1b)
+14. [共享项目反向补丁撤销（v2 P3）](#14-共享项目反向补丁撤销v2-p3)
+15. [多实例状态外置（v2 P7）](#15-多实例状态外置v2-p7)
 
 ---
 ## 1. 架构概览
@@ -494,14 +496,23 @@ Hook 内部封装了：项目恢复 → 文件选择 → 预览 → 检查 → �
 _config: Optional[AppConfig] = None
 _config_path: Optional[Path] = None
 _api_key_from_env: bool = False  # 标记 API Key 是否来自环境变量，防止写回磁盘
+_config_fingerprint: tuple[int, int] | None = None  # config.json (mtime_ns, size) 指纹
 
 def get_config() -> AppConfig:
     if _config is None:
         raise RuntimeError("Config not loaded")
+    if _fingerprint_changed():   # v2 P7：探测 mtime+size 变化，多副本配置不再漂移
+        _reload_from_disk()
     return _config
 ```
 
 所有方法内实时调用 `get_config()`，不在 `__init__` 中缓存配置对象。这样前端修改配置后，后端立即生效。
+
+v2 P7 多实例语义：
+
+- **指纹热重载**：`get_config()` 每次调用比对 config.json 的 `(mtime_ns, size)` 指纹，变化即从磁盘重载（校验失败保持旧配置并告警一次，待下次修改自动重试）。多副本部署下管理员改一份配置文件，全部副本在下次访问时自然收敛；
+- `save_config()` / `update_config_from_dict()` 写盘后同步刷新指纹——自身写盘不构成"外部变更"，不触发无意义重载；重载会重新应用 `LX_LLM_KEY` 环境变量覆盖，API Key 来源语义不变；
+- **`multi_user.enabled` 锚定**：该开关决定认证中间件、数据库初始化、用户空间布局等启动期形态，热切换会造成半初始化状态。热重载检测到磁盘值与启动锚定值不同时保持锚定值并告警，**变更仍需重启生效**。
 
 ### 7.2 安全策略
 
@@ -734,3 +745,43 @@ LatexProject.apply_change / apply_whole_files（全部项目写通道）
 | style_modify `OperationMeta` | 模块内提案级撤销（四道防线）保留，与本机制语义一致 |
 | 写回配额回滚 | `apply-change` 超限以写前全文经抑制记账的 `apply_whole_files` 恢复（以本次 op 的 after_md5 作版本守卫，检查窗口内他人已写入则放弃覆盖、只撤销本次记账并如实报错）+ `discard_op` 删除本次记账——不经 undo 通道、不污染撤销栈 |
 | 乐观锁（MD5） | 单次写冲突防护（409），反向补丁的冲突校验与其同源 |
+
+---
+
+## 15. 多实例状态外置（v2 P7）
+
+v1/v2 前期以单进程为运行前提；P7 把全部跨请求共享的进程内状态外置到共享 SQLite（迁移 v8 建表），使 `docker compose up --scale app=N` 的任意副本可服务任意请求，无需粘性会话。
+
+### 15.1 状态外置总览
+
+```
+副本 A ──┐
+         ├──▶ 共享 SQLite(WAL, data/)：业务表 + 外置状态表
+副本 B ──┤      ├─ workspace_bindings      绑定权威（进程内 LatexProject 为可重建缓存）
+         │      ├─ operation_contexts     逐段检查 preview→apply 跨副本
+         │      ├─ pending_interactions   工具确认/澄清/DDG challenge + 短间隔轮询
+         │      ├─ maintenance_lease      维护循环选主（持租约者执行）
+         │      ├─ rate_limit_events / llm_concurrency_leases / sandbox_slots
+         │      └─ email_outbox           发送前原子认领（queued→sending）防重复投递
+         ├──▶ 共享卷 data/users/ data/staging/（flock 会话互斥锁文件同卷生效）
+         └──▶ /var/run/docker.sock（只读）──▶ 沙箱容器
+```
+
+### 15.2 关键机制
+
+| 状态 | 外置方式 | 语义要点 |
+| --- | --- | --- |
+| workspace 绑定 | `workspace_bindings` 表为权威，`bind`/`unbind` 双写；`get_binding` 实时读表并节流刷新 `last_active_at` 打点 | 进程内 miss 时按绑定 root_path 重新 `open` 项目（LatexProject 状态全部可由磁盘重建）；重建失败降级空实例不阻塞请求 |
+| CheckOperationContext | payload JSON 入 `operation_contexts`（TTL 1h，维护循环清理 + 读路径惰性过期） | 段落索引键 JSON 往返变 str，反序列化时还原 int；进程 dict 降级为 L1 缓存 |
+| 工具确认 / 澄清 | `pending_interactions(kind=confirm/clarify)` + 条件 UPDATE 原子应答；等待侧以 0.5s 轮询替代 asyncio.Event | 应答与 SSE 等待可落在不同副本；双副本竞争同一待定项先到先得；status 列承载原子迁移，避免依赖 JSON 表达式 |
+| DDG challenge | 同表 `kind=ddg_challenge`（TTL 300s） | 验证码数据存储与解答提交可分属不同副本 |
+| 维护任务重复执行 | `maintenance_lease(key, holder, expires_at)` 选主：每轮开始尝试获取（TTL = 2×循环间隔），持租约者执行循环体，取消时释放 | 非持有者跳过本轮；租约到期自动易主；模块各自 cleanup_loop 幂等无害、保持独立运行 |
+| 会话互斥（style_modify/template_gen/plot_gen） | 进程内 asyncio.Lock 叠加 flock 锁文件（会话目录**旁** `<session_id>.lock`，不进目录本身——避免被 zip 打包/扫描误收） | 同机共享卷上跨副本有效；fcntl 缺失平台降级为仅进程内互斥；会话删除/TTL 清理连带删除锁文件 |
+| 配置漂移 | config.json mtime+size 指纹热重载（见 §7.1） | `multi_user.enabled` 锚定启动值，变更需重启 |
+| 日志 | env `LATEXCELLENCE_LOG_STDOUT=1` 时只输出 stdout/stderr | TimedRotatingFileHandler 多进程共写轮转有 rename 竞争；容器模式交 docker logs 收集，裸机维持单进程文件日志 |
+
+保持进程内不变的状态：LLM client / httpx / Playwright / ToolRegistry / web_cache / 元数据缓存（无用户态或纯缓存，多副本安全）；writing_chat 会话级 asyncio.Lock 仅约束同副本并发，跨副本写冲突由会话文件原子写兜底。
+
+### 15.3 编排形态
+
+仓库根 `docker-compose.yml`：app 服务（healthcheck `/api/health`，`LATEXCELLENCE_LOG_STDOUT=1`，docker.sock 只读挂载，data/config bind 卷）+ 可选 Caddy 反代 profile；副本扩展 `docker compose up -d --scale app=N`。反代要求服务名 DNS 每请求重解析（Caddy 天然支持；nginx 需 upstream 变量 + resolver），SSE 必须关闭缓冲。部署步骤、备份窗口与监控口径见 [docs/deployment.md](docs/deployment.md)。

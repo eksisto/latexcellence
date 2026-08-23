@@ -949,8 +949,15 @@ def _move_project_dir(old_root: Path, new_root: Path) -> None:
 async def _refresh_workspace_bindings(
     project_id: str, new_owner_id: str, new_root: str
 ) -> None:
-    """转交后同步在内存中仍绑定该项目的 workspace（owner / 根路径 / 文件树）。"""
+    """转交后同步在内存中仍绑定该项目的 workspace（owner / 根路径 / 文件树）。
+
+    v2 P7 多实例：`workspace_bindings` 行是全副本共享的权威，先按
+    project_id 一次性刷新全部行（覆盖其他副本持有的 workspace——本进程
+    `list_workspaces()` 只能看到本地实例），再对本副本内存中的 workspace
+    重开项目并同步进程内缓存。
+    """
     wm = get_workspace_manager()
+    wm.refresh_project_bindings(project_id, owner_id=new_owner_id, root_path=new_root)
     for info in wm.list_workspaces():
         binding = wm.get_binding(info["workspace_id"])
         if not binding or binding.get("project_id") != project_id:

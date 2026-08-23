@@ -73,6 +73,13 @@ def cleanup_expired_sandboxes() -> int:
             if latest_mtime < cutoff:
                 try:
                     shutil.rmtree(child)
+                    # v2 P7：清理会话沙箱旁的跨进程 flock 锁文件（幂等）
+                    from backend.utils.session_mutex import (
+                        lock_file_for,
+                        remove_lock_file,
+                    )
+
+                    remove_lock_file(lock_file_for(child))
                     removed += 1
                     logger.info(
                         "Expired sandbox cleaned: %s (last modified: %s, retention days: %d)",

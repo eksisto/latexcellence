@@ -15,6 +15,7 @@
     - 所有"按用户/项目拼接路径"的代码走 userspace.py 的统一入口
 """
 
+import json
 import sqlite3
 import threading
 from collections.abc import Callable, Iterator
@@ -255,6 +256,64 @@ def _migration_v7_mail_and_alerts(conn: sqlite3.Connection) -> None:
         """)
 
 
+def _migration_v8_instance_state(conn: sqlite3.Connection) -> None:
+    """v2 P7：多实例状态外置表（方案 §12.1）。
+
+    - workspace_bindings：工作区 → (user, project, root) 绑定的权威存储，
+      任一副本可按绑定重建进程内 LatexProject 缓存；
+    - operation_contexts：逐段检查 CheckOperationContext 外置（payload JSON），
+      preview 与 apply 可落在不同副本；TTL 1h 由维护循环清理；
+    - pending_interactions：写作助手工具确认 / 澄清与 DDG challenge 的跨副本
+      待定交互（status 列承载原子状态迁移，避免依赖 JSON1 表达式）；短 TTL，
+      由维护循环清理；
+    - maintenance_lease：维护循环选主租约（key 粒度，持租约者执行循环体，
+      到期自动易主；每 key 一行 upsert，无需额外清理）；
+    - email_outbox.claimed_at：发送协程按消息原子认领（queued→sending）的
+      认领时间戳，供维护循环回收"副本崩溃残留的 sending 行"（多实例下
+      防止双副本重复投递同一封邮件）。ALTER 无 IF NOT EXISTS，按
+      pragma table_info 幂等补列。
+    """
+    conn.executescript("""
+        CREATE TABLE IF NOT EXISTS workspace_bindings (
+            workspace_id   TEXT PRIMARY KEY,
+            user_id        TEXT,
+            project_id     TEXT,
+            owner_id       TEXT,
+            root_path      TEXT NOT NULL DEFAULT '',
+            last_active_at TEXT NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS ix_workspace_bindings_project
+            ON workspace_bindings (project_id);
+        CREATE TABLE IF NOT EXISTS operation_contexts (
+            operation_id TEXT PRIMARY KEY,
+            payload      TEXT NOT NULL,
+            created_at   TEXT NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS ix_operation_contexts_created
+            ON operation_contexts (created_at);
+        CREATE TABLE IF NOT EXISTS pending_interactions (
+            id         TEXT PRIMARY KEY,
+            kind       TEXT NOT NULL,
+            status     TEXT NOT NULL DEFAULT 'pending',
+            payload    TEXT NOT NULL DEFAULT '{}',
+            expires_at TEXT NOT NULL,
+            created_at TEXT NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS ix_pending_interactions_expires
+            ON pending_interactions (expires_at);
+        CREATE TABLE IF NOT EXISTS maintenance_lease (
+            key        TEXT PRIMARY KEY,
+            holder     TEXT NOT NULL,
+            expires_at TEXT NOT NULL
+        );
+        """)
+    cols = {
+        row[1] for row in conn.execute("PRAGMA table_info(email_outbox)").fetchall()
+    }
+    if "claimed_at" not in cols:
+        conn.execute("ALTER TABLE email_outbox ADD COLUMN claimed_at TEXT")
+
+
 # 邮箱部分唯一索引名（ensure_email_unique_index 创建）。
 USERS_EMAIL_UNIQUE_INDEX = "ux_users_email_unique"
 
@@ -306,7 +365,7 @@ def ensure_email_unique_index(conn: sqlite3.Connection) -> bool:
 
 # 当前 schema 最新版本号。新增迁移时：追加实现函数并在列表末尾登记
 # (target_version, description, fn)，同时递增此常量；每个步骤必须幂等可重入。
-SCHEMA_VERSION = 7
+SCHEMA_VERSION = 8
 
 # 有序迁移步骤：(目标版本, 描述, 执行函数)。版本从 2 起（1 为 v1 基线，
 # 对老库存量数据无破坏性变更，仅补齐 IF NOT EXISTS 建表）。
@@ -341,6 +400,13 @@ MIGRATIONS: list[tuple[int, str, Callable[[sqlite3.Connection], None]]] = [
         7,
         "v2 P6 mail outbox + password reset tokens + user alert state tables",
         _migration_v7_mail_and_alerts,
+    ),
+    (
+        8,
+        "v2 P7 instance-state externalization tables (workspace bindings / "
+        "operation contexts / pending interactions / maintenance lease) "
+        "+ email_outbox.claimed_at",
+        _migration_v8_instance_state,
     ),
 ]
 
@@ -393,6 +459,11 @@ def utcnow_after(seconds: int) -> str:
     return (
         datetime.now(timezone.utc).replace(microsecond=0) + timedelta(seconds=seconds)
     ).isoformat()
+
+
+def json_dumps(payload: dict) -> str:
+    """dict → 紧凑 JSON 文本（payload 列统一序列化口径；禁用 ASCII 转义）。"""
+    return json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
 
 
 def _resolve_db_path() -> Path:

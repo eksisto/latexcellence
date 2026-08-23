@@ -64,14 +64,64 @@ class CheckOperationContext:
 
 # ── 操作上下文全局存储 ──────────────────────────────────────────────────────
 # 服务实例按请求创建（消除实例状态并发串扰），但 apply 是独立的 HTTP 请求，
-# 必须能按 operation_id 找到 preview/check 阶段保存的上下文，因此上下文
-# 存放在进程级共享存储中，用锁保护并发读写。
+# 必须能按 operation_id 找到 preview/check 阶段保存的上下文。
+#
+# v2 P7 多实例外置：多用户模式下上下文以 payload JSON 存 operation_contexts
+# 表（apply 可落在另一副本）；进程内 dict 降级为无害的 L1 读缓存（命中免
+# 查询）。单用户模式不建库，dict 即全部存储（行为与历史版本一致）。
 _operation_contexts: dict[str, CheckOperationContext] = {}
 _operation_contexts_lock = threading.Lock()
 
 
+def _context_store_available() -> bool:
+    """operation_contexts 表是否可用（多用户模式且库已初始化）。"""
+    from backend.core.config import get_config
+    from backend.core.multiuser import db
+
+    try:
+        if not get_config().multi_user.enabled:
+            return False
+    except RuntimeError:
+        return False
+    return db.is_initialized()
+
+
+def _serialize_context(context: CheckOperationContext) -> dict[str, Any]:
+    """CheckOperationContext → JSON payload dict（表存储口径）。"""
+    return {
+        "marker_maps": context.marker_maps,
+        "file_path": context.file_path,
+        "file_md5s": context.file_md5s,
+        "created_at": context.created_at,
+    }
+
+
+def _deserialize_context(operation_id: str, payload: dict) -> CheckOperationContext:
+    """JSON payload dict → CheckOperationContext（含原 created_at epoch）。
+
+    marker_maps 的段落索引键为 int，JSON 对象键序列化后变 str，读取时
+    逐文件还原为 int（apply 以 int 段落索引查表）。
+    """
+    marker_maps: dict[str, dict[int, dict[str, str]]] = {}
+    for file_path, para_maps in (payload.get("marker_maps") or {}).items():
+        restored: dict[int, dict[str, str]] = {}
+        for key, mapping in (para_maps or {}).items():
+            try:
+                restored[int(key)] = mapping
+            except (TypeError, ValueError):
+                restored[key] = mapping
+        marker_maps[file_path] = restored
+    return CheckOperationContext(
+        operation_id=operation_id,
+        marker_maps=marker_maps,
+        file_path=payload["file_path"],
+        file_md5s=payload["file_md5s"],
+        created_at=float(payload.get("created_at") or time.time()),
+    )
+
+
 def _cleanup_expired_contexts_locked(max_age_seconds: int = 3600) -> None:
-    """清理超过 TTL 的过期上下文（调用方必须已持有锁）。"""
+    """清理超过 TTL 的过期上下文（L1 缓存侧；调用方必须已持有锁）。"""
     now = time.time()
     expired = [
         oid
@@ -83,16 +133,45 @@ def _cleanup_expired_contexts_locked(max_age_seconds: int = 3600) -> None:
 
 
 def store_operation_context(context: CheckOperationContext) -> None:
-    """保存操作上下文并顺带清理过期项。"""
+    """保存操作上下文并顺带清理过期项。
+
+    多用户模式写穿到 operation_contexts 表（跨副本 apply 依赖），
+    同时保留进程内 L1 缓存；单用户模式仅进程内（行为不变）。
+    """
+    if _context_store_available():
+        from backend.core.multiuser import operation_contexts
+
+        operation_contexts.store_context(
+            context.operation_id, _serialize_context(context)
+        )
+        # 表存储自带 TTL 清理路径；此处仅维护 L1 缓存
+        with _operation_contexts_lock:
+            _operation_contexts[context.operation_id] = context
+            _cleanup_expired_contexts_locked()
+        return
     with _operation_contexts_lock:
         _operation_contexts[context.operation_id] = context
         _cleanup_expired_contexts_locked()
 
 
 def get_operation_context(operation_id: str) -> CheckOperationContext | None:
-    """按 operation_id 查找操作上下文。"""
+    """按 operation_id 查找操作上下文（L1 缓存 → DB 回源）。"""
     with _operation_contexts_lock:
-        return _operation_contexts.get(operation_id)
+        cached = _operation_contexts.get(operation_id)
+    if cached is not None:
+        return cached
+    if not _context_store_available():
+        return None
+    from backend.core.multiuser import operation_contexts
+
+    payload = operation_contexts.load_context(operation_id)
+    if payload is None:
+        return None
+    context = _deserialize_context(operation_id, payload)
+    with _operation_contexts_lock:
+        _operation_contexts[operation_id] = context
+        _cleanup_expired_contexts_locked()
+    return context
 
 
 class ApplyChangeItem(BaseModel):

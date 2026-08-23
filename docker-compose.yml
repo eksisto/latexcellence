@@ -1,0 +1,70 @@
+# ─────────────────────────────────────────────────────────────
+# LateXcellence 单机 Docker Compose 编排（多用户 v2 P7）
+#
+# 用法：
+#   docker compose up -d --scale app=2          # 多副本启动（状态已外置，无需粘性会话）
+#   docker compose --profile proxy up -d        # 附带 Caddy 反代（自动 HTTPS）
+#
+# 说明：
+#   - 数据全部落在宿主 ./data bind 卷（SQLite WAL + 用户空间 + staging），
+#     多副本经 WAL + busy_timeout 共享访问；flock 锁文件同卷生效；
+#   - LATEXCELLENCE_LOG_STDOUT=1：容器内只写 stdout/stderr，交 docker logs
+#     收集（TimedRotatingFileHandler 多进程共写不安全）；
+#   - /var/run/docker.sock 只读挂载：沙箱模式 auto/docker 需要它驱动
+#     tex/convert/plot 容器（安全声明见 docs/deployment.md）；
+#   - config.json 由运行时挂载注入（凭证不打进镜像）；副本扩展用
+#     `--scale app=N`（不要在本文件写死 deploy.replicas）。
+# ─────────────────────────────────────────────────────────────
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: docker/backend/Dockerfile
+    image: latexcellence-backend:latest
+    restart: unless-stopped
+    environment:
+      # 容器模式日志只走 stdout/stderr（docker logs 收集）
+      LATEXCELLENCE_LOG_STDOUT: "1"
+      # 首个管理员引导（首次启动且用户表为空时创建；留空则等待 CLI 创建）
+      LATEXCELLENCE_ADMIN_USERNAME: ${LATEXCELLENCE_ADMIN_USERNAME:-}
+      LATEXCELLENCE_ADMIN_PASSWORD: ${LATEXCELLENCE_ADMIN_PASSWORD:-}
+      # pip 镜像源等构建期参数经 build args 透传（见 docker/build.sh 口径）
+    volumes:
+      - ${LATEXCELLENCE_DATA_DIR:-./data}:/app/data
+      - ${LATEXCELLENCE_CONFIG_PATH:-./config.json}:/app/config.json:ro
+      # 沙箱运行时：后端驱动 latexcellence-tex / -convert / -plot 容器。
+      # 无 Docker daemon 的环境请删除此行并将 sandbox.mode 设为 local。
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request;urllib.request.urlopen('http://127.0.0.1:8000/api/health', timeout=3)",
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  # 可选 Caddy 反代：服务名 DNS 自动重解析到全部健康副本（--scale 扩容零改动），
+  # SSE 已关闭缓冲。生产 HTTPS 配置样例见 docker/Caddyfile.example。
+  caddy:
+    image: caddy:2
+    profiles: ["proxy"]
+    restart: unless-stopped
+    ports:
+      - "${LATEXCELLENCE_PROXY_PORT:-8080}:80"
+    volumes:
+      - ${LATEXCELLENCE_CADDYFILE:-./docker/Caddyfile.example}:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      app:
+        condition: service_healthy
+
+volumes:
+  caddy_data:
+  caddy_config:

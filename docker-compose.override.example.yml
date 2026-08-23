@@ -1,0 +1,28 @@
+# ─────────────────────────────────────────────────────────────
+# docker-compose 覆写样例：复制为 docker-compose.override.yml 后按需修改。
+# 基础文件（docker-compose.yml）与本文件自动合并：
+#   docker compose up -d --scale app=2
+# ─────────────────────────────────────────────────────────────
+
+services:
+  app:
+    # 单副本本地试跑：直接发布端口访问 http://127.0.0.1:8000
+    # （多副本时删除 ports，改走反代，否则端口冲突）
+    ports:
+      - "127.0.0.1:8000:8000"
+
+    # 沙箱镜像 tag 对齐 build.sh 产出的版本标签时在此覆写 config.json 的
+    # sandbox.image_* 即可，无需改动编排。
+
+    # deploy 资源约束（可选）：
+    # deploy:
+    #   resources:
+    #     limits:
+    #       cpus: "2.0"
+    #       memory: 2g
+
+  caddy:
+    # 生产 HTTPS：挂载正式 Caddyfile 与证书存储卷
+    ports:
+      - "80:80"
+      - "443:443"

@@ -250,6 +250,17 @@ class StyleModifySessionStore:
             self._locks[session_id] = lock
         return lock
 
+    def guard(self, session_id: str):
+        """会话互斥守卫（v2 P7）：进程内 asyncio.Lock + 跨进程 flock 叠加。
+
+        flock 锁文件位于会话目录旁（``<root>/<session_id>.lock``），同机
+        共享卷上跨副本有效；单机行为与原 asyncio.Lock 一致。
+        """
+        from backend.utils.session_mutex import combined_session_lock
+
+        session_dir = get_sessions_root() / session_id
+        return combined_session_lock(session_dir, self.lock(session_id))
+
     # ── 会话创建 / 读取 ─────────────────────────────────────────────
 
     def create_session(
@@ -925,6 +936,10 @@ class StyleModifySessionStore:
         shutil.rmtree(session_dir)
         self._locks.pop(session_id, None)
         forget_trace_lock(session_dir)
+        # v2 P7：清理会话目录旁的跨进程 flock 锁文件（幂等、尽力而为）
+        from backend.utils.session_mutex import lock_file_for, remove_lock_file
+
+        remove_lock_file(lock_file_for(session_dir))
         # v2 P4 检查点：删除触达 style_modify_sessions 分类，刷新用量缓存行
         checkpoint_derived_usage_for_current_user("style_modify_sessions")
         self._logger.info("style_modify session deleted: %s", session_id)

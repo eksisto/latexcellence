@@ -1,0 +1,29 @@
+# ─────────────────────────────────────────────────────────────
+# LateXcellence Caddy 反代样例（多副本）
+#
+# 关键点：
+#   - reverse_proxy 直接写服务名 app：Caddy 经 Docker 内嵌 DNS 解析到全部
+#     副本并自动负载均衡，`--scale app=N` 扩缩容零改动（DNS 每次请求
+#     重解析，健康探测摘除不健康副本）；
+#   - flush_interval -1：SSE 流式端点必须关闭缓冲；
+#   - request_body max_size 与 multi_user.max_upload_archive_mb 对齐。
+#
+# 本地试跑（HTTP）：docker compose --profile proxy up -d --scale app=2
+#   → http://127.0.0.1:8080
+# 生产 HTTPS：把站点地址改为域名（如 latex.example.com），Caddy 自动签发
+# 证书；本文件默认 :80 仅用于本地/内网验证。
+# ─────────────────────────────────────────────────────────────
+
+:80 {
+	reverse_proxy app:8000 {
+		# SSE 必需：逐段检查 / Agent / 写作助手均为流式响应
+		flush_interval -1
+		health_uri /api/health
+		health_interval 10s
+		health_timeout 5s
+	}
+
+	request_body {
+		max_size 500MB
+	}
+}

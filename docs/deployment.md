@@ -1,17 +1,22 @@
 # LateXcellence — 部署指南
 
-> 本文档覆盖两种部署形态：单用户本地部署（默认）与多用户团队服务器部署。
-> 多用户模式的完整设计见 [multi-user-plan.md](multi-user-plan.md)，实现细节见 [backend-core.md](backend-core.md)。
+> 本文档覆盖三种部署形态：单用户本地部署（默认）、多用户单进程裸机部署与多用户多实例部署（Docker Compose）。
+> 多用户模式的完整设计见 [multi-user-plan.md](multi-user-plan.md) 与 [multi-user-v2-plan.md](multi-user-v2-plan.md)，实现细节见 [backend-core.md](backend-core.md)。
 
 **本文目录**：
 
 - [部署形态总览](#部署形态总览)
 - [单用户本地部署（默认）](#单用户本地部署默认)
-- [多用户服务器部署](#多用户服务器部署)
+- [多用户服务器部署（单进程裸机）](#多用户服务器部署单进程裸机)
   - [前置条件](#前置条件)
   - [构建与启动](#构建与启动)
   - [管理员引导](#管理员引导)
   - [存量数据迁移](#存量数据迁移)
+- [多实例部署（Docker Compose，v2 P7）](#多实例部署docker-composev2-p7)
+  - [运行形态](#运行形态)
+  - [编排步骤](#编排步骤)
+  - [副本扩展与反向代理](#副本扩展与反向代理)
+  - [多实例冒烟验收](#多实例冒烟验收)
 - [CPU 架构支持（amd64 / arm64）](#cpu-架构支持amd64--arm64)
 - [Docker 沙箱（v2 P1a）](#docker-沙箱v2-p1a)
 - [HTTPS 与反向代理](#https-与反向代理)
@@ -27,9 +32,10 @@
 | 形态 | 适用场景 | 认证方式 | 数据位置 |
 | --- | --- | --- | --- |
 | 单用户本地（默认） | 个人写作助手，前后端分离或全本地 | 共享访问令牌（可选） | 用户本机任意目录 |
-| 多用户服务器 | 团队共享一台服务器，浏览器直接访问 | 用户名 + 密码会话 Cookie | 服务器 `data/users/<user_id>/` |
+| 多用户单进程（裸机） | 小规模团队共享一台服务器 | 用户名 + 密码会话 Cookie | 服务器 `data/users/<user_id>/` |
+| 多用户多实例（Compose） | 团队规模增长 / 需要滚动重启与弹性扩缩 | 同上（无粘性会话，任意副本可服务任意请求） | 宿主 `./data` bind 卷（SQLite WAL + 用户空间），全部副本共享 |
 
-两种形态由 `config.json` 的 `multi_user.enabled` 开关切换；单用户模式行为与历史版本完全一致。
+三种形态由 `config.json` 的 `multi_user.enabled` 开关与启动方式决定；单用户模式行为与历史版本完全一致。
 
 ---
 
@@ -45,7 +51,7 @@
 
 ---
 
-## 多用户服务器部署
+## 多用户服务器部署（单进程裸机）
 
 ### 前置条件
 
@@ -92,7 +98,7 @@ cp config.example.json config.json
 - `dev_mode` 必须为 `false`，否则不会挂载前端静态文件；
 - `multi_user.enabled=true` 开启多用户模式。**需重启服务生效**：启动时初始化 SQLite（WAL）数据库、创建用户空间根目录并引导首个管理员；
 - `multi_user` 配置段实行严格校验（未知键报错），防止拼写错误导致安全阈值静默回退到默认值；
-- 单进程约束：v1 以 `workers=1` 运行（`python main.py config.json` 即是），SQLite WAL 与进程内工作区注册表均以单进程为前提，**不要**用多 worker / 多实例方式启动。
+- 单进程前提：裸机形态以 `workers=1` 运行（`python main.py config.json` 即是）。需要多 worker / 多实例时**不要**直接起多个进程，改走下文 Compose 形态——v2 P7 已把跨请求状态外置共享 SQLite，多实例开箱即用，但裸机手工多进程缺少共享卷与统一编排，不在支持范围。
 
 启动：
 
@@ -132,6 +138,69 @@ python -m backend.manage migrate-legacy [--dry-run]
 - 覆盖存量 `data/writing_chat_sessions/`、`data/style_modify_sessions/`、`data/templates/`、`data/plots/`、`data/formats/`、`data/prompts/` 等全局目录；
 - 复制完成后逐文件校验并输出报告；源目录默认保留，确认无误后人工清理；
 - 旧 LaTeX 项目不在自动迁移范围（config 中无工作区记录），由各用户在工作台重新上传。
+
+---
+
+## 多实例部署（Docker Compose，v2 P7）
+
+v2 P7 起，多进程 / 多副本部署是一等公民：跨请求共享状态（工作区绑定、逐段检查上下文、写作助手工具确认与澄清、DDG 验证码、登录/LLM 限流、沙箱与 LLM 并发租约、邮件队列）全部外置到共享 SQLite（WAL），任意副本可服务任意请求，**无需粘性会话**。SSE 长连接天然粘在所属连接的副本上，应用层无需处理。
+
+### 运行形态
+
+仓库根 `docker-compose.yml` 提供单机编排：
+
+| 服务 | 说明 |
+| --- | --- |
+| `app` | 后端本体（`docker/backend/Dockerfile` 构建，与 `docker/build.sh` 同口径 tag `latexcellence-backend:latest`）。healthcheck 打 `/api/health`；环境变量 `LATEXCELLENCE_LOG_STDOUT=1` 强制日志走 stdout/stderr（容器模式交 `docker logs` 收集——`TimedRotatingFileHandler` 多进程共写同一文件在轮转时有 rename 竞争，不可用） |
+| `caddy`（profile `proxy`） | 可选反向代理：服务名 DNS 自动重解析到全部健康副本并负载均衡，SSE 已关缓冲 |
+
+关键挂载：
+
+- `./data:/app/data`：SQLite 数据库 + 用户空间 + 暂存区的唯一权威位置，多副本经 WAL + `busy_timeout` 共享访问；
+- `./config.json:/app/config.json:ro`：配置运行时注入（凭证不打进镜像）；
+- `/var/run/docker.sock:/var/run/docker.sock:ro`：沙箱模式 `auto`/`docker` 需要（只读挂载；风险声明见下文）。无 Docker daemon 的环境删除此行并将 `sandbox.mode` 设为 `local`。
+
+### 编排步骤
+
+```bash
+# 0. 前置：安装 Docker 与 compose 插件；准备 config.json（multi_user.enabled=true，
+#    server.dev_mode=false）；构建前端产物 static/（打进镜像）
+cd frontend && npm install && npm run build && cd ..
+
+# 1. 构建镜像（首次或代码更新后）
+docker compose build app          # 或 ./docker/build.sh backend
+
+# 2. 沙箱镜像（编译/绘图/转换功能需要，TeX 大镜像构建耗时较长）
+./docker/build.sh                 # 见上文「Docker 沙箱」与 docker/README.md（支持离线 save/load）
+
+# 3. 启动（管理员引导凭证经环境变量注入，仅首次建库时消费）
+export LATEXCELLENCE_ADMIN_USERNAME="admin"
+export LATEXCELLENCE_ADMIN_PASSWORD="<强密码>"
+docker compose --profile proxy up -d --scale app=2   # 附带 Caddy，对外端口默认 8080
+```
+
+- 副本数按需调整：`docker compose up -d --scale app=4`（滚动扩缩容，状态在共享卷上，无需停机迁移）；
+- 单副本本地试跑可复制 `docker-compose.override.example.yml` 为 `docker-compose.override.yml` 发布 `127.0.0.1:8000` 端口直连；
+- 配置修改：编辑宿主 `config.json` 即可，**全部副本经热重载自动生效**（`get_config()` 探测文件 mtime+size 变化即重载）。例外：`multi_user.enabled` 决定认证中间件与数据库初始化等启动期形态，变更仍需重启（热重载会保持启动值并告警）。
+
+### 副本扩展与反向代理
+
+多副本下反代必须满足两点：
+
+1. **服务名每请求重解析**：Caddy 的 `reverse_proxy app:8000` 天然如此（Docker 内嵌 DNS 返回全部健康副本，扩缩容零改动）；nginx 必须用 upstream 变量 + `resolver 127.0.0.11`（直接写死 `upstream server app:8000` 会在启动时解析一次并缓存单个 IP，扩容副本永远不被调度）。
+2. **SSE 关闭缓冲**：`flush_interval -1`（Caddy）/ `proxy_buffering off`（nginx），否则逐段检查、Agent 与写作助手的流式事件被攒批延迟。
+
+两种反代的完整可用样例见 [docker/Caddyfile.example](../docker/Caddyfile.example) 与 [docker/nginx.conf.example](../docker/nginx.conf.example)（含上传体积上限对齐、健康探测、HTTPS 生产化说明）。通用注意事项见下文「HTTPS 与反向代理」。
+
+### 多实例冒烟验收
+
+```bash
+./tools/compose-smoke.sh            # replicas=2 全链路：health → 注册 → 审批 → 登录
+                                    # → 分片上传 → apply-change → undo → 下载校验
+./tools/compose-smoke.sh --with-tex # 追加 TeX 编译冒烟（需已构建 latexcellence-tex 镜像）
+```
+
+脚本使用独立的数据目录与配置（不触碰宿主 `./data` 与 `config.json`），幂等清理现场。pytest 层面的编排最小验证在 `tests/test_docker/test_compose_deploy.py`（marker `docker`，无 daemon 自动 skip）：compose 配置合法性 + 两副本各自健康 + 跨副本注册/审批/登录。
 
 ---
 
@@ -253,6 +322,8 @@ latex.example.com {
 }
 ```
 
+多实例（Compose）形态的反代样例：服务名 DNS 重解析 + 健康探测的完整配置见 [docker/Caddyfile.example](../docker/Caddyfile.example) 与 [docker/nginx.conf.example](../docker/nginx.conf.example)。
+
 ### 反向代理注意事项
 
 - **登录限流的 IP 维度会退化**：登录限流按「用户名 + 客户端 IP」计数，反代之后 `request.client.host` 恒为代理 IP，「每 IP」维度失效，「每用户名」维度仍然有效。如需恢复 IP 维度，需在后端前接入受信代理真实 IP 传递（如 nginx `real_ip` 模块）并相应调整后端取值逻辑；
@@ -324,7 +395,9 @@ v1 通过以下措施收敛攻击面，但**不能替代沙箱**：
 
 - SQLite 处于 WAL 模式，**不要**直接复制 `.db` 文件了事；停机备份最简单，在线备份用 `sqlite3 data/latexcellence.db ".backup 'backup.db'"`；
 - `data/users/` 可与数据库快照同窗口整体打包（tar/rsync）；
-- 恢复时保持目录结构不变即可，项目目录名即 `project_id`，与库中记录一致。
+- 恢复时保持目录结构不变即可，项目目录名即 `project_id`，与库中记录一致；
+- **多实例部署的停机窗口**：数据库快照与 `data/users/` 打包必须落在同一时间点，而多副本会持续写入——备份窗口内先缩容到单副本（`docker compose up -d --scale app=1`，秒级完成、不丢状态），完成快照后再扩回去；直接对活跃多副本做在线备份可能得到项目文件与 op 记录不一致的快照；
+- Compose 形态下 `logs/` 不存在（stdout 日志），日志留存交给 `docker logs` 的日志驱动（如 `local`/`json-file` 的 max-size/max-file 配置）。
 
 ---
 
@@ -346,7 +419,7 @@ v1 通过以下措施收敛攻击面，但**不能替代沙箱**：
 | `llm_rate_limit_per_minute` | 20 | 每用户 LLM 请求限流（次/分钟，60s 滑动窗口；超限返回 429 并附 Retry-After。多用户模式强制执行） |
 | `llm_max_concurrency_per_user` | 2 | 每用户最大并发 LLM 任务数（租约制，超限直接 429 不排队；仅多用户模式生效） |
 
-后台维护循环每小时执行一次：项目大小对账（修正缓存漂移）、衍生用量对账与配额预警检查、回收站过期清理、暂存区清理、删除用户归档清理、沙箱并发租约（`sandbox_slots`）过期清理、LLM 并发租约（`llm_concurrency_leases`）过期清理与限流事件（`rate_limit_events`）保留期清理、自助找回令牌与邮件留档清理。
+后台维护循环每小时执行一次：项目大小对账（修正缓存漂移）、衍生用量对账与配额预警检查、回收站过期清理、暂存区清理、删除用户归档清理、沙箱并发租约（`sandbox_slots`）过期清理、LLM 并发租约（`llm_concurrency_leases`）过期清理与限流事件（`rate_limit_events`）保留期清理、自助找回令牌与邮件留档清理、逐段检查上下文与待定交互 TTL 清理、崩溃副本残留的 sending 邮件行回收。**多实例部署下经 `maintenance_lease` 表选主：持租约的副本执行循环体，其余副本跳过本轮；租约到期自动易主，持有人崩溃后最迟一个租约 TTL 内接管。** 模块各自的 cleanup_loop（模板/绘图/样式会话 TTL 清理）保持每副本独立运行（幂等无害）。
 
 LLM 每用户治理（v2 P1b）：多用户模式下每次 LLM 调用前在单事务内完成"滑动窗口限流校验 + 事件落账 + 并发租约获取"（`core/multiuser/llm_governance.py`），请求级用户上下文由 `AccessSecurityMiddleware` 会话验证成功后全局注入，覆盖全部 `/api` 端点；被拒绝的调用不落行、不消耗配额。429 响应遵循既有结构化错误约定（`detail.error` = `llm_rate_limited` / `llm_concurrency_limited`）、附 `Retry-After` 头与秒数明细，前端三语言文案展示等待时间。单用户模式完全跳过治理（零数据库依赖）。P7 多实例阶段同一共享卷上天然跨副本生效，无需修改。
 
@@ -392,8 +465,18 @@ python -m backend.manage migrate-legacy [--dry-run]                 # 存量数�
 
 ### 日志
 
-- 位置：`logs/`（按天旋转，保留 30 天，`logging.dir` 可改）；
+- 裸机：`logs/`（按天旋转，保留 30 天，`logging.dir` 可改）；容器 / 多实例：设置 `LATEXCELLENCE_LOG_STDOUT=1` 只输出 stdout/stderr，交 `docker logs` 收集（多进程共写轮转文件不安全，compose 编排已默认开启）；
 - 排查登录问题关注 `multiuser.auth` 的限流与认证告警；上传失败关注 `invalid_archive` / `quota_exceeded` 相关记录。
+
+### 监控建议（多实例部署）
+
+| 观测点 | 含义与处置 |
+| --- | --- |
+| `database is locked` / busy 冲突日志频率 | SQLite 写锁竞争信号。两副本规模下偶发属正常；频率上升说明写吞吐逼近上限——先排查异常高频写入（如限流事件），再评估缩副本或迁移 Postgres（v3 议题） |
+| `email_outbox` 中 `status='failed'` 行数 | 邮件投递失败留档。`SELECT COUNT(*) FROM email_outbox WHERE status='failed'` 持续增长时检查 SMTP 配置、出站网络与 `last_error` 明细 |
+| 沙箱并发池水位 | `sandbox_slots` 活跃行数 vs `max_concurrent_global`：`SELECT COUNT(*) FROM sandbox_slots WHERE expires_at > now`。频繁打满会返回 429 `sandbox_busy`，按需调大全局上限 |
+| 维护选主状态 | `SELECT holder, expires_at FROM maintenance_lease`：确认只有一个活跃持有者且 `expires_at` 在滚动续期；长期无持有者说明全部副本的维护循环异常（查日志 `Multi-user maintenance cycle failed`） |
+| 待定交互堆积 | `pending_interactions` 行数应在个位数量级；持续增长说明 SSE 等待侧异常退出未消费（过期清理兜底，但仍应排查） |
 
 ### 常见问题
 

@@ -9,6 +9,7 @@
 ```
 latexcellence/
 ├── main.py                          # FastAPI 入口 + 静态文件挂载
+├── docker-compose.yml               # 多实例编排（v2 P7：app 副本扩展 + 可选 Caddy 反代 profile；override 样例同目录）
 ├── config.json                      # 配置文件
 ├── config.example.json              # 配置模板
 ├── requirements.txt                 # Python 依赖
@@ -35,7 +36,7 @@ latexcellence/
 │   │   ├── prompts.py               # 中央提示词管理模块（集中存储所有 LLM 提示词）
 │   │   ├── base_paragraph_check.py  # 逐段检查服务基类（typo/expression/code_review/terminology 共享）
 │   │   ├── access_control.py        # 统一访问控制：项目权限矩阵 + workspace 绑定校验依赖
-│   │   └── multiuser/               # 多用户模式基础设施包（db/userspace/auth/dependencies/quota/upload/upload_sessions/maintenance/migrate/sandbox_leases/llm_governance/edit_log/mail）
+│   │   └── multiuser/               # 多用户模式基础设施包（db/userspace/auth/dependencies/quota/upload/upload_sessions/maintenance/maintenance_lease/migrate/sandbox_leases/llm_governance/edit_log/mail/pending_interactions/operation_contexts）
 │   ├── utils/
 │   │   ├── json_utils.py            # LLM JSON 解析/校验/重试
 │   │   ├── file_ops.py              # 原子写入/备份/MD5
@@ -45,6 +46,7 @@ latexcellence/
 │   │   ├── path_guard.py            # 项目路径安全校验唯一入口 resolve_project_path()
 │   │   ├── tex_compile.py           # 统一 TeX 编译执行（texfot+latexmk、引擎自动检测、PDF/A）
 │   │   ├── sandbox/                 # Docker 沙箱执行包（v2 P1a：SandboxRunner 双后端、并发租约、ExecSpec/ExecResult 契约）
+│   │   ├── session_mutex.py         # 跨进程会话互斥（v2 P7：会话目录旁 flock 锁文件 + 进程内 asyncio.Lock 叠加）
 │   │   ├── latex_parser.py          # LaTeX 源码↔纯文本转换（Marker 保护）
 │   │   ├── latex_json_guard.py      # LaTeX×JSON 转义防护（内容校验器，跨模块共享）
 │   │   ├── latex_literals.py        # LaTeX 字面内容识别（逐字命令/URL 参数，parser 与 guard 共享）
@@ -193,7 +195,7 @@ latexcellence/
 │   ├── web-access-operations.md              # 网络访问灰度、观测、容量与回滚运维
 │   ├── multi-user-plan.md                    # 多用户模式设计方案（双模式/认证/用户空间/配额/权限协作/管理后台/迁移）
 │   ├── multi-user-v2-plan.md                   # 多用户模式 v2 设计方案（Docker 沙箱/rar/反向补丁撤销/分片上传/SMTP/记账优化/多实例）
-│   ├── deployment.md                          # 部署指南（单用户/多用户部署、HTTPS 反向代理、安全风险声明、备份与运维）
+│   ├── deployment.md                          # 部署指南（单用户/多用户单进程/多实例 Compose 部署、HTTPS 反向代理、安全风险声明、备份与运维监控）
 │   ├── modules/                     # 模块文档
 │   └── showcase.md                  # 展示页（showcase）说明
 ├── tests/                           # 测试用例
@@ -201,7 +203,7 @@ latexcellence/
 │   ├── test_api/                    # 各模块 API 集成测试
 │   ├── test_multiuser/              # 多用户模式测试（认证/项目/配额/协作/DB 迁移/沙箱租约/LLM 治理/rar 上传/衍生数据记账与清理/分片上传与断点续传/邮件队列与自助找回）
 │   ├── test_plot_gen/               # plot_gen 单元测试
-│   ├── test_docker/                 # Docker 沙箱真容器冒烟（marker docker，无 daemon 自动 skip）
+│   ├── test_docker/                 # Docker 沙箱真容器冒烟 + compose 编排冒烟（marker docker，无 daemon 自动 skip）
 │   ├── test_utils/                  # 后端工具单元测试（路径/JSON/宏包/搜索/学术检索/编译/sandbox 契约等）
 │   └── fixtures/                    # 测试数据（宏包规则表、公式/表格 OCR、错字查找/表达优化语料等）
 ├── data/                            # 应用运行期与用户数据统一目录
@@ -234,6 +236,7 @@ latexcellence/
 │   ├── paragraph_translate_eval/  # 逐段翻译人工评估工具（加载语料 → 跑翻译 → 生成比对报告）
 │   ├── prompt_comprehension_eval/ # Prompt 理解评测工具（逐一探测 + 历史追踪 + 回归检测）
 │   ├── rar_fixtures/               # rar 测试样例生成器（纯字节手工构造 RAR4 fixtures 入库，不依赖构建环境装包）
+│   ├── compose-smoke.sh           # 多实例 compose 冒烟（replicas=2：注册审批→分片上传→undo→下载；--with-tex 追加编译冒烟）
 │   ├── plotgen_opt/               # plot_gen Agent 优化评测工作区（脚本/数据集/报告入库，results、previews 忽略）
 │   ├── templategen_opt/           # template_gen Agent 优化评测工作区（脚本/场景定义/参考资料入库，results 忽略）
 │   └── stylemodify_opt/           # style_modify Agent 优化评测工作区（脚本/场景定义/报告入库，results、runtime 忽略）
@@ -298,6 +301,7 @@ latexcellence/
 | 多用户 LLM 治理 | 每用户滑动窗口限流 + 并发租约（`llm_governance.py`，单事务原子准入），超限 429 + Retry-After；登录限流同表计数；仅多用户模式生效，单用户零依赖直通 | [backend-core.md](docs/backend-core.md)、[multi-user-v2-plan.md](docs/multi-user-v2-plan.md) §6 |
 | 衍生数据记账与自助清理 | 四类衍生目录用量缓存（user_derived_usage 表）+ 检查点增量刷新 + 维护循环对账纠偏，配额校验与 /me 用量 O(1)；工作台分类用量条 + 自助清理（仅本人）；过期会话删除与写作会话保留期清理并入维护循环 | [backend-core.md](docs/backend-core.md)、[multi-user-v2-plan.md](docs/multi-user-v2-plan.md) §9 |
 | 邮件通知与自助找回 | SMTP 通知走 email_outbox 队列 + 发送协程（重试留档限速，未配置优雅降级）；找回令牌只存哈希、单次有效，forgot 响应恒定语义防枚举；邮箱部分唯一索引 + profile 改绑需当前密码；配额预警迟滞并入维护循环 | [backend-core.md](docs/backend-core.md)、[multi-user-v2-plan.md](docs/multi-user-v2-plan.md) §11、[deployment.md](docs/deployment.md) |
+| 多实例状态外置 | 跨请求状态（工作区绑定 / 检查上下文 / 待定交互与 DDG challenge / 维护选主）外置共享 SQLite（迁移 v8），副本扩展无需粘性会话；flock 会话互斥、config 热重载、stdout 日志开关；compose 编排 + 冒烟脚本 | [DESIGN.md §15](DESIGN.md)、[deployment.md](docs/deployment.md)、[backend-core.md](docs/backend-core.md) |
 | 多用户前端 | 登录/注册/待审批页、项目工作台（上传 zip·7z·目录、配额、回收站、权限）、管理面板、路由守卫、auth 切片；多用户模式固定同源 + CSRF 头 + Cookie 会话，SSE 不再追加 token | [frontend.md](docs/frontend.md)、[multi-user-plan.md](docs/multi-user-plan.md) |
 | i18n 多语言 | i18next 简中 / 繁中 / 英语，按 `common` / `pages` / `components` / `hooks` / `errors` 命名空间拆分 | [frontend.md](docs/frontend.md) |
 

@@ -1,0 +1,45 @@
+# ─────────────────────────────────────────────────────────────
+# LateXcellence nginx 反代样例（多副本）
+#
+# 关键点：
+#   - upstream 使用变量 + resolver：Docker 内嵌 DNS（127.0.0.11）在每次
+#     请求时重新解析服务名 app，`--scale app=N` 扩缩容后无需 reload；
+#     直接写死 upstream server app:8000 会在启动时解析一次并缓存单个 IP，
+#     扩容后的副本不会被调度到；
+#   - proxy_buffering off：SSE 流式端点必须关闭缓冲；
+#   - client_max_body_size 与 multi_user.max_upload_archive_mb 对齐。
+#
+# 宿主机直跑 nginx（非容器）时把 resolver 换成能解析 app 的 DNS，
+# 或用脚本维护 upstream 文件后 reload。
+# ─────────────────────────────────────────────────────────────
+
+resolver 127.0.0.11 valid=10s ipv6=off;
+
+server {
+    listen 80;
+    server_name _;
+
+    # 上传压缩包上限与 multi_user.max_upload_archive_mb 对齐
+    client_max_body_size 500m;
+
+    location / {
+        set $upstream http://app:8000;
+        proxy_pass $upstream;
+
+        proxy_set_header Host $host;
+        # 关键：让后端正确判定 HTTPS 并给 Cookie 加 Secure 标志
+        # （TLS 终止在本层时改为 proxy_set_header X-Forwarded-Proto https;）
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+
+        # SSE 必需：逐段检查 / Agent / 写作助手均为流式响应
+        proxy_buffering off;
+        proxy_cache off;
+        proxy_read_timeout 3600s;
+
+        # 多副本下的重试语义：连接失败换下一副本（幂等 GET 安全；
+        # 非幂等请求仅在同一连接尚未发送时切换，不会造成重复提交）
+        proxy_next_upstream error timeout http_502 http_503;
+        proxy_connect_timeout 5s;
+    }
+}

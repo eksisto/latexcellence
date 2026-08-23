@@ -94,6 +94,7 @@ Word 则相反。对它“简单”的印象来自把结构藏进 GUI：样式�
 - **团队协作（多用户模式）**：`multi_user.enabled` 一键开启后，支持注册/审批、用户名+密码会话登录、独立项目空间与配额、zip/7z/rar/目录上传（rar 经 unar 解压）、owner/editor/viewer 权限协作与回收站；写作会话/样式会话/模板/绘图等衍生数据按用户隔离，并提供存量数据迁移工具（`python -m backend.manage migrate-legacy`）；前端提供登录/注册、项目工作台与管理后台页面。适配可信团队内部部署（详见 [docs/multi-user-plan.md](docs/multi-user-plan.md)）。
 - **服务器部署指南**：多用户模式的完整部署流程（构建启动、管理员引导、HTTPS 反向代理配置、安全风险声明、数据备份与日常运维）见 [docs/deployment.md](docs/deployment.md)。v1 不提供沙箱隔离，仅建议向可信成员开放。
 - **Docker 沙箱执行（v2 P1a）**：全部外部命令（LaTeX 编译、git/latexdiff、pandoc、Python 绘图、格式化）统一经 SandboxRunner，可进一次性容器隔离执行——无网络、只读根文件系统 + tmpfs、CPU/内存/进程数限额、按用户并发租约。`sandbox.mode=auto` 探测到 Docker 即自动启用（单用户模式同样受益），不可达时回落本地进程且行为不变；镜像体系（tex/convert/plot/backend 四镜像，amd64/arm64 双架构）见 [docker/README.md](docker/README.md)。
+- **多实例水平扩展（v2 P7）**：多进程/多副本部署一等公民——跨请求状态（工作区绑定、逐段检查上下文、工具确认/验证码待定交互、维护选主）全部外置共享 SQLite，无需粘性会话；仓库根 `docker-compose.yml` 一键编排（`docker compose up -d --scale app=N` 弹性扩缩容），可选 Caddy 反代自动分发到健康副本；配置文件热重载（改动无需逐副本重启）；容器日志走 stdout 交 docker logs 收集。多实例冒烟：`tools/compose-smoke.sh`（replicas=2 全链路：注册审批 → 分片上传 → 撤销 → 下载）。
 
 ### 交互体验
 
@@ -239,15 +240,18 @@ latexcellence/
 ├── main.py                  # 统一入口
 ├── config.json              # 配置文件
 ├── config.example.json      # 配置模板
+├── docker-compose.yml       # 多实例编排（副本扩展 + 可选 Caddy 反代）
 ├── backend/
 │   ├── core/                # 核心：配置、LLM 客户端、日志、工作区管理、项目管理
 │   ├── modules/             # 各功能模块（路由 + 业务逻辑）
 │   └── utils/               # 工具：文件操作、JSON 校验、LaTeX 解析等
+├── docker/                  # 沙箱镜像体系（backend/tex/convert/plot + build.sh）
 ├── frontend/
 │   └── src/                 # React 应用
 ├── showcase/                # 独立展示页（零依赖静态站，详见 docs/showcase.md）
 ├── data/                    # 应用运行期与用户数据（formats/ plots/ prompts/ style_modify_sessions/ templates/ writing_chat_sessions/）
 ├── tests/                   # 测试
+├── tools/                   # 运维工具（compose-smoke.sh 多实例冒烟等）
 ├── docs/                    # 项目文档
 └── clean-cache.sh / clean-cache.ps1  # 清理缓存脚本（Python/前端缓存）
 ```

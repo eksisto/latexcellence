@@ -64,6 +64,10 @@ _BACKOFF_BASE_SECONDS = 2.0
 _BACKOFF_MAX_SECONDS = 60.0
 # outbox 行保留天数（sent / failed 留档供排查，超期由维护循环清理）
 OUTBOX_RETENTION_DAYS = 7
+# sending 认领的滞留回收阈值（秒）：副本在发送中途崩溃时，行会停留在
+# 'sending'；超过该时长仍无进展即视为残留，由维护循环回收回 queued 重投
+# （v2 P7 多实例：发送前原子认领防双副本重复投递，本阈值兜底认领者崩溃）
+SENDING_STALE_SECONDS = 600
 
 # 配额预警迟滞标记 kind（user_alert_state 表）：{维度}_{级别}
 _QUOTA_KIND = "{dimension}_{level}"
@@ -345,8 +349,28 @@ async def _smtp_send(
     )
 
 
+def _claim_message(message_id: str) -> bool:
+    """原子认领一条 queued 消息（queued → sending），返回是否抢到。
+
+    多实例部署下各副本独立运行发送协程：条件 UPDATE 保证同一封邮件只被
+    一个副本投递（先到先得），认领时间戳供崩溃残留回收。
+    """
+    return (
+        db_execute(
+            "UPDATE email_outbox SET status = 'sending', claimed_at = ? "
+            "WHERE id = ? AND status = 'queued'",
+            (utcnow(), message_id),
+        )
+        == 1
+    )
+
+
 async def _deliver_one(row: dict) -> bool:
-    """发送单条队列消息并落库状态。成功 True；失败按重试策略处理（False）。"""
+    """发送单条队列消息并落库状态。成功 True；失败按重试策略处理（False）。
+
+    调用前置条件：消息已被本副本认领（status='sending'）。失败且未达
+    重试上限时恢复 queued 释放认领；达到上限转 failed 留档；成功置 sent。
+    """
     try:
         await _smtp_send(
             row["recipient"], row["subject"], row["body_text"], row["body_html"]
@@ -357,7 +381,7 @@ async def _deliver_one(row: dict) -> bool:
         if attempts >= retry_limit:
             db_execute(
                 "UPDATE email_outbox SET status = 'failed', attempts = ?, "
-                "last_error = ? WHERE id = ?",
+                "last_error = ?, claimed_at = NULL WHERE id = ?",
                 (attempts, f"{type(e).__name__}: {e}", row["id"]),
             )
             logger.error(
@@ -369,7 +393,8 @@ async def _deliver_one(row: dict) -> bool:
             )
         else:
             db_execute(
-                "UPDATE email_outbox SET attempts = ?, last_error = ? WHERE id = ?",
+                "UPDATE email_outbox SET status = 'queued', attempts = ?, "
+                "last_error = ?, claimed_at = NULL WHERE id = ?",
                 (attempts, f"{type(e).__name__}: {e}", row["id"]),
             )
             logger.warning(
@@ -383,7 +408,7 @@ async def _deliver_one(row: dict) -> bool:
         return False
     db_execute(
         "UPDATE email_outbox SET status = 'sent', attempts = attempts + 1, "
-        "sent_at = ?, last_error = NULL WHERE id = ?",
+        "sent_at = ?, last_error = NULL, claimed_at = NULL WHERE id = ?",
         (utcnow(), row["id"]),
     )
     logger.info("Mail sent: to=%s subject=%s", row["recipient"], row["subject"])
@@ -392,7 +417,11 @@ async def _deliver_one(row: dict) -> bool:
 
 async def process_outbox() -> int:
     """消费一轮队列：按 created_at 顺序处理 queued 消息，尊重全局限速与
-    指数退避。返回本轮成功投递条数。供 outbox_loop 与测试直接驱动。"""
+    指数退避。返回本轮成功投递条数。供 outbox_loop 与测试直接驱动。
+
+    v2 P7：取出后先原子认领（queued → sending），认领失败的行说明另一
+    副本正在投递，跳过继续取下一条。
+    """
     if not smtp_ready() or not is_initialized():
         return 0
     sent_total = 0
@@ -407,6 +436,10 @@ async def process_outbox() -> int:
         )
         if row is None:
             break
+        if not _claim_message(row["id"]):
+            # 已被其他副本认领（status 已非 queued）：下一轮 SELECT 自然
+            # 跳过该行，直接继续取下一条
+            continue
         if await _deliver_one(row):
             sent_total += 1
         else:
@@ -441,6 +474,31 @@ def purge_old_outbox() -> int:
     if removed:
         logger.info("Purged %d old outbox mail(s)", removed)
     return removed
+
+
+def requeue_stale_outbox_claims(
+    stale_seconds: int = SENDING_STALE_SECONDS,
+) -> int:
+    """回收滞留过久的 sending 认领行（副本崩溃残留），恢复 queued 重投。
+
+    v2 P7 多实例：发送前原子认领后若认领者进程死亡，该邮件会永久停留在
+    'sending'；维护循环把超过 stale_seconds 仍无进展的认领行放回队列
+    （重投至多重复一次"已发出但未及落库"的邮件，属崩溃恢复的合理代价）。
+    并入维护循环（持租约者执行）。
+    """
+    if not is_initialized():
+        return 0
+    cutoff = utcnow_after(-int(stale_seconds))
+    requeued = db_execute(
+        "UPDATE email_outbox SET status = 'queued', claimed_at = NULL "
+        "WHERE status = 'sending' AND claimed_at IS NOT NULL AND claimed_at < ?",
+        (cutoff,),
+    )
+    if requeued:
+        logger.warning(
+            "Requeued %d stale sending mail(s) (crashed replica residue)", requeued
+        )
+    return requeued
 
 
 # ── 收件人辅助 ──────────────────────────────────────────────────

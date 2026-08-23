@@ -56,6 +56,13 @@ def cleanup_expired_sessions() -> int:
             if latest < cutoff:
                 try:
                     shutil.rmtree(child)
+                    # v2 P7：清理会话目录旁的跨进程 flock 锁文件（幂等）
+                    from backend.utils.session_mutex import (
+                        lock_file_for,
+                        remove_lock_file,
+                    )
+
+                    remove_lock_file(lock_file_for(child))
                     removed += 1
                     logger.info("Expired style_modify session cleaned: %s", child.name)
                 except OSError as e:

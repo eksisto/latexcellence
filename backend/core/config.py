@@ -17,6 +17,7 @@
 import copy
 import json
 import os
+import threading
 from pathlib import Path
 from typing import Literal
 
@@ -638,6 +639,39 @@ class AppConfig(BaseModel):
 _config: AppConfig | None = None
 _config_path: Path | None = None
 _api_key_from_env: bool = False  # 标记当前 api_key 是否来自环境变量（防落盘）
+# 热重载探测（v2 P7 多实例）：记录上次加载时 config.json 的 (mtime_ns, size)
+# 指纹，get_config() 命中变化即重载——多副本部署下管理员改配置后无需逐个
+# 重启（save_config 写盘后同步刷新指纹，避免自身触发无意义重载）。
+_config_fingerprint: tuple[int, int] | None = None
+# multi_user.enabled 的启动锚定值：该开关决定认证中间件 / 数据库初始化 /
+# 用户空间布局等启动期形态，热切换会造成半初始化状态，**必须重启生效**。
+# 热重载时检测到磁盘值与锚定值不同则保持锚定值并告警（文档维持此约束）。
+_boot_multi_user_enabled: bool | None = None
+_reload_lock = threading.Lock()
+
+
+def _record_config_fingerprint() -> None:
+    """记录当前 config_path 的 (mtime_ns, size) 指纹（文件缺失时置 None）。"""
+    global _config_fingerprint
+    if _config_path is None:
+        _config_fingerprint = None
+        return
+    try:
+        st = _config_path.stat()
+        _config_fingerprint = (st.st_mtime_ns, st.st_size)
+    except OSError:
+        _config_fingerprint = None
+
+
+def _fingerprint_changed() -> bool:
+    """config.json 自上次加载后是否发生变化（无法 stat 视为未变化）。"""
+    if _config_path is None or _config_fingerprint is None:
+        return False
+    try:
+        st = _config_path.stat()
+    except OSError:
+        return False
+    return (st.st_mtime_ns, st.st_size) != _config_fingerprint
 
 
 def load_config(config_path: str = "config.json") -> AppConfig:
@@ -656,11 +690,27 @@ def load_config(config_path: str = "config.json") -> AppConfig:
     返回：
         校验后的 AppConfig 对象
     """
-    global _config, _config_path, _api_key_from_env
+    global _config, _config_path, _api_key_from_env, _boot_multi_user_enabled
     path = Path(config_path)
     if not path.exists():
         raise FileNotFoundError(f"Config file not found: {config_path}")
 
+    cfg, api_key_from_env = _parse_config_file(path)
+    _api_key_from_env = api_key_from_env
+    _config = cfg
+    _config_path = path.resolve()
+    _boot_multi_user_enabled = cfg.multi_user.enabled
+    _record_config_fingerprint()
+    return cfg
+
+
+def _parse_config_file(path: Path) -> tuple[AppConfig, bool]:
+    """读取并校验配置文件（不触碰模块级状态）。
+
+    返回 (AppConfig, api_key 是否来自环境变量)。热重载路径复用本函数，
+    保证在发布新配置对象**之前**完成 multi_user.enabled 锚定，避免并发
+    get_config() 短暂观察到未锚定的运行模式值。
+    """
     with open(path, "r", encoding="utf-8") as f:
         data = json.load(f)
 
@@ -670,24 +720,63 @@ def load_config(config_path: str = "config.json") -> AppConfig:
         if "llm" not in data:
             data["llm"] = {}
         data["llm"]["api_key"] = env_key
-        _api_key_from_env = True
-    else:
-        _api_key_from_env = False
 
     # Pydantic 自动校验类型+填充默认值
-    _config = AppConfig(**data)
-    _config_path = path.resolve()
-    return _config
+    return AppConfig(**data), bool(env_key)
 
 
 def get_config() -> AppConfig:
     """
     获取当前缓存的配置对象。
     必须在调用 load_config() 之后才能调用。
+
+    v2 P7 热重载：探测 config.json 的 mtime+size 指纹，变化即从磁盘重载
+    （校验失败保持旧配置并告警一次）。``multi_user.enabled`` 除外——其
+    启动锚定值不随热重载漂移，变更仍需重启（见模块级常量注释）。
     """
     if _config is None:
         raise RuntimeError("Config not loaded. Call load_config() first.")
+    if _fingerprint_changed():
+        _reload_from_disk()
     return _config
+
+
+def _reload_from_disk() -> None:
+    """按磁盘内容重载配置（get_config 检测到指纹变化时调用）。
+
+    进程内串行化；加载失败（JSON 损坏 / 校验不过）时记录告警并刷新指纹，
+    保持旧配置继续服务，待下次修改后自动重试。解析经 _parse_config_file
+    纯函数完成：先锚定 multi_user.enabled 再一次性发布新配置对象，
+    不经过 load_config 的全局赋值，避免未锚定中间态外泄给并发读侧。
+    """
+    global _config, _api_key_from_env
+    with _reload_lock:
+        if not _fingerprint_changed():
+            return  # 双检：另一线程可能已完成重载
+        assert _config_path is not None
+        pinned_enabled = _boot_multi_user_enabled
+        from backend.core.logger import get_logger
+
+        log = get_logger("config")
+        log.info("Config file changed on disk (%s), reloading", _config_path.name)
+        try:
+            cfg, api_key_from_env = _parse_config_file(_config_path)
+        except Exception as e:  # noqa: BLE001 - 坏配置不阻断服务
+            log.error("Config reload failed (%s); keeping previous configuration", e)
+            _record_config_fingerprint()
+            return
+        # multi_user.enabled 锚定：热重载不改变运行模式（重启生效），
+        # 启动锚定值本身保持不变
+        if pinned_enabled is not None and cfg.multi_user.enabled != pinned_enabled:
+            cfg.multi_user.enabled = pinned_enabled
+            log.warning(
+                "multi_user.enabled changed on disk but requires a restart; "
+                "keeping boot-time value (%s)",
+                pinned_enabled,
+            )
+        _api_key_from_env = api_key_from_env
+        _config = cfg
+        _record_config_fingerprint()
 
 
 def save_config() -> None:
@@ -707,6 +796,9 @@ def save_config() -> None:
     if _api_key_from_env:
         data["llm"]["api_key"] = ""
     atomic_write(_config_path, json.dumps(data, indent=2, ensure_ascii=False))
+    # 刷新指纹：自身写盘不构成"外部变更"，避免下一次 get_config() 触发
+    # 无意义重载（v2 P7 热重载探测）
+    _record_config_fingerprint()
 
 
 def _deep_merge(base: dict, updates: dict) -> dict:

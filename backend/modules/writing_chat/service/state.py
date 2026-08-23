@@ -1,10 +1,23 @@
-"""写作助手服务状态：会话锁、工具确认与澄清请求。"""
+"""写作助手服务状态：会话锁、工具确认与澄清请求。
+
+用户交互等待的双模式实现（v2 P7 多实例收口）：
+
+- 单用户模式（默认）：进程内 dict + asyncio.Event，行为与历史版本完全一致；
+- 多用户模式：pending_interactions 表 + 短间隔轮询（``PENDING_POLL_INTERVAL_
+  SECONDS``）替代 Event——发起（SSE 等待侧）与应答（confirm-tool / clarify
+  HTTP 请求）可落在不同副本，跨实例可续。
+
+会话级写锁 ``_session_locks`` 保持进程内 asyncio.Lock：同一副本内互斥；
+跨副本的写冲突由会话文件的原子写与最后写入者语义兜底（方案 §12.1 未将
+其列入外置清单）。
+"""
 
 import asyncio
 import time
 from typing import Any
 
 from backend.core.logger import get_logger
+from backend.core.multiuser import pending_interactions
 
 
 class StateMixin:
@@ -15,12 +28,15 @@ class StateMixin:
         # 会话级写锁：同一 session 的 send / 编辑 / 压缩等操作互斥，
         # 防止双标签页并发 save_to_disk 最后写者胜导致丢消息。
         self._session_locks: dict[str, asyncio.Lock] = {}
-        # 待用户确认的工具调用（写操作：edit_paragraph / undo_last_edit）
+        # 单用户模式的待定交互存储（多用户模式走 pending_interactions 表）
         # key: pending_id, value: {event: asyncio.Event, confirmed: bool | None, tool_name: str, ...}
         self._pending_confirms: dict[str, dict[str, Any]] = {}
-        # 待用户回复的澄清请求（request_clarification）
         # key: clarify_id, value: {event: asyncio.Event, answered: bool, answer: str, created_at: float}
         self._pending_clarifications: dict[str, dict[str, Any]] = {}
+
+    def _db_pending_available(self) -> bool:
+        """pending_interactions 表是否可用（多用户模式且库已初始化）。"""
+        return pending_interactions.available()
 
     def _session_lock(self, session_id: str) -> asyncio.Lock:
         """获取指定会话的串行化锁（会话删除时由 delete_session 清理）。"""
@@ -29,6 +45,8 @@ class StateMixin:
             lock = asyncio.Lock()
             self._session_locks[session_id] = lock
         return lock
+
+    # ── 工具调用确认 ─────────────────────────────────────────────────
 
     async def _request_tool_confirmation(
         self,
@@ -43,6 +61,17 @@ class StateMixin:
             - None: 超时或被拒绝
             - dict: 确认后的参数（可能已被前端修改）
         """
+        if self._db_pending_available():
+            resolved = await self._wait_db_pending(
+                pending_interactions.KIND_CONFIRM,
+                pending_id,
+                {"tool_name": tool_name, "tool_args": dict(tool_args)},
+                timeout=120,
+            )
+            if resolved is not None and resolved.get("status") == "confirmed":
+                args = resolved.get("tool_args")
+                return args if isinstance(args, dict) else tool_args
+            return None
         self._cleanup_stale_pending()
         event = asyncio.Event()
         self._pending_confirms[pending_id] = {
@@ -81,6 +110,11 @@ class StateMixin:
         self, pending_id: str, modified_args: dict | None = None
     ) -> bool:
         """确认待定工具调用。"""
+        if self._db_pending_available():
+            update = {"tool_args": modified_args} if modified_args else None
+            return pending_interactions.try_resolve(
+                pending_id, pending_interactions.KIND_CONFIRM, "confirmed", update
+            )
         pending = self._pending_confirms.get(pending_id)
         if not pending or pending["event"].is_set():
             return False
@@ -92,6 +126,10 @@ class StateMixin:
 
     def cancel_pending_tool(self, pending_id: str) -> bool:
         """取消待定工具调用。"""
+        if self._db_pending_available():
+            return pending_interactions.try_resolve(
+                pending_id, pending_interactions.KIND_CONFIRM, "cancelled"
+            )
         pending = self._pending_confirms.get(pending_id)
         if not pending or pending["event"].is_set():
             return False
@@ -111,6 +149,18 @@ class StateMixin:
         返回：
             - str: 用户的回复内容。超时或取消时返回提示文本。
         """
+        if self._db_pending_available():
+            resolved = await self._wait_db_pending(
+                pending_interactions.KIND_CLARIFY,
+                clarify_id,
+                {},
+                timeout=120,
+            )
+            if resolved is not None and resolved.get("status") == "answered":
+                return resolved.get("answer", "")
+            if resolved is not None and resolved.get("status") == "cancelled":
+                return "（用户已取消此澄清请求，请根据已有信息自行判断并继续）"
+            return "（用户未在时限内回复，请根据已有信息自行判断并继续）"
         self._cleanup_stale_clarifications()
         event = asyncio.Event()
         self._pending_clarifications[clarify_id] = {
@@ -132,6 +182,13 @@ class StateMixin:
 
     def submit_clarification(self, clarify_id: str, answer: str) -> bool:
         """提交澄清请求的回复。"""
+        if self._db_pending_available():
+            return pending_interactions.try_resolve(
+                clarify_id,
+                pending_interactions.KIND_CLARIFY,
+                "answered",
+                {"answer": answer},
+            )
         pending = self._pending_clarifications.get(clarify_id)
         if not pending or pending["event"].is_set():
             return False
@@ -142,6 +199,10 @@ class StateMixin:
 
     def cancel_clarification(self, clarify_id: str) -> bool:
         """取消待定的澄清请求。"""
+        if self._db_pending_available():
+            return pending_interactions.try_resolve(
+                clarify_id, pending_interactions.KIND_CLARIFY, "cancelled"
+            )
         pending = self._pending_clarifications.get(clarify_id)
         if not pending or pending["event"].is_set():
             return False
@@ -162,3 +223,42 @@ class StateMixin:
             if c and not c.get("event").is_set():
                 c["answered"] = False
                 c["event"].set()
+
+    # ── 多用户模式：DB 待定交互轮询等待 ───────────────────────────────
+
+    async def _wait_db_pending(
+        self,
+        kind: str,
+        interaction_id: str,
+        payload: dict,
+        timeout: float,
+    ) -> dict | None:
+        """登记待定交互并轮询直至决议/超时。
+
+        返回决议 payload dict（含 status）；超时返回 None。轮询间隔取
+        ``PENDING_POLL_INTERVAL_SECONDS``（人机交互亚秒延迟无感，避免
+        Event 无法跨进程的缺陷），查询为单行主键读，开销可忽略。
+        """
+        await asyncio.to_thread(
+            pending_interactions.create,
+            interaction_id,
+            kind,
+            payload,
+            timeout,
+        )
+        deadline = time.monotonic() + timeout
+        poll = pending_interactions.PENDING_POLL_INTERVAL_SECONDS
+        while True:
+            await asyncio.sleep(poll)
+            resolved = await asyncio.to_thread(
+                pending_interactions.fetch_resolved, interaction_id, kind
+            )
+            if resolved is not None:
+                if resolved.get("status") == "expired":
+                    return None  # 与等待超时同义
+                return resolved
+            if time.monotonic() >= deadline:
+                await asyncio.to_thread(
+                    pending_interactions.delete, interaction_id, kind
+                )
+                return None

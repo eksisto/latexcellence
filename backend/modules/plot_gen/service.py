@@ -32,6 +32,7 @@ from backend.modules.plot_gen.models import PlotSessionMeta
 from backend.modules.plot_gen.recommender import recommend_chart_plan
 from backend.modules.plot_gen.styles import list_styles
 from backend.modules.plot_gen.trace import read_trace
+from backend.utils.session_mutex import cross_process_session_lock, lock_file_for
 
 logger = get_logger(__name__)
 
@@ -143,15 +144,18 @@ class PlotGenService:
         yield {"type": "chart_plan", "chart_plan": plan.model_dump()}
 
         agent = get_plot_gen_agent()
-        async for event in agent.generate(
-            session_id,
-            meta.description,
-            meta.language,
-            llm=llm,
-            style=meta.style,
-            chart_plan=plan,
-        ):
-            yield event
+        # 会话互斥（v2 P7）：跨进程 flock 锁文件（沙箱目录旁），多副本部署
+        # 下防止两个副本同时写同一会话（meta.json / 产物目录）
+        async with cross_process_session_lock(lock_file_for(sandbox)):
+            async for event in agent.generate(
+                session_id,
+                meta.description,
+                meta.language,
+                llm=llm,
+                style=meta.style,
+                chart_plan=plan,
+            ):
+                yield event
 
     async def refine(
         self,
@@ -160,9 +164,13 @@ class PlotGenService:
         language: str,
         llm: Any | None = None,
     ) -> AsyncIterator[dict[str, Any]]:
+        cfg = get_config()
+        sandbox = load_plot_sandbox(get_plot_output_dir(cfg), session_id)
         agent = get_plot_gen_agent()
-        async for event in agent.refine(session_id, message, language, llm=llm):
-            yield event
+        # 会话互斥（v2 P7）：同 generate，跨进程 flock + 进程内语义叠加
+        async with cross_process_session_lock(lock_file_for(sandbox)):
+            async for event in agent.refine(session_id, message, language, llm=llm):
+                yield event
 
     def list_session_files(self, session_id: str) -> list[dict[str, Any]]:
         cfg = get_config()

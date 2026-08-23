@@ -181,7 +181,7 @@ class StyleModifyService:
         )
         yield {"type": "session", "session_id": session_id}
         agent = get_style_modify_agent()
-        async with self._store.lock(session_id):
+        async with self._store.guard(session_id):
             async for event in agent.run(
                 session_id,
                 workspace_id,
@@ -207,7 +207,7 @@ class StyleModifyService:
             yield {"type": "error", "message": "No proposal to refine"}
             return
         agent = get_style_modify_agent()
-        async with self._store.lock(session_id):
+        async with self._store.guard(session_id):
             async for event in agent.refine(
                 session_id,
                 workspace_id,
@@ -231,7 +231,7 @@ class StyleModifyService:
     ) -> dict[str, Any]:
         meta = self._store.load_meta(session_id)
         self._store.require_workspace(meta, workspace_id)
-        async with self._store.lock(session_id):
+        async with self._store.guard(session_id):
             operation = await asyncio.to_thread(
                 self._store.apply_proposal,
                 session_id,

@@ -27,6 +27,7 @@ from backend.modules.template_gen.agent import (
     safe_read_sandbox_file,
 )
 from backend.modules.template_gen.trace import read_trace
+from backend.utils.session_mutex import cross_process_session_lock, lock_file_for
 
 logger = get_logger(__name__)
 
@@ -69,13 +70,16 @@ class TemplateGenService:
         logger.info(f"Agent sandbox has been created: {sandbox}")
 
         agent = get_template_agent_service()
-        async for event in agent.generate(
-            description,
-            language,
-            sandbox=sandbox,
-            llm=llm,
-        ):
-            yield event
+        # 会话互斥（v2 P7）：跨进程 flock 锁文件（沙箱目录旁）+ 进程内锁，
+        # 多副本部署下防止两个副本同时写同一沙箱
+        async with cross_process_session_lock(lock_file_for(sandbox)):
+            async for event in agent.generate(
+                description,
+                language,
+                sandbox=sandbox,
+                llm=llm,
+            ):
+                yield event
 
     # ── 产物浏览 ─────────────────────────────────────────────────────
 
