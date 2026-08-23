@@ -4,7 +4,9 @@
 职责：
     1. 负责数据库文件的初始化（表结构、索引、WAL、外键约束）
     2. 提供进程内线程安全的连接管理与统一的同步查询入口
-    3. 版本迁移机制（PRAGMA user_version + 有序幂等迁移步骤，v2 P0 引入）
+    3. 版本迁移机制（PRAGMA user_version + 有序幂等迁移步骤，v2 P0 引入；
+       v2 P7 起以 <db>.migration.lock 的 flock 做跨进程串行化，
+       每个步骤包在独立事务中并在事务内重读前置条件）
     4. 供服务层 / 中间件 / CLI 调用；事件循环线程内调用方须用
        asyncio.to_thread 调度（禁止阻塞事件循环）
 
@@ -16,10 +18,12 @@
 """
 
 import json
+import os
 import sqlite3
 import threading
+import time
 from collections.abc import Callable, Iterator
-from contextlib import contextmanager
+from contextlib import contextmanager, nullcontext
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -27,6 +31,13 @@ from backend.core.config import get_config
 from backend.core.logger import get_logger
 
 logger = get_logger("multiuser.db")
+
+try:  # 平台分叉：flock 为 POSIX 能力，Windows 缺失 fcntl 时迁移锁降级直通
+    import fcntl
+
+    _FLOCK_AVAILABLE = True
+except ImportError:  # pragma: no cover - 仅 Windows 触发
+    _FLOCK_AVAILABLE = False
 
 # 数据库模式：用户、会话、项目、协作者。
 # projects / project_collaborators 为后续阶段（P2/P4）预留，P1 一并建表。
@@ -80,14 +91,37 @@ CREATE TABLE IF NOT EXISTS project_collaborators (
 """
 
 
+def _execute_schema_script(conn: sqlite3.Connection, script: str) -> None:
+    """在调用方当前事务内逐条执行受控 schema 脚本（勿用 conn.executescript）。
+
+    executescript 会先隐式提交挂起事务，把 apply_migrations 的"单步骤单
+    事务"拦腰截断；本函数改用 sqlite3.complete_statement() 按语句边界拆分
+    （正确处理引号、``--`` 注释与触发器 BEGIN...END），再逐条
+    conn.execute，使语句全部加入调用方已开启的事务。仅限本项目受控 DDL
+    脚本（语句均以分号结尾）使用。
+    """
+    buf = ""
+    for line in script.splitlines(keepends=True):
+        buf += line
+        if sqlite3.complete_statement(buf):
+            statement = buf.strip()
+            if statement:
+                conn.execute(statement)
+            buf = ""
+    if buf.strip():
+        raise ValueError("schema script ends with an incomplete statement")
+
+
 def _migration_v1_baseline(conn: sqlite3.Connection) -> None:
     """v1 基线：业务主表。全部 CREATE IF NOT EXISTS，对存量库幂等。"""
-    conn.executescript(SCHEMA)
+    _execute_schema_script(conn, SCHEMA)
 
 
 def _migration_v2_sandbox_slots(conn: sqlite3.Connection) -> None:
     """v2 P1a：沙箱并发池租约表（崩溃残留租约由 TTL 清理兜底）。"""
-    conn.executescript("""
+    _execute_schema_script(
+        conn,
+        """
         CREATE TABLE IF NOT EXISTS sandbox_slots (
             slot_id     TEXT PRIMARY KEY,
             user_id     TEXT NOT NULL,
@@ -98,7 +132,8 @@ def _migration_v2_sandbox_slots(conn: sqlite3.Connection) -> None:
             ON sandbox_slots (expires_at);
         CREATE INDEX IF NOT EXISTS ix_sandbox_slots_user
             ON sandbox_slots (user_id);
-        """)
+        """,
+    )
 
 
 def _migration_v3_llm_governance(conn: sqlite3.Connection) -> None:
@@ -107,7 +142,9 @@ def _migration_v3_llm_governance(conn: sqlite3.Connection) -> None:
     rate_limit_events 为登录限流（kind='login'）与 LLM 限流（kind='llm'）
     共用的滑动窗口事件表；崩溃残留租约由 TTL 过滤 + 维护循环清理兜底。
     """
-    conn.executescript("""
+    _execute_schema_script(
+        conn,
+        """
         CREATE TABLE IF NOT EXISTS rate_limit_events (
             kind     TEXT NOT NULL,
             identity TEXT NOT NULL,
@@ -125,7 +162,8 @@ def _migration_v3_llm_governance(conn: sqlite3.Connection) -> None:
             ON llm_concurrency_leases (expires_at);
         CREATE INDEX IF NOT EXISTS ix_llm_concurrency_leases_user
             ON llm_concurrency_leases (user_id);
-        """)
+        """,
+    )
 
 
 def _migration_v4_workspace_edit_ops(conn: sqlite3.Connection) -> None:
@@ -136,7 +174,9 @@ def _migration_v4_workspace_edit_ops(conn: sqlite3.Connection) -> None:
     存磁盘（<users_root>/<owner_id>/.edit_logs/<project_id>/<op_id>/），
     本表只做操作索引；owner_id 冗余存储用于定位快照目录（转交后归属不变）。
     """
-    conn.executescript("""
+    _execute_schema_script(
+        conn,
+        """
         CREATE TABLE IF NOT EXISTS workspace_edit_ops (
             seq           INTEGER PRIMARY KEY AUTOINCREMENT,
             op_id         TEXT NOT NULL UNIQUE,
@@ -157,7 +197,8 @@ def _migration_v4_workspace_edit_ops(conn: sqlite3.Connection) -> None:
             ON workspace_edit_ops (project_id, actor_user_id, status, seq);
         CREATE INDEX IF NOT EXISTS ix_edit_ops_group
             ON workspace_edit_ops (op_group_id);
-        """)
+        """,
+    )
 
 
 def _migration_v5_user_derived_usage(conn: sqlite3.Connection) -> None:
@@ -169,7 +210,9 @@ def _migration_v5_user_derived_usage(conn: sqlite3.Connection) -> None:
     （触达某分类时仅重扫该目录）+ 每小时对账全量重算"两级机制维护。
     行随用户删除级联清理。
     """
-    conn.executescript("""
+    _execute_schema_script(
+        conn,
+        """
         CREATE TABLE IF NOT EXISTS user_derived_usage (
             user_id    TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
             subdir     TEXT NOT NULL,
@@ -179,7 +222,8 @@ def _migration_v5_user_derived_usage(conn: sqlite3.Connection) -> None:
         );
         CREATE INDEX IF NOT EXISTS ix_user_derived_usage_user
             ON user_derived_usage (user_id);
-        """)
+        """,
+    )
 
 
 def _migration_v6_upload_sessions(conn: sqlite3.Connection) -> None:
@@ -190,7 +234,9 @@ def _migration_v6_upload_sessions(conn: sqlite3.Connection) -> None:
     拼装）；TTL 以 last_activity_at（每次分片/状态查询续期）为基准，由
     维护循环清理过期行与对应 staging 目录。
     """
-    conn.executescript("""
+    _execute_schema_script(
+        conn,
+        """
         CREATE TABLE IF NOT EXISTS upload_sessions (
             id               TEXT PRIMARY KEY,
             user_id          TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -207,7 +253,8 @@ def _migration_v6_upload_sessions(conn: sqlite3.Connection) -> None:
             ON upload_sessions (user_id);
         CREATE INDEX IF NOT EXISTS ix_upload_sessions_activity
             ON upload_sessions (last_activity_at);
-        """)
+        """,
+    )
 
 
 def _migration_v7_mail_and_alerts(conn: sqlite3.Connection) -> None:
@@ -219,7 +266,9 @@ def _migration_v7_mail_and_alerts(conn: sqlite3.Connection) -> None:
     users.email 部分唯一索引不在本迁移内创建——存量重复邮箱时不自动改数据，
     由 ensure_email_unique_index() 在每次启动时检测并补建（见其 docstring）。
     """
-    conn.executescript("""
+    _execute_schema_script(
+        conn,
+        """
         CREATE TABLE IF NOT EXISTS email_outbox (
             id          TEXT PRIMARY KEY,
             recipient   TEXT NOT NULL,
@@ -253,7 +302,8 @@ def _migration_v7_mail_and_alerts(conn: sqlite3.Connection) -> None:
             sent_at    TEXT NOT NULL,
             PRIMARY KEY (user_id, kind)
         );
-        """)
+        """,
+    )
 
 
 def _migration_v8_instance_state(conn: sqlite3.Connection) -> None:
@@ -271,9 +321,12 @@ def _migration_v8_instance_state(conn: sqlite3.Connection) -> None:
     - email_outbox.claimed_at：发送协程按消息原子认领（queued→sending）的
       认领时间戳，供维护循环回收"副本崩溃残留的 sending 行"（多实例下
       防止双副本重复投递同一封邮件）。ALTER 无 IF NOT EXISTS，按
-      pragma table_info 幂等补列。
+      pragma table_info 幂等补列；列检查与 ALTER 同处 apply_migrations
+      的步骤事务（BEGIN IMMEDIATE）内，"查列→补列"整体原子。
     """
-    conn.executescript("""
+    _execute_schema_script(
+        conn,
+        """
         CREATE TABLE IF NOT EXISTS workspace_bindings (
             workspace_id   TEXT PRIMARY KEY,
             user_id        TEXT,
@@ -306,7 +359,13 @@ def _migration_v8_instance_state(conn: sqlite3.Connection) -> None:
             holder     TEXT NOT NULL,
             expires_at TEXT NOT NULL
         );
-        """)
+        """,
+    )
+    # claimed_at 补列（历史缺陷点）：本段由 apply_migrations 包在
+    # BEGIN IMMEDIATE 内执行——写锁持有期间重读 table_info 再决定是否
+    # ALTER，"查列→补列"原子化，即使外部跨进程锁失效也不会因并发迁移
+    # 撞出 duplicate column；直接调用（绕过迁移框架）时各语句自提交，
+    # 该前置检查仍保证单连接视角的幂等。
     cols = {
         row[1] for row in conn.execute("PRAGMA table_info(email_outbox)").fetchall()
     }
@@ -421,24 +480,151 @@ def read_user_version(conn: sqlite3.Connection) -> int:
     return int(row[0]) if row is not None else 0
 
 
+# ── 跨进程迁移串行化（v2 P7 并发初始化缺陷修复） ─────────────────
+
+
+def _main_db_path(conn: sqlite3.Connection) -> Path | None:
+    """返回连接主库的文件路径；内存库等无文件形态返回 None。
+
+    行结构 (seq, name, file)：name='main' 即主库；``file`` 为空或
+    ':memory:' 时无磁盘文件可加锁。
+    """
+    for row in conn.execute("PRAGMA database_list").fetchall():
+        if row[1] == "main":
+            file_name = str(row[2] or "")
+            if not file_name or file_name == ":memory:":
+                return None
+            return Path(file_name)
+    return None
+
+
+def _migration_lock_path(db_path: Path) -> Path:
+    """返回数据库迁移锁文件路径：`<db 文件>.migration.lock`（与库同目录）。"""
+    return db_path.parent / f"{db_path.name}.migration.lock"
+
+
+@contextmanager
+def _cross_process_migration_lock(db_path: Path) -> Iterator[None]:
+    """跨进程迁移互斥：对 `<db>.migration.lock` 取 flock 独占锁直至退出。
+
+    多副本共享同一 SQLite 库同时冷启动时，"读 user_version → 执行步骤 →
+    写回版本号"的序列若不跨进程串行化，会实证性撞出两类崩溃：v8 非原子
+    补列的 duplicate column，与 WAL 转换抢独占锁失败的 database is locked。
+    采用阻塞式加锁而非轮询：flock 在持有方进程退出/描述符关闭时由内核
+    自动释放，不存在残留锁卡死；临界区仅为秒级迁移本身。
+
+    锁文件常驻不删：他人持旧 inode 期间 unlink 后，新进程会创建不同
+    inode 的同名文件并成功加锁，反而失去互斥（与
+    backend/utils/session_mutex.py 记录的是同一陷阱）；孤儿锁文件无副作用。
+
+    Windows 无 fcntl 时降级为直通并告警：多实例部署目标平台是 Linux
+    （deployment.md），单机 Windows 开发场景退回修复前的进程内行为。
+    """
+    if not _FLOCK_AVAILABLE:  # pragma: no cover - 仅 Windows 触发
+        logger.warning(
+            "fcntl unavailable on this platform; DB migration lock degrades "
+            "to in-process-only serialization"
+        )
+        yield
+        return
+    lock_path = _migration_lock_path(db_path)
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+    fd = os.open(str(lock_path), os.O_CREAT | os.O_RDWR, 0o600)
+    try:
+        fcntl.flock(fd, fcntl.LOCK_EX)  # 阻塞等待；EINTR 由解释器自动重试
+        try:
+            yield
+        finally:
+            fcntl.flock(fd, fcntl.LOCK_UN)
+    finally:
+        os.close(fd)
+
+
+def _is_busy_error(exc: sqlite3.Error) -> bool:
+    """是否 SQLITE_BUSY 系错误（扩展结果码低字节即主码 SQLITE_BUSY）。"""
+    code = getattr(exc, "sqlite_errorcode", None)
+    if code is not None:
+        return int(code) & 0xFF == sqlite3.SQLITE_BUSY
+    return "database is locked" in str(exc).lower()
+
+
+# journal_mode=WAL 遇 SQLITE_BUSY 的重试参数：短退避若干次后放行。
+WAL_SET_MAX_RETRIES = 5
+WAL_SET_RETRY_DELAY_SECONDS = 0.2
+
+
+def _set_wal_mode_tolerant(conn: sqlite3.Connection, db_path: Path) -> None:
+    """开启 WAL；并发初始化抢占独占锁（SQLITE_BUSY）时短重试后放行。
+
+    WAL 转换需要独占锁且 busy_timeout 对该语句无效：两进程同时对同一库
+    冷启动、各自尝试 DELETE→WAL 转换时必有一方失败。重试数轮仍忙则放行
+    不抛——对方大概率已完成转换（存量运行库通常早已是 WAL），告警留痕供
+    排查长期未生效的异常情形；不得让 init_db 因该语句崩溃。
+    """
+    for attempt in range(1, WAL_SET_MAX_RETRIES + 1):
+        try:
+            conn.execute("PRAGMA journal_mode=WAL").fetchone()
+            return
+        except sqlite3.OperationalError as exc:
+            if not _is_busy_error(exc):
+                raise
+            logger.debug(
+                "journal_mode=WAL busy on %s (attempt %d/%d): %s",
+                db_path,
+                attempt,
+                WAL_SET_MAX_RETRIES,
+                exc,
+            )
+            time.sleep(WAL_SET_RETRY_DELAY_SECONDS)
+    logger.warning(
+        "Could not set journal_mode=WAL on %s after %d attempts (database "
+        "busy); continuing without WAL — the concurrent initializer likely "
+        "enabled it already",
+        db_path,
+        WAL_SET_MAX_RETRIES,
+    )
+
+
 def apply_migrations(conn: sqlite3.Connection) -> list[int]:
     """把数据库按序推进到 SCHEMA_VERSION，返回本次实际执行的版本列表。
 
-    每个步骤在独立事务中执行并立即推进版本号，保证任一步骤失败后
-    重启可以从中断处继续（步骤自身幂等）。
+    跨进程串行化：推进全程持有 `<db 文件>.migration.lock` 的 flock 独占
+    锁，多副本共享同一库文件并发冷启动时防止迁移交错（内存库等无文件
+    形态跳过加锁）。
+
+    每个步骤在独立事务（BEGIN IMMEDIATE）中执行并立即推进版本号，保证
+    任一步骤失败后重启可以从中断处继续（步骤自身幂等）；进入事务后首先
+    重读 user_version 作为纵深防御——即使外部锁失效（如降级平台），也不
+    会重复执行已完成的步骤。注意迁移函数内部不得使用 conn.executescript()
+    （其隐式提交会截断步骤事务），统一经 _execute_schema_script() 执行。
     """
-    current = read_user_version(conn)
-    applied: list[int] = []
-    for target, description, fn in MIGRATIONS:
-        if current >= target:
-            continue
-        logger.info("Applying DB migration v%d: %s", target, description)
-        fn(conn)
-        _set_user_version(conn, target)
-        conn.commit()
-        current = target
-        applied.append(target)
-    return applied
+    db_path = _main_db_path(conn)
+    lock_ctx = (
+        _cross_process_migration_lock(db_path) if db_path is not None else nullcontext()
+    )
+    with lock_ctx:
+        current = read_user_version(conn)
+        applied: list[int] = []
+        for target, description, fn in MIGRATIONS:
+            if current >= target:
+                continue
+            logger.info("Applying DB migration v%d: %s", target, description)
+            conn.execute("BEGIN IMMEDIATE")
+            try:
+                # 纵深防御：写锁内重读版本号，锁失效也不重复执行已完成步骤
+                if read_user_version(conn) >= target:
+                    conn.rollback()
+                    current = read_user_version(conn)
+                    continue
+                fn(conn)
+                _set_user_version(conn, target)
+            except BaseException:
+                conn.rollback()
+                raise
+            conn.commit()
+            current = target
+            applied.append(target)
+        return applied
 
 
 # 进程内共享连接。单进程 + WAL + RLock 串行化事务即可保证线程安全；
@@ -495,9 +681,11 @@ def init_db() -> None:
         if _conn is None:
             conn = sqlite3.connect(str(db_path), check_same_thread=False)
             conn.row_factory = sqlite3.Row
-            conn.execute("PRAGMA journal_mode=WAL")
-            conn.execute("PRAGMA foreign_keys=ON")
+            # busy_timeout 先设：覆盖后续普通语句的锁等待；对 WAL 转换本身
+            # 无效（需独占锁），由 _set_wal_mode_tolerant 单独容忍 BUSY
             conn.execute("PRAGMA busy_timeout=5000")
+            _set_wal_mode_tolerant(conn, db_path)
+            conn.execute("PRAGMA foreign_keys=ON")
             conn.execute("PRAGMA synchronous=NORMAL")
             _conn = conn
             _db_path = db_path
