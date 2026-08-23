@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import FolderUp from "lucide-react/dist/esm/icons/folder-up.mjs";
@@ -39,6 +39,15 @@ const RESUME_STORAGE_KEY = "latexcellence-upload-session-v1";
 
 // 全量 MD5 计算的分片读取粒度
 const HASH_READ_CHUNK = 1 << 20;
+
+// 进度条可见的运行阶段（idle 无进度可展示）
+const ACTIVE_PHASES = new Set([
+  "preparing",
+  "uploading",
+  "completing",
+  "paused",
+  "pausing",
+]);
 
 /**
  * 目录模式：收集 webkitdirectory 文件列表，相对路径用 webkitRelativePath
@@ -343,7 +352,11 @@ export default function UploadProjectDialog({
           ? translateError(err.message)
           : undefined,
     });
-    setPhase("paused");
+    // 会话已建立：进入暂停态，可经服务端位图续传；会话尚未建立（init/
+    // status 阶段失败）则无会话可续，回 idle 允许直接重试——否则界面
+    // 停在暂停态，「继续上传」是静默 no-op（togglePause 里队列对象为
+    // null 直接返回），用户只能靠「中止上传」逃生。
+    setPhase(queueRef.current?.sessionId ? "paused" : "idle");
   };
 
   const finishComplete = async (q) => {
@@ -461,10 +474,11 @@ export default function UploadProjectDialog({
     }
   };
 
-  /** 续传入口：先 GET status 对位图再补缺（无需重新计算 MD5/init） */
-  const resumeSavedSession = async (saved) => {
-    const current = selectionRefCurrent(saved);
-    if (!current) {
+  /** 续传入口：先 GET status 对位图再补缺（无需重新计算 MD5/init）。
+   * currentSelection 由调用方传入当次渲染的最新 selection（onClick 闭包
+   * 本就持有最新值，无需 ref 镜像）。 */
+  const resumeSavedSession = async (saved, currentSelection) => {
+    if (!selectionMatchesSaved(saved, currentSelection)) {
       toast.error(t("components:uploadProject.resumeNeedReselect"));
       return;
     }
@@ -473,7 +487,9 @@ export default function UploadProjectDialog({
       // 先 GET status：以服务端清单为权威，把重选的 File 按相对路径对位
       // （目录选择的文件顺序可能与首次上传不同，不能按数组下标对齐）
       const st = await api.projects.uploadSessions.status(saved.sessionId);
-      const byPath = new Map(current.files.map((f) => [f.name, f.file]));
+      const byPath = new Map(
+        currentSelection.files.map((f) => [f.name, f.file]),
+      );
       const files = [];
       for (const sf of st.files) {
         const file = byPath.get(sf.path);
@@ -508,21 +524,10 @@ export default function UploadProjectDialog({
     return true;
   };
 
-  // resumeSavedSession 需要读取最新 selection（避免回调闭包陈旧）
-  const selectionRef = useRef(null);
-  const selectionRefCurrent = (saved) => {
-    const sel = selectionRef.current;
-    if (!sel || !selectionMatchesSaved(saved, sel)) return null;
-    return sel;
-  };
-  useEffect(() => {
-    selectionRef.current = selection;
-  }, [selection]);
-
   const handleUploadClick = async () => {
     const saved = loadPendingResume();
     if (saved && selectionMatchesSaved(saved, selection)) {
-      await resumeSavedSession(saved);
+      await resumeSavedSession(saved, selection);
       return;
     }
     if (saved) {
@@ -545,7 +550,10 @@ export default function UploadProjectDialog({
       q.paused = true;
       q.inflight.forEach((c) => c.abort());
       setPhase("pausing");
-    } else if (phase === "paused" || phase === "pausing") {
+    } else if (phase === "paused") {
+      // 仅在完全暂停后允许恢复：pausing 期间旧队列尚未 settle，
+      // 此时重入会被 running 守卫吞掉，setPhase 又会被旧队列的
+      // catch 打回 paused，产生自相矛盾的界面抖动
       setPhase("uploading");
       runQueue();
     }
@@ -560,22 +568,11 @@ export default function UploadProjectDialog({
   const showPause =
     phase === "uploading" || phase === "paused" || phase === "pausing";
 
-  const progressText = useMemo(() => {
-    switch (phase) {
-      case "preparing":
-        return t("components:uploadProject.preparing");
-      case "uploading":
-        return t("components:uploadProject.uploading");
-      case "completing":
-        return t("components:uploadProject.completing");
-      case "paused":
-        return t("components:uploadProject.paused");
-      case "pausing":
-        return t("components:uploadProject.pausing");
-      default:
-        return "";
-    }
-  }, [phase, t]);
+  // 进度条可见的运行阶段；各阶段的 i18n key 与阶段名一致，按名取文案即可
+  const showProgress = ACTIVE_PHASES.has(phase);
+  const progressText = showProgress
+    ? t(`components:uploadProject.${phase}`)
+    : "";
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
@@ -685,11 +682,7 @@ export default function UploadProjectDialog({
           </TabsContent>
         </Tabs>
 
-        {(phase === "preparing" ||
-          phase === "uploading" ||
-          phase === "completing" ||
-          phase === "paused" ||
-          phase === "pausing") && (
+        {showProgress && (
           <div className="space-y-1">
             <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
               <div
@@ -711,7 +704,11 @@ export default function UploadProjectDialog({
           )}
           {showPause && (
             <>
-              <Button variant="outline" onClick={togglePause}>
+              <Button
+                variant="outline"
+                onClick={togglePause}
+                disabled={phase === "pausing"}
+              >
                 {phase === "uploading" ? <Pause /> : <Play />}
                 {phase === "uploading"
                   ? t("components:uploadProject.pauseBtn")

@@ -1,53 +1,11 @@
-import { memo, useEffect, useState } from "react";
+import { memo } from "react";
 import { useTranslation } from "react-i18next";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import ConfigSection, {
   CheckboxField,
 } from "@/components/settings/ConfigSection";
-
-/**
- * 数字输入。默认下限为 1（所有多用户字段均 ≥ 1）；传 min=0 允许 0 值
- * （如 writing_chat_retention_days 的"不自动删，仅统计"语义）。
- * 用本地草稿态承载自由输入：清空/删除中间态不会立即回弹下限，
- * 仅在失焦时把空/非法值归一化到下限，避免输入体验卡顿。
- */
-function NumberField({ label, value, onChange, hint, min = 1 }) {
-  const [draft, setDraft] = useState(() => String(value ?? min));
-
-  // 外部值变化（如重置/保存后回填）时同步草稿
-  useEffect(() => {
-    setDraft(String(value ?? min));
-  }, [value, min]);
-
-  const commit = () => {
-    const n = parseInt(draft, 10);
-    const safe = Number.isNaN(n) || n < min ? min : n;
-    if (String(safe) !== draft) setDraft(String(safe));
-    onChange(safe);
-  };
-
-  return (
-    <div className="space-y-1">
-      <Label className="text-xs">{label}</Label>
-      <Input
-        type="number"
-        min={String(min)}
-        value={draft}
-        onChange={(e) => {
-          const raw = e.target.value;
-          setDraft(raw);
-          // 输入中仅当是合法的 ≥ min 整数才即时提交（"" 等中间态不阻塞输入）
-          if (/^\d+$/.test(raw) && Number(raw) >= min) {
-            onChange(Number(raw));
-          }
-        }}
-        onBlur={commit}
-      />
-      {hint && <p className="text-xs text-muted-foreground">{hint}</p>}
-    </div>
-  );
-}
+import NumberField from "@/components/settings/NumberField";
 
 function MultiUserSection({ multiUser, onChange }) {
   const { t } = useTranslation("components");

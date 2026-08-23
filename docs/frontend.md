@@ -119,7 +119,8 @@ highlight.js 的按需注册与统一入口：
 | `PDFPreview.jsx` | iframe 嵌入 PDF 预览 |
 | `PromptEditor.jsx` | 自定义提示词编辑框 |
 | `ConnectionPanel.jsx` | 后端连接面板：编辑 API 基地址 / 访问令牌并测试连接，打开对话框时自动探测一次连接状态 |
-| `settings/` 分区组件 | 设置对话框各配置分区（Server / Security / LLM / Features / Function Calling / HTTP / Logging / MultiUser）与共享原语（`ConfigSection` / `CheckboxField`） |
+| `settings/` 分区组件 | 设置对话框各配置分区（Server / Security / LLM / Features / Function Calling / HTTP / Logging / MultiUser / Sandbox / Smtp）与共享原语（`ConfigSection` / `CheckboxField` / `NumberField`） |
+| `settings/NumberField.jsx` | 设置分区共享数字输入（草稿态）：清空/删除等非法中间值不回弹，失焦时归一化到 `[min, max]`，输入中仅合法整数即时提交。MultiUserSection 与 SmtpSection（端口/限速/重试）共用 |
 | `SettingsDialog.jsx` | 设置对话框外壳：加载/保存 config.json、后端连接面板与各配置分区组装；功能开关保存后同步全局 Store |
 | `FolderPickerDialog.jsx` | 文件夹选择对话框，逐级进入子文件夹 |
 | `MarkdownRenderer.jsx` | 基于 react-markdown + remark + rehype-katex |
@@ -149,7 +150,9 @@ highlight.js 的按需注册与统一入口：
 | `useEnabledFeatures.js` | 从后端加载功能开关到 Zustand store，幂等。 |
 | `useIsOpened.js` | 模式感知「项目已打开」判定（`utils/projectAccess.js` 的 `isProjectOpened`）：单用户看 `projectPath`，多用户看 `projectId`（多用户下 projectPath 恒为 null）。模块页空态守卫与检查启动守卫统一引用，避免各页复制同形条件漏改。 |
 | `useCanWrite.js` | 多用户写权限单一事实源：白名单 owner / editor 可写，viewer 及角色未知一律只读；单用户恒可写。内部复用 `utils/projectAccess.js` 的 `hasWriteRole`。 |
-| `useRegistrationEnabled.js` | 探测 `/config/status` 的 `registration_enabled`；仅明确 false 时调用方隐藏注册入口（登录页隐藏链接、注册页展示未开放提示），未知时保持入口由后端 400 兜底。 |
+| `useConfigStatus.js` | 多用户公开配置探测（`/config/status`）共享层：模块级 in-flight Promise 去重 + 短 TTL 结果缓存，多个派生 hook 同时挂载（如登录页）只发一次请求。返回 status 对象，null 表示未知（单用户/请求中/探测失败）。 |
+| `useRegistrationEnabled.js` | 基于 `useConfigStatus` 派生 `registration_enabled`；仅明确 false 时调用方隐藏注册入口（登录页隐藏链接、注册页展示未开放提示），未知时保持入口由后端 400 兜底。 |
+| `useEmailAvailable.js` | 基于 `useConfigStatus` 派生 `email_available`；仅明确 false 时隐藏「忘记密码」入口（登录页），未知时不隐藏，后端 forgot-password 统一降级响应兜底。 |
 | `useFavicon.js` | 按亮/暗模式切换浏览器标签页图标（MutationObserver 监听 `<html>` class）。 |
 | `useWritingChat.js` | 封装写作助手 Chat 全部逻辑（会话管理、SSE 流式、搜索/学术结果、深度思考解析、生成编辑、应用编辑、助手管理）。内部使用子 hooks。 |
 | `useStyleModifyAgent.js` | 封装 style_modify 项目 Agent：创建/恢复/删除 session、SSE 生命周期、refinement、proposal、apply/undo、trace 查看导出和 `translateError()` 处理。 |
@@ -275,7 +278,7 @@ highlight.js 的按需注册与统一入口：
 | `pages/ProjectWorkbenchPage.jsx` | 项目列表（我的/共享给我，含 owner 与 role）、配额用量条、上传、回收站、打开/下载/重命名/权限/删除；owner 专属操作 |
 | `pages/AdminPage.jsx` | 用户列表（待审批筛选）、批准/拒绝/禁用/启用、重置密码（两步式：先生成临时密码预览，确认后才写入）、配额调整、删除用户 |
 
-配套组件：`components/AuthShell.jsx`（认证页外壳）、`components/AuthConnectionButton.jsx`（认证页工具栏「后端连接设置」入口 + 对话框）、`components/UploadProjectDialog.jsx`（zip/7z/rar 文件或 `webkitdirectory` 目录 → 分片直传：并发 3 队列、逐片 `X-Part-MD5` 校验（自研增量 MD5 工具 `utils/md5.js`，WebCrypto 不提供 MD5）、指数退避重试、暂停/继续、localStorage 持久会话支持刷新后重新选择相同内容断点续传）、`components/ProjectPermissionsDialog.jsx`（按用户名添加协作者、改角色、移除、转交 owner）。
+配套组件：`components/AuthShell.jsx`（认证页外壳）、`components/AuthConnectionButton.jsx`（认证页工具栏「后端连接设置」入口 + 对话框）、`components/UploadProjectDialog.jsx`（zip/7z/rar 文件或 `webkitdirectory` 目录 → 分片直传：并发 3 队列、逐片 `X-Part-MD5` 校验（自研增量 MD5 工具 `utils/md5.js`，WebCrypto 不提供 MD5）、指数退避重试、暂停/继续、localStorage 持久会话支持刷新后重新选择相同内容断点续传；会话建立后的致命错误进暂停态可续传，init/status 阶段失败回 idle 允许直接重试）、`components/ProjectPermissionsDialog.jsx`（按用户名添加协作者、改角色、移除、转交 owner）。
 
 认证页改绑后端：前端实例绑定的后端不可用或用户没有账号时，未登录/待审批状态下 AppToolbar 右上角显示 `AuthConnectionButton`（样式与主题切换等工具栏图标一致），对话框复用 `ConnectionPanel` 的 `onSaved` 形态——显式「保存并刷新」按钮、不失焦静默持久化；保存到 localStorage 后刷新页面重新走启动探测。探测顺序为**显式绑定地址 → 同源 `/api/config/status` → 配置默认基地址**（`useAuth.js`），多用户模式下 API 基地址取「显式绑定 → 探测命中 → 同源 /api」（`connection.js` 的 `multiuserApiBase`）。注意：多用户会话依赖同源 Cookie + 双提交 CSRF，改绑的目标后端若为多用户模式需与前端同源部署；改绑单用户后端（令牌认证）无此限制。
 

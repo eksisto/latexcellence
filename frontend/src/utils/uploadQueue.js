@@ -27,6 +27,19 @@ export function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+// 可中断退避的轮询步长：暂停/致命错误置位后最迟一个步长内被感知，
+// 而不是等满整个退避窗口（第 5 次重试前可达 12.8s）才生效
+const BACKOFF_POLL_MS = 50;
+
+/** 可中断退避等待：q.paused / q.fatalError 置位后立即让出，由调用方循环顶部判定 */
+async function sleepBackoff(ms, q) {
+  let waited = 0;
+  while (waited < ms && !q.paused && !q.fatalError) {
+    await sleep(Math.min(BACKOFF_POLL_MS, ms - waited));
+    waited += BACKOFF_POLL_MS;
+  }
+}
+
 /**
  * 构建队列运行时对象。files 为 [{ file, size }]；paused/fatalError/
  * running/inflight 由队列驱动器维护，不参与 React 渲染。
@@ -127,7 +140,7 @@ export async function uploadPartWithRetry(
       if (!isRetryablePartError(err) || attempt >= MAX_PART_ATTEMPTS) {
         throw err;
       }
-      await sleep(retryBaseMs * 2 ** (attempt - 1));
+      await sleepBackoff(retryBaseMs * 2 ** (attempt - 1), q);
     } finally {
       q.inflight.delete(controller);
     }

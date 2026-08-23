@@ -12,6 +12,7 @@ import {
 import ConfigSection, {
   CheckboxField,
 } from "@/components/settings/ConfigSection";
+import NumberField from "@/components/settings/NumberField";
 
 /**
  * SMTP 邮件通知设置分区（多用户 v2 P6，管理员）。
@@ -44,21 +45,13 @@ function SmtpSection({ smtp, onChange }) {
             onChange={(e) => onChange("smtp.host", e.target.value)}
           />
         </div>
-        <div className="space-y-1">
-          <Label className="text-xs">{t("settings.smtpPort")}</Label>
-          <Input
-            type="number"
-            min={1}
-            max={65535}
-            value={smtp.port}
-            onChange={(e) => {
-              const n = Number(e.target.value);
-              if (Number.isInteger(n) && n >= 1 && n <= 65535) {
-                onChange("smtp.port", n);
-              }
-            }}
-          />
-        </div>
+        <NumberField
+          label={t("settings.smtpPort")}
+          value={smtp.port}
+          min={1}
+          max={65535}
+          onChange={(v) => onChange("smtp.port", v)}
+        />
       </div>
 
       {/* 加密方式 */}
@@ -169,36 +162,18 @@ function SmtpSection({ smtp, onChange }) {
           </p>
         </div>
         <div className="grid grid-cols-2 content-start gap-2">
-          <div className="space-y-1">
-            <Label className="text-xs">
-              {t("settings.smtpMaxSendPerMinute")}
-            </Label>
-            <Input
-              type="number"
-              min={1}
-              value={smtp.max_send_per_minute}
-              onChange={(e) => {
-                const n = Number(e.target.value);
-                if (Number.isInteger(n) && n >= 1) {
-                  onChange("smtp.max_send_per_minute", n);
-                }
-              }}
-            />
-          </div>
-          <div className="space-y-1">
-            <Label className="text-xs">{t("settings.smtpRetryAttempts")}</Label>
-            <Input
-              type="number"
-              min={1}
-              value={smtp.retry_attempts}
-              onChange={(e) => {
-                const n = Number(e.target.value);
-                if (Number.isInteger(n) && n >= 1) {
-                  onChange("smtp.retry_attempts", n);
-                }
-              }}
-            />
-          </div>
+          <NumberField
+            label={t("settings.smtpMaxSendPerMinute")}
+            value={smtp.max_send_per_minute}
+            min={1}
+            onChange={(v) => onChange("smtp.max_send_per_minute", v)}
+          />
+          <NumberField
+            label={t("settings.smtpRetryAttempts")}
+            value={smtp.retry_attempts}
+            min={1}
+            onChange={(v) => onChange("smtp.retry_attempts", v)}
+          />
         </div>
       </div>
     </ConfigSection>

@@ -19,6 +19,11 @@ for (let i = 0; i < 64; i++) {
   K[i] = Math.floor(Math.abs(Math.sin(i + 1)) * 4294967296);
 }
 
+// 块工作缓冲区：processBlock 为纯同步计算、实例间不会交错执行，
+// 模块级复用一份即可。避免每 64 字节块一次 Int32Array 分配——
+// 大文件全量哈希时每 MB 约 1.6 万次分配的 GC 压力不可忽视。
+const M = new Int32Array(16);
+
 function rotl(x, c) {
   return (x << c) | (x >>> (32 - c));
 }
@@ -43,12 +48,11 @@ export class Md5 {
     this.bufLen = 0;
   }
 
-  /** 处理单个 64 字节块（data 从 offset 起） */
+  /** 处理单个 64 字节块（data 从 offset 起；写入共享缓冲区 M） */
   processBlock(data, offset) {
-    const m = new Int32Array(16);
     for (let i = 0; i < 16; i++) {
       const j = offset + i * 4;
-      m[i] =
+      M[i] =
         data[j] |
         (data[j + 1] << 8) |
         (data[j + 2] << 16) |
@@ -78,7 +82,7 @@ export class Md5 {
       d = c;
       c = b;
       b =
-        (b + rotl((a + f + K[i] + m[g]) | 0, SHIFTS[(i >> 4) * 4 + (i & 3)])) |
+        (b + rotl((a + f + K[i] + M[g]) | 0, SHIFTS[(i >> 4) * 4 + (i & 3)])) |
         0;
       a = tmp;
     }

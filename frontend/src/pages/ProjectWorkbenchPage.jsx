@@ -46,8 +46,12 @@ const DERIVED_CATEGORIES = [
 
 /**
  * 衍生数据分类用量行（memo 化）：单类用量条 + 「清理」按钮。
+ * props 全为原始值 + 稳定回调（onCleanup 由父级 useCallback 提供，
+ * category 经 prop 传入、行内闭包拼装），与 ProjectRow 同一约定，
+ * 父级无关状态变化时仅依赖变化的行重渲染。
  */
 const DerivedUsageRow = memo(function DerivedUsageRow({
+  category,
   label,
   bytes,
   quotaBytes,
@@ -67,7 +71,7 @@ const DerivedUsageRow = memo(function DerivedUsageRow({
             variant="ghost"
             disabled={bytes <= 0}
             className="h-6 px-2 text-xs text-destructive hover:text-destructive"
-            onClick={onCleanup}
+            onClick={() => onCleanup(category)}
           >
             <Trash2 className="size-3" /> {cleanupLabel}
           </Button>
@@ -476,11 +480,12 @@ export default function ProjectWorkbenchPage() {
                 {DERIVED_CATEGORIES.map((c) => (
                   <DerivedUsageRow
                     key={c.key}
+                    category={c.key}
                     label={t(`pages:workbench.${c.labelKey}`)}
                     bytes={derivedUsage[c.key] || 0}
                     quotaBytes={derivedQuota || 0}
                     cleanupLabel={t("pages:workbench.derivedCleanup")}
-                    onCleanup={() => handleStartCleanupDerived(c.key)}
+                    onCleanup={handleStartCleanupDerived}
                   />
                 ))}
               </div>
