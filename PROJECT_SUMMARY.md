@@ -173,7 +173,7 @@ latexcellence/
 │       ├── fonts/                   # 字体加载（dev 本地 npm 包 / build 走 cdnjs）
 │       ├── api/index.js             # 统一 API 层（接口分组封装）
 │       ├── api/connection.js        # 后端连接配置（基地址/令牌/认证头/连接测试）
-│       ├── utils/                   # 前端工具（errorMessages.js 错误翻译 / format.js 字节与时间展示格式化 / formulaWrap.js 公式包裹重写 / highlight.js 高亮入口 / md5.js 增量 MD5（分片上传校验）/ multiUserProject.js 多用户项目打开统一入口 / projectAccess.js 双模式打开与写角色白名单纯函数）
+│       ├── utils/                   # 前端工具（errorMessages.js 错误翻译（精确映射）/ errorPatterns.js 错误模式匹配纯模块（PATTERN_MAP + matchPattern）/ format.js 字节与时间展示格式化 / formulaWrap.js 公式包裹重写 / highlight.js 高亮入口 / md5.js 增量 MD5（分片上传校验）/ uploadQueue.js 分片上传队列纯状态机（建队/位图对位/退避重试/resume 复位）/ multiUserProject.js 多用户项目打开统一入口 / projectAccess.js 双模式打开与写角色白名单纯函数）
 │       ├── styles/                  # 前端样式（code-highlight.css：高亮颜色独立文件，按需引入）
 │       └── store/useStore.js        # Zustand 全局状态
 │
@@ -286,7 +286,7 @@ latexcellence/
 | 宏包规则表检测 | 确定性规则表（命令/环境/列说明符 → 宏包）优先，零 LLM 开销；规则表未命中才 LLM 兜底 | [latex-package-rules.md](docs/latex-package-rules.md) |
 | 多文件 \input 展开 | 递归解析 `\input` / `\include` / `\subfile`，段落索引为文件内局部索引，结果按文件分组展示与写回 | [backend-core.md](docs/backend-core.md) |
 | 编译与错误翻译 | `tex_compile.py` 统一编译执行（texfot + 引擎自动检测 + PDF/A），`compile_error_translator.py` 把失败日志翻译为修复建议 | [compile.md](docs/modules/compile.md) |
-| Docker 沙箱执行 | 全部外部命令经 SandboxRunner（docker/local 双后端）：容器无网络、只读根 fs + tmpfs、资源限额与并发租约；auto 探测失败回落本地零行为变化 | [backend-core.md](docs/backend-core.md)、[deployment.md](docs/deployment.md) |
+| Docker 沙箱执行 | 全部外部命令经 SandboxRunner（docker/local 双后端）：容器无网络、只读根 fs + tmpfs、资源限额与并发租约；auto 探测（daemon ping + bind-mount 挂载预检，防容器化后端部署静默失效）失败回落本地零行为变化；镜像名留空按内置默认回落 | [backend-core.md](docs/backend-core.md)、[deployment.md](docs/deployment.md) |
 | DOI 多数据源查询 | Crossref 主索引 + arXiv 专用路由 + 补全层，`ProviderManager` 全局单例管理可插拔数据源 | [bib_manager.md](docs/modules/bib_manager.md) |
 | 自主 Agent | template_gen / plot_gen / style_modify 项目 Agent 基于 Function Calling 自主规划、执行、验证、自修，`trace.jsonl` 全程回放；私有文件工具复用 `agent_file_tools.py` 的 schema、调度与范围读取契约 | [function-calling-tools.md](docs/function-calling-tools.md)、[template_gen.md](docs/modules/template_gen.md) 等模块文档 |
 | 代码展示与高亮 | CodeBlock / MarkerText / CodeEditorInput 统一 LaTeX 源码展示，token 颜色由 `--code-token-*` 变量控制 | [frontend.md](docs/frontend.md) |

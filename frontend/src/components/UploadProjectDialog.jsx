@@ -22,6 +22,13 @@ import useStore from "@/store/useStore";
 import { translateError } from "@/utils/errorMessages";
 import { formatBytes } from "@/utils/format";
 import { Md5, md5HexFromBlob } from "@/utils/md5";
+import {
+  createUploadQueue,
+  isPausedError,
+  planTasksFromStatus,
+  resetForResume,
+  runUploadQueue,
+} from "@/utils/uploadQueue";
 
 /**
  * 分片上传（v2 P5）：本地持久化的待续传会话信息。
@@ -30,27 +37,8 @@ import { Md5, md5HexFromBlob } from "@/utils/md5";
  */
 const RESUME_STORAGE_KEY = "latexcellence-upload-session-v1";
 
-// 并发分片数（方案 §10.3）
-const UPLOAD_CONCURRENCY = 3;
-
-// 单个分片的失败重试上限（指数退避：800ms × 2^n）
-const MAX_PART_ATTEMPTS = 5;
-const RETRY_BASE_MS = 800;
-
 // 全量 MD5 计算的分片读取粒度
 const HASH_READ_CHUNK = 1 << 20;
-
-/** 后端错误码 → 是否可通过重试恢复（其余一律视为致命错误） */
-function isRetryablePartError(err) {
-  // 网络层失败（fetch 抛出）没有 code：可重试
-  if (!err?.code) return true;
-  // 分片内容校验失败：重新切片重算 MD5 后重试通常可自愈
-  return err.code === "part_md5_mismatch";
-}
-
-function sleep(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
 
 /**
  * 目录模式：收集 webkitdirectory 文件列表，相对路径用 webkitRelativePath
@@ -316,55 +304,24 @@ export default function UploadProjectDialog({
   /** 服务端权威进度对位：按位图重建已收字节基线与缺失任务列表 */
   const alignWithServer = async (q) => {
     const st = await api.projects.uploadSessions.status(q.sessionId);
-    const chunkSize = st.chunk_size || q.chunkPartBytes;
-    let receivedBytes = 0;
-    const tasks = [];
-    st.files.forEach((f) => {
-      f.bitmap.forEach((got, ci) => {
-        const bytes = Math.min(chunkSize, f.size - ci * chunkSize);
-        if (got) {
-          receivedBytes += bytes;
-        } else {
-          tasks.push({ fi: f.index, ci, bytes, offset: ci * chunkSize });
-        }
-      });
-    });
+    const { receivedBytes, tasks } = planTasksFromStatus(st, q.chunkPartBytes);
     q.uploadedBytes = receivedBytes;
     return tasks;
   };
 
-  /** 单个分片上传（指数退避重试；暂停经 AbortController 中断在途请求） */
-  const uploadPartWithRetry = async (q, task) => {
+  /** 单个分片的真实网络动作：切片 → 计算 MD5 → PUT（注入 uploadPartWithRetry） */
+  const putPart = async (q, task, signal) => {
     const entry = q.files[task.fi];
-    for (let attempt = 1; attempt <= MAX_PART_ATTEMPTS; attempt++) {
-      if (q.fatalError) throw q.fatalError;
-      if (q.paused) throw new Error("paused");
-      const controller = new AbortController();
-      q.inflight.add(controller);
-      try {
-        const blob = entry.file.slice(task.offset, task.offset + task.bytes);
-        const md5hex = await md5HexFromBlob(blob);
-        await api.projects.uploadSessions.putPart(
-          q.sessionId,
-          task.fi,
-          task.ci,
-          blob,
-          md5hex,
-          controller.signal,
-        );
-        return;
-      } catch (err) {
-        if (err?.name === "AbortError" || (q.paused && !q.fatalError)) {
-          throw new Error("paused");
-        }
-        if (!isRetryablePartError(err) || attempt >= MAX_PART_ATTEMPTS) {
-          throw err;
-        }
-        await sleep(RETRY_BASE_MS * 2 ** (attempt - 1));
-      } finally {
-        q.inflight.delete(controller);
-      }
-    }
+    const blob = entry.file.slice(task.offset, task.offset + task.bytes);
+    const md5hex = await md5HexFromBlob(blob);
+    await api.projects.uploadSessions.putPart(
+      q.sessionId,
+      task.fi,
+      task.ci,
+      blob,
+      md5hex,
+      signal,
+    );
   };
 
   const handleFatal = (err) => {
@@ -419,35 +376,23 @@ export default function UploadProjectDialog({
   const runQueue = async () => {
     const q = queueRef.current;
     if (!q || q.running) return;
-    q.running = true;
-    q.paused = false;
+    // 恢复入口：复位 running/paused 的同时清空上次运行遗留的 fatalError。
+    // 只复位 paused 不清 fatal 的话，worker 的 while (!paused && !fatalError)
+    // 会跳过全部任务并原样重抛陈旧错误，「继续上传」退化为报错循环；
+    // 服务端会话与已收分片以 status 位图为唯一权威，清标记后按位图重试安全
+    resetForResume(q);
     setPhase("uploading");
     try {
       const tasks = await alignWithServer(q);
       updateProgress(q.uploadedBytes, q.totalBytes);
-      q.nextTask = 0;
-      const workers = Array.from(
-        { length: Math.min(UPLOAD_CONCURRENCY, Math.max(tasks.length, 1)) },
-        async () => {
-          while (!q.paused && !q.fatalError) {
-            const idx = q.nextTask++;
-            if (idx >= tasks.length) return;
-            const task = tasks[idx];
-            await uploadPartWithRetry(q, task);
-            q.uploadedBytes += task.bytes;
-            updateProgress(q.uploadedBytes, q.totalBytes);
-          }
-        },
-      );
-      await Promise.all(workers);
-      if (q.fatalError) throw q.fatalError;
-      if (q.paused) {
-        setPhase("paused");
-        return;
-      }
-      await finishComplete(q);
+      await runUploadQueue(q, tasks, {
+        uploadPart: putPart,
+        onProgress: () => updateProgress(q.uploadedBytes, q.totalBytes),
+        onComplete: () => finishComplete(q),
+      });
     } catch (err) {
-      if (err instanceof Error && err.message === "paused") {
+      if (isPausedError(err)) {
+        // 暂停哨兵：不改写 fatalError，仅切换界面态等待「继续上传」
         setPhase("paused");
         return;
       }
@@ -488,7 +433,7 @@ export default function UploadProjectDialog({
         totalBytes,
         files: manifest,
       });
-      queueRef.current = {
+      queueRef.current = createUploadQueue({
         sessionId: created.session_id,
         kind: selection.kind,
         name: selection.name,
@@ -498,12 +443,7 @@ export default function UploadProjectDialog({
           file: f.file,
           size: manifest[i].size,
         })),
-        uploadedBytes: 0,
-        paused: false,
-        fatalError: null,
-        inflight: new Set(),
-        running: false,
-      };
+      });
       window.localStorage.setItem(
         RESUME_STORAGE_KEY,
         JSON.stringify({
@@ -542,19 +482,14 @@ export default function UploadProjectDialog({
         }
         files.push({ file, size: sf.size });
       }
-      queueRef.current = {
+      queueRef.current = createUploadQueue({
         sessionId: saved.sessionId,
         kind: saved.kind,
         name: saved.name,
         totalBytes: saved.totalBytes,
         chunkPartBytes: st.chunk_size || chunkPartBytes,
         files,
-        uploadedBytes: 0,
-        paused: false,
-        fatalError: null,
-        inflight: new Set(),
-        running: false,
-      };
+      });
       await runQueue();
     } catch (err) {
       handleFatal(err);
