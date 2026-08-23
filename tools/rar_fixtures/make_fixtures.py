@@ -16,11 +16,18 @@
     gbk_name.rar        GBK 编码文件名样例（中文.txt，验证解码行为）
     encrypted.rar       文件头带加密标志（仅验证被拒绝，数据未真正加密）
     volume.part1.rar    多卷集第一卷形态（仅验证被拒绝）
+    service_rr.rar      SERVICE(0x7A) 恢复记录块带伪随机数据区 +
+                        正常文件（回归：预扫须整段跳过数据区不误拒）
+    subhead_ntfs.rar    SUB_HEAD(0x78) 子块（NTFS 流形态）带数据区 +
+                        正常文件（同上）
 
 格式要点（RAR 4.x）：
     - 主头固定 13 字节：块头 7（CRC+TYPE+FLAGS+SIZE）+ HighPosAv(2) + PosAv(4)；
     - 文件头 HEAD_SIZE 从 HEAD_CRC 起算 = 块头 7 + 固定段 25 + 名字长度；
     - 数据段紧跟文件头，随后是下一块；
+    - 带数据区的三类块（FILE_HEAD 0x74 / SUB_HEAD 0x78 / SERVICE 0x7A）
+      的数据区长度都在块头 body 起始的 u32（PACK_SIZE / ADD_SIZE），
+      其中 0x7A 与文件头共用同一布局、0x78 为「DataSize + 附加段」；
     - RAR 归档内路径分隔符是反斜杠 '\\'（即使类 Unix 平台创建亦如此）——
       用正斜杠会被 unar 当成普通字符折叠为 '_'；
     - 头部 CRC 为 HEAD_TYPE 起至头部末尾的 CRC32 低 16 位。
@@ -31,6 +38,7 @@
 
 from __future__ import annotations
 
+import random
 import struct
 import sys
 import zlib
@@ -48,11 +56,14 @@ MHD_FIRSTVOLUME = 0x0100  # 标记为第一卷（注意 0x0080 是 MHD_PASSWORD�
 
 # FILE_HEAD 类型、方法与标志位
 FILE_HEAD = 0x74
+SUB_HEAD = 0x78  # 子块（NTFS 流等）：块头后第一个 u32 为 DataSize
+SERVICE_HEAD = 0x7A  # 服务块（恢复记录 RR 等）：与文件头共用同一布局
 ENDARC_HEAD = 0x7B
 METHOD_STORE = 0x30  # '0' = 存储（不压缩）
 LHD_SPLIT_BEFORE = 0x0001  # 文件延续自上一卷
 LHD_SPLIT_AFTER = 0x0002  # 文件延续到下一卷
 LHD_PASSWORD = 0x0004  # 加密
+LONG_BLOCK = 0x8000  # 块头携带 ADD_SIZE(DataSize) 字段
 
 HOST_OS_UNIX = 3
 
@@ -87,8 +98,9 @@ def _file_header(
     host_os: int = HOST_OS_UNIX,
     attr: int = 0o644,
     unp_ver: int = 20,
+    btype: int = FILE_HEAD,
 ) -> bytes:
-    """构造文件头（不含数据段）。"""
+    """构造文件头（不含数据段）；SERVICE_HEAD(0x7A) 与文件头共用布局。"""
     # HEAD_SIZE 从 HEAD_CRC 起算：块头 7（CRC+TYPE+FLAGS+SIZE）+
     # 固定段 25（PACK/UNP/HOST_OS/FILE_CRC/FTIME/UNP_VER/METHOD/
     # NAME_SIZE/ATTR）+ 文件名 N；unrar 以 CurBlockPos + HEAD_SIZE
@@ -96,7 +108,7 @@ def _file_header(
     head_size = 32 + len(name_bytes)
     body = struct.pack(
         "<BHHIIBIIBBHI",
-        FILE_HEAD,
+        btype,
         flags,
         head_size,
         len(data),  # PACK_SIZE
@@ -110,6 +122,16 @@ def _file_header(
         attr,
     )
     body += name_bytes
+    return struct.pack("<H", _header_crc(body)) + body
+
+
+def _sub_head_header(data_size: int, tag: bytes = b"") -> bytes:
+    """构造 SUB_HEAD(0x78) 子块头（不含数据段）。
+
+    块头固定段之后的第一个 u32 即数据区长度（ADD_SIZE/DataSize），
+    随后是类型相关附加段；置 LONG_BLOCK 标志与真实 NTFS 流子块一致。"""
+    body = struct.pack("<BHH", SUB_HEAD, LONG_BLOCK, 11 + len(tag))
+    body += struct.pack("<I", data_size) + tag
     return struct.pack("<H", _header_crc(body)) + body
 
 
@@ -162,6 +184,29 @@ def main() -> int:
     vol += b"\x00" * 32
     vol += _endarc()
     samples["volume.part1.rar"] = bytes(vol)
+
+    # 恢复记录样例：SERVICE(0x7A) 服务块与文件头共用布局（名字 RR），
+    # 带伪随机数据区——回归「预扫须按 DataSize 整段跳过数据区」，
+    # 数据用固定种子的 PRNG 生成，保证产物逐字节可复现
+    rr_data = random.Random(20260822).randbytes(1024)
+    tex_body = b"\\documentclass{article}\nHello\n"
+    rr = bytearray(RAR_MARKER + _main_header())
+    rr += _file_header(b"RR", rr_data, flags=0, btype=SERVICE_HEAD)
+    rr += rr_data  # 数据段紧跟服务头之后
+    rr += _file_header(b"main.tex", tex_body, flags=0)
+    rr += tex_body
+    rr += _endarc()
+    samples["service_rr.rar"] = bytes(rr)
+
+    # NTFS 子块样例：SUB_HEAD(0x78) 带 DataSize 数据区，同样验证预扫放行
+    ntfs_data = random.Random(1).randbytes(256)
+    sub = bytearray(RAR_MARKER + _main_header())
+    sub += _sub_head_header(len(ntfs_data))
+    sub += ntfs_data  # 数据段紧跟子块头之后
+    sub += _file_header(b"a.tex", b"x", flags=0)
+    sub += b"x"
+    sub += _endarc()
+    samples["subhead_ntfs.rar"] = bytes(sub)
 
     for fname, blob in samples.items():
         target = OUT_DIR / fname

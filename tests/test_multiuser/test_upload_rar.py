@@ -4,6 +4,9 @@
     - 正常解压：顶层单目录布局 / 直接内容布局 / 内容与计数
     - 加密包拒绝（文件头加密标志，预扫确定性拦截）
     - 分卷包拒绝（多卷集第一卷形态，预扫确定性拦截）
+    - 服务/子块（恢复记录 RR、NTFS 子块）带数据区的合法包不被预扫
+      误拒：数据区按块头声明的长度整段跳过，含固定种子 Monte Carlo
+      与「数据区起始即受保护标志模式」的决定性回归
     - 缺失 unar 二进制时的明确报错（unar_missing，不依赖环境装包）
     - 损坏包 / 空产物（多卷集静默零产物兜底）拒绝
     - GBK 文件名样例（unar 字符集探测与 zip 管线存在已知差异，
@@ -15,7 +18,10 @@
 用例不依赖外部二进制，任何环境都执行。
 """
 
+import random
 import shutil
+import struct
+import zlib
 from pathlib import Path
 
 import pytest
@@ -34,6 +40,15 @@ UNAR_AVAILABLE = shutil.which("unar") is not None
 
 requires_unar = pytest.mark.skipif(not UNAR_AVAILABLE, reason="unar 工具不可用")
 
+# RAR4 块类型（与 upload.py 常量同源，测试侧独立声明避免依赖私有拼写）
+FILE_HEAD = 0x74
+SUB_HEAD = 0x78
+SERVICE_HEAD = 0x7A
+ENDARC_HEAD = 0x7B
+LONG_BLOCK = 0x8000  # SUB/SERVICE 块携带 ADD_SIZE(DataSize) 字段的标志
+LHD_PASSWORD = 0x0004
+LHD_LARGE = 0x0100
+
 
 def _limits(**overrides) -> upload.UploadLimits:
     base = dict(
@@ -48,42 +63,69 @@ def _limits(**overrides) -> upload.UploadLimits:
     return upload.UploadLimits(**base)
 
 
+def _crc16(body: bytes) -> bytes:
+    """RAR 头部 CRC：从 TYPE 字节到头部末尾的 CRC32 低 16 位。"""
+    return struct.pack("<H", zlib.crc32(body) & 0xFFFF)
+
+
+_FTIME = (2026 - 1980) << 25 | 8 << 21 | 22 << 16
+
+
+def _file_block(
+    name: bytes,
+    content: bytes,
+    *,
+    flags: int = 0,
+    btype: int = FILE_HEAD,
+) -> bytes:
+    """构造文件头块 + 数据段；btype 可换为 SERVICE_HEAD(0x7A)——
+    RAR4 服务块与文件头共用同一布局（unrar 即如此解析），名字如 b"RR"。"""
+    hsize = 32 + len(name)
+    body = (
+        struct.pack(
+            "<BHHIIBIIBBHI",
+            btype,
+            flags,
+            hsize,
+            len(content),
+            len(content),
+            3,  # HOST_OS Unix
+            zlib.crc32(content) & 0xFFFFFFFF,
+            _FTIME,
+            20,  # UNP_VER
+            0x30,  # METHOD_STORE
+            len(name),
+            0o644,
+        )
+        + name
+    )
+    return _crc16(body) + body + content
+
+
+def _sub_head_block(data: bytes, tag: bytes = b"") -> bytes:
+    """构造 SUB_HEAD(0x78) 子块（NTFS 流等）：块头固定段之后的第一个
+    u32 为数据区长度（DataSize），随后是类型相关附加段与数据区本身。"""
+    body = struct.pack("<BHH", SUB_HEAD, LONG_BLOCK, 11 + len(tag))
+    body += struct.pack("<I", len(data)) + tag
+    return _crc16(body) + body + data
+
+
+def _assemble(blocks: list[bytes], main_flags: int = 0) -> bytes:
+    """主头 + 若干已拼装块 + ENDARC 组装为完整归档字节流。"""
+    main_body = struct.pack("<BHH", 0x73, main_flags, 13) + struct.pack("<HI", 0, 0)
+    out = bytearray(upload._RAR4_MARKER + _crc16(main_body) + main_body)
+    out += b"".join(blocks)
+    end_body = struct.pack("<BHH", ENDARC_HEAD, 0x4000, 7)
+    return bytes(out + _crc16(end_body) + end_body)
+
+
 def _rar4(main_flags: int = 0, entries: list[tuple[bytes, bytes]] = ()) -> bytes:
     """纯字节构造最小 RAR4 store 归档（与 tools/rar_fixtures/make_fixtures.py
     同构，供预扫/兜底分支的 hermetic 单测使用，不依赖环境装包）。"""
-    import struct as _struct
-    import zlib as _zlib
-
-    def _crc16(body: bytes) -> bytes:
-        return _struct.pack("<H", _zlib.crc32(body) & 0xFFFF)
-
-    ftime = (2026 - 1980) << 25 | 8 << 21 | 22 << 16
-    main_body = _struct.pack("<BHH", 0x73, main_flags, 13) + _struct.pack("<HI", 0, 0)
-    out = bytearray(upload._RAR4_MARKER + _crc16(main_body) + main_body)
-    for name, content in entries:
-        hsize = 32 + len(name)
-        body = (
-            _struct.pack(
-                "<BHHIIBIIBBHI",
-                0x74,
-                0,
-                hsize,
-                len(content),
-                len(content),
-                3,  # HOST_OS Unix
-                _zlib.crc32(content) & 0xFFFFFFFF,
-                ftime,
-                20,  # UNP_VER
-                0x30,  # METHOD_STORE
-                len(name),
-                0o644,
-            )
-            + name
-        )
-        out += _crc16(body) + body + content
-    end_body = _struct.pack("<BHH", 0x7B, 0x4000, 7)
-    out += _crc16(end_body) + end_body
-    return bytes(out)
+    return _assemble(
+        [_file_block(name, content) for name, content in entries],
+        main_flags=main_flags,
+    )
 
 
 @pytest.fixture
@@ -149,17 +191,117 @@ class TestRar4Prescan:
             upload._reject_protected_rar(p)
         assert ei.value.code == "invalid_archive"
 
-    def test_block_cap_bounds_prescan(self, tmp_path):
-        """超小块垃圾包：头链遍历受 max_blocks 限制，快速拒绝而非空转。"""
-        import struct as _struct
-        import zlib as _zlib
+    # ── 服务/子块数据区误拒回归（Required 缺陷）──────────────────
+    # 老预扫只对 FILE_HEAD 跳过数据区，SUB/SERVICE 带数据区时 pos 落进
+    # 高熵恢复数据随机游走，撞上「btype=0x74 且 flags&0x0007≠0」的随机
+    # 字节即误报加密（60KB RR 实测约 2.5% 误拒率）。
 
-        body = _struct.pack("<BHH", 0x73, 0, 13) + _struct.pack("<HI", 0, 0)
-        main = _struct.pack("<H", _zlib.crc32(body) & 0xFFFF) + body
-        # 无数个最小非文件块（type 非 FILE/ENDARC、hsize=7），pos 每次仅前进 7
-        junk_block = _struct.pack("<HBHH", 0, 0x76, 0, 7)
+    def test_service_data_area_not_misrejected(self, tmp_path):
+        """SERVICE(0x7A) 恢复记录带高熵数据区：预扫必须整段跳过不误拒。"""
+        payload = random.Random(318).randbytes(60_000)  # 318 号种子老实现必误拒
+        p = tmp_path / "rr.rar"
+        p.write_bytes(
+            _assemble(
+                [
+                    _file_block(b"RR", payload, btype=SERVICE_HEAD),
+                    _file_block(b"a.tex", b"x"),
+                ]
+            )
+        )
+        upload._reject_protected_rar(p)  # 不抛错
+
+    def test_sub_head_data_area_not_misrejected(self, tmp_path):
+        """SUB_HEAD(0x78)（NTFS 流等）带数据区：同样整段跳过不误拒。"""
+        p = tmp_path / "ntfs.rar"
+        p.write_bytes(
+            _assemble(
+                [
+                    _sub_head_block(random.Random(1).randbytes(4096)),
+                    _file_block(b"a.tex", b"x"),
+                ]
+            )
+        )
+        upload._reject_protected_rar(p)  # 不抛错
+
+    def test_service_data_starting_with_protected_pattern_passes(self, tmp_path):
+        """决定性回归：数据区起始即放置会被误读为「加密 FILE_HEAD」的字节
+        序列——老实现从数据区起点盲走必然误拒，新语义下数据区内容对预扫
+        不可见，任何内容都不得触发拒绝。"""
+        mine = struct.pack("<HBHH", 0, FILE_HEAD, LHD_PASSWORD, 7)
+        for btype, make_block in (
+            (SERVICE_HEAD, lambda data: _file_block(b"RR", data, btype=btype)),
+            (SUB_HEAD, _sub_head_block),
+        ):
+            p = tmp_path / f"mine_{btype:#04x}.rar"
+            p.write_bytes(
+                _assemble([make_block(mine * 64), _file_block(b"a.tex", b"x")])
+            )
+            upload._reject_protected_rar(p)  # 不抛错
+
+    def test_random_rr_payloads_never_rejected(self, tmp_path):
+        """Monte Carlo 回归（固定种子可重复）：多组 60KB 随机恢复记录 +
+        正常文件，全部放行。"""
+        p = tmp_path / "mc.rar"
+        for seed in range(24):
+            rng = random.Random(seed)
+            p.write_bytes(
+                _assemble(
+                    [
+                        _file_block(b"RR", rng.randbytes(60_000), btype=SERVICE_HEAD),
+                        _file_block(b"a.tex", b"x"),
+                    ]
+                )
+            )
+            upload._reject_protected_rar(p)
+
+    def test_unknown_block_type_stops_prescan_safely(self, tmp_path):
+        """未知块类型（如 COMM_HEAD 0x75）：直接安全返回放行；其后即使
+        紧跟受保护标志块也不得再被扫描到（不在字节流上盲走）。"""
+        unknown_body = struct.pack("<BHH", 0x75, 0, 7)
+        p = tmp_path / "comm.rar"
+        p.write_bytes(
+            _assemble(
+                [
+                    _sub_head_block(b"\x00" * 16),
+                    _crc16(unknown_body) + unknown_body,
+                    _file_block(b"secret.tex", b"x", flags=LHD_PASSWORD),
+                ]
+            )
+        )
+        upload._reject_protected_rar(p)  # 不抛错；若继续走必命中拒绝分支
+
+    def test_truncated_data_size_safe_return(self, tmp_path):
+        """服务头在 DataSize 字段中途截断：长度异常安全返回放行。"""
+        partial = struct.pack("<BHH", SERVICE_HEAD, LONG_BLOCK, 11) + b"\x01\x02"
+        p = tmp_path / "trunc.rar"
+        p.write_bytes(_assemble([])[:-7] + _crc16(partial) + partial)
+        upload._reject_protected_rar(p)  # 不抛错
+
+    def test_file_large_flag_safe_return(self, tmp_path):
+        """LHD_LARGE（数据区超 u32 模型）：按长度异常安全放行，
+        由 unar 实际解压与解压后复核兜底。"""
+        p = tmp_path / "large.rar"
+        p.write_bytes(_assemble([_file_block(b"big.tex", b"x", flags=LHD_LARGE)]))
+        upload._reject_protected_rar(p)  # 不抛错
+
+    def test_fixture_archives_with_service_data_pass(self):
+        """入库 fixture：带恢复记录 / NTFS 子块的合法包不被预扫误拒。"""
+        for name in ("service_rr.rar", "subhead_ntfs.rar"):
+            upload._reject_protected_rar(FIXTURES / name)
+
+    def test_block_cap_bounds_prescan(self, tmp_path):
+        """超小块垃圾包：头链遍历受 max_blocks 限制，快速拒绝而非空转。
+
+        用零数据 SUB 块拉长头链（未知块类型按新语义直接安全返回，
+        不再参与遍历计数，无法用于撑爆上限）。"""
+
+        def _zero_sub() -> bytes:
+            body = struct.pack("<BHH", SUB_HEAD, LONG_BLOCK, 11)
+            body += struct.pack("<I", 0)
+            return _crc16(body) + body
+
         p = tmp_path / "junk.rar"
-        p.write_bytes(upload._RAR4_MARKER + main + junk_block * 4096)
+        p.write_bytes(_assemble([])[:-7] + _zero_sub() * 4096)
         with pytest.raises(upload.ArchiveError) as ei:
             upload._reject_protected_rar(p, max_blocks=100)
         assert ei.value.code == "invalid_archive"
@@ -357,6 +499,16 @@ class TestNormalExtract:
         assert files[0].read_bytes() == b"gbk name\n"
         assert res.file_count == 1
 
+    def test_archive_with_service_data_extracts(self, extract_dir):
+        """带恢复记录 / NTFS 子块数据区的合法包端到端：预扫放行后
+        unar 忽略服务块并正常解出文件（缺陷一的功能性验收）。"""
+        res = upload.extract_archive(
+            FIXTURES / "service_rr.rar", extract_dir, _limits()
+        )
+        assert (res.root / "main.tex").read_text(
+            encoding="utf-8"
+        ) == "\\documentclass{article}\nHello\n"
+
 
 @requires_unar
 class TestProtectedReject:
@@ -465,6 +617,22 @@ class TestApiUpload:
         )
         assert r.status_code == 400
         assert r.json()["detail"]["error"] == "archive_unsafe"
+
+    def test_upload_rar_with_service_data_creates_project(self, env, alice_client):
+        """带恢复记录的合法 rar 经 API 上传：不再被预扫功能性误拒。"""
+        from tests.test_multiuser.conftest import csrf
+
+        payload = (FIXTURES / "service_rr.rar").read_bytes()
+        r = alice_client.post(
+            "/api/projects",
+            data={"name": "RarRR"},
+            files={"archive": ("rr.rar", payload, "application/vnd.rar")},
+            headers=csrf(alice_client),
+        )
+        assert r.status_code == 201, r.text
+        proj = r.json()["project"]
+        root = userspace.project_dir(env["alice"]["id"], proj["project_id"])
+        assert (root / "main.tex").exists()
 
     def test_upload_unsupported_suffix_rejected(self, env, alice_client):
         from tests.test_multiuser.conftest import csrf

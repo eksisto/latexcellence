@@ -199,6 +199,25 @@ def revoke_user_sessions(user_id: str) -> int:
     return db_execute("DELETE FROM sessions WHERE user_id = ?", (user_id,))
 
 
+def revoke_password_reset_tokens(user_id: str) -> int:
+    """吊销（删除）指定用户全部仍有效的找回令牌。
+
+    密码重置 / 邮箱改绑 / 账号禁用等安全状态变更时必须调用：变更前经
+    forgot 签发的令牌若不回收，持有者可在 TTL（1 小时）窗口内凭旧令牌
+    再次重置密码夺回控制权。按表结构语义只删未消费且未过期的行——
+    已消费行由 consume_password_reset_token 原子标记 used_at、过期行由
+    维护循环 purge_expired_reset_tokens 回收。返回删除的行数。
+    """
+    removed = db_execute(
+        "DELETE FROM password_reset_tokens "
+        "WHERE user_id = ? AND used_at IS NULL AND expires_at > ?",
+        (user_id, utcnow()),
+    )
+    if removed:
+        logger.info("Revoked %d pending password reset token(s)", removed)
+    return removed
+
+
 def purge_expired_sessions() -> int:
     """删除已过期的会话行（v2 P4：并入维护循环，修复 sessions 表无限增长）。
 
@@ -318,6 +337,9 @@ def set_user_email(user_id: str, email: str) -> dict:
         )
     except sqlite3.IntegrityError:  # 部分唯一索引兜底（并发窗口）
         raise ValueError(f"Email already taken: {clean}")
+    # 邮箱改绑属安全状态变更：旧邮箱持有者改绑前经 forgot 申请的令牌必须
+    # 立即失效，防止其在 TTL 窗口内仍可重置本账号密码
+    revoke_password_reset_tokens(user_id)
     logger.info("Email updated for user %s", existing["username"])
     return to_public_user(get_user_by_id(user_id))
 
@@ -347,6 +369,10 @@ def set_user_status(user_id: str, status: str) -> dict:
     # 禁用账号即时吊销全部会话
     if status in ("disabled",):
         revoke_user_sessions(user_id)
+        # 禁用属止损操作，且 forgot 入口不校验账号状态（pending/disabled
+        # 账号同样可被签发令牌）：禁用前签发的未消费找回令牌必须一并吊销，
+        # 防止复启用后旧令牌在 TTL 内重置密码
+        revoke_password_reset_tokens(user_id)
     logger.info("User %s status -> %s", existing["username"], status)
     return to_public_user(get_user_by_id(user_id))
 
@@ -452,6 +478,9 @@ def reset_password(user_id: str, new_password: str) -> dict:
         (hash_password(new_password), utcnow(), user_id),
     )
     revoke_user_sessions(user_id)
+    # 凭据变更：一并吊销未消费的找回令牌，防止此前经 forgot 签发的令牌
+    # 在 TTL（1 小时）窗口内再次重置密码夺回控制权
+    revoke_password_reset_tokens(user_id)
     logger.info("Password reset for user %s", existing["username"])
     return to_public_user(get_user_by_id(user_id))
 

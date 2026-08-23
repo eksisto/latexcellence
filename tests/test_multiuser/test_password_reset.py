@@ -2,7 +2,8 @@
 
 覆盖：找回全流程（命中投递 / 无邮箱降级 / 重复邮箱降级 / SMTP 未配置降级 /
 令牌过期 / 重放 / 枚举防护恒定时长 / IP 限流）、邮箱唯一性（注册 / profile
-改绑冲突）、PUT /api/auth/profile 当前密码确认。"""
+改绑冲突）、PUT /api/auth/profile 当前密码确认、凭据/安全状态变更
+（重置密码 / 改绑邮箱 / 禁用账号）连带吊销未消费找回令牌。"""
 
 import asyncio
 import re
@@ -439,3 +440,87 @@ class TestEmailUniquenessAndProfile:
         )
         assert resp.status_code == 200
         assert resp.json()["user"]["email"] == ""
+
+
+# ── 凭据/安全状态变更连带吊销未消费找回令牌 ────────────────────
+class TestCredentialChangeRevokesResetTokens:
+    """令牌签发后若发生重置密码 / 改绑邮箱 / 禁用账号，必须在 TTL 内失效。"""
+
+    def _pending_token_count(self, uid: str) -> int:
+        return db_module.db_count(
+            "SELECT COUNT(*) FROM password_reset_tokens "
+            "WHERE user_id = ? AND used_at IS NULL",
+            (uid,),
+        )
+
+    def test_reset_password_revokes_other_pending_tokens(self, mu_client):
+        """重置密码后：同用户其余未消费令牌立即失效，不可再次重置。"""
+        assert _register(mu_client, "mia", "mia@x.test").status_code == 200
+        uid = _activate("mia")
+        first, _ = auth_core.create_password_reset_token(uid)
+        second, _ = auth_core.create_password_reset_token(uid)
+
+        ok = mu_client.post(
+            "/api/auth/reset-password",
+            json={"token": first, "new_password": "fresh-pass-11"},
+        )
+        assert ok.status_code == 200
+
+        # second 签发于重置之前且未被消费：必须被连带吊销，
+        # 防止攻击者凭 TTL 内的旧令牌再次重置密码夺回控制权
+        replay = mu_client.post(
+            "/api/auth/reset-password",
+            json={"token": second, "new_password": "second-pass-22"},
+        )
+        assert replay.status_code == 400
+        assert replay.json()["detail"]["error"] == "reset_token_invalid"
+        assert self._pending_token_count(uid) == 0
+
+    def test_set_user_email_revokes_pending_tokens(self, mu_client):
+        """改绑邮箱后：改绑前签发的找回令牌立即失效。"""
+        assert _register(mu_client, "noa", "noa@x.test").status_code == 200
+        uid = _activate("noa")
+        login = mu_client.post(
+            "/api/auth/login", json={"username": "noa", "password": "password-123"}
+        )
+        assert login.status_code == 200
+        token, _expires = auth_core.create_password_reset_token(uid)
+
+        bound = mu_client.put(
+            "/api/auth/profile",
+            json={"current_password": "password-123", "email": "noa-new@x.test"},
+            headers=csrf(mu_client),
+        )
+        assert bound.status_code == 200
+        assert bound.json()["user"]["email"] == "noa-new@x.test"
+
+        stale = mu_client.post(
+            "/api/auth/reset-password",
+            json={"token": token, "new_password": "hijack-pass-1"},
+        )
+        assert stale.status_code == 400
+        assert stale.json()["detail"]["error"] == "reset_token_invalid"
+        assert self._pending_token_count(uid) == 0
+
+    def test_disable_account_revokes_pending_tokens(self, mu_client):
+        """禁用账号：未消费找回令牌一并吊销（复启用后旧令牌仍不可用）。"""
+        assert _register(mu_client, "pia", "pia@x.test").status_code == 200
+        uid = _activate("pia")
+        token, _expires = auth_core.create_password_reset_token(uid)
+
+        auth_core.set_user_status(uid, "disabled")
+        stale = mu_client.post(
+            "/api/auth/reset-password",
+            json={"token": token, "new_password": "reactivate-pass-1"},
+        )
+        assert stale.status_code == 400
+        assert stale.json()["detail"]["error"] == "reset_token_invalid"
+
+        # 令牌行已被删除而非仅被状态拦截：复启用后同样无效
+        auth_core.set_user_status(uid, "active")
+        still_stale = mu_client.post(
+            "/api/auth/reset-password",
+            json={"token": token, "new_password": "reactivate-pass-2"},
+        )
+        assert still_stale.status_code == 400
+        assert still_stale.json()["detail"]["error"] == "reset_token_invalid"

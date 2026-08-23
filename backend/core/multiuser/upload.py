@@ -18,7 +18,10 @@ rar 说明（多用户 v2 P2）：
     - rar 无进程内解析库，走外部 unar 管线（`unar -f -q -D -o <dir> -- <file>`）；
       stdin 接 /dev/null 防止加密包交互式索要密码挂起，进程组限时击杀
     - 解压前对 RAR4 头链做最小预扫，命中加密 / 分卷标志即确定性拒绝，
-      不依赖 unar 失败输出的措辞；RAR5 由输出关键词匹配与“零产物”兜底覆盖
+      不依赖 unar 失败输出的措辞；文件 / 子块 / 服务块统一按块头声明的
+      数据区长度整段跳过（恢复记录 RR 等合法服务数据不得误拒），未知
+      块或长度异常直接放行交权威复核兜底；RAR5 由输出关键词匹配与
+      “零产物”兜底覆盖
     - unar 在 Linux 上会把名字里的 '/' 折叠为 '_'（RAR 归档内部规范分隔符
       是反斜杠），因此正常 RAR 包的子目录结构不受影响；GBK 等非 UTF-8 文件名
       依赖 unar 字符集探测，可能与 zip 管线的解码结果不一致（已知差异，见文档）
@@ -431,6 +434,13 @@ _RAR4_MAIN_VOLUME = 0x0001  # MHD_VOLUME：多卷集合（分卷确定性拒绝�
 _RAR4_MAIN_PASSWORD = 0x0080  # MHD_PASSWORD：整包头加密
 # 注意 0x0040 是 MHD_PROTECT（恢复记录），合法包常见，不得误拒
 _RAR4_FILE_PROTECTED = 0x0007  # LHD_SPLIT_BEFORE|AFTER|PASSWORD 掩码
+_RAR4_FILE_LARGE = 0x0100  # LHD_LARGE：数据区超 u32（HIGH_PACK_SIZE 扩展）
+
+# 带数据区的 RAR4 块类型：块头固定段之后的第一个 u32 即数据区字节数
+# （FILE_HEAD 为 PACK_SIZE；SUB_HEAD / SERVICE——NTFS 流、注释、恢复
+# 记录 RR 等——为 ADD_SIZE），三类布局一致，预扫可统一整段跳过
+_RAR4_DATA_BLOCK_TYPES = (0x74, 0x78, 0x7A)
+_RAR4_ENDARC_TYPE = 0x7B
 
 # unar 失败输出中的受保护包特征词（大小写不敏感匹配；仅影响错误码细分，
 # 未命中也按 invalid_archive 拒绝，不影响安全性）
@@ -590,9 +600,19 @@ def _start_rar_watch(
 def _reject_protected_rar(archive_path: Path, max_blocks: int = 65536) -> None:
     """RAR4 头链最小预扫：命中加密 / 分卷标志即拒绝。
 
-    只读头部字段、不解压任何内容；结构异常时静默返回，交由后续 unar
-    管线按损坏包处理。RAR5 归档不做预扫（由输出关键词匹配与零产物
-    兜底覆盖）；SFX 前缀等非常规布局同样跳过预扫。
+    只读头部字段、不解压任何内容。对带数据区的块（FILE_HEAD 0x74 /
+    SUB_HEAD 0x78 / SERVICE 0x7A），统一按「块头 body 起始的 u32」
+    整段跳过数据区——否则 pos 会落进恢复记录（MHD_PROTECT 合法包
+    常见）等高熵数据中随机游走，把随机字节误判成受保护标志，造成
+    合法归档被误拒。遇到 ENDARC、其他未知块类型或任何长度异常时
+    直接安全返回放行，交由后续 unar 实际解压与 _validate_extracted
+    权威复核兜底，绝不在数据字节流上盲走。
+
+    其余语义保持不变：RAR5 归档不做预扫（由输出关键词匹配与零产物
+    兜底覆盖）；SFX 前缀等非常规布局同样跳过预扫；主头 MHD_VOLUME /
+    MHD_PASSWORD 与文件头 LHD_SPLIT_BEFORE|AFTER|PASSWORD 确定性
+    拒绝；LHD_LARGE（数据区超 u32 的 ≥4GiB 包，本就无法通过上传体积
+    上限）按长度异常安全放行。
 
     max_blocks 限定头链遍历块数（合法归档 ≈ 文件数 + 少量服务头），
     防止构造的超小块垃圾包把预扫变成分钟级 CPU 空转；超限按
@@ -622,27 +642,28 @@ def _reject_protected_rar(archive_path: Path, max_blocks: int = 65536) -> None:
                         "rar header chain too complex; archive rejected",
                     )
                 fp.seek(pos)
-                block = fp.read(7)
+                block = fp.read(11)  # 块头 7 字节 + DataSize u32
                 if len(block) < 7:
-                    return
-                _, btype, flags, hsize = struct.unpack("<HBHH", block)
+                    return  # 头部截断：交由 unar 报无效包
+                _, btype, flags, hsize = struct.unpack_from("<HBHH", block)
                 if hsize < 7:
                     return  # 结构损坏：交给 unar 报无效包
-                if btype == 0x7B:  # ENDARC
+                if btype == _RAR4_ENDARC_TYPE:
                     return
-                data_pos = pos + hsize
+                if btype not in _RAR4_DATA_BLOCK_TYPES:
+                    return  # 未知/不带数据区的块类型：不在预扫层面下结论
                 if btype == 0x74:  # FILE_HEAD
                     if flags & _RAR4_FILE_PROTECTED:
                         raise ArchiveError(
                             "archive_unsafe",
                             "Encrypted/volume rar archives are not allowed",
                         )
-                    fp.seek(data_pos)
-                    packed = fp.read(4)
-                    if len(packed) < 4:
-                        return
-                    data_pos += int.from_bytes(packed, "little")
-                pos = data_pos
+                    if flags & _RAR4_FILE_LARGE:
+                        return  # 数据区超预扫 u32 模型：安全放行交权威复核
+                if len(block) < 11:
+                    return  # DataSize 字段截断：长度异常安全返回
+                data_size = int.from_bytes(block[7:11], "little")
+                pos += hsize + data_size
     except OSError as e:
         raise ArchiveError("invalid_archive", f"Cannot read rar archive: {e}")
 
