@@ -29,6 +29,9 @@ services:
       # 首个管理员引导（首次启动且用户表为空时创建；留空则等待 CLI 创建）
       LATEXCELLENCE_ADMIN_USERNAME: ${LATEXCELLENCE_ADMIN_USERNAME:-}
       LATEXCELLENCE_ADMIN_PASSWORD: ${LATEXCELLENCE_ADMIN_PASSWORD:-}
+      # SMTP 授权密码（可选；优先于 config.json 且永不写盘，
+      # 与 LX_LLM_KEY 同一安全策略；config.json 为只读挂载时推荐此方式）
+      LATEXCELLENCE_SMTP_PASSWORD: ${LATEXCELLENCE_SMTP_PASSWORD:-}
       # pip 镜像源等构建期参数经 build args 透传（见 docker/build.sh 口径）
     volumes:
       - ${LATEXCELLENCE_DATA_DIR:-./data}:/app/data

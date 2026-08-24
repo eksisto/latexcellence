@@ -186,7 +186,7 @@ npm start        # 或 node server.js
 | `logging` | level, dir | 日志级别与存储路径 |
 | `multi_user` | enabled, db_path, users_root, staging_root、默认配额、上传限制、会话/回收站 TTL、LLM/登录限流、registration_enabled、admin_*_env、edit_log_*（反向补丁撤销日志：条数上限 / 单操作体积上限 / 保留时长）、writing_chat_retention_days（0 = 不自动删仅统计）、auto_approve_*（注册自动审批：总开关 / 同 IP 账号上限 / CIDR 白名单 / GeoLite2 库路径与国家·城市白名单）、trusted_proxies（可信反代，命中才信任 X-Forwarded-For）、register_rate_limit_per_hour | 多用户模式（默认关闭）；开启后强制登录、用户空间隔离、关闭任意路径打开与磁盘浏览，详见 [multi-user-plan.md](multi-user-plan.md)；共享项目反向补丁撤销见 [multi-user-v2-plan.md](multi-user-v2-plan.md) §8，衍生数据记账与细粒度清理见同文档 §9，注册自动审批部署见 [deployment.md](deployment.md)「注册自动审批」 |
 
-所有字段有 Pydantic 默认值，可部分配置。`LX_LLM_KEY` 环境变量优先于 `config.json` 中的 `api_key`。
+所有字段有 Pydantic 默认值，可部分配置。`LX_LLM_KEY` 环境变量优先于 `config.json` 中的 `api_key`；`LATEXCELLENCE_SMTP_PASSWORD` 同理优先于 `smtp.password`（两者注入的敏感值均永不写盘，详见 [deployment.md](deployment.md)「环境变量参考」）。
 
 参考完整示例见 `config.example.json`（可提交 Git，不含真实密钥）。
 

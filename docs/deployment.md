@@ -206,7 +206,7 @@ cp config.example.json config.json
 
 - `server.host` 保持 `127.0.0.1`，由反向代理对外提供 HTTPS（见下文）；直接暴露 uvicorn 到公网强烈不建议；
 - `dev_mode` 必须为 `false`，否则不会挂载前端静态文件；
-- `llm.api_key` 也可不改配置、改用环境变量 `LX_LLM_KEY` 注入（优先级更高，且永不写盘，见「环境变量参考」）；
+- `llm.api_key` 也可不改配置、改用环境变量 `LX_LLM_KEY` 注入（优先级更高，且永不写盘，见「环境变量参考」）；多用户模式的 `smtp.password` 同理，用 `LATEXCELLENCE_SMTP_PASSWORD` 注入；
 - `multi_user.enabled=true` 开启多用户模式。**需重启服务生效**：启动时初始化 SQLite（WAL）数据库、创建用户空间根目录并引导首个管理员；其余 `multi_user` 配置项均支持配置热重载，改完保存即生效；
 - **多用户模式下前端必须与 API 同源部署**（会话 Cookie 为 `SameSite=Lax`，跨域携带会被浏览器拦截）：即由后端托管 `static/` 静态页面，经同一个域名反代对外，不要把前端单独发到另一个域名再跨域调 API（这是与单用户分离部署的关键差异）；
 - `multi_user`、`sandbox`、`smtp` 三个配置段实行严格校验（未知键直接报错），防止拼写错误导致安全阈值静默回退到默认值；
@@ -730,7 +730,7 @@ latex.example.com {
 | `enabled` | false | 总开关；false 时全部通知静默跳过、登录页隐藏找回入口 |
 | `host` / `port` | "" / 465 | SMTP 服务器地址与端口（host 为空同样视为未启用） |
 | `encryption` | ssl | `ssl`（隐式 TLS）/ `starttls` / `none`（仅本地调试） |
-| `username` / `password` | "" | 认证凭据；password 走 `***` 掩码协议（设置页回显掩码，原样保存即保留原值） |
+| `username` / `password` | "" | 认证凭据；password 走 `***` 掩码协议（设置页回显掩码，原样保存即保留原值），也可经环境变量 `LATEXCELLENCE_SMTP_PASSWORD` 注入（见下文「环境变量参考」） |
 | `from_address` / `from_name` | "" / LateXcellence | 发件人（from_address 留空回退 username） |
 | `site_base_url` | "" | 站点对外地址，用于拼接找回链接；留空时邮件退化为相对路径提示，**建议配置**否则找回链接不可直接点击 |
 | `max_send_per_minute` / `retry_attempts` | 10 / 3 | 发送限速（滚动 60s 窗口）与失败重试次数（指数退避） |
@@ -742,6 +742,7 @@ latex.example.com {
 
 - 投递失败重试 `retry_attempts` 次后留档 failed（`email_outbox.last_error`），排查 SQL：`SELECT recipient, subject, last_error, attempts FROM email_outbox WHERE status='failed'`；sent/failed 留档保留 7 天自动清理。
 - 邮件发送依赖后端进程出站网络可达 SMTP 服务器；容器部署需放行对应出站端口（465/587）。
+- `password` 也可不改配置、改用环境变量 `LATEXCELLENCE_SMTP_PASSWORD` 注入（优先级更高，且永不写盘）；Compose 形态 config.json 为只读挂载，推荐此方式注入密码。
 - `site_base_url` 必须是用户浏览器可达的地址（经反向代理时填对外域名），否则找回邮件中的链接无法直接使用。
 - 未启用 SMTP 不影响任何主流程：注册/审批/登录/上传照常，找回入口自动隐藏，忘记密码的用户由管理员经管理面板重置。
 
@@ -776,6 +777,7 @@ latex.example.com {
 | 变量 | 何处使用 | 说明 |
 | --- | --- | --- |
 | `LX_LLM_KEY` | 所有形态 | 覆盖 `llm.api_key`，优先级最高；注入的 Key **永不写盘**（配置保存时自动清空该字段） |
+| `LATEXCELLENCE_SMTP_PASSWORD` | 多用户模式 | 覆盖 `smtp.password`，优先级最高；注入的密码**永不写盘**（配置保存时自动清空该字段，与 `LX_LLM_KEY` 同一安全策略） |
 | `LATEXCELLENCE_ADMIN_USERNAME` | 首次启动 | 引导首个管理员（仅在用户表为空时消费）；变量名可经 `multi_user.admin_username_env` 改 |
 | `LATEXCELLENCE_ADMIN_PASSWORD` | 首次启动 / CLI | 同上；CLI（create-admin / reset-password）省略 `--password` 时也用它替代交互输入 |
 | `LATEXCELLENCE_LOG_STDOUT` | 容器部署 | 设为 `1` 时日志只输出 stdout/stderr、不写文件（多进程共写轮转文件不安全，compose 编排已默认开启） |

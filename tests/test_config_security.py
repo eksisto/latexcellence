@@ -75,6 +75,7 @@ def _reset_config():
     cfg_module._config = None
     cfg_module._config_path = None
     cfg_module._api_key_from_env = False
+    cfg_module._smtp_password_from_env = False
 
 
 def _write_config(tmp_path, overrides=None):
@@ -137,6 +138,80 @@ class TestEnvVarKeyNotLeakedToDisk:
             cfg_module.save_config()
         result = _read_config(config_path)
         assert result["llm"]["api_key"] == "", "磁盘不应有 Key"
+
+
+class TestSmtpPasswordEnvVar:
+    """SMTP 密码环境变量（LATEXCELLENCE_SMTP_PASSWORD）：与 llm.api_key 同一安全策略"""
+
+    def test_save_config_strips_env_var_smtp_password(self, tmp_path):
+        """环境变量密码 → save_config() 后磁盘文件 smtp.password 为空"""
+        config_path = _write_config(
+            tmp_path,
+            overrides={
+                "smtp": {"enabled": True, "host": "smtp.test", "password": "file-pass"}
+            },
+        )
+        with mock.patch.dict(
+            os.environ,
+            {cfg_module.SMTP_PASSWORD_ENV: "env-pass-456"},
+            clear=True,
+        ):
+            cfg_module.load_config(config_path)
+            assert cfg_module._smtp_password_from_env is True
+            assert cfg_module.get_config().smtp.password == "env-pass-456"
+            # api_key 未被环境变量覆盖时仍正常持久化（两标记互不影响）
+            assert cfg_module._api_key_from_env is False
+            cfg_module.save_config()
+        result = _read_config(config_path)
+        assert result["smtp"]["password"] == "", "环境变量密码不应写入磁盘"
+        assert result["smtp"]["host"] == "smtp.test"
+
+    def test_file_smtp_password_still_persisted(self, tmp_path):
+        """无环境变量 → 文件中的 smtp.password 正常持久化"""
+        config_path = _write_config(
+            tmp_path, overrides={"smtp": {"enabled": True, "password": "file-pass"}}
+        )
+        with mock.patch.dict(os.environ, {}, clear=True):
+            cfg_module.load_config(config_path)
+            assert cfg_module._smtp_password_from_env is False
+            cfg_module.save_config()
+        result = _read_config(config_path)
+        assert result["smtp"]["password"] == "file-pass", "文件密码应正常持久化"
+
+    def test_masked_smtp_password_keeps_env_value_no_leak(self, tmp_path):
+        """前端传掩码密码 + 环境变量 → 内存保留原值，保存后磁盘无密码"""
+        config_path = _write_config(tmp_path)
+        with mock.patch.dict(
+            os.environ,
+            {cfg_module.SMTP_PASSWORD_ENV: "env-pass-789"},
+            clear=True,
+        ):
+            cfg_module.load_config(config_path)
+            assert cfg_module._smtp_password_from_env is True
+            assert cfg_module.get_config().smtp.password == "env-pass-789"
+            cfg_module.update_config_from_dict({"smtp": {"password": "***6789"}})
+            assert cfg_module.get_config().smtp.password == "env-pass-789"
+        result = _read_config(config_path)
+        assert result["smtp"]["password"] == "", "掩码保存不应写入环境变量密码"
+        assert "env-pass-789" not in json.dumps(result)
+
+    def test_new_smtp_password_overrides_env_marking(self, tmp_path):
+        """用户手动输入真实密码覆盖环境变量 → 持久化新密码"""
+        config_path = _write_config(
+            tmp_path, overrides={"smtp": {"enabled": True, "password": "old-pass"}}
+        )
+        with mock.patch.dict(
+            os.environ,
+            {cfg_module.SMTP_PASSWORD_ENV: "env-pass"},
+            clear=True,
+        ):
+            cfg_module.load_config(config_path)
+            assert cfg_module._smtp_password_from_env is True
+            cfg_module.update_config_from_dict({"smtp": {"password": "manual-pass"}})
+        result = _read_config(config_path)
+        assert result["smtp"]["password"] == "manual-pass", "手动输入应持久化"
+        assert not cfg_module._smtp_password_from_env
+        assert cfg_module.get_config().smtp.password == "manual-pass"
 
 
 class TestUpdateConfigFromDict:

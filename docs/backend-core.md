@@ -35,16 +35,16 @@
 
 | 函数 | 功能 |
 | --- | --- |
-| `load_config(path)` | 加载 JSON + 环境变量覆盖 `LX_LLM_KEY` + Pydantic 校验；记录文件指纹并锚定 `multi_user.enabled` 启动值 |
+| `load_config(path)` | 加载 JSON + 环境变量覆盖（`LX_LLM_KEY` → `llm.api_key`、`LATEXCELLENCE_SMTP_PASSWORD` → `smtp.password`）+ Pydantic 校验；记录文件指纹并锚定 `multi_user.enabled` 启动值 |
 | `get_config()` | 获取缓存的 `AppConfig` 单例；**禁止在 `__init__` 中缓存**。v2 P7 起探测 config.json `(mtime_ns, size)` 指纹，变化即从磁盘热重载（多副本配置收敛）；`multi_user.enabled` 锚定启动值不随热重载漂移（变更需重启，保持旧值并告警）；重载失败（JSON 损坏 / 校验不过）保持旧配置继续服务 |
-| `save_config()` | 将当前配置 `model_dump()` 写回磁盘；环境变量来源的 `api_key` 会自动清空，不会落盘；写后刷新指纹避免触发自身重载 |
-| `update_config_from_dict(updates)` | 用字典部分更新配置（前端 SettingsDialog 使用）；用户手动输入新 Key 时更新内存并允许持久化 |
+| `save_config()` | 将当前配置 `model_dump()` 写回磁盘；环境变量来源的 `api_key` / `smtp.password` 会自动清空，不会落盘；写后刷新指纹避免触发自身重载 |
+| `update_config_from_dict(updates)` | 用字典部分更新配置（前端 SettingsDialog 使用）；用户手动输入新 Key / SMTP 密码时更新内存并允许持久化 |
 
 **安全策略**：
 
-- 环境变量 `LX_LLM_KEY` 优先级高于 `config.json` 中的 `api_key`
-- 从环境变量注入的 API Key **禁止写回磁盘**：`save_config()` 内部通过 `_api_key_from_env` 标记自动识别 Key 来源，落盘前清空 `api_key` 字段
-- 用户通过 UI 手动输入的新 Key 解除环境变量标记，正常持久化到磁盘
+- 环境变量 `LX_LLM_KEY` 优先级高于 `config.json` 中的 `api_key`；`LATEXCELLENCE_SMTP_PASSWORD` 同理优先于 `smtp.password`
+- 从环境变量注入的 API Key 与 SMTP 密码**禁止写回磁盘**：`save_config()` 内部通过 `_api_key_from_env` / `_smtp_password_from_env` 标记自动识别来源，落盘前清空对应字段
+- 用户通过 UI 手动输入的新 Key / SMTP 密码解除环境变量标记，正常持久化到磁盘
 - 前端提交的 `api_key` 若以 `***` 开头（掩码），保留原值不更新
 
 ### `backend/core/security_middleware.py` — CORS 白名单与访问令牌 / 会话

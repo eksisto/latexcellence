@@ -596,6 +596,8 @@ class SmtpConfig(BaseModel):
 
     password 为敏感项：设置页以掩码返回，保存时 `***` 前缀表示保留原值
     （与 llm.api_key / security.access_token 同一掩码协议）。
+    也可经环境变量 LATEXCELLENCE_SMTP_PASSWORD 注入（优先于配置文件，
+    且永不写盘，与 LX_LLM_KEY 同一安全策略）。
     安全相关字段实行严格校验（extra=forbid）。
     """
 
@@ -683,6 +685,12 @@ class AppConfig(BaseModel):
 _config: AppConfig | None = None
 _config_path: Path | None = None
 _api_key_from_env: bool = False  # 标记当前 api_key 是否来自环境变量（防落盘）
+_smtp_password_from_env: bool = (
+    False  # 标记当前 smtp.password 是否来自环境变量（防落盘）
+)
+# SMTP 授权密码注入的环境变量名：与 LX_LLM_KEY 同一安全策略（优先于配置文件、
+# 永不写盘），供 Compose/systemd 等部署形态免改配置注入凭证。
+SMTP_PASSWORD_ENV = "LATEXCELLENCE_SMTP_PASSWORD"
 # 热重载探测（v2 P7 多实例）：记录上次加载时 config.json 的 (mtime_ns, size)
 # 指纹，get_config() 命中变化即重载——多副本部署下管理员改配置后无需逐个
 # 重启（save_config 写盘后同步刷新指纹，避免自身触发无意义重载）。
@@ -724,7 +732,8 @@ def load_config(config_path: str = "config.json") -> AppConfig:
 
     流程：
         1. 读取 JSON 文件
-        2. 检查环境变量 LX_LLM_KEY，若存在则覆盖配置中的 key
+        2. 检查环境变量 LX_LLM_KEY / LATEXCELLENCE_SMTP_PASSWORD，
+           若存在则覆盖配置中的 llm.api_key / smtp.password
         3. 通过 Pydantic 进行类型校验和默认值填充
         4. 缓存到全局变量供后续调用
 
@@ -734,13 +743,15 @@ def load_config(config_path: str = "config.json") -> AppConfig:
     返回：
         校验后的 AppConfig 对象
     """
-    global _config, _config_path, _api_key_from_env, _boot_multi_user_enabled
+    global _config, _config_path, _api_key_from_env, _smtp_password_from_env
+    global _boot_multi_user_enabled
     path = Path(config_path)
     if not path.exists():
         raise FileNotFoundError(f"Config file not found: {config_path}")
 
-    cfg, api_key_from_env = _parse_config_file(path)
+    cfg, api_key_from_env, smtp_password_from_env = _parse_config_file(path)
     _api_key_from_env = api_key_from_env
+    _smtp_password_from_env = smtp_password_from_env
     _config = cfg
     _config_path = path.resolve()
     _boot_multi_user_enabled = cfg.multi_user.enabled
@@ -748,12 +759,13 @@ def load_config(config_path: str = "config.json") -> AppConfig:
     return cfg
 
 
-def _parse_config_file(path: Path) -> tuple[AppConfig, bool]:
+def _parse_config_file(path: Path) -> tuple[AppConfig, bool, bool]:
     """读取并校验配置文件（不触碰模块级状态）。
 
-    返回 (AppConfig, api_key 是否来自环境变量)。热重载路径复用本函数，
-    保证在发布新配置对象**之前**完成 multi_user.enabled 锚定，避免并发
-    get_config() 短暂观察到未锚定的运行模式值。
+    返回 (AppConfig, api_key 是否来自环境变量, smtp.password 是否来自环境变量)。
+    热重载路径复用本函数，保证在发布新配置对象**之前**完成
+    multi_user.enabled 锚定，避免并发 get_config() 短暂观察到未锚定的
+    运行模式值。
     """
     with open(path, "r", encoding="utf-8") as f:
         data = json.load(f)
@@ -765,8 +777,14 @@ def _parse_config_file(path: Path) -> tuple[AppConfig, bool]:
             data["llm"] = {}
         data["llm"]["api_key"] = env_key
 
+    env_smtp_password = os.environ.get(SMTP_PASSWORD_ENV, "")
+    if env_smtp_password:
+        if "smtp" not in data:
+            data["smtp"] = {}
+        data["smtp"]["password"] = env_smtp_password
+
     # Pydantic 自动校验类型+填充默认值
-    return AppConfig(**data), bool(env_key)
+    return AppConfig(**data), bool(env_key), bool(env_smtp_password)
 
 
 def get_config() -> AppConfig:
@@ -793,7 +811,7 @@ def _reload_from_disk() -> None:
     纯函数完成：先锚定 multi_user.enabled 再一次性发布新配置对象，
     不经过 load_config 的全局赋值，避免未锚定中间态外泄给并发读侧。
     """
-    global _config, _api_key_from_env
+    global _config, _api_key_from_env, _smtp_password_from_env
     with _reload_lock:
         if not _fingerprint_changed():
             return  # 双检：另一线程可能已完成重载
@@ -804,7 +822,9 @@ def _reload_from_disk() -> None:
         log = get_logger("config")
         log.info("Config file changed on disk (%s), reloading", _config_path.name)
         try:
-            cfg, api_key_from_env = _parse_config_file(_config_path)
+            cfg, api_key_from_env, smtp_password_from_env = _parse_config_file(
+                _config_path
+            )
         except Exception as e:  # noqa: BLE001 - 坏配置不阻断服务
             log.error("Config reload failed (%s); keeping previous configuration", e)
             _record_config_fingerprint()
@@ -819,6 +839,7 @@ def _reload_from_disk() -> None:
                 pinned_enabled,
             )
         _api_key_from_env = api_key_from_env
+        _smtp_password_from_env = smtp_password_from_env
         _config = cfg
         _record_config_fingerprint()
 
@@ -830,7 +851,9 @@ def save_config() -> None:
     安全策略：
         - 若 api_key 来自环境变量（_api_key_from_env = True），
           落盘前将其清空，防止泄漏到磁盘。
-        - 若 api_key 由用户通过 UI 手动设置，则正常持久化。
+        - 若 smtp.password 来自环境变量（_smtp_password_from_env = True），
+          同口径处理：落盘前清空，防止泄漏到磁盘。
+        - 若敏感项由用户通过 UI 手动设置，则正常持久化。
     """
     global _config, _config_path
     if _config is None or _config_path is None:
@@ -839,6 +862,9 @@ def save_config() -> None:
     # 环境变量来源的 API Key 不得写入磁盘
     if _api_key_from_env:
         data["llm"]["api_key"] = ""
+    # 环境变量来源的 SMTP 密码同口径不得写入磁盘
+    if _smtp_password_from_env:
+        data["smtp"]["password"] = ""
     atomic_write(_config_path, json.dumps(data, indent=2, ensure_ascii=False))
     # 刷新指纹：自身写盘不构成"外部变更"，避免下一次 get_config() 触发
     # 无意义重载（v2 P7 热重载探测）
@@ -873,6 +899,7 @@ def update_config_from_dict(updates: dict) -> AppConfig:
     若传入的 llm.api_key 以 "***" 开头（前端掩码），则保留原值不变。
     若传入完整的真实 Key，则视为用户手动设置，更新内存状态并允许持久化。
     来自环境变量的 Key 不会因本次操作而写回磁盘（由 save_config() 保障）。
+    smtp.password 同口径：掩码保留原值，真实密码解除环境变量标记后可持久化。
 
     参数：
         updates: 包含要更新字段的字典，支持嵌套结构
@@ -880,7 +907,7 @@ def update_config_from_dict(updates: dict) -> AppConfig:
     返回：
         更新后的 AppConfig 对象
     """
-    global _config, _config_path, _api_key_from_env
+    global _config, _config_path, _api_key_from_env, _smtp_password_from_env
     if _config is None:
         raise RuntimeError("Config not loaded. Call load_config() first.")
 
@@ -904,11 +931,14 @@ def update_config_from_dict(updates: dict) -> AppConfig:
             if token.startswith("***"):
                 security_updates["access_token"] = current["security"]["access_token"]
 
-    # SMTP 密码（v2 P6）：沿用同一掩码协议——*** 前缀表示保留原值
+    # SMTP 密码（v2 P6）：沿用同一掩码协议——*** 前缀表示保留原值；
+    # 用户输入真实密码则视为手动设置，解除环境变量标记允许落盘
     if "smtp" in updates and isinstance(updates["smtp"], dict):
         smtp_updates = updates["smtp"]
         if smtp_updates.get("password", "").startswith("***"):
             smtp_updates["password"] = current["smtp"]["password"]
+        elif smtp_updates.get("password"):
+            _smtp_password_from_env = False
 
     # 所有已启用 API Key 的数据源均通过设置页以掩码返回，掩码表示保留原配置。
     function_calling = updates.get("features", {}).get("function_calling", {})
