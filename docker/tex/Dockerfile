@@ -38,6 +38,11 @@ FROM debian:bookworm-slim
 # 只决定 TEXDIR 安装目录名；实际安装的版本由 CTAN_MIRROR 提供的安装器决定。
 ARG TEXLIVE_VERSION=2026
 ARG CTAN_MIRROR=https://mirror.ctan.org/systems/texlive/tlnet
+# 可选 Debian apt 国内镜像源。注意：bookworm-slim 不预装 ca-certificates，
+# 换 HTTPS 源会陷入"装证书需先经网拉取"死锁——请使用 HTTP 镜像
+# （如 --build-arg DEBIAN_MIRROR=http://mirrors.ustc.edu.cn/debian，
+#   包完整性由 apt GPG 签名兜底）；plot/convert 基础镜像自带证书不受限。
+ARG DEBIAN_MIRROR=""
 
 # 额外宏包清单：scheme-medium 不含 collection-langchinese，中文学术写作所需宏包在此显式补齐。
 # 注意 tlmgr 包名与 .sty 文件名的差异：
@@ -60,6 +65,14 @@ LABEL org.opencontainers.image.title="LateXcellence TeX Sandbox" \
       org.opencontainers.image.description="LaTeX 编译沙箱：TeX Live ${TEXLIVE_VERSION} scheme-medium + 中文宏包 + latexmk/texfot/latexdiff/latexindent/git"
 
 # ── 第 1 层：系统依赖 ─────────────────────────────────────────
+# 可选 apt 换源（DEBIAN_MIRROR 非空时替换 deb.debian.org，# 分隔符避免与 URL 中 / 冲突）
+RUN set -eux; \
+    if [ -n "$DEBIAN_MIRROR" ]; then \
+        find /etc/apt -type f \( -name "*.list" -o -name "*.sources" \) -exec sed -i \
+            -e "s#http://deb\\.debian\\.org/debian#${DEBIAN_MIRROR}#g" \
+            -e "s#https://deb\\.debian\\.org/debian#${DEBIAN_MIRROR}#g" \
+            {} +; \
+    fi
 # perl        ：install-tl / tlmgr / latexindent 运行时
 # python3     ：latexmk 钩子；python3-pygments 提供 pygmentize（minted 需要）
 # fontconfig +

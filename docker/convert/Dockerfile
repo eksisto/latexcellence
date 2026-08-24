@@ -25,6 +25,9 @@ ARG PANDOC_SHA256=""
 # （pandoc 自 2.10 起提供 arm64 官方发布物，命名沿用 linux-arm64。）
 ARG TARGETARCH
 
+# 可选 Debian apt 国内镜像源（构建时如 --build-arg DEBIAN_MIRROR=https://mirrors.ustc.edu.cn/debian）
+ARG DEBIAN_MIRROR=""
+
 LABEL org.opencontainers.image.title="LateXcellence Convert Sandbox" \
       org.opencontainers.image.source="https://github.com/eksisto/latexcellence.git" \
       org.opencontainers.image.description="pandoc 转换沙箱：锁定版本 ${PANDOC_VERSION} 官方发布物"
@@ -32,7 +35,14 @@ LABEL org.opencontainers.image.title="LateXcellence Convert Sandbox" \
 # pandoc 官方 tarball 结构：pandoc-<ver>/{bin/pandoc, share/man/man1/pandoc.1.gz}
 # 二进制仅动态链接 glibc 系基础库（libgmp 等已由 slim 基础层自带），无需额外 apt 运行库；
 # wget/ca-certificates 仅构建期下载使用，同层安装、同层清理列表。
+# 可选 apt 换源（DEBIAN_MIRROR 非空时替换 deb.debian.org，# 分隔符避免与 URL 中 / 冲突）
 RUN set -eux; \
+    if [ -n "$DEBIAN_MIRROR" ]; then \
+        find /etc/apt -type f \( -name "*.list" -o -name "*.sources" \) -exec sed -i \
+            -e "s#http://deb\\.debian\\.org/debian#${DEBIAN_MIRROR}#g" \
+            -e "s#https://deb\\.debian\\.org/debian#${DEBIAN_MIRROR}#g" \
+            {} +; \
+    fi; \
     apt-get update; \
     apt-get install -y --no-install-recommends ca-certificates wget; \
     rm -rf /var/lib/apt/lists/*; \

@@ -7,10 +7,14 @@
 #   # 可选国内 pip 源：
 #   docker build --build-arg PIP_INDEX_URL=https://pypi.tuna.tsinghua.edu.cn/simple \
 #                -t latexcellence-plot:latest docker/plot
+#   # 可选 Debian apt 国内镜像源（deb822 与传统 list 均覆盖）：
+#   docker build --build-arg DEBIAN_MIRROR=https://mirrors.ustc.edu.cn/debian \
+#                -t latexcellence-plot:latest docker/plot
 # ─────────────────────────────────────────────────────────────
 FROM python:3.12-slim
 
 ARG PIP_INDEX_URL=""
+ARG DEBIAN_MIRROR=""
 
 LABEL org.opencontainers.image.title="LateXcellence Plot Sandbox" \
       org.opencontainers.image.source="https://github.com/eksisto/latexcellence.git" \
@@ -21,6 +25,17 @@ ENV MPLBACKEND=Agg \
     PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     HOME=/tmp
+
+# ── 第 0 层：可选 apt 换源 ────────────────────────────────────
+# DEBIAN_MIRROR 非空时替换 /etc/apt 内全部源文件里的 deb.debian.org（含 debian-security，
+# 其路径前缀同为 .../debian-security，替换规则天然兼容）。# 分隔符避免与 URL 中 / 冲突。
+RUN set -eux; \
+    if [ -n "$DEBIAN_MIRROR" ]; then \
+        find /etc/apt -type f \( -name "*.list" -o -name "*.sources" \) -exec sed -i \
+            -e "s#http://deb\\.debian\\.org/debian#${DEBIAN_MIRROR}#g" \
+            -e "s#https://deb\\.debian\\.org/debian#${DEBIAN_MIRROR}#g" \
+            {} +; \
+    fi
 
 # ── 第 1 层：字体 + 科学计算栈 ────────────────────────────────
 # fonts-noto-cjk / fonts-dejavu-core：中文与西文图表渲染，避免缺字方框；

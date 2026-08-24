@@ -39,6 +39,12 @@ cd <仓库根目录>
 # 国内网络环境：透传 pip 镜像源（对 backend / plot 生效）
 PIP_INDEX_URL=https://pypi.tuna.tsinghua.edu.cn/simple ./docker/build.sh backend plot
 
+# 国内网络环境：Debian apt 层换国内镜像源（tex / convert / plot 生效）
+#   替换容器内 deb.debian.org 源（含 debian-security），留空则保持官方源
+docker build \
+  --build-arg DEBIAN_MIRROR=https://mirrors.ustc.edu.cn/debian \
+  -t latexcellence-tex:latest docker/tex
+
 # TeX Live 换国内 CTAN 源（版本默认跟随 tlnet 当年发布）
 docker build \
   --build-arg CTAN_MIRROR=https://mirrors.tuna.tsinghua.edu.cn/CTAN/systems/texlive/tlnet \
