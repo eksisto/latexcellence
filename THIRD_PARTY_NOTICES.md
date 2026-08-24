@@ -91,6 +91,7 @@
 | [python-multipart](https://github.com/andrew-d/python-multipart) | >=0.0.9 | Apache-2.0 | Copyright (c) Andrew Dunham | 文件上传 |
 | [argon2-cffi](https://github.com/hynek/argon2-cffi) | >=23.1.0 | MIT | Copyright (c) 2023 Hynek Schlawack | 多用户模式密码哈希（argon2id） |
 | [aiosmtplib](https://github.com/cole/aiosmtplib) | >=3.0.0 | MIT | Copyright (c) 2015-2025 Cole Maclean | 多用户模式 SMTP 异步邮件发送（多用户 v2 P6：邮件通知与自助找回） |
+| [maxminddb](https://github.com/maxmind/MaxMind-DB-Reader-python) | >=2.6.0 | Apache-2.0 | Copyright (c) 2014 MaxMind, Inc. | 注册自动审批地理白名单：读取 GeoLite2 离线 .mmdb 库解析 IP 归属（库文件本身需按 MaxMind 协议自行获取） |
 | [docker SDK for Python](https://github.com/docker/docker-py) | >=7.0.0 | Apache-2.0 | Copyright (c) 2016-2022 Docker Inc. | Docker 沙箱执行后端（v2 P1a；sandbox.mode=auto/docker 时使用） |
 | [Pillow](https://python-pillow.github.io) | >=10.0.0 | Pillow license | Copyright (c) 1997-2011 Secret Labs AB; 1995-2011 Fredrik Lundh; 2010- Jeffrey A. Clark (Alex) and contributors | 图片处理 |
 | [aiofiles](https://github.com/Tinche/aiofiles) | >=24.0.0 | Apache-2.0 | Copyright (c) Tin Tvrtković | 异步文件 I/O |

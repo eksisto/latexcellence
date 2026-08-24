@@ -11,6 +11,7 @@ from fastapi import APIRouter, Cookie, Depends, Request, Response
 
 from backend.core.config import get_config
 from backend.core.multiuser import auth as auth_core
+from backend.core.multiuser import clientip
 from backend.core.multiuser.dependencies import get_current_user, require_admin
 from backend.modules.auth import service
 from backend.modules.auth.models import (
@@ -49,17 +50,32 @@ def _cookie_secure(request: Request) -> bool:
     return request.headers.get("x-forwarded-proto", "").strip().lower() == "https"
 
 
+def _client_ip(request: Request) -> str:
+    """解析真实客户端 IP：仅当 TCP 对端属于 trusted_proxies 白名单时才信任
+    X-Forwarded-For（直连部署恒用对端地址，伪造头无法绕过注册 IP 策略）。"""
+    mu = get_config().multi_user
+    return clientip.resolve_client_ip(
+        request.client.host if request.client else "",
+        request.headers.get("x-forwarded-for", ""),
+        list(mu.trusted_proxies),
+    )
+
+
 @auth_router.post("/register")
-async def register(req: RegisterRequest):
-    """开放注册（registration_enabled=true 时），写入 pending，等待审批。"""
-    result = await service.register(req.username, req.password, req.email)
+async def register(req: RegisterRequest, request: Request):
+    """开放注册（registration_enabled=true 时）。
+
+    记录真实客户端 IP 并按自动审批策略判定：无恶意即 active（可直接
+    登录），否则写入 pending 等待审批——只降级为人工，不直接拒绝。"""
+    ip = _client_ip(request)
+    result = await service.register(req.username, req.password, req.email, ip)
     return result
 
 
 @auth_router.post("/login")
 async def login(req: LoginRequest, response: Response, request: Request):
     """登录：校验凭据并设置 HttpOnly 会话 Cookie 与 CSRF Cookie。"""
-    ip = request.client.host if request.client else ""
+    ip = _client_ip(request)
     result = await service.login(req.username, req.password, req.remember, ip)
     max_age = _session_max_age_seconds(req.remember)
     secure = _cookie_secure(request)
@@ -125,14 +141,14 @@ async def forgot_password(req: ForgotPasswordRequest, request: Request):
 
     响应恒定时长与统一语义（delivery=sent/unavailable），不泄露账号
     存在性；unavailable 时前端引导联系管理员（email_not_available）。"""
-    ip = request.client.host if request.client else ""
+    ip = _client_ip(request)
     return await service.forgot_password(req.identifier, ip)
 
 
 @auth_router.post("/reset-password")
 async def reset_password(req: ResetPasswordRequest, request: Request):
     """凭邮件令牌设置新密码：argon2id 写入 + 吊销全部会话 + 令牌单次有效。"""
-    ip = request.client.host if request.client else ""
+    ip = _client_ip(request)
     return await service.reset_password_with_token(req.token, req.new_password, ip)
 
 

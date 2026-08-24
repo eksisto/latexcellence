@@ -603,10 +603,19 @@ latex.example.com {
 
 ### 反向代理注意事项
 
-- **登录限流的 IP 维度会退化**：登录限流按「用户名 + 客户端 IP」与「用户名全局」双维度计数，反代之后 `request.client.host` 恒为代理 IP，「每 IP」维度失效，「每用户名全局」维度仍然有效。如需恢复 IP 维度，需在后端前接入受信代理真实 IP 传递（如 nginx `real_ip` 模块）并相应调整后端取值逻辑；
+- **配置 `multi_user.trusted_proxies` 传递真实客户端 IP**：登录限流按「用户名 + 客户端 IP」与「用户名全局」双维度计数，注册限流、注册 IP 记录与自动审批策略同样依赖真实客户端 IP。反代之后 `request.client.host` 恒为代理地址，必须在配置中把代理地址（如 nginx 本机反代填 `127.0.0.1`，Caddy 容器部署填对应容器网段）列入 `multi_user.trusted_proxies`，后端才会信任其追加的 `X-Forwarded-For` 并解析出访客真实 IP；保持为空时后端恒用 TCP 对端地址（直连部署的安全默认，伪造头无法绕过）。上述白名单外的代理链会被忽略，多级代理需把每一跳都列入；
 - **SSE 流式端点必须关闭缓冲**（`proxy_buffering off` 或 Caddy `flush_interval -1`），否则逐段检查、Agent 运行、写作助手的进度事件会被代理攒批延迟；
 - **请求体上限**需 ≥ `multi_user.max_upload_archive_mb`（默认 500 MB），否则大压缩包上传会在代理层被截断（413）；
 - WebSocket 不涉及（实时推送全部走 SSE）。
+
+### 注册自动审批（IP 策略）部署
+
+开启 `multi_user.auto_approve_enabled` 后，注册请求按 IP 策略判定「无恶意」即自动通过审批，否则转人工待审批（不会直接拒绝）。判定规则与全部配置项见 [backend-core.md](backend-core.md) 「注册自动审批要点」；部署侧需要准备：
+
+- **真实 IP 链路**：先完成上文 `trusted_proxies` 配置——策略读到的若是代理 IP，白名单与地理规则全部失真；
+- **GeoLite2 离线库**（使用城市/国家白名单时必需）：在 [MaxMind](https://dev.maxmind.com/geoip/docs/databases/city-and-country/) 免费注册并下载 GeoLite2 City 的 `.mmdb` 文件，放到服务器可读路径（如 `data/GeoLite2-City.mmdb`），把路径填入 `multi_user.auto_approve_geo_db_path`。库文件可定期重新下载覆盖，后端按文件 mtime 自动重载；Python 依赖 `maxminddb` 已在 requirements.txt 中；
+- **白名单口径**：固定机构场景优先用 CIDR 白名单（如校园网出口网段），无外部数据依赖且最可靠；城市/国家白名单适合成员分布较散的场景。共享出口 IP（校园/宿舍 NAT）请调大 `auto_approve_max_accounts_per_ip` 或改用网段白名单；
+- **局域网部署**：内网地址在 GeoLite2 中无地理记录，会转人工——请用 CIDR 白名单表达可信内网网段。
 
 ### 公开端点
 

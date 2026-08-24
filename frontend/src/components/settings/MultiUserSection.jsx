@@ -199,6 +199,150 @@ function MultiUserSection({ multiUser, onChange }) {
             onChange={(v) => onChange("multi_user.registration_enabled", v)}
           />
 
+          {/* 注册自动审批（IP 策略） */}
+          <CheckboxField
+            label={t("settings.multiUserAutoApprove")}
+            checked={multiUser.auto_approve_enabled}
+            onChange={(v) => onChange("multi_user.auto_approve_enabled", v)}
+          />
+          <p className="text-xs text-muted-foreground">
+            {t("settings.multiUserAutoApproveHint")}
+          </p>
+          {multiUser.auto_approve_enabled && (
+            <div className="ml-6 space-y-3 rounded-md border p-2.5 bg-muted/40">
+              <div className="grid grid-cols-2 gap-2">
+                <NumberField
+                  label={t("settings.multiUserAutoApproveMaxPerIp")}
+                  hint={t("settings.multiUserAutoApproveMaxPerIpHint")}
+                  min={1}
+                  value={multiUser.auto_approve_max_accounts_per_ip}
+                  onChange={(v) =>
+                    onChange("multi_user.auto_approve_max_accounts_per_ip", v)
+                  }
+                />
+                <NumberField
+                  label={t("settings.multiUserRegisterRateLimit")}
+                  min={1}
+                  value={multiUser.register_rate_limit_per_hour}
+                  onChange={(v) =>
+                    onChange("multi_user.register_rate_limit_per_hour", v)
+                  }
+                />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">
+                  {t("settings.multiUserAutoApproveCidrs")}
+                </Label>
+                <Input
+                  placeholder="59.77.0.0/16, 192.168.1.5"
+                  value={(multiUser.auto_approve_allowed_cidrs || []).join(
+                    ", ",
+                  )}
+                  onChange={(e) =>
+                    onChange(
+                      "multi_user.auto_approve_allowed_cidrs",
+                      e.target.value
+                        .split(",")
+                        .map((s) => s.trim())
+                        .filter(Boolean),
+                    )
+                  }
+                />
+                <p className="text-xs text-muted-foreground">
+                  {t("settings.multiUserAutoApproveCidrsHint")}
+                </p>
+              </div>
+              <div className="grid grid-cols-1 gap-2">
+                <div className="space-y-1">
+                  <Label className="text-xs">
+                    {t("settings.multiUserGeoDbPath")}
+                  </Label>
+                  <Input
+                    placeholder="data/GeoLite2-City.mmdb"
+                    value={multiUser.auto_approve_geo_db_path}
+                    onChange={(e) =>
+                      onChange(
+                        "multi_user.auto_approve_geo_db_path",
+                        e.target.value,
+                      )
+                    }
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    {t("settings.multiUserGeoDbPathHint")}
+                  </p>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div className="space-y-1">
+                  <Label className="text-xs">
+                    {t("settings.multiUserGeoCountries")}
+                  </Label>
+                  <Input
+                    placeholder="CN"
+                    value={(
+                      multiUser.auto_approve_allowed_countries || []
+                    ).join(", ")}
+                    onChange={(e) =>
+                      onChange(
+                        "multi_user.auto_approve_allowed_countries",
+                        e.target.value
+                          .split(",")
+                          .map((s) => s.trim())
+                          .filter(Boolean),
+                      )
+                    }
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">
+                    {t("settings.multiUserGeoCities")}
+                  </Label>
+                  <Input
+                    placeholder="合肥, Hefei"
+                    value={(multiUser.auto_approve_allowed_cities || []).join(
+                      ", ",
+                    )}
+                    onChange={(e) =>
+                      onChange(
+                        "multi_user.auto_approve_allowed_cities",
+                        e.target.value
+                          .split(",")
+                          .map((s) => s.trim())
+                          .filter(Boolean),
+                      )
+                    }
+                  />
+                </div>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                {t("settings.multiUserGeoListHint")}
+              </p>
+            </div>
+          )}
+
+          {/* 真实客户端 IP 解析（反代部署） */}
+          <div className="space-y-1">
+            <Label className="text-xs">
+              {t("settings.multiUserTrustedProxies")}
+            </Label>
+            <Input
+              placeholder="127.0.0.1, 173.245.48.0/20"
+              value={(multiUser.trusted_proxies || []).join(", ")}
+              onChange={(e) =>
+                onChange(
+                  "multi_user.trusted_proxies",
+                  e.target.value
+                    .split(",")
+                    .map((s) => s.trim())
+                    .filter(Boolean),
+                )
+              }
+            />
+            <p className="text-xs text-muted-foreground">
+              {t("settings.multiUserTrustedProxiesHint")}
+            </p>
+          </div>
+
           {/* 管理员引导（环境变量名） */}
           <div className="grid grid-cols-2 gap-2">
             <div className="space-y-1">

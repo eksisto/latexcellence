@@ -147,8 +147,11 @@ def _session_ttl(remember: bool) -> timedelta:
     return timedelta(days=days)
 
 
-def create_session(user_id: str, remember: bool = False) -> str:
-    """创建会话并返回明文令牌；过期时间由配置决定（默认 7 天 / 记住我 30 天）。"""
+def create_session(user_id: str, remember: bool = False, login_ip: str = "") -> str:
+    """创建会话并返回明文令牌；过期时间由配置决定（默认 7 天 / 记住我 30 天）。
+
+    login_ip 非空时同步更新 users.last_login_ip（成功登录才更新，审计用途）。
+    """
     token = new_token()
     expires_at = datetime.now(timezone.utc) + _session_ttl(remember)
     db_execute(
@@ -163,6 +166,11 @@ def create_session(user_id: str, remember: bool = False) -> str:
             utcnow(),
         ),
     )
+    if (login_ip or "").strip():
+        db_execute(
+            "UPDATE users SET last_login_ip = ? WHERE id = ?",
+            (login_ip.strip(), user_id),
+        )
     return token
 
 
@@ -240,6 +248,11 @@ def _row_to_public_user(row: dict) -> dict:
         "project_quota_bytes": row.get("project_quota_bytes"),
         "derived_quota_bytes": row.get("derived_quota_bytes"),
         "created_at": row["created_at"],
+        # IP 审计字段（v9）：注册 IP 供管理员审批核验，auto_approved 标记
+        # 该账号由 IP 策略自动通过（而非人工审批）
+        "registered_ip": row.get("registered_ip", ""),
+        "last_login_ip": row.get("last_login_ip", ""),
+        "auto_approved": bool(row.get("auto_approved", 0)),
     }
 
 
@@ -253,8 +266,14 @@ def create_user(
     *,
     role: str = "user",
     status: str = "pending",
+    registered_ip: str = "",
+    auto_approved: bool = False,
 ) -> dict:
-    """创建用户（默认 pending，待管理员审批）。用户名重复抛 ValueError。"""
+    """创建用户（默认 pending，待管理员审批）。用户名重复抛 ValueError。
+
+    registered_ip：注册请求的真实客户端 IP（经可信代理解析；始终记录，
+    与自动审批开关无关）。auto_approved 仅在 IP 策略自动通过时为 True。
+    """
     uname = username.strip()
     err = validate_username(uname)
     if err:
@@ -279,8 +298,9 @@ def create_user(
     try:
         db_execute(
             "INSERT INTO users (id, username, password_hash, email, role, status, "
-            "project_quota_bytes, derived_quota_bytes, created_at, updated_at) "
-            "VALUES (?, ?, ?, ?, ?, ?, NULL, NULL, ?, ?)",
+            "project_quota_bytes, derived_quota_bytes, registered_ip, "
+            "auto_approved, created_at, updated_at) "
+            "VALUES (?, ?, ?, ?, ?, ?, NULL, NULL, ?, ?, ?, ?)",
             (
                 user_id,
                 uname,
@@ -288,6 +308,8 @@ def create_user(
                 clean_email,
                 role,
                 status,
+                (registered_ip or "").strip(),
+                1 if auto_approved else 0,
                 now,
                 now,
             ),
@@ -298,7 +320,13 @@ def create_user(
             raise ValueError(f"Email already taken: {clean_email}")
         raise ValueError(f"Username already taken: {uname}")
     userspace.ensure_user_dirs(user_id)
-    logger.info("User created: %s (role=%s, status=%s)", uname, role, status)
+    logger.info(
+        "User created: %s (role=%s, status=%s, ip=%s)",
+        uname,
+        role,
+        status,
+        (registered_ip or "").strip() or "unknown",
+    )
     # 返回脱敏后的公开用户信息，严禁携带 password_hash
     return to_public_user(get_user_by_id(user_id))
 
@@ -351,7 +379,8 @@ def get_user_by_id(user_id: str) -> dict | None:
 def list_users() -> list[dict]:
     rows = db_query_all(
         "SELECT id, username, email, role, status, project_quota_bytes, "
-        "derived_quota_bytes, created_at FROM users ORDER BY created_at, id"
+        "derived_quota_bytes, registered_ip, last_login_ip, auto_approved, "
+        "created_at FROM users ORDER BY created_at, id"
     )
     return [_row_to_public_user(r) for r in rows]
 

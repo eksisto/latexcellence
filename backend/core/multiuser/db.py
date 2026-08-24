@@ -377,6 +377,31 @@ def _migration_v8_instance_state(conn: sqlite3.Connection) -> None:
 USERS_EMAIL_UNIQUE_INDEX = "ux_users_email_unique"
 
 
+def _migration_v9_registration_ip_policy(conn: sqlite3.Connection) -> None:
+    """v2 注册自动审批：users 表补 IP 审计列（ALTER 无 IF NOT EXISTS，幂等补列）。
+
+    - registered_ip：注册请求的真实客户端 IP（经可信代理解析；始终记录，
+      与自动审批开关无关，供管理员审批时人工核验）
+    - last_login_ip：最近一次成功登录的 IP（登录时更新，审计用途）
+    - auto_approved：是否由 IP 策略自动通过审批（0/1），管理员侧审计标记
+
+    列检查与 ALTER 同处 apply_migrations 的步骤事务（BEGIN IMMEDIATE）内，
+    与 v8 email_outbox.claimed_at 相同的"查列→补列"原子模式。
+    """
+    existing = {row[1] for row in conn.execute("PRAGMA table_info(users)").fetchall()}
+    # (列名, 类型, 默认值)：IP 列为 TEXT，auto_approved 为 0/1 整型标记
+    for column, col_type, default in (
+        ("registered_ip", "TEXT", "''"),
+        ("last_login_ip", "TEXT", "''"),
+        ("auto_approved", "INTEGER", "0"),
+    ):
+        if column not in existing:
+            conn.execute(
+                f"ALTER TABLE users ADD COLUMN {column} {col_type} "
+                f"NOT NULL DEFAULT {default}"
+            )
+
+
 def find_duplicate_emails(conn: sqlite3.Connection) -> list[sqlite3.Row]:
     """返回 users 表中重复（大小写不敏感）的非空邮箱分组及冲突用户名列表。"""
     return conn.execute(
@@ -424,7 +449,7 @@ def ensure_email_unique_index(conn: sqlite3.Connection) -> bool:
 
 # 当前 schema 最新版本号。新增迁移时：追加实现函数并在列表末尾登记
 # (target_version, description, fn)，同时递增此常量；每个步骤必须幂等可重入。
-SCHEMA_VERSION = 8
+SCHEMA_VERSION = 9
 
 # 有序迁移步骤：(目标版本, 描述, 执行函数)。版本从 2 起（1 为 v1 基线，
 # 对老库存量数据无破坏性变更，仅补齐 IF NOT EXISTS 建表）。
@@ -466,6 +491,12 @@ MIGRATIONS: list[tuple[int, str, Callable[[sqlite3.Connection], None]]] = [
         "operation contexts / pending interactions / maintenance lease) "
         "+ email_outbox.claimed_at",
         _migration_v8_instance_state,
+    ),
+    (
+        9,
+        "v2 registration auto-approval IP audit columns on users "
+        "(registered_ip / last_login_ip / auto_approved)",
+        _migration_v9_registration_ip_policy,
     ),
 ]
 

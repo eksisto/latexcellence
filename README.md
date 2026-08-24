@@ -92,6 +92,7 @@ Word 则相反。对它“简单”的印象来自把结构藏进 GUI：样式�
 ### 多用户模式
 
 - **团队协作（多用户模式）**：`multi_user.enabled` 一键开启后，支持注册/审批、用户名+密码会话登录、独立项目空间与配额、zip/7z/rar/目录上传（rar 经 unar 解压）、owner/editor/viewer 权限协作与回收站；写作会话/样式会话/模板/绘图等衍生数据按用户隔离，并提供存量数据迁移工具（`python -m backend.manage migrate-legacy`）；前端提供登录/注册、项目工作台与管理后台页面。适配可信团队内部部署（详见 [docs/multi-user-plan.md](docs/multi-user-plan.md)）。
+- **注册自动审批（IP 策略）**：注册时记录真实客户端 IP（支持反向代理 X-Forwarded-For 可信解析），可按「同 IP 账号数上限 + IP/CIDR 网段白名单 + GeoLite2 离线地理白名单（国家/城市，如仅允许本市 IP 注册）」叠加判定——无恶意即自动通过审批直接登录，否则转人工待审批；管理员面板可见每位用户的注册 IP 与自动通过标记。配置与部署见 [docs/deployment.md](docs/deployment.md)「注册自动审批」。
 - **服务器部署指南**：多用户模式的完整部署流程（构建启动、管理员引导、HTTPS 反向代理配置、安全风险声明、数据备份与日常运维）见 [docs/deployment.md](docs/deployment.md)。v1 不提供沙箱隔离，仅建议向可信成员开放。
 - **Docker 沙箱执行（v2 P1a）**：全部外部命令（LaTeX 编译、git/latexdiff、pandoc、Python 绘图、格式化）统一经 SandboxRunner，可进一次性容器隔离执行——无网络、只读根文件系统 + tmpfs、CPU/内存/进程数限额、按用户并发租约。`sandbox.mode=auto` 探测到 Docker 即自动启用（单用户模式同样受益），不可达时回落本地进程且行为不变；镜像体系（tex/convert/plot/backend 四镜像，amd64/arm64 双架构）见 [docker/README.md](docker/README.md)。
 - **多实例水平扩展（v2 P7）**：多进程/多副本部署一等公民——跨请求状态（工作区绑定、逐段检查上下文、工具确认/验证码待定交互、维护选主）全部外置共享 SQLite，无需粘性会话；仓库根 `docker-compose.yml` 一键编排（`docker compose up -d --scale app=N` 弹性扩缩容），可选 Caddy 反代自动分发到健康副本；配置文件热重载（改动无需逐副本重启）；容器日志走 stdout 交 docker logs 收集。多实例冒烟：`tools/compose-smoke.sh`（replicas=2 全链路：注册审批 → 分片上传 → 撤销 → 下载）。

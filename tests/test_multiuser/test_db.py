@@ -313,8 +313,9 @@ class TestConcurrentMigration:
             row[1] for row in conn.execute("PRAGMA table_info(email_outbox)").fetchall()
         ]
         assert cols.count("claimed_at") == 1
-        # 迁移框架视角：版本回退后重放 v8 正常推进，且列不重复
-        assert db_module.apply_migrations(conn) == [8]
+        # 迁移框架视角：版本回退后重放 v8 正常推进（含后续新版本步骤），
+        # 且列不重复
+        assert db_module.apply_migrations(conn) == [8, db_module.SCHEMA_VERSION]
         assert db_module.read_user_version(conn) == db_module.SCHEMA_VERSION
 
     def test_init_db_threaded_repeat_no_deadlock(self, mu_env):

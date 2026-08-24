@@ -840,7 +840,10 @@
       "newPassword": "新密碼",
       "resetSubmit": "確認重設",
       "resetting": "正在重設…",
-      "resetSuccess": "密碼已重設，請使用新密碼重新登入"
+      "resetSuccess": "密碼已重設，請使用新密碼重新登入",
+      "registerApprovedTitle": "註冊成功",
+      "registerApprovedDesc": "帳號「{{username}}」已通過自動審批，現在即可登入使用。",
+      "goToLogin": "前往登入"
     },
     "workbench": {
       "title": "專案工作台",
@@ -917,6 +920,9 @@
       "statusDisabled": "已停用",
       "you": "目前帳號",
       "createdAt": "註冊於 {{date}}",
+      "registeredIp": "註冊 IP",
+      "lastLoginIp": "最近登入",
+      "autoApproved": "自動通過",
       "quotaLabel": "配額覆蓋",
       "filter": {
         "all": "全部",
@@ -1203,7 +1209,21 @@
       "smtpTemplateLanguageEn": "English",
       "smtpTemplateLanguageHint": "站點預設語言，通知郵件依該語言呈現。",
       "smtpMaxSendPerMinute": "傳送限速（封/分鐘）",
-      "smtpRetryAttempts": "失敗重試次數"
+      "smtpRetryAttempts": "失敗重試次數",
+      "multiUserAutoApprove": "註冊自動審批（IP 政策）",
+      "multiUserAutoApproveHint": "開啟後依註冊 IP 判定：命中白名單（IP 段或地理庫）且同 IP 帳號數未超限時自動通過審批，否則轉人工待審批；不會直接拒絕。",
+      "multiUserAutoApproveMaxPerIp": "同 IP 帳號數上限",
+      "multiUserAutoApproveMaxPerIpHint": "同一註冊 IP 名下所有未刪除帳號（含待審批/停用）均計入；共享出口 IP 的校園/機構請調大。",
+      "multiUserAutoApproveCidrs": "IP/CIDR 白名單",
+      "multiUserAutoApproveCidrsHint": "逗號分隔，如 59.77.0.0/16；命中即視為可信任並跳過地理校驗。",
+      "multiUserGeoDbPath": "GeoLite2 資料庫路徑",
+      "multiUserGeoDbPathHint": "MaxMind GeoLite2 離線庫（.mmdb）檔案路徑，留空不啟用地理規則。",
+      "multiUserGeoCountries": "國家代碼白名單",
+      "multiUserGeoCities": "城市名白名單",
+      "multiUserGeoListHint": "逗號分隔；與資料庫路徑同時設定才生效，國家和城市同時填寫時需同時命中。",
+      "multiUserTrustedProxies": "可信任代理 IP/CIDR",
+      "multiUserTrustedProxiesHint": "反向代理部署時填代理位址（如 127.0.0.1），命中才信任 X-Forwarded-For；直連部署留空。",
+      "multiUserRegisterRateLimit": "註冊限流（次/小時）"
     },
     "markerText": {
       "math": "公式",
@@ -1614,6 +1634,7 @@
     "emailNotAvailable": "該帳號無法自助找回密碼（未綁定可用信箱），請聯絡管理員重設",
     "resetTokenInvalid": "重設連結無效或已過期，請重新申請",
     "emailTaken": "該信箱已被其他帳號使用",
-    "invalidEmail": "信箱格式不正確"
+    "invalidEmail": "信箱格式不正確",
+    "registerRateLimited": "該 IP 註冊請求過於頻繁，請稍後再試"
   }
 }

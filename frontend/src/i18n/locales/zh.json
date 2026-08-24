@@ -840,7 +840,10 @@
       "newPassword": "新密码",
       "resetSubmit": "确认重置",
       "resetting": "正在重置…",
-      "resetSuccess": "密码已重置，请使用新密码重新登录"
+      "resetSuccess": "密码已重置，请使用新密码重新登录",
+      "registerApprovedTitle": "注册成功",
+      "registerApprovedDesc": "账号「{{username}}」已通过自动审批，现在即可登录使用。",
+      "goToLogin": "前往登录"
     },
     "workbench": {
       "title": "项目工作台",
@@ -917,6 +920,9 @@
       "statusDisabled": "已禁用",
       "you": "当前账号",
       "createdAt": "注册于 {{date}}",
+      "registeredIp": "注册 IP",
+      "lastLoginIp": "最近登录",
+      "autoApproved": "自动通过",
       "quotaLabel": "配额覆盖",
       "filter": {
         "all": "全部",
@@ -1203,7 +1209,21 @@
       "smtpTemplateLanguageEn": "English",
       "smtpTemplateLanguageHint": "站点默认语言，通知邮件按该语言渲染。",
       "smtpMaxSendPerMinute": "发送限速（封/分钟）",
-      "smtpRetryAttempts": "失败重试次数"
+      "smtpRetryAttempts": "失败重试次数",
+      "multiUserAutoApprove": "注册自动审批（IP 策略）",
+      "multiUserAutoApproveHint": "开启后按注册 IP 判定：命中白名单（IP 段或地理库）且同 IP 账号数未超限时自动通过审批，否则转人工待审批；不会直接拒绝。",
+      "multiUserAutoApproveMaxPerIp": "同 IP 账号数上限",
+      "multiUserAutoApproveMaxPerIpHint": "同一注册 IP 名下所有未删除账号（含待审批/禁用）均计入；共享出口 IP 的校园/机构请调大。",
+      "multiUserAutoApproveCidrs": "IP/CIDR 白名单",
+      "multiUserAutoApproveCidrsHint": "逗号分隔，如 59.77.0.0/16；命中即视为可信并跳过地理校验。",
+      "multiUserGeoDbPath": "GeoLite2 数据库路径",
+      "multiUserGeoDbPathHint": "MaxMind GeoLite2 离线库（.mmdb）文件路径，留空不启用地理规则。",
+      "multiUserGeoCountries": "国家码白名单",
+      "multiUserGeoCities": "城市名白名单",
+      "multiUserGeoListHint": "逗号分隔；与数据库路径同时配置才生效，国家和城市同时填写时需同时命中。",
+      "multiUserTrustedProxies": "可信代理 IP/CIDR",
+      "multiUserTrustedProxiesHint": "反代部署时填代理地址（如 127.0.0.1），命中才信任 X-Forwarded-For；直连部署留空。",
+      "multiUserRegisterRateLimit": "注册限流（次/小时）"
     },
     "markerText": {
       "math": "公式",
@@ -1614,6 +1634,7 @@
     "emailNotAvailable": "该账号无法自助找回密码（未绑定可用邮箱），请联系管理员重置",
     "resetTokenInvalid": "重置链接无效或已过期，请重新申请",
     "emailTaken": "该邮箱已被其他账号使用",
-    "invalidEmail": "邮箱格式不正确"
+    "invalidEmail": "邮箱格式不正确",
+    "registerRateLimited": "该 IP 注册请求过于频繁，请稍后再试"
   }
 }

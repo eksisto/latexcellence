@@ -17,6 +17,7 @@ from backend.core.config import get_config
 from backend.core.logger import get_logger
 from backend.core.multiuser import auth as auth_core
 from backend.core.multiuser import mail
+from backend.core.multiuser import registration_policy
 from backend.core.multiuser.dependencies import (
     forbidden,
 )
@@ -33,11 +34,23 @@ def _not_found() -> HTTPException:
 
 
 # ── 注册 / 登录 / 登出 ──────────────────────────────────────────
-async def register(username: str, password: str, email: str = "") -> dict:
+# 注册限流窗口（小时级）：与 register_rate_limit_per_hour 配套
+_REGISTER_WINDOW_SECONDS = 3600
+
+
+async def register(username: str, password: str, email: str, ip: str = "") -> dict:
+    """注册：写入用户并按 IP 策略决定自动通过或转人工审批。
+
+    - 注册 IP 经可信代理解析（router 层），始终记录到 users.registered_ip；
+    - 每 IP 滑动窗口限流（register_rate_limit_per_hour），防灌库；
+    - 自动审批判定见 multiuser/registration_policy.py：无恶意即 active，
+      否则 pending——只降级为人工，绝不直接拒绝。
+    """
     cfg = get_config()
     if not cfg.multi_user.enabled:
         raise _not_found()
-    if not cfg.multi_user.registration_enabled:
+    mu = cfg.multi_user
+    if not mu.registration_enabled:
         raise _http(400, "registration_disabled", "Registration is disabled")
     # 先做参数级校验（错误分类清晰），再交给核心创建（剩余失败即重名）
     uerr = auth_core.validate_username(username)
@@ -46,6 +59,28 @@ async def register(username: str, password: str, email: str = "") -> dict:
     perr = auth_core.validate_password(password)
     if perr:
         raise _http(400, "invalid_password", perr)
+    clean_ip = (ip or "").strip()
+    # 每 IP 注册限流：被拒绝的请求不落行、不创建用户（同登录限流口径）
+    if await asyncio.to_thread(
+        auth_core.sliding_window_rate_limited,
+        "register_ip",
+        f"ip:{clean_ip}",
+        mu.register_rate_limit_per_hour,
+        _REGISTER_WINDOW_SECONDS,
+    ):
+        raise _http(
+            429,
+            "register_rate_limited",
+            "Too many registration attempts; please retry later",
+        )
+    # IP 策略判定：存量账号数与决策均为同步压库/mmdb 操作，调度到线程池
+    existing = await asyncio.to_thread(
+        registration_policy.count_registered_accounts, clean_ip
+    )
+    decision = await asyncio.to_thread(
+        registration_policy.evaluate_registration_ip, clean_ip, existing, mu
+    )
+    status = "active" if decision.approved else "pending"
     try:
         user = await asyncio.to_thread(
             auth_core.create_user,
@@ -53,21 +88,39 @@ async def register(username: str, password: str, email: str = "") -> dict:
             password,
             email,
             role="user",
-            status="pending",
+            status=status,
+            registered_ip=clean_ip,
+            auto_approved=decision.approved,
         )
     except ValueError as e:
         if "Email already taken" in str(e):
             raise _http(409, "email_taken", str(e))
         # create_user 已通过前置校验，唯一剩余 ValueError 为用户名重复
         raise _http(409, "username_taken", str(e))
-    # 新用户待审批通知（v2 P6，全部 admin 每 5 分钟聚合）：邮件失败不影响注册
+    logger.info(
+        "Registration of %s from %s -> %s (%s)",
+        username,
+        clean_ip or "unknown-ip",
+        status,
+        decision.reason,
+    )
+    # 通知分支：待审批 → 管理员聚合摘要；自动通过 → 用户欢迎/开通邮件
     try:
-        await asyncio.to_thread(mail.notify_pending_registrations)
+        if decision.approved:
+            await asyncio.to_thread(mail.notify_account_status, user, "approve")
+        else:
+            await asyncio.to_thread(mail.notify_pending_registrations)
     except Exception as e:  # noqa: BLE001
-        logger.warning("Pending registration notification failed: %s", e)
+        logger.warning("Registration notification failed: %s", e)
     return {
         "user": user,
-        "message": "Registration submitted; waiting for admin approval",
+        # 前端据此区分「已自动开通，去登录」与「等待管理员审批」两种结果页
+        "status": status,
+        "message": (
+            "Registration approved; you can sign in now"
+            if decision.approved
+            else "Registration submitted; waiting for admin approval"
+        ),
     }
 
 
@@ -96,7 +149,7 @@ async def login(username: str, password: str, remember: bool, ip: str) -> dict:
     if user["status"] != "active":
         raise _http(401, "invalid_credentials", "Invalid username or password")
 
-    token = await asyncio.to_thread(auth_core.create_session, user["id"], remember)
+    token = await asyncio.to_thread(auth_core.create_session, user["id"], remember, ip)
     return {"token": token, "user": auth_core.to_public_user(user)}
 
 

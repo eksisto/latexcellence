@@ -52,6 +52,8 @@ const EXACT_MAP = {
   invalid_password: "invalidPassword",
   username_taken: "usernameTaken",
   rate_limited: "rateLimited",
+  // 注册自动审批（IP 策略）错误码
+  register_rate_limited: "registerRateLimited",
   not_found: "notFound",
   invalid_request: "invalidRequest",
   path_disabled: "pathDisabled",

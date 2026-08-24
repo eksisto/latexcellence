@@ -87,6 +87,10 @@ const AdminUserRow = memo(function AdminUserRow({
             </Badge>
           )}
           {statusBadge(u.status)}
+          {/* IP 策略自动通过标记：与人工审批区分，便于管理员审计 */}
+          {u.auto_approved && (
+            <Badge variant="outline">{t("pages:admin.autoApproved")}</Badge>
+          )}
           {isCurrentUser && (
             <Badge variant="outline">{t("pages:admin.you")}</Badge>
           )}
@@ -95,6 +99,17 @@ const AdminUserRow = memo(function AdminUserRow({
           {u.email || "—"} ·{" "}
           {t("pages:admin.createdAt", { date: formatDate(u.created_at) })}
         </p>
+        {(u.registered_ip || u.last_login_ip) && (
+          <p className="mt-0.5 font-mono text-xs text-muted-foreground">
+            {u.registered_ip
+              ? `${t("pages:admin.registeredIp")} ${u.registered_ip}`
+              : ""}
+            {u.registered_ip && u.last_login_ip ? " · " : ""}
+            {u.last_login_ip
+              ? `${t("pages:admin.lastLoginIp")} ${u.last_login_ip}`
+              : ""}
+          </p>
+        )}
         <p className="mt-0.5 text-xs text-muted-foreground">
           {t("pages:admin.quotaLabel")}:{" "}
           {u.project_quota_bytes != null

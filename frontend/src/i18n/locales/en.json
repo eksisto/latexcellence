@@ -840,7 +840,10 @@
       "newPassword": "New password",
       "resetSubmit": "Confirm reset",
       "resetting": "Resetting…",
-      "resetSuccess": "Password reset — sign in with your new password"
+      "resetSuccess": "Password reset — sign in with your new password",
+      "registerApprovedTitle": "Registration Approved",
+      "registerApprovedDesc": "Account “{{username}}” passed automatic approval and is ready to sign in.",
+      "goToLogin": "Sign In Now"
     },
     "workbench": {
       "title": "Projects",
@@ -917,6 +920,9 @@
       "statusDisabled": "Disabled",
       "you": "you",
       "createdAt": "registered {{date}}",
+      "registeredIp": "Registered IP",
+      "lastLoginIp": "Last login IP",
+      "autoApproved": "Auto-approved",
       "quotaLabel": "Quota override",
       "filter": {
         "all": "All",
@@ -1203,7 +1209,21 @@
       "smtpTemplateLanguageEn": "English",
       "smtpTemplateLanguageHint": "Site default language used to render notification emails.",
       "smtpMaxSendPerMinute": "Rate limit (per minute)",
-      "smtpRetryAttempts": "Retry attempts"
+      "smtpRetryAttempts": "Retry attempts",
+      "multiUserAutoApprove": "Auto-approve registrations (IP policy)",
+      "multiUserAutoApproveHint": "When enabled, a registration is auto-approved if it hits an allowlist (CIDR or GeoIP) and stays within the per-IP account cap; otherwise it falls back to manual review — never outright rejected.",
+      "multiUserAutoApproveMaxPerIp": "Accounts per registration IP",
+      "multiUserAutoApproveMaxPerIpHint": "Counts every non-deleted account registered from that IP (pending/disabled included). Raise this for campuses sharing one egress IP.",
+      "multiUserAutoApproveCidrs": "IP/CIDR allowlist",
+      "multiUserAutoApproveCidrsHint": "Comma-separated, e.g. 59.77.0.0/16; a hit marks the client as trusted and skips geo checks.",
+      "multiUserGeoDbPath": "GeoLite2 database path",
+      "multiUserGeoDbPathHint": "Path to a MaxMind GeoLite2 offline (.mmdb) file; leave empty to disable geo rules.",
+      "multiUserGeoCountries": "Country code allowlist",
+      "multiUserGeoCities": "City name allowlist",
+      "multiUserGeoListHint": "Comma-separated; requires the database path above. When both are set, both must match.",
+      "multiUserTrustedProxies": "Trusted proxy IPs/CIDRs",
+      "multiUserTrustedProxiesHint": "Behind a reverse proxy, list the proxy address (e.g. 127.0.0.1) so X-Forwarded-For is trusted; keep empty for direct exposure.",
+      "multiUserRegisterRateLimit": "Registration rate limit (per hour)"
     },
     "markerText": {
       "math": "Formula",
@@ -1614,6 +1634,7 @@
     "emailNotAvailable": "Self-service recovery is unavailable for this account (no usable email bound); please contact the administrator",
     "resetTokenInvalid": "This reset link is invalid or expired. Please request a new one",
     "emailTaken": "This email is already used by another account",
-    "invalidEmail": "Invalid email address"
+    "invalidEmail": "Invalid email address",
+    "registerRateLimited": "Too many registration attempts from this IP; please retry later"
   }
 }

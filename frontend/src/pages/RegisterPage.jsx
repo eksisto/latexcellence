@@ -20,7 +20,9 @@ import useRegistrationEnabled from "@/hooks/useRegistrationEnabled";
 
 /**
  * 多用户模式注册页（P5）。
- * 开放注册（registration_enabled）时可用；提交成功写入 pending，等待管理员审批。
+ * 开放注册（registration_enabled）时可用；后端按注册 IP 策略判定：
+ * 命中自动审批（status=active）展示「直接登录」结果页，否则写入
+ * pending 展示等待管理员审批结果页。
  */
 export default function RegisterPage() {
   const { t } = useTranslation("pages");
@@ -33,6 +35,8 @@ export default function RegisterPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [submitted, setSubmitted] = useState(false);
+  // 后端 IP 策略自动通过（true）或转人工待审批（false）
+  const [autoApproved, setAutoApproved] = useState(false);
 
   const passwordMismatch = confirm && password !== confirm;
 
@@ -46,11 +50,12 @@ export default function RegisterPage() {
     setLoading(true);
     setError(null);
     try {
-      await api.auth.register({
+      const res = await api.auth.register({
         username: username.trim(),
         password,
         email: email.trim(),
       });
+      setAutoApproved(res?.status === "active");
       setSubmitted(true);
     } catch (err) {
       setError(translateError(err.message));
@@ -58,6 +63,27 @@ export default function RegisterPage() {
       setLoading(false);
     }
   };
+
+  if (submitted && autoApproved) {
+    return (
+      <AuthShell>
+        <Card className="w-full max-w-sm gap-6">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <CheckCircle className="size-5 text-emerald-600" />
+              {t("auth.registerApprovedTitle")}
+            </CardTitle>
+            <CardDescription>
+              {t("auth.registerApprovedDesc", { username: username.trim() })}
+            </CardDescription>
+          </CardHeader>
+        </Card>
+        <div className="mt-4">
+          <Button render={<Link to="/login" />}>{t("auth.goToLogin")}</Button>
+        </div>
+      </AuthShell>
+    );
+  }
 
   if (submitted) {
     return (

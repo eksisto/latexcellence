@@ -15,6 +15,7 @@
 """
 
 import copy
+import ipaddress
 import json
 import os
 import threading
@@ -22,7 +23,7 @@ from pathlib import Path
 from typing import Literal
 
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from backend.utils.file_ops import atomic_write
 
@@ -514,6 +515,49 @@ class MultiUserConfig(BaseModel):
         5, ge=1
     )  # 登录限流（次/分钟，按用户名+IP）
     registration_enabled: bool = True  # 是否开放注册（需管理员审批）
+    # ── 注册自动审批（IP 策略，详见 multiuser/registration_policy.py）──
+    # 开关打开后按注册 IP 判定「无恶意」即自动通过审批（status=active），
+    # 否则回落人工待审批——任何检查不通过都只降级为人工，绝不直接拒绝。
+    auto_approve_enabled: bool = False  # 自动审批总开关（false 时全部转人工）
+    # 同一注册 IP 允许的账号数上限：历史所有未删除账号均计入
+    # （含 pending/disabled）；共享出口 IP 的机构部署请调大或改用白名单
+    auto_approve_max_accounts_per_ip: int = Field(1, ge=1)
+    auto_approve_allowed_cidrs: list[str] = []  # IP/CIDR 可信白名单（如校园网出口网段）
+    auto_approve_geo_db_path: str = (
+        ""  # GeoLite2 .mmdb 离线库路径（空 = 不启用地理规则）
+    )
+    auto_approve_allowed_countries: list[str] = (
+        []
+    )  # 国家码白名单（ISO 3166，如 ["CN"]）
+    auto_approve_allowed_cities: list[str] = (
+        []
+    )  # 城市名白名单（匹配库内 en/zh-CN 名称）
+    # 真实客户端 IP 解析：反代部署时配置代理的 IP/CIDR，命中才信任
+    # X-Forwarded-For；直连部署保持为空（恒用 TCP 对端地址，防伪造头绕过策略）
+    trusted_proxies: list[str] = []
+    register_rate_limit_per_hour: int = Field(20, ge=1)  # 每 IP 注册请求限流（次/小时）
+
+    @field_validator("auto_approve_allowed_cidrs", "trusted_proxies")
+    @classmethod
+    def _validate_cidr_entries(cls, v: list[str]) -> list[str]:
+        """IP/CIDR 条目在加载期强校验：拼错的网段若静默失效会架空整个审批防线。"""
+        cleaned: list[str] = []
+        for entry in v:
+            text = (entry or "").strip()
+            if not text:
+                continue
+            try:
+                ipaddress.ip_network(text, strict=False)
+            except ValueError as e:
+                raise ValueError(f"Invalid IP/CIDR entry: {entry!r}") from e
+            cleaned.append(text)
+        return cleaned
+
+    @field_validator("auto_approve_allowed_countries", "auto_approve_allowed_cities")
+    @classmethod
+    def _clean_name_list(cls, v: list[str]) -> list[str]:
+        return [entry.strip() for entry in v if (entry or "").strip()]
+
     admin_username_env: str = (
         "LATEXCELLENCE_ADMIN_USERNAME"  # 首个管理员用户名环境变量名
     )
