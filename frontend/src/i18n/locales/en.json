@@ -1600,7 +1600,7 @@
     "uploadTooLarge": "Upload exceeds the size limit",
     "invalidArchive": "Invalid or corrupt archive",
     "archiveUnsafe": "Archive contains unsafe content and was rejected",
-    "unarMissing": "The server does not have unar installed; rar archives cannot be extracted",
+    "rarExtractorMissing": "The server has no usable rar extractor (unar or bsdtar); rar archives cannot be extracted",
     "accountPending": "Your account is awaiting administrator approval",
     "accountDisabled": "Your account has been disabled; contact the administrator",
     "registrationDisabled": "Registration is closed; contact the administrator to create an account",

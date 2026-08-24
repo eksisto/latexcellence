@@ -1,33 +1,44 @@
-"""多用户模式 v2 P2：rar 上传解压管线测试。
+"""多用户模式 v2 P2 + 回退层：rar 上传解压管线测试。
 
-覆盖（方案 §7 / §14 完成标准）：
-    - 正常解压：顶层单目录布局 / 直接内容布局 / 内容与计数
+覆盖（方案 §7 / §14 完成标准 + docs/rar-extractor-fallback.md §六）：
+    - 正常解压：顶层单目录布局 / 直接内容布局 / 内容与计数（unar 与
+      bsdtar 双工具参数化）
     - 加密包拒绝（文件头加密标志，预扫确定性拦截）
     - 分卷包拒绝（多卷集第一卷形态，预扫确定性拦截）
     - 服务/子块（恢复记录 RR、NTFS 子块）带数据区的合法包不被预扫
       误拒：数据区按块头声明的长度整段跳过，含固定种子 Monte Carlo
       与「数据区起始即受保护标志模式」的决定性回归
-    - 缺失 unar 二进制时的明确报错（unar_missing，不依赖环境装包）
+    - 解压器选择层三态：有 unar / 仅 bsdtar / 全缺（rar_extractor_missing）
+    - bsdtar 命令构造断言（含「命令不含 -P」回归项）
+    - 失败输出关键词映射：encrypt / password / 截断类普通错误分别断言错误码
+    - 文件名归一化（bsdtar 分支）：GBK surrogate 名还原 / 改名冲突拒绝 /
+      合法 UTF-8 名不动 / 全链解码失败拒绝 / 自底向上改名顺序
+    - 缺失二进制时的明确报错（rar_extractor_missing，不依赖环境装包）
     - 损坏包 / 空产物（多卷集静默零产物兜底）拒绝
-    - GBK 文件名样例（unar 字符集探测与 zip 管线存在已知差异，
-      仅断言可解出唯一文件且内容一致）
+    - GBK 文件名样例（unar 字符集探测与 zip 管线存在已知差异；bsdtar +
+      归一化路径下应精确还原为中文名）
     - 解压限时接线（超时不启动进程）、监视线程超限击杀（fake 进程注入）
     - API 集成：POST /api/projects 上传 .rar 创建项目
 
-真实 unar 解压用例在无 unar 环境自动 skip；预扫 / 缺二进制 / 监视线程
-用例不依赖外部二进制，任何环境都执行。
+真实解压用例按工具参数化（requires_rar_tool），无对应二进制的环境自动
+skip；预扫 / 选择层 / 缺二进制 / 监视线程 / 归一化用例不依赖外部二进制，
+任何环境都执行。
 """
 
+import json
+import os
 import random
 import shutil
 import struct
+import subprocess
+import tempfile
 import zlib
 from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
 
-from backend.core.multiuser import upload
+from backend.core.multiuser import upload, upload_rar
 from backend.core.multiuser import userspace
 from tests.test_multiuser.test_projects_api import (
     PASSWORD,
@@ -37,10 +48,65 @@ from tests.test_multiuser.test_projects_api import (
 FIXTURES = Path(__file__).resolve().parents[1] / "fixtures" / "rar"
 
 UNAR_AVAILABLE = shutil.which("unar") is not None
+BSDTAR_AVAILABLE = shutil.which("bsdtar") is not None
 
-requires_unar = pytest.mark.skipif(not UNAR_AVAILABLE, reason="unar 工具不可用")
+# 真实解压集成用例的双工具参数化：skipif 条件各自独立（docs/rar-extractor-
+# fallback.md §六），无对应二进制的环境自动跳过该工具变体
+RAR_TOOL_PARAMS = [
+    pytest.param(
+        "unar",
+        id="unar",
+        marks=pytest.mark.skipif(not UNAR_AVAILABLE, reason="unar 工具不可用"),
+    ),
+    pytest.param(
+        "bsdtar",
+        id="bsdtar",
+        marks=pytest.mark.skipif(not BSDTAR_AVAILABLE, reason="bsdtar 工具不可用"),
+    ),
+]
 
-# RAR4 块类型（与 upload.py 常量同源，测试侧独立声明避免依赖私有拼写）
+
+@pytest.fixture
+def force_rar_tool(request, monkeypatch):
+    """强制解压器选择层选中参数指定的工具（indirect 参数化）。
+
+    unar 本就是优先项无需干预；bsdtar 变体通过隐藏 unar 的 which 结果
+    走回退分支，其余查找保持真实实现（确保 bsdtar 确实存在才不 skip）。"""
+    tool = getattr(request, "param", None)
+    if tool == "bsdtar":
+        real_which = shutil.which
+
+        def _which(name, *args, **kwargs):
+            if name == "unar":
+                return None
+            return real_which(name, *args, **kwargs)
+
+        monkeypatch.setattr(upload_rar.shutil, "which", _which)
+    elif tool != "unar":
+        raise ValueError(f"unknown rar tool param: {tool!r}")
+    return tool
+
+
+def _patch_which(monkeypatch, tool: str | None) -> None:
+    """让选择层恒选中参数指定的工具（fake 二进制路径，不依赖环境装包）；
+    tool=None 表示全部缺失。"""
+    if tool is None:
+        monkeypatch.setattr(upload_rar.shutil, "which", lambda name, *a, **k: None)
+        return
+    fake = {"unar": "/fake/unar", "bsdtar": "/fake/bsdtar"}[tool]
+    monkeypatch.setattr(
+        upload_rar.shutil,
+        "which",
+        lambda name, *args, **kwargs: fake if name == tool else None,
+    )
+
+
+def _raw_path(extract_dir: Path, raw_name: bytes) -> Path:
+    """构造 surrogateescape 字节名条目的落盘路径（模拟 libarchive 产物）。"""
+    return extract_dir / os.fsdecode(raw_name)
+
+
+# RAR4 块类型（与 upload_rar.py 常量同源，测试侧独立声明避免依赖私有拼写）
 FILE_HEAD = 0x74
 SUB_HEAD = 0x78
 SERVICE_HEAD = 0x7A
@@ -113,7 +179,7 @@ def _sub_head_block(data: bytes, tag: bytes = b"") -> bytes:
 def _assemble(blocks: list[bytes], main_flags: int = 0) -> bytes:
     """主头 + 若干已拼装块 + ENDARC 组装为完整归档字节流。"""
     main_body = struct.pack("<BHH", 0x73, main_flags, 13) + struct.pack("<HI", 0, 0)
-    out = bytearray(upload._RAR4_MARKER + _crc16(main_body) + main_body)
+    out = bytearray(upload_rar._RAR4_MARKER + _crc16(main_body) + main_body)
     out += b"".join(blocks)
     end_body = struct.pack("<BHH", ENDARC_HEAD, 0x4000, 7)
     return bytes(out + _crc16(end_body) + end_body)
@@ -135,35 +201,54 @@ def extract_dir(tmp_path) -> Path:
     return d
 
 
+@pytest.fixture
+def raw_name_dir() -> Path:
+    """支持原始字节文件名的临时目录（归一化用例专用）。
+
+    仓库可能检出在 NTFS/exFAT 等挂载点上（如 ntfs3），这类文件系统拒绝
+    非 UTF-8 原始字节名（EINVAL）；探测失败即跳过，避免环境性误报。"""
+    d = Path(tempfile.mkdtemp(prefix="latexcellence-rarnorm-"))
+    probe = os.fsencode(d) + b"/\xd6\xd0"
+    try:
+        fd = os.open(probe, os.O_CREAT | os.O_WRONLY, 0o644)
+        os.close(fd)
+        os.unlink(probe)
+    except OSError:
+        shutil.rmtree(d, ignore_errors=True)
+        pytest.skip("当前文件系统不支持原始字节文件名")
+    yield d
+    shutil.rmtree(d, ignore_errors=True)
+
+
 # ── 预扫（不依赖 unar，任何环境执行）──────────────────────────────
 class TestRar4Prescan:
     def test_encrypted_flag_rejected(self, extract_dir):
         with pytest.raises(upload.ArchiveError) as ei:
-            upload._reject_protected_rar(FIXTURES / "encrypted.rar")
+            upload_rar.reject_protected_rar(FIXTURES / "encrypted.rar")
         assert ei.value.code == "archive_unsafe"
 
     def test_volume_first_part_rejected(self, extract_dir):
         with pytest.raises(upload.ArchiveError) as ei:
-            upload._reject_protected_rar(FIXTURES / "volume.part1.rar")
+            upload_rar.reject_protected_rar(FIXTURES / "volume.part1.rar")
         assert ei.value.code == "archive_unsafe"
 
     def test_normal_archives_pass(self):
         # 正常包不抛错（含子目录与 GBK 名字样例）
         for name in ("layout_flat.rar", "layout_top_dir.rar", "gbk_name.rar"):
-            upload._reject_protected_rar(FIXTURES / name)
+            upload_rar.reject_protected_rar(FIXTURES / name)
 
     def test_main_flag_recovery_record_allowed(self, tmp_path):
         """主头 0x0040 是 MHD_PROTECT（恢复记录），合法包常见，不得误拒。"""
         p = tmp_path / "rr.rar"
         p.write_bytes(_rar4(main_flags=0x0040, entries=[(b"a.tex", b"x")]))
-        upload._reject_protected_rar(p)  # 不抛错
+        upload_rar.reject_protected_rar(p)  # 不抛错
 
     def test_main_flag_header_encrypted_rejected(self, tmp_path):
         """主头 0x0080 是 MHD_PASSWORD（整包头加密），确定性拒绝。"""
         p = tmp_path / "enchdr.rar"
         p.write_bytes(_rar4(main_flags=0x0080, entries=[(b"a.tex", b"x")]))
         with pytest.raises(upload.ArchiveError) as ei:
-            upload._reject_protected_rar(p)
+            upload_rar.reject_protected_rar(p)
         assert ei.value.code == "archive_unsafe"
 
     def test_main_flag_volume_bit_rejected(self, tmp_path):
@@ -171,24 +256,24 @@ class TestRar4Prescan:
         p = tmp_path / "vol.rar"
         p.write_bytes(_rar4(main_flags=0x0001, entries=[(b"a.tex", b"x")]))
         with pytest.raises(upload.ArchiveError) as ei:
-            upload._reject_protected_rar(p)
+            upload_rar.reject_protected_rar(p)
         assert ei.value.code == "archive_unsafe"
 
     def test_rar5_marker_skipped(self, tmp_path):
         # RAR5 归档不做 RAR4 预扫（由 unar 输出匹配与零产物兜底）
         p = tmp_path / "r5.rar"
-        p.write_bytes(upload._RAR5_MARKER + b"\x00" * 32)
-        upload._reject_protected_rar(p)
+        p.write_bytes(upload_rar._RAR5_MARKER + b"\x00" * 32)
+        upload_rar.reject_protected_rar(p)
 
     def test_garbage_bytes_skipped(self, tmp_path):
         p = tmp_path / "g.rar"
         p.write_bytes(b"Rar!\x1a\x07\x00" + b"\xff" * 64)
-        upload._reject_protected_rar(p)  # 结构异常静默返回，交由 unar 判定
+        upload_rar.reject_protected_rar(p)  # 结构异常静默返回，交由 unar 判定
 
     def test_unreadable_file_rejected(self, tmp_path):
         p = tmp_path / "missing.rar"
         with pytest.raises(upload.ArchiveError) as ei:
-            upload._reject_protected_rar(p)
+            upload_rar.reject_protected_rar(p)
         assert ei.value.code == "invalid_archive"
 
     # ── 服务/子块数据区误拒回归（Required 缺陷）──────────────────
@@ -208,7 +293,7 @@ class TestRar4Prescan:
                 ]
             )
         )
-        upload._reject_protected_rar(p)  # 不抛错
+        upload_rar.reject_protected_rar(p)  # 不抛错
 
     def test_sub_head_data_area_not_misrejected(self, tmp_path):
         """SUB_HEAD(0x78)（NTFS 流等）带数据区：同样整段跳过不误拒。"""
@@ -221,7 +306,7 @@ class TestRar4Prescan:
                 ]
             )
         )
-        upload._reject_protected_rar(p)  # 不抛错
+        upload_rar.reject_protected_rar(p)  # 不抛错
 
     def test_service_data_starting_with_protected_pattern_passes(self, tmp_path):
         """决定性回归：数据区起始即放置会被误读为「加密 FILE_HEAD」的字节
@@ -236,7 +321,7 @@ class TestRar4Prescan:
             p.write_bytes(
                 _assemble([make_block(mine * 64), _file_block(b"a.tex", b"x")])
             )
-            upload._reject_protected_rar(p)  # 不抛错
+            upload_rar.reject_protected_rar(p)  # 不抛错
 
     def test_random_rr_payloads_never_rejected(self, tmp_path):
         """Monte Carlo 回归（固定种子可重复）：多组 60KB 随机恢复记录 +
@@ -252,7 +337,7 @@ class TestRar4Prescan:
                     ]
                 )
             )
-            upload._reject_protected_rar(p)
+            upload_rar.reject_protected_rar(p)
 
     def test_unknown_block_type_stops_prescan_safely(self, tmp_path):
         """未知块类型（如 COMM_HEAD 0x75）：直接安全返回放行；其后即使
@@ -268,26 +353,26 @@ class TestRar4Prescan:
                 ]
             )
         )
-        upload._reject_protected_rar(p)  # 不抛错；若继续走必命中拒绝分支
+        upload_rar.reject_protected_rar(p)  # 不抛错；若继续走必命中拒绝分支
 
     def test_truncated_data_size_safe_return(self, tmp_path):
         """服务头在 DataSize 字段中途截断：长度异常安全返回放行。"""
         partial = struct.pack("<BHH", SERVICE_HEAD, LONG_BLOCK, 11) + b"\x01\x02"
         p = tmp_path / "trunc.rar"
         p.write_bytes(_assemble([])[:-7] + _crc16(partial) + partial)
-        upload._reject_protected_rar(p)  # 不抛错
+        upload_rar.reject_protected_rar(p)  # 不抛错
 
     def test_file_large_flag_safe_return(self, tmp_path):
         """LHD_LARGE（数据区超 u32 模型）：按长度异常安全放行，
         由 unar 实际解压与解压后复核兜底。"""
         p = tmp_path / "large.rar"
         p.write_bytes(_assemble([_file_block(b"big.tex", b"x", flags=LHD_LARGE)]))
-        upload._reject_protected_rar(p)  # 不抛错
+        upload_rar.reject_protected_rar(p)  # 不抛错
 
     def test_fixture_archives_with_service_data_pass(self):
         """入库 fixture：带恢复记录 / NTFS 子块的合法包不被预扫误拒。"""
         for name in ("service_rr.rar", "subhead_ntfs.rar"):
-            upload._reject_protected_rar(FIXTURES / name)
+            upload_rar.reject_protected_rar(FIXTURES / name)
 
     def test_block_cap_bounds_prescan(self, tmp_path):
         """超小块垃圾包：头链遍历受 max_blocks 限制，快速拒绝而非空转。
@@ -303,35 +388,278 @@ class TestRar4Prescan:
         p = tmp_path / "junk.rar"
         p.write_bytes(_assemble([])[:-7] + _zero_sub() * 4096)
         with pytest.raises(upload.ArchiveError) as ei:
-            upload._reject_protected_rar(p, max_blocks=100)
+            upload_rar.reject_protected_rar(p, max_blocks=100)
         assert ei.value.code == "invalid_archive"
 
 
-# ── 缺二进制与限时接线（不依赖 unar）─────────────────────────────
-class TestWiring:
-    def test_missing_binary_reports_unar_missing(self, extract_dir, monkeypatch):
-        monkeypatch.setattr(upload.shutil, "which", lambda name: None)
+# ── 解压器选择层与命令构造（fake 进程，不依赖二进制）────────────
+class _RecordingPopen:
+    """exit=0 的 fake Popen：记录收到的命令供构造断言。"""
+
+    captured: list[list[str]] = []
+
+    def __init__(self, cmd, *args, **kwargs):
+        type(self).captured.append(list(cmd))
+        self.pid = 4242
+        self.returncode = 0
+
+    def communicate(self, timeout=None):
+        return b"", b""
+
+
+def _failing_popen_factory(stdout: bytes, stderr: bytes):
+    """非零退出的 fake Popen 工厂：携带 canned 输出供关键词映射断言。"""
+
+    class _FailingPopen:
+        def __init__(self, cmd, *args, **kwargs):
+            self.pid = 4242
+            self.returncode = 1
+
+        def communicate(self, timeout=None):
+            return stdout, stderr
+
+    return _FailingPopen
+
+
+class TestExtractorSelection:
+    def test_unar_preferred_when_both_available(self, monkeypatch):
+        monkeypatch.setattr(
+            upload_rar.shutil,
+            "which",
+            lambda name, *a, **k: (
+                f"/fake/{name}" if name in ("unar", "bsdtar") else None
+            ),
+        )
+        assert upload_rar.resolve_rar_extractor() == ("unar", "/fake/unar")
+
+    def test_bsdtar_fallback_when_only_bsdtar(self, monkeypatch):
+        monkeypatch.setattr(
+            upload_rar.shutil,
+            "which",
+            lambda name, *a, **k: "/fake/bsdtar" if name == "bsdtar" else None,
+        )
+        assert upload_rar.resolve_rar_extractor() == ("bsdtar", "/fake/bsdtar")
+
+    def test_both_missing_reports_rar_extractor_missing(self, extract_dir, monkeypatch):
+        _patch_which(monkeypatch, None)
         with pytest.raises(upload.ArchiveError) as ei:
             upload.extract_archive(FIXTURES / "layout_flat.rar", extract_dir, _limits())
-        assert ei.value.code == "unar_missing"
+        assert ei.value.code == "rar_extractor_missing"
 
-    def test_expired_deadline_skips_process_spawn(self, extract_dir, monkeypatch):
-        """timeout_seconds=0：deadline 已过，未启动进程即拒绝。"""
-        monkeypatch.setattr(upload.shutil, "which", lambda name: "/fake/unar")
+
+class TestBsdtarCommand:
+    @pytest.fixture(autouse=True)
+    def _bsdtar_env(self, monkeypatch):
+        """强制走 bsdtar 回退分支（fake 二进制，不依赖环境装包）。"""
+        _patch_which(monkeypatch, "bsdtar")
+
+    @pytest.fixture(autouse=True)
+    def _capture_popen(self, monkeypatch):
+        _RecordingPopen.captured = []
+        monkeypatch.setattr(upload_rar.subprocess, "Popen", _RecordingPopen)
+
+    def test_command_shape_and_no_insecure_flags(self, extract_dir, tmp_path):
+        """bsdtar 命令形如 `bsdtar -x -f <abs_archive> -C <abs_dir>`；
+        回归项：命令不含 `-P`（保留成员名绝对路径语义的开关）。"""
+        archive = FIXTURES / "layout_flat.rar"
+        (extract_dir / "main.tex").write_text("x", encoding="utf-8")  # 免零产物兜底
+        upload_rar.extract_rar(archive, extract_dir, _limits())
+
+        assert len(_RecordingPopen.captured) == 1
+        cmd = _RecordingPopen.captured[0]
+        assert cmd[:3] == ["/fake/bsdtar", "-x", "-f"]
+        archive_arg, c_flag, dir_arg = cmd[3:]
+        assert c_flag == "-C"
+        # 归档与目录都用绝对路径
+        assert Path(archive_arg).is_absolute()
+        assert Path(archive_arg) == archive.resolve()
+        assert Path(dir_arg).is_absolute()
+        assert Path(dir_arg) == extract_dir.resolve()
+        assert "-P" not in cmd
+
+    def test_popen_security_kwargs_match_unar_branch(self, extract_dir, monkeypatch):
+        """stdin 接 DEVNULL、独立进程组启动——与 unar 分支完全一致。"""
+        kwargs_seen: dict = {}
+
+        class _KwargPopen(_RecordingPopen):
+            def __init__(self, cmd, *args, **kwargs):
+                kwargs_seen.update(kwargs)
+                super().__init__(cmd, *args, **kwargs)
+
+        monkeypatch.setattr(upload_rar.subprocess, "Popen", _KwargPopen)
+        (extract_dir / "a.tex").write_text("x", encoding="utf-8")
+        upload_rar.extract_rar(FIXTURES / "layout_flat.rar", extract_dir, _limits())
+        assert kwargs_seen["stdin"] == subprocess.DEVNULL
+        assert kwargs_seen["start_new_session"] is True
+
+
+# ── 失败输出关键词映射（canned stderr，不依赖二进制）─────────────
+class TestFailureKeywordMapping:
+    @pytest.mark.parametrize("rar_tool", ["unar", "bsdtar"])
+    def test_encrypted_stderr_maps_archive_unsafe(
+        self, extract_dir, monkeypatch, rar_tool
+    ):
+        _patch_which(monkeypatch, rar_tool)
+        stderr = {
+            "unar": b"unar: Cannot extract encrypted.rar: wrong password\n",
+            "bsdtar": (
+                b"bsdtar: Error opening archive: RAR5 AES-256 encrypted "
+                b"archive, passphrase required\n"
+            ),
+        }[rar_tool]
+        monkeypatch.setattr(
+            upload_rar.subprocess, "Popen", _failing_popen_factory(b"", stderr)
+        )
+        with pytest.raises(upload.ArchiveError) as ei:
+            upload.extract_archive(FIXTURES / "layout_flat.rar", extract_dir, _limits())
+        assert ei.value.code == "archive_unsafe"
+
+    @pytest.mark.parametrize("rar_tool", ["unar", "bsdtar"])
+    def test_generic_failure_maps_invalid_archive(
+        self, extract_dir, monkeypatch, rar_tool
+    ):
+        """截断类普通错误不含保护词 → invalid_archive（RAR5 分卷缺卷在
+        bsdtar 下即落此码；安全性不变，仅错误细分度下降）。"""
+        _patch_which(monkeypatch, rar_tool)
+        stderr = {
+            "unar": b"unar: Unexpected end of file\n",
+            "bsdtar": b"bsdtar: Unexpected EOF in archive\n",
+        }[rar_tool]
+        monkeypatch.setattr(
+            upload_rar.subprocess, "Popen", _failing_popen_factory(b"", stderr)
+        )
+        with pytest.raises(upload.ArchiveError) as ei:
+            upload.extract_archive(FIXTURES / "layout_flat.rar", extract_dir, _limits())
+        assert ei.value.code == "invalid_archive"
+
+
+# ── 文件名归一化（bsdtar 分支专用步骤）──────────────────────────
+class TestNormalizeRarNames:
+    GBK_BYTES = "中文.txt".encode("gbk")  # \xd6\xd0\xce\xc4.txt
+
+    def test_gbk_surrogate_name_restored(self, raw_name_dir):
+        raw = _raw_path(raw_name_dir, self.GBK_BYTES)
+        raw.write_bytes(b"x")
+        upload_rar.normalize_rar_names(raw_name_dir)
+        restored = raw_name_dir / "中文.txt"
+        assert restored.read_bytes() == b"x"
+        assert not os.path.lexists(os.fsencode(raw))
+        # 归一化后的名字必须可 JSON 序列化（文件树接口的前提）
+        json.dumps(restored.name)
+
+    def test_nested_gbk_names_renamed_bottom_up(self, raw_name_dir):
+        """父子目录同为 GBK 名：自底向上改名顺序回归项。
+
+        目录名用「资料」——其 GBK 字节非合法 UTF-8（「目录」的 GBK 字节
+        恰好也是合法 UTF-8，会按 utf-8 优先链保留 mojibake，与 zip 管线
+        同源语义，无法触达改名分支）。"""
+        gbk_dir = "资料".encode("gbk")
+        child = _raw_path(_raw_path(raw_name_dir, gbk_dir), self.GBK_BYTES)
+        child.parent.mkdir(parents=True)
+        child.write_bytes(b"x")
+        upload_rar.normalize_rar_names(raw_name_dir)
+        restored = raw_name_dir / "资料" / "中文.txt"
+        assert restored.read_bytes() == b"x"
+        assert not os.path.lexists(os.fsencode(_raw_path(raw_name_dir, gbk_dir)))
+
+    def test_rename_conflict_rejected(self, raw_name_dir):
+        """解码目标已存在 → invalid_archive 拒绝，不做覆盖。"""
+        (raw_name_dir / "中文.txt").write_bytes(b"existing")
+        _raw_path(raw_name_dir, self.GBK_BYTES).write_bytes(b"incoming")
+        with pytest.raises(upload.ArchiveError) as ei:
+            upload_rar.normalize_rar_names(raw_name_dir)
+        assert ei.value.code == "invalid_archive"
+        # 原有内容未被覆盖
+        assert (raw_name_dir / "中文.txt").read_bytes() == b"existing"
+
+    def test_valid_utf8_names_untouched(self, extract_dir):
+        (extract_dir / "hello.tex").write_bytes(b"x")
+        (extract_dir / "sub").mkdir()
+        (extract_dir / "sub" / "notes.txt").write_bytes(b"y")
+        before = sorted(str(p.relative_to(extract_dir)) for p in extract_dir.rglob("*"))
+        upload_rar.normalize_rar_names(extract_dir)
+        after = sorted(str(p.relative_to(extract_dir)) for p in extract_dir.rglob("*"))
+        assert before == after
+
+    def test_does_not_follow_symlinked_dirs(self, raw_name_dir):
+        """符号链接目录不递进：归一化先于 _validate_extracted 的符号链接
+        拒绝执行，绝不能沿链接改到解压根之外的文件系统。"""
+        victim_dir = Path(tempfile.mkdtemp(prefix="latexcellence-rarnorm-out-"))
+        try:
+            victim = _raw_path(victim_dir, self.GBK_BYTES)
+            victim.write_bytes(b"x")
+            link = raw_name_dir / "link"
+            try:
+                os.symlink(victim_dir, link, target_is_directory=True)
+            except (OSError, NotImplementedError):
+                pytest.skip("当前环境不允许创建符号链接")
+            upload_rar.normalize_rar_names(raw_name_dir)
+            # 链接目标内的外部文件未被改名或触碰
+            assert os.path.lexists(os.fsencode(victim))
+            assert not os.path.lexists(
+                os.fsencode(_raw_path(victim_dir, "中文.txt".encode()))
+            )
+        finally:
+            shutil.rmtree(victim_dir, ignore_errors=True)
+
+    def test_decode_chain_exhausted_rejected(self, raw_name_dir, monkeypatch):
+        """全链解码失败 → invalid_archive（宁可拒收，不入库坏名）。
+
+        cp437 对全部字节可解、链实际不会耗尽；为触达防御分支，把解码链
+        收窄到 utf-8+gbk 并使用两者都非法的字节序列。"""
+        monkeypatch.setattr(upload_rar, "RAR_NAME_DECODE_CHAIN", ("utf-8", "gbk"))
+        undecodable = b"\xff\xff.bin"  # utf-8/gbk 均非法
+        _raw_path(raw_name_dir, undecodable).write_bytes(b"x")
+        with pytest.raises(upload.ArchiveError) as ei:
+            upload_rar.normalize_rar_names(raw_name_dir)
+        assert ei.value.code == "invalid_archive"
+
+    def test_applied_in_bsdtar_branch_before_case_scan(self, raw_name_dir, monkeypatch):
+        """端到端接线：bsdtar 分支成功退出后、大小写扫描前执行归一化。
+
+        fake Popen 不落盘，surrogate 字节名预先放置在解压目录内；解压目录
+        本身也须位于支持原始字节名的文件系统（NTFS 挂载会 EINVAL）。"""
+        _patch_which(monkeypatch, "bsdtar")
+        monkeypatch.setattr(upload_rar.subprocess, "Popen", _RecordingPopen)
+        work = raw_name_dir / "extracted"
+        work.mkdir()
+        _raw_path(work, self.GBK_BYTES).write_bytes(b"x")
+        res = upload.extract_archive(FIXTURES / "layout_flat.rar", work, _limits())
+        assert res.file_count >= 1
+        assert (work / "中文.txt").exists()
+
+
+# ── 缺二进制与限时接线（不依赖解压器二进制）─────────────────────
+class TestWiring:
+    def test_missing_binary_reports_rar_extractor_missing(
+        self, extract_dir, monkeypatch
+    ):
+        monkeypatch.setattr(upload_rar.shutil, "which", lambda name: None)
+        with pytest.raises(upload.ArchiveError) as ei:
+            upload.extract_archive(FIXTURES / "layout_flat.rar", extract_dir, _limits())
+        assert ei.value.code == "rar_extractor_missing"
+
+    @pytest.mark.parametrize("rar_tool", ["unar", "bsdtar"])
+    def test_expired_deadline_skips_process_spawn(
+        self, extract_dir, monkeypatch, rar_tool
+    ):
+        """timeout_seconds=0：deadline 已过，未启动进程即拒绝（双工具）。"""
+        _patch_which(monkeypatch, rar_tool)
 
         def _fail_popen(*args, **kwargs):
             raise AssertionError("Popen must not be called after deadline")
 
-        monkeypatch.setattr(upload.subprocess, "Popen", _fail_popen)
+        monkeypatch.setattr(upload_rar.subprocess, "Popen", _fail_popen)
         with pytest.raises(upload.ArchiveError) as ei:
             upload.extract_archive(
                 FIXTURES / "layout_flat.rar", extract_dir, _limits(timeout_seconds=0)
             )
         assert ei.value.code == "invalid_archive"
 
-    def test_zero_product_guard_hermetic(self, extract_dir, monkeypatch):
-        """exit=0 且零产物（多卷集静默形态）：不依赖真实 unar 的兜底用例。"""
-        monkeypatch.setattr(upload.shutil, "which", lambda name: "/fake/unar")
+    @pytest.mark.parametrize("rar_tool", ["unar", "bsdtar"])
+    def test_zero_product_guard_hermetic(self, extract_dir, monkeypatch, rar_tool):
+        """exit=0 且零产物（多卷集静默形态）：双工具兜底用例。"""
+        _patch_which(monkeypatch, rar_tool)
 
         class _FakePopen:
             def __init__(self, *args, **kwargs):
@@ -341,14 +669,16 @@ class TestWiring:
             def communicate(self, timeout=None):
                 return b"", b""
 
-        monkeypatch.setattr(upload.subprocess, "Popen", _FakePopen)
+        monkeypatch.setattr(upload_rar.subprocess, "Popen", _FakePopen)
         with pytest.raises(upload.ArchiveError) as ei:
             upload.extract_archive(FIXTURES / "layout_flat.rar", extract_dir, _limits())
         assert ei.value.code == "invalid_archive"
 
-    def test_case_conflict_rejected_hermetic(self, extract_dir, monkeypatch):
-        """解压产物大小写不敏感重名：后置扫描拒绝（不依赖真实 unar）。"""
-        monkeypatch.setattr(upload.shutil, "which", lambda name: "/fake/unar")
+    @pytest.mark.parametrize("rar_tool", ["unar", "bsdtar"])
+    def test_case_conflict_rejected_hermetic(self, extract_dir, monkeypatch, rar_tool):
+        """解压产物大小写不敏感重名：后置扫描拒绝（不依赖真实解压器，
+        bsdtar 变体同时验证归一化不影响该扫描）。"""
+        _patch_which(monkeypatch, rar_tool)
         (extract_dir / "README.tex").write_text("A", encoding="utf-8")
         (extract_dir / "readme.tex").write_text("B", encoding="utf-8")
 
@@ -360,7 +690,7 @@ class TestWiring:
             def communicate(self, timeout=None):
                 return b"", b""
 
-        monkeypatch.setattr(upload.subprocess, "Popen", _FakePopen)
+        monkeypatch.setattr(upload_rar.subprocess, "Popen", _FakePopen)
         with pytest.raises(upload.ArchiveError) as ei:
             upload.extract_archive(FIXTURES / "layout_flat.rar", extract_dir, _limits())
         assert ei.value.code == "archive_unsafe"
@@ -382,14 +712,16 @@ class TestRarWatch:
         (tmp_path / "extracted" / "bomb.bin").write_bytes(b"\0" * 1024)
 
         kills: list[int] = []
-        monkeypatch.setattr(upload.os, "killpg", lambda pgid, sig: kills.append(pgid))
-        monkeypatch.setattr(upload.os, "getpgid", lambda pid: pid)
+        monkeypatch.setattr(
+            upload_rar.os, "killpg", lambda pgid, sig: kills.append(pgid)
+        )
+        monkeypatch.setattr(upload_rar.os, "getpgid", lambda pid: pid)
 
         limits = _limits(remaining_quota_bytes=512, timeout_seconds=999)
         proc = _FakeProc()
         stop = threading.Event()
         breach: list[str] = []
-        watcher = upload._start_rar_watch(
+        watcher = upload_rar._start_rar_watch(
             proc,
             tmp_path / "extracted",
             limits,
@@ -408,14 +740,14 @@ class TestRarWatch:
         import time
 
         (tmp_path / "extracted").mkdir()
-        monkeypatch.setattr(upload.os, "killpg", lambda pgid, sig: None)
-        monkeypatch.setattr(upload.os, "getpgid", lambda pid: pid)
+        monkeypatch.setattr(upload_rar.os, "killpg", lambda pgid, sig: None)
+        monkeypatch.setattr(upload_rar.os, "getpgid", lambda pid: pid)
 
         limits = _limits(timeout_seconds=999)
         proc = _FakeProc()
         stop = threading.Event()
         breach: list[str] = []
-        watcher = upload._start_rar_watch(
+        watcher = upload_rar._start_rar_watch(
             proc,
             tmp_path / "extracted",
             limits,
@@ -433,14 +765,16 @@ class TestRarWatch:
         (tmp_path / "extracted").mkdir()
         (tmp_path / "extracted" / "a.tex").write_bytes(b"x" * 16)
         kills: list[int] = []
-        monkeypatch.setattr(upload.os, "killpg", lambda pgid, sig: kills.append(pgid))
-        monkeypatch.setattr(upload.os, "getpgid", lambda pid: pid)
+        monkeypatch.setattr(
+            upload_rar.os, "killpg", lambda pgid, sig: kills.append(pgid)
+        )
+        monkeypatch.setattr(upload_rar.os, "getpgid", lambda pid: pid)
 
         limits = _limits(remaining_quota_bytes=1 << 20, timeout_seconds=60)
         proc = _FakeProc()
         stop = threading.Event()
         breach: list[str] = []
-        watcher = upload._start_rar_watch(
+        watcher = upload_rar._start_rar_watch(
             proc,
             tmp_path / "extracted",
             limits,
@@ -457,10 +791,11 @@ class TestRarWatch:
         watcher.join(timeout=5)
 
 
-# ── 真实解压（需要 unar）────────────────────────────────────────
-@requires_unar
+# ── 真实解压（需要解压器；unar / bsdtar 双工具参数化）──────────
+# 加密/分卷包在预扫阶段即确定性拒绝，与实际选中的解压器无关
+@pytest.mark.parametrize("force_rar_tool", RAR_TOOL_PARAMS, indirect=True)
 class TestNormalExtract:
-    def test_top_dir_layout(self, extract_dir):
+    def test_top_dir_layout(self, extract_dir, force_rar_tool):
         res = upload.extract_archive(
             FIXTURES / "layout_top_dir.rar", extract_dir, _limits()
         )
@@ -475,7 +810,7 @@ class TestNormalExtract:
         assert res.file_count == 2
         assert res.size > 0
 
-    def test_flat_layout(self, extract_dir):
+    def test_flat_layout(self, extract_dir, force_rar_tool):
         res = upload.extract_archive(
             FIXTURES / "layout_flat.rar", extract_dir, _limits()
         )
@@ -489,19 +824,29 @@ class TestNormalExtract:
         ) == "flat layout\n"
         assert res.file_count == 2
 
-    def test_gbk_name_extracts_single_file(self, extract_dir):
-        """GBK 文件名：unar 字符集探测与 zip 管线可能不一致（已知差异），
-        只断言解出唯一文件且内容一致，不断言文件名逐字还原。"""
-        res = upload.extract_archive(FIXTURES / "gbk_name.rar", extract_dir, _limits())
-        files = [p for p in extract_dir.rglob("*") if p.is_file()]
+    def test_gbk_name_extracts_single_file(self, raw_name_dir, force_rar_tool):
+        """GBK 文件名：unar 走字符集探测，与 zip 管线可能不一致（已知差异），
+        只断言唯一文件且内容一致；bsdtar 落盘原始字节名后经归一化步骤解码，
+        应精确还原为中文名（与 zip 管线一致，强于 unar 的探测结果）。
+
+        解压目录用 raw_name_dir 而非 extract_dir：会话级 basetemp 位于仓库
+        工作区内，可能落在拒绝非 UTF-8 原始字节名的挂载点（如 ntfs3，
+        bsdtar 落盘后 stat 直接 EINVAL），须先探测文件系统能力再执行。"""
+        res = upload.extract_archive(FIXTURES / "gbk_name.rar", raw_name_dir, _limits())
+        files = [p for p in raw_name_dir.rglob("*") if p.is_file()]
         assert len(files) == 1
-        assert files[0].name.endswith(".txt")
         assert files[0].read_bytes() == b"gbk name\n"
+        if force_rar_tool == "bsdtar":
+            # 该断言依赖 bsdtar 分支的 normalize_rar_names 步骤
+            assert files[0].name == "中文.txt"
+            json.dumps(files[0].name)  # 文件树接口 JSON 序列化安全
+        else:
+            assert files[0].name.endswith(".txt")
         assert res.file_count == 1
 
-    def test_archive_with_service_data_extracts(self, extract_dir):
-        """带恢复记录 / NTFS 子块数据区的合法包端到端：预扫放行后
-        unar 忽略服务块并正常解出文件（缺陷一的功能性验收）。"""
+    def test_archive_with_service_data_extracts(self, extract_dir, force_rar_tool):
+        """带恢复记录数据区的合法包端到端：预扫放行后解压器忽略服务块并
+        正常解出文件（缺陷一的功能性验收）。"""
         res = upload.extract_archive(
             FIXTURES / "service_rr.rar", extract_dir, _limits()
         )
@@ -510,14 +855,14 @@ class TestNormalExtract:
         ) == "\\documentclass{article}\nHello\n"
 
 
-@requires_unar
+@pytest.mark.parametrize("force_rar_tool", RAR_TOOL_PARAMS, indirect=True)
 class TestProtectedReject:
-    def test_encrypted_rejected(self, extract_dir):
+    def test_encrypted_rejected(self, extract_dir, force_rar_tool):
         with pytest.raises(upload.ArchiveError) as ei:
             upload.extract_archive(FIXTURES / "encrypted.rar", extract_dir, _limits())
         assert ei.value.code == "archive_unsafe"
 
-    def test_volume_first_part_rejected(self, extract_dir):
+    def test_volume_first_part_rejected(self, extract_dir, force_rar_tool):
         with pytest.raises(upload.ArchiveError) as ei:
             upload.extract_archive(
                 FIXTURES / "volume.part1.rar", extract_dir, _limits()
@@ -525,16 +870,16 @@ class TestProtectedReject:
         assert ei.value.code == "archive_unsafe"
 
 
-@requires_unar
+@pytest.mark.parametrize("force_rar_tool", RAR_TOOL_PARAMS, indirect=True)
 class TestCorrupt:
-    def test_garbage_bytes_rejected(self, extract_dir, tmp_path):
+    def test_garbage_bytes_rejected(self, extract_dir, tmp_path, force_rar_tool):
         p = tmp_path / "upload.rar"
         p.write_bytes(b"definitely not a rar archive")
         with pytest.raises(upload.ArchiveError) as ei:
             upload.extract_archive(p, extract_dir, _limits())
         assert ei.value.code == "invalid_archive"
 
-    def test_empty_archive_rejected(self, extract_dir, tmp_path):
+    def test_empty_archive_rejected(self, extract_dir, tmp_path, force_rar_tool):
         """合法但零条目的 rar：多卷集静默零产物兜底同样拒绝。"""
         p = tmp_path / "upload.rar"
         p.write_bytes(_rar4())
@@ -542,8 +887,10 @@ class TestCorrupt:
             upload.extract_archive(p, extract_dir, _limits())
         assert ei.value.code == "invalid_archive"
 
-    def test_case_conflict_rejected_end_to_end(self, extract_dir, tmp_path):
-        """真实 unar 解出大小写重名对：后置扫描拒绝（Linux 上两者共存）。"""
+    def test_case_conflict_rejected_end_to_end(
+        self, extract_dir, tmp_path, force_rar_tool
+    ):
+        """真实解压器解出大小写重名对：后置扫描拒绝（Linux 上两者共存）。"""
         p = tmp_path / "upload.rar"
         p.write_bytes(_rar4(entries=[(b"README.tex", b"A"), (b"readme.tex", b"B")]))
         with pytest.raises(upload.ArchiveError) as ei:
@@ -551,8 +898,8 @@ class TestCorrupt:
         assert ei.value.code == "archive_unsafe"
 
 
-# ── API 集成（需要 unar）────────────────────────────────────────
-@requires_unar
+# ── API 集成（需要解压器；unar / bsdtar 双工具参数化）──────────
+@pytest.mark.parametrize("force_rar_tool", RAR_TOOL_PARAMS, indirect=True)
 class TestApiUpload:
     @pytest.fixture
     def env(self, tmp_path):
@@ -581,7 +928,7 @@ class TestApiUpload:
         assert r.status_code == 200, r.text
         return client
 
-    def test_upload_rar_creates_project(self, env, alice_client):
+    def test_upload_rar_creates_project(self, env, alice_client, force_rar_tool):
         from tests.test_multiuser.conftest import csrf
 
         payload = (FIXTURES / "layout_top_dir.rar").read_bytes()
@@ -606,7 +953,7 @@ class TestApiUpload:
         ) == "\\documentclass{article}\nWorld\n"
         assert (root / "refs.bib").exists()
 
-    def test_upload_encrypted_rar_rejected(self, env, alice_client):
+    def test_upload_encrypted_rar_rejected(self, env, alice_client, force_rar_tool):
         from tests.test_multiuser.conftest import csrf
 
         payload = (FIXTURES / "encrypted.rar").read_bytes()
@@ -618,7 +965,9 @@ class TestApiUpload:
         assert r.status_code == 400
         assert r.json()["detail"]["error"] == "archive_unsafe"
 
-    def test_upload_rar_with_service_data_creates_project(self, env, alice_client):
+    def test_upload_rar_with_service_data_creates_project(
+        self, env, alice_client, force_rar_tool
+    ):
         """带恢复记录的合法 rar 经 API 上传：不再被预扫功能性误拒。"""
         from tests.test_multiuser.conftest import csrf
 
@@ -634,7 +983,9 @@ class TestApiUpload:
         root = userspace.project_dir(env["alice"]["id"], proj["project_id"])
         assert (root / "main.tex").exists()
 
-    def test_upload_unsupported_suffix_rejected(self, env, alice_client):
+    def test_upload_unsupported_suffix_rejected(
+        self, env, alice_client, force_rar_tool
+    ):
         from tests.test_multiuser.conftest import csrf
 
         r = alice_client.post(

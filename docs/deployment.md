@@ -98,7 +98,8 @@ curl -s http://127.0.0.1:8000/api/config/status # multi_user 应为 true
 | TeX Live | latexindent | 源码格式化层 | 回落到内置轻量格式化器 |
 | TeX Live 中文宏包 | xeCJK 等 | 编译中文 LaTeX 文档 | 中文文档编译缺宏包报错 |
 | Pandoc | 可选 | Markdown/DOCX/HTML 转 LaTeX | 格式转换功能不可用 |
-| unar | 多用户模式接收 rar 上传时必需 | rar 解压 | rar 上传返回明确错误（`unar_missing`），zip/7z 不受影响 |
+| unar | 多用户模式接收 rar 上传时的解压器之一（优先选用） | rar 解压 | rar 上传返回明确错误（`rar_extractor_missing`），zip/7z 不受影响 |
+| libarchive-tools（提供 bsdtar） | 可选，rar 解压的另一选择；无 unar 的发行版（如 Alpine/postmarketOS）用它替代 | rar 解压（unar 缺失时自动回退） | 同上（两者皆缺才报错） |
 | Docker | 可选 | 沙箱隔离外部命令执行（强烈建议多用户部署启用） | 沙箱回落本地子进程，见「安全风险声明」 |
 
 Debian/Ubuntu 安装示例（其他发行版按包名对应关系调整；TeX 组件在不同发行版的包拆分可能不同）：
@@ -111,7 +112,7 @@ sudo apt install -y python3 python3-venv python3-pip git curl
 #           中文宏包(texlive-lang-chinese)，latexmk 为独立包
 sudo apt install -y texlive-xetex texlive-latex-extra texlive-extra-utils \
     latexmk texlive-lang-chinese
-# 可选：pandoc（格式转换）、unar（rar 上传解压）
+# 可选：pandoc（格式转换）、unar 或 libarchive-tools（rar 上传解压，二选一）
 sudo apt install -y pandoc unar
 ```
 
@@ -163,7 +164,7 @@ npm run build
 
 | 依赖 | 要求 | 说明 |
 | --- | --- | --- |
-| unar | 已安装 | 多用户模式接收 rar 上传时必需（Docker 后端镜像已内置，裸机需自行安装） |
+| unar 或 bsdtar（libarchive-tools） | 至少安装其一 | 多用户模式接收 rar 上传时必需，unar 优先、缺失自动回退 bsdtar（Docker 后端镜像已内置 unar，裸机需自行安装；Alpine 系源无 unar，用 `apk add libarchive-tools`） |
 | Docker daemon | 可选但强烈建议 | 启用沙箱隔离（`sandbox.mode=auto/docker`）的前提，见「Docker 沙箱」与「安全风险声明」 |
 | HTTPS 反代 | 公网/局域网部署必备 | 见「HTTPS 与反向代理」 |
 
@@ -645,18 +646,18 @@ latex.example.com {
 | 科研绘图 | Python（matplotlib 等绘图脚本） | 上传数据驱动的脚本执行 |
 | 格式转换 | pandoc | 转换器漏洞或嵌入脚本 |
 | 源码格式化 | latexindent.pl | Perl 执行环境 |
-| rar 上传解压 | unar | 解析攻击者完全可控的压缩包字节流，转换器漏洞风险与 pandoc 同级 |
+| rar 上传解压 | unar 或 bsdtar | 解析攻击者完全可控的压缩包字节流，转换器漏洞风险与 pandoc 同级 |
 
-> **已知例外：unar 未入沙箱**。latexmk / xelatex / latexdiff / git、绘图 Python、pandoc、latexindent 等外部命令均已由 SandboxRunner（Docker 沙箱）收口；唯 **unar 目前仍是后端进程的子进程直跑，未纳入沙箱**，因此**不与上表其他命令共享同一风险口径**——即使沙箱已启用，unar 仍以宿主后端进程身份解析攻击者可控的字节流。现有缓解措施：
+> **已知例外：unar / bsdtar 未入沙箱**。latexmk / xelatex / latexdiff / git、绘图 Python、pandoc、latexindent 等外部命令均已由 SandboxRunner（Docker 沙箱）收口；唯 rar 解压器（unar 优先、缺失回退 bsdtar）目前仍是后端进程的子进程直跑，未纳入沙箱，因此**不与上表其他命令共享同一风险口径**——即使沙箱已启用，解压器仍以宿主后端进程身份解析攻击者可控的字节流。现有缓解措施：
 >
 > - stdin 关闭（`/dev/null`），防加密包交互式索要密码挂起；
 > - 独立进程组启动，限时 / 超解压配额即 SIGKILL 整组硬中断；
 > - 解压只写入独立暂存区，落位用户空间前经全量安全复核；
 > - RAR4 头链加密 / 分卷标志预扫（按块头声明的数据区长度整段跳过，不误拒带恢复记录等服务数据的合法包）。
 >
-> **跟踪项：将 unar 纳入 SandboxRunner 收口**（尚未实现，后续版本落地）。验收标准：
+> **跟踪项：将 unar / bsdtar 纳入 SandboxRunner 收口**（尚未实现，后续版本落地）。验收标准：
 >
-> - convert 镜像内置 unar；
+> - convert 镜像内置 unar 与 bsdtar；
 > - 归档暂存文件以只读方式挂载进容器，解压目录以可写方式挂载；
 > - 解压改经 `get_sandbox_runner().execute` 执行，沿用无网络、只读根文件系统、资源限额的安全基线；
 > - 真容器冒烟测试覆盖 rar 上传解压全链路（含正常包解压与加密 / 分卷包拒绝路径）。
@@ -832,4 +833,4 @@ LLM 每用户治理：多用户模式下每次 LLM 调用前在单事务内完�
 | 注册后无法登录 | 正常流程：`pending` 状态需管理员批准；管理面板 → 待审批 |
 | 启动即报配置校验错误 | `multi_user` / `sandbox` / `smtp` 配置段严格校验，未知键直接报错；对照 `config.example.json` 检查拼写 |
 | 生产模式页面 404，日志提示 static/ 为空 | 未构建前端，或启动时工作目录不是仓库根；先 `npm run build` 再从仓库根启动 |
-| rar 上传报 `unar_missing` | 裸机未安装 unar（`apt install unar`）；容器后端镜像已内置，检查是否用了自制精简镜像 |
+| rar 上传报 `rar_extractor_missing` | 裸机未安装任何 rar 解压器：Debian 系 `apt install unar`，Alpine 系 `doas apk add libarchive-tools`（提供 bsdtar），装其一即可；容器后端镜像已内置 unar，检查是否用了自制精简镜像 |

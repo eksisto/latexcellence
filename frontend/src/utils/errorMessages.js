@@ -44,7 +44,7 @@ const EXACT_MAP = {
   upload_too_large: "uploadTooLarge",
   invalid_archive: "invalidArchive",
   archive_unsafe: "archiveUnsafe",
-  unar_missing: "unarMissing",
+  rar_extractor_missing: "rarExtractorMissing",
   account_pending: "accountPending",
   account_disabled: "accountDisabled",
   registration_disabled: "registrationDisabled",

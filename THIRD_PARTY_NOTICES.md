@@ -127,7 +127,8 @@
 | --- | --- | --- | --- | --- |
 | [TeX Live](https://tug.org/texlive) | 2026 (xelatex/latexmk/latexindent.pl) | GPL-2.0-or-later | Copyright (c) TeX Live / DANTE e.V. 及各组件作者 | LaTeX 编译 |
 | [Pandoc](https://pandoc.org) | 3.10.1 | GPL-2.0-or-later | Copyright (c) 2006- John MacFarlane | 格式转换 |
-| [unar / The Unarchiver](https://theunarchiver.com) | 1.10.8（Debian main 源） | LGPL-2.1-or-later | Copyright (c) 2017-present, MacPaw Inc.; upstream Dag Ågren 及 XADMaster 贡献者 | 多用户模式 rar 压缩包解压（多用户 v2 P2；后端镜像内置） |
+| [unar / The Unarchiver](https://theunarchiver.com) | 1.10.8（Debian main 源） | LGPL-2.1-or-later | Copyright (c) 2017-present, MacPaw Inc.; upstream Dag Ågren 及 XADMaster 贡献者 | 多用户模式 rar 压缩包解压的首选解压器（多用户 v2 P2；后端镜像内置） |
+| [libarchive / bsdtar](https://www.libarchive.org) | 3.7.x（各发行版 main 源） | BSD-3-Clause（含个别组件 BSD-2-Clause） | Copyright (c) 2003-2025, Tim Kientzle, Charles P. Boyd 及 libarchive contributors | rar 解压回退解压器：宿主缺失 unar 时经 `libarchive-tools` 包提供的 bsdtar 子进程解压（RAR4/RAR5 reader 为 BSD 授权独立实现；系统包引入，不经 pip，不随本项目再分发） |
 
 ### Pandoc 许可证说明
 
@@ -140,6 +141,10 @@ TeX Live 包含多个组件（xelatex、latexmk、latexindent.pl、latexdiff 等
 ### unar 许可证说明
 
 unar 是 The Unarchiver 项目的命令行工具，核心库 XADMaster 以 LGPL-2.1-or-later 发布。本项目通过子进程调用 unar 解压用户上传的 rar 压缩包（仅多用户模式），不包含或修改其源代码；二进制经 Docker 后端镜像由 Debian main 源安装，不随本项目再分发。
+
+### libarchive（bsdtar）许可证说明
+
+libarchive 以 BSD-3-Clause 许可证发布（部分组件为 BSD-2-Clause），其 RAR4/RAR5 reader 为不含 unRAR 限制代码的 BSD 授权独立实现。当宿主机缺失 unar 时，本项目经 `libarchive-tools` 包提供的 bsdtar 以子进程方式解压 rar 压缩包作为回退（仅多用户模式），不包含或修改其源代码；bsdtar 由系统包管理器安装（各主流发行版 main 源收录），不经 pip 引入，不随本项目再分发。
 
 ## 六、主题资源
 

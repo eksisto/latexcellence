@@ -1600,7 +1600,7 @@
     "uploadTooLarge": "上传内容超过大小限制",
     "invalidArchive": "压缩包无效或已损坏",
     "archiveUnsafe": "压缩包包含不安全内容，已拒绝",
-    "unarMissing": "服务器未安装 unar，无法解压 rar 压缩包",
+    "rarExtractorMissing": "服务器未安装可用的 rar 解压工具（unar 或 bsdtar），无法解压 rar 压缩包",
     "accountPending": "账号正在等待管理员批准",
     "accountDisabled": "账号已被禁用，请联系管理员",
     "registrationDisabled": "注册已关闭，请联系管理员创建账号",

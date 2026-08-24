@@ -8,6 +8,7 @@
 用法（在仓库根目录）::
 
     python tools/rar_fixtures/make_fixtures.py
+    python tools/rar_fixtures/make_fixtures.py --verify tests/fixtures/rar/compressed_rar4.rar
 
 生成物（均为无压缩 store 方式，体积仅数百字节）：
 
@@ -34,13 +35,32 @@
 
 注意：encrypted.rar / volume.part1.rar 只设置格式标志位用于触发拒绝路径，
 不是可正常解密的归档；任何工具都不应尝试解密受保护包。
+
+真实压缩样本（RAR 解压器回退层的遗留验收项）：
+    本脚本只能构造 store（不压缩）样例——压缩流依赖专有算法，无法伪造。
+    rar 回退层（docs/rar-extractor-fallback.md §六）要求以真实压缩 RAR4 与
+    RAR5 各一在 bsdtar 下端到端上传成功作为验收标准；在装有 WinRAR 或 rar
+    （非自由 unrar 包亦可）的环境手工生成后入库 tests/fixtures/rar/：
+
+        1. 生成：取数百字节 .tex 样例（如 layout_flat.rar 解出的 main.tex），
+           `rar a -m5 -ep compressed_rar4.rar main.tex`（RAR4 默认格式）；
+           加 `-ma5`（WinRAR 5+ / rar 5.x：`rar a -ma5 -m5 -ep ...`）得 RAR5
+           变体；命名建议 compressed_rar4.rar / compressed_rar5.rar；
+        2. 校验（缺 unar/bsdtar 的机器可跳过，CI 有二进制时自动覆盖）：
+           `bsdtar -tf compressed_rar4.rar` 能列出成员且
+           `python tools/rar_fixtures/make_fixtures.py --verify compressed_rar4.rar`
+           通过（校验魔数、预扫放行、解出内容与源文件一致）；
+        3. 入库后在 tests/test_multiuser/test_upload_rar.py 增补对应真实解压
+           用例（双工具参数化）。
 """
 
 from __future__ import annotations
 
 import random
 import struct
+import subprocess
 import sys
+import tempfile
 import zlib
 from pathlib import Path
 
@@ -149,7 +169,69 @@ def build_rar(entries: list[tuple[bytes, bytes]], *, main_flags: int = 0) -> byt
     return bytes(out)
 
 
+def _verify(path: Path) -> int:
+    """`--verify <file.rar>`：入库真实压缩样本前的最小校验（回退层验收用）。
+
+    步骤：① 魔数检查（RAR4/RAR5）；② 复用上传管线预扫确认非受保护包
+    （须在仓库根目录运行以导入 backend）；③ 环境有 unar 或 bsdtar 时
+    经生产管线同一选择层与命令构造实际解压到临时目录，确认非零产物。
+    任一步失败退出码为 1。"""
+    if REPO_ROOT.name and str(REPO_ROOT) not in sys.path[:1]:
+        sys.path.insert(0, str(REPO_ROOT))
+    from backend.core.multiuser import upload_rar  # noqa: E402
+
+    blob = path.read_bytes()
+    if blob.startswith(RAR_MARKER):
+        fmt = "RAR4"
+    elif blob.startswith(b"Rar!\x1a\x07\x01\x00"):
+        fmt = "RAR5"
+    else:
+        print(f"FAIL: {path} 缺少 RAR 魔数")
+        return 1
+    print(f"magic: {fmt} OK ({len(blob)} bytes)")
+
+    try:
+        upload_rar.reject_protected_rar(path)
+    except upload_rar.ArchiveError as e:
+        print(f"FAIL: 预扫拒绝该归档（code={e.code}）：{e.message}")
+        return 1
+    print("prescan: not protected OK")
+
+    try:
+        extractor, binary = upload_rar.resolve_rar_extractor()
+    except upload_rar.ArchiveError:
+        print("extract: SKIP（环境无 unar/bsdtar）")
+        return 0
+    with tempfile.TemporaryDirectory(prefix="rar-verify-") as td:
+        tdp = Path(td)
+        cmd = upload_rar.RAR_EXTRACTOR_CMD_BUILDERS[extractor](binary, path, tdp)
+        proc = subprocess.run(
+            cmd,
+            stdin=subprocess.DEVNULL,
+            capture_output=True,
+            start_new_session=True,
+        )
+        files = [p for p in tdp.rglob("*") if p.is_file()]
+        if proc.returncode != 0 or not files:
+            print(f"FAIL: {extractor} 解压失败 (exit={proc.returncode})")
+            return 1
+        for f in sorted(files):
+            print(f"extracted: {f.relative_to(tdp)} ({f.stat().st_size} bytes)")
+    print("verify: PASS")
+    return 0
+
+
 def main() -> int:
+    if "--verify" in sys.argv[1:]:
+        idx = sys.argv.index("--verify")
+        if len(sys.argv) != idx + 2 or not sys.argv[idx + 1].lower().endswith(".rar"):
+            print(
+                "用法: python tools/rar_fixtures/make_fixtures.py --verify <file.rar>\n"
+                "（--verify 需要恰好一个 .rar 路径参数；不带 --verify 运行则重新生成 fixtures）"
+            )
+            return 2
+        return _verify(Path(sys.argv[idx + 1]))
+
     OUT_DIR.mkdir(parents=True, exist_ok=True)
 
     samples: dict[str, bytes] = {

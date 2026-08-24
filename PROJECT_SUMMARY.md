@@ -36,7 +36,7 @@ latexcellence/
 │   │   ├── prompts.py               # 中央提示词管理模块（集中存储所有 LLM 提示词）
 │   │   ├── base_paragraph_check.py  # 逐段检查服务基类（typo/expression/code_review/terminology 共享）
 │   │   ├── access_control.py        # 统一访问控制：项目权限矩阵 + workspace 绑定校验依赖
-│   │   └── multiuser/               # 多用户模式基础设施包（db/userspace/auth/clientip/registration_policy/dependencies/quota/upload/upload_sessions/maintenance/maintenance_lease/migrate/sandbox_leases/llm_governance/edit_log/mail/pending_interactions/operation_contexts）
+│   │   └── multiuser/               # 多用户模式基础设施包（db/userspace/auth/clientip/registration_policy/dependencies/quota/upload/upload_rar/upload_sessions/maintenance/maintenance_lease/migrate/sandbox_leases/llm_governance/edit_log/mail/pending_interactions/operation_contexts）
 │   ├── utils/
 │   │   ├── json_utils.py            # LLM JSON 解析/校验/重试
 │   │   ├── file_ops.py              # 原子写入/备份/MD5
@@ -196,6 +196,7 @@ latexcellence/
 │   ├── web-access-operations.md              # 网络访问灰度、观测、容量与回滚运维
 │   ├── multi-user-plan.md                    # 多用户模式设计方案（双模式/认证/用户空间/配额/权限协作/管理后台/迁移）
 │   ├── multi-user-v2-plan.md                   # 多用户模式 v2 设计方案（Docker 沙箱/rar/反向补丁撤销/分片上传/SMTP/记账优化/多实例）
+│   ├── rar-extractor-fallback.md                 # RAR 解压器回退层设计与实施记录（unar → bsdtar，已实施）
 │   ├── deployment.md                          # 后端部署指南（单用户/多用户单进程/多实例 Compose 部署、systemd 托管、HTTPS 反向代理、安全风险声明、备份、环境变量与升级回滚）
 │   ├── modules/                     # 模块文档
 │   └── showcase.md                  # 展示页（showcase）说明
@@ -297,7 +298,7 @@ latexcellence/
 | 多用户双模式 | `multi_user.enabled` 开关；单用户保持现状（本地目录 + 共享令牌），多用户强制会话认证、CSRF、禁用任意路径打开/浏览 | [multi-user-plan.md](docs/multi-user-plan.md)、[deployment.md](docs/deployment.md) |
 | 多用户认证 | argon2id 密码哈希、HttpOnly 会话 Cookie（库只存 SHA-256）、注册审批流、登录限流、管理员引导（env/CLI） | [backend-core.md](docs/backend-core.md) |
 | 注册自动审批（IP 策略） | 注册记录真实客户端 IP（可信代理解析 X-Forwarded-For）；同 IP 账号上限 + CIDR 白名单 + GeoLite2 离线地理白名单叠加判定「无恶意」即自动通过，否则转人工待审批；每 IP 注册限流，只降级不拒绝 | [backend-core.md](docs/backend-core.md)、[deployment.md](docs/deployment.md) |
-| 多用户项目与配额 | 上传 zip/7z/rar 安全解压（rar 走 unar 外部管线）、项目命名去重、项目空间配额记账、回收站（7 天）、打包下载；写回超限回滚 | [backend-core.md](docs/backend-core.md)、[multi-user-plan.md](docs/multi-user-plan.md) |
+| 多用户项目与配额 | 上传 zip/7z/rar 安全解压（rar 经 unar 优先、bsdtar 回退的外部管线）、项目命名去重、项目空间配额记账、回收站（7 天）、打包下载；写回超限回滚 | [backend-core.md](docs/backend-core.md)、[multi-user-plan.md](docs/multi-user-plan.md) |
 | 多用户权限协作 | 协作者管理（按用户名添加/改角色/移除）、项目转交（原 owner 变 viewer 或退出）、viewer 写保护；权限实时查库即时生效 | [backend-core.md](docs/backend-core.md)、[multi-user-plan.md](docs/multi-user-plan.md) |
 | 共享项目反向补丁撤销 | 多用户模式写路径统一记账（workspace_edit_ops + .edit_logs 快照），undo/redo 只回退当前用户自己的修改：冲突即拒绝（409）、恢复超配额拒绝（413）、LIFO 整组回滚、redo 对称；共享项目 v1 禁令解除 | [DESIGN.md §14](DESIGN.md)、[multi-user-v2-plan.md](docs/multi-user-v2-plan.md) §8 |
 | 多用户 LLM 治理 | 每用户滑动窗口限流 + 并发租约（`llm_governance.py`，单事务原子准入），超限 429 + Retry-After；登录限流同表计数；仅多用户模式生效，单用户零依赖直通 | [backend-core.md](docs/backend-core.md)、[multi-user-v2-plan.md](docs/multi-user-v2-plan.md) §6 |

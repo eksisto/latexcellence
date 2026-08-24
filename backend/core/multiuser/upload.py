@@ -14,25 +14,15 @@
     - 解压只写入独立暂存区，任何失败立即中止并交由服务层清理暂存区，
       绝不把未经验证的内容写入用户空间
 
-rar 说明（多用户 v2 P2）：
-    - rar 无进程内解析库，走外部 unar 管线（`unar -f -q -D -o <dir> -- <file>`）；
-      stdin 接 /dev/null 防止加密包交互式索要密码挂起，进程组限时击杀
-    - 解压前对 RAR4 头链做最小预扫，命中加密 / 分卷标志即确定性拒绝，
-      不依赖 unar 失败输出的措辞；文件 / 子块 / 服务块统一按块头声明的
-      数据区长度整段跳过（恢复记录 RR 等合法服务数据不得误拒），未知
-      块或长度异常直接放行交权威复核兜底；RAR5 由输出关键词匹配与
-      “零产物”兜底覆盖
-    - unar 在 Linux 上会把名字里的 '/' 折叠为 '_'（RAR 归档内部规范分隔符
-      是反斜杠），因此正常 RAR 包的子目录结构不受影响；GBK 等非 UTF-8 文件名
-      依赖 unar 字符集探测，可能与 zip 管线的解码结果不一致（已知差异，见文档）
+rar 说明（多用户 v2 P2 / 回退层）：
+    - rar 子系统（解压器选择层、外部进程管线、RAR4 预扫、bsdtar 分支
+      文件名归一化）已拆分至 `upload_rar.py`；本模块的 extract_archive
+      在分发 .rar 时延迟导入其 extract_rar()，安全语义见该模块 docstring
 """
 
 import os
 import re
 import shutil
-import signal
-import struct
-import subprocess
 import threading
 import time
 import zipfile
@@ -110,7 +100,11 @@ def extract_archive(
     elif suffix == ".7z":
         result = _extract_7z(archive_path, extract_dir, limits)
     elif suffix == ".rar":
-        result = _extract_rar(archive_path, extract_dir, limits)
+        # 延迟导入：upload_rar 依赖本模块的共享原语（ArchiveError 等），
+        # 函数级导入化解双向引用，两侧入口无论谁先加载都能正确初始化
+        from .upload_rar import extract_rar
+
+        result = extract_rar(archive_path, extract_dir, limits)
     else:
         raise ArchiveError(
             "invalid_archive", "Unsupported archive type (only .zip, .7z and .rar)"
@@ -423,249 +417,6 @@ def _start_extract_watch(
     thread = threading.Thread(target=watch, name="extract-watch", daemon=True)
     thread.start()
     return thread
-
-
-# ── rar（多用户 v2 P2：unar 外部管线）────────────────────────────
-_RAR4_MARKER = b"Rar!\x1a\x07\x00"
-_RAR5_MARKER = b"Rar!\x1a\x07\x01\x00"
-
-# RAR4 标志位（与 unrar headers.hpp 对应，已经真实 lsar/unar 对照验证）
-_RAR4_MAIN_VOLUME = 0x0001  # MHD_VOLUME：多卷集合（分卷确定性拒绝）
-_RAR4_MAIN_PASSWORD = 0x0080  # MHD_PASSWORD：整包头加密
-# 注意 0x0040 是 MHD_PROTECT（恢复记录），合法包常见，不得误拒
-_RAR4_FILE_PROTECTED = 0x0007  # LHD_SPLIT_BEFORE|AFTER|PASSWORD 掩码
-_RAR4_FILE_LARGE = 0x0100  # LHD_LARGE：数据区超 u32（HIGH_PACK_SIZE 扩展）
-
-# 带数据区的 RAR4 块类型：块头固定段之后的第一个 u32 即数据区字节数
-# （FILE_HEAD 为 PACK_SIZE；SUB_HEAD / SERVICE——NTFS 流、注释、恢复
-# 记录 RR 等——为 ADD_SIZE），三类布局一致，预扫可统一整段跳过
-_RAR4_DATA_BLOCK_TYPES = (0x74, 0x78, 0x7A)
-_RAR4_ENDARC_TYPE = 0x7B
-
-# unar 失败输出中的受保护包特征词（大小写不敏感匹配；仅影响错误码细分，
-# 未命中也按 invalid_archive 拒绝，不影响安全性）
-_RAR_PROTECTED_KEYWORDS = ("password", "encrypt", "volume")
-
-
-def _extract_rar(
-    archive_path: Path, extract_dir: Path, limits: UploadLimits
-) -> ExtractedProject:
-    """通过外部 unar 解压 rar 到 extract_dir。
-
-    - 二进制缺失 → `unar_missing` 明确报错（部署层负责镜像内安装）；
-    - stdin 关闭防交互索要密码挂起；start_new_session 使进程组可整体击杀；
-    - 监视线程周期统计写盘量，超剩余配额或超限时 SIGKILL 进程组硬中断；
-    - 成功但零产物视为多卷集静默失败，按 invalid_archive 拒绝。
-    返回的 size 为 0 占位——外层 extract_archive 统一用 _validate_extracted
-    的复核结果覆盖。"""
-    unar = shutil.which("unar")
-    if unar is None:
-        raise ArchiveError(
-            "unar_missing",
-            "Server does not have unar installed; cannot extract rar archives",
-        )
-    deadline = _deadline(limits)
-    _check_deadline(deadline)
-
-    # 解压前预扫 RAR4 头链：加密 / 分卷标志确定性拒绝（不解密任何受保护包）
-    _reject_protected_rar(archive_path, max_blocks=limits.max_files * 4 + 1024)
-
-    try:
-        proc = subprocess.Popen(
-            [
-                str(unar),
-                "-f",
-                "-q",
-                "-D",
-                "-o",
-                str(extract_dir),
-                "--",
-                str(archive_path),
-            ],
-            stdin=subprocess.DEVNULL,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            start_new_session=True,
-        )
-    except OSError as e:
-        raise ArchiveError("invalid_archive", f"Cannot run unar: {e}")
-
-    stop = threading.Event()
-    breach: list[str] = []
-    watcher = _start_rar_watch(proc, extract_dir, limits, deadline, stop, breach)
-    stdout_data = b""
-    stderr_data = b""
-    try:
-        remaining = deadline - time.monotonic()
-        try:
-            stdout_data, stderr_data = proc.communicate(timeout=max(remaining, 0.0))
-        except subprocess.TimeoutExpired:
-            logger.warning("Aborting rar extraction mid-flight: timeout")
-            breach.append("invalid_archive")
-            _kill_process_group(proc)
-            proc.communicate()
-    finally:
-        stop.set()
-        watcher.join(timeout=5)
-
-    # breach 仅在进程确以非零退出（被击杀 / 自身报错）时采信：
-    # returncode==0 说明 unar 已在预算内正常完成，此时 watcher 在完成前后
-    # 一个采样 tick 内的过期采样属误报——真实超配额由外层 _validate_extracted
-    # 以最终落盘量权威复核，不受此放行影响
-    if breach and proc.returncode != 0:
-        if breach[0] == "quota_exceeded":
-            raise ArchiveError(
-                "quota_exceeded", "Extracted size exceeds remaining project quota"
-            )
-        raise ArchiveError("invalid_archive", "Archive extraction timed out")
-
-    if proc.returncode != 0:
-        text = (
-            stdout_data.decode("utf-8", "ignore")
-            + "\n"
-            + stderr_data.decode("utf-8", "ignore")
-        ).lower()
-        if any(kw in text for kw in _RAR_PROTECTED_KEYWORDS):
-            raise ArchiveError(
-                "archive_unsafe",
-                "Encrypted/volume rar archives are not allowed",
-            )
-        logger.info(
-            "unar failed (exit=%s) for %s: %s",
-            proc.returncode,
-            archive_path.name,
-            " ".join(text.split())[:300],  # 压平换行，避免日志注入多行
-        )
-        raise ArchiveError("invalid_archive", "Invalid or corrupt rar archive")
-
-    # 大小写不敏感重名复核：zip/7z 在解压前的名字清单上校验，rar 没有进程内
-    # 清单，对解压产物做等价后置扫描——既避免 Linux 上歧义路径对入库，也防
-    # data 目录落在大小写不敏感卷（macOS/Windows）时后写条目静默覆盖先写条目
-    names = [str(p.relative_to(extract_dir)) for p in extract_dir.rglob("*")]
-    _validate_no_case_conflicts(names)
-
-    # 多卷集第一卷被单独上传时（暂存区无兄弟分卷），unar 可能静默零产物退出；
-    # 合法空包对项目上传同样无意义，统一拒绝
-    file_count = sum(1 for p in extract_dir.rglob("*") if p.is_file())
-    if file_count == 0:
-        raise ArchiveError(
-            "invalid_archive",
-            "No extractable content (possibly an unsupported multi-volume set)",
-        )
-    return ExtractedProject(root=extract_dir, size=0, file_count=file_count)
-
-
-def _kill_process_group(proc: subprocess.Popen) -> None:
-    """SIGKILL 整个 unar 进程组（Popen 用 start_new_session 建独立进程组）。"""
-    try:
-        os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
-    except OSError:
-        pass  # 进程已退出 / 权限不足等：以 communicate 的返回为准
-
-
-def _start_rar_watch(
-    proc: subprocess.Popen,
-    extract_dir: Path,
-    limits: UploadLimits,
-    deadline: float,
-    stop: threading.Event,
-    breach: list[str],
-) -> threading.Thread:
-    """后台监视 unar 解压的实时写盘量与限时。
-
-    周期采样 extract_dir 已写盘量（符号链接不计），超过剩余配额或超过
-    限时即 SIGKILL 进程组硬中断解压，并把错误码追加到 breach。"""
-
-    def watch() -> None:
-        while not stop.wait(_WATCH_INTERVAL_SECONDS):
-            used = dir_size(extract_dir)
-            if used > limits.remaining_quota_bytes:
-                code = "quota_exceeded"
-            elif time.monotonic() > deadline:
-                code = "invalid_archive"
-            else:
-                continue
-            breach.append(code)
-            logger.warning(
-                "Aborting rar extraction mid-flight: %s (written=%d)", code, used
-            )
-            _kill_process_group(proc)
-            return
-
-    thread = threading.Thread(target=watch, name="rar-extract-watch", daemon=True)
-    thread.start()
-    return thread
-
-
-def _reject_protected_rar(archive_path: Path, max_blocks: int = 65536) -> None:
-    """RAR4 头链最小预扫：命中加密 / 分卷标志即拒绝。
-
-    只读头部字段、不解压任何内容。对带数据区的块（FILE_HEAD 0x74 /
-    SUB_HEAD 0x78 / SERVICE 0x7A），统一按「块头 body 起始的 u32」
-    整段跳过数据区——否则 pos 会落进恢复记录（MHD_PROTECT 合法包
-    常见）等高熵数据中随机游走，把随机字节误判成受保护标志，造成
-    合法归档被误拒。遇到 ENDARC、其他未知块类型或任何长度异常时
-    直接安全返回放行，交由后续 unar 实际解压与 _validate_extracted
-    权威复核兜底，绝不在数据字节流上盲走。
-
-    其余语义保持不变：RAR5 归档不做预扫（由输出关键词匹配与零产物
-    兜底覆盖）；SFX 前缀等非常规布局同样跳过预扫；主头 MHD_VOLUME /
-    MHD_PASSWORD 与文件头 LHD_SPLIT_BEFORE|AFTER|PASSWORD 确定性
-    拒绝；LHD_LARGE（数据区超 u32 的 ≥4GiB 包，本就无法通过上传体积
-    上限）按长度异常安全放行。
-
-    max_blocks 限定头链遍历块数（合法归档 ≈ 文件数 + 少量服务头），
-    防止构造的超小块垃圾包把预扫变成分钟级 CPU 空转；超限按
-    invalid_archive 快速拒绝。"""
-    try:
-        total_size = archive_path.stat().st_size
-        with open(archive_path, "rb") as fp:
-            if fp.read(len(_RAR4_MARKER)) != _RAR4_MARKER:
-                return  # 非 RAR4 魔数（含 RAR5）：交由 unar 判定
-            main = fp.read(7)
-            # 相对主头起点：CRC(0..1)、TYPE(2)、FLAGS(3..4)、SIZE(5..6)
-            if len(main) < 7 or main[2] != 0x73:
-                return  # 主头缺失/异常：不在预扫层面下结论
-            main_flags = struct.unpack_from("<H", main, 3)[0]
-            if main_flags & (_RAR4_MAIN_VOLUME | _RAR4_MAIN_PASSWORD):
-                raise ArchiveError(
-                    "archive_unsafe",
-                    "Encrypted/volume rar archives are not allowed",
-                )
-            pos = len(_RAR4_MARKER) + 13  # 主头固定 13 字节
-            blocks = 0
-            while 0 < pos < total_size:
-                blocks += 1
-                if blocks > max_blocks:
-                    raise ArchiveError(
-                        "invalid_archive",
-                        "rar header chain too complex; archive rejected",
-                    )
-                fp.seek(pos)
-                block = fp.read(11)  # 块头 7 字节 + DataSize u32
-                if len(block) < 7:
-                    return  # 头部截断：交由 unar 报无效包
-                _, btype, flags, hsize = struct.unpack_from("<HBHH", block)
-                if hsize < 7:
-                    return  # 结构损坏：交给 unar 报无效包
-                if btype == _RAR4_ENDARC_TYPE:
-                    return
-                if btype not in _RAR4_DATA_BLOCK_TYPES:
-                    return  # 未知/不带数据区的块类型：不在预扫层面下结论
-                if btype == 0x74:  # FILE_HEAD
-                    if flags & _RAR4_FILE_PROTECTED:
-                        raise ArchiveError(
-                            "archive_unsafe",
-                            "Encrypted/volume rar archives are not allowed",
-                        )
-                    if flags & _RAR4_FILE_LARGE:
-                        return  # 数据区超预扫 u32 模型：安全放行交权威复核
-                if len(block) < 11:
-                    return  # DataSize 字段截断：长度异常安全返回
-                data_size = int.from_bytes(block[7:11], "little")
-                pos += hsize + data_size
-    except OSError as e:
-        raise ArchiveError("invalid_archive", f"Cannot read rar archive: {e}")
 
 
 # ── 通用路径/安全校验 ────────────────────────────────────────────

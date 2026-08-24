@@ -1600,7 +1600,7 @@
     "uploadTooLarge": "上傳內容超過大小限制",
     "invalidArchive": "壓縮檔無效或已損壞",
     "archiveUnsafe": "壓縮檔包含不安全內容，已拒絕",
-    "unarMissing": "伺服器未安裝 unar，無法解壓 rar 壓縮檔",
+    "rarExtractorMissing": "伺服器未安裝可用的 rar 解壓工具（unar 或 bsdtar），無法解壓 rar 壓縮檔",
     "accountPending": "帳號正在等待管理員批准",
     "accountDisabled": "帳號已被停用，請聯絡管理員",
     "registrationDisabled": "註冊已關閉，請聯絡管理員建立帳號",

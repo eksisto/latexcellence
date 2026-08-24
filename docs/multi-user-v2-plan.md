@@ -322,6 +322,8 @@ docker/
 - 大小/文件数预检：rar 无进程内目录清单，采用"先限量解压到暂存区 + 监视线程累计"（与 7z 监视同型），超限即杀进程清暂存；
 - 测试 fixture：入库一个手工构造的小型 rar 样例（含正常布局/顶层目录布局两种）+ 加密样例（仅验证拒绝）。
 
+> **附注（解压器回退层已实施）**：本节为 P2 原始方案。实施时错误码演化为独立码 `unar_missing`，并已在回退层中进一步替换为 `rar_extractor_missing`——检测层扩展为「unar 优先、缺失回退 bsdtar」（命令 `bsdtar -x -f <abs_archive> -C <abs_dir>`，禁 `-P`），两者皆缺才报错；bsdtar 分支新增产物文件名归一化步骤。设计、实测证据与部署步骤见 [docs/rar-extractor-fallback.md](rar-extractor-fallback.md)。
+
 ## 8. P3 — 共享项目撤销恢复（反向补丁）
 
 ### 8.1 数据模型与磁盘布局
