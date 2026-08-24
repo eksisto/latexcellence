@@ -21,6 +21,7 @@
   - [部署验收清单](#部署验收清单)
 - [多实例部署（Docker Compose）](#多实例部署docker-compose)
 - [CPU 架构支持（amd64 / arm64）](#cpu-架构支持amd64--arm64)
+- [Alpine 系发行版实测记录（postmarketOS 等）](#alpine-系发行版实测记录postmarketos-等)
 - [Docker 沙箱](#docker-沙箱)
 - [HTTPS 与反向代理](#https-与反向代理)
 - [安全风险声明（必读）](#安全风险声明必读)
@@ -102,7 +103,7 @@ curl -s http://127.0.0.1:8000/api/config/status # multi_user 应为 true
 | libarchive-tools（提供 bsdtar） | 可选，rar 解压的另一选择；无 unar 的发行版（如 Alpine/postmarketOS）用它替代 | rar 解压（unar 缺失时自动回退） | 同上（两者皆缺才报错） |
 | Docker | 可选 | 沙箱隔离外部命令执行（强烈建议多用户部署启用） | 沙箱回落本地子进程，见「安全风险声明」 |
 
-Debian/Ubuntu 安装示例（其他发行版按包名对应关系调整；TeX 组件在不同发行版的包拆分可能不同）：
+Debian/Ubuntu 安装示例（其他发行版按包名对应关系调整；TeX 组件在不同发行版的包拆分可能不同。**Alpine 系 / musl libc 环境（含 postmarketOS）的完整实测差异见下文[「Alpine 系发行版实测记录」](#alpine-系发行版实测记录postmarketos-等)，逐条核对后再动手**）：
 
 ```bash
 sudo apt update
@@ -138,7 +139,7 @@ npm install
 npm run build
 ```
 
-构建产物输出到仓库根的 `static/`。生产模式（`server.dev_mode=false`）下 FastAPI 会把它作为静态站点挂载，与 API 同源提供服务。
+构建产物输出到仓库根的 `static/`。生产模式（`server.dev_mode=false`）下 FastAPI 会把它作为静态站点挂载，与 API 同源提供服务。挂载使用带 SPA 回退的 `SPAStaticFiles`（见 `backend/utils/spa_static_files.py`）：刷新 / 直达 `/formula-ocr` 这类 history 路由时回退 `index.html` 交给前端路由接管，而静态资源缺失与 `/api/*` 未命中仍保持原样 404。
 
 > 构建机与运行机分离时，在构建机上完成 `npm run build` 后，把整个仓库（含 `static/`）同步到服务器即可；服务器自身不需要装 Node。
 
@@ -499,6 +500,47 @@ docker run -d --name latexcellence \
 - **联网搜索的浏览器回退池（Playwright，可选功能）**：arm64 Linux 上 Chromium/Firefox 可用，WebKit 的 arm64 支持随版本变动；该能力初始化失败仅降级并记 warning，不影响主流程。部署后建议跑一次写作助手联网搜索冒烟，确认实际可用性；
 - **发布冒烟**：若构建/发布环境与生产架构不同，建议在目标架构上完成一次最小冒烟（启动 → 登录 → 上传 → 编译）再对外提供服务；
 - Docker 沙箱镜像同样支持在 arm64 上原生构建（TeX Live `aarch64-linux` 二进制集与 pandoc 官方 arm64 发布物），多架构 buildx 构建见 [docker/README.md](../docker/README.md)。
+
+---
+
+## Alpine 系发行版实测记录（postmarketOS 等）
+
+> 来自一台 postmarketOS 设备（aarch64、systemd），版本 v26.06（Alpine 3.24，Python 3.14）的全程踩坑实录。
+> Debian/Ubuntu 用户无需阅读；目标是 Alpine 系或任何 **musl libc** 环境时，以下差异须逐条核对。
+
+### 包管理器与包名对照
+
+| 本文档（Debian/Ubuntu） | Alpine 对应 | 说明 |
+| --- | --- | --- |
+| apt | apk | 建议换国内镜像源 |
+| python3-pip | py3-pip | `python3 -m venv` 直接可用（ensurepip 未被裁剪） |
+| sqlite3 | sqlite | CLI 二进制仍叫 sqlite3 |
+| unar | **无此包**；`apk add libarchive-tools` 提供 bsdtar 回退 | 后端按「unar 优先、缺失回退 bsdtar」选择解压器，两者皆缺报 `rar_extractor_missing`；zip/7z 不受影响 |
+| texlive-xetex | texlive-xetex | 一致 |
+| latexmk / texfot / latexindent（texlive-extra-utils） | texlive-binextra | 三者同在该子包 |
+| texlive-latex-extra + texlive-lang-chinese | texlive-most + texlive-langextra | 体积大；实测该组合下 xeCJK/ctex 与中文编译完整可用，另需 `font-noto-cjk` 字体 |
+
+### Python 依赖差异（musl libc，aarch64 实测）
+
+- `py7zr`（**Python ≥ 3.14，即 v26.06 起必需**）：依赖 PEP 784 标准库 `compression.zstd`，而 Alpine 把 `_zstd` 扩展拆为独立包 `python3-zstd` 且 **v3.24 稳定源中没有**——需从 edge/main 单包安装（版本须与系统 Python 同为 3.14.x）。缺失时 py7zr import 即失败，7z 压缩包上传解压不可用；
+- `playwright`：PyPI 无 musl-aarch64 wheel，**会导致整批 pip install 失败**。处理：剔除该行后安装其余依赖。影响仅限联网搜索的浏览器回退池（默认关闭），主流程无损；
+- `matplotlib`：任何版本均无 musl-aarch64 wheel，源码编译需完整 C/C++ 工具链与若干 `-dev` 包。推荐改用发行版包（`apk add py3-matplotlib`），虚拟环境以 `python3 -m venv --system-site-packages .venv` 创建，pip 清单中剔除 matplotlib 行——系统版本满足约束时 pip 自动跳过；
+- 其余二进制依赖（numpy / scipy / pandas / Pillow / lxml / uvloop 等）均有 musllinux aarch64 wheel，无需编译环境。
+
+### 后台任务与会话清理陷阱
+
+- 先确认 init 系统：`cat /proc/1/comm`。postmarketOS 默认 OpenRC，启用其 systemd 附加仓库后才是本文档的 systemd 形态，两者服务脚本不通用；
+- systemd 发行版开启 KillUserProcesses 时，SSH 断开会**连带杀死会话内 nohup 的后台进程**（长安装脚本静默夭折且日志为空）。长耗时任务改用瞬态单元托管：
+
+  ```bash
+  doas systemd-run --unit=<名称> --collect \
+      -p WorkingDirectory=/opt/latexcellence \
+      -p StandardOutput=append:/tmp/<名称>.log \
+      sh -c '<命令> 2>&1'
+  systemctl is-active <名称>    # 轮询直至 inactive
+  ```
+
+- 脚本轮询进程存活时注意 pgrep/pkill `-f` 自匹配：模式会命中携带同一字符串的外层 shell 自身造成死循环或误杀，用 `[x]` 方括号转义规避。
 
 ---
 

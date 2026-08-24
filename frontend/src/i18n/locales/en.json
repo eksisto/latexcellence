@@ -822,7 +822,7 @@
       "pendingDesc": "Account “{{username}}” is awaiting administrator approval.",
       "pendingHint": "You can sign in once approved. This page does not update automatically; please return to the sign-in page afterwards.",
       "pendingLogout": "Sign out",
-      "forgotLink": "Forgot password?",
+      "forgotLink": "Forgot password",
       "forgotTitle": "Reset your password",
       "forgotDesc": "Enter your username or bound email and we'll send you a reset link (valid for 1 hour).",
       "forgotIdentifier": "Username or email",

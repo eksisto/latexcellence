@@ -822,7 +822,7 @@
       "pendingDesc": "账号「{{username}}」正在等待管理员批准。",
       "pendingHint": "批准后即可正常登录使用；当前不会自动跳转，批准后请返回登录页。",
       "pendingLogout": "退出登录",
-      "forgotLink": "忘记密码？",
+      "forgotLink": "忘记密码",
       "forgotTitle": "找回密码",
       "forgotDesc": "输入用户名或绑定的邮箱，我们会发送重置链接（1 小时内有效）。",
       "forgotIdentifier": "用户名或邮箱",
