@@ -125,13 +125,13 @@ latexcellence/
 │
 ├── frontend/
 │   ├── package.json                 # npm 依赖与脚本
-│   ├── vite.config.js               # Vite 配置（dev 代理目标随 VITE_API_BASE_URL 派生）
+│   ├── vite.config.js               # Vite 配置（dev 代理目标随 VITE_API_BASE_URL 派生；vendor 分包含 pinyin-pro 按需懒加载块）
 │   ├── .env.example                 # 环境变量模板（VITE_API_BASE_URL：维护者默认后端地址）
 │   ├── index.html                   # 入口 HTML
 │   ├── components.json              # shadcn/ui 组件配置
 │   ├── jsconfig.json                # JS 路径别名配置
 │   ├── public/                      # 静态资源（favicon）
-│   ├── test/                        # 前端单元测试（formulaWrap / writingChatUtils / editorFiles / editorPreferences）
+│   ├── test/                        # 前端单元测试（node --test：formulaWrap / writingChatUtils / editorFiles / editorPreferences / editorMatcher / editorSnippetInsert / editorPreambleScan / latexCommands 等）
 │   └── src/
 │       ├── main.jsx                 # React 入口
 │       ├── App.jsx                  # 根路由
@@ -140,11 +140,18 @@ latexcellence/
 │       │   ├── index.js             # i18next 初始化（含语言检测）
 │       │   ├── language.js          # 语言代码归一化 + 后端语言名映射
 │       │   └── locales/             # 翻译 JSON 文件
+│       ├── data/
+│       │   └── latexCommands/         # LaTeX 命令数据库（阶段三，按类目拆分的 JSON + 统一加载器）
+│       │       └── index.js             # schema 校验、LATEX_COMMANDS 导出、类目分组
 │       ├── lib/                     # 通用前端工具
-│       │   └── editor/                 # 编辑器纯模块（阶段二）
-│       │       ├── language.js         # LaTeX 语言包抽象层（stex StreamLanguage 唯一入口，可整体替换）
-│       │       ├── files.js            # 可编辑白名单 + 约 2MB 大小上限纯函数
-│       │       └── preferences.js      # 偏好默认值 + 白名单清洗（导入校验同源）
+│       │   └── editor/                 # 编辑器纯模块
+│       │       ├── language.js           # LaTeX 语言包抽象层（stex StreamLanguage 唯一入口，可整体替换）
+│       │       ├── files.js              # 可编辑白名单 + 约 2MB 大小上限纯函数
+│       │       ├── preferences.js        # 偏好默认值 + 白名单清洗（导入校验同源）
+│       │       ├── matcher.js            # 统一匹配器（中文/全拼/首字母/英文四路，拼音预计算缓存；行内补全与面板共用）
+│       │       ├── latexCompletion.js    # \ 与 \begin{ 行内补全 source（CM6 autocompletion）
+│       │       ├── snippetInsert.js      # 模板插入 + 占位符解析/网格骨架生成 + Tab 循环跳转模式
+│       │       └── preambleScan.js       # 导言区扫描 + 宏包缺失检测 + usepackage 插入点选取
 │       ├── pages/                   # 页面组件
 │       │   ├── LoginPage.jsx        # 多用户登录页（含忘记密码入口）
 │       │   ├── RegisterPage.jsx     # 多用户注册页（含待审批提交态）
@@ -174,11 +181,13 @@ latexcellence/
 │       ├── components/              # 共享组件 + ui 基座组件
 │       │       ├── AuthShell.jsx        # 多用户认证页公共外壳
 │       ├── AuthConnectionButton.jsx # 认证页工具栏「后端连接设置」入口（改绑后端）
-│       │   ├── editor/                 # 编辑器组件（阶段二骨架）
-│       │   │   ├── LaTeXEditor.jsx     # CodeMirror 6 受控封装（value/onChange）
-│       │   │   ├── EditorToolbar.jsx   # 保存 · 后端撤销重做 · 设置 · 返回工作台
+│       │   ├── editor/                 # 编辑器组件
+│       │   │   ├── LaTeXEditor.jsx     # CodeMirror 6 受控封装（value/onChange，挂行内补全与占位符扩展）
+│       │   │   ├── EditorToolbar.jsx   # 保存 · 后端撤销重做 · 命令面板 · 设置 · 返回工作台
 │       │   │   ├── EditorSettingsDialog.jsx # 偏好开关（软换行/字号；自动保存数据结构）
-│       │   │   └── ConflictDialog.jsx  # 保存 409 冲突弹窗（放弃重载 / 剪贴板逃生）
+│       │   │   ├── ConflictDialog.jsx  # 保存 409 冲突弹窗（放弃重载 / 剪贴板逃生）
+│       │   │   ├── CommandPalette.jsx  # 命令面板（Ctrl/Cmd+/；搜索 + 分类 + 网格选择器二级步骤）
+│       │   │   └── GridSizePicker.jsx  # 表格/矩阵 m×n 拖选网格选择器
 │       │   ├── UploadProjectDialog.jsx # 上传项目对话框（zip/7z/rar 或目录分片直传 + 断点续传 + 暂停/进度）
 │       │   ├── ProjectPermissionsDialog.jsx # 项目权限对话框（协作者管理/转交）
 │       │   └── settings/            # 设置对话框分区配置组件
@@ -279,7 +288,7 @@ latexcellence/
 | style_modify | 粘贴代码 / 项目 Agent 修改样式，支持 shadow 编译、proposal 审核、批量事务与撤销 | router.py, service.py, agent.py, models.py, session.py, trace.py, cleanup.py | ✓ | ✗ |
 | writing_chat | 写作助手对话（含联网搜索、学术检索与引文追踪、项目浏览、段落编辑和工具确认） | router.py, service/, context.py, models.py, prompt_manager.py | ✓ | ✗ |
 | bib_manager | 参考文献管理 + 格式规则层 + DOI 多数据源查询 + 重复检测 + 文献库 | router.py, service.py, models.py, bib_parser.py, format_rules.py, style_registry.py, provider_manager.py, providers/ | ✓(格式规则命中不依赖 LLM；DOI 查询不依赖 LLM) | ✗ |
-| editor | 网页编辑器：后端整文件打开/保存（MD5 乐观锁、统一撤销记账与配额回滚接线）+ 前端 /editor 页 CM6 打开-编辑-保存-冲突闭环（阶段二骨架） | backend service.py（路由挂载于 project_router）；frontend pages/EditorPage.jsx、components/editor/、lib/editor/、store/editorStore.js | ✗ | ✗ |
+| editor | 网页编辑器：后端整文件打开/保存（MD5 乐观锁、统一撤销记账与配额回滚接线）+ 前端 /editor 页 CM6 打开-编辑-保存-冲突闭环 + 命令快速输入子系统（命令数据库四路匹配查找、\ 行内补全与命令面板双入口、表格矩阵网格选择器、宏包缺失联动自动添加声明） | backend service.py（路由挂载于 project_router）；frontend pages/EditorPage.jsx、components/editor/、lib/editor/、data/latexCommands/、store/editorStore.js | ✗ | ✗ |
 | plot_gen | 科研绘图 Agent（数据画像 -> 图表推荐 -> Python 执行 -> TikZ 编译） | router.py, service.py, agent.py, models.py, data_parser.py, recommender.py, styles.py, executor.py, tikzgen.py, sandbox_guard.py, trace.py, cleanup.py | ✓ | ✗ |
 
 ## 核心设计思路

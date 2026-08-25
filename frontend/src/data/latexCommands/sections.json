@@ -1,0 +1,202 @@
+[
+  {
+    "name": "part",
+    "insert": "\\part{$1}$0",
+    "zh": "部分标题",
+    "category": "section",
+    "pkg": null,
+    "grid": null
+  },
+  {
+    "name": "chapter",
+    "insert": "\\chapter{$1}$0",
+    "zh": "章标题",
+    "category": "section",
+    "pkg": null,
+    "grid": null
+  },
+  {
+    "name": "section",
+    "insert": "\\section{$1}$0",
+    "zh": "节标题",
+    "category": "section",
+    "pkg": null,
+    "grid": null
+  },
+  {
+    "name": "subsection",
+    "insert": "\\subsection{$1}$0",
+    "zh": "小节标题",
+    "category": "section",
+    "pkg": null,
+    "grid": null
+  },
+  {
+    "name": "subsubsection",
+    "insert": "\\subsubsection{$1}$0",
+    "zh": "子小节标题",
+    "category": "section",
+    "pkg": null,
+    "grid": null
+  },
+  {
+    "name": "paragraph",
+    "insert": "\\paragraph{$1}$0",
+    "zh": "段落标题",
+    "category": "section",
+    "pkg": null,
+    "grid": null
+  },
+  {
+    "name": "subparagraph",
+    "insert": "\\subparagraph{$1}$0",
+    "zh": "子段落标题",
+    "category": "section",
+    "pkg": null,
+    "grid": null
+  },
+  {
+    "name": "title",
+    "insert": "\\title{$1}\n\\author{$2}\n\\date{$3}\n\\maketitle$0",
+    "zh": "文档标题块",
+    "category": "section",
+    "pkg": null,
+    "grid": null
+  },
+  {
+    "name": "author",
+    "insert": "\\author{$1}$0",
+    "zh": "作者",
+    "category": "section",
+    "pkg": null,
+    "grid": null
+  },
+  {
+    "name": "date",
+    "insert": "\\date{$1}$0",
+    "zh": "日期",
+    "category": "section",
+    "pkg": null,
+    "grid": null
+  },
+  {
+    "name": "maketitle",
+    "insert": "\\maketitle",
+    "zh": "生成标题页",
+    "category": "section",
+    "pkg": null,
+    "grid": null
+  },
+  {
+    "name": "tableofcontents",
+    "insert": "\\tableofcontents",
+    "zh": "目录",
+    "category": "section",
+    "pkg": null,
+    "grid": null
+  },
+  {
+    "name": "newpage",
+    "insert": "\n\\newpage\n",
+    "zh": "换页",
+    "category": "section",
+    "pkg": null,
+    "grid": null
+  },
+  {
+    "name": "clearpage",
+    "insert": "\n\\clearpage\n",
+    "zh": "清页换页",
+    "category": "section",
+    "pkg": null,
+    "grid": null
+  },
+  {
+    "name": "newline",
+    "insert": "\\newline ",
+    "zh": "换行",
+    "category": "section",
+    "pkg": null,
+    "grid": null
+  },
+  {
+    "name": "noindent",
+    "insert": "\\noindent ",
+    "zh": "取消首行缩进",
+    "category": "section",
+    "pkg": null,
+    "grid": null
+  },
+  {
+    "name": "indent",
+    "insert": "\\indent ",
+    "zh": "首行缩进",
+    "category": "section",
+    "pkg": null,
+    "grid": null
+  },
+  {
+    "name": "footnote",
+    "insert": "\\footnote{$1}$0",
+    "zh": "脚注",
+    "category": "section",
+    "pkg": null,
+    "grid": null
+  },
+  {
+    "name": "vspace",
+    "insert": "\\vspace{$1}$0",
+    "zh": "垂直间距",
+    "category": "section",
+    "pkg": null,
+    "grid": null
+  },
+  {
+    "name": "hspace",
+    "insert": "\\hspace{$1}$0",
+    "zh": "水平间距",
+    "category": "section",
+    "pkg": null,
+    "grid": null
+  },
+  {
+    "name": "itemize",
+    "insert": "\\begin{itemize}\n\t\\item $1\n\t\\item $0\n\\end{itemize}",
+    "zh": "符号列表",
+    "category": "section",
+    "pkg": null,
+    "grid": null
+  },
+  {
+    "name": "enumerate",
+    "insert": "\\begin{enumerate}\n\t\\item $1\n\t\\item $0\n\\end{enumerate}",
+    "zh": "编号列表",
+    "category": "section",
+    "pkg": null,
+    "grid": null
+  },
+  {
+    "name": "description",
+    "insert": "\\begin{description}\n\t\\item[$1] $2\n\\end{description}$0",
+    "zh": "描述列表",
+    "category": "section",
+    "pkg": null,
+    "grid": null
+  },
+  {
+    "name": "abstract",
+    "insert": "\\begin{abstract}\n\t$1\n\\end{abstract}$0",
+    "zh": "摘要环境",
+    "category": "section",
+    "pkg": null,
+    "grid": null
+  },
+  {
+    "name": "quote",
+    "insert": "\\begin{quote}\n\t$1\n\\end{quote}$0",
+    "zh": "引用环境",
+    "category": "section",
+    "pkg": null,
+    "grid": null
+  }
+]

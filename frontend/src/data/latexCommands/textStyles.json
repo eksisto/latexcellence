@@ -1,0 +1,114 @@
+[
+  {
+    "name": "text",
+    "insert": "\\text{$1}$0",
+    "zh": "行内文本",
+    "category": "text",
+    "pkg": "amsmath",
+    "grid": null
+  },
+  {
+    "name": "emph",
+    "insert": "\\emph{$1}$0",
+    "zh": "强调",
+    "category": "text",
+    "pkg": null,
+    "grid": null
+  },
+  {
+    "name": "textbf",
+    "insert": "\\textbf{$1}$0",
+    "zh": "粗体",
+    "category": "text",
+    "pkg": null,
+    "grid": null
+  },
+  {
+    "name": "textit",
+    "insert": "\\textit{$1}$0",
+    "zh": "斜体",
+    "category": "text",
+    "pkg": null,
+    "grid": null
+  },
+  {
+    "name": "textrm",
+    "insert": "\\textrm{$1}$0",
+    "zh": "罗马字体",
+    "category": "text",
+    "pkg": null,
+    "grid": null
+  },
+  {
+    "name": "textsf",
+    "insert": "\\textsf{$1}$0",
+    "zh": "无衬线字体",
+    "category": "text",
+    "pkg": null,
+    "grid": null
+  },
+  {
+    "name": "texttt",
+    "insert": "\\texttt{$1}$0",
+    "zh": "等宽字体",
+    "category": "text",
+    "pkg": null,
+    "grid": null
+  },
+  {
+    "name": "underline",
+    "insert": "\\underline{$1}$0",
+    "zh": "下划线",
+    "category": "text",
+    "pkg": null,
+    "grid": null
+  },
+  {
+    "name": "mathrm",
+    "insert": "\\mathrm{$1}$0",
+    "zh": "数学罗马体",
+    "category": "text",
+    "pkg": null,
+    "grid": null
+  },
+  {
+    "name": "mathbf",
+    "insert": "\\mathbf{$1}$0",
+    "zh": "数学粗体",
+    "category": "text",
+    "pkg": null,
+    "grid": null
+  },
+  {
+    "name": "mathcal",
+    "insert": "\\mathcal{$1}$0",
+    "zh": "数学花体",
+    "category": "text",
+    "pkg": null,
+    "grid": null
+  },
+  {
+    "name": "mathbb",
+    "insert": "\\mathbb{$1}$0",
+    "zh": "空心粗体",
+    "category": "text",
+    "pkg": "amssymb",
+    "grid": null
+  },
+  {
+    "name": "mathfrak",
+    "insert": "\\mathfrak{$1}$0",
+    "zh": "哥特体",
+    "category": "text",
+    "pkg": "amssymb",
+    "grid": null
+  },
+  {
+    "name": "boldsymbol",
+    "insert": "\\boldsymbol{$1}$0",
+    "zh": "数学粗斜体",
+    "category": "text",
+    "pkg": "amsmath",
+    "grid": null
+  }
+]

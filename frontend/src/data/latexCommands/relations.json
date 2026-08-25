@@ -1,0 +1,194 @@
+[
+  {
+    "name": "leq",
+    "insert": "\\leq",
+    "zh": "小于等于",
+    "category": "relation",
+    "pkg": null,
+    "grid": null
+  },
+  {
+    "name": "geq",
+    "insert": "\\geq",
+    "zh": "大于等于",
+    "category": "relation",
+    "pkg": null,
+    "grid": null
+  },
+  {
+    "name": "neq",
+    "insert": "\\neq",
+    "zh": "不等号",
+    "category": "relation",
+    "pkg": null,
+    "grid": null
+  },
+  {
+    "name": "equiv",
+    "insert": "\\equiv",
+    "zh": "恒等号",
+    "category": "relation",
+    "pkg": null,
+    "grid": null
+  },
+  {
+    "name": "sim",
+    "insert": "\\sim",
+    "zh": "相似于",
+    "category": "relation",
+    "pkg": null,
+    "grid": null
+  },
+  {
+    "name": "simeq",
+    "insert": "\\simeq",
+    "zh": "相似等号",
+    "category": "relation",
+    "pkg": null,
+    "grid": null
+  },
+  {
+    "name": "approx",
+    "insert": "\\approx",
+    "zh": "约等于",
+    "category": "relation",
+    "pkg": null,
+    "grid": null
+  },
+  {
+    "name": "cong",
+    "insert": "\\cong",
+    "zh": "全等于",
+    "category": "relation",
+    "pkg": null,
+    "grid": null
+  },
+  {
+    "name": "propto",
+    "insert": "\\propto",
+    "zh": "成正比",
+    "category": "relation",
+    "pkg": null,
+    "grid": null
+  },
+  {
+    "name": "ll",
+    "insert": "\\ll",
+    "zh": "远小于",
+    "category": "relation",
+    "pkg": null,
+    "grid": null
+  },
+  {
+    "name": "gg",
+    "insert": "\\gg",
+    "zh": "远大于",
+    "category": "relation",
+    "pkg": null,
+    "grid": null
+  },
+  {
+    "name": "subset",
+    "insert": "\\subset",
+    "zh": "真子集",
+    "category": "relation",
+    "pkg": null,
+    "grid": null
+  },
+  {
+    "name": "subseteq",
+    "insert": "\\subseteq",
+    "zh": "子集",
+    "category": "relation",
+    "pkg": null,
+    "grid": null
+  },
+  {
+    "name": "supset",
+    "insert": "\\supset",
+    "zh": "真包含",
+    "category": "relation",
+    "pkg": null,
+    "grid": null
+  },
+  {
+    "name": "supseteq",
+    "insert": "\\supseteq",
+    "zh": "包含",
+    "category": "relation",
+    "pkg": null,
+    "grid": null
+  },
+  {
+    "name": "in",
+    "insert": "\\in",
+    "zh": "属于",
+    "category": "relation",
+    "pkg": null,
+    "grid": null
+  },
+  {
+    "name": "ni",
+    "insert": "\\ni",
+    "zh": "反向属于",
+    "category": "relation",
+    "pkg": null,
+    "grid": null
+  },
+  {
+    "name": "notin",
+    "insert": "\\notin",
+    "zh": "不属于",
+    "category": "relation",
+    "pkg": null,
+    "grid": null
+  },
+  {
+    "name": "perp",
+    "insert": "\\perp",
+    "zh": "垂直",
+    "category": "relation",
+    "pkg": null,
+    "grid": null
+  },
+  {
+    "name": "parallel",
+    "insert": "\\parallel",
+    "zh": "平行",
+    "category": "relation",
+    "pkg": null,
+    "grid": null
+  },
+  {
+    "name": "mid",
+    "insert": "\\mid",
+    "zh": "整除",
+    "category": "relation",
+    "pkg": null,
+    "grid": null
+  },
+  {
+    "name": "models",
+    "insert": "\\models",
+    "zh": "逻辑蕴含",
+    "category": "relation",
+    "pkg": null,
+    "grid": null
+  },
+  {
+    "name": "therefore",
+    "insert": "\\therefore",
+    "zh": "所以",
+    "category": "relation",
+    "pkg": null,
+    "grid": null
+  },
+  {
+    "name": "because",
+    "insert": "\\because",
+    "zh": "因为",
+    "category": "relation",
+    "pkg": null,
+    "grid": null
+  }
+]

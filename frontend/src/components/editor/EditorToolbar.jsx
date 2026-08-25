@@ -26,6 +26,7 @@ import {
 import ArrowLeft from "lucide-react/dist/esm/icons/arrow-left.mjs";
 import Save from "lucide-react/dist/esm/icons/save.mjs";
 import Settings2 from "lucide-react/dist/esm/icons/settings-2.mjs";
+import SquareTerminal from "lucide-react/dist/esm/icons/square-terminal.mjs";
 import Undo2 from "lucide-react/dist/esm/icons/undo-2.mjs";
 import Redo2 from "lucide-react/dist/esm/icons/redo-2.mjs";
 import Loader2 from "lucide-react/dist/esm/icons/loader-circle.mjs";
@@ -44,6 +45,7 @@ import EditorSettingsDialog from "@/components/editor/EditorSettingsDialog";
  * @param {() => void|Promise<void>} props.onSave
  * @param {() => void|Promise<void>} props.onReloadBuffer
  *   后端撤销/重做落盘后重拉文件内容刷新缓冲区
+ * @param {() => void} [props.onOpenPalette] 唤起命令面板（阶段三）
  */
 export default function EditorToolbar({
   filePath,
@@ -51,6 +53,7 @@ export default function EditorToolbar({
   readOnly = false,
   onSave,
   onReloadBuffer,
+  onOpenPalette,
 }) {
   const { t } = useTranslation("components");
   const workspaceId = useStore((s) => s.workspaceId);
@@ -136,6 +139,27 @@ export default function EditorToolbar({
             {historyDisabled && dirty
               ? t("components:editor.historyBlockedByDirty")
               : t("components:editor.backendRedo")}
+          </TooltipContent>
+        </Tooltip>
+
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={onOpenPalette}
+                disabled={!filePath}
+              />
+            }
+          >
+            <SquareTerminal />
+            <span className="sr-only">
+              {t("components:editor.commandPalette")}
+            </span>
+          </TooltipTrigger>
+          <TooltipContent>
+            {t("components:editor.commandPalette")}
           </TooltipContent>
         </Tooltip>
 

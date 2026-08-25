@@ -1,0 +1,370 @@
+[
+  {
+    "name": "times",
+    "insert": "\\times",
+    "zh": "乘号",
+    "category": "operator",
+    "pkg": null,
+    "grid": null
+  },
+  {
+    "name": "div",
+    "insert": "\\div",
+    "zh": "除号",
+    "category": "operator",
+    "pkg": null,
+    "grid": null
+  },
+  {
+    "name": "pm",
+    "insert": "\\pm",
+    "zh": "加减号",
+    "category": "operator",
+    "pkg": null,
+    "grid": null
+  },
+  {
+    "name": "mp",
+    "insert": "\\mp",
+    "zh": "减加号",
+    "category": "operator",
+    "pkg": null,
+    "grid": null
+  },
+  {
+    "name": "cdot",
+    "insert": "\\cdot",
+    "zh": "点乘",
+    "category": "operator",
+    "pkg": null,
+    "grid": null
+  },
+  {
+    "name": "ast",
+    "insert": "\\ast",
+    "zh": "星号运算",
+    "category": "operator",
+    "pkg": null,
+    "grid": null
+  },
+  {
+    "name": "circ",
+    "insert": "\\circ",
+    "zh": "圆圈复合",
+    "category": "operator",
+    "pkg": null,
+    "grid": null
+  },
+  {
+    "name": "bullet",
+    "insert": "\\bullet",
+    "zh": "圆点运算",
+    "category": "operator",
+    "pkg": null,
+    "grid": null
+  },
+  {
+    "name": "cap",
+    "insert": "\\cap",
+    "zh": "交集",
+    "category": "operator",
+    "pkg": null,
+    "grid": null
+  },
+  {
+    "name": "cup",
+    "insert": "\\cup",
+    "zh": "并集",
+    "category": "operator",
+    "pkg": null,
+    "grid": null
+  },
+  {
+    "name": "uplus",
+    "insert": "\\uplus",
+    "zh": "多重并集",
+    "category": "operator",
+    "pkg": null,
+    "grid": null
+  },
+  {
+    "name": "sqcap",
+    "insert": "\\sqcap",
+    "zh": "方角交",
+    "category": "operator",
+    "pkg": null,
+    "grid": null
+  },
+  {
+    "name": "sqcup",
+    "insert": "\\sqcup",
+    "zh": "方角并",
+    "category": "operator",
+    "pkg": null,
+    "grid": null
+  },
+  {
+    "name": "vee",
+    "insert": "\\vee",
+    "zh": "逻辑或",
+    "category": "operator",
+    "pkg": null,
+    "grid": null
+  },
+  {
+    "name": "wedge",
+    "insert": "\\wedge",
+    "zh": "逻辑与",
+    "category": "operator",
+    "pkg": null,
+    "grid": null
+  },
+  {
+    "name": "setminus",
+    "insert": "\\setminus",
+    "zh": "差集",
+    "category": "operator",
+    "pkg": null,
+    "grid": null
+  },
+  {
+    "name": "oplus",
+    "insert": "\\oplus",
+    "zh": "直和",
+    "category": "operator",
+    "pkg": null,
+    "grid": null
+  },
+  {
+    "name": "ominus",
+    "insert": "\\ominus",
+    "zh": "圈减运算",
+    "category": "operator",
+    "pkg": null,
+    "grid": null
+  },
+  {
+    "name": "otimes",
+    "insert": "\\otimes",
+    "zh": "张量积",
+    "category": "operator",
+    "pkg": null,
+    "grid": null
+  },
+  {
+    "name": "oslash",
+    "insert": "\\oslash",
+    "zh": "圈除运算",
+    "category": "operator",
+    "pkg": null,
+    "grid": null
+  },
+  {
+    "name": "odot",
+    "insert": "\\odot",
+    "zh": "圈点运算",
+    "category": "operator",
+    "pkg": null,
+    "grid": null
+  },
+  {
+    "name": "sum",
+    "insert": "\\sum_{$1}^{$2} $0",
+    "zh": "求和",
+    "category": "operator",
+    "pkg": null,
+    "grid": null
+  },
+  {
+    "name": "prod",
+    "insert": "\\prod_{$1}^{$2} $0",
+    "zh": "连乘积",
+    "category": "operator",
+    "pkg": null,
+    "grid": null
+  },
+  {
+    "name": "coprod",
+    "insert": "\\coprod_{$1}^{$2} $0",
+    "zh": "余积",
+    "category": "operator",
+    "pkg": null,
+    "grid": null
+  },
+  {
+    "name": "int",
+    "insert": "\\int_{$1}^{$2} $0",
+    "zh": "积分",
+    "category": "operator",
+    "pkg": null,
+    "grid": null
+  },
+  {
+    "name": "iint",
+    "insert": "\\iint_{$1}^{$2} $0",
+    "zh": "二重积分",
+    "category": "operator",
+    "pkg": "amsmath",
+    "grid": null
+  },
+  {
+    "name": "oint",
+    "insert": "\\oint_{$1}",
+    "zh": "闭合曲线积分",
+    "category": "operator",
+    "pkg": null,
+    "grid": null
+  },
+  {
+    "name": "bigcup",
+    "insert": "\\bigcup_{$1}^{$2} $0",
+    "zh": "大并集",
+    "category": "operator",
+    "pkg": null,
+    "grid": null
+  },
+  {
+    "name": "bigcap",
+    "insert": "\\bigcap_{$1}^{$2} $0",
+    "zh": "大交集",
+    "category": "operator",
+    "pkg": null,
+    "grid": null
+  },
+  {
+    "name": "bigvee",
+    "insert": "\\bigvee_{$1}^{$2} $0",
+    "zh": "大逻辑或",
+    "category": "operator",
+    "pkg": null,
+    "grid": null
+  },
+  {
+    "name": "bigwedge",
+    "insert": "\\bigwedge_{$1}^{$2} $0",
+    "zh": "大逻辑与",
+    "category": "operator",
+    "pkg": null,
+    "grid": null
+  },
+  {
+    "name": "bigoplus",
+    "insert": "\\bigoplus_{$1}^{$2} $0",
+    "zh": "大直和",
+    "category": "operator",
+    "pkg": null,
+    "grid": null
+  },
+  {
+    "name": "bigotimes",
+    "insert": "\\bigotimes_{$1}^{$2} $0",
+    "zh": "大张量积",
+    "category": "operator",
+    "pkg": null,
+    "grid": null
+  },
+  {
+    "name": "lim",
+    "insert": "\\lim_{$1 \\to $2} $0",
+    "zh": "极限",
+    "category": "operator",
+    "pkg": null,
+    "grid": null
+  },
+  {
+    "name": "liminf",
+    "insert": "\\liminf_{$1 \\to $2} $0",
+    "zh": "下极限",
+    "category": "operator",
+    "pkg": null,
+    "grid": null
+  },
+  {
+    "name": "limsup",
+    "insert": "\\limsup_{$1 \\to $2} $0",
+    "zh": "上极限",
+    "category": "operator",
+    "pkg": null,
+    "grid": null
+  },
+  {
+    "name": "max",
+    "insert": "\\max_{$1} $0",
+    "zh": "最大值",
+    "category": "operator",
+    "pkg": null,
+    "grid": null
+  },
+  {
+    "name": "min",
+    "insert": "\\min_{$1} $0",
+    "zh": "最小值",
+    "category": "operator",
+    "pkg": null,
+    "grid": null
+  },
+  {
+    "name": "sup",
+    "insert": "\\sup_{$1} $0",
+    "zh": "上确界",
+    "category": "operator",
+    "pkg": null,
+    "grid": null
+  },
+  {
+    "name": "inf",
+    "insert": "\\inf_{$1} $0",
+    "zh": "下确界",
+    "category": "operator",
+    "pkg": null,
+    "grid": null
+  },
+  {
+    "name": "log",
+    "insert": "\\log",
+    "zh": "对数",
+    "category": "operator",
+    "pkg": null,
+    "grid": null
+  },
+  {
+    "name": "ln",
+    "insert": "\\ln",
+    "zh": "自然对数",
+    "category": "operator",
+    "pkg": null,
+    "grid": null
+  },
+  {
+    "name": "exp",
+    "insert": "\\exp",
+    "zh": "指数函数",
+    "category": "operator",
+    "pkg": null,
+    "grid": null
+  },
+  {
+    "name": "sin",
+    "insert": "\\sin",
+    "zh": "正弦",
+    "category": "operator",
+    "pkg": null,
+    "grid": null
+  },
+  {
+    "name": "cos",
+    "insert": "\\cos",
+    "zh": "余弦",
+    "category": "operator",
+    "pkg": null,
+    "grid": null
+  },
+  {
+    "name": "tan",
+    "insert": "\\tan",
+    "zh": "正切",
+    "category": "operator",
+    "pkg": null,
+    "grid": null
+  }
+]

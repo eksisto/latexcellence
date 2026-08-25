@@ -21,6 +21,8 @@ import { HighlightStyle, syntaxHighlighting } from "@codemirror/language";
 import { tags as t } from "@lezer/highlight";
 
 import { latexLanguageExtension } from "@/lib/editor/language";
+import { latexCompletionExtension } from "@/lib/editor/latexCompletion";
+import { snippetPlaceholderExtension } from "@/lib/editor/snippetInsert";
 import { cn } from "@/lib/utils";
 
 /** 亮/暗主题自适应基础主题（全部走 CSS 变量） */
@@ -72,6 +74,10 @@ const latexHighlightStyle = HighlightStyle.define([
  * @param {boolean} [props.softWrap=true]      软换行（默认开启）
  * @param {number} [props.fontSize=14]         字号 px
  * @param {boolean} [props.readOnly=false]     viewer 只读
+ * @param {(view: EditorView) => void} [props.onCreateEditor]
+ *   CM6 视图实例回调（命令面板等外部插入入口经此持有视图；阶段三接线）
+ * @param {(entry: object) => void} [props.onCompletionApply]
+ *   行内补全应用后回调（宏包缺失联动；阶段三接线）
  */
 export default function LaTeXEditor({
   value,
@@ -79,16 +85,21 @@ export default function LaTeXEditor({
   softWrap = true,
   fontSize = 14,
   readOnly = false,
+  onCreateEditor,
+  onCompletionApply,
 }) {
   const extensions = useMemo(() => {
     const base = [
       latexLanguageExtension(),
       syntaxHighlighting(latexHighlightStyle),
       editorBaseTheme,
+      // 阶段三：`\` / `\begin{` 行内补全 + 模板占位符跳转模式
+      latexCompletionExtension({ onApplyEntry: onCompletionApply }),
+      snippetPlaceholderExtension(),
     ];
     if (softWrap) base.push(EditorView.lineWrapping);
     return base;
-  }, [softWrap]);
+  }, [softWrap, onCompletionApply]);
 
   return (
     <div
@@ -98,6 +109,7 @@ export default function LaTeXEditor({
       <CodeMirror
         value={value}
         onChange={onChange}
+        onCreateEditor={onCreateEditor}
         extensions={extensions}
         editable={!readOnly}
         readOnly={readOnly}

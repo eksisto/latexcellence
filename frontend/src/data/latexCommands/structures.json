@@ -1,0 +1,154 @@
+[
+  {
+    "name": "frac",
+    "insert": "\\frac{$1}{$2}$0",
+    "zh": "分数",
+    "category": "structure",
+    "pkg": null,
+    "grid": null
+  },
+  {
+    "name": "dfrac",
+    "insert": "\\dfrac{$1}{$2}$0",
+    "zh": "显示模式分数",
+    "category": "structure",
+    "pkg": "amsmath",
+    "grid": null
+  },
+  {
+    "name": "tfrac",
+    "insert": "\\tfrac{$1}{$2}$0",
+    "zh": "文本模式分数",
+    "category": "structure",
+    "pkg": "amsmath",
+    "grid": null
+  },
+  {
+    "name": "binom",
+    "insert": "\\binom{$1}{$2}$0",
+    "zh": "二项式系数",
+    "category": "structure",
+    "pkg": "amsmath",
+    "grid": null
+  },
+  {
+    "name": "sqrt",
+    "insert": "\\sqrt{$1}$0",
+    "zh": "平方根",
+    "category": "structure",
+    "pkg": null,
+    "grid": null
+  },
+  {
+    "name": "nthroot",
+    "insert": "\\sqrt[$1]{$2}$0",
+    "zh": "n次方根",
+    "category": "structure",
+    "pkg": null,
+    "grid": null
+  },
+  {
+    "name": "overline",
+    "insert": "\\overline{$1}$0",
+    "zh": "上划线",
+    "category": "structure",
+    "pkg": null,
+    "grid": null
+  },
+  {
+    "name": "hat",
+    "insert": "\\hat{$1}$0",
+    "zh": "上尖帽",
+    "category": "structure",
+    "pkg": null,
+    "grid": null
+  },
+  {
+    "name": "bar",
+    "insert": "\\bar{$1}$0",
+    "zh": "上横线",
+    "category": "structure",
+    "pkg": null,
+    "grid": null
+  },
+  {
+    "name": "vec",
+    "insert": "\\vec{$1}$0",
+    "zh": "向量箭头",
+    "category": "structure",
+    "pkg": null,
+    "grid": null
+  },
+  {
+    "name": "tilde",
+    "insert": "\\tilde{$1}$0",
+    "zh": "波浪号",
+    "category": "structure",
+    "pkg": null,
+    "grid": null
+  },
+  {
+    "name": "dot",
+    "insert": "\\dot{$1}$0",
+    "zh": "一阶导数点",
+    "category": "structure",
+    "pkg": null,
+    "grid": null
+  },
+  {
+    "name": "ddot",
+    "insert": "\\ddot{$1}$0",
+    "zh": "二阶导数点",
+    "category": "structure",
+    "pkg": null,
+    "grid": null
+  },
+  {
+    "name": "widehat",
+    "insert": "\\widehat{$1}$0",
+    "zh": "宽尖帽",
+    "category": "structure",
+    "pkg": null,
+    "grid": null
+  },
+  {
+    "name": "widetilde",
+    "insert": "\\widetilde{$1}$0",
+    "zh": "宽波浪号",
+    "category": "structure",
+    "pkg": null,
+    "grid": null
+  },
+  {
+    "name": "overbrace",
+    "insert": "\\overbrace{$1}^{$2}$0",
+    "zh": "上花括号注释",
+    "category": "structure",
+    "pkg": null,
+    "grid": null
+  },
+  {
+    "name": "underbrace",
+    "insert": "\\underbrace{$1}_{$2}$0",
+    "zh": "下花括号注释",
+    "category": "structure",
+    "pkg": null,
+    "grid": null
+  },
+  {
+    "name": "overset",
+    "insert": "\\overset{$1}{$2}$0",
+    "zh": "上置符号",
+    "category": "structure",
+    "pkg": "amsmath",
+    "grid": null
+  },
+  {
+    "name": "underset",
+    "insert": "\\underset{$1}{$2}$0",
+    "zh": "下置符号",
+    "category": "structure",
+    "pkg": "amsmath",
+    "grid": null
+  }
+]

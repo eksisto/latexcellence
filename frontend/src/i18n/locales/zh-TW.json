@@ -1420,7 +1420,8 @@
       "backendRedo": "後端重做",
       "panelTitle": "預覽與編譯",
       "panelEmptyTitle": "編譯結果與 PDF 預覽",
-      "panelEmptyDescription": "將在後續版本接入編譯聯動，在此展示編譯輸出與 PDF 預覽。"
+      "panelEmptyDescription": "將在後續版本接入編譯聯動，在此展示編譯輸出與 PDF 預覽。",
+      "commandPalette": "指令面板（Ctrl/Cmd+/）"
     },
     "conflictDialog": {
       "title": "儲存衝突",
@@ -1438,6 +1439,37 @@
       "autoSave": "自動儲存",
       "autoSaveHint": "自動儲存將在後續版本隨編譯聯動一併啟用。",
       "fontSize": "字號"
+    },
+    "commandPalette": {
+      "title": "指令面板",
+      "description": "輸入中文、拼音全拼／首字母或英文查找 LaTeX 指令，按 Enter 插入，Tab 跳轉佔位符。",
+      "searchPlaceholder": "搜尋：阿爾法 / aerfa / ae / alpha",
+      "loading": "正在載入指令資料庫…",
+      "empty": "沒有符合的指令，換個關鍵字試試",
+      "viewerHint": "唯讀角色可瀏覽指令，但無法插入至文件",
+      "noFileHint": "請先開啟檔案後再插入指令",
+      "pkgMissing": "「{{name}}」需要巨集套件 {{pkg}}，目前導言區尚未載入",
+      "pkgAddAction": "自動加入導言區",
+      "pkgAdded": "已在導言區加入巨集套件 {{pkg}}",
+      "categories": {
+        "greek": "希臘字母",
+        "operator": "運算符號",
+        "relation": "關係符號",
+        "arrow": "箭頭符號",
+        "structure": "數學結構",
+        "text": "文字樣式",
+        "section": "章節結構",
+        "figure": "圖表浮動",
+        "mathenv": "數學環境",
+        "grid": "表格與矩陣"
+      }
+    },
+    "gridSizePicker": {
+      "title": "選擇行列",
+      "hint": "按住並拖曳選取行列範圍，放開即插入；方向鍵微調，或單擊直接選定。",
+      "sizeLabel": "{{rows}} 列 × {{cols}} 欄",
+      "confirm": "插入",
+      "back": "返回清單"
     }
   },
   "hooks": {

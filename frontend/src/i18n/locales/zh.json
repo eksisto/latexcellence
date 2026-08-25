@@ -1420,7 +1420,8 @@
       "backendRedo": "后端重做",
       "panelTitle": "预览与编译",
       "panelEmptyTitle": "编译结果与 PDF 预览",
-      "panelEmptyDescription": "将在后续版本接入编译联动，在此展示编译输出与 PDF 预览。"
+      "panelEmptyDescription": "将在后续版本接入编译联动，在此展示编译输出与 PDF 预览。",
+      "commandPalette": "命令面板（Ctrl/Cmd+/）"
     },
     "conflictDialog": {
       "title": "保存冲突",
@@ -1438,6 +1439,37 @@
       "autoSave": "自动保存",
       "autoSaveHint": "自动保存将在后续版本随编译联动一并启用。",
       "fontSize": "字号"
+    },
+    "commandPalette": {
+      "title": "命令面板",
+      "description": "输入中文、拼音全拼 / 首字母或英文查找 LaTeX 命令，回车插入，Tab 跳转占位符。",
+      "searchPlaceholder": "搜索：阿尔法 / aerfa / ae / alpha",
+      "loading": "正在加载命令数据库…",
+      "empty": "没有匹配的命令，换个关键词试试",
+      "viewerHint": "只读角色可浏览命令，但无法插入到文档",
+      "noFileHint": "请先打开文件后再插入命令",
+      "pkgMissing": "「{{name}}」需要宏包 {{pkg}}，当前导言区尚未加载",
+      "pkgAddAction": "自动添加到导言区",
+      "pkgAdded": "已在导言区添加宏包 {{pkg}}",
+      "categories": {
+        "greek": "希腊字母",
+        "operator": "运算符号",
+        "relation": "关系符号",
+        "arrow": "箭头符号",
+        "structure": "数学结构",
+        "text": "文本样式",
+        "section": "章节结构",
+        "figure": "图表浮动",
+        "mathenv": "数学环境",
+        "grid": "表格与矩阵"
+      }
+    },
+    "gridSizePicker": {
+      "title": "选择行列",
+      "hint": "按下并拖动选择行列范围，松开即插入；方向键微调，或单击直接选定。",
+      "sizeLabel": "{{rows}} 行 × {{cols}} 列",
+      "confirm": "插入",
+      "back": "返回列表"
     }
   },
   "hooks": {

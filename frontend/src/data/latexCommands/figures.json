@@ -1,0 +1,42 @@
+[
+  {
+    "name": "figure",
+    "insert": "\\begin{figure}[htbp]\n\t\\centering\n\t$1\n\t\\caption{$2}$0\n\\end{figure}",
+    "zh": "插图环境",
+    "category": "figure",
+    "pkg": null,
+    "grid": null
+  },
+  {
+    "name": "table",
+    "insert": "\\begin{table}[htbp]\n\t\\centering\n\t$1\n\t\\caption{$2}$0\n\\end{table}",
+    "zh": "表格浮动环境",
+    "category": "figure",
+    "pkg": null,
+    "grid": null
+  },
+  {
+    "name": "includegraphics",
+    "insert": "\\includegraphics[width=$1\\textwidth]{$2}$0",
+    "zh": "插入图片",
+    "category": "figure",
+    "pkg": "graphicx",
+    "grid": null
+  },
+  {
+    "name": "caption",
+    "insert": "\\caption{$1}$0",
+    "zh": "图表标题",
+    "category": "figure",
+    "pkg": null,
+    "grid": null
+  },
+  {
+    "name": "center",
+    "insert": "\\begin{center}\n\t$1\n\\end{center}$0",
+    "zh": "居中环境",
+    "category": "figure",
+    "pkg": null,
+    "grid": null
+  }
+]

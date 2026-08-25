@@ -1,0 +1,162 @@
+[
+  {
+    "name": "rightarrow",
+    "insert": "\\rightarrow",
+    "zh": "右箭头",
+    "category": "arrow",
+    "pkg": null,
+    "grid": null
+  },
+  {
+    "name": "leftarrow",
+    "insert": "\\leftarrow",
+    "zh": "左箭头",
+    "category": "arrow",
+    "pkg": null,
+    "grid": null
+  },
+  {
+    "name": "leftrightarrow",
+    "insert": "\\leftrightarrow",
+    "zh": "左右箭头",
+    "category": "arrow",
+    "pkg": null,
+    "grid": null
+  },
+  {
+    "name": "Rightarrow",
+    "insert": "\\Rightarrow",
+    "zh": "双线右箭头",
+    "category": "arrow",
+    "pkg": null,
+    "grid": null
+  },
+  {
+    "name": "Leftarrow",
+    "insert": "\\Leftarrow",
+    "zh": "双线左箭头",
+    "category": "arrow",
+    "pkg": null,
+    "grid": null
+  },
+  {
+    "name": "Leftrightarrow",
+    "insert": "\\Leftrightarrow",
+    "zh": "双线左右箭头",
+    "category": "arrow",
+    "pkg": null,
+    "grid": null
+  },
+  {
+    "name": "mapsto",
+    "insert": "\\mapsto",
+    "zh": "映射右箭头",
+    "category": "arrow",
+    "pkg": null,
+    "grid": null
+  },
+  {
+    "name": "longmapsto",
+    "insert": "\\longmapsto",
+    "zh": "长映射箭头",
+    "category": "arrow",
+    "pkg": null,
+    "grid": null
+  },
+  {
+    "name": "hookrightarrow",
+    "insert": "\\hookrightarrow",
+    "zh": "单射右箭头",
+    "category": "arrow",
+    "pkg": null,
+    "grid": null
+  },
+  {
+    "name": "hookleftarrow",
+    "insert": "\\hookleftarrow",
+    "zh": "单射左箭头",
+    "category": "arrow",
+    "pkg": null,
+    "grid": null
+  },
+  {
+    "name": "uparrow",
+    "insert": "\\uparrow",
+    "zh": "上箭头",
+    "category": "arrow",
+    "pkg": null,
+    "grid": null
+  },
+  {
+    "name": "downarrow",
+    "insert": "\\downarrow",
+    "zh": "下箭头",
+    "category": "arrow",
+    "pkg": null,
+    "grid": null
+  },
+  {
+    "name": "updownarrow",
+    "insert": "\\updownarrow",
+    "zh": "上下箭头",
+    "category": "arrow",
+    "pkg": null,
+    "grid": null
+  },
+  {
+    "name": "nearrow",
+    "insert": "\\nearrow",
+    "zh": "右上斜箭头",
+    "category": "arrow",
+    "pkg": null,
+    "grid": null
+  },
+  {
+    "name": "searrow",
+    "insert": "\\searrow",
+    "zh": "右下斜箭头",
+    "category": "arrow",
+    "pkg": null,
+    "grid": null
+  },
+  {
+    "name": "swarrow",
+    "insert": "\\swarrow",
+    "zh": "左下斜箭头",
+    "category": "arrow",
+    "pkg": null,
+    "grid": null
+  },
+  {
+    "name": "nwarrow",
+    "insert": "\\nwarrow",
+    "zh": "左上斜箭头",
+    "category": "arrow",
+    "pkg": null,
+    "grid": null
+  },
+  {
+    "name": "xrightarrow",
+    "insert": "\\xrightarrow{$1}$0",
+    "zh": "可扩展右箭头",
+    "category": "arrow",
+    "pkg": "amsmath",
+    "grid": null
+  },
+  {
+    "name": "xleftarrow",
+    "insert": "\\xleftarrow{$1}$0",
+    "zh": "可扩展左箭头",
+    "category": "arrow",
+    "pkg": "amsmath",
+    "grid": null
+  },
+  {
+    "name": "overrightarrow",
+    "insert": "\\overrightarrow{$1}$0",
+    "zh": "向量右箭头",
+    "category": "arrow",
+    "pkg": null,
+    "grid": null
+  }
+]

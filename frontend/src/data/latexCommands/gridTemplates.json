@@ -1,0 +1,98 @@
+[
+  {
+    "name": "tabular",
+    "insert": "\\begin{tabular}{%COLS%}\n\t%CELLS%\n\\end{tabular}$0",
+    "zh": "基础表格",
+    "category": "grid",
+    "pkg": null,
+    "grid": { "rows": 3, "cols": 3 }
+  },
+  {
+    "name": "array",
+    "insert": "\\begin{array}{%COLS%}\n\t%CELLS%\n\\end{array}$0",
+    "zh": "数学数组",
+    "category": "grid",
+    "pkg": null,
+    "grid": { "rows": 2, "cols": 2 }
+  },
+  {
+    "name": "matrix",
+    "insert": "\\begin{matrix}\n\t%CELLS%\n\\end{matrix}$0",
+    "zh": "无括号矩阵",
+    "category": "grid",
+    "pkg": "amsmath",
+    "grid": { "rows": 2, "cols": 2 }
+  },
+  {
+    "name": "pmatrix",
+    "insert": "\\begin{pmatrix}\n\t%CELLS%\n\\end{pmatrix}$0",
+    "zh": "圆括号矩阵",
+    "category": "grid",
+    "pkg": "amsmath",
+    "grid": { "rows": 2, "cols": 2 }
+  },
+  {
+    "name": "bmatrix",
+    "insert": "\\begin{bmatrix}\n\t%CELLS%\n\\end{bmatrix}$0",
+    "zh": "方括号矩阵",
+    "category": "grid",
+    "pkg": "amsmath",
+    "grid": { "rows": 2, "cols": 2 }
+  },
+  {
+    "name": "Bmatrix",
+    "insert": "\\begin{Bmatrix}\n\t%CELLS%\n\\end{Bmatrix}$0",
+    "zh": "花括号矩阵",
+    "category": "grid",
+    "pkg": "amsmath",
+    "grid": { "rows": 2, "cols": 2 }
+  },
+  {
+    "name": "vmatrix",
+    "insert": "\\begin{vmatrix}\n\t%CELLS%\n\\end{vmatrix}$0",
+    "zh": "竖线行列式",
+    "category": "grid",
+    "pkg": "amsmath",
+    "grid": { "rows": 3, "cols": 3 }
+  },
+  {
+    "name": "Vmatrix",
+    "insert": "\\begin{Vmatrix}\n\t%CELLS%\n\\end{Vmatrix}$0",
+    "zh": "双竖线范数矩阵",
+    "category": "grid",
+    "pkg": "amsmath",
+    "grid": { "rows": 2, "cols": 2 }
+  },
+  {
+    "name": "smallmatrix",
+    "insert": "\\begin{smallmatrix}\n\t%CELLS%\n\\end{smallmatrix}$0",
+    "zh": "行内小型矩阵",
+    "category": "grid",
+    "pkg": "amsmath",
+    "grid": { "rows": 2, "cols": 2 }
+  },
+  {
+    "name": "cases",
+    "insert": "\\begin{cases}\n\t%CELLS%\n\\end{cases}$0",
+    "zh": "分段函数",
+    "category": "grid",
+    "pkg": "amsmath",
+    "grid": { "rows": 2, "cols": 2 }
+  },
+  {
+    "name": "determinant",
+    "insert": "\\begin{vmatrix}\n\t%CELLS%\n\\end{vmatrix}$0",
+    "zh": "行列式模板",
+    "category": "grid",
+    "pkg": "amsmath",
+    "grid": { "rows": 3, "cols": 3 }
+  },
+  {
+    "name": "threelinetable",
+    "insert": "\\begin{table}[htbp]\n\t\\centering\n\t\\caption{$1}\n\t\\begin{tabular}{%COLS%}\n\t\t\\toprule\n\t%CELLS%\n\t\t\\bottomrule\n\t\\end{tabular}\n\\end{table}$0",
+    "zh": "三线表",
+    "category": "grid",
+    "pkg": "booktabs",
+    "grid": { "rows": 3, "cols": 4 }
+  }
+]

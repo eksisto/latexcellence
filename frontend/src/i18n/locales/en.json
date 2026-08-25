@@ -1420,7 +1420,8 @@
       "backendRedo": "Server redo",
       "panelTitle": "Preview & compile",
       "panelEmptyTitle": "Compile result & PDF preview",
-      "panelEmptyDescription": "Compile integration with output log and PDF preview will arrive in a future release."
+      "panelEmptyDescription": "Compile integration with output log and PDF preview will arrive in a future release.",
+      "commandPalette": "Command palette (Ctrl/Cmd+/)"
     },
     "conflictDialog": {
       "title": "Save conflict",
@@ -1438,6 +1439,37 @@
       "autoSave": "Auto save",
       "autoSaveHint": "Auto save will be enabled together with compile integration in a future release.",
       "fontSize": "Font size"
+    },
+    "commandPalette": {
+      "title": "Command palette",
+      "description": "Find LaTeX commands by Chinese name, full pinyin, initials, or English. Enter inserts; Tab jumps between placeholders.",
+      "searchPlaceholder": "Search: 阿尔法 / aerfa / ae / alpha",
+      "loading": "Loading command database…",
+      "empty": "No matching commands — try another keyword",
+      "viewerHint": "Read-only role: you can browse commands but cannot insert them into documents",
+      "noFileHint": "Open a file before inserting commands",
+      "pkgMissing": "\"{{name}}\" needs package {{pkg}}, which is not loaded in the preamble",
+      "pkgAddAction": "Add to preamble automatically",
+      "pkgAdded": "Package {{pkg}} added to the preamble",
+      "categories": {
+        "greek": "Greek letters",
+        "operator": "Operators",
+        "relation": "Relations",
+        "arrow": "Arrows",
+        "structure": "Math structure",
+        "text": "Text styles",
+        "section": "Sections",
+        "figure": "Floats",
+        "mathenv": "Math environments",
+        "grid": "Tables & matrices"
+      }
+    },
+    "gridSizePicker": {
+      "title": "Choose rows & columns",
+      "hint": "Press and drag to select rows × columns, release to insert. Arrow keys adjust; click selects directly.",
+      "sizeLabel": "{{rows}} rows × {{cols}} columns",
+      "confirm": "Insert",
+      "back": "Back to list"
     }
   },
   "hooks": {

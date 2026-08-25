@@ -1,0 +1,338 @@
+[
+  {
+    "name": "alpha",
+    "insert": "\\alpha",
+    "zh": "阿尔法",
+    "category": "greek",
+    "pkg": null,
+    "grid": null
+  },
+  {
+    "name": "beta",
+    "insert": "\\beta",
+    "zh": "贝塔",
+    "category": "greek",
+    "pkg": null,
+    "grid": null
+  },
+  {
+    "name": "gamma",
+    "insert": "\\gamma",
+    "zh": "伽马",
+    "category": "greek",
+    "pkg": null,
+    "grid": null
+  },
+  {
+    "name": "delta",
+    "insert": "\\delta",
+    "zh": "德尔塔",
+    "category": "greek",
+    "pkg": null,
+    "grid": null
+  },
+  {
+    "name": "epsilon",
+    "insert": "\\epsilon",
+    "zh": "艾普西隆",
+    "category": "greek",
+    "pkg": null,
+    "grid": null
+  },
+  {
+    "name": "varepsilon",
+    "insert": "\\varepsilon",
+    "zh": "变体艾普西隆",
+    "category": "greek",
+    "pkg": null,
+    "grid": null
+  },
+  {
+    "name": "zeta",
+    "insert": "\\zeta",
+    "zh": "泽塔",
+    "category": "greek",
+    "pkg": null,
+    "grid": null
+  },
+  {
+    "name": "eta",
+    "insert": "\\eta",
+    "zh": "伊塔",
+    "category": "greek",
+    "pkg": null,
+    "grid": null
+  },
+  {
+    "name": "theta",
+    "insert": "\\theta",
+    "zh": "西塔",
+    "category": "greek",
+    "pkg": null,
+    "grid": null
+  },
+  {
+    "name": "vartheta",
+    "insert": "\\vartheta",
+    "zh": "变体西塔",
+    "category": "greek",
+    "pkg": null,
+    "grid": null
+  },
+  {
+    "name": "iota",
+    "insert": "\\iota",
+    "zh": "约塔",
+    "category": "greek",
+    "pkg": null,
+    "grid": null
+  },
+  {
+    "name": "kappa",
+    "insert": "\\kappa",
+    "zh": "卡帕",
+    "category": "greek",
+    "pkg": null,
+    "grid": null
+  },
+  {
+    "name": "varkappa",
+    "insert": "\\varkappa",
+    "zh": "变体卡帕",
+    "category": "greek",
+    "pkg": "amssymb",
+    "grid": null
+  },
+  {
+    "name": "lambda",
+    "insert": "\\lambda",
+    "zh": "拉姆达",
+    "category": "greek",
+    "pkg": null,
+    "grid": null
+  },
+  {
+    "name": "mu",
+    "insert": "\\mu",
+    "zh": "缪",
+    "category": "greek",
+    "pkg": null,
+    "grid": null
+  },
+  {
+    "name": "nu",
+    "insert": "\\nu",
+    "zh": "纽",
+    "category": "greek",
+    "pkg": null,
+    "grid": null
+  },
+  {
+    "name": "xi",
+    "insert": "\\xi",
+    "zh": "克西",
+    "category": "greek",
+    "pkg": null,
+    "grid": null
+  },
+  {
+    "name": "omicron",
+    "insert": "\\omicron",
+    "zh": "奥米克戎",
+    "category": "greek",
+    "pkg": null,
+    "grid": null
+  },
+  {
+    "name": "pi",
+    "insert": "\\pi",
+    "zh": "派",
+    "category": "greek",
+    "pkg": null,
+    "grid": null
+  },
+  {
+    "name": "varpi",
+    "insert": "\\varpi",
+    "zh": "变体派",
+    "category": "greek",
+    "pkg": null,
+    "grid": null
+  },
+  {
+    "name": "rho",
+    "insert": "\\rho",
+    "zh": "柔",
+    "category": "greek",
+    "pkg": null,
+    "grid": null
+  },
+  {
+    "name": "varrho",
+    "insert": "\\varrho",
+    "zh": "变体柔",
+    "category": "greek",
+    "pkg": null,
+    "grid": null
+  },
+  {
+    "name": "sigma",
+    "insert": "\\sigma",
+    "zh": "西格玛",
+    "category": "greek",
+    "pkg": null,
+    "grid": null
+  },
+  {
+    "name": "varsigma",
+    "insert": "\\varsigma",
+    "zh": "变体西格玛",
+    "category": "greek",
+    "pkg": null,
+    "grid": null
+  },
+  {
+    "name": "tau",
+    "insert": "\\tau",
+    "zh": "陶",
+    "category": "greek",
+    "pkg": null,
+    "grid": null
+  },
+  {
+    "name": "upsilon",
+    "insert": "\\upsilon",
+    "zh": "宇普西隆",
+    "category": "greek",
+    "pkg": null,
+    "grid": null
+  },
+  {
+    "name": "phi",
+    "insert": "\\phi",
+    "zh": "佛爱",
+    "category": "greek",
+    "pkg": null,
+    "grid": null
+  },
+  {
+    "name": "varphi",
+    "insert": "\\varphi",
+    "zh": "变体佛爱",
+    "category": "greek",
+    "pkg": null,
+    "grid": null
+  },
+  {
+    "name": "chi",
+    "insert": "\\chi",
+    "zh": "齐",
+    "category": "greek",
+    "pkg": null,
+    "grid": null
+  },
+  {
+    "name": "psi",
+    "insert": "\\psi",
+    "zh": "普西",
+    "category": "greek",
+    "pkg": null,
+    "grid": null
+  },
+  {
+    "name": "omega",
+    "insert": "\\omega",
+    "zh": "欧米伽",
+    "category": "greek",
+    "pkg": null,
+    "grid": null
+  },
+  {
+    "name": "Gamma",
+    "insert": "\\Gamma",
+    "zh": "大写伽马",
+    "category": "greek",
+    "pkg": null,
+    "grid": null
+  },
+  {
+    "name": "Delta",
+    "insert": "\\Delta",
+    "zh": "大写德尔塔",
+    "category": "greek",
+    "pkg": null,
+    "grid": null
+  },
+  {
+    "name": "Theta",
+    "insert": "\\Theta",
+    "zh": "大写西塔",
+    "category": "greek",
+    "pkg": null,
+    "grid": null
+  },
+  {
+    "name": "Lambda",
+    "insert": "\\Lambda",
+    "zh": "大写拉姆达",
+    "category": "greek",
+    "pkg": null,
+    "grid": null
+  },
+  {
+    "name": "Xi",
+    "insert": "\\Xi",
+    "zh": "大写克西",
+    "category": "greek",
+    "pkg": null,
+    "grid": null
+  },
+  {
+    "name": "Pi",
+    "insert": "\\Pi",
+    "zh": "大写派",
+    "category": "greek",
+    "pkg": null,
+    "grid": null
+  },
+  {
+    "name": "Sigma",
+    "insert": "\\Sigma",
+    "zh": "大写西格玛",
+    "category": "greek",
+    "pkg": null,
+    "grid": null
+  },
+  {
+    "name": "Upsilon",
+    "insert": "\\Upsilon",
+    "zh": "大写宇普西隆",
+    "category": "greek",
+    "pkg": null,
+    "grid": null
+  },
+  {
+    "name": "Phi",
+    "insert": "\\Phi",
+    "zh": "大写佛爱",
+    "category": "greek",
+    "pkg": null,
+    "grid": null
+  },
+  {
+    "name": "Psi",
+    "insert": "\\Psi",
+    "zh": "大写普西",
+    "category": "greek",
+    "pkg": null,
+    "grid": null
+  },
+  {
+    "name": "Omega",
+    "insert": "\\Omega",
+    "zh": "大写欧米伽",
+    "category": "greek",
+    "pkg": null,
+    "grid": null
+  }
+]

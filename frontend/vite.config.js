@@ -97,6 +97,9 @@ export default defineConfig(({ mode }) => {
               // 以下库只被懒加载路由使用（MarkdownRenderer / CodeBlock 等），
               // 独立分包，避免随 i18next/zustand 等首屏依赖一起进入初始 vendor chunk。
               if (/highlight\.js/.test(id)) return "vendor-highlight";
+              // pinyin-pro（编辑器命令拼音匹配，阶段三）：仅经动态 import()
+              // 按需加载，独立分包防止落入首屏 vendor chunk
+              if (/pinyin-pro/.test(id)) return "vendor-pinyin";
               // CodeMirror 6（编辑器 /editor 懒加载路由专用，避免拖累首屏；
               // 覆盖 @uiw 全系子包与叶子依赖，防止与 vendor 互相引用形成循环分包）
               if (

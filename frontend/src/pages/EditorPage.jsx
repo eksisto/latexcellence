@@ -30,6 +30,7 @@ import ProjectExplorer from "@/components/ProjectExplorer";
 import LaTeXEditor from "@/components/editor/LaTeXEditor";
 import EditorToolbar from "@/components/editor/EditorToolbar";
 import ConflictDialog from "@/components/editor/ConflictDialog";
+import CommandPalette from "@/components/editor/CommandPalette";
 
 import FileCode from "lucide-react/dist/esm/icons/file-code.mjs";
 import PanelRight from "lucide-react/dist/esm/icons/panel-right.mjs";
@@ -44,6 +45,11 @@ import { isMultiUser } from "@/api/connection";
 import { translateError } from "@/utils/errorMessages";
 import { openMultiUserProject } from "@/utils/multiUserProject";
 import { isEditableFilePath, isFileTooLarge } from "@/lib/editor/files";
+import { expandEntryInsert, insertSnippet } from "@/lib/editor/snippetInsert";
+import {
+  buildPackageInsertion,
+  isPackageMissing,
+} from "@/lib/editor/preambleScan";
 
 /** 右栏占位骨架：编译结果 / PDF 预览完整联动属阶段四 */
 function EditorPlaceholderPanel() {
@@ -94,11 +100,14 @@ export default function EditorPage() {
   const [saving, setSaving] = useState(false);
   const [opening, setOpening] = useState(false);
   const [switchConfirmPath, setSwitchConfirmPath] = useState(null);
+  const [paletteOpen, setPaletteOpen] = useState(false);
   const restoringRef = useRef(false);
   /** 打开请求序号：单调递增，用于丢弃过期在途响应（快速切换 / 后退前进） */
   const openSeqRef = useRef(0);
   /** 保存请求重入门闸：同步 ref，杜绝同一渲染帧内连点产生并发保存 */
   const savingRef = useRef(false);
+  /** CM6 视图实例：命令面板 / 宏包自动添加等外部插入入口经此落笔 */
+  const editorViewRef = useRef(null);
 
   /** 结构化错误翻译：错误码优先（file_not_found 补 path 插值），未收录回落 message */
   const describeError = useCallback((e, filePathForNotFound) => {
@@ -279,12 +288,113 @@ export default function EditorPage() {
     return () => window.removeEventListener("keydown", handler);
   }, []);
 
+  /* ── Ctrl/Cmd+/：命令面板（editor-plan §6.3 入口二） ───────────────── */
+  useEffect(() => {
+    const handler = (e) => {
+      if (!(e.ctrlKey || e.metaKey)) return;
+      if (e.key !== "/") return;
+      e.preventDefault();
+      setPaletteOpen((open) => !open);
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, []);
+
   /* ── 后端撤销/重做落盘后 / 冲突放弃本地：重拉文件内容刷新缓冲区 ──── */
   const handleReloadBuffer = useCallback(async () => {
     const cur = useEditorStore.getState();
     if (!cur.filePath) return false;
     return doOpenFile(cur.filePath);
   }, [doOpenFile]);
+
+  /* ── 宏包缺失联动（editor-plan §6.5 / 决策 Q14） ─────────────────────
+   * 插入含 pkg 条目时对插入前的缓冲区做导言区扫描；缺失则 toast 提示并
+   * 提供「自动添加 \usepackage」动作：按三级回退插入点写入 CM6 缓冲区，
+   * 经 onChange 正常置脏，落盘仍走 save-file 单一路径。viewer 不触发。 */
+  const addPackageToPreamble = useCallback(
+    (pkg) => {
+      const view = editorViewRef.current;
+      // 缓冲区关闭会卸载 CM 视图：宏包提示条（10s）可能比视图存活更久，
+      // 向已销毁视图 dispatch 会抛错，此处一并拦截
+      if (!view || view.destroyed || !pkg) return;
+      const insertion = buildPackageInsertion(
+        useEditorStore.getState().content,
+        pkg,
+      );
+      // 已存在或无法定位插入点：静默返回（提示条本身只是辅助）
+      if (!insertion) return;
+      view.dispatch({
+        changes: { from: insertion.index, insert: insertion.text },
+        scrollIntoView: true,
+      });
+      view.focus();
+      toast.success(t("components:commandPalette.pkgAdded", { pkg }));
+    },
+    [t],
+  );
+
+  const notifyMissingPackage = useCallback(
+    (entry) => {
+      const pkg = entry.pkg;
+      if (!pkg || !canWrite) return;
+      const description = `\\usepackage{${pkg}}`;
+      toast.warning(
+        t("components:commandPalette.pkgMissing", {
+          name: entry.zh || `\\${entry.name}`,
+          pkg,
+        }),
+        {
+          description,
+          duration: 10000,
+          action: {
+            label: t("components:commandPalette.pkgAddAction"),
+            onClick: () => addPackageToPreamble(pkg),
+          },
+        },
+      );
+    },
+    [addPackageToPreamble, canWrite, t],
+  );
+
+  /**
+   * 命令面板统一插入出口：模板经占位符模式写入缓冲区。
+   * @returns {boolean} 是否已执行插入（false 时面板保持打开）
+   */
+  const handleInsertEntry = useCallback(
+    (entry, size) => {
+      if (!canWrite) return false;
+      const cur = useEditorStore.getState();
+      const view = editorViewRef.current;
+      if (!cur.filePath || !view || view.destroyed) {
+        toast.info(t("components:commandPalette.noFileHint"));
+        return false;
+      }
+      // 宏包扫描基于插入前内容：命令文本不影响导言区已有声明
+      const contentBefore = cur.content;
+      insertSnippet(view, expandEntryInsert(entry, size));
+      if (entry.pkg && isPackageMissing(contentBefore, entry.pkg)) {
+        notifyMissingPackage(entry);
+      }
+      return true;
+    },
+    [canWrite, notifyMissingPackage, t],
+  );
+
+  const handleCreateEditor = useCallback((view) => {
+    editorViewRef.current = view;
+  }, []);
+
+  /* 行内补全应用后的宏包缺失联动：与面板插入同一提示逻辑（§6.5 一致性）。
+   * 扫描当前缓冲区即可——插入的命令文本不含 usepackage 声明。 */
+  const handleCompletionApplyEntry = useCallback(
+    (entry) => {
+      if (!canWrite || !entry?.pkg) return;
+      if (isPackageMissing(useEditorStore.getState().content, entry.pkg)) {
+        notifyMissingPackage(entry);
+      }
+    },
+    [canWrite, notifyMissingPackage],
+  );
 
   const handleSelectTreeNode = useCallback(
     (node) => {
@@ -332,6 +442,7 @@ export default function EditorPage() {
         readOnly={readOnly}
         onSave={doSave}
         onReloadBuffer={handleReloadBuffer}
+        onOpenPalette={() => setPaletteOpen(true)}
       />
 
       <div className="flex flex-1 min-h-0 gap-3">
@@ -366,6 +477,8 @@ export default function EditorPage() {
               softWrap={session.softWrap}
               fontSize={session.fontSize}
               readOnly={readOnly}
+              onCreateEditor={handleCreateEditor}
+              onCompletionApply={handleCompletionApplyEntry}
             />
           ) : (
             <EmptyState
@@ -413,6 +526,14 @@ export default function EditorPage() {
         conflict={session.conflict}
         localContent={session.content}
         onDiscardAndReload={handleDiscardAndReload}
+      />
+
+      {/* 命令面板（Ctrl/Cmd+/ 或工具栏按钮；viewer 仅浏览不可插入） */}
+      <CommandPalette
+        open={paletteOpen}
+        onOpenChange={setPaletteOpen}
+        readOnly={readOnly}
+        onInsert={handleInsertEntry}
       />
     </div>
   );

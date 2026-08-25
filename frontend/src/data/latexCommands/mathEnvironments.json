@@ -1,0 +1,66 @@
+[
+  {
+    "name": "equation",
+    "insert": "\\begin{equation}\n\t$1\n\\end{equation}$0",
+    "zh": "编号公式环境",
+    "category": "mathenv",
+    "pkg": null,
+    "grid": null
+  },
+  {
+    "name": "equation*",
+    "insert": "\\begin{equation*}\n\t$1\n\\end{equation*}$0",
+    "zh": "不编号公式环境",
+    "category": "mathenv",
+    "pkg": "amsmath",
+    "grid": null
+  },
+  {
+    "name": "align",
+    "insert": "\\begin{align}\n\t$1 & $2 \\\\\n\t$3 & $0\n\\end{align}",
+    "zh": "对齐公式组",
+    "category": "mathenv",
+    "pkg": "amsmath",
+    "grid": null
+  },
+  {
+    "name": "align*",
+    "insert": "\\begin{align*}\n\t$1 & $2 \\\\\n\t$3 & $0\n\\end{align*}",
+    "zh": "不编号对齐公式组",
+    "category": "mathenv",
+    "pkg": "amsmath",
+    "grid": null
+  },
+  {
+    "name": "gather",
+    "insert": "\\begin{gather}\n\t$1 \\\\\n\t$0\n\\end{gather}",
+    "zh": "居中公式组",
+    "category": "mathenv",
+    "pkg": "amsmath",
+    "grid": null
+  },
+  {
+    "name": "multline",
+    "insert": "\\begin{multline}\n\t$1 \\\\\n\t$0\n\\end{multline}",
+    "zh": "长公式折行",
+    "category": "mathenv",
+    "pkg": "amsmath",
+    "grid": null
+  },
+  {
+    "name": "split",
+    "insert": "\\begin{split}\n\t$1 & $2 \\\\\n\t$3 & $0\n\\end{split}",
+    "zh": "公式内拆分对齐",
+    "category": "mathenv",
+    "pkg": "amsmath",
+    "grid": null
+  },
+  {
+    "name": "aligned",
+    "insert": "\\begin{aligned}\n\t$1 & $2 \\\\\n\t$3 & $0\n\\end{aligned}",
+    "zh": "行内对齐子块",
+    "category": "mathenv",
+    "pkg": "amsmath",
+    "grid": null
+  }
+]
