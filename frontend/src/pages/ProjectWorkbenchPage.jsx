@@ -104,7 +104,7 @@ const ProjectRow = memo(function ProjectRow({
   const isOwner = p.role === "owner";
   const roleKey = ROLE_LABEL_KEYS[p.role];
   return (
-    <div className="flex flex-col gap-3 rounded-lg border p-4 sm:flex-row sm:items-center sm:justify-between">
+    <div className="flex flex-col gap-3 rounded-lg border bg-card p-4 sm:flex-row sm:items-center sm:justify-between">
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
           <p className="truncate text-sm font-medium">{p.name}</p>
@@ -163,7 +163,7 @@ const RecycleRow = memo(function RecycleRow({
 }) {
   const { t } = useTranslation("pages");
   return (
-    <div className="flex flex-col gap-3 rounded-lg border p-4 opacity-80 sm:flex-row sm:items-center sm:justify-between">
+    <div className="flex flex-col gap-3 rounded-lg border bg-card p-4 sm:flex-row sm:items-center sm:justify-between">
       <div className="min-w-0 flex-1">
         <p className="truncate text-sm font-medium">{p.name}</p>
         <p className="mt-1 text-xs text-muted-foreground">

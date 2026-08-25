@@ -40,7 +40,7 @@ const CollaboratorRow = memo(function CollaboratorRow({
 }) {
   const { t } = useTranslation(["components", "common"]);
   return (
-    <div className="flex items-center justify-between gap-2 rounded-md border px-3 py-2">
+    <div className="flex items-center justify-between gap-2 rounded-md border bg-card px-3 py-2">
       <div className="min-w-0 flex-1">
         <p className="truncate text-sm font-medium">{collab.username}</p>
         <p className="truncate text-xs text-muted-foreground">
@@ -288,7 +288,7 @@ export default function ProjectPermissionsDialog({
                   <Label className="text-xs text-muted-foreground">
                     {t("permissions.ownerLabel")}
                   </Label>
-                  <div className="flex items-center justify-between rounded-md border px-3 py-2">
+                  <div className="flex items-center justify-between rounded-md border bg-card px-3 py-2">
                     <span className="inline-flex items-center gap-2">
                       <Crown className="size-4 text-amber-500" />
                       {data.owner?.username}

@@ -223,7 +223,7 @@ const CodeReviewResultCard = React.memo(function CodeReviewResultCard({
                   {result.suggestions.map((suggestion, i) => (
                     <li
                       key={i}
-                      className="rounded-md border border-border/70 p-2.5 text-xs"
+                      className="rounded-md border border-border/70 bg-background p-2.5 text-xs"
                     >
                       <div className="mb-1 flex items-center gap-1.5 flex-wrap">
                         <span className="font-semibold text-amber-600 dark:text-amber-400">
@@ -635,7 +635,7 @@ export default function CodeReviewPage() {
                               {(paragraphGroups[f] || []).map((p) => (
                                 <div
                                   key={p.index}
-                                  className="rounded-lg border border-border p-3"
+                                  className="rounded-lg border border-border bg-background p-3"
                                 >
                                   <span className="rounded bg-muted px-1.5 py-0.5 text-xs font-mono mb-1 inline-block">
                                     P{p.index}
@@ -656,7 +656,7 @@ export default function CodeReviewPage() {
                         {codeReviewParagraphs.map((p) => (
                           <div
                             key={p.index}
-                            className="rounded-lg border border-border p-3"
+                            className="rounded-lg border border-border bg-background p-3"
                           >
                             <span className="rounded bg-muted px-1.5 py-0.5 text-xs font-mono mb-1 inline-block">
                               P{p.index}

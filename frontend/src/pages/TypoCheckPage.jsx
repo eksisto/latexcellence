@@ -158,7 +158,7 @@ export default function TypoCheckPage() {
                   {result.changes.map((change, i) => (
                     <li
                       key={i}
-                      className="rounded border border-border p-2 text-sm"
+                      className="rounded border border-border bg-background p-2 text-sm"
                     >
                       <div className="flex items-center gap-2 mb-1">
                         <span className="rounded bg-blue-500/10 text-blue-600 dark:text-blue-400 px-1 py-0.5 text-xs font-medium">
@@ -379,7 +379,7 @@ export default function TypoCheckPage() {
                               {fileParagraphs.map((p) => (
                                 <div
                                   key={`${f}-${p.index}`}
-                                  className="rounded-lg border border-border p-3"
+                                  className="rounded-lg border border-border bg-background p-3"
                                 >
                                   <span className="rounded bg-muted px-1.5 py-0.5 text-xs font-mono mb-1 inline-block">
                                     P{p.index}
@@ -403,7 +403,7 @@ export default function TypoCheckPage() {
                       {typoParagraphs.map((p) => (
                         <div
                           key={`${activeFile}-${p.index}`}
-                          className="rounded-lg border border-border p-3"
+                          className="rounded-lg border border-border bg-background p-3"
                         >
                           <span className="rounded bg-muted px-1.5 py-0.5 text-xs font-mono mb-1 inline-block">
                             P{p.index}

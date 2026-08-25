@@ -123,7 +123,7 @@ export default function FolderPickerDialog({
             </Button>
           </div>
 
-          <div className="rounded-lg border border-border max-h-64 overflow-y-auto">
+          <div className="rounded-lg border border-border bg-card max-h-64 overflow-y-auto">
             {loading ? (
               <div className="flex items-center justify-center py-8 text-muted-foreground text-sm">
                 <Loader2 className="animate-spin mr-2 size-4" />

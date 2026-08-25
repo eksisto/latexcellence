@@ -224,7 +224,7 @@ export default function ParagraphTranslatePage() {
               />
             ) : hasTranslation ? (
               <>
-                <div className="rounded border border-border p-2 text-sm space-y-2">
+                <div className="rounded border border-border bg-background p-2 text-sm space-y-2">
                   <div>
                     <span className="text-muted-foreground text-xs">
                       {t("common:original")}
@@ -467,7 +467,7 @@ export default function ParagraphTranslatePage() {
                                 {fileParagraphs.map((p) => (
                                   <div
                                     key={`${f}-${p.index}`}
-                                    className="rounded-lg border border-border p-3"
+                                    className="rounded-lg border border-border bg-background p-3"
                                   >
                                     <span className="rounded bg-muted px-1.5 py-0.5 text-xs font-mono mb-1 inline-block">
                                       P{p.index}
@@ -491,7 +491,7 @@ export default function ParagraphTranslatePage() {
                         {translateParagraphs.map((p) => (
                           <div
                             key={`${activeFile}-${p.index}`}
-                            className="rounded-lg border border-border p-3"
+                            className="rounded-lg border border-border bg-background p-3"
                           >
                             <span className="rounded bg-muted px-1.5 py-0.5 text-xs font-mono mb-1 inline-block">
                               P{p.index}

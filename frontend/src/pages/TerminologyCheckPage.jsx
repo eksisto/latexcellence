@@ -227,7 +227,7 @@ export default function TerminologyCheckPage() {
                 {(groups[f] || []).map((p) => (
                   <div
                     key={p.index}
-                    className="rounded-lg border border-border p-3"
+                    className="rounded-lg border border-border bg-background p-3"
                   >
                     <span className="rounded bg-muted px-1.5 py-0.5 text-xs font-mono mb-1 inline-block">
                       P{p.index}
@@ -250,7 +250,10 @@ export default function TerminologyCheckPage() {
     return (
       <div className="space-y-3">
         {paragraphs.map((p) => (
-          <div key={p.index} className="rounded-lg border border-border p-3">
+          <div
+            key={p.index}
+            className="rounded-lg border border-border bg-background p-3"
+          >
             <span className="rounded bg-muted px-1.5 py-0.5 text-xs font-mono mb-1 inline-block">
               P{p.index}
             </span>
@@ -313,7 +316,7 @@ export default function TerminologyCheckPage() {
                     return (
                       <li
                         key={i}
-                        className="rounded border border-border p-2 text-sm"
+                        className="rounded border border-border bg-background p-2 text-sm"
                       >
                         <div className="flex items-center gap-2 mb-1">
                           <span className="rounded bg-orange-500/10 text-orange-600 dark:text-orange-400 px-1 py-0.5 text-xs font-medium">

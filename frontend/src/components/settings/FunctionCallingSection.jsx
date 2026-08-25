@@ -63,7 +63,7 @@ function FunctionCallingSection({ functionCalling, onChange }) {
       {webSearch.enabled && (
         <div className="ml-6 space-y-3">
           {/* 搜索引擎配置 */}
-          <fieldset className="rounded border p-2.5 space-y-3">
+          <fieldset className="rounded border bg-muted/40 p-2.5 space-y-3">
             <legend className="px-1 text-xs font-medium">
               {t("settings.searchEngineConfig")}
             </legend>
@@ -113,7 +113,7 @@ function FunctionCallingSection({ functionCalling, onChange }) {
             </div>
 
             {/* DuckDuckGo */}
-            <fieldset className="rounded border p-2.5 space-y-2">
+            <fieldset className="rounded border bg-muted/40 p-2.5 space-y-2">
               <legend className="px-1 text-xs font-medium">DuckDuckGo</legend>
               <CheckboxField
                 label={t("settings.enabled")}
@@ -128,7 +128,7 @@ function FunctionCallingSection({ functionCalling, onChange }) {
             </fieldset>
 
             {/* SearXNG */}
-            <fieldset className="rounded border p-2.5 space-y-2">
+            <fieldset className="rounded border bg-muted/40 p-2.5 space-y-2">
               <legend className="px-1 text-xs font-medium">SearXNG</legend>
               <CheckboxField
                 label={t("settings.enabled")}
@@ -158,7 +158,7 @@ function FunctionCallingSection({ functionCalling, onChange }) {
             </fieldset>
 
             {/* Tavily */}
-            <fieldset className="rounded border p-2.5 space-y-2">
+            <fieldset className="rounded border bg-muted/40 p-2.5 space-y-2">
               <legend className="px-1 text-xs font-medium">Tavily</legend>
               <CheckboxField
                 label={t("settings.enabled")}
@@ -192,7 +192,7 @@ function FunctionCallingSection({ functionCalling, onChange }) {
             </fieldset>
           </fieldset>
 
-          <fieldset className="rounded border p-2.5 space-y-3">
+          <fieldset className="rounded border bg-muted/40 p-2.5 space-y-3">
             <legend className="px-1 text-xs font-medium">
               {t("settings.searchAggregation")}
             </legend>
@@ -270,7 +270,7 @@ function FunctionCallingSection({ functionCalling, onChange }) {
           </fieldset>
 
           {/* Deep Read */}
-          <fieldset className="rounded border p-2.5 space-y-2">
+          <fieldset className="rounded border bg-muted/40 p-2.5 space-y-2">
             <legend className="px-1 text-xs font-medium">Deep Read</legend>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
@@ -307,7 +307,7 @@ function FunctionCallingSection({ functionCalling, onChange }) {
                 />
               </div>
             </div>
-            <fieldset className="space-y-3 rounded border p-2.5">
+            <fieldset className="space-y-3 rounded border bg-muted/40 p-2.5">
               <legend className="px-1 text-xs font-medium">
                 {t("settings.pageFetchResilience")}
               </legend>
@@ -359,7 +359,7 @@ function FunctionCallingSection({ functionCalling, onChange }) {
                 ))}
               </div>
             </fieldset>
-            <fieldset className="space-y-3 rounded border p-2.5">
+            <fieldset className="space-y-3 rounded border bg-muted/40 p-2.5">
               <legend className="px-1 text-xs font-medium">
                 {t("settings.pageBrowserFallback")}
               </legend>
@@ -404,7 +404,7 @@ function FunctionCallingSection({ functionCalling, onChange }) {
             </fieldset>
           </fieldset>
 
-          <fieldset className="rounded border p-2.5 space-y-3">
+          <fieldset className="rounded border bg-muted/40 p-2.5 space-y-3">
             <legend className="px-1 text-xs font-medium">
               {t("settings.pageReading")}
             </legend>

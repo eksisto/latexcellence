@@ -544,7 +544,7 @@ export default function WorkspacePage() {
                         {paragraphs.map((p) => (
                           <div
                             key={p.index}
-                            className="rounded-lg border border-border p-3"
+                            className="rounded-lg border border-border bg-background p-3"
                           >
                             <div className="flex items-center gap-2 mb-2">
                               <span className="rounded bg-muted px-1.5 py-0.5 text-xs font-mono">

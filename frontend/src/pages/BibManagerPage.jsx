@@ -66,7 +66,7 @@ const FormatResultCard = React.memo(function FormatResultCard({
   if (!formatResult) return null;
 
   return (
-    <div className="rounded-lg border border-border p-4 space-y-3 mt-2">
+    <div className="rounded-lg border border-border bg-background p-4 space-y-3 mt-2">
       {isEditingFormat && editedFormatInfo ? (
         <>
           <div className="grid grid-cols-2 gap-3">
@@ -725,7 +725,7 @@ export default function BibManagerPage() {
                     </Button>
 
                     {editedMetadata && (
-                      <div className="rounded-lg border border-border p-4 space-y-3 mt-2">
+                      <div className="rounded-lg border border-border bg-background p-4 space-y-3 mt-2">
                         <div className="flex items-center justify-between">
                           <span className="text-sm font-medium">
                             {t("pages:bibManager.step2ResultTitle")}
@@ -834,7 +834,7 @@ export default function BibManagerPage() {
                     </Button>
 
                     {editedBibtex && (
-                      <div className="rounded-lg border border-border p-4 space-y-3 mt-2">
+                      <div className="rounded-lg border border-border bg-background p-4 space-y-3 mt-2">
                         <div className="flex items-center justify-between">
                           <span className="text-sm font-medium">
                             {t("pages:bibManager.step3ResultTitle")}
@@ -999,7 +999,7 @@ export default function BibManagerPage() {
                       </Button>
 
                       {latexResult && (
-                        <div className="rounded-lg border border-border p-4 space-y-3 mt-2">
+                        <div className="rounded-lg border border-border bg-background p-4 space-y-3 mt-2">
                           <div className="flex items-center justify-between">
                             <span className="text-sm font-medium">
                               {t("pages:bibManager.step5ResultTitle")}
