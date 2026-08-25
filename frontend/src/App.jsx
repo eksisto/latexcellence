@@ -13,7 +13,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Toaster } from "@/components/ui/sonner";
 import Loader2 from "lucide-react/dist/esm/icons/loader-circle.mjs";
 import Settings from "lucide-react/dist/esm/icons/settings.mjs";
@@ -23,6 +23,7 @@ import LogIn from "lucide-react/dist/esm/icons/log-in.mjs";
 import ShieldCheck from "lucide-react/dist/esm/icons/shield-check.mjs";
 import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
+import { cn } from "@/lib/utils";
 import ThemeToggle from "@/components/ThemeToggle";
 import ThemeSwitcher from "@/components/ThemeSwitcher";
 import LanguageSwitcher from "@/components/LanguageSwitcher";
@@ -201,9 +202,23 @@ const AuthToolbar = memo(function AuthToolbar() {
   const navigate = useNavigate();
 
   if (authStatus === "single") return null;
-  if (authStatus !== "authenticated") {
-    if (authStatus === "unauthenticated") {
-      return (
+
+  const logoutLabel = authUser?.username
+    ? t("auth.logoutWithUsername", { username: authUser.username })
+    : t("auth.logout");
+  const isAdmin = authUser?.role === "admin";
+
+  // 两组图标持续挂载、仅用 CSS 切换可见性：
+  // Base UI Tooltip 的悬浮监听器在挂载后一次性绑定到触发元素上，
+  // 若在登录跳转的并发提交中才挂载，该绑定可能被跳过且不会重试（悬浮提示永久失效）。
+  return (
+    <>
+      <div
+        className={cn(
+          "flex items-center gap-1",
+          authStatus !== "unauthenticated" && "hidden",
+        )}
+      >
         <Tooltip>
           <TooltipTrigger
             render={
@@ -219,26 +234,22 @@ const AuthToolbar = memo(function AuthToolbar() {
           </TooltipTrigger>
           <TooltipContent>{t("auth.login")}</TooltipContent>
         </Tooltip>
-      );
-    }
-    return null;
-  }
-
-  const logoutLabel = authUser?.username
-    ? t("auth.logoutWithUsername", { username: authUser.username })
-    : t("auth.logout");
-
-  return (
-    <>
-      {authUser?.role === "admin" && (
+      </div>
+      <div
+        className={cn(
+          "flex items-center gap-1",
+          authStatus !== "authenticated" && "hidden",
+        )}
+      >
         <Tooltip>
           <TooltipTrigger
             render={
-              <Button
-                variant="ghost"
-                size="icon"
-                nativeButton={false}
-                render={<Link to="/admin" />}
+              <Link
+                to="/admin"
+                className={cn(
+                  buttonVariants({ variant: "ghost", size: "icon" }),
+                  !isAdmin && "hidden",
+                )}
               />
             }
           >
@@ -247,25 +258,25 @@ const AuthToolbar = memo(function AuthToolbar() {
           </TooltipTrigger>
           <TooltipContent>{t("auth.admin")}</TooltipContent>
         </Tooltip>
-      )}
-      <Tooltip>
-        <TooltipTrigger
-          render={
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={async () => {
-                await logoutUser();
-                navigate("/login", { replace: true });
-              }}
-            />
-          }
-        >
-          <LogOut className="size-5" />
-          <span className="sr-only">{logoutLabel}</span>
-        </TooltipTrigger>
-        <TooltipContent>{logoutLabel}</TooltipContent>
-      </Tooltip>
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={async () => {
+                  await logoutUser();
+                  navigate("/login", { replace: true });
+                }}
+              />
+            }
+          >
+            <LogOut className="size-5" />
+            <span className="sr-only">{logoutLabel}</span>
+          </TooltipTrigger>
+          <TooltipContent>{logoutLabel}</TooltipContent>
+        </Tooltip>
+      </div>
     </>
   );
 });
