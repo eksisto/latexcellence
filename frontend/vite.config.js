@@ -97,6 +97,14 @@ export default defineConfig(({ mode }) => {
               // 以下库只被懒加载路由使用（MarkdownRenderer / CodeBlock 等），
               // 独立分包，避免随 i18next/zustand 等首屏依赖一起进入初始 vendor chunk。
               if (/highlight\.js/.test(id)) return "vendor-highlight";
+              // CodeMirror 6（编辑器 /editor 懒加载路由专用，避免拖累首屏；
+              // 覆盖 @uiw 全系子包与叶子依赖，防止与 vendor 互相引用形成循环分包）
+              if (
+                /@codemirror|@lezer|@uiw|\/codemirror\/|style-mod|w3c-keyname|crelt|find-cluster-break/.test(
+                  id,
+                )
+              )
+                return "vendor-codemirror";
               if (
                 /react-markdown|remark-|rehype-|unified|hast-util-|mdast-util-|unist-util-|micromark|vfile|property-information|character-entities|comma-separated-tokens|space-separated-tokens|decode-named-character-reference|escape-string-regexp|is-plain-obj|trough|bail|extend|trim-lines|ccount|zwitch|devlop|dequal|markdown-table|longest-streak|web-namespaces|html-void-elements|stringify-entities|parse-entities|hastscript|style-to-js|style-to-object|inline-style-parser/.test(
                   id,

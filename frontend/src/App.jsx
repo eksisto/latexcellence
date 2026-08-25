@@ -57,6 +57,7 @@ const ForgotPasswordPage = lazy(() => import("./pages/ForgotPasswordPage"));
 const ResetPasswordPage = lazy(() => import("./pages/ResetPasswordPage"));
 const PendingApprovalPage = lazy(() => import("./pages/PendingApprovalPage"));
 const ProjectWorkbenchPage = lazy(() => import("./pages/ProjectWorkbenchPage"));
+const EditorPage = lazy(() => import("./pages/EditorPage"));
 const AdminPage = lazy(() => import("./pages/AdminPage"));
 const SettingsDialog = lazy(() => import("@/components/SettingsDialog"));
 
@@ -420,6 +421,15 @@ export default function App() {
               element={
                 <RequireAuth>
                   <WorkspacePage />
+                </RequireAuth>
+              }
+            />
+            {/* 网页编辑器（editor-plan 阶段二）：viewer 可进入但整体只读 */}
+            <Route
+              path="/editor"
+              element={
+                <RequireAuth>
+                  <EditorPage />
                 </RequireAuth>
               }
             />

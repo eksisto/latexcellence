@@ -550,7 +550,8 @@
       "projectOpened": "專案已開啟",
       "openFailed": "開啟專案失敗",
       "compileSuccessToast": "編譯成功",
-      "compileFailedToast": "編譯失敗"
+      "compileFailedToast": "編譯失敗",
+      "openEditor": "進入編輯器"
     },
     "gitDiff": {
       "title": "Git 差異高亮",
@@ -964,6 +965,26 @@
       "deleted": "已刪除使用者 {{username}}",
       "deleteFailed": "刪除使用者失敗",
       "close": "關閉"
+    },
+    "editor": {
+      "title": "編輯器",
+      "fileTooLarge": "檔案過大，無法在編輯器中開啟（超過約 2MB）：{{path}}",
+      "openFailed": "開啟檔案失敗",
+      "unsupportedType": "暫不支援在編輯器中開啟該檔案類型：{{path}}",
+      "saved": "已儲存",
+      "conflictToast": "儲存衝突：檔案已在其他位置被修改",
+      "saveFailed": "儲存失敗",
+      "reloadedFromDisk": "已放棄本地修改並重新載入",
+      "opening": "正在開啟檔案…",
+      "noProjectTitle": "尚未開啟專案",
+      "noProjectDescription": "請先在工作區開啟專案，再進入編輯器。",
+      "goWorkspace": "返回工作區",
+      "noFileSelectedTitle": "未選擇檔案",
+      "noFileSelectedHint": "在左側檔案樹點擊 .tex / .bib / .sty / .cls 檔案開始編輯，Ctrl/Cmd+S 儲存。",
+      "noFileSelectedViewerHint": "你在本專案中為唯讀角色，可瀏覽檔案內容但無法編輯。",
+      "switchDirtyTitle": "放棄未儲存的修改？",
+      "switchDirtyDescription": "當前檔案的修改尚未儲存，開啟新檔案將丟棄這些改動。",
+      "switchDirtyConfirm": "放棄並開啟"
     }
   },
   "components": {
@@ -1387,6 +1408,36 @@
       "transferFailed": "轉交失敗",
       "loading": "載入中…",
       "close": "關閉"
+    },
+    "editor": {
+      "backToWorkspace": "返回工作臺",
+      "noFile": "未開啟檔案",
+      "unsavedDot": "有未儲存的修改",
+      "historyBlockedByDirty": "有未儲存的修改，請先儲存後再撤銷/重做",
+      "saving": "儲存中…",
+      "save": "儲存",
+      "backendUndo": "後端撤銷",
+      "backendRedo": "後端重做",
+      "panelTitle": "預覽與編譯",
+      "panelEmptyTitle": "編譯結果與 PDF 預覽",
+      "panelEmptyDescription": "將在後續版本接入編譯聯動，在此展示編譯輸出與 PDF 預覽。"
+    },
+    "conflictDialog": {
+      "title": "儲存衝突",
+      "description": "檔案已被其他視窗或瀏覽器修改，儲存已被拒絕以避免覆蓋他人改動。",
+      "hint": "可先將本地內容複製到剪貼板留存，或放棄本地修改並重新載入伺服器最新版本。",
+      "copyLocal": "複製本地內容",
+      "discardAndReload": "放棄本地並重新載入",
+      "copySuccess": "本地內容已複製到剪貼板",
+      "copyFailed": "複製失敗，請手動複製"
+    },
+    "editorSettings": {
+      "title": "編輯器設定",
+      "description": "偏好僅保存在當前瀏覽器，只對編輯器生效。",
+      "softWrap": "軟換行",
+      "autoSave": "自動儲存",
+      "autoSaveHint": "自動儲存將在後續版本隨編譯聯動一併啟用。",
+      "fontSize": "字號"
     }
   },
   "hooks": {
@@ -1639,6 +1690,9 @@
     "resetTokenInvalid": "重設連結無效或已過期，請重新申請",
     "emailTaken": "該信箱已被其他帳號使用",
     "invalidEmail": "信箱格式不正確",
-    "registerRateLimited": "該 IP 註冊請求過於頻繁，請稍後再試"
+    "registerRateLimited": "該 IP 註冊請求過於頻繁，請稍後再試",
+    "invalidContent": "內容校驗失敗：偵測到損壞特徵（如控制字元或無效佔位符），已取消儲存",
+    "invalidPath": "檔案路徑不合法：僅支援 .tex / .bib / .sty / .cls，且必須位於專案內",
+    "invalidEncoding": "檔案不是有效的 UTF-8 編碼，編輯器僅支援 UTF-8 文字檔案"
   }
 }

@@ -302,6 +302,27 @@ export const api = {
           workspaceId,
         ),
       ),
+    /** 编辑器打开文件：返回 { file_path, content, md5 }（editor-plan §5.1） */
+    fileContent: (filePath, workspaceId) =>
+      request(
+        appendWs(
+          `/project/file-content?file_path=${encodeURIComponent(filePath)}`,
+          workspaceId,
+        ),
+      ),
+    /**
+     * 编辑器整文件保存（MD5 乐观锁）：base_md5 与磁盘不符时后端返回
+     * 409 结构化错误（error: "file_conflict"）；成功返回 { status, file_path, md5 }
+     */
+    saveFile: (filePath, content, baseMd5, workspaceId) =>
+      request(appendWs("/project/save-file", workspaceId), {
+        method: "POST",
+        body: JSON.stringify({
+          file_path: filePath,
+          content,
+          base_md5: baseMd5,
+        }),
+      }),
     closeWorkspace: (workspaceId) =>
       request(`/project/workspace/${encodeURIComponent(workspaceId)}`, {
         method: "DELETE",

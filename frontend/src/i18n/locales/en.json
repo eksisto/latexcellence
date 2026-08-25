@@ -550,7 +550,8 @@
       "projectOpened": "Project opened",
       "openFailed": "Failed to open project",
       "compileSuccessToast": "Compile succeeded",
-      "compileFailedToast": "Compile failed"
+      "compileFailedToast": "Compile failed",
+      "openEditor": "Open editor"
     },
     "gitDiff": {
       "title": "Git Diff Highlight",
@@ -964,6 +965,26 @@
       "deleted": "Deleted user {{username}}",
       "deleteFailed": "Failed to delete user",
       "close": "Close"
+    },
+    "editor": {
+      "title": "Editor",
+      "fileTooLarge": "File is too large to open in the editor (over ~2 MB): {{path}}",
+      "openFailed": "Failed to open file",
+      "unsupportedType": "This file type cannot be opened in the editor: {{path}}",
+      "saved": "Saved",
+      "conflictToast": "Save conflict: the file has been modified elsewhere",
+      "saveFailed": "Failed to save",
+      "reloadedFromDisk": "Discarded local changes and reloaded from disk",
+      "opening": "Opening file…",
+      "noProjectTitle": "No project opened",
+      "noProjectDescription": "Open a project in the workspace before entering the editor.",
+      "goWorkspace": "Go to workspace",
+      "noFileSelectedTitle": "No file selected",
+      "noFileSelectedHint": "Click a .tex / .bib / .sty / .cls file in the tree to start editing; Ctrl/Cmd+S to save.",
+      "noFileSelectedViewerHint": "You have read-only access to this project: you can browse files but not edit them.",
+      "switchDirtyTitle": "Discard unsaved changes?",
+      "switchDirtyDescription": "The current file has unsaved changes. Opening another file will discard them.",
+      "switchDirtyConfirm": "Discard and open"
     }
   },
   "components": {
@@ -1387,6 +1408,36 @@
       "transferFailed": "Transfer failed",
       "loading": "Loading…",
       "close": "Close"
+    },
+    "editor": {
+      "backToWorkspace": "Back to workspace",
+      "noFile": "No file opened",
+      "unsavedDot": "Unsaved changes",
+      "historyBlockedByDirty": "Unsaved changes — save before undo/redo",
+      "saving": "Saving…",
+      "save": "Save",
+      "backendUndo": "Server undo",
+      "backendRedo": "Server redo",
+      "panelTitle": "Preview & compile",
+      "panelEmptyTitle": "Compile result & PDF preview",
+      "panelEmptyDescription": "Compile integration with output log and PDF preview will arrive in a future release."
+    },
+    "conflictDialog": {
+      "title": "Save conflict",
+      "description": "The file has been modified by another window or browser. Saving was rejected to avoid overwriting those changes.",
+      "hint": "Copy your local content to the clipboard as a backup, or discard local changes and reload the latest version.",
+      "copyLocal": "Copy local content",
+      "discardAndReload": "Discard and reload",
+      "copySuccess": "Local content copied to clipboard",
+      "copyFailed": "Copy failed — please copy manually"
+    },
+    "editorSettings": {
+      "title": "Editor settings",
+      "description": "Preferences are stored in this browser only and affect the editor.",
+      "softWrap": "Soft wrap",
+      "autoSave": "Auto save",
+      "autoSaveHint": "Auto save will be enabled together with compile integration in a future release.",
+      "fontSize": "Font size"
     }
   },
   "hooks": {
@@ -1639,6 +1690,9 @@
     "resetTokenInvalid": "This reset link is invalid or expired. Please request a new one",
     "emailTaken": "This email is already used by another account",
     "invalidEmail": "Invalid email address",
-    "registerRateLimited": "Too many registration attempts from this IP; please retry later"
+    "registerRateLimited": "Too many registration attempts from this IP; please retry later",
+    "invalidContent": "Content validation failed: corruption markers detected (control characters or invalid placeholders); save cancelled",
+    "invalidPath": "Invalid file path: only .tex / .bib / .sty / .cls files inside the project are supported",
+    "invalidEncoding": "File is not valid UTF-8; the editor supports UTF-8 text files only"
   }
 }

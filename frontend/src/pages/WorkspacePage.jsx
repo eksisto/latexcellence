@@ -28,6 +28,7 @@ import {
 } from "@/components/ui/tooltip";
 import FolderOpen from "lucide-react/dist/esm/icons/folder-open.mjs";
 import SpellCheck from "lucide-react/dist/esm/icons/spell-check.mjs";
+import SquarePen from "lucide-react/dist/esm/icons/square-pen.mjs";
 import Play from "lucide-react/dist/esm/icons/play.mjs";
 import Loader2 from "lucide-react/dist/esm/icons/loader-circle.mjs";
 import Check from "lucide-react/dist/esm/icons/check.mjs";
@@ -448,6 +449,25 @@ export default function WorkspacePage() {
                   {t("pages:workspace.diffHighlight")}
                 </Button>
               )}
+              {/* 编辑器入口（editor-plan §4）：携带当前 activeFile 跳转，
+                  不改动工作台既有逻辑 */}
+              <Button
+                variant="outline"
+                size="sm"
+                nativeButton={false}
+                render={
+                  <Link
+                    to={
+                      activeFile
+                        ? `/editor?file=${encodeURIComponent(activeFile)}`
+                        : "/editor"
+                    }
+                  />
+                }
+              >
+                <SquarePen />
+                {t("pages:workspace.openEditor")}
+              </Button>
             </div>
 
             <div className="grid grid-cols-4 gap-6">

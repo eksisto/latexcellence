@@ -128,6 +128,12 @@ const EXACT_MAP = {
   "Marker map missing": "markerMapMissing",
   file_conflict: "fileConflict",
 
+  // 编辑器整文件读写（backend/modules/editor，editor-plan 阶段一接口）
+  invalid_content: "invalidContent",
+  invalid_path: "invalidPath",
+  file_not_found: "fileNotFound",
+  invalid_encoding: "invalidEncoding",
+
   // 参数校验
   "Empty reference example": "emptyReferenceExample",
   "Empty metadata": "emptyMetadata",

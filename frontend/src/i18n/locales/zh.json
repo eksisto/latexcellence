@@ -550,7 +550,8 @@
       "projectOpened": "项目已打开",
       "openFailed": "打开项目失败",
       "compileSuccessToast": "编译成功",
-      "compileFailedToast": "编译失败"
+      "compileFailedToast": "编译失败",
+      "openEditor": "进入编辑器"
     },
     "gitDiff": {
       "title": "Git 差异高亮",
@@ -964,6 +965,26 @@
       "deleted": "已删除用户 {{username}}",
       "deleteFailed": "删除用户失败",
       "close": "关闭"
+    },
+    "editor": {
+      "title": "编辑器",
+      "fileTooLarge": "文件过大，无法在编辑器中打开（超过约 2MB）：{{path}}",
+      "openFailed": "打开文件失败",
+      "unsupportedType": "暂不支持在编辑器中打开该文件类型：{{path}}",
+      "saved": "已保存",
+      "conflictToast": "保存冲突：文件已在其他位置被修改",
+      "saveFailed": "保存失败",
+      "reloadedFromDisk": "已放弃本地修改并重新加载",
+      "opening": "正在打开文件…",
+      "noProjectTitle": "尚未打开项目",
+      "noProjectDescription": "请先在工作区打开项目，再进入编辑器。",
+      "goWorkspace": "返回工作区",
+      "noFileSelectedTitle": "未选择文件",
+      "noFileSelectedHint": "在左侧文件树点击 .tex / .bib / .sty / .cls 文件开始编辑，Ctrl/Cmd+S 保存。",
+      "noFileSelectedViewerHint": "你在本项目中为只读角色，可浏览文件内容但无法编辑。",
+      "switchDirtyTitle": "放弃未保存的修改？",
+      "switchDirtyDescription": "当前文件的修改尚未保存，打开新文件将丢弃这些改动。",
+      "switchDirtyConfirm": "放弃并打开"
     }
   },
   "components": {
@@ -1387,6 +1408,36 @@
       "transferFailed": "转交失败",
       "loading": "加载中…",
       "close": "关闭"
+    },
+    "editor": {
+      "backToWorkspace": "返回工作台",
+      "noFile": "未打开文件",
+      "unsavedDot": "有未保存的修改",
+      "historyBlockedByDirty": "有未保存的修改，请先保存后再撤销/重做",
+      "saving": "保存中…",
+      "save": "保存",
+      "backendUndo": "后端撤销",
+      "backendRedo": "后端重做",
+      "panelTitle": "预览与编译",
+      "panelEmptyTitle": "编译结果与 PDF 预览",
+      "panelEmptyDescription": "将在后续版本接入编译联动，在此展示编译输出与 PDF 预览。"
+    },
+    "conflictDialog": {
+      "title": "保存冲突",
+      "description": "文件已被其他窗口或浏览器修改，保存已被拒绝以避免覆盖他人改动。",
+      "hint": "可先将本地内容复制到剪贴板留存，或放弃本地修改并重载服务端最新版本。",
+      "copyLocal": "复制本地内容",
+      "discardAndReload": "放弃本地并重载",
+      "copySuccess": "本地内容已复制到剪贴板",
+      "copyFailed": "复制失败，请手动复制"
+    },
+    "editorSettings": {
+      "title": "编辑器设置",
+      "description": "偏好仅保存在当前浏览器，只对编辑器生效。",
+      "softWrap": "软换行",
+      "autoSave": "自动保存",
+      "autoSaveHint": "自动保存将在后续版本随编译联动一并启用。",
+      "fontSize": "字号"
     }
   },
   "hooks": {
@@ -1639,6 +1690,9 @@
     "resetTokenInvalid": "重置链接无效或已过期，请重新申请",
     "emailTaken": "该邮箱已被其他账号使用",
     "invalidEmail": "邮箱格式不正确",
-    "registerRateLimited": "该 IP 注册请求过于频繁，请稍后再试"
+    "registerRateLimited": "该 IP 注册请求过于频繁，请稍后再试",
+    "invalidContent": "内容校验失败：检测到损坏特征（如控制字符或无效占位符），已取消保存",
+    "invalidPath": "文件路径不合法：仅支持 .tex / .bib / .sty / .cls，且必须位于项目内",
+    "invalidEncoding": "文件不是有效的 UTF-8 编码，编辑器仅支持 UTF-8 文本文件"
   }
 }

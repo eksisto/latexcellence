@@ -65,6 +65,13 @@
 | [i18next](https://www.i18next.com) | ^26.3.6 | MIT | Copyright (c) 2011-present i18next | 国际化核心库 |
 | [i18next-browser-languagedetector](https://github.com/i18next/i18next-browser-languagedetector) | ^8.2.1 | MIT | Copyright (c) 2011-present i18next | 浏览器语言自动检测 |
 | [react-i18next](https://github.com/i18next/react-i18next) | ^17.0.11 | MIT | Copyright (c) 2015-present i18next | React i18next 集成 |
+| [CodeMirror 6](https://codemirror.net) | ^6.0.2 | MIT | Copyright (c) by Marijn Haverbeke and others | 网页编辑器内核（编辑器页基础包） |
+| [@uiw/react-codemirror](https://github.com/uiwjs/react-codemirror) | ^4.25.11 | MIT | Copyright (c) 2018 Kenny Wong | CodeMirror 6 的 React 受控封装 |
+| [@codemirror/language](https://github.com/codemirror/dev) | ^6.12.4 | MIT | Copyright (c) by Marijn Haverbeke and others | 编辑器语言支持基础设施（StreamLanguage 流式模式挂载） |
+| [@codemirror/view](https://github.com/codemirror/dev) | ^6.43.9 | MIT | Copyright (c) by Marijn Haverbeke and others | 编辑器视图层（主题 / 软换行等视图扩展） |
+| [@codemirror/state](https://github.com/codemirror/dev) | ^6.7.1 | MIT | Copyright (c) by Marijn Haverbeke and others | 编辑器状态模型（事务 / 文档状态） |
+| [@codemirror/legacy-modes](https://github.com/codemirror/legacy-modes) | ^6.5.3 | MIT | Copyright (c) by Marijn Haverbeke and others | stex LaTeX 流式语法高亮模式（经语言包抽象层引入） |
+| [@lezer/highlight](https://github.com/lezer-parser/highlight) | ^1.2.3 | MIT | Copyright (c) by Marijn Haverbeke and others | 语法高亮标签定义（HighlightStyle） |
 | [tailwind-merge](https://github.com/dcastil/tailwind-merge) | ^3.6.0 | MIT | Copyright (c) 2021 Dany Castillo | Tailwind 类名合并 |
 | [tw-animate-css](https://github.com/Wombosvideo/tw-animate-css) | ^1.4.0 | MIT | Copyright (c) 2025 Wombosvideo | CSS 动画工具 |
 | [shadcn](https://ui.shadcn.com) | ^4.12.0 | MIT | Copyright (c) 2023 shadcn | UI 组件系统 (CLI) |

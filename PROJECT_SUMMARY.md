@@ -131,7 +131,7 @@ latexcellence/
 │   ├── components.json              # shadcn/ui 组件配置
 │   ├── jsconfig.json                # JS 路径别名配置
 │   ├── public/                      # 静态资源（favicon）
-│   ├── test/                        # 前端单元测试（formulaWrap / writingChatUtils）
+│   ├── test/                        # 前端单元测试（formulaWrap / writingChatUtils / editorFiles / editorPreferences）
 │   └── src/
 │       ├── main.jsx                 # React 入口
 │       ├── App.jsx                  # 根路由
@@ -141,12 +141,17 @@ latexcellence/
 │       │   ├── language.js          # 语言代码归一化 + 后端语言名映射
 │       │   └── locales/             # 翻译 JSON 文件
 │       ├── lib/                     # 通用前端工具
+│       │   └── editor/                 # 编辑器纯模块（阶段二）
+│       │       ├── language.js         # LaTeX 语言包抽象层（stex StreamLanguage 唯一入口，可整体替换）
+│       │       ├── files.js            # 可编辑白名单 + 约 2MB 大小上限纯函数
+│       │       └── preferences.js      # 偏好默认值 + 白名单清洗（导入校验同源）
 │       ├── pages/                   # 页面组件
 │       │   ├── LoginPage.jsx        # 多用户登录页（含忘记密码入口）
 │       │   ├── RegisterPage.jsx     # 多用户注册页（含待审批提交态）
 │       │   ├── ForgotPasswordPage.jsx / ResetPasswordPage.jsx # 自助找回密码（请求页 + 令牌重置页，v2 P6）
 │       │   ├── PendingApprovalPage.jsx # 待管理员批准占位页
 │       │   ├── ProjectWorkbenchPage.jsx # 项目工作台（列表/上传/配额/分类用量与清理/回收站/协作）
+│       │   ├── EditorPage.jsx        # /editor 编辑器页（三栏布局 + 打开-编辑-保存-冲突闭环）
 │       │   ├── AdminPage.jsx        # 管理面板（审批/禁用/重置密码/配额/删除）
 │       │   ├── code-review/         # 代码审查子组件
 │       │   └── writing-chat/        # 写作聊天子组件
@@ -169,6 +174,11 @@ latexcellence/
 │       ├── components/              # 共享组件 + ui 基座组件
 │       │       ├── AuthShell.jsx        # 多用户认证页公共外壳
 │       ├── AuthConnectionButton.jsx # 认证页工具栏「后端连接设置」入口（改绑后端）
+│       │   ├── editor/                 # 编辑器组件（阶段二骨架）
+│       │   │   ├── LaTeXEditor.jsx     # CodeMirror 6 受控封装（value/onChange）
+│       │   │   ├── EditorToolbar.jsx   # 保存 · 后端撤销重做 · 设置 · 返回工作台
+│       │   │   ├── EditorSettingsDialog.jsx # 偏好开关（软换行/字号；自动保存数据结构）
+│       │   │   └── ConflictDialog.jsx  # 保存 409 冲突弹窗（放弃重载 / 剪贴板逃生）
 │       │   ├── UploadProjectDialog.jsx # 上传项目对话框（zip/7z/rar 或目录分片直传 + 断点续传 + 暂停/进度）
 │       │   ├── ProjectPermissionsDialog.jsx # 项目权限对话框（协作者管理/转交）
 │       │   └── settings/            # 设置对话框分区配置组件
@@ -178,7 +188,8 @@ latexcellence/
 │       ├── api/connection.js        # 后端连接配置（基地址/令牌/认证头/连接测试）
 │       ├── utils/                   # 前端工具（errorMessages.js 错误翻译（精确映射）/ errorPatterns.js 错误模式匹配纯模块（PATTERN_MAP + matchPattern）/ format.js 字节与时间展示格式化 / formulaWrap.js 公式包裹重写 / highlight.js 高亮入口 / md5.js 增量 MD5（分片上传校验）/ uploadQueue.js 分片上传队列纯状态机（建队/位图对位/退避重试/resume 复位）/ multiUserProject.js 多用户项目打开统一入口 / projectAccess.js 双模式打开与写角色白名单纯函数）
 │       ├── styles/                  # 前端样式（code-highlight.css：高亮颜色独立文件，按需引入）
-│       └── store/useStore.js        # Zustand 全局状态
+│       ├── store/useStore.js        # Zustand 全局状态
+│       └── store/editorStore.js     # 编辑器状态（editorPreferences persist 切片 + editorSession 缓冲区切片）
 │
 ├── showcase/                        # 独立展示页（零依赖静态站，详见 docs/showcase.md）
 ├── docker/                          # Docker 沙箱镜像体系（v2 P1a：backend/tex/convert/plot 四镜像 + build.sh + README）
@@ -268,7 +279,7 @@ latexcellence/
 | style_modify | 粘贴代码 / 项目 Agent 修改样式，支持 shadow 编译、proposal 审核、批量事务与撤销 | router.py, service.py, agent.py, models.py, session.py, trace.py, cleanup.py | ✓ | ✗ |
 | writing_chat | 写作助手对话（含联网搜索、学术检索与引文追踪、项目浏览、段落编辑和工具确认） | router.py, service/, context.py, models.py, prompt_manager.py | ✓ | ✗ |
 | bib_manager | 参考文献管理 + 格式规则层 + DOI 多数据源查询 + 重复检测 + 文献库 | router.py, service.py, models.py, bib_parser.py, format_rules.py, style_registry.py, provider_manager.py, providers/ | ✓(格式规则命中不依赖 LLM；DOI 查询不依赖 LLM) | ✗ |
-| editor | 网页编辑器后端（阶段一）：整文件打开/保存，MD5 乐观锁，统一撤销记账与配额回滚接线 | service.py（路由挂载于 project_router） | ✗ | ✗ |
+| editor | 网页编辑器：后端整文件打开/保存（MD5 乐观锁、统一撤销记账与配额回滚接线）+ 前端 /editor 页 CM6 打开-编辑-保存-冲突闭环（阶段二骨架） | backend service.py（路由挂载于 project_router）；frontend pages/EditorPage.jsx、components/editor/、lib/editor/、store/editorStore.js | ✗ | ✗ |
 | plot_gen | 科研绘图 Agent（数据画像 -> 图表推荐 -> Python 执行 -> TikZ 编译） | router.py, service.py, agent.py, models.py, data_parser.py, recommender.py, styles.py, executor.py, tikzgen.py, sandbox_guard.py, trace.py, cleanup.py | ✓ | ✗ |
 
 ## 核心设计思路
