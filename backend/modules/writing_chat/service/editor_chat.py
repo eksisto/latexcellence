@@ -1,0 +1,497 @@
+"""编辑器侧 AI 助手服务（editor-plan §5.2 / §7，阶段四）。
+
+复用边界（方案 §7.1）：
+    - 直接复用 ConversationContext 会话持久化 / token 计数 / 压缩、
+      SSE 流式协议、ToolRegistry 只读三件套、多用户 LLM 治理与配额
+    - 新增：编辑器缓冲区协议端点、自适应上下文注入（§7.3）、
+      建议提取与消息级应用标记
+
+AI 建议**不经后端落盘**：建议以结构化形式随 SSE 返回并随消息持久化
+（仅供会话历史展示），由前端应用到 CM6 缓冲区，最终经 save-file 单一
+路径落盘（决策 Q22）。
+
+模块级纯函数 build_editor_context() / extract_suggestions() 供单测直测。
+"""
+
+import asyncio
+import json
+import re
+from typing import Any, AsyncIterator
+
+from backend.core.config import get_config
+from backend.core.multiuser.quota import (
+    checkpoint_derived_usage_for_current_user,
+    enforce_derived_quota_for_current_user,
+)
+from backend.core.prompts import get_prompt
+from backend.core.tool_registry import get_tool_registry
+from backend.core.workspace_manager import get_project_manager_for_workspace
+from backend.modules.writing_chat.context import ConversationContext
+from backend.modules.writing_chat.models import EditorSendRequest
+from backend.utils.project_tools import get_project_tools_manager
+
+from . import _deps
+
+# ── 上下文注入常量（editor-plan §7.3 / 决策 Q24） ────────────────────────────
+
+# 小文件阈值：行数低于该值时全文携带
+SMALL_FILE_LINE_THRESHOLD = 400
+# 大文件时光标邻域半径：前后各约 50 行
+CURSOR_CONTEXT_RADIUS = 50
+# 大文件时章节结构摘要的条目数上限
+OUTLINE_MAX_ENTRIES = 60
+# 章节标题在摘要中的截断长度
+OUTLINE_TITLE_MAX_CHARS = 80
+
+# 章节结构识别：仅锚定行首的分节命令（避免灾难性回溯，AGENTS.md 正则规范）
+_SECTION_RE = re.compile(r"^\\(part|chapter|section|subsection|subsubsection)\*?\s*\{")
+
+# 建议提取：```latex 围栏 → snippet；```diff / ```patch 围栏 → diff
+_SNIPPET_LANGS = {"latex", "tex"}
+_DIFF_LANGS = {"diff", "patch"}
+
+# 只读三件套（决策 Q26）：写入一律走缓冲区协议
+_EDITOR_TOOL_NAMES = ("list_files", "read_file_content", "search_across_files")
+
+
+def _xml_attr(s: str) -> str:
+    """转义 XML 属性中的特殊字符。"""
+    return s.replace("&", "&amp;").replace('"', "&quot;").replace("<", "&lt;")
+
+
+def _outline_entry(line_no: int, line: str) -> str | None:
+    """从分节命令行提取大纲条目；非分节命令返回 None。"""
+    match = _SECTION_RE.match(line)
+    if not match:
+        return None
+    title = line[match.end() :].split("}", 1)[0].strip()
+    if len(title) > OUTLINE_TITLE_MAX_CHARS:
+        title = title[:OUTLINE_TITLE_MAX_CHARS] + "…"
+    return f"L{line_no}: \\{match.group(1)} {{{title}}}"
+
+
+def build_outline(lines: list[str]) -> list[str]:
+    """提取章节结构摘要（行号 + 标题），超出上限后停止收集。"""
+    outline: list[str] = []
+    for i, line in enumerate(lines, start=1):
+        entry = _outline_entry(i, line)
+        if entry:
+            outline.append(entry)
+            if len(outline) >= OUTLINE_MAX_ENTRIES:
+                break
+    return outline
+
+
+def _window_text(lines: list[str], center: int, radius: int) -> tuple[int, int]:
+    """返回光标邻域窗口的 [start_line, end_line]（1-based，含端点）。"""
+    total = len(lines)
+    start = max(1, (center or 1) - radius)
+    end = min(total, (center or 1) + radius)
+    return start, end
+
+
+def _render_buffer_lines(lines: list[str], start: int, end: int) -> str:
+    """渲染带 1-based 行号的缓冲区片段。"""
+    return "\n".join(f"{no}: {lines[no - 1]}" for no in range(start, end + 1))
+
+
+def build_editor_context(
+    file_path: str,
+    buffer: str,
+    cursor_line: int | None = None,
+    selection: str = "",
+    include_full_file: bool = False,
+) -> str:
+    """
+    构造编辑器助手 system prompt 的 <editor_state> XML 信封（§7.3）。
+
+    自适应策略：
+        - 行数 < SMALL_FILE_LINE_THRESHOLD 或显式 include_full_file：全文携带；
+        - 大文件：章节结构摘要 + 光标前后各约 CURSOR_CONTEXT_RADIUS 行 +
+          当前选区，并以 context_note 说明省略情况。
+
+    选区始终单独携带（大文件时选区可能落在窗口之外）。缓冲区正文刻意
+    不做 XML 转义——信封由 LLM 作为文本消费而非机器解析，转义会破坏
+    LaTeX 可读性（与 writing_chat 段落信封同一取舍）。
+    """
+    lines = buffer.split("\n")
+    total = len(lines)
+
+    parts: list[str] = [
+        "<editor_state>",
+        f'<document source="{_xml_attr(file_path or "(unsaved buffer)")}">',
+        f"<total_lines>{total}</total_lines>",
+    ]
+    if cursor_line is not None and cursor_line >= 1:
+        parts.append(f'<cursor line="{min(cursor_line, max(total, 1))}"/>')
+
+    selection = selection or ""
+    if selection.strip():
+        parts.append("<selection>")
+        parts.append(selection)
+        parts.append("</selection>")
+
+    full_file = include_full_file or total < SMALL_FILE_LINE_THRESHOLD
+    if full_file:
+        parts.append('<buffer_content full="true">')
+        parts.append(_render_buffer_lines(lines, 1, total))
+        parts.append("</buffer_content>")
+    else:
+        outline = build_outline(lines)
+        parts.append("<section_outline>")
+        parts.extend(outline or ["(no sectioning commands found)"])
+        parts.append("</section_outline>")
+        start, end = _window_text(lines, cursor_line or 1, CURSOR_CONTEXT_RADIUS)
+        parts.append(
+            f'<buffer_content full="false" from_line="{start}" to_line="{end}">'
+        )
+        parts.append(_render_buffer_lines(lines, start, end))
+        parts.append("</buffer_content>")
+
+    if not full_file:
+        omitted_head = start - 1
+        omitted_tail = total - end
+        parts.append(
+            "<context_note>"
+            "The buffer is large, so only the section outline and the lines "
+            f"around the cursor are shown ({omitted_head} lines before the "
+            f"shown window and {omitted_tail} lines after it are omitted). "
+            "Line numbers refer to the full buffer. Use the "
+            "read_file_content tool to retrieve other sections if needed."
+            "</context_note>"
+        )
+
+    parts.append("</document>")
+    parts.append("</editor_state>")
+    return "\n".join(parts)
+
+
+def extract_suggestions(content: str) -> list[dict[str, str]]:
+    """
+    从 assistant 回复中提取建议（editor-plan §7.2 三种形态的数据来源）。
+
+    规则：
+        - ```latex / ```tex 围栏 → kind="snippet"（插入光标处 / 替换选区）
+        - ```diff / ```patch 围栏 → kind="diff"（unified diff 卡片逐卡审阅）
+        - 其他语言标签或裸围栏不视为建议
+        - 提取按出现顺序编号（index）
+
+    逐行扫描围栏状态机实现，避免对任意 LLM 文本使用嵌套量词正则。
+    """
+    suggestions: list[dict[str, str]] = []
+    lang = ""
+    buf: list[str] = []
+    inside = False
+    for line in (content or "").split("\n"):
+        stripped = line.strip()
+        if not inside and stripped.startswith("```"):
+            candidate = stripped[3:].strip().lower()
+            if candidate in _SNIPPET_LANGS or candidate in _DIFF_LANGS:
+                inside = True
+                lang = candidate
+                buf = []
+            continue
+        if inside and stripped.startswith("```"):
+            kind = "diff" if lang in _DIFF_LANGS else "snippet"
+            suggestions.append(
+                {
+                    "kind": kind,
+                    "language": "diff" if kind == "diff" else "latex",
+                    "content": "\n".join(buf),
+                    "index": len(suggestions),
+                }
+            )
+            inside = False
+            lang = ""
+            buf = []
+            continue
+        if inside:
+            buf.append(line)
+    # 未闭合围栏：丢弃（不完整的建议不可直接应用）
+    return suggestions
+
+
+class EditorChatMixin:
+    """编辑器侧 AI 助手对话流（/api/writing-chat/editor/* 的业务实现）。"""
+
+    def _get_editor_tools(self, workspace_id: str) -> list[dict]:
+        """只读三件套工具 schema（项目已打开且 project_tools 启用时）。"""
+        cfg = get_config()
+        if not (cfg.features.function_calling.project_tools.enabled and workspace_id):
+            return []
+        try:
+            pm = get_project_manager_for_workspace(workspace_id)
+            if not pm.is_open:
+                return []
+            schemas = get_project_tools_manager().get_tools_schema()
+        except Exception as e:
+            self._logger.warning(
+                "Failed to load editor assistant tools for workspace %s: %s",
+                workspace_id,
+                e,
+            )
+            return []
+        return [
+            schema
+            for schema in schemas
+            if schema.get("function", {}).get("name") in _EDITOR_TOOL_NAMES
+        ]
+
+    async def editor_send(
+        self, req: EditorSendRequest, workspace_id: str = ""
+    ) -> AsyncIterator[dict]:
+        """编辑器助手主对话流：同一会话串行执行，防止并发落盘丢消息。"""
+        if self._no_api_key():
+            yield {"type": "error", "message": "No API key configured"}
+            return
+        if req.session_id:
+            async with self._session_lock(req.session_id):
+                async for event in self._editor_send_locked(req, workspace_id):
+                    yield event
+        else:
+            async for event in self._editor_send_locked(req, workspace_id):
+                yield event
+
+    async def _editor_send_locked(
+        self, req: EditorSendRequest, workspace_id: str
+    ) -> AsyncIterator[dict]:
+        """对话流实现（调用方已持有会话级锁）。"""
+        scope = self._get_scope(workspace_id)
+        created_new_session = False
+        ctx = (
+            ConversationContext.load_from_disk(req.session_id)
+            if req.session_id
+            else None
+        )
+        if ctx is None:
+            # 多用户模式：新会话前检查衍生数据配额（超限 413，语义与
+            # writing_chat 一致）；单用户模式静默跳过
+            await asyncio.to_thread(
+                enforce_derived_quota_for_current_user, 0, "writing_chat_sessions"
+            )
+            ctx = ConversationContext.create_session(
+                file_path=req.file_path or None, scope=scope
+            )
+            created_new_session = True
+
+        ctx.file_path = req.file_path or ctx.file_path
+        compressed_this_round = False
+        if await ctx.should_compress_async():
+            compressed_this_round = await self._maybe_compress(ctx)
+        if compressed_this_round:
+            ctx.save_to_disk()
+            yield {"type": "compressed", "session_id": ctx.session_id}
+
+        context_block = build_editor_context(
+            req.file_path,
+            req.buffer,
+            cursor_line=req.cursor_line,
+            selection=req.selection,
+            include_full_file=req.include_full_file,
+        )
+        user_msg = ctx.append_user_message(
+            req.user_message, referenced_file=req.file_path
+        )
+        ctx.save_to_disk()
+        if created_new_session:
+            await asyncio.to_thread(
+                checkpoint_derived_usage_for_current_user, "writing_chat_sessions"
+            )
+
+        llm = _deps.get_llm_client()
+        system_prompt = get_prompt(
+            "editor_assistant",
+            "chat_system",
+            context_block=context_block,
+            language=req.language,
+        )
+        messages: list[dict[str, Any]] = [
+            {"role": "system", "content": system_prompt}
+        ] + ctx.to_llm_messages()
+
+        tools = self._get_editor_tools(workspace_id)
+        full_content_parts: list[str] = []
+        last_usage_tokens = 0
+        llm_failed = False
+
+        if tools:
+            tool_messages = list(messages)
+            persisted_tool_msg_refs: list[dict[str, Any]] = []
+            # 达到最大工具轮次且最后一轮仍在请求工具调用时置 True：
+            # 与 writing_chat 同语义，不再传递工具流式生成最终回复
+            need_final_regeneration = False
+            for round_idx in range(self._MAX_TOOL_ROUNDS):
+                round_content: list[str] = []
+                round_tool_calls = None
+                if round_idx > 0:
+                    yield {"type": "round_start"}
+
+                try:
+                    async for chunk in llm.chat_stream_with_tools(
+                        messages=tool_messages,
+                        tools=tools,
+                        temperature=get_config().llm.temperature,
+                    ):
+                        if chunk.content:
+                            round_content.append(chunk.content)
+                            yield {"type": "token", "content": chunk.content}
+                        if chunk.tool_calls:
+                            round_tool_calls = chunk.tool_calls
+                        if chunk.usage is not None:
+                            last_usage_tokens = chunk.usage.total_tokens
+                except Exception as e:
+                    # 与 writing_chat 非超限错误同语义：直接终止本轮并移除
+                    # 本轮 user 消息，便于用户重发。严禁落入下方"轮次用尽"
+                    # 兜底重发——那会对已失败的流静默重试，且重试成功后内容
+                    # 会因 llm_failed 被整体丢弃、留下无 user 提问的孤儿工具
+                    # 消息，破坏会话历史一致性。
+                    self._logger.error(f"editor chat_stream_with_tools failed: {e}")
+                    yield {"type": "error", "message": str(e)}
+                    ctx.delete_message(user_msg.id)
+                    ctx.save_to_disk()
+                    return
+
+                if not round_tool_calls:
+                    full_content_parts = round_content
+                    break
+
+                assistant_msg: dict[str, Any] = {
+                    "role": "assistant",
+                    "content": None,
+                    "tool_calls": [
+                        {
+                            "id": tc.id,
+                            "type": "function",
+                            "function": {
+                                "name": tc.function.name,
+                                "arguments": tc.function.arguments,
+                            },
+                        }
+                        for tc in round_tool_calls
+                    ],
+                }
+                tool_messages.append(assistant_msg)
+                persisted_tool_msg_refs.append(assistant_msg)
+
+                for tc in round_tool_calls:
+                    tool_name = tc.function.name
+                    try:
+                        tool_args = json.loads(tc.function.arguments)
+                    except Exception:
+                        tool_args = {}
+                    yield {
+                        "type": "tool_status",
+                        "tool": tool_name,
+                        "label": self._get_tool_label(tool_name, tool_args),
+                        "args": tool_args,
+                    }
+                    tool_args["_workspace_id"] = workspace_id
+                    try:
+                        tool_result = await get_tool_registry().execute(
+                            tool_name, tool_args
+                        )
+                        result_text = (
+                            tool_result.format_for_llm()
+                            if hasattr(tool_result, "format_for_llm")
+                            else str(tool_result)
+                        )
+                    except Exception as e:
+                        self._logger.warning(
+                            f"Editor assistant tool failed {tool_name}: {e}"
+                        )
+                        result_text = f"Tool execution failed: {e}"
+                    yield {"type": "tool_result", "tool": tool_name}
+                    tool_msg = {
+                        "role": "tool",
+                        "tool_call_id": tc.id,
+                        "content": result_text,
+                    }
+                    tool_messages.append(tool_msg)
+                    persisted_tool_msg_refs.append(tool_msg)
+                    tool_messages = self._trim_tool_messages(tool_messages)
+                # 已达最大轮次且本轮仍请求工具调用：循环结束后需再生成最终回复
+                if round_idx == self._MAX_TOOL_ROUNDS - 1:
+                    need_final_regeneration = True
+                continue
+
+            if persisted_tool_msg_refs:
+                ctx.append_tool_messages(persisted_tool_msg_refs)
+
+            if need_final_regeneration:
+                # 工具轮次用尽且最后一轮仍在请求工具调用：与 writing_chat
+                # 同语义，不再传递工具流式生成最终回复，防止空回复落盘
+                yield {"type": "round_start"}
+                try:
+                    async for chunk in llm.chat_stream_with_usage(
+                        messages=tool_messages,
+                        temperature=get_config().llm.temperature,
+                    ):
+                        if chunk.content:
+                            full_content_parts.append(chunk.content)
+                            yield {"type": "token", "content": chunk.content}
+                        if chunk.usage is not None:
+                            last_usage_tokens = chunk.usage.total_tokens
+                except Exception as e:
+                    self._logger.error(
+                        f"editor post-tool chat_stream_with_usage failed: {e}"
+                    )
+                    yield {"type": "error", "message": str(e)}
+                    ctx.delete_message(user_msg.id)
+                    ctx.save_to_disk()
+                    return
+        else:
+            # 无项目工具：纯流式
+            try:
+                async for chunk in llm.chat_stream_with_usage(
+                    messages=messages,
+                    temperature=get_config().llm.temperature,
+                ):
+                    if chunk.content:
+                        full_content_parts.append(chunk.content)
+                        yield {"type": "token", "content": chunk.content}
+                    if chunk.usage is not None:
+                        last_usage_tokens = chunk.usage.total_tokens
+            except Exception as e:
+                self._logger.error(f"editor chat_stream_with_usage failed: {e}")
+                yield {"type": "error", "message": str(e)}
+                llm_failed = True
+
+        if llm_failed:
+            # 与 writing_chat 同语义：移除本轮 user 消息，便于用户重发
+            ctx.delete_message(user_msg.id)
+            ctx.save_to_disk()
+            return
+
+        content = "".join(full_content_parts)
+        suggestion_dicts = extract_suggestions(content)
+        assistant_msg = ctx.append_assistant_message(
+            content=content,
+            tokens=last_usage_tokens,
+            suggestions=suggestion_dicts,
+        )
+        ctx.update_last_message_tokens(last_usage_tokens)
+        ctx.save_to_disk()
+
+        yield {
+            "type": "done",
+            "session_id": ctx.session_id,
+            "message_id": assistant_msg.id,
+            "tokens": last_usage_tokens,
+            "suggestions": suggestion_dicts,
+        }
+
+    async def apply_suggestion(self, session_id: str, message_id: str) -> dict:
+        """记录消息级建议应用标记（前端已把建议应用到 CM6 缓冲区之后调用）。"""
+        async with self._session_lock(session_id):
+            ctx = ConversationContext.load_from_disk(session_id)
+            if ctx is None:
+                raise ValueError(f"Session not found: {session_id}")
+            if not ctx.mark_suggestion_applied(message_id):
+                raise IndexError(f"Message not found: {message_id}")
+            ctx.save_to_disk()
+            return {
+                "status": "ok",
+                "session_id": session_id,
+                "message_id": message_id,
+                "suggestion_applied": True,
+            }

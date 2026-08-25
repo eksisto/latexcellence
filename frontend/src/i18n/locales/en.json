@@ -97,6 +97,9 @@
         },
         "writingChat": {
           "title": "Writing Assistant"
+        },
+        "editor": {
+          "title": "Web Editor"
         }
       }
     },
@@ -984,7 +987,10 @@
       "noFileSelectedViewerHint": "You have read-only access to this project: you can browse files but not edit them.",
       "switchDirtyTitle": "Discard unsaved changes?",
       "switchDirtyDescription": "The current file has unsaved changes. Opening another file will discard them.",
-      "switchDirtyConfirm": "Discard and open"
+      "switchDirtyConfirm": "Discard and open",
+      "disabledTitle": "Web editor is disabled",
+      "disabledDescription": "The administrator has disabled the web editor in the server config. Back to the workspace for other features.",
+      "compileNoMainFile": "No main file set and the current file is not .tex; set the main file in the workspace."
     }
   },
   "components": {
@@ -1247,7 +1253,10 @@
       "multiUserGeoListHint": "Comma-separated; requires the database path above. When both are set, both must match.",
       "multiUserTrustedProxies": "Trusted proxy IPs/CIDRs",
       "multiUserTrustedProxiesHint": "Behind a reverse proxy, list the proxy address (e.g. 127.0.0.1) so X-Forwarded-For is trusted; keep empty for direct exposure.",
-      "multiUserRegisterRateLimit": "Registration rate limit (per hour)"
+      "multiUserRegisterRateLimit": "Registration rate limit (per hour)",
+      "featureEditor": "Web Editor",
+      "featureEditorAssistant": "Editor AI assistant",
+      "featureEditorAssistantHint": "When off, the server rejects the editor-assistant endpoints, keeping the editor while saving LLM cost."
     },
     "markerText": {
       "math": "Formula",
@@ -1418,10 +1427,19 @@
       "save": "Save",
       "backendUndo": "Server undo",
       "backendRedo": "Server redo",
-      "panelTitle": "Preview & compile",
-      "panelEmptyTitle": "Compile result & PDF preview",
-      "panelEmptyDescription": "Compile integration with output log and PDF preview will arrive in a future release.",
-      "commandPalette": "Command palette (Ctrl/Cmd+/)"
+      "panelTitle": "Preview & AI Assistant",
+      "panelEmptyTitle": "No compile result yet",
+      "panelEmptyDescription": "Click Compile in the toolbar to see output and preview the PDF here.",
+      "commandPalette": "Command palette (Ctrl/Cmd+/)",
+      "compile": "Compile",
+      "compiling": "Compiling…",
+      "compileHint": "Auto-saves unsaved edits before compiling; aborts into the conflict flow on 409",
+      "tabCompile": "Compile & Preview",
+      "tabAssistant": "AI Assistant",
+      "collapsePanel": "Collapse panel",
+      "expandPanel": "Expand panel",
+      "panelCompileTitle": "Compile output & PDF preview",
+      "compileOutput": "Raw output"
     },
     "conflictDialog": {
       "title": "Save conflict",
@@ -1437,8 +1455,19 @@
       "description": "Preferences are stored in this browser only and affect the editor.",
       "softWrap": "Soft wrap",
       "autoSave": "Auto save",
-      "autoSaveHint": "Auto save will be enabled together with compile integration in a future release.",
-      "fontSize": "Font size"
+      "autoSaveHint": "When on, edits are saved to the server shortly after you stop typing (Ctrl/Cmd+S always works).",
+      "fontSize": "Font size",
+      "transferTitle": "Preference transfer",
+      "export": "Export JSON",
+      "importFile": "Import file",
+      "importPaste": "Paste JSON",
+      "importApply": "Apply import",
+      "importSuccess": "Preferences imported and applied",
+      "importFailed": "Import failed",
+      "import_invalid_json": "Import failed: not valid JSON",
+      "import_invalid_kind": "Import failed: not an editor-preferences export",
+      "import_unsupported_version": "Import failed: version is newer or invalid; please upgrade first",
+      "import_invalid_payload": "Import failed: prefs field missing or malformed"
     },
     "commandPalette": {
       "title": "Command palette",
@@ -1470,6 +1499,32 @@
       "sizeLabel": "{{rows}} rows × {{cols}} columns",
       "confirm": "Insert",
       "back": "Back to list"
+    },
+    "assistant": {
+      "title": "AI Assistant",
+      "clear": "Clear conversation",
+      "emptyHint": "Ask about the open document or select text and request a rewrite. Suggestions apply to the editor buffer only; saving is up to you.",
+      "inputPlaceholder": "Ask the AI assistant…",
+      "send": "Send",
+      "chatError": "Assistant request failed",
+      "compressed": "Conversation context was long; older messages were compressed.",
+      "includeFullFile": "Include the full file in this question",
+      "insertAtCursor": "Insert at cursor",
+      "replaceSelection": "Replace selection",
+      "noSelectionHint": "No selection in the editor",
+      "diffCard": "File change suggestion (+{{additions}} / −{{deletions}} lines)",
+      "applyToBuffer": "Apply to buffer",
+      "applied": "Applied",
+      "applyBufferHint": "Writes to the editor buffer only",
+      "applyFailed": "Failed to apply suggestion",
+      "diffApplied": "Changes applied to buffer (unsaved)",
+      "diffApplyFailed": "Could not apply this diff",
+      "diffHunkNotMatched": "The diff does not match the buffer (the file may have changed); ask the assistant to regenerate from the latest content.",
+      "diffMalformed": "The diff format could not be parsed.",
+      "noFileHint": "No file open; general Q&A only"
+    },
+    "staleCheck": {
+      "title": "These files changed in the editor; the check results below may be stale — consider re-running:"
     }
   },
   "hooks": {
@@ -1725,6 +1780,8 @@
     "registerRateLimited": "Too many registration attempts from this IP; please retry later",
     "invalidContent": "Content validation failed: corruption markers detected (control characters or invalid placeholders); save cancelled",
     "invalidPath": "Invalid file path: only .tex / .bib / .sty / .cls files inside the project are supported",
-    "invalidEncoding": "File is not valid UTF-8; the editor supports UTF-8 text files only"
+    "invalidEncoding": "File is not valid UTF-8; the editor supports UTF-8 text files only",
+    "assistantDisabled": "The editor AI assistant is disabled on this server",
+    "editorDisabled": "The web editor is disabled on this server"
   }
 }

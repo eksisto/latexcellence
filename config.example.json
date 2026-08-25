@@ -167,6 +167,10 @@
       "cleanup_interval_seconds": 3600,
       "cleanup_retention_days": 7
     },
+    "editor": {
+      "enabled": true,
+      "assistant_enabled": true
+    },
     "function_calling": {
       "web_search": {
         "enabled": false,

@@ -298,6 +298,7 @@ class ConversationContext:
         page_reads: list[dict[str, Any]] | None = None,
         cited_evidence_ids: list[str] | None = None,
         unverified_evidence_ids: list[str] | None = None,
+        suggestions: list[Any] | None = None,
     ) -> ChatMessage:
         """
         追加 assistant 回复消息。
@@ -325,6 +326,7 @@ class ConversationContext:
             page_reads=page_reads or [],
             cited_evidence_ids=cited_evidence_ids or [],
             unverified_evidence_ids=unverified_evidence_ids or [],
+            suggestions=suggestions or [],
             created_at=time.time(),
         )
         self.messages.append(msg)
@@ -408,6 +410,15 @@ class ConversationContext:
         for m in self.messages:
             if m.id == message_id and m.edit_op is not None:
                 m.edit_op.applied = True
+                self.last_updated_at = time.time()
+                return True
+        return False
+
+    def mark_suggestion_applied(self, message_id: str) -> bool:
+        """置位消息级建议应用标记（编辑器助手，editor-plan §5.2）。"""
+        for m in self.messages:
+            if m.id == message_id:
+                m.suggestion_applied = True
                 self.last_updated_at = time.time()
                 return True
         return False

@@ -1031,6 +1031,62 @@ export const api = {
           pending_id: pendingId,
         }),
       }),
+    /**
+     * 编辑器助手流式对话（editor-plan §5.2，阶段四）。
+     * 携带 CM6 缓冲区全文与光标/选区元信息；事件经 consumeSse 逐帧回调。
+     */
+    editorSend: async ({
+      sessionId,
+      filePath,
+      buffer,
+      cursorLine,
+      selection,
+      includeFullFile,
+      userMessage,
+      workspaceId,
+      onEvent,
+      onError,
+    }) => {
+      const url = appendWs(
+        `${getApiBase()}/writing-chat/editor/send`,
+        workspaceId,
+      );
+      let res;
+      try {
+        res = await fetch(url, {
+          method: "POST",
+          headers: authHeaders({ "Content-Type": "application/json" }),
+          body: JSON.stringify({
+            session_id: sessionId ?? null,
+            file_path: filePath ?? "",
+            buffer: buffer ?? "",
+            cursor_line: cursorLine ?? null,
+            selection: selection ?? "",
+            include_full_file: includeFullFile ?? false,
+            user_message: userMessage,
+            language: getUiLanguage(),
+          }),
+          credentials: "include",
+        });
+      } catch (e) {
+        throw new Error(translateError(e.message || "Request timed out"));
+      }
+      if (!res.ok) {
+        checkUnauthorized(res);
+        const err = await res.json().catch(() => ({ detail: res.statusText }));
+        throw buildRequestError(err, res.status);
+      }
+      await consumeSse(res, onEvent, onError);
+    },
+    /** 记录编辑器建议应用结果（消息级标记；仅登记状态，无文件写入） */
+    applyEditorSuggestion: (sessionId, messageId, workspaceId) =>
+      request(appendWs("/writing-chat/editor/apply-suggestion", workspaceId), {
+        method: "POST",
+        body: JSON.stringify({
+          session_id: sessionId,
+          message_id: messageId,
+        }),
+      }),
   },
 
   /* ---- 多用户认证（/api/auth） ---- */

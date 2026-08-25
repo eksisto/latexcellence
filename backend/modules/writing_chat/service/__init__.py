@@ -3,6 +3,7 @@
 from .compaction import CompactionMixin
 from .conversation import ConversationMixin
 from .edits import EditMixin
+from .editor_chat import EditorChatMixin
 from .sessions import SessionMixin
 from .state import StateMixin
 
@@ -11,6 +12,7 @@ class WritingChatService(
     ConversationMixin,
     EditMixin,
     CompactionMixin,
+    EditorChatMixin,
     SessionMixin,
     StateMixin,
 ):

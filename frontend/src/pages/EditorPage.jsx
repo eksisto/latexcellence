@@ -1,9 +1,9 @@
 /**
- * EditorPage —— /editor 全宽三栏布局（editor-plan §4，阶段二骨架）。
+ * EditorPage —— /editor 全宽三栏布局（editor-plan §4）。
  *
  * 布局：左栏复用 ProjectExplorer 文件树（点击打开文件）· 中栏 LaTeXEditor
- * （CM6 打开-编辑-保存-冲突闭环）· 右栏占位骨架（编译结果 / PDF 预览完整
- * 联动属阶段四）。桌面优先。
+ * （CM6 打开-编辑-保存-冲突闭环）· 右栏 Tab 切换「编译与预览 ↔ AI 助手」，
+ * 可折叠（阶段四）。桌面优先。
  *
  * 闭环职责：
  *   - 打开：GET file-content → 缓冲区 + baseMd5 基线；超约 2MB 拒绝打开；
@@ -11,8 +11,12 @@
  *   - 保存：Ctrl/Cmd+S（window 级统一拦截，编辑器内外行为一致）与工具栏
  *     按钮 → save-file 乐观锁落盘，成功更新 baseMd5、清脏标记；
  *   - 冲突：409 → ConflictDialog（放弃本地重载 / 本地内容剪贴板逃生）；
- *   - 权限：viewer 可进入但只读（禁用保存与后端撤销）；判断项目已打开
- *     一律用 useIsOpened()（多用户看 projectId）；
+ *   - 编译联动（§8 / 决策 Q18）：有脏改动时先自动保存，失败中断编译进入
+ *     冲突流程；右栏展示编译结果并复用 PDFPreview 预览 PDF；
+ *   - AI 助手（§7）：建议应用只改 CM6 缓冲区并置脏标记，落盘走保存路径；
+ *   - 权限：viewer 可进入但只读（禁用保存与后端撤销），助手仅问答模式；
+ *     判断项目已打开一律用 useIsOpened()（多用户看 projectId）；
+ *   - 功能开关：editor.enabled=false 时路由守卫提示（决策 Q17）；
  *   - 刷新直达恢复：复用模块页恢复语义（多用户 openMultiUserProject
  *     preserveActiveFile，单用户 api.project.open），仅当 fileTree 为空时执行。
  */
@@ -24,6 +28,7 @@ import { toast } from "sonner";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import EmptyState from "@/components/EmptyState";
 import ConfirmDialog from "@/components/ConfirmDialog";
 import ProjectExplorer from "@/components/ProjectExplorer";
@@ -31,14 +36,22 @@ import LaTeXEditor from "@/components/editor/LaTeXEditor";
 import EditorToolbar from "@/components/editor/EditorToolbar";
 import ConflictDialog from "@/components/editor/ConflictDialog";
 import CommandPalette from "@/components/editor/CommandPalette";
+import AssistantPanel from "@/components/editor/AssistantPanel";
+import PDFPreview from "@/components/PDFPreview";
 
+import Bot from "lucide-react/dist/esm/icons/bot.mjs";
+import Check from "lucide-react/dist/esm/icons/check.mjs";
+import CircleX from "lucide-react/dist/esm/icons/circle-x.mjs";
 import FileCode from "lucide-react/dist/esm/icons/file-code.mjs";
-import PanelRight from "lucide-react/dist/esm/icons/panel-right.mjs";
+import PanelRightClose from "lucide-react/dist/esm/icons/panel-right-close.mjs";
+import PanelRightOpen from "lucide-react/dist/esm/icons/panel-right-open.mjs";
+import Play from "lucide-react/dist/esm/icons/play.mjs";
 
 import useStore from "@/store/useStore";
 import useEditorStore from "@/store/editorStore";
 import useIsOpened from "@/hooks/useIsOpened";
 import useCanWrite from "@/hooks/useCanWrite";
+import useEnabledFeatures from "@/hooks/useEnabledFeatures";
 import { useShallow } from "zustand/react/shallow";
 import { api } from "@/api/index";
 import { isMultiUser } from "@/api/connection";
@@ -46,26 +59,101 @@ import { translateError } from "@/utils/errorMessages";
 import { openMultiUserProject } from "@/utils/multiUserProject";
 import { isEditableFilePath, isFileTooLarge } from "@/lib/editor/files";
 import { expandEntryInsert, insertSnippet } from "@/lib/editor/snippetInsert";
+import { applyUnifiedDiff } from "@/lib/editor/applyDiff";
 import {
   buildPackageInsertion,
   isPackageMissing,
 } from "@/lib/editor/preambleScan";
 
-/** 右栏占位骨架：编译结果 / PDF 预览完整联动属阶段四 */
-function EditorPlaceholderPanel() {
-  const { t } = useTranslation("components");
+/**
+ * 编译与预览面板（阶段四）：编译状态徽标、错误翻译与修复建议摘要、
+ * 原始输出折叠块，成功时复用 PDFPreview 预览。展示逻辑对齐工作台
+ * 编译结果语义，但状态由 EditorPage 局部持有，不写入全局 store。
+ */
+function CompilePreviewPanel({ compiling, compileResult, pdfUrl }) {
+  const { t } = useTranslation(["pages", "components"]);
   return (
-    <Card className="h-full">
+    <Card className="flex h-full min-h-0 flex-col overflow-hidden">
       <CardHeader className="pb-2">
-        <CardTitle className="text-sm">{t("editor.panelTitle")}</CardTitle>
+        <div className="flex items-center justify-between gap-2">
+          <CardTitle className="text-sm">
+            {t("components:editor.panelCompileTitle")}
+          </CardTitle>
+          {compileResult && (
+            <span
+              className={`inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-xs font-medium ${
+                compileResult.success
+                  ? "bg-secondary text-secondary-foreground"
+                  : "bg-destructive/10 text-destructive"
+              }`}
+            >
+              {compileResult.success ? (
+                <>
+                  <Check className="size-3" />
+                  {t("pages:workspace.compileSuccess")}
+                </>
+              ) : (
+                <>
+                  <CircleX className="size-3" />
+                  {t("pages:workspace.compileFailed")}
+                </>
+              )}
+            </span>
+          )}
+        </div>
       </CardHeader>
-      <CardContent>
-        <EmptyState
-          icon={PanelRight}
-          title={t("editor.panelEmptyTitle")}
-          description={t("editor.panelEmptyDescription")}
-          className="py-10"
-        />
+      <CardContent className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto p-3 pt-0">
+        {compiling && (
+          <p className="text-xs text-muted-foreground">
+            {t("components:editor.compiling")}
+          </p>
+        )}
+        {!compiling && !compileResult && (
+          <EmptyState
+            icon={Play}
+            title={t("components:editor.panelEmptyTitle")}
+            description={t("components:editor.panelEmptyDescription")}
+            className="py-8"
+          />
+        )}
+        {compileResult && (
+          <>
+            {compileResult.explanation && (
+              <p className="text-xs leading-relaxed text-muted-foreground">
+                {translateError({
+                  error: compileResult.error_code,
+                  message: compileResult.explanation,
+                })}
+              </p>
+            )}
+            {Array.isArray(compileResult.fixes) &&
+              compileResult.fixes.length > 0 && (
+                <ul className="space-y-1 text-xs">
+                  {compileResult.fixes.map((fix, i) => (
+                    <li key={i} className="rounded border bg-background p-1.5">
+                      {typeof fix === "string"
+                        ? fix
+                        : fix.suggestion || fix.description || ""}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            <details className="text-xs">
+              <summary className="cursor-pointer text-muted-foreground">
+                {t("components:editor.compileOutput")}
+              </summary>
+              <pre className="mt-1 max-h-40 overflow-auto rounded bg-muted/60 p-2 font-mono text-[11px] whitespace-pre-wrap break-all">
+                {(compileResult.stdout || "") + (compileResult.stderr || "")}
+              </pre>
+            </details>
+          </>
+        )}
+        {/* 成功后 PDF 预览占满剩余空间 */}
+        {compileResult?.success && pdfUrl && (
+          <div className="min-h-32 flex-1">
+            <PDFPreview url={pdfUrl} />
+          </div>
+        )}
       </CardContent>
     </Card>
   );
@@ -78,9 +166,20 @@ export default function EditorPage() {
   const workspaceId = useStore((s) => s.workspaceId);
   const fileTree = useStore((s) => s.fileTree);
   const hydrated = useStore((s) => s.hydrated);
+  const mainFile = useStore((s) => s.mainFile);
   const isOpened = useIsOpened();
   const canWrite = useCanWrite();
   const readOnly = !canWrite;
+  const enabledFeatures = useEnabledFeatures();
+
+  /** 部署级功能开关（决策 Q17）：editor.enabled=false 时路由守卫提示 */
+  const editorDisabled =
+    hydrated && enabledFeatures !== null && !enabledFeatures.editor;
+  /** AI 助手独立子开关（决策 Q26）：关闭时隐藏 AI Tab */
+  const assistantEnabled =
+    enabledFeatures === null
+      ? true
+      : enabledFeatures.editor_assistant !== false;
 
   const session = useEditorStore(
     useShallow((s) => ({
@@ -90,6 +189,7 @@ export default function EditorPage() {
       conflict: s.conflict,
       softWrap: s.softWrap,
       fontSize: s.fontSize,
+      autoSave: s.autoSave,
     })),
   );
   const openBuffer = useEditorStore((s) => s.openBuffer);
@@ -101,12 +201,18 @@ export default function EditorPage() {
   const [opening, setOpening] = useState(false);
   const [switchConfirmPath, setSwitchConfirmPath] = useState(null);
   const [paletteOpen, setPaletteOpen] = useState(false);
+  // ── 右栏状态（阶段四） ──────────────────────────────────────────────
+  const [panelCollapsed, setPanelCollapsed] = useState(false);
+  const [panelTab, setPanelTab] = useState("compile");
+  const [compiling, setCompiling] = useState(false);
+  const [compileResult, setCompileResult] = useState(null);
+  const [pdfUrl, setPdfUrl] = useState(null);
   const restoringRef = useRef(false);
   /** 打开请求序号：单调递增，用于丢弃过期在途响应（快速切换 / 后退前进） */
   const openSeqRef = useRef(0);
   /** 保存请求重入门闸：同步 ref，杜绝同一渲染帧内连点产生并发保存 */
   const savingRef = useRef(false);
-  /** CM6 视图实例：命令面板 / 宏包自动添加等外部插入入口经此落笔 */
+  /** CM6 视图实例：命令面板 / 宏包自动添加 / 助手建议等外部插入入口经此落笔 */
   const editorViewRef = useRef(null);
 
   /** 结构化错误翻译：错误码优先（file_not_found 补 path 插值），未收录回落 message */
@@ -288,6 +394,26 @@ export default function EditorPage() {
     return () => window.removeEventListener("keydown", handler);
   }, []);
 
+  /* ── 自动保存偏好（§2 / 决策 Q6，默认关）：停止编辑 2.5s 后落盘 ──────
+   * 真防抖：依赖含缓冲区内容，每次编辑都重置计时器，打字中途不触发保存
+   * （避免保存 toast / 潜在冲突弹窗打断输入）。冲突弹窗打开期间由 doSave
+   * 内部拦截（必然 409），viewer 只读跳过。 */
+  useEffect(() => {
+    if (!session.autoSave || readOnly || !session.dirty || session.conflict) {
+      return undefined;
+    }
+    const timer = window.setTimeout(() => {
+      saveRef.current();
+    }, 2500);
+    return () => window.clearTimeout(timer);
+  }, [
+    session.autoSave,
+    readOnly,
+    session.dirty,
+    session.conflict,
+    session.content,
+  ]);
+
   /* ── Ctrl/Cmd+/：命令面板（editor-plan §6.3 入口二） ───────────────── */
   useEffect(() => {
     const handler = (e) => {
@@ -384,6 +510,156 @@ export default function EditorPage() {
     editorViewRef.current = view;
   }, []);
 
+  /* ── AI 助手：编辑器上下文快照与建议应用（editor-plan §7） ─────────── */
+  /** 发送时采集 CM6 缓冲区上下文（文件路径 / 全文 / 光标行 / 选区文本） */
+  const getEditorContext = useCallback(() => {
+    const cur = useEditorStore.getState();
+    const view = editorViewRef.current;
+    let cursorLine = null;
+    let selection = "";
+    if (view && !view.destroyed) {
+      const sel = view.state.selection.main;
+      cursorLine = view.state.doc.lineAt(sel.head).number;
+      selection = sel.empty ? "" : view.state.sliceDoc(sel.from, sel.to);
+    }
+    return {
+      filePath: cur.filePath ?? "",
+      buffer: cur.content ?? "",
+      cursorLine,
+      selection,
+    };
+  }, []);
+
+  /**
+   * snippet 建议应用：插入光标处或替换选区（纯前端 CM6 transaction，
+   * 经 onChange 正常置脏；落盘仍走保存按钮 / Ctrl+S 单一路径）。
+   * @returns {boolean} 是否已应用
+   */
+  const handleApplySnippet = useCallback((text, { replace = false } = {}) => {
+    const view = editorViewRef.current;
+    if (!view || view.destroyed || !text) return false;
+    const sel = view.state.selection.main;
+    view.dispatch({
+      changes: {
+        from: sel.from,
+        to: replace ? sel.to : sel.from,
+        insert: text,
+      },
+      selection: { anchor: sel.from + text.length },
+      scrollIntoView: true,
+    });
+    view.focus();
+    return true;
+  }, []);
+
+  /**
+   * diff 建议应用：unified diff 以上下文锚定到缓冲区后整体替换文档
+   * （单个 CM6 transaction，可经 Ctrl+Z 撤销）。失败 toast 并返回 false。
+   * @returns {boolean} 是否已应用
+   */
+  const handleApplyDiffText = useCallback(
+    (diffText) => {
+      const view = editorViewRef.current;
+      if (!view || view.destroyed) return false;
+      const result = applyUnifiedDiff(
+        useEditorStore.getState().content,
+        diffText,
+      );
+      if (!result.ok) {
+        const reasonKey =
+          result.reason === "hunk_not_matched"
+            ? "components:assistant.diffHunkNotMatched"
+            : "components:assistant.diffMalformed";
+        toast.error(t("components:assistant.diffApplyFailed"), {
+          description: t(reasonKey),
+        });
+        return false;
+      }
+      view.dispatch({
+        changes: { from: 0, to: view.state.doc.length, insert: result.result },
+        scrollIntoView: true,
+      });
+      toast.success(t("components:assistant.diffApplied"));
+      return true;
+    },
+    [t],
+  );
+
+  /* ── 编译联动（editor-plan §8 / 决策 Q18）────────────────────────────
+   * 有脏改动时先自动保存（含乐观锁检查），失败（如 409 冲突）中断编译
+   * 进入既有冲突流程；编译目标优先项目主文件，无主文件时回退当前 .tex。 */
+  const resolveCompileTarget = useCallback(() => {
+    if (mainFile) return mainFile;
+    const cur = useEditorStore.getState().filePath;
+    if (cur && cur.endsWith(".tex")) return cur;
+    return null;
+  }, [mainFile]);
+
+  const handleCompile = useCallback(async () => {
+    // 脏改动先落盘：doSave 失败（含 409 → ConflictDialog 接管）即中断编译
+    if (useEditorStore.getState().dirty) {
+      const saved = await saveRef.current();
+      if (!saved) return;
+    }
+    const target = resolveCompileTarget();
+    if (!target) {
+      toast.error(t("pages:editor.compileNoMainFile"));
+      return;
+    }
+    setCompiling(true);
+    setPanelCollapsed(false);
+    setPanelTab("compile");
+    setCompileResult(null);
+    setPdfUrl((prev) => {
+      if (prev) URL.revokeObjectURL(prev);
+      return null;
+    });
+    try {
+      const data = await api.compile.run(target, workspaceId);
+      setCompileResult(data);
+      if (data.success) {
+        const url = await api.compile.pdfBlobUrl(target, workspaceId);
+        setPdfUrl(url);
+        toast.success(t("pages:workspace.compileSuccessToast"));
+      } else {
+        const reason =
+          data.error_code || data.explanation
+            ? translateError({
+                error: data.error_code,
+                message: data.explanation,
+              })
+            : "";
+        toast.error(t("pages:workspace.compileFailedToast"), {
+          description: reason || t("pages:workspace.compileFailedToast"),
+        });
+      }
+    } catch (e) {
+      const msg = translateError({ error: e.code, message: e.message });
+      setCompileResult({
+        success: false,
+        explanation: msg,
+        fixes: [],
+        stdout: "",
+        stderr: "",
+      });
+      toast.error(t("pages:workspace.compileFailedToast"), {
+        description: msg,
+      });
+    } finally {
+      setCompiling(false);
+    }
+  }, [resolveCompileTarget, t, workspaceId]);
+
+  // 卸载时回收 PDF blob URL
+  useEffect(() => {
+    return () => {
+      setPdfUrl((prev) => {
+        if (prev) URL.revokeObjectURL(prev);
+        return null;
+      });
+    };
+  }, []);
+
   /* 行内补全应用后的宏包缺失联动：与面板插入同一提示逻辑（§6.5 一致性）。
    * 扫描当前缓冲区即可——插入的命令文本不含 usepackage 声明。 */
   const handleCompletionApplyEntry = useCallback(
@@ -434,6 +710,28 @@ export default function EditorPage() {
     );
   }
 
+  /* ── 功能开关守卫（决策 Q17）：editor.enabled=false 时提示并回工作台 ── */
+  if (editorDisabled) {
+    return (
+      <div className="min-h-screen p-8 pt-16 animate-tab-enter">
+        <div className="max-w-6xl mx-auto space-y-4">
+          <h1 className="font-heading text-xl font-semibold">
+            {t("pages:editor.title")}
+          </h1>
+          <EmptyState
+            icon={FileCode}
+            title={t("pages:editor.disabledTitle")}
+            description={t("pages:editor.disabledDescription")}
+          >
+            <Button nativeButton={false} render={<Link to="/workspace" />}>
+              {t("pages:editor.goWorkspace")}
+            </Button>
+          </EmptyState>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="h-screen flex flex-col gap-3 p-4 pt-16 pb-6 animate-tab-enter">
       <EditorToolbar
@@ -443,6 +741,11 @@ export default function EditorPage() {
         onSave={doSave}
         onReloadBuffer={handleReloadBuffer}
         onOpenPalette={() => setPaletteOpen(true)}
+        compileEnabled={
+          enabledFeatures === null || enabledFeatures.compile !== false
+        }
+        compiling={compiling}
+        onCompile={handleCompile}
       />
 
       <div className="flex flex-1 min-h-0 gap-3">
@@ -494,9 +797,106 @@ export default function EditorPage() {
           )}
         </main>
 
-        {/* 右栏：编译结果 / PDF 预览联动属阶段四，本阶段为占位骨架 */}
-        <aside className="hidden w-80 shrink-0 min-h-0 xl:block">
-          <EditorPlaceholderPanel />
+        {/* 右栏：编译与预览 ↔ AI 助手 Tab 切换，可折叠（阶段四） */}
+        <aside className="hidden xl:flex shrink-0 min-h-0 gap-1.5">
+          {panelCollapsed ? (
+            <Button
+              variant="outline"
+              size="icon"
+              className="self-start"
+              onClick={() => setPanelCollapsed(false)}
+              title={t("components:editor.expandPanel")}
+            >
+              <PanelRightOpen />
+              <span className="sr-only">
+                {t("components:editor.expandPanel")}
+              </span>
+            </Button>
+          ) : (
+            <>
+              {assistantEnabled ? (
+                <div className="flex w-80 min-h-0 flex-col">
+                  <Tabs
+                    value={panelTab}
+                    onValueChange={setPanelTab}
+                    className="flex h-full min-h-0 flex-col gap-2"
+                  >
+                    <div className="flex items-center justify-between gap-1">
+                      <TabsList>
+                        <TabsTrigger value="compile">
+                          {t("components:editor.tabCompile")}
+                        </TabsTrigger>
+                        <TabsTrigger value="assistant">
+                          <Bot className="size-3.5" />
+                          {t("components:editor.tabAssistant")}
+                        </TabsTrigger>
+                      </TabsList>
+                      <Button
+                        variant="ghost"
+                        size="icon-sm"
+                        onClick={() => setPanelCollapsed(true)}
+                        title={t("components:editor.collapsePanel")}
+                      >
+                        <PanelRightClose />
+                        <span className="sr-only">
+                          {t("components:editor.collapsePanel")}
+                        </span>
+                      </Button>
+                    </div>
+                    {/* keepMounted：两个 Tab 内容常挂载（Base UI Panel 默认
+                        卸载非活动页），切换不丢助手输入草稿与卡片展开态；
+                        会话消息本身在 Zustand store，本就不受切换影响 */}
+                    <TabsContent
+                      value="compile"
+                      keepMounted
+                      className="min-h-0 flex-1"
+                    >
+                      <CompilePreviewPanel
+                        compiling={compiling}
+                        compileResult={compileResult}
+                        pdfUrl={pdfUrl}
+                      />
+                    </TabsContent>
+                    <TabsContent
+                      value="assistant"
+                      keepMounted
+                      className="min-h-0 flex-1"
+                    >
+                      <AssistantPanel
+                        readOnly={readOnly}
+                        getEditorContext={getEditorContext}
+                        onApplySnippet={handleApplySnippet}
+                        onApplyDiffText={handleApplyDiffText}
+                      />
+                    </TabsContent>
+                  </Tabs>
+                </div>
+              ) : (
+                <div className="flex w-80 min-h-0 flex-col gap-2">
+                  <div className="flex items-center justify-end">
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      onClick={() => setPanelCollapsed(true)}
+                      title={t("components:editor.collapsePanel")}
+                    >
+                      <PanelRightClose />
+                      <span className="sr-only">
+                        {t("components:editor.collapsePanel")}
+                      </span>
+                    </Button>
+                  </div>
+                  <div className="min-h-0 flex-1">
+                    <CompilePreviewPanel
+                      compiling={compiling}
+                      compileResult={compileResult}
+                      pdfUrl={pdfUrl}
+                    />
+                  </div>
+                </div>
+              )}
+            </>
+          )}
         </aside>
       </div>
 

@@ -10,6 +10,10 @@
     GET  /api/writing-chat/sessions/{id}     — 加载单个会话完整数据
     DELETE /api/writing-chat/sessions/{id}   — 删除会话
     POST /api/writing-chat/sessions/{id}/compact — 手动压缩会话
+
+编辑器侧 AI 助手（editor-plan §5.2，阶段四）：
+    POST /api/writing-chat/editor/send             — 编辑器缓冲区协议流式对话（SSE）
+    POST /api/writing-chat/editor/apply-suggestion  — 记录建议应用结果（消息级标记）
 """
 
 import json
@@ -19,12 +23,14 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
 
 from backend.core import access_control
+from backend.core.config import get_config
 from backend.core.multiuser.dependencies import (
     current_user_context,
     require_admin_if_multiuser,
 )
 from backend.modules.writing_chat.models import (
     ApplyEditRequest,
+    ApplySuggestionRequest,
     AssistantSaveRequest,
     AssistantSetActiveRequest,
     CancelClarifyRequest,
@@ -33,6 +39,7 @@ from backend.modules.writing_chat.models import (
     ClarifyRequest,
     ConfirmToolRequest,
     DeleteMessageRequest,
+    EditorSendRequest,
     GenerateEditRequest,
     RenameSessionRequest,
 )
@@ -46,6 +53,32 @@ router = APIRouter(
     tags=["writing_chat"],
     dependencies=[Depends(current_user_context)],
 )
+
+
+def _ensure_editor_assistant_available() -> None:
+    """编辑器 / 助手开关把关（editor-plan §5.3，决策 Q26）。
+
+    控制 LLM 开销是明确动机：editor.enabled=false 或
+    editor.assistant_enabled=false 时服务端直接拒绝助手端点，
+    不进入任何 LLM 调用路径。结构化错误码供前端 translateError 翻译。
+    """
+    editor_cfg = get_config().features.editor
+    if not editor_cfg.enabled:
+        raise HTTPException(
+            status_code=403,
+            detail={
+                "error": "editor_disabled",
+                "message": "The web editor is disabled on this server",
+            },
+        )
+    if not editor_cfg.assistant_enabled:
+        raise HTTPException(
+            status_code=403,
+            detail={
+                "error": "assistant_disabled",
+                "message": "The editor AI assistant is disabled on this server",
+            },
+        )
 
 
 # ── send：SSE 流式 ───────────────────────────────────────────────────────
@@ -88,6 +121,68 @@ async def send_message(
             "X-Accel-Buffering": "no",
         },
     )
+
+
+# ── 编辑器侧 AI 助手（editor-plan §5.2 / §7） ─────────────────────────────
+
+
+@router.post("/editor/send")
+async def editor_send(
+    request: EditorSendRequest,
+    workspace_id: str = Query(default="", description="工作区唯一标识符"),
+    _: dict = Depends(access_control.require_workspace(write=False, required=False)),
+):
+    """编辑器缓冲区协议流式对话（SSE）。
+
+    请求携带 CM6 缓冲区全文与光标/选区元信息；上下文注入量由服务端
+    自适应裁剪（§7.3）。建议以结构化形式随 done 事件返回，不经后端落盘。
+    """
+    _ensure_editor_assistant_available()
+    service = get_writing_chat_service()
+
+    async def event_stream():
+        try:
+            async for event in service.editor_send(request, workspace_id):
+                yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
+        except HTTPException as e:
+            detail = e.detail
+            payload = (
+                {"type": "error", "message": detail}
+                if isinstance(detail, dict)
+                else {"type": "error", "message": str(detail)}
+            )
+            yield f"data: {json.dumps(payload, ensure_ascii=False)}\n\n"
+        except Exception as e:
+            yield (
+                f"data: {json.dumps({'type': 'error', 'message': str(e)}, ensure_ascii=False)}\n\n"
+            )
+
+    return StreamingResponse(
+        event_stream(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
+
+
+@router.post("/editor/apply-suggestion")
+async def apply_editor_suggestion(request: ApplySuggestionRequest):
+    """记录建议应用结果（消息级标记），供会话历史展示。
+
+    仅登记应用状态，不做任何文件写入——建议的实际应用发生在前端
+    CM6 缓冲区，落盘仍走 save-file 单一路径。
+    """
+    _ensure_editor_assistant_available()
+    service = get_writing_chat_service()
+    try:
+        return await service.apply_suggestion(request.session_id, request.message_id)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except IndexError as e:
+        raise HTTPException(status_code=404, detail=str(e))
 
 
 # ── 生成编辑 ────────────────────────────────────────────────────────────

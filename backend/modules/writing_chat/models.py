@@ -36,6 +36,24 @@ class EditOp(BaseModel):
     applied: bool = False
 
 
+class EditorSuggestion(BaseModel):
+    """
+    编辑器助手建议（editor-plan §7.2，阶段四）。
+
+    从 assistant 回复的 Markdown 围栏代码块中提取：
+        - kind="snippet"：```latex 围栏片段，供前端"插入光标处 / 替换选区"
+        - kind="diff"：```diff 围栏 unified diff，供前端逐卡审阅应用到缓冲区
+
+    建议只随消息持久化用于会话历史展示；应用动作由前端改 CM6 缓冲区，
+    不经后端落盘（方案 §5.2）。
+    """
+
+    kind: str  # "snippet" | "diff"
+    language: str = ""
+    content: str
+    index: int = 0
+
+
 class ScholarlyResultSummary(BaseModel):
     """持久化在 assistant 消息上的学术结果摘要。"""
 
@@ -146,6 +164,10 @@ class ChatMessage(BaseModel):
     page_reads: list[PageReadSummary] = Field(default_factory=list)
     cited_evidence_ids: list[str] = Field(default_factory=list)
     unverified_evidence_ids: list[str] = Field(default_factory=list)
+    # 编辑器助手建议（仅 editor/send 产生的 assistant 消息携带）
+    suggestions: list[EditorSuggestion] = Field(default_factory=list)
+    # 消息级建议应用标记：用户在前端把该消息的任一建议应用到缓冲区后置位
+    suggestion_applied: bool = False
 
 
 ChatMessage.model_rebuild()
@@ -165,6 +187,32 @@ class ChatSendRequest(BaseModel):
         None  # None=跟随配置，True=强制启用，False=强制禁用
     )
     language: str = "zh"  # 前端 UI 语言，用于引导 LLM 回复语言
+
+
+class EditorSendRequest(BaseModel):
+    """
+    编辑器助手流式对话请求（editor-plan §5.2，阶段四）。
+
+    携带编辑器上下文：当前打开文件、CM6 缓冲区全文（含未保存修改）、
+    光标行号与选区。上下文注入量由服务端按 §7.3 自适应裁剪；
+    include_full_file 为大文件时用户手动"把全文纳入本次提问"开关。
+    """
+
+    session_id: str | None = None
+    file_path: str = ""
+    buffer: str = ""
+    cursor_line: int | None = None
+    selection: str = ""
+    include_full_file: bool = False
+    user_message: str
+    language: str = "zh"
+
+
+class ApplySuggestionRequest(BaseModel):
+    """记录编辑器建议的应用结果（消息级标记，editor-plan §5.2）。"""
+
+    session_id: str
+    message_id: str
 
 
 class GenerateEditRequest(BaseModel):

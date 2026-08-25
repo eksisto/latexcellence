@@ -3,11 +3,12 @@
  *
  * 职责：
  *   1. 偏好默认值（决策 Q6：autoSave 默认关；§4：softWrap 默认开）；
- *   2. 字段白名单 + 类型校验：persist 水合与将来（阶段四）的导入通道共用
- *      同一清洗入口——非法字段静默丢弃、合法字段立即生效，避免脏数据进 store。
+ *   2. 字段白名单 + 类型校验：persist 水合、导入通道共用同一清洗入口——
+ *      非法字段静默丢弃、合法字段立即生效，避免脏数据进 store；
+ *   3. 导出/导入载荷（§11）：kind/version/prefs 结构，version 预留扩展
+ *      （决策 Q19），导入按 version + 白名单严格校验（决策 Q20/Q21）。
  *
- * 纯函数，供 node --test 直接单测；导入/导出 UI 属阶段四，本阶段只提供
- * 数据结构与最小设置入口。
+ * 纯函数，供 node --test 直接单测。
  */
 
 export const EDITOR_PREFERENCES_DEFAULTS = Object.freeze({
@@ -19,7 +20,14 @@ export const EDITOR_PREFERENCES_DEFAULTS = Object.freeze({
   fontSize: 14,
 });
 
-/** 偏好字段白名单（导出/导入校验同源，version 扩展见方案 §11） */
+/** 导出载荷 kind 标识（§11；防止把任意 JSON 误当偏好导入） */
+export const EDITOR_PREFERENCES_EXPORT_KIND =
+  "latexcellence-editor-preferences";
+
+/** 当前支持的导出版本（version 字段预留扩展，决策 Q19） */
+export const EDITOR_PREFERENCES_EXPORT_VERSION = 1;
+
+/** 偏好字段白名单（导出/导入校验同源） */
 const PREFERENCE_KEYS = Object.keys(EDITOR_PREFERENCES_DEFAULTS);
 
 const FONT_SIZE_MIN = 10;
@@ -62,4 +70,67 @@ export function sanitizePreferences(input) {
     else result[key] = EDITOR_PREFERENCES_DEFAULTS[key];
   }
   return result;
+}
+
+/* ── 导出 / 导入（editor-plan §11，阶段四） ─────────────────────────────── */
+
+/**
+ * 序列化偏好为导出载荷文本（pretty-print JSON，§11）。
+ * @param {{autoSave: boolean, softWrap: boolean, fontSize: number}} prefs
+ * @returns {string}
+ */
+export function serializePreferences(prefs) {
+  const payload = {
+    kind: EDITOR_PREFERENCES_EXPORT_KIND,
+    version: EDITOR_PREFERENCES_EXPORT_VERSION,
+    prefs: sanitizePreferences(prefs),
+  };
+  return `${JSON.stringify(payload, null, 2)}\n`;
+}
+
+/**
+ * 解析并校验导入文本（文件或粘贴双通道共用，决策 Q20）。
+ *
+ * 校验规则（严格模式）：
+ *   - JSON 解析失败 → { ok:false, reason:"invalid_json" }
+ *   - kind 不匹配 → { ok:false, reason:"invalid_kind" }
+ *   - version 缺失 / 非整数 / 高于当前支持版本 → unsupported_version
+ *     （低版本向后兼容放行，字段按当前白名单清洗）
+ *   - prefs 非对象 → invalid_payload
+ *   - prefs 内非法字段经 sanitizePreferences 静默丢弃（§11）
+ *
+ * @param {string} text 用户提供的 JSON 文本
+ * @returns {{ok: true, prefs: {autoSave: boolean, softWrap: boolean, fontSize: number}}
+ *           | {ok: false, reason: "invalid_json"|"invalid_kind"|"unsupported_version"|"invalid_payload"}}
+ */
+export function parsePreferencesImport(text) {
+  let data;
+  try {
+    data = JSON.parse(text);
+  } catch {
+    return { ok: false, reason: "invalid_json" };
+  }
+  if (!data || typeof data !== "object" || Array.isArray(data)) {
+    return { ok: false, reason: "invalid_json" };
+  }
+  if (data.kind !== EDITOR_PREFERENCES_EXPORT_KIND) {
+    return { ok: false, reason: "invalid_kind" };
+  }
+  const version = data.version;
+  if (
+    !Number.isInteger(version) ||
+    version < 1 ||
+    version > EDITOR_PREFERENCES_EXPORT_VERSION
+  ) {
+    return { ok: false, reason: "unsupported_version" };
+  }
+  if (
+    !data.prefs ||
+    typeof data.prefs !== "object" ||
+    Array.isArray(data.prefs)
+  ) {
+    return { ok: false, reason: "invalid_payload" };
+  }
+  // 合法字段整体覆盖切片：缺失字段回落默认值，未知/非法字段静默丢弃
+  return { ok: true, prefs: sanitizePreferences(data.prefs) };
 }

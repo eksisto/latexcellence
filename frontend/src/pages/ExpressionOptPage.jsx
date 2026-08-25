@@ -46,6 +46,7 @@ import {
 } from "@/components/UnlistedChanges";
 import ParagraphContext from "@/components/ParagraphContext";
 import ProgressBar from "@/components/ProgressBar";
+import StaleCheckBanner from "@/components/editor/StaleCheckBanner";
 import ConfirmDialog from "@/components/ConfirmDialog";
 import ResultFilterBar from "@/components/ResultFilterBar";
 import useResultFilter from "@/hooks/useResultFilter";
@@ -89,6 +90,7 @@ export default function ExpressionOptPage() {
     resolveInput,
     setResolveInput,
     activeFiles,
+    staleFiles,
     canWrite,
   } = useParagraphCheck({
     apiModule: api.expressionOpt,
@@ -379,6 +381,8 @@ export default function ExpressionOptPage() {
                 onStop={handleStop}
               />
             )}
+
+            <StaleCheckBanner files={staleFiles} />
 
             <Card>
               <CardHeader className="pb-2">

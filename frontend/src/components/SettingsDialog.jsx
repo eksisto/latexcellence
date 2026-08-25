@@ -113,6 +113,8 @@ export default function SettingsDialog() {
         writing_chat: config.features.writing_chat.enabled,
         bib_manager: config.features.bib_manager.enabled,
         plot_gen: config.features.plot_gen.enabled,
+        editor: config.features.editor.enabled,
+        editor_assistant: config.features.editor.assistant_enabled,
         project_tools: config.features.function_calling.project_tools.enabled,
         web_search: config.features.function_calling.web_search.enabled,
         scholarly_research:

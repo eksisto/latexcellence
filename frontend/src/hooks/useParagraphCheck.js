@@ -110,6 +110,8 @@ export default function useParagraphCheck({
   const [applyingAll, setApplyingAll] = useState(false);
   const [resolveInput, setResolveInput] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
+  /** 保鲜横幅（editor-plan §8）：检查后文件 MD5 已变化的文件列表 */
+  const [staleFiles, setStaleFiles] = useState([]);
   // 多用户模式写权限：viewer 只读，写操作（应用更改/全部应用）直接拒绝
   const canWrite = useCanWrite();
   // 模式感知"项目已打开"：单用户看 projectPath，多用户看 projectId
@@ -276,8 +278,15 @@ export default function useParagraphCheck({
     (batch) => {
       if (batch.length === 0) return;
       const fileOrder = fileOrderRef.current;
+      // 检查结果保鲜（editor-plan §8 / 决策 Q13）：每条结果落检查时该文件
+      // 的 MD5 版本戳，供检查页加载后与当前 MD5 比对渲染过期横幅
+      const stamped = batch.map((r) => ({
+        ...r,
+        check_md5:
+          r.check_md5 ?? fileMd5sRef.current[r.file_path || activeFile] ?? null,
+      }));
       setResults((prev) => {
-        const next = [...prev, ...batch];
+        const next = [...prev, ...stamped];
         next.sort((a, b) => {
           const aHas = hasResultIssue(a);
           const bHas = hasResultIssue(b);
@@ -290,7 +299,7 @@ export default function useParagraphCheck({
         return next;
       });
     },
-    [setResults, hasResultIssue],
+    [setResults, hasResultIssue, activeFile],
   );
 
   const scheduleFlush = useCallback(() => {
@@ -668,6 +677,38 @@ export default function useParagraphCheck({
     [setActiveFile, setParagraphs, setResults, setCheckProgress],
   );
 
+  // ── 检查结果保鲜比对（editor-plan §8 / 决策 Q13）─────────────────────
+  // 结果就绪（检查流结束或从 persist 恢复）后，逐文件拉取当前 MD5 与
+  // 检查时版本戳比对；不一致的文件进入横幅提示。只提示不销毁结果。
+  const staleSeqRef = useRef(0);
+  useEffect(() => {
+    if (isLoading) return;
+    const stamped = new Map();
+    for (const r of results) {
+      const fp = r.file_path || activeFile;
+      if (fp && r.check_md5 && !stamped.has(fp)) {
+        stamped.set(fp, r.check_md5);
+      }
+    }
+    if (stamped.size === 0) {
+      setStaleFiles((prev) => (prev.length ? [] : prev));
+      return;
+    }
+    const seq = ++staleSeqRef.current;
+    (async () => {
+      const stale = [];
+      for (const [fp, checkMd5] of stamped) {
+        try {
+          const data = await api.project.fileMd5(fp, workspaceId);
+          if (data.md5 !== checkMd5) stale.push(fp);
+        } catch (_) {
+          // MD5 获取失败不判过期（不误报）
+        }
+      }
+      if (seq === staleSeqRef.current) setStaleFiles(stale);
+    })();
+  }, [results, isLoading, activeFile, workspaceId]);
+
   // 组件卸载时关闭 SSE 连接
   useEffect(() => {
     return () => {
@@ -698,6 +739,7 @@ export default function useParagraphCheck({
     resolveInput,
     setResolveInput,
     activeFiles,
+    staleFiles,
     operationId: operationIdRef,
     canWrite,
     handlePreview,

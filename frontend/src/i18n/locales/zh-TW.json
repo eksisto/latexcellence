@@ -97,6 +97,9 @@
         },
         "writingChat": {
           "title": "寫作助手"
+        },
+        "editor": {
+          "title": "網頁編輯器"
         }
       }
     },
@@ -984,7 +987,10 @@
       "noFileSelectedViewerHint": "你在本專案中為唯讀角色，可瀏覽檔案內容但無法編輯。",
       "switchDirtyTitle": "放棄未儲存的修改？",
       "switchDirtyDescription": "當前檔案的修改尚未儲存，開啟新檔案將丟棄這些改動。",
-      "switchDirtyConfirm": "放棄並開啟"
+      "switchDirtyConfirm": "放棄並開啟",
+      "disabledTitle": "網頁編輯器未啟用",
+      "disabledDescription": "管理員已在伺服器設定中關閉編輯器功能，可返回工作台使用其他功能。",
+      "compileNoMainFile": "未設定主檔案且目前檔案不是 .tex，無法編譯；請在工作台設定主檔案。"
     }
   },
   "components": {
@@ -1247,7 +1253,10 @@
       "multiUserGeoListHint": "逗號分隔；與資料庫路徑同時設定才生效，國家和城市同時填寫時需同時命中。",
       "multiUserTrustedProxies": "可信任代理 IP/CIDR",
       "multiUserTrustedProxiesHint": "反向代理部署時填代理位址（如 127.0.0.1），命中才信任 X-Forwarded-For；直連部署留空。",
-      "multiUserRegisterRateLimit": "註冊限流（次/小時）"
+      "multiUserRegisterRateLimit": "註冊限流（次/小時）",
+      "featureEditor": "網頁編輯器",
+      "featureEditorAssistant": "編輯器 AI 助手",
+      "featureEditorAssistantHint": "關閉後伺服器拒絕編輯器助手端點，可在保留編輯器的同時控制 LLM 開銷。"
     },
     "markerText": {
       "math": "公式",
@@ -1418,10 +1427,19 @@
       "save": "儲存",
       "backendUndo": "後端撤銷",
       "backendRedo": "後端重做",
-      "panelTitle": "預覽與編譯",
-      "panelEmptyTitle": "編譯結果與 PDF 預覽",
-      "panelEmptyDescription": "將在後續版本接入編譯聯動，在此展示編譯輸出與 PDF 預覽。",
-      "commandPalette": "指令面板（Ctrl/Cmd+/）"
+      "panelTitle": "預覽與 AI 助手",
+      "panelEmptyTitle": "尚無編譯結果",
+      "panelEmptyDescription": "點擊工具列「編譯」在此查看輸出並預覽 PDF。",
+      "commandPalette": "指令面板（Ctrl/Cmd+/）",
+      "compile": "編譯",
+      "compiling": "編譯中…",
+      "compileHint": "有未儲存修改時先自動儲存再編譯；衝突時中斷進入衝突流程",
+      "tabCompile": "編譯與預覽",
+      "tabAssistant": "AI 助手",
+      "collapsePanel": "摺疊右欄",
+      "expandPanel": "展開右欄",
+      "panelCompileTitle": "編譯輸出與 PDF 預覽",
+      "compileOutput": "原始輸出"
     },
     "conflictDialog": {
       "title": "儲存衝突",
@@ -1437,8 +1455,19 @@
       "description": "偏好僅保存在當前瀏覽器，只對編輯器生效。",
       "softWrap": "軟換行",
       "autoSave": "自動儲存",
-      "autoSaveHint": "自動儲存將在後續版本隨編譯聯動一併啟用。",
-      "fontSize": "字號"
+      "autoSaveHint": "開啟後編輯停止片刻自動儲存到伺服器（可隨時手動 Ctrl/Cmd+S）。",
+      "fontSize": "字號",
+      "transferTitle": "偏好遷移",
+      "export": "匯出 JSON",
+      "importFile": "匯入檔案",
+      "importPaste": "貼上匯入",
+      "importApply": "套用匯入",
+      "importSuccess": "偏好已匯入並生效",
+      "importFailed": "匯入失敗",
+      "import_invalid_json": "匯入失敗：不是有效的 JSON 文字",
+      "import_invalid_kind": "匯入失敗：檔案類型不匹配（非本編輯器偏好匯出）",
+      "import_unsupported_version": "匯入失敗：版本過新或無效，請升級後再試",
+      "import_invalid_payload": "匯入失敗：prefs 欄位缺失或格式錯誤"
     },
     "commandPalette": {
       "title": "指令面板",
@@ -1470,6 +1499,32 @@
       "sizeLabel": "{{rows}} 列 × {{cols}} 欄",
       "confirm": "插入",
       "back": "返回清單"
+    },
+    "assistant": {
+      "title": "AI 助手",
+      "clear": "清空對話",
+      "emptyHint": "詢問當前文件相關問題，或在劃詞後請求改寫。建議只套用到編輯器緩衝區，是否儲存由你決定。",
+      "inputPlaceholder": "向 AI 助手提問…",
+      "send": "傳送",
+      "chatError": "助手請求失敗",
+      "compressed": "會話上下文過長，已自動壓縮歷史訊息。",
+      "includeFullFile": "把全文納入本次提問",
+      "insertAtCursor": "插入游標處",
+      "replaceSelection": "替換選區",
+      "noSelectionHint": "目前沒有選區",
+      "diffCard": "檔案修改建議（+{{additions}} / −{{deletions}} 行）",
+      "applyToBuffer": "套用到緩衝區",
+      "applied": "已套用",
+      "applyBufferHint": "僅寫入編輯器緩衝區",
+      "applyFailed": "建議套用失敗",
+      "diffApplied": "修改已套用到緩衝區（未儲存）",
+      "diffApplyFailed": "無法套用該 diff",
+      "diffHunkNotMatched": "diff 與緩衝區內容不匹配（檔案可能已變化），請讓助手基於最新內容重新產生。",
+      "diffMalformed": "diff 格式無法解析。",
+      "noFileHint": "未開啟檔案，助手僅通用問答"
+    },
+    "staleCheck": {
+      "title": "檔案已在編輯器中修改，以下檢查結果可能過期，建議重新檢查："
     }
   },
   "hooks": {
@@ -1725,6 +1780,8 @@
     "registerRateLimited": "該 IP 註冊請求過於頻繁，請稍後再試",
     "invalidContent": "內容校驗失敗：偵測到損壞特徵（如控制字元或無效佔位符），已取消儲存",
     "invalidPath": "檔案路徑不合法：僅支援 .tex / .bib / .sty / .cls，且必須位於專案內",
-    "invalidEncoding": "檔案不是有效的 UTF-8 編碼，編輯器僅支援 UTF-8 文字檔案"
+    "invalidEncoding": "檔案不是有效的 UTF-8 編碼，編輯器僅支援 UTF-8 文字檔案",
+    "assistantDisabled": "伺服器已關閉編輯器 AI 助手功能",
+    "editorDisabled": "伺服器已關閉網頁編輯器功能"
   }
 }

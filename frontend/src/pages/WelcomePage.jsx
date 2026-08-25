@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import FolderOpen from "lucide-react/dist/esm/icons/folder-open.mjs";
+import FileCode2 from "lucide-react/dist/esm/icons/file-code-2.mjs";
 import { Button } from "@/components/ui/button";
 import Wordmark from "@/components/Wordmark";
 import useEnabledFeatures from "@/hooks/useEnabledFeatures";
@@ -134,6 +135,12 @@ const featureGroups = [
         to: "/writing-chat",
         icon: MessagesSquare,
         id: "writing_chat",
+      },
+      {
+        titleKey: "editor.title",
+        to: "/editor",
+        icon: FileCode2,
+        id: "editor",
       },
     ],
   },

@@ -255,12 +255,15 @@ async def config_status():
                 "writing_chat",
                 "bib_manager",
                 "plot_gen",
+                "editor",
             ]
         }
         | {
             "web_search": cfg.features.function_calling.web_search.enabled,
             "project_tools": cfg.features.function_calling.project_tools.enabled,
             "scholarly_research": cfg.features.function_calling.scholarly_research.enabled,
+            # 编辑器侧 AI 助手独立子开关（决策 Q26）：前端据此隐藏 AI Tab
+            "editor_assistant": cfg.features.editor.assistant_enabled,
         },
     }
 

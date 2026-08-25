@@ -40,6 +40,7 @@ import {
   UnlistedChangesBody,
 } from "@/components/UnlistedChanges";
 import ProgressBar from "@/components/ProgressBar";
+import StaleCheckBanner from "@/components/editor/StaleCheckBanner";
 import ConfirmDialog from "@/components/ConfirmDialog";
 import ResultFilterBar from "@/components/ResultFilterBar";
 import useResultFilter from "@/hooks/useResultFilter";
@@ -120,6 +121,7 @@ export default function ParagraphTranslatePage() {
     resolveInput,
     setResolveInput,
     activeFiles,
+    staleFiles,
     handlePreview,
     handleCheck,
     handlePauseResume,
@@ -435,6 +437,8 @@ export default function ParagraphTranslatePage() {
                 onStop={handleStop}
               />
             )}
+
+            <StaleCheckBanner files={staleFiles} />
 
             {translateParagraphs.length > 0 &&
               translateResults.length === 0 && (

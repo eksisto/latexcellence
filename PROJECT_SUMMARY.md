@@ -115,12 +115,12 @@ latexcellence/
 │       ├── format_converter/        # 格式转换
 │       ├── style_modify/            # 样式修改（粘贴代码 + 项目 Agent）
 │       ├── writing_chat/            # 写作助手聊天（cleanup.py 保留期清理）
-│       │   └── service/             # 业务逻辑包（state/sessions/conversation/edits/compaction/_deps）
+│       │   └── service/             # 业务逻辑包（state/sessions/conversation/edits/editor_chat/compaction/_deps）
 │       ├── bib_manager/             # 参考文献管理（格式规则层 + DOI 多数据源查询 + 重复检测 + 文献库管理）
 │       │   └── providers/           # 可插拔 DOI 数据源
 │       ├── plot_gen/                # 科研绘图（上传数据 -> 矢量图 + TikZ）
-│       ├── editor/                   # 网页编辑器后端（阶段一：整文件读写 + 统一撤销记账）
-│       │   └── service.py            # file-content / save-file 服务（扩展名白名单、MD5 乐观锁、损坏特征校验、配额回滚接线）
+│       ├── editor/                   # 网页编辑器后端（整文件读写 + 统一撤销记账）
+│       │   └── service.py            # file-content / save-file 服务（扩展名白名单、MD5 乐观锁、损坏特征校验、配额回滚接线）；编辑器助手端点见 writing_chat 包 editor_chat.py
 │       └── project_router.py        # 项目管理路由
 │
 ├── frontend/
@@ -145,13 +145,14 @@ latexcellence/
 │       │       └── index.js             # schema 校验、LATEX_COMMANDS 导出、类目分组
 │       ├── lib/                     # 通用前端工具
 │       │   └── editor/                 # 编辑器纯模块
-│       │       ├── language.js           # LaTeX 语言包抽象层（stex StreamLanguage 唯一入口，可整体替换）
-│       │       ├── files.js              # 可编辑白名单 + 约 2MB 大小上限纯函数
-│       │       ├── preferences.js        # 偏好默认值 + 白名单清洗（导入校验同源）
-│       │       ├── matcher.js            # 统一匹配器（中文/全拼/首字母/英文四路，拼音预计算缓存；行内补全与面板共用）
-│       │       ├── latexCompletion.js    # \ 与 \begin{ 行内补全 source（CM6 autocompletion）
-│       │       ├── snippetInsert.js      # 模板插入 + 占位符解析/网格骨架生成 + Tab 循环跳转模式
-│       │       └── preambleScan.js       # 导言区扫描 + 宏包缺失检测 + usepackage 插入点选取
+│       │   │       ├── language.js           # LaTeX 语言包抽象层（stex StreamLanguage 唯一入口，可整体替换）
+│       │   │       ├── files.js              # 可编辑白名单 + 约 2MB 大小上限纯函数
+│       │   │       ├── preferences.js        # 偏好默认值 + 白名单清洗 + 导出导入校验（kind/version/prefs）
+│       │   │       ├── matcher.js            # 统一匹配器（中文/全拼/首字母/英文四路，拼音预计算缓存；行内补全与面板共用）
+│       │   │       ├── latexCompletion.js    # \ 与 \begin{ 行内补全 source（CM6 autocompletion）
+│       │   │       ├── snippetInsert.js      # 模板插入 + 占位符解析/网格骨架生成 + Tab 循环跳转模式
+│       │   │       ├── preambleScan.js       # 导言区扫描 + 宏包缺失检测 + usepackage 插入点选取
+│       │   │       └── applyDiff.js          # unified diff 解析与上下文锚定应用（助手 diff 建议卡片）
 │       ├── pages/                   # 页面组件
 │       │   ├── LoginPage.jsx        # 多用户登录页（含忘记密码入口）
 │       │   ├── RegisterPage.jsx     # 多用户注册页（含待审批提交态）
@@ -163,8 +164,9 @@ latexcellence/
 │       │   ├── code-review/         # 代码审查子组件
 │       │   └── writing-chat/        # 写作聊天子组件
 │       ├── hooks/                   # 自定义 hook
-│       │   ├── useParagraphCheck.js # 逐段检查统一流程 hook
+│       │   ├── useParagraphCheck.js # 逐段检查统一流程 hook（含检查结果保鲜 MD5 比对）
 │       │   ├── useWritingChat.js    # 写作聊天生命周期 hook
+│       │   ├── useEditorAssistant.js # 编辑器 AI 助手 SSE hook（事件归约 + 项目切换守卫）
 │       │   ├── usePlotGen.js        # 科研绘图 Agent hook
 │       │   ├── useStyleModifyAgent.js # 样式修改项目 Agent hook
 │       │   ├── useAuth.js           # 多用户认证引导（模式探测 → /api/auth/me 恢复会话）
@@ -183,11 +185,13 @@ latexcellence/
 │       ├── AuthConnectionButton.jsx # 认证页工具栏「后端连接设置」入口（改绑后端）
 │       │   ├── editor/                 # 编辑器组件
 │       │   │   ├── LaTeXEditor.jsx     # CodeMirror 6 受控封装（value/onChange，挂行内补全与占位符扩展）
-│       │   │   ├── EditorToolbar.jsx   # 保存 · 后端撤销重做 · 命令面板 · 设置 · 返回工作台
-│       │   │   ├── EditorSettingsDialog.jsx # 偏好开关（软换行/字号；自动保存数据结构）
+│       │   │   ├── EditorToolbar.jsx   # 返回 · 文件名脏标记 · 后端撤销重做 · 命令面板 · 编译 · 保存 · 设置
+│       │   │   ├── EditorSettingsDialog.jsx # 偏好开关（软换行/字号/自动保存）+ 偏好导入导出双通道
 │       │   │   ├── ConflictDialog.jsx  # 保存 409 冲突弹窗（放弃重载 / 剪贴板逃生）
 │       │   │   ├── CommandPalette.jsx  # 命令面板（Ctrl/Cmd+/；搜索 + 分类 + 网格选择器二级步骤）
-│       │   │   └── GridSizePicker.jsx  # 表格/矩阵 m×n 拖选网格选择器
+│       │   │   ├── GridSizePicker.jsx  # 表格/矩阵 m×n 拖选网格选择器
+│       │   │   ├── AssistantPanel.jsx  # AI 助手侧栏（SSE 对话 + 三种建议应用形态卡片）
+│       │   │   └── StaleCheckBanner.jsx # 检查结果过期横幅（各逐段检查页复用）
 │       │   ├── UploadProjectDialog.jsx # 上传项目对话框（zip/7z/rar 或目录分片直传 + 断点续传 + 暂停/进度）
 │       │   ├── ProjectPermissionsDialog.jsx # 项目权限对话框（协作者管理/转交）
 │       │   └── settings/            # 设置对话框分区配置组件
@@ -198,7 +202,7 @@ latexcellence/
 │       ├── utils/                   # 前端工具（errorMessages.js 错误翻译（精确映射）/ errorPatterns.js 错误模式匹配纯模块（PATTERN_MAP + matchPattern）/ format.js 字节与时间展示格式化 / formulaWrap.js 公式包裹重写 / highlight.js 高亮入口 / md5.js 增量 MD5（分片上传校验）/ uploadQueue.js 分片上传队列纯状态机（建队/位图对位/退避重试/resume 复位）/ multiUserProject.js 多用户项目打开统一入口 / projectAccess.js 双模式打开与写角色白名单纯函数）
 │       ├── styles/                  # 前端样式（code-highlight.css：高亮颜色独立文件，按需引入）
 │       ├── store/useStore.js        # Zustand 全局状态
-│       └── store/editorStore.js     # 编辑器状态（editorPreferences persist 切片 + editorSession 缓冲区切片）
+│       └── store/editorStore.js     # 编辑器状态（editorPreferences persist 切片 + editorSession 缓冲区切片 + editorAssistant 助手会话切片）
 │
 ├── showcase/                        # 独立展示页（零依赖静态站，详见 docs/showcase.md）
 ├── docker/                          # Docker 沙箱镜像体系（v2 P1a：backend/tex/convert/plot 四镜像 + build.sh + README）
@@ -219,9 +223,9 @@ latexcellence/
 │   ├── multi-user-plan.md                    # 多用户模式设计方案（双模式/认证/用户空间/配额/权限协作/管理后台/迁移）
 │   ├── multi-user-v2-plan.md                   # 多用户模式 v2 设计方案（Docker 沙箱/rar/反向补丁撤销/分片上传/SMTP/记账优化/多实例）
 │   ├── rar-extractor-fallback.md                 # RAR 解压器回退层设计与实施记录（unar → bsdtar，已实施）
-│   ├── editor-plan.md                            # 网页编辑器功能设计方案（CM6 编辑器 + 命令快速输入 + AI 助手；阶段一后端读写接口已实施）
+│   ├── editor-plan.md                            # 网页编辑器功能设计方案（CM6 编辑器 + 命令快速输入 + AI 助手；已实施，设计共识与决策记录）
 │   ├── deployment.md                          # 后端部署指南（单用户/多用户单进程/多实例 Compose 部署、systemd 托管、HTTPS 反向代理、安全风险声明、备份、环境变量与升级回滚）
-│   ├── modules/                     # 模块文档
+│   ├── modules/                     # 模块文档（含 editor.md 网页编辑器）
 │   └── showcase.md                  # 展示页（showcase）说明
 ├── tests/                           # 测试用例
 │   ├── conftest.py                  # pytest 共享 fixture
@@ -288,7 +292,7 @@ latexcellence/
 | style_modify | 粘贴代码 / 项目 Agent 修改样式，支持 shadow 编译、proposal 审核、批量事务与撤销 | router.py, service.py, agent.py, models.py, session.py, trace.py, cleanup.py | ✓ | ✗ |
 | writing_chat | 写作助手对话（含联网搜索、学术检索与引文追踪、项目浏览、段落编辑和工具确认） | router.py, service/, context.py, models.py, prompt_manager.py | ✓ | ✗ |
 | bib_manager | 参考文献管理 + 格式规则层 + DOI 多数据源查询 + 重复检测 + 文献库 | router.py, service.py, models.py, bib_parser.py, format_rules.py, style_registry.py, provider_manager.py, providers/ | ✓(格式规则命中不依赖 LLM；DOI 查询不依赖 LLM) | ✗ |
-| editor | 网页编辑器：后端整文件打开/保存（MD5 乐观锁、统一撤销记账与配额回滚接线）+ 前端 /editor 页 CM6 打开-编辑-保存-冲突闭环 + 命令快速输入子系统（命令数据库四路匹配查找、\ 行内补全与命令面板双入口、表格矩阵网格选择器、宏包缺失联动自动添加声明） | backend service.py（路由挂载于 project_router）；frontend pages/EditorPage.jsx、components/editor/、lib/editor/、data/latexCommands/、store/editorStore.js | ✗ | ✗ |
+| editor | 网页编辑器：后端整文件打开/保存（MD5 乐观锁、统一撤销记账与配额回滚接线）+ 前端 /editor 页 CM6 打开-编辑-保存-冲突闭环 + 命令快速输入子系统（命令数据库四路匹配查找、\ 行内补全与命令面板双入口、表格矩阵网格选择器、宏包缺失联动自动添加声明）+ 编译联动（脏改动先自动保存）+ 编辑器侧 AI 助手（复用 Writing Chat 会话基础设施的缓冲区协议端点、自适应上下文注入、插入光标/替换选区/diff 卡片三种建议应用形态）+ 检查结果保鲜横幅 + 偏好导入导出 | backend modules/editor/service.py（路由挂载于 project_router）、writing_chat/service/editor_chat.py；frontend pages/EditorPage.jsx、components/editor/、lib/editor/、data/latexCommands/、store/editorStore.js | ✓(仅助手端点) | ✗ |
 | plot_gen | 科研绘图 Agent（数据画像 -> 图表推荐 -> Python 执行 -> TikZ 编译） | router.py, service.py, agent.py, models.py, data_parser.py, recommender.py, styles.py, executor.py, tikzgen.py, sandbox_guard.py, trace.py, cleanup.py | ✓ | ✗ |
 
 ## 核心设计思路
@@ -318,6 +322,8 @@ latexcellence/
 | 代码展示与高亮 | CodeBlock / MarkerText / CodeEditorInput 统一 LaTeX 源码展示，token 颜色由 `--code-token-*` 变量控制 | [frontend.md](docs/frontend.md) |
 | 逐段检查前端流程 | `useParagraphCheck` 统一封装恢复、预览、检查、排序、应用与持久化；`useResultFilter` 负责排序过滤 | [frontend.md](docs/frontend.md) |
 | 写作助手 | `useWritingChat` 管理会话、SSE 流式、工具确认、编辑建议双轮协议 | [writing_chat.md](docs/modules/writing_chat.md) |
+| 网页编辑器与编辑器侧 AI 助手 | `/editor` 页 CM6 缓冲区编辑经 save-file 单一路径落盘；助手复用 Writing Chat 会话基础设施，建议只改缓冲区（插入光标 / 替换选区 / unified diff 卡片），`editor.enabled` / `assistant_enabled` 双开关服务端把关 | [editor.md](docs/modules/editor.md)、[editor-plan.md](docs/editor-plan.md) |
+| 检查结果保鲜 | 逐段检查结果记录检查时文件 MD5，页面加载时比对当前 MD5，不一致渲染 StaleCheckBanner 提示重查而不销毁结果 | [frontend.md](docs/frontend.md)、[editor.md](docs/modules/editor.md) |
 | 主题系统 | 主题 CSS 自动发现，亮/暗模式独立；`--primary` / `--accent` 等由单一色相派生 | [frontend.md](docs/frontend.md) |
 | 多用户双模式 | `multi_user.enabled` 开关；单用户保持现状（本地目录 + 共享令牌），多用户强制会话认证、CSRF、禁用任意路径打开/浏览；服务器路径不向用户暴露（`root_path` / `git_root` / `sandbox` 等响应字段脱敏，编译日志等输出前缀改写为相对路径） | [multi-user-plan.md](docs/multi-user-plan.md)、[deployment.md](docs/deployment.md) |
 | 多用户认证 | argon2id 密码哈希、HttpOnly 会话 Cookie（库只存 SHA-256）、注册审批流、登录限流、管理员引导（env/CLI） | [backend-core.md](docs/backend-core.md) |

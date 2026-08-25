@@ -613,6 +613,24 @@ function FeaturesSection({ features, onChange, diffOptions }) {
           </div>
         </div>
       )}
+      {/* 网页编辑器（editor-plan §5.3 / 决策 Q17）：enabled + assistant_enabled */}
+      <CheckboxField
+        label={t("settings.featureEditor")}
+        checked={features.editor.enabled}
+        onChange={(v) => onChange("features.editor.enabled", v)}
+      />
+      {features.editor.enabled && (
+        <div className="ml-6 space-y-2 rounded-md border p-2.5 bg-muted/40">
+          <CheckboxField
+            label={t("settings.featureEditorAssistant")}
+            checked={features.editor.assistant_enabled}
+            onChange={(v) => onChange("features.editor.assistant_enabled", v)}
+          />
+          <p className="text-xs text-muted-foreground">
+            {t("settings.featureEditorAssistantHint")}
+          </p>
+        </div>
+      )}
     </ConfigSection>
   );
 }

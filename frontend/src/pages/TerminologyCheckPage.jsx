@@ -37,6 +37,7 @@ import { isMultiUser } from "@/api/connection";
 import MarkerText from "@/components/MarkerText";
 import ParagraphContext from "@/components/ParagraphContext";
 import ProgressBar from "@/components/ProgressBar";
+import StaleCheckBanner from "@/components/editor/StaleCheckBanner";
 import ConfirmDialog from "@/components/ConfirmDialog";
 import ResultFilterBar from "@/components/ResultFilterBar";
 import useResultFilter from "@/hooks/useResultFilter";
@@ -77,6 +78,7 @@ export default function TerminologyCheckPage() {
     resolveInput,
     setResolveInput,
     activeFiles,
+    staleFiles,
     operationId,
     handlePreview,
     handleCheck,
@@ -509,6 +511,8 @@ export default function TerminologyCheckPage() {
                 onStop={handleStop}
               />
             )}
+
+            <StaleCheckBanner files={staleFiles} />
 
             {terminologyParagraphs.length > 0 &&
               terminologyResults.length === 0 && (

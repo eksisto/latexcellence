@@ -450,24 +450,26 @@ export default function WorkspacePage() {
                 </Button>
               )}
               {/* 编辑器入口（editor-plan §4）：携带当前 activeFile 跳转，
-                  不改动工作台既有逻辑 */}
-              <Button
-                variant="outline"
-                size="sm"
-                nativeButton={false}
-                render={
-                  <Link
-                    to={
-                      activeFile
-                        ? `/editor?file=${encodeURIComponent(activeFile)}`
-                        : "/editor"
-                    }
-                  />
-                }
-              >
-                <SquarePen />
-                {t("pages:workspace.openEditor")}
-              </Button>
+                  不改动工作台既有逻辑；部署级开关关闭时隐藏（决策 Q17） */}
+              {enabledFeatures?.editor !== false && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  nativeButton={false}
+                  render={
+                    <Link
+                      to={
+                        activeFile
+                          ? `/editor?file=${encodeURIComponent(activeFile)}`
+                          : "/editor"
+                      }
+                    />
+                  }
+                >
+                  <SquarePen />
+                  {t("pages:workspace.openEditor")}
+                </Button>
+              )}
             </div>
 
             <div className="grid grid-cols-4 gap-6">

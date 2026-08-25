@@ -19,6 +19,8 @@ const ALL_ENABLED = {
   writing_chat: true,
   bib_manager: true,
   plot_gen: true,
+  editor: true,
+  editor_assistant: true,
   project_tools: true,
   web_search: true,
   scholarly_research: true,

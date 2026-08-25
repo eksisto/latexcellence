@@ -466,6 +466,15 @@ class PlotGenConfig(BaseModel):
     cleanup_retention_days: int = Field(7, ge=1)
 
 
+class EditorConfig(BaseModel):
+    """网页编辑器模块配置（editor-plan §5.3）"""
+
+    enabled: bool = True  # 是否启用编辑器（工作台入口与 /editor 路由）
+    # 编辑器侧 AI 助手独立子开关：管理员可在保留编辑器的同时单独关闭
+    # AI 面板以控制 LLM 开销（决策 Q26）；关闭时服务端拒绝助手端点
+    assistant_enabled: bool = True
+
+
 class FunctionCallingConfig(BaseModel):
     """Function Calling 工具配置（全局工具，LLM 自主调用）"""
 
@@ -493,6 +502,7 @@ class FeaturesConfig(BaseModel):
     writing_chat: WritingChatConfig = WritingChatConfig()
     bib_manager: BibManagerConfig = BibManagerConfig()
     plot_gen: PlotGenConfig = PlotGenConfig()
+    editor: EditorConfig = EditorConfig()
     function_calling: FunctionCallingConfig = FunctionCallingConfig()
 
 

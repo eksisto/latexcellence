@@ -38,6 +38,90 @@ function createEditorPreferencesSlice(set) {
   };
 }
 
+/* ── editorAssistant 切片（不持久化，阶段四） ─────────────────────────── */
+
+/**
+ * 编辑器 AI 助手会话状态（editor-plan §7）：按项目 scope 隔离由后端保证，
+ * 前端只保存当前项目的活跃会话 id 与消息列表。切换文件时会话延续（§7.4）；
+ * 切换项目时经 setAssistantProjectKey 检测清空。刷新即丢弃（不持久化），
+ * 会话历史仍可通过后端 session id 找回。
+ */
+function createEditorAssistantSlice(set) {
+  return {
+    /** 后端 scoped session_id（{scope}:{uuid}）；null 表示尚未开始对话 */
+    assistantSessionId: null,
+    /** 项目隔离键：单用户为 projectPath，多用户为 projectId */
+    assistantProjectKey: null,
+    /** 消息列表：{id, role, content, streaming, suggestions, suggestionApplied} */
+    assistantMessages: [],
+    /** SSE 流式接收中 */
+    assistantStreaming: false,
+    /** 工具调用指示器（tool_status 事件；null 表示空闲） */
+    assistantToolStatus: null,
+
+    setAssistantSessionId: (sessionId) =>
+      set({ assistantSessionId: sessionId }),
+    appendAssistantMessage: (message) =>
+      set((state) => ({
+        assistantMessages: [...state.assistantMessages, message],
+      })),
+    patchAssistantMessage: (messageId, patch) =>
+      set((state) => ({
+        assistantMessages: state.assistantMessages.map((m) =>
+          m.id === messageId ? { ...m, ...patch } : m,
+        ),
+      })),
+    markSuggestionApplied: (messageId, index) =>
+      set((state) => ({
+        assistantMessages: state.assistantMessages.map((m) =>
+          m.id === messageId
+            ? {
+                ...m,
+                suggestionApplied: true,
+                appliedSuggestions: {
+                  ...(m.appliedSuggestions || {}),
+                  [index]: true,
+                },
+              }
+            : m,
+        ),
+      })),
+    removeAssistantMessage: (messageId) =>
+      set((state) => ({
+        assistantMessages: state.assistantMessages.filter(
+          (m) => m.id !== messageId,
+        ),
+      })),
+    setAssistantStreaming: (streaming) =>
+      set({ assistantStreaming: !!streaming }),
+    setAssistantToolStatus: (status) => set({ assistantToolStatus: status }),
+    /**
+     * 项目切换守卫：项目键与当前不一致时清空本地会话视图。
+     * @returns {boolean} 是否发生了重置
+     */
+    ensureAssistantProject: (projectKey) =>
+      set((state) => {
+        if (!projectKey || state.assistantProjectKey === projectKey) {
+          return {};
+        }
+        return {
+          assistantProjectKey: projectKey,
+          assistantSessionId: null,
+          assistantMessages: [],
+          assistantStreaming: false,
+          assistantToolStatus: null,
+        };
+      }),
+    clearAssistantConversation: () =>
+      set({
+        assistantSessionId: null,
+        assistantMessages: [],
+        assistantStreaming: false,
+        assistantToolStatus: null,
+      }),
+  };
+}
+
 /* ── editorSession 切片（不持久化） ───────────────────────────────────── */
 
 function createEditorSessionSlice(set, get) {
@@ -112,6 +196,7 @@ export const useEditorStore = create(
     (set, get) => ({
       ...createEditorPreferencesSlice(set),
       ...createEditorSessionSlice(set, get),
+      ...createEditorAssistantSlice(set),
     }),
     {
       name: "latexcellence-editor",

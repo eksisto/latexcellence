@@ -97,6 +97,9 @@
         },
         "writingChat": {
           "title": "写作助手"
+        },
+        "editor": {
+          "title": "网页编辑器"
         }
       }
     },
@@ -984,7 +987,10 @@
       "noFileSelectedViewerHint": "你在本项目中为只读角色，可浏览文件内容但无法编辑。",
       "switchDirtyTitle": "放弃未保存的修改？",
       "switchDirtyDescription": "当前文件的修改尚未保存，打开新文件将丢弃这些改动。",
-      "switchDirtyConfirm": "放弃并打开"
+      "switchDirtyConfirm": "放弃并打开",
+      "disabledTitle": "网页编辑器未启用",
+      "disabledDescription": "管理员已在服务器配置中关闭编辑器功能，可返回工作台使用其他功能。",
+      "compileNoMainFile": "未设置主文件且当前文件不是 .tex，无法编译；请在工作台设置主文件。"
     }
   },
   "components": {
@@ -1247,7 +1253,10 @@
       "multiUserGeoListHint": "逗号分隔；与数据库路径同时配置才生效，国家和城市同时填写时需同时命中。",
       "multiUserTrustedProxies": "可信代理 IP/CIDR",
       "multiUserTrustedProxiesHint": "反代部署时填代理地址（如 127.0.0.1），命中才信任 X-Forwarded-For；直连部署留空。",
-      "multiUserRegisterRateLimit": "注册限流（次/小时）"
+      "multiUserRegisterRateLimit": "注册限流（次/小时）",
+      "featureEditor": "网页编辑器",
+      "featureEditorAssistant": "编辑器 AI 助手",
+      "featureEditorAssistantHint": "关闭后服务端拒绝编辑器助手端点，可在保留编辑器的同时控制 LLM 开销。"
     },
     "markerText": {
       "math": "公式",
@@ -1418,10 +1427,19 @@
       "save": "保存",
       "backendUndo": "后端撤销",
       "backendRedo": "后端重做",
-      "panelTitle": "预览与编译",
-      "panelEmptyTitle": "编译结果与 PDF 预览",
-      "panelEmptyDescription": "将在后续版本接入编译联动，在此展示编译输出与 PDF 预览。",
-      "commandPalette": "命令面板（Ctrl/Cmd+/）"
+      "panelTitle": "预览与 AI 助手",
+      "panelEmptyTitle": "尚无编译结果",
+      "panelEmptyDescription": "点击工具栏「编译」在此查看输出并预览 PDF。",
+      "commandPalette": "命令面板（Ctrl/Cmd+/）",
+      "compile": "编译",
+      "compiling": "编译中…",
+      "compileHint": "有未保存修改时先自动保存再编译；冲突时中断进入冲突流程",
+      "tabCompile": "编译与预览",
+      "tabAssistant": "AI 助手",
+      "collapsePanel": "折叠右栏",
+      "expandPanel": "展开右栏",
+      "panelCompileTitle": "编译输出与 PDF 预览",
+      "compileOutput": "原始输出"
     },
     "conflictDialog": {
       "title": "保存冲突",
@@ -1437,8 +1455,19 @@
       "description": "偏好仅保存在当前浏览器，只对编辑器生效。",
       "softWrap": "软换行",
       "autoSave": "自动保存",
-      "autoSaveHint": "自动保存将在后续版本随编译联动一并启用。",
-      "fontSize": "字号"
+      "autoSaveHint": "开启后编辑停止片刻自动保存到服务器（可随时手动 Ctrl/Cmd+S）。",
+      "fontSize": "字号",
+      "transferTitle": "偏好迁移",
+      "export": "导出 JSON",
+      "importFile": "导入文件",
+      "importPaste": "粘贴导入",
+      "importApply": "应用导入",
+      "importSuccess": "偏好已导入并生效",
+      "importFailed": "导入失败",
+      "import_invalid_json": "导入失败：不是有效的 JSON 文本",
+      "import_invalid_kind": "导入失败：文件类型不匹配（非本编辑器偏好导出）",
+      "import_unsupported_version": "导入失败：版本过新或无效，请升级后再试",
+      "import_invalid_payload": "导入失败：prefs 字段缺失或格式错误"
     },
     "commandPalette": {
       "title": "命令面板",
@@ -1470,6 +1499,32 @@
       "sizeLabel": "{{rows}} 行 × {{cols}} 列",
       "confirm": "插入",
       "back": "返回列表"
+    },
+    "assistant": {
+      "title": "AI 助手",
+      "clear": "清空对话",
+      "emptyHint": "询问当前文档相关问题，或在划词后请求改写。建议只应用到编辑器缓冲区，是否保存由你决定。",
+      "inputPlaceholder": "向 AI 助手提问…",
+      "send": "发送",
+      "chatError": "助手请求失败",
+      "compressed": "会话上下文过长，已自动压缩历史消息。",
+      "includeFullFile": "把全文纳入本次提问",
+      "insertAtCursor": "插入光标处",
+      "replaceSelection": "替换选区",
+      "noSelectionHint": "当前没有选区",
+      "diffCard": "文件修改建议（+{{additions}} / −{{deletions}} 行）",
+      "applyToBuffer": "应用到缓冲区",
+      "applied": "已应用",
+      "applyBufferHint": "仅写入编辑器缓冲区",
+      "applyFailed": "建议应用失败",
+      "diffApplied": "修改已应用到缓冲区（未保存）",
+      "diffApplyFailed": "无法应用该 diff",
+      "diffHunkNotMatched": "diff 与缓冲区内容不匹配（文件可能已变化），请让助手基于最新内容重新生成。",
+      "diffMalformed": "diff 格式无法解析。",
+      "noFileHint": "未打开文件，助手仅通用问答"
+    },
+    "staleCheck": {
+      "title": "文件已在编辑器中修改，以下检查结果可能过期，建议重新检查："
     }
   },
   "hooks": {
@@ -1725,6 +1780,8 @@
     "registerRateLimited": "该 IP 注册请求过于频繁，请稍后再试",
     "invalidContent": "内容校验失败：检测到损坏特征（如控制字符或无效占位符），已取消保存",
     "invalidPath": "文件路径不合法：仅支持 .tex / .bib / .sty / .cls，且必须位于项目内",
-    "invalidEncoding": "文件不是有效的 UTF-8 编码，编辑器仅支持 UTF-8 文本文件"
+    "invalidEncoding": "文件不是有效的 UTF-8 编码，编辑器仅支持 UTF-8 文本文件",
+    "assistantDisabled": "服务器已关闭编辑器 AI 助手功能",
+    "editorDisabled": "服务器已关闭网页编辑器功能"
   }
 }

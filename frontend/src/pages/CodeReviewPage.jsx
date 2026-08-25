@@ -44,6 +44,7 @@ import { emptyStateCta } from "@/utils/projectAccess";
 import { isMultiUser } from "@/api/connection";
 import ParagraphContext from "@/components/ParagraphContext";
 import ProgressBar from "@/components/ProgressBar";
+import StaleCheckBanner from "@/components/editor/StaleCheckBanner";
 import ConfirmDialog from "@/components/ConfirmDialog";
 import ResultFilterBar from "@/components/ResultFilterBar";
 import useResultFilter from "@/hooks/useResultFilter";
@@ -421,6 +422,7 @@ export default function CodeReviewPage() {
     resolveInput,
     setResolveInput,
     activeFiles,
+    staleFiles,
     handlePreview,
     handleCheck,
     handlePauseResume,
@@ -604,6 +606,8 @@ export default function CodeReviewPage() {
                 onStop={handleStop}
               />
             )}
+
+            <StaleCheckBanner files={staleFiles} />
 
             {/* paragraph preview */}
             {codeReviewParagraphs.length > 0 &&

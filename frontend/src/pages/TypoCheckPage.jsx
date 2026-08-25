@@ -40,6 +40,7 @@ import {
 } from "@/components/UnlistedChanges";
 import ParagraphContext from "@/components/ParagraphContext";
 import ProgressBar from "@/components/ProgressBar";
+import StaleCheckBanner from "@/components/editor/StaleCheckBanner";
 import ConfirmDialog from "@/components/ConfirmDialog";
 import ResultFilterBar from "@/components/ResultFilterBar";
 import useResultFilter from "@/hooks/useResultFilter";
@@ -76,6 +77,7 @@ export default function TypoCheckPage() {
     resolveInput,
     setResolveInput,
     activeFiles,
+    staleFiles,
     handlePreview,
     handleCheck,
     handlePauseResume,
@@ -348,6 +350,8 @@ export default function TypoCheckPage() {
                 onStop={handleStop}
               />
             )}
+
+            <StaleCheckBanner files={staleFiles} />
 
             {typoParagraphs.length > 0 && typoResults.length === 0 && (
               <Card>

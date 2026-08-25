@@ -134,6 +134,10 @@ const EXACT_MAP = {
   file_not_found: "fileNotFound",
   invalid_encoding: "invalidEncoding",
 
+  // 编辑器功能开关把关（editor-plan 阶段四 / 决策 Q26）
+  editor_disabled: "editorDisabled",
+  assistant_disabled: "assistantDisabled",
+
   // 参数校验
   "Empty reference example": "emptyReferenceExample",
   "Empty metadata": "emptyMetadata",
