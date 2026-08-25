@@ -354,9 +354,12 @@ const useStore = create(
         projectRole: persistedState?.projectRole ?? null,
       }),
       onRehydrateStorage: () => (state, error) => {
-        if (!error) {
-          useStore.setState({ hydrated: true });
-        }
+        if (error) return;
+        // zustand v5 对 localStorage 等同步存储会在 create() 内部同步完成水合，
+        // 此刻 const useStore 尚未完成初始化（TDZ），直接调用会抛 ReferenceError
+        // 且被 persist 静默吞掉（以 error 重入本回调），导致 hydrated 永久为 false、
+        // 各页面刷新恢复逻辑失效——必须推迟到当前同步栈结束后再置位。
+        queueMicrotask(() => useStore.setState({ hydrated: true }));
       },
       partialize: (state) => ({
         workspaceId: state.workspaceId,
