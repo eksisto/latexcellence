@@ -206,7 +206,7 @@ cp config.example.json config.json
 
 - `server.host` 保持 `127.0.0.1`，由反向代理对外提供 HTTPS（见下文）；直接暴露 uvicorn 到公网强烈不建议；
 - `dev_mode` 必须为 `false`，否则不会挂载前端静态文件；
-- `llm.api_key` 也可不改配置、改用环境变量 `LX_LLM_KEY` 注入（优先级更高，且永不写盘，见「环境变量参考」）；多用户模式的 `smtp.password` 同理，用 `LATEXCELLENCE_SMTP_PASSWORD` 注入；
+- `llm.api_key` 也可不改配置、改用环境变量 `LX_LLM_KEY` 注入（优先级更高，且永不写盘，见「环境变量参考」）；多用户模式的 `smtp.password` 同理，用 `LATEXCELLENCE_SMTP_PASSWORD` 注入；联网搜索（Tavily）与学术数据源（OpenAlex / Semantic Scholar / CORE / Unpaywall / PubMed）的 API Key 亦同，用 `LATEXCELLENCE_TAVILY_API_KEY`、`LATEXCELLENCE_OPENALEX_API_KEY` 等注入；
 - `multi_user.enabled=true` 开启多用户模式。**需重启服务生效**：启动时初始化 SQLite（WAL）数据库、创建用户空间根目录并引导首个管理员；其余 `multi_user` 配置项均支持配置热重载，改完保存即生效；
 - **多用户模式下前端必须与 API 同源部署**（会话 Cookie 为 `SameSite=Lax`，跨域携带会被浏览器拦截）：即由后端托管 `static/` 静态页面，经同一个域名反代对外，不要把前端单独发到另一个域名再跨域调 API（这是与单用户分离部署的关键差异）；
 - `multi_user`、`sandbox`、`smtp` 三个配置段实行严格校验（未知键直接报错），防止拼写错误导致安全阈值静默回退到默认值；
@@ -779,6 +779,8 @@ latex.example.com {
 | --- | --- | --- |
 | `LX_LLM_KEY` | 所有形态 | 覆盖 `llm.api_key`，优先级最高；注入的 Key **永不写盘**（配置保存时自动清空该字段） |
 | `LATEXCELLENCE_SMTP_PASSWORD` | 多用户模式 | 覆盖 `smtp.password`，优先级最高；注入的密码**永不写盘**（配置保存时自动清空该字段，与 `LX_LLM_KEY` 同一安全策略） |
+| `LATEXCELLENCE_TAVILY_API_KEY` | 联网搜索启用时 | 覆盖 `features.function_calling.web_search.engines.tavily.api_key`；优先级与**永不写盘**策略同 `LX_LLM_KEY` |
+| `LATEXCELLENCE_OPENALEX_API_KEY` 等学术数据源 Key | 学术检索启用时 | 覆盖 `features.function_calling.scholarly_research.providers.<provider>.api_key`，命名规则 `LATEXCELLENCE_<PROVIDER 大写>_API_KEY`，当前支持 OpenAlex / Semantic Scholar / Core / Unpaywall / PubMed（Crossref / arXiv / DataCite 不消费 API Key）；优先级与**永不写盘**策略同 `LX_LLM_KEY` |
 | `LATEXCELLENCE_ADMIN_USERNAME` | 首次启动 | 引导首个管理员（仅在用户表为空时消费）；变量名可经 `multi_user.admin_username_env` 改 |
 | `LATEXCELLENCE_ADMIN_PASSWORD` | 首次启动 / CLI | 同上；CLI（create-admin / reset-password）省略 `--password` 时也用它替代交互输入 |
 | `LATEXCELLENCE_LOG_STDOUT` | 容器部署 | 设为 `1` 时日志只输出 stdout/stderr、不写文件（多进程共写轮转文件不安全，compose 编排已默认开启） |
@@ -786,6 +788,8 @@ latex.example.com {
 | `LATEXCELLENCE_CONFIG_PATH` | Compose | 配置文件挂载路径（默认 `./config.json`） |
 | `LATEXCELLENCE_PROXY_PORT` | Compose | Caddy 对外端口（默认 `8080`） |
 | `LATEXCELLENCE_CADDYFILE` | Compose | Caddy 挂载的 Caddyfile（默认 `./docker/Caddyfile.example`） |
+
+注意：在设置页清空某个已由环境变量注入的敏感项（提交空值）按用户输入生效——内存值与磁盘字段会被清空，但**不会移除环境变量本身**；进程重启或 config.json 变更触发热重载后，环境变量值会重新注入并恢复生效。因此若想彻底停用某个 Key，应同时撤销对应的环境变量（如从 compose / systemd 配置中删除），而不是只在界面里清空。
 
 ---
 

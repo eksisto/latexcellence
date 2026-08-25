@@ -4,14 +4,16 @@
 职责：
     1. 定义 config.json 对应的 Pydantic 模型（带默认值和类型校验）
     2. 加载 JSON 配置文件并校验
-    3. 支持环境变量 LX_LLM_KEY 覆盖配置中的 API Key（安全优先）
+    3. 支持环境变量覆盖配置中的敏感项（见 SECRET_ENV_PATHS 注册表：
+       LLM Key / SMTP 密码 / Tavily 搜索与学术数据源 API Key）（安全优先）
     4. 运行时热重载支持
 
 安全策略：
     - config.json 可包含 API Key（首次安装时方便），但必须加入 .gitignore
     - 提供 config.example.json 作为脱敏模板，可安全提交 Git
-    - 环境变量 LX_LLM_KEY 优先级最高，且从环境变量注入的 Key **禁止写回磁盘**
-    - save_config() 自动识别 Key 来源，环境变量 Key 永不落盘
+    - 注册表中的敏感项均可经环境变量注入，环境变量优先级最高，
+      且从环境变量注入的值**禁止写回磁盘**
+    - save_config() 自动识别敏感项来源，环境变量注入值永不落盘
 """
 
 import copy
@@ -20,7 +22,7 @@ import json
 import os
 import threading
 from pathlib import Path
-from typing import Literal
+from typing import Any, Literal
 
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
@@ -281,7 +283,10 @@ class TavilyConfig(BaseModel):
     """Tavily 搜索引擎配置"""
 
     enabled: bool = True
-    api_key: str = ""  # Tavily API Key（https://app.tavily.com 获取）
+    # Tavily API Key（https://app.tavily.com 获取）；也可经环境变量
+    # LATEXCELLENCE_TAVILY_API_KEY 注入（优先于配置文件且永不写盘，
+    # 与 LX_LLM_KEY 同一安全策略）
+    api_key: str = ""
 
 
 class WebSearchEnginesConfig(BaseModel):
@@ -369,6 +374,10 @@ class ScholarlyResearchProviderConfig(BaseModel):
     """单个学术数据源配置。"""
 
     enabled: bool = True
+    # 数据源 API Key（仅部分 Provider 需要）。使用 Key 的 Provider 均可经
+    # 环境变量 LATEXCELLENCE_<PROVIDER 大写>_API_KEY 注入（如
+    # LATEXCELLENCE_OPENALEX_API_KEY），优先于配置文件且永不写盘，
+    # 与 LX_LLM_KEY 同一安全策略（完整清单见 SECRET_ENV_PATHS）
     api_key: str = ""
 
 
@@ -690,16 +699,74 @@ class AppConfig(BaseModel):
     smtp: SmtpConfig = SmtpConfig()
 
 
+# ── 敏感项环境变量注入（安全策略）────────────────────────────────────
+# 与 LX_LLM_KEY / LATEXCELLENCE_SMTP_PASSWORD 同一安全策略：环境变量
+# 优先于配置文件，注入值仅在内存生效、save_config() 落盘前自动清空对应
+# 字段（永不写盘），供 Compose/systemd 等部署形态免改配置注入凭证。
+
+# SMTP 授权密码注入的环境变量名
+SMTP_PASSWORD_ENV = "LATEXCELLENCE_SMTP_PASSWORD"
+# Tavily 联网搜索 API Key 注入的环境变量名
+TAVILY_API_KEY_ENV = "LATEXCELLENCE_TAVILY_API_KEY"
+
+
+def _scholarly_provider_path(provider: str) -> str:
+    """学术数据源 api_key 在配置中的点分路径。"""
+    return (
+        "features.function_calling.scholarly_research.providers." f"{provider}.api_key"
+    )
+
+
+# 敏感项环境变量注册表：环境变量名 → 配置点分路径。
+# 覆盖 LLM Key、SMTP 密码、Tavily 搜索 Key 与学术数据源 Key——仅收录实际
+# 消费 API Key 的数据源（crossref / arxiv / datacite 无鉴权字段消费方）。
+SECRET_ENV_PATHS: dict[str, str] = {
+    "LX_LLM_KEY": "llm.api_key",  # 历史命名，保持兼容
+    SMTP_PASSWORD_ENV: "smtp.password",
+    TAVILY_API_KEY_ENV: ("features.function_calling.web_search.engines.tavily.api_key"),
+    "LATEXCELLENCE_OPENALEX_API_KEY": _scholarly_provider_path("openalex"),
+    "LATEXCELLENCE_SEMANTIC_SCHOLAR_API_KEY": _scholarly_provider_path(
+        "semantic_scholar"
+    ),
+    "LATEXCELLENCE_CORE_API_KEY": _scholarly_provider_path("core"),
+    "LATEXCELLENCE_UNPAYWALL_API_KEY": _scholarly_provider_path("unpaywall"),
+    "LATEXCELLENCE_PUBMED_API_KEY": _scholarly_provider_path("pubmed"),
+}
+
+# 更新载荷为空字符串时视为"保留原值"的敏感项。
+# llm.api_key 沿用历史语义：前端意外清空输入框不应抹掉已配置的 Key；
+# 其余敏感项空值按用户输入处理（可清空）。
+_KEEP_ON_EMPTY_SECRET_PATHS: frozenset[str] = frozenset({"llm.api_key"})
+
+
+def _get_nested(data: dict, path: str) -> Any:
+    """按点分路径读取嵌套字典值；任一层缺失返回 None。"""
+    node: Any = data
+    for key in path.split("."):
+        if not isinstance(node, dict) or key not in node:
+            return None
+        node = node[key]
+    return node
+
+
+def _set_nested(data: dict, path: str, value: Any) -> None:
+    """按点分路径写入嵌套字典值（中间层缺失时创建空字典）。"""
+    keys = path.split(".")
+    node = data
+    for key in keys[:-1]:
+        child = node.get(key)
+        if not isinstance(child, dict):
+            child = {}
+            node[key] = child
+        node = child
+    node[keys[-1]] = value
+
+
 # 模块级全局变量：单例模式存储配置对象和路径
 _config: AppConfig | None = None
 _config_path: Path | None = None
-_api_key_from_env: bool = False  # 标记当前 api_key 是否来自环境变量（防落盘）
-_smtp_password_from_env: bool = (
-    False  # 标记当前 smtp.password 是否来自环境变量（防落盘）
-)
-# SMTP 授权密码注入的环境变量名：与 LX_LLM_KEY 同一安全策略（优先于配置文件、
-# 永不写盘），供 Compose/systemd 等部署形态免改配置注入凭证。
-SMTP_PASSWORD_ENV = "LATEXCELLENCE_SMTP_PASSWORD"
+# 当前由环境变量注入、落盘前必须清空的敏感字段集合（SECRET_ENV_PATHS 的值域）
+_secrets_from_env: set[str] = set()
 # 热重载探测（v2 P7 多实例）：记录上次加载时 config.json 的 (mtime_ns, size)
 # 指纹，get_config() 命中变化即重载——多副本部署下管理员改配置后无需逐个
 # 重启（save_config 写盘后同步刷新指纹，避免自身触发无意义重载）。
@@ -741,8 +808,9 @@ def load_config(config_path: str = "config.json") -> AppConfig:
 
     流程：
         1. 读取 JSON 文件
-        2. 检查环境变量 LX_LLM_KEY / LATEXCELLENCE_SMTP_PASSWORD，
-           若存在则覆盖配置中的 llm.api_key / smtp.password
+        2. 应用 SECRET_ENV_PATHS 注册表中的敏感项环境变量覆盖
+           （LX_LLM_KEY / LATEXCELLENCE_SMTP_PASSWORD / Tavily 与学术
+           数据源 Key 等），并记录注入来源
         3. 通过 Pydantic 进行类型校验和默认值填充
         4. 缓存到全局变量供后续调用
 
@@ -752,15 +820,14 @@ def load_config(config_path: str = "config.json") -> AppConfig:
     返回：
         校验后的 AppConfig 对象
     """
-    global _config, _config_path, _api_key_from_env, _smtp_password_from_env
+    global _config, _config_path, _secrets_from_env
     global _boot_multi_user_enabled
     path = Path(config_path)
     if not path.exists():
         raise FileNotFoundError(f"Config file not found: {config_path}")
 
-    cfg, api_key_from_env, smtp_password_from_env = _parse_config_file(path)
-    _api_key_from_env = api_key_from_env
-    _smtp_password_from_env = smtp_password_from_env
+    cfg, secrets_from_env = _parse_config_file(path)
+    _secrets_from_env = secrets_from_env
     _config = cfg
     _config_path = path.resolve()
     _boot_multi_user_enabled = cfg.multi_user.enabled
@@ -768,10 +835,10 @@ def load_config(config_path: str = "config.json") -> AppConfig:
     return cfg
 
 
-def _parse_config_file(path: Path) -> tuple[AppConfig, bool, bool]:
+def _parse_config_file(path: Path) -> tuple[AppConfig, set[str]]:
     """读取并校验配置文件（不触碰模块级状态）。
 
-    返回 (AppConfig, api_key 是否来自环境变量, smtp.password 是否来自环境变量)。
+    返回 (AppConfig, 由环境变量注入的敏感项路径集合)。
     热重载路径复用本函数，保证在发布新配置对象**之前**完成
     multi_user.enabled 锚定，避免并发 get_config() 短暂观察到未锚定的
     运行模式值。
@@ -779,21 +846,17 @@ def _parse_config_file(path: Path) -> tuple[AppConfig, bool, bool]:
     with open(path, "r", encoding="utf-8") as f:
         data = json.load(f)
 
-    # 安全策略：环境变量优先级高于配置文件，且标记来源防止落盘
-    env_key = os.environ.get("LX_LLM_KEY", "")
-    if env_key:
-        if "llm" not in data:
-            data["llm"] = {}
-        data["llm"]["api_key"] = env_key
-
-    env_smtp_password = os.environ.get(SMTP_PASSWORD_ENV, "")
-    if env_smtp_password:
-        if "smtp" not in data:
-            data["smtp"] = {}
-        data["smtp"]["password"] = env_smtp_password
+    # 安全策略：敏感项环境变量优先级高于配置文件，并记录来源防止落盘
+    secrets_from_env: set[str] = set()
+    for env_name, secret_path in SECRET_ENV_PATHS.items():
+        value = os.environ.get(env_name, "")
+        if not value:
+            continue
+        _set_nested(data, secret_path, value)
+        secrets_from_env.add(secret_path)
 
     # Pydantic 自动校验类型+填充默认值
-    return AppConfig(**data), bool(env_key), bool(env_smtp_password)
+    return AppConfig(**data), secrets_from_env
 
 
 def get_config() -> AppConfig:
@@ -820,7 +883,7 @@ def _reload_from_disk() -> None:
     纯函数完成：先锚定 multi_user.enabled 再一次性发布新配置对象，
     不经过 load_config 的全局赋值，避免未锚定中间态外泄给并发读侧。
     """
-    global _config, _api_key_from_env, _smtp_password_from_env
+    global _config, _secrets_from_env
     with _reload_lock:
         if not _fingerprint_changed():
             return  # 双检：另一线程可能已完成重载
@@ -831,9 +894,7 @@ def _reload_from_disk() -> None:
         log = get_logger("config")
         log.info("Config file changed on disk (%s), reloading", _config_path.name)
         try:
-            cfg, api_key_from_env, smtp_password_from_env = _parse_config_file(
-                _config_path
-            )
+            cfg, secrets_from_env = _parse_config_file(_config_path)
         except Exception as e:  # noqa: BLE001 - 坏配置不阻断服务
             log.error("Config reload failed (%s); keeping previous configuration", e)
             _record_config_fingerprint()
@@ -847,8 +908,7 @@ def _reload_from_disk() -> None:
                 "keeping boot-time value (%s)",
                 pinned_enabled,
             )
-        _api_key_from_env = api_key_from_env
-        _smtp_password_from_env = smtp_password_from_env
+        _secrets_from_env = secrets_from_env
         _config = cfg
         _record_config_fingerprint()
 
@@ -858,22 +918,19 @@ def save_config() -> None:
     将当前缓存的配置对象持久化写回 config.json。
 
     安全策略：
-        - 若 api_key 来自环境变量（_api_key_from_env = True），
-          落盘前将其清空，防止泄漏到磁盘。
-        - 若 smtp.password 来自环境变量（_smtp_password_from_env = True），
-          同口径处理：落盘前清空，防止泄漏到磁盘。
+        - 凡由环境变量注入的敏感项（_secrets_from_env 集合：llm.api_key /
+          smtp.password / tavily 与学术数据源 api_key），落盘前自动清空，
+          防止泄漏到磁盘。
         - 若敏感项由用户通过 UI 手动设置，则正常持久化。
     """
     global _config, _config_path
     if _config is None or _config_path is None:
         raise RuntimeError("Config not loaded. Call load_config() first.")
     data = _config.model_dump()
-    # 环境变量来源的 API Key 不得写入磁盘
-    if _api_key_from_env:
-        data["llm"]["api_key"] = ""
-    # 环境变量来源的 SMTP 密码同口径不得写入磁盘
-    if _smtp_password_from_env:
-        data["smtp"]["password"] = ""
+    # 环境变量来源的敏感项不得写入磁盘（model_dump 必然产出全部字段，
+    # 直接按注册表路径置空即可）
+    for secret_path in _secrets_from_env:
+        _set_nested(data, secret_path, "")
     atomic_write(_config_path, json.dumps(data, indent=2, ensure_ascii=False))
     # 刷新指纹：自身写盘不构成"外部变更"，避免下一次 get_config() 触发
     # 无意义重载（v2 P7 热重载探测）
@@ -905,10 +962,10 @@ def update_config_from_dict(updates: dict) -> AppConfig:
     用字典数据更新配置并持久化。
 
     支持部分更新：只需传入需要修改的字段即可，未传入的字段保持不变。
-    若传入的 llm.api_key 以 "***" 开头（前端掩码），则保留原值不变。
-    若传入完整的真实 Key，则视为用户手动设置，更新内存状态并允许持久化。
-    来自环境变量的 Key 不会因本次操作而写回磁盘（由 save_config() 保障）。
-    smtp.password 同口径：掩码保留原值，真实密码解除环境变量标记后可持久化。
+    敏感项（llm.api_key / smtp.password / tavily 与学术数据源 api_key）
+    统一掩码协议：以 "***" 开头（前端掩码）表示保留原值不变；
+    传入完整的真实值则视为用户手动设置，解除环境变量标记并允许持久化。
+    来自环境变量的敏感值不会因本次操作而写回磁盘（由 save_config() 保障）。
 
     参数：
         updates: 包含要更新字段的字典，支持嵌套结构
@@ -916,20 +973,11 @@ def update_config_from_dict(updates: dict) -> AppConfig:
     返回：
         更新后的 AppConfig 对象
     """
-    global _config, _config_path, _api_key_from_env, _smtp_password_from_env
+    global _config, _config_path, _secrets_from_env
     if _config is None:
         raise RuntimeError("Config not loaded. Call load_config() first.")
 
     current = _config.model_dump()
-
-    # 处理 api_key：掩码/空 → 保留原值；真实 Key → 更新并标记为用户设置
-    if "llm" in updates and isinstance(updates["llm"], dict):
-        api_key = updates["llm"].get("api_key", "")
-        if api_key.startswith("***") or api_key == "":
-            updates["llm"]["api_key"] = current["llm"]["api_key"]
-        else:
-            # 用户提供了真实 Key，更新内存并解除环境变量标记
-            _api_key_from_env = False
 
     # 访问令牌：掩码（*** 开头）→ 保留原值；空字符串 → 清除令牌（禁用校验）；
     # 真实 Token → 更新
@@ -940,38 +988,21 @@ def update_config_from_dict(updates: dict) -> AppConfig:
             if token.startswith("***"):
                 security_updates["access_token"] = current["security"]["access_token"]
 
-    # SMTP 密码（v2 P6）：沿用同一掩码协议——*** 前缀表示保留原值；
-    # 用户输入真实密码则视为手动设置，解除环境变量标记允许落盘
-    if "smtp" in updates and isinstance(updates["smtp"], dict):
-        smtp_updates = updates["smtp"]
-        if smtp_updates.get("password", "").startswith("***"):
-            smtp_updates["password"] = current["smtp"]["password"]
-        elif smtp_updates.get("password"):
-            _smtp_password_from_env = False
-
-    # 所有已启用 API Key 的数据源均通过设置页以掩码返回，掩码表示保留原配置。
-    function_calling = updates.get("features", {}).get("function_calling", {})
-    scholarly_research = function_calling.get("scholarly_research", {})
-    providers = scholarly_research.get("providers", {})
-    for provider_key in ("openalex", "semantic_scholar", "core", "unpaywall", "pubmed"):
-        p = providers.get(provider_key, {})
-        if isinstance(p, dict) and "api_key" in p:
-            k = p.get("api_key", "")
-            if k.startswith("***"):
-                p["api_key"] = current["features"]["function_calling"][
-                    "scholarly_research"
-                ]["providers"][provider_key]["api_key"]
-
-    # Tavily 搜索 API Key：前端掩码 → 保留原值；空值/真实 Key → 按用户输入处理
-    web_search = function_calling.get("web_search", {})
-    engines = web_search.get("engines", {})
-    tavily = engines.get("tavily", {})
-    if isinstance(tavily, dict) and "api_key" in tavily:
-        k = tavily.get("api_key", "")
-        if k.startswith("***"):
-            tavily["api_key"] = current["features"]["function_calling"]["web_search"][
-                "engines"
-            ]["tavily"]["api_key"]
+    # 敏感项统一处理（SECRET_ENV_PATHS 注册表）：
+    #   - *** 前缀（前端掩码）→ 保留原值；
+    #   - 非空真实值 → 视为手动设置，解除环境变量标记允许落盘；
+    #   - 空值 → llm.api_key 沿用历史语义保留原值（防前端误清空），
+    #     其余按用户输入透传（可清空）。
+    for secret_path in SECRET_ENV_PATHS.values():
+        value = _get_nested(updates, secret_path)
+        if not isinstance(value, str):
+            continue  # 部分更新未携带该字段
+        if value.startswith("***") or (
+            value == "" and secret_path in _KEEP_ON_EMPTY_SECRET_PATHS
+        ):
+            _set_nested(updates, secret_path, _get_nested(current, secret_path))
+        elif value:
+            _secrets_from_env.discard(secret_path)
 
     merged = _deep_merge(current, updates)
     _config = AppConfig(**merged)

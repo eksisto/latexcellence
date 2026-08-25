@@ -35,17 +35,17 @@
 
 | 函数 | 功能 |
 | --- | --- |
-| `load_config(path)` | 加载 JSON + 环境变量覆盖（`LX_LLM_KEY` → `llm.api_key`、`LATEXCELLENCE_SMTP_PASSWORD` → `smtp.password`）+ Pydantic 校验；记录文件指纹并锚定 `multi_user.enabled` 启动值 |
+| `load_config(path)` | 加载 JSON + 敏感项环境变量覆盖（`SECRET_ENV_PATHS` 注册表：`LX_LLM_KEY` → `llm.api_key`、`LATEXCELLENCE_SMTP_PASSWORD` → `smtp.password`、`LATEXCELLENCE_TAVILY_API_KEY` → Tavily Key、`LATEXCELLENCE_<PROVIDER>_API_KEY` → 学术数据源 Key）+ Pydantic 校验；记录文件指纹并锚定 `multi_user.enabled` 启动值 |
 | `get_config()` | 获取缓存的 `AppConfig` 单例；**禁止在 `__init__` 中缓存**。v2 P7 起探测 config.json `(mtime_ns, size)` 指纹，变化即从磁盘热重载（多副本配置收敛）；`multi_user.enabled` 锚定启动值不随热重载漂移（变更需重启，保持旧值并告警）；重载失败（JSON 损坏 / 校验不过）保持旧配置继续服务 |
-| `save_config()` | 将当前配置 `model_dump()` 写回磁盘；环境变量来源的 `api_key` / `smtp.password` 会自动清空，不会落盘；写后刷新指纹避免触发自身重载 |
-| `update_config_from_dict(updates)` | 用字典部分更新配置（前端 SettingsDialog 使用）；用户手动输入新 Key / SMTP 密码时更新内存并允许持久化 |
+| `save_config()` | 将当前配置 `model_dump()` 写回磁盘；环境变量注入的敏感项（LLM Key / SMTP 密码 / 搜索与学术数据源 API Key）会自动清空，不会落盘；写后刷新指纹避免触发自身重载 |
+| `update_config_from_dict(updates)` | 用字典部分更新配置（前端 SettingsDialog 使用）；用户手动输入真实敏感值时更新内存并解除环境变量标记、允许持久化 |
 
 **安全策略**：
 
-- 环境变量 `LX_LLM_KEY` 优先级高于 `config.json` 中的 `api_key`；`LATEXCELLENCE_SMTP_PASSWORD` 同理优先于 `smtp.password`
-- 从环境变量注入的 API Key 与 SMTP 密码**禁止写回磁盘**：`save_config()` 内部通过 `_api_key_from_env` / `_smtp_password_from_env` 标记自动识别来源，落盘前清空对应字段
-- 用户通过 UI 手动输入的新 Key / SMTP 密码解除环境变量标记，正常持久化到磁盘
-- 前端提交的 `api_key` 若以 `***` 开头（掩码），保留原值不更新
+- 敏感项环境变量注册表 `SECRET_ENV_PATHS`（env 名 → 配置点分路径）：`LX_LLM_KEY`、`LATEXCELLENCE_SMTP_PASSWORD`、`LATEXCELLENCE_TAVILY_API_KEY` 与学术数据源 `LATEXCELLENCE_OPENALEX_API_KEY` / `LATEXCELLENCE_SEMANTIC_SCHOLAR_API_KEY` / `LATEXCELLENCE_CORE_API_KEY` / `LATEXCELLENCE_UNPAYWALL_API_KEY` / `LATEXCELLENCE_PUBMED_API_KEY`
+- 注册表中的环境变量优先级高于 `config.json` 中的对应字段
+- 从环境变量注入的敏感值**禁止写回磁盘**：`save_config()` 内部通过 `_secrets_from_env` 集合自动识别来源，落盘前清空对应字段
+- 用户通过 UI 手动输入的真实敏感值解除环境变量标记，正常持久化到磁盘；前端提交以 `***` 开头（掩码）的敏感项保留原值不更新
 
 ### `backend/core/security_middleware.py` — CORS 白名单与访问令牌 / 会话
 

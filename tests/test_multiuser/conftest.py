@@ -53,7 +53,7 @@ def _reset_current_user_context():
 def _reset_config_state():
     cfg_module._config = None
     cfg_module._config_path = None
-    cfg_module._api_key_from_env = False
+    cfg_module._secrets_from_env = set()
 
 
 def build_mu_app() -> FastAPI:

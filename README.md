@@ -163,7 +163,7 @@ cp config.example.json config.json
 
 可以在 `config.json` 中填入 `api_key`，也可以使用环境变量 `LX_LLM_KEY`（推荐）。
 
-环境变量 `LX_LLM_KEY` 优先级高于配置文件中的 `api_key`。
+环境变量 `LX_LLM_KEY` 优先级高于配置文件中的 `api_key`。SMTP 密码（`LATEXCELLENCE_SMTP_PASSWORD`）、Tavily 搜索 Key（`LATEXCELLENCE_TAVILY_API_KEY`）与学术数据源 Key（如 `LATEXCELLENCE_OPENALEX_API_KEY`）同理支持环境变量注入，且注入值永不写盘，完整清单见 [docs/deployment.md](docs/deployment.md)「环境变量参考」。
 
 学术文献检索默认关闭。可在设置页启用各学术 Provider；默认数据源为 OpenAlex，也可填写对应 Provider 的 API Key。OpenAlex Key 可从 [OpenAlex 设置页](https://openalex.org/settings/api) 获取。
 

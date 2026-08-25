@@ -35,7 +35,7 @@ def _reset_config():
     yield
     cfg_module._config = None
     cfg_module._config_path = None
-    cfg_module._api_key_from_env = False
+    cfg_module._secrets_from_env = set()
 
 
 def _load_test_config(tmp_path, token="", origins=None):

@@ -32,6 +32,14 @@ services:
       # SMTP 授权密码（可选；优先于 config.json 且永不写盘，
       # 与 LX_LLM_KEY 同一安全策略；config.json 为只读挂载时推荐此方式）
       LATEXCELLENCE_SMTP_PASSWORD: ${LATEXCELLENCE_SMTP_PASSWORD:-}
+      # 联网搜索 / 学术数据源 API Key（可选；优先级与永不写盘策略同上，
+      # 完整清单见 docs/deployment.md「环境变量参考」）
+      LATEXCELLENCE_TAVILY_API_KEY: ${LATEXCELLENCE_TAVILY_API_KEY:-}
+      LATEXCELLENCE_OPENALEX_API_KEY: ${LATEXCELLENCE_OPENALEX_API_KEY:-}
+      LATEXCELLENCE_SEMANTIC_SCHOLAR_API_KEY: ${LATEXCELLENCE_SEMANTIC_SCHOLAR_API_KEY:-}
+      LATEXCELLENCE_CORE_API_KEY: ${LATEXCELLENCE_CORE_API_KEY:-}
+      LATEXCELLENCE_UNPAYWALL_API_KEY: ${LATEXCELLENCE_UNPAYWALL_API_KEY:-}
+      LATEXCELLENCE_PUBMED_API_KEY: ${LATEXCELLENCE_PUBMED_API_KEY:-}
       # pip 镜像源等构建期参数经 build args 透传（见 docker/build.sh 口径）
     volumes:
       - ${LATEXCELLENCE_DATA_DIR:-./data}:/app/data

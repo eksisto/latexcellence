@@ -495,7 +495,8 @@ Hook 内部封装了：项目恢复 → 文件选择 → 预览 → 检查 → �
 # 全局缓存
 _config: Optional[AppConfig] = None
 _config_path: Optional[Path] = None
-_api_key_from_env: bool = False  # 标记 API Key 是否来自环境变量，防止写回磁盘
+# 环境变量注入的敏感字段集合（SECRET_ENV_PATHS 值域），落盘前自动清空
+_secrets_from_env: set[str] = set()
 _config_fingerprint: tuple[int, int] | None = None  # config.json (mtime_ns, size) 指纹
 
 def get_config() -> AppConfig:
@@ -511,13 +512,13 @@ def get_config() -> AppConfig:
 v2 P7 多实例语义：
 
 - **指纹热重载**：`get_config()` 每次调用比对 config.json 的 `(mtime_ns, size)` 指纹，变化即从磁盘重载（校验失败保持旧配置并告警一次，待下次修改自动重试）。多副本部署下管理员改一份配置文件，全部副本在下次访问时自然收敛；
-- `save_config()` / `update_config_from_dict()` 写盘后同步刷新指纹——自身写盘不构成"外部变更"，不触发无意义重载；重载会重新应用 `LX_LLM_KEY` 环境变量覆盖，API Key 来源语义不变；
+- `save_config()` / `update_config_from_dict()` 写盘后同步刷新指纹——自身写盘不构成"外部变更"，不触发无意义重载；重载会重新应用敏感项环境变量覆盖（`SECRET_ENV_PATHS` 注册表），注入来源语义不变；
 - **`multi_user.enabled` 锚定**：该开关决定认证中间件、数据库初始化、用户空间布局等启动期形态，热切换会造成半初始化状态。热重载检测到磁盘值与启动锚定值不同时保持锚定值并告警，**变更仍需重启生效**。
 
 ### 7.2 安全策略
 
-- 环境变量 `LX_LLM_KEY` 优先级高于配置文件
-- 前端提交的 `api_key` 以 `***` 开头时保留原值（掩码保护）
+- 敏感项（LLM Key / SMTP 密码 / Tavily 搜索与学术数据源 API Key）经 `SECRET_ENV_PATHS` 注册表支持环境变量注入，优先级高于配置文件
+- 前端提交的敏感项以 `***` 开头时保留原值（掩码保护）
 - `config.json` 加入 `.gitignore`，提供 `config.example.json` 作为模板
 
 ---

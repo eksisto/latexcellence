@@ -285,7 +285,7 @@ class TestConfigHotReload:
         cfg = cfg_module.get_config()
         assert cfg.llm.model == "v2"
         assert cfg.llm.api_key == "env-key-xyz"  # 环境变量覆盖重新生效
-        assert cfg_module._api_key_from_env is True
+        assert cfg_module._secrets_from_env == {"llm.api_key"}
         assert cfg.multi_user.enabled is True  # 锚定启动值
         assert cfg_module._boot_multi_user_enabled is True  # 锚定值未被改写
 
