@@ -24,6 +24,7 @@
 | [docs/multi-user-plan.md](docs/multi-user-plan.md) | 多用户模式设计方案（双模式/认证/用户空间/配额/权限协作/管理后台/迁移） |
 | [docs/multi-user-v2-plan.md](docs/multi-user-v2-plan.md) | 多用户模式 v2 设计方案（Docker 沙箱、rar、共享撤销反向补丁、分片上传、SMTP、衍生记账优化、多实例部署） |
 | [docs/rar-extractor-fallback.md](docs/rar-extractor-fallback.md) | RAR 解压器回退层设计与实施记录（unar → bsdtar，含 Alpine 适配评估、文件名归一化与部署步骤） |
+| [docs/editor-plan.md](docs/editor-plan.md) | 网页编辑器功能设计方案（CM6 编辑器、LaTeX 命令中/拼/英快速输入、编辑器侧 AI 助手；未实施） |
 | [docker/README.md](docker/README.md) | Docker 沙箱镜像体系（四镜像构建、多架构、离线导入导出、缺宏包排查） |
 | [docs/deployment.md](docs/deployment.md) | 后端部署指南（单用户/多用户单进程/多实例 Compose 部署、systemd 托管、HTTPS 反向代理、安全风险声明、备份、环境变量与升级回滚） |
 | [tools/visual_review_api.py](tools/visual_review_api.py) | 视觉评审工具的 Chat Completions → Responses API 请求适配 |
