@@ -141,7 +141,7 @@ class FileNode:
 
 @dataclass
 class ProjectInfo:
-    root_path: str       # 项目根目录绝对路径
+    root_path: str       # 项目根目录绝对路径（内部使用；API 响应中多用户模式置 None）
     main_file: Optional[str]  # 主文档路径（如 main.tex），未找到时为 None
     file_tree: list[FileNode]
     dependency_graph: dict[str, list[str]]
@@ -705,11 +705,12 @@ raise ValueError("Validation failed after N attempts")        # ❌ 耗尽
 
 | 函数 | 功能 |
 | --- | --- |
-| `run_tex_compile(main_file, cwd, timeout, engine="auto", pdfa=False)` | 通过 texfot 包装 latexmk 执行编译，返回过滤后的输出 |
+| `run_tex_compile(main_file, cwd, timeout, engine="auto", pdfa=False)` | 通过 texfot 包装 latexmk 执行编译，返回过滤后的输出（多用户模式下输出中的工作目录绝对路径前缀脱敏为 `./` 相对形式；单用户保留原始输出） |
 | `detect_engine_from_file(tex_path)` | 根据 .tex 文件内容自动检测编译引擎 |
 | `inject_pdfx_for_pdfa(tex_path, output_path)` | 注入 PDF/A 支持包 |
 | `_check_texfot_available()` | 检测 texfot 是否在 PATH 中可用（模块级缓存） |
 | `_filter_with_regex(raw_output)` | 降级路径：用正则从原始日志中提取关键错误行 |
+| `sanitize_output_paths(text, cwd)` | 把文本中 `<cwd>/xxx` 形式的绝对路径前缀改写为 `./xxx`（纯文本工具；调用方按 `multi_user.enabled` 门控，仅多用户模式应用。编译日志 / Python traceback 展示前脱敏，plot_gen 等沙箱执行方共用） |
 
 **Pydantic 模型**：`TexCompileResult`（success, filtered_output, raw_output, timed_out, oom_killed, used_texfot）
 

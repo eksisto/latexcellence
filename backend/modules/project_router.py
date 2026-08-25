@@ -12,6 +12,7 @@ from pydantic import BaseModel
 
 from backend.core import access_control
 from backend.core.config import get_config
+from backend.core.logger import get_logger
 from backend.core.multiuser.dependencies import (
     get_current_user_optional,
     require_admin_if_multiuser,
@@ -25,6 +26,7 @@ from backend.modules.projects import service as projects_service
 from backend.utils.path_guard import resolve_path_case_insensitive
 
 router = APIRouter(prefix="/api/project", tags=["project"])
+logger = get_logger(__name__)
 
 
 class OpenProjectRequest(BaseModel):
@@ -111,7 +113,18 @@ async def _open_project_multiuser(
         # 必须 to_thread 调度，避免大项目打开时阻塞事件循环
         info = await asyncio.to_thread(project.open, access["root_path"])
     except (FileNotFoundError, NotADirectoryError) as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        # 错误消息不得携带服务器上的项目绝对路径（多用户路径约束）
+        logger.warning(
+            f"Multi-user project open failed: project={request.project_id} "
+            f"user={user['id']}: {e}"
+        )
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "error": "project_unavailable",
+                "message": "Project directory is missing or invalid",
+            },
+        ) from e
 
     # 绑定 workspace → (user_id, project_id, root_path)，后续请求实时查库校验权限
     get_workspace_manager().bind(
@@ -125,8 +138,11 @@ async def _open_project_multiuser(
 
 
 def _open_response(info: ProjectInfo) -> dict:
+    # 多用户模式：服务器上的项目绝对路径不向用户暴露（root_path 置空，
+    # 前端按需展示主文档等相对信息）；单用户模式保持本地真实路径
+    root_path = None if get_config().multi_user.enabled else info.root_path
     return {
-        "root_path": info.root_path,
+        "root_path": root_path,
         "main_file": info.main_file,
         "file_tree": _serialize_file_tree(info.file_tree),
         "dependency_graph": info.dependency_graph,

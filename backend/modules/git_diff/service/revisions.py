@@ -2,6 +2,7 @@
 
 from pathlib import Path, PurePosixPath
 
+from backend.core.config import get_config
 from backend.core.workspace_manager import get_project_manager_for_workspace
 
 from .constants import (
@@ -51,7 +52,8 @@ async def list_git_revisions(workspace_id: str = "") -> GitRefsResult:
         deduped.append(revision)
 
     return GitRefsResult(
-        git_root=str(context.git_root),
+        # 多用户模式不向用户暴露服务器上的 Git 仓库绝对路径
+        git_root=None if get_config().multi_user.enabled else str(context.git_root),
         current_branch=current_branch.strip(),
         is_dirty=bool(status.strip()),
         revisions=deduped,

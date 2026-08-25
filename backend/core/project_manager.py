@@ -189,7 +189,8 @@ class LatexProject:
             file_path,
         )
         if not full_path.exists():
-            raise FileNotFoundError(f"File not found: {full_path}")
+            # 错误消息使用相对路径，避免向用户暴露项目根目录绝对路径
+            raise FileNotFoundError(f"File not found: {file_path}")
 
         md5 = compute_md5(full_path)
         abs_path = str(full_path)
@@ -220,7 +221,8 @@ class LatexProject:
             allowed_suffixes=(".tex",),
         )
         if not full_path.exists():
-            raise FileNotFoundError(f"File not found: {full_path}")
+            # 错误消息使用相对路径，避免向用户暴露项目根目录绝对路径
+            raise FileNotFoundError(f"File not found: {file_path}")
 
         content = safe_read(full_path)
 
@@ -305,7 +307,8 @@ class LatexProject:
             file_path,
         )
         if not full_path.exists():
-            raise FileNotFoundError(f"File not found: {full_path}")
+            # 错误消息使用相对路径，避免向用户暴露项目根目录绝对路径
+            raise FileNotFoundError(f"File not found: {file_path}")
 
         abs_path = str(full_path)
 

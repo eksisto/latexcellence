@@ -30,7 +30,10 @@ from backend.core.logger import get_logger
 from backend.core.prompts import get_prompt
 from backend.core.workspace_manager import get_project_manager_for_workspace
 from backend.modules.style_modify.agent import get_style_modify_agent
-from backend.modules.style_modify.session import get_session_store
+from backend.modules.style_modify.session import (
+    get_session_store,
+    public_operation_view,
+)
 from backend.utils.latex_json_guard import validate_latex_field
 from backend.utils.latex_literals import extract_delimited_block
 
@@ -240,7 +243,7 @@ class StyleModifyService:
             )
         # 多用户模式：批量事务写盘后刷新项目用量记账（单用户无绑定，静默跳过）
         await access_control.refresh_workspace_project_usage(workspace_id)
-        return operation.model_dump()
+        return public_operation_view(operation)
 
     async def undo_agent_operation(
         self,
@@ -254,7 +257,7 @@ class StyleModifyService:
         )
         # 撤销同样改变项目磁盘占用，记账需同步回刷
         await access_control.refresh_workspace_project_usage(workspace_id)
-        return operation.model_dump()
+        return public_operation_view(operation)
 
     async def delete_agent_session(
         self,

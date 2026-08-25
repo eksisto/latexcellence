@@ -3,6 +3,7 @@
 import asyncio
 import os
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
 from backend.core.config import get_config
@@ -12,6 +13,7 @@ from backend.modules.plot_gen.executor import (
     _precheck_tikz,
     is_internal_rel_path,
 )
+from backend.utils.sandbox.models import ExecResult
 
 
 def _load_cfg(tmp_path, monkeypatch):
@@ -90,6 +92,65 @@ def test_python_sandbox_without_spec_hints_agent(tmp_path, monkeypatch):
     assert event["success"] is True
     assert event["tikz"]["generated"] is False
     assert "tikz_spec.json is missing" in text
+
+
+def test_python_sandbox_oom_output_sanitized(tmp_path, monkeypatch):
+    """多用户模式下，OOM 分支的截断输出同样要脱敏沙箱绝对路径。"""
+    cfg = _load_cfg(tmp_path, monkeypatch)
+    monkeypatch.setattr(cfg.multi_user, "enabled", True)
+    sandbox = tmp_path / "session"
+    _write_sandbox_script(sandbox, "print('hi')\n")
+    executor = PlotExecutor(sandbox, get_config())
+
+    leaked = f"plot file: {(sandbox / 'scripts' / 'plot.py').resolve()}"
+    fake = ExecResult(
+        returncode=137,
+        stdout=leaked,
+        stderr=leaked,
+        oom_killed=True,
+        backend="local",
+    )
+    runner = SimpleNamespace(execute=AsyncMock(return_value=fake))
+    with patch(
+        "backend.modules.plot_gen.executor.get_sandbox_runner",
+        return_value=runner,
+    ):
+        text, event = asyncio.run(
+            executor.execute("python_sandbox", {"script_name": "scripts/plot.py"})
+        )
+
+    assert str(sandbox.resolve()) not in event["stdout"]
+    assert "./scripts/plot.py" in event["stdout"]
+    assert str(sandbox.resolve()) not in text
+
+
+def test_python_sandbox_single_user_keeps_raw_output(tmp_path, monkeypatch):
+    """单用户模式不脱敏：执行输出保留原始沙箱绝对路径（维持现状）。"""
+    cfg = _load_cfg(tmp_path, monkeypatch)
+    monkeypatch.setattr(cfg.multi_user, "enabled", False)
+    sandbox = tmp_path / "session"
+    _write_sandbox_script(sandbox, "print('hi')\n")
+    executor = PlotExecutor(sandbox, get_config())
+
+    leaked = f"plot file: {(sandbox / 'scripts' / 'plot.py').resolve()}"
+    fake = ExecResult(
+        returncode=137,
+        stdout=leaked,
+        stderr=leaked,
+        oom_killed=True,
+        backend="local",
+    )
+    runner = SimpleNamespace(execute=AsyncMock(return_value=fake))
+    with patch(
+        "backend.modules.plot_gen.executor.get_sandbox_runner",
+        return_value=runner,
+    ):
+        text, event = asyncio.run(
+            executor.execute("python_sandbox", {"script_name": "scripts/plot.py"})
+        )
+
+    assert leaked in event["stdout"]
+    assert leaked in event["stderr"]
 
 
 def test_path_traversal_rejected(tmp_path, monkeypatch):

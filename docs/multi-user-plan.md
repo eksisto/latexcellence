@@ -324,7 +324,7 @@ data/
 | `GET /api/projects` | 我的项目 + 我被共享的项目（含 role、owner、用量、`status` 过滤回收站） |
 | `POST /api/projects` | 上传创建项目 |
 | `GET /api/projects/{project_id}/download` | 打包下载 zip（owner/editor/viewer 均可） |
-| `POST /api/project/open` | 多用户模式只接收 `project_id`，返回文件树/主文档（保持现有返回结构） |
+| `POST /api/project/open` | 多用户模式只接收 `project_id`；返回文件树/主文档，`root_path` 恒为 `null`（服务器绝对路径不向用户暴露） |
 | `PUT /api/projects/{project_id}` | 重命名（owner） |
 | `DELETE /api/projects/{project_id}` | 进回收站（owner） |
 | `POST /api/projects/{project_id}/restore` | 恢复（owner，超限禁止） |

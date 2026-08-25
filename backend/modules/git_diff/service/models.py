@@ -23,7 +23,8 @@ class GitRefsResult(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    git_root: str
+    # Git 仓库根目录绝对路径；多用户模式置 None（服务器路径不向用户暴露）
+    git_root: str | None = None
     current_branch: str = ""
     is_dirty: bool = False
     revisions: list[GitRevision]

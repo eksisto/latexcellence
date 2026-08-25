@@ -16,6 +16,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from backend.core.config import get_config
 from backend.utils.tex_compile import (
     TexCompileResult,
     _check_texfot_available,
@@ -24,6 +25,7 @@ from backend.utils.tex_compile import (
     detect_engine_from_file,
     inject_pdfx_for_pdfa,
     run_tex_compile,
+    sanitize_output_paths,
 )
 
 
@@ -143,6 +145,29 @@ class TestFilterWithRegex:
 
 
 # ── _check_texfot_available 测试 ──────────────────────────────────────────
+
+
+class TestSanitizeOutputPaths:
+    """编译输出绝对路径脱敏（多用户模式不向用户暴露服务器路径）。"""
+
+    def test_file_paths_relativized(self, tmp_path):
+        log = f"Latexmk: Log file is {tmp_path / 'main.log'}"
+        result = sanitize_output_paths(log, tmp_path)
+        assert str(tmp_path) not in result
+        assert "./main.log" in result
+
+    def test_sibling_prefix_not_corrupted(self, tmp_path):
+        # /a/b 与 /a/bc 前缀相近时，不得误伤兄弟目录
+        sibling = tmp_path.parent / (tmp_path.name + "x")
+        log = f"see {sibling / 'other.tex'} and {tmp_path / 'main.log'}"
+        result = sanitize_output_paths(log, tmp_path)
+        assert str(sibling / "other.tex") in result
+        assert "./main.log" in result
+
+    def test_no_match_unchanged(self):
+        assert sanitize_output_paths("nothing here", Path("/nonexistent-dir")) == (
+            "nothing here"
+        )
 
 
 class TestCheckTexfotAvailable:
@@ -299,6 +324,35 @@ class TestRunTexCompile:
 
         assert "stderr info" in result.raw_output
         assert "stdout" in result.raw_output
+
+    @pytest.mark.asyncio
+    async def test_multiuser_output_paths_sanitized(self, tmp_path, monkeypatch):
+        """多用户模式：编译输出中的工作目录绝对路径脱敏为 ./ 相对形式。"""
+        monkeypatch.setattr(get_config().multi_user, "enabled", True)
+        log_line = f"Latexmk: Log file is {tmp_path / 'main.log'}\n"
+        process = self._make_process(0, log_line.encode())
+        with patch("shutil.which", return_value=None):
+            with patch("asyncio.create_subprocess_exec", return_value=process):
+                with patch("asyncio.wait_for", new=_fake_wait_for):
+                    result = await run_tex_compile("main.tex", str(tmp_path), 60)
+
+        assert result.success is True
+        assert str(tmp_path) not in result.raw_output
+        assert "./main.log" in result.raw_output
+
+    @pytest.mark.asyncio
+    async def test_single_user_output_keeps_absolute_paths(self, tmp_path, monkeypatch):
+        """单用户模式：编译输出保留原始绝对路径（维持现状）。"""
+        monkeypatch.setattr(get_config().multi_user, "enabled", False)
+        log_line = f"Latexmk: Log file is {tmp_path / 'main.log'}\n"
+        process = self._make_process(0, log_line.encode())
+        with patch("shutil.which", return_value=None):
+            with patch("asyncio.create_subprocess_exec", return_value=process):
+                with patch("asyncio.wait_for", new=_fake_wait_for):
+                    result = await run_tex_compile("main.tex", str(tmp_path), 60)
+
+        assert result.success is True
+        assert str(tmp_path / "main.log") in result.raw_output
 
 
 # ── detect_engine_from_file 测试 ──────────────────────────────────────────

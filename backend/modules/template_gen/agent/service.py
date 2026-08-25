@@ -791,12 +791,11 @@ class TemplateAgentService:
             },
         )
 
-        # 4. 汇总文件
+        # 4. 汇总文件（sandbox 绝对路径不向用户暴露，前端仅消费 session_id/files）
         files = executor.list_files()
         yield {
             "type": "done",
             "session_id": session_id,
-            "sandbox": str(sandbox),
             "files": files,
             "summary": final_summary,
         }

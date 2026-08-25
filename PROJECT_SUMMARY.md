@@ -296,7 +296,7 @@ latexcellence/
 | 逐段检查前端流程 | `useParagraphCheck` 统一封装恢复、预览、检查、排序、应用与持久化；`useResultFilter` 负责排序过滤 | [frontend.md](docs/frontend.md) |
 | 写作助手 | `useWritingChat` 管理会话、SSE 流式、工具确认、编辑建议双轮协议 | [writing_chat.md](docs/modules/writing_chat.md) |
 | 主题系统 | 主题 CSS 自动发现，亮/暗模式独立；`--primary` / `--accent` 等由单一色相派生 | [frontend.md](docs/frontend.md) |
-| 多用户双模式 | `multi_user.enabled` 开关；单用户保持现状（本地目录 + 共享令牌），多用户强制会话认证、CSRF、禁用任意路径打开/浏览 | [multi-user-plan.md](docs/multi-user-plan.md)、[deployment.md](docs/deployment.md) |
+| 多用户双模式 | `multi_user.enabled` 开关；单用户保持现状（本地目录 + 共享令牌），多用户强制会话认证、CSRF、禁用任意路径打开/浏览；服务器路径不向用户暴露（`root_path` / `git_root` / `sandbox` 等响应字段脱敏，编译日志等输出前缀改写为相对路径） | [multi-user-plan.md](docs/multi-user-plan.md)、[deployment.md](docs/deployment.md) |
 | 多用户认证 | argon2id 密码哈希、HttpOnly 会话 Cookie（库只存 SHA-256）、注册审批流、登录限流、管理员引导（env/CLI） | [backend-core.md](docs/backend-core.md) |
 | 注册自动审批（IP 策略） | 注册记录真实客户端 IP（可信代理解析 X-Forwarded-For）；同 IP 账号上限 + CIDR 白名单 + 离线地理白名单叠加判定「无恶意」即自动通过，否则转人工待审批；地理查询 ip2region（.xdb，中国命中直接采用，国内精度更高）优先、非/未知中国回落 GeoLite2；每 IP 注册限流，只降级不拒绝 | [backend-core.md](docs/backend-core.md)、[deployment.md](docs/deployment.md) |
 | 多用户项目与配额 | 上传 zip/7z/rar 安全解压（rar 经 unar 优先、bsdtar 回退的外部管线）、项目命名去重、项目空间配额记账、回收站（7 天）、打包下载；写回超限回滚 | [backend-core.md](docs/backend-core.md)、[multi-user-plan.md](docs/multi-user-plan.md) |

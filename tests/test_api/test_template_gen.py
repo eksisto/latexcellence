@@ -42,6 +42,12 @@ def _make_tool_call(name, arguments, cid="tc-1"):
     )
 
 
+def _sandbox_from_done(done, tmp_path):
+    """done 事件不再携带 sandbox 绝对路径（多用户路径约束），
+    测试按 output_dir + session_id 重建沙箱目录。"""
+    return Path(tmp_path) / "templates" / done["session_id"]
+
+
 def _make_response(content=None, tool_calls=None):
     msg = SimpleNamespace(
         content=content,
@@ -152,7 +158,7 @@ class TestAgentLoop:
         done = events[-1]
         assert any(f["path"] == "main.tex" for f in done["files"])
         # 沙箱内确实写入了文件
-        sandbox = Path(done["sandbox"])
+        sandbox = _sandbox_from_done(done, tmp_path)
         assert (sandbox / "main.tex").exists()
         assert (
             (sandbox / "main.tex")
@@ -464,7 +470,9 @@ class TestAgentLoop:
         events = _collect(svc, "resume test", llm)
         done = events[-1]
         assert done["type"] == "done"
-        trace_text = (Path(done["sandbox"]) / "trace.jsonl").read_text(encoding="utf-8")
+        trace_text = (_sandbox_from_done(done, tmp_path) / "trace.jsonl").read_text(
+            encoding="utf-8"
+        )
         assert "repeated_file_rejection" in trace_text
         assert "MUCH SIMPLER" in trace_text
 
@@ -1607,7 +1615,7 @@ class TestTraceRecording:
 
         events = _collect(svc, "a simple article", llm)
         done = events[-1]
-        sandbox = Path(done["sandbox"])
+        sandbox = _sandbox_from_done(done, tmp_path)
 
         trace = read_trace(sandbox)
         types = [e["type"] for e in trace]
@@ -1794,7 +1802,9 @@ class TestGenServiceOrchestration:
 
         assert events[-1]["type"] == "done"
         done = events[-1]
-        sandbox = Path(done["sandbox"])
+        # done 事件不携带 sandbox 绝对路径（多用户路径约束）
+        assert "sandbox" not in done
+        sandbox = _sandbox_from_done(done, tmp_path)
         # 沙箱应创建在 output_dir/<session_id>/ 下
         assert sandbox.is_relative_to(tmp_path / "templates")
         assert (sandbox / "main.tex").exists()

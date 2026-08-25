@@ -237,7 +237,8 @@ class TestStyleModifySessionStore:
         with pytest.raises(ValueError, match="must not contain"):
             store.stage_replace(session_id, "../outside.tex", "bad")
 
-    def test_service_exposes_session_after_proposal(
+    @pytest.mark.asyncio
+    async def test_service_exposes_session_after_proposal(
         self,
         isolated_sessions,
         open_project,
@@ -262,10 +263,20 @@ class TestStyleModifySessionStore:
             CompileSummary(status="not_run"),
         )
 
-        data = StyleModifyService().get_agent_session(session_id, workspace_id)
+        service = StyleModifyService()
+        data = service.get_agent_session(session_id, workspace_id)
 
         assert data["proposal"]["revision"] == 1
         assert data["files"][0]["path"] == "mystyle.sty"
+
+        # 对外响应（会话查询 / 应用 / 撤销）不得携带服务器上的项目绝对路径
+        assert "project_root" not in data
+        applied = await service.apply_agent_proposal(session_id, workspace_id, 1)
+        assert "project_root" not in applied
+        undone = await service.undo_agent_operation(
+            applied["operation_id"], workspace_id
+        )
+        assert "project_root" not in undone
 
     def test_unchanged_stage_excluded_from_proposal(
         self,

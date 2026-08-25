@@ -23,6 +23,7 @@ from pathlib import Path
 
 from pydantic import BaseModel, ConfigDict
 
+from backend.core.config import get_config
 from backend.core.logger import get_logger
 from backend.utils.latex_json_guard import strip_latex_comments
 from backend.utils.sandbox import (
@@ -71,6 +72,26 @@ def _resolve_use_texfot() -> bool:
     if cached_backend_for("tex") == "docker":
         return True
     return _check_texfot_available()
+
+
+def sanitize_output_paths(text: str, cwd: Path) -> str:
+    """将命令输出中的工作目录绝对路径前缀改写为相对形式。
+
+    latexmk / Python traceback 等输出天然携带绝对路径（多用户模式下即
+    服务器上的用户空间长路径），这些输出会原样展示给用户，因此统一把
+    ``<cwd>/xxx`` 改写为 ``./xxx``。仅做前缀替换、不解析内容，
+    不影响错误定位。tex_compile 与 plot_gen 等沙箱执行方共用。
+
+    本函数是纯文本工具，不含模式判断；调用方须仅在多用户模式下应用
+    （``get_config().multi_user.enabled`` 为真时调用），单用户本地模式
+    保留原始输出。
+    """
+    base = str(cwd).rstrip("/\\")
+    if not base:
+        return text
+    for sep in ("/", "\\"):
+        text = text.replace(base + sep, "./")
+    return text
 
 
 def _filter_with_regex(raw_output: str, max_chars: int = 3000) -> str:
@@ -437,6 +458,10 @@ async def run_tex_compile(
         )
 
         raw = res.stdout + ("\n" + res.stderr if res.stderr else "")
+        # 多用户模式：输出中的服务器绝对路径统一脱敏为相对形式；
+        # 单用户本地模式保留原始输出（维持现状）
+        if get_config().multi_user.enabled:
+            raw = sanitize_output_paths(raw, work_cwd)
         if res.timed_out:
             logger.warning(f"Compilation timed out after {timeout}s in {cwd_str}")
             return TexCompileResult(

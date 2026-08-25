@@ -28,7 +28,7 @@
 ## Pydantic 输出模型
 
 - `GitRevision`（value, label, kind, short_hash, subject）
-- `GitRefsResult`（git_root, current_branch, is_dirty, revisions）
+- `GitRefsResult`（git_root, current_branch, is_dirty, revisions；`git_root` 为 Git 仓库绝对路径，多用户模式置 `None` 不向用户暴露）
 - `DiffHighlightResult`（success, job_id, pdf_url, main_file, base_ref, target_ref, added_lines, deleted_lines, included_files）
 
 ## Service 核心方法

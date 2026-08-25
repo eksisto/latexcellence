@@ -891,13 +891,15 @@ class StyleModifySessionStore:
         operation = None
         if meta.operation_id:
             try:
-                operation = self.load_operation(meta.operation_id).model_dump()
+                operation = public_operation_view(
+                    self.load_operation(meta.operation_id)
+                )
             except ValueError:
                 operation = None
         return {
             "session_id": meta.session_id,
             "workspace_id": meta.workspace_id,
-            "project_root": meta.project_root,
+            # project_root 为服务器绝对路径，不向用户暴露
             "status": meta.status,
             "requirement": meta.requirement,
             "language": meta.language,
@@ -979,6 +981,17 @@ def _copy_project(root: Path, shadow: Path) -> None:
 def _read_operation_meta(meta_path: Path) -> OperationMeta:
     data = json.loads(meta_path.read_text(encoding="utf-8"))
     return OperationMeta.model_validate(data)
+
+
+def public_operation_view(operation: OperationMeta) -> dict[str, Any]:
+    """OperationMeta 的对外视图。
+
+    project_root 为服务器上的项目绝对路径，不向用户暴露（多用户路径约束），
+    返回给前端的 apply / undo / 会话查询响应统一经此转换剔除。
+    """
+    data = operation.model_dump()
+    data.pop("project_root", None)
+    return data
 
 
 _session_store: StyleModifySessionStore | None = None

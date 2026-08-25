@@ -95,7 +95,8 @@ class TemplateGenService:
                 continue
             rel = p.relative_to(root).as_posix()
             files.append({"path": rel, "size": p.stat().st_size})
-        return {"session_id": session_id, "sandbox": str(sandbox), "files": files}
+        # sandbox 绝对路径不向用户暴露，仅返回 session 内相对文件列表
+        return {"session_id": session_id, "files": files}
 
     def read_session_file(self, session_id: str, rel_path: str) -> dict[str, Any]:
         """读取沙箱内单个文件内容。"""

@@ -684,10 +684,10 @@ class PlotGenAgent:
 
         files = executor.list_files()
         artifacts = executor.scan_artifacts()
+        # sandbox 绝对路径不向用户暴露，前端仅消费 session_id/files/artifacts
         yield {
             "type": "done",
             "session_id": session_id,
-            "sandbox": str(sandbox),
             "files": files,
             "artifacts": [a.model_dump() for a in artifacts],
             "summary": final_summary,

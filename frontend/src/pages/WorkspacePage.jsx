@@ -130,9 +130,11 @@ export default function WorkspacePage() {
         } catch {
           setParagraphs([]);
         }
-        toast.success(t("pages:workspace.projectOpened"), {
-          description: data.root_path,
-        });
+        // 单用户展示本地路径；多用户模式后端不返回 root_path（服务器路径不外露）
+        toast.success(
+          t("pages:workspace.projectOpened"),
+          data.root_path ? { description: data.root_path } : undefined,
+        );
       } catch (e) {
         const msg = translateError(e.message);
         setError(msg);
@@ -162,15 +164,14 @@ export default function WorkspacePage() {
       try {
         // 统一打开入口：openById + 项目列表（同步角色）与主文档段落并行，
         // 消除"打开 → 列表 → 段落"的串行瀑布（原实现为 3 次串行往返）
-        const { data, paragraphs } = await openMultiUserProject(
+        const { paragraphs } = await openMultiUserProject(
           projectIdToOpen,
           workspaceId,
           { withParagraphs: true },
         );
         setParagraphs(paragraphs);
-        toast.success(t("pages:workspace.projectOpened"), {
-          description: data.root_path,
-        });
+        // 多用户模式：不展示服务器上的项目路径
+        toast.success(t("pages:workspace.projectOpened"));
       } catch (e) {
         const msg = translateError(e.message);
         setError(msg);

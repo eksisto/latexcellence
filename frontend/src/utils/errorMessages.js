@@ -57,6 +57,7 @@ const EXACT_MAP = {
   not_found: "notFound",
   invalid_request: "invalidRequest",
   path_disabled: "pathDisabled",
+  project_unavailable: "projectUnavailable",
   invalid_workspace: "invalidWorkspace",
   invalid_state: "invalidState",
   user_not_found: "userNotFound",

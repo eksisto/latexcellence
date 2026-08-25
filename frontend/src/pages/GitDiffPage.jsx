@@ -514,20 +514,25 @@ export default function GitDiffPage() {
               </div>
 
               <div className="rounded-lg border bg-muted/30 p-3 text-xs text-muted-foreground space-y-1">
-                <div>
-                  {t("pages:gitDiff.gitRoot")}
-                  {gitRoot || t("pages:gitDiff.notLoaded")}
-                </div>
+                {/* 多用户模式下后端不返回服务器绝对路径，对应行整体隐藏 */}
+                {gitRoot && (
+                  <div>
+                    {t("pages:gitDiff.gitRoot")}
+                    {gitRoot}
+                  </div>
+                )}
                 <div>
                   {t("pages:gitDiff.workspaceStatus")}
                   {isDirty
                     ? t("pages:gitDiff.hasUncommittedChanges")
                     : t("pages:gitDiff.cleanOrNoChanges")}
                 </div>
-                <div>
-                  {t("pages:gitDiff.projectDirectory")}
-                  {rootPath}
-                </div>
+                {rootPath && (
+                  <div>
+                    {t("pages:gitDiff.projectDirectory")}
+                    {rootPath}
+                  </div>
+                )}
               </div>
 
               <div className="rounded-lg border">

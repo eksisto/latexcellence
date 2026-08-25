@@ -39,7 +39,11 @@ from backend.utils.sandbox import (
     current_sandbox_user_id,
     get_sandbox_runner,
 )
-from backend.utils.tex_compile import detect_engine_from_file, run_tex_compile
+from backend.utils.tex_compile import (
+    detect_engine_from_file,
+    run_tex_compile,
+    sanitize_output_paths,
+)
 
 WRITE_SUFFIXES = (".py", ".tex", ".txt", ".md", ".json", ".log", ".csv", ".tsv")
 ARTIFACT_SUFFIXES = (
@@ -460,6 +464,16 @@ class PlotExecutor(AgentFileToolExecutor):
         result_exec = await get_sandbox_runner().execute(
             spec, user_id=current_sandbox_user_id()
         )
+        # 多用户模式：输出中的沙箱绝对路径统一脱敏，OOM 等异常分支的
+        # 截断输出同样来自这里，保证出口一致；单用户保留原始输出
+        if self._cfg.multi_user.enabled:
+            stdout = sanitize_output_paths(result_exec.stdout, self._sandbox.resolve())
+            stderr = sanitize_output_paths(result_exec.stderr, self._sandbox.resolve())
+        else:
+            stdout = result_exec.stdout
+            stderr = result_exec.stderr
+        returncode = result_exec.returncode
+
         if result_exec.timed_out:
             result = ExecutionResult(
                 success=False,
@@ -473,8 +487,8 @@ class PlotExecutor(AgentFileToolExecutor):
         if result_exec.oom_killed:
             result = ExecutionResult(
                 success=False,
-                stdout=result_exec.stdout[: fcfg.sandbox_max_stdout_chars],
-                stderr=result_exec.stderr[: fcfg.sandbox_max_stdout_chars],
+                stdout=stdout[: fcfg.sandbox_max_stdout_chars],
+                stderr=stderr[: fcfg.sandbox_max_stdout_chars],
                 traceback=(
                     "Memory limit exceeded: the plotting process was killed by "
                     "the sandbox OOM guard. Reduce data size or figure DPI."
@@ -485,9 +499,6 @@ class PlotExecutor(AgentFileToolExecutor):
             )
             return self._format_execution_result(result)
 
-        stdout = result_exec.stdout
-        stderr = result_exec.stderr
-        returncode = result_exec.returncode
         artifacts = self.scan_artifacts()
         traceback = stderr[-2000:] if not returncode == 0 else ""
         result = ExecutionResult(

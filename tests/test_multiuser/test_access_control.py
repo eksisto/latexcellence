@@ -327,6 +327,19 @@ class TestProjectRouterMultiuser:
         assert r2.status_code == 403
         assert r2.json()["detail"]["error"] == "no_permission"
 
+    def test_open_response_hides_root_path(self, env):
+        """多用户模式打开响应不得携带服务器上的项目绝对路径（路径约束）。"""
+        client = _client(env)
+        _login(client, "owner")
+        r = self._open(client, env, project_id=env["project_id"])
+        assert r.status_code == 200, r.text
+        data = r.json()
+        assert data["root_path"] is None
+        real_root = str(
+            userspace.project_dir(env["owner"]["id"], env["project_id"]).resolve()
+        )
+        assert real_root not in r.text
+
     def test_unbound_workspace_invalid(self, env):
         client = _client(env)
         _login(client, "owner")

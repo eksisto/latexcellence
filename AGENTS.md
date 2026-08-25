@@ -81,6 +81,15 @@ LLM 输出的 LaTeX 文本（经 JSON 传输或写盘前）**必须**使用 `bac
 - BibTeX 字段使用 `bibtex=True`（`%` 为字面字符，避免 URL percent-encoding 误判）
 - 直接传输 LaTeX 的模块（OCR 类、writing_chat 编辑输出等）优先采用分隔符协议（`<<<LATEX>>>...<<<END>>>`）直接传输纯文本，从根上避免 JSON 转义；非 JSON 路径使用 `latex_json_guard.py` 的 `relaxed=True` 宽松校验（放行 `\t` / `\r` 等合法 LaTeX 空白）
 
+### 4. 多用户模式路径脱敏（不向用户暴露服务器路径）
+
+**多用户模式下，不显示完整项目路径（必要时可使用相对路径）。** 多用户模式下项目存放在服务器用户空间（形如 `<users_root>/<user_id>/projects/<project_id>` 的 SHA256 长路径），该路径对用户无意义且泄露服务器结构：
+
+- **API 响应**：禁止在响应体/SSE 事件中返回 `root_path`、`git_root`、`sandbox`、`project_root` 等绝对路径字段（多用户模式置 `null` 或直接省略；单用户本地模式可保留现状）
+- **错误消息**：面向用户的异常消息（HTTPException detail、toast 文案）必须用相对路径，严禁拼接 `{full_path}`；完整路径只允许进服务端日志
+- **命令输出**：编译日志、traceback 等天然携带绝对路径的文本，展示给用户前必须经前缀脱敏（复用 `tex_compile.sanitize_output_paths()`，把工作目录前缀改写为 `./`）
+- **前端判定**：判断"项目是否打开"必须用 `useIsOpened()`（多用户看 projectId），不得依赖 `rootPath` 真值
+
 ---
 
 ## Python 后端规范
