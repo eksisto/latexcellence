@@ -239,6 +239,8 @@ highlight.js 的按需注册与统一入口：
 
 亮/暗模式：读取 localStorage → 回退到系统偏好 → `document.startViewTransition()` → 切换 `<html>` 的 `.dark` class。`:root` 层面过渡 CSS 自定义属性，避免逐元素过渡的性能问题。
 
+浏览器不支持 View Transitions API（或用户开启减少动画）时，回退为逐元素 CSS 过渡：由 `index.css` 的全局规则统一过渡 `color / background-color / border-color` 等属性。注意：元素若声明了自己的 Tailwind `transition-*` 工具类（如 Tabs 滑块指示条的 `transition-[left,width,...]`、Switch 滑块的 `transition-[transform,...]`），会覆盖全局 `transition-property`，因此这些工具类必须把会随主题变化的颜色属性一并列入，否则亮暗切换时该元素会瞬间跳变、与整页渐变不同步。
+
 配色主题：`theme/` 目录 CSS 文件自动发现 → Zustand store 持久化 `currentTheme` → `data-theme` 属性 → CSS 选择器生效。与亮暗模式完全独立。
 
 ## 多用户模式前端（P5）

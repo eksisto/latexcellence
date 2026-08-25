@@ -65,7 +65,9 @@ function TabsList({ className, variant = "default", children, ...props }) {
       <TabsPrimitive.Indicator
         className={cn(
           "absolute z-0 rounded-md bg-background shadow-sm",
-          "transition-[left,width] duration-300 ease-out",
+          // 同时过渡位移与颜色：亮暗主题切换时滑块背景跟随全局 300ms 渐变，
+          // 而非因窄化 transition-property 覆盖 index.css 全局过渡而瞬间跳变
+          "transition-[left,width,background-color,box-shadow] duration-300 ease-out",
           "group-data-[variant=line]/tabs-list:hidden",
         )}
         style={{

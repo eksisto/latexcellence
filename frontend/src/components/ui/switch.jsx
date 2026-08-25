@@ -18,7 +18,7 @@ function Switch({ className, size = "default", variant = "circle", ...props }) {
       <SwitchPrimitive.Thumb
         data-slot="switch-thumb"
         className={cn(
-          "pointer-events-none relative block bg-background ring-0 transition-transform group-data-[size=default]/switch:size-4 group-data-[size=sm]/switch:size-3 group-data-[size=default]/switch:data-checked:translate-x-[calc(100%-3px)] group-data-[size=sm]/switch:data-checked:translate-x-[calc(100%-3px)] dark:data-checked:bg-primary-foreground group-data-[size=default]/switch:data-unchecked:translate-x-0 group-data-[size=sm]/switch:data-unchecked:translate-x-0 dark:data-unchecked:bg-foreground",
+          "pointer-events-none relative block bg-background ring-0 transition-[transform,background-color] group-data-[size=default]/switch:size-4 group-data-[size=sm]/switch:size-3 group-data-[size=default]/switch:data-checked:translate-x-[calc(100%-3px)] group-data-[size=sm]/switch:data-checked:translate-x-[calc(100%-3px)] dark:data-checked:bg-primary-foreground group-data-[size=default]/switch:data-unchecked:translate-x-0 group-data-[size=sm]/switch:data-unchecked:translate-x-0 dark:data-unchecked:bg-foreground",
           isRect ? "left-[0.5px]" : "",
           isRect ? "rounded-sm" : "rounded-full",
         )}
