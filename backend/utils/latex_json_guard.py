@@ -251,6 +251,38 @@ def check_latex_text_lite(value: str) -> str | None:
     return None
 
 
+def check_latex_corruption(value: str) -> str | None:
+    """仅拦截内容损坏特征的宽松校验（编辑器保存等非 JSON 直传路径）。
+
+    与 check_latex_text(relaxed=True) 同一控制字符口径（放行 \\t / \\r 等
+    合法 LaTeX 空白，拦截 \\b / \\f 等静默损坏特征），并拦截
+    '[object Object]' 类垃圾占位符；但**不做**花括号 / $ 配平与环境检查——
+    编辑器保存的是用户手写源码的任意中间态（半行命令、未闭合公式是常态），
+    配平不合法不应阻止落盘。
+
+    校验前剔除 verbatim / URL 字面内容，避免其中的字面字符被误判。
+    """
+    if not isinstance(value, str):
+        return f"expected a string, got {type(value).__name__}"
+
+    probe = _strip_verbatim(value)
+    bad = _BAD_CONTROL_RELAXED_RE.search(probe)
+    if bad:
+        return (
+            f"LaTeX text contains an illegal control character "
+            f"(U+{ord(bad.group()):04X} at position {bad.start()}); "
+            "the content appears corrupted — check for raw control "
+            "characters in the text"
+        )
+    if _GARBAGE_RE.search(probe):
+        return (
+            "LaTeX text contains a garbage placeholder like '[object Object]'; "
+            "do not serialize objects into strings — save the actual LaTeX "
+            "text content"
+        )
+    return None
+
+
 def validate_latex_field(
     value: str,
     *,

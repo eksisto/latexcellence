@@ -119,6 +119,8 @@ latexcellence/
 │       ├── bib_manager/             # 参考文献管理（格式规则层 + DOI 多数据源查询 + 重复检测 + 文献库管理）
 │       │   └── providers/           # 可插拔 DOI 数据源
 │       ├── plot_gen/                # 科研绘图（上传数据 -> 矢量图 + TikZ）
+│       ├── editor/                   # 网页编辑器后端（阶段一：整文件读写 + 统一撤销记账）
+│       │   └── service.py            # file-content / save-file 服务（扩展名白名单、MD5 乐观锁、损坏特征校验、配额回滚接线）
 │       └── project_router.py        # 项目管理路由
 │
 ├── frontend/
@@ -197,7 +199,7 @@ latexcellence/
 │   ├── multi-user-plan.md                    # 多用户模式设计方案（双模式/认证/用户空间/配额/权限协作/管理后台/迁移）
 │   ├── multi-user-v2-plan.md                   # 多用户模式 v2 设计方案（Docker 沙箱/rar/反向补丁撤销/分片上传/SMTP/记账优化/多实例）
 │   ├── rar-extractor-fallback.md                 # RAR 解压器回退层设计与实施记录（unar → bsdtar，已实施）
-│   ├── editor-plan.md                            # 网页编辑器功能设计方案（CM6 编辑器 + 命令快速输入 + AI 助手，未实施）
+│   ├── editor-plan.md                            # 网页编辑器功能设计方案（CM6 编辑器 + 命令快速输入 + AI 助手；阶段一后端读写接口已实施）
 │   ├── deployment.md                          # 后端部署指南（单用户/多用户单进程/多实例 Compose 部署、systemd 托管、HTTPS 反向代理、安全风险声明、备份、环境变量与升级回滚）
 │   ├── modules/                     # 模块文档
 │   └── showcase.md                  # 展示页（showcase）说明
@@ -266,6 +268,7 @@ latexcellence/
 | style_modify | 粘贴代码 / 项目 Agent 修改样式，支持 shadow 编译、proposal 审核、批量事务与撤销 | router.py, service.py, agent.py, models.py, session.py, trace.py, cleanup.py | ✓ | ✗ |
 | writing_chat | 写作助手对话（含联网搜索、学术检索与引文追踪、项目浏览、段落编辑和工具确认） | router.py, service/, context.py, models.py, prompt_manager.py | ✓ | ✗ |
 | bib_manager | 参考文献管理 + 格式规则层 + DOI 多数据源查询 + 重复检测 + 文献库 | router.py, service.py, models.py, bib_parser.py, format_rules.py, style_registry.py, provider_manager.py, providers/ | ✓(格式规则命中不依赖 LLM；DOI 查询不依赖 LLM) | ✗ |
+| editor | 网页编辑器后端（阶段一）：整文件打开/保存，MD5 乐观锁，统一撤销记账与配额回滚接线 | service.py（路由挂载于 project_router） | ✗ | ✗ |
 | plot_gen | 科研绘图 Agent（数据画像 -> 图表推荐 -> Python 执行 -> TikZ 编译） | router.py, service.py, agent.py, models.py, data_parser.py, recommender.py, styles.py, executor.py, tikzgen.py, sandbox_guard.py, trace.py, cleanup.py | ✓ | ✗ |
 
 ## 核心设计思路

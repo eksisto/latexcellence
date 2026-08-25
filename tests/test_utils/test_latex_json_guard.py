@@ -3,6 +3,7 @@
 import pytest
 
 from backend.utils.latex_json_guard import (
+    check_latex_corruption,
     check_latex_environments,
     check_latex_text,
     check_latex_text_lite,
@@ -258,4 +259,37 @@ class TestCheckLatexTextLite:
             M(text="R^" + "\r" + "ho")
         with pytest.raises(ValidationError):
             M(text="[object Object]")
-        assert M(text="a\tb\nc").text == "a\tb\nc"
+
+
+class TestCheckLatexCorruption:
+    """损坏特征专项校验（编辑器保存路径）测试：只拦损坏，不查配平。"""
+
+    def test_allows_tab_crlf_and_newline(self):
+        """\\t / \\r / \\n 是合法 LaTeX 空白（宽松口径），不得误拦。"""
+        assert check_latex_corruption("line1\r\nline2\ttabbed\nline3") is None
+
+    def test_blocks_real_control_character_corruption(self):
+        error = check_latex_corruption("a\fb")
+        assert error is not None
+        assert "control character" in error
+        # 非 JSON 直传路径的错误归因不提示"把反斜杠双写"
+        assert "JSON" not in error
+
+    def test_blocks_garbage_placeholder(self):
+        error = check_latex_corruption("value = [object Object]")
+        assert error is not None
+        assert "garbage" in error
+
+    def test_does_not_check_brace_or_dollar_balance(self):
+        """编辑中间态合法：未配平花括号 / $ 均放行（editor-plan §5.1）。"""
+        assert check_latex_corruption(r"\textbf{hello $x + y") is None
+        assert check_latex_corruption(r"\begin{itemize} never closed") is None
+
+    def test_skips_verbatim_content(self):
+        """verbatim / URL 字面内容中的特殊字符不参与校验。"""
+        assert check_latex_corruption(r"\verb|a[object Object]b|") is None
+
+    def test_non_string_rejected(self):
+        error = check_latex_corruption(None)
+        assert error is not None
+        assert "expected a string" in error

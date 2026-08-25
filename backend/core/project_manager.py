@@ -382,7 +382,8 @@ class LatexProject:
         *,
         expected_md5s: dict[str, str] | None = None,
         allowed_suffixes: tuple[str, ...] | None = None,
-    ) -> dict[str, str]:
+        return_edit_op_id: bool = False,
+    ) -> dict[str, str] | tuple[dict[str, str], str | None]:
         """
         以事务方式批量替换多个文件的完整内容。
 
@@ -394,9 +395,13 @@ class LatexProject:
             updates: {相对路径: 完整新内容}
             expected_md5s: 可选的乐观锁 {相对路径: 期望 MD5}
             allowed_suffixes: 可选扩展名白名单
+            return_edit_op_id: 为 True 时额外返回本次写入的编辑日志 op_id
+                （多用户模式实际记账时；单用户模式或无变化时为 None），
+                供调用方在配额超限回滚后撤销对应记账（方案 §8.4）
 
         返回：
-            {相对路径: 写入后的 MD5}
+            {相对路径: 写入后的 MD5}；return_edit_op_id=True 时返回
+            (上述字典, edit_op_id | None)
         """
         if not self._project_info:
             raise RuntimeError("No project opened")
@@ -457,7 +462,7 @@ class LatexProject:
 
             # 多用户模式：整个事务的多文件写共享同一 op_group_id，
             # 一次撤销整组回滚（方案 §8.1）；单用户模式内部直接跳过
-            edit_log.record_write(
+            edit_op_id = edit_log.record_write(
                 self._project_info.root_path,
                 [
                     (file_path, before, content)
@@ -469,6 +474,8 @@ class LatexProject:
                 "Applied whole-file batch: %d file(s)",
                 len(prepared),
             )
+            if return_edit_op_id:
+                return result, edit_op_id
             return result
 
     def undo(self, file_path: str) -> bool:

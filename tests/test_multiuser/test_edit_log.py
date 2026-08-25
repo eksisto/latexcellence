@@ -143,6 +143,45 @@ class TestRecording:
         assert len(rows) == 1
         assert rows[0]["file_count"] == 2
 
+    def test_apply_whole_files_return_edit_op_id(self, stack_env):
+        """return_edit_op_id=True：返回 (md5 字典, 本次记账 op_id)。
+
+        供编辑器整文件保存等调用方在配额超限回滚后按 id 撤销对应记账，
+        保证撤销栈不被失败写入污染（方案 §8.4）。"""
+        project = _open_project(stack_env, stack_env["owner"]["id"])
+        result, op_id = project.apply_whole_files(
+            {"main.tex": "V1\n"}, return_edit_op_id=True
+        )
+        assert set(result) == {"main.tex"}
+        rows = _op_rows(stack_env)
+        assert len(rows) == 1
+        assert rows[0]["op_id"] == op_id
+        # 该 id 可用于 discard_op 闭环（配额回滚路径依赖）
+        assert (
+            edit_log.discard_op(
+                op_id, stack_env["project_id"], stack_env["owner"]["id"]
+            )
+            is True
+        )
+        assert _op_rows(stack_env) == []
+
+    def test_apply_whole_files_default_return_contract_unchanged(self, stack_env):
+        """默认（不传 return_edit_op_id）返回值契约保持不变。"""
+        project = _open_project(stack_env, stack_env["owner"]["id"])
+        result = project.apply_whole_files({"main.tex": "V2\n"})
+        assert isinstance(result, dict)
+        assert set(result) == {"main.tex"}
+
+    def test_apply_whole_files_unchanged_content_returns_none_op(self, stack_env):
+        """无变化写入不产生 op：return_edit_op_id 返回 None。"""
+        project = _open_project(stack_env, stack_env["owner"]["id"])
+        content = (stack_env["root"] / "main.tex").read_text(encoding="utf-8")
+        _, op_id = project.apply_whole_files(
+            {"main.tex": content}, return_edit_op_id=True
+        )
+        assert op_id is None
+        assert _op_rows(stack_env) == []
+
     def test_single_user_mode_records_nothing(self, tmp_path):
         from tests.test_multiuser.conftest import build_mu_env
 

@@ -22,6 +22,7 @@ from backend.core.workspace_manager import (
     get_project_manager_for_workspace,
     get_workspace_manager,
 )
+from backend.modules.editor import service as editor_service
 from backend.modules.projects import service as projects_service
 from backend.utils.path_guard import resolve_path_case_insensitive
 
@@ -45,6 +46,13 @@ class ApplyChangeRequest(BaseModel):
 
 class FileActionRequest(BaseModel):
     file_path: str
+
+
+class SaveFileRequest(BaseModel):
+    file_path: str
+    workspace_id: str
+    content: str
+    base_md5: str | None = None
 
 
 @router.post("/open")
@@ -281,6 +289,42 @@ async def get_file_md5(
         raise HTTPException(status_code=400, detail=str(e))
     except FileNotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
+
+
+@router.get("/file-content")
+async def get_file_content(
+    file_path: str = Query(..., description="文件路径（相对于项目根目录）"),
+    workspace_id: str = Query(..., description="工作区唯一标识符"),
+    _: dict = Depends(access_control.require_workspace_read),
+):
+    """编辑器打开文件：返回文件全文与当前 MD5（editor-plan §5.1）。"""
+    project = get_project_manager_for_workspace(workspace_id)
+    return await editor_service.read_file_content(project, file_path)
+
+
+@router.post("/save-file")
+async def save_file(
+    request: SaveFileRequest,
+    binding: dict = Depends(access_control.require_workspace_write_json),
+    user: dict | None = Depends(get_current_user_optional),
+):
+    """编辑器整文件保存：MD5 乐观锁 + 统一撤销记账 + 用量记账刷新。
+
+    单用户模式推入 BackupManager 内存撤销栈；多用户模式记入反向补丁
+    编辑日志并与 AI 改动共享同一套 undo/redo 历史（editor-plan §5.1，
+    决策 Q11）。
+    """
+    project = get_project_manager_for_workspace(request.workspace_id)
+    return await editor_service.save_file_content(
+        project,
+        binding,
+        file_path=request.file_path,
+        content=request.content,
+        base_md5=request.base_md5,
+        actor_user_id=(
+            _binding_actor(binding, user) if _is_multiuser_binding(binding) else None
+        ),
+    )
 
 
 @router.post("/apply-change")
