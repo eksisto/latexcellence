@@ -526,6 +526,15 @@ class MultiUserConfig(BaseModel):
     auto_approve_geo_db_path: str = (
         ""  # GeoLite2 .mmdb 离线库路径（空 = 不启用地理规则）
     )
+    auto_approve_ip2region_db_path: str = (
+        ""  # ip2region .xdb 离线库路径（通常为 ip2region_v4.xdb；地址族由
+        # 文件头自动识别，中国 IP 归属直接采用其结果——国内城市精度优于
+        # GeoLite2，非/未知中国回落）
+    )
+    auto_approve_ip2region_db_path_v6: str = (
+        ""  # 另一地址族的 ip2region .xdb 补充库（如 ip2region_v6.xdb；
+        # 查询按注册 IP 的地址族路由到对应库，该族未配置时回落 GeoLite2）
+    )
     auto_approve_allowed_countries: list[str] = (
         []
     )  # 国家码白名单（ISO 3166，如 ["CN"]）

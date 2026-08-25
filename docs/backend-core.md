@@ -416,7 +416,8 @@ ExtractorRegistry 先处理已知公开端点（当前代码托管页面使用 G
 | `backend/core/multiuser/userspace.py` | 用户空间目录布局（`<users_root>/<user_id>/{projects, writing_chat_sessions, style_modify_sessions, templates, plots}`），`ensure_user_dirs()` 注册时创建；P6 新增请求级当前用户上下文（`set/get_current_user_id`）与统一会话资源根解析 `user_resource_root(subdir, legacy_root)`（单用户回退存量全局路径）、`iterate_user_resource_roots()`（后台清理枚举各用户资源目录） |
 | `backend/core/multiuser/auth.py` | 密码哈希（argon2id）、会话令牌（库只存 SHA-256 哈希）、用户管理（注册 pending / 审批 / 禁用 / 重置密码 / 配额覆盖 / 邮箱绑定改绑；v9 起记录注册 IP `registered_ip` 与最近登录 IP `last_login_ip`）、登录限流（每用户名+每 IP 分钟级；v2 P1b 起计数入 `rate_limit_events` 表 kind='login'，替代进程内字典）、自助找回令牌（v2 P6：只存 SHA-256、TTL 1 小时、条件 UPDATE 原子消费防重放）、通用滑动窗口限流 `sliding_window_rate_limited()`、`ensure_bootstrap_admin()` |
 | `backend/core/multiuser/clientip.py` | 真实客户端 IP 解析：仅当 TCP 对端属于 `multi_user.trusted_proxies` 白名单时才信任 `X-Forwarded-For`，从右往左找第一个不可信地址（防直连客户端伪造头绕过 IP 策略）；全部条目归一化（IPv6 压缩等），解析失败降级不抛错 |
-| `backend/core/multiuser/registration_policy.py` | 注册自动审批策略：同 IP 存量账号数上限（历史所有未删除账号）+ IP/CIDR 白名单 + GeoLite2 离线地理白名单（国家码/城市名，`maxminddb` 懒加载按 mtime 缓存 Reader）三规则叠加判定「无恶意」；任一检查不通过只降级为人工待审批（fail-open 到人工、fail-closed 到不自动通过），绝不直接拒绝；依赖缺失/库文件缺失/查询异常均告警降级，不阻塞注册 |
+| `backend/core/multiuser/registration_policy.py` | 注册自动审批策略：同 IP 存量账号数上限（历史所有未删除账号）+ IP/CIDR 白名单 + 离线地理白名单（国家码/城市名）三规则叠加判定「无恶意」；地理查询走双库解析链 `resolve_geo()`——ip2region（.xdb，`maxminddb` 同款 mtime 缓存 Searcher；中国命中直接采用，国内城市精度显著优于 GeoLite2）优先，非/未知中国回落 GeoLite2（.mmdb，`maxminddb` 懒加载按 mtime 缓存 Reader）；任一检查不通过只降级为人工待审批（fail-open 到人工、fail-closed 到不自动通过），绝不直接拒绝；依赖缺失/库文件缺失/查询异常均告警降级，不阻塞注册 |
+| `backend/core/multiuser/ip2region_xdb/` | ip2region .xdb 读取器（vendored 官方 Python binding：searcher.py + util.py，Apache-2.0 OR MIT 双许可，版权头保留；官方未发布 PyPI 故随仓内嵌）：content 缓存策略打开（整库载入内存、查询零 I/O、不持共享文件句柄线程安全），IPv4/IPv6 xdb 自文件头探测版本；入口 `open_content_searcher()` |
 | `backend/core/multiuser/dependencies.py` | FastAPI 认证依赖：`get_current_user`（401）、`require_admin`（403）、`get_current_user_optional`、`require_admin_if_multiuser`；P6 新增 `current_user_context`（注入请求级当前用户用于会话类资源归属校验） |
 | `backend/core/multiuser/quota.py` | 配额记账核心（v2 P4 重构衍生记账）：有效额度解析（用户覆盖优先）、项目用量统计、衍生用量读 `user_derived_usage` 缓存（检查点增量刷新 `refresh_derived_usage` / `checkpoint_derived_usage*`、全量对账 `reconcile_derived_usage`、分类重扫 `resync_category_all_users`）、上传/写回/恢复前置校验（超限抛 413 `quota_exceeded`，带 subdir 先刷新被触达分类）、自助清理（`cleanup_derived_category`）、项目唯一命名与建行（`xx (2)`）、项目尺寸对账（`reconcile_project_sizes`）、回收站过期清理 |
 | `backend/core/multiuser/upload.py` | 上传解压管线核心：zip（UTF-8/GBK/cp437 编码、路径穿越/符号链接/加密/炸弹拦截）与 7z（py7zr）安全解压、rar 分发到 `upload_rar.py`、项目根归一化、`move_into_user_space()` 落位；7z 监视线程以 `_sample_written_bytes()` 采样计数器替代周期 `dir_size` 全遍历（v2 P4：scandir 单趟 lstat + 超限短路）；v2 P5 起公开 `validate_member_path()` / `validate_no_case_conflicts()` / `finalize_directory_layout()` 供分片上传会话复用同一校验链 |
@@ -450,10 +451,11 @@ ExtractorRegistry 先处理已知公开端点（当前代码托管页面使用 G
 **注册自动审批要点**（`registration_policy.py` + `clientip.py`，DB 迁移 v9：users 表 `registered_ip` / `last_login_ip` / `auto_approved` 列）：
 
 - **IP 记录始终开启**：注册与登录均解析真实客户端 IP 并落库（`registered_ip` / `last_login_ip`），管理员列表可见并带 `auto_approved` 审计标记；反代部署必须配置 `multi_user.trusted_proxies`（代理 IP/CIDR 白名单），否则记录的是代理地址。
-- **决策规则叠加**：① 同 IP 账号数达 `auto_approve_max_accounts_per_ip`（历史所有未删除账号，含 pending/disabled）→ 不自动通过，优先级最高；② 命中 `auto_approve_allowed_cidrs` → 自动通过；③ 配置了 `auto_approve_geo_db_path` + 国家码/城市名白名单且地理查询命中 → 自动通过。三者全未配置时为「全部自动通过（仍受同 IP 上限约束）」的最简模式。
-- **只降级不拒绝**：任何检查不通过都回落人工待审批；地理库缺失、`maxminddb` 未安装或查询失败按 fail-closed 处理（转人工），注册主流程永不因策略基础设施故障 5xx。
+- **决策规则叠加**：① 同 IP 账号数达 `auto_approve_max_accounts_per_ip`（历史所有未删除账号，含 pending/disabled）→ 不自动通过，优先级最高；② 命中 `auto_approve_allowed_cidrs` → 自动通过；③ 配置了地理库路径（`auto_approve_ip2region_db_path` 和/或 `auto_approve_geo_db_path`）+ 国家码/城市名白名单且地理查询命中 → 自动通过。三者全未配置时为「全部自动通过（仍受同 IP 上限约束）」的最简模式。
+- **只降级不拒绝**：任何检查不通过都回落人工待审批；地理库缺失、依赖未安装或查询失败按 fail-closed 处理（转人工），注册主流程永不因策略基础设施故障 5xx。
 - **配套限流**：每 IP 注册请求滑动窗口限流 `register_rate_limit_per_hour`（kind='register_ip'），超限 429 `register_rate_limited`，被拒请求不落行不建用户。
-- **城市匹配口径**：GeoLite2 城市名大小写不敏感匹配库内全部语言名称（en/zh-CN 等）；国家码与城市名同时配置时需同时命中（AND）。私有地址在 GeoLite2 中无记录 → 转人工，局域网部署请用 CIDR 白名单表达可信网段。
+- **城市匹配口径**：城市名大小写不敏感匹配库内候选名称（GeoLite2 收录 en/zh-CN 等全部语言名称；ip2region 取省/市字段并附带去「市/省」后缀变体，「天津市」与「天津」两种白名单写法均可命中）；国家码与城市名同时配置时需同时命中（AND）。私有地址在两库中均无记录 → 转人工，局域网部署请用 CIDR 白名单表达可信网段。
+- **双库解析链**（`resolve_geo()`）：配置了 ip2region（.xdb）→ 优先查询，结果国家 == 中国（ISO 码 CN 或国名「中国」）即直接采用——国内城市精度显著优于 GeoLite2；非/未知中国、对应地址族未配置或库不可用 → 回落 GeoLite2（.mmdb）；两级都无结果 → fail-closed。ip2region 主路径（`auto_approve_ip2region_db_path`）与 IPv6 补充路径（`auto_approve_ip2region_db_path_v6`）**各只能指向一份 xdb 文件**，查询按注册 IP 的地址族自动路由（地址族由文件头探测；只配 v4 库时 IPv6 注册回落 GeoLite2）。各库 Reader/Searcher 均按路径 + mtime 缓存（文件覆盖更新自动重建并关闭旧实例）。
 
 **P2 用户空间与访问控制要点**：
 

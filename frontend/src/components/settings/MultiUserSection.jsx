@@ -271,6 +271,42 @@ function MultiUserSection({ multiUser, onChange }) {
                     {t("settings.multiUserGeoDbPathHint")}
                   </p>
                 </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">
+                    {t("settings.multiUserIp2RegionDbPath")}
+                  </Label>
+                  <Input
+                    placeholder="data/ip2region-v4.xdb"
+                    value={multiUser.auto_approve_ip2region_db_path || ""}
+                    onChange={(e) =>
+                      onChange(
+                        "multi_user.auto_approve_ip2region_db_path",
+                        e.target.value,
+                      )
+                    }
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    {t("settings.multiUserIp2RegionDbPathHint")}
+                  </p>
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">
+                    {t("settings.multiUserIp2RegionDbPathV6")}
+                  </Label>
+                  <Input
+                    placeholder="data/ip2region-v6.xdb"
+                    value={multiUser.auto_approve_ip2region_db_path_v6 || ""}
+                    onChange={(e) =>
+                      onChange(
+                        "multi_user.auto_approve_ip2region_db_path_v6",
+                        e.target.value,
+                      )
+                    }
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    {t("settings.multiUserIp2RegionDbPathV6Hint")}
+                  </p>
+                </div>
               </div>
               <div className="grid grid-cols-2 gap-2">
                 <div className="space-y-1">

@@ -656,9 +656,10 @@ latex.example.com {
 开启 `multi_user.auto_approve_enabled` 后，注册请求按 IP 策略判定「无恶意」即自动通过审批，否则转人工待审批（不会直接拒绝）。判定规则与全部配置项见 [backend-core.md](backend-core.md) 「注册自动审批要点」；部署侧需要准备：
 
 - **真实 IP 链路**：先完成上文 `trusted_proxies` 配置——策略读到的若是代理 IP，白名单与地理规则全部失真；
-- **GeoLite2 离线库**（使用城市/国家白名单时必需）：在 [MaxMind](https://dev.maxmind.com/geoip/docs/databases/city-and-country/) 免费注册并下载 GeoLite2 City 的 `.mmdb` 文件，放到服务器可读路径（如 `data/GeoLite2-City.mmdb`），把路径填入 `multi_user.auto_approve_geo_db_path`。库文件可定期重新下载覆盖，后端按文件 mtime 自动重载；Python 依赖 `maxminddb` 已在 requirements.txt 中；
+- **ip2region 离线库**（推荐，国内精度高）：从 [ip2region](https://github.com/lionsoul2014/ip2region) 下载 xdb 文件，放到服务器可读路径后填入配置。**每个配置键只能指向一份 xdb 文件**：`multi_user.auto_approve_ip2region_db_path` 填 IPv4 库（`ip2region_v4.xdb`），`auto_approve_ip2region_db_path_v6` 填 IPv6 库（`ip2region_v6.xdb`，可选）；查询按注册 IP 的地址族自动路由到对应库（地址族由文件头自动识别，两键填反不影响正确性），**某地址族未配置库时该族注册回落 GeoLite2**（如只配 v4 库，IPv6 注册走 GeoLite2 判定）。两键任一配置后 ip2region 即优先生效：中国 IP 归属直接采用其结果（省/市级精度显著优于 GeoLite2，教育网等国内网段可定位到城市），非/未知中国才回落 GeoLite2；Python 读取器已随仓内嵌（官方 binding vendored），无需额外依赖；
+- **GeoLite2 离线库**（国际城市数据更细）：在 [MaxMind](https://dev.maxmind.com/geoip/docs/databases/city-and-country/) 免费注册并下载 GeoLite2 City 的 `.mmdb` 文件，放到服务器可读路径（如 `data/GeoLite2-City.mmdb`），把路径填入 `multi_user.auto_approve_geo_db_path`。作为 ip2region 的回落源（非/未知中国时使用）；只配此库不配 ip2region 时行为与历史版本一致。两库文件均可定期重新下载覆盖，后端按文件 mtime 自动重载；
 - **白名单口径**：固定机构场景优先用 CIDR 白名单（如校园网出口网段），无外部数据依赖且最可靠；城市/国家白名单适合成员分布较散的场景。共享出口 IP（校园/宿舍 NAT）请调大 `auto_approve_max_accounts_per_ip` 或改用网段白名单；
-- **局域网部署**：内网地址在 GeoLite2 中无地理记录，会转人工——请用 CIDR 白名单表达可信内网网段。
+- **局域网部署**：内网地址在两个地理库中均无记录，会转人工——请用 CIDR 白名单表达可信内网网段。
 
 ### 公开端点
 

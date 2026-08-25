@@ -307,6 +307,8 @@
     "auto_approve_max_accounts_per_ip": 1,
     "auto_approve_allowed_cidrs": [],
     "auto_approve_geo_db_path": "",
+    "auto_approve_ip2region_db_path": "",
+    "auto_approve_ip2region_db_path_v6": "",
     "auto_approve_allowed_countries": [],
     "auto_approve_allowed_cities": [],
     "trusted_proxies": [],
