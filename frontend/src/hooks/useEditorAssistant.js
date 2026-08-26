@@ -6,6 +6,13 @@ import useEditorStore from "@/store/editorStore";
 import { api } from "@/api/index";
 import i18n from "@/i18n";
 import { translateError } from "@/utils/errorMessages";
+import {
+  createStreamingPlaceholder,
+  isStaleEvent,
+  reduceAssistantMessages,
+  reduceAssistantSessionId,
+  reduceAssistantToolStatus,
+} from "@/lib/editor/assistantStream";
 
 /**
  * 编辑器 AI 助手 hook（editor-plan §7，阶段四）。
@@ -15,8 +22,10 @@ import { translateError } from "@/utils/errorMessages";
  *     （后端按项目 scope 隔离会话，本地只跟随）；切换时同步使所有在途流
  *     过期并经 AbortController 中止在途请求，组件卸载时同样中止；
  *   - 发送消息：读取编辑器上下文（文件/缓冲区/光标/选区）经 SSE 流式对话；
- *   - SSE 事件归约：token / round_start / tool_status / compressed /
- *     done（含结构化建议）/ error。
+ *   - SSE 事件归约：事件 → 状态的纯归约收敛在 lib/editor/assistantStream.js
+ *     （token / round_start / tool_status / tool_result / compressed /
+ *     done（含结构化建议）/ error），本 hook 只负责把归约结果写回 store，
+ *     以及 toast / 中止 / 过期计数等副作用编排。
  *
  * 建议应用动作由 AssistantPanel 经 EditorPage 提供的缓冲区回调执行，
  * 本 hook 只负责对话流与应用标记上报。
@@ -85,27 +94,9 @@ export default function useEditorAssistant({ getEditorContext }) {
       };
       const placeholderId = tempId();
       store.appendAssistantMessage(userMessage);
-      store.appendAssistantMessage({
-        id: placeholderId,
-        role: "assistant",
-        content: "",
-        streaming: true,
-        suggestions: [],
-        appliedSuggestions: {},
-      });
+      store.appendAssistantMessage(createStreamingPlaceholder(placeholderId));
       store.setAssistantStreaming(true);
       store.setAssistantToolStatus(null);
-
-      const patchPlaceholder = (patch) =>
-        useEditorStore.getState().patchAssistantMessage(placeholderId, patch);
-      const appendToken = (content) => {
-        const cur = useEditorStore
-          .getState()
-          .assistantMessages.find((m) => m.id === placeholderId);
-        if (cur) {
-          patchPlaceholder({ content: (cur.content || "") + content });
-        }
-      };
 
       const seq = ++seqRef.current;
       // 每次发送持有新的 AbortController：项目切换/卸载时经 ref 中止在途流
@@ -124,7 +115,7 @@ export default function useEditorAssistant({ getEditorContext }) {
           onEvent: (event) => {
             // 过期请求的迟到事件一律丢弃（含 error：新鲜事件的 seq 本就匹配，
             // 过期请求的失败提示对当前会话已无意义）
-            if (seq !== seqRef.current) return;
+            if (isStaleEvent(seq, seqRef.current)) return;
             handleEvent(event);
           },
           signal: controller.signal,
@@ -159,38 +150,51 @@ export default function useEditorAssistant({ getEditorContext }) {
         }
       }
 
+      /**
+       * 把事件归约出的新消息数组写回 store（引用未变——无关事件或占位
+       * 已不存在——则不产生写入，与原逐字段 patch 的写入次数一致）。
+       */
+      function commitMessages(event) {
+        const { assistantMessages } = useEditorStore.getState();
+        const next = reduceAssistantMessages(assistantMessages, event, {
+          placeholderId,
+        });
+        if (next !== assistantMessages) {
+          useEditorStore.setState({ assistantMessages: next });
+        }
+      }
+
       function handleEvent(event) {
         const st = useEditorStore.getState();
         switch (event.type) {
           case "token":
-            appendToken(event.content);
+            commitMessages(event);
             break;
           case "round_start":
-            // 新一轮工具轮次：重置占位消息内容，与后端落盘内容保持一致
-            patchPlaceholder({ content: "" });
+            commitMessages(event);
             break;
           case "tool_status":
-            st.setAssistantToolStatus(event);
-            break;
           case "tool_result":
-            st.setAssistantToolStatus(null);
+            // 工具指示器是独立于消息列表的 store 字段（不在占位消息上）
+            st.setAssistantToolStatus(
+              reduceAssistantToolStatus(st.assistantToolStatus, event),
+            );
             break;
           case "compressed":
             toast.info(i18n.t("components:assistant.compressed"));
             break;
           case "done": {
-            st.setAssistantToolStatus(null);
-            patchPlaceholder({
-              id: event.message_id || placeholderId,
-              streaming: false,
-              suggestions: Array.isArray(event.suggestions)
-                ? event.suggestions
-                : [],
-              tokens: event.tokens || 0,
-            });
+            st.setAssistantToolStatus(
+              reduceAssistantToolStatus(st.assistantToolStatus, event),
+            );
+            commitMessages(event);
             // patch 用旧 id 定位；替换服务端 id 后同步会话 id
-            if (event.session_id) {
-              st.setAssistantSessionId(event.session_id);
+            const nextSessionId = reduceAssistantSessionId(
+              st.assistantSessionId,
+              event,
+            );
+            if (nextSessionId !== st.assistantSessionId) {
+              st.setAssistantSessionId(nextSessionId);
             }
             break;
           }
@@ -199,7 +203,7 @@ export default function useEditorAssistant({ getEditorContext }) {
             toast.error(i18n.t("components:assistant.chatError"), {
               description: msg,
             });
-            st.removeAssistantMessage(placeholderId);
+            commitMessages(event);
             break;
           }
           default:
