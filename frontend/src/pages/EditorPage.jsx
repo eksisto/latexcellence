@@ -33,6 +33,7 @@ import EmptyState from "@/components/EmptyState";
 import ConfirmDialog from "@/components/ConfirmDialog";
 import PageHeader from "@/components/PageHeader";
 import ProjectExplorer from "@/components/ProjectExplorer";
+import { cn } from "@/lib/utils";
 import LaTeXEditor from "@/components/editor/LaTeXEditor";
 import EditorToolbar from "@/components/editor/EditorToolbar";
 import ConflictDialog from "@/components/editor/ConflictDialog";
@@ -208,6 +209,22 @@ export default function EditorPage() {
   const [compiling, setCompiling] = useState(false);
   const [compileResult, setCompileResult] = useState(null);
   const [pdfUrl, setPdfUrl] = useState(null);
+  /** 收起态「书脊」按钮：收起后承接焦点，键盘动线不断（Enter 再展开） */
+  const spineBtnRef = useRef(null);
+  /** 面板头部折叠按钮：书脊展开后焦点回到这里 */
+  const panelCollapseRef = useRef(null);
+
+  /** 折叠右栏：状态提交后把焦点交给书脊，键盘动线连续 */
+  const collapsePanel = useCallback(() => {
+    setPanelCollapsed(true);
+    requestAnimationFrame(() => spineBtnRef.current?.focus());
+  }, []);
+
+  /** 书脊展开右栏：状态提交后焦点送回面板头部折叠按钮 */
+  const expandPanelFromSpine = useCallback(() => {
+    setPanelCollapsed(false);
+    requestAnimationFrame(() => panelCollapseRef.current?.focus());
+  }, []);
   const restoringRef = useRef(false);
   /** 打开请求序号：单调递增，用于丢弃过期在途响应（快速切换 / 后退前进） */
   const openSeqRef = useRef(0);
@@ -805,106 +822,144 @@ export default function EditorPage() {
           )}
         </main>
 
-        {/* 右栏：编译与预览 ↔ AI 助手 Tab 切换，可折叠（阶段四） */}
-        <aside className="hidden xl:flex shrink-0 min-h-0 gap-1.5">
-          {panelCollapsed ? (
-            <Button
-              variant="outline"
-              size="icon"
-              className="self-start"
-              onClick={() => setPanelCollapsed(false)}
-              title={t("components:editor.expandPanel")}
-            >
-              <PanelRightOpen />
-              <span className="sr-only">
-                {t("components:editor.expandPanel")}
-              </span>
-            </Button>
-          ) : (
-            <>
-              {assistantEnabled ? (
-                <div className="flex w-80 min-h-0 flex-col">
-                  <Tabs
-                    value={panelTab}
-                    onValueChange={setPanelTab}
-                    className="flex h-full min-h-0 flex-col gap-2"
+        {/* 右栏：编译与预览 ↔ AI 助手 Tab 切换，可折叠（阶段四）。
+            动效编排（reveal 曲线 cubic-bezier(0.22,1,0.36,1)，与 .reveal 同源）：
+            ① 宽度壳层 320ms → ② 内容淡出左滑（展开时 +60ms 跟随入场）→
+            ③ 收起态「书脊」+150ms 压轴浮现。书脊以竖排文字标注当前隐藏
+            的面板名（装订学术文档的书脊隐喻），整条可点恢复展开。
+            两态常挂载，隐藏态加 inert 防止键盘焦点落入被裁切内容；折叠/
+            展开时焦点在头部按钮与书脊之间交接。motion-reduce 全部直切 */}
+        <aside
+          className={cn(
+            "relative hidden xl:flex shrink-0 min-h-0 overflow-hidden",
+            "transition-[width] duration-[320ms] ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none",
+            panelCollapsed ? "w-10" : "w-80",
+          )}
+        >
+          {/* 展开态内容常挂载：收起时淡出并左移；shrink-0 固定宽度由
+              overflow 裁切而非挤压换行（flex 子项默认可收缩会挤压重排） */}
+          <div
+            inert={panelCollapsed || undefined}
+            className={cn(
+              "flex min-h-0 w-80 shrink-0 flex-col gap-2",
+              "transition-[transform,opacity] duration-[320ms] ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none",
+              panelCollapsed
+                ? "-translate-x-4 opacity-0 delay-0"
+                : "translate-x-0 opacity-100 delay-[60ms]",
+            )}
+          >
+            {assistantEnabled ? (
+              <Tabs
+                value={panelTab}
+                onValueChange={setPanelTab}
+                className="flex h-full min-h-0 flex-col gap-2"
+              >
+                <div className="flex items-center justify-between gap-1">
+                  <TabsList>
+                    <TabsTrigger value="compile">
+                      {t("components:editor.tabCompile")}
+                    </TabsTrigger>
+                    <TabsTrigger value="assistant">
+                      <Bot className="size-3.5" />
+                      {t("components:editor.tabAssistant")}
+                    </TabsTrigger>
+                  </TabsList>
+                  <Button
+                    ref={panelCollapseRef}
+                    variant="ghost"
+                    size="icon-sm"
+                    onClick={collapsePanel}
+                    title={t("components:editor.collapsePanel")}
                   >
-                    <div className="flex items-center justify-between gap-1">
-                      <TabsList>
-                        <TabsTrigger value="compile">
-                          {t("components:editor.tabCompile")}
-                        </TabsTrigger>
-                        <TabsTrigger value="assistant">
-                          <Bot className="size-3.5" />
-                          {t("components:editor.tabAssistant")}
-                        </TabsTrigger>
-                      </TabsList>
-                      <Button
-                        variant="ghost"
-                        size="icon-sm"
-                        onClick={() => setPanelCollapsed(true)}
-                        title={t("components:editor.collapsePanel")}
-                      >
-                        <PanelRightClose />
-                        <span className="sr-only">
-                          {t("components:editor.collapsePanel")}
-                        </span>
-                      </Button>
-                    </div>
-                    {/* keepMounted：两个 Tab 内容常挂载（Base UI Panel 默认
+                    <PanelRightClose />
+                    <span className="sr-only">
+                      {t("components:editor.collapsePanel")}
+                    </span>
+                  </Button>
+                </div>
+                {/* keepMounted：两个 Tab 内容常挂载（Base UI Panel 默认
                         卸载非活动页），切换不丢助手输入草稿与卡片展开态；
                         会话消息本身在 Zustand store，本就不受切换影响 */}
-                    <TabsContent
-                      value="compile"
-                      keepMounted
-                      className="min-h-0 flex-1"
-                    >
-                      <CompilePreviewPanel
-                        compiling={compiling}
-                        compileResult={compileResult}
-                        pdfUrl={pdfUrl}
-                      />
-                    </TabsContent>
-                    <TabsContent
-                      value="assistant"
-                      keepMounted
-                      className="min-h-0 flex-1"
-                    >
-                      <AssistantPanel
-                        readOnly={readOnly}
-                        getEditorContext={getEditorContext}
-                        onApplySnippet={handleApplySnippet}
-                        onApplyDiffText={handleApplyDiffText}
-                      />
-                    </TabsContent>
-                  </Tabs>
+                <TabsContent
+                  value="compile"
+                  keepMounted
+                  className="min-h-0 flex-1"
+                >
+                  <CompilePreviewPanel
+                    compiling={compiling}
+                    compileResult={compileResult}
+                    pdfUrl={pdfUrl}
+                  />
+                </TabsContent>
+                <TabsContent
+                  value="assistant"
+                  keepMounted
+                  className="min-h-0 flex-1"
+                >
+                  <AssistantPanel
+                    readOnly={readOnly}
+                    getEditorContext={getEditorContext}
+                    onApplySnippet={handleApplySnippet}
+                    onApplyDiffText={handleApplyDiffText}
+                  />
+                </TabsContent>
+              </Tabs>
+            ) : (
+              <>
+                <div className="flex items-center justify-end">
+                  <Button
+                    ref={panelCollapseRef}
+                    variant="ghost"
+                    size="icon-sm"
+                    onClick={collapsePanel}
+                    title={t("components:editor.collapsePanel")}
+                  >
+                    <PanelRightClose />
+                    <span className="sr-only">
+                      {t("components:editor.collapsePanel")}
+                    </span>
+                  </Button>
                 </div>
-              ) : (
-                <div className="flex w-80 min-h-0 flex-col gap-2">
-                  <div className="flex items-center justify-end">
-                    <Button
-                      variant="ghost"
-                      size="icon-sm"
-                      onClick={() => setPanelCollapsed(true)}
-                      title={t("components:editor.collapsePanel")}
-                    >
-                      <PanelRightClose />
-                      <span className="sr-only">
-                        {t("components:editor.collapsePanel")}
-                      </span>
-                    </Button>
-                  </div>
-                  <div className="min-h-0 flex-1">
-                    <CompilePreviewPanel
-                      compiling={compiling}
-                      compileResult={compileResult}
-                      pdfUrl={pdfUrl}
-                    />
-                  </div>
+                <div className="min-h-0 flex-1">
+                  <CompilePreviewPanel
+                    compiling={compiling}
+                    compileResult={compileResult}
+                    pdfUrl={pdfUrl}
+                  />
                 </div>
-              )}
-            </>
-          )}
+              </>
+            )}
+          </div>
+
+          {/* 收起态「书脊」：整条可点展开。卡片同源外观（rounded-xl +
+              foreground/10 描边），竖排文字标注当前隐藏面板名；展开时
+              左移淡出让位（+0ms 先退场），收起时 +150ms 压轴浮现 */}
+          <button
+            type="button"
+            ref={spineBtnRef}
+            inert={!panelCollapsed || undefined}
+            onClick={expandPanelFromSpine}
+            aria-label={t("components:editor.expandPanel")}
+            title={t("components:editor.expandPanel")}
+            className={cn(
+              "absolute inset-y-0 left-0 flex w-full cursor-pointer flex-col items-center gap-4 rounded-xl",
+              "bg-card p-3 text-muted-foreground ring-1 ring-foreground/10 outline-none select-none",
+              "hover:bg-muted/60 hover:text-foreground dark:hover:bg-input/30",
+              "focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50",
+              "transition-[transform,opacity,background-color] duration-200 ease-out motion-reduce:transition-none",
+              panelCollapsed
+                ? "translate-x-0 opacity-100 delay-150"
+                : "pointer-events-none -translate-x-2 opacity-0 delay-0",
+            )}
+          >
+            <PanelRightOpen className="size-4 shrink-0 opacity-70" />
+            {/* 竖排书脊题名：正文楷体沿竖轴排布，呼应装订文档的书脊 */}
+            <span className="[writing-mode:vertical-rl] text-xs leading-none tracking-[0.3em]">
+              {assistantEnabled && panelTab === "assistant"
+                ? t("components:editor.tabAssistant")
+                : t("components:editor.tabCompile")}
+            </span>
+          </button>
         </aside>
       </div>
 
