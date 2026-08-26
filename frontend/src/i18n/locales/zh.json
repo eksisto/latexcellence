@@ -1425,7 +1425,6 @@
       "close": "关闭"
     },
     "editor": {
-      "backToWorkspace": "返回工作台",
       "noFile": "未打开文件",
       "unsavedDot": "有未保存的修改",
       "historyBlockedByDirty": "有未保存的修改，请先保存后再撤销/重做",

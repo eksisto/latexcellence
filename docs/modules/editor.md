@@ -80,7 +80,7 @@ frontend/src/
 ├── pages/EditorPage.jsx              # /editor 三栏布局、编译联动、右栏 Tab、路由守卫
 ├── components/editor/
 │   ├── LaTeXEditor.jsx               # CM6 受控封装（value/onChange）
-│   ├── EditorToolbar.jsx             # 返回 · 文件名/脏标记 · 后端撤销重做 · 面板 · 编译 · 保存 · 设置
+│   ├── EditorToolbar.jsx             # 文件名/脏标记 · 后端撤销重做 · 面板 · 编译 · 保存 · 设置
 │   ├── EditorSettingsDialog.jsx      # 偏好开关 + 偏好导入/导出双通道入口
 │   ├── ConflictDialog.jsx            # 409 弹窗（放弃重载 / 本地内容剪贴板逃生）
 │   ├── CommandPalette.jsx            # 命令面板 + m×n 网格选择器二级步骤

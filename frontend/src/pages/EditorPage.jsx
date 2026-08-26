@@ -692,7 +692,7 @@ export default function EditorPage() {
   /* ── 未打开项目：空态守卫 ─────────────────────────────────────────── */
   if (hydrated && !isOpened) {
     return (
-      <div className="min-h-screen p-8 pt-16 animate-tab-enter">
+      <div className="min-h-screen p-8 animate-tab-enter">
         <div className="max-w-6xl mx-auto space-y-4">
           <h1 className="font-heading text-xl font-semibold">
             {t("pages:editor.title")}
@@ -714,7 +714,7 @@ export default function EditorPage() {
   /* ── 功能开关守卫（决策 Q17）：editor.enabled=false 时提示并回工作台 ── */
   if (editorDisabled) {
     return (
-      <div className="min-h-screen p-8 pt-16 animate-tab-enter">
+      <div className="min-h-screen p-8 animate-tab-enter">
         <div className="max-w-6xl mx-auto space-y-4">
           <h1 className="font-heading text-xl font-semibold">
             {t("pages:editor.title")}
@@ -734,7 +734,7 @@ export default function EditorPage() {
   }
 
   return (
-    <div className="h-screen flex flex-col gap-3 p-4 pt-16 pb-6 animate-tab-enter">
+    <div className="h-screen flex flex-col gap-3 p-4 pb-6 animate-tab-enter">
       {/* 与其他功能页一致的页头（返回 + §kicker + 标题）；压缩纵向留白适配全高布局 */}
       <PageHeader
         title={t("pages:editor.title")}

@@ -1,7 +1,7 @@
 /**
  * EditorToolbar —— 编辑器工具栏（editor-plan §4 / §8）。
  *
- * 按钮：返回工作台 · 文件名与脏标记 · 后端撤销/重做 · 命令面板 · 编译 · 保存 · 编辑器设置。
+ * 按钮：文件名与脏标记 · 后端撤销/重做 · 命令面板 · 编译 · 保存 · 编辑器设置。
  *
  * 撤销体系分两层（方案 §8）：缓冲区内的未保存修改由 CM6 自身 history 负责
  * （LaTeXEditor 内置），本栏的撤销/重做复用既有后端端点语义（已保存层，
@@ -15,7 +15,6 @@
  */
 
 import { useState } from "react";
-import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 
 import { Button } from "@/components/ui/button";
@@ -24,7 +23,6 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import ArrowLeft from "lucide-react/dist/esm/icons/arrow-left.mjs";
 import Play from "lucide-react/dist/esm/icons/play.mjs";
 import Save from "lucide-react/dist/esm/icons/save.mjs";
 import Settings2 from "lucide-react/dist/esm/icons/settings-2.mjs";
@@ -86,17 +84,7 @@ export default function EditorToolbar({
 
   return (
     <div className="flex flex-wrap items-center gap-2">
-      <Button
-        variant="ghost"
-        size="sm"
-        nativeButton={false}
-        render={<Link to="/workspace" />}
-      >
-        <ArrowLeft />
-        {t("components:editor.backToWorkspace")}
-      </Button>
-
-      <span className="ml-1 min-w-0 truncate font-mono text-sm text-muted-foreground">
+      <span className="min-w-0 truncate font-mono text-sm text-muted-foreground">
         {filePath || t("components:editor.noFile")}
         {dirty && (
           <span

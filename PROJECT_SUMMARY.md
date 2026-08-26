@@ -185,7 +185,7 @@ latexcellence/
 │       ├── AuthConnectionButton.jsx # 认证页工具栏「后端连接设置」入口（改绑后端）
 │       │   ├── editor/                 # 编辑器组件
 │       │   │   ├── LaTeXEditor.jsx     # CodeMirror 6 受控封装（value/onChange，挂行内补全与占位符扩展）
-│       │   │   ├── EditorToolbar.jsx   # 返回 · 文件名脏标记 · 后端撤销重做 · 命令面板 · 编译 · 保存 · 设置
+│       │   │   ├── EditorToolbar.jsx   # 文件名脏标记 · 后端撤销重做 · 命令面板 · 编译 · 保存 · 设置
 │       │   │   ├── EditorSettingsDialog.jsx # 偏好开关（软换行/字号/自动保存）+ 偏好导入导出双通道
 │       │   │   ├── ConflictDialog.jsx  # 保存 409 冲突弹窗（放弃重载 / 剪贴板逃生）
 │       │   │   ├── CommandPalette.jsx  # 命令面板（Ctrl/Cmd+/；搜索 + 分类 + 网格选择器二级步骤）

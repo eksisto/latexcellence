@@ -1425,7 +1425,6 @@
       "close": "Close"
     },
     "editor": {
-      "backToWorkspace": "Back to workspace",
       "noFile": "No file opened",
       "unsavedDot": "Unsaved changes",
       "historyBlockedByDirty": "Unsaved changes — save before undo/redo",
