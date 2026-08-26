@@ -922,3 +922,21 @@ def test_plan_e_agent_size_budgets_still_hold():
     metrics = prompt_size_metrics()
     violations = check_prompt_size_budgets(metrics)
     assert not violations, violations
+
+
+def test_editor_assistant_output_format_declares_fence_protocol():
+    """编辑器助手 system prompt 必须声明 ```latex / ```diff 双围栏协议。
+
+    前端 extract_suggestions()（service/editor_chat.py）按围栏语言标签
+    提取可应用建议：```latex/tex → snippet 卡，```diff/patch → diff 卡。
+    本断言防止后续改写 output_format 分区时误删协议描述，导致模型输出
+    不再被识别为建议。
+    """
+    prompt = get_prompt(
+        "editor_assistant",
+        "chat_system",
+        context_block="<editor_state>x</editor_state>",
+        language="English",
+    )
+    assert "```latex" in prompt
+    assert "```diff" in prompt
