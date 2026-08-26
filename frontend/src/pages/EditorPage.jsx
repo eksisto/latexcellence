@@ -46,10 +46,13 @@ import Check from "lucide-react/dist/esm/icons/check.mjs";
 import CircleX from "lucide-react/dist/esm/icons/circle-x.mjs";
 import Expand from "lucide-react/dist/esm/icons/expand.mjs";
 import FileCode from "lucide-react/dist/esm/icons/file-code.mjs";
+import FileText from "lucide-react/dist/esm/icons/file-text.mjs";
+import Image from "lucide-react/dist/esm/icons/image.mjs";
 import Minimize from "lucide-react/dist/esm/icons/minimize.mjs";
 import PanelRightClose from "lucide-react/dist/esm/icons/panel-right-close.mjs";
 import PanelRightOpen from "lucide-react/dist/esm/icons/panel-right-open.mjs";
 import Play from "lucide-react/dist/esm/icons/play.mjs";
+import X from "lucide-react/dist/esm/icons/x.mjs";
 
 import useStore from "@/store/useStore";
 import useEditorStore from "@/store/editorStore";
@@ -61,7 +64,12 @@ import { api } from "@/api/index";
 import { isMultiUser } from "@/api/connection";
 import { translateError } from "@/utils/errorMessages";
 import { openMultiUserProject } from "@/utils/multiUserProject";
-import { isEditableFilePath, isFileTooLarge } from "@/lib/editor/files";
+import {
+  isEditableFilePath,
+  isFileTooLarge,
+  isImagePreviewFilePath,
+  isPreviewableFilePath,
+} from "@/lib/editor/files";
 import { expandEntryInsert, insertSnippet } from "@/lib/editor/snippetInsert";
 import { applyUnifiedDiff } from "@/lib/editor/applyDiff";
 import {
@@ -185,7 +193,7 @@ function CompilePreviewPanel({
 }
 
 export default function EditorPage() {
-  const { t } = useTranslation(["pages", "components"]);
+  const { t } = useTranslation(["pages", "components", "common"]);
   const [searchParams, setSearchParams] = useSearchParams();
 
   const workspaceId = useStore((s) => s.workspaceId);
@@ -234,6 +242,10 @@ export default function EditorPage() {
   const [pdfUrl, setPdfUrl] = useState(null);
   /** 编译预览全屏态（对齐 GitDiff 页）：覆盖层挂在页面级，Escape 可退出 */
   const [previewFullscreen, setPreviewFullscreen] = useState(false);
+  // ── 文件只读预览状态：文件树点击 PDF / 位图在中栏编辑器区上方打开，
+  //    不进入 CM6 缓冲区（无脏跟踪 / 无 URL ?file= 写入） ──
+  const [filePreviewPath, setFilePreviewPath] = useState(null);
+  const [filePreviewUrl, setFilePreviewUrl] = useState(null);
   /** 收起态「书脊」按钮：收起后承接焦点，键盘动线不断（Enter 再展开） */
   const spineBtnRef = useRef(null);
   /** 面板头部折叠按钮：书脊展开后焦点回到这里 */
@@ -282,6 +294,9 @@ export default function EditorPage() {
           return false;
         }
         openBuffer({ filePath, content: data.content, baseMd5: data.md5 });
+        // 文本文件成功打开：收起只读预览覆盖层，让位给编辑器缓冲区
+        setFilePreviewPath(null);
+        setFilePreviewUrl(null);
         // URL 同步当前文件（replace 避免污染历史栈）
         setSearchParams(
           (prev) => {
@@ -310,10 +325,15 @@ export default function EditorPage() {
     [workspaceId, openBuffer, setSearchParams, t, describeError],
   );
 
-  /** 文件树点击入口：白名单 + 脏改动确认后打开 */
+  /** 文件树点击入口：只读预览分流（PDF/位图） + 文本白名单 + 脏改动确认 */
   const requestOpenFile = useCallback(
     (filePath) => {
       if (!filePath || opening || saving) return;
+      // PDF / 位图走只读预览覆盖层：不动缓冲区，也无须脏改动确认
+      if (isPreviewableFilePath(filePath)) {
+        setFilePreviewPath(filePath);
+        return;
+      }
       if (!isEditableFilePath(filePath)) {
         toast.error(t("pages:editor.unsupportedType", { path: filePath }));
         return;
@@ -330,10 +350,14 @@ export default function EditorPage() {
     [doOpenFile, opening, saving, t],
   );
 
-  /* ── URL ?file= 参数驱动打开（含刷新直达） ────────────────────────── */
+  /* ── URL ?file= 参数驱动打开（含刷新直达；预览型文件直达恢复覆盖层） ── */
   const requestedFile = searchParams.get("file");
   useEffect(() => {
     if (!isOpened || fileTree.length === 0 || !requestedFile) return;
+    if (isPreviewableFilePath(requestedFile)) {
+      setFilePreviewPath(requestedFile);
+      return;
+    }
     if (!isEditableFilePath(requestedFile)) {
       toast.error(t("pages:editor.unsupportedType", { path: requestedFile }));
       return;
@@ -347,6 +371,42 @@ export default function EditorPage() {
     }
     doOpenFile(requestedFile);
   }, [requestedFile, isOpened, fileTree.length, doOpenFile, t]);
+
+  /* ── 只读预览：按路径拉取 blob URL，切换/关闭/卸载时释放 ─────────── */
+  useEffect(() => {
+    if (!filePreviewPath) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const url = await api.project.rawFileBlobUrl(
+          filePreviewPath,
+          workspaceId,
+        );
+        if (cancelled) {
+          // 竞态败者：URL 尚未入 state，这里直接就地回收
+          URL.revokeObjectURL(url);
+          return;
+        }
+        setFilePreviewUrl(url);
+      } catch (e) {
+        if (cancelled) return;
+        setFilePreviewPath(null);
+        toast.error(t("pages:editor.openFailed"), {
+          description: translateError({ error: e.code, message: e.message }),
+        });
+      }
+    })();
+    return () => {
+      cancelled = true;
+      setFilePreviewUrl((prev) => {
+        if (prev) URL.revokeObjectURL(prev);
+        return null;
+      });
+    };
+  }, [filePreviewPath, workspaceId, t]);
+
+  /** 关闭只读预览：清路径即触发上方 effect 的清理分支释放 URL */
+  const closeFilePreview = useCallback(() => setFilePreviewPath(null), []);
 
   /* ── 刷新直达恢复：fileTree 为空且已声明打开过项目时重建工作区绑定 ── */
   useEffect(() => {
@@ -839,6 +899,54 @@ export default function EditorPage() {
           {opening && (
             <div className="absolute inset-0 z-10 grid place-items-center bg-background/60 text-sm text-muted-foreground">
               {t("pages:editor.opening")}
+            </div>
+          )}
+          {/* 只读预览覆盖层：文件树点击 PDF / 位图时盖在编辑器区上方，
+              不进入 CM6 缓冲区；关闭按钮退出，点 .tex 打开时自动让位。
+              PDF 走 iframe（PDFPreview），位图走 <img> 居中 contain */}
+          {filePreviewPath && (
+            <div className="absolute inset-0 z-20 flex flex-col overflow-hidden rounded-lg border bg-background">
+              <div className="flex shrink-0 items-center justify-between gap-2 border-b px-3 py-1.5">
+                <span className="flex min-w-0 items-center gap-1.5 text-sm font-medium">
+                  {isImagePreviewFilePath(filePreviewPath) ? (
+                    <Image className="size-4 shrink-0 text-muted-foreground" />
+                  ) : (
+                    <FileText className="size-4 shrink-0 text-muted-foreground" />
+                  )}
+                  <span className="truncate" title={filePreviewPath}>
+                    {filePreviewPath}
+                  </span>
+                </span>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="size-7 shrink-0"
+                  onClick={closeFilePreview}
+                  title={t("common:close")}
+                >
+                  <X className="size-4" />
+                  <span className="sr-only">{t("common:close")}</span>
+                </Button>
+              </div>
+              <div className="min-h-0 flex-1 p-2">
+                {filePreviewUrl ? (
+                  isImagePreviewFilePath(filePreviewPath) ? (
+                    <div className="flex h-full items-center justify-center overflow-auto rounded bg-muted/30 p-2">
+                      <img
+                        src={filePreviewUrl}
+                        alt={filePreviewPath}
+                        className="max-h-full max-w-full object-contain"
+                      />
+                    </div>
+                  ) : (
+                    <PDFPreview url={filePreviewUrl} />
+                  )
+                ) : (
+                  <div className="grid h-full place-items-center text-sm text-muted-foreground">
+                    {t("pages:editor.opening")}
+                  </div>
+                )}
+              </div>
             </div>
           )}
           {session.filePath ? (

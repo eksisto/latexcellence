@@ -4,7 +4,8 @@
 覆盖：打开读取、正常保存、MD5 冲突 409（含相对路径脱敏）、内容损坏特征
 拦截（配平中间态放行）、保存后 undo 回退恢复原文；以及 review 回归：
 CRLF 字节保真（content 与 md5 对应同一份磁盘字节）、非 UTF-8 稳定错误码
-invalid_encoding、内容校验卸载线程池（事件循环保护）。
+invalid_encoding、内容校验卸载线程池（事件循环保护）；以及 PDF 只读预览
+raw-file（inline 字节保真、白名单外拒绝、路径穿越防护）。
 """
 
 import hashlib
@@ -298,3 +299,87 @@ class TestEventLoopProtection:
         assert exc_info.value.status_code == 400
         # 校验在工作线程执行（事件循环所在线程 != 执行线程）
         assert seen["thread_ident"] != threading.get_ident()
+
+
+class TestRawFilePreview:
+    """编辑器二进制预览接口（GET /api/project/raw-file，白名单含 PDF 与
+    常见位图）。
+
+    只读预览：inline 返回原始字节，供文件树点击 PDF / 图片时内嵌展示；
+    路径校验与错误语义与 file-content 一致（invalid_path / file_not_found）。
+    """
+
+    PDF_BYTES = b"%PDF-1.4\n%\xe2\xe3\xcf\xd3\n1 0 obj\nendobj\n%%EOF\n"
+
+    def _get(self, client, env, file_path="out.pdf"):
+        return client.get(
+            "/api/project/raw-file",
+            params={"file_path": file_path, "workspace_id": env["ws"]},
+        )
+
+    def test_serves_pdf_inline_with_original_bytes(self, client, env):
+        (env["root"] / "out.pdf").write_bytes(self.PDF_BYTES)
+        resp = self._get(client, env)
+        assert resp.status_code == 200
+        assert resp.headers["content-type"].startswith("application/pdf")
+        # inline 内联预览而非触发下载；filename 只含 basename 不含目录
+        assert "inline" in resp.headers.get("content-disposition", "")
+        assert resp.content == self.PDF_BYTES
+        # 多用户脱敏约束：响应头与正文不得携带服务器绝对路径
+        assert str(env["root"]).encode("utf-8") not in resp.content
+        assert str(env["root"]) not in resp.headers.get("content-disposition", "")
+
+    def test_rejects_suffix_outside_preview_whitelist(self, client, env):
+        (env["root"] / "notes.txt").write_text("plain", encoding="utf-8")
+        resp = self._get(client, env, "notes.txt")
+        assert resp.status_code == 400
+        detail = resp.json()["detail"]
+        assert detail["error"] == "invalid_path"
+        assert str(env["root"]) not in resp.text
+
+    def test_rejects_editable_but_not_previewable_suffix(self, client, env):
+        # .tex 在可编辑白名单内但不在可预览白名单：raw-file 一律拒绝
+        resp = self._get(client, env, "main.tex")
+        assert resp.status_code == 400
+        assert resp.json()["detail"]["error"] == "invalid_path"
+
+    def test_missing_file_returns_404(self, client, env):
+        resp = self._get(client, env, "no_such.pdf")
+        assert resp.status_code == 404
+        detail = resp.json()["detail"]
+        assert detail["error"] == "file_not_found"
+        # 错误消息使用相对路径
+        assert detail["message"] == "File not found: no_such.pdf"
+
+    def test_serves_image_inline_with_original_bytes(self, client, env):
+        # 最小 PNG 签名头：验证位图走同一 raw-file 通道
+        png_bytes = b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01"
+        (env["root"] / "fig.png").write_bytes(png_bytes)
+        resp = self._get(client, env, "fig.png")
+        assert resp.status_code == 200
+        assert resp.headers["content-type"].startswith("image/png")
+        assert "inline" in resp.headers.get("content-disposition", "")
+        assert resp.content == png_bytes
+
+    def test_jpg_suffix_maps_to_jpeg_mime(self, client, env):
+        (env["root"] / "photo.jpg").write_bytes(b"\xff\xd8\xff\xe0fake-jpeg")
+        resp = self._get(client, env, "photo.jpg")
+        assert resp.status_code == 200
+        assert resp.headers["content-type"].startswith("image/jpeg")
+
+    def test_eps_not_previewable(self, client, env):
+        # .eps 学术常见但浏览器无法原生渲染：刻意不入可预览白名单
+        (env["root"] / "fig.eps").write_bytes(b"%!PS-Adobe-3.0 EPSF-3.0\n")
+        resp = self._get(client, env, "fig.eps")
+        assert resp.status_code == 400
+        assert resp.json()["detail"]["error"] == "invalid_path"
+
+    def test_rejects_path_traversal(self, client, env, tmp_path):
+        outside = tmp_path.parent / "evil.pdf"
+        outside.write_bytes(b"secret-bytes")
+        try:
+            resp = self._get(client, env, "../evil.pdf")
+            assert resp.status_code == 400
+            assert b"secret-bytes" not in resp.content
+        finally:
+            outside.unlink(missing_ok=True)

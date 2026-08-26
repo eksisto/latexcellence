@@ -9,7 +9,7 @@ import FileText from "lucide-react/dist/esm/icons/file-text.mjs";
 import Image from "lucide-react/dist/esm/icons/image.mjs";
 import ChevronRight from "lucide-react/dist/esm/icons/chevron-right.mjs";
 
-const IMAGE_FILE_RE = /\.(png|jpg|jpeg|webp|pdf)$/i;
+const IMAGE_FILE_RE = /\.(png|jpg|jpeg|gif|webp|bmp|pdf)$/i;
 
 function getFileIcon(name, isDir, isExpanded) {
   if (isDir) {

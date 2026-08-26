@@ -12,6 +12,10 @@
        反向补丁快照，手动编辑因此与 AI 改动共享同一套 undo/redo 历史
        （决策 Q11）；写盘后复用 projects_service.enforce_write_quota 刷新
        项目用量记账，超限回滚语义与既有写路径一致（方案 §8.4）
+    3. 二进制预览：GET /api/project/raw-file 的业务实现——路径经
+       resolve_project_path() 可预览扩展名白名单校验后，以
+       Content-Disposition: inline 的 FileResponse 返回原始字节，
+       供编辑器页内嵌 PDF 与常见位图预览（只读，不进入缓冲区与撤销历史）
 
 约束：
     - 面向用户的错误消息一律使用项目内相对路径（多用户路径脱敏规则），
@@ -27,6 +31,7 @@ import asyncio
 from pathlib import Path
 
 from fastapi import HTTPException
+from fastapi.responses import FileResponse
 
 from backend.core.logger import get_logger
 from backend.core.multiuser import edit_log
@@ -40,6 +45,31 @@ logger = get_logger(__name__)
 
 # 可编辑文件扩展名白名单（editor-plan §2 / 决策 Q3；常量供路由层与服务层复用）
 EDITABLE_SUFFIXES: tuple[str, ...] = (".tex", ".bib", ".sty", ".cls")
+
+# 可预览二进制扩展名白名单（编辑器页内嵌只读预览；须与前端
+# lib/editor/files.js 的 PREVIEWABLE_SUFFIXES 同步）。刻意不收：
+#   - .svg：以 inline 提供用户上传的 SVG 存在存储型 XSS 风险；
+#   - .eps：学术项目常见但浏览器无法原生渲染，需额外转换管线。
+PREVIEWABLE_SUFFIXES: tuple[str, ...] = (
+    ".pdf",
+    ".png",
+    ".jpg",
+    ".jpeg",
+    ".gif",
+    ".webp",
+    ".bmp",
+)
+
+# 可预览扩展名 → MIME 类型（FileResponse media_type 用）
+_RAW_MEDIA_TYPES: dict[str, str] = {
+    ".pdf": "application/pdf",
+    ".png": "image/png",
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".gif": "image/gif",
+    ".webp": "image/webp",
+    ".bmp": "image/bmp",
+}
 
 
 def _http(status: int, code: str, message: str) -> HTTPException:
@@ -178,3 +208,43 @@ def _prepare_save(project, file_path: str) -> str:
     if not full_path.is_file():
         raise FileNotFoundError(f"File not found: {file_path}")
     return _read_text_strict(full_path, file_path)
+
+
+# ── 二进制预览 ────────────────────────────────────────────────────────────
+async def read_raw_file(project, file_path: str) -> FileResponse:
+    """读取项目内可预览二进制文件（PDF 与常见位图），inline 返回原始字节。
+
+    只读预览：不进入编辑器缓冲区、不产生撤销记账；路径校验与错误语义
+    （invalid_path / file_not_found / invalid_workspace）与打开读取一致。
+    """
+    try:
+        full_path = await asyncio.to_thread(_resolve_raw_file_sync, project, file_path)
+    except FileNotFoundError as e:
+        raise _http(404, "file_not_found", str(e)) from e
+    except ValueError as e:
+        raise _http(400, "invalid_path", str(e)) from e
+    except RuntimeError as e:
+        raise _http(400, "invalid_workspace", str(e)) from e
+
+    logger.info("Editor raw file served: %s", file_path)
+    # filename 只取 basename（非服务器路径，不违反多用户脱敏）；
+    # content_disposition_type="inline" 使浏览器在 iframe 内联预览而非下载，
+    # 与 git_diff 的 PDF 端点口径一致
+    return FileResponse(
+        path=full_path,
+        media_type=_RAW_MEDIA_TYPES[full_path.suffix.lower()],
+        filename=full_path.name,
+        content_disposition_type="inline",
+    )
+
+
+def _resolve_raw_file_sync(project, file_path: str) -> Path:
+    """校验可预览目标合法（白名单 + 符号链接检测），返回绝对路径。"""
+    root = Path(project.root_path)
+    full_path = resolve_project_path(
+        root, file_path, allowed_suffixes=PREVIEWABLE_SUFFIXES
+    )
+    if not full_path.is_file():
+        logger.info("Editor raw file miss: %s (root=%s)", file_path, root)
+        raise FileNotFoundError(f"File not found: {file_path}")
+    return full_path

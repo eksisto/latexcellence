@@ -310,6 +310,14 @@ export const api = {
           workspaceId,
         ),
       ),
+    /** 编辑器二进制预览（当前仅 PDF）：返回临时 blob URL，调用方负责 revoke */
+    rawFileBlobUrl: async (filePath, workspaceId) => {
+      const url = appendWs(
+        `${getApiBase()}/project/raw-file?file_path=${encodeURIComponent(filePath)}`,
+        workspaceId,
+      );
+      return fetchBlobUrl(url);
+    },
     /**
      * 编辑器整文件保存（MD5 乐观锁）：base_md5 与磁盘不符时后端返回
      * 409 结构化错误（error: "file_conflict"）；成功返回 { status, file_path, md5 }

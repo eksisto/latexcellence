@@ -6,7 +6,8 @@
 
 网页编辑器提供工作台之外的第二内容入口：全宽三栏布局的 `/editor` 页，
 支持项目内文本文件的手动编辑与 MD5 乐观锁保存、LaTeX 命令快速输入
-（中/拼/英三路模糊查找）、编译联动与编辑器侧 AI 助手。后端由
+（中/拼/英三路模糊查找）、编译联动与编辑器侧 AI 助手；文件树点击 PDF
+以只读覆盖层内嵌预览。后端由
 `backend/modules/editor/`（整文件读写服务）与 `writing_chat` 包内的
 编辑器助手端点两部分组成。
 
@@ -31,6 +32,7 @@ AI 建议**不经后端落盘**：建议以结构化形式随 SSE 返回并随�
 | 接口 | 语义 |
 | --- | --- |
 | `GET /api/project/file-content` | 打开读取：路径经 `resolve_project_path()` 白名单校验（`.tex/.bib/.sty/.cls`），返回 `{content, md5}`；按字节保真（不做换行归一化），非 UTF-8 报稳定错误码 `invalid_encoding` |
+| `GET /api/project/raw-file` | 二进制只读预览（白名单：`.pdf` 与常见位图 `.png/.jpg/.jpeg/.gif/.webp/.bmp`）：`Content-Disposition: inline` 返回原始字节，供编辑器页内嵌预览；不进入缓冲区与撤销历史 |
 | `GET /api/project/file-md5` | 当前 MD5（乐观锁基线；检查结果保鲜横幅也复用） |
 | `POST /api/project/save-file` | 统一保存：`latex_json_guard` 宽松损坏特征校验（不做括号/$ 配平检查）→ MD5 乐观锁（不符返回 **409** 结构化错误 `file_conflict`）→ 单用户推入 BackupManager 撤销栈 / 多用户记入 workspace_edit_ops 反向补丁快照 → 刷新项目用量记账，超限回滚 |
 
@@ -89,7 +91,7 @@ frontend/src/
 │   └── StaleCheckBanner.jsx          # 检查结果过期横幅（各检查页复用）
 ├── lib/editor/
 │   ├── language.js                   # 语言包抽象层（stex StreamLanguage）
-│   ├── files.js                      # 可编辑白名单 + 大小上限纯函数
+│   ├── files.js                      # 可编辑/可预览白名单 + 大小上限纯函数
 │   ├── preferences.js                # 偏好默认值/白名单清洗/导出导入校验纯函数
 │   ├── matcher.js                    # pinyin-pro 四路模糊匹配
 │   ├── commandZh.js                  # 命令中文名按界面语言本地化展示
@@ -106,6 +108,18 @@ Zustand：`editorStore` 含三个切片——`editorPreferences`（persist：
 autoSave / softWrap / fontSize）、`editorSession`（当前文件、缓冲区、
 baseMd5、脏标记、冲突信息，不持久化）、`editorAssistant`（助手会话 id
 与消息视图，不持久化；后端会话按项目 scope 隔离，切换文件延续会话）。
+
+### 图片与 PDF 只读预览
+
+文件树点击 `.pdf` 或常见位图（前端 `isPreviewableFilePath()` 与后端
+`PREVIEWABLE_SUFFIXES` 双白名单把关）经 `GET raw-file` 拉取 blob URL，
+在中栏编辑器区上方以只读覆盖层展示（标题栏显示相对路径 + 关闭按钮）：
+PDF 走 iframe，位图走 `<img>` 居中 contain。预览不进入 CM6 缓冲区：
+无脏跟踪、不写 URL `?file=`；URL 直达 `?file=xx.pdf` 刷新时恢复预览。
+blob URL 在切换文件 / 关闭 / 卸载时就地 revoke，竞态败者（响应晚于
+路径切换）不入 state 直接回收；打开文本文件成功时自动收起覆盖层。
+白名单刻意排除 `.svg`（inline 提供用户上传的 SVG 存在存储型 XSS 风险）
+与 `.eps`（浏览器无法原生渲染）。
 
 ### 三种建议应用形态（§7.2 / 决策 Q23）
 

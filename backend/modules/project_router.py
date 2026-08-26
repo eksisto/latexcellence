@@ -302,6 +302,21 @@ async def get_file_content(
     return await editor_service.read_file_content(project, file_path)
 
 
+@router.get("/raw-file")
+async def get_raw_file(
+    file_path: str = Query(..., description="文件路径（相对于项目根目录）"),
+    workspace_id: str = Query(..., description="工作区唯一标识符"),
+    _: dict = Depends(access_control.require_workspace_read),
+):
+    """编辑器二进制预览（PDF 与常见位图）：inline 返回原始字节。
+
+    供编辑器页文件树点击 PDF / 图片时内嵌只读预览；不进入缓冲区与
+    撤销历史。
+    """
+    project = get_project_manager_for_workspace(workspace_id)
+    return await editor_service.read_raw_file(project, file_path)
+
+
 @router.post("/save-file")
 async def save_file(
     request: SaveFileRequest,
