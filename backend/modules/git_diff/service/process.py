@@ -8,12 +8,28 @@ auto 探测失败或 local 模式回落本地子进程（行为与历史完全�
 
 from pathlib import Path
 
+from backend.core.config import get_config
 from backend.core.logger import get_logger
 from backend.utils.sandbox import ExecSpec, current_sandbox_user_id, get_sandbox_runner
+from backend.utils.tex_compile import sanitize_output_paths
 
 from .models import ProcessResult
 
 logger = get_logger(__name__)
+
+
+def redact_command_output_for_user(text: str, cwd: Path) -> str:
+    """命令输出作为面向用户的错误消息前的统一脱敏口。
+
+    多用户模式下把 ``<cwd>/`` 前缀（含裸 cwd 边界）改写为相对形式，
+    防止服务器上的项目/用户空间绝对路径经 git/latexdiff 的 stderr 或
+    stdout 泄漏给客户端；单用户本地模式保留原文（路径对操作者本人可
+    见，与编译输出口径一致）。完整原始输出仍由调用方按需记入服务端日
+    志（日志不做脱敏，符合「完整路径只允许进服务端日志」约定）。
+    """
+    if not get_config().multi_user.enabled:
+        return text
+    return sanitize_output_paths(text, cwd)
 
 
 async def _run_git_checked(
@@ -24,7 +40,10 @@ async def _run_git_checked(
     result = await _run_git(cwd, args, timeout=timeout)
     if result.returncode != 0:
         raise RuntimeError(
-            result.stderr.strip() or result.stdout.strip() or "Git command failed"
+            redact_command_output_for_user(
+                result.stderr.strip() or result.stdout.strip() or "Git command failed",
+                cwd,
+            )
         )
     return result
 

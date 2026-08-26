@@ -17,7 +17,7 @@ from .constants import (
     _FLOAT_ENV_NAMES,
 )
 from .models import DiffDocument, ProcessResult
-from .process import _run_process
+from .process import _run_process, redact_command_output_for_user
 
 logger = get_logger(__name__)
 
@@ -102,7 +102,11 @@ async def _build_latexdiff_document(
                 or "latexdiff exited with a non-zero exit code, but no error output was produced"
             )
             if not result.stdout.strip():
-                raise RuntimeError(f"latexdiff failed: {msg}")
+                # tmp 目录即本次命令的工作目录：其绝对路径（含随机后缀）
+                # 不向用户暴露，多用户模式下经统一脱敏口改写
+                raise RuntimeError(
+                    f"latexdiff failed: {redact_command_output_for_user(msg, tmp)}"
+                )
             logger.warning(
                 f"latexdiff exited with a non-zero exit code, but there is still some output, which may be incomplete: {msg}"
             )

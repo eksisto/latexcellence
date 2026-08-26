@@ -94,7 +94,11 @@ async def _list_commit_revisions(git_root: Path) -> list[GitRevision]:
         # 全新仓库还没有任何提交，返回空列表（只保留 worktree 可选）
         if "does not have any commits yet" in stderr:
             return []
-        raise RuntimeError(stderr or result.stdout.strip() or "Git log failed")
+        raise RuntimeError(
+            process.redact_command_output_for_user(
+                stderr or result.stdout.strip() or "Git log failed", git_root
+            )
+        )
 
     revisions = []
     for line in result.stdout.splitlines():
