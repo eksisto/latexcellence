@@ -131,7 +131,7 @@ latexcellence/
 │   ├── components.json              # shadcn/ui 组件配置
 │   ├── jsconfig.json                # JS 路径别名配置
 │   ├── public/                      # 静态资源（favicon）
-│   ├── test/                        # 前端单元测试（node --test：formulaWrap / writingChatUtils / editorFiles / editorPreferences / editorMatcher / editorSnippetInsert / editorPreambleScan / latexCommands 等）
+│   ├── test/                        # 前端单元测试（node --test：formulaWrap / writingChatUtils / editorFiles / editorPreferences / editorMatcher / editorSnippetInsert / editorPreambleScan / latexCommands / i18nCoverage 等）
 │   └── src/
 │       ├── main.jsx                 # React 入口
 │       ├── App.jsx                  # 根路由
