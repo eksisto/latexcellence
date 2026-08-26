@@ -17,6 +17,7 @@ LaTeX 项目管理模块。
 from dataclasses import dataclass, field
 from pathlib import Path
 import threading
+from typing import NamedTuple
 
 
 from backend.core.logger import get_logger
@@ -48,6 +49,23 @@ class FileConflictError(Exception):
             f"Expected MD5: {expected_md5[:8]}..., got: {current_md5[:8]}... "
             f"Please refresh and try again."
         )
+
+
+class WholeFileWriteResult(NamedTuple):
+    """
+    apply_whole_files_detailed 的统一详细结果。
+
+    - md5s: {相对路径: 写入后的 MD5}
+    - edit_op_id: 本次事务的编辑日志 op_id（多用户模式实际记账时；
+      单用户模式或无变化时为 None）
+    - before_contents: {相对路径: 事务锁内读取的写前全文}——与乐观锁
+      校验、失败恢复使用同一份快照，供调用方（如配额超限回滚）在锁外
+      安全消费，杜绝"锁外预读、锁内被改"的竞态窗口
+    """
+
+    md5s: dict[str, str]
+    edit_op_id: str | None
+    before_contents: dict[str, str]
 
 
 @dataclass
@@ -385,11 +403,11 @@ class LatexProject:
         return_edit_op_id: bool = False,
     ) -> dict[str, str] | tuple[dict[str, str], str | None]:
         """
-        以事务方式批量替换多个文件的完整内容。
+        以事务方式批量替换多个文件的完整内容（兼容旧契约的薄包装）。
 
-        提交前校验每个文件当前 MD5 与 expected_md5s 一致；任一文件校验失败或
-        写入失败时，已写入文件恢复到事务开始前的内容。每个文件在写入前会推入
-        BackupManager，保留常规 undo 能力。
+        实现统一委托 apply_whole_files_detailed；本方法仅按历史返回契约
+        解包结果，供既有调用方（bib_manager / style_modify / projects
+        配额回滚等）零改动运行。
 
         参数：
             updates: {相对路径: 完整新内容}
@@ -402,6 +420,43 @@ class LatexProject:
         返回：
             {相对路径: 写入后的 MD5}；return_edit_op_id=True 时返回
             (上述字典, edit_op_id | None)
+        """
+        result = self.apply_whole_files_detailed(
+            updates,
+            expected_md5s=expected_md5s,
+            allowed_suffixes=allowed_suffixes,
+        )
+        if return_edit_op_id:
+            return result.md5s, result.edit_op_id
+        return result.md5s
+
+    def apply_whole_files_detailed(
+        self,
+        updates: dict[str, str],
+        *,
+        expected_md5s: dict[str, str] | None = None,
+        allowed_suffixes: tuple[str, ...] | None = None,
+    ) -> WholeFileWriteResult:
+        """
+        apply_whole_files 的详细事务实现。
+
+        提交前在事务锁内逐文件校验存在性、读取写前全文并校验 MD5 与
+        expected_md5s 一致；任一文件校验失败或写入失败时，已写入文件恢复到
+        事务开始前的内容。每个文件在写入前会推入 BackupManager，保留常规
+        undo 能力。写前全文与乐观锁/失败恢复共用同一份锁内快照并随结果
+        返回（before_contents），调用方无须再在锁外自行预读。
+
+        参数：
+            updates: {相对路径: 完整新内容}
+            expected_md5s: 可选的乐观锁 {相对路径: 期望 MD5}
+            allowed_suffixes: 可选扩展名白名单
+
+        返回：
+            WholeFileWriteResult(md5s, edit_op_id, before_contents)
+
+        异常：
+            FileNotFoundError: 任一目标文件不存在（锁内存在性检查时抛出）
+            FileConflictError: 乐观锁校验失败
         """
         if not self._project_info:
             raise RuntimeError("No project opened")
@@ -417,7 +472,15 @@ class LatexProject:
                 )
                 if not full_path.exists() or not full_path.is_file():
                     raise FileNotFoundError(f"File not found: {file_path}")
-                current = safe_read(full_path)
+                try:
+                    current = full_path.read_text(encoding="utf-8")
+                except UnicodeDecodeError:
+                    # 与 file_ops.safe_read 同语义（UTF-8 解码 + 通用换行
+                    # 归一化），但保持标准 UnicodeDecodeError 类型原样上抛，
+                    # 供调用方区分映射（如编辑器保存 → invalid_encoding 400）
+                    # 并以相对路径自行构造面向用户的错误消息；原始解码错误
+                    # 不含路径，无多用户脱敏问题。
+                    raise
                 if expected_md5s is not None:
                     expected = expected_md5s.get(file_path)
                     if expected is not None:
@@ -474,9 +537,13 @@ class LatexProject:
                 "Applied whole-file batch: %d file(s)",
                 len(prepared),
             )
-            if return_edit_op_id:
-                return result, edit_op_id
-            return result
+            return WholeFileWriteResult(
+                md5s=result,
+                edit_op_id=edit_op_id,
+                before_contents={
+                    file_path: before for file_path, _, before, _ in prepared
+                },
+            )
 
     def undo(self, file_path: str) -> bool:
         """

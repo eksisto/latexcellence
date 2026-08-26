@@ -169,6 +169,41 @@ class TestSaveFile:
         assert resp.json()["detail"]["error"] == "invalid_path"
         assert not (env["root"] / "notes.txt").exists()
 
+    def test_content_length_cap_constant(self):
+        from backend.modules.editor import service as editor_service
+
+        # 上限常量与前端缓冲区协议约定一致（约 2MB 文本）
+        assert editor_service.MAX_EDITABLE_CHARS == 2_000_000
+
+    def test_oversized_content_rejected_with_413(self, client, env, monkeypatch):
+        """超过 MAX_EDITABLE_CHARS 的保存请求 → 结构化 413 content_too_long。
+
+        缩小上限常量以避免构造 2MB 请求体；校验发生在内容损坏扫描与
+        落盘之前，磁盘内容不受影响。同时覆盖 project_router.SaveFileRequest
+        入口（校验统一收口在 service.save_file_content）。
+        """
+        from backend.modules.editor import service as editor_service
+
+        monkeypatch.setattr(editor_service, "MAX_EDITABLE_CHARS", 10)
+        resp = _save(client, env, "this content is definitely too long\n")
+        assert resp.status_code == 413
+        detail = resp.json()["detail"]
+        assert detail["error"] == "content_too_long"
+        # 多用户脱敏约束：错误消息不得携带服务器绝对路径
+        assert str(env["root"]) not in resp.text
+        # 拦截发生在落盘前
+        assert (env["root"] / "main.tex").read_text(encoding="utf-8") == MAIN_TEX
+
+    def test_content_at_limit_passes(self, client, env, monkeypatch):
+        """内容长度恰好等于上限时放行（仅超过 MAX_EDITABLE_CHARS 才 413）。"""
+        from backend.modules.editor import service as editor_service
+
+        new_content = MAIN_TEX.replace("Hello world.", "Edited.")
+        monkeypatch.setattr(editor_service, "MAX_EDITABLE_CHARS", len(new_content))
+        resp = _save(client, env, new_content)
+        assert resp.status_code == 200, resp.text
+        assert (env["root"] / "main.tex").read_text(encoding="utf-8") == new_content
+
     def test_save_then_undo_restores_original(self, client, env):
         new_content = MAIN_TEX.replace("Hello world.", "Replaced by editor.")
         saved = _save(client, env, new_content)

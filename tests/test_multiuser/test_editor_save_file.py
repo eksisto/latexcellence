@@ -18,19 +18,13 @@ from backend.core.security_middleware import AccessSecurityMiddleware
 
 PASSWORD = "password-123"
 
-MAIN_TEX = (
-    r"\documentclass{article}"
-    + "\n"
-    + r"\begin{document}"
-    + "\n"
-    + "First paragraph."
-    + "\n"
-    + "\n"
-    + "Second paragraph."
-    + "\n"
-    + r"\end{document}"
-    + "\n"
-)
+MAIN_TEX = r"""\documentclass{article}
+\begin{document}
+First paragraph.
+
+Second paragraph.
+\end{document}
+"""
 
 EDITED_TEX = MAIN_TEX.replace("First paragraph.", "First paragraph, edited.")
 

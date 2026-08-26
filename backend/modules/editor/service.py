@@ -23,11 +23,15 @@
     - 同步阻塞 I/O 与内容校验（最大约 2MB 文本的损坏特征扫描）一律经
       asyncio.to_thread 调度，不阻塞事件循环
     - 读写按字节保真：打开返回的 content 与 md5 对应同一份磁盘字节
-      （safe_read 的通用换行归一化会把 CRLF 改写为 LF，此处不用），
-      避免"打开即保存"把整个文件换行符静默翻转
+      （单次 read_bytes，safe_read 的通用换行归一化会把 CRLF 改写为
+      LF，此处不用），避免"打开即保存"把整个文件换行符静默翻转
+    - 保存内容长度受 MAX_EDITABLE_CHARS 上限保护；配额回滚所需的写前
+      全文由 apply_whole_files_detailed 在事务锁内捕获并随结果返回，
+      服务层不再锁外预读（消除预读-落盘竞态窗口）
 """
 
 import asyncio
+import hashlib
 from pathlib import Path
 
 from fastapi import HTTPException
@@ -37,7 +41,6 @@ from backend.core.logger import get_logger
 from backend.core.multiuser import edit_log
 from backend.core.project_manager import FileConflictError
 from backend.modules.projects import service as projects_service
-from backend.utils.file_ops import compute_md5
 from backend.utils.latex_json_guard import check_latex_corruption
 from backend.utils.path_guard import resolve_project_path
 
@@ -45,6 +48,10 @@ logger = get_logger(__name__)
 
 # 可编辑文件扩展名白名单（editor-plan §2 / 决策 Q3；常量供路由层与服务层复用）
 EDITABLE_SUFFIXES: tuple[str, ...] = (".tex", ".bib", ".sty", ".cls")
+
+# 单次可保存内容的字符数上限：拦截误粘贴超大文本 / 恶意超大请求体在
+# 内容校验与落盘前的资源消耗。save-file 与编辑器助手缓冲区共用同一量级。
+MAX_EDITABLE_CHARS = 2_000_000
 
 # 可预览二进制扩展名白名单（编辑器页内嵌只读预览；须与前端
 # lib/editor/files.js 的 PREVIEWABLE_SUFFIXES 同步）。刻意不收：
@@ -76,28 +83,6 @@ def _http(status: int, code: str, message: str) -> HTTPException:
     return HTTPException(status_code=status, detail={"error": code, "message": message})
 
 
-def _read_text_strict(full_path: Path, file_path: str) -> str:
-    """字节级保真读取 UTF-8 文本（编辑器读写面专用，不用 safe_read）。
-
-    safe_read 走 read_text 的通用换行归一化（\\r\\n / \\r → \\n），会导致
-    返回的 content 与 md5（按磁盘字节计算）不一致，且"打开即保存"会把
-    CRLF 文件整体改写为 LF；此处按原始字节解码，保留作者的真实换行符。
-    非 UTF-8 内容抛稳定错误码 invalid_encoding（供前端翻译层消费），
-    错误消息只含项目内相对路径。
-    """
-    try:
-        return full_path.read_bytes().decode("utf-8")
-    except UnicodeDecodeError as e:
-        raise HTTPException(
-            status_code=400,
-            detail={
-                "error": "invalid_encoding",
-                "message": f"File {file_path} is not valid UTF-8. "
-                "Only UTF-8 encoded files are supported.",
-            },
-        ) from e
-
-
 # ── 打开读取 ──────────────────────────────────────────────────────────────
 async def read_file_content(project, file_path: str) -> dict:
     """读取项目内可编辑文件的完整内容与当前 MD5（编辑器打开文件）。"""
@@ -120,8 +105,25 @@ def _read_file_sync(project, file_path: str) -> dict:
         # 错误消息使用相对路径（多用户脱敏）；完整路径只进服务端日志
         logger.info("Editor open miss: %s (root=%s)", file_path, root)
         raise FileNotFoundError(f"File not found: {file_path}")
-    content = _read_text_strict(full_path, file_path)
-    md5 = compute_md5(full_path)
+    # 字节级保真单次读取（编辑器读写面专用，不用 safe_read）：
+    # safe_read 走 read_text 的通用换行归一化（\r\n / \r → \n），会导致
+    # 返回的 content 与 md5（按磁盘字节计算）不一致，且"打开即保存"会把
+    # CRLF 文件整体改写为 LF。content 与 md5 必须对应同一份磁盘字节，
+    # 因此只做一次 read_bytes，解码失败抛稳定错误码 invalid_encoding
+    # （供前端翻译层消费），错误消息只含项目内相对路径。
+    try:
+        raw = full_path.read_bytes()
+        content = raw.decode("utf-8")
+    except UnicodeDecodeError as e:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "error": "invalid_encoding",
+                "message": f"File {file_path} is not valid UTF-8. "
+                "Only UTF-8 encoded files are supported.",
+            },
+        ) from e
+    md5 = hashlib.md5(raw).hexdigest()  # 与 file_ops.compute_md5 同口径
     logger.info("Editor file opened: %s (%d chars)", file_path, len(content))
     return {"file_path": file_path, "content": content, "md5": md5}
 
@@ -141,6 +143,16 @@ async def save_file_content(
     base_md5 与文件当前 MD5 不符时返回 409 结构化错误（错误消息为相对
     路径）；base_md5 缺省时跳过乐观锁校验（与 apply_change 语义一致）。
     """
+    # 长度上限：在内容校验与落盘前拦截超大请求体（含 project_router
+    # SaveFileRequest 入口——校验统一收口在本服务方法入口处）
+    if len(content) > MAX_EDITABLE_CHARS:
+        raise _http(
+            413,
+            "content_too_long",
+            f"Content is {len(content)} characters, exceeding the "
+            f"maximum editable size of {MAX_EDITABLE_CHARS} characters",
+        )
+
     # 内容校验：仅拦截控制字符损坏与 '[object Object]' 类垃圾占位符等
     # 损坏特征；不做括号/$ 配平检查——编辑中间态合法（§5.1 关键约束）。
     # 整文件文本的扫描是 CPU 密集操作，入线程池调度（约束见模块 docstring）
@@ -149,17 +161,18 @@ async def save_file_content(
         raise _http(400, "invalid_content", corruption)
 
     try:
-        before_content = await asyncio.to_thread(_prepare_save, project, file_path)
         expected_md5s = {file_path: base_md5} if base_md5 else None
         # source_scope 显式标记写入来源：经 to_thread 调度后帧链推断不可用，
-        # 记账诊断字段 source_module 固定为 "editor"
+        # 记账诊断字段 source_module 固定为 "editor"。
+        # before_contents 由事务在锁内捕获并随结果返回（R1：写前内容不再
+        # 在锁外预读，杜绝配额回滚读到并发改后内容的竞态）；目标文件缺失
+        # 的 FileNotFoundError 同样由锁内存在性检查抛出 → 404 语义不变。
         with edit_log.source_scope("editor"):
-            result, edit_op_id = await asyncio.to_thread(
-                project.apply_whole_files,
+            result = await asyncio.to_thread(
+                project.apply_whole_files_detailed,
                 {file_path: content},
                 expected_md5s=expected_md5s,
                 allowed_suffixes=EDITABLE_SUFFIXES,
-                return_edit_op_id=True,
             )
     except FileConflictError as e:
         raise HTTPException(
@@ -174,19 +187,29 @@ async def save_file_content(
         ) from e
     except FileNotFoundError as e:
         raise _http(404, "file_not_found", str(e)) from e
+    except UnicodeDecodeError:
+        # 目标文件现有内容非 UTF-8（事务锁内 prepare 阶段读取写前全文时
+        # 检出）：稳定错误码 invalid_encoding；发生在任何写入之前。
+        # 注意 UnicodeDecodeError 是 ValueError 子类，必须先于其分支捕获。
+        raise _http(
+            400,
+            "invalid_encoding",
+            f"File {file_path} is not valid UTF-8. "
+            "Only UTF-8 encoded files are supported.",
+        )
     except ValueError as e:
         raise _http(400, "invalid_path", str(e)) from e
     except RuntimeError as e:
         raise _http(400, "invalid_workspace", str(e)) from e
 
-    # 多用户模式：刷新项目用量记账，超限按既有语义以写前全文直接恢复并
-    # 撤销本次记账 op（单用户模式内部直接跳过）
+    # 多用户模式：刷新项目用量记账，超限按既有语义以锁内捕获的写前全文
+    # 直接恢复并撤销本次记账 op（单用户模式内部直接跳过）
     await projects_service.enforce_write_quota(
         binding,
         project,
         file_path,
-        before_content=before_content,
-        edit_op_id=edit_op_id,
+        before_content=result.before_contents.get(file_path),
+        edit_op_id=result.edit_op_id,
         actor_user_id=actor_user_id,
     )
 
@@ -196,18 +219,7 @@ async def save_file_content(
         len(content),
         bool(base_md5),
     )
-    return {"status": "ok", "file_path": file_path, "md5": result[file_path]}
-
-
-def _prepare_save(project, file_path: str) -> str:
-    """校验保存目标合法并返回写前全文（多用户配额回滚需要写前内容）。"""
-    root = Path(project.root_path)
-    full_path = resolve_project_path(
-        root, file_path, allowed_suffixes=EDITABLE_SUFFIXES
-    )
-    if not full_path.is_file():
-        raise FileNotFoundError(f"File not found: {file_path}")
-    return _read_text_strict(full_path, file_path)
+    return {"status": "ok", "file_path": file_path, "md5": result.md5s[file_path]}
 
 
 # ── 二进制预览 ────────────────────────────────────────────────────────────
