@@ -89,9 +89,10 @@ export default function ConflictDialog({
       await writeClipboardText(useEditorStore.getState().content ?? "");
       toast.success(t("components:conflictDialog.copySuccess"));
     } catch (e) {
-      toast.error(t("components:conflictDialog.copyFailed"), {
-        description: e?.message,
-      });
+      // 原始异常进 console 供排查；用户面文案统一走 i18n，
+      // 不透出浏览器英文错误消息
+      console.error("conflict dialog clipboard copy failed:", e);
+      toast.error(t("components:conflictDialog.copyFailed"));
     }
   }, [t]);
 
