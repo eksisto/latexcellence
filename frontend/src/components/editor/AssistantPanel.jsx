@@ -11,7 +11,7 @@
  * 问答但应用按钮禁用。建议不经后端落盘，落盘仍走 save-file 单一路径。
  */
 
-import { useEffect, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 
@@ -35,8 +35,12 @@ import useEditorStore from "@/store/editorStore";
 import useEditorAssistant from "@/hooks/useEditorAssistant";
 import { applyUnifiedDiff, parseUnifiedDiff } from "@/lib/editor/applyDiff";
 
-/** 单条建议的操作卡（snippet 两键 / diff 审阅卡，EditOpCard 模式） */
-function SuggestionCard({
+/**
+ * 单条建议的操作卡（snippet 两键 / diff 审阅卡，EditOpCard 模式）。
+ * props 均为原始值 + 稳定回调（onApply 经 useCallback 固定），配合
+ * React.memo：单卡展开态切换不再牵连同消息其余卡片重渲染。
+ */
+const SuggestionCard = memo(function SuggestionCard({
   messageId,
   suggestion,
   applied,
@@ -47,7 +51,11 @@ function SuggestionCard({
   const { t } = useTranslation("components");
   const [expanded, setExpanded] = useState(false);
   const isDiff = suggestion.kind === "diff";
-  const parsed = isDiff ? parseUnifiedDiff(suggestion.content) : null;
+  // diff 解析随内容记忆化：父级因流式 token / 输入重渲染时不重复解析
+  const parsed = useMemo(
+    () => (isDiff ? parseUnifiedDiff(suggestion.content) : null),
+    [isDiff, suggestion.content],
+  );
 
   if (isDiff) {
     return (
@@ -132,9 +140,9 @@ function SuggestionCard({
       </div>
     </div>
   );
-}
+});
 
-export default function AssistantPanel({
+function AssistantPanel({
   readOnly = false,
   getEditorContext,
   onApplySnippet,
@@ -162,8 +170,13 @@ export default function AssistantPanel({
   const getCtxRef = useRef(getEditorContext);
   getCtxRef.current = getEditorContext;
 
-  // 大文件判定与后端 SMALL_FILE_LINE_THRESHOLD 对齐：超过时显示"纳入全文"开关
-  const bufferLineCount = content ? content.split("\n").length : 0;
+  // 大文件判定与后端 SMALL_FILE_LINE_THRESHOLD 对齐：超过时显示"纳入全文"开关。
+  // 全文 split 随 content 引用记忆化（R11）：流式 token 到达 / 输入框键入 /
+  // 选区轮询引发的重渲染不再对大缓冲（≈2 万行）反复全文切分
+  const bufferLineCount = useMemo(
+    () => (content ? content.split("\n").length : 0),
+    [content],
+  );
   const largeBuffer = bufferLineCount >= 400;
 
   // 选区状态跟随编辑器上下文快照（发送时读取实时值，按钮态低频刷新）
@@ -190,27 +203,31 @@ export default function AssistantPanel({
 
   /**
    * 统一建议应用出口：snippet 按 mode 插入光标处 / 替换选区，diff 走
-   * 整段应用回调；应用成功后置消息级已应用标记并上报后端。
+   * 整段应用回调；应用成功后逐条标记并上报后端回写权威状态。
+   * useCallback 固定身份供 SuggestionCard 的 memo 生效。
    */
-  const handleApply = async (messageId, suggestion, mode) => {
-    if (readOnly) return;
-    try {
-      let ok = false;
-      if (suggestion.kind === "diff") {
-        ok = onApplyDiffText(suggestion.content);
-      } else {
-        ok = onApplySnippet(suggestion.content, {
-          replace: mode === "replace",
+  const handleApply = useCallback(
+    async (messageId, suggestion, mode) => {
+      if (readOnly) return;
+      try {
+        let ok = false;
+        if (suggestion.kind === "diff") {
+          ok = onApplyDiffText(suggestion.content);
+        } else {
+          ok = onApplySnippet(suggestion.content, {
+            replace: mode === "replace",
+          });
+        }
+        if (!ok) return;
+        await reportSuggestionApplied(messageId, suggestion.index);
+      } catch (e) {
+        toast.error(t("assistant.applyFailed"), {
+          description: String(e?.message || e),
         });
       }
-      if (!ok) return;
-      await reportSuggestionApplied(messageId, suggestion.index);
-    } catch (e) {
-      toast.error(t("assistant.applyFailed"), {
-        description: String(e?.message || e),
-      });
-    }
-  };
+    },
+    [readOnly, onApplyDiffText, onApplySnippet, reportSuggestionApplied, t],
+  );
 
   return (
     <Card className="flex h-full min-h-0 flex-col">
@@ -264,15 +281,18 @@ export default function AssistantPanel({
               </div>
               {(message.suggestions || []).length > 0 && (
                 <div className="space-y-1.5">
+                  {/* 已应用判定单一来源：appliedSuggestions[index]。历史会话
+                      加载时（含旧数据 suggestionApplied=true）已由 editorStore
+                      注入点归一化为同一 map，此处不再读消息级标记——
+                      应用第 1 条不会误禁其余卡片 */}
                   {message.suggestions.map((suggestion) => (
                     <SuggestionCard
                       key={`${message.id}-${suggestion.index}`}
                       messageId={message.id}
                       suggestion={suggestion}
-                      applied={
-                        message.suggestionApplied ||
-                        Boolean(message.appliedSuggestions?.[suggestion.index])
-                      }
+                      applied={Boolean(
+                        message.appliedSuggestions?.[suggestion.index],
+                      )}
                       readOnly={readOnly}
                       hasSelection={hasSelection}
                       onApply={handleApply}
@@ -345,3 +365,7 @@ export default function AssistantPanel({
     </Card>
   );
 }
+
+/** React.memo：EditorPage 传入的 readOnly 与三个回调均为稳定引用
+ * （useCallback），父页面因缓冲区键入重渲染时本面板可跳过 */
+export default memo(AssistantPanel);

@@ -12,7 +12,8 @@ import { translateError } from "@/utils/errorMessages";
  *
  * 职责：
  *   - 项目切换守卫：assistantProjectKey 与当前项目不一致时清空本地视图
- *     （后端按项目 scope 隔离会话，本地只跟随）；
+ *     （后端按项目 scope 隔离会话，本地只跟随）；切换时同步使所有在途流
+ *     过期并经 AbortController 中止在途请求，组件卸载时同样中止；
  *   - 发送消息：读取编辑器上下文（文件/缓冲区/光标/选区）经 SSE 流式对话；
  *   - SSE 事件归约：token / round_start / tool_status / compressed /
  *     done（含结构化建议）/ error。
@@ -41,11 +42,32 @@ export default function useEditorAssistant({ getEditorContext }) {
 
   /** 在途请求序号：丢弃过期请求的迟到事件 */
   const seqRef = useRef(0);
+  /** 当前在途请求的 AbortController（项目切换/卸载时 abort，风格对齐
+   * useParagraphCheck 的 EventSource close() 先例） */
+  const abortRef = useRef(null);
 
   // 项目键：单用户看 projectPath，多用户看 projectId（useIsOpened 同一判定口径）
   useEffect(() => {
+    // 项目切换守卫第一步：同步使所有在途流过期并中止在途请求，
+    // 迟到的 token/error 不再落入新项目的会话视图
+    seqRef.current += 1;
+    if (abortRef.current) {
+      abortRef.current.abort();
+      abortRef.current = null;
+    }
     ensureAssistantProject(projectPath || projectId || null);
   }, [projectPath, projectId, ensureAssistantProject]);
+
+  // 组件卸载：使在途流过期并中止请求（AbortError 由 sendMessage 静默吞掉）
+  useEffect(() => {
+    return () => {
+      seqRef.current += 1;
+      if (abortRef.current) {
+        abortRef.current.abort();
+        abortRef.current = null;
+      }
+    };
+  }, []);
 
   const sendMessage = useCallback(
     async (text, { includeFullFile = false } = {}) => {
@@ -69,7 +91,6 @@ export default function useEditorAssistant({ getEditorContext }) {
         content: "",
         streaming: true,
         suggestions: [],
-        suggestionApplied: false,
         appliedSuggestions: {},
       });
       store.setAssistantStreaming(true);
@@ -87,6 +108,9 @@ export default function useEditorAssistant({ getEditorContext }) {
       };
 
       const seq = ++seqRef.current;
+      // 每次发送持有新的 AbortController：项目切换/卸载时经 ref 中止在途流
+      const controller = new AbortController();
+      abortRef.current = controller;
       try {
         await api.writingChat.editorSend({
           sessionId: store.assistantSessionId,
@@ -98,20 +122,28 @@ export default function useEditorAssistant({ getEditorContext }) {
           userMessage: trimmed,
           workspaceId,
           onEvent: (event) => {
-            // 过期请求的迟到事件直接丢弃
-            if (seq !== seqRef.current && event.type !== "error") return;
+            // 过期请求的迟到事件一律丢弃（含 error：新鲜事件的 seq 本就匹配，
+            // 过期请求的失败提示对当前会话已无意义）
+            if (seq !== seqRef.current) return;
             handleEvent(event);
           },
+          signal: controller.signal,
         });
       } catch (e) {
-        const msg = e?.code
-          ? translateError({ error: e.code, message: e.message })
-          : translateError(e?.message);
-        toast.error(i18n.t("components:assistant.chatError"), {
-          description: msg,
-        });
-        useEditorStore.getState().removeAssistantMessage(placeholderId);
+        if (e?.name !== "AbortError") {
+          const msg = e?.code
+            ? translateError({ error: e.code, message: e.message })
+            : translateError(e?.message);
+          toast.error(i18n.t("components:assistant.chatError"), {
+            description: msg,
+          });
+          useEditorStore.getState().removeAssistantMessage(placeholderId);
+        }
+        // AbortError：主动取消（项目切换/组件卸载），静默吞掉，由 finally 收尾
       } finally {
+        if (abortRef.current === controller) {
+          abortRef.current = null;
+        }
         const latest = useEditorStore.getState();
         latest.setAssistantStreaming(false);
         latest.setAssistantToolStatus(null);
@@ -178,21 +210,13 @@ export default function useEditorAssistant({ getEditorContext }) {
     [getEditorContext, workspaceId],
   );
 
-  /** 用户点击建议应用成功后：前端标记 + 上报消息级应用标记 */
+  /** 用户点击建议应用成功后：逐条乐观标记 + 上报后端回写权威状态
+   * （编排细节收敛在 editorStore.markSuggestionApplied） */
   const reportSuggestionApplied = useCallback(
     async (messageId, index) => {
-      useEditorStore.getState().markSuggestionApplied(messageId, index);
-      const sid = useEditorStore.getState().assistantSessionId;
-      if (!sid || !messageId || messageId.startsWith("tmp-")) return;
-      try {
-        await api.writingChat.applyEditorSuggestion(
-          sid,
-          messageId,
-          workspaceId,
-        );
-      } catch (_) {
-        // 标记上报失败不影响已应用的缓冲区修改
-      }
+      await useEditorStore
+        .getState()
+        .markSuggestionApplied(messageId, index, { workspaceId });
     },
     [workspaceId],
   );

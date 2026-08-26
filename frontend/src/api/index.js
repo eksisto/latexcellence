@@ -58,6 +58,18 @@ function buildRequestError(err, status) {
 }
 
 /**
+ * 统一解析非 2xx 响应并抛出已翻译的请求错误：
+ * 401 触发全局登出回调（notifyUnauthorized）；响应体 JSON 解析失败时
+ * 以 statusText 兜底。仅收敛与该实现逐字一致的错误块——request() 因
+ * invalid_credentials 登录豁免与结构化 code 保留等差异保持独立实现。
+ */
+async function parseErrorResponse(res) {
+  checkUnauthorized(res);
+  const err = await res.json().catch(() => ({ detail: res.statusText }));
+  throw buildRequestError(err, res.status);
+}
+
+/**
  * 通用 FormData 请求函数（用于文件上传场景）
  * @param {string} url      API 路径
  * @param {FormData} formData  表单数据
@@ -79,9 +91,7 @@ async function requestForm(url, formData, method = "POST") {
     throw new Error(translateError(e.message || "Request timed out"));
   }
   if (!res.ok) {
-    checkUnauthorized(res);
-    const err = await res.json().catch(() => ({ detail: res.statusText }));
-    throw buildRequestError(err, res.status);
+    await parseErrorResponse(res);
   }
   return res.json();
 }
@@ -143,9 +153,7 @@ export async function fetchBlobUrl(url) {
     credentials: "include",
   });
   if (!res.ok) {
-    checkUnauthorized(res);
-    const err = await res.json().catch(() => ({ detail: res.statusText }));
-    throw buildRequestError(err, res.status);
+    await parseErrorResponse(res);
   }
   return URL.createObjectURL(await res.blob());
 }
@@ -156,9 +164,7 @@ export async function downloadBlob(url, fallbackName) {
     credentials: "include",
   });
   if (!res.ok) {
-    checkUnauthorized(res);
-    const err = await res.json().catch(() => ({ detail: res.statusText }));
-    throw buildRequestError(err, res.status);
+    await parseErrorResponse(res);
   }
   const blob = await res.blob();
   const cd = res.headers.get("content-disposition") || "";
@@ -437,11 +443,7 @@ export const api = {
           credentials: "include",
         });
         if (!res.ok) {
-          checkUnauthorized(res);
-          const err = await res
-            .json()
-            .catch(() => ({ detail: res.statusText }));
-          throw buildRequestError(err, res.status);
+          await parseErrorResponse(res);
         }
         await consumeSse(res, onEvent, onError);
       },
@@ -468,11 +470,7 @@ export const api = {
           },
         );
         if (!res.ok) {
-          checkUnauthorized(res);
-          const err = await res
-            .json()
-            .catch(() => ({ detail: res.statusText }));
-          throw buildRequestError(err, res.status);
+          await parseErrorResponse(res);
         }
         await consumeSse(res, onEvent, onError);
       },
@@ -543,9 +541,7 @@ export const api = {
         credentials: "include",
       });
       if (!res.ok) {
-        checkUnauthorized(res);
-        const err = await res.json().catch(() => ({ detail: res.statusText }));
-        throw buildRequestError(err, res.status);
+        await parseErrorResponse(res);
       }
       await consumeSse(res, onEvent, onError);
     },
@@ -867,9 +863,7 @@ export const api = {
         credentials: "include",
       });
       if (!res.ok) {
-        checkUnauthorized(res);
-        const err = await res.json().catch(() => ({ detail: res.statusText }));
-        throw buildRequestError(err, res.status);
+        await parseErrorResponse(res);
       }
       await consumeSse(res, onEvent, onError);
     },
@@ -888,9 +882,7 @@ export const api = {
         },
       );
       if (!res.ok) {
-        checkUnauthorized(res);
-        const err = await res.json().catch(() => ({ detail: res.statusText }));
-        throw buildRequestError(err, res.status);
+        await parseErrorResponse(res);
       }
       await consumeSse(res, onEvent, onError);
     },
@@ -952,9 +944,7 @@ export const api = {
         throw new Error(translateError(e.message || "Request timed out"));
       }
       if (!res.ok) {
-        checkUnauthorized(res);
-        const err = await res.json().catch(() => ({ detail: res.statusText }));
-        throw buildRequestError(err, res.status);
+        await parseErrorResponse(res);
       }
       await consumeSse(res, onEvent, onError);
     },
@@ -1042,6 +1032,8 @@ export const api = {
     /**
      * 编辑器助手流式对话（editor-plan §5.2，阶段四）。
      * 携带 CM6 缓冲区全文与光标/选区元信息；事件经 consumeSse 逐帧回调。
+     * @param {AbortSignal} [signal] 取消在途请求（项目切换/组件卸载时中止
+     *   流）；abort 使 fetch 与读循环以 AbortError 结束，由调用方静默处理
      */
     editorSend: async ({
       sessionId,
@@ -1054,6 +1046,7 @@ export const api = {
       workspaceId,
       onEvent,
       onError,
+      signal,
     }) => {
       const url = appendWs(
         `${getApiBase()}/writing-chat/editor/send`,
@@ -1074,25 +1067,38 @@ export const api = {
             user_message: userMessage,
             language: getUiLanguage(),
           }),
+          signal,
           credentials: "include",
         });
       } catch (e) {
+        // 保留取消信号（AbortController）的原始错误，让调用方区分“主动取消”和“真的失败”
+        if (e?.name === "AbortError") throw e;
         throw new Error(translateError(e.message || "Request timed out"));
       }
       if (!res.ok) {
-        checkUnauthorized(res);
-        const err = await res.json().catch(() => ({ detail: res.statusText }));
-        throw buildRequestError(err, res.status);
+        await parseErrorResponse(res);
       }
+      // 读循环随 abort 自然抛错结束（res.body 流被取消）
       await consumeSse(res, onEvent, onError);
     },
-    /** 记录编辑器建议应用结果（消息级标记；仅登记状态，无文件写入） */
-    applyEditorSuggestion: (sessionId, messageId, workspaceId) =>
+    /**
+     * 记录编辑器建议应用结果（仅登记状态，无文件写入）。
+     * @param {number|null} [suggestionIndex] 本次应用建议的逐条 index；
+     *   响应携带 applied_suggestions（该消息已应用 index 全量列表），供
+     *   调用方回写权威状态
+     */
+    applyEditorSuggestion: (
+      sessionId,
+      messageId,
+      workspaceId,
+      suggestionIndex = null,
+    ) =>
       request(appendWs("/writing-chat/editor/apply-suggestion", workspaceId), {
         method: "POST",
         body: JSON.stringify({
           session_id: sessionId,
           message_id: messageId,
+          suggestion_index: suggestionIndex ?? null,
         }),
       }),
   },
@@ -1328,11 +1334,7 @@ export const api = {
           throw new Error(translateError(e.message || "Request timed out"));
         }
         if (!res.ok) {
-          checkUnauthorized(res);
-          const err = await res
-            .json()
-            .catch(() => ({ detail: res.statusText }));
-          throw buildRequestError(err, res.status);
+          await parseErrorResponse(res);
         }
         return res.json();
       },

@@ -17,6 +17,7 @@ import {
   EDITOR_PREFERENCES_DEFAULTS,
   sanitizePreferences,
 } from "@/lib/editor/preferences";
+import { api } from "@/api/index";
 
 /* ── editorPreferences 切片（persist 持久化） ─────────────────────────── */
 
@@ -41,18 +42,46 @@ function createEditorPreferencesSlice(set) {
 /* ── editorAssistant 切片（不持久化，阶段四） ─────────────────────────── */
 
 /**
+ * 服务端历史消息 → 本地运行时结构的映射（R8 历史加载点）：
+ * 会话消息注入 store 的唯一入口是 appendAssistantMessage，在此完成归一化——
+ * - 新数据：applied_suggestions（已应用建议 index 数组）→ appliedSuggestions map；
+ * - 旧数据：仅有消息级 suggestionApplied=true 而无数组时，视为全部建议已应用，
+ *   避免历史卡片闪回可编辑态。
+ * 运行时"是否已应用"的唯一来源是消息上的 appliedSuggestions map。
+ */
+function normalizeAssistantMessage(message) {
+  if (!message || typeof message !== "object") return message;
+  const next = { ...message };
+  if (Array.isArray(next.applied_suggestions)) {
+    next.appliedSuggestions = Object.fromEntries(
+      next.applied_suggestions.map((index) => [index, true]),
+    );
+  } else if (next.suggestionApplied === true) {
+    const suggestions = Array.isArray(next.suggestions) ? next.suggestions : [];
+    next.appliedSuggestions = Object.fromEntries(
+      suggestions
+        .filter((s) => s && typeof s.index === "number")
+        .map((s) => [s.index, true]),
+    );
+  }
+  delete next.applied_suggestions;
+  delete next.suggestionApplied;
+  return next;
+}
+
+/**
  * 编辑器 AI 助手会话状态（editor-plan §7）：按项目 scope 隔离由后端保证，
  * 前端只保存当前项目的活跃会话 id 与消息列表。切换文件时会话延续（§7.4）；
  * 切换项目时经 setAssistantProjectKey 检测清空。刷新即丢弃（不持久化），
  * 会话历史仍可通过后端 session id 找回。
  */
-function createEditorAssistantSlice(set) {
+function createEditorAssistantSlice(set, get) {
   return {
     /** 后端 scoped session_id（{scope}:{uuid}）；null 表示尚未开始对话 */
     assistantSessionId: null,
     /** 项目隔离键：单用户为 projectPath，多用户为 projectId */
     assistantProjectKey: null,
-    /** 消息列表：{id, role, content, streaming, suggestions, suggestionApplied} */
+    /** 消息列表：{id, role, content, streaming, suggestions, appliedSuggestions} */
     assistantMessages: [],
     /** SSE 流式接收中 */
     assistantStreaming: false,
@@ -61,9 +90,13 @@ function createEditorAssistantSlice(set) {
 
     setAssistantSessionId: (sessionId) =>
       set({ assistantSessionId: sessionId }),
+    /** 注入消息；服务端历史消息在此完成 applied 状态归一化 */
     appendAssistantMessage: (message) =>
       set((state) => ({
-        assistantMessages: [...state.assistantMessages, message],
+        assistantMessages: [
+          ...state.assistantMessages,
+          normalizeAssistantMessage(message),
+        ],
       })),
     patchAssistantMessage: (messageId, patch) =>
       set((state) => ({
@@ -71,13 +104,21 @@ function createEditorAssistantSlice(set) {
           m.id === messageId ? { ...m, ...patch } : m,
         ),
       })),
-    markSuggestionApplied: (messageId, index) =>
+    /**
+     * 标记某条建议已应用：乐观写 appliedSuggestions[index]，随后上报后端
+     * （携带 suggestion_index），并用响应中的 applied_suggestions 全量数组
+     * 回写权威状态（不再维护消息级 suggestionApplied 标记）。
+     * 上报失败不影响已应用的缓冲区修改。
+     * @param {string} messageId 消息 id（tmp- 占位不上报）
+     * @param {number} index 建议 index
+     * @param {{workspaceId?: string}} [options]
+     */
+    markSuggestionApplied: async (messageId, index, { workspaceId } = {}) => {
       set((state) => ({
         assistantMessages: state.assistantMessages.map((m) =>
           m.id === messageId
             ? {
                 ...m,
-                suggestionApplied: true,
                 appliedSuggestions: {
                   ...(m.appliedSuggestions || {}),
                   [index]: true,
@@ -85,7 +126,32 @@ function createEditorAssistantSlice(set) {
               }
             : m,
         ),
-      })),
+      }));
+      const sessionId = get().assistantSessionId;
+      if (!sessionId || !messageId || messageId.startsWith("tmp-")) return;
+      try {
+        const res = await api.writingChat.applyEditorSuggestion(
+          sessionId,
+          messageId,
+          workspaceId,
+          index,
+        );
+        if (Array.isArray(res?.applied_suggestions)) {
+          const authoritative = Object.fromEntries(
+            res.applied_suggestions.map((i) => [i, true]),
+          );
+          set((state) => ({
+            assistantMessages: state.assistantMessages.map((m) =>
+              m.id === messageId
+                ? { ...m, appliedSuggestions: authoritative }
+                : m,
+            ),
+          }));
+        }
+      } catch (_) {
+        // 标记上报失败不影响已应用的缓冲区修改（保留乐观标记）
+      }
+    },
     removeAssistantMessage: (messageId) =>
       set((state) => ({
         assistantMessages: state.assistantMessages.filter(
@@ -196,7 +262,7 @@ export const useEditorStore = create(
     (set, get) => ({
       ...createEditorPreferencesSlice(set),
       ...createEditorSessionSlice(set, get),
-      ...createEditorAssistantSlice(set),
+      ...createEditorAssistantSlice(set, get),
     }),
     {
       name: "latexcellence-editor",
