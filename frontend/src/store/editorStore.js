@@ -200,8 +200,6 @@ function createEditorSessionSlice(set, get) {
     baseMd5: null,
     /** 脏标记：缓冲区 ≠ baseMd5 对应的磁盘内容 */
     dirty: false,
-    /** 打开/保存进行中 */
-    busy: false,
     /** 409 冲突信息（非 null 时 ConflictDialog 打开） */
     conflict: null,
 
@@ -215,7 +213,6 @@ function createEditorSessionSlice(set, get) {
         baseMd5,
         dirty: false,
         conflict: null,
-        busy: false,
       }),
 
     /** CM6 onChange 回写缓冲区并置脏标记 */
@@ -236,11 +233,10 @@ function createEditorSessionSlice(set, get) {
           typeof savedContent === "string"
             ? state.content !== savedContent
             : false,
-        busy: false,
       })),
 
     /** 记录冲突（保存返回 409 时调用） */
-    setConflict: (conflict) => set({ conflict, busy: false }),
+    setConflict: (conflict) => set({ conflict }),
 
     /** 关闭缓冲区（切换文件失败回退 / 项目关闭时调用） */
     closeBuffer: () =>
@@ -250,10 +246,7 @@ function createEditorSessionSlice(set, get) {
         baseMd5: null,
         dirty: false,
         conflict: null,
-        busy: false,
       }),
-
-    setBusy: (busy) => set({ busy: !!busy }),
   };
 }
 
