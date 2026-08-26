@@ -7,8 +7,10 @@
  * 设计约束：
  *   - 纯函数、零依赖，供 node --test 直接单测；
  *   - 上下文锚定匹配：优先按 hunk 头提示的旧行号定位，失配时向两侧
- *     逐步偏移搜索完整旧块精确匹配（容忍 LLM 给出的行号漂移）；
- *   - 任一 hunk 无法定位即整体失败（不落半套改动），由调用方 toast 反馈；
+ *     逐步偏移搜索完整旧块精确匹配（容忍 LLM 给出的行号漂移）；窗口内
+ *     命中多处即判定锚定歧义；
+ *   - 任一 hunk 无法定位、命中歧义或源区间重叠即整体失败（不落半套
+ *     改动），由调用方按 reason toast 反馈；
  *   - 行级操作：输入/输出均为以 \n 连接的整段文本；\ No newline 标记
  *     仅忽略不参与匹配。
  */
@@ -113,24 +115,32 @@ function matchesAt(bufferLines, index, oldLines) {
  * 在缓冲区中为单个 hunk 定位应用点（0-based 插入下标）。
  *
  * 有旧块（context/del）时：优先使用 hunk 头提示的 oldStart，失配时向
- * 两侧扩展搜索完整旧块精确匹配；纯插入 hunk（无旧块）按 git 语义
- * "插入到旧第 oldStart 行之后"，仅信任行号。
- * @returns {number} 应用点下标；-1 表示未找到
+ * 两侧扩展搜索完整旧块精确匹配；收集 ±MAX_SEARCH_OFFSET 窗口内全部
+ * 精确命中，命中数 ≥2 视为锚定歧义（同一旧块在窗口内多处出现时应用
+ * 位置不确定，宁整体失败也不误改）。纯插入 hunk（无旧块）无内容锚点，
+ * 按 git 语义"插入到旧第 oldStart 行之后"，仅信任行号。
+ * @returns {{status:"matched"|"not_matched"|"ambiguous", at:number}}
+ *           at 仅在 status==="matched" 时有效（歧义/失配为 -1）
  */
 function locateHunk(bufferLines, hunk) {
   const { oldLines } = hunkParts(hunk);
   if (oldLines.length === 0) {
-    return Math.min(Math.max(hunk.oldStart, 0), bufferLines.length);
+    return {
+      status: "matched",
+      at: Math.min(Math.max(hunk.oldStart, 0), bufferLines.length),
+    };
   }
   const hint = Math.max(0, hunk.oldStart - 1);
+  const hits = [];
   for (let offset = 0; offset <= MAX_SEARCH_OFFSET; offset++) {
     for (const candidate of offset === 0
       ? [hint]
       : [hint - offset, hint + offset]) {
-      if (matchesAt(bufferLines, candidate, oldLines)) return candidate;
+      if (matchesAt(bufferLines, candidate, oldLines)) hits.push(candidate);
     }
   }
-  return -1;
+  if (hits.length === 1) return { status: "matched", at: hits[0] };
+  return { status: hits.length > 1 ? "ambiguous" : "not_matched", at: -1 };
 }
 
 /**
@@ -139,7 +149,9 @@ function locateHunk(bufferLines, hunk) {
  * @param {string} bufferText 当前 CM6 缓冲区全文
  * @param {string} diffText 助手输出的 unified diff 文本
  * @returns {{ok: true, result: string}
- *           | {ok: false, reason: "empty_diff"|"malformed_diff"|"hunk_not_matched", detail?: string}}
+ *           | {ok: false, reason: "empty_diff"|"malformed_diff"
+ *               |"hunk_not_matched"|"hunk_ambiguous"|"hunk_overlap",
+ *              detail?: string}}
  */
 export function applyUnifiedDiff(bufferText, diffText) {
   const parsed = parseUnifiedDiff(diffText);
@@ -153,19 +165,37 @@ export function applyUnifiedDiff(bufferText, diffText) {
     };
   }
   const bufferLines = String(bufferText ?? "").split("\n");
-  // 按缓冲区位置从后往前应用，避免前序 hunk 的长度变化影响后续定位
   const located = parsed.hunks.map((hunk) => ({
     hunk,
-    at: locateHunk(bufferLines, hunk),
+    parts: hunkParts(hunk),
+    ...locateHunk(bufferLines, hunk),
   }));
-  const failed = located.find((l) => l.at === -1);
+  // 任一 hunk 定位失配或命中歧义即整体失败（与既有整体失败语义一致，
+  // 不落半套改动）
+  const failed = located.find((l) => l.status !== "matched");
   if (failed) {
-    return { ok: false, reason: "hunk_not_matched" };
+    return {
+      ok: false,
+      reason:
+        failed.status === "ambiguous" ? "hunk_ambiguous" : "hunk_not_matched",
+    };
   }
+  // 重叠校验：各 hunk 源区间（纯插入长度记 0）按位置升序相邻比较，
+  // 后一区间起点落入前一区间 [at, at + oldLen) 即源区间相交 → 整体失败。
+  // 同位置的纯插入对（0 长度区间）不相交，照常放行；区间终点之后的
+  // 插入点不受影响。倒序 splice 主循环保持不变。
+  const ascended = [...located].sort((a, b) => a.at - b.at);
+  for (let i = 1; i < ascended.length; i += 1) {
+    const cur = ascended[i - 1];
+    const next = ascended[i];
+    if (next.at < cur.at + cur.parts.oldLines.length) {
+      return { ok: false, reason: "hunk_overlap" };
+    }
+  }
+  // 按缓冲区位置从后往前应用，避免前序 hunk 的长度变化影响后续定位
   const ordered = [...located].sort((a, b) => b.at - a.at);
-  for (const { hunk, at } of ordered) {
-    const { oldLines, newLines } = hunkParts(hunk);
-    bufferLines.splice(at, oldLines.length, ...newLines);
+  for (const { parts, at } of ordered) {
+    bufferLines.splice(at, parts.oldLines.length, ...parts.newLines);
   }
   return { ok: true, result: bufferLines.join("\n") };
 }

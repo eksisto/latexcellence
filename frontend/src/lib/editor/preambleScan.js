@@ -51,10 +51,17 @@ export function parseLoadedPackages(text) {
   return loaded;
 }
 
-/** 截掉一行中非转义 `%` 之后的内容（LaTeX 注释） */
+/**
+ * 截掉一行中非转义 `%` 之后的内容（LaTeX 注释）。
+ * `%` 之前连续反斜杠个数为奇数视为转义百分号（`\%` 字面量，非注释），
+ * 偶数（含 0）则为注释起点——因此 `\\%`（换行命令后的真注释）正确截断。
+ */
 function stripComment(line) {
   for (let i = 0; i < line.length; i += 1) {
-    if (line[i] === "%" && line[i - 1] !== "\\") return line.slice(0, i);
+    if (line[i] !== "%") continue;
+    let slashes = 0;
+    for (let j = i - 1; j >= 0 && line[j] === "\\"; j -= 1) slashes += 1;
+    if (slashes % 2 === 0) return line.slice(0, i);
   }
   return line;
 }
@@ -103,15 +110,25 @@ export function findUsepackageInsertPoint(docText) {
   // 偏移 = 各候选行（含换行符）累计长度
   const offsetAfterLine = (lineIdx) =>
     lines.slice(0, lineIdx + 1).reduce((sum, l) => sum + l.length + 1, 0);
+  // 候选声明与 \begin{document} 同行时（如一行写完
+  // `\usepackage{x}\begin{document}`），行末偏移会多计一个换行长度而
+  // 越入文档体内部：钳制到 `\begin{document}` 起点之前（存在该串时取 min）
+  const clampToPreamble = (offset) => {
+    const docStart = docText.indexOf("\\begin{document}");
+    return docStart === -1 ? offset : Math.min(offset, docStart);
+  };
 
   if (lastUsepackageLineEnd >= 0) {
     return {
-      index: offsetAfterLine(lastUsepackageLineEnd),
+      index: clampToPreamble(offsetAfterLine(lastUsepackageLineEnd)),
       anchor: "usepackage",
     };
   }
   if (classLineEnd >= 0) {
-    return { index: offsetAfterLine(classLineEnd), anchor: "documentclass" };
+    return {
+      index: clampToPreamble(offsetAfterLine(classLineEnd)),
+      anchor: "documentclass",
+    };
   }
   return { index: 0, anchor: "top" };
 }

@@ -193,10 +193,9 @@ export function searchCommands(
  */
 export function listCommands(indexRows, { limit = DEFAULT_MATCH_LIMIT } = {}) {
   if (!Array.isArray(indexRows)) return [];
-  return [...indexRows]
-    .sort((a, b) => a.order - b.order)
-    .slice(0, Math.max(1, limit))
-    .map((r) => r.entry);
+  // buildCommandIndex 以保序 map 登记 order、fillPinyinSequences 就地填充
+  // 不重排：索引本身已按 order 升序，直接截取前 limit 条即可
+  return indexRows.slice(0, Math.max(1, limit)).map((r) => r.entry);
 }
 
 /* ── 懒加载共享索引（行内补全与命令面板共用同一实例与缓存） ──────────── */

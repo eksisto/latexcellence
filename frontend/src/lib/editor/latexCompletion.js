@@ -126,7 +126,7 @@ function makeEnvironmentCompletionSource(onApplyEntry, getLanguage) {
     // 空查询（刚敲完 `\begin{`）按数据库默认顺序给出全部环境
     const matches = query
       ? searchCommands(getEnvIndex(), query, { limit: 30 })
-      : listCommands(getEnvIndex(), 30);
+      : listCommands(getEnvIndex(), { limit: 30 });
     if (matches.length === 0) return null;
     const displayZh = await getCommandZhDisplay(getLanguage());
     return {

@@ -52,6 +52,18 @@ test("parseLoadedPackages：转义百分号不是注释起点", () => {
   assert.deepEqual([...parseLoadedPackages(text)], ["a"]);
 });
 
+test("parseLoadedPackages：\\\\%（换行命令）之后的 % 是真实注释", () => {
+  // 正例：连续两个反斜杠为换行命令，其后 % 起整段注释应被截掉
+  const text = "\\usepackage{a}\\\\% \\usepackage{hidden}";
+  assert.deepEqual([...parseLoadedPackages(text)], ["a"]);
+});
+
+test("parseLoadedPackages：单个 \\% 仍为转义字面量，不截断同行后续声明", () => {
+  // 反例：奇数个反斜杠转义 %，行内后续 usepackage 照常解析
+  const text = "\\usepackage{a}\\% \\usepackage{b}";
+  assert.deepEqual([...parseLoadedPackages(text)].sort(), ["a", "b"]);
+});
+
 test("插入点三级回退：最后一条 usepackage 之后 → documentclass 之后 → 顶部", () => {
   // 有 usepackage：插到最后一条声明行的下一行行首
   const p1 = findUsepackageInsertPoint(DOC);
@@ -76,6 +88,43 @@ test("插入点三级回退：最后一条 usepackage 之后 → documentclass �
 
   // 空文档
   assert.deepEqual(findUsepackageInsertPoint(""), { index: 0, anchor: "top" });
+});
+
+test("插入点钳制：候选声明与 \\begin{document} 同行时不越入文档体", () => {
+  // 正例：一行写完 usepackage 与 \begin{document}，旧行末偏移会多计一个
+  // 换行长度落入 \begin{document} 内部，现钳制到其起点之前
+  const oneLine =
+    "\\documentclass{article}\\usepackage{graphicx}\\begin{document}\n正文\n\\end{document}\n";
+  const p = findUsepackageInsertPoint(oneLine);
+  assert.equal(p.anchor, "usepackage");
+  assert.ok(
+    p.index <= oneLine.indexOf("\\begin{document}"),
+    "插入点不得越过 \\begin{document} 起点",
+  );
+  const insertion = buildPackageInsertion(oneLine, "booktabs");
+  const merged =
+    oneLine.slice(0, insertion.index) +
+    insertion.text +
+    oneLine.slice(insertion.index);
+  assert.ok(
+    merged.indexOf("\\usepackage{booktabs}") <
+      merged.indexOf("\\begin{document}"),
+    "新声明应插到文档体起点之前且 \\begin{document} 保持完整",
+  );
+
+  // documentclass 分支的同行场景同样被钳制
+  const clsOneLine = "\\documentclass{article}\\begin{document}\n正文\n";
+  const pc = findUsepackageInsertPoint(clsOneLine);
+  assert.equal(pc.anchor, "documentclass");
+  assert.ok(pc.index <= clsOneLine.indexOf("\\begin{document}"));
+
+  // 反例：常规多行文档不受钳制影响，插入点仍在最后一条 usepackage 之后
+  // （恰为文档体起点，min(offset, docStart) 不改变原值）
+  const normal =
+    "\\documentclass{article}\n\\usepackage{graphicx}\n\\begin{document}\nx\n\\end{document}\n";
+  const pn = findUsepackageInsertPoint(normal);
+  assert.equal(pn.anchor, "usepackage");
+  assert.equal(pn.index, normal.indexOf("\\begin{document}"));
 });
 
 test("buildPackageInsertion：缺失时给出插入点与完整声明；已存在返回 null", () => {

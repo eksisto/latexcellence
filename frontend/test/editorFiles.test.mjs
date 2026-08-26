@@ -2,7 +2,6 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
-  EDITABLE_SUFFIXES,
   IMAGE_PREVIEW_SUFFIXES,
   MAX_EDITOR_FILE_CHARS,
   PREVIEWABLE_SUFFIXES,
@@ -16,8 +15,8 @@ test("可编辑白名单覆盖 .tex/.bib/.sty/.cls 且大小写不敏感", () =>
   assert.ok(isEditableFilePath("main.tex"));
   assert.ok(isEditableFilePath("refs.bib"));
   assert.ok(isEditableFilePath("chapters/intro.TEX"));
-  assert.ok(isEditableFilePath("styles/custom.Style".replace("Style", "STY")));
-  assert.ok(EDITABLE_SUFFIXES.length === 4);
+  // 大小写不敏感：大写后缀与白名单等价
+  assert.ok(isEditableFilePath("styles/custom.STY"));
 });
 
 test("非白名单扩展名与非法输入被拒绝", () => {

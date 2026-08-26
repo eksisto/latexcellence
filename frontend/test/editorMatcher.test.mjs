@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import { pinyin } from "pinyin-pro";
 
 import {
+  DEFAULT_MATCH_LIMIT,
   buildCommandIndex,
   fillPinyinSequences,
   getCommandMatcherIndex,
@@ -13,6 +14,7 @@ import {
   searchCommands,
   SCORE,
 } from "../src/lib/editor/matcher.js";
+import { extractEnvironments } from "../src/lib/editor/latexCompletion.js";
 import { LATEX_COMMANDS } from "../src/data/latexCommands/index.js";
 
 /** 共享索引：一次性预计算（模拟加载期行为，勿在用例内反复构建） */
@@ -140,6 +142,40 @@ test("listCommands：默认列表按原始顺序且不打分", () => {
   const defaults = listCommands(index);
   assert.equal(defaults[0], LATEX_COMMANDS[0]);
   assert.ok(defaults.length <= 60);
+});
+
+test("listCommands：{limit:N} 精确生效且按索引构造序截取", () => {
+  // 前提：主库条目多于默认上限，limit 失效时会回退到 DEFAULT_MATCH_LIMIT
+  assert.ok(LATEX_COMMANDS.length > DEFAULT_MATCH_LIMIT);
+  // 回归（latexCompletion 环境补全）：曾以裸数字调用
+  // listCommands(idx, 30)，对象解构形参下 limit 静默失效回退默认 60；
+  // 修复为 { limit: 30 } 后必须精确截取前 30 条（索引构造序）
+  const limited = listCommands(index, { limit: 30 });
+  assert.equal(limited.length, 30);
+  assert.deepEqual(limited, LATEX_COMMANDS.slice(0, 30));
+
+  // 环境名索引同型构建（buildCommandIndex 保序）：>30 条时同样只出 30 条
+  const synthetic = buildCommandIndex(
+    Array.from({ length: 40 }, (_, i) => ({
+      name: `synthenv${i}`,
+      insert: `\\begin{synthenv${i}}`,
+      zh: `合成环境${i}`,
+      category: "environment",
+      pkg: null,
+      grid: null,
+    })),
+  );
+  assert.equal(listCommands(synthetic, { limit: 30 }).length, 30);
+
+  // 实际环境索引规模小于 30：上限不截断，全量返回且保持提取顺序
+  const envRows = buildCommandIndex(
+    extractEnvironments().map(({ name, entry }) => ({ ...entry, name })),
+  );
+  const envList = listCommands(envRows, { limit: 30 });
+  assert.deepEqual(
+    envList,
+    extractEnvironments().map(({ entry }) => entry),
+  );
 });
 
 test("getCommandMatcherIndex：动态加载并填充拼音缓存（共享实例）", async () => {
