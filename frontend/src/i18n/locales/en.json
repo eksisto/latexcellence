@@ -1454,6 +1454,7 @@
       "description": "The file has been modified by another window or browser. Saving was rejected to avoid overwriting those changes.",
       "hint": "Copy your local content to the clipboard as a backup, or discard local changes and reload the latest version.",
       "copyLocal": "Copy local content",
+      "overwriteSave": "Overwrite server copy",
       "discardAndReload": "Discard and reload",
       "copySuccess": "Local content copied to clipboard",
       "copyFailed": "Copy failed — please copy manually"
@@ -1528,6 +1529,8 @@
       "diffApplied": "Changes applied to buffer (unsaved)",
       "diffApplyFailed": "Could not apply this diff",
       "diffHunkNotMatched": "The diff does not match the buffer (the file may have changed); ask the assistant to regenerate from the latest content.",
+      "diffHunkAmbiguous": "Multiple possible matches found in the buffer; application rejected to avoid editing the wrong location.",
+      "diffHunkOverlap": "Hunks in this diff overlap each other; application rejected.",
       "diffMalformed": "The diff format could not be parsed.",
       "noFileHint": "No file open; general Q&A only"
     },
@@ -1790,6 +1793,8 @@
     "invalidPath": "Invalid file path: only .tex / .bib / .sty / .cls files inside the project are supported",
     "invalidEncoding": "File is not valid UTF-8; the editor supports UTF-8 text files only",
     "assistantDisabled": "The editor AI assistant is disabled on this server",
-    "editorDisabled": "The web editor is disabled on this server"
+    "editorDisabled": "The web editor is disabled on this server",
+    "contentTooLong": "Content exceeds the length limit",
+    "internalError": "Internal server error, please try again later"
   }
 }

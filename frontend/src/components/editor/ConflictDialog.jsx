@@ -1,11 +1,13 @@
 /**
  * ConflictDialog —— 保存 409 冲突弹窗（editor-plan §2 / 决策 Q6）。
  *
- * 乐观锁校验失败（baseMd5 与磁盘不符）时展示，提供两条出路：
+ * 乐观锁校验失败（baseMd5 与磁盘不符）时展示，提供三条出路：
  *   1. 一键放弃本地修改并重载服务端最新内容（重置缓冲区与 baseMd5）；
- *   2. 本地内容复制到剪贴板逃生（先保住未保存的编辑成果再人工裁决）。
+ *   2. 本地内容复制到剪贴板逃生（先保住未保存的编辑成果再人工裁决）；
+ *   3. 覆盖保存：显式跳过乐观锁（base_md5 缺省），以本地版本覆盖服务端。
  *
- * 弹窗可关闭但不自动消除脏标记——是否放弃始终由用户显式决定。
+ * 弹窗可关闭但不自动消除脏标记——是否放弃始终由用户显式决定；
+ * 关闭弹窗后若内容未再变化，页面级自动保存保持暂停（防 409 回路）。
  */
 
 import { useCallback, useState } from "react";
@@ -23,6 +25,7 @@ import {
 import { Button } from "@/components/ui/button";
 import Copy from "lucide-react/dist/esm/icons/copy.mjs";
 import RotateCcw from "lucide-react/dist/esm/icons/rotate-ccw.mjs";
+import Save from "lucide-react/dist/esm/icons/save.mjs";
 
 /**
  * 写剪贴板（逃生通道）。
@@ -64,6 +67,8 @@ async function writeClipboardText(text) {
  * @param {string} props.localContent 冲突发生时的本地缓冲区全文（逃生用）
  * @param {() => Promise<boolean>} props.onDiscardAndReload 放弃本地并重载，
  *   返回是否重载成功；失败时弹窗保持打开以保留逃生出口
+ * @param {() => Promise<boolean>} props.onOverwriteSave 覆盖保存（跳过乐观
+ *   锁，以本地版本覆盖服务端）；失败时弹窗保持打开
  */
 export default function ConflictDialog({
   open,
@@ -71,9 +76,11 @@ export default function ConflictDialog({
   conflict,
   localContent,
   onDiscardAndReload,
+  onOverwriteSave,
 }) {
   const { t } = useTranslation("components");
   const [reloading, setReloading] = useState(false);
+  const [overwriting, setOverwriting] = useState(false);
 
   const handleCopyLocal = useCallback(async () => {
     try {
@@ -98,6 +105,17 @@ export default function ConflictDialog({
     }
   }, [onDiscardAndReload, onOpenChange]);
 
+  const handleOverwriteSave = useCallback(async () => {
+    setOverwriting(true);
+    try {
+      const ok = await onOverwriteSave();
+      // 覆盖失败不关弹窗：冲突未解决，保留全部出路供用户重试
+      if (ok !== false) onOpenChange(false);
+    } finally {
+      setOverwriting(false);
+    }
+  }, [onOverwriteSave, onOpenChange]);
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
@@ -121,9 +139,17 @@ export default function ConflictDialog({
             {t("components:conflictDialog.copyLocal")}
           </Button>
           <Button
+            variant="secondary"
+            onClick={handleOverwriteSave}
+            disabled={reloading || overwriting}
+          >
+            <Save />
+            {t("components:conflictDialog.overwriteSave")}
+          </Button>
+          <Button
             variant="destructive"
             onClick={handleDiscardAndReload}
-            disabled={reloading}
+            disabled={reloading || overwriting}
           >
             <RotateCcw />
             {t("components:conflictDialog.discardAndReload")}

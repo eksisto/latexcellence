@@ -133,6 +133,11 @@ const EXACT_MAP = {
   invalid_path: "invalidPath",
   file_not_found: "fileNotFound",
   invalid_encoding: "invalidEncoding",
+  // 请求体长度上限（save-file content / 编辑器助手 buffer 等）
+  content_too_long: "contentTooLong",
+
+  // SSE 流式兜底：未预期异常收敛为稳定错误码，不向客户端透传 str(e)
+  internal_error: "internalError",
 
   // 编辑器功能开关把关（editor-plan 阶段四 / 决策 Q26）
   editor_disabled: "editorDisabled",

@@ -1454,6 +1454,7 @@
       "description": "文件已被其他窗口或浏览器修改，保存已被拒绝以避免覆盖他人改动。",
       "hint": "可先将本地内容复制到剪贴板留存，或放弃本地修改并重载服务端最新版本。",
       "copyLocal": "复制本地内容",
+      "overwriteSave": "覆盖保存",
       "discardAndReload": "放弃本地并重载",
       "copySuccess": "本地内容已复制到剪贴板",
       "copyFailed": "复制失败，请手动复制"
@@ -1528,6 +1529,8 @@
       "diffApplied": "修改已应用到缓冲区（未保存）",
       "diffApplyFailed": "无法应用该 diff",
       "diffHunkNotMatched": "diff 与缓冲区内容不匹配（文件可能已变化），请让助手基于最新内容重新生成。",
+      "diffHunkAmbiguous": "diff 与缓冲区存在多处可能匹配，为避免改错位置已拒绝应用",
+      "diffHunkOverlap": "diff 中多个修改块相互重叠，已拒绝应用",
       "diffMalformed": "diff 格式无法解析。",
       "noFileHint": "未打开文件，助手仅通用问答"
     },
@@ -1790,6 +1793,8 @@
     "invalidPath": "文件路径不合法：仅支持 .tex / .bib / .sty / .cls，且必须位于项目内",
     "invalidEncoding": "文件不是有效的 UTF-8 编码，编辑器仅支持 UTF-8 文本文件",
     "assistantDisabled": "服务器已关闭编辑器 AI 助手功能",
-    "editorDisabled": "服务器已关闭网页编辑器功能"
+    "editorDisabled": "服务器已关闭网页编辑器功能",
+    "contentTooLong": "内容超出长度限制",
+    "internalError": "服务器内部错误，请稍后重试"
   }
 }

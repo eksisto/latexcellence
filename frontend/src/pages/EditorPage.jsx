@@ -240,12 +240,19 @@ export default function EditorPage() {
   const [compiling, setCompiling] = useState(false);
   const [compileResult, setCompileResult] = useState(null);
   const [pdfUrl, setPdfUrl] = useState(null);
-  /** 编译预览全屏态（对齐 GitDiff 页）：覆盖层挂在页面级，Escape 可退出 */
+  /** 当前 PDF blob URL 同步 ref：回收直接走 ref（unmounted fiber 的
+   *  setState updater 不保证执行，写进 updater 会泄漏 URL） */
+  const pdfUrlRef = useRef(null);
+  /**
+   * 编译预览全屏态（对齐 GitDiff 页）：覆盖层挂在页面级，Escape 可退出
+   */
   const [previewFullscreen, setPreviewFullscreen] = useState(false);
   // ── 文件只读预览状态：文件树点击 PDF / 位图在中栏编辑器区上方打开，
   //    不进入 CM6 缓冲区（无脏跟踪 / 无 URL ?file= 写入） ──
   const [filePreviewPath, setFilePreviewPath] = useState(null);
   const [filePreviewUrl, setFilePreviewUrl] = useState(null);
+  /** 当前只读预览 blob URL 同步 ref（回收理由同 pdfUrlRef） */
+  const filePreviewUrlRef = useRef(null);
   /** 收起态「书脊」按钮：收起后承接焦点，键盘动线不断（Enter 再展开） */
   const spineBtnRef = useRef(null);
   /** 面板头部折叠按钮：书脊展开后焦点回到这里 */
@@ -267,6 +274,8 @@ export default function EditorPage() {
   const openSeqRef = useRef(0);
   /** 保存请求重入门闸：同步 ref，杜绝同一渲染帧内连点产生并发保存 */
   const savingRef = useRef(false);
+  /** 冲突发生时的缓冲区内容快照：自动保存防回路门闩（见下方 effect） */
+  const conflictSnapshotRef = useRef(null);
   /** CM6 视图实例：命令面板 / 宏包自动添加 / 助手建议等外部插入入口经此落笔 */
   const editorViewRef = useRef(null);
 
@@ -387,6 +396,7 @@ export default function EditorPage() {
           URL.revokeObjectURL(url);
           return;
         }
+        filePreviewUrlRef.current = url;
         setFilePreviewUrl(url);
       } catch (e) {
         if (cancelled) return;
@@ -398,10 +408,13 @@ export default function EditorPage() {
     })();
     return () => {
       cancelled = true;
-      setFilePreviewUrl((prev) => {
-        if (prev) URL.revokeObjectURL(prev);
-        return null;
-      });
+      // 卸载/切换：直接经 ref 回收，不写 setState updater
+      // （unmounted fiber 的 updater 不保证执行，会泄漏 blob URL）
+      if (filePreviewUrlRef.current) {
+        URL.revokeObjectURL(filePreviewUrlRef.current);
+        filePreviewUrlRef.current = null;
+      }
+      setFilePreviewUrl(null);
     };
   }, [filePreviewPath, workspaceId, t]);
 
@@ -470,8 +483,47 @@ export default function EditorPage() {
       if (e?.code === "file_conflict") {
         // 409 冲突流程：弹窗接管（消息经 translateError 三语翻译）
         setConflict({ message: describeError(e, savedPath) });
+        // 记录冲突时快照：弹窗关闭后内容未再变化期间暂停自动保存，
+        // 防止"关弹窗 → 2.5s 无操作自动重撞 409 → 再弹窗"回路
+        conflictSnapshotRef.current = savedContent;
         toast.error(t("pages:editor.conflictToast"));
       } else {
+        toast.error(t("pages:editor.saveFailed"), {
+          description: describeError(e, savedPath),
+        });
+      }
+      return false;
+    } finally {
+      savingRef.current = false;
+      setSaving(false);
+    }
+  }, [canWrite, describeError, markSaved, setConflict, t, workspaceId]);
+
+  /* ── 冲突弹窗「覆盖保存」出路：显式跳过乐观锁（base_md5 缺省），
+   *    以本地版本覆盖服务端。仅用户在弹窗内显式点击可达，不存在自动路径。
+   *    返回是否成功；失败时弹窗保持打开，逃生口仍在。 ────────────────── */
+  const handleOverwriteSave = useCallback(async () => {
+    const cur = useEditorStore.getState();
+    if (!cur.filePath || !canWrite || savingRef.current) return false;
+    savingRef.current = true;
+    setSaving(true);
+    const savedPath = cur.filePath;
+    const savedContent = cur.content;
+    try {
+      const res = await api.project.saveFile(
+        savedPath,
+        savedContent,
+        null, // base_md5 缺省 → 后端跳过乐观锁校验
+        workspaceId,
+      );
+      if (useEditorStore.getState().filePath !== savedPath) return false;
+      markSaved(res.md5, savedContent);
+      conflictSnapshotRef.current = null;
+      setConflict(null);
+      toast.success(t("pages:editor.saved"));
+      return true;
+    } catch (e) {
+      if (useEditorStore.getState().filePath === savedPath) {
         toast.error(t("pages:editor.saveFailed"), {
           description: describeError(e, savedPath),
         });
@@ -497,12 +549,34 @@ export default function EditorPage() {
     return () => window.removeEventListener("keydown", handler);
   }, []);
 
+  /* ── 关闭/刷新拦截（Critical 修复）：editorSession 刻意不持久化、
+   * autoSave 默认关，无此守卫 F5 / 关闭标签页即静默丢弃全部未保存编辑。
+   * dirty 归零后移除监听，正常关闭不受打扰。 ────────────────────────── */
+  useEffect(() => {
+    if (!session.dirty) return undefined;
+    const handler = (e) => {
+      e.preventDefault();
+      // Chrome/Edge 需要 returnValue 才会弹出确认
+      e.returnValue = "";
+    };
+    window.addEventListener("beforeunload", handler);
+    return () => window.removeEventListener("beforeunload", handler);
+  }, [session.dirty]);
+
   /* ── 自动保存偏好（§2 / 决策 Q6，默认关）：停止编辑 2.5s 后落盘 ──────
    * 真防抖：依赖含缓冲区内容，每次编辑都重置计时器，打字中途不触发保存
    * （避免保存 toast / 潜在冲突弹窗打断输入）。冲突弹窗打开期间由 doSave
    * 内部拦截（必然 409），viewer 只读跳过。 */
   useEffect(() => {
     if (!session.autoSave || readOnly || !session.dirty || session.conflict) {
+      return undefined;
+    }
+    // 防回路门闩：冲突弹窗被关闭后，缓冲区自冲突以来未再变化时不自动
+    // 重试保存（必然再次 409）；用户继续编辑（content 变化）即恢复节奏
+    if (
+      conflictSnapshotRef.current !== null &&
+      session.content === conflictSnapshotRef.current
+    ) {
       return undefined;
     }
     const timer = window.setTimeout(() => {
@@ -516,6 +590,11 @@ export default function EditorPage() {
     session.conflict,
     session.content,
   ]);
+
+  // 脏标清零（成功保存 / 放弃重载 / 切换文件）后解除冲突快照门闩
+  useEffect(() => {
+    if (!session.dirty) conflictSnapshotRef.current = null;
+  }, [session.dirty]);
 
   /* ── Ctrl/Cmd+/：命令面板（editor-plan §6.3 入口二） ───────────────── */
   useEffect(() => {
@@ -673,12 +752,17 @@ export default function EditorPage() {
         diffText,
       );
       if (!result.ok) {
-        const reasonKey =
-          result.reason === "hunk_not_matched"
-            ? "components:assistant.diffHunkNotMatched"
-            : "components:assistant.diffMalformed";
+        // 失败原因 → i18n 键映射（hunk_ambiguous / hunk_overlap 由
+        // applyDiff 的歧义与重叠检测产出，见 lib/editor/applyDiff.js）
+        const reasonKeys = {
+          hunk_not_matched: "components:assistant.diffHunkNotMatched",
+          hunk_ambiguous: "components:assistant.diffHunkAmbiguous",
+          hunk_overlap: "components:assistant.diffHunkOverlap",
+        };
         toast.error(t("components:assistant.diffApplyFailed"), {
-          description: t(reasonKey),
+          description: t(
+            reasonKeys[result.reason] ?? "components:assistant.diffMalformed",
+          ),
         });
         return false;
       }
@@ -717,15 +801,18 @@ export default function EditorPage() {
     setPanelCollapsed(false);
     setPanelTab("compile");
     setCompileResult(null);
-    setPdfUrl((prev) => {
-      if (prev) URL.revokeObjectURL(prev);
-      return null;
-    });
+    // 直接经 ref 回收旧 URL（不经 setState updater，见 pdfUrlRef 注释）
+    if (pdfUrlRef.current) {
+      URL.revokeObjectURL(pdfUrlRef.current);
+      pdfUrlRef.current = null;
+    }
+    setPdfUrl(null);
     try {
       const data = await api.compile.run(target, workspaceId);
       setCompileResult(data);
       if (data.success) {
         const url = await api.compile.pdfBlobUrl(target, workspaceId);
+        pdfUrlRef.current = url;
         setPdfUrl(url);
         toast.success(t("pages:workspace.compileSuccessToast"));
       } else {
@@ -757,13 +844,14 @@ export default function EditorPage() {
     }
   }, [resolveCompileTarget, t, workspaceId]);
 
-  // 卸载时回收 PDF blob URL
+  // 卸载时回收 PDF blob URL：直接经 ref（unmounted fiber 的 setState
+  // updater 不保证执行，写进 updater 会泄漏 URL）
   useEffect(() => {
     return () => {
-      setPdfUrl((prev) => {
-        if (prev) URL.revokeObjectURL(prev);
-        return null;
-      });
+      if (pdfUrlRef.current) {
+        URL.revokeObjectURL(pdfUrlRef.current);
+        pdfUrlRef.current = null;
+      }
     };
   }, []);
 
@@ -1167,7 +1255,7 @@ export default function EditorPage() {
         }}
       />
 
-      {/* 409 冲突弹窗 */}
+      {/* 409 冲突弹窗（三条出路：放弃重载 / 剪贴板逃生 / 覆盖保存） */}
       <ConflictDialog
         open={session.conflict !== null}
         onOpenChange={(open) => {
@@ -1176,6 +1264,7 @@ export default function EditorPage() {
         conflict={session.conflict}
         localContent={session.content}
         onDiscardAndReload={handleDiscardAndReload}
+        onOverwriteSave={handleOverwriteSave}
       />
 
       {/* 命令面板（Ctrl/Cmd+/ 或工具栏按钮；viewer 仅浏览不可插入） */}
