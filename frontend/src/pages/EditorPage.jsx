@@ -28,48 +28,30 @@ import { toast } from "sonner";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import EmptyState from "@/components/EmptyState";
 import ConfirmDialog from "@/components/ConfirmDialog";
 import PageHeader from "@/components/PageHeader";
 import ProjectExplorer from "@/components/ProjectExplorer";
-import { cn } from "@/lib/utils";
 import LaTeXEditor from "@/components/editor/LaTeXEditor";
 import EditorToolbar from "@/components/editor/EditorToolbar";
 import ConflictDialog from "@/components/editor/ConflictDialog";
 import CommandPalette from "@/components/editor/CommandPalette";
-import AssistantPanel from "@/components/editor/AssistantPanel";
-import PDFPreview from "@/components/PDFPreview";
+import FilePreviewOverlay from "@/components/editor/FilePreviewOverlay";
+import EditorRightPanel from "@/components/editor/EditorRightPanel";
+import FullscreenPDFPreview from "@/components/editor/FullscreenPDFPreview";
 
-import Bot from "lucide-react/dist/esm/icons/bot.mjs";
-import Check from "lucide-react/dist/esm/icons/check.mjs";
-import CircleX from "lucide-react/dist/esm/icons/circle-x.mjs";
-import Expand from "lucide-react/dist/esm/icons/expand.mjs";
 import FileCode from "lucide-react/dist/esm/icons/file-code.mjs";
-import FileText from "lucide-react/dist/esm/icons/file-text.mjs";
-import Image from "lucide-react/dist/esm/icons/image.mjs";
-import Minimize from "lucide-react/dist/esm/icons/minimize.mjs";
-import PanelRightClose from "lucide-react/dist/esm/icons/panel-right-close.mjs";
-import PanelRightOpen from "lucide-react/dist/esm/icons/panel-right-open.mjs";
-import Play from "lucide-react/dist/esm/icons/play.mjs";
-import X from "lucide-react/dist/esm/icons/x.mjs";
 
 import useStore from "@/store/useStore";
 import useEditorStore from "@/store/editorStore";
+import { api } from "@/api/index";
 import useIsOpened from "@/hooks/useIsOpened";
 import useCanWrite from "@/hooks/useCanWrite";
 import useEnabledFeatures from "@/hooks/useEnabledFeatures";
-import { useShallow } from "zustand/react/shallow";
-import { api } from "@/api/index";
-import { isMultiUser } from "@/api/connection";
+import useEditorBuffer from "@/hooks/useEditorBuffer";
+import useEditorCompile from "@/hooks/useEditorCompile";
 import { translateError } from "@/utils/errorMessages";
-import { openMultiUserProject } from "@/utils/multiUserProject";
-import {
-  isEditableFilePath,
-  isFileTooLarge,
-  isImagePreviewFilePath,
-  isPreviewableFilePath,
-} from "@/lib/editor/files";
+import { isEditableFilePath, isPreviewableFilePath } from "@/lib/editor/files";
 import { expandEntryInsert, insertSnippet } from "@/lib/editor/snippetInsert";
 import { applyUnifiedDiff } from "@/lib/editor/applyDiff";
 import {
@@ -78,119 +60,6 @@ import {
 } from "@/lib/editor/preambleScan";
 import { getCommandZhDisplay } from "@/lib/editor/commandZh";
 import i18n from "@/i18n";
-
-/**
- * 编译与预览面板（阶段四）：编译状态徽标、错误翻译与修复建议摘要、
- * 原始输出折叠块，成功时复用 PDFPreview 预览。展示逻辑对齐工作台
- * 编译结果语义，但状态由 EditorPage 局部持有，不写入全局 store。
- * 全屏交互对齐 GitDiff 页：预览区左下角「全屏查看」进入，覆盖层与
- * Escape 退出由页面级持有（aside 有 transform/overflow 裁切，
- * fixed 覆盖层必须挂在面板外才能铺满视口）。
- */
-function CompilePreviewPanel({
-  compiling,
-  compileResult,
-  pdfUrl,
-  fullscreen,
-  onEnterFullscreen,
-}) {
-  const { t } = useTranslation(["pages", "components"]);
-  return (
-    <Card className="flex h-full min-h-0 flex-col overflow-hidden">
-      <CardHeader className="pb-2">
-        <div className="flex items-center justify-between gap-2">
-          <CardTitle className="text-sm">
-            {t("components:editor.panelCompileTitle")}
-          </CardTitle>
-          {compileResult && (
-            <span
-              className={`inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-xs font-medium ${
-                compileResult.success
-                  ? "bg-secondary text-secondary-foreground"
-                  : "bg-destructive/10 text-destructive"
-              }`}
-            >
-              {compileResult.success ? (
-                <>
-                  <Check className="size-3" />
-                  {t("pages:workspace.compileSuccess")}
-                </>
-              ) : (
-                <>
-                  <CircleX className="size-3" />
-                  {t("pages:workspace.compileFailed")}
-                </>
-              )}
-            </span>
-          )}
-        </div>
-      </CardHeader>
-      <CardContent className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto p-3 pt-0">
-        {compiling && (
-          <p className="text-xs text-muted-foreground">
-            {t("components:editor.compiling")}
-          </p>
-        )}
-        {!compiling && !compileResult && (
-          <EmptyState
-            icon={Play}
-            title={t("components:editor.panelEmptyTitle")}
-            description={t("components:editor.panelEmptyDescription")}
-            className="py-8"
-          />
-        )}
-        {compileResult && (
-          <>
-            {compileResult.explanation && (
-              <p className="text-xs leading-relaxed text-muted-foreground">
-                {translateError({
-                  error: compileResult.error_code,
-                  message: compileResult.explanation,
-                })}
-              </p>
-            )}
-            {Array.isArray(compileResult.fixes) &&
-              compileResult.fixes.length > 0 && (
-                <ul className="space-y-1 text-xs">
-                  {compileResult.fixes.map((fix, i) => (
-                    <li key={i} className="rounded border bg-background p-1.5">
-                      {typeof fix === "string"
-                        ? fix
-                        : fix.suggestion || fix.description || ""}
-                    </li>
-                  ))}
-                </ul>
-              )}
-            <details className="text-xs">
-              <summary className="cursor-pointer text-muted-foreground">
-                {t("components:editor.compileOutput")}
-              </summary>
-              <pre className="mt-1 max-h-40 overflow-auto rounded bg-muted/60 p-2 font-mono text-[11px] whitespace-pre-wrap break-all">
-                {(compileResult.stdout || "") + (compileResult.stderr || "")}
-              </pre>
-            </details>
-          </>
-        )}
-        {/* 成功后 PDF 预览占满剩余空间；全屏时卸载内联预览（避免双 iframe），
-            左下角悬浮「全屏查看」按钮与 GitDiff 页同款 */}
-        {compileResult?.success && pdfUrl && !fullscreen && (
-          <div className="relative min-h-32 flex-1">
-            <PDFPreview url={pdfUrl} />
-            <Button
-              variant="outline"
-              size="sm"
-              className="absolute bottom-2 left-2 z-10 bg-background/80 backdrop-blur"
-              onClick={onEnterFullscreen}
-            >
-              <Expand />
-              {t("components:editor.enterFullscreen")}
-            </Button>
-          </div>
-        )}
-      </CardContent>
-    </Card>
-  );
-}
 
 export default function EditorPage() {
   const { t } = useTranslation(["pages", "components", "common"]);
@@ -205,183 +74,62 @@ export default function EditorPage() {
   const readOnly = !canWrite;
   const enabledFeatures = useEnabledFeatures();
 
-  /** 部署级功能开关（决策 Q17）：editor.enabled=false 时路由守卫提示 */
   const editorDisabled =
     hydrated && enabledFeatures !== null && !enabledFeatures.editor;
-  /** AI 助手独立子开关（决策 Q26）：关闭时隐藏 AI Tab */
   const assistantEnabled =
     enabledFeatures === null
       ? true
       : enabledFeatures.editor_assistant !== false;
 
-  const session = useEditorStore(
-    useShallow((s) => ({
-      filePath: s.filePath,
-      content: s.content,
-      dirty: s.dirty,
-      conflict: s.conflict,
-      softWrap: s.softWrap,
-      fontSize: s.fontSize,
-      autoSave: s.autoSave,
-    })),
-  );
-  const openBuffer = useEditorStore((s) => s.openBuffer);
+  const session = useEditorStore((s) => ({
+    filePath: s.filePath,
+    content: s.content,
+    dirty: s.dirty,
+    conflict: s.conflict,
+    softWrap: s.softWrap,
+    fontSize: s.fontSize,
+  }));
   const setBufferContent = useEditorStore((s) => s.setBufferContent);
-  const markSaved = useEditorStore((s) => s.markSaved);
-  const setConflict = useEditorStore((s) => s.setConflict);
 
-  const [saving, setSaving] = useState(false);
-  const [opening, setOpening] = useState(false);
-  const [switchConfirmPath, setSwitchConfirmPath] = useState(null);
-  const [paletteOpen, setPaletteOpen] = useState(false);
-  // ── 右栏状态（阶段四） ──────────────────────────────────────────────
-  const [panelCollapsed, setPanelCollapsed] = useState(false);
-  const [panelTab, setPanelTab] = useState("compile");
-  const [compiling, setCompiling] = useState(false);
-  const [compileResult, setCompileResult] = useState(null);
-  const [pdfUrl, setPdfUrl] = useState(null);
-  /** 当前 PDF blob URL 同步 ref：回收直接走 ref（unmounted fiber 的
-   *  setState updater 不保证执行，写进 updater 会泄漏 URL） */
-  const pdfUrlRef = useRef(null);
-  /**
-   * 编译预览全屏态（对齐 GitDiff 页）：覆盖层挂在页面级，Escape 可退出
-   */
-  const [previewFullscreen, setPreviewFullscreen] = useState(false);
-  // ── 文件只读预览状态：文件树点击 PDF / 位图在中栏编辑器区上方打开，
-  //    不进入 CM6 缓冲区（无脏跟踪 / 无 URL ?file= 写入） ──
+  // ── 只读预览状态（PDF/位图覆盖层，不进入 CM6 缓冲区） ─────────────
   const [filePreviewPath, setFilePreviewPath] = useState(null);
   const [filePreviewUrl, setFilePreviewUrl] = useState(null);
-  /** 当前只读预览 blob URL 同步 ref（回收理由同 pdfUrlRef） */
   const filePreviewUrlRef = useRef(null);
-  /** 收起态「书脊」按钮：收起后承接焦点，键盘动线不断（Enter 再展开） */
-  const spineBtnRef = useRef(null);
-  /** 面板头部折叠按钮：书脊展开后焦点回到这里 */
-  const panelCollapseRef = useRef(null);
 
-  /** 折叠右栏：状态提交后把焦点交给书脊，键盘动线连续 */
-  const collapsePanel = useCallback(() => {
-    setPanelCollapsed(true);
-    requestAnimationFrame(() => spineBtnRef.current?.focus());
-  }, []);
+  // ── 右栏状态 ─────────────────────────────────────────────────────
+  const [panelCollapsed, setPanelCollapsed] = useState(false);
+  const [panelTab, setPanelTab] = useState("compile");
+  const [previewFullscreen, setPreviewFullscreen] = useState(false);
+  const [paletteOpen, setPaletteOpen] = useState(false);
 
-  /** 书脊展开右栏：状态提交后焦点送回面板头部折叠按钮 */
-  const expandPanelFromSpine = useCallback(() => {
-    setPanelCollapsed(false);
-    requestAnimationFrame(() => panelCollapseRef.current?.focus());
-  }, []);
-  const restoringRef = useRef(false);
-  /** 打开请求序号：单调递增，用于丢弃过期在途响应（快速切换 / 后退前进） */
-  const openSeqRef = useRef(0);
-  /** 保存请求重入门闸：同步 ref，杜绝同一渲染帧内连点产生并发保存 */
-  const savingRef = useRef(false);
-  /** 冲突发生时的缓冲区内容快照：自动保存防回路门闩（见下方 effect） */
-  const conflictSnapshotRef = useRef(null);
-  /** CM6 视图实例：命令面板 / 宏包自动添加 / 助手建议等外部插入入口经此落笔 */
+  // ── CM6 视图实例 ────────────────────────────────────────────────
   const editorViewRef = useRef(null);
 
-  /** 结构化错误翻译：错误码优先（file_not_found 补 path 插值），未收录回落 message */
-  const describeError = useCallback((e, filePathForNotFound) => {
-    if (e?.code === "file_not_found") {
-      return translateError({ error: e.code, path: filePathForNotFound ?? "" });
-    }
-    return translateError({ error: e?.code, message: e?.message });
-  }, []);
+  /* ── 缓冲区管理（打开 / 保存 / 冲突 / 自动保存 / 刷新恢复） ──── */
+  const {
+    opening,
+    saving,
+    switchConfirmPath,
+    setSwitchConfirmPath,
+    doOpenFile,
+    requestOpenFile,
+    doSave,
+    saveRef,
+    handleOverwriteSave,
+    handleReloadBuffer,
+    handleDiscardAndReload,
+    handleSelectTreeNode,
+    conflictSnapshotRef,
+  } = useEditorBuffer({
+    workspaceId,
+    canWrite,
+    setSearchParams,
+    t,
+    setFilePreviewPath,
+    setFilePreviewUrl,
+  });
 
-  /* ── 打开文件（返回是否成功；过期请求返回 false） ──────────────────── */
-  const doOpenFile = useCallback(
-    async (filePath) => {
-      const seq = ++openSeqRef.current;
-      setOpening(true);
-      try {
-        const data = await api.project.fileContent(filePath, workspaceId);
-        // 响应返回前已有更新的打开请求发出：本次结果整体作废，
-        // 防止慢响应后到把旧文件写进新缓冲区（URL 与缓冲区错位）
-        if (seq !== openSeqRef.current) return false;
-        // 文件上限（方案 §4）：超约 2MB 拒绝进入缓冲区，防浏览器端卡顿
-        if (isFileTooLarge(data.content)) {
-          toast.error(t("pages:editor.fileTooLarge", { path: filePath }));
-          return false;
-        }
-        openBuffer({ filePath, content: data.content, baseMd5: data.md5 });
-        // 文本文件成功打开：收起只读预览覆盖层，让位给编辑器缓冲区
-        setFilePreviewPath(null);
-        setFilePreviewUrl(null);
-        // URL 同步当前文件（replace 避免污染历史栈）
-        setSearchParams(
-          (prev) => {
-            const next = new URLSearchParams(prev);
-            if (next.get("file") !== filePath) next.set("file", filePath);
-            return next;
-          },
-          { replace: true },
-        );
-        return true;
-      } catch (e) {
-        if (seq !== openSeqRef.current) return false;
-        // 失败不动现有缓冲区；仅当失败目标本就是当前缓冲区时清残留
-        const cur = useEditorStore.getState();
-        if (cur.filePath === filePath && !cur.dirty) {
-          cur.closeBuffer();
-        }
-        toast.error(t("pages:editor.openFailed"), {
-          description: describeError(e, filePath),
-        });
-        return false;
-      } finally {
-        if (seq === openSeqRef.current) setOpening(false);
-      }
-    },
-    [workspaceId, openBuffer, setSearchParams, t, describeError],
-  );
-
-  /** 文件树点击入口：只读预览分流（PDF/位图） + 文本白名单 + 脏改动确认 */
-  const requestOpenFile = useCallback(
-    (filePath) => {
-      if (!filePath || opening || saving) return;
-      // PDF / 位图走只读预览覆盖层：不动缓冲区，也无须脏改动确认
-      if (isPreviewableFilePath(filePath)) {
-        setFilePreviewPath(filePath);
-        return;
-      }
-      if (!isEditableFilePath(filePath)) {
-        toast.error(t("pages:editor.unsupportedType", { path: filePath }));
-        return;
-      }
-      const cur = useEditorStore.getState();
-      // 同一文件且无脏改动：幂等跳过；同文件带脏改动也无须重开
-      if (cur.filePath === filePath) return;
-      if (cur.dirty) {
-        setSwitchConfirmPath(filePath);
-        return;
-      }
-      doOpenFile(filePath);
-    },
-    [doOpenFile, opening, saving, t],
-  );
-
-  /* ── URL ?file= 参数驱动打开（含刷新直达；预览型文件直达恢复覆盖层） ── */
-  const requestedFile = searchParams.get("file");
-  useEffect(() => {
-    if (!isOpened || fileTree.length === 0 || !requestedFile) return;
-    if (isPreviewableFilePath(requestedFile)) {
-      setFilePreviewPath(requestedFile);
-      return;
-    }
-    if (!isEditableFilePath(requestedFile)) {
-      toast.error(t("pages:editor.unsupportedType", { path: requestedFile }));
-      return;
-    }
-    const cur = useEditorStore.getState();
-    // 已打开同一文件（无论脏否）不重复拉取；不同文件且有脏改动走确认
-    if (cur.filePath === requestedFile) return;
-    if (cur.dirty) {
-      setSwitchConfirmPath(requestedFile);
-      return;
-    }
-    doOpenFile(requestedFile);
-  }, [requestedFile, isOpened, fileTree.length, doOpenFile, t]);
-
-  /* ── 只读预览：按路径拉取 blob URL，切换/关闭/卸载时释放 ─────────── */
+  /* ── 只读预览：按路径拉取 blob URL，切换/关闭/卸载时释放 ──────── */
   useEffect(() => {
     if (!filePreviewPath) return;
     let cancelled = false;
@@ -392,7 +140,6 @@ export default function EditorPage() {
           workspaceId,
         );
         if (cancelled) {
-          // 竞态败者：URL 尚未入 state，这里直接就地回收
           URL.revokeObjectURL(url);
           return;
         }
@@ -408,8 +155,6 @@ export default function EditorPage() {
     })();
     return () => {
       cancelled = true;
-      // 卸载/切换：直接经 ref 回收，不写 setState updater
-      // （unmounted fiber 的 updater 不保证执行，会泄漏 blob URL）
       if (filePreviewUrlRef.current) {
         URL.revokeObjectURL(filePreviewUrlRef.current);
         filePreviewUrlRef.current = null;
@@ -418,185 +163,69 @@ export default function EditorPage() {
     };
   }, [filePreviewPath, workspaceId, t]);
 
-  /** 关闭只读预览：清路径即触发上方 effect 的清理分支释放 URL */
   const closeFilePreview = useCallback(() => setFilePreviewPath(null), []);
 
-  /* ── 刷新直达恢复：fileTree 为空且已声明打开过项目时重建工作区绑定 ── */
+  /* ── URL ?file= 参数驱动打开 ──────────────────────────────────── */
+  const requestedFile = searchParams.get("file");
   useEffect(() => {
-    if (!hydrated || restoringRef.current || !isOpened) return;
-    if (fileTree.length > 0) return;
-    restoringRef.current = true;
-    (async () => {
-      try {
-        const store = useStore.getState();
-        if (isMultiUser()) {
-          if (store.projectId) {
-            await openMultiUserProject(store.projectId, workspaceId, {
-              preserveActiveFile: true,
-            });
-          }
-        } else if (store.projectPath) {
-          const data = await api.project.open(store.projectPath, workspaceId);
-          store.setRootPath(data.root_path);
-          store.setFileTree(data.file_tree);
-          store.setMainFile(data.main_file);
-        }
-      } catch (_) {
-        // 恢复失败静默：呈现"未打开项目"空态，用户可回工作台重开
-      } finally {
-        restoringRef.current = false;
-      }
-    })();
-  }, [hydrated, isOpened, fileTree.length, workspaceId]);
-
-  /* ── 保存（MD5 乐观锁；返回是否成功落账） ─────────────────────────── */
-  const doSave = useCallback(async () => {
-    // 同步 ref 重入门闸：快速连点 / 键盘连击在同一渲染帧内到达时，
-    // 仅第一笔生效，避免并发双写同一 baseMd5 触发自伤式 409 冲突弹窗
-    if (savingRef.current) return false;
+    if (!isOpened || fileTree.length === 0 || !requestedFile) return;
+    if (isPreviewableFilePath(requestedFile)) {
+      setFilePreviewPath(requestedFile);
+      return;
+    }
+    if (!isEditableFilePath(requestedFile)) {
+      toast.error(t("pages:editor.unsupportedType", { path: requestedFile }));
+      return;
+    }
     const cur = useEditorStore.getState();
-    // 冲突弹窗打开期间 baseMd5 已过期：再次保存必然 409，
-    // 只会重复弹出冲突提示；出路只有弹窗内的两条显式路径
-    if (!cur.filePath || !cur.dirty || cur.conflict || !canWrite) {
-      return false;
+    if (cur.filePath === requestedFile) return;
+    if (cur.dirty) {
+      setSwitchConfirmPath(requestedFile);
+      return;
     }
-    savingRef.current = true;
-    setSaving(true);
-    // 保存快照：请求发出后缓冲区可能继续变化或切换文件，
-    // 结果只对发起时的 (filePath, content) 生效
-    const savedPath = cur.filePath;
-    const savedContent = cur.content;
-    try {
-      const res = await api.project.saveFile(
-        savedPath,
-        savedContent,
-        cur.baseMd5,
-        workspaceId,
-      );
-      // 在途切换文件：结果属于旧缓冲区，丢弃且不惊扰新文件的编辑
-      if (useEditorStore.getState().filePath !== savedPath) return false;
-      markSaved(res.md5, savedContent);
-      toast.success(t("pages:editor.saved"));
-      return true;
-    } catch (e) {
-      if (useEditorStore.getState().filePath !== savedPath) return false;
-      if (e?.code === "file_conflict") {
-        // 409 冲突流程：弹窗接管（消息经 translateError 三语翻译）
-        setConflict({ message: describeError(e, savedPath) });
-        // 记录冲突时快照：弹窗关闭后内容未再变化期间暂停自动保存，
-        // 防止"关弹窗 → 2.5s 无操作自动重撞 409 → 再弹窗"回路
-        conflictSnapshotRef.current = savedContent;
-        toast.error(t("pages:editor.conflictToast"));
-      } else {
-        toast.error(t("pages:editor.saveFailed"), {
-          description: describeError(e, savedPath),
+    doOpenFile(requestedFile);
+  }, [requestedFile, isOpened, fileTree.length, doOpenFile, t]);
+
+  /* ── 编译联动 ──────────────────────────────────────────────── */
+  const { compiling, compileResult, pdfUrl, handleCompile } = useEditorCompile({
+    saveRef,
+    mainFile,
+    t,
+    workspaceId,
+    setPanelCollapsed,
+    setPanelTab,
+    onCompileSuccess: useCallback(
+      () => toast.success(t("pages:workspace.compileSuccessToast")),
+      [t],
+    ),
+    onCompileError: useCallback(
+      (data) => {
+        const reason =
+          data.error_code || data.explanation
+            ? translateError({
+                error: data.error_code,
+                message: data.explanation,
+              })
+            : "";
+        toast.error(t("pages:workspace.compileFailedToast"), {
+          description: reason || t("pages:workspace.compileFailedToast"),
         });
-      }
-      return false;
-    } finally {
-      savingRef.current = false;
-      setSaving(false);
-    }
-  }, [canWrite, describeError, markSaved, setConflict, t, workspaceId]);
+      },
+      [t],
+    ),
+  });
 
-  /* ── 冲突弹窗「覆盖保存」出路：显式跳过乐观锁（base_md5 缺省），
-   *    以本地版本覆盖服务端。仅用户在弹窗内显式点击可达，不存在自动路径。
-   *    返回是否成功；失败时弹窗保持打开，逃生口仍在。 ────────────────── */
-  const handleOverwriteSave = useCallback(async () => {
-    const cur = useEditorStore.getState();
-    if (!cur.filePath || !canWrite || savingRef.current) return false;
-    savingRef.current = true;
-    setSaving(true);
-    const savedPath = cur.filePath;
-    const savedContent = cur.content;
-    try {
-      const res = await api.project.saveFile(
-        savedPath,
-        savedContent,
-        null, // base_md5 缺省 → 后端跳过乐观锁校验
-        workspaceId,
-      );
-      if (useEditorStore.getState().filePath !== savedPath) return false;
-      markSaved(res.md5, savedContent);
-      conflictSnapshotRef.current = null;
-      setConflict(null);
-      toast.success(t("pages:editor.saved"));
-      return true;
-    } catch (e) {
-      if (useEditorStore.getState().filePath === savedPath) {
-        toast.error(t("pages:editor.saveFailed"), {
-          description: describeError(e, savedPath),
-        });
-      }
-      return false;
-    } finally {
-      savingRef.current = false;
-      setSaving(false);
-    }
-  }, [canWrite, describeError, markSaved, setConflict, t, workspaceId]);
-
-  /* ── Ctrl/Cmd+S：window 级统一拦截（编辑器内外行为一致、单一触发点） ── */
-  const saveRef = useRef(doSave);
-  saveRef.current = doSave;
+  // 全屏预览 Escape 退出
   useEffect(() => {
-    const handler = (e) => {
-      if (!(e.ctrlKey || e.metaKey)) return;
-      if (e.key?.toLowerCase() !== "s") return;
-      e.preventDefault();
-      saveRef.current();
+    if (!previewFullscreen) return;
+    const onKeyDown = (e) => {
+      if (e.key === "Escape") setPreviewFullscreen(false);
     };
-    window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
-  }, []);
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [previewFullscreen]);
 
-  /* ── 关闭/刷新拦截（Critical 修复）：editorSession 刻意不持久化、
-   * autoSave 默认关，无此守卫 F5 / 关闭标签页即静默丢弃全部未保存编辑。
-   * dirty 归零后移除监听，正常关闭不受打扰。 ────────────────────────── */
-  useEffect(() => {
-    if (!session.dirty) return undefined;
-    const handler = (e) => {
-      e.preventDefault();
-      // Chrome/Edge 需要 returnValue 才会弹出确认
-      e.returnValue = "";
-    };
-    window.addEventListener("beforeunload", handler);
-    return () => window.removeEventListener("beforeunload", handler);
-  }, [session.dirty]);
-
-  /* ── 自动保存偏好（§2 / 决策 Q6，默认关）：停止编辑 2.5s 后落盘 ──────
-   * 真防抖：依赖含缓冲区内容，每次编辑都重置计时器，打字中途不触发保存
-   * （避免保存 toast / 潜在冲突弹窗打断输入）。冲突弹窗打开期间由 doSave
-   * 内部拦截（必然 409），viewer 只读跳过。 */
-  useEffect(() => {
-    if (!session.autoSave || readOnly || !session.dirty || session.conflict) {
-      return undefined;
-    }
-    // 防回路门闩：冲突弹窗被关闭后，缓冲区自冲突以来未再变化时不自动
-    // 重试保存（必然再次 409）；用户继续编辑（content 变化）即恢复节奏
-    if (
-      conflictSnapshotRef.current !== null &&
-      session.content === conflictSnapshotRef.current
-    ) {
-      return undefined;
-    }
-    const timer = window.setTimeout(() => {
-      saveRef.current();
-    }, 2500);
-    return () => window.clearTimeout(timer);
-  }, [
-    session.autoSave,
-    readOnly,
-    session.dirty,
-    session.conflict,
-    session.content,
-  ]);
-
-  // 脏标清零（成功保存 / 放弃重载 / 切换文件）后解除冲突快照门闩
-  useEffect(() => {
-    if (!session.dirty) conflictSnapshotRef.current = null;
-  }, [session.dirty]);
-
-  /* ── Ctrl/Cmd+/：命令面板（editor-plan §6.3 入口二） ───────────────── */
+  /* ── 命令面板 Ctrl/Cmd+/ ──────────────────────────────────── */
   useEffect(() => {
     const handler = (e) => {
       if (!(e.ctrlKey || e.metaKey)) return;
@@ -608,28 +237,15 @@ export default function EditorPage() {
     return () => window.removeEventListener("keydown", handler);
   }, []);
 
-  /* ── 后端撤销/重做落盘后 / 冲突放弃本地：重拉文件内容刷新缓冲区 ──── */
-  const handleReloadBuffer = useCallback(async () => {
-    const cur = useEditorStore.getState();
-    if (!cur.filePath) return false;
-    return doOpenFile(cur.filePath);
-  }, [doOpenFile]);
-
-  /* ── 宏包缺失联动（editor-plan §6.5 / 决策 Q14） ─────────────────────
-   * 插入含 pkg 条目时对插入前的缓冲区做导言区扫描；缺失则 toast 提示并
-   * 提供「自动添加 \usepackage」动作：按三级回退插入点写入 CM6 缓冲区，
-   * 经 onChange 正常置脏，落盘仍走 save-file 单一路径。viewer 不触发。 */
+  /* ── 宏包缺失联动 ──────────────────────────────────────────── */
   const addPackageToPreamble = useCallback(
     (pkg) => {
       const view = editorViewRef.current;
-      // 缓冲区关闭会卸载 CM 视图：宏包提示条（10s）可能比视图存活更久，
-      // 向已销毁视图 dispatch 会抛错，此处一并拦截
       if (!view || view.destroyed || !pkg) return;
       const insertion = buildPackageInsertion(
         useEditorStore.getState().content,
         pkg,
       );
-      // 已存在或无法定位插入点：静默返回（提示条本身只是辅助）
       if (!insertion) return;
       view.dispatch({
         changes: { from: insertion.index, insert: insertion.text },
@@ -646,8 +262,6 @@ export default function EditorPage() {
       const pkg = entry?.pkg;
       if (!pkg || !canWrite) return;
       const description = `\\usepackage{${pkg}}`;
-      // 命令名按界面语言本地化（commandZh.js）：en 直接展示 \命令，
-      // zh 原样中文名，zh-TW 展示繁体名；转换失败回退 \命令
       const displayZh = await getCommandZhDisplay(i18n.language);
       const zhLabel = displayZh ? displayZh(entry.zh ?? "") : "";
       toast.warning(
@@ -668,10 +282,6 @@ export default function EditorPage() {
     [addPackageToPreamble, canWrite, t],
   );
 
-  /**
-   * 命令面板统一插入出口：模板经占位符模式写入缓冲区。
-   * @returns {boolean} 是否已执行插入（false 时面板保持打开）
-   */
   const handleInsertEntry = useCallback(
     (entry, size) => {
       if (!canWrite) return false;
@@ -681,7 +291,6 @@ export default function EditorPage() {
         toast.info(t("components:commandPalette.noFileHint"));
         return false;
       }
-      // 宏包扫描基于插入前内容：命令文本不影响导言区已有声明
       const contentBefore = cur.content;
       insertSnippet(view, expandEntryInsert(entry, size));
       if (entry.pkg && isPackageMissing(contentBefore, entry.pkg)) {
@@ -696,8 +305,7 @@ export default function EditorPage() {
     editorViewRef.current = view;
   }, []);
 
-  /* ── AI 助手：编辑器上下文快照与建议应用（editor-plan §7） ─────────── */
-  /** 发送时采集 CM6 缓冲区上下文（文件路径 / 全文 / 光标行 / 选区文本） */
+  /* ── AI 助手：上下文快照与建议应用 ──────────────────────────── */
   const getEditorContext = useCallback(() => {
     const cur = useEditorStore.getState();
     const view = editorViewRef.current;
@@ -716,11 +324,6 @@ export default function EditorPage() {
     };
   }, []);
 
-  /**
-   * snippet 建议应用：插入光标处或替换选区（纯前端 CM6 transaction，
-   * 经 onChange 正常置脏；落盘仍走保存按钮 / Ctrl+S 单一路径）。
-   * @returns {boolean} 是否已应用
-   */
   const handleApplySnippet = useCallback((text, { replace = false } = {}) => {
     const view = editorViewRef.current;
     if (!view || view.destroyed || !text) return false;
@@ -738,11 +341,6 @@ export default function EditorPage() {
     return true;
   }, []);
 
-  /**
-   * diff 建议应用：unified diff 以上下文锚定到缓冲区后整体替换文档
-   * （单个 CM6 transaction，可经 Ctrl+Z 撤销）。失败 toast 并返回 false。
-   * @returns {boolean} 是否已应用
-   */
   const handleApplyDiffText = useCallback(
     (diffText) => {
       const view = editorViewRef.current;
@@ -752,8 +350,6 @@ export default function EditorPage() {
         diffText,
       );
       if (!result.ok) {
-        // 失败原因 → i18n 键映射（hunk_ambiguous / hunk_overlap 由
-        // applyDiff 的歧义与重叠检测产出，见 lib/editor/applyDiff.js）
         const reasonKeys = {
           hunk_not_matched: "components:assistant.diffHunkNotMatched",
           hunk_ambiguous: "components:assistant.diffHunkAmbiguous",
@@ -776,98 +372,6 @@ export default function EditorPage() {
     [t],
   );
 
-  /* ── 编译联动（editor-plan §8 / 决策 Q18）────────────────────────────
-   * 有脏改动时先自动保存（含乐观锁检查），失败（如 409 冲突）中断编译
-   * 进入既有冲突流程；编译目标优先项目主文件，无主文件时回退当前 .tex。 */
-  const resolveCompileTarget = useCallback(() => {
-    if (mainFile) return mainFile;
-    const cur = useEditorStore.getState().filePath;
-    if (cur && cur.endsWith(".tex")) return cur;
-    return null;
-  }, [mainFile]);
-
-  const handleCompile = useCallback(async () => {
-    // 脏改动先落盘：doSave 失败（含 409 → ConflictDialog 接管）即中断编译
-    if (useEditorStore.getState().dirty) {
-      const saved = await saveRef.current();
-      if (!saved) return;
-    }
-    const target = resolveCompileTarget();
-    if (!target) {
-      toast.error(t("pages:editor.compileNoMainFile"));
-      return;
-    }
-    setCompiling(true);
-    setPanelCollapsed(false);
-    setPanelTab("compile");
-    setCompileResult(null);
-    // 直接经 ref 回收旧 URL（不经 setState updater，见 pdfUrlRef 注释）
-    if (pdfUrlRef.current) {
-      URL.revokeObjectURL(pdfUrlRef.current);
-      pdfUrlRef.current = null;
-    }
-    setPdfUrl(null);
-    try {
-      const data = await api.compile.run(target, workspaceId);
-      setCompileResult(data);
-      if (data.success) {
-        const url = await api.compile.pdfBlobUrl(target, workspaceId);
-        pdfUrlRef.current = url;
-        setPdfUrl(url);
-        toast.success(t("pages:workspace.compileSuccessToast"));
-      } else {
-        const reason =
-          data.error_code || data.explanation
-            ? translateError({
-                error: data.error_code,
-                message: data.explanation,
-              })
-            : "";
-        toast.error(t("pages:workspace.compileFailedToast"), {
-          description: reason || t("pages:workspace.compileFailedToast"),
-        });
-      }
-    } catch (e) {
-      const msg = translateError({ error: e.code, message: e.message });
-      setCompileResult({
-        success: false,
-        explanation: msg,
-        fixes: [],
-        stdout: "",
-        stderr: "",
-      });
-      toast.error(t("pages:workspace.compileFailedToast"), {
-        description: msg,
-      });
-    } finally {
-      setCompiling(false);
-    }
-  }, [resolveCompileTarget, t, workspaceId]);
-
-  // 卸载时回收 PDF blob URL：直接经 ref（unmounted fiber 的 setState
-  // updater 不保证执行，写进 updater 会泄漏 URL）
-  useEffect(() => {
-    return () => {
-      if (pdfUrlRef.current) {
-        URL.revokeObjectURL(pdfUrlRef.current);
-        pdfUrlRef.current = null;
-      }
-    };
-  }, []);
-
-  // 全屏预览时按 Escape 退出（对齐 GitDiff 页）
-  useEffect(() => {
-    if (!previewFullscreen) return;
-
-    const onKeyDown = (e) => {
-      if (e.key === "Escape") setPreviewFullscreen(false);
-    };
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [previewFullscreen]);
-
-  /* 行内补全应用后的宏包缺失联动：与面板插入同一提示逻辑（§6.5 一致性）。
-   * 扫描当前缓冲区即可——插入的命令文本不含 usepackage 声明。 */
   const handleCompletionApplyEntry = useCallback(
     (entry) => {
       if (!canWrite || !entry?.pkg) return;
@@ -878,23 +382,7 @@ export default function EditorPage() {
     [canWrite, notifyMissingPackage],
   );
 
-  const handleSelectTreeNode = useCallback(
-    (node) => {
-      if (node.is_dir) return;
-      requestOpenFile(node.path);
-    },
-    [requestOpenFile],
-  );
-
-  const handleDiscardAndReload = useCallback(async () => {
-    // 重拉失败（网络断开 / 文件被删）时返回 false：冲突弹窗保持打开，
-    // 本地缓冲区原样保留，用户仍可走剪贴板逃生，不误报"已重载"
-    const ok = await handleReloadBuffer();
-    if (ok) toast.success(t("pages:editor.reloadedFromDisk"));
-    return ok;
-  }, [handleReloadBuffer, t]);
-
-  /* ── 未打开项目：空态守卫 ─────────────────────────────────────────── */
+  /* ── 守卫 ──────────────────────────────────────────────────── */
   if (hydrated && !isOpened) {
     return (
       <div className="min-h-screen p-8 animate-tab-enter">
@@ -916,7 +404,6 @@ export default function EditorPage() {
     );
   }
 
-  /* ── 功能开关守卫（决策 Q17）：editor.enabled=false 时提示并回工作台 ── */
   if (editorDisabled) {
     return (
       <div className="min-h-screen p-8 animate-tab-enter">
@@ -938,9 +425,9 @@ export default function EditorPage() {
     );
   }
 
+  /* ── 主布局 ──────────────────────────────────────────────────── */
   return (
     <div className="h-screen flex flex-col gap-3 p-4 pb-6 animate-tab-enter">
-      {/* 与其他功能页一致的页头（返回 + §kicker + 标题）；压缩纵向留白适配全高布局 */}
       <PageHeader
         title={t("pages:editor.title")}
         groupKey="aiAssist"
@@ -962,10 +449,7 @@ export default function EditorPage() {
       />
 
       <div className="flex flex-1 min-h-0 gap-3">
-        {/* 左栏：文件树（复用 ProjectExplorer）。
-            纵轴对齐：「编辑器」标题（视口 64px）→ 工具栏文件路径 →
-            「文件」标题同轴；卡片边框相对文字轴向左延出一个
-            card-spacing（边框落在 48px），不再贴着页面左缘 */}
+        {/* 左栏：文件树 */}
         <aside className="ml-8 w-64 shrink-0 min-h-0">
           <Card className="flex h-full flex-col">
             <CardHeader className="pb-2">
@@ -989,54 +473,11 @@ export default function EditorPage() {
               {t("pages:editor.opening")}
             </div>
           )}
-          {/* 只读预览覆盖层：文件树点击 PDF / 位图时盖在编辑器区上方，
-              不进入 CM6 缓冲区；关闭按钮退出，点 .tex 打开时自动让位。
-              PDF 走 iframe（PDFPreview），位图走 <img> 居中 contain */}
-          {filePreviewPath && (
-            <div className="absolute inset-0 z-20 flex flex-col overflow-hidden rounded-lg border bg-background">
-              <div className="flex shrink-0 items-center justify-between gap-2 border-b px-3 py-1.5">
-                <span className="flex min-w-0 items-center gap-1.5 text-sm font-medium">
-                  {isImagePreviewFilePath(filePreviewPath) ? (
-                    <Image className="size-4 shrink-0 text-muted-foreground" />
-                  ) : (
-                    <FileText className="size-4 shrink-0 text-muted-foreground" />
-                  )}
-                  <span className="truncate" title={filePreviewPath}>
-                    {filePreviewPath}
-                  </span>
-                </span>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="size-7 shrink-0"
-                  onClick={closeFilePreview}
-                  title={t("common:close")}
-                >
-                  <X className="size-4" />
-                  <span className="sr-only">{t("common:close")}</span>
-                </Button>
-              </div>
-              <div className="min-h-0 flex-1 p-2">
-                {filePreviewUrl ? (
-                  isImagePreviewFilePath(filePreviewPath) ? (
-                    <div className="flex h-full items-center justify-center overflow-auto rounded bg-muted/30 p-2">
-                      <img
-                        src={filePreviewUrl}
-                        alt={filePreviewPath}
-                        className="max-h-full max-w-full object-contain"
-                      />
-                    </div>
-                  ) : (
-                    <PDFPreview url={filePreviewUrl} />
-                  )
-                ) : (
-                  <div className="grid h-full place-items-center text-sm text-muted-foreground">
-                    {t("pages:editor.opening")}
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
+          <FilePreviewOverlay
+            filePreviewPath={filePreviewPath}
+            filePreviewUrl={filePreviewUrl}
+            onClose={closeFilePreview}
+          />
           {session.filePath ? (
             <LaTeXEditor
               value={session.content}
@@ -1061,181 +502,31 @@ export default function EditorPage() {
           )}
         </main>
 
-        {/* 右栏：编译与预览 ↔ AI 助手 Tab 切换，可折叠（阶段四）。
-            动效编排（reveal 曲线 cubic-bezier(0.22,1,0.36,1)，与 .reveal 同源）：
-            ① 宽度壳层 320ms → ② 内容淡出左滑（展开时 +60ms 跟随入场）→
-            ③ 收起态「书脊」+150ms 压轴浮现。书脊以竖排文字标注当前隐藏
-            的面板名（装订学术文档的书脊隐喻），整条可点恢复展开。
-            两态常挂载，隐藏态加 inert 防止键盘焦点落入被裁切内容；折叠/
-            展开时焦点在头部按钮与书脊之间交接。motion-reduce 全部直切 */}
-        <aside
-          className={cn(
-            "relative hidden xl:flex shrink-0 min-h-0 overflow-hidden",
-            // 与左栏 ml-8 镜像：两侧外缘均为页边距 16 + 内缩 32 = 48px，
-            // 工作区外框沿屏幕中线对称；折叠态书脊同样保持该外缘
-            "mr-8",
-            "transition-[width] duration-[320ms] ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none",
-            panelCollapsed ? "w-10" : "w-80",
-          )}
-        >
-          {/* 展开态内容常挂载：收起时淡出并左移；shrink-0 固定宽度由
-              overflow 裁切而非挤压换行（flex 子项默认可收缩会挤压重排）。
-              p-1 留出安全边距：卡片描边不贴 aside 裁切线，避免直线段
-              被裁掉只剩四角圆弧 */}
-          <div
-            inert={panelCollapsed || undefined}
-            className={cn(
-              "flex min-h-0 w-80 shrink-0 flex-col gap-2 p-1",
-              "transition-[transform,opacity] duration-[320ms] ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none",
-              panelCollapsed
-                ? "-translate-x-4 opacity-0 delay-0"
-                : "translate-x-0 opacity-100 delay-[60ms]",
-            )}
-          >
-            {assistantEnabled ? (
-              <Tabs
-                value={panelTab}
-                onValueChange={setPanelTab}
-                className="flex h-full min-h-0 flex-col gap-2"
-              >
-                <div className="flex items-center justify-between gap-1">
-                  <TabsList>
-                    <TabsTrigger value="compile">
-                      {t("components:editor.tabCompile")}
-                    </TabsTrigger>
-                    <TabsTrigger value="assistant">
-                      <Bot className="size-3.5" />
-                      {t("components:editor.tabAssistant")}
-                    </TabsTrigger>
-                  </TabsList>
-                  <Button
-                    ref={panelCollapseRef}
-                    variant="ghost"
-                    size="icon"
-                    onClick={collapsePanel}
-                    title={t("components:editor.collapsePanel")}
-                  >
-                    <PanelRightClose />
-                    <span className="sr-only">
-                      {t("components:editor.collapsePanel")}
-                    </span>
-                  </Button>
-                </div>
-                {/* keepMounted：两个 Tab 内容常挂载（Base UI Panel 默认
-                        卸载非活动页），切换不丢助手输入草稿与卡片展开态；
-                        会话消息本身在 Zustand store，本就不受切换影响 */}
-                <TabsContent
-                  value="compile"
-                  keepMounted
-                  className="min-h-0 flex-1"
-                >
-                  <CompilePreviewPanel
-                    compiling={compiling}
-                    compileResult={compileResult}
-                    pdfUrl={pdfUrl}
-                    fullscreen={previewFullscreen}
-                    onEnterFullscreen={() => setPreviewFullscreen(true)}
-                  />
-                </TabsContent>
-                <TabsContent
-                  value="assistant"
-                  keepMounted
-                  className="min-h-0 flex-1"
-                >
-                  <AssistantPanel
-                    readOnly={readOnly}
-                    getEditorContext={getEditorContext}
-                    onApplySnippet={handleApplySnippet}
-                    onApplyDiffText={handleApplyDiffText}
-                  />
-                </TabsContent>
-              </Tabs>
-            ) : (
-              <>
-                <div className="flex items-center justify-end">
-                  <Button
-                    ref={panelCollapseRef}
-                    variant="ghost"
-                    size="icon"
-                    onClick={collapsePanel}
-                    title={t("components:editor.collapsePanel")}
-                  >
-                    <PanelRightClose />
-                    <span className="sr-only">
-                      {t("components:editor.collapsePanel")}
-                    </span>
-                  </Button>
-                </div>
-                <div className="min-h-0 flex-1">
-                  <CompilePreviewPanel
-                    compiling={compiling}
-                    compileResult={compileResult}
-                    pdfUrl={pdfUrl}
-                    fullscreen={previewFullscreen}
-                    onEnterFullscreen={() => setPreviewFullscreen(true)}
-                  />
-                </div>
-              </>
-            )}
-          </div>
-
-          {/* 收起态「书脊」：整条可点展开。卡片同源外观（rounded-xl +
-              foreground/10 描边），竖排文字标注当前隐藏面板名；展开时
-              左移淡出让位（+0ms 先退场），收起时 +150ms 压轴浮现。
-              inset-1 内缩 4px：描边向外扩散 1px，贴边会被 overflow
-              裁掉直线段只剩四角圆弧 */}
-          <button
-            type="button"
-            ref={spineBtnRef}
-            inert={!panelCollapsed || undefined}
-            onClick={expandPanelFromSpine}
-            aria-label={t("components:editor.expandPanel")}
-            title={t("components:editor.expandPanel")}
-            className={cn(
-              "absolute inset-1 flex cursor-pointer flex-col items-center gap-4 rounded-xl",
-              "bg-card py-3 text-muted-foreground ring-1 ring-foreground/10 outline-none select-none",
-              "hover:bg-muted/60 hover:text-foreground dark:hover:bg-input/30",
-              "focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50",
-              "transition-[transform,opacity,background-color] duration-200 ease-out motion-reduce:transition-none",
-              panelCollapsed
-                ? "translate-x-0 opacity-100 delay-150"
-                : "pointer-events-none -translate-x-2 opacity-0 delay-0",
-            )}
-          >
-            <PanelRightOpen className="size-4 shrink-0 opacity-70" />
-            {/* 竖排书脊题名：正文楷体沿竖轴排布，呼应装订文档的书脊 */}
-            <span className="[writing-mode:vertical-rl] text-xs leading-none tracking-[0.3em]">
-              {assistantEnabled && panelTab === "assistant"
-                ? t("components:editor.tabAssistant")
-                : t("components:editor.tabCompile")}
-            </span>
-          </button>
-        </aside>
+        {/* 右栏：编译与预览 ↔ AI 助手 */}
+        <EditorRightPanel
+          assistantEnabled={assistantEnabled}
+          panelCollapsed={panelCollapsed}
+          onCollapse={setPanelCollapsed}
+          panelTab={panelTab}
+          onTabChange={setPanelTab}
+          compiling={compiling}
+          compileResult={compileResult}
+          pdfUrl={pdfUrl}
+          previewFullscreen={previewFullscreen}
+          onEnterFullscreen={() => setPreviewFullscreen(true)}
+          readOnly={readOnly}
+          getEditorContext={getEditorContext}
+          onApplySnippet={handleApplySnippet}
+          onApplyDiffText={handleApplyDiffText}
+        />
       </div>
 
-      {/* 编译预览全屏覆盖层（对齐 GitDiff 页）：挂在页面级而非右栏 aside 内，
-          避免 transform 祖先成为 fixed 包含块导致铺不满视口 */}
+      {/* 编译预览全屏覆盖层 */}
       {previewFullscreen && pdfUrl && (
-        <div className="fixed inset-0 z-50 flex flex-col bg-background">
-          <div className="flex items-center justify-between border-b px-4 py-2">
-            <h2 className="text-sm font-semibold">
-              {t("components:editor.fullscreenTitle")}
-            </h2>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setPreviewFullscreen(false)}
-            >
-              <Minimize />
-              {t("components:editor.quitFullscreen")}
-            </Button>
-          </div>
-          <div className="flex-1 overflow-hidden p-4">
-            <div className="h-full">
-              <PDFPreview url={pdfUrl} />
-            </div>
-          </div>
-        </div>
+        <FullscreenPDFPreview
+          url={pdfUrl}
+          onClose={() => setPreviewFullscreen(false)}
+        />
       )}
 
       {/* 切换文件放弃脏改动确认 */}
@@ -1255,11 +546,11 @@ export default function EditorPage() {
         }}
       />
 
-      {/* 409 冲突弹窗（三条出路：放弃重载 / 剪贴板逃生 / 覆盖保存） */}
+      {/* 409 冲突弹窗 */}
       <ConflictDialog
         open={session.conflict !== null}
         onOpenChange={(open) => {
-          if (!open) setConflict(null);
+          if (!open) useEditorStore.getState().setConflict(null);
         }}
         conflict={session.conflict}
         localContent={session.content}
@@ -1267,7 +558,7 @@ export default function EditorPage() {
         onOverwriteSave={handleOverwriteSave}
       />
 
-      {/* 命令面板（Ctrl/Cmd+/ 或工具栏按钮；viewer 仅浏览不可插入） */}
+      {/* 命令面板 */}
       <CommandPalette
         open={paletteOpen}
         onOpenChange={setPaletteOpen}
