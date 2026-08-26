@@ -1444,7 +1444,10 @@
       "collapsePanel": "Collapse panel",
       "expandPanel": "Expand panel",
       "panelCompileTitle": "Compile output & PDF preview",
-      "compileOutput": "Raw output"
+      "compileOutput": "Raw output",
+      "enterFullscreen": "Fullscreen",
+      "quitFullscreen": "Exit fullscreen",
+      "fullscreenTitle": "Compile PDF Fullscreen Preview"
     },
     "conflictDialog": {
       "title": "Save conflict",

@@ -44,7 +44,9 @@ import PDFPreview from "@/components/PDFPreview";
 import Bot from "lucide-react/dist/esm/icons/bot.mjs";
 import Check from "lucide-react/dist/esm/icons/check.mjs";
 import CircleX from "lucide-react/dist/esm/icons/circle-x.mjs";
+import Expand from "lucide-react/dist/esm/icons/expand.mjs";
 import FileCode from "lucide-react/dist/esm/icons/file-code.mjs";
+import Minimize from "lucide-react/dist/esm/icons/minimize.mjs";
 import PanelRightClose from "lucide-react/dist/esm/icons/panel-right-close.mjs";
 import PanelRightOpen from "lucide-react/dist/esm/icons/panel-right-open.mjs";
 import Play from "lucide-react/dist/esm/icons/play.mjs";
@@ -73,8 +75,17 @@ import i18n from "@/i18n";
  * 编译与预览面板（阶段四）：编译状态徽标、错误翻译与修复建议摘要、
  * 原始输出折叠块，成功时复用 PDFPreview 预览。展示逻辑对齐工作台
  * 编译结果语义，但状态由 EditorPage 局部持有，不写入全局 store。
+ * 全屏交互对齐 GitDiff 页：预览区左下角「全屏查看」进入，覆盖层与
+ * Escape 退出由页面级持有（aside 有 transform/overflow 裁切，
+ * fixed 覆盖层必须挂在面板外才能铺满视口）。
  */
-function CompilePreviewPanel({ compiling, compileResult, pdfUrl }) {
+function CompilePreviewPanel({
+  compiling,
+  compileResult,
+  pdfUrl,
+  fullscreen,
+  onEnterFullscreen,
+}) {
   const { t } = useTranslation(["pages", "components"]);
   return (
     <Card className="flex h-full min-h-0 flex-col overflow-hidden">
@@ -152,10 +163,20 @@ function CompilePreviewPanel({ compiling, compileResult, pdfUrl }) {
             </details>
           </>
         )}
-        {/* 成功后 PDF 预览占满剩余空间 */}
-        {compileResult?.success && pdfUrl && (
-          <div className="min-h-32 flex-1">
+        {/* 成功后 PDF 预览占满剩余空间；全屏时卸载内联预览（避免双 iframe），
+            左下角悬浮「全屏查看」按钮与 GitDiff 页同款 */}
+        {compileResult?.success && pdfUrl && !fullscreen && (
+          <div className="relative min-h-32 flex-1">
             <PDFPreview url={pdfUrl} />
+            <Button
+              variant="outline"
+              size="sm"
+              className="absolute bottom-2 left-2 z-10 bg-background/80 backdrop-blur"
+              onClick={onEnterFullscreen}
+            >
+              <Expand />
+              {t("components:editor.enterFullscreen")}
+            </Button>
           </div>
         )}
       </CardContent>
@@ -211,6 +232,8 @@ export default function EditorPage() {
   const [compiling, setCompiling] = useState(false);
   const [compileResult, setCompileResult] = useState(null);
   const [pdfUrl, setPdfUrl] = useState(null);
+  /** 编译预览全屏态（对齐 GitDiff 页）：覆盖层挂在页面级，Escape 可退出 */
+  const [previewFullscreen, setPreviewFullscreen] = useState(false);
   /** 收起态「书脊」按钮：收起后承接焦点，键盘动线不断（Enter 再展开） */
   const spineBtnRef = useRef(null);
   /** 面板头部折叠按钮：书脊展开后焦点回到这里 */
@@ -684,6 +707,17 @@ export default function EditorPage() {
     };
   }, []);
 
+  // 全屏预览时按 Escape 退出（对齐 GitDiff 页）
+  useEffect(() => {
+    if (!previewFullscreen) return;
+
+    const onKeyDown = (e) => {
+      if (e.key === "Escape") setPreviewFullscreen(false);
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [previewFullscreen]);
+
   /* 行内补全应用后的宏包缺失联动：与面板插入同一提示逻辑（§6.5 一致性）。
    * 扫描当前缓冲区即可——插入的命令文本不含 usepackage 声明。 */
   const handleCompletionApplyEntry = useCallback(
@@ -903,6 +937,8 @@ export default function EditorPage() {
                     compiling={compiling}
                     compileResult={compileResult}
                     pdfUrl={pdfUrl}
+                    fullscreen={previewFullscreen}
+                    onEnterFullscreen={() => setPreviewFullscreen(true)}
                   />
                 </TabsContent>
                 <TabsContent
@@ -939,6 +975,8 @@ export default function EditorPage() {
                     compiling={compiling}
                     compileResult={compileResult}
                     pdfUrl={pdfUrl}
+                    fullscreen={previewFullscreen}
+                    onEnterFullscreen={() => setPreviewFullscreen(true)}
                   />
                 </div>
               </>
@@ -978,6 +1016,31 @@ export default function EditorPage() {
           </button>
         </aside>
       </div>
+
+      {/* 编译预览全屏覆盖层（对齐 GitDiff 页）：挂在页面级而非右栏 aside 内，
+          避免 transform 祖先成为 fixed 包含块导致铺不满视口 */}
+      {previewFullscreen && pdfUrl && (
+        <div className="fixed inset-0 z-50 flex flex-col bg-background">
+          <div className="flex items-center justify-between border-b px-4 py-2">
+            <h2 className="text-sm font-semibold">
+              {t("components:editor.fullscreenTitle")}
+            </h2>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setPreviewFullscreen(false)}
+            >
+              <Minimize />
+              {t("components:editor.quitFullscreen")}
+            </Button>
+          </div>
+          <div className="flex-1 overflow-hidden p-4">
+            <div className="h-full">
+              <PDFPreview url={pdfUrl} />
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* 切换文件放弃脏改动确认 */}
       <ConfirmDialog

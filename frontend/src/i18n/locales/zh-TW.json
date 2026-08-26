@@ -1444,7 +1444,10 @@
       "collapsePanel": "摺疊右欄",
       "expandPanel": "展開右欄",
       "panelCompileTitle": "編譯輸出與 PDF 預覽",
-      "compileOutput": "原始輸出"
+      "compileOutput": "原始輸出",
+      "enterFullscreen": "全螢幕檢視",
+      "quitFullscreen": "退出全螢幕",
+      "fullscreenTitle": "編譯 PDF 全螢幕預覽"
     },
     "conflictDialog": {
       "title": "儲存衝突",

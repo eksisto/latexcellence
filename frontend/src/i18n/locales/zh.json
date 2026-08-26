@@ -1444,7 +1444,10 @@
       "collapsePanel": "折叠右栏",
       "expandPanel": "展开右栏",
       "panelCompileTitle": "编译输出与 PDF 预览",
-      "compileOutput": "原始输出"
+      "compileOutput": "原始输出",
+      "enterFullscreen": "全屏查看",
+      "quitFullscreen": "退出全屏",
+      "fullscreenTitle": "编译 PDF 全屏预览"
     },
     "conflictDialog": {
       "title": "保存冲突",
