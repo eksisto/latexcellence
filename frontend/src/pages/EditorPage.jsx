@@ -66,6 +66,8 @@ import {
   buildPackageInsertion,
   isPackageMissing,
 } from "@/lib/editor/preambleScan";
+import { getCommandZhDisplay } from "@/lib/editor/commandZh";
+import i18n from "@/i18n";
 
 /**
  * 编译与预览面板（阶段四）：编译状态徽标、错误翻译与修复建议摘要、
@@ -478,13 +480,17 @@ export default function EditorPage() {
   );
 
   const notifyMissingPackage = useCallback(
-    (entry) => {
-      const pkg = entry.pkg;
+    async (entry) => {
+      const pkg = entry?.pkg;
       if (!pkg || !canWrite) return;
       const description = `\\usepackage{${pkg}}`;
+      // 命令名按界面语言本地化（commandZh.js）：en 直接展示 \命令，
+      // zh 原样中文名，zh-TW 展示繁体名；转换失败回退 \命令
+      const displayZh = await getCommandZhDisplay(i18n.language);
+      const zhLabel = displayZh ? displayZh(entry.zh ?? "") : "";
       toast.warning(
         t("components:commandPalette.pkgMissing", {
-          name: entry.zh || `\\${entry.name}`,
+          name: zhLabel || `\\${entry.name}`,
           pkg,
         }),
         {

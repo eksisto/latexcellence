@@ -92,6 +92,8 @@ frontend/src/
 │   ├── files.js                      # 可编辑白名单 + 大小上限纯函数
 │   ├── preferences.js                # 偏好默认值/白名单清洗/导出导入校验纯函数
 │   ├── matcher.js                    # pinyin-pro 四路模糊匹配
+│   ├── commandZh.js                  # 命令中文名按界面语言本地化展示
+│   ├── completionTheme.js            # 补全弹层主题（索引卡式浮层 + 引导点）
 │   ├── latexCompletion.js            # \ 与 \begin{ 行内补全 source
 │   ├── snippetInsert.js              # 模板插入 + 占位符 Tab 循环
 │   ├── preambleScan.js               # 导言区扫描 + 宏包缺失检测

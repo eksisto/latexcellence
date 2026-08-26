@@ -100,6 +100,10 @@ export default defineConfig(({ mode }) => {
               // pinyin-pro（编辑器命令拼音匹配，阶段三）：仅经动态 import()
               // 按需加载，独立分包防止落入首屏 vendor chunk
               if (/pinyin-pro/.test(id)) return "vendor-pinyin";
+              // opencc-js（命令中文名简→繁展示，commandZh.js）：仅 zh-TW
+              // 界面经动态 import() 按需加载，独立分包防止 ~1MB 字典数据
+              // 落入首屏 vendor chunk
+              if (/opencc-js/.test(id)) return "vendor-opencc";
               // CodeMirror 6（编辑器 /editor 懒加载路由专用，避免拖累首屏；
               // 覆盖 @uiw 全系子包与叶子依赖，防止与 vendor 互相引用形成循环分包）
               if (

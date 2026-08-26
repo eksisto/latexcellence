@@ -10,6 +10,10 @@
  * 一致性约束（§6.2）：命令补全与命令面板共用 lib/editor/matcher.js 的
  * 同一匹配索引与打分；环境名补全复用同一 matchScore 打分函数。
  * 命中项经 snippetInsert.insertSnippet 应用，占位符跳转模式行为一致。
+ * 弹层外观由 completionTheme.js 定义（学术索引卡：命令名 ····· 释义）。
+ * 中文名 detail 按界面语言本地化（commandZh.js）：简中原样、繁体转换、
+ * 英文界面隐藏；当前语言由调用方经 getLanguage 注入（本模块不依赖
+ * 应用级 i18n 单例，node --test 可直接导入）。
  */
 
 import { autocompletion } from "@codemirror/autocomplete";
@@ -21,6 +25,8 @@ import {
   listCommands,
   searchCommands,
 } from "./matcher.js";
+import { getCommandZhDisplay } from "./commandZh.js";
+import { completionPopupTheme } from "./completionTheme.js";
 import { expandEntryInsert, insertSnippet } from "./snippetInsert.js";
 
 /* ── 环境清单：从数据库条目的 \begin{X} 提取（含 align* 等带星形态） ─── */
@@ -73,8 +79,9 @@ function textBefore(state, pos) {
  * 之后命中缓存），四路匹配与命令面板完全一致。
  * @param {CompletionContext} context CM6 补全上下文
  * @param {((entry: object) => void)|undefined} onApplyEntry 应用后回调（宏包缺失联动）
+ * @param {() => string} getLanguage 当前界面语言读取器（每次触发时求值）
  */
-function makeCommandCompletionSource(onApplyEntry) {
+function makeCommandCompletionSource(onApplyEntry, getLanguage) {
   return async function commandCompletionSource(context) {
     if (context.state.readOnly) return null;
     const before = textBefore(context.state, context.pos);
@@ -83,6 +90,8 @@ function makeCommandCompletionSource(onApplyEntry) {
     const query = m[1];
     const from = context.pos - query.length;
     const index = await getCommandMatcherIndex();
+    // 中文名 detail 按当前界面语言解析（en → null 隐藏；zh-TW → 简转繁）
+    const displayZh = await getCommandZhDisplay(getLanguage());
     // 空查询（刚敲下 `\`）按数据库默认顺序给默认列表，与面板初始视图一致
     const entries = query ? searchCommands(index, query) : listCommands(index);
     if (entries.length === 0) return null;
@@ -90,7 +99,7 @@ function makeCommandCompletionSource(onApplyEntry) {
       from,
       options: entries.map((entry) => ({
         label: entry.name,
-        detail: entry.zh,
+        detail: displayZh ? displayZh(entry.zh) : undefined,
         boost: 0,
         apply: (view, _completion, from2, to) => {
           insertSnippet(view, expandEntryInsert(entry), { from: from2, to });
@@ -106,8 +115,8 @@ function makeCommandCompletionSource(onApplyEntry) {
  * 环境名补全 source：`\begin{` 触发；应用时整体替换
  * `\begin{部分输入}` 为完整环境模板（含自动配对的 `\end{}`）。
  */
-function makeEnvironmentCompletionSource(onApplyEntry) {
-  return function environmentCompletionSource(context) {
+function makeEnvironmentCompletionSource(onApplyEntry, getLanguage) {
+  return async function environmentCompletionSource(context) {
     if (context.state.readOnly) return null;
     const before = textBefore(context.state, context.pos);
     const m = BEGIN_PREFIX_RE.exec(before);
@@ -119,13 +128,14 @@ function makeEnvironmentCompletionSource(onApplyEntry) {
       ? searchCommands(getEnvIndex(), query, { limit: 30 })
       : listCommands(getEnvIndex(), 30);
     if (matches.length === 0) return null;
+    const displayZh = await getCommandZhDisplay(getLanguage());
     return {
       from,
       options: matches.map((entry) => {
         const envName = BEGIN_ENV_RE.exec(entry.insert)?.[1] ?? entry.name;
         return {
           label: envName,
-          detail: entry.zh,
+          detail: displayZh ? displayZh(entry.zh) : undefined,
           boost: 0,
           apply: (view, _completion, from2, to) => {
             insertSnippet(view, expandEntryInsert(entry), { from: from2, to });
@@ -139,21 +149,31 @@ function makeEnvironmentCompletionSource(onApplyEntry) {
 }
 
 /**
- * LaTeX 行内补全扩展：命令 + 环境双 source。
+ * LaTeX 行内补全扩展：命令 + 环境双 source + 弹层主题（completionTheme）。
  * viewer 只读态由各 source 内部短路（editable=false 本就不触发）。
- * @param {{onApplyEntry?: (entry: object) => void}} [options]
- *   应用补全后回调（EditorPage 接宏包缺失联动；决策 Q14 与面板行为一致）
+ * @param {{onApplyEntry?: (entry: object) => void,
+ *   getLanguage?: () => string}} [options]
+ *   - onApplyEntry：应用补全后回调（EditorPage 接宏包缺失联动；决策 Q14
+ *     与面板行为一致）；
+ *   - getLanguage：当前界面语言读取器（缺省按未知语言处理 → 简体原样），
+ *     每次补全触发时求值，语言切换无须重建扩展。
  * @returns {import("@codemirror/state").Extension}
  */
-export function latexCompletionExtension({ onApplyEntry } = {}) {
-  return autocompletion({
-    override: [
-      makeEnvironmentCompletionSource(onApplyEntry),
-      // 异步 source 与同步 source 混排，CM6 原生支持 Promise 结果
-      makeCommandCompletionSource(onApplyEntry),
-    ],
-    icons: false,
-    closeOnBlur: true,
-    defaultKeymap: true,
-  });
+export function latexCompletionExtension({
+  onApplyEntry,
+  getLanguage = () => "",
+} = {}) {
+  return [
+    completionPopupTheme,
+    autocompletion({
+      override: [
+        makeEnvironmentCompletionSource(onApplyEntry, getLanguage),
+        // 两 source 均为异步（共享索引 / 中文名本地化），CM6 原生支持
+        makeCommandCompletionSource(onApplyEntry, getLanguage),
+      ],
+      icons: false,
+      closeOnBlur: true,
+      defaultKeymap: true,
+    }),
+  ];
 }

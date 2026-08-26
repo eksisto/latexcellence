@@ -35,6 +35,7 @@ import {
   listCommands,
   searchCommands,
 } from "@/lib/editor/matcher.js";
+import { getCommandZhDisplay } from "@/lib/editor/commandZh.js";
 import { groupCommandsByCategory } from "@/data/latexCommands/index.js";
 
 /**
@@ -50,12 +51,26 @@ export default function CommandPalette({
   readOnly = false,
   onInsert,
 }) {
-  const { t } = useTranslation("components");
+  const { t, i18n } = useTranslation("components");
   const [query, setQuery] = useState("");
   const [indexRows, setIndexRows] = useState(null);
   /** 二级步骤：当前进入网格选择器的条目（null 表示列表态） */
   const [pickerEntry, setPickerEntry] = useState(null);
   const [activeIndex, setActiveIndex] = useState(0);
+  /** 中文名展示函数（按界面语言；null = 隐藏或未就绪，渲染为空） */
+  const [zhDisplay, setZhDisplay] = useState(null);
+
+  /* 中文名本地化跟随界面语言（en → null 隐藏；zh-TW → 简转繁懒加载） */
+  useEffect(() => {
+    let cancelled = false;
+    getCommandZhDisplay(i18n.language).then((fn) => {
+      // 函数值入 state 必须包一层 updater，否则会被 React 当作惰性更新执行
+      if (!cancelled) setZhDisplay(() => fn);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [i18n.language]);
 
   const inputRef = useRef(null);
   const itemRefs = useRef(new Map());
@@ -174,7 +189,7 @@ export default function CommandPalette({
         \{entry.name}
       </code>
       <span className="min-w-0 flex-1 truncate text-sm text-muted-foreground">
-        {entry.zh}
+        {zhDisplay && entry.zh ? zhDisplay(entry.zh) : ""}
       </span>
       {entry.pkg && (
         <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 font-mono text-xs text-muted-foreground">

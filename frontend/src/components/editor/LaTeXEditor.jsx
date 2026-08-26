@@ -23,6 +23,7 @@ import { tags as t } from "@lezer/highlight";
 import { latexLanguageExtension } from "@/lib/editor/language";
 import { latexCompletionExtension } from "@/lib/editor/latexCompletion";
 import { snippetPlaceholderExtension } from "@/lib/editor/snippetInsert";
+import i18n from "@/i18n";
 import { cn } from "@/lib/utils";
 
 /** 亮/暗主题自适应基础主题（全部走 CSS 变量） */
@@ -93,8 +94,12 @@ export default function LaTeXEditor({
       latexLanguageExtension(),
       syntaxHighlighting(latexHighlightStyle),
       editorBaseTheme,
-      // 阶段三：`\` / `\begin{` 行内补全 + 模板占位符跳转模式
-      latexCompletionExtension({ onApplyEntry: onCompletionApply }),
+      // 阶段三：`\` / `\begin{` 行内补全 + 模板占位符跳转模式；
+      // getLanguage 供中文名 detail 按界面语言本地化（每次触发时求值）
+      latexCompletionExtension({
+        onApplyEntry: onCompletionApply,
+        getLanguage: () => i18n.language,
+      }),
       snippetPlaceholderExtension(),
     ];
     if (softWrap) base.push(EditorView.lineWrapping);
