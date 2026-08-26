@@ -64,6 +64,7 @@
 | [clsx](https://github.com/lukeed/clsx) | ^2.1.1 | MIT | Copyright (c) Luke Edwards | 条件类名字符串 |
 | [i18next](https://www.i18next.com) | ^26.3.6 | MIT | Copyright (c) 2011-present i18next | 国际化核心库 |
 | [pinyin-pro](https://github.com/zh-lx/pinyin-pro) | ^3.29.3 | MIT | Copyright (c) 2020-present zh-lx | 编辑器命令快速输入的中文拼音转换（全拼 / 首字母序列预计算，按需动态加载） |
+| [opencc-js](https://github.com/BYVoid/OpenCC) | ^1.4.2 | MIT AND Apache-2.0 | Copyright (c) BYVoid | 编辑器命令中文名简→繁转换（繁体界面本地化展示，按需动态加载） |
 | [i18next-browser-languagedetector](https://github.com/i18next/i18next-browser-languagedetector) | ^8.2.1 | MIT | Copyright (c) 2011-present i18next | 浏览器语言自动检测 |
 | [react-i18next](https://github.com/i18next/react-i18next) | ^17.0.11 | MIT | Copyright (c) 2015-present i18next | React i18next 集成 |
 | [CodeMirror 6](https://codemirror.net) | ^6.0.2 | MIT | Copyright (c) by Marijn Haverbeke and others | 网页编辑器内核（编辑器页基础包） |

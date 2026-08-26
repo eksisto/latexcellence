@@ -149,7 +149,9 @@ latexcellence/
 │       │   │       ├── files.js              # 可编辑白名单 + 约 2MB 大小上限纯函数
 │       │   │       ├── preferences.js        # 偏好默认值 + 白名单清洗 + 导出导入校验（kind/version/prefs）
 │       │   │       ├── matcher.js            # 统一匹配器（中文/全拼/首字母/英文四路，拼音预计算缓存；行内补全与面板共用）
+│       │   │       ├── commandZh.js          # 命令中文名按界面语言本地化展示（opencc-js 简转繁，动态加载）
 │       │   │       ├── latexCompletion.js    # \ 与 \begin{ 行内补全 source（CM6 autocompletion）
+│       │   │       ├── completionTheme.js    # 补全弹层主题（CM6 EditorView.theme + 高亮样式）
 │       │   │       ├── snippetInsert.js      # 模板插入 + 占位符解析/网格骨架生成 + Tab 循环跳转模式
 │       │   │       ├── preambleScan.js       # 导言区扫描 + 宏包缺失检测 + usepackage 插入点选取
 │       │   │       └── applyDiff.js          # unified diff 解析与上下文锚定应用（助手 diff 建议卡片）

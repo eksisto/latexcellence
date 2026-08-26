@@ -6,7 +6,8 @@
 
 网页编辑器提供工作台之外的第二内容入口：全宽三栏布局的 `/editor` 页，
 支持项目内文本文件的手动编辑与 MD5 乐观锁保存、LaTeX 命令快速输入
-（中/拼/英三路模糊查找）、编译联动与编辑器侧 AI 助手；文件树点击 PDF
+（中文 / 拼音全拼 / 首字母 / 英文四路模糊查找）、编译联动与编辑器侧
+AI 助手；文件树点击 PDF
 以只读覆盖层内嵌预览。后端由
 `backend/modules/editor/`（整文件读写服务）与 `writing_chat` 包内的
 编辑器助手端点两部分组成。
@@ -44,7 +45,7 @@ AI 建议**不经后端落盘**：建议以结构化形式随 SSE 返回并随�
 | 接口 | 语义 |
 | --- | --- |
 | `POST /api/writing-chat/editor/send` | SSE 流式对话；请求携带 `{session_id, file_path, buffer, cursor_line, selection, include_full_file, user_message, language}` |
-| `POST /api/writing-chat/editor/apply-suggestion` | 记录建议应用结果（消息级标记 `suggestion_applied`），供会话历史展示；无任何文件写入 |
+| `POST /api/writing-chat/editor/apply-suggestion` | 记录建议应用结果（请求可携带 `suggestion_index` 做逐条标记，消息持久化 `applied_suggestions` 列表并兼容旧消息级标记），供会话历史展示；无任何文件写入 |
 
 两个端点均受功能开关把关（决策 Q26）：`features.editor.enabled=false`
 或 `assistant_enabled=false` 时服务端直接拒绝（403，错误码
@@ -84,7 +85,7 @@ frontend/src/
 │   ├── LaTeXEditor.jsx               # CM6 受控封装（value/onChange）
 │   ├── EditorToolbar.jsx             # 文件名/脏标记 · 后端撤销重做 · 面板 · 编译 · 保存 · 设置
 │   ├── EditorSettingsDialog.jsx      # 偏好开关 + 偏好导入/导出双通道入口
-│   ├── ConflictDialog.jsx            # 409 弹窗（放弃重载 / 本地内容剪贴板逃生）
+│   ├── ConflictDialog.jsx            # 409 弹窗（放弃重载 / 剪贴板逃生 / 覆盖保存三出路）
 │   ├── CommandPalette.jsx            # 命令面板 + m×n 网格选择器二级步骤
 │   ├── GridSizePicker.jsx            # 表格/矩阵网格拖选
 │   ├── AssistantPanel.jsx            # AI 助手侧栏（SSE 对话 + 建议卡）
@@ -127,10 +128,10 @@ blob URL 在切换文件 / 关闭 / 卸载时就地 revoke，竞态败者（响�
 | --- | --- | --- |
 | 插入光标处 | snippet 卡「插入光标处」按钮 | CM6 transaction 在光标处插入文本 |
 | 替换选区 | snippet 卡「替换选区」按钮（有选区才可用） | CM6 transaction 替换选区范围 |
-| diff 卡片逐卡审阅 | diff 卡展开预览 + 「应用到缓冲区」 | `applyUnifiedDiff()` 按 hunk 上下文锚定匹配（行号漂移容忍），任一 hunk 无法定位即整体失败不落半套改动 |
+| diff 卡片逐卡审阅 | diff 卡展开预览 + 「应用到缓冲区」 | `applyUnifiedDiff()` 按 hunk 上下文锚定匹配（行号漂移容忍）；任一 hunk 无法定位、窗口内存在多处可能匹配（歧义）或 hunk 源区间相互重叠时均整体失败，不落半套改动 |
 
 应用动作只改缓冲区并置脏标记；viewer 可问答但应用按钮禁用。
-应用成功后调用 apply-suggestion 端点登记消息级标记。
+应用成功后调用 apply-suggestion 端点逐条（index 级）登记应用标记。
 
 ### 编译联动（§8 / 决策 Q18）
 
