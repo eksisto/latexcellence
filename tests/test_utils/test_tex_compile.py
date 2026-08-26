@@ -169,6 +169,45 @@ class TestSanitizeOutputPaths:
             "nothing here"
         )
 
+    def test_dotdot_and_symlink_cwd_resolved(self, tmp_path):
+        """cwd 含 .. 段或经符号链接进入时，先 resolve 再脱敏（R7 加固）。
+
+        多用户项目目录常经符号链接访问；未 resolve 的 base 与日志中出现的
+        真实物理路径不一致会导致漏脱敏。
+        """
+        real = tmp_path / "real_proj"
+        real.mkdir()
+        link = tmp_path / "link_proj"
+        link.symlink_to(real, target_is_directory=True)
+        # 含 .. 段且经过符号链接的工作目录：resolve 后应与 real 等价
+        tricky_cwd = link / ".." / "link_proj" / "sub" / ".."
+        log = f"Latexmk: Log file is {real / 'main.log'}\ncd {real}\n"
+        result = sanitize_output_paths(log, tricky_cwd)
+        assert str(real) not in result
+        assert str(link) not in result
+        assert "./main.log" in result
+        assert "cd .\n" in result
+
+    def test_bare_cwd_directory_itself_rewritten(self, tmp_path):
+        """日志单独打印目录本身（裸 cwd 后跟行尾/引号/空白）→ 改写为 "."。"""
+        log = (
+            f"Output directory: {tmp_path}\n"
+            f'chdir into "{tmp_path}" done\n'
+            f"working dir is {tmp_path} now\n"
+        )
+        result = sanitize_output_paths(log, tmp_path)
+        assert str(tmp_path) not in result
+        assert "Output directory: .\n" in result
+        assert '"."' in result
+        assert "working dir is . now" in result
+
+    def test_bare_cwd_as_name_prefix_not_corrupted(self, tmp_path):
+        """裸边界替换只认界定符：与 cwd 同名的兄弟目录名（无分隔符）不得误改写。"""
+        longer = tmp_path.parent / f"{tmp_path.name}_extra"
+        log = f"scanning {longer} done"
+        result = sanitize_output_paths(log, tmp_path)
+        assert str(longer) in result
+
 
 class TestCheckTexfotAvailable:
     """texfot 可用性检测测试。"""

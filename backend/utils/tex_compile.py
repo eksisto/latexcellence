@@ -79,18 +79,25 @@ def sanitize_output_paths(text: str, cwd: Path) -> str:
 
     latexmk / Python traceback 等输出天然携带绝对路径（多用户模式下即
     服务器上的用户空间长路径），这些输出会原样展示给用户，因此统一把
-    ``<cwd>/xxx`` 改写为 ``./xxx``。仅做前缀替换、不解析内容，
-    不影响错误定位。tex_compile 与 plot_gen 等沙箱执行方共用。
+    ``<cwd>/xxx`` 改写为 ``./xxx``；日志单独打印目录本身（裸 cwd 后跟
+    行尾 / 引号 / 空白）时改写为 ``.``。cwd 先经 ``Path.resolve()``
+    规范化，含 ``..`` 段或符号链接的工作目录同样命中。仅做前缀/边界
+    替换、不解析内容，不影响错误定位。tex_compile 与 plot_gen 等沙箱
+    执行方共用。
 
     本函数是纯文本工具，不含模式判断；调用方须仅在多用户模式下应用
     （``get_config().multi_user.enabled`` 为真时调用），单用户本地模式
     保留原始输出。
     """
-    base = str(cwd).rstrip("/\\")
+    base = str(Path(cwd).resolve()).rstrip("/\\")
     if not base:
         return text
     for sep in ("/", "\\"):
         text = text.replace(base + sep, "./")
+    # 裸 cwd 边界替换：单一界定字符类 lookahead（行尾 / 引号 / 空白），
+    # 线性扫描无嵌套量词（AGENTS.md 正则规范）；re.escape 防路径中的
+    # 正则元字符注入。\s 已覆盖 \n / \t 等，$ 兜底行尾。
+    text = re.sub(re.escape(base) + r"(?=[\s\"']|$)", ".", text)
     return text
 
 

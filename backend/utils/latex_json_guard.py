@@ -46,6 +46,7 @@ LaTeX × JSON 转义损坏防护工具。
 """
 
 import re
+from collections.abc import Callable
 from typing import Annotated
 
 from pydantic import AfterValidator
@@ -81,6 +82,35 @@ def _strip_verbatim(value: str) -> str:
     return blank_literal_spans(value)
 
 
+def _scan_corruption_features(
+    value: object,
+    *,
+    bad_control_re: re.Pattern[str],
+    control_error: Callable[[re.Match[str]], str],
+    garbage_error: Callable[[], str],
+) -> tuple[str | None, str]:
+    """控制字符 + 垃圾占位符扫描的共用实现（三份公开校验器去重）。
+
+    check_latex_text / check_latex_text_lite / check_latex_corruption 的
+    近似扫描块统一收口在此：类型守卫 → 剔除 verbatim / URL 字面区间 →
+    按调用方指定的控制字符正则扫描 → 垃圾占位符扫描。错误文案由调用方
+    注入（闭包构造），保证各公开函数的既有消息逐字不变。
+
+    返回：
+        (错误消息或 None, 剔除字面区间后的探测文本)——探测文本供调用方
+        继续做注释剥离 / 配平 / 换行损坏等后续校验，避免重复剔除。
+    """
+    if not isinstance(value, str):
+        return f"expected a string, got {type(value).__name__}", ""
+    probe = _strip_verbatim(value)
+    bad = bad_control_re.search(probe)
+    if bad:
+        return control_error(bad), probe
+    if _GARBAGE_RE.search(probe):
+        return garbage_error(), probe
+    return None, probe
+
+
 def strip_latex_comments(text: str, *, bibtex: bool = False) -> str:
     """移除未转义的 % 注释（% 至行尾），保留 \\% 等转义百分号。
 
@@ -109,15 +139,8 @@ def check_latex_text(
     JSON 转义风险，因此放行 \\t / \\r 这类合法 LaTeX 空白，且错误归因不再
     提示"把反斜杠双写"。
     """
-    if not isinstance(value, str):
-        return f"expected a string, got {type(value).__name__}"
 
-    # 控制字符 / 垃圾占位符：先剔除 verbatim / URL 内容再扫描，
-    # 避免 \\verb|a<TAB>b| 等合法字面内容被误判。
-    probe = _strip_verbatim(value)
-    bad_re = _BAD_CONTROL_RELAXED_RE if relaxed else _BAD_CONTROL_RE
-    bad = bad_re.search(probe)
-    if bad:
+    def _control_error(bad: re.Match[str]) -> str:
         if relaxed:
             return (
                 f"LaTeX text contains an illegal control character "
@@ -131,8 +154,21 @@ def check_latex_text(
             "in JSON strings, every LaTeX backslash must be written as two "
             "backslash characters"
         )
+
+    error, probe = _scan_corruption_features(
+        value,
+        bad_control_re=_BAD_CONTROL_RELAXED_RE if relaxed else _BAD_CONTROL_RE,
+        control_error=_control_error,
+        garbage_error=lambda: (
+            "LaTeX text contains a garbage placeholder like '[object Object]'; "
+            "do not serialize objects into strings — output the actual LaTeX "
+            "text content"
+        ),
+    )
+    if error:
+        return error
     # JSON 路径（relaxed=False）的换行损坏边界：值首部 "换行 + 小写字母"
-    # 是 \\n 开头命令（\\nabla / \\newcommand 等）被 JSON 转义吞掉反斜杠的
+    # 是 \n 开头命令（\nabla / \newcommand 等）被 JSON 转义吞掉反斜杠的
     # 特征。换行本身是合法空白，无法仅凭结果完整区分，只拦最典型特征。
     if not relaxed and re.match(r"\n[a-z]", probe):
         return (
@@ -141,12 +177,6 @@ def check_latex_text(
             "\\nabla or \\newcommand whose backslash was consumed by JSON "
             "parsing — in JSON strings, every LaTeX backslash must be written "
             "as two backslash characters"
-        )
-    if _GARBAGE_RE.search(probe):
-        return (
-            "LaTeX text contains a garbage placeholder like '[object Object]'; "
-            "do not serialize objects into strings — output the actual LaTeX "
-            "text content"
         )
 
     # 配平前剔除注释（BibTeX 的 % 是字面字符，不剥离），避免 % { 等
@@ -234,21 +264,19 @@ def check_latex_text_lite(value: str) -> str | None:
         - 垃圾占位符
     失败消息按"内容损坏"归因，不提示"把反斜杠双写"。
     """
-    if not isinstance(value, str):
-        return f"expected a string, got {type(value).__name__}"
-
-    # 先剔除 verbatim / URL 内容，避免其中的合法字面字符被误判
-    probe = _strip_verbatim(value)
-    bad = _BAD_CONTROL_LITE_RE.search(probe)
-    if bad:
-        return (
+    error, _probe = _scan_corruption_features(
+        value,
+        bad_control_re=_BAD_CONTROL_LITE_RE,
+        control_error=lambda bad: (
             f"LaTeX text contains an illegal control character "
             f"(U+{ord(bad.group()):04X} at position {bad.start()}); "
             "the output appears corrupted"
-        )
-    if _GARBAGE_RE.search(probe):
-        return "LaTeX text contains a garbage placeholder like '[object Object]'"
-    return None
+        ),
+        garbage_error=lambda: (
+            "LaTeX text contains a garbage placeholder like '[object Object]'"
+        ),
+    )
+    return error
 
 
 def check_latex_corruption(value: str) -> str | None:
@@ -262,25 +290,22 @@ def check_latex_corruption(value: str) -> str | None:
 
     校验前剔除 verbatim / URL 字面内容，避免其中的字面字符被误判。
     """
-    if not isinstance(value, str):
-        return f"expected a string, got {type(value).__name__}"
-
-    probe = _strip_verbatim(value)
-    bad = _BAD_CONTROL_RELAXED_RE.search(probe)
-    if bad:
-        return (
+    error, _probe = _scan_corruption_features(
+        value,
+        bad_control_re=_BAD_CONTROL_RELAXED_RE,
+        control_error=lambda bad: (
             f"LaTeX text contains an illegal control character "
             f"(U+{ord(bad.group()):04X} at position {bad.start()}); "
             "the content appears corrupted — check for raw control "
             "characters in the text"
-        )
-    if _GARBAGE_RE.search(probe):
-        return (
+        ),
+        garbage_error=lambda: (
             "LaTeX text contains a garbage placeholder like '[object Object]'; "
             "do not serialize objects into strings — save the actual LaTeX "
             "text content"
-        )
-    return None
+        ),
+    )
+    return error
 
 
 def validate_latex_field(
