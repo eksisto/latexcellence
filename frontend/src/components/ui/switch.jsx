@@ -2,7 +2,7 @@ import { Switch as SwitchPrimitive } from "@base-ui/react/switch";
 
 import { cn } from "@/lib/utils";
 
-function Switch({ className, size = "default", variant = "circle", ...props }) {
+function Switch({ className, size = "default", variant = "rect", ...props }) {
   const isRect = variant === "rect";
   return (
     <SwitchPrimitive.Root
