@@ -16,6 +16,7 @@
     POST /api/writing-chat/editor/apply-suggestion  — 记录建议应用结果（消息级标记）
 """
 
+import asyncio
 import json
 from typing import Any
 
@@ -24,6 +25,7 @@ from fastapi.responses import StreamingResponse
 
 from backend.core import access_control
 from backend.core.config import get_config
+from backend.core.logger import get_logger
 from backend.core.multiuser.dependencies import (
     current_user_context,
     require_admin_if_multiuser,
@@ -45,6 +47,8 @@ from backend.modules.writing_chat.models import (
 )
 from backend.modules.writing_chat.prompt_manager import get_prompt_manager
 from backend.modules.writing_chat.service import get_writing_chat_service
+
+logger = get_logger(__name__)
 
 # 会话类资源按用户隔离（P6）：依赖注入当前用户上下文，
 # 多用户模式资源定向到当前用户衍生目录，单用户模式回退存量全局路径行为不变。
@@ -84,19 +88,31 @@ def _ensure_editor_assistant_available() -> None:
 # ── send：SSE 流式 ───────────────────────────────────────────────────────
 
 
-@router.post("/send")
-async def send_message(
-    request: ChatSendRequest,
-    workspace_id: str = Query(default="", description="工作区唯一标识符"),
-    _: dict = Depends(access_control.require_workspace(write=False, required=False)),
-):
-    """流式发送对话消息。返回 SSE，事件为 data: {json}\\n\\n。"""
-    service = get_writing_chat_service()
+def _sse_stream_response(
+    agen_factory: Any,
+) -> StreamingResponse:
+    """构造写作助手 SSE 流式响应（/send 与 /editor/send 共用样板）。
+
+    参数：
+        agen_factory: 零参工厂，返回事件 async 迭代器（每次请求新建，
+            generator 不可复用）。
+
+    异常语义：
+        - asyncio.CancelledError：客户端断开等取消场景，原样 re-raise 不吞；
+        - HTTPException：结构化错误透传——detail 为 dict 时按 {error, message}
+          原样下发（供前端 translateError 按码翻译），否则转为字符串消息；
+        - 其他 Exception：logger.exception 记录完整堆栈后，仅向客户端下发
+          固定的 internal_error 结构化错误——严禁把 str(e)（可能含服务器
+          绝对路径等敏感信息）发给前端。
+    """
 
     async def event_stream():
         try:
-            async for event in service.send(request, workspace_id):
+            async for event in agen_factory():
                 yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
+        except asyncio.CancelledError:
+            # 客户端断开导致生成器被取消：必须上抛，吞掉会破坏流式协议清理
+            raise
         except HTTPException as e:
             # 结构化错误（如衍生配额超限 413）：透传 {error, message} 供前端
             # translateError 按错误码翻译
@@ -107,10 +123,16 @@ async def send_message(
                 else {"type": "error", "message": str(detail)}
             )
             yield f"data: {json.dumps(payload, ensure_ascii=False)}\n\n"
-        except Exception as e:
-            yield (
-                f"data: {json.dumps({'type': 'error', 'message': str(e)}, ensure_ascii=False)}\n\n"
-            )
+        except Exception:
+            logger.exception("Unhandled error while streaming writing-chat SSE")
+            payload = {
+                "type": "error",
+                "message": {
+                    "error": "internal_error",
+                    "message": "An unexpected server error occurred",
+                },
+            }
+            yield f"data: {json.dumps(payload, ensure_ascii=False)}\n\n"
 
     return StreamingResponse(
         event_stream(),
@@ -121,6 +143,17 @@ async def send_message(
             "X-Accel-Buffering": "no",
         },
     )
+
+
+@router.post("/send")
+async def send_message(
+    request: ChatSendRequest,
+    workspace_id: str = Query(default="", description="工作区唯一标识符"),
+    _: dict = Depends(access_control.require_workspace(write=False, required=False)),
+):
+    """流式发送对话消息。返回 SSE，事件为 data: {json}\\n\\n。"""
+    service = get_writing_chat_service()
+    return _sse_stream_response(lambda: service.send(request, workspace_id))
 
 
 # ── 编辑器侧 AI 助手（editor-plan §5.2 / §7） ─────────────────────────────
@@ -139,46 +172,27 @@ async def editor_send(
     """
     _ensure_editor_assistant_available()
     service = get_writing_chat_service()
-
-    async def event_stream():
-        try:
-            async for event in service.editor_send(request, workspace_id):
-                yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
-        except HTTPException as e:
-            detail = e.detail
-            payload = (
-                {"type": "error", "message": detail}
-                if isinstance(detail, dict)
-                else {"type": "error", "message": str(detail)}
-            )
-            yield f"data: {json.dumps(payload, ensure_ascii=False)}\n\n"
-        except Exception as e:
-            yield (
-                f"data: {json.dumps({'type': 'error', 'message': str(e)}, ensure_ascii=False)}\n\n"
-            )
-
-    return StreamingResponse(
-        event_stream(),
-        media_type="text/event-stream",
-        headers={
-            "Cache-Control": "no-cache",
-            "Connection": "keep-alive",
-            "X-Accel-Buffering": "no",
-        },
-    )
+    return _sse_stream_response(lambda: service.editor_send(request, workspace_id))
 
 
 @router.post("/editor/apply-suggestion")
 async def apply_editor_suggestion(request: ApplySuggestionRequest):
-    """记录建议应用结果（消息级标记），供会话历史展示。
+    """记录建议应用结果（消息级 / index 级标记），供会话历史展示。
 
     仅登记应用状态，不做任何文件写入——建议的实际应用发生在前端
     CM6 缓冲区，落盘仍走 save-file 单一路径。
+    契约：POST /api/writing-chat/editor/apply-suggestion
+        body {session_id, message_id, suggestion_index?}；
+    suggestion_index 缺省时保持旧契约的消息级整体置位。
     """
     _ensure_editor_assistant_available()
     service = get_writing_chat_service()
     try:
-        return await service.apply_suggestion(request.session_id, request.message_id)
+        return await service.apply_suggestion(
+            request.session_id,
+            request.message_id,
+            suggestion_index=request.suggestion_index,
+        )
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
     except IndexError as e:

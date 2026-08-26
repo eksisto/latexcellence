@@ -11,6 +11,7 @@
     - POST /api/writing-chat/editor/apply-suggestion 消息级应用标记记录
 """
 
+import asyncio
 import json
 from unittest.mock import MagicMock, patch
 
@@ -20,6 +21,7 @@ from backend.core.config import get_config
 from backend.core.llm_client import StreamChunk, UsageInfo
 from backend.core.workspace_manager import get_workspace_manager
 from backend.modules.writing_chat.context import ConversationContext
+from backend.modules.writing_chat.models import ChatMessage
 
 _LLM_CLIENT_PATH = "backend.modules.writing_chat.service._deps.get_llm_client"
 
@@ -344,6 +346,53 @@ class TestEditorSendEndpoint:
         data = _json.loads(session_files[0].read_text(encoding="utf-8"))
         assert data["messages"] == []
 
+    def test_oversized_user_message_yields_content_too_long(
+        self, client, env, temp_session_dir, monkeypatch
+    ):
+        """R3：user_message 超限 → 结构化 content_too_long（非裸 422）。"""
+        from backend.modules.writing_chat.models import EDITOR_USER_MESSAGE_MAX_CHARS
+
+        monkeypatch.setattr(get_config().llm, "api_key", "test-key")
+        oversized = "x" * (EDITOR_USER_MESSAGE_MAX_CHARS + 1)
+        resp = _send_request(client, env, {"user_message": oversized})
+        assert resp.status_code == 200  # SSE 已建立，错误经事件通道下发
+        events = _parse_sse(resp.text)
+        assert len(events) == 1
+        payload = events[0]
+        assert payload["type"] == "error"
+        message = payload["message"]
+        assert isinstance(message, dict)
+        assert message["error"] == "content_too_long"
+        # 不产生任何会话落盘副作用
+        assert list(temp_session_dir.rglob("*.json")) == []
+
+    def test_oversized_buffer_yields_content_too_long(
+        self, env, temp_session_dir, monkeypatch
+    ):
+        from fastapi import HTTPException
+
+        from backend.modules.writing_chat.models import (
+            EDITOR_SELECTION_MAX_CHARS,
+            EditorSendRequest,
+        )
+        from backend.modules.writing_chat.service import get_writing_chat_service
+
+        req = EditorSendRequest(
+            file_path="main.tex",
+            buffer="x",
+            selection="y" * (EDITOR_SELECTION_MAX_CHARS + 1),
+            user_message="hi",
+        )
+        with pytest.raises(HTTPException) as exc_info:
+            # editor_send 是 async generator：手动驱动首个 yield 触发入口校验
+            async def _drive():
+                async for _ in get_writing_chat_service().editor_send(req):
+                    pass
+
+            asyncio.run(_drive())
+        assert exc_info.value.status_code == 413
+        assert exc_info.value.detail["error"] == "content_too_long"
+
 
 # ── 开关把关（决策 Q26） ────────────────────────────────────────────────────
 
@@ -393,26 +442,28 @@ class TestApplySuggestion:
         ctx.save_to_disk()
         return ctx.session_id, assistant.id
 
+    def _apply(self, client, session_id, message_id, **extra):
+        return client.post(
+            "/api/writing-chat/editor/apply-suggestion",
+            json={"session_id": session_id, "message_id": message_id, **extra},
+        )
+
     def test_marks_message_applied_and_persists(self, client, temp_session_dir):
         session_id, message_id = self._make_session_with_suggestion()
-        resp = client.post(
-            "/api/writing-chat/editor/apply-suggestion",
-            json={"session_id": session_id, "message_id": message_id},
-        )
+        resp = self._apply(client, session_id, message_id)
         assert resp.status_code == 200, resp.text
         data = resp.json()
         assert data["status"] == "ok"
         assert data["suggestion_applied"] is True
+        # 消息级旧行为不产生 index 记录
+        assert data["applied_suggestions"] == []
 
         loaded = ConversationContext.load_from_disk(session_id)
         assert loaded.messages[-1].suggestion_applied is True
 
     def test_unknown_message_returns_404(self, client, temp_session_dir):
         session_id, _ = self._make_session_with_suggestion()
-        resp = client.post(
-            "/api/writing-chat/editor/apply-suggestion",
-            json={"session_id": session_id, "message_id": "no-such"},
-        )
+        resp = self._apply(client, session_id, "no-such")
         assert resp.status_code == 404
 
     def test_unknown_session_returns_404(self, client, temp_session_dir):
@@ -421,3 +472,171 @@ class TestApplySuggestion:
             json={"session_id": "deadbeef:000000", "message_id": "m"},
         )
         assert resp.status_code == 404
+
+
+class TestApplySuggestionByIndex:
+    """R6：index 级建议应用标记——部分应用不算整体已应用，全覆盖才置位。"""
+
+    def _make_session_with_two_suggestions(self) -> tuple[str, str]:
+        ctx = ConversationContext.create_session(file_path="main.tex", scope="tests")
+        ctx.append_user_message("改写")
+        assistant = ctx.append_assistant_message(
+            content="```latex\nHola\n```\n```diff\n-x\n+y\n```",
+            suggestions=[
+                {"kind": "snippet", "language": "latex", "content": "Hola", "index": 0},
+                {"kind": "diff", "language": "diff", "content": "-x\n+y", "index": 1},
+            ],
+        )
+        ctx.save_to_disk()
+        return ctx.session_id, assistant.id
+
+    def _apply(self, client, body: dict):
+        return client.post("/api/writing-chat/editor/apply-suggestion", json=body)
+
+    def test_partial_index_application_does_not_mark_message(
+        self, client, temp_session_dir
+    ):
+        session_id, message_id = self._make_session_with_two_suggestions()
+        resp = self._apply(
+            client,
+            {"session_id": session_id, "message_id": message_id, "suggestion_index": 0},
+        )
+        assert resp.status_code == 200, resp.text
+        data = resp.json()
+        # 仅覆盖 index 0/2：消息级标记不得置位
+        assert data["suggestion_applied"] is False
+        assert data["applied_suggestions"] == [0]
+
+        loaded = ConversationContext.load_from_disk(session_id)
+        msg = loaded.messages[-1]
+        assert msg.applied_suggestions == [0]
+        assert msg.suggestion_applied is False
+
+    def test_full_coverage_marks_message_applied(self, client, temp_session_dir):
+        session_id, message_id = self._make_session_with_two_suggestions()
+        first = self._apply(
+            client,
+            {"session_id": session_id, "message_id": message_id, "suggestion_index": 1},
+        )
+        assert first.json()["applied_suggestions"] == [1]
+        assert first.json()["suggestion_applied"] is False
+
+        second = self._apply(
+            client,
+            {"session_id": session_id, "message_id": message_id, "suggestion_index": 0},
+        )
+        assert second.status_code == 200, second.text
+        data = second.json()
+        # applied_suggestions 覆盖全部建议 index → 整体置位
+        assert sorted(data["applied_suggestions"]) == [0, 1]
+        assert data["suggestion_applied"] is True
+
+        loaded = ConversationContext.load_from_disk(session_id)
+        msg = loaded.messages[-1]
+        assert msg.suggestion_applied is True
+        assert sorted(msg.applied_suggestions) == [0, 1]
+
+    def test_duplicate_index_is_deduplicated(self, client, temp_session_dir):
+        session_id, message_id = self._make_session_with_two_suggestions()
+        for _ in range(2):
+            resp = self._apply(
+                client,
+                {
+                    "session_id": session_id,
+                    "message_id": message_id,
+                    "suggestion_index": 1,
+                },
+            )
+        assert resp.json()["applied_suggestions"] == [1]
+
+    def test_index_without_matching_suggestions_still_records(
+        self, client, temp_session_dir
+    ):
+        """越界 index 不崩溃：记录照常持久化，但不会覆盖全部建议。"""
+        session_id, message_id = self._make_session_with_two_suggestions()
+        resp = self._apply(
+            client,
+            {"session_id": session_id, "message_id": message_id, "suggestion_index": 9},
+        )
+        assert resp.status_code == 200
+        assert resp.json()["suggestion_applied"] is False
+        assert resp.json()["applied_suggestions"] == [9]
+
+    def test_legacy_no_index_marks_immediately(self, client, temp_session_dir):
+        """不带 suggestion_index 的旧客户端请求保持旧契约（直接整体置位）。"""
+        session_id, message_id = self._make_session_with_two_suggestions()
+        resp = self._apply(client, {"session_id": session_id, "message_id": message_id})
+        assert resp.json()["suggestion_applied"] is True
+        assert resp.json()["applied_suggestions"] == []
+
+    def test_old_session_data_without_field_loads_with_default(self):
+        """旧会话 JSON 缺 applied_suggestions 字段 → 默认空列表（向后兼容）。"""
+        legacy = ChatMessage.model_validate({"id": "m1", "role": "assistant"})
+        assert legacy.applied_suggestions == []
+        assert legacy.suggestion_applied is False
+
+
+# ── SSE 兜底异常脱敏（R5） ──────────────────────────────────────────────────
+
+
+def _raising_async_gen(exc: Exception):
+    async def gen():
+        raise exc
+        yield  # pragma: no cover
+
+    return gen()
+
+
+class TestSSEInternalErrorFraming:
+    """通用异常 → internal_error 结构化错误；str(e) 严禁泄漏给客户端。"""
+
+    def test_editor_send_unexpected_error_masked(
+        self, client, env, temp_session_dir, monkeypatch
+    ):
+        monkeypatch.setattr(get_config().features.editor, "enabled", True)
+        monkeypatch.setattr(get_config().features.editor, "assistant_enabled", True)
+        m_service = MagicMock()
+        m_service.editor_send = MagicMock(
+            return_value=_raising_async_gen(RuntimeError("secret /home/x/path"))
+        )
+        monkeypatch.setattr(
+            "backend.modules.writing_chat.router.get_writing_chat_service",
+            lambda: m_service,
+        )
+
+        resp = _send_request(client, env, {})
+        assert resp.status_code == 200
+        events = _parse_sse(resp.text)
+        assert len(events) == 1
+        payload = events[0]
+        assert payload["type"] == "error"
+        assert payload["message"]["error"] == "internal_error"
+        assert payload["message"]["message"] == "An unexpected server error occurred"
+        # 原始异常文本（含路径）不得出现在任何下发字节中
+        assert "secret" not in resp.text
+        assert "/home/x/path" not in resp.text
+
+    def test_send_endpoint_unexpected_error_masked(
+        self, client, env, temp_session_dir, monkeypatch
+    ):
+        """/send 与 /editor/send 共用同一兜底语义。"""
+        m_service = MagicMock()
+        m_service.send = MagicMock(
+            return_value=_raising_async_gen(RuntimeError("secret /home/x/path"))
+        )
+        monkeypatch.setattr(
+            "backend.modules.writing_chat.router.get_writing_chat_service",
+            lambda: m_service,
+        )
+
+        resp = client.post(
+            "/api/writing-chat/send",
+            params={"workspace_id": env["ws"]},
+            json={"file_path": "main.tex", "user_message": "hi"},
+        )
+        assert resp.status_code == 200
+        events = _parse_sse(resp.text)
+        assert events[-1]["type"] == "error"
+        assert events[-1]["message"]["error"] == "internal_error"
+        assert "secret" not in resp.text
+        assert "/home/x/path" not in resp.text

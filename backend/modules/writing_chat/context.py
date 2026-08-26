@@ -17,6 +17,7 @@
     - 使用 pathlib 与 encoding="utf-8"（AGENTS.md）
 """
 
+import asyncio
 import copy
 import hashlib
 import json
@@ -154,6 +155,17 @@ class ConversationContext:
             title=data.get("title", ""),
         )
 
+    @classmethod
+    async def load_from_disk_async(
+        cls, session_id: str
+    ) -> "ConversationContext | None":
+        """异步加载已有会话：同步实现经 asyncio.to_thread 调度（零逻辑复制）。
+
+        会话 JSON 可能很大（含工具消息与压缩快照），在事件循环内同步读盘
+        会阻塞并发请求；async 服务层一律使用本方法。
+        """
+        return await asyncio.to_thread(cls.load_from_disk, session_id)
+
     # ── 磁盘持久化 ──────────────────────────────────────────────────────────
 
     @staticmethod
@@ -195,6 +207,10 @@ class ConversationContext:
         path = self._session_path(self.session_id)
         atomic_write(path, json.dumps(data, ensure_ascii=False, indent=2))
         _session_meta_cache.pop(str(path), None)
+
+    async def save_to_disk_async(self) -> None:
+        """异步落盘：同步实现经 asyncio.to_thread 调度（零逻辑复制）。"""
+        await asyncio.to_thread(self.save_to_disk)
 
     def delete_from_disk(self) -> bool:
         path = self._session_path(self.session_id)
@@ -414,11 +430,26 @@ class ConversationContext:
                 return True
         return False
 
-    def mark_suggestion_applied(self, message_id: str) -> bool:
-        """置位消息级建议应用标记（编辑器助手，editor-plan §5.2）。"""
+    def mark_suggestion_applied(
+        self, message_id: str, index: int | None = None
+    ) -> bool:
+        """置位建议应用标记（编辑器助手，editor-plan §5.2）。
+
+        index=None：消息级旧行为，直接置 suggestion_applied=True（向后兼容）。
+        index 非 None：index 级标记——去重追加进 applied_suggestions，仅当
+        applied_suggestions 已覆盖该消息 suggestions 的全部 index 时才置
+        suggestion_applied=True（逐卡审阅场景下部分应用不算整体已应用）。
+        """
         for m in self.messages:
             if m.id == message_id:
-                m.suggestion_applied = True
+                if index is None:
+                    m.suggestion_applied = True
+                else:
+                    if index not in m.applied_suggestions:
+                        m.applied_suggestions.append(index)
+                    all_indices = {s.index for s in m.suggestions}
+                    if set(m.applied_suggestions) >= all_indices:
+                        m.suggestion_applied = True
                 self.last_updated_at = time.time()
                 return True
         return False

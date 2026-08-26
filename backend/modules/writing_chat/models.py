@@ -11,7 +11,7 @@
     2. API 请求/响应模型——router 层使用，校验入参
 """
 
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -48,7 +48,7 @@ class EditorSuggestion(BaseModel):
     不经后端落盘（方案 §5.2）。
     """
 
-    kind: str  # "snippet" | "diff"
+    kind: Literal["snippet", "diff"]
     language: str = ""
     content: str
     index: int = 0
@@ -166,13 +166,26 @@ class ChatMessage(BaseModel):
     unverified_evidence_ids: list[str] = Field(default_factory=list)
     # 编辑器助手建议（仅 editor/send 产生的 assistant 消息携带）
     suggestions: list[EditorSuggestion] = Field(default_factory=list)
-    # 消息级建议应用标记：用户在前端把该消息的任一建议应用到缓冲区后置位
+    # index 级建议应用记录：用户已应用到缓冲区的 suggestion index（去重升序
+    # 不保证，按应用顺序追加）。旧会话数据缺字段时默认空列表（向后兼容）。
+    applied_suggestions: list[int] = Field(default_factory=list)
+    # 消息级建议应用标记：applied_suggestions 覆盖该消息全部建议 index，
+    # 或调用方显式做消息级标记时置位
     suggestion_applied: bool = False
 
 
 ChatMessage.model_rebuild()
 
 # ── API 请求/响应模型 ────────────────────────────────────────────────────────
+
+# 编辑器助手请求体长度上限（与 editor.service.MAX_EDITABLE_CHARS 同量级）。
+# 刻意不用 Field(max_length=)/field_validator 硬拦截：Pydantic 校验失败会被
+# FastAPI 转成裸 422（detail 为数组），前端 translateError 无法映射出可理解
+# 文案；改为在 editor_chat 服务入口校验并抛结构化 413 "content_too_long"
+# （SSE error 事件携带 {error, message}，走统一翻译层）。
+EDITOR_BUFFER_MAX_CHARS = 2_000_000
+EDITOR_SELECTION_MAX_CHARS = 200_000
+EDITOR_USER_MESSAGE_MAX_CHARS = 32_000
 
 
 class ChatSendRequest(BaseModel):
@@ -196,23 +209,39 @@ class EditorSendRequest(BaseModel):
     携带编辑器上下文：当前打开文件、CM6 缓冲区全文（含未保存修改）、
     光标行号与选区。上下文注入量由服务端按 §7.3 自适应裁剪；
     include_full_file 为大文件时用户手动"把全文纳入本次提问"开关。
+
+    长度上限见模块级常量（buffer ≤ EDITOR_BUFFER_MAX_CHARS、
+    selection ≤ EDITOR_SELECTION_MAX_CHARS、user_message ≤
+    EDITOR_USER_MESSAGE_MAX_CHARS），由服务入口统一以 content_too_long
+    结构化错误拒绝。
     """
 
     session_id: str | None = None
     file_path: str = ""
-    buffer: str = ""
+    buffer: str = Field(
+        default="",
+        description=f"CM6 缓冲区全文，≤{EDITOR_BUFFER_MAX_CHARS} 字符",
+    )
     cursor_line: int | None = None
-    selection: str = ""
+    selection: str = Field(
+        default="",
+        description=f"当前选区文本，≤{EDITOR_SELECTION_MAX_CHARS} 字符",
+    )
     include_full_file: bool = False
-    user_message: str
+    user_message: str = Field(
+        description=f"用户提问原文，≤{EDITOR_USER_MESSAGE_MAX_CHARS} 字符"
+    )
     language: str = "zh"
 
 
 class ApplySuggestionRequest(BaseModel):
-    """记录编辑器建议的应用结果（消息级标记，editor-plan §5.2）。"""
+    """记录编辑器建议的应用结果（消息级 / index 级标记，editor-plan §5.2）。"""
 
     session_id: str
     message_id: str
+    # 可选：本次应用的建议序号（逐卡审阅）。缺省时按旧契约直接做消息级
+    # 整体置位（向后兼容）。
+    suggestion_index: int | None = None
 
 
 class GenerateEditRequest(BaseModel):

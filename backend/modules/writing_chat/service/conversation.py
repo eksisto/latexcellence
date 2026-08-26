@@ -543,7 +543,7 @@ class ConversationMixin:
         scope = self._get_scope(workspace_id)
         created_new_session = False
         ctx = (
-            ConversationContext.load_from_disk(req.session_id)
+            await ConversationContext.load_from_disk_async(req.session_id)
             if req.session_id
             else None
         )
@@ -567,7 +567,7 @@ class ConversationMixin:
         if await ctx.should_compress_async():
             compressed_this_round = await self._maybe_compress(ctx)
         if compressed_this_round:
-            ctx.save_to_disk()
+            await ctx.save_to_disk_async()
             yield {"type": "compressed", "session_id": ctx.session_id}
 
         # 3. 构造上下文锚点文本 + 追加 user 消息
@@ -579,7 +579,7 @@ class ConversationMixin:
             referenced_file=req.file_path,
             referenced_paragraph=req.paragraph_index,
         )
-        ctx.save_to_disk()
+        await ctx.save_to_disk_async()
         if created_new_session:
             # v2 P4 检查点：新会话落盘后刷新该用户 writing_chat_sessions 缓存行
             await asyncio.to_thread(
@@ -679,7 +679,7 @@ class ConversationMixin:
                                 # 移除本轮 user 消息，便于用户重新发送。
                                 # 超限重试耗尽时保留用户消息，避免静默丢消息。
                                 ctx.delete_message(user_msg.id)
-                            ctx.save_to_disk()
+                            await ctx.save_to_disk_async()
                             return
                         self._logger.warning(
                             "Context overflow in tool round %s (attempt %s): %s",
@@ -696,7 +696,7 @@ class ConversationMixin:
                         if recovered is None:
                             # 恢复失败：保留用户消息，不静默删除
                             yield {"type": "error", "message": str(e)}
-                            ctx.save_to_disk()
+                            await ctx.save_to_disk_async()
                             return
                         (
                             tool_messages,
@@ -908,7 +908,7 @@ class ConversationMixin:
                             "tokens": 0,
                             "captcha_pending": True,
                         }
-                        ctx.save_to_disk()
+                        await ctx.save_to_disk_async()
                         return
                     except Exception as e:
                         self._logger.warning(f"Tool execution failed {tool_name}: {e}")
@@ -950,7 +950,7 @@ class ConversationMixin:
                     self._logger.error(f"post-tool chat_stream_with_usage failed: {e}")
                     yield {"type": "error", "message": str(e)}
                     ctx.delete_message(user_msg.id)
-                    ctx.save_to_disk()
+                    await ctx.save_to_disk_async()
                     return
 
             # 将工具调用/结果消息持久化到会话上下文（任一成功路径都会执行）
@@ -975,7 +975,7 @@ class ConversationMixin:
                 self._logger.error(f"chat_stream_with_usage failed: {e}")
                 yield {"type": "error", "message": str(e)}
                 ctx.delete_message(user_msg.id)
-                ctx.save_to_disk()
+                await ctx.save_to_disk_async()
                 return
 
         # 5. 引用校验：回复中的链接必须来自当轮工具返回的真实来源
@@ -1013,7 +1013,7 @@ class ConversationMixin:
             unverified_evidence_ids=unverified_evidence_ids,
         )
         ctx.update_last_message_tokens(last_usage_tokens)
-        ctx.save_to_disk()
+        await ctx.save_to_disk_async()
 
         if citation_note:
             yield {

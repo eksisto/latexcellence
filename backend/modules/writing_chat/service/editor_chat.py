@@ -18,6 +18,8 @@ import json
 import re
 from typing import Any, AsyncIterator
 
+from fastapi import HTTPException
+
 from backend.core.config import get_config
 from backend.core.multiuser.quota import (
     checkpoint_derived_usage_for_current_user,
@@ -27,7 +29,12 @@ from backend.core.prompts import get_prompt
 from backend.core.tool_registry import get_tool_registry
 from backend.core.workspace_manager import get_project_manager_for_workspace
 from backend.modules.writing_chat.context import ConversationContext
-from backend.modules.writing_chat.models import EditorSendRequest
+from backend.modules.writing_chat.models import (
+    EDITOR_BUFFER_MAX_CHARS,
+    EDITOR_SELECTION_MAX_CHARS,
+    EDITOR_USER_MESSAGE_MAX_CHARS,
+    EditorSendRequest,
+)
 from backend.utils.project_tools import get_project_tools_manager
 
 from . import _deps
@@ -214,6 +221,31 @@ def extract_suggestions(content: str) -> list[dict[str, str]]:
 class EditorChatMixin:
     """编辑器侧 AI 助手对话流（/api/writing-chat/editor/* 的业务实现）。"""
 
+    @staticmethod
+    def _enforce_request_limits(req: EditorSendRequest) -> None:
+        """请求体长度上限把关（超限统一抛结构化 content_too_long 413）。
+
+        在 Pydantic 模型上用 Field(max_length=)/field_validator 硬拦截会被
+        FastAPI 转成裸 422（detail 为数组），前端 translateError 无法映射；
+        此处以结构化 {error, message} 抛出，SSE 兜底分支原样透传给前端。
+        """
+        limits: list[tuple[str, str, int]] = [
+            ("buffer", "Editor buffer", EDITOR_BUFFER_MAX_CHARS),
+            ("selection", "Selection", EDITOR_SELECTION_MAX_CHARS),
+            ("user_message", "User message", EDITOR_USER_MESSAGE_MAX_CHARS),
+        ]
+        for field_name, label, max_chars in limits:
+            value = getattr(req, field_name) or ""
+            if len(value) > max_chars:
+                raise HTTPException(
+                    status_code=413,
+                    detail={
+                        "error": "content_too_long",
+                        "message": f"{label} is {len(value)} characters, "
+                        f"exceeding the maximum of {max_chars} characters",
+                    },
+                )
+
     def _get_editor_tools(self, workspace_id: str) -> list[dict]:
         """只读三件套工具 schema（项目已打开且 project_tools 启用时）。"""
         cfg = get_config()
@@ -241,6 +273,7 @@ class EditorChatMixin:
         self, req: EditorSendRequest, workspace_id: str = ""
     ) -> AsyncIterator[dict]:
         """编辑器助手主对话流：同一会话串行执行，防止并发落盘丢消息。"""
+        self._enforce_request_limits(req)
         if self._no_api_key():
             yield {"type": "error", "message": "No API key configured"}
             return
@@ -259,7 +292,7 @@ class EditorChatMixin:
         scope = self._get_scope(workspace_id)
         created_new_session = False
         ctx = (
-            ConversationContext.load_from_disk(req.session_id)
+            await ConversationContext.load_from_disk_async(req.session_id)
             if req.session_id
             else None
         )
@@ -279,7 +312,7 @@ class EditorChatMixin:
         if await ctx.should_compress_async():
             compressed_this_round = await self._maybe_compress(ctx)
         if compressed_this_round:
-            ctx.save_to_disk()
+            await ctx.save_to_disk_async()
             yield {"type": "compressed", "session_id": ctx.session_id}
 
         context_block = build_editor_context(
@@ -292,7 +325,7 @@ class EditorChatMixin:
         user_msg = ctx.append_user_message(
             req.user_message, referenced_file=req.file_path
         )
-        ctx.save_to_disk()
+        await ctx.save_to_disk_async()
         if created_new_session:
             await asyncio.to_thread(
                 checkpoint_derived_usage_for_current_user, "writing_chat_sessions"
@@ -348,7 +381,7 @@ class EditorChatMixin:
                     self._logger.error(f"editor chat_stream_with_tools failed: {e}")
                     yield {"type": "error", "message": str(e)}
                     ctx.delete_message(user_msg.id)
-                    ctx.save_to_disk()
+                    await ctx.save_to_disk_async()
                     return
 
                 if not round_tool_calls:
@@ -437,7 +470,7 @@ class EditorChatMixin:
                     )
                     yield {"type": "error", "message": str(e)}
                     ctx.delete_message(user_msg.id)
-                    ctx.save_to_disk()
+                    await ctx.save_to_disk_async()
                     return
         else:
             # 无项目工具：纯流式
@@ -459,7 +492,7 @@ class EditorChatMixin:
         if llm_failed:
             # 与 writing_chat 同语义：移除本轮 user 消息，便于用户重发
             ctx.delete_message(user_msg.id)
-            ctx.save_to_disk()
+            await ctx.save_to_disk_async()
             return
 
         content = "".join(full_content_parts)
@@ -470,7 +503,7 @@ class EditorChatMixin:
             suggestions=suggestion_dicts,
         )
         ctx.update_last_message_tokens(last_usage_tokens)
-        ctx.save_to_disk()
+        await ctx.save_to_disk_async()
 
         yield {
             "type": "done",
@@ -480,18 +513,38 @@ class EditorChatMixin:
             "suggestions": suggestion_dicts,
         }
 
-    async def apply_suggestion(self, session_id: str, message_id: str) -> dict:
-        """记录消息级建议应用标记（前端已把建议应用到 CM6 缓冲区之后调用）。"""
+    async def apply_suggestion(
+        self,
+        session_id: str,
+        message_id: str,
+        suggestion_index: int | None = None,
+    ) -> dict:
+        """记录建议应用标记（前端已把建议应用到 CM6 缓冲区之后调用）。
+
+        suggestion_index 非 None 时做 index 级标记：applied_suggestions
+        去重追加，覆盖该消息全部建议 index 后才整体置位 suggestion_applied；
+        为 None 保持旧契约直接消息级置位（向后兼容）。
+        """
         async with self._session_lock(session_id):
-            ctx = ConversationContext.load_from_disk(session_id)
+            ctx = await ConversationContext.load_from_disk_async(session_id)
             if ctx is None:
                 raise ValueError(f"Session not found: {session_id}")
-            if not ctx.mark_suggestion_applied(message_id):
+            if not ctx.mark_suggestion_applied(message_id, index=suggestion_index):
                 raise IndexError(f"Message not found: {message_id}")
-            ctx.save_to_disk()
+            applied_suggestions: list[int] = []
+            suggestion_applied = False
+            for m in ctx.messages:
+                if m.id == message_id:
+                    applied_suggestions = list(m.applied_suggestions)
+                    suggestion_applied = m.suggestion_applied
+                    break
+            await ctx.save_to_disk_async()
             return {
                 "status": "ok",
                 "session_id": session_id,
                 "message_id": message_id,
-                "suggestion_applied": True,
+                # index 级部分应用时为 False：仅当 applied_suggestions 覆盖
+                # 该消息全部建议 index（或走消息级旧行为）才置位
+                "suggestion_applied": suggestion_applied,
+                "applied_suggestions": applied_suggestions,
             }
