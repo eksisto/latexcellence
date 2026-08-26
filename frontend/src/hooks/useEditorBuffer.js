@@ -13,10 +13,17 @@ import {
   isPreviewableFilePath,
 } from "@/lib/editor/files";
 
+/** 自动保存停顿阈值：停止编辑该时长后落盘（决策 Q6） */
+const AUTO_SAVE_DELAY_MS = 2500;
+
 /**
  * 编辑器缓冲区管理：打开 / 脏标 / 保存（MD5 乐观锁） / 冲突快照门闩 /
  * Ctrl+S / beforeunload / 自动保存 / URL ?file= 驱动 / 刷新直达恢复。
  * 从 EditorPage 拆出，减少主文件行数并独立可测。
+ *
+ * A2 渲染解耦：本 hook 不做任何组件级 store 订阅（content/dirty 的订阅
+ * 会让宿主页随每次按键重渲染），beforeunload / 自动保存 / 冲突快照门闩
+ * 全部改为 useEditorStore.subscribe 命令式副作用，行为与原实现等价。
  *
  * @param {{ workspaceId: string, canWrite: boolean, setSearchParams: Function, t: Function, setFilePreviewPath: Function, setFilePreviewUrl: Function }} params
  */
@@ -28,15 +35,6 @@ export default function useEditorBuffer({
   setFilePreviewPath,
   setFilePreviewUrl,
 }) {
-  const readOnly = !canWrite;
-
-  const session = useEditorStore((s) => ({
-    filePath: s.filePath,
-    content: s.content,
-    dirty: s.dirty,
-    conflict: s.conflict,
-    autoSave: s.autoSave,
-  }));
   const openBuffer = useEditorStore((s) => s.openBuffer);
   const markSaved = useEditorStore((s) => s.markSaved);
   const setConflict = useEditorStore((s) => s.setConflict);
@@ -49,6 +47,9 @@ export default function useEditorBuffer({
   const openSeqRef = useRef(0);
   const savingRef = useRef(false);
   const conflictSnapshotRef = useRef(null);
+  /** 订阅回调内读取实时写权限（避免为 readOnly 建立组件级订阅） */
+  const canWriteRef = useRef(canWrite);
+  canWriteRef.current = canWrite;
 
   const describeError = useCallback((e, filePathForNotFound) => {
     if (e?.code === "file_not_found") {
@@ -218,44 +219,80 @@ export default function useEditorBuffer({
     return () => window.removeEventListener("keydown", handler);
   }, []);
 
-  /* ── 关闭/刷新拦截 ──────────────────────────────────────────────── */
+  /* ── 关闭/刷新拦截 · 自动保存 · 冲突快照门闩（命令式订阅） ──────────
+   * 三者原为组件级 content/dirty/conflict 订阅 effect，宿主页随每次按键
+   * 重渲染；改为 store.subscribe 副作用驱动后零重渲染，语义逐条对齐：
+   *   - dirty 置真挂 beforeunload、清假卸载；
+   *   - autoSave 开启且 dirty、无冲突、非 viewer 时，内容停改 2.5s 落盘
+   *     （真防抖：每次内容变化都重置计时器）；
+   *   - 冲突弹窗被关闭后内容未再变化期间不武装定时器（防 409 回路），
+   *     脏标清零解除快照门闩。 */
   useEffect(() => {
-    if (!session.dirty) return undefined;
-    const handler = (e) => {
+    let timer = null;
+    let unloadBound = false;
+    const clearTimer = () => {
+      if (timer !== null) {
+        window.clearTimeout(timer);
+        timer = null;
+      }
+    };
+    const unloadHandler = (e) => {
       e.preventDefault();
+      // Chrome/Edge 需要 returnValue 才会弹出确认
       e.returnValue = "";
     };
-    window.addEventListener("beforeunload", handler);
-    return () => window.removeEventListener("beforeunload", handler);
-  }, [session.dirty]);
+    const setUnloadBound = (bound) => {
+      if (bound === unloadBound) return;
+      if (bound) window.addEventListener("beforeunload", unloadHandler);
+      else window.removeEventListener("beforeunload", unloadHandler);
+      unloadBound = bound;
+    };
+    const armAutosave = () => {
+      clearTimer();
+      const s = useEditorStore.getState();
+      if (!s.autoSave || !canWriteRef.current || !s.dirty || s.conflict) {
+        return;
+      }
+      // 防回路门闩：冲突弹窗被关闭后，缓冲区自冲突以来未再变化时不自动
+      // 重试保存（必然再次 409）；用户继续编辑（content 变化）即恢复节奏
+      if (
+        conflictSnapshotRef.current !== null &&
+        s.content === conflictSnapshotRef.current
+      ) {
+        return;
+      }
+      timer = window.setTimeout(() => saveRef.current(), AUTO_SAVE_DELAY_MS);
+    };
 
-  /* ── 自动保存偏好 ──────────────────────────────────────────────── */
-  useEffect(() => {
-    if (!session.autoSave || readOnly || !session.dirty || session.conflict) {
-      return undefined;
-    }
-    if (
-      conflictSnapshotRef.current !== null &&
-      session.content === conflictSnapshotRef.current
-    ) {
-      return undefined;
-    }
-    const timer = window.setTimeout(() => {
-      saveRef.current();
-    }, 2500);
-    return () => window.clearTimeout(timer);
-  }, [
-    session.autoSave,
-    readOnly,
-    session.dirty,
-    session.conflict,
-    session.content,
-  ]);
+    const unsub = useEditorStore.subscribe((s, prev) => {
+      // 脏标清零（成功保存 / 放弃重载 / 切换文件）解除冲突快照门闩
+      if (!s.dirty && conflictSnapshotRef.current !== null) {
+        conflictSnapshotRef.current = null;
+      }
+      if (s.dirty !== prev.dirty) setUnloadBound(s.dirty);
+      if (
+        s.content !== prev.content ||
+        s.dirty !== prev.dirty ||
+        s.conflict !== prev.conflict ||
+        s.autoSave !== prev.autoSave
+      ) {
+        armAutosave();
+      }
+    });
 
-  // 脏标清零后解除冲突快照门闩
-  useEffect(() => {
-    if (!session.dirty) conflictSnapshotRef.current = null;
-  }, [session.dirty]);
+    // 挂载时对齐既有状态（如路由恢复时缓冲区已脏）
+    const initial = useEditorStore.getState();
+    setUnloadBound(initial.dirty);
+    armAutosave();
+
+    return () => {
+      clearTimer();
+      unsub();
+      setUnloadBound(false);
+    };
+  }, [canWrite]);
+  // canWrite 入依赖：写权限变化（viewer 升级等）时重建订阅并立即重查
+  // 自动保存武装，对齐旧组件级实现对 readOnly 变化的即时响应。
 
   /* ── 后端撤销/重做落盘后 / 冲突放弃本地：重拉文件内容刷新缓冲区 ──── */
   const handleReloadBuffer = useCallback(async () => {
@@ -328,6 +365,5 @@ export default function useEditorBuffer({
     handleDiscardAndReload,
     handleSelectTreeNode,
     conflictSnapshotRef,
-    readOnly,
   };
 }

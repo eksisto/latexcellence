@@ -14,6 +14,7 @@ import { useCallback, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 
+import useEditorStore from "@/store/editorStore";
 import {
   Dialog,
   DialogContent,
@@ -64,17 +65,18 @@ async function writeClipboardText(text) {
  * @param {(open: boolean) => void} props.onOpenChange
  * @param {{ message?: string }|null} props.conflict
  *   后端 409 结构化错误中用于展示的字段（current_md5 由后端附带，前端未消费）
- * @param {string} props.localContent 冲突发生时的本地缓冲区全文（逃生用）
  * @param {() => Promise<boolean>} props.onDiscardAndReload 放弃本地并重载，
  *   返回是否重载成功；失败时弹窗保持打开以保留逃生出口
  * @param {() => Promise<boolean>} props.onOverwriteSave 覆盖保存（跳过乐观
  *   锁，以本地版本覆盖服务端）；失败时弹窗保持打开
+ *
+ * 本组件刻意不订阅缓冲区 content（A2 渲染解耦）：复制逃生在点击时刻经
+ * store getState 现取最新全文，避免每次按键重渲染弹窗宿主。
  */
 export default function ConflictDialog({
   open,
   onOpenChange,
   conflict,
-  localContent,
   onDiscardAndReload,
   onOverwriteSave,
 }) {
@@ -84,14 +86,14 @@ export default function ConflictDialog({
 
   const handleCopyLocal = useCallback(async () => {
     try {
-      await writeClipboardText(localContent ?? "");
+      await writeClipboardText(useEditorStore.getState().content ?? "");
       toast.success(t("components:conflictDialog.copySuccess"));
     } catch (e) {
       toast.error(t("components:conflictDialog.copyFailed"), {
         description: e?.message,
       });
     }
-  }, [localContent, t]);
+  }, [t]);
 
   const handleDiscardAndReload = useCallback(async () => {
     setReloading(true);

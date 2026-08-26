@@ -156,7 +156,6 @@ function AssistantPanel({
   const listRef = useRef(null);
 
   const filePath = useEditorStore((s) => s.filePath);
-  const content = useEditorStore((s) => s.content);
   const {
     messages,
     streaming,
@@ -171,12 +170,13 @@ function AssistantPanel({
   getCtxRef.current = getEditorContext;
 
   // 大文件判定与后端 SMALL_FILE_LINE_THRESHOLD 对齐：超过时显示"纳入全文"开关。
-  // 全文 split 随 content 引用记忆化（R11）：流式 token 到达 / 输入框键入 /
-  // 选区轮询引发的重渲染不再对大缓冲（≈2 万行）反复全文切分
-  const bufferLineCount = useMemo(
-    () => (content ? content.split("\n").length : 0),
-    [content],
-  );
+  // A2 渲染解耦：刻意不订阅 content——按键级订阅会让面板随每次键入重渲染
+  // 并对大缓冲全文 split。行数是信息性指标（仅控制开关显隐），按文件切换
+  // 与消息数变化时重算即可；发送时刻的实时 buffer 由 getEditorContext 现取。
+  const bufferLineCount = useMemo(() => {
+    const c = useEditorStore.getState().content;
+    return c ? c.split("\n").length : 0;
+  }, [filePath, messages.length]);
   const largeBuffer = bufferLineCount >= 400;
 
   // 选区状态跟随编辑器上下文快照（发送时读取实时值，按钮态低频刷新）

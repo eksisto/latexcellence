@@ -61,6 +61,33 @@ import {
 import { getCommandZhDisplay } from "@/lib/editor/commandZh";
 import i18n from "@/i18n";
 
+/**
+ * SessionEditor —— 缓冲区内容订阅隔离层（A2 按键渲染解耦）。
+ *
+ * content / softWrap / fontSize 的组件级订阅收拢到这一层：每次按键只有
+ * 本组件与 CM6 内部（value 与文档恒等，dispatch 直接跳过）参与渲染，
+ * 页面骨架、文件树、工具栏、右栏不再随键入重渲染。外部整缓冲区替换
+ * （打开文件 / 放弃重载 / 后端撤销刷新）仍经 store 单向流入，受控协议
+ * 与 LaTeXEditor 保持不变。
+ */
+function SessionEditor({ readOnly, onCreateEditor, onCompletionApply }) {
+  const content = useEditorStore((s) => s.content);
+  const softWrap = useEditorStore((s) => s.softWrap);
+  const fontSize = useEditorStore((s) => s.fontSize);
+  const setBufferContent = useEditorStore((s) => s.setBufferContent);
+  return (
+    <LaTeXEditor
+      value={content}
+      onChange={setBufferContent}
+      softWrap={softWrap}
+      fontSize={fontSize}
+      readOnly={readOnly}
+      onCreateEditor={onCreateEditor}
+      onCompletionApply={onCompletionApply}
+    />
+  );
+}
+
 export default function EditorPage() {
   const { t } = useTranslation(["pages", "components", "common"]);
   const [searchParams, setSearchParams] = useSearchParams();
@@ -81,15 +108,8 @@ export default function EditorPage() {
       ? true
       : enabledFeatures.editor_assistant !== false;
 
-  const session = useEditorStore((s) => ({
-    filePath: s.filePath,
-    content: s.content,
-    dirty: s.dirty,
-    conflict: s.conflict,
-    softWrap: s.softWrap,
-    fontSize: s.fontSize,
-  }));
-  const setBufferContent = useEditorStore((s) => s.setBufferContent);
+  const filePath = useEditorStore((s) => s.filePath);
+  const conflict = useEditorStore((s) => s.conflict);
 
   // ── 只读预览状态（PDF/位图覆盖层，不进入 CM6 缓冲区） ─────────────
   const [filePreviewPath, setFilePreviewPath] = useState(null);
@@ -435,7 +455,7 @@ export default function EditorPage() {
       />
 
       <EditorToolbar
-        filePath={session.filePath}
+        filePath={filePath}
         saving={saving}
         readOnly={readOnly}
         onSave={doSave}
@@ -478,12 +498,8 @@ export default function EditorPage() {
             filePreviewUrl={filePreviewUrl}
             onClose={closeFilePreview}
           />
-          {session.filePath ? (
-            <LaTeXEditor
-              value={session.content}
-              onChange={setBufferContent}
-              softWrap={session.softWrap}
-              fontSize={session.fontSize}
+          {filePath ? (
+            <SessionEditor
               readOnly={readOnly}
               onCreateEditor={handleCreateEditor}
               onCompletionApply={handleCompletionApplyEntry}
@@ -546,14 +562,14 @@ export default function EditorPage() {
         }}
       />
 
-      {/* 409 冲突弹窗 */}
+      {/* 409 冲突弹窗（localContent 由弹窗在复制时刻经 store 现取，
+          避免页面订阅 content 导致按键重渲染） */}
       <ConflictDialog
-        open={session.conflict !== null}
+        open={conflict !== null}
         onOpenChange={(open) => {
           if (!open) useEditorStore.getState().setConflict(null);
         }}
-        conflict={session.conflict}
-        localContent={session.content}
+        conflict={conflict}
         onDiscardAndReload={handleDiscardAndReload}
         onOverwriteSave={handleOverwriteSave}
       />
