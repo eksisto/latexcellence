@@ -780,15 +780,18 @@ export default function EditorPage() {
       />
 
       <div className="flex flex-1 min-h-0 gap-3">
-        {/* 左栏：文件树（复用 ProjectExplorer） */}
-        <aside className="w-64 shrink-0 min-h-0">
+        {/* 左栏：文件树（复用 ProjectExplorer）。
+            纵轴对齐：「编辑器」标题（视口 64px）→ 工具栏文件路径 →
+            「文件」标题同轴；卡片边框相对文字轴向左延出一个
+            card-spacing（边框落在 48px），不再贴着页面左缘 */}
+        <aside className="ml-8 w-64 shrink-0 min-h-0">
           <Card className="flex h-full flex-col">
             <CardHeader className="pb-2">
               <CardTitle className="text-sm">
                 {t("pages:workspace.files")}
               </CardTitle>
             </CardHeader>
-            <CardContent className="min-h-0 flex-1 overflow-auto p-2">
+            <CardContent className="min-h-0 flex-1 overflow-auto px-4 pb-3 pt-0">
               <ProjectExplorer
                 tree={fileTree}
                 onSelect={handleSelectTreeNode}
@@ -838,16 +841,21 @@ export default function EditorPage() {
         <aside
           className={cn(
             "relative hidden xl:flex shrink-0 min-h-0 overflow-hidden",
+            // 与左栏 ml-8 镜像：两侧外缘均为页边距 16 + 内缩 32 = 48px，
+            // 工作区外框沿屏幕中线对称；折叠态书脊同样保持该外缘
+            "mr-8",
             "transition-[width] duration-[320ms] ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none",
             panelCollapsed ? "w-10" : "w-80",
           )}
         >
           {/* 展开态内容常挂载：收起时淡出并左移；shrink-0 固定宽度由
-              overflow 裁切而非挤压换行（flex 子项默认可收缩会挤压重排） */}
+              overflow 裁切而非挤压换行（flex 子项默认可收缩会挤压重排）。
+              p-1 留出安全边距：卡片描边不贴 aside 裁切线，避免直线段
+              被裁掉只剩四角圆弧 */}
           <div
             inert={panelCollapsed || undefined}
             className={cn(
-              "flex min-h-0 w-80 shrink-0 flex-col gap-2",
+              "flex min-h-0 w-80 shrink-0 flex-col gap-2 p-1",
               "transition-[transform,opacity] duration-[320ms] ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none",
               panelCollapsed
                 ? "-translate-x-4 opacity-0 delay-0"
@@ -873,7 +881,7 @@ export default function EditorPage() {
                   <Button
                     ref={panelCollapseRef}
                     variant="ghost"
-                    size="icon-sm"
+                    size="icon"
                     onClick={collapsePanel}
                     title={t("components:editor.collapsePanel")}
                   >
@@ -916,7 +924,7 @@ export default function EditorPage() {
                   <Button
                     ref={panelCollapseRef}
                     variant="ghost"
-                    size="icon-sm"
+                    size="icon"
                     onClick={collapsePanel}
                     title={t("components:editor.collapsePanel")}
                   >
@@ -939,7 +947,9 @@ export default function EditorPage() {
 
           {/* 收起态「书脊」：整条可点展开。卡片同源外观（rounded-xl +
               foreground/10 描边），竖排文字标注当前隐藏面板名；展开时
-              左移淡出让位（+0ms 先退场），收起时 +150ms 压轴浮现 */}
+              左移淡出让位（+0ms 先退场），收起时 +150ms 压轴浮现。
+              inset-1 内缩 4px：描边向外扩散 1px，贴边会被 overflow
+              裁掉直线段只剩四角圆弧 */}
           <button
             type="button"
             ref={spineBtnRef}
@@ -948,8 +958,8 @@ export default function EditorPage() {
             aria-label={t("components:editor.expandPanel")}
             title={t("components:editor.expandPanel")}
             className={cn(
-              "absolute inset-y-0 left-0 flex w-full cursor-pointer flex-col items-center gap-4 rounded-xl",
-              "bg-card p-3 text-muted-foreground ring-1 ring-foreground/10 outline-none select-none",
+              "absolute inset-1 flex cursor-pointer flex-col items-center gap-4 rounded-xl",
+              "bg-card py-3 text-muted-foreground ring-1 ring-foreground/10 outline-none select-none",
               "hover:bg-muted/60 hover:text-foreground dark:hover:bg-input/30",
               "focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50",
               "transition-[transform,opacity,background-color] duration-200 ease-out motion-reduce:transition-none",

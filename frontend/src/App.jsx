@@ -102,6 +102,13 @@ const bgSvg = (
   </svg>
 );
 
+/** 全局右下角品牌水印。编辑器页是全高三栏工作布局（页面本身即全部内容，
+ * 无留白供装饰呼吸），不渲染水印；其余页面照常显示。 */
+function BackgroundMark() {
+  const { pathname } = useLocation();
+  return pathname === "/editor" ? null : bgSvg;
+}
+
 function FullscreenLoader() {
   return (
     <div className="flex min-h-screen items-center justify-center">
@@ -337,7 +344,7 @@ export default function App() {
   return (
     <TooltipProvider>
       <BrowserRouter>
-        {bgSvg}
+        <BackgroundMark />
         <AppToolbar />
         <Toaster />
         <Suspense

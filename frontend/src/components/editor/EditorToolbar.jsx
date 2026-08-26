@@ -83,8 +83,13 @@ export default function EditorToolbar({
   const compileDisabled = !filePath || compiling || (saving && dirty);
 
   return (
-    <div className="flex flex-wrap items-center gap-2">
-      <span className="min-w-0 truncate font-mono text-sm text-muted-foreground">
+    // pr-9（36px）：设置按钮（size-icon，32px 盒）右缘落在视口-52px，
+    // 图标中心随之落在「距右缘 68px」，与收起态书脊的居中图标同轴
+    // （书脊 inset-1 后盒宽 32px，居中图标中心 = 视口-68px）
+    <div className="flex flex-wrap items-center gap-2 pr-9">
+      {/* 与页头「编辑器」标题左对齐（PageHeader 返回按钮 size-8 +
+          gap-4 = 48px 缩进），路径与标题共用同一条纵向轴线 */}
+      <span className="min-w-0 truncate pl-12 font-mono text-sm text-muted-foreground">
         {filePath || t("components:editor.noFile")}
         {dirty && (
           <span

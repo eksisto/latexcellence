@@ -50,8 +50,18 @@ const editorBaseTheme = EditorView.theme({
   ".cm-activeLineGutter": {
     backgroundColor: "color-mix(in oklab, var(--muted) 55%, transparent)",
   },
-  ".cm-selectionBackground, &.cm-focused .cm-selectionBackground": {
-    backgroundColor: "color-mix(in oklab, var(--primary) 22%, transparent)",
+  // 选区跟随主题 --selection-bg（与全站 ::selection 同源同色，随主题切换）；
+  // 回退值保留旧 primary 混色，防止个别主题漏定义该变量时选区不可见。
+  // 注意：必须用深链选择器压过 CM 基础主题聚焦态的 5 类特异性规则
+  // （&light.cm-focused > .cm-scroller > .cm-selectionLayer …，默认
+  // 淡紫 #d7d4f0），否则编辑器聚焦时主题选区色会被它覆盖回紫色
+  ".cm-selectionBackground": {
+    backgroundColor:
+      "var(--selection-bg, color-mix(in oklab, var(--primary) 22%, transparent))",
+  },
+  "&.cm-focused .cm-scroller .cm-selectionLayer .cm-selectionBackground": {
+    backgroundColor:
+      "var(--selection-bg, color-mix(in oklab, var(--primary) 22%, transparent))",
   },
   ".cm-cursor": { borderLeftColor: "var(--foreground)" },
 });
