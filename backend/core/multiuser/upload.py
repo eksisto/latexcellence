@@ -264,8 +264,9 @@ def _extract_7z(
             total_compressed = 0
             file_count = 0
             for e in entries:
-                if getattr(e, "is_symlink", False) or not getattr(
-                    e, "archivable", True
+                if getattr(e, "is_symlink", False) or (
+                    not getattr(e, "is_directory", False)
+                    and not getattr(e, "archivable", True)
                 ):
                     raise ArchiveError(
                         "archive_unsafe",
