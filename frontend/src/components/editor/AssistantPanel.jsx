@@ -11,7 +11,15 @@
  * 问答但应用按钮禁用。建议不经后端落盘，落盘仍走 save-file 单一路径。
  */
 
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  memo,
+  useCallback,
+  useDeferredValue,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 
@@ -140,6 +148,17 @@ const SuggestionCard = memo(function SuggestionCard({
       </div>
     </div>
   );
+});
+
+/**
+ * 消息正文渲染：useDeferredValue 把流式 token 驱动的 Markdown 重解析
+ * 降为低优先级（React 可跳过中间态直接渲染较新内容），输入框与滚动
+ * 保持跟手；memo 使已完成消息在面板重渲染时彻底跳过。对齐 writing-chat
+ * MessageBubble 的既有先例。
+ */
+const MessageMarkdown = memo(function MessageMarkdown({ content }) {
+  const deferredContent = useDeferredValue(content);
+  return <MarkdownRenderer>{deferredContent}</MarkdownRenderer>;
 });
 
 function AssistantPanel({
@@ -274,7 +293,7 @@ function AssistantPanel({
             <div key={message.id} className="space-y-2">
               <div className="max-w-[95%] rounded-lg bg-muted px-3 py-2 text-sm">
                 {message.content ? (
-                  <MarkdownRenderer>{message.content}</MarkdownRenderer>
+                  <MessageMarkdown content={message.content} />
                 ) : streaming ? (
                   <Loader2 className="size-4 animate-spin text-muted-foreground" />
                 ) : null}

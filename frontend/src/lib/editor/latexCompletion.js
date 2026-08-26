@@ -89,9 +89,13 @@ function makeCommandCompletionSource(onApplyEntry, getLanguage) {
     if (!m) return null;
     const query = m[1];
     const from = context.pos - query.length;
-    const index = await getCommandMatcherIndex();
-    // 中文名 detail 按当前界面语言解析（en → null 隐藏；zh-TW → 简转繁）
-    const displayZh = await getCommandZhDisplay(getLanguage());
+    // 匹配索引（pinyin-pro chunk）与中文名转换器（opencc-js chunk）相互
+    // 独立，并行加载：串行 await 会让 zh-TW 界面首次触发补全的弹层延迟
+    // 变成两个 chunk 下载时间之和（async-parallel）
+    const [index, displayZh] = await Promise.all([
+      getCommandMatcherIndex(),
+      getCommandZhDisplay(getLanguage()),
+    ]);
     // 空查询（刚敲下 `\`）按数据库默认顺序给默认列表，与面板初始视图一致
     const entries = query ? searchCommands(index, query) : listCommands(index);
     if (entries.length === 0) return null;

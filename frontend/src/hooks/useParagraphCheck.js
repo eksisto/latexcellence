@@ -681,6 +681,9 @@ export default function useParagraphCheck({
   // 结果就绪（检查流结束或从 persist 恢复）后，逐文件拉取当前 MD5 与
   // 检查时版本戳比对；不一致的文件进入横幅提示。只提示不销毁结果。
   const staleSeqRef = useRef(0);
+  /** 上次已比对的版本戳集合签名：results 变化但戳集合未变时跳过重复
+   * 比对（应用/忽略单条结果不再触发全量重拉，async-parallel） */
+  const staleStampSigRef = useRef("");
   useEffect(() => {
     if (isLoading) return;
     const stamped = new Map();
@@ -691,21 +694,31 @@ export default function useParagraphCheck({
       }
     }
     if (stamped.size === 0) {
+      staleStampSigRef.current = "";
       setStaleFiles((prev) => (prev.length ? [] : prev));
       return;
     }
+    // 签名含 workspaceId：切换工作区后即使戳集合相同也强制重新比对
+    const sig = `${workspaceId}|${[...stamped]
+      .map(([fp, md5]) => `${fp}:${md5}`)
+      .join("|")}`;
+    if (sig === staleStampSigRef.current) return;
+    staleStampSigRef.current = sig;
     const seq = ++staleSeqRef.current;
     (async () => {
-      const stale = [];
-      for (const [fp, checkMd5] of stamped) {
-        try {
-          const data = await api.project.fileMd5(fp, workspaceId);
-          if (data.md5 !== checkMd5) stale.push(fp);
-        } catch (_) {
-          // MD5 获取失败不判过期（不误报）
-        }
-      }
-      if (seq === staleSeqRef.current) setStaleFiles(stale);
+      // 各文件的 MD5 请求相互独立，并行发出（原逐个串行 await 使横幅
+      // 出现时间随文件数线性放大）；单个失败不判过期（不误报）
+      const settled = await Promise.all(
+        [...stamped].map(async ([fp, checkMd5]) => {
+          try {
+            const data = await api.project.fileMd5(fp, workspaceId);
+            return data.md5 !== checkMd5 ? fp : null;
+          } catch (_) {
+            return null;
+          }
+        }),
+      );
+      if (seq === staleSeqRef.current) setStaleFiles(settled.filter(Boolean));
     })();
   }, [results, isLoading, activeFile, workspaceId]);
 

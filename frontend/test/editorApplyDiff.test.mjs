@@ -285,13 +285,13 @@ test("applyUnifiedDiff 两个同位置纯插入 hunk 正常应用", () => {
     ["@@ -3,0 +4,1 @@", "+插入甲。", "@@ -3,0 +4,1 @@", "+插入乙。"].join("\n"),
   );
   assert.equal(result.ok, true);
-  // 倒序 splice 下同位置按 diff 声明次序逆序落位：乙在甲之前
+  // 正向组装按锚点升序、稳定排序：同位置插入按 diff 声明次序落位（甲在乙之前）
   assert.deepEqual(result.result.split("\n"), [
     "\\documentclass{article}",
     "\\begin{document}",
     "Hello world.",
-    "插入乙。",
     "插入甲。",
+    "插入乙。",
     "Second line.",
     "\\end{document}",
   ]);
@@ -328,4 +328,88 @@ test("applyUnifiedDiff EOF 无尾换行场景不受歧义/重叠校验破坏", (
     ["@@ -7 +7 @@", "-\\end{quote}", "+\\end{quote*}"].join("\n"),
   );
   assert.deepEqual(ambiguous, { ok: false, reason: "hunk_ambiguous" });
+});
+
+test("applyUnifiedDiff 同锚点「纯插入在前 + 替换在后」按 git 语义相邻应用", () => {
+  // @@ -5,0 插到旧第 5 行之后；@@ -6,4 替换旧第 6-9 行 —— 二者锚点
+  // 相邻兼容。旧倒序 splice 方案会让插入先行落位、随后同锚点的消费型
+  // splice 把刚插入的行当旧内容删掉（静默损坏）
+  const buffer = "l1\nl2\nl3\nl4\nl5\na\nb\nc\nl9";
+  const result = applyUnifiedDiff(
+    buffer,
+    [
+      "@@ -5,0 +6,2 @@",
+      "+NEW1",
+      "+NEW2",
+      "@@ -6,4 +8,4 @@",
+      " a",
+      "-b",
+      "-c",
+      "+B",
+      "+C",
+      " l9",
+    ].join("\n"),
+  );
+  assert.equal(result.ok, true);
+  assert.equal(result.result, "l1\nl2\nl3\nl4\nl5\nNEW1\nNEW2\na\nB\nC\nl9");
+});
+
+test("applyUnifiedDiff 同锚点「替换在前 + 纯插入在后」不再误判重叠", () => {
+  // 与上一条同一 git 语义、仅 hunk 声明次序相反：正向组装下结果一致
+  const buffer = "l1\nl2\nl3\nl4\nl5\na\nb\nc\nl9";
+  const result = applyUnifiedDiff(
+    buffer,
+    [
+      "@@ -6,4 +8,4 @@",
+      " a",
+      "-b",
+      "-c",
+      "+B",
+      "+C",
+      " l9",
+      "@@ -5,0 +8,2 @@",
+      "+NEW1",
+      "+NEW2",
+    ].join("\n"),
+  );
+  assert.equal(result.ok, true);
+  assert.equal(result.result, "l1\nl2\nl3\nl4\nl5\nNEW1\nNEW2\na\nB\nC\nl9");
+});
+
+test("applyUnifiedDiff 纯插入锚点落在消费区间内部仍拒绝", () => {
+  const buffer = "l1\nl2\nl3\nl4\nl5";
+  const result = applyUnifiedDiff(
+    buffer,
+    [
+      "@@ -3,3 +3,3 @@",
+      " l3",
+      "-l4",
+      "+X",
+      " l5",
+      "@@ -4,0 +5,1 @@",
+      "+Y",
+    ].join("\n"),
+  );
+  // 插入点（旧第 4 行后）落在替换区间 [3,6) 内部：位置不确定，整体失败
+  assert.deepEqual(result, { ok: false, reason: "hunk_overlap" });
+});
+
+test("applyUnifiedDiff 纯插入紧贴替换块边界仍放行", () => {
+  // 锚在消费区间终点（替换 [1,3) 后插入）——合法的相邻形态
+  const result = applyUnifiedDiff(
+    BUFFER,
+    [
+      "@@ -3,2 +3,3 @@",
+      "-Hello world.",
+      "+Hola.",
+      "+Mundo.",
+      "@@ -5,0 +6,1 @@",
+      "+附注。",
+    ].join("\n"),
+  );
+  assert.equal(result.ok, true);
+  assert.equal(
+    result.result,
+    "\\documentclass{article}\n\\begin{document}\nHola.\nMundo.\nSecond line.\n\\end{document}\n附注。",
+  );
 });

@@ -1,4 +1,4 @@
-import { useRef, useCallback } from "react";
+import { useRef, useCallback, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { Button } from "@/components/ui/button";
@@ -44,6 +44,18 @@ export default function EditorRightPanel({
   const spineBtnRef = useRef(null);
   const panelCollapseRef = useRef(null);
 
+  // 助手 Tab 首次激活后才挂载 AssistantPanel（此后保持挂载不丢草稿）：
+  // 其静态导入链含 react-markdown + KaTeX 全家桶，进入 /editor 即挂载
+  // 会把这些重型依赖一并急切加载，而多数会话并不使用助手
+  const [assistantVisited, setAssistantVisited] = useState(false);
+  const handleTabChange = useCallback(
+    (value) => {
+      if (value === "assistant") setAssistantVisited(true);
+      onTabChange(value);
+    },
+    [onTabChange],
+  );
+
   const collapsePanel = useCallback(() => {
     onCollapse(true);
     requestAnimationFrame(() => spineBtnRef.current?.focus());
@@ -77,7 +89,7 @@ export default function EditorRightPanel({
           {assistantEnabled ? (
             <Tabs
               value={panelTab}
-              onValueChange={onTabChange}
+              onValueChange={handleTabChange}
               className="flex h-full min-h-0 flex-col gap-2"
             >
               <div className="flex items-center justify-between gap-1">
@@ -103,9 +115,8 @@ export default function EditorRightPanel({
                   </span>
                 </Button>
               </div>
-              {/* keepMounted：两个 Tab 内容常挂载（Base UI Panel 默认
-                      卸载非活动页），切换不丢助手输入草稿与卡片展开态；
-                      会话消息本身在 Zustand store，本就不受切换影响 */}
+              {/* 编译 Tab 常挂载（Base UI Panel 默认卸载非活动页）：
+                  保留编译结果与预览 DOM，切换不重渲染 */}
               <TabsContent
                 value="compile"
                 keepMounted
@@ -119,17 +130,21 @@ export default function EditorRightPanel({
                   onEnterFullscreen={onEnterFullscreen}
                 />
               </TabsContent>
+              {/* 首次访问后 keepMounted：切换不丢助手输入草稿与卡片展开态；
+                  会话消息本身在 Zustand store，本就不受切换影响 */}
               <TabsContent
                 value="assistant"
-                keepMounted
+                keepMounted={assistantVisited}
                 className="min-h-0 flex-1"
               >
-                <AssistantPanel
-                  readOnly={readOnly}
-                  getEditorContext={getEditorContext}
-                  onApplySnippet={onApplySnippet}
-                  onApplyDiffText={onApplyDiffText}
-                />
+                {assistantVisited && (
+                  <AssistantPanel
+                    readOnly={readOnly}
+                    getEditorContext={getEditorContext}
+                    onApplySnippet={onApplySnippet}
+                    onApplyDiffText={onApplyDiffText}
+                  />
+                )}
               </TabsContent>
             </Tabs>
           ) : (

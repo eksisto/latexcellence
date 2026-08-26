@@ -79,6 +79,17 @@ const latexHighlightStyle = HighlightStyle.define([
 ]);
 
 /**
+ * basicSetup 覆盖项必须保持模块级单例：@uiw/react-codemirror 把该 prop
+ * 放进 reconfigure effect 的依赖数组，内联字面量每次渲染新身份，而本
+ * 组件随每次键入重渲染 —— 等于每敲一个键触发一次 CM6 全量扩展重配置。
+ */
+const BASIC_SETUP = {
+  foldGutter: false,
+  highlightSelectionMatches: false,
+  allowMultipleSelections: false,
+};
+
+/**
  * @param {object} props
  * @param {string} props.value                 缓冲区全文
  * @param {(value: string) => void} props.onChange
@@ -129,11 +140,7 @@ export default function LaTeXEditor({
         editable={!readOnly}
         readOnly={readOnly}
         theme="none"
-        basicSetup={{
-          foldGutter: false,
-          highlightSelectionMatches: false,
-          allowMultipleSelections: false,
-        }}
+        basicSetup={BASIC_SETUP}
         className={cn("h-full text-inherit", readOnly && "opacity-90")}
       />
     </div>

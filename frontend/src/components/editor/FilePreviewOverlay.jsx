@@ -18,8 +18,10 @@ export default function FilePreviewOverlay({
   filePreviewPath,
   filePreviewUrl,
   onClose,
-  t,
 }) {
+  // 组件内自取翻译：此前经 prop 注入但唯一调用方漏传，点击预览即
+  // TypeError 白屏；就地 useTranslation 同时消除 t 的 prop drilling
+  const { t } = useTranslation();
   if (!filePreviewPath) return null;
   return (
     <div className="absolute inset-0 z-20 flex flex-col overflow-hidden rounded-lg border bg-background">

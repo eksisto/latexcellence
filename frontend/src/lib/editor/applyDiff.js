@@ -180,11 +180,12 @@ export function applyUnifiedDiff(bufferText, diffText) {
         failed.status === "ambiguous" ? "hunk_ambiguous" : "hunk_not_matched",
     };
   }
-  // 重叠校验：各 hunk 源区间（纯插入长度记 0）按位置升序相邻比较，
-  // 后一区间起点落入前一区间 [at, at + oldLen) 即源区间相交 → 整体失败。
-  // 同位置的纯插入对（0 长度区间）不相交，照常放行；区间终点之后的
-  // 插入点不受影响。倒序 splice 主循环保持不变。
-  const ascended = [...located].sort((a, b) => a.at - b.at);
+  // 重叠校验（纯插入 hunk 源区间长度记 0）：
+  //   a) 消费型 hunk（有旧块）两两比较——后一起点落入前一源区间即相交；
+  //   b) 纯插入锚点不得落在任一消费型源区间的内部；锚在区间边界
+  //      （起点或终点）合法，对应 git「紧邻替换块前/后插入」语义。
+  const consumers = located.filter((l) => l.parts.oldLines.length > 0);
+  const ascended = [...consumers].sort((a, b) => a.at - b.at);
   for (let i = 1; i < ascended.length; i += 1) {
     const cur = ascended[i - 1];
     const next = ascended[i];
@@ -192,10 +193,35 @@ export function applyUnifiedDiff(bufferText, diffText) {
       return { ok: false, reason: "hunk_overlap" };
     }
   }
-  // 按缓冲区位置从后往前应用，避免前序 hunk 的长度变化影响后续定位
-  const ordered = [...located].sort((a, b) => b.at - a.at);
-  for (const { parts, at } of ordered) {
-    bufferLines.splice(at, parts.oldLines.length, ...parts.newLines);
+  for (const ins of located) {
+    if (ins.parts.oldLines.length !== 0) continue;
+    const inside = consumers.some(
+      (c) => ins.at > c.at && ins.at < c.at + c.parts.oldLines.length,
+    );
+    if (inside) return { ok: false, reason: "hunk_overlap" };
   }
-  return { ok: true, result: bufferLines.join("\n") };
+  // 单趟正向组装：按锚点升序输出原文片段与新行。同锚点时纯插入先于
+  // 消费型（稳定排序保持 diff 原序），对应 git「插到旧第 N 行之后 +
+  // 替换旧第 N+1 行起」的相邻形态——旧的「倒序 splice」方案会让插入
+  // 先落盘、随后同锚点的消费型 splice 把刚插入的行当旧内容删掉（静默
+  // 损坏），或把该组合误判为重叠拒绝。
+  const ordered = [...located].sort(
+    (a, b) =>
+      a.at - b.at ||
+      (a.parts.oldLines.length === 0 ? 0 : 1) -
+        (b.parts.oldLines.length === 0 ? 0 : 1),
+  );
+  const out = [];
+  let cursor = 0;
+  for (const { parts, at } of ordered) {
+    // 输出锚点之前的原文（重叠校验保证 at ≥ cursor）
+    out.push(...bufferLines.slice(cursor, at));
+    out.push(...parts.newLines);
+    cursor =
+      parts.oldLines.length > 0
+        ? at + parts.oldLines.length
+        : Math.max(cursor, at);
+  }
+  out.push(...bufferLines.slice(cursor));
+  return { ok: true, result: out.join("\n") };
 }
