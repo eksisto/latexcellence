@@ -31,6 +31,7 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import EmptyState from "@/components/EmptyState";
 import ConfirmDialog from "@/components/ConfirmDialog";
+import PageHeader from "@/components/PageHeader";
 import ProjectExplorer from "@/components/ProjectExplorer";
 import LaTeXEditor from "@/components/editor/LaTeXEditor";
 import EditorToolbar from "@/components/editor/EditorToolbar";
@@ -734,6 +735,13 @@ export default function EditorPage() {
 
   return (
     <div className="h-screen flex flex-col gap-3 p-4 pt-16 pb-6 animate-tab-enter">
+      {/* 与其他功能页一致的页头（返回 + §kicker + 标题）；压缩纵向留白适配全高布局 */}
+      <PageHeader
+        title={t("pages:editor.title")}
+        groupKey="aiAssist"
+        className="mb-1 shrink-0"
+      />
+
       <EditorToolbar
         filePath={session.filePath}
         saving={saving}
