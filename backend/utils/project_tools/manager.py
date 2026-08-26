@@ -12,6 +12,7 @@
     不暴露给 LLM。
 """
 
+import asyncio
 import re
 from pathlib import Path, PureWindowsPath
 from typing import Any
@@ -247,6 +248,11 @@ class ProjectToolsManager:
 
 
 async def _list_files_executor(tool_name: str, arguments: dict[str, Any]) -> str:
+    # 目录遍历（rglob）为阻塞 I/O，入线程池调度（审查遗留项 B2）
+    return await asyncio.to_thread(_list_files_sync, tool_name, arguments)
+
+
+def _list_files_sync(tool_name: str, arguments: dict[str, Any]) -> str:
     """列出项目文件（默认 *.tex）。"""
     workspace_id = arguments.pop("_workspace_id", "")
     pm = _require_open_project(workspace_id)
@@ -291,6 +297,11 @@ async def _list_files_executor(tool_name: str, arguments: dict[str, Any]) -> str
 
 
 async def _read_file_content_executor(tool_name: str, arguments: dict[str, Any]) -> str:
+    # 文件读取为阻塞 I/O，入线程池调度（审查遗留项 B2）
+    return await asyncio.to_thread(_read_file_content_sync, tool_name, arguments)
+
+
+def _read_file_content_sync(tool_name: str, arguments: dict[str, Any]) -> str:
     """读取指定文件内容。"""
     workspace_id = arguments.pop("_workspace_id", "")
     pm = _require_open_project(workspace_id)
@@ -379,6 +390,11 @@ async def _read_file_content_executor(tool_name: str, arguments: dict[str, Any])
 async def _get_section_structure_executor(
     tool_name: str, arguments: dict[str, Any]
 ) -> str:
+    # 多文件 rglob + 逐文件全文扫描为阻塞 I/O，入线程池调度（B2）
+    return await asyncio.to_thread(_get_section_structure_sync, tool_name, arguments)
+
+
+def _get_section_structure_sync(tool_name: str, arguments: dict[str, Any]) -> str:
     """获取文档章节树。"""
     workspace_id = arguments.pop("_workspace_id", "")
     pm = _require_open_project(workspace_id)
@@ -438,6 +454,11 @@ async def _get_section_structure_executor(
 async def _search_across_files_executor(
     tool_name: str, arguments: dict[str, Any]
 ) -> str:
+    # 多文件 rglob + 逐行正则扫描为阻塞 I/O，入线程池调度（B2）
+    return await asyncio.to_thread(_search_across_files_sync, tool_name, arguments)
+
+
+def _search_across_files_sync(tool_name: str, arguments: dict[str, Any]) -> str:
     """跨文件搜索。"""
     workspace_id = arguments.pop("_workspace_id", "")
     pm = _require_open_project(workspace_id)
