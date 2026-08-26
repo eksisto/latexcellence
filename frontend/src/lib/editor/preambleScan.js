@@ -15,6 +15,8 @@
 
 /** 匹配一条 usepackage 声明（不含注释；调用方负责先剥离行内注释） */
 const USEPACKAGE_RE = /\\usepackage(?:\[[^\]\n]*\])?\{([^}\n]+)\}/g;
+/** usepackage 声明行判定（插入点回退扫描用；模块级避免循环内重建） */
+const USEPACKAGE_LINE_RE = /\\usepackage\b/;
 /** 文档类声明 */
 const DOCUMENTCLASS_RE = /\\documentclass(?:\[[^\]\n]*\])?\{[^}\n]+\}/;
 
@@ -102,7 +104,7 @@ export function findUsepackageInsertPoint(docText) {
   let classLineEnd = -1;
   for (let i = 0; i < lines.length; i += 1) {
     const stripped = stripComment(lines[i]);
-    if (/\\usepackage\b/.test(stripped)) lastUsepackageLineEnd = i;
+    if (USEPACKAGE_LINE_RE.test(stripped)) lastUsepackageLineEnd = i;
     else if (classLineEnd === -1 && DOCUMENTCLASS_RE.test(stripped))
       classLineEnd = i;
   }

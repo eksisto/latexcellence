@@ -59,10 +59,17 @@ export function isStaleEvent(seq, currentSeq) {
  * @param {Array<object>} messages 当前消息数组
  * @param {string} placeholderId 占位消息 id
  * @param {object} patch 待合并的字段补丁
- * @returns {Array<object>} 新消息数组
+ * @returns {Array<object>} 新消息数组；未命中占位时返回原数组引用
  */
 function patchPlaceholderInList(messages, placeholderId, patch) {
-  return messages.map((m) => (m.id === placeholderId ? { ...m, ...patch } : m));
+  // 单趟完成定位与重建（未命中时不产生写入）
+  let hit = false;
+  const next = messages.map((m) => {
+    if (m.id !== placeholderId) return m;
+    hit = true;
+    return { ...m, ...patch };
+  });
+  return hit ? next : messages;
 }
 
 /**
@@ -93,12 +100,16 @@ export function reduceAssistantMessages(messages, event, ctx) {
   const { placeholderId } = ctx;
   switch (event.type) {
     case "token": {
-      // 先定位占位读取已累积内容再追加（与原实现一致：找不到即不产生写入）
-      const target = messages.find((m) => m.id === placeholderId);
-      if (!target) return messages;
-      return patchPlaceholderInList(messages, placeholderId, {
-        content: (target.content || "") + event.content,
+      // 单趟完成定位、读取已累积内容与重建：token 为最高频事件，
+      // 原实现 find 定位 + map 重建两趟遍历（js-combine-iterations）；
+      // 占位不存在时不产生写入，返回原数组引用
+      let hit = false;
+      const next = messages.map((m) => {
+        if (m.id !== placeholderId) return m;
+        hit = true;
+        return { ...m, content: (m.content || "") + event.content };
       });
+      return hit ? next : messages;
     }
     case "round_start":
       // 新一轮工具轮次：重置占位消息内容，与后端落盘内容保持一致

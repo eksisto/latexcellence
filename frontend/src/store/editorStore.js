@@ -140,10 +140,19 @@ function createEditorAssistantSlice(set, get) {
           const authoritative = Object.fromEntries(
             res.applied_suggestions.map((i) => [i, true]),
           );
+          // 并集合并而非整体替换：同一消息两条建议被快速连点时，先完成的
+          // 上报响应快照可能尚未包含第二条，整体替换会把第二条的乐观标记
+          // 抹掉（服务端实际已记录）；建议无"取消应用"语义，并集安全
           set((state) => ({
             assistantMessages: state.assistantMessages.map((m) =>
               m.id === messageId
-                ? { ...m, appliedSuggestions: authoritative }
+                ? {
+                    ...m,
+                    appliedSuggestions: {
+                      ...(m.appliedSuggestions || {}),
+                      ...authoritative,
+                    },
+                  }
                 : m,
             ),
           }));

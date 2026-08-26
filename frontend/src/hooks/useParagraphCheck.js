@@ -677,6 +677,48 @@ export default function useParagraphCheck({
     [setActiveFile, setParagraphs, setResults, setCheckProgress],
   );
 
+  // ── 跨文件结果版本戳补齐 ────────────────────────────────────────────
+  // fileMd5sRef 仅在预览/冲突刷新时写入，跨文件结果（file_path ≠
+  // activeFile）会被戳 null 后静默脱离保鲜检测。此处对流中无戳的文件
+  // 补拉当前 MD5 作为基线并回写结果——语义为「自本端首次可见起保鲜」；
+  // 单个失败放弃该文件本轮基线，待下次 results 变化重试
+  const stampBackfillSeqRef = useRef(0);
+  useEffect(() => {
+    if (isLoading) return;
+    const missing = new Set();
+    for (const r of results) {
+      const fp = r.file_path || activeFile;
+      if (fp && !r.check_md5 && !fileMd5sRef.current[fp]) missing.add(fp);
+    }
+    if (missing.size === 0) return;
+    const seq = ++stampBackfillSeqRef.current;
+    (async () => {
+      const fetched = await Promise.all(
+        [...missing].map(async (fp) => {
+          try {
+            const d = await api.project.fileMd5(fp, workspaceId);
+            return [fp, d.md5];
+          } catch (_) {
+            return null;
+          }
+        }),
+      );
+      if (seq !== stampBackfillSeqRef.current) return;
+      const got = fetched.filter(Boolean);
+      if (got.length === 0) return;
+      const md5ByFp = Object.fromEntries(got);
+      fileMd5sRef.current = { ...fileMd5sRef.current, ...md5ByFp };
+      setResults((prev) =>
+        prev.map((r) => {
+          const fp = r.file_path || activeFile;
+          return fp && !r.check_md5 && md5ByFp[fp]
+            ? { ...r, check_md5: md5ByFp[fp] }
+            : r;
+        }),
+      );
+    })();
+  }, [results, isLoading, activeFile, workspaceId, setResults]);
+
   // ── 检查结果保鲜比对（editor-plan §8 / 决策 Q13）─────────────────────
   // 结果就绪（检查流结束或从 persist 恢复）后，逐文件拉取当前 MD5 与
   // 检查时版本戳比对；不一致的文件进入横幅提示。只提示不销毁结果。

@@ -143,6 +143,7 @@ export default function EditorRightPanel({
                     getEditorContext={getEditorContext}
                     onApplySnippet={onApplySnippet}
                     onApplyDiffText={onApplyDiffText}
+                    pollSelection={panelTab === "assistant" && !panelCollapsed}
                   />
                 )}
               </TabsContent>

@@ -166,6 +166,7 @@ function AssistantPanel({
   getEditorContext,
   onApplySnippet,
   onApplyDiffText,
+  pollSelection = true,
 }) {
   const { t } = useTranslation("components");
   const [input, setInput] = useState("");
@@ -198,14 +199,19 @@ function AssistantPanel({
   }, [filePath, messages.length]);
   const largeBuffer = bufferLineCount >= 400;
 
-  // 选区状态跟随编辑器上下文快照（发送时读取实时值，按钮态低频刷新）
+  // 选区状态跟随编辑器上下文快照（发送时读取实时值，按钮态低频刷新）。
+  // pollSelection=false（面板折叠 / 助手 Tab 未激活）时暂停轮询，避免
+  // keepMounted 下隐藏态空转；恢复时立即对齐一次，按钮态不滞留旧值
   useEffect(() => {
-    const id = window.setInterval(() => {
+    if (!pollSelection) return undefined;
+    const poll = () => {
       const ctx = getCtxRef.current ? getCtxRef.current() : null;
       setHasSelection(Boolean(ctx?.selection));
-    }, 800);
+    };
+    poll();
+    const id = window.setInterval(poll, 800);
     return () => window.clearInterval(id);
-  }, []);
+  }, [pollSelection]);
 
   // 新消息自动滚动到底部
   useEffect(() => {

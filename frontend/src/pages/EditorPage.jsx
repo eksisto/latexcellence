@@ -168,7 +168,9 @@ export default function EditorPage() {
       } catch (e) {
         if (cancelled) return;
         setFilePreviewPath(null);
-        toast.error(t("pages:editor.openFailed"), {
+        // 文案走模块级 i18n.t：t 在语言切换时换身份会把本 effect 整体
+        // 重跑（revoke 当前 blob 并重新拉取同一文件），此处无需响应语言
+        toast.error(i18n.t("pages:editor.openFailed"), {
           description: translateError({ error: e.code, message: e.message }),
         });
       }
@@ -181,7 +183,7 @@ export default function EditorPage() {
       }
       setFilePreviewUrl(null);
     };
-  }, [filePreviewPath, workspaceId, t]);
+  }, [filePreviewPath, workspaceId]);
 
   const closeFilePreview = useCallback(() => setFilePreviewPath(null), []);
 

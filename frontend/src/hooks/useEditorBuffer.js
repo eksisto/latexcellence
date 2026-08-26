@@ -1,4 +1,10 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
 import { toast } from "sonner";
 
 import useEditorStore from "@/store/editorStore";
@@ -47,9 +53,13 @@ export default function useEditorBuffer({
   const openSeqRef = useRef(0);
   const savingRef = useRef(false);
   const conflictSnapshotRef = useRef(null);
-  /** 订阅回调内读取实时写权限（避免为 readOnly 建立组件级订阅） */
+  /** 订阅回调内读取实时写权限（避免为 readOnly 建立组件级订阅）。
+   * 经 useLayoutEffect 同步（commit 后、绘制前），不在 render 函数体
+   * 内直接写 ref——并发渲染下被丢弃的渲染会把"未来值"提前写入 */
   const canWriteRef = useRef(canWrite);
-  canWriteRef.current = canWrite;
+  useLayoutEffect(() => {
+    canWriteRef.current = canWrite;
+  }, [canWrite]);
 
   const describeError = useCallback((e, filePathForNotFound) => {
     if (e?.code === "file_not_found") {
@@ -207,7 +217,9 @@ export default function useEditorBuffer({
 
   /* ── Ctrl/Cmd+S：window 级统一拦截 ─────────────────────────────────── */
   const saveRef = useRef(doSave);
-  saveRef.current = doSave;
+  useLayoutEffect(() => {
+    saveRef.current = doSave;
+  }, [doSave]);
   useEffect(() => {
     const handler = (e) => {
       if (!(e.ctrlKey || e.metaKey)) return;

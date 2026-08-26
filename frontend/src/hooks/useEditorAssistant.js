@@ -41,7 +41,9 @@ export default function useEditorAssistant({ getEditorContext }) {
   const projectPath = useStore((s) => s.projectPath);
   const projectId = useStore((s) => s.projectId);
 
-  const sessionId = useEditorStore((s) => s.assistantSessionId);
+  // sessionId 无消费方（AssistantPanel 不解构），刻意不做组件级订阅：
+  // 会话建立/清空不再白付一次面板重渲染；需要时经
+  // useEditorStore.getState().assistantSessionId 现取（rerender-defer-reads）
   const messages = useEditorStore((s) => s.assistantMessages);
   const streaming = useEditorStore((s) => s.assistantStreaming);
   const toolStatus = useEditorStore((s) => s.assistantToolStatus);
@@ -230,7 +232,6 @@ export default function useEditorAssistant({ getEditorContext }) {
   }, []);
 
   return {
-    sessionId,
     messages,
     streaming,
     toolStatus,

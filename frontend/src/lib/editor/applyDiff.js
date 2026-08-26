@@ -136,11 +136,15 @@ function locateHunk(bufferLines, hunk) {
     for (const candidate of offset === 0
       ? [hint]
       : [hint - offset, hint + offset]) {
-      if (matchesAt(bufferLines, candidate, oldLines)) hits.push(candidate);
+      if (matchesAt(bufferLines, candidate, oldLines)) {
+        hits.push(candidate);
+        // 命中数 ≥2 结果必然是 ambiguous，无需扫完剩余窗口（js-early-exit）
+        if (hits.length > 1) return { status: "ambiguous", at: -1 };
+      }
     }
   }
   if (hits.length === 1) return { status: "matched", at: hits[0] };
-  return { status: hits.length > 1 ? "ambiguous" : "not_matched", at: -1 };
+  return { status: "not_matched", at: -1 };
 }
 
 /**

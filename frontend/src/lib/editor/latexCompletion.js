@@ -136,9 +136,10 @@ function makeEnvironmentCompletionSource(onApplyEntry, getLanguage) {
     return {
       from,
       options: matches.map((entry) => {
-        const envName = BEGIN_ENV_RE.exec(entry.insert)?.[1] ?? entry.name;
+        // 环境名在 getEnvIndex() 构建期已从 \begin{X} 提取并覆盖进
+        // entry.name，无需每键对候选项重新 exec（纯冗余计算）
         return {
-          label: envName,
+          label: entry.name,
           detail: displayZh ? displayZh(entry.zh) : undefined,
           boost: 0,
           apply: (view, _completion, from2, to) => {
