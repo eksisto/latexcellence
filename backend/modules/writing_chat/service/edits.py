@@ -1,5 +1,6 @@
 """写作助手服务：RS2 编辑建议、应用与消息删除。"""
 
+import asyncio
 import difflib
 from typing import Any
 
@@ -47,7 +48,7 @@ class EditMixin:
         反斜杠原样传输，避免 JSON 转义静默损坏；original 由后端从段落
         原文填充，不再要求 LLM 回显，减少误报与 token 消耗。
         """
-        ctx = ConversationContext.load_from_disk(req.session_id)
+        ctx = await ConversationContext.load_from_disk_async(req.session_id)
         if ctx is None:
             raise ValueError(f"Session not found: {req.session_id}")
 
@@ -109,7 +110,7 @@ class EditMixin:
                 ctx.attach_edit_op(m.id, edit_op)
                 attached = m.id
                 break
-        ctx.save_to_disk()
+        await ctx.save_to_disk_async()
 
         return {
             "session_id": ctx.session_id,
@@ -215,7 +216,9 @@ class EditMixin:
     async def apply_edit(self, req: ApplyEditRequest, workspace_id: str = "") -> dict:
         """应用编辑操作（会话写操作串行化）。"""
         async with self._session_lock(req.session_id):
-            result = self._apply_edit_locked(req, workspace_id)
+            # 会话 JSON 读写（含 fsync）与 apply_change 的段落解析/落盘
+            # 一并入线程池，避免阻塞事件循环（B1 异步化收尾）
+            result = await asyncio.to_thread(self._apply_edit_locked, req, workspace_id)
         if not result.get("already_applied"):
             # 多用户模式：写盘后刷新项目用量记账（单用户无绑定，静默跳过）
             await access_control.refresh_workspace_project_usage(workspace_id)
@@ -259,7 +262,8 @@ class EditMixin:
     async def delete_message(self, req: DeleteMessageRequest) -> dict:
         """删除消息（会话写操作串行化）。"""
         async with self._session_lock(req.session_id):
-            return self._delete_message_locked(req)
+            # 同 apply_edit：会话读写入线程池，不阻塞事件循环
+            return await asyncio.to_thread(self._delete_message_locked, req)
 
     def _delete_message_locked(self, req: DeleteMessageRequest) -> dict:
         """删除消息实现（调用方已持有会话级锁）。"""

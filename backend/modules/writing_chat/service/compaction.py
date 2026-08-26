@@ -119,7 +119,7 @@ class CompactionMixin:
                 compressed = self._fallback_compact(ctx)
             if not compressed:
                 return None
-            ctx.save_to_disk()
+            await ctx.save_to_disk_async()
             tool_messages = [
                 {"role": "system", "content": system_prompt}
             ] + ctx.to_llm_messages()

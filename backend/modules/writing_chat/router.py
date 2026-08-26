@@ -338,13 +338,13 @@ async def list_sessions(
     _: dict = Depends(access_control.require_workspace(write=False, required=False)),
 ):
     service = get_writing_chat_service()
-    return {"sessions": service.list_sessions(workspace_id)}
+    return {"sessions": await service.list_sessions(workspace_id)}
 
 
 @router.get("/sessions/{session_id}")
 async def get_session(session_id: str):
     service = get_writing_chat_service()
-    ctx = service.load_session(session_id)
+    ctx = await service.load_session(session_id)
     if ctx is None:
         raise HTTPException(status_code=404, detail="Session not found")
     return {
