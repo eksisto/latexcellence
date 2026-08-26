@@ -32,6 +32,7 @@ from backend.utils.web_search import (
 )
 
 from . import _deps
+from .editor_chat import tool_failure_text
 
 
 class ConversationMixin:
@@ -912,7 +913,8 @@ class ConversationMixin:
                         return
                     except Exception as e:
                         self._logger.warning(f"Tool execution failed {tool_name}: {e}")
-                        result_text = f"Tool execution failed: {e}"
+                        # 失败详情经统一构造口脱敏后入 LLM 消息（C2）
+                        result_text = tool_failure_text(tool_name, e, workspace_id)
 
                     # 追加 tool result 消息
                     tool_msg = {

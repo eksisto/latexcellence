@@ -640,3 +640,65 @@ class TestSSEInternalErrorFraming:
         assert events[-1]["message"]["error"] == "internal_error"
         assert "secret" not in resp.text
         assert "/home/x/path" not in resp.text
+
+
+class TestToolFailureText:
+    """工具失败信息构造口的脱敏语义（审查遗留项 C2）。"""
+
+    _MOD = "backend.modules.writing_chat.service.editor_chat"
+    _ROOT = "/srv/latexcellence/data/users/u1/projects/p7q8"
+
+    def _patch(self, monkeypatch, *, enabled: bool, root_path=None) -> None:
+        from types import SimpleNamespace
+
+        cfg = SimpleNamespace(multi_user=SimpleNamespace(enabled=enabled))
+        monkeypatch.setattr(f"{self._MOD}.get_config", lambda: cfg)
+        if root_path is None:
+            monkeypatch.setattr(
+                f"{self._MOD}.get_project_manager_for_workspace",
+                lambda ws: (_ for _ in ()).throw(RuntimeError("workspace gone")),
+            )
+        else:
+            monkeypatch.setattr(
+                f"{self._MOD}.get_project_manager_for_workspace",
+                lambda ws: SimpleNamespace(root_path=root_path),
+            )
+
+    def test_multi_user_rewrites_project_prefix(self, monkeypatch):
+        from backend.modules.writing_chat.service.editor_chat import tool_failure_text
+
+        self._patch(monkeypatch, enabled=True, root_path=self._ROOT)
+        exc = FileNotFoundError(
+            f"[Errno 2] {self._ROOT}/sections/intro.tex: no such file"
+        )
+        out = tool_failure_text("read_file_content", exc, "ws-1")
+        assert "/srv/latexcellence" not in out
+        assert "./sections/intro.tex" in out
+        # 保留异常类型与详情形态，模型仍可自纠
+        assert "FileNotFoundError" in out
+
+    def test_multi_user_unresolvable_root_degrades_to_stable_text(self, monkeypatch):
+        from backend.modules.writing_chat.service.editor_chat import tool_failure_text
+
+        self._patch(monkeypatch, enabled=True, root_path=None)
+        out = tool_failure_text(
+            "list_files", RuntimeError("boom /home/linus/secret"), "ws-1"
+        )
+        assert out == "Tool execution failed."
+        assert "/home/linus" not in out
+
+    def test_multi_user_empty_workspace_degrades_to_stable_text(self, monkeypatch):
+        from backend.modules.writing_chat.service.editor_chat import tool_failure_text
+
+        self._patch(monkeypatch, enabled=True, root_path=self._ROOT)
+        out = tool_failure_text("search_across_files", OSError("disk full /etc"), "")
+        assert out == "Tool execution failed."
+
+    def test_single_user_keeps_raw_detail(self, monkeypatch):
+        from backend.modules.writing_chat.service.editor_chat import tool_failure_text
+
+        self._patch(monkeypatch, enabled=False)
+        exc = FileNotFoundError("main.tex: missing")
+        out = tool_failure_text("read_file_content", exc, "")
+        # 单用户本地模式零行为变化：保留原始格式
+        assert out == f"Tool execution failed: {exc}"

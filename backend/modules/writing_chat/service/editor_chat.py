@@ -16,6 +16,7 @@ AI 建议**不经后端落盘**：建议以结构化形式随 SSE 返回并随�
 import asyncio
 import json
 import re
+from pathlib import Path
 from typing import Any, AsyncIterator
 
 from fastapi import HTTPException
@@ -36,6 +37,7 @@ from backend.modules.writing_chat.models import (
     EditorSendRequest,
 )
 from backend.utils.project_tools import get_project_tools_manager
+from backend.utils.tex_compile import sanitize_output_paths
 
 from . import _deps
 
@@ -59,6 +61,31 @@ _DIFF_LANGS = {"diff", "patch"}
 
 # 只读三件套（决策 Q26）：写入一律走缓冲区协议
 _EDITOR_TOOL_NAMES = ("list_files", "read_file_content", "search_across_files")
+
+
+def tool_failure_text(
+    tool_name: str, exc: BaseException, workspace_id: str = ""
+) -> str:
+    """工具失败信息入 LLM 消息前的统一构造口（审查遗留项 C2）。
+
+    失败详情帮助模型区分可自纠错误（路径非法 / 文件不存在等），但异
+    常原文可能携带服务器绝对路径。多用户模式下按项目根目录前缀改写为
+    相对形式；workspace 缺失或项目根不可解析时降级为无详情稳定文案
+    （默认不泄漏）；单用户模式保留原文（零行为变化）。完整原文已由调
+    用方记入服务端日志。
+    """
+    if get_config().multi_user.enabled:
+        root: Path | None = None
+        if workspace_id:
+            try:
+                root = Path(get_project_manager_for_workspace(workspace_id).root_path)
+            except Exception:
+                root = None
+        if root is None:
+            return "Tool execution failed."
+        sanitized = sanitize_output_paths(f"{type(exc).__name__}: {exc}", root)
+        return f"Tool execution failed: {sanitized}"
+    return f"Tool execution failed: {exc}"
 
 
 def _xml_attr(s: str) -> str:
@@ -432,7 +459,7 @@ class EditorChatMixin:
                         self._logger.warning(
                             f"Editor assistant tool failed {tool_name}: {e}"
                         )
-                        result_text = f"Tool execution failed: {e}"
+                        result_text = tool_failure_text(tool_name, e, workspace_id)
                     yield {"type": "tool_result", "tool": tool_name}
                     tool_msg = {
                         "role": "tool",
