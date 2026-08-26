@@ -101,14 +101,24 @@ frontend/src/
 │   ├── snippetInsert.js              # 模板插入 + 占位符 Tab 循环
 │   ├── preambleScan.js               # 导言区扫描 + 宏包缺失检测
 │   ├── applyDiff.js                  # unified diff 解析与上下文锚定应用纯模块
+│   ├── assistantStream.js            # 助手 SSE 事件归约纯函数（占位消息 / 工具状态 / 会话 id，hook 与单测共用）
 │   └── （命令数据库 data/latexCommands/ 见阶段三）
-└── hooks/useEditorAssistant.js       # 助手 SSE hook（事件归约 + 项目切换守卫）
+└── hooks/useEditorAssistant.js       # 助手 SSE hook（归约委托 assistantStream 纯函数 + 项目切换守卫）
 ```
 
 Zustand：`editorStore` 含三个切片——`editorPreferences`（persist：
 autoSave / softWrap / fontSize）、`editorSession`（当前文件、缓冲区、
 baseMd5、脏标记、冲突信息，不持久化）、`editorAssistant`（助手会话 id
 与消息视图，不持久化；后端会话按项目 scope 隔离，切换文件延续会话）。
+
+按键渲染解耦（A2）：content 的组件级订阅只存在于 `SessionEditor`
+隔离层（EditorPage 内模块级组件，包住 LaTeXEditor），每次按键仅该层
+与 CM6 内部参与渲染（value 与文档恒等时 dispatch 跳过），页面骨架 /
+文件树 / 工具栏 / 右栏不随键入重渲染。`useEditorBuffer` 不订阅
+content/dirty——beforeunload、自动保存防抖与冲突快照门闩改为
+`store.subscribe` 命令式副作用，行为与组件级实现逐条等价；冲突弹窗的
+剪贴板逃生在点击时刻经 `getState()` 现取全文，助手面板的大文件行数
+判定按文件切换惰性重算。
 
 ### 图片与 PDF 只读预览
 

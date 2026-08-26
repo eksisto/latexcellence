@@ -154,7 +154,8 @@ latexcellence/
 │       │   │       ├── completionTheme.js    # 补全弹层主题（CM6 EditorView.theme + 高亮样式）
 │       │   │       ├── snippetInsert.js      # 模板插入 + 占位符解析/网格骨架生成 + Tab 循环跳转模式
 │       │   │       ├── preambleScan.js       # 导言区扫描 + 宏包缺失检测 + usepackage 插入点选取
-│       │   │       └── applyDiff.js          # unified diff 解析与上下文锚定应用（助手 diff 建议卡片）
+│       │   │       ├── applyDiff.js          # unified diff 解析与上下文锚定应用（助手 diff 建议卡片）
+│       │   │       └── assistantStream.js    # 编辑器助手 SSE 事件归约纯函数（占位消息/工具状态/会话 id 归约，供 hook 与单测共用）
 │       ├── pages/                   # 页面组件
 │       │   ├── LoginPage.jsx        # 多用户登录页（含忘记密码入口）
 │       │   ├── RegisterPage.jsx     # 多用户注册页（含待审批提交态）
