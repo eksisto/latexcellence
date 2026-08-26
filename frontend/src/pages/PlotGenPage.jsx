@@ -17,7 +17,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
-import { Input } from "@/components/ui/input";
+
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -160,14 +160,17 @@ export default function PlotGenPage() {
                 <Label className="text-xs">
                   {t("pages:plotGen.dataLabel")}
                 </Label>
-                <Input
-                  type="file"
-                  accept=".csv,.tsv,.xlsx,.xls,.json"
-                  onChange={(e) => {
-                    setFile(e.target.files?.[0] || null);
-                    e.target.value = "";
-                  }}
-                />
+                <label className="flex h-8 w-full cursor-pointer items-center rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm text-muted-foreground hover:bg-accent/50">
+                  <input
+                    type="file"
+                    accept=".csv,.tsv,.xlsx,.xls,.json"
+                    className="sr-only"
+                    onChange={(e) => setFile(e.target.files?.[0] || null)}
+                  />
+                  {file
+                    ? t("pages:plotGen.fileSelected")
+                    : `${t("pages:plotGen.browseFile")}${t("pages:plotGen.noFileSelected")}`}
+                </label>
                 {file && (
                   <p className="text-xs text-muted-foreground truncate">
                     {file.name}
