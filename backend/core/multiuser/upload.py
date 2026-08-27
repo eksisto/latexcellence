@@ -279,14 +279,19 @@ def _extract_7z(
                     continue
                 file_count += 1
                 size = int(getattr(e, "uncompressed", 0) or 0)
-                csize = max(1, int(getattr(e, "compressed", 0) or 0))
+                raw_csize = int(getattr(e, "compressed", 0) or 0)
                 if size > limits.max_file_size_bytes:
                     raise ArchiveError(
                         "upload_too_large", f"Single file exceeds size limit: {rel}"
                     )
-                _check_ratio(size, csize, limits)
+                # solid 模式下 py7zr 对单成员报告 compressed=0（压缩数据
+                # 在共享 solid 块中无法归属），此时跳过单条目压缩比检查；
+                # 解压后的 _validate_extracted 与实时监视线程已提供压缩弹
+                # 炸防护
+                if raw_csize > 0:
+                    _check_ratio(size, max(1, raw_csize), limits)
                 total_uncompressed += size
-                total_compressed += csize
+                total_compressed += max(1, raw_csize)
                 _check_total(total_uncompressed, limits)
                 _check_count(file_count, limits)
             _validate_no_case_conflicts(names)
