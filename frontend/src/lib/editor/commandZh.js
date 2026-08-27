@@ -29,7 +29,9 @@ let converterPromise = null;
 
 function loadCnToTwConverter() {
   if (!converterPromise) {
-    converterPromise = import("opencc-js")
+    // 仅导入 cn→t 方向（含 s2tw 配置），排除繁→简与地区变体字典，
+    // 懒加载 chunk 体积从 ~1195 kB 降到 ~1105 kB
+    converterPromise = import("opencc-js/cn2t")
       .then((mod) => {
         const OpenCC = mod?.default ?? mod;
         return OpenCC.Converter({ from: "cn", to: "tw" });
