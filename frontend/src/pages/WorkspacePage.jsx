@@ -51,10 +51,8 @@ import CodeBlock from "@/components/CodeBlock";
 import ConfirmDialog from "@/components/ConfirmDialog";
 import FolderPickerDialog from "@/components/FolderPickerDialog";
 import PDFPreview from "@/components/PDFPreview";
-import {
-  isPreviewableFilePath,
-  isImagePreviewFilePath,
-} from "@/lib/editor/files";
+import BinaryFilePreview from "@/components/editor/BinaryFilePreview";
+import { isPreviewableFilePath } from "@/lib/editor/files";
 
 function flattenTexFiles(nodes) {
   const result = [];
@@ -615,25 +613,13 @@ export default function WorkspacePage() {
                   </CardHeader>
                   <CardContent>
                     {previewPath ? (
-                      previewUrl ? (
-                        isImagePreviewFilePath(previewPath) ? (
-                          <div className="flex items-center justify-center overflow-auto rounded border bg-muted/30 p-4">
-                            <img
-                              src={previewUrl}
-                              alt={previewPath}
-                              className="max-h-[70vh] max-w-full object-contain"
-                            />
-                          </div>
-                        ) : (
-                          <div className="h-[70vh]">
-                            <PDFPreview url={previewUrl} />
-                          </div>
-                        )
-                      ) : (
-                        <p className="text-muted-foreground text-sm">
-                          {t("pages:workspace.previewLoading")}
-                        </p>
-                      )
+                      <div className="h-[70vh]">
+                        <BinaryFilePreview
+                          filePath={previewPath}
+                          url={previewUrl}
+                          loadingKey="pages:workspace.previewLoading"
+                        />
+                      </div>
                     ) : paragraphs.length === 0 ? (
                       <p className="text-muted-foreground text-sm">
                         {activeFile

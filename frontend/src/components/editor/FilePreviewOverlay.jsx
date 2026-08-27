@@ -1,14 +1,11 @@
 import { useTranslation } from "react-i18next";
-import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
-import PDFPreview from "@/components/PDFPreview";
+import BinaryFilePreview from "@/components/editor/BinaryFilePreview";
 
 import FileText from "lucide-react/dist/esm/icons/file-text.mjs";
 import Image from "lucide-react/dist/esm/icons/image.mjs";
 import X from "lucide-react/dist/esm/icons/x.mjs";
-
-import { isImagePreviewFilePath } from "@/lib/editor/files";
 
 /**
  * 只读文件预览覆盖层：PDF / 位图在编辑器区上方展示，不进入 CM6 缓冲区。
@@ -48,23 +45,7 @@ export default function FilePreviewOverlay({
         </Button>
       </div>
       <div className="min-h-0 flex-1 p-2">
-        {filePreviewUrl ? (
-          isImagePreviewFilePath(filePreviewPath) ? (
-            <div className="flex h-full items-center justify-center overflow-auto rounded bg-muted/30 p-2">
-              <img
-                src={filePreviewUrl}
-                alt={filePreviewPath}
-                className="max-h-full max-w-full object-contain"
-              />
-            </div>
-          ) : (
-            <PDFPreview url={filePreviewUrl} />
-          )
-        ) : (
-          <div className="grid h-full place-items-center text-sm text-muted-foreground">
-            {t("pages:editor.opening")}
-          </div>
-        )}
+        <BinaryFilePreview filePath={filePreviewPath} url={filePreviewUrl} />
       </div>
     </div>
   );

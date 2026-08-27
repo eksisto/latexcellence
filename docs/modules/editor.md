@@ -125,7 +125,10 @@ content/dirty——beforeunload、自动保存防抖与冲突快照门闩改为
 文件树点击 `.pdf` 或常见位图（前端 `isPreviewableFilePath()` 与后端
 `PREVIEWABLE_SUFFIXES` 双白名单把关）经 `GET raw-file` 拉取 blob URL，
 在中栏编辑器区上方以只读覆盖层展示（标题栏显示相对路径 + 关闭按钮）：
-PDF 走 iframe，位图走 `<img>` 居中 contain。预览不进入 CM6 缓冲区：
+PDF 走 iframe，位图走 `<img>` 居中 contain。位图/PDF 的渲染分支抽为共享
+组件 `BinaryFilePreview`（填满父容器高度的纯渲染契约，加载文案经
+`loadingKey` 定制），编辑器覆盖层（`FilePreviewOverlay`）与工作台页
+（WorkspacePage 文件树点击预览）共用同一实现。预览不进入 CM6 缓冲区：
 无脏跟踪、不写 URL `?file=`；URL 直达 `?file=xx.pdf` 刷新时恢复预览。
 blob URL 在切换文件 / 关闭 / 卸载时就地 revoke，竞态败者（响应晚于
 路径切换）不入 state 直接回收；打开文本文件成功时自动收起覆盖层。

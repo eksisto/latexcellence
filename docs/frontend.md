@@ -117,6 +117,7 @@ highlight.js 的按需注册与统一入口：
 | `ParagraphContext.jsx` | 展开显示当前段落前后上下文 |
 | `ProjectExplorer.jsx` | 递归文件树：目录展开/折叠，文件选择 |
 | `PDFPreview.jsx` | iframe 嵌入 PDF 预览 |
+| `components/editor/BinaryFilePreview.jsx` | 二进制只读预览唯一渲染分支：位图 `<img>` 居中 contain / PDF 走 `PDFPreview`，加载文案经 `loadingKey` 定制；填满父容器高度的纯渲染契约（blob URL 拉取与释放由调用方负责），编辑器覆盖层 `FilePreviewOverlay` 与工作台文件树预览共用 |
 | `PromptEditor.jsx` | 自定义提示词编辑框 |
 | `ConnectionPanel.jsx` | 后端连接面板：编辑 API 基地址 / 访问令牌并测试连接，打开对话框时自动探测一次连接状态 |
 | `settings/` 分区组件 | 设置对话框各配置分区（Server / Security / LLM / Features / Function Calling / HTTP / Logging / MultiUser / Sandbox / Smtp）与共享原语（`ConfigSection` / `CheckboxField` / `NumberField`） |
