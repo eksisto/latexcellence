@@ -50,3 +50,6 @@ data/*
 # Compose 冒烟脚本 / compose 测试的临时工作目录（数据与配置不入库）
 .compose-smoke-tmp/
 .tmp-compose-test/
+
+# Release
+release.sh
