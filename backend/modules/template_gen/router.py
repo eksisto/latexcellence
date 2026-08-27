@@ -8,7 +8,7 @@ import io
 import json
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from fastapi.responses import Response, StreamingResponse
+from fastapi.responses import FileResponse, Response, StreamingResponse
 from pydantic import BaseModel
 from starlette.background import BackgroundTask
 
@@ -90,6 +90,26 @@ async def read_file(
         return get_template_gen_service().read_session_file(session_id, path)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.get("/preview")
+async def preview_file(
+    session_id: str = Query(...),
+    path: str = Query(..., description="沙箱内相对路径"),
+):
+    """内联预览产物文件（当前仅支持 PDF），供前端 PDFPreview 渲染。"""
+    try:
+        resolved, media_type = get_template_gen_service().resolve_preview_file(
+            session_id, path
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    return FileResponse(
+        path=str(resolved),
+        media_type=media_type,
+        filename=resolved.name,
+        content_disposition_type="inline",
+    )
 
 
 @router.get("/download")

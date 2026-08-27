@@ -1740,6 +1740,8 @@
     "accessTokenRequired": "存取權杖缺失或無效，請在設定中填寫後端存取權杖",
     "originNotAllowed": "請求來源不在後端允許清單中，請在 config.json 的 server.allowed_origins 中新增該網域",
     "noTraceRecorded": "該會話暫無執行記錄",
+    "previewUnsupportedFileType": "該檔案類型不支援預覽",
+    "previewFileNotFound": "預覽檔案不存在",
     "ddgChallenge": "搜尋引擎需要驗證：{{query}}",
     "challengeExpired": "驗證已過期或不存在，請重新提問",
     "verificationFailed": "驗證失敗，請重試",

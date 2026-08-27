@@ -163,6 +163,9 @@ const EXACT_MAP = {
   "Session not found": "sessionNotFound",
   "Diff PDF not found": "diffPdfNotFound",
   "No trace recorded for this session": "noTraceRecorded",
+  // 模板生成产物预览（PDF）
+  "Preview not supported for this file type": "previewUnsupportedFileType",
+  "Preview file not found": "previewFileNotFound",
   "Data profile is missing": "plotGenDataProfileMissing",
   "Session meta not found": "plotGenSessionMetaNotFound",
   "session_id cannot be empty": "plotGenSessionIdEmpty",

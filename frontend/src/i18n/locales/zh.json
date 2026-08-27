@@ -1740,6 +1740,8 @@
     "accessTokenRequired": "访问令牌缺失或无效，请在设置中填写后端访问令牌",
     "originNotAllowed": "请求来源不在后端允许列表中，请在 config.json 的 server.allowed_origins 中添加该域名",
     "noTraceRecorded": "该会话暂无运行日志",
+    "previewUnsupportedFileType": "该文件类型不支持预览",
+    "previewFileNotFound": "预览文件不存在",
     "ddgChallenge": "搜索引擎需要验证：{{query}}",
     "challengeExpired": "验证已过期或不存在，请重新提问",
     "verificationFailed": "验证失败，请重试",

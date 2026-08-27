@@ -1740,6 +1740,8 @@
     "accessTokenRequired": "Access token missing or invalid. Please enter the backend access token in Settings.",
     "originNotAllowed": "Request origin is not in the backend allowlist. Add the domain to server.allowed_origins in config.json.",
     "noTraceRecorded": "No trace recorded for this session",
+    "previewUnsupportedFileType": "Preview is not supported for this file type",
+    "previewFileNotFound": "Preview file not found",
     "ddgChallenge": "DDG challenge for query: {{query}}",
     "challengeExpired": "Challenge expired or not found",
     "verificationFailed": "Verification failed, please retry",

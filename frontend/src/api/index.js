@@ -553,6 +553,11 @@ export const api = {
       request(
         `/template-gen/file?session_id=${encodeURIComponent(sessionId)}&path=${encodeURIComponent(path)}`,
       ),
+    /** 内联预览产物（当前仅 PDF）：返回临时 blob URL，调用方负责 revoke */
+    preview: async (sessionId, path) =>
+      fetchBlobUrl(
+        `${getApiBase()}/template-gen/preview?session_id=${encodeURIComponent(sessionId)}&path=${encodeURIComponent(path)}`,
+      ),
     trace: (sessionId) =>
       request(
         `/template-gen/trace?session_id=${encodeURIComponent(sessionId)}`,

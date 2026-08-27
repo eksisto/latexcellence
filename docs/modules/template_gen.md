@@ -247,6 +247,7 @@ latexmk 的 stdout/stderr 有时不含 `!` 错误行（错误只写进了 `<main
 | `generate(description)` | `TemplateGenService` | 创建沙箱并驱动 Agent 生成（SSE），转发事件流 |
 | `list_session_files(session_id)` | `TemplateGenService` | 列出某次 Agent 生成的文件树 |
 | `read_session_file(session_id, path)` | `TemplateGenService` | 读取沙箱内单个文件内容 |
+| `resolve_preview_file(session_id, path)` | `TemplateGenService` | 解析可内联预览的产物文件（当前仅 PDF），返回（绝对路径, media type） |
 | `zip_session(session_id)` | `TemplateGenService` | 打包沙箱为 ZIP（返回 bytes + 文件名） |
 | `get_session_trace(session_id)` | `TemplateGenService` | 读取 Agent 运行追踪（meta + events） |
 | `generate(description, sandbox, llm)` | `TemplateAgentService` | Function Calling 主循环（SSE） |
@@ -260,6 +261,7 @@ Prefix: `/api/template-gen`, Tag: `template_gen`
 | POST | `/generate` | 自主 Agent 生成（SSE 流式） |
 | GET | `/files` | 列出某次 Agent 生成的文件树 |
 | GET | `/file` | 读取沙箱内单个文件内容 |
+| GET | `/preview` | 内联预览产物文件（当前仅 PDF；`FileResponse` inline 返回，前端经 blob URL 渲染 `PDFPreview`） |
 | GET | `/download` | 下载整个沙箱为 ZIP 文件（流式响应） |
 | GET | `/trace` | 读取 Agent 运行追踪日志（JSON） |
 | GET | `/trace/download` | 导出 Agent 运行追踪日志（JSON 附件） |

@@ -33,6 +33,7 @@ import {
 import { api } from "@/api/index";
 import PageHeader from "@/components/PageHeader";
 import CodeBlock from "@/components/CodeBlock";
+import PDFPreview from "@/components/PDFPreview";
 import { languageFromFilename } from "@/utils/highlight";
 import { translateError } from "@/utils/errorMessages";
 
@@ -46,6 +47,8 @@ const ROLE_ICON = {
   done: CheckCircle2,
 };
 
+const PDF_FILE_RE = /\.pdf$/i;
+
 export default function TemplateGenPage() {
   const { t } = useTranslation(["pages", "common"]);
   const [description, setDescription] = useState("");
@@ -58,6 +61,14 @@ export default function TemplateGenPage() {
   const [selectedFile, setSelectedFile] = useState(null);
   const [fileContent, setFileContent] = useState("");
   const [loadingFile, setLoadingFile] = useState(false);
+  const [pdfUrl, setPdfUrl] = useState(null);
+  // PDF 预览失败原因（PDF 分支不渲染 CodeBlock，错误必须独立展示）
+  const [pdfError, setPdfError] = useState(null);
+  // blob URL 在替换/清空/组件卸载时由 cleanup 统一释放，避免 PDF 预览内存泄漏
+  useEffect(() => {
+    if (!pdfUrl || !pdfUrl.startsWith("blob:")) return undefined;
+    return () => URL.revokeObjectURL(pdfUrl);
+  }, [pdfUrl]);
   const [summary, setSummary] = useState("");
   const [traceOpen, setTraceOpen] = useState(false);
   const [trace, setTrace] = useState(null);
@@ -76,6 +87,8 @@ export default function TemplateGenPage() {
     setSessionId(null);
     setSelectedFile(null);
     setFileContent("");
+    setPdfUrl(null);
+    setPdfError(null);
     setSummary("");
     setTrace(null);
     setError(null);
@@ -124,6 +137,24 @@ export default function TemplateGenPage() {
       if (!sessionId) return;
       setSelectedFile(path);
       setLoadingFile(true);
+      // PDF 为二进制产物，走独立 preview 端点获取 blob URL 渲染
+      if (PDF_FILE_RE.test(path)) {
+        setFileContent("");
+        try {
+          const url = await api.templateGen.preview(sessionId, path);
+          setPdfUrl(url);
+          setPdfError(null);
+        } catch (e) {
+          setPdfUrl(null);
+          // fetchBlobUrl 内部已翻译错误，直接展示
+          setPdfError(e.message);
+        } finally {
+          setLoadingFile(false);
+        }
+        return;
+      }
+      setPdfUrl(null);
+      setPdfError(null);
       try {
         const data = await api.templateGen.file(sessionId, path);
         setFileContent(data.content || "");
@@ -462,14 +493,16 @@ export default function TemplateGenPage() {
                   {selectedFile}
                 </CardTitle>
                 <div className="flex gap-2">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => handleCopy(fileContent)}
-                  >
-                    <Copy className="size-4" />
-                    {t("common:copy")}
-                  </Button>
+                  {!PDF_FILE_RE.test(selectedFile) && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleCopy(fileContent)}
+                    >
+                      <Copy className="size-4" />
+                      {t("common:copy")}
+                    </Button>
+                  )}
                   <Button
                     variant="ghost"
                     size="sm"
@@ -486,6 +519,17 @@ export default function TemplateGenPage() {
                   <Loader2 className="animate-spin size-4" />
                   {t("common:loading")}
                 </div>
+              ) : PDF_FILE_RE.test(selectedFile) ? (
+                pdfError ? (
+                  <p className="text-sm text-destructive flex items-center gap-1 py-6">
+                    <AlertTriangle className="size-4" />
+                    {pdfError}
+                  </p>
+                ) : (
+                  <div className="h-[600px]">
+                    <PDFPreview url={pdfUrl} />
+                  </div>
+                )
               ) : (
                 <CodeBlock
                   code={fileContent}

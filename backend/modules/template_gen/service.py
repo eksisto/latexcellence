@@ -27,9 +27,14 @@ from backend.modules.template_gen.agent import (
     safe_read_sandbox_file,
 )
 from backend.modules.template_gen.trace import read_trace
+from backend.utils.path_guard import resolve_project_path
 from backend.utils.session_mutex import cross_process_session_lock, lock_file_for
 
 logger = get_logger(__name__)
+
+# 可内联预览的产物扩展名 → media type（当前仅 PDF）。
+# PDF 是二进制文件，无法走 read_file 的纯文本通道，需单独端点流式返回。
+_PREVIEW_MEDIA_TYPES = {".pdf": "application/pdf"}
 
 
 class TemplateGenService:
@@ -107,6 +112,26 @@ class TemplateGenService:
         if err is not None:
             raise ValueError(err)
         return {"session_id": session_id, "path": rel_path, "content": content}
+
+    def resolve_preview_file(self, session_id: str, rel_path: str) -> tuple[Path, str]:
+        """解析可内联预览的产物文件，返回（绝对路径, media_type）。
+
+        仅允许 _PREVIEW_MEDIA_TYPES 白名单内的扩展名；路径经
+        resolve_project_path 校验（禁止绝对路径 / 穿越越界）。
+        """
+        cfg = get_config()
+        sandbox = self._load_sandbox(cfg, session_id)
+
+        suffix = Path(rel_path).suffix.lower()
+        media_type = _PREVIEW_MEDIA_TYPES.get(suffix)
+        if media_type is None:
+            raise ValueError("Preview not supported for this file type")
+        resolved = resolve_project_path(
+            sandbox, rel_path, allowed_suffixes=tuple(_PREVIEW_MEDIA_TYPES)
+        )
+        if not resolved.is_file():
+            raise ValueError("Preview file not found")
+        return resolved, media_type
 
     def zip_session(self, session_id: str) -> tuple[bytes, str]:
         """将沙箱内所有文件打包为 ZIP，返回 (bytes, 下载文件名)。"""

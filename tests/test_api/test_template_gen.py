@@ -1809,3 +1809,86 @@ class TestGenServiceOrchestration:
         assert sandbox.is_relative_to(tmp_path / "templates")
         assert (sandbox / "main.tex").exists()
         assert done["session_id"] == sandbox.name
+
+
+class TestPreviewFile:
+    """resolve_preview_file：/preview 端点的产物预览解析。"""
+
+    _SESSION_ID = "a1b2c3d4e5f6"
+
+    @pytest.fixture(autouse=True)
+    def _load_cfg(self, tmp_path, monkeypatch):
+        load_config("config.json")
+        cfg = get_config()
+        monkeypatch.setattr(
+            cfg.features.template_gen,
+            "output_dir",
+            str(tmp_path / "templates"),
+        )
+
+    def _make_sandbox(self, tmp_path):
+        sandbox = Path(tmp_path) / "templates" / self._SESSION_ID
+        sandbox.mkdir(parents=True)
+        return sandbox
+
+    def test_returns_pdf_media_type(self, tmp_path):
+        from backend.modules.template_gen.service import TemplateGenService
+
+        sandbox = self._make_sandbox(tmp_path)
+        (sandbox / "main.pdf").write_bytes(b"%PDF-1.4 fake")
+
+        resolved, media_type = TemplateGenService().resolve_preview_file(
+            self._SESSION_ID, "main.pdf"
+        )
+
+        assert media_type == "application/pdf"
+        assert resolved.is_relative_to(sandbox.resolve())
+        assert resolved.name == "main.pdf"
+
+    def test_accepts_uppercase_suffix(self, tmp_path):
+        """扩展名大小写不敏感：.PDF 同样可预览。"""
+        from backend.modules.template_gen.service import TemplateGenService
+
+        sandbox = self._make_sandbox(tmp_path)
+        (sandbox / "MAIN.PDF").write_bytes(b"%PDF-1.4 fake")
+
+        resolved, media_type = TemplateGenService().resolve_preview_file(
+            self._SESSION_ID, "MAIN.PDF"
+        )
+
+        assert media_type == "application/pdf"
+        assert resolved.name == "MAIN.PDF"
+
+    def test_rejects_unsupported_suffix(self, tmp_path):
+        from backend.modules.template_gen.service import TemplateGenService
+
+        sandbox = self._make_sandbox(tmp_path)
+        (sandbox / "main.txt").write_text("x", encoding="utf-8")
+
+        with pytest.raises(ValueError, match="not supported"):
+            TemplateGenService().resolve_preview_file(self._SESSION_ID, "main.txt")
+
+    def test_rejects_parent_traversal(self, tmp_path):
+        from backend.modules.template_gen.service import TemplateGenService
+
+        self._make_sandbox(tmp_path)
+        outside = Path(tmp_path) / "templates" / ".." / "evil.pdf"
+        outside.write_bytes(b"%PDF-1.4 fake")
+
+        with pytest.raises(ValueError):
+            TemplateGenService().resolve_preview_file(self._SESSION_ID, "../evil.pdf")
+
+    def test_rejects_missing_file(self, tmp_path):
+        """扩展名合法但文件不存在时应报错，而非返回 200 空响应。"""
+        from backend.modules.template_gen.service import TemplateGenService
+
+        self._make_sandbox(tmp_path)
+
+        with pytest.raises(ValueError, match="not found"):
+            TemplateGenService().resolve_preview_file(self._SESSION_ID, "main.pdf")
+
+    def test_session_not_found(self, tmp_path):
+        from backend.modules.template_gen.service import TemplateGenService
+
+        with pytest.raises(ValueError, match="Session not found"):
+            TemplateGenService().resolve_preview_file("ffff00001111", "main.pdf")
