@@ -259,6 +259,26 @@ def _extract_tikz_issues(raw_output: str, limit: int = 8) -> list[dict[str, str]
     return issues
 
 
+# 编译环境缺包识别：`File `xxx.cls' not found.` / kpathsea 的
+# "I can't find file" 变体。缺 .cls/.sty 属环境问题（TeX 发行版未装该
+# 宏包），编辑 TikZ 源无法修复，必须与源码错误区分对待、立即止损。
+_TEX_MISSING_FILE_RE = re.compile(
+    r"File [`'](?P<file>[^`'\s]+\.(?:cls|sty))['`] not found"
+)
+_TEX_CANT_FIND_RE = re.compile(
+    r"I can't find file [`'](?P<file>[^`'\s]+\.(?:cls|sty))['`]"
+)
+
+
+def _detect_missing_tex_file(raw_output: str) -> str | None:
+    """从编译日志中识别缺失的 .cls/.sty，返回文件名；未检测到返回 None。"""
+    for pat in (_TEX_MISSING_FILE_RE, _TEX_CANT_FIND_RE):
+        m = pat.search(raw_output)
+        if m:
+            return m.group("file")
+    return None
+
+
 class PlotExecutor(AgentFileToolExecutor):
     """持有单个 session 沙箱的工具执行器。"""
 
@@ -281,6 +301,9 @@ class PlotExecutor(AgentFileToolExecutor):
         )
         self._file_count = 0
         self._written_paths: set[str] = set()
+        # 编译沙箱缺失 TeX 宏包时记录文件名；后续 compile_tikz 直接短路，
+        # 避免在环境问题上重复编译浪费 Agent 轮次（每次运行重建实例，无需持久化）。
+        self._tikz_env_missing: str | None = None
 
     async def execute(
         self, tool_name: str, args: dict[str, Any]
@@ -538,6 +561,31 @@ class PlotExecutor(AgentFileToolExecutor):
                 "summary": msg,
             }
 
+        if self._tikz_env_missing:
+            msg = (
+                f"TikZ compilation BLOCKED: the compile sandbox is missing "
+                f"`{self._tikz_env_missing}` (TeX package not installed). This "
+                "is an environment problem and cannot be fixed by editing the "
+                "TikZ source, rewriting tikz_spec.json, or rerunning "
+                "python_sandbox. Do not call `compile_tikz` again; call "
+                "`finish` with an explicit warning that the figure was "
+                "generated but could not be compiled because a TeX package is "
+                "missing (the administrator must rebuild the tex image; see "
+                "docker/README.md)."
+            )
+            return msg, {
+                "tool": "compile_tikz",
+                "ok": False,
+                "success": False,
+                "environment_error": True,
+                "missing_tex_file": self._tikz_env_missing,
+                "log": msg,
+                "summary": (
+                    "TikZ compilation blocked: TeX package "
+                    f"{self._tikz_env_missing} missing in the compile environment"
+                ),
+            }
+
         tikz_file = args.get("tikz_file") or "artifacts/figure.tex"
         try:
             tikz_path = self._resolve(tikz_file, allowed_suffixes=(".tex",))
@@ -648,6 +696,44 @@ class PlotExecutor(AgentFileToolExecutor):
         ]
         # latexmk 退出码为 0 但日志含真实错误时，仍视为编译失败
         success = tex_result.success and not errors
+        # 环境缺包快速止损：缺失 .cls/.sty 无法通过修改 TikZ 源修复，
+        # 记录后直接返回带环境错误标记的消息，避免 Agent 消耗重试预算。
+        missing_tex_file = (
+            _detect_missing_tex_file(tex_result.raw_output) if not success else None
+        )
+        if missing_tex_file is not None:
+            self._tikz_env_missing = missing_tex_file
+            self._logger.warning(
+                "plot_gen compile_tikz | sandbox missing TeX package: %s",
+                missing_tex_file,
+            )
+            msg = (
+                f"TikZ compilation FAILED due to a MISSING TeX PACKAGE in the "
+                f"compile environment: `{missing_tex_file}`.\n\nThis is an "
+                "environment problem: it cannot be fixed by editing the TikZ "
+                "source, rewriting tikz_spec.json, or rerunning "
+                "python_sandbox. Do NOT retry `compile_tikz`.\n\nCall "
+                "`finish` now with an explicit warning that the figure was "
+                "generated but could not be compiled because a TeX package is "
+                "missing from the compile sandbox (the administrator must add "
+                "it to the tex image; see docker/README.md)."
+            )
+            return msg, {
+                "tool": "compile_tikz",
+                "ok": False,
+                "success": False,
+                "environment_error": True,
+                "missing_tex_file": missing_tex_file,
+                "log": log,
+                "summary": (
+                    f"TikZ compilation blocked by missing TeX package "
+                    f"({missing_tex_file}); environment problem, not a source problem"
+                ),
+                "precheck": precheck_findings,
+                "precheck_blocked": False,
+                "warnings": [i["message"] for i in warnings][:8],
+                "issues": issues[:8],
+            }
         issue_text = ""
         if errors or warnings:
             lines = []
@@ -682,6 +768,7 @@ class PlotExecutor(AgentFileToolExecutor):
             "tool": "compile_tikz",
             "ok": success,
             "success": success,
+            "environment_error": False,
             "log": log,
             "summary": summary,
             "precheck": precheck_findings,

@@ -655,7 +655,64 @@ def test_compile_tikz_error_downgrades_success(tmp_path, monkeypatch):
         )
     assert event["success"] is False
     assert event["ok"] is False
+    assert event["environment_error"] is False
     assert "TIKZ ISSUES DETECTED" in text
+
+
+# ---------- 编译环境缺包快速止损 ----------
+
+
+def test_detect_missing_tex_file_patterns():
+    """缺包识别：LaTeX Error 主形态 + kpathsea 变体，普通错误不误报。"""
+    from backend.modules.plot_gen.executor import _detect_missing_tex_file
+
+    raw_latex_err = (
+        "! LaTeX Error: File `standalone.cls' not found.\n"
+        "!  ==> Fatal error occurred, no output PDF file produced!\n"
+    )
+    assert _detect_missing_tex_file(raw_latex_err) == "standalone.cls"
+
+    raw_kpathsea = (
+        "! I can't find file `pgfplots.sty'.\n" "<*> \\input{tikz_main.tex}\n"
+    )
+    assert _detect_missing_tex_file(raw_kpathsea) == "pgfplots.sty"
+
+    raw_normal_error = "! LaTeX Error: Undefined control sequence.\n"
+    assert _detect_missing_tex_file(raw_normal_error) is None
+
+
+def test_compile_tikz_missing_package_blocks_retries(tmp_path, monkeypatch):
+    """缺失 .cls/.sty 时判为环境错误并短路后续 compile_tikz，不再浪费编译轮次。"""
+    _load_cfg(tmp_path, monkeypatch)
+    cfg = get_config()
+    cfg.features.plot_gen.tikz_compile_enabled = True
+    sandbox = tmp_path / "session"
+    (sandbox / "artifacts").mkdir(parents=True)
+    (sandbox / "artifacts" / "figure.tex").write_text(FULL_DOC_TEX, encoding="utf-8")
+    executor = PlotExecutor(sandbox, cfg)
+    raw = (
+        "! LaTeX Error: File `standalone.cls' not found.\n"
+        "!  ==> Fatal error occurred, no output PDF file produced!\n"
+    )
+    m_compile = AsyncMock(return_value=_fake_tex_result(success=False, raw_output=raw))
+    with patch("backend.modules.plot_gen.executor.run_tex_compile", new=m_compile):
+        text, event = asyncio.run(
+            executor.execute("compile_tikz", {"tikz_file": "artifacts/figure.tex"})
+        )
+        assert event["success"] is False
+        assert event["environment_error"] is True
+        assert event["missing_tex_file"] == "standalone.cls"
+        assert "finish" in text
+        assert "environment problem" in text
+
+        # 第二次调用直接短路：不再启动 latexmk（run_tex_compile 只被调用一次）
+        blocked_text, blocked_event = asyncio.run(
+            executor.execute("compile_tikz", {"tikz_file": "artifacts/figure.tex"})
+        )
+    assert m_compile.await_count == 1
+    assert blocked_event["success"] is False
+    assert blocked_event["environment_error"] is True
+    assert "BLOCKED" in blocked_text
 
 
 # ---------- 4.1 figure.tex 编译前预检 ----------

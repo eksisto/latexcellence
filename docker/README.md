@@ -7,7 +7,7 @@
 | 镜像（构建目录） | 默认镜像名 | 用途 | 关键工具链 |
 | --- | --- | --- | --- |
 | `backend/` | `latexcellence-backend` | 应用本体（FastAPI 后端 + 前端静态产物），上传解压用 unar | python:3.12-slim + requirements.txt + unar + git |
-| `tex/` | `latexcellence-tex` | LaTeX 编译与 TeX 侧工具沙箱 | TeX Live（install-tl scheme-medium）+ latexmk / texfot / latexdiff / latexindent / biber + git |
+| `tex/` | `latexcellence-tex` | LaTeX 编译与 TeX 侧工具沙箱 | TeX Live（install-tl scheme-medium + 中文宏包）+ latexmk / texfot / latexdiff / latexindent / biber + git + 科研绘图宏包（standalone / pgfplots，plot_gen 依赖） |
 | `convert/` | `latexcellence-convert` | 格式转换（format_converter 模块） | pandoc 官方发布物（版本锁定） |
 | `plot/` | `latexcellence-plot` | 科研绘图 Python 沙箱（plot_gen 模块） | numpy / pandas / scipy / matplotlib / seaborn / colorcet / openpyxl / xlrd + Noto CJK 字体 |
 
@@ -114,6 +114,8 @@ docker load -i latexcellence-sandbox-images.tar
 ## 缺 TeX 宏包排查指南
 
 沙箱运行期无网络（见下节），缺宏包只能通过"改清单 → 重建镜像"解决：
+
+> plot_gen 的 TikZ 编译依赖 `standalone`（文档类）与 `pgfplots`（图表宏包），二者均不在 scheme-medium 内，已随清单内置并由构建期自检兜底。若部署使用了旧版镜像，_compile_tikz 会把 `File \`standalone.cls' not found` 类报错识别为环境问题并立即止损（Agent 不再空耗重试轮次），按本节流程重建 tex 镜像即可恢复。
 
 1. **从编译日志定位缺失文件**。典型报错形如：
    ```text

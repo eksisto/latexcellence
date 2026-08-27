@@ -57,8 +57,12 @@ ARG TL_PKGS_BIB="biber biblatex biblatex-gb7714-2015"
 ARG TL_PKGS_MATH="amsmath amsfonts mathtools unicode-math pdfx siunitx cleveref"
 ARG TL_PKGS_LAYOUT="xcolor framed enumitem titlesec fancyhdr tocloft natbib geometry setspace microtype etoolbox environ trimspaces hyperref"
 ARG TL_PKGS_TABLES_CODE="pgf booktabs multirow threeparttable caption algorithm2e algorithms listings minted fvextra tcolorbox"
+# 科研绘图（plot_gen）：TikZ 片段包装编译依赖 standalone 文档类，
+# PGFPlots 图表依赖 pgfplots（scheme-medium 均不含，缺任一项都会让
+# compile_tikz 报 `File ... not found` 并浪费 Agent 重试轮次）。
+ARG TL_PKGS_PLOT="standalone pgfplots"
 ARG TL_PKGS_TOOLS="latexmk texfot latexdiff"
-ARG EXTRA_TL_PACKAGES="${TL_PKGS_CHINESE} ${TL_PKGS_BIB} ${TL_PKGS_MATH} ${TL_PKGS_LAYOUT} ${TL_PKGS_TABLES_CODE} ${TL_PKGS_TOOLS}"
+ARG EXTRA_TL_PACKAGES="${TL_PKGS_CHINESE} ${TL_PKGS_BIB} ${TL_PKGS_MATH} ${TL_PKGS_LAYOUT} ${TL_PKGS_TABLES_CODE} ${TL_PKGS_PLOT} ${TL_PKGS_TOOLS}"
 
 LABEL org.opencontainers.image.title="LateXcellence TeX Sandbox" \
       org.opencontainers.image.source="https://github.com/eksisto/latexcellence.git" \
@@ -123,7 +127,7 @@ RUN set -eux; \
         command -v "$b" >/dev/null || { echo "FATAL: 镜像缺少可执行文件 $b"; exit 1; }; \
     done; \
     for f in ctex.sty xeCJK.sty zhnumber.sty biblatex.sty gb7714-2015.bbx \
-             pgf.sty booktabs.sty multirow.sty threeparttable.sty \
+             pgf.sty pgfplots.sty standalone.cls booktabs.sty multirow.sty threeparttable.sty \
              caption.sty subcaption.sty algorithm2e.sty algorithm.sty \
              listings.sty minted.sty fvextra.sty tcolorbox.sty \
              hyperref.sty cleveref.sty siunitx.sty pdfx.sty \

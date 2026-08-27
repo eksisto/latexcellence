@@ -96,6 +96,7 @@ backend/modules/plot_gen/
   - 线性轴上 |坐标| > 1e4（如 Excel 日期序号 44927）判定为**必然失败**（`Dimension too large`），对数轴（`xmode=log`/`ymode=log`）上的大数值坐标放行；
   - 非 ASCII 字符仅给**警告**不拦截（xelatex 可正常渲染中文，避免误伤合法流程）。
   - 预检结果以 `TIKZ PRECHECK` 段落附加到 `compile_tikz` 回传文本，事件新增 `precheck`（命中规则列表）与 `precheck_blocked`（是否跳过编译）字段
+- **编译环境缺包止损**：`_detect_missing_tex_file()` 在编译失败时从日志识别缺失的 `.cls`/`.sty`（如旧版 tex 镜像缺 `standalone.cls`/`pgfplots.sty`）。这类报错属环境问题、无法通过修改 TikZ 源修复，回传文本明确指示 Agent 不再重试 `compile_tikz`、直接带警告 `finish`；执行器同时记录缺失项，本会话后续 `compile_tikz` 调用直接短路。事件携带 `environment_error: true` 与 `missing_tex_file` 字段；恢复方式为按 `docker/README.md` 缺宏包排查指南把对应包加入清单并重建 tex 镜像
 
 ## Agent 循环保护
 
