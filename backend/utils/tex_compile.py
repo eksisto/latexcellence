@@ -391,7 +391,9 @@ async def run_tex_compile(
     返回：
         TexCompileResult（含过滤后输出、原始输出、成功/失败状态）
     """
-    cwd_path = Path(cwd)
+    # ExecSpec 契约要求绝对 cwd（docker 后端按同绝对路径 bind mount）；
+    # 多用户模式下沙箱可能来自相对配置（如 data/users/），此处统一解析
+    cwd_path = Path(cwd).resolve()
     main_tex_path = cwd_path / main_file
 
     # 处理引擎选择
