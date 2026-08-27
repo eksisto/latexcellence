@@ -542,6 +542,7 @@
       "terminologyCheck": "Terminology Check",
       "noParagraphs": "No paragraphs found or file is empty",
       "noParagraphsHint": "Click a .tex file in the file tree to view its paragraphs",
+      "previewLoading": "Loading preview...",
       "lines": "Lines {{start}}-{{end}}",
       "compileResult": "Compile Result",
       "compileSuccess": "Success",

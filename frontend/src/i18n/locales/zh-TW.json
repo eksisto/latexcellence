@@ -542,6 +542,7 @@
       "terminologyCheck": "術語一致性檢查",
       "noParagraphs": "未找到段落或檔案為空",
       "noParagraphsHint": "在檔案目錄中點選一個 .tex 檔案以檢視其段落",
+      "previewLoading": "預覽載入中...",
       "lines": "第 {{start}}-{{end}} 行",
       "compileResult": "編譯結果",
       "compileSuccess": "成功",

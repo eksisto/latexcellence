@@ -51,6 +51,10 @@ import CodeBlock from "@/components/CodeBlock";
 import ConfirmDialog from "@/components/ConfirmDialog";
 import FolderPickerDialog from "@/components/FolderPickerDialog";
 import PDFPreview from "@/components/PDFPreview";
+import {
+  isPreviewableFilePath,
+  isImagePreviewFilePath,
+} from "@/lib/editor/files";
 
 function flattenTexFiles(nodes) {
   const result = [];
@@ -104,13 +108,29 @@ export default function WorkspacePage() {
   const [folderPickerOpen, setFolderPickerOpen] = useState(false);
   const restoredRef = useRef(false);
 
+  // 只读二进制预览（PDF / 位图）：点击文件树时经 /raw-file 拉 blob URL，
+  // 切换/关闭/卸载时释放；文本文件仍走段落展示，两态互斥
+  const [previewPath, setPreviewPath] = useState(null);
+  const [previewUrl, setPreviewUrl] = useState(null);
+  const previewUrlRef = useRef(null);
+
+  const clearPreview = useCallback(() => {
+    if (previewUrlRef.current) {
+      URL.revokeObjectURL(previewUrlRef.current);
+      previewUrlRef.current = null;
+    }
+    setPreviewPath(null);
+    setPreviewUrl(null);
+  }, []);
+
   const handleCloseProject = useCallback(() => {
+    clearPreview();
     clearProject();
     setParagraphs([]);
     setPdfUrl(null);
     setConfirmCloseOpen(false);
     toast.success(t("pages:workspace.projectClosed"));
-  }, [clearProject, setPdfUrl, t]);
+  }, [clearPreview, clearProject, setPdfUrl, t]);
 
   const doOpenProject = useCallback(
     async (path) => {
@@ -293,6 +313,13 @@ export default function WorkspacePage() {
     async (node) => {
       if (node.is_dir) return;
       setActiveFile(node.path);
+      // 图片 / PDF：只读预览，不请求段落（后端 paragraphs 仅支持 .tex）
+      if (isPreviewableFilePath(node.path)) {
+        setParagraphs([]);
+        setPreviewPath(node.path);
+        return;
+      }
+      clearPreview();
       try {
         const data = await api.project.paragraphs(node.path, workspaceId);
         setParagraphs(data.paragraphs || []);
@@ -300,8 +327,37 @@ export default function WorkspacePage() {
         setParagraphs([]);
       }
     },
-    [setActiveFile, workspaceId],
+    [setActiveFile, clearPreview, workspaceId],
   );
+
+  /* 预览路径变化时拉取 blob URL，切换/卸载时释放（同 EditorPage 模式） */
+  useEffect(() => {
+    if (!previewPath) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const url = await api.project.rawFileBlobUrl(previewPath, workspaceId);
+        if (cancelled) {
+          URL.revokeObjectURL(url);
+          return;
+        }
+        previewUrlRef.current = url;
+        setPreviewUrl(url);
+      } catch (e) {
+        if (cancelled) return;
+        setPreviewPath(null);
+        toast.error(translateError({ error: e.code, message: e.message }));
+      }
+    })();
+    return () => {
+      cancelled = true;
+      if (previewUrlRef.current) {
+        URL.revokeObjectURL(previewUrlRef.current);
+        previewUrlRef.current = null;
+      }
+      setPreviewUrl(null);
+    };
+  }, [previewPath, workspaceId]);
 
   const reloadActiveFileParagraphs = useCallback(async () => {
     if (!activeFile) return;
@@ -558,7 +614,27 @@ export default function WorkspacePage() {
                     </div>
                   </CardHeader>
                   <CardContent>
-                    {paragraphs.length === 0 ? (
+                    {previewPath ? (
+                      previewUrl ? (
+                        isImagePreviewFilePath(previewPath) ? (
+                          <div className="flex items-center justify-center overflow-auto rounded border bg-muted/30 p-4">
+                            <img
+                              src={previewUrl}
+                              alt={previewPath}
+                              className="max-h-[70vh] max-w-full object-contain"
+                            />
+                          </div>
+                        ) : (
+                          <div className="h-[70vh]">
+                            <PDFPreview url={previewUrl} />
+                          </div>
+                        )
+                      ) : (
+                        <p className="text-muted-foreground text-sm">
+                          {t("pages:workspace.previewLoading")}
+                        </p>
+                      )
+                    ) : paragraphs.length === 0 ? (
                       <p className="text-muted-foreground text-sm">
                         {activeFile
                           ? t("pages:workspace.noParagraphs")
