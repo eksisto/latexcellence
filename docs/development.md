@@ -78,6 +78,7 @@ latexcellence/
 ├── backend/                   # FastAPI 后端（core / utils / modules）
 ├── frontend/                  # React 前端
 ├── showcase/                  # 独立展示页（零依赖静态站，详见 showcase.md）
+├── screenshots/               # 项目截图（README / 文档配图）
 ├── tools/                     # 维护者与评测工具（不进入运行时）
 ├── docs/                      # 开发文档（本目录）
 ├── tests/                     # pytest 测试

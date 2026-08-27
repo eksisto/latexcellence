@@ -13,6 +13,7 @@ LateXcellence 是一个面向高校理工科学生与科研团队的学术写作
 - [作品定位](#作品定位)
 - [目标用户](#目标用户)
 - [核心功能](#核心功能)
+- [界面截图](#界面截图)
 - [校园应用价值](#校园应用价值)
 - [技术栈](#技术栈)
 - [快速开始](#快速开始)
@@ -112,6 +113,28 @@ Word 则相反。对它“简单”的印象来自把结构藏进 GUI：样式�
 - **检查结果保鲜**：检查结果记录当时的文件 MD5，文件在编辑器中被修改后结果页顶部提示重新检查（不销毁既有结果）
 - **图片 OCR 统一交互**：公式/表格识别共享拖拽上传、Ctrl+V 粘贴、一键复制
 - **LaTeX 代码高亮**：OCR 结果、代码审查、格式转换、样式修改等所有 LaTeX 源码展示统一为等宽代码块并支持语法高亮，颜色随主题与明暗模式自动适配
+
+## 界面截图
+
+<table>
+  <tr>
+    <td><a href="screenshots/0.jpg"><img src="screenshots/0.jpg" alt="界面截图 01" width="320"></a></td>
+    <td><a href="screenshots/1.jpg"><img src="screenshots/1.jpg" alt="界面截图 02" width="320"></a></td>
+    <td><a href="screenshots/2.jpg"><img src="screenshots/2.jpg" alt="界面截图 03" width="320"></a></td>
+    <td><a href="screenshots/3.jpg"><img src="screenshots/3.jpg" alt="界面截图 04" width="320"></a></td>
+    <td><a href="screenshots/4.jpg"><img src="screenshots/4.jpg" alt="界面截图 05" width="320"></a></td>
+    <td><a href="screenshots/5.jpg"><img src="screenshots/5.jpg" alt="界面截图 06" width="320"></a></td>
+    <td><a href="screenshots/6.jpg"><img src="screenshots/6.jpg" alt="界面截图 07" width="320"></a></td>
+    <td><a href="screenshots/7.jpg"><img src="screenshots/7.jpg" alt="界面截图 08" width="320"></a></td>
+    <td><a href="screenshots/8.jpg"><img src="screenshots/8.jpg" alt="界面截图 09" width="320"></a></td>
+    <td><a href="screenshots/9.jpg"><img src="screenshots/9.jpg" alt="界面截图 10" width="320"></a></td>
+    <td><a href="screenshots/10.jpg"><img src="screenshots/10.jpg" alt="界面截图 11" width="320"></a></td>
+    <td><a href="screenshots/11.jpg"><img src="screenshots/11.jpg" alt="界面截图 12" width="320"></a></td>
+    <td><a href="screenshots/12.jpg"><img src="screenshots/12.jpg" alt="界面截图 13" width="320"></a></td>
+    <td><a href="screenshots/13.jpg"><img src="screenshots/13.jpg" alt="界面截图 14" width="320"></a></td>
+    <td><a href="screenshots/14.jpg"><img src="screenshots/14.jpg" alt="界面截图 15" width="320"></a></td>
+  </tr>
+</table>
 
 ## 校园应用价值
 
@@ -255,6 +278,7 @@ latexcellence/
 ├── frontend/
 │   └── src/                 # React 应用
 ├── showcase/                # 独立展示页（零依赖静态站，详见 docs/showcase.md）
+├── screenshots/             # 项目截图（README / 文档配图）
 ├── data/                    # 应用运行期与用户数据（formats/ plots/ prompts/ style_modify_sessions/ templates/ writing_chat_sessions/）
 ├── tests/                   # 测试
 ├── tools/                   # 运维工具（compose-smoke.sh 多实例冒烟等）

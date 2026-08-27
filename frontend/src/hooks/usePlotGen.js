@@ -189,6 +189,13 @@ export default function usePlotGen() {
     [sessionId],
   );
 
+  const clearPreview = useCallback(() => {
+    previewSeqRef.current += 1;
+    if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current);
+    previewUrlRef.current = "";
+    setPreviewSrc("");
+  }, []);
+
   const download = useCallback(async () => {
     if (!sessionId) return;
     try {
@@ -267,6 +274,7 @@ export default function usePlotGen() {
     loadFile,
     previewSrc,
     loadPreview,
+    clearPreview,
     download,
     loadTrace,
     downloadTrace,

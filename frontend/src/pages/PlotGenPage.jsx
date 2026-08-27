@@ -91,10 +91,11 @@ export default function PlotGenPage() {
       .catch(() => {});
   }, []);
 
-  // 切换预览文件时异步加载 blob（带令牌头，URL 不携带令牌）
+  // 切换预览文件时异步加载 blob（带令牌头，URL 不携带令牌）；取消选中时释放 blob 并清空预览
   useEffect(() => {
     if (previewPath) plot.loadPreview(previewPath);
-  }, [previewPath, plot.loadPreview]);
+    else plot.clearPreview();
+  }, [previewPath, plot.loadPreview, plot.clearPreview]);
 
   useLayoutEffect(() => {
     if (scrollRef.current) {
@@ -336,7 +337,11 @@ export default function PlotGenPage() {
                           }
                           size="sm"
                           className="h-7 text-xs"
-                          onClick={() => setPreviewPath(a.path)}
+                          onClick={() =>
+                            setPreviewPath((prev) =>
+                              prev === a.path ? "" : a.path,
+                            )
+                          }
                         >
                           {a.path.split("/").pop()}
                         </Button>

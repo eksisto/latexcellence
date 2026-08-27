@@ -208,6 +208,7 @@ latexcellence/
 │       └── store/editorStore.js     # 编辑器状态（editorPreferences persist 切片 + editorSession 缓冲区切片 + editorAssistant 助手会话切片）
 │
 ├── showcase/                        # 独立展示页（零依赖静态站，详见 docs/showcase.md）
+├── screenshots/                     # 项目截图（README / 文档配图）
 ├── docker/                          # Docker 沙箱镜像体系（v2 P1a：backend/tex/convert/plot 四镜像 + build.sh + README）
 ├── docs/                            # 开发文档
 │   ├── development.md               # 项目概述/技术栈/启动
