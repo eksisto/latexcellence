@@ -409,9 +409,11 @@ export default function EditorPage() {
     return (
       <div className="min-h-screen p-8 animate-tab-enter">
         <div className="max-w-6xl mx-auto space-y-4">
-          <h1 className="font-heading text-xl font-semibold">
-            {t("pages:editor.title")}
-          </h1>
+          <PageHeader
+            title={t("pages:editor.title")}
+            groupKey="aiAssist"
+            className="mb-0"
+          />
           <EmptyState
             icon={FileCode}
             title={t("pages:editor.noProjectTitle")}
@@ -430,9 +432,11 @@ export default function EditorPage() {
     return (
       <div className="min-h-screen p-8 animate-tab-enter">
         <div className="max-w-6xl mx-auto space-y-4">
-          <h1 className="font-heading text-xl font-semibold">
-            {t("pages:editor.title")}
-          </h1>
+          <PageHeader
+            title={t("pages:editor.title")}
+            groupKey="aiAssist"
+            className="mb-0"
+          />
           <EmptyState
             icon={FileCode}
             title={t("pages:editor.disabledTitle")}
