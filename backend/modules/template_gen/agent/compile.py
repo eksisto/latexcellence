@@ -389,12 +389,15 @@ def _error_hints(errors: list[dict[str, Any]]) -> list[str]:
             or ("font" in combined and "missing" in combined)
         ):
             hint = (
-                "Font issue: do NOT manually set CJK fonts "
-                "(\\setCJKmainfont / \\setCJKsansfont / \\setCJKfamilyfont) "
-                "or probe fonts with \\IfFontExistsTF on CJK family names "
-                "(unreliable for CJK). Delete the explicit CJK font commands "
-                "and let ctex's automatic platform fontset pick a working "
-                "stack; for Latin fonts fall back to Latin Modern or the "
+                "Font issue: the sandbox only provides the fonts in the "
+                "planning guidance's FONT WHITELIST — Windows/Office fonts "
+                "are NOT available. Map the requested font onto that "
+                "whitelist; do NOT manually set CJK fonts (\\setCJKmainfont / "
+                "\\setCJKsansfont / \\setCJKfamilyfont) or probe fonts with "
+                "\\IfFontExistsTF on CJK family names (unreliable for CJK). "
+                "Delete the explicit CJK font commands and let ctex's "
+                "automatic platform fontset pick a working stack; for Latin "
+                "fonts fall back to a whitelist font, Latin Modern, or the "
                 "class default. Document any substitution in the README."
             )
             if hint not in hints:

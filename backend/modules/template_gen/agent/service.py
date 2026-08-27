@@ -5,7 +5,11 @@ import uuid
 from pathlib import Path
 from typing import Any, AsyncIterator
 
-from backend.core.config import get_config
+from backend.core.config import (
+    FontWhitelistEntry,
+    default_font_whitelist,
+    get_config,
+)
 from backend.core.logger import get_logger
 from backend.core.llm_client import get_llm_client
 from backend.core.prompts import get_prompt
@@ -15,6 +19,19 @@ from backend.utils.agent_file_tools import build_agent_file_tools_schema
 from .executor import _ToolExecutor
 from .loop import _compact_messages, _content_hash, _nudge_message, _summarize_args
 from .sandbox import resolve_sandbox_path
+
+
+def _render_font_whitelist(entries: list[FontWhitelistEntry]) -> str:
+    """把配置的字体白名单渲染为提示词清单（每行 name | aliases | note）。"""
+    lines: list[str] = []
+    for entry in entries:
+        parts = [entry.name]
+        if entry.aliases:
+            parts.append("aliases: " + ", ".join(entry.aliases))
+        if entry.note:
+            parts.append(entry.note)
+        lines.append("- " + " | ".join(parts))
+    return "\n".join(lines)
 
 
 class TemplateAgentService:
@@ -91,10 +108,18 @@ class TemplateAgentService:
         # 禁止臆造；规划细节（架构原则、构建安全、类别 playbook）在开始时
         # 注入一次，编译恢复协议与视觉质量门禁分别在首次编译与首次成功编译
         # 后注入，避免长清单从头到尾稀释指令。
+        # 字体白名单来自配置（空列表回退默认值），只允许 Agent 使用名单内字体。
+        font_whitelist = (
+            cfg.features.template_gen.font_whitelist or default_font_whitelist()
+        )
         messages.append(
             {
                 "role": "system",
-                "content": get_prompt("template_gen", "planning_system"),
+                "content": get_prompt(
+                    "template_gen",
+                    "planning_system",
+                    font_whitelist=_render_font_whitelist(font_whitelist),
+                ),
             }
         )
         compile_enabled = cfg.features.template_gen.agent_compile_enabled

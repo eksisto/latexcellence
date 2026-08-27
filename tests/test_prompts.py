@@ -493,9 +493,18 @@ def test_template_gen_core_is_compact():
 
 
 def test_template_gen_phase_blocks_require_no_extra_placeholders():
-    """阶段块不引入新的占位符，可直接用空 kwargs 渲染。"""
+    """阶段块占位符最小化：planning 仅需配置注入的 font_whitelist，
+    其余阶段块空 kwargs 可直接渲染。"""
+    planning = get_prompt(
+        "template_gen",
+        "planning_system",
+        font_whitelist="- TeX Gyre Termes | Times New Roman",
+    )
+    assert "FONT WHITELIST" in planning
+    assert "- TeX Gyre Termes" in planning
     for key in _TEMPLATE_GEN_KEYS[1:]:
-        assert get_prompt("template_gen", key)
+        if key != "planning_system":
+            assert get_prompt("template_gen", key)
 
 
 def test_prompt_eval_accepts_semantically_complete_planning_answer():

@@ -163,8 +163,10 @@ latexmk 的 stdout/stderr 有时不含 `!` 错误行（错误只写进了 `<main
    - `\spacefactor in vertical mode` → 元数据陷阱：正文文件不得使用
      `\@...` 内部宏，类中需提供公开访问命令（如 `\thesistitlevalue`）或
      `\maketitlepage`；
-   - 字体缺失 / fontspec 错误 → 删除显式 `\setCJKmainfont` 等命令，交给
-     ctex 自动平台字体集；拉丁字体回退 Latin Modern / 类默认；
+    - 字体缺失 / fontspec 错误 → 提示沙箱只有白名单内字体（Windows/Office
+      字体不可用），删除显式 `\setCJKmainfont` 等命令交给 ctex 自动平台
+      字体集；拉丁字体回退白名单字体 / Latin Modern / 类默认（见下文
+      「字体白名单」）；
    - `Command ... already defined` → 改用 `\renewcommand` 或新命令名。
    - `macro parameter character #` → 文本中的字面 `#` 写 `\#`；HTML 颜色
      用 `\definecolor{...}{HTML}{1F4E79}` 且不带 `#` 前缀。
@@ -236,9 +238,29 @@ latexmk 的 stdout/stderr 有时不含 `!` 错误行（错误只写进了 `<main
 | `agent_max_file_size_kb` | `512` | 单文件大小上限 |
 | `agent_compile_enabled` | `true` | 是否允许 Agent 调用 `compile_latex` |
 | `agent_compile_timeout` | `120` | 编译超时（秒） |
+| `font_whitelist` | 内置默认清单 | 编译沙箱可用字体白名单，注入规划提示词（见下节） |
 | `cleanup_enabled` | `true` | 是否启用沙箱自动清理 |
 | `cleanup_retention_days` | `7` | 沙箱保留天数（按最新文件 mtime） |
 | `cleanup_interval_seconds` | `3600` | 清理扫描间隔（秒） |
+
+## 字体白名单
+
+编译沙箱只提供清单内的字体，Agent 的规划提示词（`planning_system` 的
+`{font_whitelist}` 占位符）按配置渲染 `FONT WHITELIST` 清单，并硬性约束
+`\setmainfont` / `\setCJKmainfont` 只能使用名单内字体名、用户点名名单外字体时
+选择最接近的替代并在 README 注明。
+
+- **数据结构**：`FontWhitelistEntry`（`name`：LaTeX 中使用的字体名；
+  `aliases`：可替代的常见用户叫法，如 Times New Roman；`note`：用途备注）
+- **默认值**：与 `docker/tex` 镜像内置字体保持一致（Latin Modern / TeX Gyre
+  系列 / Fandol / Noto CJK），由 `backend/core/config.py` 的
+  `default_font_whitelist()` 提供；**镜像与默认清单须同步维护**
+- **私有化部署**：团队环境装有其他字体时，直接覆盖
+  `features.template_gen.font_whitelist`（`config.json` 或设置界面 → 功能 →
+  模板生成 → 字体白名单，每行一条 `字体名 | 别名1, 别名2`）；置空列表则
+  回退内置默认清单
+- 商业字体（Times New Roman、SimSun 等）因授权原因不可打进镜像，替代关系
+  由 Agent 写入模板 README
 
 ## Service 核心方法
 

@@ -1,4 +1,4 @@
-import { memo } from "react";
+import { memo, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -14,6 +14,76 @@ import ColorField from "@/components/ColorField";
 import ConfigSection, {
   CheckboxField,
 } from "@/components/settings/ConfigSection";
+
+// 每行一条："字体名 | 别名1, 别名2"（别名可省略）；note 不在编辑器中展示，
+// 按字体名从原配置继承，避免覆盖默认清单的用途说明。
+function formatFontWhitelistText(entries) {
+  return (entries ?? [])
+    .map((entry) => {
+      const aliases = (entry.aliases ?? []).join(", ");
+      return aliases ? `${entry.name} | ${aliases}` : entry.name;
+    })
+    .join("\n");
+}
+
+function parseFontWhitelistText(raw, previous) {
+  const previousByName = new Map(
+    (previous ?? []).map((entry) => [entry.name, entry]),
+  );
+  return raw
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => {
+      const [name = "", aliasesRaw = ""] = line
+        .split("|")
+        .map((part) => part.trim());
+      const aliases = aliasesRaw
+        ? aliasesRaw
+            .split(/[,，]/)
+            .map((alias) => alias.trim())
+            .filter(Boolean)
+        : [];
+      return {
+        name,
+        aliases,
+        note: previousByName.get(name)?.note ?? "",
+      };
+    })
+    .filter((entry) => entry.name);
+}
+
+function FontWhitelistField({ value, onChange }) {
+  const { t } = useTranslation("components");
+  const [text, setText] = useState(() => formatFontWhitelistText(value));
+  const [dirty, setDirty] = useState(false);
+  useEffect(() => {
+    // 本地无未保存编辑时跟随外部配置；失焦后按解析结果归一化显示
+    if (!dirty) setText(formatFontWhitelistText(value));
+  }, [value, dirty]);
+  return (
+    <div className="space-y-1.5">
+      <Label className="text-xs">
+        {t("settings.templateGenFontWhitelist")}
+      </Label>
+      <Textarea
+        rows={7}
+        className="font-mono text-xs"
+        value={text}
+        placeholder={t("settings.templateGenFontWhitelistPlaceholder")}
+        onChange={(e) => {
+          setText(e.target.value);
+          setDirty(true);
+          onChange(parseFontWhitelistText(e.target.value, value));
+        }}
+        onBlur={() => setDirty(false)}
+      />
+      <p className="text-xs text-muted-foreground">
+        {t("settings.templateGenFontWhitelistHint")}
+      </p>
+    </div>
+  );
+}
 
 function FeaturesSection({ features, onChange, diffOptions }) {
   const { t } = useTranslation("components");
@@ -133,6 +203,12 @@ function FeaturesSection({ features, onChange, diffOptions }) {
             checked={features.template_gen.agent_compile_enabled}
             onChange={(v) =>
               onChange("features.template_gen.agent_compile_enabled", v)
+            }
+          />
+          <FontWhitelistField
+            value={features.template_gen.font_whitelist}
+            onChange={(entries) =>
+              onChange("features.template_gen.font_whitelist", entries)
             }
           />
           <div className="border-t pt-2 mt-1 space-y-2">

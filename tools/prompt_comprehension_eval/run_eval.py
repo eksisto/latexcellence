@@ -38,9 +38,14 @@ from typing import Any, Callable
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 
-from backend.core.config import get_config, load_config
+from backend.core.config import (
+    default_font_whitelist,
+    get_config,
+    load_config,
+)
 from backend.core.llm_client import LLMClient, UsageInfo
 from backend.core.logger import get_logger
+from backend.modules.template_gen.agent.service import _render_font_whitelist
 from backend.core.prompts import (
     _PROMPTS,
     get_prompt,
@@ -718,7 +723,11 @@ def _template_planning_check(response: str) -> tuple[str, str]:
 
 add_case(
     "template_gen.planning_system",
-    get_prompt("template_gen", "planning_system"),
+    get_prompt(
+        "template_gen",
+        "planning_system",
+        font_whitelist=_render_font_whitelist(default_font_whitelist()),
+    ),
     (
         "Do not call tools. Answer in one sentence: what should the first "
         "compile contract contain?"

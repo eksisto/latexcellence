@@ -102,6 +102,67 @@ class TableOCRConfig(BaseModel):
     format_latex: bool = True  # 是否启用统一 LaTeX 格式化层（latexindent / 内置兜底）
 
 
+class FontWhitelistEntry(BaseModel):
+    """白名单字体条目（template_gen 编译沙箱可用字体）"""
+
+    name: str  # LaTeX（fontspec/xeCJK）中使用的字体名
+    aliases: list[str] = Field(default_factory=list)  # 可替代的常见用户叫法
+    note: str = ""  # 用途备注（如 "Latin serif" / "CJK 宋体"）
+
+
+# template_gen 编译沙箱（docker/tex 镜像）内置字体白名单默认值，
+# 须与镜像实际安装的字体保持一致；私有化部署可按环境在 config 覆盖。
+_DEFAULT_FONT_WHITELIST: tuple[dict[str, Any], ...] = (
+    {
+        "name": "Latin Modern",
+        "note": "default Latin text/math fonts, no \\setmainfont needed",
+    },
+    {
+        "name": "TeX Gyre Termes",
+        "aliases": ["Times New Roman"],
+        "note": "Latin serif, Times-compatible",
+    },
+    {
+        "name": "TeX Gyre Heros",
+        "aliases": ["Helvetica", "Arial"],
+        "note": "Latin sans-serif",
+    },
+    {"name": "TeX Gyre Pagella", "aliases": ["Palatino"], "note": "Latin serif"},
+    {
+        "name": "TeX Gyre Schola",
+        "aliases": ["Century Schoolbook"],
+        "note": "Latin serif",
+    },
+    {
+        "name": "TeX Gyre Adventor",
+        "aliases": ["Avant Garde"],
+        "note": "Latin sans-serif",
+    },
+    {"name": "TeX Gyre Bonum", "aliases": ["Bookman"], "note": "Latin serif"},
+    {
+        "name": "FandolSong",
+        "aliases": ["宋体", "SimSun"],
+        "note": "CJK serif, ctex default fontset",
+    },
+    {"name": "FandolHei", "aliases": ["黑体", "SimHei"], "note": "CJK sans-serif"},
+    {"name": "FandolFang", "aliases": ["仿宋", "FangSong"], "note": "CJK"},
+    {"name": "FandolKai", "aliases": ["楷体", "KaiTi"], "note": "CJK"},
+    {"name": "Noto Sans CJK SC", "aliases": ["思源黑体"], "note": "CJK sans-serif"},
+    {
+        "name": "Noto Serif CJK SC",
+        "aliases": ["思源宋体", "Source Han Serif"],
+        "note": "CJK serif",
+    },
+)
+
+
+def default_font_whitelist() -> list[FontWhitelistEntry]:
+    """返回字体白名单默认值（每次构造新对象，避免共享可变默认）。"""
+    return [
+        FontWhitelistEntry.model_validate(entry) for entry in _DEFAULT_FONT_WHITELIST
+    ]
+
+
 class TemplateGenConfig(BaseModel):
     """模板生成模块配置"""
 
@@ -113,6 +174,11 @@ class TemplateGenConfig(BaseModel):
     agent_max_file_size_kb: int = Field(512, ge=1)  # 单个文件大小上限（KB）
     agent_compile_enabled: bool = True  # Agent 是否调用 latexmk 做编译验证
     agent_compile_timeout: int = Field(120, ge=1)  # Agent 编译超时（秒）
+    # 字体白名单：注入 template_gen 的规划提示词，Agent 只允许使用名单内字体；
+    # 置空列表时回退到内置默认值（需与 docker/tex 镜像内置字体一致）
+    font_whitelist: list[FontWhitelistEntry] = Field(
+        default_factory=default_font_whitelist
+    )
     # ── 沙箱自动清理配置 ──
     cleanup_enabled: bool = True  # 是否启用过期沙箱自动清理
     cleanup_interval_seconds: int = Field(

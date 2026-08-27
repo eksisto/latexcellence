@@ -268,6 +268,53 @@ class TestAgentLoop:
             for m in third_msgs
         )
 
+    def test_planning_prompt_injects_configured_font_whitelist(self, monkeypatch):
+        """planning 阶段块按配置注入字体白名单；空列表回退默认清单。"""
+        from backend.core.config import FontWhitelistEntry, default_font_whitelist
+
+        load_config("config.json")
+        cfg = get_config()
+
+        svc = TemplateAgentService()
+        llm = MagicMock()
+        captured: list[list[dict]] = []
+
+        async def _chat(messages, **kwargs):
+            captured.append([dict(m) for m in messages])
+            return _make_response(
+                tool_calls=[_make_tool_call("finish", {"summary": "ok"}, "f1")]
+            )
+
+        llm.chat_with_tools = AsyncMock(side_effect=_chat)
+
+        monkeypatch.setattr(
+            cfg.features.template_gen,
+            "font_whitelist",
+            [
+                FontWhitelistEntry(
+                    name="CampusSerif",
+                    aliases=["校园宋体"],
+                    note="campus licensed font",
+                )
+            ],
+        )
+
+        _collect(svc, "whitelist test", llm)
+
+        planning = captured[0][2]["content"]
+        assert "FONT WHITELIST" in planning
+        assert "CampusSerif" in planning
+        assert "校园宋体" in planning
+        assert "campus licensed font" in planning
+
+        # 空列表 → 服务层回退默认清单
+        monkeypatch.setattr(cfg.features.template_gen, "font_whitelist", [])
+        captured.clear()
+        _collect(svc, "whitelist fallback test", llm)
+        planning_default = captured[0][2]["content"]
+        assert "FandolSong" in planning_default
+        assert default_font_whitelist()
+
     def test_context_compaction_keeps_recent_rounds(self):
         messages = [
             {"role": "system", "content": "sys"},
@@ -475,6 +522,52 @@ class TestAgentLoop:
         )
         assert "repeated_file_rejection" in trace_text
         assert "MUCH SIMPLER" in trace_text
+
+
+class TestFontWhitelistConfig:
+    """字体白名单配置模型：默认值、覆盖与回退。"""
+
+    def test_default_whitelist_matches_tex_image(self):
+        from backend.core.config import default_font_whitelist
+
+        names = {e.name for e in default_font_whitelist()}
+        assert {
+            "Latin Modern",
+            "TeX Gyre Termes",
+            "TeX Gyre Heros",
+            "FandolSong",
+            "FandolHei",
+            "Noto Sans CJK SC",
+            "Noto Serif CJK SC",
+        } <= names
+        termes = next(
+            e for e in default_font_whitelist() if e.name == "TeX Gyre Termes"
+        )
+        assert "Times New Roman" in termes.aliases
+
+    def test_config_override_from_dict(self):
+        from backend.core.config import TemplateGenConfig
+
+        cfg = TemplateGenConfig.model_validate(
+            {
+                "font_whitelist": [
+                    {
+                        "name": "CampusSerif",
+                        "aliases": ["Times New Roman"],
+                        "note": "licensed",
+                    },
+                    {"name": "LocalHei"},
+                ]
+            }
+        )
+        assert [e.name for e in cfg.font_whitelist] == ["CampusSerif", "LocalHei"]
+        assert cfg.font_whitelist[1].aliases == []
+        assert cfg.font_whitelist[1].note == ""
+
+    def test_appconfig_defaults_nonempty(self):
+        from backend.core.config import AppConfig
+
+        assert AppConfig().features.template_gen.font_whitelist
 
 
 class TestSandboxPath:

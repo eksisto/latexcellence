@@ -7,7 +7,7 @@
 | 镜像（构建目录） | 默认镜像名 | 用途 | 关键工具链 |
 | --- | --- | --- | --- |
 | `backend/` | `latexcellence-backend` | 应用本体（FastAPI 后端 + 前端静态产物），上传解压用 unar | python:3.12-slim + requirements.txt + unar + git |
-| `tex/` | `latexcellence-tex` | LaTeX 编译与 TeX 侧工具沙箱 | TeX Live（install-tl scheme-medium + 中文宏包）+ latexmk / texfot / latexdiff / latexindent / biber + git + 科研绘图宏包（standalone / pgfplots，plot_gen 依赖） |
+| `tex/` | `latexcellence-tex` | LaTeX 编译与 TeX 侧工具沙箱 | TeX Live（install-tl scheme-medium + 中文宏包）+ latexmk / texfot / latexdiff / latexindent / biber + git + 科研绘图宏包（standalone / pgfplots，plot_gen 依赖）+ 字体白名单（Latin Modern / TeX Gyre / Fandol / Noto CJK，经 fontconfig 纳管） |
 | `convert/` | `latexcellence-convert` | 格式转换（format_converter 模块） | pandoc 官方发布物（版本锁定） |
 | `plot/` | `latexcellence-plot` | 科研绘图 Python 沙箱（plot_gen 模块） | numpy / pandas / scipy / matplotlib / seaborn / colorcet / openpyxl / xlrd + Noto CJK 字体 |
 
@@ -143,6 +143,33 @@ docker load -i latexcellence-sandbox-images.tar
 5. **验证**：重新触发一次此前失败的编译任务确认恢复。
 
 > 反向提醒：若某宏包不再需要，可从清单移除以缩小镜像体积；但移除前请确认没有项目依赖它。
+
+## 字体白名单
+
+tex 镜像内置固定的字体白名单，template_gen 的规划提示词按配置项
+`features.template_gen.font_whitelist` 渲染这份清单（每条含 `name` / `aliases`
+/ `note`），并约束 Agent 只能使用名单内字体。**配置默认值与镜像内置字体一致，
+两侧须同步维护**：改动镜像字体时同时更新 `docker/tex/Dockerfile` 与
+`backend/core/config.py` 的 `default_font_whitelist()`。
+
+| 用户需求 | 镜像内实现 |
+| --- | --- |
+| Times New Roman | TeX Gyre Termes（度量兼容自由替代，`tex-gyre` 包） |
+| Helvetica/Arial | TeX Gyre Heros |
+| 宋体/SimSun | ctex 默认 fontset（Fandol，scheme-medium 自带） |
+| 黑体 | Noto Sans CJK SC（`fonts-noto-cjk`） |
+
+**私有化部署**：环境装有其他字体时，覆盖 `features.template_gen.font_whitelist`
+（`config.json` 或设置界面）即可让 Agent 按实际环境选字体；置空列表回退默认清单。
+商业字体（Times New Roman、SimSun 等）因授权原因不可打进镜像。
+
+关键机制：TeX Live 自带字体（Latin Modern / TeX Gyre / Fandol）的 OTF 位于
+`texmf-dist/fonts` 下，默认不在 fontconfig 扫描路径内，`fontspec` 的
+`\setmainfont` 按字体名查找会报 `The font "X" cannot be found`。镜像通过
+`/etc/fonts/local.conf` 把 texmf 字体目录纳入 fontconfig，并在构建期自检
+（`fc-match "TeX Gyre Termes"`、`fc-list` 验证 Noto CJK、
+`kpsewhich texgyretermes-regular.otf`），XeLaTeX/LuaLaTeX 因此可按名加载
+白名单字体。
 
 ## 安全说明
 

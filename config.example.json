@@ -56,6 +56,69 @@
       "agent_max_file_size_kb": 512,
       "agent_compile_enabled": true,
       "agent_compile_timeout": 120,
+      "font_whitelist": [
+        {
+          "name": "Latin Modern",
+          "aliases": [],
+          "note": "default Latin text/math fonts, no \\setmainfont needed"
+        },
+        {
+          "name": "TeX Gyre Termes",
+          "aliases": ["Times New Roman"],
+          "note": "Latin serif, Times-compatible"
+        },
+        {
+          "name": "TeX Gyre Heros",
+          "aliases": ["Helvetica", "Arial"],
+          "note": "Latin sans-serif"
+        },
+        {
+          "name": "TeX Gyre Pagella",
+          "aliases": ["Palatino"],
+          "note": "Latin serif"
+        },
+        {
+          "name": "TeX Gyre Schola",
+          "aliases": ["Century Schoolbook"],
+          "note": "Latin serif"
+        },
+        {
+          "name": "TeX Gyre Adventor",
+          "aliases": ["Avant Garde"],
+          "note": "Latin sans-serif"
+        },
+        {
+          "name": "TeX Gyre Bonum",
+          "aliases": ["Bookman"],
+          "note": "Latin serif"
+        },
+        {
+          "name": "FandolSong",
+          "aliases": ["宋体", "SimSun"],
+          "note": "CJK serif, ctex default fontset"
+        },
+        {
+          "name": "FandolHei",
+          "aliases": ["黑体", "SimHei"],
+          "note": "CJK sans-serif"
+        },
+        {
+          "name": "FandolFang",
+          "aliases": ["仿宋", "FangSong"],
+          "note": "CJK"
+        },
+        { "name": "FandolKai", "aliases": ["楷体", "KaiTi"], "note": "CJK" },
+        {
+          "name": "Noto Sans CJK SC",
+          "aliases": ["思源黑体"],
+          "note": "CJK sans-serif"
+        },
+        {
+          "name": "Noto Serif CJK SC",
+          "aliases": ["思源宋体", "Source Han Serif"],
+          "note": "CJK serif"
+        }
+      ],
       "cleanup_enabled": true,
       "cleanup_interval_seconds": 3600,
       "cleanup_retention_days": 7

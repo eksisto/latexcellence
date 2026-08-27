@@ -61,8 +61,13 @@ ARG TL_PKGS_TABLES_CODE="pgf booktabs multirow threeparttable caption algorithm2
 # PGFPlots 图表依赖 pgfplots（scheme-medium 均不含，缺任一项都会让
 # compile_tikz 报 `File ... not found` 并浪费 Agent 重试轮次）。
 ARG TL_PKGS_PLOT="standalone pgfplots"
+# 西文字体白名单：TeX Gyre Termes 是 Times New Roman 的度量兼容自由替代
+# （Times New Roman/SimSun 本体为商业授权，不可打进镜像；CJK 端由
+# fonts-noto-cjk 与 scheme-medium 自带的 Fandol 覆盖）。template_gen 的
+# prompt 按同一份"字体白名单"把用户需求映射到这些字体，两侧须同步维护。
+ARG TL_PKGS_FONTS="tex-gyre"
 ARG TL_PKGS_TOOLS="latexmk texfot latexdiff"
-ARG EXTRA_TL_PACKAGES="${TL_PKGS_CHINESE} ${TL_PKGS_BIB} ${TL_PKGS_MATH} ${TL_PKGS_LAYOUT} ${TL_PKGS_TABLES_CODE} ${TL_PKGS_PLOT} ${TL_PKGS_TOOLS}"
+ARG EXTRA_TL_PACKAGES="${TL_PKGS_CHINESE} ${TL_PKGS_BIB} ${TL_PKGS_MATH} ${TL_PKGS_LAYOUT} ${TL_PKGS_TABLES_CODE} ${TL_PKGS_PLOT} ${TL_PKGS_FONTS} ${TL_PKGS_TOOLS}"
 
 LABEL org.opencontainers.image.title="LateXcellence TeX Sandbox" \
       org.opencontainers.image.source="https://github.com/eksisto/latexcellence.git" \
@@ -131,6 +136,7 @@ RUN set -eux; \
              caption.sty subcaption.sty algorithm2e.sty algorithm.sty \
              listings.sty minted.sty fvextra.sty tcolorbox.sty \
              hyperref.sty cleveref.sty siunitx.sty pdfx.sty \
+             texgyretermes-regular.otf \
              amsmath.sty amssymb.sty mathtools.sty unicode-math.sty \
              xcolor.sty framed.sty enumitem.sty titlesec.sty fancyhdr.sty \
              tocloft.sty natbib.sty geometry.sty setspace.sty microtype.sty \
@@ -138,6 +144,27 @@ RUN set -eux; \
         p="$(kpsewhich "$f")" || true; \
         [ -n "$p" ] || { echo "FATAL: 宏包清单未覆盖 ${f}（请核对 EXTRA_TL_PACKAGES）"; exit 1; }; \
     done
+
+# ── 第 4 层：fontconfig 纳管 TeX Live 自带字体 + 字体白名单自检 ───
+# scheme-medium 自带 Latin Modern / TeX Gyre / Fandol 等自由字体，但其 OTF
+# 位于 texmf-dist/fonts 下，默认不在 fontconfig 扫描路径内；fontspec 的
+# \setmainfont 按字体名查找只认 fontconfig 可见的字体，否则报
+# `The font "X" cannot be found`（run trace 6aacdd03 连 Latin Modern 都
+# 找不到的根因）。通过 /etc/fonts/local.conf 纳管后，XeLaTeX/LuaLaTeX
+# 可按名加载这些字体；构建期自检白名单核心成员确实可见。
+RUN set -eux; \
+    printf '%s\n' \
+        '<?xml version="1.0"?>' \
+        '<!DOCTYPE fontconfig SYSTEM "fonts.dtd">' \
+        '<fontconfig>' \
+        '  <!-- TeX Live 自带字体（Latin Modern / TeX Gyre / Fandol 等） -->' \
+        '  <dir>/usr/local/texlive/texmf-dist/fonts/opentype</dir>' \
+        '  <dir>/usr/local/texlive/texmf-dist/fonts/truetype</dir>' \
+        '</fontconfig>' \
+        > /etc/fonts/local.conf; \
+    fc-cache -f >/dev/null; \
+    fc-match -f '%{family}\n' "TeX Gyre Termes" | grep -q "TeX Gyre Termes"; \
+    fc-list | grep -qi "noto sans cjk"
 
 # 工作目录：容器以后端 runner 传入的 uid:gid 运行（docker run --user <uid>:<gid>），
 # 与宿主后端账号保持一致以保证产物属主正确；镜像内不绑定固定工作用户。
