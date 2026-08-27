@@ -87,8 +87,10 @@ class TestCorsAllowlist:
             },
         )
         assert res.status_code == 204
-        assert res.headers["access-control-allow-methods"] == "*"
-        assert res.headers["access-control-allow-headers"] == "*"
+        # 响应携带 Allow-Credentials: true；按 Fetch 规范凭据模式不接受
+        # 通配符，必须显式回显请求的方法与请求头
+        assert res.headers["access-control-allow-methods"] == "GET"
+        assert res.headers["access-control-allow-headers"] == "x-latexcellence-token"
 
 
 class TestSameOrigin:

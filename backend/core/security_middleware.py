@@ -192,14 +192,36 @@ class AccessSecurityMiddleware:
                     send, 403, {"detail": "Origin not allowed by CORS policy"}, []
                 )
                 return
+            # 本响应携带 Allow-Credentials: true；按 Fetch 规范，凭据模式为
+            # include 时 Allow-Methods / Allow-Headers 不接受通配符 "*"，
+            # 必须显式回显浏览器请求的方法与请求头，否则预检被浏览器拒绝
+            # （fetch 抛 NetworkError）。方法缺省时回退到本应用实际用到的集合。
+            default_methods = "GET, POST, PUT, PATCH, DELETE"
+            req_method = (
+                _get_header(headers, b"access-control-request-method").strip()
+                or default_methods
+            )
+            req_headers_raw = _get_header(headers, b"access-control-request-headers")
+            allowed_headers = ",".join(
+                sorted(
+                    {
+                        item.strip().lower()
+                        for item in req_headers_raw.split(",")
+                        if item.strip()
+                    }
+                )
+            ).encode("ascii")
             await send(
                 {
                     "type": "http.response.start",
                     "status": 204,
                     "headers": [
                         *_cors_headers(origin, origin_allowed, credentials),
-                        (b"access-control-allow-methods", b"*"),
-                        (b"access-control-allow-headers", b"*"),
+                        (
+                            b"access-control-allow-methods",
+                            req_method.upper().encode("ascii"),
+                        ),
+                        (b"access-control-allow-headers", allowed_headers),
                         (b"access-control-max-age", b"86400"),
                     ],
                 }

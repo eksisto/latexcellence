@@ -65,7 +65,8 @@
 - 其余所有 `/api/*` 请求必须携带有效的 HttpOnly 会话 Cookie（`latexcellence_session`），会话过期或账号被禁用即时失效（返回 401 `unauthorized`）；
 - **请求级用户上下文全局注入（v2 P1b）**：会话验证成功后中间件即调用 `userspace.set_current_user_id(user.id)`——本中间件为纯 ASGI，设置的 ContextVar 与下游路由/依赖/SSE 生成器同任务上下文，对全部端点可见；LLM 每用户治理与 P6 会话类资源归属校验均依赖该上下文，不再要求各路由单独声明 `current_user_context` 依赖；
 - **双提交 CSRF**：登录时额外下发可被 JS 读取的 CSRF Cookie（`latexcellence_csrf`），变更类请求（POST/PUT/PATCH/DELETE）必须携带 `X-Latexcellence-CSRF` 请求头且其值与会话携带的 CSRF Cookie 一致（常量时间比较）；缺失或不一致返回 403 `invalid_csrf`。与 `SameSite=Lax` 配合，覆盖同站子域/放宽同站点等场景；
-- 多用户模式使用 Cookie 会话，允许的跨源响应（如 Vite dev `localhost:5173`→`8000`）会携带 `Access-Control-Allow-Credentials: true`（origin 仍回显具体值而非 `*`）。
+- 多用户模式使用 Cookie 会话，允许的跨源响应（如 Vite dev `localhost:5173`→`8000`）会携带 `Access-Control-Allow-Credentials: true`（origin 仍回显具体值而非 `*`）；
+- **CORS 预检（OPTIONS）**：本响应始终携带 `Allow-Credentials: true`，按 Fetch 规范凭据模式为 `include` 时 `Allow-Methods` / `Allow-Headers` 不接受通配符 `*`，因此预检响应显式回显请求的 `Access-Control-Request-Method` 与 `Access-Control-Request-Headers`（方法缺省回退到应用实际使用的集合），否则浏览器拒绝预检导致前端 fetch 报 `NetworkError`。
 
 ### `backend/core/llm_client.py` — LLM API 客户端
 
