@@ -13,6 +13,7 @@ import { api } from "@/api/index";
 import { isMultiUser } from "@/api/connection";
 import { translateError } from "@/utils/errorMessages";
 import { openMultiUserProject } from "@/utils/multiUserProject";
+import useIsOpened from "@/hooks/useIsOpened";
 import {
   isEditableFilePath,
   isFileTooLarge,
@@ -332,7 +333,7 @@ export default function useEditorBuffer({
   // 这里只导出 doOpenFile 和 requestOpenFile，URL effect 留在 EditorPage
 
   /* ── 刷新直达恢复 ──────────────────────────────────────────────── */
-  const isOpened = useStore((s) => s.isOpened);
+  const isOpened = useIsOpened();
   const fileTree = useStore((s) => s.fileTree);
   const hydrated = useStore((s) => s.hydrated);
 
