@@ -172,22 +172,32 @@ function RequireAdmin({ children }) {
   return children;
 }
 
-/** 欢迎页/工作区页外的「打开工作区」快捷入口（多用户模式下隐藏，改用项目工作台）。 */
+/** 欢迎页/目标页外的快捷入口：单用户跳工作区页（/workspace，悬浮提示「项目工作区」）；
+ * 多用户跳项目工作台（/projects，悬浮提示「项目工作台」），仅已登录时显示。
+ * 欢迎页已有主按钮、目标页本身即目的地，这两处均不显示。 */
 const WorkspaceShortcut = memo(function WorkspaceShortcut() {
   const navigate = useNavigate();
   const { pathname } = useLocation();
   const { t } = useTranslation("components");
-  const handleNavigate = useCallback(() => navigate("/workspace"), [navigate]);
+  const authStatus = useStore((s) => s.authStatus);
 
   // 多用户标志是启动引导时一次性写入的模块级状态（connection.js），并非响应式源。
   // 本组件被 memo 包裹且无 props，父级重渲染不会传导进来；若不订阅任何会变化的值，
   // 启动探测推翻 localStorage 旧多用户标志后将保持陈旧渲染（审查 Low-2）。
   // 订阅 authStatus：boot 完成（loading → 终态）恰是模式裁决完成的时刻，
   // 借此获得一次用最新 isMultiUser() 重渲染的机会；此后模式不再变化。
-  useStore((s) => s.authStatus);
+  // 多用户模式还依赖 authStatus 门控显隐（仅已登录显示）。
+  const multiUser = isMultiUser();
+  const target = multiUser ? "/projects" : "/workspace";
+  const label = multiUser ? t("common:openProjects") : t("workspace");
+  const hiddenPaths = multiUser ? ["/", "/projects"] : ["/", "/workspace"];
+  const handleNavigate = useCallback(
+    () => navigate(target),
+    [navigate, target],
+  );
 
-  if (isMultiUser()) return null;
-  if (pathname === "/" || pathname === "/workspace") return null;
+  if (hiddenPaths.includes(pathname)) return null;
+  if (multiUser && authStatus !== "authenticated") return null;
 
   return (
     <Tooltip>
@@ -195,9 +205,9 @@ const WorkspaceShortcut = memo(function WorkspaceShortcut() {
         render={<Button variant="ghost" size="icon" onClick={handleNavigate} />}
       >
         <SquareKanban className="size-5" />
-        <span className="sr-only">{t("workspace")}</span>
+        <span className="sr-only">{label}</span>
       </TooltipTrigger>
-      <TooltipContent>{t("workspace")}</TooltipContent>
+      <TooltipContent>{label}</TooltipContent>
     </Tooltip>
   );
 });
@@ -294,7 +304,7 @@ const AppToolbar = memo(function AppToolbar() {
   const authUser = useStore((s) => s.authUser);
   return (
     <div className="fixed top-4 right-4 z-50 flex items-center gap-1">
-      {/* 欢迎页已有「打开工作区」主按钮、工作区页本身就在工作区，右上角不再显示工作区快捷入口 */}
+      {/* 欢迎页已有「打开工作区」主按钮、工作区页/项目工作台页本身即目标页，右上角不再显示快捷入口 */}
       <WorkspaceShortcut />
       <AuthToolbar />
       {/* 界面语言为纯前端设置：不依赖后端连接与登录状态，始终可切换 */}
