@@ -49,7 +49,7 @@
   "pages": {
     "welcome": {
       "slogan": "Let technology step back, and let thought land on paper",
-      "version": "v2.0.0",
+      "version": "v2.1.0",
       "tocLabel": "Modules",
       "groups": {
         "contentImport": "Content Import",

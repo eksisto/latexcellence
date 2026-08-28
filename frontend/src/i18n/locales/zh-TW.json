@@ -49,7 +49,7 @@
   "pages": {
     "welcome": {
       "slogan": "讓技術退居幕後，讓思想落於紙上",
-      "version": "v2.0.0",
+      "version": "v2.1.0",
       "tocLabel": "功能目錄",
       "groups": {
         "contentImport": "內容匯入",

@@ -186,7 +186,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="LaTeXcellence",
     description="让技术退居幕后，让思想落于纸上",
-    version="2.0.0",
+    version="2.1.0",
     lifespan=lifespan,
 )
 
@@ -210,7 +210,7 @@ async def health_check():
     cfg = get_config()
     return {
         "status": "ok",
-        "version": "2.0.0",
+        "version": "2.1.0",
         "model": cfg.llm.model,
     }
 
