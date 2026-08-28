@@ -6,6 +6,7 @@ config.json
 .codex/
 .claude/
 .opencode/
+.zcode/
 opencode.json
 skills-lock.json
 
