@@ -142,6 +142,10 @@
       "default_color_add": "#D7E8B1",
       "default_color_del": "#FFA3A3"
     },
+    "git_manage": {
+      "enabled": true,
+      "git_dir_max_mb": 200
+    },
     "format_converter": {
       "enabled": true,
       "allowed_extensions": [".md", ".markdown", ".html", ".htm", ".docx"],

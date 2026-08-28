@@ -536,6 +536,29 @@ function FeaturesSection({ features, onChange, diffOptions }) {
         </div>
       )}
       <CheckboxField
+        label={t("settings.featureGitManage")}
+        checked={features.git_manage.enabled}
+        onChange={(v) => onChange("features.git_manage.enabled", v)}
+      />
+      {features.git_manage.enabled && (
+        <div className="ml-6 space-y-3 rounded-md border p-2.5 bg-muted/40">
+          <div className="space-y-1.5">
+            <Label className="text-xs">{t("settings.gitManageDirMaxMb")}</Label>
+            <Input
+              type="number"
+              min="1"
+              value={features.git_manage.git_dir_max_mb}
+              onChange={(e) =>
+                onChange(
+                  "features.git_manage.git_dir_max_mb",
+                  parseInt(e.target.value, 10) || 200,
+                )
+              }
+            />
+          </div>
+        </div>
+      )}
+      <CheckboxField
         label={t("settings.featureWritingChat")}
         checked={features.writing_chat.enabled}
         onChange={(v) => onChange("features.writing_chat.enabled", v)}

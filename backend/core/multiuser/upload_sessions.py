@@ -44,6 +44,7 @@ from .quota import (
     create_project_row,
     dir_size,
     effective_project_quota,
+    enforce_git_dir_cap,
     enforce_project_quota,
     project_usage_for_user,
 )
@@ -499,7 +500,9 @@ def _assemble_and_place(
     # 配额二次复核（init 预检与 complete 之间竞争的兜底；失败整包拒绝）
     enforce_project_quota(user_id, extracted.size)
     dest = move_into_user_space(extract_dir, extracted.root, user_id, project_id)
-    size = dir_size(dest)
+    # .git 超独立上限 → 整包拒绝；.git 不计入项目配额口径（与对账一致）
+    enforce_git_dir_cap(dest)
+    size = dir_size(dest, exclude_dirs={".git"})
     enforce_project_quota(user_id, size)
     project_row = create_project_row(user_id, name, size, project_id=project_id)
 

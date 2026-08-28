@@ -136,7 +136,7 @@ async def _read_revision_file(
         return path.read_text(encoding="utf-8")
 
     repo_rel = _repo_path(project, project_rel)
-    result = await process._run_git(
+    result = await process.run_git(
         project.git_root,
         ["show", f"{ref}:{repo_rel}"],
         timeout=30,

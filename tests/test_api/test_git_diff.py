@@ -909,7 +909,7 @@ class TestValidateRevision:
             asyncio.run(_validate_revision(Path("."), ""))
 
     def test_option_like_ref_rejected(self, monkeypatch):
-        monkeypatch.setattr(git_diff_process, "_run_git", AsyncMock())
+        monkeypatch.setattr(git_diff_process, "run_git", AsyncMock())
         with pytest.raises(ValueError, match="must not start with '-'"):
             asyncio.run(_validate_revision(Path("."), "--output=x"))
 
@@ -926,14 +926,14 @@ class TestValidateRevision:
         ],
     )
     def test_rev_syntax_rejected(self, monkeypatch, ref):
-        monkeypatch.setattr(git_diff_process, "_run_git", AsyncMock())
+        monkeypatch.setattr(git_diff_process, "run_git", AsyncMock())
         with pytest.raises(ValueError, match="Invalid Git revision"):
             asyncio.run(_validate_revision(Path("."), ref))
 
     def test_invalid_ref_rejected(self, monkeypatch):
         monkeypatch.setattr(
             git_diff_process,
-            "_run_git",
+            "run_git",
             AsyncMock(
                 return_value=ProcessResult(
                     returncode=128, stdout="", stderr="fatal: bad revision"
@@ -955,7 +955,7 @@ class TestValidateRevision:
     def test_valid_ref_accepted(self, monkeypatch, ref):
         monkeypatch.setattr(
             git_diff_process,
-            "_run_git",
+            "run_git",
             AsyncMock(
                 return_value=ProcessResult(returncode=0, stdout="resolved", stderr="")
             ),
@@ -973,7 +973,7 @@ class TestRenderDiffPdf:
     def _patch_common(monkeypatch, tmp_path: Path, project_dir: Path, config):
         monkeypatch.setattr(git_diff_constants, "PDF_OUTPUT_ROOT", tmp_path / "jobs")
         monkeypatch.setattr(git_diff_render, "get_config", lambda: config)
-        monkeypatch.setattr(git_diff_revisions, "_get_project_context", AsyncMock())
+        monkeypatch.setattr(git_diff_revisions, "get_project_context", AsyncMock())
         monkeypatch.setattr(
             git_diff_render, "_validate_project_path", Mock(return_value="main.tex")
         )

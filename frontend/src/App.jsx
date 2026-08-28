@@ -44,6 +44,7 @@ const ExpressionOptPage = lazy(() => import("./pages/ExpressionOptPage"));
 const CodeReviewPage = lazy(() => import("./pages/CodeReviewPage"));
 const FormatConvertPage = lazy(() => import("./pages/FormatConvertPage"));
 const GitDiffPage = lazy(() => import("./pages/GitDiffPage"));
+const VersionManagePage = lazy(() => import("./pages/VersionManagePage"));
 const TerminologyCheckPage = lazy(() => import("./pages/TerminologyCheckPage"));
 const ParagraphTranslatePage = lazy(
   () => import("./pages/ParagraphTranslatePage"),
@@ -528,6 +529,14 @@ export default function App() {
               element={
                 <RequireAuth>
                   <GitDiffPage />
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="/versions"
+              element={
+                <RequireAuth>
+                  <VersionManagePage />
                 </RequireAuth>
               }
             />

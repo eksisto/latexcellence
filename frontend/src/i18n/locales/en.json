@@ -104,6 +104,9 @@
         },
         "editor": {
           "title": "Web Editor"
+        },
+        "versionManage": {
+          "title": "Version Management"
         }
       }
     },
@@ -561,7 +564,8 @@
       "openFailed": "Failed to open project",
       "compileSuccessToast": "Compile succeeded",
       "compileFailedToast": "Compile failed",
-      "openEditor": "Open editor"
+      "openEditor": "Open editor",
+      "versionManage": "Versions"
     },
     "gitDiff": {
       "title": "Git Diff Highlight",
@@ -1007,6 +1011,41 @@
       "disabledTitle": "Web editor is disabled",
       "disabledDescription": "The administrator has disabled the web editor in the server config. Back to the workspace for other features.",
       "compileNoMainFile": "No main file set and the current file is not .tex; set the main file in the workspace."
+    },
+    "versionManage": {
+      "title": "Version Management",
+      "description": "Git version control for your project: initialize, review changes, commit all, and browse history.",
+      "noProjectTitle": "No project opened",
+      "noProjectDesc": "Version management requires an opened project. Open or create one first.",
+      "openProjectWorkspace": "Open project workspace",
+      "statusTitle": "Version control status",
+      "statusDescription": "Git repository status and repository usage for the current project.",
+      "loading": "Loading…",
+      "notInitialized": "Version control is not enabled for this project yet. Initializing will generate a LaTeX-specific .gitignore and create an initial commit.",
+      "initButton": "Initialize version control",
+      "initSuccess": "Version control initialized",
+      "detachedHead": "Detached HEAD",
+      "dirty": "Uncommitted changes",
+      "clean": "Working tree clean",
+      "gitDirUsage": "Repository usage (excluded from project quota)",
+      "changesTitle": "Changed files",
+      "changesDescription": "File changes relative to the latest commit. Click a file to open it in the editor.",
+      "noChanges": "No uncommitted changes.",
+      "changeAdded": "Added",
+      "changeModified": "Modified",
+      "changeDeleted": "Deleted",
+      "commitPlaceholder": "Enter a commit message (required)…",
+      "commitButton": "Commit all",
+      "commitSuccess": "Committed successfully",
+      "logTitle": "Commit history",
+      "noCommits": "No commits yet.",
+      "compareWithWorktree": "Compare with worktree",
+      "prevPage": "Previous",
+      "nextPage": "Next",
+      "readOnlyHint": "Read-only access: viewers cannot initialize or commit.",
+      "sizeMB": "{{value}} MB",
+      "sizeKB": "{{value}} KB",
+      "sizeB": "{{value}} B"
     }
   },
   "components": {
@@ -1281,7 +1320,9 @@
       "multiUserRegisterRateLimit": "Registration rate limit (per hour)",
       "featureEditor": "Web Editor",
       "featureEditorAssistant": "Editor AI assistant",
-      "featureEditorAssistantHint": "When off, the server rejects the editor-assistant endpoints, keeping the editor while saving LLM cost."
+      "featureEditorAssistantHint": "When off, the server rejects the editor-assistant endpoints, keeping the editor while saving LLM cost.",
+      "featureGitManage": "Git version management",
+      "gitManageDirMaxMb": ".git size limit (MB)"
     },
     "markerText": {
       "math": "Formula",
@@ -1795,6 +1836,11 @@
     "downloadFailed": "Failed to package download",
     "transferFailed": "Project transfer failed",
     "invalidQuota": "Invalid quota value",
+    "gitHistoryTooLarge": "Git history (.git) exceeds the size limit",
+    "gitAlreadyInitialized": "Version control is already initialized for this project",
+    "gitNoChanges": "Nothing to commit",
+    "gitRepositoryLocked": "Git repository is locked by another operation, try again later",
+    "gitMessageRequired": "Commit message must not be empty",
     "sandboxUnavailable": "Sandbox unavailable: the Docker service is not running or unreachable",
     "sandboxBusy": "Sandbox concurrency pool is full, please retry later",
     "sandboxKilledOom": "Compilation was killed because it exceeded the sandbox memory limit; simplify the document or increase sandbox.memory_mb",

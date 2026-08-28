@@ -36,6 +36,7 @@ import CircleX from "lucide-react/dist/esm/icons/circle-x.mjs";
 import ChevronDown from "lucide-react/dist/esm/icons/chevron-down.mjs";
 import ChevronRight from "lucide-react/dist/esm/icons/chevron-right.mjs";
 import FileDiff from "lucide-react/dist/esm/icons/file-diff.mjs";
+import History from "lucide-react/dist/esm/icons/history.mjs";
 import FileTypeCorner from "lucide-react/dist/esm/icons/file-type-corner.mjs";
 import { api } from "@/api/index";
 import { isMultiUser } from "@/api/connection";
@@ -501,6 +502,17 @@ export default function WorkspacePage() {
                 >
                   <FileDiff />
                   {t("pages:workspace.diffHighlight")}
+                </Button>
+              )}
+              {enabledFeatures?.git_manage !== false && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  nativeButton={false}
+                  render={<Link to="/versions" />}
+                >
+                  <History />
+                  {t("pages:workspace.versionManage")}
                 </Button>
               )}
               {/* 编辑器入口（editor-plan §4）：携带当前 activeFile 跳转，

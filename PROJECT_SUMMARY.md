@@ -108,6 +108,7 @@ latexcellence/
 │       ├── compile/                 # 自动编译
 │       ├── git_diff/                # Git 差异高亮
 │       │   └── service/             # 服务包（models/constants/process/revisions/flatten/diff/render）
+│       ├── git_manage/             # Git 版本管理（init/status/commit/log + 上传自动初始化）
 │       ├── template_gen/            # 模板生成（自主 Agent）
 │       │   └── agent/               # Agent 包（service/executor/validation/compile/sandbox/loop/constants）
 │       ├── formula_ocr/             # 公式 OCR（含 visual_inline.py 视觉 inline/display 判定）
@@ -289,6 +290,7 @@ latexcellence/
 | paragraph_translate | 逐段翻译 | router.py, service.py | ✓ | ✓ |
 | compile | 编译 + 错误翻译 + 引擎自动检测 + PDF/A 支持 | router.py, service.py | ✓(错误翻译) | ✗ |
 | git_diff | Git 版本差异 PDF | router.py, service/ | ✓(编译失败时翻译错误) | ✗ |
+| git_manage | Git 版本管理最小闭环：自动/手动初始化、变更列表、一键提交、历史（与 git_diff 共享执行层）；.git 配额豁免 + 独立上限 | modules/git_manage/*, core/multiuser/quota.py, modules/git_diff/service/ | ✗ | ✗ |
 | template_gen | 模板生成（自主 Agent） | router.py, service.py, agent/, trace.py, cleanup.py | ✓ | ✗ |
 | formula_ocr | 图片→LaTeX 公式 | router.py, service.py, visual_inline.py | ✓(Vision) | ✗ |
 | table_ocr | 图片→LaTeX 表格 | router.py, service.py | ✓(Vision) | ✗ |
@@ -334,6 +336,7 @@ latexcellence/
 | 注册自动审批（IP 策略） | 注册记录真实客户端 IP（可信代理解析 X-Forwarded-For）；同 IP 账号上限 + CIDR 白名单 + 离线地理白名单叠加判定「无恶意」即自动通过，否则转人工待审批；地理查询 ip2region（.xdb，中国命中直接采用，国内精度更高）优先、非/未知中国回落 GeoLite2；每 IP 注册限流，只降级不拒绝 | [backend-core.md](docs/backend-core.md)、[deployment.md](docs/deployment.md) |
 | 多用户项目与配额 | 上传 zip/7z/rar 安全解压（rar 经 unar 优先、bsdtar 回退的外部管线）、项目命名去重、项目空间配额记账、回收站（7 天）、打包下载；写回超限回滚 | [backend-core.md](docs/backend-core.md)、[multi-user-plan.md](docs/multi-user-plan.md) |
 | 多用户权限协作 | 协作者管理（按用户名添加/改角色/移除）、项目转交（原 owner 变 viewer 或退出）、viewer 写保护；权限实时查库即时生效 | [backend-core.md](docs/backend-core.md)、[multi-user-plan.md](docs/multi-user-plan.md) |
+| Git 版本管理 | 上传自动/版本页手动 git init（LaTeX 专用 .gitignore，项目已有则尊重）；.git 不占项目配额，改按 git_dir_max_mb 独立上限（超限拒绝上传/初始化/提交）；「已初始化」以项目根自带 .git 为准；历史条目经 URL 参数预填 git_diff 对比 | [git_manage.md](docs/modules/git_manage.md) |
 | 共享项目反向补丁撤销 | 多用户模式写路径统一记账（workspace_edit_ops + .edit_logs 快照），undo/redo 只回退当前用户自己的修改：冲突即拒绝（409）、恢复超配额拒绝（413）、LIFO 整组回滚、redo 对称；共享项目 v1 禁令解除 | [DESIGN.md §14](DESIGN.md)、[multi-user-v2-plan.md](docs/multi-user-v2-plan.md) §8 |
 | 多用户 LLM 治理 | 每用户滑动窗口限流 + 并发租约（`llm_governance.py`，单事务原子准入），超限 429 + Retry-After；登录限流同表计数；仅多用户模式生效，单用户零依赖直通 | [backend-core.md](docs/backend-core.md)、[multi-user-v2-plan.md](docs/multi-user-v2-plan.md) §6 |
 | 衍生数据记账与自助清理 | 四类衍生目录用量缓存（user_derived_usage 表）+ 检查点增量刷新 + 维护循环对账纠偏，配额校验与 /me 用量 O(1)；工作台分类用量条 + 自助清理（仅本人）；过期会话删除与写作会话保留期清理并入维护循环 | [backend-core.md](docs/backend-core.md)、[multi-user-v2-plan.md](docs/multi-user-v2-plan.md) §9 |

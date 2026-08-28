@@ -39,7 +39,7 @@ async def render_diff_pdf(
 ) -> DiffHighlightResult:
     """生成两个 Git 状态之间的差异高亮 PDF。"""
 
-    context = await revisions_mod._get_project_context(workspace_id)
+    context = await revisions_mod.get_project_context(workspace_id)
     main_rel = _validate_project_path(context.root, main_file, require_tex=True)
 
     await revisions_mod._validate_revision(context.git_root, base_ref)
@@ -202,7 +202,7 @@ async def _prepare_target_project(
     prefix = context.project_prefix.as_posix()
     if prefix:
         archive_args.extend(["--", prefix])
-    await process_mod._run_git_checked(context.git_root, archive_args, timeout=60)
+    await process_mod.run_git_checked(context.git_root, archive_args, timeout=60)
 
     extract_dir = job_dir / "archive"
     with zipfile.ZipFile(archive_path) as archive:

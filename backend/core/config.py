@@ -221,6 +221,15 @@ class GitDiffConfig(BaseModel):
     default_color_del: str = "#FFA3A3"  # 删除内容颜色（HEX）
 
 
+class GitManageConfig(BaseModel):
+    """Git 版本管理模块配置"""
+
+    enabled: bool = True  # 是否启用
+    git_dir_max_mb: int = Field(
+        200, ge=1
+    )  # 单项目 .git 目录大小上限（MB），超限拒绝提交/上传
+
+
 class FormatConverterConfig(BaseModel):
     """文档格式转换模块配置（Markdown/DOCX/HTML ↔ LaTeX）"""
 
@@ -566,6 +575,7 @@ class FeaturesConfig(BaseModel):
     code_review: CodeReviewConfig = CodeReviewConfig()
     compile: CompileConfig = CompileConfig()
     git_diff: GitDiffConfig = GitDiffConfig()
+    git_manage: GitManageConfig = GitManageConfig()
     format_converter: FormatConverterConfig = FormatConverterConfig()
     style_modify: StyleModifyConfig = StyleModifyConfig()
     terminology_check: TerminologyCheckConfig = TerminologyCheckConfig()

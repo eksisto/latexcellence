@@ -37,6 +37,7 @@
 | --- | --- | --- |
 | 自动编译 | [compile.md](modules/compile.md) | LaTeX 编译、引擎自动检测、PDF/A 支持与错误翻译 |
 | Git 差异高亮 | [git_diff.md](modules/git_diff.md) | 版本差异可视化高亮 PDF |
+| Git 版本管理 | [git_manage.md](modules/git_manage.md) | 版本控制最小闭环：自动/手动初始化、变更列表、一键提交、历史浏览（与 git_diff 打通） |
 | 参考文献管理 | [bib_manager.md](modules/bib_manager.md) | BibTeX 格式识别、DOI 多数据源查询 |
 | 网页编辑器 | [editor.md](modules/editor.md) | /editor 全宽编辑页：整文件读写（MD5 乐观锁 + 统一撤销记账）、命令快速输入、编译联动、编辑器侧 AI 助手与检查结果保鲜横幅 |
 
@@ -106,7 +107,7 @@ bib_manager 的 DOI 查询模块和 web_search 模块共享类似的**可插拔 
 | --- | --- |
 | latexmk + xelatex | compile, git_diff |
 | pandoc | format_converter |
-| git | git_diff |
+| git | git_diff, git_manage |
 | OpenAI 兼容 API | 大部分 LLM 模块 |
 | Crossref / DataCite / OpenAlex / Europe PMC / Semantic Scholar 等 API | bib_manager（DOI 查询数据源）与 writing_chat（多 Provider 学术研究） |
 | arXiv API | bib_manager（预印本查询） |

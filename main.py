@@ -35,6 +35,7 @@ from backend.modules.table_ocr.router import router as table_ocr_router
 from backend.modules.code_review.router import router as code_review_router
 from backend.modules.compile.router import router as compile_router
 from backend.modules.git_diff.router import router as git_diff_router
+from backend.modules.git_manage.router import router as git_manage_router
 from backend.modules.format_converter.router import (
     router as format_converter_router,
 )
@@ -249,6 +250,7 @@ async def config_status():
                 "code_review",
                 "compile",
                 "git_diff",
+                "git_manage",
                 "format_converter",
                 "terminology_check",
                 "paragraph_translate",
@@ -352,6 +354,7 @@ app.include_router(table_ocr_router)
 app.include_router(code_review_router)
 app.include_router(compile_router)
 app.include_router(git_diff_router)
+app.include_router(git_manage_router)
 app.include_router(format_converter_router)
 app.include_router(style_modify_router)
 app.include_router(terminology_check_router)

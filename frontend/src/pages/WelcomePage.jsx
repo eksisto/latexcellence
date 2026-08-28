@@ -16,6 +16,7 @@ import PencilSparkles from "lucide-react/dist/esm/icons/pencil-sparkles.mjs";
 import ListChecks from "lucide-react/dist/esm/icons/list-checks.mjs";
 import ArrowLeftRight from "lucide-react/dist/esm/icons/arrow-left-right.mjs";
 import FileDiff from "lucide-react/dist/esm/icons/file-diff.mjs";
+import History from "lucide-react/dist/esm/icons/history.mjs";
 import PencilRuler from "lucide-react/dist/esm/icons/pencil-ruler.mjs";
 import FileTypeCorner from "lucide-react/dist/esm/icons/file-type-corner.mjs";
 import MessagesSquare from "lucide-react/dist/esm/icons/messages-square.mjs";
@@ -124,6 +125,12 @@ const featureGroups = [
         to: "/git-diff",
         icon: FileDiff,
         id: "git_diff",
+      },
+      {
+        titleKey: "versionManage.title",
+        to: "/versions",
+        icon: History,
+        id: "git_manage",
       },
     ],
   },

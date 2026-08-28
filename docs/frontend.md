@@ -35,6 +35,7 @@
 | `/style-modify` | StyleModifyPage | JSON request（粘贴代码）/ SSE Agent 流（项目 Agent） |
 | `/format-convert` | FormatConvertPage | JSON request |
 | `/git-diff` | GitDiffPage | JSON request |
+| `/versions` | VersionManagePage | JSON request |
 | `/writing-chat` | WritingChatPage | SSE（useWritingChat） |
 | `/bib-manager` | BibManagerPage | JSON request |
 | `/plot-gen` | PlotGenPage | **SSE Agent 流**（手写 fetch reader，无 hook） |

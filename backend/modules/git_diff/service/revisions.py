@@ -18,12 +18,12 @@ from . import process
 async def list_git_revisions(workspace_id: str = "") -> GitRefsResult:
     """列出当前项目可选的 Git revision。"""
 
-    context = await _get_project_context(workspace_id)
-    current_branch = await process._get_optional_git_output(
+    context = await get_project_context(workspace_id)
+    current_branch = await process.get_optional_git_output(
         context.git_root,
         ["branch", "--show-current"],
     )
-    status = await process._get_optional_git_output(
+    status = await process.get_optional_git_output(
         context.git_root,
         ["status", "--porcelain"],
     )
@@ -60,13 +60,13 @@ async def list_git_revisions(workspace_id: str = "") -> GitRefsResult:
     )
 
 
-async def _get_project_context(workspace_id: str = "") -> ProjectContext:
+async def get_project_context(workspace_id: str = "") -> ProjectContext:
     project = get_project_manager_for_workspace(workspace_id)
     if not project.is_open:
         raise RuntimeError("No project opened")
 
     root = Path(project.root_path).resolve()
-    git_root_output = await process._run_git_checked(
+    git_root_output = await process.run_git_checked(
         root, ["rev-parse", "--show-toplevel"]
     )
     git_root = Path(git_root_output.stdout.strip()).resolve()
@@ -84,7 +84,7 @@ async def _get_project_context(workspace_id: str = "") -> ProjectContext:
 
 
 async def _list_commit_revisions(git_root: Path) -> list[GitRevision]:
-    result = await process._run_git(
+    result = await process.run_git(
         git_root,
         ["log", "--pretty=format:%H%x00%h%x00%s", "-n", "50"],
         timeout=30,
@@ -121,7 +121,7 @@ async def _list_commit_revisions(git_root: Path) -> list[GitRevision]:
 async def _list_ref_revisions(
     git_root: Path, ref_prefix: str, kind: str
 ) -> list[GitRevision]:
-    result = await process._run_git_checked(
+    result = await process.run_git_checked(
         git_root,
         [
             "for-each-ref",
@@ -165,7 +165,7 @@ async def _validate_revision(git_root: Path, ref: str) -> None:
         token in ref for token in _REF_FORBIDDEN_SUBSTRINGS
     ):
         raise ValueError(f"Invalid Git revision: {ref}")
-    result = await process._run_git(
+    result = await process.run_git(
         git_root,
         ["rev-parse", "--verify", "--end-of-options", f"{ref}^{{commit}}"],
         timeout=30,

@@ -658,6 +658,24 @@ export const api = {
     getOptions: () => request(appendWs("/git-diff/options")),
   },
 
+  /* ---- Git 版本管理（状态 / 初始化 / 提交 / 历史） ---- */
+  gitManage: {
+    status: (workspaceId) =>
+      request(appendWs("/git-manage/status", workspaceId)),
+    init: (workspaceId) =>
+      request(appendWs("/git-manage/init", workspaceId), { method: "POST" }),
+    commit: (message, workspaceId) =>
+      request(appendWs("/git-manage/commit", workspaceId), {
+        method: "POST",
+        body: JSON.stringify({ message }),
+      }),
+    log: (workspaceId, limit = 50, offset = 0) =>
+      request(
+        appendWs("/git-manage/log", workspaceId) +
+          `&limit=${limit}&offset=${offset}`,
+      ),
+  },
+
   /* ---- 文档格式转换（Markdown/DOCX/HTML ↔ LaTeX） ---- */
   formatConverter: {
     convert: (markdown) =>

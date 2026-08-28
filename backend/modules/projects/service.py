@@ -30,6 +30,7 @@ from backend.core.multiuser.quota import (
     create_project_row,
     dir_size,
     effective_project_quota,
+    enforce_git_dir_cap,
     enforce_project_quota,
     next_available_name,
     project_usage_for_user,
@@ -43,6 +44,7 @@ from backend.core.multiuser.upload import (
 )
 from backend.core.multiuser.dependencies import forbidden
 from backend.core.workspace_manager import get_workspace_manager
+from backend.modules.git_manage import service as git_manage_service
 from backend.modules.projects.models import (
     COLLABORATOR_ROLES,
     UploadSessionInitRequest,
@@ -170,7 +172,10 @@ async def upload_create_project(
             user["id"],
             project_id,
         )
-        size = await asyncio.to_thread(dir_size, dest)
+        # .git 超独立上限 → 整包拒绝（.git 不占项目配额，改按专上限约束）
+        await asyncio.to_thread(enforce_git_dir_cap, dest)
+        # .git 不计入项目配额口径（豁免语义，与对账一致）
+        size = await asyncio.to_thread(lambda: dir_size(dest, exclude_dirs={".git"}))
         await asyncio.to_thread(enforce_project_quota, user["id"], size)
         row = await asyncio.to_thread(
             create_project_row, user["id"], base_name, size, project_id=project_id
@@ -195,6 +200,9 @@ async def upload_create_project(
         raise
     finally:
         _cleanup_staging(staging_dir)
+
+    # 落位成功后异步自动初始化 Git 版本库（best-effort；自带 .git 原样保留）
+    git_manage_service.schedule_auto_init(user["id"], row["id"])
 
     return {"project": _project_row_view(row)}
 
@@ -330,6 +338,9 @@ async def upload_session_complete(user: dict, sid: str) -> dict:
         row = await asyncio.to_thread(upload_sessions.complete_session, user["id"], sid)
     except ArchiveError as e:
         raise _map_archive_error(e)
+    # 落位成功后异步自动初始化 Git 版本库（best-effort；自带 .git 原样保留）。
+    # 须在事件循环上调度——complete_session 在工作线程执行，线程内无 loop。
+    git_manage_service.schedule_auto_init(user["id"], row["id"])
     return {"project": _project_row_view(row)}
 
 
@@ -432,9 +443,11 @@ async def restore_project(user_id: str, project_id: str) -> dict:
     if row["status"] != "deleted":
         raise _http(400, "invalid_state", "Project is not in the recycle bin")
 
-    # 恢复前重算实际磁盘大小，并校验在计入后不超配额
+    # 恢复前重算实际磁盘大小（.git 豁免口径），并校验在计入后不超配额
     size = await asyncio.to_thread(
-        lambda: dir_size(userspace.project_dir(user_id, project_id))
+        lambda: dir_size(
+            userspace.project_dir(user_id, project_id), exclude_dirs={".git"}
+        )
     )
     await asyncio.to_thread(enforce_project_quota, user_id, size)
     # 项目自身仍是 deleted 状态，不计入活动名占用；无冲突时原样返回

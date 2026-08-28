@@ -55,6 +55,7 @@ Windows 上 Codex 沙箱以专用用户执行命令，pytest 的临时目录若�
 | `test_api/test_code_review.py` | 模型校验、preview 原始 LaTeX、LLM mock、写回 |
 | `test_api/test_compile.py` | 编译成功/失败/超时、LLM 错误翻译、PDF 端点、路径穿越防御 |
 | `test_api/test_git_diff.py` | Git revision、差异 PDF 渲染、路径安全校验 |
+| `test_api/test_git_manage.py` | 真实临时仓库上的 status/init/commit/log、空提交 400、已初始化 409、上限 413、index.lock 409、多用户脱敏、API 端点映射 |
 | `test_api/test_format_converter.py` | 格式转换、pandoc mock |
 | `test_api/test_style_modify.py` | 模型校验、LLM mock、样式修改 |
 | `test_api/test_style_modify_agent.py` | 项目 Agent：LatexProject 批量事务、session overlay、proposal、应用冲突、撤销、workspace 隔离、路径穿越防御 |

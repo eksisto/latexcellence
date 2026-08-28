@@ -201,11 +201,17 @@ def user_usage(user_id: str) -> dict:
     }
 
 
-def dir_size(path: Path) -> int:
-    """递归统计目录内所有文件大小之和（符号链接不计入，异常容错）。"""
+def dir_size(path: Path, exclude_dirs: set[str] | None = None) -> int:
+    """递归统计目录内所有文件大小之和（符号链接不计入，异常容错）。
+
+    exclude_dirs 按目录名在任意层级排除（如 ``{".git"}``）：Git 版本库
+    历史体积不占项目空间配额（.git 豁免口径，另有独立大小上限）。"""
     total = 0
+    excluded = exclude_dirs or frozenset()
     try:
         for p in path.rglob("*"):
+            if excluded and excluded.intersection(p.relative_to(path).parts[:-1]):
+                continue
             try:
                 if p.is_file() and not p.is_symlink():
                     total += p.stat().st_size
@@ -235,14 +241,16 @@ def _upsert_derived_usage(user_id: str, subdir: str, size_bytes: int) -> None:
 
 
 def project_size_on_disk(project_id: str) -> int:
-    """按项目 id 从 DB 取 owner 后计算磁盘实际大小（供对账）。"""
+    """按项目 id 从 DB 取 owner 后计算磁盘实际大小（供对账）。
+
+    .git 目录不计入（配额豁免口径，与上传记账一致）。"""
     row = db_query_one("SELECT owner_id FROM projects WHERE id = ?", (project_id,))
     if row is None:
         return 0
     root = userspace.project_dir(row["owner_id"], project_id)
     if not root.is_dir():
         return 0
-    return dir_size(root)
+    return dir_size(root, exclude_dirs={".git"})
 
 
 def reconcile_project_sizes() -> int:
@@ -261,6 +269,37 @@ def reconcile_project_sizes() -> int:
     if updated:
         logger.info("Reconciled %d project size entries", updated)
     return updated
+
+
+# ── .git 目录独立上限（配额豁免的配套约束）───────────────────────
+def git_dir_cap_bytes() -> int:
+    """单项目 .git 目录大小上限（字节），来自 features.git_manage.git_dir_max_mb。"""
+    return int(get_config().features.git_manage.git_dir_max_mb) * 1024 * 1024
+
+
+def git_dir_size(project_root: Path) -> int:
+    """项目 .git 目录实际大小（不存在返回 0）。"""
+    return dir_size(project_root / ".git")
+
+
+def enforce_git_dir_cap(project_root: Path) -> None:
+    """校验项目 .git 目录未超独立上限，超限抛 413 git_history_too_large。
+
+    .git 已从项目空间配额豁免，改按该上限单独约束，防止自带巨型版本库
+    的上传包把用户空间撑爆；整包/分片两条上传路径在落位后调用。"""
+    size = git_dir_size(project_root)
+    cap = git_dir_cap_bytes()
+    if size > cap:
+        raise HTTPException(
+            status_code=413,
+            detail={
+                "error": "git_history_too_large",
+                "message": (
+                    f"Git history (.git) is too large: {size} bytes "
+                    f"exceeds the {cap} bytes limit"
+                ),
+            },
+        )
 
 
 # ── 配额前置校验 ──────────────────────────────────────────────────

@@ -100,13 +100,16 @@ def build_mu_env(
     llm_max_concurrency_per_user: int | None = None,
     mu_extra: dict | None = None,
     smtp_extra: dict | None = None,
+    sandbox_extra: dict | None = None,
 ) -> dict:
     """写入并加载多用户配置，初始化数据库。返回环境字典。
 
     mu_extra：追加/覆盖 multi_user 节字段（如分片上传测试的
     chunk_part_max_mb），键须为 MultiUserConfig 合法字段。
     smtp_extra：追加/覆盖 smtp 节字段（v2 P6 邮件测试；None 时使用默认值
-    ——enabled=False，即全部通知静默跳过的降级形态）。"""
+    ——enabled=False，即全部通知静默跳过的降级形态）。
+    sandbox_extra：追加/覆盖 sandbox 节字段（如 git_manage 测试的
+    mode=local，避免测试依赖 Docker daemon）。"""
     db_path = tmp_path / "multiuser.db"
     users_root = tmp_path / "users"
     staging = tmp_path / "staging"
@@ -144,6 +147,12 @@ def build_mu_env(
     if smtp_extra:
         smtp_config.update(smtp_extra)
     data["smtp"] = smtp_config
+    sandbox_config = {
+        "mode": "auto",
+    }
+    if sandbox_extra:
+        sandbox_config.update(sandbox_extra)
+    data["sandbox"] = sandbox_config
     config_path = tmp_path / "config.json"
     with open(config_path, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=2)

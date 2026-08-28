@@ -37,6 +37,7 @@ def build_mu_feature_app() -> FastAPI:
     from backend.modules.compile.router import router as compile_router
     from backend.modules.expression_opt.router import router as expression_opt_router
     from backend.modules.git_diff.router import router as git_diff_router
+    from backend.modules.git_manage.router import router as git_manage_router
     from backend.modules.paragraph_translate.router import (
         router as paragraph_translate_router,
     )
@@ -70,6 +71,7 @@ def build_mu_feature_app() -> FastAPI:
     app.include_router(bib_router)
     app.include_router(compile_router)
     app.include_router(git_diff_router)
+    app.include_router(git_manage_router)
     app.include_router(writing_chat_router)
     app.include_router(style_modify_router)
     app.include_router(plot_gen_router)
@@ -263,6 +265,27 @@ class TestFeatureRoutersWriteProtection:
         assert r.status_code == 403
         assert r.json()["detail"]["error"] == "no_permission"
 
+    def test_viewer_cannot_write_via_git_manage_commit(self, env):
+        _, viewer_client = self.setup_bindings(env)
+        r = viewer_client.post(
+            "/api/git-manage/commit",
+            params={"workspace_id": "ws-viewer"},
+            json={"message": "evil"},
+            headers=csrf(viewer_client),
+        )
+        assert r.status_code == 403
+        assert r.json()["detail"]["error"] == "no_permission"
+
+    def test_viewer_cannot_write_via_git_manage_init(self, env):
+        _, viewer_client = self.setup_bindings(env)
+        r = viewer_client.post(
+            "/api/git-manage/init",
+            params={"workspace_id": "ws-viewer"},
+            headers=csrf(viewer_client),
+        )
+        assert r.status_code == 403
+        assert r.json()["detail"]["error"] == "no_permission"
+
     @pytest.mark.parametrize(
         "path",
         [
@@ -346,6 +369,17 @@ class TestFeatureRoutersReadProtection:
             "/api/git-diff/refs", params={"workspace_id": "ws-owner"}
         )
         assert r.status_code == 403
+
+    def test_outsider_cannot_read_git_manage_status_and_log(self, env):
+        owner_client = _client(env)
+        _open(owner_client, env, "ws-owner", "owner")
+
+        outsider_client = _client(env)
+        _login(outsider_client, "outsider")
+        for path in ("/api/git-manage/status", "/api/git-manage/log"):
+            r = outsider_client.get(path, params={"workspace_id": "ws-owner"})
+            assert r.status_code == 403, (path, r.status_code)
+            assert r.json()["detail"]["error"] == "no_permission"
 
 
 class TestFeatureRoutersAccessMatrix:

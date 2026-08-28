@@ -32,12 +32,12 @@ def redact_command_output_for_user(text: str, cwd: Path) -> str:
     return sanitize_output_paths(text, cwd)
 
 
-async def _run_git_checked(
+async def run_git_checked(
     cwd: Path,
     args: list[str],
     timeout: int = 30,
 ) -> ProcessResult:
-    result = await _run_git(cwd, args, timeout=timeout)
+    result = await run_git(cwd, args, timeout=timeout)
     if result.returncode != 0:
         raise RuntimeError(
             redact_command_output_for_user(
@@ -48,7 +48,7 @@ async def _run_git_checked(
     return result
 
 
-async def _run_git(cwd: Path, args: list[str], timeout: int = 30) -> ProcessResult:
+async def run_git(cwd: Path, args: list[str], timeout: int = 30) -> ProcessResult:
     return await _run_process(
         ["git", "-c", "core.quotepath=false", *args],
         cwd=cwd,
@@ -59,11 +59,20 @@ async def _run_git(cwd: Path, args: list[str], timeout: int = 30) -> ProcessResu
 async def _run_process(cmd: list[str], cwd: Path, timeout: int) -> ProcessResult:
     # git 输出随用户 locale 变化，而本模块需要解析 stderr 中的固定文案
     # （如空仓库判定）。强制 LC_ALL=C 保证机器可解析的稳定英文输出。
+    # safe.directory=* 硬化 docker 部署下容器内 uid 与挂载目录属主不
+    # 一致时的 "dubious ownership" 拒绝（git 只在仓库归属可疑时读取该
+    # 配置，非沙箱本地模式行为不变）。
     spec = ExecSpec(
         command=list(cmd),
         cwd=str(cwd),
         image_kind="tex",
-        env={"LC_ALL": "C", "LANG": "C"},
+        env={
+            "LC_ALL": "C",
+            "LANG": "C",
+            "GIT_CONFIG_COUNT": "1",
+            "GIT_CONFIG_KEY_0": "safe.directory",
+            "GIT_CONFIG_VALUE_0": "*",
+        },
         timeout_seconds=float(timeout),
     )
     result = await get_sandbox_runner().execute(spec, user_id=current_sandbox_user_id())
@@ -80,8 +89,8 @@ async def _run_process(cmd: list[str], cwd: Path, timeout: int) -> ProcessResult
     )
 
 
-async def _get_optional_git_output(cwd: Path, args: list[str]) -> str:
-    result = await _run_git(cwd, args, timeout=30)
+async def get_optional_git_output(cwd: Path, args: list[str]) -> str:
+    result = await run_git(cwd, args, timeout=30)
     if result.returncode != 0:
         return ""
     return result.stdout

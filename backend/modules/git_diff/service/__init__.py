@@ -39,7 +39,7 @@ from .models import (
     ProcessResult,
     ProjectContext,
 )
-from .process import _get_optional_git_output, _run_git, _run_git_checked, _run_process
+from .process import _run_process, get_optional_git_output, run_git, run_git_checked
 from .render import (
     _compile_diff,
     _diff_main_path,
@@ -51,7 +51,7 @@ from .render import (
     render_diff_pdf,
 )
 from .revisions import (
-    _get_project_context,
+    get_project_context,
     _list_commit_revisions,
     _list_ref_revisions,
     _validate_revision,
@@ -78,7 +78,7 @@ __all__ = [
     "render_diff_pdf",
     "get_pdf_path",
     "_prune_old_job_dirs",
-    "_get_project_context",
+    "get_project_context",
     "_list_commit_revisions",
     "_list_ref_revisions",
     "_validate_revision",
@@ -103,10 +103,10 @@ __all__ = [
     "_run_latexdiff",
     "_count_latexdiff_changes",
     "_compile_diff",
-    "_run_git_checked",
-    "_run_git",
+    "run_git_checked",
+    "run_git",
     "_run_process",
-    "_get_optional_git_output",
+    "get_optional_git_output",
     "_validate_project_path",
     "_normalize_include_path",
     "_diff_main_path",

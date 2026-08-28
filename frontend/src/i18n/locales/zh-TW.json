@@ -104,6 +104,9 @@
         },
         "editor": {
           "title": "網頁編輯器"
+        },
+        "versionManage": {
+          "title": "版本管理"
         }
       }
     },
@@ -561,7 +564,8 @@
       "openFailed": "開啟專案失敗",
       "compileSuccessToast": "編譯成功",
       "compileFailedToast": "編譯失敗",
-      "openEditor": "進入編輯器"
+      "openEditor": "進入編輯器",
+      "versionManage": "版本管理"
     },
     "gitDiff": {
       "title": "Git 差異高亮",
@@ -1007,6 +1011,41 @@
       "disabledTitle": "網頁編輯器未啟用",
       "disabledDescription": "管理員已在伺服器設定中關閉編輯器功能，可返回工作台使用其他功能。",
       "compileNoMainFile": "未設定主檔案且目前檔案不是 .tex，無法編譯；請在工作台設定主檔案。"
+    },
+    "versionManage": {
+      "title": "版本管理",
+      "description": "為專案提供 Git 版本控制：初始化、檢視變更、一鍵提交與瀏覽歷史。",
+      "noProjectTitle": "未開啟專案",
+      "noProjectDesc": "版本管理需要一個已開啟的專案。請先開啟或建立專案。",
+      "openProjectWorkspace": "開啟專案工作區",
+      "statusTitle": "版本控制狀態",
+      "statusDescription": "目前專案的 Git 儲存庫狀態與版本庫佔用。",
+      "loading": "載入中…",
+      "notInitialized": "此專案尚未啟用版本控制。初始化後將自動產生 LaTeX 專用的 .gitignore 並建立初始提交。",
+      "initButton": "初始化版本控制",
+      "initSuccess": "版本控制已初始化",
+      "detachedHead": "游離 HEAD",
+      "dirty": "有未提交變更",
+      "clean": "工作區乾淨",
+      "gitDirUsage": "版本庫佔用（不佔專案空間配額）",
+      "changesTitle": "變更檔案",
+      "changesDescription": "相對於最近一次提交的檔案變更，點擊檔案在編輯器中開啟。",
+      "noChanges": "沒有未提交的變更。",
+      "changeAdded": "新增",
+      "changeModified": "修改",
+      "changeDeleted": "刪除",
+      "commitPlaceholder": "輸入提交說明（必填）…",
+      "commitButton": "全部提交",
+      "commitSuccess": "提交成功",
+      "logTitle": "提交歷史",
+      "noCommits": "還沒有任何提交。",
+      "compareWithWorktree": "對比此版本與工作區",
+      "prevPage": "上一頁",
+      "nextPage": "下一頁",
+      "readOnlyHint": "唯讀權限：viewer 角色無法初始化或提交。",
+      "sizeMB": "{{value}} MB",
+      "sizeKB": "{{value}} KB",
+      "sizeB": "{{value}} B"
     }
   },
   "components": {
@@ -1281,7 +1320,9 @@
       "multiUserRegisterRateLimit": "註冊限流（次/小時）",
       "featureEditor": "網頁編輯器",
       "featureEditorAssistant": "編輯器 AI 助手",
-      "featureEditorAssistantHint": "關閉後伺服器拒絕編輯器助手端點，可在保留編輯器的同時控制 LLM 開銷。"
+      "featureEditorAssistantHint": "關閉後伺服器拒絕編輯器助手端點，可在保留編輯器的同時控制 LLM 開銷。",
+      "featureGitManage": "Git 版本管理",
+      "gitManageDirMaxMb": ".git 大小上限（MB）"
     },
     "markerText": {
       "math": "公式",
@@ -1795,6 +1836,11 @@
     "downloadFailed": "打包下載失敗",
     "transferFailed": "專案轉交失敗",
     "invalidQuota": "配額數值不合法",
+    "gitHistoryTooLarge": "Git 歷史記錄超過大小上限，已拒絕",
+    "gitAlreadyInitialized": "該專案已初始化版本控制",
+    "gitNoChanges": "沒有可提交的變更",
+    "gitRepositoryLocked": "Git 儲存庫被其他操作佔用，請稍後重試",
+    "gitMessageRequired": "提交說明不能為空",
     "sandboxUnavailable": "沙箱不可用：Docker 服務未執行或無法連線",
     "sandboxBusy": "沙箱並行已滿，請稍後重試",
     "sandboxKilledOom": "編譯因超出沙箱記憶體限制被終止，可簡化文件或調大 sandbox.memory_mb",

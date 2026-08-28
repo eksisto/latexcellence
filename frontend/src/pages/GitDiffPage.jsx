@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import Check from "lucide-react/dist/esm/icons/check.mjs";
 import CircleX from "lucide-react/dist/esm/icons/circle-x.mjs";
@@ -139,6 +139,22 @@ export default function GitDiffPage() {
   });
   // 记录已经初始化过默认 ref 的项目，避免切换 base/target 时反复重拉 refs
   const defaultsInitializedFor = useRef("");
+
+  // 从版本管理页跳转时经 URL 参数预填 base/target（如 /git-diff?base=<hash>
+  // &target=__WORKTREE__）。预填后即清参数；并标记该项目默认值已初始化，
+  // 防止 loadRefs 用 HEAD 覆盖预填值
+  const [searchParams, setSearchParams] = useSearchParams();
+  useEffect(() => {
+    const base = searchParams.get("base");
+    const target = searchParams.get("target");
+    if (!base && !target) return;
+    defaultsInitializedFor.current = projectKey;
+    if (base) setBaseRef(base);
+    if (target) setTargetRef(target);
+    setSearchParams({}, { replace: true });
+    // 仅挂载时消费一次 URL 参数
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const texFiles = useMemo(() => flattenTexFiles(fileTree), [fileTree]);
   const grouped = useMemo(() => groupRevisions(refs), [refs]);

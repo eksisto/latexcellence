@@ -69,6 +69,13 @@ const EXACT_MAP = {
   transfer_failed: "transferFailed",
   invalid_quota: "invalidQuota",
 
+  // Git 版本管理（git_manage）错误码
+  git_history_too_large: "gitHistoryTooLarge",
+  git_already_initialized: "gitAlreadyInitialized",
+  git_no_changes: "gitNoChanges",
+  git_repository_locked: "gitRepositoryLocked",
+  git_message_required: "gitMessageRequired",
+
   // 编译沙箱（多用户 v2 P1a）错误码
   sandbox_unavailable: "sandboxUnavailable",
   sandbox_busy: "sandboxBusy",
