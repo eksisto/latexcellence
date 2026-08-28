@@ -271,6 +271,7 @@ latexcellence/
 │   ├── prompt_comprehension_eval/ # Prompt 理解评测工具（逐一探测 + 历史追踪 + 回归检测）
 │   ├── rar_fixtures/               # rar 测试样例生成器（纯字节手工构造 RAR4 fixtures 入库，不依赖构建环境装包）
 │   ├── compose-smoke.sh           # 多实例 compose 冒烟（replicas=2：注册审批→分片上传→undo→下载；--with-tex 追加编译冒烟）
+│   ├── bump-version.sh            # 版本号一键升级（main.py 两处 + 前端三语 i18n；major/minor/patch 或显式版本号，默认自动提交）
 │   ├── plotgen_opt/               # plot_gen Agent 优化评测工作区（脚本/数据集/报告入库，results、previews 忽略）
 │   ├── templategen_opt/           # template_gen Agent 优化评测工作区（脚本/场景定义/参考资料入库，results 忽略）
 │   └── stylemodify_opt/           # style_modify Agent 优化评测工作区（脚本/场景定义/报告入库，results、runtime 忽略）
