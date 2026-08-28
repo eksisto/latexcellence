@@ -41,6 +41,7 @@ import Send from "lucide-react/dist/esm/icons/send.mjs";
 import Upload from "lucide-react/dist/esm/icons/upload.mjs";
 import Wand2 from "lucide-react/dist/esm/icons/wand-sparkles.mjs";
 import Wrench from "lucide-react/dist/esm/icons/wrench.mjs";
+import Brain from "lucide-react/dist/esm/icons/brain.mjs";
 import CircleX from "lucide-react/dist/esm/icons/circle-x.mjs";
 import {
   Dialog,
@@ -259,6 +260,26 @@ export default function PlotGenPage() {
               </CardTitle>
             </CardHeader>
             <CardContent>
+              {(plot.running || plot.reasoningText) && (
+                <details className="mb-2 rounded border bg-muted/40" open>
+                  <summary className="cursor-pointer flex items-center gap-2 px-2.5 py-1.5 text-xs text-muted-foreground">
+                    <Brain className="size-3.5" />
+                    {plot.running
+                      ? t("pages:plotGen.thinking")
+                      : t("pages:plotGen.thoughtProcess")}
+                    {plot.reasoningText && (
+                      <span className="ml-auto font-mono text-[10px]">
+                        {plot.reasoningText.length}
+                      </span>
+                    )}
+                  </summary>
+                  {plot.reasoningText && (
+                    <div className="max-h-40 overflow-y-auto px-2.5 pb-2 font-mono text-[10px] whitespace-pre-wrap text-muted-foreground">
+                      {plot.reasoningText}
+                    </div>
+                  )}
+                </details>
+              )}
               <div
                 ref={scrollRef}
                 className="max-h-[420px] overflow-y-auto space-y-2 pr-1"

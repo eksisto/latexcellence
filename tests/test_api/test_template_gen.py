@@ -75,6 +75,25 @@ def _make_response(content=None, tool_calls=None):
     return SimpleNamespace(choices=[SimpleNamespace(message=msg)])
 
 
+def _stream_iter(response, reasoning=None):
+    """把 _make_response 构造的响应转为 chat_stream_with_tools 的流式片段序列。
+
+    reasoning 为可选的思维链文本列表（逐段 yield），用于 reasoning 事件测试。
+    """
+    from backend.core.llm_client import StreamChunk
+
+    async def _gen():
+        for piece in reasoning or []:
+            yield StreamChunk(content=None, usage=None, reasoning=piece)
+        msg = response.choices[0].message
+        if msg.content:
+            yield StreamChunk(content=msg.content, usage=None)
+        if msg.tool_calls:
+            yield StreamChunk(content=None, usage=None, tool_calls=msg.tool_calls)
+
+    return _gen()
+
+
 def _collect(service, description, llm):
     import asyncio
     import uuid
@@ -98,7 +117,7 @@ def _collect(service, description, llm):
 
 
 class TestAgentLoop:
-    """Agent 循环端到端（Mock chat_with_tools）。"""
+    """Agent 循环端到端（Mock chat_stream_with_tools）。"""
 
     @pytest.fixture(autouse=True)
     def _load_cfg(self, tmp_path, monkeypatch):
@@ -147,7 +166,9 @@ class TestAgentLoop:
                 ],
             ),
         ]
-        llm.chat_with_tools = AsyncMock(side_effect=responses)
+        llm.chat_stream_with_tools = MagicMock(
+            side_effect=[_stream_iter(r) for r in responses]
+        )
 
         events = _collect(svc, "a simple article", llm)
 
@@ -165,6 +186,55 @@ class TestAgentLoop:
             .read_text(encoding="utf-8")
             .startswith(r"\documentclass")
         )
+
+    def test_reasoning_events_streamed(self, tmp_path):
+        """思维链 chunk 增量转为 reasoning 事件，只读展示不进入对话历史。"""
+        svc = TemplateAgentService()
+        llm = MagicMock()
+        responses = [
+            _make_response(
+                content="Write the main file first",
+                tool_calls=[
+                    _make_tool_call(
+                        "write_file",
+                        {
+                            "file_path": "main.tex",
+                            "content": r"\documentclass{article}\begin{document}hi\end{document}",
+                        },
+                        "t1",
+                    )
+                ],
+            ),
+            _make_response(
+                tool_calls=[
+                    _make_tool_call(
+                        "finish",
+                        {"summary": "Completed", "main_file": "main.tex"},
+                        "t2",
+                    )
+                ]
+            ),
+        ]
+        reasoning_pieces = [["先规划结构", "，需要 ctexart 支持"], None]
+        llm.chat_stream_with_tools = MagicMock(
+            side_effect=[
+                _stream_iter(r, pieces)
+                for r, pieces in zip(responses, reasoning_pieces)
+            ]
+        )
+
+        events = _collect(svc, "reasoning test", llm)
+
+        reasoning_events = [e for e in events if e["type"] == "reasoning"]
+        assert [e["text"] for e in reasoning_events] == [
+            "先规划结构",
+            "，需要 ctexart 支持",
+        ]
+        # 流程正常结束，思维链文本不出现在任何后续 LLM 消息里（只读展示）
+        assert events[-1]["type"] == "done"
+        history = llm.chat_stream_with_tools.call_args_list[1].kwargs["messages"]
+        serialized = json.dumps(history, ensure_ascii=False)
+        assert "先规划结构" not in serialized
 
     def test_phase_system_injected_at_phase_transitions(self, tmp_path, monkeypatch):
         """阶段 3：planning 在开始时注入，compile/validation 阶段块在首次
@@ -219,13 +289,13 @@ class TestAgentLoop:
         ]
         captured: list[list[dict]] = []
 
-        async def _chat(messages, **kwargs):
-            # chat_with_tools 的 messages 参数是同一可变列表，后续阶段注入会
+        def _chat(messages, **kwargs):
+            # chat_stream_with_tools 的 messages 参数是同一可变列表，后续阶段注入会
             # 原地修改；这里在每次调用时深拷贝快照，才能断言阶段块注入时机。
             captured.append([dict(m) for m in messages])
-            return responses[len(captured) - 1]
+            return _stream_iter(responses[len(captured) - 1])
 
-        llm.chat_with_tools = AsyncMock(side_effect=_chat)
+        llm.chat_stream_with_tools = MagicMock(side_effect=_chat)
 
         async def _fake_compile(self_exec, args):
             return "Compilation succeeded.", {
@@ -279,13 +349,15 @@ class TestAgentLoop:
         llm = MagicMock()
         captured: list[list[dict]] = []
 
-        async def _chat(messages, **kwargs):
+        def _chat(messages, **kwargs):
             captured.append([dict(m) for m in messages])
-            return _make_response(
-                tool_calls=[_make_tool_call("finish", {"summary": "ok"}, "f1")]
+            return _stream_iter(
+                _make_response(
+                    tool_calls=[_make_tool_call("finish", {"summary": "ok"}, "f1")]
+                )
             )
 
-        llm.chat_with_tools = AsyncMock(side_effect=_chat)
+        llm.chat_stream_with_tools = MagicMock(side_effect=_chat)
 
         monkeypatch.setattr(
             cfg.features.template_gen,
@@ -408,7 +480,9 @@ class TestAgentLoop:
                 ]
             ),
         ]
-        llm.chat_with_tools = AsyncMock(side_effect=responses)
+        llm.chat_stream_with_tools = MagicMock(
+            side_effect=[_stream_iter(r) for r in responses]
+        )
         # 一次响应里三个 tool_call，循环结束后 finish 触发跳出
         events = _collect(svc, "traversal test", llm)
         results = [e for e in events if e["type"] == "tool_result"]
@@ -426,10 +500,12 @@ class TestAgentLoop:
                 ]
             ),
         ]
-        llm.chat_with_tools = AsyncMock(side_effect=responses)
+        llm.chat_stream_with_tools = MagicMock(
+            side_effect=[_stream_iter(r) for r in responses]
+        )
         events = _collect(svc, "early stop", llm)
         # 只调用一次 LLM（finish 后立即终止），不消耗 max_rounds
-        assert llm.chat_with_tools.call_count == 1
+        assert llm.chat_stream_with_tools.call_count == 1
         assert events[-1]["type"] == "done"
 
     def test_no_tool_call_is_nudged_not_terminated(self, tmp_path):
@@ -466,13 +542,15 @@ class TestAgentLoop:
                 ],
             ),
         ]
-        llm.chat_with_tools = AsyncMock(side_effect=responses)
+        llm.chat_stream_with_tools = MagicMock(
+            side_effect=[_stream_iter(r) for r in responses]
+        )
 
         events = _collect(svc, "nudge test", llm)
         # 3 次 LLM 调用：规划(无工具) → 写入 → finish
-        assert llm.chat_with_tools.call_count == 3
+        assert llm.chat_stream_with_tools.call_count == 3
         # 引导文案注入第二轮请求的 LLM 历史（作为 user 消息）
-        calls = llm.chat_with_tools.await_args_list
+        calls = llm.chat_stream_with_tools.call_args_list
         second_msgs = calls[1].kwargs["messages"]
         assert any(
             m["role"] == "user" and "stalled round" in m["content"] for m in second_msgs
@@ -512,7 +590,9 @@ class TestAgentLoop:
                 ]
             )
         )
-        llm.chat_with_tools = AsyncMock(side_effect=responses)
+        llm.chat_stream_with_tools = MagicMock(
+            side_effect=[_stream_iter(r) for r in responses]
+        )
 
         events = _collect(svc, "resume test", llm)
         done = events[-1]
@@ -1618,7 +1698,9 @@ class TestCompileFailureWarning:
                 ]
             ),
         ]
-        llm.chat_with_tools = AsyncMock(side_effect=responses)
+        llm.chat_stream_with_tools = MagicMock(
+            side_effect=[_stream_iter(r) for r in responses]
+        )
 
         # 直接桩掉 _compile_latex，避免依赖真实 latexmk，确保稳定且快速
         async def _fake_compile(self_exec, args):
@@ -1704,7 +1786,9 @@ class TestTraceRecording:
                 ],
             ),
         ]
-        llm.chat_with_tools = AsyncMock(side_effect=responses)
+        llm.chat_stream_with_tools = MagicMock(
+            side_effect=[_stream_iter(r) for r in responses]
+        )
 
         events = _collect(svc, "a simple article", llm)
         done = events[-1]
@@ -1754,7 +1838,9 @@ class TestTraceRecording:
                 ],
             ),
         ]
-        llm.chat_with_tools = AsyncMock(side_effect=responses)
+        llm.chat_stream_with_tools = MagicMock(
+            side_effect=[_stream_iter(r) for r in responses]
+        )
 
         async def run():
             events = []
@@ -1803,7 +1889,9 @@ class TestTraceRecording:
                 ],
             ),
         ]
-        llm.chat_with_tools = AsyncMock(side_effect=responses)
+        llm.chat_stream_with_tools = MagicMock(
+            side_effect=[_stream_iter(r) for r in responses]
+        )
 
         events = _collect(svc, "a simple article", llm)
         assert events[-1]["type"] == "done"
@@ -1862,29 +1950,33 @@ class TestGenServiceOrchestration:
 
         svc = TemplateGenService()
         llm = MagicMock()
-        llm.chat_with_tools = AsyncMock(
+        llm.chat_stream_with_tools = MagicMock(
             side_effect=[
-                _make_response(
-                    content="Start",
-                    tool_calls=[
-                        _make_tool_call(
-                            "write_file",
-                            {
-                                "file_path": "main.tex",
-                                "content": r"\documentclass{article}\begin{document}hi\end{document}",
-                            },
-                            "t1",
-                        )
-                    ],
+                _stream_iter(
+                    _make_response(
+                        content="Start",
+                        tool_calls=[
+                            _make_tool_call(
+                                "write_file",
+                                {
+                                    "file_path": "main.tex",
+                                    "content": r"\documentclass{article}\begin{document}hi\end{document}",
+                                },
+                                "t1",
+                            )
+                        ],
+                    )
                 ),
-                _make_response(
-                    tool_calls=[
-                        _make_tool_call(
-                            "finish",
-                            {"summary": "ok", "main_file": "main.tex"},
-                            "t2",
-                        )
-                    ]
+                _stream_iter(
+                    _make_response(
+                        tool_calls=[
+                            _make_tool_call(
+                                "finish",
+                                {"summary": "ok", "main_file": "main.tex"},
+                                "t2",
+                            )
+                        ]
+                    )
                 ),
             ]
         )

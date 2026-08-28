@@ -14,6 +14,8 @@ export default function usePlotGen() {
   const [error, setError] = useState("");
   const [warning, setWarning] = useState("");
   const [summary, setSummary] = useState("");
+  // 思维链流式文本（只读展示，不参与任何后续流程）
+  const [reasoningText, setReasoningText] = useState("");
   const [selectedFile, setSelectedFile] = useState("");
   const [fileContent, setFileContent] = useState("");
   const [loadingFile, setLoadingFile] = useState(false);
@@ -38,6 +40,11 @@ export default function usePlotGen() {
   const handleEvent = useCallback((ev) => {
     if (ev.type === "error") {
       setError(translateError(ev.message || ""));
+      return;
+    }
+    if (ev.type === "reasoning") {
+      // 增量思维链：追加到思考面板，不进入步骤流
+      setReasoningText((prev) => prev + (ev.text || ""));
       return;
     }
     if (ev.type === "warning") {
@@ -98,6 +105,7 @@ export default function usePlotGen() {
       setError("");
       setWarning("");
       setSteps([]);
+      setReasoningText("");
       setSummary("");
       setFiles([]);
       setArtifacts([]);
@@ -130,6 +138,7 @@ export default function usePlotGen() {
       setError("");
       setWarning("");
       setSteps([]);
+      setReasoningText("");
       try {
         await api.plotGen.refine({
           sessionId,
@@ -233,6 +242,7 @@ export default function usePlotGen() {
     setDataProfile(null);
     setChartPlan(null);
     setSteps([]);
+    setReasoningText("");
     setFiles([]);
     setArtifacts([]);
     setRunning(false);
@@ -263,6 +273,7 @@ export default function usePlotGen() {
     error,
     warning,
     summary,
+    reasoningText,
     selectedFile,
     fileContent,
     loadingFile,

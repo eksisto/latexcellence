@@ -11,7 +11,11 @@ from backend.core.config import (
     get_config,
 )
 from backend.core.logger import get_logger
-from backend.core.llm_client import get_llm_client
+from backend.core.llm_client import (
+    assistant_message_from_stream,
+    chat_stream_with_tools_retry,
+    get_llm_client,
+)
 from backend.core.prompts import get_prompt
 from backend.modules.template_gen.trace import append_trace, now_iso
 from backend.utils.agent_file_tools import build_agent_file_tools_schema
@@ -233,16 +237,36 @@ class TemplateAgentService:
                                 },
                             },
                         )
-                response = await llm.chat_with_tools(
+                content_parts: list[str] = []
+                tool_calls: list[Any] | None = None
+                # 流式消费：思维链增量推送（reasoning 事件），content 累计，
+                # tool_calls 在流末尾一次性返回；首个 chunk 前的瞬时失败
+                # （连接/超时/限流/5xx）由 chat_stream_with_tools_retry 补
+                # 一次重试，永久性错误直接抛出。
+                async for chunk in chat_stream_with_tools_retry(
+                    llm,
                     messages=messages,
                     tools=tools,
                     temperature=cfg.llm.temperature,
-                    # 模板文件（尤其 .cls/.sty）常接近 10KB，若 max_tokens 太小可能被截断
+                    # 模板文件（尤其 .cls/.sty）常接近 10KB，
+                    # 若 max_tokens 太小可能被截断
                     max_tokens=max(cfg.llm.max_tokens, 8192),
-                )
+                    logger=self._logger,
+                ):
+                    if chunk.reasoning:
+                        yield {
+                            "type": "reasoning",
+                            "text": chunk.reasoning,
+                        }
+                    if chunk.content:
+                        content_parts.append(chunk.content)
+                    if chunk.tool_calls:
+                        tool_calls = chunk.tool_calls
             except Exception as e:
                 self._logger.error(
-                    f"chat_with_tools failed (round {round_idx + 1}): {e}"
+                    "chat_stream_with_tools failed (round %s): %s",
+                    round_idx + 1,
+                    e,
                 )
                 await self._append_trace(
                     sandbox,
@@ -256,14 +280,12 @@ class TemplateAgentService:
                 yield {"type": "error", "message": str(e)}
                 return
 
-            choice = response.choices[0]
-            msg = choice.message
-            tool_calls = msg.tool_calls
+            content = "".join(content_parts)
 
             # 推送 LLM 的思考文本（若有）
-            if msg.content:
-                yield {"type": "plan", "content": msg.content}
-                final_summary = msg.content
+            if content:
+                yield {"type": "plan", "content": content}
+                final_summary = content
 
             await self._append_trace(
                 sandbox,
@@ -273,7 +295,7 @@ class TemplateAgentService:
                     "type": "llm",
                     "data": {
                         "role": "assistant",
-                        "content": msg.content or "",
+                        "content": content or "",
                         "tool_calls": [
                             {
                                 "id": tc.id,
@@ -295,7 +317,7 @@ class TemplateAgentService:
                 if no_tool_strikes < 2 and round_idx < max_rounds - 1:
                     no_tool_strikes += 1
                     nudge = _nudge_message()
-                    messages.append(msg.model_dump())
+                    messages.append(assistant_message_from_stream(content, None))
                     messages.append({"role": "user", "content": nudge})
                     await self._append_trace(
                         sandbox,
@@ -310,7 +332,7 @@ class TemplateAgentService:
                 break
 
             # 将 assistant 含 tool_calls 的消息追加进历史
-            messages.append(msg.model_dump())
+            messages.append(assistant_message_from_stream(content, tool_calls))
 
             # 本轮是否触发了 finish（finish 后立即跳出循环）
             finish_this_round = False

@@ -14,7 +14,11 @@ from typing import Any, AsyncIterator
 
 from backend.core.config import get_config
 from backend.core.logger import get_logger
-from backend.core.llm_client import get_llm_client
+from backend.core.llm_client import (
+    assistant_message_from_stream,
+    chat_stream_with_tools_retry,
+    get_llm_client,
+)
 from backend.core.prompts import get_prompt
 from backend.modules.style_modify.models import CompileSummary
 from backend.modules.style_modify.session import get_session_store
@@ -241,14 +245,31 @@ class StyleModifyAgent:
                 }
 
             try:
-                response = await llm.chat_with_tools(
+                content_parts: list[str] = []
+                tool_calls: list[Any] | None = None
+                # 流式消费：思维链增量推送（reasoning 事件），content 累计，
+                # tool_calls 在流末尾一次性返回；首个 chunk 前的瞬时失败
+                # （连接/超时/限流/5xx）由 chat_stream_with_tools_retry 补
+                # 一次重试，永久性错误直接抛出。
+                async for chunk in chat_stream_with_tools_retry(
+                    llm,
                     messages=messages,
                     tools=tools,
                     temperature=cfg.llm.temperature,
                     max_tokens=cfg.llm.max_tokens,
-                )
+                    logger=self._logger,
+                ):
+                    if chunk.reasoning:
+                        yield {
+                            "type": "reasoning",
+                            "text": chunk.reasoning,
+                        }
+                    if chunk.content:
+                        content_parts.append(chunk.content)
+                    if chunk.tool_calls:
+                        tool_calls = chunk.tool_calls
             except Exception as e:
-                self._logger.error("style_modify chat_with_tools failed: %s", e)
+                self._logger.error("style_modify chat_stream_with_tools failed: %s", e)
                 await self._append_trace(
                     session_id,
                     {
@@ -261,12 +282,10 @@ class StyleModifyAgent:
                 yield {"type": "error", "message": str(e)}
                 return
 
-            choice = response.choices[0]
-            msg = choice.message
-            tool_calls = msg.tool_calls
-            if msg.content:
-                yield {"type": "plan", "content": msg.content}
-                final_summary = msg.content
+            content = "".join(content_parts)
+            if content:
+                yield {"type": "plan", "content": content}
+                final_summary = content
 
             await self._append_trace(
                 session_id,
@@ -276,7 +295,7 @@ class StyleModifyAgent:
                     "type": "llm",
                     "data": {
                         "role": "assistant",
-                        "content": msg.content or "",
+                        "content": content or "",
                         "tool_calls": [
                             {
                                 "id": tc.id,
@@ -301,7 +320,7 @@ class StyleModifyAgent:
                         "project, stage candidate changes, or finish. Keep plan "
                         "text to at most two sentences."
                     )
-                    messages.append(msg.model_dump())
+                    messages.append(assistant_message_from_stream(content, tool_calls))
                     messages.append({"role": "user", "content": nudge})
                     await self._append_trace(
                         session_id,
@@ -313,10 +332,10 @@ class StyleModifyAgent:
                         },
                     )
                     continue
-                messages.append(msg.model_dump())
+                messages.append(assistant_message_from_stream(content, tool_calls))
                 break
 
-            messages.append(msg.model_dump())
+            messages.append(assistant_message_from_stream(content, tool_calls))
             finish_this_round = False
 
             for tc in tool_calls:

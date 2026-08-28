@@ -22,6 +22,7 @@ import CircleX from "lucide-react/dist/esm/icons/circle-x.mjs";
 import ScrollText from "lucide-react/dist/esm/icons/scroll-text.mjs";
 import Wand2 from "lucide-react/dist/esm/icons/wand-sparkles.mjs";
 import Wrench from "lucide-react/dist/esm/icons/wrench.mjs";
+import Brain from "lucide-react/dist/esm/icons/brain.mjs";
 import CheckCircle2 from "lucide-react/dist/esm/icons/circle-check.mjs";
 import {
   Dialog,
@@ -70,10 +71,13 @@ export default function TemplateGenPage() {
     return () => URL.revokeObjectURL(pdfUrl);
   }, [pdfUrl]);
   const [summary, setSummary] = useState("");
+  // 思维链流式文本（只读展示，不参与任何后续流程）
+  const [reasoningText, setReasoningText] = useState("");
   const [traceOpen, setTraceOpen] = useState(false);
   const [trace, setTrace] = useState(null);
   const [loadingTrace, setLoadingTrace] = useState(false);
   const scrollRef = useRef(null);
+  const reasoningScrollRef = useRef(null);
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -81,8 +85,16 @@ export default function TemplateGenPage() {
     }
   }, [steps]);
 
+  useEffect(() => {
+    if (reasoningScrollRef.current) {
+      reasoningScrollRef.current.scrollTop =
+        reasoningScrollRef.current.scrollHeight;
+    }
+  }, [reasoningText]);
+
   const reset = useCallback(() => {
     setSteps([]);
+    setReasoningText("");
     setFiles([]);
     setSessionId(null);
     setSelectedFile(null);
@@ -105,6 +117,11 @@ export default function TemplateGenPage() {
         onEvent: (ev) => {
           if (ev.type === "error") {
             setError(translateError(ev.message || ""));
+            return;
+          }
+          if (ev.type === "reasoning") {
+            // 增量思维链：追加到思考面板，不进入步骤流
+            setReasoningText((prev) => prev + (ev.text || ""));
             return;
           }
           if (ev.type === "warning") {
@@ -283,6 +300,33 @@ export default function TemplateGenPage() {
               </CardTitle>
             </CardHeader>
             <CardContent>
+              {(running || reasoningText) && (
+                <details className="mb-2 rounded border bg-muted/40" open>
+                  <summary className="cursor-pointer flex items-center gap-2 px-2.5 py-1.5 text-xs text-muted-foreground">
+                    {running ? (
+                      <Loader2 className="size-3.5 animate-spin" />
+                    ) : (
+                      <Brain className="size-3.5" />
+                    )}
+                    {running
+                      ? t("pages:templateGen.thinking")
+                      : t("pages:templateGen.thoughtProcess")}
+                    {reasoningText && (
+                      <span className="ml-auto font-mono text-[10px]">
+                        {reasoningText.length}
+                      </span>
+                    )}
+                  </summary>
+                  {reasoningText && (
+                    <div
+                      ref={reasoningScrollRef}
+                      className="max-h-40 overflow-y-auto px-2.5 pb-2 font-mono text-[10px] whitespace-pre-wrap text-muted-foreground"
+                    >
+                      {reasoningText}
+                    </div>
+                  )}
+                </details>
+              )}
               <div
                 ref={scrollRef}
                 className="max-h-[420px] overflow-y-auto space-y-2 pr-1"

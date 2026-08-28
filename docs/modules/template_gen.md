@@ -70,6 +70,7 @@ Agent 自主规划文件结构 → 逐个 `write_file` → 调用 `compile_latex
 | 事件 type | 含义 |
 | --- | --- |
 | `plan` | Agent 的思考/说明文本 |
+| `reasoning` | 思维链增量文本（`text` 字段逐段推送，仅前端展示，不进对话历史）。仅思维链模型（智谱 / DeepSeek 等）产生 |
 | `tool_call` | 工具调用开始（含 args 摘要） |
 | `tool_result` | 工具执行结果（`ok`/`summary`，write_file 额外带 `file_path`/`size`） |
 | `compile` | 编译结果，单事件便于前端高亮（`success`/`log`/`errors`）。失败时 `errors` 为结构化错误列表 |
@@ -81,7 +82,12 @@ Agent 自主规划文件结构 → 逐个 `write_file` → 调用 `compile_latex
 
 1. 历史消息超过上下文预算时自动压缩（保留最近若干轮，更早轮次替换为摘要），
    防止超大 tool_call 参数把上下文撑爆
-2. 调用 `chat_with_tools`；若 LLM 无 `tool_calls`，先按"规划瘫痪防护"引导
+2. 调用 `chat_stream_with_tools` 流式消费：思维链 chunk 增量转为 `reasoning` 事件
+   （用户在长时间思考阶段可实时看到推理进度，不会误以为卡住），content 累计，
+   tool_calls 在流末尾一次性返回；消费经共享辅助 `chat_stream_with_tools_retry()`
+   （`backend/core/llm_client.py`），流式调用无内置重试，仅对"未吐出任何 chunk
+   的瞬时失败"（连接/超时/限流/5xx）补一次重试，永久性错误直接抛出。若 LLM 无
+   `tool_calls`，先按"规划瘫痪防护"引导
    继续行动（见下文），连续 2 次仍无工具调用才结束
 3. 否则把 assistant 消息追加进历史，依次执行每个 `tool_call`，将工具结果以 `role:"tool"` 回传 LLM
 4. `finish` 工具立即跳出整体循环

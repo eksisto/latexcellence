@@ -92,8 +92,15 @@
 
 ```python
 @dataclass class UsageInfo: prompt_tokens, completion_tokens, total_tokens
-@dataclass class StreamChunk: content: str | None, usage: UsageInfo | None, tool_calls: list | None = None
+@dataclass class StreamChunk: content: str | None, usage: UsageInfo | None, tool_calls: list | None = None, reasoning: str | None = None
 ```
+
+**思维链流式透传**：智谱 / DeepSeek 等 OpenAI 兼容端点在流式 `delta.reasoning_content` 中输出思维链，`chat_stream_with_usage` / `chat_stream_with_tools` 会将其转为 `StreamChunk(reasoning=...)` 片段逐段产出（OpenAI 官方接口无该字段时自然为 None，零副作用）。思维链仅作展示用途，调用方**不得**把它写入对话历史。
+
+**流式消费共享辅助**（三个 Agent：plot_gen / style_modify / template_gen 共用）：
+
+- `chat_stream_with_tools_retry(llm, *, messages, tools, temperature, max_tokens, logger)`：包一层流式工具调用，流式调用本身无内置重试，仅对"尚未吐出任何 chunk 的瞬时失败"（`APIConnectionError` / `APITimeoutError` / 429 / 5xx / 内置 `ConnectionError` / `TimeoutError`，见 `_is_transient_stream_error()`）补一次重试；永久性错误（400 鉴权、上下文超限等）与已有增量输出后的失败均按原样抛出，不做无意义等待
+- `assistant_message_from_stream(content, tool_calls)`：把流式累计结果构造为 assistant 消息 dict（等价于非流式 `msg.model_dump()`），用于把 LLM 回复回写对话历史
 
 **重试策略**（`chat()` 内部）：
 

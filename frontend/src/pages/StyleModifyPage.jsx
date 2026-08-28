@@ -13,6 +13,7 @@ import Square from "lucide-react/dist/esm/icons/square.mjs";
 import Trash2 from "lucide-react/dist/esm/icons/trash-2.mjs";
 import Undo2 from "lucide-react/dist/esm/icons/undo-2.mjs";
 import Wand2 from "lucide-react/dist/esm/icons/wand-sparkles.mjs";
+import Brain from "lucide-react/dist/esm/icons/brain.mjs";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -243,6 +244,29 @@ export default function StyleModifyPage() {
                     </div>
                   </CardHeader>
                   <CardContent>
+                    {(agent.running || agent.reasoningText) && (
+                      <details
+                        className="mb-2 rounded-md border bg-muted/40"
+                        open
+                      >
+                        <summary className="cursor-pointer flex items-center gap-2 px-2.5 py-1.5 text-xs text-muted-foreground">
+                          <Brain className="size-3.5" />
+                          {agent.running
+                            ? t("pages:styleModify.thinking")
+                            : t("pages:styleModify.thoughtProcess")}
+                          {agent.reasoningText && (
+                            <span className="ml-auto font-mono text-[10px]">
+                              {agent.reasoningText.length}
+                            </span>
+                          )}
+                        </summary>
+                        {agent.reasoningText && (
+                          <div className="max-h-40 overflow-y-auto px-2.5 pb-2 font-mono text-[10px] whitespace-pre-wrap text-muted-foreground">
+                            {agent.reasoningText}
+                          </div>
+                        )}
+                      </details>
+                    )}
                     {agent.steps.length === 0 ? (
                       <p className="text-sm text-muted-foreground">
                         {t("pages:styleModify.agentTimelineEmpty")}

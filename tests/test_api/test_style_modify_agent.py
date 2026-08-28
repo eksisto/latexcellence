@@ -408,8 +408,8 @@ class _FakeToolCall:
 
 
 class _FakeMessage:
-    def __init__(self, tool_calls):
-        self.content = ""
+    def __init__(self, tool_calls, content=""):
+        self.content = content
         self.tool_calls = tool_calls
 
     def model_dump(self):
@@ -431,8 +431,20 @@ class _FakeMessage:
 
 
 class _FakeResponse:
-    def __init__(self, tool_calls):
-        self.choices = [SimpleNamespace(message=_FakeMessage(tool_calls))]
+    def __init__(self, tool_calls, content=""):
+        self.choices = [SimpleNamespace(message=_FakeMessage(tool_calls, content))]
+
+    def __aiter__(self):
+        async def _gen():
+            from backend.core.llm_client import StreamChunk
+
+            msg = self.choices[0].message
+            if msg.content:
+                yield StreamChunk(content=msg.content, usage=None)
+            if msg.tool_calls:
+                yield StreamChunk(content=None, usage=None, tool_calls=msg.tool_calls)
+
+        return _gen()
 
 
 class TestStyleModifyAgentLifecycle:
@@ -461,7 +473,7 @@ class TestStyleModifyAgentLifecycle:
         monkeypatch.setattr(agent_mod, "append_trace", noop_trace)
 
         class BoomLLM:
-            async def chat_with_tools(self, **kwargs):
+            def chat_stream_with_tools(self, **kwargs):
                 raise RuntimeError("boom")
 
         events = [
@@ -528,7 +540,7 @@ class TestStyleModifyAgentLifecycle:
             )
 
             class CompileLLM:
-                async def chat_with_tools(self, **kwargs):
+                def chat_stream_with_tools(self, **kwargs):
                     return _FakeResponse(
                         [
                             _FakeToolCall(
@@ -621,7 +633,7 @@ class TestStyleModifyAgentLifecycle:
                     ),
                 ]
 
-            async def chat_with_tools(self, **kwargs):
+            def chat_stream_with_tools(self, **kwargs):
                 return self.calls.pop(0)
 
         events = [
@@ -733,7 +745,7 @@ class TestStyleModifyAgentLifecycle:
                     ),
                 ]
 
-            async def chat_with_tools(self, **kwargs):
+            def chat_stream_with_tools(self, **kwargs):
                 return self.calls.pop(0)
 
         events = [
@@ -864,7 +876,7 @@ def test_finish_summary_rejects_unimplemented_style_requirement():
                     ),
                 ]
 
-            async def chat_with_tools(self, **kwargs):
+            def chat_stream_with_tools(self, **kwargs):
                 return self.calls.pop(0)
 
         events = [
@@ -1008,7 +1020,7 @@ def test_finish_summary_rejects_unimplemented_style_requirement():
                     ),
                 ]
 
-            async def chat_with_tools(self, **kwargs):
+            def chat_stream_with_tools(self, **kwargs):
                 return self.calls.pop(0)
 
         events = [

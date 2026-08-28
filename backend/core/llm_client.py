@@ -14,6 +14,7 @@ OpenAI API 统一封装模块。
 
 import asyncio
 import json
+import logging
 import re
 import threading
 import time
@@ -22,7 +23,13 @@ import urllib.request
 from dataclasses import dataclass
 from typing import Any, AsyncIterator
 
-from openai import AsyncOpenAI
+from openai import (
+    APIConnectionError,
+    APIStatusError,
+    APITimeoutError,
+    AsyncOpenAI,
+    RateLimitError,
+)
 from openai.types.chat import ChatCompletion
 
 from backend.core.config import get_config
@@ -115,15 +122,19 @@ class StreamChunk:
     """
     chat_stream_with_usage / chat_stream_with_tools 流式片段。
 
-    content / usage / tool_calls 互斥：
-        - 普通流片段：content 为字符串、usage=None、tool_calls=None
+    content / usage / tool_calls / reasoning 互斥：
+        - 普通流片段：content 为字符串、其余为 None
         - 末尾用量片段：content=None、usage=UsageInfo（若 API 未返回则为 None）
         - 工具调用片段：content=None、usage=None、tool_calls=[ChatCompletionMessageToolCall, ...]
+        - 思维链片段：content=None、usage=None、reasoning 为字符串
+          （智谱 / DeepSeek 等兼容端点在 delta.reasoning_content 中流式吐出
+          思维链；OpenAI 官方 chat completions 不含该字段，自然为 None）
     """
 
     content: str | None
     usage: UsageInfo | None
     tool_calls: list | None = None
+    reasoning: str | None = None
 
 
 class LLMClient:
@@ -724,6 +735,13 @@ class LLMClient:
             content = None
             if chunk.choices and chunk.choices[0].delta.content:
                 content = chunk.choices[0].delta.content
+            reasoning = (
+                getattr(chunk.choices[0].delta, "reasoning_content", None)
+                if chunk.choices
+                else None
+            )
+            if reasoning:
+                yield StreamChunk(content=None, usage=None, reasoning=reasoning)
             usage = getattr(chunk, "usage", None)
             # 仅在末次 chunk 会有 usage，且此时通常 content 为 None
             if content is not None:
@@ -819,6 +837,14 @@ class LLMClient:
             if chunk.choices and chunk.choices[0].delta.content:
                 content = chunk.choices[0].delta.content
 
+            reasoning = (
+                getattr(chunk.choices[0].delta, "reasoning_content", None)
+                if chunk.choices
+                else None
+            )
+            if reasoning:
+                yield StreamChunk(content=None, usage=None, reasoning=reasoning)
+
             if chunk.choices and chunk.choices[0].delta.tool_calls:
                 for tc in chunk.choices[0].delta.tool_calls:
                     idx = tc.index
@@ -870,6 +896,88 @@ class LLMClient:
                     )
                 )
             yield StreamChunk(content=None, usage=None, tool_calls=collected)
+
+
+# ── 流式消费共享辅助（三个 Agent 共用） ──────────────────────────────────
+
+
+def assistant_message_from_stream(
+    content: str, tool_calls: list[Any] | None
+) -> dict[str, Any]:
+    """把流式累计结果构造为 assistant 消息 dict（等价于 msg.model_dump()）。
+
+    流式路径拿不到完整的 ChatCompletionMessage，只能由调用方累计 content
+    并收集流末尾的 tool_calls 后重组；思维链（reasoning）只读展示，
+    禁止写入对话历史。
+    """
+    message: dict[str, Any] = {"role": "assistant", "content": content or ""}
+    if tool_calls:
+        message["tool_calls"] = [
+            {
+                "id": tc.id,
+                "type": getattr(tc, "type", "function"),
+                "function": {
+                    "name": tc.function.name,
+                    "arguments": tc.function.arguments,
+                },
+            }
+            for tc in tool_calls
+        ]
+    return message
+
+
+def _is_transient_stream_error(e: Exception) -> bool:
+    """流式调用失败是否属于可重试的瞬时抖动（连接/超时/限流/5xx）。
+
+    永久性错误（400 鉴权、上下文超限等）重试无意义，直接抛出，避免
+    无谓等待与误导性日志。
+    """
+    if isinstance(e, (APIConnectionError, APITimeoutError, RateLimitError)):
+        return True
+    if isinstance(e, APIStatusError):
+        return e.status_code >= 500
+    return isinstance(e, (ConnectionError, TimeoutError))
+
+
+async def chat_stream_with_tools_retry(
+    llm: LLMClient,
+    *,
+    messages: list[dict],
+    tools: list[dict],
+    temperature: float | None = None,
+    max_tokens: int | None = None,
+    logger: logging.Logger | None = None,
+) -> AsyncIterator[StreamChunk]:
+    """带"首 chunk 前瞬时失败重试"的流式工具调用。
+
+    流式调用无内置重试。LLM 尚未吐出任何 chunk 时即失败（连接/限流抖动）
+    无法区分"已产生增量"，此时补一次重试是安全的；仅对瞬时异常重试，
+    永久性错误直接抛出。已有增量输出后的失败无法安全重放，按原样抛出。
+    """
+    stream_attempt = 0
+    while True:
+        stream_attempt += 1
+        emitted_any = False
+        try:
+            async for chunk in llm.chat_stream_with_tools(
+                messages=messages,
+                tools=tools,
+                temperature=temperature,
+                max_tokens=max_tokens,
+            ):
+                emitted_any = True
+                yield chunk
+            return
+        except Exception as e:
+            if emitted_any or stream_attempt >= 2 or not _is_transient_stream_error(e):
+                raise
+            if logger is not None:
+                logger.warning(
+                    "chat_stream_with_tools failed before first chunk "
+                    "(transient), retrying once: %s",
+                    e,
+                )
+            await asyncio.sleep(1)
 
 
 # 全局单例：LLM 客户端实例

@@ -205,6 +205,17 @@ System prompt 中的 `STYLE NOTE` 约束 LLM：风格已由后端预置，**禁�
   - `run_end`：总结、实际轮数、最近执行/TikZ 编译是否成功
 - 每次运行的 `run_id` 与 `ts` 用于区分多次生成/微调
 
+## 思维链流式展示
+
+`agent.py` 主循环用 `chat_stream_with_tools` 流式消费 LLM 输出：思维链 chunk
+（智谱 / DeepSeek 等 `delta.reasoning_content`）逐段转为 `{"type": "reasoning",
+"text": ...}` SSE 事件实时推送，前端在时间线顶部展示可折叠思考面板；content
+累计后仍按 `plan` 事件推送，tool_calls 在流末尾一次性返回。思维链只读展示、
+不进对话历史（`assistant_message_from_stream()` 只组装 content + tool_calls）。
+消费经共享辅助 `chat_stream_with_tools_retry()`（`backend/core/llm_client.py`）：
+流式调用无内置重试，仅对"未吐出任何 chunk 的瞬时失败"（连接/超时/限流/5xx）
+补一次重试，永久性错误直接抛出；已有增量输出后的失败无法安全重放，按原样抛出。
+
 ## API
 
 | 方法 | 路径 | 功能 |

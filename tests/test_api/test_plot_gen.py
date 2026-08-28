@@ -21,28 +21,33 @@ def _make_tool_call(name, arguments, cid="tc-1"):
     )
 
 
+class _Response:
+    """chat_stream_with_tools 响应桩：response 形状 + 异步可迭代 StreamChunk 序列。"""
+
+    def __init__(self, content=None, tool_calls=None):
+        self.choices = [
+            SimpleNamespace(
+                message=SimpleNamespace(content=content, tool_calls=tool_calls)
+            )
+        ]
+
+    def __aiter__(self):
+        async def _gen():
+            msg = self.choices[0].message
+            if msg.content:
+                from backend.core.llm_client import StreamChunk
+
+                yield StreamChunk(content=msg.content, usage=None)
+            if msg.tool_calls:
+                from backend.core.llm_client import StreamChunk
+
+                yield StreamChunk(content=None, usage=None, tool_calls=msg.tool_calls)
+
+        return _gen()
+
+
 def _make_response(content=None, tool_calls=None):
-    msg = SimpleNamespace(content=content, tool_calls=tool_calls)
-    msg.model_dump = lambda: {
-        "role": "assistant",
-        "content": content,
-        "tool_calls": (
-            [
-                {
-                    "id": tc.id,
-                    "type": "function",
-                    "function": {
-                        "name": tc.function.name,
-                        "arguments": tc.function.arguments,
-                    },
-                }
-                for tc in (tool_calls or [])
-            ]
-            if tool_calls
-            else None
-        ),
-    }
-    return SimpleNamespace(choices=[SimpleNamespace(message=msg)])
+    return _Response(content=content, tool_calls=tool_calls)
 
 
 async def _collect(generator):
@@ -146,7 +151,7 @@ async def test_generate_with_mock_llm(plot_cfg, monkeypatch):
             "rationale": "bar",
         }
     )
-    llm.chat_with_tools = AsyncMock(
+    llm.chat_stream_with_tools = MagicMock(
         side_effect=[
             _make_response(
                 content="Write the script",
@@ -243,7 +248,7 @@ async def test_generate_passes_style_and_persists_final_message(plot_cfg, monkey
             "rationale": "bar",
         }
     )
-    llm.chat_with_tools = AsyncMock(
+    llm.chat_stream_with_tools = MagicMock(
         return_value=_make_response(content="这是最终回答", tool_calls=None)
     )
 
@@ -306,7 +311,7 @@ async def test_generate_records_trace(plot_cfg, monkeypatch):
 
     llm = MagicMock()
     llm.chat = AsyncMock(return_value={})
-    llm.chat_with_tools = AsyncMock(
+    llm.chat_stream_with_tools = MagicMock(
         side_effect=[
             _make_response(
                 content="Write the script",
@@ -403,7 +408,7 @@ async def test_trace_failure_does_not_abort_generation(plot_cfg, monkeypatch):
 
     llm = MagicMock()
     llm.chat = AsyncMock(return_value={})
-    llm.chat_with_tools = AsyncMock(
+    llm.chat_stream_with_tools = MagicMock(
         side_effect=[
             _make_response(
                 content="Finish now",
@@ -450,7 +455,7 @@ async def test_generate_first_round_text_only_is_nudged(plot_cfg, monkeypatch):
 
     llm = MagicMock()
     llm.chat = AsyncMock(return_value={})
-    llm.chat_with_tools = AsyncMock(
+    llm.chat_stream_with_tools = MagicMock(
         side_effect=[
             _make_response(content="让我先分析一下数据结构……", tool_calls=None),
             _make_response(
@@ -465,8 +470,8 @@ async def test_generate_first_round_text_only_is_nudged(plot_cfg, monkeypatch):
     )
 
     # 首轮文字回复后没有收尾，而是带着强约束 system 消息发起了第二次调用
-    assert llm.chat_with_tools.await_count == 2
-    second_messages = llm.chat_with_tools.await_args_list[1].kwargs["messages"]
+    assert llm.chat_stream_with_tools.call_count == 2
+    second_messages = llm.chat_stream_with_tools.call_args_list[1].kwargs["messages"]
     assert any(
         m.get("role") == "system" and "called NO tool" in m.get("content", "")
         for m in second_messages
@@ -542,7 +547,7 @@ async def test_generate_blocks_verification_loop_after_success(plot_cfg, monkeyp
 
     llm = MagicMock()
     llm.chat = AsyncMock(return_value={})
-    llm.chat_with_tools = AsyncMock(
+    llm.chat_stream_with_tools = MagicMock(
         side_effect=[
             _make_response(
                 content="Write script",
@@ -666,7 +671,7 @@ async def test_generate_blocks_stale_finish_after_change(plot_cfg, monkeypatch):
 
     llm = MagicMock()
     llm.chat = AsyncMock(return_value={})
-    llm.chat_with_tools = AsyncMock(
+    llm.chat_stream_with_tools = MagicMock(
         side_effect=[
             _make_response(
                 content="Write script",
@@ -826,7 +831,7 @@ async def test_generate_blocked_compile_keeps_tikz_state(plot_cfg, monkeypatch):
 
     llm = MagicMock()
     llm.chat = AsyncMock(return_value={})
-    llm.chat_with_tools = AsyncMock(
+    llm.chat_stream_with_tools = MagicMock(
         side_effect=[
             _make_response(
                 content="Write script",
@@ -964,7 +969,7 @@ async def test_generate_blocked_python_sandbox_keeps_execution_state(
 
     llm = MagicMock()
     llm.chat = AsyncMock(return_value={})
-    llm.chat_with_tools = AsyncMock(
+    llm.chat_stream_with_tools = MagicMock(
         side_effect=[
             _make_response(
                 content="Write script",
@@ -1095,7 +1100,7 @@ async def test_generate_blocks_stale_finish_custom_artifact_name(plot_cfg, monke
 
     llm = MagicMock()
     llm.chat = AsyncMock(return_value={})
-    llm.chat_with_tools = AsyncMock(
+    llm.chat_stream_with_tools = MagicMock(
         side_effect=[
             _make_response(
                 content="Write script",

@@ -108,7 +108,7 @@ Prefix: `/api/style-modify`, Tag: `style_modify`
 | POST | `/agent/operations/{operation_id}/undo` | 安全撤销已应用操作 |
 | DELETE | `/agent/sessions/{session_id}` | 删除未运行中的 session 和临时文件 |
 
-SSE 事件类型包括 `session`、`plan`、`tool_call`、`tool_result`、`file_staged`、`compile`、`proposal`、`warning`、`done`、`error`。SSE 不发送完整文件内容或未截断编译日志。
+SSE 事件类型包括 `session`、`plan`、`reasoning`、`tool_call`、`tool_result`、`file_staged`、`compile`、`proposal`、`warning`、`done`、`error`。SSE 不发送完整文件内容或未截断编译日志。`reasoning` 为思维链增量文本（`text` 字段逐段推送）：`agent.py` 用 `chat_stream_with_tools` 流式消费，思维链只读展示、不进对话历史；消费经共享辅助 `chat_stream_with_tools_retry()`（`backend/core/llm_client.py`），流式调用无内置重试，仅对"未吐出任何 chunk 的瞬时失败"（连接/超时/限流/5xx）补一次重试，永久性错误直接抛出。前端在 Agent 步骤面板顶部展示可折叠思考面板。
 
 ## 配置
 

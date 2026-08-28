@@ -33,6 +33,8 @@ export default function useStyleModifyAgent() {
   const [error, setError] = useState("");
   const [warning, setWarning] = useState("");
   const [summary, setSummary] = useState("");
+  // 思维链流式文本（只读展示，不参与任何后续流程）
+  const [reasoningText, setReasoningText] = useState("");
   const [compile, setCompile] = useState(null);
   const [operation, setOperation] = useState(null);
   const [trace, setTrace] = useState(null);
@@ -48,6 +50,11 @@ export default function useStyleModifyAgent() {
     (ev) => {
       if (ev.type === "error") {
         setError(translateError(ev.message || ""));
+        return;
+      }
+      if (ev.type === "reasoning") {
+        // 增量思维链：追加到思考面板，不进入步骤流
+        setReasoningText((prev) => prev + (ev.text || ""));
         return;
       }
       if (ev.type === "warning") {
@@ -139,6 +146,7 @@ export default function useStyleModifyAgent() {
       setWarning("");
       setSummary("");
       setSteps([]);
+      setReasoningText("");
       setProposal(null);
       setFiles([]);
       setCompile(null);
@@ -172,6 +180,7 @@ export default function useStyleModifyAgent() {
       setWarning("");
       setSummary("");
       setSteps([]);
+      setReasoningText("");
       try {
         await api.styleModify.agent.refine({
           sessionId,
@@ -261,6 +270,7 @@ export default function useStyleModifyAgent() {
       setProposal(null);
       setFiles([]);
       setSteps([]);
+      setReasoningText("");
       setCompile(null);
       setOperation(null);
       setSummary("");
@@ -312,6 +322,7 @@ export default function useStyleModifyAgent() {
     proposal,
     files,
     steps,
+    reasoningText,
     running,
     applying,
     error,
