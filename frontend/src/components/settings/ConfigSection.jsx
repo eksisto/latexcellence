@@ -1,13 +1,18 @@
 /** 设置对话框共享原语：分区容器与复选框 */
 
-export function CheckboxField({ label, checked, onChange }) {
+export function CheckboxField({ label, checked, onChange, disabled = false }) {
   return (
-    <label className="flex items-center gap-2 cursor-pointer select-none">
+    <label
+      className={`flex items-center gap-2 select-none ${
+        disabled ? "opacity-50" : "cursor-pointer"
+      }`}
+    >
       <input
         type="checkbox"
         checked={checked}
+        disabled={disabled}
         onChange={(e) => onChange(e.target.checked)}
-        className="size-4 cursor-pointer rounded border-input accent-primary"
+        className="size-4 cursor-pointer rounded border-input accent-primary disabled:cursor-not-allowed"
       />
       <span className="text-sm">{label}</span>
     </label>

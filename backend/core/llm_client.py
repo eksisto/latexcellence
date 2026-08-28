@@ -455,6 +455,8 @@ class LLMClient:
                 }
                 if response_format:
                     kwargs["response_format"] = response_format
+                if cfg.extra_body:
+                    kwargs["extra_body"] = cfg.extra_body
 
                 response = await self.client.chat.completions.create(**kwargs)
 
@@ -534,13 +536,16 @@ class LLMClient:
 
         self._logger.info(f"LLM stream request | model={cfg.model} | tokens={max_tok}")
 
-        stream = await self.client.chat.completions.create(
-            model=cfg.model,
-            messages=messages,
-            temperature=temp,
-            max_tokens=max_tok,
-            stream=True,
-        )
+        kwargs: dict[str, Any] = {
+            "model": cfg.model,
+            "messages": messages,
+            "temperature": temp,
+            "max_tokens": max_tok,
+            "stream": True,
+        }
+        if cfg.extra_body:
+            kwargs["extra_body"] = cfg.extra_body
+        stream = await self.client.chat.completions.create(**kwargs)
 
         async for chunk in stream:
             if chunk.choices and chunk.choices[0].delta.content:
@@ -616,6 +621,8 @@ class LLMClient:
                 }
                 if tools:
                     kwargs["tools"] = tools
+                if cfg.extra_body:
+                    kwargs["extra_body"] = cfg.extra_body
 
                 response = await self.client.chat.completions.create(**kwargs)
 
@@ -703,6 +710,8 @@ class LLMClient:
             "max_tokens": max_tok,
             "stream": True,
         }
+        if cfg.extra_body:
+            kwargs["extra_body"] = cfg.extra_body
         try:
             stream = await self.client.chat.completions.create(
                 **kwargs, stream_options={"include_usage": True}
@@ -793,6 +802,8 @@ class LLMClient:
             "stream": True,
             "tools": tools,
         }
+        if cfg.extra_body:
+            kwargs["extra_body"] = cfg.extra_body
         try:
             stream = await self.client.chat.completions.create(
                 **kwargs, stream_options={"include_usage": True}

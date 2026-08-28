@@ -5,8 +5,10 @@ llm_client.chat_stream_with_usage 行为测试。
     - 末次 chunk 透传 UsageInfo
     - 不支持 stream_options 时降级（usage=None）
     - 限流等待被正常执行
+    - extra_body 配置透传（非空传递 / 空省略）
 """
 
+from types import SimpleNamespace
 from typing import Any, AsyncIterator
 from unittest.mock import AsyncMock, MagicMock
 
@@ -116,3 +118,83 @@ async def test_chat_stream_with_usage_fallback_when_stream_options_unsupported(
     assert not any(c.usage is not None for c in chunks)
     # 第一次带 stream_options 失败，第二次不带参数成功
     assert call_count["n"] == 2
+
+
+# ── extra_body 透传 ─────────────────────────────────────────────────────────
+
+
+def _fake_cfg(extra_body: dict[str, Any] | None) -> SimpleNamespace:
+    """构造替换 llm_client.get_config 的最小配置对象。"""
+    return SimpleNamespace(
+        llm=SimpleNamespace(
+            model="test-model",
+            temperature=0.1,
+            max_tokens=100,
+            max_concurrency=2,
+            extra_body=extra_body or {},
+        )
+    )
+
+
+def _make_completion_response(content: str) -> Any:
+    response = MagicMock()
+    response.choices = [SimpleNamespace(message=SimpleNamespace(content=content))]
+    response.usage = None
+    return response
+
+
+@pytest.mark.asyncio
+async def test_chat_with_usage_passes_extra_body_when_configured(monkeypatch):
+    client = LLMClient()
+    client._rate_limit = AsyncMock()
+    monkeypatch.setattr(
+        "backend.core.llm_client.get_config",
+        lambda: _fake_cfg({"reasoning_effort": "low"}),
+    )
+
+    mock_create = AsyncMock(return_value=_make_completion_response("ok"))
+    client._client = MagicMock()
+    client._client.chat.completions.create = mock_create
+
+    content, _ = await client.chat_with_usage(
+        messages=[{"role": "user", "content": "hi"}]
+    )
+
+    assert content == "ok"
+    assert mock_create.call_args.kwargs["extra_body"] == {"reasoning_effort": "low"}
+
+
+@pytest.mark.asyncio
+async def test_chat_with_usage_omits_extra_body_when_empty(monkeypatch):
+    client = LLMClient()
+    client._rate_limit = AsyncMock()
+    monkeypatch.setattr("backend.core.llm_client.get_config", lambda: _fake_cfg({}))
+
+    mock_create = AsyncMock(return_value=_make_completion_response("ok"))
+    client._client = MagicMock()
+    client._client.chat.completions.create = mock_create
+
+    await client.chat_with_usage(messages=[{"role": "user", "content": "hi"}])
+
+    assert "extra_body" not in mock_create.call_args.kwargs
+
+
+@pytest.mark.asyncio
+async def test_chat_stream_passes_extra_body_when_configured(monkeypatch):
+    client = LLMClient()
+    client._rate_limit = AsyncMock()
+    monkeypatch.setattr(
+        "backend.core.llm_client.get_config",
+        lambda: _fake_cfg({"thinking": {"reasoning_budget": "low"}}),
+    )
+
+    mock_create = AsyncMock(return_value=_AsyncIter([_make_chunk("ok")]))
+    client._client = MagicMock()
+    client._client.chat.completions.create = mock_create
+
+    tokens = [tok async for tok in client.chat_stream(messages=[])]
+
+    assert tokens == ["ok"]
+    assert mock_create.call_args.kwargs["extra_body"] == {
+        "thinking": {"reasoning_budget": "low"}
+    }

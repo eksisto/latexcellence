@@ -57,7 +57,7 @@ class LLMConfig(BaseModel):
     base_url: str = "https://api.deepseek.com"  # API 端点（兼容第三方代理）
     model: str = "deepseek-flash"  # 模型名称
     temperature: float = Field(0.3, le=2)  # 生成温度（越低越确定，越高越创意）
-    max_tokens: int = Field(8192, ge=1)  # 单次生成最大 token 数
+    max_tokens: int = Field(16384, ge=1)  # 单次生成最大 token 数
     request_interval: float = Field(1.5, ge=0)  # 请求间隔（秒），避免触发 rate limit
     max_concurrency: int = Field(5, ge=1)  # 最大并发 LLM 请求数（Semaphore）
     # 当前模型的上下文窗口 token 数；0 表示自动探测（API 探测 → 错误信息学习 →
@@ -68,6 +68,11 @@ class LLMConfig(BaseModel):
     # 用于绕过不透传 /models 路由的网关；为空时使用 base_url。
     # 仅当探测地址与 base_url 同源时才携带 API key，跨域探测不发送密钥。
     models_probe_url: str = ""
+    # 透传给 OpenAI 兼容 API 的额外请求体参数（openai SDK extra_body 语义），
+    # 用于厂商私有参数，例如思维链模型降档 {"reasoning_effort": "low"}、
+    # 通义 {"enable_thinking": false}、智谱 {"thinking": {"reasoning_budget": "low"}}。
+    # 留空 {} 时不发送任何额外参数，不支持的模型不会因此报错（按需显式开启）。
+    extra_body: dict[str, Any] = Field(default_factory=dict)
 
 
 class TypoCheckConfig(BaseModel):

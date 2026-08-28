@@ -178,7 +178,7 @@ npm start        # 或 node server.js
 | --- | --- | --- |
 | `server` | host, port, dev_mode, vite_dev_url, allowed_origins | 服务监听配置与 CORS 白名单（前端部署域名 + 本地开发地址） |
 | `security` | access_token | 共享访问令牌；非空时所有 `/api/*` 请求（`/api/health` 除外）必须携带 `X-Latexcellence-Token` 请求头（EventSource 等无法自定义请求头的场景通过 `?token=` 传递） |
-| `llm` | api_key, base_url, model, temperature, max_tokens, request_interval, max_concurrency, context_window_tokens, models_probe_url | LLM 连接与调用参数；`context_window_tokens`（0=自动探测）与 `models_probe_url`（直连 /models 探测地址）用于上下文窗口动态推导；探测地址与主服务不同源时不携带 API key |
+| `llm` | api_key, base_url, model, temperature, max_tokens, request_interval, max_concurrency, context_window_tokens, models_probe_url, extra_body | LLM 连接与调用参数；`context_window_tokens`（0=自动探测）与 `models_probe_url`（直连 /models 探测地址）用于上下文窗口动态推导；探测地址与主服务不同源时不携带 API key；`extra_body`（默认 `{}`，空时不发送）透传厂商私有请求体参数，如思维链降档 `{"reasoning_effort": "low"}`，设置页 JSON 文本框编辑 |
 | `http` | user_agent | 外部 HTTP 请求的全局 User-Agent（web_search 引擎与 bib_manager Provider 共用） |
 | `features` | 各模块的 `enabled` + 特有配置（batch_size, output_dir, timeout 等） | 功能开关与模块级参数 |
 | `features.function_calling` | `web_search.*`、`scholarly_research.*`、`project_tools.*`、`edit_tools.*` | 全局 LLM Function Calling 工具集；`web_search.strategy` 控制 legacy/aggregate 搜索，`web_search.page_reading.strategy` 独立控制 legacy/structured 读页。结构化路径的缓存目录、TTL、大小限制、抽取器版本与质量阈值见 `config.example.json`，设置页可热重载；默认均保留 legacy 回滚路径。Tavily 未配置 Key 时使用 keyless 公共接口 |

@@ -101,6 +101,8 @@
 - 指数退避：第 N 次重试前等待 `2^(N-1)` 秒（1s → 2s → 4s）
 - 仅网络/API 异常触发重试（`json.JSONDecodeError` 不再由客户端处理）
 
+**extra_body 透传**：`llm.extra_body`（`dict[str, Any]`，默认 `{}`）会作为 openai SDK 的 `extra_body` 参数附加到全部 `chat.completions.create` 调用（非流式 / 流式 / Function Calling），用于厂商私有请求体参数，例如思维链模型降档 `{"reasoning_effort": "low"}`、通义 `{"enable_thinking": false}`、智谱 `{"thinking": {"reasoning_budget": "low"}}`。**为空时不发送任何额外参数**——非思考模型 / 不支持这些字段的 provider 不会因此报错，属于按需显式开启的配置；若对不支持的模型显式配置了字段，provider 返回 400 会走常规重试后抛出，需自行确认目标模型的参数兼容性。前端在设置对话框 LLM 分区以 JSON 文本框编辑（非法 JSON 只提示、不保存）。
+
 **单例模式**：全局 `_llm_client` 通过 `get_llm_client()` 访问，使用 `threading.Lock` 双检锁保护多线程场景。`client` 属性首次访问时读取 `get_config().llm` 创建实例并缓存；当用户通过 SettingsDialog 更新 `llm` 配置时，`config.update_config_from_dict()` 会调用 `get_llm_client().reset()` 清除缓存，使下一次访问 `client` 时按新配置重新创建，从而支持运行时热重载 `api_key` / `base_url`。
 
 **每用户治理门（多用户 v2 P1b）**：全部公共入口（`chat_with_usage` / `chat_stream` / `chat_with_tools` / `chat_stream_with_usage` / `chat_stream_with_tools`）在最外层套 `core/multiuser/llm_governance.py` 的 `admission_gate()`：多用户模式下读取请求级当前用户上下文（由 `AccessSecurityMiddleware` 会话验证成功后全局注入，覆盖全部 `/api` 端点），在单事务内完成"滑动窗口限流校验 + 事件落账 + 并发租约获取"，超限抛 429 语义 RuntimeError（`gov_code` = `llm_rate_limited` / `llm_concurrency_limited`，携带 `retry_after`），由 main.py 注册的全局异常处理器（`register_governance_handler`）翻译为 HTTP 429 + Retry-After + 既有 `detail` 包装的结构化错误体；调用结束 finally 释放租约（流式提前断开同样覆盖）。单用户模式或无用户上下文（后台任务）直通且零数据库依赖。实现细节见下方"多用户模式基础设施"一节的 `llm_governance.py` 行。
