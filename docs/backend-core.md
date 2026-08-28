@@ -759,7 +759,7 @@ backend/utils/sandbox/
 
 **Docker 容器安全基线**（runner 强制注入）：`--network none`、根文件系统只读 + tmpfs `/tmp`（容量 `tmpfs_mb`）、`--memory`/`--cpus`/`--pids-limit`、`no-new-privileges`、drop ALL capabilities、以宿主后端同 uid:gid 运行（产物属主一致）。挂载使用**同绝对路径**（host_path 即容器内路径），保证 template_gen 等解析 .log 中文件路径的逻辑零改动。超时强杀容器并标记 `timed_out`；退出码 137 或 inspect OOMKilled 标志翻译为 `oom_killed`。
 
-**并发治理**：全局进程内信号量（`max_concurrent_global`，单/多用户均生效）+ 多用户模式每用户 DB 租约（`core/multiuser/sandbox_leases.py`，`sandbox_slots` 表，TTL = 执行超时 + 120s，崩溃残留由维护循环清理；P7 多实例阶段在同一共享卷上跨副本生效）。租约满抛 `sandbox_busy`（429）。
+**并发治理**：全局进程内信号量（`max_concurrent_global`，单/多用户均生效）+ 多用户模式每用户 DB 租约（`core/multiuser/sandbox_leases.py`，`sandbox_slots` 表，TTL = 执行超时 + 120s，崩溃残留由维护循环清理；P7 多实例阶段在同一共享卷上跨副本生效）。租约满抛 `sandbox_busy`（429）。只读轻量命令经 `execute(..., lease_exempt=True)` 豁免每用户租约（仍受全局信号量约束）——目前仅 git 查询类子命令（status/log/rev-parse/show/archive 等，判定见 `git_diff/service/process.py::_is_readonly_git_args`），避免版本页并行拉取 status/log 这类毫秒级查询在每用户上限=1 时互相顶掉误报 429；init/add/commit 写操作与 latexdiff 照常占用租约。
 
 **接入的调用点**：
 
@@ -778,7 +778,7 @@ backend/utils/sandbox/
 | 函数/类 | 功能 |
 | --- | --- |
 | `get_sandbox_runner()` / `reset_sandbox_runner()` | 进程级单例获取 / 重置（测试） |
-| `SandboxRunner.execute(spec, user_id=None)` | 统一执行入口：选后端 → 并发治理 → 结果归一 |
+| `SandboxRunner.execute(spec, user_id=None, lease_exempt=False)` | 统一执行入口：选后端 → 并发治理 → 结果归一（`lease_exempt=True` 豁免每用户租约，供 git 查询类只读命令） |
 | `initialize_sandbox_runner()` / `close_sandbox_runner()` | lifespan 启动预热探测 / 关闭释放 |
 | `cached_backend_for(kind)` | 同步读取最近一次后端解析结果（pandoc/texfot/latexindent 可用性门控："docker" 表示工具由镜像提供，宿主无需安装） |
 | `to_http_exception(err)` | 把带 `sandbox_code` 的错误翻译为 HTTPException（503/429），供路由层优先匹配 |

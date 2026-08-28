@@ -553,7 +553,7 @@ docker run -d --name latexcellence \
 | `mode` | `auto` | `auto`：探测到 Docker daemon 即容器执行，不可达回落本地进程并告警；`docker`：强制容器执行，daemon 不可达返回 503 `sandbox_unavailable`（不静默回落）；`local`：保持本地子进程（行为与历史版本一致） |
 | `image_tex` / `image_convert` / `image_plot` | `latexcellence-*:latest` | 三类沙箱镜像名（tex=编译/git/latexdiff/latexindent；convert=pandoc；plot=Python 绘图） |
 | `cpus` / `memory_mb` / `pids_limit` / `tmpfs_mb` | 1.0 / 1024 / 256 / 512 | 单容器资源上限 |
-| `max_concurrent_global` / `max_concurrent_per_user` | 4 / 1 | 沙箱并发池上限（每用户租约存 SQLite，超限返回 429 `sandbox_busy`） |
+| `max_concurrent_global` / `max_concurrent_per_user` | 4 / 1 | 沙箱并发池上限（每用户租约存 SQLite，超限返回 429 `sandbox_busy`；git 查询类只读子命令豁免每用户租约） |
 | `startup_grace_seconds` | 10 | 容器冷启动宽限（叠加在各功能既有超时之上） |
 
 ### 镜像构建

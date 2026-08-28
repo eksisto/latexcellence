@@ -10,7 +10,7 @@ git_manage 不复制 git 执行层，直接复用 `backend/modules/git_diff/serv
 
 | 复用项 | 来源 | 说明 |
 | --- | --- | --- |
-| `run_git` / `run_git_checked` | `git_diff/service/process.py` | git 子进程统一经 SandboxRunner（image_kind=tex）执行，自动获得每用户并发租约、超时与 `LC_ALL=C` 稳定输出；env 注入 `safe.directory=*` 硬化容器 uid 差异 |
+| `run_git` / `run_git_checked` | `git_diff/service/process.py` | git 子进程统一经 SandboxRunner（image_kind=tex）执行，自动获得超时与 `LC_ALL=C` 稳定输出；只读子命令（status/log/rev-parse 等查询类）豁免每用户并发租约，init/add/commit 写操作照常占用；env 注入 `safe.directory=*` 硬化容器 uid 差异 |
 | `redact_command_output_for_user` | `git_diff/service/process.py` | 多用户模式下命令输出/错误消息的路径脱敏统一口 |
 | `get_project_context` | `git_diff/service/revisions.py` | 仓库定位（含 project_prefix 子目录场景） |
 

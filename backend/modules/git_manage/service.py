@@ -3,8 +3,9 @@
 复用 git_diff 的共享执行层：``run_git`` / ``run_git_checked`` /
 ``redact_command_output_for_user`` 与 ``get_project_context`` 仓库定位
 （含 project_prefix 子目录场景），不复制实现，git 命令统一经
-SandboxRunner（image_kind=tex）执行，自动获得每用户并发租约、超时与
-输出脱敏。
+SandboxRunner（image_kind=tex）执行，自动获得超时与输出脱敏；只读
+子命令（status/log/rev-parse 等查询类）豁免每用户并发租约，init/
+add/commit 写操作照常占用（见 git_diff.process._is_readonly_git_args）。
 
 安全边界：
 - 无用户输入的 ref/hash（不做 checkout / restore 类命令）；唯一自由

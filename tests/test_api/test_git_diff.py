@@ -6,6 +6,7 @@ git_diff 模块纯函数单元测试。
     - _validate_project_path 路径安全校验（委托 path_guard）
     - _split_document 文档分块（preamble / body / end）
     - _diff_lines 行级差异标记
+    - _is_readonly_git_args 只读 git 子命令判定（沙箱租约豁免）
     - _wrap_diff_block 浮动体拆包与空行保留
     - _resolve_include_path / _read_revision_file 路径穿越防护
     - _list_commit_revisions 无提交仓库容错
@@ -555,6 +556,64 @@ class TestListCommitRevisions:
                     ):
                         os.environ.pop(key, None)
             assert revisions == []
+
+
+class TestReadonlyGitArgs:
+    """只读 git 子命令判定（每用户沙箱租约豁免依据）。"""
+
+    def test_readonly_subcommands(self):
+        assert git_diff_process._is_readonly_git_args(
+            ["status", "--porcelain=v1", "-z", "-uall"]
+        )
+        assert git_diff_process._is_readonly_git_args(
+            ["log", "-1", "--pretty=format:%h%x00%s"]
+        )
+        assert git_diff_process._is_readonly_git_args(["rev-parse", "--show-toplevel"])
+        assert git_diff_process._is_readonly_git_args(
+            ["rev-parse", "--verify", "--end-of-options", "HEAD^{commit}"]
+        )
+        assert git_diff_process._is_readonly_git_args(["branch", "--show-current"])
+        assert git_diff_process._is_readonly_git_args(["for-each-ref", "refs/heads"])
+        assert git_diff_process._is_readonly_git_args(["show", "HEAD:main.tex"])
+        assert git_diff_process._is_readonly_git_args(
+            ["archive", "--format=zip", "--output", "/tmp/a.zip", "HEAD"]
+        )
+
+    def test_mutating_subcommands(self):
+        assert not git_diff_process._is_readonly_git_args(["init"])
+        assert not git_diff_process._is_readonly_git_args(["add", "-A"])
+        # 子命令的参数值（commit message 恰为只读子命令名）不能误判：
+        # 首个命中的已知子命令是 commit 本身
+        assert not git_diff_process._is_readonly_git_args(
+            ["-c", "user.name=x", "-c", "user.email=y", "commit", "-m", "status"]
+        )
+
+    def test_unknown_subcommand_conservative(self):
+        # 未识别的调用保守按非只读处理（照常占用租约，宁多不漏）
+        assert not git_diff_process._is_readonly_git_args(["worktree", "list"])
+        assert not git_diff_process._is_readonly_git_args([])
+
+    @pytest.mark.asyncio
+    async def test_run_git_passes_lease_exempt_flag(self, monkeypatch):
+        seen: dict = {}
+
+        class FakeRunner:
+            async def execute(self, spec, *, user_id=None, lease_exempt=False):
+                seen["lease_exempt"] = lease_exempt
+                return SimpleNamespace(
+                    returncode=0, stdout="", stderr="", timed_out=False
+                )
+
+        monkeypatch.setattr(
+            git_diff_process, "get_sandbox_runner", lambda: FakeRunner()
+        )
+        monkeypatch.setattr(git_diff_process, "current_sandbox_user_id", lambda: "u1")
+
+        await git_diff_process.run_git(Path("/tmp"), ["status", "--porcelain"])
+        assert seen["lease_exempt"] is True
+
+        await git_diff_process.run_git(Path("/tmp"), ["add", "-A"])
+        assert seen["lease_exempt"] is False
 
 
 class TestPruneJobDirs:

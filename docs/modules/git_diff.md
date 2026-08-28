@@ -12,7 +12,7 @@
 | --- | --- |
 | `models.py` | Pydantic 结果模型与内部 dataclass |
 | `constants.py` | 常量、正则与差异 preamble 模板 |
-| `process.py` | git / latexdiff / latexmk 子进程执行 |
+| `process.py` | git / latexdiff / latexmk 子进程执行（只读 git 子命令豁免每用户沙箱租约，判定见 `_is_readonly_git_args`） |
 | `revisions.py` | Git revision 列表与校验 |
 | `flatten.py` | LaTeX 依赖递归展开 |
 | `diff.py` | difflib / latexdiff 差异文档生成 |

@@ -217,6 +217,26 @@ class TestUserSlot:
         with pytest.raises(RuntimeError, match="Database not initialized"):
             await runner.execute(_spec(), user_id="u1")
 
+    @pytest.mark.asyncio
+    async def test_lease_exempt_skips_user_lease(self, cfg, monkeypatch):
+        """lease_exempt=True 豁免每用户租约（git 查询类只读命令）。
+
+        常规多用户执行在 DB 未初始化时快速失败；豁免路径完全不触租约，
+        因此 DB 未就绪也能正常执行，以此证明租约环节被跳过。
+        """
+        cfg.multi_user.enabled = True
+        cfg.sandbox.mode = "local"
+
+        async def fake_execute_local(spec):
+            return _result()
+
+        monkeypatch.setattr(
+            "backend.utils.sandbox.runner.execute_local", fake_execute_local
+        )
+        runner = SandboxRunner()
+        res = await runner.execute(_spec(), user_id="u1", lease_exempt=True)
+        assert res.returncode == 0
+
 
 class TestErrorFactories:
     def test_sandbox_busy_tagged(self):

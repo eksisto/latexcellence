@@ -143,8 +143,11 @@ export default function VersionManagePage() {
         /* 打开失败由后续 status 请求报错 */
       }
       if (cancelled) return;
-      loadStatus();
-      loadLog(0);
+      // status/log 串行加载：两者都是 git 沙箱命令，并行会在每用户
+      // 沙箱并发紧张时互相顶掉（429），串行也避免双 toast 叠加
+      await loadStatus();
+      if (cancelled) return;
+      await loadLog(0);
     })();
     return () => {
       cancelled = true;
@@ -156,7 +159,8 @@ export default function VersionManagePage() {
     try {
       await api.gitManage.init(workspaceId);
       toast.success(t("pages:versionManage.initSuccess"));
-      await Promise.all([loadStatus(), loadLog(0)]);
+      await loadStatus();
+      await loadLog(0);
     } catch (err) {
       toast.error(translateError(err.message));
     } finally {
@@ -172,7 +176,8 @@ export default function VersionManagePage() {
       await api.gitManage.commit(trimmed, workspaceId);
       toast.success(t("pages:versionManage.commitSuccess"));
       setMessage("");
-      await Promise.all([loadStatus(), loadLog(0)]);
+      await loadStatus();
+      await loadLog(0);
     } catch (err) {
       toast.error(translateError(err.message));
     } finally {

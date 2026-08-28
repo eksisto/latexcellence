@@ -9,7 +9,9 @@
 - 全局并发：进程内 asyncio.Semaphore(max_concurrent_global)，单/多用户
   模式均生效；
 - 每用户并发：多用户模式下经 sandbox_slots 表租约（P7 起跨副本生效），
-  获取失败抛 sandbox_busy（429）；单用户模式无用户身份，跳过。
+  获取失败抛 sandbox_busy（429）；单用户模式无用户身份，跳过。只读
+  轻量命令（git 查询类子命令）经 ``lease_exempt=True`` 豁免租约，
+  避免毫秒级查询与重任务争抢每用户唯一槽位造成误伤（429）。
 """
 
 import asyncio
@@ -190,20 +192,29 @@ class SandboxRunner:
 
     # ── 执行 ──────────────────────────────────────────────────
     async def execute(
-        self, spec: ExecSpec, *, user_id: str | None = None
+        self,
+        spec: ExecSpec,
+        *,
+        user_id: str | None = None,
+        lease_exempt: bool = False,
     ) -> ExecResult:
-        """执行一次外部命令：选后端 → 并发治理 → 结果归一。"""
+        """执行一次外部命令：选后端 → 并发治理 → 结果归一。
+
+        ``lease_exempt=True`` 豁免每用户并发租约（仍受全局信号量约束），
+        供 git 查询类等只读轻量命令使用。
+        """
         scfg = self._sandbox_cfg()
         backend = await self.resolve_backend(spec.image_kind)
         async with self._global_semaphore(scfg.max_concurrent_global):
             slot_id: str | None = None
             try:
-                slot_id = await self._acquire_user_slot(
-                    spec,
-                    user_id,
-                    max_per_user=scfg.max_concurrent_per_user,
-                    max_global=scfg.max_concurrent_global,
-                )
+                if not lease_exempt:
+                    slot_id = await self._acquire_user_slot(
+                        spec,
+                        user_id,
+                        max_per_user=scfg.max_concurrent_per_user,
+                        max_global=scfg.max_concurrent_global,
+                    )
                 if backend == "docker":
                     return await self._docker.execute(
                         spec,
