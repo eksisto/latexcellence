@@ -227,7 +227,34 @@ class FormatConverterService:
     async def _run_pandoc_text(
         self, text: str, source_format: str, target_format: str
     ) -> str | bytes:
-        """经 SandboxRunner 调用 Pandoc 进行文本转换。
+        """文本输入转换（30s 超时）：文本按 UTF-8 落临时输入文件。"""
+        return await self._run_pandoc(
+            text.encode("utf-8"),
+            source_format,
+            target_format,
+            timeout_seconds=_TEXT_TIMEOUT_SECONDS,
+        )
+
+    async def _run_pandoc_file(
+        self, file_bytes: bytes, source_format: str, target_format: str
+    ) -> str | bytes:
+        """文件输入转换（60s 超时）：二进制内容落临时输入文件。"""
+        return await self._run_pandoc(
+            file_bytes,
+            source_format,
+            target_format,
+            timeout_seconds=_FILE_TIMEOUT_SECONDS,
+        )
+
+    async def _run_pandoc(
+        self,
+        input_bytes: bytes,
+        source_format: str,
+        target_format: str,
+        *,
+        timeout_seconds: float,
+    ) -> str | bytes:
+        """经 SandboxRunner 调用 Pandoc 的共享执行路径。
 
         输入统一落临时文件后以路径传入（不使用 stdin：docker 后端不注入
         标准输入，文件化让 local/docker 两条后端行为一致）；二进制格式输出
@@ -241,7 +268,7 @@ class FormatConverterService:
         with tempfile.TemporaryDirectory(prefix="latexcellence_pandoc_") as tmp_dir:
             ext = f".{source_format}" if source_format != "markdown" else ".md"
             in_path = Path(tmp_dir) / f"in{ext}"
-            in_path.write_text(text, encoding="utf-8")
+            in_path.write_bytes(input_bytes)
 
             cmd = ["pandoc", "-f", pandoc_from, "-t", pandoc_to, *extra_args]
             out_path: Path | None = None
@@ -254,42 +281,7 @@ class FormatConverterService:
                 command=cmd,
                 cwd=tmp_dir,
                 image_kind="convert",
-                timeout_seconds=_TEXT_TIMEOUT_SECONDS,
-            )
-            result = await get_sandbox_runner().execute(
-                spec, user_id=current_sandbox_user_id()
-            )
-            return self._collect_pandoc_output(result, out_path)
-
-    async def _run_pandoc_file(
-        self, file_bytes: bytes, source_format: str, target_format: str
-    ) -> str | bytes:
-        """经 SandboxRunner 以临时文件调用 Pandoc 进行文件转换。
-
-        二进制格式返回 base64 字符串；输入/输出统一放在同一临时目录内，
-        容器内外同绝对路径可见。
-        """
-        pandoc_from = PANDOC_READER_FORMATS[source_format]
-        pandoc_to = PANDOC_WRITER_FORMATS[target_format]
-        ext = f".{source_format}" if source_format != "markdown" else ".md"
-        extra_args = ["--wrap=preserve"] if target_format == "latex" else []
-
-        with tempfile.TemporaryDirectory(prefix="latexcellence_pandoc_") as tmp_dir:
-            in_path = Path(tmp_dir) / f"in{ext}"
-            in_path.write_bytes(file_bytes)
-
-            cmd = ["pandoc", "-f", pandoc_from, "-t", pandoc_to, *extra_args]
-            out_path: Path | None = None
-            if target_format in self.BINARY_FORMATS:
-                out_path = Path(tmp_dir) / f"out.{target_format}"
-                cmd += ["-o", str(out_path)]
-            cmd.append(str(in_path))
-
-            spec = ExecSpec(
-                command=cmd,
-                cwd=tmp_dir,
-                image_kind="convert",
-                timeout_seconds=_FILE_TIMEOUT_SECONDS,
+                timeout_seconds=timeout_seconds,
             )
             result = await get_sandbox_runner().execute(
                 spec, user_id=current_sandbox_user_id()

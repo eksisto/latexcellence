@@ -42,8 +42,9 @@ markdown reader 侧启用 `tex_math_single_backslash` 扩展（`-f markdown+tex_
 | `_check_pandoc` | 检查 pandoc 是否可用 |
 | `_validate_formats(source, target)` | 校验格式参数有效性 |
 | `_validate_file(filename, source_format)` | 校验文件扩展名与格式匹配 |
-| `_run_pandoc_text(text, source, target)` | 文本输入落临时文件后调用 Pandoc（经 SandboxRunner） |
-| `_run_pandoc_file(file_bytes, source, target)` | 文件输入落临时文件后调用 Pandoc（DOCX 等二进制格式输出 base64） |
+| `_run_pandoc_text(text, source, target)` | 文本输入（UTF-8 编码）转入共享执行路径 |
+| `_run_pandoc_file(file_bytes, source, target)` | 文件输入转入共享执行路径（DOCX 等二进制格式输出 base64） |
+| `_run_pandoc(input_bytes, source, target, timeout_seconds)` | 共享执行路径：输入落临时文件后调用 Pandoc（经 SandboxRunner），收集文本/二进制输出 |
 | `_derive_output_filename(original, target)` | 推导输出文件名 |
 
 **降级策略**：无 API Key 或 LLM 兜底分析失败时，直接返回 Pandoc 转换结果。
