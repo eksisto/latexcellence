@@ -2,6 +2,7 @@ import { useTranslation } from "react-i18next";
 
 import { Button } from "@/components/ui/button";
 import BinaryFilePreview from "@/components/editor/BinaryFilePreview";
+import { isImagePreviewFilePath } from "@/lib/editor/files";
 
 import FileText from "lucide-react/dist/esm/icons/file-text.mjs";
 import Image from "lucide-react/dist/esm/icons/image.mjs";
