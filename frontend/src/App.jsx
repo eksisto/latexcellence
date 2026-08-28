@@ -304,9 +304,10 @@ const AppToolbar = memo(function AppToolbar() {
   const authUser = useStore((s) => s.authUser);
   return (
     <div className="fixed top-4 right-4 z-50 flex items-center gap-1">
-      {/* 欢迎页已有「打开工作区」主按钮、工作区页/项目工作台页本身即目标页，右上角不再显示快捷入口 */}
-      <WorkspaceShortcut />
       <AuthToolbar />
+      {/* 欢迎页已有「打开工作区」主按钮、工作区页/项目工作台页本身即目标页，右上角不再显示快捷入口。
+          kanban 固定紧邻语言切换图标左侧；单用户模式 AuthToolbar 不渲染，布局不受影响 */}
+      <WorkspaceShortcut />
       {/* 界面语言为纯前端设置：不依赖后端连接与登录状态，始终可切换 */}
       <LanguageSwitcher />
       <ThemeSwitcher />
