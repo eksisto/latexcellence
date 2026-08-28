@@ -2,6 +2,20 @@
 
 通过 `subprocess` 调用 Pandoc 实现 Markdown/DOCX/HTML 与 LaTeX 的互转，支持文本输入和文件上传两种模式。目标格式为 LaTeX 时，通过确定性宏包规则表自动分析所需宏包（LLM 仅兜底）。
 
+## Markdown 公式定界符识别
+
+markdown reader 侧启用 `tex_math_single_backslash` 扩展（`-f markdown+tex_math_single_backslash`），将 `\(E=mc^2\)` / `\[E=mc^2\]`（LLM 生成 markdown 的常见公式写法）识别为行内/行间公式，避免被 Pandoc 当作普通括号转成字面文本。该扩展只加在 reader 侧：
+
+- writer 侧（`-t`）保持 Pandoc 默认，LaTeX 输出统一为 `\(...\)` / `\[...\]` 形式；
+- 仅对 markdown 源生效，HTML/DOCX/LaTeX 源不追加该扩展；
+- 行内代码（code span/fenced code block）中的 `\(...\)` 不受影响，保持字面文本；
+- 未配对的 `\(` / `\[` 回落为普通文本，不会吞掉正文。
+
+已知限制：
+
+- 正文中**成对出现**的 `\(` ... `\)` / `\[` ... `\]` 一律按公式解析——若用户本意是输出字面 `\(`（如写作技巧说明），会被吞进 math span；
+- 内侧空白不影响识别（`\( x \)` 同样按公式处理，空白被规整），此规则与 `tex_math_dollars`（`$ x $` 不识别）不同。
+
 | 维度 | 格式转换 | 其他模块 |
 | --- | --- | --- |
 | 外部依赖 | pandoc + 宏包规则表（LLM 兜底） | latexmk / LLM |
@@ -28,8 +42,8 @@
 | `_check_pandoc` | 检查 pandoc 是否可用 |
 | `_validate_formats(source, target)` | 校验格式参数有效性 |
 | `_validate_file(filename, source_format)` | 校验文件扩展名与格式匹配 |
-| `_run_pandoc_text(text, source, target)` | 通过 stdin 调用 Pandoc |
-| `_run_pandoc_file(file_bytes, source, target)` | 通过临时文件调用 Pandoc（DOCX 等二进制格式） |
+| `_run_pandoc_text(text, source, target)` | 文本输入落临时文件后调用 Pandoc（经 SandboxRunner） |
+| `_run_pandoc_file(file_bytes, source, target)` | 文件输入落临时文件后调用 Pandoc（DOCX 等二进制格式输出 base64） |
 | `_derive_output_filename(original, target)` | 推导输出文件名 |
 
 **降级策略**：无 API Key 或 LLM 兜底分析失败时，直接返回 Pandoc 转换结果。

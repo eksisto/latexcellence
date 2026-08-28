@@ -7,9 +7,11 @@ format_converter 模块服务层 + 路由测试。
     - FormatConverterService.convert 向后兼容接口
     - Pandoc 不可用/错误时的处理
     - 宏包分析集成
+    - markdown reader 数学定界符扩展（tex_math_single_backslash）
     - /api/format-converter/* HTTP 端点测试
 """
 
+import shutil
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -347,6 +349,103 @@ class TestPandocErrors:
                 result = await service.convert_text("**bold**", "markdown", "latex")
 
         assert result["result"] == r"\textbf{bold}"
+
+
+# ── Markdown 数学定界符 reader 扩展（tex_math_single_backslash）──────────
+
+
+_PANDOC_AVAILABLE = shutil.which("pandoc") is not None
+
+
+class TestMarkdownMathReaderExtension:
+    """markdown reader 启用 tex_math_single_backslash 的命令构造断言。"""
+
+    @pytest.fixture
+    def service(self):
+        return FormatConverterService()
+
+    async def _capture_command(
+        self, service, text: str, source: str, target: str
+    ) -> list:
+        fake_runner = make_fake_runner(stdout="converted")
+        with patch("shutil.which", return_value="/usr/bin/pandoc"):
+            with patch(
+                "backend.modules.format_converter.service.get_sandbox_runner",
+                return_value=fake_runner,
+            ):
+                await service.convert_text(text, source, target)
+        spec = fake_runner.execute.call_args[0][0]
+        return spec.command
+
+    @pytest.mark.asyncio
+    async def test_markdown_reader_enables_math_extension(self, service):
+        """markdown 源：-f 必须为 markdown+tex_math_single_backslash。"""
+        cmd = await self._capture_command(service, "x", "markdown", "latex")
+        assert cmd[cmd.index("-f") + 1] == "markdown+tex_math_single_backslash"
+
+    @pytest.mark.asyncio
+    async def test_math_extension_not_applied_to_writer(self, service):
+        """扩展只加在 reader 侧，-t latex 保持默认输出格式。"""
+        cmd = await self._capture_command(service, "x", "markdown", "latex")
+        assert cmd[cmd.index("-t") + 1] == "latex"
+
+    @pytest.mark.asyncio
+    async def test_math_extension_only_for_markdown_source(self, service):
+        """非 markdown 源（html）不追加该扩展。"""
+        cmd = await self._capture_command(service, "<b>x</b>", "html", "latex")
+        assert cmd[cmd.index("-f") + 1] == "html"
+
+
+class TestBackslashMathRealPandoc:
+    """真实 pandoc（conftest 强制 local 模式）验证 \\(...\\) / \\[...\\] 公式识别。
+
+    直接调用 _run_pandoc_text（与 test_docker 冒烟一致），完全绕开
+    宏包分析，保证不发起任何 LLM 请求。
+    """
+
+    @pytest.fixture
+    def service(self):
+        return FormatConverterService()
+
+    @pytest.mark.skipif(not _PANDOC_AVAILABLE, reason="宿主未安装 pandoc")
+    @pytest.mark.asyncio
+    async def test_inline_backslash_paren_math(self, service):
+        """\\(E=mc^2\\) 应识别为行内公式（未被转义为字面文本）。"""
+        result = await service._run_pandoc_text(r"\(E=mc^2\)", "markdown", "latex")
+        assert r"\(E=mc^2\)" in result
+        assert r"\^{}" not in result
+
+    @pytest.mark.skipif(not _PANDOC_AVAILABLE, reason="宿主未安装 pandoc")
+    @pytest.mark.asyncio
+    async def test_display_backslash_bracket_math(self, service):
+        """\\[E=mc^2\\] 应识别为行间公式。"""
+        result = await service._run_pandoc_text(r"\[E=mc^2\]", "markdown", "latex")
+        assert r"\[E=mc^2\]" in result
+        assert r"\^{}" not in result
+
+    @pytest.mark.skipif(not _PANDOC_AVAILABLE, reason="宿主未安装 pandoc")
+    @pytest.mark.asyncio
+    async def test_dollar_math_regression(self, service):
+        """常规 $...$ 公式不受扩展影响（latex writer 统一输出 \\(...\\) 形式）。"""
+        result = await service._run_pandoc_text(r"$E=mc^2$", "markdown", "latex")
+        assert r"\(E=mc^2\)" in result
+        assert r"\^{}" not in result
+
+    @pytest.mark.skipif(not _PANDOC_AVAILABLE, reason="宿主未安装 pandoc")
+    @pytest.mark.asyncio
+    async def test_code_span_not_treated_as_math(self, service):
+        """行内代码中的 \\(...\\) 保持字面文本，不被误判为公式。"""
+        result = await service._run_pandoc_text(
+            r"代码 `\(\w+\)` 演示", "markdown", "latex"
+        )
+        assert r"\texttt{" in result
+
+    @pytest.mark.skipif(not _PANDOC_AVAILABLE, reason="宿主未安装 pandoc")
+    @pytest.mark.asyncio
+    async def test_markdown_to_html_math_span(self, service):
+        """markdown → html 时公式输出 math span 而非字面括号。"""
+        result = await service._run_pandoc_text(r"\(x^2\)", "markdown", "html")
+        assert "math inline" in result
 
 
 # ── Router HTTP endpoint tests ─────────────────────────────────────────────

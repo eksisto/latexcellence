@@ -28,7 +28,19 @@ from backend.utils.sandbox import (
 
 SUPPORTED_FORMATS = {"markdown", "html", "docx", "latex"}
 
-FORMAT_TO_PANDOC = {
+# Pandoc reader（-f）/ writer（-t）格式映射分离：
+# reader 侧为 markdown 启用 tex_math_single_backslash 扩展，将 \(...\) /
+# \[...\]（LLM 生成 markdown 的常见公式定界符）识别为行内/行间公式，
+# 避免被当作普通括号输出为字面文本；writer 侧保持 pandoc 默认输出
+# （不加公式相关扩展，latex 输出维持 \(...\) / \[...\] 形式）。
+PANDOC_READER_FORMATS = {
+    "markdown": "markdown+tex_math_single_backslash",
+    "html": "html",
+    "docx": "docx",
+    "latex": "latex",
+}
+
+PANDOC_WRITER_FORMATS = {
     "markdown": "markdown",
     "html": "html",
     "docx": "docx",
@@ -222,8 +234,8 @@ class FormatConverterService:
         写入同一临时目录后读回 base64。目录即工作目录（容器内同绝对路径
         rw 挂载）。
         """
-        pandoc_from = FORMAT_TO_PANDOC[source_format]
-        pandoc_to = FORMAT_TO_PANDOC[target_format]
+        pandoc_from = PANDOC_READER_FORMATS[source_format]
+        pandoc_to = PANDOC_WRITER_FORMATS[target_format]
         extra_args = ["--wrap=preserve"] if target_format == "latex" else []
 
         with tempfile.TemporaryDirectory(prefix="latexcellence_pandoc_") as tmp_dir:
@@ -257,8 +269,8 @@ class FormatConverterService:
         二进制格式返回 base64 字符串；输入/输出统一放在同一临时目录内，
         容器内外同绝对路径可见。
         """
-        pandoc_from = FORMAT_TO_PANDOC[source_format]
-        pandoc_to = FORMAT_TO_PANDOC[target_format]
+        pandoc_from = PANDOC_READER_FORMATS[source_format]
+        pandoc_to = PANDOC_WRITER_FORMATS[target_format]
         ext = f".{source_format}" if source_format != "markdown" else ".md"
         extra_args = ["--wrap=preserve"] if target_format == "latex" else []
 
