@@ -12,7 +12,7 @@
 | --- | --- |
 | `models.py` | Pydantic 结果模型与内部 dataclass |
 | `constants.py` | 常量、正则与差异 preamble 模板 |
-| `process.py` | git / latexdiff / latexmk 子进程执行（只读 git 子命令豁免每用户沙箱租约，判定见 `_is_readonly_git_args`） |
+| `process.py` | git / latexdiff / latexmk 子进程执行（只读 git 子命令豁免每用户沙箱租约，判定见 `_is_readonly_git_args`；cwd 外落盘路径经 `mounts` 显式挂载进沙箱容器） |
 | `revisions.py` | Git revision 列表与校验 |
 | `flatten.py` | LaTeX 依赖递归展开 |
 | `diff.py` | difflib / latexdiff 差异文档生成 |
@@ -83,6 +83,14 @@
 - 路径安全校验：拒绝绝对路径和 `..` 目录穿越
 
 **PDF 存储**：系统临时目录 `latexcellence_git_diff/{job_id}/`，由 OS 重启时清理。
+
+**沙箱挂载约束**：git / latexdiff / latexmk 统一经 `SandboxRunner` 执行，docker
+后端的容器根文件系统只读、`/tmp` 是独立 tmpfs，只 bind mount `ExecSpec.cwd` 与
+显式 `mounts`（同绝对路径契约）。因此命令若需写入 cwd 之外的路径，必须经
+`run_git(..., mounts=[SandboxMount(...)])` 把目标目录显式挂载进容器——commit
+模式 `git archive --output` 的落盘目录 `job_dir` 即按此挂载；漏挂时容器内 git
+会报 `could not open ... for writing: No such file or directory`。local 后端
+不感知 mounts，行为与历史一致。
 
 **临时目录清理**：每次渲染都会复制整个项目，`_prune_old_job_dirs` 在每次渲染后
 按生成时间只保留最新若干份 job 目录，防止临时盘持续膨胀。

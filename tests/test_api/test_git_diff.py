@@ -29,6 +29,7 @@ import shutil
 import subprocess
 import tempfile
 import uuid
+import zipfile
 from contextlib import contextmanager
 from pathlib import Path, PurePosixPath
 from types import SimpleNamespace
@@ -80,6 +81,7 @@ from backend.modules.git_diff.service import (
     get_pdf_path,
     list_git_revisions,
 )
+from backend.utils.sandbox import SandboxMount
 
 
 def _git_env(repo: Path) -> dict:
@@ -615,6 +617,42 @@ class TestReadonlyGitArgs:
         await git_diff_process.run_git(Path("/tmp"), ["add", "-A"])
         assert seen["lease_exempt"] is False
 
+    @pytest.mark.asyncio
+    async def test_run_git_passes_mounts_to_exec_spec(self, monkeypatch):
+        seen: dict = {}
+
+        class FakeRunner:
+            async def execute(self, spec, *, user_id=None, lease_exempt=False):
+                seen["spec"] = spec
+                return SimpleNamespace(
+                    returncode=0, stdout="", stderr="", timed_out=False
+                )
+
+        monkeypatch.setattr(
+            git_diff_process, "get_sandbox_runner", lambda: FakeRunner()
+        )
+        monkeypatch.setattr(git_diff_process, "current_sandbox_user_id", lambda: None)
+
+        # 传 mounts 时透传进 ExecSpec（docker 后端据此把 cwd 外的落盘
+        # 目录挂进容器，如 git archive 的 --output 目标）
+        job_dir = Path("/tmp/latexcellence_git_diff") / ("a" * 32)
+        await git_diff_process.run_git(
+            Path("/repo"),
+            [
+                "archive",
+                "--format=zip",
+                "--output",
+                str(job_dir / "target.zip"),
+                "HEAD",
+            ],
+            mounts=[SandboxMount(host_path=str(job_dir))],
+        )
+        assert [m.host_path for m in seen["spec"].mounts] == [str(job_dir)]
+
+        # 未传 mounts 的常规调用不带任何额外挂载（保持 cwd-only 契约）
+        await git_diff_process.run_git(Path("/repo"), ["status", "--porcelain"])
+        assert seen["spec"].mounts == []
+
 
 class TestPruneJobDirs:
     """临时 job 目录只保留最新若干份。"""
@@ -896,6 +934,40 @@ class TestPrepareTargetProject:
                 )
             assert (project_dir / "main.tex").exists()
             assert (project_dir / "chapters" / "a.tex").exists()
+
+    def test_commit_mode_mounts_job_dir_for_archive(self, monkeypatch):
+        """commit 模式 git archive 必须把 job_dir 显式挂载进沙箱。
+
+        docker 后端只 bind mount cwd 与显式 mounts，容器 /tmp 是独立
+        tmpfs——漏挂会让 git archive 报 "could not open ... for writing"。
+        """
+        captured: dict = {}
+
+        async def fake_run_git_checked(cwd, args, timeout=30, mounts=None):
+            captured["args"] = args
+            captured["mounts"] = mounts
+            # 模拟 git archive 产物，供后续解包流程使用
+            out = Path(args[args.index("--output") + 1])
+            out.parent.mkdir(parents=True, exist_ok=True)
+            with zipfile.ZipFile(out, "w") as zf:
+                zf.writestr("main.tex", "\\begin{document}x\\end{document}\n")
+            return SimpleNamespace(returncode=0, stdout="", stderr="")
+
+        monkeypatch.setattr(git_diff_process, "run_git_checked", fake_run_git_checked)
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            repo = tmp_path / "repo"
+            repo.mkdir()
+            context = ProjectContext(
+                root=repo,
+                git_root=repo,
+                project_prefix=PurePosixPath(""),
+            )
+            job_dir = tmp_path / "job"
+            project_dir = asyncio.run(_prepare_target_project("HEAD", context, job_dir))
+            assert captured["mounts"] == [SandboxMount(host_path=str(job_dir))]
+            assert "--output" in captured["args"]
+            assert (project_dir / "main.tex").exists()
 
     def test_worktree_mode_ignores_vcs_and_generated_files(self):
         with tempfile.TemporaryDirectory() as tmp:

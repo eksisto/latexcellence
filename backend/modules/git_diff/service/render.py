@@ -11,6 +11,7 @@ from backend.core.config import get_config
 from backend.core.logger import get_logger
 from backend.utils.compile_error_translator import translate_compile_errors
 from backend.utils.path_guard import resolve_project_path
+from backend.utils.sandbox import SandboxMount
 from backend.utils.tex_compile import TexCompileResult, run_tex_compile
 
 from . import constants
@@ -202,7 +203,14 @@ async def _prepare_target_project(
     prefix = context.project_prefix.as_posix()
     if prefix:
         archive_args.extend(["--", prefix])
-    await process_mod.run_git_checked(context.git_root, archive_args, timeout=60)
+    # 输出路径在 git 仓库（cwd）之外：docker 沙箱下容器 /tmp 是独立
+    # tmpfs，必须把 job_dir 显式挂载进容器，git archive 才能落盘
+    await process_mod.run_git_checked(
+        context.git_root,
+        archive_args,
+        timeout=60,
+        mounts=[SandboxMount(host_path=str(job_dir))],
+    )
 
     extract_dir = job_dir / "archive"
     with zipfile.ZipFile(archive_path) as archive:

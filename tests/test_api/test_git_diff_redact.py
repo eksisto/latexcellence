@@ -1,7 +1,8 @@
 """git_diff 命令错误输出脱敏单元测试（审查遗留项 C1 收口）。
 
 redact_command_output_for_user 是 git/latexdiff 失败消息返回用户前的
-统一脱敏口：多用户模式改写 <cwd>/ 前缀与裸 cwd 边界，单用户保留原文。
+统一脱敏口：多用户模式改写 <cwd>/ 前缀与裸 cwd 边界，以及 job 产物根
+（PDF_OUTPUT_ROOT，如 archive 输出路径）前缀，单用户保留原文。
 纯函数测试：不启动子进程，仅 monkeypatch get_config 的多用户开关。
 """
 
@@ -53,6 +54,18 @@ def test_paths_outside_cwd_are_left_untouched(monkeypatch):
     out = process_module.redact_command_output_for_user(text, CWD)
     # 兄弟路径 / 系统路径不属于本项目前缀，保持原样（避免误伤语义）
     assert str(other) in out
+
+
+def test_multi_user_rewrites_pdf_output_root_prefix(monkeypatch):
+    _set_multi_user(monkeypatch, True)
+    root = Path(process_module.PDF_OUTPUT_ROOT).resolve()
+    text = (
+        f"fatal: could not open '{root / '910f07df' / 'target.zip'}' "
+        "for writing: No such file or directory"
+    )
+    out = process_module.redact_command_output_for_user(text, CWD)
+    assert str(root) not in out
+    assert "./910f07df/target.zip" in out
 
 
 def test_relative_message_passthrough(monkeypatch):
