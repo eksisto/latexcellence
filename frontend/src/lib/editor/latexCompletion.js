@@ -81,7 +81,7 @@ function textBefore(state, pos) {
  * @param {((entry: object) => void)|undefined} onApplyEntry 应用后回调（宏包缺失联动）
  * @param {() => string} getLanguage 当前界面语言读取器（每次触发时求值）
  */
-function makeCommandCompletionSource(onApplyEntry, getLanguage) {
+export function makeCommandCompletionSource(onApplyEntry, getLanguage) {
   return async function commandCompletionSource(context) {
     if (context.state.readOnly) return null;
     const before = textBefore(context.state, context.pos);
@@ -106,7 +106,20 @@ function makeCommandCompletionSource(onApplyEntry, getLanguage) {
         detail: displayZh ? displayZh(entry.zh) : undefined,
         boost: 0,
         apply: (view, _completion, from2, to) => {
-          insertSnippet(view, expandEntryInsert(entry), { from: from2, to });
+          const template = expandEntryInsert(entry);
+          // CM6 传入的 [from2, to] 只覆盖 `\` 之后的命令词（result.from 即
+          // source 返回的 from），而模板自带前导 `\`，须左移一格把已敲入的
+          // `\` 一并替换，否则应用后得到 `\\alpha` 这类双反斜杠；
+          // from2 前一字符不是 `\`（弹层存续期间被删除）时回退原区间
+          const charBefore =
+            from2 > 0 ? view.state.doc.sliceString(from2 - 1, from2) : "";
+          insertSnippet(view, template, {
+            from:
+              template.startsWith("\\") && charBefore === "\\"
+                ? from2 - 1
+                : from2,
+            to,
+          });
           onApplyEntry?.(entry);
         },
       })),
@@ -118,8 +131,9 @@ function makeCommandCompletionSource(onApplyEntry, getLanguage) {
 /**
  * 环境名补全 source：`\begin{` 触发；应用时整体替换
  * `\begin{部分输入}` 为完整环境模板（含自动配对的 `\end{}`）。
+ * （两个 source 工厂均导出：node --test 经 mock view 锁应用区间契约）
  */
-function makeEnvironmentCompletionSource(onApplyEntry, getLanguage) {
+export function makeEnvironmentCompletionSource(onApplyEntry, getLanguage) {
   return async function environmentCompletionSource(context) {
     if (context.state.readOnly) return null;
     const before = textBefore(context.state, context.pos);
