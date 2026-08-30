@@ -148,7 +148,7 @@ TeX 可执行文件全部靠后端进程 PATH 裸名解析，无路径配置项�
     "username": "",
     "password": "",
     "from_address": "",
-    "from_name": "LateXcellence",
+    "from_name": "LaTeXcellence",
     "site_base_url": "",
     "max_send_per_minute": 10,
     "retry_attempts": 3

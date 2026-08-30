@@ -1,4 +1,4 @@
-# LateXcellence — 项目开发文档（概览）
+# LaTeXcellence — 项目开发文档（概览）
 
 > 本文档是开发文档的主入口。各模块的详细文档在同目录下。
 
@@ -46,7 +46,7 @@
 
 ## 项目概述
 
-LateXcellence 是一个由 LLM 驱动的智能体论文写作助手。后端 FastAPI + 前端 React/Vite，智能体通过 Function Calling 真正操作本地 LaTeX 项目（浏览文件、修改段落、生成工程、编译验证），而不是只停留在对话。
+LaTeXcellence 是一个由 LLM 驱动的智能体论文写作助手。后端 FastAPI + 前端 React/Vite，智能体通过 Function Calling 真正操作本地 LaTeX 项目（浏览文件、修改段落、生成工程、编译验证），而不是只停留在对话。
 
 基本流程：
 

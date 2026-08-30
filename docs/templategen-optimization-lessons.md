@@ -23,7 +23,7 @@
 
 ### 1.1 项目背景
 
-LateXcellence 是一个 AI 驱动的 LaTeX 文档助手，其中：
+LaTeXcellence 是一个 AI 驱动的 LaTeX 文档助手，其中：
 
 - `template_gen`：自主 Agent，根据用户自然语言描述，从零生成完整可编译的
   多文件 LaTeX 工程（写文件 → 编译 → 读日志 → 修错 → 再编译）。

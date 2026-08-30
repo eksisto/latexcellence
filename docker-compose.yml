@@ -1,5 +1,5 @@
 # ─────────────────────────────────────────────────────────────
-# LateXcellence 单机 Docker Compose 编排（多用户 v2 P7）
+# LaTeXcellence 单机 Docker Compose 编排（多用户 v2 P7）
 #
 # 用法：
 #   docker compose up -d --scale app=2          # 多副本启动（状态已外置，无需粘性会话）

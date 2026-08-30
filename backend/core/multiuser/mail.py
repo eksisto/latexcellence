@@ -89,19 +89,19 @@ def smtp_ready() -> bool:
 _TEMPLATES: dict[str, dict[str, dict[str, str]]] = {
     "pending_registration": {
         "zh": {
-            "subject": "[LateXcellence] 新用户待审批",
+            "subject": "[LaTeXcellence] 新用户待审批",
             "body": (
                 "您好，管理员：\n\n"
-                "LateXcellence 站点有 {count} 个新用户注册等待审批：\n"
+                "LaTeXcellence 站点有 {count} 个新用户注册等待审批：\n"
                 "{usernames}\n"
                 "请登录管理面板处理。"
             ),
         },
         "en": {
-            "subject": "[LateXcellence] New users awaiting approval",
+            "subject": "[LaTeXcellence] New users awaiting approval",
             "body": (
                 "Hello admin,\n\n"
-                "{count} new user(s) on LateXcellence are awaiting approval:\n"
+                "{count} new user(s) on LaTeXcellence are awaiting approval:\n"
                 "{usernames}\n"
                 "Please review them in the admin panel."
             ),
@@ -109,54 +109,54 @@ _TEMPLATES: dict[str, dict[str, dict[str, str]]] = {
     },
     "account_approved": {
         "zh": {
-            "subject": "[LateXcellence] 账号已开通",
+            "subject": "[LaTeXcellence] 账号已开通",
             "body": (
                 "您好，{username}：\n\n"
-                "您的 LateXcellence 账号已通过审批，现在可以登录使用。\n"
+                "您的 LaTeXcellence 账号已通过审批，现在可以登录使用。\n"
                 "登录地址：{site_link}"
             ),
         },
         "en": {
-            "subject": "[LateXcellence] Account approved",
+            "subject": "[LaTeXcellence] Account approved",
             "body": (
                 "Hello {username},\n\n"
-                "Your LateXcellence account has been approved. You can sign in now.\n"
+                "Your LaTeXcellence account has been approved. You can sign in now.\n"
                 "Sign in at: {site_link}"
             ),
         },
     },
     "account_rejected": {
         "zh": {
-            "subject": "[LateXcellence] 注册申请未通过",
+            "subject": "[LaTeXcellence] 注册申请未通过",
             "body": (
                 "您好，{username}：\n\n"
-                "很抱歉，您的 LateXcellence 注册申请未获通过。"
+                "很抱歉，您的 LaTeXcellence 注册申请未获通过。"
                 "如有疑问请联系管理员。"
             ),
         },
         "en": {
-            "subject": "[LateXcellence] Registration rejected",
+            "subject": "[LaTeXcellence] Registration rejected",
             "body": (
                 "Hello {username},\n\n"
-                "Unfortunately your LateXcellence registration was not approved. "
+                "Unfortunately your LaTeXcellence registration was not approved. "
                 "Contact the administrator if you have questions."
             ),
         },
     },
     "account_disabled": {
         "zh": {
-            "subject": "[LateXcellence] 账号已被禁用",
+            "subject": "[LaTeXcellence] 账号已被禁用",
             "body": (
                 "您好，{username}：\n\n"
-                "您的 LateXcellence 账号已被管理员禁用，会话已全部注销。"
+                "您的 LaTeXcellence 账号已被管理员禁用，会话已全部注销。"
                 "如有疑问请联系管理员。"
             ),
         },
         "en": {
-            "subject": "[LateXcellence] Account disabled",
+            "subject": "[LaTeXcellence] Account disabled",
             "body": (
                 "Hello {username},\n\n"
-                "Your LateXcellence account has been disabled by an administrator "
+                "Your LaTeXcellence account has been disabled by an administrator "
                 "and all sessions were signed out. Contact the administrator "
                 "if you have questions."
             ),
@@ -164,7 +164,7 @@ _TEMPLATES: dict[str, dict[str, dict[str, str]]] = {
     },
     "admin_password_reset": {
         "zh": {
-            "subject": "[LateXcellence] 密码已由管理员重置",
+            "subject": "[LaTeXcellence] 密码已由管理员重置",
             "body": (
                 "您好，{username}：\n\n"
                 "管理员已重置您的密码，临时密码为：\n\n"
@@ -174,7 +174,7 @@ _TEMPLATES: dict[str, dict[str, dict[str, str]]] = {
             ),
         },
         "en": {
-            "subject": "[LateXcellence] Password reset by administrator",
+            "subject": "[LaTeXcellence] Password reset by administrator",
             "body": (
                 "Hello {username},\n\n"
                 "An administrator reset your password. Temporary password:\n\n"
@@ -186,7 +186,7 @@ _TEMPLATES: dict[str, dict[str, dict[str, str]]] = {
     },
     "password_reset_token": {
         "zh": {
-            "subject": "[LateXcellence] 重置密码请求",
+            "subject": "[LaTeXcellence] 重置密码请求",
             "body": (
                 "您好，{username}：\n\n"
                 "我们收到了您（或他人）重置 {username} 账号密码的请求。"
@@ -196,7 +196,7 @@ _TEMPLATES: dict[str, dict[str, dict[str, str]]] = {
             ),
         },
         "en": {
-            "subject": "[LateXcellence] Password reset request",
+            "subject": "[LaTeXcellence] Password reset request",
             "body": (
                 "Hello {username},\n\n"
                 "We received a request to reset the password of the account "
@@ -209,7 +209,7 @@ _TEMPLATES: dict[str, dict[str, dict[str, str]]] = {
     },
     "quota_warn": {
         "zh": {
-            "subject": "[LateXcellence] 空间用量达到 {percent}%",
+            "subject": "[LaTeXcellence] 空间用量达到 {percent}%",
             "body": (
                 "您好，{username}：\n\n"
                 "您的{dimension_label}用量已达到配额的 {percent}%"
@@ -217,7 +217,7 @@ _TEMPLATES: dict[str, dict[str, dict[str, str]]] = {
             ),
         },
         "en": {
-            "subject": "[LateXcellence] {dimension_label} usage at {percent}%",
+            "subject": "[LaTeXcellence] {dimension_label} usage at {percent}%",
             "body": (
                 "Hello {username},\n\n"
                 "Your {dimension_label} usage has reached {percent}% of the quota "
@@ -227,7 +227,7 @@ _TEMPLATES: dict[str, dict[str, dict[str, str]]] = {
     },
     "quota_critical": {
         "zh": {
-            "subject": "[LateXcellence] 空间用量告急 {percent}%",
+            "subject": "[LaTeXcellence] 空间用量告急 {percent}%",
             "body": (
                 "您好，{username}：\n\n"
                 "您的{dimension_label}用量已达配额的 {percent}%"
@@ -235,7 +235,7 @@ _TEMPLATES: dict[str, dict[str, dict[str, str]]] = {
             ),
         },
         "en": {
-            "subject": "[LateXcellence] {dimension_label} almost full: {percent}%",
+            "subject": "[LaTeXcellence] {dimension_label} almost full: {percent}%",
             "body": (
                 "Hello {username},\n\n"
                 "Your {dimension_label} usage has reached {percent}% of the quota "

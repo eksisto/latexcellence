@@ -1,6 +1,6 @@
-# LateXcellence — 设计文档
+# LaTeXcellence — 设计文档
 
-本文档阐述 LateXcellence 的架构设计、核心算法和关键技术决策。
+本文档阐述 LaTeXcellence 的架构设计、核心算法和关键技术决策。
 
 ---
 

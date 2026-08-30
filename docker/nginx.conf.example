@@ -1,5 +1,5 @@
 # ─────────────────────────────────────────────────────────────
-# LateXcellence nginx 反代样例（多副本）
+# LaTeXcellence nginx 反代样例（多副本）
 #
 # 关键点：
 #   - upstream 使用变量 + resolver：Docker 内嵌 DNS（127.0.0.11）在每次

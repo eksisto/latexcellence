@@ -1,5 +1,5 @@
 # ─────────────────────────────────────────────────────────────
-# LateXcellence 科研绘图 Python 沙箱镜像（plot）
+# LaTeXcellence 科研绘图 Python 沙箱镜像（plot）
 # 基础镜像不写死架构：amd64 / arm64 均可原生构建
 #
 # 构建示例：
@@ -16,7 +16,7 @@ FROM python:3.12-slim
 ARG PIP_INDEX_URL=""
 ARG DEBIAN_MIRROR=""
 
-LABEL org.opencontainers.image.title="LateXcellence Plot Sandbox" \
+LABEL org.opencontainers.image.title="LaTeXcellence Plot Sandbox" \
       org.opencontainers.image.source="https://github.com/eksisto/latexcellence.git" \
       org.opencontainers.image.description="科研绘图沙箱：numpy/pandas/scipy/matplotlib/seaborn 科学计算栈 + 中文字体"
 

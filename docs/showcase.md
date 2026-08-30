@@ -2,7 +2,7 @@
 
 ## 功能与用途
 
-`showcase/` 是一个独立的单页产品展示网页，用于对外演示 LateXcellence 的功能与设计。
+`showcase/` 是一个独立的单页产品展示网页，用于对外演示 LaTeXcellence 的功能与设计。
 它**不依赖**后端 FastAPI 与前端 React 构建产物，仅用静态 HTML/CSS/JS +
 一个零依赖 Node.js 静态服务器即可运行。
 

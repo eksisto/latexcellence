@@ -1,4 +1,4 @@
-# LateXcellence — 功能模块文档
+# LaTeXcellence — 功能模块文档
 
 本目录包含各个功能模块的详细文档。
 

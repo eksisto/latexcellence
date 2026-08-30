@@ -2,7 +2,7 @@
   "name": "latexcellence-showcase",
   "version": "0.1.0",
   "private": true,
-  "description": "LateXcellence 展示页",
+  "description": "LaTeXcellence 展示页",
   "type": "commonjs",
   "main": "server.js",
   "scripts": {

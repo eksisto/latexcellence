@@ -1,4 +1,4 @@
-# LateXcellence - 展示页
+# LaTeXcellence - 展示页
 
 单页产品展示网页，采用**滚动叙述式（Scrollytelling）**落地页设计：全屏固定场景 + Parallax 视差，零依赖，仅需 Node.js 20+。
 

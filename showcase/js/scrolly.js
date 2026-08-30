@@ -1,5 +1,5 @@
 /* ============================================================
- * LateXcellence · Showcase — Scrollytelling 滚动引擎
+ * LaTeXcellence · Showcase — Scrollytelling 滚动引擎
  * 全屏固定场景（--p 进度）+ Parallax 视差 + 行号栏 / 章节导轨 /
  * 编译进度条 / 编译状态角标 / Hero 打字机效果
  * 依赖：render.js（先生成 DOM）、content.js（打字机内容）、constants.js（调参常量）

@@ -1,5 +1,5 @@
 #!/bin/bash
-# LateXcellence Cache Cleaner
+# LaTeXcellence Cache Cleaner
 
 ROOT="$(cd "$(dirname "$0")" && pwd)"
 cleaned=0
@@ -7,7 +7,7 @@ failed=0
 
 echo ""
 echo "========================================"
-echo "  LateXcellence Cache Cleaner"
+echo "  LaTeXcellence Cache Cleaner"
 echo "========================================"
 echo ""
 

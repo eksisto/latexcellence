@@ -34,7 +34,7 @@ git_manage 不复制 git 执行层，直接复用 `backend/modules/git_diff/serv
 ## 安全性
 
 - 无用户输入的 ref/hash（不做 checkout/restore 类命令）；唯一自由文本是 commit message，以单参数 argv 传递（无 shell，无注入面）。
-- **commit 身份**：每次经 `git -c user.name=… -c user.email=…` 注入，不落全局配置。多用户取操作者平台用户名 + `<user_id>@users.latexcellence.local`；单用户固定 `LateXcellence`。
+- **commit 身份**：每次经 `git -c user.name=… -c user.email=…` 注入，不落全局配置。多用户取操作者平台用户名 + `<user_id>@users.latexcellence.local`；单用户固定 `LaTeXcellence`。
 - 多用户模式下面向用户的错误消息一律过 `redact_command_output_for_user`；`index.lock` 并发冲突映射为 409 `git_repository_locked` 而非透传原始 stderr。
 
 ## 数据流

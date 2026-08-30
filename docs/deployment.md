@@ -1,6 +1,6 @@
-# LateXcellence — 后端部署指南
+# LaTeXcellence — 后端部署指南
 
-> 本文档面向想把 LateXcellence 部署到自己服务器上的使用者，覆盖三种部署形态的完整流程：单用户本地部署（默认）、多用户单进程裸机部署与多用户多实例部署（Docker Compose）。
+> 本文档面向想把 LaTeXcellence 部署到自己服务器上的使用者，覆盖三种部署形态的完整流程：单用户本地部署（默认）、多用户单进程裸机部署与多用户多实例部署（Docker Compose）。
 >
 > 多用户模式的设计背景见 [multi-user-plan.md](multi-user-plan.md) 与 [multi-user-v2-plan.md](multi-user-v2-plan.md)，实现细节见 [backend-core.md](backend-core.md)。**部署本身不需要阅读这些文档**——本文是自包含的。
 
@@ -328,7 +328,7 @@ python main.py config.json
 ```ini
 # /etc/systemd/system/latexcellence.service
 [Unit]
-Description=LateXcellence backend (multi-user)
+Description=LaTeXcellence backend (multi-user)
 After=network-online.target
 Wants=network-online.target
 # 若启用 Docker 沙箱（sandbox.mode=auto/docker），追加：
@@ -732,7 +732,7 @@ latex.example.com {
 | `host` / `port` | "" / 465 | SMTP 服务器地址与端口（host 为空同样视为未启用） |
 | `encryption` | ssl | `ssl`（隐式 TLS）/ `starttls` / `none`（仅本地调试） |
 | `username` / `password` | "" | 认证凭据；password 走 `***` 掩码协议（设置页回显掩码，原样保存即保留原值），也可经环境变量 `LATEXCELLENCE_SMTP_PASSWORD` 注入（见下文「环境变量参考」） |
-| `from_address` / `from_name` | "" / LateXcellence | 发件人（from_address 留空回退 username） |
+| `from_address` / `from_name` | "" / LaTeXcellence | 发件人（from_address 留空回退 username） |
 | `site_base_url` | "" | 站点对外地址，用于拼接找回链接；留空时邮件退化为相对路径提示，**建议配置**否则找回链接不可直接点击 |
 | `max_send_per_minute` / `retry_attempts` | 10 / 3 | 发送限速（滚动 60s 窗口）与失败重试次数（指数退避） |
 | `template_language` | zh | 邮件模板语言（zh/en） |

@@ -139,7 +139,7 @@ def build_mu_env(
         "port": 465,
         "encryption": "none",
         "from_address": "noreply@latexcellence.test",
-        "from_name": "LateXcellence Test",
+        "from_name": "LaTeXcellence Test",
         "site_base_url": "",
         "max_send_per_minute": 100,
         "retry_attempts": 3,

@@ -1,5 +1,5 @@
 # ─────────────────────────────────────────────────────────────
-# LateXcellence pandoc 转换沙箱镜像（convert）
+# LaTeXcellence pandoc 转换沙箱镜像（convert）
 # 基础镜像不写死架构：amd64 / arm64 均可原生构建
 #
 # 构建示例：
@@ -28,7 +28,7 @@ ARG TARGETARCH
 # 可选 Debian apt 国内镜像源（构建时如 --build-arg DEBIAN_MIRROR=https://mirrors.ustc.edu.cn/debian）
 ARG DEBIAN_MIRROR=""
 
-LABEL org.opencontainers.image.title="LateXcellence Convert Sandbox" \
+LABEL org.opencontainers.image.title="LaTeXcellence Convert Sandbox" \
       org.opencontainers.image.source="https://github.com/eksisto/latexcellence.git" \
       org.opencontainers.image.description="pandoc 转换沙箱：锁定版本 ${PANDOC_VERSION} 官方发布物"
 

@@ -1,4 +1,4 @@
-# LateXcellence — 测试文档
+# LaTeXcellence — 测试文档
 
 运行方式：`pytest tests/ -v`
 

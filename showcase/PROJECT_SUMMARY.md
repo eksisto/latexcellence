@@ -1,10 +1,10 @@
-# LateXcellence Showcase — Project Summary
+# LaTeXcellence Showcase — Project Summary
 
 > 项目概要文件，供 AI 助手快速了解本项目。**项目结构变更（新增/删除文件、模块，或调整架构）时必须同步更新本文件。**
 
 ## 是什么
 
-- `showcase/` 是 `latexcellence` 仓库内的**独立单页产品展示页**，用于对外演示 LateXcellence 的功能与设计。
+- `showcase/` 是 `latexcellence` 仓库内的**独立单页产品展示页**，用于对外演示 LaTeXcellence 的功能与设计。
 - **零依赖**：纯静态 HTML/CSS/JS + Node.js 内置 `http` 静态服务器，无构建步骤、无 npm 运行时依赖（Node.js 20+）。
 - 采用**滚动叙述式（Scrollytelling）**设计：全屏固定场景 + Parallax 视差，整页隐喻为一份“自己写自己”的 `intro.tex`。
 

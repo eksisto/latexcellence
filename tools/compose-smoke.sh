@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ─────────────────────────────────────────────────────────────
-# LateXcellence 多实例 Compose 冒烟（多用户 v2 P7）
+# LaTeXcellence 多实例 Compose 冒烟（多用户 v2 P7）
 #
 # 流程：起 replicas=2 + Caddy 反代 → /api/health → 注册 → 管理员审批 →
 # 登录 → 分片上传（各分片经反代轮询分发，可命中不同副本）→ 打开项目 →

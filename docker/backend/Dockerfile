@@ -1,5 +1,5 @@
 # ─────────────────────────────────────────────────────────────
-# LateXcellence 应用本体镜像（backend）
+# LaTeXcellence 应用本体镜像（backend）
 # 基础镜像不写死架构：amd64 / arm64 均可原生构建
 #
 # 构建示例：
@@ -21,9 +21,9 @@ ARG GID=1000
 # 可选覆盖 pip 源；留空使用 PyPI 官方默认（${VAR:+...} 为空时不追加参数）
 ARG PIP_INDEX_URL=""
 
-LABEL org.opencontainers.image.title="LateXcellence Backend" \
+LABEL org.opencontainers.image.title="LaTeXcellence Backend" \
       org.opencontainers.image.source="https://github.com/eksisto/latexcellence.git" \
-      org.opencontainers.image.description="LateXcellence 应用本体：FastAPI 后端 + Vite 构建产物；含 unar（rar 解压）与 git"
+      org.opencontainers.image.description="LaTeXcellence 应用本体：FastAPI 后端 + Vite 构建产物；含 unar（rar 解压）与 git"
 
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1

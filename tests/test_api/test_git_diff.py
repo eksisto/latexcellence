@@ -113,7 +113,7 @@ def _make_git_repo(repo: Path, files: dict[str, str], message: str = "init") -> 
             "-c",
             f"safe.directory={repo}",
             "-c",
-            "user.name=LateXcellence Test",
+            "user.name=LaTeXcellence Test",
             "-c",
             "user.email=latexcellence@example.com",
             "-C",

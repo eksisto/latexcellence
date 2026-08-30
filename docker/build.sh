@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ─────────────────────────────────────────────────────────────
-# LateXcellence 沙箱镜像统一构建脚本
+# LaTeXcellence 沙箱镜像统一构建脚本
 #
 # 首次使用先赋可执行权限：chmod +x docker/build.sh
 #

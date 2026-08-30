@@ -1,4 +1,4 @@
-# LateXcellence 提示词优化计划
+# LaTeXcellence 提示词优化计划
 
 > 状态：阶段 0 至阶段 4 已完成；阶段 5 审查已完成，计划 A、B、C、D、E 已实施。
 >
@@ -6,7 +6,7 @@
 
 ## 背景与目标
 
-LateXcellence 的 LLM 提示词统一由 `backend/core/prompts.py` 管理，当前生产模型为
+LaTeXcellence 的 LLM 提示词统一由 `backend/core/prompts.py` 管理，当前生产模型为
 Qwen3.6-35B-A3B。该模型规模有限，长提示词、模糊表述和过长的流程描述会稀释指令，
 导致 JSON 契约、Marker 保护、无修改契约等关键约束执行不稳定。
 

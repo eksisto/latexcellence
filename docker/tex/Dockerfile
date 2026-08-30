@@ -1,5 +1,5 @@
 # ─────────────────────────────────────────────────────────────
-# LateXcellence TeX 编译沙箱镜像（tex）
+# LaTeXcellence TeX 编译沙箱镜像（tex）
 #
 # 基座选择 debian:bookworm-slim（而非 ubuntu:24.04）的理由：
 #   1. install-tl 自带全套二进制与依赖库，TeX Live 与宿主发行版基本解耦，
@@ -69,7 +69,7 @@ ARG TL_PKGS_FONTS="tex-gyre"
 ARG TL_PKGS_TOOLS="latexmk texfot latexdiff"
 ARG EXTRA_TL_PACKAGES="${TL_PKGS_CHINESE} ${TL_PKGS_BIB} ${TL_PKGS_MATH} ${TL_PKGS_LAYOUT} ${TL_PKGS_TABLES_CODE} ${TL_PKGS_PLOT} ${TL_PKGS_FONTS} ${TL_PKGS_TOOLS}"
 
-LABEL org.opencontainers.image.title="LateXcellence TeX Sandbox" \
+LABEL org.opencontainers.image.title="LaTeXcellence TeX Sandbox" \
       org.opencontainers.image.source="https://github.com/eksisto/latexcellence.git" \
       org.opencontainers.image.description="LaTeX 编译沙箱：TeX Live ${TEXLIVE_VERSION} scheme-medium + 中文宏包 + latexmk/texfot/latexdiff/latexindent/git"
 

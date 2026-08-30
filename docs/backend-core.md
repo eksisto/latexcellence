@@ -1,4 +1,4 @@
-# LateXcellence — 后端核心模块
+# LaTeXcellence — 后端核心模块
 
 本文档按文件模块组织，适合作为参考手册按需查询。
 

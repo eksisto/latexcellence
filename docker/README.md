@@ -1,4 +1,4 @@
-# LateXcellence Docker 沙箱镜像体系
+# LaTeXcellence Docker 沙箱镜像体系
 
 本目录提供多用户模式 v2 的 Docker 沙箱镜像交付物：后端把全部外部命令执行（LaTeX 编译、pandoc 转换、Python 绘图、git/latexdiff、latexindent）迁入容器，按用途拆分镜像、仓库内锁定版本、构建参数化。沙箱执行模型与安全约束见 `docs/multi-user-v2-plan.md` §5。
 

@@ -1,4 +1,4 @@
-# AGENTS.md — LateXcellence Showcase（展示页）
+# AGENTS.md — LaTeXcellence Showcase（展示页）
 
 > 本文件约束 AI 助手在 `showcase/` 子项目中执行**维护任务**时的行为规范。
 > 它不替代父仓库 `latexcellence/AGENTS.md`（后端/前端全局规范），两者叠加生效。

@@ -1,5 +1,5 @@
 /* ============================================================
- * LateXcellence · Showcase — 页面内容单一来源
+ * LaTeXcellence · Showcase — 页面内容单一来源
  *
  * 所有文案、场景结构、导航、代码块内容都集中在本文件。
  * 修改页面内容（新增/删除章节、改文案、改 mock）只需改这里，
@@ -82,7 +82,7 @@ export const SCENES = [
     slogan: "让技术退居幕后，让思想落于纸上",
     lead:
       "我们不追求改变习惯，只致力于解放那些深陷 LaTeX 繁琐之中的灵魂。真正的创作，不应被编译错误与排版细节所打断。" +
-      "LateXcellence 用 AI 消除工具的存在感，让“心想”即是“事成”。",
+      "LaTeXcellence 用 AI 消除工具的存在感，让“心想”即是“事成”。",
     actions: [
       { href: "#scene-import", label: "开始浏览", icon: "i-arrow" },
       { href: "#scene-principles", label: "设计理念" },
@@ -506,7 +506,7 @@ export const SCENES = [
     head: {
       kicker: "Design Philosophy",
       title: "三条核心主张",
-      desc: "LateXcellence 的可靠，长在架构的约束里。",
+      desc: "LaTeXcellence 的可靠，长在架构的约束里。",
     },
     cards: [
       {

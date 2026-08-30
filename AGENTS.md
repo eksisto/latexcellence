@@ -1,6 +1,6 @@
-# AGENTS.md — LateXcellence AI Coding Guidelines
+# AGENTS.md — LaTeXcellence AI Coding Guidelines
 
-LateXcellence 是一个 AI 驱动的 LaTeX 文档助手。后端 FastAPI + 前端 React/Vite，通过 LLM 对 `.tex` 文件进行错字查找、表达优化等操作。
+LaTeXcellence 是一个 AI 驱动的 LaTeX 文档助手。后端 FastAPI + 前端 React/Vite，通过 LLM 对 `.tex` 文件进行错字查找、表达优化等操作。
 
 ## 全局规则
 

@@ -6,7 +6,7 @@
 
 ## 1. 背景与现状
 
-LateXcellence 目前是单用户本地部署形态：
+LaTeXcellence 目前是单用户本地部署形态：
 
 - 前端通过 `frontend/src/api/connection.js` 配置 API 基地址和共享访问令牌（`security.access_token`）；
 - 后端通过 `/api/project/open` 直接打开本地任意目录，`/api/project/browse` 可浏览服务器磁盘；

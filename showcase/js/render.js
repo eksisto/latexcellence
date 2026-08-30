@@ -1,5 +1,5 @@
 /* ============================================================
- * LateXcellence · Showcase — 页面渲染器
+ * LaTeXcellence · Showcase — 页面渲染器
  * 依据 js/content.js（内容数据）与 js/themes.js（主题数据）
  * 生成右侧导轨、主题弹层选项与全部场景 DOM。
  * index.html 只保留静态骨架，本模块在 DOM 解析后执行。

@@ -1,5 +1,5 @@
 /* ============================================================
- * LateXcellence · Showcase — 部署构建工具
+ * LaTeXcellence · Showcase — 部署构建工具
  *
  * 把网站资源（index.html / css/ / js/ / assets/）拷贝到 public/，
  * 并对 HTML / CSS / JS 做无损压缩，产出可直接部署到任意静态服务器的目录。

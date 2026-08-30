@@ -1,4 +1,4 @@
-# LateXcellence — 项目开发文档
+# LaTeXcellence — 项目开发文档
 
 > 本文件为开发文档索引。详细内容在 `docs/` 目录下。
 

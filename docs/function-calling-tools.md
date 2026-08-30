@@ -1,4 +1,4 @@
-# LateXcellence Function Calling 工具清单
+# LaTeXcellence Function Calling 工具清单
 
 ## 全局工具（注册到 ToolRegistry）
 

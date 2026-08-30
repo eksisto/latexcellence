@@ -1,5 +1,5 @@
 #!/bin/bash
-# LateXcellence — 打开一个已激活 .venv 虚拟环境的交互式 bash
+# LaTeXcellence — 打开一个已激活 .venv 虚拟环境的交互式 bash
 #
 # 用法：
 #     ./venv-shell.sh

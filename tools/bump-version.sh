@@ -1,5 +1,5 @@
 #!/bin/bash
-# LateXcellence 版本号一键升级
+# LaTeXcellence 版本号一键升级
 # 同步修改 main.py（FastAPI app + /api/health 两处）与前端三语 i18n（欢迎页展示的版本），
 # 默认以 chore(release): 升级版本为 vX.Y.Z 自动提交（--no-commit 跳过提交）。
 # 说明：frontend/package.json 的 "version": "0.1.0" 是 npm 包占位，不随发布升级。

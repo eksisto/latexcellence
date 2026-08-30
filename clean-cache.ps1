@@ -1,4 +1,4 @@
-﻿# LateXcellence Cache Cleaner
+﻿# LaTeXcellence Cache Cleaner
 # PowerShell 版本，与 clean-cache.sh 功能一致。
 
 param(
@@ -12,7 +12,7 @@ $script:Failed = 0
 
 Write-Host ""
 Write-Host "========================================"
-Write-Host "  LateXcellence Cache Cleaner"
+Write-Host "  LaTeXcellence Cache Cleaner"
 Write-Host "========================================"
 Write-Host ""
 

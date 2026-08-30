@@ -1,5 +1,5 @@
 /* ============================================================
- * LateXcellence · Showcase — 主题 CSS 生成器
+ * LaTeXcellence · Showcase — 主题 CSS 生成器
  *
  * css/themes.css 不再手工维护，而是从 frontend/src/theme/*.css
  * 按 THEME_ORDER 顺序拼接生成（与 useThemeManager.js 的顺序一致）。

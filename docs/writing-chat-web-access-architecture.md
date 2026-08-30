@@ -1,6 +1,6 @@
 # Writing Chat 网络访问架构
 
-> 本文件描述 LateXcellence Writing Chat 的通用搜索、学术检索、网页抓取与证据链架构。
+> 本文件描述 LaTeXcellence Writing Chat 的通用搜索、学术检索、网页抓取与证据链架构。
 
 ## 1. 目标与范围
 
@@ -677,4 +677,4 @@ CI 中不运行真实搜索引擎或学术 API。少量 live smoke test 由维�
 
 ### 15.1 原生 Python 实现
 
-LateXcellence 已有 Python Provider、FastAPI lifespan、`ToolRegistry`、配置热重载和 SSE 协议。原生实现复用这些边界，避免引入 Node.js、浏览器进程、独立缓存和另一套安全策略。
+LaTeXcellence 已有 Python Provider、FastAPI lifespan、`ToolRegistry`、配置热重载和 SSE 协议。原生实现复用这些边界，避免引入 Node.js、浏览器进程、独立缓存和另一套安全策略。

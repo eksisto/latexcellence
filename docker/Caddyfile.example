@@ -1,5 +1,5 @@
 # ─────────────────────────────────────────────────────────────
-# LateXcellence Caddy 反代样例（多副本）
+# LaTeXcellence Caddy 反代样例（多副本）
 #
 # 关键点：
 #   - reverse_proxy 直接写服务名 app：Caddy 经 Docker 内嵌 DNS 解析到全部

@@ -1,5 +1,5 @@
 /* ============================================================
- * LateXcellence · Showcase — 主题单一事实来源
+ * LaTeXcellence · Showcase — 主题单一事实来源
  *
  * 顺序必须与 frontend/src/theme/useThemeManager.js 的 THEME_ORDER 一致；
  * swatch / accent 取自已生成 css/themes.css 的主题 token：

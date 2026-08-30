@@ -1,4 +1,4 @@
-# LateXcellence — 前端开发文档
+# LaTeXcellence — 前端开发文档
 
 ## 目录
 

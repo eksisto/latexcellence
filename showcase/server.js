@@ -1,4 +1,4 @@
-/* LateXcellence · Showcase —— 零依赖静态文件服务器（Node.js 20+） */
+/* LaTeXcellence · Showcase —— 零依赖静态文件服务器（Node.js 20+） */
 "use strict";
 
 const http = require("http");
@@ -65,5 +65,5 @@ const server = http.createServer((req, res) => {
 });
 
 server.listen(PORT, HOST, () => {
-  console.log(`LateXcellence Showcase → http://${HOST}:${PORT}`);
+  console.log(`LaTeXcellence Showcase → http://${HOST}:${PORT}`);
 });

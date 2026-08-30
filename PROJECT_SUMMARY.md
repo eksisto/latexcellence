@@ -1,4 +1,4 @@
-# LateXcellence — Project Summary
+# LaTeXcellence — Project Summary
 
 > 项目概要文件。项目结构变更时（新增/删除模块），必须同步更新此文件。
 

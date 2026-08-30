@@ -1,5 +1,5 @@
 /* ============================================================
- * LateXcellence · Showcase — 主题漂移检查
+ * LaTeXcellence · Showcase — 主题漂移检查
  * 校验 css/themes.css 与 frontend/src/theme/*.css 是否一致。
  * 漂移时退出码为 1（可在 CI / pre-commit 中使用）。
  * ============================================================ */

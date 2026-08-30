@@ -721,7 +721,7 @@ class SmtpConfig(BaseModel):
     username: str = ""  # 认证用户名（留空 = 匿名）
     password: str = ""  # 认证密码（设置页掩码展示）
     from_address: str = ""  # 发件人地址（空时回退 username）
-    from_name: str = "LateXcellence"  # 发件人显示名
+    from_name: str = "LaTeXcellence"  # 发件人显示名
     site_base_url: str = ""  # 站点对外地址（找回链接前缀；空 = 相对路径提示）
     max_send_per_minute: int = Field(10, ge=1)  # 全局发送限速（封/分钟）
     retry_attempts: int = Field(3, ge=1)  # 投递失败重试次数（指数退避）
