@@ -154,6 +154,9 @@ const EXACT_MAP = {
   "Empty reference example": "emptyReferenceExample",
   "Empty metadata": "emptyMetadata",
   "Empty BibTeX code": "emptyBibtexCode",
+  "Empty DOI": "emptyDoi",
+  "DOI is required": "doiRequired",
+  "Empty image files": "emptyImageFiles",
   "Either text or image must be provided": "eitherTextOrImageRequired",
   "Empty image file": "emptyImageFile",
   "No file selected": "noFileSelected",
@@ -175,6 +178,39 @@ const EXACT_MAP = {
   "Preview file not found": "previewFileNotFound",
   "Data profile is missing": "plotGenDataProfileMissing",
   "Session meta not found": "plotGenSessionMetaNotFound",
+  // plot_gen Agent 收尾阶段 warning（backend/modules/plot_gen/agent.py）
+  "Reached maximum rounds without successful TikZ compilation.":
+    "plotGenMaxRoundsNoTikz",
+  "Agent called finish without a successful TikZ compilation. The TikZ artifact may be missing or invalid.":
+    "plotGenFinishWithoutTikz",
+  "WARNING: `finish` accepted although figure-affecting files changed since the last successful compile (override after a block); the artifacts may be stale.":
+    "plotGenStaleFinishAccepted",
+  "No files in sandbox": "plotGenNoFilesInSandbox",
+
+  // plot_gen Agent 止损指令（同时作为给 LLM 的编排消息，展示于 warning 条）
+  "VERIFIED-LOOP BLOCK: `compile_tikz` already succeeded and no figure-affecting file was modified since. Do not call `read_file`/`list_files`/`python_sandbox`/`compile_tikz` again; call `finish` now.":
+    "plotGenVerifiedLoopBlock",
+  "STALE FINISH BLOCKED: figure-affecting files were modified or `python_sandbox` re-ran since the last successful `compile_tikz`, so the artifacts may no longer match the current source. Rerun `python_sandbox` and `compile_tikz`, then call `finish` again. If you really cannot compile, call `finish` once more to override with a warning.":
+    "plotGenStaleFinishBlocked",
+
+  // style_modify / template_gen Agent 收尾阶段 warning
+  "Agent finished while the last shadow compilation failed; review the diff before applying.":
+    "styleModifyFinishCompileFailed",
+  "Agent finished without running a shadow compilation; the proposal may not be verified.":
+    "styleModifyFinishNoCompile",
+  "Agent called finish, but the last compilation still failed. The project may not build successfully. Please check the sandbox files manually.":
+    "templateGenFinishCompileFailed",
+
+  // 写作聊天工具确认 / 编辑器助手
+  "Pending tool not found or already resolved": "pendingToolNotFound",
+  "Clarification request not found or already resolved":
+    "clarificationNotFound",
+  "No API key configured — terminology clustering requires LLM":
+    "noApiKeyTerminologyClustering",
+
+  // 通用 / 多用户基础设施
+  "Not found": "notFoundGeneric",
+  "path is required": "pathRequired",
   "session_id cannot be empty": "plotGenSessionIdEmpty",
   "session_id contains invalid characters": "plotGenSessionIdInvalid",
   "Invalid job id": "invalidJobId",
@@ -235,6 +271,17 @@ export function translateError(msg) {
   // 1. 精确匹配
   if (msg in EXACT_MAP) {
     return i18n.t(`errors:${EXACT_MAP[msg]}`);
+  }
+
+  // 1.5 逐段检查前缀（backend/core/base_paragraph_check.py 的
+  // "{file} P{n}: {子消息}"）：剥前缀翻译子消息后拼回，使精确键与
+  // 有锚定模式也能命中；子消息未命中则继续走原文模式匹配
+  const prefixMatch = /^(\S+ P\d+: )([\s\S]+)$/.exec(msg);
+  if (prefixMatch) {
+    const translatedSub = translateError(prefixMatch[2]);
+    if (translatedSub !== prefixMatch[2]) {
+      return prefixMatch[1] + translatedSub;
+    }
   }
 
   // 2. 模式匹配（表与匹配核心见 ./errorPatterns.js，含去 ^ 锚定的

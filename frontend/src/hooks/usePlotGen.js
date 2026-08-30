@@ -166,7 +166,7 @@ export default function usePlotGen() {
         const data = await api.plotGen.file(sessionId, path);
         setFileContent(data.content || "");
       } catch (e) {
-        setFileContent(e.message);
+        setFileContent(translateError(e.message));
       } finally {
         setLoadingFile(false);
       }
@@ -210,7 +210,7 @@ export default function usePlotGen() {
     try {
       await api.plotGen.download(sessionId);
     } catch (e) {
-      setError(e.message);
+      setError(translateError(e.message));
     }
   }, [sessionId]);
 
@@ -221,7 +221,7 @@ export default function usePlotGen() {
       const data = await api.plotGen.trace(sessionId);
       setTrace(data);
     } catch (e) {
-      setError(e.message);
+      setError(translateError(e.message));
     } finally {
       setLoadingTrace(false);
     }
@@ -232,7 +232,7 @@ export default function usePlotGen() {
     try {
       await api.plotGen.downloadTrace(sessionId);
     } catch (e) {
-      setError(e.message);
+      setError(translateError(e.message));
     }
   }, [sessionId]);
 

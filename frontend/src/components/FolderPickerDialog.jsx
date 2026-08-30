@@ -15,6 +15,7 @@ import ChevronUp from "lucide-react/dist/esm/icons/chevron-up.mjs";
 import Loader2 from "lucide-react/dist/esm/icons/loader-circle.mjs";
 import FolderOpen from "lucide-react/dist/esm/icons/folder-open.mjs";
 import { api } from "@/api/index";
+import { translateError } from "@/utils/errorMessages";
 
 /**
  * 文件夹选择对话框。
@@ -56,7 +57,7 @@ export default function FolderPickerDialog({
       setDirectories(data.directories);
     } catch (e) {
       if (seq !== browseSeqRef.current) return;
-      setError(e.message);
+      setError(translateError(e.message));
       setDirectories([]);
     } finally {
       if (seq === browseSeqRef.current) {

@@ -18,6 +18,7 @@ import Copy from "lucide-react/dist/esm/icons/copy.mjs";
 import Download from "lucide-react/dist/esm/icons/download.mjs";
 import Upload from "lucide-react/dist/esm/icons/upload.mjs";
 import { api } from "@/api/index";
+import { translateError } from "@/utils/errorMessages";
 import PageHeader from "@/components/PageHeader";
 import CodeBlock, { latexEditorClass } from "@/components/CodeBlock";
 import { cn } from "@/lib/utils";
@@ -139,7 +140,7 @@ export default function FormatConvertPage() {
         setOutputFilename(data.output_filename);
       }
     } catch (e) {
-      setError(e.message);
+      setError(translateError(e.message));
     } finally {
       setLoading(false);
     }

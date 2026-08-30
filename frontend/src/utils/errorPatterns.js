@@ -131,6 +131,33 @@ export const PATTERN_MAP = [
     (m) => ({ rows: m[1], max: m[2] }),
   ],
   [/^Failed to decode CSV/, "plotGenCsvDecodeFailed", () => ({})],
+  // plot_gen Agent 止损指令（f-string 带工具名/失败次数）
+  [
+    /^STOP: the tool call `(.+?)` has failed with the identical result multiple times in a row\./,
+    "plotGenRepeatFailStop",
+    (m) => ({ tool: m[1] }),
+  ],
+  [
+    /^STOP: `python_sandbox` has failed (\d+) times in a row\./,
+    "plotGenSandboxBudgetStop",
+    (m) => ({ limit: m[1] }),
+  ],
+  [
+    /^STOP: `compile_tikz` has failed (\d+) times in a row\./,
+    "plotGenTikzBudgetStop",
+    (m) => ({ limit: m[1] }),
+  ],
+
+  // template_gen Agent 收尾（带轮数）
+  [
+    /^Reached the maximum number of rounds \((\d+)\), but the last compilation still did not pass\./,
+    "templateGenMaxRoundsCompileFailed",
+    (m) => ({ rounds: m[1] }),
+  ],
+
+  // 单用户模式路径浏览（project_router）
+  [/^Path does not exist:\s*(.+)/, "pathNotExist", (m) => ({ path: m[1] })],
+  [/^Permission denied:\s*(.+)/, "permissionDenied", (m) => ({ path: m[1] })],
 
   // 文件上传
   [

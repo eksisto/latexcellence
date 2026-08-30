@@ -37,9 +37,10 @@ export function useWritingChatCaptcha({ setError }) {
         }
         setCaptchaChallenge(null);
       } catch (e) {
-        setError(e.message);
+        const msg = translateError(e.message);
+        setError(msg);
         toast.error(i18n.t("hooks:writingChat.submitCaptchaFailed"), {
-          description: e.message,
+          description: msg,
         });
       } finally {
         setCaptchaSubmitting(false);

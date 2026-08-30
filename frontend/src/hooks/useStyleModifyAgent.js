@@ -123,7 +123,7 @@ export default function useStyleModifyAgent() {
           operationId: data.operation?.operation_id || null,
         });
       } catch (e) {
-        setError(e.message);
+        setError(translateError(e.message));
       }
     },
     [sessionId, workspaceId, setStyleModifySession],
@@ -219,7 +219,7 @@ export default function useStyleModifyAgent() {
       });
       await loadSession(sessionId);
     } catch (e) {
-      setError(e.message);
+      setError(translateError(e.message));
     } finally {
       setApplying(false);
     }
@@ -247,7 +247,7 @@ export default function useStyleModifyAgent() {
       });
       if (sessionId) await loadSession(sessionId);
     } catch (e) {
-      setError(e.message);
+      setError(translateError(e.message));
     } finally {
       setApplying(false);
     }
@@ -276,7 +276,7 @@ export default function useStyleModifyAgent() {
       setSummary("");
       setTrace(null);
     } catch (e) {
-      setError(e.message);
+      setError(translateError(e.message));
     }
   }, [sessionId, workspaceId, setStyleModifySession]);
 
@@ -287,7 +287,7 @@ export default function useStyleModifyAgent() {
       const data = await api.styleModify.agent.trace(sessionId, workspaceId);
       setTrace(data);
     } catch (e) {
-      setError(e.message);
+      setError(translateError(e.message));
     } finally {
       setLoadingTrace(false);
     }
@@ -298,7 +298,7 @@ export default function useStyleModifyAgent() {
     try {
       await api.styleModify.agent.downloadTrace(sessionId, workspaceId);
     } catch (e) {
-      setError(e.message);
+      setError(translateError(e.message));
     }
   }, [sessionId, workspaceId]);
 

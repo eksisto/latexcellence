@@ -198,7 +198,7 @@ export default function TemplateGenPage() {
       setTraceOpen(true);
     } catch (e) {
       setTrace(null);
-      setError(e.message);
+      setError(translateError(e.message));
     } finally {
       setLoadingTrace(false);
     }
@@ -209,7 +209,7 @@ export default function TemplateGenPage() {
     try {
       await api.templateGen.downloadTrace(sessionId);
     } catch (e) {
-      setError(e.message);
+      setError(translateError(e.message));
     }
   }, [sessionId]);
 
@@ -218,7 +218,7 @@ export default function TemplateGenPage() {
     try {
       await api.templateGen.download(sessionId);
     } catch (e) {
-      setError(e.message);
+      setError(translateError(e.message));
     }
   }, [sessionId]);
 

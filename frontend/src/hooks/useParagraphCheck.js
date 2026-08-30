@@ -243,9 +243,10 @@ export default function useParagraphCheck({
         i18n.t("hooks:paragraphCheck.loadedParagraphs", { count: data.total }),
       );
     } catch (e) {
-      setError(e.message);
+      const msg = translateError(e.message);
+      setError(msg);
       toast.error(i18n.t("hooks:paragraphCheck.loadParagraphsFailed"), {
-        description: e.message,
+        description: msg,
       });
     } finally {
       setLoading(storeSlice.loadingKey, false);
@@ -519,9 +520,10 @@ export default function useParagraphCheck({
           ),
         );
       } catch (e) {
-        setError(e.message);
+        const msg = translateError(e.message);
+        setError(msg);
         toast.error(i18n.t("hooks:paragraphCheck.applyChangeFailed"), {
-          description: e.message,
+          description: msg,
         });
       }
     },
@@ -636,10 +638,11 @@ export default function useParagraphCheck({
           });
         }
       } catch (e) {
-        setError(e.message);
+        const msg = translateError(e.message);
+        setError(msg);
         toast.error(i18n.t("hooks:paragraphCheck.batchApplyFailed"), {
           id: toastId,
-          description: e.message,
+          description: msg,
         });
       } finally {
         setApplyingAll(false);

@@ -299,7 +299,7 @@ export default function GitDiffPage() {
         setPdfUrl(url);
       }
     } catch (err) {
-      setError(err.message);
+      setError(translateError(err.message));
     } finally {
       setRendering(false);
     }
@@ -794,7 +794,7 @@ export default function GitDiffPage() {
                       downloadBlob(
                         resolveUrl(result.pdf_url),
                         "diff-highlight.pdf",
-                      ).catch((e) => setError(e.message))
+                      ).catch((e) => setError(translateError(e.message)))
                     }
                   >
                     <Download />

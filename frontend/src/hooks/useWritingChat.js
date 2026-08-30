@@ -439,9 +439,10 @@ export default function useWritingChat() {
         );
         return data;
       } catch (e) {
-        setError(e.message);
+        const msg = translateError(e.message);
+        setError(msg);
         toast.error(i18n.t("hooks:writingChat.generateEditFailed"), {
-          description: e.message,
+          description: msg,
         });
         return null;
       } finally {
@@ -494,9 +495,10 @@ export default function useWritingChat() {
         );
         toast.success(i18n.t("hooks:writingChat.editApplied"));
       } catch (e) {
-        setError(e.message);
+        const msg = translateError(e.message);
+        setError(msg);
         toast.error(i18n.t("hooks:writingChat.applyEditFailed"), {
-          description: e.message,
+          description: msg,
         });
       } finally {
         setApplyingMessageId(null);
@@ -518,9 +520,10 @@ export default function useWritingChat() {
           message_id: messageId,
         });
       } catch (e) {
-        setError(e.message);
+        const msg = translateError(e.message);
+        setError(msg);
         toast.error(i18n.t("hooks:writingChat.deleteMessageFailed"), {
-          description: e.message,
+          description: msg,
         });
         return;
       }
@@ -534,7 +537,8 @@ export default function useWritingChat() {
         setWritingChatCompressed(hasCompressed);
       } catch (e) {
         // 删除已成功，仅本地同步失败：尽力在本地应用等价变更
-        setError(e.message);
+        const syncMsg = translateError(e.message);
+        setError(syncMsg);
         const next = [...currentMessages];
         const idx = next.findIndex((m) => m.id === messageId);
         if (idx !== -1) {
@@ -550,7 +554,7 @@ export default function useWritingChat() {
           next.some((m) => m.compressed && m.role === "summary"),
         );
         toast.warning(i18n.t("hooks:writingChat.deleteSyncFailed"), {
-          description: e.message,
+          description: syncMsg,
         });
         return;
       }
@@ -571,9 +575,10 @@ export default function useWritingChat() {
     try {
       result = await api.writingChat.compactSession(sessionId);
     } catch (e) {
-      setError(e.message);
+      const msg = translateError(e.message);
+      setError(msg);
       toast.error(i18n.t("hooks:writingChat.compactFailed"), {
-        description: e.message,
+        description: msg,
       });
       return;
     }
@@ -591,9 +596,10 @@ export default function useWritingChat() {
       setWritingChatCompressed(hasCompressed);
       toast.success(i18n.t("hooks:writingChat.compactSuccess"));
     } catch (e) {
-      setError(e.message);
+      const msg = translateError(e.message);
+      setError(msg);
       toast.error(i18n.t("hooks:writingChat.compactFailed"), {
-        description: e.message,
+        description: msg,
       });
     }
   }, [setWritingChatMessages, setWritingChatCompressed]);
