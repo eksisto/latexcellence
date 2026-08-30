@@ -335,6 +335,9 @@ export const api = {
           file_path: filePath,
           content,
           base_md5: baseMd5,
+          // save-file 的权限依赖从 JSON body 读 workspace_id（SaveFileRequest
+          // 亦要求此字段），仅拼在 query 上会被判 invalid_workspace
+          workspace_id: workspaceId,
         }),
       }),
     closeWorkspace: (workspaceId) =>

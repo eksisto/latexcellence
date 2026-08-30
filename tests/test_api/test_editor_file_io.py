@@ -114,6 +114,24 @@ class TestSaveFile:
         assert resp.status_code == 200
         assert (env["root"] / "main.tex").read_text(encoding="utf-8") == new_content
 
+    def test_save_with_workspace_id_in_query_only(self, client, env):
+        """回归：前端 saveFile 曾只把 workspace_id 拼在 query 上（body 缺失），
+        body 必填校验会以 422 拒绝。workspace_id 改为可缺省并回退读 query
+        后，仅 query 携带的请求应正常保存。"""
+        new_content = MAIN_TEX.replace("Hello world.", "Hola mundo.")
+        resp = client.post(
+            "/api/project/save-file",
+            params={"workspace_id": env["ws"]},
+            json={
+                "file_path": "main.tex",
+                "content": new_content,
+                "base_md5": _md5(MAIN_TEX),
+            },
+        )
+        assert resp.status_code == 200, resp.text
+        assert resp.json()["md5"] == _md5(new_content)
+        assert (env["root"] / "main.tex").read_text(encoding="utf-8") == new_content
+
     def test_conflict_returns_structured_409(self, client, env):
         stale_md5 = _md5("outdated")
         resp = _save(client, env, "New content.\n", base_md5=stale_md5)

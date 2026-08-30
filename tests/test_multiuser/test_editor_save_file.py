@@ -133,6 +133,19 @@ class EditorApi:
             "/api/project/save-file", json=body, headers=self.env["csrf"](client)
         )
 
+    def save_with_query_ws(self, client, ws_id, content, base_md5=None):
+        """复刻前端 saveFile 的历史请求形状：workspace_id 只拼在 query 上，
+        JSON body 不携带（曾触发 invalid_workspace 的回归场景）。"""
+        body = {"file_path": "main.tex", "content": content}
+        if base_md5 is not None:
+            body["base_md5"] = base_md5
+        return client.post(
+            "/api/project/save-file",
+            params={"workspace_id": ws_id},
+            json=body,
+            headers=self.env["csrf"](client),
+        )
+
     def undo(self, client, ws_id):
         return client.post(
             "/api/project/undo",
@@ -189,6 +202,36 @@ class TestEditorSaveFileMultiuser:
         assert row["actor_user_id"] == editor_env["owner"]["id"]
         assert row["source_module"] == "editor"
         assert row["file_count"] == 1
+
+    def test_save_accepts_workspace_id_in_query_only(self, api, editor_env):
+        """回归：前端 saveFile 曾只把 workspace_id 拼在 query（body 缺失），
+        权限依赖从 body 读取导致每次保存 400 invalid_workspace（日志表现为
+        workspace=<empty> reason=missing）。依赖回退读 query 后应保存成功。"""
+        client = api.client_for("owner")
+        ws = "ws-editor-query-ws"
+        assert api.open(client, ws).status_code == 200
+
+        saved = api.save_with_query_ws(client, ws, EDITED_TEX, base_md5=_md5(MAIN_TEX))
+        assert saved.status_code == 200, saved.text
+        assert saved.json()["md5"] == _md5(EDITED_TEX)
+        assert (editor_env["root"] / "main.tex").read_text(
+            encoding="utf-8"
+        ) == EDITED_TEX
+
+    def test_save_without_workspace_id_anywhere_rejected(self, api, editor_env):
+        client = api.client_for("owner")
+        ws = "ws-editor-no-ws"
+        assert api.open(client, ws).status_code == 200
+
+        resp = client.post(
+            "/api/project/save-file",
+            json={"file_path": "main.tex", "content": EDITED_TEX},
+            headers=api.env["csrf"](client),
+        )
+        assert resp.status_code == 400
+        assert resp.json()["detail"]["error"] == "invalid_workspace"
+        assert (editor_env["root"] / "main.tex").read_text(encoding="utf-8") == MAIN_TEX
+        assert _op_rows(editor_env) == []
 
     def test_conflict_returns_409_with_sanitized_message(self, api, editor_env):
         client = api.client_for("owner")

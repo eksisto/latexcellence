@@ -349,8 +349,9 @@ def require_workspace(write: bool = False, *, required: bool = True):
 
 def require_workspace_json(write: bool = False, *, required: bool = True):
     """
-    与 require_workspace 相同，但 workspace_id 取自 JSON 请求体字段
-    （用于 style_modify 等把 workspace_id 放在 body 的路由）。"""
+    与 require_workspace 相同，但 workspace_id 优先取自 JSON 请求体字段
+    （用于 style_modify、save-file 等把 workspace_id 放在 body 的路由）；
+    body 未携带时回退读 query 参数，兼容仅以 query 携带的调用方。"""
 
     async def _dependency(
         request: Request,
@@ -364,6 +365,8 @@ def require_workspace_json(write: bool = False, *, required: bool = True):
         ws = None
         if isinstance(data, dict):
             ws = data.get("workspace_id")
+        if not ws:
+            ws = request.query_params.get("workspace_id")
         # 同 require_workspace：压库判定入线程池
         return await asyncio.to_thread(
             _enforce_workspace_access, ws, user, write, required=required

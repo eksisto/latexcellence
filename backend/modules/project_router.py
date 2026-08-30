@@ -50,8 +50,10 @@ class FileActionRequest(BaseModel):
 
 class SaveFileRequest(BaseModel):
     file_path: str
-    workspace_id: str
     content: str
+    # 可缺省：权限依赖优先读 body，缺省时已回退读 query（binding 里携带），
+    # 端点再以 binding.workspace_id 兜底，兼容两种携带方式
+    workspace_id: str | None = None
     base_md5: str | None = None
 
 
@@ -329,7 +331,9 @@ async def save_file(
     编辑日志并与 AI 改动共享同一套 undo/redo 历史（editor-plan §5.1，
     决策 Q11）。
     """
-    project = get_project_manager_for_workspace(request.workspace_id)
+    project = get_project_manager_for_workspace(
+        request.workspace_id or binding["workspace_id"]
+    )
     return await editor_service.save_file_content(
         project,
         binding,
