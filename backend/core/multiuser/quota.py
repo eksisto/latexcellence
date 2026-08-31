@@ -32,6 +32,11 @@ from .db import db_execute, db_query_all, db_query_one, utcnow
 
 logger = get_logger("multiuser.quota")
 
+# 模板库目录名（挂在用户空间根下；与 backend/modules/template_library/
+# user_store.TEMPLATE_LIBRARY_SUBDIR 保持一致——该目录并入「模板」类别
+# （templates sub）扫描，不新增衍生配额类别；core 层不得反向依赖模块层）
+TEMPLATE_LIBRARY_SUBDIR = "template_library"
+
 
 def _quota_exceeded(message: str) -> HTTPException:
     return HTTPException(
@@ -223,11 +228,17 @@ def dir_size(path: Path, exclude_dirs: set[str] | None = None) -> int:
 
 
 def _scan_derived_dir(user_id: str, subdir: str) -> int:
-    """扫描用户单个衍生分类目录的实际磁盘占用（不存在返回 0）。"""
+    """扫描用户单个衍生分类目录的实际磁盘占用（不存在返回 0）。
+
+    模板库（template_library/）并入「模板」类别（templates sub）口径：
+    分类用量条与自助清理对模板库天然生效，不新增类别。"""
     d = userspace.derived_dir(user_id, subdir)
-    if not d.is_dir():
-        return 0
-    return dir_size(d)
+    total = dir_size(d) if d.is_dir() else 0
+    if subdir == "templates":
+        lib = userspace.user_root(user_id) / TEMPLATE_LIBRARY_SUBDIR
+        if lib.is_dir():
+            total += dir_size(lib)
+    return total
 
 
 def _upsert_derived_usage(user_id: str, subdir: str, size_bytes: int) -> None:
@@ -390,8 +401,10 @@ def cleanup_derived_category(user_id: str, category: str) -> dict[str, int]:
     准确（其余分类可能存在自上次对账以来的漂移）。"""
     if category not in userspace.DERIVED_SUBDIRS:
         raise ValueError(f"Unknown derived data category: {category}")
-    d = userspace.derived_dir(user_id, category)
-    if d.is_dir():
+
+    def _clean_dir(d: Path) -> None:
+        if not d.is_dir():
+            return
         for child in d.iterdir():
             try:
                 if child.is_dir() and not child.is_symlink():
@@ -400,6 +413,11 @@ def cleanup_derived_category(user_id: str, category: str) -> dict[str, int]:
                     child.unlink()
             except OSError as e:
                 logger.warning("Self-service cleanup skipped %s: %s", child, e)
+
+    _clean_dir(userspace.derived_dir(user_id, category))
+    # 模板库并入「模板」类别：自助清理同步清空 template_library/
+    if category == "templates":
+        _clean_dir(userspace.user_root(user_id) / TEMPLATE_LIBRARY_SUBDIR)
     resync_user_derived_usage(user_id)
     logger.info("Derived data self-cleanup: user=%s category=%s", user_id, category)
     return derived_usage_breakdown(user_id)

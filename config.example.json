@@ -124,6 +124,40 @@
       "cleanup_interval_seconds": 3600,
       "cleanup_retention_days": 7
     },
+    "template_library": {
+      "enabled": true,
+      "user_library_dir": "data/template_library/",
+      "max_upload_mb": 20,
+      "allowed_extensions": [
+        ".tex",
+        ".sty",
+        ".cls",
+        ".bib",
+        ".bst",
+        ".bbx",
+        ".cbx",
+        ".clo",
+        ".def",
+        ".cfg",
+        ".fd",
+        ".dtx",
+        ".ins",
+        ".ltx",
+        ".tikz",
+        ".md",
+        ".txt",
+        ".json",
+        ".png",
+        ".jpg",
+        ".jpeg",
+        ".gif",
+        ".eps",
+        ".svg",
+        ".pdf",
+        ".ttf",
+        ".otf"
+      ]
+    },
     "code_review": {
       "enabled": true,
       "batch_size": 5

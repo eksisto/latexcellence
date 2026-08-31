@@ -192,6 +192,48 @@ class TemplateGenConfig(BaseModel):
     cleanup_retention_days: int = Field(7, ge=1)  # 沙箱保留天数，超过则删除
 
 
+class TemplateLibraryConfig(BaseModel):
+    """模板库模块配置（内置模板 + 用户私有模板库）"""
+
+    enabled: bool = True  # 是否启用（false 时 /api/templates 端点整体关闭）
+    user_library_dir: str = (
+        "data/template_library/"  # 单用户模式模板库目录（多用户按用户空间隔离）
+    )
+    max_upload_mb: int = Field(20, ge=1)  # 上传模板 zip 大小上限（MB）
+    # 上传模板包内允许保存的文件扩展名白名单（LaTeX 相关收窄，含图形/字体素材）
+    allowed_extensions: list[str] = Field(
+        default_factory=lambda: [
+            ".tex",
+            ".sty",
+            ".cls",
+            ".bib",
+            ".bst",
+            ".bbx",
+            ".cbx",
+            ".clo",
+            ".def",
+            ".cfg",
+            ".fd",
+            ".dtx",
+            ".ins",
+            ".ltx",
+            ".tikz",
+            ".md",
+            ".txt",
+            ".json",
+            ".png",
+            ".jpg",
+            ".jpeg",
+            ".gif",
+            ".eps",
+            ".svg",
+            ".pdf",
+            ".ttf",
+            ".otf",
+        ]
+    )
+
+
 class CodeReviewConfig(BaseModel):
     """LaTeX 代码审查模块配置"""
 
@@ -572,6 +614,7 @@ class FeaturesConfig(BaseModel):
     formula_ocr: FormulaOCRConfig = FormulaOCRConfig()
     table_ocr: TableOCRConfig = TableOCRConfig()
     template_gen: TemplateGenConfig = TemplateGenConfig()
+    template_library: TemplateLibraryConfig = TemplateLibraryConfig()
     code_review: CodeReviewConfig = CodeReviewConfig()
     compile: CompileConfig = CompileConfig()
     git_diff: GitDiffConfig = GitDiffConfig()

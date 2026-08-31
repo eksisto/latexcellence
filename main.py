@@ -30,6 +30,7 @@ from backend.modules.project_router import router as project_router
 from backend.modules.typo_check.router import router as typo_check_router
 from backend.modules.expression_opt.router import router as expression_opt_router
 from backend.modules.template_gen.router import router as template_gen_router
+from backend.modules.template_library.router import router as template_library_router
 from backend.modules.formula_ocr.router import router as formula_ocr_router
 from backend.modules.table_ocr.router import router as table_ocr_router
 from backend.modules.code_review.router import router as code_review_router
@@ -247,6 +248,7 @@ async def config_status():
                 "table_ocr",
                 "style_modify",
                 "template_gen",
+                "template_library",
                 "code_review",
                 "compile",
                 "git_diff",
@@ -349,6 +351,8 @@ app.include_router(project_router)
 app.include_router(typo_check_router)
 app.include_router(expression_opt_router)
 app.include_router(template_gen_router)
+# 模板库路由（内置模板 + 用户模板库；features.template_library.enabled=false 时端点关闭）
+app.include_router(template_library_router)
 app.include_router(formula_ocr_router)
 app.include_router(table_ocr_router)
 app.include_router(code_review_router)
