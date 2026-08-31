@@ -1,9 +1,10 @@
 import { memo, useCallback, useEffect, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import FolderOpen from "lucide-react/dist/esm/icons/folder-open.mjs";
 import UploadCloud from "lucide-react/dist/esm/icons/upload-cloud.mjs";
+import LayoutTemplate from "lucide-react/dist/esm/icons/layout-template.mjs";
 import Download from "lucide-react/dist/esm/icons/download.mjs";
 import Pencil from "lucide-react/dist/esm/icons/pencil.mjs";
 import ShieldCheck from "lucide-react/dist/esm/icons/shield-check.mjs";
@@ -26,6 +27,7 @@ import UploadProjectDialog from "@/components/UploadProjectDialog";
 import ProjectPermissionsDialog from "@/components/ProjectPermissionsDialog";
 import { api } from "@/api/index";
 import useStore from "@/store/useStore";
+import useEnabledFeatures from "@/hooks/useEnabledFeatures";
 import { translateError } from "@/utils/errorMessages";
 import { formatBytes, formatDate } from "@/utils/format";
 
@@ -197,6 +199,7 @@ const RecycleRow = memo(function RecycleRow({
 export default function ProjectWorkbenchPage() {
   const { t } = useTranslation(["pages", "common"]);
   const navigate = useNavigate();
+  const enabledFeatures = useEnabledFeatures();
 
   const authUser = useStore((s) => s.authUser);
   const quota = useStore((s) => s.quota);
@@ -423,6 +426,16 @@ export default function ProjectWorkbenchPage() {
           description={t("pages:workbench.desc")}
           backTo="/"
         >
+          {/* 从模板新建：模板中心入口（部署级 template_library 开关关闭时隐藏） */}
+          {(!enabledFeatures || enabledFeatures.template_library) && (
+            <Button
+              variant="outline"
+              nativeButton={false}
+              render={<Link to="/templates" />}
+            >
+              <LayoutTemplate /> {t("pages:workbench.newFromTemplate")}
+            </Button>
+          )}
           <Button onClick={() => setUploadOpen(true)}>
             <UploadCloud /> {t("pages:workbench.upload")}
           </Button>

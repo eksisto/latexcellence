@@ -472,6 +472,9 @@ export default function EditorPage() {
         }
         compiling={compiling}
         onCompile={handleCompile}
+        templateLibraryEnabled={
+          enabledFeatures === null || enabledFeatures.template_library !== false
+        }
       />
 
       <div className="flex flex-1 min-h-0 gap-3">

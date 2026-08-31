@@ -29,6 +29,8 @@ import {
 import FolderOpen from "lucide-react/dist/esm/icons/folder-open.mjs";
 import SpellCheck from "lucide-react/dist/esm/icons/spell-check.mjs";
 import SquarePen from "lucide-react/dist/esm/icons/square-pen.mjs";
+import LayoutTemplate from "lucide-react/dist/esm/icons/layout-template.mjs";
+import BookmarkPlus from "lucide-react/dist/esm/icons/bookmark-plus.mjs";
 import Play from "lucide-react/dist/esm/icons/play.mjs";
 import Loader2 from "lucide-react/dist/esm/icons/loader-circle.mjs";
 import Check from "lucide-react/dist/esm/icons/check.mjs";
@@ -53,6 +55,7 @@ import ConfirmDialog from "@/components/ConfirmDialog";
 import FolderPickerDialog from "@/components/FolderPickerDialog";
 import PDFPreview from "@/components/PDFPreview";
 import BinaryFilePreview from "@/components/editor/BinaryFilePreview";
+import SaveAsTemplateDialog from "@/components/template-center/SaveAsTemplateDialog";
 import { isPreviewableFilePath } from "@/lib/editor/files";
 
 function flattenTexFiles(nodes) {
@@ -105,6 +108,7 @@ export default function WorkspacePage() {
   const [showRawOutput, setShowRawOutput] = useState(false);
   const [confirmCloseOpen, setConfirmCloseOpen] = useState(false);
   const [folderPickerOpen, setFolderPickerOpen] = useState(false);
+  const [saveTemplateOpen, setSaveTemplateOpen] = useState(false);
   const restoredRef = useRef(false);
 
   // 只读二进制预览（PDF / 位图）：点击文件树时经 /raw-file 拉 blob URL，
@@ -438,6 +442,18 @@ export default function WorkspacePage() {
                       ? t("pages:workspace.openBtnLoading")
                       : t("pages:workspace.openBtn")}
                   </Button>
+                  {/* 从模板创建：模板中心入口（template_library 关闭时隐藏） */}
+                  {(!enabledFeatures || enabledFeatures.template_library) && (
+                    <Button
+                      className="w-full"
+                      variant="outline"
+                      nativeButton={false}
+                      render={<Link to="/templates" />}
+                    >
+                      <LayoutTemplate />
+                      {t("pages:workspace.newFromTemplate")}
+                    </Button>
+                  )}
                 </CardContent>
               )}
             </Card>
@@ -536,6 +552,18 @@ export default function WorkspacePage() {
                 >
                   <SquarePen />
                   {t("pages:workspace.openEditor")}
+                </Button>
+              )}
+              {/* 另存为模板：当前项目复制入库（后端仅要求读权限；
+                  template_library 关闭时隐藏） */}
+              {(!enabledFeatures || enabledFeatures.template_library) && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setSaveTemplateOpen(true)}
+                >
+                  <BookmarkPlus />
+                  {t("pages:workspace.saveAsTemplate")}
                 </Button>
               )}
             </div>
@@ -777,6 +805,11 @@ export default function WorkspacePage() {
         onOpenChange={setFolderPickerOpen}
         onSelect={handleFolderSelected}
         initialPath={openPath || ""}
+      />
+      {/* 当前项目另存为模板（工具栏入口；成功提示由对话框内部 toast） */}
+      <SaveAsTemplateDialog
+        open={saveTemplateOpen}
+        onOpenChange={setSaveTemplateOpen}
       />
     </div>
   );

@@ -69,6 +69,9 @@
         "formatConvert": {
           "title": "格式轉換"
         },
+        "templateLibrary": {
+          "title": "範本中心"
+        },
         "templateGen": {
           "title": "模板生成"
         },
@@ -565,6 +568,8 @@
       "compileSuccessToast": "編譯成功",
       "compileFailedToast": "編譯失敗",
       "openEditor": "進入編輯器",
+      "newFromTemplate": "從範本建立",
+      "saveAsTemplate": "另存為範本",
       "versionManage": "版本管理"
     },
     "gitDiff": {
@@ -737,6 +742,92 @@
       "traceLanguage": "輸出語言",
       "traceMaxRounds": "最大輪數"
     },
+    "templateCenter": {
+      "title": "範本中心",
+      "description": "瀏覽內建範本與我的範本庫，一鍵從範本建立專案",
+      "searchPlaceholder": "搜尋範本名稱或描述...",
+      "allCategories": "全部",
+      "tabBuiltin": "內建範本",
+      "tabMine": "我的範本",
+      "uploadBtn": "上傳範本",
+      "retry": "重試",
+      "builtinBadge": "內建",
+      "edit": {
+        "title": "編輯範本資訊",
+        "description": "修改範本名稱、分類與描述",
+        "nameLabel": "範本名稱",
+        "categoryLabel": "分類",
+        "descriptionLabel": "描述",
+        "descriptionPlaceholder": "簡要描述這個範本（可選）",
+        "nameRequired": "範本名稱不能為空",
+        "saving": "儲存中...",
+        "savedToast": "範本資訊已更新"
+      },
+      "fileCount": "{{count}} 個檔案",
+      "emptyTitle": "尚無內建範本",
+      "emptyDescription": "內建範本庫為空，請檢查伺服器的內建範本目錄",
+      "emptyMineTitle": "還沒有我的範本",
+      "emptyMineDescription": "上傳 zip 範本包，或在工作區把目前專案另存為範本",
+      "disabledTitle": "範本庫功能未開啟",
+      "disabledDescription": "目前部署未啟用範本庫功能，請聯絡管理員開啟",
+      "deleteSuccess": "範本已刪除",
+      "deleteFailed": "刪除範本失敗",
+      "deleteConfirmTitle": "刪除範本「{{name}}」？",
+      "deleteConfirmDesc": "將從範本庫中移除該範本；已建立的專案不受影響。",
+      "useTemplate": "使用此範本",
+      "detailTitle": "範本詳情",
+      "previewUnavailable": "預覽檔案不可用",
+      "notViewableFile": "該檔案類型不支援線上檢視",
+      "descriptionLabel": "描述",
+      "categoryLabel": "分類",
+      "authorLabel": "作者",
+      "licenseLabel": "授權",
+      "engineLabel": "引擎",
+      "mainFileLabel": "主檔案",
+      "fileCountLabel": "檔案數",
+      "filesTitle": "檔案",
+      "backToFiles": "返回檔案列表",
+      "noFiles": "範本內尚無檔案",
+      "categories": {
+        "paper": "論文",
+        "thesis": "學位論文",
+        "report": "報告",
+        "slides": "投影片",
+        "resume": "履歷",
+        "book": "書籍",
+        "poster": "海報",
+        "notes": "筆記",
+        "other": "其他"
+      },
+      "upload": {
+        "title": "上傳範本",
+        "description": "上傳 zip 壓縮包建立我的範本；缺失資訊將自動生成",
+        "fileLabel": "範本壓縮包",
+        "filePlaceholder": "選擇 .zip 檔案",
+        "nameLabel": "範本名稱",
+        "namePlaceholder": "可選，預設使用壓縮包檔名",
+        "categoryLabel": "分類",
+        "categoryAuto": "自動（其他）",
+        "optionalHint": "名稱與分類均可留空，由後端自動識別",
+        "submit": "上傳",
+        "submitting": "上傳中...",
+        "successToast": "範本上傳成功"
+      },
+      "create": {
+        "title": "從「{{name}}」建立專案",
+        "description": "將複製範本檔案樹建立新專案（不含編譯產物與庫中繼資料）",
+        "nameLabel": "專案名稱",
+        "namePlaceholder": "輸入新專案名稱",
+        "targetDirLabel": "目標目錄",
+        "targetDirPlaceholder": "選擇新專案的存放目錄",
+        "browse": "瀏覽",
+        "targetDirHint": "將在目標目錄下建立以專案名命名的新資料夾",
+        "submit": "建立專案",
+        "creating": "建立中...",
+        "successToast": "專案「{{name}}」已建立",
+        "openFailed": "專案已建立，但開啟失敗"
+      }
+    },
     "plotGen": {
       "title": "科學研究繪圖",
       "subtitle": "上傳 CSV/Excel/JSON 資料，生成可重現的 PDF/SVG/TikZ 向量圖表",
@@ -872,6 +963,7 @@
       "title": "專案工作台",
       "desc": "管理您的專案空間、上傳與協作權限",
       "upload": "上傳專案",
+      "newFromTemplate": "從範本建立",
       "refresh": "重新整理",
       "userLabel": "目前使用者",
       "projectQuota": "專案空間使用",
@@ -1160,6 +1252,9 @@
       "writingChatSummaryBudget": "摘要 token 預算",
       "writingChatSummaryModel": "摘要模型（留空跟隨主模型）",
       "featureBibManager": "參考文獻管理",
+      "featureTemplateLibrary": "範本庫",
+      "templateLibraryMaxUploadMb": "上傳範本大小上限 (MB)",
+      "templateLibraryMaxUploadMbHint": "上傳範本 zip 壓縮包的最大體積，超出將被拒絕",
       "featurePlotGen": "科學研究繪圖",
       "plotGenMaxRounds": "Agent 最大輪數",
       "plotGenExecTimeout": "腳本執行逾時（秒）",
@@ -1464,6 +1559,19 @@
       "sessionExpired": "上傳會話已過期或不存在，請重新選擇檔案後再試",
       "resumingMissing": "偵測到缺失分片，正在自動補傳…",
       "chunkHint": "壓縮包將分片直傳（支援暫停與斷點續傳），不再於客戶端打包。"
+    },
+    "saveAsTemplate": {
+      "title": "另存為範本",
+      "description": "將目前專案複製到我的範本庫（自動剔除編譯產物與 .git）",
+      "nameLabel": "範本名稱",
+      "namePlaceholder": "輸入範本名稱",
+      "categoryLabel": "分類",
+      "categoryAuto": "自動（其他）",
+      "descriptionLabel": "描述",
+      "descriptionPlaceholder": "簡要描述這個範本（可選）",
+      "submit": "儲存到範本庫",
+      "saving": "儲存中...",
+      "success": "已儲存到我的範本庫"
     },
     "permissions": {
       "title": "專案權限",
@@ -1893,6 +2001,16 @@
     "assistantDisabled": "伺服器已關閉編輯器 AI 助手功能",
     "editorDisabled": "伺服器已關閉網頁編輯器功能",
     "contentTooLong": "內容超出長度限制",
-    "internalError": "伺服器內部錯誤，請稍後重試"
+    "internalError": "伺服器內部錯誤，請稍後重試",
+    "invalidId": "範本 ID 無效",
+    "builtinReadonly": "內建範本不可修改或刪除",
+    "noMainFile": "範本中未找到 LaTeX 原始檔",
+    "invalidManifest": "範本中繼資料無效",
+    "notViewable": "僅文字原始檔支援線上檢視",
+    "readFailed": "範本檔案讀取失敗",
+    "invalidFileType": "範本包含不允許的檔案類型",
+    "targetDirRequired": "單人模式需要先選擇目標目錄",
+    "targetNotEmpty": "目標目錄已存在且非空",
+    "invalidSession": "生成會話不存在或已失效"
   }
 }

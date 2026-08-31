@@ -30,12 +30,14 @@ import SquareTerminal from "lucide-react/dist/esm/icons/square-terminal.mjs";
 import Undo2 from "lucide-react/dist/esm/icons/undo-2.mjs";
 import Redo2 from "lucide-react/dist/esm/icons/redo-2.mjs";
 import Loader2 from "lucide-react/dist/esm/icons/loader-circle.mjs";
+import BookmarkPlus from "lucide-react/dist/esm/icons/bookmark-plus.mjs";
 
 import useStore from "@/store/useStore";
 import useEditorStore from "@/store/editorStore";
 import useCanWrite from "@/hooks/useCanWrite";
 import useUndoRedo from "@/hooks/useUndoRedo";
 import EditorSettingsDialog from "@/components/editor/EditorSettingsDialog";
+import SaveAsTemplateDialog from "@/components/template-center/SaveAsTemplateDialog";
 
 /**
  * @param {object} props
@@ -49,6 +51,8 @@ import EditorSettingsDialog from "@/components/editor/EditorSettingsDialog";
  * @param {boolean} [props.compileEnabled=true] 部署级 compile 功能开关
  * @param {boolean} [props.compiling=false] 编译请求进行中
  * @param {() => void} [props.onCompile]    编译入口（脏改动先自动保存）
+ * @param {boolean} [props.templateLibraryEnabled=true]
+ *   部署级 template_library 功能开关（「另存为模板」入口）
  */
 export default function EditorToolbar({
   filePath,
@@ -60,6 +64,7 @@ export default function EditorToolbar({
   compileEnabled = true,
   compiling = false,
   onCompile,
+  templateLibraryEnabled = true,
 }) {
   const { t } = useTranslation("components");
   const workspaceId = useStore((s) => s.workspaceId);
@@ -67,6 +72,7 @@ export default function EditorToolbar({
   const canWrite = useCanWrite();
 
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [saveTemplateOpen, setSaveTemplateOpen] = useState(false);
 
   // 复用既有 undo-status 轮询与 undo/redo 端点语义；成功后经回调重拉缓冲区
   const {
@@ -189,6 +195,30 @@ export default function EditorToolbar({
           </Tooltip>
         )}
 
+        {/* 另存为模板：把当前项目复制入库（后端仅要求读权限，viewer 可用；
+            template_library 关闭时隐藏，与 compileEnabled 同一开关口径） */}
+        {templateLibraryEnabled && (
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <Button
+                  variant="outline"
+                  size="icon"
+                  onClick={() => setSaveTemplateOpen(true)}
+                />
+              }
+            >
+              <BookmarkPlus />
+              <span className="sr-only">
+                {t("components:saveAsTemplate.title")}
+              </span>
+            </TooltipTrigger>
+            <TooltipContent>
+              {t("components:saveAsTemplate.title")}
+            </TooltipContent>
+          </Tooltip>
+        )}
+
         <Button
           size="sm"
           onClick={onSave}
@@ -232,6 +262,10 @@ export default function EditorToolbar({
       <EditorSettingsDialog
         open={settingsOpen}
         onOpenChange={setSettingsOpen}
+      />
+      <SaveAsTemplateDialog
+        open={saveTemplateOpen}
+        onOpenChange={setSaveTemplateOpen}
       />
     </div>
   );

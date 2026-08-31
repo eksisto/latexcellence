@@ -7,6 +7,7 @@ const ALL_ENABLED = {
   formula_ocr: true,
   table_ocr: true,
   template_gen: true,
+  template_library: true,
   style_modify: true,
   typo_check: true,
   expression_opt: true,

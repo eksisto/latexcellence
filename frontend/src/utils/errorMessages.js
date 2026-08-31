@@ -92,6 +92,18 @@ const EXACT_MAP = {
   // 衍生数据记账与自助清理（多用户 v2 P4）错误码
   invalid_category: "invalidCategory",
 
+  // 模板库（/api/templates，template-plan 阶段②）错误码
+  invalid_id: "invalidId",
+  builtin_readonly: "builtinReadonly",
+  no_main_file: "noMainFile",
+  invalid_manifest: "invalidManifest",
+  not_viewable: "notViewable",
+  read_failed: "readFailed",
+  invalid_file_type: "invalidFileType",
+  target_dir_required: "targetDirRequired",
+  target_not_empty: "targetNotEmpty",
+  invalid_session: "invalidSession",
+
   // 分片上传与断点续传（多用户 v2 P5）错误码
   upload_session_not_found: "uploadSessionNotFound",
   upload_session_expired: "uploadSessionExpired",

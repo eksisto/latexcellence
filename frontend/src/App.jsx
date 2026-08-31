@@ -58,6 +58,7 @@ const ForgotPasswordPage = lazy(() => import("./pages/ForgotPasswordPage"));
 const ResetPasswordPage = lazy(() => import("./pages/ResetPasswordPage"));
 const PendingApprovalPage = lazy(() => import("./pages/PendingApprovalPage"));
 const ProjectWorkbenchPage = lazy(() => import("./pages/ProjectWorkbenchPage"));
+const TemplateCenterPage = lazy(() => import("./pages/TemplateCenterPage"));
 const EditorPage = lazy(() => import("./pages/EditorPage"));
 const AdminPage = lazy(() => import("./pages/AdminPage"));
 const SettingsDialog = lazy(() => import("@/components/SettingsDialog"));
@@ -481,6 +482,15 @@ export default function App() {
               element={
                 <RequireAuth>
                   <TemplateGenPage />
+                </RequireAuth>
+              }
+            />
+            {/* 模板中心（内置模板 + 我的模板库；功能关闭时页面内展示空态） */}
+            <Route
+              path="/templates"
+              element={
+                <RequireAuth>
+                  <TemplateCenterPage />
                 </RequireAuth>
               }
             />

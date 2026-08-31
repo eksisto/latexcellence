@@ -579,6 +579,82 @@ export const api = {
     },
   },
 
+  /* ---- 模板库（/api/templates：内置模板 + 我的模板库） ---- */
+  templateLibrary: {
+    /** 模板列表（内置 + 我的），category 可选（固定枚举之一） */
+    list: (category) =>
+      request(
+        `/templates${category ? `?category=${encodeURIComponent(category)}` : ""}`,
+      ),
+    /** 模板详情 + 文件树（相对路径 + 大小） */
+    detail: (templateId) =>
+      request(`/templates/${encodeURIComponent(templateId)}`),
+    /** 模板内源码查看，返回 { path, content } */
+    fileContent: (templateId, path) =>
+      request(
+        `/templates/${encodeURIComponent(templateId)}/file?path=${encodeURIComponent(path)}`,
+      ),
+    /** 内置模板缩略图（仅内置）：返回临时 blob URL，调用方负责 revoke */
+    thumbnailBlobUrl: async (templateId) =>
+      fetchBlobUrl(
+        `${getApiBase()}/templates/${encodeURIComponent(templateId)}/thumbnail`,
+      ),
+    /** 内置模板 PDF 预览（仅内置）：返回临时 blob URL，调用方负责 revoke */
+    previewBlobUrl: async (templateId) =>
+      fetchBlobUrl(
+        `${getApiBase()}/templates/${encodeURIComponent(templateId)}/preview`,
+      ),
+    /** 上传 zip 建模板（name/category 可选，缺省由后端自动生成） */
+    upload: (file, name, category) => {
+      const formData = new FormData();
+      formData.append("archive", file, file.name || "template.zip");
+      if (name) formData.append("name", name);
+      if (category) formData.append("category", category);
+      return requestForm("/templates", formData);
+    },
+    /** 改名/分类/描述（仅自己的模板；字段传 null 表示不修改） */
+    update: (
+      templateId,
+      { name = null, category = null, description = null },
+    ) =>
+      request(`/templates/${encodeURIComponent(templateId)}`, {
+        method: "PUT",
+        body: JSON.stringify({ name, category, description }),
+      }),
+    delete: (templateId) =>
+      request(`/templates/${encodeURIComponent(templateId)}`, {
+        method: "DELETE",
+      }),
+    /**
+     * 从模板创建项目：多用户仅需 name（返回 {project_id, name}）；
+     * 单用户需 target_dir（返回 {name, path}，目标非空冲突 409）
+     */
+    createProject: (templateId, name, targetDir = null) =>
+      request(`/templates/${encodeURIComponent(templateId)}/create-project`, {
+        method: "POST",
+        body: JSON.stringify({ name, target_dir: targetDir }),
+      }),
+    /**
+     * 当前项目另存为模板：workspace_id 由后端 require_workspace_read_json
+     * 从 JSON body 读取定位打开的项目（多用户按绑定解析，单用户取实例根目录）
+     */
+    saveCurrentAsTemplate: (
+      workspaceId,
+      name,
+      category = null,
+      description = "",
+    ) =>
+      request("/templates/from-project", {
+        method: "POST",
+        body: JSON.stringify({
+          workspace_id: workspaceId,
+          name,
+          category,
+          description,
+        }),
+      }),
+  },
+
   /* ---- LaTeX 代码审查 ---- */
   codeReview: {
     preview: (filePath, workspaceId, resolveInput = false) =>

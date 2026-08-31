@@ -346,6 +346,35 @@ function FeaturesSection({ features, onChange, diffOptions }) {
         checked={features.bib_manager.enabled}
         onChange={(v) => onChange("features.bib_manager.enabled", v)}
       />
+      {/* 模板库（template-plan 阶段②/③）：enabled + 上传大小上限 */}
+      <CheckboxField
+        label={t("settings.featureTemplateLibrary")}
+        checked={features.template_library.enabled}
+        onChange={(v) => onChange("features.template_library.enabled", v)}
+      />
+      {features.template_library.enabled && (
+        <div className="ml-6 space-y-2 rounded-md border p-2.5 bg-muted/40">
+          <div className="space-y-1">
+            <Label className="text-xs">
+              {t("settings.templateLibraryMaxUploadMb")}
+            </Label>
+            <Input
+              type="number"
+              min="1"
+              value={features.template_library.max_upload_mb}
+              onChange={(e) =>
+                onChange(
+                  "features.template_library.max_upload_mb",
+                  parseInt(e.target.value, 10) || 20,
+                )
+              }
+            />
+            <p className="text-xs text-muted-foreground">
+              {t("settings.templateLibraryMaxUploadMbHint")}
+            </p>
+          </div>
+        </div>
+      )}
       <CheckboxField
         label={t("settings.featureTypoCheck")}
         checked={features.typo_check.enabled}

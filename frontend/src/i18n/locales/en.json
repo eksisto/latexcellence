@@ -69,6 +69,9 @@
         "formatConvert": {
           "title": "Format Converter"
         },
+        "templateLibrary": {
+          "title": "Template Center"
+        },
         "templateGen": {
           "title": "Template Gen"
         },
@@ -565,6 +568,8 @@
       "compileSuccessToast": "Compile succeeded",
       "compileFailedToast": "Compile failed",
       "openEditor": "Open editor",
+      "newFromTemplate": "Create from template",
+      "saveAsTemplate": "Save as template",
       "versionManage": "Versions"
     },
     "gitDiff": {
@@ -737,6 +742,92 @@
       "traceLanguage": "Language",
       "traceMaxRounds": "Max rounds"
     },
+    "templateCenter": {
+      "title": "Template Center",
+      "description": "Browse built-in templates and your library, create projects from templates in one click",
+      "searchPlaceholder": "Search templates by name or description...",
+      "allCategories": "All",
+      "tabBuiltin": "Built-in",
+      "tabMine": "My Templates",
+      "uploadBtn": "Upload Template",
+      "retry": "Retry",
+      "builtinBadge": "Built-in",
+      "edit": {
+        "title": "Edit template",
+        "description": "Change the template name, category and description",
+        "nameLabel": "Template name",
+        "categoryLabel": "Category",
+        "descriptionLabel": "Description",
+        "descriptionPlaceholder": "Briefly describe this template (optional)",
+        "nameRequired": "Template name cannot be empty",
+        "saving": "Saving...",
+        "savedToast": "Template updated"
+      },
+      "fileCount": "{{count}} files",
+      "emptyTitle": "No built-in templates",
+      "emptyDescription": "The built-in template library is empty. Check the server's built-in template directory.",
+      "emptyMineTitle": "No templates yet",
+      "emptyMineDescription": "Upload a zip archive, or save the current project as a template from the workspace",
+      "disabledTitle": "Template library is disabled",
+      "disabledDescription": "The template library feature is not enabled on this deployment. Contact your administrator.",
+      "deleteSuccess": "Template deleted",
+      "deleteFailed": "Failed to delete template",
+      "deleteConfirmTitle": "Delete template \"{{name}}\"?",
+      "deleteConfirmDesc": "The template will be removed from your library; projects already created are unaffected.",
+      "useTemplate": "Use this template",
+      "detailTitle": "Template details",
+      "previewUnavailable": "Preview unavailable",
+      "notViewableFile": "This file type cannot be viewed online",
+      "descriptionLabel": "Description",
+      "categoryLabel": "Category",
+      "authorLabel": "Author",
+      "licenseLabel": "License",
+      "engineLabel": "Engine",
+      "mainFileLabel": "Main file",
+      "fileCountLabel": "Files",
+      "filesTitle": "Files",
+      "backToFiles": "Back to file list",
+      "noFiles": "No files in this template",
+      "categories": {
+        "paper": "Paper",
+        "thesis": "Thesis",
+        "report": "Report",
+        "slides": "Slides",
+        "resume": "Resume",
+        "book": "Book",
+        "poster": "Poster",
+        "notes": "Notes",
+        "other": "Other"
+      },
+      "upload": {
+        "title": "Upload template",
+        "description": "Upload a zip archive to your library; missing metadata is generated automatically",
+        "fileLabel": "Template archive",
+        "filePlaceholder": "Choose a .zip file",
+        "nameLabel": "Template name",
+        "namePlaceholder": "Optional; defaults to the archive file name",
+        "categoryLabel": "Category",
+        "categoryAuto": "Auto (Other)",
+        "optionalHint": "Name and category may be left blank for automatic detection",
+        "submit": "Upload",
+        "submitting": "Uploading...",
+        "successToast": "Template uploaded"
+      },
+      "create": {
+        "title": "Create project from \"{{name}}\"",
+        "description": "Copies the template file tree into a new project (build artifacts and library metadata excluded)",
+        "nameLabel": "Project name",
+        "namePlaceholder": "Enter the new project name",
+        "targetDirLabel": "Target directory",
+        "targetDirPlaceholder": "Choose where to store the new project",
+        "browse": "Browse",
+        "targetDirHint": "A new folder named after the project will be created inside the target directory",
+        "submit": "Create project",
+        "creating": "Creating...",
+        "successToast": "Project \"{{name}}\" created",
+        "openFailed": "Project created, but failed to open"
+      }
+    },
     "plotGen": {
       "title": "Scientific Plot",
       "subtitle": "Upload CSV/Excel/JSON data and generate reproducible PDF/SVG/TikZ vector figures",
@@ -872,6 +963,7 @@
       "title": "Projects",
       "desc": "Manage your projects, uploads and sharing",
       "upload": "Upload project",
+      "newFromTemplate": "New from template",
       "refresh": "Refresh",
       "userLabel": "Current user",
       "projectQuota": "Project space usage",
@@ -1160,6 +1252,9 @@
       "writingChatSummaryBudget": "Summary Token Budget",
       "writingChatSummaryModel": "Summary Model (empty = main model)",
       "featureBibManager": "Bib Manager",
+      "featureTemplateLibrary": "Template library",
+      "templateLibraryMaxUploadMb": "Template upload size limit (MB)",
+      "templateLibraryMaxUploadMbHint": "Maximum size of uploaded template zip archives; larger uploads are rejected",
       "featurePlotGen": "Scientific Plot",
       "plotGenMaxRounds": "Agent Max Rounds",
       "plotGenExecTimeout": "Script Timeout (s)",
@@ -1464,6 +1559,19 @@
       "sessionExpired": "The upload session has expired or no longer exists. Please select the files again.",
       "resumingMissing": "Missing parts detected; resuming automatically…",
       "chunkHint": "Archives are uploaded in chunks directly (supports pause & resumable transfers); client-side packaging removed."
+    },
+    "saveAsTemplate": {
+      "title": "Save as template",
+      "description": "Copy the current project into your template library (build artifacts and .git are excluded)",
+      "nameLabel": "Template name",
+      "namePlaceholder": "Enter a template name",
+      "categoryLabel": "Category",
+      "categoryAuto": "Auto (Other)",
+      "descriptionLabel": "Description",
+      "descriptionPlaceholder": "Briefly describe this template (optional)",
+      "submit": "Save to library",
+      "saving": "Saving...",
+      "success": "Saved to your template library"
     },
     "permissions": {
       "title": "Project permissions",
@@ -1893,6 +2001,16 @@
     "assistantDisabled": "The editor AI assistant is disabled on this server",
     "editorDisabled": "The web editor is disabled on this server",
     "contentTooLong": "Content exceeds the length limit",
-    "internalError": "Internal server error, please try again later"
+    "internalError": "Internal server error, please try again later",
+    "invalidId": "Invalid template id",
+    "builtinReadonly": "Built-in templates cannot be modified or deleted",
+    "noMainFile": "No LaTeX source file found in template",
+    "invalidManifest": "Template metadata is invalid",
+    "notViewable": "Only text source files can be viewed online",
+    "readFailed": "Failed to read template file",
+    "invalidFileType": "Template contains files of disallowed type",
+    "targetDirRequired": "A target directory is required in single-user mode",
+    "targetNotEmpty": "Target directory already exists and is not empty",
+    "invalidSession": "Generation session not found or expired"
   }
 }

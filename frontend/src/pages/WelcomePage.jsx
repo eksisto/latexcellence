@@ -23,6 +23,7 @@ import MessagesSquare from "lucide-react/dist/esm/icons/messages-square.mjs";
 import Album from "lucide-react/dist/esm/icons/album.mjs";
 import Languages from "lucide-react/dist/esm/icons/languages.mjs";
 import ChartSpline from "lucide-react/dist/esm/icons/chart-spline.mjs";
+import LayoutTemplate from "lucide-react/dist/esm/icons/layout-template.mjs";
 
 const featureGroups = [
   {
@@ -45,6 +46,12 @@ const featureGroups = [
         to: "/format-convert",
         icon: ArrowLeftRight,
         id: "format_converter",
+      },
+      {
+        titleKey: "templateLibrary.title",
+        to: "/templates",
+        icon: LayoutTemplate,
+        id: "template_library",
       },
     ],
   },

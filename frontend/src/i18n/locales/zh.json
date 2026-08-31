@@ -69,6 +69,9 @@
         "formatConvert": {
           "title": "格式转换"
         },
+        "templateLibrary": {
+          "title": "模板中心"
+        },
         "templateGen": {
           "title": "模板生成"
         },
@@ -565,6 +568,8 @@
       "compileSuccessToast": "编译成功",
       "compileFailedToast": "编译失败",
       "openEditor": "进入编辑器",
+      "newFromTemplate": "从模板创建",
+      "saveAsTemplate": "另存为模板",
       "versionManage": "版本管理"
     },
     "gitDiff": {
@@ -737,6 +742,92 @@
       "traceLanguage": "输出语言",
       "traceMaxRounds": "最大轮数"
     },
+    "templateCenter": {
+      "title": "模板中心",
+      "description": "浏览内置模板与我的模板库，一键从模板创建项目",
+      "searchPlaceholder": "搜索模板名称或描述...",
+      "allCategories": "全部",
+      "tabBuiltin": "内置模板",
+      "tabMine": "我的模板",
+      "uploadBtn": "上传模板",
+      "retry": "重试",
+      "builtinBadge": "内置",
+      "edit": {
+        "title": "编辑模板信息",
+        "description": "修改模板名称、分类与描述",
+        "nameLabel": "模板名称",
+        "categoryLabel": "分类",
+        "descriptionLabel": "描述",
+        "descriptionPlaceholder": "简要描述这个模板（可选）",
+        "nameRequired": "模板名称不能为空",
+        "saving": "保存中...",
+        "savedToast": "模板信息已更新"
+      },
+      "fileCount": "{{count}} 个文件",
+      "emptyTitle": "暂无内置模板",
+      "emptyDescription": "内置模板库为空，请检查服务端的内置模板目录",
+      "emptyMineTitle": "还没有我的模板",
+      "emptyMineDescription": "上传 zip 模板包，或在工作区把当前项目另存为模板",
+      "disabledTitle": "模板库功能未开启",
+      "disabledDescription": "当前部署未启用模板库功能，请联系管理员开启",
+      "deleteSuccess": "模板已删除",
+      "deleteFailed": "删除模板失败",
+      "deleteConfirmTitle": "删除模板「{{name}}」？",
+      "deleteConfirmDesc": "将从模板库中移除该模板；已创建的项目不受影响。",
+      "useTemplate": "使用此模板",
+      "detailTitle": "模板详情",
+      "previewUnavailable": "预览文件不可用",
+      "notViewableFile": "该文件类型不支持在线查看",
+      "descriptionLabel": "描述",
+      "categoryLabel": "分类",
+      "authorLabel": "作者",
+      "licenseLabel": "许可",
+      "engineLabel": "引擎",
+      "mainFileLabel": "主文件",
+      "fileCountLabel": "文件数",
+      "filesTitle": "文件",
+      "backToFiles": "返回文件列表",
+      "noFiles": "模板内暂无文件",
+      "categories": {
+        "paper": "论文",
+        "thesis": "学位论文",
+        "report": "报告",
+        "slides": "幻灯片",
+        "resume": "简历",
+        "book": "书籍",
+        "poster": "海报",
+        "notes": "笔记",
+        "other": "其他"
+      },
+      "upload": {
+        "title": "上传模板",
+        "description": "上传 zip 压缩包创建我的模板；缺失信息将自动生成",
+        "fileLabel": "模板压缩包",
+        "filePlaceholder": "选择 .zip 文件",
+        "nameLabel": "模板名称",
+        "namePlaceholder": "可选，缺省使用压缩包文件名",
+        "categoryLabel": "分类",
+        "categoryAuto": "自动（其他）",
+        "optionalHint": "名称与分类均可留空，由后端自动识别",
+        "submit": "上传",
+        "submitting": "上传中...",
+        "successToast": "模板上传成功"
+      },
+      "create": {
+        "title": "从「{{name}}」创建项目",
+        "description": "将复制模板文件树创建新项目（不含编译产物与库元数据）",
+        "nameLabel": "项目名称",
+        "namePlaceholder": "输入新项目名称",
+        "targetDirLabel": "目标目录",
+        "targetDirPlaceholder": "选择新项目的存放目录",
+        "browse": "浏览",
+        "targetDirHint": "将在目标目录下创建以项目名命名的新文件夹",
+        "submit": "创建项目",
+        "creating": "创建中...",
+        "successToast": "项目「{{name}}」已创建",
+        "openFailed": "项目已创建，但打开失败"
+      }
+    },
     "plotGen": {
       "title": "科研绘图",
       "subtitle": "上传 CSV/Excel/JSON 数据，生成可复现的 PDF/SVG/TikZ 矢量图表",
@@ -872,6 +963,7 @@
       "title": "项目工作台",
       "desc": "管理您的项目空间、上传与协作权限",
       "upload": "上传项目",
+      "newFromTemplate": "从模板新建",
       "refresh": "刷新",
       "userLabel": "当前用户",
       "projectQuota": "项目空间使用",
@@ -1160,6 +1252,9 @@
       "writingChatSummaryBudget": "摘要 token 预算",
       "writingChatSummaryModel": "摘要模型（留空跟随主模型）",
       "featureBibManager": "参考文献管理",
+      "featureTemplateLibrary": "模板库",
+      "templateLibraryMaxUploadMb": "上传模板大小上限 (MB)",
+      "templateLibraryMaxUploadMbHint": "上传模板 zip 压缩包的最大体积，超出将被拒绝",
       "featurePlotGen": "科研绘图",
       "plotGenMaxRounds": "Agent 最大轮数",
       "plotGenExecTimeout": "脚本执行超时（秒）",
@@ -1464,6 +1559,19 @@
       "sessionExpired": "上传会话已过期或不存在，请重新选择文件后再试",
       "resumingMissing": "检测到缺失分片，正在自动补传…",
       "chunkHint": "压缩包将分片直传（支持暂停与断点续传），不再客户端打包。"
+    },
+    "saveAsTemplate": {
+      "title": "另存为模板",
+      "description": "将当前项目复制到我的模板库（自动剔除编译产物与 .git）",
+      "nameLabel": "模板名称",
+      "namePlaceholder": "输入模板名称",
+      "categoryLabel": "分类",
+      "categoryAuto": "自动（其他）",
+      "descriptionLabel": "描述",
+      "descriptionPlaceholder": "简要描述这个模板（可选）",
+      "submit": "保存到模板库",
+      "saving": "保存中...",
+      "success": "已保存到我的模板库"
     },
     "permissions": {
       "title": "项目权限",
@@ -1893,6 +2001,16 @@
     "assistantDisabled": "服务器已关闭编辑器 AI 助手功能",
     "editorDisabled": "服务器已关闭网页编辑器功能",
     "contentTooLong": "内容超出长度限制",
-    "internalError": "服务器内部错误，请稍后重试"
+    "internalError": "服务器内部错误，请稍后重试",
+    "invalidId": "模板 ID 无效",
+    "builtinReadonly": "内置模板不可修改或删除",
+    "noMainFile": "模板中未找到 LaTeX 源文件",
+    "invalidManifest": "模板元数据无效",
+    "notViewable": "仅文本源文件支持在线查看",
+    "readFailed": "模板文件读取失败",
+    "invalidFileType": "模板包含不允许的文件类型",
+    "targetDirRequired": "单用户模式需要先选择目标目录",
+    "targetNotEmpty": "目标目录已存在且非空",
+    "invalidSession": "生成会话不存在或已失效"
   }
 }
