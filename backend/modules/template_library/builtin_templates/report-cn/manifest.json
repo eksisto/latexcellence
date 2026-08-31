@@ -1,0 +1,13 @@
+{
+  "id": "report-cn",
+  "name": "中文课程/实验报告",
+  "name_en": "Chinese Course Report",
+  "description": "课程与实验报告模板：封面、评分表、目的/原理/步骤/结果分析等章节。",
+  "category": "report",
+  "main_file": "main.tex",
+  "engine": "xelatex",
+  "author": "LaTeXcellence",
+  "license": "MIT",
+  "source": "builtin",
+  "created_at": "2026-08-31"
+}

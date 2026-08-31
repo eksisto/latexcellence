@@ -1,0 +1,175 @@
+% ============================================================
+% 中文课程/实验报告模板（report-cn）
+% ------------------------------------------------------------
+% 基于 ctexart 文档类，默认使用 TeX Live 自带的 fandol 字体，
+% 无需在系统中安装额外字体。编译引擎：xelatex。
+% 修改指南：
+%   1. 在"封面信息"处填写学校、课程、题目、姓名学号等；
+%   2. 评分表如课程不要求，可整段删除（从"评分表"到 \clearpage）；
+%   3. 正文按"目的/原理/步骤/结果/心得"组织，
+%      不需要的章节直接删除；
+%   4. 图、表、公式各有示例，替换文件名与数据即可。
+% ============================================================
+\documentclass[
+  UTF8,
+  fontset=fandol,        % TeX Live 自带开源字体，跨平台可编译
+  zihao=-4,              % 正文字号：小四
+  a4paper,
+]{ctexart}
+
+% ---- 常用宏包 ----
+\usepackage{amsmath, amssymb}             % 数学公式
+\usepackage{graphicx}                     % 插图
+\usepackage{booktabs}                     % 三线表
+\usepackage{array}                        % 表格列格式增强
+\usepackage{geometry}
+\geometry{left=2.5cm, right=2.5cm, top=2.6cm, bottom=2.6cm}
+\usepackage{setspace}
+\setstretch{1.4}                          % 正文 1.4 倍行距
+\usepackage[
+  colorlinks=true,
+  linkcolor=black,
+  citecolor=black,
+  urlcolor=black,
+]{hyperref}
+
+% ---- 章节样式：传统中文报告风格"一、二、三、" ----
+\ctexset{
+  section = {
+    format = \heiti\zihao{4},
+    name = {,、},
+    number = \chinese{section},
+    aftername = {},
+  },
+  subsection = {
+    format = \heiti\zihao{-4},
+  },
+}
+
+% 图表标题样式
+\usepackage{caption}
+\captionsetup{font=small, labelfont=bf}
+
+% ============================================================
+% 封面信息：在这里填写报告信息
+% ============================================================
+\newcommand{\SchoolName}{示例大学}
+\newcommand{\CourseName}{数据结构}
+\newcommand{\ReportTitle}{实验二~二叉树及其应用}
+\newcommand{\ReportAuthor}{张~三}
+\newcommand{\StudentNumber}{2022010000}
+\newcommand{\ClassName}{计算机 2201 班}
+\newcommand{\Instructor}{李~四}
+\newcommand{\ReportDate}{2026年5月20日}
+
+\begin{document}
+
+% ==================== 封面 ====================
+\begin{titlepage}
+  \begin{center}
+    \vspace*{2em}
+    {\zihao{2}\heiti \SchoolName}\\[1em]
+    {\zihao{3}\heiti 课程实验报告}\\[5em]
+    {\zihao{3}
+      \renewcommand{\arraystretch}{1.8}
+      \begin{tabular}{p{7em}p{16em}}
+        {\heiti 课程名称：} & \CourseName \\
+        {\heiti 实验题目：} & \ReportTitle \\
+        {\heiti 姓~~~~名：} & \ReportAuthor \\
+        {\heiti 学~~~~号：} & \StudentNumber \\
+        {\heiti 班~~~~级：} & \ClassName \\
+        {\heiti 指导教师：} & \Instructor \\
+      \end{tabular}}\\[6em]
+    {\zihao{3} \ReportDate}
+  \end{center}
+\end{titlepage}
+
+% ==================== 评分表（课程不要求可整段删除） ====================
+\begin{center}
+  {\zihao{4}\heiti 评~分~表}
+\end{center}
+\vspace{0.5em}
+\begin{center}
+  \zihao{-4}
+  \renewcommand{\arraystretch}{1.8}
+  \begin{tabular}{|>{\centering\arraybackslash}p{8em}|p{22em}|>{\centering\arraybackslash}p{6em}|}
+    \hline
+    \textbf{评分项目} & \centering\textbf{评分要点} \tabularnewline
+    \hline
+    实验操作 & 规范完成实验步骤，能正确使用相关工具与环境 & \hspace{3em}/20 \\
+    \hline
+    结果正确性 & 实验结果正确、数据完整，达到预期目标 & \hspace{3em}/30 \\
+    \hline
+    报告质量 & 分析深入、条理清晰、图表规范、书写工整 & \hspace{3em}/40 \\
+    \hline
+    实验纪律 & 按时到场、独立完成、遵守机房规范 & \hspace{3em}/10 \\
+    \hline
+    \multicolumn{2}{|r|}{\textbf{总~分}} & \hspace{3em}/100 \\
+    \hline
+  \end{tabular}
+\end{center}
+\vspace{2em}
+\begin{flushright}
+  指导教师签字：\underline{\hspace{8em}} \quad
+  批阅日期：\underline{\hspace{8em}}
+\end{flushright}
+\clearpage
+
+% ==================== 正文 ====================
+
+\section{实验目的}
+% 逐条列出本实验要达到的目标
+\begin{itemize}
+  \item 理解二叉树的结构特性与存储实现；
+  \item 掌握二叉树的遍历算法及其递归与非递归实现；
+  \item 能够将二叉树应用于实际问题求解。
+\end{itemize}
+
+\section{实验原理}
+% 简述实验涉及的理论知识，公式有编号示例
+二叉树的先序遍历按照``根—左—右''的顺序访问结点。
+设结点数为 $n$，树高为 $h$，则遍历的时间复杂度为 $O(n)$，
+递归栈空间为 $O(h)$。
+
+\section{实验内容与步骤}
+% 分步描述实验做了什么，代码可粘贴关键片段并加注释
+\begin{enumerate}
+  \item 构造示例二叉树，采用二叉链表存储；
+  \item 实现先序、中序、后序三种遍历；
+  \item 对同一棵树分别输出遍历序列并核对结果；
+  \item 统计不同规模随机树的遍历耗时。
+\end{enumerate}
+
+\section{实验结果与分析}
+% 展示运行结果（表格或截图），并对结果进行解释
+实验测得不同规模下的遍历耗时如表~\ref{tab:time} 所示，
+结果与理论复杂度 $O(n)$ 一致。
+
+\begin{table}[!htbp]
+  \centering
+  \caption{随机二叉树遍历耗时测量结果}
+  \label{tab:time}
+  \begin{tabular}{lcccc}
+    \toprule
+    结点数 $n$ & $10^3$ & $10^4$ & $10^5$ & $10^6$ \\
+    \midrule
+    耗时（ms） & 0.8 & 8.6 & 92.4 & 1043.1 \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+% 插图示例：把截图文件放在本目录，替换文件名即可（支持 PNG/JPG/PDF）
+% \begin{figure}[!htbp]
+%   \centering
+%   \includegraphics[width=0.7\linewidth]{result.png}
+%   \caption{程序运行结果截图}
+%   \label{fig:result}
+% \end{figure}
+
+\section{问题与心得}
+% 记录调试中遇到的问题及解决办法，总结收获
+实验中曾遇到递归深度过大导致栈溢出的问题，
+改为显式栈的非递归实现后解决。通过本实验加深了
+对树形结构与其遍历算法的理解。
+
+\end{document}

@@ -1,0 +1,58 @@
+% ============================================================
+% 空白项目模板（blank）
+% ------------------------------------------------------------
+% 这是一个最简可编译的 LaTeX 文档，适合从零开始自由写作。
+% 注意：本模板用 pdflatex 编译，正文不能直接写中文，
+% 中文注释不受影响；如需中文排版请改用中文模板（xelatex 编译）。
+% 修改指南：
+%   1. 把 \title、\author 改成你自己的信息；
+%   2. 在 \begin{document} 与 \end{document} 之间写作正文；
+%   3. \section 为一级标题，\subsection 为二级标题；
+%   4. 需要宏包时在导言区（\begin{document} 之前）用 \usepackage 引入。
+% ============================================================
+\documentclass[12pt, a4paper]{article}
+
+% ---- 导言区：在这里加载宏包、定义命令 ----
+% 例：\usepackage{amsmath}     % 数学公式
+% 例：\usepackage{graphicx}    % 插图
+% 例：\usepackage{booktabs}    % 三线表
+\usepackage[
+  margin=2.5cm,               % 页边距，可按需调整
+]{geometry}
+\usepackage[colorlinks=true, linkcolor=blue, urlcolor=blue]{hyperref}
+
+% 文档元信息（显示在标题处）
+\title{Your Document Title}
+\author{Your Name}
+\date{\today}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+  % 摘要：用一段话概括全文内容；不需要摘要时删除本环境即可。
+  This document is a minimal blank template provided by LaTeXcellence.
+  Start writing your own text here.
+\end{abstract}
+
+\section{Introduction}
+% 引言。这里是正文：LaTeX 用空行分段（两个回车之间的文字属于同一段）。
+This is the body text. LaTeX starts a new paragraph on a blank line:
+the text between two empty lines belongs to the same paragraph.
+
+\section{Method}
+% 用 \section、\subsection 组织章节结构。
+\subsection{A Subsection Example}
+% 行内公式写在 \$ 之间；独立公式用 equation 环境编号显示。
+Inline math goes between \$ signs, e.g., $E = mc^2$;
+displayed equations use the equation environment:
+\begin{equation}
+  \int_{-\infty}^{+\infty} e^{-x^2} \,\mathrm{d}x = \sqrt{\pi}
+\end{equation}
+
+\section{Conclusion}
+% 写完正文后编译生成 PDF（本模板默认引擎为 pdflatex）。
+Compile this file to get your PDF. Happy writing!
+
+\end{document}

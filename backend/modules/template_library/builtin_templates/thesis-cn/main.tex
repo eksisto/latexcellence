@@ -1,0 +1,189 @@
+% ============================================================
+% 中文学位论文模板（thesis-cn）
+% ------------------------------------------------------------
+% 基于 ctexbook 文档类，默认使用 TeX Live 自带的 fandol 字体，
+% 无需在系统中安装额外字体。编译引擎：xelatex。
+% 目录结构：
+%   main.tex            主文件（封面 / 声明 / 摘要 / 目录 / 全局设置）
+%   chapters/chap01.tex 第一章：绪论
+%   chapters/chap02.tex 第二章：方法与实现（示例）
+%   chapters/conclusion.tex 结论与展望
+% 修改指南：
+%   1. 在"封面信息"处填写学校、题目、姓名、学号、指导教师等；
+%   2. 摘要、Abstract 与关键词直接替换示例文字；
+%   3. 各章在 chapters/ 目录中编辑，新增章节时
+%      复制一份 chap 文件并在 main.tex 中 \include；
+%   4. 参考文献在文末 thebibliography 中按引用顺序补充；
+%   5. 学校若有专用封面 / 声明格式，以其官方 Word/PDF 为准替换本框架。
+% ============================================================
+\documentclass[
+  UTF8,
+  fontset=fandol,        % TeX Live 自带开源字体，跨平台可编译
+  zihao=-4,              % 正文字号：小四
+  a4paper,
+  oneside,               % 单面排版（双面打印可改 twoside）
+]{ctexbook}
+
+% ---- 常用宏包 ----
+\usepackage{amsmath, amssymb}             % 数学公式
+\usepackage{graphicx}                     % 插图
+\usepackage{booktabs}                     % 三线表
+\usepackage{multirow}                     % 表格合并单元格
+\usepackage{caption}                      % 图表标题样式
+\captionsetup{font=small, labelfont=bf}
+\usepackage{geometry}
+\geometry{left=3cm, right=2.6cm, top=3cm, bottom=2.8cm}
+\usepackage{setspace}
+\setstretch{1.5}                          % 正文 1.5 倍行距（常见要求）
+\usepackage[
+  colorlinks=true,
+  linkcolor=black,
+  citecolor=black,
+  urlcolor=black,
+]{hyperref}                               % 打印版链接全部黑色
+
+% 数学环境符号约定：向量用粗斜体
+\newcommand{\vect}[1]{\boldsymbol{#1}}
+
+% ---- 章节标题样式：一级标题黑体居中（常见本科论文要求）----
+\ctexset{
+  chapter = {
+    format = \centering\heiti\zihao{3},
+    nameformat = {},
+    titleformat = {},
+    number = \arabic{chapter},          % 第 1 章（可用 \chinese{chapter} 改为中文数字）
+    beforeskip = 18pt,
+    afterskip = 24pt,
+  },
+  section = {
+    format = \heiti\zihao{4},
+  },
+  subsection = {
+    format = \heiti\zihao{-4},
+  },
+}
+
+% 图表标题改为"图 1-1 / 表 2-1"式编号（章号-图号）
+\renewcommand{\thefigure}{\thechapter-\arabic{figure}}
+\renewcommand{\thetable}{\thechapter-\arabic{table}}
+\renewcommand{\theequation}{\thechapter-\arabic{equation}}
+
+% ============================================================
+% 封面信息：在这里填写你的论文信息（全文唯一需要集中修改的地方）
+% ============================================================
+\newcommand{\SchoolName}{示例大学}
+\newcommand{\ThesisTitle}{基于示例技术的示例系统设计与实现}
+\newcommand{\ThesisAuthor}{张~三}
+\newcommand{\StudentNumber}{2022010000}
+\newcommand{\Major}{计算机科学与技术}
+\newcommand{\Advisor}{李~四~教授}
+\newcommand{\ThesisDate}{2026年6月}
+
+\begin{document}
+
+% ==================== 封面 ====================
+\begin{titlepage}
+  \begin{center}
+    {\zihao{1}\heiti \SchoolName}\\[0.8em]
+    {\zihao{2}\heiti 本科毕业论文（设计）}\\[4em]
+    {\zihao{2}\heiti \ThesisTitle}\\[6em]
+    \zihao{3}
+    \renewcommand{\arraystretch}{1.6}
+    \begin{tabular}{rl}
+      {\heiti 姓~~~~~~名：} & \ThesisAuthor \\
+      {\heiti 学~~~~~~号：} & \StudentNumber \\
+      {\heiti 专~~~~~~业：} & \Major \\
+      {\heiti 指导教师：} & \Advisor \\
+    \end{tabular}\\[6em]
+    {\zihao{3} \ThesisDate}
+  \end{center}
+\end{titlepage}
+
+% ==================== 原创性声明与授权页 ====================
+% 声明文字为通用示例，正式提交前请替换为学校官方文本。
+\chapter*{原创性声明}
+\addcontentsline{toc}{chapter}{原创性声明}
+本人郑重声明：所呈交的论文是本人在指导教师指导下独立进行研究
+所取得的成果。除了文中特别加以标注引用的内容外，本论文不包含
+任何其他个人或集体已经发表或撰写的成果作品。对本文的研究做出
+重要贡献的个人和集体，均已在文中以明确方式标明。
+本人完全意识到本声明的法律后果由本人承担。
+
+\vspace{4em}
+\begin{flushright}
+  论文作者签名：\underline{\hspace{6em}} \quad 日期：\underline{\hspace{6em}}
+\end{flushright}
+
+\chapter*{版权使用授权书}
+\addcontentsline{toc}{chapter}{版权使用授权书}
+本人完全了解学校有关保留、使用学位论文的规定，同意学校保留并
+向国家有关部门或机构送交论文的复印件和电子版，允许论文被查阅
+和借阅。本人授权学校可以将本学位论文的全部或部分内容编入有关
+数据库进行检索，可以采用影印、缩印或扫描等复制手段保存和汇编
+本学位论文。
+
+\vspace{4em}
+\begin{flushright}
+  \begin{tabular}{l}
+    论文作者签名：\underline{\hspace{6em}} \quad 日期：\underline{\hspace{6em}} \\[1.2em]
+    指导教师签名：\underline{\hspace{6em}} \quad 日期：\underline{\hspace{6em}} \\
+  \end{tabular}
+\end{flushright}
+
+% ==================== 中文摘要 ====================
+\chapter*{摘\quad 要}
+\addcontentsline{toc}{chapter}{摘\quad 要}
+% 摘要：目的—方法—结果—结论，一般 300～500 字
+在此撰写中文摘要。简要说明研究背景与问题、所提出的方法、
+主要实验结果以及结论与创新点。摘要应独立成文，
+不出现图表、公式编号与参考文献引用。
+
+\vspace{1em}
+\noindent\textbf{关键词：}关键词一；关键词二；关键词三；关键词四
+
+% ==================== 英文摘要 ====================
+\chapter*{Abstract}
+\addcontentsline{toc}{chapter}{Abstract}
+Write the English abstract here, mirroring the content of the Chinese
+abstract. Keep it self-contained: state the problem, the approach,
+the main results, and the conclusion.
+
+\vspace{1em}
+\noindent\textbf{Key words:} Keyword One; Keyword Two; Keyword Three; Keyword Four
+
+% ==================== 目录 ====================
+\tableofcontents
+
+% ==================== 正文 ====================
+\include{chapters/chap01}
+\include{chapters/chap02}
+\include{chapters/conclusion}
+
+% ==================== 参考文献 ====================
+% 按 GB/T 7714 风格手工排版，条目按正文引用顺序编号；
+% 文献较多时建议改用 BibTeX（\bibliographystyle{...} + \bibliography{refs}）。
+% 注意：book 类下 thebibliography 自带“参考文献”章标题，
+% 这里不要再手写 \chapter*{参考文献}，否则会出现重复标题。
+\begin{thebibliography}{9}
+\addcontentsline{toc}{chapter}{参考文献}
+\setstretch{1.2}
+\bibitem{vapnik2000}
+VAPNIK V N. 统计学习理论[M]. 张学工, 译. 北京: 清华大学出版社, 2000.
+
+\bibitem{lecun2015}
+LECUN Y, BENGIO Y, HINTON G. Deep learning[J]. Nature, 2015,
+521(7553): 436-444.
+
+\bibitem{vaswani2017}
+VASWANI A, SHAZEER N, PARMAR N, et al. Attention is all you
+need[C]//Advances in Neural Information Processing Systems. 2017: 5998-6008.
+\end{thebibliography}
+
+% ==================== 致谢 ====================
+\chapter*{致\quad 谢}
+\addcontentsline{toc}{chapter}{致\quad 谢}
+在此撰写致谢。感谢指导教师在选题、研究与写作过程中的悉心指导，
+感谢同组同学与家人的支持与帮助。致谢内容应真诚得体，
+避免过度夸张。
+
+\end{document}

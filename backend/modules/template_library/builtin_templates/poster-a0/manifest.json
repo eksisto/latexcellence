@@ -1,0 +1,13 @@
+{
+  "id": "poster-a0",
+  "name": "A0 学术海报",
+  "name_en": "A0 Academic Poster",
+  "description": "A0 竖版学术会议海报：三栏布局、色块分节标题，适合组会与学术年会展示。",
+  "category": "poster",
+  "main_file": "main.tex",
+  "engine": "xelatex",
+  "author": "LaTeXcellence",
+  "license": "MIT",
+  "source": "builtin",
+  "created_at": "2026-08-31"
+}

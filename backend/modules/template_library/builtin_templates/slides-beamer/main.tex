@@ -1,0 +1,192 @@
+% ============================================================
+% 中文幻灯片模板（slides-beamer）
+% ------------------------------------------------------------
+% 基于 Beamer + ctexbeamer，主题为模板自绘（无小众主题包依赖），
+% 默认使用 TeX Live 自带的 fandol 字体。编译引擎：xelatex。
+% 修改指南：
+%   1. "演示信息"处填写标题、作者、单位、日期；
+%   2. 每页用 \begin{frame}...\end{frame} 编写；
+%   3. 讲到新章节时加 \section{...}，目录页会自动更新；
+%   4. 主色在"主题设置"处修改（RGB 值），整份幻灯片同步变色；
+%   5. 强调文字用 \alert{...}，要点块用 block 环境示例。
+% ============================================================
+\documentclass[
+  UTF8,
+  fontset=fandol,        % TeX Live 自带开源字体，跨平台可编译
+  11pt,
+  aspectratio=169,       % 16:9 宽屏（改 43 可回到 4:3）
+]{ctexbeamer}
+
+% ==================== 主题设置（自绘简洁主题） ====================
+% 主色：改成你的机构色即可全局换色，例如深红 RGB(155,30,30)
+\definecolor{maincolor}{RGB}{0, 82, 155}
+\definecolor{lightbg}{RGB}{238, 243, 249}
+\definecolor{graytext}{RGB}{90, 90, 90}
+
+\usepackage{booktabs}   % 三线表
+\usepackage{tikz}       % 简单示意图
+\usetikzlibrary{positioning}  % 节点相对定位（below=of ... 语法）
+
+\setbeamercolor{structure}{fg=maincolor}
+\setbeamercolor{normal text}{fg=black!85}
+\setbeamercolor{frametitle}{bg=maincolor, fg=white}
+\setbeamercolor{title}{fg=maincolor}
+\setbeamercolor{block title}{bg=maincolor, fg=white}
+\setbeamercolor{block body}{bg=lightbg}
+\setbeamercolor{alerted text}{fg=orange!85!black}
+\setbeamercolor{footline}{bg=lightbg, fg=graytext}
+
+% 页面标题条：左侧色块 + 简洁文字
+\setbeamertemplate{frametitle}{
+  \nointerlineskip
+  \begin{beamercolorbox}[
+    wd=\paperwidth, ht=1.6ex, dp=1.0ex, leftskip=1.0em
+  ]{frametitle}
+    \usebeamerfont{frametitle}\insertframetitle
+  \end{beamercolorbox}
+  \vspace{-0.3em}
+}
+
+% 页脚：短标题 + 页码
+\setbeamertemplate{footline}{
+  \begin{beamercolorbox}[
+    wd=\paperwidth, ht=2.2ex, dp=1.0ex, leftskip=1.0em, rightskip=1.0em
+  ]{footline}
+    \usebeamerfont{footline}\insertshorttitle
+    \hfill \insertframenumber\,/\,\inserttotalframenumber
+  \end{beamercolorbox}
+}
+
+% 杂项：关闭导航符号，要点用圆点，公式用衬线字体
+\setbeamertemplate{navigation symbols}{}
+\setbeamertemplate{itemize items}[circle]
+\setbeamertemplate{enumerate items}[default]
+\setbeamerfont{frametitle}{size=\large, series=\bfseries}
+\setbeamercovered{transparent}
+
+% ==================== 演示信息 ====================
+\title{示例研究汇报}
+\subtitle{从问题到方法与实验}
+\author{张~三}
+\institute{示例大学~计算机学院}
+\date{2026年8月31日}
+
+\begin{document}
+
+% ---- 封面页 ----
+\begin{frame}[plain]
+  \begin{center}
+    \vspace{2.2em}
+    {\usebeamerfont{title}\color{maincolor}\Huge\bfseries 示例研究汇报}\\[0.8em]
+    {\color{maincolor}\rule{0.5\paperwidth}{1.2pt}}\\[0.8em]
+    {\large 从问题到方法与实验}\\[2.5em]
+    {\large 张~三}\\[0.4em]
+    {\color{graytext} 示例大学~计算机学院 \quad 2026年8月31日}
+  \end{center}
+\end{frame}
+
+% ---- 目录页：\section 会自动进目录 ----
+\begin{frame}{汇报提纲}
+  \tableofcontents
+\end{frame}
+
+% ==================== 第一部分 ====================
+\section{研究背景}
+
+\begin{frame}{研究背景与动机}
+  % 每页要点建议不超过 4 条，一行一个观点
+  \begin{itemize}
+    \item 要点一：用一句话说明领域现状；
+    \item 要点二：指出尚未解决的\alert{核心问题}；
+    \item 要点三：说明解决该问题的价值与意义；
+    \item 要点四：概括本文的切入点。
+  \end{itemize}
+  \begin{block}{一句话概括}
+    把整个工作的核心思想浓缩成一句听众记得住的话。
+  \end{block}
+\end{frame}
+
+% ==================== 第二部分 ====================
+\section{方法设计}
+
+\begin{frame}{总体框架}
+  % columns 环境实现左右分栏
+  \begin{columns}
+    \begin{column}{0.52\textwidth}
+      \begin{itemize}
+        \item 模块一：数据采集与预处理；
+        \item 模块二：核心模型（公式见下）；
+        \item 模块三：评估与反馈。
+      \end{itemize}
+      \vspace{0.5em}
+      核心目标函数：
+      \[
+        \mathcal{L}(\theta) =
+        \frac{1}{N}\sum_{i=1}^{N} \ell\bigl(f(x_i;\theta),\, y_i\bigr)
+      \]
+    \end{column}
+    \begin{column}{0.44\textwidth}
+      % 用 TikZ 画一个简单流程示意（可整体删除换成图片 \includegraphics）
+      \begin{center}
+        \begin{tikzpicture}[
+          node distance=0.55cm,
+          box/.style={draw=maincolor, fill=lightbg, rounded corners=2pt,
+                      minimum width=3.6cm, minimum height=0.75cm, font=\small},
+          arr/.style={->, thick, maincolor},
+        ]
+          \node[box] (a) {输入数据};
+          \node[box, below=of a] (b) {核心模型};
+          \node[box, below=of b] (c) {结果输出};
+          \draw[arr] (a) -- (b);
+          \draw[arr] (b) -- (c);
+        \end{tikzpicture}
+      \end{center}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% ==================== 第三部分 ====================
+\section{实验结果}
+
+\begin{frame}{主要结果}
+  % 三线表展示关键数据，突出自己方法的行
+  \begin{table}
+    \centering
+    \begin{tabular}{lccc}
+      \toprule
+      方法 & 准确率（\%） & $F_1$（\%） & 参数量（M） \\
+      \midrule
+      基线方法 A & 85.2 & 84.1 & 21.3 \\
+      基线方法 B & 87.6 & 86.9 & 34.8 \\
+      \textbf{本文方法} & \textbf{90.4} & \textbf{89.7} & 28.5 \\
+      \bottomrule
+    \end{tabular}
+  \end{table}
+  \begin{itemize}
+    \item 相比最优基线，准确率提升 \alert{2.8 个百分点}；
+    \item 参数量更少，说明方法更轻量高效。
+  \end{itemize}
+\end{frame}
+
+% ==================== 第四部分 ====================
+\section{总结与展望}
+
+\begin{frame}{总结}
+  \begin{itemize}
+    \item 回顾问题：一句重述要解决的问题；
+    \item 回顾方法：一句话概括提出的方法；
+    \item 回顾结果：一句话给出最有说服力的数字；
+    \item 展望：说明下一步计划与开放问题。
+  \end{itemize}
+\end{frame}
+
+% ---- 致谢 / 提问页 ----
+\begin{frame}[plain]
+  \begin{center}
+    \vspace{3.5em}
+    {\color{maincolor}\Huge\bfseries 谢谢聆听！}\\[1.2em]
+    {\large \color{graytext} 欢迎批评指正 \quad Q \& A}
+  \end{center}
+\end{frame}
+
+\end{document}

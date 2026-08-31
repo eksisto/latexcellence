@@ -1,0 +1,122 @@
+% ============================================================
+% 中文书籍/讲义模板（book-cn）
+% ------------------------------------------------------------
+% 基于 ctexbook 文档类，默认使用 TeX Live 自带的 fandol 字体，
+% 无需在系统中安装额外字体。编译引擎：xelatex。
+% 目录结构：
+%   main.tex              主文件（扉页 / 前言 / 目录 / 定理环境设置）
+%   chapters/chap01.tex   第一章示例
+%   chapters/chap02.tex   第二章示例
+% 修改指南：
+%   1. 在"书籍信息"处填写书名、作者、版本与日期；
+%   2. \part 用于分篇，章节数少时可整体删除 \part 行；
+%   3. 定理类环境（定义/定理/例）已配好中文名称，直接使用；
+%   4. 新增章节：复制 chapters/ 下文件并在 main.tex 中 \include；
+%   5. 需要页眉页脚时再引入 fancyhdr，本模板保持默认简洁样式。
+% ============================================================
+\documentclass[
+  UTF8,
+  fontset=fandol,        % TeX Live 自带开源字体，跨平台可编译
+  zihao=-4,              % 正文字号：小四
+  a4paper,
+  oneside,               % 单面排版（正式出版可改 twoside）
+]{ctexbook}
+
+% ---- 常用宏包 ----
+\usepackage{xcolor}                       % 颜色（扉页装饰线等）
+\usepackage{amsmath, amssymb}             % 数学公式
+\usepackage{amsthm}                       % 定理类环境
+\usepackage{graphicx}                     % 插图
+\usepackage{booktabs}                     % 三线表
+\usepackage{geometry}
+\geometry{left=2.8cm, right=2.8cm, top=3cm, bottom=3cm}
+\usepackage[
+  colorlinks=true,
+  linkcolor=black,
+  citecolor=black,
+  urlcolor=blue,
+]{hyperref}
+
+% 数学符号约定：向量用粗斜体
+\newcommand{\vect}[1]{\boldsymbol{#1}}
+
+% ---- 定理类环境：中文名称，按章编号 ----
+\theoremstyle{definition}
+\newtheorem{definition}{定义}[chapter]
+\newtheorem{example}{例}[chapter]
+\newtheorem{theorem}{定理}[chapter]
+\renewcommand{\proofname}{\textbf{证明}}
+
+% ============================================================
+% 书籍信息
+% ============================================================
+\newcommand{\BookTitle}{示例教程}
+\newcommand{\BookSubtitle}{从入门到实践}
+\newcommand{\BookAuthor}{张~三~编著}
+\newcommand{\BookEdition}{第~1~版}
+\newcommand{\BookDate}{2026年8月}
+
+\begin{document}
+
+% ==================== 扉页 ====================
+\begin{titlepage}
+  \begin{center}
+    \vspace*{4em}
+    {\zihao{1}\heiti \BookTitle}\\[1.2em]
+    {\zihao{3} \BookSubtitle}\\[2em]
+    {\color{gray}\rule{0.4\textwidth}{0.6pt}}\\[10em]
+    {\zihao{3} \BookAuthor}\\[3em]
+    {\zihao{3} \BookEdition}\\[0.8em]
+    {\zihao{3} \BookDate}
+  \end{center}
+\end{titlepage}
+
+% ==================== 前言 ====================
+\frontmatter  % 前置部分用罗马数字页码（正式页码从第一章开始）
+\chapter*{前言}
+\addcontentsline{toc}{chapter}{前言}
+在此撰写前言。说明本书的写作目的、适用读者、内容组织与
+使用建议（例如哪些章节可以跳过、配套资源在哪里获取）。
+前言篇幅一般 1～2 页。
+
+% ==================== 目录 ====================
+\tableofcontents
+
+% ==================== 正文 ====================
+\mainmatter  % 正文页码从 1 重新计数
+
+\part{基础篇}
+\include{chapters/chap01}
+
+\part{进阶篇}
+\include{chapters/chap02}
+
+% ==================== 附录 ====================
+\appendix  % 之后的章节改用字母编号（附录 A、B、…）
+\chapter{常用符号一览}
+% 附录放辅助性内容：符号表、证明细节、代码清单等
+\begin{center}
+  \begin{tabular}{ll}
+    \toprule
+    符号 & 含义 \\
+    \midrule
+    $\vect{x}$ & 输入向量 \\
+    $\vect{\theta}$ & 模型参数 \\
+    $\mathcal{L}$ & 损失函数 \\
+    \bottomrule
+  \end{tabular}
+\end{center}
+
+% ==================== 参考文献 ====================
+% 教材可用"参考书目"，条目按作者或引用顺序排列
+\begin{thebibliography}{9}
+\addcontentsline{toc}{chapter}{参考文献}
+\bibitem{vapnik2000}
+VAPNIK V N. 统计学习理论[M]. 张学工, 译. 北京: 清华大学出版社, 2000.
+
+\bibitem{lecun2015}
+LECUN Y, BENGIO Y, HINTON G. Deep learning[J]. Nature, 2015,
+521(7553): 436-444.
+\end{thebibliography}
+
+\end{document}

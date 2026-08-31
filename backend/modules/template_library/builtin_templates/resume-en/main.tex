@@ -1,0 +1,123 @@
+% ============================================================
+% 英文简历模板（resume-en，现代单栏风）
+% ------------------------------------------------------------
+% 样式由模板自绘（无第三方简历类的依赖），编译引擎：pdflatex。
+% 修改指南：
+%   1. "Header"区填写姓名与联系方式（图标行按需增删）；
+%   2. 各分区直接复制 \entry 与 itemize 条目修改内容；
+%   3. 主题色在 \definecolor 处修改，全局生效；
+%   4. 目标一页：删减内容而不是缩小字号；
+%   5. 中文求职场景请改用 resume-cn 模板。
+% ============================================================
+\documentclass[10pt, a4paper]{article}
+
+% ---- 字体与页面 ----
+\usepackage[T1]{fontenc}
+\usepackage[default]{sourcesanspro}       % 现代无衬线字体（TeX Live 自带）
+\usepackage[
+  top=1.4cm, bottom=1.4cm, left=1.6cm, right=1.6cm
+]{geometry}
+\pagestyle{empty}                          % 简历不显示页码
+\setlength{\parindent}{0pt}
+
+% ---- 依赖宏包 ----
+\usepackage{xcolor}
+\usepackage{enumitem}
+\usepackage{titlesec}
+\usepackage{fontawesome5}                  % 联系方式图标
+\usepackage{hyperref}
+
+% 主题色：换色改这里（如深蓝 / 墨绿 / 深红）
+\definecolor{primary}{RGB}{20, 60, 110}
+\definecolor{graytext}{RGB}{100, 100, 100}
+
+\hypersetup{colorlinks=true, urlcolor=primary, linkcolor=primary}
+
+% ---- 分区标题：加粗着色 + 下划细线 ----
+\titleformat{\section}
+  {\large\bfseries\color{primary}}{}{0em}{}
+  [\vspace{-0.5em}{\color{primary!35}\rule{\textwidth}{0.8pt}}]
+\titlespacing{\section}{0pt}{10pt}{6pt}
+
+% ---- 列表样式：紧凑、圆点、左缩进小 ----
+\setlist[itemize]{
+  nosep,
+  leftmargin=1.2em,
+  label=\textcolor{primary}{\small$\bullet$},
+}
+
+% ---- 经历条目命令：\entry{职位/学位}{单位/学校}{时间}{地点} ----
+\newcommand{\entry}[4]{%
+  \textbf{#1} \textcolor{graytext}{$\vert$} #2
+  \hfill \textcolor{graytext}{#3 \, #4}\par
+  \vspace{0.15em}
+}
+
+% ---- 技能条目命令：\skill{类别}{内容} ----
+\newcommand{\skill}[2]{\textbf{#1:} #2\par}
+
+\begin{document}
+
+% ==================== Header ====================
+\begin{center}
+  {\Huge\bfseries\color{primary} Your Name}\\[0.6em]
+  % 联系方式：按需保留/删除图标项，\faXxx 为 fontawesome5 图标
+  \faEnvelope\ \href{mailto:you@example.com}{you@example.com} \quad
+  \faPhone\ +86 138-0000-0000 \quad
+  \faGithub\ \href{https://github.com/yourname}{github.com/yourname} \quad
+  \faLinkedin\ \href{https://linkedin.com/in/yourname}{linkedin.com/in/yourname}
+\end{center}
+\vspace{-0.4em}
+
+% ==================== Summary ====================
+\section{Summary}
+% 两三行概括定位：专业方向 + 核心技能 + 亮点成果
+Computer science senior specializing in machine learning systems.
+Experienced in building data pipelines and productionizing models;
+author of 2 conference papers.
+
+% ==================== Education ====================
+\section{Education}
+\entry{M.S. in Computer Science}{Example University}{2024.09 -- 2027.06 (expected)}{Beijing}
+\begin{itemize}
+  \item GPA: 3.8/4.0; focus: machine learning and computer vision.
+\end{itemize}
+\entry{B.S. in Computer Science}{Example University}{2020.09 -- 2024.06}{Beijing}
+\begin{itemize}
+  \item Ranked top 5\%; received the National Scholarship (2022).
+\end{itemize}
+
+% ==================== Experience ====================
+\section{Experience}
+\entry{Machine Learning Intern}{Tech Company, Beijing}{2025.06 -- 2025.09}{Beijing}
+\begin{itemize}
+  \item Built a data cleaning pipeline processing 10M+ records daily.
+  \item Improved model inference speed by 30\% through quantization.
+\end{itemize}
+\entry{Research Assistant}{AI Lab, Example University}{2023.10 -- 2024.06}{Beijing}
+\begin{itemize}
+  \item Designed experiments for the paper accepted at ExampleConf 2024.
+\end{itemize}
+
+% ==================== Projects ====================
+\section{Projects}
+\entry{LaTeXcellence}{AI-powered LaTeX assistant}{2026}{Personal project}
+\begin{itemize}
+  \item Developed a FastAPI + React tool for AI-assisted proofreading of \LaTeX{} documents.
+  \item Repo: \href{https://github.com/yourname/project}{github.com/yourname/project}.
+\end{itemize}
+
+% ==================== Skills ====================
+\section{Skills}
+\skill{Languages}{Python, C++, TypeScript, SQL}
+\skill{Frameworks}{PyTorch, FastAPI, React, Docker}
+\skill{Languages (spoken)}{English (fluent, TOEFL 105), Chinese (native)}
+
+% ==================== Honors ====================
+\section{Honors \& Awards}
+\begin{itemize}
+  \item National Scholarship, Ministry of Education, 2022.
+  \item Gold Medal, Regional Programming Contest (ICPC), 2023.
+\end{itemize}
+
+\end{document}

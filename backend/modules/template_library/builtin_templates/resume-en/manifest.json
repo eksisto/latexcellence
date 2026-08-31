@@ -1,0 +1,13 @@
+{
+  "id": "resume-en",
+  "name": "英文简历（现代风）",
+  "name_en": "English Resume (Modern)",
+  "description": "自绘样式的英文单页简历：教育、经历、项目与技能分区，无第三方模板依赖。",
+  "category": "resume",
+  "main_file": "main.tex",
+  "engine": "pdflatex",
+  "author": "LaTeXcellence",
+  "license": "MIT",
+  "source": "builtin",
+  "created_at": "2026-08-31"
+}

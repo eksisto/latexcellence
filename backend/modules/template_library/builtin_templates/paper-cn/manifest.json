@@ -1,0 +1,13 @@
+{
+  "id": "paper-cn",
+  "name": "中文论文（ctexart）",
+  "name_en": "Chinese Paper (ctexart)",
+  "description": "中文学术论文模板，含摘要、关键词、图表公式与参考文献，单栏版式。",
+  "category": "paper",
+  "main_file": "main.tex",
+  "engine": "xelatex",
+  "author": "LaTeXcellence",
+  "license": "MIT",
+  "source": "builtin",
+  "created_at": "2026-08-31"
+}

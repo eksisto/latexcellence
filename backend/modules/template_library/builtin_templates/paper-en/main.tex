@@ -1,0 +1,137 @@
+% ============================================================
+% 英文论文模板（IEEE 双栏，paper-en）
+% ------------------------------------------------------------
+% 使用 IEEEtran 文档类，版式与 IEEE 会议/期刊论文一致。
+% 编译引擎：pdflatex（LaTeXcellence 已按此配置）。
+% 修改指南：
+%   1. \title / \author 处填写论文题目与作者信息；
+%   2. 摘要在 abstract 环境，关键词在 \begin{IEEEkeywords}；
+%   3. 各章节正文直接替换示例文字；
+%   4. 参考文献使用文中 thebibliography 环境，
+%      若习惯 BibTeX，可删除该环境改用
+%      \bibliographystyle{IEEEtran} + \bibliography{refs}。
+% ============================================================
+\documentclass[conference]{IEEEtran}
+
+% ---- 常用宏包 ----
+\usepackage{amsmath, amssymb, amsfonts}   % 数学公式
+\usepackage{graphicx}                     % 插图
+\usepackage{booktabs}                     % 三线表
+\usepackage{multirow}                     % 表格合并单元格
+\usepackage{xcolor}                       % 颜色
+\usepackage[colorlinks=true, linkcolor=black, citecolor=blue, urlcolor=blue]{hyperref}
+
+% 文中自定义命令示例：向量用粗斜体
+\newcommand{\vect}[1]{\boldsymbol{#1}}
+
+\begin{document}
+
+\title{An Example Paper Title: Written with the IEEEtran Class}
+
+% \author 中的 \IEEEauthorblockN 为作者名、\IEEEauthorblockA 为单位信息
+\author{
+  \IEEEauthorblockN{First Author}
+  \IEEEauthorblockA{Department of Computer Science, Example University\\
+  City, Country\\
+  Email: first.author@example.edu}
+  \and
+  \IEEEauthorblockN{Second Author}
+  \IEEEauthorblockA{School of Artificial Intelligence, Example Institute\\
+  City, Country\\
+  Email: second.author@example.ac.cn}
+}
+
+\maketitle
+
+\begin{abstract}
+  Replace this paragraph with the abstract of your paper.
+  The abstract should state the problem, the proposed method,
+  and the main results in 150--250 words. This template uses the
+  IEEEtran conference class and compiles with pdfLaTeX.
+\end{abstract}
+
+\begin{IEEEkeywords}
+  keyword one, keyword two, keyword three, LaTeX, IEEEtran
+\end{IEEEkeywords}
+
+\section{Introduction}
+% 引言：说明研究背景、现有不足与本文贡献
+This is the introduction. Explain the background, the limitations of
+existing work, and summarize your contributions as an itemized list:
+
+\begin{itemize}
+  \item \textbf{Contribution one:} a brief statement of the first contribution.
+  \item \textbf{Contribution two:} a brief statement of the second contribution.
+  \item \textbf{Contribution three:} extensive experiments on benchmark datasets.
+\end{itemize}
+
+\section{Related Work}
+% 相关工作：分组综述代表性方法，并说明与本文的区别
+Summarize the most related approaches and clarify how your work differs
+from them. Cite references with \verb|\cite|, e.g., deep models~\cite{lecun2015}.
+
+\section{Method}
+% 方法：给出总体框架、符号定义与关键公式
+Describe your overall framework here. An example equation:
+\begin{equation}
+  \mathcal{L}(\vect{\theta}) =
+  \frac{1}{N} \sum_{i=1}^{N}
+  \ell \bigl( f(\vect{x}_i; \vect{\theta}),\, y_i \bigr)
+  + \lambda \, \lVert \vect{\theta} \rVert_2^2
+  \label{eq:loss}
+\end{equation}
+where $\ell(\cdot)$ is the loss function, $\lambda$ balances the
+regularization term, and $N$ is the number of training samples.
+Reference the equation as \eqref{eq:loss}.
+
+\section{Experiments}
+% 实验：数据集、评价指标、对比结果（表）与定性分析（图）
+\subsection{Datasets and Metrics}
+Briefly describe the datasets and evaluation metrics.
+
+\subsection{Main Results}
+Table~\ref{tab:results} reports the comparison with baselines.
+
+% 三线表示例：\toprule / \midrule / \bottomrule
+\begin{table}[!t]
+  \centering
+  \caption{Comparison with baseline methods on the benchmark.}
+  \label{tab:results}
+  \begin{tabular}{lccc}
+    \toprule
+    Method & Acc.(\%) & F1 (\%) & Params (M) \\
+    \midrule
+    Baseline A        & 85.2 & 84.1 & 21.3 \\
+    Baseline B        & 87.6 & 86.9 & 34.8 \\
+    Ours              & \textbf{90.4} & \textbf{89.7} & 28.5 \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+% 插图示例：把 image.png 换成你的图片文件
+% \begin{figure}[!t]
+%   \centering
+%   \includegraphics[width=\linewidth]{image.png}
+%   \caption{An example figure caption.}
+%   \label{fig:framework}
+% \end{figure}
+
+\section{Conclusion}
+% 结论：总结工作并展望未来方向
+Restate the problem and your approach, highlight the key findings,
+and outline future work.
+
+% ---- 参考文献：按正文引用顺序排列 ----
+\begin{thebibliography}{9}
+\bibitem{lecun2015}
+Y. LeCun, Y. Bengio, and G. Hinton,
+``Deep learning,''
+\emph{Nature}, vol. 521, no. 7553, pp. 436--444, 2015.
+
+\bibitem{vaswani2017}
+A. Vaswani \emph{et al.},
+``Attention is all you need,''
+in \emph{Proc. Adv. Neural Inf. Process. Syst. (NeurIPS)}, 2017, pp. 5998--6008.
+\end{thebibliography}
+
+\end{document}

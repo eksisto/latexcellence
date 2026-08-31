@@ -1,0 +1,37 @@
+% 第二章：进阶方法（进阶篇）
+% 示范带算法伪代码与表格的章节写法。
+\chapter{进阶方法}
+
+\section{改进的优化算法}
+% 引出比第一章更一般的算法框架
+在基础梯度下降之上，引入动量项可以加速收敛。
+更新规则如式~\eqref{eq:momentum}：
+\begin{equation}
+  \vect{v}_{t+1} = \beta \vect{v}_t - \eta \nabla \mathcal{L}(\vect{\theta}_t),
+  \qquad
+  \vect{\theta}_{t+1} = \vect{\theta}_t + \vect{v}_{t+1}.
+  \label{eq:momentum}
+\end{equation}
+其中 $\beta \in [0, 1)$ 为动量系数，$\eta$ 为学习率。
+
+\section{超参数的影响}
+% 用表格对比不同设置下的表现
+表~\ref{tab:hyper} 给出了不同动量系数下的迭代次数对比。
+
+\begin{table}[!htbp]
+  \centering
+  \caption{不同动量系数下的收敛迭代次数}
+  \label{tab:hyper}
+  \begin{tabular}{lcccc}
+    \toprule
+    动量系数 $\beta$ & 0 & 0.5 & 0.9 & 0.99 \\
+    \midrule
+    收敛迭代次数 & 812 & 356 & 154 & 203 \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\section{本章小结}
+动量方法通过累积历史梯度方向改善收敛速度，
+适合目标函数存在狭长山谷形等值面的场景；
+实际使用中建议从 $\beta = 0.9$ 开始尝试。

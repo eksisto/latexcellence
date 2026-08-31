@@ -1,0 +1,137 @@
+% ============================================================
+% 中文论文模板（paper-cn）
+% ------------------------------------------------------------
+% 基于 ctexart 文档类，默认使用 TeX Live 自带的 fandol 字体，
+% 无需在系统中安装额外字体。编译引擎：xelatex。
+% 修改指南：
+%   1. \title / \author 处填写题目与作者；多作者用 \and 分隔；
+%   2. 摘要与关键词在 abstract / keywords 环境中修改；
+%   3. 各章正文替换示例文字即可，图表公式均有示例可套用；
+%   4. 若目标期刊/学校要求宋体-中易等系统字体，可把导言区
+%      fontset=fandol 改为 fontset=windows 或 fontset=macintosh。
+% ============================================================
+\documentclass[
+  UTF8,
+  fontset=fandol,        % TeX Live 自带开源字体，跨平台可编译
+  zihao=-4,              % 正文字号：小四（约 12pt）
+  a4paper,
+]{ctexart}
+
+% ---- 常用宏包 ----
+\usepackage{amsmath, amssymb}             % 数学公式
+\usepackage{graphicx}                     % 插图
+\usepackage{booktabs}                     % 三线表
+\usepackage{multirow}                     % 表格合并单元格
+\usepackage{caption}                      % 图表标题样式
+\captionsetup{font=small, labelfont=bf}
+\usepackage{geometry}
+\geometry{left=2.5cm, right=2.5cm, top=2.8cm, bottom=2.8cm}
+\usepackage{setspace}
+\setstretch{1.4}                          % 正文 1.4 倍行距，可按需调整
+\usepackage[
+  colorlinks=true,
+  linkcolor=black,
+  citecolor=blue,
+  urlcolor=blue,
+]{hyperref}
+
+% 数学环境符号约定
+\newcommand{\vect}[1]{\boldsymbol{#1}}
+
+% 关键词环境（摘要之后使用）
+\newenvironment{keywords}{\noindent\textbf{关键词：}}{\par}
+
+\title{\heiti 基于示例方法的示例问题研究}
+\author{
+  张~三 \quad 李~四 \\
+  （示例大学~计算机学院，北京~100000）
+}
+\date{}  % 学术论文一般不显示日期
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+  % 摘要：目的—方法—结果—结论，一般 200～300 字
+  把论文摘要写在这里。摘要应简明说明研究目的、方法、
+  主要结果与结论，不出现图表和参考文献编号。
+  本模板基于 ctexart 文档类，适合课程论文与期刊投稿初稿，
+  默认使用 TeX Live 自带的 fandol 中文字体，开箱即可编译。
+\end{abstract}
+
+\begin{keywords}
+  中文论文；\LaTeX{}；模板；示例关键词
+\end{keywords}
+
+\section{引言}
+% 引言：研究背景与意义、国内外现状、本文工作与结构安排
+这里是引言。说明研究背景与意义，综述国内外研究现状，
+最后概述本文的主要工作与文章结构。引用示例：文献~\cite{vapnik2000}
+提出了经典的统计学习理论框架。
+
+\section{相关工作}
+% 相关工作：按技术路线分组综述，并指出与本文方法的区别
+简要回顾与本工作最相关的代表性方法，
+并说明本文方法与其在思路上的差异。
+
+\section{方法}
+% 方法：总体框架、符号约定与核心公式
+给出方法的总体框架与符号约定。核心目标函数如式~\eqref{eq:loss}：
+\begin{equation}
+  \mathcal{L}(\vect{\theta}) =
+  \frac{1}{N} \sum_{i=1}^{N}
+  \ell \bigl( f(\vect{x}_i; \vect{\theta}),\, y_i \bigr)
+  + \lambda \, \lVert \vect{\theta} \rVert_2^2
+  \label{eq:loss}
+\end{equation}
+其中 $\ell(\cdot)$ 为损失函数，$\lambda$ 为正则化系数，
+$N$ 为训练样本数，参数 $\vect{\theta}$ 通过梯度下降求解。
+
+\section{实验与分析}
+% 实验：数据集与评价指标、对比结果（表）、定性结果（图）
+\subsection{实验设置}
+简要说明数据集、对比方法、评价指标与实现细节。
+
+\subsection{结果与讨论}
+表~\ref{tab:results} 给出了各方法在基准数据集上的对比结果。
+
+% 三线表示例（学术惯例）：\toprule / \midrule / \bottomrule
+\begin{table}[!htbp]
+  \centering
+  \caption{基准数据集上各方法性能对比}
+  \label{tab:results}
+  \begin{tabular}{lccc}
+    \toprule
+    方法 & 准确率（\%） & $F_1$（\%） & 参数量（M） \\
+    \midrule
+    基线方法 A & 85.2 & 84.1 & 21.3 \\
+    基线方法 B & 87.6 & 86.9 & 34.8 \\
+    本文方法   & \textbf{90.4} & \textbf{89.7} & 28.5 \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+% 插图示例：把 image.png 换成你的图片文件（支持 PNG/PDF/JPG）
+% \begin{figure}[!htbp]
+%   \centering
+%   \includegraphics[width=0.8\linewidth]{image.png}
+%   \caption{方法总体框架图}
+%   \label{fig:framework}
+% \end{figure}
+
+\section{结论}
+% 结论：总结全文，指出局限与未来工作
+总结本文工作与主要发现，说明方法局限性并展望未来研究方向。
+
+% ---- 参考文献：按 GB/T 7714 风格手工排版，按引用顺序编号 ----
+\begin{thebibliography}{9}
+\bibitem{vapnik2000}
+V.~N.~Vapnik. 统计学习理论[M]. 张学工, 译. 北京: 清华大学出版社, 2000.
+
+\bibitem{lecun2015}
+LECUN Y, BENGIO Y, HINTON G. Deep learning[J]. Nature, 2015,
+521(7553): 436-444.
+\end{thebibliography}
+
+\end{document}

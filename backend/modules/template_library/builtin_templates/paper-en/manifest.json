@@ -1,0 +1,13 @@
+{
+  "id": "paper-en",
+  "name": "英文论文（IEEE 双栏）",
+  "name_en": "English Paper (IEEE)",
+  "description": "IEEE 风格英文双栏会议/期刊论文模板，含摘要、关键词与参考文献。",
+  "category": "paper",
+  "main_file": "main.tex",
+  "engine": "pdflatex",
+  "author": "LaTeXcellence",
+  "license": "MIT",
+  "source": "builtin",
+  "created_at": "2026-08-31"
+}

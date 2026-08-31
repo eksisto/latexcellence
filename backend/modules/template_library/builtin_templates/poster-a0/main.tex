@@ -1,0 +1,242 @@
+% ============================================================
+% A0 学术海报模板（poster-a0，竖版三栏）
+% ------------------------------------------------------------
+% 基于 TeX Live 自带的 a0poster 文档类 + ctex 中文方案
+%（fandol 字体，无需安装额外字体）。编译引擎：xelatex。
+% 海报建议：文字越少越好，多用图表；每个分节控制在半栏以内。
+% 修改指南：
+%   1. "海报信息"处填写题目、作者、单位、邮箱；
+%   2. 每个分节 = \postersection{标题} + 正文，按需增删；
+%   3. 三栏布局由 multicols 控制，改为 {2} 即两栏；
+%   4. 主题色在"主题设置"处修改，标题条与分节条同步变色；
+%   5. 全局字号在"字号设置"处调整（a0poster 默认字号偏小）。
+% ============================================================
+\documentclass[
+  a0,                    % 纸张：A0（841mm x 1189mm）
+  portrait,              % 竖版（横版改 landscape）
+]{a0poster}
+
+% ---- 中文支持：TeX Live 自带 fandol 字体 ----
+\usepackage[fontset=fandol]{ctex}
+
+% ==================== 主题设置 ====================
+\usepackage{xcolor}
+\definecolor{primary}{RGB}{20, 60, 110}   % 主色（标题条与分节条）
+\definecolor{lightbg}{RGB}{238, 243, 249} % 浅色底
+\definecolor{graytext}{RGB}{90, 90, 90}
+
+% ==================== 字号设置 ====================
+% a0poster 默认正文约 25pt，海报惯例正文 30~36pt，这里整体上调一档
+\renewcommand{\normalsize}{\fontsize{35}{46}\selectfont}
+\renewcommand{\small}{\fontsize{26}{34}\selectfont}
+\renewcommand{\footnotesize}{\fontsize{20}{26}\selectfont}
+\renewcommand{\large}{\fontsize{38}{49}\selectfont}
+\renewcommand{\Large}{\fontsize{45}{58}\selectfont}
+\renewcommand{\LARGE}{\fontsize{54}{69}\selectfont}
+\renewcommand{\huge}{\fontsize{64}{81}\selectfont}
+\renewcommand{\Huge}{\fontsize{76}{96}\selectfont}
+\renewcommand{\veryHuge}{\fontsize{88}{110}\selectfont}
+\normalsize
+
+% ---- 排版工具 ----
+\usepackage{multicol}                     % 多栏布局
+\usepackage{amsmath, amssymb}
+\usepackage{graphicx}
+\usepackage{booktabs}                     % 三线表
+\usepackage{enumitem}
+\usepackage{tikz}                         % 简单示意图（框架图 / 柱状图）
+\usetikzlibrary{positioning}
+\usepackage[hidelinks]{hyperref}
+
+\setlength{\columnsep}{3em}               % 栏间距
+\setlength{\columnseprule}{2pt}           % 栏间分隔线
+\def\columnseprulecolor{\color{primary!35}}
+\setlength{\parindent}{0em}
+\setlength{\parskip}{0.8em}
+
+% 数学符号约定：向量用粗斜体
+\newcommand{\vect}[1]{\boldsymbol{#1}}
+
+% 列表更紧凑
+\setlist[itemize]{itemsep=0.45em, leftmargin=1.2em,
+  label=\textcolor{primary}{\small$\bullet$}}
+
+% 分节标题条：主色底 + 白字，宽度撑满栏宽
+\newcommand{\postersection}[1]{%
+  \vspace{1.2em}
+  \noindent\colorbox{primary}{%
+    \parbox{\dimexpr\linewidth-2\fboxsep\relax}{%
+      \centering\color{white}\heiti\bfseries \Large #1}%
+  }
+  \vspace{0.8em}
+}
+
+% ==================== 海报信息 ====================
+\newcommand{\PosterTitle}{示例研究：一种高效求解示例问题的方法}
+\newcommand{\PosterAuthors}{张三\quad 李四\quad 王五}
+\newcommand{\PosterAffil}{示例大学~计算机学院}
+\newcommand{\PosterEmail}{zhangsan@example.edu（通讯作者）}
+
+\begin{document}
+
+% ==================== 页眉：题目与作者 ====================
+\begin{center}
+  \colorbox{primary}{%
+    \parbox{0.965\textwidth}{\centering\vspace{0.6em}
+      {\color{white}\fontsize{76}{90}\selectfont\bfseries \PosterTitle}\par
+      \vspace{0.5em}
+      {\color{white}\fontsize{44}{56}\selectfont \PosterAuthors}\par
+      \vspace{0.2em}
+      {\color{white!85!primary}\fontsize{34}{44}\selectfont
+        \PosterAffil\quad \PosterEmail}
+    \vspace{0.6em}}}
+\end{center}
+\vspace{1em}
+
+% ==================== 三栏正文 ====================
+\begin{multicols}{3}
+
+\postersection{研究背景}
+% 用一小段话 + 要点说清"为什么做"
+示例问题广泛存在于实际应用中，其求解效率直接决定系统的可用性。
+然而现有方法在大规模场景下面临两大挑战：
+\begin{itemize}
+  \item 计算开销随规模超线性增长；
+  \item 精度与速度难以同时兼顾。
+\end{itemize}
+为此，本文提出一种高效求解方法，在保证精度的同时显著降低开销。
+该方法的核心思想是“把计算花在刀刃上”：只对少量关键样本做高代价
+计算，其余样本使用轻量估计。形式化地，优化目标如式~\eqref{eq:goal}：
+\begin{equation}
+  \min_{\vect{\theta}} \;
+  \mathcal{L}(\vect{\theta}) =
+  \frac{1}{N}\sum_{i=1}^{N}
+  \ell\bigl(f(\vect{x}_i;\vect{\theta}),\, y_i\bigr)
+  \label{eq:goal}
+\end{equation}
+
+\postersection{方法}
+% 一图胜千言：优先放框架图，文字只讲图上没有的
+方法整体流程自上而下分为三个阶段：
+\begin{itemize}
+  \item 步骤一：数据预处理与特征构造；
+  \item 步骤二：核心模型设计（结合式~\eqref{eq:goal} 说明）；
+  \item 步骤三：训练与推理流程优化。
+\end{itemize}
+% 框架示意图（TikZ 自绘，可整体删除换成图片 \includegraphics）
+\begin{center}
+  \begin{tikzpicture}[
+    node distance=1.8cm,
+    box/.style={draw=primary, fill=lightbg, rounded corners=3pt,
+                minimum width=0.78\linewidth, minimum height=4.2cm,
+                font=\bfseries, text=primary},
+    arr/.style={->, line width=2.5pt, primary},
+  ]
+    \node[box] (a) {输入：原始数据};
+    \node[box, below=of a] (b) {核心模型};
+    \node[box, below=of b] (c) {输出：预测结果};
+    \draw[arr] (a) -- (b);
+    \draw[arr] (b) -- (c);
+  \end{tikzpicture}
+\end{center}
+\vspace{0.2em}
+与现有工作相比，本方法的创新点在于引入自适应采样策略，
+使高代价计算只集中在少量关键样本上；同时推理阶段无需重训练，
+即可在精度损失小于 0.5\% 的前提下将耗时降低约 40\%。
+
+\postersection{实验设置}
+\begin{itemize}
+  \item \textbf{数据集：}基准数据集 A 与 B；
+  \item \textbf{对比方法：}基线 A、基线 B；
+  \item \textbf{指标：}准确率、$F_1$、参数量；
+  \item \textbf{环境：}单卡 GPU，随机种子固定取 42；
+  \item \textbf{数据划分：}训练 / 验证 / 测试 = 8 : 1 : 1；
+  \item \textbf{超参数：}学习率 $3\times10^{-4}$，批次大小 256。
+\end{itemize}
+
+\postersection{主要结果}
+% 海报上的表格只留关键行，重点行加粗
+\begin{center}
+  \renewcommand{\arraystretch}{1.5}
+  \begin{tabular}{lccc}
+    \toprule
+    方法 & 准确率（\%） & $F_1$（\%） & 参数量（M） \\
+    \midrule
+    基线 A & 85.2 & 84.1 & 21.3 \\
+    基线 B & 87.6 & 86.9 & 34.8 \\
+    \textbf{本文方法} & \textbf{90.4} & \textbf{89.7} & 28.5 \\
+    \bottomrule
+  \end{tabular}
+\end{center}
+% 柱状示意图：直观展示"本文方法最优"（可替换为真实图表）
+\begin{center}
+  \begin{tikzpicture}[x=1.2cm, y=0.68cm]
+    \definecolor{bargray}{RGB}{150, 160, 175}
+    \fill[bargray!60] (0,0) rectangle (2.2,4.7);  % 基线 A
+    \fill[bargray]    (2.6,0) rectangle (4.8,5.1); % 基线 B
+    \fill[primary]    (5.2,0) rectangle (7.4,5.6); % 本文方法
+    \draw[graytext, line width=1.5pt] (0,0) -- (7.6,0);
+    \node[below, text=graytext, font=\small] at (1.1,0) {基线 A};
+    \node[below, text=graytext, font=\small] at (3.7,0) {基线 B};
+    \node[below, text=primary, font=\small\bfseries] at (6.3,0) {本文方法};
+    \node[above, font=\small] at (1.1,4.7) {85.2};
+    \node[above, font=\small] at (3.7,5.1) {87.6};
+    \node[above, text=primary, font=\small\bfseries] at (6.3,5.6) {90.4};
+  \end{tikzpicture}
+\end{center}
+\begin{itemize}
+  \item 准确率较最优基线提升 \textbf{2.8} 个百分点；
+  \item 参数更少，推理更快，便于部署；
+  \item 在两个数据集上趋势一致，结果稳健。
+\end{itemize}
+
+\postersection{结果分析}
+对提升来源做消融分析，各项贡献可分解为式~\eqref{eq:ablation}：
+\begin{equation}
+  \underbrace{+2.1}_{\text{自适应采样}}
+  + \underbrace{+0.7}_{\text{结构改进}}
+  \approx \underbrace{+2.8}_{\text{整体提升}}
+  \label{eq:ablation}
+\end{equation}
+两者结合存在正向协同效应。效率方面，推理耗时随数据规模
+近似线性增长，单条样本平均耗时由 82ms 降至 49ms，
+验证了方法在效率上的理论分析；极端分布偏移场景下
+精度波动仍在 1\% 以内，具备良好的稳健性。
+
+\postersection{应用场景}
+\begin{itemize}
+  \item 场景一：大规模实时数据处理的在线服务；
+  \item 场景二：资源受限设备上的本地推理；
+  \item 场景三：与现有业务系统的低成本集成；
+  \item 场景四：跨部门数据协作中的隐私保护计算。
+\end{itemize}
+
+\postersection{结论与展望}
+\begin{itemize}
+  \item 结论一：方法有效，指标全面提升；
+  \item 结论二：轻量化设计适合实际部署；
+  \item 展望一：扩展到更大规模数据集；
+  \item 展望二：探索多模态场景的迁移能力；
+  \item 展望三：与大模型结合，进一步降低使用门槛。
+\end{itemize}
+
+\postersection{参考文献与联系方式}
+{\color{graytext}\small
+[1] LECUN Y, et al. Deep learning[J]. Nature, 2015, 521(7553): 436-444.\par
+[2] VASWANI A, et al. Attention is all you need[C]//NeurIPS. 2017: 5998-6008.\par
+[3] 示例团队. 示例系统的设计与实现[J]. 计算机学报, 2025, 48(6): 1234-1245.\par
+}
+\vspace{0.4em}
+% 联系方式块：换成二维码图片更常见（\includegraphics{qrcode.png}）
+\begin{center}
+  \colorbox{lightbg}{%
+    \parbox{0.9\linewidth}{\centering\vspace{0.4em}
+      \textbf{论文全文与开源代码}\\[0.2em]
+      {\small \href{https://example.edu/lab}{example.edu/lab}}\\[0.2em]
+      {\small（此处可放二维码：\texttt{\string\includegraphics\{qrcode.png\}}）}
+    \vspace{0.4em}}}
+\end{center}
+
+\end{multicols}
+
+\end{document}

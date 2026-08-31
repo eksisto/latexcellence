@@ -1,0 +1,50 @@
+% 第二章：方法与实现（示例章）
+% 演示公式、表格、插图的规范用法，写作时替换为实际内容。
+\chapter{方法设计与实验分析}
+
+\section{总体设计}
+% 给出系统/方法的总体框架，配一张框架图
+介绍总体设计方案。核心目标函数如式~\eqref{eq:objective}：
+\begin{equation}
+  \min_{\vect{\theta}} \;
+  \mathcal{L}(\vect{\theta}) =
+  \frac{1}{N} \sum_{i=1}^{N}
+  \ell \bigl( f(\vect{x}_i; \vect{\theta}),\, y_i \bigr)
+  + \lambda \, \lVert \vect{\theta} \rVert_2^2
+  \label{eq:objective}
+\end{equation}
+其中 $\ell(\cdot)$ 为损失函数，$\lambda$ 为正则化系数。
+
+\section{实验设置}
+% 数据集、评价指标、对比方法、实现细节（硬件/超参数）
+说明数据集划分、评价指标与实现细节。
+
+\section{结果与分析}
+% 主实验表格：三线表是学位论文的标准表格样式
+表~\ref{tab:compare} 给出了各方法在基准数据集上的对比结果。
+
+\begin{table}[!htbp]
+  \centering
+  \caption{各方法在基准数据集上的性能对比}
+  \label{tab:compare}
+  \begin{tabular}{lccc}
+    \toprule
+    方法 & 准确率（\%） & $F_1$（\%） & 参数量（M） \\
+    \midrule
+    基线方法 A & 85.2 & 84.1 & 21.3 \\
+    基线方法 B & 87.6 & 86.9 & 34.8 \\
+    本文方法   & \textbf{90.4} & \textbf{89.7} & 28.5 \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+% 插图示例：把图片文件放到本目录（支持 PNG/PDF/JPG），替换文件名即可
+% \begin{figure}[!htbp]
+%   \centering
+%   \includegraphics[width=0.8\linewidth]{framework.png}
+%   \caption{系统总体框架图}
+%   \label{fig:framework}
+% \end{figure}
+
+对实验结果进行分析：先描述现象，再解释原因，
+最后回应第一章提出的研究问题。

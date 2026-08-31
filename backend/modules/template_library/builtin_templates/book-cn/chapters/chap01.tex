@@ -1,0 +1,49 @@
+% 第一章：基础概念（基础篇）
+% 示范正文章节的常用元素：小节、定理环境、公式、例题与章末习题。
+\chapter{基础概念}
+
+\section{什么是示例问题}
+% 开头用一小节引出本章要讲的核心概念
+本章介绍全书的基础概念。先用一段话给出直观解释，
+再给出严格定义，最后通过例子加深理解。
+
+\begin{definition}[示例问题]
+  给定样本集合 $\{(\vect{x}_i, y_i)\}_{i=1}^{N}$，
+  示例问题要求寻找参数 $\vect{\theta}$，
+  使目标函数 $\mathcal{L}(\vect{\theta})$ 最小。
+\end{definition}
+
+\section{基本性质}
+% 定理 + 证明的标准组合，证明可留作习题
+\begin{theorem}[收敛性]
+  当学习率 $\eta$ 满足 $\eta < 1/L$（$L$ 为 Lipschitz 常数）时，
+  梯度下降法收敛到局部极小点。
+\end{theorem}
+\begin{proof}
+  由凸性与 Lipschitz 连续性，对目标函数应用标准下降引理即得。
+\end{proof}
+
+\section{应用举例}
+% 例题环境：先给题目再给解答
+\begin{example}[一元情形]
+  \label{ex:onedim}
+  设 $f(x) = x^2$，从 $x_0 = 2$ 出发，学习率 $\eta = 0.25$，
+  求一步梯度下降后的位置。
+\end{example}
+\begin{proof}[解]
+  梯度为 $f'(x) = 2x$，于是
+  $x_1 = x_0 - \eta f'(x_0) = 2 - 0.25 \times 4 = 1$。
+\end{proof}
+
+\section{本章小结}
+% 一段话总结 + 引出下一章
+本章给出了示例问题的定义与基本收敛性质，
+下一章将在更一般的条件下讨论改进算法。
+
+% ---- 章末习题：讲义常用结构，不需要时可删除 ----
+\section*{习\quad 题}
+\addcontentsline{toc}{section}{习题}
+\begin{enumerate}
+  \item 证明：当目标函数为强凸函数时，梯度下降线性收敛。
+  \item 编程实现一元梯度下降，并复现例~\ref{ex:onedim} 的计算。
+\end{enumerate}

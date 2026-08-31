@@ -1,0 +1,121 @@
+% ============================================================
+% 中文简历模板（resume-cn，现代单栏风）
+% ------------------------------------------------------------
+% 基于 ctexart，默认使用 TeX Live 自带的 fandol 字体，
+% 无需在系统中安装额外字体。编译引擎：xelatex。
+% 修改指南：
+%   1. "页眉"区填写姓名、求职意向与联系方式；
+%   2. 各分区复制 \entry 与 itemize 条目修改内容；
+%   3. 主题色在 \definecolor 处修改，全局生效；
+%   4. 简历以一页为佳：删减内容而不是缩小字号；
+%   5. 英文求职场景请改用 resume-en 模板。
+% ============================================================
+\documentclass[
+  UTF8,
+  fontset=fandol,        % TeX Live 自带开源字体，跨平台可编译
+  zihao=-4,
+  a4paper,
+]{ctexart}
+
+% ---- 页面 ----
+\usepackage[
+  top=1.4cm, bottom=1.4cm, left=1.6cm, right=1.6cm
+]{geometry}
+\pagestyle{empty}                          % 简历不显示页码
+\setlength{\parindent}{0pt}
+
+% ---- 依赖宏包 ----
+\usepackage{xcolor}
+\usepackage{enumitem}
+\usepackage{titlesec}
+\usepackage{fontawesome5}                  % 联系方式图标
+\usepackage{hyperref}
+
+% 主题色：换色改这里（如深蓝 / 墨绿 / 深红）
+\definecolor{primary}{RGB}{20, 60, 110}
+\definecolor{graytext}{RGB}{100, 100, 100}
+
+\hypersetup{colorlinks=true, urlcolor=primary, linkcolor=primary}
+
+% ---- 分区标题：加粗着色 + 下划细线 ----
+\titleformat{\section}
+  {\large\bfseries\color{primary}\heiti}{}{0em}{}
+  [\vspace{-0.5em}{\color{primary!35}\rule{\textwidth}{0.8pt}}]
+\titlespacing{\section}{0pt}{10pt}{6pt}
+
+% ---- 列表样式：紧凑、圆点、左缩进小 ----
+\setlist[itemize]{
+  nosep,
+  leftmargin=1.2em,
+  label=\textcolor{primary}{\small$\bullet$},
+}
+
+% ---- 经历条目命令：\entry{职位/学位}{单位/学校}{时间}{地点} ----
+\newcommand{\entry}[4]{%
+  \textbf{#1} \textcolor{graytext}{｜} #2
+  \hfill \textcolor{graytext}{#3 \, #4}\par
+  \vspace{0.15em}
+}
+
+% ---- 技能条目命令：\skill{类别}{内容} ----
+\newcommand{\skill}[2]{\textbf{#1：}#2\par}
+
+\begin{document}
+
+% ==================== 页眉 ====================
+\begin{center}
+  {\Huge\bfseries\color{primary}张~三}\\[0.4em]
+  {\large\color{graytext} 求职意向：后端开发工程师}\\[0.6em]
+  % 联系方式：按需保留/删除图标项，\faXxx 为 fontawesome5 图标
+  \faEnvelope\ \href{mailto:zhangsan@example.com}{zhangsan@example.com} \quad
+  \faPhone\ 138-0000-0000 \quad
+  \faGithub\ \href{https://github.com/yourname}{github.com/yourname}
+\end{center}
+\vspace{-0.4em}
+
+% ==================== 教育背景 ====================
+\section{教育背景}
+\entry{计算机科学与技术~~硕士}{示例大学}{2024.09 -- 2027.06（预计）}{北京}
+\begin{itemize}
+  \item GPA：3.8/4.0；研究方向：机器学习系统。
+\end{itemize}
+\entry{软件工程~~本科}{示例大学}{2020.09 -- 2024.06}{北京}
+\begin{itemize}
+  \item 专业排名前 5\%，获国家励志奖学金（2022）。
+\end{itemize}
+
+% ==================== 实习经历 ====================
+\section{实习经历}
+\entry{后端开发实习生}{某科技有限公司}{2025.06 -- 2025.09}{北京}
+\begin{itemize}
+  \item 负责订单服务接口开发，日均处理请求百万级，P99 延迟降低 20\%；
+  \item 搭建单元测试与持续集成流程，接口测试覆盖率提升至 85\%。
+\end{itemize}
+\entry{算法实习生}{某人工智能实验室}{2023.10 -- 2024.06}{北京}
+\begin{itemize}
+  \item 参与文本分类模型的训练与调优，F1 值提升 3.2 个百分点；
+  \item 撰写实验报告与技术文档，获评优秀实习生。
+\end{itemize}
+
+% ==================== 项目经历 ====================
+\section{项目经历}
+\entry{LaTeXcellence~~AI 辅助 LaTeX 文档工具}{个人项目}{2026}{课余}
+\begin{itemize}
+  \item 使用 FastAPI + React 开发，实现错字检查、表达优化等功能；
+  \item 开源地址：\href{https://github.com/yourname/project}{github.com/yourname/project}。
+\end{itemize}
+
+% ==================== 专业技能 ====================
+\section{专业技能}
+\skill{编程语言}{Python、Go、C++、SQL}
+\skill{框架工具}{FastAPI、Docker、Git、Redis、MySQL}
+\skill{语言能力}{英语（CET-6 580），可流畅阅读英文文献}
+
+% ==================== 荣誉奖项 ====================
+\section{荣誉奖项}
+\begin{itemize}
+  \item 国家励志奖学金，教育部，2022 年；
+  \item 全国大学生程序设计竞赛区域赛金牌（ICPC），2023 年。
+\end{itemize}
+
+\end{document}
