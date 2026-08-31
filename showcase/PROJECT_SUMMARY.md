@@ -59,7 +59,7 @@ showcase/
 - 每个场景对象带 `tpl` 字段，决定 `js/render.js` 使用的渲染模板：
   `hero`（序章）/ `act`（第一幕·摩擦、第二幕·解法）/ `chapter`（功能章节）/ `principles`（设计理念）/ `stack`（技术栈）/ `themes`（主题）/ `outro`（尾声）。
 - 常用字段：`id`、`len`（场景高度 `--len × 100vh`）、`label`（aria-label）、`glyphs`（视差字形）、`ghost`（幽灵章节号）、`kicker / title / desc`、`points`、`subCards`、`feature`（主功能卡片，含 `mock`）、`stage`（act 专属舞台）等。
-- mock 内容块按 `type` 渲染：`col` / `formula-ocr` / `code` / `steps` / `row` / `file-tree` / `terminal` / `diff-del` / `diff-add` / `diff-hunk` / `badges` / `chat`。
+- mock 内容块按 `type` 渲染：`col` / `formula-ocr` / `code` / `steps` / `row` / `file-tree` / `terminal` / `diff-del` / `diff-add` / `diff-hunk` / `badges` / `chat` / `editor`（行号 + 行内补全弹层，内容取 `CODE_BLOCKS`）/ `quota`（配额用量条）。
 - 右侧导轨 `NAV` 的 `id` 必须与场景 `id` 一一对应。
 - 代码块内容在 `CODE_BLOCKS`，场景内用 `ref` 引用；未被引用的 key 应删除。
 

@@ -22,8 +22,10 @@ export const NAV = [
   { id: "scene-generate", no: "§2", name: "内容生成" },
   { id: "scene-review", no: "§3", name: "文本审查" },
   { id: "scene-code", no: "§4", name: "代码与排版" },
-  { id: "scene-version", no: "§5", name: "版本控制" },
-  { id: "scene-ai", no: "§6", name: "AI 辅助" },
+  { id: "scene-editor", no: "§5", name: "网页编辑器" },
+  { id: "scene-version", no: "§6", name: "版本控制" },
+  { id: "scene-multiuser", no: "§7", name: "多用户协作" },
+  { id: "scene-ai", no: "§8", name: "AI 辅助" },
   { id: "scene-principles", no: "理", name: "设计理念" },
   { id: "scene-stack", no: "栈", name: "技术栈" },
   { id: "scene-themes", no: "彩", name: "主题" },
@@ -57,6 +59,11 @@ export const CODE_BLOCKS = {
     "$ latexmk -xelatex main.tex\n" +
     '<span class="dim">… running xelatex …</span>\n' +
     '<span class="ok">✓ Output written on main.pdf</span>',
+  "editor-demo":
+    '<span class="c-kw">\\section</span>{实验设置}\n' +
+    "我们沿用基线模型的训练配置，并加入早停策略。\n" +
+    "\n" +
+    '<span class="c-kw">\\be</span><span class="ed-caret" aria-hidden="true"></span>',
 };
 
 /* ============================================================
@@ -162,7 +169,7 @@ export const SCENES = [
       "遇到错误，它继续修复并验证结果，直到交付可用产物。",
     ],
     points: [
-      "工具调用真正读写文件、编译验证",
+      "工具调用真正读写文件、编译验证，报错日志翻译成修复建议",
       "LaTeX 结构替换为不可见 marker，LLM 只改纯文本",
       "写回前经 JSON 校验、内容校验、MD5 乐观锁与原子写入",
     ],
@@ -416,27 +423,102 @@ export const SCENES = [
     },
   },
 
-  /* ---------------- §5 版本控制 ---------------- */
+  /* ---------------- §5 网页编辑器 ---------------- */
+  {
+    tpl: "chapter",
+    id: "scene-editor",
+    len: 3.2,
+    label: "§5 网页编辑器",
+    ghost: "§5",
+    kicker: "§5 · Web Editor",
+    title: "网页编辑器",
+    desc: [
+      "浏览器里直接写 LaTeX：命令行内补全、宏包缺失自动补声明、编译前自动落盘。",
+      "AI 助手就在侧栏，建议先在缓冲区预览，确认后才生效。",
+    ],
+    glyphs: [
+      { cls: "g1", parallax: "-0.12", text: "\\begin{itemize}" },
+      { cls: "g2", parallax: "-0.2", text: "Ctrl + /" },
+    ],
+    subCards: [
+      {
+        id: "feature-editor-palette",
+        icon: "i-grid",
+        title: "命令面板与网格选择器",
+        desc: "Ctrl/Cmd + / 呼出命令面板搜索命令，表格矩阵用 m×n 拖选网格一步插入。",
+      },
+      {
+        id: "feature-editor-assistant",
+        icon: "i-bot",
+        title: "编辑器 AI 助手",
+        desc: "复用写作助手会话：建议以插入光标、替换选区或 diff 卡片呈现，采纳与否由你决定。",
+      },
+    ],
+    feature: {
+      id: "feature-editor",
+      icon: "i-code",
+      title: "行内补全",
+      tag: "editor",
+      desc: "输入 \\ 即可触发补全，中文、全拼、首字母、英文四路匹配都能命中命令，Tab 一键应用。",
+      mock: {
+        bar: "editor · thesis/main.tex",
+        badge: "行内补全",
+        badgeCls: "blue",
+        body: [
+          {
+            type: "editor",
+            ref: "editor-demo",
+            popup: {
+              line: 3,
+              items: [
+                { cmd: "\\begin{itemize}", hint: "符号列表" },
+                { cmd: "\\begin{enumerate}", hint: "编号列表" },
+                { cmd: "\\begin{description}", hint: "描述列表" },
+              ],
+              hint: "↑↓ 选择 · Tab 应用 · Esc 关闭",
+            },
+          },
+          {
+            type: "badges",
+            items: [
+              { text: "Ctrl/Cmd + / 命令面板", cls: "" },
+              { text: "宏包缺失自动补声明", cls: "" },
+              { text: "编译前自动保存", cls: "" },
+            ],
+          },
+        ],
+      },
+    },
+  },
+
+  /* ---------------- §6 版本控制 ---------------- */
   {
     tpl: "chapter",
     id: "scene-version",
     len: 3.2,
-    label: "§5 版本控制",
-    ghost: "§5",
-    kicker: "§5 · Version Control",
+    label: "§6 版本控制",
+    ghost: "§6",
+    kicker: "§6 · Version Control",
     title: "版本控制",
     desc: "纯文本与 Git 天生相契：审阅历史 diff，编译差异 PDF；AI 的每次改动都可回退，写得再远也有归途。",
     glyphs: [
       { cls: "g1", parallax: "-0.12", text: "git diff HEAD~2" },
       { cls: "g2", parallax: "-0.2", text: "latexdiff" },
     ],
-    subCards: [],
+    subCards: [
+      {
+        id: "feature-git-manage",
+        icon: "i-branch",
+        title: "Git 版本管理",
+        desc: "上传自动初始化仓库，变更列表一键提交，历史版本随手回看；.git 不占项目配额。",
+      },
+    ],
     feature: {
       id: "feature-git-diff",
       icon: "i-diff",
       title: "Git 差异高亮",
       tag: "git_diff",
-      desc: "选择两个 Git 版本，用 latexdiff 高亮文本变化，并编译一份差异 PDF 供审阅。",
+      desc: "选择两个 Git 版本，用 latexdiff 高亮文本变化，并编译一份差异 PDF 供审阅；历史条目可一键预填对比。",
       mock: {
         bar: "git_diff · HEAD~2 → HEAD",
         badge: "PDF 已生成",
@@ -453,14 +535,83 @@ export const SCENES = [
     },
   },
 
-  /* ---------------- §6 AI 辅助 ---------------- */
+  /* ---------------- §7 多用户协作 ---------------- */
+  {
+    tpl: "chapter",
+    id: "scene-multiuser",
+    len: 3.2,
+    label: "§7 多用户协作",
+    ghost: "§7",
+    kicker: "§7 · Multi-user Collaboration",
+    title: "多用户协作",
+    desc: [
+      "一键部署给整个课题组：注册审批、独立项目空间、配额与权限，各就各位。",
+      "单用户模式照旧开箱即用，数据不出本机。",
+    ],
+    glyphs: [
+      { cls: "g1", parallax: "-0.12", text: "owner · editor · viewer" },
+      { cls: "g2", parallax: "-0.2", text: "zip · 7z · rar" },
+    ],
+    subCards: [
+      {
+        id: "feature-multiuser-permission",
+        icon: "i-users",
+        title: "权限协作",
+        desc: "按用户名添加协作者，owner / editor / viewer 三级角色，支持项目转交，权限实时生效。",
+      },
+      {
+        id: "feature-multiuser-admin",
+        icon: "i-shield",
+        title: "管理后台",
+        desc: "注册审批、账号管理、配额调整与密码重置，管理员在一处搞定。",
+      },
+      {
+        id: "feature-multiuser-upload",
+        icon: "i-upload",
+        title: "上传与配额",
+        desc: "整包 zip / 7z / rar 或目录分片直传，断点续传可暂停；项目空间配额记账，回收站兜底。",
+      },
+    ],
+    feature: {
+      id: "feature-multiuser-workbench",
+      icon: "i-folder",
+      title: "项目工作台",
+      tag: "multi_user",
+      desc: "登录后的项目大本营：项目分类与用量一目了然，超限自助清理，协作项目集中管理。",
+      mock: {
+        bar: "projects · 项目工作台",
+        badge: "用量正常",
+        badgeCls: "ok",
+        body: [
+          {
+            type: "quota",
+            items: [
+              { label: "项目空间", value: "1.2 GB / 2 GB", pct: 60 },
+              { label: "写作会话", value: "12 / 50", pct: 24 },
+              { label: "绘图输出", value: "86 / 100 MB", pct: 86 },
+            ],
+          },
+          {
+            type: "badges",
+            items: [
+              { text: "分片直传 · 断点续传", cls: "" },
+              { text: "回收站 7 天", cls: "" },
+              { text: "配额超限自动回滚", cls: "ok" },
+            ],
+          },
+        ],
+      },
+    },
+  },
+
+  /* ---------------- §8 AI 辅助 ---------------- */
   {
     tpl: "chapter",
     id: "scene-ai",
     len: 3.2,
-    label: "§6 AI 辅助",
-    ghost: "§6",
-    kicker: "§6 · AI Assistance",
+    label: "§8 AI 辅助",
+    ghost: "§8",
+    kicker: "§8 · AI Assistance",
     title: "AI 辅助",
     desc: "让写作助手理解你的项目上下文，帮你检索文献、追踪引文和修改段落。每次操作都清晰可见。",
     glyphs: [
@@ -512,7 +663,7 @@ export const SCENES = [
       {
         icon: "i-bot",
         title: "会自主干活",
-        desc: "写作助手、模板生成、科研绘图、LaTeX 样式修改，都是真正的 Agent：规划、调工具、执行、验证、出了错自己修，每一步都有迹可循。",
+        desc: "写作助手、编辑器助手、模板生成、科研绘图、LaTeX 样式修改，都是真正的 Agent：规划、调工具、执行、验证、出了错自己修，每一步都有迹可循。",
         points: [
           "工具调用真正读写文件、编译验证",
           "Function Calling 工具注册表统一管理",
@@ -569,9 +720,10 @@ export const SCENES = [
           "openai",
           "Pydantic v2",
           "httpx",
+          "SQLite",
           "pytest",
         ],
-        desc: "多工作区隔离、乐观锁、marker 解析、宏包规则表、TeX 编译封装、Web 搜索与学术检索引擎。",
+        desc: "多工作区隔离、乐观锁、marker 解析、宏包规则表、TeX 编译封装、Web 搜索与学术检索引擎；多用户配额与权限协作，外部命令经 Docker 沙箱执行。",
       },
       {
         icon: "i-palette",
@@ -582,10 +734,11 @@ export const SCENES = [
           "Tailwind CSS 4",
           "Zustand 5",
           "shadcn/ui",
+          "CodeMirror 6",
           "KaTeX",
           "highlight.js",
         ],
-        desc: "切片式状态管理、七套主题 × 明暗双档、代码高亮统一收敛到 CodeBlock / MarkerText，页面文字中英双语。",
+        desc: "切片式状态管理、七套主题 × 明暗双档、CodeMirror 6 网页编辑器，代码高亮统一收敛到 CodeBlock / MarkerText，页面文字中英双语。",
       },
       {
         icon: "i-zap",
@@ -627,7 +780,7 @@ export const SCENES = [
     glyphs: [{ cls: "g1", parallax: "-0.15", text: "\\end{document}" }],
     eyebrow: "Compiled.",
     title: "让技术退居幕后<br>让思想落于纸上",
-    desc: "从内容导入到 AI 辅助，从文本校对到版本控制。此刻，打开你的 .tex 工程，把形式的琐碎交给 AI，把时间还给思考。",
+    desc: "从内容导入到 AI 辅助，从网页编辑器到多用户协作。此刻，打开你的 .tex 工程，把形式的琐碎交给 AI，把时间还给思考。",
     actions: [
       { href: "#scene-import", label: "重新浏览", icon: "i-arrow" },
       { href: "#", label: "回到顶部", icon: "i-up", id: "toTopBtn" },

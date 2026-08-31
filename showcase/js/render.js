@@ -5,7 +5,7 @@
  * index.html 只保留静态骨架，本模块在 DOM 解析后执行。
  * ============================================================ */
 
-import { NAV, SCENES } from "./content.js";
+import { NAV, SCENES, CODE_BLOCKS } from "./content.js";
 import { THEMES, themeGradient } from "./themes.js";
 import { LAYOUT } from "./constants.js";
 
@@ -286,6 +286,49 @@ function mockBlock(b) {
                     <div class="msg assistant">${esc(b.assistant)}</div>
                     <div class="diff-line diff-add">${esc(b.add)}</div>
                   </div>`;
+    case "editor": {
+      /* 网页编辑器 mock：行号栏 + 逐行源码 + 行内补全弹层（内容取自 CODE_BLOCKS） */
+      const src = CODE_BLOCKS[b.ref] ?? "";
+      const rows = src.split("\n");
+      const at = b.popup
+        ? Math.min(b.popup.line ?? rows.length - 1, rows.length - 1)
+        : -1;
+      const items = (b.popup?.items ?? [])
+        .map(
+          (it, i) =>
+            `<div class="ed-item${i === 0 ? " active" : ""}"><span class="ed-cmd">${esc(it.cmd)}</span><span class="ed-hint">${esc(it.hint)}</span></div>`,
+        )
+        .join("\n");
+      const popup = b.popup
+        ? `<div class="ed-popup">${items}<div class="ed-popup-foot">${esc(b.popup.hint)}</div></div>`
+        : "";
+      const styleAttr = b.style ? ` style="${b.style}"` : "";
+      const gutter = [];
+      const body = [];
+      rows.forEach((l, i) => {
+        gutter.push(`<span>${i + 1}</span>`);
+        body.push(`<div class="ed-line">${l}</div>`);
+        if (i === at) body.push(popup);
+      });
+      return `<div class="editor-mock"${styleAttr}>
+                  <div class="ed-gutter" aria-hidden="true">${gutter.join("\n")}</div>
+                  <div class="ed-src">${body.join("\n")}</div>
+                </div>`;
+    }
+    case "quota": {
+      /* 配额用量条（多用户工作台 mock） */
+      const rows = b.items
+        .map((q) => {
+          const pct = Math.max(0, Math.min(100, q.pct ?? 0));
+          return `<div class="quota-row">
+                      <span class="quota-label">${esc(q.label)}</span>
+                      <span class="quota-bar"><span class="quota-fill" style="width: ${pct}%"></span></span>
+                      <span class="quota-value">${esc(q.value)}</span>
+                    </div>`;
+        })
+        .join("\n");
+      return `<div class="quota">${rows}</div>`;
+    }
     default:
       return "";
   }
