@@ -31,6 +31,7 @@
 | `/formula-ocr` | FormulaOCRPage | JSON request |
 | `/table-ocr` | TableOCRPage | JSON request |
 | `/template-gen` | TemplateGenPage | **SSE Agent 流**（手写 fetch reader，无 hook） |
+| `/templates` | TemplateCenterPage | JSON request |
 | `/code-review` | CodeReviewPage | SSE（useParagraphCheck） |
 | `/style-modify` | StyleModifyPage | JSON request（粘贴代码）/ SSE Agent 流（项目 Agent） |
 | `/format-convert` | FormatConvertPage | JSON request |
@@ -42,7 +43,9 @@
 
 全局右上角工具栏（AppToolbar）包含 LanguageSwitcher、ThemeSwitcher、ThemeToggle、工作区入口、SettingsDialog，以及认证页改绑后端入口（AuthConnectionButton：未登录/待审批时显示）；`App.jsx` 内联了一份全站共享的右下角 `\LaTeX` 字标背景装饰（`bgSvg`，含 `--primary` 圆形 + 双色字标路径），所有路由共享。
 
-`TemplateGenPage` 不使用 `useParagraphCheck` 或 `useWritingChat` hook，而是手写 `fetch` reader 对接 `/api/template-gen/generate` SSE 流，在本地 `steps` state 中累积 `plan`/`tool_call`/`tool_result`/`compile`/`warning`/`done` 事件并逐条渲染时间线。文件结果在 `done` 事件后通过 `/files` 和 `/file` 端点按需加载，支持通过 `/download` 下载整个沙箱为 ZIP 文件。生成完成后提供 Agent 日志卡片，可查看（弹窗内逐条展示 `trace.jsonl` 事件）或导出（下载 JSON），对应 `/trace` 与 `/trace/download` 端点。
+`TemplateGenPage` 不使用 `useParagraphCheck` 或 `useWritingChat` hook，而是手写 `fetch` reader 对接 `/api/template-gen/generate` SSE 流，在本地 `steps` state 中累积 `plan`/`tool_call`/`tool_result`/`compile`/`warning`/`done` 事件并逐条渲染时间线。文件结果在 `done` 事件后通过 `/files` 和 `/file` 端点按需加载，支持通过 `/download` 下载整个沙箱为 ZIP 文件。生成完成后提供 Agent 日志卡片，可查看（弹窗内逐条展示 `trace.jsonl` 事件）或导出（下载 JSON），对应 `/trace` 与 `/trace/download` 端点；另提供「存入模板库」入口（`template_library` 开关门控，`SaveTemplateGenDialog` 确认模板名与分类后走 `api.templateLibrary.fromTemplateGen`，成功 toast 可跳转模板中心）。
+
+`TemplateCenterPage`（模板中心）以搜索 + 分类 chip + 「内置模板/我的模板」tab + 卡片网格展示 `/api/templates` 列表；组件在 `components/template-center/`（卡片、详情、上传、编辑、创建项目、另存为、生成入库对话框与缩略图）。从模板创建项目成功后跳转 `/workspace`：多用户对齐项目工作台的打开模式（`clearProject` → `setOpenedProject` → 由工作台恢复链路完成打开，含主文档段落拉取与角色同步）；单用户以新 `project_path` 触发既有恢复链路。功能开关关闭时页面展示空态，欢迎页/工作台/工作区/编辑器各入口全部隐藏。
 
 `PlotGenPage` 与 TemplateGenPage 同模式：`api.plotGen.upload` 先上传数据，`generate`/`refine` 通过手写 `fetch` reader 消费 `/plot-gen/agent/generate` 等 SSE 流，在本地 `steps` state 累积 Agent 事件并渲染时间线；会话文件与 trace 通过 `/files`、`/file`、`/trace` 端点加载。
 
@@ -64,7 +67,7 @@ WelcomePage 采用「标题页 + 点线目录」构图：字标、slogan、「�
 
 默认后端地址可由维护者构建时配置：在 `frontend/.env`（模板见 `.env.example`）中设置 `VITE_API_BASE_URL` 后重新 `npm run build`，产物默认即连接该地址，用户打开前端无需手动填写。运行时优先级：设置页（localStorage）→ `VITE_API_BASE_URL` → 内置默认 `http://localhost:8000/api`；dev 模式下 Vite 代理目标也从该变量派生（去掉末尾 `/api`）。
 
-API 按功能分组暴露（health、config、project、typoCheck、expressionOpt、terminologyCheck、paragraphTranslate、formulaOCR、tableOCR、templateGen、codeReview、compile、gitDiff、styleModify、formatConverter、bibManager、writingChat），LLM 相关接口自动注入 `language` 参数。`templateGen.generate` 通过 `fetch` reader 解析 SSE 流（与 `writingChat.send` 同模式），实时推送 `plan`/`tool_call`/`tool_result`/`compile`/`warning`/`done`/`error` 事件；`templateGen.download` 支持下载整个沙箱为 ZIP 文件；`templateGen.trace` / `templateGen.downloadTrace` 支持查看与导出 Agent 运行追踪日志。`styleModify.agent` 分组提供 run、refine、session、trace、apply、undo、delete 接口，run/refine 使用 SSE，其余使用 JSON。
+API 按功能分组暴露（health、config、project、typoCheck、expressionOpt、terminologyCheck、paragraphTranslate、formulaOCR、tableOCR、templateGen、templateLibrary、codeReview、compile、gitDiff、styleModify、formatConverter、bibManager、writingChat），LLM 相关接口自动注入 `language` 参数。`templateGen.generate` 通过 `fetch` reader 解析 SSE 流（与 `writingChat.send` 同模式），实时推送 `plan`/`tool_call`/`tool_result`/`compile`/`warning`/`done`/`error` 事件；`templateGen.download` 支持下载整个沙箱为 ZIP 文件；`templateGen.trace` / `templateGen.downloadTrace` 支持查看与导出 Agent 运行追踪日志。`styleModify.agent` 分组提供 run、refine、session、trace、apply、undo、delete 接口，run/refine 使用 SSE，其余使用 JSON。
 
 ## 工具模块
 

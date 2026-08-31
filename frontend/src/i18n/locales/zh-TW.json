@@ -740,7 +740,21 @@
       "traceDialogTitle": "Agent 執行記錄",
       "traceEmpty": "暫無記錄，執行一次生成後即可檢視",
       "traceLanguage": "輸出語言",
-      "traceMaxRounds": "最大輪數"
+      "traceMaxRounds": "最大輪數",
+      "saveToLibrary": {
+        "btn": "存入範本庫",
+        "title": "儲存到我的範本庫",
+        "description": "將本次生成的工程檔案儲存為我的範本，後端自動剔除 PDF、trace 與編譯輔助檔案",
+        "nameLabel": "範本名稱",
+        "namePlaceholder": "輸入範本名稱",
+        "categoryLabel": "分類",
+        "categoryAuto": "自動（其他）",
+        "submit": "儲存",
+        "submitting": "儲存中...",
+        "successToast": "範本「{{name}}」已儲存到我的範本庫",
+        "viewTemplates": "查看範本中心",
+        "defaultName": "我的範本"
+      }
     },
     "templateCenter": {
       "title": "範本中心",
@@ -824,8 +838,7 @@
         "targetDirHint": "將在目標目錄下建立以專案名命名的新資料夾",
         "submit": "建立專案",
         "creating": "建立中...",
-        "successToast": "專案「{{name}}」已建立",
-        "openFailed": "專案已建立，但開啟失敗"
+        "successToast": "專案「{{name}}」已建立"
       }
     },
     "plotGen": {

@@ -84,7 +84,7 @@ latexcellence/
 ├── tests/                     # pytest 测试
 ├── static/                    # Vite 构建产物
 ├── logs/                    # 运行时日志
-└── data/                    # 运行期与用户数据统一目录（formats/ plots/ prompts/ style_modify_sessions/ templates/ writing_chat_sessions/ web_cache/）
+└── data/                    # 运行期与用户数据统一目录（formats/ plots/ prompts/ style_modify_sessions/ templates/ template_library/ writing_chat_sessions/ web_cache/）
 ```
 
 > 带逐文件注释的完整目录树见 [PROJECT_SUMMARY.md](../PROJECT_SUMMARY.md)。
@@ -116,6 +116,7 @@ latexcellence/
 | `plotgen_opt/` | plot_gen Agent 闭环优化评测工作区 |
 | `templategen_opt/` | template_gen Agent 闭环优化评测工作区 |
 | `stylemodify_opt/` | style_modify Agent 闭环优化评测工作区 |
+| `builtin_templates/` | 内置 LaTeX 模板编译验证与元资产生成（详见 [template_library.md](./modules/template_library.md)「维护者脚本」） |
 
 每个工具子目录的详细用法见其自带 `README.md`。
 
@@ -185,6 +186,7 @@ npm start        # 或 node server.js
 | `features.writing_chat` | compression_threshold_tokens（0=动态）、compression_headroom_tokens、compression_keep_recent_tokens/turns、summary_token_budget、summary_model 等 | 写作助手上下文压缩触发与摘要预算；摘要旧配置 `summary_max_tokens` 自动迁移并告警 |
 | `features.editor` | enabled, assistant_enabled | 网页编辑器开关与编辑器 AI 助手独立子开关（关闭时服务端拒绝助手端点以控制 LLM 开销），见 [modules/editor.md](modules/editor.md) |
 | `features.style_modify.agent` | 项目 Agent 的会话目录、轮次、工具/编译上限、大小限制、shadow 编译和清理配置 | style_modify 项目 Agent 模式 |
+| `features.template_library` | enabled, user_library_dir, max_upload_mb, allowed_extensions | 模板库开关（关闭时 `/api/templates` 整体关闭、前端隐藏入口）、单用户库目录、上传 zip 上限与扩展名白名单，见 [modules/template_library.md](modules/template_library.md) |
 | `logging` | level, dir | 日志级别与存储路径 |
 | `multi_user` | enabled, db_path, users_root, staging_root、默认配额、上传限制、会话/回收站 TTL、LLM/登录限流、registration_enabled、admin_*_env、edit_log_*（反向补丁撤销日志：条数上限 / 单操作体积上限 / 保留时长）、writing_chat_retention_days（0 = 不自动删仅统计）、auto_approve_*（注册自动审批：总开关 / 同 IP 账号上限 / CIDR 白名单 / ip2region 库路径（主 + IPv6 补充，按地址族路由）与 GeoLite2 库路径 + 国家·城市白名单；地理查询 ip2region 中国优先、非/未知中国回落 GeoLite2）、trusted_proxies（可信反代，命中才信任 X-Forwarded-For）、register_rate_limit_per_hour | 多用户模式（默认关闭）；开启后强制登录、用户空间隔离、关闭任意路径打开与磁盘浏览，详见 [multi-user-plan.md](multi-user-plan.md)；共享项目反向补丁撤销见 [multi-user-v2-plan.md](multi-user-v2-plan.md) §8，衍生数据记账与细粒度清理见同文档 §9，注册自动审批部署见 [deployment.md](deployment.md)「注册自动审批」 |
 

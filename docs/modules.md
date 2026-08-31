@@ -39,6 +39,7 @@
 | Git 差异高亮 | [git_diff.md](modules/git_diff.md) | 版本差异可视化高亮 PDF |
 | Git 版本管理 | [git_manage.md](modules/git_manage.md) | 版本控制最小闭环：自动/手动初始化、变更列表、一键提交、历史浏览（与 git_diff 打通） |
 | 参考文献管理 | [bib_manager.md](modules/bib_manager.md) | BibTeX 格式识别、DOI 多数据源查询 |
+| 模板库 | [template_library.md](modules/template_library.md) | 内置模板 + 用户私有模板库：浏览/上传/从模板创建项目/另存为模板/生成结果入库（/api/templates，零 LLM，配额并入「模板」衍生类别） |
 | 网页编辑器 | [editor.md](modules/editor.md) | /editor 全宽编辑页：整文件读写（MD5 乐观锁 + 统一撤销记账）、命令快速输入、编译联动、编辑器侧 AI 助手与检查结果保鲜横幅 |
 
 ### 工具模块

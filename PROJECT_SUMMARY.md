@@ -111,6 +111,8 @@ latexcellence/
 │       ├── git_manage/             # Git 版本管理（init/status/commit/log + 上传自动初始化）
 │       ├── template_gen/            # 模板生成（自主 Agent）
 │       │   └── agent/               # Agent 包（service/executor/validation/compile/sandbox/loop/constants）
+│       ├── template_library/        # 模板库（内置模板 + 用户私有模板库，/api/templates，零 LLM）
+│       │   └── builtin_templates/   # 内置模板包内资源（manifest + assets 元资源 + LaTeX 工程）
 │       ├── formula_ocr/             # 公式 OCR（含 visual_inline.py 视觉 inline/display 判定）
 │       ├── table_ocr/               # 表格 OCR
 │       ├── format_converter/        # 格式转换
@@ -165,6 +167,7 @@ latexcellence/
 │       │   ├── ProjectWorkbenchPage.jsx # 项目工作台（列表/上传/配额/分类用量与清理/回收站/协作）
 │       │   ├── EditorPage.jsx        # /editor 编辑器页（三栏布局 + 打开-编辑-保存-冲突闭环）
 │       │   ├── AdminPage.jsx        # 管理面板（审批/禁用/重置密码/配额/删除）
+│       │   ├── TemplateCenterPage.jsx # 模板中心页（内置/我的模板浏览、上传、从模板创建项目）
 │       │   ├── code-review/         # 代码审查子组件
 │       │   └── writing-chat/        # 写作聊天子组件
 │       ├── hooks/                   # 自定义 hook
@@ -198,6 +201,7 @@ latexcellence/
 │       │   │   └── StaleCheckBanner.jsx # 检查结果过期横幅（各逐段检查页复用）
 │       │   ├── UploadProjectDialog.jsx # 上传项目对话框（zip/7z/rar 或目录分片直传 + 断点续传 + 暂停/进度）
 │       │   ├── ProjectPermissionsDialog.jsx # 项目权限对话框（协作者管理/转交）
+│       │   ├── template-center/     # 模板中心组件（卡片/详情/上传/编辑/创建项目/另存为/生成入库对话框与缩略图）
 │       │   └── settings/            # 设置对话框分区配置组件
 │       ├── theme/                   # 主题 CSS + useThemeManager.js
 │       ├── fonts/                   # 字体加载（dev 本地 npm 包 / build 走 cdnjs）
@@ -237,6 +241,7 @@ latexcellence/
 │   ├── test_api/                    # 各模块 API 集成测试
 │   ├── test_multiuser/              # 多用户模式测试（认证/项目/配额/协作/DB 迁移/沙箱租约/LLM 治理/rar 上传/衍生数据记账与清理/分片上传与断点续传/邮件队列与自助找回）
 │   ├── test_plot_gen/               # plot_gen 单元测试
+│   ├── test_template_library/       # 模板库测试（模型/内置发现/用户库/API/多用户隔离与配额）
 │   ├── test_docker/                 # Docker 沙箱真容器冒烟 + compose 编排冒烟（marker docker，无 daemon 自动 skip）
 │   ├── test_utils/                  # 后端工具单元测试（路径/JSON/宏包/搜索/学术检索/编译/sandbox 契约等）
 │   └── fixtures/                    # 测试数据（宏包规则表、公式/表格 OCR、错字查找/表达优化语料等）
@@ -249,6 +254,7 @@ latexcellence/
 │   ├── prompts/                     # 自定义提示词（expression/ 风格预设与 writing_chat/ 角色预设）
 │   ├── style_modify_sessions/       # style_modify Agent 会话缓存
 │   ├── templates/                   # 生成的 LaTeX 模板（<session_id>/ 沙箱产物）
+│   ├── template_library/            # 单用户模式模板库（多用户按用户空间隔离到 users/<user_id>/template_library/）
 │   ├── writing_chat_sessions/       # 写作助手聊天持久化数据
 │   └── web_cache/                   # 结构化网页原始/抽取缓存（运行时生成，可清理）
 ├── logs/                            # 运行时日志
@@ -258,6 +264,7 @@ latexcellence/
 │   ├── visual_review_api.py       # 视觉评审工具的 Responses API 请求适配
 │   ├── generality_gate.py         # Agent 闭环优化通用性门禁（硬编码特征扫描/提示词体积监控/holdout 解析/对照组回归判定）
 │   ├── tex_path.py                # 评测工具共享：TeX Live 路径自动发现（非交互 shell 也能定位 latexmk）
+│   ├── builtin_templates/         # 内置模板验证脚本（verify_templates.py：编译验证 + --gen-assets 元资源生成，维护者专用）
 │   ├── latex_packages/            # 宏包规则表维护脚本（编译验证 + 覆盖率报告）
 │   │   ├── verify_rules.py        # 离线编译验证（维护者专用，需 TeX）
 │   │   ├── coverage_report.py     # 覆盖率报告（对照常用宏包清单）
@@ -293,6 +300,7 @@ latexcellence/
 | git_diff | Git 版本差异 PDF | router.py, service/ | ✓(编译失败时翻译错误) | ✗ |
 | git_manage | Git 版本管理最小闭环：自动/手动初始化、变更列表、一键提交、历史（与 git_diff 共享执行层）；.git 配额豁免 + 独立上限 | modules/git_manage/*, core/multiuser/quota.py, modules/git_diff/service/ | ✗ | ✗ |
 | template_gen | 模板生成（自主 Agent） | router.py, service.py, agent/, trace.py, cleanup.py | ✓ | ✗ |
+| template_library | 模板库：内置模板发现 + 用户私有模板库（上传 zip/项目另存为/生成结果入库）、从模板创建项目（清洗复制，多用户配额预检超限 413）、内置模板缩略图与 PDF 预览；零 LLM | router.py, service.py, models.py, builtin_store.py, user_store.py, builtin_templates/, core/multiuser/quota.py | ✗ | ✗ |
 | formula_ocr | 图片→LaTeX 公式 | router.py, service.py, visual_inline.py | ✓(Vision) | ✗ |
 | table_ocr | 图片→LaTeX 表格 | router.py, service.py | ✓(Vision) | ✗ |
 | format_converter | 格式转换(pandoc) | router.py, service.py | ✓(宏包分析仅兜底) | ✗ |
@@ -338,6 +346,7 @@ latexcellence/
 | 多用户项目与配额 | 上传 zip/7z/rar 安全解压（rar 经 unar 优先、bsdtar 回退的外部管线）、项目命名去重、项目空间配额记账、回收站（7 天）、打包下载；写回超限回滚 | [backend-core.md](docs/backend-core.md)、[multi-user-plan.md](docs/multi-user-plan.md) |
 | 多用户权限协作 | 协作者管理（按用户名添加/改角色/移除）、项目转交（原 owner 变 viewer 或退出）、viewer 写保护；权限实时查库即时生效 | [backend-core.md](docs/backend-core.md)、[multi-user-plan.md](docs/multi-user-plan.md) |
 | Git 版本管理 | 上传自动/版本页手动 git init（LaTeX 专用 .gitignore，项目已有则尊重）；.git 不占项目配额，改按 git_dir_max_mb 独立上限（超限拒绝上传/初始化/提交）；「已初始化」以项目根自带 .git 为准；历史条目经 URL 参数预填 git_diff 对比 | [git_manage.md](docs/modules/git_manage.md) |
+| 模板体系 | 内置模板（包内资源，manifest 元数据 + 预编译缩略图/PDF 预览）与用户私有库双模式并存；从模板创建项目为纯复制语义（清洗剔除编译产物/.git/库元数据，无变量替换）；上传走安全解压 + 扩展名白名单，模板库本体占「模板」衍生配额、创建项目走项目配额 | [template_library.md](docs/modules/template_library.md)、[template_gen.md](docs/modules/template_gen.md) |
 | 共享项目反向补丁撤销 | 多用户模式写路径统一记账（workspace_edit_ops + .edit_logs 快照），undo/redo 只回退当前用户自己的修改：冲突即拒绝（409）、恢复超配额拒绝（413）、LIFO 整组回滚、redo 对称；共享项目 v1 禁令解除 | [DESIGN.md §14](DESIGN.md)、[multi-user-v2-plan.md](docs/multi-user-v2-plan.md) §8 |
 | 多用户 LLM 治理 | 每用户滑动窗口限流 + 并发租约（`llm_governance.py`，单事务原子准入），超限 429 + Retry-After；登录限流同表计数；仅多用户模式生效，单用户零依赖直通 | [backend-core.md](docs/backend-core.md)、[multi-user-v2-plan.md](docs/multi-user-v2-plan.md) §6 |
 | 衍生数据记账与自助清理 | 四类衍生目录用量缓存（user_derived_usage 表）+ 检查点增量刷新 + 维护循环对账纠偏，配额校验与 /me 用量 O(1)；工作台分类用量条 + 自助清理（仅本人）；过期会话删除与写作会话保留期清理并入维护循环 | [backend-core.md](docs/backend-core.md)、[multi-user-v2-plan.md](docs/multi-user-v2-plan.md) §9 |

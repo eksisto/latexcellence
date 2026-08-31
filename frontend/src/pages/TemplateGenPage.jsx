@@ -1,5 +1,7 @@
 import { useState, useCallback, useRef, useMemo, useEffect } from "react";
 import { useTranslation } from "react-i18next";
+import { useNavigate } from "react-router-dom";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -24,6 +26,7 @@ import Wand2 from "lucide-react/dist/esm/icons/wand-sparkles.mjs";
 import Wrench from "lucide-react/dist/esm/icons/wrench.mjs";
 import Brain from "lucide-react/dist/esm/icons/brain.mjs";
 import CheckCircle2 from "lucide-react/dist/esm/icons/circle-check.mjs";
+import LibraryBig from "lucide-react/dist/esm/icons/library-big.mjs";
 import {
   Dialog,
   DialogContent,
@@ -35,6 +38,8 @@ import { api } from "@/api/index";
 import PageHeader from "@/components/PageHeader";
 import CodeBlock from "@/components/CodeBlock";
 import PDFPreview from "@/components/PDFPreview";
+import SaveTemplateGenDialog from "@/components/template-center/SaveTemplateGenDialog";
+import useEnabledFeatures from "@/hooks/useEnabledFeatures";
 import { languageFromFilename } from "@/utils/highlight";
 import { translateError } from "@/utils/errorMessages";
 
@@ -52,6 +57,11 @@ const PDF_FILE_RE = /\.pdf$/i;
 
 export default function TemplateGenPage() {
   const { t } = useTranslation(["pages", "common"]);
+  const navigate = useNavigate();
+  const enabledFeatures = useEnabledFeatures();
+  // 模板库开关未水合时视为启用（与 TemplateCenterPage 同口径，避免闪烁）
+  const templateLibEnabled =
+    !enabledFeatures || !!enabledFeatures.template_library;
   const [description, setDescription] = useState("");
   const [running, setRunning] = useState(false);
   const [error, setError] = useState(null);
@@ -76,6 +86,8 @@ export default function TemplateGenPage() {
   const [traceOpen, setTraceOpen] = useState(false);
   const [trace, setTrace] = useState(null);
   const [loadingTrace, setLoadingTrace] = useState(false);
+  // 保存到我的模板库对话框（template_library 开关门控）
+  const [saveOpen, setSaveOpen] = useState(false);
   const scrollRef = useRef(null);
   const reasoningScrollRef = useRef(null);
 
@@ -221,6 +233,24 @@ export default function TemplateGenPage() {
       setError(translateError(e.message));
     }
   }, [sessionId]);
+
+  // 入库成功：toast 提示并提供跳转模板中心的入口
+  const handleSavedToLibrary = useCallback(
+    (tpl) => {
+      toast.success(
+        t("pages:templateGen.saveToLibrary.successToast", {
+          name: tpl?.name || "",
+        }),
+        {
+          action: {
+            label: t("pages:templateGen.saveToLibrary.viewTemplates"),
+            onClick: () => navigate("/templates"),
+          },
+        },
+      );
+    },
+    [navigate, t],
+  );
 
   const compileResults = useMemo(
     () => steps.filter((s) => s.type === "compile"),
@@ -433,6 +463,17 @@ export default function TemplateGenPage() {
                 <FolderTree className="size-4" />
                 {t("pages:templateGen.fileTree")}
                 <div className="ml-auto flex items-center gap-2">
+                  {files.length > 0 && sessionId && templateLibEnabled && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-6 px-1.5 text-xs gap-1"
+                      onClick={() => setSaveOpen(true)}
+                    >
+                      <LibraryBig className="size-3" />
+                      {t("pages:templateGen.saveToLibrary.btn")}
+                    </Button>
+                  )}
                   {files.length > 0 && sessionId && (
                     <Button
                       variant="ghost"
@@ -585,6 +626,14 @@ export default function TemplateGenPage() {
           </Card>
         </div>
       )}
+
+      {/* 保存到我的模板库 */}
+      <SaveTemplateGenDialog
+        open={saveOpen}
+        onOpenChange={setSaveOpen}
+        sessionId={sessionId}
+        onSaved={handleSavedToLibrary}
+      />
 
       {/* Agent 运行日志弹窗 */}
       <Dialog open={traceOpen} onOpenChange={setTraceOpen}>

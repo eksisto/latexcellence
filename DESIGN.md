@@ -22,6 +22,7 @@
 13. [LLM 每用户治理模型（v2 P1b）](#13-llm-每用户治理模型v2-p1b)
 14. [共享项目反向补丁撤销（v2 P3）](#14-共享项目反向补丁撤销v2-p3)
 15. [多实例状态外置（v2 P7）](#15-多实例状态外置v2-p7)
+16. [模板体系：内置模板与私有模板库](#16-模板体系内置模板与私有模板库)
 
 ---
 ## 1. 架构概览
@@ -788,3 +789,32 @@ v1/v2 前期以单进程为运行前提；P7 把全部跨请求共享的进程�
 ### 15.3 编排形态
 
 仓库根 `docker-compose.yml`：app 服务（healthcheck `/api/health`，`LATEXCELLENCE_LOG_STDOUT=1`，docker.sock 只读挂载，data/config bind 卷）+ 可选 Caddy 反代 profile；副本扩展 `docker compose up -d --scale app=N`。反代要求服务名 DNS 每请求重解析（Caddy 天然支持；nginx 需 upstream 变量 + resolver），SSE 必须关闭缓冲。部署步骤、备份窗口与监控口径见 [docs/deployment.md](docs/deployment.md)。
+
+---
+
+## 16. 模板体系：内置模板与私有模板库
+
+模板体系由两个互补模块构成：`template_gen`（自主 Agent 按描述**生成**新模板，LLM 密集）与 `template_library`（模板的**沉淀与复用**，零 LLM）。本节记录后者的设计决策，模块细节见 [docs/modules/template_library.md](docs/modules/template_library.md)。
+
+### 16.1 定位与双模式
+
+模板库是内置模板与用户私有模板的统一浏览/复用入口（`/api/templates`）。数据面按存放位置天然分成两类，`kind`（builtin/user）由位置判定、不写入 manifest：
+
+- **内置模板**：随代码分发的包内资源（`builtin_templates/<template_id>/`），只读；带 `manifest.json` 元数据与 `assets/` 预编译元资源（缩略图 + PDF 预览）。发现不做启动期缓存，每次请求实时读盘，与配置热重载/模板热更新语义一致。
+- **用户模板库**：多用户按用户空间隔离（`<users_root>/<user_id>/template_library/`，目录归属即权限，他人模板统一 404 不泄露存在性）；单用户走全局库目录，保持存量行为。入库通道（上传 zip / 项目另存为 / template_gen 生成结果）共用同一清洗复制 + manifest 生成 + 配额校验管线，元数据优先级为「请求显式提供 > 已有 manifest > 自动回退」。
+
+### 16.2 复用而非新建：安全与配额边界
+
+设计原则是**不引入新的安全面**，全部复用既有基础设施：
+
+- 上传解压复用 `extract_archive` 安全链，解压预算直接取「模板」类别剩余衍生配额，超限即时拒绝；上传原样保存的前提是全包扩展名白名单收窄（LaTeX 相关 + 图形/字体）。
+- 模板内文件读取统一走 `path_guard.resolve_project_path()`（拒绝穿越/符号链接/白名单外扩展名），模板 id 经正则校验杜绝路径形态注入；响应与错误消息只携带相对路径（路径脱敏约束同全局规则）。
+- 配额双轨：**创建项目**走项目空间配额（预检超限 413，与上传创建同链路落位 + 建行 + 自动初始化 Git）；**模板库本体**占衍生配额并并入既有「模板」类别（templates sub），工作台用量条与自助清理零改动。
+
+### 16.3 创建项目 = 清洗复制（无变量替换）
+
+从模板创建项目刻意保持**纯复制语义**：不做变量替换、不注入用户信息，项目名由用户输入。所有入库/创建路径共用唯一的清洗实现（`copytree` ignore 回调）：剔除 `.git/` 与 LaTeX 编译产物；创建项目额外剔除 `manifest.json` 与内置 `assets/`（库工件不混入新建项目）；生成结果入库额外剔除 `trace.jsonl` 与 PDF 输出。清洗规则只有一份实现，避免多通道口径漂移。
+
+### 16.4 与 template_gen 的闭环
+
+`template_gen` 的会话沙箱是模板库的来源之一：`POST /from-template-gen` 按用户隔离解析会话目录（`userspace.user_resource_root`），清洗后入库为「我的模板」。前端在生成完成态提供「存入模板库」入口（模板名契约必填、默认名兜底，分类可选），成功后引导跳转模板中心——生成（LLM）→ 验证（编译）→ 沉淀（入库）→ 复用（创建项目）形成完整闭环。

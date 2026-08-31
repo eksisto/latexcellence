@@ -740,7 +740,21 @@
       "traceDialogTitle": "Agent Run Log",
       "traceEmpty": "No trace yet. Run a generation to record one.",
       "traceLanguage": "Language",
-      "traceMaxRounds": "Max rounds"
+      "traceMaxRounds": "Max rounds",
+      "saveToLibrary": {
+        "btn": "Save to Library",
+        "title": "Save to My Templates",
+        "description": "Save the generated project files as one of your templates; PDF, trace and build artifacts are removed automatically",
+        "nameLabel": "Template name",
+        "namePlaceholder": "Enter template name",
+        "categoryLabel": "Category",
+        "categoryAuto": "Auto (Other)",
+        "submit": "Save",
+        "submitting": "Saving...",
+        "successToast": "Template \"{{name}}\" saved to your library",
+        "viewTemplates": "Open Template Center",
+        "defaultName": "My Template"
+      }
     },
     "templateCenter": {
       "title": "Template Center",
@@ -824,8 +838,7 @@
         "targetDirHint": "A new folder named after the project will be created inside the target directory",
         "submit": "Create project",
         "creating": "Creating...",
-        "successToast": "Project \"{{name}}\" created",
-        "openFailed": "Project created, but failed to open"
+        "successToast": "Project \"{{name}}\" created"
       }
     },
     "plotGen": {

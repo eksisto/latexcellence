@@ -740,7 +740,21 @@
       "traceDialogTitle": "Agent 运行日志",
       "traceEmpty": "暂无日志，运行一次生成后即可查看",
       "traceLanguage": "输出语言",
-      "traceMaxRounds": "最大轮数"
+      "traceMaxRounds": "最大轮数",
+      "saveToLibrary": {
+        "btn": "存入模板库",
+        "title": "保存到我的模板库",
+        "description": "将本次生成的工程文件保存为我的模板，后端自动剔除 PDF、trace 与编译辅助文件",
+        "nameLabel": "模板名称",
+        "namePlaceholder": "输入模板名称",
+        "categoryLabel": "分类",
+        "categoryAuto": "自动（其他）",
+        "submit": "保存",
+        "submitting": "保存中...",
+        "successToast": "模板「{{name}}」已保存到我的模板库",
+        "viewTemplates": "查看模板中心",
+        "defaultName": "我的模板"
+      }
     },
     "templateCenter": {
       "title": "模板中心",
@@ -824,8 +838,7 @@
         "targetDirHint": "将在目标目录下创建以项目名命名的新文件夹",
         "submit": "创建项目",
         "creating": "创建中...",
-        "successToast": "项目「{{name}}」已创建",
-        "openFailed": "项目已创建，但打开失败"
+        "successToast": "项目「{{name}}」已创建"
       }
     },
     "plotGen": {

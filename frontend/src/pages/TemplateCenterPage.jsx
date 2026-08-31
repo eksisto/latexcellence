@@ -17,7 +17,6 @@ import { api } from "@/api/index";
 import useStore from "@/store/useStore";
 import useEnabledFeatures from "@/hooks/useEnabledFeatures";
 import { translateError } from "@/utils/errorMessages";
-import { openMultiUserProject } from "@/utils/multiUserProject";
 import {
   TEMPLATE_CATEGORIES,
   filterTemplates,
@@ -38,7 +37,6 @@ export default function TemplateCenterPage() {
   const { t } = useTranslation(["pages", "common"]);
   const navigate = useNavigate();
   const enabledFeatures = useEnabledFeatures();
-  const workspaceId = useStore((s) => s.workspaceId);
 
   const [templates, setTemplates] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -87,25 +85,26 @@ export default function TemplateCenterPage() {
     ).filter((tpl) => tpl.kind === kind);
   }, [templates, tab, keyword, category]);
 
-  /** 创建成功：多用户 openMultiUserProject → /workspace；单用户清空当前
+  /** 创建成功：多用户对齐 ProjectWorkbenchPage.handleOpen（清空项目态 →
+   * 置目标项目身份 → 进 /workspace，由工作台恢复链路完成打开，含主文档
+   * 段落拉取与角色同步，与从工作台打开项目行为一致）；单用户清空当前
    * 项目状态后以新路径触发 WorkspacePage 既有恢复链路（含主文档段落拉取） */
   const handleProjectCreated = useCallback(
-    async (project) => {
+    (project) => {
       const store = useStore.getState();
       if (project?.project_id) {
-        try {
-          await openMultiUserProject(project.project_id, workspaceId);
-          toast.success(
-            t("pages:templateCenter.create.successToast", {
-              name: project.name || "",
-            }),
-          );
-          navigate("/workspace");
-        } catch (e) {
-          toast.error(t("pages:templateCenter.create.openFailed"), {
-            description: translateError({ error: e.code, message: e.message }),
-          });
-        }
+        store.clearProject();
+        store.setOpenedProject({
+          projectId: project.project_id,
+          // 角色未知先置 null，工作台打开时经项目列表同步
+          projectRole: null,
+        });
+        toast.success(
+          t("pages:templateCenter.create.successToast", {
+            name: project.name || "",
+          }),
+        );
+        navigate("/workspace");
         return;
       }
       if (project?.path) {
@@ -124,7 +123,7 @@ export default function TemplateCenterPage() {
         navigate("/workspace");
       }
     },
-    [navigate, t, workspaceId],
+    [navigate, t],
   );
 
   const handleDelete = useCallback(async () => {

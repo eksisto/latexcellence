@@ -653,6 +653,20 @@ export const api = {
           description,
         }),
       }),
+    /**
+     * template_gen 会话产物保存到我的模板库（后端剔除 PDF/trace/编译辅助
+     * 文件后复制入库；name 契约必填，category/description 可选）
+     */
+    fromTemplateGen: (sessionId, name, category = null, description = "") =>
+      request("/templates/from-template-gen", {
+        method: "POST",
+        body: JSON.stringify({
+          session_id: sessionId,
+          name,
+          category,
+          description,
+        }),
+      }),
   },
 
   /* ---- LaTeX 代码审查 ---- */
