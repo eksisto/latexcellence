@@ -59,6 +59,10 @@ WelcomePage 采用「标题页 + 点线目录」构图：字标、slogan、「�
 
 状态切片：水合状态、功能开关、系统状态（主题色、workspaceId）、项目状态（路径、文件树、主文件）、style_modify Agent 恢复标识（session_id / revision / operation_id / mode）、写作助手（会话列表、消息）、各检查模块段落/结果、编译结果/进度、加载状态。`partialize` 只持久化 Agent 恢复所需标识，不持久化完整源码、diff 和 trace。
 
+### 程序化 UI 状态 `store/uiStore.js`
+
+非持久化的轻量 Zustand store，承载设置对话框的程序化开关与定位分区（`settingsDialog: { open, section }`）：`openSettingsDialog(section)` 供 `ModelBadge` 等深层组件打开设置对话框并滚动定位到指定分区（避免 prop drilling），工具栏常规入口与程序化入口共用同一开关；`clearSettingsSection()` 在定位消费后清除标记，防止之后常规打开重复定位。
+
 ## API 层 `api/index.js`
 
 所有请求通过 `request(url, options)`，自动处理 Content-Type、BASE_URL 前缀、错误翻译。FormData 请求通过 `requestForm(url, formData, method)`。需要工作区隔离的端点通过 `appendWs(url, workspaceId)` 拼接 `workspace_id` 参数。
@@ -78,6 +82,10 @@ API 按功能分组暴露（health、config、project、typoCheck、expressionOp
 ### utils/errorMessages.js
 
 后端英文错误消息 → 当前语言翻译。精确匹配 + 正则模式匹配，翻译资源位于 `errors` 命名空间。调用点包括 `request()`、`requestForm()`、`useParagraphCheck.js`、`useWritingChat.js`。
+
+### utils/modelProfiles.js
+
+多模型支持纯函数模块（不依赖 i18n 运行时 / DOM / 网络，`node --test` 直接单测，见 `test/modelProfiles.test.mjs`）：槽位两级解析 `resolveRoleTarget`、能力判定与过滤 `hasCapability` / `filterProfilesByCapability`、槽位下拉选项构建 `buildSlotOptions`（按能力过滤，空指派经哨兵值承载「跟随 default」/「使用全局默认配置」选项）、模型徽标展示格式化 `formatRouteDisplay` 与路由查找 `findRouteByRole`。槽位键与能力闭集常量（`LLM_ROLE_KEYS` / `LLM_CAPABILITIES`）必须与后端 `backend/core/config.py` 保持一致。
 
 ### utils/format.js
 
@@ -124,8 +132,9 @@ highlight.js 的按需注册与统一入口：
 | `components/editor/BinaryFilePreview.jsx` | 二进制只读预览唯一渲染分支：位图 `<img>` 居中 contain / PDF 走 `PDFPreview`，加载文案经 `loadingKey` 定制；填满父容器高度的纯渲染契约（blob URL 拉取与释放由调用方负责），编辑器覆盖层 `FilePreviewOverlay` 与工作台文件树预览共用 |
 | `PromptEditor.jsx` | 自定义提示词编辑框 |
 | `ConnectionPanel.jsx` | 后端连接面板：编辑 API 基地址 / 访问令牌并测试连接，打开对话框时自动探测一次连接状态 |
-| `settings/` 分区组件 | 设置对话框各配置分区（Server / Security / LLM / Features / Function Calling / HTTP / Logging / MultiUser / Sandbox / Smtp）与共享原语（`ConfigSection` / `CheckboxField` / `NumberField`） |
+| `settings/` 分区组件 | 设置对话框各配置分区（Server / Security / LLM / Models 模型管理 / Features / Function Calling / HTTP / Logging / MultiUser / Sandbox / Smtp）与共享原语（`ConfigSection` / `CheckboxField` / `NumberField`） |
 | `settings/NumberField.jsx` | 设置分区共享数字输入（草稿态）：清空/删除等非法中间值不回弹，失焦时归一化到 `[min, max]`，输入中仅合法整数即时提交。MultiUserSection 与 SmtpSection（端口/限速/重试）共用 |
+| `ModelBadge.jsx` | 功能入口处的当前模型徽标（多模型支持）：展示该功能槽位两级解析后的「档案名 · 模型名」，数据源 `GET /api/llm/routes`（进入页面时拉取一次，不随每次请求刷新，失败静默不渲染）；点击经 `uiStore` 打开设置对话框并定位模型管理分区，多用户普通用户无设置入口时退化为纯展示。挂载于 OCR 页、各逐段检查页、Agent 页与写作聊天页等功能入口 |
 | `SettingsDialog.jsx` | 设置对话框外壳：加载/保存 config.json、后端连接面板与各配置分区组装；功能开关保存后同步全局 Store |
 | `FolderPickerDialog.jsx` | 文件夹选择对话框，逐级进入子文件夹 |
 | `MarkdownRenderer.jsx` | 基于 react-markdown + remark + rehype-katex |
@@ -146,6 +155,13 @@ highlight.js 的按需注册与统一入口：
 | `ColorField.jsx` | 颜色选择器组件 |
 | `BibManagerLibrary.jsx` | 参考文献库管理面板（文件列表、条目 CRUD、重复检测、统计）；写操作入口（撤销/重做、条目编辑/删除）经 `useCanWrite` 门控，viewer 只读 |
 | `FormatResultCard` | 格式识别结果展示卡片（`React.memo` 组件，展示格式名称、置信度、字段列表、LaTeX 样式推荐） |
+
+### 设置分区：模型管理（`settings/ModelManagementSection.jsx`）
+
+多模型支持的设置分区（由 `SettingsDialog` 组装，随 `/api/config` 整体保存；设计见 [multi-model-plan.md](multi-model-plan.md)）：
+
+- **档案卡片**：名称 / base_url / api_key / model / 能力勾选（vision、reasoning），可选覆盖项（temperature、max_tokens、请求间隔、并发、上下文窗口、探测地址、extra_body）放折叠区，空值 = 继承全局；已保存档案 id 只读，被任一槽位引用的档案禁用删除（后端保存校验兜底拒绝）；
+- **槽位指派**：每个角色槽位一个下拉框，选项经 `utils/modelProfiles.js` 按能力过滤（如 OCR 槽只列出含 vision 的档案）；非 default 槽首位为「跟随 default」，default 槽首位为「使用全局默认配置」（内置档案）。
 
 ## 核心 Hook
 

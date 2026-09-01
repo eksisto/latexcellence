@@ -60,7 +60,7 @@ RS2 不直接写回 `.tex`，用户再点"应用到 .tex"才调用 `project_mana
 
 工具循环中单轮请求若触发上下文超限，会按序恢复：先裁剪旧工具对，仍超限则持久化已完成的历史工具轮次并压缩（不动当前正在执行的轮次），再重试同一轮；恢复失败时推送 SSE `error` 并保留用户消息（不静默删除）。
 
-**上下文窗口探测**：`LLMClient.get_context_window()` 按“显式配置 `llm.context_window_tokens` → API `/models` 探测（`context_length` / `inputTokenLimit` / `outputTokenLimit` / `max_model_len` / `context_window` / `max_context_length`）→ 超限错误信息学习 → 内置模型表 → 默认 200000”的优先级获取窗口，结果按 `(base_url, model)` 缓存，`reset()`（配置热重载）时失效。`llm.models_probe_url` 可指定直连 vLLM / OpenAI 兼容 `/models` 地址，绕过不透传 `/models` 的网关；仅当探测地址与主服务同源时才携带 API key，跨域探测不发送密钥。
+**上下文窗口探测**：`LLMClient.get_context_window()` 按“显式配置 `llm.context_window_tokens` → API `/models` 探测（`context_length` / `inputTokenLimit` / `outputTokenLimit` / `max_model_len` / `context_window` / `max_context_length`）→ 超限错误信息学习 → 内置模型表 → 默认 200000”的优先级获取窗口，结果按 `(profile_id, base_url, model)` 缓存（按模型档案隔离，防跨档案串味），`reset()`（配置热重载清池）时失效。`llm.models_probe_url` 可指定直连 vLLM / OpenAI 兼容 `/models` 地址，绕过不透传 `/models` 的网关；仅当探测地址与主服务同源时才携带 API key，跨域探测不发送密钥。
 
 **手动压缩**：`POST /api/writing-chat/sessions/{id}/compact` 复用自动压缩逻辑（不追加 user 消息），前端会话页提供“压缩会话”按钮（streaming 或草稿会话中禁用；压缩成功后才重新拉取会话，消息过少/压缩失败时不发起二次请求）。
 

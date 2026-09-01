@@ -234,7 +234,7 @@ latexcellence/
 │   ├── multi-user-v2-plan.md                   # 多用户模式 v2 设计方案（Docker 沙箱/rar/反向补丁撤销/分片上传/SMTP/记账优化/多实例）
 │   ├── rar-extractor-fallback.md                 # RAR 解压器回退层设计与实施记录（unar → bsdtar，已实施）
 │   ├── editor-plan.md                            # 网页编辑器功能设计方案（CM6 编辑器 + 命令快速输入 + AI 助手；已实施，设计共识与决策记录）
-│   ├── multi-model-plan.md                       # 多模型支持设计方案（模型档案 + 角色槽位路由；计划未实施）
+│   ├── multi-model-plan.md                       # 多模型支持设计方案（模型档案 + 角色槽位路由；已实施）
 │   ├── deployment.md                          # 后端部署指南（单用户/多用户单进程/多实例 Compose 部署、systemd 托管、HTTPS 反向代理、安全风险声明、备份、环境变量与升级回滚）
 │   ├── modules/                     # 模块文档（含 editor.md 网页编辑器）
 │   └── showcase.md                  # 展示页（showcase）说明
@@ -323,6 +323,7 @@ latexcellence/
 | LaTeX×JSON 转义防护 | `latex_json_guard.py` 拦截控制字符、`[object Object]` 占位符、花括号 / `$` / 环境配平；分隔符协议等非 JSON 路径用 `relaxed=True` | [backend-core.md](docs/backend-core.md) |
 | 分隔符协议 | OCR、style_modify、writing_chat 编辑输出用 `<<<LATEX>>>...<<<END>>>` 直接传输纯文本，从根上避免 JSON 转义损坏 | [formula_ocr.md](docs/modules/formula_ocr.md) 等模块文档 |
 | 集中式提示词管理 | 所有 LLM 提示词集中存放在 `backend/core/prompts.py`，`get_prompt()` 参数化获取，`{language}` 占位符注入输出语言 | [backend-core.md](docs/backend-core.md) |
+| 多模型支持（角色槽位路由） | `llm.profiles` 模型档案 + `assignments` 槽位指派，`get_client_for(role)` 按两级解析路由客户端（池化 + 热重载清池）；能力硬校验（OCR 槽必需 vision）、旧配置自动迁移、推理模型封装层兼容；设置页「模型管理」分区编辑，功能入口模型徽标展示当前生效模型 | [backend-core.md](docs/backend-core.md)、[multi-model-plan.md](docs/multi-model-plan.md) |
 | BaseParagraphCheckService | 多个逐段检查模块共享的基类，封装文件解析、marker 替换、LLM 编排与写回，子类通过 hooks 定制 | [backend-core.md](docs/backend-core.md) |
 | CheckOperationContext | 每次 preview/check 生成唯一 `operation_id`，保存 marker 映射与 MD5 快照（TTL 1 小时），apply 时精确还原，防止 marker 污染源文件 | [DESIGN.md §1.4](DESIGN.md) |
 | 乐观锁 | 读取时返回文件 MD5，写回时校验；不一致抛 `FileConflictError`（HTTP 409），前端刷新 MD5 后重试 | [DESIGN.md §4.2](DESIGN.md) |

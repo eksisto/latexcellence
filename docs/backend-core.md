@@ -4,7 +4,7 @@
 
 ## 目录
 
-- [后端核心模块](#后端核心模块)：config、security_middleware、llm_client、logger、project_manager、base_paragraph_check、prompts、tool_registry、workspace_manager
+- [后端核心模块](#后端核心模块)：config、security_middleware、llm_client、model_router、logger、project_manager、base_paragraph_check、prompts、tool_registry、workspace_manager
 - [后端工具模块](#后端工具模块)：scholarly_research、tool_result_protocol、file_ops、path_guard、json_utils、latex_json_guard、sandbox（Docker 沙箱执行）、tex_compile、compile_error_translator、latex_formatter、latex_parser、latex_literals、latex_package_analyzer、input_resolver、spa_static_files 等
 - [项目管理路由 project_router.py](#项目管理路由-project_routerpy)
 
@@ -18,7 +18,7 @@
 
 - `ServerConfig` — 服务配置（host, port, dev_mode, vite_dev_url, allowed_origins）
 - `SecurityConfig` — 跨域访问安全配置（access_token）
-- `LLMConfig` — LLM 配置（api_key, base_url, model, temperature 等）
+- `LLMConfig` — LLM 配置（api_key, base_url, model, temperature 等）+ 模型档案 `profiles` 与槽位指派 `assignments`（多模型支持，见下方「模型路由器与客户端池」）
 - `TypoCheckConfig` / `ExpressionOptConfig` / `TerminologyCheckConfig` / `FormulaOCRConfig` / `TableOCRConfig` / `TemplateGenConfig` / `CodeReviewConfig` / `CompileConfig` / `GitDiffConfig` / `FormatConverterConfig` / `StyleModifyConfig` / `StyleModifyAgentConfig` / `WritingChatConfig` / `BibManagerConfig` / `ParagraphTranslateConfig` — 各功能模块配置
   - `CompileConfig` 包含 `engine`（编译引擎：auto/pdflatex/xelatex/lualatex）和 `pdfa`（PDF/A-2b 归档格式输出）配置
   - `TemplateGenConfig` 包含 `cleanup_enabled`/`cleanup_interval_seconds`/`cleanup_retention_days` 沙箱清理配置
@@ -70,7 +70,7 @@
 
 ### `backend/core/llm_client.py` — LLM API 客户端
 
-封装 `openai.AsyncOpenAI`，提供统一的调用、重试和限流逻辑。
+封装 `openai.AsyncOpenAI`，提供统一的调用、重试和限流逻辑。客户端按模型档案实例化（每个档案一个池化实例，见下方「模型路由器与客户端池」），推理模型的参数差异在封装层统一适配，各 service 无感知。
 
 **职责边界**：`llm_client` 只负责网络通信和重试，**不负责 JSON 解析**。JSON 解析与 schema 校验统一由 `json_utils.py` 的 `safe_parse_json()` 和 `retry_with_validation()` 负责。
 
@@ -85,7 +85,7 @@
 | `chat_stream()` | 流式对话：返回 `AsyncIterator[str]`，按 token 产出，用于 SSE 推送 |
 | `chat_stream_with_usage()` | 流式对话 + 末尾携带 UsageInfo：返回 `AsyncIterator[StreamChunk]`，`StreamChunk.content` 为文本片段、`StreamChunk.usage` 为末次 LLM token 用量（用 `stream_options={"include_usage": True}` 透传，第三方不支持时降级为 `None`） |
 | `chat_stream_with_tools()` | 流式对话 + Function Calling：与 `chat_stream_with_usage` 类似，但额外接受 `tools` 参数。流中同时 yield content（文本 token 实时推送）和 tool_calls（末次 yield 完整 `ChatCompletionMessageToolCall` 列表） |
-| `get_context_window()` | 获取模型上下文窗口（token）：显式配置 → `/models` 探测 → 超限错误学习 → 内置模型表 → 默认 200000；结果按 `(base_url, model)` 缓存，`reset()` 时失效，探测失败绝不抛出；探测地址与主服务不同源时不携带 API key |
+| `get_context_window()` | 获取模型上下文窗口（token）：显式配置 → `/models` 探测 → 超限错误学习 → 内置模型表 → 默认 200000；结果按 `(profile_id, base_url, model)` 缓存（按档案隔离，防跨档案串味），`reset()` 时失效，探测失败绝不抛出；探测地址与主服务不同源时不携带 API key |
 | `_rate_limit()` | 内部限流器：确保两次请求间隔 ≥ `config.llm.request_interval` |
 
 **数据类**：
@@ -110,9 +110,40 @@
 
 **extra_body 透传**：`llm.extra_body`（`dict[str, Any]`，默认 `{}`）会作为 openai SDK 的 `extra_body` 参数附加到全部 `chat.completions.create` 调用（非流式 / 流式 / Function Calling），用于厂商私有请求体参数，例如思维链模型降档 `{"reasoning_effort": "low"}`、通义 `{"enable_thinking": false}`、智谱 `{"thinking": {"reasoning_budget": "low"}}`。**为空时不发送任何额外参数**——非思考模型 / 不支持这些字段的 provider 不会因此报错，属于按需显式开启的配置；若对不支持的模型显式配置了字段，provider 返回 400 会走常规重试后抛出，需自行确认目标模型的参数兼容性。前端在设置对话框 LLM 分区以 JSON 文本框编辑（非法 JSON 只提示、不保存）。
 
-**单例模式**：全局 `_llm_client` 通过 `get_llm_client()` 访问，使用 `threading.Lock` 双检锁保护多线程场景。`client` 属性首次访问时读取 `get_config().llm` 创建实例并缓存；当用户通过 SettingsDialog 更新 `llm` 配置时，`config.update_config_from_dict()` 会调用 `get_llm_client().reset()` 清除缓存，使下一次访问 `client` 时按新配置重新创建，从而支持运行时热重载 `api_key` / `base_url`。
+**多实例与池化**：`LLMClient` 不再是全局单例——每个模型档案对应一个池化实例（见下方「模型路由器与客户端池」）。`get_llm_client()` 保留为 `get_client_for("default")` 的薄别名，服务存量导入路径与 default 槽辅助调用。`client` 属性首次访问时按当前配置创建 `AsyncOpenAI` 并缓存；配置热重载经 `reset_client_pool()` 清空整个客户端池（逐实例 `reset()`），使下一次访问按新配置重建，从而支持运行时热重载 `api_key` / `base_url`。
+
+**推理模型兼容封装层**（service 无感知）：
+
+- **请求侧参数适配**：部分推理模型拒绝 `temperature` / `top_p` 或要求 `max_completion_tokens`。捕获明确的参数类 4xx 错误后，自动剔除不支持参数（`max_tokens` 更名 `max_completion_tokens` 透传）重试一次并记录日志；厂商私有参数继续走档案级 `extra_body` 显式透传（现状机制）；
+- **响应侧清洗**：JSON 路径（`chat` / `chat_with_usage`）解析前剥离 `content` 中的 `<think>...</think>` 思维链片段；`reasoning_content` 字段天然不参与解析；流式路径思维链照常经 `StreamChunk(reasoning=...)` 产出（仅展示用途），SSE 协议不变；
+- 不依赖 `retry_with_validation()` 的 JSON 重试来兜底模型格式问题（重试仍只服务其原有职责）。
 
 **每用户治理门（多用户 v2 P1b）**：全部公共入口（`chat_with_usage` / `chat_stream` / `chat_with_tools` / `chat_stream_with_usage` / `chat_stream_with_tools`）在最外层套 `core/multiuser/llm_governance.py` 的 `admission_gate()`：多用户模式下读取请求级当前用户上下文（由 `AccessSecurityMiddleware` 会话验证成功后全局注入，覆盖全部 `/api` 端点），在单事务内完成"滑动窗口限流校验 + 事件落账 + 并发租约获取"，超限抛 429 语义 RuntimeError（`gov_code` = `llm_rate_limited` / `llm_concurrency_limited`，携带 `retry_after`），由 main.py 注册的全局异常处理器（`register_governance_handler`）翻译为 HTTP 429 + Retry-After + 既有 `detail` 包装的结构化错误体；调用结束 finally 释放租约（流式提前断开同样覆盖）。单用户模式或无用户上下文（后台任务）直通且零数据库依赖。实现细节见下方"多用户模式基础设施"一节的 `llm_governance.py` 行。
+
+### `backend/core/model_router.py` — 模型路由器与客户端池（多模型支持）
+
+`llm` 配置节为「全局默认字段 + `profiles` 模型档案列表 + `assignments` 槽位指派表」，各功能模块按任务角色（槽位）自动路由到对应模型档案。完整设计与评审决策见 [multi-model-plan.md](multi-model-plan.md)。
+
+**配置结构**（`backend/core/config.py`）：
+
+- `ModelProfile`：一个可独立调用的 LLM 连接——`id`（唯一，`^[a-zA-Z0-9_-]+$`，禁占内置保留 id `__default__`）/ `name` / `base_url` / `api_key` / `model` + `capabilities` 能力闭集（`vision` / `reasoning`；`vision` 参与槽位硬校验，`reasoning` 为提示性标注）+ 可选覆盖项（`temperature` / `max_tokens` / `request_interval` / `max_concurrency` / `context_window_tokens` / `models_probe_url` / `extra_body`，`None` / `0` / `{}` 表示继承顶层默认值——推理模型的差异化配置按档案独立表达，节流（Semaphore + 请求间隔）也按档案隔离）；
+- `assignments`：固定槽位键集合（`default` / `agent` / `ocr` / `writing_chat` / `typo_check` / `expression_opt` / `code_review` / `terminology_check` / `paragraph_translate`）→ 档案 id；空串 = 跟随 `default` 槽，`default` 槽空串 = 内置默认档案；
+- **硬校验**（Pydantic `model_validator`，启动加载与 `/api/config` 保存共用同一道门禁，拒绝时旧配置不覆盖）：档案 id 唯一、格式合法且不占保留 id；`assignments` 只允许已知槽位键且引用的档案必须存在；OCR 槽两级解析结果必须含 `vision`；错误消息中文可读，经前端 `errorPatterns.js` 的配置校验错误模式翻译为三语提示；
+- **自动迁移**：`profiles` 为空时读取侧在内存合成 `id="__default__"` 的内置档案（取值即顶层字段，capabilities 含 vision + reasoning），不回写文件，存量配置行为不变；解析辅助 `builtin_default_profile()` / `effective_profiles()` / `resolve_role()`；
+- **档案 api_key 掩码协议**：GET 返回 `***xxxx` 尾四位掩码；保存时 `***` 前缀按档案 id 保留原值、未知 id 置空、空串透传（与顶层敏感项掩码语义一致）。
+
+**两级槽位解析**（无环）：`role → assignments[role]`，为空则 `assignments["default"]`，仍为空则内置默认档案。槽位与调用点映射：`agent` 槽覆盖 template_gen / plot_gen / style_modify（Agent 与 service）；`ocr` 槽覆盖 formula_ocr / table_ocr；`writing_chat` 槽覆盖写作会话与编辑器助手端点（`editor_chat`）；各逐段检查模块（typo_check、expression_opt、code_review、terminology_check、paragraph_translate）经 `base_paragraph_check.llm_role` ClassVar 钩子声明各自槽位，`terminology_check` 的 `extractor.py` 同槽；编译错误翻译、搜索查询重写等低频辅助调用跟随 `default` 槽（继续使用 `get_llm_client()` 别名）。`writing_chat.summary_model` 覆写模型名的行为保持不变。
+
+**核心接口**：
+
+| 函数 | 功能 |
+| --- | --- |
+| `get_client_for(role)` | 按两级解析取目标档案的 `LLMClient`；客户端池 `{profile_id: LLMClient}` 双检锁惰性创建（支持 `asyncio.to_thread()` 多线程场景），档案指纹（`base_url` / `api_key` / `model`）变化时惰性重建实例（双保险，主失效路径仍是配置热重载清池） |
+| `reset_client_pool()` | 清空整个客户端池并逐实例 `reset()`（释放 `AsyncOpenAI` / Semaphore / 探测缓存）；配置热重载接线点（`config.py` 配置保存路径调用；绕过保存接口的磁盘直改重载由客户端指纹惰性重建兜底） |
+
+**`LLMClient` 档案化**（`llm_client.py`）：构造函数增加 `profile_id` 参数；`_resolve_cfg()` 每次请求实时解析「顶层字段 + 档案覆盖项」的合并视图（不在 `__init__` 缓存，遵守配置热重载规范；档案缺失时防御性回退顶层配置，功能不中断）；每个客户端实例持有独立的 `AsyncOpenAI`、Semaphore 与请求间隔状态；上下文窗口探测缓存按 `(profile_id, base_url, model)` 键隔离。
+
+**解析结果查询端点**：`GET /api/llm/routes`（`main.py`）固定返回全部角色槽位的两级解析结果（`role` / `profile_id` / `profile_name` / `model` / `capabilities`，不含 `api_key` / `base_url`），每次请求实时解析、不缓存；权限为「多用户模式已登录即可读」（`require_login_if_multiuser` 依赖，宽于 `/api/config` 的管理员门禁——模型徽标对所有登录用户展示、泄露面仅模型名），单用户模式受共享访问令牌中间件约束。
 
 ### `backend/core/logger.py` — 日志系统
 
