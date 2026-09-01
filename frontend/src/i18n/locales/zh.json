@@ -1050,6 +1050,7 @@
       "createdAt": "注册于 {{date}}",
       "registeredIp": "注册 IP",
       "lastLoginIp": "最近登录",
+      "lastLoginAt": "最近登录于 {{date}}",
       "autoApproved": "自动通过",
       "quotaLabel": "配额覆盖",
       "filter": {

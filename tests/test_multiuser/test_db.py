@@ -97,6 +97,13 @@ class TestSchemaMigrations:
         tables = _table_names()
         assert "sandbox_slots" in tables
 
+    def test_users_last_login_at_column_exists(self, mu_env):
+        """v10：users.last_login_at 审计列就位（新库与存量库升级后一致）。"""
+        cols = {
+            row["name"] for row in db_module.db_query_all("PRAGMA table_info(users)")
+        }
+        assert "last_login_at" in cols
+
     def test_init_idempotent_keeps_version(self, mu_env):
         db_module.init_db()
         db_module.init_db()
@@ -313,9 +320,11 @@ class TestConcurrentMigration:
             row[1] for row in conn.execute("PRAGMA table_info(email_outbox)").fetchall()
         ]
         assert cols.count("claimed_at") == 1
-        # 迁移框架视角：版本回退后重放 v8 正常推进（含后续新版本步骤），
+        # 迁移框架视角：版本回退后重放 v8 起的所有待执行步骤推进到最新版，
         # 且列不重复
-        assert db_module.apply_migrations(conn) == [8, db_module.SCHEMA_VERSION]
+        assert db_module.apply_migrations(conn) == list(
+            range(8, db_module.SCHEMA_VERSION + 1)
+        )
         assert db_module.read_user_version(conn) == db_module.SCHEMA_VERSION
 
     def test_init_db_threaded_repeat_no_deadlock(self, mu_env):

@@ -82,13 +82,16 @@ def cmd_list_users(args: argparse.Namespace) -> None:
     if not users:
         print("No users yet.")
         return
-    header = f"{'USERNAME':<24} {'ROLE':<6} {'STATUS':<10} {'CREATED_AT':<25} QUOTA(B)"
+    header = (
+        f"{'USERNAME':<24} {'ROLE':<6} {'STATUS':<10} "
+        f"{'CREATED_AT':<25} {'LAST_LOGIN_AT':<25} QUOTA(B)"
+    )
     print(header)
     print("-" * len(header))
     for u in users:
         print(
             f"{u['username']:<24} {u['role']:<6} {u['status']:<10} "
-            f"{u['created_at']:<25} "
+            f"{u['created_at']:<25} {u['last_login_at'] or '-':<25} "
             f"P={u['project_quota_bytes'] or 'default'} D={u['derived_quota_bytes'] or 'default'}"
         )
 

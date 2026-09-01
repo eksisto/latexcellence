@@ -152,6 +152,30 @@ class TestSessionLifecycle:
         assert auth_core.validate_session(t1) is None
         assert auth_core.validate_session(t2) is None
 
+    def test_create_session_records_last_login(self, mu_env):
+        """成功登录（创建会话）回填 last_login_at；带 IP 时同步 last_login_ip。"""
+        user = auth_core.create_user("alice", VALID_PW)
+        auth_core.set_user_status(user["id"], "active")
+        auth_core.create_session(user["id"], login_ip="203.0.113.9")
+        row = db_module.db_query_one("SELECT * FROM users WHERE id = ?", (user["id"],))
+        assert row["last_login_at"] != ""
+        assert row["last_login_ip"] == "203.0.113.9"
+        # 公开视图（管理员列表 / 登录响应）暴露最近登录时间
+        assert auth_core.to_public_user(row)["last_login_at"] == row["last_login_at"]
+        # 不带 IP 的会话创建仍刷新时间，且不覆盖已有登录 IP
+        auth_core.create_session(user["id"])
+        row2 = db_module.db_query_one("SELECT * FROM users WHERE id = ?", (user["id"],))
+        assert row2["last_login_at"] >= row["last_login_at"]
+        assert row2["last_login_ip"] == "203.0.113.9"
+
+    def test_list_users_exposes_last_login_at(self, mu_env):
+        user = auth_core.create_user("alice", VALID_PW)
+        assert all(u["last_login_at"] == "" for u in auth_core.list_users())
+        auth_core.set_user_status(user["id"], "active")
+        auth_core.create_session(user["id"])
+        rows = {u["id"]: u for u in auth_core.list_users()}
+        assert rows[user["id"]]["last_login_at"] != ""
+
 
 class TestBootstrapAdmin:
     def test_creates_from_env(self, mu_env):

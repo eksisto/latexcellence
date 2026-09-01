@@ -98,6 +98,11 @@ const AdminUserRow = memo(function AdminUserRow({
         <p className="mt-1 text-xs text-muted-foreground">
           {u.email || "—"} ·{" "}
           {t("pages:admin.createdAt", { date: formatDate(u.created_at) })}
+          {u.last_login_at
+            ? ` · ${t("pages:admin.lastLoginAt", {
+                date: formatDate(u.last_login_at),
+              })}`
+            : ""}
         </p>
         {(u.registered_ip || u.last_login_ip) && (
           <p className="mt-0.5 font-mono text-xs text-muted-foreground">

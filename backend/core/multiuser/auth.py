@@ -150,7 +150,8 @@ def _session_ttl(remember: bool) -> timedelta:
 def create_session(user_id: str, remember: bool = False, login_ip: str = "") -> str:
     """创建会话并返回明文令牌；过期时间由配置决定（默认 7 天 / 记住我 30 天）。
 
-    login_ip 非空时同步更新 users.last_login_ip（成功登录才更新，审计用途）。
+    成功登录（创建会话）即回填 users.last_login_at（最近登录时间，审计用途）；
+    login_ip 非空时同步更新 users.last_login_ip。
     """
     token = new_token()
     expires_at = datetime.now(timezone.utc) + _session_ttl(remember)
@@ -166,11 +167,15 @@ def create_session(user_id: str, remember: bool = False, login_ip: str = "") -> 
             utcnow(),
         ),
     )
-    if (login_ip or "").strip():
+    now = utcnow()
+    ip = (login_ip or "").strip()
+    if ip:
         db_execute(
-            "UPDATE users SET last_login_ip = ? WHERE id = ?",
-            (login_ip.strip(), user_id),
+            "UPDATE users SET last_login_at = ?, last_login_ip = ? WHERE id = ?",
+            (now, ip, user_id),
         )
+    else:
+        db_execute("UPDATE users SET last_login_at = ? WHERE id = ?", (now, user_id))
     return token
 
 
@@ -248,10 +253,12 @@ def _row_to_public_user(row: dict) -> dict:
         "project_quota_bytes": row.get("project_quota_bytes"),
         "derived_quota_bytes": row.get("derived_quota_bytes"),
         "created_at": row["created_at"],
-        # IP 审计字段（v9）：注册 IP 供管理员审批核验，auto_approved 标记
+        # 审计字段：注册 IP 供管理员审批核验（v9），last_login_* 为最近一次
+        # 成功登录的 IP 与时间（登录时回填），auto_approved 标记
         # 该账号由 IP 策略自动通过（而非人工审批）
         "registered_ip": row.get("registered_ip", ""),
         "last_login_ip": row.get("last_login_ip", ""),
+        "last_login_at": row.get("last_login_at", ""),
         "auto_approved": bool(row.get("auto_approved", 0)),
     }
 
@@ -379,8 +386,8 @@ def get_user_by_id(user_id: str) -> dict | None:
 def list_users() -> list[dict]:
     rows = db_query_all(
         "SELECT id, username, email, role, status, project_quota_bytes, "
-        "derived_quota_bytes, registered_ip, last_login_ip, auto_approved, "
-        "created_at FROM users ORDER BY created_at, id"
+        "derived_quota_bytes, registered_ip, last_login_ip, last_login_at, "
+        "auto_approved, created_at FROM users ORDER BY created_at, id"
     )
     return [_row_to_public_user(r) for r in rows]
 

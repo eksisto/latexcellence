@@ -283,7 +283,7 @@ highlight.js 的按需注册与统一入口：
 | `pages/RegisterPage.jsx` | 注册（用户名/密码/确认/邮箱），按后端 IP 策略结果分支展示：自动通过 →「直接登录」成功态，否则「待审批」提交态 |
 | `pages/PendingApprovalPage.jsx` | 待管理员批准占位页 |
 | `pages/ProjectWorkbenchPage.jsx` | 项目列表（我的/共享给我，含 owner 与 role）、配额用量条、上传、回收站、打开/下载/重命名/权限/删除；owner 专属操作 |
-| `pages/AdminPage.jsx` | 用户列表（待审批筛选）、批准/拒绝/禁用/启用、重置密码（两步式：先生成临时密码预览，确认后才写入）、配额调整、删除用户；用户行展示注册 IP / 最近登录 IP 与「自动通过」审计标记 |
+| `pages/AdminPage.jsx` | 用户列表（待审批筛选）、批准/拒绝/禁用/启用、重置密码（两步式：先生成临时密码预览，确认后才写入）、配额调整、删除用户；用户行展示注册 IP / 最近登录 IP / 最近登录时间与「自动通过」审计标记 |
 
 配套组件：`components/AuthShell.jsx`（认证页外壳）、`components/AuthConnectionButton.jsx`（认证页工具栏「后端连接设置」入口 + 对话框）、`components/UploadProjectDialog.jsx`（zip/7z/rar 文件或 `webkitdirectory` 目录 → 分片直传：并发 3 队列、逐片 `X-Part-MD5` 校验（自研增量 MD5 工具 `utils/md5.js`，WebCrypto 不提供 MD5）、指数退避重试、暂停/继续、localStorage 持久会话支持刷新后重新选择相同内容断点续传；会话建立后的致命错误进暂停态可续传，init/status 阶段失败回 idle 允许直接重试）、`components/ProjectPermissionsDialog.jsx`（按用户名添加协作者、改角色、移除、转交 owner）。
 

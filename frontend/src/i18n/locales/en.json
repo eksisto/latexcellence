@@ -1050,6 +1050,7 @@
       "createdAt": "registered {{date}}",
       "registeredIp": "Registered IP",
       "lastLoginIp": "Last login IP",
+      "lastLoginAt": "last login {{date}}",
       "autoApproved": "Auto-approved",
       "quotaLabel": "Quota override",
       "filter": {

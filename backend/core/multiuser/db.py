@@ -402,6 +402,21 @@ def _migration_v9_registration_ip_policy(conn: sqlite3.Connection) -> None:
             )
 
 
+def _migration_v10_last_login_at(conn: sqlite3.Connection) -> None:
+    """users.last_login_at 审计列：最近一次成功登录时间（ISO 8601 UTC）。
+
+    与 v9 的 last_login_ip 同口径——成功登录（创建会话）时回填，
+    供管理面板查看账号活跃情况。ALTER 无 IF NOT EXISTS，沿用 v8/v9 的
+    "查列→补列"幂等模式：列检查与 ALTER 同处 apply_migrations 的步骤
+    事务（BEGIN IMMEDIATE）内，整体原子。
+    """
+    existing = {row[1] for row in conn.execute("PRAGMA table_info(users)").fetchall()}
+    if "last_login_at" not in existing:
+        conn.execute(
+            "ALTER TABLE users ADD COLUMN last_login_at TEXT NOT NULL DEFAULT ''"
+        )
+
+
 def find_duplicate_emails(conn: sqlite3.Connection) -> list[sqlite3.Row]:
     """返回 users 表中重复（大小写不敏感）的非空邮箱分组及冲突用户名列表。"""
     return conn.execute(
@@ -449,7 +464,7 @@ def ensure_email_unique_index(conn: sqlite3.Connection) -> bool:
 
 # 当前 schema 最新版本号。新增迁移时：追加实现函数并在列表末尾登记
 # (target_version, description, fn)，同时递增此常量；每个步骤必须幂等可重入。
-SCHEMA_VERSION = 9
+SCHEMA_VERSION = 10
 
 # 有序迁移步骤：(目标版本, 描述, 执行函数)。版本从 2 起（1 为 v1 基线，
 # 对老库存量数据无破坏性变更，仅补齐 IF NOT EXISTS 建表）。
@@ -497,6 +512,11 @@ MIGRATIONS: list[tuple[int, str, Callable[[sqlite3.Connection], None]]] = [
         "v2 registration auto-approval IP audit columns on users "
         "(registered_ip / last_login_ip / auto_approved)",
         _migration_v9_registration_ip_policy,
+    ),
+    (
+        10,
+        "users.last_login_at audit column (last successful login timestamp)",
+        _migration_v10_last_login_at,
     ),
 ]
 

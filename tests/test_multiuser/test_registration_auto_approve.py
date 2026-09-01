@@ -660,7 +660,7 @@ class TestRegisterAutoApproveAPI:
         user = db_module.db_query_one("SELECT * FROM users WHERE username = 'bob'")
         assert user["registered_ip"] == "203.0.113.10"
         assert user["auto_approved"] == 1
-        # 无需等待审批，直接登录成功，并回填 last_login_ip
+        # 无需等待审批，直接登录成功，并回填 last_login_ip / last_login_at
         r = client.post(
             "/api/auth/login",
             json={"username": "bob", "password": "pass-12345678"},
@@ -668,6 +668,7 @@ class TestRegisterAutoApproveAPI:
         assert r.status_code == 200, r.text
         row = db_module.db_query_one("SELECT * FROM users WHERE username = 'bob'")
         assert row["last_login_ip"] == "203.0.113.10"
+        assert row["last_login_at"] != ""
 
     def test_second_account_from_same_ip_falls_back_to_pending(self, tmp_path):
         """同 IP 第二个账号（上限 1）不自动通过 → 转人工待审批。"""
@@ -750,6 +751,8 @@ class TestRegisterAutoApproveAPI:
         users = {u["username"]: u for u in r.json()["users"]}
         assert users["audited"]["registered_ip"] == "203.0.113.10"
         assert users["audited"]["auto_approved"] is True
+        # 管理员自己刚经 API 登录，最近登录时间已随用户列表透出
+        assert users["root"]["last_login_at"] != ""
 
 
 ADMIN_IP = "203.0.113.1"
@@ -770,7 +773,7 @@ class TestMigrationV9:
         conn.rollback()
 
     def test_legacy_v8_db_upgrades_with_data_intact(self, tmp_path):
-        """存量 v8 库升级到 v9：新列带默认值，既有用户数据完好。"""
+        """存量 v8 库升级到最新版：审计列带默认值，既有用户数据完好。"""
         import json as _json
         import os as _os
         from unittest import mock as _mock
@@ -810,7 +813,9 @@ class TestMigrationV9:
             cfg_module.load_config(str(config_path))
         try:
             db_module.init_db()
-            assert db_module.read_user_version(db_module._require_conn()) == 9
+            assert db_module.read_user_version(db_module._require_conn()) == (
+                db_module.SCHEMA_VERSION
+            )
             user = db_module.db_query_one("SELECT * FROM users WHERE id = 'u-old'")
             assert user is not None
             assert user["registered_ip"] == "" and user["last_login_ip"] == ""

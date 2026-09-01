@@ -1050,6 +1050,7 @@
       "createdAt": "註冊於 {{date}}",
       "registeredIp": "註冊 IP",
       "lastLoginIp": "最近登入",
+      "lastLoginAt": "最近登入於 {{date}}",
       "autoApproved": "自動通過",
       "quotaLabel": "配額覆蓋",
       "filter": {
