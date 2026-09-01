@@ -54,3 +54,6 @@ data/*
 
 # Release
 release.sh
+
+# Scripts
+scripts/
