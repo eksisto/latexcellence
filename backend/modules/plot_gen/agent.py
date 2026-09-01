@@ -12,8 +12,8 @@ from backend.core.logger import get_logger
 from backend.core.llm_client import (
     assistant_message_from_stream,
     chat_stream_with_tools_retry,
-    get_llm_client,
 )
+from backend.core.model_router import get_client_for
 from backend.core.prompts import get_prompt, render_pgfplots_reference
 from backend.modules.plot_gen.data_parser import build_profile_context
 from backend.modules.plot_gen.executor import PlotExecutor
@@ -135,7 +135,8 @@ class PlotGenAgent:
             return
 
         if llm is None:
-            llm = get_llm_client()
+            # agent 槽位：单次高价值生成任务（multi-model-plan §6）
+            llm = get_client_for("agent")
 
         sandbox = load_plot_sandbox(get_plot_output_dir(cfg), session_id)
         meta = read_session_meta(sandbox)
@@ -199,7 +200,8 @@ class PlotGenAgent:
     ) -> AsyncIterator[dict[str, Any]]:
         cfg = get_config()
         if llm is None:
-            llm = get_llm_client()
+            # agent 槽位：单次高价值生成任务（multi-model-plan §6）
+            llm = get_client_for("agent")
         sandbox = load_plot_sandbox(get_plot_output_dir(cfg), session_id)
         meta = read_session_meta(sandbox)
         messages = list(meta.messages)

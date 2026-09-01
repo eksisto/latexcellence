@@ -448,10 +448,15 @@ class TestRecognizeWithPackageAnalysis:
 
     @pytest.fixture(autouse=True)
     def _mock_get_llm_client(self, mock_llm, monkeypatch):
-        """将 get_llm_client() 返回 mock_llm，避免调用真实 LLM。"""
+        """将 get_client_for("ocr") 的返回替换为 mock_llm，避免调用真实 LLM。"""
+
+        def _fake_get_client_for(role):
+            assert role == "ocr", f"unexpected LLM role: {role}"
+            return mock_llm
+
         monkeypatch.setattr(
-            "backend.modules.table_ocr.service.get_llm_client",
-            lambda: mock_llm,
+            "backend.modules.table_ocr.service.get_client_for",
+            _fake_get_client_for,
         )
 
     @pytest.mark.asyncio

@@ -25,8 +25,8 @@ from typing import Any, AsyncIterator
 
 from backend.core import access_control
 from backend.core.config import get_config
-from backend.core.llm_client import get_llm_client
 from backend.core.logger import get_logger
+from backend.core.model_router import get_client_for
 from backend.core.prompts import get_prompt
 from backend.core.workspace_manager import get_project_manager_for_workspace
 from backend.modules.style_modify.agent import get_style_modify_agent
@@ -66,7 +66,8 @@ class StyleModifyService:
             self._logger.warning("No API key configured")
             raise RuntimeError("No API key configured")
 
-        llm = get_llm_client()
+        # agent 槽位：单次高价值生成任务（multi-model-plan §6）
+        llm = get_client_for("agent")
         return await self._modify_with_llm(llm, latex, description)
 
     async def _modify_with_llm(

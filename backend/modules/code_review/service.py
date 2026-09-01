@@ -96,6 +96,8 @@ class CodeReviewService(BaseParagraphCheckService):
     """
 
     use_marker_protection: ClassVar[bool] = False
+    # LLM 槽位路由（multi-model-plan §6）
+    llm_role: ClassVar[str] = "code_review"
 
     def __init__(self):
         super().__init__("code_review")

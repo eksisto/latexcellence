@@ -106,13 +106,15 @@ class TestStyleModifyService:
             "backend.modules.style_modify.service.get_config", return_value=mock_cfg
         ):
             with patch(
-                "backend.modules.style_modify.service.get_llm_client",
+                "backend.modules.style_modify.service.get_client_for",
                 return_value=mock_llm,
-            ):
+            ) as mock_get_client:
                 result = await service.modify(sample_latex, "make it bold")
 
         assert result["latex"] == modified_latex
         mock_llm.chat.assert_called_once()
+        # 槽位锁定：service 直调走 agent 槽（multi-model-plan §6）
+        mock_get_client.assert_called_once_with("agent")
 
     @pytest.mark.asyncio
     async def test_literal_backslashes_preserved(self, service, sample_latex):
@@ -128,7 +130,7 @@ class TestStyleModifyService:
             "backend.modules.style_modify.service.get_config", return_value=mock_cfg
         ):
             with patch(
-                "backend.modules.style_modify.service.get_llm_client",
+                "backend.modules.style_modify.service.get_client_for",
                 return_value=mock_llm,
             ):
                 result = await service.modify(sample_latex, "add a formula")
@@ -150,7 +152,7 @@ class TestStyleModifyService:
             "backend.modules.style_modify.service.get_config", return_value=mock_cfg
         ):
             with patch(
-                "backend.modules.style_modify.service.get_llm_client",
+                "backend.modules.style_modify.service.get_client_for",
                 return_value=mock_llm,
             ):
                 result = await service.modify(sample_latex, "add whitespace")
@@ -172,7 +174,7 @@ class TestStyleModifyService:
             "backend.modules.style_modify.service.get_config", return_value=mock_cfg
         ):
             with patch(
-                "backend.modules.style_modify.service.get_llm_client",
+                "backend.modules.style_modify.service.get_client_for",
                 return_value=mock_llm,
             ):
                 result = await service.modify(sample_latex, "bold")
@@ -193,7 +195,7 @@ class TestStyleModifyService:
             "backend.modules.style_modify.service.get_config", return_value=mock_cfg
         ):
             with patch(
-                "backend.modules.style_modify.service.get_llm_client",
+                "backend.modules.style_modify.service.get_client_for",
                 return_value=mock_llm,
             ):
                 with pytest.raises(RuntimeError, match="Style modification failed"):
@@ -220,7 +222,7 @@ class TestStyleModifyService:
             "backend.modules.style_modify.service.get_config", return_value=mock_cfg
         ):
             with patch(
-                "backend.modules.style_modify.service.get_llm_client",
+                "backend.modules.style_modify.service.get_client_for",
                 return_value=mock_llm,
             ):
                 result = await service.modify(sample_latex, "make it bold")
@@ -242,7 +244,7 @@ class TestStyleModifyService:
             "backend.modules.style_modify.service.get_config", return_value=mock_cfg
         ):
             with patch(
-                "backend.modules.style_modify.service.get_llm_client",
+                "backend.modules.style_modify.service.get_client_for",
                 return_value=mock_llm,
             ):
                 with pytest.raises(RuntimeError, match="Style modification failed"):

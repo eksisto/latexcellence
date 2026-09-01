@@ -30,8 +30,8 @@ from pydantic import (
 )
 
 from backend.core.config import get_config
-from backend.core.llm_client import get_llm_client
 from backend.core.logger import get_logger
+from backend.core.model_router import get_client_for
 from backend.core.prompts import get_prompt
 from backend.utils.json_utils import format_validation_error
 from backend.utils.latex_json_guard import validate_latex_field
@@ -135,7 +135,8 @@ class TableOCRService:
                 "low_confidence": True,
             }
 
-        llm = get_llm_client()
+        # ocr 槽位：硬性依赖视觉模型（multi-model-plan §6，保存期硬校验 vision）
+        llm = get_client_for("ocr")
         result = await self._recognize_with_llm(llm, base64_image, content_type)
 
         # 第二步：分析 LaTeX 代码所需的宏包（table 领域：排除引用/版式类宏包）

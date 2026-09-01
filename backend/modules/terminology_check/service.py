@@ -20,10 +20,10 @@
 """
 
 import asyncio
-from typing import Any
+from typing import Any, ClassVar
 
 from backend.core.config import get_config
-from backend.core.llm_client import get_llm_client
+from backend.core.model_router import get_client_for
 from backend.core.base_paragraph_check import BaseParagraphCheckService
 from backend.modules.terminology_check.extractor import TermExtractor, TermItem
 
@@ -59,6 +59,9 @@ class TerminologyCheckService(BaseParagraphCheckService):
         preview = svc.preview_paragraphs("main.tex", resolve_input=True)
         results = await svc.check_terminology_stream("main.tex", resolve_input=True)
     """
+
+    # LLM 槽位路由（multi-model-plan §6）：逐段高频调用，适合快速模型
+    llm_role: ClassVar[str] = "terminology_check"
 
     def __init__(self):
         super().__init__("terminology_check")
@@ -103,7 +106,8 @@ class TerminologyCheckService(BaseParagraphCheckService):
             self._logger.warning("No API key — using fallback term extraction")
             return self._check_no_llm(file_path, all_para_data, operation_id)
 
-        llm = get_llm_client()
+        # 按本模块槽位实时取客户端（热重载语义，禁止缓存实例）
+        llm = get_client_for(self.llm_role)
         sem = asyncio.Semaphore(cfg.llm.max_concurrency)
 
         async def _limited(coro):

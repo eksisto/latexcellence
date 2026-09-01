@@ -17,8 +17,8 @@ from backend.core.logger import get_logger
 from backend.core.llm_client import (
     assistant_message_from_stream,
     chat_stream_with_tools_retry,
-    get_llm_client,
 )
+from backend.core.model_router import get_client_for
 from backend.core.prompts import get_prompt
 from backend.modules.style_modify.models import CompileSummary
 from backend.modules.style_modify.session import get_session_store
@@ -73,7 +73,8 @@ class StyleModifyAgent:
 
         cfg = get_config()
         if llm is None:
-            llm = get_llm_client()
+            # agent 槽位：单次高价值生成任务（multi-model-plan §6）
+            llm = get_client_for("agent")
         compile_enabled = "available" if _tex_toolchain_available() else "unavailable"
         system_prompt = get_prompt(
             "style_modify",
@@ -120,7 +121,8 @@ class StyleModifyAgent:
         self._store.save_meta(session_id, meta)
 
         if llm is None:
-            llm = get_llm_client()
+            # agent 槽位：单次高价值生成任务（multi-model-plan §6）
+            llm = get_client_for("agent")
         compile_enabled = "available" if _tex_toolchain_available() else "unavailable"
         refine_prompt = get_prompt(
             "style_modify",

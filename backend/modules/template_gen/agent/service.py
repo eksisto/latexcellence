@@ -14,8 +14,8 @@ from backend.core.logger import get_logger
 from backend.core.llm_client import (
     assistant_message_from_stream,
     chat_stream_with_tools_retry,
-    get_llm_client,
 )
+from backend.core.model_router import get_client_for
 from backend.core.prompts import get_prompt
 from backend.modules.template_gen.trace import append_trace, now_iso
 from backend.utils.agent_file_tools import build_agent_file_tools_schema
@@ -76,7 +76,8 @@ class TemplateAgentService:
             return
 
         if llm is None:
-            llm = get_llm_client()
+            # agent 槽位：单次高价值生成任务（multi-model-plan §6）
+            llm = get_client_for("agent")
 
         session_id = sandbox.name
 

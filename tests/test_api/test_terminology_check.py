@@ -439,7 +439,7 @@ class TestExtractor:
         text = "Machine Learning (ML) is widely used in AI."
 
         with patch(
-            "backend.modules.terminology_check.extractor.get_llm_client"
+            "backend.modules.terminology_check.extractor.get_client_for"
         ) as mock_get:
             mock_llm = MagicMock()
             mock_llm.chat = AsyncMock(
@@ -466,6 +466,8 @@ class TestExtractor:
             assert terms[0].term == "Machine Learning"
             assert terms[1].term == "ML"
             assert terms[1].term_type == "abbreviation"
+            # 槽位锁定：extractor 直调走 terminology_check 槽（multi-model-plan §6）
+            mock_get.assert_called_once_with("terminology_check")
 
     @pytest.mark.asyncio
     async def test_extract_terms_llm_failure_returns_empty(self):
@@ -473,7 +475,7 @@ class TestExtractor:
         text = "Some text."
 
         with patch(
-            "backend.modules.terminology_check.extractor.get_llm_client"
+            "backend.modules.terminology_check.extractor.get_client_for"
         ) as mock_get:
             mock_llm = MagicMock()
             mock_llm.chat = AsyncMock(side_effect=Exception("Network error"))
@@ -492,7 +494,7 @@ class TestClusterTerms:
         unique_terms = ["Deep Learning", "deep learning", "深度学习", "DL", "CNN"]
 
         with patch(
-            "backend.modules.terminology_check.extractor.get_llm_client"
+            "backend.modules.terminology_check.extractor.get_client_for"
         ) as mock_get:
             mock_llm = MagicMock()
             mock_llm.chat = AsyncMock(
@@ -530,7 +532,7 @@ class TestClusterTerms:
         unique_terms = ["Python", "Java", "C++"]
 
         with patch(
-            "backend.modules.terminology_check.extractor.get_llm_client"
+            "backend.modules.terminology_check.extractor.get_client_for"
         ) as mock_get:
             mock_llm = MagicMock()
             mock_llm.chat = AsyncMock(return_value={"clusters": []})
@@ -545,7 +547,7 @@ class TestClusterTerms:
         unique_terms = ["ML", "machine learning"]
 
         with patch(
-            "backend.modules.terminology_check.extractor.get_llm_client"
+            "backend.modules.terminology_check.extractor.get_client_for"
         ) as mock_get:
             mock_llm = MagicMock()
             mock_llm.chat = AsyncMock(side_effect=Exception("Network error"))

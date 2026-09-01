@@ -13,7 +13,7 @@
     将所有子文件纳入处理范围，段落按文件分组返回。
 """
 
-from typing import Any
+from typing import Any, ClassVar
 
 from pydantic import BaseModel
 
@@ -63,6 +63,8 @@ class ExpressionOptService(BaseParagraphCheckService):
     """
 
     _output_field = "optimized"
+    # LLM 槽位路由（multi-model-plan §6）：逐段高频调用，适合快速模型
+    llm_role: ClassVar[str] = "expression_opt"
 
     def __init__(self):
         super().__init__("expression_opt")

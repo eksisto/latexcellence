@@ -10,6 +10,7 @@ terminology_check）的共享逻辑：
     4. 结果写回源文件
 
 子类只需实现以下 hooks：
+    llm_role                     → LLM 槽位（multi-model-plan §6，类属性）
     _get_system_prompt()          → LLM system prompt
     _build_user_content(text)     → LLM user message
     _get_model_cls()              → Pydantic 响应模型
@@ -32,10 +33,10 @@ from pydantic import BaseModel
 
 from backend.core import access_control
 from backend.core.logger import get_logger
+from backend.core.model_router import get_client_for
 from backend.core.multiuser import llm_governance
 from backend.core.project_manager import FileConflictError
 from backend.core.workspace_manager import get_project_manager_for_workspace
-from backend.core.llm_client import get_llm_client
 from backend.core.config import get_config
 from backend.utils.latex_parser import LatexParser, MARKER_PATTERN
 from backend.utils.input_resolver import resolve_inputs
@@ -240,10 +241,12 @@ class BaseParagraphCheckService:
     逐段检查服务基类。
 
     子类通过类变量控制行为差异：
+        - llm_role: LLM 槽位（multi-model-plan §6），客户端按槽位实时路由
         - _output_field: 结果字段名（"corrected" 或 "optimized"）
         - use_marker_protection: 是否启用 marker 保护策略
     """
 
+    llm_role: ClassVar[str] = "default"
     _output_field: ClassVar[str] = "corrected"
     use_marker_protection: ClassVar[bool] = True
 
@@ -604,7 +607,8 @@ class BaseParagraphCheckService:
             self._logger.warning("No API key configured, returning plain text only")
             return self._no_api_key_batch_fallback(targets, file_path, operation_id)
 
-        llm = get_llm_client()
+        # 每次调用时按子类槽位实时取客户端（热重载语义，禁止缓存实例）
+        llm = get_client_for(self.llm_role)
         batch_size = self._get_batch_size()
         sem = asyncio.Semaphore(cfg.llm.max_concurrency)
         results: list[dict[str, Any] | None] = [None] * len(targets)
@@ -689,7 +693,8 @@ class BaseParagraphCheckService:
             yield {"type": "done", "operation_id": operation_id}
             return
 
-        llm = get_llm_client()
+        # 每次调用时按子类槽位实时取客户端（热重载语义，禁止缓存实例）
+        llm = get_client_for(self.llm_role)
 
         for i, d in enumerate(all_para_data):
             f = d["file_path"]

@@ -12,7 +12,7 @@ from typing import Any, Optional
 from pydantic import BaseModel
 
 from backend.core.logger import get_logger
-from backend.core.llm_client import get_llm_client
+from backend.core.model_router import get_client_for
 from backend.utils.json_utils import retry_with_validation
 from backend.modules.terminology_check.models import TermClusterResult
 
@@ -130,7 +130,7 @@ class TermExtractor:
 
         try:
             validated: TermExtractOutput = await retry_with_validation(
-                chat_fn=get_llm_client().chat,
+                chat_fn=get_client_for("terminology_check").chat,
                 messages=messages,
                 model_cls=TermExtractOutput,
                 max_retries=3,
@@ -192,7 +192,7 @@ class TermExtractor:
 
         try:
             validated: TermClusterResult = await retry_with_validation(
-                chat_fn=get_llm_client().chat,
+                chat_fn=get_client_for("terminology_check").chat,
                 messages=messages,
                 model_cls=TermClusterResult,
                 max_retries=3,

@@ -583,9 +583,15 @@ class TestRecognizeWithPackageAnalysis:
 
     @pytest.fixture(autouse=True)
     def _mock_get_llm_client(self, mock_llm, monkeypatch):
+        """将 get_client_for 的返回替换为 mock_llm，并锁定必须请求 ocr 槽位。"""
+
+        def _fake_get_client_for(role):
+            assert role == "ocr", f"unexpected LLM role: {role}"
+            return mock_llm
+
         monkeypatch.setattr(
-            "backend.modules.formula_ocr.service.get_llm_client",
-            lambda: mock_llm,
+            "backend.modules.formula_ocr.service.get_client_for",
+            _fake_get_client_for,
         )
 
     @pytest.mark.asyncio
@@ -778,9 +784,15 @@ class TestVisualHintMerge:
 
     @pytest.fixture(autouse=True)
     def _mock_get_llm_client(self, mock_llm, monkeypatch):
+        """将 get_client_for 的返回替换为 mock_llm，并锁定必须请求 ocr 槽位。"""
+
+        def _fake_get_client_for(role):
+            assert role == "ocr", f"unexpected LLM role: {role}"
+            return mock_llm
+
         monkeypatch.setattr(
-            "backend.modules.formula_ocr.service.get_llm_client",
-            lambda: mock_llm,
+            "backend.modules.formula_ocr.service.get_client_for",
+            _fake_get_client_for,
         )
 
     @pytest.mark.asyncio

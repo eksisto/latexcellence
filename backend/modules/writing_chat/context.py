@@ -595,12 +595,13 @@ class ConversationContext:
         """
         异步判断是否需要压缩；动态推导时先探测模型上下文窗口。
         """
-        from backend.core.llm_client import get_llm_client
+        from backend.core.model_router import get_client_for
 
         cfg = get_config().features.writing_chat
         if cfg.compression_threshold_tokens > 0:
             return self.should_compress()
-        window = await get_llm_client().get_context_window()
+        # writing_chat 槽位（multi-model-plan §6）
+        window = await get_client_for("writing_chat").get_context_window()
         return self.should_compress(window)
 
     def to_llm_messages(self) -> list[dict]:
