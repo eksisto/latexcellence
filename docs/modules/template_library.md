@@ -133,7 +133,7 @@ Prefix: `/api/templates`, Tag: `template_library`。`features.template_library.e
 | `resume-en` | 英文简历（现代风） | resume | 自绘样式的英文单页简历，无第三方模板依赖 |
 | `poster-a0` | A0 学术海报 | poster | A0 竖版三栏学术海报，色块分节标题 |
 
-每个模板均带预编译元资源（`assets/thumbnail.png` 卡片缩略图 + `assets/preview.pdf` 详情页 PDF 预览）；用户模板仅文件树 + 源码查看。
+每个模板均带预编译元资源（`assets/thumbnail.png` 卡片缩略图 + `assets/preview.pdf` 详情页 PDF 预览）；用户模板仅文件树 + 源码查看。详情对话框中的 PDF 预览支持全屏（左下角悬浮「全屏查看」进入、覆盖层按钮或 Escape 退出，与 git-diff 页全屏预览同款设计；覆盖层经 portal 挂到 body，避免对话框动画 transform 影响 fixed 定位）。
 
 ## 维护者脚本
 

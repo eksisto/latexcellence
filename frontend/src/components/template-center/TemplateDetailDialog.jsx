@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import {
   Dialog,
@@ -17,6 +18,8 @@ import FileText from "lucide-react/dist/esm/icons/file-text.mjs";
 import ChevronLeft from "lucide-react/dist/esm/icons/chevron-left.mjs";
 import Loader2 from "lucide-react/dist/esm/icons/loader-circle.mjs";
 import FileWarning from "lucide-react/dist/esm/icons/file-warning.mjs";
+import Expand from "lucide-react/dist/esm/icons/expand.mjs";
+import Minimize from "lucide-react/dist/esm/icons/minimize.mjs";
 import { api } from "@/api/index";
 import { translateError } from "@/utils/errorMessages";
 import { languageFromFilename } from "@/utils/highlight";
@@ -116,6 +119,8 @@ export default function TemplateDetailDialog({
   // blob URL / 请求序号：对话框切换模板或快速点文件时丢弃过期响应
   const previewUrlRef = useRef(null);
   const fileSeqRef = useRef(0);
+  // PDF 全屏预览（与 GitDiffPage 全屏设计同款：悬浮按钮进入 + 覆盖层退出）
+  const [pdfFullscreen, setPdfFullscreen] = useState(false);
 
   const isBuiltin = template?.kind === "builtin";
 
@@ -138,6 +143,7 @@ export default function TemplateDetailDialog({
     setFileContent("");
     setFileError(null);
     setPreviewFailed(false);
+    setPdfFullscreen(false);
     releasePreview();
     (async () => {
       try {
@@ -170,6 +176,16 @@ export default function TemplateDetailDialog({
     };
   }, [open, template, isBuiltin, releasePreview]);
 
+  // 全屏时 Escape 退出（不冒泡关闭外层对话框）
+  useEffect(() => {
+    if (!pdfFullscreen) return;
+    const onKeyDown = (e) => {
+      if (e.key === "Escape") setPdfFullscreen(false);
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [pdfFullscreen]);
+
   const handleSelectFile = useCallback(
     async (path) => {
       setSelectedPath(path);
@@ -195,7 +211,13 @@ export default function TemplateDetailDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-4xl max-h-[85vh] flex flex-col">
+      <DialogContent
+        className="sm:max-w-4xl max-h-[85vh] flex flex-col"
+        onEscapeKeyDown={(e) => {
+          // PDF 全屏时 Escape 只退出全屏，不关闭对话框
+          if (pdfFullscreen) e.preventDefault();
+        }}
+      >
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <span className="truncate">{template?.name}</span>
@@ -232,22 +254,37 @@ export default function TemplateDetailDialog({
                   : "space-y-4"
               }
             >
-              {/* 左列：内置模板 PDF 预览（复用 PDFPreview，经认证 blob 加载） */}
+              {/* 左列：内置模板 PDF 预览（复用 PDFPreview，经认证 blob 加载）；
+                  全屏时卸载内联预览避免双 iframe，左下角悬浮「全屏查看」
+                  与 GitDiff 页同款 */}
               {isBuiltin && (
-                <div className="h-[60vh]">
-                  {previewUrl ? (
+                <div className="relative h-[60vh]">
+                  {!pdfFullscreen && previewUrl ? (
                     <PDFPreview url={previewUrl} />
                   ) : (
-                    <Card className="h-full">
-                      <CardContent className="flex h-full flex-col items-center justify-center gap-2">
-                        <FileWarning className="size-8 text-muted-foreground/40" />
-                        <p className="text-sm text-muted-foreground/60">
-                          {previewFailed
-                            ? t("pages:templateCenter.previewUnavailable")
-                            : t("common:loading")}
-                        </p>
-                      </CardContent>
-                    </Card>
+                    !pdfFullscreen && (
+                      <Card className="h-full">
+                        <CardContent className="flex h-full flex-col items-center justify-center gap-2">
+                          <FileWarning className="size-8 text-muted-foreground/40" />
+                          <p className="text-sm text-muted-foreground/60">
+                            {previewFailed
+                              ? t("pages:templateCenter.previewUnavailable")
+                              : t("common:loading")}
+                          </p>
+                        </CardContent>
+                      </Card>
+                    )
+                  )}
+                  {previewUrl && !pdfFullscreen && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="absolute bottom-2 left-2 z-10 bg-background/80 backdrop-blur"
+                      onClick={() => setPdfFullscreen(true)}
+                    >
+                      <Expand />
+                      {t("pages:templateCenter.enterFullscreen")}
+                    </Button>
                   )}
                 </div>
               )}
@@ -367,6 +404,36 @@ export default function TemplateDetailDialog({
           </Button>
         </DialogFooter>
       </DialogContent>
+
+      {/* PDF 全屏覆盖层：portal 到 body，避免对话框动画 transform 成为
+          fixed 包含块；与 GitDiffPage / FullscreenPDFPreview 同款设计 */}
+      {pdfFullscreen &&
+        previewUrl &&
+        createPortal(
+          <div className="fixed inset-0 z-50 flex flex-col bg-background">
+            <div className="flex items-center justify-between border-b px-4 py-2">
+              <h2 className="text-sm font-semibold">
+                {template?.name}
+                {" · "}
+                {t("pages:templateCenter.fullscreenTitle")}
+              </h2>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setPdfFullscreen(false)}
+              >
+                <Minimize />
+                {t("pages:templateCenter.quitFullscreen")}
+              </Button>
+            </div>
+            <div className="flex-1 overflow-hidden p-4">
+              <div className="h-full">
+                <PDFPreview url={previewUrl} />
+              </div>
+            </div>
+          </div>,
+          document.body,
+        )}
     </Dialog>
   );
 }
