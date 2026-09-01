@@ -1107,6 +1107,7 @@
       "opening": "Opening file…",
       "noProjectTitle": "No project opened",
       "noProjectDescription": "Open a project in the workspace before entering the editor.",
+      "noProjectDescriptionMultiUser": "Open a project from the project list before entering the editor.",
       "goWorkspace": "Go to workspace",
       "noFileSelectedTitle": "No file selected",
       "noFileSelectedHint": "Click a .tex / .bib / .sty / .cls file in the tree to start editing; Ctrl/Cmd+S to save.",

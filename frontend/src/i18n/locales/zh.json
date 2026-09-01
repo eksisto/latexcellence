@@ -1107,6 +1107,7 @@
       "opening": "正在打开文件…",
       "noProjectTitle": "尚未打开项目",
       "noProjectDescription": "请先在工作区打开项目，再进入编辑器。",
+      "noProjectDescriptionMultiUser": "请先在项目工作台打开项目，再进入编辑器。",
       "goWorkspace": "返回工作区",
       "noFileSelectedTitle": "未选择文件",
       "noFileSelectedHint": "在左侧文件树点击 .tex / .bib / .sty / .cls 文件开始编辑，Ctrl/Cmd+S 保存。",

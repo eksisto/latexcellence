@@ -45,6 +45,7 @@ import FileCode from "lucide-react/dist/esm/icons/file-code.mjs";
 import useStore from "@/store/useStore";
 import useEditorStore from "@/store/editorStore";
 import { api } from "@/api/index";
+import { isMultiUser } from "@/api/connection";
 import useIsOpened from "@/hooks/useIsOpened";
 import useCanWrite from "@/hooks/useCanWrite";
 import useEnabledFeatures from "@/hooks/useEnabledFeatures";
@@ -417,10 +418,19 @@ export default function EditorPage() {
           <EmptyState
             icon={FileCode}
             title={t("pages:editor.noProjectTitle")}
-            description={t("pages:editor.noProjectDescription")}
+            description={
+              isMultiUser()
+                ? t("pages:editor.noProjectDescriptionMultiUser")
+                : t("pages:editor.noProjectDescription")
+            }
           >
-            <Button nativeButton={false} render={<Link to="/workspace" />}>
-              {t("pages:editor.goWorkspace")}
+            <Button
+              nativeButton={false}
+              render={<Link to={isMultiUser() ? "/projects" : "/workspace"} />}
+            >
+              {isMultiUser()
+                ? t("common:openProjects")
+                : t("pages:editor.goWorkspace")}
             </Button>
           </EmptyState>
         </div>
@@ -442,8 +452,13 @@ export default function EditorPage() {
             title={t("pages:editor.disabledTitle")}
             description={t("pages:editor.disabledDescription")}
           >
-            <Button nativeButton={false} render={<Link to="/workspace" />}>
-              {t("pages:editor.goWorkspace")}
+            <Button
+              nativeButton={false}
+              render={<Link to={isMultiUser() ? "/projects" : "/workspace"} />}
+            >
+              {isMultiUser()
+                ? t("common:openProjects")
+                : t("pages:editor.goWorkspace")}
             </Button>
           </EmptyState>
         </div>

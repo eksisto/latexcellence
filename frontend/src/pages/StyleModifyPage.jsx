@@ -26,6 +26,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import PageHeader from "@/components/PageHeader";
 import { api } from "@/api/index";
+import { isMultiUser } from "@/api/connection";
 import CodeBlock from "@/components/CodeBlock";
 import CodeEditorInput from "@/components/CodeEditorInput";
 import useIsOpened from "@/hooks/useIsOpened";
@@ -151,10 +152,16 @@ export default function StyleModifyPage() {
                     <CardContent>
                       <Button
                         nativeButton={false}
-                        render={<Link to="/workspace" />}
+                        render={
+                          <Link
+                            to={isMultiUser() ? "/projects" : "/workspace"}
+                          />
+                        }
                       >
                         <FolderOpen />
-                        {t("common:openWorkspace")}
+                        {isMultiUser()
+                          ? t("common:openProjects")
+                          : t("common:openWorkspace")}
                       </Button>
                     </CardContent>
                   </Card>
