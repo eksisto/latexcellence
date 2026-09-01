@@ -200,7 +200,8 @@ class TemplateLibraryConfig(BaseModel):
         "data/template_library/"  # 单用户模式模板库目录（多用户按用户空间隔离）
     )
     max_upload_mb: int = Field(20, ge=1)  # 上传模板 zip 大小上限（MB）
-    # 上传模板包内允许保存的文件扩展名白名单（LaTeX 相关收窄，含图形/字体素材）
+    # 上传模板包内允许保存的文件扩展名白名单（LaTeX 相关收窄，含图形/字体素材）；
+    # 无扩展名文件（.gitignore/Makefile 等）豁免校验，上传解压后统一清理不入库
     allowed_extensions: list[str] = Field(
         default_factory=lambda: [
             ".tex",

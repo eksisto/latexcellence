@@ -13,7 +13,8 @@
     - 阻塞 I/O 与目录复制/扫描一律 asyncio.to_thread，不阻塞事件循环
     - 路径拼接统一经 path_guard（见 builtin_store.resolve_template_file）
     - 清洗：创建项目/另存为模板时排除 .git/ 与 LaTeX 编译产物（及内置
-      模板的 manifest.json 与 assets/）；上传模板原样保存（仅扩展名白名单）
+      模板的 manifest.json 与 assets/）；上传模板做扩展名白名单收窄，
+      无扩展名杂项（.gitignore/Makefile 等）豁免校验且不入库（解压即清理）
     - 错误统一映射 HTTPException（结构化 detail：{"error": code, ...}）
 """
 
@@ -431,6 +432,7 @@ async def upload_template(
             raise _map_archive_error(e)
 
         root = extracted.root
+        await asyncio.to_thread(_remove_extensionless_files, root)
         try:
             await asyncio.to_thread(_check_allowed_extensions, root)
         except ArchiveError as e:
@@ -504,14 +506,42 @@ def _stem_from_filename(filename: str) -> str:
     return name.strip()
 
 
+def _remove_extensionless_files(root: Path) -> None:
+    """清理无扩展名文件（.gitignore/Makefile/LICENSE 等）及其空目录。
+
+    无扩展名文件的 Path.suffix 为空串，不在白名单语义内，统一视为上传包
+    冗余：不入库。删除后自底向上剔除变空的子目录（rmdir 仅对空目录生效）。
+    """
+    for path in root.rglob("*"):
+        if path.is_symlink() or not path.is_file():
+            continue
+        if path.suffix == "":
+            try:
+                path.unlink()
+            except OSError as e:
+                logger.warning("Failed to remove extensionless file %s: %s", path, e)
+    for path in sorted(
+        (p for p in root.rglob("*") if p.is_dir() and not p.is_symlink()),
+        reverse=True,
+    ):
+        try:
+            path.rmdir()
+        except OSError:
+            pass
+
+
 def _check_allowed_extensions(root: Path) -> None:
-    """扩展名白名单收窄：上传包内出现白名单外文件类型直接拒绝（原样保存前提）。"""
+    """扩展名白名单收窄：上传包内出现白名单外文件类型直接拒绝。
+
+    无扩展名文件（.gitignore/Makefile 等，Path.suffix 为空串）豁免校验，
+    由 _remove_extensionless_files 统一清理，不入库。
+    """
     allowed = {
         ext.lower() for ext in get_config().features.template_library.allowed_extensions
     }
     for entry in builtin_store.iter_template_files(root):
         suffix = Path(entry.path).suffix.lower()
-        if suffix not in allowed:
+        if suffix and suffix not in allowed:
             raise ArchiveError(
                 "invalid_file_type",
                 f"Template contains files of disallowed type: {entry.path}",

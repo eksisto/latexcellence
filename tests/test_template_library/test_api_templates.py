@@ -142,6 +142,30 @@ class TestUpload:
         assert r.status_code == 400
         assert r.json()["detail"]["error"] == "invalid_file_type"
 
+    def test_upload_cleans_extensionless_files(self, su_client):
+        """无扩展名文件豁免白名单校验，但解压后清理、不入库。"""
+        payload = make_zip(
+            {
+                "main.tex": r"\documentclass{article}",
+                "figs/plot.png": "png",
+                ".gitignore": "build/",
+                "Makefile": "all:",
+                "LICENSE": "MIT",
+                "notes/readme": "junk",
+            }
+        )
+        r = su_client.post(
+            "/api/templates",
+            files={"archive": ("pack.zip", payload, "application/zip")},
+        )
+        assert r.status_code == 201, r.text
+        tpl = r.json()["template"]
+        # 无扩展名杂项全部被清理，仅剩白名单内文件
+        assert tpl["file_count"] == 2
+        detail = su_client.get(f"/api/templates/{tpl['id']}").json()
+        paths = [f["path"] for f in detail["files"]]
+        assert set(paths) == {"main.tex", "figs/plot.png"}
+
     def test_upload_over_size_limit(self, su_client, su_env):
         cfg = get_config()
         old = cfg.features.template_library.max_upload_mb

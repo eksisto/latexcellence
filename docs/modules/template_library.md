@@ -79,14 +79,14 @@ Prefix: `/api/templates`, Tag: `template_library`。`features.template_library.e
 
 | 通道 | 源 | 额外排除 |
 | --- | --- | --- |
-| `POST /`（upload） | zip 安全解压结果 | 无（原样保存，仅扩展名白名单收窄，见「安全」） |
+| `POST /`（upload） | zip 安全解压结果 | 无扩展名杂项文件（`.gitignore`/`Makefile` 等，解压即清理，见「安全」） |
 | `POST /from-project` | 当前打开项目的根目录 | 清洗规则（编译产物 + `.git/`） |
 | `POST /from-template-gen` | template_gen 会话沙箱 | 清洗规则 + `trace.jsonl` + `.pdf`（PDF 编译输出） |
 
 ## 安全边界
 
 - **上传解压**：复用 `backend/core/multiuser/upload.py` 的 `extract_archive` 安全链（zip 炸弹/路径穿越/嵌套深度防护），解压预算取当前用户「模板」类别剩余衍生配额（单用户退化为上传大小上限），超限即时拒绝；上传包流式写盘并实时校验 `max_upload_mb`。仅接受 `.zip`。
-- **扩展名白名单**：上传模板包内出现 `allowed_extensions`（LaTeX 相关收窄，含图形/字体素材）之外的文件类型直接拒绝——这是「上传原样保存」的前提。
+- **扩展名白名单**：上传模板包内出现 `allowed_extensions`（LaTeX 相关收窄，含图形/字体素材）之外的文件类型直接拒绝。无扩展名文件（`Path.suffix` 为空串，如 `.gitignore`/`Makefile`/`LICENSE`）豁免校验，但视为上传包冗余：解压后由 `_remove_extensionless_files()` 统一清理（连同清空后的子目录），不入库。
 - **路径安全唯一入口**：模板内文件读取统一经 `builtin_store.resolve_template_file()` → `path_guard.resolve_project_path()`（拒绝绝对路径 / `..` / 符号链接 / 越界逃逸 / 白名单外扩展名）；模板 id 经 `SAFE_ID_RE`（字母/数字/下划线/连字符）校验，杜绝路径穿越。
 - **源码查看白名单**：`file` 端点是纯文本通道，仅放行 `.tex/.sty/.cls/.bib/...` 等文本扩展名；二进制素材走 `thumbnail`/`preview` 专用端点。
 - **路径脱敏**：API 响应与错误消息只携带模板内相对路径，服务器绝对路径只进服务端日志（对齐 AGENTS.md 多用户路径脱敏约束）。
@@ -114,7 +114,7 @@ Prefix: `/api/templates`, Tag: `template_library`。`features.template_library.e
 - 一律排除：`.git/`；LaTeX 编译产物扩展名（`.aux/.log/.out/.toc/.bbl/.fls/.fdb_latexmk/.synctex.gz/...`）
 - 创建项目额外排除 `manifest.json`（内置模板的 `assets/` 元资源目录一并排除）——库工件不混入新建项目
 - `from-template-gen` 额外排除 `trace.jsonl` 与 `.pdf`
-- 上传模板例外：原样保存（安全前提是全包扩展名白名单校验）
+- 上传模板例外：不走 `_make_clean_ignore()`，而是解压后清理无扩展名杂项文件 + 全包扩展名白名单收窄（白名单外文件直接拒绝）
 
 ## 内置模板清单
 
