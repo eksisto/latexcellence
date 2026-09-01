@@ -1411,11 +1411,11 @@ def update_config_from_dict(updates: dict) -> AppConfig:
     _config = AppConfig(**merged)
     save_config()
 
-    # LLM 配置变更时，重置 LLMClient 单例使新配置立即生效
+    # LLM 配置变更时，清空模型客户端池使新配置立即生效（multi-model-plan §5.1）
     if "llm" in updates:
-        from backend.core.llm_client import get_llm_client
+        from backend.core.model_router import reset_client_pool
 
-        get_llm_client().reset()
+        reset_client_pool()
 
     # 联网搜索配置变更时，重置 SearchManager 单例使新配置立即生效
     if "features" in updates and "function_calling" in updates.get("features", {}):

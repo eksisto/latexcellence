@@ -5,6 +5,15 @@ OpenAI API 统一封装模块。
     1. 非流式对话（chat）：发送消息、接收 JSON 解析结果，含自动重试 + 指数退避
     2. 流式对话（chat_stream）：逐 token 输出，用于 SSE 推送进度
     3. 请求频率控制（rate limiting），避免触发 API 限流
+    4. 模型档案感知（multi-model-plan §5.1）：每个实例绑定一个档案
+       （profile_id），请求时经 _resolve_cfg() 实时解析「顶层字段 + 档案
+       覆盖项」合并视图；档案间的连接、节流与上下文窗口探测彼此隔离
+
+推理模型统一兼容（multi-model-plan §5.2，封装层处理、service 无感知）：
+    - 请求侧：参数类 4xx（拒绝 temperature / 要求 max_completion_tokens）
+      自动降参重试一次；厂商私有参数走档案级 extra_body 显式透传
+    - 响应侧：JSON 路径（chat / chat_with_usage）剥离 <think>...</think>；
+      reasoning_content 天然不参与解析，流式协议不变
 
 重试策略：
     - 网络/API 异常 → 重试（最多 3 次，间隔 2^n 秒指数退避）
@@ -32,7 +41,7 @@ from openai import (
 )
 from openai.types.chat import ChatCompletion
 
-from backend.core.config import get_config
+from backend.core.config import BUILTIN_PROFILE_ID, LLMConfig, get_config
 from backend.core.logger import get_logger
 from backend.core.multiuser import llm_governance
 
@@ -137,6 +146,121 @@ class StreamChunk:
     reasoning: str | None = None
 
 
+# ── 档案化配置解析与推理模型兼容辅助（multi-model-plan §5.1/§5.2）─────────
+
+
+@dataclass
+class ResolvedLLMCfg:
+    """「llm 顶层字段 + 档案覆盖项」的合并视图（每次请求实时解析，不缓存）。
+
+    档案覆盖项语义（multi-model-plan §4）：None / 0 / {}（空值哨兵）表示
+    继承顶层默认值。已接受限制：extra_body 以 {} 表示继承，因此「档案显式
+    清空顶层 extra_body」不可表达（P1 评审记录）。
+    """
+
+    api_key: str
+    base_url: str
+    model: str
+    temperature: float
+    max_tokens: int
+    request_interval: float
+    max_concurrency: int
+    context_window_tokens: int
+    models_probe_url: str
+    extra_body: dict[str, Any]
+
+
+_THINK_OPEN = "<think>"
+_THINK_CLOSE = "</think>"
+
+
+def _strip_think_blocks(text: str) -> str:
+    """剥离 content 中的 <think>...</think> 思维链片段（§5.2 响应侧清洗）。
+
+    部分推理模型会把思维链以 <think> 标签混入正文，干扰下游 JSON 解析；
+    在封装层统一剥离，service 无感知。未闭合的 <think> 不处理（无法确定
+    边界）；reasoning_content 字段天然不进正文，无需处理。
+
+    用 str.find 线性扫描而非正则：清洗在事件循环内同步执行，退化模型可能
+    重复吐出海量未闭合 <think> 标签，正则 `<think>.*?</think>` 在该病态
+    输入下为 O(标签数 × 文本长度)（实测 100KB / 数千标签达秒级，会阻塞
+    整个事件循环）；find 版本严格 O(n)，语义与正则版逐例一致。
+    """
+    if not text or _THINK_OPEN not in text:
+        return text
+    parts: list[str] = []
+    rest = text
+    while True:
+        start = rest.find(_THINK_OPEN)
+        if start == -1:
+            return "".join(parts) + rest
+        end = rest.find(_THINK_CLOSE, start + len(_THINK_OPEN))
+        if end == -1:
+            # 剩余部分含未闭合标签，无法确定边界，保持原样
+            return "".join(parts) + rest
+        parts.append(rest[:start])
+        rest = rest[end + len(_THINK_CLOSE) :]
+
+
+def _adapt_kwargs_for_param_error(
+    kwargs: dict[str, Any], exc: Exception
+) -> dict[str, Any] | None:
+    """按参数类 4xx 错误调整请求参数；无法识别或无可调整项时返回 None。
+
+    识别方式（保守，避免掩盖真实错误）：openai APIStatusError 且状态码为
+    400 / 422，且错误文本命中已知参数名。适配动作：
+        - 文本拒绝 temperature / top_p → 从请求中剔除对应参数；
+        - 文本要求 max_completion_tokens → 将 max_tokens 更名透传
+          （OpenAI 推理系列兼容语义）。
+    厂商私有参数不做猜测，继续走档案级 extra_body 显式透传。
+    """
+    if not isinstance(exc, APIStatusError) or exc.status_code not in (400, 422):
+        return None
+    text = str(exc).lower()
+    adapted = dict(kwargs)
+    changed = False
+    for param in ("temperature", "top_p"):
+        if param in text and param in adapted:
+            adapted.pop(param)
+            changed = True
+    if "max_completion_tokens" in text and "max_tokens" in adapted:
+        adapted["max_completion_tokens"] = adapted.pop("max_tokens")
+        changed = True
+    return adapted if changed else None
+
+
+# fire-and-forget 关闭任务的强引用集：事件循环仅持弱引用，不持引用的任务
+# 可能在 await 期间被 GC 回收，导致 close 静默丢失（CPython asyncio 已知
+# 陷阱）；完成后经 done callback 自动出集，集合常态为空。
+_pending_close_tasks: set[asyncio.Task] = set()
+
+
+def _close_async_client_quietly(aclient: AsyncOpenAI) -> None:
+    """尽力释放 AsyncOpenAI 底层 HTTP 连接（reset / 指纹重建路径的资源收尾）。
+
+    reset() 可能从无事件循环的同步上下文调用（如配置保存），此时无法
+    await close()，静默放弃、交由 GC 兜底；在事件循环内则以 fire-and-forget
+    任务关闭，不阻塞调用方（与既有 reset 的非阻塞语义一致）。
+    """
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        return
+
+    async def _close() -> None:
+        try:
+            await aclient.close()
+        except Exception:  # noqa: BLE001 - 释放路径绝不抛出
+            pass
+
+    try:
+        task = loop.create_task(_close())
+    except RuntimeError:
+        return
+    _pending_close_tasks.add(task)
+    task.add_done_callback(_pending_close_tasks.discard)
+
+
 class LLMClient:
     """
     LLM API 客户端。
@@ -144,32 +268,105 @@ class LLMClient:
     所有 LLM 调用（文本校对、表达优化、公式 OCR 等）都通过此模块进行。
     """
 
-    def __init__(self):
+    def __init__(self, profile_id: str | None = None):
+        """档案化客户端（multi-model-plan §5.1）。
+
+        profile_id：绑定的模型档案 id；None 表示无档案——直接使用 llm 顶层
+        字段，旧路径行为完全不变。实例在 __init__ 不缓存任何配置（AGENTS.md
+        热重载规范），档案对象与覆盖项在每次请求时经 _resolve_cfg() 实时解析。
+        """
+        self._profile_id = profile_id
         self._client: AsyncOpenAI | None = None
+        # 创建 AsyncOpenAI 时记录的档案指纹（base_url / api_key / model），
+        # 供 client 属性惰性校验；None 表示"外部直接注入的实例"（测试路径），
+        # 不参与指纹校验
+        self._client_fingerprint: tuple[str, str, str] | None = None
         self._client_lock = threading.Lock()
         self._last_request_time: float = 0
         self._rate_limit_lock = asyncio.Lock()
-        # 全局并发上限：所有 LLM 调用（含流式）共享同一信号量，
-        # 容量来自 config.llm.max_concurrency，热重载时随 reset() 重建。
+        # 并发上限：本实例（即本档案）的全部 LLM 调用共享同一信号量，容量来自
+        # 合并配置的 max_concurrency，热重载时随 reset() 重建。
         self._semaphore: asyncio.Semaphore | None = None
         self._semaphore_capacity: int = 0
         self._logger = get_logger("llm_client")
-        # 上下文窗口缓存：key=(base_url, model)，reset() 时随配置一起失效
-        self._context_window_cache: dict[tuple[str, str], int] = {}
+        # 上下文窗口缓存：key=(档案 id, base_url, model)，按档案隔离避免跨档案
+        # 串味（multi-model-plan §10 风险项），reset() 时随配置一起失效
+        self._context_window_cache: dict[tuple[str, str, str], int] = {}
         self._window_cache_lock = threading.Lock()
 
     def reset(self) -> None:
         """重置缓存的 AsyncOpenAI 实例与上下文窗口探测结果，使下次访问重新读取配置。"""
         with self._client_lock:
-            self._client = None
+            stale, self._client = self._client, None
+            self._client_fingerprint = None
         with self._window_cache_lock:
             self._context_window_cache.clear()
         self._semaphore = None
         self._semaphore_capacity = 0
+        if stale is not None:
+            _close_async_client_quietly(stale)
+
+    # ── 档案化配置解析（每次请求实时，严禁在 __init__ 缓存）────────────
+
+    def _resolve_cfg(self) -> "LLMConfig | ResolvedLLMCfg":
+        """解析本客户端生效的 LLM 配置视图（每次请求实时调用）。
+
+        - profile_id 为空 / 内置档案 id：直接返回 llm 顶层配置——内置档案即
+          顶层字段的镜像（config.builtin_default_profile），零合并开销，旧
+          路径行为完全不变；
+        - 自定义档案：按 id 从当前 config 实时重新解析档案对象（不缓存，防
+          止热重载后拿到旧档案），None / 0 / {} 覆盖项继承顶层默认值；
+        - 档案不存在（防御路径：正常应先经 reset_client_pool 清池）：回退
+          顶层配置，功能不中断。
+        """
+        cfg = get_config().llm
+        if not self._profile_id or self._profile_id == BUILTIN_PROFILE_ID:
+            return cfg
+        profile = next((p for p in cfg.profiles if p.id == self._profile_id), None)
+        if profile is None:
+            self._logger.warning(
+                "Profile %s not found in config; falling back to top-level llm config",
+                self._profile_id,
+            )
+            return cfg
+        return ResolvedLLMCfg(
+            api_key=profile.api_key,
+            base_url=profile.base_url,
+            model=profile.model,
+            temperature=(
+                cfg.temperature if profile.temperature is None else profile.temperature
+            ),
+            max_tokens=(
+                cfg.max_tokens if profile.max_tokens is None else profile.max_tokens
+            ),
+            request_interval=(
+                profile.request_interval or cfg.request_interval
+            ),  # 0 / null = 继承顶层
+            max_concurrency=(
+                cfg.max_concurrency
+                if profile.max_concurrency is None
+                else profile.max_concurrency
+            ),
+            # 0 / null = 继承顶层（顶层 0 = 自动探测）
+            context_window_tokens=(
+                profile.context_window_tokens or cfg.context_window_tokens
+            ),
+            models_probe_url=profile.models_probe_url or cfg.models_probe_url,
+            # {} = 继承顶层（"显式清空顶层 extra_body"不可表达，已接受限制）
+            extra_body=(
+                dict(profile.extra_body) if profile.extra_body else dict(cfg.extra_body)
+            ),
+        )
+
+    def _window_cache_key(
+        self, cfg: "LLMConfig | ResolvedLLMCfg"
+    ) -> tuple[str, str, str]:
+        """上下文窗口缓存 key：按档案 id 隔离（multi-model-plan §10 风险项）。"""
+        return (self._profile_id or BUILTIN_PROFILE_ID, cfg.base_url, cfg.model)
 
     def _get_semaphore(self) -> asyncio.Semaphore:
-        """按当前 max_concurrency 配置获取全局并发信号量（容量变化时重建）。"""
-        cap = get_config().llm.max_concurrency
+        """按当前合并配置的 max_concurrency 获取并发信号量（容量变化时重建）。"""
+        cap = self._resolve_cfg().max_concurrency
         if self._semaphore is None or self._semaphore_capacity != cap:
             self._semaphore = asyncio.Semaphore(cap)
             self._semaphore_capacity = cap
@@ -276,8 +473,8 @@ class LLMClient:
                 break
         if window is None:
             return None
-        cfg = get_config().llm
-        key = (cfg.base_url, cfg.model)
+        cfg = self._resolve_cfg()
+        key = self._window_cache_key(cfg)
         with self._window_cache_lock:
             self._context_window_cache[key] = window
         self._logger.info(
@@ -297,21 +494,22 @@ class LLMClient:
         获取当前模型上下文窗口（token）。
 
         优先级链：
-            1. 显式配置 llm.context_window_tokens（非 0）
-            2. 缓存（含错误信息学习结果，按 (base_url, model)）
+            1. 合并配置的 context_window_tokens（显式配置非 0；档案覆盖项
+               0 / null 继承顶层）
+            2. 缓存（含错误信息学习结果，按 (档案 id, base_url, model)）
             3. GET {probe_base}/models 探测（默认 base_url，可用
-               llm.models_probe_url 覆盖为直连地址）
+               models_probe_url 覆盖为直连地址）
             4. 内置模型表
             5. 默认值 200000
 
         探测失败只降级，绝不抛出；reset()（配置热重载）时缓存失效。
         """
-        cfg = get_config().llm
+        cfg = self._resolve_cfg()
         explicit = cfg.context_window_tokens
         if explicit > 0:
             return explicit
 
-        key = (cfg.base_url, cfg.model)
+        key = self._window_cache_key(cfg)
         with self._window_cache_lock:
             cached = self._context_window_cache.get(key)
         if cached is not None:
@@ -342,31 +540,88 @@ class LLMClient:
     @property
     def client(self) -> AsyncOpenAI:
         """
-        获取或创建 AsyncOpenAI 实例（懒加载 + 双检锁）。
-        每次创建时实时读取 config，支持运行时热重载 api_key / base_url。
+        获取或创建 AsyncOpenAI 实例（懒加载 + 双检锁 + 档案指纹惰性校验）。
+
+        - 首次访问时实时读取配置创建，支持运行时热重载 api_key / base_url；
+        - 池化客户端（创建时记录过指纹）每次访问按档案指纹（base_url /
+          api_key / model）惰性校验，指纹变化即重建内部实例，并关闭被替换
+          的旧实例（该双保险路径是绕过 reset 钩子的磁盘直改热重载的主失效
+          路径，不关闭会每次泄漏一个连接池；multi-model-plan §5.1）；
+        - 指纹为 None 表示外部直接注入的 _client（测试路径），跳过校验。
         """
-        if self._client is None:
+        if self._client is not None and self._client_fingerprint is None:
+            return self._client
+        cfg = self._resolve_cfg()
+        fingerprint = (cfg.base_url, cfg.api_key, cfg.model)
+        stale: AsyncOpenAI | None = None
+        if self._client is None or self._client_fingerprint != fingerprint:
             with self._client_lock:
-                if self._client is None:
-                    cfg = get_config().llm
+                if self._client is None or self._client_fingerprint != fingerprint:
+                    stale = self._client
                     self._client = AsyncOpenAI(
                         api_key=cfg.api_key,
                         base_url=cfg.base_url,
                     )
+                    self._client_fingerprint = fingerprint
+        if stale is not None:
+            _close_async_client_quietly(stale)
         return self._client
 
     async def _rate_limit(self) -> None:
         """
-        请求频率控制。
-        确保两次请求之间的时间间隔不小于 config.llm.request_interval。
+        请求频率控制（按本实例档案独立节流）。
+        确保两次请求之间的时间间隔不小于合并配置的 request_interval。
         如果上次请求距今不足间隔，则等待到足够时间后再放行。
         """
         async with self._rate_limit_lock:
-            cfg = get_config().llm
+            interval = self._resolve_cfg().request_interval
             elapsed = time.time() - self._last_request_time
-            if elapsed < cfg.request_interval:
-                await asyncio.sleep(cfg.request_interval - elapsed)
+            if elapsed < interval:
+                await asyncio.sleep(interval - elapsed)
             self._last_request_time = time.time()
+
+    async def _create_raw(
+        self, kwargs: dict[str, Any], stream_options: dict[str, Any] | None
+    ) -> Any:
+        """直连 chat.completions.create（stream_options 可选）。"""
+        if stream_options is None:
+            return await self.client.chat.completions.create(**kwargs)
+        return await self.client.chat.completions.create(
+            **kwargs, stream_options=stream_options
+        )
+
+    async def _create_completion(
+        self, kwargs: dict[str, Any], *, stream_options: dict[str, Any] | None = None
+    ) -> Any:
+        """发起 chat.completions.create，统一请求侧推理模型兼容（§5.2）。
+
+        降级顺序：
+            1. 参数类 4xx（如推理模型拒绝 temperature、要求
+               max_completion_tokens）→ 按错误信息剔除/替换不支持参数，
+               立即重试一次并记 warning 日志；
+            2. （仅流式）stream_options 不被网关支持 → 去掉该参数重试
+               （现状降级行为，保持不变）。
+        """
+        current = dict(kwargs)
+        try:
+            return await self._create_raw(current, stream_options)
+        except Exception as first_error:
+            adapted = _adapt_kwargs_for_param_error(current, first_error)
+            if adapted is not None:
+                self._logger.warning(
+                    "LLM endpoint rejected request parameters "
+                    "(%s); retrying once with adapted kwargs",
+                    first_error,
+                )
+                current = adapted
+                try:
+                    return await self._create_raw(current, stream_options)
+                except Exception as adapted_error:
+                    first_error = adapted_error
+            if stream_options is None:
+                raise
+            self._logger.warning(f"stream_options unsupported, fallback: {first_error}")
+            return await self._create_raw(current, None)
 
     async def chat(
         self,
@@ -444,7 +699,7 @@ class LLMClient:
         usage 为 None 表示 API 未返回用量信息（调用方降级估算）；
         其余行为与 chat() 一致。
         """
-        cfg = get_config().llm
+        cfg = self._resolve_cfg()
         model_name = model or cfg.model
         temp = temperature if temperature is not None else cfg.temperature
         max_tok = max_tokens if max_tokens is not None else cfg.max_tokens
@@ -469,7 +724,7 @@ class LLMClient:
                 if cfg.extra_body:
                     kwargs["extra_body"] = cfg.extra_body
 
-                response = await self.client.chat.completions.create(**kwargs)
+                response = await self._create_completion(kwargs)
 
                 content = response.choices[0].message.content
                 usage = response.usage
@@ -486,7 +741,8 @@ class LLMClient:
                         f"total_tokens={usage.total_tokens}"
                     )
 
-                return content, usage_info
+                # 响应侧清洗：剥离推理模型混入正文的 <think> 思维链片段（§5.2）
+                return _strip_think_blocks(content) if content else content, usage_info
 
             except Exception as e:
                 self._learn_window_from_exception(e)
@@ -537,9 +793,9 @@ class LLMClient:
             max_tokens: 最大生成 token 数（覆盖 config 中的默认值）
 
         生成：
-            每次 yield 一个文本片段（string），逐 token 流式返回
+            每次 yield 一个 token 片段（string），逐 token 流式返回
         """
-        cfg = get_config().llm
+        cfg = self._resolve_cfg()
         temp = temperature if temperature is not None else cfg.temperature
         max_tok = max_tokens if max_tokens is not None else cfg.max_tokens
 
@@ -556,7 +812,7 @@ class LLMClient:
         }
         if cfg.extra_body:
             kwargs["extra_body"] = cfg.extra_body
-        stream = await self.client.chat.completions.create(**kwargs)
+        stream = await self._create_completion(kwargs)
 
         async for chunk in stream:
             if chunk.choices and chunk.choices[0].delta.content:
@@ -611,7 +867,7 @@ class LLMClient:
         异常：
             重试耗尽后抛出最后一次异常的原始类型
         """
-        cfg = get_config().llm
+        cfg = self._resolve_cfg()
         temp = temperature if temperature is not None else cfg.temperature
         max_tok = max_tokens if max_tokens is not None else cfg.max_tokens
 
@@ -635,7 +891,7 @@ class LLMClient:
                 if cfg.extra_body:
                     kwargs["extra_body"] = cfg.extra_body
 
-                response = await self.client.chat.completions.create(**kwargs)
+                response = await self._create_completion(kwargs)
 
                 usage = response.usage
                 if usage:
@@ -704,7 +960,7 @@ class LLMClient:
         生成：
             每次 yield 一个 StreamChunk 实例。
         """
-        cfg = get_config().llm
+        cfg = self._resolve_cfg()
         temp = temperature if temperature is not None else cfg.temperature
         max_tok = max_tokens if max_tokens is not None else cfg.max_tokens
 
@@ -723,13 +979,9 @@ class LLMClient:
         }
         if cfg.extra_body:
             kwargs["extra_body"] = cfg.extra_body
-        try:
-            stream = await self.client.chat.completions.create(
-                **kwargs, stream_options={"include_usage": True}
-            )
-        except Exception as e:
-            self._logger.warning(f"stream_options unsupported, fallback: {e}")
-            stream = await self.client.chat.completions.create(**kwargs)
+        stream = await self._create_completion(
+            kwargs, stream_options={"include_usage": True}
+        )
 
         async for chunk in stream:
             content = None
@@ -802,7 +1054,7 @@ class LLMClient:
         生成：
             每次 yield 一个 StreamChunk 实例。
         """
-        cfg = get_config().llm
+        cfg = self._resolve_cfg()
         temp = temperature if temperature is not None else cfg.temperature
         max_tok = max_tokens if max_tokens is not None else cfg.max_tokens
 
@@ -822,13 +1074,9 @@ class LLMClient:
         }
         if cfg.extra_body:
             kwargs["extra_body"] = cfg.extra_body
-        try:
-            stream = await self.client.chat.completions.create(
-                **kwargs, stream_options={"include_usage": True}
-            )
-        except Exception as e:
-            self._logger.warning(f"stream_options unsupported, fallback: {e}")
-            stream = await self.client.chat.completions.create(**kwargs)
+        stream = await self._create_completion(
+            kwargs, stream_options={"include_usage": True}
+        )
 
         tool_calls_acc: dict[int, dict[str, Any]] = {}
 
@@ -980,18 +1228,13 @@ async def chat_stream_with_tools_retry(
             await asyncio.sleep(1)
 
 
-# 全局单例：LLM 客户端实例
-_llm_client: LLMClient | None = None
-_llm_client_lock = threading.Lock()
-
-
 def get_llm_client() -> LLMClient:
+    """获取 default 槽位的 LLMClient（模型路由器薄别名，multi-model-plan §5.1）。
+
+    存量导入路径（from backend.core.llm_client import get_llm_client）保持
+    不变；P3 调用点迁移后本别名仅服务尚未迁移的调用方与存量测试。函数级
+    导入以避免 llm_client ↔ model_router 的模块环。
     """
-    获取全局唯一的 LLMClient 实例（单例模式）。
-    """
-    global _llm_client
-    if _llm_client is None:
-        with _llm_client_lock:
-            if _llm_client is None:
-                _llm_client = LLMClient()
-    return _llm_client
+    from backend.core.model_router import get_client_for
+
+    return get_client_for("default")

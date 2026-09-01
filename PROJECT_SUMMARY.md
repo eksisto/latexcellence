@@ -28,6 +28,7 @@ latexcellence/
 │   ├── core/
 │   │   ├── config.py                # Pydantic 配置模型 + 热重载
 │   │   ├── llm_client.py            # AsyncOpenAI 封装（流式 + 重试 + 限流 + Function Calling）
+│   │   ├── model_router.py          # 模型路由器（槽位 → 档案客户端池，热重载清池）
 │   │   ├── security_middleware.py   # CORS 白名单 + 共享访问令牌中间件（多用户模式：会话 + CSRF + 请求级用户上下文全局注入）
 │   │   ├── logger.py                # TimedRotatingFileHandler 日志
 │   │   ├── workspace_manager.py     # 多工作区管理（workspace_id → LatexProject）
