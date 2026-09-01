@@ -23,7 +23,50 @@
     "max_concurrency": 5,
     "context_window_tokens": 0,
     "models_probe_url": "",
-    "extra_body": {}
+    "extra_body": {},
+    "profiles": [
+      {
+        "id": "deepthink",
+        "name": "深度思考模型",
+        "base_url": "https://open.bigmodel.cn/api/paas/v4",
+        "api_key": "",
+        "model": "glm-4.6",
+        "capabilities": ["vision", "reasoning"],
+        "temperature": null,
+        "max_tokens": null,
+        "request_interval": null,
+        "max_concurrency": null,
+        "context_window_tokens": 0,
+        "models_probe_url": "",
+        "extra_body": {}
+      },
+      {
+        "id": "vision-pro",
+        "name": "视觉模型",
+        "base_url": "https://api.openai.com/v1",
+        "api_key": "",
+        "model": "gpt-4o",
+        "capabilities": ["vision"],
+        "temperature": null,
+        "max_tokens": null,
+        "request_interval": null,
+        "max_concurrency": null,
+        "context_window_tokens": 0,
+        "models_probe_url": "",
+        "extra_body": {}
+      }
+    ],
+    "assignments": {
+      "default": "",
+      "agent": "",
+      "ocr": "",
+      "writing_chat": "",
+      "typo_check": "",
+      "expression_opt": "",
+      "code_review": "",
+      "terminology_check": "",
+      "paragraph_translate": ""
+    }
   },
   "http": {
     "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36"

@@ -20,12 +20,20 @@ import copy
 import ipaddress
 import json
 import os
+import re
 import threading
 from pathlib import Path
 from typing import Any, Literal
 
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    ValidationInfo,
+    field_validator,
+    model_validator,
+)
 
 from backend.utils.file_ops import atomic_write
 
@@ -48,6 +56,102 @@ class SecurityConfig(BaseModel):
     """跨域访问安全配置"""
 
     access_token: str = ""  # 共享访问令牌（留空表示不校验，用于纯本地开发）
+
+
+# ── 多模型支持：模型档案 + 槽位指派（multi-model-plan §4）──────────────
+
+# 内置默认档案的保留 id：由 llm 顶层字段在读取侧合成（自动迁移，不回写文件），
+# 用户自定义档案禁止占用该 id。
+BUILTIN_PROFILE_ID = "__default__"
+
+# 固定槽位（角色）集合：assignments 只允许这些键。
+# 空串值 = 跟随 default 槽；default 槽空串 = 内置默认档案。
+LLM_ROLE_KEYS: tuple[str, ...] = (
+    "default",
+    "agent",
+    "ocr",
+    "writing_chat",
+    "typo_check",
+    "expression_opt",
+    "code_review",
+    "terminology_check",
+    "paragraph_translate",
+)
+
+# 档案能力声明闭集：vision 参与槽位硬校验（OCR 必需）；reasoning 为提示性标注。
+LLM_CAPABILITIES: tuple[str, ...] = ("vision", "reasoning")
+
+# 档案 id 格式：非空，仅字母 / 数字 / 下划线 / 连字符
+_PROFILE_ID_PATTERN = re.compile(r"^[a-zA-Z0-9_-]+$")
+
+
+def default_assignments() -> dict[str, str]:
+    """返回全部槽位为空串的指派表（每次构造新对象，避免共享可变默认）。"""
+    return {role: "" for role in LLM_ROLE_KEYS}
+
+
+class ModelProfile(BaseModel):
+    """模型档案：一个可独立调用的 LLM 连接（多模型支持，multi-model-plan §4）。
+
+    连接三件套（base_url / api_key / model）必填；capabilities 为闭集能力声明。
+    可选覆盖项（temperature / max_tokens / request_interval / max_concurrency /
+    context_window_tokens / models_probe_url / extra_body）缺省或为 null / 0 / {}
+    时表示继承 llm 顶层默认值，「档案覆盖项 + 顶层字段」的合并视图由客户端层
+    在每次请求时实时解析（P2 落实），配置层不做缓存。
+    extra="forbid"：档案字段拼写错误在加载期直接报错，防止静默失效。
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    # 唯一标识：^[a-zA-Z0-9_-]+$；__default__ 为内置档案保留 id
+    id: str
+    name: str  # 展示名
+    base_url: str  # API 端点（必填）
+    api_key: str  # API Key（必填，可为空串以兼容免鉴权本地端点）
+    model: str  # 模型名称（必填）
+    # 能力声明（闭集：vision / reasoning），空列表表示未声明任何能力
+    capabilities: list[str] = Field(default_factory=list)
+    # ── 以下为可选覆盖项：null / 0 / {} 表示继承 llm 顶层默认值 ──
+    temperature: float | None = Field(default=None, le=2)
+    max_tokens: int | None = Field(default=None, ge=1)
+    request_interval: float | None = Field(default=None, ge=0)  # 每档案独立节流
+    max_concurrency: int | None = Field(default=None, ge=1)  # 每档案独立 Semaphore
+    context_window_tokens: int | None = 0  # 0 / null = 继承顶层（顶层 0 = 自动探测）
+    models_probe_url: str = ""  # 空串 = 继承顶层
+    extra_body: dict[str, Any] = Field(default_factory=dict)  # 空 {} = 继承顶层
+
+    @field_validator("id")
+    @classmethod
+    def _validate_id(cls, v: str) -> str:
+        """档案 id 非空且格式合法；保留 id 由 LLMConfig 层门禁拒绝。"""
+        value = v.strip()
+        if not value:
+            raise ValueError("模型档案 id 不能为空")
+        if not _PROFILE_ID_PATTERN.fullmatch(value):
+            raise ValueError(
+                f"模型档案 id 非法：{value!r}，仅允许字母、数字、下划线和连字符"
+            )
+        return value
+
+    @field_validator("base_url", "model")
+    @classmethod
+    def _validate_connection_fields(cls, v: str, info: ValidationInfo) -> str:
+        """连接三件套中的 base_url / model 不得为空（api_key 允许空串）。"""
+        if not v.strip():
+            raise ValueError(f"模型档案 {info.field_name} 不能为空")
+        return v
+
+    @field_validator("capabilities")
+    @classmethod
+    def _validate_capabilities(cls, v: list[str]) -> list[str]:
+        """能力声明闭集校验：仅允许 vision / reasoning。"""
+        invalid = [item for item in v if item not in LLM_CAPABILITIES]
+        if invalid:
+            raise ValueError(
+                f"模型档案能力声明含非法值：{invalid}，仅允许："
+                f"{'、'.join(LLM_CAPABILITIES)}"
+            )
+        return v
 
 
 class LLMConfig(BaseModel):
@@ -73,6 +177,137 @@ class LLMConfig(BaseModel):
     # 通义 {"enable_thinking": false}、智谱 {"thinking": {"reasoning_budget": "low"}}。
     # 留空 {} 时不发送任何额外参数，不支持的模型不会因此报错（按需显式开启）。
     extra_body: dict[str, Any] = Field(default_factory=dict)
+    # ── 多模型支持（multi-model-plan §4）──
+    # 模型档案列表：为空时读取侧自动合成内置默认档案（builtin_default_profile /
+    # effective_profiles），不回写配置文件，旧单模型配置零迁移成本。
+    profiles: list[ModelProfile] = Field(default_factory=list)
+    # 槽位指派表：固定 9 个角色键（LLM_ROLE_KEYS），值为档案 id；空串 = 跟随
+    # default 槽（default 槽空串 = 内置默认档案）。缺失键加载时自动补空串。
+    assignments: dict[str, str] = Field(default_factory=default_assignments)
+
+    @model_validator(mode="before")
+    @classmethod
+    def _normalize_assignments(cls, data):
+        """指派表规范化：未知槽位直接拒绝、缺失槽位补空串、null 视为空串。"""
+        if not isinstance(data, dict):
+            return data
+        raw = data.get("assignments")
+        if raw is None:
+            return data  # 缺省时由字段默认工厂补全
+        if not isinstance(raw, dict):
+            raise ValueError("llm.assignments 必须是对象（槽位 → 档案 id 的映射）")
+        unknown = sorted(str(key) for key in raw if key not in LLM_ROLE_KEYS)
+        if unknown:
+            raise ValueError(
+                f"llm.assignments 含未知槽位：{'、'.join(unknown)}；"
+                f"支持的槽位：{'、'.join(LLM_ROLE_KEYS)}"
+            )
+        normalized = default_assignments()
+        for role in LLM_ROLE_KEYS:
+            value = raw.get(role)
+            # null 视为空串；其余交由 Pydantic str 类型校验
+            normalized[role] = "" if value is None else value
+        data = dict(data)
+        data["assignments"] = normalized
+        return data
+
+    @model_validator(mode="after")
+    def _validate_profiles_and_assignments(self) -> "LLMConfig":
+        """多模型配置硬校验门禁（multi-model-plan §5.3）。
+
+        启动加载与 /api/config 保存共用同一道门禁（Pydantic 校验失败一律拒绝）：
+        1. 档案 id 唯一，且不得占用内置档案保留 id（格式由 ModelProfile 层校验）；
+        2. assignments 引用的档案必须存在；
+        3. OCR 槽两级解析结果必须具备 vision 能力（视觉硬需求，无替代）。
+        """
+        seen: dict[str, int] = {}
+        for index, profile in enumerate(self.profiles, start=1):
+            if profile.id == BUILTIN_PROFILE_ID:
+                raise ValueError(
+                    f'模型档案 id "{BUILTIN_PROFILE_ID}" 为内置默认档案的'
+                    "保留 id，请改用其他 id"
+                )
+            if profile.id in seen:
+                raise ValueError(
+                    f'模型档案 id 重复："{profile.id}"（第 {seen[profile.id]} 与'
+                    f"第 {index} 个档案），请为每个档案使用唯一 id"
+                )
+            seen[profile.id] = index
+
+        available = "、".join(seen) if seen else "（无，请先在 profiles 中定义档案）"
+        for role in LLM_ROLE_KEYS:
+            target = self.assignments[role]
+            if target and target not in seen:
+                raise ValueError(
+                    f'槽位 "{role}" 指派的模型档案 "{target}" 不存在；'
+                    f"当前可用档案：{available}"
+                )
+
+        ocr_profile = self.resolve_role("ocr")
+        if "vision" not in ocr_profile.capabilities:
+            raise ValueError(
+                f'槽位 "ocr" 解析到的模型档案 "{ocr_profile.id}"'
+                f"（{ocr_profile.name}）缺少 vision 能力；OCR 功能必须使用"
+                "视觉模型，请为该档案勾选 vision 能力、改派其他视觉档案，"
+                "或清空该槽位指派（留空时跟随 default 槽）"
+            )
+        return self
+
+    def builtin_default_profile(self) -> ModelProfile:
+        """由顶层字段合成内置默认档案（id=__default__），每次调用构造新对象。
+
+        自动迁移核心（multi-model-plan §4）：不回写文件、不做任何缓存，仅在
+        读取侧合成。存量单模型一直承担包括 OCR 在内的全部调用，故内置档案
+        视为 vision + reasoning 全能力，保证旧配置迁移后零感知（不产生新的
+        校验失败）。
+        """
+        return ModelProfile(
+            id=BUILTIN_PROFILE_ID,
+            name="全局默认模型",
+            base_url=self.base_url,
+            api_key=self.api_key,
+            model=self.model,
+            capabilities=list(LLM_CAPABILITIES),
+            temperature=self.temperature,
+            max_tokens=self.max_tokens,
+            request_interval=self.request_interval,
+            max_concurrency=self.max_concurrency,
+            context_window_tokens=self.context_window_tokens,
+            models_probe_url=self.models_probe_url,
+            extra_body=dict(self.extra_body),
+        )
+
+    def effective_profiles(self) -> list[ModelProfile]:
+        """有效档案列表（自动迁移视图）：profiles 为空时合成内置档案。
+
+        profiles 非空时原样返回用户档案（不合成、不追加内置档案）；内置默认
+        档案始终是两级解析的最终兜底（见 resolve_role），与本列表是否包含它
+        无关——本列表面向档案管理 / 展示场景。
+        """
+        if self.profiles:
+            return list(self.profiles)
+        return [self.builtin_default_profile()]
+
+    def resolve_role(self, role: str) -> ModelProfile:
+        """两级槽位解析（multi-model-plan §4），纯函数式、供路由器（P2）复用。
+
+        规则：assignments[role] 非空 → 该档案；为空 → assignments["default"]
+        指派的档案；仍为空 → 内置默认档案（顶层字段合成）。未知角色抛
+        ValueError。
+        """
+        if role not in LLM_ROLE_KEYS:
+            raise ValueError(
+                f'未知的模型槽位："{role}"；支持的槽位：{"、".join(LLM_ROLE_KEYS)}'
+            )
+        target = self.assignments.get(role) or self.assignments.get("default") or ""
+        if target:
+            profile_map = {profile.id: profile for profile in self.profiles}
+            profile = profile_map.get(target)
+            if profile is None:
+                # 正常情况下已被校验门禁拦截，此处为防御性兜底
+                raise ValueError(f'槽位 "{role}" 指派的模型档案 "{target}" 不存在')
+            return profile
+        return self.builtin_default_profile()
 
 
 class TypoCheckConfig(BaseModel):
