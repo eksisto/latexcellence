@@ -22,8 +22,12 @@ import uvicorn
 
 from backend.core.config import load_config, get_config, update_config_from_dict
 from backend.core.logger import setup_logging, get_logger
+from backend.core.model_router import resolve_role_routes
 from backend.utils.spa_static_files import SPAStaticFiles
-from backend.core.multiuser.dependencies import require_admin_if_multiuser
+from backend.core.multiuser.dependencies import (
+    require_admin_if_multiuser,
+    require_login_if_multiuser,
+)
 from backend.core.multiuser.llm_governance import register_governance_handler
 from backend.core.security_middleware import AccessSecurityMiddleware
 from backend.modules.project_router import router as project_router
@@ -351,6 +355,24 @@ async def update_config(
             status_code=400, detail=f"Config validation failed: {details}"
         )
     return {"status": "ok"}
+
+
+@app.get("/api/llm/routes")
+async def get_llm_routes(_: None = Depends(require_login_if_multiuser)):
+    """
+    查询各角色槽位当前生效的模型档案解析结果（multi-model-plan §5.4）。
+
+    固定覆盖全部角色槽位，每项为该角色经两级解析（指派槽 → default 槽 →
+    内置档案）得到的档案展示信息，不含 api_key / base_url 等敏感字段；
+    每次请求实时解析，不缓存（热重载语义）。
+
+    权限（multi-model-plan §7.2 裁决）：模型为服务端全局配置、对用户只读，
+    功能页模型徽标在多用户模式下对所有登录用户展示，故本端点为"多用户
+    模式已登录即可读"（require_login_if_multiuser），宽于 /api/config 的
+    管理员门禁（响应无脱敏密钥，泄露面仅模型名）；单用户模式放行，仍受
+    共享访问令牌中间件约束。
+    """
+    return {"routes": resolve_role_routes()}
 
 
 # 注册各功能模块路由

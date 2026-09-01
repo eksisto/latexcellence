@@ -21,8 +21,9 @@ reset_client_pool 注释）。
 """
 
 import threading
+from typing import Any
 
-from backend.core.config import ModelProfile, get_config
+from backend.core.config import LLM_ROLE_KEYS, ModelProfile, get_config
 from backend.core.llm_client import LLMClient
 
 # 客户端池：profile_id → LLMClient（惰性创建，llm 配置变更时整体清空）
@@ -52,6 +53,30 @@ def _client_for_profile(profile: ModelProfile) -> LLMClient:
             client = LLMClient(profile_id=profile.id)
             _client_pool[profile.id] = client
         return client
+
+
+def resolve_role_routes() -> list[dict[str, Any]]:
+    """解析全部角色槽位当前生效的档案信息（GET /api/llm/routes 数据源）。
+
+    固定覆盖 LLM_ROLE_KEYS 全部槽位，每项为该角色经两级解析（指派槽 →
+    default 槽 → 内置档案）得到的展示信息，不含 api_key 等敏感字段；
+    每次调用实时读取配置解析，不做任何缓存（与 get_client_for 相同的
+    热重载语义）。
+    """
+    llm_cfg = get_config().llm
+    routes: list[dict[str, Any]] = []
+    for role in LLM_ROLE_KEYS:
+        profile = llm_cfg.resolve_role(role)
+        routes.append(
+            {
+                "role": role,
+                "profile_id": profile.id,
+                "profile_name": profile.name,
+                "model": profile.model,
+                "capabilities": list(profile.capabilities),
+            }
+        )
+    return routes
 
 
 def reset_client_pool() -> None:

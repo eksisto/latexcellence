@@ -236,6 +236,8 @@ export const api = {
         method: "POST",
         body: JSON.stringify(data),
       }),
+    /** 多模型支持：各角色槽位当前生效的模型档案解析结果（不含 api_key） */
+    llmRoutes: () => request("/llm/routes"),
   },
 
   /* ---- 项目管理 ---- */

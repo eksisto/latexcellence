@@ -83,6 +83,23 @@ async def require_admin_if_multiuser(
         raise forbidden("no_permission", "Admin privileges required")
 
 
+async def require_login_if_multiuser(
+    user: dict | None = Depends(get_current_user_optional),
+) -> dict | None:
+    """多用户模式下要求已登录（任意角色）；单用户模式直接放行（保持既有行为）。
+
+    与 require_admin_if_multiuser 同构但不限角色：供"响应无敏感字段、
+    多用户模式下所有登录用户可读"的只读端点使用（如 /api/llm/routes——
+    模型为服务端全局配置、对用户只读，功能页模型徽标对所有登录用户展示，
+    multi-model-plan §7.2；中间件已强制会话，本依赖为端点级显式声明）。
+    """
+    if not get_config().multi_user.enabled:
+        return None
+    if user is None:
+        raise unauthorized("Not logged in")
+    return user
+
+
 async def current_user_context(
     user: dict | None = Depends(get_current_user_optional),
 ) -> dict | None:

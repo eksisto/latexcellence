@@ -113,6 +113,49 @@ export const PATTERN_MAP = [
   ],
 
   // 配置校验
+  // 多模型配置校验门禁（multi-model-plan P1/P4）：具体门禁消息模式必须
+  // 排在下方通用 "Config validation failed:" 条目之前——该条目会把整段
+  // 消息（含 Pydantic 的 loc 前缀与 "Value error, " 前缀）作为 details
+  // 原样透传，无法翻译。门禁消息经 HTTP 层包装后形如
+  // "Config validation failed: llm: Value error, 槽位 "ocr" ..."，
+  // 故本组不加 ^ 锚定，按内部特异短语命中（短语含槽位/档案名格式，
+  // 足够特异，不会误伤其他配置错误）；多条错误以 "; " 连接时命中并
+  // 翻译首个。
+  [
+    /槽位 "([^"]+)" 解析到的模型档案 "([^"]+)"（([^）]+)）缺少 vision 能力/,
+    "configOcrSlotNeedsVision",
+    (m) => ({ role: m[1], id: m[2], name: m[3] }),
+  ],
+  [
+    /槽位 "([^"]+)" 指派的模型档案 "([^"]+)" 不存在/,
+    "configAssignmentProfileMissing",
+    (m) => ({ role: m[1], id: m[2] }),
+  ],
+  [
+    /llm\.assignments 含未知槽位：(.+?)；/,
+    "configAssignmentUnknownSlot",
+    (m) => ({ slots: m[1] }),
+  ],
+  [
+    /模型档案 id 重复："([^"]+)"/,
+    "configProfileIdDuplicate",
+    (m) => ({ id: m[1] }),
+  ],
+  [
+    /模型档案 id 非法：(.+?)，仅允许/,
+    "configProfileIdInvalid",
+    (m) => ({ id: m[1] }),
+  ],
+  [
+    /模型档案 id "[^"]*" 为内置默认档案的保留 id/,
+    "configProfileIdReserved",
+    () => ({}),
+  ],
+  [
+    /模型档案能力声明含非法值：(.+?)，仅允许/,
+    "configProfileCapabilitiesInvalid",
+    (m) => ({ values: m[1] }),
+  ],
   [
     /^Config validation failed:\s*(.+)/,
     "configValidationFailed",
