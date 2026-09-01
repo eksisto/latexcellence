@@ -211,6 +211,17 @@ class TestValidationGates:
         with pytest.raises(ValidationError):
             _llm(assignments={"ocr": 123})
 
+    def test_assignment_value_whitespace_stripped(self):
+        """指派值去首尾空白，与档案 id 规范化对齐（手改配置不产生误报）。"""
+        llm = _llm(profiles=[VISION_PROFILE], assignments={"ocr": "  vision-pro  "})
+        assert llm.assignments["ocr"] == "vision-pro"
+        assert llm.resolve_role("ocr").id == "vision-pro"
+
+    def test_assignment_to_reserved_builtin_id_rejected(self):
+        """assignments 引用内置保留 id 同样拒绝（内置档案不可被指派）。"""
+        with pytest.raises(ValidationError):
+            _llm(profiles=[VISION_PROFILE], assignments={"ocr": BUILTIN_PROFILE_ID})
+
     def test_valid_vision_assignment_passes(self):
         llm = _llm(
             profiles=[VISION_PROFILE, REASONING_PROFILE],
@@ -221,7 +232,7 @@ class TestValidationGates:
 
 
 class TestAssignmentsNormalization:
-    """指派表规范化：固定 9 键、缺失补空串、null 视为空串。"""
+    """指派表规范化：固定槽位键集合、缺失补空串、null 视为空串。"""
 
     def test_default_assignments_all_empty(self):
         llm = _llm()
@@ -305,6 +316,9 @@ class TestProfileOverrideFields:
             ModelProfile(**VISION_PROFILE, request_interval=-1)
         with pytest.raises(ValidationError):
             ModelProfile(**VISION_PROFILE, temperature=3)
+        with pytest.raises(ValidationError):
+            # 上下文窗口与顶层语义一致：非负（0 = 自动探测/继承）
+            ModelProfile(**VISION_PROFILE, context_window_tokens=-1)
 
     def test_override_values_roundtrip(self):
         profile = ModelProfile(
@@ -321,6 +335,24 @@ class TestProfileOverrideFields:
         base = {k: v for k, v in VISION_PROFILE.items() if k != "capabilities"}
         profile = ModelProfile(**base, capabilities=[])
         assert profile.capabilities == []
+
+    def test_text_fields_whitespace_stripped(self):
+        """展示名 / base_url / model 加载期去首尾空白，避免请求期才报错。"""
+        profile = ModelProfile(
+            **{
+                **VISION_PROFILE,
+                "name": "  视觉模型  ",
+                "base_url": "  https://vision.example.com/v1  ",
+                "model": " vision-model ",
+            }
+        )
+        assert profile.name == "视觉模型"
+        assert profile.base_url == "https://vision.example.com/v1"
+        assert profile.model == "vision-model"
+
+    def test_blank_name_rejected(self):
+        with pytest.raises(ValidationError):
+            ModelProfile(**{**VISION_PROFILE, "name": "   "})
 
 
 class TestLegacyConfigCompat:

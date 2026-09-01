@@ -288,6 +288,13 @@ async def get_full_config(
     key = data["llm"]["api_key"]
     if key:
         data["llm"]["api_key"] = "***" + key[-4:] if len(key) > 4 else "****"
+    # 模型档案 api_key 与顶层 Key 同口径脱敏：仅展示后 4 位，防止明文泄露
+    for profile in data["llm"].get("profiles", []):
+        profile_key = profile.get("api_key", "")
+        if profile_key:
+            profile["api_key"] = (
+                "***" + profile_key[-4:] if len(profile_key) > 4 else "****"
+            )
     providers = data["features"]["function_calling"]["scholarly_research"]["providers"]
     for provider_key in ("openalex", "semantic_scholar", "core", "unpaywall", "pubmed"):
         p = providers.get(provider_key, {})

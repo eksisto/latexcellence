@@ -711,3 +711,110 @@ class TestConfigApiValidation:
         assert exc_info.value.status_code == 400
         assert "agent_max_rounds" in exc_info.value.detail
         assert cfg_module.get_config().features.plot_gen.agent_max_rounds == 20
+
+
+class TestProfileApiKeyMasking:
+    """模型档案（llm.profiles）api_key 与顶层 llm.api_key 同一掩码协议：
+
+    GET /api/config 脱敏为 ***xxxx；update 回传掩码值按档案 id 保留原值，
+    掩码串绝不落盘（多模型配置 P1 引入的 secret 面与既有 Key 同等防护）。
+    """
+
+    PROFILE_VISION = {
+        "id": "vision-pro",
+        "name": "视觉模型",
+        "base_url": "https://vision.example.com/v1",
+        "api_key": "vision-secret-1234",
+        "model": "vision-model",
+        "capabilities": ["vision"],
+    }
+
+    def _write_profile_config(self, tmp_path):
+        return _write_config(
+            tmp_path,
+            overrides={"llm": {"profiles": [dict(self.PROFILE_VISION)]}},
+        )
+
+    @pytest.mark.asyncio
+    async def test_full_config_masks_profile_api_key(self, tmp_path):
+        """GET /api/config 不得明文返回档案 api_key（仅后 4 位）"""
+        config_path = self._write_profile_config(tmp_path)
+        with mock.patch.dict(os.environ, {}, clear=True):
+            cfg_module.load_config(config_path)
+            from main import get_full_config
+
+            response = await get_full_config()
+
+        masked = response["llm"]["profiles"][0]["api_key"]
+        assert masked == "***1234"
+        assert "vision-secret" not in json.dumps(response)
+
+    def test_masked_profile_key_roundtrip_keeps_value(self, tmp_path):
+        """前端回传掩码值 → 按档案 id 保留原 Key，掩码串不落盘"""
+        config_path = self._write_profile_config(tmp_path)
+        with mock.patch.dict(os.environ, {}, clear=True):
+            cfg_module.load_config(config_path)
+            cfg_module.update_config_from_dict(
+                {
+                    "llm": {
+                        "profiles": [
+                            dict(self.PROFILE_VISION, api_key="***1234"),
+                        ]
+                    }
+                }
+            )
+        result = _read_config(config_path)
+        assert result["llm"]["profiles"][0]["api_key"] == "vision-secret-1234"
+
+    def test_masked_profile_key_with_unknown_id_cleared(self, tmp_path):
+        """掩码值但 id 匹配不到现有档案 → 置空（掩码串不得被当作真实 Key）"""
+        config_path = self._write_profile_config(tmp_path)
+        with mock.patch.dict(os.environ, {}, clear=True):
+            cfg_module.load_config(config_path)
+            cfg_module.update_config_from_dict(
+                {
+                    "llm": {
+                        "profiles": [
+                            dict(
+                                self.PROFILE_VISION, id="new-profile", api_key="***1234"
+                            ),
+                        ]
+                    }
+                }
+            )
+        result = _read_config(config_path)
+        assert result["llm"]["profiles"][0]["api_key"] == ""
+
+    def test_new_profile_key_persists(self, tmp_path):
+        """真实新 Key 按用户输入持久化（解除掩码协议）"""
+        config_path = self._write_profile_config(tmp_path)
+        with mock.patch.dict(os.environ, {}, clear=True):
+            cfg_module.load_config(config_path)
+            cfg_module.update_config_from_dict(
+                {
+                    "llm": {
+                        "profiles": [
+                            dict(self.PROFILE_VISION, api_key="brand-new-key"),
+                        ]
+                    }
+                }
+            )
+        result = _read_config(config_path)
+        assert result["llm"]["profiles"][0]["api_key"] == "brand-new-key"
+
+    def test_empty_profile_key_clears_existing(self, tmp_path):
+        """空串按用户输入处理：可清空档案 Key（区别于顶层 llm.api_key 保留语义）"""
+        config_path = self._write_profile_config(tmp_path)
+        with mock.patch.dict(os.environ, {}, clear=True):
+            cfg_module.load_config(config_path)
+            cfg_module.update_config_from_dict(
+                {
+                    "llm": {
+                        "profiles": [
+                            dict(self.PROFILE_VISION, api_key=""),
+                        ]
+                    }
+                }
+            )
+        result = _read_config(config_path)
+        assert result["llm"]["profiles"][0]["api_key"] == ""

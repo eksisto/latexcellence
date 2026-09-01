@@ -116,7 +116,9 @@ class ModelProfile(BaseModel):
     max_tokens: int | None = Field(default=None, ge=1)
     request_interval: float | None = Field(default=None, ge=0)  # 每档案独立节流
     max_concurrency: int | None = Field(default=None, ge=1)  # 每档案独立 Semaphore
-    context_window_tokens: int | None = 0  # 0 / null = 继承顶层（顶层 0 = 自动探测）
+    context_window_tokens: int | None = Field(
+        default=0, ge=0
+    )  # 0 / null = 继承顶层（顶层 0 = 自动探测）
     models_probe_url: str = ""  # 空串 = 继承顶层
     extra_body: dict[str, Any] = Field(default_factory=dict)  # 空 {} = 继承顶层
 
@@ -133,13 +135,18 @@ class ModelProfile(BaseModel):
             )
         return value
 
-    @field_validator("base_url", "model")
+    @field_validator("name", "base_url", "model")
     @classmethod
-    def _validate_connection_fields(cls, v: str, info: ValidationInfo) -> str:
-        """连接三件套中的 base_url / model 不得为空（api_key 允许空串）。"""
-        if not v.strip():
+    def _validate_non_empty_text_fields(cls, v: str, info: ValidationInfo) -> str:
+        """展示名与连接字段（base_url / model）非空并去除首尾空白。
+
+        空白污染的 base_url / model 会让请求期才报错且难以定位，加载期统一
+        规范化（api_key 允许空串，兼容免鉴权本地端点）。
+        """
+        value = v.strip()
+        if not value:
             raise ValueError(f"模型档案 {info.field_name} 不能为空")
-        return v
+        return value
 
     @field_validator("capabilities")
     @classmethod
@@ -181,7 +188,7 @@ class LLMConfig(BaseModel):
     # 模型档案列表：为空时读取侧自动合成内置默认档案（builtin_default_profile /
     # effective_profiles），不回写配置文件，旧单模型配置零迁移成本。
     profiles: list[ModelProfile] = Field(default_factory=list)
-    # 槽位指派表：固定 9 个角色键（LLM_ROLE_KEYS），值为档案 id；空串 = 跟随
+    # 槽位指派表：固定槽位键集合（LLM_ROLE_KEYS），值为档案 id；空串 = 跟随
     # default 槽（default 槽空串 = 内置默认档案）。缺失键加载时自动补空串。
     assignments: dict[str, str] = Field(default_factory=default_assignments)
 
@@ -205,8 +212,15 @@ class LLMConfig(BaseModel):
         normalized = default_assignments()
         for role in LLM_ROLE_KEYS:
             value = raw.get(role)
-            # null 视为空串；其余交由 Pydantic str 类型校验
-            normalized[role] = "" if value is None else value
+            # null 视为空串；字符串去除首尾空白（与 ModelProfile 的 id 规范化
+            # 对齐，避免手改配置时的空白污染导致"档案不存在"误报）；
+            # 其余类型交由 Pydantic str 类型校验拒绝
+            if value is None:
+                normalized[role] = ""
+            elif isinstance(value, str):
+                normalized[role] = value.strip()
+            else:
+                normalized[role] = value
         data = dict(data)
         data["assignments"] = normalized
         return data
@@ -1373,6 +1387,25 @@ def update_config_from_dict(updates: dict) -> AppConfig:
             _set_nested(updates, secret_path, _get_nested(current, secret_path))
         elif value:
             _secrets_from_env.discard(secret_path)
+
+    # 模型档案 api_key（多模型 profiles）与顶层 llm.api_key 同一掩码协议：
+    #   - "***" 前缀（前端掩码回传）→ 按档案 id 匹配保留原值，掩码串绝不落盘；
+    #     id 匹配不到任何现有档案时置空（防掩码串被当作真实 Key 写入）；
+    #   - 其余值（含空串）按用户输入透传（档案 Key 允许为空，适配免鉴权端点）。
+    llm_updates = updates.get("llm")
+    if isinstance(llm_updates, dict) and isinstance(llm_updates.get("profiles"), list):
+        current_by_id = {
+            profile["id"]: profile
+            for profile in current.get("llm", {}).get("profiles", [])
+            if isinstance(profile, dict) and profile.get("id")
+        }
+        for profile_updates in llm_updates["profiles"]:
+            if not isinstance(profile_updates, dict):
+                continue
+            value = profile_updates.get("api_key")
+            if isinstance(value, str) and value.startswith("***"):
+                original = current_by_id.get(profile_updates.get("id"), {})
+                profile_updates["api_key"] = original.get("api_key", "")
 
     merged = _deep_merge(current, updates)
     _config = AppConfig(**merged)
