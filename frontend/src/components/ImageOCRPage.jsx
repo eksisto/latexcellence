@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import PageHeader from "@/components/PageHeader";
+import ModelBadge from "@/components/ModelBadge";
 import CodeBlock from "@/components/CodeBlock";
 import Upload from "lucide-react/dist/esm/icons/upload.mjs";
 import Loader2 from "lucide-react/dist/esm/icons/loader-circle.mjs";
@@ -143,7 +144,10 @@ export default function ImageOCRPage({
   return (
     <div className="min-h-screen p-8 animate-tab-enter">
       <div className="max-w-6xl mx-auto">
-        <PageHeader title={title} groupKey="contentImport" />
+        <PageHeader title={title} groupKey="contentImport">
+          {/* OCR 槽位当前生效模型（formula_ocr / table_ocr 共用） */}
+          <ModelBadge role="ocr" />
+        </PageHeader>
       </div>
 
       <div className="max-w-2xl mx-auto space-y-4">

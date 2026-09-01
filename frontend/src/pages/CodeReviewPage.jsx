@@ -31,6 +31,7 @@ import Loader2 from "lucide-react/dist/esm/icons/loader-circle.mjs";
 import Search from "lucide-react/dist/esm/icons/search.mjs";
 import FolderOpen from "lucide-react/dist/esm/icons/folder-open.mjs";
 import PageHeader from "@/components/PageHeader";
+import ModelBadge from "@/components/ModelBadge";
 import EmptyState from "@/components/EmptyState";
 import UndoRedoButtons from "@/components/UndoRedoButtons";
 import React from "react";
@@ -496,10 +497,9 @@ export default function CodeReviewPage() {
   return (
     <div className="min-h-screen p-8 animate-tab-enter">
       <div className="max-w-6xl mx-auto">
-        <PageHeader
-          title={t("pages:code_review.title")}
-          groupKey="code_review"
-        />
+        <PageHeader title={t("pages:code_review.title")} groupKey="code_review">
+          <ModelBadge role="code_review" />
+        </PageHeader>
       </div>
 
       <div className="max-w-4xl mx-auto">

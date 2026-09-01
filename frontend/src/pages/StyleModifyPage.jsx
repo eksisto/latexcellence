@@ -25,6 +25,7 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import PageHeader from "@/components/PageHeader";
+import ModelBadge from "@/components/ModelBadge";
 import { api } from "@/api/index";
 import { isMultiUser } from "@/api/connection";
 import CodeBlock from "@/components/CodeBlock";
@@ -119,10 +120,9 @@ export default function StyleModifyPage() {
   return (
     <div className="min-h-screen p-8 animate-tab-enter">
       <div className="max-w-6xl mx-auto">
-        <PageHeader
-          title={t("pages:styleModify.title")}
-          groupKey="code_review"
-        />
+        <PageHeader title={t("pages:styleModify.title")} groupKey="code_review">
+          <ModelBadge role="agent" />
+        </PageHeader>
       </div>
 
       <div className="max-w-6xl mx-auto space-y-6">

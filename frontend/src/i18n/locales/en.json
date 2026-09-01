@@ -1167,6 +1167,11 @@
     }
   },
   "components": {
+    "modelBadge": {
+      "currentModel": "Current model",
+      "openSettings": "View and manage models",
+      "readonlyHint": "Models are configured by the server"
+    },
     "settings": {
       "title": "Settings",
       "loading": "Loading...",
@@ -1220,6 +1225,42 @@
       "llmPresetReasoningLow": "reasoning_effort=low (widely supported)",
       "llmPresetQwenNoThinking": "enable_thinking=false (Qwen)",
       "llmPresetZhipuBudgetLow": "thinking.reasoning_budget=low (Zhipu)",
+      "modelManagement": "Model Management",
+      "modelManagementHint": "Each profile is an independently callable model connection; which model each feature uses is decided by the slot assignments below",
+      "modelProfiles": "Model Profiles",
+      "modelProfilesEmpty": "No profiles yet; without profiles every feature uses the global default configuration above",
+      "modelAddProfile": "Add Profile",
+      "modelRemoveProfile": "Remove Profile",
+      "modelProfileId": "Profile ID",
+      "modelProfileIdHint": "Only letters, digits, underscores and hyphens; cannot be changed after saving",
+      "modelProfileName": "Name",
+      "modelProfileNamePlaceholder": "e.g. Vision Model",
+      "modelApiKeyHint": "Saved keys show as a mask: keep the mask to reuse the stored key on save; clear it to remove",
+      "modelCapabilities": "Capabilities",
+      "modelCapability": {
+        "vision": "vision (image input)",
+        "reasoning": "reasoning (chain of thought)"
+      },
+      "modelOverrides": "Optional Overrides",
+      "modelOverridesActive": "overridden",
+      "modelOverridesHint": "Leave blank to inherit the global defaults above",
+      "modelReferencedCount": "Referenced by {{count}} slot(s)",
+      "modelReferencedBlockTitle": "This profile is referenced by slot(s) {{slots}}; reassign or clear them before deleting this profile",
+      "modelAssignments": "Slot Assignments",
+      "modelAssignmentsHint": "Blank follows the default slot; a blank default slot uses the global configuration",
+      "modelSlotFollowDefault": "Follow default slot",
+      "modelSlotBuiltin": "Use global default configuration (built-in profile)",
+      "modelRole": {
+        "default": "Default (fallback & auxiliary)",
+        "agent": "Agent tasks (template / plot / style)",
+        "ocr": "Image OCR (formula / table)",
+        "writing_chat": "Writing Assistant",
+        "typo_check": "Typo Check",
+        "expression_opt": "Expression Optimization",
+        "code_review": "Code Review",
+        "terminology_check": "Terminology Check",
+        "paragraph_translate": "Paragraph Translation"
+      },
       "features": "Features",
       "featureTypoCheck": "Typo Check",
       "featureExpressionOpt": "Expression Optimization",

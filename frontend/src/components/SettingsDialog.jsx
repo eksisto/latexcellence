@@ -1,4 +1,4 @@
-import { useCallback, useState, useEffect } from "react";
+import { useCallback, useRef, useState, useEffect } from "react";
 import { toast } from "sonner";
 import Settings from "lucide-react/dist/esm/icons/settings.mjs";
 import { useTranslation } from "react-i18next";
@@ -16,6 +16,7 @@ import ConnectionPanel from "@/components/ConnectionPanel";
 import ServerSection from "@/components/settings/ServerSection";
 import SecuritySection from "@/components/settings/SecuritySection";
 import LLMSection from "@/components/settings/LLMSection";
+import ModelManagementSection from "@/components/settings/ModelManagementSection";
 import FeaturesSection from "@/components/settings/FeaturesSection";
 import FunctionCallingSection from "@/components/settings/FunctionCallingSection";
 import HttpSection from "@/components/settings/HttpSection";
@@ -24,6 +25,7 @@ import MultiUserSection from "@/components/settings/MultiUserSection";
 import SandboxSection from "@/components/settings/SandboxSection";
 import SmtpSection from "@/components/settings/SmtpSection";
 import useStore from "@/store/useStore";
+import useUiStore, { SETTINGS_SECTION_MODELS } from "@/store/uiStore";
 import { isMultiUser } from "@/api/connection";
 
 /** 多用户模式：连接（基地址/令牌）由服务器统一管理，隐藏设置入口 */
@@ -43,7 +45,11 @@ function ConnectionSettingsSlot({ open }) {
 }
 
 export default function SettingsDialog() {
-  const [open, setOpen] = useState(false);
+  // 开关状态收口在 uiStore：ModelBadge 等深层组件可程序化打开并定位分区
+  const open = useUiStore((s) => s.settingsDialog.open);
+  const pendingSection = useUiStore((s) => s.settingsDialog.section);
+  const setOpen = useUiStore((s) => s.setSettingsDialogOpen);
+  const clearSettingsSection = useUiStore((s) => s.clearSettingsSection);
   const [config, setConfig] = useState(null);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -52,10 +58,14 @@ export default function SettingsDialog() {
     mathMarkups: [],
   });
   const [configLoadFailed, setConfigLoadFailed] = useState(false);
+  const modelsSectionRef = useRef(null);
   const { t } = useTranslation("components");
 
   useEffect(() => {
     if (open) {
+      // 每次打开都重取配置并重置草稿：分区组件（含模型管理的服务端
+      // 档案 id 快照）随最新服务端数据重新挂载，避免跨会话陈旧草稿
+      setConfig(null);
       setConfigLoadFailed(false);
       setLoading(true);
       Promise.all([
@@ -75,6 +85,22 @@ export default function SettingsDialog() {
         .finally(() => setLoading(false));
     }
   }, [open]);
+
+  // 程序化打开时定位到指定分区（multi-model-plan §7.2）：等配置与分区
+  // 渲染完成后再滚动，随后清除标记，避免之后常规打开重复定位
+  useEffect(() => {
+    if (!open || pendingSection !== SETTINGS_SECTION_MODELS || !config) {
+      return undefined;
+    }
+    const raf = requestAnimationFrame(() => {
+      modelsSectionRef.current?.scrollIntoView({
+        block: "start",
+        behavior: "smooth",
+      });
+      clearSettingsSection();
+    });
+    return () => cancelAnimationFrame(raf);
+  }, [open, pendingSection, config, clearSettingsSection]);
 
   const set = useCallback((path, value) => {
     setConfig((prev) => {
@@ -187,6 +213,9 @@ export default function SettingsDialog() {
           <ServerSection server={config.server} onChange={set} />
           <SecuritySection security={config.security} onChange={set} />
           <LLMSection llm={config.llm} onChange={set} />
+          <div ref={modelsSectionRef} className="scroll-mt-4">
+            <ModelManagementSection llm={config.llm} onChange={set} />
+          </div>
           <FeaturesSection
             features={config.features}
             onChange={set}

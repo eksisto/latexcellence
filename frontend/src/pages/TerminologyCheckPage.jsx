@@ -26,6 +26,7 @@ import Loader2 from "lucide-react/dist/esm/icons/loader-circle.mjs";
 import ListChecks from "lucide-react/dist/esm/icons/list-checks.mjs";
 import FolderOpen from "lucide-react/dist/esm/icons/folder-open.mjs";
 import PageHeader from "@/components/PageHeader";
+import ModelBadge from "@/components/ModelBadge";
 import EmptyState from "@/components/EmptyState";
 import UndoRedoButtons from "@/components/UndoRedoButtons";
 import ProofDiff from "@/components/ProofDiff";
@@ -405,7 +406,9 @@ export default function TerminologyCheckPage() {
         <PageHeader
           title={t("pages:terminologyCheck.title")}
           groupKey="textReview"
-        />
+        >
+          <ModelBadge role="terminology_check" />
+        </PageHeader>
       </div>
 
       <div className="max-w-4xl mx-auto">

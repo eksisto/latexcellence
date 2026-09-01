@@ -32,6 +32,7 @@ import FolderOpen from "lucide-react/dist/esm/icons/folder-open.mjs";
 import ListChecks from "lucide-react/dist/esm/icons/list-checks.mjs";
 import { api } from "@/api/index";
 import PageHeader from "@/components/PageHeader";
+import ModelBadge from "@/components/ModelBadge";
 import EmptyState from "@/components/EmptyState";
 import UndoRedoButtons from "@/components/UndoRedoButtons";
 import ProofDiff from "@/components/ProofDiff";
@@ -275,7 +276,9 @@ export default function ExpressionOptPage() {
         <PageHeader
           title={t("pages:expressionOpt.title")}
           groupKey="textReview"
-        />
+        >
+          <ModelBadge role="expression_opt" />
+        </PageHeader>
       </div>
 
       <div className="max-w-4xl mx-auto">

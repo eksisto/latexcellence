@@ -52,6 +52,7 @@ import {
 } from "@/components/ui/dialog";
 import { api } from "@/api/index";
 import PageHeader from "@/components/PageHeader";
+import ModelBadge from "@/components/ModelBadge";
 import CodeBlock from "@/components/CodeBlock";
 import { languageFromFilename } from "@/utils/highlight";
 import usePlotGen from "@/hooks/usePlotGen";
@@ -146,7 +147,9 @@ export default function PlotGenPage() {
           title={t("pages:plotGen.title")}
           description={t("pages:plotGen.subtitle")}
           groupKey="contentGeneration"
-        />
+        >
+          <ModelBadge role="agent" />
+        </PageHeader>
       </div>
 
       <div className="max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-3 gap-4">

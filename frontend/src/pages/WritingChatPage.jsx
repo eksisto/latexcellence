@@ -25,6 +25,7 @@ import {
 import { Separator } from "@/components/ui/separator";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import PageHeader from "@/components/PageHeader";
+import ModelBadge from "@/components/ModelBadge";
 import EmptyState from "@/components/EmptyState";
 import useWritingChat from "@/hooks/useWritingChat";
 import useIsOpened from "@/hooks/useIsOpened";
@@ -153,7 +154,9 @@ export default function WritingChatPage() {
   return (
     <div className="min-h-screen p-4 md:p-8 animate-tab-enter">
       <div className="max-w-7xl mx-auto">
-        <PageHeader title={t("pages:writingChat.title")} groupKey="aiAssist" />
+        <PageHeader title={t("pages:writingChat.title")} groupKey="aiAssist">
+          <ModelBadge role="writing_chat" />
+        </PageHeader>
       </div>
 
       {!isOpened || texFiles.length === 0 ? (

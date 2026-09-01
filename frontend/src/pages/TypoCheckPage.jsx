@@ -26,6 +26,7 @@ import ListChecks from "lucide-react/dist/esm/icons/list-checks.mjs";
 import FolderOpen from "lucide-react/dist/esm/icons/folder-open.mjs";
 import { api } from "@/api/index";
 import PageHeader from "@/components/PageHeader";
+import ModelBadge from "@/components/ModelBadge";
 import EmptyState from "@/components/EmptyState";
 import UndoRedoButtons from "@/components/UndoRedoButtons";
 import ProofDiff from "@/components/ProofDiff";
@@ -244,7 +245,9 @@ export default function TypoCheckPage() {
   return (
     <div className="min-h-screen p-8 animate-tab-enter">
       <div className="max-w-6xl mx-auto">
-        <PageHeader title={t("pages:typoCheck.title")} groupKey="textReview" />
+        <PageHeader title={t("pages:typoCheck.title")} groupKey="textReview">
+          <ModelBadge role="typo_check" />
+        </PageHeader>
       </div>
 
       <div className="max-w-4xl mx-auto">

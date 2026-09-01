@@ -1167,6 +1167,11 @@
     }
   },
   "components": {
+    "modelBadge": {
+      "currentModel": "目前模型",
+      "openSettings": "查看並管理各功能使用的模型",
+      "readonlyHint": "模型由伺服器統一配置"
+    },
     "settings": {
       "title": "設定",
       "loading": "載入中...",
@@ -1220,6 +1225,42 @@
       "llmPresetReasoningLow": "reasoning_effort=low（多家相容端點支援）",
       "llmPresetQwenNoThinking": "enable_thinking=false（千問）",
       "llmPresetZhipuBudgetLow": "thinking.reasoning_budget=low（智譜）",
+      "modelManagement": "模型管理",
+      "modelManagementHint": "檔案定義可獨立調用的模型連接；各功能使用哪個模型由下方槽位指派決定",
+      "modelProfiles": "模型檔案",
+      "modelProfilesEmpty": "尚無檔案；不設定檔案時全部功能使用上方全域預設配置",
+      "modelAddProfile": "新增檔案",
+      "modelRemoveProfile": "刪除檔案",
+      "modelProfileId": "檔案 ID",
+      "modelProfileIdHint": "僅允許字母、數字、底線和連字符；儲存後不可再修改",
+      "modelProfileName": "名稱",
+      "modelProfileNamePlaceholder": "如：視覺模型",
+      "modelApiKeyHint": "已儲存的金鑰以遮罩顯示：保留遮罩儲存即沿用原值，清空則移除",
+      "modelCapabilities": "能力宣告",
+      "modelCapability": {
+        "vision": "vision（影像輸入）",
+        "reasoning": "reasoning（推理／思維鏈）"
+      },
+      "modelOverrides": "可選覆寫項",
+      "modelOverridesActive": "已覆寫",
+      "modelOverridesHint": "留空表示沿用上方全域預設值",
+      "modelReferencedCount": "被 {{count}} 個槽位引用",
+      "modelReferencedBlockTitle": "該檔案被槽位 {{slots}} 引用，請先將這些槽位改派其他檔案或清空，再刪除檔案",
+      "modelAssignments": "槽位指派",
+      "modelAssignmentsHint": "留空跟隨 default 槽；default 留空使用全域預設配置",
+      "modelSlotFollowDefault": "跟隨 default 槽",
+      "modelSlotBuiltin": "使用全域預設配置（內建檔案）",
+      "modelRole": {
+        "default": "預設（兜底與輔助調用）",
+        "agent": "Agent 任務（模板 / 繪圖 / 樣式）",
+        "ocr": "圖片識別（公式 / 表格 OCR）",
+        "writing_chat": "寫作助手",
+        "typo_check": "文字校對",
+        "expression_opt": "表達優化",
+        "code_review": "程式碼審查",
+        "terminology_check": "術語一致性",
+        "paragraph_translate": "逐段翻譯"
+      },
       "features": "功能",
       "featureTypoCheck": "文字校對",
       "featureExpressionOpt": "表達優化",

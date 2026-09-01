@@ -36,6 +36,7 @@ import {
 } from "@/components/ui/dialog";
 import { api } from "@/api/index";
 import PageHeader from "@/components/PageHeader";
+import ModelBadge from "@/components/ModelBadge";
 import CodeBlock from "@/components/CodeBlock";
 import PDFPreview from "@/components/PDFPreview";
 import SaveTemplateGenDialog from "@/components/template-center/SaveTemplateGenDialog";
@@ -265,7 +266,9 @@ export default function TemplateGenPage() {
           title={t("pages:templateGen.title")}
           description={t("pages:templateGen.agentHint")}
           groupKey="contentGeneration"
-        />
+        >
+          <ModelBadge role="agent" />
+        </PageHeader>
       </div>
 
       <div className="max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-3 gap-4">
