@@ -12,7 +12,9 @@
  */
 
 import {
+  lazy,
   memo,
+  Suspense,
   useCallback,
   useDeferredValue,
   useEffect,
@@ -28,7 +30,6 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import MarkdownRenderer from "@/components/MarkdownRenderer";
 import Bot from "lucide-react/dist/esm/icons/bot.mjs";
 import Check from "lucide-react/dist/esm/icons/check.mjs";
 import FileDiff from "lucide-react/dist/esm/icons/file-diff.mjs";
@@ -150,6 +151,12 @@ const SuggestionCard = memo(function SuggestionCard({
   );
 });
 
+// bundle-dynamic-imports：react-markdown + katex 系列较重，且仅在
+// 面板渲染出首条 Markdown 消息时才真正需要，改为按需加载
+const LazyMarkdownRenderer = lazy(
+  () => import("@/components/MarkdownRenderer"),
+);
+
 /**
  * 消息正文渲染：useDeferredValue 把流式 token 驱动的 Markdown 重解析
  * 降为低优先级（React 可跳过中间态直接渲染较新内容），输入框与滚动
@@ -158,7 +165,11 @@ const SuggestionCard = memo(function SuggestionCard({
  */
 const MessageMarkdown = memo(function MessageMarkdown({ content }) {
   const deferredContent = useDeferredValue(content);
-  return <MarkdownRenderer>{deferredContent}</MarkdownRenderer>;
+  return (
+    <Suspense fallback={<div className="min-h-[1em]" aria-hidden />}>
+      <LazyMarkdownRenderer>{deferredContent}</LazyMarkdownRenderer>
+    </Suspense>
+  );
 });
 
 function AssistantPanel({

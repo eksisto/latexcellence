@@ -287,17 +287,20 @@ export default function useParagraphCheck({
           r.check_md5 ?? fileMd5sRef.current[r.file_path || activeFile] ?? null,
       }));
       setResults((prev) => {
-        const next = [...prev, ...stamped];
+        // 装饰-排序-去装饰（js-cache-function-results）：hasResultIssue 内部
+        // 需遍历 changes/suggestions，比较器逐对重复调用约 O(n²·k)，
+        // 排序前每条结果只算一次
+        const next = [...prev, ...stamped].map((r) => ({
+          result: r,
+          has: hasResultIssue(r),
+          order: fileOrder.get(r.file_path) ?? Infinity,
+        }));
         next.sort((a, b) => {
-          const aHas = hasResultIssue(a);
-          const bHas = hasResultIssue(b);
-          if (aHas !== bHas) return aHas ? -1 : 1;
-          const aOrder = fileOrder.get(a.file_path) ?? Infinity;
-          const bOrder = fileOrder.get(b.file_path) ?? Infinity;
-          if (aOrder !== bOrder) return aOrder - bOrder;
-          return a.paragraph_index - b.paragraph_index;
+          if (a.has !== b.has) return a.has ? -1 : 1;
+          if (a.order !== b.order) return a.order - b.order;
+          return a.result.paragraph_index - b.result.paragraph_index;
         });
-        return next;
+        return next.map((e) => e.result);
       });
     },
     [setResults, hasResultIssue, activeFile],

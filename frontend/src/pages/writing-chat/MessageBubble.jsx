@@ -1,4 +1,11 @@
-import { useEffect, useState, memo, useDeferredValue } from "react";
+import {
+  useEffect,
+  useState,
+  memo,
+  lazy,
+  Suspense,
+  useDeferredValue,
+} from "react";
 import { useTranslation } from "react-i18next";
 import Loader2 from "lucide-react/dist/esm/icons/loader-circle.mjs";
 import Lightbulb from "lucide-react/dist/esm/icons/lightbulb.mjs";
@@ -16,7 +23,21 @@ import GraduationCap from "lucide-react/dist/esm/icons/graduation-cap.mjs";
 import BookOpenText from "lucide-react/dist/esm/icons/book-open-text.mjs";
 import ShieldAlert from "lucide-react/dist/esm/icons/shield-alert.mjs";
 import { Button } from "@/components/ui/button";
-import MarkdownRenderer from "@/components/MarkdownRenderer";
+
+// bundle-dynamic-imports：react-markdown + katex 系列较重，且仅在
+// 会话渲染出首条 Markdown 消息时才真正需要，改为按需加载
+const LazyMarkdownRenderer = lazy(
+  () => import("@/components/MarkdownRenderer"),
+);
+
+/** Markdown 渲染的本地 Suspense 边界：chunk 加载瞬间不冒泡到路由级边界 */
+function MessageMarkdownBoundary({ children }) {
+  return (
+    <Suspense fallback={<div className="min-h-[1em]" aria-hidden />}>
+      <LazyMarkdownRenderer>{children}</LazyMarkdownRenderer>
+    </Suspense>
+  );
+}
 
 function formatTime(ts) {
   if (!ts) return "";
@@ -294,9 +315,9 @@ function MessageBubble({ message, actions }) {
                   >
                     <div className="overflow-hidden">
                       <div className="mt-2 text-xs leading-relaxed text-muted-foreground">
-                        <MarkdownRenderer>
+                        <MessageMarkdownBoundary>
                           {message.thinkingContent}
-                        </MarkdownRenderer>
+                        </MessageMarkdownBoundary>
                       </div>
                     </div>
                   </div>
@@ -616,7 +637,9 @@ function MessageBubble({ message, actions }) {
                 </span>
               ) : message.displayContent ||
                 (!message.thinkingOpen && message.content) ? (
-                <MarkdownRenderer>{deferredMarkdownContent}</MarkdownRenderer>
+                <MessageMarkdownBoundary>
+                  {deferredMarkdownContent}
+                </MessageMarkdownBoundary>
               ) : null}
             </div>
           )}

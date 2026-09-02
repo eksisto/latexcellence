@@ -633,7 +633,7 @@ export default function VersionManagePage() {
                                   </span>
                                 </li>
                               )}
-                              <li className="relative pl-8">
+                              <li className="relative pl-8 [content-visibility:auto] [contain-intrinsic-size:auto_48px]">
                                 <span
                                   aria-hidden
                                   className="absolute left-0 top-1 size-[15px] rounded-full border border-border bg-card"

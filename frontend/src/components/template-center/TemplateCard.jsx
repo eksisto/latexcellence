@@ -1,3 +1,4 @@
+import { memo } from "react";
 import { useTranslation } from "react-i18next";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
@@ -10,13 +11,20 @@ import TemplateThumbnail from "@/components/template-center/TemplateThumbnail";
 /**
  * 模板卡片：缩略图 + 名称 + 分类标签；内置模板带「内置」标识。
  * 「我的模板」中的卡片额外提供编辑（改名/分类）与删除操作。
+ * memo（rerender-memo）：调用方以稳定 setter 作回调，页面任意 state
+ * 变化时未受影响的卡片跳过重渲染。
  *
  * @param {object}   props.template     模板摘要（GET /api/templates 条目）
- * @param {() => void} props.onOpen     打开详情
- * @param {() => void} [props.onEdit]   编辑元数据（仅我的模板，未传则不显示）
- * @param {() => void} [props.onDelete] 删除（仅我的模板，未传则不显示）
+ * @param {(tpl: object) => void} props.onOpen 打开详情
+ * @param {(tpl: object) => void} [props.onEdit]   编辑元数据（仅我的模板，未传则不显示）
+ * @param {(tpl: object) => void} [props.onDelete] 删除（仅我的模板，未传则不显示）
  */
-export default function TemplateCard({ template, onOpen, onEdit, onDelete }) {
+const TemplateCard = memo(function TemplateCard({
+  template,
+  onOpen,
+  onEdit,
+  onDelete,
+}) {
   const { t } = useTranslation(["pages", "common"]);
   const isBuiltin = template.kind === "builtin";
   return (
@@ -98,4 +106,6 @@ export default function TemplateCard({ template, onOpen, onEdit, onDelete }) {
       )}
     </Card>
   );
-}
+});
+
+export default TemplateCard;

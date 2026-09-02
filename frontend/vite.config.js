@@ -30,11 +30,24 @@ function fontSourcePlugin() {
               injectTo: "head-prepend",
             },
           ]
-        : CDN_FONT_LINKS.map((href) => ({
-            tag: "link",
-            attrs: { rel: "stylesheet", href },
-            injectTo: "head-prepend",
-          }));
+        : [
+            // bundle-preload：字体 CSS 均来自该 CDN，先预热连接
+            // （DNS + TLS），缩短阻塞渲染的字体样式表建立连接的时间
+            {
+              tag: "link",
+              attrs: {
+                rel: "preconnect",
+                href: "https://s4.zstatic.net",
+                crossorigin: true,
+              },
+              injectTo: "head-prepend",
+            },
+            ...CDN_FONT_LINKS.map((href) => ({
+              tag: "link",
+              attrs: { rel: "stylesheet", href },
+              injectTo: "head-prepend",
+            })),
+          ];
       return { html, tags };
     },
   };

@@ -1,4 +1,10 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  useCallback,
+  useDeferredValue,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
@@ -77,13 +83,17 @@ export default function TemplateCenterPage() {
     if (featuresResolved && featureEnabled) loadTemplates();
   }, [featuresResolved, featureEnabled, loadTemplates]);
 
-  /** 按 tab（内置/我的）+ 搜索关键字 + 分类过滤并排序 */
+  /** 按 tab（内置/我的）+ 搜索关键字 + 分类过滤并排序。
+   * 过滤走 deferred 关键字（rerender-use-deferred-value）：键入保持跟手，
+   * 过滤与网格重渲染降为低优先级，对齐 useResultFilter / BibManagerLibrary
+   * 的既有先例 */
+  const deferredKeyword = useDeferredValue(keyword);
   const visibleTemplates = useMemo(() => {
     const kind = tab === "builtin" ? "builtin" : "user";
     return sortTemplates(
-      filterTemplates(templates, { keyword, category }),
+      filterTemplates(templates, { keyword: deferredKeyword, category }),
     ).filter((tpl) => tpl.kind === kind);
-  }, [templates, tab, keyword, category]);
+  }, [templates, tab, deferredKeyword, category]);
 
   /** 创建成功：多用户对齐 ProjectWorkbenchPage.handleOpen（清空项目态 →
    * 置目标项目身份 → 进 /workspace，由工作台恢复链路完成打开，含主文档
@@ -260,16 +270,12 @@ export default function TemplateCenterPage() {
                     <TemplateCard
                       key={tpl.id}
                       template={tpl}
-                      onOpen={() => setDetailTemplate(tpl)}
-                      onEdit={
-                        tabKey === "mine"
-                          ? () => setEditTemplate(tpl)
-                          : undefined
-                      }
+                      // 稳定回调（rerender-memo-with-default-value 配套）：
+                      // 传 setter 本体（接收 tpl），避免内联闭包让卡片 memo 失效
+                      onOpen={setDetailTemplate}
+                      onEdit={tabKey === "mine" ? setEditTemplate : undefined}
                       onDelete={
-                        tabKey === "mine"
-                          ? () => setDeleteTemplate(tpl)
-                          : undefined
+                        tabKey === "mine" ? setDeleteTemplate : undefined
                       }
                     />
                   ))}
