@@ -22,6 +22,10 @@
  *     URL ?file= 指定者激活（恢复集合与 URL 参数合并）；
  *   - 编译联动（Q16）：编译前依次保存所有脏 tab，任一失败中断并切换
  *     到归属 tab 进入冲突/陈旧流程；
+ *   - 一键格式化（阶段五 / Q8）：工具栏按钮 + Ctrl/Cmd+Shift+F 调后端
+ *     format-latex 纯转换端点，结果直接替换发起 tab 缓冲区并置脏
+ *     （单事务整文档替换，Ctrl+Z 一步撤销；落盘仍走 save-file），
+ *     viewer 禁用；
  *   - AI 助手（§7 / Q17）：建议卡片携带发送时来源 filePath，活跃 tab
  *     不匹配时禁用应用并提示切换；
  *   - 权限：viewer 可进入但只读（禁用保存与后端撤销），助手仅问答模式；
@@ -31,7 +35,13 @@
  *     preserveActiveFile，单用户 api.project.open），仅当 fileTree 为空时执行。
  */
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
@@ -70,6 +80,8 @@ import useCanWrite from "@/hooks/useCanWrite";
 import useEnabledFeatures from "@/hooks/useEnabledFeatures";
 import useEditorBuffer from "@/hooks/useEditorBuffer";
 import useEditorCompile from "@/hooks/useEditorCompile";
+import useEditorFormat from "@/hooks/useEditorFormat";
+import { isFormatShortcut } from "@/lib/editor/formatApply";
 import { translateError } from "@/utils/errorMessages";
 import { isEditableFilePath, isPreviewableFilePath } from "@/lib/editor/files";
 import { expandEntryInsert, insertSnippet } from "@/lib/editor/snippetInsert";
@@ -204,6 +216,20 @@ export default function EditorPage() {
     setFilePreviewPath,
     setFilePreviewUrl,
   });
+
+  /* ── 一键格式化（阶段五 / 决策 Q8）：结果直接替换发起 tab 缓冲区并置
+     脏（落盘仍走 save-file 单一路径），Ctrl+Z 一步撤销；viewer 禁用 */
+  const { formatting, handleFormat } = useEditorFormat({
+    workspaceId,
+    t,
+    getView: useCallback(() => editorViewRef.current, []),
+  });
+  // 快捷键经 ref 解引用：handleFormat 依赖 t / workspaceId，直接闭包会
+  // 随语言切换 / 项目切换重建监听器（与 Ctrl+S 的 saveRef 同模式）
+  const formatRef = useRef(handleFormat);
+  useLayoutEffect(() => {
+    formatRef.current = handleFormat;
+  }, [handleFormat]);
 
   /* ── 只读预览：按路径拉取 blob URL，切换/关闭/卸载时释放 ──────── */
   useEffect(() => {
@@ -342,6 +368,21 @@ export default function EditorPage() {
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
   }, []);
+
+  /* ── 一键格式化快捷键 Ctrl/Cmd+Shift+F（阶段五 / Q8；阶段二已占用
+     Ctrl+B/I/U/K/L、Ctrl+/，CM6 内置查找面板为 Ctrl/Cmd+F——Shift 变体
+     无冲突；viewer 只读 / 无激活 tab 时不触发，在途守卫在 hook 内） ── */
+  useEffect(() => {
+    const handler = (e) => {
+      if (!isFormatShortcut(e)) return;
+      e.preventDefault();
+      if (!canWrite) return;
+      if (!useEditorStore.getState().activeTabPath) return;
+      formatRef.current();
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [canWrite]);
 
   /* ── 宏包缺失联动 ──────────────────────────────────────────── */
   const addPackageToPreamble = useCallback(
@@ -591,6 +632,8 @@ export default function EditorPage() {
         onSave={doSaveActive}
         onReloadBuffer={handleReloadBuffer}
         onOpenPalette={() => setPaletteOpen(true)}
+        formatting={formatting}
+        onFormat={handleFormat}
         compileEnabled={
           enabledFeatures === null || enabledFeatures.compile !== false
         }

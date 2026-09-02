@@ -172,6 +172,27 @@ export function setTabBufferReducer(session, buffer, now) {
 }
 
 /**
+ * 后台 tab 缓冲区替换（一键格式化的非激活通路，阶段五 / Q8）：
+ * 更新指定 tab 的缓冲区并置脏（结果只进缓冲区，落盘仍走 save-file
+ * 单一路径）；不改激活位 / 乐观锁基线 / 陈旧标记——格式化不触磁盘。
+ * tab 不存在时原样返回原引用。
+ * @param {{tabs: Array, activeTabPath: string|null}} session
+ * @param {string} filePath 目标 tab（格式化发起时的 tab）
+ * @param {string} buffer 格式化后的全文
+ * @returns {{tabs: Array, activeTabPath: string|null}}
+ */
+export function replaceTabBufferReducer(session, filePath, buffer) {
+  const tab = findTab(session, filePath);
+  if (!tab || tab.buffer === buffer) return session;
+  return {
+    tabs: session.tabs.map((t) =>
+      t.filePath === filePath ? { ...t, buffer, dirty: true } : t,
+    ),
+    activeTabPath: session.activeTabPath,
+  };
+}
+
+/**
  * 保存成功回写：更新乐观锁基线、清除陈旧标记，并按保存快照重算脏标记
  * （在途期间有新输入 → 保持 dirty，避免"已保存"假象导致静默丢失）。
  * @param {{tabs: Array, activeTabPath: string|null}} session

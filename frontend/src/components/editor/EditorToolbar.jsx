@@ -12,6 +12,10 @@
  *
  * 编译按钮（阶段四 / 决策 Q18）：有脏改动时先自动保存（含乐观锁检查），
  * 失败中断编译进入既有冲突流程；编译执行与结果展示由 EditorPage 承担。
+ *
+ * 格式化按钮（阶段五 / 决策 Q8）：调 format-latex 纯转换端点，结果由
+ * useEditorFormat 直接替换发起 tab 缓冲区并置脏（Ctrl+Z 可撤销）；
+ * viewer 只读禁用（写前置操作，服务端同样要求写权限）；请求在途禁用防连点。
  */
 
 import { useState } from "react";
@@ -31,6 +35,7 @@ import Undo2 from "lucide-react/dist/esm/icons/undo-2.mjs";
 import Redo2 from "lucide-react/dist/esm/icons/redo-2.mjs";
 import Loader2 from "lucide-react/dist/esm/icons/loader-circle.mjs";
 import BookmarkPlus from "lucide-react/dist/esm/icons/bookmark-plus.mjs";
+import Sparkles from "lucide-react/dist/esm/icons/sparkles.mjs";
 
 import useStore from "@/store/useStore";
 import useEditorStore, { activeDirty } from "@/store/editorStore";
@@ -48,6 +53,8 @@ import SaveAsTemplateDialog from "@/components/template-center/SaveAsTemplateDia
  * @param {(filePath?: string) => Promise<boolean>} props.onReloadBuffer
  *   后端撤销/重做落盘后重拉文件内容刷新缓冲区
  * @param {() => void} [props.onOpenPalette] 唤起命令面板
+ * @param {boolean} [props.formatting=false] 格式化请求进行中（阶段五 / Q8）
+ * @param {() => void|Promise<void>} [props.onFormat] 一键格式化入口
  * @param {boolean} [props.compileEnabled=true] 部署级 compile 功能开关
  * @param {boolean} [props.compiling=false] 编译请求进行中
  * @param {() => void} [props.onCompile]    编译入口（先全量保存脏 tab）
@@ -61,6 +68,8 @@ export default function EditorToolbar({
   onSave,
   onReloadBuffer,
   onOpenPalette,
+  formatting = false,
+  onFormat,
   compileEnabled = true,
   compiling = false,
   onCompile,
@@ -88,6 +97,8 @@ export default function EditorToolbar({
   const historyDisabled = readOnly || !canWrite || dirty;
   // viewer 可编译（只读操作）；无文件时不可编译；保存/编译互斥防并发写盘
   const compileDisabled = !filePath || compiling || (saving && dirty);
+  // 格式化为写前置操作（Q8）：viewer 禁用；无文件 / 请求在途禁用防连点
+  const formatDisabled = readOnly || !canWrite || !filePath || formatting;
 
   return (
     // pr-9（36px）：设置按钮（size-icon，32px 盒）右缘落在视口-52px，
@@ -171,6 +182,24 @@ export default function EditorToolbar({
           <TooltipContent>
             {t("components:editor.commandPalette")}
           </TooltipContent>
+        </Tooltip>
+
+        {/* 一键格式化（阶段五 / Q8）：Ctrl+Z 可撤销，viewer 禁用 */}
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={() => onFormat?.()}
+                disabled={formatDisabled}
+              />
+            }
+          >
+            {formatting ? <Loader2 className="animate-spin" /> : <Sparkles />}
+            <span className="sr-only">{t("components:editor.format")}</span>
+          </TooltipTrigger>
+          <TooltipContent>{t("components:editor.formatHint")}</TooltipContent>
         </Tooltip>
 
         {compileEnabled && (

@@ -21,6 +21,11 @@ r"""
        扫描 .tex 提取 \label（含行号）与 \cite key、.bib 经 bib_parser
        提取条目 key 与标题，供前端 \ref / \label / \cite 补全；零 LLM、
        零写盘、响应只含相对路径
+    5. 一键格式化：POST /api/project/format-latex 的业务实现
+       （editor-productivity-plan §5.2 / 决策 Q8，阶段五）——纯转换端点，
+       接收缓冲区全文复用 latex_formatter（latexindent 优先、内置兜底，
+       外部命令执行沿既有 SandboxRunner 规则）返回格式化结果；不落盘、
+       不涉路径、零配额影响、零 LLM
 
 约束：
     - 面向用户的错误消息一律使用项目内相对路径（多用户路径脱敏规则），
@@ -49,6 +54,7 @@ from backend.core.logger import get_logger
 from backend.core.multiuser import edit_log
 from backend.core.project_manager import FileConflictError
 from backend.modules.projects import service as projects_service
+from backend.utils.latex_formatter import format_latex_source
 from backend.utils.latex_json_guard import check_latex_corruption
 from backend.utils.path_guard import resolve_project_path
 
@@ -58,7 +64,8 @@ logger = get_logger(__name__)
 EDITABLE_SUFFIXES: tuple[str, ...] = (".tex", ".bib", ".sty", ".cls")
 
 # 单次可保存内容的字符数上限：拦截误粘贴超大文本 / 恶意超大请求体在
-# 内容校验与落盘前的资源消耗。save-file 与编辑器助手缓冲区共用同一量级。
+# 内容校验与落盘前的资源消耗。save-file、编辑器助手缓冲区与 format-latex
+# 纯转换端点共用同一量级（格式化内容与可编辑内容同源，均为编辑器缓冲区）。
 MAX_EDITABLE_CHARS = 2_000_000
 
 # 可预览二进制扩展名白名单（编辑器页内嵌只读预览；须与前端
@@ -421,3 +428,57 @@ async def scan_project_symbols(project) -> dict:
         return await asyncio.to_thread(_scan_symbols_sync, project)
     except RuntimeError as e:
         raise _http(400, "invalid_workspace", str(e)) from e
+
+
+# ── 一键格式化（editor-productivity-plan §5.2 / 决策 Q8，阶段五） ──────
+async def format_latex_buffer(project, content: str) -> dict:
+    """编辑器一键格式化（纯转换端点，零写盘、零配额影响、零 LLM）。
+
+    接收缓冲区全文，复用 latex_formatter 统一入口（latexindent 优先、
+    内置轻量格式化器兜底，外部命令执行沿既有 SandboxRunner 规则与
+    超时语义）返回格式化结果；不接收 file_path、不访问项目文件、
+    不进入任何写盘 / 记账通道——落盘仍由前端走 save-file 单一路径。
+
+    失败语义：latexindent 与内置兜底两层内部均"失败返回原样"（层内
+    吞掉外部命令异常 / 超时，属 latex_formatter 既有契约，此时结果与
+    原文一致、changed=False）；本服务层仅拦截意外异常，收敛为 500
+    format_failed 稳定错误码（三语 errors 命名空间同步）。
+    """
+    # 工作区把关：纯转换不访问项目文件，仅复用 root_path 的打开状态
+    # 检查（未打开项目 → RuntimeError → invalid_workspace，与
+    # latex-symbols 同语义）
+    try:
+        Path(project.root_path)
+    except RuntimeError as e:
+        raise _http(400, "invalid_workspace", str(e)) from e
+
+    # 大小上限：与 save-file / 编辑器打开同量级（约 2MB），在格式化
+    # 调度前拦截超大请求体
+    if len(content) > MAX_EDITABLE_CHARS:
+        raise _http(
+            413,
+            "content_too_long",
+            f"Content is {len(content)} characters, exceeding the "
+            f"maximum editable size of {MAX_EDITABLE_CHARS} characters",
+        )
+
+    try:
+        # format_latex_source 内部已按层调度线程池（探测/内置格式化走
+        # to_thread、latexindent 经 SandboxRunner 异步执行），不阻塞事件循环
+        formatted = await format_latex_source(content)
+    except Exception as e:  # noqa: BLE001 — 收敛为稳定错误码，不透传内部细节
+        logger.warning("Editor format-latex failed: %s", e)
+        raise _http(
+            500,
+            "format_failed",
+            "LaTeX formatting failed. Please retry or check the document.",
+        ) from e
+
+    changed = formatted != content
+    logger.info(
+        "Editor buffer formatted: %d chars -> %d chars (changed=%s)",
+        len(content),
+        len(formatted),
+        changed,
+    )
+    return {"content": formatted, "changed": changed}

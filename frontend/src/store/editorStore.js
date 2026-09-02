@@ -34,6 +34,7 @@ import {
   getTabBuffer,
   markTabSavedReducer,
   openTabReducer,
+  replaceTabBufferReducer,
   resetSessionReducer,
   setTabBufferReducer,
   setTabStaleReducer,
@@ -277,6 +278,14 @@ function createEditorSessionSlice(set, get) {
     /** CM6 onChange 回写激活 tab 的缓冲区并置脏标记 */
     setBufferContent: (content) =>
       set((state) => setTabBufferReducer(state, content, now())),
+
+    /**
+     * 非激活 tab 缓冲区替换（一键格式化后台应用通路，阶段五 / Q8）：
+     * 目标 tab 在请求期间被切走时，替换发起 tab 的缓冲区数据并置脏，
+     * 不切视图（落盘仍走 save-file 单一路径）。
+     */
+    setTabBuffer: (filePath, buffer) =>
+      set((state) => replaceTabBufferReducer(state, filePath, buffer)),
 
     /**
      * 保存成功：更新该 tab 的乐观锁基线、清除陈旧标记，并按保存快照重算

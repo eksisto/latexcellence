@@ -154,6 +154,8 @@ const EXACT_MAP = {
   invalid_encoding: "invalidEncoding",
   // 请求体长度上限（save-file content / 编辑器助手 buffer 等）
   content_too_long: "contentTooLong",
+  // 编辑器一键格式化（backend/modules/editor，editor-productivity-plan 阶段五）
+  format_failed: "formatFailed",
 
   // SSE 流式兜底：未预期异常收敛为稳定错误码，不向客户端透传 str(e)
   internal_error: "internalError",

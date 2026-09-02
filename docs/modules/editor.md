@@ -2,7 +2,8 @@
 
 > 设计依据：[docs/editor-plan.md](../editor-plan.md)（含 grilling 决策记录
 > Q1–Q26）与 [docs/editor-productivity-plan.md](../editor-productivity-plan.md)
-> （editor v2，阶段一多缓冲区基座、阶段二编辑基本功包、阶段三大纲面板已实施）。
+> （editor v2，阶段一多缓冲区基座、阶段二编辑基本功包、阶段三大纲面板、
+> 阶段四引用补全与阶段五一键格式化已实施）。
 
 ## 设计概述
 
@@ -38,6 +39,7 @@ AI 建议**不经后端落盘**：建议以结构化形式随 SSE 返回并随�
 | `GET /api/project/raw-file` | 二进制只读预览（白名单：`.pdf` 与常见位图 `.png/.jpg/.jpeg/.gif/.webp/.bmp`）：`Content-Disposition: inline` 返回原始字节，供编辑器页与工作台页（WorkspacePage 文件树点击）内嵌预览；不进入缓冲区与撤销历史 |
 | `GET /api/project/file-md5` | 当前 MD5（乐观锁基线；检查结果保鲜横幅也复用） |
 | `GET /api/project/latex-symbols` | 引用符号扫描（阶段四 / 决策 Q7）：全项目只读遍历 `.tex` / `.bib`（隐藏目录跳过、单文件 2MB 上限），`.tex` 逐行提取 `\label{...}`（1 基行号）与 `\cite` 家族 key（可选参数 `[p.~5]` 跳过、`\cite{a,b,c}` 拆分、注释行剔除），`.bib` 经 `bib_parser.py` 提取条目 key 与标题；每个文件经 `resolve_project_path()` 白名单 + 符号链接校验（逃逸文件静默跳过）；响应 `{labels, cites}` 只含相对路径（多用户脱敏），cites 中 bib 条目（kind="bib"，带净化标题）优先、`.tex` 已引用 key（kind="tex"）去重补尾；零 LLM、零写盘，扫描经 `asyncio.to_thread()` 调度 |
+| `POST /api/project/format-latex` | 一键格式化（阶段五 / 决策 Q8）：**纯转换端点**——接收缓冲区全文 `{content}`，复用 `latex_formatter.format_latex_source()`（latexindent 优先、内置轻量格式化器兜底，外部命令执行沿既有 SandboxRunner 规则与超时语义）返回 `{content, changed}`；不接收路径参数、不落盘、不进入配额记账、零 LLM；内容上限与 save-file 同量级（超限 413 `content_too_long`）；写权限依赖使 viewer 服务端拒绝；两层格式化器按契约"失败返回原样"（`changed=false`），意外异常收敛为 500 `format_failed` |
 | `POST /api/project/save-file` | 统一保存：`latex_json_guard` 宽松损坏特征校验（不做括号/$ 配平检查）→ MD5 乐观锁（不符返回 **409** 结构化错误 `file_conflict`）→ 单用户推入 BackupManager 撤销栈 / 多用户记入 workspace_edit_ops 反向补丁快照 → 刷新项目用量记账，超限回滚 |
 
 约束：面向用户的错误消息只用相对路径（多用户路径脱敏）；同步阻塞 I/O
@@ -88,7 +90,7 @@ frontend/src/
 │   ├── LaTeXEditor.jsx               # CM6 受控封装（value/onChange）+ 多缓冲区 per-file EditorState 换档
 │   ├── EditorTabBar.jsx              # 标签条（脏标记圆点 + 磁盘已变更标记 + 关闭按钮 + 全部保存）
 │   ├── OutlinePanel.jsx              # 左栏「大纲」tab 内容（四级缩进条目 + 空态，点击经回调定位）
-│   ├── EditorToolbar.jsx             # 激活 tab 路径/脏标记 · 后端撤销重做 · 面板 · 编译 · 保存 · 设置
+│   ├── EditorToolbar.jsx             # 激活 tab 路径/脏标记 · 后端撤销重做 · 面板 · 格式化 · 编译 · 保存 · 设置
 │   ├── EditorCloseTabDialog.jsx      # 关闭脏 tab 三选弹窗（保存并关闭 / 放弃改动 / 取消）
 │   ├── EditorSettingsDialog.jsx      # 偏好开关 + 偏好导入/导出双通道入口
 │   ├── ConflictDialog.jsx            # 409 弹窗（动作作用于冲突归属 tab：放弃重载 / 剪贴板逃生 / 覆盖保存）
@@ -114,6 +116,7 @@ frontend/src/
 │   ├── beginClose.js                 # \begin{env} 打字机自动补 \end（transactionFilter 纯决策分层）
 │   ├── searchPanel.js                # CM6 查找替换面板主题化 + 三语短语（EditorState.phrases）
 │   ├── outlineScan.js                # 大纲扫描纯模块（分节命令解析 / 注释与 verbatim 排除 / 标题净化）
+│   ├── formatApply.js                # 一键格式化纯模块（快捷键判定 / 应用决策 view·state·store / 单事务整文档替换）
 │   ├── preambleScan.js               # 导言区扫描 + 宏包缺失检测
 │   ├── applyDiff.js                  # unified diff 解析与上下文锚定应用纯模块
 │   ├── assistantStream.js            # 助手 SSE 事件归约纯函数（占位消息 / 工具状态 / 会话 id，hook 与单测共用）
@@ -121,6 +124,7 @@ frontend/src/
 └── hooks/useEditorBuffer.js          # 多缓冲区编排（打开/激活/保存/冲突/陈旧/自动保存/刷新恢复/项目切换守卫）
 └── hooks/useEditorAssistant.js       # 助手 SSE hook（归约委托 assistantStream 纯函数 + 项目切换守卫）
 └── hooks/useEditorOutline.js         # 大纲数据源（仅激活缓冲区，防抖重扫 + tab 切换立即重扫）
+└── hooks/useEditorFormat.js          # 一键格式化编排（在途守卫 / 发起 tab 定位 / 应用决策分派）
 ```
 
 Zustand：`editorStore` 含三个切片——`editorPreferences`（persist：
@@ -290,6 +294,32 @@ content/dirty——beforeunload、per-tab 自动保存防抖与冲突快照门�
   `latexCompletionExtension`（缺省时不挂引用 source）；首次触发补全时
   缓存缺失自动拉取，loading 期间走 CM6 默认行为。
 
+### 一键格式化（editor-productivity-plan §5.3，阶段五 / 决策 Q8）
+
+工具栏「格式化」按钮 + Ctrl/Cmd+Shift+F 快捷键（避开阶段二已占用的
+Ctrl+B/I/U/K/L、Ctrl+/ 与 CM6 内置查找面板 Ctrl/Cmd+F）。点击后调后端
+`POST /api/project/format-latex` 纯转换端点（携带**发起时**的 tab 缓冲区
+全文），成功后**直接全文替换发起 tab 的缓冲区并置脏**——不做 diff 预览，
+落盘仍走 save-file 单一路径 / 自动保存，toast 提示「Ctrl+Z 可撤销」。
+
+- **应用决策**（纯模块 `lib/editor/formatApply.js` 的 `planFormatApply()`，
+  node --test 直接单测）：目标始终是**发起时的 tab**（按 filePath 定位）。
+  结果与原文一致 → `skip_unchanged`（不替换，提示已符合格式规范）；目标
+  tab 已被关闭 → `skip_missing`（静默丢弃）；目标即激活 tab 且 CM6 视图
+  正显示其缓冲区 → `view` 通路，对视图 dispatch **单个**整文档 changes
+  事务（CM6 history 记录一次变更，Ctrl+Z 一步撤销回原文）；活跃 tab 在
+  请求期间被切走 → `state` 通路，对 `tabViews` 登记表中的 EditorState
+  存档做单事务 `update()`（history facet 随存档保留，不切视图，仅写回
+  发起 tab 的缓冲区数据）；存档缺失 / 失配 → `store` 通路降级，仅写回
+  store 缓冲区（下次换入按缓冲区重建，历史复位——可接受降级）。
+- **后台 tab 缓冲区替换**：`tabs.js` 新增 `replaceTabBufferReducer()` +
+  store `setTabBuffer` 动作（置脏、不改激活位 / 乐观锁基线 / 陈旧标记）。
+- **并发守卫** `hooks/useEditorFormat.js`：请求在途时拒新请求（工具栏
+  按钮同步禁用防连点）；Q8 未要求内容一致性校验——返回后直接应用最新
+  结果，请求期间继续编辑的少量改动会被覆盖，Ctrl+Z 一步可回（决策记录）。
+- **viewer 禁用**：工具栏按钮按写权限禁用；后端端点同样挂
+  `require_workspace_write`，服务端兜底。
+
 ### 图片与 PDF 只读预览
 
 文件树点击 `.pdf` 或常见位图（前端 `isPreviewableFilePath()` 与后端
@@ -363,11 +393,15 @@ AI 面板。四处配置同步规范照 AGENTS.md 执行；`/api/config/status` 
   字节保真 / invalid_encoding / 事件循环保护（无 LLM）
 - 后端 `tests/test_api/test_editor_assistant.py`：上下文注入纯函数、
   建议提取、SSE 端点（Mock LLM，严禁真实网络）、开关把关、apply 标记
+- 后端 `tests/test_api/test_editor_format_latex.py`：format-latex 纯转换
+  （Mock `format_latex_source`，无真实 latexindent 子进程）/ changed 标记 /
+  413 上限 / invalid_workspace / 500 format_failed / 零写盘验证
 - 前端 node --test：editorPreferences（含导入导出校验）、editorApplyDiff、
   editorTabs（tab 状态机归约与会话选择器）、editorSessionPersistence
   （序列化清洗 / LRU 配额淘汰 / 项目键隔离）、editorTabViews（登记表）、
   editorFiles / editorMatcher / editorSnippetInsert / editorPreambleScan /
   editorWrap（包裹纯逻辑与直包键位一致性）/ editorBeginClose（\begin
   配对纯决策与事务行为）/ editorSearchPanel（面板短语映射与语言热更新）/
-  editorOutlineScan（大纲扫描边界）/ latexCommands（含 wrap 类目 schema）/
+  editorOutlineScan（大纲扫描边界）/ editorFormatApply（格式化应用决策、
+  快捷键判定与 CM6 history 单步撤销）/ latexCommands（含 wrap 类目 schema）/
   i18nLocales 键集合一致性等

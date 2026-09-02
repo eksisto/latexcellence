@@ -57,6 +57,12 @@ class SaveFileRequest(BaseModel):
     base_md5: str | None = None
 
 
+class FormatLatexRequest(BaseModel):
+    # 一键格式化（阶段五 / 决策 Q8）为纯转换端点：只接收缓冲区全文，
+    # 刻意不接收 file_path 等任何路径字段（不落盘、不涉项目文件）
+    content: str
+
+
 @router.post("/open")
 async def open_project(
     request: OpenProjectRequest,
@@ -305,6 +311,23 @@ async def get_latex_symbols(
     """
     project = get_project_manager_for_workspace(workspace_id)
     return await editor_service.scan_project_symbols(project)
+
+
+@router.post("/format-latex")
+async def format_latex(
+    request: FormatLatexRequest,
+    workspace_id: str = Query(..., description="工作区唯一标识符"),
+    _: dict = Depends(access_control.require_workspace_write),
+):
+    """编辑器一键格式化（editor-productivity-plan §5.2 / 决策 Q8，阶段五）。
+
+    纯转换端点：接收缓冲区全文，内部复用 latex_formatter（latexindent
+    优先、内置兜底，外部命令执行沿既有 SandboxRunner 规则）返回格式化
+    结果；不落盘、不涉路径、零配额影响、零 LLM。写权限依赖使 viewer
+    在服务端即被拒绝（前端同步禁用入口）。
+    """
+    project = get_project_manager_for_workspace(workspace_id)
+    return await editor_service.format_latex_buffer(project, request.content)
 
 
 @router.get("/file-content")

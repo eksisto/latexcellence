@@ -325,6 +325,15 @@ export const api = {
      */
     latexSymbols: (workspaceId) =>
       request(appendWs("/project/latex-symbols", workspaceId)),
+    /**
+     * 编辑器一键格式化（纯转换，阶段五 / 决策 Q8）：接收缓冲区全文，
+     * 返回 { content, changed }；不落盘、不涉路径，落盘仍走 save-file
+     */
+    formatLatex: (content, workspaceId) =>
+      request(appendWs("/project/format-latex", workspaceId), {
+        method: "POST",
+        body: JSON.stringify({ content }),
+      }),
     /** 编辑器二进制预览（当前仅 PDF）：返回临时 blob URL，调用方负责 revoke */
     rawFileBlobUrl: async (filePath, workspaceId) => {
       const url = appendWs(
