@@ -8,6 +8,7 @@ from typing import Any, AsyncIterator
 from urllib.parse import urlparse, urlunparse
 
 from backend.core.config import get_config
+from backend.core.model_router import has_api_key_for
 from backend.core.multiuser.quota import (
     checkpoint_derived_usage_for_current_user,
     enforce_derived_quota_for_current_user,
@@ -217,7 +218,7 @@ class ConversationMixin:
 
     @staticmethod
     def _no_api_key() -> bool:
-        return not bool(get_config().llm.api_key)
+        return not has_api_key_for("writing_chat")
 
     @staticmethod
     def _get_scope(workspace_id: str) -> str:

@@ -23,7 +23,7 @@ import asyncio
 from typing import Any, ClassVar
 
 from backend.core.config import get_config
-from backend.core.model_router import get_client_for
+from backend.core.model_router import get_client_for, has_api_key_for
 from backend.core.base_paragraph_check import BaseParagraphCheckService
 from backend.modules.terminology_check.extractor import TermExtractor, TermItem
 
@@ -100,7 +100,7 @@ class TerminologyCheckService(BaseParagraphCheckService):
         file_md5s = self._capture_file_md5s(files, workspace_id)
         self._store_context(operation_id, self._marker_maps, file_path, file_md5s)
 
-        has_api_key = bool(cfg.llm.api_key)
+        has_api_key = has_api_key_for(self.llm_role)
 
         if not has_api_key:
             self._logger.warning("No API key — using fallback term extraction")
@@ -195,7 +195,7 @@ class TerminologyCheckService(BaseParagraphCheckService):
         total = len(all_para_data)
         yield {"type": "progress", "current": 0, "total": total}
 
-        has_api_key = bool(cfg.llm.api_key)
+        has_api_key = has_api_key_for(self.llm_role)
 
         if not has_api_key:
             yield {

@@ -22,7 +22,7 @@ from backend.core import llm_client as llm_client_module
 from backend.core import model_router
 from backend.core.config import BUILTIN_PROFILE_ID, AppConfig, LLMConfig
 from backend.core.llm_client import LLMClient, get_llm_client
-from backend.core.model_router import get_client_for, reset_client_pool
+from backend.core.model_router import get_client_for, has_api_key_for, reset_client_pool
 
 # 与 test_config_model_profiles 一致的顶层字段基线（语义保持不变）
 TOP_LLM = {
@@ -333,3 +333,63 @@ class TestBackwardCompat:
         client.reset()
         assert client._client is None
         assert client._client_fingerprint is None
+
+
+# ── API-key 门禁按槽位路由判断（调用点预检统一入口）──────────────────────
+
+
+class TestApiKeyGate:
+    def test_profile_only_key_resolves_through_assignment(self, install_config):
+        """顶层留空、仅档案配 Key（合法配置）：门禁必须按路由结果判定为有 Key。
+
+        回归锁定：历史门禁只看顶层 llm.api_key，会把该配置误判为未配置 Key
+        而让所有功能走 no-key 降级路径。
+        """
+        install_config(
+            api_key="",
+            profiles=[VISION_PROFILE, REASONING_PROFILE],
+            assignments={"ocr": "vision-pro", "agent": "deepthink"},
+        )
+        assert has_api_key_for("ocr") is True
+        assert has_api_key_for("agent") is True
+
+    def test_profile_only_key_builtin_fallback_is_false(self, install_config):
+        """顶层留空且槽位两级回退到内置档案：门禁判定为无 Key（正确降级）。"""
+        install_config(
+            api_key="",
+            profiles=[VISION_PROFILE],
+            assignments={"ocr": "vision-pro"},
+        )
+        assert has_api_key_for("writing_chat") is False
+        assert has_api_key_for("default") is False
+
+    def test_top_level_key_used_via_builtin_profile(self, install_config):
+        """无档案指派时内置档案继承顶层 Key：门禁判定为有 Key。"""
+        install_config()
+        assert has_api_key_for("default") is True
+
+    def test_two_level_fallback_uses_default_slot_key(self, install_config):
+        """空槽位跟随 default 槽指派档案的 Key（两级解析语义）。"""
+        install_config(
+            api_key="",
+            profiles=[VISION_PROFILE],
+            assignments={"default": "vision-pro"},
+        )
+        assert has_api_key_for("terminology_check") is True
+
+    def test_empty_profile_key_falls_back_to_default_slot(self, install_config):
+        """被指派档案 Key 为空串（免鉴权端点）时，门禁判定为无 Key。"""
+        profile_without_key = dict(VISION_PROFILE, api_key="")
+        install_config(
+            api_key="key-top",
+            profiles=[profile_without_key],
+            assignments={"ocr": "vision-pro", "default": "vision-pro"},
+        )
+        assert has_api_key_for("ocr") is False
+        # 未指派槽位两级回退同样落到该档案
+        assert has_api_key_for("typo_check") is False
+
+    def test_unknown_role_raises_value_error(self, install_config):
+        install_config()
+        with pytest.raises(ValueError, match="未知"):
+            has_api_key_for("nonexistent_role")

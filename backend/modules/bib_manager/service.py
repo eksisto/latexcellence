@@ -25,6 +25,7 @@ from backend.core.workspace_manager import get_project_manager_for_workspace
 # default 槽位（multi-model-plan §6）：低频辅助调用；get_llm_client 即
 # get_client_for("default") 的薄别名（P2 起语义等价，见 test_model_router）
 from backend.core.llm_client import get_llm_client
+from backend.core.model_router import has_api_key_for
 from backend.core.config import get_config
 from backend.core.prompts import get_prompt
 from backend.modules.bib_manager.models import (
@@ -117,8 +118,7 @@ class BibManagerService:
             )
             return result
 
-        cfg = get_config()
-        if not cfg.llm.api_key:
+        if not has_api_key_for("default"):
             raise RuntimeError("No API key configured")
 
         llm = get_llm_client()
@@ -185,8 +185,7 @@ class BibManagerService:
         self, text: str, format_info: dict | None = None
     ) -> dict[str, Any]:
         """从文本提取文献元数据。"""
-        cfg = get_config()
-        if not cfg.llm.api_key:
+        if not has_api_key_for("default"):
             raise RuntimeError("No API key configured")
 
         llm = get_llm_client()
@@ -237,8 +236,7 @@ class BibManagerService:
         format_info: dict | None = None,
     ) -> dict[str, Any]:
         """从多张图片（截图）提取文献元数据。"""
-        cfg = get_config()
-        if not cfg.llm.api_key:
+        if not has_api_key_for("default"):
             raise RuntimeError("No API key configured")
 
         all_fields = []
@@ -325,8 +323,7 @@ class BibManagerService:
         existing_keys: list[str] | None = None,
     ) -> dict[str, Any]:
         """将元数据生成为 BibTeX 代码。"""
-        cfg = get_config()
-        if not cfg.llm.api_key:
+        if not has_api_key_for("default"):
             raise RuntimeError("No API key configured")
 
         llm = get_llm_client()

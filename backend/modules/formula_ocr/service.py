@@ -28,7 +28,7 @@ from pydantic import BaseModel, Field, ValidationError, field_validator
 
 from backend.core.config import get_config
 from backend.core.logger import get_logger
-from backend.core.model_router import get_client_for
+from backend.core.model_router import get_client_for, has_api_key_for
 from backend.core.prompts import get_prompt
 from backend.utils.json_utils import format_validation_error
 from backend.utils.latex_json_guard import validate_latex_field
@@ -159,7 +159,7 @@ class FormulaOCRService:
         )
 
         cfg = get_config()
-        if not cfg.llm.api_key:
+        if not has_api_key_for("ocr"):
             self._logger.warning("No API key configured, returning empty result")
             return {
                 "latex": "",

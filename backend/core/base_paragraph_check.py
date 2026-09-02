@@ -33,7 +33,7 @@ from pydantic import BaseModel
 
 from backend.core import access_control
 from backend.core.logger import get_logger
-from backend.core.model_router import get_client_for
+from backend.core.model_router import get_client_for, has_api_key_for
 from backend.core.multiuser import llm_governance
 from backend.core.project_manager import FileConflictError
 from backend.core.workspace_manager import get_project_manager_for_workspace
@@ -603,7 +603,7 @@ class BaseParagraphCheckService:
             file_md5s = self._capture_file_md5s(files, workspace_id)
             self._store_context(operation_id, self._marker_maps, file_path, file_md5s)
 
-        if not cfg.llm.api_key:
+        if not has_api_key_for(self.llm_role):
             self._logger.warning("No API key configured, returning plain text only")
             return self._no_api_key_batch_fallback(targets, file_path, operation_id)
 
@@ -684,7 +684,7 @@ class BaseParagraphCheckService:
         total = len(all_para_data)
         yield {"type": "progress", "current": 0, "total": total}
 
-        if not cfg.llm.api_key:
+        if not has_api_key_for(self.llm_role):
             yield {
                 "type": "error",
                 "message": "No API key configured",

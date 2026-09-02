@@ -140,6 +140,7 @@
 | --- | --- |
 | `get_client_for(role)` | 按两级解析取目标档案的 `LLMClient`；客户端池 `{profile_id: LLMClient}` 双检锁惰性创建（支持 `asyncio.to_thread()` 多线程场景），档案指纹（`base_url` / `api_key` / `model`）变化时惰性重建实例（双保险，主失效路径仍是配置热重载清池） |
 | `reset_client_pool()` | 清空整个客户端池并逐实例 `reset()`（释放 `AsyncOpenAI` / Semaphore / 探测缓存）；配置热重载接线点（`config.py` 配置保存路径调用；绕过保存接口的磁盘直改重载由客户端指纹惰性重建兜底） |
+| `has_api_key_for(role)` | 判断槽位两级解析后的生效档案是否配置了 `api_key`；各调用点的「是否配置 Key」预检统一入口（不能只看顶层 `llm.api_key`——用户可能仅给档案配 Key、顶层留空），无 Key 降级路径据此触发 |
 
 **`LLMClient` 档案化**（`llm_client.py`）：构造函数增加 `profile_id` 参数；`_resolve_cfg()` 每次请求实时解析「顶层字段 + 档案覆盖项」的合并视图（不在 `__init__` 缓存，遵守配置热重载规范；档案缺失时防御性回退顶层配置，功能不中断）；每个客户端实例持有独立的 `AsyncOpenAI`、Semaphore 与请求间隔状态；上下文窗口探测缓存按 `(profile_id, base_url, model)` 键隔离。
 

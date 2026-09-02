@@ -13,7 +13,7 @@ from backend.core.llm_client import (
     assistant_message_from_stream,
     chat_stream_with_tools_retry,
 )
-from backend.core.model_router import get_client_for
+from backend.core.model_router import get_client_for, has_api_key_for
 from backend.core.prompts import get_prompt, render_pgfplots_reference
 from backend.modules.plot_gen.data_parser import build_profile_context
 from backend.modules.plot_gen.executor import PlotExecutor
@@ -130,7 +130,7 @@ class PlotGenAgent:
         chart_plan: ChartPlan | None = None,
     ) -> AsyncIterator[dict[str, Any]]:
         cfg = get_config()
-        if not cfg.llm.api_key and llm is None:
+        if llm is None and not has_api_key_for("agent"):
             yield {"type": "error", "message": "No API key configured"}
             return
 

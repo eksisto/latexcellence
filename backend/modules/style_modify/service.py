@@ -26,7 +26,7 @@ from typing import Any, AsyncIterator
 from backend.core import access_control
 from backend.core.config import get_config
 from backend.core.logger import get_logger
-from backend.core.model_router import get_client_for
+from backend.core.model_router import get_client_for, has_api_key_for
 from backend.core.prompts import get_prompt
 from backend.core.workspace_manager import get_project_manager_for_workspace
 from backend.modules.style_modify.agent import get_style_modify_agent
@@ -62,7 +62,7 @@ class StyleModifyService:
             { latex: "修改后的 LaTeX 源码" }
         """
         cfg = get_config()
-        if not cfg.llm.api_key:
+        if not has_api_key_for("agent"):
             self._logger.warning("No API key configured")
             raise RuntimeError("No API key configured")
 
@@ -170,7 +170,7 @@ class StyleModifyService:
         if not cfg.features.style_modify.agent.enabled:
             yield {"type": "error", "message": "Style modify agent is disabled"}
             return
-        if not cfg.llm.api_key and llm is None:
+        if not has_api_key_for("agent") and llm is None:
             yield {"type": "error", "message": "No API key configured"}
             return
 

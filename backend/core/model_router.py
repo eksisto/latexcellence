@@ -42,6 +42,16 @@ def get_client_for(role: str) -> LLMClient:
     return _client_for_profile(profile)
 
 
+def has_api_key_for(role: str) -> bool:
+    """判断槽位两级解析后的生效档案是否配置了 api_key。
+
+    调用点的"是否配置 Key"预检统一入口：必须按路由结果判断，不能只看
+    顶层 llm.api_key——用户可能仅给自定义档案配 Key、顶层留空（合法配置），
+    此时按顶层判断会把功能误判为未配置 Key 而走降级路径。
+    """
+    return bool(get_config().llm.resolve_role(role).api_key)
+
+
 def _client_for_profile(profile: ModelProfile) -> LLMClient:
     """按档案 id 从池中取客户端（惰性创建 + 双检锁）。"""
     client = _client_pool.get(profile.id)

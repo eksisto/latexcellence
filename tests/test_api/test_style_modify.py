@@ -75,16 +75,23 @@ class TestStyleModifyService:
         """按分隔符协议包装一段 LaTeX。"""
         return f"<<<LATEX>>>\n{latex}\n<<<END>>>"
 
-    @pytest.mark.asyncio
-    async def test_no_api_key_raises(self, service, sample_latex):
-        mock_cfg = MagicMock()
-        mock_cfg.llm.api_key = ""
+    @pytest.fixture(autouse=True)
+    def _api_key_gate(self, monkeypatch):
+        """API-key 门禁默认放行（按 agent 槽位路由判断）；no-key 用例单独覆写。"""
+        monkeypatch.setattr(
+            "backend.modules.style_modify.service.has_api_key_for",
+            lambda role: True,
+        )
 
-        with patch(
-            "backend.modules.style_modify.service.get_config", return_value=mock_cfg
-        ):
-            with pytest.raises(RuntimeError, match="No API key"):
-                await service.modify(sample_latex, "bold")
+    @pytest.mark.asyncio
+    async def test_no_api_key_raises(self, service, sample_latex, monkeypatch):
+        # 门禁按 agent 槽位两级解析后的档案 Key 判断（不再看顶层 llm.api_key）
+        monkeypatch.setattr(
+            "backend.modules.style_modify.service.has_api_key_for",
+            lambda role: False,
+        )
+        with pytest.raises(RuntimeError, match="No API key"):
+            await service.modify(sample_latex, "bold")
 
     @pytest.mark.asyncio
     async def test_successful_modification(self, service, sample_latex):

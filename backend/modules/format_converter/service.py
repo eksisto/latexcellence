@@ -19,6 +19,7 @@ from backend.core.logger import get_logger
 # default 槽位（multi-model-plan §6）：宏包分析兜底等低频辅助调用；
 # get_llm_client 即 get_client_for("default") 的薄别名（P2 起语义等价）
 from backend.core.llm_client import get_llm_client
+from backend.core.model_router import has_api_key_for
 from backend.core.config import get_config
 from backend.utils.latex_package_analyzer import prepend_package_comments
 from backend.utils.sandbox import (
@@ -151,7 +152,7 @@ class FormatConverterService:
     async def _analyze_packages(self, latex: str) -> str:
         """分析 LaTeX 代码所需的宏包，失败时静默降级。"""
         cfg = get_config()
-        if cfg.llm.api_key:
+        if has_api_key_for("default"):
             try:
                 llm = get_llm_client()
                 latex = await prepend_package_comments(llm, latex, domain="general")

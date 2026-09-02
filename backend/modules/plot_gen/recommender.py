@@ -3,6 +3,7 @@
 from typing import Any
 
 from backend.core.config import get_config
+from backend.core.model_router import has_api_key_for
 from backend.core.logger import get_logger
 from backend.core.prompts import get_prompt
 from backend.modules.plot_gen.data_parser import (
@@ -155,8 +156,7 @@ async def recommend_chart_plan(
     fallback = deterministic_chart_plan(profile, description)
     if llm is None:
         return fallback
-    cfg = get_config()
-    if not cfg.llm.api_key:
+    if not has_api_key_for("agent"):
         return fallback
 
     system_prompt = get_prompt(

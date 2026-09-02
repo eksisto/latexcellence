@@ -15,7 +15,7 @@ from backend.core.llm_client import (
     assistant_message_from_stream,
     chat_stream_with_tools_retry,
 )
-from backend.core.model_router import get_client_for
+from backend.core.model_router import get_client_for, has_api_key_for
 from backend.core.prompts import get_prompt
 from backend.modules.template_gen.trace import append_trace, now_iso
 from backend.utils.agent_file_tools import build_agent_file_tools_schema
@@ -71,7 +71,7 @@ class TemplateAgentService:
             llm: 可选 LLM 客户端（测试注入用）
         """
         cfg = get_config()
-        if llm is None and not cfg.llm.api_key:
+        if llm is None and not has_api_key_for("agent"):
             yield {"type": "error", "message": "No API key configured"}
             return
 
