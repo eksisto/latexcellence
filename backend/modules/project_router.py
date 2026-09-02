@@ -293,6 +293,20 @@ async def get_file_md5(
         raise HTTPException(status_code=404, detail=str(e))
 
 
+@router.get("/latex-symbols")
+async def get_latex_symbols(
+    workspace_id: str = Query(..., description="工作区唯一标识符"),
+    _: dict = Depends(access_control.require_workspace_read),
+):
+    r"""全项目只读符号扫描（\ref/\label/\cite 补全数据源，阶段四）。
+
+    零 LLM、零写盘：一次返回全项目 \label（含行号）与 cite key（.bib
+    条目优先，.tex 已引用 key 补尾）；响应只含相对路径（多用户脱敏）。
+    """
+    project = get_project_manager_for_workspace(workspace_id)
+    return await editor_service.scan_project_symbols(project)
+
+
 @router.get("/file-content")
 async def get_file_content(
     file_path: str = Query(..., description="文件路径（相对于项目根目录）"),

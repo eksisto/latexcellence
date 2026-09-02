@@ -1,4 +1,4 @@
-"""
+r"""
 编辑器整文件读写服务层（editor-plan §5.1，阶段一）。
 
 职责：
@@ -16,6 +16,11 @@
        resolve_project_path() 可预览扩展名白名单校验后，以
        Content-Disposition: inline 的 FileResponse 返回原始字节，
        供编辑器页内嵌 PDF 与常见位图预览（只读，不进入缓冲区与撤销历史）
+    4. 引用符号扫描：GET /api/project/latex-symbols 的业务实现
+       （editor-productivity-plan §5.2 / 决策 Q7，阶段四）——全项目只读
+       扫描 .tex 提取 \label（含行号）与 \cite key、.bib 经 bib_parser
+       提取条目 key 与标题，供前端 \ref / \label / \cite 补全；零 LLM、
+       零写盘、响应只含相对路径
 
 约束：
     - 面向用户的错误消息一律使用项目内相对路径（多用户路径脱敏规则），
@@ -32,10 +37,13 @@
 
 import asyncio
 import hashlib
+import re
 from pathlib import Path
 
 from fastapi import HTTPException
 from fastapi.responses import FileResponse
+
+from backend.modules.bib_manager.bib_parser import parse_bib_file
 
 from backend.core.logger import get_logger
 from backend.core.multiuser import edit_log
@@ -66,6 +74,22 @@ PREVIEWABLE_SUFFIXES: tuple[str, ...] = (
     ".webp",
     ".bmp",
 )
+
+# 引用符号扫描扩展名白名单（latex-symbols 端点，editor-productivity-plan
+# §5.2 阶段四）：.tex 提取 \label / \cite key，.bib 经 bib_parser 提取条目
+SYMBOL_SCAN_SUFFIXES: tuple[str, ...] = (".tex", ".bib")
+
+# \label{...}：标签 key 内不允许花括号（防跨标签误匹配）；逐行匹配无嵌套量词
+_LABEL_RE = re.compile(r"\\label\{([^{}]+)\}")
+
+# \cite 家族（natbib/biblatex：cite/citep/citet/parencite/textcite/...，
+# 含星号变体与已敲出的可选参数 [p.~5]，可连续多个 [..]）；key 组内不允许
+# 花括号，一个 \cite{a,b,c} 由服务层按逗号拆分
+_CITE_RE = re.compile(r"\\[A-Za-z]*[cC]ite[A-Za-z]*\*?(?:\[[^\][{}]*\])*\{([^{}]*)\}")
+
+# 单文件符号扫描的内容上限（与 MAX_EDITABLE_CHARS 同量级）：异常超大文件
+# 跳过并记日志，防止个别畸形文件拖垮全项目扫描
+MAX_SYMBOL_SCAN_CHARS = 2_000_000
 
 # 可预览扩展名 → MIME 类型（FileResponse media_type 用）
 _RAW_MEDIA_TYPES: dict[str, str] = {
@@ -260,3 +284,140 @@ def _resolve_raw_file_sync(project, file_path: str) -> Path:
         logger.info("Editor raw file miss: %s (root=%s)", file_path, root)
         raise FileNotFoundError(f"File not found: {file_path}")
     return full_path
+
+
+# ── 引用符号扫描（editor-productivity-plan §5.2 / 决策 Q7，阶段四） ──────
+def _strip_comment(line: str) -> str:
+    """截掉一行中非转义 `%` 之后的内容（与前端 outlineScan.stripComment 同语义）。
+
+    `%` 之前连续反斜杠个数为奇数视为转义百分号（`\\%` 字面量，非注释），
+    偶数（含 0）则为注释起点——因此 `\\\\%`（换行命令后的真注释）正确截断。
+    """
+    for i, ch in enumerate(line):
+        if ch != "%":
+            continue
+        slashes = 0
+        j = i - 1
+        while j >= 0 and line[j] == "\\":
+            slashes += 1
+            j -= 1
+        if slashes % 2 == 0:
+            return line[:i]
+    return line
+
+
+def _clean_bib_title(title: str) -> str:
+    """bib 条目标题净化：去花括号定界符、折叠空白（保留转义命令原样）。"""
+    text = title.replace("{", "").replace("}", "")
+    return re.sub(r"\s+", " ", text).strip()
+
+
+def _collect_tex_symbols(
+    content: str, rel_path: str, labels: list[dict], cited_keys: list[dict]
+) -> None:
+    """逐行提取单个 .tex 文件的 \\label（含行号）与 \\cite key（补全引用侧）。"""
+    for line_no, raw_line in enumerate(content.splitlines(), 1):
+        line = _strip_comment(raw_line)
+        for m in _LABEL_RE.finditer(line):
+            labels.append(
+                {"key": m.group(1).strip(), "file_path": rel_path, "line": line_no}
+            )
+        for m in _CITE_RE.finditer(line):
+            for key in m.group(1).split(","):
+                key = key.strip()
+                # \nocite{*} 通配（"引用全部 bib 条目"）不是真实 key，
+                # 不进补全候选
+                if key and key != "*":
+                    cited_keys.append({"key": key, "file_path": rel_path})
+
+
+def _collect_bib_keys(content: str, rel_path: str, entries: list[dict]) -> None:
+    """经 bib_parser 提取单个 .bib 文件的条目 key 与标题（供 detail 展示）。"""
+    for entry in parse_bib_file(content):
+        key = (entry.get("cite_key") or "").strip()
+        if not key:
+            continue
+        title = _clean_bib_title(entry.get("fields", {}).get("title", ""))
+        entries.append({"key": key, "file_path": rel_path, "title": title})
+
+
+def _scan_symbols_sync(project) -> dict:
+    """全项目符号扫描（同步实现，由 asyncio.to_thread 调度）。
+
+    只读扫描：遍历项目内 .tex / .bib（隐藏目录跳过），每个文件经
+    resolve_project_path() 校验（扩展名白名单 + 逐组件符号链接检测，
+    指向项目外的文件静默跳过）；响应只含项目内相对路径（多用户脱敏）。
+    """
+    root = Path(project.root_path)  # 未打开项目时 RuntimeError → invalid_workspace
+    labels: list[dict] = []
+    bib_entries: list[dict] = []
+    cited_keys: list[dict] = []
+    scanned = 0
+    for path in sorted(root.rglob("*")):
+        if path.suffix.lower() not in SYMBOL_SCAN_SUFFIXES or not path.is_file():
+            continue
+        rel = path.relative_to(root).as_posix()
+        # 隐藏目录（.git 等）下的文件不参与符号扫描
+        if any(part.startswith(".") for part in Path(rel).parts):
+            continue
+        try:
+            full_path = resolve_project_path(
+                root, rel, allowed_suffixes=SYMBOL_SCAN_SUFFIXES
+            )
+        except ValueError as e:
+            logger.debug("Symbol scan skip %s: %s", rel, e)
+            continue
+        # 超限预检在读入前按字节大小进行：UTF-8 字节数 ≥ 字符数，字节
+        # 超限的文件必然也超字符上限，避免把 GB 级畸形文件整读进内存
+        try:
+            size = full_path.stat().st_size
+        except OSError as e:
+            logger.info("Symbol scan unreadable file %s: %s", rel, e)
+            continue
+        if size > MAX_SYMBOL_SCAN_CHARS:
+            logger.info("Symbol scan skip oversized file %s (%d bytes)", rel, size)
+            continue
+        try:
+            content = full_path.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError) as e:
+            logger.info("Symbol scan unreadable file %s: %s", rel, e)
+            continue
+        if full_path.suffix.lower() == ".bib":
+            _collect_bib_keys(content, rel, bib_entries)
+        else:
+            _collect_tex_symbols(content, rel, labels, cited_keys)
+        scanned += 1
+
+    # cites：bib 条目优先（带标题）；.tex 中已 \cite 的 key 去重后补尾
+    # （bib 缺失 / 条目未录入时仍可补全出已引用的 key）
+    seen_bib_keys = {e["key"] for e in bib_entries}
+    cites = list(bib_entries)
+    seen_cites = set(seen_bib_keys)
+    for item in cited_keys:
+        if item["key"] in seen_cites:
+            continue
+        seen_cites.add(item["key"])
+        cites.append({**item, "kind": "tex"})
+    for entry in bib_entries:
+        entry["kind"] = "bib"
+
+    labels.sort(key=lambda x: (x["file_path"], x["line"], x["key"]))
+    logger.info(
+        "Symbol scan done: %d files, %d labels, %d cite keys",
+        scanned,
+        len(labels),
+        len(cites),
+    )
+    return {"labels": labels, "cites": cites}
+
+
+async def scan_project_symbols(project) -> dict:
+    """全项目只读符号扫描（引用补全数据源，零 LLM、零写盘）。
+
+    返回 {labels: [{key, file_path, line}], cites: [{key, file_path,
+    kind, title?}]}；file_path 一律为项目内相对路径（多用户脱敏）。
+    """
+    try:
+        return await asyncio.to_thread(_scan_symbols_sync, project)
+    except RuntimeError as e:
+        raise _http(400, "invalid_workspace", str(e)) from e

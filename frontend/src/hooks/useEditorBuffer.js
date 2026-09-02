@@ -32,6 +32,7 @@ import {
   loadSession,
   saveSession,
 } from "@/lib/editor/sessionPersistence";
+import { projectSymbolCache } from "@/lib/editor/latexSymbols";
 
 /** 自动保存停改阈值：停止编辑该时长后落盘（editor-productivity-plan Q15） */
 const AUTO_SAVE_DELAY_MS = 2500;
@@ -265,6 +266,9 @@ export default function useEditorBuffer({
         if (!findTab(useEditorStore.getState(), filePath)) return false;
         useEditorStore.getState().markTabSaved(filePath, res.md5, savedBuffer);
         conflictSnapshotsRef.current.delete(filePath);
+        // 引用符号缓存失效（阶段四 / Q7）：保存可能新增/删除 \label、
+        // \cite 或 .bib 条目，下次触发补全时重拉
+        projectSymbolCache.invalidate(projectKeyRef.current);
         if (overwrite) {
           // 覆盖保存成功即解决该 tab 冲突（弹窗出路）
           if (useEditorStore.getState().conflict?.filePath === filePath) {
@@ -601,6 +605,8 @@ export default function useEditorBuffer({
     }
     tabViewRegistry.clear();
     clearSession(window.sessionStorage);
+    // 引用符号缓存按项目隔离：项目切换/关闭时清空（阶段四 / Q7）
+    projectSymbolCache.clear();
     // 允许新项目挂载后尝试恢复（载荷通常为空，静默跳过）
     sessionRestoredRef.current = false;
     setClosingTabPath(null);

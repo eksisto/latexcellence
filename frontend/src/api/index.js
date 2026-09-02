@@ -318,6 +318,13 @@ export const api = {
           workspaceId,
         ),
       ),
+    /**
+     * 全项目只读符号扫描（\ref/\label/\cite 补全数据源，阶段四）：
+     * 返回 { labels: [{key, file_path, line}], cites: [{key, file_path, kind, title?}] }，
+     * 零 LLM、零写盘，file_path 一律为项目内相对路径
+     */
+    latexSymbols: (workspaceId) =>
+      request(appendWs("/project/latex-symbols", workspaceId)),
     /** 编辑器二进制预览（当前仅 PDF）：返回临时 blob URL，调用方负责 revoke */
     rawFileBlobUrl: async (filePath, workspaceId) => {
       const url = appendWs(

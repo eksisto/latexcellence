@@ -145,6 +145,9 @@ const SEARCH_PANEL = createSearchPanelExtension({
  *   CM6 视图实例回调（命令面板等外部插入入口经此持有视图）
  * @param {(entry: object) => void} [props.onCompletionApply]
  *   行内补全应用后回调（宏包缺失联动）
+ * @param {() => Promise<object|null>} [props.getRefSymbols]
+ *   引用补全（\ref/\label/\cite，阶段四）的项目符号数据读取器；
+ *   缺省时不挂引用 source
  */
 export default function LaTeXEditor({
   value,
@@ -156,6 +159,7 @@ export default function LaTeXEditor({
   autoCloseEnv = true,
   onCreateEditor,
   onCompletionApply,
+  getRefSymbols,
 }) {
   const viewRef = useRef(null);
   /** 当前装载在视图中的 tab（null = 尚未完成首次装载） */
@@ -196,10 +200,12 @@ export default function LaTeXEditor({
       syntaxHighlighting(latexHighlightStyle),
       editorBaseTheme,
       // 阶段三：`\` / `\begin{` 行内补全 + 模板占位符跳转模式；
-      // getLanguage 供中文名 detail 按界面语言本地化（每次触发时求值）
+      // getLanguage 供中文名 detail 按界面语言本地化（每次触发时求值）；
+      // 阶段四：getRefSymbols 供 \ref/\label/\cite 引用补全取项目符号
       latexCompletionExtension({
         onApplyEntry: onCompletionApply,
         getLanguage: () => i18n.language,
+        getRefSymbols,
       }),
       snippetPlaceholderExtension(),
       // 包裹命令直包快捷键（Ctrl/Cmd+B/I/U/K，editor v2 决策 Q13）
@@ -218,7 +224,7 @@ export default function LaTeXEditor({
     ];
     if (softWrap) base.push(EditorView.lineWrapping);
     return base;
-  }, [softWrap, onCompletionApply, handleDocChange]);
+  }, [softWrap, onCompletionApply, handleDocChange, getRefSymbols]);
 
   /* ── 界面语言切换：热更新查找面板短语（phrases facet 依赖语言字段） ── */
   useEffect(() => {

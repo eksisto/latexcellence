@@ -1,7 +1,7 @@
 # 编辑器生产力改造设计方案（editor v2）
 
 > **状态：共识已定稿，分阶段实施中（阶段一多缓冲区基座、阶段二编辑基本功包、
-> 阶段三大纲面板已实施，形态见 [modules/editor.md](modules/editor.md)）。** 本文记录「编辑器从可用到生产力工具」改造的
+> 阶段三大纲面板、阶段四引用补全已实施，形态见 [modules/editor.md](modules/editor.md)）。** 本文记录「编辑器从可用到生产力工具」改造的
 > 完整设计共识（经 grilling 三轮拷问收敛），作为分阶段实施的依据与变更对照
 > 基线。v1 设计见 [editor-plan.md](editor-plan.md)，已实施形态见
 > [modules/editor.md](modules/editor.md)。如行为与本文冲突，先修订本文再动代码。

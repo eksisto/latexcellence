@@ -79,6 +79,10 @@ import {
   buildPackageInsertion,
   isPackageMissing,
 } from "@/lib/editor/preambleScan";
+import {
+  projectSymbolCache,
+  reduceProjectKey,
+} from "@/lib/editor/latexSymbols";
 import { getCommandZhDisplay } from "@/lib/editor/commandZh";
 import i18n from "@/i18n";
 
@@ -98,6 +102,20 @@ function SessionEditor({ readOnly, onCreateEditor, onCompletionApply }) {
   const fontSize = useEditorStore((s) => s.fontSize);
   const autoCloseEnv = useEditorStore((s) => s.autoCloseEnv);
   const setBufferContent = useEditorStore((s) => s.setBufferContent);
+  // 引用补全（阶段四 / Q7）：项目符号缓存读取器。缓存以项目为键
+  // （单用户 projectPath / 多用户 projectId），首次触发补全时经
+  // projectSymbolCache 拉取（在途 Promise 共享），保存成功后由
+  // useEditorBuffer 失效、项目切换/关闭时清空
+  const workspaceId = useStore((s) => s.workspaceId);
+  const projectPath = useStore((s) => s.projectPath);
+  const projectId = useStore((s) => s.projectId);
+  const getRefSymbols = useCallback(() => {
+    const projectKey = reduceProjectKey({ projectPath, projectId });
+    if (!projectKey || !workspaceId) return Promise.resolve(null);
+    return projectSymbolCache.load(projectKey, () =>
+      api.project.latexSymbols(workspaceId),
+    );
+  }, [projectPath, projectId, workspaceId]);
   return (
     <LaTeXEditor
       value={buffer}
@@ -109,6 +127,7 @@ function SessionEditor({ readOnly, onCreateEditor, onCompletionApply }) {
       autoCloseEnv={autoCloseEnv}
       onCreateEditor={onCreateEditor}
       onCompletionApply={onCompletionApply}
+      getRefSymbols={getRefSymbols}
     />
   );
 }

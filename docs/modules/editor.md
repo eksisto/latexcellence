@@ -37,6 +37,7 @@ AI 建议**不经后端落盘**：建议以结构化形式随 SSE 返回并随�
 | `GET /api/project/file-content` | 打开读取：路径经 `resolve_project_path()` 白名单校验（`.tex/.bib/.sty/.cls`），返回 `{content, md5}`；按字节保真（不做换行归一化），非 UTF-8 报稳定错误码 `invalid_encoding` |
 | `GET /api/project/raw-file` | 二进制只读预览（白名单：`.pdf` 与常见位图 `.png/.jpg/.jpeg/.gif/.webp/.bmp`）：`Content-Disposition: inline` 返回原始字节，供编辑器页与工作台页（WorkspacePage 文件树点击）内嵌预览；不进入缓冲区与撤销历史 |
 | `GET /api/project/file-md5` | 当前 MD5（乐观锁基线；检查结果保鲜横幅也复用） |
+| `GET /api/project/latex-symbols` | 引用符号扫描（阶段四 / 决策 Q7）：全项目只读遍历 `.tex` / `.bib`（隐藏目录跳过、单文件 2MB 上限），`.tex` 逐行提取 `\label{...}`（1 基行号）与 `\cite` 家族 key（可选参数 `[p.~5]` 跳过、`\cite{a,b,c}` 拆分、注释行剔除），`.bib` 经 `bib_parser.py` 提取条目 key 与标题；每个文件经 `resolve_project_path()` 白名单 + 符号链接校验（逃逸文件静默跳过）；响应 `{labels, cites}` 只含相对路径（多用户脱敏），cites 中 bib 条目（kind="bib"，带净化标题）优先、`.tex` 已引用 key（kind="tex"）去重补尾；零 LLM、零写盘，扫描经 `asyncio.to_thread()` 调度 |
 | `POST /api/project/save-file` | 统一保存：`latex_json_guard` 宽松损坏特征校验（不做括号/$ 配平检查）→ MD5 乐观锁（不符返回 **409** 结构化错误 `file_conflict`）→ 单用户推入 BackupManager 撤销栈 / 多用户记入 workspace_edit_ops 反向补丁快照 → 刷新项目用量记账，超限回滚 |
 
 约束：面向用户的错误消息只用相对路径（多用户路径脱敏）；同步阻塞 I/O
@@ -106,7 +107,8 @@ frontend/src/
 │   ├── matcher.js                    # pinyin-pro 四路模糊匹配
 │   ├── commandZh.js                  # 命令中文名按界面语言本地化展示
 │   ├── completionTheme.js            # 补全弹层主题（索引卡式浮层 + 引导点）
-│   ├── latexCompletion.js            # \ 与 \begin{ 行内补全 source
+│   ├── latexCompletion.js            # \ 与 \begin{ 行内补全 source（+ 阶段四 \ref/\label/\cite 引用 source）
+│   ├── latexSymbols.js               # 引用补全符号缓存（项目为键 / 在途共享 / 保存失效）+ 候选映射过滤
 │   ├── snippetInsert.js              # 模板插入 + 占位符 Tab 循环
 │   ├── wrap.js                       # 包裹命令纯逻辑（多选区包裹计算）+ 直包快捷键键位
 │   ├── beginClose.js                 # \begin{env} 打字机自动补 \end（transactionFilter 纯决策分层）
@@ -255,6 +257,38 @@ content/dirty——beforeunload、per-tab 自动保存防抖与冲突快照门�
 - **空态**：无激活 tab 与无大纲条目两分支，文案三语
   （`components:editor.outline.*`）；条目过多随 CardContent 滚动。
   左栏已有 tab 入口即开关语义，不新增偏好项（对齐 Q18 边界）。
+
+### 引用补全（editor-productivity-plan §5.3，阶段四 / 决策 Q7）
+
+`\ref{` / `\label{` / `\cite{` 三路触发的行内补全 source（挂入
+`latexCompletion.js` 的 autocompletion override，复用 completionTheme
+弹层主题），数据来自后端 `GET /api/project/latex-symbols` 全项目符号
+扫描（跨文件 `\ref` 命中、`.bib` key 命中）。
+
+- **触发与替换区间**：`\ref` / `\cref` / `\Cref` / `\eqref` / `\pageref` /
+  `\autoref`（含星号与已敲出的可选参数）与 `\label{` 补全已有 label
+  （`\label{` 提供已有标签提示，避免重复定义）；`\cite` 家族（任意含
+  cite 的命令名，含星号与可选参数如 `[p.~5]`，`\nocite{*}` 通配不进候选）
+  补全 bib 条目 key 与
+  `.tex` 已引用 key（bib 优先）。应用补全只替换 `{` 之后已敲入的部分
+  key（CM6 默认 apply，`\ref{` 前缀原样保留）；`validFor` 为 key 字符集
+  （字母数字 + `: _ - .`），弹层存续期间继续敲 key 不重复查询。
+- **纯模块** `lib/editor/latexSymbols.js`（node --test 直接单测）：
+  `reduceProjectKey()` 项目隔离键归约（单用户 projectPath / 多用户
+  projectId，与 useEditorBuffer 口径一致）；`createProjectSymbolCache()`
+  缓存（应用级单例 `projectSymbolCache`，拉取以共享在途 Promise 去重，
+  失败静默出缓存下次重试、不弹 toast）；`buildLabelOptions()` /
+  `buildCiteOptions()` 把扫描结果映射为补全 option（label 显示名 +
+  detail 显示出处：label 为 `文件:行号`、bib 条目为净化标题、tex 已引用
+  key 为文件；type 字段区分 label / cite），`filterCompletionOptions()`
+  前缀命中优先、子串其次、上限 60 条。
+- **缓存失效（Q7）**：缓存以项目为键；`useEditorBuffer` 保存成功路径
+  （手动 / 自动 / 编译前置 / 三选弹窗共用 `doSaveTab`）调 `invalidate()`
+  下次触发补全重拉；项目切换守卫 effect 调 `clear()` 清空全部。
+- **拉取接线**：`SessionEditor` 提供 `getRefSymbols` 读取器（项目未打开
+  返回 null → source 短路），经 `LaTeXEditor` prop 注入
+  `latexCompletionExtension`（缺省时不挂引用 source）；首次触发补全时
+  缓存缺失自动拉取，loading 期间走 CM6 默认行为。
 
 ### 图片与 PDF 只读预览
 
