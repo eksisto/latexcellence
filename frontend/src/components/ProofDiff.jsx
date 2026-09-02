@@ -1,3 +1,4 @@
+import { memo } from "react";
 import { useTranslation } from "react-i18next";
 import { cn } from "@/lib/utils";
 
@@ -5,8 +6,11 @@ import { cn } from "@/lib/utils";
  * 「原文 → 修改后」对照行。
  * 原文用衬线体加删除线（像校对稿上的删改），修改后用加粗。
  * modified 可传字符串或任意 ReactNode（如术语检查里的自定义 Input）。
+ *
+ * memo（rerender-memo）：结果卡片列表场景下，页面级 state（检查进度、
+ * 提示消息、搜索过滤）高频变化时不因父级重渲染而重渲染。
  */
-export default function ProofDiff({
+const ProofDiff = memo(function ProofDiff({
   original,
   modified,
   originalLabel,
@@ -47,4 +51,6 @@ export default function ProofDiff({
       </div>
     </div>
   );
-}
+});
+
+export default ProofDiff;

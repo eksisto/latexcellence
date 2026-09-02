@@ -22,6 +22,7 @@ import {
   setMultiUserMode,
 } from "@/api/connection";
 import useStore from "@/store/useStore";
+import { seedConfigStatusCache } from "@/hooks/useConfigStatus";
 
 // 每个探测地址的超时（毫秒）：绑定不可达地址时避免启动卡在全屏 loading
 // 等待浏览器默认网络超时（可达数十秒）；超时视为该地址不可达，继续优先级探测。
@@ -29,7 +30,10 @@ const PROBE_TIMEOUT_MS = 4000;
 
 /**
  * 探测一个基地址的 /config/status；不可达 / 超时 / 非 2xx 返回 null。
- * @returns {Promise<{multiUser: boolean, base: string} | null>}
+ * 命中时保留完整 payload（data）：探测本身就要拉取整个响应体，
+ * 把它写入共享探测层缓存可让后续消费方（useEnabledFeatures 等）
+ * 复用同一次请求，消除启动期对同一端点的重复请求（client-swr-dedup）。
+ * @returns {Promise<{multiUser: boolean, base: string, data: object} | null>}
  */
 async function probeStatus(base) {
   const controller = new AbortController();
@@ -41,7 +45,7 @@ async function probeStatus(base) {
     });
     if (!res.ok) return null;
     const data = await res.json();
-    return { multiUser: data.multi_user === true, base };
+    return { multiUser: data.multi_user === true, base, data };
   } catch {
     return null;
   } finally {
@@ -124,8 +128,11 @@ export default function useAuthBootstrap() {
           )
         : null;
 
-      const { multiUser, base } = await detectMultiUserMode();
+      const { multiUser, base, data: statusData } = await detectMultiUserMode();
       setMultiUserMode(multiUser, base);
+      // 探测已拿到完整 /config/status payload：写入共享探测层缓存，
+      // 首个业务页的 useEnabledFeatures 直接命中，不再二次请求
+      seedConfigStatusCache(statusData);
       // 模式可能被探测修正（首访无持久化标志时 base 曾指向默认地址）：
       // 重置功能开关，让 useEnabledFeatures 以正确基地址重新拉取
       useStore.setState({ enabledFeatures: null });

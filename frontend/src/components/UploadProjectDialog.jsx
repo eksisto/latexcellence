@@ -18,6 +18,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { api } from "@/api/index";
+import { fetchConfigStatus } from "@/hooks/useConfigStatus";
 import useStore from "@/store/useStore";
 import { translateError } from "@/utils/errorMessages";
 import { formatBytes } from "@/utils/format";
@@ -141,13 +142,13 @@ export default function UploadProjectDialog({
     setPendingResume(loadPendingResume());
   }, [open, loadPendingResume]);
 
-  // 目录模式前置校验需要后端上传上限与分片大小：打开时拉取一次 config/status；
+  // 目录模式前置校验需要后端上传上限与分片大小：打开时拉取一次 config/status
+  // （走共享探测层，命中宿主页已拉取的缓存则不再重复请求）；
   // 失败保持 null → 跳过数量/单文件校验，提交时由后端 413 兜底（错误码可翻译）
   useEffect(() => {
     if (!open || uploadLimits) return;
     let mounted = true;
-    api
-      .configStatus()
+    fetchConfigStatus()
       .then((data) => {
         if (mounted && data?.max_upload_files) {
           setUploadLimits({

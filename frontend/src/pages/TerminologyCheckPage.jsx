@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo } from "react";
+import { useState, useCallback, useMemo, memo } from "react";
 import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
@@ -44,6 +44,143 @@ import ResultFilterBar from "@/components/ResultFilterBar";
 import useResultFilter from "@/hooks/useResultFilter";
 import useStore from "@/store/useStore";
 import { toast } from "sonner";
+
+/**
+ * 单条术语检查结果卡片（rerender-memo，对齐 CodeReviewResultCard 模式）：
+ * 模块级 memo 组件 + 稳定回调 props，检查流 progress 高频更新、搜索过滤、
+ * 消息变化时已渲染的卡片不再随页面整体重渲染。customReplacements 作为
+ * prop 传入：编辑替换词的每次键入仍会刷新列表（受控输入所需），
+ * 但流式检查期间卡片保持稳定。
+ */
+const TerminologyResultCard = memo(function TerminologyResultCard({
+  result,
+  paragraphs,
+  paragraphMap,
+  onApply,
+  onIgnore,
+  canWrite,
+  customReplacements,
+  onCustomReplacementChange,
+  activeFile,
+}) {
+  const { t } = useTranslation(["pages", "common"]);
+  const hasChanges = result.changes && result.changes.length > 0;
+  return (
+    <Card
+      id={`term-result-P${result.paragraph_index}`}
+      className="[content-visibility:auto] [contain-intrinsic-size:auto_180px]"
+    >
+      <CardHeader className="pb-2">
+        <div className="flex items-center justify-between">
+          <CardTitle className="text-sm">
+            {t("pages:terminologyCheck.paragraph", {
+              index: result.paragraph_index,
+            })}
+          </CardTitle>
+          {hasChanges && (
+            <span className="rounded bg-destructive/10 text-destructive px-1.5 py-0.5 text-xs font-medium">
+              {t("pages:terminologyCheck.issuesCount", {
+                count: result.changes.length,
+              })}
+            </span>
+          )}
+        </div>
+        {result.terms && result.terms.length > 0 && (
+          <div className="flex flex-wrap gap-1 mt-1">
+            {result.terms.map((term, i) => (
+              <span
+                key={i}
+                className="rounded bg-muted px-1.5 py-0.5 text-xs text-muted-foreground"
+              >
+                {term}
+              </span>
+            ))}
+          </div>
+        )}
+      </CardHeader>
+      <CardContent>
+        <div className="space-y-3">
+          {hasChanges ? (
+            <>
+              <ul className="space-y-2">
+                {result.changes.map((change, i) => {
+                  const cKey = `${result.file_path || activeFile}:${result.paragraph_index}:${change.original}`;
+                  return (
+                    <li
+                      key={i}
+                      className="rounded border border-border bg-background p-2 text-sm"
+                    >
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="rounded bg-orange-500/10 text-orange-600 dark:text-orange-400 px-1 py-0.5 text-xs font-medium">
+                          {t("pages:terminologyCheck.inconsistency")}
+                        </span>
+                        {change.concept && (
+                          <span className="text-muted-foreground text-xs font-mono">
+                            → {change.concept}
+                          </span>
+                        )}
+                      </div>
+                      {change.explanation && (
+                        <p className="text-xs text-muted-foreground mb-2">
+                          {change.explanation}
+                        </p>
+                      )}
+                      <ProofDiff
+                        original={change.original}
+                        modifiedLabel={t("pages:terminologyCheck.replacedWith")}
+                        modified={
+                          <Input
+                            type="text"
+                            value={customReplacements[cKey] ?? change.corrected}
+                            onChange={(e) =>
+                              onCustomReplacementChange((prev) => ({
+                                ...prev,
+                                [cKey]: e.target.value,
+                              }))
+                            }
+                            className="h-7 text-sm font-medium"
+                          />
+                        }
+                      />
+                    </li>
+                  );
+                })}
+              </ul>
+              <div className="flex items-center gap-2">
+                <Button
+                  size="sm"
+                  onClick={() => onApply(result)}
+                  disabled={!canWrite}
+                >
+                  {t("common:applyChange")}
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() =>
+                    onIgnore(result.paragraph_index, result.file_path)
+                  }
+                >
+                  {t("common:ignore")}
+                </Button>
+              </div>
+            </>
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              {t("pages:terminologyCheck.noIssues")}
+            </p>
+          )}
+          <ParagraphContext
+            currentIndex={result.paragraph_index}
+            paragraphs={paragraphs}
+            paragraphMap={paragraphMap}
+            currentText={result.plain_text || result.original}
+          />
+        </div>
+      </CardContent>
+    </Card>
+  );
+});
 
 export default function TerminologyCheckPage() {
   const { t } = useTranslation(["pages", "common"]);
@@ -273,133 +410,6 @@ export default function TerminologyCheckPage() {
     );
   };
 
-  const renderResultCard = (result) => {
-    const hasChanges = result.changes && result.changes.length > 0;
-    return (
-      <Card
-        key={`${result.file_path}-term-result-P${result.paragraph_index}`}
-        id={`term-result-P${result.paragraph_index}`}
-        className="[content-visibility:auto] [contain-intrinsic-size:auto_180px]"
-      >
-        <CardHeader className="pb-2">
-          <div className="flex items-center justify-between">
-            <CardTitle className="text-sm">
-              {t("pages:terminologyCheck.paragraph", {
-                index: result.paragraph_index,
-              })}
-            </CardTitle>
-            {hasChanges && (
-              <span className="rounded bg-destructive/10 text-destructive px-1.5 py-0.5 text-xs font-medium">
-                {t("pages:terminologyCheck.issuesCount", {
-                  count: result.changes.length,
-                })}
-              </span>
-            )}
-          </div>
-          {result.terms && result.terms.length > 0 && (
-            <div className="flex flex-wrap gap-1 mt-1">
-              {result.terms.map((term, i) => (
-                <span
-                  key={i}
-                  className="rounded bg-muted px-1.5 py-0.5 text-xs text-muted-foreground"
-                >
-                  {term}
-                </span>
-              ))}
-            </div>
-          )}
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-3">
-            {hasChanges ? (
-              <>
-                <ul className="space-y-2">
-                  {result.changes.map((change, i) => {
-                    const cKey = `${result.file_path || activeFile}:${result.paragraph_index}:${change.original}`;
-                    return (
-                      <li
-                        key={i}
-                        className="rounded border border-border bg-background p-2 text-sm"
-                      >
-                        <div className="flex items-center gap-2 mb-1">
-                          <span className="rounded bg-orange-500/10 text-orange-600 dark:text-orange-400 px-1 py-0.5 text-xs font-medium">
-                            {t("pages:terminologyCheck.inconsistency")}
-                          </span>
-                          {change.concept && (
-                            <span className="text-muted-foreground text-xs font-mono">
-                              → {change.concept}
-                            </span>
-                          )}
-                        </div>
-                        {change.explanation && (
-                          <p className="text-xs text-muted-foreground mb-2">
-                            {change.explanation}
-                          </p>
-                        )}
-                        <ProofDiff
-                          original={change.original}
-                          modifiedLabel={t(
-                            "pages:terminologyCheck.replacedWith",
-                          )}
-                          modified={
-                            <Input
-                              type="text"
-                              value={
-                                customReplacements[cKey] ?? change.corrected
-                              }
-                              onChange={(e) =>
-                                setCustomReplacements((prev) => ({
-                                  ...prev,
-                                  [cKey]: e.target.value,
-                                }))
-                              }
-                              className="h-7 text-sm font-medium"
-                            />
-                          }
-                        />
-                      </li>
-                    );
-                  })}
-                </ul>
-                <div className="flex items-center gap-2">
-                  <Button
-                    size="sm"
-                    onClick={() => handleApplyWithCustom(result)}
-                    disabled={!canWrite}
-                  >
-                    {t("common:applyChange")}
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() =>
-                      handleIgnoreChange(
-                        result.paragraph_index,
-                        result.file_path,
-                      )
-                    }
-                  >
-                    {t("common:ignore")}
-                  </Button>
-                </div>
-              </>
-            ) : (
-              <p className="text-sm text-muted-foreground">
-                {t("pages:terminologyCheck.noIssues")}
-              </p>
-            )}
-            <ParagraphContext
-              currentIndex={result.paragraph_index}
-              paragraphs={terminologyParagraphs}
-              paragraphMap={paragraphMap}
-              currentText={result.plain_text || result.original}
-            />
-          </div>
-        </CardContent>
-      </Card>
-    );
-  };
-
   return (
     <div className="min-h-screen p-8 animate-tab-enter">
       <div className="max-w-6xl mx-auto">
@@ -587,14 +597,42 @@ export default function TerminologyCheckPage() {
                         <div className="space-y-4">
                           {filteredResults
                             .filter((r) => (r.file_path || "") === f)
-                            .map((result) => renderResultCard(result))}
+                            .map((result) => (
+                              <TerminologyResultCard
+                                key={`${result.file_path}-term-result-P${result.paragraph_index}`}
+                                result={result}
+                                paragraphs={terminologyParagraphs}
+                                paragraphMap={paragraphMap}
+                                onApply={handleApplyWithCustom}
+                                onIgnore={handleIgnoreChange}
+                                canWrite={canWrite}
+                                customReplacements={customReplacements}
+                                onCustomReplacementChange={
+                                  setCustomReplacements
+                                }
+                                activeFile={activeFile}
+                              />
+                            ))}
                         </div>
                       </TabsContent>
                     ))}
                   </Tabs>
                 ) : (
                   <div className="space-y-4">
-                    {filteredResults.map((result) => renderResultCard(result))}
+                    {filteredResults.map((result) => (
+                      <TerminologyResultCard
+                        key={`${result.file_path}-term-result-P${result.paragraph_index}`}
+                        result={result}
+                        paragraphs={terminologyParagraphs}
+                        paragraphMap={paragraphMap}
+                        onApply={handleApplyWithCustom}
+                        onIgnore={handleIgnoreChange}
+                        canWrite={canWrite}
+                        customReplacements={customReplacements}
+                        onCustomReplacementChange={setCustomReplacements}
+                        activeFile={activeFile}
+                      />
+                    ))}
                   </div>
                 )}
               </div>

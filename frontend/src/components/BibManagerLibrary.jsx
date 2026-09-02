@@ -510,7 +510,7 @@ export default function BibManagerLibrary() {
                 return (
                   <Card
                     key={`${entry.cite_key}-${index}`}
-                    className="hover:border-primary/30 transition-colors"
+                    className="hover:border-primary/30 transition-colors [content-visibility:auto] [contain-intrinsic-size:auto_88px]"
                   >
                     <CardContent className="p-4">
                       <div className="flex items-start justify-between gap-3">
@@ -696,7 +696,10 @@ export default function BibManagerLibrary() {
                 })();
 
                 return (
-                  <Card key={idx} className="border-destructive/30">
+                  <Card
+                    key={idx}
+                    className="border-destructive/30 [content-visibility:auto] [contain-intrinsic-size:auto_96px]"
+                  >
                     <CardContent className="p-3">
                       <div className="flex items-center gap-2 mb-2">
                         <Badge

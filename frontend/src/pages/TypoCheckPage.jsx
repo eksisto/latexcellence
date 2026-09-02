@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, memo } from "react";
 import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
@@ -45,6 +45,130 @@ import StaleCheckBanner from "@/components/editor/StaleCheckBanner";
 import ConfirmDialog from "@/components/ConfirmDialog";
 import ResultFilterBar from "@/components/ResultFilterBar";
 import useResultFilter from "@/hooks/useResultFilter";
+
+/**
+ * 单条检查结果卡片（rerender-memo，对齐 CodeReviewResultCard 模式）：
+ * 模块级 memo 组件 + 稳定回调 props，检查流 progress 高频更新、
+ * 搜索过滤、消息变化时已渲染的卡片不再随页面整体重渲染。
+ */
+const TypoResultCard = memo(function TypoResultCard({
+  result,
+  paragraphs,
+  paragraphMap,
+  onApply,
+  onIgnore,
+  canWrite,
+}) {
+  const { t } = useTranslation(["pages", "common"]);
+  const hasChanges = result.changes && result.changes.length > 0;
+  const hasUnlistedChanges = result.unlisted_changes === true;
+  return (
+    <Card
+      id={`${result.file_path}-P${result.paragraph_index}`}
+      className="[content-visibility:auto] [contain-intrinsic-size:auto_180px]"
+    >
+      <CardHeader className="pb-2">
+        <div className="flex items-center justify-between">
+          <CardTitle className="text-sm">
+            {t("common:paragraph")} {result.paragraph_index}
+          </CardTitle>
+          {hasChanges && (
+            <span className="rounded bg-destructive/10 text-destructive px-1.5 py-0.5 text-xs font-medium">
+              {result.changes.length} {t("common:issues")}
+            </span>
+          )}
+          {hasUnlistedChanges && (
+            <UnlistedChangesBadge
+              label={t("pages:typoCheck.unlistedChangesBadge")}
+            />
+          )}
+        </div>
+      </CardHeader>
+      <CardContent>
+        <div className="space-y-3">
+          {hasChanges ? (
+            <>
+              <ul className="space-y-2">
+                {result.changes.map((change, i) => (
+                  <li
+                    key={i}
+                    className="rounded border border-border bg-background p-2 text-sm"
+                  >
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="rounded bg-blue-500/10 text-blue-600 dark:text-blue-400 px-1 py-0.5 text-xs font-medium">
+                        {change.type}
+                      </span>
+                      {change.explanation && (
+                        <span className="text-muted-foreground text-xs">
+                          {change.explanation}
+                        </span>
+                      )}
+                    </div>
+                    <ProofDiff
+                      original={change.original}
+                      modified={change.corrected}
+                    />
+                  </li>
+                ))}
+              </ul>
+              <div className="flex items-center gap-2">
+                <Button
+                  size="sm"
+                  onClick={() =>
+                    onApply(
+                      result.paragraph_index,
+                      result.corrected,
+                      result.file_path,
+                    )
+                  }
+                  disabled={!canWrite}
+                >
+                  {t("common:applyChange")}
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() =>
+                    onIgnore(result.paragraph_index, result.file_path)
+                  }
+                >
+                  {t("common:ignore")}
+                </Button>
+              </div>
+            </>
+          ) : hasUnlistedChanges ? (
+            <UnlistedChangesBody
+              text={result.corrected}
+              message={t("pages:typoCheck.unlistedChanges")}
+              applyLabel={t("common:applyChange")}
+              applyDisabled={!canWrite}
+              onApply={() =>
+                onApply(
+                  result.paragraph_index,
+                  result.corrected,
+                  result.file_path,
+                )
+              }
+              onIgnore={() =>
+                onIgnore(result.paragraph_index, result.file_path)
+              }
+            />
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              {t("pages:typoCheck.noIssues")}
+            </p>
+          )}
+          <ParagraphContext
+            currentIndex={result.paragraph_index}
+            paragraphs={paragraphs}
+            paragraphMap={paragraphMap}
+            currentText={result.plain_text || result.original}
+          />
+        </div>
+      </CardContent>
+    </Card>
+  );
+});
 
 export default function TypoCheckPage() {
   const { t } = useTranslation(["pages", "common"]);
@@ -126,121 +250,6 @@ export default function TypoCheckPage() {
     () => groupByFile(filteredResults),
     [filteredResults],
   );
-
-  const renderResultCard = (result) => {
-    const hasChanges = result.changes && result.changes.length > 0;
-    const hasUnlistedChanges = result.unlisted_changes === true;
-    return (
-      <Card
-        key={`${result.file_path}-${result.paragraph_index}`}
-        id={`${result.file_path}-P${result.paragraph_index}`}
-        className="[content-visibility:auto] [contain-intrinsic-size:auto_180px]"
-      >
-        <CardHeader className="pb-2">
-          <div className="flex items-center justify-between">
-            <CardTitle className="text-sm">
-              {t("common:paragraph")} {result.paragraph_index}
-            </CardTitle>
-            {hasChanges && (
-              <span className="rounded bg-destructive/10 text-destructive px-1.5 py-0.5 text-xs font-medium">
-                {result.changes.length} {t("common:issues")}
-              </span>
-            )}
-            {hasUnlistedChanges && (
-              <UnlistedChangesBadge
-                label={t("pages:typoCheck.unlistedChangesBadge")}
-              />
-            )}
-          </div>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-3">
-            {hasChanges ? (
-              <>
-                <ul className="space-y-2">
-                  {result.changes.map((change, i) => (
-                    <li
-                      key={i}
-                      className="rounded border border-border bg-background p-2 text-sm"
-                    >
-                      <div className="flex items-center gap-2 mb-1">
-                        <span className="rounded bg-blue-500/10 text-blue-600 dark:text-blue-400 px-1 py-0.5 text-xs font-medium">
-                          {change.type}
-                        </span>
-                        {change.explanation && (
-                          <span className="text-muted-foreground text-xs">
-                            {change.explanation}
-                          </span>
-                        )}
-                      </div>
-                      <ProofDiff
-                        original={change.original}
-                        modified={change.corrected}
-                      />
-                    </li>
-                  ))}
-                </ul>
-                <div className="flex items-center gap-2">
-                  <Button
-                    size="sm"
-                    onClick={() =>
-                      handleApplyChange(
-                        result.paragraph_index,
-                        result.corrected,
-                        result.file_path,
-                      )
-                    }
-                    disabled={!canWrite}
-                  >
-                    {t("common:applyChange")}
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() =>
-                      handleIgnoreChange(
-                        result.paragraph_index,
-                        result.file_path,
-                      )
-                    }
-                  >
-                    {t("common:ignore")}
-                  </Button>
-                </div>
-              </>
-            ) : hasUnlistedChanges ? (
-              <UnlistedChangesBody
-                text={result.corrected}
-                message={t("pages:typoCheck.unlistedChanges")}
-                applyLabel={t("common:applyChange")}
-                applyDisabled={!canWrite}
-                onApply={() =>
-                  handleApplyChange(
-                    result.paragraph_index,
-                    result.corrected,
-                    result.file_path,
-                  )
-                }
-                onIgnore={() =>
-                  handleIgnoreChange(result.paragraph_index, result.file_path)
-                }
-              />
-            ) : (
-              <p className="text-sm text-muted-foreground">
-                {t("pages:typoCheck.noIssues")}
-              </p>
-            )}
-            <ParagraphContext
-              currentIndex={result.paragraph_index}
-              paragraphs={typoParagraphs}
-              paragraphMap={paragraphMap}
-              currentText={result.plain_text || result.original}
-            />
-          </div>
-        </CardContent>
-      </Card>
-    );
-  };
 
   return (
     <div className="min-h-screen p-8 animate-tab-enter">
@@ -481,9 +490,17 @@ export default function TypoCheckPage() {
                                 {t("common:noFileResult")}
                               </p>
                             ) : (
-                              fileResults.map((result) =>
-                                renderResultCard(result),
-                              )
+                              fileResults.map((result) => (
+                                <TypoResultCard
+                                  key={`${result.file_path}-${result.paragraph_index}`}
+                                  result={result}
+                                  paragraphs={typoParagraphs}
+                                  paragraphMap={paragraphMap}
+                                  onApply={handleApplyChange}
+                                  onIgnore={handleIgnoreChange}
+                                  canWrite={canWrite}
+                                />
+                              ))
                             )}
                           </div>
                         </TabsContent>
@@ -491,7 +508,17 @@ export default function TypoCheckPage() {
                     })}
                   </Tabs>
                 ) : (
-                  filteredResults.map((result) => renderResultCard(result))
+                  filteredResults.map((result) => (
+                    <TypoResultCard
+                      key={`${result.file_path}-${result.paragraph_index}`}
+                      result={result}
+                      paragraphs={typoParagraphs}
+                      paragraphMap={paragraphMap}
+                      onApply={handleApplyChange}
+                      onIgnore={handleIgnoreChange}
+                      canWrite={canWrite}
+                    />
+                  ))
                 )}
               </div>
             )}

@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { api } from "@/api/index";
+import { fetchConfigStatus } from "@/hooks/useConfigStatus";
 import useStore from "@/store/useStore";
 
 const ALL_ENABLED = {
@@ -35,8 +35,9 @@ export default function useEnabledFeatures() {
   useEffect(() => {
     if (enabledFeatures !== null) return;
     let mounted = true;
-    api
-      .configStatus()
+    // 走共享探测层：与 useAuth 启动探测 / UploadProjectDialog 等消费方
+    // 共享 in-flight 去重与 TTL 缓存，不再各页独立重复请求 /config/status
+    fetchConfigStatus()
       .then(({ features }) => {
         if (mounted && features) {
           setEnabledFeatures({ workspace: true, ...features });

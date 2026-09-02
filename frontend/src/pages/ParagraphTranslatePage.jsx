@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, memo } from "react";
 import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
@@ -47,6 +47,129 @@ import ResultFilterBar from "@/components/ResultFilterBar";
 import useResultFilter from "@/hooks/useResultFilter";
 
 const OTHER_LANGUAGE = "__other__";
+
+/**
+ * 单条翻译结果卡片（rerender-memo，对齐 CodeReviewResultCard 模式）：
+ * 模块级 memo 组件 + 稳定回调 props，检查流 progress 高频更新、
+ * 搜索过滤、消息变化时已渲染的卡片不再随页面整体重渲染。
+ */
+const TranslateResultCard = memo(function TranslateResultCard({
+  result,
+  paragraphs,
+  paragraphMap,
+  onApply,
+  onIgnore,
+  canWrite,
+}) {
+  const { t } = useTranslation(["pages", "common"]);
+  // 比较 translated 与 original 而非 plain_text：
+  // translated 和 original 均已还原 marker（由后端 _build_success_result 处理），
+  // 而 plain_text 仍含 marker。若用 plain_text 比较，"__CMD_0001__" ≠ "\\textbf"，
+  // 任何含 LaTeX 命令的段落都会被误判为 hasTranslation=true
+  const hasTranslation = result.translated !== result.original;
+  const hasUnlistedChanges = result.unlisted_changes === true;
+  return (
+    <Card
+      id={`${result.file_path}-P${result.paragraph_index}`}
+      className="[content-visibility:auto] [contain-intrinsic-size:auto_180px]"
+    >
+      <CardHeader className="pb-2">
+        <div className="flex items-center justify-between">
+          <CardTitle className="text-sm">
+            {t("common:paragraph")} {result.paragraph_index}
+          </CardTitle>
+          {hasTranslation && (
+            <span className="rounded bg-blue-500/10 text-blue-600 dark:text-blue-400 px-1.5 py-0.5 text-xs font-medium">
+              {t("pages:paragraphTranslate.translated")}
+            </span>
+          )}
+          {hasUnlistedChanges && (
+            <UnlistedChangesBadge
+              label={t("pages:paragraphTranslate.unlistedChangesBadge")}
+            />
+          )}
+        </div>
+      </CardHeader>
+      <CardContent>
+        <div className="space-y-3">
+          {hasUnlistedChanges ? (
+            <UnlistedChangesBody
+              text={result.translated}
+              message={t("pages:paragraphTranslate.unlistedChanges")}
+              applyLabel={t("common:applyChange")}
+              applyDisabled={!canWrite}
+              onApply={() =>
+                onApply(
+                  result.paragraph_index,
+                  result.translated,
+                  result.file_path,
+                )
+              }
+              onIgnore={() =>
+                onIgnore(result.paragraph_index, result.file_path)
+              }
+            />
+          ) : hasTranslation ? (
+            <>
+              <div className="rounded border border-border bg-background p-2 text-sm space-y-2">
+                <div>
+                  <span className="text-muted-foreground text-xs">
+                    {t("common:original")}
+                  </span>
+                  <div className="mt-0.5 whitespace-pre-wrap break-all text-foreground/60">
+                    <MarkerText text={result.original} />
+                  </div>
+                </div>
+                <div>
+                  <span className="text-muted-foreground text-xs">
+                    {t("pages:paragraphTranslate.translation")}
+                  </span>
+                  <div className="mt-0.5 whitespace-pre-wrap break-all font-medium">
+                    {result.translated}
+                  </div>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  size="sm"
+                  onClick={() =>
+                    onApply(
+                      result.paragraph_index,
+                      result.translated,
+                      result.file_path,
+                    )
+                  }
+                  disabled={!canWrite}
+                >
+                  {t("common:applyChange")}
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() =>
+                    onIgnore(result.paragraph_index, result.file_path)
+                  }
+                >
+                  {t("common:ignore")}
+                </Button>
+              </div>
+            </>
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              {t("pages:paragraphTranslate.noTranslation")}
+            </p>
+          )}
+          <ParagraphContext
+            currentIndex={result.paragraph_index}
+            paragraphs={paragraphs}
+            paragraphMap={paragraphMap}
+            currentText={result.plain_text || result.original}
+          />
+        </div>
+      </CardContent>
+    </Card>
+  );
+});
 
 const TARGET_LANGUAGES = [
   { value: "English", label: "English" },
@@ -174,120 +297,6 @@ export default function ParagraphTranslatePage() {
 
   const handleTranslate = () => {
     handleCheck();
-  };
-
-  const renderResultCard = (result) => {
-    // 比较 translated 与 original 而非 plain_text：
-    // translated 和 original 均已还原 marker（由后端 _build_success_result 处理），
-    // 而 plain_text 仍含 marker。若用 plain_text 比较，"__CMD_0001__" ≠ "\\textbf"，
-    // 任何含 LaTeX 命令的段落都会被误判为 hasTranslation=true
-    const hasTranslation = result.translated !== result.original;
-    const hasUnlistedChanges = result.unlisted_changes === true;
-    return (
-      <Card
-        key={`${result.file_path}-${result.paragraph_index}`}
-        id={`${result.file_path}-P${result.paragraph_index}`}
-        className="[content-visibility:auto] [contain-intrinsic-size:auto_180px]"
-      >
-        <CardHeader className="pb-2">
-          <div className="flex items-center justify-between">
-            <CardTitle className="text-sm">
-              {t("common:paragraph")} {result.paragraph_index}
-            </CardTitle>
-            {hasTranslation && (
-              <span className="rounded bg-blue-500/10 text-blue-600 dark:text-blue-400 px-1.5 py-0.5 text-xs font-medium">
-                {t("pages:paragraphTranslate.translated")}
-              </span>
-            )}
-            {hasUnlistedChanges && (
-              <UnlistedChangesBadge
-                label={t("pages:paragraphTranslate.unlistedChangesBadge")}
-              />
-            )}
-          </div>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-3">
-            {hasUnlistedChanges ? (
-              <UnlistedChangesBody
-                text={result.translated}
-                message={t("pages:paragraphTranslate.unlistedChanges")}
-                applyLabel={t("common:applyChange")}
-                applyDisabled={!canWrite}
-                onApply={() =>
-                  handleApplyChange(
-                    result.paragraph_index,
-                    result.translated,
-                    result.file_path,
-                  )
-                }
-                onIgnore={() =>
-                  handleIgnoreChange(result.paragraph_index, result.file_path)
-                }
-              />
-            ) : hasTranslation ? (
-              <>
-                <div className="rounded border border-border bg-background p-2 text-sm space-y-2">
-                  <div>
-                    <span className="text-muted-foreground text-xs">
-                      {t("common:original")}
-                    </span>
-                    <div className="mt-0.5 whitespace-pre-wrap break-all text-foreground/60">
-                      <MarkerText text={result.original} />
-                    </div>
-                  </div>
-                  <div>
-                    <span className="text-muted-foreground text-xs">
-                      {t("pages:paragraphTranslate.translation")}
-                    </span>
-                    <div className="mt-0.5 whitespace-pre-wrap break-all font-medium">
-                      {result.translated}
-                    </div>
-                  </div>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Button
-                    size="sm"
-                    onClick={() =>
-                      handleApplyChange(
-                        result.paragraph_index,
-                        result.translated,
-                        result.file_path,
-                      )
-                    }
-                    disabled={!canWrite}
-                  >
-                    {t("common:applyChange")}
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() =>
-                      handleIgnoreChange(
-                        result.paragraph_index,
-                        result.file_path,
-                      )
-                    }
-                  >
-                    {t("common:ignore")}
-                  </Button>
-                </div>
-              </>
-            ) : (
-              <p className="text-sm text-muted-foreground">
-                {t("pages:paragraphTranslate.noTranslation")}
-              </p>
-            )}
-            <ParagraphContext
-              currentIndex={result.paragraph_index}
-              paragraphs={translateParagraphs}
-              paragraphMap={paragraphMap}
-              currentText={result.plain_text || result.original}
-            />
-          </div>
-        </CardContent>
-      </Card>
-    );
   };
 
   return (
@@ -569,9 +578,17 @@ export default function ParagraphTranslatePage() {
                                 {t("common:noFileResult")}
                               </p>
                             ) : (
-                              fileResults.map((result) =>
-                                renderResultCard(result),
-                              )
+                              fileResults.map((result) => (
+                                <TranslateResultCard
+                                  key={`${result.file_path}-${result.paragraph_index}`}
+                                  result={result}
+                                  paragraphs={translateParagraphs}
+                                  paragraphMap={paragraphMap}
+                                  onApply={handleApplyChange}
+                                  onIgnore={handleIgnoreChange}
+                                  canWrite={canWrite}
+                                />
+                              ))
                             )}
                           </div>
                         </TabsContent>
@@ -579,7 +596,17 @@ export default function ParagraphTranslatePage() {
                     })}
                   </Tabs>
                 ) : (
-                  filteredResults.map((result) => renderResultCard(result))
+                  filteredResults.map((result) => (
+                    <TranslateResultCard
+                      key={`${result.file_path}-${result.paragraph_index}`}
+                      result={result}
+                      paragraphs={translateParagraphs}
+                      paragraphMap={paragraphMap}
+                      onApply={handleApplyChange}
+                      onIgnore={handleIgnoreChange}
+                      canWrite={canWrite}
+                    />
+                  ))
                 )}
               </div>
             )}

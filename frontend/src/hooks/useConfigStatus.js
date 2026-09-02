@@ -1,8 +1,9 @@
 /**
  * 多用户模式公开配置探测（/api/config/status）共享层。
  *
- * useRegistrationEnabled / useEmailAvailable 的公共底座，解决两个派生
- * hook 同时挂载（如登录页）时各自独立请求同一端点的重复探测：
+ * useRegistrationEnabled / useEmailAvailable / useEnabledFeatures /
+ * UploadProjectDialog 的公共底座，解决多个消费方各自独立请求同一端点的
+ * 重复探测（client-swr-dedup）：
  * - 模块级 in-flight Promise 去重：并发消费者共享同一次请求；
  * - 短 TTL 结果缓存：页面快速往返的重挂载不再重复请求。
  *
@@ -20,7 +21,7 @@ let cachedStatus = null;
 let cachedAt = 0;
 let inflight = null;
 
-function fetchConfigStatus() {
+export function fetchConfigStatus() {
   if (cachedStatus && Date.now() - cachedAt < CACHE_TTL_MS) {
     return Promise.resolve(cachedStatus);
   }
@@ -37,6 +38,17 @@ function fetchConfigStatus() {
       });
   }
   return inflight;
+}
+
+/**
+ * 用一次已知的探测结果直接填充缓存（不覆盖 in-flight）：useAuth 启动探测
+ * 已经拉到完整 /config/status payload 时复用它，消除启动期的第二次请求。
+ * 仅在缓存为空时写入，避免以旧探测结果覆盖更新的响应。
+ */
+export function seedConfigStatusCache(data) {
+  if (!data || cachedStatus || inflight) return;
+  cachedStatus = data;
+  cachedAt = Date.now();
 }
 
 export default function useConfigStatus() {
