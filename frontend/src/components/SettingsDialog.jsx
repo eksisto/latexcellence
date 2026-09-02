@@ -58,6 +58,9 @@ export default function SettingsDialog() {
     mathMarkups: [],
   });
   const [configLoadFailed, setConfigLoadFailed] = useState(false);
+  // 模型管理分区 extra_body 草稿合法性：非法 JSON 时禁用保存，防止静默
+  // 落盘与界面显示不一致的上一个合法对象（卡片转回合法时自动恢复）
+  const [modelsValid, setModelsValid] = useState(true);
   const modelsSectionRef = useRef(null);
   const { t } = useTranslation("components");
 
@@ -66,6 +69,7 @@ export default function SettingsDialog() {
       // 每次打开都重取配置并重置草稿：分区组件（含模型管理的服务端
       // 档案 id 快照）随最新服务端数据重新挂载，避免跨会话陈旧草稿
       setConfig(null);
+      setModelsValid(true);
       setConfigLoadFailed(false);
       setLoading(true);
       Promise.all([
@@ -214,7 +218,11 @@ export default function SettingsDialog() {
           <SecuritySection security={config.security} onChange={set} />
           <LLMSection llm={config.llm} onChange={set} />
           <div ref={modelsSectionRef} className="scroll-mt-4">
-            <ModelManagementSection llm={config.llm} onChange={set} />
+            <ModelManagementSection
+              llm={config.llm}
+              onChange={set}
+              onExtraBodyValidityChange={setModelsValid}
+            />
           </div>
           <FeaturesSection
             features={config.features}
@@ -232,7 +240,7 @@ export default function SettingsDialog() {
           <SmtpSection smtp={config.smtp} onChange={set} />
         </div>
         <DialogFooter className="mt-4">
-          <Button onClick={handleSave} disabled={saving}>
+          <Button onClick={handleSave} disabled={saving || !modelsValid}>
             {saving ? t("settings.saving") : t("settings.saveConfig")}
           </Button>
         </DialogFooter>

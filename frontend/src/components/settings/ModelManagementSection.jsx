@@ -1,4 +1,4 @@
-import { memo, useEffect, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -126,11 +126,13 @@ function OverrideNumberField({ label, value, onCommit, min, max, step }) {
  */
 function ProfileCard({
   profile,
+  cardKey,
   savedIds,
   referencedRoles,
   onPatch,
   onPatchId,
   onRemove,
+  onExtraBodyInvalidChange,
 }) {
   const { t } = useTranslation("components");
   // 已保存档案 id 只读（挂载时快照判定）：掩码 api_key 按档案 id 匹配保留
@@ -161,6 +163,15 @@ function ProfileCard({
       onPatch({ extra_body: parsed });
     }
   }
+
+  // extra_body 草稿非法时向分区登记（保存按钮据此禁用）：非法时父级仍持有
+  // 上一个合法对象，放行保存会静默落盘与界面显示不一致的数据；转回合法或
+  // 卡片卸载时经 effect cleanup 注销，删除卡片不会留下悬挂标记
+  useEffect(() => {
+    if (extraBodyValid) return undefined;
+    onExtraBodyInvalidChange(cardKey, true);
+    return () => onExtraBodyInvalidChange(cardKey, false);
+  }, [extraBodyValid, cardKey, onExtraBodyInvalidChange]);
 
   function toggleCapability(capability, checked) {
     const current = Array.isArray(profile.capabilities)
@@ -413,10 +424,34 @@ function ProfileCard({
  * 整对象提交，均随 SettingsDialog 的整体保存生效；校验失败错误经
  * request() 翻译层在保存 toast 中展示。
  */
-function ModelManagementSection({ llm, onChange }) {
+function ModelManagementSection({ llm, onChange, onExtraBodyValidityChange }) {
   const { t } = useTranslation("components");
   const profiles = Array.isArray(llm.profiles) ? llm.profiles : [];
   const assignments = llm.assignments || {};
+
+  // extra_body 草稿非法的卡片键集合：非空 = 至少一张卡片的 JSON 非法，
+  // 聚合结果上报对话框禁用保存按钮
+  const [invalidExtraBodyKeys, setInvalidExtraBodyKeys] = useState(
+    () => new Set(),
+  );
+
+  const handleExtraBodyInvalidChange = useCallback((key, invalid) => {
+    setInvalidExtraBodyKeys((prev) => {
+      const existed = prev.has(key);
+      if (invalid === existed) return prev;
+      const next = new Set(prev);
+      if (invalid) {
+        next.add(key);
+      } else {
+        next.delete(key);
+      }
+      return next;
+    });
+  }, []);
+
+  useEffect(() => {
+    onExtraBodyValidityChange?.(invalidExtraBodyKeys.size === 0);
+  }, [invalidExtraBodyKeys, onExtraBodyValidityChange]);
 
   // 服务器已保存档案 id 集合（挂载时快照）：已保存档案 id 只读，
   // 防止掩码 api_key 因改 id 无法匹配原值而被后端清空
@@ -524,11 +559,13 @@ function ModelManagementSection({ llm, onChange }) {
             // 因键变化而重挂载，输入焦点与卡片内草稿态全部丢失
             key={profile[DRAFT_CARD_KEY] || profile.id}
             profile={profile}
+            cardKey={profile[DRAFT_CARD_KEY] || profile.id}
             savedIds={savedIdsRef.current}
             referencedRoles={collectSlotReferences(assignments, profile.id)}
             onPatch={(patch) => updateProfile(index, patch)}
             onPatchId={(nextId) => updateProfileId(index, nextId)}
             onRemove={() => removeProfile(index)}
+            onExtraBodyInvalidChange={handleExtraBodyInvalidChange}
           />
         ))}
       </div>
