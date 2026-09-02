@@ -2,7 +2,7 @@
 
 > 设计依据：[docs/editor-plan.md](../editor-plan.md)（含 grilling 决策记录
 > Q1–Q26）与 [docs/editor-productivity-plan.md](../editor-productivity-plan.md)
-> （editor v2，阶段一多缓冲区基座、阶段二编辑基本功包已实施）。
+> （editor v2，阶段一多缓冲区基座、阶段二编辑基本功包、阶段三大纲面板已实施）。
 
 ## 设计概述
 
@@ -86,6 +86,7 @@ frontend/src/
 ├── components/editor/
 │   ├── LaTeXEditor.jsx               # CM6 受控封装（value/onChange）+ 多缓冲区 per-file EditorState 换档
 │   ├── EditorTabBar.jsx              # 标签条（脏标记圆点 + 磁盘已变更标记 + 关闭按钮 + 全部保存）
+│   ├── OutlinePanel.jsx              # 左栏「大纲」tab 内容（四级缩进条目 + 空态，点击经回调定位）
 │   ├── EditorToolbar.jsx             # 激活 tab 路径/脏标记 · 后端撤销重做 · 面板 · 编译 · 保存 · 设置
 │   ├── EditorCloseTabDialog.jsx      # 关闭脏 tab 三选弹窗（保存并关闭 / 放弃改动 / 取消）
 │   ├── EditorSettingsDialog.jsx      # 偏好开关 + 偏好导入/导出双通道入口
@@ -110,12 +111,14 @@ frontend/src/
 │   ├── wrap.js                       # 包裹命令纯逻辑（多选区包裹计算）+ 直包快捷键键位
 │   ├── beginClose.js                 # \begin{env} 打字机自动补 \end（transactionFilter 纯决策分层）
 │   ├── searchPanel.js                # CM6 查找替换面板主题化 + 三语短语（EditorState.phrases）
+│   ├── outlineScan.js                # 大纲扫描纯模块（分节命令解析 / 注释与 verbatim 排除 / 标题净化）
 │   ├── preambleScan.js               # 导言区扫描 + 宏包缺失检测
 │   ├── applyDiff.js                  # unified diff 解析与上下文锚定应用纯模块
 │   ├── assistantStream.js            # 助手 SSE 事件归约纯函数（占位消息 / 工具状态 / 会话 id，hook 与单测共用）
 │   └── （命令数据库 data/latexCommands/ 按类目拆分 JSON + index.js 统一加载器，含 wrap 包裹类目）
 └── hooks/useEditorBuffer.js          # 多缓冲区编排（打开/激活/保存/冲突/陈旧/自动保存/刷新恢复/项目切换守卫）
 └── hooks/useEditorAssistant.js       # 助手 SSE hook（归约委托 assistantStream 纯函数 + 项目切换守卫）
+└── hooks/useEditorOutline.js         # 大纲数据源（仅激活缓冲区，防抖重扫 + tab 切换立即重扫）
 ```
 
 Zustand：`editorStore` 含三个切片——`editorPreferences`（persist：
@@ -219,6 +222,40 @@ content/dirty——beforeunload、per-tab 自动保存防抖与冲突快照门�
   facet）；界面语言切换时经 `setSearchLanguage` 效果对活跃视图热更新
   （换档收起的存档 EditorState 保留建档时的语言，可接受边界）。
 
+### 大纲面板（editor-productivity-plan §5.3，阶段三）
+
+左栏「文件 / 大纲」双 tab（决策 Q6）：大纲 tab **仅解析当前激活缓冲区**
+（跨文件大纲留二期），条目为 `\section` / `\subsection` /
+`\subsubsection` / `\paragraph` 四级缩进展示（含 `*` 星号变体）。
+
+- **扫描纯模块** `lib/editor/outlineScan.js`：`scanOutline(docText)` 单趟
+  O(n) 逐行扫描（正则无嵌套量词），输出 `{ level, title, line }`
+  （line 为 1 基行号）。边界处理：非转义 `%`（含 `\%` / `\\%` 转义奇偶
+  判定）之后的注释不产生条目；`\section[短标题]{长标题}` 跳过可选参数；
+  标题花括号逐字符配平（`\{` 转义不计数），跨行标题（花括号未在同一行
+  配平）保守跳过；verbatim 类环境（verbatim / verbatim* / Verbatim /
+  Verbatim* / lstlisting / minted 保守集合）与 `\verb` 行内参数整体排除
+  （单行剥离顺序固定为 `\verb` 参数 → 注释 → verbatim 起点：`\verb`
+  参数内 `%` 为字面字符、`\begin{verbatim}` 为字面文本，不得先于参数
+  剥离前产生注释 / 环境语义）。
+- **标题净化规则**（实现层既定决策）：标题内命令名后紧跟花括号参数时
+  丢弃命令名保留参数内容（`\textbf{Bold}` → Bold）；无参数命令保留命令
+  名去反斜杠（`\LaTeX` → LaTeX）；转义符号字面化（`\_` → _）；`~` 转空
+  格；花括号定界符丢弃、连续空白折叠为单个空格。
+- **重扫时机** `hooks/useEditorOutline.js`：激活 tab 变化（切换 / 关闭 /
+  项目切换）立即重扫目标缓冲区；编辑激活缓冲区经
+  `useEditorStore.subscribe` 命令式订阅（A2 渲染解耦，键入不触发面板重
+  渲染）防抖 300ms 重扫，到点后现取当下激活缓冲区，期间换档不串档；
+  防抖器在卸载 / 激活位变化路径清理。大纲状态仅保存激活 tab 的扫描结果
+  （组件局部 state，不进 store——会话切片无需持久化大纲，重扫成本可忽略）。
+- **点击定位**：点击条目经页面注入的回调取活跃 CM6 视图
+  （`EditorPage` 的 `editorViewRef`），`selection anchor` 置目标行行首 +
+  `EditorView.scrollIntoView(pos, { y: "start" })`——行首落光标复用既有
+  `cm-activeLine` 主题高亮该行；行号越界（编辑期间条目行漂移）直接忽略。
+- **空态**：无激活 tab 与无大纲条目两分支，文案三语
+  （`components:editor.outline.*`）；条目过多随 CardContent 滚动。
+  左栏已有 tab 入口即开关语义，不新增偏好项（对齐 Q18 边界）。
+
 ### 图片与 PDF 只读预览
 
 文件树点击 `.pdf` 或常见位图（前端 `isPreviewableFilePath()` 与后端
@@ -298,4 +335,5 @@ AI 面板。四处配置同步规范照 AGENTS.md 执行；`/api/config/status` 
   editorFiles / editorMatcher / editorSnippetInsert / editorPreambleScan /
   editorWrap（包裹纯逻辑与直包键位一致性）/ editorBeginClose（\begin
   配对纯决策与事务行为）/ editorSearchPanel（面板短语映射与语言热更新）/
-  latexCommands（含 wrap 类目 schema）/ i18nLocales 键集合一致性等
+  editorOutlineScan（大纲扫描边界）/ latexCommands（含 wrap 类目 schema）/
+  i18nLocales 键集合一致性等

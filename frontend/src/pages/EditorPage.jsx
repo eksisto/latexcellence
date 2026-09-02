@@ -2,7 +2,8 @@
  * EditorPage —— /editor 全宽三栏布局（editor-plan §4 + 多缓冲区基座，
  * editor-productivity-plan §5.1）。
  *
- * 布局：左栏复用 ProjectExplorer 文件树（点击打开/激活 tab）· 中栏顶部
+ * 布局：左栏「文件 / 大纲」双 tab（Q6：文件树点击打开/激活 tab，大纲
+ * 展示激活缓冲区分节结构并点击定位）· 中栏顶部
  * tab 条 + LaTeXEditor（单 CM6 实例 + 每文件独立 EditorState 交换）·
  * 右栏 Tab 切换「编译与预览 ↔ AI 助手」，可折叠。桌面优先。
  *
@@ -15,6 +16,8 @@
  *   - 冲突：409 → 归属 tab 置前 + ConflictDialog（放弃重载 / 剪贴板
  *     逃生 / 覆盖保存三出路）；
  *   - 关闭：脏 tab 三选弹窗（保存并关闭 / 放弃改动 / 取消）；
+ *   - 大纲（阶段三 / Q6）：左栏「大纲」tab 仅解析激活缓冲区，编辑防抖
+ *     300ms 重扫、切换 tab 立即重扫，点击条目滚动到行首并高亮；
  *   - 刷新恢复：sessionStorage 恢复全部 tab（含脏缓冲区）+ toast；
  *     URL ?file= 指定者激活（恢复集合与 URL 参数合并）；
  *   - 编译联动（Q16）：编译前依次保存所有脏 tab，任一失败中断并切换
@@ -33,7 +36,8 @@ import { Link, useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import EmptyState from "@/components/EmptyState";
 import ConfirmDialog from "@/components/ConfirmDialog";
@@ -48,7 +52,9 @@ import CommandPalette from "@/components/editor/CommandPalette";
 import FilePreviewOverlay from "@/components/editor/FilePreviewOverlay";
 import EditorRightPanel from "@/components/editor/EditorRightPanel";
 import FullscreenPDFPreview from "@/components/editor/FullscreenPDFPreview";
+import OutlinePanel from "@/components/editor/OutlinePanel";
 
+import { EditorView } from "@codemirror/view";
 import FileCode from "lucide-react/dist/esm/icons/file-code.mjs";
 
 import useStore from "@/store/useStore";
@@ -144,6 +150,9 @@ export default function EditorPage() {
   const [paletteOpen, setPaletteOpen] = useState(false);
   // 命令面板类目过滤（Ctrl+L 打开 wrap 专项浮层，Ctrl/Cmd+/ 打开全量面板）
   const [paletteFilter, setPaletteFilter] = useState(null);
+
+  // ── 左栏双 tab（决策 Q6）：文件树 ↔ 当前激活缓冲区大纲 ────────────
+  const [leftTab, setLeftTab] = useState("files");
 
   // ── CM6 视图实例 ────────────────────────────────────────────────
   const editorViewRef = useRef(null);
@@ -391,6 +400,22 @@ export default function EditorPage() {
     editorViewRef.current = view;
   }, []);
 
+  /* ── 大纲点击定位（阶段三）：滚动到目标行首并高亮 ────────────────
+     selection anchor 置行首使 CM6 既有 cm-activeLine 高亮该行
+     （editorBaseTheme 已配主题色），scrollIntoView y:start 滚到视口顶部；
+     行号越界（编辑期间条目行漂移）时忽略本次定位，不抛错 */
+  const handleJumpToLine = useCallback((line) => {
+    const view = editorViewRef.current;
+    if (!view || view.destroyed || !Number.isInteger(line) || line < 1) return;
+    if (line > view.state.doc.lines) return;
+    const target = view.state.doc.line(line);
+    view.dispatch({
+      selection: { anchor: target.from },
+      effects: EditorView.scrollIntoView(target.from, { y: "start" }),
+    });
+    view.focus();
+  }, []);
+
   /* ── AI 助手：上下文快照与建议应用 ──────────────────────────── */
   const getEditorContext = useCallback(() => {
     const cur = useEditorStore.getState();
@@ -558,19 +583,30 @@ export default function EditorPage() {
       />
 
       <div className="flex flex-1 min-h-0 gap-3">
-        {/* 左栏：文件树 */}
+        {/* 左栏：文件树 / 大纲双 tab（决策 Q6） */}
         <aside className="ml-8 w-64 shrink-0 min-h-0">
           <Card className="flex h-full flex-col">
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm">
-                {t("pages:workspace.files")}
-              </CardTitle>
+              <Tabs value={leftTab} onValueChange={setLeftTab}>
+                <TabsList className="w-full">
+                  <TabsTrigger value="files" className="w-full">
+                    {t("pages:workspace.files")}
+                  </TabsTrigger>
+                  <TabsTrigger value="outline" className="w-full">
+                    {t("components:editor.outline.tab")}
+                  </TabsTrigger>
+                </TabsList>
+              </Tabs>
             </CardHeader>
-            <CardContent className="min-h-0 flex-1 overflow-auto px-4 pb-3 pt-0">
-              <ProjectExplorer
-                tree={fileTree}
-                onSelect={handleSelectTreeNode}
-              />
+            <CardContent className="min-h-0 flex-1 overflow-auto px-2 pb-3 pt-0">
+              {leftTab === "outline" ? (
+                <OutlinePanel onJumpToLine={handleJumpToLine} />
+              ) : (
+                <ProjectExplorer
+                  tree={fileTree}
+                  onSelect={handleSelectTreeNode}
+                />
+              )}
             </CardContent>
           </Card>
         </aside>

@@ -1713,6 +1713,14 @@
         "replaceAll": "Replace all",
         "replacedMatchOnLine": "Replaced match on line $",
         "replacedMatches": "Replaced $ matches"
+      },
+      "outline": {
+        "tab": "Outline",
+        "label": "Document outline",
+        "noFileTitle": "No file open",
+        "noFileDescription": "Open a .tex file to see its section outline here.",
+        "emptyTitle": "No outline entries",
+        "emptyDescription": "No \\section / \\subsection / \\subsubsection / \\paragraph commands found."
       }
     },
     "conflictDialog": {

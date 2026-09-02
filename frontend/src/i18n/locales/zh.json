@@ -1713,6 +1713,14 @@
         "replaceAll": "全部替换",
         "replacedMatchOnLine": "已替换第 $ 行的匹配",
         "replacedMatches": "已替换 $ 处匹配"
+      },
+      "outline": {
+        "tab": "大纲",
+        "label": "文档大纲",
+        "noFileTitle": "未打开文件",
+        "noFileDescription": "打开 .tex 文件后此处展示章节大纲。",
+        "emptyTitle": "暂无大纲条目",
+        "emptyDescription": "未发现 \\section / \\subsection / \\subsubsection / \\paragraph 命令。"
       }
     },
     "conflictDialog": {
