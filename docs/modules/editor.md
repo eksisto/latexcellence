@@ -2,8 +2,9 @@
 
 > 设计依据：[docs/editor-plan.md](../editor-plan.md)（含 grilling 决策记录
 > Q1–Q26）与 [docs/editor-productivity-plan.md](../editor-productivity-plan.md)
-> （editor v2，阶段一多缓冲区基座、阶段二编辑基本功包、阶段三大纲面板、
-> 阶段四引用补全与阶段五一键格式化已实施）。
+> （editor v2，七个阶段均已实施：阶段一多缓冲区基座、阶段二编辑基本功包、
+> 阶段三大纲面板、阶段四引用补全、阶段五一键格式化、阶段六 KaTeX 公式
+> 悬停预览与阶段七编译错误列表与跨文件跳转）。
 
 ## 设计概述
 

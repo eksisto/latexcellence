@@ -29,7 +29,9 @@ LaTeXcellence 当前的工作台以**段落只读视图**展示文件内容，AI
 
 ### 非目标（留作二期候选）
 
-实时协同编辑（Yjs）、KaTeX 公式预览、`\ref{}` / `\cite{}` 引用补全、多标签页、用户自定义片段、冲突 diff 合并视图、助手接入联网搜索/学术检索工具。
+实时协同编辑（Yjs）、用户自定义片段、冲突 diff 合并视图、助手接入联网搜索/学术检索工具。
+
+> 其中「多标签页」「`\ref{}` / `\cite{}` 引用补全」「KaTeX 公式预览」已由编辑器生产力改造（[editor-productivity-plan.md](editor-productivity-plan.md)）落地，移出非目标。
 
 ## 3. 技术选型
 
