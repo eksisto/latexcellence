@@ -15,6 +15,13 @@ const CDN_FONT_LINKS = [
   "https://s4.zstatic.net/ajax/libs/fontsource-stix-two-text/5.2.8/latin-600.css",
 ];
 
+// 字体资源所在的唯一源集合（preconnect 按「协议+域名+端口」生效，一条覆盖
+// 同源的全部 CSS 与 woff2）。从 CDN_FONT_LINKS 派生而非写死：换 CDN 只需
+// 改上面的数组，预热连接自动跟随，不会留下指向旧域名的无效配置。
+const CDN_FONT_ORIGINS = [
+  ...new Set(CDN_FONT_LINKS.map((href) => new URL(href).origin)),
+];
+
 function fontSourcePlugin() {
   return {
     name: "font-source",
@@ -31,17 +38,17 @@ function fontSourcePlugin() {
             },
           ]
         : [
-            // bundle-preload：字体 CSS 均来自该 CDN，先预热连接
-            // （DNS + TLS），缩短阻塞渲染的字体样式表建立连接的时间
-            {
+            // bundle-preload：先预热字体源连接（DNS + TLS），缩短阻塞
+            // 渲染的字体样式表建立连接的时间；源从 CDN_FONT_LINKS 派生
+            ...CDN_FONT_ORIGINS.map((origin) => ({
               tag: "link",
               attrs: {
                 rel: "preconnect",
-                href: "https://s4.zstatic.net",
+                href: origin,
                 crossorigin: true,
               },
               injectTo: "head-prepend",
-            },
+            })),
             ...CDN_FONT_LINKS.map((href) => ({
               tag: "link",
               attrs: { rel: "stylesheet", href },
