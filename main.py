@@ -185,6 +185,10 @@ async def lifespan(app: FastAPI):
         except Exception as e:
             logger.warning("Failed to close sandbox runner: %s", e)
         await close_research_http_client()
+        # 应用关停时清理 LLM 客户端池（释放各档案 AsyncOpenAI 底层连接）
+        from backend.core.model_router import reset_client_pool
+
+        reset_client_pool()
         logger.info("Shutting down LaTeXcellence server")
 
 

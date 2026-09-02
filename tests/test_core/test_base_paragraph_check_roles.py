@@ -159,6 +159,8 @@ class TestBatchFetchUsesSubclassRole:
     async def test_run_batch_check_fetches_client_with_subclass_role(self, monkeypatch):
         captured_roles = []
         sentinel_client = MagicMock(name="llm_client")
+        # 批次编排信号量容量取自客户端合并视图（含档案覆盖项）
+        sentinel_client.resolved_max_concurrency.return_value = 1
 
         def fake_get_client_for(role):
             captured_roles.append(role)

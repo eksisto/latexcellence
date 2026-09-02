@@ -28,6 +28,8 @@ export default function ModelBadge({ role }) {
   const authStatus = useStore((s) => s.authStatus);
   const authUser = useStore((s) => s.authUser);
   const openSettingsDialog = useUiStore((s) => s.openSettingsDialog);
+  // 设置保存成功后版本号自增，触发重新拉取（改派模型后徽标即时刷新）
+  const routesVersion = useUiStore((s) => s.modelRoutesVersion);
 
   useEffect(() => {
     if (!role) return undefined;
@@ -43,7 +45,7 @@ export default function ModelBadge({ role }) {
     return () => {
       cancelled = true;
     };
-  }, [role]);
+  }, [role, routesVersion]);
 
   const display = formatRouteDisplay(route);
   if (!display) return null;

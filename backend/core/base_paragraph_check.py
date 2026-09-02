@@ -588,7 +588,6 @@ class BaseParagraphCheckService:
 
         共享编排骨架：文件解析 → 段落收集 → 过滤 → 分批 LLM → 汇总结果。
         """
-        cfg = get_config()
         files = self._get_files(file_path, resolve_input, workspace_id)
 
         self._file_path = file_path
@@ -610,7 +609,9 @@ class BaseParagraphCheckService:
         # 每次调用时按子类槽位实时取客户端（热重载语义，禁止缓存实例）
         llm = get_client_for(self.llm_role)
         batch_size = self._get_batch_size()
-        sem = asyncio.Semaphore(cfg.llm.max_concurrency)
+        # 批次编排信号量与档案客户端内部信号量同口径：按合并配置
+        # （含档案 max_concurrency 覆盖项）取容量，而非仅顶层字段
+        sem = asyncio.Semaphore(llm.resolved_max_concurrency())
         results: list[dict[str, Any] | None] = [None] * len(targets)
 
         async def _limited(coro):

@@ -8,9 +8,11 @@ import {
   collectSlotReferences,
   filterProfilesByCapability,
   findRouteByRole,
+  dropBlankDraftProfiles,
   formatProfileOption,
   formatRouteDisplay,
   hasCapability,
+  isBlankProfile,
   resolveRoleTarget,
 } from "../src/utils/modelProfiles.js";
 
@@ -270,4 +272,79 @@ test("角色槽位闭集与计划 §6 的 9 个槽位一致", () => {
     "paragraph_translate",
   ]);
   assert.equal(BUILTIN_PROFILE_ID, "__default__");
+});
+
+// ── 空白草稿过滤（保存前清理「添加档案」后未做任何输入的卡片）──────────
+
+test("isBlankProfile：仅当 id/名称/连接三件套/Key 全空（含纯空白）时为真", () => {
+  assert.equal(
+    isBlankProfile({ id: "", name: "", base_url: "", model: "", api_key: "" }),
+    true,
+  );
+  assert.equal(
+    isBlankProfile({
+      id: "  ",
+      name: "",
+      base_url: "\t",
+      model: "",
+      api_key: "",
+    }),
+    true,
+  );
+  assert.equal(isBlankProfile(null), false);
+  assert.equal(isBlankProfile(undefined), false);
+  // 任一字段有值即非空白草稿
+  assert.equal(
+    isBlankProfile({ id: "", name: "x", base_url: "", model: "", api_key: "" }),
+    false,
+  );
+  assert.equal(
+    isBlankProfile({
+      id: "p1",
+      name: "",
+      base_url: "",
+      model: "",
+      api_key: "",
+    }),
+    false,
+  );
+  assert.equal(
+    isBlankProfile({ id: "", name: "", base_url: "", model: "m", api_key: "" }),
+    false,
+  );
+  // 掩码 Key 原样回填的已保存档案绝不会被误判为空白
+  assert.equal(
+    isBlankProfile({
+      id: "p1",
+      name: "n",
+      base_url: "u",
+      model: "m",
+      api_key: "***abcd",
+    }),
+    false,
+  );
+});
+
+test("dropBlankDraftProfiles：仅剔除空白草稿，保留有效档案（含掩码 Key）", () => {
+  const blank = { id: "", name: "", base_url: "", model: "", api_key: "" };
+  const saved = {
+    id: "p1",
+    name: "n",
+    base_url: "u",
+    model: "m",
+    api_key: "***abcd",
+  };
+  const partial = {
+    id: "",
+    name: "起名中",
+    base_url: "",
+    model: "",
+    api_key: "",
+  };
+  assert.deepEqual(dropBlankDraftProfiles([blank, saved, partial]), [
+    saved,
+    partial,
+  ]);
+  // 非数组入参防御
+  assert.deepEqual(dropBlankDraftProfiles(undefined), []);
 });

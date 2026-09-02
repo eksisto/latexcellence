@@ -14,6 +14,11 @@ export const SETTINGS_SECTION_MODELS = "models";
 
 const useUiStore = create((set) => ({
   settingsDialog: { open: false, section: null },
+  // 模型路由数据版本号：设置保存成功后自增，ModelBadge 据此重新拉取
+  // /api/llm/routes（徽标仅在挂载与版本变化时拉取，改派模型后即时刷新）
+  modelRoutesVersion: 0,
+  bumpModelRoutesVersion: () =>
+    set((state) => ({ modelRoutesVersion: state.modelRoutesVersion + 1 })),
   /** 打开设置对话框；section 传入分区标识时渲染后滚动定位到该分区 */
   openSettingsDialog: (section = null) =>
     set({ settingsDialog: { open: true, section } }),

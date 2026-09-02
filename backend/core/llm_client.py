@@ -372,6 +372,14 @@ class LLMClient:
             self._semaphore_capacity = cap
         return self._semaphore
 
+    def resolved_max_concurrency(self) -> int:
+        """当前合并配置（顶层字段 + 档案覆盖项）的并发上限。
+
+        供批次编排层的外部信号量使用（与 _get_semaphore 容量同口径），
+        避免外部访问 _resolve_cfg 私有方法。
+        """
+        return self._resolve_cfg().max_concurrency
+
     # ── 上下文窗口探测 ─────────────────────────────────────────────────
 
     @staticmethod

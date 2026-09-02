@@ -263,6 +263,19 @@ class TestConcurrencyInheritance:
         client._get_semaphore()
         assert client._semaphore_capacity == 2
 
+    def test_resolved_max_concurrency_public_accessor(self, install_config):
+        """批次编排的外部信号量经公共方法取容量（与内部信号量同口径）。"""
+        install_config(
+            profiles=[VISION_PROFILE],
+            assignments={"ocr": "vision-pro"},
+        )
+        # 档案覆盖项生效
+        assert get_client_for("ocr").resolved_max_concurrency() == 2
+        # 未覆盖档案两级回退继承顶层
+        assert get_client_for("typo_check").resolved_max_concurrency() == (
+            TOP_LLM["max_concurrency"]
+        )
+
     @pytest.mark.asyncio
     async def test_rate_limit_uses_resolved_interval(self, install_config, monkeypatch):
         install_config(

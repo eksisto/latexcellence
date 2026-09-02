@@ -27,6 +27,7 @@ import SmtpSection from "@/components/settings/SmtpSection";
 import useStore from "@/store/useStore";
 import useUiStore, { SETTINGS_SECTION_MODELS } from "@/store/uiStore";
 import { isMultiUser } from "@/api/connection";
+import { dropBlankDraftProfiles } from "@/utils/modelProfiles";
 
 /** 多用户模式：连接（基地址/令牌）由服务器统一管理，隐藏设置入口 */
 function ConnectionSettingsSlot({ open }) {
@@ -124,7 +125,16 @@ export default function SettingsDialog() {
   async function handleSave() {
     setSaving(true);
     try {
-      await api.config.update(config);
+      // 保存前过滤「添加档案」后未做任何输入的空白草稿：避免后端以
+      // 「id 不能为空」拒绝整表；profiles 为整表替换语义
+      const payload = {
+        ...config,
+        llm: {
+          ...config.llm,
+          profiles: dropBlankDraftProfiles(config.llm.profiles),
+        },
+      };
+      await api.config.update(payload);
       // 保存成功后更新全局 Store 中的功能开启状态，使主页实时响应
       useStore.getState().setEnabledFeatures({
         workspace: true,
@@ -153,6 +163,9 @@ export default function SettingsDialog() {
           config.features.function_calling.scholarly_research.enabled,
       });
       setOpen(false);
+      // 模型路由版本号自增：已挂载页面的 ModelBadge 据此重新拉取
+      // /api/llm/routes，改派模型后徽标即时刷新
+      useUiStore.getState().bumpModelRoutesVersion();
       toast.success(t("settings.configSaved"));
     } catch (err) {
       toast.error(t("settings.configSaveFailed"), { description: err.message });

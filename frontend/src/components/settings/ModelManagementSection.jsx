@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -124,17 +124,27 @@ function OverrideNumberField({ label, value, onCommit, min, max, step }) {
  * 后端按档案 id 沿用原值；清空 = 移除）。已保存档案的 id 只读——
  * 掩码 Key 按档案 id 匹配保留原值，改 id 会导致后端匹配不到而清空 Key。
  */
-function ProfileCard({
+// memo：单个卡片编辑时不重渲染其他卡片——回调全部经 useCallback 固定
+// 身份、index 为原始值、引用列表在卡片内部 memo（卡片数量多时保障输入
+// 流畅度；被编辑卡片自身的 profile 引用变化，正常重渲染）
+const ProfileCard = memo(function ProfileCard({
   profile,
+  index,
   cardKey,
   savedIds,
-  referencedRoles,
+  assignments,
   onPatch,
   onPatchId,
   onRemove,
   onExtraBodyInvalidChange,
 }) {
   const { t } = useTranslation("components");
+  // 「被槽位引用」列表在卡片内部按 (assignments, id) memo：引用关系只随
+  // 指派表与本档案 id 变化，避免每次渲染新建数组破坏 memo 比较
+  const referencedRoles = useMemo(
+    () => collectSlotReferences(assignments, profile.id),
+    [assignments, profile.id],
+  );
   // 已保存档案 id 只读（挂载时快照判定）：掩码 api_key 按档案 id 匹配保留
   // 原值，改 id 会让后端匹配不到而清空 Key。草稿卡片挂载时 id 必为空串、
   // 永不锁定——输入撞上已保存 id 时仍可继续编辑，唯一性冲突由保存期
@@ -160,7 +170,7 @@ function ProfileCard({
     setExtraBodyDraft(raw);
     const parsed = parseExtraBody(raw);
     if (parsed !== undefined) {
-      onPatch({ extra_body: parsed });
+      onPatch(index, { extra_body: parsed });
     }
   }
 
@@ -182,7 +192,7 @@ function ProfileCard({
         ? current
         : [...current, capability]
       : current.filter((item) => item !== capability);
-    onPatch({ capabilities: next });
+    onPatch(index, { capabilities: next });
   }
 
   const referenced =
@@ -194,7 +204,7 @@ function ProfileCard({
           title: t("settings.modelReferencedBlockTitle", {
             slots: referencedRoles
               .map((role) => t(`settings.modelRole.${role}`))
-              .join("、"),
+              .join(t("settings.modelRoleListSeparator")),
           }),
         }
       : null;
@@ -213,7 +223,7 @@ function ProfileCard({
             value={profile.id}
             placeholder="vision-pro"
             readOnly={lockedId}
-            onChange={(e) => onPatchId(e.target.value)}
+            onChange={(e) => onPatchId(index, e.target.value)}
             className="font-mono text-xs"
           />
         </div>
@@ -229,7 +239,7 @@ function ProfileCard({
           <Button
             variant="ghost"
             size="icon-xs"
-            onClick={onRemove}
+            onClick={() => onRemove(index)}
             disabled={!!referenced}
             title={
               referenced ? referenced.title : t("settings.modelRemoveProfile")
@@ -251,7 +261,7 @@ function ProfileCard({
         <Input
           value={profile.name}
           placeholder={t("settings.modelProfileNamePlaceholder")}
-          onChange={(e) => onPatch({ name: e.target.value })}
+          onChange={(e) => onPatch(index, { name: e.target.value })}
           className="text-xs"
         />
       </div>
@@ -261,7 +271,7 @@ function ProfileCard({
         <Input
           value={profile.base_url}
           placeholder="https://api.example.com/v1"
-          onChange={(e) => onPatch({ base_url: e.target.value })}
+          onChange={(e) => onPatch(index, { base_url: e.target.value })}
           className="text-xs"
         />
       </div>
@@ -278,7 +288,7 @@ function ProfileCard({
             // 空串回传而被后端透传清空（档案 Key 无顶层 llm.api_key 的
             // 空值保护）；清空输入框再保存 = 显式移除
             value={profile.api_key || ""}
-            onChange={(e) => onPatch({ api_key: e.target.value })}
+            onChange={(e) => onPatch(index, { api_key: e.target.value })}
             className="text-xs"
           />
           <p className="text-xs text-muted-foreground">
@@ -290,7 +300,7 @@ function ProfileCard({
           <Input
             value={profile.model}
             placeholder="glm-4.6v"
-            onChange={(e) => onPatch({ model: e.target.value })}
+            onChange={(e) => onPatch(index, { model: e.target.value })}
             className="text-xs"
           />
         </div>
@@ -338,7 +348,7 @@ function ProfileCard({
               <OverrideNumberField
                 label={t("settings.temperature")}
                 value={profile.temperature}
-                onCommit={(v) => onPatch({ temperature: v })}
+                onCommit={(v) => onPatch(index, { temperature: v })}
                 min="0"
                 max="2"
                 step="0.1"
@@ -346,7 +356,7 @@ function ProfileCard({
               <OverrideNumberField
                 label={t("settings.maxTokens")}
                 value={profile.max_tokens}
-                onCommit={(v) => onPatch({ max_tokens: v })}
+                onCommit={(v) => onPatch(index, { max_tokens: v })}
                 min="1"
               />
               <OverrideNumberField
@@ -357,14 +367,14 @@ function ProfileCard({
                 value={
                   profile.request_interval > 0 ? profile.request_interval : null
                 }
-                onCommit={(v) => onPatch({ request_interval: v })}
+                onCommit={(v) => onPatch(index, { request_interval: v })}
                 min="0"
                 step="0.5"
               />
               <OverrideNumberField
                 label={t("settings.maxConcurrency")}
                 value={profile.max_concurrency}
-                onCommit={(v) => onPatch({ max_concurrency: v })}
+                onCommit={(v) => onPatch(index, { max_concurrency: v })}
                 min="1"
               />
               <OverrideNumberField
@@ -374,7 +384,7 @@ function ProfileCard({
                     ? profile.context_window_tokens
                     : null
                 }
-                onCommit={(v) => onPatch({ context_window_tokens: v })}
+                onCommit={(v) => onPatch(index, { context_window_tokens: v })}
                 min="0"
               />
               <div className="space-y-1">
@@ -385,7 +395,7 @@ function ProfileCard({
                   value={profile.models_probe_url || ""}
                   placeholder="http://host:8000/v1"
                   onChange={(e) =>
-                    onPatch({ models_probe_url: e.target.value })
+                    onPatch(index, { models_probe_url: e.target.value })
                   }
                   className="text-xs"
                 />
@@ -415,7 +425,7 @@ function ProfileCard({
       </div>
     </div>
   );
-}
+});
 
 /**
  * 模型管理设置分区（multi-model-plan §7.1）：模型档案增删改 + 槽位指派。
@@ -427,7 +437,8 @@ function ProfileCard({
 function ModelManagementSection({ llm, onChange, onExtraBodyValidityChange }) {
   const { t } = useTranslation("components");
   const profiles = Array.isArray(llm.profiles) ? llm.profiles : [];
-  const assignments = llm.assignments || {};
+  // 兜底 {} 经 memo 固定：缺失时不再每次渲染新建对象，卡片 memo 比较不失效
+  const assignments = useMemo(() => llm.assignments || {}, [llm.assignments]);
 
   // extra_body 草稿非法的卡片键集合：非空 = 至少一张卡片的 JSON 非法，
   // 聚合结果上报对话框禁用保存按钮
@@ -460,6 +471,13 @@ function ModelManagementSection({ llm, onChange, onExtraBodyValidityChange }) {
     savedIdsRef.current = new Set(profiles.map((profile) => profile.id));
   }
 
+  // 最新 profiles / assignments 的 ref：卡片回调经 useCallback 固定身份、
+  // 调用时读 ref 取当前值，使 memo(ProfileCard) 在无关更新时真正跳过
+  const profilesRef = useRef(profiles);
+  profilesRef.current = profiles;
+  const assignmentsRef = useRef(assignments);
+  assignmentsRef.current = assignments;
+
   function setProfiles(next) {
     onChange("llm.profiles", next);
   }
@@ -491,33 +509,48 @@ function ModelManagementSection({ llm, onChange, onExtraBodyValidityChange }) {
     ]);
   }
 
-  function updateProfile(index, patch) {
-    setProfiles(
-      profiles.map((profile, i) =>
-        i === index ? { ...profile, ...patch } : profile,
-      ),
-    );
-  }
+  const updateProfile = useCallback(
+    (index, patch) => {
+      setProfiles(
+        profilesRef.current.map((profile, i) =>
+          i === index ? { ...profile, ...patch } : profile,
+        ),
+      );
+    },
+    [onChange],
+  );
 
-  /** 修改档案 id 时同步改写指派表中对旧 id 的引用，避免保存期「引用不存在」被拒 */
-  function updateProfileId(index, nextId) {
-    const oldId = profiles[index]?.id || "";
-    updateProfile(index, { id: nextId });
-    if (!oldId || oldId === nextId) return;
-    const touched = Object.entries(assignments).some(
-      ([, target]) => target === oldId,
-    );
-    if (!touched) return;
-    const next = { ...assignments };
-    for (const [role, target] of Object.entries(next)) {
-      if (target === oldId) next[role] = nextId;
-    }
-    setAssignments(next);
-  }
+  /** 修改档案 id 时同步改写指派表中对旧 id 的引用，避免保存期「引用不存在」被拒。
+   * 仅当旧 id 属于服务端已保存档案（挂载快照）时才改写：已保存档案 id 只读，
+   * 正常不会走到这里（防御未来放开编辑）；草稿输入撞上已保存 id 后再改走，
+   * 不得动到指向该已保存档案的指派——否则指派被静默改写且删除草稿后残留 */
+  const updateProfileId = useCallback(
+    (index, nextId) => {
+      const current = profilesRef.current;
+      const oldId = current[index]?.id || "";
+      updateProfile(index, { id: nextId });
+      if (!oldId || oldId === nextId) return;
+      if (!savedIdsRef.current.has(oldId)) return;
+      const assignments = assignmentsRef.current;
+      const touched = Object.entries(assignments).some(
+        ([, target]) => target === oldId,
+      );
+      if (!touched) return;
+      const next = { ...assignments };
+      for (const [role, target] of Object.entries(next)) {
+        if (target === oldId) next[role] = nextId;
+      }
+      setAssignments(next);
+    },
+    [updateProfile],
+  );
 
-  function removeProfile(index) {
-    setProfiles(profiles.filter((_, i) => i !== index));
-  }
+  const removeProfile = useCallback(
+    (index) => {
+      setProfiles(profilesRef.current.filter((_, i) => i !== index));
+    },
+    [onChange],
+  );
 
   /** 空指派值 → 下拉哨兵；档案 id → 原值 */
   function toSelectValue(role) {
@@ -559,12 +592,13 @@ function ModelManagementSection({ llm, onChange, onExtraBodyValidityChange }) {
             // 因键变化而重挂载，输入焦点与卡片内草稿态全部丢失
             key={profile[DRAFT_CARD_KEY] || profile.id}
             profile={profile}
+            index={index}
             cardKey={profile[DRAFT_CARD_KEY] || profile.id}
             savedIds={savedIdsRef.current}
-            referencedRoles={collectSlotReferences(assignments, profile.id)}
-            onPatch={(patch) => updateProfile(index, patch)}
-            onPatchId={(nextId) => updateProfileId(index, nextId)}
-            onRemove={() => removeProfile(index)}
+            assignments={assignments}
+            onPatch={updateProfile}
+            onPatchId={updateProfileId}
+            onRemove={removeProfile}
             onExtraBodyInvalidChange={handleExtraBodyInvalidChange}
           />
         ))}

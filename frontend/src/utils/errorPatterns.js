@@ -157,6 +157,11 @@ export const PATTERN_MAP = [
     (m) => ({ values: m[1] }),
   ],
   [
+    /模型档案 (id|name|base_url|model) 不能为空/,
+    "configProfileFieldRequired",
+    (m) => ({ field: m[1] }),
+  ],
+  [
     /^Config validation failed:\s*(.+)/,
     "configValidationFailed",
     (m) => ({ details: m[1] }),

@@ -139,3 +139,27 @@ export function formatRouteDisplay(route) {
   if (name && model) return `${name} · ${model}`;
   return name || model || null;
 }
+
+/**
+ * 档案是否完全未填写（id / 名称 / 连接三件套 / Key 全空）：
+ * 「添加档案」后未做任何输入的空白草稿，保存前应过滤掉，
+ * 否则后端校验以「id 不能为空」拒绝，用户面对的却是一张没填过的卡片。
+ */
+export function isBlankProfile(profile) {
+  if (!profile) return false;
+  const blank = (value) => typeof value === "string" && value.trim() === "";
+  return (
+    blank(profile.id) &&
+    blank(profile.name) &&
+    blank(profile.base_url) &&
+    blank(profile.model) &&
+    blank(profile.api_key)
+  );
+}
+
+/** 过滤完全未填写的草稿档案（保存前调用；profiles 整表替换进载荷） */
+export function dropBlankDraftProfiles(profiles) {
+  return (Array.isArray(profiles) ? profiles : []).filter(
+    (profile) => !isBlankProfile(profile),
+  );
+}
