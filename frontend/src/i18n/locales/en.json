@@ -1115,12 +1115,14 @@
       "noFileSelectedTitle": "No file selected",
       "noFileSelectedHint": "Click a .tex / .bib / .sty / .cls file in the tree to start editing; Ctrl/Cmd+S to save.",
       "noFileSelectedViewerHint": "You have read-only access to this project: you can browse files but not edit them.",
-      "switchDirtyTitle": "Discard unsaved changes?",
-      "switchDirtyDescription": "The current file has unsaved changes. Opening another file will discard them.",
-      "switchDirtyConfirm": "Discard and open",
       "disabledTitle": "Web editor is disabled",
       "disabledDescription": "The administrator has disabled the web editor in the server config. Back to the workspace for other features.",
-      "compileNoMainFile": "No main file set and the current file is not .tex; set the main file in the workspace."
+      "compileNoMainFile": "No main file set and the current file is not .tex; set the main file in the workspace.",
+      "sessionRestored": "Restored your last editing session ({{count}} tabs)",
+      "sessionOverflowToast": "Too much unsaved content to restore fully; please save your work",
+      "staleConfirmTitle": "File changed on disk",
+      "staleConfirmDescription": "This file was modified elsewhere. Saving will overwrite the current disk content. Continue anyway?",
+      "staleConfirmProceed": "Save anyway"
     },
     "versionManage": {
       "title": "Version Management",
@@ -1683,7 +1685,16 @@
       "compileOutput": "Raw output",
       "enterFullscreen": "Fullscreen",
       "quitFullscreen": "Exit fullscreen",
-      "fullscreenTitle": "Compile PDF Fullscreen Preview"
+      "fullscreenTitle": "Compile PDF Fullscreen Preview",
+      "tabBarLabel": "Open files",
+      "tabStaleBadge": "Changed on disk",
+      "closeTab": "Close tab",
+      "saveAll": "Save all",
+      "closeTabTitle": "Unsaved changes",
+      "closeTabDescription": "This tab has unsaved changes that will be lost when closed.",
+      "closeTabSaveAndClose": "Save and close",
+      "closeTabDiscard": "Discard changes",
+      "closeTabCancel": "Cancel"
     },
     "conflictDialog": {
       "title": "Save conflict",
@@ -1768,7 +1779,8 @@
       "diffHunkAmbiguous": "Multiple possible matches found in the buffer; application rejected to avoid editing the wrong location.",
       "diffHunkOverlap": "Hunks in this diff overlap each other; application rejected.",
       "diffMalformed": "The diff format could not be parsed.",
-      "noFileHint": "No file open; general Q&A only"
+      "noFileHint": "No file open; general Q&A only",
+      "fileMismatchHint": "Suggestion targets {{file}}; switch to that tab before applying"
     },
     "staleCheck": {
       "title": "These files changed in the editor; the check results below may be stale — consider re-running:"

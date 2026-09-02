@@ -1,19 +1,26 @@
 /**
- * EditorPage —— /editor 全宽三栏布局（editor-plan §4）。
+ * EditorPage —— /editor 全宽三栏布局（editor-plan §4 + 多缓冲区基座，
+ * editor-productivity-plan §5.1）。
  *
- * 布局：左栏复用 ProjectExplorer 文件树（点击打开文件）· 中栏 LaTeXEditor
- * （CM6 打开-编辑-保存-冲突闭环）· 右栏 Tab 切换「编译与预览 ↔ AI 助手」，
- * 可折叠（阶段四）。桌面优先。
+ * 布局：左栏复用 ProjectExplorer 文件树（点击打开/激活 tab）· 中栏顶部
+ * tab 条 + LaTeXEditor（单 CM6 实例 + 每文件独立 EditorState 交换）·
+ * 右栏 Tab 切换「编译与预览 ↔ AI 助手」，可折叠。桌面优先。
  *
- * 闭环职责：
- *   - 打开：GET file-content → 缓冲区 + baseMd5 基线；超约 2MB 拒绝打开；
- *   - 编辑：onChange 回写 editorSession 并置脏标记；
- *   - 保存：Ctrl/Cmd+S（window 级统一拦截，编辑器内外行为一致）与工具栏
- *     按钮 → save-file 乐观锁落盘，成功更新 baseMd5、清脏标记；
- *   - 冲突：409 → ConflictDialog（放弃本地重载 / 本地内容剪贴板逃生）；
- *   - 编译联动（§8 / 决策 Q18）：有脏改动时先自动保存，失败中断编译进入
- *     冲突流程；右栏展示编译结果并复用 PDFPreview 预览 PDF；
- *   - AI 助手（§7）：建议应用只改 CM6 缓冲区并置脏标记，落盘走保存路径；
+ * 多缓冲区闭环（阶段一）：
+ *   - 打开：文件树点击 / URL ?file= → tab 已存在则激活，否则 GET
+ *     file-content 新开 tab（缓冲区 + baseMd5 基线；超约 2MB 拒绝打开）；
+ *   - 编辑：onChange 回写激活 tab 并置脏标记；
+ *   - 保存：Ctrl/Cmd+S（window 级统一拦截）与工具栏按钮 → 激活 tab 经
+ *     save-file 乐观锁落盘；陈旧 tab 保存前经用户确认；
+ *   - 冲突：409 → 归属 tab 置前 + ConflictDialog（放弃重载 / 剪贴板
+ *     逃生 / 覆盖保存三出路）；
+ *   - 关闭：脏 tab 三选弹窗（保存并关闭 / 放弃改动 / 取消）；
+ *   - 刷新恢复：sessionStorage 恢复全部 tab（含脏缓冲区）+ toast；
+ *     URL ?file= 指定者激活（恢复集合与 URL 参数合并）；
+ *   - 编译联动（Q16）：编译前依次保存所有脏 tab，任一失败中断并切换
+ *     到归属 tab 进入冲突/陈旧流程；
+ *   - AI 助手（§7 / Q17）：建议卡片携带发送时来源 filePath，活跃 tab
+ *     不匹配时禁用应用并提示切换；
  *   - 权限：viewer 可进入但只读（禁用保存与后端撤销），助手仅问答模式；
  *     判断项目已打开一律用 useIsOpened()（多用户看 projectId）；
  *   - 功能开关：editor.enabled=false 时路由守卫提示（决策 Q17）；
@@ -34,6 +41,8 @@ import PageHeader from "@/components/PageHeader";
 import ProjectExplorer from "@/components/ProjectExplorer";
 import LaTeXEditor from "@/components/editor/LaTeXEditor";
 import EditorToolbar from "@/components/editor/EditorToolbar";
+import EditorTabBar from "@/components/editor/EditorTabBar";
+import EditorCloseTabDialog from "@/components/editor/EditorCloseTabDialog";
 import ConflictDialog from "@/components/editor/ConflictDialog";
 import CommandPalette from "@/components/editor/CommandPalette";
 import FilePreviewOverlay from "@/components/editor/FilePreviewOverlay";
@@ -43,7 +52,11 @@ import FullscreenPDFPreview from "@/components/editor/FullscreenPDFPreview";
 import FileCode from "lucide-react/dist/esm/icons/file-code.mjs";
 
 import useStore from "@/store/useStore";
-import useEditorStore from "@/store/editorStore";
+import useEditorStore, {
+  activeBuffer,
+  activeFilePath,
+  findTab,
+} from "@/store/editorStore";
 import { api } from "@/api/index";
 import { isMultiUser } from "@/api/connection";
 import useIsOpened from "@/hooks/useIsOpened";
@@ -65,20 +78,22 @@ import i18n from "@/i18n";
 /**
  * SessionEditor —— 缓冲区内容订阅隔离层（A2 按键渲染解耦）。
  *
- * content / softWrap / fontSize 的组件级订阅收拢到这一层：每次按键只有
- * 本组件与 CM6 内部（value 与文档恒等，dispatch 直接跳过）参与渲染，
- * 页面骨架、文件树、工具栏、右栏不再随键入重渲染。外部整缓冲区替换
- * （打开文件 / 放弃重载 / 后端撤销刷新）仍经 store 单向流入，受控协议
- * 与 LaTeXEditor 保持不变。
+ * 激活 tab 的 buffer / softWrap / fontSize 的组件级订阅收拢到这一层：
+ * 每次按键只有本组件与 CM6 内部（value 与文档恒等，dispatch 直接跳过）
+ * 参与渲染，页面骨架、文件树、tab 条、工具栏、右栏不再随键入重渲染。
+ * 多缓冲区换档（activeKey 变化时的 EditorState 交换）在 LaTeXEditor
+ * 内部完成，激活 tab 的 content 仍经本层单点订阅流入 CM6。
  */
 function SessionEditor({ readOnly, onCreateEditor, onCompletionApply }) {
-  const content = useEditorStore((s) => s.content);
+  const buffer = useEditorStore(activeBuffer);
+  const activeTabPath = useEditorStore((s) => s.activeTabPath);
   const softWrap = useEditorStore((s) => s.softWrap);
   const fontSize = useEditorStore((s) => s.fontSize);
   const setBufferContent = useEditorStore((s) => s.setBufferContent);
   return (
     <LaTeXEditor
-      value={content}
+      value={buffer}
+      activeKey={activeTabPath}
       onChange={setBufferContent}
       softWrap={softWrap}
       fontSize={fontSize}
@@ -109,8 +124,10 @@ export default function EditorPage() {
       ? true
       : enabledFeatures.editor_assistant !== false;
 
-  const filePath = useEditorStore((s) => s.filePath);
+  const filePath = useEditorStore((s) => s.activeTabPath);
   const conflict = useEditorStore((s) => s.conflict);
+  // autoSave 偏好（原始布尔）：关闭脏 tab 三选弹窗的默认项（决策 Q5）
+  const autoSavePref = useEditorStore((s) => s.autoSave);
 
   // ── 只读预览状态（PDF/位图覆盖层，不进入 CM6 缓冲区） ─────────────
   const [filePreviewPath, setFilePreviewPath] = useState(null);
@@ -126,25 +143,30 @@ export default function EditorPage() {
   // ── CM6 视图实例 ────────────────────────────────────────────────
   const editorViewRef = useRef(null);
 
-  /* ── 缓冲区管理（打开 / 保存 / 冲突 / 自动保存 / 刷新恢复） ──── */
+  /* ── 缓冲区管理（打开/激活 / 保存 / 冲突 / 自动保存 / 关闭三选 /
+     陈旧检测 / 刷新恢复 / 项目切换守卫） ─────────────────────────── */
   const {
     opening,
     saving,
-    switchConfirmPath,
-    setSwitchConfirmPath,
+    closingTabPath,
+    setClosingTabPath,
+    staleConfirmPath,
+    setStaleConfirmPath,
     doOpenFile,
-    requestOpenFile,
-    doSave,
-    saveRef,
+    requestCloseTab,
+    closeTabImmediate,
+    doSaveTab,
+    doSaveActive,
+    saveAndCloseTab,
+    doSaveAllDirty,
+    doSaveAllDirtyRef,
     handleOverwriteSave,
     handleReloadBuffer,
     handleDiscardAndReload,
     handleSelectTreeNode,
-    conflictSnapshotRef,
   } = useEditorBuffer({
     workspaceId,
     canWrite,
-    setSearchParams,
     t,
     setFilePreviewPath,
     setFilePreviewUrl,
@@ -188,7 +210,8 @@ export default function EditorPage() {
 
   const closeFilePreview = useCallback(() => setFilePreviewPath(null), []);
 
-  /* ── URL ?file= 参数驱动打开 ──────────────────────────────────── */
+  /* ── URL ?file= 参数驱动打开（打开/激活；与 sessionStorage 恢复合并：
+     恢复全部 tab 集合，?file= 指定者激活，§4） ───────────────────── */
   const requestedFile = searchParams.get("file");
   useEffect(() => {
     if (!isOpened || fileTree.length === 0 || !requestedFile) return;
@@ -201,17 +224,38 @@ export default function EditorPage() {
       return;
     }
     const cur = useEditorStore.getState();
-    if (cur.filePath === requestedFile) return;
-    if (cur.dirty) {
-      setSwitchConfirmPath(requestedFile);
+    if (cur.activeTabPath === requestedFile) return;
+    if (findTab(cur, requestedFile)) {
+      cur.activateTab(requestedFile);
       return;
     }
     doOpenFile(requestedFile);
   }, [requestedFile, isOpened, fileTree.length, doOpenFile, t]);
 
+  /* ── URL ?file= 跟随激活 tab（声明在打开 effect 之后：同一 commit 内
+     先消费 requestedFile 再回写 URL，避免恢复集合激活位互相覆盖；
+     只读预览直达参数在无激活 tab 时保留） ─────────────────────────── */
+  useEffect(() => {
+    if (!isOpened || fileTree.length === 0) return;
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        if (filePath) {
+          if (next.get("file") !== filePath) next.set("file", filePath);
+          return next;
+        }
+        const current = next.get("file");
+        if (current && isPreviewableFilePath(current)) return next;
+        if (current) next.delete("file");
+        return next;
+      },
+      { replace: true },
+    );
+  }, [filePath, isOpened, fileTree.length, setSearchParams]);
+
   /* ── 编译联动 ──────────────────────────────────────────────── */
   const { compiling, compileResult, pdfUrl, handleCompile } = useEditorCompile({
-    saveRef,
+    doSaveAllDirtyRef,
     mainFile,
     t,
     workspaceId,
@@ -266,7 +310,7 @@ export default function EditorPage() {
       const view = editorViewRef.current;
       if (!view || view.destroyed || !pkg) return;
       const insertion = buildPackageInsertion(
-        useEditorStore.getState().content,
+        activeBuffer(useEditorStore.getState()),
         pkg,
       );
       if (!insertion) return;
@@ -310,11 +354,11 @@ export default function EditorPage() {
       if (!canWrite) return false;
       const cur = useEditorStore.getState();
       const view = editorViewRef.current;
-      if (!cur.filePath || !view || view.destroyed) {
+      if (!activeFilePath(cur) || !view || view.destroyed) {
         toast.info(t("components:commandPalette.noFileHint"));
         return false;
       }
-      const contentBefore = cur.content;
+      const contentBefore = activeBuffer(cur);
       insertSnippet(view, expandEntryInsert(entry, size));
       if (entry.pkg && isPackageMissing(contentBefore, entry.pkg)) {
         notifyMissingPackage(entry);
@@ -340,8 +384,8 @@ export default function EditorPage() {
       selection = sel.empty ? "" : view.state.sliceDoc(sel.from, sel.to);
     }
     return {
-      filePath: cur.filePath ?? "",
-      buffer: cur.content ?? "",
+      filePath: activeFilePath(cur) ?? "",
+      buffer: activeBuffer(cur),
       cursorLine,
       selection,
     };
@@ -369,7 +413,7 @@ export default function EditorPage() {
       const view = editorViewRef.current;
       if (!view || view.destroyed) return false;
       const result = applyUnifiedDiff(
-        useEditorStore.getState().content,
+        activeBuffer(useEditorStore.getState()),
         diffText,
       );
       if (!result.ok) {
@@ -398,7 +442,9 @@ export default function EditorPage() {
   const handleCompletionApplyEntry = useCallback(
     (entry) => {
       if (!canWrite || !entry?.pkg) return;
-      if (isPackageMissing(useEditorStore.getState().content, entry.pkg)) {
+      if (
+        isPackageMissing(activeBuffer(useEditorStore.getState()), entry.pkg)
+      ) {
         notifyMissingPackage(entry);
       }
     },
@@ -479,7 +525,7 @@ export default function EditorPage() {
         filePath={filePath}
         saving={saving}
         readOnly={readOnly}
-        onSave={doSave}
+        onSave={doSaveActive}
         onReloadBuffer={handleReloadBuffer}
         onOpenPalette={() => setPaletteOpen(true)}
         compileEnabled={
@@ -510,8 +556,8 @@ export default function EditorPage() {
           </Card>
         </aside>
 
-        {/* 中栏：CM6 编辑器 */}
-        <main className="relative min-h-0 min-w-0 flex-1">
+        {/* 中栏：tab 条 + CM6 编辑器 */}
+        <main className="relative flex min-h-0 min-w-0 flex-1 flex-col gap-2">
           {opening && (
             <div className="absolute inset-0 z-10 grid place-items-center bg-background/60 text-sm text-muted-foreground">
               {t("pages:editor.opening")}
@@ -523,11 +569,22 @@ export default function EditorPage() {
             onClose={closeFilePreview}
           />
           {filePath ? (
-            <SessionEditor
-              readOnly={readOnly}
-              onCreateEditor={handleCreateEditor}
-              onCompletionApply={handleCompletionApplyEntry}
-            />
+            <>
+              <EditorTabBar
+                onActivateTab={(path) =>
+                  useEditorStore.getState().activateTab(path)
+                }
+                onRequestCloseTab={requestCloseTab}
+                onSaveAll={() => doSaveAllDirty()}
+              />
+              <div className="min-h-0 flex-1">
+                <SessionEditor
+                  readOnly={readOnly}
+                  onCreateEditor={handleCreateEditor}
+                  onCompletionApply={handleCompletionApplyEntry}
+                />
+              </div>
+            </>
           ) : (
             <EmptyState
               icon={FileCode}
@@ -569,25 +626,40 @@ export default function EditorPage() {
         />
       )}
 
-      {/* 切换文件放弃脏改动确认 */}
+      {/* 陈旧保存确认（决策 Q4）：磁盘已变更的 tab 保存前需用户确认；
+          确认后仍走 save-file 乐观锁，磁盘再次变化时 409 兜底 */}
       <ConfirmDialog
-        open={switchConfirmPath !== null}
+        open={staleConfirmPath !== null}
         onOpenChange={(open) => {
-          if (!open) setSwitchConfirmPath(null);
+          if (!open) setStaleConfirmPath(null);
         }}
-        title={t("pages:editor.switchDirtyTitle")}
-        description={t("pages:editor.switchDirtyDescription")}
-        confirmText={t("pages:editor.switchDirtyConfirm")}
+        title={t("pages:editor.staleConfirmTitle")}
+        description={t("pages:editor.staleConfirmDescription")}
+        confirmText={t("pages:editor.staleConfirmProceed")}
         variant="destructive"
         onConfirm={async () => {
-          const target = switchConfirmPath;
-          setSwitchConfirmPath(null);
-          if (target) await doOpenFile(target);
+          const target = staleConfirmPath;
+          setStaleConfirmPath(null);
+          if (target) await doSaveTab(target, { confirmedStale: true });
         }}
       />
 
-      {/* 409 冲突弹窗（localContent 由弹窗在复制时刻经 store 现取，
-          避免页面订阅 content 导致按键重渲染） */}
+      {/* 关闭脏 tab 三选弹窗（决策 Q5）：保存并关闭 / 放弃改动 / 取消；
+          autoSave 偏好开启时默认「保存并关闭」；「保存并关闭」经
+          saveAndCloseTab 兜底——弹窗待决期间已被自动保存落盘的 tab 直接关闭 */}
+      <EditorCloseTabDialog
+        open={closingTabPath !== null}
+        tabPath={closingTabPath}
+        autoSaveDefault={autoSavePref}
+        onOpenChange={(open) => {
+          if (!open) setClosingTabPath(null);
+        }}
+        onSaveAndClose={saveAndCloseTab}
+        onDiscardAndClose={(path) => closeTabImmediate(path)}
+      />
+
+      {/* 409 冲突弹窗（动作作用于冲突归属 tab；复制逃生在点击时刻经
+          store 现取该 tab 全文，避免页面订阅 content 导致按键重渲染） */}
       <ConflictDialog
         open={conflict !== null}
         onOpenChange={(open) => {

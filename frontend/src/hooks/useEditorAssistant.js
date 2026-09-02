@@ -96,7 +96,12 @@ export default function useEditorAssistant({ getEditorContext }) {
       };
       const placeholderId = tempId();
       store.appendAssistantMessage(userMessage);
-      store.appendAssistantMessage(createStreamingPlaceholder(placeholderId));
+      // 占位消息携带发送时的来源 filePath（Q17 tab 守卫）：done 落位保留
+      // 该字段，建议卡片据此在活跃 tab 切换后禁用跨文件应用
+      store.appendAssistantMessage({
+        ...createStreamingPlaceholder(placeholderId),
+        filePath: ctx.filePath ?? null,
+      });
       store.setAssistantStreaming(true);
       store.setAssistantToolStatus(null);
 

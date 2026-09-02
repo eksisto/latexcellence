@@ -1115,12 +1115,14 @@
       "noFileSelectedTitle": "未选择文件",
       "noFileSelectedHint": "在左侧文件树点击 .tex / .bib / .sty / .cls 文件开始编辑，Ctrl/Cmd+S 保存。",
       "noFileSelectedViewerHint": "你在本项目中为只读角色，可浏览文件内容但无法编辑。",
-      "switchDirtyTitle": "放弃未保存的修改？",
-      "switchDirtyDescription": "当前文件的修改尚未保存，打开新文件将丢弃这些改动。",
-      "switchDirtyConfirm": "放弃并打开",
       "disabledTitle": "网页编辑器未启用",
       "disabledDescription": "管理员已在服务器配置中关闭编辑器功能，可返回工作台使用其他功能。",
-      "compileNoMainFile": "未设置主文件且当前文件不是 .tex，无法编译；请在工作台设置主文件。"
+      "compileNoMainFile": "未设置主文件且当前文件不是 .tex，无法编译；请在工作台设置主文件。",
+      "sessionRestored": "已恢复上次编辑会话（{{count}} 个标签页）",
+      "sessionOverflowToast": "未保存内容过多，超出会话恢复上限，请及时保存",
+      "staleConfirmTitle": "磁盘上的文件已变更",
+      "staleConfirmDescription": "该文件在磁盘上已被其他程序修改，覆盖保存将丢弃磁盘上的当前内容。仍要继续保存吗？",
+      "staleConfirmProceed": "仍要保存"
     },
     "versionManage": {
       "title": "版本管理",
@@ -1683,7 +1685,16 @@
       "compileOutput": "原始输出",
       "enterFullscreen": "全屏查看",
       "quitFullscreen": "退出全屏",
-      "fullscreenTitle": "编译 PDF 全屏预览"
+      "fullscreenTitle": "编译 PDF 全屏预览",
+      "tabBarLabel": "已打开文件",
+      "tabStaleBadge": "磁盘已变更",
+      "closeTab": "关闭标签页",
+      "saveAll": "全部保存",
+      "closeTabTitle": "有未保存的修改",
+      "closeTabDescription": "该标签页的修改尚未保存，关闭后将丢弃这些改动。",
+      "closeTabSaveAndClose": "保存并关闭",
+      "closeTabDiscard": "放弃改动",
+      "closeTabCancel": "取消"
     },
     "conflictDialog": {
       "title": "保存冲突",
@@ -1768,7 +1779,8 @@
       "diffHunkAmbiguous": "diff 与缓冲区存在多处可能匹配，为避免改错位置已拒绝应用",
       "diffHunkOverlap": "diff 中多个修改块相互重叠，已拒绝应用",
       "diffMalformed": "diff 格式无法解析。",
-      "noFileHint": "未打开文件，助手仅通用问答"
+      "noFileHint": "未打开文件，助手仅通用问答",
+      "fileMismatchHint": "建议来自 {{file}}，请先切换到该标签页再应用"
     },
     "staleCheck": {
       "title": "文件已在编辑器中修改，以下检查结果可能过期，建议重新检查："

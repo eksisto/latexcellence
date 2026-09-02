@@ -14,7 +14,7 @@ import { useCallback, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 
-import useEditorStore from "@/store/editorStore";
+import useEditorStore, { getTabBuffer } from "@/store/editorStore";
 import {
   Dialog,
   DialogContent,
@@ -63,15 +63,17 @@ async function writeClipboardText(text) {
  * @param {object} props
  * @param {boolean} props.open
  * @param {(open: boolean) => void} props.onOpenChange
- * @param {{ message?: string }|null} props.conflict
- *   后端 409 结构化错误中用于展示的字段（current_md5 由后端附带，前端未消费）
- * @param {() => Promise<boolean>} props.onDiscardAndReload 放弃本地并重载，
- *   返回是否重载成功；失败时弹窗保持打开以保留逃生出口
- * @param {() => Promise<boolean>} props.onOverwriteSave 覆盖保存（跳过乐观
- *   锁，以本地版本覆盖服务端）；失败时弹窗保持打开
+ * @param {{ filePath?: string, message?: string }|null} props.conflict
+ *   后端 409 结构化错误中用于展示的字段；多缓冲区（阶段一）起冲突携带
+ *   归属 filePath，弹窗动作（复制/放弃/覆盖）一律作用于归属 tab 的缓冲区，
+ *   不随激活 tab 切换漂移（current_md5 由后端附带，前端未消费）
+ * @param {(filePath: string) => Promise<boolean>} props.onDiscardAndReload
+ *   放弃本地并重载，返回是否重载成功；失败时弹窗保持打开以保留逃生出口
+ * @param {(filePath: string) => Promise<boolean>} props.onOverwriteSave
+ *   覆盖保存（跳过乐观锁，以本地版本覆盖服务端）；失败时弹窗保持打开
  *
  * 本组件刻意不订阅缓冲区 content（A2 渲染解耦）：复制逃生在点击时刻经
- * store getState 现取最新全文，避免每次按键重渲染弹窗宿主。
+ * store getState 现取冲突归属 tab 的最新全文，避免每次按键重渲染弹窗宿主。
  */
 export default function ConflictDialog({
   open,
@@ -86,7 +88,9 @@ export default function ConflictDialog({
 
   const handleCopyLocal = useCallback(async () => {
     try {
-      await writeClipboardText(useEditorStore.getState().content ?? "");
+      await writeClipboardText(
+        getTabBuffer(useEditorStore.getState(), conflict?.filePath ?? null),
+      );
       toast.success(t("components:conflictDialog.copySuccess"));
     } catch (e) {
       // 原始异常进 console 供排查；用户面文案统一走 i18n，
@@ -94,30 +98,32 @@ export default function ConflictDialog({
       console.error("conflict dialog clipboard copy failed:", e);
       toast.error(t("components:conflictDialog.copyFailed"));
     }
-  }, [t]);
+  }, [t, conflict?.filePath]);
 
   const handleDiscardAndReload = useCallback(async () => {
+    if (!conflict?.filePath) return;
     setReloading(true);
     try {
-      const ok = await onDiscardAndReload();
+      const ok = await onDiscardAndReload(conflict.filePath);
       // 重载失败（网络断开 / 文件被删）不关弹窗：脏缓冲区仍在，
       // 用户可重试或先复制逃生，不能假装冲突已解决
       if (ok !== false) onOpenChange(false);
     } finally {
       setReloading(false);
     }
-  }, [onDiscardAndReload, onOpenChange]);
+  }, [conflict?.filePath, onDiscardAndReload, onOpenChange]);
 
   const handleOverwriteSave = useCallback(async () => {
+    if (!conflict?.filePath) return;
     setOverwriting(true);
     try {
-      const ok = await onOverwriteSave();
+      const ok = await onOverwriteSave(conflict.filePath);
       // 覆盖失败不关弹窗：冲突未解决，保留全部出路供用户重试
       if (ok !== false) onOpenChange(false);
     } finally {
       setOverwriting(false);
     }
-  }, [onOverwriteSave, onOpenChange]);
+  }, [conflict?.filePath, onOverwriteSave, onOpenChange]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>

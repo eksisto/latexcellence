@@ -40,7 +40,7 @@ import TextCursorInput from "lucide-react/dist/esm/icons/text-cursor-input.mjs";
 import Trash2 from "lucide-react/dist/esm/icons/trash-2.mjs";
 import Wrench from "lucide-react/dist/esm/icons/wrench.mjs";
 
-import useEditorStore from "@/store/editorStore";
+import useEditorStore, { activeBuffer } from "@/store/editorStore";
 import useEditorAssistant from "@/hooks/useEditorAssistant";
 import { applyUnifiedDiff, parseUnifiedDiff } from "@/lib/editor/applyDiff";
 
@@ -48,6 +48,10 @@ import { applyUnifiedDiff, parseUnifiedDiff } from "@/lib/editor/applyDiff";
  * 单条建议的操作卡（snippet 两键 / diff 审阅卡，EditOpCard 模式）。
  * props 均为原始值 + 稳定回调（onApply 经 useCallback 固定），配合
  * React.memo：单卡展开态切换不再牵连同消息其余卡片重渲染。
+ *
+ * tab 守卫（editor-productivity-plan Q17）：卡片携带发送时的来源
+ * filePath（sourceFilePath），活跃 tab 不匹配时禁用应用并提示切换，
+ * 不自动切 tab。
  */
 const SuggestionCard = memo(function SuggestionCard({
   messageId,
@@ -55,16 +59,24 @@ const SuggestionCard = memo(function SuggestionCard({
   applied,
   readOnly,
   hasSelection,
+  mismatchedPath,
   onApply,
 }) {
   const { t } = useTranslation("components");
   const [expanded, setExpanded] = useState(false);
   const isDiff = suggestion.kind === "diff";
+  const guardBlocked = Boolean(mismatchedPath);
   // diff 解析随内容记忆化：父级因流式 token / 输入重渲染时不重复解析
   const parsed = useMemo(
     () => (isDiff ? parseUnifiedDiff(suggestion.content) : null),
     [isDiff, suggestion.content],
   );
+
+  const guardHint = guardBlocked ? (
+    <span className="text-[10px] text-amber-600 dark:text-amber-400">
+      {t("assistant.fileMismatchHint", { file: mismatchedPath })}
+    </span>
+  ) : null;
 
   if (isDiff) {
     return (
@@ -87,13 +99,18 @@ const SuggestionCard = memo(function SuggestionCard({
             {suggestion.content}
           </pre>
         )}
-        <div className="mt-1.5 flex items-center justify-between">
+        <div className="mt-1.5 flex items-center justify-between gap-2">
           {!applied ? (
             <Button
               size="xs"
               variant="outline"
               onClick={() => onApply(messageId, suggestion, "diff")}
-              disabled={readOnly}
+              disabled={readOnly || guardBlocked}
+              title={
+                guardBlocked
+                  ? t("assistant.fileMismatchHint", { file: mismatchedPath })
+                  : undefined
+              }
             >
               <Check />
               {t("assistant.applyToBuffer")}
@@ -104,9 +121,11 @@ const SuggestionCard = memo(function SuggestionCard({
               {t("assistant.applied")}
             </span>
           )}
-          <span className="text-[10px] text-muted-foreground">
-            {t("assistant.applyBufferHint")}
-          </span>
+          {guardHint ?? (
+            <span className="text-[10px] text-muted-foreground">
+              {t("assistant.applyBufferHint")}
+            </span>
+          )}
         </div>
       </div>
     );
@@ -129,7 +148,12 @@ const SuggestionCard = memo(function SuggestionCard({
               size="xs"
               variant="outline"
               onClick={() => onApply(messageId, suggestion, "insert")}
-              disabled={readOnly}
+              disabled={readOnly || guardBlocked}
+              title={
+                guardBlocked
+                  ? t("assistant.fileMismatchHint", { file: mismatchedPath })
+                  : undefined
+              }
             >
               <TextCursorInput />
               {t("assistant.insertAtCursor")}
@@ -138,8 +162,14 @@ const SuggestionCard = memo(function SuggestionCard({
               size="xs"
               variant="outline"
               onClick={() => onApply(messageId, suggestion, "replace")}
-              disabled={readOnly || !hasSelection}
-              title={hasSelection ? undefined : t("assistant.noSelectionHint")}
+              disabled={readOnly || guardBlocked || !hasSelection}
+              title={
+                guardBlocked
+                  ? t("assistant.fileMismatchHint", { file: mismatchedPath })
+                  : hasSelection
+                    ? undefined
+                    : t("assistant.noSelectionHint")
+              }
             >
               <SquareDashedMousePointer />
               {t("assistant.replaceSelection")}
@@ -147,6 +177,7 @@ const SuggestionCard = memo(function SuggestionCard({
           </>
         )}
       </div>
+      {guardHint && <div className="mt-1">{guardHint}</div>}
     </div>
   );
 });
@@ -186,7 +217,8 @@ function AssistantPanel({
   const [hasSelection, setHasSelection] = useState(false);
   const listRef = useRef(null);
 
-  const filePath = useEditorStore((s) => s.filePath);
+  // 激活 tab 路径（原始值订阅）：建议卡 tab 守卫与左下角上下文展示共用
+  const activeTabPath = useEditorStore((s) => s.activeTabPath);
   const {
     messages,
     streaming,
@@ -205,9 +237,9 @@ function AssistantPanel({
   // 并对大缓冲全文 split。行数是信息性指标（仅控制开关显隐），按文件切换
   // 与消息数变化时重算即可；发送时刻的实时 buffer 由 getEditorContext 现取。
   const bufferLineCount = useMemo(() => {
-    const c = useEditorStore.getState().content;
+    const c = activeBuffer(useEditorStore.getState());
     return c ? c.split("\n").length : 0;
-  }, [filePath, messages.length]);
+  }, [activeTabPath, messages.length]);
   const largeBuffer = bufferLineCount >= 400;
 
   // 选区状态跟随编辑器上下文快照（发送时读取实时值，按钮态低频刷新）。
@@ -331,6 +363,13 @@ function AssistantPanel({
                       )}
                       readOnly={readOnly}
                       hasSelection={hasSelection}
+                      // tab 守卫（Q17）：活跃 tab 与发送时来源不一致 →
+                      // 禁用应用并提示切换（不自动切 tab）
+                      mismatchedPath={
+                        message.filePath && message.filePath !== activeTabPath
+                          ? message.filePath
+                          : null
+                      }
                       onApply={handleApply}
                     />
                   ))}
@@ -382,7 +421,7 @@ function AssistantPanel({
         />
         <div className="flex items-center justify-between">
           <span className="truncate text-[10px] text-muted-foreground">
-            {filePath || t("assistant.noFileHint")}
+            {activeTabPath || t("assistant.noFileHint")}
           </span>
           <Button
             size="sm"

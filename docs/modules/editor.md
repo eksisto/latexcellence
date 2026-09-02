@@ -1,13 +1,15 @@
 # 网页编辑器模块 `editor/` + `/editor`
 
-> 设计依据：[docs/editor-plan.md](../editor-plan.md)（含 grilling 决策记录 Q1–Q26）。
+> 设计依据：[docs/editor-plan.md](../editor-plan.md)（含 grilling 决策记录
+> Q1–Q26）与 [docs/editor-productivity-plan.md](../editor-productivity-plan.md)
+> （editor v2，阶段一多缓冲区基座已实施）。
 
 ## 设计概述
 
 网页编辑器提供工作台之外的第二内容入口：全宽三栏布局的 `/editor` 页，
-支持项目内文本文件的手动编辑与 MD5 乐观锁保存、LaTeX 命令快速输入
-（中文 / 拼音全拼 / 首字母 / 英文四路模糊查找）、编译联动与编辑器侧
-AI 助手；文件树点击 PDF
+支持项目内文本文件的**多缓冲区（多标签页）**编辑与 MD5 乐观锁保存、LaTeX
+命令快速输入（中文 / 拼音全拼 / 首字母 / 英文四路模糊查找）、编译联动与
+编辑器侧 AI 助手；文件树点击 PDF
 以只读覆盖层内嵌预览。后端由
 `backend/modules/editor/`（整文件读写服务）与 `writing_chat` 包内的
 编辑器助手端点两部分组成。
@@ -80,17 +82,23 @@ hunk 至少带 3 行上下文，供前端锚定定位。
 
 ```
 frontend/src/
-├── pages/EditorPage.jsx              # /editor 三栏布局、编译联动、右栏 Tab、路由守卫
+├── pages/EditorPage.jsx              # /editor 三栏布局、tab 条接线、编译联动、右栏 Tab、URL ?file= 双向、路由守卫
 ├── components/editor/
-│   ├── LaTeXEditor.jsx               # CM6 受控封装（value/onChange）
-│   ├── EditorToolbar.jsx             # 文件名/脏标记 · 后端撤销重做 · 面板 · 编译 · 保存 · 设置
+│   ├── LaTeXEditor.jsx               # CM6 受控封装（value/onChange）+ 多缓冲区 per-file EditorState 换档
+│   ├── EditorTabBar.jsx              # 标签条（脏标记圆点 + 磁盘已变更标记 + 关闭按钮 + 全部保存）
+│   ├── EditorToolbar.jsx             # 激活 tab 路径/脏标记 · 后端撤销重做 · 面板 · 编译 · 保存 · 设置
+│   ├── EditorCloseTabDialog.jsx      # 关闭脏 tab 三选弹窗（保存并关闭 / 放弃改动 / 取消）
 │   ├── EditorSettingsDialog.jsx      # 偏好开关 + 偏好导入/导出双通道入口
-│   ├── ConflictDialog.jsx            # 409 弹窗（放弃重载 / 剪贴板逃生 / 覆盖保存三出路）
+│   ├── ConflictDialog.jsx            # 409 弹窗（动作作用于冲突归属 tab：放弃重载 / 剪贴板逃生 / 覆盖保存）
 │   ├── CommandPalette.jsx            # 命令面板 + m×n 网格选择器二级步骤
 │   ├── GridSizePicker.jsx            # 表格/矩阵网格拖选
-│   ├── AssistantPanel.jsx            # AI 助手侧栏（SSE 对话 + 建议卡）
-│   └── StaleCheckBanner.jsx          # 检查结果过期横幅（各检查页复用）
+│   ├── AssistantPanel.jsx            # AI 助手侧栏（SSE 对话 + 建议卡 + 来源 tab 守卫）
+│   ├── StaleCheckBanner.jsx          # 检查结果过期横幅（各检查页复用）
+│   └── …（BinaryFilePreview / CompilePreviewPanel / EditorRightPanel / FilePreviewOverlay / FullscreenPDFPreview）
 ├── lib/editor/
+│   ├── tabs.js                       # 多缓冲区 tab 状态机纯归约（打开/激活/键入/保存回写/陈旧/关闭）+ 会话选择器
+│   ├── sessionPersistence.js         # 会话 sessionStorage 持久化纯函数（序列化 / 白名单清洗 / LRU 配额淘汰 / 项目键隔离）
+│   ├── tabViews.js                   # per-tab CM6 EditorState / 滚动位置登记表（单实例换档的数据底座）
 │   ├── language.js                   # 语言包抽象层（stex StreamLanguage）
 │   ├── files.js                      # 可编辑/可预览白名单 + 大小上限纯函数
 │   ├── preferences.js                # 偏好默认值/白名单清洗/导出导入校验纯函数
@@ -103,22 +111,72 @@ frontend/src/
 │   ├── applyDiff.js                  # unified diff 解析与上下文锚定应用纯模块
 │   ├── assistantStream.js            # 助手 SSE 事件归约纯函数（占位消息 / 工具状态 / 会话 id，hook 与单测共用）
 │   └── （命令数据库 data/latexCommands/ 见阶段三）
+└── hooks/useEditorBuffer.js          # 多缓冲区编排（打开/激活/保存/冲突/陈旧/自动保存/刷新恢复/项目切换守卫）
 └── hooks/useEditorAssistant.js       # 助手 SSE hook（归约委托 assistantStream 纯函数 + 项目切换守卫）
 ```
 
 Zustand：`editorStore` 含三个切片——`editorPreferences`（persist：
-autoSave / softWrap / fontSize）、`editorSession`（当前文件、缓冲区、
-baseMd5、脏标记、冲突信息，不持久化）、`editorAssistant`（助手会话 id
-与消息视图，不持久化；后端会话按项目 scope 隔离，切换文件延续会话）。
+autoSave / softWrap / fontSize）、`editorSession`（多缓冲区会话，
+不持久化）、`editorAssistant`（助手会话 id 与消息视图，不持久化；
+后端会话按项目 scope 隔离，切换文件延续会话）。
 
-按键渲染解耦（A2）：content 的组件级订阅只存在于 `SessionEditor`
+### 多缓冲区基座（editor-productivity-plan §5.1，阶段一）
+
+`editorSession` 切片为多缓冲区模型：`tabs: [{ filePath, buffer, baseMd5,
+dirty, stale, lastActive }]` + `activeTabPath` + `conflict`。tab 转移逻辑
+（打开 / 激活 / 键入回写 / 保存回写 / 陈旧回写 / 关闭）全部是
+`lib/editor/tabs.js` 的不可变纯归约，node --test 直接单测。
+
+- **单 CM6 实例 + EditorState 交换**：tab 切换时 `LaTeXEditor` 把当前视图
+  的 `EditorState`（撤销历史与选区随之冻结）按 filePath 收进
+  `lib/editor/tabViews.js` 登记表，换入目标 tab 存档；滚动位置不属于
+  EditorState，由登记表单独记忆并在换回时恢复。无存档的 tab 按当前
+  缓冲区重建 state（扩展配置复刻 `@uiw/react-codemirror` 的
+  `getDefaultExtensions` 组装，basicSetup / 语法包不因换档缺位）；
+  存档与 store 缓冲区或外观（softWrap/readOnly）失配时同样重建（撤销
+  历史复位，对齐重挂载语义）。换档产生的整文档变更经 switchGuard 吸收，
+  不误标脏标记。
+- **激活缓冲区单点订阅**：content 的组件级订阅仍只存在于 `SessionEditor`
+  隔离层（A2 按键渲染解耦保持）；tab 条用 `useShallow` 投影路径数组，
+  tab 项各自订阅自身 dirty/stale 原始值，键入不牵连页面骨架重渲染。
+- **陈旧检测（Q4）**：激活 tab 时惰性调 `GET /api/project/file-md5` 与该
+  tab `baseMd5` 比对（复用检查结果保鲜的"MD5 比对 + 只提示不销毁"模式），
+  不一致显示"磁盘已变更"标记；保存前经确认弹窗（自动保存通道静默跳过，
+  不弹窗不抢激活位）；保存时 409 冲突流程照旧兜底，保存成功后 stale 清除。
+  MD5 获取失败不误报。
+- **关闭脏 tab（Q5）**：三选弹窗（保存并关闭 / 放弃改动 / 取消）；
+  `autoSave` 偏好开启时默认「保存并关闭」；Escape / 点击遮罩一律「取消」。
+  关闭激活 tab 时右侧邻居接管激活位、末尾回落左侧。
+- **刷新恢复（Q14）**：打开的 tab 集合（含脏缓冲区全文 + `baseMd5` + 陈旧
+  标记）与激活位带项目隔离键写入 sessionStorage（防抖 1s，pagehide /
+  页面隐藏兜底 flush）；刷新后整体恢复并 toast 告知，磁盘内容以缓冲区为
+  准，期间磁盘被改由激活时陈旧检测提示、保存时乐观锁兜底。超配额
+  （约 5MB）按 LRU 淘汰最久不活跃的非脏 tab；全为脏 tab 仍超限时 toast
+  提示保存。URL `?file=` 跟随激活 tab；刷新时与 sessionStorage 恢复结果
+  合并（恢复全部 tab 集合，`?file=` 指定者激活）。SPA 内切换项目即清空
+  会话与视图存档（项目键守卫，sessionStorage 载荷单键单项目）。
+- **自动保存（Q15）**：per-tab 防抖器，所有脏 tab 各自停改 2.5s 落盘
+  （`autoSave` 偏好开启时；冲突快照门闩按 tab 隔离，防 409 回路）。
+- **编译联动（Q16）**：编译前依次自动保存**所有**脏 tab（tab 条顺序），
+  任一失败即中断编译——409 由保存侧切换到归属 tab 进入冲突流程，陈旧
+  确认弹窗同理。
+- **AI 助手 tab 守卫（Q17）**：助手上下文与建议卡片携带发送时的来源
+  filePath（随消息记录）；应用建议时活跃 tab 不匹配则禁用按钮并提示
+  切换，不自动切 tab（纯前端改动）。
+- **全部保存**：多于一个脏 tab 时 tab 条提供「全部保存」入口（按 tab 条
+  顺序依次落盘）。
+- **后端撤销/重做**：工具栏按钮绑定激活 tab 的文件；「脏改动时禁用后端
+  历史」的既有规则不变；undo/redo 落盘后重拉内容重建该 tab（撤销历史
+  随 EditorState 重建复位）。
+
+按键渲染解耦（A2）：激活缓冲区的组件级订阅只存在于 `SessionEditor`
 隔离层（EditorPage 内模块级组件，包住 LaTeXEditor），每次按键仅该层
 与 CM6 内部参与渲染（value 与文档恒等时 dispatch 跳过），页面骨架 /
-文件树 / 工具栏 / 右栏不随键入重渲染。`useEditorBuffer` 不订阅
-content/dirty——beforeunload、自动保存防抖与冲突快照门闩改为
+文件树 / tab 条 / 工具栏 / 右栏不随键入重渲染。`useEditorBuffer` 不订阅
+content/dirty——beforeunload、per-tab 自动保存防抖与冲突快照门闩改为
 `store.subscribe` 命令式副作用，行为与组件级实现逐条等价；冲突弹窗的
-剪贴板逃生在点击时刻经 `getState()` 现取全文，助手面板的大文件行数
-判定按文件切换惰性重算。
+剪贴板逃生在点击时刻经 `getState()` 现取冲突归属 tab 的全文，助手面板
+的大文件行数判定按文件切换惰性重算。
 
 ### 图片与 PDF 只读预览
 
@@ -144,13 +202,16 @@ blob URL 在切换文件 / 关闭 / 卸载时就地 revoke，竞态败者（响�
 | diff 卡片逐卡审阅 | diff 卡展开预览 + 「应用到缓冲区」 | `applyUnifiedDiff()` 按 hunk 上下文锚定匹配（行号漂移容忍），单趟正向组装应用；任一 hunk 无法定位、窗口内存在多处可能匹配（歧义）或 hunk 源区间相互重叠时均整体失败，不落半套改动。同锚点的相邻「纯插入 + 替换」组合按 git 语义放行（插入紧贴替换块前/后边界合法，插入锚点落入替换区间内部仍判重叠） |
 
 应用动作只改缓冲区并置脏标记；viewer 可问答但应用按钮禁用。
+多缓冲区下建议卡片携带发送时的来源 filePath（随消息记录），活跃 tab
+不匹配时禁用应用按钮并提示切换，不自动切 tab（v2 决策 Q17，纯前端）。
 应用成功后调用 apply-suggestion 端点逐条（index 级）登记应用标记。
 
-### 编译联动（§8 / 决策 Q18）
+### 编译联动（§8 / 决策 Q18 + v2 Q16）
 
 工具栏「编译」：先解析编译目标（优先项目主文件，无主文件时回退当前
-打开的 `.tex`；解析失败直接提示并跳过，不先行落盘），缓冲区有脏改动时
-再自动保存（乐观锁校验），失败（如 409 冲突弹窗接管）即中断编译。
+激活的 `.tex`；解析失败直接提示并跳过，不先行落盘）；多缓冲区下编译前
+依次自动保存**所有**脏 tab（tab 条顺序，任一 409 即中断、切换到归属
+tab 进入冲突弹窗，陈旧确认弹窗同理），全部成功后继续。
 编译全程持在途序号守卫：双击竞态下过期响应整体丢弃并自回收其 blob
 URL。编译结果与 PDF 预览（复用 `PDFPreview` 与既有
 compile API）在右栏「编译与预览」Tab 展示；右栏可在该 Tab 与 AI 助手
@@ -191,5 +252,7 @@ AI 面板。四处配置同步规范照 AGENTS.md 执行；`/api/config/status` 
 - 后端 `tests/test_api/test_editor_assistant.py`：上下文注入纯函数、
   建议提取、SSE 端点（Mock LLM，严禁真实网络）、开关把关、apply 标记
 - 前端 node --test：editorPreferences（含导入导出校验）、editorApplyDiff、
+  editorTabs（tab 状态机归约与会话选择器）、editorSessionPersistence
+  （序列化清洗 / LRU 配额淘汰 / 项目键隔离）、editorTabViews（登记表）、
   editorFiles / editorMatcher / editorSnippetInsert / editorPreambleScan /
   latexCommands / i18nLocales 键集合一致性等

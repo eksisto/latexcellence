@@ -33,7 +33,7 @@ import Loader2 from "lucide-react/dist/esm/icons/loader-circle.mjs";
 import BookmarkPlus from "lucide-react/dist/esm/icons/bookmark-plus.mjs";
 
 import useStore from "@/store/useStore";
-import useEditorStore from "@/store/editorStore";
+import useEditorStore, { activeDirty } from "@/store/editorStore";
 import useCanWrite from "@/hooks/useCanWrite";
 import useUndoRedo from "@/hooks/useUndoRedo";
 import EditorSettingsDialog from "@/components/editor/EditorSettingsDialog";
@@ -41,16 +41,16 @@ import SaveAsTemplateDialog from "@/components/template-center/SaveAsTemplateDia
 
 /**
  * @param {object} props
- * @param {string|null} props.filePath      当前打开的文件路径
- * @param {boolean} props.saving            保存请求进行中
+ * @param {string|null} props.filePath      激活 tab 的文件路径
+ * @param {boolean} props.saving            保存请求进行中（任一 tab 在途）
  * @param {boolean} [props.readOnly=false]  viewer 只读
- * @param {() => void|Promise<void>} props.onSave
- * @param {() => void|Promise<void>} props.onReloadBuffer
+ * @param {() => void|Promise<void>} props.onSave 保存激活 tab
+ * @param {(filePath?: string) => Promise<boolean>} props.onReloadBuffer
  *   后端撤销/重做落盘后重拉文件内容刷新缓冲区
  * @param {() => void} [props.onOpenPalette] 唤起命令面板
  * @param {boolean} [props.compileEnabled=true] 部署级 compile 功能开关
  * @param {boolean} [props.compiling=false] 编译请求进行中
- * @param {() => void} [props.onCompile]    编译入口（脏改动先自动保存）
+ * @param {() => void} [props.onCompile]    编译入口（先全量保存脏 tab）
  * @param {boolean} [props.templateLibraryEnabled=true]
  *   部署级 template_library 功能开关（「另存为模板」入口）
  */
@@ -68,7 +68,8 @@ export default function EditorToolbar({
 }) {
   const { t } = useTranslation("components");
   const workspaceId = useStore((s) => s.workspaceId);
-  const dirty = useEditorStore((s) => s.dirty);
+  // 激活 tab 的脏标记（原始布尔订阅，键入只在翻转时重渲染本栏）
+  const dirty = useEditorStore(activeDirty);
   const canWrite = useCanWrite();
 
   const [settingsOpen, setSettingsOpen] = useState(false);

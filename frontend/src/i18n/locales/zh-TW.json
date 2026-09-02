@@ -1115,12 +1115,14 @@
       "noFileSelectedTitle": "未選擇檔案",
       "noFileSelectedHint": "在左側檔案樹點擊 .tex / .bib / .sty / .cls 檔案開始編輯，Ctrl/Cmd+S 儲存。",
       "noFileSelectedViewerHint": "你在本專案中為唯讀角色，可瀏覽檔案內容但無法編輯。",
-      "switchDirtyTitle": "放棄未儲存的修改？",
-      "switchDirtyDescription": "當前檔案的修改尚未儲存，開啟新檔案將丟棄這些改動。",
-      "switchDirtyConfirm": "放棄並開啟",
       "disabledTitle": "網頁編輯器未啟用",
       "disabledDescription": "管理員已在伺服器設定中關閉編輯器功能，可返回工作台使用其他功能。",
-      "compileNoMainFile": "未設定主檔案且目前檔案不是 .tex，無法編譯；請在工作台設定主檔案。"
+      "compileNoMainFile": "未設定主檔案且目前檔案不是 .tex，無法編譯；請在工作台設定主檔案。",
+      "sessionRestored": "已恢復上次編輯會話（{{count}} 個標籤頁）",
+      "sessionOverflowToast": "未儲存內容過多，超出會話恢復上限，請及時儲存",
+      "staleConfirmTitle": "磁碟上的檔案已變更",
+      "staleConfirmDescription": "該檔案在磁碟上已被其他程式修改，覆蓋儲存將丟棄磁碟上的目前內容。仍要繼續儲存嗎？",
+      "staleConfirmProceed": "仍要儲存"
     },
     "versionManage": {
       "title": "版本管理",
@@ -1683,7 +1685,16 @@
       "compileOutput": "原始輸出",
       "enterFullscreen": "全螢幕檢視",
       "quitFullscreen": "退出全螢幕",
-      "fullscreenTitle": "編譯 PDF 全螢幕預覽"
+      "fullscreenTitle": "編譯 PDF 全螢幕預覽",
+      "tabBarLabel": "已開啟檔案",
+      "tabStaleBadge": "磁碟已變更",
+      "closeTab": "關閉標籤頁",
+      "saveAll": "全部儲存",
+      "closeTabTitle": "有未儲存的修改",
+      "closeTabDescription": "該標籤頁的修改尚未儲存，關閉後將丟棄這些改動。",
+      "closeTabSaveAndClose": "儲存並關閉",
+      "closeTabDiscard": "放棄改動",
+      "closeTabCancel": "取消"
     },
     "conflictDialog": {
       "title": "儲存衝突",
@@ -1768,7 +1779,8 @@
       "diffHunkAmbiguous": "diff 與緩衝區存在多處可能匹配，為避免改錯位置已拒絕應用",
       "diffHunkOverlap": "diff 中多個修改塊相互重疊，已拒絕應用",
       "diffMalformed": "diff 格式無法解析。",
-      "noFileHint": "未開啟檔案，助手僅通用問答"
+      "noFileHint": "未開啟檔案，助手僅通用問答",
+      "fileMismatchHint": "建議來自 {{file}}，請先切換到該標籤頁再應用"
     },
     "staleCheck": {
       "title": "檔案已在編輯器中修改，以下檢查結果可能過期，建議重新檢查："

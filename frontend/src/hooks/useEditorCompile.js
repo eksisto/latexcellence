@@ -1,18 +1,25 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 
-import useEditorStore from "@/store/editorStore";
+import useEditorStore, {
+  activeFilePath,
+  countDirtyTabs,
+} from "@/store/editorStore";
 import { api } from "@/api/index";
 import { translateError } from "@/utils/errorMessages";
 
 /**
  * 编译联动：编译状态 / PDF blob ref 回收 / handleCompile 编排。
- * 从 EditorPage 拆出，与 useEditorBuffer 通过 saveRef 解耦。
+ * 从 EditorPage 拆出，与 useEditorBuffer 通过 doSaveAllDirtyRef 解耦。
  *
- * @param {{ saveRef, mainFile, t, workspaceId, setPanelCollapsed, setPanelTab, onCompileSuccess, onCompileError }} params
+ * 编译前置（editor-productivity-plan Q16）：编译前依次自动保存**所有**
+ * 脏 tab（tab 条顺序），任一失败即中断编译——409 由保存侧切换到归属
+ * tab 并接管进冲突流程，陈旧确认弹窗同理。
+ *
+ * @param {{ doSaveAllDirtyRef, mainFile, t, workspaceId, setPanelCollapsed, setPanelTab, onCompileSuccess, onCompileError }} params
  */
 export default function useEditorCompile({
-  saveRef,
+  doSaveAllDirtyRef,
   mainFile,
   t,
   workspaceId,
@@ -30,7 +37,7 @@ export default function useEditorCompile({
 
   const resolveCompileTarget = useCallback(() => {
     if (mainFile) return mainFile;
-    const cur = useEditorStore.getState().filePath;
+    const cur = activeFilePath(useEditorStore.getState());
     if (cur && cur.endsWith(".tex")) return cur;
     return null;
   }, [mainFile]);
@@ -44,10 +51,11 @@ export default function useEditorCompile({
       return;
     }
     const seq = ++compileSeqRef.current;
-    // 脏改动先落盘：doSave 失败（含 409 → ConflictDialog 接管）即中断编译
-    if (useEditorStore.getState().dirty) {
-      const saved = await saveRef.current();
-      if (!saved || seq !== compileSeqRef.current) return;
+    // 所有脏 tab 先落盘（Q16）：任一保存失败（409 → 归属 tab 冲突流程
+    // 接管 / 陈旧确认弹窗等待）即中断编译
+    if (countDirtyTabs(useEditorStore.getState().tabs) > 0) {
+      const saved = await doSaveAllDirtyRef.current();
+      if (!saved?.ok || seq !== compileSeqRef.current) return;
     }
     // 展开面板 + 切换到编译 Tab + 标记编译中
     setPanelCollapsed(false);
@@ -97,7 +105,7 @@ export default function useEditorCompile({
     resolveCompileTarget,
     t,
     workspaceId,
-    saveRef,
+    doSaveAllDirtyRef,
     setPanelCollapsed,
     setPanelTab,
     onCompileSuccess,

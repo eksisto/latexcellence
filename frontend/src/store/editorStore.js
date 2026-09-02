@@ -1,13 +1,16 @@
 /**
- * 编辑器状态（editor-plan §9）：editorPreferences + editorSession 两个切片
- * 组合为一个独立 store，不进入全局 useStore——编辑器缓冲区是页面级临时态，
- * 与项目级持久化状态（latexcellence-project）生命周期不同。
+ * 编辑器状态（editor-plan §9 + editor-productivity-plan §5.1）：
+ * editorPreferences + editorSession 两个切片组合为一个独立 store，不进入
+ * 全局 useStore——编辑器缓冲区是页面级临时态，与项目级持久化状态
+ * （latexcellence-project）生命周期不同。
  *
  * 持久化策略：
  *   - editorPreferences：persist 持久化（autoSave / softWrap / fontSize），
  *     水合后经 sanitizePreferences 白名单清洗，脏数据回落默认值；
- *   - editorSession（当前文件、缓冲区内容、baseMd5、脏标记、冲突信息）：
- *     不持久化——刷新即丢弃未保存缓冲区，避免与磁盘真实状态分叉。
+ *   - editorSession（多缓冲区：tabs + activeTabPath + 冲突信息）：不进
+ *     localStorage——刷新恢复走 sessionStorage 专项通道（含脏缓冲区全文，
+ *     LRU 配额兜底，见 lib/editor/sessionPersistence.js），由
+ *     useEditorBuffer 负责写入与恢复，避免与磁盘真实状态分叉。
  */
 
 import { create } from "zustand";
@@ -17,7 +20,37 @@ import {
   EDITOR_PREFERENCES_DEFAULTS,
   sanitizePreferences,
 } from "@/lib/editor/preferences";
+import {
+  activateTabReducer,
+  activeBaseMd5,
+  activeBuffer,
+  activeDirty,
+  activeFilePath,
+  closeTabReducer,
+  countDirtyTabs,
+  findTab,
+  getActiveTab,
+  getDirtyTabsInOrder,
+  getTabBuffer,
+  markTabSavedReducer,
+  openTabReducer,
+  resetSessionReducer,
+  setTabBufferReducer,
+  setTabStaleReducer,
+} from "@/lib/editor/tabs";
 import { api } from "@/api/index";
+
+export {
+  activeBaseMd5,
+  activeBuffer,
+  activeDirty,
+  activeFilePath,
+  findTab,
+  getActiveTab,
+  getTabBuffer,
+  countDirtyTabs,
+  getDirtyTabsInOrder,
+};
 
 /* ── editorPreferences 切片（persist 持久化） ─────────────────────────── */
 
@@ -197,65 +230,85 @@ function createEditorAssistantSlice(set, get) {
   };
 }
 
-/* ── editorSession 切片（不持久化） ───────────────────────────────────── */
+/* ── editorSession 切片（不持久化；刷新恢复走 sessionStorage 专项通道） ── */
 
+/**
+ * 多缓冲区会话（editor-productivity-plan §5.1，阶段一）：
+ *   tabs: [{ filePath, buffer, baseMd5, dirty, stale, lastActive }]
+ *   activeTabPath: 激活 tab（键 = 项目相对路径）
+ *   conflict: 409 冲突信息 { filePath, message }（含所属文件，弹窗动作
+ *   始终作用于冲突归属 tab，不随激活切换漂移）
+ *
+ * tab 转移逻辑（打开 / 激活 / 关闭 / 保存回写等）全部委托
+ * lib/editor/tabs.js 的不可变归约；cursor/selection 随 CM6 EditorState
+ * 隔离（tabViews 登记表），不进入本切片。
+ */
 function createEditorSessionSlice(set, get) {
+  /** 单调时刻源：LRU lastActive 依据（测试外恒递增） */
+  const now = () => Date.now();
+
   return {
-    /** 当前打开的文件路径（项目相对路径；null 表示未打开文件） */
-    filePath: null,
-    /** 缓冲区全文（受控 value 的单一事实源） */
-    content: "",
-    /** 打开时服务端返回的 MD5（乐观锁基线） */
-    baseMd5: null,
-    /** 脏标记：缓冲区 ≠ baseMd5 对应的磁盘内容 */
-    dirty: false,
-    /** 409 冲突信息（非 null 时 ConflictDialog 打开） */
+    tabs: [],
+    activeTabPath: null,
     conflict: null,
 
     /**
-     * 打开文件成功后的缓冲区初始化。
+     * 打开 tab：不存在则新建（携带服务端内容），已存在视为显式重拉
+     * （冲突放弃重载 / 后端撤销刷新）：以磁盘内容覆盖缓冲区并复位脏 /
+     * 陈旧标记，随后激活。
      */
-    openBuffer: ({ filePath, content, baseMd5 }) =>
-      set({
-        filePath,
-        content,
-        baseMd5,
-        dirty: false,
-        conflict: null,
-      }),
-
-    /** CM6 onChange 回写缓冲区并置脏标记 */
-    setBufferContent: (content) =>
-      set((state) => (state.filePath ? { content, dirty: true } : {})),
-
-    /**
-     * 保存成功：更新乐观锁基线并按保存快照重算脏标记。
-     * @param {string} md5 服务端返回的新 MD5
-     * @param {string} [savedContent] 发起保存时的缓冲区快照；在途期间若有
-     *   新输入（content ≠ 快照），保持 dirty=true，避免"已保存"假象导致
-     *   切换文件/关闭页面时静默丢弃未落盘编辑。
-     */
-    markSaved: (md5, savedContent) =>
+    openTab: ({ filePath, content, baseMd5 }) =>
       set((state) => ({
-        baseMd5: md5,
-        dirty:
-          typeof savedContent === "string"
-            ? state.content !== savedContent
-            : false,
+        ...openTabReducer(state, {
+          filePath,
+          buffer: content,
+          baseMd5,
+          now: now(),
+        }),
+        conflict: state.conflict?.filePath === filePath ? null : state.conflict,
       })),
 
-    /** 记录冲突（保存返回 409 时调用） */
+    /** 激活 tab（文件树点击已打开的文件 / URL ?file= / 关闭后邻居接管） */
+    activateTab: (filePath) =>
+      set((state) => activateTabReducer(state, filePath, now())),
+
+    /** CM6 onChange 回写激活 tab 的缓冲区并置脏标记 */
+    setBufferContent: (content) =>
+      set((state) => setTabBufferReducer(state, content, now())),
+
+    /**
+     * 保存成功：更新该 tab 的乐观锁基线、清除陈旧标记，并按保存快照重算
+     * 脏标记（在途期间有新输入则保持 dirty）。
+     * @param {string} filePath 保存归属 tab（保存期间允许切换激活 tab）
+     * @param {string} md5 服务端返回的新 MD5
+     * @param {string} [savedBuffer] 发起保存时的缓冲区快照
+     */
+    markTabSaved: (filePath, md5, savedBuffer) =>
+      set((state) =>
+        markTabSavedReducer(state, { filePath, md5, savedBuffer }),
+      ),
+
+    /** 陈旧检测回写（激活 tab 惰性 file-md5 比对结果） */
+    setTabStale: (filePath, stale) =>
+      set((state) => setTabStaleReducer(state, filePath, stale)),
+
+    /** 记录冲突（保存返回 409 时调用；message 已脱敏为相对路径） */
     setConflict: (conflict) => set({ conflict }),
 
-    /** 关闭缓冲区（切换文件失败回退 / 项目关闭时调用） */
-    closeBuffer: () =>
-      set({
-        filePath: null,
-        content: "",
-        baseMd5: null,
-        dirty: false,
-        conflict: null,
-      }),
+    /** 关闭单个 tab；关闭激活 tab 时邻居接管激活位 */
+    closeTab: (filePath) => set((state) => closeTabReducer(state, filePath)),
+
+    /**
+     * 整体恢复会话（sessionStorage 刷新恢复专用入口，Q14）：载荷已经
+     * lib/editor/sessionPersistence.parseSession 白名单清洗，此处原样
+     * 写回（含脏缓冲区全文、baseMd5 与陈旧标记）。
+     */
+    restoreSession: ({ tabs, activeTabPath }) =>
+      set({ tabs, activeTabPath: activeTabPath ?? null, conflict: null }),
+
+    /** 关闭全部 tab / 会话复位（项目切换守卫、恢复失败兜底） */
+    resetSession: () =>
+      set((state) => ({ ...resetSessionReducer(), conflict: null })),
   };
 }
 
