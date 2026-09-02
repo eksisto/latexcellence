@@ -113,6 +113,7 @@ function SessionEditor({ readOnly, onCreateEditor, onCompletionApply }) {
   const softWrap = useEditorStore((s) => s.softWrap);
   const fontSize = useEditorStore((s) => s.fontSize);
   const autoCloseEnv = useEditorStore((s) => s.autoCloseEnv);
+  const formulaHover = useEditorStore((s) => s.formulaHover);
   const setBufferContent = useEditorStore((s) => s.setBufferContent);
   // 引用补全（阶段四 / Q7）：项目符号缓存读取器。缓存以项目为键
   // （单用户 projectPath / 多用户 projectId），首次触发补全时经
@@ -137,6 +138,7 @@ function SessionEditor({ readOnly, onCreateEditor, onCompletionApply }) {
       fontSize={fontSize}
       readOnly={readOnly}
       autoCloseEnv={autoCloseEnv}
+      formulaHover={formulaHover}
       onCreateEditor={onCreateEditor}
       onCompletionApply={onCompletionApply}
       getRefSymbols={getRefSymbols}

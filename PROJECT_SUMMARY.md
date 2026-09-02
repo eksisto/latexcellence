@@ -160,6 +160,8 @@ latexcellence/
 │       │   │       ├── snippetInsert.js      # 模板插入 + 占位符解析/网格骨架生成 + Tab 循环跳转模式
 │       │   │       ├── wrap.js               # 包裹命令纯逻辑（多选区包裹计算 + Ctrl/Cmd+B/I/U/K 直包键位）
 │       │   │       ├── beginClose.js         # \begin{env} 打字机自动补 \end（transactionFilter，autoCloseEnv 开关）
+│       │   │       ├── formulaHoverScan.js   # KaTeX 悬停公式区域识别纯模块（$/\\(\\)/\\[\\]/$$/显示环境，注释与转义边界）
+│       │   │       ├── formulaHover.js       # CM6 hoverTooltip 公式悬停预览（katex 动态分块 import + 主题化）
 │       │   │       ├── searchPanel.js        # CM6 查找替换面板主题化 + 面板文案三语短语（EditorState.phrases）
 │       │   │       ├── preambleScan.js       # 导言区扫描 + 宏包缺失检测 + usepackage 插入点选取
 │       │   │       ├── applyDiff.js          # unified diff 解析与上下文锚定应用（助手 diff 建议卡片）
@@ -243,7 +245,7 @@ latexcellence/
 │   ├── multi-user-v2-plan.md                   # 多用户模式 v2 设计方案（Docker 沙箱/rar/反向补丁撤销/分片上传/SMTP/记账优化/多实例）
 │   ├── rar-extractor-fallback.md                 # RAR 解压器回退层设计与实施记录（unar → bsdtar，已实施）
 │   ├── editor-plan.md                            # 网页编辑器功能设计方案（CM6 编辑器 + 命令快速输入 + AI 助手；已实施，设计共识与决策记录）
-│   ├── editor-productivity-plan.md                # 编辑器生产力改造设计方案（多缓冲区 tab/大纲/引用补全/格式化/KaTeX/错误跳转；分阶段实施中，阶段一多缓冲区基座、阶段二编辑基本功包、阶段三大纲面板、阶段四引用补全与阶段五一键格式化已实施）
+│   ├── editor-productivity-plan.md                # 编辑器生产力改造设计方案（多缓冲区 tab/大纲/引用补全/格式化/KaTeX/错误跳转；分阶段实施中，阶段一多缓冲区基座、阶段二编辑基本功包、阶段三大纲面板、阶段四引用补全、阶段五一键格式化与阶段六 KaTeX 公式悬停预览已实施）
 │   ├── multi-model-plan.md                       # 多模型支持设计方案（模型档案 + 角色槽位路由；已实施）
 │   ├── deployment.md                          # 后端部署指南（单用户/多用户单进程/多实例 Compose 部署、systemd 托管、HTTPS 反向代理、安全风险声明、备份、环境变量与升级回滚）
 │   ├── modules/                     # 模块文档（含 editor.md 网页编辑器）

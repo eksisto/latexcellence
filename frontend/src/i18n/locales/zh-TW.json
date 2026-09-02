@@ -1726,6 +1726,9 @@
         "noFileDescription": "開啟 .tex 檔案後此處展示章節大綱。",
         "emptyTitle": "暫無大綱條目",
         "emptyDescription": "未發現 \\section / \\subsection / \\subsubsection / \\paragraph 命令。"
+      },
+      "formulaHover": {
+        "renderError": "公式渲染失敗：LaTeX 語法可能有誤"
       }
     },
     "conflictDialog": {
@@ -1746,6 +1749,8 @@
       "autoSaveHint": "開啟後編輯停止片刻自動儲存到伺服器（可隨時手動 Ctrl/Cmd+S）。",
       "autoCloseEnv": "環境自動配對",
       "autoCloseEnvHint": "輸入 \\begin{環境} 的右花括號後，自動補全對應的 \\end 行。",
+      "formulaHover": "公式懸停預覽",
+      "formulaHoverHint": "滑鼠停在公式上約半秒，彈出 KaTeX 渲染的公式預覽。",
       "fontSize": "字號",
       "transferTitle": "偏好遷移",
       "export": "匯出 JSON",

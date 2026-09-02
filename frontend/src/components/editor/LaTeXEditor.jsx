@@ -50,6 +50,7 @@ import { latexCompletionExtension } from "@/lib/editor/latexCompletion";
 import { snippetPlaceholderExtension } from "@/lib/editor/snippetInsert";
 import { wrapKeymapExtension } from "@/lib/editor/wrap";
 import { autoCloseEnvExtension } from "@/lib/editor/beginClose";
+import { formulaHoverExtension } from "@/lib/editor/formulaHover";
 import { createSearchPanelExtension } from "@/lib/editor/searchPanel";
 import tabViewRegistry from "@/lib/editor/tabViews";
 import i18n from "@/i18n";
@@ -141,6 +142,8 @@ const SEARCH_PANEL = createSearchPanelExtension({
  * @param {boolean} [props.readOnly=false]     viewer 只读
  * @param {boolean} [props.autoCloseEnv=true]  \begin{env} 自动补 \end 开关
  *   （autoCloseEnv 偏好；经 ref 读取，切换无须重配置扩展）
+ * @param {boolean} [props.formulaHover=true]  KaTeX 公式悬停预览开关
+ *   （formulaHover 偏好，阶段六；经 ref 读取，切换无须重配置扩展）
  * @param {(view: EditorView) => void} [props.onCreateEditor]
  *   CM6 视图实例回调（命令面板等外部插入入口经此持有视图）
  * @param {(entry: object) => void} [props.onCompletionApply]
@@ -157,6 +160,7 @@ export default function LaTeXEditor({
   fontSize = 14,
   readOnly = false,
   autoCloseEnv = true,
+  formulaHover = true,
   onCreateEditor,
   onCompletionApply,
   getRefSymbols,
@@ -185,6 +189,13 @@ export default function LaTeXEditor({
     autoCloseEnvRef.current = autoCloseEnv;
   }, [autoCloseEnv]);
 
+  // formulaHover 偏好经 ref 供 hoverTooltip 回调在悬停时刻读取：偏好切换
+  // 只改 ref，不进入扩展依赖数组，避免每次切换触发 CM6 全量重配置
+  const formulaHoverRef = useRef(formulaHover);
+  useLayoutEffect(() => {
+    formulaHoverRef.current = formulaHover;
+  }, [formulaHover]);
+
   const handleDocChange = useCallback((nextValue) => {
     if (switchGuardRef.current) return;
     // 去重：@uiw 包装层 listener 与自有 listener 对同一事务都会通知，
@@ -212,6 +223,12 @@ export default function LaTeXEditor({
       WRAP_KEYMAP,
       // \begin{env} 打字机补 \end（editor v2 决策 Q12；开关经 ref 实时读取）
       autoCloseEnvExtension({ isEnabled: () => autoCloseEnvRef.current }),
+      // KaTeX 公式悬停预览（editor v2 阶段六 / 决策 Q9；开关经 ref 实时
+      // 读取，katex 动态分块 import 首屏零加载）
+      formulaHoverExtension({
+        isEnabled: () => formulaHoverRef.current,
+        translate: (key) => i18n.t(key),
+      }),
       // 查找替换面板主题化 + 面板文案三语（editor v2 阶段二）
       SEARCH_PANEL.extension,
       // 自有 doc listener：换档后视图 state 不含包装层内部 listener，

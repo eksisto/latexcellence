@@ -1726,6 +1726,9 @@
         "noFileDescription": "Open a .tex file to see its section outline here.",
         "emptyTitle": "No outline entries",
         "emptyDescription": "No \\section / \\subsection / \\subsubsection / \\paragraph commands found."
+      },
+      "formulaHover": {
+        "renderError": "Failed to render formula — the LaTeX may be invalid"
       }
     },
     "conflictDialog": {
@@ -1746,6 +1749,8 @@
       "autoSaveHint": "When on, edits are saved to the server shortly after you stop typing (Ctrl/Cmd+S always works).",
       "autoCloseEnv": "Auto-close environments",
       "autoCloseEnvHint": "After typing the closing brace of \\begin{env}, the matching \\end line is inserted automatically.",
+      "formulaHover": "Formula hover preview",
+      "formulaHoverHint": "Rest the pointer on a formula for about half a second to see a KaTeX-rendered preview.",
       "fontSize": "Font size",
       "transferTitle": "Preference transfer",
       "export": "Export JSON",

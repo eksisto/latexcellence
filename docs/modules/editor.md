@@ -116,6 +116,8 @@ frontend/src/
 │   ├── beginClose.js                 # \begin{env} 打字机自动补 \end（transactionFilter 纯决策分层）
 │   ├── searchPanel.js                # CM6 查找替换面板主题化 + 三语短语（EditorState.phrases）
 │   ├── outlineScan.js                # 大纲扫描纯模块（分节命令解析 / 注释与 verbatim 排除 / 标题净化）
+│   ├── formulaHoverScan.js           # KaTeX 悬停公式区域识别纯模块（行内/显示定界符 + equation/align 系环境，注释与转义边界）
+│   ├── formulaHover.js               # CM6 hoverTooltip 公式悬停预览（katex 动态分块 import / 错误提示 / 主题化）
 │   ├── formatApply.js                # 一键格式化纯模块（快捷键判定 / 应用决策 view·state·store / 单事务整文档替换）
 │   ├── preambleScan.js               # 导言区扫描 + 宏包缺失检测
 │   ├── applyDiff.js                  # unified diff 解析与上下文锚定应用纯模块
@@ -128,7 +130,7 @@ frontend/src/
 ```
 
 Zustand：`editorStore` 含三个切片——`editorPreferences`（persist：
-autoSave / softWrap / autoCloseEnv / fontSize）、`editorSession`（多缓冲区会话，
+autoSave / softWrap / autoCloseEnv / formulaHover / fontSize）、`editorSession`（多缓冲区会话，
 不持久化）、`editorAssistant`（助手会话 id 与消息视图，不持久化；
 后端会话按项目 scope 隔离，切换文件延续会话）。
 
@@ -320,6 +322,44 @@ Ctrl+B/I/U/K/L、Ctrl+/ 与 CM6 内置查找面板 Ctrl/Cmd+F）。点击后调�
 - **viewer 禁用**：工具栏按钮按写权限禁用；后端端点同样挂
   `require_workspace_write`，服务端兜底。
 
+### KaTeX 公式悬停预览（editor-productivity-plan §5.3，阶段六 / 决策 Q9）
+
+悬停浮层形态（Q9）：指针在公式区域停留约 500ms（CM6 `hoverTooltip` 的
+`hoverTime`）后弹出 KaTeX 渲染预览；右栏固定预览卡留二期。开关为
+`formulaHover` 偏好（默认开，Q18），经 isEnabled ref 注入（同
+`autoCloseEnv` 模式，切换偏好不重配置扩展），设置弹窗 + 三语 i18n。
+
+- **公式识别**（纯模块 `lib/editor/formulaHoverScan.js`，node --test
+  单测）：`findFormulaAt(text, pos)` 判定位置是否在公式内，返回
+  `{ from, to, text, display }`。支持行内 `$...$` / `\(...\)`、display
+  `$$...$$` / `\[...\]` 与 equation / align 系环境（环境清单与
+  `utils/formulaWrap.js` 的 STANDALONE_DISPLAY_ENV_RE 口径一致，含带星
+  变体；同名环境嵌套按深度配对）。`\$` / `\%` 转义不算定界符，悬停在
+  顶层转义对（`\\`、`\$`、`\%` 等）的字面字符上不判定公式；注释行
+  （未转义 `%` 之后）不参与定界符匹配、不判定公式；未闭合定界符 / 环境
+  不判定公式；verbatim 类环境不特殊处理（与 `formulaWrap.js` 同源口径，
+  其内部 `$...$` 仍判定为公式）。区域包含判定为 `from <= pos < to`（悬停
+  定界符任一字符均命中）；公式区域内部的注释文字仍显示所在公式（覆盖
+  不留空洞）。
+- **性能策略**：CM6 hover 回调只在指针停留 500ms 后触发（非 mousemove
+  高频），单次调用为「文档起点 → 悬停位置」的单向单遍状态机扫描
+  （O(pos)，命中后再向后补扫至闭合定界符），不做全文重扫、不建索引。
+- **katex 动态分块**（决策 Q9）：`import("katex")` 与
+  `import("katex/dist/katex.min.css")` 均为动态 import，模块级缓存
+  Promise 全程只加载一次；构建产物为独立 `vendor-katex` chunk
+  （vite manualChunks 既有规则），编辑器路由静态引用零 katex，首屏零
+  加载（CSS 同拍按需注入，不阻塞首屏）。
+- **渲染与安全**：`renderToString` 固定 `trust: false`（禁止 `\href`
+  等写入任意属性）+ `output: "html"` + `strict: "ignore"`，
+  `throwOnError: true` 下 KaTeX parseError 统一捕获 → 浮层显示三语
+  错误提示（`components:editor.formulaHover.renderError`），不抛未捕获
+  异常；katex 块加载失败同样落错误提示。浮层内不放原始用户 HTML。
+- **主题与换档**：浮层经 `EditorView.theme` 走全站 CSS 变量（--card /
+  --border / --surface-*，与 completionTheme 同源浮层词汇），亮/暗主题
+  切换零 JS 参与；tooltip 属于 EditorState 状态，tab 换档（setState）
+  与文档变更时由 CM6 自动收起，per-tab 换档后扩展随 buildState /
+  存档恒在。
+
 ### 图片与 PDF 只读预览
 
 文件树点击 `.pdf` 或常见位图（前端 `isPreviewableFilePath()` 与后端
@@ -402,6 +442,6 @@ AI 面板。四处配置同步规范照 AGENTS.md 执行；`/api/config/status` 
   editorFiles / editorMatcher / editorSnippetInsert / editorPreambleScan /
   editorWrap（包裹纯逻辑与直包键位一致性）/ editorBeginClose（\begin
   配对纯决策与事务行为）/ editorSearchPanel（面板短语映射与语言热更新）/
-  editorOutlineScan（大纲扫描边界）/ editorFormatApply（格式化应用决策、
+  editorOutlineScan（大纲扫描边界）/ editorFormulaHoverScan（公式识别边界）/ editorFormatApply（格式化应用决策、
   快捷键判定与 CM6 history 单步撤销）/ latexCommands（含 wrap 类目 schema）/
   i18nLocales 键集合一致性等

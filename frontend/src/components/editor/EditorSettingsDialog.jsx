@@ -56,10 +56,12 @@ export default function EditorSettingsDialog({ open, onOpenChange }) {
     softWrap,
     autoSave,
     autoCloseEnv,
+    formulaHover,
     fontSize,
     setSoftWrap,
     setAutoSave,
     setAutoCloseEnv,
+    setFormulaHover,
     setFontSize,
     applyPreferences,
   } = useEditorStore(
@@ -67,10 +69,12 @@ export default function EditorSettingsDialog({ open, onOpenChange }) {
       softWrap: s.softWrap,
       autoSave: s.autoSave,
       autoCloseEnv: s.autoCloseEnv,
+      formulaHover: s.formulaHover,
       fontSize: s.fontSize,
       setSoftWrap: s.setSoftWrap,
       setAutoSave: s.setAutoSave,
       setAutoCloseEnv: s.setAutoCloseEnv,
+      setFormulaHover: s.setFormulaHover,
       setFontSize: s.setFontSize,
       applyPreferences: s.applyPreferences,
     })),
@@ -88,6 +92,7 @@ export default function EditorSettingsDialog({ open, onOpenChange }) {
           autoSave: prefs.autoSave,
           softWrap: prefs.softWrap,
           autoCloseEnv: prefs.autoCloseEnv,
+          formulaHover: prefs.formulaHover,
           fontSize: prefs.fontSize,
         }),
       ],
@@ -176,6 +181,20 @@ export default function EditorSettingsDialog({ open, onOpenChange }) {
           </div>
           <p className="-mt-2 text-xs text-muted-foreground">
             {t("components:editorSettings.autoCloseEnvHint")}
+          </p>
+
+          <div className="flex items-center justify-between gap-4">
+            <Label htmlFor="editor-formula-hover" className="text-sm">
+              {t("components:editorSettings.formulaHover")}
+            </Label>
+            <Switch
+              id="editor-formula-hover"
+              checked={formulaHover}
+              onCheckedChange={(checked) => setFormulaHover(checked === true)}
+            />
+          </div>
+          <p className="-mt-2 text-xs text-muted-foreground">
+            {t("components:editorSettings.formulaHoverHint")}
           </p>
 
           <div className="flex items-center justify-between gap-4">
