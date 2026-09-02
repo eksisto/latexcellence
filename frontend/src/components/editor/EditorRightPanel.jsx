@@ -31,9 +31,11 @@ export default function EditorRightPanel({
   onTabChange,
   compiling,
   compileResult,
+  compileTarget,
   pdfUrl,
   previewFullscreen,
   onEnterFullscreen,
+  onJumpToError,
   readOnly,
   getEditorContext,
   onApplySnippet,
@@ -125,9 +127,11 @@ export default function EditorRightPanel({
                 <CompilePreviewPanel
                   compiling={compiling}
                   compileResult={compileResult}
+                  compileTarget={compileTarget}
                   pdfUrl={pdfUrl}
                   fullscreen={previewFullscreen}
                   onEnterFullscreen={onEnterFullscreen}
+                  onJumpToError={onJumpToError}
                 />
               </TabsContent>
               {/* 首次访问后 keepMounted：切换不丢助手输入草稿与卡片展开态；
@@ -168,9 +172,11 @@ export default function EditorRightPanel({
                 <CompilePreviewPanel
                   compiling={compiling}
                   compileResult={compileResult}
+                  compileTarget={compileTarget}
                   pdfUrl={pdfUrl}
                   fullscreen={previewFullscreen}
                   onEnterFullscreen={onEnterFullscreen}
+                  onJumpToError={onJumpToError}
                 />
               </div>
             </>

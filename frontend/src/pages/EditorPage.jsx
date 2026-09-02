@@ -22,6 +22,10 @@
  *     URL ?file= 指定者激活（恢复集合与 URL 参数合并）；
  *   - 编译联动（Q16）：编译前依次保存所有脏 tab，任一失败中断并切换
  *     到归属 tab 进入冲突/陈旧流程；
+ *   - 编译错误跳转（阶段七 / Q10+Q19）：编译失败时右栏展示可点击错误
+ *     列表（logFileStack 纯模块解析日志 `(./` 文件栈归属 `l.N` 错误到
+ *     文件），点击联动打开/激活对应 tab 并滚动行首高亮；归属歧义回落
+ *     发起编译的文件并标低置信角标；
  *   - 一键格式化（阶段五 / Q8）：工具栏按钮 + Ctrl/Cmd+Shift+F 调后端
  *     format-latex 纯转换端点，结果直接替换发起 tab 缓冲区并置脏
  *     （单事务整文档替换，Ctrl+Z 一步撤销；落盘仍走 save-file），
@@ -314,34 +318,35 @@ export default function EditorPage() {
     );
   }, [filePath, isOpened, fileTree.length, setSearchParams]);
 
-  /* ── 编译联动 ──────────────────────────────────────────────── */
-  const { compiling, compileResult, pdfUrl, handleCompile } = useEditorCompile({
-    doSaveAllDirtyRef,
-    mainFile,
-    t,
-    workspaceId,
-    setPanelCollapsed,
-    setPanelTab,
-    onCompileSuccess: useCallback(
-      () => toast.success(t("pages:workspace.compileSuccessToast")),
-      [t],
-    ),
-    onCompileError: useCallback(
-      (data) => {
-        const reason =
-          data.error_code || data.explanation
-            ? translateError({
-                error: data.error_code,
-                message: data.explanation,
-              })
-            : "";
-        toast.error(t("pages:workspace.compileFailedToast"), {
-          description: reason || t("pages:workspace.compileFailedToast"),
-        });
-      },
-      [t],
-    ),
-  });
+  /* ── 编译联动（返回值新增 compileTarget，阶段七错误列表低置信回落用） ── */
+  const { compiling, compileResult, compileTarget, pdfUrl, handleCompile } =
+    useEditorCompile({
+      doSaveAllDirtyRef,
+      mainFile,
+      t,
+      workspaceId,
+      setPanelCollapsed,
+      setPanelTab,
+      onCompileSuccess: useCallback(
+        () => toast.success(t("pages:workspace.compileSuccessToast")),
+        [t],
+      ),
+      onCompileError: useCallback(
+        (data) => {
+          const reason =
+            data.error_code || data.explanation
+              ? translateError({
+                  error: data.error_code,
+                  message: data.explanation,
+                })
+              : "";
+          toast.error(t("pages:workspace.compileFailedToast"), {
+            description: reason || t("pages:workspace.compileFailedToast"),
+          });
+        },
+        [t],
+      ),
+    });
 
   // 全屏预览 Escape 退出
   useEffect(() => {
@@ -477,6 +482,43 @@ export default function EditorPage() {
     });
     view.focus();
   }, []);
+
+  /* ── 编译错误跳转（阶段七 / Q10+Q19）：点击右栏错误条目 → 目标文件
+     tab 已存在则激活、未打开则打开 → 滚动定位到该行行首并高亮。
+     跨 tab 跳转经 pendingErrorJumpRef 延迟到 activeTabPath 换档 effect
+     之后（LaTeXEditor 已完成 EditorState 交换）再执行定位；
+     低置信条目同样可点（回落 compileTarget 定位），UI 已标低置信角标 */
+  const pendingErrorJumpRef = useRef(null);
+
+  const handleJumpToError = useCallback(
+    (entry) => {
+      if (!entry?.file || !Number.isInteger(entry.line) || entry.line < 1) {
+        return;
+      }
+      const cur = useEditorStore.getState();
+      if (cur.activeTabPath === entry.file) {
+        handleJumpToLine(entry.line);
+        return;
+      }
+      pendingErrorJumpRef.current = entry;
+      if (findTab(cur, entry.file)) {
+        cur.activateTab(entry.file);
+        return;
+      }
+      doOpenFile(entry.file).then((ok) => {
+        // 打开失败（路径漂移 / 白名单外）：清掉待决跳转，避免迟到误定位
+        if (!ok) pendingErrorJumpRef.current = null;
+      });
+    },
+    [handleJumpToLine, doOpenFile],
+  );
+
+  useEffect(() => {
+    const pending = pendingErrorJumpRef.current;
+    if (!pending || !filePath || filePath !== pending.file) return;
+    pendingErrorJumpRef.current = null;
+    handleJumpToLine(pending.line);
+  }, [filePath, handleJumpToLine]);
 
   /* ── AI 助手：上下文快照与建议应用 ──────────────────────────── */
   const getEditorContext = useCallback(() => {
@@ -727,9 +769,11 @@ export default function EditorPage() {
           onTabChange={setPanelTab}
           compiling={compiling}
           compileResult={compileResult}
+          compileTarget={compileTarget}
           pdfUrl={pdfUrl}
           previewFullscreen={previewFullscreen}
           onEnterFullscreen={() => setPreviewFullscreen(true)}
+          onJumpToError={handleJumpToError}
           readOnly={readOnly}
           getEditorContext={getEditorContext}
           onApplySnippet={handleApplySnippet}

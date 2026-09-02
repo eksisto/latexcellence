@@ -1688,6 +1688,11 @@
       "expandPanel": "展开右栏",
       "panelCompileTitle": "编译输出与 PDF 预览",
       "compileOutput": "原始输出",
+      "errorList": {
+        "title": "编译错误",
+        "empty": "未从编译日志解析出可定位的错误行",
+        "lowConfidence": "错误文件归属低置信：点击将定位到发起编译的文件"
+      },
       "enterFullscreen": "全屏查看",
       "quitFullscreen": "退出全屏",
       "fullscreenTitle": "编译 PDF 全屏预览",

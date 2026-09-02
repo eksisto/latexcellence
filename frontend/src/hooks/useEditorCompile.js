@@ -16,6 +16,9 @@ import { translateError } from "@/utils/errorMessages";
  * 脏 tab（tab 条顺序），任一失败即中断编译——409 由保存侧切换到归属
  * tab 并接管进冲突流程，陈旧确认弹窗同理。
  *
+ * 编译目标记忆（阶段七 / Q19）：compileTarget 记录发起编译的文件，供
+ * 右栏错误列表在日志文件栈归属歧义时低置信回落定位。
+ *
  * @param {{ doSaveAllDirtyRef, mainFile, t, workspaceId, setPanelCollapsed, setPanelTab, onCompileSuccess, onCompileError }} params
  */
 export default function useEditorCompile({
@@ -31,6 +34,9 @@ export default function useEditorCompile({
   const [compiling, setCompiling] = useState(false);
   const [compileResult, setCompileResult] = useState(null);
   const [pdfUrl, setPdfUrl] = useState(null);
+  // 发起编译的目标文件（项目相对路径，阶段七）：错误列表归属歧义时的
+  // 低置信回落目标（与 parseLogErrors 的 fallbackFile 对接）
+  const [compileTarget, setCompileTarget] = useState(null);
   const pdfUrlRef = useRef(null);
   /** 在途编译序号：丢弃过期请求的迟到响应，防止旧结果覆盖新状态 */
   const compileSeqRef = useRef(0);
@@ -62,6 +68,7 @@ export default function useEditorCompile({
     setPanelTab("compile");
     setCompiling(true);
     setCompileResult(null);
+    setCompileTarget(target);
     // 直接经 ref 回收旧 URL
     if (pdfUrlRef.current) {
       URL.revokeObjectURL(pdfUrlRef.current);
@@ -125,6 +132,7 @@ export default function useEditorCompile({
   return {
     compiling,
     compileResult,
+    compileTarget,
     pdfUrl,
     handleCompile,
   };

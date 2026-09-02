@@ -1688,6 +1688,11 @@
       "expandPanel": "Expand panel",
       "panelCompileTitle": "Compile output & PDF preview",
       "compileOutput": "Raw output",
+      "errorList": {
+        "title": "Compile errors",
+        "empty": "No locatable error lines were parsed from the compile log",
+        "lowConfidence": "Low confidence in file attribution: clicking locates the file that started the compile"
+      },
       "enterFullscreen": "Fullscreen",
       "quitFullscreen": "Exit fullscreen",
       "fullscreenTitle": "Compile PDF Fullscreen Preview",

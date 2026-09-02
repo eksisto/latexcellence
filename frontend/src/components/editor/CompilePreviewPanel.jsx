@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -9,22 +10,74 @@ import Check from "lucide-react/dist/esm/icons/check.mjs";
 import CircleX from "lucide-react/dist/esm/icons/circle-x.mjs";
 import Expand from "lucide-react/dist/esm/icons/expand.mjs";
 import Play from "lucide-react/dist/esm/icons/play.mjs";
+import TriangleAlert from "lucide-react/dist/esm/icons/triangle-alert.mjs";
 
 import { translateError } from "@/utils/errorMessages";
+import { parseLogErrors } from "@/lib/editor/logFileStack";
+import { cn } from "@/lib/utils";
 
 /**
  * 编译与预览面板：编译状态徽标、错误翻译与修复建议摘要、
+ * 可点击错误列表（阶段七 / Q10+Q19：日志文件栈解析 → 跨文件跳转）、
  * 原始输出折叠块，成功时复用 PDFPreview 预览。
  * 与 GitDiffPage 同源：两侧编译/渲染结果共用同一组件。
  */
+
+/** 单个可点击错误条目：文件相对路径 + l.N + 消息摘要，低置信标角标 */
+function ErrorListItem({ entry, onJump }) {
+  const { t } = useTranslation("components");
+  return (
+    <li>
+      <button
+        type="button"
+        onClick={() => onJump(entry)}
+        title={entry.detail || entry.message}
+        className={cn(
+          "w-full rounded border bg-background p-1.5 text-left",
+          "outline-none transition-colors select-none",
+          "hover:bg-muted/70 focus-visible:bg-muted/70",
+          "focus-visible:ring-2 focus-visible:ring-ring/50",
+        )}
+      >
+        <span className="flex items-center gap-1.5 font-mono text-[11px] text-muted-foreground">
+          <span className="min-w-0 truncate">{entry.file ?? "?"}</span>
+          <span className="shrink-0">l.{entry.line}</span>
+          {entry.lowConfidence && (
+            <span
+              title={t("editor.errorList.lowConfidence")}
+              className="shrink-0 text-amber-500"
+            >
+              <TriangleAlert className="size-3" />
+              <span className="sr-only">
+                {t("editor.errorList.lowConfidence")}
+              </span>
+            </span>
+          )}
+        </span>
+        <span className="mt-0.5 block truncate text-xs">
+          {entry.message || entry.detail}
+        </span>
+      </button>
+    </li>
+  );
+}
+
 export default function CompilePreviewPanel({
   compiling,
   compileResult,
   pdfUrl,
   fullscreen,
   onEnterFullscreen,
+  compileTarget = null,
+  onJumpToError = null,
 }) {
   const { t } = useTranslation(["pages", "components"]);
+  // 错误列表（阶段七）：仅失败结果 + 注入了跳转回调时解析展示
+  // （GitDiff 页同源组件未注入回调，保持既有形态不变）
+  const errorEntries = useMemo(() => {
+    if (!compileResult || compileResult.success || !onJumpToError) return [];
+    return parseLogErrors(compileResult.stdout || "", compileTarget);
+  }, [compileResult, compileTarget, onJumpToError]);
   return (
     <Card className="flex h-full min-h-0 flex-col overflow-hidden">
       <CardHeader className="pb-2">
@@ -91,6 +144,31 @@ export default function CompilePreviewPanel({
                   ))}
                 </ul>
               )}
+            {!compileResult.success && onJumpToError && (
+              <div className="space-y-1">
+                <p className="text-xs font-medium text-foreground/80">
+                  {t("components:editor.errorList.title")}
+                </p>
+                {errorEntries.length === 0 ? (
+                  <p className="text-xs text-muted-foreground">
+                    {t("components:editor.errorList.empty")}
+                  </p>
+                ) : (
+                  <ul
+                    className="space-y-1"
+                    aria-label={t("components:editor.errorList.title")}
+                  >
+                    {errorEntries.map((entry, index) => (
+                      <ErrorListItem
+                        key={`${entry.file}-${entry.line}-${index}`}
+                        entry={entry}
+                        onJump={onJumpToError}
+                      />
+                    ))}
+                  </ul>
+                )}
+              </div>
+            )}
             <details className="text-xs">
               <summary className="cursor-pointer text-muted-foreground">
                 {t("components:editor.compileOutput")}

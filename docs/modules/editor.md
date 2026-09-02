@@ -360,6 +360,43 @@ Ctrl+B/I/U/K/L、Ctrl+/ 与 CM6 内置查找面板 Ctrl/Cmd+F）。点击后调�
   与文档变更时由 CM6 自动收起，per-tab 换档后扩展随 buildState /
   存档恒在。
 
+### 编译错误列表与跨文件跳转（editor-productivity-plan §5.3，阶段七 / 决策 Q10 + Q19）
+
+编译失败时右栏在既有解释 / 建议摘要之下展示可点击错误列表（不做行内
+波浪线，Q10）：条目为「文件相对路径 · l.N 行号 + 消息摘要」，原始日志
+行做 title detail；点击条目联动跳转——目标文件 tab 已存在则激活、未
+打开则打开，随后滚动定位到该行行首并高亮（复用阶段三 jumpToLine 的
+selection anchor + scrollIntoView 方案）；跨 tab 跳转经待决标记延迟到
+activeTabPath 换档（EditorState 交换）完成后执行，打开失败时清除待决
+标记防迟到误定位。
+
+- **日志文件栈解析**（纯模块 `lib/editor/logFileStack.js`，node --test
+  单测）：`parseLogErrors(logText, fallbackFile)` 把每条 `l.N` 错误归属
+  所在文件——`(./path` 压栈、`)` 弹栈（TeX 日志的文件嵌套约定），`l.N`
+  归属栈顶文件，支持跨文件跳转；高置信要求栈顶为项目内可编辑白名单
+  文件（.tex/.bib/.sty/.cls），输出条目含相对路径、行号、消息摘要、
+  `l.N` 源码回显 detail 与置信标记。
+- **歧义保守回落**（Q19）：`\(` / `\)` 数学括号、消息文本中的成对括号
+  （`(see the transcript)`、`Overfull \hbox (15.3pt too wide)`）经
+  「文本括号深度」记账隔离，不参与文件栈运算；错误块（`!` 行到 `l.N`
+  行）上下文收录期间跳过栈运算，上下文收满仍无 `l.N`（`File not found`
+  等无行号错误）则恢复扫描，防止错误块无限吞行导致后续文件栈失配；
+  空栈弹栈等畸形日志置 stackBroken，此后错误与
+  栈顶为系统文件（texmf 绝对路径）/ `.aux` 等不可编辑路径的错误一律
+  回落发起编译的文件（`useEditorCompile` 记忆的 compileTarget）并标
+  `lowConfidence: true`，UI 以琥珀色角标 + 三语 tooltip 标注；无文件栈
+  （单文件项目 / texfot 过滤）同样回落低置信。
+- **79 列折行**：TeX 日志按 max_print_line 折行，解析先按「折行段必
+  打满 79 列」启发式 dewrap 再逐逻辑行处理，长文件名 / 长消息跨行正确
+  续接（保守启发式：恰好 79 列的完整逻辑行会被误并入下一行，只影响
+  文本拼接、不影响括号栈正确性）。
+- **脱敏与路径形态**：解析对象为编译响应携带的 stdout 原始日志（多用户
+  模式后端已由 `sanitize_output_paths` 把工作目录前缀改写 `./`），条目
+  文件路径统一为项目内相对路径展示，绝无绝对路径。
+- **防御上限**：错误条目数上限 200、单条消息 / 上下文截断，防止异常
+  日志（如无限循环输出）拖垮右栏渲染；未以 `l.N` 收尾的错误块丢弃
+  （无行号不可跳转）。
+
 ### 图片与 PDF 只读预览
 
 文件树点击 `.pdf` 或常见位图（前端 `isPreviewableFilePath()` 与后端

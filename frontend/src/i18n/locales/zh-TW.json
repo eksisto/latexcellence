@@ -1688,6 +1688,11 @@
       "expandPanel": "展開右欄",
       "panelCompileTitle": "編譯輸出與 PDF 預覽",
       "compileOutput": "原始輸出",
+      "errorList": {
+        "title": "編譯錯誤",
+        "empty": "未從編譯日誌解析出可定位的錯誤行",
+        "lowConfidence": "錯誤檔案歸屬低信心：點擊將定位到發起編譯的檔案"
+      },
       "enterFullscreen": "全螢幕檢視",
       "quitFullscreen": "退出全螢幕",
       "fullscreenTitle": "編譯 PDF 全螢幕預覽",
