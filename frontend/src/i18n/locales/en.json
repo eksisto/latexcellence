@@ -1694,7 +1694,26 @@
       "closeTabDescription": "This tab has unsaved changes that will be lost when closed.",
       "closeTabSaveAndClose": "Save and close",
       "closeTabDiscard": "Discard changes",
-      "closeTabCancel": "Cancel"
+      "closeTabCancel": "Cancel",
+      "searchPanel": {
+        "all": "All",
+        "byWord": "Whole words",
+        "close": "Close",
+        "currentMatch": "current match",
+        "find": "Find",
+        "go": "Go",
+        "goToLine": "Go to line",
+        "matchCase": "Match case",
+        "next": "Next",
+        "onLine": "on line",
+        "previous": "Previous",
+        "regexp": "Regular expression",
+        "replace": "Replace",
+        "replaceAction": "Replace",
+        "replaceAll": "Replace all",
+        "replacedMatchOnLine": "Replaced match on line $",
+        "replacedMatches": "Replaced $ matches"
+      }
     },
     "conflictDialog": {
       "title": "Save conflict",
@@ -1712,6 +1731,8 @@
       "softWrap": "Soft wrap",
       "autoSave": "Auto save",
       "autoSaveHint": "When on, edits are saved to the server shortly after you stop typing (Ctrl/Cmd+S always works).",
+      "autoCloseEnv": "Auto-close environments",
+      "autoCloseEnvHint": "After typing the closing brace of \\begin{env}, the matching \\end line is inserted automatically.",
       "fontSize": "Font size",
       "transferTitle": "Preference transfer",
       "export": "Export JSON",
@@ -1728,6 +1749,7 @@
     "commandPalette": {
       "title": "Command palette",
       "description": "Find LaTeX commands by Chinese name, full pinyin, initials, or English. Enter inserts; Tab jumps between placeholders.",
+      "categoryFilterDescription": "Wrap the current selection with a command (inserts an empty command at the cursor)",
       "searchPlaceholder": "Search: 阿尔法 / aerfa / ae / alpha",
       "loading": "Loading command database…",
       "empty": "No matching commands — try another keyword",
@@ -1743,6 +1765,7 @@
         "arrow": "Arrows",
         "structure": "Math structure",
         "text": "Text styles",
+        "wrap": "Wrap commands",
         "section": "Sections",
         "figure": "Floats",
         "mathenv": "Math environments",

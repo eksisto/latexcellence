@@ -17,6 +17,12 @@
  *     只写一次」去重，保证每次实际变更恰好一次 store 写入；
  *   - 语言包经 lib/editor/language.js 抽象层引入（决策 Q2），本组件不直接
  *     import legacy-modes，保证将来可整体替换 AGPL 语法包；
+ *   - 编辑基本功包（editor v2 阶段二）：包裹直包快捷键（Ctrl/Cmd+B/I/U/K，
+ *     逻辑在 lib/editor/wrap.js）+ 多光标（basicSetup
+ *     allowMultipleSelections 默认开启，无偏好开关）+ \begin{env} 打字机
+ *     补 \end（lib/editor/beginClose.js，autoCloseEnv 偏好经 ref 读取）+
+ *     查找替换面板主题化与三语（lib/editor/searchPanel.js，语言切换经
+ *     setSearchLanguage 效果热更新）；
  *   - 缓冲区内撤销/重做交给 CM6 自身 history（basicSetup 内置，
  *     Ctrl/Cmd+Z / Shift+Ctrl/Cmd+Z，随 EditorState 按文件隔离），与后端
  *     撤销分属两层（方案 §8）；
@@ -26,7 +32,13 @@
  *     亮/暗主题切换零 JS 参与。
  */
 
-import { useCallback, useLayoutEffect, useMemo, useRef } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+} from "react";
 import CodeMirror, { getDefaultExtensions } from "@uiw/react-codemirror";
 import { EditorView } from "@codemirror/view";
 import { EditorState } from "@codemirror/state";
@@ -36,6 +48,9 @@ import { tags as t } from "@lezer/highlight";
 import { latexLanguageExtension } from "@/lib/editor/language";
 import { latexCompletionExtension } from "@/lib/editor/latexCompletion";
 import { snippetPlaceholderExtension } from "@/lib/editor/snippetInsert";
+import { wrapKeymapExtension } from "@/lib/editor/wrap";
+import { autoCloseEnvExtension } from "@/lib/editor/beginClose";
+import { createSearchPanelExtension } from "@/lib/editor/searchPanel";
 import tabViewRegistry from "@/lib/editor/tabViews";
 import i18n from "@/i18n";
 import { cn } from "@/lib/utils";
@@ -103,8 +118,18 @@ const latexHighlightStyle = HighlightStyle.define([
 const BASIC_SETUP = {
   foldGutter: false,
   highlightSelectionMatches: false,
-  allowMultipleSelections: false,
+  // 多光标默认开启（editor v2 §4 决策：无偏好开关；Alt+Click 等默认行为可用）
+  allowMultipleSelections: true,
 };
+
+/** 直包快捷键映射（模块级单例，同 basicSetup 的稳定性要求） */
+const WRAP_KEYMAP = wrapKeymapExtension();
+
+/** 查找替换面板扩展 + 语言热更新效果（翻译函数闭包 i18n，语言无关键值） */
+const SEARCH_PANEL = createSearchPanelExtension({
+  getLanguage: () => i18n.language,
+  translate: (key) => i18n.t(key),
+});
 
 /**
  * @param {object} props
@@ -114,6 +139,8 @@ const BASIC_SETUP = {
  * @param {boolean} [props.softWrap=true]      软换行（默认开启）
  * @param {number} [props.fontSize=14]         字号 px
  * @param {boolean} [props.readOnly=false]     viewer 只读
+ * @param {boolean} [props.autoCloseEnv=true]  \begin{env} 自动补 \end 开关
+ *   （autoCloseEnv 偏好；经 ref 读取，切换无须重配置扩展）
  * @param {(view: EditorView) => void} [props.onCreateEditor]
  *   CM6 视图实例回调（命令面板等外部插入入口经此持有视图）
  * @param {(entry: object) => void} [props.onCompletionApply]
@@ -126,6 +153,7 @@ export default function LaTeXEditor({
   softWrap = true,
   fontSize = 14,
   readOnly = false,
+  autoCloseEnv = true,
   onCreateEditor,
   onCompletionApply,
 }) {
@@ -145,6 +173,13 @@ export default function LaTeXEditor({
   useLayoutEffect(() => {
     onChangeRef.current = onChange;
   }, [onChange]);
+
+  // autoCloseEnv 偏好经 ref 供事务过滤器在打字时刻读取：偏好切换只改
+  // ref，不进入扩展依赖数组，避免每次切换触发 CM6 全量重配置
+  const autoCloseEnvRef = useRef(autoCloseEnv);
+  useLayoutEffect(() => {
+    autoCloseEnvRef.current = autoCloseEnv;
+  }, [autoCloseEnv]);
 
   const handleDocChange = useCallback((nextValue) => {
     if (switchGuardRef.current) return;
@@ -167,6 +202,12 @@ export default function LaTeXEditor({
         getLanguage: () => i18n.language,
       }),
       snippetPlaceholderExtension(),
+      // 包裹命令直包快捷键（Ctrl/Cmd+B/I/U/K，editor v2 决策 Q13）
+      WRAP_KEYMAP,
+      // \begin{env} 打字机补 \end（editor v2 决策 Q12；开关经 ref 实时读取）
+      autoCloseEnvExtension({ isEnabled: () => autoCloseEnvRef.current }),
+      // 查找替换面板主题化 + 面板文案三语（editor v2 阶段二）
+      SEARCH_PANEL.extension,
       // 自有 doc listener：换档后视图 state 不含包装层内部 listener，
       // doc 变更回写 store 统一走本入口（详见 handleDocChange 去重）
       EditorView.updateListener.of((update) => {
@@ -178,6 +219,20 @@ export default function LaTeXEditor({
     if (softWrap) base.push(EditorView.lineWrapping);
     return base;
   }, [softWrap, onCompletionApply, handleDocChange]);
+
+  /* ── 界面语言切换：热更新查找面板短语（phrases facet 依赖语言字段） ── */
+  useEffect(() => {
+    const handler = (lang) => {
+      const view = viewRef.current;
+      if (view && !view.destroyed) {
+        view.dispatch({ effects: SEARCH_PANEL.setSearchLanguage.of(lang) });
+      }
+    };
+    i18n.on("languageChanged", handler);
+    return () => {
+      i18n.off("languageChanged", handler);
+    };
+  }, []);
 
   /**
    * 自建 EditorState 的扩展配置：复刻 @uiw 包装层 getExtensions 的组装

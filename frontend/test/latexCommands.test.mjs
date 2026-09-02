@@ -9,6 +9,7 @@ import {
   groupCommandsByCategory,
 } from "../src/data/latexCommands/index.js";
 import { extractEnvironments } from "../src/lib/editor/latexCompletion.js";
+import { WRAP_DIRECT_SHORTCUTS } from "../src/lib/editor/wrap.js";
 
 /** 数据库条目的合法宏包白名单（§6.5 最小映射集，新增需有意扩充） */
 const KNOWN_PACKAGES = new Set(["amsmath", "amssymb", "booktabs", "graphicx"]);
@@ -149,4 +150,27 @@ test("分组保持类目声明顺序且组内保持传入顺序", () => {
       assert.equal(entry.category, group.id);
     }
   }
+});
+
+test("wrap 类目收录全部包裹命令（含直包四命令），insert 为单参数模板", () => {
+  const wrapEntries = LATEX_COMMANDS.filter((e) => e.category === "wrap");
+  assert.ok(wrapEntries.length >= 10, "wrap 全集应不少于 10 条");
+  const names = new Set(wrapEntries.map((e) => e.name));
+  // 决策 Q13：直包命令必须在 wrap 类目内
+  for (const name of WRAP_DIRECT_SHORTCUTS.map((s) => s.command)) {
+    assert.ok(names.has(name), `wrap 类目缺少直包命令 ${name}`);
+  }
+  for (const entry of wrapEntries) {
+    assert.match(
+      entry.insert,
+      new RegExp(`^\\\\${entry.name}\\{\\$1\\}\\$0$`),
+      `${entry.name} 的 insert 应为单参数包裹模板`,
+    );
+    assert.equal(entry.pkg, null, "包裹命令均属内核 LaTeX，无需宏包");
+  }
+  // 原文本样式类目的包裹命令已整体迁至 wrap 类目（name 全库唯一）
+  assert.ok(!names.has("text"), "\\text 属行内文本（text 类目），不入 wrap");
+  assert.ok(
+    LATEX_COMMANDS.some((e) => e.name === "text" && e.category === "text"),
+  );
 });

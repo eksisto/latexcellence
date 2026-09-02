@@ -43,12 +43,15 @@ import { groupCommandsByCategory } from "@/data/latexCommands/index.js";
  * @param {boolean} props.open
  * @param {(open: boolean) => void} props.onOpenChange
  * @param {boolean} [props.readOnly=false] viewer 只读：仅浏览不可插入
+ * @param {string|null} [props.categoryFilter=null] 类目过滤（非空时面板只
+ *   展示/搜索该类目，作为专项浮层菜单使用，如 Ctrl+L 的 wrap 全集）
  * @param {(entry: object, size: {rows:number,cols:number}|null) => boolean} props.onInsert
  */
 export default function CommandPalette({
   open,
   onOpenChange,
   readOnly = false,
+  categoryFilter = null,
   onInsert,
 }) {
   const { t, i18n } = useTranslation("components");
@@ -111,22 +114,28 @@ export default function CommandPalette({
    */
   const { groups, flatItems } = useMemo(() => {
     if (!indexRows) return { groups: [], flatItems: [] };
+    const inCategory = (entries) =>
+      categoryFilter
+        ? entries.filter((e) => e.category === categoryFilter)
+        : entries;
     const trimmed = query.trim();
     if (trimmed) {
-      const hits = searchCommands(indexRows, trimmed);
+      const hits = inCategory(searchCommands(indexRows, trimmed));
       return { groups: null, flatItems: hits };
     }
-    const cats = groupCommandsByCategory(listCommandRows(indexRows));
+    const cats = groupCommandsByCategory(
+      inCategory(listCommandRows(indexRows)),
+    );
     return {
       groups: cats,
       flatItems: cats.flatMap((g) => g.entries),
     };
-  }, [indexRows, query]);
+  }, [indexRows, query, categoryFilter]);
 
   /* 键盘导航范围变化时归位 */
   useEffect(() => {
     setActiveIndex(0);
-  }, [query, indexRows]);
+  }, [query, indexRows, categoryFilter]);
 
   useEffect(() => {
     const el = itemRefs.current.get(activeIndex);
@@ -214,9 +223,15 @@ export default function CommandPalette({
         onKeyDown={handleKeyDown}
       >
         <DialogHeader>
-          <DialogTitle>{t("commandPalette.title")}</DialogTitle>
+          <DialogTitle>
+            {categoryFilter
+              ? t(`commandPalette.categories.${categoryFilter}`)
+              : t("commandPalette.title")}
+          </DialogTitle>
           <DialogDescription>
-            {t("commandPalette.description")}
+            {categoryFilter
+              ? t("commandPalette.categoryFilterDescription")
+              : t("commandPalette.description")}
           </DialogDescription>
         </DialogHeader>
 

@@ -67,6 +67,7 @@ import useEditorCompile from "@/hooks/useEditorCompile";
 import { translateError } from "@/utils/errorMessages";
 import { isEditableFilePath, isPreviewableFilePath } from "@/lib/editor/files";
 import { expandEntryInsert, insertSnippet } from "@/lib/editor/snippetInsert";
+import { wrapViewSelections, WRAP_CATEGORY } from "@/lib/editor/wrap";
 import { applyUnifiedDiff } from "@/lib/editor/applyDiff";
 import {
   buildPackageInsertion,
@@ -89,6 +90,7 @@ function SessionEditor({ readOnly, onCreateEditor, onCompletionApply }) {
   const activeTabPath = useEditorStore((s) => s.activeTabPath);
   const softWrap = useEditorStore((s) => s.softWrap);
   const fontSize = useEditorStore((s) => s.fontSize);
+  const autoCloseEnv = useEditorStore((s) => s.autoCloseEnv);
   const setBufferContent = useEditorStore((s) => s.setBufferContent);
   return (
     <LaTeXEditor
@@ -98,6 +100,7 @@ function SessionEditor({ readOnly, onCreateEditor, onCompletionApply }) {
       softWrap={softWrap}
       fontSize={fontSize}
       readOnly={readOnly}
+      autoCloseEnv={autoCloseEnv}
       onCreateEditor={onCreateEditor}
       onCompletionApply={onCompletionApply}
     />
@@ -139,6 +142,8 @@ export default function EditorPage() {
   const [panelTab, setPanelTab] = useState("compile");
   const [previewFullscreen, setPreviewFullscreen] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
+  // 命令面板类目过滤（Ctrl+L 打开 wrap 专项浮层，Ctrl/Cmd+/ 打开全量面板）
+  const [paletteFilter, setPaletteFilter] = useState(null);
 
   // ── CM6 视图实例 ────────────────────────────────────────────────
   const editorViewRef = useRef(null);
@@ -292,13 +297,19 @@ export default function EditorPage() {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [previewFullscreen]);
 
-  /* ── 命令面板 Ctrl/Cmd+/ ──────────────────────────────────── */
+  /* ── 命令面板 Ctrl/Cmd+/（全量） 与包裹菜单 Ctrl+L（wrap 全集浮层） ── */
   useEffect(() => {
     const handler = (e) => {
       if (!(e.ctrlKey || e.metaKey)) return;
-      if (e.key !== "/") return;
-      e.preventDefault();
-      setPaletteOpen((open) => !open);
+      if (e.key === "/") {
+        e.preventDefault();
+        setPaletteFilter(null);
+        setPaletteOpen((open) => !open);
+      } else if (e.key === "l" || e.key === "L") {
+        e.preventDefault();
+        setPaletteFilter(WRAP_CATEGORY);
+        setPaletteOpen(true);
+      }
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
@@ -359,11 +370,19 @@ export default function EditorPage() {
         return false;
       }
       const contentBefore = activeBuffer(cur);
-      insertSnippet(view, expandEntryInsert(entry, size));
-      if (entry.pkg && isPackageMissing(contentBefore, entry.pkg)) {
+      // wrap 类目（editor v2 决策 Q13）：面板执行包裹动作——对每个选区
+      // 包成 \cmd{内容}，光标处插入空命令并定位到参数内；其余类目走
+      // 占位符模板插入
+      let ok = true;
+      if (entry.category === WRAP_CATEGORY) {
+        ok = wrapViewSelections(view, entry.name);
+      } else {
+        insertSnippet(view, expandEntryInsert(entry, size));
+      }
+      if (ok && entry.pkg && isPackageMissing(contentBefore, entry.pkg)) {
         notifyMissingPackage(entry);
       }
-      return true;
+      return ok;
     },
     [canWrite, notifyMissingPackage, t],
   );
@@ -670,11 +689,12 @@ export default function EditorPage() {
         onOverwriteSave={handleOverwriteSave}
       />
 
-      {/* 命令面板 */}
+      {/* 命令面板（categoryFilter 非 null 时作为专项浮层菜单，如 Ctrl+L 的 wrap 全集） */}
       <CommandPalette
         open={paletteOpen}
         onOpenChange={setPaletteOpen}
         readOnly={readOnly}
+        categoryFilter={paletteFilter}
         onInsert={handleInsertEntry}
       />
     </div>

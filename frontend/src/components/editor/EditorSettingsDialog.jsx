@@ -55,18 +55,22 @@ export default function EditorSettingsDialog({ open, onOpenChange }) {
   const {
     softWrap,
     autoSave,
+    autoCloseEnv,
     fontSize,
     setSoftWrap,
     setAutoSave,
+    setAutoCloseEnv,
     setFontSize,
     applyPreferences,
   } = useEditorStore(
     useShallow((s) => ({
       softWrap: s.softWrap,
       autoSave: s.autoSave,
+      autoCloseEnv: s.autoCloseEnv,
       fontSize: s.fontSize,
       setSoftWrap: s.setSoftWrap,
       setAutoSave: s.setAutoSave,
+      setAutoCloseEnv: s.setAutoCloseEnv,
       setFontSize: s.setFontSize,
       applyPreferences: s.applyPreferences,
     })),
@@ -83,6 +87,7 @@ export default function EditorSettingsDialog({ open, onOpenChange }) {
         serializePreferences({
           autoSave: prefs.autoSave,
           softWrap: prefs.softWrap,
+          autoCloseEnv: prefs.autoCloseEnv,
           fontSize: prefs.fontSize,
         }),
       ],
@@ -157,6 +162,20 @@ export default function EditorSettingsDialog({ open, onOpenChange }) {
           </div>
           <p className="-mt-2 text-xs text-muted-foreground">
             {t("components:editorSettings.autoSaveHint")}
+          </p>
+
+          <div className="flex items-center justify-between gap-4">
+            <Label htmlFor="editor-autoclose-env" className="text-sm">
+              {t("components:editorSettings.autoCloseEnv")}
+            </Label>
+            <Switch
+              id="editor-autoclose-env"
+              checked={autoCloseEnv}
+              onCheckedChange={(checked) => setAutoCloseEnv(checked === true)}
+            />
+          </div>
+          <p className="-mt-2 text-xs text-muted-foreground">
+            {t("components:editorSettings.autoCloseEnvHint")}
           </p>
 
           <div className="flex items-center justify-between gap-4">

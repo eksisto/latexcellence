@@ -11,10 +11,11 @@ import {
   serializePreferences,
 } from "../src/lib/editor/preferences.js";
 
-test("默认偏好符合方案决策（autoSave 关、softWrap 开）", () => {
+test("默认偏好符合方案决策（autoSave 关、softWrap 开、autoCloseEnv 开）", () => {
   assert.deepEqual(EDITOR_PREFERENCES_DEFAULTS, {
     autoSave: false,
     softWrap: true,
+    autoCloseEnv: true,
     fontSize: 14,
   });
 });
@@ -23,10 +24,16 @@ test("sanitizePreferences 仅接受类型合法的字段", () => {
   const cleaned = sanitizePreferences({
     autoSave: true,
     softWrap: false,
+    autoCloseEnv: false,
     fontSize: 18,
     evilField: "x",
   });
-  assert.deepEqual(cleaned, { autoSave: true, softWrap: false, fontSize: 18 });
+  assert.deepEqual(cleaned, {
+    autoSave: true,
+    softWrap: false,
+    autoCloseEnv: false,
+    fontSize: 18,
+  });
   assert.equal("evilField" in cleaned, false);
 });
 
@@ -39,6 +46,7 @@ test("sanitizePreferences 对非法值回落默认值而非丢弃整个对象", 
   assert.deepEqual(sanitizePreferences({ autoSave: true, softWrap: null }), {
     autoSave: true,
     softWrap: true,
+    autoCloseEnv: true,
     fontSize: 14,
   });
 });
@@ -65,13 +73,19 @@ test("serializePreferences 输出 pretty-print 的 kind/version/prefs 载荷", (
   const text = serializePreferences({
     autoSave: true,
     softWrap: false,
+    autoCloseEnv: false,
     fontSize: 18,
   });
   const parsed = JSON.parse(text);
   assert.deepEqual(parsed, {
     kind: EDITOR_PREFERENCES_EXPORT_KIND,
     version: EDITOR_PREFERENCES_EXPORT_VERSION,
-    prefs: { autoSave: true, softWrap: false, fontSize: 18 },
+    prefs: {
+      autoSave: true,
+      softWrap: false,
+      autoCloseEnv: false,
+      fontSize: 18,
+    },
   });
   // pretty-print：多行 + 2 空格缩进
   assert.ok(text.includes("\n"));
@@ -91,12 +105,18 @@ test("parsePreferencesImport 接受合法导出载荷", () => {
   const text = serializePreferences({
     autoSave: false,
     softWrap: true,
+    autoCloseEnv: false,
     fontSize: 16,
   });
   const result = parsePreferencesImport(text);
   assert.deepEqual(result, {
     ok: true,
-    prefs: { autoSave: false, softWrap: true, fontSize: 16 },
+    prefs: {
+      autoSave: false,
+      softWrap: true,
+      autoCloseEnv: false,
+      fontSize: 16,
+    },
   });
 });
 
@@ -171,6 +191,7 @@ test("parsePreferencesImport 静默丢弃非法字段、合法字段整体覆盖
   assert.deepEqual(result.prefs, {
     autoSave: true,
     softWrap: true,
+    autoCloseEnv: true,
     fontSize: 20,
   });
 });

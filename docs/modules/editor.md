@@ -2,7 +2,7 @@
 
 > 设计依据：[docs/editor-plan.md](../editor-plan.md)（含 grilling 决策记录
 > Q1–Q26）与 [docs/editor-productivity-plan.md](../editor-productivity-plan.md)
-> （editor v2，阶段一多缓冲区基座已实施）。
+> （editor v2，阶段一多缓冲区基座、阶段二编辑基本功包已实施）。
 
 ## 设计概述
 
@@ -107,16 +107,19 @@ frontend/src/
 │   ├── completionTheme.js            # 补全弹层主题（索引卡式浮层 + 引导点）
 │   ├── latexCompletion.js            # \ 与 \begin{ 行内补全 source
 │   ├── snippetInsert.js              # 模板插入 + 占位符 Tab 循环
+│   ├── wrap.js                       # 包裹命令纯逻辑（多选区包裹计算）+ 直包快捷键键位
+│   ├── beginClose.js                 # \begin{env} 打字机自动补 \end（transactionFilter 纯决策分层）
+│   ├── searchPanel.js                # CM6 查找替换面板主题化 + 三语短语（EditorState.phrases）
 │   ├── preambleScan.js               # 导言区扫描 + 宏包缺失检测
 │   ├── applyDiff.js                  # unified diff 解析与上下文锚定应用纯模块
 │   ├── assistantStream.js            # 助手 SSE 事件归约纯函数（占位消息 / 工具状态 / 会话 id，hook 与单测共用）
-│   └── （命令数据库 data/latexCommands/ 见阶段三）
+│   └── （命令数据库 data/latexCommands/ 按类目拆分 JSON + index.js 统一加载器，含 wrap 包裹类目）
 └── hooks/useEditorBuffer.js          # 多缓冲区编排（打开/激活/保存/冲突/陈旧/自动保存/刷新恢复/项目切换守卫）
 └── hooks/useEditorAssistant.js       # 助手 SSE hook（归约委托 assistantStream 纯函数 + 项目切换守卫）
 ```
 
 Zustand：`editorStore` 含三个切片——`editorPreferences`（persist：
-autoSave / softWrap / fontSize）、`editorSession`（多缓冲区会话，
+autoSave / softWrap / autoCloseEnv / fontSize）、`editorSession`（多缓冲区会话，
 不持久化）、`editorAssistant`（助手会话 id 与消息视图，不持久化；
 后端会话按项目 scope 隔离，切换文件延续会话）。
 
@@ -177,6 +180,44 @@ content/dirty——beforeunload、per-tab 自动保存防抖与冲突快照门�
 `store.subscribe` 命令式副作用，行为与组件级实现逐条等价；冲突弹窗的
 剪贴板逃生在点击时刻经 `getState()` 现取冲突归属 tab 的全文，助手面板
 的大文件行数判定按文件切换惰性重算。
+
+### 编辑基本功包（editor-productivity-plan §5.3，阶段二）
+
+只作用于活跃缓冲区（单 CM6 实例），撤销历史随 per-tab EditorState 天然隔离。
+
+- **包裹命令（决策 Q13）**：Ctrl/Cmd+B / I / U / K 分别直包
+  `\textbf{}` / `\emph{}` / `\underline{}` / `\texttt{}`；Ctrl+L 打开
+  命令面板的 wrap 专项浮层（`categoryFilter` 过滤，覆盖 wrap 全集）。
+  数据源为 `data/latexCommands/wrap.json` 新增的 wrap 类目（直包四命令 +
+  textit / textsc / textup / textsl / textnormal / textsf / textrm /
+  textsuperscript / textsubscript；原 text 类目中的包裹命令整体迁入），
+  顺带进 matcher 四路匹配索引与命令面板——面板对
+  `category === "wrap"` 的条目执行包裹动作而非占位符插入。
+  纯逻辑在 `lib/editor/wrap.js`：`computeWrapEdits()` 对每个选区包成
+  `\cmd{内容}` 并保持内容选中（便于连续叠加包裹实现嵌套），空选区插入
+  空命令并把光标定位到参数内；多选区逐个包裹、单事务完成（Ctrl+Z 一步
+  撤销），选区方向保留；重叠区间整体拒绝。
+- **多光标（§4）**：basicSetup 的 `allowMultipleSelections` 放开，默认
+  开启、无偏好开关；Alt+Click 添加光标、Ctrl/Cmd+D 选中下一处匹配等
+  CM6 默认行为随之可用。
+- **`\begin{env}` 自动配对（决策 Q12）**：输入 `\begin{env}` 完成 `}`
+  后自动追加 `\n\n<行首缩进>\end{env}`（Overleaf 式打字机补全），光标
+  留在中间空行；该 `\begin` 之后的缓冲区内已存在对应 `\end{env}`
+  （向后扫描，嵌套同名环境逐层抵消、注释行不参与配对）则不再补；
+  `%` 注释行内的 `\begin` 不触发补全。纯决策函数
+  `beginAutoCloseDecision()`（输入
+  光标前后文本，输出插入文本与光标偏移）与 transactionFilter
+  （识别「光标恰落在打字插入区间末尾」的事务，多光标下逐光标决策，
+  追加事务以 `sequential: true` 与打字事务合并，单步撤销）分居于
+  `lib/editor/beginClose.js`。`autoCloseEnv` 偏好开关（默认开）经
+  isEnabled 读取器每事务求值，切换无须重配置扩展。
+- **查找替换面板**：basicSetup 内置 searchKeymap（Ctrl/Cmd+F 唤起），
+  `lib/editor/searchPanel.js` 补齐面板主题（面板 / 输入框 / 按钮 /
+  匹配高亮全部走主题 CSS 变量，亮暗自适应）与本地化——官方短语键经
+  `SEARCH_PHRASE_KEY_MAP` 映射到 i18n `components:editor.searchPanel.*`
+  命名空间，注入 `EditorState.phrases`（以语言字段为依赖的 compute
+  facet）；界面语言切换时经 `setSearchLanguage` 效果对活跃视图热更新
+  （换档收起的存档 EditorState 保留建档时的语言，可接受边界）。
 
 ### 图片与 PDF 只读预览
 
@@ -255,4 +296,6 @@ AI 面板。四处配置同步规范照 AGENTS.md 执行；`/api/config/status` 
   editorTabs（tab 状态机归约与会话选择器）、editorSessionPersistence
   （序列化清洗 / LRU 配额淘汰 / 项目键隔离）、editorTabViews（登记表）、
   editorFiles / editorMatcher / editorSnippetInsert / editorPreambleScan /
-  latexCommands / i18nLocales 键集合一致性等
+  editorWrap（包裹纯逻辑与直包键位一致性）/ editorBeginClose（\begin
+  配对纯决策与事务行为）/ editorSearchPanel（面板短语映射与语言热更新）/
+  latexCommands（含 wrap 类目 schema）/ i18nLocales 键集合一致性等

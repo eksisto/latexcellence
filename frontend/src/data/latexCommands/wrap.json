@@ -1,0 +1,106 @@
+[
+  {
+    "name": "textbf",
+    "insert": "\\textbf{$1}$0",
+    "zh": "粗体",
+    "category": "wrap",
+    "pkg": null,
+    "grid": null
+  },
+  {
+    "name": "emph",
+    "insert": "\\emph{$1}$0",
+    "zh": "强调",
+    "category": "wrap",
+    "pkg": null,
+    "grid": null
+  },
+  {
+    "name": "underline",
+    "insert": "\\underline{$1}$0",
+    "zh": "下划线",
+    "category": "wrap",
+    "pkg": null,
+    "grid": null
+  },
+  {
+    "name": "texttt",
+    "insert": "\\texttt{$1}$0",
+    "zh": "等宽字体",
+    "category": "wrap",
+    "pkg": null,
+    "grid": null
+  },
+  {
+    "name": "textit",
+    "insert": "\\textit{$1}$0",
+    "zh": "斜体",
+    "category": "wrap",
+    "pkg": null,
+    "grid": null
+  },
+  {
+    "name": "textsc",
+    "insert": "\\textsc{$1}$0",
+    "zh": "小型大写",
+    "category": "wrap",
+    "pkg": null,
+    "grid": null
+  },
+  {
+    "name": "textup",
+    "insert": "\\textup{$1}$0",
+    "zh": "直立体",
+    "category": "wrap",
+    "pkg": null,
+    "grid": null
+  },
+  {
+    "name": "textsl",
+    "insert": "\\textsl{$1}$0",
+    "zh": "倾斜体",
+    "category": "wrap",
+    "pkg": null,
+    "grid": null
+  },
+  {
+    "name": "textnormal",
+    "insert": "\\textnormal{$1}$0",
+    "zh": "正常字体",
+    "category": "wrap",
+    "pkg": null,
+    "grid": null
+  },
+  {
+    "name": "textsf",
+    "insert": "\\textsf{$1}$0",
+    "zh": "无衬线字体",
+    "category": "wrap",
+    "pkg": null,
+    "grid": null
+  },
+  {
+    "name": "textrm",
+    "insert": "\\textrm{$1}$0",
+    "zh": "罗马字体",
+    "category": "wrap",
+    "pkg": null,
+    "grid": null
+  },
+  {
+    "name": "textsuperscript",
+    "insert": "\\textsuperscript{$1}$0",
+    "zh": "文本上标",
+    "category": "wrap",
+    "pkg": null,
+    "grid": null
+  },
+  {
+    "name": "textsubscript",
+    "insert": "\\textsubscript{$1}$0",
+    "zh": "文本下标",
+    "category": "wrap",
+    "pkg": null,
+    "grid": null
+  }
+]

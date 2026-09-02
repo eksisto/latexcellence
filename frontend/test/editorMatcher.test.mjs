@@ -186,3 +186,14 @@ test("getCommandMatcherIndex：动态加载并填充拼音缓存（共享实例�
   assert.equal(row.fullPinyin, "aerfa");
   assert.equal(row.initials, "aef");
 });
+
+test("wrap 类目条目进入四路匹配索引（editor v2 阶段二）", () => {
+  // 中文精确路：粗体 → \textbf（wrap 类目）
+  assert.equal(searchCommands(index, "粗体")[0].name, "textbf");
+  // 英文前缀路：textsc
+  assert.equal(searchCommands(index, "textsc")[0].name, "textsc");
+  // 全拼路：等宽字体 → dengkuanziti
+  assert.equal(searchCommands(index, "dengkuanziti")[0].name, "texttt");
+  // 首字母路：xiaoxingdaxie → xxdx
+  assert.ok(searchCommands(index, "xxdx").some((e) => e.name === "textsc"));
+});

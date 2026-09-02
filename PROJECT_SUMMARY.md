@@ -157,6 +157,9 @@ latexcellence/
 │       │   │       ├── latexCompletion.js    # \ 与 \begin{ 行内补全 source（CM6 autocompletion）
 │       │   │       ├── completionTheme.js    # 补全弹层主题（CM6 EditorView.theme + 高亮样式）
 │       │   │       ├── snippetInsert.js      # 模板插入 + 占位符解析/网格骨架生成 + Tab 循环跳转模式
+│       │   │       ├── wrap.js               # 包裹命令纯逻辑（多选区包裹计算 + Ctrl/Cmd+B/I/U/K 直包键位）
+│       │   │       ├── beginClose.js         # \begin{env} 打字机自动补 \end（transactionFilter，autoCloseEnv 开关）
+│       │   │       ├── searchPanel.js        # CM6 查找替换面板主题化 + 面板文案三语短语（EditorState.phrases）
 │       │   │       ├── preambleScan.js       # 导言区扫描 + 宏包缺失检测 + usepackage 插入点选取
 │       │   │       ├── applyDiff.js          # unified diff 解析与上下文锚定应用（助手 diff 建议卡片）
 │       │   │       ├── tabs.js               # 多缓冲区 tab 状态机纯归约（打开/激活/关闭/保存回写）与会话选择器
@@ -198,10 +201,10 @@ latexcellence/
 │       │   │   ├── LaTeXEditor.jsx     # CodeMirror 6 受控封装（value/onChange + 多缓冲区 per-file EditorState 换档，挂行内补全与占位符扩展）
 │       │   │   ├── EditorTabBar.jsx    # 多缓冲区标签条（脏标记圆点 + 磁盘已变更标记 + 关闭按钮 + 全部保存）
 │       │   │   ├── EditorToolbar.jsx   # 激活 tab 路径脏标记 · 后端撤销重做 · 命令面板 · 编译 · 保存 · 设置
-│       │   │   ├── EditorSettingsDialog.jsx # 偏好开关（软换行/字号/自动保存）+ 偏好导入导出双通道
+│       │   │   ├── EditorSettingsDialog.jsx # 偏好开关（软换行/字号/自动保存/环境自动配对）+ 偏好导入导出双通道
 │       │   │   ├── EditorCloseTabDialog.jsx # 关闭脏 tab 三选弹窗（保存并关闭/放弃改动/取消，autoSave 开启默认前者）
 │       │   │   ├── ConflictDialog.jsx  # 保存 409 冲突弹窗（按冲突归属 tab 出路：放弃重载 / 剪贴板逃生 / 覆盖保存）
-│       │   │   ├── CommandPalette.jsx  # 命令面板（Ctrl/Cmd+/；搜索 + 分类 + 网格选择器二级步骤）
+│       │   │   ├── CommandPalette.jsx  # 命令面板（Ctrl/Cmd+/ 全量；Ctrl+L 包裹命令专项浮层；搜索 + 分类 + 网格选择器二级步骤）
 │       │   │   ├── GridSizePicker.jsx  # 表格/矩阵 m×n 拖选网格选择器
 │       │   │   ├── AssistantPanel.jsx  # AI 助手侧栏（SSE 对话 + 三种建议应用形态卡片）
 │       │   │   └── StaleCheckBanner.jsx # 检查结果过期横幅（各逐段检查页复用）
@@ -239,7 +242,7 @@ latexcellence/
 │   ├── multi-user-v2-plan.md                   # 多用户模式 v2 设计方案（Docker 沙箱/rar/反向补丁撤销/分片上传/SMTP/记账优化/多实例）
 │   ├── rar-extractor-fallback.md                 # RAR 解压器回退层设计与实施记录（unar → bsdtar，已实施）
 │   ├── editor-plan.md                            # 网页编辑器功能设计方案（CM6 编辑器 + 命令快速输入 + AI 助手；已实施，设计共识与决策记录）
-│   ├── editor-productivity-plan.md                # 编辑器生产力改造设计方案（多缓冲区 tab/大纲/引用补全/格式化/KaTeX/错误跳转；分阶段实施中，阶段一多缓冲区基座已实施）
+│   ├── editor-productivity-plan.md                # 编辑器生产力改造设计方案（多缓冲区 tab/大纲/引用补全/格式化/KaTeX/错误跳转；分阶段实施中，阶段一多缓冲区基座与阶段二编辑基本功包已实施）
 │   ├── multi-model-plan.md                       # 多模型支持设计方案（模型档案 + 角色槽位路由；已实施）
 │   ├── deployment.md                          # 后端部署指南（单用户/多用户单进程/多实例 Compose 部署、systemd 托管、HTTPS 反向代理、安全风险声明、备份、环境变量与升级回滚）
 │   ├── modules/                     # 模块文档（含 editor.md 网页编辑器）
@@ -315,7 +318,7 @@ latexcellence/
 | style_modify | 粘贴代码 / 项目 Agent 修改样式，支持 shadow 编译、proposal 审核、批量事务与撤销 | router.py, service.py, agent.py, models.py, session.py, trace.py, cleanup.py | ✓ | ✗ |
 | writing_chat | 写作助手对话（含联网搜索、学术检索与引文追踪、项目浏览、段落编辑和工具确认） | router.py, service/, context.py, models.py, prompt_manager.py | ✓ | ✗ |
 | bib_manager | 参考文献管理 + 格式规则层 + DOI 多数据源查询 + 重复检测 + 文献库 | router.py, service.py, models.py, bib_parser.py, format_rules.py, style_registry.py, provider_manager.py, providers/ | ✓(格式规则命中不依赖 LLM；DOI 查询不依赖 LLM) | ✗ |
-| editor | 网页编辑器：后端整文件打开/保存（MD5 乐观锁、统一撤销记账与配额回滚接线）+ 前端 /editor 页 CM6 打开-编辑-保存-冲突闭环 + 命令快速输入子系统（命令数据库四路匹配查找、\ 行内补全与命令面板双入口、表格矩阵网格选择器、宏包缺失联动自动添加声明）+ 多缓冲区基座（tab 条、per-tab 缓冲区/撤销/滚动、陈旧检测、关闭三选、sessionStorage 刷新恢复、per-tab 自动保存、编译全量脏保存、助手 tab 守卫） + 编译联动（脏改动先自动保存）+ 编辑器侧 AI 助手（复用 Writing Chat 会话基础设施的缓冲区协议端点、自适应上下文注入、插入光标/替换选区/diff 卡片三种建议应用形态）+ 检查结果保鲜横幅 + 偏好导入导出 | backend modules/editor/service.py（路由挂载于 project_router）、writing_chat/service/editor_chat.py；frontend pages/EditorPage.jsx、components/editor/、lib/editor/、data/latexCommands/、store/editorStore.js | ✓(仅助手端点) | ✗ |
+| editor | 网页编辑器：后端整文件打开/保存（MD5 乐观锁、统一撤销记账与配额回滚接线）+ 前端 /editor 页 CM6 打开-编辑-保存-冲突闭环 + 命令快速输入子系统（命令数据库四路匹配查找、\ 行内补全与命令面板双入口、表格矩阵网格选择器、宏包缺失联动自动添加声明）+ 多缓冲区基座（tab 条、per-tab 缓冲区/撤销/滚动、陈旧检测、关闭三选、sessionStorage 刷新恢复、per-tab 自动保存、编译全量脏保存、助手 tab 守卫） + 编辑基本功包（包裹命令快捷键 Ctrl/Cmd+B/I/U/K 直包与 Ctrl+L 包裹浮层、wrap 类目进命令数据库与命令面板、多光标、\begin{env} 打字机自动补 \end（autoCloseEnv 开关）、查找替换面板主题化与三语） + 编译联动（脏改动先自动保存）+ 编辑器侧 AI 助手（复用 Writing Chat 会话基础设施的缓冲区协议端点、自适应上下文注入、插入光标/替换选区/diff 卡片三种建议应用形态）+ 检查结果保鲜横幅 + 偏好导入导出 | backend modules/editor/service.py（路由挂载于 project_router）、writing_chat/service/editor_chat.py；frontend pages/EditorPage.jsx、components/editor/、lib/editor/、data/latexCommands/、store/editorStore.js | ✓(仅助手端点) | ✗ |
 | plot_gen | 科研绘图 Agent（数据画像 -> 图表推荐 -> Python 执行 -> TikZ 编译） | router.py, service.py, agent.py, models.py, data_parser.py, recommender.py, styles.py, executor.py, tikzgen.py, sandbox_guard.py, trace.py, cleanup.py | ✓ | ✗ |
 
 ## 核心设计思路

@@ -2,7 +2,7 @@
  * LaTeX 命令数据库统一加载器（editor-plan §6.1）。
  *
  * 数据按类目拆分为纯 JSON 文件（希腊字母 / 运算 / 关系 / 箭头 / 数学结构 /
- * 文本样式 / 章节 / 图表 / 数学环境 / 表格矩阵网格模板），本文件负责：
+ * 文本样式 / 包裹命令 / 章节 / 图表 / 数学环境 / 表格矩阵网格模板），本文件负责：
  *   - 汇总合并并做 schema 校验（name 唯一、insert 非空、category 白名单、
  *     grid 形状合法）；数据错误在加载时即抛出，由测试与构建第一时间暴露；
  *   - 导出 `LATEX_COMMANDS`（条目数组）与 `COMMAND_CATEGORIES`（面板分组
@@ -22,6 +22,7 @@ import relations from "./relations.json" with { type: "json" };
 import arrows from "./arrows.json" with { type: "json" };
 import structures from "./structures.json" with { type: "json" };
 import textStyles from "./textStyles.json" with { type: "json" };
+import wrap from "./wrap.json" with { type: "json" };
 import sections from "./sections.json" with { type: "json" };
 import figures from "./figures.json" with { type: "json" };
 import mathEnvironments from "./mathEnvironments.json" with { type: "json" };
@@ -35,6 +36,7 @@ export const COMMAND_CATEGORIES = [
   "arrow",
   "structure",
   "text",
+  "wrap",
   "section",
   "figure",
   "mathenv",
@@ -99,6 +101,7 @@ const merged = [
   ...mergeCategory(arrows, "arrows.json"),
   ...mergeCategory(structures, "structures.json"),
   ...mergeCategory(textStyles, "textStyles.json"),
+  ...mergeCategory(wrap, "wrap.json"),
   ...mergeCategory(sections, "sections.json"),
   ...mergeCategory(figures, "figures.json"),
   ...mergeCategory(mathEnvironments, "mathEnvironments.json"),

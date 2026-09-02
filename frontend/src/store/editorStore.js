@@ -5,8 +5,8 @@
  * （latexcellence-project）生命周期不同。
  *
  * 持久化策略：
- *   - editorPreferences：persist 持久化（autoSave / softWrap / fontSize），
- *     水合后经 sanitizePreferences 白名单清洗，脏数据回落默认值；
+ *   - editorPreferences：persist 持久化（autoSave / softWrap / autoCloseEnv
+ *     / fontSize），水合后经 sanitizePreferences 白名单清洗，脏数据回落默认值；
  *   - editorSession（多缓冲区：tabs + activeTabPath + 冲突信息）：不进
  *     localStorage——刷新恢复走 sessionStorage 专项通道（含脏缓冲区全文，
  *     LRU 配额兜底，见 lib/editor/sessionPersistence.js），由
@@ -62,6 +62,8 @@ function createEditorPreferencesSlice(set) {
     ...EDITOR_PREFERENCES_DEFAULTS,
     setAutoSave: (value) => set({ autoSave: !!value }),
     setSoftWrap: (value) => set({ softWrap: !!value }),
+    // \begin 自动配对开关（editor v2 决策 Q18，默认开）
+    setAutoCloseEnv: (value) => set({ autoCloseEnv: !!value }),
     // 字号经白名单校验（区间整数），非法值静默忽略
     setFontSize: (value) => {
       const cleaned = sanitizePreferences({ fontSize: value });
@@ -326,6 +328,7 @@ export const useEditorStore = create(
       partialize: (state) => ({
         autoSave: state.autoSave,
         softWrap: state.softWrap,
+        autoCloseEnv: state.autoCloseEnv,
         fontSize: state.fontSize,
       }),
       merge: (persisted, current) => ({
