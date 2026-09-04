@@ -207,7 +207,7 @@ latexcellence/
 │       │   ├── editor/                 # 编辑器组件
 │       │   │   ├── LaTeXEditor.jsx     # CodeMirror 6 受控封装（value/onChange + 多缓冲区 per-file EditorState 换档，挂行内补全与占位符扩展）
 │       │   │   ├── EditorTabBar.jsx    # 多缓冲区标签条（脏标记圆点 + 磁盘已变更标记 + 关闭按钮 + 全部保存）
-│       │   │   ├── EditorToolbar.jsx   # 激活 tab 路径脏标记 · 后端撤销重做 · 命令面板 · 编译 · 保存 · 设置
+│       │   │   ├── EditorToolbar.jsx   # 后端撤销重做 · 命令面板 · 编译 · 保存 · 设置
 │       │   │   ├── EditorStatusBar.jsx # 编辑器底部状态栏（光标行列 / 选区 / 行数 / 中西文字数，统计 hub 订阅）
 │       │   │   ├── EditorSettingsDialog.jsx # 偏好开关（软换行/字号/自动保存/环境自动配对）+ 偏好导入导出双通道
 │       │   │   ├── EditorCloseTabDialog.jsx # 关闭脏 tab 三选弹窗（保存并关闭/放弃改动/取消，autoSave 开启默认前者）

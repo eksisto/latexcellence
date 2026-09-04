@@ -1663,7 +1663,6 @@
       "close": "Close"
     },
     "editor": {
-      "noFile": "No file opened",
       "unsavedDot": "Unsaved changes",
       "historyBlockedByDirty": "Unsaved changes — save before undo/redo",
       "saving": "Saving…",

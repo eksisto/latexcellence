@@ -1,7 +1,8 @@
 /**
  * EditorToolbar —— 编辑器工具栏（editor-plan §4 / §8）。
  *
- * 按钮：文件名与脏标记 · 后端撤销/重做 · 命令面板 · 编译 · 保存 · 编辑器设置。
+ * 按钮：后端撤销/重做 · 命令面板 · 编译 · 保存 · 编辑器设置。
+ * 激活文件与脏标记由 tab 条展示，本栏不再重复展示。
  *
  * 撤销体系分两层（方案 §8）：缓冲区内的未保存修改由 CM6 自身 history 负责
  * （LaTeXEditor 内置），本栏的撤销/重做复用既有后端端点语义（已保存层，
@@ -46,7 +47,8 @@ import SaveAsTemplateDialog from "@/components/template-center/SaveAsTemplateDia
 
 /**
  * @param {object} props
- * @param {string|null} props.filePath      激活 tab 的文件路径
+ * @param {string|null} props.filePath      激活 tab 的文件路径（撤销/重做
+ *   目标与按钮禁用判定，不在本栏展示）
  * @param {boolean} props.saving            保存请求进行中（任一 tab 在途）
  * @param {boolean} [props.readOnly=false]  viewer 只读
  * @param {() => void|Promise<void>} props.onSave 保存激活 tab
@@ -104,190 +106,166 @@ export default function EditorToolbar({
     // pr-9（36px）：设置按钮（size-icon，32px 盒）右缘落在视口-52px，
     // 图标中心随之落在「距右缘 68px」，与收起态书脊的居中图标同轴
     // （书脊 inset-1 后盒宽 32px，居中图标中心 = 视口-68px）
-    <div className="flex flex-wrap items-center gap-2 pr-9">
-      {/* 与页头「编辑器」标题左对齐（PageHeader 返回按钮 size-8 +
-          gap-4 = 48px 缩进），路径与标题共用同一条纵向轴线 */}
-      <span className="min-w-0 truncate pl-12 font-mono text-sm text-muted-foreground">
-        {filePath || t("components:editor.noFile")}
-        {dirty && (
-          <span
-            className="ml-1.5 inline-block size-2 rounded-full bg-primary align-middle"
-            title={t("components:editor.unsavedDot")}
-          />
-        )}
-      </span>
-
-      <div className="ml-auto flex items-center gap-1">
-        <Tooltip>
-          <TooltipTrigger
-            render={
-              <Button
-                variant="outline"
-                size="icon"
-                onClick={handleUndo}
-                disabled={!canUndo || historyBusy || historyDisabled}
-              />
-            }
-          >
-            <Undo2 />
-            <span className="sr-only">
-              {t("components:editor.backendUndo")}
-            </span>
-          </TooltipTrigger>
-          <TooltipContent>
-            {historyDisabled && dirty
-              ? t("components:editor.historyBlockedByDirty")
-              : t("components:editor.backendUndo")}
-          </TooltipContent>
-        </Tooltip>
-        <Tooltip>
-          <TooltipTrigger
-            render={
-              <Button
-                variant="outline"
-                size="icon"
-                onClick={handleRedo}
-                disabled={!canRedo || historyBusy || historyDisabled}
-              />
-            }
-          >
-            <Redo2 />
-            <span className="sr-only">
-              {t("components:editor.backendRedo")}
-            </span>
-          </TooltipTrigger>
-          <TooltipContent>
-            {historyDisabled && dirty
-              ? t("components:editor.historyBlockedByDirty")
-              : t("components:editor.backendRedo")}
-          </TooltipContent>
-        </Tooltip>
-
-        <Tooltip>
-          <TooltipTrigger
-            render={
-              <Button
-                variant="outline"
-                size="icon"
-                onClick={onOpenPalette}
-                disabled={!filePath}
-              />
-            }
-          >
-            <SquareTerminal />
-            <span className="sr-only">
-              {t("components:editor.commandPalette")}
-            </span>
-          </TooltipTrigger>
-          <TooltipContent>
-            {t("components:editor.commandPalette")}
-          </TooltipContent>
-        </Tooltip>
-
-        {/* 一键格式化（阶段五 / Q8）：Ctrl+Z 可撤销，viewer 禁用 */}
-        <Tooltip>
-          <TooltipTrigger
-            render={
-              <Button
-                variant="outline"
-                size="icon"
-                onClick={() => onFormat?.()}
-                disabled={formatDisabled}
-              />
-            }
-          >
-            {formatting ? <Loader2 className="animate-spin" /> : <Sparkles />}
-            <span className="sr-only">{t("components:editor.format")}</span>
-          </TooltipTrigger>
-          <TooltipContent>{t("components:editor.formatHint")}</TooltipContent>
-        </Tooltip>
-
-        {compileEnabled && (
-          <Tooltip>
-            <TooltipTrigger
-              render={
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={onCompile}
-                  disabled={compileDisabled}
-                />
-              }
-            >
-              {compiling ? <Loader2 className="animate-spin" /> : <Play />}
-              {compiling
-                ? t("components:editor.compiling")
-                : t("components:editor.compile")}
-            </TooltipTrigger>
-            <TooltipContent>
-              {t("components:editor.compileHint")}
-            </TooltipContent>
-          </Tooltip>
-        )}
-
-        {/* 另存为模板：把当前项目复制入库（后端仅要求读权限，viewer 可用；
-            template_library 关闭时隐藏，与 compileEnabled 同一开关口径） */}
-        {templateLibraryEnabled && (
-          <Tooltip>
-            <TooltipTrigger
-              render={
-                <Button
-                  variant="outline"
-                  size="icon"
-                  onClick={() => setSaveTemplateOpen(true)}
-                />
-              }
-            >
-              <BookmarkPlus />
-              <span className="sr-only">
-                {t("components:saveAsTemplate.title")}
-              </span>
-            </TooltipTrigger>
-            <TooltipContent>
-              {t("components:saveAsTemplate.title")}
-            </TooltipContent>
-          </Tooltip>
-        )}
-
-        <Button
-          size="sm"
-          onClick={onSave}
-          disabled={saveDisabled}
-          className="ml-1"
+    <div className="flex flex-wrap items-center justify-end gap-1 pr-9">
+      <Tooltip>
+        <TooltipTrigger
+          render={
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={handleUndo}
+              disabled={!canUndo || historyBusy || historyDisabled}
+            />
+          }
         >
-          {saving ? (
-            <>
-              <Loader2 className="animate-spin" />
-              {t("components:editor.saving")}
-            </>
-          ) : (
-            <>
-              <Save />
-              {t("components:editor.save")}
-            </>
-          )}
-        </Button>
+          <Undo2 />
+          <span className="sr-only">{t("components:editor.backendUndo")}</span>
+        </TooltipTrigger>
+        <TooltipContent>
+          {historyDisabled && dirty
+            ? t("components:editor.historyBlockedByDirty")
+            : t("components:editor.backendUndo")}
+        </TooltipContent>
+      </Tooltip>
+      <Tooltip>
+        <TooltipTrigger
+          render={
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={handleRedo}
+              disabled={!canRedo || historyBusy || historyDisabled}
+            />
+          }
+        >
+          <Redo2 />
+          <span className="sr-only">{t("components:editor.backendRedo")}</span>
+        </TooltipTrigger>
+        <TooltipContent>
+          {historyDisabled && dirty
+            ? t("components:editor.historyBlockedByDirty")
+            : t("components:editor.backendRedo")}
+        </TooltipContent>
+      </Tooltip>
 
+      <Tooltip>
+        <TooltipTrigger
+          render={
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={onOpenPalette}
+              disabled={!filePath}
+            />
+          }
+        >
+          <SquareTerminal />
+          <span className="sr-only">
+            {t("components:editor.commandPalette")}
+          </span>
+        </TooltipTrigger>
+        <TooltipContent>{t("components:editor.commandPalette")}</TooltipContent>
+      </Tooltip>
+
+      {/* 一键格式化（阶段五 / Q8）：Ctrl+Z 可撤销，viewer 禁用 */}
+      <Tooltip>
+        <TooltipTrigger
+          render={
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={() => onFormat?.()}
+              disabled={formatDisabled}
+            />
+          }
+        >
+          {formatting ? <Loader2 className="animate-spin" /> : <Sparkles />}
+          <span className="sr-only">{t("components:editor.format")}</span>
+        </TooltipTrigger>
+        <TooltipContent>{t("components:editor.formatHint")}</TooltipContent>
+      </Tooltip>
+
+      {compileEnabled && (
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={onCompile}
+                disabled={compileDisabled}
+              />
+            }
+          >
+            {compiling ? <Loader2 className="animate-spin" /> : <Play />}
+            {compiling
+              ? t("components:editor.compiling")
+              : t("components:editor.compile")}
+          </TooltipTrigger>
+          <TooltipContent>{t("components:editor.compileHint")}</TooltipContent>
+        </Tooltip>
+      )}
+
+      {/* 另存为模板：把当前项目复制入库（后端仅要求读权限，viewer 可用；
+            template_library 关闭时隐藏，与 compileEnabled 同一开关口径） */}
+      {templateLibraryEnabled && (
         <Tooltip>
           <TooltipTrigger
             render={
               <Button
                 variant="outline"
                 size="icon"
-                onClick={() => setSettingsOpen(true)}
+                onClick={() => setSaveTemplateOpen(true)}
               />
             }
           >
-            <Settings2 />
+            <BookmarkPlus />
             <span className="sr-only">
-              {t("components:editorSettings.title")}
+              {t("components:saveAsTemplate.title")}
             </span>
           </TooltipTrigger>
           <TooltipContent>
-            {t("components:editorSettings.title")}
+            {t("components:saveAsTemplate.title")}
           </TooltipContent>
         </Tooltip>
-      </div>
+      )}
+
+      <Button
+        size="sm"
+        onClick={onSave}
+        disabled={saveDisabled}
+        className="ml-1"
+      >
+        {saving ? (
+          <>
+            <Loader2 className="animate-spin" />
+            {t("components:editor.saving")}
+          </>
+        ) : (
+          <>
+            <Save />
+            {t("components:editor.save")}
+          </>
+        )}
+      </Button>
+
+      <Tooltip>
+        <TooltipTrigger
+          render={
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={() => setSettingsOpen(true)}
+            />
+          }
+        >
+          <Settings2 />
+          <span className="sr-only">
+            {t("components:editorSettings.title")}
+          </span>
+        </TooltipTrigger>
+        <TooltipContent>{t("components:editorSettings.title")}</TooltipContent>
+      </Tooltip>
 
       <EditorSettingsDialog
         open={settingsOpen}

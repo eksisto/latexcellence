@@ -92,7 +92,7 @@ frontend/src/
 │   ├── LaTeXEditor.jsx               # CM6 受控封装（value/onChange）+ 多缓冲区 per-file EditorState 换档
 │   ├── EditorTabBar.jsx              # 标签条（脏标记圆点 + 磁盘已变更标记 + 关闭按钮 + 全部保存）
 │   ├── OutlinePanel.jsx              # 左栏「大纲」tab 内容（四级缩进条目 + 空态，点击经回调定位）
-│   ├── EditorToolbar.jsx             # 激活 tab 路径/脏标记 · 后端撤销重做 · 面板 · 格式化 · 编译 · 保存 · 设置
+│   ├── EditorToolbar.jsx             # 后端撤销重做 · 面板 · 格式化 · 编译 · 保存 · 设置
 │   ├── EditorCloseTabDialog.jsx      # 关闭脏 tab 三选弹窗（保存并关闭 / 放弃改动 / 取消）
 │   ├── EditorSettingsDialog.jsx      # 偏好开关 + 偏好导入/导出双通道入口
 │   ├── ConflictDialog.jsx            # 409 弹窗（动作作用于冲突归属 tab：放弃重载 / 剪贴板逃生 / 覆盖保存）
