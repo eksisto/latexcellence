@@ -11,7 +11,9 @@
  *   - 拼音序列在索引构建时一次性算好并缓存（模块级 promise，只算一次），
  *     后续每次按键只做纯字符串比较；
  *   - pinyin-pro 经动态 `import()` 按需引入：只有真正构建索引（编辑器
- *     页面首次触发补全/面板）时才下载该 chunk，不进主包。
+ *     页面首次触发补全/面板）时才下载该 chunk，不进主包；
+ *   - 数学专名的多音字误读经 PINYIN_WORD_FIXES 词级修正（customPinyin
+ *     注册），在首次 pinyin() 调用前完成一次。
  */
 
 import { LATEX_COMMANDS } from "../../data/latexCommands/index.js";
@@ -76,6 +78,18 @@ export function buildCommandIndex(commands = LATEX_COMMANDS) {
     initials: "",
   }));
 }
+
+/**
+ * 词级读音修正表：pinyin-pro 默认词典对多音字取最常用读音，数学专名会
+ * 取错——「伽」默认 jiā（伽利略），伽马/欧米伽应读 gā，导致按 gama 搜
+ * 不到 \gamma 反而 jiama 误命中。
+ * 只注册词级（非字级）映射：不影响同字其他读音；且注册词可作用于包含
+ * 它的更长条目（「大写伽马」「大写欧米伽」随词命中一并修正）。
+ */
+export const PINYIN_WORD_FIXES = {
+  伽马: "ga ma",
+  欧米伽: "ou mi ga",
+};
 
 /**
  * 用给定拼音转换函数填充全拼/首字母序列（仅中文部分参与匹配，
@@ -210,7 +224,12 @@ let indexPromise = null;
 export function getCommandMatcherIndex() {
   if (!indexPromise) {
     indexPromise = import("pinyin-pro")
-      .then(({ pinyin }) => fillPinyinSequences(buildCommandIndex(), pinyin))
+      .then(({ pinyin, customPinyin }) => {
+        // customPinyin 注册的是模块级全局词典，必须在任何 pinyin() 调用
+        // 前完成（本模块是 pinyin-pro 在应用内的唯一消费点）
+        customPinyin(PINYIN_WORD_FIXES);
+        return fillPinyinSequences(buildCommandIndex(), pinyin);
+      })
       .catch((err) => {
         // 失败复位缓存允许重试；索引退化为纯中文/英文两路仍可用
         indexPromise = null;

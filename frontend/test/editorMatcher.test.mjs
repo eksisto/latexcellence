@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { pinyin } from "pinyin-pro";
+import { pinyin, customPinyin } from "pinyin-pro";
 
 import {
   DEFAULT_MATCH_LIMIT,
@@ -13,9 +13,13 @@ import {
   normalizeQuery,
   searchCommands,
   SCORE,
+  PINYIN_WORD_FIXES,
 } from "../src/lib/editor/matcher.js";
 import { extractEnvironments } from "../src/lib/editor/latexCompletion.js";
 import { LATEX_COMMANDS } from "../src/data/latexCommands/index.js";
+
+// 与生产 getCommandMatcherIndex 一致：构建索引前注册词级读音修正
+customPinyin(PINYIN_WORD_FIXES);
 
 /** 共享索引：一次性预计算（模拟加载期行为，勿在用例内反复构建） */
 const index = fillPinyinSequences(buildCommandIndex(), pinyin);
@@ -51,6 +55,18 @@ test("首字母路：ae 命中阿尔法；jz 覆盖矩阵家族（名词首字�
   assert.equal(jz[0].name, "footnote");
   // 无括号矩阵等修饰语在前的条目经首字母子串路仍可被找到
   assert.ok(jz.some((e) => e.name === "matrix"));
+});
+
+test("多音字词级修正：gama 命中伽马，jiama 不再误命中（PINYIN_WORD_FIXES）", () => {
+  // 「伽」默认取 jiā（伽利略），词级修正后伽马/欧米伽读 gā
+  assert.equal(searchCommands(index, "gama")[0].name, "gamma");
+  assert.equal(searchCommands(index, "oumiga")[0].name, "omega");
+  // 修正前的错误读音不再命中
+  assert.ok(!searchCommands(index, "jiama").some((e) => e.name === "gamma"));
+  // 首字母路同步修正：伽马 → gm
+  assert.equal(searchCommands(index, "gm")[0].name, "gamma");
+  // 词级注册作用于更长条目：大写伽马 → daxiegama
+  assert.equal(searchCommands(index, "daxiegama")[0].name, "Gamma");
 });
 
 test("英文前缀/子串路：al → alpha 置顶；大小写不敏感", () => {
@@ -185,6 +201,10 @@ test("getCommandMatcherIndex：动态加载并填充拼音缓存（共享实例�
   const row = shared.find((r) => r.entry.name === "alpha");
   assert.equal(row.fullPinyin, "aerfa");
   assert.equal(row.initials, "aef");
+  // 动态索引同样经过词级读音修正：伽马全拼为 gama 而非 jiama
+  const gammaRow = shared.find((r) => r.entry.name === "gamma");
+  assert.equal(gammaRow.fullPinyin, "gama");
+  assert.equal(gammaRow.initials, "gm");
 });
 
 test("wrap 类目条目进入四路匹配索引（editor v2 阶段二）", () => {
