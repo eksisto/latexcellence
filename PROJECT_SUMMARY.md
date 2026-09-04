@@ -251,8 +251,10 @@ latexcellence/
 │   ├── rar-extractor-fallback.md                 # RAR 解压器回退层设计与实施记录（unar → bsdtar，已实施）
 │   ├── editor-plan.md                            # 网页编辑器功能设计方案（CM6 编辑器 + 命令快速输入 + AI 助手；已实施，设计共识与决策记录）
 │   ├── editor-productivity-plan.md                # 编辑器生产力改造设计方案（多缓冲区 tab/大纲/引用补全/格式化/KaTeX/错误跳转；八个阶段均已实施，阶段一多缓冲区基座、阶段二编辑基本功包、阶段三大纲面板、阶段四引用补全、阶段五一键格式化、阶段六 KaTeX 公式悬停预览、阶段七编译错误列表与跨文件跳转、阶段八修改行色条/状态栏/选中高亮匹配/会话持久化升级 localStorage（借鉴 Notepad++））
+│   ├── editor-experience-plan.md                # 编辑器写作体验收口设计方案（编辑器 v3：SyncTeX 正反向同步/用户自定义片段/实时语法诊断/跨文件大纲与 KaTeX 预览卡/助手接入联网与学术检索/自研 MIT Lezer 子集语法；已定稿）
 │   ├── multi-model-plan.md                       # 多模型支持设计方案（模型档案 + 角色槽位路由；已实施）
 │   ├── deployment.md                          # 后端部署指南（单用户/多用户单进程/多实例 Compose 部署、systemd 托管、HTTPS 反向代理、安全风险声明、备份、环境变量与升级回滚）
+│   ├── deploy-followups-plan.md               # 多用户部署侧跟踪项收口设计方案（rar 解压器入沙箱/真实压缩 RAR 样本验收/沙箱容器预创建池 warm pool/模型连通性测试；已定稿）
 │   ├── modules/                     # 模块文档（含 editor.md 网页编辑器）
 │   └── showcase.md                  # 展示页（showcase）说明
 ├── tests/                           # 测试用例

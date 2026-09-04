@@ -26,7 +26,9 @@
 | [docs/rar-extractor-fallback.md](docs/rar-extractor-fallback.md) | RAR 解压器回退层设计与实施记录（unar → bsdtar，含 Alpine 适配评估、文件名归一化与部署步骤） |
 | [docs/editor-plan.md](docs/editor-plan.md) | 网页编辑器功能设计方案（CM6 编辑器、LaTeX 命令中/拼/英快速输入、编辑器侧 AI 助手；已实施，设计共识与决策记录） |
 | [docs/editor-productivity-plan.md](docs/editor-productivity-plan.md) | 编辑器生产力改造设计方案（多缓冲区 tab、大纲导航、引用补全、格式化、KaTeX 预览、编译错误跳转；七个阶段均已实施，阶段一多缓冲区基座、阶段二编辑基本功包、阶段三大纲面板、阶段四引用补全、阶段五一键格式化、阶段六 KaTeX 公式悬停预览与阶段七编译错误列表与跨文件跳转，grilling 决策记录 Q1–Q19） |
+| [docs/editor-experience-plan.md](docs/editor-experience-plan.md) | 编辑器写作体验收口设计方案（编辑器 v3：SyncTeX 正反向同步、用户自定义片段库、实时语法诊断、跨文件大纲与 KaTeX 预览卡、编辑器助手接入联网搜索与学术检索、自研 MIT Lezer 子集语法；已定稿） |
 | [docs/multi-model-plan.md](docs/multi-model-plan.md) | 多模型支持设计方案（模型档案 + 角色槽位路由、能力硬校验、推理模型封装层兼容；已实施） |
+| [docs/deploy-followups-plan.md](docs/deploy-followups-plan.md) | 多用户部署侧跟踪项收口设计方案（rar 解压器纳入 SandboxRunner、真实压缩 RAR4/RAR5 样本验收、沙箱容器预创建池 warm pool、模型连通性测试端点与设置入口；已定稿） |
 | [docs/modules/editor.md](docs/modules/editor.md) | 网页编辑器模块文档（整文件读写、命令快速输入、编译联动、AI 助手侧栏与保鲜横幅的数据流 / API / 配置 / 前端结构） |
 | [docs/modules/template_library.md](docs/modules/template_library.md) | 模板库模块文档（内置模板清单、双模式数据流、manifest schema、API 一览、安全边界、配额并入、清洗规则与维护者脚本） |
 | [docker/README.md](docker/README.md) | Docker 沙箱镜像体系（四镜像构建、多架构、离线导入导出、缺宏包排查） |
