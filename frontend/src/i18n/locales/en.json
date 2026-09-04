@@ -1736,6 +1736,11 @@
         "renderError": "Failed to render formula — the LaTeX may be invalid"
       }
     },
+    "editorStatusBar": {
+      "cursor": "Ln {{line}}, Col {{col}}",
+      "selected": "{{count}} selected",
+      "docStats": "{{lines}} lines · {{words}} words"
+    },
     "conflictDialog": {
       "title": "Save conflict",
       "description": "The file has been modified by another window or browser. Saving was rejected to avoid overwriting those changes.",
@@ -1756,6 +1761,8 @@
       "autoCloseEnvHint": "After typing the closing brace of \\begin{env}, the matching \\end line is inserted automatically.",
       "formulaHover": "Formula hover preview",
       "formulaHoverHint": "Rest the pointer on a formula for about half a second to see a KaTeX-rendered preview.",
+      "selectionMatches": "Highlight all matches of selection",
+      "selectionMatchesHint": "Highlight every occurrence of the selected text, e.g. to spot all \\label / \\ref pairs.",
       "fontSize": "Font size",
       "transferTitle": "Preference transfer",
       "export": "Export JSON",

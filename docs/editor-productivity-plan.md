@@ -1,8 +1,9 @@
 # 编辑器生产力改造设计方案（editor v2）
 
-> **状态：共识已定稿，七阶段全部实施完成（阶段一多缓冲区基座、阶段二编辑基本功包、
+> **状态：共识已定稿，八个阶段全部实施完成（阶段一多缓冲区基座、阶段二编辑基本功包、
 > 阶段三大纲面板、阶段四引用补全、阶段五一键格式化、阶段六 KaTeX 公式悬停预览、
-> 阶段七编译错误跳转，形态见
+> 阶段七编译错误跳转、阶段八修改行色条 / 状态栏 / 选中高亮匹配 / 会话持久化升级
+> localStorage（借鉴 Notepad++），形态见
 > [modules/editor.md](modules/editor.md)）。** 本文记录「编辑器从可用到生产力工具」改造的
 > 完整设计共识（经 grilling 三轮拷问收敛），作为分阶段实施的依据与变更对照
 > 基线。v1 设计见 [editor-plan.md](editor-plan.md)，已实施形态见
@@ -136,13 +137,22 @@ per-tab 维护 `{ filePath, buffer, baseMd5, dirty, stale, cursor/scroll }`，
 - **编译错误跳转**（阶段七）：日志文件栈解析纯模块（`(./` 压栈、`)` 弹栈、
   `l.N` 归属栈顶文件；转义括号等歧义保守回落当前缓冲区并标低置信），
   右栏错误列表可点击，跨文件跳转 = 联动打开对应 tab 并定位行首高亮。
+- **修改行色条 / 状态栏 / 选中高亮匹配 / 会话持久化升级**（阶段八，
+  借鉴 Notepad++，详细形态见 modules/editor.md 同名章节）：行级 diff
+  纯模块（公共前后缀剪除 + Myers O(ND) + 防退化护栏）+ CM6 行装饰双
+  色条（琥珀 = 未保存修改、翠绿 = 本会话已保存修改），基线复用 tab 记
+  录的 savedBuffer/openedBuffer；底部状态栏（光标行列 / 选区 / 行数 /
+  中西文字数，统计 hub 发布-订阅不经过页面 React 树）；selectionMatches
+  偏好按需挂载 highlightSelectionMatches；会话载荷由 sessionStorage 迁
+  移 localStorage（遗留收养迁移，脏 tab 携带 savedBuffer 的 v2 载荷）。
 
 ### 5.4 偏好增量
 
 `EDITOR_PREFERENCES_DEFAULTS` 新增 `formulaHover` / `autoCloseEnv`
 （默认均开），随既有白名单清洗、导入导出校验、设置弹窗与三语 i18n 一并
 生效。**不新增 `config.json` 配置项**，无四处配置同步负担；`editor.enabled`
-/ `assistant_enabled` 服务端开关语义不变。
+/ `assistant_enabled` 服务端开关语义不变。阶段八追加 `selectionMatches`
+（选中即高亮全部匹配，默认开，同一通道生效）。
 
 ## 6. 阶段划分与验收
 
@@ -155,8 +165,9 @@ per-tab 维护 `{ filePath, buffer, baseMd5, dirty, stale, cursor/scroll }`，
 | 五：格式化 | `format-latex` 端点 + 工具栏/快捷键入口 | 格式化结果只进缓冲区不落盘；Ctrl+Z 可完整撤销；viewer 禁用 |
 | 六：KaTeX 悬停 | hover tooltip + katex 动态分块 | 悬停渲染正确；首屏零 katex 加载；开关生效；`THIRD_PARTY_NOTICES.md` 更新 |
 | 七：错误跳转 | 日志栈解析纯模块 + 右栏错误列表 + tab 联动 | 子文件错误跳转正确；歧义回落标低置信；解析模块单测覆盖 |
+| 八：Notepad++ 借鉴包 | 修改行色条（changeHistoryDiff + changeHistory 扩展）、底部状态栏（stats + EditorStatusBar）、selectionMatches 偏好、会话持久化升级 localStorage（v2 载荷 + 遗留收养） | 橙标随键入/撤回精确进出，保存后转绿标；dirty 改按内容比对（撤回保存点清脏）；字数状态栏键入只重渲染状态栏；选中高亮开关即时生效；重启浏览器恢复脏缓冲区且色条基线正确；四组纯模块/字段单测覆盖 |
 
-阶段一必须独立先行（改动面最深）；二至七相互无依赖，可按序推进。
+阶段一必须独立先行（改动面最深）；二至八相互无依赖，可按序推进。
 
 ## 7. 全局约束（每阶段适用）
 

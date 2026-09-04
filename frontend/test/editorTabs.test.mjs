@@ -7,6 +7,8 @@ import {
   activeBuffer,
   activeDirty,
   activeFilePath,
+  activeOpenedBuffer,
+  activeSavedBuffer,
   closeTabReducer,
   countDirtyTabs,
   createTabRecord,
@@ -44,12 +46,14 @@ function sessionWithTwo() {
   return s;
 }
 
-test("createTabRecord 初始为干净且不陈旧", () => {
+test("createTabRecord 初始为干净且不陈旧（保存/打开基线从缓冲区起步）", () => {
   assert.deepEqual(
     createTabRecord({ filePath: "a.tex", buffer: "x", baseMd5: "m" }),
     {
       filePath: "a.tex",
       buffer: "x",
+      savedBuffer: "x",
+      openedBuffer: "x",
       baseMd5: "m",
       dirty: false,
       stale: false,
@@ -87,6 +91,9 @@ test("openTabReducer 对已存在 tab 以磁盘内容覆盖并复位脏/陈旧�
   const tab = findTab(s, "b.tex");
   assert.equal(tab.stale, false);
   assert.equal(tab.baseMd5, "m-b2");
+  // 重拉即「回到磁盘真实内容」：保存/打开基线一并复位（阶段八）
+  assert.equal(tab.savedBuffer, "B-disk");
+  assert.equal(tab.openedBuffer, "B-disk");
   assert.deepEqual(
     s.tabs.map((t) => t.filePath),
     ["a.tex", "b.tex"],
@@ -104,7 +111,7 @@ test("activateTabReducer 切换激活位并刷新 lastActive；不存在时原�
   assert.equal(same, s);
 });
 
-test("setTabBufferReducer 只写激活 tab 并置脏；无激活 tab 时原样返回", () => {
+test("setTabBufferReducer 只写激活 tab 并按保存基线重算脏；无激活 tab 时原样返回", () => {
   let s = sessionWithTwo();
   s = activateTabReducer(s, "a.tex", 3);
   s = setTabBufferReducer(s, "A1", 4);
@@ -112,6 +119,9 @@ test("setTabBufferReducer 只写激活 tab 并置脏；无激活 tab 时原样�
   assert.equal(getTabBuffer(s, "b.tex"), "B");
   assert.equal(activeDirty(s), true);
   assert.equal(findTab(s, "a.tex").lastActive, 4);
+  // 撤回到保存点内容（buffer === savedBuffer）→ 自动清脏（阶段八）
+  s = setTabBufferReducer(s, "A", 5);
+  assert.equal(activeDirty(s), false);
   const empty = { tabs: [], activeTabPath: null };
   assert.equal(setTabBufferReducer(empty, "x", 1), empty);
 });
@@ -218,6 +228,33 @@ test("activeFilePath / getActiveTab 对空会话安全回落", () => {
   assert.equal(activeBuffer(empty), "");
   assert.equal(activeBaseMd5(empty), null);
   assert.equal(activeDirty(empty), false);
+  assert.equal(activeSavedBuffer(empty), null);
+  assert.equal(activeOpenedBuffer(empty), null);
+});
+
+test("保存回写推进 savedBuffer 基线：橙色（未保存）→ 绿色（已保存）分界", () => {
+  let s = sessionWithTwo(); // a.tex buffer/saved/opened 均为 "A"
+  s = activateTabReducer(s, "a.tex", 3);
+  s = setTabBufferReducer(s, "A1\nA2", 4); // 脏：buffer ≠ saved("A")
+  assert.equal(findTab(s, "a.tex").savedBuffer, "A");
+  assert.equal(findTab(s, "a.tex").openedBuffer, "A");
+  // 保存成功：savedBuffer 推进为保存快照
+  s = markTabSavedReducer(s, {
+    filePath: "a.tex",
+    md5: "m2",
+    savedBuffer: "A1\nA2",
+  });
+  let tab = findTab(s, "a.tex");
+  assert.equal(tab.savedBuffer, "A1\nA2");
+  assert.equal(tab.dirty, false);
+  // 打开基线不动：绿色集合（相对 opened 的差异）由色条扩展计算
+  assert.equal(tab.openedBuffer, "A");
+  // savedBuffer 快照缺失（旧调用方防御）：以当前缓冲区为基线
+  s = setTabBufferReducer(s, "A9", 5);
+  s = markTabSavedReducer(s, { filePath: "a.tex", md5: "m3" });
+  tab = findTab(s, "a.tex");
+  assert.equal(tab.savedBuffer, "A9");
+  assert.equal(tab.dirty, false);
 });
 
 test("planTabSave 前置决策矩阵：脏/干净/缺失/冲突待决", () => {

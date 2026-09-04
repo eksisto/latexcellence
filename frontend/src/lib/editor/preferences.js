@@ -20,6 +20,8 @@ export const EDITOR_PREFERENCES_DEFAULTS = Object.freeze({
   autoCloseEnv: true,
   /** KaTeX 公式悬停预览：默认开启（editor v2 决策 Q18/Q9，阶段六） */
   formulaHover: true,
+  /** 选中即高亮全部匹配：默认开启（阶段八，借鉴 Notepad++ 智能高亮） */
+  selectionMatches: true,
   /** 编辑器字号（px） */
   fontSize: 14,
 });
@@ -56,7 +58,7 @@ export function isValidFontSize(value) {
  * 按字段白名单清洗偏好输入：仅接受类型合法的字段，其余静默丢弃；
  * 输出整体覆盖当前切片（不合并未知键）。
  * @param {Record<string, unknown>|null|undefined} input 待清洗的偏好对象
- * @returns {{autoSave: boolean, softWrap: boolean, autoCloseEnv: boolean, formulaHover: boolean, fontSize: number}}
+ * @returns {{autoSave: boolean, softWrap: boolean, autoCloseEnv: boolean, formulaHover: boolean, selectionMatches: boolean, fontSize: number}}
  */
 export function sanitizePreferences(input) {
   if (!input || typeof input !== "object") {
@@ -80,7 +82,7 @@ export function sanitizePreferences(input) {
 
 /**
  * 序列化偏好为导出载荷文本（pretty-print JSON，§11）。
- * @param {{autoSave: boolean, softWrap: boolean, autoCloseEnv: boolean, formulaHover: boolean, fontSize: number}} prefs
+ * @param {{autoSave: boolean, softWrap: boolean, autoCloseEnv: boolean, formulaHover: boolean, selectionMatches: boolean, fontSize: number}} prefs
  * @returns {string}
  */
 export function serializePreferences(prefs) {
@@ -104,7 +106,7 @@ export function serializePreferences(prefs) {
  *   - prefs 内非法字段经 sanitizePreferences 静默丢弃（§11）
  *
  * @param {string} text 用户提供的 JSON 文本
- * @returns {{ok: true, prefs: {autoSave: boolean, softWrap: boolean, autoCloseEnv: boolean, formulaHover: boolean, fontSize: number}}
+ * @returns {{ok: true, prefs: {autoSave: boolean, softWrap: boolean, autoCloseEnv: boolean, formulaHover: boolean, selectionMatches: boolean, fontSize: number}}
  *           | {ok: false, reason: "invalid_json"|"invalid_kind"|"unsupported_version"|"invalid_payload"}}
  */
 export function parsePreferencesImport(text) {

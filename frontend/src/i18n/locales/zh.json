@@ -1736,6 +1736,11 @@
         "renderError": "公式渲染失败：LaTeX 语法可能有误"
       }
     },
+    "editorStatusBar": {
+      "cursor": "行 {{line}}，列 {{col}}",
+      "selected": "选中 {{count}} 字",
+      "docStats": "共 {{lines}} 行 · {{words}} 字"
+    },
     "conflictDialog": {
       "title": "保存冲突",
       "description": "文件已被其他窗口或浏览器修改，保存已被拒绝以避免覆盖他人改动。",
@@ -1756,6 +1761,8 @@
       "autoCloseEnvHint": "输入 \\begin{环境} 的右花括号后，自动补全对应的 \\end 行。",
       "formulaHover": "公式悬停预览",
       "formulaHoverHint": "鼠标停在公式上约半秒，弹出 KaTeX 渲染的公式预览。",
+      "selectionMatches": "选中高亮全部匹配",
+      "selectionMatchesHint": "选中文字后高亮全文相同片段，便于核对 \\label 与 \\ref 的对应。",
       "fontSize": "字号",
       "transferTitle": "偏好迁移",
       "export": "导出 JSON",

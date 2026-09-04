@@ -28,6 +28,14 @@
  *     撤销分属两层（方案 §8）；
  *   - Ctrl/Cmd+S 不在编辑器键映射内绑定：由页面级 window 监听统一拦截
  *     （焦点在编辑器内外行为一致，且避免双重触发），本组件只负责呈现；
+ *   - 修改行色条（阶段八，借鉴 Notepad++ Change History）：基线经 props
+ *     （savedText/openedText）同步进 changeHistoryField（效果 dispatch，
+ *     集合在事务内重算），渲染用行装饰左侧内阴影条，零 gutter 列；
+ *   - 底部状态栏统计（阶段八）：光标/选区/行数即时发布、字数尾随防抖，
+ *     经 statsHub（发布-订阅）直通 EditorStatusBar，不经过页面 React 树；
+ *   - 选中即高亮全部匹配（阶段八，selectionMatches 偏好）：@codemirror/
+ *     search 的 highlightSelectionMatches 按偏好挂载（BASIC_SETUP 常驻
+ *     false，避免模块级单例随偏好变化），切换经换档失配重建生效到各 tab；
  *   - 高亮配色复用全局 --code-token-* 变量、底色复用主题变量，
  *     亮/暗主题切换零 JS 参与。
  */
@@ -43,6 +51,7 @@ import CodeMirror, { getDefaultExtensions } from "@uiw/react-codemirror";
 import { EditorView } from "@codemirror/view";
 import { EditorState } from "@codemirror/state";
 import { HighlightStyle, syntaxHighlighting } from "@codemirror/language";
+import { highlightSelectionMatches } from "@codemirror/search";
 import { tags as t } from "@lezer/highlight";
 
 import { latexLanguageExtension } from "@/lib/editor/language";
@@ -52,6 +61,13 @@ import { wrapKeymapExtension } from "@/lib/editor/wrap";
 import { autoCloseEnvExtension } from "@/lib/editor/beginClose";
 import { formulaHoverExtension } from "@/lib/editor/formulaHover";
 import { createSearchPanelExtension } from "@/lib/editor/searchPanel";
+import {
+  changeHistoryExtension,
+  getChangeBaselines,
+  setOpenedTextEffect,
+  setSavedTextEffect,
+} from "@/lib/editor/changeHistory";
+import { countDocStats } from "@/lib/editor/stats";
 import tabViewRegistry from "@/lib/editor/tabViews";
 import i18n from "@/i18n";
 import { cn } from "@/lib/utils";
@@ -132,6 +148,18 @@ const SEARCH_PANEL = createSearchPanelExtension({
   translate: (key) => i18n.t(key),
 });
 
+/** 修改行色条扩展组（模块级单例：字段/插件对象稳定，重配置零副作用） */
+const CHANGE_HISTORY = changeHistoryExtension();
+
+/** 选中即高亮全部匹配（模块级单例；按 selectionMatches 偏好条件挂载） */
+const SELECTION_MATCHES = highlightSelectionMatches({
+  minSelectionLength: 2,
+  maxMatches: 100,
+});
+
+/** 状态栏字数统计的尾随防抖（大文档逐键全量统计不可取） */
+const DOC_STATS_DEBOUNCE_MS = 250;
+
 /**
  * @param {object} props
  * @param {string} props.value                 激活 tab 的缓冲区全文
@@ -144,6 +172,14 @@ const SEARCH_PANEL = createSearchPanelExtension({
  *   （autoCloseEnv 偏好；经 ref 读取，切换无须重配置扩展）
  * @param {boolean} [props.formulaHover=true]  KaTeX 公式悬停预览开关
  *   （formulaHover 偏好，阶段六；经 ref 读取，切换无须重配置扩展）
+ * @param {string|null} [props.savedText=null] 激活 tab 的保存内容基线
+ *   （tab.savedBuffer，阶段八色条橙基线；null = 无基线不显示色条）
+ * @param {string|null} [props.openedText=null] 激活 tab 的打开内容基线
+ *   （tab.openedBuffer，阶段八色条绿基线）
+ * @param {boolean} [props.selectionMatches=true] 选中即高亮全部匹配
+ *   （阶段八偏好；换档失配重建生效到各存档 tab）
+ * @param {object|null} [props.statsHub=null]  状态栏统计 hub
+ *   （lib/editor/stats.js 发布-订阅；缺省不发布）
  * @param {(view: EditorView) => void} [props.onCreateEditor]
  *   CM6 视图实例回调（命令面板等外部插入入口经此持有视图）
  * @param {(entry: object) => void} [props.onCompletionApply]
@@ -161,6 +197,10 @@ export default function LaTeXEditor({
   readOnly = false,
   autoCloseEnv = true,
   formulaHover = true,
+  savedText = null,
+  openedText = null,
+  selectionMatches = true,
+  statsHub = null,
   onCreateEditor,
   onCompletionApply,
   getRefSymbols,
@@ -195,6 +235,56 @@ export default function LaTeXEditor({
   useLayoutEffect(() => {
     formulaHoverRef.current = formulaHover;
   }, [formulaHover]);
+
+  // statsHub 经 ref 供扩展内 update listener 在事务时刻读取（hub 身份
+  // 稳定，防御调用方未来改为动态创建时触发扩展重配置）
+  const statsHubRef = useRef(statsHub);
+  useLayoutEffect(() => {
+    statsHubRef.current = statsHub;
+  }, [statsHub]);
+
+  /** 文档统计缓存：字数经尾随防抖刷新，光标/行数发布时即时取值 */
+  const docWordsCacheRef = useRef({ words: 0 });
+  const docStatsTimerRef = useRef(null);
+
+  /** 发布一次状态栏快照（全数值，hub 内浅比较去重） */
+  const publishStats = useCallback((state) => {
+    const hub = statsHubRef.current;
+    if (!hub) return;
+    const sel = state.selection.main;
+    const headLine = state.doc.lineAt(sel.head);
+    hub.publish({
+      line: headLine.number,
+      col: sel.head - headLine.from + 1,
+      selectedChars: sel.to - sel.from,
+      lines: state.doc.lines,
+      words: docWordsCacheRef.current.words,
+    });
+  }, []);
+
+  /** 字数尾随防抖：停改 250ms 后全量统计并补发一次快照 */
+  const scheduleDocStats = useCallback(() => {
+    if (docStatsTimerRef.current !== null) return;
+    docStatsTimerRef.current = window.setTimeout(() => {
+      docStatsTimerRef.current = null;
+      const view = viewRef.current;
+      if (!view || view.destroyed) return;
+      docWordsCacheRef.current = {
+        words: countDocStats(view.state.doc.toString()).totalWords,
+      };
+      publishStats(view.state);
+    }, DOC_STATS_DEBOUNCE_MS);
+  }, [publishStats]);
+
+  // 卸载清理防抖定时器
+  useEffect(
+    () => () => {
+      if (docStatsTimerRef.current !== null) {
+        window.clearTimeout(docStatsTimerRef.current);
+      }
+    },
+    [],
+  );
 
   const handleDocChange = useCallback((nextValue) => {
     if (switchGuardRef.current) return;
@@ -231,17 +321,34 @@ export default function LaTeXEditor({
       }),
       // 查找替换面板主题化 + 面板文案三语（editor v2 阶段二）
       SEARCH_PANEL.extension,
+      // 修改行色条（阶段八）：基线经 setSavedText/setOpenedText 效果注入
+      CHANGE_HISTORY,
+      // 选中即高亮全部匹配（阶段八偏好；模块级单例条件挂载）
+      ...(selectionMatches ? [SELECTION_MATCHES] : []),
       // 自有 doc listener：换档后视图 state 不含包装层内部 listener，
-      // doc 变更回写 store 统一走本入口（详见 handleDocChange 去重）
+      // doc 变更回写 store 统一走本入口（详见 handleDocChange 去重）；
+      // 状态栏统计同 listener 发布（docChanged 走字数防抖）
       EditorView.updateListener.of((update) => {
         if (update.docChanged) {
           handleDocChange(update.state.doc.toString());
+          scheduleDocStats();
+        }
+        if (statsHubRef.current && (update.docChanged || update.selectionSet)) {
+          publishStats(update.state);
         }
       }),
     ];
     if (softWrap) base.push(EditorView.lineWrapping);
     return base;
-  }, [softWrap, onCompletionApply, handleDocChange, getRefSymbols]);
+  }, [
+    softWrap,
+    selectionMatches,
+    onCompletionApply,
+    handleDocChange,
+    scheduleDocStats,
+    publishStats,
+    getRefSymbols,
+  ]);
 
   /* ── 界面语言切换：热更新查找面板短语（phrases facet 依赖语言字段） ── */
   useEffect(() => {
@@ -308,7 +415,11 @@ export default function LaTeXEditor({
       return;
     }
     // 收起旧 tab：完整 EditorState（撤销历史/选区）入登记表并记忆滚动
-    tabViewRegistry.setState(prevKey, view.state, { softWrap, readOnly });
+    tabViewRegistry.setState(prevKey, view.state, {
+      softWrap,
+      readOnly,
+      selectionMatches,
+    });
     tabViewRegistry.setScroll(prevKey, view.scrollDOM.scrollTop);
     switchGuardRef.current = true;
     try {
@@ -318,14 +429,19 @@ export default function LaTeXEditor({
         !state ||
         state.doc.toString() !== value ||
         config?.softWrap !== softWrap ||
-        config?.readOnly !== readOnly
+        config?.readOnly !== readOnly ||
+        config?.selectionMatches !== selectionMatches
       ) {
         // 无存档，或存档与 store 缓冲区/外观失配（外部整缓冲区替换、
         // 偏好变更后未经过换档）→ 按当前缓冲区重建（撤销历史复位）
         state = buildState(value);
         tabViewRegistry.setScroll(activeKey, 0);
       }
-      tabViewRegistry.setState(activeKey, state, { softWrap, readOnly });
+      tabViewRegistry.setState(activeKey, state, {
+        softWrap,
+        readOnly,
+        selectionMatches,
+      });
       view.setState(state);
     } finally {
       switchGuardRef.current = false;
@@ -339,10 +455,75 @@ export default function LaTeXEditor({
     value,
     softWrap,
     readOnly,
+    selectionMatches,
     extensions,
     buildState,
     restoreScroll,
   ]);
+
+  /* ── 修改行色条基线同步（阶段八）：tab 激活（换档/重建）与保存回写
+     （store 的 savedBuffer 变化）时对齐当前视图的基线字段；与字段现值
+     相同则跳过 dispatch（键入期间 props 恒定，零额外事务）。
+     注意：@uiw 包装层的 CM6 视图在挂载后异步创建（onCreateEditor 晚于
+     本组件首个 passive effect），挂载期 effect 会因 view 未就绪空转——
+     因此 onCreateEditor 回调里必须补跑一次，见 handleEditorCreated ── */
+  const syncBaselinesFor = useCallback((view, key, saved, opened) => {
+    if (!view || view.destroyed) return;
+    const current = getChangeBaselines(view.state);
+    if (
+      current &&
+      current.savedText === saved &&
+      current.openedText === opened
+    ) {
+      return;
+    }
+    view.dispatch({
+      effects: [setSavedTextEffect.of(saved), setOpenedTextEffect.of(opened)],
+    });
+  }, []);
+
+  const baselinePropsRef = useRef({ activeKey, savedText, openedText });
+  useLayoutEffect(() => {
+    baselinePropsRef.current = { activeKey, savedText, openedText };
+  });
+
+  useEffect(() => {
+    syncBaselinesFor(viewRef.current, activeKey, savedText, openedText);
+  }, [activeKey, savedText, openedText, syncBaselinesFor]);
+
+  /* ── 状态栏统计对齐（阶段八）：首装 / 换档 / 外部整缓冲区替换后同步
+     计算一次字数并立即发布（不等防抖）；挂载期由 handleEditorCreated
+     补跑（视图晚于首个 passive effect 就绪，同基线同步） ───────────── */
+  useEffect(() => {
+    const view = viewRef.current;
+    if (!view || view.destroyed || !statsHubRef.current) return;
+    docWordsCacheRef.current = {
+      words: countDocStats(view.state.doc.toString()).totalWords,
+    };
+    publishStats(view.state);
+  }, [activeKey, publishStats]);
+
+  /** CM6 视图就绪回调：补跑挂载期因视图未就绪而空转的一次性对齐 */
+  const handleEditorCreated = useCallback(
+    (view) => {
+      viewRef.current = view;
+      const props = baselinePropsRef.current;
+      syncBaselinesFor(
+        view,
+        props.activeKey,
+        props.savedText,
+        props.openedText,
+      );
+      if (statsHubRef.current) {
+        docWordsCacheRef.current = {
+          words: countDocStats(view.state.doc.toString()).totalWords,
+        };
+        publishStats(view.state);
+      }
+      onCreateEditor?.(view);
+    },
+    [onCreateEditor, syncBaselinesFor, publishStats],
+  );
 
   /* ── 外部整缓冲区替换（冲突放弃重载 / 后端撤销刷新）：重建激活 tab ── */
   useLayoutEffect(() => {
@@ -351,7 +532,11 @@ export default function LaTeXEditor({
     if (currentKeyRef.current !== activeKey) return; // 换档 effect 负责
     if (view.state.doc.toString() === value) return; // 键入回显，已同步
     const state = buildState(value);
-    tabViewRegistry.setState(activeKey, state, { softWrap, readOnly });
+    tabViewRegistry.setState(activeKey, state, {
+      softWrap,
+      readOnly,
+      selectionMatches,
+    });
     tabViewRegistry.setScroll(activeKey, 0);
     switchGuardRef.current = true;
     try {
@@ -360,7 +545,7 @@ export default function LaTeXEditor({
       switchGuardRef.current = false;
     }
     lastSyncedRef.current = value;
-  }, [activeKey, value, softWrap, readOnly, buildState]);
+  }, [activeKey, value, softWrap, readOnly, selectionMatches, buildState]);
 
   return (
     <div
@@ -370,10 +555,7 @@ export default function LaTeXEditor({
       <CodeMirror
         value={value}
         onChange={handleDocChange}
-        onCreateEditor={(view) => {
-          viewRef.current = view;
-          onCreateEditor?.(view);
-        }}
+        onCreateEditor={handleEditorCreated}
         extensions={extensions}
         editable={!readOnly}
         readOnly={readOnly}

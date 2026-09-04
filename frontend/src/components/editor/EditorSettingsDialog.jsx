@@ -57,11 +57,13 @@ export default function EditorSettingsDialog({ open, onOpenChange }) {
     autoSave,
     autoCloseEnv,
     formulaHover,
+    selectionMatches,
     fontSize,
     setSoftWrap,
     setAutoSave,
     setAutoCloseEnv,
     setFormulaHover,
+    setSelectionMatches,
     setFontSize,
     applyPreferences,
   } = useEditorStore(
@@ -70,11 +72,13 @@ export default function EditorSettingsDialog({ open, onOpenChange }) {
       autoSave: s.autoSave,
       autoCloseEnv: s.autoCloseEnv,
       formulaHover: s.formulaHover,
+      selectionMatches: s.selectionMatches,
       fontSize: s.fontSize,
       setSoftWrap: s.setSoftWrap,
       setAutoSave: s.setAutoSave,
       setAutoCloseEnv: s.setAutoCloseEnv,
       setFormulaHover: s.setFormulaHover,
+      setSelectionMatches: s.setSelectionMatches,
       setFontSize: s.setFontSize,
       applyPreferences: s.applyPreferences,
     })),
@@ -93,6 +97,7 @@ export default function EditorSettingsDialog({ open, onOpenChange }) {
           softWrap: prefs.softWrap,
           autoCloseEnv: prefs.autoCloseEnv,
           formulaHover: prefs.formulaHover,
+          selectionMatches: prefs.selectionMatches,
           fontSize: prefs.fontSize,
         }),
       ],
@@ -195,6 +200,22 @@ export default function EditorSettingsDialog({ open, onOpenChange }) {
           </div>
           <p className="-mt-2 text-xs text-muted-foreground">
             {t("components:editorSettings.formulaHoverHint")}
+          </p>
+
+          <div className="flex items-center justify-between gap-4">
+            <Label htmlFor="editor-selection-matches" className="text-sm">
+              {t("components:editorSettings.selectionMatches")}
+            </Label>
+            <Switch
+              id="editor-selection-matches"
+              checked={selectionMatches}
+              onCheckedChange={(checked) =>
+                setSelectionMatches(checked === true)
+              }
+            />
+          </div>
+          <p className="-mt-2 text-xs text-muted-foreground">
+            {t("components:editorSettings.selectionMatchesHint")}
           </p>
 
           <div className="flex items-center justify-between gap-4">

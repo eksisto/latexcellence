@@ -29,21 +29,22 @@ import {
 import tabViewRegistry from "@/lib/editor/tabViews";
 import {
   clearSession,
-  loadSession,
+  loadSessionAdoptingLegacy,
   saveSession,
 } from "@/lib/editor/sessionPersistence";
 import { projectSymbolCache } from "@/lib/editor/latexSymbols";
 
 /** 自动保存停改阈值：停止编辑该时长后落盘（editor-productivity-plan Q15） */
 const AUTO_SAVE_DELAY_MS = 2500;
-/** 会话持久化防抖：键入高频变更合并写入 sessionStorage（pagehide 兜底 flush） */
+/** 会话持久化防抖：键入高频变更合并写入 localStorage（pagehide 兜底 flush） */
 const SESSION_PERSIST_DEBOUNCE_MS = 1000;
 
 /**
  * 编辑器多缓冲区管理（editor-productivity-plan §5.1，阶段一）：
  * 打开 / 激活 / 关闭（脏三选）/ 保存（MD5 乐观锁，per-tab）/ 冲突快照门闩 /
  * Ctrl+S / beforeunload / per-tab 自动保存 / 陈旧检测 / 全部保存 /
- * URL ?file= 驱动 / sessionStorage 刷新恢复 / 项目切换守卫。
+ * URL ?file= 驱动 / localStorage 刷新恢复（阶段八升级，含 sessionStorage
+ * 遗留迁移）/ 项目切换守卫。
  *
  * A2 渲染解耦：本 hook 不订阅缓冲区内容（content/dirty 的组件级订阅会让
  * 宿主页随每次按键重渲染），beforeunload / 自动保存 / 冲突快照门闩 /
@@ -531,15 +532,21 @@ export default function useEditorBuffer({
     [doReloadTab, t],
   );
 
-  /* ── sessionStorage 刷新恢复（Q14） ─────────────────────────────── */
+  /* ── 会话恢复（Q14，阶段八升级 localStorage）：主存 localStorage，
+     升级前的 sessionStorage 遗留载荷自动收养迁移 ──────────────────── */
   useEffect(() => {
     if (!hydrated || !isOpened || fileTree.length === 0) return;
     if (sessionRestoredRef.current) return;
     sessionRestoredRef.current = true;
-    const result = loadSession(window.sessionStorage, projectKeyRef.current);
+    const result = loadSessionAdoptingLegacy(
+      window.localStorage,
+      window.sessionStorage,
+      projectKeyRef.current,
+    );
     if (!result.ok || result.tabs.length === 0) return;
-    // 恢复全部 tab 集合（含脏缓冲区全文 + baseMd5）；URL ?file= 指定者的
-    // 激活由 EditorPage 的 URL effect 合并（恢复结果与 URL 参数取并集）
+    // 恢复全部 tab 集合（含脏缓冲区全文 + 保存基线 savedBuffer）；URL
+    // ?file= 指定者的激活由 EditorPage 的 URL effect 合并（恢复结果与
+    // URL 参数取并集）
     useEditorStore.getState().restoreSession({
       tabs: result.tabs,
       activeTabPath: result.activeTabPath,
@@ -549,7 +556,7 @@ export default function useEditorBuffer({
     );
   }, [hydrated, isOpened, fileTree.length, t]);
 
-  /* ── 会话持久化（防抖写 sessionStorage；pagehide / 隐藏兜底 flush） ── */
+  /* ── 会话持久化（防抖写 localStorage；pagehide / 隐藏兜底 flush） ── */
   useEffect(() => {
     let timer = null;
     const flush = () => {
@@ -559,7 +566,7 @@ export default function useEditorBuffer({
       }
       if (!projectKeyRef.current) return;
       const s = useEditorStore.getState();
-      const result = saveSession(window.sessionStorage, {
+      const result = saveSession(window.localStorage, {
         projectKey: projectKeyRef.current,
         tabs: s.tabs,
         activeTabPath: s.activeTabPath,
@@ -604,6 +611,8 @@ export default function useEditorBuffer({
       cur.resetSession();
     }
     tabViewRegistry.clear();
+    // 双存储清除：localStorage 主存 + 升级期可能的 sessionStorage 遗留
+    clearSession(window.localStorage);
     clearSession(window.sessionStorage);
     // 引用符号缓存按项目隔离：项目切换/关闭时清空（阶段四 / Q7）
     projectSymbolCache.clear();

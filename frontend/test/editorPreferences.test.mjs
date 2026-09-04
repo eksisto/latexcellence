@@ -17,6 +17,7 @@ test("默认偏好符合方案决策（autoSave 关、softWrap 开、autoCloseEn
     softWrap: true,
     autoCloseEnv: true,
     formulaHover: true,
+    selectionMatches: true,
     fontSize: 14,
   });
 });
@@ -35,6 +36,7 @@ test("sanitizePreferences 仅接受类型合法的字段", () => {
     softWrap: false,
     autoCloseEnv: false,
     formulaHover: false,
+    selectionMatches: true,
     fontSize: 18,
   });
   assert.equal("evilField" in cleaned, false);
@@ -51,6 +53,7 @@ test("sanitizePreferences 对非法值回落默认值而非丢弃整个对象", 
     softWrap: true,
     autoCloseEnv: true,
     formulaHover: true,
+    selectionMatches: true,
     fontSize: 14,
   });
 });
@@ -90,6 +93,7 @@ test("serializePreferences 输出 pretty-print 的 kind/version/prefs 载荷", (
       softWrap: false,
       autoCloseEnv: false,
       formulaHover: false,
+      selectionMatches: true,
       fontSize: 18,
     },
   });
@@ -123,6 +127,7 @@ test("parsePreferencesImport 接受合法导出载荷", () => {
       softWrap: true,
       autoCloseEnv: false,
       formulaHover: true,
+      selectionMatches: true,
       fontSize: 16,
     },
   });
@@ -201,6 +206,7 @@ test("parsePreferencesImport 静默丢弃非法字段、合法字段整体覆盖
     softWrap: true,
     autoCloseEnv: true,
     formulaHover: true,
+    selectionMatches: true,
     fontSize: 20,
   });
 });

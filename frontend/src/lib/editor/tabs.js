@@ -7,13 +7,17 @@
  *
  * 会话状态形状（session）：
  *   {
- *     tabs: [{ filePath, buffer, baseMd5, dirty, stale, lastActive }],
+ *     tabs: [{ filePath, buffer, savedBuffer, openedBuffer, baseMd5,
+ *              dirty, stale, lastActive }],
  *     activeTabPath: string | null,
  *   }
  *   - filePath：项目相对路径，tab 唯一键；
  *   - buffer：缓冲区全文（受控 value 的单一事实源）；
+ *   - savedBuffer：最近一次保存落盘的内容基线（保存快照回写，阶段八）；
+ *   - openedBuffer：本次会话打开时的原始内容基线（阶段八，仅内存态——
+ *     不进会话持久化，刷新恢复后回落为 savedBuffer）；
  *   - baseMd5：打开（或上次保存）时的磁盘 MD5，乐观锁基线；
- *   - dirty：缓冲区 ≠ baseMd5 对应磁盘内容；
+ *   - dirty：buffer ≠ savedBuffer（内容比对，Ctrl+Z 回到保存点即清脏）；
  *   - stale：磁盘已变更标记（激活时惰性 file-md5 比对不一致）；
  *   - lastActive：最近激活时刻（LRU 淘汰依据），由调用方传入时刻值。
  *
@@ -24,12 +28,15 @@
 /**
  * 构造单个 tab 记录。
  * @param {{filePath: string, buffer: string, baseMd5: string|null, now?: number}} input
- * @returns {{filePath: string, buffer: string, baseMd5: string|null, dirty: boolean, stale: boolean, lastActive: number}}
+ * @returns {{filePath: string, buffer: string, savedBuffer: string, openedBuffer: string, baseMd5: string|null, dirty: boolean, stale: boolean, lastActive: number}}
  */
 export function createTabRecord({ filePath, buffer, baseMd5, now = 0 }) {
   return {
     filePath,
     buffer,
+    // 新开 tab 即保存基线与打开基线的起点（阶段八）
+    savedBuffer: buffer,
+    openedBuffer: buffer,
     baseMd5,
     dirty: false,
     stale: false,
@@ -74,6 +81,23 @@ export function activeDirty(session) {
   return getActiveTab(session)?.dirty ?? false;
 }
 
+/**
+ * 激活 tab 的保存内容基线（阶段八：修改行色条橙色基线；无激活 tab 或
+ * 基线缺失时 null——编辑器侧按「无基线」降级为不显示色条）。
+ * @returns {string|null}
+ */
+export function activeSavedBuffer(session) {
+  return getActiveTab(session)?.savedBuffer ?? null;
+}
+
+/**
+ * 激活 tab 的打开内容基线（阶段八：绿色基线，仅会话内存态）。
+ * @returns {string|null}
+ */
+export function activeOpenedBuffer(session) {
+  return getActiveTab(session)?.openedBuffer ?? null;
+}
+
 /** @returns {string} 指定 tab 的缓冲区全文（未找到时空串） */
 export function getTabBuffer(session, filePath) {
   return findTab(session, filePath)?.buffer ?? "";
@@ -105,12 +129,16 @@ export function openTabReducer(
   const existing = findTab(session, filePath);
   if (existing) {
     // 打开已有 tab：仅激活并刷新基线（调用方仅在首开 / 显式重拉时携带
-    // 服务端内容，正常切换文件树点击走 activateTabReducer）
+    // 服务端内容，正常切换文件树点击走 activateTabReducer）。
+    // 重拉即「回到磁盘真实内容」：保存基线与打开基线一并复位（阶段八），
+    // 修改行色条随之清零
     const tabs = session.tabs.map((tab) =>
       tab.filePath === filePath
         ? {
             ...tab,
             buffer,
+            savedBuffer: buffer,
+            openedBuffer: buffer,
             baseMd5,
             dirty: false,
             stale: false,
@@ -151,8 +179,10 @@ export function activateTabReducer(session, filePath, now) {
 }
 
 /**
- * 键入回写：更新激活 tab 的缓冲区并置脏、刷新 lastActive。
- * 无激活 tab 时原样返回原引用（与 v1 setBufferContent 的空转守卫一致）。
+ * 键入回写：更新激活 tab 的缓冲区并按保存基线重算脏标记、刷新 lastActive。
+ * 脏 = buffer ≠ savedBuffer（阶段八）：Ctrl+Z 撤回到保存点内容即自动清脏，
+ * 与修改行色条的语义一致。无激活 tab 时原样返回原引用（与 v1
+ * setBufferContent 的空转守卫一致）。
  * @param {{tabs: Array, activeTabPath: string|null}} session
  * @param {string} buffer CM6 回传的全文
  * @param {number} now
@@ -164,7 +194,12 @@ export function setTabBufferReducer(session, buffer, now) {
   return {
     tabs: session.tabs.map((t) =>
       t.filePath === active.filePath
-        ? { ...t, buffer, dirty: true, lastActive: now }
+        ? {
+            ...t,
+            buffer,
+            dirty: buffer !== t.savedBuffer,
+            lastActive: now,
+          }
         : t,
     ),
     activeTabPath: session.activeTabPath,
@@ -186,15 +221,18 @@ export function replaceTabBufferReducer(session, filePath, buffer) {
   if (!tab || tab.buffer === buffer) return session;
   return {
     tabs: session.tabs.map((t) =>
-      t.filePath === filePath ? { ...t, buffer, dirty: true } : t,
+      t.filePath === filePath
+        ? { ...t, buffer, dirty: buffer !== t.savedBuffer }
+        : t,
     ),
     activeTabPath: session.activeTabPath,
   };
 }
 
 /**
- * 保存成功回写：更新乐观锁基线、清除陈旧标记，并按保存快照重算脏标记
- * （在途期间有新输入 → 保持 dirty，避免"已保存"假象导致静默丢失）。
+ * 保存成功回写：更新乐观锁基线与保存内容基线（色条的橙色 → 绿色分界，
+ * 阶段八）、清除陈旧标记，并按保存快照重算脏标记（在途期间有新输入 →
+ * 保持 dirty，避免"已保存"假象导致静默丢失）。
  * @param {{tabs: Array, activeTabPath: string|null}} session
  * @param {{filePath: string, md5: string, savedBuffer?: string}} input
  * @returns {{tabs: Array, activeTabPath: string|null}}
@@ -206,6 +244,9 @@ export function markTabSavedReducer(session, { filePath, md5, savedBuffer }) {
         ? {
             ...t,
             baseMd5: md5,
+            // 保存快照缺失时以当前缓冲区为基线（防御旧调用方）
+            savedBuffer:
+              typeof savedBuffer === "string" ? savedBuffer : t.buffer,
             stale: false,
             dirty:
               typeof savedBuffer === "string"

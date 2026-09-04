@@ -18,7 +18,7 @@
  *   - 关闭：脏 tab 三选弹窗（保存并关闭 / 放弃改动 / 取消）；
  *   - 大纲（阶段三 / Q6）：左栏「大纲」tab 仅解析激活缓冲区，编辑防抖
  *     300ms 重扫、切换 tab 立即重扫，点击条目滚动到行首并高亮；
- *   - 刷新恢复：sessionStorage 恢复全部 tab（含脏缓冲区）+ toast；
+ *   - 刷新/重启恢复：localStorage 恢复全部 tab（含脏缓冲区，阶段八升级）+ toast；
  *     URL ?file= 指定者激活（恢复集合与 URL 参数合并）；
  *   - 编译联动（Q16）：编译前依次保存所有脏 tab，任一失败中断并切换
  *     到归属 tab 进入冲突/陈旧流程；
@@ -43,6 +43,7 @@ import {
   useCallback,
   useEffect,
   useLayoutEffect,
+  useMemo,
   useRef,
   useState,
 } from "react";
@@ -67,6 +68,7 @@ import FilePreviewOverlay from "@/components/editor/FilePreviewOverlay";
 import EditorRightPanel from "@/components/editor/EditorRightPanel";
 import FullscreenPDFPreview from "@/components/editor/FullscreenPDFPreview";
 import OutlinePanel from "@/components/editor/OutlinePanel";
+import EditorStatusBar from "@/components/editor/EditorStatusBar";
 
 import { EditorView } from "@codemirror/view";
 import FileCode from "lucide-react/dist/esm/icons/file-code.mjs";
@@ -75,6 +77,8 @@ import useStore from "@/store/useStore";
 import useEditorStore, {
   activeBuffer,
   activeFilePath,
+  activeOpenedBuffer,
+  activeSavedBuffer,
   findTab,
 } from "@/store/editorStore";
 import { api } from "@/api/index";
@@ -99,6 +103,7 @@ import {
   projectSymbolCache,
   reduceProjectKey,
 } from "@/lib/editor/latexSymbols";
+import { createStatsHub } from "@/lib/editor/stats";
 import { getCommandZhDisplay } from "@/lib/editor/commandZh";
 import i18n from "@/i18n";
 
@@ -111,13 +116,23 @@ import i18n from "@/i18n";
  * 多缓冲区换档（activeKey 变化时的 EditorState 交换）在 LaTeXEditor
  * 内部完成，激活 tab 的 content 仍经本层单点订阅流入 CM6。
  */
-function SessionEditor({ readOnly, onCreateEditor, onCompletionApply }) {
+function SessionEditor({
+  readOnly,
+  statsHub,
+  onCreateEditor,
+  onCompletionApply,
+}) {
   const buffer = useEditorStore(activeBuffer);
   const activeTabPath = useEditorStore((s) => s.activeTabPath);
   const softWrap = useEditorStore((s) => s.softWrap);
   const fontSize = useEditorStore((s) => s.fontSize);
   const autoCloseEnv = useEditorStore((s) => s.autoCloseEnv);
   const formulaHover = useEditorStore((s) => s.formulaHover);
+  // 修改行色条基线（阶段八）：保存基线随 markTabSaved 变化（橙→绿分界），
+  // 打开基线仅会话内存态；字符串按值比较，键入期间不会触发重渲染
+  const savedText = useEditorStore(activeSavedBuffer);
+  const openedText = useEditorStore(activeOpenedBuffer);
+  const selectionMatches = useEditorStore((s) => s.selectionMatches);
   const setBufferContent = useEditorStore((s) => s.setBufferContent);
   // 引用补全（阶段四 / Q7）：项目符号缓存读取器。缓存以项目为键
   // （单用户 projectPath / 多用户 projectId），首次触发补全时经
@@ -143,6 +158,10 @@ function SessionEditor({ readOnly, onCreateEditor, onCompletionApply }) {
       readOnly={readOnly}
       autoCloseEnv={autoCloseEnv}
       formulaHover={formulaHover}
+      savedText={savedText}
+      openedText={openedText}
+      selectionMatches={selectionMatches}
+      statsHub={statsHub}
       onCreateEditor={onCreateEditor}
       onCompletionApply={onCompletionApply}
       getRefSymbols={getRefSymbols}
@@ -193,6 +212,10 @@ export default function EditorPage() {
 
   // ── CM6 视图实例 ────────────────────────────────────────────────
   const editorViewRef = useRef(null);
+
+  // ── 状态栏统计 hub（阶段八）：LaTeXEditor 发布 / EditorStatusBar 订阅，
+  //    统计状态不经过页面 React 树（键入只重渲染状态栏自身） ──────────
+  const statsHub = useMemo(() => createStatsHub(), []);
 
   /* ── 缓冲区管理（打开/激活 / 保存 / 冲突 / 自动保存 / 关闭三选 /
      陈旧检测 / 刷新恢复 / 项目切换守卫） ─────────────────────────── */
@@ -275,7 +298,7 @@ export default function EditorPage() {
 
   const closeFilePreview = useCallback(() => setFilePreviewPath(null), []);
 
-  /* ── URL ?file= 参数驱动打开（打开/激活；与 sessionStorage 恢复合并：
+  /* ── URL ?file= 参数驱动打开（打开/激活；与会话恢复集合合并：
      恢复全部 tab 集合，?file= 指定者激活，§4） ───────────────────── */
   const requestedFile = searchParams.get("file");
   useEffect(() => {
@@ -738,12 +761,16 @@ export default function EditorPage() {
                 onRequestCloseTab={requestCloseTab}
                 onSaveAll={() => doSaveAllDirty()}
               />
-              <div className="min-h-0 flex-1">
-                <SessionEditor
-                  readOnly={readOnly}
-                  onCreateEditor={handleCreateEditor}
-                  onCompletionApply={handleCompletionApplyEntry}
-                />
+              <div className="flex min-h-0 flex-1 flex-col">
+                <div className="min-h-0 flex-1">
+                  <SessionEditor
+                    readOnly={readOnly}
+                    statsHub={statsHub}
+                    onCreateEditor={handleCreateEditor}
+                    onCompletionApply={handleCompletionApplyEntry}
+                  />
+                </div>
+                <EditorStatusBar hub={statsHub} />
               </div>
             </>
           ) : (

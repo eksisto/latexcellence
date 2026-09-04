@@ -2,9 +2,10 @@
 
 > 设计依据：[docs/editor-plan.md](../editor-plan.md)（含 grilling 决策记录
 > Q1–Q26）与 [docs/editor-productivity-plan.md](../editor-productivity-plan.md)
-> （editor v2，七个阶段均已实施：阶段一多缓冲区基座、阶段二编辑基本功包、
+> （editor v2，八个阶段均已实施：阶段一多缓冲区基座、阶段二编辑基本功包、
 > 阶段三大纲面板、阶段四引用补全、阶段五一键格式化、阶段六 KaTeX 公式
-> 悬停预览与阶段七编译错误列表与跨文件跳转）。
+> 悬停预览、阶段七编译错误列表与跨文件跳转，以及阶段八修改行色条 /
+> 状态栏 / 选中高亮匹配 / 会话持久化升级 localStorage，借鉴 Notepad++）。
 
 ## 设计概述
 
@@ -398,6 +399,58 @@ activeTabPath 换档（EditorState 交换）完成后执行，打开失败时清
   日志（如无限循环输出）拖垮右栏渲染；未以 `l.N` 收尾的错误块丢弃
   （无行号不可跳转）。
 
+### 修改行色条与状态栏（editor-productivity-plan §5.3，阶段八；借鉴 Notepad++）
+
+**修改行色条**（借鉴 Notepad++ 8.4.6 的 Change History margin）：编辑区
+行左侧以内阴影色条标记修改行——**琥珀色** = 相对保存基线有未保存修改的
+行，**翠绿色** = 本会话改过且已保存的行，橙色优先于绿色；行号集合随
+事务重算，`Ctrl+Z` 撤回到保存点时橙标精确清零（与脏标记语义一致）。
+渲染用 `Decoration.line` 零 gutter 列实现，不挤压代码区。
+
+- **基线数据**：tab 记录新增 `savedBuffer`（最近保存落盘的内容，保存
+  快照回写推进）与 `openedBuffer`（本次会话打开时的原始内容，仅会话
+  内存态、不持久化）；`dirty` 同步改为内容比对 `buffer !== savedBuffer`
+  （键入后撤回到保存内容即自动清脏，关闭弹窗 / 自动保存 / beforeunload
+  联动受益）。
+- **行级 diff**（纯模块 `lib/editor/changeHistoryDiff.js`，node --test
+  单测）：全文相同直通 → 公共前后缀剪除 → 中段 Myers O(ND) 回溯收
+  集变更行；纯删除块不标（after 侧无对应行，对齐 Notepad++）。防退化
+  护栏：中段超行数上限或 Myers 步数预算超支时整段标记（整文档格式化
+  等全量替换场景结果正确、开销有界）。
+- **CM6 扩展**（`lib/editor/changeHistory.js`）：`changeHistoryField`
+  持有基线文本与行号集合，基线经 `setSavedTextEffect` /
+  `setOpenedTextEffect` 由 LaTeXEditor 随 tab 激活（换档/重建）与保存
+  回写同步注入。性能取舍：橙色集每次键入全量重算（剪除后开销可忽略）；
+  绿色集为「保存时冻结」模型——冻结集仅在基线效果触发时重建，展示集 =
+  冻结集 − 橙色集派生，已保存行被再编辑转橙后撤回可恢复绿标。已知近似：
+  键入期间冻结绿集行号不随上方插入/删除漂移（越界行过滤），下次保存 /
+  换档时精确重建；无保存基线时（v1 载荷恢复降级）不显示色条。
+
+**底部状态栏**（借鉴 Notepad++ 状态栏）：中栏编辑器下方常驻条展示光标
+行列、选区字数（有选区时）与全文行数 / 字数；字数口径为 CJK 汉字逐字 +
+西文词连续段（`lib/editor/stats.js` 纯模块，LaTeX 命令按原文近似统计，
+定位为粗略参考）。统计经 `createStatsHub` 发布-订阅直通
+`EditorStatusBar`（useSyncExternalStore 订阅），不经过页面 React 树，
+键入与光标移动只重渲染状态栏自身；光标/行数即时发布，字数 250ms 尾随
+防抖（大文档逐键全量统计不可取），换档/整缓冲区替换后同步计算一次。
+
+**选中即高亮全部匹配**（借鉴 Notepad++ 智能高亮）：新增
+`selectionMatches` 偏好（默认开），按偏好挂载 `@codemirror/search` 的
+`highlightSelectionMatches`（minSelectionLength 2 / maxMatches 100），
+选中文字后高亮全文相同片段，便于核对 `\label` 与 `\ref` 对应；偏好经
+换档失配检测重建存档 EditorState 生效到各 tab。
+
+**会话持久化升级 localStorage**（借鉴 Notepad++ snapshot：未保存内容不
+随浏览器关闭丢失）：多缓冲区会话载荷由 sessionStorage 迁移到
+localStorage（同一浏览器重启后仍可恢复脏缓冲区）；升级前的 sessionStorage
+遗留载荷在主存缺失时自动收养迁移（`loadSessionAdoptingLegacy`），旧会话
+不因升级丢失；项目切换守卫双存储清除。载荷 v2：脏 tab 额外携带
+`savedBuffer`（保存基线，恢复后色条橙基线 / 关闭弹窗语义 / 撤销基线复
+用），干净 tab 不冗余写入；`openedBuffer` 不持久化，恢复后回落
+`savedBuffer`（绿色色条从零重建，橙色基线不受影响）。已知取舍：localStorage
+跨浏览器窗口共享（恢复载荷后者胜出）；公共机器上脏缓冲区内容留存本机
+（与 Notepad++ snapshot 同类取舍，隐私敏感场景建议开启自动保存落盘）。
+
 ### 图片与 PDF 只读预览
 
 文件树点击 `.pdf` 或常见位图（前端 `isPreviewableFilePath()` 与后端
@@ -476,7 +529,10 @@ AI 面板。四处配置同步规范照 AGENTS.md 执行；`/api/config/status` 
   413 上限 / invalid_workspace / 500 format_failed / 零写盘验证
 - 前端 node --test：editorPreferences（含导入导出校验）、editorApplyDiff、
   editorTabs（tab 状态机归约与会话选择器）、editorSessionPersistence
-  （序列化清洗 / LRU 配额淘汰 / 项目键隔离）、editorTabViews（登记表）、
+  （序列化清洗 / LRU 配额淘汰 / 项目键隔离 / localStorage 遗留收养迁移）、
+  editorChangeHistoryDiff（行级 diff 边界与护栏）、editorChangeHistory
+  （色条字段基线注入 / 橙绿集合转移 / 冻结恢复语义）、editorStats
+  （字数统计口径与统计 hub）、editorTabViews（登记表）、
   editorFiles / editorMatcher / editorSnippetInsert / editorPreambleScan /
   editorWrap（包裹纯逻辑与直包键位一致性）/ editorBeginClose（\begin
   配对纯决策与事务行为）/ editorSearchPanel（面板短语映射与语言热更新）/

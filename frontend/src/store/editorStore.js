@@ -6,12 +6,13 @@
  *
  * 持久化策略：
  *   - editorPreferences：persist 持久化（autoSave / softWrap / autoCloseEnv
- *     / formulaHover / fontSize），水合后经 sanitizePreferences 白名单清洗，
- *     脏数据回落默认值；
+ *     / formulaHover / selectionMatches / fontSize），水合后经
+ *     sanitizePreferences 白名单清洗，脏数据回落默认值；
  *   - editorSession（多缓冲区：tabs + activeTabPath + 冲突信息）：不进
- *     localStorage——刷新恢复走 sessionStorage 专项通道（含脏缓冲区全文，
- *     LRU 配额兜底，见 lib/editor/sessionPersistence.js），由
- *     useEditorBuffer 负责写入与恢复，避免与磁盘真实状态分叉。
+ *     zustand persist——刷新/重启恢复走 sessionPersistence 专项通道（含
+ *     脏缓冲区全文 + 保存基线，localStorage + LRU 配额兜底，见
+ *     lib/editor/sessionPersistence.js），由 useEditorBuffer 负责写入与
+ *     恢复，避免与磁盘真实状态分叉。
  */
 
 import { create } from "zustand";
@@ -27,6 +28,8 @@ import {
   activeBuffer,
   activeDirty,
   activeFilePath,
+  activeOpenedBuffer,
+  activeSavedBuffer,
   closeTabReducer,
   countDirtyTabs,
   findTab,
@@ -47,6 +50,8 @@ export {
   activeBuffer,
   activeDirty,
   activeFilePath,
+  activeSavedBuffer,
+  activeOpenedBuffer,
   findTab,
   getActiveTab,
   getTabBuffer,
@@ -68,6 +73,8 @@ function createEditorPreferencesSlice(set) {
     setAutoCloseEnv: (value) => set({ autoCloseEnv: !!value }),
     // KaTeX 公式悬停预览开关（editor v2 决策 Q18/Q9，阶段六，默认开）
     setFormulaHover: (value) => set({ formulaHover: !!value }),
+    // 选中即高亮全部匹配（阶段八，借鉴 Notepad++ 智能高亮，默认开）
+    setSelectionMatches: (value) => set({ selectionMatches: !!value }),
     // 字号经白名单校验（区间整数），非法值静默忽略
     setFontSize: (value) => {
       const cleaned = sanitizePreferences({ fontSize: value });
@@ -236,11 +243,12 @@ function createEditorAssistantSlice(set, get) {
   };
 }
 
-/* ── editorSession 切片（不持久化；刷新恢复走 sessionStorage 专项通道） ── */
+/* ── editorSession 切片（不持久化；刷新/重启恢复走 sessionPersistence） ── */
 
 /**
  * 多缓冲区会话（editor-productivity-plan §5.1，阶段一）：
- *   tabs: [{ filePath, buffer, baseMd5, dirty, stale, lastActive }]
+ *   tabs: [{ filePath, buffer, savedBuffer, openedBuffer, baseMd5,
+ *            dirty, stale, lastActive }]
  *   activeTabPath: 激活 tab（键 = 项目相对路径）
  *   conflict: 409 冲突信息 { filePath, message }（含所属文件，弹窗动作
  *   始终作用于冲突归属 tab，不随激活切换漂移）
@@ -313,7 +321,7 @@ function createEditorSessionSlice(set, get) {
     closeTab: (filePath) => set((state) => closeTabReducer(state, filePath)),
 
     /**
-     * 整体恢复会话（sessionStorage 刷新恢复专用入口，Q14）：载荷已经
+     * 整体恢复会话（sessionPersistence 刷新/重启恢复专用入口，Q14）：载荷已经
      * lib/editor/sessionPersistence.parseSession 白名单清洗，此处原样
      * 写回（含脏缓冲区全文、baseMd5 与陈旧标记）。
      */
@@ -336,12 +344,15 @@ export const useEditorStore = create(
     {
       name: "latexcellence-editor",
       version: 1,
-      // 仅偏好进 localStorage；会话切片（含缓冲区内容）显式排除
+      // 仅偏好进 localStorage；会话切片（含缓冲区内容）显式排除——刷新/
+      // 重启恢复走 sessionPersistence 专项通道（同样落 localStorage，
+      // 含脏缓冲区全文与保存基线，LRU 配额兜底）
       partialize: (state) => ({
         autoSave: state.autoSave,
         softWrap: state.softWrap,
         autoCloseEnv: state.autoCloseEnv,
         formulaHover: state.formulaHover,
+        selectionMatches: state.selectionMatches,
         fontSize: state.fontSize,
       }),
       merge: (persisted, current) => ({

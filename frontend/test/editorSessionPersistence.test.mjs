@@ -3,10 +3,12 @@ import assert from "node:assert/strict";
 
 import {
   EDITOR_SESSION_MAX_BYTES,
+  EDITOR_SESSION_PAYLOAD_VERSION,
   EDITOR_SESSION_STORAGE_KEY,
   clearSession,
   fitSessionToQuota,
   loadSession,
+  loadSessionAdoptingLegacy,
   measureBytes,
   parseSession,
   saveSession,
@@ -60,6 +62,9 @@ test("serializeSession/parseSession 往返保留全部 tab 字段与激活位", 
     {
       filePath: "a.tex",
       buffer: "A-dirty",
+      // v1 形状入参：脏 tab 未携带保存基线 → 置 null（色条降级）
+      savedBuffer: null,
+      openedBuffer: "A-dirty",
       baseMd5: "m-a",
       dirty: true,
       stale: false,
@@ -68,12 +73,50 @@ test("serializeSession/parseSession 往返保留全部 tab 字段与激活位", 
     {
       filePath: "sub/b.tex",
       buffer: "\\section{A}",
+      // 干净 tab：保存/打开基线按定义等值于 buffer
+      savedBuffer: "\\section{A}",
+      openedBuffer: "\\section{A}",
       baseMd5: null,
       dirty: false,
       stale: false,
       lastActive: 5,
     },
   ]);
+});
+
+test("v2 载荷：脏 tab 携带 savedBuffer，干净 tab 不冗余写入", () => {
+  const tabs = [
+    tab({
+      filePath: "a.tex",
+      dirty: true,
+      buffer: "A-current",
+      savedBuffer: "A-saved",
+    }),
+    tab({ filePath: "b.tex" }),
+  ];
+  const text = serializeSession({
+    projectKey: "p",
+    tabs,
+    activeTabPath: "a.tex",
+  });
+  const data = JSON.parse(text);
+  assert.equal(data.version, EDITOR_SESSION_PAYLOAD_VERSION);
+  assert.equal(data.tabs[0].savedBuffer, "A-saved");
+  assert.equal("savedBuffer" in data.tabs[1], false);
+  const parsed = parseSession(text);
+  assert.equal(parsed.ok, true);
+  assert.deepEqual(parsed.tabs[0], {
+    filePath: "a.tex",
+    buffer: "A-current",
+    savedBuffer: "A-saved",
+    // 打开基线不持久化：恢复后回落 savedBuffer（绿色色条从零重建）
+    openedBuffer: "A-saved",
+    baseMd5: "m-a",
+    dirty: true,
+    stale: false,
+    lastActive: 1,
+  });
+  assert.equal(parsed.tabs[1].savedBuffer, "\\section{A}");
 });
 
 test("parseSession 对损坏 / 结构异常载荷整体放弃", () => {
@@ -236,6 +279,58 @@ test("clearSession 移除载荷", () => {
   });
   clearSession(storage);
   assert.equal(storage.getItem(EDITOR_SESSION_STORAGE_KEY), null);
+});
+
+test("loadSessionAdoptingLegacy 主存缺失时收养 sessionStorage 遗留并清出", () => {
+  const local = memoryStorage();
+  const legacy = memoryStorage();
+  saveSession(legacy, {
+    projectKey: "p",
+    tabs: [tab()],
+    activeTabPath: "a.tex",
+  });
+  const adopted = loadSessionAdoptingLegacy(local, legacy, "p");
+  assert.equal(adopted.ok, true);
+  assert.equal(adopted.adoptedLegacy, true);
+  assert.equal(adopted.tabs.length, 1);
+  // 收养后遗留载荷清出（后续 saveSession 自然落到主存）
+  assert.equal(legacy.getItem(EDITOR_SESSION_STORAGE_KEY), null);
+  // 主存已有载荷时不理会遗留
+  saveSession(local, {
+    projectKey: "p",
+    tabs: [tab({ filePath: "local.tex" })],
+    activeTabPath: "local.tex",
+  });
+  saveSession(legacy, {
+    projectKey: "p",
+    tabs: [tab({ filePath: "legacy.tex" })],
+    activeTabPath: "legacy.tex",
+  });
+  const primary = loadSessionAdoptingLegacy(local, legacy, "p");
+  assert.equal(primary.ok, true);
+  assert.equal(primary.adoptedLegacy, undefined);
+  assert.equal(primary.tabs[0].filePath, "local.tex");
+  // 双双缺失 → missing；遗留损坏 / 项目不匹配不迁移
+  assert.equal(
+    loadSessionAdoptingLegacy(memoryStorage(), memoryStorage(), "p").reason,
+    "missing",
+  );
+  const corrupt = memoryStorage();
+  corrupt.setItem(EDITOR_SESSION_STORAGE_KEY, "{broken");
+  assert.equal(
+    loadSessionAdoptingLegacy(memoryStorage(), corrupt, "p").reason,
+    "missing",
+  );
+  const mismatch = memoryStorage();
+  saveSession(mismatch, {
+    projectKey: "other",
+    tabs: [tab()],
+    activeTabPath: "a.tex",
+  });
+  assert.equal(
+    loadSessionAdoptingLegacy(memoryStorage(), mismatch, "p").reason,
+    "missing",
+  );
 });
 
 test("saveSession 对注入 storage 抛错时静默放弃不落盘", () => {
