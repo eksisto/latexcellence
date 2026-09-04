@@ -1051,6 +1051,9 @@ class SandboxConfig(BaseModel):
     max_concurrent_global: int = Field(4, ge=1)  # 全局并发沙箱上限
     max_concurrent_per_user: int = Field(1, ge=1)  # 每用户并发沙箱上限（多用户模式）
     startup_grace_seconds: int = Field(10, ge=1)  # 容器启动宽限期（秒）
+    # 容器预创建池（部署收口阶段三）：仅 docker 后端生效；auto 模式探测
+    # 命中 docker 才启用，local 模式与开关无关
+    warm_pool_enabled: bool = True
 
 
 class LoggingConfig(BaseModel):

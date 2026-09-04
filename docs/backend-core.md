@@ -793,6 +793,8 @@ backend/utils/sandbox/
 
 **协作式取消（cancel_event，部署收口阶段一）**：`execute(spec, ..., cancel_event=asyncio.Event)` 支持调用方 mid-flight 中断——docker 后端强杀容器、local 后端 `terminate_process_tree` 击杀进程组，结果为非零退出码且**不标记** `timed_out`（错误语义由调用方按自身状态判定，如 rar 解压超配额 → `quota_exceeded`）。全局并发闸门为此从 asyncio.Semaphore 改为跨事件循环安全的计数闸门（rar 解压的同步核心在 worker 线程独立事件循环内调用 execute，asyncio 原语与循环绑定不可跨循环复用）。
 
+**容器预创建池（warm pool，部署收口阶段三）**：`sandbox.warm_pool_enabled=true`（默认开启，仅 docker 后端生效；auto 模式探测命中 docker 才启用）时，docker 后端按 image_kind 维护"已创建未启动"容器队列，池深 = `max_concurrent_global`（每副本本地）。执行路径为：池 pop → start → exec → stop + remove → 异步补充（补充任务并发 ≤ 2，延迟触发并复核"最近执行形状"未漂移，避免为逐请求换临时目录的负载制造死容器）；池空或形状不一致时按原路径即时 create（无退化路径差异）。关键设计：Docker 容器的 command/挂载/环境变量在 create 时固化，因此池条目携带创建时的完整 kwargs（"形状"），**仅当与本次 ExecSpec 推导的形状逐字段一致时才复用**（复用 `_build_container_kwargs`，安全基线与现网逐字段一致；资源限额热重载后自动失配重建）——执行语义不变：每执行一个 start 一次的全新容器，无跨执行状态。`initialize_sandbox_runner()`（lifespan）预热每类别一个占位容器（无形状、不挂载宿主路径，仅吸收镜像层/页缓存冷启成本，首次执行时弃置）并挂载周期对账任务。池容器统一打 label `latexcellence.warm_pool=1` + 副本标识（环境变量 `LATEXCELLENCE_SANDBOX_REPLICA_ID` 优先，缺省按 maintenance_lease holder 既有约定生成 hostname:hex8 进程唯一标识）；**孤儿清理是每副本职责**（启动期 + 周期对账，按 label + 自身副本标识清退本副本遗留，外来副本 created/exited 容器超龄（默认 900s）清退、运行中绝不触碰），有意不进维护循环的"持租约者执行"选主分支（multi-user-v2-plan §12.1 补记）。execute 路径输出池命中/未命中与准备耗时日志行（`sandbox container ready | pool=hit|miss|off | prep=…ms`）。开关关闭后执行行为与现网完全一致，池遗留由对账清退。基准脚本 `tools/warm_pool_bench.py`（同 ExecSpec 冷启 N 次对比池路径 N 次，输出 P50/P95）。多副本部署下各副本独立建池、空闲容器总量相应上浮，为已知代价（见 [deployment.md](deployment.md)「Docker 沙箱」）。
+
 **并发治理**：全局进程内闸门（`max_concurrent_global`，跨事件循环生效，单/多用户均生效）+ 多用户模式每用户 DB 租约（`core/multiuser/sandbox_leases.py`，`sandbox_slots` 表，TTL = 执行超时 + 120s，崩溃残留由维护循环清理；P7 多实例阶段在同一共享卷上跨副本生效）。租约满抛 `sandbox_busy`（429）。只读轻量命令经 `execute(..., lease_exempt=True)` 豁免每用户租约（仍受全局闸门约束）——目前仅 git 查询类子命令（status/log/rev-parse/show/archive 等，判定见 `git_diff/service/process.py::_is_readonly_git_args`），避免版本页并行拉取 status/log 这类毫秒级查询在每用户上限=1 时互相顶掉误报 429；init/add/commit 写操作与 latexdiff 照常占用租约。
 
 **接入的调用点**：
@@ -819,7 +821,7 @@ backend/utils/sandbox/
 | `to_http_exception(err)` | 把带 `sandbox_code` 的错误翻译为 HTTPException（503/429），供路由层优先匹配 |
 | `current_sandbox_user_id()` | 读取多用户上下文当前用户（每用户租约归属） |
 
-**测试**：契约与租约测试见 `tests/test_utils/test_sandbox_models.py`、`tests/test_utils/test_sandbox_runner.py`、`tests/test_multiuser/test_sandbox_leases.py`；真容器冒烟见 `tests/test_docker/`（marker `docker`，无 daemon 自动 skip）。
+**测试**：契约与租约测试见 `tests/test_utils/test_sandbox_models.py`、`tests/test_utils/test_sandbox_runner.py`、`tests/test_utils/test_sandbox_warm_pool.py`（warm pool 池路径/补充/对账，fake client）、`tests/test_multiuser/test_sandbox_leases.py`；真容器冒烟见 `tests/test_docker/`（marker `docker`，无 daemon 自动 skip），warm pool 端到端见 `tests/test_docker/test_warm_pool_smoke.py`。
 
 ### `compile_error_translator.py` — LaTeX 编译错误 LLM 翻译
 

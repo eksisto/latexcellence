@@ -36,6 +36,10 @@ PROBE_TTL_SECONDS = 60.0
 # 全局并发闸门轮询间隔（秒）：仅在全局上限已满的争用场景产生额外等待
 _GATE_POLL_INTERVAL_SECONDS = 0.05
 
+# warm pool 孤儿对账周期（秒；启动期先做一轮，之后由本循环接管——
+# 每副本职责，不进维护循环选主，见 multi-user-v2-plan §12.1 补记）
+POOL_RECONCILE_INTERVAL_SECONDS = 600.0
+
 
 class _GlobalGate:
     """进程级并发闸门：线程锁保护的计数器 + 异步轮询等待。
@@ -94,6 +98,8 @@ class SandboxRunner:
         self._gate = _GlobalGate()
         # 最近一次按镜像类别解析的后端（同步可用性门控读取）
         self._last_backend: dict[str, str] = {}
+        # warm pool 周期对账任务（lifespan 循环上创建/取消；None=未启动）
+        self._pool_reconcile_task: asyncio.Task | None = None
 
     def _probe_gate(self) -> asyncio.Lock:
         """当前事件循环的探测单飞锁（惰性创建，随循环回收）。"""
@@ -275,7 +281,58 @@ class SandboxRunner:
 
                 await asyncio.to_thread(sandbox_leases.release, slot_id)
 
+    # ── warm pool 启动期挂载（部署收口阶段三）──────────────────
+    async def warm_pool_startup(self) -> None:
+        """lifespan 启动期：预热占位容器 + 首轮孤儿对账 + 周期对账任务。
+
+        仅在 warm_pool_enabled 开启且存在解析为 docker 的镜像类别时生效；
+        auto 探测未命中 docker（回落 local）与 local/docker 关闭开关的
+        部署形态完全不走这里（行为与现网一致）。"""
+        scfg = self._sandbox_cfg()
+        if not scfg.warm_pool_enabled:
+            return
+        kinds_images: dict[str, str] = {}
+        for kind in ("tex", "convert", "plot"):
+            if self._last_backend.get(kind) != "docker":
+                continue
+            try:
+                kinds_images[kind] = self._image_for(kind)
+            except Exception:  # noqa: BLE001 — 类别无镜像名则跳过
+                continue
+        if not kinds_images:
+            return
+        await self._docker.warm_up(kinds_images, self._limits())
+        await self._docker.reconcile_orphans()
+        if self._pool_reconcile_task is None or self._pool_reconcile_task.done():
+            self._pool_reconcile_task = asyncio.create_task(self._pool_reconcile_loop())
+            logger.info(
+                "warm pool periodic reconcile scheduled (every %.0fs)",
+                POOL_RECONCILE_INTERVAL_SECONDS,
+            )
+
+    async def _pool_reconcile_loop(self) -> None:
+        """周期对账：清理本副本池孤儿与开关关闭后的池遗留。"""
+        while True:
+            await asyncio.sleep(POOL_RECONCILE_INTERVAL_SECONDS)
+            # 开关关闭时同样继续循环：backend 侧对账规则会清退本副本池
+            # 遗留（运行中/在飞执行容器保护至自然收尾），实现配置关闭后
+            # 的资源回收
+            try:
+                await self._docker.reconcile_orphans()
+            except Exception as e:  # noqa: BLE001 — 单轮失败不终止循环
+                logger.debug("warm pool reconcile failed: %s", e)
+
     async def close(self) -> None:
+        if self._pool_reconcile_task is not None:
+            task = self._pool_reconcile_task
+            self._pool_reconcile_task = None
+            task.cancel()
+            try:
+                await task
+            except asyncio.CancelledError:
+                pass
+            except Exception:  # noqa: BLE001 — 关闭路径尽力而为
+                pass
         self._docker.close()
 
 
@@ -303,6 +360,9 @@ async def initialize_sandbox_runner() -> None:
     解析结果写入 cached_backend_for() 门控缓存——宿主不装 pandoc/TeX、
     全靠镜像的部署形态下，首个请求的可用性门控即正确（否则首次转换
     会因读到空缓存而错误要求宿主安装工具）。
+
+    docker 后端生效且 warm pool 开启时，随后执行池预热（每类别一个
+    占位容器）与首轮孤儿对账，并挂载周期对账任务（部署收口阶段三）。
     """
     runner = get_sandbox_runner()
     reachable = await runner.probe_docker()
@@ -316,6 +376,10 @@ async def initialize_sandbox_runner() -> None:
             await runner.resolve_backend(kind)
         except Exception as e:  # noqa: BLE001 — docker 模式不可达等，留空走本地门控
             logger.debug("sandbox backend warmup skipped for %s: %s", kind, e)
+    try:
+        await runner.warm_pool_startup()
+    except Exception as e:  # noqa: BLE001 — 池预热失败不影响可用性
+        logger.warning("Sandbox warm pool startup failed: %s", e)
 
 
 async def close_sandbox_runner() -> None:

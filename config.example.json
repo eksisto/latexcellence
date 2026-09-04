@@ -485,7 +485,8 @@
     "tmpfs_mb": 512,
     "max_concurrent_global": 4,
     "max_concurrent_per_user": 1,
-    "startup_grace_seconds": 10
+    "startup_grace_seconds": 10,
+    "warm_pool_enabled": true
   },
   "smtp": {
     "enabled": false,

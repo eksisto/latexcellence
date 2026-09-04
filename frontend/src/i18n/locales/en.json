@@ -1440,6 +1440,8 @@
       "sandboxMaxConcurrentGlobal": "Global Max Concurrency",
       "sandboxMaxConcurrentPerUser": "Per-user Max Concurrency",
       "sandboxStartupGraceSeconds": "Container Startup Grace (s)",
+      "sandboxWarmPool": "Container Warm Pool",
+      "sandboxWarmPoolHint": "Pre-create standby containers to cut per-execution startup latency (Docker sandbox mode only; disabling restores plain per-execution containers)",
       "smtp": "SMTP Email Notifications",
       "smtpEnabled": "Enable SMTP notifications",
       "smtpHint": "When enabled: pending approvals, approval results, admin password resets and quota alerts are emailed. When disabled all notifications are silently skipped. Takes effect after saving.",

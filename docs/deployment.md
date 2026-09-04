@@ -555,6 +555,11 @@ docker run -d --name latexcellence \
 | `cpus` / `memory_mb` / `pids_limit` / `tmpfs_mb` | 1.0 / 1024 / 256 / 512 | 单容器资源上限 |
 | `max_concurrent_global` / `max_concurrent_per_user` | 4 / 1 | 沙箱并发池上限（每用户租约存 SQLite，超限返回 429 `sandbox_busy`；git 查询类只读子命令豁免每用户租约） |
 | `startup_grace_seconds` | 10 | 容器冷启动宽限（叠加在各功能既有超时之上） |
+| `warm_pool_enabled` | true | 容器预创建池（warm pool）：预先创建待命容器，命中时免去 create 直接 start，降低每次执行的启动等待。仅 docker 后端生效（auto 模式探测命中 docker 才启用；local 模式与开关无关）；关闭后每次执行即时建容器，行为与历史版本一致 |
+
+### warm pool 运维说明（部署收口阶段三）
+
+池容器是"已创建未启动"的一次性容器，统一带 label `latexcellence.warm_pool=1` 与副本标识（环境变量 `LATEXCELLENCE_SANDBOX_REPLICA_ID` 可显式指定，缺省按 hostname:随机后缀进程唯一生成），只在执行某类命令后按该命令的容器形状补满（池深 = `max_concurrent_global`），不会为从未执行过的类别常驻容器。孤儿清理为每副本职责：副本启动期与运行期周期对账，按 label + 自身副本标识清退本副本遗留；副本异常退出后的残留容器由任一存活副本在超龄（默认 900s）后清退，也可手工 `docker container prune --filter "label=latexcellence.warm_pool=1"` 清理。多副本部署（`--scale app=N`）下各副本独立建池，空闲容器总量相应上浮（每副本每类别至多 `max_concurrent_global` 个 created 态容器，不占运行资源），为已知代价；冷启动收益可用 `.venv/bin/python tools/warm_pool_bench.py` 实测。
 
 ### 镜像构建
 

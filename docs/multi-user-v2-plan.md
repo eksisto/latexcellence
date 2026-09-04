@@ -466,6 +466,7 @@ docker/
 | 配置热重载 | 进程单例，改配置其他副本漂移 | `get_config()` 增加 config.json mtime+size 检查，变化即重载；`multi_user.enabled` 仍需重启（文档维持） |
 | 后台任务重复执行 | 各副本各自跑（幂等） | `maintenance_lease` 选主：持租约者执行维护循环，减少重复扫描；模块 cleanup_loop 保持各自运行（幂等无害） |
 | 日志 | TimedRotatingFileHandler（多进程不安全） | 容器模式 env 开关切纯 stdout；裸机维持单进程前提 |
+| 沙箱容器 warm pool 孤儿 | daemon 中的 created 态池容器（副本进程内队列状态，部署收口阶段三） | **有意偏离选主语义**：不入维护循环（容器是 daemon 全局资源、池是副本本地状态，"持租约者执行"会误清他副本的活池）。改为每副本职责——各自按 label `latexcellence.warm_pool=1` + 自身副本标识清退本副本遗留，外来副本 created/exited 容器超龄（默认 900s）后由任一副本对账清退；副本本地状态（池队列/在飞集合）随进程消亡，无需外置 |
 | LLM client / httpx / Playwright / ToolRegistry / web_cache / 元数据缓存 | 进程内 | 保持进程内（无用户态或纯缓存，多副本安全） |
 
 ### 12.2 编排与验收

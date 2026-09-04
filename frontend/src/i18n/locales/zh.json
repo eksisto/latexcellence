@@ -1440,6 +1440,8 @@
       "sandboxMaxConcurrentGlobal": "全局最大并发数",
       "sandboxMaxConcurrentPerUser": "单用户最大并发数",
       "sandboxStartupGraceSeconds": "容器启动等待（秒）",
+      "sandboxWarmPool": "容器预创建池（warm pool）",
+      "sandboxWarmPoolHint": "预先创建待命容器，降低每次执行的启动等待（仅 Docker 沙箱模式生效；关闭后行为与常规逐次建容器一致）",
       "smtp": "SMTP 邮件通知",
       "smtpEnabled": "启用 SMTP 邮件通知",
       "smtpHint": "启用后：注册待审批、审批结果、管理员重置密码与配额预警会邮件通知；关闭则全部静默跳过。修改后保存即生效。",

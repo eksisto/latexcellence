@@ -9,7 +9,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import ConfigSection from "@/components/settings/ConfigSection";
+import ConfigSection, {
+  CheckboxField,
+} from "@/components/settings/ConfigSection";
 
 /** mode → 当前选中项下方的说明文案 key */
 const MODE_HINT_KEY = {
@@ -194,6 +196,18 @@ function SandboxSection({ sandbox, onChange }) {
           value={sandbox.max_concurrent_per_user}
           onChange={(v) => onChange("sandbox.max_concurrent_per_user", v)}
         />
+      </div>
+
+      {/* 容器预创建池（warm pool）：仅 docker 后端生效 */}
+      <div className="space-y-1">
+        <CheckboxField
+          label={t("settings.sandboxWarmPool")}
+          checked={sandbox.warm_pool_enabled}
+          onChange={(v) => onChange("sandbox.warm_pool_enabled", v)}
+        />
+        <p className="text-xs text-muted-foreground">
+          {t("settings.sandboxWarmPoolHint")}
+        </p>
       </div>
     </ConfigSection>
   );

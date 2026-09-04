@@ -46,7 +46,7 @@ latexcellence/
 │   │   ├── time_utils.py            # 时间工具：当前日期/时间/星期格式化
 │   │   ├── path_guard.py            # 项目路径安全校验唯一入口 resolve_project_path()
 │   │   ├── tex_compile.py           # 统一 TeX 编译执行（texfot+latexmk、引擎自动检测、PDF/A）
-│   │   ├── sandbox/                 # Docker 沙箱执行包（v2 P1a：SandboxRunner 双后端、并发租约、ExecSpec/ExecResult 契约）
+│   │   ├── sandbox/                 # Docker 沙箱执行包（v2 P1a：SandboxRunner 双后端、并发租约、ExecSpec/ExecResult 契约；部署收口阶段三：docker 后端容器预创建池 warm pool——形状匹配复用 + 每副本孤儿对账）
 │   │   ├── session_mutex.py         # 跨进程会话互斥（v2 P7：会话目录旁 flock 锁文件 + 进程内 asyncio.Lock 叠加）
 │   │   ├── latex_parser.py          # LaTeX 源码↔纯文本转换（Marker 保护）
 │   │   ├── latex_json_guard.py      # LaTeX×JSON 转义防护（内容校验器，跨模块共享）
@@ -298,6 +298,7 @@ latexcellence/
 │   ├── paragraph_translate_eval/  # 逐段翻译人工评估工具（加载语料 → 跑翻译 → 生成比对报告）
 │   ├── prompt_comprehension_eval/ # Prompt 理解评测工具（逐一探测 + 历史追踪 + 回归检测）
 │   ├── rar_fixtures/               # rar 测试样例工具（make_fixtures.py 纯字节构造 store 模式 RAR4 入库；verify_fixtures.py 对全部入库样本做结构/预扫/真实解压对账；真实压缩样本由 rar CLI 生成，步骤见前者 docstring）
+│   ├── warm_pool_bench.py          # 沙箱容器预创建池冷启动基准（同 ExecSpec 冷启 N 次对比池路径 N 次，输出准备耗时/墙钟 P50/P95，需 Docker daemon）
 │   ├── compose-smoke.sh           # 多实例 compose 冒烟（replicas=2：注册审批→分片上传→undo→下载；--with-tex 追加编译冒烟）
 │   ├── bump-version.sh            # 版本号一键升级（main.py 两处 + 前端三语 i18n；major/minor/patch 或显式版本号，默认自动提交）
 │   ├── plotgen_opt/               # plot_gen Agent 优化评测工作区（脚本/数据集/报告入库，results、previews 忽略）
