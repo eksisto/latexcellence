@@ -51,8 +51,11 @@ export default function PageHeader({
           <p className="mt-1.5 text-sm text-muted-foreground">{description}</p>
         )}
       </div>
+      {/* mt-6：右侧操作位（ModelBadge 等）避开 AppToolbar 固定工具条
+          （top-4 + 32px 图标 = 底缘 48px），徽标顶部落在 56px 留 8px 间隙，
+          且与 h1 标题行（52px 起）大致垂直居中 */}
       {children && (
-        <div className="ml-auto flex shrink-0 items-center gap-2 pt-1">
+        <div className="ml-auto mt-6 flex shrink-0 items-center gap-2">
           {children}
         </div>
       )}

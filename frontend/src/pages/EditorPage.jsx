@@ -685,11 +685,14 @@ export default function EditorPage() {
 
   /* ── 主布局 ──────────────────────────────────────────────────── */
   return (
-    <div className="h-screen flex flex-col gap-3 p-4 pb-6 animate-tab-enter">
+    <div className="h-screen flex flex-col gap-3 pt-8 px-4 pb-6 animate-tab-enter">
+      {/* 返回箭头与左栏卡片左缘对齐：卡片左缘 = px-4 + aside ml-8 = 48px，
+          PageHeader ml-6 使按钮盒落在 40px，箭头图标（size-8 盒内居中，
+          左内边距 8px）左缘恰好重合 48px */}
       <PageHeader
         title={t("pages:editor.title")}
         groupKey="aiAssist"
-        className="mb-1 shrink-0"
+        className="mb-1 ml-6 shrink-0"
       />
 
       <EditorToolbar
