@@ -6,8 +6,9 @@
 - ``docker``：daemon 不可达直接抛 sandbox_unavailable（503），不静默回落。
 
 并发治理：
-- 全局并发：进程内 asyncio.Semaphore(max_concurrent_global)，单/多用户
-  模式均生效；
+- 全局并发：进程内跨事件循环安全的计数闸门（max_concurrent_global），
+  单/多用户模式均生效（rar 解压等同步核心经 worker 线程独立事件循环
+  调用时同样计入）；
 - 每用户并发：多用户模式下经 sandbox_slots 表租约（P7 起跨副本生效），
   获取失败抛 sandbox_busy（429）；单用户模式无用户身份，跳过。只读
   轻量命令（git 查询类子命令）经 ``lease_exempt=True`` 豁免租约，
@@ -16,7 +17,9 @@
 
 import asyncio
 import os
+import threading
 import time
+import weakref
 
 from backend.core.config import get_config
 from backend.core.logger import get_logger
@@ -29,6 +32,37 @@ logger = get_logger("sandbox.runner")
 
 # Docker daemon 探测结果的 TTL 缓存（秒）
 PROBE_TTL_SECONDS = 60.0
+
+# 全局并发闸门轮询间隔（秒）：仅在全局上限已满的争用场景产生额外等待
+_GATE_POLL_INTERVAL_SECONDS = 0.05
+
+
+class _GlobalGate:
+    """进程级并发闸门：线程锁保护的计数器 + 异步轮询等待。
+
+    asyncio.Semaphore 与首次使用它的事件循环绑定（跨循环复用抛
+    RuntimeError），而沙箱执行存在两类循环来源：服务层主循环，以及
+    rar 解压等同步核心在 worker 线程内经 asyncio.run 建立的独立循环。
+    ``max_concurrent_global`` 的语义是进程内全部沙箱执行的并发上限，
+    必须跨循环统一生效，故以线程安全的计数器实现；等待方轮询重试，
+    不占用线程池线程。"""
+
+    def __init__(self) -> None:
+        self._count = 0
+        self._guard = threading.Lock()
+
+    async def acquire(self, limit: int) -> None:
+        while True:
+            with self._guard:
+                if self._count < limit:
+                    self._count += 1
+                    return
+            await asyncio.sleep(_GATE_POLL_INTERVAL_SECONDS)
+
+    def release(self) -> None:
+        with self._guard:
+            self._count = max(0, self._count - 1)
+
 
 # 内置默认镜像名：与 backend/core/config.py SandboxConfig 字段默认值一致。
 # 管理员在设置页把镜像名清空保存时按内置默认回落（与三语提示
@@ -45,7 +79,9 @@ class SandboxRunner:
 
     def __init__(self) -> None:
         self._docker = DockerBackend()
-        self._probe_lock = asyncio.Lock()
+        # 探测单飞锁按事件循环隔离（asyncio.Lock 与首次使用它的循环绑定），
+        # 探测结果 TTL 缓存本身是跨循环共享的普通数据
+        self._probe_gates: weakref.WeakKeyDictionary = weakref.WeakKeyDictionary()
         self._probe_ok: bool | None = None
         self._probe_at: float = 0.0
         # bind-mount 预检结果（进程内固化，None=未测）：同绝对路径挂载契约
@@ -54,10 +90,19 @@ class SandboxRunner:
         # DockerBackend.preflight_mount_check），失败视同不可达。
         self._mount_ok: bool | None = None
         self._warned_fallback = False
-        self._semaphore: asyncio.Semaphore | None = None
-        self._semaphore_limit = 0
+        # 全局并发闸门（跨事件循环安全，见 _GlobalGate）
+        self._gate = _GlobalGate()
         # 最近一次按镜像类别解析的后端（同步可用性门控读取）
         self._last_backend: dict[str, str] = {}
+
+    def _probe_gate(self) -> asyncio.Lock:
+        """当前事件循环的探测单飞锁（惰性创建，随循环回收）。"""
+        loop = asyncio.get_running_loop()
+        lock = self._probe_gates.get(loop)
+        if lock is None:
+            lock = asyncio.Lock()
+            self._probe_gates[loop] = lock
+        return lock
 
     # ── 配置 ──────────────────────────────────────────────────
     @staticmethod
@@ -93,7 +138,7 @@ class SandboxRunner:
         首次探测通过 ping 后追加一次 bind-mount 预检（进程内固化，不随
         TTL 重测——部署拓扑不会在运行期变化）；mode=local 跳过预检。
         """
-        async with self._probe_lock:
+        async with self._probe_gate():
             now = time.monotonic()
             if self._probe_ok is not None and now - self._probe_at < PROBE_TTL_SECONDS:
                 return self._probe_ok
@@ -162,13 +207,6 @@ class SandboxRunner:
         return self._last_backend.get(kind)
 
     # ── 并发治理 ──────────────────────────────────────────────
-    def _global_semaphore(self, limit: int) -> asyncio.Semaphore:
-        if self._semaphore is None or self._semaphore_limit != limit:
-            # 配置热重载改变上限时重建（旧的排队中的等待者随旧对象回收）
-            self._semaphore = asyncio.Semaphore(limit)
-            self._semaphore_limit = limit
-        return self._semaphore
-
     async def _acquire_user_slot(
         self, spec: ExecSpec, user_id: str | None, max_per_user: int, max_global: int
     ) -> str | None:
@@ -197,37 +235,45 @@ class SandboxRunner:
         *,
         user_id: str | None = None,
         lease_exempt: bool = False,
+        cancel_event: asyncio.Event | None = None,
     ) -> ExecResult:
         """执行一次外部命令：选后端 → 并发治理 → 结果归一。
 
-        ``lease_exempt=True`` 豁免每用户并发租约（仍受全局信号量约束），
+        ``lease_exempt=True`` 豁免每用户并发租约（仍受全局闸门约束），
         供 git 查询类等只读轻量命令使用。
+
+        ``cancel_event`` 置位触发 mid-flight 协作式取消（供调用方在配额
+        超限等宿主侧判定后中断执行）：docker 后端强杀容器、local 后端
+        击杀进程组，结果为非零退出码且不标记 ``timed_out``——错误语义由
+        调用方按自身状态（如超配额）判定。不传保持既有纯超时语义。
         """
         scfg = self._sandbox_cfg()
         backend = await self.resolve_backend(spec.image_kind)
-        async with self._global_semaphore(scfg.max_concurrent_global):
-            slot_id: str | None = None
-            try:
-                if not lease_exempt:
-                    slot_id = await self._acquire_user_slot(
-                        spec,
-                        user_id,
-                        max_per_user=scfg.max_concurrent_per_user,
-                        max_global=scfg.max_concurrent_global,
-                    )
-                if backend == "docker":
-                    return await self._docker.execute(
-                        spec,
-                        image=self._image_for(spec.image_kind),
-                        limits=self._limits(),
-                        grace_seconds=float(scfg.startup_grace_seconds),
-                    )
-                return await execute_local(spec)
-            finally:
-                if slot_id:
-                    from backend.core.multiuser import db, sandbox_leases
+        await self._gate.acquire(scfg.max_concurrent_global)
+        slot_id: str | None = None
+        try:
+            if not lease_exempt:
+                slot_id = await self._acquire_user_slot(
+                    spec,
+                    user_id,
+                    max_per_user=scfg.max_concurrent_per_user,
+                    max_global=scfg.max_concurrent_global,
+                )
+            if backend == "docker":
+                return await self._docker.execute(
+                    spec,
+                    image=self._image_for(spec.image_kind),
+                    limits=self._limits(),
+                    grace_seconds=float(scfg.startup_grace_seconds),
+                    cancel_event=cancel_event,
+                )
+            return await execute_local(spec, cancel_event=cancel_event)
+        finally:
+            self._gate.release()
+            if slot_id:
+                from backend.core.multiuser import db, sandbox_leases
 
-                    await asyncio.to_thread(sandbox_leases.release, slot_id)
+                await asyncio.to_thread(sandbox_leases.release, slot_id)
 
     async def close(self) -> None:
         self._docker.close()

@@ -4,6 +4,10 @@
 - 环境变量 = 完整 os.environ + ExecSpec.env 白名单覆盖；
 - POSIX 下 start_new_session、Windows 下 CREATE_NEW_PROCESS_GROUP，
   超时整组击杀进程树。
+
+协作式取消（cancel_event）：置位后与超时同样走 terminate_process_tree
+整组击杀，但结果不标记 timed_out——取消是调用方的 mid-flight 决策
+（如 rar 解压超配额），错误语义由调用方按自身状态判定。
 """
 
 import asyncio
@@ -80,8 +84,20 @@ def _build_proc_kwargs() -> dict[str, Any]:
     return kwargs
 
 
-async def execute_local(spec: ExecSpec) -> ExecResult:
-    """在本地以子进程执行 ExecSpec（与历史各调用点行为逐项一致）。"""
+async def execute_local(
+    spec: ExecSpec, *, cancel_event: asyncio.Event | None = None
+) -> ExecResult:
+    """在本地以子进程执行 ExecSpec（与历史各调用点行为逐项一致）。
+
+    cancel_event 置位时整组击杀进程树并提前返回（不标记 timed_out——
+    取消是调用方的 mid-flight 决策，错误语义由调用方判定）；传入 None
+    走既有 ``wait_for`` 纯超时语义，行为与沙箱化之前逐项一致。
+
+    实现约束（阶段一评审回归）：无 cancel_event 时**不得**把
+    ``communicate`` 派生为独立任务——孤立任务会被宿主事件循环的整体
+    取消扫描（如 TestClient 每请求 portal 的 teardown）单独取消，与
+    外层任务的取消解卷交错后可能悬挂在永不结算的 future 上；故仅取消
+    路径才需要 communicate / cancel_event / 超时三方竞争。"""
     env = os.environ.copy()
     env.update(spec.env)
     logger.debug("local exec | cmd=%s | cwd=%s", spec.command, spec.cwd)
@@ -91,22 +107,63 @@ async def execute_local(spec: ExecSpec) -> ExecResult:
         env=env,
         **_build_proc_kwargs(),
     )
-    try:
-        stdout_b, stderr_b = await asyncio.wait_for(
-            process.communicate(), timeout=spec.timeout_seconds
-        )
-    except asyncio.TimeoutError:
-        await terminate_process_tree(process)
-        stdout_b, stderr_b = await process.communicate()
+    if cancel_event is None:
+        # 既有路径：wait_for 超时 → TimeoutError → 击杀进程组 + timed_out
+        # （communicate 内联 await，不派生独立任务，语义与沙箱化之前一致）
+        try:
+            stdout_b, stderr_b = await asyncio.wait_for(
+                process.communicate(), timeout=spec.timeout_seconds
+            )
+        except asyncio.TimeoutError:
+            # wait_for 已取消首个 communicate 任务：击杀进程组后重新收尸
+            await terminate_process_tree(process)
+            stdout_b, stderr_b = await process.communicate()
+            stdout, stderr = _decode(stdout_b, stderr_b)
+            return ExecResult(
+                returncode=process.returncode if process.returncode is not None else -1,
+                stdout=stdout,
+                stderr=stderr,
+                timed_out=True,
+                backend="local",
+            )
         stdout, stderr = _decode(stdout_b, stderr_b)
         return ExecResult(
             returncode=process.returncode if process.returncode is not None else -1,
             stdout=stdout,
             stderr=stderr,
-            timed_out=True,
             backend="local",
         )
 
+    # 协作式取消路径：communicate / cancel_event / 超时 三方竞争
+    # （FIRST_COMPLETED：任一先完成即唤醒——默认 ALL_COMPLETED 会
+    # 等 communicate 结束才返回，cancel_event 置位将无法中断）
+    comm = asyncio.ensure_future(process.communicate())
+    cancel_waiter = asyncio.ensure_future(cancel_event.wait())
+    try:
+        done, _pending = await asyncio.wait(
+            [comm, cancel_waiter],
+            timeout=spec.timeout_seconds,
+            return_when=asyncio.FIRST_COMPLETED,
+        )
+        if comm not in done:
+            cancelled = cancel_waiter in done
+            if cancelled:
+                logger.info("local exec cancelled mid-flight | cmd=%s", spec.command)
+            await terminate_process_tree(process)
+            stdout_b, stderr_b = await comm
+            stdout, stderr = _decode(stdout_b, stderr_b)
+            return ExecResult(
+                returncode=(
+                    process.returncode if process.returncode is not None else -1
+                ),
+                stdout=stdout,
+                stderr=stderr,
+                timed_out=not cancelled,  # 仅超时标记；取消由调用方判定
+                backend="local",
+            )
+        stdout_b, stderr_b = comm.result()
+    finally:
+        cancel_waiter.cancel()
     stdout, stderr = _decode(stdout_b, stderr_b)
     return ExecResult(
         returncode=process.returncode if process.returncode is not None else -1,

@@ -365,7 +365,7 @@ latexcellence/
 | 多用户双模式 | `multi_user.enabled` 开关；单用户保持现状（本地目录 + 共享令牌），多用户强制会话认证、CSRF、禁用任意路径打开/浏览；服务器路径不向用户暴露（`root_path` / `git_root` / `sandbox` 等响应字段脱敏，编译日志等输出前缀改写为相对路径） | [multi-user-plan.md](docs/multi-user-plan.md)、[deployment.md](docs/deployment.md) |
 | 多用户认证 | argon2id 密码哈希、HttpOnly 会话 Cookie（库只存 SHA-256）、注册审批流、登录限流、管理员引导（env/CLI） | [backend-core.md](docs/backend-core.md) |
 | 注册自动审批（IP 策略） | 注册记录真实客户端 IP（可信代理解析 X-Forwarded-For）；同 IP 账号上限 + CIDR 白名单 + 离线地理白名单叠加判定「无恶意」即自动通过，否则转人工待审批；地理查询 ip2region（.xdb，中国命中直接采用，国内精度更高）优先、非/未知中国回落 GeoLite2；每 IP 注册限流，只降级不拒绝 | [backend-core.md](docs/backend-core.md)、[deployment.md](docs/deployment.md) |
-| 多用户项目与配额 | 上传 zip/7z/rar 安全解压（rar 经 unar 优先、bsdtar 回退的外部管线）、项目命名去重、项目空间配额记账、回收站（7 天）、打包下载；写回超限回滚 | [backend-core.md](docs/backend-core.md)、[multi-user-plan.md](docs/multi-user-plan.md) |
+| 多用户项目与配额 | 上传 zip/7z/rar 安全解压（rar 经 unar 优先、bsdtar 回退，解压命令经 SandboxRunner 沙箱执行：convert 镜像内置双工具 + 压缩包只读挂载 + 宿主监视任务超配额/超时硬中断，local 回落探测宿主 PATH）、项目命名去重、项目空间配额记账、回收站（7 天）、打包下载；写回超限回滚 | [backend-core.md](docs/backend-core.md)、[multi-user-plan.md](docs/multi-user-plan.md) |
 | 多用户权限协作 | 协作者管理（按用户名添加/改角色/移除）、项目转交（原 owner 变 viewer 或退出）、viewer 写保护；权限实时查库即时生效 | [backend-core.md](docs/backend-core.md)、[multi-user-plan.md](docs/multi-user-plan.md) |
 | Git 版本管理 | 上传自动/版本页手动 git init（LaTeX 专用 .gitignore，项目已有则尊重）；.git 不占项目配额，改按 git_dir_max_mb 独立上限（超限拒绝上传/初始化/提交）；「已初始化」以项目根自带 .git 为准；历史条目经 URL 参数预填 git_diff 对比 | [git_manage.md](docs/modules/git_manage.md) |
 | 模板体系 | 内置模板（包内资源，manifest 元数据 + 预编译缩略图/PDF 预览）与用户私有库双模式并存；从模板创建项目为纯复制语义（清洗剔除编译产物/.git/库元数据，无变量替换）；上传走安全解压 + 扩展名白名单，模板库本体占「模板」衍生配额、创建项目走项目配额 | [template_library.md](docs/modules/template_library.md)、[template_gen.md](docs/modules/template_gen.md) |

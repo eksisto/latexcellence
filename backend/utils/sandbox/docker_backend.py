@@ -212,17 +212,28 @@ class DockerBackend:
         image: str,
         limits: SandboxLimits,
         grace_seconds: float = 0.0,
+        cancel_event: asyncio.Event | None = None,
     ) -> ExecResult:
-        """在一次性容器中执行命令；超时强杀容器并标记 timed_out。"""
+        """在一次性容器中执行命令；超时强杀容器并标记 timed_out。
+
+        cancel_event 置位时同样强杀容器，但不标记 timed_out——取消是
+        调用方的 mid-flight 决策（如 rar 解压超配额），错误语义由调用方
+        按自身状态判定；oom 启发式（exit 137）在取消场景不适用。"""
         container = None
         started = time.monotonic()
         deadline = started + spec.timeout_seconds + grace_seconds
         timed_out = False
+        cancelled = False
+        cancel_waiter = (
+            asyncio.ensure_future(cancel_event.wait())
+            if cancel_event is not None
+            else None
+        )
         try:
             container = await asyncio.to_thread(
                 self._create_and_start, spec, image, limits
             )
-            # 轮询等待退出；超时先 kill 再收尸，避免容器僵死占用并发槽
+            # 轮询等待退出；超时或取消先 kill 再收尸，避免容器僵死占用并发槽
             while True:
                 state = await asyncio.to_thread(self._read_state, container)
                 if state.get("Status") not in ("created", "running"):
@@ -236,7 +247,21 @@ class DockerBackend:
                     await asyncio.to_thread(container.kill)
                     timed_out = True
                     break
-                await asyncio.sleep(_POLL_INTERVAL_SECONDS)
+                if cancel_waiter is not None:
+                    done, _ = await asyncio.wait(
+                        {cancel_waiter}, timeout=_POLL_INTERVAL_SECONDS
+                    )
+                    if cancel_waiter in done:
+                        logger.warning(
+                            "sandbox container cancelled mid-flight, killing: "
+                            "image=%s",
+                            image,
+                        )
+                        await asyncio.to_thread(container.kill)
+                        cancelled = True
+                        break
+                else:
+                    await asyncio.sleep(_POLL_INTERVAL_SECONDS)
 
             state = await asyncio.to_thread(self._read_state, container)
             raw_logs = await asyncio.to_thread(
@@ -245,7 +270,7 @@ class DockerBackend:
             stdout, stderr = _decode_pair(_demux_docker_stream(raw_logs))
             exit_code = int(state.get("ExitCode") or 0)
             oom_killed = bool(state.get("OOMKilled")) or (
-                exit_code == 137 and not timed_out
+                exit_code == 137 and not timed_out and not cancelled
             )
             return ExecResult(
                 returncode=-1 if timed_out else exit_code,
@@ -262,6 +287,8 @@ class DockerBackend:
                 f"container execution failed (image={image}): {e}"
             ) from e
         finally:
+            if cancel_waiter is not None:
+                cancel_waiter.cancel()
             if container is not None:
                 try:
                     await asyncio.to_thread(container.remove, force=True)

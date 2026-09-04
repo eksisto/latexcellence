@@ -51,11 +51,14 @@ def _fake_docker(runner: SandboxRunner, *, reachable: bool, result=None):
         # 挂载预检默认通过（预检失败分支在 test_sandbox_docker_backend.py）
         return True
 
-    async def fake_execute(spec, *, image, limits, grace_seconds=0.0):
+    async def fake_execute(
+        spec, *, image, limits, grace_seconds=0.0, cancel_event=None
+    ):
         calls["image"] = image
         calls["limits"] = limits
         calls["grace"] = grace_seconds
         calls["spec"] = spec
+        calls["cancel_event"] = cancel_event
         return result or _result(backend="docker")
 
     runner._docker = type(
@@ -114,8 +117,9 @@ class TestExecuteRouting:
         expected = _result(returncode=3, stdout="out", stderr="err")
         seen: dict = {}
 
-        async def fake_execute_local(spec):
+        async def fake_execute_local(spec, *, cancel_event=None):
             seen["spec"] = spec
+            seen["cancel_event"] = cancel_event
             return expected
 
         monkeypatch.setattr(
@@ -125,6 +129,60 @@ class TestExecuteRouting:
         res = await runner.execute(_spec(timeout_seconds=7))
         assert res is expected
         assert seen["spec"].timeout_seconds == 7
+        assert seen["cancel_event"] is None
+
+    @pytest.mark.asyncio
+    async def test_cancel_event_passthrough(self, cfg, monkeypatch):
+        """cancel_event 契约：原样透传给所选后端（Q4 方案 A）。"""
+        cfg.sandbox.mode = "local"
+        seen: dict = {}
+
+        async def fake_execute_local(spec, *, cancel_event=None):
+            seen["cancel_event"] = cancel_event
+            return _result()
+
+        monkeypatch.setattr(
+            "backend.utils.sandbox.runner.execute_local", fake_execute_local
+        )
+        runner = SandboxRunner()
+        event = asyncio.Event()
+        await runner.execute(_spec(), cancel_event=event)
+        assert seen["cancel_event"] is event
+
+    @pytest.mark.asyncio
+    async def test_global_gate_bounds_cross_loop_concurrency(self, cfg, monkeypatch):
+        """全局并发闸门跨事件循环生效（rar 同步核心经独立循环调用 execute）。
+
+        asyncio.Semaphore 与循环绑定，闸门必须是进程级：worker 循环内的
+        执行同样计入 max_concurrent_global。"""
+        cfg.sandbox.mode = "local"
+        cfg.sandbox.max_concurrent_global = 1
+
+        async def fake_execute_local(spec, *, cancel_event=None):
+            await asyncio.sleep(0.05)
+            return _result()
+
+        monkeypatch.setattr(
+            "backend.utils.sandbox.runner.execute_local", fake_execute_local
+        )
+        runner = SandboxRunner()
+
+        async def run_in_worker_loop():
+            loop = asyncio.new_event_loop()
+            try:
+                return await asyncio.to_thread(
+                    loop.run_until_complete, runner.execute(_spec())
+                )
+            finally:
+                loop.close()
+
+        # 同一时刻两个循环各跑一个执行：上限=1 时必须串行（都成功但不并发）
+        import time as _time
+
+        start = _time.monotonic()
+        await asyncio.gather(run_in_worker_loop(), runner.execute(_spec()))
+        elapsed = _time.monotonic() - start
+        assert elapsed >= 0.09  # 串行化：总耗时 ≥ 2 × 单次执行时长
 
     @pytest.mark.asyncio
     async def test_docker_uses_configured_image_and_limits(self, cfg):
@@ -196,7 +254,6 @@ class TestUserSlot:
         cfg.sandbox.mode = "local"
 
         acquired: list = []
-        import backend.utils.sandbox.runner as runner_mod
 
         def fake_acquire(*a, **k):  # pragma: nocover - 不应被调用
             acquired.append(a)
@@ -227,7 +284,8 @@ class TestUserSlot:
         cfg.multi_user.enabled = True
         cfg.sandbox.mode = "local"
 
-        async def fake_execute_local(spec):
+        async def fake_execute_local(spec, *, cancel_event=None):
+            assert cancel_event is None
             return _result()
 
         monkeypatch.setattr(
@@ -236,6 +294,80 @@ class TestUserSlot:
         runner = SandboxRunner()
         res = await runner.execute(_spec(), user_id="u1", lease_exempt=True)
         assert res.returncode == 0
+
+
+class TestLocalBackendCancel:
+    """local 后端协作式取消（Q4 方案 A）：真实子进程（sleep）验证。"""
+
+    @pytest.mark.asyncio
+    async def test_cancel_event_kills_process(self, cfg):
+        """cancel_event 置位 → 进程组被击杀、非零退出、不标记 timed_out。"""
+        import os
+
+        if os.name != "posix":
+            pytest.skip("进程组取消语义仅 POSIX")
+        cfg.sandbox.mode = "local"
+        runner = SandboxRunner()
+        cancel_event = asyncio.Event()
+        spec = _spec(command=["sleep", "30"], timeout_seconds=60)
+        task = asyncio.ensure_future(runner.execute(spec, cancel_event=cancel_event))
+        await asyncio.sleep(0.4)  # 等 sleep 进程启动并进入等待
+        cancel_event.set()
+        res = await asyncio.wait_for(task, timeout=10)
+        assert res.returncode != 0
+        assert res.timed_out is False
+
+    @pytest.mark.asyncio
+    async def test_no_cancel_keeps_timeout_semantics(self, cfg):
+        """不传 cancel_event：既有纯超时语义回归（timed_out=True）。"""
+        cfg.sandbox.mode = "local"
+        runner = SandboxRunner()
+        res = await runner.execute(_spec(command=["sleep", "30"], timeout_seconds=0.3))
+        assert res.timed_out is True
+        assert res.returncode != 0
+
+    @pytest.mark.asyncio
+    async def test_no_cancel_path_keeps_inline_wait_for(self, cfg, monkeypatch):
+        """回归（阶段一评审修复）：无 cancel_event 的既有路径不派生独立
+        communicate 任务——asyncio.wait 三方竞争仅供取消路径使用。
+
+        背景：宿主事件循环 teardown（如 TestClient 每请求 portal 关闭）
+        的整体取消扫描会把孤立 communicate 任务与外层任务分别取消，取消
+        解卷交错后外层任务可能悬挂在永不结算的 future 上（全量测试曾
+        稳定复现卡死）。git 等既有调用方不传 cancel_event，必须保持与
+        沙箱化之前 wait_for 内联语义逐项一致。"""
+        cfg.sandbox.mode = "local"
+
+        async def _forbidden_wait(*args, **kwargs):
+            raise AssertionError(
+                "no-cancel_event path must keep inline wait_for semantics"
+            )
+
+        monkeypatch.setattr(
+            "backend.utils.sandbox.local_backend.asyncio.wait", _forbidden_wait
+        )
+        runner = SandboxRunner()
+        res = await runner.execute(_spec(command=["echo", "hi"], timeout_seconds=10))
+        assert res.returncode == 0
+        assert res.timed_out is False
+
+    @pytest.mark.asyncio
+    async def test_outer_task_cancelled_midflight_settles(self, cfg):
+        """回归（阶段一评审修复）：模拟请求循环 teardown 的整体取消扫描——
+        外层任务与子进程派生任务同时被取消时，execute 必须在有限时间内
+        全部结算，不得悬挂。"""
+        cfg.sandbox.mode = "local"
+        runner = SandboxRunner()
+        spec = _spec(command=["sleep", "30"], timeout_seconds=60)
+        task = asyncio.ensure_future(runner.execute(spec))
+        await asyncio.sleep(0.3)  # 等 sleep 子进程启动并进入等待
+        current = asyncio.current_task()
+        others = [t for t in asyncio.all_tasks() if t is not current]
+        for t in others:
+            t.cancel()
+        task.cancel()
+        done, pending = await asyncio.wait({task, *others}, timeout=10)
+        assert pending == set()  # 全部结算：teardown 不再可能卡死
 
 
 class TestErrorFactories:

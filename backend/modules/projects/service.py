@@ -43,6 +43,7 @@ from backend.core.multiuser.upload import (
     move_into_user_space,
 )
 from backend.core.multiuser.dependencies import forbidden
+from backend.utils.sandbox import to_http_exception
 from backend.core.workspace_manager import get_workspace_manager
 from backend.modules.git_manage import service as git_manage_service
 from backend.modules.projects.models import (
@@ -145,6 +146,13 @@ async def upload_create_project(
         _cleanup_staging(staging_dir)
         raise _map_archive_error(e)
     except Exception as e:
+        # rar 解压经 SandboxRunner 执行（docker 模式 daemon 不可达等）抛出
+        # 带 sandbox_code 的错误：按既有语义映射 503/429，不落入通用 400
+        sandbox_http = to_http_exception(e)
+        if sandbox_http is not None:
+            logger.warning("Sandbox error during upload %s: %s", upload_id, e)
+            _cleanup_staging(staging_dir)
+            raise sandbox_http
         logger.exception("Unexpected extraction failure for upload %s", upload_id)
         _cleanup_staging(staging_dir)
         raise _http(400, "invalid_archive", f"Failed to extract archive: {e}")
@@ -338,6 +346,13 @@ async def upload_session_complete(user: dict, sid: str) -> dict:
         row = await asyncio.to_thread(upload_sessions.complete_session, user["id"], sid)
     except ArchiveError as e:
         raise _map_archive_error(e)
+    except Exception as e:
+        # rar 分片会话解压经 SandboxRunner 执行：sandbox 错误按既有语义
+        # 映射 503/429（complete_session 内部已整包清场后原样上抛）
+        sandbox_http = to_http_exception(e)
+        if sandbox_http is not None:
+            raise sandbox_http
+        raise
     # 落位成功后异步自动初始化 Git 版本库（best-effort；自带 .git 原样保留）。
     # 须在事件循环上调度——complete_session 在工作线程执行，线程内无 loop。
     git_manage_service.schedule_auto_init(user["id"], row["id"])

@@ -463,7 +463,7 @@ ExtractorRegistry 先处理已知公开端点（当前代码托管页面使用 G
 | `backend/core/multiuser/dependencies.py` | FastAPI 认证依赖：`get_current_user`（401）、`require_admin`（403）、`get_current_user_optional`、`require_admin_if_multiuser`；P6 新增 `current_user_context`（注入请求级当前用户用于会话类资源归属校验） |
 | `backend/core/multiuser/quota.py` | 配额记账核心（v2 P4 重构衍生记账）：有效额度解析（用户覆盖优先）、项目用量统计、衍生用量读 `user_derived_usage` 缓存（检查点增量刷新 `refresh_derived_usage` / `checkpoint_derived_usage*`、全量对账 `reconcile_derived_usage`、分类重扫 `resync_category_all_users`）、上传/写回/恢复前置校验（超限抛 413 `quota_exceeded`，带 subdir 先刷新被触达分类）、自助清理（`cleanup_derived_category`）、项目唯一命名与建行（`xx (2)`）、项目尺寸对账（`reconcile_project_sizes`）、回收站过期清理 |
 | `backend/core/multiuser/upload.py` | 上传解压管线核心：zip（UTF-8/GBK/cp437 编码、路径穿越/符号链接/加密/炸弹拦截）与 7z（py7zr）安全解压、rar 分发到 `upload_rar.py`、项目根归一化、`move_into_user_space()` 落位；7z 监视线程以 `_sample_written_bytes()` 采样计数器替代周期 `dir_size` 全遍历（v2 P4：scandir 单趟 lstat + 超限短路）；v2 P5 起公开 `validate_member_path()` / `validate_no_case_conflicts()` / `finalize_directory_layout()` 供分片上传会话复用同一校验链 |
-| `backend/core/multiuser/upload_rar.py` | rar 外部解压器子系统（自 upload.py 拆分，v2 P2 + 回退层）：解压器选择层 `resolve_rar_extractor()`（unar 优先、缺失回退 bsdtar，皆缺抛 `rar_extractor_missing`）、命令构造注册表 `RAR_EXTRACTOR_CMD_BUILDERS`、进程组限时/超配额击杀监视、RAR4 加密与分卷标志预扫（`reject_protected_rar`）、受保护包输出关键词兜底、零产物兜底、bsdtar 分支文件名归一化（`normalize_rar_names`：surrogateescape 字节名按 utf-8→gbk→cp437 链原地改名）；`extract_archive` 分发 .rar 时延迟导入其 `extract_rar()`（化解双向引用） |
+| `backend/core/multiuser/upload_rar.py` | rar 外部解压器子系统（自 upload.py 拆分，v2 P2 + 回退层；部署收口阶段一起解压命令经 SandboxRunner 在 convert 镜像内执行）：解压器选择层（local 后端 `resolve_rar_extractor()` 宿主 PATH 探测，unar 优先、缺失回退 bsdtar，皆缺抛 `rar_extractor_missing`；docker 后端不探测容器内 PATH，按 unar 优先固定顺序取注册表 builder）、命令构造注册表 `RAR_EXTRACTOR_CMD_BUILDERS`、ExecSpec 执行编排（压缩包只读挂载 + 解压目录 rw 挂载 + 既有 deadline 折算 `timeout_seconds`）、宿主侧 asyncio 监视任务（采样 extract_dir 写盘量，超配额/超时置位 `cancel_event` 硬中断：docker 杀容器、local 击杀进程组）、RAR4 加密与分卷标志预扫（`reject_protected_rar`）、受保护包输出关键词兜底、零产物兜底、bsdtar 分支文件名归一化（`normalize_rar_names`：surrogateescape 字节名按 utf-8→gbk→cp437 链原地改名）；解压暂存与全部安全复核留在宿主进程；`extract_archive` 分发 .rar 时延迟导入其 `extract_rar()`（化解双向引用） |
 | `backend/core/multiuser/upload_sessions.py` | 分片上传会话核心（v2 P5）：init manifest 结构与剩余配额预检、part 幂等落盘（`X-Part-MD5` 校验 + 体积上限 + 成功续期）、status 位图对位、complete 条件态拼装落位（齐全校验 + 全量 MD5 复核 + 配额二次复核，可续传失败保留现场 / 拼装失败整包清场）、abort 清理、TTL 过期会话与孤儿 staging 目录清理（`purge_expired_upload_sessions`，并入维护循环） |
 | `backend/core/multiuser/mail.py` | 邮件服务（v2 P6）：`email_outbox` 队列投递（业务方入队即返回）+ aiosmtplib 异步发送协程（指数退避重试、失败留档 failed、滚动窗口全局限速）、中英事件模板集中管理（待审批聚合 / 审批结果 / 管理员重置密码 / 找回令牌 / 配额预警）、`smtp.enabled=false` 优雅降级、配额预警迟滞检查（`evaluate_quota_alerts`，读用量缓存）、找回令牌每邮箱去抖（`reset_target_debounced`）、outbox 留档清理；v2 P7 起发送前按消息原子认领（queued→sending 条件 UPDATE，多副本不重复投递），崩溃残留的 sending 行由 `requeue_stale_outbox_claims()` 回收重投 |
 | `backend/core/multiuser/maintenance.py` | 后台维护循环：项目/衍生用量双对账 + 配额预警检查（对账后执行）+ 回收站/暂存区清理 + 沙箱/LLM 租约与限流事件清理 + 编辑日志 TTL 清理 + 过期登录会话删除 + 写作会话保留期清理 + 分片上传过期会话与孤儿目录清理 + 找回令牌与邮件留档清理 + 逐段检查上下文与待定交互 TTL 清理 + 崩溃副本残留 sending 行回收（v2 P4/P5/P6/P7；`main.py` lifespan 启动）。**v2 P7 多实例选主**：持 `maintenance_lease` 租约的副本执行循环体，非持有者跳过本轮；租约到期自动易主，取消时释放 |
@@ -791,7 +791,9 @@ backend/utils/sandbox/
 
 **Docker 容器安全基线**（runner 强制注入）：`--network none`、根文件系统只读 + tmpfs `/tmp`（容量 `tmpfs_mb`）、`--memory`/`--cpus`/`--pids-limit`、`no-new-privileges`、drop ALL capabilities、以宿主后端同 uid:gid 运行（产物属主一致）。挂载使用**同绝对路径**（host_path 即容器内路径），保证 template_gen 等解析 .log 中文件路径的逻辑零改动。超时强杀容器并标记 `timed_out`；退出码 137 或 inspect OOMKilled 标志翻译为 `oom_killed`。
 
-**并发治理**：全局进程内信号量（`max_concurrent_global`，单/多用户均生效）+ 多用户模式每用户 DB 租约（`core/multiuser/sandbox_leases.py`，`sandbox_slots` 表，TTL = 执行超时 + 120s，崩溃残留由维护循环清理；P7 多实例阶段在同一共享卷上跨副本生效）。租约满抛 `sandbox_busy`（429）。只读轻量命令经 `execute(..., lease_exempt=True)` 豁免每用户租约（仍受全局信号量约束）——目前仅 git 查询类子命令（status/log/rev-parse/show/archive 等，判定见 `git_diff/service/process.py::_is_readonly_git_args`），避免版本页并行拉取 status/log 这类毫秒级查询在每用户上限=1 时互相顶掉误报 429；init/add/commit 写操作与 latexdiff 照常占用租约。
+**协作式取消（cancel_event，部署收口阶段一）**：`execute(spec, ..., cancel_event=asyncio.Event)` 支持调用方 mid-flight 中断——docker 后端强杀容器、local 后端 `terminate_process_tree` 击杀进程组，结果为非零退出码且**不标记** `timed_out`（错误语义由调用方按自身状态判定，如 rar 解压超配额 → `quota_exceeded`）。全局并发闸门为此从 asyncio.Semaphore 改为跨事件循环安全的计数闸门（rar 解压的同步核心在 worker 线程独立事件循环内调用 execute，asyncio 原语与循环绑定不可跨循环复用）。
+
+**并发治理**：全局进程内闸门（`max_concurrent_global`，跨事件循环生效，单/多用户均生效）+ 多用户模式每用户 DB 租约（`core/multiuser/sandbox_leases.py`，`sandbox_slots` 表，TTL = 执行超时 + 120s，崩溃残留由维护循环清理；P7 多实例阶段在同一共享卷上跨副本生效）。租约满抛 `sandbox_busy`（429）。只读轻量命令经 `execute(..., lease_exempt=True)` 豁免每用户租约（仍受全局闸门约束）——目前仅 git 查询类子命令（status/log/rev-parse/show/archive 等，判定见 `git_diff/service/process.py::_is_readonly_git_args`），避免版本页并行拉取 status/log 这类毫秒级查询在每用户上限=1 时互相顶掉误报 429；init/add/commit 写操作与 latexdiff 照常占用租约。
 
 **接入的调用点**：
 
@@ -802,6 +804,7 @@ backend/utils/sandbox/
 | `modules/format_converter/service.py`（pandoc 文本/文件转换，输入统一走临时文件——契约不含 stdin） | convert |
 | `utils/latexindent_utils.format_with_latexindent` | tex |
 | `modules/plot_gen/executor._run_script`（LLM 生成的绘图脚本；审计钩子保留为纵深防御） | plot |
+| `core/multiuser/upload_rar.extract_rar`（rar 上传解压；压缩包只读挂载 + 解压目录 rw 挂载 + cancel_event 配额硬中断） | convert |
 
 **镜像体系**：仓库 `docker/` 目录提供四镜像（backend/tex/convert/plot）Dockerfile 与 `build.sh`（支持 buildx amd64/arm64 双架构），详见 [deployment.md](deployment.md) 与 [docker/README.md](../docker/README.md)。缺 TeX 宏包时改 `docker/tex/Dockerfile` 的 `EXTRA_TL_PACKAGES` 清单重建镜像（运行期不装包，沙箱无网络原则）。
 

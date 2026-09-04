@@ -8,7 +8,7 @@
 | --- | --- | --- | --- |
 | `backend/` | `latexcellence-backend` | 应用本体（FastAPI 后端 + 前端静态产物），上传解压用 unar | python:3.12-slim + requirements.txt + unar + git |
 | `tex/` | `latexcellence-tex` | LaTeX 编译与 TeX 侧工具沙箱 | TeX Live（install-tl scheme-medium + 中文宏包）+ latexmk / texfot / latexdiff / latexindent / biber + git + 科研绘图宏包（standalone / pgfplots，plot_gen 依赖）+ 字体白名单（Latin Modern / TeX Gyre / Fandol / Noto CJK，经 fontconfig 纳管） |
-| `convert/` | `latexcellence-convert` | 格式转换（format_converter 模块） | pandoc 官方发布物（版本锁定） |
+| `convert/` | `latexcellence-convert` | 格式转换（format_converter 模块）+ rar 上传解压（upload_rar 沙箱管线） | pandoc 官方发布物（版本锁定）+ unar / libarchive-tools（bsdtar，rar 解压双工具） |
 | `plot/` | `latexcellence-plot` | 科研绘图 Python 沙箱（plot_gen 模块） | numpy / pandas / scipy / matplotlib / seaborn / colorcet / openpyxl / xlrd + Noto CJK 字体 |
 
 镜像名通过 `config.json` 的 `sandbox.image_*` 配置项引用；`backend` 镜像本身由部署形态（compose 等）引用，不占用 `sandbox.image_*`。
@@ -193,4 +193,5 @@ tex 镜像内置固定的字体白名单，template_gen 的规划提示词按配
 - backend 镜像只安装 Playwright 的 Python 包、不含浏览器内核：web_search 的浏览器回退池在容器内不可用，抓取自动走 HTTP 路径；确有需要可在部署文档基础上自行扩展镜像安装内核。
 - plot 镜像 pip 包是仓库 `requirements.txt` 的对齐子集（数值计算与绘图部分），两侧版本下限需同步维护。
 - convert 镜像不设 ENTRYPOINT：后端 SandboxRunner 以完整 argv 驱动容器。手工调试时命令完整给出即可：`docker run --rm -v "$PWD:/w" -w /w latexcellence-convert:<tag> pandoc -f md -t html in.md`。
+- convert 镜像同时承载 rar 上传解压：multiuser 上传管线把 unar / bsdtar 解压命令经 SandboxRunner 派发到本镜像执行（压缩包只读挂载、解压目录可写挂载），镜像内两工具须同时齐备，构建期 `command -v` 自检兜底。
 - tex 镜像体积主要来自 scheme-medium + 中文字体/宏包，属预期；不要为缩小体积改用 scheme-basic，中文支持会整体缺失。

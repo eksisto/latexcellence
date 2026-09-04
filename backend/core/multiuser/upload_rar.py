@@ -1,47 +1,63 @@
 """
-多用户模式上传解压管线 —— rar 外部解压器子系统（多用户 v2 P2 / 回退层）。
+多用户模式上传解压管线 —— rar 外部解压器子系统（多用户 v2 P2 / 回退层 /
+部署收口阶段一沙箱化）。
 
 从 upload.py 拆分而来（该文件越过单文件健康边界）：本模块只承载 rar 相关的
-选择层、命令构造、文件名归一化、外部进程管线与 RAR4 头链预扫；zip/7z 及
+选择层、命令构造、文件名归一化、沙箱执行管线与 RAR4 头链预扫；zip/7z 及
 共享校验原样留在 upload.py。
 
 分层与导入方向：
     - 本模块依赖 upload.py 的共享原语（ArchiveError / UploadLimits /
       ExtractedProject / deadline 工具 / 大小写冲突校验 / 采样间隔）；
     - upload.extract_archive 在分发 .rar 时延迟导入本模块的 extract_rar()
-      （函数级导入化解双向引用，两侧入口无论谁先加载都能正确初始化）。
+      （函数级导入化解双向引用，两侧入口无论谁先加载都能正确初始化）；
+    - 解压命令经 backend/utils/sandbox 的 SandboxRunner 执行（部署收口
+      阶段一）：convert 镜像内置 unar / bsdtar，无网络、只读根文件系统、
+      资源限额的安全基线与 latexmk / pandoc 等外部命令对齐。
 
 rar 解压语义（unar 优先、bsdtar 回退）：
-    - rar 无进程内解析库，走外部解压器管线：unar 优先
-      （`unar -f -q -D -o <dir> -- <file>`），二进制缺失时回退 bsdtar
-      （`bsdtar -x -f <archive> -C <dir>`，libarchive 的 RAR reader 为 BSD
-      授权独立实现，Alpine 等无 unar 源的主机可用）；两者皆缺抛
-      `rar_extractor_missing`；不跨解压器重试（部分解压状态下的配额/
+    - rar 无进程内解析库，走外部解压器管线：local 后端按宿主 PATH 探测
+      （unar 优先，缺失回退 bsdtar；两者皆缺抛 `rar_extractor_missing`）；
+      docker 后端不探测容器内 PATH，按 unar 优先的固定顺序取注册表
+      builder（镜像保证两者齐备）；不跨解压器重试（部分解压状态下的配额/
       限时语义复杂化，且两工具对损坏包判定不同，结果不可复现）
-    - stdin 接 /dev/null 防止加密包交互式索要密码挂起，进程组限时击杀
-    - 解压前对 RAR4 头链做最小预扫，命中加密 / 分卷标志即确定性拒绝，
-      不依赖解压器失败输出的措辞；文件 / 子块 / 服务块统一按块头声明的
-      数据区长度整段跳过（恢复记录 RR 等合法服务数据不得误拒），未知
-      块或长度异常直接放行交权威复核兜底；RAR5 由输出关键词匹配与
-      “零产物”兜底覆盖
+    - 命令以 ExecSpec 描述（argv 形式、无 stdin 契约）：压缩包以只读方式
+      bind mount 进容器（同绝对路径契约），解压目录（暂存区）以可写方式
+      挂载为工作目录；加密包无法交互式索要密码（stdin 关闭），挂起不可能
+    - mid-flight 拦截（超配额 / 超时）由宿主侧 asyncio 监视任务采样
+      extract_dir 写盘量实现（extract_dir 经 bind mount 对宿主可见），
+      越限置位 cancel_event，docker 后端杀容器、local 后端击杀进程组
+    - 解压前对 RAR4 头链做最小预扫（宿主进程、纯 Python），命中加密 /
+      分卷标志即确定性拒绝，不依赖解压器失败输出的措辞；文件 / 子块 /
+      服务块统一按块头声明的数据区长度整段跳过（恢复记录 RR 等合法服务
+      数据不得误拒），未知块或长度异常直接放行交权威复核兜底；RAR5 由
+      输出关键词匹配与“零产物”兜底覆盖
     - unar 在 Linux 上会把名字里的 '/' 折叠为 '_'（RAR 归档内部规范分隔符
       是反斜杠），因此正常 RAR 包的子目录结构不受影响；GBK 等非 UTF-8 文件名
       依赖 unar 字符集探测。bsdtar/libarchive 不做字符集探测，非 UTF-8 名以
-      surrogateescape 字节落盘，故 bsdtar 分支在进程成功后执行
+      surrogateescape 字节落盘，故 bsdtar 分支在执行成功后执行
       `normalize_rar_names()` 按 utf-8 → gbk → cp437 链原地归一化，
       防 lone surrogate 使文件树 JSON 序列化失败（与 zip 管线解码链一致）
+    - 解压暂存、文件名归一化、大小写冲突扫描、零产物兜底等安全复核全部
+      留在宿主进程（纯 Python），在沙箱执行前后照常运行
 """
 
+import asyncio
+import contextlib
 import os
 import shutil
-import signal
 import struct
-import subprocess
-import threading
 import time
 from pathlib import Path
 
 from backend.core.logger import get_logger
+from backend.utils.sandbox import (
+    ExecResult,
+    ExecSpec,
+    SandboxMount,
+    current_sandbox_user_id,
+    get_sandbox_runner,
+)
 from .quota import dir_size
 from .upload import (
     ArchiveError,
@@ -77,10 +93,12 @@ _RAR_PROTECTED_KEYWORDS = ("password", "encrypt", "volume")
 
 
 def resolve_rar_extractor() -> tuple[str, str]:
-    """可用性选择层：unar 优先，缺失时回退 bsdtar，皆缺抛明确错误。
+    """local 后端专用的可用性选择层：探测宿主 PATH（unar 优先，缺失回退
+    bsdtar，皆缺抛明确错误），返回 (解压器名, 二进制绝对路径)。
 
-    返回 (解压器名, 二进制绝对路径)。双工具并存环境恒选 unar（生产已
-    验证且容错更宽），行为与回退层引入前逐字节一致。"""
+    仅宿主语义：docker 后端不探测容器内 PATH（镜像保证 unar/bsdtar 齐备，
+    见 `_select_rar_extractor`）。双工具并存环境恒选 unar（生产已验证且
+    容错更宽），行为与回退层引入前逐字节一致。"""
     unar = shutil.which("unar")
     if unar is not None:
         return "unar", unar
@@ -91,6 +109,28 @@ def resolve_rar_extractor() -> tuple[str, str]:
         "rar_extractor_missing",
         "Server has no usable rar extractor (unar or bsdtar); "
         "cannot extract rar archives",
+    )
+
+
+# docker 后端的固定选择顺序（不探测容器内 PATH；convert 镜像保证齐备）
+_DOCKER_EXTRACTOR_PREFERENCE = ("unar", "bsdtar")
+
+
+def _select_rar_extractor(backend: str) -> tuple[str, str]:
+    """按执行后端选择解压器，返回 (解压器名, 命令首参)。
+
+    - local：宿主 PATH 探测（`resolve_rar_extractor`，二进制缺失抛
+      `rar_extractor_missing`——该错误码仅 local 后端产生）；
+    - docker：按固定优先序取注册表 builder，命令首参为裸二进制名（由
+      容器 PATH 解析），不做任何宿主探测。"""
+    if backend == "local":
+        return resolve_rar_extractor()
+    for name in _DOCKER_EXTRACTOR_PREFERENCE:
+        if name in RAR_EXTRACTOR_CMD_BUILDERS:
+            return name, name
+    raise ArchiveError(
+        "rar_extractor_missing",
+        "No rar extractor registered for the sandbox image",
     )
 
 
@@ -217,72 +257,51 @@ def normalize_rar_names(extract_dir: Path) -> None:
 def extract_rar(
     archive_path: Path, extract_dir: Path, limits: UploadLimits
 ) -> ExtractedProject:
-    """通过外部解压器（unar 优先，缺失回退 bsdtar）解压 rar 到 extract_dir。
+    """经 SandboxRunner 解压 rar 到 extract_dir（unar 优先，bsdtar 回退）。
 
-    - 两个二进制都缺失 → `rar_extractor_missing` 明确报错（部署层负责
-      安装其一：Debian 系 `apt install unar`，Alpine 系 `apk add
-      libarchive-tools`）；
-    - stdin 关闭防交互索要密码挂起；start_new_session 使进程组可整体击杀；
-    - 监视线程周期统计写盘量，超剩余配额或超限时 SIGKILL 进程组硬中断；
+    - local 后端：宿主两个二进制都缺失 → `rar_extractor_missing` 明确报错
+      （部署层负责安装其一：Debian 系 `apt install unar`，Alpine 系
+      `apk add libarchive-tools`）；docker 后端由 convert 镜像保证齐备，
+      daemon 不可达时按 sandbox_unavailable → 503 硬失败（mode=auto 探测
+      失败自动回落 local，行为与沙箱化前一致）；
+    - 命令以 ExecSpec 描述（argv、无 stdin），压缩包只读挂载、解压目录
+      可写挂载；mid-flight 超配额 / 超时由宿主侧监视任务置位 cancel_event
+      硬中断（docker 杀容器 / local 击杀进程组）；
+    - deadline 折算为 spec.timeout_seconds + ExecResult.timed_out，错误码
+      与用户文案不变；
     - bsdtar 分支成功退出后先做文件名归一化再进入后续扫描；
     - 成功但零产物视为多卷集静默失败，按 invalid_archive 拒绝。
     返回的 size 为 0 占位——外层 extract_archive 统一用 _validate_extracted
     的复核结果覆盖。"""
-    extractor, binary = resolve_rar_extractor()
-    build_cmd = RAR_EXTRACTOR_CMD_BUILDERS[extractor]
-    logger.info("rar extractor selected: %s (%s)", extractor, binary)
     deadline = _deadline(limits)
     _check_deadline(deadline)
 
-    # 解压前预扫 RAR4 头链：加密 / 分卷标志确定性拒绝（不解密任何受保护包）
+    # 解压前预扫 RAR4 头链（宿主进程、纯 Python）：加密 / 分卷标志确定性拒绝
     reject_protected_rar(archive_path, max_blocks=limits.max_files * 4 + 1024)
 
-    try:
-        proc = subprocess.Popen(
-            build_cmd(binary, archive_path, extract_dir),
-            stdin=subprocess.DEVNULL,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            start_new_session=True,
-        )
-    except OSError as e:
-        raise ArchiveError("invalid_archive", f"Cannot run {extractor}: {e}")
+    # 本函数保持同步签名（upload.extract_archive 的同步核心经
+    # asyncio.to_thread 调度，工作线程内无事件循环）：解压执行段在此线程内
+    # 建立独立事件循环跑完（runner 的并发闸门与探测锁均跨循环安全）
+    extractor, result, breach = asyncio.run(
+        _extract_via_sandbox(archive_path, extract_dir, limits, deadline)
+    )
 
-    stop = threading.Event()
-    breach: list[str] = []
-    watcher = _start_rar_watch(proc, extract_dir, limits, deadline, stop, breach)
-    stdout_data = b""
-    stderr_data = b""
-    try:
-        remaining = deadline - time.monotonic()
-        try:
-            stdout_data, stderr_data = proc.communicate(timeout=max(remaining, 0.0))
-        except subprocess.TimeoutExpired:
-            logger.warning("Aborting rar extraction mid-flight: timeout")
-            breach.append("invalid_archive")
-            _kill_process_group(proc)
-            proc.communicate()
-    finally:
-        stop.set()
-        watcher.join(timeout=5)
-
-    # breach 仅在进程确以非零退出（被击杀 / 自身报错）时采信：
-    # returncode==0 说明解压器已在预算内正常完成，此时 watcher 在完成前后
+    # breach 仅在进程确以非零退出（被取消 / 自身报错）时采信：
+    # returncode==0 说明解压器已在预算内正常完成，此时监视任务在完成前后
     # 一个采样 tick 内的过期采样属误报——真实超配额由外层 _validate_extracted
     # 以最终落盘量权威复核，不受此放行影响
-    if breach and proc.returncode != 0:
+    if breach and result.returncode != 0:
         if breach[0] == "quota_exceeded":
             raise ArchiveError(
                 "quota_exceeded", "Extracted size exceeds remaining project quota"
             )
         raise ArchiveError("invalid_archive", "Archive extraction timed out")
 
-    if proc.returncode != 0:
-        text = (
-            stdout_data.decode("utf-8", "ignore")
-            + "\n"
-            + stderr_data.decode("utf-8", "ignore")
-        ).lower()
+    if result.timed_out:
+        raise ArchiveError("invalid_archive", "Archive extraction timed out")
+
+    if result.returncode != 0:
+        text = (result.stdout + "\n" + result.stderr).lower()
         if any(kw in text for kw in _RAR_PROTECTED_KEYWORDS):
             raise ArchiveError(
                 "archive_unsafe",
@@ -291,7 +310,7 @@ def extract_rar(
         logger.info(
             "%s failed (exit=%s) for %s: %s",
             extractor,
-            proc.returncode,
+            result.returncode,
             archive_path.name,
             " ".join(text.split())[:300],  # 压平换行，避免日志注入多行
         )
@@ -320,46 +339,89 @@ def extract_rar(
     return ExtractedProject(root=extract_dir, size=0, file_count=file_count)
 
 
-def _kill_process_group(proc: subprocess.Popen) -> None:
-    """SIGKILL 整个解压器进程组（Popen 用 start_new_session 建独立进程组）。"""
-    try:
-        os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
-    except OSError:
-        pass  # 进程已退出 / 权限不足等：以 communicate 的返回为准
-
-
-def _start_rar_watch(
-    proc: subprocess.Popen,
+async def _extract_via_sandbox(
+    archive_path: Path,
     extract_dir: Path,
     limits: UploadLimits,
     deadline: float,
-    stop: threading.Event,
+) -> tuple[str, ExecResult, list[str]]:
+    """异步编排：选后端 → 选解压器 → 构造 ExecSpec → 监视任务 + 沙箱执行。
+
+    返回 (解压器名, ExecResult, breach)。breach 由监视任务在置位
+    cancel_event 前写入（同一事件循环内顺序可见，无竞态）。"""
+    runner = get_sandbox_runner()
+    backend = await runner.resolve_backend("convert")
+    extractor, binary = _select_rar_extractor(backend)
+    logger.info(
+        "rar extractor selected: %s (%s) | sandbox backend=%s",
+        extractor,
+        binary,
+        backend,
+    )
+
+    # 归档与解压目录统一取真实绝对路径：docker 后端按同绝对路径契约 bind
+    # mount，命令参数（bsdtar 的 -f/-C 等）与挂载源必须指向同一路径，
+    # resolve() 消除路径中符号链接组件在宿主与 daemon 视角下的分歧
+    archive_real = Path(archive_path).resolve()
+    dir_real = Path(extract_dir).resolve()
+    command = RAR_EXTRACTOR_CMD_BUILDERS[extractor](binary, archive_real, dir_real)
+    remaining = deadline - time.monotonic()
+    spec = ExecSpec(
+        command=command,
+        cwd=str(dir_real),  # 解压目录：默认 rw 挂载进容器
+        image_kind="convert",
+        mounts=[SandboxMount(host_path=str(archive_real), read_only=True)],
+        # 既有 deadline 折算为执行超时（ExecSpec 要求 >0；临界过期场景由
+        # 后端立即超时返回 timed_out，错误码与文案不变）
+        timeout_seconds=max(remaining, 0.05),
+    )
+
+    cancel_event = asyncio.Event()
+    breach: list[str] = []
+    watcher = asyncio.ensure_future(
+        _rar_watch_task(extract_dir, limits, deadline, cancel_event, breach)
+    )
+    try:
+        result = await runner.execute(
+            spec,
+            user_id=current_sandbox_user_id(),
+            cancel_event=cancel_event,
+        )
+    finally:
+        watcher.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await watcher
+    return extractor, result, breach
+
+
+async def _rar_watch_task(
+    extract_dir: Path,
+    limits: UploadLimits,
+    deadline: float,
+    cancel_event: asyncio.Event,
     breach: list[str],
-) -> threading.Thread:
-    """后台监视 rar 解压（unar/bsdtar）的实时写盘量与限时。
+) -> None:
+    """宿主侧异步监视任务：周期采样解压目录写盘量，越限置位 cancel_event。
 
-    周期采样 extract_dir 已写盘量（符号链接不计），超过剩余配额或超过
-    限时即 SIGKILL 进程组硬中断解压，并把错误码追加到 breach。"""
-
-    def watch() -> None:
-        while not stop.wait(_WATCH_INTERVAL_SECONDS):
-            used = dir_size(extract_dir)
-            if used > limits.remaining_quota_bytes:
-                code = "quota_exceeded"
-            elif time.monotonic() > deadline:
-                code = "invalid_archive"
-            else:
-                continue
-            breach.append(code)
-            logger.warning(
-                "Aborting rar extraction mid-flight: %s (written=%d)", code, used
-            )
-            _kill_process_group(proc)
-            return
-
-    thread = threading.Thread(target=watch, name="rar-extract-watch", daemon=True)
-    thread.start()
-    return thread
+    extract_dir 经 bind mount 对宿主可见，dir_size 采样逻辑与沙箱化前的
+    监视线程一致（符号链接不计）；超过剩余配额或超过限时即置位 cancel_event
+    （docker 后端杀容器、local 后端击杀进程组），并把错误码追加到 breach。
+    采样为同步阻塞遍历，经 asyncio.to_thread 调度避免阻塞事件循环。"""
+    while True:
+        await asyncio.sleep(_WATCH_INTERVAL_SECONDS)
+        used = await asyncio.to_thread(dir_size, extract_dir)
+        if used > limits.remaining_quota_bytes:
+            code = "quota_exceeded"
+        elif time.monotonic() > deadline:
+            code = "invalid_archive"
+        else:
+            continue
+        breach.append(code)
+        logger.warning(
+            "Aborting rar extraction mid-flight: %s (written=%d)", code, used
+        )
+        cancel_event.set()
+        return
 
 
 def reject_protected_rar(archive_path: Path, max_blocks: int = 65536) -> None:

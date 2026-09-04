@@ -5,8 +5,10 @@
 - _network_kwarg_name：docker-py 新旧签名下的网络参数名选择
 - _build_container_kwargs：容器安全基线断言（无网络 / 只读 / 降权 / 限额）
 - _image_for：空镜像名按内置默认回落（与设置页提示一致）
+- execute 的 cancel_event 协作式取消（部署收口阶段一，fake 容器 hermetic）
 """
 
+import asyncio
 import os
 from types import SimpleNamespace
 
@@ -234,3 +236,106 @@ class TestProbeMountPreflightIntegration:
         r._docker = fake
         await r.probe_docker()
         assert fake.preflight_called is False
+
+
+class TestExecuteCancelEvent:
+    """cancel_event 协作式取消（Q4 方案 A）：fake 容器验证杀容器语义。
+
+    hermetic：fake client/container 替身不触达 daemon；覆盖执行循环中
+    cancel_event 置位 → kill → 非 timed_out 结果 → 容器强制移除 的链路，
+    以及取消场景下 exit 137 不误判为 oom_killed 的启发式豁免。"""
+
+    @staticmethod
+    def _fake_backend(monkeypatch, *, oom_on_kill=False):
+        from backend.utils.sandbox.docker_backend import DockerBackend
+
+        calls: dict = {"kill": 0, "removed": 0}
+
+        class FakeContainer:
+            def __init__(self):
+                self.attrs = {"State": {"Status": "running", "OOMKilled": False}}
+                self.killed = False
+
+            def start(self):
+                self.attrs["State"]["Status"] = "running"
+
+            def reload(self):
+                if self.killed:
+                    self.attrs["State"] = {
+                        "Status": "exited",
+                        "ExitCode": 137,
+                        "OOMKilled": oom_on_kill,
+                    }
+
+            def kill(self):
+                self.killed = True
+                calls["kill"] += 1
+
+            def logs(self, stdout=True, stderr=True):
+                return b""
+
+            def remove(self, force=False):
+                calls["removed"] += 1
+
+        container = FakeContainer()
+
+        class FakeContainers:
+            def create(self, **kwargs):
+                return container
+
+        class FakeClient:
+            containers = FakeContainers()
+
+        backend = DockerBackend()
+        monkeypatch.setattr(backend, "_get_client", lambda: FakeClient())
+        return backend, container, calls
+
+    @staticmethod
+    def _spec() -> ExecSpec:
+        return ExecSpec(
+            command=["sleep", "60"], cwd="/workspace/proj", timeout_seconds=30
+        )
+
+    @pytest.mark.asyncio
+    async def test_cancel_kills_container_without_timed_out(self, monkeypatch):
+        backend, container, calls = self._fake_backend(monkeypatch)
+
+        async def canceller():
+            await asyncio.sleep(0.05)
+            event.set()
+
+        event = asyncio.Event()
+        task = asyncio.ensure_future(
+            backend.execute(
+                self._spec(),
+                image="img:1",
+                limits=SandboxLimits(),
+                cancel_event=event,
+            )
+        )
+        asyncio.ensure_future(canceller())
+        res = await asyncio.wait_for(task, timeout=10)
+        assert calls["kill"] == 1
+        assert res.timed_out is False
+        assert res.returncode == 137
+        assert res.oom_killed is False  # 取消场景豁免 exit-137 oom 启发式
+        assert calls["removed"] == 1  # 容器最终强制清理
+
+    @pytest.mark.asyncio
+    async def test_cancel_before_start_still_kills(self, monkeypatch):
+        """cancel_event 已置位（如监视任务先于执行越限）：不漏杀。"""
+        backend, _container, calls = self._fake_backend(monkeypatch)
+        event = asyncio.Event()
+        event.set()
+        res = await asyncio.wait_for(
+            backend.execute(
+                self._spec(),
+                image="img:1",
+                limits=SandboxLimits(),
+                cancel_event=event,
+            ),
+            timeout=10,
+        )
+        assert calls["kill"] == 1
+        assert res.timed_out is False
+        assert res.returncode == 137

@@ -239,7 +239,7 @@ python -m backend.manage set-status <username> pending|active|disabled
 | 端点 | 说明 |
 | --- | --- |
 | `GET /api/projects` | 我的项目 + 被共享的项目（含 role / owner / 用量，过滤回收站） |
-| `POST /api/projects` | multipart 上传 `.zip` / `.7z` / `.rar` 创建项目（流式写暂存区、安全解压、命名去重 `xx (2)`、配额校验；rar 经外部解压器 unar 优先、缺失回退 bsdtar，两者皆缺时返回 400 `rar_extractor_missing`） |
+| `POST /api/projects` | multipart 上传 `.zip` / `.7z` / `.rar` 创建项目（流式写暂存区、安全解压、命名去重 `xx (2)`、配额校验；rar 经外部解压器 unar 优先、缺失回退 bsdtar——解压命令经 SandboxRunner 执行，convert 镜像内置双工具，local 回落探测宿主 PATH、两者皆缺时返回 400 `rar_extractor_missing`；docker 模式 daemon 不可达返回 503 `sandbox_unavailable`） |
 | `GET /api/projects/{id}/download` | 打包下载 zip（owner / editor / viewer 均可） |
 | `PUT /api/projects/{id}` | 重命名（owner，同名冲突 409） |
 | `DELETE /api/projects/{id}` | 项目进回收站（owner，删除即腾出配额） |

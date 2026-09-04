@@ -17,7 +17,9 @@ add/commit 写操作照常占用（见 git_diff.process._is_readonly_git_args）
 """
 
 import asyncio
+import contextvars
 import shutil
+import threading
 from pathlib import Path, PurePosixPath
 
 from fastapi import HTTPException
@@ -422,30 +424,72 @@ async def get_log(
 
 
 # ── 上传自动初始化（best-effort 后台任务）─────────────────────────
-# 进行中的自动初始化任务登记（wait_auto_init_tasks 供测试确定性等待）
-_AUTO_INIT_TASKS: set[asyncio.Task] = set()
+# 进行中的自动初始化线程登记（wait_auto_init_tasks 供测试确定性等待）。
+_AUTO_INIT_WORKERS: set[threading.Thread] = set()
+_AUTO_INIT_WORKERS_LOCK = threading.Lock()
 
 
 async def wait_auto_init_tasks() -> None:
-    """等待全部自动初始化后台任务结束（测试用；生产路径无需调用）。"""
-    while _AUTO_INIT_TASKS:
-        await asyncio.gather(*list(_AUTO_INIT_TASKS), return_exceptions=True)
+    """等待全部自动初始化后台线程结束（测试用；生产路径无需调用）。"""
+    while True:
+        with _AUTO_INIT_WORKERS_LOCK:
+            workers = [t for t in _AUTO_INIT_WORKERS if t.is_alive()]
+        if not workers:
+            return
+        await asyncio.to_thread(_join_auto_init_workers, workers)
+
+
+def _join_auto_init_workers(workers: list[threading.Thread]) -> None:
+    for worker in workers:
+        worker.join(timeout=300)
+
+
+def _auto_init_worker_main(
+    user_id: str, project_id: str, ctx: contextvars.Context
+) -> None:
+    """工作线程入口：在自有钱程的事件循环内执行自动初始化。
+
+    请求上下文（沙箱租约用户等 ContextVar）在调度时快照，随线程内的
+    事件循环一并生效。"""
+    try:
+        ctx.run(asyncio.run, _auto_init(user_id, project_id))
+    except Exception as e:  # noqa: BLE001 — best-effort：失败不影响上传结果
+        logger.warning("Auto git init failed for project %s: %s", project_id, e)
+    finally:
+        with _AUTO_INIT_WORKERS_LOCK:
+            _AUTO_INIT_WORKERS.discard(threading.current_thread())
 
 
 def schedule_auto_init(user_id: str, project_id: str) -> None:
     """上传落位后调度异步自动初始化；异常仅记日志，不进上传事务。
 
     项目自带 .git 时原样保留（探测到已有仓库直接跳过）；多用户模式下
-    事件循环上下文（沙箱租约用户）随 create_task 复制保留。"""
+    事件循环上下文（沙箱租约用户）在调度时快照并随工作线程保留。
+
+    执行落位在独立工作线程的自有事件循环，而非调度方（请求）循环：
+    git 自动初始化要派生子进程，而宿主事件循环可能随时被整体取消收尾
+    （TestClient 每请求 portal 的 teardown、服务器 shutdown 对在途请求
+    的取消）——取消恰好命中子进程 spawn 窗口时，CPython asyncio 的
+    子进程 transport 会因 ``_connect_pipes`` 半接线而永久无法收尾
+    （``_try_finish`` 等「全部管道已断开」永不满足，``_wait`` future
+    永不结算），拖死整个 loop teardown。脱离请求循环从根上消除该
+    窗口；daemon 线程不阻塞进程退出，git 操作自身有超时上界。"""
     if not get_config().features.git_manage.enabled:
         return
     try:
         asyncio.get_running_loop()
     except RuntimeError:
         return  # 无事件循环的调用环境：跳过，由版本页手动初始化兜底
-    task = asyncio.create_task(_auto_init(user_id, project_id))
-    _AUTO_INIT_TASKS.add(task)
-    task.add_done_callback(_AUTO_INIT_TASKS.discard)
+    ctx = contextvars.copy_context()
+    worker = threading.Thread(
+        target=_auto_init_worker_main,
+        args=(user_id, project_id, ctx),
+        name="git-auto-init",
+        daemon=True,
+    )
+    with _AUTO_INIT_WORKERS_LOCK:
+        _AUTO_INIT_WORKERS.add(worker)
+    worker.start()
 
 
 async def _auto_init(user_id: str, project_id: str) -> None:

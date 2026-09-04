@@ -157,6 +157,54 @@ class TestUploadAutoInit:
         )
         assert r.stdout.strip() == "Initial commit"
 
+    def test_auto_init_survives_loop_teardown(self, env):
+        """回归（阶段一评审修复）：调度循环被整体收尾后自动初始化仍完成。
+
+        背景：自动初始化曾在调度方（请求）循环上 create_task 执行，而
+        TestClient 每请求 portal 的 teardown 会对循环做整体取消扫描——
+        取消恰好命中 git 子进程 spawn 窗口时，CPython asyncio 子进程
+        transport 因 `_connect_pipes` 半接线而永久无法收尾（`_try_finish`
+        等全部管道断开永不满足），任务悬挂在永不结算的 `_wait` future
+        上，拖死整个 teardown。现实现把初始化移入独立线程的自有循环，
+        请求循环死亡不影响其完成。
+
+        本用例在一次性循环内调度后**不做任何取消清理**直接停掉该循环
+        （比 teardown 更苛刻），断言初始化仍然落地。"""
+        import time
+        import uuid
+
+        user_id = env["alice"]["id"]
+        project_id = uuid.uuid4().hex
+        root = userspace.project_dir(user_id, project_id)
+        root.mkdir(parents=True, exist_ok=False)
+        (root / "main.tex").write_text("x", encoding="utf-8")
+
+        loop = asyncio.new_event_loop()
+        try:
+
+            async def _schedule():
+                git_manage_service.schedule_auto_init(user_id, project_id)
+                # 调度方循环内确认：工作在独立线程，不在当前循环线程
+                with git_manage_service._AUTO_INIT_WORKERS_LOCK:
+                    workers = list(git_manage_service._AUTO_INIT_WORKERS)
+                assert workers, "worker thread must be registered"
+                assert all(w is not asyncio.current_task() for w in workers)
+
+            loop.run_until_complete(_schedule())
+        finally:
+            loop.stop()
+            loop.close()
+
+        deadline = time.monotonic() + 60
+        while time.monotonic() < deadline:
+            if (root / ".git").is_dir() and _git_commit_count(root) == 1:
+                break
+            time.sleep(0.1)
+        assert (root / ".git").is_dir(), "auto init must survive loop teardown"
+        assert (root / ".gitignore").is_file()
+        assert _git_commit_count(root) == 1
+        asyncio.run(git_manage_service.wait_auto_init_tasks())
+
     def test_auto_init_disabled_by_feature_flag(self, env, monkeypatch):
         monkeypatch.setattr(
             git_manage_service.get_config().features.git_manage,

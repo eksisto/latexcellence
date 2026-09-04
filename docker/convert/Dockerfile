@@ -30,7 +30,7 @@ ARG DEBIAN_MIRROR=""
 
 LABEL org.opencontainers.image.title="LaTeXcellence Convert Sandbox" \
       org.opencontainers.image.source="https://github.com/eksisto/latexcellence.git" \
-      org.opencontainers.image.description="pandoc 转换沙箱：锁定版本 ${PANDOC_VERSION} 官方发布物"
+      org.opencontainers.image.description="pandoc 转换沙箱：锁定版本 ${PANDOC_VERSION} 官方发布物 + rar 解压（unar/bsdtar）"
 
 # pandoc 官方 tarball 结构：pandoc-<ver>/{bin/pandoc, share/man/man1/pandoc.1.gz}
 # 二进制仅动态链接 glibc 系基础库（libgmp 等已由 slim 基础层自带），无需额外 apt 运行库；
@@ -58,6 +58,26 @@ RUN set -eux; \
     install -m 0644 /tmp/pandoc/share/man/man1/pandoc.1.gz /usr/local/share/man/man1/ 2>/dev/null || true; \
     pandoc --version >/dev/null; \
     rm -rf /tmp/pandoc /tmp/pandoc.tar.gz
+
+# ── rar 解压工具（多用户上传 .rar 的沙箱解压，部署收口阶段一）──────
+# upload_rar 管线的解压命令经 SandboxRunner 在本镜像内执行（无网络、
+# 只读根文件系统、资源限额与编译/转换命令同一安全基线）：
+#   unar             优先解压器（Debian main 源；禁交互参数由命令构造层保证）
+#   libarchive-tools 提供 bsdtar（libarchive 的 RAR reader 为 BSD 授权
+#                    独立实现），作为 unar 的固定回退；两者须同时齐备——
+#                    后端 docker 模式不探测容器内 PATH，按 unar 优先的
+#                    固定顺序直接取命令
+RUN set -eux; \
+    apt-get update; \
+    apt-get install -y --no-install-recommends unar libarchive-tools; \
+    rm -rf /var/lib/apt/lists/*
+
+# 构建期自检：与 tex 镜像同款 command -v 清单核对，缺可执行文件直接中止构建
+# （pandoc 为既有内容；unar/bsdtar 为 rar 沙箱解压必需）
+RUN set -eux; \
+    for b in pandoc unar bsdtar; do \
+        command -v "$b" >/dev/null || { echo "FATAL: 镜像缺少可执行文件 $b"; exit 1; }; \
+    done
 
 # 不设 ENTRYPOINT：后端 SandboxRunner 统一以完整 argv（"pandoc -f ... -t ..."）
 # 驱动容器，与 local 后端共用同一 ExecSpec 契约；镜像内只保证 pandoc 在 PATH。

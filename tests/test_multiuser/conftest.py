@@ -108,8 +108,10 @@ def build_mu_env(
     chunk_part_max_mb），键须为 MultiUserConfig 合法字段。
     smtp_extra：追加/覆盖 smtp 节字段（v2 P6 邮件测试；None 时使用默认值
     ——enabled=False，即全部通知静默跳过的降级形态）。
-    sandbox_extra：追加/覆盖 sandbox 节字段（如 git_manage 测试的
-    mode=local，避免测试依赖 Docker daemon）。"""
+    sandbox_extra：追加/覆盖 sandbox 节字段。默认 mode=local（hermetic：
+    rar 解压经 SandboxRunner 执行后，auto 模式会在装了 docker SDK + daemon
+    可达的开发机/CI 上把上传解压劫持进真实容器；需要真容器的用例显式传
+    sandbox_extra={"mode": "docker"}）。"""
     db_path = tmp_path / "multiuser.db"
     users_root = tmp_path / "users"
     staging = tmp_path / "staging"
@@ -148,7 +150,7 @@ def build_mu_env(
         smtp_config.update(smtp_extra)
     data["smtp"] = smtp_config
     sandbox_config = {
-        "mode": "auto",
+        "mode": "local",
     }
     if sandbox_extra:
         sandbox_config.update(sandbox_extra)

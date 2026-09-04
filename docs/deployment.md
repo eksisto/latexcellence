@@ -165,7 +165,7 @@ npm run build
 
 | 依赖 | 要求 | 说明 |
 | --- | --- | --- |
-| unar 或 bsdtar（libarchive-tools） | 至少安装其一 | 多用户模式接收 rar 上传时必需，unar 优先、缺失自动回退 bsdtar（Docker 后端镜像已内置 unar，裸机需自行安装；Alpine 系源无 unar，用 `apk add libarchive-tools`） |
+| unar 或 bsdtar（libarchive-tools） | 至少安装其一（仅 `sandbox.mode=local` 及 auto 回落需要） | 多用户模式接收 rar 上传时必需，unar 优先、缺失自动回退 bsdtar（Docker 沙箱模式下解压在 convert 镜像内执行，镜像已内置双工具，宿主无需安装；Alpine 系源无 unar，用 `apk add libarchive-tools`） |
 | Docker daemon | 可选但强烈建议 | 启用沙箱隔离（`sandbox.mode=auto/docker`）的前提，见「Docker 沙箱」与「安全风险声明」 |
 | HTTPS 反代 | 公网/局域网部署必备 | 见「HTTPS 与反向代理」 |
 
@@ -689,21 +689,9 @@ latex.example.com {
 | 科研绘图 | Python（matplotlib 等绘图脚本） | 上传数据驱动的脚本执行 |
 | 格式转换 | pandoc | 转换器漏洞或嵌入脚本 |
 | 源码格式化 | latexindent.pl | Perl 执行环境 |
-| rar 上传解压 | unar 或 bsdtar | 解析攻击者完全可控的压缩包字节流，转换器漏洞风险与 pandoc 同级 |
+| rar 上传解压 | unar 或 bsdtar（convert 镜像内置） | 解析攻击者完全可控的压缩包字节流，转换器漏洞风险与 pandoc 同级 |
 
-> **已知例外：unar / bsdtar 未入沙箱**。latexmk / xelatex / latexdiff / git、绘图 Python、pandoc、latexindent 等外部命令均已由 SandboxRunner（Docker 沙箱）收口；唯 rar 解压器（unar 优先、缺失回退 bsdtar）目前仍是后端进程的子进程直跑，未纳入沙箱，因此**不与上表其他命令共享同一风险口径**——即使沙箱已启用，解压器仍以宿主后端进程身份解析攻击者可控的字节流。现有缓解措施：
->
-> - stdin 关闭（`/dev/null`），防加密包交互式索要密码挂起；
-> - 独立进程组启动，限时 / 超解压配额即 SIGKILL 整组硬中断；
-> - 解压只写入独立暂存区，落位用户空间前经全量安全复核；
-> - RAR4 头链加密 / 分卷标志预扫（按块头声明的数据区长度整段跳过，不误拒带恢复记录等服务数据的合法包）。
->
-> **跟踪项：将 unar / bsdtar 纳入 SandboxRunner 收口**（尚未实现，后续版本落地）。验收标准：
->
-> - convert 镜像内置 unar 与 bsdtar；
-> - 归档暂存文件以只读方式挂载进容器，解压目录以可写方式挂载；
-> - 解压改经 `get_sandbox_runner().execute` 执行，沿用无网络、只读根文件系统、资源限额的安全基线；
-> - 真容器冒烟测试覆盖 rar 上传解压全链路（含正常包解压与加密 / 分卷包拒绝路径）。
+rar 解压已与其余外部命令同一收口：解压命令经 SandboxRunner 在 convert 镜像容器内执行（无网络、只读根文件系统、资源限额），压缩包以只读方式挂载、解压目录以可写方式挂载，解压产物落位用户空间前仍经全量安全复核；宿主侧监视任务超配额 / 超时即硬中断（杀容器 / 击杀进程组）。`local` 模式（含 auto 回落）下解压仍为宿主子进程，风险口径见上方总则。
 
 除沙箱外，多用户模式通过以下措施收敛攻击面（**不能替代沙箱**）：
 
@@ -882,4 +870,4 @@ LLM 每用户治理：多用户模式下每次 LLM 调用前在单事务内完�
 | 注册后无法登录 | 正常流程：`pending` 状态需管理员批准；管理面板 → 待审批 |
 | 启动即报配置校验错误 | `multi_user` / `sandbox` / `smtp` 配置段严格校验，未知键直接报错；对照 `config.example.json` 检查拼写 |
 | 生产模式页面 404，日志提示 static/ 为空 | 未构建前端，或启动时工作目录不是仓库根；先 `npm run build` 再从仓库根启动 |
-| rar 上传报 `rar_extractor_missing` | 裸机未安装任何 rar 解压器：Debian 系 `apt install unar`，Alpine 系 `doas apk add libarchive-tools`（提供 bsdtar），装其一即可；容器后端镜像已内置 unar，检查是否用了自制精简镜像 |
+| rar 上传报 `rar_extractor_missing` | local 模式（含 auto 回落）裸机未安装任何 rar 解压器：Debian 系 `apt install unar`，Alpine 系 `doas apk add libarchive-tools`（提供 bsdtar），装其一即可；Docker 沙箱模式下解压在 convert 镜像内执行、镜像已内置双工具，若报此错说明实际走了 local 回落 |

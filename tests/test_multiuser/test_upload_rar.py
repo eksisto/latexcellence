@@ -1,6 +1,7 @@
-"""多用户模式 v2 P2 + 回退层：rar 上传解压管线测试。
+"""多用户模式 v2 P2 + 回退层 + 部署收口阶段一：rar 上传解压管线测试。
 
-覆盖（方案 §7 / §14 完成标准 + docs/rar-extractor-fallback.md §六）：
+覆盖（方案 §7 / §14 完成标准 + docs/rar-extractor-fallback.md §六 +
+deploy-followups-plan.md §4.1 阶段一）：
     - 正常解压：顶层单目录布局 / 直接内容布局 / 内容与计数（unar 与
       bsdtar 双工具参数化）
     - 加密包拒绝（文件头加密标志，预扫确定性拦截）
@@ -8,8 +9,11 @@
     - 服务/子块（恢复记录 RR、NTFS 子块）带数据区的合法包不被预扫
       误拒：数据区按块头声明的长度整段跳过，含固定种子 Monte Carlo
       与「数据区起始即受保护标志模式」的决定性回归
-    - 解压器选择层三态：有 unar / 仅 bsdtar / 全缺（rar_extractor_missing）
-    - bsdtar 命令构造断言（含「命令不含 -P」回归项）
+    - 解压器选择层三态：有 unar / 仅 bsdtar / 全缺（rar_extractor_missing，
+      仅 local 后端语义）；docker 后端按固定优先序取注册表 builder
+    - 解压执行段经 SandboxRunner：ExecSpec 形状断言（命令形状与「不含
+      -P」回归、cwd、压缩包只读挂载、timeout 折算、image_kind、无 stdin、
+      每用户租约上下文透传），fake runner 不启动任何进程
     - 失败输出关键词映射：encrypt / password / 截断类普通错误分别断言错误码
     - 文件名归一化（bsdtar 分支）：GBK surrogate 名还原 / 改名冲突拒绝 /
       合法 UTF-8 名不动 / 全链解码失败拒绝 / 自底向上改名顺序
@@ -17,21 +21,25 @@
     - 损坏包 / 空产物（多卷集静默零产物兜底）拒绝
     - GBK 文件名样例（unar 字符集探测与 zip 管线存在已知差异；bsdtar +
       归一化路径下应精确还原为中文名）
-    - 解压限时接线（超时不启动进程）、监视线程超限击杀（fake 进程注入）
+    - 解压限时接线（超时不发起执行）、宿主侧监视任务超配额/超时置位
+      cancel_event 的接线（fake runner 模拟取消后非零退出）
     - API 集成：POST /api/projects 上传 .rar 创建项目
 
 真实解压用例按工具参数化（requires_rar_tool），无对应二进制的环境自动
-skip；预扫 / 选择层 / 缺二进制 / 监视线程 / 归一化用例不依赖外部二进制，
-任何环境都执行。
+skip；预扫 / 选择层 / 缺二进制 / 监视任务 / 归一化 / ExecSpec 形状用例
+不依赖外部二进制与 Docker daemon（fake runner），任何环境都执行；
+真容器冒烟见 tests/test_docker/test_rar_sandbox_smoke.py（marker docker）。
 """
 
+import asyncio
+import contextlib
 import json
 import os
 import random
 import shutil
 import struct
-import subprocess
 import tempfile
+import time
 import zlib
 from pathlib import Path
 
@@ -40,6 +48,7 @@ from fastapi.testclient import TestClient
 
 from backend.core.multiuser import upload, upload_rar
 from backend.core.multiuser import userspace
+from backend.utils.sandbox import ExecResult, ExecSpec, SandboxMount
 from tests.test_multiuser.test_projects_api import (
     PASSWORD,
     build_mu_projects_app,
@@ -393,32 +402,51 @@ class TestRar4Prescan:
 
 
 # ── 解压器选择层与命令构造（fake 进程，不依赖二进制）────────────
-class _RecordingPopen:
-    """exit=0 的 fake Popen：记录收到的命令供构造断言。"""
-
-    captured: list[list[str]] = []
-
-    def __init__(self, cmd, *args, **kwargs):
-        type(self).captured.append(list(cmd))
-        self.pid = 4242
-        self.returncode = 0
-
-    def communicate(self, timeout=None):
-        return b"", b""
+def _fake_result(**kwargs) -> ExecResult:
+    kwargs.setdefault("returncode", 0)
+    kwargs.setdefault("stdout", "")
+    kwargs.setdefault("stderr", "")
+    kwargs.setdefault("backend", "local")
+    return ExecResult(**kwargs)
 
 
-def _failing_popen_factory(stdout: bytes, stderr: bytes):
-    """非零退出的 fake Popen 工厂：携带 canned 输出供关键词映射断言。"""
+class _FakeRunner:
+    """记录 ExecSpec / cancel_event / user_id 的 fake SandboxRunner。
 
-    class _FailingPopen:
-        def __init__(self, cmd, *args, **kwargs):
-            self.pid = 4242
-            self.returncode = 1
+    hermetic：不启动任何进程、不探测 Docker daemon。result 为直接返回的
+    canned 结果；execute_impl 供自定义异步实现（如等待 cancel_event 置位
+    后返回非零退出，模拟后端取消路径）。"""
 
-        def communicate(self, timeout=None):
-            return stdout, stderr
+    def __init__(self, *, backend: str = "local", result=None, execute_impl=None):
+        self.backend = backend
+        self.result = result
+        self.execute_impl = execute_impl
+        self.specs: list[ExecSpec] = []
+        self.cancel_events: list[object] = []
+        self.user_ids: list[str | None] = []
+        self.execute_calls = 0
 
-    return _FailingPopen
+    async def resolve_backend(self, kind: str) -> str:
+        assert kind == "convert"
+        return self.backend
+
+    async def execute(
+        self, spec, *, user_id=None, cancel_event=None, lease_exempt=False
+    ):
+        self.execute_calls += 1
+        self.specs.append(spec)
+        self.cancel_events.append(cancel_event)
+        self.user_ids.append(user_id)
+        if self.execute_impl is not None:
+            return await self.execute_impl(
+                spec, user_id=user_id, cancel_event=cancel_event
+            )
+        return self.result
+
+
+def _install_runner(monkeypatch, runner: _FakeRunner) -> _FakeRunner:
+    monkeypatch.setattr(upload_rar, "get_sandbox_runner", lambda: runner)
+    return runner
 
 
 class TestExtractorSelection:
@@ -447,53 +475,88 @@ class TestExtractorSelection:
         assert ei.value.code == "rar_extractor_missing"
 
 
-class TestBsdtarCommand:
-    @pytest.fixture(autouse=True)
-    def _bsdtar_env(self, monkeypatch):
-        """强制走 bsdtar 回退分支（fake 二进制，不依赖环境装包）。"""
-        _patch_which(monkeypatch, "bsdtar")
+class TestSandboxExecSpec:
+    """解压执行段经 SandboxRunner：ExecSpec 形状断言（阶段一验收）。
 
-    @pytest.fixture(autouse=True)
-    def _capture_popen(self, monkeypatch):
-        _RecordingPopen.captured = []
-        monkeypatch.setattr(upload_rar.subprocess, "Popen", _RecordingPopen)
+    fake runner 记录 ExecSpec，不启动任何进程；工具选择层仍走真实
+    实现（which 探测按 _patch_which 注入），保证「选择层 → 命令构造 →
+    ExecSpec」全链一致。"""
 
-    def test_command_shape_and_no_insecure_flags(self, extract_dir, tmp_path):
-        """bsdtar 命令形如 `bsdtar -x -f <abs_archive> -C <abs_dir>`；
-        回归项：命令不含 `-P`（保留成员名绝对路径语义的开关）。"""
-        archive = FIXTURES / "layout_flat.rar"
+    def _run(self, monkeypatch, extract_dir: Path, tool: str = "bsdtar") -> ExecSpec:
+        _patch_which(monkeypatch, tool)
+        runner = _install_runner(monkeypatch, _FakeRunner(result=_fake_result()))
         (extract_dir / "main.tex").write_text("x", encoding="utf-8")  # 免零产物兜底
-        upload_rar.extract_rar(archive, extract_dir, _limits())
+        upload_rar.extract_rar(FIXTURES / "layout_flat.rar", extract_dir, _limits())
+        assert runner.execute_calls == 1
+        return runner.specs[0]
 
-        assert len(_RecordingPopen.captured) == 1
-        cmd = _RecordingPopen.captured[0]
+    def test_bsdtar_command_shape_and_no_insecure_flags(self, extract_dir, monkeypatch):
+        """命令形如 `bsdtar -x -f <abs_archive> -C <abs_dir>`；
+        回归项：命令不含 `-P`（保留成员名绝对路径语义的开关）。"""
+        spec = self._run(monkeypatch, extract_dir)
+        cmd = spec.command
         assert cmd[:3] == ["/fake/bsdtar", "-x", "-f"]
         archive_arg, c_flag, dir_arg = cmd[3:]
         assert c_flag == "-C"
         # 归档与目录都用绝对路径
         assert Path(archive_arg).is_absolute()
-        assert Path(archive_arg) == archive.resolve()
+        assert Path(archive_arg) == (FIXTURES / "layout_flat.rar").resolve()
         assert Path(dir_arg).is_absolute()
         assert Path(dir_arg) == extract_dir.resolve()
         assert "-P" not in cmd
 
-    def test_popen_security_kwargs_match_unar_branch(self, extract_dir, monkeypatch):
-        """stdin 接 DEVNULL、独立进程组启动——与 unar 分支完全一致。"""
-        kwargs_seen: dict = {}
+    def test_unar_command_shape(self, extract_dir, monkeypatch):
+        """命令形如 `unar -f -q -D -o <dir> -- <archive>`（-D 根归一化语义）。"""
+        spec = self._run(monkeypatch, extract_dir, tool="unar")
+        cmd = spec.command
+        assert cmd[0] == "/fake/unar"
+        assert cmd[1:5] == ["-f", "-q", "-D", "-o"]
+        assert Path(cmd[5]) == extract_dir.resolve()
+        assert cmd[6] == "--"
+        assert Path(cmd[7]) == (FIXTURES / "layout_flat.rar").resolve()
 
-        class _KwargPopen(_RecordingPopen):
-            def __init__(self, cmd, *args, **kwargs):
-                kwargs_seen.update(kwargs)
-                super().__init__(cmd, *args, **kwargs)
+    def test_exec_spec_shape(self, extract_dir, monkeypatch):
+        """cwd=解压目录、压缩包绝对路径只读挂载、image_kind=convert、
+        既有 deadline 折算为 timeout_seconds、argv 无 shell 字符串。"""
+        spec = self._run(monkeypatch, extract_dir)
+        assert spec.cwd == str(extract_dir.resolve())
+        assert spec.image_kind == "convert"
+        assert len(spec.mounts) == 1
+        mount = spec.mounts[0]
+        assert isinstance(mount, SandboxMount)
+        assert mount.host_path == str((FIXTURES / "layout_flat.rar").resolve())
+        assert mount.read_only is True
+        # 60s deadline 折算（运行期耗时占用极少，容差 2s）
+        assert 58.0 < spec.timeout_seconds <= 60.0
+        # argv 形式：全为非空字符串（禁 shell 字符串由 ExecSpec 模型强制）
+        assert spec.command == [str(a) for a in spec.command]
+        assert all(spec.command)
 
-        monkeypatch.setattr(upload_rar.subprocess, "Popen", _KwargPopen)
-        (extract_dir / "a.tex").write_text("x", encoding="utf-8")
+    def test_cancel_event_and_user_lease_context(self, extract_dir, monkeypatch):
+        """cancel_event 为当次执行的 asyncio.Event；每用户租约上下文经
+        current_sandbox_user_id 透传（Q4 方案 A）。"""
+        monkeypatch.setattr(upload_rar, "current_sandbox_user_id", lambda: "u-rar")
+        _patch_which(monkeypatch, "unar")
+        runner = _install_runner(monkeypatch, _FakeRunner(result=_fake_result()))
+        (extract_dir / "main.tex").write_text("x", encoding="utf-8")
         upload_rar.extract_rar(FIXTURES / "layout_flat.rar", extract_dir, _limits())
-        assert kwargs_seen["stdin"] == subprocess.DEVNULL
-        assert kwargs_seen["start_new_session"] is True
+        assert runner.user_ids == ["u-rar"]
+        assert isinstance(runner.cancel_events[0], asyncio.Event)
+
+    def test_docker_backend_skips_host_path_probe(self, extract_dir, monkeypatch):
+        """docker 后端不探测宿主 PATH（Q3）：宿主全缺解压器也按注册表
+        固定优先序选中 unar（裸二进制名交容器 PATH 解析）。"""
+        _patch_which(monkeypatch, None)  # 宿主 unar/bsdtar 全缺
+        runner = _install_runner(
+            monkeypatch,
+            _FakeRunner(backend="docker", result=_fake_result(backend="docker")),
+        )
+        (extract_dir / "main.tex").write_text("x", encoding="utf-8")
+        upload_rar.extract_rar(FIXTURES / "layout_flat.rar", extract_dir, _limits())
+        assert runner.specs[0].command[0] == "unar"
 
 
-# ── 失败输出关键词映射（canned stderr，不依赖二进制）─────────────
+# ── 失败输出关键词映射（canned ExecResult，不依赖二进制）─────────
 class TestFailureKeywordMapping:
     @pytest.mark.parametrize("rar_tool", ["unar", "bsdtar"])
     def test_encrypted_stderr_maps_archive_unsafe(
@@ -501,14 +564,14 @@ class TestFailureKeywordMapping:
     ):
         _patch_which(monkeypatch, rar_tool)
         stderr = {
-            "unar": b"unar: Cannot extract encrypted.rar: wrong password\n",
+            "unar": "unar: Cannot extract encrypted.rar: wrong password\n",
             "bsdtar": (
-                b"bsdtar: Error opening archive: RAR5 AES-256 encrypted "
-                b"archive, passphrase required\n"
+                "bsdtar: Error opening archive: RAR5 AES-256 encrypted "
+                "archive, passphrase required\n"
             ),
         }[rar_tool]
-        monkeypatch.setattr(
-            upload_rar.subprocess, "Popen", _failing_popen_factory(b"", stderr)
+        _install_runner(
+            monkeypatch, _FakeRunner(result=_fake_result(returncode=1, stderr=stderr))
         )
         with pytest.raises(upload.ArchiveError) as ei:
             upload.extract_archive(FIXTURES / "layout_flat.rar", extract_dir, _limits())
@@ -522,11 +585,11 @@ class TestFailureKeywordMapping:
         bsdtar 下即落此码；安全性不变，仅错误细分度下降）。"""
         _patch_which(monkeypatch, rar_tool)
         stderr = {
-            "unar": b"unar: Unexpected end of file\n",
-            "bsdtar": b"bsdtar: Unexpected EOF in archive\n",
+            "unar": "unar: Unexpected end of file\n",
+            "bsdtar": "bsdtar: Unexpected EOF in archive\n",
         }[rar_tool]
-        monkeypatch.setattr(
-            upload_rar.subprocess, "Popen", _failing_popen_factory(b"", stderr)
+        _install_runner(
+            monkeypatch, _FakeRunner(result=_fake_result(returncode=1, stderr=stderr))
         )
         with pytest.raises(upload.ArchiveError) as ei:
             upload.extract_archive(FIXTURES / "layout_flat.rar", extract_dir, _limits())
@@ -617,10 +680,10 @@ class TestNormalizeRarNames:
     def test_applied_in_bsdtar_branch_before_case_scan(self, raw_name_dir, monkeypatch):
         """端到端接线：bsdtar 分支成功退出后、大小写扫描前执行归一化。
 
-        fake Popen 不落盘，surrogate 字节名预先放置在解压目录内；解压目录
+        fake runner 不落盘，surrogate 字节名预先放置在解压目录内；解压目录
         本身也须位于支持原始字节名的文件系统（NTFS 挂载会 EINVAL）。"""
         _patch_which(monkeypatch, "bsdtar")
-        monkeypatch.setattr(upload_rar.subprocess, "Popen", _RecordingPopen)
+        _install_runner(monkeypatch, _FakeRunner(result=_fake_result()))
         work = raw_name_dir / "extracted"
         work.mkdir()
         _raw_path(work, self.GBK_BYTES).write_bytes(b"x")
@@ -634,42 +697,46 @@ class TestWiring:
     def test_missing_binary_reports_rar_extractor_missing(
         self, extract_dir, monkeypatch
     ):
-        monkeypatch.setattr(upload_rar.shutil, "which", lambda name: None)
+        _patch_which(monkeypatch, None)
+        runner = _install_runner(monkeypatch, _FakeRunner(result=_fake_result()))
         with pytest.raises(upload.ArchiveError) as ei:
             upload.extract_archive(FIXTURES / "layout_flat.rar", extract_dir, _limits())
         assert ei.value.code == "rar_extractor_missing"
+        # 选择层失败：解压命令从未发起
+        assert runner.execute_calls == 0
 
     @pytest.mark.parametrize("rar_tool", ["unar", "bsdtar"])
-    def test_expired_deadline_skips_process_spawn(
-        self, extract_dir, monkeypatch, rar_tool
-    ):
-        """timeout_seconds=0：deadline 已过，未启动进程即拒绝（双工具）。"""
+    def test_expired_deadline_skips_execution(self, extract_dir, monkeypatch, rar_tool):
+        """timeout_seconds=0：deadline 已过，未发起执行即拒绝（双工具）。"""
         _patch_which(monkeypatch, rar_tool)
-
-        def _fail_popen(*args, **kwargs):
-            raise AssertionError("Popen must not be called after deadline")
-
-        monkeypatch.setattr(upload_rar.subprocess, "Popen", _fail_popen)
+        runner = _install_runner(monkeypatch, _FakeRunner(result=_fake_result()))
         with pytest.raises(upload.ArchiveError) as ei:
             upload.extract_archive(
                 FIXTURES / "layout_flat.rar", extract_dir, _limits(timeout_seconds=0)
             )
         assert ei.value.code == "invalid_archive"
+        assert runner.execute_calls == 0
+
+    @pytest.mark.parametrize("rar_tool", ["unar", "bsdtar"])
+    def test_backend_timeout_maps_invalid_archive(
+        self, extract_dir, monkeypatch, rar_tool
+    ):
+        """deadline 折算 spec.timeout_seconds：后端 timed_out → 既有超时文案。"""
+        _patch_which(monkeypatch, rar_tool)
+        _install_runner(
+            monkeypatch,
+            _FakeRunner(result=_fake_result(returncode=-1, timed_out=True)),
+        )
+        with pytest.raises(upload.ArchiveError) as ei:
+            upload.extract_archive(FIXTURES / "layout_flat.rar", extract_dir, _limits())
+        assert ei.value.code == "invalid_archive"
+        assert "timed out" in ei.value.message
 
     @pytest.mark.parametrize("rar_tool", ["unar", "bsdtar"])
     def test_zero_product_guard_hermetic(self, extract_dir, monkeypatch, rar_tool):
         """exit=0 且零产物（多卷集静默形态）：双工具兜底用例。"""
         _patch_which(monkeypatch, rar_tool)
-
-        class _FakePopen:
-            def __init__(self, *args, **kwargs):
-                self.pid = 4242
-                self.returncode = 0
-
-            def communicate(self, timeout=None):
-                return b"", b""
-
-        monkeypatch.setattr(upload_rar.subprocess, "Popen", _FakePopen)
+        _install_runner(monkeypatch, _FakeRunner(result=_fake_result()))
         with pytest.raises(upload.ArchiveError) as ei:
             upload.extract_archive(FIXTURES / "layout_flat.rar", extract_dir, _limits())
         assert ei.value.code == "invalid_archive"
@@ -679,116 +746,130 @@ class TestWiring:
         """解压产物大小写不敏感重名：后置扫描拒绝（不依赖真实解压器，
         bsdtar 变体同时验证归一化不影响该扫描）。"""
         _patch_which(monkeypatch, rar_tool)
+        _install_runner(monkeypatch, _FakeRunner(result=_fake_result()))
         (extract_dir / "README.tex").write_text("A", encoding="utf-8")
         (extract_dir / "readme.tex").write_text("B", encoding="utf-8")
-
-        class _FakePopen:
-            def __init__(self, *args, **kwargs):
-                self.pid = 4242
-                self.returncode = 0
-
-            def communicate(self, timeout=None):
-                return b"", b""
-
-        monkeypatch.setattr(upload_rar.subprocess, "Popen", _FakePopen)
         with pytest.raises(upload.ArchiveError) as ei:
             upload.extract_archive(FIXTURES / "layout_flat.rar", extract_dir, _limits())
         assert ei.value.code == "archive_unsafe"
 
 
-# ── 监视线程（fake 进程注入，不依赖 unar）────────────────────────
-class _FakeProc:
-    def __init__(self):
-        self.pid = 99999
-        self.killed = False
-
-
+# ── 宿主侧监视任务与取消接线（fake 进程注入，不依赖 unar/docker）──
 class TestRarWatch:
-    def test_quota_breach_kills_process_group(self, tmp_path, monkeypatch):
-        import threading
+    """监视任务（沙箱化后为宿主侧 asyncio task）：越限置位 cancel_event。"""
 
+    @pytest.mark.asyncio
+    async def test_quota_breach_sets_cancel_event(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(upload_rar, "_WATCH_INTERVAL_SECONDS", 0.01)
+        extract = tmp_path / "extracted"
+        extract.mkdir()
         # 预置已写盘量超过剩余配额的解压目录（模拟解压中途越限）
-        (tmp_path / "extracted").mkdir()
-        (tmp_path / "extracted" / "bomb.bin").write_bytes(b"\0" * 1024)
-
-        kills: list[int] = []
-        monkeypatch.setattr(
-            upload_rar.os, "killpg", lambda pgid, sig: kills.append(pgid)
-        )
-        monkeypatch.setattr(upload_rar.os, "getpgid", lambda pid: pid)
+        (extract / "bomb.bin").write_bytes(b"\0" * 1024)
 
         limits = _limits(remaining_quota_bytes=512, timeout_seconds=999)
-        proc = _FakeProc()
-        stop = threading.Event()
+        cancel_event = asyncio.Event()
         breach: list[str] = []
-        watcher = upload_rar._start_rar_watch(
-            proc,
-            tmp_path / "extracted",
-            limits,
-            upload._deadline(limits),
-            stop,
-            breach,
+        await asyncio.wait_for(
+            upload_rar._rar_watch_task(
+                extract, limits, upload._deadline(limits), cancel_event, breach
+            ),
+            timeout=5,
         )
-        watcher.join(timeout=5)
-        assert not watcher.is_alive()
         assert breach == ["quota_exceeded"]
-        assert kills == [proc.pid]
-        stop.set()
+        assert cancel_event.is_set()
 
-    def test_deadline_breach_reports_timeout(self, tmp_path, monkeypatch):
-        import threading
-        import time
-
-        (tmp_path / "extracted").mkdir()
-        monkeypatch.setattr(upload_rar.os, "killpg", lambda pgid, sig: None)
-        monkeypatch.setattr(upload_rar.os, "getpgid", lambda pid: pid)
-
+    @pytest.mark.asyncio
+    async def test_deadline_breach_sets_cancel_event(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(upload_rar, "_WATCH_INTERVAL_SECONDS", 0.01)
+        extract = tmp_path / "extracted"
+        extract.mkdir()
         limits = _limits(timeout_seconds=999)
-        proc = _FakeProc()
-        stop = threading.Event()
+        cancel_event = asyncio.Event()
         breach: list[str] = []
-        watcher = upload_rar._start_rar_watch(
-            proc,
-            tmp_path / "extracted",
-            limits,
-            time.monotonic() - 1,  # 已过期
-            stop,
-            breach,
+        await asyncio.wait_for(
+            upload_rar._rar_watch_task(
+                extract, limits, time.monotonic() - 1, cancel_event, breach  # 已过期
+            ),
+            timeout=5,
         )
-        watcher.join(timeout=5)
         assert breach == ["invalid_archive"]
-        stop.set()
+        assert cancel_event.is_set()
 
-    def test_normal_state_not_interrupted(self, tmp_path, monkeypatch):
-        import threading
-
-        (tmp_path / "extracted").mkdir()
-        (tmp_path / "extracted" / "a.tex").write_bytes(b"x" * 16)
-        kills: list[int] = []
-        monkeypatch.setattr(
-            upload_rar.os, "killpg", lambda pgid, sig: kills.append(pgid)
-        )
-        monkeypatch.setattr(upload_rar.os, "getpgid", lambda pid: pid)
+    @pytest.mark.asyncio
+    async def test_normal_state_not_interrupted(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(upload_rar, "_WATCH_INTERVAL_SECONDS", 0.01)
+        extract = tmp_path / "extracted"
+        extract.mkdir()
+        (extract / "a.tex").write_bytes(b"x" * 16)
 
         limits = _limits(remaining_quota_bytes=1 << 20, timeout_seconds=60)
-        proc = _FakeProc()
-        stop = threading.Event()
+        cancel_event = asyncio.Event()
         breach: list[str] = []
-        watcher = upload_rar._start_rar_watch(
-            proc,
-            tmp_path / "extracted",
-            limits,
-            upload._deadline(limits),
-            stop,
-            breach,
+        task = asyncio.ensure_future(
+            upload_rar._rar_watch_task(
+                extract, limits, upload._deadline(limits), cancel_event, breach
+            )
         )
-        # 一个采样周期内未越限 → 不击杀、不记 breach
-        watcher.join(timeout=2.5)
-        assert watcher.is_alive()
-        assert kills == []
+        # 数个采样周期内未越限 → 不置位 cancel_event、不记 breach
+        await asyncio.sleep(0.05)
+        assert not cancel_event.is_set()
         assert breach == []
-        stop.set()
-        watcher.join(timeout=5)
+        task.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await task
+
+
+class TestCancelWiring:
+    """监视任务 → cancel_event → 后端取消 的端到端接线（阶段一 Q4 方案 A）。
+
+    fake runner 模拟后端在 cancel_event 置位后以非零退出返回。"""
+
+    def test_quota_breach_cancels_execution(self, extract_dir, monkeypatch):
+        monkeypatch.setattr(upload_rar, "_WATCH_INTERVAL_SECONDS", 0.01)
+        (extract_dir / "bomb.bin").write_bytes(b"\0" * 1024)
+
+        async def impl(spec, *, user_id=None, cancel_event=None):
+            await cancel_event.wait()
+            return _fake_result(returncode=137)
+
+        _install_runner(monkeypatch, _FakeRunner(execute_impl=impl))
+        _patch_which(monkeypatch, "unar")
+        with pytest.raises(upload.ArchiveError) as ei:
+            upload.extract_archive(
+                FIXTURES / "layout_flat.rar",
+                extract_dir,
+                _limits(remaining_quota_bytes=512),
+            )
+        assert ei.value.code == "quota_exceeded"
+
+    def test_user_lease_context_survives_worker_loop(self, extract_dir, monkeypatch):
+        """每用户租约上下文经 worker 循环传入 execute（Q4 每用户并发治理）。
+
+        服务层真实调用形态：请求循环内 ContextVar 已注入当前用户 →
+        asyncio.to_thread 调度同步核心 → 核心内 asyncio.run 建独立循环。
+        跨线程 + 跨循环的 ContextVar 传递链是本次接入的关键接缝——
+        本用例不 Mock current_sandbox_user_id 本身，仅替换 runner，
+        保证该接缝不被实现细节变化悄悄打断。"""
+        from backend.core.multiuser import userspace
+
+        _patch_which(monkeypatch, "unar")
+        runner = _install_runner(monkeypatch, _FakeRunner(result=_fake_result()))
+        (extract_dir / "main.tex").write_text("x", encoding="utf-8")
+
+        async def caller():
+            userspace.set_current_user_id("u-ctx")
+            try:
+                await asyncio.to_thread(
+                    upload_rar.extract_rar,
+                    FIXTURES / "layout_flat.rar",
+                    extract_dir,
+                    _limits(),
+                )
+            finally:
+                userspace.set_current_user_id(None)
+
+        asyncio.run(caller())
+        assert runner.user_ids == ["u-ctx"]
 
 
 # ── 真实解压（需要解压器；unar / bsdtar 双工具参数化）──────────
@@ -995,3 +1076,63 @@ class TestApiUpload:
         )
         assert r.status_code == 400
         assert r.json()["detail"]["error"] == "invalid_archive"
+
+
+# ── API 集成：沙箱硬失败语义（hermetic，不依赖解压器二进制）──────
+class TestApiSandboxErrorMapping:
+    """rar 解压经 SandboxRunner 后，docker 模式硬失败须映射 503 而非 400。
+
+    类级双工具参数化不适用于本组用例：fake runner 在解压器选择前即抛
+    沙箱错误，选择层不触达，hermetic 恒执行。"""
+
+    @pytest.fixture
+    def env(self, tmp_path):
+        from backend.core.multiuser import auth as auth_core
+        from backend.core.multiuser import db as db_module
+        from tests.test_multiuser.conftest import (
+            _reset_config_state,
+            build_mu_env,
+        )
+
+        env = build_mu_env(tmp_path)
+        env["alice"] = auth_core.create_user(
+            "alice", PASSWORD, role="user", status="active"
+        )
+        yield env
+        db_module.close_db()
+        _reset_config_state()
+
+    @pytest.fixture
+    def alice_client(self, env) -> TestClient:
+        client = TestClient(build_mu_projects_app())
+        r = client.post(
+            "/api/auth/login",
+            json={"username": "alice", "password": PASSWORD},
+        )
+        assert r.status_code == 200, r.text
+        return client
+
+    def test_upload_docker_unavailable_maps_503(self, env, alice_client, monkeypatch):
+        """mode=docker 硬失败（daemon 不可达）：sandbox_unavailable → 503（Q6）。
+
+        fake runner 直接从 resolve_backend 抛沙箱错误；验证 service 层把
+        带 sandbox_code 的错误映射为 503，而非落入通用 400 invalid_archive。"""
+        from tests.test_multiuser.conftest import csrf
+        from backend.utils.sandbox import sandbox_unavailable
+
+        class _UnavailableRunner:
+            async def resolve_backend(self, kind: str) -> str:
+                assert kind == "convert"
+                raise sandbox_unavailable("docker daemon unreachable (test)")
+
+        monkeypatch.setattr(
+            upload_rar, "get_sandbox_runner", lambda: _UnavailableRunner()
+        )
+        payload = (FIXTURES / "layout_flat.rar").read_bytes()
+        r = alice_client.post(
+            "/api/projects",
+            files={"archive": ("proj.rar", payload, "application/vnd.rar")},
+            headers=csrf(alice_client),
+        )
+        assert r.status_code == 503, r.text
+        assert r.json()["detail"]["error"] == "sandbox_unavailable"
