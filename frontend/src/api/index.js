@@ -238,6 +238,16 @@ export const api = {
       }),
     /** 多模型支持：各角色槽位当前生效的模型档案解析结果（不含 api_key） */
     llmRoutes: () => request("/llm/routes"),
+    /**
+     * 模型连通性测试（部署收口阶段四）：后端以服务端配置真实值向目标档案
+     * 发起一次最小补全。掩码协议边界：只传 profile_id / role 标识，
+     * 严禁回传 api_key（前端持有的是 ***xxxx 掩码）。
+     */
+    llmTest: (payload) =>
+      request("/llm/test", {
+        method: "POST",
+        body: JSON.stringify(payload),
+      }),
   },
 
   /* ---- 项目管理 ---- */

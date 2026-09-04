@@ -147,6 +147,26 @@ async def admission_gate() -> AsyncIterator[str | None]:
             )
 
 
+@asynccontextmanager
+async def admission_exempt_scope() -> AsyncIterator[None]:
+    """管理面 LLM 诊断豁免门（deploy-followups-plan §4.4，有意偏离）。
+
+    POST /api/llm/test（模型连通性测试）属管理员诊断操作：触发真实计费
+    调用的主体是服务器管理员，且一次诊断不应消耗其个人速率窗口 / 并发
+    租约（否则排障点击会与正常功能调用争抢配额）。作用域内临时挂起请求级
+    当前用户上下文，admission_gate() 的 governed_user_id() 即返回 None
+    直通（档案级并发 Semaphore 等客户端层约束不受影响）；单用户模式本就
+    不受治理，该作用域为无害空操作。ContextVar 按异步任务隔离，作用域
+    退出（含异常路径）即恢复，不影响并发处理中的其他请求。
+    """
+    previous = userspace.get_current_user_id()
+    userspace.set_current_user_id(None)
+    try:
+        yield
+    finally:
+        userspace.set_current_user_id(previous)
+
+
 def _iso(dt: datetime) -> str:
     return dt.replace(microsecond=0).isoformat()
 

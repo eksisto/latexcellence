@@ -139,12 +139,15 @@
 | 函数 | 功能 |
 | --- | --- |
 | `get_client_for(role)` | 按两级解析取目标档案的 `LLMClient`；客户端池 `{profile_id: LLMClient}` 双检锁惰性创建（支持 `asyncio.to_thread()` 多线程场景），档案指纹（`base_url` / `api_key` / `model`）变化时惰性重建实例（双保险，主失效路径仍是配置热重载清池） |
+| `get_client_for_profile(profile_id)` / `resolve_profile_by_id(profile_id)` | 按档案 id 直取池化客户端 / 解析档案对象（含内置档案；不存在抛 `ValueError`）——连通性测试 `profile_id` 粒度的"档案直查"入口，绕过槽位解析但不绕开客户端池复用 |
 | `reset_client_pool()` | 清空整个客户端池并逐实例 `reset()`（释放 `AsyncOpenAI` / Semaphore / 探测缓存）；配置热重载接线点（`config.py` 配置保存路径调用；绕过保存接口的磁盘直改重载由客户端指纹惰性重建兜底），应用关停时（lifespan finally）亦调用以释放底层连接 |
 | `has_api_key_for(role)` | 判断槽位两级解析后的生效档案是否配置了 `api_key`；各调用点的「是否配置 Key」预检统一入口（不能只看顶层 `llm.api_key`——用户可能仅给档案配 Key、顶层留空），无 Key 降级路径据此触发 |
 
 **`LLMClient` 档案化**（`llm_client.py`）：构造函数增加 `profile_id` 参数；`_resolve_cfg()` 每次请求实时解析「顶层字段 + 档案覆盖项」的合并视图（不在 `__init__` 缓存，遵守配置热重载规范；档案缺失时防御性回退顶层配置，功能不中断）；每个客户端实例持有独立的 `AsyncOpenAI`、Semaphore 与请求间隔状态；上下文窗口探测缓存按 `(profile_id, base_url, model)` 键隔离。`resolved_max_concurrency()` 供批次编排层的外部信号量取合并视图容量（与内部 `_get_semaphore` 同口径，避免访问私有方法）。
 
 **解析结果查询端点**：`GET /api/llm/routes`（`main.py`）固定返回全部角色槽位的两级解析结果（`role` / `profile_id` / `profile_name` / `model` / `capabilities`，不含 `api_key` / `base_url`），每次请求实时解析、不缓存；权限为「多用户模式已登录即可读」（`require_login_if_multiuser` 依赖，宽于 `/api/config` 的管理员门禁——模型徽标对所有登录用户展示、泄露面仅模型名），单用户模式受共享访问令牌中间件约束。
+
+**连通性测试端点**：`POST /api/llm/test`（`main.py`，部署收口阶段四）向目标档案发起一次最小补全（`"ping"` / `max_tokens=1` / `max_retries=1` 快速失败），`asyncio.timeout` 15s 硬上限，计测往返延迟。请求 `profile_id` 与 `role` 二选一（都传或都不传 → 422）：`role` 经 `get_client_for()` 两级解析（指派槽 → default 槽 → 内置档案）验证"实际生效档案"；`profile_id` 经 `get_client_for_profile()` 直取档案本身（客户端仍走全局池复用，未知档案 404 不静默回落）。响应 `{ok, latency_ms, model, profile_id, role?, error?}`，失败（含缺 key / 超时 / 上游错误）一律 200 + `ok=false` 内联 `error` 对象（`{error: 码, message, status?}`，与 detail 结构化错误约定同形，前端 `translateError()` 直接消费；错误码 `api_key_missing` / `llm_test_timeout` / `llm_test_upstream` / `llm_test_unreachable` / `llm_test_failed` 入三语 `errors` 命名空间），严禁回显密钥与上游响应体，服务端日志只记档案标识与错误类别。掩码协议边界（Q9）：后端直接读服务端配置真实值、前端只传目标标识，测试路径只读、绝不落盘 / 变更配置。权限为「多用户模式管理员」（`require_admin_if_multiuser`——触发真实计费调用属管理面操作）；多用户 LLM 每用户治理对本端点**有意豁免**（管理员的诊断调用不消耗个人限流窗口 / 并发租约，经 `llm_governance.admission_exempt_scope()` 临时挂起请求级用户上下文实现，档案级并发 Semaphore 等客户端层约束不受影响，见 deploy-followups-plan §4.4）。
 
 ### `backend/core/logger.py` — 日志系统
 

@@ -85,6 +85,14 @@ const EXACT_MAP = {
   llm_rate_limited: "llmRateLimited",
   llm_concurrency_limited: "llmConcurrencyLimited",
 
+  // 模型连通性测试（deploy-followups-plan 阶段四）内联错误码
+  // （POST /api/llm/test 响应体 error.code，消费处手动 translateError）
+  api_key_missing: "llmTestApiKeyMissing",
+  llm_test_timeout: "llmTestTimeout",
+  llm_test_upstream: "llmTestUpstream",
+  llm_test_unreachable: "llmTestUnreachable",
+  llm_test_failed: "llmTestFailed",
+
   // 反向补丁撤销（多用户 v2 P3）错误码
   quota_exceeded_recover: "quotaExceededRecover",
   op_not_undoable: "opNotUndoable",

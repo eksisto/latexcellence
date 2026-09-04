@@ -277,6 +277,81 @@ class TestAdmissionGate:
         assert _leases() == []
 
 
+# ── admission_exempt_scope：管理面诊断豁免（部署收口阶段四）──────────
+class TestAdmissionExemptScope:
+    """POST /api/llm/test 的治理豁免门（deploy-followups-plan §4.4）。
+
+    锁定三个契约：作用域内挂起请求级用户上下文、异常路径恢复、
+    ContextVar 按异步任务隔离（并发任务不受豁免影响）。
+    """
+
+    @pytest.mark.asyncio
+    async def test_suspends_and_restores_user_context(self):
+        """作用域内当前用户挂起为 None，退出后恢复原值。"""
+        userspace.set_current_user_id("u1")
+        try:
+            async with gov.admission_exempt_scope():
+                assert userspace.get_current_user_id() is None
+            assert userspace.get_current_user_id() == "u1"
+        finally:
+            userspace.set_current_user_id(None)
+
+    @pytest.mark.asyncio
+    async def test_restores_on_exception(self):
+        """作用域内抛异常：异常向上传播，用户上下文仍被 finally 恢复。"""
+        userspace.set_current_user_id("u1")
+        try:
+            with pytest.raises(RuntimeError, match="boom"):
+                async with gov.admission_exempt_scope():
+                    raise RuntimeError("boom")
+            assert userspace.get_current_user_id() == "u1"
+        finally:
+            userspace.set_current_user_id(None)
+
+    @pytest.mark.asyncio
+    async def test_concurrent_task_isolation(self):
+        """豁免按任务隔离：并发任务在豁免窗口内的上下文不受影响。"""
+        userspace.set_current_user_id("uA")
+        entered = asyncio.Event()
+        seen: dict[str, str | None] = {}
+
+        async def exempt_task():
+            async with gov.admission_exempt_scope():
+                entered.set()  # 通知观察者：已进入豁免窗口
+                await asyncio.sleep(0.05)
+                seen["inside_exempt"] = userspace.get_current_user_id()
+            seen["after_exempt"] = userspace.get_current_user_id()
+
+        async def observer_task():
+            await entered.wait()
+            seen["other_during_exempt"] = userspace.get_current_user_id()
+
+        try:
+            await asyncio.gather(exempt_task(), observer_task())
+        finally:
+            userspace.set_current_user_id(None)
+
+        assert seen["inside_exempt"] is None
+        assert seen["after_exempt"] == "uA"
+        # 观察者任务在豁免窗口内读取：仍是自己的 uA，未被豁免波及
+        assert seen["other_during_exempt"] == "uA"
+
+    @pytest.mark.asyncio
+    async def test_gate_governed_only_outside_scope(self, mu_env, governed_user):
+        """admission_gate 仅在豁免作用域内直通，作用域外照常治理。"""
+        async with gov.admission_exempt_scope():
+            async with gov.admission_gate() as task_id:
+                assert task_id is None
+        assert _events() == []
+        assert _leases() == []
+        # 作用域外：治理恢复生效（限流事件落账，租约随调用结束释放）
+        async with gov.admission_gate() as task_id:
+            assert task_id is not None
+        assert len(_events()) == 1
+        assert _events()[0]["identity"] == "u1"
+        assert _leases() == []
+
+
 # ── llm_client 注入集成 ──────────────────────────────────────────
 def _stub_impl(client, impl):
     """替换 LLMClient 内部实现桩（治理门在桩外层，保持生效）。"""

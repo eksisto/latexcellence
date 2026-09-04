@@ -62,6 +62,10 @@ export default function SettingsDialog() {
   // 模型管理分区 extra_body 草稿合法性：非法 JSON 时禁用保存，防止静默
   // 落盘与界面显示不一致的上一个合法对象（卡片转回合法时自动恢复）
   const [modelsValid, setModelsValid] = useState(true);
+  // 模型连通性测试进行中：禁用保存——保存会 reset_client_pool 关闭池化
+  // 客户端底层连接，恰好在途的诊断请求会因传输层关闭而失败，且测试结果
+  // 将指向旧配置（防冲突处理，随测试结束自动恢复）
+  const [modelsTestRunning, setModelsTestRunning] = useState(false);
   const modelsSectionRef = useRef(null);
   const { t } = useTranslation("components");
 
@@ -235,6 +239,7 @@ export default function SettingsDialog() {
               llm={config.llm}
               onChange={set}
               onExtraBodyValidityChange={setModelsValid}
+              onTestRunningChange={setModelsTestRunning}
             />
           </div>
           <FeaturesSection
@@ -253,7 +258,10 @@ export default function SettingsDialog() {
           <SmtpSection smtp={config.smtp} onChange={set} />
         </div>
         <DialogFooter className="mt-4">
-          <Button onClick={handleSave} disabled={saving || !modelsValid}>
+          <Button
+            onClick={handleSave}
+            disabled={saving || !modelsValid || modelsTestRunning}
+          >
             {saving ? t("settings.saving") : t("settings.saveConfig")}
           </Button>
         </DialogFooter>

@@ -12,23 +12,39 @@ LaTeXcellence — 统一入口文件
 
 import asyncio
 import sys
+import time
 from contextlib import asynccontextmanager
 from pathlib import Path
+from typing import Any
 
 from fastapi import Depends, FastAPI, HTTPException
 from fastapi.responses import FileResponse
-from pydantic import ValidationError
+from openai import APIConnectionError, APIStatusError, APITimeoutError
+from pydantic import BaseModel, ValidationError
 import uvicorn
 
-from backend.core.config import load_config, get_config, update_config_from_dict
+from backend.core.config import (
+    LLM_ROLE_KEYS,
+    load_config,
+    get_config,
+    update_config_from_dict,
+)
 from backend.core.logger import setup_logging, get_logger
-from backend.core.model_router import resolve_role_routes
+from backend.core.model_router import (
+    get_client_for,
+    get_client_for_profile,
+    resolve_profile_by_id,
+    resolve_role_routes,
+)
 from backend.utils.spa_static_files import SPAStaticFiles
 from backend.core.multiuser.dependencies import (
     require_admin_if_multiuser,
     require_login_if_multiuser,
 )
-from backend.core.multiuser.llm_governance import register_governance_handler
+from backend.core.multiuser.llm_governance import (
+    admission_exempt_scope,
+    register_governance_handler,
+)
 from backend.core.security_middleware import AccessSecurityMiddleware
 from backend.modules.project_router import router as project_router
 from backend.modules.typo_check.router import router as typo_check_router
@@ -377,6 +393,190 @@ async def get_llm_routes(_: None = Depends(require_login_if_multiuser)):
     共享访问令牌中间件约束。
     """
     return {"routes": resolve_role_routes()}
+
+
+# ── 模型连通性测试（deploy-followups-plan §4.4，阶段四）──────────────────
+
+# 诊断补全的超时上限（秒）：一次最小补全（max_tokens=1）的往返硬上限
+_LLM_TEST_TIMEOUT_SECONDS = 15.0
+
+
+class LlmTestRequest(BaseModel):
+    """POST /api/llm/test 请求体：profile_id 与 role 二选一。
+
+    掩码协议边界（Q9）：前端只传目标标识，api_key 等敏感材料一律由后端
+    直接读服务端配置真实值，严禁前端回传。
+    """
+
+    profile_id: str | None = None
+    role: str | None = None
+
+
+def _llm_test_error(code: str, message: str, **extra: Any) -> dict[str, Any]:
+    """构造测试结果内联错误对象。
+
+    键名与 HTTPException detail 的结构化错误约定一致（{"error": 码,
+    "message": 文案, ...附加字段}），前端 translateError() 可直接消费；
+    脱敏：不含密钥与上游响应体。
+    """
+    error: dict[str, Any] = {"error": code, "message": message}
+    error.update(extra)
+    return error
+
+
+def _classify_llm_test_error(exc: Exception) -> dict[str, Any]:
+    """把连通性测试异常归类为机器可读错误码 + 有限脱敏信息。
+
+    仅保留错误类别与上游 HTTP 状态码两类安全字段，严禁回显 api_key 或
+    上游响应体（可能含请求回显）；完整异常细节只进服务端日志。
+    注意 APITimeoutError 是 APIConnectionError 的子类，必须先判超时。
+    """
+    if isinstance(exc, (APITimeoutError, TimeoutError)):
+        return _llm_test_error(
+            "llm_test_timeout",
+            "Connectivity test timed out; check the network and base_url",
+        )
+    if isinstance(exc, APIStatusError):
+        status = getattr(exc, "status_code", None)
+        return _llm_test_error(
+            "llm_test_upstream",
+            f"Upstream API returned HTTP {status}",
+            status=status,
+        )
+    if isinstance(exc, APIConnectionError):
+        return _llm_test_error(
+            "llm_test_unreachable",
+            "Failed to reach the API endpoint; check the network and base_url",
+        )
+    return _llm_test_error(
+        "llm_test_failed", "Connectivity test failed; check the profile settings"
+    )
+
+
+@app.post("/api/llm/test")
+async def test_llm_connectivity(
+    payload: LlmTestRequest,
+    _: None = Depends(require_admin_if_multiuser),
+):
+    """模型连通性测试：向目标档案发起一次最小补全并计测往返延迟。
+
+    双粒度（二选一，均为 422 语义错误拒绝）：
+        - role：经 get_client_for(role) 两级解析（指派槽 → default 槽 →
+          内置档案），验证"该槽位实际生效的档案"；
+        - profile_id：直取该档案本身（get_client_for_profile），验证
+          "档案当前配置是否可连通"。
+
+    执行语义：LLMClient.chat() 最小补全（"ping"、max_tokens=1、
+    max_retries=1 快速失败），asyncio.timeout 15s 硬上限；测试结果
+    （含失败）一律以 200 + ok=false + error{} 内联返回，只有权限 /
+    参数 / 目标不存在走 HTTP 错误状态码。
+
+    掩码协议边界（Q9）：后端直接读服务端配置真实值，前端只传
+    profile_id；本端点只读配置，绝不落盘 / 变更任何配置项。
+
+    多用户 LLM 治理豁免（有意偏离，deploy-followups-plan §4.4）：触发
+    真实计费的诊断操作属管理面（require_admin_if_multiuser），不应
+    消耗管理员的个人速率窗口 / 并发租约，故 chat 调用包裹在
+    admission_exempt_scope() 内——详见 llm_governance 模块注释。
+    """
+    if bool(payload.profile_id) == bool(payload.role):
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "error": "invalid_request",
+                "message": "Provide exactly one of profile_id or role",
+            },
+        )
+
+    role: str | None = None
+    if payload.role is not None:
+        if payload.role not in LLM_ROLE_KEYS:
+            raise HTTPException(
+                status_code=422,
+                detail={
+                    "error": "invalid_request",
+                    "message": f"Unknown role: {payload.role}",
+                },
+            )
+        role = payload.role
+        profile = get_config().llm.resolve_role(role)
+        client = get_client_for(role)
+    else:
+        try:
+            profile = resolve_profile_by_id(payload.profile_id or "")
+            client = get_client_for_profile(payload.profile_id or "")
+        except ValueError as exc:
+            raise HTTPException(
+                status_code=404,
+                detail={"error": "not_found", "message": str(exc)},
+            ) from None
+
+    logger = get_logger("main")
+
+    def _response(ok: bool, latency_ms: int, **extra: Any) -> dict[str, Any]:
+        """组装响应体：model / profile_id 来自解析后的档案（role 粒度即
+        两级解析结果），不含 api_key / base_url 等敏感字段。"""
+        body: dict[str, Any] = {
+            "ok": ok,
+            "latency_ms": latency_ms,
+            "model": profile.model,
+            "profile_id": profile.id,
+        }
+        if role is not None:
+            body["role"] = role
+        body.update(extra)
+        return body
+
+    if not profile.api_key:
+        logger.info(
+            "LLM connectivity test skipped (no api key): profile=%s", profile.id
+        )
+        return _response(
+            ok=False,
+            latency_ms=0,
+            error=_llm_test_error(
+                "api_key_missing",
+                "No API key configured for this profile",
+            ),
+        )
+
+    logger.info(
+        "LLM connectivity test started: profile=%s role=%s model=%s",
+        profile.id,
+        role or "-",
+        profile.model,
+    )
+    started = time.perf_counter()
+    try:
+        # 治理豁免仅包裹诊断调用本身（见 docstring 与
+        # llm_governance.admission_exempt_scope 注释）
+        async with admission_exempt_scope():
+            async with asyncio.timeout(_LLM_TEST_TIMEOUT_SECONDS):
+                await client.chat(
+                    messages=[{"role": "user", "content": "ping"}],
+                    max_tokens=1,
+                    max_retries=1,
+                )
+    except Exception as exc:
+        latency_ms = int((time.perf_counter() - started) * 1000)
+        error = _classify_llm_test_error(exc)
+        # 服务端日志只记档案标识与错误类别，绝不记录异常细节 / 密钥 /
+        # 上游响应内容
+        logger.warning(
+            "LLM connectivity test failed: profile=%s category=%s latency_ms=%d",
+            profile.id,
+            error["error"],
+            latency_ms,
+        )
+        return _response(ok=False, latency_ms=latency_ms, error=error)
+
+    latency_ms = int((time.perf_counter() - started) * 1000)
+    logger.info(
+        "LLM connectivity test ok: profile=%s latency_ms=%d",
+        profile.id,
+        latency_ms,
+    )
+    return _response(ok=True, latency_ms=latency_ms)
 
 
 # 注册各功能模块路由

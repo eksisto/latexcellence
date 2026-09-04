@@ -1,5 +1,7 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { api } from "@/api";
+import { translateError } from "@/utils/errorMessages";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
@@ -137,6 +139,8 @@ const ProfileCard = memo(function ProfileCard({
   onPatchId,
   onRemove,
   onExtraBodyInvalidChange,
+  onTestConnection,
+  onTestRunningChange,
 }) {
   const { t } = useTranslation("components");
   // 「被槽位引用」列表在卡片内部按 (assignments, id) memo：引用关系只随
@@ -159,6 +163,38 @@ const ProfileCard = memo(function ProfileCard({
   const [extraBodyDraft, setExtraBodyDraft] = useState(null);
   const extraBodyValid =
     extraBodyDraft === null || parseExtraBody(extraBodyDraft) !== undefined;
+
+  // 连通性测试状态（本卡片局部）：testing 期间经 onTestRunningChange 向
+  // 分区聚合（对话框据此禁用保存，防止 reset_client_pool 掐断在途诊断
+  // 请求）；testResult 为后端响应（{ok, latency_ms, error?}）或 HTTP 层
+  // 错误（{httpErrorMessage}，message 已被 request() 翻译）
+  const [testing, setTesting] = useState(false);
+  const [testResult, setTestResult] = useState(null);
+
+  async function handleTestConnection() {
+    if (testing) return;
+    setTesting(true);
+    setTestResult(null);
+    onTestRunningChange?.(cardKey, true);
+    try {
+      const res = await onTestConnection(profile.id);
+      setTestResult(res ?? { ok: false, error: { error: "llm_test_failed" } });
+    } catch (err) {
+      setTestResult({ ok: false, httpErrorMessage: err.message });
+    } finally {
+      setTesting(false);
+      onTestRunningChange?.(cardKey, false);
+    }
+  }
+
+  function renderTestResult(result) {
+    if (result.ok) {
+      return t("settings.modelTestOk", { ms: result.latency_ms });
+    }
+    if (result.httpErrorMessage) return result.httpErrorMessage;
+    // 响应体内嵌错误字段不经过 request() 拦截，手动走 translateError
+    return translateError(result.error);
+  }
 
   const extraBodyText =
     extraBodyDraft ??
@@ -306,6 +342,38 @@ const ProfileCard = memo(function ProfileCard({
         </div>
       </div>
 
+      {/* 连通性测试（部署收口阶段四）：后端读取服务端已保存配置真实值
+          （含密钥）发起最小补全，未保存的草稿无处可测，仅在已保存档案
+          （挂载快照 savedIds 命中，即 lockedId）上开放 */}
+      <div className="flex flex-wrap items-center gap-2">
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={handleTestConnection}
+          disabled={testing || !lockedId}
+          title={
+            lockedId
+              ? t("settings.modelTestHint")
+              : t("settings.modelTestSavedRequired")
+          }
+        >
+          {testing
+            ? t("settings.modelTestRunning")
+            : t("settings.modelTestButton")}
+        </Button>
+        {!testing && testResult && (
+          <span
+            className={`text-xs ${
+              testResult.ok
+                ? "font-medium text-emerald-600 dark:text-emerald-400"
+                : "text-destructive"
+            }`}
+          >
+            {renderTestResult(testResult)}
+          </span>
+        )}
+      </div>
+
       <div className="space-y-1.5">
         <Label className="text-xs">{t("settings.modelCapabilities")}</Label>
         <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5">
@@ -434,7 +502,12 @@ const ProfileCard = memo(function ProfileCard({
  * 整对象提交，均随 SettingsDialog 的整体保存生效；校验失败错误经
  * request() 翻译层在保存 toast 中展示。
  */
-function ModelManagementSection({ llm, onChange, onExtraBodyValidityChange }) {
+function ModelManagementSection({
+  llm,
+  onChange,
+  onExtraBodyValidityChange,
+  onTestRunningChange,
+}) {
   const { t } = useTranslation("components");
   const profiles = Array.isArray(llm.profiles) ? llm.profiles : [];
   // 兜底 {} 经 memo 固定：缺失时不再每次渲染新建对象，卡片 memo 比较不失效
@@ -463,6 +536,35 @@ function ModelManagementSection({ llm, onChange, onExtraBodyValidityChange }) {
   useEffect(() => {
     onExtraBodyValidityChange?.(invalidExtraBodyKeys.size === 0);
   }, [invalidExtraBodyKeys, onExtraBodyValidityChange]);
+
+  // 连通性测试进行中的卡片键集合：任一非空即上报对话框禁用保存按钮
+  // （防冲突：保存会 reset_client_pool 关闭池化客户端底层连接，恰好在途
+  // 的诊断请求会因传输层关闭而失败，且结果将指向旧配置）
+  const [testingCardKeys, setTestingCardKeys] = useState(() => new Set());
+
+  const handleTestRunningChange = useCallback((key, running) => {
+    setTestingCardKeys((prev) => {
+      const existed = prev.has(key);
+      if (running === existed) return prev;
+      const next = new Set(prev);
+      if (running) {
+        next.add(key);
+      } else {
+        next.delete(key);
+      }
+      return next;
+    });
+  }, []);
+
+  useEffect(() => {
+    onTestRunningChange?.(testingCardKeys.size > 0);
+  }, [testingCardKeys, onTestRunningChange]);
+
+  // 连通性测试 API 调用（掩码协议边界：只传档案 id，密钥由服务端读取）
+  const testConnection = useCallback(
+    async (profileId) => api.config.llmTest({ profile_id: profileId }),
+    [],
+  );
 
   // 服务器已保存档案 id 集合（挂载时快照）：已保存档案 id 只读，
   // 防止掩码 api_key 因改 id 无法匹配原值而被后端清空
@@ -600,6 +702,8 @@ function ModelManagementSection({ llm, onChange, onExtraBodyValidityChange }) {
             onPatchId={updateProfileId}
             onRemove={removeProfile}
             onExtraBodyInvalidChange={handleExtraBodyInvalidChange}
+            onTestConnection={testConnection}
+            onTestRunningChange={handleTestRunningChange}
           />
         ))}
       </div>

@@ -23,7 +23,12 @@ reset_client_pool 注释）。
 import threading
 from typing import Any
 
-from backend.core.config import LLM_ROLE_KEYS, ModelProfile, get_config
+from backend.core.config import (
+    BUILTIN_PROFILE_ID,
+    LLM_ROLE_KEYS,
+    ModelProfile,
+    get_config,
+)
 from backend.core.llm_client import LLMClient
 
 # 客户端池：profile_id → LLMClient（惰性创建，llm 配置变更时整体清空）
@@ -40,6 +45,33 @@ def get_client_for(role: str) -> LLMClient:
     """
     profile = get_config().llm.resolve_role(role)
     return _client_for_profile(profile)
+
+
+def resolve_profile_by_id(profile_id: str) -> ModelProfile:
+    """按档案 id 解析档案对象（含内置档案），不存在抛 ValueError。
+
+    与两级槽位解析（resolve_role）互补的"档案直查"入口：供连通性测试
+    等管理面诊断场景按 id 定位档案本身，而非某槽位当前生效的档案。
+    每次调用实时读取配置，不做任何缓存（热重载语义）。
+    """
+    llm_cfg = get_config().llm
+    if profile_id == BUILTIN_PROFILE_ID:
+        return llm_cfg.builtin_default_profile()
+    profile = next((p for p in llm_cfg.profiles if p.id == profile_id), None)
+    if profile is None:
+        raise ValueError(f'模型档案不存在："{profile_id}"')
+    return profile
+
+
+def get_client_for_profile(profile_id: str) -> LLMClient:
+    """按档案 id 获取（池化）LLM 客户端。
+
+    与 get_client_for 的区别：绕过槽位解析，直接定位指定档案——验证
+    "该档案本身"（连通性测试的 profile_id 粒度，deploy-followups-plan
+    §4.4）。客户端仍走全局池复用（不绕开 AsyncOpenAI 连接共享与档案级
+    节流）；档案不存在抛 ValueError（见 resolve_profile_by_id）。
+    """
+    return _client_for_profile(resolve_profile_by_id(profile_id))
 
 
 def has_api_key_for(role: str) -> bool:
