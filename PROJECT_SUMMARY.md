@@ -297,7 +297,7 @@ latexcellence/
 │   ├── terminology_check_eval/    # 术语一致性人工评估工具（加载多段术语语料 → 跑检查 → 生成比对报告）
 │   ├── paragraph_translate_eval/  # 逐段翻译人工评估工具（加载语料 → 跑翻译 → 生成比对报告）
 │   ├── prompt_comprehension_eval/ # Prompt 理解评测工具（逐一探测 + 历史追踪 + 回归检测）
-│   ├── rar_fixtures/               # rar 测试样例生成器（纯字节手工构造 RAR4 fixtures 入库，不依赖构建环境装包）
+│   ├── rar_fixtures/               # rar 测试样例工具（make_fixtures.py 纯字节构造 store 模式 RAR4 入库；verify_fixtures.py 对全部入库样本做结构/预扫/真实解压对账；真实压缩样本由 rar CLI 生成，步骤见前者 docstring）
 │   ├── compose-smoke.sh           # 多实例 compose 冒烟（replicas=2：注册审批→分片上传→undo→下载；--with-tex 追加编译冒烟）
 │   ├── bump-version.sh            # 版本号一键升级（main.py 两处 + 前端三语 i18n；major/minor/patch 或显式版本号，默认自动提交）
 │   ├── plotgen_opt/               # plot_gen Agent 优化评测工作区（脚本/数据集/报告入库，results、previews 忽略）

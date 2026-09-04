@@ -38,9 +38,14 @@ BSD 授权独立实现（不含 unRAR 代码），不受上述许可剥离影响
 | GBK 文件名样例 | ✓ 保留原始字节（见 §四，需归一化步骤） |
 | 加密 / 分卷标志样例 | 报错拒绝（管线本就预扫先拒，行为一致） |
 | 手工构造的非规范 NTFS 子块样例 | ✗ Header CRC error 被拒（见 §八 风险 1） |
+| 真实压缩 RAR4 / RAR5（rar 6.24 `-m5`） | ✓ 正确解出（部署收口阶段二入库样本，见 §十） |
+| 真实加密 RAR5（AES-256，`-p`） | 报错拒绝（「Unsupported block header size」不含保护关键词 → `invalid_archive`，见 §十） |
+| 真实 RAR5 分卷第一卷（单独上传） | 报错拒绝（截断类错误 → `invalid_archive`） |
 
 真实压缩 RAR 未能在本机复现验证（无 rar 生成工具；现有 fixtures 全为 store 模式），
 依据为其他生产项目的公开验证记录；实施前须按 §六 用真实样本闭环。
+（更新：部署收口阶段二已以 rar 6.24 生成真实压缩/加密/分卷样本入库并完成
+双工具实测，事实记录见 §十。）
 
 ## 二、目标与非目标
 
@@ -241,3 +246,40 @@ doas systemctl restart latexcellence
    bsdtar 解压此类归档会以 `invalid_archive` 拒绝——安全无损的降级，但意味着
    该类环境下非 UTF-8 名 rar 不可用；测试侧 GBK 用例因此使用带能力探测的
    `raw_name_dir` fixture，避免环境性误报。
+
+## 十、入库真实压缩样本（部署收口阶段二事实记录）
+
+真实压缩流无法伪造，样本以 rarlab rar CLI 生成后入库 `tests/fixtures/rar/`
+（自产 `.tex` 数据，不分发 rar 软件本体，总体积 KB 级）：
+
+| 样本 | 生成要点 | 用途 |
+| --- | --- | --- |
+| `compressed_rar4.rar` / `compressed_rar5.rar` | `rar a -ma4/-ma5 -m5 -ep`（346 字节源 `.tex`，pack 211/211） | 真实压缩包双工具端到端上传解压 |
+| `encrypted_rar5.rar` | `rar a -ma5 -m5 -ep -p<口令>`（AES-256） | 真实加密包确定性拒绝 |
+| `volume4.part1.rar` / `volume4.part2.rar` | `rar a -ma4 -m5 -ep -v1k` | 真实分卷对确定性拒绝 |
+
+结构期望与生产管线预扫行为的自动对账：`python
+tools/rar_fixtures/verify_fixtures.py`（版本头、压缩方法与实际压缩比、
+加密/分卷标志、成员名、单样本体积上限；环境有解压器时追加真实解压指纹
+校验）。再生成步骤见 `tools/rar_fixtures/make_fixtures.py` 模块 docstring。
+
+实测结论（rar 6.24 / unar 1.10.8 / bsdtar 3.7.4，2026-09）：
+
+- **rar 7.x 起移除 `-ma4`**，无法再生成 RAR4 归档（Debian 源 rar 7.11 实测
+  `Unknown option: ma4`）；RAR4 样本须用 rar 5.x / 6.x 生成；
+- 真实压缩 RAR4 / RAR5 在 unar、bsdtar 下均端到端上传解压成功，产物与源
+  内容逐字节一致（`TestRealCompressedExtract`，双工具参数化）；
+- 真实加密 RAR5 的拒绝码**按工具细分**：unar 报「requires a password」
+  命中关键词 → `archive_unsafe`；bsdtar 报「Unsupported block header size」
+  不含关键词 → `invalid_archive`（拒绝确定性成立，细分度下降同 §五）；
+- **RAR5 分卷第一卷单独上传**（隔离目录、无兄弟分卷，与上传场景一致）：
+  unar 零产物退出（exit=0）→ 由「成功但零产物」兜底 `invalid_archive`
+  （§五 的假设实测成立）；bsdtar 报「Too small block encountered」非零
+  退出、不含保护关键词 → `invalid_archive`。两工具均确定性拒绝，但 unar
+  分支依赖零产物兜底这一弱信号，且 unar 在归档同目录存在兄弟分卷时会
+  自动补全解压（生产上传为单文件暂存，不触发）。分卷入库样本因此选用
+  RAR4——预扫 MHD_VOLUME 在解压发起前确定性拒绝，与解压器行为完全无关；
+- **SERVICE(0x7A) 服务块必须置 LONG_BLOCK（0x8000）**：手工构造缺该标志时
+  unar/unrar 视为无数据区、在数据字节上瞎找下一块直至放弃（lsar 列出
+  0 个成员、解出 0 个文件），仅 bsdtar/libarchive 容忍；`service_rr.rar`
+  已按真实结构修复（flags=0xC000），verify 脚本对该标志有回归断言。

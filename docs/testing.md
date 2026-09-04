@@ -126,3 +126,30 @@ LLM 并自动核验 JSON 格式、marker 保护、分隔符协议、JSON 转义�
 等关键契约，输出 `logs/prompt_comprehension_eval/results.json` 供人工复核。
 该流程依赖真实 LLM 调用，不属于 `pytest tests/` 自动测试范围。使用说明见
 `tools/prompt_comprehension_eval/README.md`。
+
+---
+
+## RAR 入库样本与结构校验
+
+`tests/fixtures/rar/` 是多用户 rar 上传管线的自动化测试样本，分两类：
+
+- **纯字节手工构造**（`tools/rar_fixtures/make_fixtures.py` 生成，store 模式
+  RAR4）：布局、GBK 文件名、加密/分卷标志、服务块/子块数据区回归等结构性
+  用例，不依赖构建环境装包；
+- **真实 rar CLI 生成**（`compressed_rar4.rar` / `compressed_rar5.rar` /
+  `encrypted_rar5.rar` / `volume4.part1.rar` / `volume4.part2.rar`，rarlab
+  rar 6.24 产物，总体积 KB 级）：压缩流无法伪造，用于「真实压缩 RAR4/RAR5
+  双工具端到端上传解压」验收。再生成步骤见 `make_fixtures.py` 模块 docstring
+  （注意 rar 7.x 起移除 `-ma4`，无法生成 RAR4 归档）。
+
+`tools/rar_fixtures/verify_fixtures.py` 对**全部**入库样本做结构对账
+（版本头、压缩方法与实际压缩比、加密/分卷标志、成员名清单、单样本体积
+上限），并与生产管线 RAR4 预扫行为互验（预期放行/拒绝逐一对账）；环境
+存在 unar/bsdtar 时额外做真实解压对账（压缩样本解出内容 sha256 与源
+指纹一致、真实加密包必须被解压器拒绝）。任何环境都可运行：
+
+```bash
+python tools/rar_fixtures/verify_fixtures.py   # 退出码 0=全部通过
+```
+
+新增/删除入库样本必须同步该脚本的 `EXPECTATIONS` 期望表。

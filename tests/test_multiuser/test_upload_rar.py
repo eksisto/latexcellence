@@ -1,9 +1,14 @@
-"""多用户模式 v2 P2 + 回退层 + 部署收口阶段一：rar 上传解压管线测试。
+"""多用户模式 v2 P2 + 回退层 + 部署收口阶段一/二：rar 上传解压管线测试。
 
 覆盖（方案 §7 / §14 完成标准 + docs/rar-extractor-fallback.md §六 +
-deploy-followups-plan.md §4.1 阶段一）：
+deploy-followups-plan.md §4.1/§4.2 阶段一/二）：
     - 正常解压：顶层单目录布局 / 直接内容布局 / 内容与计数（unar 与
       bsdtar 双工具参数化）
+    - 真实压缩样本（rar CLI 生成，压缩流无法伪造）：RAR4 / RAR5 在双
+      工具下端到端上传解压，产物与源 .tex 内容逐字节一致（阶段二验收）
+    - 真实加密 RAR5（AES-256）拒绝：拒绝发生在解压器失败输出关键词
+      匹配，错误码按工具细分（unar→archive_unsafe / bsdtar→invalid_archive）
+    - 真实 RAR4 分卷对拒绝：预扫 MHD_VOLUME 确定性拦截，与解压器无关
     - 加密包拒绝（文件头加密标志，预扫确定性拦截）
     - 分卷包拒绝（多卷集第一卷形态，预扫确定性拦截）
     - 服务/子块（恢复记录 RR、NTFS 子块）带数据区的合法包不被预扫
@@ -29,6 +34,9 @@ deploy-followups-plan.md §4.1 阶段一）：
 skip；预扫 / 选择层 / 缺二进制 / 监视任务 / 归一化 / ExecSpec 形状用例
 不依赖外部二进制与 Docker daemon（fake runner），任何环境都执行；
 真容器冒烟见 tests/test_docker/test_rar_sandbox_smoke.py（marker docker）。
+
+入库样本的结构期望由 tools/rar_fixtures/verify_fixtures.py 独立对账；
+真实样本再生成步骤见 tools/rar_fixtures/make_fixtures.py 模块 docstring。
 """
 
 import asyncio
@@ -73,6 +81,22 @@ RAR_TOOL_PARAMS = [
         marks=pytest.mark.skipif(not BSDTAR_AVAILABLE, reason="bsdtar 工具不可用"),
     ),
 ]
+
+# 真实压缩样本（compressed_rar4.rar / compressed_rar5.rar，同源 .tex）的
+# 期望内容：与 tools/rar_fixtures/verify_fixtures.py 的 CRC32/sha256 指纹
+# 互相钉死——源内容一旦漂移，两边校验都会失败
+COMPRESSED_TEX = (
+    "\\documentclass{article}\n"
+    "\\title{Compression Fixture}\n"
+    "\\author{LaTeXcellence Test Suite}\n"
+    "\\begin{document}\n"
+    "\\maketitle\n"
+    "This sample paragraph is generated for the rar fixture suite.\n"
+    "TeX typesets the same sentence repeatedly to keep the archive small.\n"
+    "\\section{Repeat}\n"
+    "TeX typesets the same sentence repeatedly to keep the archive small.\n"
+    "\\end{document}\n"
+)
 
 
 @pytest.fixture
@@ -951,6 +975,57 @@ class TestProtectedReject:
         assert ei.value.code == "archive_unsafe"
 
 
+# ── 真实压缩 / 加密 / 分卷样本（部署收口阶段二，需要解压器）──────
+# 样本由 rarlab rar 6.24 生成入库（压缩流无法伪造），结构期望由
+# tools/rar_fixtures/verify_fixtures.py 独立对账；再生成步骤见
+# tools/rar_fixtures/make_fixtures.py 模块 docstring。
+@pytest.mark.parametrize("force_rar_tool", RAR_TOOL_PARAMS, indirect=True)
+class TestRealCompressedExtract:
+    """真实压缩 RAR4 / RAR5 端到端解压：预扫放行 → 沙箱解压 →
+    产物与源 .tex 内容逐字节一致（阶段二验收口径，unar 同 bsdtar 覆盖）。"""
+
+    @pytest.mark.parametrize(
+        "fixture_name", ["compressed_rar4.rar", "compressed_rar5.rar"]
+    )
+    def test_compressed_archive_roundtrip(
+        self, extract_dir, fixture_name, force_rar_tool
+    ):
+        res = upload.extract_archive(FIXTURES / fixture_name, extract_dir, _limits())
+        # 单文件直接内容布局：解压根即项目根
+        assert res.root == extract_dir
+        assert (res.root / "main.tex").read_text(encoding="utf-8") == COMPRESSED_TEX
+        assert res.file_count == 1
+
+
+@pytest.mark.parametrize("force_rar_tool", RAR_TOOL_PARAMS, indirect=True)
+class TestRealProtectedReject:
+    """真实受保护样本的确定性拒绝。
+
+    - 真实加密 RAR5（AES-256）：预扫只覆盖 RAR4，拒绝发生在解压器失败
+      输出的关键词匹配——unar 报「requires a password」命中 password →
+      archive_unsafe；bsdtar 报「Unsupported block header size」不含关键
+      词 → invalid_archive（§五：安全性不变，仅错误细分度随工具下降）；
+    - 真实 RAR4 分卷对：预扫 MHD_VOLUME 确定性拦截，与解压器无关，
+      第一卷 / 后续卷单独上传均拒绝。分卷样本选用 RAR4 而非 RAR5：
+      RAR5 分卷第一卷单独上传时 unar 仅零产物退出（拒绝依赖零产物兜底
+      的弱信号），RAR4 预扫在解压发起前拦截、不依赖解压器行为——
+      见 make_fixtures.py docstring 与 rar-extractor-fallback.md §十。"""
+
+    def test_real_encrypted_rar5_rejected(self, extract_dir, force_rar_tool):
+        with pytest.raises(upload.ArchiveError) as ei:
+            upload.extract_archive(
+                FIXTURES / "encrypted_rar5.rar", extract_dir, _limits()
+            )
+        expected = {"unar": "archive_unsafe", "bsdtar": "invalid_archive"}
+        assert ei.value.code == expected[force_rar_tool]
+
+    def test_real_volume_parts_rejected(self, extract_dir, force_rar_tool):
+        for name in ("volume4.part1.rar", "volume4.part2.rar"):
+            with pytest.raises(upload.ArchiveError) as ei:
+                upload.extract_archive(FIXTURES / name, extract_dir, _limits())
+            assert ei.value.code == "archive_unsafe"
+
+
 @pytest.mark.parametrize("force_rar_tool", RAR_TOOL_PARAMS, indirect=True)
 class TestCorrupt:
     def test_garbage_bytes_rejected(self, extract_dir, tmp_path, force_rar_tool):
@@ -1033,6 +1108,28 @@ class TestApiUpload:
             encoding="utf-8"
         ) == "\\documentclass{article}\nWorld\n"
         assert (root / "refs.bib").exists()
+
+    @pytest.mark.parametrize(
+        "fixture_name", ["compressed_rar4.rar", "compressed_rar5.rar"]
+    )
+    def test_upload_compressed_rar_creates_project(
+        self, env, alice_client, fixture_name, force_rar_tool
+    ):
+        """真实压缩 RAR4/RAR5 经 API 端到端上传创建项目
+        （解压 + 内容核验 + 落位用户空间，阶段二验收口径）。"""
+        from tests.test_multiuser.conftest import csrf
+
+        payload = (FIXTURES / fixture_name).read_bytes()
+        r = alice_client.post(
+            "/api/projects",
+            data={"name": "RarCompressed"},
+            files={"archive": (fixture_name, payload, "application/vnd.rar")},
+            headers=csrf(alice_client),
+        )
+        assert r.status_code == 201, r.text
+        proj = r.json()["project"]
+        root = userspace.project_dir(env["alice"]["id"], proj["project_id"])
+        assert (root / "main.tex").read_text(encoding="utf-8") == COMPRESSED_TEX
 
     def test_upload_encrypted_rar_rejected(self, env, alice_client, force_rar_tool):
         from tests.test_multiuser.conftest import csrf

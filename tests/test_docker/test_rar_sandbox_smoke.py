@@ -7,8 +7,10 @@
 - 压缩包路径以只读方式挂载：容器内写挂载源必须失败（安全基线断言）；
 - 无 daemon / 缺镜像 / 临时目录对 daemon 不可见：整文件 skip，不影响回落回归。
 
-fixtures 复用 tools/rar_fixtures 纯字节 store 模式 RAR4 样本（真实压缩样本
-属阶段二）。运行方式：pytest -m docker（或全量运行，未满足条件自动跳过）。
+fixtures 复用 tests/fixtures/rar/ 入库样本（store 模式 RAR4；真实压缩
+RAR4/RAR5 样本已由部署收口阶段二入库，如需真容器路径覆盖可在本文件增补，
+local 模式双工具端到端见 tests/test_multiuser/test_upload_rar.py）。
+运行方式：pytest -m docker（或全量运行，未满足条件自动跳过）。
 """
 
 import shutil

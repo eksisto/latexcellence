@@ -3,14 +3,17 @@
 
 多用户上传管线 P2 的入库 fixtures 不依赖构建环境安装 rar/unar：
 本脚本用纯字节拼装出最小合法 RAR 归档，产物提交进 tests/fixtures/rar/，
-由 CI 与开发机上的 unar 真实解压验证。
+由 CI 与开发机上的 unar 真实解压验证。入库后统一跑
+`python tools/rar_fixtures/verify_fixtures.py` 做结构 + 预扫 + （有解压器
+时的）真实解压对账，防止坏样本静默入库。
 
 用法（在仓库根目录）::
 
     python tools/rar_fixtures/make_fixtures.py
     python tools/rar_fixtures/make_fixtures.py --verify tests/fixtures/rar/compressed_rar4.rar
+    python tools/rar_fixtures/verify_fixtures.py
 
-生成物（均为无压缩 store 方式，体积仅数百字节）：
+生成物（本脚本产物均为无压缩 store 方式，体积仅数百字节）：
 
     layout_flat.rar     直接内容布局（main.tex + notes\\readme.txt）
     layout_top_dir.rar  顶层单目录布局（proj\\main.tex + proj\\refs.bib）
@@ -22,6 +25,10 @@
     subhead_ntfs.rar    SUB_HEAD(0x78) 子块（NTFS 流形态）带数据区 +
                         正常文件（同上）
 
+另有真实 rar CLI 生成的压缩 / 加密 / 分卷样本（compressed_rar4.rar、
+compressed_rar5.rar、encrypted_rar5.rar、volume4.part1.rar、
+volume4.part2.rar）不经本脚本生成，见文末「真实压缩样本」段。
+
 格式要点（RAR 4.x）：
     - 主头固定 13 字节：块头 7（CRC+TYPE+FLAGS+SIZE）+ HighPosAv(2) + PosAv(4)；
     - 文件头 HEAD_SIZE 从 HEAD_CRC 起算 = 块头 7 + 固定段 25 + 名字长度；
@@ -29,6 +36,11 @@
     - 带数据区的三类块（FILE_HEAD 0x74 / SUB_HEAD 0x78 / SERVICE 0x7A）
       的数据区长度都在块头 body 起始的 u32（PACK_SIZE / ADD_SIZE），
       其中 0x7A 与文件头共用同一布局、0x78 为「DataSize + 附加段」；
+    - SERVICE / SUB 块必须置 LONG_BLOCK（0x8000）标志声明「本块携带
+      PACK_SIZE 长度的数据区」——真实 rar 的 RR 块 flags=0xC000
+      （LONG_BLOCK | 0x4000 skip-if-unknown）；缺 LONG_BLOCK 时
+      unar/unrar 视为无数据区、随后在数据字节上瞎找下一块直至放弃
+      （实测 lsar 列出 0 个成员），只有 bsdtar/libarchive 容忍；
     - RAR 归档内路径分隔符是反斜杠 '\\'（即使类 Unix 平台创建亦如此）——
       用正斜杠会被 unar 当成普通字符折叠为 '_'；
     - 头部 CRC 为 HEAD_TYPE 起至头部末尾的 CRC32 低 16 位。
@@ -36,22 +48,74 @@
 注意：encrypted.rar / volume.part1.rar 只设置格式标志位用于触发拒绝路径，
 不是可正常解密的归档；任何工具都不应尝试解密受保护包。
 
-真实压缩样本（RAR 解压器回退层的遗留验收项）：
+真实压缩样本（RAR 解压器回退层的遗留验收项，已入库）：
     本脚本只能构造 store（不压缩）样例——压缩流依赖专有算法，无法伪造。
-    rar 回退层（docs/rar-extractor-fallback.md §六）要求以真实压缩 RAR4 与
-    RAR5 各一在 bsdtar 下端到端上传成功作为验收标准；在装有 WinRAR 或 rar
-    （非自由 unrar 包亦可）的环境手工生成后入库 tests/fixtures/rar/：
+    真实样本用 rarlab rar CLI 生成后入库（自产 .tex 数据，不分发 rar 软件
+    本体，无许可负担）。再生成步骤：
 
-        1. 生成：取数百字节 .tex 样例（如 layout_flat.rar 解出的 main.tex），
-           `rar a -m5 -ep compressed_rar4.rar main.tex`（RAR4 默认格式）；
-           加 `-ma5`（WinRAR 5+ / rar 5.x：`rar a -ma5 -m5 -ep ...`）得 RAR5
-           变体；命名建议 compressed_rar4.rar / compressed_rar5.rar；
-        2. 校验（缺 unar/bsdtar 的机器可跳过，CI 有二进制时自动覆盖）：
-           `bsdtar -tf compressed_rar4.rar` 能列出成员且
-           `python tools/rar_fixtures/make_fixtures.py --verify compressed_rar4.rar`
-           通过（校验魔数、预扫放行、解出内容与源文件一致）；
-        3. 入库后在 tests/test_multiuser/test_upload_rar.py 增补对应真实解压
-           用例（双工具参数化）。
+        0. 工具版本：rar 5.x / 6.x（默认 RAR4 格式，`-ma5` 切 RAR5）。
+           注意 rar 7.x 起 **移除了 `-ma4`**（无法再生成 RAR4 归档），
+           Debian 源的 rar 7.11 不可用于 compressed_rar4.rar / volume4.*；
+           无 root 环境可把 rarlab tarball 解到私有前缀使用，不入库。
+        1. 源内容（两个压缩样本同源；固定 mtime 使再生成头部时间稳定）::
+
+               cat > main.tex <<'EOF'
+               \\documentclass{article}
+               \\title{Compression Fixture}
+               \\author{LaTeXcellence Test Suite}
+               \\begin{document}
+               \\maketitle
+               This sample paragraph is generated for the rar fixture suite.
+               TeX typesets the same sentence repeatedly to keep the archive small.
+               \\section{Repeat}
+               TeX typesets the same sentence repeatedly to keep the archive small.
+               \\end{document}
+               EOF
+               touch -t 202608221200 main.tex
+
+           分卷源 chapter.tex：普通文本压缩率太高，装不进两卷，需用固定
+           种子 PRNG 的 base64 verbatim 块把压缩后体积撑到约 1.7KB（恰跨
+           `-v1k` 两卷）::
+
+               python3 - <<'EOF'
+               import base64, random
+               from pathlib import Path
+               para = ("TeX typesets the same sentence repeatedly to keep the "
+                       "archive small. The quick brown fox jumps over the lazy "
+                       "dog while doing so.\\n")
+               rng = random.Random(20260905)
+               blob = base64.b64encode(rng.randbytes(1200)).decode("ascii")
+               lines = "\\n".join(blob[i:i + 76] for i in range(0, len(blob), 76))
+               body = ("\\\\documentclass{article}\\n\\\\title{Volume Fixture}\\n"
+                       "\\\\begin{document}\\nThis chapter is a repeatable filler "
+                       "used to span several rar volumes.\\n" + para * 8 +
+                       "% Deterministic pseudo-random payload (seed 20260905), "
+                       "compresses poorly\\n% so that the archive actually "
+                       "splits into a multi-part set.\\n\\\\begin{verbatim}\\n"
+                       + lines + "\\n\\\\end{verbatim}\\n\\\\end{document}\\n")
+               Path("chapter.tex").write_bytes(body.encode("utf-8"))
+               EOF
+               touch -t 202608221200 chapter.tex
+
+           期望指纹（写入 tools/rar_fixtures/verify_fixtures.py 常量，改动
+           源内容必须同步）：main.tex 346 字节，CRC32 0x75EB3C4F，
+           sha256 fbb50bfc...61d84c12（全值见 verify 脚本）。
+
+               rar a -ma4 -m5 -ep -tsm compressed_rar4.rar main.tex
+               rar a -ma5 -m5 -ep -tsm compressed_rar5.rar main.tex
+               rar a -ma5 -m5 -ep -tsm -pFixtures2026 encrypted_rar5.rar main.tex
+               rar a -ma4 -m5 -ep -tsm -v1k volume4.rar chapter.tex   # → part1/part2
+
+           注：分卷选 RAR4 而非 RAR5——RAR5 分卷第一卷单独上传时 unar
+           零产物退出（依赖「成功但零产物」兜底拒绝的弱信号）、bsdtar 报
+           截断类错误；RAR4 分卷由预扫 MHD_VOLUME 在解压发起前确定性
+           拒绝（双工具一致、不依赖解压器行为）。
+        2. 校验：`python tools/rar_fixtures/verify_fixtures.py` 全绿后入库；
+           `bsdtar -tf <样本>` 能列出成员属人工复核的加分项。
+        3. 入库后在 tests/test_multiuser/test_upload_rar.py 的真实样本用例
+           中登记（双工具参数化；加密 RAR5 的拒绝码按工具细分：
+           unar 命中 password 关键词 → archive_unsafe，bsdtar 报块头
+           尺寸错 → invalid_archive）。
 """
 
 from __future__ import annotations
@@ -84,6 +148,7 @@ LHD_SPLIT_BEFORE = 0x0001  # 文件延续自上一卷
 LHD_SPLIT_AFTER = 0x0002  # 文件延续到下一卷
 LHD_PASSWORD = 0x0004  # 加密
 LONG_BLOCK = 0x8000  # 块头携带 ADD_SIZE(DataSize) 字段
+SKIP_IF_UNKNOWN = 0x4000  # 旧解析器可跳过的块（真实 rar 的 RR 块两标志齐置）
 
 HOST_OS_UNIX = 3
 
@@ -269,11 +334,16 @@ def main() -> int:
 
     # 恢复记录样例：SERVICE(0x7A) 服务块与文件头共用布局（名字 RR），
     # 带伪随机数据区——回归「预扫须按 DataSize 整段跳过数据区」，
-    # 数据用固定种子的 PRNG 生成，保证产物逐字节可复现
+    # 数据用固定种子的 PRNG 生成，保证产物逐字节可复现。
+    # flags 置 LONG_BLOCK | SKIP_IF_UNKNOWN（与真实 rar 的 RR 块一致）：
+    # SERVICE 块缺 LONG_BLOCK 时 unar/unrar 视为无数据区，在数据字节上
+    # 瞎找下一块直至放弃（实测解出 0 个文件），只有 bsdtar 容忍。
     rr_data = random.Random(20260822).randbytes(1024)
     tex_body = b"\\documentclass{article}\nHello\n"
     rr = bytearray(RAR_MARKER + _main_header())
-    rr += _file_header(b"RR", rr_data, flags=0, btype=SERVICE_HEAD)
+    rr += _file_header(
+        b"RR", rr_data, flags=LONG_BLOCK | SKIP_IF_UNKNOWN, btype=SERVICE_HEAD
+    )
     rr += rr_data  # 数据段紧跟服务头之后
     rr += _file_header(b"main.tex", tex_body, flags=0)
     rr += tex_body

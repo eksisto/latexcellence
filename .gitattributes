@@ -1,1 +1,4 @@
 * text=auto eol=lf
+# 二进制测试样本：禁用行尾归一化（防止 git 将无 NUL 字节的样本误判为
+# 文本并在 checkin 时改写字节，破坏 sha256 钉死的 fixture 内容）
+tests/fixtures/rar/*.rar -text
