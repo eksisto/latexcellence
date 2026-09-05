@@ -281,7 +281,7 @@ class TestCheckLatexCorruption:
         assert "garbage" in error
 
     def test_does_not_check_brace_or_dollar_balance(self):
-        """编辑中间态合法：未配平花括号 / $ 均放行（editor-plan §5.1）。"""
+        """编辑中间态合法：未配平花括号 / $ 均放行（editor-design §5.1）。"""
         assert check_latex_corruption(r"\textbf{hello $x + y") is None
         assert check_latex_corruption(r"\begin{itemize} never closed") is None
 

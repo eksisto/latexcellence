@@ -1,5 +1,5 @@
 /**
- * EditorSettingsDialog —— 编辑器偏好设置（editor-plan §9 / §11）。
+ * EditorSettingsDialog —— 编辑器偏好设置（editor-design §9 / §11）。
  *
  * 开关：软换行、字号即时生效；自动保存（默认关，决策 Q6）在缓冲区停止
  * 编辑后延迟落盘（行为联动属阶段四，经 save-file 单一路径）。

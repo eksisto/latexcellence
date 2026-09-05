@@ -10,7 +10,7 @@ import { scanOutline } from "@/lib/editor/outlineScan";
 export const OUTLINE_RESCAN_DEBOUNCE_MS = 300;
 
 /**
- * 大纲面板数据源（editor-productivity-plan §5.3 阶段三 / 决策 Q6）：
+ * 大纲面板数据源（editor-productivity-design §5.3 阶段三 / 决策 Q6）：
  * 仅解析当前激活 tab 的缓冲区（跨文件大纲留二期）。
  *
  * 重扫时机：

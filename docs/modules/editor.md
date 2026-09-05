@@ -1,7 +1,7 @@
 # 网页编辑器模块 `editor/` + `/editor`
 
-> 设计依据：[docs/editor-plan.md](../editor-plan.md)（含 grilling 决策记录
-> Q1–Q26）与 [docs/editor-productivity-plan.md](../editor-productivity-plan.md)
+> 设计依据：[docs/editor-design.md](../editor-design.md)（含 grilling 决策记录
+> Q1–Q26）与 [docs/editor-productivity-design.md](../editor-productivity-design.md)
 > （editor v2，八个阶段均已实施：阶段一多缓冲区基座、阶段二编辑基本功包、
 > 阶段三大纲面板、阶段四引用补全、阶段五一键格式化、阶段六 KaTeX 公式
 > 悬停预览、阶段七编译错误列表与跨文件跳转，以及阶段八修改行色条 /
@@ -136,7 +136,7 @@ autoSave / softWrap / autoCloseEnv / formulaHover / fontSize）、`editorSession
 不持久化）、`editorAssistant`（助手会话 id 与消息视图，不持久化；
 后端会话按项目 scope 隔离，切换文件延续会话）。
 
-### 多缓冲区基座（editor-productivity-plan §5.1，阶段一）
+### 多缓冲区基座（editor-productivity-design §5.1，阶段一）
 
 `editorSession` 切片为多缓冲区模型：`tabs: [{ filePath, buffer, baseMd5,
 dirty, stale, lastActive }]` + `activeTabPath` + `conflict`。tab 转移逻辑
@@ -194,7 +194,7 @@ content/dirty——beforeunload、per-tab 自动保存防抖与冲突快照门�
 剪贴板逃生在点击时刻经 `getState()` 现取冲突归属 tab 的全文，助手面板
 的大文件行数判定按文件切换惰性重算。
 
-### 编辑基本功包（editor-productivity-plan §5.3，阶段二）
+### 编辑基本功包（editor-productivity-design §5.3，阶段二）
 
 只作用于活跃缓冲区（单 CM6 实例），撤销历史随 per-tab EditorState 天然隔离。
 
@@ -232,7 +232,7 @@ content/dirty——beforeunload、per-tab 自动保存防抖与冲突快照门�
   facet）；界面语言切换时经 `setSearchLanguage` 效果对活跃视图热更新
   （换档收起的存档 EditorState 保留建档时的语言，可接受边界）。
 
-### 大纲面板（editor-productivity-plan §5.3，阶段三）
+### 大纲面板（editor-productivity-design §5.3，阶段三）
 
 左栏「文件 / 大纲」双 tab（决策 Q6）：大纲 tab **仅解析当前激活缓冲区**
 （跨文件大纲留二期），条目为 `\section` / `\subsection` /
@@ -266,7 +266,7 @@ content/dirty——beforeunload、per-tab 自动保存防抖与冲突快照门�
   （`components:editor.outline.*`）；条目过多随 CardContent 滚动。
   左栏已有 tab 入口即开关语义，不新增偏好项（对齐 Q18 边界）。
 
-### 引用补全（editor-productivity-plan §5.3，阶段四 / 决策 Q7）
+### 引用补全（editor-productivity-design §5.3，阶段四 / 决策 Q7）
 
 `\ref{` / `\label{` / `\cite{` 三路触发的行内补全 source（挂入
 `latexCompletion.js` 的 autocompletion override，复用 completionTheme
@@ -298,7 +298,7 @@ content/dirty——beforeunload、per-tab 自动保存防抖与冲突快照门�
   `latexCompletionExtension`（缺省时不挂引用 source）；首次触发补全时
   缓存缺失自动拉取，loading 期间走 CM6 默认行为。
 
-### 一键格式化（editor-productivity-plan §5.3，阶段五 / 决策 Q8）
+### 一键格式化（editor-productivity-design §5.3，阶段五 / 决策 Q8）
 
 工具栏「格式化」按钮 + Ctrl/Cmd+Shift+F 快捷键（避开阶段二已占用的
 Ctrl+B/I/U/K/L、Ctrl+/ 与 CM6 内置查找面板 Ctrl/Cmd+F）。点击后调后端
@@ -324,7 +324,7 @@ Ctrl+B/I/U/K/L、Ctrl+/ 与 CM6 内置查找面板 Ctrl/Cmd+F）。点击后调�
 - **viewer 禁用**：工具栏按钮按写权限禁用；后端端点同样挂
   `require_workspace_write`，服务端兜底。
 
-### KaTeX 公式悬停预览（editor-productivity-plan §5.3，阶段六 / 决策 Q9）
+### KaTeX 公式悬停预览（editor-productivity-design §5.3，阶段六 / 决策 Q9）
 
 悬停浮层形态（Q9）：指针在公式区域停留约 500ms（CM6 `hoverTooltip` 的
 `hoverTime`）后弹出 KaTeX 渲染预览；右栏固定预览卡留二期。开关为
@@ -362,7 +362,7 @@ Ctrl+B/I/U/K/L、Ctrl+/ 与 CM6 内置查找面板 Ctrl/Cmd+F）。点击后调�
   与文档变更时由 CM6 自动收起，per-tab 换档后扩展随 buildState /
   存档恒在。
 
-### 编译错误列表与跨文件跳转（editor-productivity-plan §5.3，阶段七 / 决策 Q10 + Q19）
+### 编译错误列表与跨文件跳转（editor-productivity-design §5.3，阶段七 / 决策 Q10 + Q19）
 
 编译失败时右栏在既有解释 / 建议摘要之下展示可点击错误列表（不做行内
 波浪线，Q10）：条目为「文件相对路径 · l.N 行号 + 消息摘要」，原始日志
@@ -399,7 +399,7 @@ activeTabPath 换档（EditorState 交换）完成后执行，打开失败时清
   日志（如无限循环输出）拖垮右栏渲染；未以 `l.N` 收尾的错误块丢弃
   （无行号不可跳转）。
 
-### 修改行色条与状态栏（editor-productivity-plan §5.3，阶段八；借鉴 Notepad++）
+### 修改行色条与状态栏（editor-productivity-design §5.3，阶段八；借鉴 Notepad++）
 
 **修改行色条**（借鉴 Notepad++ 8.4.6 的 Change History margin）：编辑区
 行左侧以内阴影色条标记修改行——**琥珀色** = 相对保存基线有未保存修改的

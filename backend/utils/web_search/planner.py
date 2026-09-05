@@ -5,7 +5,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-# default 槽位（multi-model-plan §6）：查询重写/规划为低频辅助调用；
+# default 槽位（multi-model §6）：查询重写/规划为低频辅助调用；
 # get_llm_client 即 get_client_for("default") 的薄别名（P2 起语义等价）
 from backend.core.llm_client import get_llm_client
 from backend.core.logger import get_logger

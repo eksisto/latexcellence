@@ -1,5 +1,5 @@
 /**
- * EditorStatusBar —— 编辑器底部状态栏（editor-productivity-plan 阶段八，
+ * EditorStatusBar —— 编辑器底部状态栏（editor-productivity-design 阶段八，
  * 借鉴 Notepad++ 状态栏：光标行列 / 选区长度 / 全文行数与字数）。
  *
  * 统计快照经 statsHub（lib/editor/stats.js 的发布-订阅）流入，组件用

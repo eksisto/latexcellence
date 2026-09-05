@@ -16,12 +16,12 @@
 | [duckduckgo-challenge.md](./duckduckgo-challenge.md) | DDG 验证码处理 |
 | [templategen-optimization-lessons.md](./templategen-optimization-lessons.md) | template_gen 闭环优化复盘：通用性退化事故的原因、教训与改进机制 |
 | [plotgen-optimization-lessons.md](./plotgen-optimization-lessons.md) | plot_gen 闭环优化复盘与最佳实践 |
-| [prompt-optimization-plan.md](./prompt-optimization-plan.md) | 提示词优化计划：Claude 提示词分析、分阶段改造与验收标准 |
+| [prompt-guidelines.md](./prompt-guidelines.md) | 提示词工程原则与约定：小型模型可迁移原则、统一结构、回归口径 |
 | [writing-chat-web-access-architecture.md](./writing-chat-web-access-architecture.md) | Writing Chat 网络访问架构：搜索、学术检索、分级抓取、结构化抽取与证据链 |
 | [adr/0001-web-access-evaluation.md](./adr/0001-web-access-evaluation.md) | 网络访问阶段 0 的离线评测工具与依赖边界决策 |
 | [adr/0002-web-access-stage0-dependencies.md](./adr/0002-web-access-stage0-dependencies.md) | 网络访问阶段 0 的浏览器、HTML 抽取和 PDF 解析依赖验证决策 |
 | [windows-temp-permissions.md](./windows-temp-permissions.md) | Windows 下 Codex 沙箱临时目录权限问题排查：pytest 会话级 basetemp、ACL 清理与预防 |
-| [multi-user-plan.md](./multi-user-plan.md) | 多用户模式设计方案（双模式/认证/用户空间/配额/权限协作/管理后台/迁移） |
+| [multi-user.md](./multi-user.md) | 多用户模式设计（双模式/认证/用户空间/配额/权限协作/沙箱/撤销/邮件/多实例；权威设计参考） |
 | [deployment.md](./deployment.md) | 后端部署指南（单用户/多用户单进程/多实例 Compose 部署、systemd 托管、HTTPS 反向代理、安全风险声明、备份、环境变量与升级回滚） |
 
 ---
@@ -188,7 +188,7 @@ npm start        # 或 node server.js
 | `features.style_modify.agent` | 项目 Agent 的会话目录、轮次、工具/编译上限、大小限制、shadow 编译和清理配置 | style_modify 项目 Agent 模式 |
 | `features.template_library` | enabled, user_library_dir, max_upload_mb, allowed_extensions | 模板库开关（关闭时 `/api/templates` 整体关闭、前端隐藏入口）、单用户库目录、上传 zip 上限与扩展名白名单，见 [modules/template_library.md](modules/template_library.md) |
 | `logging` | level, dir | 日志级别与存储路径 |
-| `multi_user` | enabled, db_path, users_root, staging_root、默认配额、上传限制、会话/回收站 TTL、LLM/登录限流、registration_enabled、admin_*_env、edit_log_*（反向补丁撤销日志：条数上限 / 单操作体积上限 / 保留时长）、writing_chat_retention_days（0 = 不自动删仅统计）、auto_approve_*（注册自动审批：总开关 / 同 IP 账号上限 / CIDR 白名单 / ip2region 库路径（主 + IPv6 补充，按地址族路由）与 GeoLite2 库路径 + 国家·城市白名单；地理查询 ip2region 中国优先、非/未知中国回落 GeoLite2）、trusted_proxies（可信反代，命中才信任 X-Forwarded-For）、register_rate_limit_per_hour | 多用户模式（默认关闭）；开启后强制登录、用户空间隔离、关闭任意路径打开与磁盘浏览，详见 [multi-user-plan.md](multi-user-plan.md)；共享项目反向补丁撤销见 [multi-user-v2-plan.md](multi-user-v2-plan.md) §8，衍生数据记账与细粒度清理见同文档 §9，注册自动审批部署见 [deployment.md](deployment.md)「注册自动审批」 |
+| `multi_user` | enabled, db_path, users_root, staging_root、默认配额、上传限制、会话/回收站 TTL、LLM/登录限流、registration_enabled、admin_*_env、edit_log_*（反向补丁撤销日志：条数上限 / 单操作体积上限 / 保留时长）、writing_chat_retention_days（0 = 不自动删仅统计）、auto_approve_*（注册自动审批：总开关 / 同 IP 账号上限 / CIDR 白名单 / ip2region 库路径（主 + IPv6 补充，按地址族路由）与 GeoLite2 库路径 + 国家·城市白名单；地理查询 ip2region 中国优先、非/未知中国回落 GeoLite2）、trusted_proxies（可信反代，命中才信任 X-Forwarded-For）、register_rate_limit_per_hour | 多用户模式（默认关闭）；开启后强制登录、用户空间隔离、关闭任意路径打开与磁盘浏览，详见 [multi-user.md](multi-user.md)（反向补丁撤销 §8、衍生数据记账与自助清理 §3.3、注册自动审批 §2.1）；部署见 [deployment.md](deployment.md)「注册自动审批」 |
 | `sandbox` | mode, image_tex/convert/plot, cpus, memory_mb, pids_limit, tmpfs_mb, max_concurrent_global, max_concurrent_per_user, startup_grace_seconds, warm_pool_enabled | 外部命令沙箱执行（编译/转换/绘图/git 等统一经 SandboxRunner，可进一次性 Docker 容器隔离）。`warm_pool_enabled`（默认 true）为容器预创建池开关：仅 docker 后端生效，auto 模式探测命中 docker 才启用；关闭后每次执行即时建容器（行为与历史版本一致）。完整字段说明与安全基线见 [deployment.md](deployment.md)「Docker 沙箱」，执行模型见 [backend-core.md](backend-core.md)「sandbox/ 包」 |
 
 所有字段有 Pydantic 默认值，可部分配置。敏感项支持经环境变量注入（`SECRET_ENV_PATHS` 注册表）：`LX_LLM_KEY` 优先于 `llm.api_key`；`LATEXCELLENCE_SMTP_PASSWORD` 优先于 `smtp.password`；`LATEXCELLENCE_TAVILY_API_KEY` 优先于 Tavily 搜索 Key，学术数据源同理用 `LATEXCELLENCE_<PROVIDER 大写>_API_KEY`（如 `LATEXCELLENCE_OPENALEX_API_KEY`）。环境变量注入的敏感值均永不写盘，完整清单见 [deployment.md](deployment.md)「环境变量参考」。
@@ -272,7 +272,7 @@ python -m backend.manage set-status <username> pending|active|disabled
 - 会话类资源（写作会话 / style_modify 会话 / 模板 / 绘图）按用户隔离：`userspace.user_resource_root(subdir, legacy_root)` 统一解析入口——多用户模式按请求级当前用户返回 `<users_root>/<user_id>/<子目录>/`，单用户模式回退存量全局路径（行为不变）。当前用户由路由依赖 `current_user_context` 注入（writing-chat / style-modify / template-gen / plot-gen 四个路由挂载）；后台清理任务经 `userspace.iterate_user_resource_roots()` 枚举全部用户资源目录。
 - 存量数据迁移：`python -m backend.manage migrate-legacy [--dry-run]` 把存量全局目录（`data/writing_chat_sessions/`、`data/style_modify_sessions/`、`data/templates/`、`data/plots/`、`data/formats/`、`data/prompts/`）幂等复制到管理员用户空间对应子目录；目标文件已存在则跳过（不覆盖迁移后新数据）；复制后逐文件校验并输出报告。核心逻辑在 `backend/core/multiuser/migrate.py`。
 
-基础设施、认证与项目实现的详细说明见 [docs/backend-core.md](backend-core.md)，完整设计见 [docs/multi-user-plan.md](multi-user-plan.md)，服务器部署指南（HTTPS、风险声明、备份与运维）见 [docs/deployment.md](deployment.md)。
+基础设施、认证与项目实现的详细说明见 [docs/backend-core.md](backend-core.md)，完整设计见 [docs/multi-user.md](multi-user.md)，服务器部署指南（HTTPS、风险声明、备份与运维）见 [docs/deployment.md](deployment.md)。
 
 > 运维提示：登录限流按"用户名 + 客户端 IP"计数；若部署在反向代理（nginx 等）之后，`request.client.host` 恒为代理 IP，"每 IP"维度会退化，需按部署接入受信代理 / 真实 IP 传递后才会生效。
 

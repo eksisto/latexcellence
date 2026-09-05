@@ -58,7 +58,7 @@ class SecurityConfig(BaseModel):
     access_token: str = ""  # 共享访问令牌（留空表示不校验，用于纯本地开发）
 
 
-# ── 多模型支持：模型档案 + 槽位指派（multi-model-plan §4）──────────────
+# ── 多模型支持：模型档案 + 槽位指派（multi-model §4）──────────────
 
 # 内置默认档案的保留 id：由 llm 顶层字段在读取侧合成（自动迁移，不回写文件），
 # 用户自定义档案禁止占用该 id。
@@ -91,7 +91,7 @@ def default_assignments() -> dict[str, str]:
 
 
 class ModelProfile(BaseModel):
-    """模型档案：一个可独立调用的 LLM 连接（多模型支持，multi-model-plan §4）。
+    """模型档案：一个可独立调用的 LLM 连接（多模型支持，multi-model §4）。
 
     连接三件套（base_url / api_key / model）必填；capabilities 为闭集能力声明。
     可选覆盖项（temperature / max_tokens / request_interval / max_concurrency /
@@ -184,7 +184,7 @@ class LLMConfig(BaseModel):
     # 通义 {"enable_thinking": false}、智谱 {"thinking": {"reasoning_budget": "low"}}。
     # 留空 {} 时不发送任何额外参数，不支持的模型不会因此报错（按需显式开启）。
     extra_body: dict[str, Any] = Field(default_factory=dict)
-    # ── 多模型支持（multi-model-plan §4）──
+    # ── 多模型支持（multi-model §4）──
     # 模型档案列表：为空时读取侧自动合成内置默认档案（builtin_default_profile /
     # effective_profiles），不回写配置文件，旧单模型配置零迁移成本。
     profiles: list[ModelProfile] = Field(default_factory=list)
@@ -227,7 +227,7 @@ class LLMConfig(BaseModel):
 
     @model_validator(mode="after")
     def _validate_profiles_and_assignments(self) -> "LLMConfig":
-        """多模型配置硬校验门禁（multi-model-plan §5.3）。
+        """多模型配置硬校验门禁（multi-model §5.3）。
 
         启动加载与 /api/config 保存共用同一道门禁（Pydantic 校验失败一律拒绝）：
         1. 档案 id 唯一，且不得占用内置档案保留 id（格式由 ModelProfile 层校验）；
@@ -270,7 +270,7 @@ class LLMConfig(BaseModel):
     def builtin_default_profile(self) -> ModelProfile:
         """由顶层字段合成内置默认档案（id=__default__），每次调用构造新对象。
 
-        自动迁移核心（multi-model-plan §4）：不回写文件、不做任何缓存，仅在
+        自动迁移核心（multi-model §4）：不回写文件、不做任何缓存，仅在
         读取侧合成。存量单模型一直承担包括 OCR 在内的全部调用，故内置档案
         视为 vision + reasoning 全能力，保证旧配置迁移后零感知（不产生新的
         校验失败）。
@@ -303,7 +303,7 @@ class LLMConfig(BaseModel):
         return [self.builtin_default_profile()]
 
     def resolve_role(self, role: str) -> ModelProfile:
-        """两级槽位解析（multi-model-plan §4），纯函数式、供路由器（P2）复用。
+        """两级槽位解析（multi-model §4），纯函数式、供路由器（P2）复用。
 
         规则：assignments[role] 非空 → 该档案；为空 → assignments["default"]
         指派的档案；仍为空 → 内置默认档案（顶层字段合成）。未知角色抛
@@ -839,7 +839,7 @@ class PlotGenConfig(BaseModel):
 
 
 class EditorConfig(BaseModel):
-    """网页编辑器模块配置（editor-plan §5.3）"""
+    """网页编辑器模块配置（editor-design §5.3）"""
 
     enabled: bool = True  # 是否启用编辑器（工作台入口与 /editor 路由）
     # 编辑器侧 AI 助手独立子开关：管理员可在保留编辑器的同时单独关闭
@@ -1414,7 +1414,7 @@ def update_config_from_dict(updates: dict) -> AppConfig:
     _config = AppConfig(**merged)
     save_config()
 
-    # LLM 配置变更时，清空模型客户端池使新配置立即生效（multi-model-plan §5.1）
+    # LLM 配置变更时，清空模型客户端池使新配置立即生效（multi-model §5.1）
     if "llm" in updates:
         from backend.core.model_router import reset_client_pool
 

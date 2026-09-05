@@ -1,4 +1,4 @@
-"""编辑器整文件读写接口测试（单用户模式，editor-plan §5.1 阶段一）。
+"""编辑器整文件读写接口测试（单用户模式，editor-design §5.1 阶段一）。
 
 纯文件操作：无 LLM 参与、不 Mock LLM、无网络。
 覆盖：打开读取、正常保存、MD5 冲突 409（含相对路径脱敏）、内容损坏特征
@@ -173,7 +173,7 @@ class TestSaveFile:
         assert raw == content
 
     def test_allows_unbalanced_mid_edit_state(self, client, env):
-        # 编辑中间态合法：不做括号/$ 配平检查（editor-plan §5.1 关键约束）
+        # 编辑中间态合法：不做括号/$ 配平检查（editor-design §5.1 关键约束）
         current = MAIN_TEX
         for partial in ("Half opened brace: {", r"Unclosed math: $x + y"):
             new_content = partial + "\n"

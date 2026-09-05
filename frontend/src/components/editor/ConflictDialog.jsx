@@ -1,5 +1,5 @@
 /**
- * ConflictDialog —— 保存 409 冲突弹窗（editor-plan §2 / 决策 Q6）。
+ * ConflictDialog —— 保存 409 冲突弹窗（editor-design §2 / 决策 Q6）。
  *
  * 乐观锁校验失败（baseMd5 与磁盘不符）时展示，提供三条出路：
  *   1. 一键放弃本地修改并重载服务端最新内容（重置缓冲区与 baseMd5）；

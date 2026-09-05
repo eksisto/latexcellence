@@ -1,6 +1,6 @@
 /**
- * LaTeXEditor —— CodeMirror 6 受控封装 + 多缓冲区换档（editor-plan §9、
- * editor-productivity-plan §4/§5.1，阶段一）。
+ * LaTeXEditor —— CodeMirror 6 受控封装 + 多缓冲区换档（editor-design §9、
+ * editor-productivity-design §4/§5.1，阶段一）。
  *
  * 设计要点：
  *   - 受控 value / onChange：激活 tab 的缓冲区由 editorSession 切片持有，

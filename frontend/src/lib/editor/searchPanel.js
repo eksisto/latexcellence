@@ -1,5 +1,5 @@
 /**
- * CM6 查找替换面板（editor-productivity-plan §5.3 阶段二）。
+ * CM6 查找替换面板（editor-productivity-design §5.3 阶段二）。
  *
  * basicSetup 已内置 searchKeymap（Ctrl/Cmd+F 唤起面板，openSearchPanel
  * 会自动挂载 search 扩展），本模块补齐两件事：

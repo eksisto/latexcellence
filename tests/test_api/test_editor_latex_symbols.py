@@ -1,4 +1,4 @@
-r"""编辑器引用符号扫描接口测试（单用户模式，editor-productivity-plan §5.2 阶段四）。
+r"""编辑器引用符号扫描接口测试（单用户模式，editor-productivity-design §5.2 阶段四）。
 
 纯文件操作：无 LLM 参与、不 Mock LLM、无网络。
 覆盖：\label 提取（含 1 基行号、跨文件）、\cite 可选参数与多 key 拆分、

@@ -484,7 +484,7 @@ _PROMPTS: dict[str, dict[str, str]] = {
             + TOOL_RESULT_PROTOCOL_RULE
         ),
     },
-    # ── editor_assistant 模块（编辑器侧 AI 助手，editor-plan §7） ────────────
+    # ── editor_assistant 模块（编辑器侧 AI 助手，editor-design §7） ────────────
     "editor_assistant": {
         "chat_system": (
             "<role>\n"

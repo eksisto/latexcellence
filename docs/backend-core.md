@@ -122,7 +122,7 @@
 
 ### `backend/core/model_router.py` — 模型路由器与客户端池（多模型支持）
 
-`llm` 配置节为「全局默认字段 + `profiles` 模型档案列表 + `assignments` 槽位指派表」，各功能模块按任务角色（槽位）自动路由到对应模型档案。完整设计与评审决策见 [multi-model-plan.md](multi-model-plan.md)。
+`llm` 配置节为「全局默认字段 + `profiles` 模型档案列表 + `assignments` 槽位指派表」，各功能模块按任务角色（槽位）自动路由到对应模型档案。完整设计与评审决策见 [multi-model.md](multi-model.md)。
 
 **配置结构**（`backend/core/config.py`）：
 
@@ -147,7 +147,7 @@
 
 **解析结果查询端点**：`GET /api/llm/routes`（`main.py`）固定返回全部角色槽位的两级解析结果（`role` / `profile_id` / `profile_name` / `model` / `capabilities`，不含 `api_key` / `base_url`），每次请求实时解析、不缓存；权限为「多用户模式已登录即可读」（`require_login_if_multiuser` 依赖，宽于 `/api/config` 的管理员门禁——模型徽标对所有登录用户展示、泄露面仅模型名），单用户模式受共享访问令牌中间件约束。
 
-**连通性测试端点**：`POST /api/llm/test`（`main.py`，部署收口阶段四）向目标档案发起一次最小补全（`"ping"` / `max_tokens=1` / `max_retries=1` 快速失败），`asyncio.timeout` 15s 硬上限，计测往返延迟。请求 `profile_id` 与 `role` 二选一（都传或都不传 → 422）：`role` 经 `get_client_for()` 两级解析（指派槽 → default 槽 → 内置档案）验证"实际生效档案"；`profile_id` 经 `get_client_for_profile()` 直取档案本身（客户端仍走全局池复用，未知档案 404 不静默回落）。响应 `{ok, latency_ms, model, profile_id, role?, error?}`，失败（含缺 key / 超时 / 上游错误）一律 200 + `ok=false` 内联 `error` 对象（`{error: 码, message, status?}`，与 detail 结构化错误约定同形，前端 `translateError()` 直接消费；错误码 `api_key_missing` / `llm_test_timeout` / `llm_test_upstream` / `llm_test_unreachable` / `llm_test_failed` 入三语 `errors` 命名空间），严禁回显密钥与上游响应体，服务端日志只记档案标识与错误类别。掩码协议边界（Q9）：后端直接读服务端配置真实值、前端只传目标标识，测试路径只读、绝不落盘 / 变更配置。权限为「多用户模式管理员」（`require_admin_if_multiuser`——触发真实计费调用属管理面操作）；多用户 LLM 每用户治理对本端点**有意豁免**（管理员的诊断调用不消耗个人限流窗口 / 并发租约，经 `llm_governance.admission_exempt_scope()` 临时挂起请求级用户上下文实现，档案级并发 Semaphore 等客户端层约束不受影响，见 deploy-followups-plan §4.4）。
+**连通性测试端点**：`POST /api/llm/test`（`main.py`，部署收口阶段四）向目标档案发起一次最小补全（`"ping"` / `max_tokens=1` / `max_retries=1` 快速失败），`asyncio.timeout` 15s 硬上限，计测往返延迟。请求 `profile_id` 与 `role` 二选一（都传或都不传 → 422）：`role` 经 `get_client_for()` 两级解析（指派槽 → default 槽 → 内置档案）验证"实际生效档案"；`profile_id` 经 `get_client_for_profile()` 直取档案本身（客户端仍走全局池复用，未知档案 404 不静默回落）。响应 `{ok, latency_ms, model, profile_id, role?, error?}`，失败（含缺 key / 超时 / 上游错误）一律 200 + `ok=false` 内联 `error` 对象（`{error: 码, message, status?}`，与 detail 结构化错误约定同形，前端 `translateError()` 直接消费；错误码 `api_key_missing` / `llm_test_timeout` / `llm_test_upstream` / `llm_test_unreachable` / `llm_test_failed` 入三语 `errors` 命名空间），严禁回显密钥与上游响应体，服务端日志只记档案标识与错误类别。掩码协议边界（Q9）：后端直接读服务端配置真实值、前端只传目标标识，测试路径只读、绝不落盘 / 变更配置。权限为「多用户模式管理员」（`require_admin_if_multiuser`——触发真实计费调用属管理面操作）；多用户 LLM 每用户治理对本端点**有意豁免**（管理员的诊断调用不消耗个人限流窗口 / 并发租约，经 `llm_governance.admission_exempt_scope()` 临时挂起请求级用户上下文实现，档案级并发 Semaphore 等客户端层约束不受影响，见 deploy-followups §4.4）。
 
 ### `backend/core/logger.py` — 日志系统
 
@@ -451,7 +451,7 @@ ExtractorRegistry 先处理已知公开端点（当前代码托管页面使用 G
 
 ### 多用户模式基础设施（`backend/core/multiuser/` + `backend/core/access_control.py` + `backend/modules/auth/` + `backend/manage.py`）
 
-多用户模式（`multi_user.enabled=true`）的后端基础设施，按阶段（见 [docs/multi-user-plan.md](multi-user-plan.md) 与 [docs/multi-user-v2-plan.md](multi-user-v2-plan.md)）实施。P1 已完成：SQLite 初始化、注册/审批/登录/会话/Cookie/CSRF、管理员引导与 CLI；P2 已完成：用户空间目录、统一路径解析、项目访问控制、workspace 绑定与现有端点收紧；P3 已完成：上传/解压管线、项目命名、配额记账、回收站与下载；P4 已完成：协作者管理、转交、viewer 写保护与共享项目撤销禁用；P5 已完成：前端登录/注册/工作台/上传/权限/管理面板全套；P6 已完成：migrate-legacy 存量迁移、会话类资源按用户归属校验与存量路径改造；P7 已完成：部署指南（HTTPS、风险声明，见 [deployment.md](deployment.md)）与全量文档同步。v2 P1a/P1b/P2 已完成 Docker 沙箱、LLM 每用户治理与 rar 支持（见 [multi-user-v2-plan.md](multi-user-v2-plan.md)）；v2 P3 已完成共享项目反向补丁撤销（见下文「反向补丁撤销要点」与 [DESIGN.md §14](../DESIGN.md)）；v2 P4 已完成衍生数据用量缓存记账与细粒度清理；v2 P5 已完成大文件分片上传与断点续传（见下文「分片上传要点」）；v2 P6 已完成 SMTP 邮件通知与自助找回（见下文「邮件与自助找回要点」）；v2 P7 已完成多进程/多实例收口——进程内状态全部外置共享 SQLite、维护选主、flock 会话互斥、配置热重载与 compose 编排（见下文「多实例状态外置要点」与 [DESIGN.md §15](../DESIGN.md)）。
+多用户模式（`multi_user.enabled=true`）的后端基础设施，覆盖双模式认证、用户空间与配额、权限协作、上传（含分片与 rar）、Docker 沙箱、LLM 治理、反向补丁撤销、邮件与多实例外置。设计总览与决策见 [docs/multi-user.md](multi-user.md)；沙箱/治理/撤销/多实例的执行模型深读见 [DESIGN.md §12–§15](../DESIGN.md)；本文以下按主题记录实现要点（接口契约、表结构、安全口径）。部署与运维见 [deployment.md](deployment.md)。
 
 **包结构**：
 
@@ -796,7 +796,7 @@ backend/utils/sandbox/
 
 **协作式取消（cancel_event，部署收口阶段一）**：`execute(spec, ..., cancel_event=asyncio.Event)` 支持调用方 mid-flight 中断——docker 后端强杀容器、local 后端 `terminate_process_tree` 击杀进程组，结果为非零退出码且**不标记** `timed_out`（错误语义由调用方按自身状态判定，如 rar 解压超配额 → `quota_exceeded`）。全局并发闸门为此从 asyncio.Semaphore 改为跨事件循环安全的计数闸门（rar 解压的同步核心在 worker 线程独立事件循环内调用 execute，asyncio 原语与循环绑定不可跨循环复用）。
 
-**容器预创建池（warm pool，部署收口阶段三）**：`sandbox.warm_pool_enabled=true`（默认开启，仅 docker 后端生效；auto 模式探测命中 docker 才启用）时，docker 后端按 image_kind 维护"已创建未启动"容器队列，池深 = `max_concurrent_global`（每副本本地）。执行路径为：池 pop → start → exec → stop + remove → 异步补充（补充任务并发 ≤ 2，延迟触发并复核"最近执行形状"未漂移，避免为逐请求换临时目录的负载制造死容器）；池空或形状不一致时按原路径即时 create（无退化路径差异）。关键设计：Docker 容器的 command/挂载/环境变量在 create 时固化，因此池条目携带创建时的完整 kwargs（"形状"），**仅当与本次 ExecSpec 推导的形状逐字段一致时才复用**（复用 `_build_container_kwargs`，安全基线与现网逐字段一致；资源限额热重载后自动失配重建）——执行语义不变：每执行一个 start 一次的全新容器，无跨执行状态。`initialize_sandbox_runner()`（lifespan）预热每类别一个占位容器（无形状、不挂载宿主路径，仅吸收镜像层/页缓存冷启成本，首次执行时弃置）并挂载周期对账任务。池容器统一打 label `latexcellence.warm_pool=1` + 副本标识（环境变量 `LATEXCELLENCE_SANDBOX_REPLICA_ID` 优先，缺省按 maintenance_lease holder 既有约定生成 hostname:hex8 进程唯一标识）；**孤儿清理是每副本职责**（启动期 + 周期对账，按 label + 自身副本标识清退本副本遗留，外来副本 created/exited 容器超龄（默认 900s）清退、运行中绝不触碰），有意不进维护循环的"持租约者执行"选主分支（multi-user-v2-plan §12.1 补记）。execute 路径输出池命中/未命中与准备耗时日志行（`sandbox container ready | pool=hit|miss|off | prep=…ms`）。开关关闭后执行行为与现网完全一致，池遗留由对账清退。基准脚本 `tools/warm_pool_bench.py`（同 ExecSpec 冷启 N 次对比池路径 N 次，输出 P50/P95）。多副本部署下各副本独立建池、空闲容器总量相应上浮，为已知代价（见 [deployment.md](deployment.md)「Docker 沙箱」）。
+**容器预创建池（warm pool，部署收口阶段三）**：`sandbox.warm_pool_enabled=true`（默认开启，仅 docker 后端生效；auto 模式探测命中 docker 才启用）时，docker 后端按 image_kind 维护"已创建未启动"容器队列，池深 = `max_concurrent_global`（每副本本地）。执行路径为：池 pop → start → exec → stop + remove → 异步补充（补充任务并发 ≤ 2，延迟触发并复核"最近执行形状"未漂移，避免为逐请求换临时目录的负载制造死容器）；池空或形状不一致时按原路径即时 create（无退化路径差异）。关键设计：Docker 容器的 command/挂载/环境变量在 create 时固化，因此池条目携带创建时的完整 kwargs（"形状"），**仅当与本次 ExecSpec 推导的形状逐字段一致时才复用**（复用 `_build_container_kwargs`，安全基线与现网逐字段一致；资源限额热重载后自动失配重建）——执行语义不变：每执行一个 start 一次的全新容器，无跨执行状态。`initialize_sandbox_runner()`（lifespan）预热每类别一个占位容器（无形状、不挂载宿主路径，仅吸收镜像层/页缓存冷启成本，首次执行时弃置）并挂载周期对账任务。池容器统一打 label `latexcellence.warm_pool=1` + 副本标识（环境变量 `LATEXCELLENCE_SANDBOX_REPLICA_ID` 优先，缺省按 maintenance_lease holder 既有约定生成 hostname:hex8 进程唯一标识）；**孤儿清理是每副本职责**（启动期 + 周期对账，按 label + 自身副本标识清退本副本遗留，外来副本 created/exited 容器超龄（默认 900s）清退、运行中绝不触碰），有意不进维护循环的"持租约者执行"选主分支（docs/multi-user.md §10 补记）。execute 路径输出池命中/未命中与准备耗时日志行（`sandbox container ready | pool=hit|miss|off | prep=…ms`）。开关关闭后执行行为与现网完全一致，池遗留由对账清退。基准脚本 `tools/warm_pool_bench.py`（同 ExecSpec 冷启 N 次对比池路径 N 次，输出 P50/P95）。多副本部署下各副本独立建池、空闲容器总量相应上浮，为已知代价（见 [deployment.md](deployment.md)「Docker 沙箱」）。
 
 **并发治理**：全局进程内闸门（`max_concurrent_global`，跨事件循环生效，单/多用户均生效）+ 多用户模式每用户 DB 租约（`core/multiuser/sandbox_leases.py`，`sandbox_slots` 表，TTL = 执行超时 + 120s，崩溃残留由维护循环清理；P7 多实例阶段在同一共享卷上跨副本生效）。租约满抛 `sandbox_busy`（429）。只读轻量命令经 `execute(..., lease_exempt=True)` 豁免每用户租约（仍受全局闸门约束）——目前仅 git 查询类子命令（status/log/rev-parse/show/archive 等，判定见 `git_diff/service/process.py::_is_readonly_git_args`），避免版本页并行拉取 status/log 这类毫秒级查询在每用户上限=1 时互相顶掉误报 429；init/add/commit 写操作与 latexdiff 照常占用租约。
 

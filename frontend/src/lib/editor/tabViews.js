@@ -1,5 +1,5 @@
 /**
- * per-tab CM6 EditorState / 滚动位置登记表（editor-productivity-plan §4，阶段一）。
+ * per-tab CM6 EditorState / 滚动位置登记表（editor-productivity-design §4，阶段一）。
  *
  * 单 CM6 实例 + 每文件独立 EditorState 交换：tab 切换时把当前视图的
  * EditorState（含撤销历史与选区）按 filePath 收起、换入目标 tab 的存档；

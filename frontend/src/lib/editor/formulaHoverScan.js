@@ -1,5 +1,5 @@
 /**
- * KaTeX 悬停预览的公式区域识别纯模块（editor-productivity-plan §5.3 阶段六 /
+ * KaTeX 悬停预览的公式区域识别纯模块（editor-productivity-design §5.3 阶段六 /
  * 决策 Q9；识别口径与 utils/formulaWrap.js 同源思路）。
  *
  * 支持的公式形态：

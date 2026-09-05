@@ -1,4 +1,4 @@
-r"""编辑器一键格式化接口测试（单用户模式，editor-productivity-plan §5.2 / 决策 Q8，阶段五）。
+r"""编辑器一键格式化接口测试（单用户模式，editor-productivity-design §5.2 / 决策 Q8，阶段五）。
 
 纯转换端点：Mock format_latex_source（latex_formatter 统一入口），无真实
 latexindent 子进程、无 LLM、无网络。

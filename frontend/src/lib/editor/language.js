@@ -1,5 +1,5 @@
 /**
- * LaTeX 语言包抽象层（editor-plan §3 / 决策 Q2）。
+ * LaTeX 语言包抽象层（editor-design §3 / 决策 Q2）。
  *
  * 设计约束（Q2）：
  *   v1 使用 MIT 许可的 `@codemirror/legacy-modes` stex 流式模式，仅提供

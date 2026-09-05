@@ -12,7 +12,7 @@ import useUiStore, { SETTINGS_SECTION_MODELS } from "@/store/uiStore";
 import { formatRouteDisplay, findRouteByRole } from "@/utils/modelProfiles";
 
 /**
- * 功能入口处的当前模型徽标（multi-model-plan §7.2）。
+ * 功能入口处的当前模型徽标（multi-model §7.2）。
  *
  * 展示该功能槽位两级解析后的「档案名 · 模型名」，数据源为
  * GET /api/llm/routes（多用户模式已登录即可读）；进入页面时拉取一次，

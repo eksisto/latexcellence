@@ -1,4 +1,4 @@
-"""编辑器侧 AI 助手服务（editor-plan §5.2 / §7，阶段四）。
+"""编辑器侧 AI 助手服务（editor-design §5.2 / §7，阶段四）。
 
 复用边界（方案 §7.1）：
     - 直接复用 ConversationContext 会话持久化 / token 计数 / 压缩、
@@ -41,7 +41,7 @@ from backend.utils.tex_compile import sanitize_output_paths
 
 from . import _deps
 
-# ── 上下文注入常量（editor-plan §7.3 / 决策 Q24） ────────────────────────────
+# ── 上下文注入常量（editor-design §7.3 / 决策 Q24） ────────────────────────────
 
 # 小文件阈值：行数低于该值时全文携带
 SMALL_FILE_LINE_THRESHOLD = 400
@@ -202,7 +202,7 @@ def build_editor_context(
 
 def extract_suggestions(content: str) -> list[dict[str, str]]:
     """
-    从 assistant 回复中提取建议（editor-plan §7.2 三种形态的数据来源）。
+    从 assistant 回复中提取建议（editor-design §7.2 三种形态的数据来源）。
 
     规则：
         - ```latex / ```tex 围栏 → kind="snippet"（插入光标处 / 替换选区）

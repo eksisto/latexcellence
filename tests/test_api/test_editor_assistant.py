@@ -1,4 +1,4 @@
-"""编辑器侧 AI 助手测试（editor-plan §5.2 / §7，阶段四）。
+"""编辑器侧 AI 助手测试（editor-design §5.2 / §7，阶段四）。
 
 覆盖：
     - build_editor_context 自适应上下文注入（小文件全文 / 大文件摘要+
@@ -114,7 +114,7 @@ def _send_request(client, env, body: dict):
     )
 
 
-# ── 纯函数：上下文注入构建逻辑（editor-plan §7.3 / 决策 Q24） ───────────────
+# ── 纯函数：上下文注入构建逻辑（editor-design §7.3 / 决策 Q24） ───────────────
 
 
 class TestBuildEditorContext:

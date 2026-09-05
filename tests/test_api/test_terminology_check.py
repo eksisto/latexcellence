@@ -466,7 +466,7 @@ class TestExtractor:
             assert terms[0].term == "Machine Learning"
             assert terms[1].term == "ML"
             assert terms[1].term_type == "abbreviation"
-            # 槽位锁定：extractor 直调走 terminology_check 槽（multi-model-plan §6）
+            # 槽位锁定：extractor 直调走 terminology_check 槽（multi-model §6）
             mock_get.assert_called_once_with("terminology_check")
 
     @pytest.mark.asyncio

@@ -1,5 +1,5 @@
 r"""
-编辑器整文件读写服务层（editor-plan §5.1，阶段一）。
+编辑器整文件读写服务层（editor-design §5.1，阶段一）。
 
 职责：
     1. 打开读取：GET /api/project/file-content 的业务实现——路径经
@@ -17,12 +17,12 @@ r"""
        Content-Disposition: inline 的 FileResponse 返回原始字节，
        供编辑器页内嵌 PDF 与常见位图预览（只读，不进入缓冲区与撤销历史）
     4. 引用符号扫描：GET /api/project/latex-symbols 的业务实现
-       （editor-productivity-plan §5.2 / 决策 Q7，阶段四）——全项目只读
+       （editor-productivity-design §5.2 / 决策 Q7，阶段四）——全项目只读
        扫描 .tex 提取 \label（含行号）与 \cite key、.bib 经 bib_parser
        提取条目 key 与标题，供前端 \ref / \label / \cite 补全；零 LLM、
        零写盘、响应只含相对路径
     5. 一键格式化：POST /api/project/format-latex 的业务实现
-       （editor-productivity-plan §5.2 / 决策 Q8，阶段五）——纯转换端点，
+       （editor-productivity-design §5.2 / 决策 Q8，阶段五）——纯转换端点，
        接收缓冲区全文复用 latex_formatter（latexindent 优先、内置兜底，
        外部命令执行沿既有 SandboxRunner 规则）返回格式化结果；不落盘、
        不涉路径、零配额影响、零 LLM
@@ -60,7 +60,7 @@ from backend.utils.path_guard import resolve_project_path
 
 logger = get_logger(__name__)
 
-# 可编辑文件扩展名白名单（editor-plan §2 / 决策 Q3；常量供路由层与服务层复用）
+# 可编辑文件扩展名白名单（editor-design §2 / 决策 Q3；常量供路由层与服务层复用）
 EDITABLE_SUFFIXES: tuple[str, ...] = (".tex", ".bib", ".sty", ".cls")
 
 # 单次可保存内容的字符数上限：拦截误粘贴超大文本 / 恶意超大请求体在
@@ -82,7 +82,7 @@ PREVIEWABLE_SUFFIXES: tuple[str, ...] = (
     ".bmp",
 )
 
-# 引用符号扫描扩展名白名单（latex-symbols 端点，editor-productivity-plan
+# 引用符号扫描扩展名白名单（latex-symbols 端点，editor-productivity-design
 # §5.2 阶段四）：.tex 提取 \label / \cite key，.bib 经 bib_parser 提取条目
 SYMBOL_SCAN_SUFFIXES: tuple[str, ...] = (".tex", ".bib")
 
@@ -293,7 +293,7 @@ def _resolve_raw_file_sync(project, file_path: str) -> Path:
     return full_path
 
 
-# ── 引用符号扫描（editor-productivity-plan §5.2 / 决策 Q7，阶段四） ──────
+# ── 引用符号扫描（editor-productivity-design §5.2 / 决策 Q7，阶段四） ──────
 def _strip_comment(line: str) -> str:
     """截掉一行中非转义 `%` 之后的内容（与前端 outlineScan.stripComment 同语义）。
 
@@ -430,7 +430,7 @@ async def scan_project_symbols(project) -> dict:
         raise _http(400, "invalid_workspace", str(e)) from e
 
 
-# ── 一键格式化（editor-productivity-plan §5.2 / 决策 Q8，阶段五） ──────
+# ── 一键格式化（editor-productivity-design §5.2 / 决策 Q8，阶段五） ──────
 async def format_latex_buffer(project, content: str) -> dict:
     """编辑器一键格式化（纯转换端点，零写盘、零配额影响、零 LLM）。
 

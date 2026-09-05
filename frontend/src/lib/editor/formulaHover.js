@@ -1,5 +1,5 @@
 /**
- * KaTeX 公式悬停预览（editor-productivity-plan §5.3 阶段六 / 决策 Q9）。
+ * KaTeX 公式悬停预览（editor-productivity-design §5.3 阶段六 / 决策 Q9）。
  *
  * CM6 hoverTooltip 扩展：指针在公式区域停留约 500ms（Q9 决策）后弹出
  * 浮层，katex.renderToString 渲染公式全文（含定界符；env 直接整段喂给

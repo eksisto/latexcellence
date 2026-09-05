@@ -149,7 +149,7 @@ async def admission_gate() -> AsyncIterator[str | None]:
 
 @asynccontextmanager
 async def admission_exempt_scope() -> AsyncIterator[None]:
-    """管理面 LLM 诊断豁免门（deploy-followups-plan §4.4，有意偏离）。
+    """管理面 LLM 诊断豁免门（deploy-followups §4.4，有意偏离）。
 
     POST /api/llm/test（模型连通性测试）属管理员诊断操作：触发真实计费
     调用的主体是服务器管理员，且一次诊断不应消耗其个人速率窗口 / 并发

@@ -1,5 +1,5 @@
 /**
- * LaTeX 命令数据库统一加载器（editor-plan §6.1）。
+ * LaTeX 命令数据库统一加载器（editor-design §6.1）。
  *
  * 数据按类目拆分为纯 JSON 文件（希腊字母 / 运算 / 关系 / 箭头 / 数学结构 /
  * 文本样式 / 包裹命令 / 章节 / 图表 / 数学环境 / 表格矩阵网格模板），本文件负责：
@@ -8,7 +8,7 @@
  *   - 导出 `LATEX_COMMANDS`（条目数组）与 `COMMAND_CATEGORIES`（面板分组
  *     展示顺序），供 matcher / 补全 / 命令面板共用。
  *
- * 条目 schema（editor-plan §6.1，严格一致）：
+ * 条目 schema（editor-design §6.1，严格一致）：
  *   { name, insert, zh, category, pkg, grid }
  *   - insert：插入模板；`$1/$2…` 为占位符、`$0` 为退出位置；网格模板另含
  *     `%COLS%`（列格式串）与 `%CELLS%`（单元格骨架）两个生成标记，

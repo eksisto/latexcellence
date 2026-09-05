@@ -1,6 +1,6 @@
 /**
- * EditorPage —— /editor 全宽三栏布局（editor-plan §4 + 多缓冲区基座，
- * editor-productivity-plan §5.1）。
+ * EditorPage —— /editor 全宽三栏布局（editor-design §4 + 多缓冲区基座，
+ * editor-productivity-design §5.1）。
  *
  * 布局：左栏「文件 / 大纲」双 tab（Q6：文件树点击打开/激活 tab，大纲
  * 展示激活缓冲区分节结构并点击定位）· 中栏顶部

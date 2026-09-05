@@ -1,5 +1,5 @@
 /**
- * GridSizePicker —— m×n 网格选择器（editor-plan §6.4 / 决策 Q9）。
+ * GridSizePicker —— m×n 网格选择器（editor-design §6.4 / 决策 Q9）。
  *
  * 面板中带 grid 配置的条目（tabular/matrix 家族/cases 等）进入二级步骤：
  * 仿 Word「插入表格」的拖选网格——按下并划过单元格高亮 m×n 矩形，松开

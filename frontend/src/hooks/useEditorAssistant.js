@@ -15,7 +15,7 @@ import {
 } from "@/lib/editor/assistantStream";
 
 /**
- * 编辑器 AI 助手 hook（editor-plan §7，阶段四）。
+ * 编辑器 AI 助手 hook（editor-design §7，阶段四）。
  *
  * 职责：
  *   - 项目切换守卫：assistantProjectKey 与当前项目不一致时清空本地视图

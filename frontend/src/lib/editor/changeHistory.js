@@ -1,5 +1,5 @@
 /**
- * 修改行色条扩展（editor-productivity-plan 阶段八；借鉴 Notepad++ 8.4.6
+ * 修改行色条扩展（editor-productivity-design 阶段八；借鉴 Notepad++ 8.4.6
  * Change History margin：橙条 = 有未保存修改的行，绿条 = 本会话改过且
  * 已保存的行）。
  *

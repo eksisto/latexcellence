@@ -1,5 +1,5 @@
 /**
- * 多缓冲区 tab 状态机纯模块（editor-productivity-plan §5.1，阶段一）。
+ * 多缓冲区 tab 状态机纯模块（editor-productivity-design §5.1，阶段一）。
  *
  * editorSession 切片的不可变归约全部收敛在此：store 只做「调用归约 + 写回」，
  * 不内联 tab 数组操作，保证打开 / 激活 / 关闭 / 保存回写等转移逻辑可被
@@ -22,7 +22,7 @@
  *   - lastActive：最近激活时刻（LRU 淘汰依据），由调用方传入时刻值。
  *
  * cursor/selection 随 CM6 EditorState 天然隔离、滚动位置由 tabViews 登记表
- * 持有，均不进入本状态（editor-productivity-plan §4）。
+ * 持有，均不进入本状态（editor-productivity-design §4）。
  */
 
 /**

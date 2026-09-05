@@ -1,5 +1,5 @@
 /**
- * 多模型支持前端纯函数模块（multi-model-plan §4 / §7）。
+ * 多模型支持前端纯函数模块（multi-model §4 / §7）。
  *
  * 只含常量与纯函数，不依赖 i18n 运行时 / DOM / 网络，供设置分区组件、
  * 模型徽标组件与 node --test 单测共用。角色槽位与能力闭集必须与后端
@@ -26,7 +26,7 @@ export const LLM_ROLE_KEYS = [
 export const LLM_CAPABILITIES = ["vision", "reasoning"];
 
 /**
- * 两级槽位解析的目标档案 id（multi-model-plan §4）：
+ * 两级槽位解析的目标档案 id（multi-model §4）：
  * assignments[role] 非空 → 该档案；为空 → assignments["default"]；
  * 仍为空 → 内置默认档案（BUILTIN_PROFILE_ID）。
  */

@@ -496,7 +496,7 @@ const ProfileCard = memo(function ProfileCard({
 });
 
 /**
- * 模型管理设置分区（multi-model-plan §7.1）：模型档案增删改 + 槽位指派。
+ * 模型管理设置分区（multi-model §7.1）：模型档案增删改 + 槽位指派。
  *
  * 保存语义：profiles 为整表替换（后端 _deep_merge 列表语义）、assignments
  * 整对象提交，均随 SettingsDialog 的整体保存生效；校验失败错误经

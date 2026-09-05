@@ -1,5 +1,5 @@
 /**
- * OutlinePanel —— 左栏「大纲」tab 内容（editor-productivity-plan §5.3
+ * OutlinePanel —— 左栏「大纲」tab 内容（editor-productivity-design §5.3
  * 阶段三 / 决策 Q6）。
  *
  * 展示当前激活缓冲区的大纲：`\section` / `\subsection` /

@@ -1,5 +1,5 @@
 /**
- * 编辑器偏好纯模块（editor-plan §9 editorPreferences 切片、§11 偏好导入/导出）。
+ * 编辑器偏好纯模块（editor-design §9 editorPreferences 切片、§11 偏好导入/导出）。
  *
  * 职责：
  *   1. 偏好默认值（决策 Q6：autoSave 默认关；§4：softWrap 默认开）；
@@ -78,7 +78,7 @@ export function sanitizePreferences(input) {
   return result;
 }
 
-/* ── 导出 / 导入（editor-plan §11，阶段四） ─────────────────────────────── */
+/* ── 导出 / 导入（editor-design §11，阶段四） ─────────────────────────────── */
 
 /**
  * 序列化偏好为导出载荷文本（pretty-print JSON，§11）。

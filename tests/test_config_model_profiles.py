@@ -1,6 +1,6 @@
 """模型档案（profiles）与槽位指派（assignments）配置：自动迁移 + 能力硬校验。
 
-对应 multi-model-plan §4/§5.3 的 P1 交付：
+对应 multi-model §4/§5.3 的 P1 交付：
 - profiles 为空时读取侧合成内置默认档案（不回写文件），全部槽位解析落到它；
 - 校验门禁：档案 id 唯一且格式合法、assignments 引用存在、OCR 槽必须 vision；
 - 存量兼容：旧单模型结构（仅顶层字段）加载行为不变；

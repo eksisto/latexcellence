@@ -1,5 +1,5 @@
 /**
- * 引用符号缓存与补全候选项映射（editor-productivity-plan §5.2/§5.3，
+ * 引用符号缓存与补全候选项映射（editor-productivity-design §5.2/§5.3，
  * 决策 Q7，阶段四）。
  *
  * 数据源为后端 GET /api/project/latex-symbols 的全项目只读符号扫描

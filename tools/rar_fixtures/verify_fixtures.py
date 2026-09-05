@@ -483,7 +483,7 @@ def _live_extraction_checks(results: list[str]) -> None:
                     "service_rr.rar",
                     # subhead_ntfs.rar 不做真实解压对账：手工构造的非规范
                     # NTFS 子块会被 bsdtar Header CRC error 拒绝，属
-                    # docs/rar-extractor-fallback.md §八 风险 1 的已知限制
+                    # docs/rar-extractor-fallback.md §七 风险 1 的已知限制
                     # （预扫 / 结构检查仍覆盖该样本）。
                 )
             ),

@@ -139,6 +139,8 @@
 | [Pandoc](https://pandoc.org) | 3.10.1 | GPL-2.0-or-later | Copyright (c) 2006- John MacFarlane | 格式转换 |
 | [unar / The Unarchiver](https://theunarchiver.com) | 1.10.8（Debian main 源） | LGPL-2.1-or-later | Copyright (c) 2017-present, MacPaw Inc.; upstream Dag Ågren 及 XADMaster 贡献者 | 多用户模式 rar 压缩包解压的首选解压器（多用户 v2 P2；后端镜像内置） |
 | [libarchive / bsdtar](https://www.libarchive.org) | 3.7.x（各发行版 main 源） | BSD-3-Clause（含个别组件 BSD-2-Clause） | Copyright (c) 2003-2025, Tim Kientzle, Charles P. Boyd 及 libarchive contributors | rar 解压回退解压器：宿主缺失 unar 时经 `libarchive-tools` 包提供的 bsdtar 子进程解压（RAR4/RAR5 reader 为 BSD 授权独立实现；系统包引入，不经 pip，不随本项目再分发） |
+| [unar / The Unarchiver](https://theunarchiver.com)（convert 沙箱镜像内置） | Debian main 源（版本随镜像基础 Debian 发行版） | LGPL-2.1-or-later | Copyright (c) 2017-present, MacPaw Inc.; upstream Dag Ågren 及 XADMaster 贡献者 | Docker 沙箱模式 rar 解压容器（convert 镜像）内的首选解压器：`docker/convert/Dockerfile` 构建期经 Debian main 源 apt 安装，Debian 包随镜像分发 |
+| [libarchive / bsdtar](https://www.libarchive.org)（convert 沙箱镜像内置） | Debian main 源 `libarchive-tools`（版本随镜像基础 Debian 发行版） | BSD-3-Clause（含个别组件 BSD-2-Clause） | Copyright (c) 2003-2025, Tim Kientzle, Charles P. Boyd 及 libarchive contributors | Docker 沙箱模式 rar 解压容器（convert 镜像）内的回退解压器，与 unar 按固定顺序取用：构建期经 Debian main 源 apt 安装 `libarchive-tools`，Debian 包随镜像分发 |
 
 ### Pandoc 许可证说明
 

@@ -319,7 +319,7 @@ async def format_latex(
     workspace_id: str = Query(..., description="工作区唯一标识符"),
     _: dict = Depends(access_control.require_workspace_write),
 ):
-    """编辑器一键格式化（editor-productivity-plan §5.2 / 决策 Q8，阶段五）。
+    """编辑器一键格式化（editor-productivity-design §5.2 / 决策 Q8，阶段五）。
 
     纯转换端点：接收缓冲区全文，内部复用 latex_formatter（latexindent
     优先、内置兜底，外部命令执行沿既有 SandboxRunner 规则）返回格式化
@@ -336,7 +336,7 @@ async def get_file_content(
     workspace_id: str = Query(..., description="工作区唯一标识符"),
     _: dict = Depends(access_control.require_workspace_read),
 ):
-    """编辑器打开文件：返回文件全文与当前 MD5（editor-plan §5.1）。"""
+    """编辑器打开文件：返回文件全文与当前 MD5（editor-design §5.1）。"""
     project = get_project_manager_for_workspace(workspace_id)
     return await editor_service.read_file_content(project, file_path)
 
@@ -365,7 +365,7 @@ async def save_file(
     """编辑器整文件保存：MD5 乐观锁 + 统一撤销记账 + 用量记账刷新。
 
     单用户模式推入 BackupManager 内存撤销栈；多用户模式记入反向补丁
-    编辑日志并与 AI 改动共享同一套 undo/redo 历史（editor-plan §5.1，
+    编辑日志并与 AI 改动共享同一套 undo/redo 历史（editor-design §5.1，
     决策 Q11）。
     """
     project = get_project_manager_for_workspace(

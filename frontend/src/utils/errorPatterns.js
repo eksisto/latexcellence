@@ -113,7 +113,7 @@ export const PATTERN_MAP = [
   ],
 
   // 配置校验
-  // 多模型配置校验门禁（multi-model-plan P1/P4）：具体门禁消息模式必须
+  // 多模型配置校验门禁（multi-model P1/P4）：具体门禁消息模式必须
   // 排在下方通用 "Config validation failed:" 条目之前——该条目会把整段
   // 消息（含 Pydantic 的 loc 前缀与 "Value error, " 前缀）作为 details
   // 原样透传，无法翻译。门禁消息经 HTTP 层包装后形如

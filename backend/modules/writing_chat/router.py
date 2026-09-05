@@ -11,7 +11,7 @@
     DELETE /api/writing-chat/sessions/{id}   — 删除会话
     POST /api/writing-chat/sessions/{id}/compact — 手动压缩会话
 
-编辑器侧 AI 助手（editor-plan §5.2，阶段四）：
+编辑器侧 AI 助手（editor-design §5.2，阶段四）：
     POST /api/writing-chat/editor/send             — 编辑器缓冲区协议流式对话（SSE）
     POST /api/writing-chat/editor/apply-suggestion  — 记录建议应用结果（消息级标记）
 """
@@ -60,7 +60,7 @@ router = APIRouter(
 
 
 def _ensure_editor_assistant_available() -> None:
-    """编辑器 / 助手开关把关（editor-plan §5.3，决策 Q26）。
+    """编辑器 / 助手开关把关（editor-design §5.3，决策 Q26）。
 
     控制 LLM 开销是明确动机：editor.enabled=false 或
     editor.assistant_enabled=false 时服务端直接拒绝助手端点，
@@ -156,7 +156,7 @@ async def send_message(
     return _sse_stream_response(lambda: service.send(request, workspace_id))
 
 
-# ── 编辑器侧 AI 助手（editor-plan §5.2 / §7） ─────────────────────────────
+# ── 编辑器侧 AI 助手（editor-design §5.2 / §7） ─────────────────────────────
 
 
 @router.post("/editor/send")

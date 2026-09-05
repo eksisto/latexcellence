@@ -1,7 +1,7 @@
 """
 模型路由器：按任务槽位（role）路由到模型档案的 LLM 客户端池。
 
-multi-model-plan §5.1（P2 交付）。职责：
+multi-model §5.1（P2 交付）。职责：
     1. get_client_for(role)：按槽位两级解析（config.LLMConfig.resolve_role）
        得到目标档案，从客户端池 {profile_id: LLMClient} 取实例；
     2. 池复用：同档案全局共享同一 LLMClient（各自持有独立 AsyncOpenAI、
@@ -37,7 +37,7 @@ _pool_lock = threading.Lock()
 
 
 def get_client_for(role: str) -> LLMClient:
-    """按任务槽位获取 LLM 客户端（multi-model-plan §5.1 统一入口）。
+    """按任务槽位获取 LLM 客户端（multi-model §5.1 统一入口）。
 
     槽位两级解析：assignments[role] → assignments["default"] → 内置默认档案
     （顶层字段合成）。未知槽位抛 ValueError（支持的槽位见
@@ -67,7 +67,7 @@ def get_client_for_profile(profile_id: str) -> LLMClient:
     """按档案 id 获取（池化）LLM 客户端。
 
     与 get_client_for 的区别：绕过槽位解析，直接定位指定档案——验证
-    "该档案本身"（连通性测试的 profile_id 粒度，deploy-followups-plan
+    "该档案本身"（连通性测试的 profile_id 粒度，deploy-followups
     §4.4）。客户端仍走全局池复用（不绕开 AsyncOpenAI 连接共享与档案级
     节流）；档案不存在抛 ValueError（见 resolve_profile_by_id）。
     """

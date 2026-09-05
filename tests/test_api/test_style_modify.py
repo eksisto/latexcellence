@@ -120,7 +120,7 @@ class TestStyleModifyService:
 
         assert result["latex"] == modified_latex
         mock_llm.chat.assert_called_once()
-        # 槽位锁定：service 直调走 agent 槽（multi-model-plan §6）
+        # 槽位锁定：service 直调走 agent 槽（multi-model §6）
         mock_get_client.assert_called_once_with("agent")
 
     @pytest.mark.asyncio

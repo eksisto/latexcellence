@@ -73,7 +73,7 @@ class StyleModifyAgent:
 
         cfg = get_config()
         if llm is None:
-            # agent 槽位：单次高价值生成任务（multi-model-plan §6）
+            # agent 槽位：单次高价值生成任务（multi-model §6）
             llm = get_client_for("agent")
         compile_enabled = "available" if _tex_toolchain_available() else "unavailable"
         system_prompt = get_prompt(
@@ -121,7 +121,7 @@ class StyleModifyAgent:
         self._store.save_meta(session_id, meta)
 
         if llm is None:
-            # agent 槽位：单次高价值生成任务（multi-model-plan §6）
+            # agent 槽位：单次高价值生成任务（multi-model §6）
             llm = get_client_for("agent")
         compile_enabled = "available" if _tex_toolchain_available() else "unavailable"
         refine_prompt = get_prompt(

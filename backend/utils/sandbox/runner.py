@@ -37,7 +37,7 @@ PROBE_TTL_SECONDS = 60.0
 _GATE_POLL_INTERVAL_SECONDS = 0.05
 
 # warm pool 孤儿对账周期（秒；启动期先做一轮，之后由本循环接管——
-# 每副本职责，不进维护循环选主，见 multi-user-v2-plan §12.1 补记）
+# 每副本职责，不进维护循环选主，见 docs/multi-user.md §10 补记）
 POOL_RECONCILE_INTERVAL_SECONDS = 600.0
 
 

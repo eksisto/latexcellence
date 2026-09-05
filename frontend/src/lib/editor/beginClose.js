@@ -1,5 +1,5 @@
 /**
- * \begin{env} 自动配对（editor-productivity-plan §5.3 阶段二 / 决策 Q12）。
+ * \begin{env} 自动配对（editor-productivity-design §5.3 阶段二 / 决策 Q12）。
  *
  * Overleaf 式打字机补 \end：输入 `\begin{env}` 的右花括号 `}` 后自动插入
  * `\n\n\end{env}`，光标留在中间空行；若该 `\begin` 之后的缓冲区内已存在

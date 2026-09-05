@@ -1,5 +1,5 @@
 /**
- * 行内补全（editor-plan §6.3 入口一 / 决策 Q8、Q15）。
+ * 行内补全（editor-design §6.3 入口一 / 决策 Q8、Q15）。
  *
  * 双触发：
  *   - `\` 触发命令补全（反斜杠后可继续输入英文字母或中文，中文走共享
@@ -75,7 +75,7 @@ const COMMAND_PREFIX_RE = /\\([A-Za-z\u4e00-\u9fff]*)$/;
 /** `\begin{` 后的部分环境名 */
 const BEGIN_PREFIX_RE = /\\begin\{([A-Za-z]*)$/;
 
-/* ── 引用补全触发（editor-productivity-plan §5.3 阶段四 / 决策 Q7） ───
+/* ── 引用补全触发（editor-productivity-design §5.3 阶段四 / 决策 Q7） ───
  * 三路触发共用同一 source（触发词互斥）：
  *   - \ref{ / \cref{ / \Cref{ / \eqref{ / \pageref{ / \autoref{（含星号与
  *     已敲出的可选参数）：补全全项目已有 label（跨文件命中，Q7）；

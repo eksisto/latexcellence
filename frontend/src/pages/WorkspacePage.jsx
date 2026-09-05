@@ -531,7 +531,7 @@ export default function WorkspacePage() {
                   {t("pages:workspace.versionManage")}
                 </Button>
               )}
-              {/* 编辑器入口（editor-plan §4）：携带当前 activeFile 跳转，
+              {/* 编辑器入口（editor-design §4）：携带当前 activeFile 跳转，
                   不改动工作台既有逻辑；部署级开关关闭时隐藏（决策 Q17）。
                   判定与 WelcomePage 同一口径：features 加载中放行、
                   已加载但缺 key 视为关闭（真值过滤） */}

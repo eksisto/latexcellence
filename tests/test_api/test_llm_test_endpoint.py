@@ -1,4 +1,4 @@
-"""POST /api/llm/test 模型连通性测试端点（deploy-followups-plan §4.4，阶段四）。
+"""POST /api/llm/test 模型连通性测试端点（deploy-followups §4.4，阶段四）。
 
 覆盖：
     - 请求校验：profile_id / role 二选一（都传或都不传 → 422）、未知槽位

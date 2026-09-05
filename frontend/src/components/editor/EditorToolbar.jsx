@@ -1,5 +1,5 @@
 /**
- * EditorToolbar —— 编辑器工具栏（editor-plan §4 / §8）。
+ * EditorToolbar —— 编辑器工具栏（editor-design §4 / §8）。
  *
  * 按钮：后端撤销/重做 · 命令面板 · 编译 · 保存 · 编辑器设置。
  * 激活文件与脏标记由 tab 条展示，本栏不再重复展示。

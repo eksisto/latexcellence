@@ -1,7 +1,7 @@
 """writing_chat service 内部共享依赖（便于测试统一 patch）。
 
 LLM 客户端经模型路由器按 writing_chat 槽位实时解析
-（multi-model-plan §6）；保持 get_llm_client 函数名不变，
+（multi-model §6）；保持 get_llm_client 函数名不变，
 使既有测试的 patch 点与本模块消费方（edits / editor_chat /
 conversation / compaction 的 `_deps.get_llm_client()`）无需改动。
 """

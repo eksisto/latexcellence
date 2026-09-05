@@ -2,14 +2,14 @@
  * 全局 UI 状态（非持久化）：当前承载设置对话框的程序化开关与定位分区。
  *
  * ModelBadge 等深层组件需要「点击打开设置对话框并定位到模型管理分区」
- * （multi-model-plan §7.2），深层传递违反 prop drilling 禁令，故经独立
+ * （multi-model §7.2），深层传递违反 prop drilling 禁令，故经独立
  * 的轻量 store 传递；SettingsDialog 订阅本 store 渲染，工具栏常规入口
  * 与程序化入口共用同一开关。
  */
 
 import { create } from "zustand";
 
-/** 设置对话框支持的定位分区标识：模型管理分区（multi-model-plan §7.1） */
+/** 设置对话框支持的定位分区标识：模型管理分区（multi-model §7.1） */
 export const SETTINGS_SECTION_MODELS = "models";
 
 const useUiStore = create((set) => ({

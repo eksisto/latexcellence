@@ -433,7 +433,7 @@ class ConversationContext:
     def mark_suggestion_applied(
         self, message_id: str, index: int | None = None
     ) -> bool:
-        """置位建议应用标记（编辑器助手，editor-plan §5.2）。
+        """置位建议应用标记（编辑器助手，editor-design §5.2）。
 
         index=None：消息级旧行为，直接置 suggestion_applied=True（向后兼容）。
         index 非 None：index 级标记——去重追加进 applied_suggestions，仅当
@@ -600,7 +600,7 @@ class ConversationContext:
         cfg = get_config().features.writing_chat
         if cfg.compression_threshold_tokens > 0:
             return self.should_compress()
-        # writing_chat 槽位（multi-model-plan §6）
+        # writing_chat 槽位（multi-model §6）
         window = await get_client_for("writing_chat").get_context_window()
         return self.should_compress(window)
 

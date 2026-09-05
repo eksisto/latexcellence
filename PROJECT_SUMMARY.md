@@ -243,18 +243,17 @@ latexcellence/
 │   ├── function-calling-tools.md    # Function Calling 工具体系说明
 │   ├── templategen-optimization-lessons.md  # template_gen 闭环优化复盘与通用性门禁
 │   ├── plotgen-optimization-lessons.md      # plot_gen 闭环优化复盘与最佳实践
-│   ├── prompt-optimization-plan.md          # 提示词优化计划
+│   ├── prompt-guidelines.md                 # 提示词工程原则与约定（统一结构/回归口径）
 │   ├── windows-temp-permissions.md          # Windows 沙箱临时目录权限排查（pytest basetemp/ACL/清理）
 │   ├── web-access-operations.md              # 网络访问灰度、观测、容量与回滚运维
-│   ├── multi-user-plan.md                    # 多用户模式设计方案（双模式/认证/用户空间/配额/权限协作/管理后台/迁移）
-│   ├── multi-user-v2-plan.md                   # 多用户模式 v2 设计方案（Docker 沙箱/rar/反向补丁撤销/分片上传/SMTP/记账优化/多实例）
-│   ├── rar-extractor-fallback.md                 # RAR 解压器回退层设计与实施记录（unar → bsdtar，已实施）
-│   ├── editor-plan.md                            # 网页编辑器功能设计方案（CM6 编辑器 + 命令快速输入 + AI 助手；已实施，设计共识与决策记录）
-│   ├── editor-productivity-plan.md                # 编辑器生产力改造设计方案（多缓冲区 tab/大纲/引用补全/格式化/KaTeX/错误跳转；八个阶段均已实施，阶段一多缓冲区基座、阶段二编辑基本功包、阶段三大纲面板、阶段四引用补全、阶段五一键格式化、阶段六 KaTeX 公式悬停预览、阶段七编译错误列表与跨文件跳转、阶段八修改行色条/状态栏/选中高亮匹配/会话持久化升级 localStorage（借鉴 Notepad++））
-│   ├── editor-experience-plan.md                # 编辑器写作体验收口设计方案（编辑器 v3：SyncTeX 正反向同步/用户自定义片段/实时语法诊断/跨文件大纲与 KaTeX 预览卡/助手接入联网与学术检索/自研 MIT Lezer 子集语法；已定稿）
-│   ├── multi-model-plan.md                       # 多模型支持设计方案（模型档案 + 角色槽位路由；已实施）
+│   ├── multi-user.md                           # 多用户模式设计（双模式/认证/用户空间/配额/权限协作/沙箱/撤销/邮件/多实例；v1+v2 合并的权威设计参考）
+│   ├── rar-extractor-fallback.md                 # RAR 解压器回退层设计（unar → bsdtar，已实施）
+│   ├── editor-design.md                            # 网页编辑器 v1 设计（CM6 编辑器 + 命令快速输入 + AI 助手；已实施，设计与决策记录）
+│   ├── editor-productivity-design.md                # 编辑器生产力改造 v2 设计（多缓冲区 tab/大纲/引用补全/格式化/KaTeX/错误跳转/修改行色条；已实施，设计与决策记录）
+│   ├── editor-experience-design.md                # 编辑器写作体验收口设计方案（编辑器 v3：SyncTeX 正反向同步/用户自定义片段/实时语法诊断/跨文件大纲与 KaTeX 预览卡/助手接入联网与学术检索/自研 MIT Lezer 子集语法；已定稿）
+│   ├── multi-model.md                       # 多模型支持设计（模型档案 + 角色槽位路由；已实施）
 │   ├── deployment.md                          # 后端部署指南（单用户/多用户单进程/多实例 Compose 部署、systemd 托管、HTTPS 反向代理、安全风险声明、备份、环境变量与升级回滚）
-│   ├── deploy-followups-plan.md               # 多用户部署侧跟踪项收口设计方案（rar 解压器入沙箱/真实压缩 RAR 样本验收/沙箱容器预创建池 warm pool/模型连通性测试；已定稿）
+│   ├── deploy-followups.md               # 多用户部署侧收口设计（rar 解压入沙箱/真实 RAR 样本/warm pool/模型连通性测试；已实施）
 │   ├── modules/                     # 模块文档（含 editor.md 网页编辑器）
 │   └── showcase.md                  # 展示页（showcase）说明
 ├── tests/                           # 测试用例
@@ -343,7 +342,7 @@ latexcellence/
 | LaTeX×JSON 转义防护 | `latex_json_guard.py` 拦截控制字符、`[object Object]` 占位符、花括号 / `$` / 环境配平；分隔符协议等非 JSON 路径用 `relaxed=True` | [backend-core.md](docs/backend-core.md) |
 | 分隔符协议 | OCR、style_modify、writing_chat 编辑输出用 `<<<LATEX>>>...<<<END>>>` 直接传输纯文本，从根上避免 JSON 转义损坏 | [formula_ocr.md](docs/modules/formula_ocr.md) 等模块文档 |
 | 集中式提示词管理 | 所有 LLM 提示词集中存放在 `backend/core/prompts.py`，`get_prompt()` 参数化获取，`{language}` 占位符注入输出语言 | [backend-core.md](docs/backend-core.md) |
-| 多模型支持（角色槽位路由） | `llm.profiles` 模型档案 + `assignments` 槽位指派，`get_client_for(role)` 按两级解析路由客户端（池化 + 热重载清池）；能力硬校验（OCR 槽必需 vision）、旧配置自动迁移、推理模型封装层兼容；设置页「模型管理」分区编辑，功能入口模型徽标展示当前生效模型 | [backend-core.md](docs/backend-core.md)、[multi-model-plan.md](docs/multi-model-plan.md) |
+| 多模型支持（角色槽位路由） | `llm.profiles` 模型档案 + `assignments` 槽位指派，`get_client_for(role)` 按两级解析路由客户端（池化 + 热重载清池）；能力硬校验（OCR 槽必需 vision）、旧配置自动迁移、推理模型封装层兼容；设置页「模型管理」分区编辑（档案卡片「测试连接」发起 `POST /api/llm/test` 连通性自检，返回延迟/失败原因），功能入口模型徽标展示当前生效模型 | [backend-core.md](docs/backend-core.md)、[multi-model.md](docs/multi-model.md) |
 | BaseParagraphCheckService | 多个逐段检查模块共享的基类，封装文件解析、marker 替换、LLM 编排与写回，子类通过 hooks 定制 | [backend-core.md](docs/backend-core.md) |
 | CheckOperationContext | 每次 preview/check 生成唯一 `operation_id`，保存 marker 映射与 MD5 快照（TTL 1 小时），apply 时精确还原，防止 marker 污染源文件 | [DESIGN.md §1.4](DESIGN.md) |
 | 乐观锁 | 读取时返回文件 MD5，写回时校验；不一致抛 `FileConflictError`（HTTP 409），前端刷新 MD5 后重试 | [DESIGN.md §4.2](DESIGN.md) |
@@ -360,22 +359,22 @@ latexcellence/
 | 代码展示与高亮 | CodeBlock / MarkerText / CodeEditorInput 统一 LaTeX 源码展示，token 颜色由 `--code-token-*` 变量控制 | [frontend.md](docs/frontend.md) |
 | 逐段检查前端流程 | `useParagraphCheck` 统一封装恢复、预览、检查、排序、应用与持久化；`useResultFilter` 负责排序过滤 | [frontend.md](docs/frontend.md) |
 | 写作助手 | `useWritingChat` 管理会话、SSE 流式、工具确认、编辑建议双轮协议 | [writing_chat.md](docs/modules/writing_chat.md) |
-| 网页编辑器与编辑器侧 AI 助手 | `/editor` 页 CM6 缓冲区编辑经 save-file 单一路径落盘；助手复用 Writing Chat 会话基础设施，建议只改缓冲区（插入光标 / 替换选区 / unified diff 卡片），`editor.enabled` / `assistant_enabled` 双开关服务端把关 | [editor.md](docs/modules/editor.md)、[editor-plan.md](docs/editor-plan.md) |
+| 网页编辑器与编辑器侧 AI 助手 | `/editor` 页 CM6 缓冲区编辑经 save-file 单一路径落盘；助手复用 Writing Chat 会话基础设施，建议只改缓冲区（插入光标 / 替换选区 / unified diff 卡片），`editor.enabled` / `assistant_enabled` 双开关服务端把关 | [editor.md](docs/modules/editor.md)、[editor-design.md](docs/editor-design.md) |
 | 检查结果保鲜 | 逐段检查结果记录检查时文件 MD5，页面加载时比对当前 MD5，不一致渲染 StaleCheckBanner 提示重查而不销毁结果 | [frontend.md](docs/frontend.md)、[editor.md](docs/modules/editor.md) |
 | 主题系统 | 主题 CSS 自动发现，亮/暗模式独立；`--primary` / `--accent` 等由单一色相派生 | [frontend.md](docs/frontend.md) |
-| 多用户双模式 | `multi_user.enabled` 开关；单用户保持现状（本地目录 + 共享令牌），多用户强制会话认证、CSRF、禁用任意路径打开/浏览；服务器路径不向用户暴露（`root_path` / `git_root` / `sandbox` 等响应字段脱敏，编译日志等输出前缀改写为相对路径） | [multi-user-plan.md](docs/multi-user-plan.md)、[deployment.md](docs/deployment.md) |
+| 多用户双模式 | `multi_user.enabled` 开关；单用户保持现状（本地目录 + 共享令牌），多用户强制会话认证、CSRF、禁用任意路径打开/浏览；服务器路径不向用户暴露（`root_path` / `git_root` / `sandbox` 等响应字段脱敏，编译日志等输出前缀改写为相对路径） | [multi-user.md](docs/multi-user.md)、[deployment.md](docs/deployment.md) |
 | 多用户认证 | argon2id 密码哈希、HttpOnly 会话 Cookie（库只存 SHA-256）、注册审批流、登录限流、管理员引导（env/CLI） | [backend-core.md](docs/backend-core.md) |
 | 注册自动审批（IP 策略） | 注册记录真实客户端 IP（可信代理解析 X-Forwarded-For）；同 IP 账号上限 + CIDR 白名单 + 离线地理白名单叠加判定「无恶意」即自动通过，否则转人工待审批；地理查询 ip2region（.xdb，中国命中直接采用，国内精度更高）优先、非/未知中国回落 GeoLite2；每 IP 注册限流，只降级不拒绝 | [backend-core.md](docs/backend-core.md)、[deployment.md](docs/deployment.md) |
-| 多用户项目与配额 | 上传 zip/7z/rar 安全解压（rar 经 unar 优先、bsdtar 回退，解压命令经 SandboxRunner 沙箱执行：convert 镜像内置双工具 + 压缩包只读挂载 + 宿主监视任务超配额/超时硬中断，local 回落探测宿主 PATH）、项目命名去重、项目空间配额记账、回收站（7 天）、打包下载；写回超限回滚 | [backend-core.md](docs/backend-core.md)、[multi-user-plan.md](docs/multi-user-plan.md) |
-| 多用户权限协作 | 协作者管理（按用户名添加/改角色/移除）、项目转交（原 owner 变 viewer 或退出）、viewer 写保护；权限实时查库即时生效 | [backend-core.md](docs/backend-core.md)、[multi-user-plan.md](docs/multi-user-plan.md) |
+| 多用户项目与配额 | 上传 zip/7z/rar 安全解压（rar 经 unar 优先、bsdtar 回退，解压命令经 SandboxRunner 沙箱执行：convert 镜像内置双工具 + 压缩包只读挂载 + 宿主监视任务超配额/超时硬中断，local 回落探测宿主 PATH）、项目命名去重、项目空间配额记账、回收站（7 天）、打包下载；写回超限回滚 | [backend-core.md](docs/backend-core.md)、[multi-user.md](docs/multi-user.md) |
+| 多用户权限协作 | 协作者管理（按用户名添加/改角色/移除）、项目转交（原 owner 变 viewer 或退出）、viewer 写保护；权限实时查库即时生效 | [backend-core.md](docs/backend-core.md)、[multi-user.md](docs/multi-user.md) |
 | Git 版本管理 | 上传自动/版本页手动 git init（LaTeX 专用 .gitignore，项目已有则尊重）；.git 不占项目配额，改按 git_dir_max_mb 独立上限（超限拒绝上传/初始化/提交）；「已初始化」以项目根自带 .git 为准；历史条目经 URL 参数预填 git_diff 对比 | [git_manage.md](docs/modules/git_manage.md) |
 | 模板体系 | 内置模板（包内资源，manifest 元数据 + 预编译缩略图/PDF 预览）与用户私有库双模式并存；从模板创建项目为纯复制语义（清洗剔除编译产物/.git/库元数据，无变量替换）；上传走安全解压 + 扩展名白名单，模板库本体占「模板」衍生配额、创建项目走项目配额 | [template_library.md](docs/modules/template_library.md)、[template_gen.md](docs/modules/template_gen.md) |
-| 共享项目反向补丁撤销 | 多用户模式写路径统一记账（workspace_edit_ops + .edit_logs 快照），undo/redo 只回退当前用户自己的修改：冲突即拒绝（409）、恢复超配额拒绝（413）、LIFO 整组回滚、redo 对称；共享项目 v1 禁令解除 | [DESIGN.md §14](DESIGN.md)、[multi-user-v2-plan.md](docs/multi-user-v2-plan.md) §8 |
-| 多用户 LLM 治理 | 每用户滑动窗口限流 + 并发租约（`llm_governance.py`，单事务原子准入），超限 429 + Retry-After；登录限流同表计数；仅多用户模式生效，单用户零依赖直通 | [backend-core.md](docs/backend-core.md)、[multi-user-v2-plan.md](docs/multi-user-v2-plan.md) §6 |
-| 衍生数据记账与自助清理 | 四类衍生目录用量缓存（user_derived_usage 表）+ 检查点增量刷新 + 维护循环对账纠偏，配额校验与 /me 用量 O(1)；工作台分类用量条 + 自助清理（仅本人）；过期会话删除与写作会话保留期清理并入维护循环 | [backend-core.md](docs/backend-core.md)、[multi-user-v2-plan.md](docs/multi-user-v2-plan.md) §9 |
-| 邮件通知与自助找回 | SMTP 通知走 email_outbox 队列 + 发送协程（重试留档限速，未配置优雅降级）；密码可经 `LATEXCELLENCE_SMTP_PASSWORD` 环境变量注入（优先于配置文件且永不写盘，与 LLM Key 同一安全策略）；找回令牌只存哈希、单次有效，forgot 响应恒定语义防枚举；邮箱部分唯一索引 + profile 改绑需当前密码；配额预警迟滞并入维护循环 | [backend-core.md](docs/backend-core.md)、[multi-user-v2-plan.md](docs/multi-user-v2-plan.md) §11、[deployment.md](docs/deployment.md) |
+| 共享项目反向补丁撤销 | 多用户模式写路径统一记账（workspace_edit_ops + .edit_logs 快照），undo/redo 只回退当前用户自己的修改：冲突即拒绝（409）、恢复超配额拒绝（413）、LIFO 整组回滚、redo 对称；共享项目 v1 禁令解除 | [DESIGN.md §14](DESIGN.md)、[multi-user.md](docs/multi-user.md) §8 |
+| 多用户 LLM 治理 | 每用户滑动窗口限流 + 并发租约（`llm_governance.py`，单事务原子准入），超限 429 + Retry-After；登录限流同表计数；仅多用户模式生效，单用户零依赖直通 | [backend-core.md](docs/backend-core.md)、[multi-user.md](docs/multi-user.md) §7 |
+| 衍生数据记账与自助清理 | 四类衍生目录用量缓存（user_derived_usage 表）+ 检查点增量刷新 + 维护循环对账纠偏，配额校验与 /me 用量 O(1)；工作台分类用量条 + 自助清理（仅本人）；过期会话删除与写作会话保留期清理并入维护循环 | [backend-core.md](docs/backend-core.md)、[multi-user.md](docs/multi-user.md) §3.3 |
+| 邮件通知与自助找回 | SMTP 通知走 email_outbox 队列 + 发送协程（重试留档限速，未配置优雅降级）；密码可经 `LATEXCELLENCE_SMTP_PASSWORD` 环境变量注入（优先于配置文件且永不写盘，与 LLM Key 同一安全策略）；找回令牌只存哈希、单次有效，forgot 响应恒定语义防枚举；邮箱部分唯一索引 + profile 改绑需当前密码；配额预警迟滞并入维护循环 | [backend-core.md](docs/backend-core.md)、[multi-user.md](docs/multi-user.md) §9、[deployment.md](docs/deployment.md) |
 | 多实例状态外置 | 跨请求状态（工作区绑定 / 检查上下文 / 待定交互与 DDG challenge / 维护选主）外置共享 SQLite（迁移 v8），副本扩展无需粘性会话；flock 会话互斥、config 热重载、stdout 日志开关；compose 编排 + 冒烟脚本 | [DESIGN.md §15](DESIGN.md)、[deployment.md](docs/deployment.md)、[backend-core.md](docs/backend-core.md) |
-| 多用户前端 | 登录/注册/待审批页、项目工作台（上传 zip·7z·目录、配额、回收站、权限）、管理面板、路由守卫、auth 切片；多用户模式固定同源 + CSRF 头 + Cookie 会话，SSE 不再追加 token | [frontend.md](docs/frontend.md)、[multi-user-plan.md](docs/multi-user-plan.md) |
+| 多用户前端 | 登录/注册/待审批页、项目工作台（上传 zip·7z·目录、配额、回收站、权限）、管理面板、路由守卫、auth 切片；多用户模式固定同源 + CSRF 头 + Cookie 会话，SSE 不再追加 token | [frontend.md](docs/frontend.md)、[multi-user.md](docs/multi-user.md) |
 | i18n 多语言 | i18next 简中 / 繁中 / 英语，按 `common` / `pages` / `components` / `hooks` / `errors` 命名空间拆分 | [frontend.md](docs/frontend.md) |
 
 各功能模块的单模块设计（数据流、Pydantic 模型、API、配置）见 [docs/modules.md](docs/modules.md)。

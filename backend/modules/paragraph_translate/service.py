@@ -61,7 +61,7 @@ class ParagraphTranslateService(BaseParagraphCheckService):
     """
 
     _output_field = "translated"
-    # LLM 槽位路由（multi-model-plan §6）：逐段高频调用，适合快速模型
+    # LLM 槽位路由（multi-model §6）：逐段高频调用，适合快速模型
     llm_role: ClassVar[str] = "paragraph_translate"
 
     def __init__(self):

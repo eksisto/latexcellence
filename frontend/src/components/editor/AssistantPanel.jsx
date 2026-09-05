@@ -1,5 +1,5 @@
 /**
- * AssistantPanel —— 编辑器 AI 助手侧栏（editor-plan §7，阶段四）。
+ * AssistantPanel —— 编辑器 AI 助手侧栏（editor-design §7，阶段四）。
  *
  * Copilot 式右栏面板：SSE 流式对话（复用 Writing Chat 会话持久化与
  * 只读项目工具），三种建议应用形态齐全（§7.2 / 决策 Q23）：
@@ -49,7 +49,7 @@ import { applyUnifiedDiff, parseUnifiedDiff } from "@/lib/editor/applyDiff";
  * props 均为原始值 + 稳定回调（onApply 经 useCallback 固定），配合
  * React.memo：单卡展开态切换不再牵连同消息其余卡片重渲染。
  *
- * tab 守卫（editor-productivity-plan Q17）：卡片携带发送时的来源
+ * tab 守卫（editor-productivity-design Q17）：卡片携带发送时的来源
  * filePath（sourceFilePath），活跃 tab 不匹配时禁用应用并提示切换，
  * 不自动切 tab。
  */

@@ -1,4 +1,4 @@
-"""LLMClient 推理模型统一兼容封装层（multi-model-plan §5.2，P2 交付）。
+"""LLMClient 推理模型统一兼容封装层（multi-model §5.2，P2 交付）。
 
 覆盖：
     - 请求侧参数适配：参数类 4xx（拒绝 temperature / 要求

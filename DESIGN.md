@@ -599,7 +599,7 @@ Mock 返回值必须符合 Pydantic schema，确保测试的可重复性。
 
 - **注册自动审批（IP 策略）**：注册时解析真实客户端 IP（`clientip.py`：仅当 TCP 对端属于 `multi_user.trusted_proxies` 白名单才信任 X-Forwarded-For，防伪造头绕过）并始终落库（users 表 v9 迁移新增 `registered_ip` / `last_login_ip` / `auto_approved`）。审批决策（`registration_policy.py`）为正向白名单叠加：同 IP 历史账号数达上限 → 不自动通过；命中 CIDR 白名单或离线地理白名单（国家码 + 城市名 AND 语义）→ 自动通过 active 并发开通邮件。地理查询走双库解析链：优先 ip2region（.xdb 官方 binding vendored 于 `multiuser/ip2region_xdb/`，中国命中直接采用，国内城市精度显著优于 GeoLite2），非/未知中国回落 MaxMind GeoLite2（.mmdb）；两库均按 mtime 缓存、懒加载可缺省。全部白名单未配置即「全放行」最简模式。任何不通过只降级人工待审批——**只降级不拒绝**；地理库缺失/查询失败 fail-closed 转人工，注册主流程永不因策略故障 5xx。配套每 IP 注册滑动窗口限流（kind='register_ip'，超限 429 `register_rate_limited`）。
 
-完整方案、数据模型与阶段划分见 [docs/multi-user-plan.md](docs/multi-user-plan.md)，实现细节见 [docs/backend-core.md](docs/backend-core.md)，部署指南（HTTPS、风险声明）见 [docs/deployment.md](docs/deployment.md)。
+设计总览见 [docs/multi-user.md](docs/multi-user.md)，实现细节见 [docs/backend-core.md](docs/backend-core.md)，部署指南（HTTPS、风险声明）见 [docs/deployment.md](docs/deployment.md)。
 
 ---
 
@@ -629,11 +629,11 @@ Mock 返回值必须符合 Pydantic schema，确保测试的可重复性。
 
 ## 11. 多用户模式设计决策记录
 
-多用户模式的完整关键决策记录（双模式、认证、存储、配额、权限、上传、迁移等）见 [docs/multi-user-plan.md §3](docs/multi-user-plan.md)。P0–P7 全部落地为 `backend/core/multiuser/`（db/userspace/auth/dependencies/quota/upload/upload_sessions/maintenance/migrate/edit_log/sandbox_leases/llm_governance）、`backend/modules/auth/`（`/api/auth` 与 `/api/admin`）、`backend/modules/projects/`（`/api/projects` 与权限协作）与 `backend/manage.py`（CLI），设计与实现见 §9.4 与 [docs/backend-core.md](docs/backend-core.md)，部署见 [docs/deployment.md](docs/deployment.md)。
+多用户模式的完整关键决策记录（双模式、认证、存储、配额、权限、上传、迁移等）见 [docs/multi-user.md §13](docs/multi-user.md)。P0–P7 全部落地为 `backend/core/multiuser/`（db/userspace/auth/dependencies/quota/upload/upload_sessions/maintenance/migrate/edit_log/sandbox_leases/llm_governance）、`backend/modules/auth/`（`/api/auth` 与 `/api/admin`）、`backend/modules/projects/`（`/api/projects` 与权限协作）与 `backend/manage.py`（CLI），设计与实现见 §9.4 与 [docs/backend-core.md](docs/backend-core.md)，部署见 [docs/deployment.md](docs/deployment.md)。
 
 ## 12. Docker 沙箱执行模型（v2 P1a）
 
-多用户 v2 的完整设计见 [docs/multi-user-v2-plan.md](docs/multi-user-v2-plan.md)；本节记录已落地的沙箱执行模型（P1a 阶段）。
+多用户模式设计总览见 [docs/multi-user.md](docs/multi-user.md)；本节记录已落地的沙箱执行模型。
 
 ### 12.1 统一执行入口
 
@@ -824,7 +824,7 @@ v1/v2 前期以单进程为运行前提；P7 把全部跨请求共享的进程�
 
 ## 17. 多模型支持：模型档案与角色槽位路由
 
-完整方案与评审决策见 [docs/multi-model-plan.md](docs/multi-model-plan.md)，实现细节见 [docs/backend-core.md](docs/backend-core.md)；本节记录核心设计决策。
+完整方案与评审决策见 [docs/multi-model.md](docs/multi-model.md)，实现细节见 [docs/backend-core.md](docs/backend-core.md)；本节记录核心设计决策。
 
 ### 17.1 决策概览
 

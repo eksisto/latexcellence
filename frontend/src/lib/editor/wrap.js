@@ -1,5 +1,5 @@
 /**
- * 包裹命令（editor-productivity-plan §5.3 阶段二 / 决策 Q13）。
+ * 包裹命令（editor-productivity-design §5.3 阶段二 / 决策 Q13）。
  *
  * 三层：
  *   1. 纯函数层（node --test 直接覆盖）：computeWrapEdits 对若干选区计算

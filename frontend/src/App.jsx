@@ -444,7 +444,7 @@ export default function App() {
                 </RequireAuth>
               }
             />
-            {/* 网页编辑器（editor-plan 阶段二）：viewer 可进入但整体只读 */}
+            {/* 网页编辑器（editor-design 阶段二）：viewer 可进入但整体只读 */}
             <Route
               path="/editor"
               element={

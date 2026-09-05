@@ -110,7 +110,7 @@ export default function useParagraphCheck({
   const [applyingAll, setApplyingAll] = useState(false);
   const [resolveInput, setResolveInput] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
-  /** 保鲜横幅（editor-plan §8）：检查后文件 MD5 已变化的文件列表 */
+  /** 保鲜横幅（editor-design §8）：检查后文件 MD5 已变化的文件列表 */
   const [staleFiles, setStaleFiles] = useState([]);
   // 多用户模式写权限：viewer 只读，写操作（应用更改/全部应用）直接拒绝
   const canWrite = useCanWrite();
@@ -279,7 +279,7 @@ export default function useParagraphCheck({
     (batch) => {
       if (batch.length === 0) return;
       const fileOrder = fileOrderRef.current;
-      // 检查结果保鲜（editor-plan §8 / 决策 Q13）：每条结果落检查时该文件
+      // 检查结果保鲜（editor-design §8 / 决策 Q13）：每条结果落检查时该文件
       // 的 MD5 版本戳，供检查页加载后与当前 MD5 比对渲染过期横幅
       const stamped = batch.map((r) => ({
         ...r,
@@ -725,7 +725,7 @@ export default function useParagraphCheck({
     })();
   }, [results, isLoading, activeFile, workspaceId, setResults]);
 
-  // ── 检查结果保鲜比对（editor-plan §8 / 决策 Q13）─────────────────────
+  // ── 检查结果保鲜比对（editor-design §8 / 决策 Q13）─────────────────────
   // 结果就绪（检查流结束或从 persist 恢复）后，逐文件拉取当前 MD5 与
   // 检查时版本戳比对；不一致的文件进入横幅提示。只提示不销毁结果。
   const staleSeqRef = useRef(0);

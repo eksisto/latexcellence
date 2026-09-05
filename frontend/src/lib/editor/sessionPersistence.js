@@ -1,6 +1,6 @@
 /**
  * 编辑器多缓冲区会话的持久化纯模块（localStorage，阶段八升级）。
- * （editor-productivity-plan §5.1 / 决策 Q14，阶段一；Notepad++ snapshot
+ * （editor-productivity-design §5.1 / 决策 Q14，阶段一；Notepad++ snapshot
  * 借鉴：未保存内容不随浏览器关闭丢失，阶段八由 sessionStorage 迁移到
  * localStorage——同一浏览器重启后仍可恢复脏缓冲区。）
  *

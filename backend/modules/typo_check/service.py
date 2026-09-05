@@ -61,7 +61,7 @@ class TypoCheckService(BaseParagraphCheckService):
         results = await svc.check_typos_stream("main.tex", resolve_input=True)
     """
 
-    # LLM 槽位路由（multi-model-plan §6）：逐段高频调用，适合快速模型
+    # LLM 槽位路由（multi-model §6）：逐段高频调用，适合快速模型
     llm_role: ClassVar[str] = "typo_check"
 
     def __init__(self):

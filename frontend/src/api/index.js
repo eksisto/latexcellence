@@ -320,7 +320,7 @@ export const api = {
           workspaceId,
         ),
       ),
-    /** 编辑器打开文件：返回 { file_path, content, md5 }（editor-plan §5.1） */
+    /** 编辑器打开文件：返回 { file_path, content, md5 }（editor-design §5.1） */
     fileContent: (filePath, workspaceId) =>
       request(
         appendWs(
@@ -1174,7 +1174,7 @@ export const api = {
         }),
       }),
     /**
-     * 编辑器助手流式对话（editor-plan §5.2，阶段四）。
+     * 编辑器助手流式对话（editor-design §5.2，阶段四）。
      * 携带 CM6 缓冲区全文与光标/选区元信息；事件经 consumeSse 逐帧回调。
      * @param {AbortSignal} [signal] 取消在途请求（项目切换/组件卸载时中止
      *   流）；abort 使 fetch 与读循环以 AbortError 结束，由调用方静默处理

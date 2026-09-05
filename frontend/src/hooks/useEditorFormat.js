@@ -13,7 +13,7 @@ import {
 } from "@/lib/editor/formatApply";
 
 /**
- * 一键格式化（editor-productivity-plan §5.3 阶段五 / 决策 Q8）。
+ * 一键格式化（editor-productivity-design §5.3 阶段五 / 决策 Q8）。
  *
  * 点击后调 POST /api/project/format-latex 纯转换端点（携带**发起时**的
  * tab 缓冲区全文），成功后按 planFormatApply 决策替换**发起 tab**的

@@ -135,7 +135,7 @@ class PlotGenAgent:
             return
 
         if llm is None:
-            # agent 槽位：单次高价值生成任务（multi-model-plan §6）
+            # agent 槽位：单次高价值生成任务（multi-model §6）
             llm = get_client_for("agent")
 
         sandbox = load_plot_sandbox(get_plot_output_dir(cfg), session_id)
@@ -200,7 +200,7 @@ class PlotGenAgent:
     ) -> AsyncIterator[dict[str, Any]]:
         cfg = get_config()
         if llm is None:
-            # agent 槽位：单次高价值生成任务（multi-model-plan §6）
+            # agent 槽位：单次高价值生成任务（multi-model §6）
             llm = get_client_for("agent")
         sandbox = load_plot_sandbox(get_plot_output_dir(cfg), session_id)
         meta = read_session_meta(sandbox)

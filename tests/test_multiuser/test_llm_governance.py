@@ -279,7 +279,7 @@ class TestAdmissionGate:
 
 # ── admission_exempt_scope：管理面诊断豁免（部署收口阶段四）──────────
 class TestAdmissionExemptScope:
-    """POST /api/llm/test 的治理豁免门（deploy-followups-plan §4.4）。
+    """POST /api/llm/test 的治理豁免门（deploy-followups §4.4）。
 
     锁定三个契约：作用域内挂起请求级用户上下文、异常路径恢复、
     ContextVar 按异步任务隔离（并发任务不受豁免影响）。

@@ -1,5 +1,5 @@
 /**
- * EditorCloseTabDialog —— 关闭脏 tab 三选弹窗（editor-productivity-plan
+ * EditorCloseTabDialog —— 关闭脏 tab 三选弹窗（editor-productivity-design
  * §5.1 / 决策 Q5，阶段一）：保存并关闭 / 放弃改动 / 取消。autoSave 偏好
  * 开启时默认选中「保存并关闭」。
  *

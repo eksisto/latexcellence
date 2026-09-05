@@ -16,7 +16,7 @@ from typing import Any
 
 from backend.core.logger import get_logger
 
-# default 槽位（multi-model-plan §6）：宏包分析兜底等低频辅助调用；
+# default 槽位（multi-model §6）：宏包分析兜底等低频辅助调用；
 # get_llm_client 即 get_client_for("default") 的薄别名（P2 起语义等价）
 from backend.core.llm_client import get_llm_client
 from backend.core.model_router import has_api_key_for

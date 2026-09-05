@@ -1,5 +1,5 @@
 /**
- * StaleCheckBanner —— 检查结果保鲜横幅（editor-plan §8，决策 Q13）。
+ * StaleCheckBanner —— 检查结果保鲜横幅（editor-design §8，决策 Q13）。
  *
  * 各逐段检查结果记录检查时的文件 MD5；检查页加载/结果就绪后经
  * /api/project/file-md5 比对当前 MD5，不一致时渲染"文件已在编辑器中

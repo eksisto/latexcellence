@@ -1,5 +1,5 @@
 /**
- * EditorTabBar —— 多缓冲区标签条（editor-productivity-plan §5.1 / 决策 Q3，
+ * EditorTabBar —— 多缓冲区标签条（editor-productivity-design §5.1 / 决策 Q3，
  * 阶段一）。中栏顶部：标签 + 脏标记圆点 + 陈旧「磁盘已变更」标记 + 关闭
  * 按钮；多于一个脏 tab 时提供「全部保存」入口（§4）。
  *

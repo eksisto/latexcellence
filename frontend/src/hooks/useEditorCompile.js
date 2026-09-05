@@ -12,7 +12,7 @@ import { translateError } from "@/utils/errorMessages";
  * 编译联动：编译状态 / PDF blob ref 回收 / handleCompile 编排。
  * 从 EditorPage 拆出，与 useEditorBuffer 通过 doSaveAllDirtyRef 解耦。
  *
- * 编译前置（editor-productivity-plan Q16）：编译前依次自动保存**所有**
+ * 编译前置（editor-productivity-design Q16）：编译前依次自动保存**所有**
  * 脏 tab（tab 条顺序），任一失败即中断编译——409 由保存侧切换到归属
  * tab 并接管进冲突流程，陈旧确认弹窗同理。
  *

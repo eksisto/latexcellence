@@ -741,7 +741,7 @@ function FeaturesSection({ features, onChange, diffOptions }) {
           </div>
         </div>
       )}
-      {/* 网页编辑器（editor-plan §5.3 / 决策 Q17）：enabled + assistant_enabled */}
+      {/* 网页编辑器（editor-design §5.3 / 决策 Q17）：enabled + assistant_enabled */}
       <CheckboxField
         label={t("settings.featureEditor")}
         checked={features.editor.enabled}

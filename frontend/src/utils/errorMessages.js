@@ -85,7 +85,7 @@ const EXACT_MAP = {
   llm_rate_limited: "llmRateLimited",
   llm_concurrency_limited: "llmConcurrencyLimited",
 
-  // 模型连通性测试（deploy-followups-plan 阶段四）内联错误码
+  // 模型连通性测试（deploy-followups 阶段四）内联错误码
   // （POST /api/llm/test 响应体 error.code，消费处手动 translateError）
   api_key_missing: "llmTestApiKeyMissing",
   llm_test_timeout: "llmTestTimeout",
@@ -155,20 +155,20 @@ const EXACT_MAP = {
   "Marker map missing": "markerMapMissing",
   file_conflict: "fileConflict",
 
-  // 编辑器整文件读写（backend/modules/editor，editor-plan 阶段一接口）
+  // 编辑器整文件读写（backend/modules/editor，editor-design 阶段一接口）
   invalid_content: "invalidContent",
   invalid_path: "invalidPath",
   file_not_found: "fileNotFound",
   invalid_encoding: "invalidEncoding",
   // 请求体长度上限（save-file content / 编辑器助手 buffer 等）
   content_too_long: "contentTooLong",
-  // 编辑器一键格式化（backend/modules/editor，editor-productivity-plan 阶段五）
+  // 编辑器一键格式化（backend/modules/editor，editor-productivity-design 阶段五）
   format_failed: "formatFailed",
 
   // SSE 流式兜底：未预期异常收敛为稳定错误码，不向客户端透传 str(e)
   internal_error: "internalError",
 
-  // 编辑器功能开关把关（editor-plan 阶段四 / 决策 Q26）
+  // 编辑器功能开关把关（editor-design 阶段四 / 决策 Q26）
   editor_disabled: "editorDisabled",
   assistant_disabled: "assistantDisabled",
 

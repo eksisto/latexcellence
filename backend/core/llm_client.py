@@ -5,11 +5,11 @@ OpenAI API 统一封装模块。
     1. 非流式对话（chat）：发送消息、接收 JSON 解析结果，含自动重试 + 指数退避
     2. 流式对话（chat_stream）：逐 token 输出，用于 SSE 推送进度
     3. 请求频率控制（rate limiting），避免触发 API 限流
-    4. 模型档案感知（multi-model-plan §5.1）：每个实例绑定一个档案
+    4. 模型档案感知（multi-model §5.1）：每个实例绑定一个档案
        （profile_id），请求时经 _resolve_cfg() 实时解析「顶层字段 + 档案
        覆盖项」合并视图；档案间的连接、节流与上下文窗口探测彼此隔离
 
-推理模型统一兼容（multi-model-plan §5.2，封装层处理、service 无感知）：
+推理模型统一兼容（multi-model §5.2，封装层处理、service 无感知）：
     - 请求侧：参数类 4xx（拒绝 temperature / 要求 max_completion_tokens）
       自动降参重试一次；厂商私有参数走档案级 extra_body 显式透传
     - 响应侧：JSON 路径（chat / chat_with_usage）剥离 <think>...</think>；
@@ -146,14 +146,14 @@ class StreamChunk:
     reasoning: str | None = None
 
 
-# ── 档案化配置解析与推理模型兼容辅助（multi-model-plan §5.1/§5.2）─────────
+# ── 档案化配置解析与推理模型兼容辅助（multi-model §5.1/§5.2）─────────
 
 
 @dataclass
 class ResolvedLLMCfg:
     """「llm 顶层字段 + 档案覆盖项」的合并视图（每次请求实时解析，不缓存）。
 
-    档案覆盖项语义（multi-model-plan §4）：None / 0 / {}（空值哨兵）表示
+    档案覆盖项语义（multi-model §4）：None / 0 / {}（空值哨兵）表示
     继承顶层默认值。已接受限制：extra_body 以 {} 表示继承，因此「档案显式
     清空顶层 extra_body」不可表达（P1 评审记录）。
     """
@@ -269,7 +269,7 @@ class LLMClient:
     """
 
     def __init__(self, profile_id: str | None = None):
-        """档案化客户端（multi-model-plan §5.1）。
+        """档案化客户端（multi-model §5.1）。
 
         profile_id：绑定的模型档案 id；None 表示无档案——直接使用 llm 顶层
         字段，旧路径行为完全不变。实例在 __init__ 不缓存任何配置（AGENTS.md
@@ -290,7 +290,7 @@ class LLMClient:
         self._semaphore_capacity: int = 0
         self._logger = get_logger("llm_client")
         # 上下文窗口缓存：key=(档案 id, base_url, model)，按档案隔离避免跨档案
-        # 串味（multi-model-plan §10 风险项），reset() 时随配置一起失效
+        # 串味（multi-model §8 风险与已裁决），reset() 时随配置一起失效
         self._context_window_cache: dict[tuple[str, str, str], int] = {}
         self._window_cache_lock = threading.Lock()
 
@@ -361,7 +361,7 @@ class LLMClient:
     def _window_cache_key(
         self, cfg: "LLMConfig | ResolvedLLMCfg"
     ) -> tuple[str, str, str]:
-        """上下文窗口缓存 key：按档案 id 隔离（multi-model-plan §10 风险项）。"""
+        """上下文窗口缓存 key：按档案 id 隔离（multi-model §8 风险与已裁决）。"""
         return (self._profile_id or BUILTIN_PROFILE_ID, cfg.base_url, cfg.model)
 
     def _get_semaphore(self) -> asyncio.Semaphore:
@@ -554,7 +554,7 @@ class LLMClient:
         - 池化客户端（创建时记录过指纹）每次访问按档案指纹（base_url /
           api_key / model）惰性校验，指纹变化即重建内部实例，并关闭被替换
           的旧实例（该双保险路径是绕过 reset 钩子的磁盘直改热重载的主失效
-          路径，不关闭会每次泄漏一个连接池；multi-model-plan §5.1）；
+          路径，不关闭会每次泄漏一个连接池；multi-model §5.1）；
         - 指纹为 None 表示外部直接注入的 _client（测试路径），跳过校验。
         """
         if self._client is not None and self._client_fingerprint is None:
@@ -1237,7 +1237,7 @@ async def chat_stream_with_tools_retry(
 
 
 def get_llm_client() -> LLMClient:
-    """获取 default 槽位的 LLMClient（模型路由器薄别名，multi-model-plan §5.1）。
+    """获取 default 槽位的 LLMClient（模型路由器薄别名，multi-model §5.1）。
 
     存量导入路径（from backend.core.llm_client import get_llm_client）保持
     不变；P3 调用点迁移后本别名仅服务尚未迁移的调用方与存量测试。函数级

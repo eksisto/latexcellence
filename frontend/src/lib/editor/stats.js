@@ -1,5 +1,5 @@
 /**
- * 文档统计纯模块（editor-productivity-plan 阶段八：底部状态栏，
+ * 文档统计纯模块（editor-productivity-design 阶段八：底部状态栏，
  * 借鉴 Notepad++ 状态栏的 Ln/Col 与长度展示；字数口径面向论文写作）。
  *
  * countDocStats(text)：

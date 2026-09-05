@@ -380,13 +380,13 @@ async def update_config(
 @app.get("/api/llm/routes")
 async def get_llm_routes(_: None = Depends(require_login_if_multiuser)):
     """
-    查询各角色槽位当前生效的模型档案解析结果（multi-model-plan §5.4）。
+    查询各角色槽位当前生效的模型档案解析结果（multi-model §5.4）。
 
     固定覆盖全部角色槽位，每项为该角色经两级解析（指派槽 → default 槽 →
     内置档案）得到的档案展示信息，不含 api_key / base_url 等敏感字段；
     每次请求实时解析，不缓存（热重载语义）。
 
-    权限（multi-model-plan §7.2 裁决）：模型为服务端全局配置、对用户只读，
+    权限（multi-model §7.2 裁决）：模型为服务端全局配置、对用户只读，
     功能页模型徽标在多用户模式下对所有登录用户展示，故本端点为"多用户
     模式已登录即可读"（require_login_if_multiuser），宽于 /api/config 的
     管理员门禁（响应无脱敏密钥，泄露面仅模型名）；单用户模式放行，仍受
@@ -395,7 +395,7 @@ async def get_llm_routes(_: None = Depends(require_login_if_multiuser)):
     return {"routes": resolve_role_routes()}
 
 
-# ── 模型连通性测试（deploy-followups-plan §4.4，阶段四）──────────────────
+# ── 模型连通性测试（deploy-followups §4.4，阶段四）──────────────────
 
 # 诊断补全的超时上限（秒）：一次最小补全（max_tokens=1）的往返硬上限
 _LLM_TEST_TIMEOUT_SECONDS = 15.0
@@ -474,7 +474,7 @@ async def test_llm_connectivity(
     掩码协议边界（Q9）：后端直接读服务端配置真实值，前端只传
     profile_id；本端点只读配置，绝不落盘 / 变更任何配置项。
 
-    多用户 LLM 治理豁免（有意偏离，deploy-followups-plan §4.4）：触发
+    多用户 LLM 治理豁免（有意偏离，deploy-followups §4.4）：触发
     真实计费的诊断操作属管理面（require_admin_if_multiuser），不应
     消耗管理员的个人速率窗口 / 并发租约，故 chat 调用包裹在
     admission_exempt_scope() 内——详见 llm_governance 模块注释。

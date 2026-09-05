@@ -1,4 +1,4 @@
-"""GET /api/llm/routes 端点与 /api/config 保存校验生效路径（multi-model-plan P4）。
+"""GET /api/llm/routes 端点与 /api/config 保存校验生效路径（multi-model P4）。
 
 覆盖：
     - 9 个角色槽位齐全，两级解析正确（指派槽 → default 槽回退 → 内置档案）
@@ -247,7 +247,7 @@ class TestLlmRoutesAuthMultiUser:
 
     跟随 tests/test_multiuser 的既有测试形态：临时多用户环境 + 真实端点
     函数挂载 + 认证路由，验证匿名 401 / 普通用户 200 / 管理员 200
-    （multi-model-plan §7.2：模型徽标对多用户模式所有登录用户展示，
+    （multi-model §7.2：模型徽标对多用户模式所有登录用户展示，
     端点不要求管理员；严于中间件会话门禁由依赖显式声明兜底）。
     """
 

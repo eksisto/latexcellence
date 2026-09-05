@@ -1,6 +1,6 @@
 """convert 镜像 rar 解压沙箱真容器冒烟（marker: docker，三重 skip 门）。
 
-验收口径对应 deploy-followups-plan.md §4.1 阶段一：
+验收口径对应 deploy-followups.md §4.1 阶段一：
 - 有 Docker 且 convert 镜像存在：store 模式 RAR4 样本经 extract_archive
   全链路（预扫 → 沙箱解压 → 归一化/复核）在真容器内解压成功；
 - 加密 / 分卷包走既有确定性拒绝路径（错误码不变）；

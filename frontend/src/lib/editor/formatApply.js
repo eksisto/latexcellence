@@ -1,5 +1,5 @@
 /**
- * 一键格式化（editor-productivity-plan §5.3 阶段五 / 决策 Q8）。
+ * 一键格式化（editor-productivity-design §5.3 阶段五 / 决策 Q8）。
  *
  * 交互语义（Q8）：点击格式化 → 调后端 POST /api/project/format-latex
  * 纯转换端点 → 成功后**直接全文替换发起时的 tab 缓冲区**并置脏（落盘

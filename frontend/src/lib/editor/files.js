@@ -1,5 +1,5 @@
 /**
- * 编辑器文件边界纯模块（editor-plan §2 / 决策 Q3、§4 文件上限）。
+ * 编辑器文件边界纯模块（editor-design §2 / 决策 Q3、§4 文件上限）。
  *
  * 职责：
  *   1. 可编辑扩展名白名单（与后端 backend/modules/editor/service.py 的

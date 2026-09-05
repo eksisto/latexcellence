@@ -1,6 +1,6 @@
 # 编辑器写作体验收口设计方案（editor v3）
 
-> **状态：未实施。** 本文是编辑器生产力改造（[editor-productivity-plan.md](editor-productivity-plan.md)，
+> **状态：未实施。** 本文是编辑器生产力改造（[editor-productivity-design.md](editor-productivity-design.md)，
 > 八阶段已全部实施）完成后，对其"非目标（记入 roadmap）"清单的收口方案，作为分阶段实施的
 > 依据与变更对照基线。唯一保留的动工前门槛：阶段五（助手联网）需就确认流时序单独过一轮
 > 设计评审（见 Q12）。已实施形态见 [modules/editor.md](modules/editor.md)。
@@ -223,8 +223,8 @@ Overleaf 级体验相比仍有明确落差，全部对应 v2 计划记入 roadma
   `THIRD_PARTY_NOTICES.md`；不新增 `config.json` 配置项（行为开关全部走
   编辑器偏好通道）。
 - 每阶段同步更新 `docs/modules/editor.md` 与 `PROJECT_SUMMARY.md`；全部
-  完成后将本文状态改为"已实施"，并勾销 [editor-productivity-plan.md](editor-productivity-plan.md)
-  §2 非目标清单对应条目与 [editor-plan.md](editor-plan.md) 非目标中"助手接入
+  完成后将本文状态改为"已实施"，并勾销 [editor-productivity-design.md](editor-productivity-design.md)
+  §2 非目标清单对应条目与 [editor-design.md](editor-design.md) 非目标中"助手接入
   联网搜索/学术检索"项；README 编辑器条目增量。
 
 ## 附录：Lezer 语法升级选型记录（自研 MIT 子集）

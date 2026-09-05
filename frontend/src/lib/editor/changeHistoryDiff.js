@@ -1,5 +1,5 @@
 /**
- * 行级 diff 纯模块（editor-productivity-plan 阶段八：修改行色条，
+ * 行级 diff 纯模块（editor-productivity-design 阶段八：修改行色条，
  * 借鉴 Notepad++ 8.4.6 Change History margin）。
  *
  * computeChangedLines(before, after) 返回 after 中「与 before 存在差异」的

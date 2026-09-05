@@ -88,7 +88,7 @@ Word 则相反。对它“简单”的印象来自把结构藏进 GUI：样式�
 
 ### 更多能力
 
-- **多模型支持**：设置页可配置多个模型档案（各自 API 地址 / Key / 模型与视觉、推理能力），并按任务槽位自动路由——识别类功能用视觉模型、逐段检查用快速模型、Agent 与写作助手用推理模型，各功能入口显示当前使用的模型；旧单模型配置自动兼容（设计详见 [docs/multi-model-plan.md](docs/multi-model-plan.md)）
+- **多模型支持**：设置页可配置多个模型档案（各自 API 地址 / Key / 模型与视觉、推理能力），并按任务槽位自动路由——识别类功能用视觉模型、逐段检查用快速模型、Agent 与写作助手用推理模型，各功能入口显示当前使用的模型；旧单模型配置自动兼容（设计详见 [docs/multi-model.md](docs/multi-model.md)）
 - **多文件 \input 展开**：文本校对、表达优化、源码格式化、术语一致性检查均支持递归解析 `\input`/`\include` 引用，一键处理整个项目的多个 `.tex` 文件
 - **逐段翻译**：按段落将内容翻译为目标语言，保留 LaTeX 结构不变
 - **Git 差异高亮**：选择主文件和两个 Git 状态，将文档差异编译为红删绿增底纹的 PDF（不影响项目源码）
@@ -97,7 +97,7 @@ Word 则相反。对它“简单”的印象来自把结构藏进 GUI：样式�
 
 ### 多用户模式
 
-- **团队协作（多用户模式）**：`multi_user.enabled` 一键开启后，支持注册/审批、用户名+密码会话登录、独立项目空间与配额、zip/7z/rar/目录上传（rar 经 unar 或 bsdtar 解压）、owner/editor/viewer 权限协作与回收站；写作会话/样式会话/模板/绘图等衍生数据按用户隔离，并提供存量数据迁移工具（`python -m backend.manage migrate-legacy`）；前端提供登录/注册、项目工作台与管理后台页面。适配可信团队内部部署（详见 [docs/multi-user-plan.md](docs/multi-user-plan.md)）。
+- **团队协作（多用户模式）**：`multi_user.enabled` 一键开启后，支持注册/审批、用户名+密码会话登录、独立项目空间与配额、zip/7z/rar/目录上传（rar 经 unar 或 bsdtar 解压）、owner/editor/viewer 权限协作与回收站；写作会话/样式会话/模板/绘图等衍生数据按用户隔离，并提供存量数据迁移工具（`python -m backend.manage migrate-legacy`）；前端提供登录/注册、项目工作台与管理后台页面。适配可信团队内部部署（详见 [docs/multi-user.md](docs/multi-user.md)）。
 - **注册自动审批（IP 策略）**：注册时记录真实客户端 IP（支持反向代理 X-Forwarded-For 可信解析），可按「同 IP 账号数上限 + IP/CIDR 网段白名单 + 离线地理白名单（国家/城市，如仅允许本市 IP 注册；ip2region 中国命中优先采用、国内精度更高，非/未知中国回落 GeoLite2）」叠加判定——无恶意即自动通过审批直接登录，否则转人工待审批；管理员面板可见每位用户的注册 IP 与自动通过标记。配置与部署见 [docs/deployment.md](docs/deployment.md)「注册自动审批」。
 - **服务器部署指南**：多用户模式的完整部署流程（构建启动、管理员引导、HTTPS 反向代理配置、安全风险声明、数据备份与日常运维）见 [docs/deployment.md](docs/deployment.md)。
 - **Docker 沙箱执行**：全部外部命令（LaTeX 编译、git/latexdiff、pandoc、Python 绘图、格式化）统一经 SandboxRunner，可进一次性容器隔离执行——无网络、只读根文件系统 + tmpfs、CPU/内存/进程数限额、按用户并发租约。`sandbox.mode=auto` 探测到 Docker 即自动启用（单用户模式同样受益），不可达时回落本地进程且行为不变；镜像体系（tex/convert/plot/backend 四镜像，amd64/arm64 双架构）见 [docker/README.md](docker/README.md)。

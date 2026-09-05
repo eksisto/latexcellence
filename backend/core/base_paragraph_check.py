@@ -10,7 +10,7 @@ terminology_check）的共享逻辑：
     4. 结果写回源文件
 
 子类只需实现以下 hooks：
-    llm_role                     → LLM 槽位（multi-model-plan §6，类属性）
+    llm_role                     → LLM 槽位（multi-model §6，类属性）
     _get_system_prompt()          → LLM system prompt
     _build_user_content(text)     → LLM user message
     _get_model_cls()              → Pydantic 响应模型
@@ -241,7 +241,7 @@ class BaseParagraphCheckService:
     逐段检查服务基类。
 
     子类通过类变量控制行为差异：
-        - llm_role: LLM 槽位（multi-model-plan §6），客户端按槽位实时路由
+        - llm_role: LLM 槽位（multi-model §6），客户端按槽位实时路由
         - _output_field: 结果字段名（"corrected" 或 "optimized"）
         - use_marker_protection: 是否启用 marker 保护策略
     """

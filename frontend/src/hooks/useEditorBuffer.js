@@ -34,13 +34,13 @@ import {
 } from "@/lib/editor/sessionPersistence";
 import { projectSymbolCache } from "@/lib/editor/latexSymbols";
 
-/** 自动保存停改阈值：停止编辑该时长后落盘（editor-productivity-plan Q15） */
+/** 自动保存停改阈值：停止编辑该时长后落盘（editor-productivity-design Q15） */
 const AUTO_SAVE_DELAY_MS = 2500;
 /** 会话持久化防抖：键入高频变更合并写入 localStorage（pagehide 兜底 flush） */
 const SESSION_PERSIST_DEBOUNCE_MS = 1000;
 
 /**
- * 编辑器多缓冲区管理（editor-productivity-plan §5.1，阶段一）：
+ * 编辑器多缓冲区管理（editor-productivity-design §5.1，阶段一）：
  * 打开 / 激活 / 关闭（脏三选）/ 保存（MD5 乐观锁，per-tab）/ 冲突快照门闩 /
  * Ctrl+S / beforeunload / per-tab 自动保存 / 陈旧检测 / 全部保存 /
  * URL ?file= 驱动 / localStorage 刷新恢复（阶段八升级，含 sessionStorage

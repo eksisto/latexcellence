@@ -1,5 +1,5 @@
 /**
- * 编辑器状态（editor-plan §9 + editor-productivity-plan §5.1）：
+ * 编辑器状态（editor-design §9 + editor-productivity-design §5.1）：
  * editorPreferences + editorSession 两个切片组合为一个独立 store，不进入
  * 全局 useStore——编辑器缓冲区是页面级临时态，与项目级持久化状态
  * （latexcellence-project）生命周期不同。
@@ -116,7 +116,7 @@ function normalizeAssistantMessage(message) {
 }
 
 /**
- * 编辑器 AI 助手会话状态（editor-plan §7）：按项目 scope 隔离由后端保证，
+ * 编辑器 AI 助手会话状态（editor-design §7）：按项目 scope 隔离由后端保证，
  * 前端只保存当前项目的活跃会话 id 与消息列表。切换文件时会话延续（§7.4）；
  * 切换项目时经 setAssistantProjectKey 检测清空。刷新即丢弃（不持久化），
  * 会话历史仍可通过后端 session id 找回。
@@ -246,7 +246,7 @@ function createEditorAssistantSlice(set, get) {
 /* ── editorSession 切片（不持久化；刷新/重启恢复走 sessionPersistence） ── */
 
 /**
- * 多缓冲区会话（editor-productivity-plan §5.1，阶段一）：
+ * 多缓冲区会话（editor-productivity-design §5.1，阶段一）：
  *   tabs: [{ filePath, buffer, savedBuffer, openedBuffer, baseMd5,
  *            dirty, stale, lastActive }]
  *   activeTabPath: 激活 tab（键 = 项目相对路径）

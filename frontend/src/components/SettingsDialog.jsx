@@ -95,7 +95,7 @@ export default function SettingsDialog() {
     }
   }, [open]);
 
-  // 程序化打开时定位到指定分区（multi-model-plan §7.2）：等配置与分区
+  // 程序化打开时定位到指定分区（multi-model §7.2）：等配置与分区
   // 渲染完成后再滚动，随后清除标记，避免之后常规打开重复定位
   useEffect(() => {
     if (!open || pendingSection !== SETTINGS_SECTION_MODELS || !config) {

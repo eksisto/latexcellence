@@ -1,5 +1,5 @@
 /**
- * logFileStack —— 编译日志文件栈解析纯模块（editor-productivity-plan
+ * logFileStack —— 编译日志文件栈解析纯模块（editor-productivity-design
  * 阶段七 / 决策 Q19）。
  *
  * 解析 TeX 编译日志（compile API 失败响应携带的 stdout 原始日志，

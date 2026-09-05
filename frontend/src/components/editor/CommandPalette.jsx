@@ -1,5 +1,5 @@
 /**
- * CommandPalette —— 命令面板（editor-plan §6.3 入口二 / 决策 Q8、Q12）。
+ * CommandPalette —— 命令面板（editor-design §6.3 入口二 / 决策 Q8、Q12）。
  *
  * `Ctrl/Cmd+/` 或工具栏按钮唤起的居中面板：搜索框 + 分类列表。
  *   - 搜索与行内补全共用 lib/editor/matcher.js 同一索引与打分（§6.2 一致性）；

@@ -1,5 +1,5 @@
 /**
- * Unified diff 应用纯模块（editor-plan §7.2 建议形态三，阶段四）。
+ * Unified diff 应用纯模块（editor-design §7.2 建议形态三，阶段四）。
  *
  * 职责：解析助手输出的 ```diff 围栏内容（unified diff），逐 hunk 以
  * 上下文行锚定到当前 CM6 缓冲区文本并应用，返回新缓冲区全文。

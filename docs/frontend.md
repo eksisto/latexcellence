@@ -158,7 +158,7 @@ highlight.js 的按需注册与统一入口：
 
 ### 设置分区：模型管理（`settings/ModelManagementSection.jsx`）
 
-多模型支持的设置分区（由 `SettingsDialog` 组装，随 `/api/config` 整体保存；设计见 [multi-model-plan.md](multi-model-plan.md)）：
+多模型支持的设置分区（由 `SettingsDialog` 组装，随 `/api/config` 整体保存；设计见 [multi-model.md](multi-model.md)）：
 
 - **档案卡片**：名称 / base_url / api_key / model / 能力勾选（vision、reasoning），可选覆盖项（temperature、max_tokens、请求间隔、并发、上下文窗口、探测地址、extra_body）放折叠区，空值 = 继承全局；已保存档案 id 只读，被任一槽位引用的档案禁用删除（后端保存校验兜底拒绝）；
 - **槽位指派**：每个角色槽位一个下拉框，选项经 `utils/modelProfiles.js` 按能力过滤（如 OCR 槽只列出含 vision 的档案）；非 default 槽首位为「跟随 default」，default 槽首位为「使用全局默认配置」（内置档案）。
@@ -266,7 +266,7 @@ highlight.js 的按需注册与统一入口：
 
 ## 多用户模式前端（P5）
 
-> 详细设计见 [multi-user-plan.md](multi-user-plan.md)。
+> 详细设计见 [multi-user.md](multi-user.md)。
 
 多用户模式（`/api/config/status` 返回 `multi_user: true` 时）下，前端切换为"登录 + 项目工作台"形态；单用户模式保持原有行为（本地目录 + 共享令牌 + 可配置 API 基地址）。
 

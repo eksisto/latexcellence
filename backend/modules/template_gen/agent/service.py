@@ -76,7 +76,7 @@ class TemplateAgentService:
             return
 
         if llm is None:
-            # agent 槽位：单次高价值生成任务（multi-model-plan §6）
+            # agent 槽位：单次高价值生成任务（multi-model §6）
             llm = get_client_for("agent")
 
         session_id = sandbox.name

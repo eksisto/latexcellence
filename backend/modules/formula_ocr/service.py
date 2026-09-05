@@ -168,7 +168,7 @@ class FormulaOCRService:
                 "low_confidence": True,
             }
 
-        # ocr 槽位：硬性依赖视觉模型（multi-model-plan §6，保存期硬校验 vision）
+        # ocr 槽位：硬性依赖视觉模型（multi-model §6，保存期硬校验 vision）
         llm = get_client_for("ocr")
         result = await self._recognize_with_llm(
             llm, base64_image, content_type, visual_hint

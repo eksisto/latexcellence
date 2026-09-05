@@ -1,5 +1,5 @@
 /**
- * 大纲扫描纯模块（editor-productivity-plan §5.3 阶段三 / 决策 Q6 / §4）。
+ * 大纲扫描纯模块（editor-productivity-design §5.3 阶段三 / 决策 Q6 / §4）。
  *
  * 输入缓冲区全文，解析 `\section` / `\subsection` / `\subsubsection` /
  * `\paragraph`（含星号变体），输出条目数组

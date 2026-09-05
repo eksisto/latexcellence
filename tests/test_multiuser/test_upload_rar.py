@@ -1,7 +1,7 @@
 """多用户模式 v2 P2 + 回退层 + 部署收口阶段一/二：rar 上传解压管线测试。
 
-覆盖（方案 §7 / §14 完成标准 + docs/rar-extractor-fallback.md §六 +
-deploy-followups-plan.md §4.1/§4.2 阶段一/二）：
+覆盖（docs/rar-extractor-fallback.md §六 +
+deploy-followups.md §4.1/§4.2 阶段一/二）：
     - 正常解压：顶层单目录布局 / 直接内容布局 / 内容与计数（unar 与
       bsdtar 双工具参数化）
     - 真实压缩样本（rar CLI 生成，压缩流无法伪造）：RAR4 / RAR5 在双
@@ -1009,7 +1009,7 @@ class TestRealProtectedReject:
       第一卷 / 后续卷单独上传均拒绝。分卷样本选用 RAR4 而非 RAR5：
       RAR5 分卷第一卷单独上传时 unar 仅零产物退出（拒绝依赖零产物兜底
       的弱信号），RAR4 预扫在解压发起前拦截、不依赖解压器行为——
-      见 make_fixtures.py docstring 与 rar-extractor-fallback.md §十。"""
+      见 make_fixtures.py docstring 与 rar-extractor-fallback.md §八。"""
 
     def test_real_encrypted_rar5_rejected(self, extract_dir, force_rar_tool):
         with pytest.raises(upload.ArchiveError) as ei:

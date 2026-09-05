@@ -91,7 +91,7 @@ async def require_login_if_multiuser(
     与 require_admin_if_multiuser 同构但不限角色：供"响应无敏感字段、
     多用户模式下所有登录用户可读"的只读端点使用（如 /api/llm/routes——
     模型为服务端全局配置、对用户只读，功能页模型徽标对所有登录用户展示，
-    multi-model-plan §7.2；中间件已强制会话，本依赖为端点级显式声明）。
+    multi-model §7.2；中间件已强制会话，本依赖为端点级显式声明）。
     """
     if not get_config().multi_user.enabled:
         return None
