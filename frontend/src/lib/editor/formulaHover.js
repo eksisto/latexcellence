@@ -35,8 +35,8 @@ import { findFormulaAt } from "./formulaHoverScan";
 /** 悬停触发延迟（Q9：约 500ms） */
 const HOVER_TIME_MS = 500;
 
-/** katex 渲染参数（trust:false 为 XSS 约束，禁止覆盖） */
-const KATEX_RENDER_OPTIONS = Object.freeze({
+/** katex 渲染参数（trust:false 为 XSS 约束，禁止覆盖；固定预览卡共享） */
+export const KATEX_RENDER_OPTIONS = Object.freeze({
   displayMode: false, // 由每个公式的 region.display 覆盖
   throwOnError: true, // parseError 抛出 → 统一落错误提示，不出 KaTeX 红字
   strict: "ignore",
@@ -44,9 +44,10 @@ const KATEX_RENDER_OPTIONS = Object.freeze({
   output: "html",
 });
 
-/** katex 模块 + CSS 的按需单例加载（失败不缓存，下次悬停可重试） */
+/** katex 模块 + CSS 的按需单例加载（失败不缓存，下次悬停可重试；
+ * 固定预览卡（editor v3 §4.4 / 决策 Q11）共享同一单例） */
 let katexPromise = null;
-function loadKatex() {
+export function loadKatex() {
   if (!katexPromise) {
     katexPromise = Promise.all([
       import("katex"),

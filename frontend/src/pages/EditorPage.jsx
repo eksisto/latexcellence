@@ -16,8 +16,12 @@
  *   - 冲突：409 → 归属 tab 置前 + ConflictDialog（放弃重载 / 剪贴板
  *     逃生 / 覆盖保存三出路）；
  *   - 关闭：脏 tab 三选弹窗（保存并关闭 / 放弃改动 / 取消）；
- *   - 大纲（阶段三 / Q6）：左栏「大纲」tab 仅解析激活缓冲区，编辑防抖
+ *   - 大纲（阶段三 / Q6）：左栏「大纲」tab 解析激活缓冲区，编辑防抖
  *     300ms 重扫、切换 tab 立即重扫，点击条目滚动到行首并高亮；
+ *   - 跨文件大纲（editor v3 阶段四 / Q10）：大纲面板增加当前文件 /
+ *     本项目双视图，本项目视图按文件分组、激活文件置顶展开，点击条目
+ *     复用错误跳转的开 tab + 行定位通路；公式固定预览卡（Q11）在编辑区
+ *     底部、状态栏上方跟随光标渲染所在公式，无公式 / 渲染失败静默隐藏；
  *   - 刷新/重启恢复：localStorage 恢复全部 tab（含脏缓冲区，阶段八升级）+ toast；
  *     URL ?file= 指定者激活（恢复集合与 URL 参数合并）；
  *   - 编译联动（Q16）：编译前依次保存所有脏 tab，任一失败中断并切换
@@ -68,6 +72,7 @@ import FilePreviewOverlay from "@/components/editor/FilePreviewOverlay";
 import EditorRightPanel from "@/components/editor/EditorRightPanel";
 import FullscreenPDFPreview from "@/components/editor/FullscreenPDFPreview";
 import OutlinePanel from "@/components/editor/OutlinePanel";
+import FormulaPreviewCard from "@/components/editor/FormulaPreviewCard";
 import EditorStatusBar from "@/components/editor/EditorStatusBar";
 
 import { EditorView } from "@codemirror/view";
@@ -220,8 +225,11 @@ export default function EditorPage() {
   // 命令面板类目过滤（Ctrl+L 打开 wrap 专项浮层，Ctrl/Cmd+/ 打开全量面板）
   const [paletteFilter, setPaletteFilter] = useState(null);
 
-  // ── 左栏双 tab（决策 Q6）：文件树 ↔ 当前激活缓冲区大纲 ────────────
+  // ── 左栏双 tab（决策 Q6）：文件树 ↔ 大纲 ─────────────────────────
   const [leftTab, setLeftTab] = useState("files");
+  // 大纲面板视图（editor v3 阶段四 / Q10）：当前文件 ↔ 本项目；
+  // 状态提升到页面，左栏 tab 切换卸载面板时视图选择不丢失
+  const [outlineView, setOutlineView] = useState("file");
 
   // ── CM6 视图实例 ────────────────────────────────────────────────
   const editorViewRef = useRef(null);
@@ -519,8 +527,9 @@ export default function EditorPage() {
     view.focus();
   }, []);
 
-  /* ── 编译错误跳转（阶段七 / Q10+Q19）：点击右栏错误条目 → 目标文件
-     tab 已存在则激活、未打开则打开 → 滚动定位到该行行首并高亮。
+  /* ── 跨文件「开 tab + 行定位」跳转通路（阶段七 Q10+Q19 编译错误 /
+     editor v3 阶段四 Q10 本项目大纲共用）：点击目标 → 目标文件 tab 已
+     存在则激活、未打开则打开 → 滚动定位到该行行首并高亮。
      跨 tab 跳转经 pendingErrorJumpRef 延迟到 activeTabPath 换档 effect
      之后（LaTeXEditor 已完成 EditorState 交换）再执行定位；
      低置信条目同样可点（回落 compileTarget 定位），UI 已标低置信角标 */
@@ -856,7 +865,12 @@ export default function EditorPage() {
             </CardHeader>
             <CardContent className="min-h-0 flex-1 overflow-auto px-2 pb-3 pt-0">
               {leftTab === "outline" ? (
-                <OutlinePanel onJumpToLine={handleJumpToLine} />
+                <OutlinePanel
+                  view={outlineView}
+                  onViewChange={setOutlineView}
+                  onJumpToLine={handleJumpToLine}
+                  onJumpToFileLine={handleJumpToError}
+                />
               ) : (
                 <ProjectExplorer
                   tree={fileTree}
@@ -889,13 +903,16 @@ export default function EditorPage() {
                 onSaveAll={() => doSaveAllDirty()}
               />
               <div className="flex min-h-0 flex-1 flex-col">
-                <div className="min-h-0 flex-1">
+                {/* relative 供公式固定预览卡（editor v3 阶段四 / Q11）在
+                    编辑区底部、状态栏上方悬浮 */}
+                <div className="relative min-h-0 flex-1">
                   <SessionEditor
                     readOnly={readOnly}
                     statsHub={statsHub}
                     onCreateEditor={handleCreateEditor}
                     onCompletionApply={handleCompletionApplyEntry}
                   />
+                  <FormulaPreviewCard hub={statsHub} />
                 </div>
                 <EditorStatusBar hub={statsHub} />
               </div>

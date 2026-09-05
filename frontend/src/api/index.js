@@ -336,6 +336,13 @@ export const api = {
     latexSymbols: (workspaceId) =>
       request(appendWs("/project/latex-symbols", workspaceId)),
     /**
+     * 全项目 .tex 跨文件大纲（editor v3 阶段四 / 决策 Q10）：
+     * 返回 { files: [{file_path, entries: [{level, title, line}]}] }，
+     * 零 LLM、零写盘、项目级缓存 + 保存失效，file_path 一律为相对路径
+     */
+    projectOutline: (workspaceId) =>
+      request(appendWs("/project/outline", workspaceId)),
+    /**
      * 编辑器一键格式化（纯转换，阶段五 / 决策 Q8）：接收缓冲区全文，
      * 返回 { content, changed }；不落盘、不涉路径，落盘仍走 save-file
      */

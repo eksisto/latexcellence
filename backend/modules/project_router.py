@@ -313,6 +313,21 @@ async def get_latex_symbols(
     return await editor_service.scan_project_symbols(project)
 
 
+@router.get("/outline")
+async def get_project_outline(
+    workspace_id: str = Query(..., description="工作区唯一标识符"),
+    _: dict = Depends(access_control.require_workspace_read),
+):
+    """全项目 .tex 跨文件大纲（editor-experience-design §4.4 / 决策 Q10）。
+
+    零 LLM、零写盘：返回 {files: [{file_path, entries: [{level, title,
+    line}]}]}，分节命令正则口径与前端 outlineScan 一致；项目级缓存 +
+    保存失效（save-file 成功后重扫）；响应只含相对路径（多用户脱敏）。
+    """
+    project = get_project_manager_for_workspace(workspace_id)
+    return await editor_service.scan_project_outline(project)
+
+
 @router.post("/format-latex")
 async def format_latex(
     request: FormatLatexRequest,

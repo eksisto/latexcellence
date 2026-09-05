@@ -8,7 +8,7 @@
 > 状态栏 / 选中高亮匹配 / 会话持久化升级 localStorage，借鉴 Notepad++）
 > 与 [docs/editor-experience-design.md](../editor-experience-design.md)
 > （editor v3 写作体验收口；阶段一 SyncTeX 正反向同步、阶段二用户自定义
-> 片段库已实施）。
+> 片段库、阶段三实时语法诊断、阶段四跨文件大纲与公式固定预览卡已实施）。
 
 ## 设计概述
 
@@ -44,6 +44,7 @@ AI 建议**不经后端落盘**：建议以结构化形式随 SSE 返回并随�
 | `GET /api/project/raw-file` | 二进制只读预览（白名单：`.pdf` 与常见位图 `.png/.jpg/.jpeg/.gif/.webp/.bmp`）：`Content-Disposition: inline` 返回原始字节，供编辑器页与工作台页（WorkspacePage 文件树点击）内嵌预览；不进入缓冲区与撤销历史 |
 | `GET /api/project/file-md5` | 当前 MD5（乐观锁基线；检查结果保鲜横幅也复用） |
 | `GET /api/project/latex-symbols` | 引用符号扫描（阶段四 / 决策 Q7）：全项目只读遍历 `.tex` / `.bib`（隐藏目录跳过、单文件 2MB 上限），`.tex` 逐行提取 `\label{...}`（1 基行号）与 `\cite` 家族 key（可选参数 `[p.~5]` 跳过、`\cite{a,b,c}` 拆分、注释行剔除），`.bib` 经 `bib_parser.py` 提取条目 key 与标题；每个文件经 `resolve_project_path()` 白名单 + 符号链接校验（逃逸文件静默跳过）；响应 `{labels, cites}` 只含相对路径（多用户脱敏），cites 中 bib 条目（kind="bib"，带净化标题）优先、`.tex` 已引用 key（kind="tex"）去重补尾；零 LLM、零写盘，扫描经 `asyncio.to_thread()` 调度 |
+| `GET /api/project/outline` | 跨文件大纲（editor v3 阶段四 / 决策 Q10）：全项目只读遍历 `.tex`（隐藏目录跳过、单文件 2MB 上限、`resolve_project_path()` 校验与逃逸文件静默跳过，同 latex-symbols 安全口径），逐行提取分节命令 `\section` / `\subsection` / `\subsubsection` / `\paragraph`（含星号变体、可选参数跳过、注释与 `\verb` 剔除、verbatim 类环境豁免、标题净化与前端 `outlineScan.js` 同正则口径）；响应 `{files: [{file_path, entries: [{level, title, line}]}]}` 只含相对路径，无条目文件不进响应；项目级缓存（封顶逐出）+ 保存失效（save-file 落盘成功后重扫）；零 LLM、零写盘，扫描经 `asyncio.to_thread()` 调度 |
 | `POST /api/project/format-latex` | 一键格式化（阶段五 / 决策 Q8）：**纯转换端点**——接收缓冲区全文 `{content}`，复用 `latex_formatter.format_latex_source()`（latexindent 优先、内置轻量格式化器兜底，外部命令执行沿既有 SandboxRunner 规则与超时语义）返回 `{content, changed}`；不接收路径参数、不落盘、不进入配额记账、零 LLM；内容上限与 save-file 同量级（超限 413 `content_too_long`）；写权限依赖使 viewer 服务端拒绝；两层格式化器按契约"失败返回原样"（`changed=false`），意外异常收敛为 500 `format_failed` |
 | `POST /api/project/save-file` | 统一保存：`latex_json_guard` 宽松损坏特征校验（不做括号/$ 配平检查）→ MD5 乐观锁（不符返回 **409** 结构化错误 `file_conflict`）→ 单用户推入 BackupManager 撤销栈 / 多用户记入 workspace_edit_ops 反向补丁快照 → 刷新项目用量记账，超限回滚 |
 
@@ -94,7 +95,8 @@ frontend/src/
 ├── components/editor/
 │   ├── LaTeXEditor.jsx               # CM6 受控封装（value/onChange）+ 多缓冲区 per-file EditorState 换档
 │   ├── EditorTabBar.jsx              # 标签条（脏标记圆点 + 磁盘已变更标记 + 关闭按钮 + 全部保存）
-│   ├── OutlinePanel.jsx              # 左栏「大纲」tab 内容（四级缩进条目 + 空态，点击经回调定位）
+│   ├── OutlinePanel.jsx              # 左栏「大纲」tab 内容（当前文件 / 本项目双视图；四级缩进条目 + 空态，点击经回调定位）
+│   ├── FormulaPreviewCard.jsx        # 当前公式固定预览卡（编辑区底部悬浮，光标跟随防抖渲染，空态/失败静默隐藏）
 │   ├── EditorToolbar.jsx             # 后端撤销重做 · 面板 · 格式化 · 编译 · 保存 · 设置
 │   ├── EditorCloseTabDialog.jsx      # 关闭脏 tab 三选弹窗（保存并关闭 / 放弃改动 / 取消）
 │   ├── EditorSettingsDialog.jsx      # 偏好开关 + 自定义片段管理（增删改 + 实时预览）+ 偏好导入/导出双通道入口
@@ -122,6 +124,7 @@ frontend/src/
 │   ├── beginClose.js                 # \begin{env} 打字机自动补 \end（transactionFilter 纯决策分层）
 │   ├── searchPanel.js                # CM6 查找替换面板主题化 + 三语短语（EditorState.phrases）
 │   ├── outlineScan.js                # 大纲扫描纯模块（分节命令解析 / 注释与 verbatim 排除 / 标题净化）
+│   ├── outlineProject.js             # 跨文件大纲分组纯模块（按文件分组 / 激活文件置顶排序，后端 outline 响应 → 展示结构）
 │   ├── formulaHoverScan.js           # KaTeX 悬停公式区域识别纯模块（行内/显示定界符 + equation/align 系环境，注释与转义边界）
 │   ├── formulaHover.js               # CM6 hoverTooltip 公式悬停预览（katex 动态分块 import / 错误提示 / 主题化）
 │   ├── formatApply.js                # 一键格式化纯模块（快捷键判定 / 应用决策 view·state·store / 单事务整文档替换）
@@ -131,7 +134,7 @@ frontend/src/
 │   └── （命令数据库 data/latexCommands/ 按类目拆分 JSON + index.js 统一加载器，含 wrap 包裹类目）
 └── hooks/useEditorBuffer.js          # 多缓冲区编排（打开/激活/保存/冲突/陈旧/自动保存/刷新恢复/项目切换守卫）
 └── hooks/useEditorAssistant.js       # 助手 SSE hook（归约委托 assistantStream 纯函数 + 项目切换守卫）
-└── hooks/useEditorOutline.js         # 大纲数据源（仅激活缓冲区，防抖重扫 + tab 切换立即重扫）
+└── hooks/useEditorOutline.js         # 大纲数据源（当前文件视图防抖重扫 + tab 切换立即重扫；本项目视图拉取后端 outline、保存后防抖重拉）
 └── hooks/useEditorFormat.js          # 一键格式化编排（在途守卫 / 发起 tab 定位 / 应用决策分派）
 ```
 
@@ -272,9 +275,10 @@ content/dirty——beforeunload、per-tab 自动保存防抖与冲突快照门�
 
 ### 大纲面板（editor-productivity-design §5.3，阶段三）
 
-左栏「文件 / 大纲」双 tab（决策 Q6）：大纲 tab **仅解析当前激活缓冲区**
-（跨文件大纲留二期），条目为 `\section` / `\subsection` /
-`\subsubsection` / `\paragraph` 四级缩进展示（含 `*` 星号变体）。
+左栏「文件 / 大纲」双 tab（决策 Q6）：大纲 tab 的「当前文件」视图**仅解析
+当前激活缓冲区**（跨文件大纲由 editor v3 阶段四「本项目」视图收口，见
+[跨文件大纲与公式固定预览卡](#跨文件大纲与公式固定预览卡editor-v3-阶段四--决策-q10--q11)），
+条目为 `\section` / `\subsection` / `\subsubsection` / `\paragraph` 四级缩进展示（含 `*` 星号变体）。
 
 - **扫描纯模块** `lib/editor/outlineScan.js`：`scanOutline(docText)` 单趟
   O(n) 逐行扫描（正则无嵌套量词），输出 `{ level, title, line }`
@@ -615,6 +619,44 @@ PDF 预览由 iframe 整体替换为 pdf.js 渲染（`PdfJsPreview`，
 - **设置入口**：`EditorSettingsDialog` 增「实时语法诊断」开关（三语
   i18n，含提示文案）。
 
+### 跨文件大纲与公式固定预览卡（editor v3 阶段四 / 决策 Q10 + Q11）
+
+**跨文件大纲**：大纲面板增加「当前文件 / 本项目」双视图切换（视图状态
+提升到 EditorPage，左栏 tab 切换卸载面板时不丢失选择）；当前文件视图
+行为完全不变。
+
+- **后端数据源**：`GET /api/project/outline` 全项目 `.tex` 分节扫描
+  （见后端接口表：正则口径与前端 `outlineScan.js` 同源、`asyncio.to_thread()`
+  调度、响应只含相对路径）。项目级缓存以项目根为键、封顶逐出，save-file
+  落盘成功后失效——沿袭 latex-symbols 引用补全「项目为键 + 保存失效」
+  的缓存模式；绕过 save-file 的磁盘直改在下次保存前不重扫（同一取舍）。
+- **前端数据层**：`useEditorOutline` 按 `view` 参数分流——当前文件视图
+  沿用本地缓冲区解析（防抖 300ms 重扫、换档立即重扫）；本项目视图切入
+  时拉取、任一 tab 保存基线（`savedBuffer`）变化后防抖 300ms 重拉
+  （订阅命令式、快照字符串比对，保存风暴合并为一次重拉），拉取失败
+  静默保持旧分组。分组展示结构由纯模块 `outlineProject.js` 的
+  `groupProjectOutline(files, activePath)` 计算：按文件平铺分组
+  （`\input`/`\include` 树状排序明确不做）、激活文件组置顶、其余组按
+  相对路径字典序、空条目组剔除。
+- **交互**：激活文件组默认展开，其余组折叠、点击文件头（basename +
+  条目数角标）切换展开，数据重拉后回落默认；点击条目复用编译错误跳转
+  的「开 tab + 行定位」通路（`pendingErrorJumpRef` 换档延迟机制），
+  未打开的文件经 `doOpenFile` 打开后定位到行首并高亮。
+- **验收对齐**：保存后大纲缓存失效重扫；当前文件视图行为不变；端点
+  响应无绝对路径（`tests/test_api/test_editor_outline.py` 覆盖）。
+
+**公式固定预览卡**（`FormulaPreviewCard`）：编辑区底部、状态栏上方悬浮
+卡片（不进右栏 tab——右栏已被编译/助手占用）。订阅 stats hub 光标通道
+（监听器无参调用、快照回调内 `getSnapshot()` 回读，快照只进 ref 不触发
+页面重渲染），尾随防抖约 400ms 后取激活缓冲区光标所在公式渲染：
+`lineColToOffset`（`formulaHoverScan.js` 纯函数）把 1 基行/列快照换算为
+文档偏移，`findFormulaAt` 识别公式区域（行内/行间/`\(\)`/`\[\]`/显示
+环境同一口径），KaTeX 经 `formulaHover.js` 导出的 `loadKatex` 单例与
+`KATEX_RENDER_OPTIONS`（`trust: false` XSS 约束单一来源）渲染，递增
+序号丢弃过期渲染。与悬停浮层的策略差异：固定卡常驻编辑区，无公式/
+KaTeX 渲染失败时**静默隐藏**（不显示错误文案——常驻场景下错误提示反而
+构成噪声）。
+
 ### 检查结果保鲜（§8 / 决策 Q13）
 
 `useParagraphCheck` 为每条检查结果打上检查时的文件 MD5 版本戳
@@ -651,6 +693,12 @@ AI 面板。四处配置同步规范照 AGENTS.md 执行；`/api/config/status` 
   `-synctex=1` 追加规则（synctex 默认 false 时编译命令零变化）/
   pdfa 组合忽略 / view·edit 输出解析 / file_path 越界拒绝 /
   多用户输出脱敏 / 响应无绝对路径
+- 后端 `tests/test_api/test_editor_outline.py`：跨文件大纲端点
+  （无 LLM 无沙箱纯文件操作）——多文件分组 / 相对路径与响应无绝对路径 /
+  分节口径（星号变体、可选参数、注释与 verbatim 剔除、标题净化）/
+  项目级缓存命中与 save-file 保存失效（绕过 save-file 的磁盘直改
+  保持旧扫描）/ 非 .tex 排除 / 隐藏目录跳过 / 符号链接逃逸拒绝 /
+  空项目 / invalid_workspace
 - 前端 node --test：editorPreferences（含导入导出校验与自定义片段条目级
   清洗 / v1·v2 载荷兼容）、customCommands（片段清洗 / 归一化 / 合并 /
   面板分组 / 网格标记端到端）、editorApplyDiff、
@@ -662,7 +710,8 @@ AI 面板。四处配置同步规范照 AGENTS.md 执行；`/api/config/status` 
   editorFiles / editorMatcher / editorSnippetInsert / editorPreambleScan /
   editorWrap（包裹纯逻辑与直包键位一致性）/ editorBeginClose（\begin
   配对纯决策与事务行为）/ editorSearchPanel（面板短语映射与语言热更新）/
-  editorOutlineScan（大纲扫描边界）/ editorFormulaHoverScan（公式识别边界）/
+  editorOutlineScan（大纲扫描边界）/ editorOutlineProject（本项目视图
+  分组置顶排序与光标快照 → 文档偏移换算）/ editorFormulaHoverScan（公式识别边界）/
   editorDiagnostics（实时诊断：环境栈匹配 / 花括号计数、注释·\verb·
   verbatim·转义·URL 字面量豁免、200 条截断标注、消息格式化注入）/
   editorFormatApply（格式化应用决策、

@@ -26,6 +26,10 @@ r"""
        接收缓冲区全文复用 latex_formatter（latexindent 优先、内置兜底，
        外部命令执行沿既有 SandboxRunner 规则）返回格式化结果；不落盘、
        不涉路径、零配额影响、零 LLM
+    6. 跨文件大纲：GET /api/project/outline 的业务实现
+       （editor-experience-design §4.4 / 决策 Q10，阶段四）——全项目 .tex
+       分节扫描（与前端 outlineScan.js 同正则口径），项目级缓存 + 保存
+       失效；零 LLM、零写盘、响应只含相对路径
 
 约束：
     - 面向用户的错误消息一律使用项目内相对路径（多用户路径脱敏规则），
@@ -250,6 +254,9 @@ async def save_file_content(
         len(content),
         bool(base_md5),
     )
+    # 跨文件大纲缓存保存失效（editor v3 §4.4 / 决策 Q10）：保存可能新增 /
+    # 删除分节命令，下次 outline 请求全量重扫
+    invalidate_project_outline_cache(project)
     return {"status": "ok", "file_path": file_path, "md5": result.md5s[file_path]}
 
 
@@ -482,3 +489,312 @@ async def format_latex_buffer(project, content: str) -> dict:
         changed,
     )
     return {"content": formatted, "changed": changed}
+
+
+# ── 跨文件大纲扫描（editor-experience-design §4.4 / 决策 Q10，阶段四） ────
+# 正则口径与前端 lib/editor/outlineScan.js 严格一致（命令集合与层级判定
+# 同源）：分节命令 section / subsection / subsubsection / paragraph（含
+# 星号变体与可选参数 [短标题]）、注释与 \verb 参数剔除、verbatim 类环境
+# 豁免、跨行标题保守跳过、标题净化规则逐条对齐。前端改动口径时两侧须
+# 同步修订。
+
+# 大纲扫描扩展名白名单：跨文件大纲只看 .tex 分节结构
+OUTLINE_SCAN_SUFFIXES: tuple[str, ...] = (".tex",)
+
+# 单文件扫描的内容上限（与 MAX_EDITABLE_CHARS 同量级）：异常超大文件跳过
+MAX_OUTLINE_SCAN_CHARS = 2_000_000
+
+# 分节命令 → 大纲层级（长名在前，防止 subsection 误吞 section 前缀；
+# (?![a-zA-Z]) 杜绝 \sectionfoo 误匹配）
+_SECTION_COMMAND_RE = re.compile(
+    r"\\(subsubsection|subsection|section|paragraph)(?![a-zA-Z])"
+)
+
+# 分节命令名 → 缩进层级（section 0 / subsection 1 / subsubsection 2 /
+# paragraph 3，与前端 LEVEL_BY_NAME 一致）
+_LEVEL_BY_NAME: dict[str, int] = {
+    "section": 0,
+    "subsection": 1,
+    "subsubsection": 2,
+    "paragraph": 3,
+}
+
+# verbatim 类环境起点（\begin{...}；环境名区分大小写，保守集合与前端一致）
+_BEGIN_VERBATIM_RE = re.compile(
+    r"\\begin\s*\{(verbatim\*?|Verbatim\*?|lstlisting|minted)\}"
+)
+
+# 连续空白折叠（标题净化收尾用）
+_TITLE_WHITESPACE_RE = re.compile(r"\s+")
+
+
+def _is_ascii_alpha(ch: str) -> bool:
+    """JS /[a-zA-Z]/ 同口径的 ASCII 字母判定（Python isalpha 含 Unicode，不通用）。"""
+    return ("a" <= ch <= "z") or ("A" <= ch <= "Z")
+
+
+def _strip_verb_spans(line: str) -> str:
+    r"""移除一行中所有 \verb（含 \verb*）行内参数，防止参数文本被误认成大纲条目。
+
+    与前端 outlineScan.stripVerbSpans 同语义：定界符为字母/空白（或缺失）
+    视为非法 verb 形态原样保留；未闭合时余下内容整体视为 verb 内部排除。
+    """
+    out: list[str] = []
+    i = 0
+    n = len(line)
+    while True:
+        idx = line.find("\\verb", i)
+        if idx == -1:
+            out.append(line[i:])
+            return "".join(out)
+        out.append(line[i:idx])
+        j = idx + 5
+        if j < n and line[j] == "*":
+            j += 1
+        delim = line[j] if j < n else None
+        if delim is None or delim.isspace() or _is_ascii_alpha(delim):
+            out.append(line[idx : j + 1])
+            i = j + 1
+            continue
+        end = line.find(delim, j + 1)
+        i = n if end == -1 else end + 1
+
+
+def _read_balanced_group(line: str, open_idx: int) -> str | None:
+    r"""读取 line 中自 open_idx（指向 `{`）起的配平花括号组，返回组内文本。
+
+    未配平（如跨行标题）返回 None；`\{` / `\}` 等转义字符不参与配平计数
+    （与前端 outlineScan.readBalancedGroup 同语义）。
+    """
+    depth = 0
+    i = open_idx
+    n = len(line)
+    while i < n:
+        ch = line[i]
+        if ch == "\\":
+            i += 2  # 跳过转义字符的下一个字符
+            continue
+        if ch == "{":
+            depth += 1
+        elif ch == "}":
+            depth -= 1
+            if depth == 0:
+                return line[open_idx + 1 : i]
+        i += 1
+    return None
+
+
+def _title_to_plain_text(raw: str) -> str:
+    r"""标题原文 → 展示用纯文本（与前端 outlineScan.titleToPlainText 逐条对齐）。
+
+    - 命令名后紧跟花括号参数：丢弃命令名，参数内容由外层继续处理
+      （`\textbf{粗}` → 粗）；
+    - 无参数命令：保留命令名去反斜杠（`\LaTeX` → LaTeX，含星号变体）；
+    - 转义符号（`\%` / `\_` / `\{` 等）：保留字面字符；
+    - `~`：空格；花括号定界符丢弃；连续空白折叠为单个空格。
+    """
+    if not isinstance(raw, str):
+        return ""
+    out: list[str] = []
+    i = 0
+    n = len(raw)
+    while i < n:
+        ch = raw[i]
+        if ch == "\\":
+            if i + 1 >= n:
+                break
+            nxt = raw[i + 1]
+            if _is_ascii_alpha(nxt):
+                j = i + 1
+                while j < n and _is_ascii_alpha(raw[j]):
+                    j += 1
+                if j < n and raw[j] == "*":
+                    j += 1
+                k = j
+                while k < n and raw[k] in (" ", "\t"):
+                    k += 1
+                if k < n and raw[k] == "{":
+                    # 带参数命令：丢弃命令名（参数内容与其后的 `}` 由主循环处理）
+                    i = j + 1
+                else:
+                    out.append(raw[i + 1 : j])
+                    i = j
+            else:
+                out.append(nxt)
+                i += 2
+            continue
+        if ch in ("{", "}"):
+            i += 1
+            continue
+        if ch == "~":
+            out.append(" ")
+            i += 1
+            continue
+        out.append(ch)
+        i += 1
+    return _TITLE_WHITESPACE_RE.sub(" ", "".join(out)).strip()
+
+
+def _collect_section_entries(line: str, line_no: int, entries: list[dict]) -> None:
+    r"""在已净化的单行文本中收集分节条目（与前端 collectSectionEntries 同语义）。
+
+    星号变体跳过、可选参数 [...] 跳过后取强制参数、跨行标题（花括号未在
+    同行配平）保守跳过；标题内部再出现分节命令字样时整段跳过不重复计入。
+    """
+    pos = 0
+    n = len(line)
+    while True:
+        m = _SECTION_COMMAND_RE.search(line, pos)
+        if m is None:
+            return
+        i = m.end()
+        if i < n and line[i] == "*":
+            i += 1  # 星号变体（\section*）
+        if i < n and line[i] == "[":
+            close = line.find("]", i + 1)
+            if close == -1:
+                pos = m.end()
+                continue
+            i = close + 1
+        while i < n and line[i] in (" ", "\t"):
+            i += 1
+        if i >= n or line[i] != "{":
+            pos = m.end()
+            continue
+        raw = _read_balanced_group(line, i)
+        if raw is None:
+            pos = m.end()
+            continue
+        title = _title_to_plain_text(raw)
+        if title:
+            entries.append(
+                {"level": _LEVEL_BY_NAME[m.group(1)], "title": title, "line": line_no}
+            )
+        # 跳过整个已消费的花括号组（组内分节命令字样不重复计入）
+        pos = i + len(raw) + 2
+
+
+def scan_tex_outline(content: str) -> list[dict]:
+    r"""扫描单个 .tex 文件全文，产出大纲条目（保持文档出现顺序）。
+
+    返回 [{level, title, line}]（line 为 1 基行号）；注释、\verb 参数与
+    verbatim 类环境内不产生条目（逐行单趟扫描，口径与前端 outlineScan.scanOutline
+    一致）。纯函数，供服务层与测试复用。
+    """
+    entries: list[dict] = []
+    if not isinstance(content, str) or not content:
+        return entries
+    verbatim_env: str | None = None
+    for line_no, raw_line in enumerate(content.split("\n"), 1):
+        if verbatim_env:
+            # verbatim 内一切字面（含 % 注释），只找环境结束标记
+            if re.search(rf"\\end\s*\{{{re.escape(verbatim_env)}\}}", raw_line):
+                verbatim_env = None
+            continue
+        # 剥离顺序：先剥 \verb 行内参数（其参数内 % 为字面字符），再剥注释
+        # （被注释掉的 \begin{verbatim} 不应进入 verbatim 态），最后检查
+        # verbatim 环境起点（起点之后同行内容均在 verbatim 内）
+        work = _strip_verb_spans(raw_line)
+        work = _strip_comment(work)
+        begin_match = _BEGIN_VERBATIM_RE.search(work)
+        if begin_match:
+            verbatim_env = begin_match.group(1)
+            work = work[: begin_match.start()]
+        _collect_section_entries(work, line_no, entries)
+    return entries
+
+
+# 项目级跨文件大纲缓存（决策 Q10：沿袭 latex-symbols 缓存模式——以项目为
+# 键、保存成功后失效重扫；键为项目根路径字符串，值为最近一次扫描结果）。
+# 上限封顶防长驻进程在大量项目间切换时无界膨胀（FIFO 逐出最旧项目）。
+_outline_cache: dict[str, dict] = {}
+_OUTLINE_CACHE_MAX_ENTRIES = 16
+
+
+def invalidate_project_outline_cache(project) -> None:
+    """保存失效入口：清掉该项目的跨文件大纲缓存（下次请求全量重扫）。
+
+    save-file 落盘成功后调用；项目未打开（RuntimeError）时静默跳过。
+    """
+    try:
+        root = str(Path(project.root_path))
+    except RuntimeError:
+        return
+    _outline_cache.pop(root, None)
+
+
+def _scan_outline_sync(project) -> dict:
+    """全项目 .tex 分节扫描（同步实现，由 asyncio.to_thread 调度）。
+
+    只读扫描：遍历项目内 .tex（隐藏目录跳过），每个文件经
+    resolve_project_path() 校验（扩展名白名单 + 逐组件符号链接检测，
+    指向项目外的文件静默跳过）；响应只含项目内相对路径（多用户脱敏）。
+    无大纲条目的文件不进响应（空分组对目录无信息量）。
+    """
+    root = Path(project.root_path)  # 未打开项目时 RuntimeError → invalid_workspace
+    files: list[dict] = []
+    total_entries = 0
+    for path in sorted(root.rglob("*")):
+        if path.suffix.lower() not in OUTLINE_SCAN_SUFFIXES or not path.is_file():
+            continue
+        rel = path.relative_to(root).as_posix()
+        # 隐藏目录（.git 等）下的文件不参与大纲扫描
+        if any(part.startswith(".") for part in Path(rel).parts):
+            continue
+        try:
+            full_path = resolve_project_path(
+                root, rel, allowed_suffixes=OUTLINE_SCAN_SUFFIXES
+            )
+        except ValueError as e:
+            logger.debug("Outline scan skip %s: %s", rel, e)
+            continue
+        # 超限预检在读入前按字节大小进行（UTF-8 字节数 ≥ 字符数）
+        try:
+            size = full_path.stat().st_size
+        except OSError as e:
+            logger.info("Outline scan unreadable file %s: %s", rel, e)
+            continue
+        if size > MAX_OUTLINE_SCAN_CHARS:
+            logger.info("Outline scan skip oversized file %s (%d bytes)", rel, size)
+            continue
+        try:
+            content = full_path.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError) as e:
+            logger.info("Outline scan unreadable file %s: %s", rel, e)
+            continue
+        entries = scan_tex_outline(content)
+        if not entries:
+            continue
+        files.append({"file_path": rel, "entries": entries})
+        total_entries += len(entries)
+
+    logger.info(
+        "Outline scan done: %d files, %d entries",
+        len(files),
+        total_entries,
+    )
+    return {"files": files}
+
+
+async def scan_project_outline(project) -> dict:
+    """全项目只读 .tex 分节扫描（跨文件大纲数据源，零 LLM、零写盘）。
+
+    返回 {files: [{file_path, entries: [{level, title, line}]}]}；
+    file_path 一律为项目内相对路径（多用户脱敏）。项目级缓存命中直接
+    返回，save-file 成功后由 invalidate_project_outline_cache 失效。
+    """
+    try:
+        cache_key = str(Path(project.root_path))
+    except RuntimeError as e:
+        raise _http(400, "invalid_workspace", str(e)) from e
+    cached = _outline_cache.get(cache_key)
+    if cached is not None:
+        return cached
+    try:
+        result = await asyncio.to_thread(_scan_outline_sync, project)
+    except RuntimeError as e:
+        raise _http(400, "invalid_workspace", str(e)) from e
+    _outline_cache[cache_key] = result
+    if len(_outline_cache) > _OUTLINE_CACHE_MAX_ENTRIES:
+        _outline_cache.pop(next(iter(_outline_cache)))
+    return result

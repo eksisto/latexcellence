@@ -1743,7 +1743,13 @@
         "noFileTitle": "未開啟檔案",
         "noFileDescription": "開啟 .tex 檔案後此處展示章節大綱。",
         "emptyTitle": "暫無大綱條目",
-        "emptyDescription": "未發現 \\section / \\subsection / \\subsubsection / \\paragraph 命令。"
+        "emptyDescription": "未發現 \\section / \\subsection / \\subsubsection / \\paragraph 命令。",
+        "viewFile": "當前檔案",
+        "viewProject": "本專案",
+        "projectLoading": "正在掃描專案結構…",
+        "projectEmptyTitle": "本專案暫無大綱",
+        "projectEmptyDescription": "專案內未發現含 \\section 等分節命令的 .tex 檔案。",
+        "entryCount": "{{count}} 條"
       },
       "formulaHover": {
         "renderError": "公式渲染失敗：LaTeX 語法可能有誤"

@@ -251,6 +251,29 @@ function makeRegion(text, info, to) {
 }
 
 /**
+ * 光标快照（stats hub 的 1 基 line / col）→ 文档偏移量。
+ *
+ * 供固定预览卡把状态栏光标快照换算为 findFormulaAt 的 pos 入参。
+ * 边界处理：line/col 非法或缺省回落 1；line 超出文档行数返回 -1（快照
+ * 与缓冲区编辑瞬间错位时宁可隐藏卡片）；col 超出该行长度钳到行尾。
+ *
+ * @param {string} text 文档全文
+ * @param {number} line 1 基行号
+ * @param {number} col 1 基列号
+ * @returns {number} 文档偏移量；无法定位时 -1
+ */
+export function lineColToOffset(text, line, col) {
+  if (typeof text !== "string" || text.length === 0) return -1;
+  const l = Number.isInteger(line) && line >= 1 ? line : 1;
+  const c = Number.isInteger(col) && col >= 1 ? col : 1;
+  const lines = text.split("\n");
+  if (l > lines.length) return -1;
+  let offset = 0;
+  for (let i = 0; i < l - 1; i += 1) offset += lines[i].length + 1;
+  return offset + Math.min(c - 1, lines[l - 1].length);
+}
+
+/**
  * 判定文档位置 pos 是否落在公式区域内。
  *
  * 区域包含判定：`from <= pos < to`（悬停在定界符任一字符上均命中）。
