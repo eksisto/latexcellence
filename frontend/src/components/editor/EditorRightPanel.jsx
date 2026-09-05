@@ -36,6 +36,9 @@ export default function EditorRightPanel({
   previewFullscreen,
   onEnterFullscreen,
   onJumpToError,
+  // SyncTeX 正反向同步通道（editor v3 阶段一），透传给编译预览面板
+  forwardTarget = null,
+  onBackwardSync = null,
   readOnly,
   getEditorContext,
   onApplySnippet,
@@ -132,6 +135,8 @@ export default function EditorRightPanel({
                   fullscreen={previewFullscreen}
                   onEnterFullscreen={onEnterFullscreen}
                   onJumpToError={onJumpToError}
+                  forwardTarget={forwardTarget}
+                  onBackwardSync={onBackwardSync}
                 />
               </TabsContent>
               {/* 首次访问后 keepMounted：切换不丢助手输入草稿与卡片展开态；
@@ -177,6 +182,8 @@ export default function EditorRightPanel({
                   fullscreen={previewFullscreen}
                   onEnterFullscreen={onEnterFullscreen}
                   onJumpToError={onJumpToError}
+                  forwardTarget={forwardTarget}
+                  onBackwardSync={onBackwardSync}
                 />
               </div>
             </>

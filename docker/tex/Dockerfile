@@ -128,7 +128,7 @@ RUN set -eux; \
 RUN set -eux; \
     tlmgr option repository "$CTAN_MIRROR"; \
     tlmgr install $EXTRA_TL_PACKAGES; \
-    for b in xelatex lualatex pdflatex latexmk texfot latexdiff latexindent biber git pygmentize; do \
+    for b in xelatex lualatex pdflatex latexmk texfot latexdiff latexindent biber git pygmentize synctex; do \
         command -v "$b" >/dev/null || { echo "FATAL: 镜像缺少可执行文件 $b"; exit 1; }; \
     done; \
     for f in ctex.sty xeCJK.sty zhnumber.sty biblatex.sty gb7714-2015.bbx \

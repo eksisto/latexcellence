@@ -1531,7 +1531,13 @@
     },
     "pdfPreview": {
       "title": "PDF 預覽",
-      "noPreview": "暫無 PDF 預覽"
+      "noPreview": "暫無 PDF 預覽",
+      "zoomIn": "放大",
+      "zoomOut": "縮小",
+      "fitWidth": "適寬",
+      "pageInput": "頁碼",
+      "loading": "PDF 載入中…",
+      "loadFailed": "PDF 載入失敗"
     },
     "promptEditor": {
       "title": "自訂提示詞",
@@ -1702,6 +1708,7 @@
       "enterFullscreen": "全螢幕檢視",
       "quitFullscreen": "退出全螢幕",
       "fullscreenTitle": "編譯 PDF 全螢幕預覽",
+      "synctexFailed": "PDF 反向定位失敗",
       "tabBarLabel": "已開啟檔案",
       "tabStaleBadge": "磁碟已變更",
       "closeTab": "關閉標籤頁",

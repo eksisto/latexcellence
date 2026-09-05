@@ -1531,7 +1531,13 @@
     },
     "pdfPreview": {
       "title": "PDF 预览",
-      "noPreview": "暂无 PDF 预览"
+      "noPreview": "暂无 PDF 预览",
+      "zoomIn": "放大",
+      "zoomOut": "缩小",
+      "fitWidth": "适宽",
+      "pageInput": "页码",
+      "loading": "PDF 加载中…",
+      "loadFailed": "PDF 加载失败"
     },
     "promptEditor": {
       "title": "自定义提示词",
@@ -1702,6 +1708,7 @@
       "enterFullscreen": "全屏查看",
       "quitFullscreen": "退出全屏",
       "fullscreenTitle": "编译 PDF 全屏预览",
+      "synctexFailed": "PDF 反向定位失败",
       "tabBarLabel": "已打开文件",
       "tabStaleBadge": "磁盘已变更",
       "closeTab": "关闭标签页",

@@ -5,9 +5,12 @@
     1. 通过 project_manager 获取项目根目录
     2. 调用 tex_compile（texfot 包装 latexmk）执行编译
     3. 编译失败时调用 LLM 翻译错误信息为“人话”
+    4. SyncTeX 正/反向只读查询（editor v3 阶段一）：synctex view/edit
+       经 SandboxRunner 在项目根目录执行，零写盘、响应只含相对路径
 """
 
-from pathlib import Path
+import re
+from pathlib import Path, PurePosixPath
 
 from pydantic import BaseModel, ConfigDict
 
@@ -16,7 +19,12 @@ from backend.core.workspace_manager import get_project_manager_for_workspace
 from backend.core.config import get_config
 from backend.utils.compile_error_translator import translate_compile_errors
 from backend.utils.path_guard import resolve_project_path
-from backend.utils.tex_compile import run_tex_compile
+from backend.utils.sandbox import (
+    ExecSpec,
+    current_sandbox_user_id,
+    get_sandbox_runner,
+)
+from backend.utils.tex_compile import run_tex_compile, sanitize_output_paths
 
 logger = get_logger(__name__)
 
@@ -53,6 +61,9 @@ class CompileResult(BaseModel):
     fixes: list[str] = []
     # 结构化错误码（如 sandbox_killed_oom），前端据此做 i18n 翻译
     error_code: str = ""
+    # SyncTeX 是否实际生效（请求 true 且未与 PDF/A 组合；editor v3 Q3）。
+    # 编译页 / git_diff 等既有调用方默认 False，行为零变化
+    synctex: bool = False
 
 
 async def compile_latex(
@@ -61,6 +72,7 @@ async def compile_latex(
     language: str = "zh",
     engine: str = "auto",
     pdfa: bool = False,
+    synctex: bool = False,
 ) -> CompileResult:
     """
     编译 LaTeX 项目的主文件。
@@ -71,6 +83,8 @@ async def compile_latex(
         language: 用户语言（用于错误翻译）
         engine: 编译引擎（auto/pdflatex/xelatex/lualatex）
         pdfa: 是否启用 PDF/A-2b 归档格式输出
+        synctex: 是否生成 SyncTeX 数据（编辑器正向/反向同步查询依赖）；
+            与 pdfa 组合时后端忽略（响应 synctex=False）
 
     返回：
         CompileResult 对象（含编译状态、输出日志、LLM 翻译的解释和建议）
@@ -95,10 +109,22 @@ async def compile_latex(
     if not pdfa:
         pdfa = cfg.features.compile.pdfa
 
-    logger.info(f"Compiling {main_file} in {root} (engine={engine}, pdfa={pdfa})")
+    # PDF/A 在临时目录编译后仅回拷 PDF，.synctex.gz 不同步回项目目录，
+    # synctex 组合 pdfa 时视为不生效（响应如实回传，editor v3 决策 Q3）
+    synctex_effective = synctex and not pdfa
+
+    logger.info(
+        f"Compiling {main_file} in {root} "
+        f"(engine={engine}, pdfa={pdfa}, synctex={synctex_effective})"
+    )
 
     tex_result = await run_tex_compile(
-        main_file, root, timeout, engine=engine, pdfa=pdfa
+        main_file,
+        root,
+        timeout,
+        engine=engine,
+        pdfa=pdfa,
+        synctex=synctex_effective,
     )
 
     if tex_result.timed_out:
@@ -133,6 +159,7 @@ async def compile_latex(
             success=True,
             stdout=tex_result.raw_output,
             stderr=tex_result.filtered_output,
+            synctex=synctex_effective,
         )
 
     logger.warning(f"Compilation failed for {main_file}, translating errors")
@@ -150,3 +177,271 @@ async def compile_latex(
         explanation=explanation,
         fixes=fixes,
     )
+
+
+# ── SyncTeX 正/反向只读查询（editor v3 阶段一 / 决策 Q1）──────────────────
+#
+# 两端点均为零写盘查询：synctex view / synctex edit（TeX Live 自带）经
+# SandboxRunner 在项目根目录执行，不解析 .synctex.gz 前端 JS（Q1）。
+# 输出中的文件路径只以相对形式返回（多用户脱敏）；file_path 经
+# resolve_project_path() 唯一入口校验。超时取编译超时的一个零头，
+# synctex 查询是毫秒级本地操作，10s 已是数量级冗余。
+
+SYNCTEX_QUERY_TIMEOUT_SECONDS = 10.0
+
+# synctex view 记录起始行：水平盒 `{Page:N` / 垂直盒 `[Page:N`（同形态
+# 语义，坐标均为 72dpi 点单位、页面左上原点）
+_SYNCTEX_RECORD_START_RE = re.compile(r"^[{\[]Page:(\d+)\s*$")
+
+# synctex 记录内允许出现的坐标字段（V 为垂直盒纵深，暂不消费）
+_SYNCTEX_RECORD_KEYS = frozenset({"x", "y", "w", "h"})
+
+# 反向查询可定位的源文件白名单（与编辑器可编辑白名单同口径）
+SYNCTEX_SOURCE_SUFFIXES = (".tex", ".bib", ".sty", ".cls")
+
+
+class SynctexRecord(BaseModel):
+    """正向查询单条定位记录（72dpi 点单位，页面左上原点）。"""
+
+    model_config = ConfigDict(extra="forbid")
+
+    page: int
+    x: float
+    y: float
+    w: float = 0.0
+    h: float = 0.0
+
+
+class SynctexForwardResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    records: list[SynctexRecord] = []
+
+
+class SynctexBackwardResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    found: bool = False
+    file_path: str = ""
+    line: int = 0
+    col: int = 0
+
+
+def parse_synctex_view_records(output: str) -> list[SynctexRecord]:
+    """解析 synctex view 输出中的定位记录。
+
+    记录形如（``{``/``[`` 语义等价，均以独立 ``}``/``]`` 行收尾）::
+
+        {Page:1
+        x:113.811016
+        y:104.411476
+        w:324.176788
+        h:10.448627
+        }
+
+    缺坐标、坐标非法或未闭合的记录整体丢弃（保守解析，不猜）。
+    """
+    records: list[SynctexRecord] = []
+    current: dict | None = None
+    for raw_line in output.splitlines():
+        line = raw_line.strip()
+        if current is None:
+            match = _SYNCTEX_RECORD_START_RE.match(line)
+            if match:
+                current = {"page": int(match.group(1))}
+            continue
+        if line in ("}", "]"):
+            if {"x", "y"} <= current.keys():
+                try:
+                    records.append(
+                        SynctexRecord(
+                            page=current["page"],
+                            x=float(current["x"]),
+                            y=float(current["y"]),
+                            w=float(current.get("w") or 0.0),
+                            h=float(current.get("h") or 0.0),
+                        )
+                    )
+                except (TypeError, ValueError):
+                    logger.debug("Discarding malformed synctex record: %s", current)
+            current = None
+            continue
+        key, sep, value = line.partition(":")
+        if sep and key in _SYNCTEX_RECORD_KEYS:
+            # 容忍 "113.811016pt" 形态的单位后缀
+            current[key] = re.sub(r"[a-zA-Z]+$", "", value).strip()
+    return records
+
+
+def parse_synctex_edit_result(output: str) -> tuple[str, int, int] | None:
+    """解析 synctex edit 输出，返回 ``(input_path, line, col)``。
+
+    ``Input`` 缺失或行号无效（0/负值，synctex 以 -1 标记未知行）时返回
+    None，由调用方收敛为 not_found。
+    """
+    input_path: str | None = None
+    line: int | None = None
+    col: int | None = None
+    for raw_line in output.splitlines():
+        text = raw_line.strip()
+        if text.startswith("Input:") and input_path is None:
+            input_path = text[len("Input:") :].strip() or None
+        elif text.startswith("Line:"):
+            try:
+                line = int(text[len("Line:") :].strip())
+            except ValueError:
+                pass
+        elif text.startswith("Column:"):
+            try:
+                col = int(text[len("Column:") :].strip())
+            except ValueError:
+                pass
+    if not input_path or line is None or line < 1:
+        return None
+    return input_path, line, (col if col is not None and col >= 0 else 0)
+
+
+def _relativize_synctex_input(input_path: str, root: Path) -> str | None:
+    """把 synctex 输出的 Input 路径归一为项目内相对 POSIX 路径。
+
+    latexmk 以项目根为 cwd 编译时记录的 Input 多为相对路径（原样保留，
+    仅剥 ``./`` 前缀）；绝对路径仅当位于项目根内时转相对，项目外（texmf
+    系统文件等）一律拒绝——响应绝不携带绝对路径（多用户脱敏约束）。
+    """
+    candidate = input_path.strip()
+    if not candidate:
+        return None
+    path = Path(candidate)
+    if not path.is_absolute():
+        # PurePosixPath 归一化掉 "." 段并保留 ".." 段：含 ".." 的相对路径
+        # 不在项目根内，拒绝（不能用 lstrip 剥前缀，会误伤 ".." 与点开头的文件名）
+        pure = PurePosixPath(path.as_posix())
+        if pure.is_absolute() or ".." in pure.parts:
+            return None
+        return pure.as_posix() or None
+    try:
+        return path.resolve().relative_to(root.resolve()).as_posix()
+    except ValueError:
+        return None
+
+
+async def _run_synctex_query(command: list[str], root: Path) -> str:
+    """经 SandboxRunner 执行一条 synctex 查询，返回合并后的标准输出。
+
+    抛出的 RuntimeError 交由路由层按既有 compile 端点的异常映射规则
+    （沙箱基础设施错误优先）处理；执行失败/超时/OOM 收敛为空输出。
+    """
+    spec = ExecSpec(
+        command=command,
+        cwd=str(root),
+        image_kind="tex",
+        timeout_seconds=SYNCTEX_QUERY_TIMEOUT_SECONDS,
+    )
+    logger.debug("Running synctex query: %s", " ".join(command))
+    res = await get_sandbox_runner().execute(spec, user_id=current_sandbox_user_id())
+    if res.timed_out:
+        logger.warning(
+            "synctex query timed out: %s", command[1] if len(command) > 1 else command
+        )
+        return ""
+    if res.oom_killed:
+        logger.warning("synctex query killed by sandbox memory limit")
+        return ""
+    output = res.stdout + ("\n" + res.stderr if res.stderr else "")
+    # 多用户模式：输出中的服务器绝对路径统一脱敏为相对形式（与编译
+    # 日志同规则）；单用户本地模式保留原始输出
+    if get_config().multi_user.enabled:
+        output = sanitize_output_paths(output, root)
+    return output
+
+
+def _resolve_project_or_raise(workspace_id: str) -> Path:
+    """解析工作区项目根目录；未打开项目抛 RuntimeError（路由层映射 400）。"""
+    project = get_project_manager_for_workspace(workspace_id)
+    if not project.is_open:
+        raise RuntimeError("No project opened")
+    return Path(project.root_path)
+
+
+def _resolve_synctex_pdf(workspace_id: str, main_file: str) -> tuple[Path, str]:
+    """校验工作区与 main_file，返回 ``(项目根, pdf 相对 POSIX 路径)``。
+
+    与既有 /api/compile/pdf 端点同构：main_file 经 _validate_main_file
+    （唯一入口 resolve_project_path）校验后派生同名 PDF；尚未编译时抛
+    FileNotFoundError（路由层映射 404）。
+    """
+    root = _resolve_project_or_raise(workspace_id)
+    pdf_abs = _validate_main_file(main_file, root).with_suffix(".pdf")
+    if not pdf_abs.exists():
+        raise FileNotFoundError(
+            f"PDF not found: {pdf_abs.name}. Please compile the project first."
+        )
+    return root, Path(main_file).with_suffix(".pdf").as_posix()
+
+
+async def synctex_forward(
+    workspace_id: str,
+    main_file: str,
+    file_path: str,
+    line: int,
+    col: int = 0,
+) -> SynctexForwardResponse:
+    """正向同步：源码 ``(file_path, line, col)`` → PDF 页面矩形记录。
+
+    执行 ``synctex view -i "line:col:file" -o <pdf>``（cwd=项目根），
+    返回 72dpi 点单位的页面矩形（页面左上原点）。零写盘。
+    """
+    root, pdf_rel = _resolve_synctex_pdf(workspace_id, main_file)
+    resolved_source = resolve_project_path(
+        root, file_path, allowed_suffixes=SYNCTEX_SOURCE_SUFFIXES
+    )
+    source_rel = resolved_source.relative_to(root.resolve()).as_posix()
+    command = [
+        "synctex",
+        "view",
+        "-i",
+        f"{line}:{col}:{source_rel}",
+        "-o",
+        pdf_rel,
+    ]
+    output = await _run_synctex_query(command, root)
+    records = parse_synctex_view_records(output)
+    if not records:
+        logger.info(
+            f"synctex view returned no records for {file_path}:{line} (main={main_file})"
+        )
+    return SynctexForwardResponse(records=records)
+
+
+async def synctex_backward(
+    workspace_id: str,
+    main_file: str,
+    page: int,
+    x: float,
+    y: float,
+) -> SynctexBackwardResponse:
+    """反向同步：PDF ``(page, x, y)`` → 源码位置。
+
+    执行 ``synctex edit -o "page:x:y:<pdf>"``（cwd=项目根），返回项目内
+    相对路径与行号；找不到对应源码位置时返回 ``found=False``（HTTP 200，
+    属合法空结果而非错误）。零写盘。
+    """
+    root, pdf_rel = _resolve_synctex_pdf(workspace_id, main_file)
+    command = [
+        "synctex",
+        "edit",
+        "-o",
+        f"{page}:{x}:{y}:{pdf_rel}",
+    ]
+    output = await _run_synctex_query(command, root)
+    parsed = parse_synctex_edit_result(output)
+    if parsed is None:
+        logger.info(f"synctex edit found no source for page={page} (main={main_file})")
+        return SynctexBackwardResponse(found=False)
+    input_path, line, col = parsed
+    rel = _relativize_synctex_input(input_path, root)
+    if rel is None:
+        # 定位到项目外文件（texmf / 生成文件）：不泄露路径，按未命中处理
+        logger.info(f"synctex edit target outside project root, dropping: page={page}")
+        return SynctexBackwardResponse(found=False)
+    return SynctexBackwardResponse(found=True, file_path=rel, line=line, col=col)

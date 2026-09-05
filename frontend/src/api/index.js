@@ -732,6 +732,9 @@ export const api = {
           language: getUiLanguage(),
           engine: options.engine || "auto",
           pdfa: options.pdfa || false,
+          // SyncTeX 数据（editor v3 决策 Q3）：编辑器恒传 true（Q3），
+          // 编译页 / git_diff 等既有调用方不传 → false，行为零变化
+          synctex: options.synctex || false,
         }),
       }),
     pdfBlobUrl: async (mainFile, workspaceId) => {
@@ -741,6 +744,26 @@ export const api = {
       );
       return fetchBlobUrl(url);
     },
+    // SyncTeX 正向同步（editor v3 阶段一）：源码位置 → PDF 页面矩形
+    // （72dpi 点单位、页面左上原点）。line 为 1 基缓冲区行号（脏缓冲区
+    // 偏差容忍不补偿，Q4）；col 为 synctex 原生 0 基列号
+    synctexForward: ({ workspaceId, mainFile, filePath, line, col = 0 }) =>
+      request(appendWs("/compile/synctex/forward", workspaceId), {
+        method: "POST",
+        body: JSON.stringify({
+          main_file: mainFile,
+          file_path: filePath,
+          line,
+          col,
+        }),
+      }),
+    // SyncTeX 反向同步：PDF 点位（72dpi 点、页面左上原点，前端已完成
+    // y 翻转）→ 源码位置；未命中返回 {found: false}
+    synctexBackward: ({ workspaceId, mainFile, page, x, y }) =>
+      request(appendWs("/compile/synctex/backward", workspaceId), {
+        method: "POST",
+        body: JSON.stringify({ main_file: mainFile, page, x, y }),
+      }),
   },
 
   /* ---- Git 差异高亮 ---- */

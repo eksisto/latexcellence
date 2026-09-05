@@ -45,7 +45,7 @@ latexcellence/
 │   │   ├── input_resolver.py        # \input/\include 递归解析
 │   │   ├── time_utils.py            # 时间工具：当前日期/时间/星期格式化
 │   │   ├── path_guard.py            # 项目路径安全校验唯一入口 resolve_project_path()
-│   │   ├── tex_compile.py           # 统一 TeX 编译执行（texfot+latexmk、引擎自动检测、PDF/A）
+│   │   ├── tex_compile.py           # 统一 TeX 编译执行（texfot+latexmk、引擎自动检测、PDF/A、可选 -synctex=1 供 SyncTeX 查询）
 │   │   ├── sandbox/                 # Docker 沙箱执行包（v2 P1a：SandboxRunner 双后端、并发租约、ExecSpec/ExecResult 契约；部署收口阶段三：docker 后端容器预创建池 warm pool——形状匹配复用 + 每副本孤儿对账）
 │   │   ├── session_mutex.py         # 跨进程会话互斥（v2 P7：会话目录旁 flock 锁文件 + 进程内 asyncio.Lock 叠加）
 │   │   ├── latex_parser.py          # LaTeX 源码↔纯文本转换（Marker 保护）
@@ -106,7 +106,7 @@ latexcellence/
 │       ├── terminology_check/       # 术语一致性
 │       ├── paragraph_translate/     # 逐段翻译
 │       ├── code_review/              # LaTeX 代码审查
-│       ├── compile/                 # 自动编译
+│       ├── compile/                 # 自动编译 + SyncTeX 正反向只读查询（synctex view/edit 经沙箱零写盘执行，响应只含相对路径）
 │       ├── git_diff/                # Git 差异高亮
 │       │   └── service/             # 服务包（models/constants/process/revisions/flatten/diff/render）
 │       ├── git_manage/             # Git 版本管理（init/status/commit/log + 上传自动初始化）
@@ -129,13 +129,13 @@ latexcellence/
 │
 ├── frontend/
 │   ├── package.json                 # npm 依赖与脚本
-│   ├── vite.config.js               # Vite 配置（dev 代理目标随 VITE_API_BASE_URL 派生；vendor 分包含 pinyin-pro 按需懒加载块）
+│   ├── vite.config.js               # Vite 配置（dev 代理目标随 VITE_API_BASE_URL 派生；vendor 分包含 pinyin-pro / pdfjs-dist 等按需懒加载块）
 │   ├── .env.example                 # 环境变量模板（VITE_API_BASE_URL：维护者默认后端地址）
 │   ├── index.html                   # 入口 HTML
 │   ├── components.json              # shadcn/ui 组件配置
 │   ├── jsconfig.json                # JS 路径别名配置
 │   ├── public/                      # 静态资源（favicon）
-│   ├── test/                        # 前端单元测试（node --test：formulaWrap / writingChatUtils / editorFiles / editorPreferences / editorTabs / editorSessionPersistence / editorChangeHistoryDiff / editorChangeHistory / editorStats / editorTabViews / editorMatcher / editorSnippetInsert / editorPreambleScan / latexCommands / i18nCoverage 等）
+│   ├── test/                        # 前端单元测试（node --test：formulaWrap / writingChatUtils / editorFiles / editorPreferences / editorTabs / editorSessionPersistence / editorChangeHistoryDiff / editorChangeHistory / editorStats / editorTabViews / editorMatcher / editorSnippetInsert / editorPreambleScan / editorSynctexMath / latexCommands / i18nCoverage 等）
 │   └── src/
 │       ├── main.jsx                 # React 入口
 │       ├── App.jsx                  # 根路由
@@ -163,6 +163,7 @@ latexcellence/
 │       │   │       ├── changeHistoryDiff.js  # 行级 diff 纯模块（前后缀剪除 + Myers O(ND) + 防退化护栏）
 │       │   │       ├── changeHistory.js      # 修改行色条 CM6 扩展（savedBuffer/openedBuffer 基线注入 + 橙/绿行装饰）
 │       │   │       ├── stats.js              # 文档统计纯模块（中西文字数口径）+ 状态栏发布-订阅 hub
+│       │   │       ├── synctexMath.js        # SyncTeX 坐标换算纯模块（点→CSS 像素、左上原点翻转、缩放限幅/步进/适宽）
 │       │   │       ├── formulaHoverScan.js   # KaTeX 悬停公式区域识别纯模块（$/\\(\\)/\\[\\]/$$/显示环境，注释与转义边界）
 │       │   │       ├── formulaHover.js       # CM6 hoverTooltip 公式悬停预览（katex 动态分块 import + 主题化）
 │       │   │       ├── searchPanel.js        # CM6 查找替换面板主题化 + 面板文案三语短语（EditorState.phrases）
@@ -215,6 +216,8 @@ latexcellence/
 │       │   │   ├── CommandPalette.jsx  # 命令面板（Ctrl/Cmd+/ 全量；Ctrl+L 包裹命令专项浮层；搜索 + 分类 + 网格选择器二级步骤）
 │       │   │   ├── GridSizePicker.jsx  # 表格/矩阵 m×n 拖选网格选择器
 │       │   │   ├── AssistantPanel.jsx  # AI 助手侧栏（SSE 对话 + 三种建议应用形态卡片）
+│       │   │   ├── PdfJsPreview.jsx    # pdf.js 渲染的 PDF 预览（iframe 替代：懒加载分块 + 最小工具条 + 正向高亮浮层 + 反向双击取点）
+│       │   │   ├── FullscreenPDFPreview.jsx # PDF 全屏预览覆盖层（页面级 fixed，正向/反向通道透传）
 │       │   │   └── StaleCheckBanner.jsx # 检查结果过期横幅（各逐段检查页复用）
 │       │   ├── UploadProjectDialog.jsx # 上传项目对话框（zip/7z/rar 或目录分片直传 + 断点续传 + 暂停/进度）
 │       │   ├── ProjectPermissionsDialog.jsx # 项目权限对话框（协作者管理/转交）
@@ -250,7 +253,7 @@ latexcellence/
 │   ├── rar-extractor-fallback.md                 # RAR 解压器回退层设计（unar → bsdtar，已实施）
 │   ├── editor-design.md                            # 网页编辑器 v1 设计（CM6 编辑器 + 命令快速输入 + AI 助手；已实施，设计与决策记录）
 │   ├── editor-productivity-design.md                # 编辑器生产力改造 v2 设计（多缓冲区 tab/大纲/引用补全/格式化/KaTeX/错误跳转/修改行色条；已实施，设计与决策记录）
-│   ├── editor-experience-design.md                # 编辑器写作体验收口设计方案（编辑器 v3：SyncTeX 正反向同步/用户自定义片段/实时语法诊断/跨文件大纲与 KaTeX 预览卡/助手接入联网与学术检索/自研 MIT Lezer 子集语法；已定稿）
+│   ├── editor-experience-design.md                # 编辑器写作体验收口设计方案（编辑器 v3：SyncTeX 正反向同步/用户自定义片段/实时语法诊断/跨文件大纲与 KaTeX 预览卡/助手接入联网与学术检索/自研 MIT Lezer 子集语法；阶段一已实施，其余待实施）
 │   ├── multi-model.md                       # 多模型支持设计（模型档案 + 角色槽位路由；已实施）
 │   ├── deployment.md                          # 后端部署指南（单用户/多用户单进程/多实例 Compose 部署、systemd 托管、HTTPS 反向代理、安全风险声明、备份、环境变量与升级回滚）
 │   ├── deploy-followups.md               # 多用户部署侧收口设计（rar 解压入沙箱/真实 RAR 样本/warm pool/模型连通性测试；已实施）
@@ -317,7 +320,7 @@ latexcellence/
 | code_review | LaTeX 代码审查（工具格式化 + LLM 质量审查） | router.py, service.py | ✓ | ✗ |
 | terminology_check | 术语一致性检查 | router.py, service.py, extractor.py, models.py | ✓ | ✓ |
 | paragraph_translate | 逐段翻译 | router.py, service.py | ✓ | ✓ |
-| compile | 编译 + 错误翻译 + 引擎自动检测 + PDF/A 支持 | router.py, service.py | ✓(错误翻译) | ✗ |
+| compile | 编译 + 错误翻译 + 引擎自动检测 + PDF/A 支持 + SyncTeX 正反向只读查询（synctex view/edit 经沙箱零写盘，响应只含相对路径） | router.py, service.py | ✓(错误翻译) | ✗ |
 | git_diff | Git 版本差异 PDF | router.py, service/ | ✓(编译失败时翻译错误) | ✗ |
 | git_manage | Git 版本管理最小闭环：自动/手动初始化、变更列表、一键提交、历史（与 git_diff 共享执行层）；.git 配额豁免 + 独立上限 | modules/git_manage/*, core/multiuser/quota.py, modules/git_diff/service/ | ✗ | ✗ |
 | template_gen | 模板生成（自主 Agent） | router.py, service.py, agent/, trace.py, cleanup.py | ✓ | ✗ |
@@ -328,7 +331,7 @@ latexcellence/
 | style_modify | 粘贴代码 / 项目 Agent 修改样式，支持 shadow 编译、proposal 审核、批量事务与撤销 | router.py, service.py, agent.py, models.py, session.py, trace.py, cleanup.py | ✓ | ✗ |
 | writing_chat | 写作助手对话（含联网搜索、学术检索与引文追踪、项目浏览、段落编辑和工具确认） | router.py, service/, context.py, models.py, prompt_manager.py | ✓ | ✗ |
 | bib_manager | 参考文献管理 + 格式规则层 + DOI 多数据源查询 + 重复检测 + 文献库 | router.py, service.py, models.py, bib_parser.py, format_rules.py, style_registry.py, provider_manager.py, providers/ | ✓(格式规则命中不依赖 LLM；DOI 查询不依赖 LLM) | ✗ |
-| editor | 网页编辑器：后端整文件打开/保存（MD5 乐观锁、统一撤销记账与配额回滚接线）+ 前端 /editor 页 CM6 打开-编辑-保存-冲突闭环 + 命令快速输入子系统（命令数据库四路匹配查找、\ 行内补全与命令面板双入口、表格矩阵网格选择器、宏包缺失联动自动添加声明）+ 多缓冲区基座（tab 条、per-tab 缓冲区/撤销/滚动、陈旧检测、关闭三选、sessionStorage 刷新恢复、per-tab 自动保存、编译全量脏保存、助手 tab 守卫） + 编辑基本功包（包裹命令快捷键 Ctrl/Cmd+B/I/U/K 直包与 Ctrl+L 包裹浮层、wrap 类目进命令数据库与命令面板、多光标、\begin{env} 打字机自动补 \end（autoCloseEnv 开关）、查找替换面板主题化与三语） + 编译联动（脏改动先自动保存）+ 引用补全（\ref/\label/\cite 三触发 source + 后端 latex-symbols 全项目符号扫描 + 项目级缓存保存失效）+ 一键格式化（工具栏按钮与 Ctrl/Cmd+Shift+F 快捷键 + 后端 format-latex 纯转换端点（latexindent 优先、内置兜底），结果直接替换发起 tab 缓冲区并置脏（单事务整文档替换，Ctrl+Z 一步撤销），落盘仍走 save-file 单一路径，viewer 禁用）+ 编译错误列表与跨文件跳转（右栏可点击错误列表 + 点击联动打开/激活 tab 并行首定位高亮；logFileStack 日志文件栈解析纯模块（`(./` 压栈、`)` 弹栈、`l.N` 归属栈顶、79 列 dewrap），归属歧义回落发起编译的文件并标低置信）+ 编辑器侧 AI 助手（复用 Writing Chat 会话基础设施的缓冲区协议端点、自适应上下文注入、插入光标/替换选区/diff 卡片三种建议应用形态）+ 检查结果保鲜横幅 + 偏好导入导出 + 修改行色条（阶段八借鉴 Notepad++ Change History：savedBuffer/openedBuffer 双基线 + changeHistoryDiff 行级 Myers diff 纯模块（防退化护栏）+ changeHistory CM6 行装饰扩展，琥珀=未保存修改/翠绿=本会话已保存修改，Ctrl+Z 到保存点精确清零；dirty 改按 buffer≠savedBuffer 内容比对）+ 底部状态栏（stats 中西文字数统计纯模块 + createStatsHub 发布订阅 + EditorStatusBar，不经过页面 React 树）+ selectionMatches 选中高亮全部匹配偏好 + 会话持久化升级 localStorage（v2 载荷脏 tab 携带 savedBuffer，sessionStorage 遗留收养迁移，重启浏览器可恢复脏缓冲区） | backend modules/editor/service.py（路由挂载于 project_router）、writing_chat/service/editor_chat.py；frontend pages/EditorPage.jsx、components/editor/、lib/editor/、data/latexCommands/、store/editorStore.js | ✓(仅助手端点) | ✗ |
+| editor | 网页编辑器：后端整文件打开/保存（MD5 乐观锁、统一撤销记账与配额回滚接线）+ 前端 /editor 页 CM6 打开-编辑-保存-冲突闭环 + 命令快速输入子系统（命令数据库四路匹配查找、\ 行内补全与命令面板双入口、表格矩阵网格选择器、宏包缺失联动自动添加声明）+ 多缓冲区基座（tab 条、per-tab 缓冲区/撤销/滚动、陈旧检测、关闭三选、sessionStorage 刷新恢复、per-tab 自动保存、编译全量脏保存、助手 tab 守卫） + 编辑基本功包（包裹命令快捷键 Ctrl/Cmd+B/I/U/K 直包与 Ctrl+L 包裹浮层、wrap 类目进命令数据库与命令面板、多光标、\begin{env} 打字机自动补 \end（autoCloseEnv 开关）、查找替换面板主题化与三语） + 编译联动（脏改动先自动保存）+ 引用补全（\ref/\label/\cite 三触发 source + 后端 latex-symbols 全项目符号扫描 + 项目级缓存保存失效）+ 一键格式化（工具栏按钮与 Ctrl/Cmd+Shift+F 快捷键 + 后端 format-latex 纯转换端点（latexindent 优先、内置兜底），结果直接替换发起 tab 缓冲区并置脏（单事务整文档替换，Ctrl+Z 一步撤销），落盘仍走 save-file 单一路径，viewer 禁用）+ 编译错误列表与跨文件跳转（右栏可点击错误列表 + 点击联动打开/激活 tab 并行首定位高亮；logFileStack 日志文件栈解析纯模块（`(./` 压栈、`)` 弹栈、`l.N` 归属栈顶、79 列 dewrap），归属歧义回落发起编译的文件并标低置信）+ 编辑器侧 AI 助手（复用 Writing Chat 会话基础设施的缓冲区协议端点、自适应上下文注入、插入光标/替换选区/diff 卡片三种建议应用形态）+ 检查结果保鲜横幅 + 偏好导入导出 + 修改行色条（阶段八借鉴 Notepad++ Change History：savedBuffer/openedBuffer 双基线 + changeHistoryDiff 行级 Myers diff 纯模块（防退化护栏）+ changeHistory CM6 行装饰扩展，琥珀=未保存修改/翠绿=本会话已保存修改，Ctrl+Z 到保存点精确清零；dirty 改按 buffer≠savedBuffer 内容比对）+ 底部状态栏（stats 中西文字数统计纯模块 + createStatsHub 发布订阅 + EditorStatusBar，不经过页面 React 树）+ selectionMatches 选中高亮全部匹配偏好 + 会话持久化升级 localStorage（v2 载荷脏 tab 携带 savedBuffer，sessionStorage 遗留收养迁移，重启浏览器可恢复脏缓冲区）+ SyncTeX 正反向同步（editor v3 阶段一：编译链路可选 `-synctex=1` + synctex forward/backward 只读查询端点 + PDF 预览 iframe 替换为 pdf.js 渲染（懒加载分块、最小缩放/适宽/页码工具条、正向高亮浮层、双击反向取点，`PdfJsPreview` 对外 `{url}` 兼容使全屏预览等使用点自动受益），正向由 stats hub 光标通道防抖驱动（预览可见且有产物才查询）、反向复用错误跳转的开 tab + 行定位通路） | backend modules/editor/service.py（路由挂载于 project_router）、writing_chat/service/editor_chat.py；frontend pages/EditorPage.jsx、components/editor/、lib/editor/、data/latexCommands/、store/editorStore.js | ✓(仅助手端点) | ✗ |
 | plot_gen | 科研绘图 Agent（数据画像 -> 图表推荐 -> Python 执行 -> TikZ 编译） | router.py, service.py, agent.py, models.py, data_parser.py, recommender.py, styles.py, executor.py, tikzgen.py, sandbox_guard.py, trace.py, cleanup.py | ✓ | ✗ |
 
 ## 核心设计思路

@@ -73,3 +73,27 @@ test("createStatsHub：发布 / 订阅 / 快照引用稳定", () => {
   hub.publish({ line: 9, col: 9, selectedChars: 0, lines: 1, words: 0 });
   assert.equal(seen.length, 2);
 });
+
+test("createStatsHub：监听器无参调用，快照消费方须经 getSnapshot() 回读", () => {
+  // 契约钉子（editor v3 阶段一回归）：subscribe 的 listener 以零参数调用
+  // （JSDoc `() => void`），回调形参不会拿到快照。EditorPage 正向同步的
+  // 光标快照捕获（防抖前回读 getSnapshot 进 ref）依赖本契约——若 hub
+  // 未来改为向监听器传参，此处先行报错以同步审视两端消费方。
+  const hub = createStatsHub();
+  const receivedArgs = [];
+  const captured = [];
+  const unsub = hub.subscribe((...args) => {
+    receivedArgs.push(args.length);
+    // 正确消费形态：回调内回读 getSnapshot（EditorPage / EditorStatusBar 同款）
+    captured.push(hub.getSnapshot());
+  });
+
+  const stats = { line: 7, col: 4, selectedChars: 0, lines: 30, words: 80 };
+  hub.publish(stats);
+
+  assert.deepEqual(receivedArgs, [0], "监听器必须以零参数调用");
+  assert.equal(captured.length, 1);
+  assert.equal(captured[0], stats, "getSnapshot() 须返回刚发布的快照");
+
+  unsub();
+});

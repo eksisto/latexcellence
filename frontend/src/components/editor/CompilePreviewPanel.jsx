@@ -70,6 +70,10 @@ export default function CompilePreviewPanel({
   onEnterFullscreen,
   compileTarget = null,
   onJumpToError = null,
+  // SyncTeX 正反向同步通道（editor v3 阶段一）：编辑器页注入，
+  // GitDiff 页等未注入的使用点保持既有纯预览形态不变
+  forwardTarget = null,
+  onBackwardSync = null,
 }) {
   const { t } = useTranslation(["pages", "components"]);
   // 错误列表（阶段七）：仅失败结果 + 注入了跳转回调时解析展示
@@ -179,11 +183,15 @@ export default function CompilePreviewPanel({
             </details>
           </>
         )}
-        {/* 成功后 PDF 预览占满剩余空间；全屏时卸载内联预览（避免双 iframe），
+        {/* 成功后 PDF 预览占满剩余空间；全屏时卸载内联预览（避免双实例），
             左下角悬浮「全屏查看」按钮与 GitDiff 页同款 */}
         {compileResult?.success && pdfUrl && !fullscreen && (
           <div className="relative min-h-32 flex-1">
-            <PDFPreview url={pdfUrl} />
+            <PDFPreview
+              url={pdfUrl}
+              forwardTarget={forwardTarget}
+              onBackwardSync={onBackwardSync}
+            />
             <Button
               variant="outline"
               size="sm"

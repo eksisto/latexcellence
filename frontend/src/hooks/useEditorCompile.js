@@ -76,7 +76,11 @@ export default function useEditorCompile({
     }
     setPdfUrl(null);
     try {
-      const data = await api.compile.run(target, workspaceId);
+      // 编辑器恒传 synctex=true（editor v3 决策 Q3）：生成 .synctex.gz
+      // 供正反向同步查询；编译页 / git_diff 等调用方默认 false 零影响
+      const data = await api.compile.run(target, workspaceId, {
+        synctex: true,
+      });
       if (seq !== compileSeqRef.current) return; // 已被更新的编译接管
       setCompileResult(data);
       if (data.success) {

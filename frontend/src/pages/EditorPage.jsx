@@ -73,6 +73,9 @@ import EditorStatusBar from "@/components/editor/EditorStatusBar";
 import { EditorView } from "@codemirror/view";
 import FileCode from "lucide-react/dist/esm/icons/file-code.mjs";
 
+/** 正向同步光标防抖（editor v3 决策 Q6：约 800ms 停顿才发查询） */
+const SYNCTEX_FORWARD_DEBOUNCE_MS = 800;
+
 import useStore from "@/store/useStore";
 import useEditorStore, {
   activeBuffer,
@@ -543,6 +546,117 @@ export default function EditorPage() {
     handleJumpToLine(pending.line);
   }, [filePath, handleJumpToLine]);
 
+  /* ── SyncTeX 正反向同步（editor v3 阶段一 / 决策 Q4+Q5+Q6） ─────
+     正向：stats hub 光标通道防抖驱动（快照只进 ref，键入零重渲染；
+     Q4：缓冲区行号直发，脏缓冲区偏差容忍不补偿；Q6：仅预览可见且有
+     编译产物时查询，失败静默，不做偏好开关）。反向：双击取点后查询，
+     命中即复用 handleJumpToError 的开 tab + 行定位通路（未打开文件经
+     pendingErrorJumpRef 延迟到换档后）。 */
+  const [forwardSync, setForwardSync] = useState(null);
+  const forwardSeqRef = useRef(0);
+  const forwardTimerRef = useRef(null);
+  const cursorStatsRef = useRef(null);
+
+  const previewVisible =
+    previewFullscreen || (panelTab === "compile" && !panelCollapsed);
+
+  const previewVisibleRef = useRef(previewVisible);
+  useLayoutEffect(() => {
+    previewVisibleRef.current = previewVisible;
+  }, [previewVisible]);
+
+  const pdfUrlRef = useRef(pdfUrl);
+  useLayoutEffect(() => {
+    pdfUrlRef.current = pdfUrl;
+  }, [pdfUrl]);
+
+  const compileTargetRef = useRef(compileTarget);
+  useLayoutEffect(() => {
+    compileTargetRef.current = compileTarget;
+  }, [compileTarget]);
+
+  const requestForwardSync = useCallback(async () => {
+    if (!previewVisibleRef.current || !workspaceId || !pdfUrlRef.current)
+      return;
+    const target = compileTargetRef.current || mainFile;
+    const activePath = useEditorStore.getState().activeTabPath;
+    const cursor = cursorStatsRef.current;
+    // synctex 源文件白名单与编辑器可编辑白名单同口径（.tex/.bib/.sty/.cls）
+    if (!target || !activePath || !cursor || !isEditableFilePath(activePath)) {
+      return;
+    }
+    const seq = ++forwardSeqRef.current;
+    try {
+      const data = await api.compile.synctexForward({
+        workspaceId,
+        mainFile: target,
+        filePath: activePath,
+        line: cursor.line,
+        col: Math.max(0, (cursor.col ?? 1) - 1), // synctex 0 基列号
+      });
+      if (seq !== forwardSeqRef.current) return; // 过期响应丢弃
+      const records = Array.isArray(data?.records) ? data.records : [];
+      setForwardSync({ records });
+    } catch {
+      // Q6：正向同步是行为无侵入的跟随能力，失败静默不打断写作
+    }
+  }, [workspaceId, mainFile]);
+
+  // stats hub 订阅（光标通道）：快照进 ref + 尾随防抖约 800ms 发查询
+  useEffect(() => {
+    const schedule = () => {
+      if (forwardTimerRef.current !== null) {
+        window.clearTimeout(forwardTimerRef.current);
+      }
+      forwardTimerRef.current = window.setTimeout(() => {
+        forwardTimerRef.current = null;
+        requestForwardSync();
+      }, SYNCTEX_FORWARD_DEBOUNCE_MS);
+    };
+    // hub 契约：监听器无参调用，快照须经 getSnapshot() 回读
+    // （与 EditorStatusBar 的 useSyncExternalStore 同源约定）
+    const unsubscribe = statsHub.subscribe(() => {
+      cursorStatsRef.current = statsHub.getSnapshot();
+      schedule();
+    });
+    return () => {
+      unsubscribe();
+      if (forwardTimerRef.current !== null) {
+        window.clearTimeout(forwardTimerRef.current);
+        forwardTimerRef.current = null;
+      }
+    };
+  }, [statsHub, requestForwardSync]);
+
+  // 预览变为可见（切回编译 tab / 展开面板 / 进全屏）时立即补发一次
+  useEffect(() => {
+    if (previewVisible) requestForwardSync();
+  }, [previewVisible, requestForwardSync]);
+
+  const handleBackwardSync = useCallback(
+    async ({ page, x, y }) => {
+      const target = compileTargetRef.current || mainFile;
+      if (!workspaceId || !target) return;
+      try {
+        const data = await api.compile.synctexBackward({
+          workspaceId,
+          mainFile: target,
+          page,
+          x,
+          y,
+        });
+        if (data?.found && data.file_path) {
+          handleJumpToError({ file: data.file_path, line: data.line });
+        }
+      } catch (e) {
+        toast.error(t("components:editor.synctexFailed"), {
+          description: translateError({ error: e.code, message: e.message }),
+        });
+      }
+    },
+    [workspaceId, mainFile, handleJumpToError, t],
+  );
+
   /* ── AI 助手：上下文快照与建议应用 ──────────────────────────── */
   const getEditorContext = useCallback(() => {
     const cur = useEditorStore.getState();
@@ -804,6 +918,8 @@ export default function EditorPage() {
           previewFullscreen={previewFullscreen}
           onEnterFullscreen={() => setPreviewFullscreen(true)}
           onJumpToError={handleJumpToError}
+          forwardTarget={forwardSync}
+          onBackwardSync={handleBackwardSync}
           readOnly={readOnly}
           getEditorContext={getEditorContext}
           onApplySnippet={handleApplySnippet}
@@ -811,11 +927,13 @@ export default function EditorPage() {
         />
       </div>
 
-      {/* 编译预览全屏覆盖层 */}
+      {/* 编译预览全屏覆盖层（正向高亮/反向双击通道同步透传） */}
       {previewFullscreen && pdfUrl && (
         <FullscreenPDFPreview
           url={pdfUrl}
           onClose={() => setPreviewFullscreen(false)}
+          forwardTarget={forwardSync}
+          onBackwardSync={handleBackwardSync}
         />
       )}
 

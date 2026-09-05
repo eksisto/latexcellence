@@ -1,11 +1,13 @@
 # 网页编辑器模块 `editor/` + `/editor`
 
 > 设计依据：[docs/editor-design.md](../editor-design.md)（含 grilling 决策记录
-> Q1–Q26）与 [docs/editor-productivity-design.md](../editor-productivity-design.md)
+> Q1–Q26）、[docs/editor-productivity-design.md](../editor-productivity-design.md)
 > （editor v2，八个阶段均已实施：阶段一多缓冲区基座、阶段二编辑基本功包、
 > 阶段三大纲面板、阶段四引用补全、阶段五一键格式化、阶段六 KaTeX 公式
 > 悬停预览、阶段七编译错误列表与跨文件跳转，以及阶段八修改行色条 /
-> 状态栏 / 选中高亮匹配 / 会话持久化升级 localStorage，借鉴 Notepad++）。
+> 状态栏 / 选中高亮匹配 / 会话持久化升级 localStorage，借鉴 Notepad++）
+> 与 [docs/editor-experience-design.md](../editor-experience-design.md)
+> （editor v3 写作体验收口；阶段一 SyncTeX 正反向同步已实施）。
 
 ## 设计概述
 
@@ -456,7 +458,8 @@ localStorage（同一浏览器重启后仍可恢复脏缓冲区）；升级前�
 文件树点击 `.pdf` 或常见位图（前端 `isPreviewableFilePath()` 与后端
 `PREVIEWABLE_SUFFIXES` 双白名单把关）经 `GET raw-file` 拉取 blob URL，
 在中栏编辑器区上方以只读覆盖层展示（标题栏显示相对路径 + 关闭按钮）：
-PDF 走 iframe，位图走 `<img>` 居中 contain。位图/PDF 的渲染分支抽为共享
+PDF 走 pdf.js 渲染（`PdfJsPreview`，editor v3 阶段一替换 iframe，见下文
+SyncTeX 一节），位图走 `<img>` 居中 contain。位图/PDF 的渲染分支抽为共享
 组件 `BinaryFilePreview`（填满父容器高度的纯渲染契约，加载文案经
 `loadingKey` 定制），编辑器覆盖层（`FilePreviewOverlay`）与工作台页
 （WorkspacePage 文件树点击预览）共用同一实现。预览不进入 CM6 缓冲区：
@@ -486,7 +489,9 @@ blob URL 在切换文件 / 关闭 / 卸载时就地 revoke，竞态败者（响�
 依次自动保存**所有**脏 tab（tab 条顺序，任一 409 即中断、切换到归属
 tab 进入冲突弹窗，陈旧确认弹窗同理），全部成功后继续。
 编译全程持在途序号守卫：双击竞态下过期响应整体丢弃并自回收其 blob
-URL。编译结果与 PDF 预览（复用 `PDFPreview` 与既有
+URL。编辑器发起的编译恒传 `synctex=true`（editor v3 决策 Q3，供
+SyncTeX 正反向查询；编译页 / git_diff 等调用方默认 false 零变化）。
+编译结果与 PDF 预览（复用 `PDFPreview` 与既有
 compile API）在右栏「编译与预览」Tab 展示；右栏可在该 Tab 与 AI 助手
 之间切换并整体折叠。PDF 预览左下角提供「全屏查看」按钮，全屏覆盖层
 （标题栏 + 退出按钮）挂在页面级——右栏 aside 带 transform 裁切，
@@ -495,6 +500,36 @@ Escape 亦可退出。收起态呈现为整条可点展开的「书脊」——�
 外观、竖排文字标注当前隐藏面板名；展开/收起动效按壳层宽度 → 内容
 淡入左滑 → 书脊浮现三层编排（`cubic-bezier(0.22,1,0.36,1)`），
 焦点在头部折叠按钮与书脊间交接，`prefers-reduced-motion` 下全部直切。
+
+### SyncTeX 正反向同步（editor v3 阶段一 / 决策 Q1–Q6）
+
+PDF 预览由 iframe 整体替换为 pdf.js 渲染（`PdfJsPreview`，
+`pdfjs-dist` Apache-2.0 经 `THIRD_PARTY_NOTICES.md` 登记）：渲染层
+可控是正反向定位的前提——iframe 无法程序化滚动、无法取点击位置。
+`pdfjs-dist` 仅经动态 `import()` 首次预览才加载（vite 独立分包
+`vendor-pdfjs`，worker 资产经 Vite `?url` 引入），首屏零加载；
+`PDFPreview` 对外 props 兼容 `{url}` 并新增可选 `forwardTarget` /
+`onBackwardSync` 通道，GitDiff / 工作台 / 模板中心等既有使用点
+自动受益于 pdf.js 渲染与最小工具条（± 缩放含 Ctrl+滚轮、适宽、
+页码输入；无文本层），缩放态跨编译（url 更新）保留。
+
+- **后端**（compile 模块，详见 [compile.md](compile.md)）：编译链路
+  `-synctex=1` 按请求可选追加；`POST /api/compile/synctex/forward`
+  （源码位置 → PDF 页面矩形，72dpi 点单位、左上原点）与
+  `POST /api/compile/synctex/backward`（PDF 点位 → 源码相对路径 +
+  行列）经 SandboxRunner 零写盘执行 `synctex view` / `synctex edit`，
+  响应不含绝对路径（Q1：不用前端 JS 解析 `.synctex.gz`）。
+- **正向（Q4+Q6）**：光标位置自动跟随——stats hub 光标通道快照只进
+  ref（键入零页面重渲染），尾随防抖约 800ms 后在「预览可见（编译 tab
+  展开或全屏）且有编译产物」时发查询；缓冲区行号直发（脏缓冲区偏差
+  容忍不补偿），失败静默、不做偏好开关。命中记录经 props 下发到
+  `PdfJsPreview`：滚动到对应页并绘制高亮矩形浮层（点 → CSS 像素
+  换算，纯函数 `synctexMath.js`），下一次 forward 替换。
+- **反向（Q5）**：PDF 内**双击**取点（单击保留给滚动/选择习惯）——
+  pdf.js `viewport.convertToPdfPoint` 后按 synctex 左上原点约定做
+  `y = pageHeight − y` 换算，回调 EditorPage 查询 backward 端点；
+  命中即复用编译错误跳转的「开 tab + 行定位」通路（文件未打开时经
+  `pendingErrorJumpRef` 延迟到换档后），查询失败 toast 三语提示。
 
 ### 检查结果保鲜（§8 / 决策 Q13）
 
@@ -527,6 +562,11 @@ AI 面板。四处配置同步规范照 AGENTS.md 执行；`/api/config/status` 
 - 后端 `tests/test_api/test_editor_format_latex.py`：format-latex 纯转换
   （Mock `format_latex_source`，无真实 latexindent 子进程）/ changed 标记 /
   413 上限 / invalid_workspace / 500 format_failed / 零写盘验证
+- 后端 `tests/test_api/test_compile_synctex.py`：SyncTeX 正反向端点
+  （Mock 沙箱执行，无真实 synctex 二进制 / docker / 网络）与
+  `-synctex=1` 追加规则（synctex 默认 false 时编译命令零变化）/
+  pdfa 组合忽略 / view·edit 输出解析 / file_path 越界拒绝 /
+  多用户输出脱敏 / 响应无绝对路径
 - 前端 node --test：editorPreferences（含导入导出校验）、editorApplyDiff、
   editorTabs（tab 状态机归约与会话选择器）、editorSessionPersistence
   （序列化清洗 / LRU 配额淘汰 / 项目键隔离 / localStorage 遗留收养迁移）、
@@ -537,5 +577,6 @@ AI 面板。四处配置同步规范照 AGENTS.md 执行；`/api/config/status` 
   editorWrap（包裹纯逻辑与直包键位一致性）/ editorBeginClose（\begin
   配对纯决策与事务行为）/ editorSearchPanel（面板短语映射与语言热更新）/
   editorOutlineScan（大纲扫描边界）/ editorFormulaHoverScan（公式识别边界）/ editorFormatApply（格式化应用决策、
-  快捷键判定与 CM6 history 单步撤销）/ latexCommands（含 wrap 类目 schema）/
+  快捷键判定与 CM6 history 单步撤销）/ editorSynctexMath（SyncTeX 点→像素
+  换算与左上原点翻转，含双击取点闭环）/ latexCommands（含 wrap 类目 schema）/
   i18nLocales 键集合一致性等

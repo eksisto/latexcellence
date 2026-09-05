@@ -1,6 +1,6 @@
 # 编辑器写作体验收口设计方案（editor v3）
 
-> **状态：未实施。** 本文是编辑器生产力改造（[editor-productivity-design.md](editor-productivity-design.md)，
+> **状态：分阶段实施中（阶段一 SyncTeX 正反向同步已实施，其余阶段未实施）。** 本文是编辑器生产力改造（[editor-productivity-design.md](editor-productivity-design.md)，
 > 八阶段已全部实施）完成后，对其"非目标（记入 roadmap）"清单的收口方案，作为分阶段实施的
 > 依据与变更对照基线。唯一保留的动工前门槛：阶段五（助手联网）需就确认流时序单独过一轮
 > 设计评审（见 Q12）。已实施形态见 [modules/editor.md](modules/editor.md)。

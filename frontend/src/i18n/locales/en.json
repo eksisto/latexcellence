@@ -1531,7 +1531,13 @@
     },
     "pdfPreview": {
       "title": "PDF Preview",
-      "noPreview": "No PDF preview available"
+      "noPreview": "No PDF preview available",
+      "zoomIn": "Zoom in",
+      "zoomOut": "Zoom out",
+      "fitWidth": "Fit width",
+      "pageInput": "Page number",
+      "loading": "Loading PDF…",
+      "loadFailed": "Failed to load PDF"
     },
     "promptEditor": {
       "title": "Custom Prompt",
@@ -1702,6 +1708,7 @@
       "enterFullscreen": "Fullscreen",
       "quitFullscreen": "Exit fullscreen",
       "fullscreenTitle": "Compile PDF Fullscreen Preview",
+      "synctexFailed": "PDF backward sync failed",
       "tabBarLabel": "Open files",
       "tabStaleBadge": "Changed on disk",
       "closeTab": "Close tab",

@@ -124,6 +124,10 @@ export default defineConfig(({ mode }) => {
               // 界面经动态 import() 按需加载，独立分包防止 ~1MB 字典数据
               // 落入首屏 vendor chunk
               if (/opencc-js/.test(id)) return "vendor-opencc";
+              // pdfjs-dist（PDF 预览渲染层，editor v3 阶段一）：仅经动态
+              // import() 首次预览才加载，独立分包防止落入首屏 vendor chunk
+              // （worker 资产经 ?url 引入为独立 asset，不经分包）
+              if (/pdfjs-dist/.test(id)) return "vendor-pdfjs";
               // CodeMirror 6（编辑器 /editor 懒加载路由专用，避免拖累首屏；
               // 覆盖 @uiw 全系子包与叶子依赖，防止与 vendor 互相引用形成循环分包）
               if (

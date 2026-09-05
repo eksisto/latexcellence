@@ -377,6 +377,7 @@ async def run_tex_compile(
     extra_args: list[str] | None = None,
     engine: str = "auto",
     pdfa: bool = False,
+    synctex: bool = False,
 ) -> TexCompileResult:
     """通过 texfot 包装 latexmk 执行 TeX 编译，返回过滤后的输出。
 
@@ -387,6 +388,9 @@ async def run_tex_compile(
         extra_args: 传递给 latexmk 的额外参数（如 ["-halt-on-error"]）
         engine: 编译引擎（auto/pdflatex/xelatex/lualatex），auto 时根据文件内容检测
         pdfa: 是否启用 PDF/A-2b 归档格式输出
+        synctex: 是否生成 SyncTeX 数据（-synctex=1）。PDF/A 模式下忽略：
+            PDF/A 在临时目录编译后仅回拷 PDF，``.synctex.gz`` 不同步回
+            项目目录，开了也无法查询（editor v3 决策 Q3）
 
     返回：
         TexCompileResult（含过滤后输出、原始输出、成功/失败状态）
@@ -442,6 +446,10 @@ async def run_tex_compile(
 
     cwd_str = str(work_cwd)
     latexmk_base = ["latexmk", engine_arg, "-interaction=nonstopmode"]
+    if synctex and not pdfa:
+        # 与 extra_args 同级的基础参数：调用方显式请求才追加，
+        # 编译页 / git_diff 等既有调用方（默认 False）零变化
+        latexmk_base.append("-synctex=1")
     if extra_args:
         latexmk_base.extend(extra_args)
     latexmk_base.append(actual_main_file)
