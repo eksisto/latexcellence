@@ -10,12 +10,17 @@ AI 建议**不经后端落盘**：建议以结构化形式随 SSE 返回并随�
 （仅供会话历史展示），由前端应用到 CM6 缓冲区，最终经 save-file 单一
 路径落盘（决策 Q22）。
 
+阶段五b 确认流：联网/学术工具在编辑器侧逐次确认（先登记 pending 再
+yield `tool_pending`，流内等待 confirm/cancel 端点决议；拒绝 / TTL 过期
+注入取消语义 tool result），复用 Writing Chat 的 pending 基础设施与端点。
+
 模块级纯函数 build_editor_context() / extract_suggestions() 供单测直测。
 """
 
 import asyncio
 import json
 import re
+import uuid
 from pathlib import Path
 from typing import Any, AsyncIterator
 
@@ -73,6 +78,22 @@ _SCHOLARLY_TOOL_NAMES = frozenset(
         "get_full_text_or_sections",
         "search_research_data_resources",
     }
+)
+
+# 确认流分组（阶段五b，editor-design §4.5 / §5"经确认执行"）：编辑器
+# 侧对联网/学术工具逐次确认——每次调用产生一个 pending 交互，用户确认
+# 后才执行、拒绝/超时后模型收到取消语义。这是比 Writing Chat 主对话
+# （这些工具直通、零 pending）更严格的新策略，属编辑器侧计划本意；
+# 项目只读三件套维持直通，不产生 pending。
+_CONFIRMABLE_TOOL_NAMES = _WEB_TOOL_NAMES | _SCHOLARLY_TOOL_NAMES
+
+# 取消语义 tool result 注入文本（模型侧消息，不面向用户、无需 i18n）：
+# 明确告知用户拒绝了本次检索且不得原样重试，模型可基于已有信息继续
+# 回答或换策略。
+_TOOL_CANCELLED_TEXT = (
+    "The user declined the {tool_name} operation. Do not retry the same "
+    "call; continue with the information you already have, or ask the "
+    "user how to proceed."
 )
 
 # 只读工具白名单（阶段五a 扩展）：项目只读三件套（决策 Q26）+ 联网搜索
@@ -561,6 +582,58 @@ class EditorChatMixin:
                         persisted_tool_msg_refs.append(tool_msg)
                         tool_messages = self._trim_tool_messages(tool_messages)
                         continue
+
+                    # 确认流（阶段五b）：联网/学术工具逐次确认。**先登记
+                    # pending 再 yield tool_pending**——事件到达前端后用户
+                    # 可能在亚秒内点击确认，登记在后会使 confirm 端点查无
+                    # 此 pending（Writing Chat 既有次序的时序缺陷，编辑器
+                    # 侧不复现）。等待在流内挂起（confirm/cancel 端点经
+                    # Event / pending_interactions 表续流），TTL 过期等同
+                    # 拒绝（_await_tool_confirmation 返回 None）。
+                    if tool_name in _CONFIRMABLE_TOOL_NAMES:
+                        pending_id = uuid.uuid4().hex[:12]
+                        await self._register_tool_confirmation(
+                            pending_id, tool_name, tool_args
+                        )
+                        yield {
+                            "type": "tool_pending",
+                            "pending_id": pending_id,
+                            "tool": tool_name,
+                            "label": self._get_tool_label(tool_name, tool_args),
+                            "args": tool_args,
+                        }
+                        confirmed_args = await self._await_tool_confirmation(
+                            pending_id, tool_name, tool_args
+                        )
+                        if confirmed_args is None:
+                            self._logger.info(
+                                f"Editor assistant tool {tool_name} declined "
+                                f"by user [pending={pending_id}]"
+                            )
+                            yield {
+                                "type": "tool_cancelled",
+                                "pending_id": pending_id,
+                                "tool": tool_name,
+                            }
+                            # 取消语义 tool result：tool_call 配对完整，
+                            # 模型明确知道用户拒绝了本次检索
+                            tool_msg = {
+                                "role": "tool",
+                                "tool_call_id": tc.id,
+                                "content": _TOOL_CANCELLED_TEXT.format(
+                                    tool_name=tool_name
+                                ),
+                            }
+                            tool_messages.append(tool_msg)
+                            persisted_tool_msg_refs.append(tool_msg)
+                            tool_messages = self._trim_tool_messages(tool_messages)
+                            continue
+                        # 使用可能被前端修改后的参数
+                        tool_args = confirmed_args
+                        self._logger.info(
+                            f"Editor assistant tool {tool_name} confirmed "
+                            f"by user [pending={pending_id}]"
+                        )
 
                     yield {
                         "type": "tool_status",

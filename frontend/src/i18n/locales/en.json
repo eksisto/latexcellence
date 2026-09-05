@@ -1881,7 +1881,14 @@
       "diffHunkOverlap": "Hunks in this diff overlap each other; application rejected.",
       "diffMalformed": "The diff format could not be parsed.",
       "noFileHint": "No file open; general Q&A only",
-      "fileMismatchHint": "Suggestion targets {{file}}; switch to that tab before applying"
+      "fileMismatchHint": "Suggestion targets {{file}}; switch to that tab before applying",
+      "toolConfirmTitle": "Assistant requests a web/scholarly lookup",
+      "toolConfirmDesc": "Tool {{tool}} needs your confirmation before it runs: {{summary}}",
+      "toolConfirmNoSummary": "(no summary available)",
+      "toolConfirmAllow": "Allow once",
+      "toolConfirmDeny": "Deny",
+      "toolConfirmExpired": "Timed out; this call will be treated as declined",
+      "toolCancelled": "Web/scholarly lookup cancelled"
     },
     "staleCheck": {
       "title": "These files changed in the editor; the check results below may be stale — consider re-running:"

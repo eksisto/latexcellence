@@ -145,6 +145,8 @@ function createEditorAssistantSlice(set, get) {
     assistantStreaming: false,
     /** 工具调用指示器（tool_status 事件；null 表示空闲） */
     assistantToolStatus: null,
+    /** 工具确认卡（tool_pending 事件，阶段五b 确认流；null 表示无待确认） */
+    assistantPendingTool: null,
 
     setAssistantSessionId: (sessionId) =>
       set({ assistantSessionId: sessionId }),
@@ -228,6 +230,8 @@ function createEditorAssistantSlice(set, get) {
     setAssistantStreaming: (streaming) =>
       set({ assistantStreaming: !!streaming }),
     setAssistantToolStatus: (status) => set({ assistantToolStatus: status }),
+    setAssistantPendingTool: (pendingTool) =>
+      set({ assistantPendingTool: pendingTool }),
     /**
      * 项目切换守卫：项目键与当前不一致时清空本地会话视图。
      * @returns {boolean} 是否发生了重置
@@ -243,6 +247,7 @@ function createEditorAssistantSlice(set, get) {
           assistantMessages: [],
           assistantStreaming: false,
           assistantToolStatus: null,
+          assistantPendingTool: null,
         };
       }),
     clearAssistantConversation: () =>
@@ -251,6 +256,7 @@ function createEditorAssistantSlice(set, get) {
         assistantMessages: [],
         assistantStreaming: false,
         assistantToolStatus: null,
+        assistantPendingTool: null,
       }),
   };
 }

@@ -94,9 +94,10 @@ hunk 至少带 3 行上下文，供前端锚定定位。
 `read_page_sections` / `find_in_page`）+ 学术检索（`search_scholarly_works`
 / `get_work_details` / `find_related_works` / `get_full_text_or_sections`
 / `search_research_data_resources`），与 Writing Chat 主对话注册表对齐；
-这些工具在编辑器侧**直通执行**（无 pending 确认，与 Writing Chat 一致；
-确认流属阶段五b），`edit_paragraph` / `undo_last_edit` 仍不入白名单
-（写入一律走缓冲区协议）。
+其中联网/学术九工具在编辑器侧**逐次确认执行**（阶段五b 确认流，见
+下节；比 Writing Chat 主对话——这些工具直通——更严格，属编辑器侧
+计划本意），项目只读三件套直通；`edit_paragraph` / `undo_last_edit`
+仍不入白名单（写入一律走缓冲区协议）。
 
 `_get_editor_tools` 从单一 project_tools 源扩为**三源汇聚、按源独立
 容错**（单一源故障只降级该源，不连坐其余）：
@@ -140,6 +141,37 @@ images / query / engine_name / instruction）后以 `done(captcha_pending=true)`
 "删占位"语义对齐。挑战数据存储与提交端点
 （`POST /api/search/ddg-challenge`，TTL 300s、多用户跨副本）复用
 Writing Chat 既有设施，零改动。挑战解决后由用户手动重发原提问。
+挑战与确认互斥：captcha 分支直接终流，确认流不与之组合（工具先经
+确认、执行时才可能触发挑战）。
+
+#### 工具确认流（editor v3 阶段五b）
+
+联网/学术九工具在编辑器侧**逐次确认**：每次工具调用产生一个 pending
+交互，用户确认后才执行；项目只读三件套维持直通。复用 Writing Chat
+既有 confirm/cancel 端点与 pending 基础设施（多用户
+`pending_interactions` 表驱动跨副本先到先得 / 单用户进程内 Event，
+TTL 120s），零新增端点与配置项。
+
+时序要点：
+
+- **先登记后 yield**：`state.py` 把确认拆为登记
+  （`_register_tool_confirmation`）与等待（`_await_tool_confirmation`）
+  两阶段；工具循环先登记 pending、再下发 `tool_pending` SSE 事件、
+  后进入等待。Writing Chat 既有次序是 yield 先于登记（亚秒级确认会
+  命中"查无此 pending"404），编辑器侧不复现该缺陷；
+  `_request_tool_confirmation` 组合两阶段，Writing Chat 原行为不变。
+- **流内等待**：SSE 生成器挂起于等待处（与 Writing Chat pending 同
+  构），confirm/cancel 端点决议后续流，确认后同一流内继续执行与
+  后续模型轮次；确认参数可被前端修改（`modified_args`）。
+- **取消语义**：用户拒绝或 TTL 过期统一注入取消语义 tool result
+  （tool_call 配对完整、模型明确知晓用户拒绝了本次检索且不得原样
+  重试），模型可基于已有信息继续回答或换策略。
+- **幂等与竞态**：单用户 Event `is_set` 先查、多用户条件 UPDATE
+  先到先得；过期/已决议后到达的 confirm/cancel 返回 404，前端静默
+  清卡。
+- **SSE 断流**：无回放机制，照搬 Writing Chat"断流即丢弃、用户手动
+  重发"语义（前端确认卡为内存态，hook finally 兜底清卡）；pending
+  等待期间流内无心跳，反向代理空闲超时属已知部署限制。
 
 ## 前端
 
@@ -157,7 +189,7 @@ frontend/src/
 │   ├── ConflictDialog.jsx            # 409 弹窗（动作作用于冲突归属 tab：放弃重载 / 剪贴板逃生 / 覆盖保存）
 │   ├── CommandPalette.jsx            # 命令面板 + m×n 网格选择器二级步骤
 │   ├── GridSizePicker.jsx            # 表格/矩阵网格拖选
-│   ├── AssistantPanel.jsx            # AI 助手侧栏（SSE 对话 + 建议卡 + 来源 tab 守卫 + DDG 挑战弹窗）
+│   ├── AssistantPanel.jsx            # AI 助手侧栏（SSE 对话 + 建议卡 + 来源 tab 守卫 + DDG 挑战弹窗 + 工具确认卡）
 │   ├── StaleCheckBanner.jsx          # 检查结果过期横幅（各检查页复用）
 │   └── …（BinaryFilePreview / CompilePreviewPanel / EditorRightPanel / FilePreviewOverlay / FullscreenPDFPreview）
 ├── CaptchaDialog.jsx                 # DDG 搜索验证码弹窗（共享：Writing Chat 页与编辑器助手侧栏共用，阶段五a 提升）
@@ -185,10 +217,10 @@ frontend/src/
 │   ├── formatApply.js                # 一键格式化纯模块（快捷键判定 / 应用决策 view·state·store / 单事务整文档替换）
 │   ├── preambleScan.js               # 导言区扫描 + 宏包缺失检测
 │   ├── applyDiff.js                  # unified diff 解析与上下文锚定应用纯模块
-│   ├── assistantStream.js            # 助手 SSE 事件归约纯函数（占位消息 / 工具状态 / 会话 id / DDG 挑战，hook 与单测共用）
+│   ├── assistantStream.js            # 助手 SSE 事件归约纯函数（占位消息 / 工具状态 / 工具确认卡 / 会话 id / DDG 挑战，hook 与单测共用）
 │   └── （命令数据库 data/latexCommands/ 按类目拆分 JSON + index.js 统一加载器，含 wrap 包裹类目）
 └── hooks/useEditorBuffer.js          # 多缓冲区编排（打开/激活/保存/冲突/陈旧/自动保存/刷新恢复/项目切换守卫）
-└── hooks/useEditorAssistant.js       # 助手 SSE hook（归约委托 assistantStream 纯函数 + 项目切换守卫 + 复用 useWritingChatCaptcha 挑战通道）
+└── hooks/useEditorAssistant.js       # 助手 SSE hook（归约委托 assistantStream 纯函数 + 项目切换守卫 + 工具确认/取消动作 + 复用 useWritingChatCaptcha 挑战通道）
 └── hooks/useEditorOutline.js         # 大纲数据源（当前文件视图防抖重扫 + tab 切换立即重扫；本项目视图拉取后端 outline、保存后防抖重拉）
 └── hooks/useEditorFormat.js          # 一键格式化编排（在途守卫 / 发起 tab 定位 / 应用决策分派）
 ```
@@ -589,6 +621,22 @@ pages/writing-chat/ 提升到 components/，Writing Chat 页同步改导入，
 避免刷新后出现"幽灵"空消息）并照常回写会话 id（user 消息已在服务端
 落盘）；`captcha_challenge` 事件同时清空工具指示器，不留滞留状态。
 挑战解决后由用户手动重发原提问（无自动续流，与 Writing Chat 同语义）。
+
+### 工具确认卡（editor v3 阶段五b）
+
+联网/学术工具调用先经侧栏确认卡放行：`tool_pending` 事件经
+`reduceAssistantPendingTool` 归一化写入 `editorStore.assistantPendingTool`
+（时间戳由 hook 副作用层补盖），`AssistantPanel` 渲染 `ToolConfirmCard`
+（工具名 + 查询/URL/文献 ID 摘要，三语）。确认/取消动作由
+`useEditorAssistant` 接 Writing Chat 既有 confirm-tool / cancel-tool
+端点（静默 404：过期或已决议一律清卡不报错），确认后同一 SSE 流内
+续流，无需重新发起请求。卡片内建 TTL 120s 过期视觉态（与后端
+`_TOOL_CONFIRM_TTL_SECONDS` 对齐，超时按钮禁用并灰色化，等待后端
+`tool_cancelled` 事件收尾）；`tool_pending` / `tool_cancelled` /
+`done` / `error` 均清工具指示器与卡片，不留滞留状态。确认对象是
+检索而非写盘，viewer 亦可确认（无 canWrite 守卫，与写工具确认的
+刻意差异）。pending 期间流仍在途（`assistantStreaming` 为 true），
+输入框禁用天然防并发轮次。
 
 ### 编译联动（§8 / 决策 Q18 + v2 Q16）
 

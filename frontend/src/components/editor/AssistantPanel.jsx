@@ -1,6 +1,7 @@
 /**
  * AssistantPanel —— 编辑器 AI 助手侧栏（editor-design §7，阶段四；
- * 阶段五a 接入联网/学术检索工具与 DDG 挑战侧栏内完成）。
+ * 阶段五a 接入联网/学术检索工具与 DDG 挑战侧栏内完成；阶段五b 接入
+ * 联网/学术工具的逐次确认流）。
  *
  * Copilot 式右栏面板：SSE 流式对话（复用 Writing Chat 会话持久化与
  * 只读项目工具/联网搜索/学术检索），三种建议应用形态齐全（§7.2 / 决策 Q23）：
@@ -12,6 +13,8 @@
  * 问答但应用按钮禁用。建议不经后端落盘，落盘仍走 save-file 单一路径。
  * DDG 挑战（阶段五a）：后端 captcha_challenge 事件终流后弹共享
  * CaptchaDialog，挑战在面板提交/放弃，用户随后手动重发原提问。
+ * 工具确认卡（阶段五b）：联网/学术工具调用先经确认卡放行（含 TTL
+ * 过期视觉态），viewer 可确认；确认后同一流内继续执行。
  */
 
 import {
@@ -36,6 +39,9 @@ import { Textarea } from "@/components/ui/textarea";
 import Bot from "lucide-react/dist/esm/icons/bot.mjs";
 import Check from "lucide-react/dist/esm/icons/check.mjs";
 import FileDiff from "lucide-react/dist/esm/icons/file-diff.mjs";
+import Globe from "lucide-react/dist/esm/icons/globe.mjs";
+import GraduationCap from "lucide-react/dist/esm/icons/graduation-cap.mjs";
+import Hourglass from "lucide-react/dist/esm/icons/hourglass.mjs";
 import Loader2 from "lucide-react/dist/esm/icons/loader-circle.mjs";
 import SendHorizontal from "lucide-react/dist/esm/icons/send-horizontal.mjs";
 import SquareDashedMousePointer from "lucide-react/dist/esm/icons/square-dashed-mouse-pointer.mjs";
@@ -47,6 +53,125 @@ import useEditorStore, { activeBuffer } from "@/store/editorStore";
 import useEditorAssistant from "@/hooks/useEditorAssistant";
 import CaptchaDialog from "@/components/CaptchaDialog";
 import { applyUnifiedDiff, parseUnifiedDiff } from "@/lib/editor/applyDiff";
+
+/**
+ * 工具确认卡 TTL（毫秒）：与后端 StateMixin._TOOL_CONFIRM_TTL_SECONDS
+ * （120s）对齐——过期后确认/取消端点必返 404，卡片先行进入"已超时"
+ * 视觉态（按钮禁用），等待后端 tool_cancelled 事件收尾。
+ */
+const PENDING_TOOL_TTL_MS = 120_000;
+
+/** 摘要参数键优先级：查询词 > 页面 URL > 文献 ID，取到即止 */
+const PENDING_ARG_KEYS = ["query", "url", "work_id"];
+
+/**
+ * 从工具参数中提取人类可读的摘要（查询词 / URL / 文献 ID，截断至
+ * 80 字符），供确认卡展示；无可辨认参数时回落空串（只显示工具名）。
+ */
+function summarizePendingArgs(args) {
+  for (const key of PENDING_ARG_KEYS) {
+    const value = args?.[key];
+    if (typeof value === "string" && value.trim()) {
+      const trimmed = value.trim();
+      return trimmed.length > 80 ? `${trimmed.slice(0, 80)}…` : trimmed;
+    }
+  }
+  return "";
+}
+
+/**
+ * 工具确认卡（阶段五b 确认流）：联网/学术工具逐次确认的侧栏卡片。
+ * 渲染在消息列表外（与 toolStatus 指示器同层，不复用 Writing Chat 的
+ * ToolConfirmDialog 模态）。确认/取消动作经 hook 接 Writing Chat 既有
+ * confirm-tool / cancel-tool 端点；TTL 120s 过期后按钮禁用并显示超时
+ * 态（后端将注入取消语义 tool result，流内收尾）。确认对象是检索而非
+ * 写盘，viewer 亦可放行（无 canWrite 守卫，刻意决策）。
+ */
+const ToolConfirmCard = memo(function ToolConfirmCard({
+  pendingTool,
+  submitting,
+  onConfirm,
+  onCancel,
+}) {
+  const { t } = useTranslation("components");
+  const [expired, setExpired] = useState(false);
+  const isScholarly = useMemo(
+    () =>
+      [
+        "search_scholarly_works",
+        "get_work_details",
+        "find_related_works",
+        "get_full_text_or_sections",
+        "search_research_data_resources",
+      ].includes(pendingTool?.tool),
+    [pendingTool?.tool],
+  );
+  const summary = useMemo(
+    () => summarizePendingArgs(pendingTool?.args),
+    [pendingTool?.args],
+  );
+
+  // TTL 倒计时：超时进入灰色化视觉态（后端 tool_cancelled 事件随后
+  // 清卡；点按端点的 404 亦由 hook 静默清卡兜底）
+  useEffect(() => {
+    setExpired(false);
+    if (!pendingTool?.createdAt) return undefined;
+    const remaining =
+      PENDING_TOOL_TTL_MS - (Date.now() - pendingTool.createdAt);
+    if (remaining <= 0) {
+      setExpired(true);
+      return undefined;
+    }
+    const id = window.setTimeout(() => setExpired(true), remaining);
+    return () => window.clearTimeout(id);
+  }, [pendingTool?.pending_id, pendingTool?.createdAt]);
+
+  const Icon = isScholarly ? GraduationCap : Globe;
+
+  return (
+    <div
+      className={`rounded-md border p-2.5 text-xs ${
+        expired
+          ? "border-muted bg-muted/40 opacity-70"
+          : "border-amber-500/40 bg-amber-500/5"
+      }`}
+    >
+      <div className="flex items-center gap-1.5 font-medium">
+        <Icon className="size-3.5 shrink-0 text-amber-600 dark:text-amber-400" />
+        {t("assistant.toolConfirmTitle")}
+      </div>
+      <div className="mt-1 break-all text-muted-foreground">
+        {t("assistant.toolConfirmDesc", {
+          tool: pendingTool?.tool || "",
+          summary: summary || t("assistant.toolConfirmNoSummary"),
+        })}
+      </div>
+      <div className="mt-1.5 flex items-center gap-1.5">
+        {expired ? (
+          <span className="inline-flex items-center gap-1 text-[10px] text-muted-foreground">
+            <Hourglass className="size-3" />
+            {t("assistant.toolConfirmExpired")}
+          </span>
+        ) : (
+          <>
+            <Button size="xs" onClick={() => onConfirm()} disabled={submitting}>
+              {submitting ? <Loader2 className="animate-spin" /> : <Check />}
+              {t("assistant.toolConfirmAllow")}
+            </Button>
+            <Button
+              size="xs"
+              variant="outline"
+              onClick={() => onCancel()}
+              disabled={submitting}
+            >
+              {t("assistant.toolConfirmDeny")}
+            </Button>
+          </>
+        )}
+      </div>
+    </div>
+  );
+});
 
 /**
  * 单条建议的操作卡（snippet 两键 / diff 审阅卡，EditOpCard 模式）。
@@ -227,6 +352,9 @@ function AssistantPanel({
     messages,
     streaming,
     toolStatus,
+    pendingTool,
+    confirmAssistantTool,
+    cancelAssistantTool,
     captchaChallenge,
     captchaSubmitting,
     submitCaptcha,
@@ -235,6 +363,26 @@ function AssistantPanel({
     reportSuggestionApplied,
     clearConversation,
   } = useEditorAssistant({ getEditorContext });
+  /** 确认请求在途：按钮禁用防双击（端点侧先到先得幂等兜底） */
+  const [confirmSubmitting, setConfirmSubmitting] = useState(false);
+
+  /** 确认/取消共用的在途守卫包装（端点 404 静默清卡在 hook 内） */
+  const handleConfirmTool = useCallback(async () => {
+    setConfirmSubmitting(true);
+    try {
+      await confirmAssistantTool();
+    } finally {
+      setConfirmSubmitting(false);
+    }
+  }, [confirmAssistantTool]);
+  const handleCancelTool = useCallback(async () => {
+    setConfirmSubmitting(true);
+    try {
+      await cancelAssistantTool();
+    } finally {
+      setConfirmSubmitting(false);
+    }
+  }, [cancelAssistantTool]);
 
   /** 稳定引用：轮询 effect 经 ref 读取最新回调，不因内联函数重建重启 */
   const getCtxRef = useRef(getEditorContext);
@@ -393,6 +541,20 @@ function AssistantPanel({
           </div>
         )}
       </div>
+
+      {/* 工具确认卡（阶段五b 确认流）：渲染在消息列表外（与 toolStatus
+          指示器同层）；确认后同一 SSE 流内续流，拒绝/超时后端注入取消
+          语义，助手可换策略回答 */}
+      {pendingTool && (
+        <div className="border-t p-3">
+          <ToolConfirmCard
+            pendingTool={pendingTool}
+            submitting={confirmSubmitting}
+            onConfirm={handleConfirmTool}
+            onCancel={handleCancelTool}
+          />
+        </div>
+      )}
 
       {/* DDG 挑战（阶段五a）：终流后弹出，侧栏内提交/放弃（三语键沿用
           pages:writingChat.captcha*，挑战解决后由用户手动重发原提问） */}

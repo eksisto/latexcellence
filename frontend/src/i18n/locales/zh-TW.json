@@ -1881,7 +1881,14 @@
       "diffHunkOverlap": "diff 中多個修改塊相互重疊，已拒絕應用",
       "diffMalformed": "diff 格式無法解析。",
       "noFileHint": "未開啟檔案，助手僅通用問答",
-      "fileMismatchHint": "建議來自 {{file}}，請先切換到該標籤頁再應用"
+      "fileMismatchHint": "建議來自 {{file}}，請先切換到該標籤頁再應用",
+      "toolConfirmTitle": "助手請求執行連線/學術檢索",
+      "toolConfirmDesc": "工具 {{tool}} 需經你確認後才會執行：{{summary}}",
+      "toolConfirmNoSummary": "（無摘要參數）",
+      "toolConfirmAllow": "允許執行",
+      "toolConfirmDeny": "拒絕",
+      "toolConfirmExpired": "已逾時，本次呼叫將按取消處理",
+      "toolCancelled": "已取消本次連線/學術檢索"
     },
     "staleCheck": {
       "title": "檔案已在編輯器中修改，以下檢查結果可能過期，建議重新檢查："

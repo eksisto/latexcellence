@@ -23,6 +23,11 @@ from backend.core.multiuser import pending_interactions
 class StateMixin:
     """会话级状态与用户交互等待。"""
 
+    # 待确认交互的统一 TTL（秒）：DB 行 expires_at 与单用户 Event 等待
+    # 超时共用；超时 / 过期一律等同用户拒绝（调用方注入取消语义 tool
+    # result，模型侧永不悬空）
+    _TOOL_CONFIRM_TTL_SECONDS = 120
+
     def __init__(self):
         self._logger = get_logger("writing_chat.service")
         # 会话级写锁：同一 session 的 send / 编辑 / 压缩等操作互斥，
@@ -61,28 +66,71 @@ class StateMixin:
             - None: 超时或被拒绝
             - dict: 确认后的参数（可能已被前端修改）
         """
+        await self._register_tool_confirmation(pending_id, tool_name, tool_args)
+        return await self._await_tool_confirmation(pending_id, tool_name, tool_args)
+
+    async def _register_tool_confirmation(
+        self,
+        pending_id: str,
+        tool_name: str,
+        tool_args: dict,
+    ) -> None:
+        """登记待确认交互（不等待决议）。
+
+        编辑器确认流（阶段五b）要求"先登记后 yield"：``tool_pending``
+        事件携带的 pending_id 一旦到达前端，用户可能在亚秒内点击确认，
+        若登记发生在 yield 之后（Writing Chat 主对话的既有次序），
+        confirm 端点将查无此 pending 而误报 404。拆为登记 / 等待两阶段
+        后，调用方可先登记、再推事件、后等待；Writing Chat 的
+        ``_request_tool_confirmation`` 组合两者，行为与历史版本一致。
+        """
         if self._db_pending_available():
-            resolved = await self._wait_db_pending(
-                pending_interactions.KIND_CONFIRM,
+            await asyncio.to_thread(
+                pending_interactions.create,
                 pending_id,
+                pending_interactions.KIND_CONFIRM,
                 {"tool_name": tool_name, "tool_args": dict(tool_args)},
-                timeout=120,
+                self._TOOL_CONFIRM_TTL_SECONDS,
             )
-            if resolved is not None and resolved.get("status") == "confirmed":
-                args = resolved.get("tool_args")
-                return args if isinstance(args, dict) else tool_args
-            return None
+            return
         self._cleanup_stale_pending()
-        event = asyncio.Event()
         self._pending_confirms[pending_id] = {
-            "event": event,
+            "event": asyncio.Event(),
             "confirmed": None,
             "tool_name": tool_name,
             "tool_args": dict(tool_args),
             "created_at": time.time(),
         }
+
+    async def _await_tool_confirmation(
+        self,
+        pending_id: str,
+        tool_name: str,
+        tool_args: dict,
+    ) -> dict | None:
+        """等待已登记（:meth:`_register_tool_confirmation`）的待确认交互决议。
+
+        返回：
+            - None: 取消 / 等待超时 / pending 行过期（三者同义）
+            - dict: 确认后的参数（可能已被前端修改）
+        """
+        if self._db_pending_available():
+            resolved = await self._poll_db_pending(
+                pending_id,
+                pending_interactions.KIND_CONFIRM,
+                self._TOOL_CONFIRM_TTL_SECONDS,
+            )
+            if resolved is not None and resolved.get("status") == "confirmed":
+                args = resolved.get("tool_args")
+                return args if isinstance(args, dict) else tool_args
+            return None
+        entry = self._pending_confirms.get(pending_id)
+        if entry is None:
+            return None
         try:
-            await asyncio.wait_for(event.wait(), timeout=120)
+            await asyncio.wait_for(
+                entry["event"].wait(), timeout=self._TOOL_CONFIRM_TTL_SECONDS
+            )
         except asyncio.TimeoutError:
             self._pending_confirms.pop(pending_id, None)
             return None
@@ -246,6 +294,20 @@ class StateMixin:
             payload,
             timeout,
         )
+        return await self._poll_db_pending(interaction_id, kind, timeout)
+
+    async def _poll_db_pending(
+        self,
+        interaction_id: str,
+        kind: str,
+        timeout: float,
+    ) -> dict | None:
+        """轮询已登记（调用方负责 create）的待定交互直至决议/超时。
+
+        与 :meth:`_wait_db_pending` 的等待语义一致；拆出供"先登记后
+        yield"的两阶段调用方（编辑器确认流）复用。过期行按已决议处理
+        （fetch_resolved 返回 status=expired），与等待超时同义。
+        """
         deadline = time.monotonic() + timeout
         poll = pending_interactions.PENDING_POLL_INTERVAL_SECONDS
         while True:

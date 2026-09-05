@@ -1,10 +1,12 @@
 # 编辑器写作体验收口设计方案（editor v3）
 
-> **状态：分阶段实施中（阶段一 SyncTeX 正反向同步、阶段二用户自定义片段库、阶段三实时语法诊断、阶段四跨文件大纲与公式固定预览卡、阶段五a 助手接入联网与学术检索已实施，其余阶段未实施）。** 本文是编辑器生产力改造（[editor-productivity-design.md](editor-productivity-design.md)，
+> **状态：分阶段实施中（阶段一 SyncTeX 正反向同步、阶段二用户自定义片段库、阶段三实时语法诊断、阶段四跨文件大纲与公式固定预览卡、阶段五助手接入联网与学术检索（5a 工具接入 + 5b 确认流）已实施，其余阶段（阶段六自研 Lezer 语法）未实施）。** 本文是编辑器生产力改造（[editor-productivity-design.md](editor-productivity-design.md)，
 > 八阶段已全部实施）完成后，对其"非目标（记入 roadmap）"清单的收口方案，作为分阶段实施的
 > 依据与变更对照基线。阶段五（助手联网）的确认流时序已过专项设计评审（见 Q12），按评审
-> 结论拆为"5a 工具接入（含 DDG 挑战）"与"5b 确认流"两个子阶段，5a 先行（工具直通执行，
-> 与 Writing Chat 主对话注册表行为一致；DDG 挑战是唯一的人机交互）。已实施形态见
+> 结论拆为"5a 工具接入（含 DDG 挑战）"与"5b 确认流"两个子阶段：5a 先行落地工具接入
+> （联网/学术工具直通执行、DDG 挑战侧栏完成），5b 落地确认流并把 5a 的直通形态升级为
+> 联网/学术九工具**逐次确认**（项目只读工具维持直通；确认粒度取评审 §1.2 方案 A，
+> 系计划 §5 验收"经确认执行；拒绝后模型收到取消语义"的本意）。已实施形态见
 > [modules/editor.md](modules/editor.md)。
 > 如行为与本文冲突，先修订本文再动代码。
 
@@ -166,6 +168,10 @@ Overleaf 级体验相比仍有明确落差，全部对应 v2 计划记入 roadma
   确认/取消卡片，动作复用 Writing Chat 既有 confirm/cancel 端点与
   pending_interactions 基础设施（多用户表驱动 + 单用户 Event 路径不变）；
   DDG 挑战复用 `hooks/writing-chat/captcha` 的交互通道在助手侧栏内完成。
+  实施落定（5b）：确认粒度为联网/学术九工具**逐次确认**（项目只读工具
+  直通）；pending 先登记后下发事件（修复 Writing Chat 既有"yield 先于
+  登记"的亚秒确认 404 缺陷）；等待在流内挂起（与 Writing Chat pending
+  同构）；拒绝 / TTL 120s 过期统一注入取消语义 tool result。
 - **提示词**：`prompts.py` 的 `editor_assistant.chat_system` 增补工具使用
   约定（何时检索、引用如何给到缓冲区建议）；提示词改动遵循集中管理规范。
 - **功能开关**：沿用网络访问既有灰度开关与 `editor.assistant_enabled` 双重

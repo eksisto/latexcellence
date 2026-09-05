@@ -5,14 +5,16 @@
  *   - 消息列表归约：reduceAssistantMessages；
  *   - 工具调用指示器归约：reduceAssistantToolStatus（对应独立于消息列表的
  *     editorStore.assistantToolStatus 字段，不在占位消息上）；
+ *   - 工具确认卡归约：reduceAssistantPendingTool（对应
+ *     editorStore.assistantPendingTool 字段，阶段五b 确认流）；
  *   - 会话 id 归约：reduceAssistantSessionId（done 回填服务端 scoped id）；
  *   - DDG 挑战归约：reduceAssistantCaptcha（captcha_challenge 事件 →
  *     useWritingChatCaptcha 通道的挑战对象，阶段五a）；
  *   - 过期守卫判断：isStaleEvent；
  *   - 占位消息工厂：createStreamingPlaceholder。
  *
- * toast、translateError、AbortController、seq 计数等副作用仍由
- * useEditorAssistant hook 编排；本模块全部为纯输入输出。
+ * toast、translateError、AbortController、seq 计数、confirm/cancel 请求
+ * 等副作用仍由 useEditorAssistant hook 编排；本模块全部为纯输入输出。
  */
 
 /**
@@ -147,6 +149,9 @@ export function reduceAssistantMessages(messages, event, ctx) {
  *   - tool_result / done / captcha_challenge：工具轮次结束、整轮流收尾
  *     或 DDG 挑战接管的流暂停态，指示器清空为 null（滞留会挂僵尸
  *     "工具执行中"指示器，对齐 Writing Chat sse.js 先例）；
+ *   - tool_pending / tool_cancelled：确认卡接管的流暂停态（阶段五b），
+ *     指示器清空为 null——pending 先于 tool_status 出现，取消后亦无
+ *     "执行中"可言，防御性清零不滞留；
  *   - 其他事件：维持原值。
  *
  * @param {object|null} toolStatus 当前指示器值
@@ -160,9 +165,44 @@ export function reduceAssistantToolStatus(toolStatus, event) {
     case "tool_result":
     case "done":
     case "captcha_challenge":
+    case "tool_pending":
+    case "tool_cancelled":
       return null;
     default:
       return toolStatus;
+  }
+}
+
+/**
+ * 归约 SSE 事件对工具确认卡（editorStore.assistantPendingTool，阶段五b
+ * 确认流）的影响：
+ *   - tool_pending：归一化产出确认卡对象（含 args / label 兜底）；
+ *     createdAt 由 hook 侧（副作用层）补盖时间戳，本归约保持纯函数；
+ *   - tool_cancelled / done / error：卡片终结——取消事件、正常终流或
+ *     流失败时不应残留可点击的死卡（断流无回放机制，照搬 Writing Chat
+ *     "用户手动重发"语义，不发明恢复协议）；
+ *   - 其他事件（含 confirm 后续流中的 tool_status / token）：维持原值，
+ *     确认卡在用户点击动作时由 hook 清除。
+ *
+ * @param {object|null} pendingTool 当前确认卡对象
+ * @param {{type: string}} event SSE 事件对象
+ * @returns {object|null} 新确认卡值（无变化时返回原值）
+ */
+export function reduceAssistantPendingTool(pendingTool, event) {
+  switch (event.type) {
+    case "tool_pending":
+      return {
+        pending_id: event.pending_id,
+        tool: event.tool || "",
+        label: event.label || "",
+        args: event.args && typeof event.args === "object" ? event.args : {},
+      };
+    case "tool_cancelled":
+    case "done":
+    case "error":
+      return null;
+    default:
+      return pendingTool;
   }
 }
 

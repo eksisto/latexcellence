@@ -392,6 +392,107 @@ class TestPendingInteractionCrossInstance:
         assert ddg.get_challenge(cid) is None
 
 
+# ── 编辑器确认流（阶段五b）：两阶段登记/等待，多用户表驱动 ──────────
+class TestEditorTwoPhaseToolConfirmation:
+    """编辑器联网/学术工具逐次确认在多用户模式下的表驱动路径。
+
+    与 Writing Chat 的单方法 ``_request_tool_confirmation`` 不同，编辑器
+    侧为"先登记（_register_tool_confirmation）→ 推 tool_pending 事件 →
+    再等待（_await_tool_confirmation）"：登记先于事件下发，亚秒级确认
+    不会命中"查无此 pending"。本组用例沿袭上方跨实例先例：waiter /
+    responder 为共享同一 DB 的独立服务实例。
+    """
+
+    def test_register_creates_row_then_await_returns_confirmed_args(self, mu_env):
+        waiter = _FreshState()
+        responder = _FreshState()
+        import asyncio
+
+        async def scenario():
+            await waiter._register_tool_confirmation(
+                "pid-edit1", "web_search", {"query": "orig"}
+            )
+            # 登记即对外可见：此刻 confirm 端点已可达（先登记后 yield 的
+            # 前提条件）
+            row = db_module.db_query_one(
+                "SELECT status FROM pending_interactions "
+                "WHERE id='pid-edit1' AND kind='confirm'"
+            )
+            assert row is not None and row["status"] == "pending"
+
+            task = asyncio.ensure_future(
+                waiter._await_tool_confirmation(
+                    "pid-edit1", "web_search", {"query": "orig"}
+                )
+            )
+            await asyncio.sleep(0.05)
+            ok = responder.confirm_pending_tool("pid-edit1", {"query": "modified"})
+            return await task, ok
+
+        result, ok = asyncio.run(scenario())
+        assert ok is True
+        assert result == {"query": "modified"}
+
+    def test_register_then_cancel_wakes_waiter_with_none(self, mu_env):
+        waiter = _FreshState()
+        responder = _FreshState()
+        import asyncio
+
+        async def scenario():
+            await waiter._register_tool_confirmation(
+                "pid-edit2", "search_scholarly_works", {"query": "q"}
+            )
+            task = asyncio.ensure_future(
+                waiter._await_tool_confirmation(
+                    "pid-edit2", "search_scholarly_works", {"query": "q"}
+                )
+            )
+            await asyncio.sleep(0.05)
+            ok = responder.cancel_pending_tool("pid-edit2")
+            return await task, ok
+
+        result, ok = asyncio.run(scenario())
+        assert ok is True
+        assert result is None  # 取消语义由调用方注入 tool result
+
+    def test_expired_row_await_equals_cancel(self, mu_env):
+        """pending 行过期（TTL 120s）后等待侧返回 None，等同取消语义。"""
+        waiter = _FreshState()
+        import asyncio
+
+        async def scenario():
+            await waiter._register_tool_confirmation(
+                "pid-edit3", "open_page", {"url": "https://example.com"}
+            )
+            db_module.db_execute(
+                "UPDATE pending_interactions SET expires_at = ? "
+                "WHERE id='pid-edit3'",
+                (db_module.utcnow(),),
+            )
+            return await waiter._await_tool_confirmation(
+                "pid-edit3", "open_page", {"url": "https://example.com"}
+            )
+
+        assert asyncio.run(scenario()) is None
+
+    def test_first_resolve_wins_on_registered_row(self, mu_env):
+        """登记后双副本竞态决议先到先得（条件 UPDATE 幂等）。"""
+        waiter = _FreshState()
+        first = _FreshState()
+        second = _FreshState()
+        import asyncio
+
+        async def scenario():
+            await waiter._register_tool_confirmation(
+                "pid-edit4", "find_in_page", {"url": "u", "query": "q"}
+            )
+            assert first.confirm_pending_tool("pid-edit4") is True
+            assert second.confirm_pending_tool("pid-edit4") is False
+            assert second.cancel_pending_tool("pid-edit4") is False
+
+        asyncio.run(scenario())
+
+
 class _FreshState:
     """独立 StateMixin 实例（共享同一 DB），模拟两个副本的服务对象。
 

@@ -226,7 +226,7 @@
 
 **写作助手 (writing_chat)**: `_get_enabled_tools()` 无条件注入 `request_clarification` 工具（始终可用），再按配置依次追加联网搜索 + 项目浏览 + 段落编辑 + 学术检索四类工具的 schema，注入 LLM `tools` 参数。其中段落编辑工具（`edit_paragraph` / `undo_last_edit`）默认需经前端确认弹窗（`edit_tools.require_confirmation=true`）后才执行，用户可修改参数或拒绝。
 
-**编辑器助手 (writing_chat/editor)**: 复用同一 ToolRegistry，`_get_editor_tools()`（`editor_chat.py`）按白名单 `_EDITOR_TOOL_NAMES` 过滤三源 schema——项目浏览 + 联网搜索 + 学术检索（与写作助手注册表对齐，白名单扩自阶段五a），**不含**段落编辑工具（编辑器写入一律走缓冲区协议）。联网源受 `web_search.enabled` AND `writing_chat.web_search_enabled` 双开关、学术源受 `scholarly_research.enabled` AND `providers.openalex.enabled` 双开关把关（schema 收集层把关 + 工具循环执行前按同口径复核）；工具循环另有执行前白名单硬校验，模型幻觉调用越权工具名（含 `edit_paragraph`）或开关已关的联网/学术工具会被拒绝执行并注入失败 tool result。工具全部直通执行（DDG 验证挑战是唯一的人机交互）。
+**编辑器助手 (writing_chat/editor)**: 复用同一 ToolRegistry，`_get_editor_tools()`（`editor_chat.py`）按白名单 `_EDITOR_TOOL_NAMES` 过滤三源 schema——项目浏览 + 联网搜索 + 学术检索（与写作助手注册表对齐，白名单扩自阶段五a），**不含**段落编辑工具（编辑器写入一律走缓冲区协议）。联网源受 `web_search.enabled` AND `writing_chat.web_search_enabled` 双开关、学术源受 `scholarly_research.enabled` AND `providers.openalex.enabled` 双开关把关（schema 收集层把关 + 工具循环执行前按同口径复核）；工具循环另有执行前白名单硬校验，模型幻觉调用越权工具名（含 `edit_paragraph`）或开关已关的联网/学术工具会被拒绝执行并注入失败 tool result。联网/学术九工具在编辑器侧**逐次确认执行**（阶段五b 确认流）：每次调用产生 pending 交互、经前端确认卡放行后执行，拒绝或 TTL 120s 过期注入取消语义 tool result；pending 先登记后下发事件，confirm/cancel 复用本模块 `confirm-tool` / `cancel-tool` 端点（多用户表驱动跨副本、单用户 Event）。项目只读三件套直通执行；DDG 验证挑战是确认之外唯一的人机交互。
 
 **模板生成 (template_gen)**: `_build_tools_schema()` 私有构建工具列表，通过 `chat_with_tools()` 直接传入，工具数量随 `agent_compile_enabled` 配置变化。
 

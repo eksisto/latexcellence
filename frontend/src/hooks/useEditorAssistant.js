@@ -11,6 +11,7 @@ import {
   isStaleEvent,
   reduceAssistantCaptcha,
   reduceAssistantMessages,
+  reduceAssistantPendingTool,
   reduceAssistantSessionId,
   reduceAssistantToolStatus,
 } from "@/lib/editor/assistantStream";
@@ -27,11 +28,17 @@ import { useWritingChatCaptcha } from "@/hooks/writing-chat/captcha";
  *   - SSE 事件归约：事件 → 状态的纯归约收敛在 lib/editor/assistantStream.js
  *     （token / round_start / tool_status / tool_result / compressed /
  *     done（含结构化建议与 captcha_pending 终流形态）/ captcha_challenge /
- *     error），本 hook 只负责把归约结果写回 store，以及 toast / 中止 /
- *     过期计数等副作用编排；
+ *     tool_pending / tool_cancelled / error），本 hook 只负责把归约结果
+ *     写回 store，以及 toast / 中止 / 过期计数等副作用编排；
  *   - DDG 挑战（阶段五a）：captcha_challenge 事件写入 useWritingChatCaptcha
  *     通道，挑战在助手侧栏内提交/放弃；captcha done 删占位不留幽灵消息，
- *     会话 id 照常回写（user 消息已在服务端落盘）。
+ *     会话 id 照常回写（user 消息已在服务端落盘）；
+ *   - 工具确认流（阶段五b）：联网/学术工具的 tool_pending 事件落为
+ *     assistantPendingTool 确认卡；confirm/cancel 动作接 Writing Chat
+ *     既有端点（静默 404：过期/已决议的 pending 一律清卡不报错，与
+ *     useWritingChat 同口径），确认后同一 SSE 流内续流（后端流内等待，
+ *     无需重新发起请求）。无写权限守卫——确认对象是联网/学术检索而非
+ *     写盘，viewer 亦可放行（与写工具确认的 canWrite 守卫差异是刻意的）。
  *
  * 建议应用动作由 AssistantPanel 经 EditorPage 提供的缓冲区回调执行，
  * 本 hook 只负责对话流与应用标记上报。
@@ -53,6 +60,7 @@ export default function useEditorAssistant({ getEditorContext }) {
   const messages = useEditorStore((s) => s.assistantMessages);
   const streaming = useEditorStore((s) => s.assistantStreaming);
   const toolStatus = useEditorStore((s) => s.assistantToolStatus);
+  const pendingTool = useEditorStore((s) => s.assistantPendingTool);
   const ensureAssistantProject = useEditorStore(
     (s) => s.ensureAssistantProject,
   );
@@ -121,6 +129,9 @@ export default function useEditorAssistant({ getEditorContext }) {
       });
       store.setAssistantStreaming(true);
       store.setAssistantToolStatus(null);
+      // 新一轮发送不残留上一轮的确认卡（正常由 done/tool_cancelled 清除，
+      // 此处兜底断流后重发的场景）
+      store.setAssistantPendingTool(null);
 
       const seq = ++seqRef.current;
       // 每次发送持有新的 AbortController：项目切换/卸载时经 ref 中止在途流
@@ -162,6 +173,9 @@ export default function useEditorAssistant({ getEditorContext }) {
         const latest = useEditorStore.getState();
         latest.setAssistantStreaming(false);
         latest.setAssistantToolStatus(null);
+        // 断流无 pending 回放机制：SSE 中断时同步清确认卡，避免残留可
+        // 点击的死卡（照搬 Writing Chat "断流即丢弃、用户手动重发"语义）
+        latest.setAssistantPendingTool(null);
         // 占位消息若未被 done 替换（异常中断），移除避免"幽灵"回复
         if (
           useEditorStore
@@ -204,6 +218,31 @@ export default function useEditorAssistant({ getEditorContext }) {
               reduceAssistantToolStatus(st.assistantToolStatus, event),
             );
             break;
+          case "tool_pending":
+            // 确认卡接管的流暂停态（阶段五b）：清工具指示器，归一化后
+            // 写入确认卡状态（由 AssistantPanel 渲染确认/取消卡）；时间
+            // 戳在本侧（副作用层）补盖，归约保持纯函数
+            st.setAssistantToolStatus(
+              reduceAssistantToolStatus(st.assistantToolStatus, event),
+            );
+            st.setAssistantPendingTool({
+              ...reduceAssistantPendingTool(st.assistantPendingTool, event),
+              createdAt: Date.now(),
+            });
+            break;
+          case "tool_cancelled":
+            // 用户拒绝 / TTL 过期：清指示器与确认卡，toast 告知（与
+            // Writing Chat tool_cancelled 同语义）
+            st.setAssistantToolStatus(
+              reduceAssistantToolStatus(st.assistantToolStatus, event),
+            );
+            st.setAssistantPendingTool(
+              reduceAssistantPendingTool(st.assistantPendingTool, event),
+            );
+            toast.info(i18n.t("components:assistant.toolCancelled"), {
+              description: event.tool,
+            });
+            break;
           case "captcha_challenge":
             // DDG 挑战接管的流暂停态：清工具指示器，挑战对象归一化后
             // 写入 captcha 通道（由 AssistantPanel 渲染挑战卡）
@@ -218,6 +257,11 @@ export default function useEditorAssistant({ getEditorContext }) {
           case "done": {
             st.setAssistantToolStatus(
               reduceAssistantToolStatus(st.assistantToolStatus, event),
+            );
+            // 终流兜底清确认卡（正常路径 pending 已被 tool_cancelled 或
+            // 用户动作清除；后端 pending 必在流内决议，此处防御性归约）
+            st.setAssistantPendingTool(
+              reduceAssistantPendingTool(st.assistantPendingTool, event),
             );
             commitMessages(event);
             // patch 用旧 id 定位；替换服务端 id 后同步会话 id
@@ -257,6 +301,38 @@ export default function useEditorAssistant({ getEditorContext }) {
     [workspaceId],
   );
 
+  /**
+   * 确认/取消待定的联网/学术工具调用（阶段五b 确认流）：接 Writing Chat
+   * 既有 confirm-tool / cancel-tool 端点（仅凭 pending_id 定位，无会话
+   * 绑定）。端点 404（pending 已过期或已决议）静默吞掉并清卡——与
+   * useWritingChat 同口径；决议后同一 SSE 流内续流（后端流内等待），
+   * 无需重新发起请求。
+   */
+  const confirmAssistantTool = useCallback(async (modifiedArgs) => {
+    const tool = useEditorStore.getState().assistantPendingTool;
+    if (!tool?.pending_id) return;
+    try {
+      await api.writingChat.confirmTool(
+        tool.pending_id,
+        modifiedArgs ?? undefined,
+      );
+    } catch {
+      // silent：过期/已决议的 pending（404）不向用户报错
+    }
+    useEditorStore.getState().setAssistantPendingTool(null);
+  }, []);
+
+  const cancelAssistantTool = useCallback(async () => {
+    const tool = useEditorStore.getState().assistantPendingTool;
+    if (!tool?.pending_id) return;
+    try {
+      await api.writingChat.cancelTool(tool.pending_id);
+    } catch {
+      // silent：同上
+    }
+    useEditorStore.getState().setAssistantPendingTool(null);
+  }, []);
+
   const clearConversation = useCallback(() => {
     useEditorStore.getState().clearAssistantConversation();
   }, []);
@@ -265,6 +341,9 @@ export default function useEditorAssistant({ getEditorContext }) {
     messages,
     streaming,
     toolStatus,
+    pendingTool,
+    confirmAssistantTool,
+    cancelAssistantTool,
     captchaChallenge,
     captchaSubmitting,
     submitCaptcha,

@@ -1881,7 +1881,14 @@
       "diffHunkOverlap": "diff 中多个修改块相互重叠，已拒绝应用",
       "diffMalformed": "diff 格式无法解析。",
       "noFileHint": "未打开文件，助手仅通用问答",
-      "fileMismatchHint": "建议来自 {{file}}，请先切换到该标签页再应用"
+      "fileMismatchHint": "建议来自 {{file}}，请先切换到该标签页再应用",
+      "toolConfirmTitle": "助手请求执行联网/学术检索",
+      "toolConfirmDesc": "工具 {{tool}} 需经你确认后才会执行：{{summary}}",
+      "toolConfirmNoSummary": "（无摘要参数）",
+      "toolConfirmAllow": "允许执行",
+      "toolConfirmDeny": "拒绝",
+      "toolConfirmExpired": "已超时，本次调用将按取消处理",
+      "toolCancelled": "已取消本次联网/学术检索"
     },
     "staleCheck": {
       "title": "文件已在编辑器中修改，以下检查结果可能过期，建议重新检查："

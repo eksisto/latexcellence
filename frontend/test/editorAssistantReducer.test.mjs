@@ -6,6 +6,7 @@ import {
   isStaleEvent,
   reduceAssistantCaptcha,
   reduceAssistantMessages,
+  reduceAssistantPendingTool,
   reduceAssistantSessionId,
   reduceAssistantToolStatus,
 } from "../src/lib/editor/assistantStream.js";
@@ -347,4 +348,159 @@ test("归约函数不可变更新：输入数组与其中的消息不被修改",
   // 归约结果本身也符合预期
   assert.equal(afterDone[1].id, "m-1");
   assert.deepEqual(afterError, [frozen[0]]);
+});
+
+// ── 阶段五b：工具确认流（tool_pending / tool_cancelled） ─────────────────
+
+const PENDING_EVENT = {
+  type: "tool_pending",
+  pending_id: "pid1",
+  tool: "web_search",
+  label: "searching",
+  args: { query: "latex bib style" },
+};
+
+test("tool_pending 归一化为确认卡对象（args 非对象兜底空对象）", () => {
+  assert.deepEqual(reduceAssistantPendingTool(null, PENDING_EVENT), {
+    pending_id: "pid1",
+    tool: "web_search",
+    label: "searching",
+    args: { query: "latex bib style" },
+  });
+  // args 缺失/非对象时兜底空对象；tool/label 缺省回落空串
+  assert.deepEqual(
+    reduceAssistantPendingTool(null, {
+      type: "tool_pending",
+      pending_id: "pid2",
+      args: "不是对象",
+    }),
+    { pending_id: "pid2", tool: "", label: "", args: {} },
+  );
+  // createdAt 由 hook 副作用层补盖，归约不产生时间戳
+  assert.equal(
+    "createdAt" in reduceAssistantPendingTool(null, PENDING_EVENT),
+    false,
+  );
+});
+
+test("tool_cancelled / done / error 终结确认卡，无关事件维持原值", () => {
+  const card = { pending_id: "pid1", tool: "web_search" };
+  assert.equal(
+    reduceAssistantPendingTool(card, {
+      type: "tool_cancelled",
+      tool: "web_search",
+    }),
+    null,
+  );
+  assert.equal(reduceAssistantPendingTool(card, { type: "done" }), null);
+  assert.equal(reduceAssistantPendingTool(card, { type: "error" }), null);
+  // 确认后续流中的 token / tool_status 不清卡（卡片由用户动作清除）
+  assert.equal(
+    reduceAssistantPendingTool(card, { type: "token", content: "x" }),
+    card,
+  );
+  assert.equal(
+    reduceAssistantPendingTool(card, {
+      type: "tool_status",
+      tool: "open_page",
+    }),
+    card,
+  );
+  // 无卡时取消/终流幂等（保持 null）
+  assert.equal(
+    reduceAssistantPendingTool(null, { type: "tool_cancelled" }),
+    null,
+  );
+});
+
+test("tool_pending / tool_cancelled 清空工具指示器（确认流暂停态不滞留）", () => {
+  const statusEvent = { type: "tool_status", tool: "open_page" };
+  assert.equal(
+    reduceAssistantToolStatus(statusEvent, {
+      type: "tool_pending",
+      pending_id: "p",
+    }),
+    null,
+  );
+  assert.equal(
+    reduceAssistantToolStatus(statusEvent, { type: "tool_cancelled" }),
+    null,
+  );
+});
+
+test("确认恢复流：pending → 确认后 tool_status/tool_result → done 兜底清卡", () => {
+  // 1. pending 到达：卡片落位、指示器清空
+  let card = reduceAssistantPendingTool(null, PENDING_EVENT);
+  let status = reduceAssistantToolStatus(null, PENDING_EVENT);
+  assert.equal(card.pending_id, "pid1");
+  assert.equal(status, null);
+
+  // 2. 用户确认（hook 调端点后清卡；流内续传 tool_status）
+  status = reduceAssistantToolStatus(status, {
+    type: "tool_status",
+    tool: "web_search",
+  });
+  assert.equal(status.tool, "web_search");
+
+  // 3. tool_result 清指示器，token 流正常
+  status = reduceAssistantToolStatus(status, {
+    type: "tool_result",
+    tool: "web_search",
+  });
+  assert.equal(status, null);
+
+  // 4. done 兜底清卡（防异常时序残留死卡）
+  assert.equal(reduceAssistantPendingTool(card, { type: "done" }), null);
+});
+
+test("取消流：pending → tool_cancelled → 卡与指示器均终结", () => {
+  const card = reduceAssistantPendingTool(null, PENDING_EVENT);
+  const status = reduceAssistantToolStatus(null, PENDING_EVENT);
+  const cancelled = {
+    type: "tool_cancelled",
+    pending_id: "pid1",
+    tool: "web_search",
+  };
+  assert.equal(reduceAssistantPendingTool(card, cancelled), null);
+  assert.equal(reduceAssistantToolStatus(status, cancelled), null);
+  // 消息列表不受 tool_cancelled 影响（占位消息保持流式形态，原引用返回）
+  const before = initialMessages();
+  const msgs = reduceAssistantMessages(before, cancelled, {
+    placeholderId: PLACEHOLDER_ID,
+  });
+  assert.equal(msgs, before);
+});
+
+test("pending 期间新 tool_pending 到达：新卡替换旧卡（不同 pending_id）", () => {
+  const first = reduceAssistantPendingTool(null, PENDING_EVENT);
+  const second = reduceAssistantPendingTool(first, {
+    type: "tool_pending",
+    pending_id: "pid2",
+    tool: "search_scholarly_works",
+    label: "searching_scholarly",
+    args: { query: "openalex" },
+  });
+  assert.equal(second.pending_id, "pid2");
+  assert.equal(second.tool, "search_scholarly_works");
+});
+
+test("确认流事件对消息列表无影响（token/round_start 照常归约）", () => {
+  const streamed = appendToken(initialMessages(), "思考片段");
+  const afterPending = reduceAssistantMessages(streamed, PENDING_EVENT, {
+    placeholderId: PLACEHOLDER_ID,
+  });
+  assert.equal(afterPending, streamed);
+  const afterCancelled = reduceAssistantMessages(
+    afterPending,
+    { type: "tool_cancelled", pending_id: "pid1" },
+    { placeholderId: PLACEHOLDER_ID },
+  );
+  assert.equal(afterCancelled, streamed);
+  // round_start 后新轮次 token 照常写入占位
+  const reset = reduceAssistantMessages(
+    afterCancelled,
+    { type: "round_start" },
+    { placeholderId: PLACEHOLDER_ID },
+  );
+  assert.equal(reset[1].content, "");
 });

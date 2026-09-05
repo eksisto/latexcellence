@@ -19,7 +19,7 @@
 
 import asyncio
 import json
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -765,6 +765,75 @@ def _make_function_tool_call(
     )
 
 
+def _drive_editor_send(service, req, workspace_id, *, resolve=None, modified_args=None):
+    """直接驱动 service.editor_send 异步生成器（单用户 Event 确认路径）。
+
+    确认流在流内等待（SSE 生成器挂起于 _await_tool_confirmation），而
+    asyncio.Event 非线程安全、不能从 TestClient 的其他线程置位，故在
+    同一事件循环内以伴随任务自动决议：
+
+        - resolve=None：不决议，等待 TTL（配合 TTL monkeypatch 测过期）；
+        - resolve="confirm"：pending 登记后立即确认（亚秒级，验证
+          "先登记后 yield"——确认先于 tool_pending 事件抵达消费方也
+          必须成功）；
+        - resolve="cancel"：pending 登记后立即取消。
+
+    返回 (events, ordering)：ordering 依序记录 ("register", pid) 与
+    ("yield", event_type)，供登记先于事件下发的时序断言。
+    """
+    import asyncio
+
+    async def scenario():
+        ordering: list[tuple] = []
+        events: list[dict] = []
+        pending_ids: list[str] = []
+        registered = asyncio.Event()
+        real_register = service._register_tool_confirmation
+
+        async def spy_register(pid, tool_name, tool_args):
+            ordering.append(("register", pid))
+            result = await real_register(pid, tool_name, tool_args)
+            pending_ids.append(pid)
+            registered.set()
+            return result
+
+        service._register_tool_confirmation = spy_register
+        resolver_task = None
+        if resolve is not None:
+
+            async def resolver():
+                await registered.wait()
+                pid = pending_ids[-1]
+                if resolve == "confirm":
+                    assert service.confirm_pending_tool(pid, modified_args) is True
+                else:
+                    assert service.cancel_pending_tool(pid) is True
+
+            resolver_task = asyncio.ensure_future(resolver())
+        try:
+            async for event in service.editor_send(req, workspace_id):
+                ordering.append(("yield", event.get("type")))
+                events.append(event)
+        finally:
+            service._register_tool_confirmation = real_register
+            if resolver_task is not None:
+                await resolver_task
+        return events, ordering
+
+    return asyncio.run(scenario())
+
+
+def _mock_registry(result_text: str = "TOOL RESULT", *, side_effect=None):
+    """构造 registry Mock：execute 为 AsyncMock（editor_chat 内 await），
+    结果对象带 format_for_llm；side_effect 用于异常路径（DDG 挑战等）。"""
+    m_registry = MagicMock()
+    m_registry.execute = AsyncMock(
+        return_value=MagicMock(format_for_llm=MagicMock(return_value=result_text)),
+        side_effect=side_effect,
+    )
+    return m_registry
+
+
 class TestEditorToolSources:
     """_get_editor_tools 三源汇聚 + 按源独立容错 + 开关前置（阶段五a）。"""
 
@@ -974,17 +1043,17 @@ class TestEditorToolWhitelist:
         tool_msg = ctx.messages[2]
         assert "not available to the editor assistant" in tool_msg.content
 
-    def test_whitelisted_web_tool_executes(
-        self, client, env, temp_session_dir, monkeypatch
-    ):
-        """白名单内工具照常执行：registry 触达、tool_status/tool_result 成对。"""
+    def test_whitelisted_web_tool_executes(self, env, temp_session_dir, monkeypatch):
+        """白名单内工具经确认后照常执行：registry 触达、pending/tool_status/
+        tool_result 依序成对（阶段五b 起联网工具先经确认流）。"""
+        from backend.modules.writing_chat.models import EditorSendRequest
+        from backend.modules.writing_chat.service import get_writing_chat_service
+
         monkeypatch.setattr(get_config().llm, "api_key", "test-key")
-        m_registry = MagicMock()
-        m_registry.execute = MagicMock(
-            return_value=MagicMock(
-                format_for_llm=MagicMock(return_value="SEARCH RESULTS")
-            )
-        )
+        # registry.execute 须为 AsyncMock（editor_chat 内 await）：同步
+        # MagicMock 不可 await，会让本用例静默走失败注入路径、既断言不到
+        # "照常执行"原意图，也测不到结果入会话
+        m_registry = _mock_registry(result_text="SEARCH RESULTS")
         monkeypatch.setattr(f"{_EDITOR_CHAT_MOD}.get_tool_registry", lambda: m_registry)
 
         rounds = [
@@ -1011,17 +1080,37 @@ class TestEditorToolWhitelist:
         m_client.chat_stream_with_tools = MagicMock(
             side_effect=lambda **_: _stream(rounds.pop(0))
         )
+        req = EditorSendRequest(
+            file_path="main.tex", buffer=MAIN_TEX, user_message="查证"
+        )
         with patch(_LLM_CLIENT_PATH, m_llm):
-            resp = _send_request(client, env, {})
+            events, _ = _drive_editor_send(
+                get_writing_chat_service(),
+                req,
+                env["ws"],
+                resolve="confirm",
+            )
 
         assert m_registry.execute.call_count == 1
         assert m_registry.execute.call_args.args[0] == "web_search"
 
-        events = _parse_sse(resp.text)
         types = [e["type"] for e in events]
-        assert types == ["tool_status", "tool_result", "round_start", "token", "done"]
+        assert types == [
+            "tool_pending",
+            "tool_status",
+            "tool_result",
+            "round_start",
+            "token",
+            "done",
+        ]
         assert events[0]["tool"] == "web_search"
         assert events[-1]["type"] == "done"
+
+        # 成功执行路径的结果真正注入会话（非失败兜底文本）
+        ctx = ConversationContext.load_from_disk(events[-1]["session_id"])
+        roles = [m.role for m in ctx.messages]
+        assert roles == ["user", "assistant", "tool", "assistant"]
+        assert ctx.messages[2].content == "SEARCH RESULTS"
 
     def test_network_tools_blocked_when_switches_closed(
         self, client, env, temp_session_dir, monkeypatch
@@ -1132,9 +1221,12 @@ class TestEditorDDGChallenge:
     """DDGChallengeError 显式分支：captcha 终流事件（阶段五a，Mock LLM）。"""
 
     def test_challenge_terminates_stream_with_captcha_pending(
-        self, client, env, temp_session_dir, monkeypatch
+        self, env, temp_session_dir, monkeypatch
     ):
         from backend.utils.web_search import DDGChallengeError
+
+        from backend.modules.writing_chat.models import EditorSendRequest
+        from backend.modules.writing_chat.service import get_writing_chat_service
 
         monkeypatch.setattr(get_config().llm, "api_key", "test-key")
         challenge = DDGChallengeError(
@@ -1166,14 +1258,21 @@ class TestEditorDDGChallenge:
             side_effect=lambda **_: _stream(rounds.pop(0))
         )
         m_client.chat_stream_with_usage = MagicMock()
+        req = EditorSendRequest(
+            file_path="main.tex", buffer=MAIN_TEX, user_message="查证"
+        )
         with patch(_LLM_CLIENT_PATH, m_llm):
-            resp = _send_request(client, env, {})
+            events, _ = _drive_editor_send(
+                get_writing_chat_service(),
+                req,
+                env["ws"],
+                resolve="confirm",
+            )
 
-        events = _parse_sse(resp.text)
         types = [e["type"] for e in events]
-        assert types == ["tool_status", "captcha_challenge", "done"]
+        assert types == ["tool_pending", "tool_status", "captcha_challenge", "done"]
 
-        captcha = events[1]
+        captcha = events[2]
         assert captcha["challenge_id"] == "cid123"
         assert captcha["images"] == [{"hash": "h1", "base64": "Zm9v"}]
         assert captcha["query"] == "latex tutorial"
@@ -1192,9 +1291,12 @@ class TestEditorDDGChallenge:
         assert ctx.messages[0].role == "user"
 
     def test_general_tool_failure_still_yields_tool_result(
-        self, client, env, temp_session_dir, monkeypatch
+        self, env, temp_session_dir, monkeypatch
     ):
         """通用失败路径不携带 captcha 语义（DDG 分支仅在真实挑战时出现）。"""
+        from backend.modules.writing_chat.models import EditorSendRequest
+        from backend.modules.writing_chat.service import get_writing_chat_service
+
         monkeypatch.setattr(get_config().llm, "api_key", "test-key")
         m_registry = MagicMock()
         m_registry.execute = MagicMock(side_effect=RuntimeError("boom"))
@@ -1226,11 +1328,340 @@ class TestEditorDDGChallenge:
         m_client.chat_stream_with_tools = MagicMock(
             side_effect=lambda **_: _stream(rounds.pop(0))
         )
+        req = EditorSendRequest(
+            file_path="main.tex", buffer=MAIN_TEX, user_message="查证"
+        )
         with patch(_LLM_CLIENT_PATH, m_llm):
-            resp = _send_request(client, env, {})
+            events, _ = _drive_editor_send(
+                get_writing_chat_service(),
+                req,
+                env["ws"],
+                resolve="confirm",
+            )
 
-        events = _parse_sse(resp.text)
         types = [e["type"] for e in events]
         assert "captcha_challenge" not in types
         assert types[-1] == "done"
         assert events[-1].get("captcha_pending") is None
+
+
+# ── 阶段五b：联网/学术工具确认流 ──────────────────────────────────────────
+
+
+class TestEditorToolConfirmation:
+    """编辑器侧联网/学术工具逐次确认（阶段五b，editor-design §4.5/§5）。
+
+    确认流为流内等待：service.editor_send 生成器挂起于 pending 等待处，
+    confirm/cancel 端点决议后续流。asyncio.Event 非线程安全，决议在
+    同一事件循环内经伴随任务注入（_drive_editor_send），全程 Mock LLM
+    与 registry，无真实网络。
+    """
+
+    def _make_two_round_llm(self, tool_name: str, args: dict | None = None):
+        rounds = [
+            [
+                StreamChunk(
+                    content=None,
+                    usage=None,
+                    tool_calls=[
+                        _make_function_tool_call(
+                            call_id="call_conf", name=tool_name, args=args
+                        ),
+                    ],
+                )
+            ],
+            [
+                StreamChunk(content="answered with available info", usage=None),
+                StreamChunk(
+                    content=None,
+                    usage=UsageInfo(
+                        prompt_tokens=8, completion_tokens=2, total_tokens=10
+                    ),
+                ),
+            ],
+        ]
+        m_llm, m_client = _mock_llm([])
+        m_client.chat_stream_with_tools = MagicMock(
+            side_effect=lambda **_: _stream(rounds.pop(0))
+        )
+        return m_llm
+
+    def _req(self):
+        from backend.modules.writing_chat.models import EditorSendRequest
+
+        return EditorSendRequest(
+            file_path="main.tex", buffer=MAIN_TEX, user_message="查证一下"
+        )
+
+    def test_confirm_executes_tool_and_injects_result(
+        self, env, temp_session_dir, monkeypatch
+    ):
+        """确认后工具真正执行：结果作为 tool result 注入并驱动后续模型轮次。"""
+        from backend.modules.writing_chat.service import get_writing_chat_service
+
+        monkeypatch.setattr(get_config().llm, "api_key", "test-key")
+        m_registry = _mock_registry(result_text="PAPERS")
+        monkeypatch.setattr(f"{_EDITOR_CHAT_MOD}.get_tool_registry", lambda: m_registry)
+
+        with patch(
+            _LLM_CLIENT_PATH,
+            self._make_two_round_llm(
+                "search_scholarly_works", {"query": "latex citations"}
+            ),
+        ):
+            events, _ = _drive_editor_send(
+                get_writing_chat_service(),
+                self._req(),
+                env["ws"],
+                resolve="confirm",
+                modified_args={"query": "modified query"},
+            )
+
+        # 确认后执行且使用（可能被前端修改后的）参数
+        assert m_registry.execute.call_count == 1
+        assert m_registry.execute.call_args.args[0] == "search_scholarly_works"
+        assert m_registry.execute.call_args.args[1]["query"] == "modified query"
+
+        types = [e["type"] for e in events]
+        assert types == [
+            "tool_pending",
+            "tool_status",
+            "tool_result",
+            "round_start",
+            "token",
+            "done",
+        ]
+        pending = events[0]
+        assert pending["pending_id"]
+        assert pending["tool"] == "search_scholarly_works"
+        assert pending["label"] == "searching_scholarly"
+        assert pending["args"] == {"query": "latex citations"}
+
+        # 结果注入会话：assistant(tool_calls) + tool(执行结果) + 最终回复
+        ctx = ConversationContext.load_from_disk(events[-1]["session_id"])
+        roles = [m.role for m in ctx.messages]
+        assert roles == ["user", "assistant", "tool", "assistant"]
+        assert ctx.messages[2].content == "PAPERS"
+
+    def test_register_before_yield_subsecond_confirm_no_404(
+        self, env, temp_session_dir, monkeypatch
+    ):
+        """先登记后 yield：登记先于 tool_pending 事件下发，亚秒级确认
+        不落"查无此 pending"404（Writing Chat 既有次序缺陷的回归断言）。"""
+        from backend.modules.writing_chat.service import get_writing_chat_service
+
+        monkeypatch.setattr(get_config().llm, "api_key", "test-key")
+        m_registry = _mock_registry(result_text="OK")
+        monkeypatch.setattr(f"{_EDITOR_CHAT_MOD}.get_tool_registry", lambda: m_registry)
+
+        with patch(_LLM_CLIENT_PATH, self._make_two_round_llm("web_search")):
+            events, ordering = _drive_editor_send(
+                get_writing_chat_service(),
+                self._req(),
+                env["ws"],
+                resolve="confirm",
+            )
+
+        # 登记必然先于 tool_pending 事件下发（同协程顺序执行，可精确断言）
+        first_register = ordering.index(next(t for t in ordering if t[0] == "register"))
+        first_pending_yield = ordering.index(("yield", "tool_pending"))
+        assert first_register < first_pending_yield
+
+        # 决议在登记后立即发生（早于 tool_pending 抵达消费方），仍成功执行
+        types = [e["type"] for e in events]
+        assert "tool_cancelled" not in types
+        assert types[-1] == "done"
+        assert m_registry.execute.call_count == 1
+
+    def test_cancel_injects_cancel_semantics_and_model_continues(
+        self, env, temp_session_dir, monkeypatch
+    ):
+        """拒绝后模型收到取消语义：不执行、注入取消 tool result，模型
+        基于已有信息继续回答。"""
+        from backend.modules.writing_chat.service import get_writing_chat_service
+
+        monkeypatch.setattr(get_config().llm, "api_key", "test-key")
+        m_registry = MagicMock()
+        m_registry.execute = MagicMock()
+        monkeypatch.setattr(f"{_EDITOR_CHAT_MOD}.get_tool_registry", lambda: m_registry)
+
+        with patch(
+            _LLM_CLIENT_PATH,
+            self._make_two_round_llm("web_search", {"query": "who said"}),
+        ):
+            events, _ = _drive_editor_send(
+                get_writing_chat_service(),
+                self._req(),
+                env["ws"],
+                resolve="cancel",
+            )
+
+        m_registry.execute.assert_not_called()
+
+        types = [e["type"] for e in events]
+        assert types == [
+            "tool_pending",
+            "tool_cancelled",
+            "round_start",
+            "token",
+            "done",
+        ]
+        cancelled = events[1]
+        assert cancelled["tool"] == "web_search"
+        assert cancelled["pending_id"] == events[0]["pending_id"]
+
+        # 取消语义 tool result 持久化：tool_call 配对完整、模型不悬空，
+        # 并明确知晓用户拒绝了本次检索
+        ctx = ConversationContext.load_from_disk(events[-1]["session_id"])
+        roles = [m.role for m in ctx.messages]
+        assert roles == ["user", "assistant", "tool", "assistant"]
+        cancel_msg = ctx.messages[2]
+        assert "user declined" in cancel_msg.content
+        assert "web_search" in cancel_msg.content
+        assert "Do not retry" in cancel_msg.content
+        assert ctx.messages[-1].content == "answered with available info"
+
+    def test_ttl_expiry_equals_cancel(self, env, temp_session_dir, monkeypatch):
+        """TTL 过期等同取消：等待侧超时 → tool_cancelled + 取消语义注入。"""
+        from backend.modules.writing_chat.service import get_writing_chat_service
+        from backend.modules.writing_chat.service.state import StateMixin
+
+        monkeypatch.setattr(get_config().llm, "api_key", "test-key")
+        monkeypatch.setattr(StateMixin, "_TOOL_CONFIRM_TTL_SECONDS", 0.05)
+        m_registry = MagicMock()
+        m_registry.execute = MagicMock()
+        monkeypatch.setattr(f"{_EDITOR_CHAT_MOD}.get_tool_registry", lambda: m_registry)
+
+        with patch(
+            _LLM_CLIENT_PATH,
+            self._make_two_round_llm("open_page", {"url": "https://example.com"}),
+        ):
+            events, _ = _drive_editor_send(
+                get_writing_chat_service(),
+                self._req(),
+                env["ws"],
+                resolve=None,
+            )
+
+        m_registry.execute.assert_not_called()
+        types = [e["type"] for e in events]
+        assert types == [
+            "tool_pending",
+            "tool_cancelled",
+            "round_start",
+            "token",
+            "done",
+        ]
+
+        # 过期后 pending 条目已被清理，迟到的 confirm/cancel 返回 False
+        # （端点侧将 404，前端静默清卡）
+        service = get_writing_chat_service()
+        pending_id = events[0]["pending_id"]
+        assert service.confirm_pending_tool(pending_id) is False
+        assert service.cancel_pending_tool(pending_id) is False
+
+    def test_double_resolve_first_wins(self, env, temp_session_dir, monkeypatch):
+        """双 confirm / confirm+cancel 竞态先到先得（单用户 Event 幂等）。"""
+        import asyncio
+
+        from backend.modules.writing_chat.service import get_writing_chat_service
+        from backend.modules.writing_chat.service.state import StateMixin
+
+        monkeypatch.setattr(StateMixin, "_TOOL_CONFIRM_TTL_SECONDS", 5)
+        service = get_writing_chat_service()
+
+        async def scenario():
+            # 直接走两阶段登记（编辑器同款路径），不进入完整对话流
+            await service._register_tool_confirmation(
+                "pid-race-1", "web_search", {"query": "q"}
+            )
+            assert service.confirm_pending_tool("pid-race-1") is True
+            assert service.confirm_pending_tool("pid-race-1") is False
+            assert service.cancel_pending_tool("pid-race-1") is False
+
+            await service._register_tool_confirmation(
+                "pid-race-2", "web_search", {"query": "q"}
+            )
+            assert service.confirm_pending_tool("pid-race-2") is True
+            assert service.cancel_pending_tool("pid-race-2") is False
+
+            await service._register_tool_confirmation(
+                "pid-race-3", "web_search", {"query": "q"}
+            )
+            assert service.cancel_pending_tool("pid-race-3") is True
+            assert service.cancel_pending_tool("pid-race-3") is False
+            assert service.confirm_pending_tool("pid-race-3") is False
+
+        asyncio.run(scenario())
+
+    def test_readonly_tools_bypass_confirmation(
+        self, env, temp_session_dir, monkeypatch
+    ):
+        """项目只读工具维持直通：无 pending、无登记，直接执行（回归保障）。"""
+        from backend.modules.writing_chat.service import get_writing_chat_service
+
+        monkeypatch.setattr(get_config().llm, "api_key", "test-key")
+        m_registry = MagicMock()
+        m_registry.execute = MagicMock(
+            return_value=MagicMock(format_for_llm=MagicMock(return_value="FILE BODY"))
+        )
+        monkeypatch.setattr(f"{_EDITOR_CHAT_MOD}.get_tool_registry", lambda: m_registry)
+
+        service = get_writing_chat_service()
+        # 竞态用例可能在单例上残留已决议条目；本用例只关心"直通路径
+        # 不登记"，先清空再断言
+        service._pending_confirms.clear()
+        with patch(
+            _LLM_CLIENT_PATH,
+            self._make_two_round_llm("read_file_content", {"file_path": "main.tex"}),
+        ):
+            events, ordering = _drive_editor_send(
+                service,
+                self._req(),
+                env["ws"],
+            )
+
+        assert m_registry.execute.call_count == 1
+        types = [e["type"] for e in events]
+        assert "tool_pending" not in types
+        assert "tool_cancelled" not in types
+        assert ("yield", "tool_status") in ordering
+        assert not any(t[0] == "register" for t in ordering)
+        assert service._pending_confirms == {}
+
+    def test_scholarly_and_web_groups_all_require_confirmation(
+        self, env, temp_session_dir, monkeypatch
+    ):
+        """确认流覆盖联网 4 + 学术 5 全部九个工具（确认粒度=逐次）。"""
+        from backend.modules.writing_chat.service import get_writing_chat_service
+        from backend.modules.writing_chat.service.editor_chat import (
+            _CONFIRMABLE_TOOL_NAMES,
+            _EDITOR_TOOL_NAMES,
+            _SCHOLARLY_TOOL_NAMES,
+            _WEB_TOOL_NAMES,
+        )
+
+        assert _CONFIRMABLE_TOOL_NAMES == _WEB_TOOL_NAMES | _SCHOLARLY_TOOL_NAMES
+        assert len(_CONFIRMABLE_TOOL_NAMES) == 9
+        # 只读三件套不在确认分组
+        for name in ("list_files", "read_file_content", "search_across_files"):
+            assert name not in _CONFIRMABLE_TOOL_NAMES
+            assert name in _EDITOR_TOOL_NAMES
+
+        # 行为抽验一个学术分组工具（其余由分组恒等断言覆盖）
+        monkeypatch.setattr(get_config().llm, "api_key", "test-key")
+        m_registry = _mock_registry(result_text="DATA")
+        monkeypatch.setattr(f"{_EDITOR_CHAT_MOD}.get_tool_registry", lambda: m_registry)
+
+        with patch(
+            _LLM_CLIENT_PATH,
+            self._make_two_round_llm("get_work_details", {"work_id": "W10.1234"}),
+        ):
+            events, _ = _drive_editor_send(
+                get_writing_chat_service(),
+                self._req(),
+                env["ws"],
+                resolve="confirm",
+            )
+        assert events[0]["type"] == "tool_pending"
+        assert events[0]["tool"] == "get_work_details"
