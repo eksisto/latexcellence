@@ -567,6 +567,54 @@ PDF 预览由 iframe 整体替换为 pdf.js 渲染（`PdfJsPreview`，
   命中即复用编译错误跳转的「开 tab + 行定位」通路（文件未打开时经
   `pendingErrorJumpRef` 延迟到换档后），查询失败 toast 三语提示。
 
+### 实时语法诊断（editor v3 阶段三 / 决策 Q9）
+
+编辑停顿约 500ms 后对激活缓冲区做轻量语法检查，以内联波浪线 + 悬停提示
+呈现——不进编译错误列表、不阻断编译（chktex 镜像集成为可选增强不排期，
+触发条件为纯模块方案实测误报率不可接受时再评估）。
+
+- **诊断纯模块** `lib/editor/diagnostics.js`（node --test 直接单测）：
+  `computeDiagnostics(docText, formatMessage?)` 单趟 O(n) 状态机扫描
+  （无嵌套量词正则；主线程护栏：`\end` 栈内查找经「环境名 → 出现次数」
+  索引 O(1) 判空防深栈平方退化、超限且双栈皆空后只计数不构建条目、消息
+  仅对返回的 ≤ 200 条组装），输出 `{ from, to, severity, rule, params,
+  message }`（from/to 为 CM6 偏移），上限 200 条——超出按文档位置截断并
+  在首条标注（`truncated`/`total` 字段 + message 附截断提示，total 恒为
+  精确总数）。规则两条：
+  - `unmatched-env`（error）：`\begin`/`\end` 栈匹配，环境名扫描思路与
+    `formulaHoverScan` 同源（命令名全读，杜绝 `\endnote` 误判 `\end`）。
+    `\end{env}` 与栈顶同名弹出；命中更深层同名时其上内层环境全部按未闭合
+    报告并整段弹出（LaTeX 要求环境正确嵌套）；栈内无同名报 stray `\end`；
+    文档末尾栈内残留按未闭合报告（定位在各 `\begin` token 区间）。环境名
+    本行未闭合（畸形或键入中途）按已敲出前缀继续栈匹配、不闪报。
+    verbatim 类环境（verbatim / verbatim* / Verbatim / Verbatim* /
+    lstlisting / minted，与 `outlineScan` 同一保守清单）整体豁免：内容全
+    字面（注释、花括号、`\begin` 均为普通文本）只找 `\end{同名}`；未闭合
+    的 verbatim 本身仍在文末报告，其后内容随之字面化（抑制级联误报）。
+  - `unbalanced-braces`（warning）：全文档花括号栈计数——多余的 `}` 定位
+    所在行（每行最多一条）；文末未闭合 `{` 定位最内层 opener（params
+    携带未闭合总数）。豁免：注释（`stripComment` 同源口径：非转义 `%` 起
+    注释、`\%` / `\\%` 奇偶判定）、`\verb` / `\verb*` 参数（`outlineScan`
+    同口径：定界符为字母/空白视为非法形态不豁免、参数不跨行）、转义
+    `\{` / `\}`、URL 字面量（`\url` / `\path` / `\href` 第一个花括号参数，
+    与后端 `latex_literals.py` 同源：参数内 `%20` 等为字面字符不再起注释，
+    花括号转义感知配对整体吞掉）。
+- **诊断消息三语**：纯模块只产出 rule + params（formatMessage 注入组装
+  message，缺省英文兜底文案保证 node --test 可测）；接线层
+  `lib/editor/liveLint.js` 按 `components:editor.diagnostics.*` 文案表
+  组装（i18n 每次诊断运行时求值，语言切换后下一次诊断生效）。
+- **CM6 接线**：`@codemirror/lint`（MIT）新增为显式依赖并登记
+  `THIRD_PARTY_NOTICES.md`；`linter(..., { delay: 500 })` 模块级单例随
+  `liveDiagnostics` 偏好条件挂载，挂载/失配重建遵循 selectionMatches
+  先例（激活 tab 经包装层重配置即时生效，存档 tab 换入时 config 失配
+  重建）。
+- **偏好通道**：`EDITOR_PREFERENCES_DEFAULTS` 增 `liveDiagnostics: true`
+  （默认开），经 `sanitizePreferences` 布尔白名单清洗并随导入导出载荷
+  分发；不升 persist/导出 version——布尔新键走白名单缺省补齐，v1/v2
+  存档与导入载荷天然兼容，无迁移转换可做。
+- **设置入口**：`EditorSettingsDialog` 增「实时语法诊断」开关（三语
+  i18n，含提示文案）。
+
 ### 检查结果保鲜（§8 / 决策 Q13）
 
 `useParagraphCheck` 为每条检查结果打上检查时的文件 MD5 版本戳
@@ -614,7 +662,10 @@ AI 面板。四处配置同步规范照 AGENTS.md 执行；`/api/config/status` 
   editorFiles / editorMatcher / editorSnippetInsert / editorPreambleScan /
   editorWrap（包裹纯逻辑与直包键位一致性）/ editorBeginClose（\begin
   配对纯决策与事务行为）/ editorSearchPanel（面板短语映射与语言热更新）/
-  editorOutlineScan（大纲扫描边界）/ editorFormulaHoverScan（公式识别边界）/ editorFormatApply（格式化应用决策、
+  editorOutlineScan（大纲扫描边界）/ editorFormulaHoverScan（公式识别边界）/
+  editorDiagnostics（实时诊断：环境栈匹配 / 花括号计数、注释·\verb·
+  verbatim·转义·URL 字面量豁免、200 条截断标注、消息格式化注入）/
+  editorFormatApply（格式化应用决策、
   快捷键判定与 CM6 history 单步撤销）/ editorSynctexMath（SyncTeX 点→像素
   换算与左上原点翻转，含双击取点闭环）/ latexCommands（含 wrap 类目 schema）/
   i18nLocales 键集合一致性等

@@ -1747,6 +1747,13 @@
       },
       "formulaHover": {
         "renderError": "Failed to render formula — the LaTeX may be invalid"
+      },
+      "diagnostics": {
+        "envUnclosed": "Environment {{env}} is never closed: the matching \\end is missing.",
+        "envStray": "\\end with no matching \\begin: environment {{env}} was never opened.",
+        "braceExtraClose": "Unexpected }: the } on line {{line}} has no matching {.",
+        "braceUnclosed": "Unbalanced braces: the { on line {{line}} is never closed ({{depth}} unclosed { in total).",
+        "truncatedNote": "Too many diagnostics: showing the first {{limit}} of {{total}}."
       }
     },
     "editorStatusBar": {
@@ -1806,7 +1813,9 @@
       "import_invalid_json": "Import failed: not valid JSON",
       "import_invalid_kind": "Import failed: not an editor-preferences export",
       "import_unsupported_version": "Import failed: version is newer or invalid; please upgrade first",
-      "import_invalid_payload": "Import failed: prefs field missing or malformed"
+      "import_invalid_payload": "Import failed: prefs field missing or malformed",
+      "liveDiagnostics": "Live syntax checks",
+      "liveDiagnosticsHint": "About half a second after you stop typing, unclosed environments and unbalanced braces are flagged inline (compiling is not affected)."
     },
     "commandPalette": {
       "title": "Command palette",

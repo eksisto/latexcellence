@@ -36,6 +36,11 @@
  *   - 选中即高亮全部匹配（阶段八，selectionMatches 偏好）：@codemirror/
  *     search 的 highlightSelectionMatches 按偏好挂载（BASIC_SETUP 常驻
  *     false，避免模块级单例随偏好变化），切换经换档失配重建生效到各 tab；
+ *   - 实时语法诊断（editor v3 阶段三 / 决策 Q9，liveDiagnostics 偏好）：
+ *     @codemirror/lint 的 linter（delay 500ms）随偏好按需挂载，规则实现
+ *     在纯模块 lib/editor/diagnostics.js（未闭合环境 error / 花括号失衡
+ *     warning，注释、\verb、verbatim、转义与 URL 字面量豁免，200 条上限），
+ *     消息经 i18n 文案表三语组装；挂载与失配重建同 selectionMatches 先例；
  *   - 高亮配色复用全局 --code-token-* 变量、底色复用主题变量，
  *     亮/暗主题切换零 JS 参与。
  */
@@ -60,6 +65,7 @@ import { snippetPlaceholderExtension } from "@/lib/editor/snippetInsert";
 import { wrapKeymapExtension } from "@/lib/editor/wrap";
 import { autoCloseEnvExtension } from "@/lib/editor/beginClose";
 import { formulaHoverExtension } from "@/lib/editor/formulaHover";
+import { createDiagnosticsLinter } from "@/lib/editor/liveLint";
 import { createSearchPanelExtension } from "@/lib/editor/searchPanel";
 import {
   changeHistoryExtension,
@@ -157,6 +163,13 @@ const SELECTION_MATCHES = highlightSelectionMatches({
   maxMatches: 100,
 });
 
+/** 实时语法诊断（editor v3 阶段三 / 决策 Q9；模块级单例条件挂载，同
+    SELECTION_MATCHES 先例：liveDiagnostics 偏好开 → 挂载，关 → 摘除，
+    tab 存档 config 失配重建生效到各 tab；文案 i18n 每次诊断运行时求值） */
+const DIAGNOSTICS_LINTER = createDiagnosticsLinter({
+  translate: (key, params) => i18n.t(key, params),
+});
+
 /** 状态栏字数统计的尾随防抖（大文档逐键全量统计不可取） */
 const DOC_STATS_DEBOUNCE_MS = 250;
 
@@ -178,6 +191,8 @@ const DOC_STATS_DEBOUNCE_MS = 250;
  *   （tab.openedBuffer，阶段八色条绿基线）
  * @param {boolean} [props.selectionMatches=true] 选中即高亮全部匹配
  *   （阶段八偏好；换档失配重建生效到各存档 tab）
+ * @param {boolean} [props.liveDiagnostics=true] 实时语法诊断
+ *   （editor v3 阶段三 / 决策 Q9 偏好；换档失配重建生效到各存档 tab）
  * @param {object|null} [props.statsHub=null]  状态栏统计 hub
  *   （lib/editor/stats.js 发布-订阅；缺省不发布）
  * @param {(view: EditorView) => void} [props.onCreateEditor]
@@ -203,6 +218,7 @@ export default function LaTeXEditor({
   savedText = null,
   openedText = null,
   selectionMatches = true,
+  liveDiagnostics = true,
   statsHub = null,
   onCreateEditor,
   onCompletionApply,
@@ -331,6 +347,9 @@ export default function LaTeXEditor({
       CHANGE_HISTORY,
       // 选中即高亮全部匹配（阶段八偏好；模块级单例条件挂载）
       ...(selectionMatches ? [SELECTION_MATCHES] : []),
+      // 实时语法诊断（editor v3 阶段三 / 决策 Q9 偏好；模块级单例条件挂载，
+      // 编辑停顿 500ms 后运行，规则与豁免口径见 lib/editor/diagnostics.js）
+      ...(liveDiagnostics ? [DIAGNOSTICS_LINTER] : []),
       // 自有 doc listener：换档后视图 state 不含包装层内部 listener，
       // doc 变更回写 store 统一走本入口（详见 handleDocChange 去重）；
       // 状态栏统计同 listener 发布（docChanged 走字数防抖）
@@ -349,6 +368,7 @@ export default function LaTeXEditor({
   }, [
     softWrap,
     selectionMatches,
+    liveDiagnostics,
     onCompletionApply,
     handleDocChange,
     scheduleDocStats,
@@ -426,6 +446,7 @@ export default function LaTeXEditor({
       softWrap,
       readOnly,
       selectionMatches,
+      liveDiagnostics,
     });
     tabViewRegistry.setScroll(prevKey, view.scrollDOM.scrollTop);
     switchGuardRef.current = true;
@@ -437,7 +458,8 @@ export default function LaTeXEditor({
         state.doc.toString() !== value ||
         config?.softWrap !== softWrap ||
         config?.readOnly !== readOnly ||
-        config?.selectionMatches !== selectionMatches
+        config?.selectionMatches !== selectionMatches ||
+        config?.liveDiagnostics !== liveDiagnostics
       ) {
         // 无存档，或存档与 store 缓冲区/外观失配（外部整缓冲区替换、
         // 偏好变更后未经过换档）→ 按当前缓冲区重建（撤销历史复位）
@@ -448,6 +470,7 @@ export default function LaTeXEditor({
         softWrap,
         readOnly,
         selectionMatches,
+        liveDiagnostics,
       });
       view.setState(state);
     } finally {
@@ -463,6 +486,7 @@ export default function LaTeXEditor({
     softWrap,
     readOnly,
     selectionMatches,
+    liveDiagnostics,
     extensions,
     buildState,
     restoreScroll,
@@ -543,6 +567,7 @@ export default function LaTeXEditor({
       softWrap,
       readOnly,
       selectionMatches,
+      liveDiagnostics,
     });
     tabViewRegistry.setScroll(activeKey, 0);
     switchGuardRef.current = true;
@@ -552,7 +577,15 @@ export default function LaTeXEditor({
       switchGuardRef.current = false;
     }
     lastSyncedRef.current = value;
-  }, [activeKey, value, softWrap, readOnly, selectionMatches, buildState]);
+  }, [
+    activeKey,
+    value,
+    softWrap,
+    readOnly,
+    selectionMatches,
+    liveDiagnostics,
+    buildState,
+  ]);
 
   return (
     <div

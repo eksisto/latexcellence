@@ -6,8 +6,9 @@
  *
  * 持久化策略：
  *   - editorPreferences：persist 持久化（autoSave / softWrap / autoCloseEnv
- *     / formulaHover / selectionMatches / fontSize / customSnippets，v2），
- *     水合后经 sanitizePreferences 白名单清洗，脏数据回落默认值；
+ *     / formulaHover / selectionMatches / liveDiagnostics / fontSize /
+ *     customSnippets，v2），水合后经 sanitizePreferences 白名单清洗，
+ *     脏数据回落默认值；
  *   - editorSession（多缓冲区：tabs + activeTabPath + 冲突信息）：不进
  *     zustand persist——刷新/重启恢复走 sessionPersistence 专项通道（含
  *     脏缓冲区全文 + 保存基线，localStorage + LRU 配额兜底，见
@@ -76,6 +77,8 @@ function createEditorPreferencesSlice(set) {
     setFormulaHover: (value) => set({ formulaHover: !!value }),
     // 选中即高亮全部匹配（阶段八，借鉴 Notepad++ 智能高亮，默认开）
     setSelectionMatches: (value) => set({ selectionMatches: !!value }),
+    // 实时语法诊断开关（editor v3 阶段三 / 决策 Q9，默认开）
+    setLiveDiagnostics: (value) => set({ liveDiagnostics: !!value }),
     // 字号经白名单校验（区间整数），非法值静默忽略
     setFontSize: (value) => {
       const cleaned = sanitizePreferences({ fontSize: value });
@@ -354,7 +357,10 @@ export const useEditorStore = create(
       name: "latexcellence-editor",
       // v2：customSnippets 并入偏好（editor v3 阶段二 / 决策 Q7）；
       // v1 存档经 migrate 透传，merge 的 sanitizePreferences 自动补默认
-      // 空数组（字段级白名单对缺失字段回落默认值）
+      // 空数组（字段级白名单对缺失字段回落默认值）。
+      // editor v3 阶段三：liveDiagnostics 新键不升 version——布尔键有默认
+      // 值且 sanitizePreferences 白名单对缺失字段回落默认，v1/v2 存档与
+      // 同版本导入载荷天然兼容，无迁移转换可做（升 version 纯仪式）。
       version: 2,
       migrate: (persisted) => persisted,
       // 仅偏好进 localStorage；会话切片（含缓冲区内容）显式排除——刷新/
@@ -366,6 +372,7 @@ export const useEditorStore = create(
         autoCloseEnv: state.autoCloseEnv,
         formulaHover: state.formulaHover,
         selectionMatches: state.selectionMatches,
+        liveDiagnostics: state.liveDiagnostics,
         fontSize: state.fontSize,
         customSnippets: state.customSnippets,
       }),

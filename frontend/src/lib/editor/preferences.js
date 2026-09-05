@@ -25,6 +25,8 @@ export const EDITOR_PREFERENCES_DEFAULTS = Object.freeze({
   formulaHover: true,
   /** 选中即高亮全部匹配：默认开启（阶段八，借鉴 Notepad++ 智能高亮） */
   selectionMatches: true,
+  /** 实时语法诊断（editor v3 阶段三 / 决策 Q9）：默认开启 */
+  liveDiagnostics: true,
   /** 编辑器字号（px） */
   fontSize: 14,
   /** 用户自定义片段库（editor v3 阶段二 / 决策 Q7） */
@@ -114,7 +116,7 @@ export function isValidFontSize(value) {
  * 输出整体覆盖当前切片（不合并未知键）。customSnippets 数组逐条目级清洗
  * （schema 校验、去重名、超限截断，见 sanitizeCustomSnippets）。
  * @param {Record<string, unknown>|null|undefined} input 待清洗的偏好对象
- * @returns {{autoSave: boolean, softWrap: boolean, autoCloseEnv: boolean, formulaHover: boolean, selectionMatches: boolean, fontSize: number, customSnippets: Array}}
+ * @returns {{autoSave: boolean, softWrap: boolean, autoCloseEnv: boolean, formulaHover: boolean, selectionMatches: boolean, liveDiagnostics: boolean, fontSize: number, customSnippets: Array}}
  */
 export function sanitizePreferences(input) {
   if (!input || typeof input !== "object") {
@@ -143,7 +145,7 @@ export function sanitizePreferences(input) {
 /**
  * 序列化偏好为导出载荷文本（pretty-print JSON，§11）。v2 载荷携带
  * customSnippets（决策 Q7），随既有导入导出双通道分发。
- * @param {{autoSave: boolean, softWrap: boolean, autoCloseEnv: boolean, formulaHover: boolean, selectionMatches: boolean, fontSize: number, customSnippets?: Array}} prefs
+ * @param {{autoSave: boolean, softWrap: boolean, autoCloseEnv: boolean, formulaHover: boolean, selectionMatches: boolean, liveDiagnostics: boolean, fontSize: number, customSnippets?: Array}} prefs
  * @returns {string}
  */
 export function serializePreferences(prefs) {
@@ -168,7 +170,7 @@ export function serializePreferences(prefs) {
  *   - prefs 内非法字段经 sanitizePreferences 静默丢弃（§11）
  *
  * @param {string} text 用户提供的 JSON 文本
- * @returns {{ok: true, prefs: {autoSave: boolean, softWrap: boolean, autoCloseEnv: boolean, formulaHover: boolean, selectionMatches: boolean, fontSize: number, customSnippets: Array}}
+ * @returns {{ok: true, prefs: {autoSave: boolean, softWrap: boolean, autoCloseEnv: boolean, formulaHover: boolean, selectionMatches: boolean, liveDiagnostics: boolean, fontSize: number, customSnippets: Array}}
  *           | {ok: false, reason: "invalid_json"|"invalid_kind"|"unsupported_version"|"invalid_payload"}}
  */
 export function parsePreferencesImport(text) {

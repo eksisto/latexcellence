@@ -73,6 +73,7 @@
 | [@codemirror/view](https://github.com/codemirror/dev) | ^6.43.9 | MIT | Copyright (c) by Marijn Haverbeke and others | 编辑器视图层（主题 / 软换行等视图扩展） |
 | [@codemirror/state](https://github.com/codemirror/dev) | ^6.7.1 | MIT | Copyright (c) by Marijn Haverbeke and others | 编辑器状态模型（事务 / 文档状态） |
 | [@codemirror/legacy-modes](https://github.com/codemirror/legacy-modes) | ^6.5.3 | MIT | Copyright (c) by Marijn Haverbeke and others | stex LaTeX 流式语法高亮模式（经语言包抽象层引入） |
+| [@codemirror/lint](https://github.com/codemirror/dev) | ^6.9.7 | MIT | Copyright (c) by Marijn Haverbeke and others | 编辑器实时语法诊断（CM6 lint 扩展：未闭合环境 / 花括号失衡内联提示，editor v3 阶段三） |
 | [@lezer/highlight](https://github.com/lezer-parser/highlight) | ^1.2.3 | MIT | Copyright (c) by Marijn Haverbeke and others | 语法高亮标签定义（HighlightStyle） |
 | [tailwind-merge](https://github.com/dcastil/tailwind-merge) | ^3.6.0 | MIT | Copyright (c) 2021 Dany Castillo | Tailwind 类名合并 |
 | [pdf.js (pdfjs-dist)](https://github.com/mozilla/pdf.js) | ^4.10.38 | Apache-2.0 | Copyright 2012 Mozilla Foundation | PDF 渲染引擎（编辑器 PDF 预览替换 iframe，SyncTeX 正反向定位的渲染层；按需动态加载） |

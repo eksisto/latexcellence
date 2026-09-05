@@ -2,7 +2,8 @@
  * EditorSettingsDialog —— 编辑器偏好设置（editor-design §9 / §11）。
  *
  * 开关：软换行、字号即时生效；自动保存（默认关，决策 Q6）在缓冲区停止
- * 编辑后延迟落盘（行为联动属阶段四，经 save-file 单一路径）。
+ * 编辑后延迟落盘（行为联动属阶段四，经 save-file 单一路径）；实时语法
+ * 诊断（editor v3 阶段三 / 决策 Q9）切换后经扩展重配置即时生效。
  *
  * 自定义片段（editor v3 阶段二 / 决策 Q7、Q8）：列表 + 增删改表单
  * （命令名 / 插入内容 / 中文名），插入内容带实时预览（占位符解析后的
@@ -80,6 +81,7 @@ export default function EditorSettingsDialog({ open, onOpenChange }) {
     autoCloseEnv,
     formulaHover,
     selectionMatches,
+    liveDiagnostics,
     fontSize,
     customSnippets,
     setSoftWrap,
@@ -87,6 +89,7 @@ export default function EditorSettingsDialog({ open, onOpenChange }) {
     setAutoCloseEnv,
     setFormulaHover,
     setSelectionMatches,
+    setLiveDiagnostics,
     setFontSize,
     setCustomSnippets,
     applyPreferences,
@@ -97,6 +100,7 @@ export default function EditorSettingsDialog({ open, onOpenChange }) {
       autoCloseEnv: s.autoCloseEnv,
       formulaHover: s.formulaHover,
       selectionMatches: s.selectionMatches,
+      liveDiagnostics: s.liveDiagnostics,
       fontSize: s.fontSize,
       customSnippets: s.customSnippets,
       setSoftWrap: s.setSoftWrap,
@@ -104,6 +108,7 @@ export default function EditorSettingsDialog({ open, onOpenChange }) {
       setAutoCloseEnv: s.setAutoCloseEnv,
       setFormulaHover: s.setFormulaHover,
       setSelectionMatches: s.setSelectionMatches,
+      setLiveDiagnostics: s.setLiveDiagnostics,
       setFontSize: s.setFontSize,
       setCustomSnippets: s.setCustomSnippets,
       applyPreferences: s.applyPreferences,
@@ -125,6 +130,7 @@ export default function EditorSettingsDialog({ open, onOpenChange }) {
           autoCloseEnv: prefs.autoCloseEnv,
           formulaHover: prefs.formulaHover,
           selectionMatches: prefs.selectionMatches,
+          liveDiagnostics: prefs.liveDiagnostics,
           fontSize: prefs.fontSize,
           customSnippets: prefs.customSnippets,
         }),
@@ -301,6 +307,23 @@ export default function EditorSettingsDialog({ open, onOpenChange }) {
           </div>
           <p className="-mt-2 text-xs text-muted-foreground">
             {t("components:editorSettings.selectionMatchesHint")}
+          </p>
+
+          {/* 实时语法诊断（editor v3 阶段三 / 决策 Q9）：CM6 lint 内联波浪线 */}
+          <div className="flex items-center justify-between gap-4">
+            <Label htmlFor="editor-live-diagnostics" className="text-sm">
+              {t("components:editorSettings.liveDiagnostics")}
+            </Label>
+            <Switch
+              id="editor-live-diagnostics"
+              checked={liveDiagnostics}
+              onCheckedChange={(checked) =>
+                setLiveDiagnostics(checked === true)
+              }
+            />
+          </div>
+          <p className="-mt-2 text-xs text-muted-foreground">
+            {t("components:editorSettings.liveDiagnosticsHint")}
           </p>
 
           <div className="flex items-center justify-between gap-4">

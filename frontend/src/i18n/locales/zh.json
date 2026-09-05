@@ -1747,6 +1747,13 @@
       },
       "formulaHover": {
         "renderError": "公式渲染失败：LaTeX 语法可能有误"
+      },
+      "diagnostics": {
+        "envUnclosed": "环境 {{env}} 未闭合：缺少与之配对的 \\end。",
+        "envStray": "\\end 命令没有对应的 \\begin：环境 {{env}} 从未开启。",
+        "braceExtraClose": "出现多余的 }：第 {{line}} 行的 } 没有与之配对的 {。",
+        "braceUnclosed": "花括号不配平：第 {{line}} 行的 { 未闭合（全文共 {{depth}} 个 { 缺少对应 }）。",
+        "truncatedNote": "诊断条数过多，仅显示前 {{limit}} 条（共 {{total}} 条）。"
       }
     },
     "editorStatusBar": {
@@ -1806,7 +1813,9 @@
       "import_invalid_json": "导入失败：不是有效的 JSON 文本",
       "import_invalid_kind": "导入失败：文件类型不匹配（非本编辑器偏好导出）",
       "import_unsupported_version": "导入失败：版本过新或无效，请升级后再试",
-      "import_invalid_payload": "导入失败：prefs 字段缺失或格式错误"
+      "import_invalid_payload": "导入失败：prefs 字段缺失或格式错误",
+      "liveDiagnostics": "实时语法诊断",
+      "liveDiagnosticsHint": "编辑停顿约半秒后自动检查环境是否闭合、花括号是否配平，并在编辑器内联标记提示（不影响编译）。"
     },
     "commandPalette": {
       "title": "命令面板",
