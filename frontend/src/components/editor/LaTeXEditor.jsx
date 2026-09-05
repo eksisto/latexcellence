@@ -187,6 +187,9 @@ const DOC_STATS_DEBOUNCE_MS = 250;
  * @param {() => Promise<object|null>} [props.getRefSymbols]
  *   引用补全（\ref/\label/\cite，阶段四）的项目符号数据读取器；
  *   缺省时不挂引用 source
+ * @param {() => Array} [props.getCustomSnippets]
+ *   自定义片段读取器（editor v3 阶段二 / 决策 Q8）；每次补全触发时求值，
+ *   偏好更新即时生效，无须重建扩展
  */
 export default function LaTeXEditor({
   value,
@@ -204,6 +207,7 @@ export default function LaTeXEditor({
   onCreateEditor,
   onCompletionApply,
   getRefSymbols,
+  getCustomSnippets,
 }) {
   const viewRef = useRef(null);
   /** 当前装载在视图中的 tab（null = 尚未完成首次装载） */
@@ -302,11 +306,13 @@ export default function LaTeXEditor({
       editorBaseTheme,
       // 阶段三：`\` / `\begin{` 行内补全 + 模板占位符跳转模式；
       // getLanguage 供中文名 detail 按界面语言本地化（每次触发时求值）；
-      // 阶段四：getRefSymbols 供 \ref/\label/\cite 引用补全取项目符号
+      // 阶段四：getRefSymbols 供 \ref/\label/\cite 引用补全取项目符号；
+      // editor v3 阶段二：getCustomSnippets 供自定义片段合并进匹配索引
       latexCompletionExtension({
         onApplyEntry: onCompletionApply,
         getLanguage: () => i18n.language,
         getRefSymbols,
+        getCustomSnippets,
       }),
       snippetPlaceholderExtension(),
       // 包裹命令直包快捷键（Ctrl/Cmd+B/I/U/K，editor v2 决策 Q13）
@@ -348,6 +354,7 @@ export default function LaTeXEditor({
     scheduleDocStats,
     publishStats,
     getRefSymbols,
+    getCustomSnippets,
   ]);
 
   /* ── 界面语言切换：热更新查找面板短语（phrases facet 依赖语言字段） ── */

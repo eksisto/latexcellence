@@ -5,6 +5,8 @@
  *   - 搜索与行内补全共用 lib/editor/matcher.js 同一索引与打分（§6.2 一致性）；
  *   - 空查询按数据库默认顺序分类浏览；有查询时按得分归一排序平铺，
  *     条目上标注所属类目；
+ *   - 自定义片段（editor v3 阶段二 / 决策 Q8）经 customCommands 合并层
+ *     追加进匹配索引，归入独立 "custom" 分组置尾；
  *   - 带 grid 配置的条目进入 GridSizePicker 二级步骤选定行列后插入；
  *   - 插入动作经 onInsert 回调交由页面执行（snippetInsert 占位符模式 +
  *     宏包缺失联动），返回 false 表示拒绝（viewer 只读 / 未打开文件），
@@ -29,14 +31,21 @@ import GridSizePicker from "@/components/editor/GridSizePicker";
 import Search from "lucide-react/dist/esm/icons/search.mjs";
 import Table from "lucide-react/dist/esm/icons/table.mjs";
 
+import { LATEX_COMMANDS as LATEX_COMMANDS_BASE } from "@/data/latexCommands/index.js";
+
 import {
   buildCommandIndex,
-  getCommandMatcherIndex,
+  getExtendedMatcherIndex,
   listCommands,
   searchCommands,
 } from "@/lib/editor/matcher.js";
 import { getCommandZhDisplay } from "@/lib/editor/commandZh.js";
-import { groupCommandsByCategory } from "@/data/latexCommands/index.js";
+import {
+  groupCommandsWithCustom,
+  withCustomCommands,
+} from "@/lib/editor/customCommands.js";
+import useEditorStore from "@/store/editorStore";
+import { useShallow } from "zustand/react/shallow";
 
 /**
  * @param {object} props
@@ -62,6 +71,10 @@ export default function CommandPalette({
   const [activeIndex, setActiveIndex] = useState(0);
   /** 中文名展示函数（按界面语言；null = 隐藏或未就绪，渲染为空） */
   const [zhDisplay, setZhDisplay] = useState(null);
+  // 自定义片段（editor v3 阶段二 / 决策 Q8）：随偏好更新重取派生索引
+  const { customSnippets } = useEditorStore(
+    useShallow((s) => ({ customSnippets: s.customSnippets })),
+  );
 
   /* 中文名本地化跟随界面语言（en → null 隐藏；zh-TW → 简转繁懒加载） */
   useEffect(() => {
@@ -78,25 +91,32 @@ export default function CommandPalette({
   const inputRef = useRef(null);
   const itemRefs = useRef(new Map());
 
-  /* 打开时重置并确保共享索引就绪（pinyin-pro 动态 chunk 首载） */
+  /* 打开时重置并确保索引就绪（pinyin-pro 动态 chunk 首载；customSnippets
+     变更时重取派生索引——面板关闭期间编辑片段，下次打开即生效） */
   useEffect(() => {
     if (!open) return;
     setQuery("");
     setPickerEntry(null);
     setActiveIndex(0);
     let cancelled = false;
-    getCommandMatcherIndex()
+    getExtendedMatcherIndex(customSnippets)
       .then((index) => {
         if (!cancelled) setIndexRows(index);
       })
       .catch(() => {
         // 拼音资源加载失败：退化为无拼音索引（中文子串/英文两路仍可检索）
-        if (!cancelled) setIndexRows(buildCommandIndex());
+        if (!cancelled) {
+          setIndexRows(
+            buildCommandIndex(
+              withCustomCommands(LATEX_COMMANDS_BASE, customSnippets),
+            ),
+          );
+        }
       });
     return () => {
       cancelled = true;
     };
-  }, [open]);
+  }, [open, customSnippets]);
 
   /* 输入框聚焦 */
   useEffect(() => {
@@ -123,7 +143,7 @@ export default function CommandPalette({
       const hits = inCategory(searchCommands(indexRows, trimmed));
       return { groups: null, flatItems: hits };
     }
-    const cats = groupCommandsByCategory(
+    const cats = groupCommandsWithCustom(
       inCategory(listCommandRows(indexRows)),
     );
     return {

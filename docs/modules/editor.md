@@ -7,7 +7,8 @@
 > 悬停预览、阶段七编译错误列表与跨文件跳转，以及阶段八修改行色条 /
 > 状态栏 / 选中高亮匹配 / 会话持久化升级 localStorage，借鉴 Notepad++）
 > 与 [docs/editor-experience-design.md](../editor-experience-design.md)
-> （editor v3 写作体验收口；阶段一 SyncTeX 正反向同步已实施）。
+> （editor v3 写作体验收口；阶段一 SyncTeX 正反向同步、阶段二用户自定义
+> 片段库已实施）。
 
 ## 设计概述
 
@@ -96,7 +97,7 @@ frontend/src/
 │   ├── OutlinePanel.jsx              # 左栏「大纲」tab 内容（四级缩进条目 + 空态，点击经回调定位）
 │   ├── EditorToolbar.jsx             # 后端撤销重做 · 面板 · 格式化 · 编译 · 保存 · 设置
 │   ├── EditorCloseTabDialog.jsx      # 关闭脏 tab 三选弹窗（保存并关闭 / 放弃改动 / 取消）
-│   ├── EditorSettingsDialog.jsx      # 偏好开关 + 偏好导入/导出双通道入口
+│   ├── EditorSettingsDialog.jsx      # 偏好开关 + 自定义片段管理（增删改 + 实时预览）+ 偏好导入/导出双通道入口
 │   ├── ConflictDialog.jsx            # 409 弹窗（动作作用于冲突归属 tab：放弃重载 / 剪贴板逃生 / 覆盖保存）
 │   ├── CommandPalette.jsx            # 命令面板 + m×n 网格选择器二级步骤
 │   ├── GridSizePicker.jsx            # 表格/矩阵网格拖选
@@ -109,11 +110,12 @@ frontend/src/
 │   ├── tabViews.js                   # per-tab CM6 EditorState / 滚动位置登记表（单实例换档的数据底座）
 │   ├── language.js                   # 语言包抽象层（stex StreamLanguage）
 │   ├── files.js                      # 可编辑/可预览白名单 + 大小上限纯函数
-│   ├── preferences.js                # 偏好默认值/白名单清洗/导出导入校验纯函数
-│   ├── matcher.js                    # pinyin-pro 四路模糊匹配（多音字词级读音修正）
+│   ├── preferences.js                # 偏好默认值/白名单清洗/导出导入校验纯函数（v2 含自定义片段条目级清洗）
+│   ├── matcher.js                    # pinyin-pro 四路模糊匹配（多音字词级读音修正）+ 自定义片段派生索引
+│   ├── customCommands.js             # 自定义片段消费侧合并层（归一化 / 与内建库合并 / 面板独立分组）
 │   ├── commandZh.js                  # 命令中文名按界面语言本地化展示
 │   ├── completionTheme.js            # 补全弹层主题（索引卡式浮层 + 引导点）
-│   ├── latexCompletion.js            # \ 与 \begin{ 行内补全 source（+ 阶段四 \ref/\label/\cite 引用 source）
+│   ├── latexCompletion.js            # \ 与 \begin{ 行内补全 source（+ 阶段四 \ref/\label/\cite 引用 source；自定义片段经合并层参与匹配）
 │   ├── latexSymbols.js               # 引用补全符号缓存（项目为键 / 在途共享 / 保存失效）+ 候选映射过滤
 │   ├── snippetInsert.js              # 模板插入 + 占位符 Tab 循环
 │   ├── wrap.js                       # 包裹命令纯逻辑（多选区包裹计算）+ 直包快捷键键位
@@ -133,8 +135,10 @@ frontend/src/
 └── hooks/useEditorFormat.js          # 一键格式化编排（在途守卫 / 发起 tab 定位 / 应用决策分派）
 ```
 
-Zustand：`editorStore` 含三个切片——`editorPreferences`（persist：
-autoSave / softWrap / autoCloseEnv / formulaHover / fontSize）、`editorSession`（多缓冲区会话，
+Zustand：`editorStore` 含三个切片——`editorPreferences`（persist v2：
+autoSave / softWrap / autoCloseEnv / formulaHover / selectionMatches /
+fontSize / customSnippets；v1 存档经 migrate 透传后按白名单清洗补默认
+空数组）、`editorSession`（多缓冲区会话，
 不持久化）、`editorAssistant`（助手会话 id 与消息视图，不持久化；
 后端会话按项目 scope 隔离，切换文件延续会话）。
 
@@ -233,6 +237,38 @@ content/dirty——beforeunload、per-tab 自动保存防抖与冲突快照门�
   命名空间，注入 `EditorState.phrases`（以语言字段为依赖的 compute
   facet）；界面语言切换时经 `setSearchLanguage` 效果对活跃视图热更新
   （换档收起的存档 EditorState 保留建档时的语言，可接受边界）。
+
+### 自定义片段库（editor v3 阶段二 / 决策 Q7、Q8）
+
+用户个人高频模板（如实验室宏包专属环境）并入编辑器偏好持久化与消费链路，
+`data/latexCommands` JSON 保持构建期冻结，新增的全部是消费侧能力。
+
+- **数据与持久化（Q7）**：偏好 persist（`"latexcellence-editor"`）version
+  1 → 2，载荷增 `customSnippets` 数组；`sanitizePreferences()` 对其做条目
+  级清洗——条目形状 `{ name, insert, zh, category: "custom" }`（category
+  恒定、grid/pkg 等运行期字段不落盘）、命令名形状校验（与内建同规则）、
+  同名去重（先到先得）、上限 100 条、单条 insert ≤ 4000 字符（超限整条
+  丢弃，截断可能产生残缺 LaTeX）。偏好导出载荷升 version 2；导入通道
+  同时接受 v1（无片段字段，清洗回落空数组，不丢数据）与 v2。
+- **消费侧合并层（Q8）**：纯模块 `lib/editor/customCommands.js`——
+  `normalizeCustomSnippet()` 把存储条目归一化为运行时形状（补齐
+  `pkg: null` 与派生 `grid`：insert 含 `%CELLS%` 标记时默认 2×2，使
+  `%COLS%`/`%CELLS%` 网格标记对自定义条目经既有 GridSizePicker /
+  `expandEntryInsert()` 机制天然生效）；`withCustomCommands(base, custom)`
+  把自定义条目（与内建同名者丢弃，避免运行期命中歧义）追加在内建之后，
+  作为补全 source、命令面板 / 包裹浮层数据与插入入口的统一数据通道；
+  `groupCommandsWithCustom()` 在面板把自定义条目归入独立 "custom" 分组
+  置尾（三语条目）。条目机制层零改动：`expandEntryInsert` /
+  `insertSnippet` / `$n` 占位符跳转原样复用。
+- **匹配索引**：matcher 共享索引保持单实例，`getExtendedMatcherIndex()`
+  仅为追加的自定义条目计算拼音序列并按条目数组引用缓存（store 不可变
+  更新，引用不变即零重算）；`\begin{` 环境补全的环境清单同样经合并层
+  提取并按引用缓存。偏好更新即时生效，无须重建编辑器扩展。
+- **管理界面**：`EditorSettingsDialog` 新增「自定义片段」分区——列表
+  （命令名 + 中文名/模板摘要）与增删改表单（名称 / 插入内容 / 中文名，
+  插入内容带实时预览：占位符与网格标记解析后的实际插入文本）；表单校验
+  名称形状、与内建及其他片段的重名、插入内容非空与长度上限。自定义片段
+  跟随既有偏好导入导出双通道分发，不另开通道。
 
 ### 大纲面板（editor-productivity-design §5.3，阶段三）
 
@@ -567,7 +603,9 @@ AI 面板。四处配置同步规范照 AGENTS.md 执行；`/api/config/status` 
   `-synctex=1` 追加规则（synctex 默认 false 时编译命令零变化）/
   pdfa 组合忽略 / view·edit 输出解析 / file_path 越界拒绝 /
   多用户输出脱敏 / 响应无绝对路径
-- 前端 node --test：editorPreferences（含导入导出校验）、editorApplyDiff、
+- 前端 node --test：editorPreferences（含导入导出校验与自定义片段条目级
+  清洗 / v1·v2 载荷兼容）、customCommands（片段清洗 / 归一化 / 合并 /
+  面板分组 / 网格标记端到端）、editorApplyDiff、
   editorTabs（tab 状态机归约与会话选择器）、editorSessionPersistence
   （序列化清洗 / LRU 配额淘汰 / 项目键隔离 / localStorage 遗留收养迁移）、
   editorChangeHistoryDiff（行级 diff 边界与护栏）、editorChangeHistory

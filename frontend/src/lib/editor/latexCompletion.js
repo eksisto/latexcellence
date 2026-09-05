@@ -17,6 +17,8 @@
  * 中文名 detail 按界面语言本地化（commandZh.js）：简中原样、繁体转换、
  * 英文界面隐藏；当前语言由调用方经 getLanguage 注入（本模块不依赖
  * 应用级 i18n 单例，node --test 可直接导入）。
+ * 自定义片段（editor v3 阶段二 / 决策 Q8）经 getCustomSnippets 读取器
+ * 注入，由 customCommands.withCustomCommands 合并层归一化后参与匹配。
  */
 
 import { autocompletion } from "@codemirror/autocomplete";
@@ -24,10 +26,12 @@ import { autocompletion } from "@codemirror/autocomplete";
 import { LATEX_COMMANDS } from "../../data/latexCommands/index.js";
 import {
   getCommandMatcherIndex,
+  getExtendedMatcherIndex,
   buildCommandIndex,
   listCommands,
   searchCommands,
 } from "./matcher.js";
+import { withCustomCommands } from "./customCommands.js";
 import { getCommandZhDisplay } from "./commandZh.js";
 import { completionPopupTheme } from "./completionTheme.js";
 import { expandEntryInsert, insertSnippet } from "./snippetInsert.js";
@@ -54,18 +58,28 @@ export function extractEnvironments(commands = LATEX_COMMANDS) {
   return [...seen.values()];
 }
 
-/** 环境名索引（ASCII 名称，无需拼音；复用同一打分函数） */
-let envIndex = null;
-function getEnvIndex() {
-  if (!envIndex) {
-    envIndex = buildCommandIndex(
-      extractEnvironments().map(({ name, entry }) => ({
+/** 环境名索引（ASCII 名称，无需拼音；复用同一打分函数）。
+ * 缓存键为自定义片段数组引用（editor v3 阶段二：`\begin{` 补全同样命中
+ * 自定义环境模板；store 不可变更新，引用不变即零重算）。 */
+const NO_CUSTOM_SNIPPETS = Object.freeze([]);
+let envIndexCache = null;
+function getEnvIndex(customSnippets) {
+  const custom = Array.isArray(customSnippets)
+    ? customSnippets
+    : NO_CUSTOM_SNIPPETS;
+  if (envIndexCache && envIndexCache.custom === custom) {
+    return envIndexCache.index;
+  }
+  const index = buildCommandIndex(
+    extractEnvironments(withCustomCommands(LATEX_COMMANDS, custom)).map(
+      ({ name, entry }) => ({
         ...entry,
         name,
-      })),
-    );
-  }
-  return envIndex;
+      }),
+    ),
+  );
+  envIndexCache = { custom, index };
+  return index;
 }
 
 /* ── 光标前缀解析 ─────────────────────────────────────────────────────── */
@@ -99,12 +113,19 @@ function textBefore(state, pos) {
 
 /**
  * 命令补全 source。异步等待共享索引（首次动态加载 pinyin-pro，
- * 之后命中缓存），四路匹配与命令面板完全一致。
+ * 之后命中缓存），四路匹配与命令面板完全一致。自定义片段经
+ * getExtendedMatcherIndex 追加进索引（editor v3 阶段二 / 决策 Q8）。
  * @param {CompletionContext} context CM6 补全上下文
  * @param {((entry: object) => void)|undefined} onApplyEntry 应用后回调（宏包缺失联动）
  * @param {() => string} getLanguage 当前界面语言读取器（每次触发时求值）
+ * @param {(() => Array)|undefined} [getCustomSnippets] 自定义片段读取器
+ *   （每次触发时求值；缺省退回纯内建索引）
  */
-export function makeCommandCompletionSource(onApplyEntry, getLanguage) {
+export function makeCommandCompletionSource(
+  onApplyEntry,
+  getLanguage,
+  getCustomSnippets,
+) {
   return async function commandCompletionSource(context) {
     if (context.state.readOnly) return null;
     const before = textBefore(context.state, context.pos);
@@ -116,7 +137,9 @@ export function makeCommandCompletionSource(onApplyEntry, getLanguage) {
     // 独立，并行加载：串行 await 会让 zh-TW 界面首次触发补全的弹层延迟
     // 变成两个 chunk 下载时间之和（async-parallel）
     const [index, displayZh] = await Promise.all([
-      getCommandMatcherIndex(),
+      getCustomSnippets
+        ? getExtendedMatcherIndex(getCustomSnippets())
+        : getCommandMatcherIndex(),
       getCommandZhDisplay(getLanguage()),
     ]);
     // 空查询（刚敲下 `\`）按数据库默认顺序给默认列表，与面板初始视图一致
@@ -155,8 +178,16 @@ export function makeCommandCompletionSource(onApplyEntry, getLanguage) {
  * 环境名补全 source：`\begin{` 触发；应用时整体替换
  * `\begin{部分输入}` 为完整环境模板（含自动配对的 `\end{}`）。
  * （两个 source 工厂均导出：node --test 经 mock view 锁应用区间契约）
+ * @param {((entry: object) => void)|undefined} onApplyEntry 应用后回调
+ * @param {() => string} getLanguage 当前界面语言读取器
+ * @param {(() => Array)|undefined} [getCustomSnippets] 自定义片段读取器
+ *   （含 \begin{X} 模板的自定义条目进入环境清单；缺省纯内建）
  */
-export function makeEnvironmentCompletionSource(onApplyEntry, getLanguage) {
+export function makeEnvironmentCompletionSource(
+  onApplyEntry,
+  getLanguage,
+  getCustomSnippets,
+) {
   return async function environmentCompletionSource(context) {
     if (context.state.readOnly) return null;
     const before = textBefore(context.state, context.pos);
@@ -165,9 +196,12 @@ export function makeEnvironmentCompletionSource(onApplyEntry, getLanguage) {
     const query = m[1];
     const from = context.pos - query.length - "\\begin{".length;
     // 空查询（刚敲完 `\begin{`）按数据库默认顺序给出全部环境
+    const envIndex = getEnvIndex(
+      getCustomSnippets ? getCustomSnippets() : null,
+    );
     const matches = query
-      ? searchCommands(getEnvIndex(), query, { limit: 30 })
-      : listCommands(getEnvIndex(), { limit: 30 });
+      ? searchCommands(envIndex, query, { limit: 30 })
+      : listCommands(envIndex, { limit: 30 });
     if (matches.length === 0) return null;
     const displayZh = await getCommandZhDisplay(getLanguage());
     return {
@@ -236,24 +270,32 @@ export function makeReferenceCompletionSource(getRefSymbols) {
  * viewer 只读态由各 source 内部短路（editable=false 本就不触发）。
  * @param {{onApplyEntry?: (entry: object) => void,
  *   getLanguage?: () => string,
- *   getRefSymbols?: () => Promise<object|null>}} [options]
+ *   getRefSymbols?: () => Promise<object|null>,
+ *   getCustomSnippets?: () => Array}} [options]
  *   - onApplyEntry：应用补全后回调（EditorPage 接宏包缺失联动；决策 Q14
  *     与面板行为一致）；
  *   - getLanguage：当前界面语言读取器（缺省按未知语言处理 → 简体原样），
  *     每次补全触发时求值，语言切换无须重建扩展；
  *   - getRefSymbols：引用补全（\ref/\label/\cite）的项目符号数据读取器
- *     （阶段四；缺省时不挂引用 source）。
+ *     （阶段四；缺省时不挂引用 source）；
+ *   - getCustomSnippets：自定义片段读取器（editor v3 阶段二；每次触发时
+ *     求值，偏好更新即时生效，无须重建扩展；缺省退回纯内建数据）。
  * @returns {import("@codemirror/state").Extension}
  */
 export function latexCompletionExtension({
   onApplyEntry,
   getLanguage = () => "",
   getRefSymbols,
+  getCustomSnippets,
 } = {}) {
   const sources = [
-    makeEnvironmentCompletionSource(onApplyEntry, getLanguage),
+    makeEnvironmentCompletionSource(
+      onApplyEntry,
+      getLanguage,
+      getCustomSnippets,
+    ),
     // 两 source 均为异步（共享索引 / 中文名本地化），CM6 原生支持
-    makeCommandCompletionSource(onApplyEntry, getLanguage),
+    makeCommandCompletionSource(onApplyEntry, getLanguage, getCustomSnippets),
   ];
   if (typeof getRefSymbols === "function") {
     sources.push(makeReferenceCompletionSource(getRefSymbols));

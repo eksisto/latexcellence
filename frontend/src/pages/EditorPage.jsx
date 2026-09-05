@@ -151,6 +151,12 @@ function SessionEditor({
       api.project.latexSymbols(workspaceId),
     );
   }, [projectPath, projectId, workspaceId]);
+  // 自定义片段读取器（editor v3 阶段二 / 决策 Q8）：补全触发时实时求值，
+  // 偏好更新即时生效且引用稳定，无须重建编辑器扩展
+  const getCustomSnippets = useCallback(
+    () => useEditorStore.getState().customSnippets,
+    [],
+  );
   return (
     <LaTeXEditor
       value={buffer}
@@ -168,6 +174,7 @@ function SessionEditor({
       onCreateEditor={onCreateEditor}
       onCompletionApply={onCompletionApply}
       getRefSymbols={getRefSymbols}
+      getCustomSnippets={getCustomSnippets}
     />
   );
 }

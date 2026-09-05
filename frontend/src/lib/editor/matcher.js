@@ -215,6 +215,8 @@ export function listCommands(indexRows, { limit = DEFAULT_MATCH_LIMIT } = {}) {
 /* ── 懒加载共享索引（行内补全与命令面板共用同一实例与缓存） ──────────── */
 
 let indexPromise = null;
+/** 共享拼音转换器：派生索引（自定义片段追加行）复用，避免重复动态 import */
+let sharedPinyinFn = null;
 
 /**
  * 获取共享匹配索引（含预计算拼音）。首次调用动态引入 pinyin-pro 构建；
@@ -228,6 +230,7 @@ export function getCommandMatcherIndex() {
         // customPinyin 注册的是模块级全局词典，必须在任何 pinyin() 调用
         // 前完成（本模块是 pinyin-pro 在应用内的唯一消费点）
         customPinyin(PINYIN_WORD_FIXES);
+        sharedPinyinFn = pinyin;
         return fillPinyinSequences(buildCommandIndex(), pinyin);
       })
       .catch((err) => {
@@ -237,6 +240,38 @@ export function getCommandMatcherIndex() {
       });
   }
   return indexPromise;
+}
+
+/* ── 派生索引（editor v3 阶段二：自定义片段合并层消费） ─────────────────── */
+
+/**
+ * 追加条目的派生索引缓存：键为 extraCommands 数组引用（store 不可变更新，
+ * 每次编辑产生新引用，旧引用随 GC 回收），值为已填充拼音的合并索引行。
+ */
+const extendedIndexCache = new WeakMap();
+
+/**
+ * 获取「共享索引 + 追加条目」的合并匹配索引（editor v3 阶段二 / 决策 Q8）：
+ * base 行复用 getCommandMatcherIndex 的共享缓存，仅为追加条目计算拼音；
+ * 结果按 extraCommands 数组引用缓存——追加条目未变化时零重算。
+ * @param {Array} [extraCommands] 追加的命令条目（如自定义片段；空/非数组
+ *   直接返回共享索引）
+ * @returns {Promise<Array>} resolve 为已填充拼音的索引行（base 在前、追加在后）
+ */
+export async function getExtendedMatcherIndex(extraCommands) {
+  const baseRows = await getCommandMatcherIndex();
+  if (!Array.isArray(extraCommands) || extraCommands.length === 0) {
+    return baseRows;
+  }
+  const cached = extendedIndexCache.get(extraCommands);
+  if (cached) return cached;
+  const extraRows = fillPinyinSequences(
+    buildCommandIndex(extraCommands),
+    sharedPinyinFn,
+  );
+  const rows = baseRows.concat(extraRows);
+  extendedIndexCache.set(extraCommands, rows);
+  return rows;
 }
 
 /**

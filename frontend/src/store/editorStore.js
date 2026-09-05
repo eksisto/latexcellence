@@ -6,8 +6,8 @@
  *
  * 持久化策略：
  *   - editorPreferences：persist 持久化（autoSave / softWrap / autoCloseEnv
- *     / formulaHover / selectionMatches / fontSize），水合后经
- *     sanitizePreferences 白名单清洗，脏数据回落默认值；
+ *     / formulaHover / selectionMatches / fontSize / customSnippets，v2），
+ *     水合后经 sanitizePreferences 白名单清洗，脏数据回落默认值；
  *   - editorSession（多缓冲区：tabs + activeTabPath + 冲突信息）：不进
  *     zustand persist——刷新/重启恢复走 sessionPersistence 专项通道（含
  *     脏缓冲区全文 + 保存基线，localStorage + LRU 配额兜底，见
@@ -20,6 +20,7 @@ import { persist } from "zustand/middleware";
 
 import {
   EDITOR_PREFERENCES_DEFAULTS,
+  sanitizeCustomSnippets,
   sanitizePreferences,
 } from "@/lib/editor/preferences";
 import {
@@ -80,6 +81,14 @@ function createEditorPreferencesSlice(set) {
       const cleaned = sanitizePreferences({ fontSize: value });
       set({ fontSize: cleaned.fontSize });
     },
+    // 自定义片段（editor v3 阶段二 / 决策 Q7）：条目级清洗后整体覆盖；
+    // 函数入参按 updater 语义求值（zustand set 不透传函数值）
+    setCustomSnippets: (value) =>
+      set((state) => {
+        const next =
+          typeof value === "function" ? value(state.customSnippets) : value;
+        return { customSnippets: sanitizeCustomSnippets(next) };
+      }),
     /** 整体覆盖偏好切片（阶段四导入通道复用；本阶段仅水合 migrate 使用） */
     applyPreferences: (partial) => set(sanitizePreferences(partial)),
   };
@@ -343,7 +352,11 @@ export const useEditorStore = create(
     }),
     {
       name: "latexcellence-editor",
-      version: 1,
+      // v2：customSnippets 并入偏好（editor v3 阶段二 / 决策 Q7）；
+      // v1 存档经 migrate 透传，merge 的 sanitizePreferences 自动补默认
+      // 空数组（字段级白名单对缺失字段回落默认值）
+      version: 2,
+      migrate: (persisted) => persisted,
       // 仅偏好进 localStorage；会话切片（含缓冲区内容）显式排除——刷新/
       // 重启恢复走 sessionPersistence 专项通道（同样落 localStorage，
       // 含脏缓冲区全文与保存基线，LRU 配额兜底）
@@ -354,6 +367,7 @@ export const useEditorStore = create(
         formulaHover: state.formulaHover,
         selectionMatches: state.selectionMatches,
         fontSize: state.fontSize,
+        customSnippets: state.customSnippets,
       }),
       merge: (persisted, current) => ({
         ...current,
