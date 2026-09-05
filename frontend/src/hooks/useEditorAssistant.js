@@ -9,10 +9,12 @@ import { translateError } from "@/utils/errorMessages";
 import {
   createStreamingPlaceholder,
   isStaleEvent,
+  reduceAssistantCaptcha,
   reduceAssistantMessages,
   reduceAssistantSessionId,
   reduceAssistantToolStatus,
 } from "@/lib/editor/assistantStream";
+import { useWritingChatCaptcha } from "@/hooks/writing-chat/captcha";
 
 /**
  * 编辑器 AI 助手 hook（editor-design §7，阶段四）。
@@ -24,8 +26,12 @@ import {
  *   - 发送消息：读取编辑器上下文（文件/缓冲区/光标/选区）经 SSE 流式对话；
  *   - SSE 事件归约：事件 → 状态的纯归约收敛在 lib/editor/assistantStream.js
  *     （token / round_start / tool_status / tool_result / compressed /
- *     done（含结构化建议）/ error），本 hook 只负责把归约结果写回 store，
- *     以及 toast / 中止 / 过期计数等副作用编排。
+ *     done（含结构化建议与 captcha_pending 终流形态）/ captcha_challenge /
+ *     error），本 hook 只负责把归约结果写回 store，以及 toast / 中止 /
+ *     过期计数等副作用编排；
+ *   - DDG 挑战（阶段五a）：captcha_challenge 事件写入 useWritingChatCaptcha
+ *     通道，挑战在助手侧栏内提交/放弃；captcha done 删占位不留幽灵消息，
+ *     会话 id 照常回写（user 消息已在服务端落盘）。
  *
  * 建议应用动作由 AssistantPanel 经 EditorPage 提供的缓冲区回调执行，
  * 本 hook 只负责对话流与应用标记上报。
@@ -56,6 +62,17 @@ export default function useEditorAssistant({ getEditorContext }) {
   /** 当前在途请求的 AbortController（项目切换/卸载时 abort，风格对齐
    * useParagraphCheck 的 EventSource close() 先例） */
   const abortRef = useRef(null);
+
+  // DDG 挑战通道（阶段五a）：复用 Writing Chat 的 UI 无关 hook（内部调
+  // /api/search/ddg-challenge 提交端点）。hook 的 setError 副作用在本侧
+  // 无对应错误横幅——提交失败已由 hook 内 toast 呈现，传空实现即可。
+  const {
+    captchaChallenge,
+    setCaptchaChallenge,
+    captchaSubmitting,
+    submitCaptcha,
+    dismissCaptcha,
+  } = useWritingChatCaptcha({ setError: () => {} });
 
   // 项目键：单用户看 projectPath，多用户看 projectId（useIsOpened 同一判定口径）
   useEffect(() => {
@@ -187,6 +204,14 @@ export default function useEditorAssistant({ getEditorContext }) {
               reduceAssistantToolStatus(st.assistantToolStatus, event),
             );
             break;
+          case "captcha_challenge":
+            // DDG 挑战接管的流暂停态：清工具指示器，挑战对象归一化后
+            // 写入 captcha 通道（由 AssistantPanel 渲染挑战卡）
+            st.setAssistantToolStatus(
+              reduceAssistantToolStatus(st.assistantToolStatus, event),
+            );
+            setCaptchaChallenge(reduceAssistantCaptcha(null, event));
+            break;
           case "compressed":
             toast.info(i18n.t("components:assistant.compressed"));
             break;
@@ -218,7 +243,7 @@ export default function useEditorAssistant({ getEditorContext }) {
         }
       }
     },
-    [getEditorContext, workspaceId],
+    [getEditorContext, workspaceId, setCaptchaChallenge],
   );
 
   /** 用户点击建议应用成功后：逐条乐观标记 + 上报后端回写权威状态
@@ -240,6 +265,10 @@ export default function useEditorAssistant({ getEditorContext }) {
     messages,
     streaming,
     toolStatus,
+    captchaChallenge,
+    captchaSubmitting,
+    submitCaptcha,
+    dismissCaptcha,
     sendMessage,
     reportSuggestionApplied,
     clearConversation,

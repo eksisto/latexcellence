@@ -1,4 +1,4 @@
-"""编辑器侧 AI 助手测试（editor-design §5.2 / §7，阶段四）。
+"""编辑器侧 AI 助手测试（editor-design §5.2 / §7，阶段四；阶段五a 扩）。
 
 覆盖：
     - build_editor_context 自适应上下文注入（小文件全文 / 大文件摘要+
@@ -9,6 +9,12 @@
       token 流、done 携带结构化建议、会话持久化与消息级标记初始态
     - editor.assistant_enabled=false 时服务端拒绝助手端点（决策 Q26）
     - POST /api/writing-chat/editor/apply-suggestion 消息级应用标记记录
+    - 阶段五a：工具白名单执行前硬校验（幻觉/越权工具名被拒；联网/学术
+      工具在源开关关闭时执行期同口径复核拒绝）、
+      _get_editor_tools 三源汇聚（联网/学术/项目）与按源独立容错、
+      网络访问灰度开关双重把关（开关关闭时工具不可达）、
+      DDGChallengeError 显式分支（captcha_challenge + done(captcha_pending)
+      终流，本轮工具消息不持久化）
 """
 
 import asyncio
@@ -702,3 +708,529 @@ class TestToolFailureText:
         out = tool_failure_text("read_file_content", exc, "")
         # 单用户本地模式零行为变化：保留原始格式
         assert out == f"Tool execution failed: {exc}"
+
+
+# ── 阶段五a：工具白名单 / 多源汇聚 / DDG 挑战 ─────────────────────────────
+
+_EDITOR_CHAT_MOD = "backend.modules.writing_chat.service.editor_chat"
+
+_WEB_TOOL_NAMES = {"web_search", "open_page", "find_in_page"}
+_SCHOLARLY_TOOL_NAMES = {
+    "search_scholarly_works",
+    "get_work_details",
+    "find_related_works",
+    "get_full_text_or_sections",
+    "search_research_data_resources",
+}
+_PROJECT_TOOL_NAMES = {"list_files", "read_file_content", "search_across_files"}
+
+
+def _tool_schema(name: str) -> dict:
+    return {
+        "type": "function",
+        "function": {"name": name, "parameters": {"type": "object", "properties": {}}},
+    }
+
+
+def _tool_source(names) -> MagicMock:
+    m = MagicMock()
+    m.get_tools_schema = MagicMock(return_value=[_tool_schema(n) for n in names])
+    return m
+
+
+def _enable_network_switches(monkeypatch, *, web: bool, scholarly: bool) -> None:
+    """精确挂点在 schema 收集层（editor_chat._get_editor_tools）的开关矩阵。"""
+    fc = get_config().features.function_calling
+    monkeypatch.setattr(fc.web_search, "enabled", web)
+    monkeypatch.setattr(get_config().features.writing_chat, "web_search_enabled", web)
+    monkeypatch.setattr(fc.scholarly_research, "enabled", scholarly)
+    monkeypatch.setattr(fc.scholarly_research.providers.openalex, "enabled", scholarly)
+
+
+def _make_function_tool_call(
+    call_id: str = "call_1", name: str = "web_search", args: dict | None = None
+):
+    """构造 openai tool_call 对象（镜像 test_writing_chat 的先例）。"""
+    import json
+
+    from openai.types.chat.chat_completion_message_tool_call import (
+        ChatCompletionMessageToolCall,
+        Function,
+    )
+
+    return ChatCompletionMessageToolCall(
+        id=call_id,
+        function=Function(name=name, arguments=json.dumps(args or {"query": "test"})),
+        type="function",
+    )
+
+
+class TestEditorToolSources:
+    """_get_editor_tools 三源汇聚 + 按源独立容错 + 开关前置（阶段五a）。"""
+
+    def _service(self):
+        from backend.modules.writing_chat.service import get_writing_chat_service
+
+        return get_writing_chat_service()
+
+    def _patch_sources(
+        self,
+        monkeypatch,
+        *,
+        web=None,
+        scholarly=None,
+        project=None,
+        project_open=True,
+    ):
+        """web/scholarly/project 为 None 表示该源抛异常；否则为工具名集合。"""
+        if web is None:
+
+            def _boom():
+                raise RuntimeError("search manager unavailable")
+
+            monkeypatch.setattr(f"{_EDITOR_CHAT_MOD}.get_search_manager", _boom)
+        elif web is not False:
+            monkeypatch.setattr(
+                f"{_EDITOR_CHAT_MOD}.get_search_manager", lambda: _tool_source(web)
+            )
+
+        if scholarly is None:
+
+            def _boom():
+                raise RuntimeError("research http client not initialized")
+
+            monkeypatch.setattr(
+                "backend.utils.scholarly_research.get_research_manager", _boom
+            )
+        elif scholarly is not False:
+            monkeypatch.setattr(
+                "backend.utils.scholarly_research.get_research_manager",
+                lambda: _tool_source(scholarly),
+            )
+
+        if project is not False:
+            from types import SimpleNamespace
+
+            monkeypatch.setattr(
+                f"{_EDITOR_CHAT_MOD}.get_project_manager_for_workspace",
+                lambda ws: SimpleNamespace(is_open=project_open),
+            )
+            monkeypatch.setattr(
+                f"{_EDITOR_CHAT_MOD}.get_project_tools_manager",
+                lambda: _tool_source(project or _PROJECT_TOOL_NAMES),
+            )
+
+    def test_all_sources_converged_with_switches_on(self, monkeypatch):
+        self._enable_all(monkeypatch)
+        self._patch_sources(
+            monkeypatch,
+            web=_WEB_TOOL_NAMES,
+            scholarly=_SCHOLARLY_TOOL_NAMES,
+            project=_PROJECT_TOOL_NAMES,
+        )
+        names = {s["function"]["name"] for s in self._service()._get_editor_tools("ws")}
+        assert names == _WEB_TOOL_NAMES | _SCHOLARLY_TOOL_NAMES | _PROJECT_TOOL_NAMES
+
+    def _enable_all(self, monkeypatch):
+        _enable_network_switches(monkeypatch, web=True, scholarly=True)
+        monkeypatch.setattr(
+            get_config().features.function_calling.project_tools, "enabled", True
+        )
+
+    def test_web_tools_absent_when_writing_chat_gate_closed(self, monkeypatch):
+        """全局 web_search.enabled 开而 Writing Chat 灰度总闸关 → 联网源不注入。"""
+        self._enable_all(monkeypatch)
+        monkeypatch.setattr(
+            get_config().features.writing_chat, "web_search_enabled", False
+        )
+        self._patch_sources(
+            monkeypatch,
+            web=_WEB_TOOL_NAMES,
+            scholarly=_SCHOLARLY_TOOL_NAMES,
+            project=_PROJECT_TOOL_NAMES,
+        )
+        names = {s["function"]["name"] for s in self._service()._get_editor_tools("ws")}
+        assert names == _SCHOLARLY_TOOL_NAMES | _PROJECT_TOOL_NAMES
+
+    def test_scholarly_tools_absent_when_openalex_disabled(self, monkeypatch):
+        self._enable_all(monkeypatch)
+        monkeypatch.setattr(
+            get_config().features.function_calling.scholarly_research.providers.openalex,
+            "enabled",
+            False,
+        )
+        self._patch_sources(
+            monkeypatch,
+            web=_WEB_TOOL_NAMES,
+            scholarly=_SCHOLARLY_TOOL_NAMES,
+            project=_PROJECT_TOOL_NAMES,
+        )
+        names = {s["function"]["name"] for s in self._service()._get_editor_tools("ws")}
+        assert names == _WEB_TOOL_NAMES | _PROJECT_TOOL_NAMES
+
+    def test_all_switches_closed_tools_unreachable(self, monkeypatch):
+        """三源开关全关 → 返回空列表 → 调用方走纯流式分支（工具不可达）。"""
+        _enable_network_switches(monkeypatch, web=False, scholarly=False)
+        monkeypatch.setattr(
+            get_config().features.function_calling.project_tools, "enabled", False
+        )
+        # 源实现仍会被 imports，但开关关闭即短路；兜底 patch 避免 import 副作用
+        self._patch_sources(monkeypatch, project=False)
+        assert self._service()._get_editor_tools("") == []
+
+    def test_source_failure_degrades_independently(self, monkeypatch):
+        """单一源故障（含学术源 httpx 客户端未初始化）不连坐其余源。"""
+        self._enable_all(monkeypatch)
+        self._patch_sources(
+            monkeypatch,
+            web=None,  # 搜索源抛异常
+            scholarly=_SCHOLARLY_TOOL_NAMES,
+            project=_PROJECT_TOOL_NAMES,
+        )
+        names = {s["function"]["name"] for s in self._service()._get_editor_tools("ws")}
+        assert names == _SCHOLARLY_TOOL_NAMES | _PROJECT_TOOL_NAMES
+
+    def test_scholarly_failure_degrades_independently(self, monkeypatch):
+        self._enable_all(monkeypatch)
+        self._patch_sources(
+            monkeypatch,
+            web=_WEB_TOOL_NAMES,
+            scholarly=None,  # get_research_manager 抛 RuntimeError
+            project=_PROJECT_TOOL_NAMES,
+        )
+        names = {s["function"]["name"] for s in self._service()._get_editor_tools("ws")}
+        assert names == _WEB_TOOL_NAMES | _PROJECT_TOOL_NAMES
+
+    def test_workspace_gate_only_constrains_project_source(self, monkeypatch):
+        """联网/学术源不依赖 workspace；项目源仅在项目打开时注入。"""
+        self._enable_all(monkeypatch)
+        self._patch_sources(
+            monkeypatch,
+            web=_WEB_TOOL_NAMES,
+            scholarly=_SCHOLARLY_TOOL_NAMES,
+            project=_PROJECT_TOOL_NAMES,
+            project_open=False,
+        )
+        names = {s["function"]["name"] for s in self._service()._get_editor_tools("ws")}
+        assert names == _WEB_TOOL_NAMES | _SCHOLARLY_TOOL_NAMES
+
+
+class TestEditorToolWhitelist:
+    """执行前白名单硬校验（阶段五a 既有缺陷必修，Mock LLM 无网络）。"""
+
+    def test_hallucinated_write_tool_rejected_before_execution(
+        self, client, env, temp_session_dir, monkeypatch
+    ):
+        """幻觉调用 edit_paragraph 不得执行：不触达 registry、不推 tool_status，
+        注入模型可自纠的失败 tool result 后流程继续到最终回复。"""
+        monkeypatch.setattr(get_config().llm, "api_key", "test-key")
+        m_registry = MagicMock()
+        m_registry.execute = MagicMock()
+        monkeypatch.setattr(f"{_EDITOR_CHAT_MOD}.get_tool_registry", lambda: m_registry)
+
+        rounds = [
+            [
+                StreamChunk(
+                    content=None,
+                    usage=None,
+                    tool_calls=[
+                        _make_function_tool_call(
+                            call_id="call_evil", name="edit_paragraph"
+                        ),
+                    ],
+                )
+            ],
+            [
+                StreamChunk(content="cannot edit directly", usage=None),
+                StreamChunk(
+                    content=None,
+                    usage=UsageInfo(
+                        prompt_tokens=10, completion_tokens=3, total_tokens=13
+                    ),
+                ),
+            ],
+        ]
+        m_llm, m_client = _mock_llm([])
+        m_client.chat_stream_with_tools = MagicMock(
+            side_effect=lambda **_: _stream(rounds.pop(0))
+        )
+        m_client.chat_stream_with_usage = MagicMock()
+        with patch(_LLM_CLIENT_PATH, m_llm):
+            resp = _send_request(client, env, {})
+
+        m_registry.execute.assert_not_called()
+        events = _parse_sse(resp.text)
+        types = [e["type"] for e in events]
+        assert types == ["round_start", "token", "done"]
+        assert not any(e.get("tool") == "edit_paragraph" for e in events)
+
+        # 会话持久化 tool_calls/tool 配对完整（被拒调用也有 tool result），
+        # 流程继续到最终 assistant 回复
+        session_id = events[-1]["session_id"]
+        ctx = ConversationContext.load_from_disk(session_id)
+        roles = [m.role for m in ctx.messages]
+        assert roles == ["user", "assistant", "tool", "assistant"]
+        assert ctx.messages[-1].content == "cannot edit directly"
+        tool_msg = ctx.messages[2]
+        assert "not available to the editor assistant" in tool_msg.content
+
+    def test_whitelisted_web_tool_executes(
+        self, client, env, temp_session_dir, monkeypatch
+    ):
+        """白名单内工具照常执行：registry 触达、tool_status/tool_result 成对。"""
+        monkeypatch.setattr(get_config().llm, "api_key", "test-key")
+        m_registry = MagicMock()
+        m_registry.execute = MagicMock(
+            return_value=MagicMock(
+                format_for_llm=MagicMock(return_value="SEARCH RESULTS")
+            )
+        )
+        monkeypatch.setattr(f"{_EDITOR_CHAT_MOD}.get_tool_registry", lambda: m_registry)
+
+        rounds = [
+            [
+                StreamChunk(
+                    content=None,
+                    usage=None,
+                    tool_calls=[
+                        _make_function_tool_call(call_id="call_ws", name="web_search"),
+                    ],
+                )
+            ],
+            [
+                StreamChunk(content="answer based on search", usage=None),
+                StreamChunk(
+                    content=None,
+                    usage=UsageInfo(
+                        prompt_tokens=10, completion_tokens=3, total_tokens=13
+                    ),
+                ),
+            ],
+        ]
+        m_llm, m_client = _mock_llm([])
+        m_client.chat_stream_with_tools = MagicMock(
+            side_effect=lambda **_: _stream(rounds.pop(0))
+        )
+        with patch(_LLM_CLIENT_PATH, m_llm):
+            resp = _send_request(client, env, {})
+
+        assert m_registry.execute.call_count == 1
+        assert m_registry.execute.call_args.args[0] == "web_search"
+
+        events = _parse_sse(resp.text)
+        types = [e["type"] for e in events]
+        assert types == ["tool_status", "tool_result", "round_start", "token", "done"]
+        assert events[0]["tool"] == "web_search"
+        assert events[-1]["type"] == "done"
+
+    def test_network_tools_blocked_when_switches_closed(
+        self, client, env, temp_session_dir, monkeypatch
+    ):
+        """源开关全关时白名单内联网/学术工具同样拒绝执行（审查加固回归）：
+        ToolRegistry.execute 只查运行时 enabled 标志，若执行前不复核源
+        开关，schema 关闭后模型幻觉调用仍会直达执行器产生真实网络请求。
+        """
+        monkeypatch.setattr(get_config().llm, "api_key", "test-key")
+        _enable_network_switches(monkeypatch, web=False, scholarly=False)
+        m_registry = MagicMock()
+        m_registry.execute = MagicMock()
+        monkeypatch.setattr(f"{_EDITOR_CHAT_MOD}.get_tool_registry", lambda: m_registry)
+
+        rounds = [
+            [
+                StreamChunk(
+                    content=None,
+                    usage=None,
+                    tool_calls=[
+                        _make_function_tool_call(call_id="call_ws", name="web_search"),
+                        _make_function_tool_call(
+                            call_id="call_sr", name="search_scholarly_works"
+                        ),
+                    ],
+                )
+            ],
+            [
+                StreamChunk(content="answered without network", usage=None),
+                StreamChunk(
+                    content=None,
+                    usage=UsageInfo(
+                        prompt_tokens=10, completion_tokens=3, total_tokens=13
+                    ),
+                ),
+            ],
+        ]
+        m_llm, m_client = _mock_llm([])
+        m_client.chat_stream_with_tools = MagicMock(
+            side_effect=lambda **_: _stream(rounds.pop(0))
+        )
+        with patch(_LLM_CLIENT_PATH, m_llm):
+            resp = _send_request(client, env, {})
+
+        # 两个幻觉调用均未触达 registry（无任何真实网络/检索出口）
+        m_registry.execute.assert_not_called()
+        events = _parse_sse(resp.text)
+        assert not any(
+            e.get("tool") in ("web_search", "search_scholarly_works") for e in events
+        )
+        assert [e["type"] for e in events] == ["round_start", "token", "done"]
+
+        # 会话持久化 tool_calls/tool 配对完整：两个被拒调用各有一条失败
+        # tool result（tool_calls 不悬空），流程继续到最终 assistant 回复
+        session_id = events[-1]["session_id"]
+        ctx = ConversationContext.load_from_disk(session_id)
+        tool_msgs = [m for m in ctx.messages if m.role == "tool"]
+        assert len(tool_msgs) == 2
+        assert all(
+            "not available to the editor assistant" in m.content for m in tool_msgs
+        )
+        assert ctx.messages[-1].content == "answered without network"
+
+    def test_web_tool_blocked_when_writing_chat_gate_closed_alone(
+        self, client, env, temp_session_dir, monkeypatch
+    ):
+        """全局 web_search.enabled 开而 Writing Chat 灰度总闸关：执行期
+        复核与 schema 收集层同口径（AND），幻觉调用不被放行。"""
+        monkeypatch.setattr(get_config().llm, "api_key", "test-key")
+        _enable_network_switches(monkeypatch, web=False, scholarly=True)
+        m_registry = MagicMock()
+        m_registry.execute = MagicMock()
+        monkeypatch.setattr(f"{_EDITOR_CHAT_MOD}.get_tool_registry", lambda: m_registry)
+
+        rounds = [
+            [
+                StreamChunk(
+                    content=None,
+                    usage=None,
+                    tool_calls=[
+                        _make_function_tool_call(call_id="call_ws", name="open_page"),
+                    ],
+                )
+            ],
+            [
+                StreamChunk(content="no page access", usage=None),
+                StreamChunk(
+                    content=None,
+                    usage=UsageInfo(
+                        prompt_tokens=10, completion_tokens=3, total_tokens=13
+                    ),
+                ),
+            ],
+        ]
+        m_llm, m_client = _mock_llm([])
+        m_client.chat_stream_with_tools = MagicMock(
+            side_effect=lambda **_: _stream(rounds.pop(0))
+        )
+        with patch(_LLM_CLIENT_PATH, m_llm):
+            resp = _send_request(client, env, {})
+
+        m_registry.execute.assert_not_called()
+        events = _parse_sse(resp.text)
+        assert [e["type"] for e in events] == ["round_start", "token", "done"]
+
+
+class TestEditorDDGChallenge:
+    """DDGChallengeError 显式分支：captcha 终流事件（阶段五a，Mock LLM）。"""
+
+    def test_challenge_terminates_stream_with_captcha_pending(
+        self, client, env, temp_session_dir, monkeypatch
+    ):
+        from backend.utils.web_search import DDGChallengeError
+
+        monkeypatch.setattr(get_config().llm, "api_key", "test-key")
+        challenge = DDGChallengeError(
+            challenge_id="cid123",
+            images=[{"hash": "h1", "base64": "Zm9v"}],
+            query="latex tutorial",
+            submission_url="https://duckduckgo.com/challenge",
+            form_data={"k": "v"},
+            engine_name="DuckDuckGo",
+            instruction="Pick the ducks",
+        )
+        m_registry = MagicMock()
+        m_registry.execute = MagicMock(side_effect=challenge)
+        monkeypatch.setattr(f"{_EDITOR_CHAT_MOD}.get_tool_registry", lambda: m_registry)
+
+        rounds = [
+            [
+                StreamChunk(
+                    content=None,
+                    usage=None,
+                    tool_calls=[
+                        _make_function_tool_call(call_id="call_ddg", name="web_search"),
+                    ],
+                )
+            ],
+        ]
+        m_llm, m_client = _mock_llm([])
+        m_client.chat_stream_with_tools = MagicMock(
+            side_effect=lambda **_: _stream(rounds.pop(0))
+        )
+        m_client.chat_stream_with_usage = MagicMock()
+        with patch(_LLM_CLIENT_PATH, m_llm):
+            resp = _send_request(client, env, {})
+
+        events = _parse_sse(resp.text)
+        types = [e["type"] for e in events]
+        assert types == ["tool_status", "captcha_challenge", "done"]
+
+        captcha = events[1]
+        assert captcha["challenge_id"] == "cid123"
+        assert captcha["images"] == [{"hash": "h1", "base64": "Zm9v"}]
+        assert captcha["query"] == "latex tutorial"
+        assert captcha["engine_name"] == "DuckDuckGo"
+        assert captcha["instruction"] == "Pick the ducks"
+
+        done = events[-1]
+        assert done["captcha_pending"] is True
+        assert done["message_id"] == ""
+        assert done["session_id"]
+
+        # 本轮工具消息不持久化：会话仅剩此前已落盘的 user 消息（无 assistant/
+        # tool 残留，与前端"删占位"语义对齐）
+        ctx = ConversationContext.load_from_disk(done["session_id"])
+        assert len(ctx.messages) == 1
+        assert ctx.messages[0].role == "user"
+
+    def test_general_tool_failure_still_yields_tool_result(
+        self, client, env, temp_session_dir, monkeypatch
+    ):
+        """通用失败路径不携带 captcha 语义（DDG 分支仅在真实挑战时出现）。"""
+        monkeypatch.setattr(get_config().llm, "api_key", "test-key")
+        m_registry = MagicMock()
+        m_registry.execute = MagicMock(side_effect=RuntimeError("boom"))
+        monkeypatch.setattr(f"{_EDITOR_CHAT_MOD}.get_tool_registry", lambda: m_registry)
+
+        rounds = [
+            [
+                StreamChunk(
+                    content=None,
+                    usage=None,
+                    tool_calls=[
+                        _make_function_tool_call(
+                            call_id="call_fail", name="web_search"
+                        ),
+                    ],
+                )
+            ],
+            [
+                StreamChunk(content="recovered", usage=None),
+                StreamChunk(
+                    content=None,
+                    usage=UsageInfo(
+                        prompt_tokens=5, completion_tokens=1, total_tokens=6
+                    ),
+                ),
+            ],
+        ]
+        m_llm, m_client = _mock_llm([])
+        m_client.chat_stream_with_tools = MagicMock(
+            side_effect=lambda **_: _stream(rounds.pop(0))
+        )
+        with patch(_LLM_CLIENT_PATH, m_llm):
+            resp = _send_request(client, env, {})
+
+        events = _parse_sse(resp.text)
+        types = [e["type"] for e in events]
+        assert "captcha_challenge" not in types
+        assert types[-1] == "done"
+        assert events[-1].get("captcha_pending") is None

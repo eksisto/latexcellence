@@ -38,6 +38,7 @@ from backend.modules.writing_chat.models import (
 )
 from backend.utils.project_tools import get_project_tools_manager
 from backend.utils.tex_compile import sanitize_output_paths
+from backend.utils.web_search import DDGChallengeError, get_search_manager
 
 from . import _deps
 
@@ -59,8 +60,61 @@ _SECTION_RE = re.compile(r"^\\(part|chapter|section|subsection|subsubsection)\*?
 _SNIPPET_LANGS = {"latex", "tex"}
 _DIFF_LANGS = {"diff", "patch"}
 
-# 只读三件套（决策 Q26）：写入一律走缓冲区协议
-_EDITOR_TOOL_NAMES = ("list_files", "read_file_content", "search_across_files")
+# 联网搜索 / 学术检索工具名分组（执行期源开关复核的判定依据，见
+# _tool_source_gate_open）；_EDITOR_TOOL_NAMES 由两组派生，保持单一来源。
+_WEB_TOOL_NAMES = frozenset(
+    {"web_search", "open_page", "read_page_sections", "find_in_page"}
+)
+_SCHOLARLY_TOOL_NAMES = frozenset(
+    {
+        "search_scholarly_works",
+        "get_work_details",
+        "find_related_works",
+        "get_full_text_or_sections",
+        "search_research_data_resources",
+    }
+)
+
+# 只读工具白名单（阶段五a 扩展）：项目只读三件套（决策 Q26）+ 联网搜索
+# + 学术检索（editor-design §4.5，以 Writing Chat 主对话注册表为准）。
+# 写入一律走缓冲区协议——edit_paragraph / undo_last_edit 明确不入白名单。
+# 该表是执行前硬校验的依据之一：ToolRegistry.execute 只查运行时 enabled
+# 标志、不复查 schema 来源，缺此校验时模型幻觉调用即可执行全局任意
+# 已启用工具（含写盘）。联网/学术工具另有执行期源开关复核。
+_EDITOR_TOOL_NAMES = (
+    "list_files",
+    "read_file_content",
+    "search_across_files",
+    # 联网搜索（function-calling-tools.md「联网搜索」；read_page_sections
+    # 仅 structured 策略下进入 schema，白名单无条件列入、过滤天然生效）
+    *_WEB_TOOL_NAMES,
+    # 学术检索（function-calling-tools.md「学术检索与引文追踪工具」）
+    *_SCHOLARLY_TOOL_NAMES,
+)
+
+
+def _tool_source_gate_open(tool_name: str) -> bool:
+    """执行期复核联网/学术工具的源开关（阶段五a 审查加固）。
+
+    白名单只约束工具名集合，源开关约束"该工具此刻是否允许出网/出库"：
+    ToolRegistry.execute 只查运行时 enabled 标志、不复查 config_path，
+    若只在 schema 收集层把关，开关关闭后模型幻觉调用仍可直达执行器
+    产生真实网络请求。故执行前按与 _get_editor_tools 相同口径复核：
+    web 源为全局开关 AND Writing Chat 灰度总闸，学术源为
+    scholarly_research.enabled AND providers.openalex.enabled（与
+    conversation.py 同款双重把关）。项目工具源只读且注入 schema 时已过
+    workspace 门，维持阶段四现状不在此复核。
+    """
+    cfg = get_config()
+    if tool_name in _WEB_TOOL_NAMES:
+        return bool(
+            cfg.features.function_calling.web_search.enabled
+            and cfg.features.writing_chat.web_search_enabled
+        )
+    if tool_name in _SCHOLARLY_TOOL_NAMES:
+        research_cfg = cfg.features.function_calling.scholarly_research
+        return bool(research_cfg.enabled and research_cfg.providers.openalex.enabled)
+    return True
 
 
 def tool_failure_text(
@@ -274,22 +328,60 @@ class EditorChatMixin:
                 )
 
     def _get_editor_tools(self, workspace_id: str) -> list[dict]:
-        """只读三件套工具 schema（项目已打开且 project_tools 启用时）。"""
+        """编辑器助手工具 schema 汇聚（阶段五a，editor-design §4.5）。
+
+        三源汇聚、按源独立容错（单一源故障只降级该源，不连坐其余）：
+            - 联网搜索：双重开关把关（全局 web_search.enabled AND Writing
+              Chat 侧 web_search_enabled 灰度总闸，镜像 conversation.py）；
+            - 学术检索：scholarly_research.enabled AND providers.openalex.enabled
+              （get_research_manager 依赖 lifespan 初始化的共享 httpx 客户端，
+              未初始化时抛 RuntimeError，按源捕获降级为空）；
+            - 项目工具：project_tools.enabled 且项目已打开（现状不变）。
+
+        功能开关在 schema 收集层把关，工具循环执行前另按同口径复核
+        （_tool_source_gate_open）：ToolRegistry.execute 不复查
+        config_path，仅靠 schema 不注入挡不住模型幻觉调用。返回前按
+        _EDITOR_TOOL_NAMES 过滤（read_page_sections 仅 structured 策略
+        下由 web 源产出）。
+        """
         cfg = get_config()
-        if not (cfg.features.function_calling.project_tools.enabled and workspace_id):
-            return []
-        try:
-            pm = get_project_manager_for_workspace(workspace_id)
-            if not pm.is_open:
-                return []
-            schemas = get_project_tools_manager().get_tools_schema()
-        except Exception as e:
-            self._logger.warning(
-                "Failed to load editor assistant tools for workspace %s: %s",
-                workspace_id,
-                e,
-            )
-            return []
+        schemas: list[dict] = []
+
+        # ── 联网搜索源（不需要 workspace / 项目打开） ──────────────────
+        if (
+            cfg.features.function_calling.web_search.enabled
+            and cfg.features.writing_chat.web_search_enabled
+        ):
+            try:
+                schemas.extend(get_search_manager().get_tools_schema())
+            except Exception as e:
+                self._logger.warning("Failed to load editor web search tools: %s", e)
+
+        # ── 学术检索源（同样不依赖 workspace） ─────────────────────────
+        research_cfg = cfg.features.function_calling.scholarly_research
+        if research_cfg.enabled and research_cfg.providers.openalex.enabled:
+            try:
+                from backend.utils.scholarly_research import get_research_manager
+
+                schemas.extend(get_research_manager().get_tools_schema())
+            except Exception as e:
+                self._logger.warning(
+                    "Failed to load editor scholarly research tools: %s", e
+                )
+
+        # ── 项目工具源（workspace 门只约束本源） ───────────────────────
+        if cfg.features.function_calling.project_tools.enabled and workspace_id:
+            try:
+                pm = get_project_manager_for_workspace(workspace_id)
+                if pm.is_open:
+                    schemas.extend(get_project_tools_manager().get_tools_schema())
+            except Exception as e:
+                self._logger.warning(
+                    "Failed to load editor assistant tools for workspace %s: %s",
+                    workspace_id,
+                    e,
+                )
+
         return [
             schema
             for schema in schemas
@@ -439,6 +531,37 @@ class EditorChatMixin:
                         tool_args = json.loads(tc.function.arguments)
                     except Exception:
                         tool_args = {}
+
+                    # 执行前白名单硬校验（阶段五a 既有缺陷必修）：
+                    # ToolRegistry 全局存有 edit_paragraph 等写工具且
+                    # execute 不复查工具来源，模型幻觉调用将绕过编辑器
+                    # "只读 + 缓冲区协议"边界直达写盘。不在白名单、或属
+                    # 联网/学术分组但源开关已关（_tool_source_gate_open，
+                    # 防 schema 关闭后幻觉调用仍产生真实网络请求）的一律
+                    # 不执行、不推送 tool_status（无真实执行可指示），
+                    # 注入模型可自纠的失败 tool result 并记日志。
+                    if (
+                        tool_name not in _EDITOR_TOOL_NAMES
+                        or not _tool_source_gate_open(tool_name)
+                    ):
+                        self._logger.warning(
+                            "Editor assistant blocked non-whitelisted "
+                            f"tool call: {tool_name}"
+                        )
+                        tool_msg = {
+                            "role": "tool",
+                            "tool_call_id": tc.id,
+                            "content": (
+                                f'Tool "{tool_name}" is not available to the '
+                                "editor assistant. Use only the tools provided "
+                                "in this conversation."
+                            ),
+                        }
+                        tool_messages.append(tool_msg)
+                        persisted_tool_msg_refs.append(tool_msg)
+                        tool_messages = self._trim_tool_messages(tool_messages)
+                        continue
+
                     yield {
                         "type": "tool_status",
                         "tool": tool_name,
@@ -455,6 +578,33 @@ class EditorChatMixin:
                             if hasattr(tool_result, "format_for_llm")
                             else str(tool_result)
                         )
+                    except DDGChallengeError as ce:
+                        # DDG 挑战（镜像 conversation.py）：推送 captcha 事件
+                        # 后携带 captcha_pending 语义终流。本轮工具消息不持久
+                        # 化（与前端"删占位"语义对齐），挑战解决后由用户手动
+                        # 重发原提问；user 消息此前已落盘，回存保持会话一致。
+                        self._logger.info(
+                            "Editor assistant DDG challenge | "
+                            f"query={ce.query[:40]} | images={len(ce.images)} | "
+                            f"cid={ce.challenge_id}"
+                        )
+                        yield {
+                            "type": "captcha_challenge",
+                            "challenge_id": ce.challenge_id,
+                            "images": ce.images,
+                            "query": ce.query,
+                            "engine_name": ce.engine_name,
+                            "instruction": ce.instruction,
+                        }
+                        yield {
+                            "type": "done",
+                            "session_id": ctx.session_id,
+                            "message_id": "",
+                            "tokens": 0,
+                            "captcha_pending": True,
+                        }
+                        await ctx.save_to_disk_async()
+                        return
                     except Exception as e:
                         self._logger.warning(
                             f"Editor assistant tool failed {tool_name}: {e}"

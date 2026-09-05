@@ -1,3 +1,11 @@
+/**
+ * DDG 搜索验证码弹窗（共享组件）。
+ *
+ * 由 Writing Chat 页与编辑器 AssistantPanel（阶段五a）共用：挑战数据
+ * 与提交通道均来自 useWritingChatCaptcha（UI 无关 hook，内部调
+ * POST /api/search/ddg-challenge），本组件只负责图片网格选择视图。
+ * 文案沿用 pages:writingChat.captcha* 既有三语键（零新增）。
+ */
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import Loader2 from "lucide-react/dist/esm/icons/loader-circle.mjs";

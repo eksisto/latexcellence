@@ -6,6 +6,8 @@
  *   - 工具调用指示器归约：reduceAssistantToolStatus（对应独立于消息列表的
  *     editorStore.assistantToolStatus 字段，不在占位消息上）；
  *   - 会话 id 归约：reduceAssistantSessionId（done 回填服务端 scoped id）；
+ *   - DDG 挑战归约：reduceAssistantCaptcha（captcha_challenge 事件 →
+ *     useWritingChatCaptcha 通道的挑战对象，阶段五a）；
  *   - 过期守卫判断：isStaleEvent；
  *   - 占位消息工厂：createStreamingPlaceholder。
  *
@@ -117,6 +119,12 @@ export function reduceAssistantMessages(messages, event, ctx) {
         content: "",
       });
     case "done":
+      // captcha_pending 终流形态（阶段五a DDG 挑战）：后端未持久化
+      // assistant 消息（挑战分支在落盘前 return），删占位避免"幽灵"空
+      // 回复残留（镜像 error 分支与 Writing Chat sse.js 同语义）
+      if (event.captcha_pending) {
+        return messages.filter((m) => m.id !== placeholderId);
+      }
       // patch 用旧 id 定位；服务端 id 缺省回落占位 id
       return patchPlaceholderInList(messages, placeholderId, {
         id: event.message_id || placeholderId,
@@ -136,7 +144,9 @@ export function reduceAssistantMessages(messages, event, ctx) {
  * 归约 SSE 事件对工具调用指示器（editorStore.assistantToolStatus，
  * 独立于消息列表的 store 字段）的影响：
  *   - tool_status：指示器置为整个事件对象（面板据此渲染工具名/状态）；
- *   - tool_result / done：工具轮次结束或整轮流收尾，指示器清空为 null；
+ *   - tool_result / done / captcha_challenge：工具轮次结束、整轮流收尾
+ *     或 DDG 挑战接管的流暂停态，指示器清空为 null（滞留会挂僵尸
+ *     "工具执行中"指示器，对齐 Writing Chat sse.js 先例）；
  *   - 其他事件：维持原值。
  *
  * @param {object|null} toolStatus 当前指示器值
@@ -149,10 +159,33 @@ export function reduceAssistantToolStatus(toolStatus, event) {
       return event;
     case "tool_result":
     case "done":
+    case "captcha_challenge":
       return null;
     default:
       return toolStatus;
   }
+}
+
+/**
+ * 归约 SSE 事件对 DDG 挑战状态（useWritingChatCaptcha 通道的
+ * captchaChallenge state）的影响：仅 captcha_challenge 事件归一化产出
+ * 挑战对象（空数组/空串兜底），其余事件维持原值。挑战的清除由
+ * submitCaptcha / dismissCaptcha 负责（终流后挑战保持展示，与
+ * Writing Chat 同语义）。
+ *
+ * @param {object|null} captchaChallenge 当前挑战对象
+ * @param {{type: string}} event SSE 事件对象
+ * @returns {object|null} 新挑战值（无变化时返回原值）
+ */
+export function reduceAssistantCaptcha(captchaChallenge, event) {
+  if (event.type !== "captcha_challenge") return captchaChallenge;
+  return {
+    challenge_id: event.challenge_id,
+    images: event.images || [],
+    query: event.query || "",
+    engine_name: event.engine_name || "",
+    instruction: event.instruction || "",
+  };
 }
 
 /**

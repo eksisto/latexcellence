@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import {
   createStreamingPlaceholder,
   isStaleEvent,
+  reduceAssistantCaptcha,
   reduceAssistantMessages,
   reduceAssistantSessionId,
   reduceAssistantToolStatus,
@@ -165,6 +166,85 @@ test("error 事件移除占位消息且其余消息原样保留", () => {
     { placeholderId: PLACEHOLDER_ID },
   );
   assert.deepEqual(remaining, [USER_MESSAGE]);
+});
+
+test("done 携带 captcha_pending 时删除占位（阶段五a DDG 挑战终流）", () => {
+  const streamed = appendToken(initialMessages(), "将被丢弃的草稿");
+  const doneEvent = {
+    type: "done",
+    session_id: "default:sess-cap",
+    message_id: "",
+    tokens: 0,
+    captcha_pending: true,
+  };
+  const result = reduceAssistantMessages(streamed, doneEvent, {
+    placeholderId: PLACEHOLDER_ID,
+  });
+  // 后端未持久化 assistant 消息：删占位、保留 user 消息，不留幽灵空回复
+  assert.deepEqual(result, [USER_MESSAGE]);
+
+  // 会话 id 照常回写（user 消息已在服务端落盘，重发需挂到同一会话）
+  assert.equal(
+    reduceAssistantSessionId("old:sess", doneEvent),
+    "default:sess-cap",
+  );
+});
+
+test("done 未携带 captcha_pending 时照常落位（反例）", () => {
+  const streamed = appendToken(initialMessages(), "正常回复内容");
+  const result = reduceAssistantMessages(
+    streamed,
+    { type: "done", message_id: "m-ok", tokens: 4, suggestions: [] },
+    { placeholderId: PLACEHOLDER_ID },
+  );
+  assert.equal(result.length, 2);
+  assert.equal(result[1].id, "m-ok");
+  assert.equal(result[1].streaming, false);
+  assert.equal(result[1].content, "正常回复内容");
+});
+
+test("captcha_challenge 清空工具指示器且归一化挑战对象", () => {
+  const statusEvent = { type: "tool_status", tool: "web_search" };
+  // 挑战接管流暂停态：指示器清空，不滞留"工具执行中"
+  assert.equal(
+    reduceAssistantToolStatus(statusEvent, {
+      type: "captcha_challenge",
+      challenge_id: "c1",
+    }),
+    null,
+  );
+  // 无关事件不清空（原值透传）
+  assert.equal(
+    reduceAssistantToolStatus(statusEvent, { type: "token", content: "x" }),
+    statusEvent,
+  );
+
+  const event = {
+    type: "captcha_challenge",
+    challenge_id: "c1",
+    images: [{ hash: "h1", base64: "Zm9v" }],
+    query: "latex tutorial",
+    engine_name: "DuckDuckGo",
+    instruction: "Pick the ducks",
+  };
+  assert.deepEqual(reduceAssistantCaptcha(null, event), {
+    challenge_id: "c1",
+    images: [{ hash: "h1", base64: "Zm9v" }],
+    query: "latex tutorial",
+    engine_name: "DuckDuckGo",
+    instruction: "Pick the ducks",
+  });
+  // images 缺省兜底空数组
+  assert.deepEqual(
+    reduceAssistantCaptcha(null, {
+      type: "captcha_challenge",
+      challenge_id: "c2",
+    }).images,
+    [],
+  );
+  // 非 captcha_challenge 事件维持原值引用
+  const existing = { challenge_id: "keep" };
+  assert.equal(reduceAssistantCaptcha(existing, { type: "done" }), existing);
 });
 
 test("error 事件在占位已不存在时安全幂等", () => {

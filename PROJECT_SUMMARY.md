@@ -178,7 +178,7 @@ latexcellence/
 │       │   │       ├── tabs.js               # 多缓冲区 tab 状态机纯归约（打开/激活/关闭/保存回写）与会话选择器
 │       │   │       ├── sessionPersistence.js # 会话持久化纯函数（localStorage 主存 + sessionStorage 遗留收养迁移/序列化/白名单清洗/LRU 配额淘汰）
 │       │   │       ├── tabViews.js           # per-tab CM6 EditorState / 滚动位置登记表（单实例换档）
-│       │   │       └── assistantStream.js    # 编辑器助手 SSE 事件归约纯函数（占位消息/工具状态/会话 id 归约，供 hook 与单测共用）
+│       │   │       └── assistantStream.js    # 编辑器助手 SSE 事件归约纯函数（占位消息/工具状态/会话 id/DDG 挑战归约，供 hook 与单测共用）
 │       ├── pages/                   # 页面组件
 │       │   ├── LoginPage.jsx        # 多用户登录页（含忘记密码入口）
 │       │   ├── RegisterPage.jsx     # 多用户注册页（含待审批提交态）
@@ -193,7 +193,7 @@ latexcellence/
 │       ├── hooks/                   # 自定义 hook
 │       │   ├── useParagraphCheck.js # 逐段检查统一流程 hook（含检查结果保鲜 MD5 比对）
 │       │   ├── useWritingChat.js    # 写作聊天生命周期 hook
-│       │   ├── useEditorAssistant.js # 编辑器 AI 助手 SSE hook（事件归约 + 项目切换守卫）
+│       │   ├── useEditorAssistant.js # 编辑器 AI 助手 SSE hook（事件归约 + 项目切换守卫 + 复用 useWritingChatCaptcha 挑战通道）
 │       │   ├── usePlotGen.js        # 科研绘图 Agent hook
 │       │   ├── useStyleModifyAgent.js # 样式修改项目 Agent hook
 │       │   ├── useAuth.js           # 多用户认证引导（模式探测 → /api/auth/me 恢复会话）
@@ -209,6 +209,7 @@ latexcellence/
 │       │   └── bib-manager/         # 参考文献管理子 hooks（format_analysis/metadata_extraction/bibtex_generation/bib_file_save/latex_generation）
 │       ├── components/              # 共享组件 + ui 基座组件
 │       │       ├── AuthShell.jsx        # 多用户认证页公共外壳
+│       │       ├── CaptchaDialog.jsx    # DDG 搜索验证码弹窗（Writing Chat 页与编辑器助手侧栏共用）
 │       ├── AuthConnectionButton.jsx # 认证页工具栏「后端连接设置」入口（改绑后端）
 │       │   ├── editor/                 # 编辑器组件
 │       │   │   ├── LaTeXEditor.jsx     # CodeMirror 6 受控封装（value/onChange + 多缓冲区 per-file EditorState 换档，挂行内补全与占位符扩展）
@@ -222,7 +223,7 @@ latexcellence/
 │       │   │   ├── ConflictDialog.jsx  # 保存 409 冲突弹窗（按冲突归属 tab 出路：放弃重载 / 剪贴板逃生 / 覆盖保存）
 │       │   │   ├── CommandPalette.jsx  # 命令面板（Ctrl/Cmd+/ 全量；Ctrl+L 包裹命令专项浮层；搜索 + 分类 + 网格选择器二级步骤）
 │       │   │   ├── GridSizePicker.jsx  # 表格/矩阵 m×n 拖选网格选择器
-│       │   │   ├── AssistantPanel.jsx  # AI 助手侧栏（SSE 对话 + 三种建议应用形态卡片）
+│       │   │   ├── AssistantPanel.jsx  # AI 助手侧栏（SSE 对话 + 三种建议应用形态卡片 + DDG 挑战弹窗）
 │       │   │   ├── PdfJsPreview.jsx    # pdf.js 渲染的 PDF 预览（iframe 替代：懒加载分块 + 最小工具条 + 正向高亮浮层 + 反向双击取点）
 │       │   │   ├── FullscreenPDFPreview.jsx # PDF 全屏预览覆盖层（页面级 fixed，正向/反向通道透传）
 │       │   │   └── StaleCheckBanner.jsx # 检查结果过期横幅（各逐段检查页复用）
@@ -260,7 +261,7 @@ latexcellence/
 │   ├── rar-extractor-fallback.md                 # RAR 解压器回退层设计（unar → bsdtar，已实施）
 │   ├── editor-design.md                            # 网页编辑器 v1 设计（CM6 编辑器 + 命令快速输入 + AI 助手；已实施，设计与决策记录）
 │   ├── editor-productivity-design.md                # 编辑器生产力改造 v2 设计（多缓冲区 tab/大纲/引用补全/格式化/KaTeX/错误跳转/修改行色条；已实施，设计与决策记录）
-│   ├── editor-experience-design.md                # 编辑器写作体验收口设计方案（编辑器 v3：SyncTeX 正反向同步/用户自定义片段/实时语法诊断/跨文件大纲与 KaTeX 预览卡/助手接入联网与学术检索/自研 MIT Lezer 子集语法；阶段一至四已实施，其余待实施）
+│   ├── editor-experience-design.md                # 编辑器写作体验收口设计方案（编辑器 v3：SyncTeX 正反向同步/用户自定义片段/实时语法诊断/跨文件大纲与 KaTeX 预览卡/助手接入联网与学术检索/自研 MIT Lezer 子集语法；阶段一至四及五a已实施，其余待实施）
 │   ├── multi-model.md                       # 多模型支持设计（模型档案 + 角色槽位路由；已实施）
 │   ├── deployment.md                          # 后端部署指南（单用户/多用户单进程/多实例 Compose 部署、systemd 托管、HTTPS 反向代理、安全风险声明、备份、环境变量与升级回滚）
 │   ├── deploy-followups.md               # 多用户部署侧收口设计（rar 解压入沙箱/真实 RAR 样本/warm pool/模型连通性测试；已实施）
@@ -338,7 +339,7 @@ latexcellence/
 | style_modify | 粘贴代码 / 项目 Agent 修改样式，支持 shadow 编译、proposal 审核、批量事务与撤销 | router.py, service.py, agent.py, models.py, session.py, trace.py, cleanup.py | ✓ | ✗ |
 | writing_chat | 写作助手对话（含联网搜索、学术检索与引文追踪、项目浏览、段落编辑和工具确认） | router.py, service/, context.py, models.py, prompt_manager.py | ✓ | ✗ |
 | bib_manager | 参考文献管理 + 格式规则层 + DOI 多数据源查询 + 重复检测 + 文献库 | router.py, service.py, models.py, bib_parser.py, format_rules.py, style_registry.py, provider_manager.py, providers/ | ✓(格式规则命中不依赖 LLM；DOI 查询不依赖 LLM) | ✗ |
-| editor | 网页编辑器：后端整文件打开/保存（MD5 乐观锁、统一撤销记账与配额回滚接线）+ 前端 /editor 页 CM6 打开-编辑-保存-冲突闭环 + 命令快速输入子系统（命令数据库四路匹配查找、\ 行内补全与命令面板双入口、表格矩阵网格选择器、宏包缺失联动自动添加声明）+ 多缓冲区基座（tab 条、per-tab 缓冲区/撤销/滚动、陈旧检测、关闭三选、sessionStorage 刷新恢复、per-tab 自动保存、编译全量脏保存、助手 tab 守卫） + 编辑基本功包（包裹命令快捷键 Ctrl/Cmd+B/I/U/K 直包与 Ctrl+L 包裹浮层、wrap 类目进命令数据库与命令面板、多光标、\begin{env} 打字机自动补 \end（autoCloseEnv 开关）、查找替换面板主题化与三语） + 编译联动（脏改动先自动保存）+ 引用补全（\ref/\label/\cite 三触发 source + 后端 latex-symbols 全项目符号扫描 + 项目级缓存保存失效）+ 一键格式化（工具栏按钮与 Ctrl/Cmd+Shift+F 快捷键 + 后端 format-latex 纯转换端点（latexindent 优先、内置兜底），结果直接替换发起 tab 缓冲区并置脏（单事务整文档替换，Ctrl+Z 一步撤销），落盘仍走 save-file 单一路径，viewer 禁用）+ 编译错误列表与跨文件跳转（右栏可点击错误列表 + 点击联动打开/激活 tab 并行首定位高亮；logFileStack 日志文件栈解析纯模块（`(./` 压栈、`)` 弹栈、`l.N` 归属栈顶、79 列 dewrap），归属歧义回落发起编译的文件并标低置信）+ 编辑器侧 AI 助手（复用 Writing Chat 会话基础设施的缓冲区协议端点、自适应上下文注入、插入光标/替换选区/diff 卡片三种建议应用形态）+ 检查结果保鲜横幅 + 偏好导入导出 + 修改行色条（阶段八借鉴 Notepad++ Change History：savedBuffer/openedBuffer 双基线 + changeHistoryDiff 行级 Myers diff 纯模块（防退化护栏）+ changeHistory CM6 行装饰扩展，琥珀=未保存修改/翠绿=本会话已保存修改，Ctrl+Z 到保存点精确清零；dirty 改按 buffer≠savedBuffer 内容比对）+ 底部状态栏（stats 中西文字数统计纯模块 + createStatsHub 发布订阅 + EditorStatusBar，不经过页面 React 树）+ selectionMatches 选中高亮全部匹配偏好 + 会话持久化升级 localStorage（v2 载荷脏 tab 携带 savedBuffer，sessionStorage 遗留收养迁移，重启浏览器可恢复脏缓冲区）+ SyncTeX 正反向同步（editor v3 阶段一：编译链路可选 `-synctex=1` + synctex forward/backward 只读查询端点 + PDF 预览 iframe 替换为 pdf.js 渲染（懒加载分块、最小缩放/适宽/页码工具条、正向高亮浮层、双击反向取点，`PdfJsPreview` 对外 `{url}` 兼容使全屏预览等使用点自动受益），正向由 stats hub 光标通道防抖驱动（预览可见且有产物才查询）、反向复用错误跳转的开 tab + 行定位通路）+ 用户自定义片段库（editor v3 阶段二：偏好 persist v2 增 customSnippets（条目级清洗：命令名形状校验、同名去重、上限与单条 insert 长度上限，v1 导入载荷兼容不丢数据）+ customCommands 消费侧合并层（归一化补齐 pkg/grid 派生字段，%COLS%/%CELLS% 网格标记天然生效；条目机制层 expandEntryInsert/insertSnippet/$n 占位符零改动）统一并入行内补全、命令面板/包裹浮层与插入入口，面板独立 custom 分组三语 + 设置弹层自定义片段管理分区（列表增删改 + 占位符解析实时预览，跟随既有偏好导入导出双通道））+ 实时语法诊断（editor v3 阶段三：diagnostics 诊断纯模块（\begin/\end 栈匹配报未闭合/错嵌/多出的 \end，花括号全文档计数报多余 } 与未闭合 {，豁免注释/\verb 参数/verbatim 类环境/转义 \{\}/\url 系 URL 字面量，200 条上限超出截断并在首条标注）+ @codemirror/lint 接线（linter delay 500ms 编辑停顿后运行，内联波浪线 + 悬停提示，不进错误列表不阻断编译）+ liveDiagnostics 偏好开关（默认开，白名单缺省补齐不升版本，设置弹层三语开关，存档 tab 失配重建即时生效））+ 跨文件大纲与公式固定预览卡（editor v3 阶段四：后端 GET /api/project/outline 全项目 .tex 分节扫描（分节命令口径与前端 outlineScan 同源、asyncio.to_thread 调度、项目级缓存 + 保存失效、响应只含相对路径）+ 大纲面板当前文件/本项目双视图（本项目视图按文件平铺分组、激活文件置顶展开、其余组折叠可切换，纯模块 outlineProject 分组排序，点击条目复用错误跳转的 pendingErrorJumpRef 换档机制开 tab 行定位）+ 公式固定预览卡 FormulaPreviewCard（编辑区底部状态栏上方悬浮，订阅 stats hub 光标通道防抖约 400ms，findFormulaAt 识别 + loadKatex 单例渲染，无公式/渲染失败静默隐藏）） | backend modules/editor/service.py（路由挂载于 project_router）、writing_chat/service/editor_chat.py；frontend pages/EditorPage.jsx、components/editor/、lib/editor/、data/latexCommands/、store/editorStore.js | ✓(仅助手端点) | ✗ |
+| editor | 网页编辑器：后端整文件打开/保存（MD5 乐观锁、统一撤销记账与配额回滚接线）+ 前端 /editor 页 CM6 打开-编辑-保存-冲突闭环 + 命令快速输入子系统（命令数据库四路匹配查找、\ 行内补全与命令面板双入口、表格矩阵网格选择器、宏包缺失联动自动添加声明）+ 多缓冲区基座（tab 条、per-tab 缓冲区/撤销/滚动、陈旧检测、关闭三选、sessionStorage 刷新恢复、per-tab 自动保存、编译全量脏保存、助手 tab 守卫） + 编辑基本功包（包裹命令快捷键 Ctrl/Cmd+B/I/U/K 直包与 Ctrl+L 包裹浮层、wrap 类目进命令数据库与命令面板、多光标、\begin{env} 打字机自动补 \end（autoCloseEnv 开关）、查找替换面板主题化与三语） + 编译联动（脏改动先自动保存）+ 引用补全（\ref/\label/\cite 三触发 source + 后端 latex-symbols 全项目符号扫描 + 项目级缓存保存失效）+ 一键格式化（工具栏按钮与 Ctrl/Cmd+Shift+F 快捷键 + 后端 format-latex 纯转换端点（latexindent 优先、内置兜底），结果直接替换发起 tab 缓冲区并置脏（单事务整文档替换，Ctrl+Z 一步撤销），落盘仍走 save-file 单一路径，viewer 禁用）+ 编译错误列表与跨文件跳转（右栏可点击错误列表 + 点击联动打开/激活 tab 并行首定位高亮；logFileStack 日志文件栈解析纯模块（`(./` 压栈、`)` 弹栈、`l.N` 归属栈顶、79 列 dewrap），归属歧义回落发起编译的文件并标低置信）+ 编辑器侧 AI 助手（复用 Writing Chat 会话基础设施的缓冲区协议端点、自适应上下文注入、插入光标/替换选区/diff 卡片三种建议应用形态）+ 检查结果保鲜横幅 + 偏好导入导出 + 修改行色条（阶段八借鉴 Notepad++ Change History：savedBuffer/openedBuffer 双基线 + changeHistoryDiff 行级 Myers diff 纯模块（防退化护栏）+ changeHistory CM6 行装饰扩展，琥珀=未保存修改/翠绿=本会话已保存修改，Ctrl+Z 到保存点精确清零；dirty 改按 buffer≠savedBuffer 内容比对）+ 底部状态栏（stats 中西文字数统计纯模块 + createStatsHub 发布订阅 + EditorStatusBar，不经过页面 React 树）+ selectionMatches 选中高亮全部匹配偏好 + 会话持久化升级 localStorage（v2 载荷脏 tab 携带 savedBuffer，sessionStorage 遗留收养迁移，重启浏览器可恢复脏缓冲区）+ SyncTeX 正反向同步（editor v3 阶段一：编译链路可选 `-synctex=1` + synctex forward/backward 只读查询端点 + PDF 预览 iframe 替换为 pdf.js 渲染（懒加载分块、最小缩放/适宽/页码工具条、正向高亮浮层、双击反向取点，`PdfJsPreview` 对外 `{url}` 兼容使全屏预览等使用点自动受益），正向由 stats hub 光标通道防抖驱动（预览可见且有产物才查询）、反向复用错误跳转的开 tab + 行定位通路）+ 用户自定义片段库（editor v3 阶段二：偏好 persist v2 增 customSnippets（条目级清洗：命令名形状校验、同名去重、上限与单条 insert 长度上限，v1 导入载荷兼容不丢数据）+ customCommands 消费侧合并层（归一化补齐 pkg/grid 派生字段，%COLS%/%CELLS% 网格标记天然生效；条目机制层 expandEntryInsert/insertSnippet/$n 占位符零改动）统一并入行内补全、命令面板/包裹浮层与插入入口，面板独立 custom 分组三语 + 设置弹层自定义片段管理分区（列表增删改 + 占位符解析实时预览，跟随既有偏好导入导出双通道））+ 实时语法诊断（editor v3 阶段三：diagnostics 诊断纯模块（\begin/\end 栈匹配报未闭合/错嵌/多出的 \end，花括号全文档计数报多余 } 与未闭合 {，豁免注释/\verb 参数/verbatim 类环境/转义 \{\}/\url 系 URL 字面量，200 条上限超出截断并在首条标注）+ @codemirror/lint 接线（linter delay 500ms 编辑停顿后运行，内联波浪线 + 悬停提示，不进错误列表不阻断编译）+ liveDiagnostics 偏好开关（默认开，白名单缺省补齐不升版本，设置弹层三语开关，存档 tab 失配重建即时生效））+ 跨文件大纲与公式固定预览卡（editor v3 阶段四：后端 GET /api/project/outline 全项目 .tex 分节扫描（分节命令口径与前端 outlineScan 同源、asyncio.to_thread 调度、项目级缓存 + 保存失效、响应只含相对路径）+ 大纲面板当前文件/本项目双视图（本项目视图按文件平铺分组、激活文件置顶展开、其余组折叠可切换，纯模块 outlineProject 分组排序，点击条目复用错误跳转的 pendingErrorJumpRef 换档机制开 tab 行定位）+ 公式固定预览卡 FormulaPreviewCard（编辑区底部状态栏上方悬浮，订阅 stats hub 光标通道防抖约 400ms，findFormulaAt 识别 + loadKatex 单例渲染，无公式/渲染失败静默隐藏））+ 助手接入联网与学术检索（editor v3 阶段五a：`_EDITOR_TOOL_NAMES` 扩入 9 个联网/学术工具并与 Writing Chat 主对话注册表对齐（直通执行、写入仍走缓冲区协议）+ `_get_editor_tools` 三源汇聚按源独立容错（联网源受 web_search.enabled AND writing_chat.web_search_enabled 双开关、学术源受 scholarly_research.enabled AND providers.openalex.enabled 双开关，把关精确挂 schema 收集层并在工具循环执行前按同口径复核）+ 工具循环执行前白名单硬校验（幻觉/越权工具名不执行、注入失败 tool result，堵住幻觉调用 edit_paragraph 直达写盘的既有缺陷）+ DDGChallengeError 显式分支（captcha_challenge 事件 + done(captcha_pending) 终流，本轮工具消息不持久化）+ AssistantPanel 复用 useWritingChatCaptcha 通道与共享 CaptchaDialog（自 pages/writing-chat/ 提升）在侧栏内完成挑战 + assistantStream 归约扩展（captcha_pending 删占位不留幽灵消息、captcha_challenge 清工具指示器、挑战对象归一化）+ prompts 工具使用约定（何时检索/引用只来自工具真实来源/引用不进建议块） | backend modules/editor/service.py（路由挂载于 project_router）、writing_chat/service/editor_chat.py；frontend pages/EditorPage.jsx、components/editor/、components/CaptchaDialog.jsx、lib/editor/、data/latexCommands/、store/editorStore.js | ✓(仅助手端点) | ✗ |
 | plot_gen | 科研绘图 Agent（数据画像 -> 图表推荐 -> Python 执行 -> TikZ 编译） | router.py, service.py, agent.py, models.py, data_parser.py, recommender.py, styles.py, executor.py, tikzgen.py, sandbox_guard.py, trace.py, cleanup.py | ✓ | ✗ |
 
 ## 核心设计思路
@@ -369,7 +370,7 @@ latexcellence/
 | 代码展示与高亮 | CodeBlock / MarkerText / CodeEditorInput 统一 LaTeX 源码展示，token 颜色由 `--code-token-*` 变量控制 | [frontend.md](docs/frontend.md) |
 | 逐段检查前端流程 | `useParagraphCheck` 统一封装恢复、预览、检查、排序、应用与持久化；`useResultFilter` 负责排序过滤 | [frontend.md](docs/frontend.md) |
 | 写作助手 | `useWritingChat` 管理会话、SSE 流式、工具确认、编辑建议双轮协议 | [writing_chat.md](docs/modules/writing_chat.md) |
-| 网页编辑器与编辑器侧 AI 助手 | `/editor` 页 CM6 缓冲区编辑经 save-file 单一路径落盘；助手复用 Writing Chat 会话基础设施，建议只改缓冲区（插入光标 / 替换选区 / unified diff 卡片），`editor.enabled` / `assistant_enabled` 双开关服务端把关 | [editor.md](docs/modules/editor.md)、[editor-design.md](docs/editor-design.md) |
+| 网页编辑器与编辑器侧 AI 助手 | `/editor` 页 CM6 缓冲区编辑经 save-file 单一路径落盘；助手复用 Writing Chat 会话基础设施，建议只改缓冲区（插入光标 / 替换选区 / unified diff 卡片），`editor.enabled` / `assistant_enabled` 双开关服务端把关；助手工具白名单（项目只读 + 联网搜索 + 学术检索，执行前硬校验）直通执行，DDG 挑战在侧栏内完成（阶段五a；确认流属阶段五b） | [editor.md](docs/modules/editor.md)、[editor-design.md](docs/editor-design.md) |
 | 检查结果保鲜 | 逐段检查结果记录检查时文件 MD5，页面加载时比对当前 MD5，不一致渲染 StaleCheckBanner 提示重查而不销毁结果 | [frontend.md](docs/frontend.md)、[editor.md](docs/modules/editor.md) |
 | 主题系统 | 主题 CSS 自动发现，亮/暗模式独立；`--primary` / `--accent` 等由单一色相派生 | [frontend.md](docs/frontend.md) |
 | 多用户双模式 | `multi_user.enabled` 开关；单用户保持现状（本地目录 + 共享令牌），多用户强制会话认证、CSRF、禁用任意路径打开/浏览；服务器路径不向用户暴露（`root_path` / `git_root` / `sandbox` 等响应字段脱敏，编译日志等输出前缀改写为相对路径） | [multi-user.md](docs/multi-user.md)、[deployment.md](docs/deployment.md) |

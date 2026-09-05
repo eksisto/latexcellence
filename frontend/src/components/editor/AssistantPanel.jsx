@@ -1,14 +1,17 @@
 /**
- * AssistantPanel —— 编辑器 AI 助手侧栏（editor-design §7，阶段四）。
+ * AssistantPanel —— 编辑器 AI 助手侧栏（editor-design §7，阶段四；
+ * 阶段五a 接入联网/学术检索工具与 DDG 挑战侧栏内完成）。
  *
  * Copilot 式右栏面板：SSE 流式对话（复用 Writing Chat 会话持久化与
- * 只读项目工具），三种建议应用形态齐全（§7.2 / 决策 Q23）：
+ * 只读项目工具/联网搜索/学术检索），三种建议应用形态齐全（§7.2 / 决策 Q23）：
  *   1. 插入光标处 —— snippet 建议一键插入（纯前端 CM6 transaction）；
  *   2. 替换选区   —— 划词改写场景替换当前选区；
  *   3. diff 卡片   —— unified diff 预览逐卡审阅、一键应用到缓冲区。
  *
  * 应用动作只改缓冲区并置脏标记，是否保存始终由用户决定；viewer 可
  * 问答但应用按钮禁用。建议不经后端落盘，落盘仍走 save-file 单一路径。
+ * DDG 挑战（阶段五a）：后端 captcha_challenge 事件终流后弹共享
+ * CaptchaDialog，挑战在面板提交/放弃，用户随后手动重发原提问。
  */
 
 import {
@@ -42,6 +45,7 @@ import Wrench from "lucide-react/dist/esm/icons/wrench.mjs";
 
 import useEditorStore, { activeBuffer } from "@/store/editorStore";
 import useEditorAssistant from "@/hooks/useEditorAssistant";
+import CaptchaDialog from "@/components/CaptchaDialog";
 import { applyUnifiedDiff, parseUnifiedDiff } from "@/lib/editor/applyDiff";
 
 /**
@@ -223,6 +227,10 @@ function AssistantPanel({
     messages,
     streaming,
     toolStatus,
+    captchaChallenge,
+    captchaSubmitting,
+    submitCaptcha,
+    dismissCaptcha,
     sendMessage,
     reportSuggestionApplied,
     clearConversation,
@@ -385,6 +393,15 @@ function AssistantPanel({
           </div>
         )}
       </div>
+
+      {/* DDG 挑战（阶段五a）：终流后弹出，侧栏内提交/放弃（三语键沿用
+          pages:writingChat.captcha*，挑战解决后由用户手动重发原提问） */}
+      <CaptchaDialog
+        challenge={captchaChallenge}
+        submitting={captchaSubmitting}
+        onSubmit={submitCaptcha}
+        onDismiss={dismissCaptcha}
+      />
 
       {/* 输入区 */}
       <div className="space-y-2 border-t p-3">

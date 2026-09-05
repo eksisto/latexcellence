@@ -87,6 +87,60 @@ hunk 至少带 3 行上下文，供前端锚定定位。
   向后兼容存量会话 JSON）
 - `EditorSendRequest` / `ApplySuggestionRequest`
 
+#### 工具白名单与多源汇聚（editor v3 阶段五a / 决策 Q12）
+
+`_EDITOR_TOOL_NAMES`（`service/editor_chat.py`）从项目只读三件套扩为
+12 个工具：三件套 + 联网搜索（`web_search` / `open_page` /
+`read_page_sections` / `find_in_page`）+ 学术检索（`search_scholarly_works`
+/ `get_work_details` / `find_related_works` / `get_full_text_or_sections`
+/ `search_research_data_resources`），与 Writing Chat 主对话注册表对齐；
+这些工具在编辑器侧**直通执行**（无 pending 确认，与 Writing Chat 一致；
+确认流属阶段五b），`edit_paragraph` / `undo_last_edit` 仍不入白名单
+（写入一律走缓冲区协议）。
+
+`_get_editor_tools` 从单一 project_tools 源扩为**三源汇聚、按源独立
+容错**（单一源故障只降级该源，不连坐其余）：
+
+- 联网搜索源：双重开关把关——`function_calling.web_search.enabled`
+  AND `writing_chat.web_search_enabled`（镜像 Writing Chat；该灰度总闸
+  现同时约束编辑器），不依赖 workspace / 项目打开；
+- 学术检索源：`scholarly_research.enabled` AND
+  `providers.openalex.enabled`（`get_research_manager` 依赖 lifespan
+  初始化的共享 httpx 客户端，未初始化时按源捕获降级为空）；
+- 项目工具源：现状不变（workspace 门只约束本源）。
+
+功能开关在 schema 收集层把关（schema 不注入即对模型不可见），工具
+循环执行前另按同口径复核联网/学术源开关（`_tool_source_gate_open`）：
+`ToolRegistry.execute` 只查运行时 enabled 标志、不复查 config_path，
+仅靠 schema 层挡不住模型幻觉调用产生真实网络请求。
+
+**执行前白名单硬校验**：工具循环在执行任何工具前校验工具名 ∈
+`_EDITOR_TOOL_NAMES`，联网/学术分组工具再复核源开关
+（web：`web_search.enabled` AND `writing_chat.web_search_enabled`；
+学术：`scholarly_research.enabled` AND `providers.openalex.enabled`）——
+`ToolRegistry` 全局存有 `edit_paragraph` 等写工具，缺此校验时模型幻觉
+调用即可绕过编辑器边界直达写盘或出网。被拒调用不执行、不推
+`tool_status`，注入模型可自纠的失败 tool result 并记服务端日志。
+
+提示词（`editor_assistant.chat_system`）增补工具使用约定：何时检索
+（答案依赖不确定事实时检索，缓冲区可答不检索）、引用只来自工具真实
+返回（URL / DOI / OpenAlex ID）、引用置于回复文本而非 ```latex /
+```diff 建议块内。
+
+助手 assistant 消息与 Writing Chat 不同，不持久化搜索/学术元数据
+（search_results / scholarly_results 等），会话历史只有纯文本与建议，
+属阶段五a 的范围裁剪而非缺陷。
+
+#### DDG 挑战（editor v3 阶段五a）
+
+联网搜索触发 DDG 验证时，工具循环在通用失败分支之前显式捕获
+`DDGChallengeError`，SSE 下发 `captcha_challenge` 事件（challenge_id /
+images / query / engine_name / instruction）后以 `done(captcha_pending=true)`
+终流；本轮工具消息不持久化（会话仅剩已落盘的 user 消息），与前端
+"删占位"语义对齐。挑战数据存储与提交端点
+（`POST /api/search/ddg-challenge`，TTL 300s、多用户跨副本）复用
+Writing Chat 既有设施，零改动。挑战解决后由用户手动重发原提问。
+
 ## 前端
 
 ```
@@ -103,9 +157,10 @@ frontend/src/
 │   ├── ConflictDialog.jsx            # 409 弹窗（动作作用于冲突归属 tab：放弃重载 / 剪贴板逃生 / 覆盖保存）
 │   ├── CommandPalette.jsx            # 命令面板 + m×n 网格选择器二级步骤
 │   ├── GridSizePicker.jsx            # 表格/矩阵网格拖选
-│   ├── AssistantPanel.jsx            # AI 助手侧栏（SSE 对话 + 建议卡 + 来源 tab 守卫）
+│   ├── AssistantPanel.jsx            # AI 助手侧栏（SSE 对话 + 建议卡 + 来源 tab 守卫 + DDG 挑战弹窗）
 │   ├── StaleCheckBanner.jsx          # 检查结果过期横幅（各检查页复用）
 │   └── …（BinaryFilePreview / CompilePreviewPanel / EditorRightPanel / FilePreviewOverlay / FullscreenPDFPreview）
+├── CaptchaDialog.jsx                 # DDG 搜索验证码弹窗（共享：Writing Chat 页与编辑器助手侧栏共用，阶段五a 提升）
 ├── lib/editor/
 │   ├── tabs.js                       # 多缓冲区 tab 状态机纯归约（打开/激活/键入/保存回写/陈旧/关闭）+ 会话选择器
 │   ├── sessionPersistence.js         # 会话 sessionStorage 持久化纯函数（序列化 / 白名单清洗 / LRU 配额淘汰 / 项目键隔离）
@@ -130,10 +185,10 @@ frontend/src/
 │   ├── formatApply.js                # 一键格式化纯模块（快捷键判定 / 应用决策 view·state·store / 单事务整文档替换）
 │   ├── preambleScan.js               # 导言区扫描 + 宏包缺失检测
 │   ├── applyDiff.js                  # unified diff 解析与上下文锚定应用纯模块
-│   ├── assistantStream.js            # 助手 SSE 事件归约纯函数（占位消息 / 工具状态 / 会话 id，hook 与单测共用）
+│   ├── assistantStream.js            # 助手 SSE 事件归约纯函数（占位消息 / 工具状态 / 会话 id / DDG 挑战，hook 与单测共用）
 │   └── （命令数据库 data/latexCommands/ 按类目拆分 JSON + index.js 统一加载器，含 wrap 包裹类目）
 └── hooks/useEditorBuffer.js          # 多缓冲区编排（打开/激活/保存/冲突/陈旧/自动保存/刷新恢复/项目切换守卫）
-└── hooks/useEditorAssistant.js       # 助手 SSE hook（归约委托 assistantStream 纯函数 + 项目切换守卫）
+└── hooks/useEditorAssistant.js       # 助手 SSE hook（归约委托 assistantStream 纯函数 + 项目切换守卫 + 复用 useWritingChatCaptcha 挑战通道）
 └── hooks/useEditorOutline.js         # 大纲数据源（当前文件视图防抖重扫 + tab 切换立即重扫；本项目视图拉取后端 outline、保存后防抖重拉）
 └── hooks/useEditorFormat.js          # 一键格式化编排（在途守卫 / 发起 tab 定位 / 应用决策分派）
 ```
@@ -522,6 +577,19 @@ blob URL 在切换文件 / 关闭 / 卸载时就地 revoke，竞态败者（响�
 不匹配时禁用应用按钮并提示切换，不自动切 tab（v2 决策 Q17，纯前端）。
 应用成功后调用 apply-suggestion 端点逐条（index 级）登记应用标记。
 
+### 助手 DDG 挑战侧栏内完成（editor v3 阶段五a）
+
+`useEditorAssistant` 复用 Writing Chat 的 UI 无关通道
+`useWritingChatCaptcha`（内部调 `POST /api/search/ddg-challenge`）：
+SSE `captcha_challenge` 事件经 `reduceAssistantCaptcha` 归一化后写入
+挑战状态，`AssistantPanel` 渲染共享 `CaptchaDialog`（阶段五a 从
+pages/writing-chat/ 提升到 components/，Writing Chat 页同步改导入，
+文案沿用既有三语键零新增），挑战在面板内提交/放弃。`done` 归约对
+`captcha_pending` 终流形态删除占位消息（后端未持久化 assistant 回复，
+避免刷新后出现"幽灵"空消息）并照常回写会话 id（user 消息已在服务端
+落盘）；`captcha_challenge` 事件同时清空工具指示器，不留滞留状态。
+挑战解决后由用户手动重发原提问（无自动续流，与 Writing Chat 同语义）。
+
 ### 编译联动（§8 / 决策 Q18 + v2 Q16）
 
 工具栏「编译」：先解析编译目标（优先项目主文件，无主文件时回退当前
@@ -684,7 +752,11 @@ AI 面板。四处配置同步规范照 AGENTS.md 执行；`/api/config/status` 
 - 后端 `tests/test_api/test_editor_file_io.py`：整文件读写 / 409 结构 /
   字节保真 / invalid_encoding / 事件循环保护（无 LLM）
 - 后端 `tests/test_api/test_editor_assistant.py`：上下文注入纯函数、
-  建议提取、SSE 端点（Mock LLM，严禁真实网络）、开关把关、apply 标记
+  建议提取、SSE 端点（Mock LLM，严禁真实网络）、开关把关、apply 标记、
+  工具白名单执行前硬校验（幻觉/越权工具名被拒不执行）、`_get_editor_tools`
+  三源汇聚与按源独立容错及开关矩阵（关闭时工具不可达）、
+  DDGChallengeError 分支终流（captcha_challenge + done(captcha_pending)、
+  本轮工具消息不持久化）
 - 后端 `tests/test_api/test_editor_format_latex.py`：format-latex 纯转换
   （Mock `format_latex_source`，无真实 latexindent 子进程）/ changed 标记 /
   413 上限 / invalid_workspace / 500 format_failed / 零写盘验证

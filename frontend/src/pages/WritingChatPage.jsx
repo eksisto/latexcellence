@@ -33,7 +33,7 @@ import { emptyStateCta } from "@/utils/projectAccess";
 import { isMultiUser } from "@/api/connection";
 import { isVisibleChatMessage } from "@/hooks/writing-chat";
 import MessageBubble from "./writing-chat/MessageBubble";
-import CaptchaDialog from "./writing-chat/CaptchaDialog";
+import CaptchaDialog from "@/components/CaptchaDialog";
 import ToolStatusBar from "./writing-chat/ToolStatusBar";
 const ToolConfirmDialog = lazy(
   () => import("./writing-chat/ToolConfirmDialog"),
