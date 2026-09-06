@@ -1821,7 +1821,9 @@
       "import_unsupported_version": "匯入失敗：版本過新或無效，請升級後再試",
       "import_invalid_payload": "匯入失敗：prefs 欄位缺失或格式錯誤",
       "liveDiagnostics": "即時語法診斷",
-      "liveDiagnosticsHint": "編輯停頓約半秒後自動檢查環境是否閉合、花括號是否配平，並在編輯器內聯標記提示（不影響編譯）。"
+      "liveDiagnosticsHint": "編輯停頓約半秒後自動檢查環境是否閉合、花括號是否配平，並在編輯器內聯標記提示（不影響編譯）。",
+      "codeFolding": "程式碼摺疊",
+      "codeFoldingHint": "在編輯器左側顯示摺疊標記，可摺疊環境與分節內容，摺疊後顯示環境名稱或標題摘要（不影響編譯）。"
     },
     "commandPalette": {
       "title": "指令面板",

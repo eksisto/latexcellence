@@ -43,6 +43,12 @@
  *     在纯模块 lib/editor/diagnostics.js（未闭合环境 error / 花括号失衡
  *     warning，注释、\verb、verbatim、转义与 URL 字面量豁免，200 条上限），
  *     消息经 i18n 文案表三语组装；挂载与失配重建同 selectionMatches 先例；
+ *   - 代码折叠（editor v3 阶段六b / 决策 Q14，codeFolding 偏好）：折叠
+ *     gutter 与折叠占位符（环境名 / 分节标题摘要）随偏好按需挂载，扩展组
+ *     经 language.js 唯一入口取得（latexFoldingExtension，模块级单例）；
+ *     折叠区间定义在 latexGrammar 包（环境 / 分节走 foldService、verbatim
+ *     走 foldNodeProp），随 Lezer 语言只在 .tex/.sty/.cls 生效，.bib 无
+ *     折叠标记零回归；挂载与失配重建同 selectionMatches 先例；
  *   - 高亮配色复用全局 --code-token-* 变量、底色复用主题变量，
  *     亮/暗主题切换零 JS 参与。
  */
@@ -61,7 +67,11 @@ import { HighlightStyle, syntaxHighlighting } from "@codemirror/language";
 import { highlightSelectionMatches } from "@codemirror/search";
 import { tags as t } from "@lezer/highlight";
 
-import { latexLanguageExtension, fileSuffixOf } from "@/lib/editor/language";
+import {
+  latexLanguageExtension,
+  latexFoldingExtension,
+  fileSuffixOf,
+} from "@/lib/editor/language";
 import { latexCompletionExtension } from "@/lib/editor/latexCompletion";
 import { snippetPlaceholderExtension } from "@/lib/editor/snippetInsert";
 import { wrapKeymapExtension } from "@/lib/editor/wrap";
@@ -175,6 +185,11 @@ const DIAGNOSTICS_LINTER = createDiagnosticsLinter({
   translate: (key, params) => i18n.t(key, params),
 });
 
+/** 代码折叠（editor v3 阶段六b / 决策 Q14；模块级单例条件挂载，同
+    liveDiagnostics 先例：codeFolding 偏好开 → 挂载 foldGutter + 折叠
+    占位符，关 → 摘除；折叠区间随 Lezer 语言仅 .tex/.sty/.cls 生效） */
+const FOLDING_EXTENSIONS = latexFoldingExtension();
+
 /** 状态栏字数统计的尾随防抖（大文档逐键全量统计不可取） */
 const DOC_STATS_DEBOUNCE_MS = 250;
 
@@ -198,6 +213,8 @@ const DOC_STATS_DEBOUNCE_MS = 250;
  *   （阶段八偏好；换档失配重建生效到各存档 tab）
  * @param {boolean} [props.liveDiagnostics=true] 实时语法诊断
  *   （editor v3 阶段三 / 决策 Q9 偏好；换档失配重建生效到各存档 tab）
+ * @param {boolean} [props.codeFolding=true] 代码折叠
+ *   （editor v3 阶段六b / 决策 Q14 偏好；换档失配重建生效到各存档 tab）
  * @param {object|null} [props.statsHub=null]  状态栏统计 hub
  *   （lib/editor/stats.js 发布-订阅；缺省不发布）
  * @param {(view: EditorView) => void} [props.onCreateEditor]
@@ -224,6 +241,7 @@ export default function LaTeXEditor({
   openedText = null,
   selectionMatches = true,
   liveDiagnostics = true,
+  codeFolding = true,
   statsHub = null,
   onCreateEditor,
   onCompletionApply,
@@ -360,6 +378,9 @@ export default function LaTeXEditor({
       // 实时语法诊断（editor v3 阶段三 / 决策 Q9 偏好；模块级单例条件挂载，
       // 编辑停顿 500ms 后运行，规则与豁免口径见 lib/editor/diagnostics.js）
       ...(liveDiagnostics ? [DIAGNOSTICS_LINTER] : []),
+      // 代码折叠（editor v3 阶段六b / 决策 Q14 偏好；模块级单例条件挂载，
+      // 折叠区间由 latexGrammar 包随语言提供，占位符显示环境名/标题摘要）
+      ...(codeFolding ? FOLDING_EXTENSIONS : []),
       // 自有 doc listener：换档后视图 state 不含包装层内部 listener，
       // doc 变更回写 store 统一走本入口（详见 handleDocChange 去重）；
       // 状态栏统计同 listener 发布（docChanged 走字数防抖）
@@ -380,6 +401,7 @@ export default function LaTeXEditor({
     softWrap,
     selectionMatches,
     liveDiagnostics,
+    codeFolding,
     onCompletionApply,
     handleDocChange,
     scheduleDocStats,
@@ -458,6 +480,7 @@ export default function LaTeXEditor({
       readOnly,
       selectionMatches,
       liveDiagnostics,
+      codeFolding,
     });
     tabViewRegistry.setScroll(prevKey, view.scrollDOM.scrollTop);
     switchGuardRef.current = true;
@@ -470,7 +493,8 @@ export default function LaTeXEditor({
         config?.softWrap !== softWrap ||
         config?.readOnly !== readOnly ||
         config?.selectionMatches !== selectionMatches ||
-        config?.liveDiagnostics !== liveDiagnostics
+        config?.liveDiagnostics !== liveDiagnostics ||
+        config?.codeFolding !== codeFolding
       ) {
         // 无存档，或存档与 store 缓冲区/外观失配（外部整缓冲区替换、
         // 偏好变更后未经过换档）→ 按当前缓冲区重建（撤销历史复位）
@@ -482,6 +506,7 @@ export default function LaTeXEditor({
         readOnly,
         selectionMatches,
         liveDiagnostics,
+        codeFolding,
       });
       view.setState(state);
     } finally {
@@ -498,6 +523,7 @@ export default function LaTeXEditor({
     readOnly,
     selectionMatches,
     liveDiagnostics,
+    codeFolding,
     extensions,
     buildState,
     restoreScroll,
@@ -579,6 +605,7 @@ export default function LaTeXEditor({
       readOnly,
       selectionMatches,
       liveDiagnostics,
+      codeFolding,
     });
     tabViewRegistry.setScroll(activeKey, 0);
     switchGuardRef.current = true;
@@ -595,6 +622,7 @@ export default function LaTeXEditor({
     readOnly,
     selectionMatches,
     liveDiagnostics,
+    codeFolding,
     buildState,
   ]);
 

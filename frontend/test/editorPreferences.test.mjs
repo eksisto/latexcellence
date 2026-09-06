@@ -27,12 +27,13 @@ const fullPrefs = (overrides = {}) => ({
   formulaHover: true,
   selectionMatches: true,
   liveDiagnostics: true,
+  codeFolding: true,
   fontSize: 14,
   customSnippets: [],
   ...overrides,
 });
 
-test("默认偏好符合方案决策（autoSave 关、softWrap 开、autoCloseEnv/formulaHover/liveDiagnostics 开；v2 增 customSnippets）", () => {
+test("默认偏好符合方案决策（autoSave 关、softWrap 开、autoCloseEnv/formulaHover/liveDiagnostics/codeFolding 开；v2 增 customSnippets）", () => {
   assert.deepEqual(EDITOR_PREFERENCES_DEFAULTS, fullPrefs());
   assert.equal(EDITOR_PREFERENCES_EXPORT_VERSION, 2);
 });
@@ -140,6 +141,7 @@ test("serializePreferences 输出 pretty-print 的 kind/version/prefs 载荷（v
       formulaHover: false,
       selectionMatches: true,
       liveDiagnostics: true,
+      codeFolding: true,
       fontSize: 18,
       customSnippets: [],
     },
@@ -183,6 +185,7 @@ test("parsePreferencesImport 接受合法导出载荷", () => {
       formulaHover: true,
       selectionMatches: true,
       liveDiagnostics: true,
+      codeFolding: true,
       fontSize: 16,
       customSnippets: [],
     },
@@ -264,6 +267,7 @@ test("parsePreferencesImport 静默丢弃非法字段、合法字段整体覆盖
     formulaHover: true,
     selectionMatches: true,
     liveDiagnostics: true,
+    codeFolding: true,
     fontSize: 20,
     customSnippets: [],
   });
@@ -294,6 +298,7 @@ test("parsePreferencesImport 接受 v1 载荷（无 customSnippets 字段）且�
     formulaHover: false,
     selectionMatches: false,
     liveDiagnostics: true, // editor v3 阶段三新键：v1 载荷缺失回落默认值
+    codeFolding: true, // editor v3 阶段六b新键：v1 载荷缺失回落默认值
     fontSize: 18,
     customSnippets: [], // 片段字段缺失回落空数组，不视为非法
   });

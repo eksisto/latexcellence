@@ -27,6 +27,8 @@ export const EDITOR_PREFERENCES_DEFAULTS = Object.freeze({
   selectionMatches: true,
   /** 实时语法诊断（editor v3 阶段三 / 决策 Q9）：默认开启 */
   liveDiagnostics: true,
+  /** 代码折叠（editor v3 阶段六b / 决策 Q14）：折叠 gutter 与占位符，默认开启 */
+  codeFolding: true,
   /** 编辑器字号（px） */
   fontSize: 14,
   /** 用户自定义片段库（editor v3 阶段二 / 决策 Q7） */

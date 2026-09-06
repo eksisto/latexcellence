@@ -1821,7 +1821,9 @@
       "import_unsupported_version": "导入失败：版本过新或无效，请升级后再试",
       "import_invalid_payload": "导入失败：prefs 字段缺失或格式错误",
       "liveDiagnostics": "实时语法诊断",
-      "liveDiagnosticsHint": "编辑停顿约半秒后自动检查环境是否闭合、花括号是否配平，并在编辑器内联标记提示（不影响编译）。"
+      "liveDiagnosticsHint": "编辑停顿约半秒后自动检查环境是否闭合、花括号是否配平，并在编辑器内联标记提示（不影响编译）。",
+      "codeFolding": "代码折叠",
+      "codeFoldingHint": "在编辑器左侧显示折叠标记，可折叠环境与分节内容，折叠后显示环境名或标题摘要（不影响编译）。"
     },
     "commandPalette": {
       "title": "命令面板",

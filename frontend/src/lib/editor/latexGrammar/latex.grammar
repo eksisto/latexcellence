@@ -17,7 +17,10 @@
 //   - \begin {verbatim}（\begin 与 { 之间带空白）不进入 verbatim 原样态，
 //     退化为普通环境解析（outlineScan 口径允许 \s*，此处从严，仅影响
 //     verbatim 内容高亮，不影响解析稳定性）
-//   - 折叠与环境缩进（foldNodeProp / indentNodeProp）属阶段六b，本文件不含
+//   - 折叠与环境缩进属阶段六b，但不在本 grammar 源内实现：折叠 / 缩进 /
+//     括号配对 prop 全部经组装层（index.js + folding.js / indentation.js /
+//     brackets.js）接线——无 Environment 包裹节点、环境名配对 CFG 不可
+//     表达，且生成物保持零 @codemirror 依赖（选型说明见 folding.js 头注）
 //
 // ── 结构说明（高亮着色采用"叶子包裹"模式）───────────────────────────────
 //   @lezer/highlight 的 highlightRange 会把外层节点的样式 class 沿树向内

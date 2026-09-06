@@ -1,5 +1,6 @@
 /**
- * LaTeX 语言包抽象层（editor-design §3 / 决策 Q2；editor v3 阶段六a / 决策 Q14）。
+ * LaTeX 语言包抽象层（editor-design §3 / 决策 Q2；editor v3 阶段六a /
+ * 决策 Q14；阶段六b 折叠与环境缩进）。
  *
  * 设计约束：
  *   **本文件是语言包进入编辑器的唯一入口**——其余代码不得直接 import
@@ -9,10 +10,16 @@
  *
  * 后缀分流（Q14）：
  *   - `.tex` / `.sty` / `.cls` → 自研 MIT Lezer 子集语法
- *     （latexGrammar/，精确高亮 + Lezer 增量解析；折叠与环境缩进为
- *     阶段六b）；
+ *     （latexGrammar/，精确高亮 + Lezer 增量解析；六b 起含环境 / 分节
+ *     折叠（foldService）、环境体自动缩进（indentService + indentOnInput）
+ *     与基于语法树的括号匹配精确化（openedBy/closedBy prop + \begin↔\end
+ *     配对高亮））；
  *   - `.bib` 及未知后缀 → 沿用 @codemirror/legacy-modes 的 stex 流式
  *     模式（自研最小 bib 语法列为可选尾项，暂不实施）。
+ *
+ * `latexFoldingExtension()` 转发折叠 UI 扩展组（foldGutter + 折叠占位符，
+ * 见 latexGrammar/index.js 的 latexFoldingUI）：编辑器按 codeFolding 偏好
+ * 条件挂载（扩展模块级单例，切换经换档失配重建生效）。
  *
  * 高亮配色复用全局 `--code-token-*` CSS 变量（LaTeXEditor.jsx 的
  * latexHighlightStyle），亮/暗主题切换时无需重新构建编辑器扩展。
@@ -21,7 +28,7 @@
 import { StreamLanguage } from "@codemirror/language";
 import { stexMath } from "@codemirror/legacy-modes/mode/stex";
 
-import { latexLanguageSupport } from "./latexGrammar/index.js";
+import { latexLanguageSupport, latexFoldingUI } from "./latexGrammar/index.js";
 
 /** 走自研 Lezer 语法的文件后缀集合（.bib 暂不在此列，见 Q14） */
 const LEZER_SUFFIXES = new Set([".tex", ".sty", ".cls"]);
@@ -62,3 +69,17 @@ export function latexLanguageExtension(suffix = "") {
   }
   return stexLanguage;
 }
+
+/**
+ * 返回折叠 UI 扩展组（foldGutter + codeFolding 折叠占位符；模块级单例）。
+ * 仅 Lezer 语法提供折叠区间（foldService / foldNodeProp 随语言挂载），
+ * .bib 缓冲区挂载后无折叠标记、行为与现状一致。
+ * @returns {import("@codemirror/state").Extension[]}
+ */
+export function latexFoldingExtension() {
+  if (!foldingExtension) {
+    foldingExtension = latexFoldingUI();
+  }
+  return foldingExtension;
+}
+let foldingExtension = null;

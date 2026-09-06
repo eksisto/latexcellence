@@ -9,8 +9,9 @@
 > 与 [docs/editor-experience-design.md](../editor-experience-design.md)
 > （editor v3 写作体验收口；阶段一 SyncTeX 正反向同步、阶段二用户自定义
 > 片段库、阶段三实时语法诊断、阶段四跨文件大纲与公式固定预览卡、
-> 阶段五助手接入联网与学术检索（5a 工具接入 + 5b 确认流）及阶段六a
-> 自研 Lezer 子集语法 P0 高亮已实施，阶段六b 折叠与环境缩进待实施）。
+> 阶段五助手接入联网与学术检索（5a 工具接入 + 5b 确认流）及阶段六
+> 自研 Lezer 子集语法（6a P0 高亮 + 6b 折叠、环境缩进与括号匹配
+> 精确化）已实施）。
 
 ## 设计概述
 
@@ -200,11 +201,14 @@ frontend/src/
 │   ├── sessionPersistence.js         # 会话 sessionStorage 持久化纯函数（序列化 / 白名单清洗 / LRU 配额淘汰 / 项目键隔离）
 │   ├── tabViews.js                   # per-tab CM6 EditorState / 滚动位置登记表（单实例换档的数据底座）
 │   ├── language.js                   # 语言包抽象层（唯一入口，按文件后缀分流：.tex/.sty/.cls → 自研 Lezer 子集语法，.bib 及未知 → stex StreamLanguage）
-│   ├── latexGrammar/                 # 自研 MIT Lezer LaTeX 子集语法（阶段六a P0 高亮；生成物 parser.js/parser.terms.js 不入库，npm predev/prebuild/pretest 先行生成）
+│   ├── latexGrammar/                 # 自研 MIT Lezer LaTeX 子集语法（阶段六a P0 高亮 + 六b 折叠/环境缩进/括号匹配精确化；生成物 parser.js/parser.terms.js 不入库，npm predev/prebuild/pretest 先行生成）
 │   │   ├── latex.grammar             # grammar 源（注释/命令/数学区/环境/分组/上下标/verbatim 吞掉/分节 heading，错误恢复兜底）
 │   │   ├── verbTokens.js             # \verb 参数外部分词器（任意相同定界符、行界口径，fallback 语义）
 │   │   ├── highlight.js              # 叶子节点 → @lezer/highlight tags 映射（与 stex 视觉对齐，对照清单见 test/editorLatexGrammar.test.mjs 头注）
-│   │   ├── index.js                  # parser + tags 组装 LanguageSupport（模块级单例）
+│   │   ├── folding.js                # 折叠/配对纯函数层（环境与分节折叠区间、verbatim 折叠、begin↔end 配对、折叠占位符摘要，带记忆化与扫描上限）
+│   │   ├── indentation.js            # 环境体自动缩进纯函数层（最内层开环境回溯、\end 对齐、verbatim 豁免）
+│   │   ├── brackets.js               # 括号匹配精确化（openedBy/closedBy 配对 prop + begin↔end 配对高亮插件）
+│   │   ├── index.js                  # parser + tags + 六b 扩展组装 LanguageSupport（foldService/indentService/配对 prop，模块级单例）
 │   │   └── build.mjs                 # @lezer/generator Node API 生成脚本（dev/build/test 前自动执行）
 │   ├── files.js                      # 可编辑/可预览白名单 + 大小上限纯函数
 │   ├── preferences.js                # 偏好默认值/白名单清洗/导出导入校验纯函数（v2 含自定义片段条目级清洗）
@@ -646,18 +650,21 @@ pages/writing-chat/ 提升到 components/，Writing Chat 页同步改导入，
 刻意差异）。pending 期间流仍在途（`assistantStreaming` 为 true），
 输入框禁用天然防并发轮次。
 
-### 语法高亮语言层（editor v3 阶段六a / 决策 Q14）
+### 语法高亮语言层（editor v3 阶段六a / 决策 Q14；六b 折叠·缩进·括号匹配）
 
 `language.js` 保持「语言包进入编辑器的唯一入口」契约，导出改为
 `latexLanguageExtension(suffix)` 并新增 `fileSuffixOf(path)` 后缀提取；
 `LaTeXEditor` 以激活 tab 的文件后缀传参（进入 useMemo 依赖，仅随后缀
 类变化触发扩展重配置）：`.tex` / `.sty` / `.cls` 返回自研 Lezer
 LanguageSupport，`.bib` 及未知后缀沿用 stex StreamLanguage（自研最小
-bib 语法列为可选尾项）。语言实例模块级缓存，跨 EditorState 复用。
+bib 语法列为可选尾项）。语言实例模块级缓存，跨 EditorState 复用；
+`latexFoldingExtension()` 经同一入口转发折叠 UI 扩展组（应用层按
+`codeFolding` 偏好条件挂载）。
 
 **latexGrammar 包**（`lib/editor/latexGrammar/`，全部 MIT 自研，不引入
 AGPL 依赖）：`latex.grammar` grammar 源 + `verbTokens.js` 外部分词器 +
-`highlight.js` tags 映射 + `index.js` LanguageSupport 组装 +
+`highlight.js` tags 映射 + `folding.js` / `indentation.js` 纯函数层 +
+`brackets.js` 配对 prop 与配对高亮 + `index.js` LanguageSupport 组装 +
 `build.mjs` 生成脚本。`@lezer/generator`（MIT，devDependency）经 npm
 `predev` / `prebuild` / `pretest` 钩子在 dev / build / test 前把 grammar
 编译为 parser.js / parser.terms.js（生成物不入库，已列 .gitignore，clean
@@ -672,12 +679,43 @@ CFG 表达，由 `verbTokens.js` 外部分词器实现（以 `{ fallback: true }
 声明——主 token 表已产出 token 时外部分词器默认不再被询问），行界与
 非法定界符口径对齐 `outlineScan.stripVerbSpans`。明确不追求 catcode 级
 正确与 `$` 配对零误判，依赖 Lezer 错误恢复（error-insensitive）保证
-畸形输入可解析、不崩溃；折叠与环境缩进（foldNodeProp / indentNodeProp）
-属阶段六b。高亮着色采用「叶子包裹」模式（只对恰好覆盖单 token 的节点
-打 tag，容器节点不着色），tags 与 stex StreamLanguage 视觉逐类对齐，
-回归对照清单见 `test/editorLatexGrammar.test.mjs` 头注；`latexHighlightStyle`
-据新增 heading tag 补充 `--code-token-title` 映射。语言层带
-`commentTokens: { line: "%" }` 行注释切换数据。
+畸形输入可解析、不崩溃。高亮着色采用「叶子包裹」模式（只对恰好覆盖
+单 token 的节点打 tag，容器节点不着色），tags 与 stex StreamLanguage
+视觉逐类对齐，回归对照清单见 `test/editorLatexGrammar.test.mjs` 头注；
+`latexHighlightStyle` 据新增 heading tag 补充 `--code-token-title` 映射。
+语言层带 `commentTokens: { line: "%" }` 行注释切换数据。
+
+**阶段六b（折叠 / 环境体缩进 / 括号匹配精确化）**：全部在组装层接线，
+不改动 grammar 树形状——`\begin{env}` 与 `\end{env}` 是兄弟节点且
+「环境名相同才配对」无法用 CFG 表达（强行加 Environment 包裹规则会把
+`\begin{a}…\end{b}` 贪心错误配对、让未闭合环境吞掉后文），而 CM6 的
+foldNodeProp / indentNodeProp 树路径机制都要求包裹节点存在于祖先链上，
+故按 CM 官方语言包惯例在 `parser.configure` / LanguageSupport 组装层
+挂载，配对与缩进逻辑落为零 `@codemirror` 依赖的纯函数层（node --test
+直测）。折叠区间口径：环境 = `\begin` 行尾 → 匹配 `\end` 行首（起止
+同行 / 未配对 / 无名 → 不可折叠）；分节 = 命令行尾 → 下一同级或更高级
+分节命令行首（无后继 → 文档尾；subsection 属于 section 内部，不关闭
+其区间）；verbatim 类环境有跨全环境的 `VerbatimEnvironment` 包裹节点，
+走 CM 原生 foldNodeProp 路径。折叠 / 配对前向扫描带「命中即提前退出 +
+扫描字符上限 + 按树记忆化」护栏，缩进的「最内层开环境」回溯带节点
+访问上限（2MB 文档抽样查询无 O(n²) 劣化，耗时数据点见测试日志）。折叠
+占位符显示环境名 / 分节标题摘要（`⟨itemize⟩` / `⟨标题…⟩`，无锚点回落
+`⋯`，点击展开）。环境体自动缩进经 indentService（优先级高于 CM 树路径
+缩进，返回 null = 保持现状）：环境体内换行缩进 = 最内层开环境 `\begin`
+列 + 缩进单位（沿袭项目现状——未显式设定 indentUnit，即 CM 默认 2 空格），
+行首为 `\end` 时与 `\begin` 起始列对齐，`languageData.indentOnInput`
+（`/^\s*\\end\b/`）让打出 `\end` 时自动回正该行（与 `\begin` 打字机补
+`\end` 联动）；verbatim 体内返回 null 原样保留。括号匹配精确化：把
+`{}` / `[]` / `()` / `$` / `$$` / `\[` `\]` `\(` `\)` 定界节点经
+`NodeProp.closedBy` / `openedBy` 声明配对（CM6 既有 bracketMatching 的
+matchBrackets 优先读 prop 并在同一父节点兄弟序列内配对——花括号不跨出
+Group / MathGroup 作用域、`$` 定界不跨对吞并、verbatim 体内无括号节点
+天然豁免，配不上就不高亮、不做文本回退猜测）；`\begin{env}` ↔
+`\end{env}` 名称配对由 ViewPlugin 经 folding.js 求配对并复用 CM 的
+`cm-matchingBracket` 样式类（与既有 bracketMatching 并存，二者装饰对象
+不同节点）。`codeFolding` 偏好（默认开，白名单缺省补齐不升版本，设置
+弹层三语开关，存档 tab 失配重建即时生效）控制折叠 gutter 挂载；`.bib`
+缓冲区无折叠区间、行为与现状一致。
 
 ### 编译联动（§8 / 决策 Q18 + v2 Q16）
 
@@ -880,5 +918,8 @@ AI 面板。四处配置同步规范照 AGENTS.md 执行；`/api/config/status` 
   换算与左上原点翻转，含双击取点闭环）/ editorLatexGrammar（自研 Lezer
   语法解析树断言：注释 / 命令 / 数学区 / 环境 / verbatim 与 \verb 吞掉 /
   分节 heading / 畸形输入错误恢复，含 classHighlighter 高亮断言与
-  stex 回归对照清单头注、2MB 全量解析耗时数据点）/ latexCommands（含
+  stex 回归对照清单头注、2MB 全量解析耗时数据点）/
+  editorLatexGrammarFeatures（六b 折叠区间 / 环境体缩进 / begin↔end
+  配对与占位符摘要纯函数断言、openedBy/closedBy 配对 prop 与语言数据
+  组装层断言、畸形输入收敛与 2MB 抽样查询回归）/ latexCommands（含
   wrap 类目 schema）/ i18nLocales 键集合一致性等

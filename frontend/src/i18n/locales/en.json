@@ -1821,7 +1821,9 @@
       "import_unsupported_version": "Import failed: version is newer or invalid; please upgrade first",
       "import_invalid_payload": "Import failed: prefs field missing or malformed",
       "liveDiagnostics": "Live syntax checks",
-      "liveDiagnosticsHint": "About half a second after you stop typing, unclosed environments and unbalanced braces are flagged inline (compiling is not affected)."
+      "liveDiagnosticsHint": "About half a second after you stop typing, unclosed environments and unbalanced braces are flagged inline (compiling is not affected).",
+      "codeFolding": "Code folding",
+      "codeFoldingHint": "Show fold markers in the editor gutter to collapse environments and sections; the placeholder shows the environment name or title summary (compiling is not affected)."
     },
     "commandPalette": {
       "title": "Command palette",

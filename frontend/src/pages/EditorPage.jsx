@@ -143,6 +143,8 @@ function SessionEditor({
   const selectionMatches = useEditorStore((s) => s.selectionMatches);
   // 实时语法诊断（editor v3 阶段三 / 决策 Q9）
   const liveDiagnostics = useEditorStore((s) => s.liveDiagnostics);
+  // 代码折叠（editor v3 阶段六b / 决策 Q14）
+  const codeFolding = useEditorStore((s) => s.codeFolding);
   const setBufferContent = useEditorStore((s) => s.setBufferContent);
   // 引用补全（阶段四 / Q7）：项目符号缓存读取器。缓存以项目为键
   // （单用户 projectPath / 多用户 projectId），首次触发补全时经
@@ -178,6 +180,7 @@ function SessionEditor({
       openedText={openedText}
       selectionMatches={selectionMatches}
       liveDiagnostics={liveDiagnostics}
+      codeFolding={codeFolding}
       statsHub={statsHub}
       onCreateEditor={onCreateEditor}
       onCompletionApply={onCompletionApply}

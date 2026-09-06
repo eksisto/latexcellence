@@ -6,9 +6,9 @@
  *
  * 持久化策略：
  *   - editorPreferences：persist 持久化（autoSave / softWrap / autoCloseEnv
- *     / formulaHover / selectionMatches / liveDiagnostics / fontSize /
- *     customSnippets，v2），水合后经 sanitizePreferences 白名单清洗，
- *     脏数据回落默认值；
+ *     / formulaHover / selectionMatches / liveDiagnostics / codeFolding /
+ *     fontSize / customSnippets，v2），水合后经 sanitizePreferences 白名单
+ *     清洗，脏数据回落默认值；
  *   - editorSession（多缓冲区：tabs + activeTabPath + 冲突信息）：不进
  *     zustand persist——刷新/重启恢复走 sessionPersistence 专项通道（含
  *     脏缓冲区全文 + 保存基线，localStorage + LRU 配额兜底，见
@@ -79,6 +79,8 @@ function createEditorPreferencesSlice(set) {
     setSelectionMatches: (value) => set({ selectionMatches: !!value }),
     // 实时语法诊断开关（editor v3 阶段三 / 决策 Q9，默认开）
     setLiveDiagnostics: (value) => set({ liveDiagnostics: !!value }),
+    // 代码折叠开关（editor v3 阶段六b / 决策 Q14，默认开）
+    setCodeFolding: (value) => set({ codeFolding: !!value }),
     // 字号经白名单校验（区间整数），非法值静默忽略
     setFontSize: (value) => {
       const cleaned = sanitizePreferences({ fontSize: value });
@@ -379,6 +381,7 @@ export const useEditorStore = create(
         formulaHover: state.formulaHover,
         selectionMatches: state.selectionMatches,
         liveDiagnostics: state.liveDiagnostics,
+        codeFolding: state.codeFolding,
         fontSize: state.fontSize,
         customSnippets: state.customSnippets,
       }),

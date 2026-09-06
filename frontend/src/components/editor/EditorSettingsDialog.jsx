@@ -3,7 +3,8 @@
  *
  * 开关：软换行、字号即时生效；自动保存（默认关，决策 Q6）在缓冲区停止
  * 编辑后延迟落盘（行为联动属阶段四，经 save-file 单一路径）；实时语法
- * 诊断（editor v3 阶段三 / 决策 Q9）切换后经扩展重配置即时生效。
+ * 诊断（editor v3 阶段三 / 决策 Q9）与代码折叠（editor v3 阶段六b /
+ * 决策 Q14）切换后经扩展重配置即时生效。
  *
  * 自定义片段（editor v3 阶段二 / 决策 Q7、Q8）：列表 + 增删改表单
  * （命令名 / 插入内容 / 中文名），插入内容带实时预览（占位符解析后的
@@ -82,6 +83,7 @@ export default function EditorSettingsDialog({ open, onOpenChange }) {
     formulaHover,
     selectionMatches,
     liveDiagnostics,
+    codeFolding,
     fontSize,
     customSnippets,
     setSoftWrap,
@@ -90,6 +92,7 @@ export default function EditorSettingsDialog({ open, onOpenChange }) {
     setFormulaHover,
     setSelectionMatches,
     setLiveDiagnostics,
+    setCodeFolding,
     setFontSize,
     setCustomSnippets,
     applyPreferences,
@@ -101,6 +104,7 @@ export default function EditorSettingsDialog({ open, onOpenChange }) {
       formulaHover: s.formulaHover,
       selectionMatches: s.selectionMatches,
       liveDiagnostics: s.liveDiagnostics,
+      codeFolding: s.codeFolding,
       fontSize: s.fontSize,
       customSnippets: s.customSnippets,
       setSoftWrap: s.setSoftWrap,
@@ -109,6 +113,7 @@ export default function EditorSettingsDialog({ open, onOpenChange }) {
       setFormulaHover: s.setFormulaHover,
       setSelectionMatches: s.setSelectionMatches,
       setLiveDiagnostics: s.setLiveDiagnostics,
+      setCodeFolding: s.setCodeFolding,
       setFontSize: s.setFontSize,
       setCustomSnippets: s.setCustomSnippets,
       applyPreferences: s.applyPreferences,
@@ -131,6 +136,7 @@ export default function EditorSettingsDialog({ open, onOpenChange }) {
           formulaHover: prefs.formulaHover,
           selectionMatches: prefs.selectionMatches,
           liveDiagnostics: prefs.liveDiagnostics,
+          codeFolding: prefs.codeFolding,
           fontSize: prefs.fontSize,
           customSnippets: prefs.customSnippets,
         }),
@@ -324,6 +330,21 @@ export default function EditorSettingsDialog({ open, onOpenChange }) {
           </div>
           <p className="-mt-2 text-xs text-muted-foreground">
             {t("components:editorSettings.liveDiagnosticsHint")}
+          </p>
+
+          {/* 代码折叠（editor v3 阶段六b / 决策 Q14）：折叠 gutter 与占位符 */}
+          <div className="flex items-center justify-between gap-4">
+            <Label htmlFor="editor-code-folding" className="text-sm">
+              {t("components:editorSettings.codeFolding")}
+            </Label>
+            <Switch
+              id="editor-code-folding"
+              checked={codeFolding}
+              onCheckedChange={(checked) => setCodeFolding(checked === true)}
+            />
+          </div>
+          <p className="-mt-2 text-xs text-muted-foreground">
+            {t("components:editorSettings.codeFoldingHint")}
           </p>
 
           <div className="flex items-center justify-between gap-4">
