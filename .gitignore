@@ -57,3 +57,8 @@ release.sh
 
 # Scripts
 scripts/
+
+# Lezer grammar 生成物（frontend npm predev/prebuild/pretest 自动生成，
+# 不入库；clean checkout 后经 npm scripts 先行生成，构建可重复）
+frontend/src/lib/editor/latexGrammar/parser.js
+frontend/src/lib/editor/latexGrammar/parser.terms.js

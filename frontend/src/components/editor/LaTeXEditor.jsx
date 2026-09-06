@@ -15,8 +15,10 @@
  *     listener（其 listener 只存在于包装层创建的初始 state），doc 变更
  *     统一由本 listener 回写 store；与包装层 listener 并存时按「值相同
  *     只写一次」去重，保证每次实际变更恰好一次 store 写入；
- *   - 语言包经 lib/editor/language.js 抽象层引入（决策 Q2），本组件不直接
- *     import legacy-modes，保证将来可整体替换 AGPL 语法包；
+ *   - 语言包经 lib/editor/language.js 抽象层引入（决策 Q2；editor v3
+ *     阶段六a / 决策 Q14 起按激活 tab 文件后缀分流：.tex/.sty/.cls 走
+ *     自研 Lezer 子集语法，.bib 沿用 stex 流式模式），本组件不直接
+ *     import 语法实现，保证可整体替换；
  *   - 编辑基本功包（editor v2 阶段二）：包裹直包快捷键（Ctrl/Cmd+B/I/U/K，
  *     逻辑在 lib/editor/wrap.js）+ 多光标（basicSetup
  *     allowMultipleSelections 默认开启，无偏好开关）+ \begin{env} 打字机
@@ -59,7 +61,7 @@ import { HighlightStyle, syntaxHighlighting } from "@codemirror/language";
 import { highlightSelectionMatches } from "@codemirror/search";
 import { tags as t } from "@lezer/highlight";
 
-import { latexLanguageExtension } from "@/lib/editor/language";
+import { latexLanguageExtension, fileSuffixOf } from "@/lib/editor/language";
 import { latexCompletionExtension } from "@/lib/editor/latexCompletion";
 import { snippetPlaceholderExtension } from "@/lib/editor/snippetInsert";
 import { wrapKeymapExtension } from "@/lib/editor/wrap";
@@ -121,7 +123,9 @@ const editorBaseTheme = EditorView.theme({
   ".cm-cursor": { borderLeftColor: "var(--foreground)" },
 });
 
-/** LaTeX 语法高亮：token 颜色对齐 CodeBlock 的 --code-token-* 变量 */
+/** LaTeX 语法高亮：token 颜色对齐 CodeBlock 的 --code-token-* 变量；
+    heading（分节命令 tag，editor v3 阶段六a）映射到与 tagName 相同的
+    --code-token-title，与 stex 分节命令的视觉表现保持一致 */
 const latexHighlightStyle = HighlightStyle.define([
   { tag: t.comment, color: "var(--code-token-comment)" },
   { tag: t.keyword, color: "var(--code-token-keyword)" },
@@ -129,6 +133,7 @@ const latexHighlightStyle = HighlightStyle.define([
   { tag: t.number, color: "var(--code-token-number)" },
   { tag: t.special(t.variableName), color: "var(--code-token-string)" },
   { tag: t.tagName, color: "var(--code-token-title)" },
+  { tag: t.heading, color: "var(--code-token-title)" },
   { tag: t.bracket, color: "var(--code-token-punctuation)" },
   { tag: t.invalid, color: "var(--destructive)" },
 ]);
@@ -315,9 +320,14 @@ export default function LaTeXEditor({
     onChangeRef.current(nextValue);
   }, []);
 
+  // 语言按激活 tab 文件后缀分流（editor v3 阶段六a / 决策 Q14）：.tex/
+  // .sty/.cls 走自研 Lezer 子集语法，.bib 沿用 stex 流式模式。后缀仅随
+  // activeKey 变化，进入依赖数组不会在键入期间触发扩展重配置
+  const activeSuffix = fileSuffixOf(activeKey);
+
   const extensions = useMemo(() => {
     const base = [
-      latexLanguageExtension(),
+      latexLanguageExtension(activeSuffix),
       syntaxHighlighting(latexHighlightStyle),
       editorBaseTheme,
       // 阶段三：`\` / `\begin{` 行内补全 + 模板占位符跳转模式；
@@ -366,6 +376,7 @@ export default function LaTeXEditor({
     if (softWrap) base.push(EditorView.lineWrapping);
     return base;
   }, [
+    activeSuffix,
     softWrap,
     selectionMatches,
     liveDiagnostics,

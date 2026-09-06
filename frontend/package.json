@@ -7,8 +7,11 @@
     "node": ">=20"
   },
   "scripts": {
+    "predev": "node src/lib/editor/latexGrammar/build.mjs",
     "dev": "vite",
+    "prebuild": "node src/lib/editor/latexGrammar/build.mjs",
     "build": "vite build",
+    "pretest": "node src/lib/editor/latexGrammar/build.mjs",
     "preview": "vite preview",
     "test": "node --test"
   },
@@ -59,6 +62,7 @@
     "zustand": "^5.0.0"
   },
   "devDependencies": {
+    "@lezer/generator": "^1.8.0",
     "@tailwindcss/vite": "^4.1.0",
     "@vitejs/plugin-react": "^4.4.0",
     "tailwindcss": "^4.1.0",

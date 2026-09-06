@@ -1,0 +1,275 @@
+// LaTeXcellence 自研 Lezer LaTeX 子集语法（editor v3 阶段六a / 设计文档 §4.6 / 决策 Q14）。
+//
+// ── 范围（P0 = 高亮子集）─────────────────────────────────────────────────
+//   - 行注释（非转义 % 起至行尾，\% 为字面字符）
+//   - 命令（\foo、\foo* 星号变体、\{}/[] 参数）
+//   - 数学区：$...$ / $$...$$ / \(...\) / \[...\]
+//   - \begin{env} / \end{env} 环境、分组 {}、上下标 ^ / _
+//   - verbatim 类环境（verbatim / verbatim* / Verbatim / Verbatim* /
+//     lstlisting / minted，与 outlineScan.js 的 BEGIN_VERBATIM_RE 同口径）
+//     与 \verb 行内参数原样吞掉（\verb 经外部分词器支持任意定界符）
+//   - 分节命令（\part / \chapter / \section / \subsection /
+//     \subsubsection / \paragraph，含星号变体）映射 heading tag
+//
+// ── 明确不追求（错误敏感场景依赖 Lezer 错误恢复）─────────────────────────
+//   - catcode / \makeatletter 级完全正确（命令名字符集固定为 ASCII 字母）
+//   - $ 配对零误判（未配对定界符走错误恢复，局部高亮降级可接受）
+//   - \begin {verbatim}（\begin 与 { 之间带空白）不进入 verbatim 原样态，
+//     退化为普通环境解析（outlineScan 口径允许 \s*，此处从严，仅影响
+//     verbatim 内容高亮，不影响解析稳定性）
+//   - 折叠与环境缩进（foldNodeProp / indentNodeProp）属阶段六b，本文件不含
+//
+// ── 结构说明（高亮着色采用"叶子包裹"模式）───────────────────────────────
+//   @lezer/highlight 的 highlightRange 会把外层节点的样式 class 沿树向内
+//   累积（内层 = 外层 class + 自身 class 叠加），因此只对"恰好覆盖单个
+//   token / 不含其他带色子节点"的叶子节点打 tag；InlineMath、Group、
+//   VerbatimBody 等容器节点一律不打 tag，由其叶子子节点各自着色。
+//
+//   数学区内部复用全局 token（word / number / cmd 等），通过 MathWord /
+//   MathNumber 等叶子节点包裹实现数学内专属配色；顶层则用裸 token /
+//   NumberLit 分别呈现，保证与 stex StreamLanguage 的视觉表现逐类对齐
+//   （对照清单见 test/editorLatexGrammar.test.mjs 头注）。
+
+@top Source { content* }
+
+// 默认跳过集：空白 + 行注释（verbatim 环境走下方空跳过集，注释在原样态内不成立）
+@skip { ws | LineComment }
+
+@tokens {
+  ws { $[ \t\r\n]+ }
+
+  // 非转义 % 至行尾（\% 由 controlSym 整体吃掉，不会进入注释起始判定）
+  LineComment { "%" ![\n]* }
+
+  word { std.asciiLetter+ }
+
+  // 整数 / 小数（如 3、12.5）；不支持 .5 前缀形式（. 归兜底字符集，避免
+  // 与 textChar/mathChar 同位重叠——stex 的 .5 视觉差异仅在数学内一个字符）
+  number { std.digit+ ("." std.digit*)? }
+
+  // 命令名：反斜杠 + ASCII 字母串，可选星号变体（\section* 的 * 属于命令）
+  cmd { "\\" std.asciiLetter+ "*"? }
+
+  // 控制符号 / 转义（\% \& \_ \{ \\ \, 等）；排除字母（属 cmd）与圆方括号
+  //（\( \) \[ \] 属数学定界符 token），避免等长冲突
+  controlSym { "\\" ![a-zA-Z()\[\]] }
+
+  dollarOne { "$" }
+  dollarTwo { "$$" }
+
+  dBracketOpen { "\\[" }
+  dBracketClose { "\\]" }
+  dParenOpen { "\\(" }
+  dParenClose { "\\)" }
+
+  // 共享兜底单字符（顶层与数学区同名 token，杜绝"同字符两个 token"的
+  // 等长竞争——lezer 运行时对等长多 token 匹配可能选中当前状态不可用的
+  // token 触发错误恢复）：+ = < > , . : ; ' " | ! ? * / ~ # 及全部非 ASCII
+  //（中文正文）；两处上下文均保持无色，与 stex 口径一致
+  plainChar { ![%$\\{}()\[\]^_&0-9a-zA-Z \t\r\n] }
+
+  // 数学区 ^ _ &（上下标 / 对齐符）：mathBody 内经 MathOp 叶子节点着色
+  //（tagName，同 stex "tag"），顶层裸引用保持无色（同 stex 顶层）
+  mathOpTok { $[\^_&] }
+
+  // verbatim 起始标记：必须是局部 token 组之外的常规 token（局部组独占其
+  // 所在解析状态，起始状态与其他 content token 共存，故不可入组）；与 cmd
+  // 前缀重叠，靠"最长匹配 + @precedence"消解
+  beginVerbatim { "\\begin{verbatim}" }
+  beginVerbatimStar { "\\begin{verbatim*}" }
+  beginVerbatimUpper { "\\begin{Verbatim}" }
+  beginVerbatimUpperStar { "\\begin{Verbatim*}" }
+  beginLstlisting { "\\begin{lstlisting}" }
+  beginMinted { "\\begin{minted}" }
+
+  @precedence {
+    beginVerbatim,
+    beginVerbatimStar,
+    beginVerbatimUpper,
+    beginVerbatimUpperStar,
+    beginLstlisting,
+    beginMinted,
+    cmd
+  }
+}
+
+// \verb 行内参数：定界符为任意非字母非空白字符且两侧相同，CFG 无法表达
+// "同字符闭合"，经外部分词器实现（口径对齐 outlineScan.stripVerbSpans）
+@external tokens verbReader from "./verbTokens.js" { verbArg }
+
+/* ── 命令 token 特化（@specialize 不能置于 @tokens 块，放在规则区；
+   小写规则透明不建节点）────────────────────────────────────────────────
+   由 cmd 按内容精确匹配替换 token id，避免与 cmd 产生同位重叠 */
+
+secPart { @specialize<cmd, "\\part"> }
+secPartStar { @specialize<cmd, "\\part*"> }
+secChapter { @specialize<cmd, "\\chapter"> }
+secChapterStar { @specialize<cmd, "\\chapter*"> }
+secSection { @specialize<cmd, "\\section"> }
+secSectionStar { @specialize<cmd, "\\section*"> }
+secSubsection { @specialize<cmd, "\\subsection"> }
+secSubsectionStar { @specialize<cmd, "\\subsection*"> }
+secSubsubsection { @specialize<cmd, "\\subsubsection"> }
+secSubsubsectionStar { @specialize<cmd, "\\subsubsection*"> }
+secParagraph { @specialize<cmd, "\\paragraph"> }
+secParagraphStar { @specialize<cmd, "\\paragraph*"> }
+
+beginCmd { @specialize<cmd, "\\begin"> }
+endCmd { @specialize<cmd, "\\end"> }
+
+verbCmd { @specialize<cmd, "\\verb"> }
+verbStarCmd { @specialize<cmd, "\\verb*"> }
+
+/* ── 顶层内容 ──────────────────────────────────────────────────────────── */
+
+content {
+  InlineMath |
+  DisplayDollar |
+  DisplayBracketMath |
+  DisplayParenMath |
+  VerbatimEnvironment |
+  VerbCommand |
+  BeginEnvironment |
+  EndEnvironment |
+  SectionCommand |
+  Command |
+  ControlSymbol |
+  Group |
+  word |
+  NumberLit |
+  mathOpTok |
+  "(" |
+  ")" |
+  OpenBracket |
+  CloseBracket |
+  plainChar
+}
+
+/* ── 数学区（内部复用全局 token，经叶子节点着色）────────────────────────── */
+
+InlineMath { MathDollar mathBody* MathDollar }
+DisplayDollar { MathDollarDollar mathBody* MathDollarDollar }
+DisplayBracketMath { DBracketOpen mathBody* DBracketClose }
+DisplayParenMath { DParenOpen mathBody* DParenClose }
+
+mathBody {
+  MathWord |
+  MathNumber |
+  MathOp |
+  BeginEnvironment |
+  EndEnvironment |
+  SectionCommand |
+  VerbCommand |
+  Command |
+  ControlSymbol |
+  MathGroup |
+  OpenParen |
+  CloseParen |
+  OpenBracket |
+  CloseBracket |
+  plainChar
+}
+
+MathGroup { OpenBrace mathBody* CloseBrace }
+
+/* ── 环境 / 分组 / 分节 ────────────────────────────────────────────────── */
+
+BeginEnvironment { BeginCmd EnvNameGroup }
+EndEnvironment { EndCmd EnvNameGroup }
+
+EnvNameGroup { OpenBrace EnvName CloseBrace }
+EnvName { (word | number | plainChar)* }
+
+SectionCommand {
+  secPart |
+  secPartStar |
+  secChapter |
+  secChapterStar |
+  secSection |
+  secSectionStar |
+  secSubsection |
+  secSubsectionStar |
+  secSubsubsection |
+  secSubsubsectionStar |
+  secParagraph |
+  secParagraphStar
+}
+
+Group { OpenBrace content* CloseBrace }
+
+// verbatim 类环境的局部 token 组：仅含结束标记（局部 token）与 @else
+// 兜底字符。起始标记是常规 token（见 @tokens），进入 VerbatimBody 后
+// 状态由局部组独占——体内容零语义原样吞掉（含换行），只有命中结束
+// 标记（最长匹配）才退出。
+@local tokens {
+  endVerbatim { "\\end{verbatim}" }
+  endVerbatimStar { "\\end{verbatim*}" }
+  endVerbatimUpper { "\\end{Verbatim}" }
+  endVerbatimUpperStar { "\\end{Verbatim*}" }
+  endLstlisting { "\\end{lstlisting}" }
+  endMinted { "\\end{minted}" }
+  @else verbatimChar
+}
+
+@skip {} {
+  // VerbCommand 必须定义在空跳过组：默认跳过集含 LineComment，若在默认
+  // 组内解析，verbArg 期待态下 `%` 定界符会被主 token 表命中为 LineComment
+  //（skip token 在该状态有合法动作，@lezer/lr 的 token 读取循环随之终止），
+  // fallback 的 verbReader 永远不被询问，`\verb%..%` 退化为注释吞掉（真实
+  // LaTeX 与 outlineScan.stripVerbSpans 均允许 % 定界）。空跳过集下
+  // LineComment 在 verbArg 态无动作，fallback 分词器得以介入。
+  VerbCommand { (VerbCmdT | VerbStarT) verbArg }
+
+  VerbatimEnvironment {
+    VerbatimEnv { BeginV VerbatimBody EndV } |
+    VerbatimStarEnv { BeginVStar VerbatimBody EndVStar } |
+    VerbatimUpperEnv { BeginVUpper VerbatimBody EndVUpper } |
+    VerbatimUpperStarEnv { BeginVUpperStar VerbatimBody EndVUpperStar } |
+    LstlistingEnv { BeginLst VerbatimBody EndLst } |
+    MintedEnv { BeginMinted VerbatimBody EndMinted }
+  }
+
+  VerbatimBody { verbatimChar* }
+
+  // verbatim 起止字面 token 的叶子包裹（着色与普通 \begin/\end 一致）
+  BeginV { beginVerbatim }
+  EndV { endVerbatim }
+  BeginVStar { beginVerbatimStar }
+  EndVStar { endVerbatimStar }
+  BeginVUpper { beginVerbatimUpper }
+  EndVUpper { endVerbatimUpper }
+  BeginVUpperStar { beginVerbatimUpperStar }
+  EndVUpperStar { endVerbatimUpperStar }
+  BeginLst { beginLstlisting }
+  EndLst { endLstlisting }
+  BeginMinted { beginMinted }
+  EndMinted { endMinted }
+}
+
+/* ── 叶子节点（token → node 包裹，供 highlight.js 打 tag）────────────────── */
+
+MathDollar { dollarOne }
+MathDollarDollar { dollarTwo }
+DBracketOpen { dBracketOpen }
+DBracketClose { dBracketClose }
+DParenOpen { dParenOpen }
+DParenClose { dParenClose }
+MathWord { word }
+MathNumber { number }
+MathOp { mathOpTok }
+NumberLit { number }
+
+BeginCmd { beginCmd }
+EndCmd { endCmd }
+VerbCmdT { verbCmd }
+VerbStarT { verbStarCmd }
+
+OpenBrace { "{" }
+CloseBrace { "}" }
+OpenBracket { "[" }
+CloseBracket { "]" }
+OpenParen { "(" }
+CloseParen { ")" }
+
+ControlSymbol { controlSym }
+Command { cmd }

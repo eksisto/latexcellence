@@ -8,7 +8,9 @@
 > 状态栏 / 选中高亮匹配 / 会话持久化升级 localStorage，借鉴 Notepad++）
 > 与 [docs/editor-experience-design.md](../editor-experience-design.md)
 > （editor v3 写作体验收口；阶段一 SyncTeX 正反向同步、阶段二用户自定义
-> 片段库、阶段三实时语法诊断、阶段四跨文件大纲与公式固定预览卡已实施）。
+> 片段库、阶段三实时语法诊断、阶段四跨文件大纲与公式固定预览卡、
+> 阶段五助手接入联网与学术检索（5a 工具接入 + 5b 确认流）及阶段六a
+> 自研 Lezer 子集语法 P0 高亮已实施，阶段六b 折叠与环境缩进待实施）。
 
 ## 设计概述
 
@@ -197,7 +199,13 @@ frontend/src/
 │   ├── tabs.js                       # 多缓冲区 tab 状态机纯归约（打开/激活/键入/保存回写/陈旧/关闭）+ 会话选择器
 │   ├── sessionPersistence.js         # 会话 sessionStorage 持久化纯函数（序列化 / 白名单清洗 / LRU 配额淘汰 / 项目键隔离）
 │   ├── tabViews.js                   # per-tab CM6 EditorState / 滚动位置登记表（单实例换档的数据底座）
-│   ├── language.js                   # 语言包抽象层（stex StreamLanguage）
+│   ├── language.js                   # 语言包抽象层（唯一入口，按文件后缀分流：.tex/.sty/.cls → 自研 Lezer 子集语法，.bib 及未知 → stex StreamLanguage）
+│   ├── latexGrammar/                 # 自研 MIT Lezer LaTeX 子集语法（阶段六a P0 高亮；生成物 parser.js/parser.terms.js 不入库，npm predev/prebuild/pretest 先行生成）
+│   │   ├── latex.grammar             # grammar 源（注释/命令/数学区/环境/分组/上下标/verbatim 吞掉/分节 heading，错误恢复兜底）
+│   │   ├── verbTokens.js             # \verb 参数外部分词器（任意相同定界符、行界口径，fallback 语义）
+│   │   ├── highlight.js              # 叶子节点 → @lezer/highlight tags 映射（与 stex 视觉对齐，对照清单见 test/editorLatexGrammar.test.mjs 头注）
+│   │   ├── index.js                  # parser + tags 组装 LanguageSupport（模块级单例）
+│   │   └── build.mjs                 # @lezer/generator Node API 生成脚本（dev/build/test 前自动执行）
 │   ├── files.js                      # 可编辑/可预览白名单 + 大小上限纯函数
 │   ├── preferences.js                # 偏好默认值/白名单清洗/导出导入校验纯函数（v2 含自定义片段条目级清洗）
 │   ├── matcher.js                    # pinyin-pro 四路模糊匹配（多音字词级读音修正）+ 自定义片段派生索引
@@ -638,6 +646,39 @@ pages/writing-chat/ 提升到 components/，Writing Chat 页同步改导入，
 刻意差异）。pending 期间流仍在途（`assistantStreaming` 为 true），
 输入框禁用天然防并发轮次。
 
+### 语法高亮语言层（editor v3 阶段六a / 决策 Q14）
+
+`language.js` 保持「语言包进入编辑器的唯一入口」契约，导出改为
+`latexLanguageExtension(suffix)` 并新增 `fileSuffixOf(path)` 后缀提取；
+`LaTeXEditor` 以激活 tab 的文件后缀传参（进入 useMemo 依赖，仅随后缀
+类变化触发扩展重配置）：`.tex` / `.sty` / `.cls` 返回自研 Lezer
+LanguageSupport，`.bib` 及未知后缀沿用 stex StreamLanguage（自研最小
+bib 语法列为可选尾项）。语言实例模块级缓存，跨 EditorState 复用。
+
+**latexGrammar 包**（`lib/editor/latexGrammar/`，全部 MIT 自研，不引入
+AGPL 依赖）：`latex.grammar` grammar 源 + `verbTokens.js` 外部分词器 +
+`highlight.js` tags 映射 + `index.js` LanguageSupport 组装 +
+`build.mjs` 生成脚本。`@lezer/generator`（MIT，devDependency）经 npm
+`predev` / `prebuild` / `pretest` 钩子在 dev / build / test 前把 grammar
+编译为 parser.js / parser.terms.js（生成物不入库，已列 .gitignore，clean
+checkout 直接构建可重复）。P0 子集范围：行注释（`\%` 豁免、`\\%` 为真
+注释）、命令（含 `*` 变体与 `{}` / `[]` 参数）、四种数学定界（`$...$` /
+`$$...$$` / `\(...\)` / `\[...\]`）、`\begin`/`\end` 环境、分组、上下标、
+分节命令（part/chapter/section/subsection/subsubsection/paragraph 含
+星号变体）映射 heading tag；verbatim 类环境（verbatim / verbatim* /
+Verbatim / Verbatim* / lstlisting / minted，与 `outlineScan` 同口径）与
+`\verb` 任意定界符参数整体原样吞掉。`\verb` 定界符「两侧同字符」无法用
+CFG 表达，由 `verbTokens.js` 外部分词器实现（以 `{ fallback: true }`
+声明——主 token 表已产出 token 时外部分词器默认不再被询问），行界与
+非法定界符口径对齐 `outlineScan.stripVerbSpans`。明确不追求 catcode 级
+正确与 `$` 配对零误判，依赖 Lezer 错误恢复（error-insensitive）保证
+畸形输入可解析、不崩溃；折叠与环境缩进（foldNodeProp / indentNodeProp）
+属阶段六b。高亮着色采用「叶子包裹」模式（只对恰好覆盖单 token 的节点
+打 tag，容器节点不着色），tags 与 stex StreamLanguage 视觉逐类对齐，
+回归对照清单见 `test/editorLatexGrammar.test.mjs` 头注；`latexHighlightStyle`
+据新增 heading tag 补充 `--code-token-title` 映射。语言层带
+`commentTokens: { line: "%" }` 行注释切换数据。
+
 ### 编译联动（§8 / 决策 Q18 + v2 Q16）
 
 工具栏「编译」：先解析编译目标（优先项目主文件，无主文件时回退当前
@@ -836,5 +877,8 @@ AI 面板。四处配置同步规范照 AGENTS.md 执行；`/api/config/status` 
   verbatim·转义·URL 字面量豁免、200 条截断标注、消息格式化注入）/
   editorFormatApply（格式化应用决策、
   快捷键判定与 CM6 history 单步撤销）/ editorSynctexMath（SyncTeX 点→像素
-  换算与左上原点翻转，含双击取点闭环）/ latexCommands（含 wrap 类目 schema）/
-  i18nLocales 键集合一致性等
+  换算与左上原点翻转，含双击取点闭环）/ editorLatexGrammar（自研 Lezer
+  语法解析树断言：注释 / 命令 / 数学区 / 环境 / verbatim 与 \verb 吞掉 /
+  分节 heading / 畸形输入错误恢复，含 classHighlighter 高亮断言与
+  stex 回归对照清单头注、2MB 全量解析耗时数据点）/ latexCommands（含
+  wrap 类目 schema）/ i18nLocales 键集合一致性等

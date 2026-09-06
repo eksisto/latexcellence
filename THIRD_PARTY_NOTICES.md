@@ -85,9 +85,10 @@
 | 项目 | 版本 | 许可证 | 版权 / 作者 | 用途 |
 | --- | --- | --- | --- | --- |
 | [Vite](https://vitejs.dev) | ^6.3.0 | MIT | Copyright (c) 2019-present, VoidZero Inc. and Vite contributors | 构建工具 |
-| [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react) | ^4.4.0 | MIT | Copyright (c) 2019-present, Yuxi (Evan) You and Vite contributors | React 编译插件 |
+| [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react) | ^4.4.0 | MIT | Copyright (c) 2019-present, Evan You and Vite contributors | React 编译插件 |
 | [Tailwind CSS](https://tailwindcss.com) | ^4.1.0 | MIT | Copyright (c) Tailwind Labs, Inc. | CSS 框架 |
 | [@tailwindcss/vite](https://tailwindcss.com) | ^4.1.0 | MIT | Copyright (c) Tailwind Labs, Inc. | Tailwind Vite 插件 |
+| [@lezer/generator](https://github.com/lezer-parser/generator) | ^1.8.0 | MIT | Copyright (c) by Marijn Haverbeke and others | LaTeX 子集语法构建期生成器（latex.grammar → parser，仅 dev/build/test 阶段使用，不打包进构建产物） |
 
 ## 三、后端依赖 (Python pip)
 
