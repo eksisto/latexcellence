@@ -1349,7 +1349,7 @@ class TestEditorDDGChallenge:
 
 
 class TestEditorToolConfirmation:
-    """编辑器侧联网/学术工具逐次确认（阶段五b，editor-design §4.5/§5）。
+    """编辑器侧联网/学术工具逐次确认（阶段五b，editor-experience-design §4.5/§5）。
 
     确认流为流内等待：service.editor_send 生成器挂起于 pending 等待处，
     confirm/cancel 端点决议后续流。asyncio.Event 非线程安全，决议在

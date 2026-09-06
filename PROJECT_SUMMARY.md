@@ -262,7 +262,7 @@ latexcellence/
 │   ├── rar-extractor-fallback.md                 # RAR 解压器回退层设计（unar → bsdtar，已实施）
 │   ├── editor-design.md                            # 网页编辑器 v1 设计（CM6 编辑器 + 命令快速输入 + AI 助手；已实施，设计与决策记录）
 │   ├── editor-productivity-design.md                # 编辑器生产力改造 v2 设计（多缓冲区 tab/大纲/引用补全/格式化/KaTeX/错误跳转/修改行色条；已实施，设计与决策记录）
-│   ├── editor-experience-design.md                # 编辑器写作体验收口设计方案（编辑器 v3：SyncTeX 正反向同步/用户自定义片段/实时语法诊断/跨文件大纲与 KaTeX 预览卡/助手接入联网与学术检索/自研 MIT Lezer 子集语法；阶段一至六b 已实施）
+│   ├── editor-experience-design.md                # 编辑器写作体验收口设计方案（编辑器 v3：SyncTeX 正反向同步/用户自定义片段/实时语法诊断/跨文件大纲与 KaTeX 预览卡/助手接入联网与学术检索/自研 MIT Lezer 子集语法；已实施，设计与决策记录）
 │   ├── multi-model.md                       # 多模型支持设计（模型档案 + 角色槽位路由；已实施）
 │   ├── deployment.md                          # 后端部署指南（单用户/多用户单进程/多实例 Compose 部署、systemd 托管、HTTPS 反向代理、安全风险声明、备份、环境变量与升级回滚）
 │   ├── deploy-followups.md               # 多用户部署侧收口设计（rar 解压入沙箱/真实 RAR 样本/warm pool/模型连通性测试；已实施）
@@ -371,7 +371,7 @@ latexcellence/
 | 代码展示与高亮 | CodeBlock / MarkerText / CodeEditorInput 统一 LaTeX 源码展示，token 颜色由 `--code-token-*` 变量控制 | [frontend.md](docs/frontend.md) |
 | 逐段检查前端流程 | `useParagraphCheck` 统一封装恢复、预览、检查、排序、应用与持久化；`useResultFilter` 负责排序过滤 | [frontend.md](docs/frontend.md) |
 | 写作助手 | `useWritingChat` 管理会话、SSE 流式、工具确认、编辑建议双轮协议 | [writing_chat.md](docs/modules/writing_chat.md) |
-| 网页编辑器与编辑器侧 AI 助手 | `/editor` 页 CM6 缓冲区编辑经 save-file 单一路径落盘；助手复用 Writing Chat 会话基础设施，建议只改缓冲区（插入光标 / 替换选区 / unified diff 卡片），`editor.enabled` / `assistant_enabled` 双开关服务端把关；助手工具白名单（项目只读 + 联网搜索 + 学术检索，执行前硬校验），联网/学术工具经确认卡逐次确认后执行（拒绝/TTL 过期注入取消语义，先登记后下发 pending 事件），DDG 挑战在侧栏内完成（阶段五已实施） | [editor.md](docs/modules/editor.md)、[editor-design.md](docs/editor-design.md) |
+| 网页编辑器与编辑器侧 AI 助手 | `/editor` 页 CM6 缓冲区编辑经 save-file 单一路径落盘；助手复用 Writing Chat 会话基础设施，建议只改缓冲区（插入光标 / 替换选区 / unified diff 卡片），`editor.enabled` / `assistant_enabled` 双开关服务端把关；助手工具白名单（项目只读 + 联网搜索 + 学术检索，执行前硬校验），联网/学术工具经确认卡逐次确认后执行（拒绝/TTL 过期注入取消语义，先登记后下发 pending 事件），DDG 挑战在侧栏内完成（已实施） | [editor.md](docs/modules/editor.md)、[editor-design.md](docs/editor-design.md) |
 | 检查结果保鲜 | 逐段检查结果记录检查时文件 MD5，页面加载时比对当前 MD5，不一致渲染 StaleCheckBanner 提示重查而不销毁结果 | [frontend.md](docs/frontend.md)、[editor.md](docs/modules/editor.md) |
 | 主题系统 | 主题 CSS 自动发现，亮/暗模式独立；`--primary` / `--accent` 等由单一色相派生 | [frontend.md](docs/frontend.md) |
 | 多用户双模式 | `multi_user.enabled` 开关；单用户保持现状（本地目录 + 共享令牌），多用户强制会话认证、CSRF、禁用任意路径打开/浏览；服务器路径不向用户暴露（`root_path` / `git_root` / `sandbox` 等响应字段脱敏，编译日志等输出前缀改写为相对路径） | [multi-user.md](docs/multi-user.md)、[deployment.md](docs/deployment.md) |

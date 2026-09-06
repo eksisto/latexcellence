@@ -4,7 +4,7 @@
 > 设计与决策依据，供维护与查询；当前完整实现形态见
 > [docs/modules/editor.md](modules/editor.md)，后续演进见
 > [editor-productivity-design.md](editor-productivity-design.md)（v2，已实施）与
-> [editor-experience-design.md](editor-experience-design.md)（v3，未实施）。
+> [editor-experience-design.md](editor-experience-design.md)（v3，已实施）。
 > 代码注释中的「editor-design §N」与「决策 QN」均指向本文编号。如行为与本文冲突，
 > 先修订本文再动代码。
 
@@ -34,7 +34,8 @@
 
 > 「多标签页」「`\ref{}` / `\cite{}` 引用补全」「KaTeX 公式预览」已由 v2 改造
 > （[editor-productivity-design.md](editor-productivity-design.md)）落地；「自定义片段」
-> 「助手接入联网/学术检索」「Lezer 语法」在 [editor-experience-design.md](editor-experience-design.md)（v3）规划。
+> 「助手接入联网/学术检索」「Lezer 语法」已由 v3 收口
+> （[editor-experience-design.md](editor-experience-design.md)，已实施）。
 
 ## 3. 技术选型
 
@@ -143,6 +144,9 @@ AI 修改**不经后端落盘**：建议以结构化形式随 SSE 返回，由�
 | 新增 | 编辑器缓冲区协议端点（§5.2）、编辑器上下文注入、三种建议应用形态的前端交互、助手专用 system prompt |
 | 不动 | Writing Chat 现有页面与段落双轮编辑协议（零回归） |
 
+> 上表为 v1 边界。v3 起助手工具面扩展（联网搜索 / 学术检索 + 工具确认流），确认复用
+> Writing Chat 既有 confirm/cancel 端点与 pending 基础设施，见 modules/editor.md。
+
 不复用段落编辑协议的原因：其编辑对象是**磁盘上的第 N 个段落**且应用即落盘；而 Copilot 式助手的本质是操作**编辑器缓冲区**（含未保存内容）。AI 若绕过缓冲区直改磁盘，未保存内容即与磁盘分叉，并与"所有落盘走 save-file 单一路径"的决策冲突。
 
 ### 7.2 建议应用形态（三种齐全）
@@ -166,7 +170,7 @@ AI 修改**不经后端落盘**：建议以结构化形式随 SSE 返回，由�
 
 ### 7.5 工具面
 
-只开放只读项目工具；写入一律走缓冲区协议。联网搜索、学术检索等工具经 v3 规划接入（见 editor-experience-design.md）。
+写入一律走缓冲区协议，AI 从不直接改磁盘。工具面演进：v1 仅开放只读项目工具（list_files / read_file_content / search_across_files）；v3 接入联网搜索与学术检索工具并经确认流逐次确认（项目只读工具维持直通），详见 editor-experience-design.md 与 modules/editor.md「工具确认卡」。
 
 ## 8. 与现有体系的集成点
 
@@ -180,7 +184,7 @@ AI 修改**不经后端落盘**：建议以结构化形式随 SSE 返回，由�
 
 ## 9. 前端结构
 
-完整组件与模块清单（含 v2 增量）见 [docs/modules/editor.md](modules/editor.md)。v1 核心落点：
+完整组件与模块清单（含 v2 / v3 增量）见 [docs/modules/editor.md](modules/editor.md)。v1 核心落点：
 
 ```
 frontend/src/
@@ -205,7 +209,7 @@ Zustand 切片：`editorPreferences`（persist 持久化偏好）与 `editorSess
 | `Tab` | 占位符间循环跳转 |
 | `Ctrl/Cmd+Z` / `Shift+Ctrl/Cmd+Z` | 缓冲区内撤销/重做（CM6 history，未保存层） |
 
-v2 追加快捷键（包裹 `Ctrl/Cmd+B/I/U/K`、包裹浮层 `Ctrl+L`、一键格式化 `Ctrl/Cmd+Shift+F`）见 [editor-productivity-design.md](editor-productivity-design.md) 与 modules/editor.md。
+v2 追加快捷键（包裹 `Ctrl/Cmd+B/I/U/K`、包裹浮层 `Ctrl+L`、一键格式化 `Ctrl/Cmd+Shift+F`）见 [editor-productivity-design.md](editor-productivity-design.md)；v3 新增交互（SyncTeX 正反向同步、实时语法诊断、跨文件大纲与公式预览卡、自定义片段管理）见 [editor-experience-design.md](editor-experience-design.md) 与 modules/editor.md。
 
 ## 11. 偏好导入/导出
 
@@ -222,8 +226,9 @@ v2 追加快捷键（包裹 `Ctrl/Cmd+B/I/U/K`、包裹浮层 `Ctrl+L`、一键�
 
 ## 12. 决策记录
 
-> 本表是代码注释中「决策 QN」引用的锚点。部分 v1 决策已被 v2 改造迭代
-> （Q5 单文件 → 多缓冲区、Q10 KaTeX 延后 → 已落地、Q15 引用补全延后 → 已落地），
+> 本表是代码注释中「决策 QN」引用的锚点。部分 v1 决策已被后续迭代更新
+> （v2：Q5 单文件 → 多缓冲区、Q10 KaTeX 延后 → 已落地、Q15 引用补全延后 → 已落地；
+> v3：Q12 自定义片段延后 → 已落地、Q26 工具面 → 扩展联网/学术检索 + 确认流），
 > 现行行为以 modules/editor.md 为准；本表保留作为设计初衷的对照基线。
 
 | # | 决策 | 结论 |
@@ -239,7 +244,7 @@ v2 追加快捷键（包裹 `Ctrl/Cmd+B/I/U/K`、包裹浮层 `Ctrl+L`、一键�
 | Q9 | 模板插入 | 表格/矩阵 m×n 网格选择器 |
 | Q10 | KaTeX 预览 | v1 不做（v2 已落地悬停预览） |
 | Q11 | 撤销体系 | save-file 接入反向补丁统一记账 |
-| Q12 | 命令数据库 | 首批精选百余条，自定义片段延后（v3 规划） |
+| Q12 | 命令数据库 | 首批精选百余条，自定义片段延后（v3 已落地片段库） |
 | Q13 | 结果保鲜 | 文件版本戳比对 MD5 + 过期横幅 |
 | Q14 | 宏包联动 | 内置最小映射，缺失 toast + 一键添加声明 |
 | Q15 | 补全覆盖面 | 命令 + \begin{ 环境（\ref/\cite 已由 v2 落地） |

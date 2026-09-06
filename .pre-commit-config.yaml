@@ -1,15 +1,9 @@
-# pre-commit 配置 —— 提交前自动格式化
-# language: system 复用提交环境已有工具（PATH 中的 python + black / prettier），
-# 不再自建隔离环境，避免 .git/pre-commit/ 膨胀。
-# black 以 `python -m black` 跨平台调用：Windows 无法直接执行 Linux venv 的
-# .venv/bin/black，而模块调用在两平台通用（Linux 提交时激活 .venv 即用 venv 版）。
-# 版本号与本机在用的 black / prettier 保持一致，保证与 VS Code formatOnSave 输出一致
 repos:
   - repo: local
     hooks:
       - id: black
         name: black (Python 格式化)
-        entry: python -m black
+        entry: black
         language: system
         types: [python]
 

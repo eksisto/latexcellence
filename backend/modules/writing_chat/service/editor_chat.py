@@ -80,7 +80,7 @@ _SCHOLARLY_TOOL_NAMES = frozenset(
     }
 )
 
-# 确认流分组（阶段五b，editor-design §4.5 / §5"经确认执行"）：编辑器
+# 确认流分组（阶段五b，editor-experience-design §4.5 / §5"经确认执行"）：编辑器
 # 侧对联网/学术工具逐次确认——每次调用产生一个 pending 交互，用户确认
 # 后才执行、拒绝/超时后模型收到取消语义。这是比 Writing Chat 主对话
 # （这些工具直通、零 pending）更严格的新策略，属编辑器侧计划本意；
@@ -97,7 +97,7 @@ _TOOL_CANCELLED_TEXT = (
 )
 
 # 只读工具白名单（阶段五a 扩展）：项目只读三件套（决策 Q26）+ 联网搜索
-# + 学术检索（editor-design §4.5，以 Writing Chat 主对话注册表为准）。
+# + 学术检索（editor-experience-design §4.5，以 Writing Chat 主对话注册表为准）。
 # 写入一律走缓冲区协议——edit_paragraph / undo_last_edit 明确不入白名单。
 # 该表是执行前硬校验的依据之一：ToolRegistry.execute 只查运行时 enabled
 # 标志、不复查 schema 来源，缺此校验时模型幻觉调用即可执行全局任意
@@ -349,7 +349,7 @@ class EditorChatMixin:
                 )
 
     def _get_editor_tools(self, workspace_id: str) -> list[dict]:
-        """编辑器助手工具 schema 汇聚（阶段五a，editor-design §4.5）。
+        """编辑器助手工具 schema 汇聚（阶段五a，editor-experience-design §4.5）。
 
         三源汇聚、按源独立容错（单一源故障只降级该源，不连坐其余）：
             - 联网搜索：双重开关把关（全局 web_search.enabled AND Writing

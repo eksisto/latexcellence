@@ -2,7 +2,7 @@
 
 > **状态：已实施。** 本文记录「编辑器从可用到生产力工具」改造的设计与决策依据，
 > 供维护与查询；当前完整实现形态见 [modules/editor.md](modules/editor.md)。
-> v1 设计见 [editor-design.md](editor-design.md)，v3 规划见
+> v1 设计见 [editor-design.md](editor-design.md)，v3 收口设计（已实施）见
 > [editor-experience-design.md](editor-experience-design.md)。
 > 代码注释中的「editor-productivity-design §N」与「决策 QN」均指向本文编号。
 > 如行为与本文冲突，先修订本文再动代码。
@@ -37,7 +37,9 @@ v2 以**多缓冲区基座**为先导，补齐编辑基本功与写作反馈闭�
 - 实时语法诊断（与 Lezer 语法升级一并评估）；
 - 实时协同编辑、冲突 diff 合并视图（沿袭 v1 非目标）。
 
-> 实施完成后勾销义务：v3 实施时须同步勾销本节非目标对应条目与 editor-design.md 非目标相关项。
+> 勾销记录：「Lezer 语法」「SyncTeX 正反向同步」「用户自定义片段库」「实时语法
+> 诊断」已由 v3 收口（[editor-experience-design.md](editor-experience-design.md)，已实施）；
+> 「实时协同编辑、冲突 diff 合并视图」仍为非目标。
 
 ## 3. 拷问决策记录（grilling Q1–Q19）
 
@@ -50,10 +52,10 @@ v2 以**多缓冲区基座**为先导，补齐编辑基本功与写作反馈闭�
 | Q3 | 多缓冲区 UI | 中栏顶部 tab 条（标签 + 脏标记圆点 + 关闭按钮）；文件树点击 = 打开/激活 |
 | Q4 | 陈旧缓冲区 | 激活 tab 时惰性比对 `file-md5`，不一致显示"磁盘已变更"标记，保存前提示；只提示不销毁；保存时 409 仍兜底 |
 | Q5 | 关脏 tab | 三选弹窗：保存并关闭 / 放弃改动 / 取消；自动保存开启时默认"保存并关闭" |
-| Q6 | 大纲面板 | 左栏"文件 / 大纲"双 tab；仅解析当前激活缓冲区；编辑防抖增量重扫；点击滚动定位；跨文件大纲留 v3 |
+| Q6 | 大纲面板 | 左栏"文件 / 大纲"双 tab；仅解析当前激活缓冲区；编辑防抖增量重扫；点击滚动定位；跨文件大纲留 v3（已由 v3 落地为"本项目"跨文件视图） |
 | Q7 | 引用补全数据源 | 新增后端只读符号扫描端点，一次返回全项目 label/cite key；bib key 解析复用 `bib_parser.py` |
 | Q8 | 格式化交互 | 直接全文替换缓冲区 + toast 提示 Ctrl+Z 可撤销；不做 diff 预览；后端薄端点包裹 `latex_formatter` |
-| Q9 | KaTeX 形态 | 悬停浮层（约 500ms 延迟），katex 动态分块 import；右栏固定预览卡留 v3 |
+| Q9 | KaTeX 形态 | 悬停浮层（约 500ms 延迟），katex 动态分块 import；右栏固定预览卡留 v3（已由 v3 落地为编辑区底部固定预览卡） |
 | Q10 | 错误定位 | 右栏可点击错误列表 + 跳转定位（行首高亮）；不做行内波浪线（LaTeX 错误行号噪声大） |
 | Q11 | 阶段划分 | 基座 → 基本功 → 大纲 → 补全 → 格式化 → KaTeX → 错误跳转 → Notepad++ 借鉴包 |
 | Q12 | `\begin` 配对 | Overleaf 式打字机补 `\end`；该 `\begin` 曾配对过则不再补 |

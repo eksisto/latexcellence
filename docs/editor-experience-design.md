@@ -1,6 +1,6 @@
 # 编辑器写作体验收口设计方案（editor v3）
 
-> **状态：阶段一至六b 已实施（阶段一 SyncTeX 正反向同步、阶段二用户自定义片段库、阶段三实时语法诊断、阶段四跨文件大纲与公式固定预览卡、阶段五助手接入联网与学术检索（5a 工具接入 + 5b 确认流）、阶段六自研 Lezer 语法（6a P0 高亮 + 6b 折叠与环境缩进）；其中 6b 的折叠 / 缩进 / 括号配对按 §4.6 P1 惯例落为组装层 foldService / indentService / nodeProp 接线而非 grammar 源内 props，选型理由见 [modules/editor.md](modules/editor.md)）。** 本文是编辑器生产力改造（[editor-productivity-design.md](editor-productivity-design.md)，
+> **状态：已实施。** 本文是编辑器生产力改造（[editor-productivity-design.md](editor-productivity-design.md)，
 > 八阶段已全部实施）完成后，对其"非目标（记入 roadmap）"清单的收口方案，作为分阶段实施的
 > 依据与变更对照基线。阶段五（助手联网）的确认流时序已过专项设计评审（见 Q12），按评审
 > 结论拆为"5a 工具接入（含 DDG 挑战）"与"5b 确认流"两个子阶段：5a 先行落地工具接入
@@ -233,7 +233,8 @@ Overleaf 级体验相比仍有明确落差，全部对应 v2 计划记入 roadma
 - 每阶段同步更新 `docs/modules/editor.md` 与 `PROJECT_SUMMARY.md`；全部
   完成后将本文状态改为"已实施"，并勾销 [editor-productivity-design.md](editor-productivity-design.md)
   §2 非目标清单对应条目与 [editor-design.md](editor-design.md) 非目标中"助手接入
-  联网搜索/学术检索"项；README 编辑器条目增量。
+  联网搜索/学术检索"项；README 编辑器条目增量。（本条全局收尾义务已执行：本文
+  状态为"已实施"，两处旧非目标已勾销，README 编辑器条目已增量核对。）
 
 ## 附录：Lezer 语法升级选型记录（自研 MIT 子集）
 
