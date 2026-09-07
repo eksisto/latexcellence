@@ -40,6 +40,10 @@ export default function useEditorCompile({
   const pdfUrlRef = useRef(null);
   /** 在途编译序号：丢弃过期请求的迟到响应，防止旧结果覆盖新状态 */
   const compileSeqRef = useRef(0);
+  /** 本次会话是否已发起过编译（发起后 PDF 归编译流程管，恢复逻辑退出） */
+  const compiledRef = useRef(false);
+  /** 当前恢复产物对应的目标文件（mainFile 切换时按需重取） */
+  const restoredTargetRef = useRef(null);
 
   const resolveCompileTarget = useCallback(() => {
     if (mainFile) return mainFile;
@@ -57,6 +61,7 @@ export default function useEditorCompile({
       return;
     }
     const seq = ++compileSeqRef.current;
+    compiledRef.current = true;
     // 所有脏 tab 先落盘（Q16）：任一保存失败（409 → 归属 tab 冲突流程
     // 接管 / 陈旧确认弹窗等待）即中断编译
     if (countDirtyTabs(useEditorStore.getState().tabs) > 0) {
@@ -136,6 +141,40 @@ export default function useEditorCompile({
       }
     };
   }, []);
+
+  // 页面加载/刷新后恢复既有编译产物：目标文件（mainFile，缺省回落激活
+  // .tex tab）的同名 PDF 已存在时直接载入预览，避免空态「尚无编译结果」
+  // ——刷新后编译状态本就不持久，与其显示空面板不如默认展示上次产物。
+  // 从未编译（/compile/pdf 404）静默回落空态；用户发起过编译后本逻辑
+  // 退出，PDF 生命周期完全归编译流程管理。
+  useEffect(() => {
+    if (!workspaceId || compiledRef.current) return;
+    const target =
+      mainFile ||
+      (() => {
+        const cur = activeFilePath(useEditorStore.getState());
+        return cur && cur.endsWith(".tex") ? cur : null;
+      })();
+    if (!target) return;
+    if (restoredTargetRef.current === target && pdfUrlRef.current) return;
+    let cancelled = false;
+    api.compile
+      .pdfBlobUrl(target, workspaceId)
+      .then((url) => {
+        if (cancelled || compiledRef.current) {
+          URL.revokeObjectURL(url);
+          return;
+        }
+        if (pdfUrlRef.current) URL.revokeObjectURL(pdfUrlRef.current);
+        pdfUrlRef.current = url;
+        restoredTargetRef.current = target;
+        setPdfUrl(url);
+      })
+      .catch(() => {}); // 无产物（404 等）：保持空态
+    return () => {
+      cancelled = true;
+    };
+  }, [workspaceId, mainFile]);
 
   return {
     compiling,

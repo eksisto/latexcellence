@@ -1690,6 +1690,7 @@
       "panelTitle": "Preview & AI Assistant",
       "panelEmptyTitle": "No compile result yet",
       "panelEmptyDescription": "Click Compile in the toolbar to see output and preview the PDF here.",
+      "panelRestoredHint": "Showing the previously compiled PDF. Click Compile in the toolbar to refresh it.",
       "commandPalette": "Command palette (Ctrl/Cmd+/)",
       "compile": "Compile",
       "compiling": "Compiling…",

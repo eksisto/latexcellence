@@ -730,6 +730,13 @@ SyncTeX 正反向查询；编译页 / git_diff 等调用方默认 false 零变�
 等可再生产物（详见 [compile.md](compile.md)），避免 latexmk 依上次失败
 状态短路为 "Nothing to do" 且提示无具体错误，同时保证失败日志始终来自
 本次运行。
+刷新恢复既有产物：编译状态与 PDF blob URL 本就不跨刷新持久，页面加载
+后 `useEditorCompile` 主动按编译目标（主文件，缺省回落激活 `.tex`）请求
+既有 `/compile/pdf` 产物，命中即直接载入预览（面板提示「正在预览已有的
+编译产物」），从未编译（404）静默回落空态；主文件切换时按需重取。
+用户发起过编译后恢复逻辑退出，PDF 生命周期完全归编译流程管理（在途
+竞态经 compiledRef 守卫，迟到响应自回收 blob URL）。既有产物无
+`.synctex.gz` 时正向同步查询失败，按既有 Q6 口径静默不打断写作。
 编译结果与 PDF 预览（复用 `PDFPreview` 与既有
 compile API）在右栏「编译与预览」Tab 展示；右栏可在该 Tab 与 AI 助手
 之间切换并整体折叠。PDF 预览左下角提供「全屏查看」按钮，全屏覆盖层

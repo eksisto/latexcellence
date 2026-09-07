@@ -118,13 +118,19 @@ export default function CompilePreviewPanel({
             {t("components:editor.compiling")}
           </p>
         )}
-        {!compiling && !compileResult && (
+        {!compiling && !compileResult && !pdfUrl && (
           <EmptyState
             icon={Play}
             title={t("components:editor.panelEmptyTitle")}
             description={t("components:editor.panelEmptyDescription")}
             className="py-8"
           />
+        )}
+        {/* 刷新后无本次编译状态但已恢复既有产物：提示来源为历史编译 */}
+        {pdfUrl && !compiling && !compileResult && (
+          <p className="text-xs text-muted-foreground">
+            {t("components:editor.panelRestoredHint")}
+          </p>
         )}
         {compileResult && (
           <>
@@ -183,9 +189,10 @@ export default function CompilePreviewPanel({
             </details>
           </>
         )}
-        {/* 成功后 PDF 预览占满剩余空间；全屏时卸载内联预览（避免双实例），
+        {/* 成功后（或刷新恢复的历史产物）PDF 预览占满剩余空间；
+            全屏时卸载内联预览（避免双实例），
             左下角悬浮「全屏查看」按钮与 GitDiff 页同款 */}
-        {compileResult?.success && pdfUrl && !fullscreen && (
+        {pdfUrl && !fullscreen && (!compileResult || compileResult.success) && (
           <div className="relative min-h-32 flex-1">
             <PDFPreview
               url={pdfUrl}

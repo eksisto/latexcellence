@@ -1690,6 +1690,7 @@
       "panelTitle": "預覽與 AI 助手",
       "panelEmptyTitle": "尚無編譯結果",
       "panelEmptyDescription": "點擊工具列「編譯」在此查看輸出並預覽 PDF。",
+      "panelRestoredHint": "正在預覽已有的編譯產物，點擊工具列「編譯」可重新整理。",
       "commandPalette": "指令面板（Ctrl/Cmd+/）",
       "compile": "編譯",
       "compiling": "編譯中…",

@@ -1690,6 +1690,7 @@
       "panelTitle": "预览与 AI 助手",
       "panelEmptyTitle": "尚无编译结果",
       "panelEmptyDescription": "点击工具栏「编译」在此查看输出并预览 PDF。",
+      "panelRestoredHint": "正在预览已有的编译产物，点击工具栏「编译」可刷新。",
       "commandPalette": "命令面板（Ctrl/Cmd+/）",
       "compile": "编译",
       "compiling": "编译中…",
