@@ -822,7 +822,9 @@ export default function GitDiffPage() {
           )}
         </div>
 
-        <div className="relative h-[720px]">
+        {/* min-w-0：截断 pdf.js 占位盒（固定 px 宽）的 min-content 传播，
+            否则放大 PDF 时 1fr 轨道被 minmax(auto,1fr) 的自动最小尺寸撑大 */}
+        <div className="relative h-[720px] min-w-0">
           {!pdfFullscreen ? <PDFPreview url={pdfUrl} /> : null}
           {pdfUrl && !pdfFullscreen && (
             <Button
