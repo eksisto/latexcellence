@@ -19,19 +19,19 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from pydantic import ValidationError
 
+from backend.modules.terminology_check.extractor import TermExtractor
 from backend.modules.terminology_check.models import (
-    TermChange,
-    TermParagraphResult,
-    TermExtractionResult,
     ExtractedTerm,
+    TermChange,
     TermCluster,
     TermClusterResult,
+    TermExtractionResult,
+    TermParagraphResult,
 )
 from backend.modules.terminology_check.service import (
     TerminologyCheckService,
     _deduplicate_terms,
 )
-from backend.modules.terminology_check.extractor import TermExtractor, TermItem
 
 
 @pytest.fixture

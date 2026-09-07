@@ -12,7 +12,7 @@ tex_compile 单元测试。
 import asyncio
 import tempfile
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -686,9 +686,9 @@ class TestInjectPdfxForPdfa:
 
         # 验证注入位置在 \documentclass 之后
         lines = content.split("\n")
-        docclass_idx = next(i for i, l in enumerate(lines) if "\\documentclass" in l)
+        docclass_idx = next(i for i, ln in enumerate(lines) if "\\documentclass" in ln)
         pdfx_idx = next(
-            i for i, l in enumerate(lines) if "\\usepackage[a-2b]{pdfx}" in l
+            i for i, ln in enumerate(lines) if "\\usepackage[a-2b]{pdfx}" in ln
         )
         assert pdfx_idx == docclass_idx + 1
 

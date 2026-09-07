@@ -6,7 +6,6 @@ LaTeX 代码审查 API 路由。
 
 import json
 
-
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel

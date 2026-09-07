@@ -14,7 +14,7 @@ search_across_files / 学术检索等）提供一致的截断状态、数量、�
 
 from __future__ import annotations
 
-from typing import Iterable
+from collections.abc import Iterable
 
 _STATUS_SEPARATOR = "─" * 40
 

@@ -19,7 +19,6 @@ import pytest
 from fastapi import FastAPI, UploadFile
 from fastapi.testclient import TestClient
 
-from backend.core import config as cfg_module
 from backend.core.multiuser import auth as auth_core
 from backend.core.multiuser import db as db_module
 from backend.core.multiuser import quota as quota_module

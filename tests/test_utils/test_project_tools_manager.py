@@ -8,12 +8,12 @@ import pytest
 
 from backend.utils.project_tools.manager import (
     ProjectToolsManager,
-    get_project_tools_manager,
-    reset_project_tools_manager,
+    _get_section_structure_executor,
     _list_files_executor,
     _read_file_content_executor,
-    _get_section_structure_executor,
     _search_across_files_executor,
+    get_project_tools_manager,
+    reset_project_tools_manager,
 )
 
 
@@ -111,7 +111,7 @@ class TestListFiles:
     @pytest.mark.asyncio
     async def test_list_tex_default(self, project_dir):
         ws_id = "test-list-default"
-        pm = _open_project(ws_id, project_dir)
+        _open_project(ws_id, project_dir)
         result = await _list_files_executor("list_files", {"_workspace_id": ws_id})
         assert "main.tex" in result
         assert "chap1.tex" in result

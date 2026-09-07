@@ -12,23 +12,22 @@
 """
 
 import time
-from pathlib import Path
-from typing import AsyncIterator
+from collections.abc import AsyncIterator
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from backend.core import workspace_manager as wm_mod
 from backend.core.config import get_config
 from backend.core.llm_client import StreamChunk, UsageInfo
-from backend.core import workspace_manager as wm_mod
 from backend.modules.writing_chat.context import ConversationContext
 from backend.modules.writing_chat.models import (
+    ApplyEditRequest,
     ChatMessage,
+    ChatSendRequest,
+    DeleteMessageRequest,
     EditOp,
     GenerateEditRequest,
-    ApplyEditRequest,
-    DeleteMessageRequest,
-    ChatSendRequest,
 )
 from backend.modules.writing_chat.service import WritingChatService
 
@@ -238,7 +237,7 @@ class TestContext:
         ctx.append_user_message("more")
         ctx.append_assistant_message("more answer", tokens=15)
         # 模拟压缩：snapshot 保留原 4 条消息、替换为 1 条 summary
-        snapshot = ctx.snapshot_for_compression()
+        ctx.snapshot_for_compression()
         ctx.replace_with_summary("summary text", summary_tokens=8)
         assert ctx.cumulative_tokens == 8
         assert len(ctx.messages) == 1
@@ -1575,6 +1574,7 @@ _TOOL_REGISTRY_PATH = (
 def _make_tool_call(call_id: str = "call_ws", query: str = "latex tutorial"):
     """构造 openai tool_call 对象。"""
     import json
+
     from openai.types.chat.chat_completion_message_tool_call import (
         ChatCompletionMessageToolCall,
         Function,

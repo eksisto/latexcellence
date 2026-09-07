@@ -29,10 +29,10 @@ from typing import Any
 
 from backend.core.config import get_config
 from backend.core.logger import get_logger
-from backend.utils.file_ops import atomic_write, safe_read
 from backend.modules.writing_chat.models import (
     ChatMessage,
 )
+from backend.utils.file_ops import atomic_write, safe_read
 
 _SCOPE_SEPARATOR = ":"
 _NOPROJECT_SCOPE = "_noproject"

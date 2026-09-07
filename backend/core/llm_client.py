@@ -29,8 +29,9 @@ import threading
 import time
 import urllib.parse
 import urllib.request
+from collections.abc import AsyncIterator
 from dataclasses import dataclass
-from typing import Any, AsyncIterator
+from typing import Any
 
 from openai import (
     APIConnectionError,

@@ -30,20 +30,20 @@ def _collect_font_dirs() -> list[str]:
     dirs: list[str] = []
     windir = os.environ.get("WINDIR")
     if windir:
-        dirs.append(os.path.join(windir, "Fonts"))
+        dirs.append(str(Path(windir) / "Fonts"))
     local_appdata = os.environ.get("LOCALAPPDATA")
     if local_appdata:
-        dirs.append(os.path.join(local_appdata, "Microsoft", "Windows", "Fonts"))
-    home = os.path.expanduser("~")
+        dirs.append(str(Path(local_appdata) / "Microsoft" / "Windows" / "Fonts"))
+    home = Path.home()
     dirs.extend(
         [
             "/usr/share/fonts",
             "/usr/local/share/fonts",
-            os.path.join(home, ".fonts"),
-            os.path.join(home, ".local", "share", "fonts"),
+            str(home / ".fonts"),
+            str(home / ".local" / "share" / "fonts"),
             "/System/Library/Fonts",
             "/Library/Fonts",
-            os.path.join(home, "Library", "Fonts"),
+            str(home / "Library" / "Fonts"),
         ]
     )
     return dirs

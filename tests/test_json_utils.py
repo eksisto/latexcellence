@@ -8,7 +8,7 @@ json_utils 模块单元测试。
     - retry_with_validation 重试逻辑（Mock LLM）
 """
 
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock
 
 import pytest
 from pydantic import BaseModel, ValidationError
@@ -18,7 +18,6 @@ from backend.utils.json_utils import (
     parse_and_validate,
     retry_with_validation,
     safe_parse_json,
-    validate_model,
 )
 from backend.utils.latex_json_guard import LatexText
 

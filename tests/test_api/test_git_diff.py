@@ -50,6 +50,7 @@ from backend.core.workspace_manager import (
     get_workspace_manager,
 )
 from backend.modules.git_diff.service import (
+    WORKTREE_REF,
     DiffDocument,
     DiffHighlightResult,
     FlattenContext,
@@ -59,8 +60,6 @@ from backend.modules.git_diff.service import (
     ProcessResult,
     ProjectContext,
     TexCompileResult,
-    WORKTREE_REF,
-    _build_latexdiff_document,
     _build_diff_document,
     _build_diff_preamble,
     _count_latexdiff_changes,
@@ -71,12 +70,12 @@ from backend.modules.git_diff.service import (
     _prepare_target_project,
     _prune_old_job_dirs,
     _read_revision_file,
-    _resolve_include_path,
     _resolve_color_hex,
+    _resolve_include_path,
     _split_document,
     _strip_blank_lines,
-    _validate_revision,
     _validate_project_path,
+    _validate_revision,
     _wrap_diff_block,
     get_pdf_path,
     list_git_revisions,
@@ -1033,16 +1032,16 @@ class TestValidateRevision:
     """revision 校验。"""
 
     def test_worktree_ref_skips_check(self):
-        assert asyncio.run(_validate_revision(Path("."), WORKTREE_REF)) is None
+        assert asyncio.run(_validate_revision(Path(), WORKTREE_REF)) is None
 
     def test_empty_ref_rejected(self):
         with pytest.raises(ValueError, match="Git revision"):
-            asyncio.run(_validate_revision(Path("."), ""))
+            asyncio.run(_validate_revision(Path(), ""))
 
     def test_option_like_ref_rejected(self, monkeypatch):
         monkeypatch.setattr(git_diff_process, "run_git", AsyncMock())
         with pytest.raises(ValueError, match="must not start with '-'"):
-            asyncio.run(_validate_revision(Path("."), "--output=x"))
+            asyncio.run(_validate_revision(Path(), "--output=x"))
 
     @pytest.mark.parametrize(
         "ref",
@@ -1059,7 +1058,7 @@ class TestValidateRevision:
     def test_rev_syntax_rejected(self, monkeypatch, ref):
         monkeypatch.setattr(git_diff_process, "run_git", AsyncMock())
         with pytest.raises(ValueError, match="Invalid Git revision"):
-            asyncio.run(_validate_revision(Path("."), ref))
+            asyncio.run(_validate_revision(Path(), ref))
 
     def test_invalid_ref_rejected(self, monkeypatch):
         monkeypatch.setattr(
@@ -1072,7 +1071,7 @@ class TestValidateRevision:
             ),
         )
         with pytest.raises(ValueError, match="Invalid Git revision"):
-            asyncio.run(_validate_revision(Path("."), "definitely-not-a-ref"))
+            asyncio.run(_validate_revision(Path(), "definitely-not-a-ref"))
 
     @pytest.mark.parametrize(
         "ref",
@@ -1091,7 +1090,7 @@ class TestValidateRevision:
                 return_value=ProcessResult(returncode=0, stdout="resolved", stderr="")
             ),
         )
-        assert asyncio.run(_validate_revision(Path("."), ref)) is None
+        assert asyncio.run(_validate_revision(Path(), ref)) is None
 
 
 # ── render_diff_pdf 主流程 ─────────────────────────────────────────────────
@@ -1253,6 +1252,7 @@ class TestGitDiffEndpoints:
     @pytest.fixture
     def client(self):
         from fastapi.testclient import TestClient
+
         from main import app
 
         return TestClient(app)
@@ -1463,13 +1463,13 @@ class TestDownloadPdfEndpoint:
     @pytest.fixture
     def client(self):
         from fastapi.testclient import TestClient
+
         from main import app
 
         return TestClient(app)
 
     def test_pdf_served_inline(self, client, tmp_path):
         """PDF 存在时返回 200 且 Content-Disposition 为 inline。"""
-        import hashlib
 
         job_id = "a" * 32
         pdf_dir = tmp_path / "diff_pdfs"

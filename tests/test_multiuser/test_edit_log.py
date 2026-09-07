@@ -185,7 +185,7 @@ class TestRecording:
     def test_single_user_mode_records_nothing(self, tmp_path):
         from tests.test_multiuser.conftest import build_mu_env
 
-        env = build_mu_env(tmp_path, enabled=False)
+        build_mu_env(tmp_path, enabled=False)
         try:
             userspace.set_current_user_id(None)
             root = tmp_path / "solo-project"

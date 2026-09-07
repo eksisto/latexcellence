@@ -15,7 +15,7 @@ import pytest
 from backend.core import config as cfg_module
 from backend.core.multiuser import migrate as migrate_core
 from backend.core.multiuser import userspace
-from tests.test_multiuser.conftest import build_mu_env, _reset_config_state
+from tests.test_multiuser.conftest import _reset_config_state, build_mu_env
 
 
 @pytest.fixture
@@ -139,7 +139,6 @@ class TestMigrateLegacy:
     def test_dry_run_writes_nothing(self, mu_env_with_legacy):
         admin = mu_env_with_legacy["admin"]
         admin_root = userspace.user_root(admin["id"])
-        before = admin_root.exists()
         report = migrate_core.migrate_legacy(admin["id"], dry_run=True)
         assert report["dry_run"] is True
         admin_root = userspace.user_root(admin["id"])
@@ -156,7 +155,7 @@ class TestMigrateLegacy:
         ).exists()
 
     def test_create_admin_required(self, mu_env_factory):
-        env = mu_env_factory()
+        mu_env_factory()
         # 无管理员时 find_first_admin 返回 None
         from backend.core.multiuser.migrate import find_first_admin
 
@@ -358,8 +357,8 @@ class TestUserContextDependency:
         """多用户模式下经依赖注入后，当前用户上下文被设置。"""
         import asyncio
 
-        from backend.core.multiuser.dependencies import current_user_context
         from backend.core.multiuser import userspace as us
+        from backend.core.multiuser.dependencies import current_user_context
 
         async def _with_user():
             fake_user = {
@@ -381,8 +380,8 @@ class TestUserContextDependency:
         """未登录（单用户/匿名）时注入 None，资源根回退存量全局路径。"""
         import asyncio
 
-        from backend.core.multiuser.dependencies import current_user_context
         from backend.core.multiuser import userspace as us
+        from backend.core.multiuser.dependencies import current_user_context
 
         async def _anonymous():
             await current_user_context(user=None)

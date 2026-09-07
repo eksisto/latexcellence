@@ -27,9 +27,9 @@ from backend.modules.plot_gen.styles import (
 from backend.modules.plot_gen.tikzgen import generate_figure_tex
 from backend.utils.agent_file_tools import (
     AgentFileRead,
+    AgentFileToolBehavior,
     AgentFileToolExecutor,
     AgentFileToolFailure,
-    AgentFileToolBehavior,
     AgentFileWrite,
 )
 from backend.utils.path_guard import resolve_project_path

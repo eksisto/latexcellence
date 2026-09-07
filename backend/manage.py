@@ -21,7 +21,7 @@ import argparse
 import getpass
 import os
 import sys
-from typing import Sequence
+from collections.abc import Sequence
 
 from backend.core.config import get_config, load_config
 from backend.core.multiuser import auth as auth_core

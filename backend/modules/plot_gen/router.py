@@ -5,7 +5,6 @@ import json
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
 from fastapi.responses import FileResponse, StreamingResponse
-from pydantic import BaseModel, Field
 from starlette.background import BackgroundTask
 
 from backend.core.config import get_config

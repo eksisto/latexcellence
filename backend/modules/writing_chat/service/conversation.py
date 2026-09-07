@@ -4,7 +4,8 @@ import asyncio
 import json
 import re
 import uuid
-from typing import Any, AsyncIterator
+from collections.abc import AsyncIterator
+from typing import Any
 from urllib.parse import urlparse, urlunparse
 
 from backend.core.config import get_config
@@ -17,8 +18,8 @@ from backend.core.prompts import CUSTOM_INSTRUCTIONS_ISOLATION_RULE, get_prompt
 from backend.core.tool_registry import get_tool_registry
 from backend.core.workspace_manager import get_project_manager_for_workspace
 from backend.modules.writing_chat.context import (
-    ConversationContext,
     _NOPROJECT_SCOPE,
+    ConversationContext,
     compute_scope,
 )
 from backend.modules.writing_chat.models import ChatSendRequest
@@ -598,8 +599,6 @@ class ConversationMixin:
         messages = [
             {"role": "system", "content": system_prompt}
         ] + ctx.to_llm_messages()
-        assistant_id = uuid.uuid4().hex
-
         # 获取可用的 Function Calling 工具（搜索 + 项目浏览）
         tools = self._get_enabled_tools(workspace_id, req.web_search_enabled)
         persisted_scholarly_results: list[dict[str, Any]] = []

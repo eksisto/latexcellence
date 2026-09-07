@@ -17,7 +17,6 @@ for _p in (str(PROJECT_ROOT), str(TOOLS_DIR)):
     if _p not in sys.path:
         sys.path.insert(0, _p)
 
-from backend.utils.latex_parser import LatexParser
 from terminology_check_eval.core import (
     analyze_hits,
     iter_items,
@@ -26,6 +25,8 @@ from terminology_check_eval.core import (
     validate_corpus,
 )
 from terminology_check_eval.run_eval import build_item
+
+from backend.utils.latex_parser import LatexParser
 
 
 def _cluster(recommended: str, variants: list[str] | None = None) -> dict:

@@ -17,26 +17,24 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any
 
+import uvicorn
 from fastapi import Depends, FastAPI, HTTPException
-from fastapi.responses import FileResponse
 from openai import APIConnectionError, APIStatusError, APITimeoutError
 from pydantic import BaseModel, ValidationError
-import uvicorn
 
 from backend.core.config import (
     LLM_ROLE_KEYS,
-    load_config,
     get_config,
+    load_config,
     update_config_from_dict,
 )
-from backend.core.logger import setup_logging, get_logger
+from backend.core.logger import get_logger, setup_logging
 from backend.core.model_router import (
     get_client_for,
     get_client_for_profile,
     resolve_profile_by_id,
     resolve_role_routes,
 )
-from backend.utils.spa_static_files import SPAStaticFiles
 from backend.core.multiuser.dependencies import (
     require_admin_if_multiuser,
     require_login_if_multiuser,
@@ -46,34 +44,37 @@ from backend.core.multiuser.llm_governance import (
     register_governance_handler,
 )
 from backend.core.security_middleware import AccessSecurityMiddleware
-from backend.modules.project_router import router as project_router
-from backend.modules.typo_check.router import router as typo_check_router
-from backend.modules.expression_opt.router import router as expression_opt_router
-from backend.modules.template_gen.router import router as template_gen_router
-from backend.modules.template_library.router import router as template_library_router
-from backend.modules.formula_ocr.router import router as formula_ocr_router
-from backend.modules.table_ocr.router import router as table_ocr_router
+from backend.modules.auth.router import (
+    admin_router as auth_admin_router,
+)
+from backend.modules.auth.router import (
+    auth_router,
+)
+from backend.modules.bib_manager.router import router as bib_manager_router
 from backend.modules.code_review.router import router as code_review_router
 from backend.modules.compile.router import router as compile_router
-from backend.modules.git_diff.router import router as git_diff_router
-from backend.modules.git_manage.router import router as git_manage_router
+from backend.modules.expression_opt.router import router as expression_opt_router
 from backend.modules.format_converter.router import (
     router as format_converter_router,
 )
-from backend.modules.style_modify.router import router as style_modify_router
-from backend.modules.terminology_check.router import router as terminology_check_router
+from backend.modules.formula_ocr.router import router as formula_ocr_router
+from backend.modules.git_diff.router import router as git_diff_router
+from backend.modules.git_manage.router import router as git_manage_router
 from backend.modules.paragraph_translate.router import (
     router as paragraph_translate_router,
 )
-from backend.modules.writing_chat.router import router as writing_chat_router
-from backend.modules.bib_manager.router import router as bib_manager_router
 from backend.modules.plot_gen.router import router as plot_gen_router
-from backend.modules.auth.router import (
-    admin_router as auth_admin_router,
-    auth_router,
-)
+from backend.modules.project_router import router as project_router
 from backend.modules.projects.router import router as projects_router
+from backend.modules.style_modify.router import router as style_modify_router
+from backend.modules.table_ocr.router import router as table_ocr_router
+from backend.modules.template_gen.router import router as template_gen_router
+from backend.modules.template_library.router import router as template_library_router
+from backend.modules.terminology_check.router import router as terminology_check_router
+from backend.modules.typo_check.router import router as typo_check_router
+from backend.modules.writing_chat.router import router as writing_chat_router
 from backend.utils.search_router import router as search_router
+from backend.utils.spa_static_files import SPAStaticFiles
 
 
 @asynccontextmanager
@@ -99,11 +100,14 @@ async def lifespan(app: FastAPI):
                 admin["username"],
             )
 
-    from backend.modules.template_gen.cleanup import cleanup_loop
+    from backend.modules.bib_manager.provider_manager import (
+        close_provider_manager,
+    )
     from backend.modules.plot_gen.cleanup import cleanup_loop as plot_cleanup_loop
     from backend.modules.style_modify.cleanup import (
         cleanup_loop as style_modify_cleanup_loop,
     )
+    from backend.modules.template_gen.cleanup import cleanup_loop
     from backend.utils.sandbox import (
         close_sandbox_runner,
         initialize_sandbox_runner,
@@ -117,9 +121,6 @@ async def lifespan(app: FastAPI):
         close_search_manager,
         close_structured_page_reader,
         initialize_structured_page_reader,
-    )
-    from backend.modules.bib_manager.provider_manager import (
-        close_provider_manager,
     )
 
     # 沙箱运行时预热：探测 Docker daemon 可达性（auto 模式据此决定首请求走向）
@@ -141,8 +142,8 @@ async def lifespan(app: FastAPI):
     mu_maintenance_task = None
     mail_outbox_task = None
     if get_config().multi_user.enabled:
-        from backend.core.multiuser.maintenance import maintenance_loop
         from backend.core.multiuser.mail import outbox_loop
+        from backend.core.multiuser.maintenance import maintenance_loop
 
         mu_maintenance_task = asyncio.create_task(maintenance_loop())
         # SMTP 邮件发送协程（v2 P6）：消费 email_outbox 队列；未启用 SMTP 时

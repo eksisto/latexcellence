@@ -1,7 +1,6 @@
 """difflib / latexdiff 差异文档生成。"""
 
 import difflib
-import re
 import tempfile
 from pathlib import Path
 

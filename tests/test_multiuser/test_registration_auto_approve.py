@@ -65,7 +65,7 @@ class TestResolveClientIp:
 
     def test_spoofed_prefix_after_real_proxy_hop(self):
         """客户端自带的伪造条目落在链首，先于可信代理条目被跳过。"""
-        xff = f"6.6.6.6, 198.51.100.9"
+        xff = "6.6.6.6, 198.51.100.9"
         ip = clientip.resolve_client_ip(PROXY, xff, ["10.0.0.0/8"])
         # 链中第一个不可信地址是 198.51.100.9（真实上一跳），伪造的 6.6.6.6 被忽略
         assert ip == "198.51.100.9"
@@ -347,7 +347,6 @@ def _build_mini_xdb(path, segments, *, ipv6: bool = False):
     )
     index_buf = bytearray(len(entries) * index_size)
     for i, (start_b, end_b, dlen, dptr) in enumerate(entries):
-        idx_ptr = index_start + i * index_size
         bucket = _bucket(segments[i][0])
         slots = buckets.setdefault(bucket, [i, i])
         slots[1] = i
@@ -652,7 +651,7 @@ class TestRegisterAutoApproveAPI:
         assert user["auto_approved"] == 0
 
     def test_auto_approved_user_can_login_immediately(self, tmp_path):
-        env = build_mu_env(tmp_path, mu_extra={"auto_approve_enabled": True})
+        build_mu_env(tmp_path, mu_extra={"auto_approve_enabled": True})
         client = make_client("203.0.113.10")
         r = _register(client, "bob")
         assert r.status_code == 200
@@ -672,7 +671,7 @@ class TestRegisterAutoApproveAPI:
 
     def test_second_account_from_same_ip_falls_back_to_pending(self, tmp_path):
         """同 IP 第二个账号（上限 1）不自动通过 → 转人工待审批。"""
-        env = build_mu_env(tmp_path, mu_extra={"auto_approve_enabled": True})
+        build_mu_env(tmp_path, mu_extra={"auto_approve_enabled": True})
         client = make_client("203.0.113.10")
         assert _register(client, "first").json()["status"] == "active"
         r2 = _register(client, "second")
@@ -683,7 +682,7 @@ class TestRegisterAutoApproveAPI:
 
     def test_higher_limit_allows_shared_exit_ip(self, tmp_path):
         """共享出口 IP 的机构部署调大上限后可批量自动通过。"""
-        env = build_mu_env(
+        build_mu_env(
             tmp_path,
             mu_extra={
                 "auto_approve_enabled": True,
@@ -696,7 +695,7 @@ class TestRegisterAutoApproveAPI:
         assert _register(client, "user3").json()["status"] == "pending"
 
     def test_cidr_allowlist_flow(self, tmp_path):
-        env = build_mu_env(
+        build_mu_env(
             tmp_path,
             mu_extra={
                 "auto_approve_enabled": True,
@@ -709,7 +708,7 @@ class TestRegisterAutoApproveAPI:
         assert _register(outside, "outside-user").json()["status"] == "pending"
 
     def test_register_rate_limit_per_ip(self, tmp_path):
-        env = build_mu_env(
+        build_mu_env(
             tmp_path,
             mu_extra={
                 "auto_approve_enabled": True,
@@ -727,7 +726,7 @@ class TestRegisterAutoApproveAPI:
         assert _register(other, "rl-other-ip").status_code == 200
 
     def test_admin_list_exposes_ip_audit_fields(self, tmp_path):
-        env = build_mu_env(tmp_path, mu_extra={"auto_approve_enabled": True})
+        build_mu_env(tmp_path, mu_extra={"auto_approve_enabled": True})
         admin_client = TestClient(build_mu_app(), client=(ADMIN_IP, 40000))
         from backend.core.multiuser import auth as auth_core
 

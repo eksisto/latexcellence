@@ -11,7 +11,6 @@
 - runner 侧 warm_pool_startup 挂载（预热 + 首轮对账 + 周期任务）。
 """
 
-import asyncio
 import time
 from types import SimpleNamespace
 

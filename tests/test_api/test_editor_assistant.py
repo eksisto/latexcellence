@@ -44,6 +44,7 @@ Hello world.
 @pytest.fixture
 def client():
     from fastapi.testclient import TestClient
+
     from main import app
 
     return TestClient(app)
@@ -1223,10 +1224,9 @@ class TestEditorDDGChallenge:
     def test_challenge_terminates_stream_with_captcha_pending(
         self, env, temp_session_dir, monkeypatch
     ):
-        from backend.utils.web_search import DDGChallengeError
-
         from backend.modules.writing_chat.models import EditorSendRequest
         from backend.modules.writing_chat.service import get_writing_chat_service
+        from backend.utils.web_search import DDGChallengeError
 
         monkeypatch.setattr(get_config().llm, "api_key", "test-key")
         challenge = DDGChallengeError(

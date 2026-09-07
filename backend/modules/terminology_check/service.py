@@ -22,10 +22,10 @@
 import asyncio
 from typing import Any, ClassVar
 
-from backend.core.config import get_config
-from backend.core.model_router import get_client_for, has_api_key_for
 from backend.core.base_paragraph_check import BaseParagraphCheckService
-from backend.modules.terminology_check.extractor import TermExtractor, TermItem
+from backend.core.config import get_config
+from backend.core.model_router import has_api_key_for
+from backend.modules.terminology_check.extractor import TermExtractor
 
 
 def _deduplicate_terms(all_terms: list[dict[str, Any]]) -> list[str]:
@@ -106,8 +106,6 @@ class TerminologyCheckService(BaseParagraphCheckService):
             self._logger.warning("No API key — using fallback term extraction")
             return self._check_no_llm(file_path, all_para_data, operation_id)
 
-        # 按本模块槽位实时取客户端（热重载语义，禁止缓存实例）
-        llm = get_client_for(self.llm_role)
         sem = asyncio.Semaphore(cfg.llm.max_concurrency)
 
         async def _limited(coro):

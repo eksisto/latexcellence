@@ -1,7 +1,5 @@
 """project_router /undo-status 端点测试。"""
 
-from pathlib import Path
-
 import pytest
 
 
@@ -11,6 +9,7 @@ class TestUndoStatus:
     @pytest.fixture
     def client(self):
         from fastapi.testclient import TestClient
+
         from main import app
 
         return TestClient(app)

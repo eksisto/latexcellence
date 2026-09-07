@@ -28,10 +28,10 @@ import hashlib
 import json
 import shutil
 import uuid
+from collections.abc import Iterator
 from contextlib import contextmanager
 from contextvars import ContextVar
 from pathlib import Path
-from typing import Iterator
 
 from fastapi import HTTPException
 

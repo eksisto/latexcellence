@@ -277,7 +277,7 @@ class SandboxRunner:
         finally:
             self._gate.release()
             if slot_id:
-                from backend.core.multiuser import db, sandbox_leases
+                from backend.core.multiuser import sandbox_leases
 
                 await asyncio.to_thread(sandbox_leases.release, slot_id)
 

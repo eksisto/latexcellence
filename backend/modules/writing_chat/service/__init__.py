@@ -2,8 +2,8 @@
 
 from .compaction import CompactionMixin
 from .conversation import ConversationMixin
-from .edits import EditMixin
 from .editor_chat import EditorChatMixin
+from .edits import EditMixin
 from .sessions import SessionMixin
 from .state import StateMixin
 

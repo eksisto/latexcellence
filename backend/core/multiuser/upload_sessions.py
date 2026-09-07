@@ -339,7 +339,7 @@ def store_part(
     tmp_path = parts / f"{file_index}-{chunk_index}.{uuid.uuid4().hex}.tmp"
     try:
         tmp_path.write_bytes(data)
-        os.replace(tmp_path, final_path)
+        tmp_path.replace(final_path)
     except OSError:
         tmp_path.unlink(missing_ok=True)
         raise

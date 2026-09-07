@@ -1,7 +1,5 @@
 """OpenAlex API 元数据提供者（补全层）。"""
 
-import re
-
 import httpx
 
 from backend.core.logger import get_logger
@@ -111,7 +109,6 @@ class OpenAlexProvider(BaseMetadataProvider):
             if kw:
                 keywords.append(kw)
 
-        is_oa = data.get("open_access", {}).get("is_oa", False)
         oa_url = data.get("open_access", {}).get("oa_url", "")
         url = oa_url or f"https://doi.org/{doi}"
 

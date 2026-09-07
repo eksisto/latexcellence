@@ -17,9 +17,9 @@ from pathlib import Path, PurePosixPath
 
 from pydantic import BaseModel, ConfigDict
 
+from backend.core.config import get_config
 from backend.core.logger import get_logger
 from backend.core.workspace_manager import get_project_manager_for_workspace
-from backend.core.config import get_config
 from backend.utils.compile_error_translator import translate_compile_errors
 from backend.utils.path_guard import resolve_project_path
 from backend.utils.sandbox import (

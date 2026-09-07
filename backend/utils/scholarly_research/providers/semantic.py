@@ -225,7 +225,6 @@ class SemanticScholarProvider(BaseResearchProvider):
         )
 
     async def get_details(self, work_id: str) -> WorkDetailResult | None:
-        from .._utils import _dedup_works
 
         identifier = work_id.strip()
         url_id = identifier

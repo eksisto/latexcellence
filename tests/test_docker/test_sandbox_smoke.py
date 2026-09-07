@@ -59,7 +59,6 @@ def _host_tmp_visible_to_daemon() -> bool:
     限制而非产品缺陷，显式 skip 以免掩盖真实回归。真实开发机 / CI 上
     此预检恒通过。
     """
-    import asyncio
 
     work = Path(tempfile.mkdtemp(prefix="lx_sbx_preflight_"))
     try:
@@ -211,7 +210,6 @@ class TestConvertSmoke:
 
     def test_pandoc_binary_with_full_argv(self, docker_available):
         """convert 镜像内以完整 argv 执行 pandoc --version（ENTRYPOINT 回归哨兵）。"""
-        import asyncio
 
         cfg = get_config()
         if not _image_exists(cfg.sandbox.image_convert):

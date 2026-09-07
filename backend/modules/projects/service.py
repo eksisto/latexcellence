@@ -26,6 +26,7 @@ from backend.core.logger import get_logger
 from backend.core.multiuser import auth as auth_core
 from backend.core.multiuser import upload_sessions, userspace
 from backend.core.multiuser.db import db_execute, db_query_all, db_query_one, utcnow
+from backend.core.multiuser.dependencies import forbidden
 from backend.core.multiuser.quota import (
     create_project_row,
     dir_size,
@@ -42,14 +43,13 @@ from backend.core.multiuser.upload import (
     extract_archive,
     move_into_user_space,
 )
-from backend.core.multiuser.dependencies import forbidden
-from backend.utils.sandbox import to_http_exception
 from backend.core.workspace_manager import get_workspace_manager
 from backend.modules.git_manage import service as git_manage_service
 from backend.modules.projects.models import (
     COLLABORATOR_ROLES,
     UploadSessionInitRequest,
 )
+from backend.utils.sandbox import to_http_exception
 
 logger = get_logger("projects.service")
 
@@ -398,7 +398,7 @@ async def _require_owner(user_id: str, project_id: str) -> dict:
 
 
 async def rename_project(user_id: str, project_id: str, new_name: str) -> dict:
-    access = await _require_owner(user_id, project_id)
+    await _require_owner(user_id, project_id)
     name = sanitize_project_name(new_name)
     if not name:
         raise _http(400, "invalid_name", "Project name cannot be empty")

@@ -18,7 +18,8 @@
 import base64
 import io
 import re
-from typing import Any, Iterator
+from collections.abc import Iterator
+from typing import Any
 
 from PIL import Image
 from pydantic import (
@@ -34,8 +35,8 @@ from backend.core.logger import get_logger
 from backend.core.model_router import get_client_for, has_api_key_for
 from backend.core.prompts import get_prompt
 from backend.utils.json_utils import format_validation_error
-from backend.utils.latex_json_guard import validate_latex_field
 from backend.utils.latex_formatter import format_latex_source
+from backend.utils.latex_json_guard import validate_latex_field
 from backend.utils.latex_literals import (
     extract_delimited_block,
     find_matching_brace,

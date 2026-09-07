@@ -33,6 +33,7 @@ No section commands here.
 @pytest.fixture
 def client():
     from fastapi.testclient import TestClient
+
     from main import app
 
     return TestClient(app)
@@ -41,8 +42,10 @@ def client():
 @pytest.fixture
 def env(client, tmp_path):
     """已打开临时项目的单用户工作区；结束释放工作区并清空大纲缓存。"""
-    from backend.core.workspace_manager import get_workspace_manager
-    from backend.core.workspace_manager import get_project_manager_for_workspace
+    from backend.core.workspace_manager import (
+        get_project_manager_for_workspace,
+        get_workspace_manager,
+    )
     from backend.modules.editor import service as editor_service
 
     ws_id = "editor-outline"

@@ -11,13 +11,12 @@ project_manager 单元测试。
     - MD5 校验（防止并发修改）
 """
 
-import os
 import tempfile
 from pathlib import Path
 
 import pytest
-from backend.core.project_manager import LatexProject, Paragraph, ProjectInfo
-from backend.utils.file_ops import BackupManager
+
+from backend.core.project_manager import LatexProject, ProjectInfo
 
 
 @pytest.fixture
@@ -289,7 +288,7 @@ class TestUndoRedo:
         original = (temp_project / "chapter1.tex").read_text(encoding="utf-8")
 
         # 修改
-        paragraphs = project.get_paragraphs("chapter1.tex")
+        project.get_paragraphs("chapter1.tex")
         project.apply_change("chapter1.tex", 0, "Changed text.")
 
         # 验证修改
@@ -310,7 +309,7 @@ class TestUndoRedo:
         project = LatexProject()
         project.open(str(temp_project))
 
-        paragraphs = project.get_paragraphs("chapter1.tex")
+        project.get_paragraphs("chapter1.tex")
         project.apply_change("chapter1.tex", 0, "Version A")
 
         modified = (temp_project / "chapter1.tex").read_text(encoding="utf-8")
@@ -335,7 +334,7 @@ class TestUndoRedo:
     def test_cannot_redo_without_undo(self, temp_project):
         project = LatexProject()
         project.open(str(temp_project))
-        paragraphs = project.get_paragraphs("chapter1.tex")
+        project.get_paragraphs("chapter1.tex")
         project.apply_change("chapter1.tex", 0, "Changed.")
         assert not project.can_redo("chapter1.tex")
 
@@ -345,9 +344,9 @@ class TestUndoRedo:
 
         original = (temp_project / "chapter1.tex").read_text(encoding="utf-8")
 
-        paragraphs = project.get_paragraphs("chapter1.tex")
+        project.get_paragraphs("chapter1.tex")
         project.apply_change("chapter1.tex", 0, "Change 1")
-        paragraphs = project.get_paragraphs("chapter1.tex")
+        project.get_paragraphs("chapter1.tex")
         project.apply_change("chapter1.tex", 1, "Change 2")
 
         project.undo("chapter1.tex")  # undo change 2

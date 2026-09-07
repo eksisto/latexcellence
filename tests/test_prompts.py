@@ -12,14 +12,13 @@ import re
 import pytest
 
 from backend.core.prompts import (
+    _PROMPTS,
     CUSTOM_INSTRUCTIONS_ISOLATION_RULE,
     GENERATION_FIDELITY_RULE,
-    JSON_ONLY_RULE,
     MARKER_PROTECTION_RULES,
     NO_INVENTION_RULE,
     TOOL_RESULT_PROTOCOL_RULE,
     UNTRUSTED_DATA_RULE,
-    _PROMPTS,
     get_prompt,
 )
 from backend.modules.bib_manager.style_registry import list_all_styles

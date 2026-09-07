@@ -297,7 +297,7 @@ class TestInit:
         assert r.json()["detail"]["error"] == "invalid_request"
 
     def test_init_quota_precheck(self, tmp_path):
-        env = build_mu_env(
+        build_mu_env(
             tmp_path, mu_extra={"chunk_part_max_mb": 1, "default_project_quota_mb": 1}
         )
         auth_core.create_user("alice", PASSWORD, role="user", status="active")

@@ -1,7 +1,6 @@
 """学术研究共享工具函数 — 规范化、去重、排序与结果限制。"""
 
 import re
-from typing import Any
 
 from .models import FieldProvenance, ScholarlyWork, WorkVersion
 
@@ -70,7 +69,6 @@ def _dedup_works(works: list[ScholarlyWork]) -> list[ScholarlyWork]:
     seen: dict[str, ScholarlyWork] = {}
     order: list[str] = []
     for work in works:
-        identifiers = work.identifiers or {}
         exact = (
             _normalize_doi(work.doi),
             work.pmid,

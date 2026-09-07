@@ -4,7 +4,7 @@
 提供图片上传和 LaTeX 公式识别接口。
 """
 
-from fastapi import APIRouter, HTTPException, UploadFile, File
+from fastapi import APIRouter, File, HTTPException, UploadFile
 
 from backend.modules.formula_ocr.service import FormulaOCRService
 

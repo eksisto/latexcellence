@@ -17,12 +17,12 @@ from typing import Any, ClassVar
 
 from pydantic import BaseModel
 
-from backend.core.config import get_config
 from backend.core.base_paragraph_check import (
     BaseParagraphCheckService,
     has_unlisted_changes,
     normalize_changes_contract,
 )
+from backend.core.config import get_config
 from backend.core.prompts import get_prompt
 from backend.modules.expression_opt.prompt_manager import get_prompt_manager
 from backend.utils.latex_json_guard import LatexTextLite

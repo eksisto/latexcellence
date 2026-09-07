@@ -2,8 +2,8 @@
 
 from .models import (
     ContentBlock,
-    DocumentSection,
     DocumentChunk,
+    DocumentSection,
     EvidenceBundle,
     EvidenceChunk,
     ExtractedDocument,

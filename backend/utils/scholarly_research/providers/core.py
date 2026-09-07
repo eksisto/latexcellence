@@ -67,7 +67,7 @@ class COREProvider(BaseResearchProvider):
         """根据 DOI 查询 CORE 中的开放获取全文链接。"""
         try:
             payload = await self._request_json(
-                f"/search/outputs",
+                "/search/outputs",
                 params={"doi": doi.strip(), "limit": 1},
             )
             results = payload.get("results", [])

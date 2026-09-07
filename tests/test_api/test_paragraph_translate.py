@@ -13,8 +13,8 @@ import pytest
 from pydantic import ValidationError
 
 from backend.modules.paragraph_translate.service import (
-    ParagraphTranslateService,
     ParagraphTranslateResult,
+    ParagraphTranslateService,
     TranslateChangeItem,
 )
 

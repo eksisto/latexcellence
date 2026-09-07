@@ -12,43 +12,39 @@
 import base64
 import io
 import json
-import os
 from pathlib import Path
 from typing import Any
 
 from PIL import Image
 from pydantic import ValidationError
 
-from backend.core.logger import get_logger
-from backend.core.workspace_manager import get_project_manager_for_workspace
+from backend.core.config import get_config
 
 # default 槽位（multi-model §6）：低频辅助调用；get_llm_client 即
 # get_client_for("default") 的薄别名（P2 起语义等价，见 test_model_router）
 from backend.core.llm_client import get_llm_client
+from backend.core.logger import get_logger
 from backend.core.model_router import has_api_key_for
-from backend.core.config import get_config
 from backend.core.prompts import get_prompt
+from backend.core.workspace_manager import get_project_manager_for_workspace
+from backend.modules.bib_manager.bib_parser import (
+    extract_cite_key,
+    normalize_doi,
+    normalize_title,
+    parse_bib_file,
+    remove_entry_from_content,
+)
+from backend.modules.bib_manager.format_rules import detect_format
 from backend.modules.bib_manager.models import (
     BibEntry,
-    DoiLookupResult,
     ExtractedMetadata,
-    LatexCodeResult,
     ReferenceFormatResult,
     SavedFormatInfo,
 )
-from backend.modules.bib_manager.format_rules import detect_format
-from backend.modules.bib_manager.bib_parser import (
-    parse_bib_file,
-    remove_entry_from_content,
-    normalize_title,
-    normalize_doi,
-    BibParserError,
-    extract_cite_key,
-)
-from backend.modules.bib_manager.style_registry import get_style_for_format
 from backend.modules.bib_manager.provider_manager import get_provider_manager
-from backend.utils.json_utils import retry_with_validation
+from backend.modules.bib_manager.style_registry import get_style_for_format
 from backend.utils.file_ops import compute_md5, safe_read
+from backend.utils.json_utils import retry_with_validation
 from backend.utils.path_guard import resolve_project_path
 
 _MAX_DIMENSION = 2000
@@ -670,7 +666,7 @@ class BibManagerService:
         file_path = fmt_dir / f"{_validate_format_name(name)}.json"
         if not file_path.exists():
             return False
-        os.remove(file_path)
+        file_path.unlink()
         self._logger.info(f"Deleted format: {name}")
         return True
 
@@ -756,8 +752,6 @@ class BibManagerService:
         pm = get_project_manager_for_workspace(workspace_id)
         if not pm.is_open:
             raise RuntimeError("No project opened")
-
-        root = Path(pm.root_path)
 
         # 收集所有条目
         all_entries: list[dict[str, Any]] = []

@@ -16,8 +16,7 @@ from fastapi import HTTPException
 from backend.core.config import get_config
 from backend.core.logger import get_logger
 from backend.core.multiuser import auth as auth_core
-from backend.core.multiuser import mail
-from backend.core.multiuser import registration_policy
+from backend.core.multiuser import mail, registration_policy
 from backend.core.multiuser.dependencies import (
     forbidden,
 )

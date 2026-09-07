@@ -6,8 +6,9 @@ marker 编号机制演示。
 你可以修改 ``latex_paragraph`` 变量中的内容来测试自己的段落。
 """
 
-from backend.utils.latex_parser import LatexParser
 import re
+
+from backend.utils.latex_parser import LatexParser
 
 latex_paragraph = r"""
 % ================================================================

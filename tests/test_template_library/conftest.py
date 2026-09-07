@@ -6,7 +6,6 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from backend.core import config as cfg_module
 from backend.core.config import get_config
 from backend.core.multiuser import auth as auth_module
 from backend.core.multiuser import db as db_module
@@ -98,7 +97,7 @@ def su_client(su_env) -> TestClient:
 
 def csrf(client: TestClient, headers: dict | None = None) -> dict:
     """为变更类请求附加与客户端 CSRF Cookie 值一致的请求头（双提交 CSRF）。"""
-    from tests.test_multiuser.conftest import CSRF_HEADER, CSRF_COOKIE
+    from tests.test_multiuser.conftest import CSRF_COOKIE, CSRF_HEADER
 
     h = dict(headers or {})
     h[CSRF_HEADER] = client.cookies.get(CSRF_COOKIE, "")

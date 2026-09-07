@@ -18,7 +18,6 @@ import pytest
 
 from backend.modules.format_converter.service import (
     FormatConverterService,
-    SUPPORTED_FORMATS,
 )
 from backend.utils.sandbox.models import ExecResult
 
@@ -457,6 +456,7 @@ class TestRouterConvert:
     @pytest.fixture
     def client(self):
         from fastapi.testclient import TestClient
+
         from main import app
 
         return TestClient(app)
@@ -503,6 +503,7 @@ class TestRouterConvertText:
     @pytest.fixture
     def client(self):
         from fastapi.testclient import TestClient
+
         from main import app
 
         return TestClient(app)
@@ -561,6 +562,7 @@ class TestRouterConvertFile:
     @pytest.fixture
     def client(self):
         from fastapi.testclient import TestClient
+
         from main import app
 
         return TestClient(app)

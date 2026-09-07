@@ -19,7 +19,7 @@ PAST_ISO = "2000-01-01T00:00:00+00:00"
 @pytest.fixture
 def mu_env(tmp_path):
     """多用户环境（LLM 阈值经 build_mu_env 参数控制，默认走配置字段）。"""
-    from tests.test_multiuser.conftest import build_mu_env, _reset_config_state
+    from tests.test_multiuser.conftest import _reset_config_state, build_mu_env
 
     env = build_mu_env(tmp_path)
     yield env
@@ -232,7 +232,7 @@ class TestAdmissionGate:
     @pytest.mark.asyncio
     async def test_skips_in_single_user_mode_without_db(self, tmp_path):
         """单用户模式直通：不依赖数据库初始化（未 init_db 也必须可用）。"""
-        from tests.test_multiuser.conftest import build_mu_env, _reset_config_state
+        from tests.test_multiuser.conftest import _reset_config_state, build_mu_env
 
         try:
             build_mu_env(tmp_path, enabled=False)
@@ -400,7 +400,7 @@ class TestLLMClientIntegration:
     @pytest.mark.asyncio
     async def test_rate_limit_surfaces_from_chat(self, tmp_path):
         """达到每分钟上限后，chat 抛出携带 gov_code 的 429 语义错误。"""
-        from tests.test_multiuser.conftest import build_mu_env, _reset_config_state
+        from tests.test_multiuser.conftest import _reset_config_state, build_mu_env
 
         try:
             build_mu_env(
@@ -427,7 +427,7 @@ class TestLLMClientIntegration:
     @pytest.mark.asyncio
     async def test_concurrency_limit_surfaces_from_parallel_chats(self, tmp_path):
         """并发超限不排队：并行调用中恰有一个成功、一个被拒且不残留租约。"""
-        from tests.test_multiuser.conftest import build_mu_env, _reset_config_state
+        from tests.test_multiuser.conftest import _reset_config_state, build_mu_env
 
         try:
             build_mu_env(

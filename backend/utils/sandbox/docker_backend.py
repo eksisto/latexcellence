@@ -42,7 +42,7 @@ from datetime import datetime
 from backend.core.config import get_config
 from backend.core.logger import get_logger
 from backend.utils.sandbox.errors import sandbox_unavailable
-from backend.utils.sandbox.models import ExecSpec, ExecResult, SandboxLimits
+from backend.utils.sandbox.models import ExecResult, ExecSpec, SandboxLimits
 
 logger = get_logger("sandbox.docker")
 

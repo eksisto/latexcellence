@@ -32,17 +32,17 @@ from typing import Any, ClassVar
 from pydantic import BaseModel
 
 from backend.core import access_control
+from backend.core.config import get_config
 from backend.core.logger import get_logger
 from backend.core.model_router import get_client_for, has_api_key_for
 from backend.core.multiuser import llm_governance
 from backend.core.project_manager import FileConflictError
 from backend.core.workspace_manager import get_project_manager_for_workspace
-from backend.core.config import get_config
-from backend.utils.latex_parser import LatexParser, MARKER_PATTERN
+from backend.utils.file_ops import compute_md5
 from backend.utils.input_resolver import resolve_inputs
 from backend.utils.json_utils import retry_with_validation
 from backend.utils.latex_json_guard import check_latex_text_lite
-from backend.utils.file_ops import compute_md5
+from backend.utils.latex_parser import MARKER_PATTERN, LatexParser
 from backend.utils.path_guard import resolve_project_path
 
 
@@ -927,9 +927,9 @@ class BaseParagraphCheckService:
         restored = []
         for change in changes:
             d = dict(change)
-            for field in fields:
-                if field in d and isinstance(d[field], str):
-                    d[field] = self._parser.restore_from_markers(d[field], marker_map)
+            for fld in fields:
+                if fld in d and isinstance(d[fld], str):
+                    d[fld] = self._parser.restore_from_markers(d[fld], marker_map)
             restored.append(d)
         return restored, marker_map
 

@@ -1,7 +1,5 @@
 """提示词管理器的名称校验（防止路径穿越）。"""
 
-from pathlib import Path
-
 import pytest
 
 from backend.core.config import get_config
@@ -11,6 +9,8 @@ from backend.modules.expression_opt.prompt_manager import (
 )
 from backend.modules.writing_chat.prompt_manager import (
     WritingChatPromptManager,
+)
+from backend.modules.writing_chat.prompt_manager import (
     get_prompt_manager as get_writing_prompt_manager,
 )
 

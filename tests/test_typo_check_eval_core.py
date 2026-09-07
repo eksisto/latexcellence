@@ -15,7 +15,6 @@ for _p in (str(PROJECT_ROOT), str(TOOLS_DIR)):
     if _p not in sys.path:
         sys.path.insert(0, _p)
 
-from backend.utils.latex_parser import LatexParser
 from typo_check_eval.core import (
     analyze_hits,
     iter_items,
@@ -23,6 +22,8 @@ from typo_check_eval.core import (
     normalize_fragment,
 )
 from typo_check_eval.run_eval import build_item
+
+from backend.utils.latex_parser import LatexParser
 
 
 def _issue(original: str, corrected: str = "x") -> dict:

@@ -10,11 +10,9 @@
 
 import hashlib
 import os
-import shutil
 import tempfile
 from collections import deque
 from pathlib import Path
-
 
 from backend.core.logger import get_logger
 

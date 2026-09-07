@@ -10,7 +10,7 @@ from backend.utils.sandbox.errors import SANDBOX_BUSY, sandbox_code_of
 @pytest.fixture
 def mu_env(tmp_path):
     """最小多用户环境：临时库 + 已初始化（复用 conftest 构建器）。"""
-    from tests.test_multiuser.conftest import build_mu_env, _reset_config_state
+    from tests.test_multiuser.conftest import _reset_config_state, build_mu_env
 
     env = build_mu_env(tmp_path)
     yield env

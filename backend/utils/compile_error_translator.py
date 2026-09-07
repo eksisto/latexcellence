@@ -18,7 +18,6 @@ from pydantic import BaseModel, ConfigDict
 # default 槽位（multi-model §6）：编译错误翻译为低频辅助调用；
 # get_llm_client 即 get_client_for("default") 的薄别名（P2 起语义等价）
 from backend.core.llm_client import get_llm_client
-from backend.core.config import get_config
 from backend.core.logger import get_logger
 from backend.core.prompts import get_prompt
 from backend.utils.json_utils import retry_with_validation

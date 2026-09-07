@@ -58,15 +58,16 @@ from backend.utils.sandbox import (
     current_sandbox_user_id,
     get_sandbox_runner,
 )
+
 from .quota import dir_size
 from .upload import (
+    _WATCH_INTERVAL_SECONDS,
     ArchiveError,
     ExtractedProject,
     UploadLimits,
     _check_deadline,
     _deadline,
     _validate_no_case_conflicts,
-    _WATCH_INTERVAL_SECONDS,
 )
 
 logger = get_logger("multiuser.upload.rar")

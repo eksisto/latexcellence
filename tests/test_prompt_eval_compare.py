@@ -9,10 +9,10 @@ from __future__ import annotations
 import pytest
 
 from tools.prompt_comprehension_eval.run_eval import (
+    _prompt_hash,
     build_report,
     compare_reports,
     wilson_ci,
-    _prompt_hash,
 )
 
 # ── wilson_ci ──────────────────────────────────────────────────────────────

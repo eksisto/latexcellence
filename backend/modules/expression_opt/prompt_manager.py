@@ -12,10 +12,8 @@
     - 当前激活的提示词通过一个特殊的 _active.txt 文件标识内容。
 """
 
-import os
 import re
 from pathlib import Path
-
 
 from backend.core.config import get_config
 from backend.core.logger import get_logger

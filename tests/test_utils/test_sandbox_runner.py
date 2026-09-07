@@ -407,8 +407,8 @@ class TestInitializeWarmup:
     async def test_initialize_fills_gating_cache(self, cfg, monkeypatch):
         """启动预热应填充三类镜像的后端解析缓存（宿主无工具部署形态首请求即正确）。"""
         from backend.utils.sandbox import (
-            initialize_sandbox_runner,
             cached_backend_for,
+            initialize_sandbox_runner,
             reset_sandbox_runner,
         )
 
@@ -429,8 +429,8 @@ class TestInitializeWarmup:
     async def test_initialize_survives_unreachable_docker_mode(self, cfg, monkeypatch):
         """docker 模式 + daemon 不可达：预热不抛错，门控留空回落本地检测。"""
         from backend.utils.sandbox import (
-            initialize_sandbox_runner,
             cached_backend_for,
+            initialize_sandbox_runner,
             reset_sandbox_runner,
         )
 

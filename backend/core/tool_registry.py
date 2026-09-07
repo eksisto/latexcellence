@@ -14,7 +14,8 @@ Function Calling 工具注册表。
     - 全局单例模式
 """
 
-from typing import Any, Callable, Awaitable
+from collections.abc import Awaitable, Callable
+from typing import Any
 
 from backend.core.config import get_config
 from backend.core.logger import get_logger

@@ -20,7 +20,6 @@ from backend.core.base_paragraph_check import (
 )
 from backend.core.multiuser import db as db_module
 from backend.core.multiuser import (
-    operation_contexts,
     pending_interactions,
     userspace,
 )
@@ -180,8 +179,8 @@ class TestWorkspaceBindingCrossInstance:
 
     def test_transfer_refresh_updates_row(self, mu_env):
         """项目转交刷新路径经 bind() 同步更新 DB 行。"""
-        from backend.modules.projects.service import _refresh_workspace_bindings
         from backend.core.workspace_manager import get_workspace_manager
+        from backend.modules.projects.service import _refresh_workspace_bindings
 
         gwm = get_workspace_manager()
         gwm.get_or_create("ws6")  # list_workspaces 只枚举进程内实例
@@ -203,7 +202,6 @@ class TestWorkspaceBindingCrossInstance:
         其后续请求按失效 root_path 定位文件。
         """
         from backend.modules.projects.service import _refresh_workspace_bindings
-        from backend.core.workspace_manager import get_workspace_manager
 
         # "副本 B" 的 workspace：只存在于独立管理器实例，不在全局单例中
         replica_b = _fresh_manager()

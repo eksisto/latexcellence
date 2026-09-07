@@ -6,27 +6,25 @@ import asyncio
 import json
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import MagicMock
 
 import pytest
 
-from backend.core.config import load_config, get_config
+from backend.core.config import get_config, load_config
 from backend.modules.template_gen.agent import (
     TemplateAgentService,
-    _ToolExecutor,
     _attach_source_context,
-    _check_body_style_commands,
-    _check_cjk_support,
-    _check_class_option_order,
     _check_provides_date,
-    _check_setter_accessors,
     _compact_messages,
     _extract_errors,
     _format_error_analysis,
+    _ToolExecutor,
     _trim_log,
 )
 from backend.modules.template_gen.agent import (
     executor as agent_executor_mod,
+)
+from backend.modules.template_gen.agent import (
     service as agent_service_mod,
 )
 from backend.modules.template_gen.trace import append_trace, read_trace
@@ -699,7 +697,6 @@ class TestToolExecutorCompile:
     """编译工具在 latexmk 不可用时优雅降级。"""
 
     def test_main_file_missing(self, tmp_path):
-        from types import SimpleNamespace
 
         cfg = get_config()
         cfg.features.template_gen.output_dir = str(tmp_path)

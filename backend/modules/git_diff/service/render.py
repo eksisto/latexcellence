@@ -19,7 +19,7 @@ from . import diff as diff_mod
 from . import flatten as flatten_mod
 from . import process as process_mod
 from . import revisions as revisions_mod
-from .models import DiffDocument, DiffHighlightResult, FlattenedDocument, ProjectContext
+from .models import DiffHighlightResult, ProjectContext
 
 logger = get_logger(__name__)
 

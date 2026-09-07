@@ -10,14 +10,15 @@ import json
 import re
 import shutil
 import uuid
-from typing import Any, AsyncIterator
+from collections.abc import AsyncIterator
+from typing import Any
 
 from backend.core.config import get_config
-from backend.core.logger import get_logger
 from backend.core.llm_client import (
     assistant_message_from_stream,
     chat_stream_with_tools_retry,
 )
+from backend.core.logger import get_logger
 from backend.core.model_router import get_client_for
 from backend.core.prompts import get_prompt
 from backend.modules.style_modify.models import CompileSummary

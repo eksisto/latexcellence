@@ -59,8 +59,6 @@ from pathlib import Path
 from fastapi import HTTPException
 from fastapi.responses import FileResponse
 
-from backend.modules.bib_manager.bib_parser import parse_bib_file
-
 from backend.core.logger import get_logger
 from backend.core.multiuser import edit_log
 from backend.core.multiuser.quota import (
@@ -68,6 +66,7 @@ from backend.core.multiuser.quota import (
     refresh_owner_usage_after_write,
 )
 from backend.core.project_manager import FileConflictError
+from backend.modules.bib_manager.bib_parser import parse_bib_file
 from backend.modules.projects import service as projects_service
 from backend.utils.latex_formatter import format_latex_source
 from backend.utils.latex_json_guard import check_latex_corruption

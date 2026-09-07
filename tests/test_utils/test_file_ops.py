@@ -1,6 +1,5 @@
 """file_ops 单元测试。"""
 
-from pathlib import Path
 from unittest.mock import patch
 
 from backend.utils.file_ops import atomic_write

@@ -12,11 +12,11 @@ from backend.core.config import get_config
 from backend.core.project_manager import FileConflictError, LatexProject
 from backend.modules.style_modify.agent import StyleModifyAgent, get_style_modify_agent
 from backend.modules.style_modify.models import CompileSummary
+from backend.modules.style_modify.service import StyleModifyService
 from backend.modules.style_modify.session import (
     StyleModifySessionStore,
     get_session_store,
 )
-from backend.modules.style_modify.service import StyleModifyService
 from backend.utils.file_ops import compute_md5
 
 
@@ -344,6 +344,7 @@ class TestStyleModifyAgentRouter:
     @pytest.fixture
     def client(self):
         from fastapi.testclient import TestClient
+
         from main import app
 
         return TestClient(app)

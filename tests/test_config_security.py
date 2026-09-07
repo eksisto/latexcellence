@@ -2,8 +2,6 @@
 
 import json
 import os
-import tempfile
-from pathlib import Path
 from unittest import mock
 
 import pytest
@@ -701,6 +699,7 @@ class TestConfigApiValidation:
         with mock.patch.dict(os.environ, {}, clear=True):
             cfg_module.load_config(config_path)
             from fastapi import HTTPException
+
             from main import update_config
 
             with pytest.raises(HTTPException) as exc_info:

@@ -1,7 +1,6 @@
 """writing_chat 会话 id 校验（防止目录穿越）。"""
 
 import json
-from pathlib import Path
 
 import pytest
 

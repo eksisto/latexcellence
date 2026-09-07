@@ -59,7 +59,9 @@ def resolve_project_path(
     # 跨平台绝对路径判断：os.path.isabs 只识别当前平台的绝对路径（Linux 上是
     # POSIX /...，Windows 上是盘符/UNC），需叠加 PureWindowsPath 覆盖 Windows
     # 风格绝对路径（C:/...、C:\...、\\server\share\...），防止跨平台走私绕过。
-    if os.path.isabs(file_path) or PureWindowsPath(file_path).is_absolute():
+    if (
+        os.path.isabs(file_path) or PureWindowsPath(file_path).is_absolute()
+    ):  # noqa: PTH117 — bytes 路径与跨平台语义，见上注释
         raise ValueError("file_path must not be an absolute path")
 
     if ".." in Path(file_path).parts:

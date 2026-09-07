@@ -29,6 +29,7 @@ from typing import Any
 
 from backend.core.config import get_config
 from backend.core.logger import get_logger
+
 from . import userspace
 
 logger = get_logger("multiuser.migrate")
@@ -73,7 +74,7 @@ def _copy_file_atomic(src: Path, target: Path) -> None:
     tmp = target.with_name(f"{target.name}{_TEMP_SUFFIX}-{os.getpid()}")
     try:
         shutil.copy2(src, tmp)
-        os.replace(tmp, target)
+        tmp.replace(target)
     finally:
         if tmp.exists():
             try:

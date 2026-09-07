@@ -4,8 +4,6 @@
 定义术语抽取、一致性问题和检查结果的数据结构。
 """
 
-from typing import Optional
-
 from pydantic import BaseModel, ConfigDict
 
 

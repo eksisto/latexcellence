@@ -9,9 +9,7 @@
     - 权限矩阵端到端：viewer 只读 / 写 403；移除后失去访问
 """
 
-import io
 import uuid
-import zipfile
 
 import pytest
 from fastapi import FastAPI
@@ -21,8 +19,8 @@ from backend.core import access_control
 from backend.core.multiuser import auth as auth_core
 from backend.core.multiuser import db as db_module
 from backend.core.multiuser import userspace
-from backend.core.workspace_manager import get_workspace_manager
 from backend.core.security_middleware import AccessSecurityMiddleware
+from backend.core.workspace_manager import get_workspace_manager
 from tests.test_multiuser.conftest import build_mu_env, csrf
 
 PASSWORD = "password-123"

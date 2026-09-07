@@ -9,10 +9,8 @@
 """
 
 import asyncio
-import io
 import json
 import uuid
-import zipfile
 from unittest import mock
 
 import pytest

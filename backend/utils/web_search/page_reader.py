@@ -11,8 +11,8 @@ from backend.utils.web_search.errors import FetchFailure
 from backend.utils.web_search.extract.chunking import collect_evidence, select_evidence
 from backend.utils.web_search.extract.models import EvidenceChunk, ExtractedDocument
 from backend.utils.web_search.extract.registry import ExtractionError, ExtractorRegistry
-from backend.utils.web_search.fetch.cache import WebCache
 from backend.utils.web_search.fetch.browser import BrowserHealth
+from backend.utils.web_search.fetch.cache import WebCache
 from backend.utils.web_search.fetch.coordinator import FetchCoordinator
 
 

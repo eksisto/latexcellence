@@ -16,9 +16,8 @@ from fastapi import HTTPException
 
 from backend.core.multiuser import auth as auth_core
 from backend.core.multiuser import db as db_module
-from backend.core.multiuser import quota
-from backend.core.multiuser import userspace
-from tests.test_multiuser.conftest import build_mu_env, _reset_config_state
+from backend.core.multiuser import quota, userspace
+from tests.test_multiuser.conftest import _reset_config_state, build_mu_env
 
 
 @pytest.fixture

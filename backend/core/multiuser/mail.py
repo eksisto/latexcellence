@@ -37,6 +37,7 @@ import aiosmtplib
 
 from backend.core.config import get_config
 from backend.core.logger import get_logger
+
 from .db import (
     db_execute,
     db_query_all,

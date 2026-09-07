@@ -1,12 +1,12 @@
 """LaTeX 依赖递归展开（git 与 worktree 模式）。"""
 
-from pathlib import Path, PurePosixPath, PureWindowsPath
+from pathlib import PurePosixPath, PureWindowsPath
 
 from backend.utils.path_guard import resolve_project_path
 
-from .constants import WORKTREE_REF, _INPUT_PATTERN
-from .models import FlattenContext, FlattenedDocument, ProjectContext
 from . import process
+from .constants import _INPUT_PATTERN, WORKTREE_REF
+from .models import FlattenContext, FlattenedDocument, ProjectContext
 
 
 async def _flatten_main_document(

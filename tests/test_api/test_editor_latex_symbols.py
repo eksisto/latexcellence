@@ -42,6 +42,7 @@ REFS_BIB = """@article{smith2020,
 @pytest.fixture
 def client():
     from fastapi.testclient import TestClient
+
     from main import app
 
     return TestClient(app)

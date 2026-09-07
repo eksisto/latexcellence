@@ -250,6 +250,7 @@ class TestCheckLatexTextLite:
     def test_latex_text_lite_type_rejects_corruption(self):
         """LatexTextLite 作为 Pydantic 字段类型时拦截损坏内容。"""
         from pydantic import BaseModel, ValidationError
+
         from backend.utils.latex_json_guard import LatexTextLite
 
         class M(BaseModel):

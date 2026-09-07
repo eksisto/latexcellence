@@ -5,6 +5,7 @@ from pathlib import Path, PurePosixPath
 from backend.core.config import get_config
 from backend.core.workspace_manager import get_project_manager_for_workspace
 
+from . import process
 from .constants import (
     _COMMIT_HASH_RE,
     _REF_FORBIDDEN_SUBSTRINGS,
@@ -12,7 +13,6 @@ from .constants import (
     WORKTREE_REF,
 )
 from .models import GitRefsResult, GitRevision, ProjectContext
-from . import process
 
 
 async def list_git_revisions(workspace_id: str = "") -> GitRefsResult:

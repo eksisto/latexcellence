@@ -1,7 +1,7 @@
 """Structured web fetching, policy, and cache orchestration."""
 
-from .cache import WebCache
 from .browser import BrowserFetchResult, BrowserHealth, BrowserPool
+from .cache import WebCache
 from .coordinator import FetchCoordinator, FetchResult
 from .detector import BlockageDetection, detect_blockage
 from .policy import url_is_safe

@@ -2,9 +2,8 @@
 
 from typing import Any
 
-from backend.core.config import get_config
-from backend.core.model_router import has_api_key_for
 from backend.core.logger import get_logger
+from backend.core.model_router import has_api_key_for
 from backend.core.prompts import get_prompt
 from backend.modules.plot_gen.data_parser import (
     build_profile_context,

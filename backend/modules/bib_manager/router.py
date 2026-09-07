@@ -6,7 +6,6 @@
 
 import json
 
-
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
 from pydantic import BaseModel
 

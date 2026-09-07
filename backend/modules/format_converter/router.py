@@ -10,7 +10,6 @@ from pydantic import BaseModel
 from backend.core.config import get_config
 from backend.modules.format_converter.service import (
     FormatConverterService,
-    SUPPORTED_FORMATS,
 )
 from backend.utils.sandbox import to_http_exception
 

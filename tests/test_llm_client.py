@@ -9,7 +9,7 @@ llm_client.chat_stream_with_usage 行为测试。
 """
 
 from types import SimpleNamespace
-from typing import Any, AsyncIterator
+from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
 import httpx
@@ -18,7 +18,6 @@ import pytest
 from backend.core.llm_client import (
     LLMClient,
     StreamChunk,
-    UsageInfo,
     chat_stream_with_tools_retry,
 )
 

@@ -31,8 +31,8 @@ from pathlib import Path
 
 from backend.core.config import get_config
 from backend.core.logger import get_logger
+
 from . import userspace
-from .quota import dir_size
 
 logger = get_logger("multiuser.upload")
 

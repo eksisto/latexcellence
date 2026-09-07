@@ -12,19 +12,19 @@ import re
 import pytest
 from pydantic import ValidationError
 
+from backend.modules.bib_manager.models import ExtractedMetadata
+from backend.modules.formula_ocr.service import FormulaOCRService
+from backend.modules.style_modify.service import StyleModifyService
+from backend.modules.table_ocr.service import TableOCRService
+from backend.modules.writing_chat.service import WritingChatService
 from backend.utils.json_utils import safe_parse_json
 from backend.utils.latex_json_guard import (
     check_latex_environments,
     check_latex_text,
     check_latex_text_lite,
 )
-from backend.utils.latex_parser import LatexParser
 from backend.utils.latex_literals import extract_delimited_block, remove_delimited_block
-from backend.modules.formula_ocr.service import FormulaOCRService
-from backend.modules.bib_manager.models import ExtractedMetadata
-from backend.modules.style_modify.service import StyleModifyService
-from backend.modules.table_ocr.service import TableOCRService
-from backend.modules.writing_chat.service import WritingChatService
+from backend.utils.latex_parser import LatexParser
 
 
 @pytest.mark.parametrize(

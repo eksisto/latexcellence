@@ -21,7 +21,8 @@ LaTeX 样式修改业务逻辑。
 """
 
 import asyncio
-from typing import Any, AsyncIterator
+from collections.abc import AsyncIterator
+from typing import Any
 
 from backend.core import access_control
 from backend.core.config import get_config
@@ -61,7 +62,6 @@ class StyleModifyService:
         返回：
             { latex: "修改后的 LaTeX 源码" }
         """
-        cfg = get_config()
         if not has_api_key_for("agent"):
             self._logger.warning("No API key configured")
             raise RuntimeError("No API key configured")

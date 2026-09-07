@@ -18,12 +18,12 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from pydantic import ValidationError
 
-from backend.modules.expression_opt.service import (
-    ExpressionOptService,
-    ExpressionOptResult,
-    ExpressionChangeItem,
-)
 from backend.modules.expression_opt.prompt_manager import PromptManager
+from backend.modules.expression_opt.service import (
+    ExpressionChangeItem,
+    ExpressionOptResult,
+    ExpressionOptService,
+)
 
 # ── fixtures ───────────────────────────────────────────────────────────────
 
@@ -373,8 +373,6 @@ class TestPromptManager:
     def pm(self, tmp_path, monkeypatch):
         prompts_dir = tmp_path / "prompts" / "expression"
         prompts_dir.mkdir(parents=True)
-
-        import backend.core.config as config_mod
 
         # Patch get_config to return a config with our temp dir
         monkeypatch.setattr(

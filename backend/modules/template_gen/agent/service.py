@@ -2,19 +2,20 @@
 
 import json
 import uuid
+from collections.abc import AsyncIterator
 from pathlib import Path
-from typing import Any, AsyncIterator
+from typing import Any
 
 from backend.core.config import (
     FontWhitelistEntry,
     default_font_whitelist,
     get_config,
 )
-from backend.core.logger import get_logger
 from backend.core.llm_client import (
     assistant_message_from_stream,
     chat_stream_with_tools_retry,
 )
+from backend.core.logger import get_logger
 from backend.core.model_router import get_client_for, has_api_key_for
 from backend.core.prompts import get_prompt
 from backend.modules.template_gen.trace import append_trace, now_iso

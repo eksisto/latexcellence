@@ -54,8 +54,7 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-from backend.core.multiuser import upload, upload_rar
-from backend.core.multiuser import userspace
+from backend.core.multiuser import upload, upload_rar, userspace
 from backend.utils.sandbox import ExecResult, ExecSpec, SandboxMount
 from tests.test_multiuser.test_projects_api import (
     PASSWORD,
@@ -1214,8 +1213,8 @@ class TestApiSandboxErrorMapping:
 
         fake runner 直接从 resolve_backend 抛沙箱错误；验证 service 层把
         带 sandbox_code 的错误映射为 503，而非落入通用 400 invalid_archive。"""
-        from tests.test_multiuser.conftest import csrf
         from backend.utils.sandbox import sandbox_unavailable
+        from tests.test_multiuser.conftest import csrf
 
         class _UnavailableRunner:
             async def resolve_backend(self, kind: str) -> str:

@@ -6,6 +6,7 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
+from tools.web_access_eval.legacy import collect_extraction, collect_grounding
 from tools.web_access_eval.metrics import (
     evaluate_extraction,
     evaluate_grounding,
@@ -15,15 +16,12 @@ from tools.web_access_eval.metrics import (
 from tools.web_access_eval.models import (
     EvalBlock,
     EvidenceCitation,
-    ExtractionDataset,
     ExtractionPrediction,
     ExtractionPredictions,
-    GroundingDataset,
     GroundingPrediction,
     GroundingPredictions,
     RankedScholarlyResult,
     RankedSearchResult,
-    ScholarlyDataset,
     ScholarlyPrediction,
     ScholarlyPredictions,
     SearchDataset,
@@ -34,8 +32,6 @@ from tools.web_access_eval.run_eval import load_dataset, replay, validate_datase
 from tools.web_access_eval.structured import (
     collect_extraction as collect_structured_extraction,
 )
-from tools.web_access_eval.legacy import collect_extraction, collect_grounding
-from tools.web_access_eval.legacy import collect_extraction
 
 DATASETS = Path("tools/web_access_eval/datasets")
 

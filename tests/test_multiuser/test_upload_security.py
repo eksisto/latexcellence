@@ -151,7 +151,7 @@ class TestSecurity:
         import subprocess
 
         subprocess.run(
-            ["7z", "a", "-tzip", f"-psecret", str(enc), "secret.txt"],
+            ["7z", "a", "-tzip", "-psecret", str(enc), "secret.txt"],
             cwd=str(src),
             check=True,
             capture_output=True,
@@ -219,10 +219,10 @@ class TestQuotaLimits:
 # ── 落位 ─────────────────────────────────────────────────────────
 class TestMove:
     def test_move_into_user_space(self, tmp_path):
-        from tests.test_multiuser.conftest import build_mu_env
         from backend.core.multiuser import userspace
+        from tests.test_multiuser.conftest import build_mu_env
 
-        env = build_mu_env(tmp_path)
+        build_mu_env(tmp_path)
         staging = userspace.get_staging_root() / "upload1" / "extracted"
         staging.mkdir(parents=True)
         project_root = staging / "proj"
@@ -249,11 +249,11 @@ class TestStagingRetention:
         import time
 
         from backend.core.multiuser import quota, userspace
+        from backend.core.multiuser.db import close_db
         from tests.test_multiuser.conftest import (
             _reset_config_state,
             build_mu_env,
         )
-        from backend.core.multiuser.db import close_db
 
         try:
             build_mu_env(tmp_path)

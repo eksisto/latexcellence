@@ -14,11 +14,10 @@ LaTeX 项目管理模块。
     - 修改前校验文件 MD5，防止用户在审核期间手动修改文件导致冲突
 """
 
+import threading
 from dataclasses import dataclass, field
 from pathlib import Path
-import threading
 from typing import NamedTuple
-
 
 from backend.core.logger import get_logger
 from backend.core.multiuser import edit_log
@@ -376,7 +375,7 @@ class LatexProject:
         para = paragraphs[paragraph_index]
 
         # 将当前内容推入撤销栈（在读取源文件前）
-        save_md5 = self._backup_mgr.push(full_path)
+        self._backup_mgr.push(full_path)
 
         # 读取源文件全部行
         lines = safe_read_lines(full_path)

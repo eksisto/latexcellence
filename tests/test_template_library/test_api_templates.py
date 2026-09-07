@@ -3,7 +3,6 @@
 import json
 
 from backend.core.config import get_config
-from backend.modules.template_library.builtin_store import BUILTIN_ROOT
 from tests.test_template_library.conftest import (
     make_manifest,
     make_zip,

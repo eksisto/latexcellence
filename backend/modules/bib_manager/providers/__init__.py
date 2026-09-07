@@ -9,12 +9,12 @@
     - Semantic Scholar（补全层）
 """
 
+from backend.modules.bib_manager.providers.arxiv import ArxivProvider
 from backend.modules.bib_manager.providers.base import BaseMetadataProvider
 from backend.modules.bib_manager.providers.crossref import CrossrefProvider
-from backend.modules.bib_manager.providers.arxiv import ArxivProvider
 from backend.modules.bib_manager.providers.datacite import DataCiteProvider
-from backend.modules.bib_manager.providers.openalex import OpenAlexProvider
 from backend.modules.bib_manager.providers.europepmc import EuropePMCProvider
+from backend.modules.bib_manager.providers.openalex import OpenAlexProvider
 from backend.modules.bib_manager.providers.semantic import SemanticScholarProvider
 
 __all__ = [

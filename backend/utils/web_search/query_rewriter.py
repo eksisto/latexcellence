@@ -1,7 +1,6 @@
 """查询重写 — 将用户自然语言搜索意图拆解为多条精准查询。"""
 
 import re
-from typing import Any
 
 from pydantic import BaseModel, Field
 

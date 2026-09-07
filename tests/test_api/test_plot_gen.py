@@ -387,7 +387,6 @@ async def test_trace_failure_does_not_abort_generation(plot_cfg, monkeypatch):
         description="比较两组",
     )
     session_id = result["session_id"]
-    sandbox = Path(plot_cfg.features.plot_gen.output_dir) / session_id
 
     class FakeExecutor:
         def __init__(self, sandbox, cfg, logger=None, style_key=None):
@@ -1167,6 +1166,7 @@ class TestPlotGenTraceRouter:
     @pytest.fixture
     def client(self):
         from fastapi.testclient import TestClient
+
         from main import app
 
         return TestClient(app)

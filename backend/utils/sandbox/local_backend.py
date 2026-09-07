@@ -17,7 +17,7 @@ import subprocess
 from typing import Any
 
 from backend.core.logger import get_logger
-from backend.utils.sandbox.models import ExecSpec, ExecResult
+from backend.utils.sandbox.models import ExecResult, ExecSpec
 
 logger = get_logger("sandbox.local")
 

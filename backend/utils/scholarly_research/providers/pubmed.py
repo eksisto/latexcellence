@@ -1,6 +1,5 @@
 """PubMed API 提供者 — NCBI E-utilities 生物医学文献检索。"""
 
-import asyncio
 import time
 from typing import Any
 

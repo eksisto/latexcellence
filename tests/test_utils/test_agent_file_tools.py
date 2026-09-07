@@ -7,10 +7,14 @@ from backend.modules.plot_gen.agent import PlotGenAgent
 from backend.modules.plot_gen.executor import PlotExecutor
 from backend.modules.style_modify.agent import (
     StyleModifyAgent,
+)
+from backend.modules.style_modify.agent import (
     _ToolExecutor as StyleModifyToolExecutor,
 )
 from backend.modules.template_gen.agent import (
     TemplateAgentService,
+)
+from backend.modules.template_gen.agent import (
     _ToolExecutor as TemplateToolExecutor,
 )
 from backend.utils.agent_file_tools import (

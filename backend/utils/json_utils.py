@@ -13,7 +13,8 @@ LLM JSON 解析/校验/重试模块。
 
 import json
 import re
-from typing import Any, Callable, Type, TypeVar, Union
+from collections.abc import Callable
+from typing import Any, TypeVar
 
 from pydantic import BaseModel, ValidationError
 
@@ -117,7 +118,7 @@ def _replace_single_quotes_outside_strings(text: str) -> str:
     return "".join(out)
 
 
-def validate_model(data: dict[str, Any], model_cls: Type[T]) -> T:
+def validate_model(data: dict[str, Any], model_cls: type[T]) -> T:
     """
     使用 Pydantic 模型校验 JSON 数据。
 
@@ -154,8 +155,8 @@ def format_validation_error(errors: list[dict[str, Any]]) -> str:
 
 
 def parse_and_validate(
-    text: Union[str, dict[str, Any]],
-    model_cls: Type[T],
+    text: str | dict[str, Any],
+    model_cls: type[T],
     raise_on_error: bool = True,
 ) -> tuple[T | None, str | None]:
     """
@@ -196,7 +197,7 @@ def parse_and_validate(
 async def retry_with_validation(
     chat_fn: Callable,
     messages: list[dict[str, Any]],
-    model_cls: Type[T],
+    model_cls: type[T],
     max_retries: int = 3,
     logger_name: str = "json_utils",
     **chat_kwargs,

@@ -29,7 +29,6 @@
 
 import threading
 import time
-from pathlib import Path
 
 from backend.core.logger import get_logger
 from backend.core.project_manager import LatexProject
@@ -43,8 +42,8 @@ _BINDING_TOUCH_INTERVAL_SECONDS = 60
 
 def _bindings_store_available() -> bool:
     """绑定表是否可用（多用户模式且库已初始化）。"""
-    from backend.core.multiuser import db
     from backend.core.config import get_config
+    from backend.core.multiuser import db
 
     try:
         if not get_config().multi_user.enabled:

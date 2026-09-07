@@ -1,5 +1,8 @@
 """模板生成自主 Agent 包（对外导入路径与原先 agent.py 保持一致）。"""
 
+from backend.modules.template_gen.trace import append_trace, now_iso
+from backend.utils.tex_compile import run_tex_compile
+
 from .compile import (
     _attach_source_context,
     _error_hints,
@@ -34,9 +37,6 @@ from .validation import (
     _local_dependencies_provide_cjk,
     _strip_latex_comments,
 )
-
-from backend.modules.template_gen.trace import append_trace, now_iso
-from backend.utils.tex_compile import run_tex_compile
 
 __all__ = [
     "TemplateAgentService",

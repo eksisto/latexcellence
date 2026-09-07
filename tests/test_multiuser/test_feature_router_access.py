@@ -11,17 +11,14 @@
 """
 
 import uuid
-from pathlib import Path
 
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from backend.core import access_control
 from backend.core.multiuser import auth as auth_core
 from backend.core.multiuser import db as db_module
 from backend.core.multiuser import userspace
-from backend.core.security_middleware import AccessSecurityMiddleware
 from backend.core.workspace_manager import get_workspace_manager
 from tests.test_multiuser.conftest import build_mu_env, csrf
 

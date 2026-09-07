@@ -10,7 +10,6 @@
 # Local change: absolute import rewritten to a relative one for in-tree use.
 
 import io
-from typing import Union
 
 from . import util
 
@@ -42,7 +41,7 @@ class Searcher(object):
     def get_io_count(self):
         return self.__io_count
 
-    def search(self, ip: Union[bytes, str]):
+    def search(self, ip: bytes | str):
         # check and parse the string ip
         ip_bytes = None
         if isinstance(ip, str):

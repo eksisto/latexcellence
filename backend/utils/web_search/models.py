@@ -108,7 +108,7 @@ class SearchResponse(BaseModel):
         lines.append("")
 
         # 预算扣除标题/摘要/URL 等固定开销后，剩余给页面全文
-        remaining = max(0, max_chars - sum(len(l) + 1 for l in lines))
+        remaining = max(0, max_chars - sum(len(line) + 1 for line in lines))
         for i, r in enumerate(items, 1):
             lines.append(f"[{i}] {r.title}")
             if r.snippet:

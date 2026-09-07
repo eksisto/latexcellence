@@ -10,6 +10,7 @@ import asyncio
 from fastapi import Cookie, Depends, HTTPException
 
 from backend.core.config import get_config
+
 from . import auth as auth_core
 from . import userspace
 

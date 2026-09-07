@@ -14,13 +14,13 @@ import pytest
 from backend.core.multiuser import auth as auth_core
 from backend.core.multiuser import db as db_module
 from backend.core.multiuser import mail
+from tests.test_multiuser.conftest import build_mu_app as _build_app
 from tests.test_multiuser.conftest import (
     build_mu_env,
     csrf,
     last_outbox_row,
     smtp_enabled_extra,
 )
-from tests.test_multiuser.conftest import build_mu_app as _build_app
 
 
 def _run(coro):

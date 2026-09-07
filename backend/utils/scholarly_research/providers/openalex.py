@@ -11,7 +11,7 @@ import httpx
 from backend.core.config import get_config
 from backend.core.logger import get_logger
 
-from .._utils import _normalize_doi, _DOI_PREFIX_PATTERN
+from .._utils import _normalize_doi
 from ..base import BaseResearchProvider
 from ..models import (
     Author,

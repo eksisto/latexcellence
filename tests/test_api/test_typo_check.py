@@ -13,15 +13,15 @@ typo_check 模块集成测试。
 
 import tempfile
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from pydantic import ValidationError
 
 from backend.modules.typo_check.service import (
-    TypoCheckService,
-    TypoCheckResult,
     TypoChangeItem,
+    TypoCheckResult,
+    TypoCheckService,
 )
 from backend.utils.latex_parser import MARKER_PATTERN
 

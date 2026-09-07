@@ -4,20 +4,21 @@ import json
 import posixpath
 import re
 import uuid
+from collections.abc import AsyncIterator
 from pathlib import Path
-from typing import Any, AsyncIterator
+from typing import Any
 
 from backend.core.config import get_config
-from backend.core.logger import get_logger
 from backend.core.llm_client import (
     assistant_message_from_stream,
     chat_stream_with_tools_retry,
 )
+from backend.core.logger import get_logger
 from backend.core.model_router import get_client_for, has_api_key_for
 from backend.core.prompts import get_prompt, render_pgfplots_reference
 from backend.modules.plot_gen.data_parser import build_profile_context
 from backend.modules.plot_gen.executor import PlotExecutor
-from backend.modules.plot_gen.models import ChartPlan, DataProfile, PlotSessionMeta
+from backend.modules.plot_gen.models import ChartPlan, PlotSessionMeta
 from backend.modules.plot_gen.trace import append_trace, now_iso
 from backend.utils.agent_file_tools import build_agent_file_tools_schema
 

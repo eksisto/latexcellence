@@ -9,9 +9,9 @@
 # (binding/python/ip2region/util.py, dual-licensed Apache-2.0 OR MIT).
 
 import io
-import os
 import ipaddress
-from typing import Callable
+import os
+from collections.abc import Callable
 
 # global constants
 XdbStructure20 = 2

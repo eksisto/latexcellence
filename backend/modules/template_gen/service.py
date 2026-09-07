@@ -12,8 +12,9 @@ import asyncio
 import io
 import uuid
 import zipfile
+from collections.abc import AsyncIterator
 from pathlib import Path
-from typing import Any, AsyncIterator
+from typing import Any
 
 from backend.core.config import get_config
 from backend.core.logger import get_logger

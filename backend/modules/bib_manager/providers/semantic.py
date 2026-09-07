@@ -105,7 +105,6 @@ class SemanticScholarProvider(BaseMetadataProvider):
 
         keywords = []
 
-        external_ids = data.get("externalIds", {})
         url = f"https://doi.org/{doi}"
         oa_pdf = data.get("openAccessPdf", {})
         if oa_pdf and oa_pdf.get("url"):

@@ -10,18 +10,17 @@ from backend.core.logger import get_logger
 from backend.utils.time_utils import get_current_time_context
 from backend.utils.web_search.base import BaseSearchEngine
 from backend.utils.web_search.deep_read import get_deep_reader
-from backend.utils.web_search.page_reader import get_structured_page_reader
 from backend.utils.web_search.engines.ddg import DDGChallengeError, DuckDuckGoHtmlEngine
 from backend.utils.web_search.engines.searxng import SearXNGEngine
 from backend.utils.web_search.engines.tavily import TavilyEngine
 from backend.utils.web_search.models import (
-    FindInPageResult,
     EngineStatus,
+    FindInPageResult,
     PageReadResult,
     SearchResponse,
     SearchResult,
 )
-
+from backend.utils.web_search.page_reader import get_structured_page_reader
 from backend.utils.web_search.query_rewriter import QueryRewriter
 from backend.utils.web_search.ranking import rank_responses
 from backend.utils.web_search.url_utils import canonicalize_url

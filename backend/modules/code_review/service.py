@@ -16,20 +16,19 @@ LaTeX 代码审查业务逻辑。
     - 源码修改由工具完成，LLM 仅提供建议
 """
 
-import re
 from typing import Any, ClassVar, Literal
 
 from pydantic import BaseModel, model_validator
 
 from backend.core import access_control
-from backend.core.config import get_config
-from backend.core.workspace_manager import get_project_manager_for_workspace
 from backend.core.base_paragraph_check import BaseParagraphCheckService
+from backend.core.config import get_config
 from backend.core.prompts import get_prompt
+from backend.core.workspace_manager import get_project_manager_for_workspace
 from backend.utils.json_utils import retry_with_validation
-from backend.utils.latex_parser import MARKER_PATTERN
-from backend.utils.latex_json_guard import LatexText
 from backend.utils.latex_formatter import format_latex_source
+from backend.utils.latex_json_guard import LatexText
+from backend.utils.latex_parser import MARKER_PATTERN
 
 # ── Pydantic models for LLM response schema ────────────────────────────────
 

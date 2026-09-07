@@ -7,14 +7,14 @@
 
 import json
 import re
-from typing import Any, Optional
+from typing import Any
 
 from pydantic import BaseModel
 
 from backend.core.logger import get_logger
 from backend.core.model_router import get_client_for
-from backend.utils.json_utils import retry_with_validation
 from backend.modules.terminology_check.models import TermClusterResult
+from backend.utils.json_utils import retry_with_validation
 
 
 class TermItem(BaseModel):

@@ -6,7 +6,6 @@
 
 import json
 
-
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
@@ -14,8 +13,8 @@ from pydantic import BaseModel
 from backend.core import access_control
 from backend.core.base_paragraph_check import ApplyChangeItem, inject_expected_md5s
 from backend.core.multiuser.dependencies import require_admin_if_multiuser
-from backend.modules.expression_opt.service import ExpressionOptService
 from backend.modules.expression_opt.prompt_manager import get_prompt_manager
+from backend.modules.expression_opt.service import ExpressionOptService
 
 router = APIRouter(prefix="/api/expression-opt", tags=["expression_opt"])
 

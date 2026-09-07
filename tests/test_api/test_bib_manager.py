@@ -13,7 +13,6 @@ bib_manager 模块集成测试。
     - Router 端点集成测试
 """
 
-import json
 import tempfile
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -21,6 +20,14 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from pydantic import ValidationError
 
+from backend.core.config import get_config
+from backend.modules.bib_manager.bib_parser import (
+    BibParserError,
+    normalize_doi,
+    normalize_title,
+    parse_bib_file,
+    remove_entry_from_content,
+)
 from backend.modules.bib_manager.models import (
     BibEntry,
     DoiLookupRequest,
@@ -32,26 +39,18 @@ from backend.modules.bib_manager.models import (
     SaveBibRequest,
     SavedFormatInfo,
 )
+from backend.modules.bib_manager.providers.arxiv import ArxivProvider
+from backend.modules.bib_manager.providers.base import (
+    clean_doi,
+    extract_arxiv_id,
+    is_arxiv_doi,
+)
+from backend.modules.bib_manager.providers.crossref import CrossrefProvider
 from backend.modules.bib_manager.service import BibManagerService
 from backend.modules.bib_manager.style_registry import (
     get_style_for_format,
     list_all_styles,
 )
-from backend.modules.bib_manager.bib_parser import (
-    parse_bib_file,
-    remove_entry_from_content,
-    normalize_title,
-    normalize_doi,
-    BibParserError,
-)
-from backend.modules.bib_manager.providers.base import (
-    clean_doi,
-    is_arxiv_doi,
-    extract_arxiv_id,
-)
-from backend.modules.bib_manager.providers.crossref import CrossrefProvider
-from backend.modules.bib_manager.providers.arxiv import ArxivProvider
-from backend.core.config import get_config
 from backend.utils.file_ops import safe_read
 
 

@@ -18,8 +18,8 @@ import httpx
 import pytest
 from openai import APIStatusError, BadRequestError, UnprocessableEntityError
 
-from backend.core.config import AppConfig, LLMConfig
 from backend.core import llm_client as llm_client_module
+from backend.core.config import AppConfig, LLMConfig
 from backend.core.llm_client import (
     LLMClient,
     ResolvedLLMCfg,

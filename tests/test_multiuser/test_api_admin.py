@@ -1,9 +1,7 @@
 """多用户模式 P1：管理员端点（用户列表/审批/禁用/重置密码/配额）API 测试。"""
 
-from fastapi.testclient import TestClient
-
 from backend.core.multiuser import auth as auth_core
-from tests.test_multiuser.conftest import build_mu_app, csrf
+from tests.test_multiuser.conftest import csrf
 
 ADMIN_U = "admin"
 ADMIN_P = "admin-pass-123"
@@ -359,8 +357,7 @@ class TestDeleteUser:
         import os
         import time
 
-        from backend.core.multiuser import quota
-        from backend.core.multiuser import userspace
+        from backend.core.multiuser import quota, userspace
 
         admin = auth_core.create_user(ADMIN_U, ADMIN_P, role="admin", status="active")
         victim = auth_core.create_user(

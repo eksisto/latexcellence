@@ -8,6 +8,7 @@ import httpx
 from backend.core.config import get_config
 from backend.core.logger import get_logger
 from backend.core.tool_registry import get_tool_registry
+from backend.utils.web_search.page_reader import get_structured_page_reader
 
 from ._utils import _dedup_works, _limit_results, _rrf_rank, _sort_works
 from .base import BaseResearchProvider
@@ -19,7 +20,6 @@ from .models import (
     WorkDetailResult,
 )
 from .planner import ScholarlyQueryPlan
-from backend.utils.web_search.page_reader import get_structured_page_reader
 from .providers.arxiv import ArxivProvider
 from .providers.core import COREProvider
 from .providers.crossref import CrossrefProvider

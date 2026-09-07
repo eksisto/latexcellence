@@ -474,6 +474,7 @@ class TestCompileRouter:
     @pytest.fixture
     def client(self):
         from fastapi.testclient import TestClient
+
         from main import app
 
         return TestClient(app)
@@ -583,6 +584,7 @@ class TestCompilePdfEndpoint:
     @pytest.fixture
     def client(self):
         from fastapi.testclient import TestClient
+
         from main import app
 
         return TestClient(app)
@@ -671,15 +673,17 @@ class TestCompileRequestValidation:
         assert req.main_file == "main.tex"
 
     def test_empty_rejected(self):
-        from backend.modules.compile.router import CompileRequest
         from pydantic import ValidationError
+
+        from backend.modules.compile.router import CompileRequest
 
         with pytest.raises(ValidationError):
             CompileRequest(main_file="")
 
     def test_starts_with_dash_rejected(self):
-        from backend.modules.compile.router import CompileRequest
         from pydantic import ValidationError
+
+        from backend.modules.compile.router import CompileRequest
 
         with pytest.raises(ValidationError):
             CompileRequest(main_file="--output=/tmp")
@@ -703,6 +707,7 @@ class TestCompilePdfEndpointValidation:
     @pytest.fixture
     def client(self):
         from fastapi.testclient import TestClient
+
         from main import app
 
         return TestClient(app)

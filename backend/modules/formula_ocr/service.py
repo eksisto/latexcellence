@@ -31,14 +31,15 @@ from backend.core.logger import get_logger
 from backend.core.model_router import get_client_for, has_api_key_for
 from backend.core.prompts import get_prompt
 from backend.utils.json_utils import format_validation_error
-from backend.utils.latex_json_guard import validate_latex_field
 from backend.utils.latex_formatter import format_latex_source
+from backend.utils.latex_json_guard import validate_latex_field
 from backend.utils.latex_literals import (
     blank_literal_spans,
     extract_delimited_block,
     find_matching_brace,
 )
 from backend.utils.latex_package_analyzer import prepend_package_comments
+
 from .visual_inline import VisualInlineHint, analyze_formula_image
 
 # 分隔符协议：LaTeX 以纯文本形式夹在标记之间，避免 JSON 反斜杠转义损坏

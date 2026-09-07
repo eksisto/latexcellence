@@ -19,7 +19,7 @@ from backend.utils.sandbox.docker_backend import (
     _demux_docker_stream,
 )
 from backend.utils.sandbox.errors import sandbox_code_of
-from backend.utils.sandbox.models import ExecSpec, SandboxMount, SandboxLimits
+from backend.utils.sandbox.models import ExecSpec, SandboxLimits, SandboxMount
 
 
 def _frame(ftype: int, payload: bytes) -> bytes:

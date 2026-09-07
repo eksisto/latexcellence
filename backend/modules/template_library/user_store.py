@@ -15,8 +15,8 @@ manifest.json 与内置模板 schema 一致，含 id/name/category/main_file/sou
 import json
 import shutil
 import uuid
+from collections.abc import Callable
 from pathlib import Path
-from typing import Callable
 
 from backend.core.config import get_config
 from backend.core.logger import get_logger

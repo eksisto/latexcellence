@@ -7,16 +7,16 @@ from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from pydantic import ValidationError
 from PIL import Image
+from pydantic import ValidationError
 
-from backend.modules.formula_ocr.visual_inline import (
-    VisualInlineHint,
-    analyze_formula_image,
-)
 from backend.modules.formula_ocr.service import (
     FormulaOCRResult,
     FormulaOCRService,
+)
+from backend.modules.formula_ocr.visual_inline import (
+    VisualInlineHint,
+    analyze_formula_image,
 )
 
 _VISUAL_FIXTURES = (

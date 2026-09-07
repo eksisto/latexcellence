@@ -19,8 +19,8 @@ import pytest
 from pydantic import ValidationError
 
 from backend.modules.code_review.service import (
-    CodeReviewService,
     CodeReviewResult,
+    CodeReviewService,
     CodeReviewSuggestion,
 )
 from backend.utils.latexindent_utils import is_latexindent_available

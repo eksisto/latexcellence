@@ -89,7 +89,6 @@ class EuropePMCProvider(BaseMetadataProvider):
         volume = str(result.get("journalVolume", ""))
         issue = str(result.get("issue", ""))
         page_info = result.get("pageInfo", "")
-        pages_match = re.match(r"(\d+)-(\d+)", page_info) if page_info else None
         pages = page_info
 
         publisher = result.get("publisher", "")

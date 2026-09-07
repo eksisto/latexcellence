@@ -1,5 +1,7 @@
 """Git 差异高亮 PDF 生成服务包（对外导入路径与原先 service.py 保持一致）。"""
 
+from backend.utils.tex_compile import TexCompileResult
+
 from .constants import (
     LATEXDIFF_MATH_MARKUPS,
     LATEXDIFF_TYPES,
@@ -51,14 +53,12 @@ from .render import (
     render_diff_pdf,
 )
 from .revisions import (
-    get_project_context,
     _list_commit_revisions,
     _list_ref_revisions,
     _validate_revision,
+    get_project_context,
     list_git_revisions,
 )
-
-from backend.utils.tex_compile import TexCompileResult
 
 __all__ = [
     "DiffDocument",

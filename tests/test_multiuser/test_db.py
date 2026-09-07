@@ -111,9 +111,9 @@ class TestSchemaMigrations:
 
     def test_legacy_v1_db_upgrades_without_data_loss(self, tmp_path):
         """存量 v1 库（有表但 user_version=0）升级到最新版且数据保留。"""
-        import sqlite3
         import json as _json
         import os as _os
+        import sqlite3
         from unittest import mock as _mock
 
         from backend.core import config as cfg_module
