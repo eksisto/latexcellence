@@ -62,3 +62,7 @@ scripts/
 # 不入库；clean checkout 后经 npm scripts 先行生成，构建可重复）
 frontend/src/lib/editor/latexGrammar/parser.js
 frontend/src/lib/editor/latexGrammar/parser.terms.js
+
+# pdf.js 预置 CMap 资源（同上：pre 钩子从 pdfjs-dist 拷贝，PdfJsPreview
+# 翻译无 ToUnicode 的 CID 字体必需，见 src/lib/editor/pdfjsCmaps.build.mjs）
+frontend/public/pdfjs/

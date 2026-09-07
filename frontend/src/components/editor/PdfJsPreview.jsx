@@ -137,7 +137,17 @@ export default function PdfJsPreview({
     activeTasksRef.current.clear();
     loadPdfjs()
       .then(async (pdfjs) => {
-        loaded = await pdfjs.getDocument({ url }).promise;
+        loaded = await pdfjs.getDocument({
+          url,
+          // pdf.js 翻译无 ToUnicode 的 CID 字体（xdvipdfmx 嵌入的中文
+          // Fandol 等，ctex 默认字库）需按 /CIDSystemInfo 拉取预置 CMap
+          // （实测请求 Adobe-GB1-UCS2）：缺失时 translateFont 整体失败，
+          // 中文字形不渲染（桌面查看器直接按 CID 绘制字形不受影响）。
+          // 资源经 predev/prebuild 钩子拷贝到 public/pdfjs/cmaps
+          // （src/lib/editor/pdfjsCmaps.build.mjs，生成物不入库）
+          cMapUrl: `${import.meta.env.BASE_URL}pdfjs/cmaps/`,
+          cMapPacked: true,
+        }).promise;
         if (cancelled) {
           loaded.destroy();
           return;

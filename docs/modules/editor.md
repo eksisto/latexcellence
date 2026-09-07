@@ -743,6 +743,14 @@ PDF 预览由 iframe 整体替换为 pdf.js 渲染（`PdfJsPreview`，
 可控是正反向定位的前提——iframe 无法程序化滚动、无法取点击位置。
 `pdfjs-dist` 仅经动态 `import()` 首次预览才加载（vite 独立分包
 `vendor-pdfjs`，worker 资产经 Vite `?url` 引入），首屏零加载；
+`getDocument` 需传入 `cMapUrl` / `cMapPacked` 指向预置 CMap 资源——
+LaTeX 工具链（xdvipdfmx）嵌入的 CID 字体普遍无 ToUnicode（如 ctex
+默认 Fandol 中文字体），pdf.js 翻译字体时按 `/CIDSystemInfo` 拉取
+预置 CMap（实测 `Adobe-GB1-UCS2`），缺失时 `translateFont` 整体
+失败、对应字形（典型表现：中文）不渲染，而桌面查看器直接按 CID
+绘制字形不受影响；资源由 `src/lib/editor/pdfjsCmaps.build.mjs` 经
+predev/prebuild/pretest 钩子从 `pdfjs-dist/cmaps` 拷贝到
+`public/pdfjs/cmaps`（生成物不入库，与 latexGrammar parser 同模式）。
 `PDFPreview` 对外 props 兼容 `{url}` 并新增可选 `forwardTarget` /
 `onBackwardSync` 通道，GitDiff / 工作台 / 模板中心等既有使用点
 自动受益于 pdf.js 渲染与最小工具条（± 缩放含 Ctrl+滚轮、适宽、

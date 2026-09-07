@@ -7,11 +7,11 @@
     "node": ">=20"
   },
   "scripts": {
-    "predev": "node src/lib/editor/latexGrammar/build.mjs",
+    "predev": "node src/lib/editor/latexGrammar/build.mjs && node src/lib/editor/pdfjsCmaps.build.mjs",
     "dev": "vite",
-    "prebuild": "node src/lib/editor/latexGrammar/build.mjs",
+    "prebuild": "node src/lib/editor/latexGrammar/build.mjs && node src/lib/editor/pdfjsCmaps.build.mjs",
     "build": "vite build",
-    "pretest": "node src/lib/editor/latexGrammar/build.mjs",
+    "pretest": "node src/lib/editor/latexGrammar/build.mjs && node src/lib/editor/pdfjsCmaps.build.mjs",
     "preview": "vite preview",
     "test": "node --test"
   },
