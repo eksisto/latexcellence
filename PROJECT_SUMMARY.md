@@ -32,7 +32,7 @@ latexcellence/
 │   │   ├── security_middleware.py   # CORS 白名单 + 共享访问令牌中间件（多用户模式：会话 + CSRF + 请求级用户上下文全局注入）
 │   │   ├── logger.py                # TimedRotatingFileHandler 日志
 │   │   ├── workspace_manager.py     # 多工作区管理（workspace_id → LatexProject）
-│   │   ├── project_manager.py       # LaTeX 项目管理（文件树/段落/撤销）
+│   │   ├── project_manager.py       # LaTeX 项目管理（文件树/段落/撤销/手动主文件持久化 .latexcellence/main_file，open 时优先读取、安全回落自动识别）
 │   │   ├── tool_registry.py         # Function Calling 工具注册表
 │   │   ├── prompts.py               # 中央提示词管理模块（集中存储所有 LLM 提示词）
 │   │   ├── base_paragraph_check.py  # 逐段检查服务基类（typo/expression/code_review/terminology 共享）

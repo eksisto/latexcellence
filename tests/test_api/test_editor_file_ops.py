@@ -189,6 +189,61 @@ class TestDeleteFile:
             outside.unlink(missing_ok=True)
 
 
+class TestMainFilePersistence:
+    """手动主文件持久化（.latexcellence/main_file）：换主文件后项目重开
+    （页面刷新直达恢复 / 后端重启 / 关闭再打开）必须保持有效——否则 open()
+    的自动识别（优先 main.tex）会静默重置用户选择，删除原主文件的通路
+    也随之再次被保护拦截。"""
+
+    def _set_main(self, client, env, file_path):
+        return client.post(
+            "/api/project/set-main-file",
+            params={"workspace_id": env["ws"]},
+            json={"file_path": file_path},
+        )
+
+    def test_switch_survives_project_reopen_then_delete_old_main(self, client, env):
+        from backend.core.workspace_manager import get_project_manager_for_workspace
+
+        (env["root"] / "other.tex").write_text("% other\n", encoding="utf-8")
+        switched = self._set_main(client, env, "other.tex")
+        assert switched.status_code == 200, switched.text
+
+        # 模拟刷新直达 / 重开项目：open() 重新识别主文件，应读到持久标记
+        pm = get_project_manager_for_workspace(env["ws"])
+        info = pm.open(str(env["root"]))
+        assert info.main_file == "other.tex"
+
+        # 删除原主文档不再被保护拦截
+        resp = _delete(client, env, "main.tex")
+        assert resp.status_code == 200, resp.text
+        assert not (env["root"] / "main.tex").exists()
+
+    def test_marker_dir_not_exposed_in_file_tree(self, client, env):
+        (env["root"] / "other.tex").write_text("% other\n", encoding="utf-8")
+        assert self._set_main(client, env, "other.tex").status_code == 200
+        assert (env["root"] / ".latexcellence" / "main_file").is_file()
+        listed = client.get(
+            "/api/project/file-tree",
+            params={"workspace_id": env["ws"]},
+        )
+        assert listed.status_code == 200
+        # 元数据目录为隐藏目录：不进文件树，也不出现在任何响应文本
+        assert ".latexcellence" not in listed.text
+
+    def test_invalid_marker_falls_back_to_auto_detect(self, client, env):
+        # 上传压缩包夹带的恶意/陈旧标记（穿越路径）→ 安全校验拒绝，
+        # open 时安全回落自动识别（main.tex）
+        marker_dir = env["root"] / ".latexcellence"
+        marker_dir.mkdir()
+        (marker_dir / "main_file").write_text("../evil.tex", encoding="utf-8")
+        from backend.core.workspace_manager import get_project_manager_for_workspace
+
+        pm = get_project_manager_for_workspace(env["ws"])
+        info = pm.open(str(env["root"]))
+        assert info.main_file == "main.tex"
+
+
 class TestFileTreeRefresh:
     """create/delete 响应外，GET /file-tree 的打开时缓存也应反映变更
     （服务端 refresh_file_tree 就地更新 open 时扫描的缓存）。"""

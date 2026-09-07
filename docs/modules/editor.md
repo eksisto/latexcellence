@@ -53,6 +53,15 @@ AI 建议**不经后端落盘**：建议以结构化形式随 SSE 返回并随�
 | `POST /api/project/create-file` | 文件树新建文件：白名单后缀路径校验 → 目标已存在报 409 `file_exists`、父目录缺失报 400 `parent_not_found` → utf-8 落盘（内容固定为空，`content` 字段预留模板初始化）→ 多用户模式落盘前按新文件字节做项目配额预检（超限 413 `quota_exceeded`）、落盘后 `refresh_owner_usage_after_write` → 失效大纲缓存 → 响应携带重扫后的 `file_tree`（前端单次往返刷新）。**不纳入统一撤销记账**（edit_log 恢复通道只支持改写已存在文件），超长内容 413 `content_too_long`、损坏特征 400 `invalid_content` 与 save-file 同口径 |
 | `POST /api/project/delete-file` | 文件树删除文件：白名单后缀路径校验 → 目标非普通文件报 404 `file_not_found` → **主文档删除保护**（当前 main file 报 400 `main_file_protected`，需先 set-main-file 更换）→ `unlink()` → 多用户模式刷新用量记账（配额按磁盘重算随之释放）→ 失效大纲缓存 → 响应携带重扫后的 `file_tree`。同样不纳入撤销记账，误删由前端确认弹窗兜底 |
 
+手动主文件经 `set_main_file()` 持久化到项目内隐藏标记
+`.latexcellence/main_file`（原子写），`open()` 时优先读取、缺失/非法/
+指向文件不存在时安全回落自动识别（优先 main.tex）——否则页面刷新
+直达恢复等重开项目的场景会把用户选择静默重置回 main.tex，删除保护
+随之再次拦截；标记内容经 path_guard 白名单校验（仅 .tex、拒绝穿越与
+符号链接），上传压缩包夹带的恶意标记无风险。隐藏目录不进文件树，
+也不参与大纲/符号扫描；git_manage 的 .gitignore 模板已含
+`.latexcellence/` 避免污染用户版本库。
+
 约束：面向用户的错误消息只用相对路径（多用户路径脱敏）；同步阻塞 I/O
 与损坏特征扫描一律经 `asyncio.to_thread` 调度。
 

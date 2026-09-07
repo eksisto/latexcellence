@@ -154,8 +154,11 @@ class LatexProject:
 
         # 扫描文件树
         file_tree = self._scan_directory(root)
-        # 识别主文档
-        main_file = self._find_main_file(root, file_tree)
+        # 识别主文档：手动设置过的主文件经 .latexcellence/main_file 持久化，
+        # 优先于自动识别（否则重开项目/刷新页面会静默回退 main.tex）
+        main_file = self._read_persisted_main_file(root) or self._find_main_file(
+            root, file_tree
+        )
         # 构建依赖图
         dep_graph = self._build_dependency_graph(root)
 
@@ -660,6 +663,11 @@ class LatexProject:
         """
         手动设置项目主文档路径。
 
+        同时持久化到 <root>/.latexcellence/main_file：手动选择必须跨项目
+        重开（页面刷新直达恢复 / 后端重启 / 关闭再打开）保持有效，否则
+        open() 的自动识别（优先 main.tex）会静默覆盖用户选择。持久化
+        失败仅记警告——内存中的设置仍然生效，行为不劣于不持久化。
+
         参数：
             file_path: 主文件相对路径
         """
@@ -673,7 +681,43 @@ class LatexProject:
         if not full_path.exists():
             raise FileNotFoundError(f"File not found: {file_path}")
         self._project_info.main_file = file_path
+        self._persist_main_file(Path(self._project_info.root_path), file_path)
         self._logger.info(f"Main file set to: {file_path}")
+
+    # 手动主文件持久化标记（隐藏目录：_scan_directory 与大纲/符号扫描
+    # 均跳过点开头条目，不会进文件树或参与任何扫描）
+    _MAIN_FILE_MARKER_DIR = ".latexcellence"
+    _MAIN_FILE_MARKER_NAME = "main_file"
+
+    def _persist_main_file(self, root: Path, file_path: str) -> None:
+        """把手动主文件写入项目内标记文件（原子写，失败仅记警告）。"""
+        try:
+            marker_dir = root / self._MAIN_FILE_MARKER_DIR
+            marker_dir.mkdir(parents=True, exist_ok=True)
+            atomic_write(marker_dir / self._MAIN_FILE_MARKER_NAME, file_path + "\n")
+        except OSError as e:
+            self._logger.warning("Persist main file marker failed: %s", e)
+
+    def _read_persisted_main_file(self, root: Path) -> str | None:
+        """读取持久化的手动主文件；缺失/非法/指向文件不存在时返回 None。
+
+        标记内容经 path_guard 白名单校验（仅 .tex、拒绝穿越与符号链接），
+        指向文件必须真实存在——上传压缩包夹带的恶意/陈旧标记一律安全
+        回落到自动识别。
+        """
+        marker = root / self._MAIN_FILE_MARKER_DIR / self._MAIN_FILE_MARKER_NAME
+        try:
+            if not marker.is_file():
+                return None
+            value = marker.read_text(encoding="utf-8").strip()
+            if not value:
+                return None
+            resolve_project_path(root, value, allowed_suffixes=(".tex",))
+            if not (root / value).is_file():
+                return None
+            return value
+        except (OSError, ValueError):
+            return None
 
     def can_undo(self, file_path: str) -> bool:
         """检查指定文件是否有可撤销的操作。"""
