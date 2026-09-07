@@ -197,7 +197,8 @@ class ProjectInfo:
 | 方法 | 功能 |
 | --- | --- |
 | `open(path)` | 打开项目目录，扫描文件树，检测主文档，构建依赖图 |
-| `get_file_tree()` | 返回文件树（仅展示 `.tex`/`.bib`/`.cls`/`.sty`/`.pdf` 文件） |
+| `get_file_tree()` | 返回文件树（文件收录条件为「非隐藏 + 非编译产物」：任意格式资源均可见，仅编译产物黑名单 `BUILD_ARTIFACT_SUFFIXES` 不进树；`.pdf` 刻意不在黑名单，保留编译产物可预览的现状） |
+| `refresh_file_tree()` | 重扫项目目录并就地刷新缓存的文件树（编辑器文件树新建/上传/删除后调用；`main_file` 与依赖图保持不变） |
 | `get_file_md5(file_path)` | 返回指定文件的当前 MD5 哈希值（乐观锁版本号），同时更新内部缓存 |
 | `get_paragraphs(file_path)` | 按空行分割文件为段落，记录行号范围 |
 | `apply_change(file_path, idx, text, expected_md5=None)` | 原地修改段落：乐观锁校验 → 备份 → 替换行范围 → 原子写入 → 更新 MD5 缓存 |

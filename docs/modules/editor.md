@@ -11,7 +11,8 @@
 > 片段库、阶段三实时语法诊断、阶段四跨文件大纲与公式固定预览卡、
 > 阶段五助手接入联网与学术检索（5a 工具接入 + 5b 确认流）及阶段六
 > 自研 Lezer 子集语法（6a P0 高亮 + 6b 折叠、环境缩进与括号匹配
-> 精确化）已实施）。
+> 精确化）已实施）、[docs/editor-file-upload-design.md](../editor-file-upload-design.md)
+> （文件树上传任意格式资源，决策 D1–D12，已实施）。
 
 ## 设计概述
 
@@ -51,7 +52,8 @@ AI 建议**不经后端落盘**：建议以结构化形式随 SSE 返回并随�
 | `POST /api/project/format-latex` | 一键格式化（阶段五 / 决策 Q8）：**纯转换端点**——接收缓冲区全文 `{content}`，复用 `latex_formatter.format_latex_source()`（latexindent 优先、内置轻量格式化器兜底，外部命令执行沿既有 SandboxRunner 规则与超时语义）返回 `{content, changed}`；不接收路径参数、不落盘、不进入配额记账、零 LLM；内容上限与 save-file 同量级（超限 413 `content_too_long`）；写权限依赖使 viewer 服务端拒绝；两层格式化器按契约"失败返回原样"（`changed=false`），意外异常收敛为 500 `format_failed` |
 | `POST /api/project/save-file` | 统一保存：`latex_json_guard` 宽松损坏特征校验（不做括号/$ 配平检查）→ MD5 乐观锁（不符返回 **409** 结构化错误 `file_conflict`）→ 单用户推入 BackupManager 撤销栈 / 多用户记入 workspace_edit_ops 反向补丁快照 → 刷新项目用量记账，超限回滚 |
 | `POST /api/project/create-file` | 文件树新建文件：白名单后缀路径校验 → 目标已存在报 409 `file_exists`、父目录缺失报 400 `parent_not_found` → utf-8 落盘（内容固定为空，`content` 字段预留模板初始化）→ 多用户模式落盘前按新文件字节做项目配额预检（超限 413 `quota_exceeded`）、落盘后 `refresh_owner_usage_after_write` → 失效大纲缓存 → 响应携带重扫后的 `file_tree`（前端单次往返刷新）。**不纳入统一撤销记账**（edit_log 恢复通道只支持改写已存在文件），超长内容 413 `content_too_long`、损坏特征 400 `invalid_content` 与 save-file 同口径 |
-| `POST /api/project/delete-file` | 文件树删除文件：白名单后缀路径校验 → 目标非普通文件报 404 `file_not_found` → **主文档删除保护**（当前 main file 报 400 `main_file_protected`，需先 set-main-file 更换）→ `unlink()` → 多用户模式刷新用量记账（配额按磁盘重算随之释放）→ 失效大纲缓存 → 响应携带重扫后的 `file_tree`。同样不纳入撤销记账，误删由前端确认弹窗兜底 |
+| `POST /api/project/delete-file` | 文件树删除文件：**主文档删除保护**（当前 main file 报 400 `main_file_protected`，需先 set-main-file 更换）→ 隐藏组件拒绝 + 路径校验（不限后缀，任意非隐藏后缀可删，决策 D9；`_reject_hidden_components` 与上传路径共用）→ 目标非普通文件报 404 `file_not_found` → `unlink()` → 多用户模式刷新用量记账（配额按磁盘重算随之释放）→ 失效大纲缓存 → 响应携带重扫后的 `file_tree`。同样不纳入撤销记账，误删由前端确认弹窗兜底 |
+| `POST /api/project/upload-file` | 文件树上传任意格式资源（决策 D1/D5/D6，详见[文件树新建 / 上传 / 删除文件](#文件树新建--上传--删除文件)）：multipart + query 形态（multipart 无法携带 JSON body，故字段 `file` 走表单、`file_path` / `workspace_id` 走 query），鉴权用 query 版 `require_workspace(write=True)`。校验链按序：20MB 流式上限（`MAX_UPLOAD_FILE_BYTES`，超限即中止并清理暂存，413 `file_too_large`）→ 目标文件名消毒（拒绝空名 / 控制字符 / 路径分隔符）→ 隐藏组件拒绝（任一路径组件点开头即 400 `invalid_path`）→ `resolve_project_path()` 不限后缀 → 同名冲突 409 `file_exists`、父目录缺失 400 `parent_not_found` → 多用户模式落盘前按实际上传字节数做项目配额预检（超限 413 `quota_exceeded`）→ 同目录临时文件 + `Path.replace()` 原子落盘（整链路字节搬运，二进制不经 `write_text`）→ 多用户用量刷新 → 失效大纲缓存 → 响应 `{status, file_path, file_tree}`。工作区未绑定项目 400 `invalid_workspace`；错误消息一律相对路径（多用户脱敏）。**不纳入统一撤销记账**、零 LLM |
 
 手动主文件经 `set_main_file()` 持久化到项目内隐藏标记
 `.latexcellence/main_file`（原子写），`open()` 时优先读取、缺失/非法/
@@ -208,6 +210,7 @@ frontend/src/
 │   ├── StaleCheckBanner.jsx          # 检查结果过期横幅（各检查页复用）
 │   └── …（BinaryFilePreview / CompilePreviewPanel / EditorRightPanel / FilePreviewOverlay / FullscreenPDFPreview）
 ├── CaptchaDialog.jsx                 # DDG 搜索验证码弹窗（共享：Writing Chat 页与编辑器助手侧栏共用，阶段五a 提升）
+├── ProjectExplorer.jsx               # 文件树（工作台页与编辑器页共享）：新建 / 上传（多选，loading 防重复）/ 删除 / 设为主文件入口
 ├── lib/editor/
 │   ├── tabs.js                       # 多缓冲区 tab 状态机纯归约（打开/激活/键入/保存回写/陈旧/关闭）+ 会话选择器
 │   ├── sessionPersistence.js         # 会话 sessionStorage 持久化纯函数（序列化 / 白名单清洗 / LRU 配额淘汰 / 项目键隔离）
@@ -222,7 +225,7 @@ frontend/src/
 │   │   ├── brackets.js               # 括号匹配精确化（openedBy/closedBy 配对 prop + begin↔end 配对高亮插件）
 │   │   ├── index.js                  # parser + tags + 六b 扩展组装 LanguageSupport（foldService/indentService/配对 prop，模块级单例）
 │   │   └── build.mjs                 # @lezer/generator Node API 生成脚本（dev/build/test 前自动执行）
-│   ├── files.js                      # 可编辑/可预览白名单 + 大小上限 + 新建文件名校验/路径拼接纯函数
+│   ├── files.js                      # 可编辑/可预览白名单 + 大小上限 + 新建/上传文件名校验与路径拼接纯函数
 │   ├── preferences.js                # 偏好默认值/白名单清洗/导出导入校验纯函数（v2 含自定义片段条目级清洗）
 │   ├── matcher.js                    # pinyin-pro 四路模糊匹配（多音字词级读音修正）+ 自定义片段派生索引
 │   ├── customCommands.js             # 自定义片段消费侧合并层（归一化 / 与内建库合并 / 面板独立分组）
@@ -615,7 +618,7 @@ localStorage（同一浏览器重启后仍可恢复脏缓冲区）；升级前�
 跨浏览器窗口共享（恢复载荷后者胜出）；公共机器上脏缓冲区内容留存本机
 （与 Notepad++ snapshot 同类取舍，隐私敏感场景建议开启自动保存落盘）。
 
-### 文件树新建 / 删除文件
+### 文件树新建 / 上传 / 删除文件
 
 左栏 `ProjectExplorer` 在可写（`useCanWrite()`）时提供文件级操作入口：
 面板标题行「新建文件」按钮在项目根创建；目录行 hover 的「+」在该目录
@@ -629,6 +632,31 @@ hover 的垃圾桶按钮发起删除（`ConfirmDialog` destructive 二次确认�
 缓存。创建成功后自动打开新 tab（复用 `doOpenFile` 通路）；删除成功后
 该文件全部 tab（含脏缓冲区）联动关闭、只读预览覆盖层同步收起、引用
 符号缓存失效。操作不进撤销记账（见后端小节），由确认弹窗兜底。
+
+**资源上传**（决策 D1–D5、D8，机制详见
+[editor-file-upload-design.md](../editor-file-upload-design.md)）：
+面板标题行与目录行 hover 各有「上传」按钮（与新建「+」同模式），系统
+文件选择框一次多选任意格式。选中后 `useEditorBuffer` 的
+`handleUploadFiles()` 串行逐个直传 `POST /api/project/upload-file`：
+发起前 `validateUploadFileName()` 做与服务端同口径的消毒预检（拒绝空名 /
+路径分隔符 / 控制字符 / 点开头文件名，无效名不发请求；服务端校验仍为
+权威）；每次成功以响应携带的重扫整树 `setFileTree`（末次即最终态）并
+失效引用符号缓存（上传 `.tex` / `.bib` 会引入新的 `\label` / `\cite`
+来源）；失败逐个收集，toast 汇总文件名与原因（经 `translateError()`
+翻译），已成功文件保留。单文件成功 toast 附「插入引用」动作（决策
+D4：仅位图 / PDF 且存在激活文本 tab 时提供）：复用命令面板
+`\includegraphics` 条目模板与 `snippetInsert` 占位符 Tab 跳转通路，
+路径参数预填相对项目根的正斜杠路径（graphics 路径相对编译 cwd，与
+当前编辑文件位置无关，决策 D8），缺 `graphicx` 时经
+`notifyMissingPackage` 自动补宏包声明；多文件仅汇总提示。上传中入口
+按钮呈 loading 态防重复提交；viewer 无上传入口（canWrite 门控 +
+后端写权限双保险）。
+
+配套的树扫描行为：文件树收录条件为「非隐藏 + 非编译产物」（决策
+D2/D7，黑名单见 [backend-core.md](../backend-core.md) project_manager
+一节），任意格式资源（上传或 zip 导入自带）均在树中可见、可预览类型
+点击即预览；未知类型点击树条目 toast 提示不支持预览（决策 D12，不做
+静默无响应）。
 
 文件行另有「设为主文件」hover 星标按钮（仅 `.tex` 且非当前主文件时
 显示；当前主文件行常驻实心星标识，任意深度子目录各自比对
@@ -942,13 +970,18 @@ AI 面板。四处配置同步规范照 AGENTS.md 执行；`/api/config/status` 
 - 后端 `tests/test_api/test_editor_file_io.py`：整文件读写 / 409 结构 /
   字节保真 / invalid_encoding / 事件循环保护（无 LLM）
 - 后端 `tests/test_api/test_editor_file_ops.py` 与
-  `tests/test_multiuser/test_editor_file_ops.py`：文件树新建/删除——
+  `tests/test_multiuser/test_editor_file_ops.py`：文件树新建/上传/删除——
   创建落盘与响应携带重扫 file_tree（根/子目录）/ 重复 409 `file_exists` /
   白名单外后缀与路径穿越拒绝 / 父目录缺失 `parent_not_found` /
   超长 413 / 损坏内容 400 / 删除与树同步 / 主文档保护
   `main_file_protected`（换主文件后放行）/ GET /file-tree 缓存刷新；
-  多用户侧 owner 创建/删除成功且**不产生 workspace_edit_ops 记账**、
-  viewer 写保护 403、配额预检 413（落盘前拦截）、路径脱敏
+  上传任意后缀成功（树含新文件，根/子目录）/ 超限 413（落盘前拦截）/
+  冲突 409 / 隐藏目录·点开头·控制字符·空文件名·反斜杠分隔符拒绝 /
+  产物黑名单不进树（含 `.synctex.gz` 双后缀命中，资源文件保留）/
+  任意非隐藏后缀删除成功 / raw-file 对非白名单后缀仍拒绝；
+  多用户侧 owner 创建/上传/删除成功且**不产生 workspace_edit_ops 记账**、
+  viewer 写保护 403（含上传）、上传配额预检 413（落盘前拦截）、
+  CSRF/未登录 401、路径脱敏
 - 后端 `tests/test_api/test_editor_assistant.py`：上下文注入纯函数、
   建议提取、SSE 端点（Mock LLM，严禁真实网络）、开关把关、apply 标记、
   工具白名单执行前硬校验（幻觉/越权工具名被拒不执行）、`_get_editor_tools`

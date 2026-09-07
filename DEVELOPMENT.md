@@ -26,6 +26,7 @@
 | [docs/editor-design.md](docs/editor-design.md) | 网页编辑器 v1 设计（CM6 编辑器、LaTeX 命令中/拼/英快速输入、编辑器侧 AI 助手；已实施，设计与决策记录） |
 | [docs/editor-productivity-design.md](docs/editor-productivity-design.md) | 编辑器生产力改造 v2 设计（多缓冲区 tab、大纲导航、引用补全、格式化、KaTeX 预览、编译错误跳转、修改行色条；已实施，设计与决策记录 Q1–Q19） |
 | [docs/editor-experience-design.md](docs/editor-experience-design.md) | 编辑器写作体验收口设计方案（编辑器 v3：SyncTeX 正反向同步、用户自定义片段库、实时语法诊断、跨文件大纲与 KaTeX 预览卡、编辑器助手接入联网搜索与学术检索、自研 MIT Lezer 子集语法；已实施，设计与决策记录） |
+| [docs/editor-file-upload-design.md](docs/editor-file-upload-design.md) | 编辑器文件树上传任意格式资源设计（决策记录 D1–D12、安全护栏、上传校验链、树扫描产物黑名单与插入引用；已实施） |
 | [docs/multi-model.md](docs/multi-model.md) | 多模型支持设计（模型档案 + 角色槽位路由、能力硬校验、推理模型封装层兼容；已实施） |
 | [docs/deploy-followups.md](docs/deploy-followups.md) | 多用户部署侧收口设计（rar 解压器纳入 SandboxRunner、真实压缩 RAR 样本、沙箱容器预创建池 warm pool、模型连通性测试；已实施） |
 | [docs/modules/editor.md](docs/modules/editor.md) | 网页编辑器模块文档（整文件读写、命令快速输入、编译联动、AI 助手侧栏与保鲜横幅的数据流 / API / 配置 / 前端结构） |
