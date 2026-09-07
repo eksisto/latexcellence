@@ -7,7 +7,7 @@
 import asyncio
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from pydantic import BaseModel
 
 from backend.core import access_control
@@ -441,8 +441,9 @@ async def delete_file(
 ):
     """删除项目内文件（文件树操作，零 LLM、不进撤销记账）。
 
-    可编辑白名单后缀；主文档受保护（先 set-main-file 更换）。多用户
-    模式删除后刷新用量记账（配额随之释放）。响应携带重扫后的 file_tree。
+    任意非隐藏后缀均可删除（editor-file-upload-design §4.4，隐藏组件被
+    服务端权威拒绝）；主文档受保护（先 set-main-file 更换）。多用户模式
+    删除后刷新用量记账（配额随之释放）。响应携带重扫后的 file_tree。
     """
     project = get_project_manager_for_workspace(
         request.workspace_id or binding["workspace_id"]
@@ -451,6 +452,34 @@ async def delete_file(
         project,
         binding,
         file_path=request.file_path,
+    )
+
+
+@router.post("/upload-file")
+async def upload_file(
+    file: UploadFile = File(...),
+    file_path: str = Query(
+        ..., description="目标相对路径（目录 + 文件名，根目录上传时为纯文件名）"
+    ),
+    workspace_id: str = Query(..., description="工作区唯一标识符"),
+    binding: dict = Depends(access_control.require_workspace_write),
+):
+    """上传文件到项目内任意相对路径（文件树操作，零 LLM、不进撤销记账）。
+
+    multipart + query 形态（editor-file-upload-design 决策 D11）：multipart
+    无法携带 JSON body，file_path 与 workspace_id 走 query 参数，鉴权依赖
+    相应换成 query 版 require_workspace(write=True)（create-file 用的
+    JSON body 版不适用）。任意格式 + §3 安全护栏：20MB 流式上限、文件名
+    消毒、隐藏组件拒绝、path_guard 不限后缀、同名冲突 409；多用户模式
+    落盘前项目配额预检、落盘后刷新用量记账。响应携带重扫后的 file_tree，
+    前端单次往返完成文件树刷新。
+    """
+    project = get_project_manager_for_workspace(workspace_id)
+    return await editor_service.upload_project_file(
+        project,
+        binding,
+        file_path=file_path,
+        upload_file=file,
     )
 
 

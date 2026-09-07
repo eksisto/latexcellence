@@ -2,7 +2,7 @@
 LaTeX 项目管理模块。
 
 职责：
-    1. 打开 LaTeX 项目目录，扫描 .tex/.bib/.cls 文件树
+    1. 打开 LaTeX 项目目录，扫描文件树（非隐藏 + 非编译产物黑名单）
     2. 检测 \\include / \\input / \\subfile 依赖关系
     3. 按空行分割 .tex 文件为段落，记录每段在源文件中的行号范围
     4. 原地修改：用户审核确认后，精确写回对应段落
@@ -30,6 +30,46 @@ from backend.utils.file_ops import (
     safe_read_lines,
 )
 from backend.utils.path_guard import resolve_project_path
+
+# 编译产物后缀黑名单（editor-file-upload-design §4.3 / 决策 D7）：文件树
+# 收录条件为「非隐藏 + 非编译产物」，黑名单挡住 latexmk/TeX/bibtex/
+# makeindex/glossaries/beamer 常见产物刷屏。产物仍真实存在于项目（可被
+# 引用、随项目下载），只是不进树；`.pdf` 刻意不进黑名单（保留编译产物
+# PDF 可见可预览的现状）。匹配用 name.endswith(tuple) 而非 entry.suffix，
+# 天然覆盖 `.synctex.gz` / `.run.xml` 等双后缀。
+BUILD_ARTIFACT_SUFFIXES: tuple[str, ...] = (
+    ".aux",
+    ".log",
+    ".toc",
+    ".lof",
+    ".lot",
+    ".out",
+    ".bbl",
+    ".blg",
+    ".bcf",
+    ".run.xml",
+    ".spl",
+    ".fls",
+    ".fdb_latexmk",
+    ".synctex.gz",
+    ".xdv",
+    ".dvi",
+    ".nav",
+    ".snm",
+    ".vrb",
+    ".idx",
+    ".ind",
+    ".ilg",
+    ".glo",
+    ".gls",
+    ".glstex",
+    ".acn",
+    ".acr",
+    ".alg",
+    ".ist",
+    ".maf",
+    ".bak",
+)
 
 
 class FileConflictError(Exception):
@@ -135,7 +175,8 @@ class LatexProject:
 
         流程：
             1. 检查路径有效性
-            2. 递归扫描文件树（仅保留 .tex/.bib/.cls/.sty/.pdf）
+            2. 递归扫描文件树（非隐藏 + 非编译产物黑名单，见
+               _scan_directory / editor-file-upload-design §4.3）
             3. 自动识别主文档（优先查找 main.tex）
             4. 解析 \\include / \\input 依赖关系
 
@@ -751,12 +792,16 @@ class LatexProject:
         """
         递归扫描项目目录，构建文件树。
 
+        文件节点收录条件为「非隐藏 + 非编译产物」（editor-file-upload-design
+        §4.3 / 决策 D7）：任意格式资源（zip 导入或文件树上传）均在树中可见，
+        仅编译产物黑名单（BUILD_ARTIFACT_SUFFIXES）不进树；目录仍递归全收。
+
         参数：
             root: 项目根目录
             rel_path: 当前相对路径（递归时使用）
 
         返回：
-            FileNode 列表（仅包含 .tex/.bib/.cls/.sty/.pdf 文件）
+            FileNode 列表（非隐藏 + 非编译产物的全量文件与目录）
         """
         nodes = []
         current = root / rel_path if rel_path else root
@@ -776,7 +821,7 @@ class LatexProject:
                             children=self._scan_directory(root, rel),
                         )
                     )
-                elif entry.suffix in (".tex", ".bib", ".cls", ".sty", ".pdf"):
+                elif not entry.name.endswith(BUILD_ARTIFACT_SUFFIXES):
                     nodes.append(FileNode(name=entry.name, path=rel, is_dir=False))
         except PermissionError:
             pass  # 跳过无权限的目录

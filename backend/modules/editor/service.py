@@ -31,12 +31,20 @@ r"""
        分节扫描（与前端 outlineScan.js 同正则口径），项目级缓存 + 保存
        失效；零 LLM、零写盘、响应只含相对路径
     7. 文件树新建/删除：POST /api/project/create-file 与
-       POST /api/project/delete-file 的业务实现——可编辑白名单后缀校验 +
-       冲突/父目录检查，多用户模式创建前按新文件字节做配额预检、删除后
-       刷新用量记账（配额随之释放）；主文档受删除保护；响应携带重扫后的
-       file_tree 供前端单次往返刷新。刻意不纳入统一撤销记账（edit_log
-       恢复通道只支持改写已存在文件，不支持文件级增删），误删由前端
-       确认弹窗兜底
+       POST /api/project/delete-file 的业务实现——新建走可编辑白名单
+       后缀校验，删除放开为任意非隐藏后缀（主文档受删除保护，
+       editor-file-upload-design §4.4）；冲突/父目录检查 + 多用户模式
+       创建前按新文件字节做配额预检、删除后刷新用量记账（配额随之
+       释放）；响应携带重扫后的 file_tree 供前端单次往返刷新。刻意不
+       纳入统一撤销记账（edit_log 恢复通道只支持改写已存在文件，不
+       支持文件级增删），误删由前端确认弹窗兜底
+    8. 文件树上传：POST /api/project/upload-file 的业务实现
+       （editor-file-upload-design §4）——multipart 任意格式上传到项目
+       内任意相对路径：20MB 流式大小上限（超限即中止）→ 文件名消毒 →
+       隐藏组件拒绝 → resolve_project_path（不限后缀）→ 冲突检查 →
+       多用户配额预检 → 同目录临时文件 + Path.replace 原子落盘 →
+       多用户用量刷新（§4.1 校验链）。零 LLM、不进撤销记账；响应携带
+       重扫后的 file_tree
 
 约束：
     - 面向用户的错误消息一律使用项目内相对路径（多用户路径脱敏规则），
@@ -53,10 +61,13 @@ r"""
 
 import asyncio
 import hashlib
+import os
 import re
+import shutil
+import tempfile
 from pathlib import Path
 
-from fastapi import HTTPException
+from fastapi import HTTPException, UploadFile
 from fastapi.responses import FileResponse
 
 from backend.core.logger import get_logger
@@ -81,6 +92,15 @@ EDITABLE_SUFFIXES: tuple[str, ...] = (".tex", ".bib", ".sty", ".cls")
 # 内容校验与落盘前的资源消耗。save-file、编辑器助手缓冲区与 format-latex
 # 纯转换端点共用同一量级（格式化内容与可编辑内容同源，均为编辑器缓冲区）。
 MAX_EDITABLE_CHARS = 2_000_000
+
+# 单文件上传字节上限（editor-file-upload-design §4.2 / 决策 D6）：任意格式
+# 上传的唯一大小约束——文本类上传不受 MAX_EDITABLE_CHARS 约束（那是编辑
+# 缓冲区/保存路径的约束）。20MB 后端常量、不引入配置项；多用户模式另有
+# 项目配额预检兜底。
+MAX_UPLOAD_FILE_BYTES = 20 * 1024 * 1024
+
+# multipart 流式分块拷贝的块大小：逐块落盘避免大文件整读进内存
+_UPLOAD_CHUNK_BYTES = 1024 * 1024
 
 # 可预览二进制扩展名白名单（编辑器页内嵌只读预览；须与前端
 # lib/editor/files.js 的 PREVIEWABLE_SUFFIXES 同步）。刻意不收：
@@ -370,9 +390,11 @@ def _create_file_sync(project, file_path: str, content: str) -> str:
 async def delete_project_file(project, binding: dict, *, file_path: str) -> dict:
     """删除项目内文件（文件树操作，零 LLM、不进撤销记账）。
 
-    限制可编辑白名单后缀；主文档受保护（400 main_file_protected，需先
-    set-main-file 更换）。多用户模式删除后刷新用量记账（配额按磁盘
-    重算随之释放）。响应携带重扫后的 file_tree。
+    任意非隐藏后缀均可删除（editor-file-upload-design §4.4：任意格式可传
+    则必然要可删；隐藏组件被服务端权威拒绝，不依赖"不进文件树、无删除
+    入口"的树层排除）；主文档受保护（400 main_file_protected，需先
+    set-main-file 更换）。多用户模式删除后刷新用量记账（配额按磁盘重算
+    随之释放）。响应携带重扫后的 file_tree。
     """
     try:
         main_file = await asyncio.to_thread(project.get_main_file)
@@ -407,15 +429,190 @@ async def delete_project_file(project, binding: dict, *, file_path: str) -> dict
 
 
 def _delete_file_sync(project, file_path: str) -> None:
-    """同步删除：路径校验（白名单）→ 存在性检查 → unlink。"""
+    """同步删除：隐藏组件拒绝（§4.4「非隐藏」约束）→ 路径校验（不限
+    后缀）→ 存在性检查 → unlink。"""
     root = Path(project.root_path)
-    full_path = resolve_project_path(
-        root, file_path, allowed_suffixes=EDITABLE_SUFFIXES
-    )
+    _reject_hidden_components(file_path)
+    full_path = resolve_project_path(root, file_path)
     if not full_path.is_file():
         logger.info("Editor delete miss: %s (root=%s)", file_path, root)
         raise FileNotFoundError(f"File not found: {file_path}")
     full_path.unlink()
+
+
+# ── 文件树上传（editor-file-upload-design §4） ────────────────────────────
+def _validate_upload_target_name(file_path: str) -> None:
+    r"""上传目标文件名消毒（editor-file-upload-design §3-6）：拒绝空名、
+    控制字符与路径分隔符；超长文件名由 OS 层兜底报错。
+
+    `\` 按 Windows 路径分隔符走私一并拒绝（POSIX 上虽是合法文件名字符，
+    但跨平台目标语义不成立）；尾分隔符 / 纯点段（`Path()` 解析后会剥离，
+    `Path.name` 为空）视为空文件名拒绝，避免落到目录语义上产生误导性
+    的静默改写目标。
+    """
+    if not file_path or not file_path.strip():
+        raise ValueError("file_path must not be empty")
+    if "\\" in file_path:
+        raise ValueError(
+            f"Target file name must not contain path separators: {file_path}"
+        )
+    if any(ord(ch) < 32 or ord(ch) == 127 for ch in file_path):
+        raise ValueError(
+            f"Target file name must not contain control characters: {file_path}"
+        )
+    if file_path.endswith("/") or not Path(file_path).name:
+        raise ValueError(f"Invalid target file name: {file_path}")
+
+
+def _reject_hidden_components(file_path: str) -> None:
+    """隐藏路径拒绝（editor-file-upload-design §3-3）：目标 file_path 任一
+    组件以点开头即拒绝——覆盖 `.git/`、`.latexcellence/` 等隐藏目录与点
+    开头的文件名；服务端权威校验，不依赖客户端同名消毒预检。
+
+    path_guard 不做隐藏组件判定（`.latexcellence/main_file` 等内部机制
+    自身要写隐藏路径），因此该策略由编辑器文件操作层在上传（§3-3）与
+    删除（§4.4 / 决策 D9「任意非隐藏后缀」）两条入口各自强制执行。
+    """
+    if any(part.startswith(".") for part in Path(file_path).parts):
+        raise ValueError(f"Hidden files and directories are not allowed: {file_path}")
+
+
+def _stream_upload_to_temp(upload_file: UploadFile) -> tuple[Path, int]:
+    """multipart 上传体流式分块落系统临时文件（editor-file-upload-design
+    §4.1 校验链第 1 步 / §4.2）。
+
+    逐块读取并累计字节数，超过 MAX_UPLOAD_FILE_BYTES 立即中止、清理
+    临时文件并抛 413 file_too_large；返回 (暂存路径, 字节数)。暂存文件
+    由调用方在校验链结束（成功落盘或任一步失败）后统一清理。
+    """
+    fd, name = tempfile.mkstemp(prefix="latexcellence-upload-")
+    staged = Path(name)
+    total = 0
+    try:
+        with os.fdopen(fd, "wb") as out:
+            src = upload_file.file
+            src.seek(0)
+            while chunk := src.read(_UPLOAD_CHUNK_BYTES):
+                total += len(chunk)
+                if total > MAX_UPLOAD_FILE_BYTES:
+                    raise _http(
+                        413,
+                        "file_too_large",
+                        "File exceeds the upload size limit of "
+                        f"{MAX_UPLOAD_FILE_BYTES} bytes",
+                    )
+                out.write(chunk)
+    except Exception:
+        staged.unlink(missing_ok=True)
+        raise
+    return staged, total
+
+
+def _prepare_upload_sync(project, file_path: str) -> Path:
+    """同步校验阶段（editor-file-upload-design §4.1 校验链第 2–5 步）：
+    文件名消毒 → 隐藏组件拒绝 → resolve_project_path（不限后缀，任意
+    格式成立的路径边界不变）→ 冲突/父目录检查；返回目标绝对路径，
+    落盘由 _commit_upload_sync 执行。
+    """
+    root = Path(project.root_path)
+    _validate_upload_target_name(file_path)
+    _reject_hidden_components(file_path)
+    full_path = resolve_project_path(root, file_path)
+    if full_path.exists():
+        # 错误消息使用相对路径（多用户脱敏）；完整路径只进服务端日志
+        logger.info("Editor upload conflict: %s (root=%s)", file_path, root)
+        raise FileExistsError(f"File already exists: {file_path}")
+    if not full_path.parent.is_dir():
+        raise FileNotFoundError(f"Parent directory does not exist: {file_path}")
+    return full_path
+
+
+def _commit_upload_sync(target: Path, staged: Path) -> None:
+    """原子落盘（editor-file-upload-design §4.1 校验链第 7 步 / §4.2）。
+
+    暂存文件位于系统临时目录，与项目目录可能跨文件系统，直接 replace
+    会 EXDEV 失败；与 file_ops.atomic_write 同模式：先复制到目标同目录
+    临时文件（保证 rename 在同一文件系统上），再 Path.replace（os.replace
+    原子语义）替换到目标路径，目标绝不出现半写状态。整条链路按字节
+    搬运，二进制不走 write_text。
+    """
+    fd, tmp_name = tempfile.mkstemp(
+        suffix=".tmp", prefix=f".{target.name}.", dir=target.parent
+    )
+    tmp = Path(tmp_name)
+    try:
+        try:
+            out = os.fdopen(fd, "wb")
+        except Exception:
+            os.close(fd)
+            raise
+        with out, staged.open("rb") as src:
+            shutil.copyfileobj(src, out)
+            out.flush()
+            os.fsync(out.fileno())
+        tmp.replace(target)
+    except Exception:
+        tmp.unlink(missing_ok=True)
+        raise
+
+
+async def upload_project_file(
+    project,
+    binding: dict,
+    *,
+    file_path: str,
+    upload_file: UploadFile,
+) -> dict:
+    """上传文件到项目内任意相对路径（文件树操作，零 LLM、不进撤销记账）。
+
+    任意格式 + §3 安全护栏（回读边界/路径边界/隐藏路径拒绝/大小与配额/
+    鉴权/文件名消毒）见设计文档；校验链按 §4.1 顺序执行。多用户模式
+    属"已知增量"写路径：落盘前按实际上传字节数做项目配额预检（超限
+    413 quota_exceeded），落盘后刷新用量记账。响应携带重扫后的
+    file_tree，前端单次往返完成文件树刷新。
+    """
+    # 1. 大小流式校验：超限即中止（临时文件已在 _stream_upload_to_temp
+    #    内清理）；无论后续成败，UploadFile 底层 spool 一律关闭
+    try:
+        staged, size = await asyncio.to_thread(_stream_upload_to_temp, upload_file)
+    finally:
+        await upload_file.close()
+
+    # 校验链 2–7 步与暂存文件清理收口在同一 finally：任何一步失败都不
+    # 残留暂存文件（成功 replace 后暂存路径已不存在，unlink 幂等）
+    try:
+        try:
+            # 2–5. 消毒 → 隐藏组件 → resolve（不限后缀）→ 冲突/父目录
+            target = await asyncio.to_thread(_prepare_upload_sync, project, file_path)
+        except FileExistsError as e:
+            raise _http(409, "file_exists", str(e)) from e
+        except FileNotFoundError as e:
+            raise _http(400, "parent_not_found", str(e)) from e
+        except ValueError as e:
+            raise _http(400, "invalid_path", str(e)) from e
+        except RuntimeError as e:
+            raise _http(400, "invalid_workspace", str(e)) from e
+
+        # 6. 多用户配额预检（先于落盘；HTTPException 原样透传）
+        owner_id, project_id = _binding_owner(binding)
+        if owner_id and project_id:
+            await asyncio.to_thread(enforce_project_quota, owner_id, size)
+
+        # 7. 原子写盘（同目录临时文件 + Path.replace，二进制字节保真）
+        await asyncio.to_thread(_commit_upload_sync, target, staged)
+    finally:
+        staged.unlink(missing_ok=True)
+
+    # 8. 多用户用量刷新（单用户模式内部跳过）
+    if project_id:
+        await asyncio.to_thread(refresh_owner_usage_after_write, project_id)
+    invalidate_project_outline_cache(project)
+    logger.info("Editor file uploaded: %s (%d bytes)", file_path, size)
+    return {
+        "status": "ok",
+        "file_path": file_path,
+        "file_tree": _refreshed_tree(project),
+    }
 
 
 # ── 二进制预览 ────────────────────────────────────────────────────────────

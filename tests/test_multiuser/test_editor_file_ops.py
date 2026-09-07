@@ -1,9 +1,10 @@
-"""编辑器文件树新建/删除接口测试（多用户模式）。
+"""编辑器文件树新建/删除/上传接口测试（多用户模式）。
 
 纯文件操作：无 LLM 参与、不 Mock LLM、无网络。
-覆盖多用户侧验收：owner 创建成功（磁盘落盘 + 响应携带重扫后 file_tree）、
-viewer 写保护 403、创建不纳入统一撤销记账（无 workspace_edit_ops 残留）、
-项目配额预检超限 413（落盘前拦截）、owner 删除成功。
+覆盖多用户侧验收：owner 创建/上传成功（磁盘落盘 + 响应携带重扫后
+file_tree）、viewer 写保护 403、创建/上传不纳入统一撤销记账（无
+workspace_edit_ops 残留）、项目配额预检超限 413（落盘前拦截）、
+上传后 owner 用量记账刷新、CSRF 缺失 403 / 未登录 401、owner 删除成功。
 """
 
 import uuid
@@ -126,6 +127,14 @@ class FileOpsApi:
             headers=self.env["csrf"](client),
         )
 
+    def upload(self, client, ws_id, file_path, data: bytes, with_csrf=True):
+        return client.post(
+            "/api/project/upload-file",
+            params={"file_path": file_path, "workspace_id": ws_id},
+            files={"file": ("upload.bin", data, "application/octet-stream")},
+            headers=self.env["csrf"](client) if with_csrf else None,
+        )
+
 
 @pytest.fixture
 def api(file_ops_env):
@@ -216,6 +225,101 @@ class TestEditorFileOpsMultiuser:
         assert api.open(client, ws).status_code == 200
 
         resp = api.create(client, ws, "main.tex")
+        assert resp.status_code == 409
+        # 相对路径脱敏：响应任何位置不得出现用户空间绝对路径
+        assert str(file_ops_env["root"]) not in resp.text
+        assert str(file_ops_env["tmp_path"]) not in resp.text
+
+
+class TestEditorFileUploadMultiuser:
+    """文件树上传（POST /api/project/upload-file，editor-file-upload-design §4）：
+    multipart + query 形态，鉴权走 query 版 require_workspace(write=True)；
+    多用户落盘前配额预检、落盘后用量刷新；不进统一撤销记账。"""
+
+    PNG_BYTES = b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01"
+
+    def _size_bytes(self, env) -> int:
+        row = db_module.db_query_one(
+            "SELECT size_bytes FROM projects WHERE id = ?", (env["project_id"],)
+        )
+        return row["size_bytes"]
+
+    def test_owner_uploads_file_refreshes_usage_no_edit_log(self, api, file_ops_env):
+        client = api.client_for("owner")
+        ws = "ws-upload-create"
+        assert api.open(client, ws).status_code == 200
+        (file_ops_env["root"] / "figures").mkdir()
+        main_size = (file_ops_env["root"] / "main.tex").stat().st_size
+
+        resp = api.upload(client, ws, "figures/fig.png", self.PNG_BYTES)
+        assert resp.status_code == 200, resp.text
+        data = resp.json()
+        assert data["status"] == "ok"
+        assert "figures/fig.png" in _tree_paths(data["file_tree"])
+        assert (
+            file_ops_env["root"] / "figures" / "fig.png"
+        ).read_bytes() == self.PNG_BYTES
+        # 上传不纳入统一撤销记账：不产生 workspace_edit_ops 记录
+        assert _op_rows(file_ops_env) == []
+        # 落盘后用量记账刷新：size_bytes == 项目磁盘实际大小（main.tex + 上传）
+        assert self._size_bytes(file_ops_env) == main_size + len(self.PNG_BYTES)
+
+    def test_upload_quota_precheck_rejects_before_write(self, api, file_ops_env):
+        # 配额压到极小：任何非空上传都会在落盘前被预检拒绝
+        db_module.db_execute(
+            "UPDATE users SET project_quota_bytes = ? WHERE id = ?",
+            (10, file_ops_env["owner"]["id"]),
+        )
+        client = api.client_for("owner")
+        ws = "ws-upload-quota"
+        assert api.open(client, ws).status_code == 200
+
+        resp = api.upload(client, ws, "big.xyz", b"x" * 64)
+        assert resp.status_code == 413
+        assert resp.json()["detail"]["error"] == "quota_exceeded"
+        assert not (file_ops_env["root"] / "big.xyz").exists()
+        assert self._size_bytes(file_ops_env) == 0
+
+    def test_viewer_cannot_upload(self, api, file_ops_env):
+        client = api.client_for("viewer")
+        ws = "ws-upload-viewer"
+        assert api.open(client, ws).status_code == 200
+
+        resp = api.upload(client, ws, "hijack.png", self.PNG_BYTES)
+        assert resp.status_code == 403
+        assert resp.json()["detail"]["error"] == "no_permission"
+        assert not (file_ops_env["root"] / "hijack.png").exists()
+
+    def test_upload_requires_csrf(self, api, file_ops_env):
+        client = api.client_for("owner")
+        ws = "ws-upload-csrf"
+        assert api.open(client, ws).status_code == 200
+
+        resp = api.upload(client, ws, "no_csrf.png", self.PNG_BYTES, with_csrf=False)
+        assert resp.status_code == 403
+        assert resp.json()["detail"]["error"] == "invalid_csrf"
+        assert not (file_ops_env["root"] / "no_csrf.png").exists()
+
+    def test_upload_unauthenticated_returns_401(self, api, file_ops_env):
+        # 未登录客户端：安全中间件在会话校验即拒绝（401 unauthorized）
+        from fastapi.testclient import TestClient as _TestClient
+
+        anon = _TestClient(file_ops_env["app"])
+        resp = anon.post(
+            "/api/project/upload-file",
+            params={"file_path": "anon.png", "workspace_id": "ws-upload-anon"},
+            files={"file": ("upload.bin", self.PNG_BYTES, "application/octet-stream")},
+        )
+        assert resp.status_code == 401
+        assert resp.json()["detail"]["error"] == "unauthorized"
+        assert not (file_ops_env["root"] / "anon.png").exists()
+
+    def test_paths_sanitized_in_upload_error_messages(self, api, file_ops_env):
+        client = api.client_for("owner")
+        ws = "ws-upload-sanitize"
+        assert api.open(client, ws).status_code == 200
+
+        resp = api.upload(client, ws, "main.tex", b"dup")
         assert resp.status_code == 409
         # 相对路径脱敏：响应任何位置不得出现用户空间绝对路径
         assert str(file_ops_env["root"]) not in resp.text
