@@ -1,6 +1,6 @@
 # 自动编译模块 `compile/`
 
-通过 `subprocess` 调用 `latexmk` 编译主文件，支持自动引擎检测和 PDF/A 归档输出。编译失败时使用 LLM 翻译 stderr 错误信息。不使用 Marker 保护策略。另提供 SyncTeX 正/反向只读查询端点（editor v3 阶段一），供编辑器 PDF ↔ 源码互跳。
+通过 `subprocess` 调用 `latexmk` 编译主文件，支持自动引擎检测、PDF/A 归档输出与编译前产物清理。编译失败时使用 LLM 翻译 stderr 错误信息。不使用 Marker 保护策略。另提供 SyncTeX 正/反向只读查询端点（editor v3 阶段一），供编辑器 PDF ↔ 源码互跳。
 
 | 维度 | 编译模块 | 其他 LLM 模块 |
 | --- | --- | --- |
@@ -21,6 +21,23 @@
 ### PDF/A 归档输出
 
 在 `\documentclass` 之后注入 `\usepackage[a-2b]{pdfx}` 以支持 PDF/A-2b 归档格式输出。若已存在 `pdfx` 或 `pdfmanagement-testphase` 包则跳过注入。
+
+### 编译前产物清理（clean_first）
+
+- 动机：latexmk 依赖项目内持久化的 `.fdb_latexmk` / `.log` 记录上次运行
+  状态，源文件未变化时短路为 "Nothing to do"，但因上次失败的错误状态仍
+  会以 exit 12 失败；其关键线索行（"gave an error in previous
+  invocation"）又不命中 texfot 的 stdout 过滤模式，用户只能看到无信息量
+  的 `-f` 提示。
+- `CompileRequest.clean` / `compile_latex(clean_first=...)`：为 true 时
+  编译前调用 `clean_project_artifacts(root)` 清理项目内可再生产物后再
+  执行 latexmk，保证引擎必跑、失败日志始终来自本次运行。编辑器编译链路
+  恒传 true；编译页 / git_diff 等既有调用方默认 false 零变化。
+- `clean_project_artifacts(root)` 遍历项目根目录（含 `\input` 子目录），
+  按扩展名白名单删除（latexmk 默认清理集 + 常见宏包/工具产物，含
+  `.synctex.gz` / `.run.xml` 等复合后缀）；跳过 `.git` 目录、符号链接与
+  非普通文件；`.pdf` 与 `.tex/.bib/.sty` 等源文件不在白名单，永不删除。
+  同步阻塞 I/O，调用方经 `asyncio.to_thread` 调度。
 
 ### SyncTeX 数据与正/反向查询（editor v3 阶段一）
 
@@ -49,7 +66,8 @@
 
 | 方法 | 功能 |
 | --- | --- |
-| `compile_latex(main_file, workspace_id, language, engine, pdfa, synctex)` | 调用 latexmk → 捕获 stderr → 失败时 LLM 翻译 → 返回 CompileResult |
+| `compile_latex(main_file, workspace_id, language, engine, pdfa, synctex, clean_first)` | 可选清理再生产物 → 调用 latexmk → 捕获 stderr → 失败时 LLM 翻译 → 返回 CompileResult |
+| `clean_project_artifacts(root)` | 按扩展名白名单清理项目内可再生产物（跳过 .git / 符号链接 / PDF / 源文件），返回删除文件数 |
 | `_extract_key_errors(stderr_text)` | 从 stderr 提取关键错误行 |
 | `synctex_forward(workspace_id, main_file, file_path, line, col)` | 正向：`synctex view -i "line:col:file" -o pdf`，解析输出中的页面矩形记录 |
 | `synctex_backward(workspace_id, main_file, page, x, y)` | 反向：`synctex edit -o "page:x:y:pdf"`，Input 路径归一为项目内相对路径 |
@@ -61,7 +79,7 @@ Prefix: `/api/compile`, Tag: `compile`
 
 | 方法 | 路径 | 功能 |
 | --- | --- | --- |
-| POST | `/run` | 编译 LaTeX 项目（支持 engine/pdfa/synctex 参数） |
+| POST | `/run` | 编译 LaTeX 项目（支持 engine/pdfa/synctex/clean 参数） |
 | GET | `/pdf` | 返回最近一次编译产出的 PDF（内联预览） |
 | POST | `/synctex/forward` | 正向同步：源码位置 → PDF 页面矩形（只读零写盘） |
 | POST | `/synctex/backward` | 反向同步：PDF 点位 → 源码位置（相对路径；未命中 found=false） |

@@ -3,12 +3,15 @@
 
 负责编排以下流程：
     1. 通过 project_manager 获取项目根目录
-    2. 调用 tex_compile（texfot 包装 latexmk）执行编译
-    3. 编译失败时调用 LLM 翻译错误信息为“人话”
-    4. SyncTeX 正/反向只读查询（editor v3 阶段一）：synctex view/edit
+    2. 可选清理项目内可再生的 LaTeX 编译产物（clean_first，编辑器链路启用）
+    3. 调用 tex_compile（texfot 包装 latexmk）执行编译
+    4. 编译失败时调用 LLM 翻译错误信息为“人话”
+    5. SyncTeX 正/反向只读查询（editor v3 阶段一）：synctex view/edit
        经 SandboxRunner 在项目根目录执行，零写盘、响应只含相对路径
 """
 
+import asyncio
+import os
 import re
 from pathlib import Path, PurePosixPath
 
@@ -66,6 +69,79 @@ class CompileResult(BaseModel):
     synctex: bool = False
 
 
+# ── 编译前产物清理（clean_first=True 时启用；编辑器编译链路传 true）────────
+#
+# 背景：latexmk 依赖项目内持久化的 .fdb_latexmk/.log 记录上次运行状态，
+# 源文件未变化时短路为 "Nothing to do"，但因上次失败的错误状态仍会以
+# exit 12 失败；其关键线索行（"gave an error in previous invocation"）
+# 又不命中 texfot 的 stdout 过滤模式，用户只能看到无信息量的 -f 提示。
+# 编译前清理再生产物可保证引擎必跑、失败日志始终来自本次运行。
+
+# 可再生产物扩展名白名单（latexmk 默认清理集 + 常见宏包/工具产物）。
+# .pdf 不在列（编译失败时保留旧预览）；.tex/.bib/.sty 等源文件不在列
+_CLEANUP_SUFFIXES = frozenset(
+    {
+        ".aux",
+        ".bbl",
+        ".bcf",
+        ".blg",
+        ".fdb_latexmk",
+        ".fls",
+        ".glg",
+        ".glo",
+        ".gls",
+        ".idx",
+        ".ilg",
+        ".ind",
+        ".log",
+        ".lof",
+        ".lot",
+        ".lol",
+        ".nav",
+        ".out",
+        ".snm",
+        ".spl",
+        ".toc",
+        ".vrb",
+        ".xdv",
+        ".acn",
+        ".acr",
+        ".alg",
+        ".ist",
+    }
+)
+# 复合后缀：Path.suffix 只取最后一段，需按文件名结尾匹配
+_CLEANUP_NAME_ENDINGS = (".synctex.gz", ".synctex(busy)", ".run.xml")
+
+# 不进入的目录（版本库内部与编译无关）
+_CLEANUP_SKIP_DIRS = frozenset({".git"})
+
+
+def clean_project_artifacts(root: Path) -> int:
+    """清理项目内可再生的 LaTeX 编译产物，返回删除的文件数。
+
+    遍历项目根目录（含子目录，\\input 子目录也会产生 aux 产物），按
+    上述白名单删除；跳过 .git 目录、符号链接与非普通文件。扩展名全部
+    为 TeX 工具链的再生产物，不触碰源文件与 PDF。同步阻塞 I/O，调用方
+    须经 asyncio.to_thread 调度。
+    """
+    removed = 0
+    for path in sorted(root.rglob("*")):
+        if os.path.islink(path) or not path.is_file():
+            continue
+        if _CLEANUP_SKIP_DIRS.intersection(path.relative_to(root).parts):
+            continue
+        if path.suffix in _CLEANUP_SUFFIXES or path.name.endswith(
+            _CLEANUP_NAME_ENDINGS
+        ):
+            try:
+                path.unlink()
+                removed += 1
+            except OSError as e:
+                logger.warning(f"Failed to remove artifact {path.name}: {e}")
+    return removed
+
+
 async def compile_latex(
     main_file: str,
     workspace_id: str = "",
@@ -73,6 +149,7 @@ async def compile_latex(
     engine: str = "auto",
     pdfa: bool = False,
     synctex: bool = False,
+    clean_first: bool = False,
 ) -> CompileResult:
     """
     编译 LaTeX 项目的主文件。
@@ -85,6 +162,9 @@ async def compile_latex(
         pdfa: 是否启用 PDF/A-2b 归档格式输出
         synctex: 是否生成 SyncTeX 数据（编辑器正向/反向同步查询依赖）；
             与 pdfa 组合时后端忽略（响应 synctex=False）
+        clean_first: 编译前先清理项目内可再生产物（.aux/.log/.fdb_latexmk
+            等）。编辑器编译链路传 True：避免 latexmk 依上次失败状态短路
+            且日志无具体错误；编译页 / git_diff 默认 False 零变化
 
     返回：
         CompileResult 对象（含编译状态、输出日志、LLM 翻译的解释和建议）
@@ -115,8 +195,14 @@ async def compile_latex(
 
     logger.info(
         f"Compiling {main_file} in {root} "
-        f"(engine={engine}, pdfa={pdfa}, synctex={synctex_effective})"
+        f"(engine={engine}, pdfa={pdfa}, synctex={synctex_effective}, "
+        f"clean_first={clean_first})"
     )
+
+    if clean_first:
+        # 同步文件遍历/删除经线程池调度，不阻塞事件循环
+        removed = await asyncio.to_thread(clean_project_artifacts, root)
+        logger.info(f"Cleaned {removed} artifact file(s) before compile")
 
     tex_result = await run_tex_compile(
         main_file,

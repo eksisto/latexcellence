@@ -4,11 +4,13 @@ compile 模块服务层 + 路由测试。
 覆盖内容：
     - CompileResult / ErrorTranslation Pydantic 模型校验
     - _extract_key_errors 错误过滤
-    - compile_latex 编译流程（Mock run_tex_compile + LLM）
+    - clean_project_artifacts 编译前产物清理
+    - compile_latex 编译流程（Mock run_tex_compile + LLM，含 clean_first）
     - /api/compile/run HTTP 端点测试
     - /api/compile/pdf HTTP 端点测试
 """
 
+import os
 import tempfile
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -19,6 +21,7 @@ from pydantic import ValidationError
 from backend.modules.compile.service import (
     CompileResult,
     _validate_main_file,
+    clean_project_artifacts,
     compile_latex,
 )
 from backend.utils.compile_error_translator import (
@@ -219,6 +222,75 @@ class TestValidateMainFile:
             _validate_main_file("main.pdf", project_root)
 
 
+# ── clean_project_artifacts ───────────────────────────────────────────────
+
+
+class TestCleanProjectArtifacts:
+    """编译前产物清理测试。"""
+
+    @pytest.fixture
+    def project(self, tmp_path):
+        """带再生产物（根目录 + 子目录）、源文件与 .git 的项目目录。"""
+        root = tmp_path
+        (root / "main.tex").write_text("x", encoding="utf-8")
+        (root / "main.pdf").write_bytes(b"%PDF fake")
+        (root / "refs.bib").write_text("@article{x}", encoding="utf-8")
+        for name in (
+            "main.aux",
+            "main.log",
+            "main.fdb_latexmk",
+            "main.fls",
+            "main.out",
+            "main.toc",
+            "main.bbl",
+            "main.blg",
+            "main.synctex.gz",
+            "main.run.xml",
+        ):
+            (root / name).write_text("artifact", encoding="utf-8")
+        sub = root / "chapters"
+        sub.mkdir()
+        (sub / "ch1.tex").write_text("x", encoding="utf-8")
+        (sub / "ch1.aux").write_text("artifact", encoding="utf-8")
+        git = root / ".git"
+        git.mkdir()
+        (git / "packed.log").write_text("keep me", encoding="utf-8")
+        return root
+
+    def test_removes_artifacts_in_root_and_subdirs(self, project):
+        removed = clean_project_artifacts(project)
+        # 根目录 10 个 + 子目录 ch1.aux 共 11 个
+        assert removed == 11
+        assert not (project / "main.aux").exists()
+        assert not (project / "main.log").exists()
+        assert not (project / "main.fdb_latexmk").exists()
+        assert not (project / "main.synctex.gz").exists()
+        assert not (project / "main.run.xml").exists()
+        assert not (project / "chapters" / "ch1.aux").exists()
+
+    def test_keeps_sources_and_pdf(self, project):
+        clean_project_artifacts(project)
+        assert (project / "main.tex").exists()
+        assert (project / "main.pdf").exists()
+        assert (project / "refs.bib").exists()
+        assert (project / "chapters" / "ch1.tex").exists()
+
+    def test_skips_git_dir(self, project):
+        clean_project_artifacts(project)
+        assert (project / ".git" / "packed.log").read_text(
+            encoding="utf-8"
+        ) == "keep me"
+
+    def test_skips_symlinks(self, project):
+        link = project / "external.log"
+        os.symlink(project / "chapters" / "ch1.tex", link)
+        clean_project_artifacts(project)
+        assert link.is_symlink()
+
+    def test_empty_project(self, tmp_path):
+        assert clean_project_artifacts(tmp_path) == 0
+
+
 # ── compile_latex ──────────────────────────────────────────────────────────
 
 
@@ -261,6 +333,54 @@ class TestCompileLatex:
 
         assert result.success is True
         assert "Transcript written" in result.stdout
+
+    @pytest.mark.asyncio
+    async def test_compile_clean_first_removes_artifacts(
+        self, mock_project, mock_tex_success
+    ):
+        """clean_first=True：编译前清理再生产物，源文件保留。"""
+        root = Path(mock_project.root_path)
+        for name in ("main.aux", "main.log", "main.fdb_latexmk"):
+            (root / name).write_text("stale", encoding="utf-8")
+
+        with patch(
+            "backend.modules.compile.service.get_project_manager_for_workspace",
+            return_value=mock_project,
+        ):
+            with patch(
+                "backend.modules.compile.service.run_tex_compile",
+                new_callable=AsyncMock,
+                return_value=mock_tex_success,
+            ) as mock_run:
+                result = await compile_latex("main.tex", clean_first=True)
+
+        assert result.success is True
+        mock_run.assert_awaited_once()
+        assert not (root / "main.aux").exists()
+        assert not (root / "main.log").exists()
+        assert not (root / "main.fdb_latexmk").exists()
+        assert (root / "main.tex").exists()
+
+    @pytest.mark.asyncio
+    async def test_compile_default_keeps_artifacts(
+        self, mock_project, mock_tex_success
+    ):
+        """默认 clean_first=False 不清理，既有调用方行为零变化。"""
+        root = Path(mock_project.root_path)
+        (root / "main.aux").write_text("stale", encoding="utf-8")
+
+        with patch(
+            "backend.modules.compile.service.get_project_manager_for_workspace",
+            return_value=mock_project,
+        ):
+            with patch(
+                "backend.modules.compile.service.run_tex_compile",
+                new_callable=AsyncMock,
+                return_value=mock_tex_success,
+            ):
+                await compile_latex("main.tex")
+
+        assert (root / "main.aux").exists()
 
     @pytest.mark.asyncio
     async def test_compile_timeout(self, mock_project):
@@ -377,6 +497,37 @@ class TestCompileRouter:
         assert response.status_code == 200
         data = response.json()
         assert data["success"] is True
+
+    def test_run_forwards_clean_flag(self, client):
+        """clean=true 请求透传为 compile_latex(clean_first=True)。"""
+        with patch(
+            "backend.modules.compile.router.compile_latex", new_callable=AsyncMock
+        ) as mock_compile:
+            mock_compile.return_value = CompileResult(
+                success=True, stdout="", stderr=""
+            )
+            response = client.post(
+                "/api/compile/run?workspace_id=test",
+                json={"main_file": "main.tex", "clean": True},
+            )
+
+        assert response.status_code == 200
+        assert mock_compile.call_args.kwargs["clean_first"] is True
+
+    def test_run_clean_defaults_false(self, client):
+        """不传 clean 时默认 False，既有调用方行为零变化。"""
+        with patch(
+            "backend.modules.compile.router.compile_latex", new_callable=AsyncMock
+        ) as mock_compile:
+            mock_compile.return_value = CompileResult(
+                success=True, stdout="", stderr=""
+            )
+            response = client.post(
+                "/api/compile/run?workspace_id=test", json={"main_file": "main.tex"}
+            )
+
+        assert response.status_code == 200
+        assert mock_compile.call_args.kwargs["clean_first"] is False
 
     def test_run_no_project_returns_400(self, client):
         """无项目时返回 400。"""

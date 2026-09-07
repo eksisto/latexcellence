@@ -41,6 +41,8 @@ class CompileRequest(BaseModel):
     engine: str = "auto"  # auto/pdflatex/xelatex/lualatex
     pdfa: bool = False  # PDF/A-2b 归档格式输出
     synctex: bool = False  # 生成 SyncTeX 数据（编辑器正反向同步；editor v3 Q3）
+    # 编译前清理可再生产物（编辑器编译链路传 true；既有调用方默认 false 零变化）
+    clean: bool = False
 
     @field_validator("main_file")
     @classmethod
@@ -68,6 +70,7 @@ async def run_compile(
     编译 LaTeX 项目。
 
     使用 latexmk 编译主文件，支持自动引擎检测和 PDF/A 输出。
+    clean=true 时编译前先清理项目内可再生产物（编辑器链路启用）。
     若编译失败，使用 LLM 将错误信息翻译为通俗易懂的解释和修复建议。
     """
     try:
@@ -78,6 +81,7 @@ async def run_compile(
             engine=request.engine,
             pdfa=request.pdfa,
             synctex=request.synctex,
+            clean_first=request.clean,
         )
         return result.model_dump()
     except RuntimeError as e:

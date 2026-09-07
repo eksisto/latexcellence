@@ -77,9 +77,13 @@ export default function useEditorCompile({
     setPdfUrl(null);
     try {
       // 编辑器恒传 synctex=true（editor v3 决策 Q3）：生成 .synctex.gz
-      // 供正反向同步查询；编译页 / git_diff 等调用方默认 false 零影响
+      // 供正反向同步查询；编译页 / git_diff 等调用方默认 false 零影响。
+      // clean=true：编译前先清理 .aux/.log/.fdb_latexmk 等再生产物——
+      // 避免 latexmk 依上次失败状态短路为 "Nothing to do" 且提示无具体
+      // 错误，同时保证失败日志始终来自本次运行
       const data = await api.compile.run(target, workspaceId, {
         synctex: true,
+        clean: true,
       });
       if (seq !== compileSeqRef.current) return; // 已被更新的编译接管
       setCompileResult(data);

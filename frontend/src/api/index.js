@@ -742,6 +742,9 @@ export const api = {
           // SyncTeX 数据（editor v3 决策 Q3）：编辑器恒传 true（Q3），
           // 编译页 / git_diff 等既有调用方不传 → false，行为零变化
           synctex: options.synctex || false,
+          // 编译前清理可再生产物：编辑器编译传 true（保证引擎必跑、失败
+          // 日志必新鲜），编译页 / git_diff 等既有调用方不传 → false
+          clean: options.clean || false,
         }),
       }),
     pdfBlobUrl: async (mainFile, workspaceId) => {

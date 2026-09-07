@@ -725,7 +725,11 @@ Group / MathGroup 作用域、`$` 定界不跨对吞并、verbatim 体内无括�
 tab 进入冲突弹窗，陈旧确认弹窗同理），全部成功后继续。
 编译全程持在途序号守卫：双击竞态下过期响应整体丢弃并自回收其 blob
 URL。编辑器发起的编译恒传 `synctex=true`（editor v3 决策 Q3，供
-SyncTeX 正反向查询；编译页 / git_diff 等调用方默认 false 零变化）。
+SyncTeX 正反向查询；编译页 / git_diff 等调用方默认 false 零变化），
+并恒传 `clean=true`——编译前先由后端清理项目内 `.aux/.log/.fdb_latexmk`
+等可再生产物（详见 [compile.md](compile.md)），避免 latexmk 依上次失败
+状态短路为 "Nothing to do" 且提示无具体错误，同时保证失败日志始终来自
+本次运行。
 编译结果与 PDF 预览（复用 `PDFPreview` 与既有
 compile API）在右栏「编译与预览」Tab 展示；右栏可在该 Tab 与 AI 助手
 之间切换并整体折叠。PDF 预览左下角提供「全屏查看」按钮，全屏覆盖层
