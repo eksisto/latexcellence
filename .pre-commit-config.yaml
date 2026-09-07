@@ -12,3 +12,16 @@ repos:
         entry: prettier --write
         language: system
         types_or: [javascript, jsx, ts, tsx, css, html, json]
+
+      - id: ruff
+        name: ruff (Python 静态检查，规则见 ruff.toml)
+        entry: ruff check --force-exclude
+        language: system
+        types: [python]
+
+      - id: check-conventions
+        name: check_conventions (AGENTS.md 约束：pydantic v1 / path_guard 绕过 / 文档硬编码数量)
+        entry: python scripts/check_conventions.py
+        language: system
+        pass_filenames: false
+        always_run: true

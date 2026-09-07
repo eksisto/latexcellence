@@ -1,0 +1,53 @@
+# Ruff 配置 — AGENTS.md 编码约束的机器化执行。
+# 规则与 AGENTS.md「绝对禁止事项」对照表见 docs/development.md「约束机器化」一节。
+# 修复存量违规后，新增违规会被 pre-commit 与 scripts/check.sh 直接拦截。
+target-version = "py312"
+
+exclude = [
+    ".venv",
+    "static",   # Vite 构建产物
+    "data",     # 运行期用户数据
+    "logs",
+    "tools",    # 维护者专用 CLI/评测脚本：print 输出属正常用法
+    "showcase", # 零依赖静态站
+    "docker",
+]
+
+[lint]
+select = [
+    "E4", "E7", "E9",                    # pycodestyle 错误级（未定义名/裸 except/歧义命名等）
+    "F",                                 # pyflakes（F821 未定义名、未用导入等）
+    "I",                                 # isort 导入排序（同包相对导入风格的可读性兜底）
+    "T201",                              # 禁止 print() → 用 logger（AGENTS.md）
+    "PTH",                               # 禁止 os.path → 用 pathlib.Path（AGENTS.md）
+    "UP006", "UP007", "UP035", "UP045",  # 类型注解现代化：list[str] / X | None（AGENTS.md）
+]
+ignore = [
+    # AGENTS.md 明确要求用 os.path.islink 做符号链接检测（兼容路径不存在的场景），
+    # pathlib 的 is_symlink() 对不存在的路径行为不同，禁止迁移。
+    "PTH114",
+    # 内置 open() 不在 os.path 禁令范围内，仅要求显式 encoding；存量逐步迁移，暂不强制。
+    "PTH123",
+    # os.symlink 是 os 模块而非 os.path，创建符号链接的 API 选择不做强制。
+    "PTH211",
+]
+
+[lint.per-file-ignores]
+# CLI 管理工具与演示脚本：print 是面向维护者的正常输出方式
+"backend/manage.py" = ["T201"]
+"tests/test_marker_numbering_demo.py" = ["T201"]
+"scripts/*" = ["T201"]
+# __init__.py 的再导出（re-export）模式：未使用导入属有意为之
+"**/__init__.py" = ["F401"]
+# 评测对齐测试先做 sys.path 注入再导入，属刻意的延迟导入模式
+"tests/test_*eval*.py" = ["E402"]
+# vendored ip2region xdb 搜索器：上游 C 风格代码（!= None、单字母变量、裸 except），
+# 且核心流程操作 bytes 路径（pathlib 不支持），保持与上游一致，不做风格改造
+"backend/core/multiuser/ip2region_xdb/**" = ["E711", "E722", "E741", "PTH"]
+# RAR 成员名规范化流程全程操作 bytes 路径（os.fsencode/fsdecode），pathlib 不支持 bytes
+"backend/core/multiuser/upload_rar.py" = ["PTH104", "PTH118", "PTH119", "PTH120"]
+# 文件系统探测：probe 是原始字节文件名（bytes 路径），pathlib 不支持
+"tests/test_multiuser/test_upload_rar.py" = ["PTH108"]
+# 安全校验唯一入口：os.path.isabs 接受 bytes 且语义为「当前平台绝对路径」，
+# 与下一行 PureWindowsPath 叠加构成跨平台绝对路径走私防护，不可换用 pathlib
+"backend/utils/path_guard.py" = ["PTH117"]
