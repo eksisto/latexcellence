@@ -4,8 +4,9 @@ LaTeXcellence 是一个 AI 驱动的 LaTeX 文档助手。后端 FastAPI + 前�
 
 ## 全局规则
 
-- **每次开始新对话**，先读 PROJECT_SUMMARY.md 了解项目结构和功能。
+- **每次开始新对话**，先读 PROJECT_SUMMARY.md（精简索引）定位本次任务相关的模块与设计要点，需要细节时再读 `docs/` 对应文档，不要整篇背诵。
 - **项目结构变更**（新增/删除模块、核心文件路径变更），必须同步更新 PROJECT_SUMMARY.md。
+- **特性专属约束按需加载**：配置同步、逐段检查、错误消息翻译等场景约束已下沉为 `.agents/skills/` 下的项目 skill，碰到对应场景必须先读对应 SKILL.md 再动手。
 
 ## 技术栈速查
 
@@ -27,7 +28,19 @@ npm run build
 
 # 运行后端测试
 pytest tests/ -v
+
+# 统一验证入口：改完代码跑这一条（ruff + black + 约束扫描 + pytest + 前端单测）
+bash scripts/check.sh
 ```
+
+## 约束机器化（优先靠工具，不靠记忆）
+
+本文件的编码约束已尽量落地为机器检查，**机器检查是准绳，文字只是解释**：
+
+- `ruff.toml`：os.path / print / Pydantic v1 API 之外的可静态化禁令（含豁免清单与理由）
+- `scripts/check_conventions.py`：ruff 覆盖不到的约定——Pydantic v1 残留、path_guard 绕过、文档硬编码数量
+- `.pre-commit-config.yaml`：black / prettier / ruff / 约束扫描，提交前自动拦截
+- `scripts/check.sh`：以上全部 + pytest + 前端单测的统一入口；**完成代码修改后必须运行并通过**
 
 ## 缓存清理
 
@@ -135,11 +148,7 @@ LLM 输出的 LaTeX 文本（经 JSON 传输或写盘前）**必须**使用 `bac
 - **组件与样式**：优先使用 shadcn/ui 组件。样式定制通过 Tailwind CSS 4 的 utility classes 或 CSS 变量，**禁止**直接魔改底层 Radix UI 的 DOM 结构或滥用内联 `style`。
 - **代码风格**：遵循 Prettier 默认配置。
 - **页面文字**：前端页面使用中文。
-- **配置同步规范**：当修改 `config.json` 配置文件时（如新增配置项、删除配置项、修改配置结构），**必须**同步更新前端相关代码：
-  1. 更新 `frontend/src/components/settings/` 下的设置分区组件（由 `SettingsDialog.jsx` 组装），确保用户可以通过界面修改新配置项。
-  2. 更新 `SettingsDialog.jsx` 的 `handleSave` 函数中 `setEnabledFeatures` 调用，确保新增的功能开关能实时同步到全局状态。
-  3. 更新 `frontend/src/pages/WelcomePage.jsx` 中的 `featureGroups`，确保新功能在首页有点线目录条目展示。
-  4. 更新后端 `backend/core/config.py` 中的 `AppConfig` 模型，确保 Pydantic 校验与 config.json 结构一致。
+- **配置同步规范**：修改 `config.json` / `config.example.json` 的结构（增删改配置项、功能开关）时，**必须**先读 `.agents/skills/latexcellence-config-sync/SKILL.md` 并执行其中的同步检查单（设置分区组件、`handleSave`、`WelcomePage.featureGroups`、`AppConfig` 模型四处缺一不可）。
 
 ---
 
@@ -183,17 +192,13 @@ LLM 输出的 LaTeX 文本（经 JSON 传输或写盘前）**必须**使用 `bac
 | `__init__` 缓存配置 | 方法内实时 `get_config()` |
 | 前端 `prop drilling` | 用 Zustand 或 React Context 传深层状态 |
 | Zustand setter 直接存函数值 | `set()` 不支持函数 updater 透传；若需 `setResult(prev=>...)`：setter 检测 `typeof value==="function"` 并转 `set(state=>({key:value(state.key)}))`；否则函数会被当值存，渲染 `.map()`/`.length` 对函数类型会崩溃 |
-| 逐段检查后刷新全部预览 | 应用单段修改后**不得**调用刷新全部预览（会清空）；从结果列表过滤掉已应用段落；检查结果需纳入 Zustand persist `partialize` 以支持刷新保留 |
-| 逐段检查结果显示顺序 | `changes` 非空优先；无建议在后；同类内部按 `paragraph_index` 升序；排序完成后再做过滤，保持有序 |
-| 逐段检查功能实现模式 | 必须用 `useParagraphCheck` hook 封装：恢复/文件选择/预览/检查优化/排序/应用/refresh 持久化；页面只传 API 模块与 store slice 配置；禁止在页面重复实现 |
-| 逐段检查前端交互约束 | 1）结果页用 `<MarkerText>` 渲染含 Marker（如 `__MATH_0000__`）的字符串展示友好标签；2）展开“查看原文”用 `<ParagraphContext>`（显示当前段落前后上下文） |
+| 绕过 skill 实现逐段检查 | 逐段检查族（typo/expression/terminology/translate）前后端的实现、展示顺序、保鲜与交互约束，必须先读 `.agents/skills/latexcellence-paragraph-check/SKILL.md` 再动手 |
 
 ### 前端错误消息翻译规则
 
-前端**必须**将所有后端返回的英文错误消息翻译为当前语言后再展示给用户：
+前端**必须**将所有后端返回的英文错误消息翻译为当前语言后再展示，统一走
+`errorMessages.js` + `errorPatterns.js` + i18n 三语 `errors` 命名空间维护。
 
-- **HTTP 请求层**：`api/index.js` 的 `request()` 已统一通过 `translateError()` 翻译错误。
-- **SSE 流**：`useParagraphCheck` / `useWritingChat` 等 hook 中 SSE 返回的 `data.message` 必须手动调用 `translateError()` 翻译。
-- **响应体字段**：API 响应 JSON 中嵌套的错误字段（如 `result.errors[].reason`）**不经过 `request()` 拦截**，必须在消费处手动调用 `translateError()` 翻译。
-- **新增后端错误时**：必须同步在 `frontend/src/i18n/locales/zh.json`、`zh-TW.json` 和 `en.json` 的 `errors` 命名空间中添加对应翻译条目（精确匹配用扁平 key，模式匹配用描述性 key + `{{变量}}` 占位符）。
-- **禁止硬编码中文兜底**：不要在组件中写 `e.reason === "xxx" ? "中文" : e.reason` 这样的条件翻译，统一走 `errorMessages.js` + i18n 维护。
+关键点：`request()` 已统一翻译 HTTP 错误；但 **SSE `data.message`** 与**响应体嵌套错误字段**（如 `result.errors[].reason`）必须在消费处手动 `translateError()`；新增后端错误必须同步 `zh.json` / `zh-TW.json` / `en.json` 三语条目（前端 i18nCoverage 单测会拦截漏配）。**禁止**组件内硬编码 `e.reason === "xxx" ? "中文" : e.reason` 式条件翻译。
+
+完整链路与 key 规范见 `.agents/skills/latexcellence-i18n-errors/SKILL.md`。
