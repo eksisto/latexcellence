@@ -1132,7 +1132,11 @@
       "deleteConfirmDirty": "This file has unsaved changes; deleting it will discard them.",
       "deleteConfirmProceed": "Delete",
       "mainFileSet": "Set {{path}} as the main file",
-      "mainFileSetFailed": "Failed to set the main file"
+      "mainFileSetFailed": "Failed to set the main file",
+      "uploaded": "Uploaded {{path}}",
+      "uploadedMany": "Uploaded {{count}} files",
+      "uploadFailed": "Failed to upload {{count}} file(s)",
+      "insertReference": "Insert reference"
     },
     "versionManage": {
       "title": "Version Management",
@@ -1544,7 +1548,15 @@
       "createAction": "Create",
       "cancelAction": "Cancel",
       "setMainFile": "Set as main file",
-      "currentMainFile": "Current main file"
+      "currentMainFile": "Current main file",
+      "upload": "Upload files",
+      "uploadHere": "Upload files here",
+      "uploadFileError": {
+        "empty": "Invalid file name",
+        "separator": "File name must not contain path separators",
+        "control": "File name must not contain control characters",
+        "hidden": "Hidden files starting with a dot cannot be uploaded"
+      }
     },
     "folderPicker": {
       "title": "Select Folder",
@@ -2238,6 +2250,7 @@
     "invalidSession": "Generation session not found or expired",
     "fileExists": "A file with the same name already exists",
     "parentNotFound": "Parent directory does not exist; create the folder in the project root first",
-    "mainFileProtected": "The main file cannot be deleted; go back to the project workspace and switch the main file in the \"Main file\" dropdown first"
+    "mainFileProtected": "The main file cannot be deleted; go back to the project workspace and switch the main file in the \"Main file\" dropdown first",
+    "uploadFileTooLarge": "File exceeds the upload size limit (20MB)"
   }
 }

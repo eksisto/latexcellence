@@ -247,6 +247,111 @@ export default function EditorPage() {
   //    统计状态不经过页面 React 树（键入只重渲染状态栏自身） ──────────
   const statsHub = useMemo(() => createStatsHub(), []);
 
+  /* ── 宏包缺失联动 ──────────────────────────────────────────── */
+  const addPackageToPreamble = useCallback(
+    (pkg) => {
+      const view = editorViewRef.current;
+      if (!view || view.destroyed || !pkg) return;
+      const insertion = buildPackageInsertion(
+        activeBuffer(useEditorStore.getState()),
+        pkg,
+      );
+      if (!insertion) return;
+      view.dispatch({
+        changes: { from: insertion.index, insert: insertion.text },
+        scrollIntoView: true,
+      });
+      view.focus();
+      toast.success(t("components:commandPalette.pkgAdded", { pkg }));
+    },
+    [t],
+  );
+
+  const notifyMissingPackage = useCallback(
+    async (entry) => {
+      const pkg = entry?.pkg;
+      if (!pkg || !canWrite) return;
+      const description = `\\usepackage{${pkg}}`;
+      const displayZh = await getCommandZhDisplay(i18n.language);
+      const zhLabel = displayZh ? displayZh(entry.zh ?? "") : "";
+      toast.warning(
+        t("components:commandPalette.pkgMissing", {
+          name: zhLabel || `\\${entry.name}`,
+          pkg,
+        }),
+        {
+          description,
+          duration: 10000,
+          action: {
+            label: t("components:commandPalette.pkgAddAction"),
+            onClick: () => addPackageToPreamble(pkg),
+          },
+        },
+      );
+    },
+    [addPackageToPreamble, canWrite, t],
+  );
+
+  /* ── 命令插入管线（命令面板与上传「插入引用」共用，§5.3） ──────── */
+  const handleInsertEntry = useCallback(
+    (entry, size) => {
+      if (!canWrite) return false;
+      const cur = useEditorStore.getState();
+      const view = editorViewRef.current;
+      if (!activeFilePath(cur) || !view || view.destroyed) {
+        toast.info(t("components:commandPalette.noFileHint"));
+        return false;
+      }
+      const contentBefore = activeBuffer(cur);
+      // wrap 类目（editor v2 决策 Q13）：面板执行包裹动作——对每个选区
+      // 包成 \cmd{内容}，光标处插入空命令并定位到参数内；其余类目走
+      // 占位符模板插入
+      let ok = true;
+      if (entry.category === WRAP_CATEGORY) {
+        ok = wrapViewSelections(view, entry.name);
+      } else {
+        insertSnippet(view, expandEntryInsert(entry, size));
+      }
+      if (ok && entry.pkg && isPackageMissing(contentBefore, entry.pkg)) {
+        notifyMissingPackage(entry);
+      }
+      return ok;
+    },
+    [canWrite, notifyMissingPackage, t],
+  );
+
+  /* ── 上传成功后的「插入引用」（editor-file-upload-design §5.3 / D4+D8）：
+     复用命令面板 includegraphics 条目同款模板（figures.json），$2 预填
+     D8 口径路径（相对项目根、正斜杠，与当前编辑文件位置无关），
+     $1 宽度与 $0 退出位仍走既有 snippetInsert 占位符 Tab 跳转通路 */
+  const insertFigureReference = useCallback(
+    (filePath) => {
+      handleInsertEntry({
+        name: "includegraphics",
+        insert: `\\includegraphics[width=$1\\textwidth]{${filePath}}$0`,
+        pkg: "graphicx",
+      });
+    },
+    [handleInsertEntry],
+  );
+
+  /** 单文件上传成功的 toast 动作构造：不可引用类型 / 无激活文本 tab /
+      编辑器视图未就绪时返回 undefined（仅提示上传成功，D4 边界） */
+  const buildUploadInsertAction = useCallback(
+    (uploadedPath) => {
+      // 仅位图/PDF 可作为 \includegraphics 引用（与可预览白名单同集合）
+      if (!isPreviewableFilePath(uploadedPath)) return undefined;
+      const cur = useEditorStore.getState();
+      const view = editorViewRef.current;
+      if (!activeFilePath(cur) || !view || view.destroyed) return undefined;
+      return {
+        label: t("pages:editor.insertReference"),
+        onClick: () => insertFigureReference(uploadedPath),
+      };
+    },
+    [t, insertFigureReference],
+  );
+
   /* ── 缓冲区管理（打开/激活 / 保存 / 冲突 / 自动保存 / 关闭三选 /
      陈旧检测 / 刷新恢复 / 项目切换守卫） ─────────────────────────── */
   const {
@@ -271,12 +376,15 @@ export default function EditorPage() {
     handleCreateFile,
     handleDeleteFile,
     handleSetMainFile,
+    handleUploadFiles,
+    uploading,
   } = useEditorBuffer({
     workspaceId,
     canWrite,
     t,
     setFilePreviewPath,
     setFilePreviewUrl,
+    buildUploadInsertAction,
   });
 
   /* ── 一键格式化（阶段五 / 决策 Q8）：结果直接替换发起 tab 缓冲区并置
@@ -456,78 +564,6 @@ export default function EditorPage() {
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
   }, [canWrite]);
-
-  /* ── 宏包缺失联动 ──────────────────────────────────────────── */
-  const addPackageToPreamble = useCallback(
-    (pkg) => {
-      const view = editorViewRef.current;
-      if (!view || view.destroyed || !pkg) return;
-      const insertion = buildPackageInsertion(
-        activeBuffer(useEditorStore.getState()),
-        pkg,
-      );
-      if (!insertion) return;
-      view.dispatch({
-        changes: { from: insertion.index, insert: insertion.text },
-        scrollIntoView: true,
-      });
-      view.focus();
-      toast.success(t("components:commandPalette.pkgAdded", { pkg }));
-    },
-    [t],
-  );
-
-  const notifyMissingPackage = useCallback(
-    async (entry) => {
-      const pkg = entry?.pkg;
-      if (!pkg || !canWrite) return;
-      const description = `\\usepackage{${pkg}}`;
-      const displayZh = await getCommandZhDisplay(i18n.language);
-      const zhLabel = displayZh ? displayZh(entry.zh ?? "") : "";
-      toast.warning(
-        t("components:commandPalette.pkgMissing", {
-          name: zhLabel || `\\${entry.name}`,
-          pkg,
-        }),
-        {
-          description,
-          duration: 10000,
-          action: {
-            label: t("components:commandPalette.pkgAddAction"),
-            onClick: () => addPackageToPreamble(pkg),
-          },
-        },
-      );
-    },
-    [addPackageToPreamble, canWrite, t],
-  );
-
-  const handleInsertEntry = useCallback(
-    (entry, size) => {
-      if (!canWrite) return false;
-      const cur = useEditorStore.getState();
-      const view = editorViewRef.current;
-      if (!activeFilePath(cur) || !view || view.destroyed) {
-        toast.info(t("components:commandPalette.noFileHint"));
-        return false;
-      }
-      const contentBefore = activeBuffer(cur);
-      // wrap 类目（editor v2 决策 Q13）：面板执行包裹动作——对每个选区
-      // 包成 \cmd{内容}，光标处插入空命令并定位到参数内；其余类目走
-      // 占位符模板插入
-      let ok = true;
-      if (entry.category === WRAP_CATEGORY) {
-        ok = wrapViewSelections(view, entry.name);
-      } else {
-        insertSnippet(view, expandEntryInsert(entry, size));
-      }
-      if (ok && entry.pkg && isPackageMissing(contentBefore, entry.pkg)) {
-        notifyMissingPackage(entry);
-      }
-      return ok;
-    },
-    [canWrite, notifyMissingPackage, t],
-  );
 
   const handleCreateEditor = useCallback((view) => {
     editorViewRef.current = view;
@@ -905,6 +941,8 @@ export default function EditorPage() {
                   }}
                   onDeleteFile={setDeleteConfirmPath}
                   onSetMainFile={handleSetMainFile}
+                  onUploadFile={handleUploadFiles}
+                  uploading={uploading}
                 />
               )}
             </CardContent>

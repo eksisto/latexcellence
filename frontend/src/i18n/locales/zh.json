@@ -1132,7 +1132,11 @@
       "deleteConfirmDirty": "该文件有未保存的修改，删除后这些修改将丢失。",
       "deleteConfirmProceed": "删除",
       "mainFileSet": "已将 {{path}} 设为主文件",
-      "mainFileSetFailed": "设置主文件失败"
+      "mainFileSetFailed": "设置主文件失败",
+      "uploaded": "已上传 {{path}}",
+      "uploadedMany": "已上传 {{count}} 个文件",
+      "uploadFailed": "{{count}} 个文件上传失败",
+      "insertReference": "插入引用"
     },
     "versionManage": {
       "title": "版本管理",
@@ -1544,7 +1548,15 @@
       "createAction": "创建",
       "cancelAction": "取消",
       "setMainFile": "设为主文件",
-      "currentMainFile": "当前主文件"
+      "currentMainFile": "当前主文件",
+      "upload": "上传文件",
+      "uploadHere": "上传到此文件夹",
+      "uploadFileError": {
+        "empty": "无效的文件名",
+        "separator": "文件名不能包含路径分隔符",
+        "control": "文件名包含非法控制字符",
+        "hidden": "不支持上传以点开头的隐藏文件"
+      }
     },
     "folderPicker": {
       "title": "选择文件夹",
@@ -2238,6 +2250,7 @@
     "invalidSession": "生成会话不存在或已失效",
     "fileExists": "同名文件已存在",
     "parentNotFound": "父目录不存在，请先在项目根目录创建对应文件夹",
-    "mainFileProtected": "不能删除主文件；请先返回项目工作区，在「主文件」下拉框中更换主文件后再删除"
+    "mainFileProtected": "不能删除主文件；请先返回项目工作区，在「主文件」下拉框中更换主文件后再删除",
+    "uploadFileTooLarge": "文件超过上传大小上限（20MB）"
   }
 }

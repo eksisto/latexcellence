@@ -390,7 +390,26 @@ export const api = {
         }),
       }),
     /**
-     * 文件树删除文件（白名单后缀；主文档受保护）：成功返回
+     * 文件树上传文件（任意格式，editor-file-upload-design 决策 D11）：
+     * multipart 字段 file + query file_path（目标相对路径）与 workspace_id，
+     * credentials/CSRF/authHeaders 复用 requestForm 封装。成功返回
+     * { status, file_path, file_tree }（重扫后的完整目录树）；错误码
+     * 409 file_exists、400 invalid_path / parent_not_found、
+     * 413 quota_exceeded / file_too_large
+     */
+    uploadFile: (filePath, file, workspaceId) => {
+      const formData = new FormData();
+      formData.append("file", file);
+      return requestForm(
+        appendWs(
+          `/project/upload-file?file_path=${encodeURIComponent(filePath)}`,
+          workspaceId,
+        ),
+        formData,
+      );
+    },
+    /**
+     * 文件树删除文件（任意非隐藏后缀，主文档受保护）：成功返回
      * { status, file_path, file_tree }（重扫后的完整目录树）
      */
     deleteFile: (filePath, workspaceId) =>

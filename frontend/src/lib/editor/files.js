@@ -109,3 +109,22 @@ export function joinProjectPath(dirPath, fileName) {
   if (!dir) return fileName;
   return `${dir}/${fileName}`;
 }
+
+/**
+ * 校验「上传文件」的原始文件名（文件树上传入口，editor-file-upload-design
+ * §3-6 / §5.5）。与后端 _validate_upload_target_name / _reject_hidden_components
+ * 同口径：拒绝空名、路径分隔符、控制字符与点开头（隐藏文件）。任意后缀
+ * 均可上传（决策 D1），不做扩展名白名单；服务端校验仍为权威，此处仅
+ * 供选择框回调预检、避免无效请求。
+ *
+ * @param {string} name File.name（浏览器原始文件名）
+ * @returns {string|null} null 表示合法；否则返回错误码
+ *   "empty" / "separator" / "control" / "hidden"（供 i18n key 映射）
+ */
+export function validateUploadFileName(name) {
+  if (typeof name !== "string" || name.trim().length === 0) return "empty";
+  if (/[/\\]/.test(name)) return "separator";
+  if (/[\u0000-\u001F\u007F]/.test(name)) return "control";
+  if (name.startsWith(".")) return "hidden";
+  return null;
+}

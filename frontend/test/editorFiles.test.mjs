@@ -1,10 +1,14 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 
 import {
   IMAGE_PREVIEW_SUFFIXES,
   joinProjectPath,
   validateNewFileName,
+  validateUploadFileName,
   MAX_EDITOR_FILE_CHARS,
   PREVIEWABLE_SUFFIXES,
   isEditableFilePath,
@@ -103,4 +107,100 @@ test("joinProjectPath：根目录返回文件名，子目录拼相对路径", ()
   assert.equal(joinProjectPath("chapters", "intro.tex"), "chapters/intro.tex");
   // 容忍树节点路径尾部斜杠
   assert.equal(joinProjectPath("figs/", "plot.tex"), "figs/plot.tex");
+});
+
+test("validateUploadFileName：任意后缀的正常文件名放行（决策 D1）", () => {
+  assert.equal(validateUploadFileName("figure.png"), null);
+  assert.equal(validateUploadFileName("plot.PNG"), null);
+  assert.equal(validateUploadFileName("data.csv"), null);
+  assert.equal(validateUploadFileName("archive.tar.gz"), null);
+  assert.equal(validateUploadFileName("main.tex"), null);
+  // 任意格式：无后缀也放行（服务端不限后缀）
+  assert.equal(validateUploadFileName("Makefile"), null);
+  assert.equal(validateUploadFileName("包含空格 与-横线_下划线.pdf"), null);
+});
+
+test("validateUploadFileName：空名返回 empty", () => {
+  assert.equal(validateUploadFileName(""), "empty");
+  assert.equal(validateUploadFileName("   "), "empty");
+  assert.equal(validateUploadFileName(null), "empty");
+  assert.equal(validateUploadFileName(undefined), "empty");
+  assert.equal(validateUploadFileName(42), "empty");
+});
+
+test("validateUploadFileName：路径分隔符返回 separator", () => {
+  // 单段约束：File.name 不允许夹带路径（目标目录由树节点决定）
+  assert.equal(validateUploadFileName("a/b.png"), "separator");
+  assert.equal(validateUploadFileName("a\\b.png"), "separator");
+  assert.equal(validateUploadFileName("dir/nested/file.tex"), "separator");
+});
+
+test("validateUploadFileName：控制字符返回 control", () => {
+  assert.equal(validateUploadFileName("a\u0000b.png"), "control");
+  assert.equal(validateUploadFileName("a\nb.png"), "control");
+  assert.equal(validateUploadFileName("a\tb.png"), "control");
+  assert.equal(validateUploadFileName("a\u001Fb.png"), "control");
+  assert.equal(validateUploadFileName("a\u007Fb.png"), "control");
+});
+
+test("validateUploadFileName：点开头隐藏名返回 hidden", () => {
+  assert.equal(validateUploadFileName(".gitignore"), "hidden");
+  assert.equal(validateUploadFileName(".."), "hidden");
+  assert.equal(validateUploadFileName(".hidden.png"), "hidden");
+});
+
+test("joinProjectPath：上传资源到根目录与子目录（正斜杠，D8 口径）", () => {
+  // 根目录上传为纯文件名
+  assert.equal(joinProjectPath(null, "fig.png"), "fig.png");
+  assert.equal(joinProjectPath("", "plot.pdf"), "plot.pdf");
+  // 子目录上传拼相对路径（\includegraphics 引用口径：相对项目根、正斜杠）
+  assert.equal(
+    joinProjectPath("figures", "scheme1.png"),
+    "figures/scheme1.png",
+  );
+  assert.equal(
+    joinProjectPath("figures/scan", "p.1.jpg"),
+    "figures/scan/p.1.jpg",
+  );
+});
+
+test("上传消毒错误码与三语 i18n 条目一一对应（动态键门禁缺口回归）", () => {
+  // validateUploadFileName 的错误码经模板字符串动态消费
+  // （useEditorBuffer：t(`components:projectExplorer.uploadFileError.${code}`)），
+  // i18nCoverage 只扫静态字面量键、i18nLocales 只查三语平价——三语齐缺时
+  // 既有门禁全部放行，界面会直接渲染原始键名。此处逐语逐键钉死消费契约。
+  const localesDir = join(
+    dirname(fileURLToPath(import.meta.url)),
+    "../src/i18n/locales",
+  );
+  const codes = ["empty", "separator", "control", "hidden"];
+  for (const locale of ["zh", "zh-TW", "en"]) {
+    const dict = JSON.parse(
+      readFileSync(join(localesDir, `${locale}.json`), "utf8"),
+    );
+    const uploadFileError =
+      dict.components?.projectExplorer?.uploadFileError ?? {};
+    for (const code of codes) {
+      assert.ok(
+        typeof uploadFileError[code] === "string" &&
+          uploadFileError[code].length > 0,
+        `${locale}.components.projectExplorer.uploadFileError.${code} 缺失`,
+      );
+    }
+    assert.ok(
+      dict.errors?.uploadFileTooLarge,
+      `${locale}.errors.uploadFileTooLarge 缺失`,
+    );
+  }
+  // 后端 413 file_too_large → errors 命名空间的映射链路：EXACT_MAP 登记
+  // 是 translateError 命中的前提（multiUserLocales 的固定 ERROR_CODES 清单
+  // 不含编辑器文件操作错误码，此处钉死该映射不被静默删改）
+  const errorMessagesSrc = readFileSync(
+    join(
+      dirname(fileURLToPath(import.meta.url)),
+      "../src/utils/errorMessages.js",
+    ),
+    "utf8",
+  );
+  assert.match(errorMessagesSrc, /file_too_large:\s*"uploadFileTooLarge"/);
 });

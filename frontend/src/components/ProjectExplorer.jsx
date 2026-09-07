@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { cn } from "@/lib/utils";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -11,6 +11,8 @@ import ChevronRight from "lucide-react/dist/esm/icons/chevron-right.mjs";
 import Plus from "lucide-react/dist/esm/icons/plus.mjs";
 import Trash2 from "lucide-react/dist/esm/icons/trash-2.mjs";
 import Star from "lucide-react/dist/esm/icons/star.mjs";
+import Upload from "lucide-react/dist/esm/icons/upload.mjs";
+import Loader2 from "lucide-react/dist/esm/icons/loader-2.mjs";
 
 const IMAGE_FILE_RE = /\.(png|jpg|jpeg|gif|webp|bmp|pdf)$/i;
 // 主文件仅限 .tex（与后端 set-main-file 的 allowed_suffixes 一致）
@@ -28,17 +30,19 @@ function getFileIcon(name, isDir, isExpanded) {
   return <File className="size-4 text-muted-foreground" />;
 }
 
-/** 行内 hover 操作按钮（新建/删除）；stopPropagation 防触发行主点击 */
-function RowActionButton({ title, onClick, children }) {
+/** 行内 hover 操作按钮（新建/上传/删除）；stopPropagation 防触发行主点击 */
+function RowActionButton({ title, onClick, children, disabled = false }) {
   return (
     <button
       type="button"
       title={title}
       aria-label={title}
+      disabled={disabled}
       className={cn(
         "inline-flex size-5 shrink-0 items-center justify-center rounded",
         "text-muted-foreground hover:bg-muted hover:text-foreground",
         "opacity-0 transition-opacity group-hover:opacity-100 focus:opacity-100",
+        disabled && "pointer-events-none opacity-30",
       )}
       onClick={(e) => {
         e.stopPropagation();
@@ -61,6 +65,8 @@ function TreeNode({
   onCreateFile,
   onDeleteFile,
   onSetMainFile,
+  onRequestUpload,
+  uploading,
 }) {
   const { t } = useTranslation("components");
   const isDir = node.is_dir;
@@ -99,12 +105,21 @@ function TreeNode({
         {canWrite && (
           <div className="flex shrink-0 items-center pr-1">
             {isDir ? (
-              <RowActionButton
-                title={t("projectExplorer.newFileHere")}
-                onClick={() => onCreateFile?.(node.path)}
-              >
-                <Plus className="size-3.5" />
-              </RowActionButton>
+              <>
+                <RowActionButton
+                  title={t("projectExplorer.uploadHere")}
+                  disabled={uploading}
+                  onClick={() => onRequestUpload?.(node.path)}
+                >
+                  <Upload className="size-3.5" />
+                </RowActionButton>
+                <RowActionButton
+                  title={t("projectExplorer.newFileHere")}
+                  onClick={() => onCreateFile?.(node.path)}
+                >
+                  <Plus className="size-3.5" />
+                </RowActionButton>
+              </>
             ) : (
               <>
                 {isTexName(node.name) &&
@@ -154,6 +169,8 @@ function TreeNode({
                 onCreateFile={onCreateFile}
                 onDeleteFile={onDeleteFile}
                 onSetMainFile={onSetMainFile}
+                onRequestUpload={onRequestUpload}
+                uploading={uploading}
               />
             ))}
           </ul>
@@ -171,9 +188,15 @@ export default function ProjectExplorer({
   onCreateFile,
   onDeleteFile,
   onSetMainFile,
+  onUploadFile,
+  uploading = false,
 }) {
   const { t } = useTranslation("components");
   const [expandedDirs, setExpandedDirs] = useState(() => new Set());
+  // 上传选择框：内置隐藏 input 由按钮触发，uploadDirRef 记录触发入口
+  // 对应的目标目录（null = 项目根，editor-file-upload-design §5.1 / D3）
+  const uploadInputRef = useRef(null);
+  const uploadDirRef = useRef(null);
 
   const toggleDir = useCallback((path) => {
     setExpandedDirs((prev) => {
@@ -187,25 +210,71 @@ export default function ProjectExplorer({
     });
   }, []);
 
+  const openUploadPicker = useCallback((dirPath) => {
+    uploadDirRef.current = dirPath;
+    uploadInputRef.current?.click();
+  }, []);
+
+  const handleUploadInputChange = useCallback(
+    (e) => {
+      const { files } = e.target;
+      if (files && files.length > 0)
+        onUploadFile?.(uploadDirRef.current, files);
+      // 复位以便再次选择同一文件仍触发 change
+      e.target.value = "";
+    },
+    [onUploadFile],
+  );
+
   return (
     <div className="flex flex-col h-full">
+      {/* 隐藏的多选文件输入：根标题行与目录行 hover 按钮共用同一入口 */}
+      <input
+        ref={uploadInputRef}
+        type="file"
+        multiple
+        className="hidden"
+        aria-hidden="true"
+        tabIndex={-1}
+        onChange={handleUploadInputChange}
+      />
       <div className="flex items-center justify-between mb-3 px-1">
         <h3 className="font-semibold text-sm text-muted-foreground">
           {t("projectExplorer.title")}
         </h3>
         {canWrite && tree.length > 0 && (
-          <button
-            type="button"
-            title={t("projectExplorer.newFile")}
-            aria-label={t("projectExplorer.newFile")}
-            className={cn(
-              "inline-flex size-5 items-center justify-center rounded",
-              "text-muted-foreground hover:bg-muted hover:text-foreground",
-            )}
-            onClick={() => onCreateFile?.(null)}
-          >
-            <Plus className="size-4" />
-          </button>
+          <div className="flex shrink-0 items-center gap-1">
+            <button
+              type="button"
+              title={t("projectExplorer.upload")}
+              aria-label={t("projectExplorer.upload")}
+              disabled={uploading}
+              className={cn(
+                "inline-flex size-5 items-center justify-center rounded",
+                "text-muted-foreground hover:bg-muted hover:text-foreground",
+                uploading && "pointer-events-none opacity-30",
+              )}
+              onClick={() => openUploadPicker(null)}
+            >
+              {uploading ? (
+                <Loader2 className="size-4 animate-spin" />
+              ) : (
+                <Upload className="size-4" />
+              )}
+            </button>
+            <button
+              type="button"
+              title={t("projectExplorer.newFile")}
+              aria-label={t("projectExplorer.newFile")}
+              className={cn(
+                "inline-flex size-5 items-center justify-center rounded",
+                "text-muted-foreground hover:bg-muted hover:text-foreground",
+              )}
+              onClick={() => onCreateFile?.(null)}
+            >
+              <Plus className="size-4" />
+            </button>
+          </div>
         )}
       </div>
       {tree.length === 0 ? (
@@ -227,6 +296,8 @@ export default function ProjectExplorer({
                 onCreateFile={onCreateFile}
                 onDeleteFile={onDeleteFile}
                 onSetMainFile={onSetMainFile}
+                onRequestUpload={openUploadPicker}
+                uploading={uploading}
               />
             ))}
           </ul>

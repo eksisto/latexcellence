@@ -18,6 +18,8 @@ import {
   isEditableFilePath,
   isFileTooLarge,
   isPreviewableFilePath,
+  joinProjectPath,
+  validateUploadFileName,
 } from "@/lib/editor/files";
 import {
   countDirtyTabs,
@@ -50,7 +52,7 @@ const SESSION_PERSIST_DEBOUNCE_MS = 1000;
  * 宿主页随每次按键重渲染），beforeunload / 自动保存 / 冲突快照门闩 /
  * 会话持久化全部走 useEditorStore.subscribe 命令式副作用。
  *
- * @param {{ workspaceId: string, canWrite: boolean, t: Function, setFilePreviewPath: Function, setFilePreviewUrl: Function }} params
+ * @param {{ workspaceId: string, canWrite: boolean, t: Function, setFilePreviewPath: Function, setFilePreviewUrl: Function, buildUploadInsertAction?: Function }} params
  */
 export default function useEditorBuffer({
   workspaceId,
@@ -58,12 +60,15 @@ export default function useEditorBuffer({
   t,
   setFilePreviewPath,
   setFilePreviewUrl,
+  buildUploadInsertAction,
 }) {
   const openTab = useEditorStore((s) => s.openTab);
   const activateTab = useEditorStore((s) => s.activateTab);
 
   const [saving, setSaving] = useState(false);
   const [opening, setOpening] = useState(false);
+  /** 文件树上传在途（任一文件未落盘；入口按钮据此禁用防重复提交） */
+  const [uploading, setUploading] = useState(false);
   /** 关闭脏 tab 三选弹窗的归属路径（null = 弹窗关闭） */
   const [closingTabPath, setClosingTabPath] = useState(null);
   /** 陈旧确认弹窗的归属路径（保存前确认磁盘已变更） */
@@ -724,6 +729,77 @@ export default function useEditorBuffer({
     [workspaceId, t, describeError],
   );
 
+  /* ── 文件树上传（editor-file-upload-design §5.2 / 决策 D4+D5） ──────
+     串行逐个直传（单文件 ≤20MB，无需分片队列）；每次成功以响应携带的
+     重扫整树 setFileTree（末次即最终态，与 handleCreateFile 模式一致）。
+     失败收集汇总、已成功文件保留（部分成功不回滚）。 */
+  const handleUploadFiles = useCallback(
+    async (dirPath, files) => {
+      const list = Array.from(files ?? []);
+      if (list.length === 0) return false;
+      setUploading(true);
+      const succeeded = [];
+      const failed = [];
+      try {
+        for (const file of list) {
+          // 客户端消毒预检（§3-6，与服务端权威校验同口径）：无效名不发起请求
+          const invalid = validateUploadFileName(file.name);
+          if (invalid) {
+            failed.push({
+              name: file.name,
+              reason: t(
+                `components:projectExplorer.uploadFileError.${invalid}`,
+              ),
+            });
+            continue;
+          }
+          const targetPath = joinProjectPath(dirPath, file.name);
+          try {
+            const res = await api.project.uploadFile(
+              targetPath,
+              file,
+              workspaceId,
+            );
+            useStore.getState().setFileTree(res.file_tree);
+            succeeded.push(targetPath);
+          } catch (e) {
+            failed.push({
+              name: file.name,
+              reason: describeError(e, targetPath),
+            });
+          }
+        }
+      } finally {
+        setUploading(false);
+      }
+      // 上传 .tex/.bib 可能引入 \label/\cite、上传 .tex 可能新增资源引用：
+      // 失效引用符号缓存，下次补全触发时重拉（对齐保存/新建路径语义）
+      if (succeeded.length > 0) {
+        projectSymbolCache.invalidate(projectKeyRef.current);
+        if (succeeded.length === 1) {
+          // D4：单文件成功 toast 带「插入引用」动作；无激活文本 tab 或
+          // 类型不可引用时 buildUploadInsertAction 返回 undefined（仅提示成功）
+          toast.success(t("pages:editor.uploaded", { path: succeeded[0] }), {
+            duration: 10000,
+            action: buildUploadInsertAction?.(succeeded[0]),
+          });
+        } else {
+          toast.success(
+            t("pages:editor.uploadedMany", { count: succeeded.length }),
+          );
+        }
+      }
+      if (failed.length > 0) {
+        toast.error(t("pages:editor.uploadFailed", { count: failed.length }), {
+          description: failed.map((f) => `${f.name}: ${f.reason}`).join("\n"),
+          duration: 10000,
+        });
+      }
+      return failed.length === 0;
+    },
+    [workspaceId, t, describeError, buildUploadInsertAction],
+  );
+
   return {
     opening,
     saving,
@@ -748,6 +824,8 @@ export default function useEditorBuffer({
     handleCreateFile,
     handleDeleteFile,
     handleSetMainFile,
+    handleUploadFiles,
+    uploading,
     conflictSnapshotsRef,
   };
 }

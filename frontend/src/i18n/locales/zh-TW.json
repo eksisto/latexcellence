@@ -1132,7 +1132,11 @@
       "deleteConfirmDirty": "該檔案有未儲存的修改，刪除後這些修改將遺失。",
       "deleteConfirmProceed": "刪除",
       "mainFileSet": "已將 {{path}} 設為主檔案",
-      "mainFileSetFailed": "設定主檔案失敗"
+      "mainFileSetFailed": "設定主檔案失敗",
+      "uploaded": "已上傳 {{path}}",
+      "uploadedMany": "已上傳 {{count}} 個檔案",
+      "uploadFailed": "{{count}} 個檔案上傳失敗",
+      "insertReference": "插入引用"
     },
     "versionManage": {
       "title": "版本管理",
@@ -1544,7 +1548,15 @@
       "createAction": "建立",
       "cancelAction": "取消",
       "setMainFile": "設為主檔案",
-      "currentMainFile": "目前主檔案"
+      "currentMainFile": "目前主檔案",
+      "upload": "上傳檔案",
+      "uploadHere": "上傳到此資料夾",
+      "uploadFileError": {
+        "empty": "無效的檔案名稱",
+        "separator": "檔案名稱不能包含路徑分隔符",
+        "control": "檔案名稱包含非法控制字元",
+        "hidden": "不支援上傳以點開頭的隱藏檔案"
+      }
     },
     "folderPicker": {
       "title": "選擇資料夾",
@@ -2238,6 +2250,7 @@
     "invalidSession": "生成會話不存在或已失效",
     "fileExists": "同名檔案已存在",
     "parentNotFound": "父目錄不存在，請先在專案根目錄建立對應資料夾",
-    "mainFileProtected": "不能刪除主檔案；請先返回專案工作區，在「主檔案」下拉選單中更換主檔案後再刪除"
+    "mainFileProtected": "不能刪除主檔案；請先返回專案工作區，在「主檔案」下拉選單中更換主檔案後再刪除",
+    "uploadFileTooLarge": "檔案超過上傳大小上限（20MB）"
   }
 }
