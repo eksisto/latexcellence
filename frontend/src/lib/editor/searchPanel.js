@@ -4,7 +4,9 @@
  * basicSetup 已内置 searchKeymap（Ctrl/Cmd+F 唤起面板，openSearchPanel
  * 会自动挂载 search 扩展），本模块补齐两件事：
  *   1. 主题化：面板 / 输入框 / 按钮 / 匹配高亮全部改走全局主题 CSS 变量，
- *      亮暗主题零 JS 参与（与 LaTeXEditor 基础主题同一做法）；
+ *      亮暗主题零 JS 参与（与 LaTeXEditor 基础主题同一做法）。注意按钮
+ *      必须显式 appearance:none——Tailwind preflight 给 button 强制了
+ *      appearance:button，原生渐变背景图会盖在主题纯色之上；
  *   2. 本地化：@codemirror/search 的面板文案经 EditorState.phrases 呈现，
  *      这里把官方短语键（"Find" / "Replace" / "replaced $ matches"…）
  *      映射到 i18n 的 components:editor.searchPanel.* 命名空间，三语同步（zh/zh-TW/en）。
@@ -77,19 +79,52 @@ const searchPanelTheme = EditorView.theme({
   },
   ".cm-panel.cm-search": {
     padding: "8px 10px",
-    display: "flex",
-    flexWrap: "wrap",
-    alignItems: "center",
-    gap: "2px",
+    // 保持 block 流：CM 在替换行前插入的 <br> 只在块级布局中生效，
+    // flex/grid 下它是零尺寸 item 且盒尺寸不可被 CSS 改写（折行失效）
     "& input, & button": {
       margin: "2px 4px 2px 0",
       font: "inherit",
       fontSize: "0.8125rem",
       color: "var(--foreground)",
+      verticalAlign: "middle",
     },
+    // 勾选框：appearance:none 纯 CSS 自绘（对齐全站 shadcn Checkbox 观感）。
+    // 不能依赖原生绘制 + accent-color：原生控件的绘制不保证跟随过渡中间值
+    // 逐帧重绘，亮/暗切换时计算值在渐变而外观瞬间跳变。自绘后颜色落在
+    // 普通的 background-color / border-color 上，随全局主题过渡可靠渐变；
+    // 勾选态附加 150ms scale 微动画（View Transitions 路径下两者均被
+    // :active-view-transition 关闭，由整页交叉淡入接管，不会叠加）
     "& input[type=checkbox]": {
-      marginRight: "4px",
-      accentColor: "var(--primary)",
+      appearance: "none",
+      width: "0.875rem",
+      height: "0.875rem",
+      borderRadius: "4px",
+      border: "1px solid var(--border)",
+      backgroundColor: "var(--background)",
+      display: "inline-grid",
+      placeContent: "center",
+      cursor: "pointer",
+      transition:
+        "background-color 300ms cubic-bezier(0.4, 0, 0.2, 1), border-color 300ms cubic-bezier(0.4, 0, 0.2, 1)",
+      "&::before": {
+        content: '""',
+        width: "0.5rem",
+        height: "0.5rem",
+        backgroundColor: "var(--primary-foreground)",
+        clipPath:
+          "polygon(14% 44%, 0 65%, 50% 100%, 100% 16%, 80% 0%, 43% 62%)",
+        transform: "scale(0)",
+        transition: "transform 150ms cubic-bezier(0.4, 0, 0.2, 1)",
+      },
+      "&:checked": {
+        borderColor: "var(--primary)",
+        backgroundColor: "var(--primary)",
+        "&::before": { transform: "scale(1)" },
+      },
+      "&:focus-visible": {
+        outline: "2px solid color-mix(in oklch, var(--ring) 70%, transparent)",
+        outlineOffset: "2px",
+      },
     },
     "& input[type=text], & input:not([type])": {
       padding: "3px 6px",
@@ -97,15 +132,35 @@ const searchPanelTheme = EditorView.theme({
       border: "1px solid var(--border)",
       backgroundColor: "var(--background)",
       outline: "none",
-      "&:focus": { borderColor: "var(--ring)" },
+      "&:focus": {
+        borderColor: "var(--ring)",
+        boxShadow:
+          "0 0 0 3px color-mix(in oklch, var(--ring) 50%, transparent)",
+      },
     },
+    // 按钮走主题纯色（对齐全站 Button secondary 变体）。appearance:none
+    // 与 background-image:none 必须显式声明：Tailwind preflight 给 button
+    // 强制了 appearance:button，UA 样式表还为 button 声明了原生渐变
+    // background-image——仅设主题 background-color 压不住它（拟物质感 +
+    // 暗色模式下亮灰底白字不可读的根源）
     "& button": {
+      appearance: "none",
+      backgroundImage: "none",
       padding: "3px 8px",
       borderRadius: "6px",
       border: "1px solid var(--border)",
-      backgroundColor: "var(--background)",
+      backgroundColor: "var(--secondary)",
+      color: "var(--secondary-foreground)",
       cursor: "pointer",
-      "&:hover": { backgroundColor: "var(--accent)" },
+      "&:hover": {
+        backgroundColor:
+          "color-mix(in oklch, var(--secondary), var(--foreground) 5%)",
+      },
+      "&:focus-visible": {
+        borderColor: "var(--ring)",
+        boxShadow:
+          "0 0 0 3px color-mix(in oklch, var(--ring) 50%, transparent)",
+      },
     },
     "& label": {
       margin: "2px 8px 2px 0",
@@ -114,14 +169,32 @@ const searchPanelTheme = EditorView.theme({
       whiteSpace: "pre",
       display: "inline-flex",
       alignItems: "center",
+      verticalAlign: "middle",
       gap: "4px",
       cursor: "pointer",
     },
+    // 关闭按钮：ghost 样式（对齐全站 Button ghost 变体）；hover 用半透明
+    // muted 混色，亮暗主题各自成立
     "& [name=close]": {
+      appearance: "none",
+      backgroundImage: "none",
+      backgroundColor: "transparent",
+      borderColor: "transparent",
+      color: "var(--muted-foreground)",
       top: "6px",
       right: "6px",
       borderRadius: "6px",
       padding: "2px 6px",
+      cursor: "pointer",
+      "&:hover": {
+        backgroundColor: "color-mix(in oklch, var(--muted) 60%, transparent)",
+        color: "var(--foreground)",
+      },
+      "&:focus-visible": {
+        borderColor: "var(--ring)",
+        boxShadow:
+          "0 0 0 3px color-mix(in oklch, var(--ring) 50%, transparent)",
+      },
     },
   },
   ".cm-searchMatch": {

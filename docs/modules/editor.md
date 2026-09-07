@@ -338,7 +338,18 @@ content/dirty——beforeunload、per-tab 自动保存防抖与冲突快照门�
   `SEARCH_PHRASE_KEY_MAP` 映射到 i18n `components:editor.searchPanel.*`
   命名空间，注入 `EditorState.phrases`（以语言字段为依赖的 compute
   facet）；界面语言切换时经 `setSearchLanguage` 效果对活跃视图热更新
-  （换档收起的存档 EditorState 保留建档时的语言，可接受边界）。
+  （换档收起的存档 EditorState 保留建档时的语言，可接受边界）。样式
+  细节：按钮必须显式 `appearance: none` + `background-image: none` 压掉
+  Tailwind preflight 的 `appearance: button` 与 UA 样式表原生渐变
+  （否则拟物质感、暗色下亮灰底白字不可读），配色对齐全站 Button 的
+  secondary（动作按钮）/ ghost（关闭 ×）变体；面板保持 block 流布局
+  （CM 插入的 `<br>` 仅在块级布局中折行，flex/grid 下盒尺寸不可改写，
+  替换行折行会失效）；勾选框为 `appearance: none` 纯 CSS 自绘（勾选态
+  clip-path 勾 + 150ms scale 微动画，对齐 shadcn Checkbox 观感）——原生
+  控件的绘制不保证跟随 `accent-color` 过渡中间值逐帧重绘，自绘后颜色
+  落在 background-color / border-color 上，亮暗切换随全局主题过渡可靠
+  渐变（View Transitions 路径下两者均被 `:active-view-transition` 关闭，
+  由整页交叉淡入接管）。
 
 ### 自定义片段库（editor v3 阶段二 / 决策 Q7、Q8）
 
