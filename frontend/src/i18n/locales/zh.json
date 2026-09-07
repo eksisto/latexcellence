@@ -2234,6 +2234,6 @@
     "invalidSession": "生成会话不存在或已失效",
     "fileExists": "同名文件已存在",
     "parentNotFound": "父目录不存在，请先在项目根目录创建对应文件夹",
-    "mainFileProtected": "不能删除主文件；请先在工具栏将其他文件设为主文件"
+    "mainFileProtected": "不能删除主文件；请先返回项目工作区，在「主文件」下拉框中更换主文件后再删除"
   }
 }

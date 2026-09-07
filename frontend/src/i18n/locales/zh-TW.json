@@ -2234,6 +2234,6 @@
     "invalidSession": "生成會話不存在或已失效",
     "fileExists": "同名檔案已存在",
     "parentNotFound": "父目錄不存在，請先在專案根目錄建立對應資料夾",
-    "mainFileProtected": "不能刪除主檔案；請先在工具列將其他檔案設為主檔案"
+    "mainFileProtected": "不能刪除主檔案；請先返回專案工作區，在「主檔案」下拉選單中更換主檔案後再刪除"
   }
 }

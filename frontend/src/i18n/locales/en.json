@@ -2234,6 +2234,6 @@
     "invalidSession": "Generation session not found or expired",
     "fileExists": "A file with the same name already exists",
     "parentNotFound": "Parent directory does not exist; create the folder in the project root first",
-    "mainFileProtected": "The main file cannot be deleted; set another file as the main file first"
+    "mainFileProtected": "The main file cannot be deleted; go back to the project workspace and switch the main file in the \"Main file\" dropdown first"
   }
 }
