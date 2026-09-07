@@ -75,6 +75,9 @@
   --code-bg: oklch(0.965 0 0);
   --code-fg: oklch(0.3 0 0);
   --code-border: oklch(0.88 0 0);
+  /* 编辑器括号匹配/失配高亮底色（LaTeXEditor 消费；亮色保持 CM 默认） */
+  --bracket-match-bg: #328c8252;
+  --bracket-nonmatch-bg: #bb555544;
 }
 
 .dark {
@@ -85,6 +88,9 @@
   --code-bg: oklch(0.235 0 0);
   --code-fg: oklch(0.87 0 0);
   --code-border: oklch(0.38 0 0);
+  /* 暗色下提亮 + 提高不透明度，深底上清晰可见（CM 默认青绿几乎不可见） */
+  --bracket-match-bg: #5eead466;
+  --bracket-nonmatch-bg: #f8717166;
 }
 
 @layer base {

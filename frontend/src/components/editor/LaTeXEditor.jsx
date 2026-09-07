@@ -131,6 +131,16 @@ const editorBaseTheme = EditorView.theme({
       "var(--selection-bg, color-mix(in oklab, var(--primary) 22%, transparent))",
   },
   ".cm-cursor": { borderLeftColor: "var(--foreground)" },
+  // 括号匹配/失配高亮：颜色走 CSS 变量（亮/暗默认值在 index.css 分别定义）。
+  // CM baseTheme 的低透明青绿在暗色背景上几乎不可见；深链选择器压过
+  // baseTheme 聚焦态的 3 类特异性规则（同上方 selection 覆盖的处理方式），
+  // decoration mark 必然位于 .cm-content 内，选择器安全。
+  "&.cm-focused .cm-content .cm-matchingBracket": {
+    backgroundColor: "var(--bracket-match-bg, #328c8252)",
+  },
+  "&.cm-focused .cm-content .cm-nonmatchingBracket": {
+    backgroundColor: "var(--bracket-nonmatch-bg, #bb555544)",
+  },
 });
 
 /** LaTeX 语法高亮：token 颜色对齐 CodeBlock 的 --code-token-* 变量；
