@@ -139,7 +139,7 @@ RAR4 原始字节名经 Python surrogateescape 落盘。此类名字直接进 JS
 - **rar 7.x 起移除 `-ma4`**（`Unknown option: ma4`），RAR4 样本必须用 rar 5.x / 6.x 生成；
 - 真实压缩 RAR4/RAR5 在 unar、bsdtar 下均端到端解压成功，产物逐字节一致；
 - **手工构造 RAR4 时 SERVICE(0x7A) 服务块必须置 LONG_BLOCK（0x8000）**：缺该标志时
-  unar/unrar 视为无数据区、解出 0 个文件（静默坏包），仅 bsdtar/libarchive 容忍；
+  unar/unrar 视为无数据区、解不出任何文件（静默坏包），仅 bsdtar/libarchive 容忍；
   `service_rr.rar` 已按真实结构修复，verify 脚本对该标志有回归断言；
 - unar 在归档同目录存在兄弟分卷时会自动补全解压——生产上传为单文件暂存不触发，但构造
   分卷测试样例时须隔离目录。

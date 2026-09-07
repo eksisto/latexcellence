@@ -104,7 +104,7 @@ hunk 至少带 3 行上下文，供前端锚定定位。
 #### 工具白名单与多源汇聚（editor v3 阶段五a / 决策 Q12）
 
 `_EDITOR_TOOL_NAMES`（`service/editor_chat.py`）从项目只读三件套扩为
-12 个工具：三件套 + 联网搜索（`web_search` / `open_page` /
+工具集：三件套 + 联网搜索（`web_search` / `open_page` /
 `read_page_sections` / `find_in_page`）+ 学术检索（`search_scholarly_works`
 / `get_work_details` / `find_related_works` / `get_full_text_or_sections`
 / `search_research_data_resources`），与 Writing Chat 主对话注册表对齐；
