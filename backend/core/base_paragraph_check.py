@@ -645,7 +645,7 @@ class BaseParagraphCheckService:
                 results[batch_start + slot] = batch_results[slot]
 
             if batch_start + batch_size < len(targets):
-                await asyncio.sleep(cfg.llm.request_interval)
+                await asyncio.sleep(get_config().llm.request_interval)
 
         self._logger.info(
             f"Batch check completed for {file_path} " f"[op={operation_id}]"
