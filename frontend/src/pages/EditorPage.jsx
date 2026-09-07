@@ -74,6 +74,7 @@ import FullscreenPDFPreview from "@/components/editor/FullscreenPDFPreview";
 import OutlinePanel from "@/components/editor/OutlinePanel";
 import FormulaPreviewCard from "@/components/editor/FormulaPreviewCard";
 import EditorStatusBar from "@/components/editor/EditorStatusBar";
+import CreateFileDialog from "@/components/editor/CreateFileDialog";
 
 import { EditorView } from "@codemirror/view";
 import FileCode from "lucide-react/dist/esm/icons/file-code.mjs";
@@ -233,6 +234,11 @@ export default function EditorPage() {
   // 大纲面板视图（editor v3 阶段四 / Q10）：当前文件 ↔ 本项目；
   // 状态提升到页面，左栏 tab 切换卸载面板时视图选择不丢失
   const [outlineView, setOutlineView] = useState("file");
+  // 文件树新建弹窗：开关 + 目标目录（null = 项目根，由树节点决定）
+  const [createDialogOpen, setCreateDialogOpen] = useState(false);
+  const [createDialogDir, setCreateDialogDir] = useState(null);
+  // 文件树删除确认弹窗的归属路径（null = 弹窗关闭）
+  const [deleteConfirmPath, setDeleteConfirmPath] = useState(null);
 
   // ── CM6 视图实例 ────────────────────────────────────────────────
   const editorViewRef = useRef(null);
@@ -262,6 +268,8 @@ export default function EditorPage() {
     handleReloadBuffer,
     handleDiscardAndReload,
     handleSelectTreeNode,
+    handleCreateFile,
+    handleDeleteFile,
   } = useEditorBuffer({
     workspaceId,
     canWrite,
@@ -321,6 +329,16 @@ export default function EditorPage() {
   }, [filePreviewPath, workspaceId]);
 
   const closeFilePreview = useCallback(() => setFilePreviewPath(null), []);
+
+  /* ── 文件树删除执行：成功后收起可能正展示该文件的只读预览覆盖层 ──── */
+  const handleDeleteConfirmed = useCallback(
+    async (filePath) => {
+      const ok = await handleDeleteFile(filePath);
+      if (ok && filePreviewPath === filePath) closeFilePreview();
+      return ok;
+    },
+    [handleDeleteFile, filePreviewPath, closeFilePreview],
+  );
 
   /* ── URL ?file= 参数驱动打开（打开/激活；与会话恢复集合合并：
      恢复全部 tab 集合，?file= 指定者激活，§4） ───────────────────── */
@@ -878,6 +896,12 @@ export default function EditorPage() {
                 <ProjectExplorer
                   tree={fileTree}
                   onSelect={handleSelectTreeNode}
+                  canWrite={canWrite}
+                  onCreateFile={(dirPath) => {
+                    setCreateDialogDir(dirPath);
+                    setCreateDialogOpen(true);
+                  }}
+                  onDeleteFile={setDeleteConfirmPath}
                 />
               )}
             </CardContent>
@@ -982,6 +1006,50 @@ export default function EditorPage() {
           const target = staleConfirmPath;
           setStaleConfirmPath(null);
           if (target) await doSaveTab(target, { confirmedStale: true });
+        }}
+      />
+
+      {/* 文件树新建文件弹窗：目标目录由触发入口决定（头部按钮 = 项目根，
+          目录行 hover 按钮 = 该目录）；成功后自动打开新 tab 并刷新文件树 */}
+      <CreateFileDialog
+        open={createDialogOpen}
+        onOpenChange={setCreateDialogOpen}
+        dirPath={createDialogDir}
+        onCreate={handleCreateFile}
+      />
+
+      {/* 文件树删除确认（destructive）：目标存在脏 tab 时追加未保存警示，
+          确认后该文件全部 tab 一并关闭 */}
+      <ConfirmDialog
+        open={deleteConfirmPath !== null}
+        onOpenChange={(open) => {
+          if (!open) setDeleteConfirmPath(null);
+        }}
+        title={t("pages:editor.deleteFileTitle")}
+        description={
+          deleteConfirmPath
+            ? [
+                t("pages:editor.deleteConfirmDescription", {
+                  path: deleteConfirmPath,
+                }),
+                useEditorStore
+                  .getState()
+                  .tabs.some(
+                    (tab) => tab.filePath === deleteConfirmPath && tab.dirty,
+                  )
+                  ? t("pages:editor.deleteConfirmDirty")
+                  : null,
+              ]
+                .filter(Boolean)
+                .join(" ")
+            : ""
+        }
+        confirmText={t("pages:editor.deleteConfirmProceed")}
+        variant="destructive"
+        onConfirm={async () => {
+          const target = deleteConfirmPath;
+          setDeleteConfirmPath(null);
+          if (target) await handleDeleteConfirmed(target);
         }}
       />
 

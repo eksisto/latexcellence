@@ -187,6 +187,25 @@ class LatexProject:
             raise RuntimeError("No project opened")
         return self._project_info.file_tree
 
+    def refresh_file_tree(self) -> list[FileNode]:
+        """重扫项目目录并就地刷新缓存的文件树。
+
+        文件树是 open() 时的一次性扫描缓存；编辑器在项目内新建/删除
+        文件后调用本方法刷新视图。只更新 file_tree，main_file 与依赖
+        图保持不变（避免整项目重新 open）。
+        """
+        if self._project_info is None:
+            raise RuntimeError("No project opened")
+        root = Path(self._project_info.root_path)
+        self._project_info.file_tree = self._scan_directory(root)
+        return self._project_info.file_tree
+
+    def get_main_file(self) -> str | None:
+        """返回当前项目主文档的相对路径（未设置时为 None）。"""
+        if self._project_info is None:
+            raise RuntimeError("No project opened")
+        return self._project_info.main_file
+
     def get_file_md5(self, file_path: str) -> str:
         """
         获取指定文件的当前 MD5 哈希值。

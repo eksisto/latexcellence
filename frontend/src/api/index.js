@@ -375,6 +375,32 @@ export const api = {
           workspace_id: workspaceId,
         }),
       }),
+    /**
+     * 文件树新建文件（零 LLM、不进撤销记账）：成功返回 { status, file_path,
+     * file_tree }——file_tree 为重扫后的完整目录树，调用方直接 setFileTree
+     * 完成刷新；已存在 409 file_exists、父目录缺失 400 parent_not_found
+     */
+    createFile: (filePath, workspaceId, content = "") =>
+      request(appendWs("/project/create-file", workspaceId), {
+        method: "POST",
+        body: JSON.stringify({
+          file_path: filePath,
+          content,
+          workspace_id: workspaceId,
+        }),
+      }),
+    /**
+     * 文件树删除文件（白名单后缀；主文档受保护）：成功返回
+     * { status, file_path, file_tree }（重扫后的完整目录树）
+     */
+    deleteFile: (filePath, workspaceId) =>
+      request(appendWs("/project/delete-file", workspaceId), {
+        method: "POST",
+        body: JSON.stringify({
+          file_path: filePath,
+          workspace_id: workspaceId,
+        }),
+      }),
     closeWorkspace: (workspaceId) =>
       request(`/project/workspace/${encodeURIComponent(workspaceId)}`, {
         method: "DELETE",

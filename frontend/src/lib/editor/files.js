@@ -77,3 +77,35 @@ export function isFileTooLarge(value) {
   const length = typeof value === "number" ? value : (value?.length ?? 0);
   return length > MAX_EDITOR_FILE_CHARS;
 }
+
+/**
+ * 校验「新建文件」的文件名输入（文件树新建入口，与后端 create-file
+ * 白名单同源）。单段文件名：禁止路径分隔符与点号目录引用（目标目录
+ * 由树节点决定，不允许在文件名里夹带路径）。
+ *
+ * @param {string} name 用户输入的文件名
+ * @returns {string|null} null 表示合法；否则返回错误码
+ *   "empty" / "separator" / "suffix"（供 i18n key 映射）
+ */
+export function validateNewFileName(name) {
+  if (typeof name !== "string") return "empty";
+  const trimmed = name.trim();
+  if (trimmed.length === 0) return "empty";
+  if (/[/\\]/.test(trimmed) || trimmed === "." || trimmed === "..") {
+    return "separator";
+  }
+  if (!isEditableFilePath(trimmed)) return "suffix";
+  return null;
+}
+
+/**
+ * 拼接目标目录相对路径与文件名（目录为空 = 项目根，返回文件名本身）。
+ * @param {string|null} dirPath 树中目录节点的相对路径（根目录为 null/空）
+ * @param {string} fileName 已通过 validateNewFileName 的单段文件名
+ * @returns {string}
+ */
+export function joinProjectPath(dirPath, fileName) {
+  const dir = typeof dirPath === "string" ? dirPath.replace(/\/+$/, "") : "";
+  if (!dir) return fileName;
+  return `${dir}/${fileName}`;
+}

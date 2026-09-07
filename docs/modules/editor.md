@@ -50,6 +50,8 @@ AI 建议**不经后端落盘**：建议以结构化形式随 SSE 返回并随�
 | `GET /api/project/outline` | 跨文件大纲（editor v3 阶段四 / 决策 Q10）：全项目只读遍历 `.tex`（隐藏目录跳过、单文件 2MB 上限、`resolve_project_path()` 校验与逃逸文件静默跳过，同 latex-symbols 安全口径），逐行提取分节命令 `\section` / `\subsection` / `\subsubsection` / `\paragraph`（含星号变体、可选参数跳过、注释与 `\verb` 剔除、verbatim 类环境豁免、标题净化与前端 `outlineScan.js` 同正则口径）；响应 `{files: [{file_path, entries: [{level, title, line}]}]}` 只含相对路径，无条目文件不进响应；项目级缓存（封顶逐出）+ 保存失效（save-file 落盘成功后重扫）；零 LLM、零写盘，扫描经 `asyncio.to_thread()` 调度 |
 | `POST /api/project/format-latex` | 一键格式化（阶段五 / 决策 Q8）：**纯转换端点**——接收缓冲区全文 `{content}`，复用 `latex_formatter.format_latex_source()`（latexindent 优先、内置轻量格式化器兜底，外部命令执行沿既有 SandboxRunner 规则与超时语义）返回 `{content, changed}`；不接收路径参数、不落盘、不进入配额记账、零 LLM；内容上限与 save-file 同量级（超限 413 `content_too_long`）；写权限依赖使 viewer 服务端拒绝；两层格式化器按契约"失败返回原样"（`changed=false`），意外异常收敛为 500 `format_failed` |
 | `POST /api/project/save-file` | 统一保存：`latex_json_guard` 宽松损坏特征校验（不做括号/$ 配平检查）→ MD5 乐观锁（不符返回 **409** 结构化错误 `file_conflict`）→ 单用户推入 BackupManager 撤销栈 / 多用户记入 workspace_edit_ops 反向补丁快照 → 刷新项目用量记账，超限回滚 |
+| `POST /api/project/create-file` | 文件树新建文件：白名单后缀路径校验 → 目标已存在报 409 `file_exists`、父目录缺失报 400 `parent_not_found` → utf-8 落盘（内容固定为空，`content` 字段预留模板初始化）→ 多用户模式落盘前按新文件字节做项目配额预检（超限 413 `quota_exceeded`）、落盘后 `refresh_owner_usage_after_write` → 失效大纲缓存 → 响应携带重扫后的 `file_tree`（前端单次往返刷新）。**不纳入统一撤销记账**（edit_log 恢复通道只支持改写已存在文件），超长内容 413 `content_too_long`、损坏特征 400 `invalid_content` 与 save-file 同口径 |
+| `POST /api/project/delete-file` | 文件树删除文件：白名单后缀路径校验 → 目标非普通文件报 404 `file_not_found` → **主文档删除保护**（当前 main file 报 400 `main_file_protected`，需先 set-main-file 更换）→ `unlink()` → 多用户模式刷新用量记账（配额按磁盘重算随之释放）→ 失效大纲缓存 → 响应携带重扫后的 `file_tree`。同样不纳入撤销记账，误删由前端确认弹窗兜底 |
 
 约束：面向用户的错误消息只用相对路径（多用户路径脱敏）；同步阻塞 I/O
 与损坏特征扫描一律经 `asyncio.to_thread` 调度。
@@ -188,6 +190,7 @@ frontend/src/
 │   ├── FormulaPreviewCard.jsx        # 当前公式固定预览卡（编辑区底部悬浮，光标跟随防抖渲染，空态/失败静默隐藏）
 │   ├── EditorToolbar.jsx             # 后端撤销重做 · 面板 · 格式化 · 编译 · 保存 · 设置
 │   ├── EditorCloseTabDialog.jsx      # 关闭脏 tab 三选弹窗（保存并关闭 / 放弃改动 / 取消）
+│   ├── CreateFileDialog.jsx          # 文件树新建文件弹窗（单段文件名 + 白名单后缀实时校验 + 目标路径预览）
 │   ├── EditorSettingsDialog.jsx      # 偏好开关 + 自定义片段管理（增删改 + 实时预览）+ 偏好导入/导出双通道入口
 │   ├── ConflictDialog.jsx            # 409 弹窗（动作作用于冲突归属 tab：放弃重载 / 剪贴板逃生 / 覆盖保存）
 │   ├── CommandPalette.jsx            # 命令面板 + m×n 网格选择器二级步骤
@@ -210,7 +213,7 @@ frontend/src/
 │   │   ├── brackets.js               # 括号匹配精确化（openedBy/closedBy 配对 prop + begin↔end 配对高亮插件）
 │   │   ├── index.js                  # parser + tags + 六b 扩展组装 LanguageSupport（foldService/indentService/配对 prop，模块级单例）
 │   │   └── build.mjs                 # @lezer/generator Node API 生成脚本（dev/build/test 前自动执行）
-│   ├── files.js                      # 可编辑/可预览白名单 + 大小上限纯函数
+│   ├── files.js                      # 可编辑/可预览白名单 + 大小上限 + 新建文件名校验/路径拼接纯函数
 │   ├── preferences.js                # 偏好默认值/白名单清洗/导出导入校验纯函数（v2 含自定义片段条目级清洗）
 │   ├── matcher.js                    # pinyin-pro 四路模糊匹配（多音字词级读音修正）+ 自定义片段派生索引
 │   ├── customCommands.js             # 自定义片段消费侧合并层（归一化 / 与内建库合并 / 面板独立分组）
@@ -603,6 +606,21 @@ localStorage（同一浏览器重启后仍可恢复脏缓冲区）；升级前�
 跨浏览器窗口共享（恢复载荷后者胜出）；公共机器上脏缓冲区内容留存本机
 （与 Notepad++ snapshot 同类取舍，隐私敏感场景建议开启自动保存落盘）。
 
+### 文件树新建 / 删除文件
+
+左栏 `ProjectExplorer` 在可写（`useCanWrite()`）时提供文件级操作入口：
+面板标题行「新建文件」按钮在项目根创建；目录行 hover 的「+」在该目录
+创建（单段文件名输入弹窗 `CreateFileDialog`，`validateNewFileName()` 做
+单段路径 + 白名单后缀实时校验，`joinProjectPath()` 拼相对路径）；文件行
+hover 的垃圾桶按钮发起删除（`ConfirmDialog` destructive 二次确认，目标
+存在脏 tab 时描述追加未保存警示）。创建/删除经
+`POST /api/project/create-file` / `POST /api/project/delete-file`
+（见后端一节），响应携带重扫后的 `file_tree`，前端 `setFileTree` 单次
+往返完成刷新——`LatexProject.refresh_file_tree()` 就地更新 open 时扫描的
+缓存。创建成功后自动打开新 tab（复用 `doOpenFile` 通路）；删除成功后
+该文件全部 tab（含脏缓冲区）联动关闭、只读预览覆盖层同步收起、引用
+符号缓存失效。操作不进撤销记账（见后端小节），由确认弹窗兜底。
+
 ### 图片与 PDF 只读预览
 
 文件树点击 `.pdf` 或常见位图（前端 `isPreviewableFilePath()` 与后端
@@ -908,6 +926,14 @@ AI 面板。四处配置同步规范照 AGENTS.md 执行；`/api/config/status` 
 
 - 后端 `tests/test_api/test_editor_file_io.py`：整文件读写 / 409 结构 /
   字节保真 / invalid_encoding / 事件循环保护（无 LLM）
+- 后端 `tests/test_api/test_editor_file_ops.py` 与
+  `tests/test_multiuser/test_editor_file_ops.py`：文件树新建/删除——
+  创建落盘与响应携带重扫 file_tree（根/子目录）/ 重复 409 `file_exists` /
+  白名单外后缀与路径穿越拒绝 / 父目录缺失 `parent_not_found` /
+  超长 413 / 损坏内容 400 / 删除与树同步 / 主文档保护
+  `main_file_protected`（换主文件后放行）/ GET /file-tree 缓存刷新；
+  多用户侧 owner 创建/删除成功且**不产生 workspace_edit_ops 记账**、
+  viewer 写保护 403、配额预检 413（落盘前拦截）、路径脱敏
 - 后端 `tests/test_api/test_editor_assistant.py`：上下文注入纯函数、
   建议提取、SSE 端点（Mock LLM，严禁真实网络）、开关把关、apply 标记、
   工具白名单执行前硬校验（幻觉/越权工具名被拒不执行）、`_get_editor_tools`

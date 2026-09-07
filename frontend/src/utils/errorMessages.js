@@ -162,6 +162,10 @@ const EXACT_MAP = {
   invalid_encoding: "invalidEncoding",
   // 请求体长度上限（save-file content / 编辑器助手 buffer 等）
   content_too_long: "contentTooLong",
+  // 文件树新建/删除（create-file / delete-file）
+  file_exists: "fileExists",
+  parent_not_found: "parentNotFound",
+  main_file_protected: "mainFileProtected",
   // 编辑器一键格式化（backend/modules/editor，editor-productivity-design 阶段五）
   format_failed: "formatFailed",
 

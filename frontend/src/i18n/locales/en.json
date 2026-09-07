@@ -1122,7 +1122,15 @@
       "sessionOverflowToast": "Too much unsaved content to restore fully; please save your work",
       "staleConfirmTitle": "File changed on disk",
       "staleConfirmDescription": "This file was modified elsewhere. Saving will overwrite the current disk content. Continue anyway?",
-      "staleConfirmProceed": "Save anyway"
+      "staleConfirmProceed": "Save anyway",
+      "created": "Created {{path}}",
+      "createFailed": "Failed to create file",
+      "deleted": "Deleted {{path}}",
+      "deleteFailed": "Failed to delete file",
+      "deleteFileTitle": "Delete file",
+      "deleteConfirmDescription": "Delete {{path}}? This action cannot be undone.",
+      "deleteConfirmDirty": "This file has unsaved changes; deleting it will discard them.",
+      "deleteConfirmProceed": "Delete"
     },
     "versionManage": {
       "title": "Version Management",
@@ -1517,7 +1525,22 @@
     },
     "projectExplorer": {
       "title": "Project Files",
-      "noProject": "No project opened"
+      "noProject": "No project opened",
+      "newFile": "New file",
+      "newFileHere": "New file in this folder",
+      "deleteFile": "Delete file",
+      "createTitle": "New file",
+      "createInRoot": "The new file will be created in the project root.",
+      "createInDir": "The new file will be created in {{dir}}.",
+      "namePlaceholder": "File name, e.g. chapter1.tex",
+      "nameHint": "Supported extensions: {{suffixes}}",
+      "fileNameError": {
+        "empty": "Please enter a file name",
+        "separator": "File name cannot contain path separators (the target folder is decided by the selected location)",
+        "suffix": "Unsupported extension; only .tex / .bib / .sty / .cls are allowed"
+      },
+      "createAction": "Create",
+      "cancelAction": "Cancel"
     },
     "folderPicker": {
       "title": "Select Folder",
@@ -2208,6 +2231,9 @@
     "invalidFileType": "Template contains files of disallowed type",
     "targetDirRequired": "A target directory is required in single-user mode",
     "targetNotEmpty": "Target directory already exists and is not empty",
-    "invalidSession": "Generation session not found or expired"
+    "invalidSession": "Generation session not found or expired",
+    "fileExists": "A file with the same name already exists",
+    "parentNotFound": "Parent directory does not exist; create the folder in the project root first",
+    "mainFileProtected": "The main file cannot be deleted; set another file as the main file first"
   }
 }

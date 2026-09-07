@@ -1122,7 +1122,15 @@
       "sessionOverflowToast": "未保存内容过多，超出会话恢复上限，请及时保存",
       "staleConfirmTitle": "磁盘上的文件已变更",
       "staleConfirmDescription": "该文件在磁盘上已被其他程序修改，覆盖保存将丢弃磁盘上的当前内容。仍要继续保存吗？",
-      "staleConfirmProceed": "仍要保存"
+      "staleConfirmProceed": "仍要保存",
+      "created": "已创建 {{path}}",
+      "createFailed": "创建文件失败",
+      "deleted": "已删除 {{path}}",
+      "deleteFailed": "删除文件失败",
+      "deleteFileTitle": "删除文件",
+      "deleteConfirmDescription": "确定删除 {{path}} 吗？该操作不可撤销。",
+      "deleteConfirmDirty": "该文件有未保存的修改，删除后这些修改将丢失。",
+      "deleteConfirmProceed": "删除"
     },
     "versionManage": {
       "title": "版本管理",
@@ -1517,7 +1525,22 @@
     },
     "projectExplorer": {
       "title": "项目文件",
-      "noProject": "未打开项目"
+      "noProject": "未打开项目",
+      "newFile": "新建文件",
+      "newFileHere": "在此文件夹中新建文件",
+      "deleteFile": "删除文件",
+      "createTitle": "新建文件",
+      "createInRoot": "将在项目根目录创建新文件。",
+      "createInDir": "将在 {{dir}} 中创建新文件。",
+      "namePlaceholder": "文件名，如 chapter1.tex",
+      "nameHint": "支持的扩展名：{{suffixes}}",
+      "fileNameError": {
+        "empty": "请输入文件名",
+        "separator": "文件名不能包含路径分隔符（目标目录由所选位置决定）",
+        "suffix": "扩展名不支持，仅支持 .tex / .bib / .sty / .cls"
+      },
+      "createAction": "创建",
+      "cancelAction": "取消"
     },
     "folderPicker": {
       "title": "选择文件夹",
@@ -2208,6 +2231,9 @@
     "invalidFileType": "模板包含不允许的文件类型",
     "targetDirRequired": "单用户模式需要先选择目标目录",
     "targetNotEmpty": "目标目录已存在且非空",
-    "invalidSession": "生成会话不存在或已失效"
+    "invalidSession": "生成会话不存在或已失效",
+    "fileExists": "同名文件已存在",
+    "parentNotFound": "父目录不存在，请先在项目根目录创建对应文件夹",
+    "mainFileProtected": "不能删除主文件；请先在工具栏将其他文件设为主文件"
   }
 }

@@ -1122,7 +1122,15 @@
       "sessionOverflowToast": "未儲存內容過多，超出會話恢復上限，請及時儲存",
       "staleConfirmTitle": "磁碟上的檔案已變更",
       "staleConfirmDescription": "該檔案在磁碟上已被其他程式修改，覆蓋儲存將丟棄磁碟上的目前內容。仍要繼續儲存嗎？",
-      "staleConfirmProceed": "仍要儲存"
+      "staleConfirmProceed": "仍要儲存",
+      "created": "已建立 {{path}}",
+      "createFailed": "建立檔案失敗",
+      "deleted": "已刪除 {{path}}",
+      "deleteFailed": "刪除檔案失敗",
+      "deleteFileTitle": "刪除檔案",
+      "deleteConfirmDescription": "確定刪除 {{path}} 嗎？此操作無法復原。",
+      "deleteConfirmDirty": "該檔案有未儲存的修改，刪除後這些修改將遺失。",
+      "deleteConfirmProceed": "刪除"
     },
     "versionManage": {
       "title": "版本管理",
@@ -1517,7 +1525,22 @@
     },
     "projectExplorer": {
       "title": "專案檔案",
-      "noProject": "未開啟專案"
+      "noProject": "未開啟專案",
+      "newFile": "新增檔案",
+      "newFileHere": "在此資料夾中新增檔案",
+      "deleteFile": "刪除檔案",
+      "createTitle": "新增檔案",
+      "createInRoot": "將在專案根目錄建立新檔案。",
+      "createInDir": "將在 {{dir}} 中建立新檔案。",
+      "namePlaceholder": "檔案名稱，如 chapter1.tex",
+      "nameHint": "支援的副檔名：{{suffixes}}",
+      "fileNameError": {
+        "empty": "請輸入檔案名稱",
+        "separator": "檔案名稱不能包含路徑分隔符（目標目錄由所選位置決定）",
+        "suffix": "副檔名不支援，僅支援 .tex / .bib / .sty / .cls"
+      },
+      "createAction": "建立",
+      "cancelAction": "取消"
     },
     "folderPicker": {
       "title": "選擇資料夾",
@@ -2208,6 +2231,9 @@
     "invalidFileType": "範本包含不允許的檔案類型",
     "targetDirRequired": "單人模式需要先選擇目標目錄",
     "targetNotEmpty": "目標目錄已存在且非空",
-    "invalidSession": "生成會話不存在或已失效"
+    "invalidSession": "生成會話不存在或已失效",
+    "fileExists": "同名檔案已存在",
+    "parentNotFound": "父目錄不存在，請先在專案根目錄建立對應資料夾",
+    "mainFileProtected": "不能刪除主檔案；請先在工具列將其他檔案設為主檔案"
   }
 }

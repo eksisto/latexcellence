@@ -30,6 +30,13 @@ r"""
        （editor-experience-design §4.4 / 决策 Q10，阶段四）——全项目 .tex
        分节扫描（与前端 outlineScan.js 同正则口径），项目级缓存 + 保存
        失效；零 LLM、零写盘、响应只含相对路径
+    7. 文件树新建/删除：POST /api/project/create-file 与
+       POST /api/project/delete-file 的业务实现——可编辑白名单后缀校验 +
+       冲突/父目录检查，多用户模式创建前按新文件字节做配额预检、删除后
+       刷新用量记账（配额随之释放）；主文档受删除保护；响应携带重扫后的
+       file_tree 供前端单次往返刷新。刻意不纳入统一撤销记账（edit_log
+       恢复通道只支持改写已存在文件，不支持文件级增删），误删由前端
+       确认弹窗兜底
 
 约束：
     - 面向用户的错误消息一律使用项目内相对路径（多用户路径脱敏规则），
@@ -56,6 +63,10 @@ from backend.modules.bib_manager.bib_parser import parse_bib_file
 
 from backend.core.logger import get_logger
 from backend.core.multiuser import edit_log
+from backend.core.multiuser.quota import (
+    enforce_project_quota,
+    refresh_owner_usage_after_write,
+)
 from backend.core.project_manager import FileConflictError
 from backend.modules.projects import service as projects_service
 from backend.utils.latex_formatter import format_latex_source
@@ -258,6 +269,154 @@ async def save_file_content(
     # 删除分节命令，下次 outline 请求全量重扫
     invalidate_project_outline_cache(project)
     return {"status": "ok", "file_path": file_path, "md5": result.md5s[file_path]}
+
+
+# ── 文件树新建 / 删除 ────────────────────────────────────────────────────
+def serialize_file_tree(nodes) -> list[dict]:
+    """FileNode 树 → JSON 兼容嵌套结构（name/path/is_dir/children 递归）。"""
+    result: list[dict] = []
+    for node in nodes:
+        item: dict = {"name": node.name, "path": node.path, "is_dir": node.is_dir}
+        if node.children:
+            item["children"] = serialize_file_tree(node.children)
+        result.append(item)
+    return result
+
+
+def _binding_owner(binding: dict) -> tuple[str | None, str | None]:
+    """多用户绑定取 (owner_id, project_id)；单用户模式返回 (None, None)。"""
+    if not binding or not binding.get("multi_user"):
+        return None, None
+    return binding.get("owner_id"), binding.get("project_id")
+
+
+def _refreshed_tree(project) -> list[dict]:
+    """重扫项目目录并返回序列化文件树（就地更新 open 时的缓存）。"""
+    return serialize_file_tree(project.refresh_file_tree())
+
+
+async def create_project_file(
+    project,
+    binding: dict,
+    *,
+    file_path: str,
+    content: str,
+) -> dict:
+    """在项目内新建文件（文件树操作，零 LLM、不进撤销记账）。
+
+    路径经 resolve_project_path 白名单校验（逐组件符号链接检测内置）；
+    目标已存在（含目录）报 409 file_exists，父目录缺失报 400
+    parent_not_found。多用户模式属"已知增量"写路径：落盘前按新文件
+    字节数做项目配额预检（超限 413 quota_exceeded），落盘后刷新用量
+    记账。响应携带重扫后的 file_tree，前端单次往返完成文件树刷新。
+    """
+    if len(content) > MAX_EDITABLE_CHARS:
+        raise _http(
+            413,
+            "content_too_long",
+            f"Content is {len(content)} characters, exceeding the "
+            f"maximum editable size of {MAX_EDITABLE_CHARS} characters",
+        )
+    corruption = await asyncio.to_thread(check_latex_corruption, content)
+    if corruption:
+        raise _http(400, "invalid_content", corruption)
+
+    # 多用户配额预检（先于落盘；HTTPException 原样透传）
+    owner_id, project_id = _binding_owner(binding)
+    if owner_id and project_id:
+        await asyncio.to_thread(
+            enforce_project_quota, owner_id, len(content.encode("utf-8"))
+        )
+
+    try:
+        created = await asyncio.to_thread(
+            _create_file_sync, project, file_path, content
+        )
+    except FileExistsError as e:
+        raise _http(409, "file_exists", str(e)) from e
+    except FileNotFoundError as e:
+        raise _http(400, "parent_not_found", str(e)) from e
+    except ValueError as e:
+        raise _http(400, "invalid_path", str(e)) from e
+    except RuntimeError as e:
+        raise _http(400, "invalid_workspace", str(e)) from e
+
+    if project_id:
+        await asyncio.to_thread(refresh_owner_usage_after_write, project_id)
+    invalidate_project_outline_cache(project)
+    logger.info("Editor file created: %s (%d chars)", file_path, len(content))
+    return {
+        "status": "ok",
+        "file_path": created,
+        "file_tree": _refreshed_tree(project),
+    }
+
+
+def _create_file_sync(project, file_path: str, content: str) -> str:
+    """同步新建：路径校验 → 冲突/父目录检查 → 字节保真写盘。"""
+    root = Path(project.root_path)
+    full_path = resolve_project_path(
+        root, file_path, allowed_suffixes=EDITABLE_SUFFIXES
+    )
+    if full_path.exists():
+        # 错误消息使用相对路径（多用户脱敏）；完整路径只进服务端日志
+        logger.info("Editor create conflict: %s (root=%s)", file_path, root)
+        raise FileExistsError(f"File already exists: {file_path}")
+    if not full_path.parent.is_dir():
+        raise FileNotFoundError(f"Parent directory does not exist: {file_path}")
+    full_path.write_bytes(content.encode("utf-8"))
+    return file_path
+
+
+async def delete_project_file(project, binding: dict, *, file_path: str) -> dict:
+    """删除项目内文件（文件树操作，零 LLM、不进撤销记账）。
+
+    限制可编辑白名单后缀；主文档受保护（400 main_file_protected，需先
+    set-main-file 更换）。多用户模式删除后刷新用量记账（配额按磁盘
+    重算随之释放）。响应携带重扫后的 file_tree。
+    """
+    try:
+        main_file = await asyncio.to_thread(project.get_main_file)
+    except RuntimeError as e:
+        raise _http(400, "invalid_workspace", str(e)) from e
+    if main_file and main_file == file_path:
+        raise _http(
+            400,
+            "main_file_protected",
+            "Cannot delete the main file; set another main file first",
+        )
+
+    try:
+        await asyncio.to_thread(_delete_file_sync, project, file_path)
+    except FileNotFoundError as e:
+        raise _http(404, "file_not_found", str(e)) from e
+    except ValueError as e:
+        raise _http(400, "invalid_path", str(e)) from e
+    except RuntimeError as e:
+        raise _http(400, "invalid_workspace", str(e)) from e
+
+    _, project_id = _binding_owner(binding)
+    if project_id:
+        await asyncio.to_thread(refresh_owner_usage_after_write, project_id)
+    invalidate_project_outline_cache(project)
+    logger.info("Editor file deleted: %s", file_path)
+    return {
+        "status": "ok",
+        "file_path": file_path,
+        "file_tree": _refreshed_tree(project),
+    }
+
+
+def _delete_file_sync(project, file_path: str) -> None:
+    """同步删除：路径校验（白名单）→ 存在性检查 → unlink。"""
+    root = Path(project.root_path)
+    full_path = resolve_project_path(
+        root, file_path, allowed_suffixes=EDITABLE_SUFFIXES
+    )
+    if not full_path.is_file():
+        logger.info("Editor delete miss: %s (root=%s)", file_path, root)
+        raise FileNotFoundError(f"File not found: {file_path}")
+    full_path.unlink()
 
 
 # ── 二进制预览 ────────────────────────────────────────────────────────────

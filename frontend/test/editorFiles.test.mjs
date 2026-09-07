@@ -3,6 +3,8 @@ import assert from "node:assert/strict";
 
 import {
   IMAGE_PREVIEW_SUFFIXES,
+  joinProjectPath,
+  validateNewFileName,
   MAX_EDITOR_FILE_CHARS,
   PREVIEWABLE_SUFFIXES,
   isEditableFilePath,
@@ -71,4 +73,34 @@ test("可预览白名单不误收其他扩展名与非法输入", () => {
 test("PDF 同时不在可编辑白名单：预览分流不进文本缓冲区", () => {
   assert.equal(isEditableFilePath("main.pdf"), false);
   assert.equal(isPreviewableFilePath("main.pdf"), true);
+});
+
+test("validateNewFileName：合法单段白名单文件名放行", () => {
+  assert.equal(validateNewFileName("new.tex"), null);
+  assert.equal(validateNewFileName("  appendix.TEX  "), null);
+  assert.equal(validateNewFileName("refs.bib"), null);
+  assert.equal(validateNewFileName("custom.sty"), null);
+  assert.equal(validateNewFileName("book.cls"), null);
+});
+
+test("validateNewFileName：空名/路径分隔符/白名单外后缀返回错误码", () => {
+  assert.equal(validateNewFileName(""), "empty");
+  assert.equal(validateNewFileName("   "), "empty");
+  assert.equal(validateNewFileName(null), "empty");
+  // 单段约束：文件名不允许夹带路径（目标目录由树节点决定）
+  assert.equal(validateNewFileName("a/b.tex"), "separator");
+  assert.equal(validateNewFileName("a\\b.tex"), "separator");
+  assert.equal(validateNewFileName(".."), "separator");
+  assert.equal(validateNewFileName("."), "separator");
+  // 后缀白名单与 isEditableFilePath 同源
+  assert.equal(validateNewFileName("notes.txt"), "suffix");
+  assert.equal(validateNewFileName("noext"), "suffix");
+});
+
+test("joinProjectPath：根目录返回文件名，子目录拼相对路径", () => {
+  assert.equal(joinProjectPath(null, "a.tex"), "a.tex");
+  assert.equal(joinProjectPath("", "a.tex"), "a.tex");
+  assert.equal(joinProjectPath("chapters", "intro.tex"), "chapters/intro.tex");
+  // 容忍树节点路径尾部斜杠
+  assert.equal(joinProjectPath("figs/", "plot.tex"), "figs/plot.tex");
 });

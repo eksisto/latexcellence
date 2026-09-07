@@ -57,6 +57,18 @@ class SaveFileRequest(BaseModel):
     base_md5: str | None = None
 
 
+class CreateFileRequest(BaseModel):
+    file_path: str
+    # 新建固定为空文件；保留 content 字段以便后续扩展模板初始化
+    content: str = ""
+    workspace_id: str | None = None
+
+
+class DeleteFileRequest(BaseModel):
+    file_path: str
+    workspace_id: str | None = None
+
+
 class FormatLatexRequest(BaseModel):
     # 一键格式化（阶段五 / 决策 Q8）为纯转换端点：只接收缓冲区全文，
     # 刻意不接收 file_path 等任何路径字段（不落盘、不涉项目文件）
@@ -398,6 +410,50 @@ async def save_file(
     )
 
 
+@router.post("/create-file")
+async def create_file(
+    request: CreateFileRequest,
+    binding: dict = Depends(access_control.require_workspace_write_json),
+    user: dict | None = Depends(get_current_user_optional),
+):
+    """在项目内新建文件（文件树操作，零 LLM、不进撤销记账）。
+
+    路径白名单校验 + 冲突/父目录检查；多用户模式创建前做项目配额
+    预检、创建后刷新用量记账。响应携带重扫后的 file_tree，前端单次
+    往返完成文件树刷新。
+    """
+    project = get_project_manager_for_workspace(
+        request.workspace_id or binding["workspace_id"]
+    )
+    return await editor_service.create_project_file(
+        project,
+        binding,
+        file_path=request.file_path,
+        content=request.content,
+    )
+
+
+@router.post("/delete-file")
+async def delete_file(
+    request: DeleteFileRequest,
+    binding: dict = Depends(access_control.require_workspace_write_json),
+    user: dict | None = Depends(get_current_user_optional),
+):
+    """删除项目内文件（文件树操作，零 LLM、不进撤销记账）。
+
+    可编辑白名单后缀；主文档受保护（先 set-main-file 更换）。多用户
+    模式删除后刷新用量记账（配额随之释放）。响应携带重扫后的 file_tree。
+    """
+    project = get_project_manager_for_workspace(
+        request.workspace_id or binding["workspace_id"]
+    )
+    return await editor_service.delete_project_file(
+        project,
+        binding,
+        file_path=request.file_path,
+    )
+
+
 @router.post("/apply-change")
 async def apply_change(
     request: ApplyChangeRequest,
@@ -673,15 +729,5 @@ async def list_workspaces(
 
 
 def _serialize_file_tree(nodes):
-    """将 FileNode 列表序列化为 JSON 兼容格式。"""
-    result = []
-    for node in nodes:
-        item = {
-            "name": node.name,
-            "path": node.path,
-            "is_dir": node.is_dir,
-        }
-        if node.children:
-            item["children"] = _serialize_file_tree(node.children)
-        result.append(item)
-    return result
+    """将 FileNode 列表序列化为 JSON 兼容格式（委托 editor 服务层实现）。"""
+    return editor_service.serialize_file_tree(nodes)

@@ -659,6 +659,52 @@ export default function useEditorBuffer({
     [requestOpenFile],
   );
 
+  /* ── 文件树新建 / 删除（响应携带重扫后 file_tree，单次往返刷新） ────── */
+  const handleCreateFile = useCallback(
+    async (filePath) => {
+      try {
+        const res = await api.project.createFile(filePath, workspaceId);
+        useStore.getState().setFileTree(res.file_tree);
+        // 新建 .bib 可能引入 cite key、新建 .tex 可能新增 \label：
+        // 失效引用符号缓存，下次补全触发时重拉（对齐保存路径语义）
+        projectSymbolCache.invalidate(projectKeyRef.current);
+        toast.success(t("pages:editor.created", { path: filePath }));
+        // 自动打开新 tab（复用打开通路：拉取内容 + 乐观锁基线）
+        await doOpenFile(filePath);
+        return true;
+      } catch (e) {
+        toast.error(t("pages:editor.createFailed"), {
+          description: describeError(e, filePath),
+        });
+        return false;
+      }
+    },
+    [workspaceId, t, describeError, doOpenFile],
+  );
+
+  const handleDeleteFile = useCallback(
+    async (filePath) => {
+      try {
+        const res = await api.project.deleteFile(filePath, workspaceId);
+        useStore.getState().setFileTree(res.file_tree);
+        projectSymbolCache.invalidate(projectKeyRef.current);
+        // 该文件的全部 tab 一并关闭（含脏缓冲区；确认弹窗已警示未保存
+        // 修改将丢失）——文件已不在磁盘，保留 tab 只会保存 404
+        if (findTab(useEditorStore.getState(), filePath)) {
+          closeTabImmediate(filePath);
+        }
+        toast.success(t("pages:editor.deleted", { path: filePath }));
+        return true;
+      } catch (e) {
+        toast.error(t("pages:editor.deleteFailed"), {
+          description: describeError(e, filePath),
+        });
+        return false;
+      }
+    },
+    [workspaceId, t, describeError, closeTabImmediate],
+  );
+
   return {
     opening,
     saving,
@@ -680,6 +726,8 @@ export default function useEditorBuffer({
     handleReloadBuffer,
     handleDiscardAndReload,
     handleSelectTreeNode,
+    handleCreateFile,
+    handleDeleteFile,
     conflictSnapshotsRef,
   };
 }

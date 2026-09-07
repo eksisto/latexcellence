@@ -8,6 +8,8 @@ import File from "lucide-react/dist/esm/icons/file.mjs";
 import FileText from "lucide-react/dist/esm/icons/file-text.mjs";
 import Image from "lucide-react/dist/esm/icons/image.mjs";
 import ChevronRight from "lucide-react/dist/esm/icons/chevron-right.mjs";
+import Plus from "lucide-react/dist/esm/icons/plus.mjs";
+import Trash2 from "lucide-react/dist/esm/icons/trash-2.mjs";
 
 const IMAGE_FILE_RE = /\.(png|jpg|jpeg|gif|webp|bmp|pdf)$/i;
 
@@ -23,36 +25,89 @@ function getFileIcon(name, isDir, isExpanded) {
   return <File className="size-4 text-muted-foreground" />;
 }
 
-function TreeNode({ node, depth = 0, expandedDirs, onToggleDir, onSelect }) {
+/** 行内 hover 操作按钮（新建/删除）；stopPropagation 防触发行主点击 */
+function RowActionButton({ title, onClick, children }) {
+  return (
+    <button
+      type="button"
+      title={title}
+      aria-label={title}
+      className={cn(
+        "inline-flex size-5 shrink-0 items-center justify-center rounded",
+        "text-muted-foreground hover:bg-muted hover:text-foreground",
+        "opacity-0 transition-opacity group-hover:opacity-100 focus:opacity-100",
+      )}
+      onClick={(e) => {
+        e.stopPropagation();
+        onClick();
+      }}
+    >
+      {children}
+    </button>
+  );
+}
+
+function TreeNode({
+  node,
+  depth = 0,
+  expandedDirs,
+  onToggleDir,
+  onSelect,
+  canWrite,
+  onCreateFile,
+  onDeleteFile,
+}) {
+  const { t } = useTranslation("components");
   const isDir = node.is_dir;
   const isExpanded = isDir && expandedDirs.has(node.path);
   const hasChildren = isDir && node.children && node.children.length > 0;
 
   return (
     <li>
-      <button
-        className={cn(
-          "flex items-center gap-1.5 w-full cursor-pointer rounded-md px-2 py-1 text-sm text-left",
-          "hover:bg-muted",
-        )}
-        style={{ paddingLeft: `${depth * 16 + 8}px` }}
-        onClick={() => {
-          if (isDir) {
-            onToggleDir(node.path);
-          } else {
-            onSelect?.(node);
-          }
-        }}
-      >
-        <ChevronRight
+      <div className="group flex w-full items-center">
+        <button
           className={cn(
-            "size-3 text-muted-foreground shrink-0 transition-transform duration-200 ease-out",
-            isDir ? isExpanded && "rotate-90" : "invisible",
+            "flex flex-1 items-center gap-1.5 min-w-0 cursor-pointer rounded-md px-2 py-1 text-sm text-left",
+            "hover:bg-muted",
           )}
-        />
-        {getFileIcon(node.name, isDir, isExpanded)}
-        <span className="truncate">{node.name}</span>
-      </button>
+          style={{ paddingLeft: `${depth * 16 + 8}px` }}
+          onClick={() => {
+            if (isDir) {
+              onToggleDir(node.path);
+            } else {
+              onSelect?.(node);
+            }
+          }}
+        >
+          <ChevronRight
+            className={cn(
+              "size-3 text-muted-foreground shrink-0 transition-transform duration-200 ease-out",
+              isDir ? isExpanded && "rotate-90" : "invisible",
+            )}
+          />
+          {getFileIcon(node.name, isDir, isExpanded)}
+          <span className="truncate">{node.name}</span>
+        </button>
+        {canWrite && (
+          <div className="flex shrink-0 items-center pr-1">
+            {isDir ? (
+              <RowActionButton
+                title={t("projectExplorer.newFileHere")}
+                onClick={() => onCreateFile?.(node.path)}
+              >
+                <Plus className="size-3.5" />
+              </RowActionButton>
+            ) : (
+              <RowActionButton
+                title={t("projectExplorer.deleteFile")}
+                onClick={() => onDeleteFile?.(node.path)}
+              >
+                <Trash2 className="size-3.5" />
+              </RowActionButton>
+            )}
+          </div>
+        )}
+      </div>
       {hasChildren && (
         <div
           className="grid transition-[grid-template-rows] duration-200 ease-out"
@@ -67,6 +122,9 @@ function TreeNode({ node, depth = 0, expandedDirs, onToggleDir, onSelect }) {
                 expandedDirs={expandedDirs}
                 onToggleDir={onToggleDir}
                 onSelect={onSelect}
+                canWrite={canWrite}
+                onCreateFile={onCreateFile}
+                onDeleteFile={onDeleteFile}
               />
             ))}
           </ul>
@@ -76,7 +134,13 @@ function TreeNode({ node, depth = 0, expandedDirs, onToggleDir, onSelect }) {
   );
 }
 
-export default function ProjectExplorer({ tree = [], onSelect }) {
+export default function ProjectExplorer({
+  tree = [],
+  onSelect,
+  canWrite = false,
+  onCreateFile,
+  onDeleteFile,
+}) {
   const { t } = useTranslation("components");
   const [expandedDirs, setExpandedDirs] = useState(() => new Set());
 
@@ -94,9 +158,25 @@ export default function ProjectExplorer({ tree = [], onSelect }) {
 
   return (
     <div className="flex flex-col h-full">
-      <h3 className="font-semibold text-sm text-muted-foreground mb-3 px-1">
-        {t("projectExplorer.title")}
-      </h3>
+      <div className="flex items-center justify-between mb-3 px-1">
+        <h3 className="font-semibold text-sm text-muted-foreground">
+          {t("projectExplorer.title")}
+        </h3>
+        {canWrite && tree.length > 0 && (
+          <button
+            type="button"
+            title={t("projectExplorer.newFile")}
+            aria-label={t("projectExplorer.newFile")}
+            className={cn(
+              "inline-flex size-5 items-center justify-center rounded",
+              "text-muted-foreground hover:bg-muted hover:text-foreground",
+            )}
+            onClick={() => onCreateFile?.(null)}
+          >
+            <Plus className="size-4" />
+          </button>
+        )}
+      </div>
       {tree.length === 0 ? (
         <p className="text-muted-foreground/60 text-sm px-1">
           {t("projectExplorer.noProject")}
@@ -111,6 +191,9 @@ export default function ProjectExplorer({ tree = [], onSelect }) {
                 expandedDirs={expandedDirs}
                 onToggleDir={toggleDir}
                 onSelect={onSelect}
+                canWrite={canWrite}
+                onCreateFile={onCreateFile}
+                onDeleteFile={onDeleteFile}
               />
             ))}
           </ul>
