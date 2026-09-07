@@ -265,6 +265,7 @@ latexcellence/
 │   ├── editor-design.md                            # 网页编辑器 v1 设计（CM6 编辑器 + 命令快速输入 + AI 助手；已实施，设计与决策记录）
 │   ├── editor-productivity-design.md                # 编辑器生产力改造 v2 设计（多缓冲区 tab/大纲/引用补全/格式化/KaTeX/错误跳转/修改行色条；已实施，设计与决策记录）
 │   ├── editor-experience-design.md                # 编辑器写作体验收口设计方案（编辑器 v3：SyncTeX 正反向同步/用户自定义片段/实时语法诊断/跨文件大纲与 KaTeX 预览卡/助手接入联网与学术检索/自研 MIT Lezer 子集语法；已实施，设计与决策记录）
+│   ├── editor-file-upload-design.md               # 编辑器文件树上传设计（任意格式上传 + 安全护栏 + 编译产物黑名单 + 插入引用；待实施，决策基线）
 │   ├── multi-model.md                       # 多模型支持设计（模型档案 + 角色槽位路由；已实施）
 │   ├── deployment.md                          # 后端部署指南（单用户/多用户单进程/多实例 Compose 部署、systemd 托管、HTTPS 反向代理、安全风险声明、备份、环境变量与升级回滚）
 │   ├── deploy-followups.md               # 多用户部署侧收口设计（rar 解压入沙箱/真实 RAR 样本/warm pool/模型连通性测试；已实施）
