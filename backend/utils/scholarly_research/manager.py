@@ -14,6 +14,7 @@ from .base import BaseResearchProvider
 from .models import (
     FullTextResult,
     RelatedWorksResult,
+    ScholarlyWork,
     SearchScholarlyResult,
     WorkDetailResult,
 )
