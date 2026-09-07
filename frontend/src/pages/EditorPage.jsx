@@ -270,6 +270,7 @@ export default function EditorPage() {
     handleSelectTreeNode,
     handleCreateFile,
     handleDeleteFile,
+    handleSetMainFile,
   } = useEditorBuffer({
     workspaceId,
     canWrite,
@@ -897,11 +898,13 @@ export default function EditorPage() {
                   tree={fileTree}
                   onSelect={handleSelectTreeNode}
                   canWrite={canWrite}
+                  mainFile={mainFile}
                   onCreateFile={(dirPath) => {
                     setCreateDialogDir(dirPath);
                     setCreateDialogOpen(true);
                   }}
                   onDeleteFile={setDeleteConfirmPath}
+                  onSetMainFile={handleSetMainFile}
                 />
               )}
             </CardContent>

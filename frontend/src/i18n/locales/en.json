@@ -1130,7 +1130,9 @@
       "deleteFileTitle": "Delete file",
       "deleteConfirmDescription": "Delete {{path}}? This action cannot be undone.",
       "deleteConfirmDirty": "This file has unsaved changes; deleting it will discard them.",
-      "deleteConfirmProceed": "Delete"
+      "deleteConfirmProceed": "Delete",
+      "mainFileSet": "Set {{path}} as the main file",
+      "mainFileSetFailed": "Failed to set the main file"
     },
     "versionManage": {
       "title": "Version Management",
@@ -1540,7 +1542,9 @@
         "suffix": "Unsupported extension; only .tex / .bib / .sty / .cls are allowed"
       },
       "createAction": "Create",
-      "cancelAction": "Cancel"
+      "cancelAction": "Cancel",
+      "setMainFile": "Set as main file",
+      "currentMainFile": "Current main file"
     },
     "folderPicker": {
       "title": "Select Folder",

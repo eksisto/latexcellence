@@ -1130,7 +1130,9 @@
       "deleteFileTitle": "刪除檔案",
       "deleteConfirmDescription": "確定刪除 {{path}} 嗎？此操作無法復原。",
       "deleteConfirmDirty": "該檔案有未儲存的修改，刪除後這些修改將遺失。",
-      "deleteConfirmProceed": "刪除"
+      "deleteConfirmProceed": "刪除",
+      "mainFileSet": "已將 {{path}} 設為主檔案",
+      "mainFileSetFailed": "設定主檔案失敗"
     },
     "versionManage": {
       "title": "版本管理",
@@ -1540,7 +1542,9 @@
         "suffix": "副檔名不支援，僅支援 .tex / .bib / .sty / .cls"
       },
       "createAction": "建立",
-      "cancelAction": "取消"
+      "cancelAction": "取消",
+      "setMainFile": "設為主檔案",
+      "currentMainFile": "目前主檔案"
     },
     "folderPicker": {
       "title": "選擇資料夾",

@@ -630,6 +630,12 @@ hover 的垃圾桶按钮发起删除（`ConfirmDialog` destructive 二次确认�
 该文件全部 tab（含脏缓冲区）联动关闭、只读预览覆盖层同步收起、引用
 符号缓存失效。操作不进撤销记账（见后端小节），由确认弹窗兜底。
 
+文件行另有「设为主文件」hover 星标按钮（仅 `.tex` 且非当前主文件时
+显示；当前主文件行常驻实心星标识，任意深度子目录各自比对
+`node.path === mainFile`）。点击走 `POST /api/project/set-main-file`
+（手动主文件持久化见后端一节），成功后同步全局 `mainFile` 使星标
+即时迁移；viewer 无此入口（canWrite 门控 + 后端写权限双保险）。
+
 ### 图片与 PDF 只读预览
 
 文件树点击 `.pdf` 或常见位图（前端 `isPreviewableFilePath()` 与后端

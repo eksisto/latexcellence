@@ -1130,7 +1130,9 @@
       "deleteFileTitle": "删除文件",
       "deleteConfirmDescription": "确定删除 {{path}} 吗？该操作不可撤销。",
       "deleteConfirmDirty": "该文件有未保存的修改，删除后这些修改将丢失。",
-      "deleteConfirmProceed": "删除"
+      "deleteConfirmProceed": "删除",
+      "mainFileSet": "已将 {{path}} 设为主文件",
+      "mainFileSetFailed": "设置主文件失败"
     },
     "versionManage": {
       "title": "版本管理",
@@ -1540,7 +1542,9 @@
         "suffix": "扩展名不支持，仅支持 .tex / .bib / .sty / .cls"
       },
       "createAction": "创建",
-      "cancelAction": "取消"
+      "cancelAction": "取消",
+      "setMainFile": "设为主文件",
+      "currentMainFile": "当前主文件"
     },
     "folderPicker": {
       "title": "选择文件夹",

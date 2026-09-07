@@ -705,6 +705,25 @@ export default function useEditorBuffer({
     [workspaceId, t, describeError, closeTabImmediate],
   );
 
+  const handleSetMainFile = useCallback(
+    async (filePath) => {
+      try {
+        await api.project.setMainFile(filePath, workspaceId);
+        // 同步全局 mainFile：文件树的当前主文件星标即时迁移；
+        // 后端已持久化到 .latexcellence/main_file，重开项目不丢失
+        useStore.getState().setMainFile(filePath);
+        toast.success(t("pages:editor.mainFileSet", { path: filePath }));
+        return true;
+      } catch (e) {
+        toast.error(t("pages:editor.mainFileSetFailed"), {
+          description: describeError(e, filePath),
+        });
+        return false;
+      }
+    },
+    [workspaceId, t, describeError],
+  );
+
   return {
     opening,
     saving,
@@ -728,6 +747,7 @@ export default function useEditorBuffer({
     handleSelectTreeNode,
     handleCreateFile,
     handleDeleteFile,
+    handleSetMainFile,
     conflictSnapshotsRef,
   };
 }

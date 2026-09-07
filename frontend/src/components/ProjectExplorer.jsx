@@ -10,8 +10,11 @@ import Image from "lucide-react/dist/esm/icons/image.mjs";
 import ChevronRight from "lucide-react/dist/esm/icons/chevron-right.mjs";
 import Plus from "lucide-react/dist/esm/icons/plus.mjs";
 import Trash2 from "lucide-react/dist/esm/icons/trash-2.mjs";
+import Star from "lucide-react/dist/esm/icons/star.mjs";
 
 const IMAGE_FILE_RE = /\.(png|jpg|jpeg|gif|webp|bmp|pdf)$/i;
+// 主文件仅限 .tex（与后端 set-main-file 的 allowed_suffixes 一致）
+const isTexName = (name) => name.toLowerCase().endsWith(".tex");
 
 function getFileIcon(name, isDir, isExpanded) {
   if (isDir) {
@@ -54,13 +57,18 @@ function TreeNode({
   onToggleDir,
   onSelect,
   canWrite,
+  mainFile,
   onCreateFile,
   onDeleteFile,
+  onSetMainFile,
 }) {
   const { t } = useTranslation("components");
   const isDir = node.is_dir;
   const isExpanded = isDir && expandedDirs.has(node.path);
   const hasChildren = isDir && node.children && node.children.length > 0;
+  // 每个节点各自比对：主文件可能在任意深度的子目录里，
+  // 不能由父层算好下传（嵌套主文件会永远拿不到星标）
+  const isMainFile = mainFile != null && node.path === mainFile;
 
   return (
     <li>
@@ -98,12 +106,31 @@ function TreeNode({
                 <Plus className="size-3.5" />
               </RowActionButton>
             ) : (
-              <RowActionButton
-                title={t("projectExplorer.deleteFile")}
-                onClick={() => onDeleteFile?.(node.path)}
-              >
-                <Trash2 className="size-3.5" />
-              </RowActionButton>
+              <>
+                {isTexName(node.name) &&
+                  (isMainFile ? (
+                    // 当前主文件：常驻实心星标（非按钮），提供状态可视性
+                    <span
+                      title={t("projectExplorer.currentMainFile")}
+                      className="inline-flex size-5 shrink-0 items-center justify-center"
+                    >
+                      <Star className="size-3.5 fill-amber-400 text-amber-400" />
+                    </span>
+                  ) : (
+                    <RowActionButton
+                      title={t("projectExplorer.setMainFile")}
+                      onClick={() => onSetMainFile?.(node.path)}
+                    >
+                      <Star className="size-3.5" />
+                    </RowActionButton>
+                  ))}
+                <RowActionButton
+                  title={t("projectExplorer.deleteFile")}
+                  onClick={() => onDeleteFile?.(node.path)}
+                >
+                  <Trash2 className="size-3.5" />
+                </RowActionButton>
+              </>
             )}
           </div>
         )}
@@ -123,8 +150,10 @@ function TreeNode({
                 onToggleDir={onToggleDir}
                 onSelect={onSelect}
                 canWrite={canWrite}
+                mainFile={mainFile}
                 onCreateFile={onCreateFile}
                 onDeleteFile={onDeleteFile}
+                onSetMainFile={onSetMainFile}
               />
             ))}
           </ul>
@@ -138,8 +167,10 @@ export default function ProjectExplorer({
   tree = [],
   onSelect,
   canWrite = false,
+  mainFile = null,
   onCreateFile,
   onDeleteFile,
+  onSetMainFile,
 }) {
   const { t } = useTranslation("components");
   const [expandedDirs, setExpandedDirs] = useState(() => new Set());
@@ -192,8 +223,10 @@ export default function ProjectExplorer({
                 onToggleDir={toggleDir}
                 onSelect={onSelect}
                 canWrite={canWrite}
+                mainFile={mainFile}
                 onCreateFile={onCreateFile}
                 onDeleteFile={onDeleteFile}
+                onSetMainFile={onSetMainFile}
               />
             ))}
           </ul>
