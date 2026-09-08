@@ -151,7 +151,7 @@ npm run build
 
 - **开发模式**：`python main.py config.json` + `cd frontend && npm run dev`；
 - **生产模式**：`server.dev_mode=false` + `npm run build` 后由 FastAPI 挂载 `static/` 同源提供；
-- **前后端分离**：前端静态站点部署在公网，后端保持 `127.0.0.1` 绑定 + 共享访问令牌，详见 README 与 [development.md](development.md) 的「开发/生产模式」章节。
+- **前后端分离**：前端静态站点部署在公网，后端保持 `127.0.0.1` 绑定 + 共享访问令牌，详见 [development.md](development.md) 的「开发/生产模式」章节。
 
 单用户模式下无需 HTTPS（数据不出本机），但若通过局域网访问建议至少设置 `security.access_token`。
 
