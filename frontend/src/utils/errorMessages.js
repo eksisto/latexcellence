@@ -162,8 +162,11 @@ const EXACT_MAP = {
   invalid_encoding: "invalidEncoding",
   // 请求体长度上限（save-file content / 编辑器助手 buffer 等）
   content_too_long: "contentTooLong",
-  // 文件树新建/删除/上传（create-file / delete-file / upload-file）
+  // 文件树新建/删除/上传/移动（create-file / delete-file / upload-file /
+  // move-file / create-dir）
   file_exists: "fileExists",
+  target_exists: "targetExists",
+  into_self: "intoSelf",
   parent_not_found: "parentNotFound",
   main_file_protected: "mainFileProtected",
   // 上传单文件大小上限（upload-file，editor-file-upload-design D6）

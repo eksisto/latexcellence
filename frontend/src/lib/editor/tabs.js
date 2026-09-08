@@ -382,3 +382,62 @@ export function diffTabsForAutosave(prevTabs, nextTabs) {
     .map((tab) => tab.filePath);
   return { toArm, toClear };
 }
+
+/* ── 移动后的路径重映射（editor-file-move-design §5.2 / 决策 Q6） ──────── */
+
+/**
+ * 单路径重映射核心（拖拽移动成功后的路径跟随）：文件按精确匹配；目录按
+ * 「等于 from 或位于 from 子树内」的前缀一次匹配覆盖整棵子树。前缀比较
+ * 带 `/` 边界（`figs` 不误伤 `figs2`）。
+ * @param {string} path 待重映射的路径
+ * @param {string} fromPath 移动前相对路径
+ * @param {string} toPath 移动后相对路径
+ * @param {boolean} [isDir] 被移动对象是否为目录
+ * @returns {string} 命中时返回新路径；未命中（或输入非法）原样返回
+ */
+export function remapMovedPath(path, fromPath, toPath, isDir = false) {
+  if (typeof path !== "string" || !fromPath || !toPath) return path;
+  if (isDir) {
+    if (path === fromPath) return toPath;
+    if (path.startsWith(`${fromPath}/`)) {
+      return toPath + path.slice(fromPath.length);
+    }
+    return path;
+  }
+  return path === fromPath ? toPath : path;
+}
+
+/**
+ * 移动成功后的会话路径重映射：重映射 tabs[].filePath 与 activeTabPath；
+ * buffer / savedBuffer / openedBuffer / baseMd5 / dirty / stale /
+ * lastActive 全部原样保留（Q6：路径重映射是唯一不丢数据的方案）。
+ * 未命中任何路径时原样返回 session 引用，供 store 层空转（不触发订阅方）。
+ * @param {{tabs: Array, activeTabPath: string|null}} session
+ * @param {string} fromPath 移动前相对路径
+ * @param {string} toPath 移动后相对路径
+ * @param {{isDir?: boolean}} [options]
+ * @returns {{tabs: Array, activeTabPath: string|null}}
+ */
+export function remapMovedPaths(
+  session,
+  fromPath,
+  toPath,
+  { isDir = false } = {},
+) {
+  let changed = false;
+  const tabs = session.tabs.map((tab) => {
+    const next = remapMovedPath(tab.filePath, fromPath, toPath, isDir);
+    if (next === tab.filePath) return tab;
+    changed = true;
+    return { ...tab, filePath: next };
+  });
+  const activeTabPath = remapMovedPath(
+    session.activeTabPath,
+    fromPath,
+    toPath,
+    isDir,
+  );
+  if (activeTabPath !== session.activeTabPath) changed = true;
+  if (!changed) return session;
+  return { tabs, activeTabPath };
+}

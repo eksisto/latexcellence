@@ -409,14 +409,46 @@ export const api = {
       );
     },
     /**
-     * 文件树删除文件（任意非隐藏后缀，主文档受保护）：成功返回
-     * { status, file_path, file_tree }（重扫后的完整目录树）
+     * 文件树删除文件/目录（任意非隐藏后缀；目录递归删除整棵子树，
+     * editor-file-move-design 决策 Q9/Q10）：成功返回
+     * { status, file_path, file_tree }（重扫后的完整目录树）；子树含
+     * 主文档时 400 main_file_protected
      */
     deleteFile: (filePath, workspaceId) =>
       request(appendWs("/project/delete-file", workspaceId), {
         method: "POST",
         body: JSON.stringify({
           file_path: filePath,
+          workspace_id: workspaceId,
+        }),
+      }),
+    /**
+     * 文件树拖拽移动（文件/目录通用，editor-file-move-design §4.1）：
+     * 目录整棵子树随迁；主文件被移走时后端记录跟随改写（决策 Q3）。
+     * 成功返回 { status, from_path, to_path, main_file, file_tree }——
+     * main_file 与 file_tree 为响应单一事实源（决策 Q12）；错误码
+     * 404 file_not_found、400 parent_not_found / into_self / invalid_path、
+     * 409 target_exists
+     */
+    moveFile: (fromPath, toPath, workspaceId) =>
+      request(appendWs("/project/move-file", workspaceId), {
+        method: "POST",
+        body: JSON.stringify({
+          from_path: fromPath,
+          to_path: toPath,
+          workspace_id: workspaceId,
+        }),
+      }),
+    /**
+     * 文件树新建目录（editor-file-move-design §4.1）：单级 mkdir、父目录
+     * 必须已存在。成功返回 { status, dir_path, file_tree }；错误码
+     * 409 target_exists、400 parent_not_found / invalid_path
+     */
+    createDir: (dirPath, workspaceId) =>
+      request(appendWs("/project/create-dir", workspaceId), {
+        method: "POST",
+        body: JSON.stringify({
+          dir_path: dirPath,
           workspace_id: workspaceId,
         }),
       }),

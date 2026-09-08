@@ -18,6 +18,7 @@ import {
   isEditableFilePath,
   isFileTooLarge,
   isPreviewableFilePath,
+  getBaseName,
   joinProjectPath,
   validateUploadFileName,
 } from "@/lib/editor/files";
@@ -27,6 +28,7 @@ import {
   getDirtyTabsInOrder,
   planTabClose,
   planTabSave,
+  remapMovedPath,
 } from "@/lib/editor/tabs";
 import tabViewRegistry from "@/lib/editor/tabViews";
 import {
@@ -688,17 +690,32 @@ export default function useEditorBuffer({
   );
 
   const handleDeleteFile = useCallback(
-    async (filePath) => {
+    async (filePath, isDir = false) => {
       try {
         const res = await api.project.deleteFile(filePath, workspaceId);
         useStore.getState().setFileTree(res.file_tree);
         projectSymbolCache.invalidate(projectKeyRef.current);
-        // 该文件的全部 tab 一并关闭（含脏缓冲区；确认弹窗已警示未保存
-        // 修改将丢失）——文件已不在磁盘，保留 tab 只会保存 404
-        if (findTab(useEditorStore.getState(), filePath)) {
-          closeTabImmediate(filePath);
+        // 该文件/目录的全部 tab 一并关闭（含脏缓冲区；删除确认弹窗已警示
+        // 未保存修改将丢失）——文件/目录已不在磁盘，保留 tab 只会保存 404。
+        // 文件精确匹配；目录递归删除（editor-file-move-design 决策 Q9）按
+        // 路径前缀命中整棵子树的 tab（editor-file-move-design §5.3）
+        const subtreePrefix = `${filePath}/`;
+        const orphanPaths = useEditorStore
+          .getState()
+          .tabs.filter(
+            (tab) =>
+              tab.filePath === filePath ||
+              tab.filePath.startsWith(subtreePrefix),
+          )
+          .map((tab) => tab.filePath);
+        for (const path of orphanPaths) {
+          closeTabImmediate(path);
         }
-        toast.success(t("pages:editor.deleted", { path: filePath }));
+        toast.success(
+          isDir
+            ? t("pages:editor.folderDeleted", { path: filePath })
+            : t("pages:editor.deleted", { path: filePath }),
+        );
         return true;
       } catch (e) {
         toast.error(t("pages:editor.deleteFailed"), {
@@ -708,6 +725,90 @@ export default function useEditorBuffer({
       }
     },
     [workspaceId, t, describeError, closeTabImmediate],
+  );
+
+  /* ── 文件树新建目录（editor-file-move-design §5.3：拖拽落点靠它造） ── */
+  const handleCreateDir = useCallback(
+    async (dirPath) => {
+      try {
+        const res = await api.project.createDir(dirPath, workspaceId);
+        useStore.getState().setFileTree(res.file_tree);
+        toast.success(t("pages:editor.folderCreated", { path: dirPath }));
+        return true;
+      } catch (e) {
+        toast.error(t("pages:editor.createFolderFailed"), {
+          description: describeError(e, dirPath),
+        });
+        return false;
+      }
+    },
+    [workspaceId, t, describeError],
+  );
+
+  /**
+   * 文件树拖拽移动（editor-file-move-design §5.2 / 决策 Q3、Q6、Q12、Q13）。
+   * @param {string} fromPath 被移动条目的项目相对路径
+   * @param {string|null} targetDir 目标目录（null = 项目根）
+   * @param {boolean} [isDir] 被移动条目是否为目录（决定子树前缀重映射）
+   * @returns {Promise<boolean>}
+   */
+  const handleMoveEntry = useCallback(
+    async (fromPath, targetDir, isDir = false) => {
+      if (!fromPath || !canWriteRef.current) return false;
+      // 落位路径 = 目标目录 + 原名（lib/editor/files.js 纯函数拼接）
+      const toPath = joinProjectPath(targetDir, getBaseName(fromPath));
+      // 拖回原位：静默忽略不发请求（后端 to == from 语义为 400 into_self）
+      if (toPath === fromPath) return true;
+      // 目录拖入自身子树：拖拽 UI 已排除非法落点，此处兜底静默忽略
+      if (isDir && toPath.startsWith(`${fromPath}/`)) return true;
+      try {
+        const res = await api.project.moveFile(fromPath, toPath, workspaceId);
+        // 不做乐观更新（Q12）：磁盘移动成功后才依次同步本地状态——
+        // 1. 已开 tab / 激活位 / 冲突归属路径重映射（buffer、baseMd5、脏
+        //    标记原样保留，Q6）；sessionPersistence 持久化键与 URL ?file=
+        //    由既有订阅随 tabs / activeTabPath 变化自动跟进改写（Q13）
+        useEditorStore.getState().remapMovedPaths({ fromPath, toPath, isDir });
+        // 2. 全局 activeFile（useStore 持久化的项目身份信息，undo/redo
+        //    与模块页在用）按同一口径重映射
+        const global = useStore.getState();
+        if (typeof global.activeFile === "string") {
+          const nextActiveFile = remapMovedPath(
+            global.activeFile,
+            fromPath,
+            toPath,
+            isDir,
+          );
+          if (nextActiveFile !== global.activeFile) {
+            global.setActiveFile(nextActiveFile);
+          }
+        }
+        // 3. 只读预览覆盖层归属路径同步重映射（对齐删除路径的收起语义）：
+        //    预览中的文件/子树文件随移动换路，EditorPage 的预览 effect 将
+        //    按新路径重拉 blob；未命中时 setter 值不变，不触发重拉
+        setFilePreviewPath((prev) =>
+          typeof prev === "string"
+            ? remapMovedPath(prev, fromPath, toPath, isDir)
+            : prev,
+        );
+        // 4. 响应为单一事实源：主文件记录（Q3 后端跟随改写）+ 重扫后整树
+        if (res.main_file !== undefined) {
+          global.setMainFile(res.main_file);
+        }
+        global.setFileTree(res.file_tree);
+        // 5. 引用符号缓存失效：\label / \cite 的来源路径已变化（对齐
+        //    保存 / 新建路径语义）
+        projectSymbolCache.invalidate(projectKeyRef.current);
+        toast.success(t("pages:editor.moved", { path: toPath }));
+        return true;
+      } catch (e) {
+        // 失败仅 toast（translateError 链路）：树与标签页零改动（Q12）
+        toast.error(t("pages:editor.moveFailed"), {
+          description: describeError(e, fromPath),
+        });
+        return false;
+      }
+    },
+    [workspaceId, t, describeError, setFilePreviewPath],
   );
 
   const handleSetMainFile = useCallback(
@@ -822,7 +923,9 @@ export default function useEditorBuffer({
     handleDiscardAndReload,
     handleSelectTreeNode,
     handleCreateFile,
+    handleCreateDir,
     handleDeleteFile,
+    handleMoveEntry,
     handleSetMainFile,
     handleUploadFiles,
     uploading,

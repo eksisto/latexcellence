@@ -1,9 +1,10 @@
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { cn } from "@/lib/utils";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import Folder from "lucide-react/dist/esm/icons/folder.mjs";
 import FolderOpen from "lucide-react/dist/esm/icons/folder-open.mjs";
+import FolderPlus from "lucide-react/dist/esm/icons/folder-plus.mjs";
 import File from "lucide-react/dist/esm/icons/file.mjs";
 import FileText from "lucide-react/dist/esm/icons/file-text.mjs";
 import Image from "lucide-react/dist/esm/icons/image.mjs";
@@ -17,6 +18,15 @@ import Loader2 from "lucide-react/dist/esm/icons/loader-2.mjs";
 const IMAGE_FILE_RE = /\.(png|jpg|jpeg|gif|webp|bmp|pdf)$/i;
 // 主文件仅限 .tex（与后端 set-main-file 的 allowed_suffixes 一致）
 const isTexName = (name) => name.toLowerCase().endsWith(".tex");
+
+/* ── 文件树拖拽移动（editor-file-move-design §5.1 / 决策 Q5、Q7） ──────
+   原生 HTML5 Drag & Drop 零依赖：自定义 MIME 携带 {path, isDir}，
+   落点为目录行（排除自身与子孙）与树背景空白区（= 项目根）。 */
+const TREE_NODE_MIME = "application/x-latexcellence-tree-node";
+/** 折叠目录上的悬停自动展开时延（决策 Q7） */
+const AUTO_EXPAND_DELAY_MS = 500;
+/** 根落点目录标记：树背景空白区 = 项目根（树内目录路径恒非空串） */
+const ROOT_DROP_DIR = "";
 
 function getFileIcon(name, isDir, isExpanded) {
   if (isDir) {
@@ -63,10 +73,12 @@ function TreeNode({
   canWrite,
   mainFile,
   onCreateFile,
+  onCreateFolder,
   onDeleteFile,
   onSetMainFile,
   onRequestUpload,
   uploading,
+  dnd,
 }) {
   const { t } = useTranslation("components");
   const isDir = node.is_dir;
@@ -75,10 +87,24 @@ function TreeNode({
   // 每个节点各自比对：主文件可能在任意深度的子目录里，
   // 不能由父层算好下传（嵌套主文件会永远拿不到星标）
   const isMainFile = mainFile != null && node.path === mainFile;
+  const isDragging = canWrite && dnd.isDragging(node.path);
+  const isDropTarget = canWrite && dnd.isDropTarget(node.path);
 
   return (
     <li>
-      <div className="group flex w-full items-center">
+      <div
+        className={cn(
+          "group flex w-full items-center rounded-md",
+          isDragging && "opacity-50",
+          isDropTarget && "ring-1 ring-primary/50 bg-primary/5",
+        )}
+        draggable={canWrite}
+        onDragStart={(e) => dnd.onDragStart(e, node)}
+        onDragEnd={dnd.onDragEnd}
+        onDragOver={(e) => dnd.onDragOver(e, node)}
+        onDragLeave={(e) => dnd.onDragLeave(e, node)}
+        onDrop={(e) => dnd.onDrop(e, node)}
+      >
         <button
           className={cn(
             "flex flex-1 items-center gap-1.5 min-w-0 cursor-pointer rounded-md px-2 py-1 text-sm text-left",
@@ -118,6 +144,18 @@ function TreeNode({
                   onClick={() => onCreateFile?.(node.path)}
                 >
                   <Plus className="size-3.5" />
+                </RowActionButton>
+                <RowActionButton
+                  title={t("projectExplorer.createFolderHere")}
+                  onClick={() => onCreateFolder?.(node.path)}
+                >
+                  <FolderPlus className="size-3.5" />
+                </RowActionButton>
+                <RowActionButton
+                  title={t("projectExplorer.deleteFolder")}
+                  onClick={() => onDeleteFile?.(node.path, true)}
+                >
+                  <Trash2 className="size-3.5" />
                 </RowActionButton>
               </>
             ) : (
@@ -167,10 +205,12 @@ function TreeNode({
                 canWrite={canWrite}
                 mainFile={mainFile}
                 onCreateFile={onCreateFile}
+                onCreateFolder={onCreateFolder}
                 onDeleteFile={onDeleteFile}
                 onSetMainFile={onSetMainFile}
                 onRequestUpload={onRequestUpload}
                 uploading={uploading}
+                dnd={dnd}
               />
             ))}
           </ul>
@@ -186,7 +226,9 @@ export default function ProjectExplorer({
   canWrite = false,
   mainFile = null,
   onCreateFile,
+  onCreateFolder,
   onDeleteFile,
+  onMoveEntry,
   onSetMainFile,
   onUploadFile,
   uploading = false,
@@ -197,6 +239,12 @@ export default function ProjectExplorer({
   // 对应的目标目录（null = 项目根，editor-file-upload-design §5.1 / D3）
   const uploadInputRef = useRef(null);
   const uploadDirRef = useRef(null);
+  // 拖拽源（null = 无进行中的树内拖拽）：{ path, isDir }
+  const [dragging, setDragging] = useState(null);
+  // 高亮落点目录；ROOT_DROP_DIR（空串）= 树背景空白区，null = 无高亮
+  const [dropTargetDir, setDropTargetDir] = useState(null);
+  // 折叠目录悬停自动展开计时器（Q7）：{ path, timer } | null
+  const hoverExpandRef = useRef(null);
 
   const toggleDir = useCallback((path) => {
     setExpandedDirs((prev) => {
@@ -225,6 +273,153 @@ export default function ProjectExplorer({
     },
     [onUploadFile],
   );
+
+  /* ── 拖拽移动（editor-file-move-design §5.1） ────────────────────── */
+
+  /** 落点合法性：目录行排除被拖目录自身与子孙（isDir 前缀判定）；
+      文件落点与根目录恒合法（落回原位由 handleMoveEntry 静默忽略） */
+  const canDropOn = useCallback((source, targetDir) => {
+    if (!source) return false;
+    if (targetDir == null) return true; // 项目根
+    if (!source.isDir) return true;
+    return (
+      targetDir !== source.path && !targetDir.startsWith(`${source.path}/`)
+    );
+  }, []);
+
+  const cancelHoverExpand = useCallback(() => {
+    if (hoverExpandRef.current !== null) {
+      window.clearTimeout(hoverExpandRef.current.timer);
+      hoverExpandRef.current = null;
+    }
+  }, []);
+
+  /** 折叠目录悬停约 500ms 自动展开（Q7）；已在同一节点计时则不重置 */
+  const armHoverExpand = useCallback(
+    (path) => {
+      if (hoverExpandRef.current?.path === path) return;
+      cancelHoverExpand();
+      hoverExpandRef.current = {
+        path,
+        timer: window.setTimeout(() => {
+          hoverExpandRef.current = null;
+          setExpandedDirs((prev) => {
+            // 展开即成，不再收起（与 toggleDir 的语义分离）
+            if (prev.has(path)) return prev;
+            const next = new Set(prev);
+            next.add(path);
+            return next;
+          });
+        }, AUTO_EXPAND_DELAY_MS),
+      };
+    },
+    [cancelHoverExpand],
+  );
+
+  /** dragend / drop / 清理的统一复位：取消计时器并复位全部拖拽状态 */
+  const clearDragState = useCallback(() => {
+    cancelHoverExpand();
+    setDragging(null);
+    setDropTargetDir(null);
+  }, [cancelHoverExpand]);
+
+  // 卸载清理：拖拽进行中组件被卸载（左栏切大纲 / 路由离开）时取消悬停
+  // 展开计时器并复位拖拽状态，防止卸载后计时器仍触发 setState
+  useEffect(() => () => clearDragState(), [clearDragState]);
+
+  const handleDragStart = useCallback(
+    (e, node) => {
+      if (!canWrite) {
+        e.preventDefault();
+        return;
+      }
+      e.dataTransfer.setData(
+        TREE_NODE_MIME,
+        JSON.stringify({ path: node.path, isDir: node.is_dir }),
+      );
+      e.dataTransfer.effectAllowed = "move";
+      setDragging({ path: node.path, isDir: node.is_dir });
+    },
+    [canWrite],
+  );
+
+  const handleDragOver = useCallback(
+    (e, node) => {
+      // 目录行自管落点判定，阻断向树背景（根落点）冒泡
+      e.stopPropagation();
+      if (!dragging) return; // 外部拖入不做（§8 非目标）
+      if (!node.is_dir) return; // 文件行不是落点：不 preventDefault → 禁止光标
+      if (!canDropOn(dragging, node.path)) return; // 自身 / 子孙：非法落点
+      e.preventDefault();
+      e.dataTransfer.dropEffect = "move";
+      setDropTargetDir((prev) => (prev === node.path ? prev : node.path));
+      if (!expandedDirs.has(node.path)) armHoverExpand(node.path);
+      else cancelHoverExpand();
+    },
+    [dragging, canDropOn, expandedDirs, armHoverExpand, cancelHoverExpand],
+  );
+
+  const handleDragLeave = useCallback(
+    (e, node) => {
+      e.stopPropagation();
+      // 相关目标仍在行内（移动到子元素）时忽略，防止 dragleave 闪烁误清
+      if (e.currentTarget.contains?.(e.relatedTarget)) return;
+      cancelHoverExpand();
+      setDropTargetDir((prev) => (prev === node.path ? null : prev));
+    },
+    [cancelHoverExpand],
+  );
+
+  const handleDrop = useCallback(
+    (e, node) => {
+      e.stopPropagation();
+      e.preventDefault();
+      if (dragging && node.is_dir && canDropOn(dragging, node.path)) {
+        onMoveEntry?.(dragging.path, node.path, dragging.isDir);
+      }
+      clearDragState();
+    },
+    [dragging, canDropOn, onMoveEntry, clearDragState],
+  );
+
+  /** 树背景空白区 = 项目根落点（editor-file-move-design §5.1） */
+  const handleRootDragOver = useCallback(
+    (e) => {
+      if (!dragging) return;
+      e.preventDefault();
+      e.dataTransfer.dropEffect = "move";
+      setDropTargetDir((prev) =>
+        prev === ROOT_DROP_DIR ? prev : ROOT_DROP_DIR,
+      );
+    },
+    [dragging],
+  );
+
+  const handleRootDragLeave = useCallback((e) => {
+    // 仍在树区内（移动到行等子元素）时忽略
+    if (e.currentTarget.contains?.(e.relatedTarget)) return;
+    setDropTargetDir((prev) => (prev === ROOT_DROP_DIR ? null : prev));
+  }, []);
+
+  const handleRootDrop = useCallback(
+    (e) => {
+      e.preventDefault();
+      if (dragging) onMoveEntry?.(dragging.path, null, dragging.isDir);
+      clearDragState();
+    },
+    [dragging, onMoveEntry, clearDragState],
+  );
+
+  // dnd 面向下传：TreeNode 递归子树共用的拖拽判定与视觉态
+  const dnd = {
+    isDragging: (path) => dragging?.path === path,
+    isDropTarget: (path) => dropTargetDir === path,
+    onDragStart: handleDragStart,
+    onDragEnd: clearDragState,
+    onDragOver: handleDragOver,
+    onDragLeave: handleDragLeave,
+    onDrop: handleDrop,
+  };
 
   return (
     <div className="flex flex-col h-full">
@@ -274,6 +469,18 @@ export default function ProjectExplorer({
             >
               <Plus className="size-4" />
             </button>
+            <button
+              type="button"
+              title={t("projectExplorer.createFolder")}
+              aria-label={t("projectExplorer.createFolder")}
+              className={cn(
+                "inline-flex size-5 items-center justify-center rounded",
+                "text-muted-foreground hover:bg-muted hover:text-foreground",
+              )}
+              onClick={() => onCreateFolder?.(null)}
+            >
+              <FolderPlus className="size-4" />
+            </button>
           </div>
         )}
       </div>
@@ -282,26 +489,39 @@ export default function ProjectExplorer({
           {t("projectExplorer.noProject")}
         </p>
       ) : (
-        <ScrollArea className="flex-1">
-          <ul className="space-y-0.5 pr-3">
-            {tree.map((node) => (
-              <TreeNode
-                key={node.path}
-                node={node}
-                expandedDirs={expandedDirs}
-                onToggleDir={toggleDir}
-                onSelect={onSelect}
-                canWrite={canWrite}
-                mainFile={mainFile}
-                onCreateFile={onCreateFile}
-                onDeleteFile={onDeleteFile}
-                onSetMainFile={onSetMainFile}
-                onRequestUpload={openUploadPicker}
-                uploading={uploading}
-              />
-            ))}
-          </ul>
-        </ScrollArea>
+        <div
+          className={cn(
+            "flex-1 min-h-0 rounded-md",
+            dropTargetDir === ROOT_DROP_DIR &&
+              "ring-1 ring-primary/50 bg-primary/5",
+          )}
+          onDragOver={handleRootDragOver}
+          onDragLeave={handleRootDragLeave}
+          onDrop={handleRootDrop}
+        >
+          <ScrollArea className="h-full">
+            <ul className="space-y-0.5 pr-3">
+              {tree.map((node) => (
+                <TreeNode
+                  key={node.path}
+                  node={node}
+                  expandedDirs={expandedDirs}
+                  onToggleDir={toggleDir}
+                  onSelect={onSelect}
+                  canWrite={canWrite}
+                  mainFile={mainFile}
+                  onCreateFile={onCreateFile}
+                  onCreateFolder={onCreateFolder}
+                  onDeleteFile={onDeleteFile}
+                  onSetMainFile={onSetMainFile}
+                  onRequestUpload={openUploadPicker}
+                  uploading={uploading}
+                  dnd={dnd}
+                />
+              ))}
+            </ul>
+          </ScrollArea>
+        </div>
       )}
     </div>
   );

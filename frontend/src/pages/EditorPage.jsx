@@ -235,10 +235,13 @@ export default function EditorPage() {
   // 状态提升到页面，左栏 tab 切换卸载面板时视图选择不丢失
   const [outlineView, setOutlineView] = useState("file");
   // 文件树新建弹窗：开关 + 目标目录（null = 项目根，由树节点决定）
+  // + 新建类型（file = 文件 / dir = 文件夹，editor-file-move-design §5.3）
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [createDialogDir, setCreateDialogDir] = useState(null);
-  // 文件树删除确认弹窗的归属路径（null = 弹窗关闭）
-  const [deleteConfirmPath, setDeleteConfirmPath] = useState(null);
+  const [createDialogMode, setCreateDialogMode] = useState("file");
+  // 文件树删除确认弹窗的归属目标（null = 弹窗关闭；isDir 区分文件夹
+  // 递归删除的强警告文案，editor-file-move-design 决策 Q9）
+  const [deleteConfirmTarget, setDeleteConfirmTarget] = useState(null);
 
   // ── CM6 视图实例 ────────────────────────────────────────────────
   const editorViewRef = useRef(null);
@@ -374,7 +377,9 @@ export default function EditorPage() {
     handleDiscardAndReload,
     handleSelectTreeNode,
     handleCreateFile,
+    handleCreateDir,
     handleDeleteFile,
+    handleMoveEntry,
     handleSetMainFile,
     handleUploadFiles,
     uploading,
@@ -439,11 +444,19 @@ export default function EditorPage() {
 
   const closeFilePreview = useCallback(() => setFilePreviewPath(null), []);
 
-  /* ── 文件树删除执行：成功后收起可能正展示该文件的只读预览覆盖层 ──── */
+  /* ── 文件树删除执行：成功后收起可能正展示该文件/其子树文件的只读
+     预览覆盖层（目录递归删除按路径前缀命中，决策 Q9） ──────────────── */
   const handleDeleteConfirmed = useCallback(
-    async (filePath) => {
-      const ok = await handleDeleteFile(filePath);
-      if (ok && filePreviewPath === filePath) closeFilePreview();
+    async (target) => {
+      const ok = await handleDeleteFile(target.path, target.isDir);
+      if (
+        ok &&
+        filePreviewPath &&
+        (filePreviewPath === target.path ||
+          filePreviewPath.startsWith(`${target.path}/`))
+      ) {
+        closeFilePreview();
+      }
       return ok;
     },
     [handleDeleteFile, filePreviewPath, closeFilePreview],
@@ -937,9 +950,18 @@ export default function EditorPage() {
                   mainFile={mainFile}
                   onCreateFile={(dirPath) => {
                     setCreateDialogDir(dirPath);
+                    setCreateDialogMode("file");
                     setCreateDialogOpen(true);
                   }}
-                  onDeleteFile={setDeleteConfirmPath}
+                  onCreateFolder={(dirPath) => {
+                    setCreateDialogDir(dirPath);
+                    setCreateDialogMode("dir");
+                    setCreateDialogOpen(true);
+                  }}
+                  onDeleteFile={(path, isDir) =>
+                    setDeleteConfirmTarget({ path, isDir: Boolean(isDir) })
+                  }
+                  onMoveEntry={handleMoveEntry}
                   onSetMainFile={handleSetMainFile}
                   onUploadFile={handleUploadFiles}
                   uploading={uploading}
@@ -1050,33 +1072,52 @@ export default function EditorPage() {
         }}
       />
 
-      {/* 文件树新建文件弹窗：目标目录由触发入口决定（头部按钮 = 项目根，
-          目录行 hover 按钮 = 该目录）；成功后自动打开新 tab 并刷新文件树 */}
+      {/* 文件树新建文件/文件夹弹窗：目标目录与类型由触发入口决定（头部
+          按钮 = 项目根，目录行 hover 按钮 = 该目录）；成功后文件自动打开
+          新 tab / 文件夹仅刷新文件树，均以响应整树刷新 */}
       <CreateFileDialog
         open={createDialogOpen}
         onOpenChange={setCreateDialogOpen}
         dirPath={createDialogDir}
-        onCreate={handleCreateFile}
+        mode={createDialogMode}
+        onCreate={
+          createDialogMode === "dir" ? handleCreateDir : handleCreateFile
+        }
       />
 
-      {/* 文件树删除确认（destructive）：目标存在脏 tab 时追加未保存警示，
-          确认后该文件全部 tab 一并关闭 */}
+      {/* 文件树删除确认（destructive）：文件精确删除；文件夹为递归删除
+          强警告（editor-file-move-design 决策 Q9）。目标命中脏 tab 时
+          追加未保存警示，确认后命中 tab 全部关闭 */}
       <ConfirmDialog
-        open={deleteConfirmPath !== null}
+        open={deleteConfirmTarget !== null}
         onOpenChange={(open) => {
-          if (!open) setDeleteConfirmPath(null);
+          if (!open) setDeleteConfirmTarget(null);
         }}
-        title={t("pages:editor.deleteFileTitle")}
+        title={
+          deleteConfirmTarget?.isDir
+            ? t("pages:editor.deleteFolderTitle")
+            : t("pages:editor.deleteFileTitle")
+        }
         description={
-          deleteConfirmPath
+          deleteConfirmTarget
             ? [
-                t("pages:editor.deleteConfirmDescription", {
-                  path: deleteConfirmPath,
-                }),
+                deleteConfirmTarget.isDir
+                  ? t("pages:editor.deleteFolderConfirmDescription", {
+                      path: deleteConfirmTarget.path,
+                    })
+                  : t("pages:editor.deleteConfirmDescription", {
+                      path: deleteConfirmTarget.path,
+                    }),
                 useEditorStore
                   .getState()
                   .tabs.some(
-                    (tab) => tab.filePath === deleteConfirmPath && tab.dirty,
+                    (tab) =>
+                      tab.dirty &&
+                      (tab.filePath === deleteConfirmTarget.path ||
+                        (deleteConfirmTarget.isDir &&
+                          tab.filePath.startsWith(
+                            `${deleteConfirmTarget.path}/`,
+                          ))),
                   )
                   ? t("pages:editor.deleteConfirmDirty")
                   : null,
@@ -1085,11 +1126,15 @@ export default function EditorPage() {
                 .join(" ")
             : ""
         }
-        confirmText={t("pages:editor.deleteConfirmProceed")}
+        confirmText={
+          deleteConfirmTarget?.isDir
+            ? t("pages:editor.deleteFolderConfirmProceed")
+            : t("pages:editor.deleteConfirmProceed")
+        }
         variant="destructive"
         onConfirm={async () => {
-          const target = deleteConfirmPath;
-          setDeleteConfirmPath(null);
+          const target = deleteConfirmTarget;
+          setDeleteConfirmTarget(null);
           if (target) await handleDeleteConfirmed(target);
         }}
       />

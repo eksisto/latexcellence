@@ -111,6 +111,17 @@ export function joinProjectPath(dirPath, fileName) {
 }
 
 /**
+ * 取路径的末段（拖拽移动落位名，editor-file-move-design §5.2）：
+ * to_path = joinProjectPath(targetDir, getBaseName(fromPath))。
+ * @param {string} filePath 项目相对路径
+ * @returns {string} 最后一段路径（无分隔符时为路径本身）
+ */
+export function getBaseName(filePath) {
+  if (typeof filePath !== "string" || filePath.length === 0) return "";
+  return filePath.split("/").pop() ?? "";
+}
+
+/**
  * 校验「上传文件」的原始文件名（文件树上传入口，editor-file-upload-design
  * §3-6 / §5.5）。与后端 _validate_upload_target_name / _reject_hidden_components
  * 同口径：拒绝空名、路径分隔符、控制字符与点开头（隐藏文件）。任意后缀
@@ -127,4 +138,19 @@ export function validateUploadFileName(name) {
   if (/[\u0000-\u001F\u007F]/.test(name)) return "control";
   if (name.startsWith(".")) return "hidden";
   return null;
+}
+
+/**
+ * 校验「新建文件夹」的文件夹名输入（文件树新建目录入口，
+ * editor-file-move-design §5.3）。与服务端 create-dir 的名字消毒同口径
+ * （复用 _validate_upload_target_name + 隐藏组件拒绝）：空名 / 路径分隔符 /
+ * 控制字符 / 点开头（隐藏目录）拒绝；目录不限扩展名。服务端校验仍为
+ * 权威，此处仅供弹窗预检、避免无效请求。
+ *
+ * @param {string} name 用户输入的文件夹名
+ * @returns {string|null} null 表示合法；否则返回错误码
+ *   "empty" / "separator" / "control" / "hidden"（供 i18n key 映射）
+ */
+export function validateNewDirName(name) {
+  return validateUploadFileName(name);
 }

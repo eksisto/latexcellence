@@ -40,6 +40,8 @@ import {
   getTabBuffer,
   markTabSavedReducer,
   openTabReducer,
+  remapMovedPath,
+  remapMovedPaths as remapMovedPathsReducer,
   replaceTabBufferReducer,
   resetSessionReducer,
   setTabBufferReducer,
@@ -339,6 +341,43 @@ function createEditorSessionSlice(set, get) {
 
     /** 关闭单个 tab；关闭激活 tab 时邻居接管激活位 */
     closeTab: (filePath) => set((state) => closeTabReducer(state, filePath)),
+
+    /**
+     * 拖拽移动成功后的会话路径重映射（editor-file-move-design §5.2 /
+     * 决策 Q6/Q13）：tabs[].filePath / activeTabPath / 409 冲突归属路径按
+     * 「旧路径 → 新路径」重映射（文件精确匹配，目录前缀覆盖整棵子树）；
+     * buffer / savedBuffer / openedBuffer / baseMd5 / dirty / stale 原样
+     * 保留。无任何命中时状态引用不变（订阅方零触发）。sessionPersistence
+     * 持久化键与 URL ?file= 由既有订阅随 tabs / activeTabPath 变化自动
+     * 跟进改写（Q13）。
+     * @param {{fromPath: string, toPath: string, isDir?: boolean}} input
+     */
+    remapMovedPaths: ({ fromPath, toPath, isDir = false }) =>
+      set((state) => {
+        const next = remapMovedPathsReducer(state, fromPath, toPath, { isDir });
+        // 409 冲突信息按归属路径一并重映射：悬空在旧路径上的冲突弹窗会让
+        // 「覆盖保存 / 放弃重载」静默失效（找不到归属 tab）
+        const conflictFilePath = state.conflict
+          ? remapMovedPath(state.conflict.filePath, fromPath, toPath, isDir)
+          : null;
+        const conflictChanged =
+          state.conflict != null &&
+          conflictFilePath !== state.conflict.filePath;
+        if (
+          next.tabs === state.tabs &&
+          next.activeTabPath === state.activeTabPath &&
+          !conflictChanged
+        ) {
+          return {};
+        }
+        return {
+          tabs: next.tabs,
+          activeTabPath: next.activeTabPath,
+          conflict: conflictChanged
+            ? { ...state.conflict, filePath: conflictFilePath }
+            : state.conflict,
+        };
+      }),
 
     /**
      * 整体恢复会话（sessionPersistence 刷新/重启恢复专用入口，Q14）：载荷已经
