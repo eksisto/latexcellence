@@ -33,11 +33,12 @@ r"""
     7. 文件树新建/删除：POST /api/project/create-file 与
        POST /api/project/delete-file 的业务实现——新建走可编辑白名单
        后缀校验，删除放开为任意非隐藏后缀（主文档受删除保护，
-       editor-file-upload-design §4.4）；冲突/父目录检查 + 多用户模式
-       创建前按新文件字节做配额预检、删除后刷新用量记账（配额随之
-       释放）；响应携带重扫后的 file_tree 供前端单次往返刷新。刻意不
-       纳入统一撤销记账（edit_log 恢复通道只支持改写已存在文件，不
-       支持文件级增删），误删由前端确认弹窗兜底
+       editor-file-upload-design §4.4；目录为递归删除，子树内含主文件
+       时按 editor-file-move-design 决策 Q10 拒绝）；冲突/父目录检查 +
+       多用户模式创建前按新文件字节做配额预检、删除后刷新用量记账
+       （配额随之释放）；响应携带重扫后的 file_tree 供前端单次往返
+       刷新。刻意不纳入统一撤销记账（edit_log 恢复通道只支持改写已
+       存在文件，不支持文件级增删），误删由前端确认弹窗兜底
     8. 文件树上传：POST /api/project/upload-file 的业务实现
        （editor-file-upload-design §4）——multipart 任意格式上传到项目
        内任意相对路径：20MB 流式大小上限（超限即中止）→ 文件名消毒 →
@@ -45,6 +46,15 @@ r"""
        多用户配额预检 → 同目录临时文件 + Path.replace 原子落盘 →
        多用户用量刷新（§4.1 校验链）。零 LLM、不进撤销记账；响应携带
        重扫后的 file_tree
+    9. 文件树移动/新建目录：POST /api/project/move-file 与
+       POST /api/project/create-dir 的业务实现（editor-file-move-design
+       §4.1）——move 文件与目录通用（目录整棵子树随迁），to_path 全部
+       校验先于任何磁盘变更（§3-5），主文件被移走时记录按「旧前缀 →
+       新前缀」跟随改写并复用 set-main-file 内部写入通路（§4.2 /
+       决策 Q3）；create-dir 单级 mkdir（父目录必须已存在）。均零 LLM、
+       不进撤销记账（决策 Q11），且不产生新字节落盘：不做配额预检、
+       不刷新用量记账；响应携带重扫后的 file_tree（move 另携带改写后
+       的 main_file，前端以响应为单一事实源）
 
 约束：
     - 面向用户的错误消息一律使用项目内相对路径（多用户路径脱敏规则），
@@ -388,19 +398,21 @@ def _create_file_sync(project, file_path: str, content: str) -> str:
 
 
 async def delete_project_file(project, binding: dict, *, file_path: str) -> dict:
-    """删除项目内文件（文件树操作，零 LLM、不进撤销记账）。
+    """删除项目内文件或目录（文件树操作，零 LLM、不进撤销记账）。
 
     任意非隐藏后缀均可删除（editor-file-upload-design §4.4：任意格式可传
     则必然要可删；隐藏组件被服务端权威拒绝，不依赖"不进文件树、无删除
-    入口"的树层排除）；主文档受保护（400 main_file_protected，需先
-    set-main-file 更换）。多用户模式删除后刷新用量记账（配额按磁盘重算
-    随之释放）。响应携带重扫后的 file_tree。
+    入口"的树层排除）；目标为目录时递归删除整棵子树（editor-file-move-
+    design §4.1 / 决策 Q9）；主文档受保护——等于目标或位于目标子树内均
+    拒绝（400 main_file_protected，决策 Q10，需先移走或先 set-main-file
+    更换）。多用户模式删除后刷新用量记账（配额按磁盘重算随之释放）。
+    响应携带重扫后的 file_tree。
     """
     try:
         main_file = await asyncio.to_thread(project.get_main_file)
     except RuntimeError as e:
         raise _http(400, "invalid_workspace", str(e)) from e
-    if main_file and main_file == file_path:
+    if main_file and _is_same_or_under(main_file, file_path):
         raise _http(
             400,
             "main_file_protected",
@@ -430,14 +442,207 @@ async def delete_project_file(project, binding: dict, *, file_path: str) -> dict
 
 def _delete_file_sync(project, file_path: str) -> None:
     """同步删除：隐藏组件拒绝（§4.4「非隐藏」约束）→ 路径校验（不限
-    后缀）→ 存在性检查 → unlink。"""
+    后缀）→ 项目根本身拒绝 → 目录递归删除（editor-file-move-design
+    §4.1 / 决策 Q9）或文件 unlink。"""
     root = Path(project.root_path)
     _reject_hidden_components(file_path)
     full_path = resolve_project_path(root, file_path)
+    if full_path == root:
+        # "." / "./" 等空相对路径经 path_guard 解析后即项目根本身：
+        # 目录递归分支若不拦截，rmtree 会把整个项目（含 .git /
+        # .latexcellence）连根删除；文件删除时代该输入落到 is_file
+        # 检查为 404，本守卫是目录删除引入后的等价安全底线
+        raise ValueError("Cannot delete the project root directory")
+    if full_path.is_dir():
+        # 目录递归删除：执行前已过 path_guard（项目内、非隐藏，§3-4）；
+        # 物理删除无软删除/回收站——前端强警告为第一道闸、主文件保护
+        # 为第二道（Q10），子树内是否含主文件由 delete_project_file 预检
+        shutil.rmtree(full_path)
+        return
     if not full_path.is_file():
         logger.info("Editor delete miss: %s (root=%s)", file_path, root)
         raise FileNotFoundError(f"File not found: {file_path}")
     full_path.unlink()
+
+
+def _is_same_or_under(path: str, ancestor: str) -> bool:
+    """path 等于 ancestor 或位于其子树内（posix 相对路径前缀判定）。
+
+    两侧先经 Path 解析规范（剥离冗余分隔符与 '.' 段）再比较；用于
+    目录删除的主文件子树保护（决策 Q10）与主文件记录跟随判定（§4.2）。
+    """
+    normalized = Path(path).as_posix()
+    prefix = Path(ancestor).as_posix()
+    return normalized == prefix or normalized.startswith(prefix + "/")
+
+
+# ── 文件树移动 / 新建目录（editor-file-move-design §4） ───────────────────
+async def move_project_path(project, *, from_path: str, to_path: str) -> dict:
+    """移动项目内文件或目录（文件树拖拽，editor-file-move-design §4.1）。
+
+    文件与目录通用：目录迁移为整棵子树随迁（shutil.move）。to_path 全部
+    校验先于任何磁盘变更（§3-5），无半完成态。主文件被移走（本身或其
+    祖先目录）时记录跟随改写（§4.2 / 决策 Q3）。move 不产生新字节落盘：
+    不做配额预检、不刷新用量记账，亦不进统一撤销记账（决策 Q11）。响应
+    携带改写后的 main_file 与重扫后的 file_tree，前端以响应为单一事实源
+    （决策 Q12）。
+    """
+    try:
+        result = await asyncio.to_thread(_move_path_sync, project, from_path, to_path)
+    except RuntimeError as e:
+        raise _http(400, "invalid_workspace", str(e)) from e
+    invalidate_project_outline_cache(project)
+    logger.info("Editor path moved: %s -> %s", from_path, to_path)
+    return {
+        "status": "ok",
+        "from_path": from_path,
+        "to_path": to_path,
+        "main_file": result["main_file"],
+        "file_tree": _refreshed_tree(project),
+    }
+
+
+def _move_path_sync(project, from_path: str, to_path: str) -> dict:
+    """同步移动（由 asyncio.to_thread 调度）：校验链按 §4.1 顺序全部
+    通过后才执行 shutil.move，主文件记录改写随后完成。
+
+    域内错误直接以 HTTPException 抛出（同 _stream_upload_to_temp 先例，
+    经 to_thread 传播后由 FastAPI 统一处理）；错误消息一律相对路径
+    （多用户脱敏），完整路径只进服务端日志。
+    """
+    root = Path(project.root_path)
+    try:
+        # 1. from/to 各自隐藏组件拒绝（§3-1，覆盖 .git / .latexcellence 等）
+        #    + path_guard（不限后缀，逐组件符号链接检测内置）
+        _reject_hidden_components(from_path)
+        _reject_hidden_components(to_path)
+        from_full = resolve_project_path(root, from_path)
+        to_full = resolve_project_path(root, to_path)
+    except ValueError as e:
+        raise _http(400, "invalid_path", str(e)) from e
+
+    # 2. from 存在（文件或目录；404 file_not_found 与 delete 同码）
+    if not from_full.exists():
+        logger.info("Editor move miss: %s (root=%s)", from_path, root)
+        raise _http(404, "file_not_found", f"File not found: {from_path}")
+
+    # 3. to 父目录存在（单级语义，与 create-file 一致）
+    if not to_full.parent.is_dir():
+        raise _http(
+            400,
+            "parent_not_found",
+            f"Parent directory does not exist: {to_path}",
+        )
+
+    # 4. into_self：to 等于 from 或位于 from 子树内。先于 target_exists
+    #    检查——to == from 时目标必然"已存在"，字面顺序会让拖拽到自身
+    #    误报 409，而 §6 测试基线要求自移返回 400 into_self
+    if to_full == from_full or to_full.is_relative_to(from_full):
+        raise _http(
+            400,
+            "into_self",
+            f"Cannot move {from_path} into itself or its own subtree",
+        )
+
+    # 5. to 不存在：同名文件与同名目录均拒绝（409 target_exists，决策 Q2）
+    if to_full.exists():
+        logger.info(
+            "Editor move conflict: %s -> %s (root=%s)", from_path, to_path, root
+        )
+        raise _http(409, "target_exists", f"Target already exists: {to_path}")
+
+    # 6. 整棵子树随迁（shutil.move 对文件与目录通用；to 不存在时精确
+    #    落位为 to，不会退化为"移入目录"语义）
+    shutil.move(from_full, to_full)
+
+    # 7. 主文件记录跟随改写（§4.2 / 决策 Q3）
+    return {
+        "main_file": _rewrite_main_file_after_move(project, root, from_full, to_full)
+    }
+
+
+def _rewrite_main_file_after_move(
+    project, root: Path, from_full: Path, to_full: Path
+) -> str | None:
+    """主文件记录跟随改写（editor-file-move-design §4.2 / 决策 Q3）。
+
+    主文件等于被移动路径或位于其子树内时，按「旧路径前缀 → 新路径
+    前缀」改写，并复用 set-main-file 的内部写入通路同时更新内存记录与
+    .latexcellence/main_file 标记（内部机制写隐藏路径不受
+    _reject_hidden_components 约束——该拒绝只针对用户提供的路径）。
+    其余情况原样返回当前记录；改写失败仅记警告、移动结果不回滚
+    （与 _persist_main_file「失败仅记警告」容错语义一致）。
+    """
+    try:
+        main_file = project.get_main_file()
+    except RuntimeError:
+        return None
+    if not main_file:
+        return None
+    from_rel = from_full.relative_to(root).as_posix()
+    to_rel = to_full.relative_to(root).as_posix()
+    # 切片改写前先规范化主文件记录：set-main-file / .latexcellence 标记
+    # 会原样存储用户输入（如 "./main.tex"），未经 Path 解析的前缀切片会
+    # 产出目录路径（to_rel + ""），改写必然失败并留下悬空记录
+    main_rel = Path(main_file).as_posix()
+    if not _is_same_or_under(main_rel, from_rel):
+        return main_file
+    new_main = to_rel + main_rel[len(from_rel) :]
+    try:
+        project.set_main_file(new_main)
+    except (OSError, ValueError, RuntimeError) as e:
+        logger.warning(
+            "Main file record rewrite failed after move %s -> %s: %s",
+            from_rel,
+            to_rel,
+            e,
+        )
+        return project.get_main_file()
+    return new_main
+
+
+async def create_project_dir(project, *, dir_path: str) -> dict:
+    """在项目内新建目录（文件树操作，零 LLM、不进撤销记账）。
+
+    名字消毒与 create-file 同口径（空名/控制字符/分隔符/点开头拒绝，
+    复用上传目标名消毒助手）+ 隐藏组件拒绝 + path_guard（不限后缀）；
+    父目录必须已存在（单级 mkdir，不做递归创建）；已存在同名文件或
+    目录报 409 target_exists。不产生新字节落盘：不做配额预检、不刷新
+    用量记账。响应携带重扫后的 file_tree。
+    """
+    try:
+        created = await asyncio.to_thread(_create_dir_sync, project, dir_path)
+    except FileExistsError as e:
+        raise _http(409, "target_exists", str(e)) from e
+    except FileNotFoundError as e:
+        raise _http(400, "parent_not_found", str(e)) from e
+    except ValueError as e:
+        raise _http(400, "invalid_path", str(e)) from e
+    except RuntimeError as e:
+        raise _http(400, "invalid_workspace", str(e)) from e
+    logger.info("Editor dir created: %s", dir_path)
+    return {
+        "status": "ok",
+        "dir_path": created,
+        "file_tree": _refreshed_tree(project),
+    }
+
+
+def _create_dir_sync(project, dir_path: str) -> str:
+    """同步新建目录：名字消毒 → 隐藏组件拒绝 → 路径校验（不限后缀）→
+    冲突/父目录检查 → 单级 mkdir。"""
+    root = Path(project.root_path)
+    _validate_upload_target_name(dir_path)
+    _reject_hidden_components(dir_path)
+    full_path = resolve_project_path(root, dir_path)
+    if full_path.exists():
+        # 错误消息使用相对路径（多用户脱敏）；完整路径只进服务端日志
+        logger.info("Editor create-dir conflict: %s (root=%s)", dir_path, root)
+        raise FileExistsError(f"Target already exists: {dir_path}")
+    if not full_path.parent.is_dir():
+        raise FileNotFoundError(f"Parent directory does not exist: {dir_path}")
+    full_path.mkdir()
+    return dir_path
 
 
 # ── 文件树上传（editor-file-upload-design §4） ────────────────────────────

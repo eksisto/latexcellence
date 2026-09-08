@@ -69,6 +69,17 @@ class DeleteFileRequest(BaseModel):
     workspace_id: str | None = None
 
 
+class MoveFileRequest(BaseModel):
+    from_path: str
+    to_path: str
+    workspace_id: str | None = None
+
+
+class CreateDirRequest(BaseModel):
+    dir_path: str
+    workspace_id: str | None = None
+
+
 class FormatLatexRequest(BaseModel):
     # 一键格式化（阶段五 / 决策 Q8）为纯转换端点：只接收缓冲区全文，
     # 刻意不接收 file_path 等任何路径字段（不落盘、不涉项目文件）
@@ -439,10 +450,11 @@ async def delete_file(
     binding: dict = Depends(access_control.require_workspace_write_json),
     user: dict | None = Depends(get_current_user_optional),
 ):
-    """删除项目内文件（文件树操作，零 LLM、不进撤销记账）。
+    """删除项目内文件或目录（文件树操作，零 LLM、不进撤销记账）。
 
     任意非隐藏后缀均可删除（editor-file-upload-design §4.4，隐藏组件被
-    服务端权威拒绝）；主文档受保护（先 set-main-file 更换）。多用户模式
+    服务端权威拒绝）；目标为目录时递归删除整棵子树（editor-file-move-
+    design 决策 Q9），子树内含主文档时拒绝（决策 Q10）。多用户模式
     删除后刷新用量记账（配额随之释放）。响应携带重扫后的 file_tree。
     """
     project = get_project_manager_for_workspace(
@@ -453,6 +465,48 @@ async def delete_file(
         binding,
         file_path=request.file_path,
     )
+
+
+@router.post("/move-file")
+async def move_file(
+    request: MoveFileRequest,
+    binding: dict = Depends(access_control.require_workspace_write_json),
+    user: dict | None = Depends(get_current_user_optional),
+):
+    """移动项目内文件或目录（文件树拖拽，editor-file-move-design §4.1）。
+
+    JSON body 版鉴权（require_workspace(write=True)）：viewer 403、
+    未登录 401，CSRF 由安全中间件统一把关。文件与目录通用（目录整棵
+    子树随迁）；to_path 全部校验先于任何磁盘变更；主文件被移走时记录
+    跟随改写（决策 Q3），响应携带改写后的 main_file 与重扫后的
+    file_tree。move 不产生新字节落盘：不做配额预检 / 用量刷新，亦不进
+    撤销记账（决策 Q11）。
+    """
+    project = get_project_manager_for_workspace(
+        request.workspace_id or binding["workspace_id"]
+    )
+    return await editor_service.move_project_path(
+        project, from_path=request.from_path, to_path=request.to_path
+    )
+
+
+@router.post("/create-dir")
+async def create_dir(
+    request: CreateDirRequest,
+    binding: dict = Depends(access_control.require_workspace_write_json),
+    user: dict | None = Depends(get_current_user_optional),
+):
+    """在项目内新建目录（文件树操作，editor-file-move-design §4.1）。
+
+    名字消毒与 create-file 同口径（空名/控制字符/分隔符/点开头拒绝）+
+    隐藏组件拒绝；父目录必须已存在（单级 mkdir，不做递归创建）；已存在
+    同名 409 target_exists。零 LLM、不进撤销记账、不产生新字节落盘（无
+    配额影响）。响应携带重扫后的 file_tree。
+    """
+    project = get_project_manager_for_workspace(
+        request.workspace_id or binding["workspace_id"]
+    )
+    return await editor_service.create_project_dir(project, dir_path=request.dir_path)
 
 
 @router.post("/upload-file")

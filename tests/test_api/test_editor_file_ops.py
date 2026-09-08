@@ -1,11 +1,16 @@
-"""编辑器文件树新建/删除/上传接口测试（单用户模式）。
+"""编辑器文件树新建/删除/移动/上传接口测试（单用户模式）。
 
 纯文件操作：无 LLM 参与、不 Mock LLM、无网络。
 覆盖：创建成功（磁盘落盘 + 响应携带重扫后 file_tree + 子目录场景）、
 重复创建 409、白名单外后缀拒绝、父目录缺失、路径穿越防护、超长内容
 413；删除成功（磁盘移除 + 树同步，editor-file-upload-design §4.4 放开
-为任意非隐藏后缀）、删除不存在 404、主文档删除保护、隐藏路径直调删除
-拒绝（D9）；上传（§4：任意后缀成功、超限 413、同名 409、父目录缺失、
+为任意非隐藏后缀）、删除不存在 404、主文档删除保护、目录递归删除与
+子树主文件保护（editor-file-move-design 决策 Q9/Q10）、项目根本身
+删除拒绝（「.」解析即根）、隐藏路径直调删除拒绝（D9）；移动
+（move-file：文件/目录通用、冲突 409、into_self、
+父目录缺失、隐藏路径拒绝、主文件记录跟随改写 §4.2/决策 Q3）；新建
+目录（create-dir：根/子目录成功、重复 409、父缺失 400、非法名/隐藏名
+拒绝）；上传（§4：任意后缀成功、超限 413、同名 409、父目录缺失、
 隐藏/点开头/控制字符文件名拒绝）；产物黑名单不进 file_tree（含
 .synctex.gz 双后缀）；raw-file 对非白名单后缀仍拒绝（§3-1 回归）；以及
 refresh_file_tree 对 GET /file-tree 缓存的刷新效果。
@@ -66,6 +71,28 @@ def _upload(client, env, file_path, data: bytes):
     )
 
 
+def _move(client, env, from_path, to_path):
+    return client.post(
+        "/api/project/move-file",
+        json={"from_path": from_path, "to_path": to_path, "workspace_id": env["ws"]},
+    )
+
+
+def _create_dir(client, env, dir_path):
+    return client.post(
+        "/api/project/create-dir",
+        json={"dir_path": dir_path, "workspace_id": env["ws"]},
+    )
+
+
+def _set_main(client, env, file_path):
+    return client.post(
+        "/api/project/set-main-file",
+        params={"workspace_id": env["ws"]},
+        json={"file_path": file_path},
+    )
+
+
 def _tree_paths(tree, prefix=""):
     """递归收集文件树中全部文件相对路径（目录不收）。"""
     paths = []
@@ -75,6 +102,16 @@ def _tree_paths(tree, prefix=""):
         else:
             paths.append(node["path"])
     return paths
+
+
+def _tree_dirs(tree):
+    """递归收集文件树中全部目录相对路径。"""
+    dirs = []
+    for node in tree:
+        if node["is_dir"]:
+            dirs.append(node["path"])
+            dirs.extend(_tree_dirs(node.get("children", [])))
+    return dirs
 
 
 class TestCreateFile:
@@ -215,6 +252,66 @@ class TestDeleteFile:
         assert (env["root"] / ".git" / "config").exists()
         assert (env["root"] / ".latexcellence" / "main_file").exists()
 
+    def test_delete_project_root_rejected(self, client, env):
+        # 回归：「.」经 path_guard 解析即项目根本身，目录递归删除分支
+        # 若不拦截会把整个项目（含 .git / .latexcellence）连根删除；
+        # 必须以 400 invalid_path 拒绝且磁盘原样保留
+        (env["root"] / "chapters").mkdir()
+        for dot in (".", "./"):
+            resp = _delete(client, env, dot)
+            assert resp.status_code == 400, f"{dot!r}: {resp.text}"
+            assert resp.json()["detail"]["error"] == "invalid_path"
+        assert (env["root"] / "main.tex").exists()
+        assert (env["root"] / "chapters").is_dir()
+
+    def test_delete_directory_recursive(self, client, env):
+        # Q9：目录递归删除，嵌套内容整棵随删，树同步移除
+        src = env["root"] / "src"
+        (src / "inner").mkdir(parents=True)
+        (src / "a.tex").write_text("% a\n", encoding="utf-8")
+        (src / "inner" / "b.tex").write_text("% b\n", encoding="utf-8")
+        resp = _delete(client, env, "src")
+        assert resp.status_code == 200, resp.text
+        data = resp.json()
+        assert data["status"] == "ok"
+        assert data["file_path"] == "src"
+        assert not src.exists()
+        assert "src/a.tex" not in _tree_paths(data["file_tree"])
+        assert "src" not in _tree_dirs(data["file_tree"])
+
+    def test_delete_empty_directory(self, client, env):
+        (env["root"] / "empty").mkdir()
+        resp = _delete(client, env, "empty")
+        assert resp.status_code == 200, resp.text
+        assert not (env["root"] / "empty").exists()
+
+    def test_delete_directory_containing_main_file_protected(self, client, env):
+        # Q10：子树内含主文件（含更深层级）→ 拒绝递归删除，磁盘原样保留
+        src = env["root"] / "src"
+        (src / "inner").mkdir(parents=True)
+        (src / "inner" / "thesis.tex").write_text("% thesis\n", encoding="utf-8")
+        assert _set_main(client, env, "src/inner/thesis.tex").status_code == 200
+        resp = _delete(client, env, "src")
+        assert resp.status_code == 400
+        detail = resp.json()["detail"]
+        assert detail["error"] == "main_file_protected"
+        assert str(env["root"]) not in resp.text
+        assert (src / "inner" / "thesis.tex").exists()
+
+    def test_delete_hidden_directory_rejected(self, client, env):
+        # 隐藏目录本身同样不可经删除端点移除（与 D9 同口径）
+        (env["root"] / ".git").mkdir()
+        (env["root"] / ".latexcellence").mkdir()
+        (env["root"] / ".latexcellence" / "main_file").write_text(
+            "main.tex", encoding="utf-8"
+        )
+        for hidden in (".git", ".latexcellence"):
+            resp = _delete(client, env, hidden)
+            assert resp.status_code == 400, resp.text
+            assert resp.json()["detail"]["error"] == "invalid_path"
+        assert (env["root"] / ".git").is_dir()
+        assert (env["root"] / ".latexcellence" / "main_file").exists()
+
     def test_rejects_path_traversal(self, client, env, tmp_path):
         outside = tmp_path.parent / "evil.tex"
         outside.write_text("secret", encoding="utf-8")
@@ -224,6 +321,263 @@ class TestDeleteFile:
             assert "secret" not in resp.text
         finally:
             outside.unlink(missing_ok=True)
+
+
+class TestMovePath:
+    """文件树拖拽移动（POST /api/project/move-file，editor-file-move-design
+    §4.1）：文件与目录通用（整棵子树随迁）、409 target_exists（决策 Q2）、
+    400 into_self、400 parent_not_found、404 file_not_found、隐藏路径拒绝、
+    主文件记录跟随改写（§4.2 / 决策 Q3）、响应携带重扫后 file_tree。
+    """
+
+    def test_move_file_into_subdirectory(self, client, env):
+        (env["root"] / "chapters").mkdir()
+        (env["root"] / "draft.tex").write_text("% draft\n", encoding="utf-8")
+        resp = _move(client, env, "draft.tex", "chapters/draft.tex")
+        assert resp.status_code == 200, resp.text
+        data = resp.json()
+        assert data["status"] == "ok"
+        assert data["from_path"] == "draft.tex"
+        assert data["to_path"] == "chapters/draft.tex"
+        # 磁盘：旧路径消失、内容随迁新路径
+        assert not (env["root"] / "draft.tex").exists()
+        assert (env["root"] / "chapters" / "draft.tex").read_text(
+            encoding="utf-8"
+        ) == "% draft\n"
+        # 响应携带重扫后 file_tree（单次往返刷新）
+        paths = _tree_paths(data["file_tree"])
+        assert "chapters/draft.tex" in paths
+        assert "draft.tex" not in paths
+
+    def test_move_file_to_root(self, client, env):
+        chapters = env["root"] / "chapters"
+        chapters.mkdir()
+        (chapters / "deep.tex").write_text("% deep\n", encoding="utf-8")
+        resp = _move(client, env, "chapters/deep.tex", "deep.tex")
+        assert resp.status_code == 200, resp.text
+        assert (env["root"] / "deep.tex").read_text(encoding="utf-8") == "% deep\n"
+        assert not (chapters / "deep.tex").exists()
+        paths = _tree_paths(resp.json()["file_tree"])
+        assert "deep.tex" in paths
+        assert "chapters/deep.tex" not in paths
+
+    def test_move_directory_subtree_follows(self, client, env):
+        src = env["root"] / "src"
+        (src / "inner").mkdir(parents=True)
+        (src / "a.tex").write_text("% a\n", encoding="utf-8")
+        (src / "inner" / "b.tex").write_text("% b\n", encoding="utf-8")
+        (src / "fig.png").write_bytes(b"\x89PNG")
+        resp = _move(client, env, "src", "parts")
+        assert resp.status_code == 200, resp.text
+        assert not src.exists()
+        assert (env["root"] / "parts" / "a.tex").read_text(encoding="utf-8") == "% a\n"
+        assert (env["root"] / "parts" / "inner" / "b.tex").read_text(
+            encoding="utf-8"
+        ) == "% b\n"
+        assert (env["root"] / "parts" / "fig.png").read_bytes() == b"\x89PNG"
+        data = resp.json()
+        paths = _tree_paths(data["file_tree"])
+        assert "parts/a.tex" in paths
+        assert "parts/inner/b.tex" in paths
+        assert "src/a.tex" not in paths
+        assert "parts" in _tree_dirs(data["file_tree"])
+        assert "src" not in _tree_dirs(data["file_tree"])
+
+    def test_move_onto_existing_file_returns_409(self, client, env):
+        (env["root"] / "a.tex").write_text("% a\n", encoding="utf-8")
+        (env["root"] / "b.tex").write_text("% b\n", encoding="utf-8")
+        resp = _move(client, env, "a.tex", "b.tex")
+        assert resp.status_code == 409
+        detail = resp.json()["detail"]
+        assert detail["error"] == "target_exists"
+        assert str(env["root"]) not in resp.text
+        # 双方原样保留（拒绝即无磁盘变更）
+        assert (env["root"] / "a.tex").read_text(encoding="utf-8") == "% a\n"
+        assert (env["root"] / "b.tex").read_text(encoding="utf-8") == "% b\n"
+
+    def test_move_onto_existing_directory_returns_409(self, client, env):
+        (env["root"] / "docs").mkdir()
+        (env["root"] / "chapters").mkdir()
+        resp = _move(client, env, "docs", "chapters")
+        assert resp.status_code == 409
+        assert resp.json()["detail"]["error"] == "target_exists"
+        assert (env["root"] / "docs").is_dir()
+        assert (env["root"] / "chapters").is_dir()
+
+    def test_move_into_itself_returns_400_into_self(self, client, env):
+        (env["root"] / "chapters").mkdir()
+        resp = _move(client, env, "chapters", "chapters")
+        assert resp.status_code == 400
+        assert resp.json()["detail"]["error"] == "into_self"
+        assert (env["root"] / "chapters").is_dir()
+        resp = _move(client, env, "main.tex", "main.tex")
+        assert resp.status_code == 400
+        assert resp.json()["detail"]["error"] == "into_self"
+        assert (env["root"] / "main.tex").exists()
+
+    def test_move_into_own_subtree_returns_400_into_self(self, client, env):
+        (env["root"] / "chapters").mkdir()
+        resp = _move(client, env, "chapters", "chapters/nested")
+        assert resp.status_code == 400
+        assert resp.json()["detail"]["error"] == "into_self"
+        assert not (env["root"] / "chapters" / "nested").exists()
+
+    def test_move_missing_parent_returns_400(self, client, env):
+        resp = _move(client, env, "main.tex", "no_such_dir/main.tex")
+        assert resp.status_code == 400
+        detail = resp.json()["detail"]
+        assert detail["error"] == "parent_not_found"
+        assert str(env["root"]) not in resp.text
+        assert (env["root"] / "main.tex").exists()
+        assert not (env["root"] / "no_such_dir").exists()
+
+    def test_move_missing_source_returns_404(self, client, env):
+        resp = _move(client, env, "ghost.tex", "elsewhere.tex")
+        assert resp.status_code == 404
+        detail = resp.json()["detail"]
+        assert detail["error"] == "file_not_found"
+        assert detail["message"] == "File not found: ghost.tex"
+        assert not (env["root"] / "elsewhere.tex").exists()
+
+    def test_move_rejects_hidden_source(self, client, env):
+        git_dir = env["root"] / ".git"
+        git_dir.mkdir()
+        (git_dir / "config").write_text("[core]\n", encoding="utf-8")
+        resp = _move(client, env, ".git/config", "config")
+        assert resp.status_code == 400
+        assert resp.json()["detail"]["error"] == "invalid_path"
+        assert (git_dir / "config").exists()
+        assert not (env["root"] / "config").exists()
+
+    def test_move_rejects_hidden_target(self, client, env):
+        (env["root"] / "notes.tex").write_text("% notes\n", encoding="utf-8")
+        resp = _move(client, env, "notes.tex", ".latexcellence/notes.tex")
+        assert resp.status_code == 400
+        assert resp.json()["detail"]["error"] == "invalid_path"
+        assert (env["root"] / "notes.tex").exists()
+        assert not (env["root"] / ".latexcellence").exists()
+
+    def test_move_main_file_rewrites_record(self, client, env):
+        # Q3：主文件被拖走 → 允许移动并自动更新记录（内存 +
+        # .latexcellence/main_file 标记，响应带回改写后主文件）
+        (env["root"] / "chapters").mkdir()
+        resp = _move(client, env, "main.tex", "chapters/main.tex")
+        assert resp.status_code == 200, resp.text
+        data = resp.json()
+        assert data["main_file"] == "chapters/main.tex"
+        marker = env["root"] / ".latexcellence" / "main_file"
+        assert marker.read_text(encoding="utf-8").strip() == "chapters/main.tex"
+        # 重开项目（页面刷新直达 / 后端重启语义）后记录仍然生效
+        from backend.core.workspace_manager import get_project_manager_for_workspace
+
+        info = get_project_manager_for_workspace(env["ws"]).open(str(env["root"]))
+        assert info.main_file == "chapters/main.tex"
+
+    def test_move_folder_containing_main_file_rewrites_prefix(self, client, env):
+        # §4.2 前缀改写：移动主文件的祖先目录，记录按「旧前缀 → 新前缀」改写
+        chapters = env["root"] / "chapters"
+        chapters.mkdir()
+        (chapters / "thesis.tex").write_text("% thesis\n", encoding="utf-8")
+        assert _set_main(client, env, "chapters/thesis.tex").status_code == 200
+        resp = _move(client, env, "chapters", "parts")
+        assert resp.status_code == 200, resp.text
+        data = resp.json()
+        assert data["main_file"] == "parts/thesis.tex"
+        marker = env["root"] / ".latexcellence" / "main_file"
+        assert marker.read_text(encoding="utf-8").strip() == "parts/thesis.tex"
+        assert (env["root"] / "parts" / "thesis.tex").read_text(
+            encoding="utf-8"
+        ) == "% thesis\n"
+        from backend.core.workspace_manager import get_project_manager_for_workspace
+
+        info = get_project_manager_for_workspace(env["ws"]).open(str(env["root"]))
+        assert info.main_file == "parts/thesis.tex"
+
+    def test_move_main_file_record_with_dot_prefix_normalizes(self, client, env):
+        # 回归：主文件记录可能带「./」前缀（set-main-file / .latexcellence
+        # 标记原样存储用户输入），前缀改写必须先规范化——否则切片产出目录
+        # 路径，set_main_file 因后缀白名单失败，记录悬空在旧路径
+        assert _set_main(client, env, "./main.tex").status_code == 200
+        (env["root"] / "chapters").mkdir()
+        resp = _move(client, env, "main.tex", "chapters/main.tex")
+        assert resp.status_code == 200, resp.text
+        data = resp.json()
+        assert data["main_file"] == "chapters/main.tex"
+        marker = env["root"] / ".latexcellence" / "main_file"
+        assert marker.read_text(encoding="utf-8").strip() == "chapters/main.tex"
+        assert (env["root"] / "chapters" / "main.tex").is_file()
+
+    def test_move_unrelated_paths_keep_main_record(self, client, env):
+        # 主文件不在移动子树内：记录原样保留，响应带回当前主文件
+        (env["root"] / "other.tex").write_text("% other\n", encoding="utf-8")
+        (env["root"] / "chapters").mkdir()
+        resp = _move(client, env, "other.tex", "chapters/other.tex")
+        assert resp.status_code == 200, resp.text
+        assert resp.json()["main_file"] == "main.tex"
+
+
+class TestCreateDir:
+    """新建文件夹（POST /api/project/create-dir，editor-file-move-design
+    §4.1）：成功（根 / 子目录）、重复 409 target_exists、父缺失 400
+    parent_not_found、非法名 / 隐藏名拒绝。
+    """
+
+    def test_create_dir_at_root(self, client, env):
+        resp = _create_dir(client, env, "figures")
+        assert resp.status_code == 200, resp.text
+        data = resp.json()
+        assert data["status"] == "ok"
+        assert data["dir_path"] == "figures"
+        assert (env["root"] / "figures").is_dir()
+        assert "figures" in _tree_dirs(data["file_tree"])
+
+    def test_create_dir_in_subdirectory(self, client, env):
+        (env["root"] / "docs").mkdir()
+        resp = _create_dir(client, env, "docs/notes")
+        assert resp.status_code == 200, resp.text
+        assert (env["root"] / "docs" / "notes").is_dir()
+        assert "docs/notes" in _tree_dirs(resp.json()["file_tree"])
+
+    def test_create_dir_duplicate_returns_409(self, client, env):
+        (env["root"] / "figures").mkdir()
+        resp = _create_dir(client, env, "figures")
+        assert resp.status_code == 409
+        detail = resp.json()["detail"]
+        assert detail["error"] == "target_exists"
+        assert str(env["root"]) not in resp.text
+        assert (env["root"] / "figures").is_dir()
+
+    def test_create_dir_name_taken_by_file_returns_409(self, client, env):
+        resp = _create_dir(client, env, "main.tex")
+        assert resp.status_code == 409
+        assert resp.json()["detail"]["error"] == "target_exists"
+        assert (env["root"] / "main.tex").is_file()
+
+    def test_create_dir_missing_parent_returns_400(self, client, env):
+        # 单级 mkdir：不做递归创建，父目录缺失即拒绝
+        resp = _create_dir(client, env, "no_such/inner")
+        assert resp.status_code == 400
+        detail = resp.json()["detail"]
+        assert detail["error"] == "parent_not_found"
+        assert str(env["root"]) not in resp.text
+        assert not (env["root"] / "no_such").exists()
+
+    def test_create_dir_rejects_invalid_names(self, client, env):
+        # 与 create-file 同口径消毒：空名 / 控制字符 / 尾分隔符 / 反斜杠分隔符
+        for bad in ("", "bad\x0bname", "trailing/", "back\\slash"):
+            resp = _create_dir(client, env, bad)
+            assert resp.status_code == 400, f"{bad!r}: {resp.text}"
+            assert resp.json()["detail"]["error"] == "invalid_path"
+        assert list(env["root"].iterdir()) == [env["root"] / "main.tex"]
+
+    def test_create_dir_rejects_hidden_names(self, client, env):
+        for bad in (".git", ".latexcellence", "docs/.hidden"):
+            resp = _create_dir(client, env, bad)
+            assert resp.status_code == 400, f"{bad!r}: {resp.text}"
+            assert resp.json()["detail"]["error"] == "invalid_path"
+        assert not (env["root"] / ".git").exists()
+        assert not (env["root"] / ".latexcellence").exists()
+        assert not (env["root"] / "docs").exists()
 
 
 class TestUploadFile:

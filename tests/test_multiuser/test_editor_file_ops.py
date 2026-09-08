@@ -1,10 +1,13 @@
-"""编辑器文件树新建/删除/上传接口测试（多用户模式）。
+"""编辑器文件树新建/删除/移动/上传接口测试（多用户模式）。
 
 纯文件操作：无 LLM 参与、不 Mock LLM、无网络。
 覆盖多用户侧验收：owner 创建/上传成功（磁盘落盘 + 响应携带重扫后
 file_tree）、viewer 写保护 403、创建/上传不纳入统一撤销记账（无
 workspace_edit_ops 残留）、项目配额预检超限 413（落盘前拦截）、
-上传后 owner 用量记账刷新、CSRF 缺失 403 / 未登录 401、owner 删除成功。
+上传后 owner 用量记账刷新、CSRF 缺失 403 / 未登录 401、owner 删除成功；
+移动（move-file / create-dir，editor-file-move-design §4.1）：owner
+移动成功且不产生配额变化与 workspace_edit_ops 记账（决策 Q11）、viewer
+403、未登录 401、CSRF、错误消息相对路径脱敏。
 """
 
 import uuid
@@ -127,6 +130,24 @@ class FileOpsApi:
             headers=self.env["csrf"](client),
         )
 
+    def move(self, client, ws_id, from_path, to_path, with_csrf=True):
+        return client.post(
+            "/api/project/move-file",
+            json={
+                "from_path": from_path,
+                "to_path": to_path,
+                "workspace_id": ws_id,
+            },
+            headers=self.env["csrf"](client) if with_csrf else None,
+        )
+
+    def create_dir(self, client, ws_id, dir_path):
+        return client.post(
+            "/api/project/create-dir",
+            json={"dir_path": dir_path, "workspace_id": ws_id},
+            headers=self.env["csrf"](client),
+        )
+
     def upload(self, client, ws_id, file_path, data: bytes, with_csrf=True):
         return client.post(
             "/api/project/upload-file",
@@ -229,6 +250,120 @@ class TestEditorFileOpsMultiuser:
         # 相对路径脱敏：响应任何位置不得出现用户空间绝对路径
         assert str(file_ops_env["root"]) not in resp.text
         assert str(file_ops_env["tmp_path"]) not in resp.text
+
+
+class TestEditorFileMoveMultiuser:
+    """文件树移动 / 新建目录（POST /api/project/move-file 与 create-dir，
+    editor-file-move-design §4.1）多用户侧验收：owner 移动/建目录成功且
+    不产生配额变化与 workspace_edit_ops 记账（决策 Q11）、viewer 写保护
+    403、CSRF 缺失 403、未登录 401、错误消息相对路径脱敏。"""
+
+    def _size_bytes(self, env) -> int:
+        row = db_module.db_query_one(
+            "SELECT size_bytes FROM projects WHERE id = ?", (env["project_id"],)
+        )
+        return row["size_bytes"]
+
+    def test_owner_moves_file_without_quota_or_edit_log_change(self, api, file_ops_env):
+        client = api.client_for("owner")
+        ws = "ws-move-owner"
+        assert api.open(client, ws).status_code == 200
+        (file_ops_env["root"] / "figures").mkdir()
+        created = api.create(client, ws, "figures/draft.tex", "% draft\n")
+        assert created.status_code == 200, created.text
+
+        size_before = self._size_bytes(file_ops_env)
+        resp = api.move(client, ws, "figures/draft.tex", "draft.tex")
+        assert resp.status_code == 200, resp.text
+        data = resp.json()
+        assert data["status"] == "ok"
+        assert data["from_path"] == "figures/draft.tex"
+        assert data["to_path"] == "draft.tex"
+        assert "draft.tex" in _tree_paths(data["file_tree"])
+        # 移动不产生新字节落盘：不做配额预检 / 用量刷新，size_bytes 不变
+        assert self._size_bytes(file_ops_env) == size_before
+        # 不纳入统一撤销记账：不产生 workspace_edit_ops 记录（决策 Q11）
+        assert _op_rows(file_ops_env) == []
+        # 磁盘：旧路径消失、内容随迁
+        assert not (file_ops_env["root"] / "figures" / "draft.tex").exists()
+        assert (file_ops_env["root"] / "draft.tex").read_text(
+            encoding="utf-8"
+        ) == "% draft\n"
+
+    def test_owner_creates_dir(self, api, file_ops_env):
+        client = api.client_for("owner")
+        ws = "ws-move-mkdir"
+        assert api.open(client, ws).status_code == 200
+
+        resp = api.create_dir(client, ws, "chapters")
+        assert resp.status_code == 200, resp.text
+        data = resp.json()
+        assert data["status"] == "ok"
+        assert data["dir_path"] == "chapters"
+        assert (file_ops_env["root"] / "chapters").is_dir()
+        # 建目录不产生新字节落盘、不进撤销记账
+        assert _op_rows(file_ops_env) == []
+
+    def test_viewer_cannot_move_or_create_dir(self, api, file_ops_env):
+        client = api.client_for("viewer")
+        ws = "ws-move-viewer"
+        assert api.open(client, ws).status_code == 200
+
+        moved = api.move(client, ws, "main.tex", "hijacked.tex")
+        assert moved.status_code == 403
+        assert moved.json()["detail"]["error"] == "no_permission"
+
+        created = api.create_dir(client, ws, "hijack")
+        assert created.status_code == 403
+        assert created.json()["detail"]["error"] == "no_permission"
+
+        # viewer 写保护：磁盘未被改动
+        assert (file_ops_env["root"] / "main.tex").exists()
+        assert not (file_ops_env["root"] / "hijacked.tex").exists()
+        assert not (file_ops_env["root"] / "hijack").exists()
+
+    def test_move_requires_csrf(self, api, file_ops_env):
+        client = api.client_for("owner")
+        ws = "ws-move-csrf"
+        assert api.open(client, ws).status_code == 200
+
+        resp = api.move(client, ws, "main.tex", "moved.tex", with_csrf=False)
+        assert resp.status_code == 403
+        assert resp.json()["detail"]["error"] == "invalid_csrf"
+        assert (file_ops_env["root"] / "main.tex").exists()
+        assert not (file_ops_env["root"] / "moved.tex").exists()
+
+    def test_move_unauthenticated_returns_401(self, api, file_ops_env):
+        # 未登录客户端：安全中间件在会话校验即拒绝（401 unauthorized）
+        from fastapi.testclient import TestClient as _TestClient
+
+        anon = _TestClient(file_ops_env["app"])
+        resp = anon.post(
+            "/api/project/move-file",
+            json={
+                "from_path": "main.tex",
+                "to_path": "moved.tex",
+                "workspace_id": "ws-move-anon",
+            },
+        )
+        assert resp.status_code == 401
+        assert resp.json()["detail"]["error"] == "unauthorized"
+        assert (file_ops_env["root"] / "main.tex").exists()
+        assert not (file_ops_env["root"] / "moved.tex").exists()
+
+    def test_paths_sanitized_in_move_error_messages(self, api, file_ops_env):
+        client = api.client_for("owner")
+        ws = "ws-move-sanitize"
+        assert api.open(client, ws).status_code == 200
+
+        into_self = api.move(client, ws, "main.tex", "main.tex")
+        assert into_self.status_code == 400
+        missing = api.move(client, ws, "ghost.tex", "elsewhere.tex")
+        assert missing.status_code == 404
+        # 相对路径脱敏：响应任何位置不得出现用户空间绝对路径
+        for resp in (into_self, missing):
+            assert str(file_ops_env["root"]) not in resp.text
+            assert str(file_ops_env["tmp_path"]) not in resp.text
 
 
 class TestEditorFileUploadMultiuser:
