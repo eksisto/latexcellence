@@ -12,7 +12,9 @@
 > 阶段五助手接入联网与学术检索（5a 工具接入 + 5b 确认流）及阶段六
 > 自研 Lezer 子集语法（6a P0 高亮 + 6b 折叠、环境缩进与括号匹配
 > 精确化）已实施）、[docs/editor-file-upload-design.md](../editor-file-upload-design.md)
-> （文件树上传任意格式资源，决策 D1–D12，已实施）。
+> （文件树上传任意格式资源，决策 D1–D12，已实施）、
+> [docs/editor-file-move-design.md](../editor-file-move-design.md)
+> （文件树拖拽移动 / 目录组织，决策 Q1–Q13，已实施）。
 
 ## 设计概述
 
@@ -52,15 +54,19 @@ AI 建议**不经后端落盘**：建议以结构化形式随 SSE 返回并随�
 | `POST /api/project/format-latex` | 一键格式化（阶段五 / 决策 Q8）：**纯转换端点**——接收缓冲区全文 `{content}`，复用 `latex_formatter.format_latex_source()`（latexindent 优先、内置轻量格式化器兜底，外部命令执行沿既有 SandboxRunner 规则与超时语义）返回 `{content, changed}`；不接收路径参数、不落盘、不进入配额记账、零 LLM；内容上限与 save-file 同量级（超限 413 `content_too_long`）；写权限依赖使 viewer 服务端拒绝；两层格式化器按契约"失败返回原样"（`changed=false`），意外异常收敛为 500 `format_failed` |
 | `POST /api/project/save-file` | 统一保存：`latex_json_guard` 宽松损坏特征校验（不做括号/$ 配平检查）→ MD5 乐观锁（不符返回 **409** 结构化错误 `file_conflict`）→ 单用户推入 BackupManager 撤销栈 / 多用户记入 workspace_edit_ops 反向补丁快照 → 刷新项目用量记账，超限回滚 |
 | `POST /api/project/create-file` | 文件树新建文件：白名单后缀路径校验 → 目标已存在报 409 `file_exists`、父目录缺失报 400 `parent_not_found` → utf-8 落盘（内容固定为空，`content` 字段预留模板初始化）→ 多用户模式落盘前按新文件字节做项目配额预检（超限 413 `quota_exceeded`）、落盘后 `refresh_owner_usage_after_write` → 失效大纲缓存 → 响应携带重扫后的 `file_tree`（前端单次往返刷新）。**不纳入统一撤销记账**（edit_log 恢复通道只支持改写已存在文件），超长内容 413 `content_too_long`、损坏特征 400 `invalid_content` 与 save-file 同口径 |
-| `POST /api/project/delete-file` | 文件树删除文件：**主文档删除保护**（当前 main file 报 400 `main_file_protected`，需先 set-main-file 更换）→ 隐藏组件拒绝 + 路径校验（不限后缀，任意非隐藏后缀可删，决策 D9；`_reject_hidden_components` 与上传路径共用）→ 目标非普通文件报 404 `file_not_found` → `unlink()` → 多用户模式刷新用量记账（配额按磁盘重算随之释放）→ 失效大纲缓存 → 响应携带重扫后的 `file_tree`。同样不纳入撤销记账，误删由前端确认弹窗兜底 |
-| `POST /api/project/upload-file` | 文件树上传任意格式资源（决策 D1/D5/D6，详见[文件树新建 / 上传 / 删除文件](#文件树新建--上传--删除文件)）：multipart + query 形态（multipart 无法携带 JSON body，故字段 `file` 走表单、`file_path` / `workspace_id` 走 query），鉴权用 query 版 `require_workspace(write=True)`。校验链按序：20MB 流式上限（`MAX_UPLOAD_FILE_BYTES`，超限即中止并清理暂存，413 `file_too_large`）→ 目标文件名消毒（拒绝空名 / 控制字符 / 路径分隔符）→ 隐藏组件拒绝（任一路径组件点开头即 400 `invalid_path`）→ `resolve_project_path()` 不限后缀 → 同名冲突 409 `file_exists`、父目录缺失 400 `parent_not_found` → 多用户模式落盘前按实际上传字节数做项目配额预检（超限 413 `quota_exceeded`）→ 同目录临时文件 + `Path.replace()` 原子落盘（整链路字节搬运，二进制不经 `write_text`）→ 多用户用量刷新 → 失效大纲缓存 → 响应 `{status, file_path, file_tree}`。工作区未绑定项目 400 `invalid_workspace`；错误消息一律相对路径（多用户脱敏）。**不纳入统一撤销记账**、零 LLM |
+| `POST /api/project/delete-file` | 文件树删除文件/目录：**主文档删除保护**——当前 main file 等于目标**或位于目标子树内**均报 400 `main_file_protected`（需先移走或先 set-main-file 更换）→ 隐藏组件拒绝 + 路径校验（不限后缀，任意非隐藏后缀可删，决策 D9；`_reject_hidden_components` 与上传路径共用）→ 项目根本身拒绝（400 `invalid_path`，防 `.` / `./` 经 path_guard 解析为项目根后被连根删除）→ 目标为目录时 `shutil.rmtree()` 递归删除整棵子树（决策 Q9）、文件 `unlink()`（不存在报 404 `file_not_found`）→ 多用户模式刷新用量记账（配额按磁盘重算随之释放）→ 失效大纲缓存 → 响应携带重扫后的 `file_tree`。同样不纳入撤销记账，误删由前端确认弹窗兜底 |
+| `POST /api/project/move-file` | 文件树拖拽移动（决策 Q1–Q6，交互见[文件树新建 / 上传 / 删除 / 拖拽移动](#文件树新建--上传--删除--拖拽移动)）：JSON body `{from_path, to_path}`，文件与目录通用（目录整棵子树随迁）。校验链按序全部通过后才执行任何磁盘变更（无半完成态）：from/to 各自隐藏组件拒绝 + `resolve_project_path()`（不限后缀）→ from 存在（404 `file_not_found`，与 delete 同码）→ to 父目录存在（400 `parent_not_found`）→ into_self（to 等于 from 或位于 from 子树内，400 `into_self`，**先于** target_exists 检查——拖回原位应得 400 而非 409）→ to 已存在同名文件或目录均拒绝（409 `target_exists`，决策 Q2）→ `asyncio.to_thread` 执行 `shutil.move` → 主文件记录跟随改写（决策 Q3，见下文）→ 失效大纲缓存 → 响应 `{status, from_path, to_path, main_file, file_tree}`，main_file 与 file_tree 为前端单一事实源（决策 Q12）。**不产生新字节落盘**：不做配额预检 / 用量刷新；**不纳入统一撤销记账**（决策 Q11）、零 LLM；不做 git mv 联动。工作区未绑定 400 `invalid_workspace`；错误消息一律相对路径（多用户脱敏） |
+| `POST /api/project/create-dir` | 文件树新建目录（为拖拽提供落点，决策 Q7/Q9）：名字消毒与 create-file 同口径（复用上传目标名消毒助手，拒绝空名 / 控制字符 / 路径分隔符 / 点开头）→ 隐藏组件拒绝 + `resolve_project_path()`（不限后缀）→ 已存在同名文件或目录 409 `target_exists`、父目录缺失 400 `parent_not_found` → `asyncio.to_thread` 单级 `mkdir()`（不做递归创建）→ 响应 `{status, dir_path, file_tree}`。**不纳入统一撤销记账**、不产生新字节落盘（无配额影响）、零 LLM；错误消息一律相对路径（多用户脱敏） |
+| `POST /api/project/upload-file` | 文件树上传任意格式资源（决策 D1/D5/D6，详见[文件树新建 / 上传 / 删除 / 拖拽移动](#文件树新建--上传--删除--拖拽移动)）：multipart + query 形态（multipart 无法携带 JSON body，故字段 `file` 走表单、`file_path` / `workspace_id` 走 query），鉴权用 query 版 `require_workspace(write=True)`。校验链按序：20MB 流式上限（`MAX_UPLOAD_FILE_BYTES`，超限即中止并清理暂存，413 `file_too_large`）→ 目标文件名消毒（拒绝空名 / 控制字符 / 路径分隔符）→ 隐藏组件拒绝（任一路径组件点开头即 400 `invalid_path`）→ `resolve_project_path()` 不限后缀 → 同名冲突 409 `file_exists`、父目录缺失 400 `parent_not_found` → 多用户模式落盘前按实际上传字节数做项目配额预检（超限 413 `quota_exceeded`）→ 同目录临时文件 + `Path.replace()` 原子落盘（整链路字节搬运，二进制不经 `write_text`）→ 多用户用量刷新 → 失效大纲缓存 → 响应 `{status, file_path, file_tree}`。工作区未绑定项目 400 `invalid_workspace`；错误消息一律相对路径（多用户脱敏）。**不纳入统一撤销记账**、零 LLM |
 
 手动主文件经 `set_main_file()` 持久化到项目内隐藏标记
 `.latexcellence/main_file`（原子写），`open()` 时优先读取、缺失/非法/
 指向文件不存在时安全回落自动识别（优先 main.tex）——否则页面刷新
 直达恢复等重开项目的场景会把用户选择静默重置回 main.tex，删除保护
 随之再次拦截；标记内容经 path_guard 白名单校验（仅 .tex、拒绝穿越与
-符号链接），上传压缩包夹带的恶意标记无风险。隐藏目录不进文件树，
+符号链接），上传压缩包夹带的恶意标记无风险。主文件本身或其祖先目录被
+拖拽移动时，该记录由 move-file 按「旧路径前缀 → 新路径前缀」跟随改写
+（决策 Q3，见 move-file 行）。隐藏目录不进文件树，
 也不参与大纲/符号扫描；git_manage 的 .gitignore 模板已含
 `.latexcellence/` 避免污染用户版本库。
 
@@ -201,7 +207,7 @@ frontend/src/
 │   ├── FormulaPreviewCard.jsx        # 当前公式固定预览卡（编辑区底部悬浮，光标跟随防抖渲染，空态/失败静默隐藏）
 │   ├── EditorToolbar.jsx             # 后端撤销重做 · 面板 · 格式化 · 编译 · 保存 · 设置
 │   ├── EditorCloseTabDialog.jsx      # 关闭脏 tab 三选弹窗（保存并关闭 / 放弃改动 / 取消）
-│   ├── CreateFileDialog.jsx          # 文件树新建文件弹窗（单段文件名 + 白名单后缀实时校验 + 目标路径预览）
+│   ├── CreateFileDialog.jsx          # 文件树新建文件/文件夹弹窗（单段名称 + 实时校验：文件白名单后缀 / 目录名消毒 + 目标路径预览）
 │   ├── EditorSettingsDialog.jsx      # 偏好开关 + 自定义片段管理（增删改 + 实时预览）+ 偏好导入/导出双通道入口
 │   ├── ConflictDialog.jsx            # 409 弹窗（动作作用于冲突归属 tab：放弃重载 / 剪贴板逃生 / 覆盖保存）
 │   ├── CommandPalette.jsx            # 命令面板 + m×n 网格选择器二级步骤
@@ -210,9 +216,9 @@ frontend/src/
 │   ├── StaleCheckBanner.jsx          # 检查结果过期横幅（各检查页复用）
 │   └── …（BinaryFilePreview / CompilePreviewPanel / EditorRightPanel / FilePreviewOverlay / FullscreenPDFPreview）
 ├── CaptchaDialog.jsx                 # DDG 搜索验证码弹窗（共享：Writing Chat 页与编辑器助手侧栏共用，阶段五a 提升）
-├── ProjectExplorer.jsx               # 文件树（工作台页与编辑器页共享）：新建 / 上传（多选，loading 防重复）/ 删除 / 设为主文件入口
+├── ProjectExplorer.jsx               # 文件树（工作台页与编辑器页共享）：新建文件/文件夹 / 上传（多选，loading 防重复）/ 删除文件/文件夹（强警告）/ 拖拽移动（原生 HTML5 DnD + 悬停自动展开）/ 设为主文件入口
 ├── lib/editor/
-│   ├── tabs.js                       # 多缓冲区 tab 状态机纯归约（打开/激活/键入/保存回写/陈旧/关闭）+ 会话选择器
+│   ├── tabs.js                       # 多缓冲区 tab 状态机纯归约（打开/激活/键入/保存回写/陈旧/关闭）+ 移动后路径重映射（remapMovedPaths）+ 会话选择器
 │   ├── sessionPersistence.js         # 会话 sessionStorage 持久化纯函数（序列化 / 白名单清洗 / LRU 配额淘汰 / 项目键隔离）
 │   ├── tabViews.js                   # per-tab CM6 EditorState / 滚动位置登记表（单实例换档的数据底座）
 │   ├── language.js                   # 语言包抽象层（唯一入口，按文件后缀分流：.tex/.sty/.cls → 自研 Lezer 子集语法，.bib 及未知 → stex StreamLanguage）
@@ -225,7 +231,7 @@ frontend/src/
 │   │   ├── brackets.js               # 括号匹配精确化（openedBy/closedBy 配对 prop + begin↔end 配对高亮插件）
 │   │   ├── index.js                  # parser + tags + 六b 扩展组装 LanguageSupport（foldService/indentService/配对 prop，模块级单例）
 │   │   └── build.mjs                 # @lezer/generator Node API 生成脚本（dev/build/test 前自动执行）
-│   ├── files.js                      # 可编辑/可预览白名单 + 大小上限 + 新建/上传文件名校验与路径拼接纯函数
+│   ├── files.js                      # 可编辑/可预览白名单 + 大小上限 + 新建文件/文件夹·上传文件名校验与路径拼接纯函数（joinProjectPath / getBaseName）
 │   ├── preferences.js                # 偏好默认值/白名单清洗/导出导入校验纯函数（v2 含自定义片段条目级清洗）
 │   ├── matcher.js                    # pinyin-pro 四路模糊匹配（多音字词级读音修正）+ 自定义片段派生索引
 │   ├── customCommands.js             # 自定义片段消费侧合并层（归一化 / 与内建库合并 / 面板独立分组）
@@ -263,7 +269,8 @@ fontSize / customSnippets；v1 存档经 migrate 透传后按白名单清洗补�
 
 `editorSession` 切片为多缓冲区模型：`tabs: [{ filePath, buffer, baseMd5,
 dirty, stale, lastActive }]` + `activeTabPath` + `conflict`。tab 转移逻辑
-（打开 / 激活 / 键入回写 / 保存回写 / 陈旧回写 / 关闭）全部是
+（打开 / 激活 / 键入回写 / 保存回写 / 陈旧回写 / 关闭）与拖拽移动后的
+路径重映射（`remapMovedPaths`，决策 Q6）全部是
 `lib/editor/tabs.js` 的不可变纯归约，node --test 直接单测。
 
 - **单 CM6 实例 + EditorState 交换**：tab 切换时 `LaTeXEditor` 把当前视图
@@ -618,20 +625,62 @@ localStorage（同一浏览器重启后仍可恢复脏缓冲区）；升级前�
 跨浏览器窗口共享（恢复载荷后者胜出）；公共机器上脏缓冲区内容留存本机
 （与 Notepad++ snapshot 同类取舍，隐私敏感场景建议开启自动保存落盘）。
 
-### 文件树新建 / 上传 / 删除文件
+### 文件树新建 / 上传 / 删除 / 拖拽移动
 
-左栏 `ProjectExplorer` 在可写（`useCanWrite()`）时提供文件级操作入口：
-面板标题行「新建文件」按钮在项目根创建；目录行 hover 的「+」在该目录
-创建（单段文件名输入弹窗 `CreateFileDialog`，`validateNewFileName()` 做
-单段路径 + 白名单后缀实时校验，`joinProjectPath()` 拼相对路径）；文件行
-hover 的垃圾桶按钮发起删除（`ConfirmDialog` destructive 二次确认，目标
-存在脏 tab 时描述追加未保存警示）。创建/删除经
-`POST /api/project/create-file` / `POST /api/project/delete-file`
-（见后端一节），响应携带重扫后的 `file_tree`，前端 `setFileTree` 单次
-往返完成刷新——`LatexProject.refresh_file_tree()` 就地更新 open 时扫描的
-缓存。创建成功后自动打开新 tab（复用 `doOpenFile` 通路）；删除成功后
-该文件全部 tab（含脏缓冲区）联动关闭、只读预览覆盖层同步收起、引用
-符号缓存失效。操作不进撤销记账（见后端小节），由确认弹窗兜底。
+左栏 `ProjectExplorer` 在可写（`useCanWrite()`）时提供文件与目录级操作入口：
+面板标题行「新建文件」「新建文件夹」按钮在项目根创建；目录行 hover 的
+「+」「+文件夹」在该目录创建（单段名称输入弹窗 `CreateFileDialog` 按
+`mode` 分流：文件走 `validateNewFileName()` 单段路径 + 白名单后缀实时
+校验、文件夹走 `validateNewDirName()` 名字消毒预检——与服务端 create-dir
+同口径，空名 / 分隔符 / 控制字符 / 点开头拒绝、目录不限扩展名；
+`joinProjectPath()` 拼相对路径）；文件行 hover 的垃圾桶按钮删除文件，
+目录行 hover 的垃圾桶按钮删除文件夹（均 `ConfirmDialog` destructive 二次
+确认：文件夹为**递归删除强警告**「将永久删除该目录及其内部全部文件与
+子文件夹，此操作不可恢复」（决策 Q9），目标命中脏 tab（目录按路径前缀
+命中子树）时描述追加未保存警示）。
+
+创建 / 删除 / 移动经 `POST /api/project/create-file` / `create-dir` /
+`delete-file` / `move-file`（见后端一节），响应携带重扫后的 `file_tree`，
+前端 `setFileTree` 单次往返完成刷新——`LatexProject.refresh_file_tree()`
+就地更新 open 时扫描的缓存。创建文件成功后自动打开新 tab（复用
+`doOpenFile` 通路）、创建文件夹仅刷新树；删除成功后命中文件/子树的全部
+tab（含脏缓冲区）联动关闭、只读预览覆盖层按同前缀命中收起、引用符号
+缓存失效。操作不进撤销记账（见后端小节），由确认弹窗与强警告兜底。
+
+**拖拽移动**（决策 Q1–Q7、Q12、Q13，机制详见
+[editor-file-move-design.md](../editor-file-move-design.md)）：文件与
+目录行均可拖拽（原生 HTML5 Drag & Drop，零新依赖，Q5；`canWrite` 门槛，
+viewer 无拖拽入口，WorkspacePage 只读用法不受影响）。dragstart 以自定义
+MIME（`application/x-latexcellence-tree-node`）携带 `{path, isDir}` 并置
+`effectAllowed = "move"`，被拖行半透明。合法落点为目录行（被拖目录自身
+与子孙按前缀排除）与树底部空白区（= 项目根）：合法落点高亮 +
+`dropEffect = "move"`；非法落点（文件行、自身 / 子孙）不响应放置且不
+高亮。拖到折叠目录上悬停约 500ms 自动展开（Q7，展开即成不回弹）；
+dragleave / drop / dragend / 组件卸载统一取消计时器并复位全部拖拽状态。
+落位路径为 `to_path = joinProjectPath(targetDir, getBaseName(fromPath))`
+（原名落位，`getBaseName` 为 `lib/editor/files.js` 纯函数）；拖回原位
+静默忽略不发请求（目录拖入自身子树由前端兜底拦截）。
+
+不做乐观更新（Q12）：drop 后发请求，成功才依次同步本地状态——
+`remapMovedPaths()`（`lib/editor/tabs.js` 纯归约）重映射 `tabs[].filePath`、
+`activeTabPath` 与 409 冲突归属路径（**buffer、savedBuffer、baseMd5、
+脏标记、陈旧标记原样保留**，Q6；目录按「等于 from 或位于 from 子树内」
+前缀一次匹配覆盖整棵子树，`/` 边界防误伤同名前缀目录；无任何命中时
+状态引用不变、订阅方零触发）；全局 `activeFile`（useStore）与只读预览
+覆盖层归属路径按同口径重映射（预览文件随移动换路重拉，未命中零触发）；
+`setMainFile(res.main_file)` 与 `setFileTree(res.file_tree)` 以响应为
+单一事实源；引用符号缓存失效（`\label` / `\cite` 来源路径变化）。
+sessionPersistence 持久化键与 URL `?file=` 由既有订阅随 tabs /
+activeTabPath 变化自动跟进改写（Q13，防止刷新后按旧路径打开 404 或丢
+脏缓冲区）。失败仅 toast（`translateError()` 链路），树与标签页零改动。
+
+**主文件记录跟随**（决策 Q3）：移动主文件本身或其祖先目录时，后端按
+「旧路径前缀 → 新路径前缀」改写 `.latexcellence/main_file` 记录（切片
+前先规范化 `./` 前缀；复用 set-main-file 内部写入通路，内部机制写隐藏
+路径不受 `_reject_hidden_components` 约束），响应携带改写后的
+`main_file`，前端星标即时迁移。已知限制：`\input` / `\include` 引用不
+自动改写（Q4，由用户自行维护）、触屏不支持拖拽（Q5），见设计文档
+§8 非目标与已知限制。
 
 **资源上传**（决策 D1–D5、D8，机制详见
 [editor-file-upload-design.md](../editor-file-upload-design.md)）：
@@ -970,17 +1019,28 @@ AI 面板。四处配置同步规范照 AGENTS.md 执行；`/api/config/status` 
 - 后端 `tests/test_api/test_editor_file_io.py`：整文件读写 / 409 结构 /
   字节保真 / invalid_encoding / 事件循环保护（无 LLM）
 - 后端 `tests/test_api/test_editor_file_ops.py` 与
-  `tests/test_multiuser/test_editor_file_ops.py`：文件树新建/上传/删除——
+  `tests/test_multiuser/test_editor_file_ops.py`：文件树新建/上传/删除/
+  移动/新建目录——
   创建落盘与响应携带重扫 file_tree（根/子目录）/ 重复 409 `file_exists` /
   白名单外后缀与路径穿越拒绝 / 父目录缺失 `parent_not_found` /
   超长 413 / 损坏内容 400 / 删除与树同步 / 主文档保护
-  `main_file_protected`（换主文件后放行）/ GET /file-tree 缓存刷新；
+  `main_file_protected`（换主文件后放行）/ 目录递归删除与空目录删除 /
+  含主文件目录删除 400 `main_file_protected` / 隐藏目录删除拒绝 /
+  项目根本身删除 400 `invalid_path` / GET /file-tree 缓存刷新；
   上传任意后缀成功（树含新文件，根/子目录）/ 超限 413（落盘前拦截）/
   冲突 409 / 隐藏目录·点开头·控制字符·空文件名·反斜杠分隔符拒绝 /
   产物黑名单不进树（含 `.synctex.gz` 双后缀命中，资源文件保留）/
   任意非隐藏后缀删除成功 / raw-file 对非白名单后缀仍拒绝；
-  多用户侧 owner 创建/上传/删除成功且**不产生 workspace_edit_ops 记账**、
-  viewer 写保护 403（含上传）、上传配额预检 413（落盘前拦截）、
+  移动：文件 → 子目录 / 根 / 文件夹整棵子树随迁（嵌套内容随迁）/
+  同名文件与同名目录 409 `target_exists` / 自身与子孙 400 `into_self` /
+  父目录缺失 400 `parent_not_found` / 源缺失 404 `file_not_found` /
+  隐藏路径 from·to 拒绝 / 移动主文件后记录跟随（含 `./` 前缀规范化）/
+  移动含主文件的文件夹后前缀改写 / 无关路径记录不动；
+  新建目录：根 / 子目录成功 / 目录名被文件占用 409 `target_exists` /
+  父缺失 400 / 非法名与隐藏名拒绝；
+  多用户侧 owner 创建/上传/删除/移动/建目录成功且**不产生
+  workspace_edit_ops 记账**（move 另无配额变化）、viewer 写保护 403
+  （含上传/移动/建目录）、上传配额预检 413（落盘前拦截）、
   CSRF/未登录 401、路径脱敏
 - 后端 `tests/test_api/test_editor_assistant.py`：上下文注入纯函数、
   建议提取、SSE 端点（Mock LLM，严禁真实网络）、开关把关、apply 标记、
@@ -1005,7 +1065,12 @@ AI 面板。四处配置同步规范照 AGENTS.md 执行；`/api/config/status` 
 - 前端 node --test：editorPreferences（含导入导出校验与自定义片段条目级
   清洗 / v1·v2 载荷兼容）、customCommands（片段清洗 / 归一化 / 合并 /
   面板分组 / 网格标记端到端）、editorApplyDiff、
-  editorTabs（tab 状态机归约与会话选择器）、editorSessionPersistence
+  editorTabs（tab 状态机归约与会话选择器）、editorFileMove（拖拽移动
+  路径重映射：文件精确命中 / 目录前缀覆盖子树且 `/` 边界防误伤 /
+  buffer·baseMd5·脏标记原样保留 / 激活位与预览归属路径同口径 /
+  无命中空转，`getBaseName`·`joinProjectPath` 落位拼接，
+  `validateNewDirName` 目录名消毒，移动与新建目录错误码三语条目
+  一一对应）、editorSessionPersistence
   （序列化清洗 / LRU 配额淘汰 / 项目键隔离 / localStorage 遗留收养迁移）、
   editorChangeHistoryDiff（行级 diff 边界与护栏）、editorChangeHistory
   （色条字段基线注入 / 橙绿集合转移 / 冻结恢复语义）、editorStats

@@ -57,7 +57,7 @@ latexcellence/
 | writing_chat | 写作助手对话（联网搜索、学术检索、工具确认） | ✓ | [writing_chat.md](docs/modules/writing_chat.md) |
 | bib_manager | 参考文献管理 + DOI 多数据源查询 | 部分 | [bib_manager.md](docs/modules/bib_manager.md) |
 | plot_gen | 科研绘图 Agent（数据 → Python → TikZ） | ✓ | [plot_gen.md](docs/modules/plot_gen.md) |
-| editor | 网页编辑器（整文件读写、多缓冲区、编译联动、AI 助手、文件树资源上传） | ✓(助手) | [editor.md](docs/modules/editor.md) |
+| editor | 网页编辑器（整文件读写、多缓冲区、编译联动、AI 助手、文件树资源上传、拖拽移动与目录组织） | ✓(助手) | [editor.md](docs/modules/editor.md) |
 
 ## 核心设计要点
 

@@ -127,7 +127,7 @@ highlight.js 的按需注册与统一入口：
 | `CodeEditorInput.jsx` | 可编辑代码输入框（高亮版）：底层 `<pre>` 渲染 highlight.js 高亮结果、上层透明 textarea 保留光标/选区/滚动，两者共用同一套排版规则保证逐字对齐；供粘贴 LaTeX 源码等需要边输入边高亮的场景使用 |
 | `MarkerText.jsx` | 将 `__CMD_NNNN__` 等 marker 解析为彩色内联标签；`variant="code"`（默认）将纯文本片段渲染为 `.code-inline` 并做 LaTeX 高亮（渲染期派生 HTML，按 token 经 `useMemo` 缓存），`variant="text"` 保持原样（用于 diff 等已有语义配色的场景）。仅用于段落预览等含 marker 的展示场景。**结果卡片中**的 `change.original`/`change.corrected` 等字段因后端已还原 marker，直接以文本渲染，无需 `MarkerText` 包裹 |
 | `ParagraphContext.jsx` | 展开显示当前段落前后上下文 |
-| `ProjectExplorer.jsx` | 递归文件树：目录展开/折叠，文件选择 |
+| `ProjectExplorer.jsx` | 递归文件树（工作台页与编辑器页共享）：目录展开/折叠、文件选择、拖拽移动（原生 HTML5 DnD，落点高亮 + 悬停自动展开）、新建/删除文件夹、上传与设为主文件入口；机制详见 [modules/editor.md](modules/editor.md) |
 | `PDFPreview.jsx` | iframe 嵌入 PDF 预览 |
 | `components/editor/BinaryFilePreview.jsx` | 二进制只读预览唯一渲染分支：位图 `<img>` 居中 contain / PDF 走 `PDFPreview`，加载文案经 `loadingKey` 定制；填满父容器高度的纯渲染契约（blob URL 拉取与释放由调用方负责），编辑器覆盖层 `FilePreviewOverlay` 与工作台文件树预览共用 |
 | `PromptEditor.jsx` | 自定义提示词编辑框 |
