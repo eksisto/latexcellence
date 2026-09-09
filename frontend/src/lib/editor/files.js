@@ -122,6 +122,31 @@ export function getBaseName(filePath) {
 }
 
 /**
+ * 取路径的目录部分（重命名落位父目录，editor-file-context-menu-design
+ * §4.3）：to_path = joinProjectPath(getDirName(fromPath), newName)。
+ * @param {string} filePath 项目相对路径
+ * @returns {string|null} 目录相对路径（根目录返回 null，与 joinProjectPath
+ *   的根目录语义一致）
+ */
+export function getDirName(filePath) {
+  if (typeof filePath !== "string" || filePath.length === 0) return null;
+  const idx = filePath.lastIndexOf("/");
+  return idx === -1 ? null : filePath.slice(0, idx);
+}
+
+/**
+ * 重命名同名 no-op 判定（决策 Q11）：新名拼回同目录后与原路径相同则静默
+ * 跳过不发请求（与拖拽拖回原位的静默忽略同语义，Q11 / §5.2）。
+ * @param {string} fromPath 原项目相对路径
+ * @param {string} newName 单段新名称（原样 trim 后比较）
+ * @returns {boolean} true 表示新名与原名相同，应静默关闭弹窗
+ */
+export function isRenameNoop(fromPath, newName) {
+  if (typeof fromPath !== "string" || typeof newName !== "string") return true;
+  return joinProjectPath(getDirName(fromPath), newName.trim()) === fromPath;
+}
+
+/**
  * 校验「上传文件」的原始文件名（文件树上传入口，editor-file-upload-design
  * §3-6 / §5.5）。与后端 _validate_upload_target_name / _reject_hidden_components
  * 同口径：拒绝空名、路径分隔符、控制字符与点开头（隐藏文件）。任意后缀

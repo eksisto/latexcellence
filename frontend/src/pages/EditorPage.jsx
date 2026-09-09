@@ -100,7 +100,12 @@ import useEditorCompile from "@/hooks/useEditorCompile";
 import useEditorFormat from "@/hooks/useEditorFormat";
 import { isFormatShortcut } from "@/lib/editor/formatApply";
 import { translateError } from "@/utils/errorMessages";
-import { isEditableFilePath, isPreviewableFilePath } from "@/lib/editor/files";
+import {
+  isEditableFilePath,
+  isPreviewableFilePath,
+  getBaseName,
+  getDirName,
+} from "@/lib/editor/files";
 import { expandEntryInsert, insertSnippet } from "@/lib/editor/snippetInsert";
 import { wrapViewSelections, WRAP_CATEGORY } from "@/lib/editor/wrap";
 import { applyUnifiedDiff } from "@/lib/editor/applyDiff";
@@ -235,10 +240,13 @@ export default function EditorPage() {
   // 状态提升到页面，左栏 tab 切换卸载面板时视图选择不丢失
   const [outlineView, setOutlineView] = useState("file");
   // 文件树新建弹窗：开关 + 目标目录（null = 项目根，由树节点决定）
-  // + 新建类型（file = 文件 / dir = 文件夹，editor-file-move-design §5.3）
+  // + 类型（file = 文件 / dir = 文件夹 / rename = 重命名，
+  // editor-file-move-design §5.3 / editor-file-context-menu-design §4.3）
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [createDialogDir, setCreateDialogDir] = useState(null);
   const [createDialogMode, setCreateDialogMode] = useState("file");
+  // 重命名弹窗归属目标：{ path, name, isDir }（右键菜单入口决定）
+  const [renameTarget, setRenameTarget] = useState(null);
   // 文件树删除确认弹窗的归属目标（null = 弹窗关闭；isDir 区分文件夹
   // 递归删除的强警告文案，editor-file-move-design 决策 Q9）
   const [deleteConfirmTarget, setDeleteConfirmTarget] = useState(null);
@@ -380,6 +388,7 @@ export default function EditorPage() {
     handleCreateDir,
     handleDeleteFile,
     handleMoveEntry,
+    handleRenameEntry,
     handleSetMainFile,
     handleUploadFiles,
     uploading,
@@ -962,6 +971,19 @@ export default function EditorPage() {
                     setDeleteConfirmTarget({ path, isDir: Boolean(isDir) })
                   }
                   onMoveEntry={handleMoveEntry}
+                  onRenameEntry={(path, isDir) => {
+                    // 右键重命名入口（editor-file-context-menu-design §4.3）：
+                    // 复用 CreateFileDialog rename 模式，dirPath 语义为
+                    // 「目标父目录」
+                    setRenameTarget({
+                      path,
+                      name: getBaseName(path),
+                      isDir: Boolean(isDir),
+                    });
+                    setCreateDialogDir(getDirName(path));
+                    setCreateDialogMode("rename");
+                    setCreateDialogOpen(true);
+                  }}
                   onSetMainFile={handleSetMainFile}
                   onUploadFile={handleUploadFiles}
                   uploading={uploading}
@@ -1072,16 +1094,27 @@ export default function EditorPage() {
         }}
       />
 
-      {/* 文件树新建文件/文件夹弹窗：目标目录与类型由触发入口决定（头部
-          按钮 = 项目根，目录行 hover 按钮 = 该目录）；成功后文件自动打开
-          新 tab / 文件夹仅刷新文件树，均以响应整树刷新 */}
+      {/* 文件树新建 / 重命名弹窗：目标目录与类型由触发入口决定（头部
+          按钮 = 项目根，目录 / 树行右键菜单 = 该目录或目标父目录）；
+          成功后文件自动打开新 tab / 文件夹仅刷新文件树，均以响应整树刷新 */}
       <CreateFileDialog
         open={createDialogOpen}
         onOpenChange={setCreateDialogOpen}
         dirPath={createDialogDir}
         mode={createDialogMode}
+        initialName={renameTarget?.name ?? ""}
+        isDir={renameTarget?.isDir ?? false}
         onCreate={
-          createDialogMode === "dir" ? handleCreateDir : handleCreateFile
+          createDialogMode === "dir"
+            ? handleCreateDir
+            : createDialogMode === "rename"
+              ? (newFullPath) =>
+                  handleRenameEntry(
+                    renameTarget.path,
+                    getBaseName(newFullPath),
+                    renameTarget.isDir,
+                  )
+              : handleCreateFile
         }
       />
 

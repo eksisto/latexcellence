@@ -207,7 +207,7 @@ frontend/src/
 │   ├── FormulaPreviewCard.jsx        # 当前公式固定预览卡（编辑区底部悬浮，光标跟随防抖渲染，空态/失败静默隐藏）
 │   ├── EditorToolbar.jsx             # 后端撤销重做 · 面板 · 格式化 · 编译 · 保存 · 设置
 │   ├── EditorCloseTabDialog.jsx      # 关闭脏 tab 三选弹窗（保存并关闭 / 放弃改动 / 取消）
-│   ├── CreateFileDialog.jsx          # 文件树新建文件/文件夹弹窗（单段名称 + 实时校验：文件白名单后缀 / 目录名消毒 + 目标路径预览）
+│   ├── CreateFileDialog.jsx          # 文件树新建文件/文件夹/重命名弹窗（单段名称 + 实时校验：文件白名单后缀 / 目录与重命名消毒 + 目标路径预览）
 │   ├── EditorSettingsDialog.jsx      # 偏好开关 + 自定义片段管理（增删改 + 实时预览）+ 偏好导入/导出双通道入口
 │   ├── ConflictDialog.jsx            # 409 弹窗（动作作用于冲突归属 tab：放弃重载 / 剪贴板逃生 / 覆盖保存）
 │   ├── CommandPalette.jsx            # 命令面板 + m×n 网格选择器二级步骤
@@ -216,7 +216,7 @@ frontend/src/
 │   ├── StaleCheckBanner.jsx          # 检查结果过期横幅（各检查页复用）
 │   └── …（BinaryFilePreview / CompilePreviewPanel / EditorRightPanel / FilePreviewOverlay / FullscreenPDFPreview）
 ├── CaptchaDialog.jsx                 # DDG 搜索验证码弹窗（共享：Writing Chat 页与编辑器助手侧栏共用，阶段五a 提升）
-├── ProjectExplorer.jsx               # 文件树（工作台页与编辑器页共享）：新建文件/文件夹 / 上传（多选，loading 防重复）/ 删除文件/文件夹（强警告）/ 拖拽移动（原生 HTML5 DnD + 悬停自动展开）/ 设为主文件入口
+├── ProjectExplorer.jsx               # 文件树（工作台页与编辑器页共享）：右键菜单（按目标类型矩阵 + 行临时光）/ 新建文件/文件夹 / 重命名 / 上传（多选，loading 防重复）/ 删除文件/文件夹（强警告）/ 拖拽移动（原生 HTML5 DnD + 悬停自动展开）/ 设为主文件入口；行内 hover 图标已收敛，头部根级三键保留
 ├── lib/editor/
 │   ├── tabs.js                       # 多缓冲区 tab 状态机纯归约（打开/激活/键入/保存回写/陈旧/关闭）+ 移动后路径重映射（remapMovedPaths）+ 会话选择器
 │   ├── sessionPersistence.js         # 会话 sessionStorage 持久化纯函数（序列化 / 白名单清洗 / LRU 配额淘汰 / 项目键隔离）
@@ -231,7 +231,8 @@ frontend/src/
 │   │   ├── brackets.js               # 括号匹配精确化（openedBy/closedBy 配对 prop + begin↔end 配对高亮插件）
 │   │   ├── index.js                  # parser + tags + 六b 扩展组装 LanguageSupport（foldService/indentService/配对 prop，模块级单例）
 │   │   └── build.mjs                 # @lezer/generator Node API 生成脚本（dev/build/test 前自动执行）
-│   ├── files.js                      # 可编辑/可预览白名单 + 大小上限 + 新建文件/文件夹·上传文件名校验与路径拼接纯函数（joinProjectPath / getBaseName）
+│   ├── files.js                      # 可编辑/可预览白名单 + 大小上限 + 新建文件/文件夹·上传文件名校验与路径拼接纯函数（joinProjectPath / getBaseName / getDirName / isRenameNoop）
+│   ├── contextMenuItems.js           # 文件树右键菜单映射纯函数（目标类型解析 + 菜单项矩阵，node --test 直测）
 │   ├── preferences.js                # 偏好默认值/白名单清洗/导出导入校验纯函数（v2 含自定义片段条目级清洗）
 │   ├── matcher.js                    # pinyin-pro 四路模糊匹配（多音字词级读音修正）+ 自定义片段派生索引
 │   ├── customCommands.js             # 自定义片段消费侧合并层（归一化 / 与内建库合并 / 面板独立分组）
@@ -625,22 +626,48 @@ localStorage（同一浏览器重启后仍可恢复脏缓冲区）；升级前�
 跨浏览器窗口共享（恢复载荷后者胜出）；公共机器上脏缓冲区内容留存本机
 （与 Notepad++ snapshot 同类取舍，隐私敏感场景建议开启自动保存落盘）。
 
-### 文件树新建 / 上传 / 删除 / 拖拽移动
+### 文件树右键菜单 / 新建 / 重命名 / 上传 / 删除 / 拖拽移动
 
-左栏 `ProjectExplorer` 在可写（`useCanWrite()`）时提供文件与目录级操作入口：
-面板标题行「新建文件」「新建文件夹」按钮在项目根创建；目录行 hover 的
-「+」「+文件夹」在该目录创建（单段名称输入弹窗 `CreateFileDialog` 按
-`mode` 分流：文件走 `validateNewFileName()` 单段路径 + 白名单后缀实时
-校验、文件夹走 `validateNewDirName()` 名字消毒预检——与服务端 create-dir
-同口径，空名 / 分隔符 / 控制字符 / 点开头拒绝、目录不限扩展名；
-`joinProjectPath()` 拼相对路径）；文件行 hover 的垃圾桶按钮删除文件，
-目录行 hover 的垃圾桶按钮删除文件夹（均 `ConfirmDialog` destructive 二次
+左栏 `ProjectExplorer` 在可写（`useCanWrite()`）时提供文件与目录级操作
+入口，单点操作的主入口是**右键菜单**（决策 Q1/Q2，机制详见
+[editor-file-context-menu-design.md](../editor-file-context-menu-design.md)）：
+树行、树背景空白区与面板标题行各自挂 `ContextMenu.Root`（基座为
+`components/ui/context-menu.jsx` 的 `@base-ui/react/context-menu` 包装，
+与既有 ui 组件同构、零新依赖），菜单项清单由
+`lib/editor/contextMenuItems.js` 纯函数产出（`resolveNodeMenuTarget()` +
+`getFileTreeMenuItems()`，node --test 直测矩阵）：`.tex` 非主文件为
+「设为主文件 ┃ 重命名 ┃ 删除」、当前主文件为「重命名 ┃ 删除」、其他
+文件为「重命名 ┃ 删除」、目录为「新建文件 ┃ 新建文件夹 ┃ 上传到此处 ┃
+重命名 ┃ 删除」、背景与标题栏（= 项目根）为「新建文件 ┃ 新建文件夹 ┃
+上传」。右键该行临时高亮（同 hover 色，菜单关闭即清除，目录只高亮不
+展开，决策 Q5a/Q8）；树区内浏览器原生菜单完全拦截（Q5b）；viewer 与
+空树不挂菜单（Q6/Q12）；上传进行中仅「上传」类菜单项禁用。行内 hover
+图标已全部收敛删除（决策 Q2），头部根级三键（上传 / 新建文件 / 新建
+文件夹）保留作可发现性锚点。
+
+面板标题行「新建文件」「新建文件夹」按钮在项目根创建；目录右键菜单在
+该目录创建（单段名称输入弹窗 `CreateFileDialog` 按 `mode` 分流：
+`file` 走 `validateNewFileName()` 单段路径 + 白名单后缀实时校验；
+`dir` 与 `rename` 走 `validateNewDirName()` 名字消毒预检——与服务端
+create-dir 同口径，空名 / 分隔符 / 控制字符 / 点开头拒绝、目录不限扩展名；
+`joinProjectPath()` 拼相对路径）。
+
+**重命名**（右键菜单入口，决策 Q7/Q10d/Q11）：`CreateFileDialog` 的
+`mode="rename"` 预填原名并全选、预览行显示「旧路径 → 新路径」，校验同
+消毒口径但**不限**扩展名白名单（图片 / `.bib` / `.sty` 均可改名，允许
+改后缀）；提交经 `useEditorBuffer.handleRenameEntry()` 走 move-file
+同目录改名（move 通路核心 `moveEntry()` 为拖拽与重命名共用，toast 文案
+key 参数化），同名静默关窗不发请求、失败 toast 后弹窗保留可继续改；
+主文件记录与 tab 路径随 move 既有机制跟随。
+
+文件与目录的「删除」在右键菜单（均 `ConfirmDialog` destructive 二次
 确认：文件夹为**递归删除强警告**「将永久删除该目录及其内部全部文件与
 子文件夹，此操作不可恢复」（决策 Q9），目标命中脏 tab（目录按路径前缀
 命中子树）时描述追加未保存警示）。
 
-创建 / 删除 / 移动经 `POST /api/project/create-file` / `create-dir` /
-`delete-file` / `move-file`（见后端一节），响应携带重扫后的 `file_tree`，
+创建 / 删除 / 移动 / 重命名经 `POST /api/project/create-file` /
+`create-dir` / `delete-file` / `move-file`（重命名同走 move-file，见后端
+一节），响应携带重扫后的 `file_tree`，
 前端 `setFileTree` 单次往返完成刷新——`LatexProject.refresh_file_tree()`
 就地更新 open 时扫描的缓存。创建文件成功后自动打开新 tab（复用
 `doOpenFile` 通路）、创建文件夹仅刷新树；删除成功后命中文件/子树的全部
@@ -684,9 +711,10 @@ activeTabPath 变化自动跟进改写（Q13，防止刷新后按旧路径打开
 
 **资源上传**（决策 D1–D5、D8，机制详见
 [editor-file-upload-design.md](../editor-file-upload-design.md)）：
-面板标题行与目录行 hover 各有「上传」按钮（与新建「+」同模式），系统
-文件选择框一次多选任意格式。选中后 `useEditorBuffer` 的
-`handleUploadFiles()` 串行逐个直传 `POST /api/project/upload-file`：
+面板标题行「上传」按钮（头部根级三键之一）与目录右键菜单「上传到此处」
+共用同一隐藏多选 input，系统文件选择框一次多选任意格式。选中后
+`useEditorBuffer` 的 `handleUploadFiles()` 串行逐个直传
+`POST /api/project/upload-file`：
 发起前 `validateUploadFileName()` 做与服务端同口径的消毒预检（拒绝空名 /
 路径分隔符 / 控制字符 / 点开头文件名，无效名不发请求；服务端校验仍为
 权威）；每次成功以响应携带的重扫整树 `setFileTree`（末次即最终态）并
@@ -707,9 +735,10 @@ D2/D7，黑名单见 [backend-core.md](../backend-core.md) project_manager
 点击即预览；未知类型点击树条目 toast 提示不支持预览（决策 D12，不做
 静默无响应）。
 
-文件行另有「设为主文件」hover 星标按钮（仅 `.tex` 且非当前主文件时
-显示；当前主文件行常驻实心星标识，任意深度子目录各自比对
-`node.path === mainFile`）。点击走 `POST /api/project/set-main-file`
+「设为主文件」入口在 `.tex` 文件右键菜单（仅非当前主文件时出现；当前
+主文件行常驻实心星标识，任意深度子目录各自比对
+`node.path === mainFile`，决策 Q2/Q3）。点击走
+`POST /api/project/set-main-file`
 （手动主文件持久化见后端一节），成功后同步全局 `mainFile` 使星标
 即时迁移；viewer 无此入口（canWrite 门控 + 后端写权限双保险）。
 

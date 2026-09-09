@@ -1127,6 +1127,8 @@
       "createFailed": "Failed to create file",
       "deleted": "Deleted {{path}}",
       "moved": "Moved to {{path}}",
+      "renamed": "Renamed to {{path}}",
+      "renameFailed": "Rename failed",
       "moveFailed": "Move failed",
       "folderCreated": "Folder created: {{path}}",
       "createFolderFailed": "Folder creation failed",
@@ -1571,6 +1573,18 @@
       "cancelAction": "Cancel",
       "setMainFile": "Set as main file",
       "currentMainFile": "Current main file",
+      "rename": "Rename",
+      "renameFileTitle": "Rename file",
+      "renameDirTitle": "Rename folder",
+      "renameDescription": "Enter a new name for {{path}}.",
+      "renameNameHint": "Names may use any extension; names starting with a dot are rejected",
+      "renameAction": "Rename",
+      "renameNameError": {
+        "empty": "Please enter a new name",
+        "separator": "Name must not contain path separators",
+        "control": "Name contains illegal control characters",
+        "hidden": "Names starting with a dot are not allowed"
+      },
       "upload": "Upload files",
       "uploadHere": "Upload files here",
       "uploadFileError": {

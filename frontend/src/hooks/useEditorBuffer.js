@@ -19,6 +19,8 @@ import {
   isFileTooLarge,
   isPreviewableFilePath,
   getBaseName,
+  getDirName,
+  isRenameNoop,
   joinProjectPath,
   validateUploadFileName,
 } from "@/lib/editor/files";
@@ -746,24 +748,35 @@ export default function useEditorBuffer({
   );
 
   /**
-   * 文件树拖拽移动（editor-file-move-design §5.2 / 决策 Q3、Q6、Q12、Q13）。
-   * @param {string} fromPath 被移动条目的项目相对路径
-   * @param {string|null} targetDir 目标目录（null = 项目根）
-   * @param {boolean} [isDir] 被移动条目是否为目录（决定子树前缀重映射）
-   * @returns {Promise<boolean>}
+   * move 通路核心（editor-file-context-menu-design 决策 Q11）：拖拽移动与
+   * 重命名共用——磁盘 move-file + tab/activeFile/只读预览重映射 + 响应整树
+   * 刷新，主文件跟随与 sessionPersistence / URL ?file= 由既有订阅机制自动
+   * 覆盖（响应携带改写后 main_file 与重扫 file_tree，前端以响应为单一事实源）。
+   * @param {string} fromPath 原项目相对路径
+   * @param {string} toPath 新项目相对路径（拖拽壳拼落位路径；重命名传同目录新名路径）
+   * @param {boolean} [isDir] 是否目录（决定子树前缀重映射）
+   * @param {{ successKey?: string, failKey?: string }} [toastKeys] 成功 / 失败
+   *   toast 文案 key（挂 pages:editor 命名空间；拖拽 moved/moveFailed，重命名
+   *   renamed/renameFailed）
+   * @returns {Promise<boolean>} 同名同位静默 no-op 亦返回 true（调用方据此关弹窗）
    */
-  const handleMoveEntry = useCallback(
-    async (fromPath, targetDir, isDir = false) => {
-      if (!fromPath || !canWriteRef.current) return false;
-      // 落位路径 = 目标目录 + 原名（lib/editor/files.js 纯函数拼接）
-      const toPath = joinProjectPath(targetDir, getBaseName(fromPath));
-      // 拖回原位：静默忽略不发请求（后端 to == from 语义为 400 into_self）
+  const moveEntry = useCallback(
+    async (
+      fromPath,
+      toPath,
+      isDir = false,
+      { successKey = "moved", failKey = "moveFailed" } = {},
+    ) => {
+      if (!fromPath || !toPath || !canWriteRef.current) return false;
+      // 同名同位：静默忽略不发请求（重命名决策 Q11 / 后端 to == from 语义为
+      // 400 into_self；拖回原位同语义）
       if (toPath === fromPath) return true;
       // 目录拖入自身子树：拖拽 UI 已排除非法落点，此处兜底静默忽略
       if (isDir && toPath.startsWith(`${fromPath}/`)) return true;
       try {
         const res = await api.project.moveFile(fromPath, toPath, workspaceId);
-        // 不做乐观更新（Q12）：磁盘移动成功后才依次同步本地状态——
+        // 不做乐观更新（editor-file-move-design Q12）：磁盘移动成功后才依次
+        // 同步本地状态——
         // 1. 已开 tab / 激活位 / 冲突归属路径重映射（buffer、baseMd5、脏
         //    标记原样保留，Q6）；sessionPersistence 持久化键与 URL ?file=
         //    由既有订阅随 tabs / activeTabPath 变化自动跟进改写（Q13）
@@ -790,7 +803,7 @@ export default function useEditorBuffer({
             ? remapMovedPath(prev, fromPath, toPath, isDir)
             : prev,
         );
-        // 4. 响应为单一事实源：主文件记录（Q3 后端跟随改写）+ 重扫后整树
+        // 4. 响应为单一事实源：主文件记录（后端跟随改写）+ 重扫后整树
         if (res.main_file !== undefined) {
           global.setMainFile(res.main_file);
         }
@@ -798,17 +811,66 @@ export default function useEditorBuffer({
         // 5. 引用符号缓存失效：\label / \cite 的来源路径已变化（对齐
         //    保存 / 新建路径语义）
         projectSymbolCache.invalidate(projectKeyRef.current);
-        toast.success(t("pages:editor.moved", { path: toPath }));
+        toast.success(t(`pages:editor.${successKey}`, { path: toPath }));
         return true;
       } catch (e) {
-        // 失败仅 toast（translateError 链路）：树与标签页零改动（Q12）
-        toast.error(t("pages:editor.moveFailed"), {
+        // 失败仅 toast（translateError 链路）：树与标签页零改动
+        // （editor-file-move-design Q12；重命名失败后弹窗保留可继续改，Q11）
+        toast.error(t(`pages:editor.${failKey}`), {
           description: describeError(e, fromPath),
         });
         return false;
       }
     },
     [workspaceId, t, describeError, setFilePreviewPath],
+  );
+
+  /**
+   * 文件树拖拽移动壳（editor-file-move-design §5.2 / 决策 Q3、Q6、Q12、Q13）：
+   * 落位路径 = 目标目录 + 原名。
+   * @param {string} fromPath 被移动条目的项目相对路径
+   * @param {string|null} targetDir 目标目录（null = 项目根）
+   * @param {boolean} [isDir] 被移动条目是否为目录（决定子树前缀重映射）
+   * @returns {Promise<boolean>}
+   */
+  const handleMoveEntry = useCallback(
+    async (fromPath, targetDir, isDir = false) => {
+      if (!fromPath) return false;
+      // 落位路径 = 目标目录 + 原名（lib/editor/files.js 纯函数拼接）
+      return moveEntry(
+        fromPath,
+        joinProjectPath(targetDir, getBaseName(fromPath)),
+        isDir,
+      );
+    },
+    [moveEntry],
+  );
+
+  /**
+   * 文件树重命名（editor-file-context-menu-design §4.3 / 决策 Q7、Q10d、
+   * Q11）：走 move-file 同目录改名，允许改后缀（后端不限后缀）；同名
+   * no-op 静默返回 true（弹窗静默关闭不发请求）。
+   * @param {string} fromPath 原项目相对路径
+   * @param {string} newName 单段新名称（弹窗已消毒校验）
+   * @param {boolean} [isDir] 目标是否目录
+   * @returns {Promise<boolean>}
+   */
+  const handleRenameEntry = useCallback(
+    async (fromPath, newName, isDir = false) => {
+      if (!fromPath || typeof newName !== "string") return false;
+      const trimmed = newName.trim();
+      if (trimmed.length === 0) return false;
+      // 同名静默 no-op（Q11）：isRenameNoop 判定与 moveEntry 内的
+      // toPath === fromPath 同口径，此处短路避免拼路径后重复比较
+      if (isRenameNoop(fromPath, trimmed)) return true;
+      return moveEntry(
+        fromPath,
+        joinProjectPath(getDirName(fromPath), trimmed),
+        isDir,
+        { successKey: "renamed", failKey: "renameFailed" },
+      );
+    },
+    [moveEntry],
   );
 
   const handleSetMainFile = useCallback(
@@ -926,6 +988,7 @@ export default function useEditorBuffer({
     handleCreateDir,
     handleDeleteFile,
     handleMoveEntry,
+    handleRenameEntry,
     handleSetMainFile,
     handleUploadFiles,
     uploading,

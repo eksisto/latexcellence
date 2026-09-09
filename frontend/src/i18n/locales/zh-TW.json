@@ -1127,6 +1127,8 @@
       "createFailed": "建立檔案失敗",
       "deleted": "已刪除 {{path}}",
       "moved": "已移動至 {{path}}",
+      "renamed": "已重新命名為 {{path}}",
+      "renameFailed": "重新命名失敗",
       "moveFailed": "移動失敗",
       "folderCreated": "資料夾已建立：{{path}}",
       "createFolderFailed": "資料夾建立失敗",
@@ -1571,6 +1573,18 @@
       "cancelAction": "取消",
       "setMainFile": "設為主檔案",
       "currentMainFile": "目前主檔案",
+      "rename": "重新命名",
+      "renameFileTitle": "重新命名檔案",
+      "renameDirTitle": "重新命名資料夾",
+      "renameDescription": "為 {{path}} 輸入新名稱。",
+      "renameNameHint": "名稱可含任意副檔名；以點開頭的隱藏名稱會被拒絕",
+      "renameAction": "重新命名",
+      "renameNameError": {
+        "empty": "請輸入新名稱",
+        "separator": "名稱不能包含路徑分隔符",
+        "control": "名稱包含非法控制字符",
+        "hidden": "不支援以點開頭的隱藏名稱"
+      },
       "upload": "上傳檔案",
       "uploadHere": "上傳到此資料夾",
       "uploadFileError": {

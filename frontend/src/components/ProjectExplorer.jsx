@@ -2,6 +2,17 @@ import { useState, useCallback, useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { cn } from "@/lib/utils";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuSeparator,
+  ContextMenuTrigger,
+} from "@/components/ui/context-menu";
+import {
+  getFileTreeMenuItems,
+  resolveNodeMenuTarget,
+} from "@/lib/editor/contextMenuItems";
 import Folder from "lucide-react/dist/esm/icons/folder.mjs";
 import FolderOpen from "lucide-react/dist/esm/icons/folder-open.mjs";
 import FolderPlus from "lucide-react/dist/esm/icons/folder-plus.mjs";
@@ -10,7 +21,6 @@ import FileText from "lucide-react/dist/esm/icons/file-text.mjs";
 import Image from "lucide-react/dist/esm/icons/image.mjs";
 import ChevronRight from "lucide-react/dist/esm/icons/chevron-right.mjs";
 import Plus from "lucide-react/dist/esm/icons/plus.mjs";
-import Trash2 from "lucide-react/dist/esm/icons/trash-2.mjs";
 import Star from "lucide-react/dist/esm/icons/star.mjs";
 import Upload from "lucide-react/dist/esm/icons/upload.mjs";
 import Loader2 from "lucide-react/dist/esm/icons/loader-2.mjs";
@@ -40,28 +50,31 @@ function getFileIcon(name, isDir, isExpanded) {
   return <File className="size-4 text-muted-foreground" />;
 }
 
-/** 行内 hover 操作按钮（新建/上传/删除）；stopPropagation 防触发行主点击 */
-function RowActionButton({ title, onClick, children, disabled = false }) {
-  return (
-    <button
-      type="button"
-      title={title}
-      aria-label={title}
-      disabled={disabled}
-      className={cn(
-        "inline-flex size-5 shrink-0 items-center justify-center rounded",
-        "text-muted-foreground hover:bg-muted hover:text-foreground",
-        "opacity-0 transition-opacity group-hover:opacity-100 focus:opacity-100",
-        disabled && "pointer-events-none opacity-30",
-      )}
-      onClick={(e) => {
-        e.stopPropagation();
-        onClick();
-      }}
-    >
-      {children}
-    </button>
-  );
+/**
+ * 菜单内容渲染（editor-file-context-menu-design §4.2）：按 Q13 纯函数
+ * 产出的清单渲染菜单项，group 变化处插分隔线；纯文字不配图标（§3.1），
+ * uploadingSensitive 项在上传进行中禁用（§3.2-5）。
+ */
+function FileTreeMenu({ target, uploading, onAction }) {
+  const { t } = useTranslation("components");
+  const nodes = [];
+  let prevGroup = null;
+  for (const item of getFileTreeMenuItems(target)) {
+    if (prevGroup !== null && item.group !== prevGroup) {
+      nodes.push(<ContextMenuSeparator key={`sep-${item.id}`} />);
+    }
+    prevGroup = item.group;
+    nodes.push(
+      <ContextMenuItem
+        key={item.id}
+        disabled={item.uploadingSensitive && uploading}
+        onClick={() => onAction(item.id)}
+      >
+        {t(`projectExplorer.${item.i18nKey}`)}
+      </ContextMenuItem>,
+    );
+  }
+  return nodes;
 }
 
 function TreeNode({
@@ -77,6 +90,7 @@ function TreeNode({
   onDeleteFile,
   onSetMainFile,
   onRequestUpload,
+  onRenameEntry,
   uploading,
   dnd,
 }) {
@@ -89,105 +103,119 @@ function TreeNode({
   const isMainFile = mainFile != null && node.path === mainFile;
   const isDragging = canWrite && dnd.isDragging(node.path);
   const isDropTarget = canWrite && dnd.isDropTarget(node.path);
+  // 右键菜单开启态 = 行临时光（决策 Q8）：菜单关闭（执行项 / Esc / 点别处）
+  // 即清除，树不引入持久选中概念
+  const [menuOpen, setMenuOpen] = useState(false);
+
+  const menuTarget = resolveNodeMenuTarget(node, mainFile);
+
+  const handleMenuAction = useCallback(
+    (actionId) => {
+      switch (actionId) {
+        case "newFile":
+          onCreateFile?.(node.path);
+          break;
+        case "newFolder":
+          onCreateFolder?.(node.path);
+          break;
+        case "uploadHere":
+          onRequestUpload?.(node.path);
+          break;
+        case "setMainFile":
+          onSetMainFile?.(node.path);
+          break;
+        case "rename":
+          onRenameEntry?.(node.path, isDir);
+          break;
+        case "delete":
+          onDeleteFile?.(node.path, isDir);
+          break;
+        default:
+          break;
+      }
+    },
+    [
+      node.path,
+      isDir,
+      onCreateFile,
+      onCreateFolder,
+      onRequestUpload,
+      onSetMainFile,
+      onRenameEntry,
+      onDeleteFile,
+    ],
+  );
+
+  const row = (
+    <div
+      className={cn(
+        "flex w-full items-center rounded-md",
+        menuOpen && "bg-muted",
+        isDragging && "opacity-50",
+        isDropTarget && "ring-1 ring-primary/50 bg-primary/5",
+      )}
+      draggable={canWrite}
+      onDragStart={(e) => dnd.onDragStart(e, node)}
+      onDragEnd={dnd.onDragEnd}
+      onDragOver={(e) => dnd.onDragOver(e, node)}
+      onDragLeave={(e) => dnd.onDragLeave(e, node)}
+      onDrop={(e) => dnd.onDrop(e, node)}
+    >
+      <button
+        className={cn(
+          "flex flex-1 items-center gap-1.5 min-w-0 cursor-pointer rounded-md px-2 py-1 text-sm text-left",
+          "hover:bg-muted",
+        )}
+        style={{ paddingLeft: `${depth * 16 + 8}px` }}
+        onClick={() => {
+          if (isDir) {
+            onToggleDir(node.path);
+          } else {
+            onSelect?.(node);
+          }
+        }}
+      >
+        <ChevronRight
+          className={cn(
+            "size-3 text-muted-foreground shrink-0 transition-transform duration-200 ease-out",
+            isDir ? isExpanded && "rotate-90" : "invisible",
+          )}
+        />
+        {getFileIcon(node.name, isDir, isExpanded)}
+        <span className="truncate">{node.name}</span>
+      </button>
+      {isMainFile && (
+        // 当前主文件：常驻实心星标（非按钮，决策 Q2），状态指示不是操作；
+        // 单点操作入口收敛到右键菜单（决策 Q2）
+        <span
+          title={t("projectExplorer.currentMainFile")}
+          className="mr-1 inline-flex size-5 shrink-0 items-center justify-center"
+        >
+          <Star className="size-3.5 fill-amber-400 text-amber-400" />
+        </span>
+      )}
+    </div>
+  );
 
   return (
     <li>
-      <div
-        className={cn(
-          "group flex w-full items-center rounded-md",
-          isDragging && "opacity-50",
-          isDropTarget && "ring-1 ring-primary/50 bg-primary/5",
-        )}
-        draggable={canWrite}
-        onDragStart={(e) => dnd.onDragStart(e, node)}
-        onDragEnd={dnd.onDragEnd}
-        onDragOver={(e) => dnd.onDragOver(e, node)}
-        onDragLeave={(e) => dnd.onDragLeave(e, node)}
-        onDrop={(e) => dnd.onDrop(e, node)}
-      >
-        <button
-          className={cn(
-            "flex flex-1 items-center gap-1.5 min-w-0 cursor-pointer rounded-md px-2 py-1 text-sm text-left",
-            "hover:bg-muted",
-          )}
-          style={{ paddingLeft: `${depth * 16 + 8}px` }}
-          onClick={() => {
-            if (isDir) {
-              onToggleDir(node.path);
-            } else {
-              onSelect?.(node);
-            }
-          }}
-        >
-          <ChevronRight
-            className={cn(
-              "size-3 text-muted-foreground shrink-0 transition-transform duration-200 ease-out",
-              isDir ? isExpanded && "rotate-90" : "invisible",
-            )}
-          />
-          {getFileIcon(node.name, isDir, isExpanded)}
-          <span className="truncate">{node.name}</span>
-        </button>
-        {canWrite && (
-          <div className="flex shrink-0 items-center pr-1">
-            {isDir ? (
-              <>
-                <RowActionButton
-                  title={t("projectExplorer.uploadHere")}
-                  disabled={uploading}
-                  onClick={() => onRequestUpload?.(node.path)}
-                >
-                  <Upload className="size-3.5" />
-                </RowActionButton>
-                <RowActionButton
-                  title={t("projectExplorer.newFileHere")}
-                  onClick={() => onCreateFile?.(node.path)}
-                >
-                  <Plus className="size-3.5" />
-                </RowActionButton>
-                <RowActionButton
-                  title={t("projectExplorer.createFolderHere")}
-                  onClick={() => onCreateFolder?.(node.path)}
-                >
-                  <FolderPlus className="size-3.5" />
-                </RowActionButton>
-                <RowActionButton
-                  title={t("projectExplorer.deleteFolder")}
-                  onClick={() => onDeleteFile?.(node.path, true)}
-                >
-                  <Trash2 className="size-3.5" />
-                </RowActionButton>
-              </>
-            ) : (
-              <>
-                {isTexName(node.name) &&
-                  (isMainFile ? (
-                    // 当前主文件：常驻实心星标（非按钮），提供状态可视性
-                    <span
-                      title={t("projectExplorer.currentMainFile")}
-                      className="inline-flex size-5 shrink-0 items-center justify-center"
-                    >
-                      <Star className="size-3.5 fill-amber-400 text-amber-400" />
-                    </span>
-                  ) : (
-                    <RowActionButton
-                      title={t("projectExplorer.setMainFile")}
-                      onClick={() => onSetMainFile?.(node.path)}
-                    >
-                      <Star className="size-3.5" />
-                    </RowActionButton>
-                  ))}
-                <RowActionButton
-                  title={t("projectExplorer.deleteFile")}
-                  onClick={() => onDeleteFile?.(node.path)}
-                >
-                  <Trash2 className="size-3.5" />
-                </RowActionButton>
-              </>
-            )}
-          </div>
-        )}
-      </div>
+      {canWrite ? (
+        // 右键即选中（决策 Q5a）+ 完全拦截原生菜单（Q5b，由 Trigger 的
+        // stopEvent 天然完成）；目录只高亮不展开（目录展开仍在左键）
+        <ContextMenu onOpenChange={setMenuOpen}>
+          <ContextMenuTrigger render={row} />
+          <ContextMenuContent>
+            <FileTreeMenu
+              target={menuTarget}
+              uploading={uploading}
+              onAction={handleMenuAction}
+            />
+          </ContextMenuContent>
+        </ContextMenu>
+      ) : (
+        // viewer 不挂菜单（决策 Q6），原生菜单保留
+        row
+      )}
       {hasChildren && (
         <div
           className="grid transition-[grid-template-rows] duration-200 ease-out"
@@ -209,6 +237,7 @@ function TreeNode({
                 onDeleteFile={onDeleteFile}
                 onSetMainFile={onSetMainFile}
                 onRequestUpload={onRequestUpload}
+                onRenameEntry={onRenameEntry}
                 uploading={uploading}
                 dnd={dnd}
               />
@@ -229,6 +258,7 @@ export default function ProjectExplorer({
   onCreateFolder,
   onDeleteFile,
   onMoveEntry,
+  onRenameEntry,
   onSetMainFile,
   onUploadFile,
   uploading = false,
@@ -272,6 +302,26 @@ export default function ProjectExplorer({
       e.target.value = "";
     },
     [onUploadFile],
+  );
+
+  /* ── 根级右键菜单（树背景空白区 / 头部标题栏共用，决策 Q9 / Q12） ──── */
+  const handleRootMenuAction = useCallback(
+    (actionId) => {
+      switch (actionId) {
+        case "newFile":
+          onCreateFile?.(null);
+          break;
+        case "newFolder":
+          onCreateFolder?.(null);
+          break;
+        case "upload":
+          openUploadPicker(null);
+          break;
+        default:
+          break;
+      }
+    },
+    [onCreateFile, onCreateFolder, openUploadPicker],
   );
 
   /* ── 拖拽移动（editor-file-move-design §5.1） ────────────────────── */
@@ -421,9 +471,107 @@ export default function ProjectExplorer({
     onDrop: handleDrop,
   };
 
+  // 头部标题栏行（右键弹根级菜单，与树背景空白区一致，决策 Q9）
+  const headerRow = (
+    <div className="flex items-center justify-between mb-3 px-1">
+      <h3 className="font-semibold text-sm text-muted-foreground">
+        {t("projectExplorer.title")}
+      </h3>
+      {canWrite && tree.length > 0 && (
+        // 头部根级三键保留（决策 Q2）：右键菜单成为单点操作主入口后的
+        // 可发现性锚点
+        <div className="flex shrink-0 items-center gap-1">
+          <button
+            type="button"
+            title={t("projectExplorer.upload")}
+            aria-label={t("projectExplorer.upload")}
+            disabled={uploading}
+            className={cn(
+              "inline-flex size-5 items-center justify-center rounded",
+              "text-muted-foreground hover:bg-muted hover:text-foreground",
+              uploading && "pointer-events-none opacity-30",
+            )}
+            onClick={() => openUploadPicker(null)}
+          >
+            {uploading ? (
+              <Loader2 className="size-4 animate-spin" />
+            ) : (
+              <Upload className="size-4" />
+            )}
+          </button>
+          <button
+            type="button"
+            title={t("projectExplorer.newFile")}
+            aria-label={t("projectExplorer.newFile")}
+            className={cn(
+              "inline-flex size-5 items-center justify-center rounded",
+              "text-muted-foreground hover:bg-muted hover:text-foreground",
+            )}
+            onClick={() => onCreateFile?.(null)}
+          >
+            <Plus className="size-4" />
+          </button>
+          <button
+            type="button"
+            title={t("projectExplorer.createFolder")}
+            aria-label={t("projectExplorer.createFolder")}
+            className={cn(
+              "inline-flex size-5 items-center justify-center rounded",
+              "text-muted-foreground hover:bg-muted hover:text-foreground",
+            )}
+            onClick={() => onCreateFolder?.(null)}
+          >
+            <FolderPlus className="size-4" />
+          </button>
+        </div>
+      )}
+    </div>
+  );
+
+  // 树体（背景空白区 = 项目根落点；canWrite 时整体兼作根级右键 Trigger）
+  const treeBody = (
+    <div
+      className={cn(
+        "flex-1 min-h-0 rounded-md",
+        dropTargetDir === ROOT_DROP_DIR &&
+          "ring-1 ring-primary/50 bg-primary/5",
+      )}
+      onDragOver={handleRootDragOver}
+      onDragLeave={handleRootDragLeave}
+      onDrop={handleRootDrop}
+    >
+      <ScrollArea className="h-full">
+        <ul className="space-y-0.5 pr-3">
+          {tree.map((node) => (
+            <TreeNode
+              key={node.path}
+              node={node}
+              expandedDirs={expandedDirs}
+              onToggleDir={toggleDir}
+              onSelect={onSelect}
+              canWrite={canWrite}
+              mainFile={mainFile}
+              onCreateFile={onCreateFile}
+              onCreateFolder={onCreateFolder}
+              onDeleteFile={onDeleteFile}
+              onSetMainFile={onSetMainFile}
+              onRequestUpload={openUploadPicker}
+              onRenameEntry={onRenameEntry}
+              uploading={uploading}
+              dnd={dnd}
+            />
+          ))}
+        </ul>
+      </ScrollArea>
+    </div>
+  );
+
+  // 根级菜单（决策 Q12）：canWrite 且已开项目才挂载；空树 / viewer 不挂
+  const rootMenuEnabled = canWrite && tree.length > 0;
+
   return (
     <div className="flex flex-col h-full">
-      {/* 隐藏的多选文件输入：根标题行与目录行 hover 按钮共用同一入口 */}
+      {/* 隐藏的多选文件输入：头部按钮与目录右键菜单共用同一入口 */}
       <input
         ref={uploadInputRef}
         type="file"
@@ -433,95 +581,37 @@ export default function ProjectExplorer({
         tabIndex={-1}
         onChange={handleUploadInputChange}
       />
-      <div className="flex items-center justify-between mb-3 px-1">
-        <h3 className="font-semibold text-sm text-muted-foreground">
-          {t("projectExplorer.title")}
-        </h3>
-        {canWrite && tree.length > 0 && (
-          <div className="flex shrink-0 items-center gap-1">
-            <button
-              type="button"
-              title={t("projectExplorer.upload")}
-              aria-label={t("projectExplorer.upload")}
-              disabled={uploading}
-              className={cn(
-                "inline-flex size-5 items-center justify-center rounded",
-                "text-muted-foreground hover:bg-muted hover:text-foreground",
-                uploading && "pointer-events-none opacity-30",
-              )}
-              onClick={() => openUploadPicker(null)}
-            >
-              {uploading ? (
-                <Loader2 className="size-4 animate-spin" />
-              ) : (
-                <Upload className="size-4" />
-              )}
-            </button>
-            <button
-              type="button"
-              title={t("projectExplorer.newFile")}
-              aria-label={t("projectExplorer.newFile")}
-              className={cn(
-                "inline-flex size-5 items-center justify-center rounded",
-                "text-muted-foreground hover:bg-muted hover:text-foreground",
-              )}
-              onClick={() => onCreateFile?.(null)}
-            >
-              <Plus className="size-4" />
-            </button>
-            <button
-              type="button"
-              title={t("projectExplorer.createFolder")}
-              aria-label={t("projectExplorer.createFolder")}
-              className={cn(
-                "inline-flex size-5 items-center justify-center rounded",
-                "text-muted-foreground hover:bg-muted hover:text-foreground",
-              )}
-              onClick={() => onCreateFolder?.(null)}
-            >
-              <FolderPlus className="size-4" />
-            </button>
-          </div>
-        )}
-      </div>
+      {rootMenuEnabled ? (
+        <ContextMenu>
+          <ContextMenuTrigger render={headerRow} />
+          <ContextMenuContent>
+            <FileTreeMenu
+              target={{ targetType: "root" }}
+              uploading={uploading}
+              onAction={handleRootMenuAction}
+            />
+          </ContextMenuContent>
+        </ContextMenu>
+      ) : (
+        headerRow
+      )}
       {tree.length === 0 ? (
         <p className="text-muted-foreground/60 text-sm px-1">
           {t("projectExplorer.noProject")}
         </p>
+      ) : rootMenuEnabled ? (
+        <ContextMenu>
+          <ContextMenuTrigger render={treeBody} />
+          <ContextMenuContent>
+            <FileTreeMenu
+              target={{ targetType: "root" }}
+              uploading={uploading}
+              onAction={handleRootMenuAction}
+            />
+          </ContextMenuContent>
+        </ContextMenu>
       ) : (
-        <div
-          className={cn(
-            "flex-1 min-h-0 rounded-md",
-            dropTargetDir === ROOT_DROP_DIR &&
-              "ring-1 ring-primary/50 bg-primary/5",
-          )}
-          onDragOver={handleRootDragOver}
-          onDragLeave={handleRootDragLeave}
-          onDrop={handleRootDrop}
-        >
-          <ScrollArea className="h-full">
-            <ul className="space-y-0.5 pr-3">
-              {tree.map((node) => (
-                <TreeNode
-                  key={node.path}
-                  node={node}
-                  expandedDirs={expandedDirs}
-                  onToggleDir={toggleDir}
-                  onSelect={onSelect}
-                  canWrite={canWrite}
-                  mainFile={mainFile}
-                  onCreateFile={onCreateFile}
-                  onCreateFolder={onCreateFolder}
-                  onDeleteFile={onDeleteFile}
-                  onSetMainFile={onSetMainFile}
-                  onRequestUpload={openUploadPicker}
-                  uploading={uploading}
-                  dnd={dnd}
-                />
-              ))}
-            </ul>
-          </ScrollArea>
-        </div>
+        treeBody
       )}
     </div>
   );

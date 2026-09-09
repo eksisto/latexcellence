@@ -1127,6 +1127,8 @@
       "createFailed": "创建文件失败",
       "deleted": "已删除 {{path}}",
       "moved": "已移动至 {{path}}",
+      "renamed": "已重命名为 {{path}}",
+      "renameFailed": "重命名失败",
       "moveFailed": "移动失败",
       "folderCreated": "文件夹已创建：{{path}}",
       "createFolderFailed": "文件夹创建失败",
@@ -1571,6 +1573,18 @@
       "cancelAction": "取消",
       "setMainFile": "设为主文件",
       "currentMainFile": "当前主文件",
+      "rename": "重命名",
+      "renameFileTitle": "重命名文件",
+      "renameDirTitle": "重命名文件夹",
+      "renameDescription": "为 {{path}} 输入新名称。",
+      "renameNameHint": "名称可含任意扩展名；以点开头的隐藏名称会被拒绝",
+      "renameAction": "重命名",
+      "renameNameError": {
+        "empty": "请输入新名称",
+        "separator": "名称不能包含路径分隔符",
+        "control": "名称包含非法控制字符",
+        "hidden": "不支持以点开头的隐藏名称"
+      },
       "upload": "上传文件",
       "uploadHere": "上传到此文件夹",
       "uploadFileError": {

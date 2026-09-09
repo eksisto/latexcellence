@@ -127,7 +127,7 @@ highlight.js 的按需注册与统一入口：
 | `CodeEditorInput.jsx` | 可编辑代码输入框（高亮版）：底层 `<pre>` 渲染 highlight.js 高亮结果、上层透明 textarea 保留光标/选区/滚动，两者共用同一套排版规则保证逐字对齐；供粘贴 LaTeX 源码等需要边输入边高亮的场景使用 |
 | `MarkerText.jsx` | 将 `__CMD_NNNN__` 等 marker 解析为彩色内联标签；`variant="code"`（默认）将纯文本片段渲染为 `.code-inline` 并做 LaTeX 高亮（渲染期派生 HTML，按 token 经 `useMemo` 缓存），`variant="text"` 保持原样（用于 diff 等已有语义配色的场景）。仅用于段落预览等含 marker 的展示场景。**结果卡片中**的 `change.original`/`change.corrected` 等字段因后端已还原 marker，直接以文本渲染，无需 `MarkerText` 包裹 |
 | `ParagraphContext.jsx` | 展开显示当前段落前后上下文 |
-| `ProjectExplorer.jsx` | 递归文件树（工作台页与编辑器页共享）：目录展开/折叠、文件选择、拖拽移动（原生 HTML5 DnD，落点高亮 + 悬停自动展开）、新建/删除文件夹、上传与设为主文件入口；机制详见 [modules/editor.md](modules/editor.md) |
+| `ProjectExplorer.jsx` | 递归文件树（工作台页与编辑器页共享）：目录展开/折叠、文件选择、**右键菜单**（树行 / 树背景 / 标题栏挂 base-ui ContextMenu，菜单项清单由 `lib/editor/contextMenuItems.js` 纯函数按目标类型矩阵产出，右键行临时光，viewer 与空树不挂载）、拖拽移动（原生 HTML5 DnD，落点高亮 + 悬停自动展开）、新建/删除文件夹、重命名、上传与设为主文件入口；行内 hover 图标已收敛，头部根级三键保留；机制详见 [modules/editor.md](modules/editor.md) |
 | `PDFPreview.jsx` | iframe 嵌入 PDF 预览 |
 | `components/editor/BinaryFilePreview.jsx` | 二进制只读预览唯一渲染分支：位图 `<img>` 居中 contain / PDF 走 `PDFPreview`，加载文案经 `loadingKey` 定制；填满父容器高度的纯渲染契约（blob URL 拉取与释放由调用方负责），编辑器覆盖层 `FilePreviewOverlay` 与工作台文件树预览共用 |
 | `PromptEditor.jsx` | 自定义提示词编辑框 |
@@ -142,6 +142,7 @@ highlight.js 的按需注册与统一入口：
 | `ThemeSwitcher.jsx` | 配色主题切换下拉，自动发现主题文件 |
 | `LanguageSwitcher.jsx` | 界面语言切换下拉（简中 / 繁中 / 英语）：纯前端设置，常驻右上角工具栏，不依赖后端连接与登录状态；选择经 i18next LanguageDetector 持久化到 localStorage |
 | `components/ui/sonner.jsx` | 全局提示入口：使用内联 SVG 面图标、主题感知的 Toast classNames 与统一间距 |
+| `components/ui/context-menu.jsx` | 右键菜单原语：`@base-ui/react/context-menu` 包装（ContextMenu / Trigger / Content / Item / Separator），Trigger 默认渲染 `div` 且整体拦截原生菜单；文件树右键菜单在用（与既有 ui 包装组件同构，零新依赖） |
 | `ConfirmDialog.jsx` | 通用确认对话框（destructive 样式 + 禁止遮罩关闭） |
 | `ImageOCRPage.jsx` | 通用图片 OCR 页面组件（拖拽/粘贴/识别/复制；`renderResultMeta` 可接收 `(result, setResult)` 第二参数更新结果，FormulaOCR 未判定切换控件依赖此透传） |
 | `Wordmark.jsx` | STIX Two Text 排 "LaTeXcellence" |
