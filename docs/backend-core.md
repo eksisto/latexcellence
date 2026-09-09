@@ -4,7 +4,7 @@
 
 ## 目录
 
-- [后端核心模块](#后端核心模块)：config、security_middleware、llm_client、model_router、logger、project_manager、base_paragraph_check、prompts、tool_registry、workspace_manager
+- [后端核心模块](#后端核心模块)：config、env、security_middleware、llm_client、model_router、logger、project_manager、base_paragraph_check、prompts、tool_registry、workspace_manager
 - [后端工具模块](#后端工具模块)：scholarly_research、tool_result_protocol、file_ops、path_guard、json_utils、latex_json_guard、sandbox（Docker 沙箱执行）、tex_compile、compile_error_translator、latex_formatter、latex_parser、latex_literals、latex_package_analyzer、input_resolver、spa_static_files 等
 - [项目管理路由 project_router.py](#项目管理路由-project_routerpy)
 
@@ -46,6 +46,14 @@
 - 注册表中的环境变量优先级高于 `config.json` 中的对应字段
 - 从环境变量注入的敏感值**禁止写回磁盘**：`save_config()` 内部通过 `_secrets_from_env` 集合自动识别来源，落盘前清空对应字段
 - 用户通过 UI 手动输入的真实敏感值解除环境变量标记，正常持久化到磁盘；前端提交以 `***` 开头（掩码）的敏感项保留原值不更新
+
+### `backend/core/env.py` — .env 环境变量文件加载
+
+基于 python-dotenv 的统一 `.env` 加载入口。在 `backend/core/config.py` 的 `_parse_config_file()` 开头统一调用 `load_env_file()`（`load_config()` 与配置热重载都经由该路径，入口点与离线评测工具无需单独调用），把项目根 `.env` 文件（模板 `.env.example`，文件本身已被 `.gitignore` 忽略）注入 `os.environ`，后续 `SECRET_ENV_PATHS`、`admin_*_env` 等环境变量消费点自动读到。tools 专属变量（如 `TEXLIVE_BIN`，经 `tools/tex_path.py` 消费、不经配置解析）的消费点可自行调用（幂等）。
+
+- **优先级**：真实环境变量 > `.env` 文件 > config.json——`load_dotenv(override=False)` 只补缺，不覆盖 shell / systemd / compose 中已显式注入的值；
+- **幂等**：默认路径（项目根 `.env`）只加载一次，重复调用直接跳过；显式传 `path`（测试用）始终允许加载，但同样不覆盖已存在的变量；
+- 变量名与用途的权威清单见 `docs/deployment.md`「环境变量参考」。
 
 ### `backend/core/security_middleware.py` — CORS 白名单与访问令牌 / 会话
 

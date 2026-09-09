@@ -36,6 +36,8 @@ from pydantic import (
 
 from backend.utils.file_ops import atomic_write
 
+from .env import load_env_file
+
 
 class ServerConfig(BaseModel):
     """服务器配置"""
@@ -1229,6 +1231,9 @@ def _parse_config_file(path: Path) -> tuple[AppConfig, set[str]]:
     multi_user.enabled 锚定，避免并发 get_config() 短暂观察到未锚定的
     运行模式值。
     """
+    # .env 文件注入统一收口在此处（幂等，真实环境变量优先）：
+    # load_config 与热重载都经由本函数，任何入口点无需单独调用
+    load_env_file()
     with open(path, "r", encoding="utf-8") as f:
         data = json.load(f)
 

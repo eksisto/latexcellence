@@ -13,7 +13,7 @@ latexcellence/
 ├── main.py                # FastAPI 入口 + 静态文件挂载
 ├── config.json            # 运行配置（模板见 config.example.json）
 ├── backend/
-│   ├── core/              # 配置热重载、模型路由、LLM 客户端、日志、workspace/project 管理、
+│   ├── core/              # 配置热重载、.env 环境变量加载、模型路由、LLM 客户端、日志、workspace/project 管理、
 │   │                      # 集中提示词 prompts.py、逐段检查基类 base_paragraph_check.py、
 │   │                      # 访问控制、安全中间件、多用户基础设施 multiuser/
 │   ├── utils/             # LaTeX 解析（marker 保护、\input 展开）、json_utils、latex_json_guard、

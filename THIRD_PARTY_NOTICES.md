@@ -101,6 +101,7 @@
 | [openai](https://github.com/openai/openai-python) | >=1.66.0 | Apache-2.0 | Copyright (c) OpenAI | OpenAI API SDK |
 | [pydantic](https://docs.pydantic.dev) | >=2.0.0 | MIT | Copyright (c) 2017 to present Pydantic Services Inc. and individual contributors | 数据模型校验 |
 | [pydantic-settings](https://github.com/pydantic/pydantic-settings) | >=2.0.0 | MIT | Copyright (c) 2022 Samuel Colvin and other contributors | 配置管理 |
+| [python-dotenv](https://github.com/theskumar/python-dotenv) | >=1.0.0 | BSD-3-Clause | Copyright (c) 2020 Saurabh Kumar | 加载项目根 `.env` 环境变量文件（凭证类配置注入） |
 | [python-multipart](https://github.com/andrew-d/python-multipart) | >=0.0.9 | Apache-2.0 | Copyright (c) Andrew Dunham | 文件上传 |
 | [argon2-cffi](https://github.com/hynek/argon2-cffi) | >=23.1.0 | MIT | Copyright (c) 2023 Hynek Schlawack | 多用户模式密码哈希（argon2id） |
 | [aiosmtplib](https://github.com/cole/aiosmtplib) | >=3.0.0 | MIT | Copyright (c) 2015-2025 Cole Maclean | 多用户模式 SMTP 异步邮件发送（多用户 v2 P6：邮件通知与自助找回） |

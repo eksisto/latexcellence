@@ -9,9 +9,14 @@ stylemodify_opt 等离线工具统一复用。
 import os
 from pathlib import Path
 
+from backend.core.env import load_env_file
+
 
 def ensure_tex_path() -> None:
     """把常见 TeX Live Linux 安装目录加入 PATH，避免因 shell PATH 缺失误判。"""
+    # TEXLIVE_BIN 可经项目根 .env 注入（tools 专属变量，不经 load_config）；
+    # 此处幂等加载，不与 backend.core.config 的收口冲突
+    load_env_file()
     current = os.environ.get("PATH", "")
     candidates: list[str] = []
 

@@ -193,6 +193,8 @@ npm start        # 或 node server.js
 
 所有字段有 Pydantic 默认值，可部分配置。敏感项支持经环境变量注入（`SECRET_ENV_PATHS` 注册表）：`LX_LLM_KEY` 优先于 `llm.api_key`；`LATEXCELLENCE_SMTP_PASSWORD` 优先于 `smtp.password`；`LATEXCELLENCE_TAVILY_API_KEY` 优先于 Tavily 搜索 Key，学术数据源同理用 `LATEXCELLENCE_<PROVIDER 大写>_API_KEY`（如 `LATEXCELLENCE_OPENALEX_API_KEY`）。环境变量注入的敏感值均永不写盘，完整清单见 [deployment.md](deployment.md)「环境变量参考」。
 
+这些环境变量也可以统一写进项目根目录的 `.env` 文件（模板见 `.env.example`）：配置解析时（`backend/core/config.py`）经 `backend/core/env.py` 自动加载，优先级为真实环境变量 > `.env` 文件 > config.json。
+
 参考完整示例见 `config.example.json`（可提交 Git，不含真实密钥）。
 
 ---

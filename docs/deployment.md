@@ -768,6 +768,8 @@ rar 解压已与其余外部命令同一收口：解压命令经 SandboxRunner �
 
 部署相关的全部环境变量（均可选，未设置时走配置文件默认值）：
 
+这些变量可以逐个 export，也可以统一写进项目根目录的 `.env` 文件（模板见 `.env.example`）：配置解析时（`backend/core/config.py`）会经 `backend/core/env.py` 自动加载 `.env` 并注入 `os.environ`，服务端与离线评测工具一律生效。优先级为**真实环境变量 > `.env` 文件 > config.json**——`.env` 只补缺，不会覆盖 shell / systemd / compose 中已显式注入的值。
+
 | 变量 | 何处使用 | 说明 |
 | --- | --- | --- |
 | `LX_LLM_KEY` | 所有形态 | 覆盖 `llm.api_key`，优先级最高；注入的 Key **永不写盘**（配置保存时自动清空该字段） |

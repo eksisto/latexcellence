@@ -32,6 +32,9 @@ frontend/.env
 frontend/.env.local
 frontend/.env.*.local
 
+# Backend env（凭证类环境变量注入；模板 .env.example 保持入库）
+.env
+
 # Logs
 logs/
 
