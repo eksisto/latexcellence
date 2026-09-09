@@ -128,7 +128,10 @@ async def _list_changes(context: ProjectContext) -> list[GitChangeItem]:
     """工作区变更列表（porcelain v1 -z -uall，路径转为项目内相对路径）。
 
     仓库根相对路径经 project_prefix 过滤转换：项目前缀之外（父仓库其他
-    目录）的变更不展示、不计脏标记。"""
+    目录）的变更不展示、不计脏标记。应用内部元数据目录 ``.latexcellence/``
+    （手动主文件标记等）同样不展示——与文件树/扫描的隐藏目录口径一致，
+    兜底 .gitignore 排除缺失（项目自带 .gitignore 时 init 模板不写入）
+    或标记文件已被跟踪的仓库。"""
     result = await git_diff_process.run_git(
         context.git_root,
         ["status", "--porcelain=v1", "-z", "-uall"],
@@ -162,6 +165,8 @@ async def _list_changes(context: ProjectContext) -> list[GitChangeItem]:
                 continue
         else:
             rel = repo_path
+        if rel.parts[0] == ".latexcellence":
+            continue
         changes.append(GitChangeItem(path=rel.as_posix(), kind=_change_kind(xy)))
     return changes
 

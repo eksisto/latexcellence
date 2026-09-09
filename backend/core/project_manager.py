@@ -728,6 +728,7 @@ class LatexProject:
     # 均跳过点开头条目，不会进文件树或参与任何扫描）
     _MAIN_FILE_MARKER_DIR = ".latexcellence"
     _MAIN_FILE_MARKER_NAME = "main_file"
+    _MARKER_GITIGNORE_LINE = ".latexcellence/"
 
     def _persist_main_file(self, root: Path, file_path: str) -> None:
         """把手动主文件写入项目内标记文件（原子写，失败仅记警告）。"""
@@ -737,6 +738,41 @@ class LatexProject:
             atomic_write(marker_dir / self._MAIN_FILE_MARKER_NAME, file_path + "\n")
         except OSError as e:
             self._logger.warning("Persist main file marker failed: %s", e)
+            return
+        self._ensure_marker_ignored(root)
+
+    def _ensure_marker_ignored(self, root: Path) -> None:
+        """确保项目 .gitignore 排除标记目录（best-effort，失败仅记警告）。
+
+        项目自带 .gitignore 时 git_manage 的 init 不会写入模板，标记文件
+        会以未跟踪条目出现在版本管理页，故在写入标记后主动兜底补写。
+        无 .gitignore 时仅在项目根已有仓库（.git 存在）才创建最小条目；
+        无仓库时不创建——留给 git_manage init 写入完整 LaTeX 模板
+        （已含本排除项），避免一个只含本条目的 .gitignore 抑制完整模板。
+        """
+        gitignore = root / ".gitignore"
+        try:
+            if gitignore.is_file():
+                text = gitignore.read_text(encoding="utf-8")
+                if any(
+                    line.strip().strip("/") == self._MAIN_FILE_MARKER_DIR
+                    for line in text.splitlines()
+                ):
+                    return
+                if text.endswith("\n\n"):
+                    separator = ""
+                elif text.endswith("\n"):
+                    separator = "\n"
+                else:
+                    separator = "\n\n"
+                atomic_write(
+                    gitignore,
+                    f"{text}{separator}{self._MARKER_GITIGNORE_LINE}\n",
+                )
+            elif (root / ".git").exists():
+                atomic_write(gitignore, f"{self._MARKER_GITIGNORE_LINE}\n")
+        except OSError as e:
+            self._logger.warning("Ensure .gitignore excludes marker dir failed: %s", e)
 
     def _read_persisted_main_file(self, root: Path) -> str | None:
         """读取持久化的手动主文件；缺失/非法/指向文件不存在时返回 None。

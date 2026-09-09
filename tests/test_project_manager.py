@@ -442,6 +442,58 @@ class TestPathTraversal:
         with pytest.raises(ValueError, match="must not contain"):
             project.set_main_file("../../evil.tex")
 
+
+class TestSetMainFileGitignore:
+    """手动主文件标记目录应被 .gitignore 排除，避免污染版本管理页。"""
+
+    def test_existing_gitignore_appends_pattern(self, temp_project):
+        gitignore = temp_project / ".gitignore"
+        gitignore.write_text("*.aux\n*.log\n", encoding="utf-8")
+        project = LatexProject()
+        project.open(str(temp_project))
+        project.set_main_file("main.tex")
+        text = gitignore.read_text(encoding="utf-8")
+        assert text.startswith("*.aux\n*.log\n")
+        assert text.endswith(".latexcellence/\n")
+        assert (temp_project / ".latexcellence" / "main_file").read_text(
+            encoding="utf-8"
+        ) == "main.tex\n"
+
+    def test_existing_gitignore_with_pattern_untouched(self, temp_project):
+        original = "*.aux\n.latexcellence/\n"
+        gitignore = temp_project / ".gitignore"
+        gitignore.write_text(original, encoding="utf-8")
+        project = LatexProject()
+        project.open(str(temp_project))
+        project.set_main_file("main.tex")
+        assert gitignore.read_text(encoding="utf-8") == original
+
+    def test_existing_gitignore_leading_slash_variant_matched(self, temp_project):
+        """`/.latexcellence/` 等价写法视为已排除，不重复追加。"""
+        original = "/.latexcellence/\n"
+        gitignore = temp_project / ".gitignore"
+        gitignore.write_text(original, encoding="utf-8")
+        project = LatexProject()
+        project.open(str(temp_project))
+        project.set_main_file("main.tex")
+        assert gitignore.read_text(encoding="utf-8") == original
+
+    def test_no_gitignore_without_repo_not_created(self, temp_project):
+        project = LatexProject()
+        project.open(str(temp_project))
+        project.set_main_file("main.tex")
+        assert not (temp_project / ".gitignore").exists()
+
+    def test_no_gitignore_with_git_dir_creates_minimal(self, temp_project):
+        """项目根已有仓库但缺 .gitignore（用户自建/删除）时补最小条目。"""
+        (temp_project / ".git").mkdir()
+        project = LatexProject()
+        project.open(str(temp_project))
+        project.set_main_file("main.tex")
+        assert (temp_project / ".gitignore").read_text(
+            encoding="utf-8"
+        ) == ".latexcellence/\n"
+
     def test_get_paragraphs_absolute_rejected(self, temp_project):
         project = LatexProject()
         project.open(str(temp_project))

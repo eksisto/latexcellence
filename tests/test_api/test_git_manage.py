@@ -157,6 +157,25 @@ class TestGetStatus:
             }
 
     @require_git
+    def test_marker_dir_not_listed_when_not_ignored(self):
+        """项目自带 .gitignore 未排除 .latexcellence/ 时（init 模板不写入的
+        场景），主文件标记不应作为变更出现在版本页，也不计入脏标记。"""
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp)
+            _make_git_repo(
+                repo,
+                {"main.tex": "v1\n", ".gitignore": "*.aux\n"},
+                message="first",
+            )
+            marker_dir = repo / ".latexcellence"
+            marker_dir.mkdir()
+            (marker_dir / "main_file").write_text("main.tex\n", encoding="utf-8")
+            with _opened_workspace(repo), _active_git_env(repo):
+                result = asyncio.run(git_manage_service.get_status("ws"))
+            assert result.changes == []
+            assert result.is_dirty is False
+
+    @require_git
     def test_parent_repo_does_not_count_as_initialized(self):
         """项目根无自带 .git、仅落在父级仓库内 → 未初始化（可手动 init）。"""
         with tempfile.TemporaryDirectory() as tmp:
