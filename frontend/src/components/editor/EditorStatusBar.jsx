@@ -17,7 +17,7 @@ export default function EditorStatusBar({ hub }) {
 
   return (
     <div
-      className="flex h-7 shrink-0 items-center gap-4 rounded-lg border border-border bg-muted/40 px-3 text-xs text-muted-foreground"
+      className="flex h-7 shrink-0 items-center gap-4 border-t border-border bg-muted/40 px-3 text-xs text-muted-foreground"
       data-testid="editor-status-bar"
     >
       <span>

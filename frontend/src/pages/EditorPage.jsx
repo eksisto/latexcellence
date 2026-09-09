@@ -1014,7 +1014,8 @@ export default function EditorPage() {
                 onRequestCloseTab={requestCloseTab}
                 onSaveAll={() => doSaveAllDirty()}
               />
-              <div className="flex min-h-0 flex-1 flex-col">
+              {/* 编辑区与状态栏共用一个圆角边框容器，细线分隔（避免双圆角堆叠） */}
+              <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-border bg-background">
                 {/* relative 供公式固定预览卡（editor v3 阶段四 / Q11）在
                     编辑区底部、状态栏上方悬浮 */}
                 <div className="relative min-h-0 flex-1">

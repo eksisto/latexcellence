@@ -638,7 +638,7 @@ export default function LaTeXEditor({
 
   return (
     <div
-      className="h-full overflow-hidden rounded-lg border border-border bg-background"
+      className="h-full overflow-hidden bg-background"
       style={{ fontSize: `${fontSize}px` }}
     >
       <CodeMirror
