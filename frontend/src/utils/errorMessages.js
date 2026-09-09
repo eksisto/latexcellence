@@ -75,6 +75,12 @@ const EXACT_MAP = {
   git_no_changes: "gitNoChanges",
   git_repository_locked: "gitRepositoryLocked",
   git_message_required: "gitMessageRequired",
+  git_file_path_invalid: "gitFilePathInvalid",
+  git_file_untracked: "gitFileUntracked",
+  git_patch_invalid: "gitPatchInvalid",
+  git_worktree_changed: "gitWorktreeChanged",
+  git_commit_not_found: "gitCommitNotFound",
+  git_restore_no_base: "gitRestoreNoBase",
 
   // 编译沙箱（多用户 v2 P1a）错误码
   sandbox_unavailable: "sandboxUnavailable",

@@ -889,7 +889,7 @@ export const api = {
     getOptions: () => request(appendWs("/git-diff/options")),
   },
 
-  /* ---- Git 版本管理（状态 / 初始化 / 提交 / 历史） ---- */
+  /* ---- Git 版本管理（状态 / 初始化 / 提交 / 历史 / 源码 diff / 恢复） ---- */
   gitManage: {
     status: (workspaceId) =>
       request(appendWs("/git-manage/status", workspaceId)),
@@ -905,6 +905,25 @@ export const api = {
         appendWs("/git-manage/log", workspaceId) +
           `&limit=${limit}&offset=${offset}`,
       ),
+    // 单文件源码级 diff（commit 为空 = 工作区 vs HEAD，否则该提交 vs 父提交）
+    fileDiff: (path, workspaceId, commit = "") =>
+      request(
+        appendWs("/git-manage/file-diff", workspaceId) +
+          `&path=${encodeURIComponent(path)}` +
+          (commit ? `&commit=${encodeURIComponent(commit)}` : ""),
+      ),
+    // 单个提交变更的文件清单（抽屉内两级导航第一级）
+    commitFiles: (commit, workspaceId) =>
+      request(
+        appendWs("/git-manage/commit-files", workspaceId) +
+          `&commit=${encodeURIComponent(commit)}`,
+      ),
+    // 恢复工作区变更：{ path, mode: "file" | "hunks", hunks?: hunk.raw[] }
+    restore: (payload, workspaceId) =>
+      request(appendWs("/git-manage/restore", workspaceId), {
+        method: "POST",
+        body: JSON.stringify(payload),
+      }),
   },
 
   /* ---- 文档格式转换（Markdown/DOCX/HTML ↔ LaTeX） ---- */

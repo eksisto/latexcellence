@@ -1,12 +1,11 @@
-import { Fragment, useCallback, useEffect, useState } from "react";
+import { Fragment, useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import ArrowUpRight from "lucide-react/dist/esm/icons/arrow-up-right.mjs";
 import CircleCheck from "lucide-react/dist/esm/icons/circle-check.mjs";
+import FileCode2 from "lucide-react/dist/esm/icons/file-code-2.mjs";
 import FileDiff from "lucide-react/dist/esm/icons/file-diff.mjs";
-import FileMinus from "lucide-react/dist/esm/icons/file-minus.mjs";
-import FilePlus from "lucide-react/dist/esm/icons/file-plus.mjs";
 import FilePen from "lucide-react/dist/esm/icons/file-pen.mjs";
 import GitBranch from "lucide-react/dist/esm/icons/git-branch.mjs";
 import History from "lucide-react/dist/esm/icons/history.mjs";
@@ -21,13 +20,27 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import EmptyState from "@/components/EmptyState";
 import PageHeader from "@/components/PageHeader";
+import DiffDrawer from "@/components/versions/DiffDrawer";
+import {
+  CHANGE_KIND_META,
+  CHANGE_KIND_ORDER,
+} from "@/components/versions/changeKind";
 import { api } from "@/api/index";
 import { cn } from "@/lib/utils";
 import useStore from "@/store/useStore";
+import useEditorStore, { findTab } from "@/store/editorStore";
 import { translateError } from "@/utils/errorMessages";
 import { openMultiUserProject } from "@/utils/multiUserProject";
 import useCanWrite from "@/hooks/useCanWrite";
@@ -37,25 +50,6 @@ import { isMultiUser } from "@/api/connection";
 const WORKTREE_REF = "__WORKTREE__";
 const PAGE_SIZE = 50;
 const COMMIT_MAX_LENGTH = 500;
-
-const CHANGE_KIND_META = {
-  added: {
-    icon: FilePlus,
-    key: "changeAdded",
-    chip: "bg-primary/10 text-primary",
-  },
-  modified: {
-    icon: FilePen,
-    key: "changeModified",
-    chip: "bg-accent text-accent-foreground",
-  },
-  deleted: {
-    icon: FileMinus,
-    key: "changeDeleted",
-    chip: "bg-destructive/10 text-destructive",
-  },
-};
-const CHANGE_KIND_ORDER = ["added", "modified", "deleted"];
 
 function formatBytes(bytes, t) {
   if (bytes >= 1024 * 1024) {
@@ -216,9 +210,17 @@ export default function VersionManagePage() {
   const [logEntries, setLogEntries] = useState([]);
   const [logOffset, setLogOffset] = useState(0);
   const [loadingLog, setLoadingLog] = useState(false);
+  // diff 抽屉：null 关闭；{ mode: "worktree", path } | { mode: "commit", commit }
+  const [drawer, setDrawer] = useState(null);
+  // 恢复后编辑器脏缓冲区的重载确认（存路径，非空即弹）
+  const [reloadPrompt, setReloadPrompt] = useState(null);
+  // 源码 diff 预取缓存（path → file-diff 结果；null = 拉取中）
+  const diffCacheRef = useRef(new Map());
 
   const loadStatus = useCallback(async () => {
     if (!workspaceId) return;
+    // 状态刷新即失效预取缓存（恢复/提交成功后的刷新同样走这里）
+    diffCacheRef.current.clear();
     try {
       const data = await api.gitManage.status(workspaceId);
       setStatus(data);
@@ -226,6 +228,20 @@ export default function VersionManagePage() {
       toast.error(translateError(err.message));
     }
   }, [workspaceId]);
+
+  // 源码 diff 预取：status 到手后并行拉取变更文件（上限 10，只读 git
+  // 命令豁免沙箱并发租约，并行安全）——点击抽屉时缓存命中即渲染
+  useEffect(() => {
+    if (!workspaceId || !status?.initialized) return;
+    for (const change of (status.changes ?? []).slice(0, 10)) {
+      if (diffCacheRef.current.has(change.path)) continue;
+      diffCacheRef.current.set(change.path, null);
+      api.gitManage
+        .fileDiff(change.path, workspaceId)
+        .then((data) => diffCacheRef.current.set(change.path, data))
+        .catch(() => diffCacheRef.current.delete(change.path));
+    }
+  }, [status, workspaceId]);
 
   const loadLog = useCallback(
     async (offset = 0) => {
@@ -297,6 +313,47 @@ export default function VersionManagePage() {
       setInitting(false);
     }
   }, [workspaceId, loadStatus, loadLog, t]);
+
+  /**
+   * 恢复成功后的编辑器联动（Q7 决议）：该文件若在编辑器中打开——
+   * 缓冲区干净则静默重载磁盘内容；有未保存修改则弹确认，由用户决定
+   * 重载（丢弃修改）或保留（保存时有 409 乐观锁兜底）。
+   */
+  const syncEditorTab = useCallback(
+    async (filePath) => {
+      const tab = findTab(useEditorStore.getState(), filePath);
+      if (!tab) return;
+      if (tab.dirty) {
+        setReloadPrompt(filePath);
+        return;
+      }
+      try {
+        const data = await api.project.fileContent(filePath, workspaceId);
+        useEditorStore.getState().openTab({
+          filePath,
+          content: data.content,
+          baseMd5: data.md5,
+        });
+      } catch {
+        /* 重载失败不打扰恢复主流程：编辑器下次打开自然取到新内容 */
+      }
+    },
+    [workspaceId],
+  );
+
+  const handleRestored = useCallback(
+    async (path) => {
+      await loadStatus();
+      await syncEditorTab(path);
+    },
+    [loadStatus, syncEditorTab],
+  );
+
+  /** 抽屉缓存读取（null = 未命中/拉取中，走正常加载态） */
+  const getCachedDiff = useCallback(
+    (p) => diffCacheRef.current.get(p) ?? null,
+    [],
+  );
 
   if (!isOpened) {
     return (
@@ -501,41 +558,47 @@ export default function VersionManagePage() {
                               <KindIcon className="size-3" aria-hidden />
                             </span>
                           );
-                          // 已删除文件无法在编辑器中打开，渲染为不可点击条目
-                          if (change.kind === "deleted") {
-                            return (
-                              <li
-                                key={change.path}
-                                className="flex items-center gap-2.5 rounded-md px-2 py-1.5 opacity-60"
-                              >
-                                {chip}
-                                <span
-                                  className="min-w-0 flex-1 truncate font-mono text-xs line-through"
-                                  title={change.path}
-                                >
-                                  {change.path}
-                                </span>
-                              </li>
-                            );
-                          }
                           return (
-                            <li key={change.path}>
-                              <Link
-                                to={`/editor?file=${encodeURIComponent(change.path)}`}
-                                className="group flex items-center gap-2.5 rounded-md px-2 py-1.5 transition-colors hover:bg-muted/60"
+                            <li
+                              key={change.path}
+                              className="group flex items-center gap-2.5 rounded-md px-2 py-1.5 transition-colors hover:bg-muted/60"
+                            >
+                              {/* 点行 → 源码 diff 抽屉（含已删除文件：可看全文删除并恢复） */}
+                              <button
+                                type="button"
+                                className="flex min-w-0 flex-1 cursor-pointer items-center gap-2.5 text-left"
+                                onClick={() =>
+                                  setDrawer({
+                                    mode: "worktree",
+                                    path: change.path,
+                                  })
+                                }
+                                title={t("pages:versionManage.viewChangeDiff")}
                               >
                                 {chip}
                                 <span
-                                  className="min-w-0 flex-1 truncate font-mono text-xs"
+                                  className={cn(
+                                    "min-w-0 flex-1 truncate font-mono text-xs",
+                                    change.kind === "deleted" &&
+                                      "text-muted-foreground line-through",
+                                  )}
                                   title={change.path}
                                 >
                                   {change.path}
                                 </span>
-                                <ArrowUpRight
-                                  className="size-3.5 shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100"
-                                  aria-hidden
-                                />
-                              </Link>
+                              </button>
+                              {change.kind !== "deleted" && (
+                                <Link
+                                  to={`/editor?file=${encodeURIComponent(change.path)}`}
+                                  className="shrink-0"
+                                  aria-label={t(
+                                    "pages:versionManage.openInEditor",
+                                  )}
+                                  title={t("pages:versionManage.openInEditor")}
+                                >
+                                  <ArrowUpRight className="size-3.5 text-muted-foreground transition-colors group-hover:text-foreground" />
+                                </Link>
+                              )}
                             </li>
                           );
                         })}
@@ -669,25 +732,47 @@ export default function VersionManagePage() {
                                       </time>
                                     </p>
                                   </div>
-                                  <Button
-                                    variant="ghost"
-                                    size="icon-sm"
-                                    className="shrink-0 text-muted-foreground"
-                                    nativeButton={false}
-                                    render={
-                                      <Link
-                                        to={`/git-diff?base=${entry.hash}&target=${WORKTREE_REF}`}
-                                        title={t(
-                                          "pages:versionManage.compareWithWorktree",
-                                        )}
-                                        aria-label={t(
-                                          "pages:versionManage.compareWithWorktree",
-                                        )}
-                                      />
-                                    }
-                                  >
-                                    <FileDiff className="size-3.5" />
-                                  </Button>
+                                  <div className="flex shrink-0 items-center gap-0.5">
+                                    {/* 源码级 diff：抽屉内两级导航（文件清单 → 单文件 diff），只读 */}
+                                    <Button
+                                      variant="ghost"
+                                      size="icon-sm"
+                                      className="text-muted-foreground"
+                                      onClick={() =>
+                                        setDrawer({
+                                          mode: "commit",
+                                          commit: entry.hash,
+                                        })
+                                      }
+                                      title={t(
+                                        "pages:versionManage.viewSourceChanges",
+                                      )}
+                                      aria-label={t(
+                                        "pages:versionManage.viewSourceChanges",
+                                      )}
+                                    >
+                                      <FileCode2 className="size-3.5" />
+                                    </Button>
+                                    <Button
+                                      variant="ghost"
+                                      size="icon-sm"
+                                      className="text-muted-foreground"
+                                      nativeButton={false}
+                                      render={
+                                        <Link
+                                          to={`/git-diff?base=${entry.hash}&target=${WORKTREE_REF}`}
+                                          title={t(
+                                            "pages:versionManage.compareWithWorktree",
+                                          )}
+                                          aria-label={t(
+                                            "pages:versionManage.compareWithWorktree",
+                                          )}
+                                        />
+                                      }
+                                    >
+                                      <FileDiff className="size-3.5" />
+                                    </Button>
+                                  </div>
                                 </div>
                               </li>
                             </Fragment>
@@ -724,6 +809,68 @@ export default function VersionManagePage() {
           </>
         )}
       </div>
+
+      {/* 源码 diff 抽屉（工作区恢复 / 提交往只读浏览共用） */}
+      <DiffDrawer
+        open={drawer !== null}
+        onOpenChange={(o) => {
+          if (!o) setDrawer(null);
+        }}
+        workspaceId={workspaceId}
+        mode={drawer?.mode ?? "worktree"}
+        path={drawer?.path ?? ""}
+        commit={drawer?.commit ?? ""}
+        canWrite={canWrite}
+        getCachedDiff={getCachedDiff}
+        onRestored={handleRestored}
+      />
+
+      {/* 恢复后编辑器脏缓冲区确认：重载丢弃未保存修改 / 保留由 409 兜底 */}
+      <Dialog
+        open={reloadPrompt !== null}
+        onOpenChange={(o) => {
+          if (!o) setReloadPrompt(null);
+        }}
+      >
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>
+              {t("pages:versionManage.reloadPromptTitle")}
+            </DialogTitle>
+            <DialogDescription>
+              {t("pages:versionManage.reloadPromptBody", {
+                path: reloadPrompt ?? "",
+              })}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setReloadPrompt(null)}>
+              {t("pages:versionManage.reloadPromptCancel")}
+            </Button>
+            <Button
+              onClick={async () => {
+                const target = reloadPrompt;
+                setReloadPrompt(null);
+                try {
+                  const data = await api.project.fileContent(
+                    target,
+                    workspaceId,
+                  );
+                  useEditorStore.getState().openTab({
+                    filePath: target,
+                    content: data.content,
+                    baseMd5: data.md5,
+                  });
+                } catch (err) {
+                  toast.error(translateError(err.message));
+                }
+              }}
+            >
+              {t("pages:versionManage.reloadPromptConfirm")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

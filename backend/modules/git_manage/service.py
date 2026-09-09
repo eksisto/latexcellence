@@ -1,15 +1,22 @@
-"""Git 版本管理服务层（init / status / commit / log，最小闭环）。
+"""Git 版本管理服务层（init / status / commit / log / 源码 diff / 恢复）。
 
 复用 git_diff 的共享执行层：``run_git`` / ``run_git_checked`` /
 ``redact_command_output_for_user`` 与 ``get_project_context`` 仓库定位
 （含 project_prefix 子目录场景），不复制实现，git 命令统一经
 SandboxRunner（image_kind=tex）执行，自动获得超时与输出脱敏；只读
-子命令（status/log/rev-parse 等查询类）豁免每用户并发租约，init/
-add/commit 写操作照常占用（见 git_diff.process._is_readonly_git_args）。
+子命令（status/log/diff/show 等查询类）豁免每用户并发租约，init/
+add/commit/restore/apply 写操作照常占用（见 git_diff.process
+._is_readonly_git_args）。
 
 安全边界：
-- 无用户输入的 ref/hash（不做 checkout / restore 类命令）；唯一自由
-  文本是 commit message，以单参数 argv 传递（无 shell，无注入面）；
+- commit 模式的 ref 只接受 hex 哈希（正则白名单 + rev-parse 校验后才
+  拼接 ``^{commit}`` 父引用）；唯一自由文本是 commit message 与恢复
+  请求的 hunk raw 切片，均以单参数 argv / 项目内临时文件传递（无
+  shell，无注入面）；
+- hunk 恢复的 patch 由服务端重新生成 diff 后按回传切片拼接（切片必须
+  逐字出现在当前 diff 中），``git apply -R --check`` 预检失败即回滚
+  语义的 409——工作区在展示与恢复之间被改动时 fail-closed，绝不覆盖
+  新编辑；
 - commit 身份每次经 ``git -c user.name=… -c user.email=…`` 注入，不落
   全局配置；
 - 多用户模式下面向用户的错误消息一律过 redact_command_output_for_user
@@ -18,8 +25,11 @@ add/commit 写操作照常占用（见 git_diff.process._is_readonly_git_args）
 
 import asyncio
 import contextvars
+import re
 import shutil
 import threading
+import time
+import uuid
 from pathlib import Path, PurePosixPath
 
 from fastapi import HTTPException
@@ -37,9 +47,16 @@ from backend.utils.path_guard import resolve_project_path
 
 from .models import (
     GitChangeItem,
+    GitCommitFileItem,
+    GitCommitFilesResult,
     GitCommitResult,
+    GitDiffHunk,
+    GitDiffLine,
+    GitFileDiffResult,
     GitLastCommit,
     GitLogEntry,
+    GitRestoreRequest,
+    GitRestoreResult,
     GitStatusResult,
 )
 
@@ -47,6 +64,21 @@ logger = get_logger(__name__)
 
 # 大仓库的 add / commit 可能显著超过默认 30s（首次提交全量入库）
 _HEAVY_GIT_TIMEOUT = 120
+# diff / show 读取与 restore 写入的超时（大文件 diff 生成留余量）
+_DIFF_TIMEOUT = 60
+
+# commit 模式仅接受 hex 哈希（校验通过后才允许拼接 ^{commit} 父引用）
+_COMMIT_HASH_RE = re.compile(r"^[0-9a-fA-F]{7,40}$")
+# unified diff hunk 头
+_HUNK_HEADER = "@@ "
+# 单文件 diff 展示行数上限（超出在 hunk 边界截断，truncated=true）
+_MAX_DIFF_LINES = 2000
+# 单文件超大全文本不生成行级 diff 的体积阈值（工作区文件 stat 口径）
+_MAX_DIFF_FILE_BYTES = 2 * 1024 * 1024
+# 单个提交文件清单条目上限
+_MAX_COMMIT_FILES = 1000
+# diff/restore 不允许触碰的隐藏前缀（.latexcellence 为应用元数据）
+_FORBIDDEN_PATH_PREFIXES = (".git", ".latexcellence")
 
 # LaTeX 编译产物 .gitignore 模板（项目已有 .gitignore 时尊重现状，不覆盖）
 GITIGNORE_TEMPLATE = """\
@@ -427,6 +459,556 @@ async def get_log(
             )
         )
     return entries
+
+
+# ── 源码级 diff 查看 ───────────────────────────────────────────────
+
+
+def _fail_path(path: str) -> HTTPException:
+    return _fail(400, "git_file_path_invalid", f"Invalid file path: {path}")
+
+
+def _validate_diff_path(root: Path, path: str) -> PurePosixPath:
+    """diff/restore 目标路径校验，返回项目内相对路径。
+
+    走 resolve_project_path 唯一入口（拒绝绝对路径 / .. / 符号链接 /
+    越界），并显式拒绝 .git 与 .latexcellence 前缀；目录路径无 diff
+    语义，一并拒绝。restore 侧自行按 project_prefix 换算仓库根相对
+    路径（写路径需要仓库根基准，展示路径不需要）。"""
+    if not path or not path.strip():
+        raise _fail_path(path)
+    rel = PurePosixPath(path)
+    if any(part in ("..", ".") for part in rel.parts) or (
+        rel.parts and rel.parts[0] in _FORBIDDEN_PATH_PREFIXES
+    ):
+        raise _fail_path(path)
+    try:
+        resolved = resolve_project_path(root, rel.as_posix())
+    except ValueError as e:
+        raise _fail_path(path) from e
+    if resolved.is_dir():
+        raise _fail_path(path)
+    return rel
+
+
+def _normalized_commit(commit: str) -> str:
+    """commit 模式仅接受 hex 哈希（正则白名单），返回小写规范化形式。
+
+    不做前置 rev-parse 校验：无效哈希由 git show 自身报错，调用方按
+    退出码映射 404——省一次沙箱往返；白名单保证用户输入永远只作为
+    单一 argv 出现，无注入面。"""
+    candidate = (commit or "").strip().lower()
+    if not _COMMIT_HASH_RE.fullmatch(candidate):
+        raise _fail(400, "git_commit_not_found", f"Commit not found: {commit}")
+    return candidate
+
+
+async def _raw_status_for_path(cwd: Path, pathspec: str) -> str:
+    """单路径 porcelain XY 状态码（cwd 相对 pathspec；无变更返回空串）。"""
+    result = await git_diff_process.run_git(
+        cwd,
+        ["status", "--porcelain=v1", "-z", "-uall", "--", pathspec],
+    )
+    if result.returncode != 0:
+        raise RuntimeError(
+            git_diff_process.redact_command_output_for_user(
+                result.stderr.strip() or "Git status failed", cwd
+            )
+        )
+    for entry in result.stdout.split("\x00"):
+        if entry and not entry.startswith("#"):
+            return entry[:2]
+    return ""
+
+
+async def _has_head(context: ProjectContext) -> bool:
+    """仓库是否已有提交（unborn HEAD 时 diff HEAD / restore 无基线）。"""
+    result = await git_diff_process.run_git(
+        context.git_root,
+        ["rev-parse", "--verify", "-q", "--end-of-options", "HEAD"],
+    )
+    return result.returncode == 0
+
+
+async def _run_diff_command(context: ProjectContext, args: list[str]) -> str:
+    result = await git_diff_process.run_git(
+        context.git_root, args, timeout=_DIFF_TIMEOUT
+    )
+    if result.returncode != 0:
+        raise RuntimeError(
+            git_diff_process.redact_command_output_for_user(
+                result.stderr.strip() or "Git diff failed", context.git_root
+            )
+        )
+    return result.stdout
+
+
+def _worktree_diff_args(pathspec: str) -> list[str]:
+    """工作区 vs HEAD 的 diff 参数（pathspec 为 cwd 相对路径）。"""
+    return ["diff", "--no-color", "--no-renames", "HEAD", "--", pathspec]
+
+
+def _file_too_large(root: Path, rel: PurePosixPath) -> bool:
+    """工作区文件超大全文本判定（>2MB 不生成行级 diff；缺失按否处理）。"""
+    try:
+        target = resolve_project_path(root, rel.as_posix())
+        return target.is_file() and target.stat().st_size > _MAX_DIFF_FILE_BYTES
+    except (ValueError, OSError):
+        return False
+
+
+def _parse_unified_diff(
+    diff_text: str, max_lines: int
+) -> tuple[list[GitDiffHunk], bool, bool, int, int]:
+    """unified diff 文本 → (hunks, truncated, is_binary, additions, deletions)。
+
+    在 hunk 边界截断：使累计展示行数超过 max_lines 的 hunk 整体丢弃并标记
+    truncated，保证已返回的 raw 都是完整 hunk（可安全回传用于恢复）。
+    ``\\ No newline`` 行不计展示行但保留在 raw 中（git apply 需要）。
+    二进制 diff 没有 hunk 头，仅 "Binary files ... differ" 标记行。"""
+    hunks: list[GitDiffHunk] = []
+    truncated = False
+    total_adds = total_dels = 0
+    lines = diff_text.splitlines(keepends=True)
+    i = 0
+    while i < len(lines) and not lines[i].startswith(_HUNK_HEADER):
+        i += 1
+    is_binary = (
+        i == len(lines)
+        and bool(diff_text.strip())
+        and ("Binary files" in diff_text or "GIT_BINARY patch" in diff_text)
+    )
+    used = 0
+    while i < len(lines):
+        header = lines[i]
+        i += 1
+        body: list[str] = []
+        parsed: list[GitDiffLine] = []
+        adds = dels = 0
+        display = 1  # hunk 头自计一行
+        while i < len(lines):
+            raw_line = lines[i]
+            if not raw_line.strip():
+                # 空上下文行（git 通常保留前导空格；裸空行按 context 展示）
+                body.append(raw_line)
+                parsed.append(GitDiffLine(type="context", text=""))
+                display += 1
+                i += 1
+                continue
+            marker = raw_line[:1]
+            if marker not in (" ", "+", "-", "\\"):
+                break  # 下一个文件段（diff --git …）
+            body.append(raw_line)
+            if marker == "+":
+                adds += 1
+            elif marker == "-":
+                dels += 1
+            if marker != "\\":
+                parsed.append(
+                    GitDiffLine(
+                        type={" ": "context", "+": "add", "-": "del"}[marker],
+                        text=raw_line[1:].rstrip("\r\n"),
+                    )
+                )
+                display += 1
+            i += 1
+        if used + display > max_lines:
+            truncated = True
+            break
+        used += display
+        total_adds += adds
+        total_dels += dels
+        hunks.append(
+            GitDiffHunk(
+                header=header.rstrip("\n"),
+                lines=parsed,
+                raw=header + "".join(body),
+                additions=adds,
+                deletions=dels,
+            )
+        )
+    return hunks, truncated, is_binary, total_adds, total_dels
+
+
+def _kind_from_diff_text(diff_text: str) -> str:
+    """从 diff 头部元信息推断 kind（省去一次 status 查询）。"""
+    if not diff_text.strip():
+        return ""
+    if "new file mode" in diff_text:
+        return "added"
+    if "deleted file mode" in diff_text:
+        return "deleted"
+    return "modified"
+
+
+async def _untracked_file_diff(
+    root: Path, result_path: str, rel: PurePosixPath, kind: str
+) -> GitFileDiffResult:
+    """未跟踪文件：对 /dev/null 生成全文新增 diff，不可恢复（撤销=删除）。"""
+    if await asyncio.to_thread(_file_too_large, root, rel):
+        return GitFileDiffResult(path=result_path, kind=kind, too_large=True)
+    abs_path = str(root / rel)
+    result = await git_diff_process.run_git(
+        root,
+        [
+            "diff",
+            "--no-color",
+            "--no-renames",
+            "--no-index",
+            "--",
+            "/dev/null",
+            abs_path,
+        ],
+        timeout=_DIFF_TIMEOUT,
+    )
+    # --no-index 存在差异时退出码为 1，属预期而非错误
+    diff_text = result.stdout if result.returncode in (0, 1) else ""
+    if result.returncode not in (0, 1):
+        logger.warning(
+            "Untracked file diff failed | path=%s | stderr=%s",
+            abs_path,
+            result.stderr.strip(),
+        )
+    hunks, truncated, is_binary, adds, dels = _parse_unified_diff(
+        diff_text, _MAX_DIFF_LINES
+    )
+    return GitFileDiffResult(
+        path=result_path,
+        kind=kind,
+        is_binary=is_binary,
+        truncated=truncated,
+        additions=adds,
+        deletions=dels,
+        hunks=hunks,
+        restorable=False,
+    )
+
+
+async def get_file_diff(
+    workspace_id: str = "", path: str = "", commit: str = ""
+) -> GitFileDiffResult:
+    """单文件源码级 diff。
+
+    commit 为空：工作区 vs HEAD；commit 为 hex 哈希：该提交 vs 其父
+    提交（只读，不可恢复）。页面数据过期（文件已无变更）时 kind 返回
+    空串而非报错。
+
+    性能约束（沙箱下每次 git 调用都是一次容器往返）：diff-first 排序，
+    常见路径（已跟踪文件的修改/删除）只跑一次 ``git diff HEAD``，kind
+    从 diff 头推导；空 diff 才补一次 status 区分干净/未跟踪；diff 失败
+    （unborn HEAD）按无基线处理。全程 cwd=项目根 + cwd 相对 pathspec，
+    不需要仓库根定位（展示解析不依赖仓库根相对路径），省去
+    get_project_context 的 rev-parse。"""
+    started = time.monotonic()
+    root = await _workspace_root(workspace_id)
+    rel = _validate_diff_path(root, path)
+    result_path = rel.as_posix()
+
+    if commit:
+        candidate = _normalized_commit(commit)
+        result = await git_diff_process.run_git(
+            root,
+            [
+                "show",
+                "--no-color",
+                "--no-renames",
+                # merge 提交默认输出空 combined diff；按第一父提交呈现
+                # 变更（git < 2.31 无此含义，优雅退化为现状而非报错）
+                "--first-parent",
+                "--format=",
+                candidate,
+                "--",
+                result_path,
+            ],
+            timeout=_DIFF_TIMEOUT,
+        )
+        if result.returncode != 0:
+            logger.warning(
+                "Git show failed | path=%s | commit=%s | stderr=%s",
+                result_path,
+                candidate,
+                result.stderr.strip(),
+            )
+            raise _fail(400, "git_commit_not_found", f"Commit not found: {commit}")
+        hunks, truncated, is_binary, adds, dels = _parse_unified_diff(
+            result.stdout, _MAX_DIFF_LINES
+        )
+        logger.debug(
+            "Git file diff | path=%s | commit=%s | %.0fms",
+            result_path,
+            candidate,
+            (time.monotonic() - started) * 1000,
+        )
+        return GitFileDiffResult(
+            path=result_path,
+            kind=_kind_from_diff_text(result.stdout),
+            is_binary=is_binary,
+            truncated=truncated,
+            additions=adds,
+            deletions=dels,
+            hunks=hunks,
+            restorable=False,
+            commit_hash=candidate,
+        )
+
+    # 工作区模式：diff-first
+    result = await git_diff_process.run_git(
+        root, _worktree_diff_args(result_path), timeout=_DIFF_TIMEOUT
+    )
+    if result.returncode != 0:
+        # unborn HEAD（无提交）：一切文件无基线，存在的工作区文件按全文新增展示
+        logger.debug(
+            "Git diff HEAD unavailable (unborn HEAD?) | path=%s | stderr=%s",
+            result_path,
+            result.stderr.strip(),
+        )
+        if not (root / rel).exists():
+            return GitFileDiffResult(path=result_path, kind="")
+        return await _untracked_file_diff(root, result_path, rel, "added")
+
+    if result.stdout.strip():
+        # 已跟踪变更：kind 从 diff 头推导，无需 status
+        hunks, truncated, is_binary, adds, dels = _parse_unified_diff(
+            result.stdout, _MAX_DIFF_LINES
+        )
+        logger.debug(
+            "Git file diff | path=%s | %.0fms",
+            result_path,
+            (time.monotonic() - started) * 1000,
+        )
+        return GitFileDiffResult(
+            path=result_path,
+            kind=_kind_from_diff_text(result.stdout),
+            is_binary=is_binary,
+            too_large=await asyncio.to_thread(_file_too_large, root, rel),
+            truncated=truncated,
+            additions=adds,
+            deletions=dels,
+            hunks=hunks,
+            restorable=True,
+        )
+
+    # 空 diff：区分「已干净」与「未跟踪」（后者用 --no-index 展示全文新增）
+    xy = await _raw_status_for_path(root, result_path)
+    if not xy:
+        logger.debug(
+            "Git file diff | path=%s | clean | %.0fms",
+            result_path,
+            (time.monotonic() - started) * 1000,
+        )
+        return GitFileDiffResult(path=result_path, kind="")
+    if xy == "??":
+        return await _untracked_file_diff(root, result_path, rel, "added")
+    # porcelain 有条目但 diff HEAD 为空（异常 index 状态等）：给 kind 不给 hunks
+    return GitFileDiffResult(path=result_path, kind=_change_kind(xy), restorable=True)
+
+
+async def get_commit_files(
+    workspace_id: str = "", commit: str = ""
+) -> GitCommitFilesResult:
+    """单个提交变更的文件清单（抽屉内两级导航第一级；项目内相对路径）。
+
+    单次 ``git show --name-status --relative``（cwd=项目根）：--relative
+    把输出路径改写为项目内相对路径并自动排除子树之外的变更，省去
+    仓库根定位与前缀换算。--first-parent 使 merge 提交按第一父提交
+    呈现变更（默认 combined diff 对 merge 输出为空，会被误判为无变更）。"""
+    root = await _workspace_root(workspace_id)
+    candidate = _normalized_commit(commit)
+    result = await git_diff_process.run_git(
+        root,
+        [
+            "show",
+            "--no-color",
+            "--no-renames",
+            "--name-status",
+            "--relative",
+            "--first-parent",
+            "--format=",
+            candidate,
+        ],
+        timeout=_DIFF_TIMEOUT,
+    )
+    if result.returncode != 0:
+        logger.warning(
+            "Git show name-status failed | commit=%s | stderr=%s",
+            candidate,
+            result.stderr.strip(),
+        )
+        raise _fail(400, "git_commit_not_found", f"Commit not found: {commit}")
+
+    files: list[GitCommitFileItem] = []
+    truncated = False
+    for line in result.stdout.splitlines():
+        if not line.strip():
+            continue
+        parts = line.split("\t")
+        if len(parts) < 2:
+            continue
+        letter, rel_path = parts[0], parts[1]
+        rel = PurePosixPath(rel_path)
+        if rel.parts and rel.parts[0] in _FORBIDDEN_PATH_PREFIXES:
+            continue
+        if len(files) >= _MAX_COMMIT_FILES:
+            truncated = True
+            break
+        kind = "added" if letter == "A" else "deleted" if letter == "D" else "modified"
+        files.append(GitCommitFileItem(path=rel.as_posix(), kind=kind))
+    return GitCommitFilesResult(hash=candidate, files=files, truncated=truncated)
+
+
+# ── 选择性恢复 ─────────────────────────────────────────────────────
+
+_WORKTREE_CHANGED_MESSAGE = (
+    "Workspace changed since the diff was shown; refresh and retry"
+)
+
+
+def _write_patch_file(directory: Path, patch: str) -> str:
+    """在项目元数据临时目录原子写入 patch，返回文件名。"""
+    directory.mkdir(parents=True, exist_ok=True)
+    name = f"restore-{uuid.uuid4().hex}.patch"
+    tmp = directory / f"{name}.tmp"
+    # newline="" 禁止换行符翻译，保证 patch 字节与服务端 diff 文本一致
+    tmp.write_text(patch, encoding="utf-8", newline="")
+    tmp.replace(directory / name)
+    return name
+
+
+async def restore_changes(
+    workspace_id: str = "", request: GitRestoreRequest | None = None
+) -> GitRestoreResult:
+    """恢复工作区变更（整文件或按 hunk）。
+
+    整文件模式 ``--staged --worktree``：暂存区与工作区一并回退 HEAD；
+    hunk 模式只回退工作区。hunk 模式 fail-closed：服务端以相同参数重新
+    生成 diff，前端回传的 hunk raw 切片必须逐字命中当前 diff（过期即
+    409），文件头由服务端重新生成（客户端永远不提供 patch 头），
+    ``git apply -R --check`` 预检通过才落盘——工作区在展示与恢复之间被
+    任何一方改动时，恢复不会覆盖新编辑。"""
+    if request is None:
+        raise _fail(400, "git_patch_invalid", "Missing restore payload")
+    context = await get_project_context(workspace_id)
+    rel = _validate_diff_path(context.root, request.path)
+    repo_rel_posix = (context.project_prefix / rel).as_posix()
+
+    xy = await _raw_status_for_path(context.git_root, repo_rel_posix)
+    if not xy:
+        raise _fail(400, "git_no_changes", "File has no pending changes to restore")
+    if xy == "??":
+        raise _fail(
+            400,
+            "git_file_untracked",
+            "Untracked files have no committed baseline to restore",
+        )
+    if not await _has_head(context):
+        raise _fail(
+            400, "git_restore_no_base", "Repository has no commits to restore to"
+        )
+
+    if request.mode == "file":
+        # --staged + --worktree：暂存区一并回退。应用自身 add -A 后原子
+        # commit，暂存态只在 commit 失败（如 index.lock 409）或单用户终端
+        # git add 后残留；若只回退工作区，暂存条目会让文件在恢复后仍显示
+        # 为已变更（A → AD / M → M），「已恢复」提示失实。staged-added
+        # （HEAD 无此文件）经 --staged 连同 index 条目一起清除，整文件消失。
+        await git_diff_process.run_git_checked(
+            context.git_root,
+            [
+                "restore",
+                "--source=HEAD",
+                "--staged",
+                "--worktree",
+                "--",
+                repo_rel_posix,
+            ],
+            timeout=_HEAVY_GIT_TIMEOUT,
+        )
+        logger.info("Git restore file ok | path=%s", repo_rel_posix)
+        return GitRestoreResult(path=rel.as_posix(), mode="file")
+
+    # hunks 模式只回退工作区、不动暂存区（部分撤销不越权改写用户的暂存
+    # 状态）；提交路径统一 add -A 以工作区为准，残留暂存不会复活已撤销
+    # 的 hunk。
+    selected = [h for h in request.hunks if h and h.strip()]
+    if not selected:
+        raise _fail(422, "git_patch_invalid", "No hunks selected")
+    for raw in selected:
+        if not raw.startswith(_HUNK_HEADER):
+            raise _fail(400, "git_patch_invalid", "Malformed hunk payload")
+
+    diff_text = await _run_diff_command(context, _worktree_diff_args(repo_rel_posix))
+    positions: list[int] = []
+    for raw in selected:
+        idx = diff_text.find(raw)
+        if idx < 0:
+            raise _fail(409, "git_worktree_changed", _WORKTREE_CHANGED_MESSAGE)
+        positions.append(idx)
+    # 位置排序 + 去重后拼接：文件头取自服务端重新生成的 diff 文本
+    pairs = sorted(zip(positions, selected))
+    unique_raws: list[str] = []
+    seen_positions: set[int] = set()
+    for pos, raw in pairs:
+        if pos in seen_positions:
+            continue
+        seen_positions.add(pos)
+        unique_raws.append(raw)
+    header_end = diff_text.find(_HUNK_HEADER)
+    patch = diff_text[:header_end] + "".join(unique_raws)
+    if not patch.endswith("\n"):
+        patch += "\n"
+
+    patch_dir = context.root / ".latexcellence" / "tmp"
+    patch_rel = PurePosixPath(
+        (context.project_prefix / ".latexcellence" / "tmp").as_posix()
+    )
+    patch_name = await asyncio.to_thread(_write_patch_file, patch_dir, patch)
+    patch_arg = (patch_rel / patch_name).as_posix()
+    logger.debug(
+        "Git restore hunks | path=%s | hunks=%d", repo_rel_posix, len(unique_raws)
+    )
+    try:
+        check = await git_diff_process.run_git(
+            context.git_root,
+            ["apply", "-R", "--check", "--whitespace=nowarn", patch_arg],
+            timeout=_HEAVY_GIT_TIMEOUT,
+        )
+        if check.returncode != 0:
+            logger.warning(
+                "Git apply --check rejected restore patch | path=%s | stderr=%s",
+                repo_rel_posix,
+                check.stderr.strip(),
+            )
+            raise _fail(409, "git_worktree_changed", _WORKTREE_CHANGED_MESSAGE)
+        applied = await git_diff_process.run_git(
+            context.git_root,
+            ["apply", "-R", "--whitespace=nowarn", patch_arg],
+            timeout=_HEAVY_GIT_TIMEOUT,
+        )
+        if applied.returncode != 0:
+            stderr = applied.stderr.strip()
+            logger.warning(
+                "Git apply failed after check | path=%s | stderr=%s",
+                repo_rel_posix,
+                stderr,
+            )
+            if "index.lock" in stderr:
+                raise _fail(
+                    409,
+                    "git_repository_locked",
+                    "Git repository is locked by another operation, please retry later",
+                )
+            raise _fail(409, "git_worktree_changed", _WORKTREE_CHANGED_MESSAGE)
+    finally:
+        await asyncio.to_thread((patch_dir / patch_name).unlink, missing_ok=True)
+
+    logger.info(
+        "Git restore hunks ok | path=%s | hunks=%d",
+        repo_rel_posix,
+        len(unique_raws),
+    )
+    return GitRestoreResult(
+        path=rel.as_posix(), mode="hunks", restored_hunks=len(unique_raws)
+    )
 
 
 # ── 上传自动初始化（best-effort 后台任务）─────────────────────────

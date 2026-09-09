@@ -435,6 +435,7 @@ apply 时携带 file_path → 精确写回对应文件
 | 格式转换 | pandoc 子进程转换，宏包分析兜底补充 `\usepackage` 注释 | [format_converter.md](docs/modules/format_converter.md) |
 | 样式修改 | 粘贴代码单次请求，或项目 Agent overlay + shadow 编译 + proposal 事务写回 | [style_modify.md](docs/modules/style_modify.md) |
 | Git 差异高亮 | 两个 Git revision 内容对比 → 差异高亮文档 → latexmk 编译 PDF | [git_diff.md](docs/modules/git_diff.md) |
+| Git 变更恢复 | 源码 diff 结构化 hunk → 前端勾选 → 服务端重生成 diff 校验切片 → `git apply -R --check` fail-closed | [git_manage.md](docs/modules/git_manage.md) |
 
 ---
 
