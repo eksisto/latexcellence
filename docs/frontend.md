@@ -150,7 +150,7 @@ highlight.js 的按需注册与统一入口：
 | `EmptyState.jsx` | 共享空状态：细环图标 + 标题 + 描述 + 可选 CTA（无项目 / 恢复中 / 空结果） |
 | `ProofDiff.jsx` | 原文→修改后对照行：原文衬线删除线、改后加粗（`modified` 可传字符串或 ReactNode，术语检查传自定义 Input）；`code` prop（默认开启）将两侧切换为等宽字体 |
 | `ResultFilterBar.jsx` | 结果过滤工具栏（搜索框 + 类型下拉 + 段落跳转 + 重置） |
-| `UndoRedoButtons.jsx` | 可复用撤销/重做按钮组：内部使用 `useUndoRedo`，轮询 undo-status（页面不可见时暂停），支持 Ctrl+Z / Ctrl+Shift+Z / Ctrl+Y 快捷键与撤销确认弹窗；快捷键由组件级共享监听处理（仅最近挂载实例响应）；用于 workspace、逐段检查各页与参考文献管理（文献库） |
+| `UndoRedoButtons.jsx` | 可复用撤销/重做按钮组：内部使用 `useUndoRedo`，轮询 undo-status（页面不可见时暂停），支持 Ctrl+Z / Ctrl+Shift+Z / Ctrl+Y 快捷键与撤销确认弹窗；轮询 interval 与快捷键监听均为组件级共享（全应用各只挂一份，多实例不叠加）；用于 workspace、逐段检查各页与参考文献管理（文献库） |
 | `ProgressBar.jsx` | 检查进度条组件 |
 | `UnlistedChanges.jsx` | 展示「模型修改了全文但未列出条目」（unlisted_changes）的琥珀色提示：`UnlistedChangesBadge`（卡片头标记）+ `UnlistedChangesBody`（全文预览 + 应用/忽略），typo_check / expression_opt / paragraph_translate 共用，全文经 MarkerText 渲染 |
 | `ColorField.jsx` | 颜色选择器组件 |

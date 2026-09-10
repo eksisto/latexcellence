@@ -121,13 +121,14 @@ export default function WritingChatPage() {
   const canEdit = paragraphIndex != null && !!activeFile;
   const visibleMessages = messages.filter(isVisibleChatMessage);
 
+  // 函数与稳定标量打包下传；编辑/应用进行态（editingMessageId /
+  // applyingMessageId）不进本对象——它们任一变化都会让对象换引用，
+  // 全部 memo 化 MessageBubble 比较失效，渲染点按消息拆成布尔 props
   const messageActions = useMemo(
     () => ({
       generateEdit,
       applyEdit,
       deleteMessage,
-      editingMessageId,
-      applyingMessageId,
       canEdit,
       canApplyEdit: canWrite,
       prepareSectionRead: (page, sectionIds) =>
@@ -138,17 +139,7 @@ export default function WritingChatPage() {
           }),
         ),
     }),
-    [
-      generateEdit,
-      applyEdit,
-      deleteMessage,
-      editingMessageId,
-      applyingMessageId,
-      canEdit,
-      canWrite,
-      setInput,
-      t,
-    ],
+    [generateEdit, applyEdit, deleteMessage, canEdit, canWrite, setInput, t],
   );
 
   return (
@@ -509,6 +500,8 @@ export default function WritingChatPage() {
                     key={m.id}
                     message={m}
                     actions={messageActions}
+                    isEditing={editingMessageId === m.id}
+                    isApplying={applyingMessageId === m.id}
                   />
                 ))}
               </div>

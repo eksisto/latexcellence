@@ -103,15 +103,19 @@ export default defineConfig(({ mode }) => {
           },
           manualChunks(id) {
             if (id.includes("node_modules")) {
+              // @base-ui / lucide-react 不做 manualChunks 强制分组，也不
+              // 落入末尾兜底 vendor chunk（bundle-dynamic-imports）：入口
+              // 只静态引用其中一小部分，任何整库分组都会把懒加载路由引用
+              // 的全部组件/图标聚进首屏。返回 undefined 交给 Rollup 默认
+              // 算法跟随消费者分包（组件与图标均已子路径深导入，天然可拆）
+              if (/@base-ui|@radix-ui|lucide-react/.test(id)) return;
               if (
                 /\/node_modules\/react(-dom)?\//.test(id) ||
                 /\/node_modules\/scheduler\//.test(id)
               )
                 return "vendor-react";
-              if (/@base-ui|@radix-ui/.test(id)) return "vendor-ui";
               if (/react-router|@remix-run\/router/.test(id))
                 return "vendor-router";
-              if (/lucide-react/.test(id)) return "vendor-icons";
               if (/sonner/.test(id)) return "vendor-sonner";
               if (/katex/.test(id)) return "vendor-katex";
               // 以下库只被懒加载路由使用（MarkdownRenderer / CodeBlock 等），

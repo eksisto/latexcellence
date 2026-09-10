@@ -54,6 +54,29 @@ function uninstallSharedKeydown() {
 }
 
 /**
+ * 模块级共享轮询：undo-status 的 2.5s 定时刷新全应用只挂一个 interval
+ * （第一个实例挂载时启动，最后一个实例卸载时清除）。若同一时刻存在
+ * 多个 UndoRedoButtons，一次 tick 依次刷新全部活跃实例，避免 N 个
+ * 实例 N 倍轮询——与上方 keydown 共享注册表同款先例。
+ */
+const pollRefreshers = new Set();
+let sharedPollTimer = null;
+
+function installSharedPolling() {
+  if (sharedPollTimer !== null) return;
+  sharedPollTimer = setInterval(() => {
+    if (document.visibilityState !== "visible") return;
+    for (const refresh of pollRefreshers) refresh();
+  }, 2500);
+}
+
+function uninstallSharedPolling() {
+  if (sharedPollTimer === null || pollRefreshers.size > 0) return;
+  clearInterval(sharedPollTimer);
+  sharedPollTimer = null;
+}
+
+/**
  * 可复用的撤销/重做按钮组。
  *
  * 用于逐段检查、文献库等页面：对当前激活文件执行撤销/重做，
@@ -85,19 +108,21 @@ export default function UndoRedoButtons({
   });
 
   // 页面内其他写操作不会触发 useUndoRedo 的刷新，定时轮询保持按钮状态准确；
-  // 执行撤销/重做期间 hook 内部会跳过刷新，避免与写操作抢请求
+  // 执行撤销/重做期间 hook 内部会跳过刷新，避免与写操作抢请求。
+  // 轮询 interval 为模块级共享（见 pollRefreshers 注释），实例只注册
+  // 自己的 refresh；页面不可见时跳过刷新
   useEffect(() => {
     if (!activeFile) return;
     const onVisibilityChange = () => {
       if (document.visibilityState === "visible") refresh();
     };
     document.addEventListener("visibilitychange", onVisibilityChange);
-    const timer = setInterval(() => {
-      if (document.visibilityState === "visible") refresh();
-    }, 2500);
+    pollRefreshers.add(refresh);
+    installSharedPolling();
     return () => {
       document.removeEventListener("visibilitychange", onVisibilityChange);
-      clearInterval(timer);
+      pollRefreshers.delete(refresh);
+      uninstallSharedPolling();
     };
   }, [refresh, activeFile]);
 

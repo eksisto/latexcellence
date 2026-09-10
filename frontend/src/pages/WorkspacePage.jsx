@@ -117,6 +117,10 @@ export default function WorkspacePage() {
   const [previewUrl, setPreviewUrl] = useState(null);
   const previewUrlRef = useRef(null);
 
+  // 段落加载序号：doOpenProject / handleSelectFile / reloadActiveFileParagraphs
+  // 三个写入口共享，快速连续切换时丢弃过期响应（防旧文件段落覆盖新文件）
+  const paragraphsSeqRef = useRef(0);
+
   const clearPreview = useCallback(() => {
     if (previewUrlRef.current) {
       URL.revokeObjectURL(previewUrlRef.current);
@@ -129,6 +133,7 @@ export default function WorkspacePage() {
   const handleCloseProject = useCallback(() => {
     clearPreview();
     clearProject();
+    paragraphsSeqRef.current += 1;
     setParagraphs([]);
     setPdfUrl(null);
     setConfirmCloseOpen(false);
@@ -148,10 +153,13 @@ export default function WorkspacePage() {
         setFileTree(data.file_tree);
         setMainFile(data.main_file);
         setActiveFile(data.main_file);
+        const seq = ++paragraphsSeqRef.current;
         try {
           const p = await api.project.paragraphs(data.main_file, workspaceId);
+          if (seq !== paragraphsSeqRef.current) return;
           setParagraphs(p.paragraphs || []);
         } catch {
+          if (seq !== paragraphsSeqRef.current) return;
           setParagraphs([]);
         }
         // 单用户展示本地路径；多用户模式后端不返回 root_path（服务器路径不外露）
@@ -318,15 +326,19 @@ export default function WorkspacePage() {
       setActiveFile(node.path);
       // 图片 / PDF：只读预览，不请求段落（后端 paragraphs 仅支持 .tex）
       if (isPreviewableFilePath(node.path)) {
+        paragraphsSeqRef.current += 1;
         setParagraphs([]);
         setPreviewPath(node.path);
         return;
       }
       clearPreview();
+      const seq = ++paragraphsSeqRef.current;
       try {
         const data = await api.project.paragraphs(node.path, workspaceId);
+        if (seq !== paragraphsSeqRef.current) return;
         setParagraphs(data.paragraphs || []);
       } catch (e) {
+        if (seq !== paragraphsSeqRef.current) return;
         setParagraphs([]);
       }
     },
@@ -364,10 +376,13 @@ export default function WorkspacePage() {
 
   const reloadActiveFileParagraphs = useCallback(async () => {
     if (!activeFile) return;
+    const seq = ++paragraphsSeqRef.current;
     try {
       const data = await api.project.paragraphs(activeFile, workspaceId);
+      if (seq !== paragraphsSeqRef.current) return;
       setParagraphs(data.paragraphs || []);
     } catch (_) {
+      if (seq !== paragraphsSeqRef.current) return;
       setParagraphs([]);
     }
   }, [activeFile, workspaceId]);

@@ -644,8 +644,9 @@ export const api = {
 
   /* ---- 模板生成 ---- */
   templateGen: {
-    /* 自主 Agent 生成（SSE 流式） */
-    generate: async ({ description, language, onEvent, onError }) => {
+    /* 自主 Agent 生成（SSE 流式）；signal 取消在途请求（重新生成/组件
+       卸载时中止流），abort 以 AbortError 结束，由调用方静默处理 */
+    generate: async ({ description, language, onEvent, onError, signal }) => {
       const res = await fetch(`${getApiBase()}/template-gen/generate`, {
         method: "POST",
         headers: authHeaders({ "Content-Type": "application/json" }),
@@ -653,6 +654,7 @@ export const api = {
           description,
           language: language ?? getUiLanguage(),
         }),
+        signal,
         credentials: "include",
       });
       if (!res.ok) {
@@ -1187,6 +1189,11 @@ export const api = {
 
   /* ---- 写作助手 ---- */
   writingChat: {
+    /**
+     * 写作聊天流式对话。
+     * @param {AbortSignal} [signal] 取消在途请求（组件卸载时中止流）；
+     *   abort 使 fetch 与读循环以 AbortError 结束，由调用方静默处理
+     */
     send: async ({
       sessionId,
       filePath,
@@ -1196,6 +1203,7 @@ export const api = {
       workspaceId,
       onEvent,
       onError,
+      signal,
     }) => {
       const url = appendWs(`${getApiBase()}/writing-chat/send`, workspaceId);
       let res;
@@ -1211,9 +1219,12 @@ export const api = {
             assistant_prompt: assistantPrompt ?? null,
             language: getUiLanguage(),
           }),
+          signal,
           credentials: "include",
         });
       } catch (e) {
+        // 保留取消信号（AbortController）的原始错误，让调用方区分“主动取消”和“真的失败”
+        if (e?.name === "AbortError") throw e;
         throw new Error(translateError(e.message || "Request timed out"));
       }
       if (!res.ok) {

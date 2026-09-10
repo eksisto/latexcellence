@@ -266,11 +266,19 @@ export function lineColToOffset(text, line, col) {
   if (typeof text !== "string" || text.length === 0) return -1;
   const l = Number.isInteger(line) && line >= 1 ? line : 1;
   const c = Number.isInteger(col) && col >= 1 ? col : 1;
-  const lines = text.split("\n");
-  if (l > lines.length) return -1;
+  // 逐个 indexOf 递进到目标行（O(行前偏移)）：预览卡每次光标停顿都会
+  // 调用本函数，全文 split 只为求一个偏移量就分配数千行子串
   let offset = 0;
-  for (let i = 0; i < l - 1; i += 1) offset += lines[i].length + 1;
-  return offset + Math.min(c - 1, lines[l - 1].length);
+  for (let i = 0; i < l - 1; i += 1) {
+    const nl = text.indexOf("\n", offset);
+    if (nl === -1) return -1; // 行号超出文档行数（快照与编辑错位）
+    offset = nl + 1;
+  }
+  // 目标行长度：到下一个换行或文档尾（CRLF 的 \r 计入行长度，与
+  // 原 split 实现口径一致）
+  const nl = text.indexOf("\n", offset);
+  const lineEnd = nl === -1 ? text.length : nl;
+  return offset + Math.min(c - 1, lineEnd - offset);
 }
 
 /**

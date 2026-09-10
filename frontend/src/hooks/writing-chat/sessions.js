@@ -2,7 +2,7 @@
  * Writing Chat 会话管理逻辑。
  */
 
-import { useCallback, useEffect } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import { toast } from "sonner";
 import { api } from "@/api/index";
 import i18n from "@/i18n";
@@ -28,6 +28,9 @@ export function useWritingChatSessions({
   writingChatCurrentSessionId,
   writingChatMessages,
 }) {
+  /** 会话加载序号：快速连续切换时丢弃过期响应，防慢的旧 loadSession
+   * 把 currentSessionId 与消息列表改写回旧会话 */
+  const loadSessionSeqRef = useRef(0);
   // ── 刷新会话列表 ─────────────────────────────────────────────────
   const refreshSessions = useCallback(async () => {
     try {
@@ -63,8 +66,10 @@ export function useWritingChatSessions({
         setWritingChatCompressed(false);
         return;
       }
+      const seq = ++loadSessionSeqRef.current;
       try {
         const data = await api.writingChat.loadSession(sessionId);
+        if (seq !== loadSessionSeqRef.current) return;
         setWritingChatCurrentSessionId(sessionId);
         setWritingChatMessages(processLoadedMessages(data.messages || []));
         const hasCompressed = (data.messages || []).some(
@@ -75,6 +80,7 @@ export function useWritingChatSessions({
           setActiveFile(data.file_path);
         }
       } catch (e) {
+        if (seq !== loadSessionSeqRef.current) return;
         toast.error(i18n.t("hooks:writingChat.loadSessionFailed"), {
           description: e.message,
         });

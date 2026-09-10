@@ -43,20 +43,60 @@ export default function useStyleModifyAgent() {
   const abortRef = useRef(null);
   const stepKeyRef = useRef(0);
   const restoredRef = useRef(false);
+  // 思维链事件可能逐 token 到达：先累积进 ref，requestAnimationFrame 批量
+  // 提交（每帧至多一次 setState），避免逐事件整页重渲染
+  //（usePlotGen 的同款先例）
+  const reasoningBufRef = useRef("");
+  const reasoningFlushRef = useRef(0);
 
-  useEffect(() => () => abortRef.current?.abort(), []);
+  useEffect(
+    () => () => {
+      abortRef.current?.abort();
+      cancelAnimationFrame(reasoningFlushRef.current);
+    },
+    [],
+  );
+
+  const flushReasoning = useCallback(() => {
+    if (reasoningFlushRef.current) {
+      cancelAnimationFrame(reasoningFlushRef.current);
+      reasoningFlushRef.current = 0;
+    }
+    if (!reasoningBufRef.current) return;
+    const chunk = reasoningBufRef.current;
+    reasoningBufRef.current = "";
+    setReasoningText((prev) => prev + chunk);
+  }, []);
+
+  const clearReasoning = useCallback(() => {
+    if (reasoningFlushRef.current) {
+      cancelAnimationFrame(reasoningFlushRef.current);
+      reasoningFlushRef.current = 0;
+    }
+    reasoningBufRef.current = "";
+    setReasoningText("");
+  }, []);
 
   const applyEvent = useCallback(
     (ev) => {
       if (ev.type === "error") {
+        flushReasoning();
         setError(translateError(ev.message || ""));
         return;
       }
       if (ev.type === "reasoning") {
         // 增量思维链：追加到思考面板，不进入步骤流
-        setReasoningText((prev) => prev + (ev.text || ""));
+        reasoningBufRef.current += ev.text || "";
+        if (!reasoningFlushRef.current) {
+          reasoningFlushRef.current = requestAnimationFrame(() => {
+            reasoningFlushRef.current = 0;
+            flushReasoning();
+          });
+        }
         return;
       }
+      // 非 reasoning 事件先落盘缓冲的思维链文本，保持展示顺序
+      flushReasoning();
       if (ev.type === "warning") {
         setWarning(translateError(ev.message || ""));
         return;
@@ -98,7 +138,7 @@ export default function useStyleModifyAgent() {
           : ev;
       setSteps((prev) => [...prev, { ...step, _key: stepKeyRef.current++ }]);
     },
-    [setStyleModifySession],
+    [setStyleModifySession, flushReasoning],
   );
 
   const handleStreamError = useCallback((e) => {
@@ -146,7 +186,7 @@ export default function useStyleModifyAgent() {
       setWarning("");
       setSummary("");
       setSteps([]);
-      setReasoningText("");
+      clearReasoning();
       setProposal(null);
       setFiles([]);
       setCompile(null);
@@ -166,7 +206,7 @@ export default function useStyleModifyAgent() {
         setRunning(false);
       }
     },
-    [workspaceId, applyEvent, handleStreamError],
+    [workspaceId, applyEvent, handleStreamError, clearReasoning],
   );
 
   const refine = useCallback(
@@ -180,7 +220,7 @@ export default function useStyleModifyAgent() {
       setWarning("");
       setSummary("");
       setSteps([]);
-      setReasoningText("");
+      clearReasoning();
       try {
         await api.styleModify.agent.refine({
           sessionId,
@@ -197,7 +237,7 @@ export default function useStyleModifyAgent() {
         setRunning(false);
       }
     },
-    [sessionId, workspaceId, applyEvent, handleStreamError],
+    [sessionId, workspaceId, applyEvent, handleStreamError, clearReasoning],
   );
 
   const apply = useCallback(async () => {
@@ -270,7 +310,7 @@ export default function useStyleModifyAgent() {
       setProposal(null);
       setFiles([]);
       setSteps([]);
-      setReasoningText("");
+      clearReasoning();
       setCompile(null);
       setOperation(null);
       setSummary("");
@@ -278,7 +318,7 @@ export default function useStyleModifyAgent() {
     } catch (e) {
       setError(translateError(e.message));
     }
-  }, [sessionId, workspaceId, setStyleModifySession]);
+  }, [sessionId, workspaceId, setStyleModifySession, clearReasoning]);
 
   const loadTrace = useCallback(async () => {
     if (!sessionId || !workspaceId) return;

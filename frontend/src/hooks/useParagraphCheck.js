@@ -112,6 +112,10 @@ export default function useParagraphCheck({
   const [isPaused, setIsPaused] = useState(false);
   /** 保鲜横幅（editor-design §8）：检查后文件 MD5 已变化的文件列表 */
   const [staleFiles, setStaleFiles] = useState([]);
+  // hasResultIssue 结果缓存：结果对象不可变，同一条跨帧只算一次
+  //（SSE 流式期间每帧 flush 都要为排序取 has 值，重复遍历 changes/
+  // suggestions 纯属浪费；WeakMap 按对象缓存，随对象消亡自动释放）
+  const [issueCache] = useState(() => new WeakMap());
   // 多用户模式写权限：viewer 只读，写操作（应用更改/全部应用）直接拒绝
   const canWrite = useCanWrite();
   // 模式感知"项目已打开"：单用户看 projectPath，多用户看 projectId
@@ -287,23 +291,44 @@ export default function useParagraphCheck({
           r.check_md5 ?? fileMd5sRef.current[r.file_path || activeFile] ?? null,
       }));
       setResults((prev) => {
-        // 装饰-排序-去装饰（js-cache-function-results）：hasResultIssue 内部
-        // 需遍历 changes/suggestions，比较器逐对重复调用约 O(n²·k)，
-        // 排序前每条结果只算一次
-        const next = [...prev, ...stamped].map((r) => ({
-          result: r,
-          has: hasResultIssue(r),
-          order: fileOrder.get(r.file_path) ?? Infinity,
-        }));
-        next.sort((a, b) => {
-          if (a.has !== b.has) return a.has ? -1 : 1;
-          if (a.order !== b.order) return a.order - b.order;
-          return a.result.paragraph_index - b.result.paragraph_index;
-        });
-        return next.map((e) => e.result);
+        const hasOf = (r) => {
+          let has = issueCache.get(r);
+          if (has === undefined) {
+            has = hasResultIssue(r);
+            issueCache.set(r, has);
+          }
+          return has;
+        };
+        const orderOf = (r) => fileOrder.get(r.file_path) ?? Infinity;
+        const cmp = (a, b) => {
+          const ha = hasOf(a);
+          const hb = hasOf(b);
+          if (ha !== hb) return ha ? -1 : 1;
+          const oa = orderOf(a);
+          const ob = orderOf(b);
+          if (oa !== ob) return oa - ob;
+          return a.paragraph_index - b.paragraph_index;
+        };
+        // SSE 流式增量到达：prev 已按 cmp 有序（下方归并维持该不变量，
+        // 其余 setResults 写入路径均为保序的 filter/map 或整体重置），批内
+        // 排序后线性归并即可——无须每帧对全量结果装饰-排序-去装饰，帧
+        // 成本从 O(n log n) 降到 O(n + b log b)。平局取 prev 在前，
+        // 与稳定排序的既有输出次序一致
+        stamped.sort(cmp);
+        const merged = new Array(prev.length + stamped.length);
+        let i = 0;
+        let j = 0;
+        let k = 0;
+        while (i < prev.length && j < stamped.length) {
+          merged[k++] =
+            cmp(prev[i], stamped[j]) <= 0 ? prev[i++] : stamped[j++];
+        }
+        while (i < prev.length) merged[k++] = prev[i++];
+        while (j < stamped.length) merged[k++] = stamped[j++];
+        return merged;
       });
     },
-    [setResults, hasResultIssue, activeFile],
+    [setResults, hasResultIssue, activeFile, issueCache],
   );
 
   const scheduleFlush = useCallback(() => {
@@ -570,14 +595,16 @@ export default function useParagraphCheck({
         toast.error(i18n.t("errors:noPermission"));
         return;
       }
-      if (typeof onConfirm === "function") {
-        const approved = await onConfirm();
-        if (!approved) return;
-      }
+      // 空集短路先于确认弹窗（async-cheap-condition-before-await）：
+      // results.filter 是同步廉价操作，已无待应用项时不再打扰用户确认
       const pending = results.filter(hasResultIssue);
       if (pending.length === 0) {
         toast.info(messages.applyAllEmpty);
         return;
+      }
+      if (typeof onConfirm === "function") {
+        const approved = await onConfirm();
+        if (!approved) return;
       }
       setApplyingAll(true);
       const toastId = toast.loading(

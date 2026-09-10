@@ -158,6 +158,19 @@ export default function useWritingChat() {
 
   const restoringRef = useRef(false);
 
+  /** 在途写作流的中止器：组件卸载时 abort（AbortError 由 sendMessage
+   * 静默吞掉），风格对齐 useEditorAssistant 的 abortRef 先例 */
+  const sendAbortRef = useRef(null);
+
+  // 组件卸载：中止在途流，SSE 读循环随 abort 结束，不再触发卸载后的
+  // 收尾网络请求（refreshSessions）
+  useEffect(
+    () => () => {
+      sendAbortRef.current?.abort();
+    },
+    [],
+  );
+
   const texFiles = useMemo(() => flattenTexFiles(fileTree), [fileTree]);
 
   // ── 使用子 hooks ──────────────────────────────────────────────────
@@ -279,18 +292,25 @@ export default function useWritingChat() {
   ]);
 
   // ── 加载段落预览（供段落选择 dropdown 使用） ─────────────────────
+  // 加载序号：快速切换文件时丢弃过期响应，防上一个文件的段落挂到
+  // 新 activeFile 下展示
+  const paragraphsSeqRef = useRef(0);
   const loadParagraphs = useCallback(async () => {
     if (!activeFile) {
+      paragraphsSeqRef.current += 1;
       setParagraphs([]);
       return;
     }
+    const seq = ++paragraphsSeqRef.current;
     try {
       const data = await api.project.paragraphs(activeFile, workspaceId);
+      if (seq !== paragraphsSeqRef.current) return;
       setParagraphs(data.paragraphs || []);
     } catch (e) {
+      if (seq !== paragraphsSeqRef.current) return;
       setParagraphs([]);
     }
-  }, [activeFile]);
+  }, [activeFile, workspaceId]);
 
   useEffect(() => {
     loadParagraphs();
@@ -311,6 +331,11 @@ export default function useWritingChat() {
       setError(null);
       setStreaming(true);
       setLoading("writingChat", true);
+
+      // 每次发送持有新的 AbortController：卸载时经 ref 中止在途流
+      const controller = new AbortController();
+      sendAbortRef.current = controller;
+      let aborted = false;
 
       // 临时占位 user message + streaming assistant message
       const tmpUserId = uid();
@@ -369,15 +394,24 @@ export default function useWritingChat() {
               : null,
           workspaceId,
           onEvent,
+          signal: controller.signal,
         });
       } catch (e) {
-        const msg = translateError(e.message);
-        setError(msg);
-        setWritingChatMessages((prev) =>
-          prev.filter((m) => m.id !== tmpAssistantId),
-        );
-        toast.error(msg, { description: msg });
+        if (e?.name === "AbortError") {
+          // 主动取消（组件卸载）：静默收尾，不提示、不刷新会话列表
+          aborted = true;
+        } else {
+          const msg = translateError(e.message);
+          setError(msg);
+          setWritingChatMessages((prev) =>
+            prev.filter((m) => m.id !== tmpAssistantId),
+          );
+          toast.error(msg, { description: msg });
+        }
       } finally {
+        if (sendAbortRef.current === controller) {
+          sendAbortRef.current = null;
+        }
         // 兜底落盘缓冲 token：正常 done/error 事件已同步落盘，
         // 这里覆盖流异常结束（无 done 事件）时残留在缓冲里的最后一批
         onEvent.flush?.();
@@ -385,7 +419,7 @@ export default function useWritingChat() {
         setLoading("writingChat", false);
         setToolStatus(null);
         // 后端 send 后可能新建会话或更新现有，刷新 session 列表
-        refreshSessions();
+        if (!aborted) refreshSessions();
       }
     },
     [

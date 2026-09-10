@@ -91,6 +91,42 @@ export default function TemplateGenPage() {
   const [saveOpen, setSaveOpen] = useState(false);
   const scrollRef = useRef(null);
   const reasoningScrollRef = useRef(null);
+  /** 在途生成流的中止器：重新生成/组件卸载时 abort（AbortError 由
+   * handleGenerate 静默吞掉），风格对齐 usePlotGen 的 abortRef 先例 */
+  const abortRef = useRef(null);
+  // 思维链事件可能逐 token 到达：先累积进 ref，requestAnimationFrame 批量
+  // 提交（每帧至多一次 setState），避免逐事件整页重渲染
+  //（usePlotGen / useStyleModifyAgent 的同款先例）
+  const reasoningBufRef = useRef("");
+  const reasoningFlushRef = useRef(0);
+
+  useEffect(
+    () => () => {
+      abortRef.current?.abort();
+      cancelAnimationFrame(reasoningFlushRef.current);
+    },
+    [],
+  );
+
+  const flushReasoning = useCallback(() => {
+    if (reasoningFlushRef.current) {
+      cancelAnimationFrame(reasoningFlushRef.current);
+      reasoningFlushRef.current = 0;
+    }
+    if (!reasoningBufRef.current) return;
+    const chunk = reasoningBufRef.current;
+    reasoningBufRef.current = "";
+    setReasoningText((prev) => prev + chunk);
+  }, []);
+
+  const clearReasoning = useCallback(() => {
+    if (reasoningFlushRef.current) {
+      cancelAnimationFrame(reasoningFlushRef.current);
+      reasoningFlushRef.current = 0;
+    }
+    reasoningBufRef.current = "";
+    setReasoningText("");
+  }, []);
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -107,7 +143,7 @@ export default function TemplateGenPage() {
 
   const reset = useCallback(() => {
     setSteps([]);
-    setReasoningText("");
+    clearReasoning();
     setFiles([]);
     setSessionId(null);
     setSelectedFile(null);
@@ -118,23 +154,35 @@ export default function TemplateGenPage() {
     setTrace(null);
     setError(null);
     setWarning(null);
-  }, []);
+  }, [clearReasoning]);
 
   const handleGenerate = useCallback(async () => {
     if (!description.trim()) return;
+    abortRef.current?.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
     reset();
     setRunning(true);
     try {
       await api.templateGen.generate({
         description: description.trim(),
+        signal: controller.signal,
         onEvent: (ev) => {
-          if (ev.type === "error") {
-            setError(translateError(ev.message || ""));
-            return;
-          }
           if (ev.type === "reasoning") {
             // 增量思维链：追加到思考面板，不进入步骤流
-            setReasoningText((prev) => prev + (ev.text || ""));
+            reasoningBufRef.current += ev.text || "";
+            if (!reasoningFlushRef.current) {
+              reasoningFlushRef.current = requestAnimationFrame(() => {
+                reasoningFlushRef.current = 0;
+                flushReasoning();
+              });
+            }
+            return;
+          }
+          // 非 reasoning 事件先落盘缓冲的思维链文本，保持展示顺序
+          flushReasoning();
+          if (ev.type === "error") {
+            setError(translateError(ev.message || ""));
             return;
           }
           if (ev.type === "warning") {
@@ -156,11 +204,13 @@ export default function TemplateGenPage() {
         onError: () => {},
       });
     } catch (e) {
-      setError(translateError(e.message));
+      // 主动中止（重新生成/组件卸载）静默收尾
+      if (e?.name !== "AbortError") setError(translateError(e.message));
     } finally {
+      if (abortRef.current === controller) abortRef.current = null;
       setRunning(false);
     }
-  }, [description, reset]);
+  }, [description, reset, flushReasoning]);
 
   const handleLoadFile = useCallback(
     async (path) => {

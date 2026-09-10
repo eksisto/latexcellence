@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useRef } from "react";
+import { useState, useCallback, useEffect, useRef, memo } from "react";
 import { useTranslation } from "react-i18next";
 import { cn } from "@/lib/utils";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -77,7 +77,62 @@ function FileTreeMenu({ target, uploading, onAction }) {
   return nodes;
 }
 
-function TreeNode({
+/**
+ * TreeNode memo 比较器（rerender-memo）：树 state（expandedDirs / 拖拽态）
+ * 任一变化都会重渲 ProjectExplorer，而单个节点实际只依赖以下值的「语义
+ * 结果」——展开态与拖拽视觉态按本节点路径求值比较（其余目录的开合 /
+ * 落点变化不波及本节点），事件处理器引用逐一比对。比较通过即整棵子树
+ * 跳过重渲染；dnd 事件处理器经 draggingRef 读取拖拽进行态、引用恒稳定
+ * （见 ProjectExplorer 的 dnd 组装注释），否则子树会持有过期闭包。
+ */
+function areTreeNodePropsEqual(prev, next) {
+  if (prev.node !== next.node || prev.depth !== next.depth) return false;
+  if (
+    prev.canWrite !== next.canWrite ||
+    prev.mainFile !== next.mainFile ||
+    prev.uploading !== next.uploading
+  ) {
+    return false;
+  }
+  // 展开态按本节点路径求值：目录开合只重渲该目录自身一行
+  if (
+    prev.expandedDirs.has(prev.node.path) !==
+    next.expandedDirs.has(next.node.path)
+  ) {
+    return false;
+  }
+  // 拖拽视觉态按本节点路径求值：dragover 落点变化只重渲新旧落点两行，
+  // 而非整棵树（dropTargetDir 是全局值，直接比较会让全部节点失效）
+  if (
+    (prev.dnd.draggingPath === prev.node.path) !==
+    (next.dnd.draggingPath === next.node.path)
+  ) {
+    return false;
+  }
+  if (
+    (prev.dnd.dropTargetDir === prev.node.path) !==
+    (next.dnd.dropTargetDir === next.node.path)
+  ) {
+    return false;
+  }
+  return (
+    prev.onToggleDir === next.onToggleDir &&
+    prev.onSelect === next.onSelect &&
+    prev.onCreateFile === next.onCreateFile &&
+    prev.onCreateFolder === next.onCreateFolder &&
+    prev.onDeleteFile === next.onDeleteFile &&
+    prev.onSetMainFile === next.onSetMainFile &&
+    prev.onRequestUpload === next.onRequestUpload &&
+    prev.onRenameEntry === next.onRenameEntry &&
+    prev.dnd.onDragStart === next.dnd.onDragStart &&
+    prev.dnd.onDragEnd === next.dnd.onDragEnd &&
+    prev.dnd.onDragOver === next.dnd.onDragOver &&
+    prev.dnd.onDragLeave === next.dnd.onDragLeave &&
+    prev.dnd.onDrop === next.dnd.onDrop
+  );
+}
+
+const TreeNode = memo(function TreeNode({
   node,
   depth = 0,
   expandedDirs,
@@ -101,8 +156,8 @@ function TreeNode({
   // 每个节点各自比对：主文件可能在任意深度的子目录里，
   // 不能由父层算好下传（嵌套主文件会永远拿不到星标）
   const isMainFile = mainFile != null && node.path === mainFile;
-  const isDragging = canWrite && dnd.isDragging(node.path);
-  const isDropTarget = canWrite && dnd.isDropTarget(node.path);
+  const isDragging = canWrite && dnd.draggingPath === node.path;
+  const isDropTarget = canWrite && dnd.dropTargetDir === node.path;
   // 右键菜单开启态 = 行临时光（决策 Q8）：菜单关闭（执行项 / Esc / 点别处）
   // 即清除，树不引入持久选中概念
   const [menuOpen, setMenuOpen] = useState(false);
@@ -247,7 +302,7 @@ function TreeNode({
       )}
     </li>
   );
-}
+}, areTreeNodePropsEqual);
 
 export default function ProjectExplorer({
   tree = [],
@@ -269,8 +324,12 @@ export default function ProjectExplorer({
   // 对应的目标目录（null = 项目根，editor-file-upload-design §5.1 / D3）
   const uploadInputRef = useRef(null);
   const uploadDirRef = useRef(null);
-  // 拖拽源（null = 无进行中的树内拖拽）：{ path, isDir }
+  // 拖拽源（null = 无进行中的树内拖拽）：{ path, isDir }。
+  // state 供渲染；draggingRef 供事件处理器同步读取——若处理器闭包随
+  // dragging state 重建，memo 化的 TreeNode 子树会持有过期闭包，拖拽
+  // 判定整体失效（ref 均在事件处理器内写入，不经 render 体）
   const [dragging, setDragging] = useState(null);
+  const draggingRef = useRef(null);
   // 高亮落点目录；ROOT_DROP_DIR（空串）= 树背景空白区，null = 无高亮
   const [dropTargetDir, setDropTargetDir] = useState(null);
   // 折叠目录悬停自动展开计时器（Q7）：{ path, timer } | null
@@ -369,6 +428,7 @@ export default function ProjectExplorer({
   /** dragend / drop / 清理的统一复位：取消计时器并复位全部拖拽状态 */
   const clearDragState = useCallback(() => {
     cancelHoverExpand();
+    draggingRef.current = null;
     setDragging(null);
     setDropTargetDir(null);
   }, [cancelHoverExpand]);
@@ -388,6 +448,7 @@ export default function ProjectExplorer({
         JSON.stringify({ path: node.path, isDir: node.is_dir }),
       );
       e.dataTransfer.effectAllowed = "move";
+      draggingRef.current = { path: node.path, isDir: node.is_dir };
       setDragging({ path: node.path, isDir: node.is_dir });
     },
     [canWrite],
@@ -397,16 +458,18 @@ export default function ProjectExplorer({
     (e, node) => {
       // 目录行自管落点判定，阻断向树背景（根落点）冒泡
       e.stopPropagation();
-      if (!dragging) return; // 外部拖入不做（§8 非目标）
+      const source = draggingRef.current;
+      if (!source) return; // 外部拖入不做（§8 非目标）
       if (!node.is_dir) return; // 文件行不是落点：不 preventDefault → 禁止光标
-      if (!canDropOn(dragging, node.path)) return; // 自身 / 子孙：非法落点
+      if (!canDropOn(source, node.path)) return; // 自身 / 子孙：非法落点
       e.preventDefault();
       e.dataTransfer.dropEffect = "move";
       setDropTargetDir((prev) => (prev === node.path ? prev : node.path));
-      if (!expandedDirs.has(node.path)) armHoverExpand(node.path);
-      else cancelHoverExpand();
+      // 折叠目录悬停自动展开（Q7）：armHoverExpand 按路径去重，已展开
+      // 目录的计时器到期后 functional set 幂等返回，无须读 expandedDirs
+      armHoverExpand(node.path);
     },
-    [dragging, canDropOn, expandedDirs, armHoverExpand, cancelHoverExpand],
+    [canDropOn, armHoverExpand],
   );
 
   const handleDragLeave = useCallback(
@@ -424,26 +487,22 @@ export default function ProjectExplorer({
     (e, node) => {
       e.stopPropagation();
       e.preventDefault();
-      if (dragging && node.is_dir && canDropOn(dragging, node.path)) {
-        onMoveEntry?.(dragging.path, node.path, dragging.isDir);
+      const source = draggingRef.current;
+      if (source && node.is_dir && canDropOn(source, node.path)) {
+        onMoveEntry?.(source.path, node.path, source.isDir);
       }
       clearDragState();
     },
-    [dragging, canDropOn, onMoveEntry, clearDragState],
+    [canDropOn, onMoveEntry, clearDragState],
   );
 
   /** 树背景空白区 = 项目根落点（editor-file-move-design §5.1） */
-  const handleRootDragOver = useCallback(
-    (e) => {
-      if (!dragging) return;
-      e.preventDefault();
-      e.dataTransfer.dropEffect = "move";
-      setDropTargetDir((prev) =>
-        prev === ROOT_DROP_DIR ? prev : ROOT_DROP_DIR,
-      );
-    },
-    [dragging],
-  );
+  const handleRootDragOver = useCallback((e) => {
+    if (!draggingRef.current) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    setDropTargetDir((prev) => (prev === ROOT_DROP_DIR ? prev : ROOT_DROP_DIR));
+  }, []);
 
   const handleRootDragLeave = useCallback((e) => {
     // 仍在树区内（移动到行等子元素）时忽略
@@ -454,16 +513,19 @@ export default function ProjectExplorer({
   const handleRootDrop = useCallback(
     (e) => {
       e.preventDefault();
-      if (dragging) onMoveEntry?.(dragging.path, null, dragging.isDir);
+      const source = draggingRef.current;
+      if (source) onMoveEntry?.(source.path, null, source.isDir);
       clearDragState();
     },
-    [dragging, onMoveEntry, clearDragState],
+    [onMoveEntry, clearDragState],
   );
 
-  // dnd 面向下传：TreeNode 递归子树共用的拖拽判定与视觉态
+  // dnd 面向下传：TreeNode 递归子树共用的拖拽判定与视觉态。拖拽源/落点
+  // 以「值」携带（memo 比较器按语义比较，仅波及的行重渲染），事件处理器
+  // 引用恒稳定（拖拽进行态经 draggingRef 读取，见 dragging 声明处注释）
   const dnd = {
-    isDragging: (path) => dragging?.path === path,
-    isDropTarget: (path) => dropTargetDir === path,
+    draggingPath: dragging ? dragging.path : null,
+    dropTargetDir,
     onDragStart: handleDragStart,
     onDragEnd: clearDragState,
     onDragOver: handleDragOver,

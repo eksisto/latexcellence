@@ -11,10 +11,10 @@
  *     EditorState，由登记表单独记忆并在换回时恢复；无存档的 tab 按
  *     store 缓冲区重建（复刻 @uiw 包装层的扩展配置，含 basicSetup）；
  *   - 换档产生的整文档变更经 switchGuard 吸收，不误标脏标记；
- *   - 自有 update listener：换入/重建的 EditorState 不含 @uiw 包装层内部
- *     listener（其 listener 只存在于包装层创建的初始 state），doc 变更
- *     统一由本 listener 回写 store；与包装层 listener 并存时按「值相同
- *     只写一次」去重，保证每次实际变更恰好一次 store 写入；
+ *   - 自有 update listener：doc 变更回写 store 的唯一路径。包装层不传
+ *     onChange prop（其内部 listener 的全文 toString + onChange 调用仅在
+ *     传入该 prop 时发生），键入热路径每事务只做一次全文序列化、恰好
+ *     一次 store 写入，无须「值相同只写一次」去重；
  *   - 语言包经 lib/editor/language.js 抽象层引入（决策 Q2；editor v3
  *     阶段六a / 决策 Q14 起按激活 tab 文件后缀分流：.tex/.sty/.cls 走
  *     自研 Lezer 子集语法，.bib 沿用 stex 流式模式），本组件不直接
@@ -263,8 +263,6 @@ export default function LaTeXEditor({
   const currentKeyRef = useRef(null);
   /** 换档/重建期间吸收 doc 变更回写（防止程序性整文档替换误标脏） */
   const switchGuardRef = useRef(false);
-  /** 最近一次已回写 store 的文档全文（listener 双路通知去重） */
-  const lastSyncedRef = useRef(null);
 
   // onChange 经 ref 解引用：EditorState 内嵌的 update listener 在创建时
   // 闭包，直接捕获会过期；经 ref 永远调用最新回调。
@@ -341,10 +339,6 @@ export default function LaTeXEditor({
 
   const handleDocChange = useCallback((nextValue) => {
     if (switchGuardRef.current) return;
-    // 去重：@uiw 包装层 listener 与自有 listener 对同一事务都会通知，
-    // 值相同只写一次（不影响连续两次真实变更——值必然不同）
-    if (nextValue === lastSyncedRef.current) return;
-    lastSyncedRef.current = nextValue;
     onChangeRef.current(nextValue);
   }, []);
 
@@ -391,8 +385,8 @@ export default function LaTeXEditor({
       // 代码折叠（editor v3 阶段六b / 决策 Q14 偏好；模块级单例条件挂载，
       // 折叠区间由 latexGrammar 包随语言提供，占位符显示环境名/标题摘要）
       ...(codeFolding ? FOLDING_EXTENSIONS : []),
-      // 自有 doc listener：换档后视图 state 不含包装层内部 listener，
-      // doc 变更回写 store 统一走本入口（详见 handleDocChange 去重）；
+      // 自有 doc listener：doc 变更回写 store 的唯一入口（包装层 onChange
+      // 不传，见组件头注——避免其内部 listener 的全文序列化重复通知）；
       // 状态栏统计同 listener 发布（docChanged 走字数防抖）
       EditorView.updateListener.of((update) => {
         if (update.docChanged) {
@@ -480,7 +474,6 @@ export default function LaTeXEditor({
     if (prevKey === activeKey) return;
     // 首次装载：包装层已按 value 建好初始 state，无需换档
     if (!prevKey) {
-      lastSyncedRef.current = value;
       currentKeyRef.current = activeKey;
       return;
     }
@@ -522,7 +515,6 @@ export default function LaTeXEditor({
     } finally {
       switchGuardRef.current = false;
     }
-    lastSyncedRef.current = value;
     currentKeyRef.current = activeKey;
     restoreScroll(activeKey);
     view.focus();
@@ -624,7 +616,6 @@ export default function LaTeXEditor({
     } finally {
       switchGuardRef.current = false;
     }
-    lastSyncedRef.current = value;
   }, [
     activeKey,
     value,
@@ -643,7 +634,6 @@ export default function LaTeXEditor({
     >
       <CodeMirror
         value={value}
-        onChange={handleDocChange}
         onCreateEditor={handleEditorCreated}
         extensions={extensions}
         editable={!readOnly}

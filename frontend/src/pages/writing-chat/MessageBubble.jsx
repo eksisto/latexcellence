@@ -56,7 +56,9 @@ const areResultsEqual = (prevProps, nextProps) => {
 /**
  * MessageBubble 的 memo 比较器：
  * 只比较影响气泡渲染的字段，函数型 actions 依赖上层保持稳定引用，
- * 这样流式更新时只有内容变化的那条消息会重渲染。
+ * 这样流式更新时只有内容变化的那条消息会重渲染。编辑/应用进行态由
+ * 上层按消息拆好的 isEditing / isApplying 布尔传入——若下传全局的
+ * editingMessageId，任一条消息进入编辑态会让全部气泡比较失效。
  */
 const areMessageBubblesEqual = (prevProps, nextProps) => {
   const a = prevProps.message;
@@ -91,14 +93,15 @@ const areMessageBubblesEqual = (prevProps, nextProps) => {
   ) {
     return false;
   }
+  if (
+    prevProps.isEditing !== nextProps.isEditing ||
+    prevProps.isApplying !== nextProps.isApplying
+  ) {
+    return false;
+  }
   const pa = prevProps.actions;
   const na = nextProps.actions;
-  return (
-    pa.editingMessageId === na.editingMessageId &&
-    pa.applyingMessageId === na.applyingMessageId &&
-    pa.canEdit === na.canEdit &&
-    pa.canApplyEdit === na.canApplyEdit
-  );
+  return pa.canEdit === na.canEdit && pa.canApplyEdit === na.canApplyEdit;
 };
 
 const ScholarlyResultItem = memo(({ result, t }) => {
@@ -162,14 +165,22 @@ const ScholarlyResultItem = memo(({ result, t }) => {
   );
 }, areResultsEqual);
 
-function MessageBubble({ message, actions }) {
+/**
+ * @param {boolean} [isEditing=false] 本条消息的编辑指令生成进行中
+ *   （上层由 editingMessageId === message.id 拆算，memo 只失效目标气泡）
+ * @param {boolean} [isApplying=false] 本条消息的编辑应用进行中（同上）
+ */
+function MessageBubble({
+  message,
+  actions,
+  isEditing = false,
+  isApplying = false,
+}) {
   const { t } = useTranslation(["pages", "common"]);
   const {
     generateEdit,
     applyEdit,
     deleteMessage,
-    editingMessageId,
-    applyingMessageId,
     canEdit,
     canApplyEdit = true,
     prepareSectionRead,
@@ -651,7 +662,7 @@ function MessageBubble({ message, actions }) {
             edit_op={message.edit_op}
             reason={message.edit_reason}
             onApply={(customText) => applyEdit(message.id, customText)}
-            applying={applyingMessageId === message.id}
+            applying={isApplying}
             applyDisabled={!canApplyEdit}
           />
         )}
@@ -678,9 +689,9 @@ function MessageBubble({ message, actions }) {
               variant="ghost"
               title={t("pages:writingChat.generateEdit")}
               onClick={() => generateEdit(message.id, "")}
-              disabled={editingMessageId === message.id}
+              disabled={isEditing}
             >
-              {editingMessageId === message.id ? (
+              {isEditing ? (
                 <Loader2 className="size-3 animate-spin" />
               ) : (
                 <PencilLine className="size-3" />

@@ -4,6 +4,7 @@ import {
   useEffect,
   useMemo,
   useDeferredValue,
+  useRef,
 } from "react";
 import { toast } from "sonner";
 import { useTranslation } from "react-i18next";
@@ -75,6 +76,10 @@ export default function BibManagerLibrary() {
   const [showDupDialog, setShowDupDialog] = useState(false);
   const [deletingDupKey, setDeletingDupKey] = useState("");
 
+  /** 条目加载序号：快速切换 .bib 文件时丢弃过期响应，防上一个文件的
+   * 条目和统计写进当前视图（撤销/重做的重载与切换共用同一守卫） */
+  const loadSeqRef = useRef(0);
+
   useEffect(() => {
     api.bibManager
       .listBibFiles(workspaceId)
@@ -90,20 +95,24 @@ export default function BibManagerLibrary() {
   const loadData = useCallback(
     async (filePath) => {
       if (!filePath) return;
+      const seq = ++loadSeqRef.current;
       setLoading(true);
       try {
         const [entriesRes, statsRes] = await Promise.all([
           api.bibManager.parseEntries(filePath, workspaceId),
           api.bibManager.entryStats(filePath, workspaceId),
         ]);
+        if (seq !== loadSeqRef.current) return;
         setEntries(entriesRes.entries || []);
         setStats(statsRes);
       } catch (e) {
+        if (seq !== loadSeqRef.current) return;
         toast.error(t("pages:bibManager.library.loadFailed"), {
           description: e.message,
         });
       } finally {
-        setLoading(false);
+        // 仅最新一次加载有权复位 loading，过期请求提前返回不灭新请求的 loading
+        if (seq === loadSeqRef.current) setLoading(false);
       }
     },
     [workspaceId, t],
