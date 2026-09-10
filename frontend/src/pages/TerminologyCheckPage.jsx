@@ -46,11 +46,41 @@ import useStore from "@/store/useStore";
 import { toast } from "sonner";
 
 /**
+ * 单条变更行（rerender-memo-with-default-value）：ProofDiff 的 modified
+ * 若直接传内联 <Input> 元素，引用每次渲染必变，ProofDiff 的 memo 形同虚设。
+ * 这里把受控 Input 收进行组件内部、对外只暴露原始值 props，键入替换词时
+ * 仅值变化的行重渲染，未编辑行的 ProofDiff 随之被 memo 跳过。
+ */
+const ChangeDiffRow = memo(function ChangeDiffRow({
+  original,
+  modifiedLabel,
+  value,
+  replaceKey,
+  onReplace,
+}) {
+  return (
+    <ProofDiff
+      original={original}
+      modifiedLabel={modifiedLabel}
+      modified={
+        <Input
+          type="text"
+          value={value}
+          onChange={(e) => onReplace(replaceKey, e.target.value)}
+          className="h-7 text-sm font-medium"
+        />
+      }
+    />
+  );
+});
+
+/**
  * 单条术语检查结果卡片（rerender-memo，对齐 CodeReviewResultCard 模式）：
  * 模块级 memo 组件 + 稳定回调 props，检查流 progress 高频更新、搜索过滤、
  * 消息变化时已渲染的卡片不再随页面整体重渲染。customReplacements 作为
  * prop 传入：编辑替换词的每次键入仍会刷新列表（受控输入所需），
- * 但流式检查期间卡片保持稳定。
+ * 但流式检查期间卡片保持稳定；行级替换输入下沉到 ChangeDiffRow（memo），
+ * 键入时未编辑行的 ProofDiff 不再随卡片重渲染。
  */
 const TerminologyResultCard = memo(function TerminologyResultCard({
   result,
@@ -65,6 +95,13 @@ const TerminologyResultCard = memo(function TerminologyResultCard({
 }) {
   const { t } = useTranslation(["pages", "common"]);
   const hasChanges = result.changes && result.changes.length > 0;
+  // onCustomReplacementChange 是 useState setter（引用稳定），此回调随之稳定，
+  // 是 ChangeDiffRow memo 生效的前提
+  const handleReplace = useCallback(
+    (key, value) =>
+      onCustomReplacementChange((prev) => ({ ...prev, [key]: value })),
+    [onCustomReplacementChange],
+  );
   return (
     <Card
       id={`term-result-P${result.paragraph_index}`}
@@ -125,22 +162,12 @@ const TerminologyResultCard = memo(function TerminologyResultCard({
                           {change.explanation}
                         </p>
                       )}
-                      <ProofDiff
+                      <ChangeDiffRow
                         original={change.original}
                         modifiedLabel={t("pages:terminologyCheck.replacedWith")}
-                        modified={
-                          <Input
-                            type="text"
-                            value={customReplacements[cKey] ?? change.corrected}
-                            onChange={(e) =>
-                              onCustomReplacementChange((prev) => ({
-                                ...prev,
-                                [cKey]: e.target.value,
-                              }))
-                            }
-                            className="h-7 text-sm font-medium"
-                          />
-                        }
+                        value={customReplacements[cKey] ?? change.corrected}
+                        replaceKey={cKey}
+                        onReplace={handleReplace}
                       />
                     </li>
                   );
@@ -256,6 +283,13 @@ export default function TerminologyCheckPage() {
   const paragraphMap = useMemo(
     () => new Map(terminologyParagraphs.map((p) => [p.index, p])),
     [terminologyParagraphs],
+  );
+
+  // 单趟按文件分组（js-index-maps）：过滤后的结果在多文件 Tabs 下逐 tab
+  // 全量 filter 是 O(文件数×结果数)，检查流 rAF 批量追加时反复触发
+  const filteredResultsByFile = useMemo(
+    () => groupByFile(filteredResults),
+    [filteredResults],
   );
 
   const buildCorrectedText = useCallback((result, overrides) => {
@@ -595,24 +629,20 @@ export default function TerminologyCheckPage() {
                     {activeFiles.map((f) => (
                       <TabsContent key={f} value={f}>
                         <div className="space-y-4">
-                          {filteredResults
-                            .filter((r) => (r.file_path || "") === f)
-                            .map((result) => (
-                              <TerminologyResultCard
-                                key={`${result.file_path}-term-result-P${result.paragraph_index}`}
-                                result={result}
-                                paragraphs={terminologyParagraphs}
-                                paragraphMap={paragraphMap}
-                                onApply={handleApplyWithCustom}
-                                onIgnore={handleIgnoreChange}
-                                canWrite={canWrite}
-                                customReplacements={customReplacements}
-                                onCustomReplacementChange={
-                                  setCustomReplacements
-                                }
-                                activeFile={activeFile}
-                              />
-                            ))}
+                          {(filteredResultsByFile[f] || []).map((result) => (
+                            <TerminologyResultCard
+                              key={`${result.file_path}-term-result-P${result.paragraph_index}`}
+                              result={result}
+                              paragraphs={terminologyParagraphs}
+                              paragraphMap={paragraphMap}
+                              onApply={handleApplyWithCustom}
+                              onIgnore={handleIgnoreChange}
+                              canWrite={canWrite}
+                              customReplacements={customReplacements}
+                              onCustomReplacementChange={setCustomReplacements}
+                              activeFile={activeFile}
+                            />
+                          ))}
                         </div>
                       </TabsContent>
                     ))}

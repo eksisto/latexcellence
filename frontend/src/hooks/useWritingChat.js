@@ -378,6 +378,9 @@ export default function useWritingChat() {
         );
         toast.error(msg, { description: msg });
       } finally {
+        // 兜底落盘缓冲 token：正常 done/error 事件已同步落盘，
+        // 这里覆盖流异常结束（无 done 事件）时残留在缓冲里的最后一批
+        onEvent.flush?.();
         setStreaming(false);
         setLoading("writingChat", false);
         setToolStatus(null);

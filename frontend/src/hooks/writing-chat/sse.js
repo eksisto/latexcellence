@@ -23,25 +23,58 @@ export function createSSEEventHandler({
   setError,
   writingChatCurrentSessionId,
 }) {
-  return (event) => {
+  // token 缓冲：requestAnimationFrame 批量提交，每帧至多一次 store 写入。
+  // 此前每条 token 单独 setWritingChatMessages + 对全文重跑 parseThinking，
+  // 长回复时整页重渲染与字符串扫描成本随 token 数线性放大
+  // （useParagraphCheck 的 scheduleFlush 为同款先例）。
+  let pendingText = "";
+  let flushHandle = null;
+
+  const applyPendingText = (chunk) => {
+    setWritingChatMessages((prev) =>
+      prev.map((m) => {
+        if (m.id !== tmpAssistantId) return m;
+        const raw = (m.rawContent || "") + chunk;
+        const parsed = parseThinking(raw);
+        return {
+          ...m,
+          rawContent: raw,
+          content: raw,
+          thinkingContent: parsed.thinking,
+          displayContent: parsed.display,
+          thinkingOpen: parsed.thinkingOpen,
+          thinkingClosed: parsed.thinkingClosed,
+        };
+      }),
+    );
+  };
+
+  const flushPendingTokens = () => {
+    if (flushHandle != null) {
+      cancelAnimationFrame(flushHandle);
+      flushHandle = null;
+    }
+    if (!pendingText) return;
+    const chunk = pendingText;
+    pendingText = "";
+    applyPendingText(chunk);
+  };
+
+  const handler = (event) => {
     if (event.type === "token") {
-      setWritingChatMessages((prev) =>
-        prev.map((m) => {
-          if (m.id !== tmpAssistantId) return m;
-          const raw = (m.rawContent || "") + event.content;
-          const parsed = parseThinking(raw);
-          return {
-            ...m,
-            rawContent: raw,
-            content: raw,
-            thinkingContent: parsed.thinking,
-            displayContent: parsed.display,
-            thinkingOpen: parsed.thinkingOpen,
-            thinkingClosed: parsed.thinkingClosed,
-          };
-        }),
-      );
-    } else if (event.type === "round_start") {
+      pendingText += event.content || "";
+      if (flushHandle == null) {
+        flushHandle = requestAnimationFrame(() => {
+          flushHandle = null;
+          flushPendingTokens();
+        });
+      }
+      return;
+    }
+    // 非 token 事件先同步落盘已缓冲 token，保证事件顺序
+    //（如 round_start 的重置只应作用于已展示的内容）
+    flushPendingTokens();
+    if (event.type === "round_start") {
       // 新一轮工具轮次开始：重置累积的流式内容，只保留最后一轮的回复，
       // 与后端落盘的 assistant 消息内容保持一致
       setWritingChatMessages((prev) =>
@@ -217,4 +250,8 @@ export function createSSEEventHandler({
       toast.error(i18n.t("hooks:writingChat.chatError"), { description: msg });
     }
   };
+  // 流收尾兜底：正常 done/error 已同步落盘，这里覆盖「无 done 事件即结束」
+  // 的异常收尾（由 useWritingChat 在 finally 中调用）
+  handler.flush = flushPendingTokens;
+  return handler;
 }

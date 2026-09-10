@@ -195,27 +195,32 @@ function splitHighlightedHtml(html) {
   };
 
   while (i < html.length) {
-    const ch = html[i];
-    if (ch === "\n") {
+    // 文本段整段切片追加（js-combine-iterations）：逐字符 += 在大代码块
+    // （流式聊天每 token 重跑本函数）下产生数十万次字符串拼接
+    const nl = html.indexOf("\n", i);
+    const lt = html.indexOf("<", i);
+    if (nl === -1 && lt === -1) {
+      buf += html.slice(i);
+      break;
+    }
+    const j = nl === -1 ? lt : lt === -1 ? nl : Math.min(nl, lt);
+    if (j > i) buf += html.slice(i, j);
+    i = j;
+    if (html[i] === "\n") {
       flushLine();
       i++;
       continue;
     }
-    if (ch === "<") {
-      const gt = html.indexOf(">", i + 1);
-      if (gt === -1) {
-        buf += ch; // 防御：无闭合尖括号时按普通文本处理
-        i++;
-        continue;
-      }
-      const tagStr = html.slice(i + 1, gt);
-      i = gt + 1;
-      if (tagStr.startsWith("/")) closeTag(tagStr);
-      else openTag(tagStr);
+    const gt = html.indexOf(">", i + 1);
+    if (gt === -1) {
+      buf += html[i]; // 防御：无闭合尖括号时按普通文本处理
+      i++;
       continue;
     }
-    buf += ch;
-    i++;
+    const tagStr = html.slice(i + 1, gt);
+    i = gt + 1;
+    if (tagStr.startsWith("/")) closeTag(tagStr);
+    else openTag(tagStr);
   }
   flushLine();
   // 去掉末尾换行产生的空行（"a\n" 只显示一行）

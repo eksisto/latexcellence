@@ -38,6 +38,10 @@ import {
  */
 const RESUME_STORAGE_KEY = "latexcellence-upload-session-v1";
 
+// 载荷结构版本（client-localstorage-schema，对齐 useStore persist 的
+// version+migrate 惯例）：结构变更时递增，读取侧校验失败即视为无待续传会话
+const RESUME_PAYLOAD_VERSION = 1;
+
 // 全量 MD5 计算的分片读取粒度
 const HASH_READ_CHUNK = 1 << 20;
 
@@ -130,7 +134,13 @@ export default function UploadProjectDialog({
       const raw = window.localStorage.getItem(RESUME_STORAGE_KEY);
       if (!raw) return null;
       const saved = JSON.parse(raw);
-      if (saved?.sessionId && Array.isArray(saved.files)) return saved;
+      if (
+        saved?.v === RESUME_PAYLOAD_VERSION &&
+        saved?.sessionId &&
+        Array.isArray(saved.files)
+      ) {
+        return saved;
+      }
     } catch {
       // 存储损坏视为无待续传会话
     }
@@ -461,6 +471,7 @@ export default function UploadProjectDialog({
       window.localStorage.setItem(
         RESUME_STORAGE_KEY,
         JSON.stringify({
+          v: RESUME_PAYLOAD_VERSION,
           sessionId: created.session_id,
           kind: selection.kind,
           name: selection.name,

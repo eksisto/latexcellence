@@ -454,15 +454,24 @@ export default function useParagraphCheck({
           .filter((e) => e.reason === "file_conflict")
           .map((e) => e.file_path || activeFile),
       );
-      for (const f of conflictFiles) {
-        try {
-          const md5Data = await api.project.fileMd5(f, workspaceId);
+      // 各文件的 MD5 请求相互独立，并行发出（async-parallel，与下方
+      // 保鲜比对的并行写法一致）；单个失败忽略该文件
+      const settled = await Promise.all(
+        [...conflictFiles].map(async (f) => {
+          try {
+            const md5Data = await api.project.fileMd5(f, workspaceId);
+            return [f, md5Data.md5];
+          } catch (_) {
+            return null;
+          }
+        }),
+      );
+      for (const entry of settled) {
+        if (entry) {
           fileMd5sRef.current = {
             ...fileMd5sRef.current,
-            [f]: md5Data.md5,
+            [entry[0]]: entry[1],
           };
-        } catch (_) {
-          // 忽略 MD5 获取失败
         }
       }
     },

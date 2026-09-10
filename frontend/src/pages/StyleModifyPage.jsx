@@ -58,6 +58,13 @@ export default function StyleModifyPage() {
   const [refineMessage, setRefineMessage] = useState("");
   const [showTrace, setShowTrace] = useState(false);
 
+  // 稳定引用（rerender-memo）：CodeEditorInput 是 memo 组件，内联 onChange
+  // 会在 agent 流式更新引发的本页重渲染中使其失效
+  const handlePasteLatexChange = useCallback(
+    (e) => setPasteLatex(e.target.value),
+    [],
+  );
+
   const isAgent = agent.mode === "agent";
 
   const handlePasteModify = useCallback(async () => {
@@ -506,7 +513,7 @@ export default function StyleModifyPage() {
                   <CardContent>
                     <CodeEditorInput
                       value={pasteLatex}
-                      onChange={(e) => setPasteLatex(e.target.value)}
+                      onChange={handlePasteLatexChange}
                       placeholder={t("pages:styleModify.sourcePlaceholder")}
                       className="min-h-80"
                     />

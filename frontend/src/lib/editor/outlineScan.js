@@ -195,16 +195,16 @@ export function scanOutline(docText) {
   if (typeof docText !== "string" || docText.length === 0) return entries;
   /** 当前所处 verbatim 类环境名（null = 不在 verbatim 内） */
   let verbatimEnv = null;
+  /** 环境结束标记正则：进入环境时构造一次（js-hoist-regexp），
+   * 避免环境内每一行都重新编译；与环境名同生命周期 */
+  let verbatimEndRe = null;
   const lines = docText.split("\n");
   for (let i = 0; i < lines.length; i += 1) {
     if (verbatimEnv) {
       // verbatim 内一切字面（含 % 注释），只找环境结束标记
-      if (
-        new RegExp(`\\\\end\\s*\\{${verbatimEnv.replace("*", "\\*")}\\}`).test(
-          lines[i],
-        )
-      ) {
+      if (verbatimEndRe.test(lines[i])) {
         verbatimEnv = null;
+        verbatimEndRe = null;
       }
       continue;
     }
@@ -217,6 +217,9 @@ export function scanOutline(docText) {
     const beginMatch = work.match(BEGIN_VERBATIM_RE);
     if (beginMatch) {
       verbatimEnv = beginMatch[1];
+      verbatimEndRe = new RegExp(
+        `\\\\end\\s*\\{${verbatimEnv.replace("*", "\\*")}\\}`,
+      );
       work = work.slice(0, beginMatch.index);
     }
     collectSectionEntries(work, i + 1, entries);

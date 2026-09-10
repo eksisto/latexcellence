@@ -147,9 +147,9 @@ export function parseSession(text) {
  * @param {Array} tabs 当前 tab 记录
  * @param {string|null} activeTabPath
  * @param {{projectKey?: string|null, limitBytes?: number}} [options]
- * @returns {{ok: boolean, tabs: Array, activeTabPath: string|null, evicted: string[], overflow: boolean}}
- *   ok：归约后载荷可写入；evicted：被淘汰的 filePath 列表；
- *   overflow：全为脏 tab 仍超限（调用方 toast 提示保存）
+ * @returns {{ok: boolean, tabs: Array, activeTabPath: string|null, evicted: string[], overflow: boolean,
+ *            payload: string}} payload：通过校验的那次序列化结果，调用方可直接复用写入，
+ *   避免同一份全量载荷（含所有 buffer 全文）再 stringify 一次
  */
 export function fitSessionToQuota(
   tabs,
@@ -160,20 +160,19 @@ export function fitSessionToQuota(
   let currentActive = activeTabPath;
   const evicted = [];
   for (;;) {
-    const bytes = measureBytes(
-      serializeSession({
-        projectKey,
-        tabs: current,
-        activeTabPath: currentActive,
-      }),
-    );
-    if (bytes <= limitBytes) {
+    const payload = serializeSession({
+      projectKey,
+      tabs: current,
+      activeTabPath: currentActive,
+    });
+    if (measureBytes(payload) <= limitBytes) {
       return {
         ok: true,
         tabs: current,
         activeTabPath: currentActive,
         evicted,
         overflow: false,
+        payload,
       };
     }
     // 最久不活跃的非脏 tab（激活 tab 通常是最近活跃，天然靠后）
@@ -216,14 +215,8 @@ export function saveSession(storage, session, options = {}) {
     return { ok: false, evicted: fit.evicted, overflow: true };
   }
   try {
-    storage.setItem(
-      EDITOR_SESSION_STORAGE_KEY,
-      serializeSession({
-        projectKey: session.projectKey,
-        tabs: fit.tabs,
-        activeTabPath: fit.activeTabPath,
-      }),
-    );
+    // 复用配额校验时的序列化结果，不再对全量载荷二次 stringify
+    storage.setItem(EDITOR_SESSION_STORAGE_KEY, fit.payload);
     return { ok: true, evicted: fit.evicted, overflow: false };
   } catch (_) {
     // 序列化已控量仍写入失败（宿主配额策略等）：放弃本轮持久化，
