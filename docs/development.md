@@ -399,7 +399,8 @@ AGENTS.md 的编码约束已尽量落地为机器检查，机器检查是准绳�
 | 项目约定扫描 | `scripts/check_conventions.py` | ruff 覆盖不到的三类：Pydantic v1 残留（`parse_obj`/`@validator`/`class Config`）、path_guard 绕过（`xxx / file_path`、`os.path.join(root, ...)`、同行 `resolve()+is_relative_to()`，白名单为解压根/rglob 合法包含检查）、文档硬编码数量（「N 个模块」等，豁免「上限/最多/返回」限值措辞，自测用例内置） |
 | 提交前拦截 | `.pre-commit-config.yaml` | black、prettier、ruff、约束扫描四个 local hook |
 | 统一验证入口 | `scripts/check.sh` | ruff + `black --check` + 约束扫描 + pytest + 前端 `npm test`，**完成代码修改后必须运行并通过** |
-| 编辑器实时化 | `.zcode/config.json` hooks + `scripts/zcode_post_edit_hook.py` | PostToolUse（Edit/Write）编辑 `.py` 自动 black、前端文件自动 prettier；编辑 `backend/`、`frontend/src/` 或配置文件时经 `additionalContext` 注入文档同步提醒（maintain-latexcellence-docs / latexcellence-config-sync）。Windows 侧使用需把 command 改为 process 类型或调整解释器名 |
+| 提交时格式化 | `.pre-commit-config.yaml` | black / prettier 在**提交时点**统一格式化。刻意不做编辑期（agent 编辑后）自动格式化：格式化会改动 agent 正在编辑的文件，令其文件状态跟踪失效、触发整文件重读，并与连续编辑产生竞态 |
+| 编辑器文档提醒 | `.zcode/config.json` hooks + `scripts/zcode_post_edit_hook.py` | PostToolUse（Edit/Write）在编辑 `backend/`、`frontend/src/` 或配置文件时经 `additionalContext` 注入文档同步提醒（maintain-latexcellence-docs / latexcellence-config-sync）。hook 只读、不修改任何文件。Windows 侧使用需把 command 改为 process 类型或调整解释器名 |
 
 注意事项：
 
