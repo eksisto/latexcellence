@@ -35,6 +35,7 @@
 | [docs/modules/template_library.md](docs/modules/template_library.md) | 模板库模块文档（内置模板清单、双模式数据流、manifest schema、API 一览、安全边界、配额并入、清洗规则与维护者脚本） |
 | [docker/README.md](docker/README.md) | Docker 沙箱镜像体系（四镜像构建、多架构、离线导入导出、缺宏包排查） |
 | [docs/deployment.md](docs/deployment.md) | 后端部署指南（单用户/多用户单进程/多实例 Compose 部署、systemd 托管、HTTPS 反向代理、安全风险声明、备份、环境变量与升级回滚） |
+| [docs/eval-regression-ci.md](docs/eval-regression-ci.md) | 评测回归基线 CI（tools/ 人工评测接入 Gitea Actions、指标采集与基线比对、基线治理与阈值调优） |
 | [tools/visual_review_api.py](tools/visual_review_api.py) | 视觉评审工具的 Chat Completions → Responses API 请求适配 |
 | [tools/compose-smoke.sh](tools/compose-smoke.sh) | 多实例 Compose 冒烟（replicas=2：注册审批 → 分片上传 → undo → 下载；`--with-tex` 追加编译冒烟） |
 | [tools/bump-version.sh](tools/bump-version.sh) | 版本号一键升级（同步 main.py 与前端三语 i18n；支持 major/minor/patch 或显式版本号，默认以 `chore(release)` 自动提交，`--no-commit` 跳过） |

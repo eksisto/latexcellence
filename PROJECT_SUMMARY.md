@@ -27,7 +27,7 @@ latexcellence/
 ├── docs/                  # 开发文档（模块明细在 docs/modules/，设计记录在各 *-design.md）
 ├── tests/                 # pytest：test_api / test_multiuser / test_utils / test_docker 等
 │                          #（docker marker 无 daemon 自动跳过）
-├── tools/                 # 维护者专用：各模块人工评估、宏包规则验证、Agent 评测工作区
+├── tools/                 # 维护者专用：各模块人工评估、评测回归 CI（tools/ci）、宏包规则验证、Agent 评测工作区
 ├── scripts/               # 维护脚本：check.sh 统一验证、check_conventions.py 约束扫描、sync_config.py
 ├── docker/                # Docker 沙箱镜像体系（backend/tex/convert/plot 四镜像）
 ├── data/                  # 运行期数据（DB、用户空间、模板、缓存；运行时生成）
