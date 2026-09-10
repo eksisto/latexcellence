@@ -8,7 +8,7 @@
 
 | 文件 | 职责 |
 | --- | --- |
-| `.gitea/workflows/eval-regression.yml` | CI 入口，三档 job（离线门禁 / LLM 评测 / OCR 评测） |
+| `.gitea/workflows/eval-regression.yml` / `.gitlab-ci.yml` | CI 入口（Gitea Actions 与 GitLab CI 两份**等价实现**），三档 job（离线门禁 / LLM 评测 / OCR 评测）；修改任一侧必须同步另一侧 |
 | `tools/ci/collect_metrics.py` | 指标采集：把各套评测的原始产物（results.json / 重放报告）归一化为统一的 metrics.json |
 | `tools/ci/compare_metrics.py` | 基线比对与更新：回归时非零退出；`--update-baseline` 播种/刷新基线 |
 | `tools/ci/metric_rules.py` | 共享规则：指标方向登记表（higher/lower）、suite 分类与默认容差 |
@@ -28,9 +28,9 @@
 
 **触发路径**（PR 与 push 相同）：`backend/core/prompts.py`、`llm_client.py`、`base_paragraph_check.py`、`latex_parser.py`、`json_utils.py`、`latex_json_guard.py`、各评测对应的功能模块与 fixtures、`tools/*_eval/**`、`tools/eval_common.py`、`tools/ci/**`、`config.example.json`、workflow 自身。
 
-**定时**：每周一 02:00 UTC 全量（含 OCR）。用途：`llm.base_url` 指向的托管模型可能在仓库无任何变更的情况下被服务方升级，只有定期重跑才能捕捉这种"模型漂移"。
+**定时**：每周一 02:00 UTC 全量（含 OCR）。用途：`llm.base_url` 指向的托管模型可能在仓库无任何变更的情况下被服务方升级，只有定期重跑才能捕捉这种"模型漂移"（Gitea 在 workflow 内声明；GitLab 需在 UI 配置流水线计划，见 5.3）。
 
-**手动**（`workflow_dispatch`）：`run_llm` / `run_ocr` / `update_baseline` 三个开关。OCR 相关改动建议手动触发 `run_ocr` 验证。
+**手动**（Gitea `workflow_dispatch` / GitLab「运行流水线」变量，见 5.3）：`run_llm`（`RUN_LLM`）/ `run_ocr`（`RUN_OCR`）/ `update_baseline`（`UPDATE_BASELINE`）三个开关。OCR 相关改动建议手动触发 `run_ocr` 验证。
 
 ## 3. 指标与判定
 
@@ -93,9 +93,11 @@ CI 内也可手动触发并勾选 `update_baseline`：各 job 会以 `--update-b
 
 **什么时候不该更新**：比对已经报回归、且你解释不了回归原因时。先看该 suite 的 `report.html` / `results.json` artifact 定位具体条目，确认是波动（重跑一次验证）还是真回退。
 
-## 5. Gitea 配置（一次性）
+## 5. CI 平台配置（一次性）
 
-### 5.1 Runner（实例管理员）
+workflow 有两份等价实现，按仓库实际托管平台取其一即可；两平台互不读取对方文件，可并存（Gitea 只读 `.gitea/workflows/`，GitLab 只读 `.gitlab-ci.yml`）。若同一仓库同时镜像到两侧，流水线会各自触发，Secrets 需分别配置。
+
+### 5.1 Gitea：Runner（实例管理员）
 
 Gitea Actions 无托管 runner，需自托管 [act_runner](https://docs.gitea.com/usage/actions/quickstart/) 并注册到实例：
 
@@ -105,7 +107,7 @@ Gitea Actions 无托管 runner，需自托管 [act_runner](https://docs.gitea.co
 - **网络**：runner 机器需能访问 `llm.base_url` 指向的 LLM API；实例默认 `DEFAULT_ACTIONS_URL=github` 时 runner 需能拉取 github.com 上的 action，内网隔离实例改为 `self` 并镜像所需 action
 - **定时触发**：由 Gitea 服务端发出，届时需有 runner 在线，否则 job 挂起等待
 
-### 5.2 仓库 Secrets 与变量
+### 5.2 Gitea：仓库 Secrets 与变量
 
 仓库 `设置 → Actions` 中配置：
 
@@ -118,6 +120,19 @@ Gitea Actions 无托管 runner，需自托管 [act_runner](https://docs.gitea.co
 **bootstrap 步骤**：配置 Key → 手动触发 workflow（工作流页面"运行工作流"，勾选 `run_llm=true`）→ 检查 artifact 中各 LLM suite 的结果是否合理 → 再次手动触发并勾选 `update_baseline` → 审核并提交 `tools/ci/baselines/` 新增文件 → 此后 PR 自动进入回归门禁。web 四套基线已随本方案播种（离线重放确定性可复现，容差为 0）。
 
 > 本 workflow 语法与 GitHub Actions 兼容：若仓库同步镜像到 GitHub，把文件复制回 `.github/workflows/` 即可复用（secrets 需在两侧分别配置）。注意 Gitea 优先读 `.gitea/workflows/`、仅在其没有 workflow 时才回退 `.github/workflows/`，两处不要各放一份导致混淆。
+
+### 5.3 GitLab：Runner、变量与流水线计划
+
+`.gitlab-ci.yml` 与 Gitea 版 job 一一对应（offline-gate / llm-evals / ocr-evals），运行环境为 `python:3.12-slim` 镜像，pip 缓存按 `requirements.txt` 哈希跨流水线复用：
+
+- **Runner**：自托管 [GitLab Runner](https://docs.gitlab.com/runner/)（Docker executor），需能拉取 `python:3.12-slim` 并访问 `llm.base_url` 指向的 LLM API；ocr-evals 在容器内 `apt-get` 安装 TeX Live（容器默认 root，无需 sudo）。
+- **CI/CD 变量**（`设置 → CI/CD → 变量`）：
+  - `LX_LLM_KEY`：LLM/OCR job 需要，建议勾选 Masked；**未配置时这两个 job 不会创建**（离线门禁照常运行）。
+  - `EVAL_LLM_BASE_URL` / `EVAL_LLM_MODEL`（可选）：覆盖评测用 `llm.base_url` / `llm.model`，映射到 `build_config.py` 读取的环境变量。
+- **定时全量**：UI `构建 → 流水线计划` 新建，cron `0 2 * * 1`（每周一 02:00，捕捉托管模型漂移），此时三档 job 全跑（含 OCR）。
+- **手动触发**：「运行流水线」时覆盖流水线变量，等价 Gitea 的 `workflow_dispatch` inputs：`RUN_LLM`（默认 `true`）、`RUN_OCR`（默认 `false`）、`UPDATE_BASELINE`（置 `true` 时以 `--update-baseline` 运行并上传基线 artifact）。
+- **路径过滤语义差异**：MR 流水线基于与目标分支的 diff 判定（主力路径，最可靠）；默认分支 push 基于推送前 SHA，连续多次 push 或批量合并可能漏判，以 MR 门禁为准；feature 分支 push 不创建流水线（与 Gitea 版 `push.branches: [master]` 行为一致）。
+- **防并发**：`resource_group`（按 ref 串行）+ `interruptible`（新流水线可取消运行中的旧 MR 流水线），对应 Gitea 的 concurrency group。
 
 ## 6. 设计要点
 

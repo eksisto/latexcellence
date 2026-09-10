@@ -1,0 +1,206 @@
+# 评测回归基线 CI（GitLab CI 版，与 .gitea/workflows/eval-regression.yml 等价）：
+# 提示词 / 模型 / 解析器 / 评测工具变更后自动跑评测并与基线比对。
+#
+# 三档 job：
+#   - offline-gate：零成本离线门禁（语料校验 + 网络访问评测离线重放 + 基线比对）
+#   - llm-evals：LLM 语料评测四套 + Prompt 理解评测（需 CI/CD 变量 LX_LLM_KEY，未配置自动跳过）
+#   - ocr-evals：公式/表格 OCR 评测（需 Vision 模型 + TeX Live，仅定时全量或手动触发）
+#
+# 与 Gitea 版的对应关系（修改任一侧必须同步另一侧，触发路径清单见下方 eval_changes）：
+#   pull_request / push(master)      -> workflow:rules 限定 MR 与默认分支 push，job rules 做路径过滤
+#   schedule (每周一 02:00 UTC)      -> GitLab 不支持在文件内声明，需在 UI「构建 → 流水线计划」
+#                                       配置 cron `0 2 * * 1`，见 docs/eval-regression-ci.md
+#   workflow_dispatch inputs         -> 「运行流水线」时覆盖流水线变量 RUN_LLM / RUN_OCR / UPDATE_BASELINE
+#   secrets.LX_LLM_KEY              -> CI/CD 变量 LX_LLM_KEY（建议勾选 Masked）
+#   vars.EVAL_LLM_BASE_URL/MODEL     -> CI/CD 变量 EVAL_LLM_BASE_URL / EVAL_LLM_MODEL（可选）
+#   concurrency group                -> resource_group + interruptible
+#   actions/upload-artifact          -> artifacts（额外把 tools/ci/baselines/ 一并上传，
+#                                       --update-baseline 模式下人工审核 diff 后提交入库）
+#
+# 注意：本仓库若同时镜像到 Gitea 与 GitLab，两侧会各自触发流水线，secrets 需分别配置。
+
+stages:
+  - eval
+
+workflow:
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+    - if: '$CI_PIPELINE_SOURCE == "web"'
+    - if: '$CI_PIPELINE_SOURCE == "schedule"'
+    - if: '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
+
+# 触发路径（PR 与默认分支 push 相同）。与 Gitea 版保持一致，唯一差异：
+# 自身文件名（Gitea 版监听 .gitea/workflows/eval-regression.yml，本文件监听 .gitlab-ci.yml）。
+.eval_changes: &eval_changes
+  paths:
+    - backend/core/prompts.py
+    - backend/core/llm_client.py
+    - backend/core/base_paragraph_check.py
+    - backend/utils/latex_parser.py
+    - backend/utils/json_utils.py
+    - backend/utils/latex_json_guard.py
+    - backend/modules/typo_check/**
+    - backend/modules/expression_opt/**
+    - backend/modules/terminology_check/**
+    - backend/modules/paragraph_translate/**
+    - backend/modules/formula_ocr/**
+    - backend/modules/table_ocr/**
+    - tests/fixtures/typo_check/**
+    - tests/fixtures/expression_opt/**
+    - tests/fixtures/terminology_check/**
+    - tests/fixtures/paragraph_translate/**
+    - tests/fixtures/formula_ocr/**
+    - tests/fixtures/table_ocr/**
+    - tools/eval_common.py
+    - tools/typo_check_eval/**
+    - tools/expression_opt_eval/**
+    - tools/terminology_check_eval/**
+    - tools/paragraph_translate_eval/**
+    - tools/formula_ocr_eval/**
+    - tools/table_ocr_eval/**
+    - tools/prompt_comprehension_eval/**
+    - tools/web_access_eval/**
+    - tools/ci/**
+    - config.example.json
+    - .gitlab-ci.yml
+
+variables:
+  EVAL_METRICS_DIR: logs/ci/metrics
+  EVAL_BASELINES_DIR: tools/ci/baselines
+  # 「运行流水线」手动触发的三个开关（对应 Gitea workflow_dispatch inputs 的默认值）
+  RUN_LLM: "true"
+  RUN_OCR: "false"
+  UPDATE_BASELINE: "false"
+  # pip 缓存目录（配合 cache:paths 按 requirements.txt 哈希复用）
+  PIP_CACHE_DIR: "$CI_PROJECT_DIR/.pip-cache"
+
+.eval-base:
+  stage: eval
+  image: python:3.12-slim
+  interruptible: true
+  resource_group: eval-regression-$CI_COMMIT_REF_SLUG
+  cache:
+    key:
+      files:
+        - requirements.txt
+    paths:
+      - .pip-cache
+  artifacts:
+    when: always
+    paths:
+      - logs/ci/
+      - tools/ci/baselines/
+    expire_in: 14 days
+  before_script:
+    - python --version
+
+# 离线门禁：语料校验 + 网络访问评测离线重放 + 基线比对
+offline-gate:
+  extends: .eval-base
+  timeout: 15m
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      changes: *eval_changes
+    - if: '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
+      changes: *eval_changes
+    # 手动触发与定时全量不做路径过滤（与 Gitea 版 dispatch/schedule 行为一致）
+    - if: '$CI_PIPELINE_SOURCE == "web"'
+    - if: '$CI_PIPELINE_SOURCE == "schedule"'
+  script:
+    - pip install -r requirements.txt
+    # 语料与用例离线校验
+    - python tools/terminology_check_eval/run_eval.py --validate
+    - python tools/paragraph_translate_eval/run_eval.py --validate
+    - python tools/prompt_comprehension_eval/run_eval.py --dry-run
+    - python tools/web_access_eval/run_eval.py validate
+    - mkdir -p "$EVAL_METRICS_DIR" logs/ci/web
+    - python tools/web_access_eval/run_eval.py replay --dataset tools/web_access_eval/datasets/search.json --predictions tools/web_access_eval/results/legacy-search.json --output logs/ci/web/search-report.json
+    - python tools/web_access_eval/run_eval.py replay --dataset tools/web_access_eval/datasets/scholarly.json --predictions tools/web_access_eval/results/legacy-scholarly.json --output logs/ci/web/scholarly-report.json
+    - python tools/web_access_eval/run_eval.py replay --dataset tools/web_access_eval/datasets/extraction.json --predictions tools/web_access_eval/results/legacy-extraction.json --output logs/ci/web/extraction-report.json
+    - python tools/web_access_eval/run_eval.py collect-structured-extraction --dataset tools/web_access_eval/datasets/extraction.json --output logs/ci/web/structured-predictions.json
+    - python tools/web_access_eval/run_eval.py replay --dataset tools/web_access_eval/datasets/extraction.json --predictions logs/ci/web/structured-predictions.json --output logs/ci/web/extraction_structured-report.json
+    - python tools/ci/collect_metrics.py --suite web_search --results logs/ci/web/search-report.json --output "$EVAL_METRICS_DIR/web_search.json"
+    - python tools/ci/collect_metrics.py --suite web_scholarly --results logs/ci/web/scholarly-report.json --output "$EVAL_METRICS_DIR/web_scholarly.json"
+    - python tools/ci/collect_metrics.py --suite web_extraction --results logs/ci/web/extraction-report.json --output "$EVAL_METRICS_DIR/web_extraction.json"
+    - python tools/ci/collect_metrics.py --suite web_extraction_structured --results logs/ci/web/extraction_structured-report.json --output "$EVAL_METRICS_DIR/web_extraction_structured.json"
+    # --update-baseline 恒返回 0，不做回归判定
+    - ARGS=""
+    - if [ "$UPDATE_BASELINE" = "true" ]; then ARGS="--update-baseline"; fi
+    - python tools/ci/compare_metrics.py --metrics-dir "$EVAL_METRICS_DIR" --baselines-dir "$EVAL_BASELINES_DIR" --output logs/ci/regression_report.json $ARGS
+
+# LLM 评测回归：语料四套 + Prompt 理解 + 基线比对（无 Key 时 job 不创建）
+llm-evals:
+  extends: .eval-base
+  timeout: 1h 30m
+  variables:
+    GIT_DEPTH: "0"
+    LATEXCELLENCE_CI_LLM_BASE_URL: "$EVAL_LLM_BASE_URL"
+    LATEXCELLENCE_CI_LLM_MODEL: "$EVAL_LLM_MODEL"
+  rules:
+    # 未配置 Key 直接不出现在流水线中（== null 仅匹配未定义，空串由脚本兜底）
+    - if: '$LX_LLM_KEY == null'
+      when: never
+    - if: '$CI_PIPELINE_SOURCE == "schedule"'
+    - if: '$CI_PIPELINE_SOURCE == "web" && $RUN_LLM == "true"'
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      changes: *eval_changes
+    - if: '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
+      changes: *eval_changes
+  script:
+    - |
+      if [ -z "$LX_LLM_KEY" ]; then
+        echo "警告：未配置 CI/CD 变量 LX_LLM_KEY，本次跳过 LLM 评测。配置方法见 docs/eval-regression-ci.md。"
+        exit 0
+      fi
+    - pip install -r requirements.txt
+    # 生成评测用 config.json（api_key 由 LX_LLM_KEY 经 SECRET_ENV_PATHS 注入，不落盘）
+    - python tools/ci/build_config.py
+    # LLM 连通性探测：防止服务不可用时各套评测"静默回退为原文"产出假 clean 结果
+    - python tools/ci/llm_probe.py
+    - python tools/typo_check_eval/run_eval.py --output-dir logs/ci/typo_check
+    - python tools/expression_opt_eval/run_eval.py --output-dir logs/ci/expression_opt
+    - python tools/terminology_check_eval/run_eval.py --output-dir logs/ci/terminology_check
+    - python tools/paragraph_translate_eval/run_eval.py --output-dir logs/ci/paragraph_translate
+    - mkdir -p logs/ci/prompt_comprehension
+    - python tools/prompt_comprehension_eval/run_eval.py --out logs/ci/prompt_comprehension/results.json --concurrency 4
+    - mkdir -p "$EVAL_METRICS_DIR"
+    - python tools/ci/collect_metrics.py --suite typo_check --results logs/ci/typo_check/results.json --output "$EVAL_METRICS_DIR/typo_check.json"
+    - python tools/ci/collect_metrics.py --suite expression_opt --results logs/ci/expression_opt/results.json --output "$EVAL_METRICS_DIR/expression_opt.json"
+    - python tools/ci/collect_metrics.py --suite terminology_check --results logs/ci/terminology_check/results.json --output "$EVAL_METRICS_DIR/terminology_check.json"
+    - python tools/ci/collect_metrics.py --suite paragraph_translate --results logs/ci/paragraph_translate/results.json --output "$EVAL_METRICS_DIR/paragraph_translate.json"
+    - python tools/ci/collect_metrics.py --suite prompt_comprehension --results logs/ci/prompt_comprehension/results.json --output "$EVAL_METRICS_DIR/prompt_comprehension.json"
+    - ARGS=""
+    - if [ "$UPDATE_BASELINE" = "true" ]; then ARGS="--update-baseline"; fi
+    - python tools/ci/compare_metrics.py --metrics-dir "$EVAL_METRICS_DIR" --baselines-dir "$EVAL_BASELINES_DIR" --output logs/ci/regression_report.json $ARGS
+
+# OCR 评测回归：公式/表格 + 基线比对（仅定时全量或手动 run_ocr）
+ocr-evals:
+  extends: .eval-base
+  timeout: 1h
+  variables:
+    LATEXCELLENCE_CI_LLM_BASE_URL: "$EVAL_LLM_BASE_URL"
+    LATEXCELLENCE_CI_LLM_MODEL: "$EVAL_LLM_MODEL"
+  rules:
+    - if: '$LX_LLM_KEY == null'
+      when: never
+    - if: '$CI_PIPELINE_SOURCE == "schedule"'
+    - if: '$CI_PIPELINE_SOURCE == "web" && $RUN_OCR == "true"'
+  script:
+    - apt-get update
+    - apt-get install -y --no-install-recommends texlive-latex-base texlive-latex-extra texlive-fonts-recommended poppler-utils
+    - |
+      if [ -z "$LX_LLM_KEY" ]; then
+        echo "警告：未配置 CI/CD 变量 LX_LLM_KEY，本次跳过 OCR 评测。"
+        exit 0
+      fi
+    - pip install -r requirements.txt
+    - python tools/ci/build_config.py
+    - python tools/ci/llm_probe.py
+    - python tools/formula_ocr_eval/run_eval.py --output-dir logs/ci/formula_ocr
+    - python tools/table_ocr_eval/run_eval.py --output-dir logs/ci/table_ocr
+    - mkdir -p "$EVAL_METRICS_DIR"
+    - python tools/ci/collect_metrics.py --suite formula_ocr --results logs/ci/formula_ocr/results.json --output "$EVAL_METRICS_DIR/formula_ocr.json"
+    - python tools/ci/collect_metrics.py --suite table_ocr --results logs/ci/table_ocr/results.json --output "$EVAL_METRICS_DIR/table_ocr.json"
+    - ARGS=""
+    - if [ "$UPDATE_BASELINE" = "true" ]; then ARGS="--update-baseline"; fi
+    - python tools/ci/compare_metrics.py --metrics-dir "$EVAL_METRICS_DIR" --baselines-dir "$EVAL_BASELINES_DIR" --output logs/ci/regression_report.json $ARGS
