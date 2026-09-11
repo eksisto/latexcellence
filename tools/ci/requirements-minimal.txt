@@ -1,4 +1,4 @@
-# 评测 CI 轻量依赖集：offline-gate / llm-evals 两个 job 专用（ocr-evals 用根 requirements.txt）。
+# 评测 CI 轻量依赖集：offline-gate / llm-evals 专用。
 # 只收录评测工具真实导入的包：
 #   - openai / pydantic-settings：LLM 客户端与配置模型
 #   - fastapi / argon2-cffi：backend.core 的 access_control / multiuser 导入链所需（仅类型与密码器，评测不起服务）

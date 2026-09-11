@@ -8,7 +8,7 @@
 
 | 文件 | 职责 |
 | --- | --- |
-| `.gitea/workflows/eval-regression.yml` / `.gitlab-ci.yml` | CI 入口（Gitea Actions 与 GitLab CI 两份**等价实现**），三档 job（离线门禁 / LLM 评测 / OCR 评测）；修改任一侧必须同步另一侧 |
+| `.gitea/workflows/eval-regression.yml` / `.gitlab-ci.yml` | CI 入口（Gitea Actions 与 GitLab CI 两份**等价实现**），job 分离线门禁与 LLM 评测两档；修改任一侧必须同步另一侧 |
 | `tools/ci/collect_metrics.py` | 指标采集：把各套评测的原始产物（results.json / 重放报告）归一化为统一的 metrics.json |
 | `tools/ci/compare_metrics.py` | 基线比对与更新：回归时非零退出；`--update-baseline` 播种/刷新基线 |
 | `tools/ci/metric_rules.py` | 共享规则：指标方向登记表（higher/lower）、suite 分类与默认容差 |
@@ -18,19 +18,18 @@
 
 各套人工评测工具自身的用法见 `tools/<suite>_eval/README.md`；本文只讲 CI 接入层。
 
-## 2. 三档 job
+## 2. Job 分档
 
 | Job | 内容 | 外部依赖 | 触发 |
 | --- | --- | --- | --- |
 | `offline-gate` | 术语/翻译语料校验、Prompt 理解用例 `--dry-run`、web_access 数据集校验、各网络访问评测套件**离线重放**（search / scholarly / extraction legacy / extraction structured）+ 基线比对 | 无（零成本） | PR / push 路径命中即跑 |
 | `llm-evals` | 错字、表达优化、术语一致性、逐段翻译四套语料评测 + Prompt 理解评测（`--concurrency 4`）+ 基线比对 | `secrets.LX_LLM_KEY`；LLM 调用量随语料规模线性增长 | PR / push（有 Key 才跑，无 Key 警告跳过）、定时、手动 |
-| `ocr-evals` | 公式 OCR、表格 OCR 评测 + 基线比对 | Vision 模型 + TeX Live（job 内 apt 安装）+ poppler-utils | 仅定时全量或手动（`run_ocr=true`） |
 
 **触发路径**（PR 与 push 相同）：`backend/core/prompts.py`、`llm_client.py`、`base_paragraph_check.py`、`latex_parser.py`、`json_utils.py`、`latex_json_guard.py`、各评测对应的功能模块与 fixtures、`tools/*_eval/**`、`tools/eval_common.py`、`tools/ci/**`、`config.example.json`、workflow 自身。
 
-**定时**：每周一 02:00 UTC 全量（含 OCR）。用途：`llm.base_url` 指向的托管模型可能在仓库无任何变更的情况下被服务方升级，只有定期重跑才能捕捉这种"模型漂移"（Gitea 在 workflow 内声明；GitLab 需在 UI 配置流水线计划，见 5.3）。
+**定时**：每周一 02:00 UTC 全量回归。用途：`llm.base_url` 指向的托管模型可能在仓库无任何变更的情况下被服务方升级，只有定期重跑才能捕捉这种"模型漂移"（Gitea 在 workflow 内声明；GitLab 需在 UI 配置流水线计划，见 5.3）。
 
-**手动**（Gitea `workflow_dispatch` / GitLab「运行流水线」变量，见 5.3）：`run_llm`（`RUN_LLM`）/ `run_ocr`（`RUN_OCR`）/ `update_baseline`（`UPDATE_BASELINE`）三个开关。OCR 相关改动建议手动触发 `run_ocr` 验证。
+**手动**（Gitea `workflow_dispatch` / GitLab「运行流水线」变量，见 5.3）：`run_llm`（`RUN_LLM`）/ `update_baseline`（`UPDATE_BASELINE`）开关。
 
 ## 3. 指标与判定
 
@@ -103,7 +102,6 @@ Gitea Actions 无托管 runner，需自托管 [act_runner](https://docs.gitea.co
 
 - **版本要求**：Gitea ≥ 1.22（artifact v4 API，`actions/upload-artifact@v4` 依赖）；`workflow_dispatch` inputs 建议 ≥ 1.23
 - **标签映射**：`runs-on: ubuntu-latest` 只是标签，注册时需把 `ubuntu-latest` 映射到含 Python 3.12 + node20 的全量镜像（如 `catthehacker/ubuntu:act-latest` 或 `gitea/runner-images:ubuntu-latest`），`actions/setup-python` 的 pip cache 才能工作；默认的极简镜像跑不起来
-- **OCR job**：需镜像可 `apt-get` 安装 TeX Live（全量镜像自带 sudo，或以 root 容器运行）
 - **网络**：runner 机器需能访问 `llm.base_url` 指向的 LLM API；实例默认 `DEFAULT_ACTIONS_URL=github` 时 runner 需能拉取 github.com 上的 action，内网隔离实例改为 `self` 并镜像所需 action
 - **定时触发**：由 Gitea 服务端发出，届时需有 runner 在线，否则 job 挂起等待
 
@@ -113,7 +111,7 @@ Gitea Actions 无托管 runner，需自托管 [act_runner](https://docs.gitea.co
 
 | 配置 | 必需 | 说明 |
 | --- | --- | --- |
-| `secrets.LX_LLM_KEY` | LLM/OCR job 需要 | 注入 `llm.api_key`（`backend/core/config.py` 的 `SECRET_ENV_PATHS` 机制，优先于配置文件且永不落盘） |
+| `secrets.LX_LLM_KEY` | LLM 评测 job 需要 | 注入 `llm.api_key`（`backend/core/config.py` 的 `SECRET_ENV_PATHS` 机制，优先于配置文件且永不落盘） |
 | `vars.EVAL_LLM_BASE_URL` | 可选 | 覆盖评测用 `llm.base_url`（默认取 `config.example.json`） |
 | `vars.EVAL_LLM_MODEL` | 可选 | 覆盖评测用 `llm.model` |
 | `vars.PIP_INDEX_URL` | 可选 | pip 镜像源；workflow 顶层 env 注入 `PIP_INDEX_URL`，未配置回落官方源（runner 直连官方 PyPI 缓慢时配置） |
@@ -124,15 +122,15 @@ Gitea Actions 无托管 runner，需自托管 [act_runner](https://docs.gitea.co
 
 ### 5.3 GitLab：Runner、变量与流水线计划
 
-`.gitlab-ci.yml` 与 Gitea 版 job 一一对应（offline-gate / llm-evals / ocr-evals），运行环境为 `python:3.12-slim` 镜像。offline-gate / llm-evals 安装 `tools/ci/requirements-minimal.txt` 轻量依赖集（评测工具真实导入的最小集合，不含 playwright / numpy 等重依赖——冷缓存首跑在慢速 PyPI 链路上全量安装曾撑爆 offline-gate 超时），ocr-evals 因 OCR 模块依赖 numpy / scipy / Pillow 安装全量 `requirements.txt`；pip 缓存按依赖清单哈希跨流水线复用：
+`.gitlab-ci.yml` 与 Gitea 版 job 一一对应（offline-gate / llm-evals），运行环境为 `python:3.12-slim` 镜像，均安装 `tools/ci/requirements-minimal.txt` 轻量依赖集（评测工具真实导入的最小集合，不含 playwright / numpy 等重依赖——冷缓存首跑在慢速 PyPI 链路上全量安装曾撑爆 offline-gate 超时）；pip 缓存按清单哈希跨流水线复用：
 
-- **Runner**：自托管 [GitLab Runner](https://docs.gitlab.com/runner/)（Docker executor），需能拉取 `python:3.12-slim` 并访问 `llm.base_url` 指向的 LLM API；ocr-evals 在容器内 `apt-get` 安装 TeX Live（容器默认 root，无需 sudo）。
+- **Runner**：自托管 [GitLab Runner](https://docs.gitlab.com/runner/)（Docker executor），需能拉取 `python:3.12-slim` 并访问 `llm.base_url` 指向的 LLM API。
 - **CI/CD 变量**（`设置 → CI/CD → 变量`）：
   - `LX_LLM_KEY`：LLM/OCR job 需要，建议勾选 Masked；**未配置时这两个 job 不会创建**（离线门禁照常运行）。
   - `EVAL_LLM_BASE_URL` / `EVAL_LLM_MODEL`（可选）：覆盖评测用 `llm.base_url` / `llm.model`，映射到 `build_config.py` 读取的环境变量。
   - `PIP_INDEX_URL`（可选）：pip 镜像源；pip 原生读取该环境变量，runner 直连官方 PyPI 缓慢时配置为镜像地址。
-- **定时全量**：UI `构建 → 流水线计划` 新建，cron `0 2 * * 1`（每周一 02:00，捕捉托管模型漂移），此时三档 job 全跑（含 OCR）。
-- **手动触发**：「运行流水线」时覆盖流水线变量，等价 Gitea 的 `workflow_dispatch` inputs：`RUN_LLM`（默认 `true`）、`RUN_OCR`（默认 `false`）、`UPDATE_BASELINE`（置 `true` 时以 `--update-baseline` 运行并上传基线 artifact）。
+- **定时全量**：UI `构建 → 流水线计划` 新建，cron `0 2 * * 1`（每周一 02:00，捕捉托管模型漂移），此时全部 job 运行。
+- **手动触发**：「运行流水线」时覆盖流水线变量，等价 Gitea 的 `workflow_dispatch` inputs：`RUN_LLM`（默认 `true`）、`UPDATE_BASELINE`（置 `true` 时以 `--update-baseline` 运行并上传基线 artifact）。
 - **路径过滤语义差异**：MR 流水线基于与目标分支的 diff 判定（主力路径，最可靠）；默认分支 push 基于推送前 SHA，连续多次 push 或批量合并可能漏判，以 MR 门禁为准；feature 分支 push 不创建流水线（与 Gitea 版 `push.branches: [master]` 行为一致）。
 - **防并发**：`resource_group`（按 ref 串行）+ `interruptible`（新流水线可取消运行中的旧 MR 流水线），对应 Gitea 的 concurrency group。
 
@@ -140,7 +138,7 @@ Gitea Actions 无托管 runner，需自托管 [act_runner](https://docs.gitea.co
 
 - **静默回退防护**：语料式评测在 LLM 不可用时会把失败静默回退为原文（产出一堆假 clean 结果且 exit 0）。防护有两层：`llm_probe.py` 在跑评测前先做最小调用，失败即终止 job；结果里 `errors` 指标本身参与回归判定。
 - **web_access 重放为何能进离线门禁**：预测文件已入库（`tools/web_access_eval/results/legacy-*.json`），replay 只做确定性打分，可守护指标计算与数据集本身的回归；structured 抽取套件走本地 HTML fixture 经 `ExtractorRegistry` 采集后重放，额外守护抽取器代码。grounding 套件暂无入库预测，待补齐后再播种基线。
-- **OCR 为何单独一档**：需要 TeX Live 安装（拉慢 job）与 Vision 模型；若模型无 Vision 能力，评测会大面积失败并体现在 `errors` 指标上（诚实失败，而非静默）。
+- **OCR 评测不进 CI**：公式/表格 OCR 评测需要 Vision 模型与 TeX Live 安装（拉慢 job），历史上以独立 job 仅在定时/手动触发，现已从 CI 移除；`tools/formula_ocr_eval/`、`tools/table_ocr_eval/` 及 `metric_rules.py` 的 ocr suite 规则保留，需要时可在本地手动跑评测并按第 4 节流程播种/比对基线。
 - **输出目录**：CI 统一写 `logs/ci/`（已被根 `.gitignore` 覆盖），`results.json` + `report.html` 随 artifact 上传供人工查看。
 
 ## 7. 已知限制
