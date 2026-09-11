@@ -6,6 +6,10 @@
 #   - llm-evals：LLM 语料评测四套 + Prompt 理解评测（需 CI/CD 变量 LX_LLM_KEY，未配置自动跳过）
 #   - ocr-evals：公式/表格 OCR 评测（需 Vision 模型 + TeX Live，仅定时全量或手动触发）
 #
+# 依赖策略：offline-gate / llm-evals 安装 tools/ci/requirements-minimal.txt 轻量依赖集
+# （评测工具真实导入的最小集合），ocr-evals 安装全量 requirements.txt。
+# runner 访问 PyPI 慢时，在 CI/CD 变量配置 PIP_INDEX_URL 指向镜像（pip 原生读取该环境变量）。
+#
 # 与 Gitea 版的对应关系（修改任一侧必须同步另一侧，触发路径清单见下方 eval_changes）：
 #   pull_request / push(master)      -> workflow:rules 限定 MR 与默认分支 push，job rules 做路径过滤
 #   schedule (每周一 02:00 UTC)      -> GitLab 不支持在文件内声明，需在 UI「构建 → 流水线计划」
@@ -71,7 +75,7 @@ variables:
   RUN_LLM: "true"
   RUN_OCR: "false"
   UPDATE_BASELINE: "false"
-  # pip 缓存目录（配合 cache:paths 按 requirements.txt 哈希复用）
+  # pip 缓存目录（配合 cache:paths 按依赖清单哈希复用）
   PIP_CACHE_DIR: "$CI_PROJECT_DIR/.pip-cache"
 
 .eval-base:
@@ -83,6 +87,7 @@ variables:
     key:
       files:
         - requirements.txt
+        - tools/ci/requirements-minimal.txt
     paths:
       - .pip-cache
   artifacts:
@@ -107,7 +112,7 @@ offline-gate:
     - if: '$CI_PIPELINE_SOURCE == "web"'
     - if: '$CI_PIPELINE_SOURCE == "schedule"'
   script:
-    - pip install -r requirements.txt
+    - pip install -r tools/ci/requirements-minimal.txt
     # 语料与用例离线校验
     - python tools/terminology_check_eval/run_eval.py --validate
     - python tools/paragraph_translate_eval/run_eval.py --validate
@@ -152,7 +157,7 @@ llm-evals:
         echo "警告：未配置 CI/CD 变量 LX_LLM_KEY，本次跳过 LLM 评测。配置方法见 docs/eval-regression-ci.md。"
         exit 0
       fi
-    - pip install -r requirements.txt
+    - pip install -r tools/ci/requirements-minimal.txt
     # 生成评测用 config.json（api_key 由 LX_LLM_KEY 经 SECRET_ENV_PATHS 注入，不落盘）
     - python tools/ci/build_config.py
     # LLM 连通性探测：防止服务不可用时各套评测"静默回退为原文"产出假 clean 结果

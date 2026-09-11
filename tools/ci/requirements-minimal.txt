@@ -1,0 +1,16 @@
+# 评测 CI 轻量依赖集：offline-gate / llm-evals 两个 job 专用（ocr-evals 用根 requirements.txt）。
+# 只收录评测工具真实导入的包：
+#   - openai / pydantic-settings：LLM 客户端与配置模型
+#   - fastapi / argon2-cffi：backend.core 的 access_control / multiuser 导入链所需（仅类型与密码器，评测不起服务）
+#   - httpx：backend.utils.web_search.deep_read 顶层导入
+#   - trafilatura / beautifulsoup4：structured 抽取重放经 ExtractorRegistry 引入
+# 刻意不含 playwright / numpy / pandas / scipy / Pillow 等重依赖：runner 到 PyPI 链路慢时，
+# 全量安装会撑爆 offline-gate 的超时（GitLab 首跑冷缓存实测超时）。
+# 增删条目时需同步两侧 CI 的缓存 key（.gitlab-ci.yml 与 .gitea/workflows/eval-regression.yml）。
+openai>=1.66.0
+pydantic-settings>=2.0.0
+fastapi>=0.115.0
+httpx>=0.27.0
+argon2-cffi>=23.1.0
+trafilatura>=2.1.0
+beautifulsoup4>=4.15.0

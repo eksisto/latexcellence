@@ -5,6 +5,10 @@
 #   - llm-evals：LLM 语料评测四套 + Prompt 理解评测（需 secrets.LX_LLM_KEY，未配置自动跳过）
 #   - ocr-evals：公式/表格 OCR 评测（需 Vision 模型 + TeX Live，仅定时全量或手动触发）
 #
+# 依赖策略：offline-gate / llm-evals 安装 tools/ci/requirements-minimal.txt 轻量依赖集
+# （评测工具真实导入的最小集合），ocr-evals 安装全量 requirements.txt。
+# runner 访问 PyPI 慢时，在仓库 vars 配置 PIP_INDEX_URL 指向镜像。
+#
 # Gitea Actions 要求：
 #   - Gitea ≥ 1.22（artifact v4 API；workflow_dispatch inputs 建议 ≥ 1.23）
 #   - 自托管 act_runner，标签 ubuntu-latest 需映射到含 Python 3.12 + node20 的全量镜像
@@ -115,6 +119,8 @@ concurrency:
 env:
   EVAL_METRICS_DIR: logs/ci/metrics
   EVAL_BASELINES_DIR: tools/ci/baselines
+  # 未配置镜像时回落官方源（pip 原生读取该环境变量）
+  PIP_INDEX_URL: ${{ vars.PIP_INDEX_URL || 'https://pypi.org/simple' }}
 
 jobs:
   offline-gate:
@@ -127,9 +133,9 @@ jobs:
         with:
           python-version: "3.12"
           cache: pip
-          cache-dependency-path: requirements.txt
+          cache-dependency-path: tools/ci/requirements-minimal.txt
       - name: 安装依赖
-        run: pip install -r requirements.txt
+        run: pip install -r tools/ci/requirements-minimal.txt
       - name: 语料与用例离线校验
         run: |
           python tools/terminology_check_eval/run_eval.py --validate
@@ -206,9 +212,9 @@ jobs:
         with:
           python-version: "3.12"
           cache: pip
-          cache-dependency-path: requirements.txt
+          cache-dependency-path: tools/ci/requirements-minimal.txt
       - name: 安装依赖
-        run: pip install -r requirements.txt
+        run: pip install -r tools/ci/requirements-minimal.txt
       - name: 检查 LLM Key
         id: check_key
         run: |

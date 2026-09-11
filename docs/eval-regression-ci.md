@@ -116,6 +116,7 @@ Gitea Actions 无托管 runner，需自托管 [act_runner](https://docs.gitea.co
 | `secrets.LX_LLM_KEY` | LLM/OCR job 需要 | 注入 `llm.api_key`（`backend/core/config.py` 的 `SECRET_ENV_PATHS` 机制，优先于配置文件且永不落盘） |
 | `vars.EVAL_LLM_BASE_URL` | 可选 | 覆盖评测用 `llm.base_url`（默认取 `config.example.json`） |
 | `vars.EVAL_LLM_MODEL` | 可选 | 覆盖评测用 `llm.model` |
+| `vars.PIP_INDEX_URL` | 可选 | pip 镜像源；workflow 顶层 env 注入 `PIP_INDEX_URL`，未配置回落官方源（runner 直连官方 PyPI 缓慢时配置） |
 
 **bootstrap 步骤**：配置 Key → 手动触发 workflow（工作流页面"运行工作流"，勾选 `run_llm=true`）→ 检查 artifact 中各 LLM suite 的结果是否合理 → 再次手动触发并勾选 `update_baseline` → 审核并提交 `tools/ci/baselines/` 新增文件 → 此后 PR 自动进入回归门禁。web 四套基线已随本方案播种（离线重放确定性可复现，容差为 0）。
 
@@ -123,12 +124,13 @@ Gitea Actions 无托管 runner，需自托管 [act_runner](https://docs.gitea.co
 
 ### 5.3 GitLab：Runner、变量与流水线计划
 
-`.gitlab-ci.yml` 与 Gitea 版 job 一一对应（offline-gate / llm-evals / ocr-evals），运行环境为 `python:3.12-slim` 镜像，pip 缓存按 `requirements.txt` 哈希跨流水线复用：
+`.gitlab-ci.yml` 与 Gitea 版 job 一一对应（offline-gate / llm-evals / ocr-evals），运行环境为 `python:3.12-slim` 镜像。offline-gate / llm-evals 安装 `tools/ci/requirements-minimal.txt` 轻量依赖集（评测工具真实导入的最小集合，不含 playwright / numpy 等重依赖——冷缓存首跑在慢速 PyPI 链路上全量安装曾撑爆 offline-gate 超时），ocr-evals 因 OCR 模块依赖 numpy / scipy / Pillow 安装全量 `requirements.txt`；pip 缓存按依赖清单哈希跨流水线复用：
 
 - **Runner**：自托管 [GitLab Runner](https://docs.gitlab.com/runner/)（Docker executor），需能拉取 `python:3.12-slim` 并访问 `llm.base_url` 指向的 LLM API；ocr-evals 在容器内 `apt-get` 安装 TeX Live（容器默认 root，无需 sudo）。
 - **CI/CD 变量**（`设置 → CI/CD → 变量`）：
   - `LX_LLM_KEY`：LLM/OCR job 需要，建议勾选 Masked；**未配置时这两个 job 不会创建**（离线门禁照常运行）。
   - `EVAL_LLM_BASE_URL` / `EVAL_LLM_MODEL`（可选）：覆盖评测用 `llm.base_url` / `llm.model`，映射到 `build_config.py` 读取的环境变量。
+  - `PIP_INDEX_URL`（可选）：pip 镜像源；pip 原生读取该环境变量，runner 直连官方 PyPI 缓慢时配置为镜像地址。
 - **定时全量**：UI `构建 → 流水线计划` 新建，cron `0 2 * * 1`（每周一 02:00，捕捉托管模型漂移），此时三档 job 全跑（含 OCR）。
 - **手动触发**：「运行流水线」时覆盖流水线变量，等价 Gitea 的 `workflow_dispatch` inputs：`RUN_LLM`（默认 `true`）、`RUN_OCR`（默认 `false`）、`UPDATE_BASELINE`（置 `true` 时以 `--update-baseline` 运行并上传基线 artifact）。
 - **路径过滤语义差异**：MR 流水线基于与目标分支的 diff 判定（主力路径，最可靠）；默认分支 push 基于推送前 SHA，连续多次 push 或批量合并可能漏判，以 MR 门禁为准；feature 分支 push 不创建流水线（与 Gitea 版 `push.branches: [master]` 行为一致）。
