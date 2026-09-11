@@ -243,8 +243,6 @@ async def run_eval_main(
     validate_corpus: Callable[[dict], list[str]] | None = None,
 ) -> int:
     """逐条评估并生成报告（供 run_eval_cli 调用，也可被测试直接驱动）。"""
-    ensure_config(PROJECT_ROOT)
-
     manifest = load_manifest(fixtures_dir)
     if validate_corpus is not None:
         corpus_issues = validate_corpus(manifest)
@@ -257,6 +255,8 @@ async def run_eval_main(
             print("语料校验通过。")
             return 0
 
+    # --validate 不调用 LLM，不能要求 config.json（CI 离线门禁无此文件），真实评估前才加载
+    ensure_config(PROJECT_ROOT)
     cfg = get_config()
     if not cfg.llm.api_key:
         print(no_key_warning)
