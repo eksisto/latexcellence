@@ -37,6 +37,8 @@ ignore = [
 "backend/manage.py" = ["T201"]
 "tests/test_marker_numbering_demo.py" = ["T201"]
 "scripts/*" = ["T201"]
+# Skill 维护脚本（.agents/skills/*/scripts/）：同 scripts/*，print 是面向维护者的正常输出方式
+".agents/**/scripts/*" = ["T201"]
 # __init__.py 的再导出（re-export）模式：未使用导入属有意为之
 "**/__init__.py" = ["F401"]
 # 评测对齐测试先做 sys.path 注入再导入，属刻意的延迟导入模式

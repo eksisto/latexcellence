@@ -1,0 +1,4 @@
+interface:
+  display_name: "LateXcellence 提示词维护"
+  short_description: "维护 backend/core/prompts.py 提示词格式与规范"
+  default_prompt: "Use $maintain-latexcellence-prompts to update prompts in backend/core/prompts.py while keeping the project prompt structure and specs."
