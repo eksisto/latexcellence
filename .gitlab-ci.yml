@@ -1,28 +1,33 @@
-# 评测回归基线 CI（GitLab CI 版，与 .gitea/workflows/eval-regression.yml 等价）：
-# 提示词 / 模型 / 解析器 / 评测工具变更后自动跑评测并与基线比对。
+# 代码门禁 + 评测回归 CI：
+#   - check 阶段：任意 MR / 默认分支 push 全量跑的代码门禁
+#   - eval 阶段：提示词 / 模型 / 解析器 / 评测工具变更后跑评测并与基线比对
 #
 # job 分档：
+#   - python-check：ruff + black --check + AGENTS.md 约束扫描 + pytest（不做路径过滤）
+#   - web-check：前端单测 + 生产构建（不做路径过滤）
 #   - offline-gate：零成本离线门禁（语料校验 + 网络访问评测离线重放 + 基线比对）
 #   - llm-evals：LLM 语料评测四套 + Prompt 理解评测（需 CI/CD 变量 LX_LLM_KEY，未配置自动跳过）
 #
-# 依赖策略：offline-gate / llm-evals 均安装 tools/ci/requirements-minimal.txt 轻量依赖集
+# 依赖策略：
+#   check 阶段装 requirements.txt + requirements-dev.txt（开发工具锁版本见该文件）；
+#   offline-gate / llm-evals 均安装 tools/ci/requirements-minimal.txt 轻量依赖集
 # （评测工具真实导入的最小集合）。
 # runner 访问 PyPI 慢时，在 CI/CD 变量配置 PIP_INDEX_URL 指向镜像（pip 原生读取该环境变量）。
 #
-# 与 Gitea 版的对应关系（修改任一侧必须同步另一侧，触发路径清单见下方 eval_changes）：
-#   pull_request / push(master)      -> workflow:rules 限定 MR 与默认分支 push，job rules 做路径过滤
-#   schedule (每周一 02:00 UTC)      -> GitLab 不支持在文件内声明，需在 UI「构建 → 流水线计划」
-#                                       配置 cron `0 2 * * 1`，见 docs/eval-regression-ci.md
-#   workflow_dispatch inputs         -> 「运行流水线」时覆盖流水线变量 RUN_LLM / UPDATE_BASELINE
-#   secrets.LX_LLM_KEY              -> CI/CD 变量 LX_LLM_KEY（建议勾选 Masked）
-#   vars.EVAL_LLM_BASE_URL/MODEL     -> CI/CD 变量 EVAL_LLM_BASE_URL / EVAL_LLM_MODEL（可选）
-#   concurrency group                -> resource_group + interruptible
-#   actions/upload-artifact          -> artifacts（额外把 tools/ci/baselines/ 一并上传，
-#                                       --update-baseline 模式下人工审核 diff 后提交入库）
-#
-# 注意：本仓库若同时镜像到 Gitea 与 GitLab，两侧会各自触发流水线，secrets 需分别配置。
+# 运行方式与一次性配置：
+#   MR / 默认分支 push            -> workflow:rules 限定；check 阶段全量跑，
+#                                    eval 阶段 job rules 做路径过滤
+#   流水线计划（每周一 02:00 UTC）-> GitLab 不支持在文件内声明，需在 UI「构建 → 流水线计划」
+#                                    配置 cron `0 2 * * 1`，见 docs/eval-regression-ci.md
+#   「运行流水线」手动触发         -> 覆盖流水线变量 RUN_LLM / UPDATE_BASELINE
+#   LX_LLM_KEY                   -> CI/CD 变量（建议勾选 Masked）
+#   EVAL_LLM_BASE_URL / MODEL     -> CI/CD 变量（可选）
+#   防并发                        -> resource_group + interruptible
+#   基线产物                      -> artifacts（额外把 tools/ci/baselines/ 一并上传，
+#                                    --update-baseline 模式下人工审核 diff 后提交入库）
 
 stages:
+  - check
   - eval
 
 workflow:
@@ -32,8 +37,7 @@ workflow:
     - if: '$CI_PIPELINE_SOURCE == "schedule"'
     - if: '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
 
-# 触发路径（PR 与默认分支 push 相同）。与 Gitea 版保持一致，唯一差异：
-# 自身文件名（Gitea 版监听 .gitea/workflows/eval-regression.yml，本文件监听 .gitlab-ci.yml）。
+# 触发路径（MR 与默认分支 push 相同），并监听本文件自身的变更（修改 CI 逻辑必须自证）。
 .eval_changes: &eval_changes
   paths:
     - backend/core/prompts.py
@@ -64,11 +68,60 @@ workflow:
 variables:
   EVAL_METRICS_DIR: logs/ci/metrics
   EVAL_BASELINES_DIR: tools/ci/baselines
-  # 「运行流水线」手动触发的开关（对应 Gitea workflow_dispatch inputs 的默认值）
+  # 「运行流水线」手动触发的开关（默认值；播种/更新基线时置 UPDATE_BASELINE=true）
   RUN_LLM: "true"
   UPDATE_BASELINE: "false"
   # pip 缓存目录（配合 cache:paths 按依赖清单哈希复用）
   PIP_CACHE_DIR: "$CI_PROJECT_DIR/.pip-cache"
+
+# ── check 阶段：代码门禁（与评测无关，全量路径）──────────────────────────────
+# 命令不在这里重写：两个 job 只负责装依赖，检查逻辑全在 scripts/check_backend.sh /
+# scripts/check_frontend.sh 里，与本地 `bash scripts/check.sh` 同源。
+# 之所以不做路径过滤：评测回归只覆盖部分路径，改 router / service / 前端 / 测试
+# 等普通代码过去没有任何 CI 拦截。
+.check-base:
+  stage: check
+  interruptible: true
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+    - if: '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
+    - if: '$CI_PIPELINE_SOURCE == "web"'
+    - if: '$CI_PIPELINE_SOURCE == "schedule"'
+
+python-check:
+  extends: .check-base
+  image: python:3.12-slim
+  timeout: 30m
+  cache:
+    key:
+      files:
+        - requirements.txt
+        - requirements-dev.txt
+    paths:
+      - .pip-cache
+  # 系统依赖与 docker/backend/Dockerfile 对齐（git / unar）：让依赖外部二进制的
+  # 用例从 skip 变为真跑（git 版本管理、rar 解压回退层）。
+  before_script:
+    - apt-get update && apt-get install -y --no-install-recommends git unar && rm -rf /var/lib/apt/lists/*
+  script:
+    # --skip-docker：CI job 无 Docker daemon，显式排除 marker=docker 的真容器冒烟
+    - bash scripts/check_backend.sh --install --skip-docker
+
+web-check:
+  extends: .check-base
+  image: node:20-bookworm-slim
+  timeout: 20m
+  variables:
+    NPM_CONFIG_CACHE: "$CI_PROJECT_DIR/.npm-cache"
+  cache:
+    key:
+      files:
+        - frontend/package-lock.json
+    paths:
+      - .npm-cache
+  script:
+    # --build 是 check 阶段与评测阶段的关键差别：单测跑不出断掉的 import / JSX 错误
+    - bash scripts/check_frontend.sh --install --build
 
 .eval-base:
   stage: eval
@@ -99,7 +152,7 @@ offline-gate:
       changes: *eval_changes
     - if: '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
       changes: *eval_changes
-    # 手动触发与定时全量不做路径过滤（与 Gitea 版 dispatch/schedule 行为一致）
+    # 手动触发与定时全量不做路径过滤
     - if: '$CI_PIPELINE_SOURCE == "web"'
     - if: '$CI_PIPELINE_SOURCE == "schedule"'
   script:
@@ -134,7 +187,7 @@ llm-evals:
     LATEXCELLENCE_CI_LLM_MODEL: "$EVAL_LLM_MODEL"
   rules:
     # 未配置 Key 直接不出现在流水线中（== null 仅匹配未定义，空串由脚本兜底）
-    - if: '$LX_LLM_KEY == null'
+    - if: "$LX_LLM_KEY == null"
       when: never
     - if: '$CI_PIPELINE_SOURCE == "schedule"'
     - if: '$CI_PIPELINE_SOURCE == "web" && $RUN_LLM == "true"'

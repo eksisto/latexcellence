@@ -124,6 +124,8 @@
 | [pytest](https://pytest.org) | >=8.0.0 | MIT | Copyright (c) 2004 Holger Krekel and others | 测试框架 |
 | [pytest-asyncio](https://github.com/pytest-dev/pytest-asyncio) | >=0.24.0 | Apache-2.0 | Copyright (c) Tin Tvrtković | 异步测试支持 |
 | [aiosmtpd](https://github.com/aio-libs/aiosmtpd) | >=1.4.6 | Apache-2.0 | Copyright (c) The aiosmtpd project and individual contributors | 本地 mock SMTP server（仅测试使用，多用户 v2 P6） |
+| [ruff](https://docs.astral.sh/ruff/) | ==0.16.6 | MIT | Copyright (c) 2022 Charlie Marsh | Python 静态检查（开发/CI 门禁，见 `requirements-dev.txt`，不参与运行与分发） |
+| [black](https://black.readthedocs.io) | ==26.5.1 | MIT | Copyright (c) 2018 Łukasz Langa | Python 代码格式化检查（开发/CI 门禁，见 `requirements-dev.txt`，不参与运行与分发） |
 
 ## 四、内联字体文件 (bundled)
 

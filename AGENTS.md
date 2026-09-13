@@ -41,6 +41,8 @@ bash scripts/check.sh
 - `scripts/check_conventions.py`：ruff 覆盖不到的约定——Pydantic v1 残留、path_guard 绕过、文档硬编码数量
 - `.pre-commit-config.yaml`：black / prettier / ruff / 约束扫描，提交前自动拦截
 - `scripts/check.sh`：以上全部 + pytest + 前端单测的统一入口；**完成代码修改后必须运行并通过**
+- `scripts/check_backend.sh` / `scripts/check_frontend.sh`：`check.sh` 委托的拆分子集，CI 的 `python-check` / `web-check` job（`.gitlab-ci.yml` 的 `check` 阶段）直接调用它们——**不要在 CI 文件里另写一份检查命令**
+- `requirements-dev.txt`：ruff / black 锁版本（生产 `requirements.txt` 不含），本地与 CI 必须同版本
 
 ## 缓存清理
 

@@ -6,7 +6,7 @@
 #   - trafilatura / beautifulsoup4：structured 抽取重放经 ExtractorRegistry 引入
 # 刻意不含 playwright / numpy / pandas / scipy / Pillow 等重依赖：runner 到 PyPI 链路慢时，
 # 全量安装会撑爆 offline-gate 的超时（GitLab 首跑冷缓存实测超时）。
-# 增删条目时需同步两侧 CI 的缓存 key（.gitlab-ci.yml 与 .gitea/workflows/eval-regression.yml）。
+# 增删条目时需同步 .gitlab-ci.yml 中 eval job 的缓存 key。
 openai>=1.66.0
 pydantic-settings>=2.0.0
 fastapi>=0.115.0

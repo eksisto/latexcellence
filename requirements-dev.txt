@@ -1,0 +1,10 @@
+# 开发/CI 工具依赖：生产运行与镜像不需要这些包
+# （docker/backend/Dockerfile 只装 requirements.txt）。
+#
+# 精确锁版本的理由：CI 的 python-check job 与本地 scripts/check_backend.sh、
+# pre-commit 必须使用同一版本——ruff 小版本会新增默认规则、black 会调整格式化
+# 口径，版本漂移会让「本地全绿、CI 报红」或反之，且无法从 commit 复现结论。
+#
+# 升级流程：本地升级 -> bash scripts/check.sh 全绿 -> 改此处并同步 docs/development.md。
+ruff==0.16.6
+black==26.5.1

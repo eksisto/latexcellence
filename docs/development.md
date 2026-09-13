@@ -398,15 +398,31 @@ AGENTS.md 的编码约束已尽量落地为机器检查，机器检查是准绳�
 | 静态检查 | `ruff.toml` | `print()`（T201）、`os.path`（PTH，例外 `os.path.islink`）、类型注解现代化（UP006/007/035/045）、导入排序（I）、pyflakes 基础（F）；豁免均带理由注释（vendored ip2region、bytes 路径的 upload_rar、path_guard 的跨平台 isabs 等） |
 | 项目约定扫描 | `scripts/check_conventions.py` | ruff 覆盖不到的三类：Pydantic v1 残留（`parse_obj`/`@validator`/`class Config`）、path_guard 绕过（`xxx / file_path`、`os.path.join(root, ...)`、同行 `resolve()+is_relative_to()`，白名单为解压根/rglob 合法包含检查）、文档硬编码数量（「N 个模块」等，豁免「上限/最多/返回」限值措辞，自测用例内置） |
 | 提交前拦截 | `.pre-commit-config.yaml` | black、prettier、ruff、约束扫描四个 local hook |
-| 统一验证入口 | `scripts/check.sh` | ruff + `black --check` + 约束扫描 + pytest + 前端 `npm test`，**完成代码修改后必须运行并通过** |
+| 统一验证入口 | `scripts/check.sh` | 顺序调用下面两个脚本，**完成代码修改后必须运行并通过**；`--install` 装依赖、`--build` 追加前端构建、`--skip-docker` 跳过真容器冒烟 |
+| 后端校验 | `scripts/check_backend.sh` | ruff + `black --check` + 约束扫描 + `pytest tests/ -q`；CI 的 `python-check` job 直接调用它（`--install --skip-docker`） |
+| 前端校验 | `scripts/check_frontend.sh` | `npm test`（node --test）+ 可选 `npm run build`；CI 的 `web-check` job 调用它（`--install --build`） |
+| 开发工具依赖 | `requirements-dev.txt` | ruff / black 精确锁版本（生产 `requirements.txt` 不含），CI 与本地装同一版本 |
 | 提交时格式化 | `.pre-commit-config.yaml` | black / prettier 在**提交时点**统一格式化。刻意不做编辑期（agent 编辑后）自动格式化：格式化会改动 agent 正在编辑的文件，令其文件状态跟踪失效、触发整文件重读，并与连续编辑产生竞态 |
 | 编辑器文档提醒 | `.zcode/config.json` hooks + `scripts/zcode_post_edit_hook.py` | PostToolUse（Edit/Write）在编辑 `backend/`、`frontend/src/` 或配置文件时经 `additionalContext` 注入文档同步提醒（maintain-latexcellence-docs / latexcellence-config-sync）。hook 只读、不修改任何文件。Windows 侧使用需把 command 改为 process 类型或调整解释器名 |
 
+仓库 CI 分两条链路，触发条件与覆盖面不同，缺一不可：
+
+| 链路 | 载体 | 触发 | 内容 |
+| --- | --- | --- | --- |
+| 代码门禁 | `.gitlab-ci.yml` 的 `check` 阶段（`python-check` / `web-check`） | 任意 MR 与默认分支 push（**不做路径过滤**） | 装依赖后调用 `scripts/check_backend.sh --install --skip-docker` / `scripts/check_frontend.sh --install --build`，与本地结论同源 |
+| 评测回归 | `.gitlab-ci.yml` 的 `eval` 阶段 | 命中提示词 / 模型 / 解析器 / 评测工具路径，或定时、手动 | 离线门禁 + LLM 评测与基线比对，见 [eval-regression-ci.md](eval-regression-ci.md) |
+
+CI job 不重写任何检查命令：检查逻辑只存在于 `scripts/check_*.sh`，CI 侧只负责装依赖（`--install`），避免「本地 CI 两套命令」漂移。
+
 注意事项：
 
-- ruff 不装在 requirements.txt（与 black 同为开发工具），首次使用需
-  `pip install ruff`（建议装进 `.venv`，pre-commit 以 `language: system` 调用）。
+- 开发工具（ruff / black）锁在 `requirements-dev.txt`，与生产依赖分离：
+  `pip install -r requirements.txt -r requirements-dev.txt`（pre-commit 仍以
+  `language: system` 调用 `.venv` 内的同名命令，版本一致才不会出现「本地全绿、CI 报红」）。
 - 约束扫描器新增规则时，必须同步在脚本内补自测用例并跑通。
+- `pytest.mark.docker` 真容器冒烟在 CI 里被 `--skip-docker` 排除（job 无 daemon）；
+  本机 daemon 与宿主机不共享 `/tmp` 时同样会失败，属环境问题而非代码问题，
+  详见 [testing.md](testing.md)。
 - 逐段检查、配置同步、错误消息翻译等**特性专属流程约束**不进 linter，
   以 workspace skill 形式按需加载（`.agents/skills/`），AGENTS.md 只留指针。
 

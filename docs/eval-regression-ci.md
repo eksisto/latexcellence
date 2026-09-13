@@ -1,6 +1,6 @@
 # 评测回归基线 CI（eval-regression）
 
-> 把 `tools/` 下的人工评测工具接入 Gitea Actions：提示词、模型、解析器、语料或评测工具本身变更后自动跑评测，与入库基线比对指标，回归即失败，防止质量无声回退。
+> 把 `tools/` 下的人工评测工具接入 GitLab CI：提示词、模型、解析器、语料或评测工具本身变更后自动跑评测，与入库基线比对指标，回归即失败，防止质量无声回退。
 
 ---
 
@@ -8,7 +8,7 @@
 
 | 文件 | 职责 |
 | --- | --- |
-| `.gitea/workflows/eval-regression.yml` / `.gitlab-ci.yml` | CI 入口（Gitea Actions 与 GitLab CI 两份**等价实现**），job 分离线门禁与 LLM 评测两档；修改任一侧必须同步另一侧 |
+| `.gitlab-ci.yml` | CI 入口，job 分离线门禁与 LLM 评测两档（另有与评测无关的 check 门禁阶段，见下方分工说明） |
 | `tools/ci/collect_metrics.py` | 指标采集：把各套评测的原始产物（results.json / 重放报告）归一化为统一的 metrics.json |
 | `tools/ci/compare_metrics.py` | 基线比对与更新：回归时非零退出；`--update-baseline` 播种/刷新基线 |
 | `tools/ci/metric_rules.py` | 共享规则：指标方向登记表（higher/lower）、suite 分类与默认容差 |
@@ -18,18 +18,20 @@
 
 各套人工评测工具自身的用法见 `tools/<suite>_eval/README.md`；本文只讲 CI 接入层。
 
+> **与代码门禁的分工**：本文件只讲评测回归。仓库 CI 另有一条与评测无关的**代码门禁**（`.gitlab-ci.yml` 的 `check` 阶段，任意 MR 与默认分支 push **全量**触发，不做路径过滤），job 只负责装依赖，检查命令全部来自 `scripts/check_backend.sh` / `scripts/check_frontend.sh`，与本地统一验证入口 `scripts/check.sh` 同源。两条链路的分工与载体见 [docs/development.md 的「约束机器化」](development.md)。
+
 ## 2. Job 分档
 
 | Job | 内容 | 外部依赖 | 触发 |
 | --- | --- | --- | --- |
-| `offline-gate` | 术语/翻译语料校验、Prompt 理解用例 `--dry-run`、web_access 数据集校验、各网络访问评测套件**离线重放**（search / scholarly / extraction legacy / extraction structured）+ 基线比对 | 无（零成本） | PR / push 路径命中即跑 |
-| `llm-evals` | 错字、表达优化、术语一致性、逐段翻译四套语料评测 + Prompt 理解评测（`--concurrency 4`）+ 基线比对 | `secrets.LX_LLM_KEY`；LLM 调用量随语料规模线性增长 | PR / push（有 Key 才跑，无 Key 警告跳过）、定时、手动 |
+| `offline-gate` | 术语/翻译语料校验、Prompt 理解用例 `--dry-run`、web_access 数据集校验、各网络访问评测套件**离线重放**（search / scholarly / extraction legacy / extraction structured）+ 基线比对 | 无（零成本） | MR / 默认分支 push 路径命中即跑 |
+| `llm-evals` | 错字、表达优化、术语一致性、逐段翻译四套语料评测 + Prompt 理解评测（`--concurrency 4`）+ 基线比对 | CI/CD 变量 `LX_LLM_KEY`；LLM 调用量随语料规模线性增长 | MR / 默认分支 push（有 Key 才跑，无 Key 警告跳过）、定时、手动 |
 
-**触发路径**（PR 与 push 相同）：`backend/core/prompts.py`、`llm_client.py`、`base_paragraph_check.py`、`latex_parser.py`、`json_utils.py`、`latex_json_guard.py`、各评测对应的功能模块与 fixtures、`tools/*_eval/**`、`tools/eval_common.py`、`tools/ci/**`、`config.example.json`、workflow 自身。
+**触发路径**（MR 与默认分支 push 相同）：`backend/core/prompts.py`、`llm_client.py`、`base_paragraph_check.py`、`latex_parser.py`、`json_utils.py`、`latex_json_guard.py`、各评测对应的功能模块与 fixtures、`tools/*_eval/**`、`tools/eval_common.py`、`tools/ci/**`、`config.example.json`、`.gitlab-ci.yml` 自身。
 
-**定时**：每周一 02:00 UTC 全量回归。用途：`llm.base_url` 指向的托管模型可能在仓库无任何变更的情况下被服务方升级，只有定期重跑才能捕捉这种"模型漂移"（Gitea 在 workflow 内声明；GitLab 需在 UI 配置流水线计划，见 5.3）。
+**定时**：每周一 02:00 UTC 全量回归。用途：`llm.base_url` 指向的托管模型可能在仓库无任何变更的情况下被服务方升级，只有定期重跑才能捕捉这种"模型漂移"（GitLab 不支持在文件内声明，需在 UI「构建 → 流水线计划」配置，见 5.1）。
 
-**手动**（Gitea `workflow_dispatch` / GitLab「运行流水线」变量，见 5.3）：`run_llm`（`RUN_LLM`）/ `update_baseline`（`UPDATE_BASELINE`）开关。
+**手动**（GitLab「运行流水线」变量，见 5.1）：`run_llm`（`RUN_LLM`）/ `update_baseline`（`UPDATE_BASELINE`）开关。
 
 ## 3. 指标与判定
 
@@ -82,7 +84,7 @@ python tools/ci/compare_metrics.py --metrics-dir logs/ci/metrics --baselines-dir
 python tools/ci/compare_metrics.py --metrics-dir logs/ci/metrics --baselines-dir tools/ci/baselines --update-baseline typo_check
 ```
 
-CI 内也可手动触发并勾选 `update_baseline`：各 job 会以 `--update-baseline` 运行并上传 `tools/ci/baselines/` 为 artifact（`eval-*-artifacts`），下载后人工审核 diff 再提交。`--update-baseline` 模式恒返回 0，不做回归判定。
+CI 内也可手动触发并把 `UPDATE_BASELINE` 置为 `true`：各 job 会以 `--update-baseline` 运行并上传 `tools/ci/baselines/` 为 artifact，下载后人工审核 diff 再提交。`--update-baseline` 模式恒返回 0，不做回归判定。
 
 **什么时候该更新基线**：
 
@@ -94,45 +96,23 @@ CI 内也可手动触发并勾选 `update_baseline`：各 job 会以 `--update-b
 
 ## 5. CI 平台配置（一次性）
 
-workflow 有两份等价实现，按仓库实际托管平台取其一即可；两平台互不读取对方文件，可并存（Gitea 只读 `.gitea/workflows/`，GitLab 只读 `.gitlab-ci.yml`）。若同一仓库同时镜像到两侧，流水线会各自触发，Secrets 需分别配置。
+CI 载体为 GitLab CI（`.gitlab-ci.yml`），需在自托管 GitLab 实例 / 仓库上一次性完成下列配置：
 
-### 5.1 Gitea：Runner（实例管理员）
+### 5.1 Runner、变量与流水线计划
 
-Gitea Actions 无托管 runner，需自托管 [act_runner](https://docs.gitea.com/usage/actions/quickstart/) 并注册到实例：
+两个 eval job（offline-gate / llm-evals）运行环境为 `python:3.12-slim` 镜像，均安装 `tools/ci/requirements-minimal.txt` 轻量依赖集（评测工具真实导入的最小集合，不含 playwright / numpy 等重依赖——冷缓存首跑在慢速 PyPI 链路上全量安装曾撑爆 offline-gate 超时）；pip 缓存按清单哈希跨流水线复用。check 阶段两个 job 另需能拉取 `node:20-bookworm-slim`。
 
-- **版本要求**：Gitea ≥ 1.22（artifact v4 API，`actions/upload-artifact@v4` 依赖）；`workflow_dispatch` inputs 建议 ≥ 1.23
-- **标签映射**：`runs-on: ubuntu-latest` 只是标签，注册时需把 `ubuntu-latest` 映射到含 Python 3.12 + node20 的全量镜像（如 `catthehacker/ubuntu:act-latest` 或 `gitea/runner-images:ubuntu-latest`），`actions/setup-python` 的 pip cache 才能工作；默认的极简镜像跑不起来
-- **网络**：runner 机器需能访问 `llm.base_url` 指向的 LLM API；实例默认 `DEFAULT_ACTIONS_URL=github` 时 runner 需能拉取 github.com 上的 action，内网隔离实例改为 `self` 并镜像所需 action
-- **定时触发**：由 Gitea 服务端发出，届时需有 runner 在线，否则 job 挂起等待
-
-### 5.2 Gitea：仓库 Secrets 与变量
-
-仓库 `设置 → Actions` 中配置：
-
-| 配置 | 必需 | 说明 |
-| --- | --- | --- |
-| `secrets.LX_LLM_KEY` | LLM 评测 job 需要 | 注入 `llm.api_key`（`backend/core/config.py` 的 `SECRET_ENV_PATHS` 机制，优先于配置文件且永不落盘） |
-| `vars.EVAL_LLM_BASE_URL` | 可选 | 覆盖评测用 `llm.base_url`（默认取 `config.example.json`） |
-| `vars.EVAL_LLM_MODEL` | 可选 | 覆盖评测用 `llm.model` |
-| `vars.PIP_INDEX_URL` | 可选 | pip 镜像源；workflow 顶层 env 注入 `PIP_INDEX_URL`，未配置回落官方源（runner 直连官方 PyPI 缓慢时配置） |
-
-**bootstrap 步骤**：配置 Key → 手动触发 workflow（工作流页面"运行工作流"，勾选 `run_llm=true`）→ 检查 artifact 中各 LLM suite 的结果是否合理 → 再次手动触发并勾选 `update_baseline` → 审核并提交 `tools/ci/baselines/` 新增文件 → 此后 PR 自动进入回归门禁。web 四套基线已随本方案播种（离线重放确定性可复现，容差为 0）。
-
-> 本 workflow 语法与 GitHub Actions 兼容：若仓库同步镜像到 GitHub，把文件复制回 `.github/workflows/` 即可复用（secrets 需在两侧分别配置）。注意 Gitea 优先读 `.gitea/workflows/`、仅在其没有 workflow 时才回退 `.github/workflows/`，两处不要各放一份导致混淆。
-
-### 5.3 GitLab：Runner、变量与流水线计划
-
-`.gitlab-ci.yml` 与 Gitea 版 job 一一对应（offline-gate / llm-evals），运行环境为 `python:3.12-slim` 镜像，均安装 `tools/ci/requirements-minimal.txt` 轻量依赖集（评测工具真实导入的最小集合，不含 playwright / numpy 等重依赖——冷缓存首跑在慢速 PyPI 链路上全量安装曾撑爆 offline-gate 超时）；pip 缓存按清单哈希跨流水线复用：
-
-- **Runner**：自托管 [GitLab Runner](https://docs.gitlab.com/runner/)（Docker executor），需能拉取 `python:3.12-slim` 并访问 `llm.base_url` 指向的 LLM API。
+- **Runner**：自托管 [GitLab Runner](https://docs.gitlab.com/runner/)（Docker executor），需能拉取上述镜像并访问 `llm.base_url` 指向的 LLM API。
 - **CI/CD 变量**（`设置 → CI/CD → 变量`）：
-  - `LX_LLM_KEY`：LLM/OCR job 需要，建议勾选 Masked；**未配置时这两个 job 不会创建**（离线门禁照常运行）。
+  - `LX_LLM_KEY`：LLM 评测 job 需要，建议勾选 Masked；**未配置时该 job 不会创建**（离线门禁照常运行）。
   - `EVAL_LLM_BASE_URL` / `EVAL_LLM_MODEL`（可选）：覆盖评测用 `llm.base_url` / `llm.model`，映射到 `build_config.py` 读取的环境变量。
   - `PIP_INDEX_URL`（可选）：pip 镜像源；pip 原生读取该环境变量，runner 直连官方 PyPI 缓慢时配置为镜像地址。
 - **定时全量**：UI `构建 → 流水线计划` 新建，cron `0 2 * * 1`（每周一 02:00，捕捉托管模型漂移），此时全部 job 运行。
-- **手动触发**：「运行流水线」时覆盖流水线变量，等价 Gitea 的 `workflow_dispatch` inputs：`RUN_LLM`（默认 `true`）、`UPDATE_BASELINE`（置 `true` 时以 `--update-baseline` 运行并上传基线 artifact）。
-- **路径过滤语义差异**：MR 流水线基于与目标分支的 diff 判定（主力路径，最可靠）；默认分支 push 基于推送前 SHA，连续多次 push 或批量合并可能漏判，以 MR 门禁为准；feature 分支 push 不创建流水线（与 Gitea 版 `push.branches: [master]` 行为一致）。
-- **防并发**：`resource_group`（按 ref 串行）+ `interruptible`（新流水线可取消运行中的旧 MR 流水线），对应 Gitea 的 concurrency group。
+- **手动触发**：「运行流水线」时覆盖流水线变量：`RUN_LLM`（默认 `true`）、`UPDATE_BASELINE`（置 `true` 时以 `--update-baseline` 运行并上传基线 artifact）。
+- **路径过滤语义**：MR 流水线基于与目标分支的 diff 判定（主力路径，最可靠）；默认分支 push 基于推送前 SHA，连续多次 push 或批量合并可能漏判，以 MR 门禁为准；feature 分支 push 不创建流水线。
+- **防并发**：`resource_group`（按 ref 串行）+ `interruptible`（新流水线可取消运行中的旧 MR 流水线）。
+
+**bootstrap 步骤**：配置 `LX_LLM_KEY` → 手动「运行流水线」（`RUN_LLM=true`）→ 检查 artifact 中各 LLM suite 的结果是否合理 → 再次手动触发（`UPDATE_BASELINE=true`）→ 审核并提交 `tools/ci/baselines/` 新增文件 → 此后 MR 自动进入回归门禁。web 四套基线已随本方案播种（离线重放确定性可复现，容差为 0）。
 
 ## 6. 设计要点
 

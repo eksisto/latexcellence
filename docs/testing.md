@@ -2,6 +2,12 @@
 
 运行方式：`pytest tests/ -v`
 
+## docker marker 用例与 CI
+
+`tests/test_docker/` 下的真容器冒烟带 `pytest.mark.docker`，无 Docker daemon 或缺少镜像时自动 skip；CI 的代码门禁 job（`python-check`）没有 daemon，因此显式以 `-m "not docker"` 排除（见 `scripts/check_backend.sh --skip-docker`）。
+
+即使本机有 daemon，只要它运行在私有 mount namespace（如 systemd `PrivateTmp=yes`）里，宿主机 `/tmp` 路径在容器内不可见，warm pool 用例会以 `bind source path does not exist: /tmp/lx_warm_pool_*` 失败——这是环境问题而非代码问题，本地可加 `--skip-docker`；真容器冒烟应在 daemon 与工作目录共享挂载的专用机器 / runner 上跑。
+
 ## 运行环境注意：TestClient 与受限沙箱
 
 在禁用 AF_UNIX socket 写入的受限沙箱（如网络受限的 Codex Linux 沙箱）中，`TestClient` 会在首次请求处挂起，属环境限制而非代码问题。解决方式：`~/.codex/config.toml` 开启 `network_access` 等。
