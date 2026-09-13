@@ -49,7 +49,7 @@ latexcellence/
 | compile | 编译 + 错误翻译 + SyncTeX 正反向只读查询 | ✓(翻译) | [compile.md](docs/modules/compile.md) |
 | git_diff | Git 版本差异 PDF | ✓(翻译) | [git_diff.md](docs/modules/git_diff.md) |
 | git_manage | Git 版本管理（初始化/提交/历史 + 源码级变更查看与选择性恢复，与 git_diff 共享执行层） | ✗ | [git_manage.md](docs/modules/git_manage.md) |
-| template_gen | 模板生成自主 Agent（沙箱闭环） | ✓ | [template_gen.md](docs/modules/template_gen.md) |
+| template_gen | 模板生成自主 Agent（沙箱内写文件 → 编译 → 修错循环） | ✓ | [template_gen.md](docs/modules/template_gen.md) |
 | template_library | 内置 + 用户模板库，从模板创建项目 | ✗ | [template_library.md](docs/modules/template_library.md) |
 | formula_ocr | 图片 → LaTeX 公式 | ✓(Vision) | [formula_ocr.md](docs/modules/formula_ocr.md) |
 | table_ocr | 图片 → LaTeX 表格 | ✓(Vision) | [table_ocr.md](docs/modules/table_ocr.md) |

@@ -135,7 +135,7 @@
 
 ## 7. 文档索引
 
-实施时的文档同步义务已履行，行为描述沉淀于常设文档：[editor.md](modules/editor.md)（上传 API、文件树操作与测试覆盖）、[backend-core.md](backend-core.md)（project_manager 树扫描口径）、`PROJECT_SUMMARY.md` / `DEVELOPMENT.md`（索引）、`README.md`（用户功能简介）。本节仅作索引，无其余义务清单。
+实施时的文档同步义务已履行，行为描述收录于常设文档：[editor.md](modules/editor.md)（上传 API、文件树操作与测试覆盖）、[backend-core.md](backend-core.md)（project_manager 树扫描口径）、`PROJECT_SUMMARY.md` / `DEVELOPMENT.md`（索引）、`README.md`（用户功能简介）。本节仅作索引，无其余义务清单。
 
 ## 8. 非目标
 

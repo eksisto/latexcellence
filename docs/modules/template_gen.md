@@ -185,7 +185,7 @@ latexmk 的 stdout/stderr 有时不含 `!` 错误行（错误只写进了 `<main
      检查拼写与大小写；主题不会凭空提供未定义的颜色。
    - `Bibliography not compatible with author-year citations` → natbib
      模式与 `.bst` 不一致；`latexmk -gg` 会自动重新生成 `.bbl`，无需删除，
-     只需把 natbib 选项与 `\bibliographystyle` 对齐到同一种风格。
+     只需把 natbib 选项与 `\bibliographystyle` 统一为同一种风格。
    - 参考文献失败（无 `.bbl`）→ 自动追加 `main.blg` 尾部并提示检查
      `.bst` 名称与 `.bib` 条目字段。
 3. 同一编译错误签名连续出现 3 次时，循环注入 `[SYSTEM INTERVENTION]`

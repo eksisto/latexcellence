@@ -122,6 +122,8 @@ latexcellence/
 
 ### Agent 闭环优化规范
 
+「闭环优化」指在 `tools/*_opt/` 评测工作区里「跑基线 → 采集指标与 trace → 诊断 → 改提示词或代码 → 再跑对照」的迭代循环，每轮以通用性门禁与对照组回归收尾。
+
 优化 template_gen / plot_gen / style_modify 等 Agent 时，必须遵守以下
 内容边界与门禁（机制已内建在工具中，具体用法见各工具 `README.md`）：
 

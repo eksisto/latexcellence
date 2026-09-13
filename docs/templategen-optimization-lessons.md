@@ -1,7 +1,7 @@
 # template_gen 闭环优化复盘与通用性门禁
 
 > 本文档同时承担两类职责：
-> 1. 沉淀通用性门禁与行为约束——所有 Agent 优化都必须遵守；
+> 1. 汇总通用性门禁与行为约束——所有 Agent 优化都必须遵守；
 > 2. 按轮次记录闭环优化——每轮一个独立小节，只追加、不覆盖。
 > 新增一轮时，在“优化轮次复盘”中追加下一轮小节（如 `### 3.4 第 4 轮`），并按文末模板记录。
 >
@@ -82,7 +82,7 @@ LaTeXcellence 是一个 AI 驱动的 LaTeX 文档助手，其中：
 | 大文件输出 token 上限放宽 | `backend/modules/template_gen/agent/` | 解决通用的大文件截断问题 |
 | 同一被拒内容重发 3 次注入纠正 | `backend/modules/template_gen/agent/` | 通用防退化循环 |
 | 花括号不配平错误带位置/行号/上下文 | `backend/utils/latex_json_guard.py` | 共享校验器的通用诊断改进 |
-| plot_gen ASCII 硬限制改为自适应 | prompts / agent / executor / tikzgen | 与后端 xelatex+CJK 能力对齐 |
+| plot_gen ASCII 硬限制改为自适应 | prompts / agent / executor / tikzgen | 与后端 xelatex+CJK 能力一致 |
 | `tju` 评测场景与基准文档 | `tools/templategen_opt/` | 只属于评测工具，不进运行时 |
 
 #### 错误的部分（已撤销或修正）
@@ -143,7 +143,7 @@ SimSun 硬编码坑到时，当前循环早已结束。奖励函数缺少多样�
 
 往 system prompt 加一句话成本最低、信号最快，于是提示词成了"知识倾倒场"——
 环境事实、模板细节、字体清单全塞进去。而真正通用的东西（运行时探测、
-缺失资源协议、分层构建）应该沉淀在代码里。
+缺失资源协议、分层构建）应该做进代码里。
 
 反例：`style_modify` 之所以没犯这个病，是因为它把"环境有没有 latexmk"做成
 运行时探测（`shutil.which`），而不是写死在提示词里。
@@ -270,7 +270,7 @@ FACTS、matplotlib 字体链调整。
 
 第一轮的完整背景与任务目标见 §1；做法、保留/撤销与边界见 §2.1；
 机制层面的错误原因见 §2.2；保留/撤销清单见 §2.5；涉及文件见 §2.6。
-这一轮的通用结论已沉淀为“通用性教训与行为约束”，后续轮次不再重复描述。
+这一轮的通用结论已汇总进 §2“通用性教训与行为约束”，后续轮次不再重复描述。
 
 ### 3.2 第 2 轮（2026-08-13）：机制修复，不碰评测数据
 
@@ -449,7 +449,7 @@ thesis/requirements 因编译失败无 PDF 可审。
    "Bibliography not compatible with author-year citations"，Agent 想
    删除 `.bbl` 但工具没有删除能力，也没有针对该签名的修复指引；
    实际上 latexmk `-gg` 会重新生成 `.bbl`，根因是 natbib 模式与 `.bst`
-   没有对齐。
+   不一致。
 3. **成功编译后的空转**：requirements（opt7）对同一份已成功源码连续
    调用 20+ 次 `compile_latex`；resume（opt8 初版）连续多次成功编译后
    追 overfull box 直到耗尽 50 轮。没有"源码未变已成功→应 finish"与
@@ -468,7 +468,7 @@ thesis/requirements 因编译失败无 PDF 可审。
 | 改动 | 文件 | 为什么通用 |
 | --- | --- | --- |
 | 首次编译后连续 5 次写文件未编译 → 提示立即编译；同一文件重写 5 次 → 提示停止盲改 | `backend/modules/template_gen/agent/` | 任何长修复迭代都需要验证闭环，与模板/环境无关 |
-| natbib 与 `.bbl` 风格不匹配的错误签名 HINT（对齐 natbib 模式与 `.bst`，不删 `.bbl`） | 同上 | 通用 LaTeX 引用机制 |
+| natbib 与 `.bbl` 风格不匹配的错误签名 HINT（使 natbib 模式与 `.bst` 一致，不删 `.bbl`） | 同上 | 通用 LaTeX 引用机制 |
 | `Undefined color` 错误签名 HINT（先 `\definecolor` 再使用、检查大小写） | 同上 | 通用 xcolor/主题机制 |
 | 源码未变时跳过"重复成功编译"并提示 finish；连续 2 次触发 `success_recompile_loop` 干预 | 同上 | 防"已验证仍空转"的通用防呆 |
 | 连续 4 次成功编译 → 提示非致命质量警告可交付、应 finish | 同上 | 防"无限打磨 overfull box"的通用防呆 |

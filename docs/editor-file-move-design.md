@@ -187,7 +187,7 @@ Mock 原则照旧：单元测试不发起真实网络请求。
 
 ## 7. 文档索引
 
-实施时的文档同步义务已履行，行为描述沉淀于常设文档：
+实施时的文档同步义务已履行，行为描述收录于常设文档：
 [editor.md](modules/editor.md)（move-file / create-dir API、文件树交互与
 测试覆盖）、[frontend.md](frontend.md)（ProjectExplorer 组件描述）、
 `PROJECT_SUMMARY.md` / `DEVELOPMENT.md`（索引）、`README.md`（用户功能

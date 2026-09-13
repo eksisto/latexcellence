@@ -45,7 +45,7 @@
 
 `TemplateGenPage` 不使用 `useParagraphCheck` 或 `useWritingChat` hook，而是手写 `fetch` reader 对接 `/api/template-gen/generate` SSE 流，在本地 `steps` state 中累积 `plan`/`tool_call`/`tool_result`/`compile`/`warning`/`done` 事件并逐条渲染时间线。文件结果在 `done` 事件后通过 `/files` 和 `/file` 端点按需加载，支持通过 `/download` 下载整个沙箱为 ZIP 文件。生成完成后提供 Agent 日志卡片，可查看（弹窗内逐条展示 `trace.jsonl` 事件）或导出（下载 JSON），对应 `/trace` 与 `/trace/download` 端点；另提供「存入模板库」入口（`template_library` 开关门控，`SaveTemplateGenDialog` 确认模板名与分类后走 `api.templateLibrary.fromTemplateGen`，成功 toast 可跳转模板中心）。
 
-`TemplateCenterPage`（模板中心）以搜索 + 分类 chip + 「内置模板/我的模板」tab + 卡片网格展示 `/api/templates` 列表；组件在 `components/template-center/`（卡片、详情、上传、编辑、创建项目、另存为、生成入库对话框与缩略图）。从模板创建项目成功后跳转 `/workspace`：多用户对齐项目工作台的打开模式（`clearProject` → `setOpenedProject` → 由工作台恢复链路完成打开，含主文档段落拉取与角色同步）；单用户以新 `project_path` 触发既有恢复链路。功能开关关闭时页面展示空态，欢迎页/工作台/工作区/编辑器各入口全部隐藏。
+`TemplateCenterPage`（模板中心）以搜索 + 分类 chip + 「内置模板/我的模板」tab + 卡片网格展示 `/api/templates` 列表；组件在 `components/template-center/`（卡片、详情、上传、编辑、创建项目、另存为、生成入库对话框与缩略图）。从模板创建项目成功后跳转 `/workspace`：多用户沿用项目工作台的打开模式（`clearProject` → `setOpenedProject` → 由工作台恢复链路完成打开，含主文档段落拉取与角色同步）；单用户以新 `project_path` 触发既有恢复链路。功能开关关闭时页面展示空态，欢迎页/工作台/工作区/编辑器各入口全部隐藏。
 
 `PlotGenPage` 与 TemplateGenPage 同模式：`api.plotGen.upload` 先上传数据，`generate`/`refine` 通过手写 `fetch` reader 消费 `/plot-gen/agent/generate` 等 SSE 流，在本地 `steps` state 累积 Agent 事件并渲染时间线；会话文件与 trace 通过 `/files`、`/file`、`/trace` 端点加载。
 

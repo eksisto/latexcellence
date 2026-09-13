@@ -76,7 +76,7 @@
 
 | 问题 | 解决方案 |
 | --- | --- |
-| LLM 输出不可靠（格式错误、字段缺失） | `retry_with_validation()` 闭环重试 |
+| LLM 输出不可靠（格式错误、字段缺失） | `retry_with_validation()` 校验失败反馈重试 |
 | LaTeX 结构必须保护，LLM 只能改纯文本 | Marker 替换-还原策略 |
 | 用户可能在审核期间修改文件 | 乐观锁：读取时获取 MD5，写回时校验，冲突返回 409 |
 | 多模块共享相同的段落检查流程 | `useParagraphCheck` hook 抽象 |
@@ -614,7 +614,7 @@ Mock 返回值必须符合 Pydantic schema，确保测试的可重复性。
 | 配置校验 | Pydantic v2 | 类型安全，JSON Schema 自动生成 |
 | 文件写入 | 原子写入 | 防止写中断损坏文件 |
 | 撤销机制 | 内存 deque | 比文件备份更高效，支持多步 |
-| LLM 校验 | Pydantic + 重试 | 闭环反馈，比简单重试更可靠 |
+| LLM 校验 | Pydantic + 重试 | 校验错误反馈给模型再重试，比单纯重发更可靠 |
 | Marker 还原 | 创建顺序（counter）降序；非标准 marker 回退按长度降序 | 外层 marker 先还原，同时防止短 marker 误匹配长 marker 前缀 |
 | 编译错误翻译 | 外部进程 + LLM | 正则提取关键错误，LLM 翻译为中文解释，不修改源文件 |
 | 写作助手 Marker 策略 | 全程无 marker | 对话与编辑建议都直接使用原始 LaTeX；编辑建议走分隔符协议（`<<<LATEX>>>...<<<END>>>`）避免 JSON 转义损坏 |
@@ -796,7 +796,7 @@ v1/v2 前期以单进程为运行前提；P7 把全部跨请求共享的进程�
 
 ## 16. 模板体系：内置模板与私有模板库
 
-模板体系由两个互补模块构成：`template_gen`（自主 Agent 按描述**生成**新模板，LLM 密集）与 `template_library`（模板的**沉淀与复用**，零 LLM）。本节记录后者的设计决策，模块细节见 [docs/modules/template_library.md](docs/modules/template_library.md)。
+模板体系由两个互补模块构成：`template_gen`（自主 Agent 按描述**生成**新模板，LLM 密集）与 `template_library`（模板的**入库与复用**，零 LLM）。本节记录后者的设计决策，模块细节见 [docs/modules/template_library.md](docs/modules/template_library.md)。
 
 ### 16.1 定位与双模式
 
@@ -817,9 +817,9 @@ v1/v2 前期以单进程为运行前提；P7 把全部跨请求共享的进程�
 
 从模板创建项目刻意保持**纯复制语义**：不做变量替换、不注入用户信息，项目名由用户输入。所有入库/创建路径共用唯一的清洗实现（`copytree` ignore 回调）：剔除 `.git/` 与 LaTeX 编译产物；创建项目额外剔除 `manifest.json` 与内置 `assets/`（库工件不混入新建项目）；生成结果入库额外剔除 `trace.jsonl` 与 PDF 输出。清洗规则只有一份实现，避免多通道口径漂移。
 
-### 16.4 与 template_gen 的闭环
+### 16.4 与 template_gen 的衔接
 
-`template_gen` 的会话沙箱是模板库的来源之一：`POST /from-template-gen` 按用户隔离解析会话目录（`userspace.user_resource_root`），清洗后入库为「我的模板」。前端在生成完成态提供「存入模板库」入口（模板名契约必填、默认名兜底，分类可选），成功后引导跳转模板中心——生成（LLM）→ 验证（编译）→ 沉淀（入库）→ 复用（创建项目）形成完整闭环。
+`template_gen` 的会话沙箱是模板库的来源之一：`POST /from-template-gen` 按用户隔离解析会话目录（`userspace.user_resource_root`），清洗后入库为「我的模板」。前端在生成完成态提供「存入模板库」入口（模板名契约必填、默认名兜底，分类可选），成功后引导跳转模板中心——生成（LLM）→ 验证（编译）→ 入库 → 复用（创建项目）。
 
 ---
 
