@@ -476,6 +476,7 @@ test("大文档解析：2MB 单次全量解析可完成（耗时数据点，见 
     `[latexGrammar 大文档解析] ${doc.length} 字符（约 ${(doc.length / 1024 / 1024).toFixed(2)} MB）全量解析耗时 ${elapsedMs} ms`,
   );
   // 宽松上限防回归（CM6 实际键入为增量解析；「2MB 键入不卡」需真机验证，
-  // 此处仅佐证单次全量解析的量级可接受）
-  assert.ok(elapsedMs < 10000, `2MB 解析耗时异常: ${elapsedMs} ms`);
+  // 此处仅佐证单次全量解析的量级可接受）。20s 上限在慢速 CI（实测 ~2s）
+  // 与 10 倍极限节流下均有余量，只拦截算法级退化。
+  assert.ok(elapsedMs < 20000, `2MB 解析耗时异常: ${elapsedMs} ms`);
 });

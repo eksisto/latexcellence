@@ -13,7 +13,7 @@
     "build": "vite build",
     "pretest": "node src/lib/editor/latexGrammar/build.mjs && node src/lib/editor/pdfjsCmaps.build.mjs",
     "preview": "vite preview",
-    "test": "node --test"
+    "test": "node --stack-size=4000 --test"
   },
   "dependencies": {
     "@base-ui/react": "^1.6.0",

@@ -14,6 +14,10 @@
 
 新增依赖环境配置的测试时优先沿用该基线，不要隐式依赖本机 `config.json` 的某个开关取值：否则 CI 干净检出上会出现本地无法复现的失败甚至挂起。
 
+## 前端单测的栈预算
+
+`npm test` 以 `node --stack-size=4000 --test` 运行：2MB 大文档的 Lezer 全量解析在树物化（`@lezer/common` 的 `takeNode`）中最深递归约 2500 层（`CutOff.Depth` 保护上限），单帧较大、总耗栈 ≈1MB，恰好贴着 V8 默认 984KB 栈的边缘——本机侥幸通过、共享 CI runner 上以 `RangeError: Maximum call stack size exceeded` 告终。显式 4MB 栈（约为需求 4 倍，仍在 Linux 默认 8MB rlimit 之内）消除该环境不确定性；`--test` 的子进程会继承该标志。
+
 ## 运行环境注意：TestClient 与受限沙箱
 
 在禁用 AF_UNIX socket 写入的受限沙箱（如网络受限的 Codex Linux 沙箱）中，`TestClient` 会在首次请求处挂起，属环境限制而非代码问题。解决方式：`~/.codex/config.toml` 开启 `network_access` 等。
