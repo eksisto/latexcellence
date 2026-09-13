@@ -31,6 +31,9 @@ command -v python >/dev/null 2>&1 || PY=python3
 
 if [ "$INSTALL" = "1" ]; then
   echo "── 安装依赖（requirements.txt + requirements-dev.txt）──"
+  # PyPI 直连缓慢（国内 runner / 开发机）时的默认镜像；已显式配置
+  # PIP_INDEX_URL（CI/CD 变量或环境变量）时以该值为准，不覆盖。
+  export PIP_INDEX_URL="${PIP_INDEX_URL:-https://pypi.tuna.tsinghua.edu.cn/simple}"
   "$PY" -V
   "$PY" -m pip install -r requirements.txt -r requirements-dev.txt
 fi
@@ -44,7 +47,9 @@ echo "── black --check ─────────────────�
 echo "── AGENTS.md 约束扫描 ────────────────"
 "$PY" scripts/check_conventions.py
 
-PYTEST_ARGS=(tests/ -q)
+# 并行执行：按文件分发给 worker（保持文件内顺序），缩短慢速 runner 上的墙钟；
+# worker 上限 8，兼顾多核机的加速比与 runner 的内存约束。
+PYTEST_ARGS=(tests/ -q -n auto --dist loadfile --maxprocesses=8)
 if [ "$SKIP_DOCKER" = "1" ]; then
   PYTEST_ARGS+=(-m "not docker")
 fi

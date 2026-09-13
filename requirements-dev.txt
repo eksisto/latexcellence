@@ -8,3 +8,5 @@
 # 升级流程：本地升级 -> bash scripts/check.sh 全绿 -> 改此处并同步 docs/development.md。
 ruff==0.16.6
 black==26.5.1
+# pytest 并行执行（check_backend.sh 的 -n auto）：缩短慢速 CI runner 上的墙钟
+pytest-xdist==3.8.0

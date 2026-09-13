@@ -106,7 +106,7 @@ CI 载体为 GitLab CI（`.gitlab-ci.yml`），需在自托管 GitLab 实例 / �
 - **CI/CD 变量**（`设置 → CI/CD → 变量`）：
   - `LX_LLM_KEY`：LLM 评测 job 需要，建议勾选 Masked；**未配置时该 job 不会创建**（离线门禁照常运行）。
   - `EVAL_LLM_BASE_URL` / `EVAL_LLM_MODEL`（可选）：覆盖评测用 `llm.base_url` / `llm.model`，映射到 `build_config.py` 读取的环境变量。
-  - `PIP_INDEX_URL`（可选）：pip 镜像源；pip 原生读取该环境变量，runner 直连官方 PyPI 缓慢时配置为镜像地址。
+  - `PIP_INDEX_URL`（可选）：pip 镜像源。CI 已默认使用清华 TUNA 镜像（`check_backend.sh --install` 与 eval job 的 before_script 均以 `${PIP_INDEX_URL:-默认值}` 形式 export），如需换其他镜像在此配置即可覆盖。
 - **定时全量**：UI `构建 → 流水线计划` 新建，cron `0 2 * * 1`（每周一 02:00，捕捉托管模型漂移），此时全部 job 运行。
 - **手动触发**：「运行流水线」时覆盖流水线变量：`RUN_LLM`（默认 `true`）、`UPDATE_BASELINE`（置 `true` 时以 `--update-baseline` 运行并上传基线 artifact）。
 - **路径过滤语义**：MR 流水线基于与目标分支的 diff 判定（主力路径，最可靠）；默认分支 push 基于推送前 SHA，连续多次 push 或批量合并可能漏判，以 MR 门禁为准；feature 分支 push 不创建流水线。

@@ -2,6 +2,8 @@
 
 运行方式：`pytest tests/ -v`
 
+代码门禁（`scripts/check_backend.sh`，本地 `check.sh` 与 CI 的 python-check 同源）以 pytest-xdist 并行执行：`-n auto --dist loadfile --maxprocesses=8`，按文件分发、保持文件内用例顺序。手工逐文件排查时直接 `pytest tests/ -v` 仍为串行；并行会话下 `.pytest_tmp` 会话目录的旧目录清理由 xdist 主进程统一执行（worker 跳过，避免并发误删）。
+
 ## docker marker 用例与 CI
 
 `tests/test_docker/` 下的真容器冒烟带 `pytest.mark.docker`，无 Docker daemon 或缺少镜像时自动 skip；CI 的代码门禁 job（`python-check`）没有 daemon，因此显式以 `-m "not docker"` 排除（见 `scripts/check_backend.sh --skip-docker`）。

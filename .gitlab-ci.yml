@@ -12,7 +12,9 @@
 #   check 阶段装 requirements.txt + requirements-dev.txt（开发工具锁版本见该文件）；
 #   offline-gate / llm-evals 均安装 tools/ci/requirements-minimal.txt 轻量依赖集
 # （评测工具真实导入的最小集合）。
-# runner 访问 PyPI 慢时，在 CI/CD 变量配置 PIP_INDEX_URL 指向镜像（pip 原生读取该环境变量）。
+# pip 默认走清华 TUNA 镜像（export 于 check_backend.sh --install 与 eval-base
+# before_script，均为 ${PIP_INDEX_URL:-默认值} 形式）：CI/CD 变量或环境已显式
+# 配置 PIP_INDEX_URL 时以该值为准。
 #
 # 运行方式与一次性配置：
 #   MR / 默认分支 push            -> workflow:rules 限定；check 阶段全量跑，
@@ -91,7 +93,8 @@ variables:
 python-check:
   extends: .check-base
   image: python:3.12-slim
-  timeout: 30m
+  # 慢速共享 runner 上的余量；pip 镜像 + pytest 并行后实际通常远低于此
+  timeout: 60m
   cache:
     key:
       files:
@@ -142,6 +145,8 @@ web-check:
     expire_in: 14 days
   before_script:
     - python --version
+    # 评测 job 的 pip 默认镜像（与 check_backend.sh --install 同一默认值）
+    - export PIP_INDEX_URL="${PIP_INDEX_URL:-https://pypi.tuna.tsinghua.edu.cn/simple}"
 
 # 离线门禁：语料校验 + 网络访问评测离线重放 + 基线比对
 offline-gate:

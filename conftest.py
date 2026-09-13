@@ -50,16 +50,17 @@ def _cleanup_old_sessions(base: Path, keep: int) -> None:
         shutil.rmtree(old, ignore_errors=True)
 
 
-def _make_session_dir(config: Any) -> Path | None:
+def _make_session_dir(config: Any, *, cleanup: bool = True) -> Path | None:
     try:
         root = Path(getattr(config, "rootpath", config.rootdir))
         base = root / ".pytest_tmp"
         base.mkdir(mode=0o700, exist_ok=True)
-        try:
-            keep = max(1, int(config.getini("tmp_path_retention_count")))
-        except Exception:
-            keep = 3
-        _cleanup_old_sessions(base, keep)
+        if cleanup:
+            try:
+                keep = max(1, int(config.getini("tmp_path_retention_count")))
+            except Exception:
+                keep = 3
+            _cleanup_old_sessions(base, keep)
         name = (
             f"{_SESSION_PREFIX}{datetime.now():%Y%m%d-%H%M%S}-"
             f"{uuid.uuid4().hex[:8]}"
@@ -81,7 +82,11 @@ def pytest_configure(config: Any) -> None:
     if config.option.basetemp is not None:
         # 显式 --basetemp 优先，尊重用户选择。
         return
-    session_dir = _make_session_dir(config)
+    # xdist worker 不做历史清理：多 worker 并发启动时 keep（默认 3）小于
+    # worker 数，后到的清理会把先到的 worker 刚创建的会话目录误判为旧目录
+    # 删除。历史目录清理由主进程（无 workerinput）统一负责。
+    cleanup = not hasattr(config, "workerinput")
+    session_dir = _make_session_dir(config, cleanup=cleanup)
     if session_dir is None:
         return
     config.option.basetemp = str(session_dir)
