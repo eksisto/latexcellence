@@ -7,6 +7,7 @@ LaTeXcellence 是一个 AI 驱动的 LaTeX 文档助手。后端 FastAPI + 前�
 - **每次开始新对话**，先读 PROJECT_SUMMARY.md（精简索引）定位本次任务相关的模块与设计要点，需要细节时再读 `docs/` 对应文档，不要整篇背诵。
 - **项目结构变更**（新增/删除模块、核心文件路径变更），必须同步更新 PROJECT_SUMMARY.md。
 - **特性专属约束按需加载**：配置同步、逐段检查、错误消息翻译等场景约束已下沉为 `.agents/skills/` 下的项目 skill，碰到对应场景必须先读对应 SKILL.md 再动手。
+- **提交代码**（写 commit message）前，必须先读 `.agents/skills/latexcellence-commit-message/SKILL.md`，按其规范书写提交说明。
 
 ## 技术栈速查
 
@@ -49,24 +50,6 @@ bash scripts/check.sh
 - 根目录提供功能一致的 `clean-cache.sh`（Bash）和 `clean-cache.ps1`（PowerShell）。
 - 清理缓存时直接运行对应脚本，不需要再向用户询问授权。
 - 非交互执行 PowerShell 版本时使用 `.\clean-cache.ps1 -NoPause`，避免等待按键。
-
----
-
-## Commit Message 规范
-
-格式：`<type>: <中文描述>` 或 `<type>(<scope>): <中文描述>`
-
-- **type**：`feat`（新功能）、`fix`（修 bug）、`refactor`（重构）、`docs`（文档）等
-- **scope**（可选）：影响范围，如 `frontend`、`backend`、`config`、`compile`
-- **描述**：用中文，简洁明了
-
-示例：
-
-```
-feat: 多工作区支持 + 配置清理
-fix(compile): 修复 latexmk 超时后子进程泄漏问题
-refactor: 消除外部模块对私有属性的直接访问
-```
 
 ---
 
@@ -160,26 +143,6 @@ LLM 输出的 LaTeX 文本（经 JSON 传输或写盘前）**必须**使用 `bac
 - **异步测试**：注意 `loop_scope` 的设置，确保 fixture 和测试函数在同一个事件循环中。
 - **Mock 策略**：测试 Service 层时，**必须 Mock LLM 调用**（使用 `pytest-mock` 或 `unittest.mock`），严禁在单元测试中发起真实网络请求。
 - **LaTeX 数据**：测试用的 LaTeX 字符串必须使用原始字符串 `r"..."`。
-
----
-
-## 文档编写
-
-- DEVELOPMENT.md 是开发文档。编码完成新的模块，必须在 DEVELOPMENT.md 文档中添加对模块功能、用途、设计的记录。对已有模块逻辑进行修改，DEVELOPMENT.md 中描述同步更新。
-- README.md 是项目简介。当新增重大功能或进行重大修改后，需要同步对 README.md 进行修改。
-- DESIGN.md 是设计技术文档。
-
-### 文档中的数量描述规范（重要）
-
-**严禁在文档中硬编码文件/模块/组件的具体数量**（如"13 个功能模块"、"14 个页面"、"7 个 hook"等）。
-
-原因：项目结构会频繁变化，硬编码的数字极易过时，每次增删模块都需要同步修改文档中的数字，维护成本高且容易遗漏。
-
-**正确做法**：
-
-- 使用模糊描述替代具体数字：`多个`、`若干`、`各` 等
-- 或直接省略数量描述，只列出类型/目录结构
-- 需要精确数量时，应通过脚本动态统计而非手动写死
 
 ---
 
