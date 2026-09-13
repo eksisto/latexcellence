@@ -8,6 +8,12 @@
 
 即使本机有 daemon，只要它运行在私有 mount namespace（如 systemd `PrivateTmp=yes`）里，宿主机 `/tmp` 路径在容器内不可见，warm pool 用例会以 `bind source path does not exist: /tmp/lx_warm_pool_*` 失败——这是环境问题而非代码问题，本地可加 `--skip-docker`；真容器冒烟应在 daemon 与工作目录共享挂载的专用机器 / runner 上跑。
 
+## 测试基线配置与 CI 干净检出
+
+`config.json` 含密钥不入库：存在时测试套件直接使用，干净检出（CI / 新 clone）自动回退加载入库的 `config.example.json`（见 `tests/conftest.py` 的 `_ensure_config`）。随后 fixture 在内存中统一钉住环境敏感基线——清空 access_token、关闭 multi_user、dummy api_key、沙箱 local 模式、打开联网/学术检索全局开关——保证测试结果不随开发者本机配置漂移；需要相反行为的用例自行 monkeypatch。
+
+新增依赖环境配置的测试时优先沿用该基线，不要隐式依赖本机 `config.json` 的某个开关取值：否则 CI 干净检出上会出现本地无法复现的失败甚至挂起。
+
 ## 运行环境注意：TestClient 与受限沙箱
 
 在禁用 AF_UNIX socket 写入的受限沙箱（如网络受限的 Codex Linux 沙箱）中，`TestClient` 会在首次请求处挂起，属环境限制而非代码问题。解决方式：`~/.codex/config.toml` 开启 `network_access` 等。

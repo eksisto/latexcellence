@@ -176,7 +176,9 @@ test("scanOutline：大文档单趟扫描结果正确（性能形态哨兵）", 
   assert.equal(outline.length, 1000);
   assert.equal(outline[0].line, 1);
   assert.equal(outline[999].line, 999 * 10 + 1);
-  assert.ok(elapsed < 2000, `大文档扫描耗时过长：${elapsed}ms`);
+  // 上限是退化哨兵而非性能指标：正常单趟扫描远低于 1s，慢速 CI 也不过数秒；
+  // 灾难性回溯（嵌套量词）会到分钟级。阈值取 8s 只拦截算法退化。
+  assert.ok(elapsed < 8000, `大文档扫描耗时过长：${elapsed}ms`);
 });
 
 test("stripComment：转义判定与 preambleScan 同语义", () => {

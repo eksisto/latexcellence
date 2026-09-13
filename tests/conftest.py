@@ -8,25 +8,24 @@ from pathlib import Path
 
 import pytest
 
-from backend.core.config import get_config, load_config
+from backend.core.config import AppConfig, get_config, load_config
 from backend.utils.latex_parser import LatexParser
 
 
-@pytest.fixture(autouse=True)
-def _ensure_config():
-    """确保每次测试前 config 已加载。"""
-    try:
-        get_config()
-    except RuntimeError:
-        project_root = Path(__file__).resolve().parent.parent
-        config_path = project_root / "config.json"
-        if config_path.exists():
-            load_config(str(config_path))
-        else:
-            load_config("config.json")
+def _repo_config_path() -> Path:
+    """仓库根配置路径：config.json（含密钥，不入库）优先，干净检出
+    （CI / 新 clone）回退到入库的 config.example.json。"""
+    project_root = Path(__file__).resolve().parent.parent
+    config_path = project_root / "config.json"
+    if not config_path.exists():
+        return project_root / "config.example.json"
+    return config_path
+
+
+def apply_test_config_pins(cfg: AppConfig) -> None:
+    """在内存中钉住环境敏感基线，保证测试不随本机 config.json 取值漂移。"""
     # 访问令牌属于本地运行环境配置：中间件行为由 test_security_middleware 单独
     # 覆盖，其余 API 测试统一在内存中绕过令牌校验，避免依赖开发者本机 config.json。
-    cfg = get_config()
     cfg.security.access_token = ""
     # 多用户开关同理属于本地运行环境配置：通用测试套件统一以单用户模式运行
     # （多用户专项测试在 tests/test_multiuser 自行构建隔离配置环境，不受影响），
@@ -38,6 +37,12 @@ def _ensure_config():
     # 不依赖本机 config.json，也绝不会在单测中发起真实 LLM 请求。
     # 需要验证“无 Key”行为的测试可自行 monkeypatch 置空。
     cfg.llm.api_key = "test-key"
+    # 联网搜索 / 学术检索的全局功能开关同理钉为「开」：工具类用例按此基线
+    # 编写，需要关闭行为的用例自行 monkeypatch（如 Writing Chat 灰度总闸
+    # 用例）。干净检出加载 config.example.json（默认关）时若不钉住，工具
+    # 不进入登记路径，resolve 型用例会在事件等待上无限挂起。
+    cfg.features.function_calling.web_search.enabled = True
+    cfg.features.function_calling.scholarly_research.enabled = True
     # 沙箱模式同理强制 local：装了 docker SDK 的开发机/CI 上，auto 模式会把
     # 单测中的命令执行劫持进真实容器（且沙箱化进程的临时目录对 daemon 不可
     # 见），破坏测试确定性。需要真容器的用例走 docker marker（tests/test_docker/
@@ -46,6 +51,29 @@ def _ensure_config():
 
     cfg.sandbox.mode = "local"
     reset_sandbox_runner()
+
+
+def load_repo_config() -> AppConfig:
+    """加载仓库根配置并应用测试基线。
+
+    供测试体内需要显式（重）加载配置的用例（template_gen / plot_gen /
+    多用户回归等）使用，与 _ensure_config 共享同一套回退与钉住逻辑，
+    避免隐式依赖开发者本机 config.json 的存在与取值。
+    """
+    cfg = load_config(str(_repo_config_path()))
+    apply_test_config_pins(cfg)
+    return cfg
+
+
+@pytest.fixture(autouse=True)
+def _ensure_config():
+    """确保每次测试前 config 已加载，并钉住环境敏感基线。"""
+    try:
+        cfg = get_config()
+    except RuntimeError:
+        load_repo_config()
+        return
+    apply_test_config_pins(cfg)
 
 
 @pytest.fixture

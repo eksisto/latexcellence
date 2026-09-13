@@ -10,7 +10,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from backend.core.config import get_config, load_config
+from backend.core.config import get_config
 from backend.modules.template_gen.agent import (
     TemplateAgentService,
     _attach_source_context,
@@ -28,6 +28,7 @@ from backend.modules.template_gen.agent import (
     service as agent_service_mod,
 )
 from backend.modules.template_gen.trace import append_trace, read_trace
+from tests.conftest import load_repo_config
 
 
 def _make_tool_call(name, arguments, cid="tc-1"):
@@ -119,7 +120,7 @@ class TestAgentLoop:
 
     @pytest.fixture(autouse=True)
     def _load_cfg(self, tmp_path, monkeypatch):
-        load_config("config.json")
+        load_repo_config()
         cfg = get_config()
         # 重定向输出目录到临时目录，避免污染真实 data/templates/
         monkeypatch.setattr(
@@ -237,7 +238,7 @@ class TestAgentLoop:
     def test_phase_system_injected_at_phase_transitions(self, tmp_path, monkeypatch):
         """阶段 3：planning 在开始时注入，compile/validation 阶段块在首次
         编译后注入，且不会在编译前出现在上下文中。"""
-        load_config("config.json")
+        load_repo_config()
         cfg = get_config()
         monkeypatch.setattr(
             cfg.features.template_gen,
@@ -340,7 +341,7 @@ class TestAgentLoop:
         """planning 阶段块按配置注入字体白名单；空列表回退默认清单。"""
         from backend.core.config import FontWhitelistEntry, default_font_whitelist
 
-        load_config("config.json")
+        load_repo_config()
         cfg = get_config()
 
         svc = TemplateAgentService()
@@ -1656,7 +1657,7 @@ class TestCompileFailureWarning:
     ):
         """LLM：write → compile(失败) → finish，应 emit compile(success=False)
         和 warning 事件，仍以 done 收尾。"""
-        load_config("config.json")
+        load_repo_config()
         cfg = get_config()
         monkeypatch.setattr(
             cfg.features.template_gen, "output_dir", str(tmp_path / "templates")
@@ -1741,7 +1742,7 @@ class TestTraceRecording:
 
     @pytest.fixture(autouse=True)
     def _load_cfg(self, tmp_path, monkeypatch):
-        load_config("config.json")
+        load_repo_config()
         cfg = get_config()
         monkeypatch.setattr(
             cfg.features.template_gen,
@@ -1936,10 +1937,10 @@ class TestGenServiceOrchestration:
     async def test_generate_creates_sandbox_and_yields_done(
         self, tmp_path, monkeypatch
     ):
-        from backend.core.config import get_config, load_config
+        from backend.core.config import get_config
         from backend.modules.template_gen.service import TemplateGenService
 
-        load_config("config.json")
+        load_repo_config()
         cfg = get_config()
         monkeypatch.setattr(
             cfg.features.template_gen, "output_dir", str(tmp_path / "templates")
@@ -2000,7 +2001,7 @@ class TestPreviewFile:
 
     @pytest.fixture(autouse=True)
     def _load_cfg(self, tmp_path, monkeypatch):
-        load_config("config.json")
+        load_repo_config()
         cfg = get_config()
         monkeypatch.setattr(
             cfg.features.template_gen,

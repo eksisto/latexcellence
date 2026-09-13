@@ -324,13 +324,26 @@ test("同名嵌套弹出后计数正确：多余 \\end 仍判 stray，不误命�
 });
 
 test("病态输入性能护栏：深环境栈 × 海量 stray \\end 不退化（曾经的平方级卡死）", async () => {
-  // 5 万层未闭合 + 5 万个不匹配 \end：修复前逐 \end 全栈扫描约需数秒
-  const doc = "\\begin{aaa}\n".repeat(50000) + "\\end{zzz}\n".repeat(50000);
-  const t0 = performance.now();
-  const items = computeDiagnostics(doc);
-  const elapsed = performance.now() - t0;
-  assert.ok(elapsed < 2000, `computeDiagnostics 耗时 ${elapsed}ms，疑似退化`);
+  // 5 万层未闭合 + 5 万个不匹配 \end：修复前逐 \end 全栈扫描呈平方级。
+  // 绝对耗时阈值随机器漂移（共享 CI runner 上正常实现也可能到数秒），
+  // 故断言「规模翻倍 → 耗时不足 3 倍」的线性标度：线性实现约 2 倍稳过，
+  // 平方级实现约 4 倍必挂；另设宽松绝对上限兜底真卡死。
+  const build = (n) => "\\begin{aaa}\n".repeat(n) + "\\end{zzz}\n".repeat(n);
+  computeDiagnostics(build(2000)); // 预热，JIT 稳定后再计时
+  const timed = (n) => {
+    const t0 = performance.now();
+    computeDiagnostics(build(n));
+    return performance.now() - t0;
+  };
+  const half = timed(25000);
+  const full = timed(50000);
+  assert.ok(
+    full < 3 * half + 500,
+    `computeDiagnostics 规模翻倍耗时 ${half.toFixed(0)}ms → ${full.toFixed(0)}ms，疑似超线性退化`,
+  );
+  assert.ok(full < 30000, `computeDiagnostics 耗时 ${full}ms，疑似退化`);
   // 截断与排序仍正确：文末 unclosed（文档最前）居首，total 精确
+  const items = computeDiagnostics(build(50000));
   assert.equal(items.length, DIAGNOSTICS_LIMIT);
   assert.equal(items[0].params.kind, "unclosed");
   assert.equal(items[0].params.env, "aaa");

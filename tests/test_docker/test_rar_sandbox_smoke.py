@@ -37,12 +37,12 @@ FIXTURES = Path(__file__).resolve().parents[1] / "fixtures" / "rar"
 @pytest.fixture(scope="module", autouse=True)
 def _ensure_config_loaded():
     """模块级 fixture 先于函数级 conftest 加载，需自行保证配置就绪。"""
-    from backend.core.config import load_config
-
     try:
         get_config()
     except RuntimeError:
-        load_config("config.json")
+        from tests.conftest import load_repo_config
+
+        load_repo_config()
 
 
 @pytest.fixture(scope="module")

@@ -15,13 +15,14 @@ import pytest
 from backend.core import config as cfg_module
 from backend.core.multiuser import migrate as migrate_core
 from backend.core.multiuser import userspace
+from tests.conftest import load_repo_config
 from tests.test_multiuser.conftest import _reset_config_state, build_mu_env
 
 
 @pytest.fixture
 def default_config():
     """加载项目默认单用户配置（multi_user.enabled=false），测试后复位。"""
-    cfg_module.load_config("config.json")
+    load_repo_config()
     yield cfg_module.get_config()
     _reset_config_state()
 

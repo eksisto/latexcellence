@@ -7,8 +7,9 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from backend.core.config import get_config, load_config
+from backend.core.config import get_config
 from backend.modules.plot_gen.service import PlotGenService
+from tests.conftest import load_repo_config
 
 
 def _make_tool_call(name, arguments, cid="tc-1"):
@@ -56,7 +57,7 @@ async def _collect(generator):
 
 @pytest.fixture
 def plot_cfg(tmp_path, monkeypatch):
-    load_config("config.json")
+    load_repo_config()
     cfg = get_config()
     monkeypatch.setattr(cfg.llm, "api_key", "test-key")
     monkeypatch.setattr(

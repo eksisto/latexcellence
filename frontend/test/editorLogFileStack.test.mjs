@@ -322,5 +322,7 @@ test("parseLogErrors：大日志单趟解析性能形态哨兵", () => {
   const elapsed = Date.now() - start;
   assert.equal(errors.length, 1);
   assert.equal(errors[0].file, "chapters/a.tex");
-  assert.ok(elapsed < 2000, `大日志解析耗时过长：${elapsed}ms`);
+  // 上限是退化哨兵而非性能指标：正常单趟解析远低于 1s，慢速 CI 也不过数秒；
+  // 平方级退化会到分钟级。阈值取 8s 只拦截算法退化。
+  assert.ok(elapsed < 8000, `大日志解析耗时过长：${elapsed}ms`);
 });

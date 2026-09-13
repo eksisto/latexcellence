@@ -646,6 +646,7 @@ test("大文档回归：2MB 解析 + 折叠/缩进/配对抽样查询（耗时�
     `[latexGrammar 六b 大文档回归] ${(doc.length / 1024 / 1024).toFixed(2)} MB 全量解析 ${parseMs} ms，20 处折叠/缩进/配对抽样查询合计 ${queryMs} ms（命中折叠 ${folds} 处）`,
   );
   assert.ok(parseMs < 10000, `2MB 解析耗时异常: ${parseMs} ms`);
-  // 抽样查询整体应在数十至百毫秒量级（无 O(n²) 劣化）
-  assert.ok(queryMs < 2000, `六b 查询耗时异常: ${queryMs} ms`);
+  // 抽样查询整体应在数十至百毫秒量级（无 O(n²) 劣化）。上限是退化哨兵：
+  // 慢速 CI 上正常实现也不过数秒，阈值取 8s 只拦截算法退化。
+  assert.ok(queryMs < 8000, `六b 查询耗时异常: ${queryMs} ms`);
 });
