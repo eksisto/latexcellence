@@ -30,6 +30,7 @@ from backend.core.config import (
     get_config,
 )
 from backend.core.llm_client import LLMClient
+from backend.utils.llm_cache import clear_llm_cache
 
 # 客户端池：profile_id → LLMClient（惰性创建，llm 配置变更时整体清空）
 _client_pool: dict[str, LLMClient] = {}
@@ -129,9 +130,14 @@ def reset_client_pool() -> None:
     连接，恰好在途的旧实例请求可能因传输层关闭而中断——非流式路径由内置
     重试在新实例上自动恢复，流式路径该次调用报错。热重载为低频用户操作，
     该权衡可接受；如需请求级无损排空属于跨阶段改造，此处从简。
+
+    同时清空 LLM 响应缓存（llm_cache）：模型 / 档案切换后旧结果不再
+    复用（缓存键虽含模型名，但换档案可能仅改 base_url / api_key 而
+    模型名相同，清空是最稳妥的失效语义）。
     """
     with _pool_lock:
         clients = list(_client_pool.values())
         _client_pool.clear()
     for client in clients:
         client.reset()
+    clear_llm_cache()

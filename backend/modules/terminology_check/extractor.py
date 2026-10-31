@@ -14,7 +14,7 @@ from pydantic import BaseModel
 from backend.core.logger import get_logger
 from backend.core.model_router import get_client_for
 from backend.modules.terminology_check.models import TermClusterResult
-from backend.utils.json_utils import retry_with_validation
+from backend.utils.llm_cache import cached_llm_validate
 
 
 class TermItem(BaseModel):
@@ -129,8 +129,8 @@ class TermExtractor:
         ]
 
         try:
-            validated: TermExtractOutput = await retry_with_validation(
-                chat_fn=get_client_for("terminology_check").chat,
+            validated: TermExtractOutput = await cached_llm_validate(
+                get_client_for("terminology_check"),
                 messages=messages,
                 model_cls=TermExtractOutput,
                 max_retries=3,
@@ -191,8 +191,8 @@ class TermExtractor:
         ]
 
         try:
-            validated: TermClusterResult = await retry_with_validation(
-                chat_fn=get_client_for("terminology_check").chat,
+            validated: TermClusterResult = await cached_llm_validate(
+                get_client_for("terminology_check"),
                 messages=messages,
                 model_cls=TermClusterResult,
                 max_retries=3,

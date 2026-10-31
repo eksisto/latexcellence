@@ -381,6 +381,15 @@ class LLMClient:
         """
         return self._resolve_cfg().max_concurrency
 
+    @property
+    def resolved_model(self) -> str:
+        """当前合并配置的模型名（每次实时解析，热重载语义）。
+
+        供 llm_cache 构造缓存键使用（模型变化 → key 变化），避免外部
+        访问 _resolve_cfg 私有方法。
+        """
+        return self._resolve_cfg().model
+
     # ── 上下文窗口探测 ─────────────────────────────────────────────────
 
     @staticmethod

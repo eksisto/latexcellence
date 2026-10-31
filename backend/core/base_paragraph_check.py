@@ -40,9 +40,9 @@ from backend.core.project_manager import FileConflictError
 from backend.core.workspace_manager import get_project_manager_for_workspace
 from backend.utils.file_ops import compute_md5
 from backend.utils.input_resolver import resolve_inputs
-from backend.utils.json_utils import retry_with_validation
 from backend.utils.latex_json_guard import check_latex_text_lite
 from backend.utils.latex_parser import MARKER_PATTERN, LatexParser
+from backend.utils.llm_cache import cached_llm_validate
 from backend.utils.path_guard import resolve_project_path
 
 
@@ -497,8 +497,10 @@ class BaseParagraphCheckService:
         ]
 
         try:
-            validated = await retry_with_validation(
-                chat_fn=llm.chat,
+            # 缓存版校验重试：段落文本/提示词/参数未变时复用上次结果，
+            # 整篇复查不再为未修改段落重复计费（见 llm_cache 模块说明）
+            validated = await cached_llm_validate(
+                llm,
                 messages=messages,
                 model_cls=self._get_model_cls(),
                 max_retries=3,

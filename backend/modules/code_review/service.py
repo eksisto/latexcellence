@@ -25,10 +25,10 @@ from backend.core.base_paragraph_check import BaseParagraphCheckService
 from backend.core.config import get_config
 from backend.core.prompts import get_prompt
 from backend.core.workspace_manager import get_project_manager_for_workspace
-from backend.utils.json_utils import retry_with_validation
 from backend.utils.latex_formatter import format_latex_source
 from backend.utils.latex_json_guard import LatexText
 from backend.utils.latex_parser import MARKER_PATTERN
+from backend.utils.llm_cache import cached_llm_validate
 
 # ── Pydantic models for LLM response schema ────────────────────────────────
 
@@ -172,8 +172,9 @@ class CodeReviewService(BaseParagraphCheckService):
         ]
 
         try:
-            validated = await retry_with_validation(
-                chat_fn=llm.chat,
+            # 缓存版校验重试：格式化后源码未变时复用上次审查结果（llm_cache）
+            validated = await cached_llm_validate(
+                llm,
                 messages=messages,
                 model_cls=self._get_model_cls(),
                 max_retries=3,

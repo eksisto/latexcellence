@@ -44,7 +44,7 @@ from backend.modules.bib_manager.models import (
 from backend.modules.bib_manager.provider_manager import get_provider_manager
 from backend.modules.bib_manager.style_registry import get_style_for_format
 from backend.utils.file_ops import compute_md5, safe_read
-from backend.utils.json_utils import retry_with_validation
+from backend.utils.llm_cache import cached_llm_validate
 from backend.utils.path_guard import resolve_project_path
 
 _MAX_DIMENSION = 2000
@@ -126,8 +126,8 @@ class BibManagerService:
         ]
 
         try:
-            validated: ReferenceFormatResult = await retry_with_validation(
-                chat_fn=llm.chat,
+            validated: ReferenceFormatResult = await cached_llm_validate(
+                llm,
                 messages=messages,
                 model_cls=ReferenceFormatResult,
                 max_retries=3,
@@ -196,8 +196,8 @@ class BibManagerService:
         ]
 
         try:
-            validated: ExtractedMetadata = await retry_with_validation(
-                chat_fn=llm.chat,
+            validated: ExtractedMetadata = await cached_llm_validate(
+                llm,
                 messages=messages,
                 model_cls=ExtractedMetadata,
                 max_retries=3,
@@ -288,8 +288,8 @@ class BibManagerService:
         ]
 
         try:
-            validated: ExtractedMetadata = await retry_with_validation(
-                chat_fn=llm.chat,
+            validated: ExtractedMetadata = await cached_llm_validate(
+                llm,
                 messages=messages,
                 model_cls=ExtractedMetadata,
                 max_retries=3,
@@ -354,8 +354,8 @@ class BibManagerService:
         ]
 
         try:
-            validated: BibEntry = await retry_with_validation(
-                chat_fn=llm.chat,
+            validated: BibEntry = await cached_llm_validate(
+                llm,
                 messages=messages,
                 model_cls=BibEntry,
                 max_retries=3,

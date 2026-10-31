@@ -76,6 +76,18 @@ def _ensure_config():
     apply_test_config_pins(cfg)
 
 
+@pytest.fixture(autouse=True)
+def _clear_llm_cache():
+    """每个用例前清空 LLM 响应缓存。
+
+    缓存以 (模型, 提示词, 参数) 为键跨用例存活，会把前一个用例的 mock
+    响应泄露给同输入的后一个用例，必须逐用例隔离。
+    """
+    from backend.utils.llm_cache import clear_llm_cache
+
+    clear_llm_cache()
+
+
 @pytest.fixture
 def parser():
     return LatexParser()

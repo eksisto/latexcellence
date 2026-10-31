@@ -39,6 +39,7 @@ from backend.utils.latex_literals import (
     find_matching_brace,
 )
 from backend.utils.latex_package_analyzer import prepend_package_comments
+from backend.utils.llm_cache import build_cache_key, cached_call
 
 from .visual_inline import VisualInlineHint, analyze_formula_image
 
@@ -221,69 +222,85 @@ class FormulaOCRService:
         ]
 
         max_tokens = max(get_config().llm.max_tokens, 4096)
-        last_error: str | None = None
-        for attempt in range(_MAX_OCR_RETRIES):
-            try:
-                response_text = await llm.chat(
-                    messages,
-                    temperature=0.1,
-                    max_tokens=max_tokens,
-                )
-                raw_block = self._extract_latex_block(response_text)
-                if raw_block is None:
-                    raise ValueError(
-                        "Response did not contain a <<<LATEX>>>...<<<END>>> block. "
-                        "Output the LaTeX code strictly between those two markers."
-                    )
-                latex = self._strip_math_wrappers(raw_block)
-                confidence = self._parse_confidence(response_text)
-                visual_value = (
-                    visual_hint.inline if visual_hint and visual_hint.decided else None
-                )
-                inline, inline_source = self._inline_decision(
-                    raw_block, visual=visual_value
-                )
-                validated = FormulaOCRResult(
-                    latex=latex, inline=inline, confidence=confidence
-                )
-                result = validated.model_dump()
-                result["inline_source"] = inline_source
 
-                # 置信度阈值处理
-                if validated.confidence < 0.7:
-                    result["low_confidence"] = True
-
-                return result
-
-            except ValidationError as e:
-                last_error = format_validation_error(e.errors())
-            except ValueError as e:
-                last_error = str(e)
-            except Exception as e:
-                self._logger.error(f"Formula OCR error: {e}")
-                raise RuntimeError(f"Formula recognition failed: {e}")
-
-            self._logger.warning(
-                f"Formula OCR protocol/validation failed on attempt "
-                f"{attempt + 1}/{_MAX_OCR_RETRIES}: {last_error}"
-            )
-            messages = messages + [
-                {
-                    "role": "user",
-                    "content": (
-                        "Your previous response failed the output protocol. "
-                        f"Error: {last_error}\n\n"
-                        "Please re-read the formula image and respond with exactly:\n"
-                        "<<<LATEX>>>\n<LaTeX code>\n<<<END>>>\n"
-                        "CONFIDENCE: <float between 0 and 1>"
-                    ),
-                }
-            ]
-
-        raise RuntimeError(
-            f"Formula recognition failed after {_MAX_OCR_RETRIES} attempts. "
-            f"Last error: {last_error}"
+        # 同一图片重复识别免费：按 (模型, 初始消息, 采样参数) 缓存整个
+        # 识别-校验-回喂重试循环的最终结果（llm_cache）；循环内部重试语义不变
+        cache_key = build_cache_key(
+            str(getattr(llm, "resolved_model", "")),
+            messages,
+            temperature=0.1,
+            max_tokens=max_tokens,
         )
+
+        async def _attempt_loop() -> dict[str, Any]:
+            nonlocal messages
+            last_error: str | None = None
+            for attempt in range(_MAX_OCR_RETRIES):
+                try:
+                    response_text = await llm.chat(
+                        messages,
+                        temperature=0.1,
+                        max_tokens=max_tokens,
+                    )
+                    raw_block = self._extract_latex_block(response_text)
+                    if raw_block is None:
+                        raise ValueError(
+                            "Response did not contain a <<<LATEX>>>...<<<END>>> block. "
+                            "Output the LaTeX code strictly between those two markers."
+                        )
+                    latex = self._strip_math_wrappers(raw_block)
+                    confidence = self._parse_confidence(response_text)
+                    visual_value = (
+                        visual_hint.inline
+                        if visual_hint and visual_hint.decided
+                        else None
+                    )
+                    inline, inline_source = self._inline_decision(
+                        raw_block, visual=visual_value
+                    )
+                    validated = FormulaOCRResult(
+                        latex=latex, inline=inline, confidence=confidence
+                    )
+                    result = validated.model_dump()
+                    result["inline_source"] = inline_source
+
+                    # 置信度阈值处理
+                    if validated.confidence < 0.7:
+                        result["low_confidence"] = True
+
+                    return result
+
+                except ValidationError as e:
+                    last_error = format_validation_error(e.errors())
+                except ValueError as e:
+                    last_error = str(e)
+                except Exception as e:
+                    self._logger.error(f"Formula OCR error: {e}")
+                    raise RuntimeError(f"Formula recognition failed: {e}")
+
+                self._logger.warning(
+                    f"Formula OCR protocol/validation failed on attempt "
+                    f"{attempt + 1}/{_MAX_OCR_RETRIES}: {last_error}"
+                )
+                messages = messages + [
+                    {
+                        "role": "user",
+                        "content": (
+                            "Your previous response failed the output protocol. "
+                            f"Error: {last_error}\n\n"
+                            "Please re-read the formula image and respond with exactly:\n"
+                            "<<<LATEX>>>\n<LaTeX code>\n<<<END>>>\n"
+                            "CONFIDENCE: <float between 0 and 1>"
+                        ),
+                    }
+                ]
+
+            raise RuntimeError(
+                f"Formula recognition failed after {_MAX_OCR_RETRIES} attempts. "
+                f"Last error: {last_error}"
+            )
+
+        return await cached_call(cache_key, _attempt_loop)
 
     def _extract_latex_block(self, response_text: str) -> str | None:
         """提取 <<<LATEX>>>...<<<END>>> 原始块（数学包裹由调用方剥离）。

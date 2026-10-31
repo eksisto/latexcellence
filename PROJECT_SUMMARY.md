@@ -17,9 +17,10 @@ latexcellence/
 │   │                      # 集中提示词 prompts.py、逐段检查基类 base_paragraph_check.py、
 │   │                      # 访问控制、安全中间件、多用户基础设施 multiuser/
 │   ├── utils/             # LaTeX 解析（marker 保护、\input 展开）、json_utils、latex_json_guard、
-│   │                      # path_guard（路径安全唯一入口）、tex_compile、沙箱 sandbox/、
-│   │                      # 联网搜索 web_search/、学术检索 scholarly_research/、
-│   │                      # Function Calling 工具 project_tools/、宏包检测与规则表
+│   │                      # llm_cache（LLM 响应缓存）、path_guard（路径安全唯一入口）、
+│   │                      # tex_compile、沙箱 sandbox/、联网搜索 web_search/、
+│   │                      # 学术检索 scholarly_research/、Function Calling 工具 project_tools/、
+│   │                      # 宏包检测与规则表
 │   └── modules/           # 各功能模块（见下表），router.py 薄路由 + service.py 业务逻辑
 ├── frontend/
 │   └── src/               # pages / components（editor、settings 等子目录）/ hooks /
@@ -66,6 +67,7 @@ latexcellence/
 | --- | --- | --- |
 | Marker 保护 | LaTeX 结构替换为 marker，LLM 只能改纯文本；还原按创建顺序降序；code_review 例外 | [DESIGN.md §2](DESIGN.md)、[backend-core.md](docs/backend-core.md) |
 | JSON 输出校验流水线 | `safe_parse_json()` → Pydantic `model_validate()` → 失败反馈 LLM 重试 | [DESIGN.md §3](DESIGN.md) |
+| LLM 响应缓存 | 纯函数式调用按 (模型+提示+参数) 哈希复用结果，重复检查/编译/OCR 零计费；对话与 Agent 禁用 | [backend-core.md](docs/backend-core.md) |
 | LaTeX×JSON 转义防护 + 分隔符协议 | `latex_json_guard` 拦截转义损坏；OCR/编辑类用 `<<<LATEX>>>` 直传纯文本 | [backend-core.md](docs/backend-core.md) |
 | 集中提示词管理 | 全部提示词在 `backend/core/prompts.py`，经 `get_prompt()` 取用 | [prompt-guidelines.md](docs/prompt-guidelines.md) |
 | 多模型路由 | 模型档案 + 角色槽位，`get_client_for(role)` 两级解析，热重载清池 | [multi-model.md](docs/multi-model.md) |

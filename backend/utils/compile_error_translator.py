@@ -20,7 +20,7 @@ from pydantic import BaseModel, ConfigDict
 from backend.core.llm_client import get_llm_client
 from backend.core.logger import get_logger
 from backend.core.prompts import get_prompt
-from backend.utils.json_utils import retry_with_validation
+from backend.utils.llm_cache import cached_llm_validate
 
 logger = get_logger(__name__)
 
@@ -119,18 +119,16 @@ async def translate_compile_errors(
             },
         ]
 
-        async def chat_fn(msgs, **kwargs):
-            kwargs["response_format"] = {"type": "json_object"}
-            return await llm_client.chat(msgs, **kwargs)
-
-        result = await retry_with_validation(
-            chat_fn=chat_fn,
+        # 缓存版校验重试：同一错误日志反复编译不重复计费（llm_cache）
+        result = await cached_llm_validate(
+            llm_client,
             messages=messages,
             model_cls=ErrorTranslation,
             max_retries=2,
             logger_name="compile_error_translator",
             temperature=0.3,
             max_tokens=2048,
+            response_format={"type": "json_object"},
         )
         return (result.explanation, result.fixes)
     except Exception as e:

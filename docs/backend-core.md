@@ -5,7 +5,7 @@
 ## 目录
 
 - [后端核心模块](#后端核心模块)：config、env、security_middleware、llm_client、model_router、logger、project_manager、base_paragraph_check、prompts、tool_registry、workspace_manager
-- [后端工具模块](#后端工具模块)：scholarly_research、tool_result_protocol、file_ops、path_guard、json_utils、latex_json_guard、sandbox（Docker 沙箱执行）、tex_compile、compile_error_translator、latex_formatter、latex_parser、latex_literals、latex_package_analyzer、input_resolver、spa_static_files 等
+- [后端工具模块](#后端工具模块)：scholarly_research、tool_result_protocol、file_ops、path_guard、json_utils、llm_cache、latex_json_guard、sandbox（Docker 沙箱执行）、tex_compile、compile_error_translator、latex_formatter、latex_parser、latex_literals、latex_package_analyzer、input_resolver、spa_static_files 等
 - [项目管理路由 project_router.py](#项目管理路由-project_routerpy)
 
 ---
@@ -690,6 +690,32 @@ for attempt in range(max_retries):
         messages += [correction_prompt_with_error_details]  # 🔁 反馈错误重试
 raise ValueError("Validation failed after N attempts")        # ❌ 耗尽
 ```
+
+### `llm_cache.py` — LLM 响应缓存（降低 API 使用成本）
+
+**定位**：对「纯函数式」LLM 调用（给定 模型 + 消息 + 采样参数，期望相同结果）做结果复用。典型场景：逐段检查整篇复查时未修改段落直接命中、同一错误反复编译不重复翻译、同一图片重复 OCR 免费、同一条目重复解析免费。
+
+**缓存键**：`sha256(模型名 + 完整 messages + 采样参数)`。段落文本、语言、自定义指令、提示词模板、temperature / max_tokens 任一变化都会改变 key，因此无需 TTL；模型 / 档案切换经 `model_router.reset_client_pool()`（配置热重载接线点）整体清空。命中日志带 12 位 key 前缀（`LLM cache hit | key=…`）。
+
+**核心接口**：
+
+| 函数 | 功能 |
+| --- | --- |
+| `cached_llm_validate(llm, *, messages, model_cls, **chat_kwargs)` | `retry_with_validation` 的缓存版直接替代：命中即用 `model_cls` 重新校验后返回，未命中走原全流程并缓存 `model_dump(mode="json")` |
+| `build_cache_key(model, messages, **params)` / `cache_get` / `cache_put` | 低层三件套，供非 JSON 协议路径（OCR 分隔符协议）自行包裹最终结果 |
+| `cached_call(key, fetch)` | 按 key 取结果：先查缓存，未命中执行 fetch 并缓存；同 key 并发请求经 in-flight 锁合流为一次真实调用 |
+| `clear_llm_cache()` | 清空缓存（热重载接线 + 测试隔离；`tests/conftest.py` 每用例自动调用） |
+
+**行为细则**：
+
+- 缓存容量 1024 条 LRU（段落级 JSON，峰值内存数 MB）；
+- 失败不缓存：LLM 异常 / 校验耗尽直接上抛，重试与回退路径行为与无缓存时一致；
+- 命中后重新过一次 Pydantic 校验（防 schema 漂移，成本可忽略），失败按未命中回源；
+- 并发合流只共享成功结果，fetch 抛错时各调用方各自走异常路径。
+
+**已挂接调用点**：`base_paragraph_check._check_one_paragraph`（typo / expression / paragraph_translate）、`code_review`、`terminology_check` 抽取与聚类、`compile_error_translator`、`bib_manager` 四处解析、`formula_ocr` / `table_ocr`（分隔符协议整循环）。
+
+**禁止挂接**：多轮对话（writing_chat / editor 助手——上下文含时间与用户意图，缓存会返回过期回复）、Agent 工具循环（template_gen / plot_gen / style_modify——工具副作用使输入看似相同实则语义不同）。
 
 ### `latex_json_guard.py` — LaTeX×JSON 转义防护校验器
 
