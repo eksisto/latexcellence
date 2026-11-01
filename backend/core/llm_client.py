@@ -359,10 +359,12 @@ class LLMClient:
             ),
         )
 
-    def _window_cache_key(
-        self, cfg: "LLMConfig | ResolvedLLMCfg"
-    ) -> tuple[str, str, str]:
-        """上下文窗口缓存 key：按档案 id 隔离（multi-model §8 风险与已裁决）。"""
+    def _client_scope(self, cfg: "LLMConfig | ResolvedLLMCfg") -> tuple[str, str, str]:
+        """客户端作用域（档案 id, 端点, 模型）。
+
+        上下文窗口缓存与 LLM 响应缓存共用同一隔离口径：同模型名但档案 /
+        base_url 不同的客户端不得互相复用结果（multi-model §8 风险与已裁决）。
+        """
         return (self._profile_id or BUILTIN_PROFILE_ID, cfg.base_url, cfg.model)
 
     def _get_semaphore(self) -> asyncio.Semaphore:
@@ -389,6 +391,21 @@ class LLMClient:
         访问 _resolve_cfg 私有方法。
         """
         return self._resolve_cfg().model
+
+    @property
+    def cache_identity(self) -> str:
+        """LLM 响应缓存的客户端身份串（档案 + 端点 + 模型 + extra_body）。
+
+        同模型名但档案 / base_url 不同的客户端不能共用缓存，否则结果会
+        跨端点串用；extra_body 影响生成（如推理强度），同样纳入身份。
+        api_key 不参与：换 Key 不改变结果，也不该被拼进任何可能落日志的
+        字符串。身份随配置实时解析，热重载后自然变化，另有
+        reset_client_pool() 整体清空兜底。
+        """
+        cfg = self._resolve_cfg()
+        profile_id, base_url, model = self._client_scope(cfg)
+        extra_body = json.dumps(cfg.extra_body, sort_keys=True, ensure_ascii=False)
+        return f"{profile_id}|{base_url}|{model}|{extra_body}"
 
     # ── 上下文窗口探测 ─────────────────────────────────────────────────
 
@@ -492,7 +509,7 @@ class LLMClient:
         if window is None:
             return None
         cfg = self._resolve_cfg()
-        key = self._window_cache_key(cfg)
+        key = self._client_scope(cfg)
         with self._window_cache_lock:
             self._context_window_cache[key] = window
         self._logger.info(
@@ -527,7 +544,7 @@ class LLMClient:
         if explicit > 0:
             return explicit
 
-        key = self._window_cache_key(cfg)
+        key = self._client_scope(cfg)
         with self._window_cache_lock:
             cached = self._context_window_cache.get(key)
         if cached is not None:

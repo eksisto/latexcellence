@@ -433,14 +433,37 @@ class TestContextWindowIsolation:
         assert pa.call_count == 1
         assert pb.call_count == 1
 
-    def test_window_cache_key_includes_profile_scope(self, monkeypatch):
+    def test_client_scope_includes_profile_scope(self, monkeypatch):
         _install_cfg(monkeypatch, profiles=[REASONING_PROFILE])
         scoped = LLMClient(profile_id="deepthink")
         bare = LLMClient()
-        key = scoped._window_cache_key(scoped._resolve_cfg())
+        key = scoped._client_scope(scoped._resolve_cfg())
         assert key[0] == "deepthink"
-        bare_key = bare._window_cache_key(bare._resolve_cfg())
+        bare_key = bare._client_scope(bare._resolve_cfg())
         assert bare_key[0] == "__default__"
+
+    def test_cache_identity_includes_profile_endpoint_and_extra_body(self, monkeypatch):
+        _install_cfg(monkeypatch, profiles=[REASONING_PROFILE, VISION_PROFILE])
+        bare = LLMClient()
+        reasoning = LLMClient(profile_id="deepthink")
+        vision = LLMClient(profile_id="vision-pro")
+
+        # 身份串 = 档案 id | base_url | 模型 | extra_body：同模型名不同档案不串用
+        assert (
+            bare.cache_identity == "__default__|https://top.example.com/v1|top-model|{}"
+        )
+        assert reasoning.cache_identity.startswith(
+            "deepthink|https://think.example.com/v1|think-model|"
+        )
+        assert vision.cache_identity.startswith(
+            "vision-pro|https://vision.example.com/v1|vision-model|"
+        )
+        assert (
+            len({bare.cache_identity, reasoning.cache_identity, vision.cache_identity})
+            == 3
+        )
+        assert "key-vision" not in vision.cache_identity  # api_key 不参与
+        assert '"thinking"' in vision.cache_identity  # extra_body 参与
 
 
 # ── 旧实例资源回收（reset / 指纹重建路径）────────────────────────────────

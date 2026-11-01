@@ -695,16 +695,16 @@ raise ValueError("Validation failed after N attempts")        # ❌ 耗尽
 
 **定位**：对「纯函数式」LLM 调用（给定 模型 + 消息 + 采样参数，期望相同结果）做结果复用。典型场景：逐段检查整篇复查时未修改段落直接命中、同一错误反复编译不重复翻译、同一图片重复 OCR 不再产生 API 调用（识别与宏包兜底均命中缓存，本地格式化仍会重跑）、同一条目重复解析免费。
 
-**缓存键**：`sha256(模型名 + 完整 messages + 采样参数)`。段落文本、语言、自定义指令、提示词模板、temperature / max_tokens 任一变化都会改变 key，因此无需 TTL；模型 / 档案切换经 `model_router.reset_client_pool()`（配置热重载接线点）整体清空。命中日志带 12 位 key 前缀（`LLM cache hit | key=…`）。
+**缓存键**：`sha256(客户端身份 + 完整 messages + 采样参数)`。客户端身份取 `LLMClient.cache_identity`（档案 id + base_url + 模型 + extra_body，api_key 不参与），同模型名但不同端点 / 档案的客户端不会串用结果；无身份属性的测试替身按 `resolved_model` 退化，连模型名都没有时用对象标识隔离。段落文本、语言、自定义指令、提示词模板、temperature / max_tokens 任一变化都会改变 key，因此无需 TTL；模型 / 档案切换经 `model_router.reset_client_pool()`（配置热重载接线点）整体清空。messages / 采样参数必须 JSON 可序列化，不可序列化直接抛 `TypeError`（不再 `default=str` 静默折叠）。命中在 debug 级记录 12 位 key 前缀（`LLM cache hit | key=…`），逐段检查量级下不进 INFO 日志。
 
 **核心接口**：
 
 | 函数 | 功能 |
 | --- | --- |
 | `cached_llm_validate(llm, *, messages, model_cls, **chat_kwargs)` | `retry_with_validation` 的缓存版直接替代：命中即用 `model_cls` 重新校验后返回，未命中走原全流程并缓存 `model_dump(mode="json")` |
-| `build_cache_key(model, messages, **params)` / `cache_get` / `cache_put` | 低层三件套，供非 JSON 协议路径（OCR 分隔符协议）自行包裹最终结果 |
+| `build_cache_key(client, messages, **params)` / `cache_get` / `cache_put` | 低层三件套，供非 JSON 协议路径（OCR 分隔符协议）自行包裹最终结果；`client` 取 `client_cache_identity(llm)` |
 | `cached_call(key, fetch)` | 按 key 取结果：先查缓存，未命中执行 fetch 并缓存；同 key 并发请求经 in-flight 锁合流为一次真实调用 |
-| `clear_llm_cache()` | 清空缓存（热重载接线 + 测试隔离；`tests/conftest.py` 每用例自动调用） |
+| `clear_llm_cache()` | 清空缓存与 in-flight 锁登记（热重载接线 + 测试隔离；`tests/conftest.py` 每用例自动调用） |
 
 **行为细则**：
 

@@ -95,6 +95,46 @@ class TestCachedLLMValidate:
         assert llm_a.calls == 1
         assert llm_b.calls == 1
 
+    async def test_client_identity_scopes_same_model(self):
+        """同模型名、不同档案 / 端点的客户端不得共用缓存条目。"""
+
+        class _ScopedStub(_StubLLM):
+            def __init__(self, identity: str):
+                super().__init__(model="same-model")
+                self.cache_identity = identity
+
+        llm_a = _ScopedStub("profile-a|https://a.example.com|same-model|{}")
+        llm_b = _ScopedStub("profile-b|https://b.example.com|same-model|{}")
+        await cached_llm_validate(
+            llm_a, messages=_MESSAGES, model_cls=_DemoResult, temperature=0.3
+        )
+        await cached_llm_validate(
+            llm_b, messages=_MESSAGES, model_cls=_DemoResult, temperature=0.3
+        )
+        assert llm_a.calls == 1
+        assert llm_b.calls == 1
+
+    async def test_clients_without_identity_get_isolated_keys(self):
+        """既无 cache_identity 也无 resolved_model 的替身不得共用空串键。"""
+
+        class _BareStub:
+            def __init__(self):
+                self.calls = 0
+
+            async def chat(self, messages, **kwargs):
+                self.calls += 1
+                return json.dumps({"corrected": "ok", "changes": []})
+
+        llm_a, llm_b = _BareStub(), _BareStub()
+        await cached_llm_validate(
+            llm_a, messages=_MESSAGES, model_cls=_DemoResult, temperature=0.3
+        )
+        await cached_llm_validate(
+            llm_b, messages=_MESSAGES, model_cls=_DemoResult, temperature=0.3
+        )
+        assert llm_a.calls == 1
+        assert llm_b.calls == 1
+
     async def test_sampling_params_part_of_key(self):
         llm = _StubLLM()
         await cached_llm_validate(
@@ -216,6 +256,20 @@ class TestCacheInternals:
         got["changes"].append("b")  # 读取方随后改写副本
 
         assert cache_get("isolated") == {"latex": "x", "changes": ["a"]}
+
+    def test_clear_llm_cache_clears_inflight_locks(self):
+        """clear 同时清 in-flight 锁登记，避免跨用例 / 跨事件循环遗留。"""
+        from backend.utils import llm_cache as mod
+
+        with mod._inflight_guard:
+            mod._inflight_locks["stale"] = asyncio.Lock()
+        clear_llm_cache()
+        assert mod._inflight_locks == {}
+
+    def test_key_requires_json_serializable_params(self):
+        """非 JSON 参数直接报错，不静默 str() 折叠成可能碰撞的 key。"""
+        with pytest.raises(TypeError):
+            build_cache_key("m", _MESSAGES, weird=object())
 
     def test_key_sensitive_to_message_content(self):
         a = build_cache_key("m", [{"role": "user", "content": "abc"}])

@@ -43,7 +43,11 @@ from backend.utils.latex_literals import (
     remove_delimited_block,
 )
 from backend.utils.latex_package_analyzer import prepend_package_comments
-from backend.utils.llm_cache import build_cache_key, cached_call
+from backend.utils.llm_cache import (
+    build_cache_key,
+    cached_call,
+    client_cache_identity,
+)
 
 # 分隔符协议：LaTeX 以纯文本形式夹在标记之间，避免 JSON 反斜杠转义损坏
 _CONFIDENCE_RE = re.compile(r"CONFIDENCE\s*:\s*([0-9]*\.?[0-9]+)", re.IGNORECASE)
@@ -190,7 +194,7 @@ class TableOCRService:
         # 同一图片重复识别免费：按 (模型, 初始消息, 采样参数) 缓存整个
         # 识别-校验-回喂重试循环的最终结果（llm_cache）；循环内部重试语义不变
         cache_key = build_cache_key(
-            str(getattr(llm, "resolved_model", "")),
+            client_cache_identity(llm),
             messages,
             temperature=0.1,
             max_tokens=max_tokens,

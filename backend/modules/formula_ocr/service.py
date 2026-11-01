@@ -39,7 +39,11 @@ from backend.utils.latex_literals import (
     find_matching_brace,
 )
 from backend.utils.latex_package_analyzer import prepend_package_comments
-from backend.utils.llm_cache import build_cache_key, cached_call
+from backend.utils.llm_cache import (
+    build_cache_key,
+    cached_call,
+    client_cache_identity,
+)
 
 from .visual_inline import VisualInlineHint, analyze_formula_image
 
@@ -232,7 +236,7 @@ class FormulaOCRService:
         # 同一图片重复识别免费：按 (模型, 初始消息, 采样参数) 缓存整个
         # 识别-校验-回喂重试循环的最终结果（llm_cache）；循环内部重试语义不变
         cache_key = build_cache_key(
-            str(getattr(llm, "resolved_model", "")),
+            client_cache_identity(llm),
             messages,
             temperature=0.1,
             max_tokens=max_tokens,
