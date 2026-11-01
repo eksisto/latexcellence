@@ -5,7 +5,7 @@
  *   - `\` 触发命令补全（反斜杠后可继续输入英文字母或中文，中文走共享
  *     匹配器的拼音/子串路）；
  *   - `\begin{` 触发环境名补全，应用时插入含 `\end{}` 的完整环境模板，
- *     自动配对（决策 Q15：\ref/\cite 留二期，不在本 source 范围）；
+ *     自动配对；
  *   - `\ref{` / `\label{` / `\cite{` 触发引用补全（editor v2 阶段四 /
  *     决策 Q7），数据来自 makeReferenceCompletionSource 注入的项目符号
  *     缓存（lib/editor/latexSymbols.js）。

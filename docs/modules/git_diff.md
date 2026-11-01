@@ -12,7 +12,7 @@
 | --- | --- |
 | `models.py` | Pydantic 结果模型与内部 dataclass |
 | `constants.py` | 常量、正则与差异 preamble 模板 |
-| `process.py` | git / latexdiff / latexmk 子进程执行（只读 git 子命令豁免每用户沙箱租约，判定见 `_is_readonly_git_args`，cwd 外落盘路径经 `mounts` 显式挂载进沙箱容器） |
+| `process.py` | git / latexdiff 子进程执行（latexmk 编译经 `tex_compile` 的 SandboxRunner，见 render.py。只读 git 子命令豁免每用户沙箱租约，判定见 `_is_readonly_git_args`，cwd 外落盘路径经 `mounts` 显式挂载进沙箱容器） |
 | `revisions.py` | Git revision 列表与校验 |
 | `flatten.py` | LaTeX 依赖递归展开 |
 | `diff.py` | difflib / latexdiff 差异文档生成 |
@@ -29,7 +29,7 @@ PDF 编译失败时，调用 `compile_error_translator.translate_compile_errors(
 
 - `GitRevision`（value, label, kind, short_hash, subject）
 - `GitRefsResult`（git_root, current_branch, is_dirty, revisions。`git_root` 为 Git 仓库绝对路径，多用户模式置 `None` 不向用户暴露）
-- `DiffHighlightResult`（success, job_id, pdf_url, main_file, base_ref, target_ref, added_lines, deleted_lines, included_files）
+- `DiffHighlightResult`（success, job_id, pdf_url, main_file, base_ref, target_ref, added_lines, deleted_lines, included_files, diff_engine, stdout, stderr, explanation, fixes。编译失败时 `explanation`/`fixes` 携带中文解释与修复建议）
 
 ## Service 核心方法
 
@@ -37,7 +37,7 @@ PDF 编译失败时，调用 `compile_error_translator.translate_compile_errors(
 | --- | --- |
 | `list_git_revisions` | 列出可选 revision（工作区 + 最近 50 条提交 + 分支 + 标签） |
 | `render_diff_pdf(main_file, base_ref, target_ref)` | 生成差异高亮 PDF 的主入口 |
-| `_flatten_main_document` | 递归展开主文件及 input/include 依赖 |
+| `_flatten_main_document` | 递归展开主文件及 input/include/subfile 依赖 |
 | `_build_diff_document` | difflib 生成带红删绿增底纹的差异 LaTeX 文档 |
 | `_prepare_target_project` | git archive 或 copytree 准备编译目录 |
 | `get_pdf_path` | 根据 job_id 定位已生成的 PDF |
@@ -63,7 +63,7 @@ PDF 编译失败时，调用 `compile_error_translator.translate_compile_errors(
         2. 支持配置标记样式（markup type）和数学公式标记粒度（math markup）
         3. 支持排除安全命令和文本命令
 4. 准备编译目录（工作区用 `shutil.copytree`，commit 用 `git archive --format=zip`）
-5. 写入差异 `.tex` 文件，调用 `latexmk -xelatex` 编译 → PDF 复制到临时目录
+5. 写入差异 `.tex` 文件，调用 `run_tex_compile()` 编译（latexmk，引擎自动检测）→ PDF 复制到临时目录
 
 **差异 LaTeX 宏包定义**（使用 `framed` 和 `MakeFramed` 环境以支持跨页和复杂内容，颜色可通过配置自定义）：
 
@@ -92,9 +92,9 @@ PDF 编译失败时，调用 `compile_error_translator.translate_compile_errors(
 **无提交仓库**：`git log` 在没有任何提交的新仓库会失败，此时提交列表返回空，
 页面仍可用 worktree 与其他分支/标签比较。
 
-**超时进程清理**：latexmk / latexdiff 超时后通过 `terminate_process_tree()`
-终止整个子进程树（Windows 用 `taskkill /T`，POSIX 用 `killpg`），避免
-xelatex / bibtex 子进程残留占用文件锁。
+**超时进程清理**：latexmk / latexdiff 超时后终止整个子进程树，避免
+xelatex / bibtex 子进程残留占用文件锁。sandbox local 后端经 `terminate_process_tree()`
+（Windows 用 `taskkill /F /T`，POSIX 用 `killpg`）；docker 后端不经此路径。
 
 **默认值配置**：`/options` 返回 `features.git_diff` 的默认引擎、标记类型、数学标记粒度和颜色。前端页面初始化时读取这些值，设置页的修改才会生效。
 服务端在请求未传这些字段时也会按配置兜底。

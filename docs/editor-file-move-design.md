@@ -134,12 +134,14 @@
 
 ### 5.3 新建 / 删除文件夹 UI
 
-- 入口（Q7）：头部「新建文件夹」按钮（根目录）+ 目录行 hover FolderPlus
-  按钮，与现有「新建文件」同模式。
+- 入口（Q7）：头部根级「新建文件夹」按钮（根目录）。**后续变更**：目录行
+  hover FolderPlus / 删除按钮已被 [editor-file-context-menu-design.md](editor-file-context-menu-design.md)
+  Q2 收敛删除，目录级新建与删除改由右键菜单承接（菜单矩阵见
+  [editor.md](modules/editor.md)）。
 - `CreateFileDialog` 增加目录模式（`mode = "dir"`），前端消毒预检
   （`validateNewDirName()`）与服务端同口径。
-- 目录行 hover 删除按钮：ConfirmDialog 强警告（「将永久删除 ×× 及其内部
-  全部文件与子文件夹，此操作不可恢复」）。仅 `canWrite` 时显示。
+- 删除目录：ConfirmDialog 强警告（「将永久删除 ×× 及其内部
+  全部文件与子文件夹，此操作不可恢复」）。仅 `canWrite` 时可用。
 - 删除目录成功后，关闭 filePath 命中该目录前缀的全部 tab（扩展现有
   `handleDeleteFile` 的精确匹配关闭逻辑），只读预览覆盖层按同前缀收起。
 
@@ -160,38 +162,18 @@
 
 ## 6. 测试基线
 
-后端 `tests/test_api/test_editor_file_ops.py` 增补：
-
-- move：文件 → 子目录 / 根；文件夹整棵迁移（嵌套内容随迁）；409
-  `target_exists`（同名文件与同名目录）；400 `into_self`（自身、子孙）；
-  400 `parent_not_found`；404 from 不存在；隐藏路径 from/to 拒绝；移动
-  主文件后记录跟随（含 `./` 前缀规范化回归）；移动含主文件的文件夹后
-  前缀改写；无关路径记录不动；响应 `file_tree` 正确。
-- create-dir：成功（根 / 子目录）、重复 409（目录名被文件占用亦拒绝）、
-  父缺失 400、非法名 / 隐藏名拒绝。
-- delete-file 目录扩展：递归删除成功（含空目录）；含主文件目录 400
-  `main_file_protected`；隐藏目录拒绝；项目根本身 400 `invalid_path`
-  回归。
-
-多用户 `tests/test_multiuser/test_editor_file_ops.py` 增补：viewer 403、
-未登录 401、CSRF、错误消息相对路径脱敏、move / create-dir 不产生配额
-变化与 workspace_edit_ops 记账。
-
-前端（node --test，`frontend/test/editorFileMove.test.mjs`）：
-`remapMovedPath` / `remapMovedPaths`（精确命中 / 前缀命中且 `/` 边界防
-误伤 / activeTabPath / 预览归属路径同口径 / 无关 tab 不动 / 无命中空转）、
-`getBaseName` 与 `joinProjectPath` 落位拼接、`validateNewDirName` 消毒
-分支、移动与新建目录错误码三语条目一一对应。
-
+测试覆盖已收录于 [editor.md](modules/editor.md)「测试」清单（单用户 /
+多用户 `test_editor_file_ops.py` 的 move / create-dir / 目录删除用例与
+前端 `editorFileMove.test.mjs` 纯函数单测），本文不再单独保留基线清单。
 Mock 原则照旧：单元测试不发起真实网络请求。
 
 ## 7. 文档索引
 
-实施时的文档同步义务已履行，行为描述收录于常设文档：
+行为描述收录于常设文档：
 [editor.md](modules/editor.md)（move-file / create-dir API、文件树交互与
 测试覆盖）、[frontend.md](frontend.md)（ProjectExplorer 组件描述）、
 `PROJECT_SUMMARY.md` / `DEVELOPMENT.md`（索引）、`README.md`（用户功能
-简介）。本节仅作索引，无其余义务清单。
+简介）。本节仅作索引。
 
 ## 8. 非目标与已知限制
 

@@ -1,6 +1,6 @@
 # 文档格式转换模块 `format_converter/`
 
-通过 `subprocess` 调用 Pandoc，在 Markdown/DOCX/HTML 与 LaTeX 之间互转，支持文本输入和文件上传两种模式。目标格式为 LaTeX 时，通过确定性宏包规则表自动分析所需宏包（LLM 仅兜底）。
+经 `SandboxRunner` 调用 Pandoc（docker convert 镜像 / local 回落），在 Markdown/DOCX/HTML 与 LaTeX 之间互转，支持文本输入和文件上传两种模式。目标格式为 LaTeX 时，通过确定性宏包规则表自动分析所需宏包（LLM 仅兜底）。
 
 ## Markdown 公式定界符识别
 
@@ -45,6 +45,7 @@ markdown reader 侧启用 `tex_math_single_backslash` 扩展（`-f markdown+tex_
 | `_run_pandoc_text(text, source, target)` | 文本输入（UTF-8 编码）转入共享执行路径 |
 | `_run_pandoc_file(file_bytes, source, target)` | 文件输入转入共享执行路径（DOCX 等二进制格式输出 base64） |
 | `_run_pandoc(input_bytes, source, target, timeout_seconds)` | 共享执行路径：输入落临时文件后调用 Pandoc（经 SandboxRunner），收集文本/二进制输出 |
+| `_analyze_packages(latex)` | 目标为 LaTeX 时的宏包分析（`prepend_package_comments`，规则表优先 / LLM 兜底，失败静默降级返回原文） |
 | `_derive_output_filename(original, target)` | 推导输出文件名 |
 
 **降级策略**：无 API Key 或 LLM 兜底分析失败时，直接返回 Pandoc 转换结果。
@@ -72,7 +73,7 @@ Prefix: `/api/format-converter`, Tag: `format_converter`
 
 ```json
 { "text": "<b>bold</b>", "source_format": "html", "target_format": "latex" }
-→ { "result": "\\textbf{bold}" }
+→ { "result": "\\textbf{bold}", "is_binary": false }
 ```
 
 **`POST /convert-file`**（multipart/form-data）
@@ -81,7 +82,7 @@ Prefix: `/api/format-converter`, Tag: `format_converter`
 - Query: `source_format`, `target_format`
 
 ```json
-→ { "result": "...", "output_filename": "document.tex" }
+→ { "result": "...", "output_filename": "document.tex", "is_binary": false }
 ```
 
 ## 配置项

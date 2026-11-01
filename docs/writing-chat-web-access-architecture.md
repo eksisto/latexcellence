@@ -61,15 +61,22 @@ WritingChatService
 
 ```text
 backend/utils/web_search/
-├── manager.py                 # 搜索编排与兼容入口
+├── manager.py                 # SearchManager：搜索编排、工具注册与兼容入口
+├── base.py                    # 搜索引擎抽象基类
+├── engines/                   # DuckDuckGo / Tavily / SearXNG 等搜索后端实现
 ├── planner.py                 # SearchQueryPlan + 校验重试
+├── query_rewriter.py          # 查询重写：拆解为多条精准查询
 ├── ranking.py                 # RRF、来源分类、域名多样性
 ├── url_utils.py               # URL 规范化与跟踪参数处理
+├── models.py                  # 搜索结果数据模型
 ├── errors.py                  # 分阶段错误模型
+├── deep_read.py               # Deep Read：抓取搜索结果页面正文并提取主要内容
+├── page_reader.py             # 结构化网页读取服务（read_page_sections 等工具后端）
 ├── fetch/
 │   ├── coordinator.py         # 分级抓取状态机
 │   ├── policy.py              # SSRF、robots、大小、域名调度
-│   ├── http.py                # 共享 HTTP transport
+│   ├── detector.py            # 阻断页与 JavaScript shell 检测
+│   ├── scheduler.py           # 每域名并发、节奏与熔断协调
 │   ├── browser.py             # 可选浏览器池
 │   └── cache.py               # 原始内容与条件请求缓存
 └── extract/
@@ -80,16 +87,23 @@ backend/utils/web_search/
     └── chunking.py            # 标题感知切块与证据选择
 
 backend/utils/scholarly_research/
-├── planner.py                 # ScholarlyQueryPlan
-├── ranking.py                 # 跨 Provider RRF 与多样性
-├── record_linker.py           # 标识符、版本族、字段溯源
-└── full_text.py               # OA 定位、学术 HTML/PDF 章节抽取
+├── manager.py                 # ResearchManager：Provider 注册与联邦搜索编排
+├── planner.py                 # 学术检索查询计划契约
+├── models.py                  # 学术研究统一数据模型
+├── base.py                    # 学术数据源抽象接口
+├── providers/                 # OpenAlex / arXiv / PubMed / Crossref 等数据源实现
+└── _utils.py                  # 内部辅助
 
 tools/web_access_eval/
 ├── datasets/                  # 查询、页面和问答评测语料
-├── run_search_eval.py         # 通用/学术检索评测
-├── run_extraction_eval.py     # 正文与结构保留评测
-└── run_grounding_eval.py      # 端到端网页理解与引用评测
+├── run_eval.py                # 评测入口：校验或离线重放评测结果
+├── structured.py              # 结构化 HTML 抽取路径的预测采集
+├── legacy.py                  # 现行网络访问实现的预测采集
+├── spike.py                   # 浏览器 / HTML 抽取器 / PDF 解析能力探针
+├── stage6.py                  # 本地容量冒烟测试与回退配置检查
+├── metrics.py                 # 评测指标
+├── models.py                  # 评测数据模型
+└── results/                   # 评测结果输出
 ```
 
 ## 3. 统一数据契约
@@ -288,21 +302,15 @@ class EvidenceBundle(BaseModel):
 - 域名质量规则、重复内容和低信息摘要惩罚。
 - 顶部结果的域名多样性约束。
 
-可选的 LLM reranker 只处理确定性排序后的候选头部，输入限制为标题、摘要和来源元数据。它不能新增 URL，也不能覆盖安全过滤。评测无法证明收益时不启用。
-
-跨引擎共识只统计独立 origin source。搜索引擎返回的合成答案单独标记为 `synthetic_summary`，只能帮助选择待读页面，不能作为可引用证据。
+跨引擎共识只统计独立 origin source。搜索引擎返回的合成答案保存在 `SearchResponse.answer`，`format_for_llm()` 将其单独标注为引擎摘要，只能帮助选择待读页面，不能作为可引用证据。
 
 ### 4.5 搜索结果工具契约
 
-保持 `web_search(query, max_results)` 兼容，同时增加可选参数：
+`web_search` 工具接受两个参数：`query`（必填）和 `max_results`（默认 10，上限 20）。时效窗口和偏好域名不作为工具参数，由查询规划器写入 `SearchQueryPlan`。
 
-- `mode`: `fast`、`balanced`、`comprehensive`。
-- `freshness`: 明确时效窗口。
-- `preferred_domains`: 用户明确指定时使用。
+响应为 `SearchResponse`，包含结果列表、`rewritten_queries`、`answer`（引擎合成答案）、`engine_statuses`、`candidates`（含 `source_type`、`origin_ranks`、`score_components`、`final_score`）和 `partial` 标志。`format_for_llm()` 用 UNTRUSTED 包装头输出，不输出评分细节，页面全文按 `max_chars` 总预算截断，避免多轮搜索撑爆上下文。
 
-响应增加 `query_plan`、`engine_statuses`、`score_components` 和 `partial`。`format_for_llm()` 默认不输出全部评分细节，只输出来源类型、共识提示和必要的降级说明，避免浪费上下文。
-
-Tavily 等 Provider 返回的 `raw_content` 标记为 `proxied_content`。它可以作为抓取失败时的低置信度预览，但 `open_page` 默认仍读取原始 URL。回答需要精确主张时，只有原站正文或明确标注的公开结构化端点可以进入可引用 EvidenceBundle。若只能获得代理内容，工具结果必须向模型和用户说明来源层级。
+Deep Read 抓取的正文写入结果的 `full_content` 字段。合成答案与搜索正文都是搜索侧素材，回答需要精确主张时，用 `open_page` 读取原站正文。
 
 ## 5. 学术搜索
 
@@ -334,15 +342,15 @@ Provider 并发框架保留，合并层使用：
 
 ### 5.3 作品关联、版本合并与字段溯源
 
-`record_linker` 执行以下操作：
+合并层（`_utils.py` 的 `_dedup_works` / `_unique_versions`）执行以下操作：
 
 1. 优先使用 DOI、PMID、PMCID、arXiv ID、OpenAlex ID 和 Semantic Scholar ID 建立精确关联。
-2. 对缺少标识符的记录，用规范化标题、作者、年份和期刊做保守的模糊匹配。
-3. 把预印本、会议版、期刊版建成 version family，默认展示正式版本，并保留其他版本链接。
-4. 每个合并字段记录来源和冲突状态。题名、年份或 DOI 冲突时不做无依据覆盖。
-5. 对撤回、更正、勘误和预印本状态使用 Provider 明确返回的标记。缺失时显示 `unknown`。
+2. 对缺少标识符的记录，用规范化标题、首作者和年份（±1 年）做保守关联，避免把同名作品错误合并。
+3. 把预印本、会议版、期刊版记入 version family（`versions`），去重时优先保留正式版本。
+4. 标题、年份或 DOI 出现冲突时，把冲突值和来源记入 `field_provenance`，不覆盖已采用的值。
+5. 撤回与出版状态经 `retraction_status` / `publication_status` 字段表达，当前无 Provider 写入，保持默认 `unknown`；预印本与正式版的区分由 `work_type` 和版本合并承担。
 
-`ScholarlyWork` 增加 `identifiers`、`versions`、`field_provenance`、`publication_status`、`retraction_status` 和 `ranking_explanation` 等结构化字段。前端仍可从兼容字段读取 DOI、作者和 OA 状态。
+`ScholarlyWork` 携带 `identifiers`、`versions`、`field_provenance`、`publication_status`、`retraction_status` 和 `ranking_explanation` 等结构化字段。前端仍可从兼容字段读取 DOI、作者和 OA 状态。
 
 ### 5.4 学术全文与章节
 
@@ -490,7 +498,7 @@ Content: ...
 - 目标大小使用 token 估算，中文、日文、韩文单独校准。
 - overlap 复制完整尾部块，不从句子中间切割。
 - 表格、代码和公式超过预算时使用类型专用分片，并保留共同标题路径。
-- 对当前问题先做 BM25 召回，再用 MMR 控制重复。可选 reranker 只处理召回后的少量 chunk。
+- 对当前问题先做 BM25 召回，再用 MMR 控制重复。
 - 每个来源设置软预算，同时保留跨来源证据，避免一个长页面耗尽全部上下文。
 
 长页默认返回：元数据、标题大纲、总字数、质量信息和最相关片段。完整文档保留在缓存中，LLM 可通过章节 ID 继续读取。
@@ -520,13 +528,13 @@ Content: ...
 | 工具 | 说明 |
 | --- | --- |
 | `web_search` | 返回排序后的来源、引擎状态、结果类型、共识和 `partial`，保持现有结果字段 |
-| `open_page` | 接受 `query`、`mode=auto/outline/relevant/full`、`render=auto/http/browser` 和 token 预算，返回 `document_id`、outline 与证据块 |
-| `find_in_page` | 接受 URL 或 `document_id`，使用块索引和词法检索，返回 heading breadcrumb 与 evidence ID |
-| `read_page_sections` | 按 `document_id + section_ids` 读取完整章节，避免反复抓取 URL |
+| `open_page` | 接受 `url`、`max_chars`（默认 10000，上限 20000）；`structured` 策略下另有 `mode`（outline/relevant/full，默认 outline）与 `query`，outline 模式返回标题、章节大纲与证据块 |
+| `find_in_page` | 接受 `url` + `query`（必填）、`context_chars`（默认 600）与 `max_matches`（默认 5），返回每个匹配项的短上下文 |
+| `read_page_sections` | 按 `url` + `section_ids`（1–10 个，取自 `open_page` 大纲）读取指定章节，避免整页反复抓取 |
 | `search_scholarly_works` | 返回版本族、字段来源、排序解释和 Provider 状态 |
 | `get_full_text_or_sections` | 返回真实抽取章节、缺失章节、OA 来源和证据块 |
 
-`open_page(mode=full)` 仍受硬 token 预算约束。"full"表示覆盖全部章节的分批读取入口，不表示一次把无限正文塞入模型上下文。
+`open_page(mode=full)` 仍受 `max_chars` 上限约束。"full" 返回限量全文，不表示一次把无限正文塞入模型上下文。
 
 ### 9.2 工具循环与会话持久化
 
@@ -567,19 +575,16 @@ Prompt 要求模型：
 | 配置组 | 字段 | 用途 |
 | --- | --- | --- |
 | `web_search` | `strategy`、`overall_timeout_seconds`、`per_engine_timeout_seconds`、`max_parallel_queries`、`domain_result_cap` | 搜索聚合、截止时间和结果多样性 |
-| `web_search.ranking` | `mode`、`source_type_boosts`、`consensus_weight`、`llm_rerank_enabled`、`llm_rerank_top_k` | 确定性排序与可选 LLM 重排 |
-| `web_search.fetch` | `mode`、`max_redirects`、`max_response_bytes`、`per_domain_concurrency`、`min_domain_interval_ms`、`respect_robots` | 抓取策略、安全边界和域名调度 |
-| `web_search.fetch.browser` | `enabled`、`pool_size`、`page_timeout_seconds`、`max_pages_per_request` | 可选浏览器回退资源预算 |
-| `web_search.cache` | `enabled`、`dir`、`search_ttl_seconds`、`document_ttl_seconds`、`max_size_mb` | 搜索、原始文档和抽取结果缓存 |
-| `web_search.extraction` | `min_quality_score`、`chunk_tokens`、`overlap_tokens`、`max_evidence_tokens` | 候选选择、切块和证据预算 |
-| `scholarly_research` | `ranking_mode`、`full_text_enabled`、`max_graph_expansions`、`provider_timeout_seconds` | 学术排序、全文和引文扩展预算 |
-| `scholarly_research.full_text` | `pdf_backend`、`grobid_url`、`max_pdf_mb`、`section_confidence_threshold` | 学术 PDF/HTML 解析策略 |
+| `web_search.ranking` | `mode`（`rrf` / `legacy`）、`source_type_boosts` | 确定性排序与来源类型加权 |
+| `web_search.page_reading` | `strategy`、`max_response_mb`、`max_redirects`、`max_retries`、`backoff_base_seconds`、`max_retry_after_seconds`、`per_domain_concurrency`、`min_domain_interval_ms`、`circuit_failure_threshold`、`circuit_cooldown_seconds`、`extractor_version`、`quality_threshold`、`cache_enabled`、`cache_dir`、`cache_ttl_seconds`、`max_cache_entry_mb` | 结构化网页读取：抓取重试、域名调度与熔断、抽取质量、缓存 |
+| `web_search.page_reading.browser` | `enabled`、`pool_size`、`page_timeout_seconds`、`max_pages_per_request`、`stable_window_ms` | 可选浏览器回退资源预算 |
+| `scholarly_research` | `primary_source`、`ranking_mode`、`full_text_enabled`、`max_results`、`timeout_seconds`、`providers.*`（各数据源的 `enabled` / `api_key`） | 学术数据源、排序模式、全文开关与检索预算 |
 
 配置约束：
 
 - Service 和 Provider 方法内调用 `get_config()`，不在 `__init__` 缓存热重载字段。
 - 资源池结构变化时，配置 reload hook 安全重建资源池。单次请求使用不可变配置快照，避免执行中途混用新旧预算。
-- 密钥和 `grobid_url` 等敏感/内部字段通过设置接口脱敏。
+- Tavily 和学术 Provider 的 `api_key` 可经环境变量注入（`LATEXCELLENCE_TAVILY_API_KEY`、`LATEXCELLENCE_<PROVIDER 大写>_API_KEY`），优先于配置文件且永不写盘。
 - 设置页把常用模式、浏览器开关和缓存上限放在主区域，其余字段放入高级设置，但所有新增配置仍可通过 UI 修改。
 - 修改配置时同步 `AppConfig`、`config.example.json`、设置分区、`SettingsDialog.jsx`、`WelcomePage.jsx` 和 i18n。
 - 新缓存目录使用 `pathlib.Path` 和显式 UTF-8。接入现有清理脚本，不使用 `os.path`。

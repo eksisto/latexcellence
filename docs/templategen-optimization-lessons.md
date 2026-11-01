@@ -278,7 +278,7 @@ FACTS、matplotlib 字体链调整。
 
 按本文档约束再次闭环优化 `template_gen`。
 采用既有闭环工具（`tools/templategen_opt/`）：先跑当前代码基线
-（`base2`，4 个通用场景），再做机制修复，再跑 `opt4` 对照，最后才运行
+（`base2`，4 个通用场景），再做机制修复，再跑 `opt5` 对照，最后才运行
 holdout `tju` 做最终回归。
 
 #### 基线诊断（base2）

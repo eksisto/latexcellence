@@ -5,7 +5,7 @@
 ## 目录
 
 - [后端核心模块](#后端核心模块)：config、env、security_middleware、llm_client、model_router、logger、project_manager、base_paragraph_check、prompts、tool_registry、workspace_manager
-- [后端工具模块](#后端工具模块)：scholarly_research、tool_result_protocol、file_ops、path_guard、json_utils、llm_cache、ocr_protocol、latex_json_guard、sandbox（Docker 沙箱执行）、tex_compile、compile_error_translator、latex_formatter、latex_parser、latex_literals、latex_package_analyzer、input_resolver、spa_static_files 等
+- [后端工具模块](#后端工具模块)：scholarly_research、tool_result_protocol、file_ops、path_guard、json_utils、llm_cache、ocr_protocol、latex_json_guard、sandbox（Docker 沙箱执行）、tex_compile、compile_error_translator、latex_formatter、latex_parser、latex_literals、latex_package_analyzer、input_resolver、search_router、spa_static_files 等
 - [项目管理路由 project_router.py](#项目管理路由-project_routerpy)
 
 ---
@@ -19,7 +19,7 @@
 - `ServerConfig` — 服务配置（host, port, dev_mode, vite_dev_url, allowed_origins）
 - `SecurityConfig` — 跨域访问安全配置（access_token）
 - `LLMConfig` — LLM 配置（api_key, base_url, model, temperature 等）+ 模型档案 `profiles` 与槽位指派 `assignments`（多模型支持，见下方「模型路由器与客户端池」）
-- `TypoCheckConfig` / `ExpressionOptConfig` / `TerminologyCheckConfig` / `FormulaOCRConfig` / `TableOCRConfig` / `TemplateGenConfig` / `CodeReviewConfig` / `CompileConfig` / `GitDiffConfig` / `FormatConverterConfig` / `StyleModifyConfig` / `StyleModifyAgentConfig` / `WritingChatConfig` / `BibManagerConfig` / `ParagraphTranslateConfig` — 各功能模块配置
+- `TypoCheckConfig` / `ExpressionOptConfig` / `TerminologyCheckConfig` / `FormulaOCRConfig` / `TableOCRConfig` / `TemplateGenConfig` / `CodeReviewConfig` / `CompileConfig` / `GitDiffConfig` / `GitManageConfig` / `FormatConverterConfig` / `StyleModifyConfig` / `StyleModifyAgentConfig` / `WritingChatConfig` / `BibManagerConfig` / `ParagraphTranslateConfig` / `TemplateLibraryConfig` / `PlotGenConfig` / `EditorConfig` — 各功能模块配置
   - `CompileConfig` 包含 `engine`（编译引擎：auto/pdflatex/xelatex/lualatex）和 `pdfa`（PDF/A-2b 归档格式输出）配置
   - `TemplateGenConfig` 包含 `cleanup_enabled`/`cleanup_interval_seconds`/`cleanup_retention_days` 沙箱清理配置
   - `StyleModifyAgentConfig` 包含项目 Agent 会话目录、轮次、大小、shadow 编译和清理配置
@@ -29,7 +29,7 @@
 - `FeaturesConfig` — 功能聚合
 - `LoggingConfig` — 日志配置
 - `HttpConfig` — 外部 HTTP 请求全局配置（user_agent）
-- `AppConfig` — 顶层聚合（server, security, llm, http, features, logging）
+- `AppConfig` — 顶层聚合（server, security, llm, http, features, logging, multi_user, sandbox, smtp）
 
 **核心接口**：
 
@@ -93,7 +93,7 @@
 | `chat_stream()` | 流式对话：返回 `AsyncIterator[str]`，按 token 产出，用于 SSE 推送 |
 | `chat_stream_with_usage()` | 流式对话 + 末尾携带 UsageInfo：返回 `AsyncIterator[StreamChunk]`，`StreamChunk.content` 为文本片段、`StreamChunk.usage` 为末次 LLM token 用量（用 `stream_options={"include_usage": True}` 透传，第三方不支持时降级为 `None`） |
 | `chat_stream_with_tools()` | 流式对话 + Function Calling：与 `chat_stream_with_usage` 类似，但额外接受 `tools` 参数。流中同时 yield content（文本 token 实时推送）和 tool_calls（末次 yield 完整 `ChatCompletionMessageToolCall` 列表） |
-| `get_context_window()` | 获取模型上下文窗口（token）：显式配置 → `/models` 探测 → 超限错误学习 → 内置模型表 → 默认 200000；结果按 `(profile_id, base_url, model)` 缓存（按档案隔离，防跨档案串用），`reset()` 时失效，探测失败绝不抛出；探测地址与主服务不同源时不携带 API key |
+| `get_context_window()` | 获取模型上下文窗口（token）：显式配置 → 缓存（含超限错误学习的写入值）→ `/models` 探测 → 内置模型表 → 默认 200000；结果按 `(profile_id, base_url, model)` 缓存（按档案隔离，防跨档案串用），`reset()` 时失效，探测失败绝不抛出；探测地址与主服务不同源时不携带 API key |
 | `_rate_limit()` | 内部限流器：确保两次请求间隔 ≥ `config.llm.request_interval` |
 
 **数据类**：
@@ -112,8 +112,8 @@
 
 **重试策略**（`chat()` 内部）：
 
-- 最多重试 3 次
-- 指数退避：第 N 次重试前等待 `2^(N-1)` 秒（1s → 2s → 4s）
+- 最多 3 次尝试（含首次，`max_retries=3`）
+- 指数退避：各次重试前依次等待 1s、2s
 - 仅网络/API 异常触发重试（`json.JSONDecodeError` 不再由客户端处理）
 
 **extra_body 透传**：`llm.extra_body`（`dict[str, Any]`，默认 `{}`）会作为 openai SDK 的 `extra_body` 参数附加到全部 `chat.completions.create` 调用（非流式 / 流式 / Function Calling），用于厂商私有请求体参数，例如思维链模型降档 `{"reasoning_effort": "low"}`、通义 `{"enable_thinking": false}`、智谱 `{"thinking": {"reasoning_budget": "low"}}`。**为空时不发送任何额外参数**——非思考模型 / 不支持这些字段的 provider 不会因此报错，属于按需显式开启的配置；若对不支持的模型显式配置了字段，provider 返回 400 会走常规重试后抛出，需自行确认目标模型的参数兼容性。前端在设置对话框 LLM 分区以 JSON 文本框编辑（非法 JSON 只提示、不保存）。
@@ -221,6 +221,7 @@ class ProjectInfo:
 
 **主文档检测逻辑**（递归深度限制 2 层）：
 
+0. 项目内 `.latexcellence/main_file` 持久化标记**优先**（用户手动设置过主文件时经 `.tex` 白名单校验后直接采用，避免重开项目静默回退 `main.tex`）
 1. 精确匹配文件名为 `main.tex`（不区分大小写） → 使用
 2. 文件名包含 `"main"` 子串的 `.tex` 文件（如 `main-chapter1.tex`） → 使用
 3. 若仍未找到，取文件树中第一个 `.tex` 文件（仅顶层，不递归）
@@ -258,7 +259,7 @@ class ProjectInfo:
 
 **关键设计**：
 
-- `ApplyChangeItem` 共享模型（`paragraph_index`, `new_text`, `file_path`）：各逐段检查模块 router 的 apply 接口统一使用
+- `ApplyChangeItem` 共享模型（`paragraph_index`, `new_text`, `file_path`, `expected_md5: str | None = None`）：各逐段检查模块 router 的 apply 接口统一使用，`expected_md5` 为乐观锁注入点（`inject_expected_md5s()` 统一填充）
 - `CheckOperationContext` 操作上下文：每次 preview/check 生成唯一 `operation_id`，深拷贝 `marker_maps` 存入操作上下文存储（`store_operation_context` / `get_operation_context`）。**v2 P7 多实例外置**：多用户模式下上下文 payload JSON 入 `operation_contexts` 表（apply 可落在另一副本；段落索引键 JSON 往返变 str，读取时还原 int），进程 dict 降级为无害 L1 缓存；单用户模式不建库、dict 即全部存储（行为不变）。若 context 丢失（过期/重启），逐段检查 `marker_map` 缺失时跳过写入并返回 `errors`，防止字面 marker 污染文件
 - 类变量控制差异：
   - `_output_field`: 结果字段名（`"corrected"` / `"optimized"` / `"translated"` 等）
@@ -293,7 +294,7 @@ class ProjectInfo:
 
 #### 如何添加新工具
 
-工具注册分为两步：**① 实现执行函数** → **② 在合适的初始化时机注册**。以下以添加 `get_current_time` 工具为例。
+添加一个新工具分为三步：**① 实现执行函数** → **② 在合适的初始化时机注册** → **③ 在消费端启用**。以下以添加 `get_current_time` 工具为例。
 
 **1. 实现执行函数**
 
@@ -437,7 +438,7 @@ next_step: ...
 
 `web_search.page_reading.strategy=structured` 时，`page_reader.py` 编排 `fetch/` 与 `extract/`：`FetchCoordinator` 只访问公网 HTTPS，逐跳复核重定向，限制响应大小，并通过阻断检测、域名调度、`Retry-After`、退避和熔断返回带诊断信息的 `FetchFailure`；原始缓存使用 URL 哈希键，只保存正文及 ETag、Last-Modified、Content-Type 等安全元数据。新鲜条目直接命中，过期条目发送条件请求。抽取缓存键包含内容 hash 与 `extractor_version`，算法版本变化会自然失效。启用浏览器回退时，JavaScript shell 或低质量 HTTP 页面进入隔离的 Playwright context；导航和子资源继续执行 SSRF 校验，登录、验证码、挑战和付费墙只返回明确阻断状态。网页读取处于 `structured` 时，`read_page_sections` 工具注册并可用；切回 `legacy` 后 `open_page` / `find_in_page` 继续使用 DeepReader，`read_page_sections` 不注册。
 
-ExtractorRegistry 先处理已知公开端点（当前代码托管页面使用 GitHub 官方 raw 端点），再按 MIME 分派。HTML 抽取比较语义 DOM 与 Trafilatura 候选，通过确定性质量分选优；`ContentBlock` 保留块类型、标题路径、链接和稳定块 ID，`DocumentSection` 构成大纲。`chunking.py` 不拆散普通块，先用 BM25 召回，再用 MMR 抑制重复，并把 block ID 写入 `EvidenceChunk`。CPU 密集型解析通过 `asyncio.to_thread()` 执行。切回 `legacy` 后 `open_page` / `find_in_page` 继续使用 DeepReader，`read_page_sections` 不注册。
+ExtractorRegistry 先处理已知公开端点（当前代码托管页面使用 GitHub 官方 raw 端点），再按 MIME 分派。HTML 抽取比较语义 DOM 与 Trafilatura 候选，通过确定性质量分选优；`ContentBlock` 保留块类型、标题路径、链接和稳定块 ID，`DocumentSection` 构成大纲。`chunking.py` 不拆散普通块，先用 BM25 召回，再用 MMR 抑制重复，并把 block ID 写入 `EvidenceChunk`。CPU 密集型解析通过 `asyncio.to_thread()` 执行。
 
 **注意事项**：
 
@@ -676,7 +677,7 @@ ExtractorRegistry 先处理已知公开端点（当前代码托管页面使用 G
 | `validate_model(data, model_cls)` | Pydantic `.model_validate()` 严格校验 |
 | `format_validation_error(errors)` | 将 Pydantic ValidationError 格式化为 LLM 可读的中文错误信息 |
 | `parse_and_validate(text, model)` | 一步完成：解析 + 校验，返回 `(model, error)` 元组 |
-| `retry_with_validation(chat_fn, messages, model, max_retries=3)` | **核心重试循环**：调用 LLM → 解析 JSON → Pydantic 校验 → 失败时反馈错误给 LLM 重试 |
+| `retry_with_validation(chat_fn, messages, model_cls, max_retries=3, logger_name="json_utils")` | **核心重试循环**：调用 LLM → 解析 JSON → Pydantic 校验 → 失败时反馈错误给 LLM 重试（`max_retries` 含首次调用，共 3 次尝试） |
 
 **`retry_with_validation()` 流程**：
 
@@ -769,6 +770,8 @@ raise ValueError("Validation failed after N attempts")        # ❌ 耗尽
 | 接口 | 功能 |
 | --- | --- |
 | `check_latex_text(value, *, bibtex=False, relaxed=False)` | 基础内容校验，通过返回 `None`，失败返回错误消息 |
+| `check_latex_corruption(value)` | 宽松损坏特征校验（编辑器保存 / create-file 等非 JSON 直传路径）：只拦控制字符损坏与垃圾占位符，不做配平检查 |
+| `strip_latex_comments(text, *, bibtex=False)` | 移除未转义的 `%` 注释（`%` 至行尾；反斜杠奇偶语义与 `check_latex_text` 一致，`bibtex=True` 时 `%` 为字面字符不剥离） |
 | `check_latex_text_lite(value)` | 轻量内容校验（marker 模块输出字段）：控制字符 + 垃圾占位符，不查配平 |
 | `check_latex_environments(value)` | 环境栈式配平校验 |
 | `validate_latex_field(value, *, check_environments=False, bibtex=False, relaxed=False)` | Pydantic 校验器回调：失败抛 `ValueError` |
@@ -797,11 +800,11 @@ raise ValueError("Validation failed after N attempts")        # ❌ 耗尽
 
 | 函数 | 功能 |
 | --- | --- |
-| `run_tex_compile(main_file, cwd, timeout, engine="auto", pdfa=False)` | 通过 texfot 包装 latexmk 执行编译，返回过滤后的输出（多用户模式下输出中的工作目录绝对路径前缀脱敏为 `./` 相对形式；单用户保留原始输出） |
+| `run_tex_compile(main_file, cwd, timeout, engine="auto", pdfa=False, extra_args=None, synctex=False)` | 通过 texfot 包装 latexmk 执行编译，返回过滤后的输出（多用户模式下输出中的工作目录绝对路径前缀脱敏为 `./` 相对形式；单用户保留原始输出；`synctex=true` 追加 `-synctex=1`，与 PDF/A 组合时忽略） |
 | `detect_engine_from_file(tex_path)` | 根据 .tex 文件内容自动检测编译引擎 |
 | `inject_pdfx_for_pdfa(tex_path, output_path)` | 注入 PDF/A 支持包 |
 | `_check_texfot_available()` | 检测 texfot 是否在 PATH 中可用（模块级缓存） |
-| `_filter_with_regex(raw_output)` | 降级路径：用正则从原始日志中提取关键错误行 |
+| `_filter_with_regex(raw_output, max_chars=3000)` | 降级路径：用正则从原始日志中提取关键错误行 |
 | `sanitize_output_paths(text, cwd)` | 把文本中 `<cwd>/xxx` 形式的绝对路径前缀改写为 `./xxx`（纯文本工具；调用方按 `multi_user.enabled` 门控，仅多用户模式应用。编译日志 / Python traceback 展示前脱敏，plot_gen 等沙箱执行方共用） |
 
 **Pydantic 模型**：`TexCompileResult`（success, filtered_output, raw_output, timed_out, oom_killed, used_texfot）
@@ -964,7 +967,7 @@ backend/utils/sandbox/
 
 **注释保护策略**：注释替换（`%` → 行尾 → `__COM_NNNN__`）放在内联逐字、URL 参数与逐字类环境（`verbatim`/`Verbatim`/`lstlisting` 等）之后、其他环境/数学/命令之前执行，确保注释内的 `\command{}`、`$math$`、`\begin{env}` 不被单独提取。逐字类环境（`_VERBATIM_ENVS`）在注释之前，因其内部可含字面 `%`；URL 参数（`\url` / `\path` / `\href`）同样在注释之前整体 marker 化，`%20` 不会被误当作注释起点。注释不再是直接删除，而是 marker 化，LLM 无法修改，还原时完整恢复。
 
-**解析流水线**：VERB → URL → VERBATIM_ENVS → COM → ENV → MATH → CMD（9 步顺序执行）
+**解析流水线**：VERB → URL → 逐字类环境 → COM → ENV → 展示数学 → 行内数学 → CMD → 空白规范化（9 步顺序执行；ENV 一项覆盖 `_replace_protected_envs` 的两次调用——`_VERBATIM_ENVS` 与 `_PROTECTED_ENVS`）
 
 **Marker 匹配规则（v2 修复）**：
 
@@ -1032,7 +1035,7 @@ LLM 兜底提示词不携带映射表，只要求通用推理并显式排除内�
 
 **设计理念**：许多 LaTeX 项目使用 `\input{}` / `\include{}` / `\subfile{}` 将文档拆分为多个 `.tex` 文件。段落处理模块默认只分析用户选中的单个文件，开启 `resolve_input` 后，系统会递归展开所有引用的子文件，将它们的段落一并送入 LLM 处理。
 
-**核心接口**：`resolve_inputs(main_file, project_root, pm)`
+**核心接口**：`resolve_inputs(file_path, root_path)`（`_visited` 为内部递归参数，调用方无需传入）
 
 **关键设计约束**：
 

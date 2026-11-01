@@ -86,7 +86,7 @@ function renderHero(s) {
               </div>
               <div class="paper-card">
                 <div class="paper-title">LaTeXcellence</div>
-                <div class="paper-author">智能体论文写作助手</div>
+                <div class="paper-author">AI 驱动的 LaTeX 文档助手</div>
                 <p class="paper-abs">
                   从一段自然语言到可编译的 LaTeX 工程，
                   智能体真正读写文件、编译验证，而不是只停留在对话。

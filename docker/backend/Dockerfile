@@ -2,11 +2,12 @@
 # LaTeXcellence 应用本体镜像（backend）
 # 基础镜像不写死架构：amd64 / arm64 均可原生构建
 #
-# 构建示例：
-#   docker build -t latexcellence-backend:latest docker/backend
+# 构建示例（在仓库根执行；本镜像按仓库根为 build context，与 docker-compose.yml
+# 的 app 服务一致，也可直接用 ./docker/build.sh backend）：
+#   docker build -t latexcellence-backend:latest .
 #   # 可选国内 pip 源：
 #   docker build --build-arg PIP_INDEX_URL=https://pypi.tuna.tsinghua.edu.cn/simple \
-#                -t latexcellence-backend:latest docker/backend
+#                -t latexcellence-backend:latest .
 #
 # 运行约定（config.json 与 data/ 由运行时挂载，凭证不打进镜像）：
 #   docker run -v ./config.json:/app/config.json:ro \

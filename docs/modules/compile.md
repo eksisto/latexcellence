@@ -1,6 +1,6 @@
 # 自动编译模块 `compile/`
 
-通过 `subprocess` 调用 `latexmk` 编译主文件，支持自动引擎检测、PDF/A 归档输出与编译前产物清理。编译失败时使用 LLM 翻译 stderr 错误信息。不使用 Marker 保护策略。另提供 SyncTeX 正/反向只读查询端点（editor v3 阶段一），供编辑器 PDF ↔ 源码互跳。
+经 `SandboxRunner` 执行 `texfot` 包装的 `latexmk` 编译主文件（docker tex 镜像 / local 回落），支持自动引擎检测、PDF/A 归档输出与编译前产物清理。编译失败时使用 LLM 翻译 stderr 错误信息。不使用 Marker 保护策略。另提供 SyncTeX 正/反向只读查询端点（editor v3 阶段一），供编辑器 PDF ↔ 源码互跳。
 
 | 维度 | 编译模块 | 其他 LLM 模块 |
 | --- | --- | --- |
@@ -13,8 +13,8 @@
 
 根据 `.tex` 文件内容自动选择编译引擎：
 
-1. 检测 XeLaTeX 专属宏包（fontspec/xeCJK/polyglossia）→ xelatex
-2. 检测 LuaLaTeX 专属宏包/命令（luacode/luatextra/directlua）→ lualatex
+1. 检测 XeLaTeX 专属宏包/命令（fontspec/xeCJK/polyglossia/unicode-math、`\setmainfont` 等字体命令）与 ctex 文档类 → xelatex
+2. 检测 LuaLaTeX 专属宏包/命令（luacode/luatextra/directlua/luatexja 等）→ lualatex
 3. 检测非 ASCII 字符（中文/日文/韩文等）→ xelatex（pdfLaTeX 不支持 Unicode）
 4. 以上都不匹配 → pdflatex
 
@@ -37,6 +37,7 @@
 ## Pydantic 输出模型
 
 - `CompileResult`（success, stdout, stderr, explanation, fixes, error_code, synctex）
+- 沙箱内存超限（OOM）时返回结构化错误：`error_code="sandbox_killed_oom"` + 固定建议，不走 LLM 翻译
 - `ErrorTranslation`（explanation, fixes）
 - `SynctexForwardResponse`（records: page/x/y/w/h，72dpi 点单位、页面左上原点）
 - `SynctexBackwardResponse`（found, file_path, line, col。未命中 found=false 属合法空结果）
@@ -47,7 +48,7 @@
 | --- | --- |
 | `compile_latex(main_file, workspace_id, language, engine, pdfa, synctex, clean_first)` | 可选清理再生产物 → 调用 latexmk → 捕获 stderr → 失败时 LLM 翻译 → 返回 CompileResult |
 | `clean_project_artifacts(root)` | 按扩展名白名单清理项目内可再生产物（跳过 .git / 符号链接 / PDF / 源文件），返回删除文件数 |
-| `_extract_key_errors(stderr_text)` | 从 stderr 提取关键错误行 |
+| `translate_compile_errors`（`backend/utils/compile_error_translator.py` 共享函数） | 从编译日志提取关键错误行（`extract_key_errors`），经 LLM 翻译为中文解释与修复建议 |
 | `synctex_forward(workspace_id, main_file, file_path, line, col)` | 正向：`synctex view -i "line:col:file" -o pdf`，解析输出中的页面矩形记录 |
 | `synctex_backward(workspace_id, main_file, page, x, y)` | 反向：`synctex edit -o "page:x:y:pdf"`，Input 路径归一为项目内相对路径 |
 | `parse_synctex_view_records(output)` / `parse_synctex_edit_result(output)` | synctex CLI 输出解析纯函数（保守解析，畸形记录丢弃） |

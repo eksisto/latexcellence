@@ -14,6 +14,7 @@
 | `sessions.py` | 会话 CRUD 与手动压缩 |
 | `conversation.py` | RS1 对话流、工具编排、引用校验 |
 | `edits.py` | RS2 编辑建议、应用与消息删除 |
+| `editor_chat.py` | 编辑器侧 AI 助手（EditorChatMixin：/editor/send 流式对话、建议应用标记；详见 [editor.md](editor.md)） |
 | `compaction.py` | 上下文超限判断、兜底裁剪与 LLM 摘要压缩 |
 | `_deps.py` | 共享依赖（LLM 客户端）统一出口，便于测试 patch |
 
@@ -157,6 +158,8 @@ Prefix: `/api/writing-chat`, Tag: `writing_chat`
 | POST | `/sessions/{id}/compact` | 手动压缩会话 |
 | GET | `/sessions` | 列出会话 |
 | GET | `/sessions/{id}` | 加载会话 |
+| POST | `/editor/send` | 编辑器侧 AI 助手流式对话（编辑器缓冲区协议，机制见 [editor.md](editor.md)） |
+| POST | `/editor/apply-suggestion` | 登记编辑器建议应用结果（v2 起支持 `suggestion_index` 逐条标记） |
 | DELETE | `/sessions/{id}` | 删除会话 |
 | GET/POST/DELETE | `/prompts[/{name}]` | 助手提示词 CRUD |
 | POST | `/prompts/active` | 设置激活助手 |

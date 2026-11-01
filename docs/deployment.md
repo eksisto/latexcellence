@@ -55,7 +55,7 @@
 
 以下是从一台全新 Linux 服务器到「管理员可登录」的最短路径，每步的详细说明见对应章节：
 
-```bashd
+```bash
 # 0. 安装系统依赖（Debian/Ubuntu 示例，见「环境准备」）
 sudo apt install -y python3 python3-venv texlive-xetex texlive-latex-extra \
     texlive-extra-utils latexmk texlive-lang-chinese pandoc unar git
@@ -565,9 +565,10 @@ docker run -d --name latexcellence \
 
 ```bash
 cd docker/
-./build.sh                 # 构建全部镜像，tag 为 latexcellence-*:YYYY.MM + latest
+./build.sh                 # 构建全部镜像（backend 以仓库根为 context），tag 为 latexcellence-*:YYYY.MM + latest
 ./build.sh tex             # 只构建 tex 镜像
-BUILDX_MULTI_ARCH=1 ./build.sh --load tex   # buildx 双架构（amd64+arm64）
+BUILDX_MULTI_ARCH=1 ./build.sh --push tex                  # buildx 双架构（amd64+arm64）构建并推送
+BUILDX_MULTI_ARCH=1 BUILDX_PLATFORMS=linux/arm64 ./build.sh --load tex   # 单架构构建并加载到本地 daemon
 ```
 
 镜像体系、离线导入导出（`docker save/load`）、升级流程与缺 TeX 宏包排查指南见 [docker/README.md](../docker/README.md)。TeX 宏包清单在 `docker/tex/Dockerfile` 的 `EXTRA_TL_PACKAGES` 构建参数中维护。运行期不装包（沙箱无网络原则），缺宏包时改清单重建镜像。
@@ -783,6 +784,7 @@ LLM API Key 存于服务器 `config.json`（或经 `LX_LLM_KEY` 环境变量注�
 | `LATEXCELLENCE_CONFIG_PATH` | Compose | 配置文件挂载路径（默认 `./config.json`） |
 | `LATEXCELLENCE_PROXY_PORT` | Compose | Caddy 对外端口（默认 `8080`） |
 | `LATEXCELLENCE_CADDYFILE` | Compose | Caddy 挂载的 Caddyfile（默认 `./docker/Caddyfile.example`） |
+| `LATEXCELLENCE_SANDBOX_REPLICA_ID` | 容器部署（多副本） | 显式指定沙箱 warm pool 的副本标识；缺省按 hostname:随机后缀进程唯一生成（见上文「warm pool 运维说明」） |
 
 注意：在设置页清空某个已由环境变量注入的敏感项（提交空值）按用户输入生效——内存值与磁盘字段会被清空，但**不会移除环境变量本身**。进程重启或 config.json 变更触发热重载后，环境变量值会重新注入并恢复生效。因此若想彻底停用某个 Key，应同时撤销对应的环境变量（如从 compose / systemd 配置中删除），而不是只在界面里清空。
 

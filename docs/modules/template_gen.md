@@ -92,6 +92,7 @@ Agent 自主规划文件结构 → 逐个 `write_file` → 调用 `compile_latex
 3. 否则把 assistant 消息追加进历史，依次执行每个 `tool_call`，将工具结果以 `role:"tool"` 回传 LLM
 4. `finish` 工具立即跳出整体循环
 5. 循环中跟踪 `compile_state`（`called`/`success`）。若最后一次编译仍失败时触发 `finish`，额外推送 `warning` 事件（不阻断 `done`）。
+6. 达到 `agent_max_rounds` 仍未 finish → 自动结束并推送提示。若此时编译仍失败，同样推送 `warning`。
 
 ## 写盘静态校验
 
@@ -108,7 +109,6 @@ Agent 自主规划文件结构 → 逐个 `write_file` → 调用 `compile_latex
 
 `compile_latex` 的质量门禁只读取最后一次主 `.log`，避免把早期 pass 的
 undefined citation/reference 误判为失败。未解析引用/缺字仍会阻断成功。
-5. 达到 `agent_max_rounds` 仍未 finish → 自动结束并推送提示。若此时编译仍失败，同样推送 `warning`。
 
 ## 规划瘫痪防护（no-tool-call nudge）
 
@@ -239,7 +239,7 @@ latexmk 的 stdout/stderr 有时不含 `!` 错误行（错误只写进了 `<main
 | --- | --- | --- |
 | `enabled` | `true` | 模块总开关 |
 | `output_dir` | `data/templates/` | Agent 沙箱根目录 |
-| `agent_max_rounds` | `30` | Agent 最大工具调用轮数 |
+| `agent_max_rounds` | `50` | Agent 最大工具调用轮数 |
 | `agent_max_files` | `30` | 单次生成最大**不同文件数**（重写已有文件不计入预算） |
 | `agent_max_file_size_kb` | `512` | 单文件大小上限 |
 | `agent_compile_enabled` | `true` | 是否允许 Agent 调用 `compile_latex` |
@@ -355,7 +355,7 @@ Prefix: `/api/template-gen`, Tag: `template_gen`
   用户期望字体。同一缺失资源最多处理 1–2 轮，并在 `finish` 摘要中说明替代。
 - **Walking Skeleton 工作流**：先写最小可编译骨架并编译通过，再逐层丰富
   内容，禁止一次性写完整套复杂宏再编译。
-- **输出 token 上限放宽**：全局默认 `llm.max_tokens` 由 4096 提至 8192
+- **输出 token 上限放宽**：全局默认 `llm.max_tokens` 已提升至 16384
   （`backend/core/config.py` / `config.example.json` / 设置分区组件同步）。
   template_gen 仍保留 `max(cfg.llm.max_tokens, 8192)` 下限，即使用户把全局
   `max_tokens` 调得很小，`.cls` 等大文件在工具参数尾部也不会被截断导致

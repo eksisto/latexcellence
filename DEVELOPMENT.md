@@ -13,6 +13,7 @@
 | [docs/frontend.md](docs/frontend.md) | 前端开发文档 |
 | [docs/testing.md](docs/testing.md) | 测试规范 |
 | [docs/function-calling-tools.md](docs/function-calling-tools.md) | Function Calling 工具清单（全局/私有工具、配置结构） |
+| [docs/latex-package-rules.md](docs/latex-package-rules.md) | 宏包规则表维护指南（`latex_package_rules.py` 的改动模板、评审清单与验证脚本） |
 | [docs/duckduckgo-challenge.md](docs/duckduckgo-challenge.md) | DDG 验证码处理与前端交互说明 |
 | [docs/templategen-optimization-lessons.md](docs/templategen-optimization-lessons.md) | template_gen 闭环优化复盘与通用性门禁说明 |
 | [docs/plotgen-optimization-lessons.md](docs/plotgen-optimization-lessons.md) | plot_gen 闭环优化复盘与最佳实践说明 |
@@ -20,6 +21,8 @@
 | [docs/windows-temp-permissions.md](docs/windows-temp-permissions.md) | Windows 下 Codex 沙箱临时目录权限问题排查（pytest basetemp / ACL / 清理） |
 | [docs/web-access-operations.md](docs/web-access-operations.md) | Writing Chat 网络访问灰度、观测、容量检查、缓存维护与回滚 |
 | [docs/writing-chat-web-access-architecture.md](docs/writing-chat-web-access-architecture.md) | Writing Chat 网络访问架构：搜索、学术检索、分级抓取、结构化抽取与证据链 |
+| [docs/adr/0001-web-access-evaluation.md](docs/adr/0001-web-access-evaluation.md) | ADR：网络访问阶段 0 使用离线评测工具（已接受） |
+| [docs/adr/0002-web-access-stage0-dependencies.md](docs/adr/0002-web-access-stage0-dependencies.md) | ADR：网络访问阶段 0 依赖技术验证（候选已评估，生产接入暂缓） |
 | [docs/showcase.md](docs/showcase.md) | 独立展示页 |
 | [docs/multi-user.md](docs/multi-user.md) | 多用户模式设计（双模式、认证、用户空间与配额、权限协作、上传管线、Docker 沙箱、LLM 治理、反向补丁撤销、SMTP、多实例。v1+v2 合并的权威设计参考） |
 | [docs/rar-extractor-fallback.md](docs/rar-extractor-fallback.md) | RAR 解压器回退层设计（unar → bsdtar：选择层、文件名归一化、错误码映射、fixtures 与实测结论） |

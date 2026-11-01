@@ -50,7 +50,7 @@ User prompt 将待翻译纯文本和目标语言注入模板。
 
 | 层级 | 防护内容 | 失败处理 |
 | --- | --- | --- |
-| 第 1 层 | `retry_with_validation()`（最多 3 次） | LLM 输出不符 schema 时反馈重试 |
+| 第 1 层 | `retry_with_validation()`（`max_retries=3`，含首次） | LLM 输出不符 schema 时反馈重试 |
 | 第 2 层 | Marker 匹配验证 | 不一致时回退到原文 |
 | 第 3 层 | changes 契约确定性校验：主字段与原文逐字符一致但 changes 非空 → 清空虚假条目（`normalize_changes_contract`）；主字段已修改但 changes 为空 → 标记 `unlisted_changes=true`（`has_unlisted_changes`） | 清空/标记，由前端展示全文修改而非静默丢失 |
 | 第 4 层 | 异常兜底 | LLM 调用异常时返回原文 + 空 changes |
@@ -73,7 +73,7 @@ Prefix: `/api/paragraph-translate`, Tag: `paragraph_translate`
 ```
 { "type": "progress", "current": 3, "total": 12, "file_path": "..." }
 { "type": "result", "paragraph_index": 0, "data": {...} }
-{ "type": "error", "message": "...", "retrying": true }
+{ "type": "error", "message": "...", "retrying": false }
 { "type": "done", "operation_id": "..." }
 ```
 

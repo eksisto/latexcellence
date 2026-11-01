@@ -100,6 +100,7 @@ BaseParagraphCheckService
 ├── 结果写回：MD5 校验 → 原子写入
 │
 └── 多个 Hook（子类定制点）：
+    ├── llm_role（ClassVar）             → LLM 槽位角色（multi-model §6）
     ├── _get_system_prompt()              → 系统提示词（含 marker 保护约束）
     ├── _build_user_content(text)         → 构建 LLM User 内容
     ├── _get_model_cls()                  → 返回 Pydantic 响应模型类
@@ -113,7 +114,7 @@ BaseParagraphCheckService
 
 ### 1.4 CheckOperationContext 操作上下文
 
-每次 preview/check 操作生成唯一 `operation_id`（12 位 hex），关联的上下文（`CheckOperationContext`）保存在服务实例的 `_operation_contexts` 字典中：
+每次 preview/check 操作生成唯一 `operation_id`（12 位 hex），关联的上下文（`CheckOperationContext`）保存在模块级全局字典 `_operation_contexts`（带线程锁）；多用户/多实例模式下写穿共享 SQLite 的 `operation_contexts` 表实现跨副本 apply，进程字典降级为 L1 读缓存：
 
 | 字段 | 含义 |
 | --- | --- |
@@ -182,7 +183,7 @@ BaseParagraphCheckService
 
 **Marker 前缀**：`CMD`（命令）、`MATH`（公式）、`ENV`（环境）、`VERB`（逐字）、`COM`（注释）
 
-### 2.4 命令解析（第 5 步）的难点
+### 2.4 命令解析（第 8 步）的难点
 
 LaTeX 命令的参数结构复杂，需要字符级扫描：
 
@@ -445,8 +446,8 @@ apply 时携带 file_path → 精确写回对应文件
 
 采用 Zustand 5 + `persist` 中间件：
 
-- **持久化字段**：项目路径、活动文件、各模块的段落和结果、`writingChatCurrentSessionId`、`workspaceId`、`rootPath`、`mainFile`、`currentTheme`
-- **非持久化字段**：文件树、PDF URL、加载状态、`writingChatMessages`、`writingChatCompressed`
+- **持久化字段**：项目路径、活动文件、各模块的段落和结果、`writingChatSessions`、`writingChatCurrentSessionId`、`writingChatMessages`、`writingChatCompressed`、`workspaceId`、`rootPath`、`mainFile`、`currentTheme`
+- **非持久化字段**：文件树、PDF URL、加载状态
 
 刷新页面后，项目身份和检查结果自动恢复，无需重新加载。
 
@@ -646,7 +647,9 @@ Mock 返回值必须符合 Pydantic schema，确保测试的可重复性。
                          │   local  ──▶ 本地子进程（进程组建组 + 超时整树击杀，与 v1 行为逐项一致）
                          │   auto   ──▶ daemon 探测（TTL 缓存）命中即容器，否则回落 local 并告警
                          │   docker ──▶ 强制容器；daemon 不可达 → sandbox_unavailable（503）
-                         ├─ 全局并发：进程内 Semaphore(max_concurrent_global)
+                         ├─ 全局并发：进程内计数闸门 _GlobalGate（线程锁计数 + 轮询等待，
+                         │              跨事件循环安全——asyncio.Semaphore 与循环绑定，
+                         │              rar 解压 worker 的独立循环无法复用）
                          ├─ 每用户并发：sandbox_slots 表租约（多用户模式；BEGIN IMMEDIATE 原子校验，
                          │              TTL = 超时+120s，崩溃残留由维护循环清理，P7 起跨副本生效）
                          └─ docker 后端：一次性容器（无网络 / 只读根 fs + tmpfs /tmp /

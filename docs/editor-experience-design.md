@@ -1,12 +1,9 @@
 # 编辑器写作体验收口设计方案（editor v3）
 
-> **状态：已实施。** 本文是编辑器生产力改造（[editor-productivity-design.md](editor-productivity-design.md)，
-> 八阶段已全部实施）完成后，对其"非目标（记入 roadmap）"清单的收口方案，作为分阶段实施的
-> 依据与变更对照基线。阶段五（助手联网）的确认流时序已过专项设计评审（见 Q12），按评审
-> 结论拆为"5a 工具接入（含 DDG 挑战）"与"5b 确认流"两个子阶段。5a 先行落地工具接入
-> （联网/学术工具直通执行、DDG 挑战侧栏完成）。5b 落地确认流，把 5a 的直通形态升级为
-> 联网/学术九工具**逐次确认**（项目只读工具维持直通）。确认粒度取评审 §1.2 方案 A，
-> 即计划 §5 验收"经确认执行；拒绝后模型收到取消语义"的本意。已实施形态见
+> **状态：已实施。** 本文是编辑器生产力改造（[editor-productivity-design.md](editor-productivity-design.md)）
+> 完成后，对其「非目标（记入 roadmap）」清单的收口方案（editor v3）。助手联网
+> 确认流按决策 Q12 拆为 5a 工具接入与 5b 确认流两批交付，最终形态为联网/学术
+> 九工具**逐次确认**（项目只读工具维持直通）。已实施形态见
 > [modules/editor.md](modules/editor.md)。
 > 如行为与本文冲突，先修订本文再动代码。
 
@@ -66,7 +63,7 @@ Overleaf 级体验相比仍有落差，全部对应 v2 计划记入 roadmap 的�
 | Q9 | 诊断实现路线 | 自研纯模块 `diagnostics.js`（node --test 可测）+ `@codemirror/lint`（新增显式依赖，MIT）；首轮只报未闭合环境（栈匹配，verbatim 类环境内豁免）与花括号不配平（复用 `outlineScan.stripComment` 同源规则豁免注释/`\verb`）；上限 200 条；chktex 镜像集成为可选增强，首轮不做（镜像体积与噪声治理成本，触发条件：纯模块误报率实测不达标） |
 | Q10 | 跨文件大纲数据源 | 后端新增 `GET /api/project/outline` 全项目 `.tex` 分节扫描（沿袭 `latex-symbols` 先例：只读扫描 + `asyncio.to_thread()` + 项目级缓存保存失效）；UI 在左栏大纲面板增加"本项目"视图，按文件分组、激活文件置顶展开，点击联动开 tab（复用错误跳转的 `pendingErrorJumpRef` 换档机制） |
 | Q11 | KaTeX 固定预览卡形态 | 不新增右栏 tab（已被编译/助手占用）；编辑区底部、状态栏上方悬浮卡片，防抖约 400ms 跟随光标所在公式渲染，空态隐藏；识别复用 `formulaHoverScan.findFormulaAt`，KaTeX 复用 `formulaHover.loadKatex` 单例 |
-| Q12 | 助手工具范围与确认流 | `_EDITOR_TOOL_NAMES` 扩入联网搜索与学术检索工具集（以 Writing Chat 主对话注册表为准）；编辑器 SSE 流新增 `tool_pending` 事件，确认/取消复用 Writing Chat 的 pending_interactions 基础设施与端点；DDG 挑战交互复用 `hooks/writing-chat/captcha` 通道（本阶段改动面最大，动工前需单独过一轮确认流时序的设计评审——既定门槛） |
+| Q12 | 助手工具范围与确认流 | `_EDITOR_TOOL_NAMES` 扩入联网搜索与学术检索工具集（以 Writing Chat 主对话注册表为准）；编辑器 SSE 流新增 `tool_pending` 事件，确认/取消复用 Writing Chat 的 pending_interactions 基础设施与端点；DDG 挑战交互复用 `hooks/writing-chat/captcha` 通道；确认粒度为联网/学术九工具**逐次确认**（项目只读工具直通），实施拆为 5a 工具接入与 5b 确认流两批交付 |
 | Q13 | 阶段顺序 | 一 SyncTeX → 二 自定义片段 → 三 实时诊断 → 四 跨文件大纲 + 预览卡 → 五 助手联网（一至四相互无依赖，三与四可并行）；六 Lezer 语法与一至五无依赖，可在任意时点插入（内部再分 6a 高亮 / 6b 折叠缩进两批交付） |
 | Q14 | Lezer 自研路线 | 自研 MIT 子集语法（维护者已确认）：grammar 源置于 `frontend/src/lib/editor/latexGrammar/`，经 `lezer-generator`（MIT，devDependency）在 dev/build 前编译，生成物不入库；`.tex`/`.sty`/`.cls` 走 Lezer 语法、`.bib` 暂保留 StreamLanguage（自研最小 bib 语法列可选尾项）；`language.js` 契约改为 `latexLanguageExtension(suffix)`；子集范围 P0 = 注释/命令及参数/行内行间数学/环境/分组/上下标/verbatim 原样，P1 = 环境与分节折叠 + 环境体缩进；不追求 catcode 级完全正确，依赖 Lezer 错误恢复保证极端输入不崩 |
 
@@ -158,7 +155,7 @@ Overleaf 级体验相比仍有落差，全部对应 v2 计划记入 roadmap 的�
   渲染；无公式/渲染失败静默隐藏（与悬停浮层的失败文案策略不同：固定卡
   常驻场景下错误提示反而构成噪声）。
 
-### 4.5 阶段五：编辑器助手接入联网搜索与学术检索（动工前过专项评审，见 Q12）
+### 4.5 阶段五：编辑器助手接入联网搜索与学术检索
 
 - **工具白名单**：`editor_chat.py` 的 `_EDITOR_TOOL_NAMES` 扩入 Writing Chat
   主对话注册的联网搜索与学术检索工具（`web_search`、`search_scholarly_works`
@@ -168,7 +165,7 @@ Overleaf 级体验相比仍有落差，全部对应 v2 计划记入 roadmap 的�
   确认/取消卡片，动作复用 Writing Chat 既有 confirm/cancel 端点与
   pending_interactions 基础设施（多用户表驱动 + 单用户 Event 路径不变）；
   DDG 挑战复用 `hooks/writing-chat/captcha` 的交互通道在助手侧栏内完成。
-  实施落定（5b）：确认粒度为联网/学术九工具**逐次确认**（项目只读工具
+  确认粒度为联网/学术九工具**逐次确认**（项目只读工具
   直通）；pending 先登记后下发事件（修复 Writing Chat 既有"yield 先于
   登记"的亚秒确认 404 缺陷）；等待在流内挂起（与 Writing Chat pending
   同构）；拒绝 / TTL 120s 过期统一注入取消语义 tool result。
@@ -176,9 +173,8 @@ Overleaf 级体验相比仍有落差，全部对应 v2 计划记入 roadmap 的�
   约定（何时检索、引用如何给到缓冲区建议）；提示词改动遵循集中管理规范。
 - **功能开关**：沿用网络访问既有灰度开关与 `editor.assistant_enabled` 双重
   把关，不新增配置项；SSE 事件归约扩展 `assistantStream.js` 并补单测。
-- 本阶段为全部阶段中唯一跨"编辑器 ↔ Writing Chat 会话基础设施"边界的
-  改动，动工前需针对确认流时序（SSE 中断恢复、pending TTL 过期）单独
-  评审，必要时拆为"工具接入"与"确认流"两个子阶段交付。
+- 本阶段是全部阶段中唯一跨"编辑器 ↔ Writing Chat 会话基础设施"边界的
+  改动。
 
 ### 4.6 阶段六：自研 MIT Lezer 子集语法
 
@@ -206,35 +202,17 @@ Overleaf 级体验相比仍有落差，全部对应 v2 计划记入 roadmap 的�
 
 ## 5. 阶段划分与验收
 
-| 阶段 | 内容 | 验收要点 |
-| --- | --- | --- |
-| 一：SyncTeX | `-synctex=1`、forward/backward 端点、pdf.js 预览替换、双向联动 | 三引擎编译产物均可正向定位与反向跳转；既有编译页/git_diff 编译行为零变化（synctex 默认关）；pdf.js 分块懒加载首屏零请求；synctex 端点响应无绝对路径；`tests/test_api` 补端点用例（mock 沙箱执行，严禁真实网络） |
-| 二：自定义片段 | 偏好 v2 迁移、customCommands 合并层、设置分区管理 | 自定义条目可在补全/命令面板/插入三入口命中；刷新后保留；v1 偏好导出文件可导入不丢数据；清洗函数纯模块单测覆盖 |
-| 三：实时诊断 | diagnostics 纯模块 + lint 接线 + 偏好开关 | 未闭合环境/花括号失衡在编辑停顿后出现；verbatim/注释/`\verb` 内不误报；超 200 条截断；开关即时生效；纯模块单测覆盖正反例 |
-| 四：跨文件大纲 + 预览卡 | outline 端点 + 大纲双视图 + KaTeX 固定卡 | 跨文件章节点击正确开 tab 定位；保存后大纲缓存失效；当前文件视图行为不变；固定卡跟随光标、空态隐藏；端点响应无绝对路径 |
-| 五：助手联网 | 工具白名单扩展 + tool_pending 确认流 + DDG 挑战交互 | 助手可发起搜索/学术检索并经确认执行；拒绝后模型收到取消语义；挑战可在侧栏完成；开关关闭时工具不可达；assistantStream 归约单测覆盖新事件 |
-| 六：Lezer 语法（6a/6b） | latexGrammar 包 + `language.js` 按后缀分流；6a 高亮子集，6b 折叠 + 环境缩进 | 四类后缀高亮不回归（`.bib` 保持现状）；回归对照清单通过；2MB 文档键入不卡；grammar 解析树 node --test 覆盖；`THIRD_PARTY_NOTICES.md` 登记 lezer-generator |
-
-阶段一独立先行（改动面覆盖编译链路与预览层）；二至四无相互依赖；五压轴
-且动工前过专项评审；六与一至五无依赖，可在任意时点以 6a/6b 两批插入。
+全部阶段已实施。各阶段验收要点已沉淀至 [modules/editor.md](modules/editor.md)
+对应专节与「测试」清单，本文不再保留分阶段验收表。
 
 ## 6. 全局约束（每阶段适用）
 
-- 落盘仍走 save-file 单一路径 + MD5 乐观锁；synctex/outline/lint/预览全部
-  零写盘；新增端点响应不返回绝对路径，面向用户的错误消息同步三语
-  `errors` 命名空间。
-- 新增纯模块一律 node --test 单测；后端新增端点补 `tests/test_api/`
-  集成测试（Mock 沙箱与 LLM，严禁真实网络）；同步阻塞与全项目扫描一律
-  `asyncio.to_thread()`。
-- 新增依赖（`pdfjs-dist`、`@codemirror/lint`、`lezer-generator` /
-  `@lezer/generator`，均为 MIT / Apache-2.0 宽松许可）登记
-  `THIRD_PARTY_NOTICES.md`；不新增 `config.json` 配置项（行为开关全部走
-  编辑器偏好通道）。
-- 每阶段同步更新 `docs/modules/editor.md` 与 `PROJECT_SUMMARY.md`；全部
-  完成后将本文状态改为"已实施"，并勾销 [editor-productivity-design.md](editor-productivity-design.md)
-  §2 非目标清单对应条目与 [editor-design.md](editor-design.md) 非目标中"助手接入
-  联网搜索/学术检索"项；README 编辑器条目增量。（本条全局收尾义务已执行：本文
-  状态为"已实施"，两处旧非目标已勾销，README 编辑器条目已增量核对。）
+各阶段共同遵循的全局约束——落盘走 save-file 单一路径 + MD5 乐观锁、查询类
+端点零写盘且响应无绝对路径、面向用户的错误消息同步三语 `errors` 命名空间、
+纯模块 node --test 单测、同步阻塞与全项目扫描经 `asyncio.to_thread()`、新增
+依赖（均为宽松许可）登记 `THIRD_PARTY_NOTICES.md`——已并入
+[modules/editor.md](modules/editor.md) 各专节与项目级规范（AGENTS.md），
+本文不再单独保留义务清单。
 
 ## 附录：Lezer 语法升级选型记录（自研 MIT 子集）
 

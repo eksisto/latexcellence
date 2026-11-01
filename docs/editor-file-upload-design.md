@@ -28,7 +28,7 @@
 | --- | --- | --- | --- |
 | D1 | 上传类型 | **任意格式** + §3 护栏 | zip 导入已允许任意类型进项目目录，写侧类型白名单不构成实质安全边界。真正的边界在回读（raw-file）与执行（编译沙箱）侧，二者均已独立设防。文本后缀（`.tex/.bib/.sty/.cls`）一并涵盖。上传**不走** `check_latex_corruption`（该校验面向 LLM 输出的 JSON 损坏特征，用户自有文件与 zip 导入口径一致） |
 | D2 | 树联动行为变化 | 接受 | 扩展树扫描后，旧项目 zip 自带的资源文件开始出现在树中。树展示项目真实内容是更正确的行为，且预览通路现成 |
-| D3 | 上传入口 | 根标题行 + 目录行 hover「上传」按钮（与新建 `+` 同模式），系统文件选择框**多选** | 与现有交互语言一致，成本最小。拖拽与工具栏入口列入非目标 |
+| D3 | 上传入口 | 根标题行 + 目录行 hover「上传」按钮（与新建 `+` 同模式），系统文件选择框**多选**。后续被 [editor-file-context-menu-design.md](editor-file-context-menu-design.md) Q2 取代：目录行 hover 图标已全部删除，「上传到此处」改由目录右键菜单承接，头部根级三键保留 | 与现有交互语言一致，成本最小。拖拽与工具栏入口列入非目标 |
 | D4 | 上传成功动作 | **单文件**成功 toast 带「插入引用」按钮。多文件仅汇总提示 | 插入是「刚好要引用它」的单文件场景，批量插入没有合理语义 |
 | D5 | 同名冲突 | **拒绝**（409 `file_exists`，与 create-file 同语义） | 静默覆盖丢数据。自动重命名导致插入路径与预期不符 |
 | D6 | 单文件大小上限 | **20MB 后端常量**，不引入配置项 | 对图片/PDF 图充足。避免为小功能付出配置项 + 设置页 + 首页点线目录的同步成本。多用户另有项目配额预检兜底 |
@@ -96,7 +96,7 @@
 ### 5.1 `ProjectExplorer.jsx`
 
 - props：`onUploadFile(dirPath | null, files: FileList)` 与 `uploading`。由 `EditorPage` 在 `canWrite` 时传入，工作台页只读用法不受影响。
-- 入口：根标题行 Upload 图标按钮（紧邻现有 `+`）；目录行 hover Upload 按钮（紧邻目录行 `+`）。组件内置隐藏 `<input type="file" multiple>` 由按钮触发，`uploadDirRef` 记录触发入口对应的目标目录（null = 项目根）。上传中按钮呈 loading 态防重复提交。
+- 入口：头部根级 Upload 图标按钮（紧邻现有 `+`）。**后续变更**：目录行 hover Upload 按钮已被 [editor-file-context-menu-design.md](editor-file-context-menu-design.md) Q2 收敛删除，「上传到此处」改由目录右键菜单承接。组件内置隐藏 `<input type="file" multiple>` 由按钮触发，`uploadDirRef` 记录触发入口对应的目标目录（null = 项目根）。上传中按钮呈 loading 态防重复提交。
 - 图标：`IMAGE_FILE_RE` 命中 → Image 图标；其余非可编辑文本类型 → 通用 File 图标。
 
 ### 5.2 上传流程（`frontend/src/hooks/useEditorBuffer.js`）
@@ -128,14 +128,13 @@
 
 ## 6. 测试基线
 
-- `tests/test_api/test_editor_file_ops.py`：上传任意后缀成功（树含新文件，根/子目录）；单文件超限 413（落盘前拦截）；同名冲突 409；父目录缺失 400；隐藏目录 / 点开头文件名 / 控制字符 / 空文件名 / 反斜杠分隔符拒绝；产物黑名单不进 `file_tree`（含 `.synctex.gz` 双后缀命中，资源文件保留）；删除任意非隐藏后缀成功；主文档删除保护回归；raw-file 对非白名单后缀仍拒绝。
-- `tests/test_multiuser/test_editor_file_ops.py`：owner 上传成功刷新用量且不产生 workspace_edit_ops 记账；配额预检超限 413（落盘前拦截）；viewer 上传 403；CSRF 缺失与未登录 401；错误消息路径脱敏。
-- 前端（`frontend/test/editorFiles.test.mjs`，node --test）：`validateUploadFileName` 消毒分支与 `joinProjectPath` 路径拼接。
-- 遵循既有 Mock 原则：单元测试不发起真实网络请求。
+测试覆盖已收录于 [editor.md](modules/editor.md)「测试」清单（单用户 /
+多用户 `test_editor_file_ops.py` 与前端 `editorFiles.test.mjs`），
+本文不再单独保留基线清单。遵循既有 Mock 原则：单元测试不发起真实网络请求。
 
 ## 7. 文档索引
 
-实施时的文档同步义务已履行，行为描述收录于常设文档：[editor.md](modules/editor.md)（上传 API、文件树操作与测试覆盖）、[backend-core.md](backend-core.md)（project_manager 树扫描口径）、`PROJECT_SUMMARY.md` / `DEVELOPMENT.md`（索引）、`README.md`（用户功能简介）。本节仅作索引，无其余义务清单。
+行为描述收录于常设文档：[editor.md](modules/editor.md)（上传 API、文件树操作与测试覆盖）、[backend-core.md](backend-core.md)（project_manager 树扫描口径）、`PROJECT_SUMMARY.md` / `DEVELOPMENT.md`（索引）、`README.md`（用户功能简介）。本节仅作索引。
 
 ## 8. 非目标
 

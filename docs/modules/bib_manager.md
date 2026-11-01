@@ -100,7 +100,7 @@ bib_manager/
 
 配置变更时需要调用 `reset_provider_manager()` 重建单例。
 
-所有 Provider 共享进程级 `httpx.AsyncClient`（懒创建、按请求传超时），服务关闭时由 `close_provider_manager()` 统一释放。
+各 Provider 持有进程级懒创建的共享 `httpx.AsyncClient`（连接复用、按请求传超时），服务关闭时由 `close_provider_manager()` 统一释放。
 
 ## Service 核心方法
 
@@ -108,7 +108,7 @@ bib_manager/
 | --- | --- |
 | `analyze_format(example)` | 格式识别：确定性规则层优先，未命中时 LLM 兜底 → ReferenceFormatResult |
 | `extract_from_text(text, format_info)` | LLM 从文本提取元数据 |
-| `extract_from_image(image_data, content_type, format_info)` | LLM Vision 从截图提取元数据 |
+| `extract_from_images(image_items, format_info)` | LLM Vision 批量提取多张截图元数据（`/extract` 端点接受多文件上传）；`extract_from_image` 为单图包装 |
 | `generate_bibtex(metadata, format_info, existing_keys)` | LLM 生成 BibTeX → BibEntry |
 | `generate_latex_code(metadata, format_info, bib_file_path, language)` | 生成 LaTeX 代码片段（注释跟随 UI 语言） |
 | `lookup_doi(doi)` | 委托 ProviderManager 查询多数据源聚合元数据 |
@@ -167,18 +167,22 @@ Prefix: `/api/bib-manager`
 
 ## Provider 配置
 
-在 `config.json` 的 `bib_manager.providers` 节点中，可为每个数据源独立开关：
+在 `config.json` 的 `features.bib_manager` 节点中，可为每个数据源独立开关（`enabled` 控制整个参考文献管理模块，`format_configs_dir` 为格式配置文件目录）：
 
 ```json
 {
-  "bib_manager": {
-    "providers": {
-      "crossref": { "enabled": true },
-      "arxiv": { "enabled": true },
-      "datacite": { "enabled": true },
-      "openalex": { "enabled": false },
-      "europepmc": { "enabled": false },
-      "semantic_scholar": { "enabled": false }
+  "features": {
+    "bib_manager": {
+      "enabled": true,
+      "format_configs_dir": "data/formats/",
+      "providers": {
+        "crossref": { "enabled": true },
+        "arxiv": { "enabled": true },
+        "datacite": { "enabled": true },
+        "openalex": { "enabled": false },
+        "europepmc": { "enabled": false },
+        "semantic_scholar": { "enabled": false }
+      }
     }
   }
 }

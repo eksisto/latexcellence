@@ -14,7 +14,7 @@
 还原 LaTeX:      \textbf{这是一各错字} $x^2$ 更多内容
 ```
 
-**解析流水线**：9 步顺序执行（VERB → URL → 逐字类环境 → COM → ENV → MATH → CMD → 空白规范化）。Marker 格式为 `__{PREFIX}_{COUNTER:04d}__`，PREFIX 为 CMD / MATH / ENV / VERB / COM。还原时按创建顺序（counter）降序替换（外层 marker 先还原），非标准 marker 回退为按长度降序。
+**解析流水线**：9 步顺序执行（VERB → URL → 逐字类环境 → COM → ENV → 展示数学 → 行内数学 → CMD → 空白规范化）。Marker 格式为 `__{PREFIX}_{COUNTER:04d}__`，PREFIX 为 CMD / MATH / ENV / VERB / COM。还原时按创建顺序（counter）降序替换（外层 marker 先还原），非标准 marker 回退为按长度降序。
 
 ### System Prompt 核心约束
 
@@ -34,11 +34,11 @@ system prompt 强制约束 LLM：marker（`__CMD_0000__`）代表 LaTeX 命令�
 | `check_typos_stream` | SSE 流式逐段推送检查进度 |
 | `apply_changes` | 还原 marker + 原子写回源文件 |
 
-**批量处理**：按 `batch_size` 分批，`asyncio.gather` + `Semaphore(max_concurrency)` 并发，批次间等待 `request_interval`。
+**批量处理**：按 `batch_size` 分批，`asyncio.gather` + `Semaphore` 并发（容量取 `llm.resolved_max_concurrency()`，即合并模型档案覆盖项后的口径），批次间等待 `request_interval`。
 
 **三层防护**：
 
-1. `retry_with_validation()` 校验 JSON schema → 反馈重试
+1. `cached_llm_validate()` 校验 JSON schema → 反馈重试（内部走 `json_utils.retry_with_validation()`，并带段落级结果缓存：整篇复查时未变化的段落不产生 LLM 调用）
 2. Marker 匹配验证 → 不一致时回退原文
 3. 异常兜底 → 返回原始文本 + 空 changes
 

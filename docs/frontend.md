@@ -39,7 +39,11 @@
 | `/versions` | VersionManagePage | JSON request |
 | `/writing-chat` | WritingChatPage | SSE（useWritingChat） |
 | `/bib-manager` | BibManagerPage | JSON request |
-| `/plot-gen` | PlotGenPage | **SSE Agent 流**（手写 fetch reader，无 hook） |
+| `/plot-gen` | PlotGenPage | **SSE Agent 流**（usePlotGen） |
+| `/editor` | EditorPage | 网页编辑器（多缓冲区 tab、编译联动、编辑器侧 AI 助手 SSE，机制见 [modules/editor.md](modules/editor.md)） |
+| `/login` / `/register` / `/forgot-password` / `/reset-password` / `/waiting` | LoginPage / RegisterPage / ForgotPasswordPage / ResetPasswordPage / PendingApprovalPage | 认证页（多用户模式，见下文「多用户模式前端」） |
+| `/projects` | ProjectWorkbenchPage | 项目工作台（多用户模式） |
+| `/admin` | AdminPage | 管理后台（仅 admin，多用户模式） |
 
 全局右上角工具栏（AppToolbar）包含 LanguageSwitcher、ThemeSwitcher、ThemeToggle、工作区入口、SettingsDialog，以及认证页改绑后端入口（AuthConnectionButton：未登录/待审批时显示）。`App.jsx` 内联了一份全站共享的右下角 `\LaTeX` 字标背景装饰（`bgSvg`，含 `--primary` 圆形 + 双色字标路径）。
 
@@ -47,7 +51,7 @@
 
 `TemplateCenterPage`（模板中心）以搜索 + 分类 chip + 「内置模板/我的模板」tab + 卡片网格展示 `/api/templates` 列表。组件位于 `components/template-center/`（卡片、详情、上传、编辑、创建项目、另存为、生成入库对话框与缩略图）。从模板创建项目成功后跳转 `/workspace`：多用户沿用项目工作台的打开模式（`clearProject` → `setOpenedProject` → 由工作台恢复链路完成打开，含主文档段落拉取与角色同步）。单用户以新 `project_path` 触发既有恢复链路。功能开关关闭时页面展示空态，欢迎页/工作台/工作区/编辑器各入口全部隐藏。
 
-`PlotGenPage` 与 TemplateGenPage 同模式：`api.plotGen.upload` 先上传数据，`generate`/`refine` 通过手写 `fetch` reader 消费 `/plot-gen/agent/generate` 等 SSE 流，在本地 `steps` state 累积 Agent 事件并渲染时间线。会话文件与 trace 通过 `/files`、`/file`、`/trace` 端点加载。
+`PlotGenPage` 与 TemplateGenPage 同模式：`api.plotGen.upload` 先上传数据，`generate`/`refine` 经 `usePlotGen` hook 以 `fetch` reader 消费 `/plot-gen/agent/generate` 等 SSE 流，在本地 `steps` state 累积 Agent 事件并渲染时间线。会话文件与 trace 通过 `/files`、`/file`、`/trace` 端点加载。
 
 `StyleModifyPage` 顶部使用 segmented control 切换项目 Agent 与粘贴代码。项目 Agent 模式通过 `useStyleModifyAgent` 消费 `/style-modify/agent/run` 和 refine SSE，展示工具步骤、逐文件 diff、编译状态、proposal 操作、refinement 输入和 trace 查看/导出。粘贴代码模式保留旧交互。
 
@@ -57,7 +61,7 @@ WelcomePage 采用「标题页 + 点线目录」构图：字标、slogan、「�
 
 使用 Zustand 5 + `persist` 中间件，持久化键 `"latexcellence-project"`。setter 支持 function updater 模式。持久化水合完成后设置 `hydrated: true`。
 
-状态切片：水合状态、功能开关、系统状态（主题色、workspaceId）、项目状态（路径、文件树、主文件）、style_modify Agent 恢复标识（session_id / revision / operation_id / mode）、写作助手（会话列表、消息）、各检查模块段落/结果、编译结果/进度、加载状态。`partialize` 只持久化 Agent 恢复所需标识，不持久化完整源码、diff 和 trace。
+状态切片：水合状态、功能开关、系统状态（主题色、workspaceId）、项目状态（路径、文件树、主文件）、style_modify Agent 恢复标识（session_id / revision / operation_id / mode）、写作助手（会话列表、消息）、各检查模块段落/结果、编译结果/进度、加载状态。`partialize` 持久化项目身份（含多用户 `projectId` / `projectRole`）、主题、style_modify Agent 恢复标识、各检查模块段落与结果（刷新后保鲜恢复）以及写作会话（列表、当前会话、消息、压缩标记）；不持久化完整源码、diff 和 trace。
 
 ### 程序化 UI 状态 `store/uiStore.js`
 
@@ -71,7 +75,7 @@ WelcomePage 采用「标题页 + 点线目录」构图：字标、slogan、「�
 
 维护者可在构建时配置默认后端地址：在 `frontend/.env`（模板见 `.env.example`）中设置 `VITE_API_BASE_URL` 后重新 `npm run build`，产物默认即连接该地址，用户打开前端无需手动填写。运行时优先级：设置页（localStorage）→ `VITE_API_BASE_URL` → 内置默认 `http://localhost:8000/api`。dev 模式下 Vite 代理目标也从该变量派生（去掉末尾 `/api`）。
 
-API 按功能分组暴露（health、config、project、typoCheck、expressionOpt、terminologyCheck、paragraphTranslate、formulaOCR、tableOCR、templateGen、templateLibrary、codeReview、compile、gitDiff、styleModify、formatConverter、bibManager、writingChat），LLM 相关接口自动注入 `language` 参数。`templateGen.generate` 通过 `fetch` reader 解析 SSE 流（与 `writingChat.send` 同模式），实时推送 `plan`/`tool_call`/`tool_result`/`compile`/`warning`/`done`/`error` 事件。`templateGen.download` 支持下载整个沙箱为 ZIP 文件。`templateGen.trace` / `templateGen.downloadTrace` 支持查看与导出 Agent 运行追踪日志。`styleModify.agent` 分组提供 run、refine、session、trace、apply、undo、delete 接口，run/refine 使用 SSE，其余使用 JSON。
+API 按功能分组暴露（health、config、project、typoCheck、expressionOpt、terminologyCheck、paragraphTranslate、formulaOCR、tableOCR、templateGen、templateLibrary、codeReview、compile、gitDiff、gitManage、styleModify、formatConverter、bibManager、writingChat、plotGen），LLM 相关接口自动注入 `language` 参数。`templateGen.generate` 通过 `fetch` reader 解析 SSE 流（与 `writingChat.send` 同模式），实时推送 `plan`/`tool_call`/`tool_result`/`compile`/`warning`/`done`/`error` 事件。`templateGen.download` 支持下载整个沙箱为 ZIP 文件。`templateGen.trace` / `templateGen.downloadTrace` 支持查看与导出 Agent 运行追踪日志。`styleModify.agent` 分组提供 run、refine、session、trace、apply、undo、delete 接口，run/refine 使用 SSE，其余使用 JSON。
 
 ## 工具模块
 
@@ -81,7 +85,13 @@ API 按功能分组暴露（health、config、project、typoCheck、expressionOp
 
 ### utils/errorMessages.js
 
-后端英文错误消息 → 当前语言翻译。精确匹配 + 正则模式匹配，翻译资源位于 `errors` 命名空间。调用点包括 `request()`、`requestForm()`、`useParagraphCheck.js`、`useWritingChat.js`。
+后端英文错误消息 → 当前语言翻译。精确匹配 + 正则模式匹配，翻译资源位于 `errors` 命名空间。调用点包括 `request()`、`requestForm()`、`useParagraphCheck.js`、`useWritingChat.js`。正则模式资源独立在 `utils/errorPatterns.js`。
+
+### utils/ 其他共享模块
+
+- `multiUserProject.js`：多用户项目状态恢复的共享纯函数（`useParagraphCheck` 恢复链路在用）
+- `templateCenter.js`：模板中心共享工具
+- `uploadQueue.js`：分片上传队列（并发 3、指数退避、断点续传，供 `UploadProjectDialog` 使用，见「多用户模式前端」）
 
 ### utils/modelProfiles.js
 
@@ -117,7 +127,7 @@ highlight.js 的按需注册与统一入口：
 
 界面语言是纯前端设置：由工具栏的 `LanguageSwitcher.jsx` 切换（与主题控件同款下拉交互），选择结果经 i18next LanguageDetector 缓存到 localStorage。它不属于后端 config.json，因此后端未连接、未登录（含多用户非管理员）时同样可以切换。
 
-新增中文文案时，需同步更新 `zh.json` 与 `zh-TW.json`。
+新增文案时，需同步更新 `zh.json` / `zh-TW.json` / `en.json` 三语（`test/i18nLocales.test.mjs` 的 i18nCoverage 单测会拦截漏配）。加载策略：`zh` 静态打入首屏 bundle，`zh-TW` / `en` 经 `lazyLocaleBackend` 按需动态加载。
 
 ## 核心组件
 
@@ -128,13 +138,13 @@ highlight.js 的按需注册与统一入口：
 | `MarkerText.jsx` | 将 `__CMD_NNNN__` 等 marker 解析为彩色内联标签；`variant="code"`（默认）将纯文本片段渲染为 `.code-inline` 并做 LaTeX 高亮（渲染期派生 HTML，按 token 经 `useMemo` 缓存），`variant="text"` 保持原样（用于 diff 等已有语义配色的场景）。仅用于段落预览等含 marker 的展示场景。**结果卡片中**的 `change.original`/`change.corrected` 等字段因后端已还原 marker，直接以文本渲染，无需 `MarkerText` 包裹 |
 | `ParagraphContext.jsx` | 展开显示当前段落前后上下文 |
 | `ProjectExplorer.jsx` | 递归文件树（工作台页与编辑器页共享）：目录展开/折叠、文件选择、**右键菜单**（树行 / 树背景 / 标题栏挂 base-ui ContextMenu，菜单项清单由 `lib/editor/contextMenuItems.js` 纯函数按目标类型矩阵产出，右键行临时光，viewer 与空树不挂载）、拖拽移动（原生 HTML5 DnD，落点高亮 + 悬停自动展开）、新建/删除文件夹、重命名、上传与设为主文件入口；行内 hover 图标已收敛，头部根级三键保留；机制详见 [modules/editor.md](modules/editor.md) |
-| `PDFPreview.jsx` | iframe 嵌入 PDF 预览 |
+| `PDFPreview.jsx` | PDF 预览：包装 `PdfJsPreview` 以 pdf.js 渲染（editor v3 阶段一替换 iframe 方案），支持程序化滚动定位与取点 |
 | `components/editor/BinaryFilePreview.jsx` | 二进制只读预览唯一渲染分支：位图 `<img>` 居中 contain / PDF 走 `PDFPreview`，加载文案经 `loadingKey` 定制；填满父容器高度的纯渲染契约（blob URL 拉取与释放由调用方负责），编辑器覆盖层 `FilePreviewOverlay` 与工作台文件树预览共用 |
 | `PromptEditor.jsx` | 自定义提示词编辑框 |
 | `ConnectionPanel.jsx` | 后端连接面板：编辑 API 基地址 / 访问令牌并测试连接，打开对话框时自动探测一次连接状态 |
 | `settings/` 分区组件 | 设置对话框各配置分区（Server / Security / LLM / Models 模型管理 / Features / Function Calling / HTTP / Logging / MultiUser / Sandbox / Smtp）与共享原语（`ConfigSection` / `CheckboxField` / `NumberField`） |
 | `settings/NumberField.jsx` | 设置分区共享数字输入（草稿态）：清空/删除等非法中间值不回弹，失焦时归一化到 `[min, max]`，输入中仅合法整数即时提交。MultiUserSection 与 SmtpSection（端口/限速/重试）共用 |
-| `ModelBadge.jsx` | 功能入口处的当前模型徽标（多模型支持）：展示该功能槽位两级解析后的「档案名 · 模型名」，数据源 `GET /api/llm/routes`（进入页面时拉取一次，不随每次请求刷新，失败静默不渲染）；点击经 `uiStore` 打开设置对话框并定位模型管理分区，多用户普通用户无设置入口时退化为纯展示。挂载于 OCR 页、各逐段检查页、Agent 页与写作助手 Chat 页等功能入口 |
+| `ModelBadge.jsx` | 功能入口处的当前模型徽标（多模型支持）：展示该功能槽位两级解析后的「档案名 · 模型名」，数据源 `GET /api/llm/routes`（进入页面时拉取一次；设置保存后 `uiStore` 的 `modelRoutesVersion` 自增触发重拉，改派模型即时刷新；失败静默不渲染）；点击经 `uiStore` 打开设置对话框并定位模型管理分区，多用户普通用户无设置入口时退化为纯展示。挂载于 OCR 页、各逐段检查页、Agent 页与写作助手 Chat 页等功能入口 |
 | `SettingsDialog.jsx` | 设置对话框外壳：加载/保存 config.json、后端连接面板与各配置分区组装；功能开关保存后同步全局 Store |
 | `FolderPickerDialog.jsx` | 文件夹选择对话框，逐级进入子文件夹 |
 | `MarkdownRenderer.jsx` | 基于 react-markdown + remark + rehype-katex |
@@ -153,6 +163,7 @@ highlight.js 的按需注册与统一入口：
 | `UndoRedoButtons.jsx` | 可复用撤销/重做按钮组：内部使用 `useUndoRedo`，轮询 undo-status（页面不可见时暂停），支持 Ctrl+Z / Ctrl+Shift+Z / Ctrl+Y 快捷键与撤销确认弹窗；轮询 interval 与快捷键监听均为组件级共享（全应用各只挂一份，多实例不叠加）；用于 workspace、逐段检查各页与参考文献管理（文献库） |
 | `ProgressBar.jsx` | 检查进度条组件 |
 | `UnlistedChanges.jsx` | 展示「模型修改了全文但未列出条目」（unlisted_changes）的琥珀色提示：`UnlistedChangesBadge`（卡片头标记）+ `UnlistedChangesBody`（全文预览 + 应用/忽略），typo_check / expression_opt / paragraph_translate 共用，全文经 MarkerText 渲染 |
+| `components/editor/StaleCheckBanner.jsx` | 检查结果保鲜横幅：`useParagraphCheck` 的 `staleFiles` 非空时提示检查结果可能过期并提供重新检查入口，逐段检查各页共用 |
 | `ColorField.jsx` | 颜色选择器组件 |
 | `BibManagerLibrary.jsx` | 参考文献库管理面板（文件列表、条目 CRUD、重复检测、统计）；写操作入口（撤销/重做、条目编辑/删除）经 `useCanWrite` 门控，viewer 只读 |
 | `FormatResultCard` | 格式识别结果展示卡片（`React.memo` 组件，展示格式名称、置信度、字段列表、LaTeX 样式推荐） |
@@ -163,6 +174,7 @@ highlight.js 的按需注册与统一入口：
 
 - **档案卡片**：名称 / base_url / api_key / model / 能力勾选（vision、reasoning），可选覆盖项（temperature、max_tokens、请求间隔、并发、上下文窗口、探测地址、extra_body）放折叠区，空值 = 继承全局；已保存档案 id 只读，被任一槽位引用的档案禁用删除（后端保存校验兜底拒绝）；
 - **槽位指派**：每个角色槽位一个下拉框，选项经 `utils/modelProfiles.js` 按能力过滤（如 OCR 槽只列出含 vision 的档案）；非 default 槽首位为「跟随 default」，default 槽首位为「使用全局默认配置」（内置档案）。
+- **连通性测试**：每个档案卡片提供测试入口，经 `POST /api/llm/test` 以服务端真实配置发送最小补全验证连通性；API Key 以掩码协议处理（测试不回显明文），测试期间禁用保存按钮。
 
 ## 核心 Hook
 
@@ -189,6 +201,8 @@ highlight.js 的按需注册与统一入口：
 | `useBibFileSave.js` | BibManager Step 4：Bib 文件写入与条目管理 |
 | `useLatexGeneration.js` | BibManager Step 5：LaTeX 代码生成 |
 
+> 编辑器类 hook（`useEditorBuffer` / `useEditorAssistant` / `useEditorCompile` / `useEditorFormat` / `useEditorOutline`）与 `store/editorStore.js` 不在本表，见 [modules/editor.md](modules/editor.md)。
+
 ### `useParagraphCheck` 配置接口
 
 | 参数 | 类型 | 默认值 | 说明 |
@@ -199,7 +213,7 @@ highlight.js 的按需注册与统一入口：
 | `storeSlice` | object | 必填 | Zustand store 切片键（paragraphs, results, loading...） |
 | `messages` | object | 见源码 | 自定义提示文案（加载中、成功等） |
 
-**返回值**：`projectPath`、`activeFile`、`workspaceId`、`texFiles`、`paragraphs`、`results`、`isLoading`、`progress`、`restoring`、`applyingAll`、`isPaused`、`error`、`message`、`resolveInput`、`activeFiles`、`operationId`、`handlePreview`、`handleCheck`、`handlePauseResume`、`handleStop`、`handleApplyChange`、`handleApplyAll`、`handleIgnoreChange`、`handleFileChange`。
+**返回值**：`projectPath`、`activeFile`、`workspaceId`、`texFiles`、`paragraphs`、`results`、`isLoading`、`progress`、`restoring`、`applyingAll`、`isPaused`、`error`、`message`、`resolveInput` / `setResolveInput`、`activeFiles`、`operationId`、`staleFiles`（检查后磁盘已变更的文件集合，非空时由 `StaleCheckBanner` 展示保鲜提示）、`canWrite`（viewer 写保护判定）、`handlePreview`、`handleCheck`、`handlePauseResume`、`handleStop`、`handleApplyChange`、`handleApplyAll`、`handleIgnoreChange`、`handleFileChange`。
 
 ### `useUndoRedo` 配置接口
 
@@ -273,9 +287,9 @@ highlight.js 的按需注册与统一入口：
 
 ### 请求层与认证（connection.js / api/index.js）
 
-- `multi_user.enabled` 由 `useAuthBootstrap`（`hooks/useAuth.js`）启动时探测：优先同源 `/api/config/status`，失败回退按配置 API 基地址探测；
-- 多用户模式下 `getApiBase()` 固定返回同源 `/api`（生产由 FastAPI 挂载 static/ 同源提供，dev 走 Vite `/api` 代理），`getApiToken()` 返回空串，`authHeaders()` 附加双提交 CSRF 头 `X-Latexcellence-CSRF`（值取自可读 Cookie `latexcellence_csrf`），`appendToken()` 不再追加 `?token=`（SSE 同源自动携带 Cookie）；
-- `api/index.js` 新增 `auth`（register/login/logout/me）、`admin`（list/approve/reject/disable/enable/reset-password preview·confirm/quota/delete）、`projects`（list/recycle-bin/upload/rename/remove/restore/permanentDelete/download/permissions/transfer）分组。`project.openById` 供按 `project_id` 打开；
+- `multi_user.enabled` 由 `useAuthBootstrap`（`hooks/useAuth.js`）启动时探测，顺序为**显式绑定地址 → 同源 `/api/config/status` → 配置默认基地址**（候选并行发起、按此顺序裁决）；
+- 多用户模式下 `getApiBase()` 取「显式绑定 → 探测命中 → 同源 `/api`」（生产由 FastAPI 挂载 static/ 同源提供，dev 走 Vite `/api` 代理），`getApiToken()` 返回空串，`authHeaders()` 附加双提交 CSRF 头 `X-Latexcellence-CSRF`（值取自可读 Cookie `latexcellence_csrf`），`appendToken()` 不再追加 `?token=`（SSE 同源自动携带 Cookie）；
+- `api/index.js` 新增 `auth`（register/login/logout/me + forgot-password / reset-password 找回密码、updateProfile 邮箱改绑、cleanupDerivedData 衍生数据清理）、`admin`（list/approve/reject/disable/enable/reset-password preview·confirm/quota/delete）、`projects`（list/recycle-bin/upload/rename/remove/restore/permanentDelete/download/permissions（list/add/update/remove）/transfer + `uploadSessions` 大文件分片上传端点组，见 [multi-user.md](multi-user.md) 上传管线）分组。`project.openById` 供按 `project_id` 打开；
 - 请求层 401 → `notifyUnauthorized()` → store `handleUnauthorized()` 清空认证与项目状态，路由守卫自动跳转登录页；
 - `translateError()` 支持结构化错误 `{ error, message }`，并收录全部多用户错误码（unauthorized/no_permission/quota_exceeded/invalid_csrf 等）。
 
@@ -290,7 +304,7 @@ highlight.js 的按需注册与统一入口：
 - `/login`、`/register`、`/waiting`：认证页守卫（已登录 → `/projects`）；
 - `/projects`（项目工作台）、`/admin`（仅 admin）及所有业务页面：`RequireAuth`（未登录 → `/login`）；
 - 单用户模式 `authStatus === "single"` 全部放行，行为不变；
-- 工具栏：多用户模式以图标按钮 + 悬浮提示显示登录 / 登出（提示含用户名）/ 管理入口（admin 可见），样式与主题切换等图标一致。设置按钮仅 admin 可见（配置接口仅管理员可访问）。`ConnectionPanel` 在多用户模式下被注释说明替代。
+- 工具栏：多用户模式以图标按钮 + 悬浮提示显示登录 / 登出（提示含用户名）/ 管理入口（admin 可见），样式与主题切换等图标一致。设置按钮仅 admin 可见（配置接口仅管理员可访问）。设置对话框在多用户模式下以只读说明面板替代 `ConnectionPanel`（连接由服务器统一管理）。
 
 ### 页面
 
@@ -299,10 +313,12 @@ highlight.js 的按需注册与统一入口：
 | `pages/LoginPage.jsx` | 用户名/密码/记住我，登录成功后经 `/api/auth/me` 恢复并跳转工作台 |
 | `pages/RegisterPage.jsx` | 注册（用户名/密码/确认/邮箱），按后端 IP 策略结果分支展示：自动通过 →「直接登录」成功态，否则「待审批」提交态 |
 | `pages/PendingApprovalPage.jsx` | 待管理员批准占位页 |
+| `pages/ForgotPasswordPage.jsx` | 忘记密码：提交用户名/邮箱发起找回，后端统一降级响应、不泄露账号存在性 |
+| `pages/ResetPasswordPage.jsx` | 凭邮件令牌设置新密码 |
 | `pages/ProjectWorkbenchPage.jsx` | 项目列表（我的/共享给我，含 owner 与 role）、配额用量条、上传、回收站、打开/下载/重命名/权限/删除；owner 专属操作 |
 | `pages/AdminPage.jsx` | 用户列表（待审批筛选）、批准/拒绝/禁用/启用、重置密码（两步式：先生成临时密码预览，确认后才写入）、配额调整、删除用户；用户行展示注册 IP / 最近登录 IP / 最近登录时间与「自动通过」审计标记 |
 
-配套组件：`components/AuthShell.jsx`（认证页外壳）、`components/AuthConnectionButton.jsx`（认证页工具栏「后端连接设置」入口 + 对话框）、`components/UploadProjectDialog.jsx`（zip/7z/rar 文件或 `webkitdirectory` 目录 → 分片直传：并发 3 队列、逐片 `X-Part-MD5` 校验（自研增量 MD5 工具 `utils/md5.js`，WebCrypto 不提供 MD5）、指数退避重试、暂停/继续、localStorage 持久会话支持刷新后重新选择相同内容断点续传；会话建立后的致命错误进暂停态可续传，init/status 阶段失败回 idle 允许直接重试）、`components/ProjectPermissionsDialog.jsx`（按用户名添加协作者、改角色、移除、转交 owner）。
+配套组件：`components/AuthShell.jsx`（认证页外壳）、`components/AuthConnectionButton.jsx`（认证页工具栏「后端连接设置」入口 + 对话框）、`components/ProfileEmailDialog.jsx`（邮箱改绑：验证当前密码后更新邮箱，对应 `PUT /api/auth/profile`，挂载于项目工作台）、`components/UploadProjectDialog.jsx`（zip/7z/rar 文件或 `webkitdirectory` 目录 → 分片直传：并发 3 队列、逐片 `X-Part-MD5` 校验（自研增量 MD5 工具 `utils/md5.js`，WebCrypto 不提供 MD5）、指数退避重试、暂停/继续、localStorage 持久会话支持刷新后重新选择相同内容断点续传；会话建立后的致命错误进暂停态可续传，init/status 阶段失败回 idle 允许直接重试）、`components/ProjectPermissionsDialog.jsx`（按用户名添加协作者、改角色、移除、转交 owner）。
 
 认证页改绑后端：前端实例绑定的后端不可用或用户没有账号时，未登录/待审批状态下 AppToolbar 右上角显示 `AuthConnectionButton`（样式与主题切换等工具栏图标一致），对话框复用 `ConnectionPanel` 的 `onSaved` 形态——显式「保存并刷新」按钮、不失焦静默持久化。保存到 localStorage 后刷新页面重新走启动探测。探测顺序为**显式绑定地址 → 同源 `/api/config/status` → 配置默认基地址**（`useAuth.js`），多用户模式下 API 基地址取「显式绑定 → 探测命中 → 同源 /api」（`connection.js` 的 `multiuserApiBase`）。注意：多用户会话依赖同源 Cookie + 双提交 CSRF，改绑的目标后端若为多用户模式需与前端同源部署。改绑单用户后端（令牌认证）无此限制。
 

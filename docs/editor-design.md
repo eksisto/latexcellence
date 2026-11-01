@@ -42,7 +42,7 @@
 | 层 | 选型 | 许可证 | 说明 |
 | --- | --- | --- | --- |
 | 编辑器内核 | CodeMirror 6 + `@uiw/react-codemirror` | MIT | Overleaf 同款路线；模块化体积小；补全系统支持完全自定义来源与匹配函数 |
-| LaTeX 高亮 | `@codemirror/legacy-modes` 的 `stex` 流式模式，经语言包抽象层引入 | MIT | 仅语法高亮，无智能缩进/折叠；抽象层（`lib/editor/language.js`）保证将来可整体替换 |
+| LaTeX 高亮 | `@codemirror/legacy-modes` 的 `stex` 流式模式，经语言包抽象层引入（editor v3 起 `.tex`/`.sty`/`.cls` 已切换为自研 MIT Lezer 子集语法，`.bib` 仍用 stex；见 editor-experience-design Q14） | MIT | 仅语法高亮，无智能缩进/折叠；抽象层（`lib/editor/language.js`）保证将来可整体替换 |
 | 拼音匹配 | `pinyin-pro` | MIT | `match()` 一个函数同时覆盖中文子串 / 全拼 / 首字母查询 |
 
 **许可红线（长期有效）**：社区另有基于 Overleaf Lezer 语法的 `codemirror-lang-latex`
@@ -67,6 +67,7 @@
 ```
 
 - 入口：工作台"进入编辑器"按钮携带 activeFile 跳转 `/editor?file=...`；
+- 注：上图为 v1 形态。现行布局中大纲在左栏「文件 / 大纲」双 tab（v2 决策 Q6），右栏为编译与预览 + AI 助手，现行结构见 [modules/editor.md](modules/editor.md)。
 - 权限：复用 `useCanWrite`；viewer 可进入但整体只读，AI 助手仅问答模式；
 - 文件上限：超过约 2MB 拒绝打开并提示，防浏览器端卡顿；
 - 软换行默认开启（LaTeX 源码长行常见），可在偏好中调整。
@@ -90,7 +91,7 @@
 | 接口 | 语义 |
 | --- | --- |
 | `POST /api/writing-chat/editor/send` | SSE 流式对话；请求额外携带编辑器上下文 `{file_path, buffer, cursor_line, selection}`（§7.3） |
-| `POST /api/writing-chat/editor/apply-suggestion` | 记录建议应用结果（消息级标记），供会话历史展示 |
+| `POST /api/writing-chat/editor/apply-suggestion` | 记录建议应用结果（v2 起支持 `suggestion_index` 逐条标记，缺省仍消息级），供会话历史展示 |
 
 AI 修改**不经后端落盘**：建议以结构化形式随 SSE 返回，由前端应用到 CM6 缓冲区，用户保存时才经 save-file 统一路径落盘。
 
@@ -216,12 +217,12 @@ v2 追加快捷键（包裹 `Ctrl/Cmd+B/I/U/K`、包裹浮层 `Ctrl+L`、一键�
 ```jsonc
 {
   "kind": "latexcellence-editor-preferences",
-  "version": 1,
-  "prefs": { "autoSave": false, "softWrap": true, "fontSize": 14 }
+  "version": 2,
+  "prefs": { "autoSave": false, "softWrap": true, "fontSize": 14, "customSnippets": [] }
 }
 ```
 
-- 导出：pretty-print 下载 `.json`；导入：文件或粘贴皆可，按 `version` + 字段白名单严格校验，非法字段静默丢弃，合法字段**整体覆盖**当前切片（无合并选项）；
+- 导出：pretty-print 下载 `.json`；导入：文件或粘贴皆可，按 `version` + 字段白名单严格校验，非法字段静默丢弃，合法字段**整体覆盖**当前切片（无合并选项）；导入兼容 v1 载荷（无 `customSnippets` 时按白名单补默认空数组，editor-experience-design Q7）；
 - 入口：编辑器设置弹层（不放全局设置对话框，避免与部署配置混淆）。
 
 ## 12. 决策记录

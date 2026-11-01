@@ -46,7 +46,7 @@
 
 ## 项目概述
 
-LaTeXcellence 是一个由 LLM 驱动的智能体论文写作助手。后端 FastAPI + 前端 React/Vite。智能体通过 Function Calling 操作本地 LaTeX 项目（浏览文件、修改段落、生成工程、编译验证），而不是只停留在对话。
+LaTeXcellence 是一个由 AI 驱动的 LaTeX 文档助手。后端 FastAPI + 前端 React/Vite。智能体通过 Function Calling 操作本地 LaTeX 项目（浏览文件、修改段落、生成工程、编译验证），而不是只停留在对话。
 
 基本流程：
 
@@ -73,18 +73,22 @@ LaTeXcellence 是一个由 LLM 驱动的智能体论文写作助手。后端 Fas
 ```
 latexcellence/
 ├── main.py                    # 统一入口（FastAPI + 静态文件挂载）
-├── config.json / config.example.json / requirements.txt / pytest.ini
+├── config.json / config.example.json / requirements.txt / requirements-dev.txt / pytest.ini / conftest.py
 ├── AGENTS.md / DEVELOPMENT.md / DESIGN.md / PROJECT_SUMMARY.md / README.md
+├── .env.example               # 环境变量模板（敏感 Key 注入，见「环境变量」）
+├── docker-compose.yml         # 多实例 Compose 编排（副本扩展 + 可选 Caddy 反代）
 ├── backend/                   # FastAPI 后端（core / utils / modules）
 ├── frontend/                  # React 前端
+├── docker/                    # Docker 沙箱镜像体系（backend/tex/convert/plot 四镜像 + build.sh，见 docker/README.md）
+├── scripts/                   # 维护脚本：check.sh 统一验证入口、check_conventions.py、sync_config.py
 ├── showcase/                  # 独立展示页（零依赖静态站，详见 showcase.md）
 ├── screenshots/               # 项目截图（README / 文档配图）
 ├── tools/                     # 维护者与评测工具（不进入运行时）
 ├── docs/                      # 开发文档（本目录）
 ├── tests/                     # pytest 测试
 ├── static/                    # Vite 构建产物
-├── logs/                    # 运行时日志
-└── data/                    # 运行期与用户数据统一目录（formats/ plots/ prompts/ style_modify_sessions/ templates/ template_library/ writing_chat_sessions/ web_cache/）
+├── logs/                      # 运行时日志
+└── data/                      # 运行期与用户数据统一目录（latexcellence.db、users/ staging/ templates/ formats/ plots/ prompts/ writing_chat_sessions/ archive/ 等，均按需创建）
 ```
 
 > 带逐文件注释的完整目录树见 [PROJECT_SUMMARY.md](../PROJECT_SUMMARY.md)。
@@ -117,6 +121,8 @@ latexcellence/
 | `templategen_opt/` | template_gen Agent 闭环优化评测工作区 |
 | `stylemodify_opt/` | style_modify Agent 闭环优化评测工作区 |
 | `builtin_templates/` | 内置 LaTeX 模板编译验证与元资产生成（详见 [template_library.md](./modules/template_library.md)「维护者脚本」） |
+| `ci/` | 评测回归 CI 脚本（GitLab CI 的 offline-gate / llm-evals 阶段调用，详见 [eval-regression-ci.md](./eval-regression-ci.md)） |
+| `rar_fixtures/` | RAR 入库样本生成与结构校验（`make_fixtures.py` / `verify_fixtures.py`，见 [testing.md](./testing.md)「RAR 入库样本」） |
 
 每个工具子目录的详细用法见其自带 `README.md`。
 
@@ -192,6 +198,7 @@ npm start        # 或 node server.js
 | `logging` | level, dir | 日志级别与存储路径 |
 | `multi_user` | enabled, db_path, users_root, staging_root、默认配额、上传限制、会话/回收站 TTL、LLM/登录限流、registration_enabled、admin_*_env、edit_log_*（反向补丁撤销日志：条数上限 / 单操作体积上限 / 保留时长）、writing_chat_retention_days（0 = 不自动删仅统计）、auto_approve_*（注册自动审批：总开关 / 同 IP 账号上限 / CIDR 白名单 / ip2region 库路径（主 + IPv6 补充，按地址族路由）与 GeoLite2 库路径 + 国家·城市白名单；地理查询 ip2region 中国优先、非/未知中国回落 GeoLite2）、trusted_proxies（可信反代，命中才信任 X-Forwarded-For）、register_rate_limit_per_hour | 多用户模式（默认关闭）；开启后强制登录、用户空间隔离、关闭任意路径打开与磁盘浏览，详见 [multi-user.md](multi-user.md)（反向补丁撤销 §8、衍生数据记账与自助清理 §3.3、注册自动审批 §2.1）；部署见 [deployment.md](deployment.md)「注册自动审批」 |
 | `sandbox` | mode, image_tex/convert/plot, cpus, memory_mb, pids_limit, tmpfs_mb, max_concurrent_global, max_concurrent_per_user, startup_grace_seconds, warm_pool_enabled | 外部命令沙箱执行（编译/转换/绘图/git 等统一经 SandboxRunner，可进一次性 Docker 容器隔离）。`warm_pool_enabled`（默认 true）为容器预创建池开关：仅 docker 后端生效，auto 模式探测命中 docker 才启用；关闭后每次执行即时建容器（行为与历史版本一致）。完整字段说明与安全基线见 [deployment.md](deployment.md)「Docker 沙箱」，执行模型见 [backend-core.md](backend-core.md)「sandbox/ 包」 |
+| `smtp` | enabled, host, port, encryption, username, password, from_address, from_name, site_base_url, max_send_per_minute, retry_attempts, template_language | 邮件通知（注册审批、密码找回），仅多用户模式使用；`password` 经 `LATEXCELLENCE_SMTP_PASSWORD` 环境变量注入、永不写盘。部署配置见 [deployment.md](deployment.md)「SMTP 邮件通知」 |
 
 所有字段有 Pydantic 默认值，可部分配置。敏感项支持经环境变量注入（`SECRET_ENV_PATHS` 注册表）：`LX_LLM_KEY` 优先于 `llm.api_key`；`LATEXCELLENCE_SMTP_PASSWORD` 优先于 `smtp.password`；`LATEXCELLENCE_TAVILY_API_KEY` 优先于 Tavily 搜索 Key，学术数据源同理用 `LATEXCELLENCE_<PROVIDER 大写>_API_KEY`（如 `LATEXCELLENCE_OPENALEX_API_KEY`）。环境变量注入的敏感值均永不写盘，完整清单见 [deployment.md](deployment.md)「环境变量参考」。
 

@@ -70,7 +70,7 @@ LLM 输出**必须**经过 `json_utils.py` 的 `retry_with_validation()` 处理�
 
 1. `safe_parse_json()` 容错解析（去 markdown 围栏、尾逗号、单引号）
 2. Pydantic `.model_validate()` 严格校验
-3. 失败时，用 `format_validation_error()` 将错误格式化后反馈给 LLM 重试（最多 3 次）
+3. 失败时，用 `format_validation_error()` 将错误格式化后反馈给 LLM 重试（`max_retries=3`，含首次调用在内最多 3 次尝试）
 
 ### 3. LaTeX 内容校验（JSON 转义防护）
 
@@ -131,7 +131,7 @@ LLM 输出的 LaTeX 文本（经 JSON 传输或写盘前）**必须**使用 `bac
 ## 前端规范 (React 19 + Zustand)
 
 - **状态管理 (Zustand)**：采用**切片（Slices）模式**，避免单一巨型 store。组件内订阅 state 时，优先使用 `useShallow` 防止不必要的重渲染。
-- **组件与样式**：优先使用 shadcn/ui 组件。样式定制通过 Tailwind CSS 4 的 utility classes 或 CSS 变量，**禁止**直接魔改底层 Radix UI 的 DOM 结构或滥用内联 `style`。
+- **组件与样式**：优先使用 shadcn/ui 组件。样式定制通过 Tailwind CSS 4 的 utility classes 或 CSS 变量，**禁止**直接魔改底层 Base UI 的 DOM 结构或滥用内联 `style`。
 - **代码风格**：遵循 Prettier 默认配置。
 - **页面文字**：前端页面使用中文。
 - **配置同步规范**：修改 `config.json` / `config.example.json` 的结构（增删改配置项、功能开关）时，**必须**先读 `.agents/skills/latexcellence-config-sync/SKILL.md` 并执行其中的同步检查单（设置分区组件、`handleSave`、`WelcomePage.featureGroups`、`AppConfig` 模型四处缺一不可）。

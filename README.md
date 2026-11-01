@@ -188,7 +188,7 @@ python main.py config.json
 | 层 | 技术 |
 | --- | --- |
 | 后端 | Python 3.12+, FastAPI, uvicorn, openai, pydantic v2, httpx |
-| 前端 | React 19, Vite 6, Tailwind CSS 4, Zustand 5, shadcn/ui, sonner, react-markdown + KaTeX, highlight.js |
+| 前端 | React 19, Vite 6, Tailwind CSS 4, Zustand 5, shadcn/ui（Base UI 底层）, sonner, react-markdown + KaTeX, highlight.js |
 | 测试 | pytest + pytest-asyncio；前端 node:test（`npm test`，Node 内置测试运行器） |
 
 ## 项目结构
@@ -210,6 +210,7 @@ latexcellence/
 ├── data/                    # 应用运行期数据（运行时生成）
 ├── tests/                   # 测试
 ├── tools/                   # 运维与评估工具
+├── scripts/                 # 维护脚本（check.sh 统一验证入口、check_conventions.py 等）
 ├── docs/                    # 项目文档
 └── clean-cache.sh / clean-cache.ps1  # 清理缓存脚本
 ```

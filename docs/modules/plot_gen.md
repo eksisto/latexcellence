@@ -21,6 +21,7 @@ backend/modules/plot_gen/
 ├── recommender.py   # 确定性图表规则 + LLM 结构化推荐
 ├── styles.py        # Nature/Science/Cell/IEEE/ACS 风格预设
 ├── executor.py      # Python 子进程执行、产物扫描、TikZ 编译和统计检验
+├── tikzgen.py       # 受控 PGFPlots 生成器（tikz_spec.json 校验与 figure.tex 确定性渲染）
 ├── sandbox_guard.py # python_sandbox 审计钩子防护（安全监听器）
 ├── trace.py         # Agent 运行追踪（trace.jsonl 记录与读取）
 └── cleanup.py       # 过期 session 清理

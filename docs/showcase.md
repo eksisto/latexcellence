@@ -26,9 +26,9 @@
 
 - 主题 token 与 `frontend/src/theme/*.css` 逐字一致，明暗双档，由
   `tools/gen-themes.mjs` 生成。
-- 字体家族与 `frontend/src/index.css` 一致。字体经 cdnjs 加载，仓库内不保留字体文件
-  （LXGW WenKai 用 cdnjs 上官方 `lxgw-wenkai-web` 包的 `result.css`，其余字体在
-  `showcase/css/fonts.css` 中直接引用 cdnjs fontsource 包的 woff2）。
+- 字体家族与 `frontend/src/index.css` 一致。字体经又拍云 Zstatic（s4.zstatic.net，cdnjs
+  镜像）加载，仓库内不保留字体文件（LXGW WenKai 用其镜像的官方 `lxgw-wenkai-web`
+  包 `result.css`，其余字体在 `showcase/css/fonts.css` 中直接引用 fontsource 包 woff2）。
 - 动效实现：
   - `css/scrolly.css` + `js/scrolly.js`：每个 `[data-pin]` 固定场景的滚动进度写入
     `--p`，CSS 用 `clamp()` 分段编排文本与 mock 的入场/退场。`[data-parallax]`

@@ -12,12 +12,9 @@
 
 ## Pydantic 输出模型
 
-- `ExtractedTerm` — 单条抽取术语（term, term_type, context）
-- `TermExtractionResult` — 术语抽取响应（terms）
-- `TermChange` — 术语修改建议（type, concept, original, corrected, explanation）
-- `TermCluster` — 语义聚类结果（recommended, variants）
-- `TermClusterResult` — 聚类响应（clusters）
-- `TermParagraphResult` — 逐段检查结果（paragraph_index, original, corrected, terms, changes）
+- `TermItem` / `TermExtractOutput` — LLM 抽取阶段实际使用的输出模型（term, term_type, context / terms），定义在 `extractor.py`
+- `TermCluster` / `TermClusterResult` — 语义聚类结果（recommended, variants / clusters），聚类阶段经 `cached_llm_validate()` 校验
+- `models.py` 中另有 `ExtractedTerm` / `TermExtractionResult` / `TermChange` / `TermParagraphResult`，当前后端无调用方（未接线模型）
 
 ## 术语提取与语义聚类 `extractor.py`
 
@@ -50,15 +47,17 @@ Phase 3: 生成修正结果
 | `check_terminology` | 三步走流程 |
 | `check_terminology_stream` | SSE 流式推送 |
 | `apply_changes` | 还原 marker + 原子写回 |
-| `_deduplicate_terms` | 精确匹配去重，保持首次出现顺序 |
+| `_deduplicate_terms`（模块级函数） | 精确匹配去重，保持首次出现顺序 |
 
-### 三层防护（与 typo_check 一致）
+### 防护（与 typo_check 不完全一致）
 
 | 层级 | 防护内容 | 失败处理 |
 | --- | --- | --- |
-| 第 1 层 | `retry_with_validation()`（最多 3 次） | LLM 输出不符 schema 时反馈重试 |
-| 第 2 层 | Marker 匹配验证 | 不一致时回退到原文 |
+| 第 1 层 | `retry_with_validation()`（`max_retries=3`，含首次） | LLM 输出不符 schema 时反馈重试 |
+| 第 2 层 | 术语级 marker 过滤：形如 `__CMD_xxxx__` 的字符串不会作为术语被抽取 | — |
 | 第 3 层 | 异常兜底 | LLM 调用异常时返回原文 + 空 changes |
+
+注意：本模块不走基类的 `_check_one_paragraph` 逐段路径，没有 typo_check 那样的逐段 marker 匹配验证。
 
 ## API 路由
 

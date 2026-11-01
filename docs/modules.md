@@ -35,6 +35,8 @@
 
 | 模块 | 文档 | 说明 |
 | --- | --- | --- |
+| 用户认证与管理 | [multi-user.md](multi-user.md) | 多用户注册/审批/登录与管理员接口（/api/auth、/api/admin），无 LLM |
+| 项目管理 | [multi-user.md](multi-user.md) | 多用户项目：上传/下载/回收站/配额/协作，无 LLM |
 | 自动编译 | [compile.md](modules/compile.md) | LaTeX 编译、引擎自动检测、PDF/A 支持与错误翻译 |
 | Git 差异高亮 | [git_diff.md](modules/git_diff.md) | 版本差异可视化高亮 PDF |
 | Git 版本管理 | [git_manage.md](modules/git_manage.md) | 最小完整版本控制：自动/手动初始化、变更列表、一键提交、历史浏览（与 git_diff 打通） |
@@ -61,11 +63,11 @@
 
 ### CheckOperationContext
 
-每次 preview/check 生成唯一 `operation_id`，关联的上下文（marker_maps、file_md5s、TTL 1 小时）保存在服务实例中。apply 时通过 operation_id 取回上下文，避免并发或重启后 marker 映射丢失。
+每次 preview/check 生成唯一 `operation_id`，关联的上下文（marker_maps、file_md5s、TTL 1 小时）保存在进程级共享存储中；多用户/多实例模式下外置到共享 SQLite 的 `operation_contexts` 表（多副本均可取回）。apply 时通过 operation_id 取回上下文，避免并发或重启后 marker 映射丢失。
 
 ### 乐观锁
 
-多工作区并发编辑同一文件时，通过 MD5 哈希检测冲突。读取段落时后端返回 `file_md5`，应用修改时前端传回 `expected_md5`，后端校验失败时抛出 `FileConflictError`（HTTP 409）。前端自动刷新 MD5 并提示用户重试。`inject_expected_md5s()` 辅助函数统一为各模块 router 注入预期 MD5。
+多工作区并发编辑同一文件时，通过 MD5 哈希检测冲突。读取段落时后端返回 `file_md5`，应用修改时前端传回 `expected_md5`。逐段检查的 apply 链路中校验失败不抛异常，而是返回 HTTP 200 并在 `errors[]` 中给出 `reason="file_conflict"`；HTTP 409 仅用于 editor 整文件直写等其它路径。前端自动刷新 MD5 并提示用户重试。`inject_expected_md5s()` 辅助函数统一为各模块 router 注入预期 MD5。
 
 ### Marker 保护策略
 
@@ -106,7 +108,7 @@ bib_manager 的 DOI 查询模块和 web_search 模块共享类似的**可插拔 
 
 | 依赖 | 模块 |
 | --- | --- |
-| latexmk + xelatex | compile, git_diff |
+| latexmk（编译引擎自动检测） | compile, git_diff |
 | pandoc | format_converter |
 | git | git_diff, git_manage |
 | OpenAI 兼容 API | 大部分 LLM 模块 |

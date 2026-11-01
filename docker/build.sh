@@ -9,7 +9,8 @@
 #   ./docker/build.sh tex plot                 # 只构建指定目标（可多个）
 #   BUILDX_MULTI_ARCH=1 ./build.sh             # buildx 双架构构建（linux/amd64,linux/arm64）
 #   BUILDX_MULTI_ARCH=1 ./build.sh --push      # buildx 双架构构建并推送 manifest
-#   BUILDX_MULTI_ARCH=1 ./build.sh --load      # buildx 单架构构建并加载到本地 daemon
+#   BUILDX_MULTI_ARCH=1 BUILDX_PLATFORMS=linux/arm64 ./build.sh --load
+#                                              # buildx 单架构构建并加载到本地 daemon
 #
 # 环境变量：
 #   BUILDX_MULTI_ARCH=1     启用 buildx 多架构路径（默认 0，走普通 docker build）
@@ -18,6 +19,8 @@
 #
 # tag 规则：latexcellence-{backend,tex,convert,plot}:YYYY.MM 与 :latest 双标签；
 #          config.json 的 sandbox.image_* 引用该名称。
+# context：backend 目标以仓库根为 build context（Dockerfile 按根书写 COPY，
+#          与 docker-compose.yml 的 app 服务一致）；tex/convert/plot 以各自目录为 context。
 # ─────────────────────────────────────────────────────────────
 set -euo pipefail
 
@@ -28,7 +31,7 @@ PLATFORMS="${BUILDX_PLATFORMS:-linux/amd64,linux/arm64}"
 BUILDX_MULTI_ARCH="${BUILDX_MULTI_ARCH:-0}"
 
 usage() {
-    sed -n '2,21p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
+    sed -n '2,24p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
 }
 
 targets=()
@@ -100,6 +103,12 @@ failed=0
 build_one() {
     local target="$1"
     local dir="$SCRIPT_DIR/$target"
+    # backend 的 Dockerfile 以仓库根为 context（COPY requirements.txt / main.py /
+    # backend / static），与 docker-compose.yml 的 app 服务同口径；其余镜像以
+    # 各自目录为 context
+    if [ "$target" = "backend" ]; then
+        dir="$(cd "$SCRIPT_DIR/.." && pwd)"
+    fi
     shift
     local -a extra_args=()
     # backend / plot 支持 PIP_INDEX_URL 构建参数透传

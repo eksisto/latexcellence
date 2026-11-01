@@ -51,15 +51,7 @@
 | [@fontsource/stix-two-text](https://fontsource.org/fonts/stix-two-text) | ^5.3.0 | OFL-1.1 | Copyright (c) 2001-2021 The STIX Fonts Project Authors | STIX Two Text 学术衬线显示字体（品牌字标 / § 编号 / 小大写标签） |
 | [sonner](https://sonner.emilkowal.ski) | ^2.0.7 | MIT | Copyright (c) 2023 Emil Kowalski | Toast 通知组件 |
 | [lucide-react](https://lucide.dev) | ^1.23.0 | ISC and MIT | Copyright (c) Lucide Icons and Contributors | 图标库 |
-| [@base-ui/react](https://base-ui.com) | ^1.6.0 | MIT | Copyright (c) 2019 Material-UI SAS | 无头 UI Button 组件 |
-| [@radix-ui/react-dialog](https://radix-ui.com) | ^1.1.18 | MIT | Copyright (c) 2022 WorkOS | 对话框原语 |
-| [@radix-ui/react-label](https://radix-ui.com) | ^2.1.11 | MIT | Copyright (c) 2022 WorkOS | 标签原语 |
-| [@radix-ui/react-scroll-area](https://radix-ui.com) | ^1.2.13 | MIT | Copyright (c) 2022 WorkOS | 滚动区域原语 |
-| [@radix-ui/react-select](https://radix-ui.com) | ^2.3.2 | MIT | Copyright (c) 2022 WorkOS | 下拉选择原语 |
-| [@radix-ui/react-separator](https://radix-ui.com) | ^1.1.11 | MIT | Copyright (c) 2022 WorkOS | 分隔线原语 |
-| [@radix-ui/react-slot](https://radix-ui.com) | ^1.3.0 | MIT | Copyright (c) 2022 WorkOS | Slot 原语 |
-| [@radix-ui/react-tabs](https://radix-ui.com) | ^1.1.16 | MIT | Copyright (c) 2022 WorkOS | 标签页原语 |
-| [@radix-ui/react-tooltip](https://radix-ui.com) | ^1.2.11 | MIT | Copyright (c) 2022 WorkOS | 工具提示原语 |
+| [@base-ui/react](https://base-ui.com) | ^1.6.0 | MIT | Copyright (c) 2019 Material-UI SAS | 无头 UI 组件原语（Dialog / ContextMenu / Select 等） |
 | [class-variance-authority](https://cva.style) | ^0.7.1 | Apache-2.0 | Copyright (c) Joe Bell | 组件变体定义 |
 | [clsx](https://github.com/lukeed/clsx) | ^2.1.1 | MIT | Copyright (c) Luke Edwards | 条件类名字符串 |
 | [i18next](https://www.i18next.com) | ^26.3.6 | MIT | Copyright (c) 2011-present i18next | 国际化核心库 |
@@ -67,7 +59,6 @@
 | [opencc-js](https://github.com/BYVoid/OpenCC) | ^1.4.2 | MIT AND Apache-2.0 | Copyright (c) BYVoid | 编辑器命令中文名简→繁转换（繁体界面本地化展示，按需动态加载） |
 | [i18next-browser-languagedetector](https://github.com/i18next/i18next-browser-languagedetector) | ^8.2.1 | MIT | Copyright (c) 2011-present i18next | 浏览器语言自动检测 |
 | [react-i18next](https://github.com/i18next/react-i18next) | ^17.0.11 | MIT | Copyright (c) 2015-present i18next | React i18next 集成 |
-| [CodeMirror 6](https://codemirror.net) | ^6.0.2 | MIT | Copyright (c) by Marijn Haverbeke and others | 网页编辑器内核（编辑器页基础包） |
 | [@uiw/react-codemirror](https://github.com/uiwjs/react-codemirror) | ^4.25.11 | MIT | Copyright (c) 2018 Kenny Wong | CodeMirror 6 的 React 受控封装 |
 | [@codemirror/language](https://github.com/codemirror/dev) | ^6.12.4 | MIT | Copyright (c) by Marijn Haverbeke and others | 编辑器语言支持基础设施（StreamLanguage 流式模式挂载） |
 | [@codemirror/view](https://github.com/codemirror/dev) | ^6.43.9 | MIT | Copyright (c) by Marijn Haverbeke and others | 编辑器视图层（主题 / 软换行等视图扩展） |
@@ -79,7 +70,6 @@
 | [tailwind-merge](https://github.com/dcastil/tailwind-merge) | ^3.6.0 | MIT | Copyright (c) 2021 Dany Castillo | Tailwind 类名合并 |
 | [pdf.js (pdfjs-dist)](https://github.com/mozilla/pdf.js) | ^4.10.38 | Apache-2.0 | Copyright 2012 Mozilla Foundation | PDF 渲染引擎（编辑器 PDF 预览替换 iframe，SyncTeX 正反向定位的渲染层；按需动态加载） |
 | [tw-animate-css](https://github.com/Wombosvideo/tw-animate-css) | ^1.4.0 | MIT | Copyright (c) 2025 Wombosvideo | CSS 动画工具 |
-| [shadcn](https://ui.shadcn.com) | ^4.12.0 | MIT | Copyright (c) 2023 shadcn | UI 组件系统 (CLI) |
 
 ## 二、前端开发依赖 (npm devDependencies)
 
@@ -90,6 +80,7 @@
 | [Tailwind CSS](https://tailwindcss.com) | ^4.1.0 | MIT | Copyright (c) Tailwind Labs, Inc. | CSS 框架 |
 | [@tailwindcss/vite](https://tailwindcss.com) | ^4.1.0 | MIT | Copyright (c) Tailwind Labs, Inc. | Tailwind Vite 插件 |
 | [@lezer/generator](https://github.com/lezer-parser/generator) | ^1.8.0 | MIT | Copyright (c) by Marijn Haverbeke and others | LaTeX 子集语法构建期生成器（latex.grammar → parser，仅 dev/build/test 阶段使用，不打包进构建产物） |
+| [shadcn](https://ui.shadcn.com) | ^4.12.0 | MIT | Copyright (c) 2023 shadcn | UI 组件系统 CLI（生成组件源码，运行时无依赖） |
 
 ## 三、后端依赖 (Python pip)
 
@@ -103,6 +94,7 @@
 | [pydantic-settings](https://github.com/pydantic/pydantic-settings) | >=2.0.0 | MIT | Copyright (c) 2022 Samuel Colvin and other contributors | 配置管理 |
 | [python-dotenv](https://github.com/theskumar/python-dotenv) | >=1.0.0 | BSD-3-Clause | Copyright (c) 2020 Saurabh Kumar | 加载项目根 `.env` 环境变量文件（凭证类配置注入） |
 | [python-multipart](https://github.com/andrew-d/python-multipart) | >=0.0.9 | Apache-2.0 | Copyright (c) Andrew Dunham | 文件上传 |
+| [py7zr](https://github.com/miurahr/py7zr) | >=1.1.0 | LGPL-2.1-or-later | Copyright (c) Hiroshi Miura | 多用户上传 7z 压缩包解压 |
 | [argon2-cffi](https://github.com/hynek/argon2-cffi) | >=23.1.0 | MIT | Copyright (c) 2023 Hynek Schlawack | 多用户模式密码哈希（argon2id） |
 | [aiosmtplib](https://github.com/cole/aiosmtplib) | >=3.0.0 | MIT | Copyright (c) 2015-2025 Cole Maclean | 多用户模式 SMTP 异步邮件发送（多用户 v2 P6：邮件通知与自助找回） |
 | [maxminddb](https://github.com/maxmind/MaxMind-DB-Reader-python) | >=2.6.0 | Apache-2.0 | Copyright (c) 2014 MaxMind, Inc. | 注册自动审批地理白名单：读取 GeoLite2 离线 .mmdb 库解析 IP 归属（库文件本身需按 MaxMind 协议自行获取） |
@@ -126,6 +118,7 @@
 | [aiosmtpd](https://github.com/aio-libs/aiosmtpd) | >=1.4.6 | Apache-2.0 | Copyright (c) The aiosmtpd project and individual contributors | 本地 mock SMTP server（仅测试使用，多用户 v2 P6） |
 | [ruff](https://docs.astral.sh/ruff/) | ==0.16.6 | MIT | Copyright (c) 2022 Charlie Marsh | Python 静态检查（开发/CI 门禁，见 `requirements-dev.txt`，不参与运行与分发） |
 | [black](https://black.readthedocs.io) | ==26.5.1 | MIT | Copyright (c) 2018 Łukasz Langa | Python 代码格式化检查（开发/CI 门禁，见 `requirements-dev.txt`，不参与运行与分发） |
+| [pytest-xdist](https://github.com/pytest-dev/pytest-xdist) | ==3.8.0 | MIT | Copyright (c) holger krekel and contributors | 测试并行分发（开发/CI 门禁，见 `requirements-dev.txt`，不参与运行与分发） |
 
 ## 四、内联字体文件 (bundled)
 
@@ -136,15 +129,15 @@
 | JetBrains Mono | OFL-1.1 | Copyright (c) 2020 The JetBrains Mono Project Authors | [JetBrains](https://www.jetbrains.com/lp/mono) |
 | STIX Two Text | OFL-1.1 | Copyright (c) 2001-2021 The STIX Fonts Project Authors | [STIX Fonts Project](https://github.com/stipub/stixfonts) |
 
-> 说明：`showcase/` 展示页通过 cdnjs 从 CDN 加载上述同一批字体（见 `showcase/css/fonts.css`、`showcase/index.html`），不新增仓库内资产与依赖。
+> 说明：`showcase/` 展示页经又拍云 Zstatic（s4.zstatic.net，cdnjs 镜像）加载上述同一批字体（见 `showcase/css/fonts.css`、`showcase/index.html`），不新增仓库内资产与依赖。
 
 ## 五、系统级外部依赖
 
 | 项目 | 版本 | 许可证 | 版权 / 作者 | 用途 |
 | --- | --- | --- | --- | --- |
 | [TeX Live](https://tug.org/texlive) | 2026 (xelatex/latexmk/latexindent.pl) | GPL-2.0-or-later | Copyright (c) TeX Live / DANTE e.V. 及各组件作者 | LaTeX 编译 |
-| [Pandoc](https://pandoc.org) | 3.10.1 | GPL-2.0-or-later | Copyright (c) 2006- John MacFarlane | 格式转换 |
-| [unar / The Unarchiver](https://theunarchiver.com) | 1.10.8（Debian main 源） | LGPL-2.1-or-later | Copyright (c) 2017-present, MacPaw Inc.; upstream Dag Ågren 及 XADMaster 贡献者 | 多用户模式 rar 压缩包解压的首选解压器（多用户 v2 P2；后端镜像内置） |
+| [Pandoc](https://pandoc.org) | 3.6.4 | GPL-2.0-or-later | Copyright (c) 2006- John MacFarlane | 格式转换 |
+| [unar / The Unarchiver](https://theunarchiver.com) | Debian main 源（版本随镜像基础 Debian 发行版） | LGPL-2.1-or-later | Copyright (c) 2017-present, MacPaw Inc.; upstream Dag Ågren 及 XADMaster 贡献者 | 多用户模式 rar 压缩包解压的首选解压器（多用户 v2 P2；后端镜像内置） |
 | [libarchive / bsdtar](https://www.libarchive.org) | 3.7.x（各发行版 main 源） | BSD-3-Clause（含个别组件 BSD-2-Clause） | Copyright (c) 2003-2025, Tim Kientzle, Charles P. Boyd 及 libarchive contributors | rar 解压回退解压器：宿主缺失 unar 时经 `libarchive-tools` 包提供的 bsdtar 子进程解压（RAR4/RAR5 reader 为 BSD 授权独立实现；系统包引入，不经 pip，不随本项目再分发） |
 | [unar / The Unarchiver](https://theunarchiver.com)（convert 沙箱镜像内置） | Debian main 源（版本随镜像基础 Debian 发行版） | LGPL-2.1-or-later | Copyright (c) 2017-present, MacPaw Inc.; upstream Dag Ågren 及 XADMaster 贡献者 | Docker 沙箱模式 rar 解压容器（convert 镜像）内的首选解压器：`docker/convert/Dockerfile` 构建期经 Debian main 源 apt 安装，Debian 包随镜像分发 |
 | [libarchive / bsdtar](https://www.libarchive.org)（convert 沙箱镜像内置） | Debian main 源 `libarchive-tools`（版本随镜像基础 Debian 发行版） | BSD-3-Clause（含个别组件 BSD-2-Clause） | Copyright (c) 2003-2025, Tim Kientzle, Charles P. Boyd 及 libarchive contributors | Docker 沙箱模式 rar 解压容器（convert 镜像）内的回退解压器，与 unar 按固定顺序取用：构建期经 Debian main 源 apt 安装 `libarchive-tools`，Debian 包随镜像分发 |

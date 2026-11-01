@@ -1,6 +1,6 @@
 # 联网搜索模块
 
-后端工具模块，提供多引擎联网搜索，支持 Function Calling 集成。当前已集成到 Writing Chat 模块中。
+后端工具模块，提供多引擎联网搜索，支持 Function Calling 集成。当前已集成到 Writing Chat 模块与编辑器 AI 助手。v2 网络访问架构（查询规划、多引擎聚合、结构化读页与证据引用）的完整设计见 [writing-chat-web-access-architecture.md](../writing-chat-web-access-architecture.md)，灰度与运维见 [web-access-operations.md](../web-access-operations.md)。
 
 ## 核心文件
 
@@ -10,6 +10,13 @@
 | `models.py` | SearchResult / SearchResponse / PageReadResult / FindInPageResult 数据模型 |
 | `base.py` | BaseSearchEngine 抽象基类 |
 | `manager.py` | SearchManager + 全局单例 + 查询重写 + Deep Read 编排 + Function Calling schema |
+| `planner.py` | 查询规划（aggregate 路径的多查询拆解与校验） |
+| `ranking.py` | 聚合结果确定性排序（RRF / legacy 来源类型加权） |
+| `url_utils.py` | URL 规范化、跟踪参数清理与安全校验 |
+| `page_reader.py` | 结构化读页编排（缓存、抽取、质量阈值） |
+| `errors.py` | 类型化抓取失败与阻断分类 |
+| `extract/` | HTML 抽取、正文分块与质量评估 |
+| `fetch/` | 抓取协调：条件请求、限流、熔断与浏览器回退 |
 | `deep_read.py` | DeepReader — 抓取搜索结果页面正文并提取主要内容 |
 | `query_rewriter.py` | QueryRewriter — LLM 搜索查询重写 + 规则兜底 |
 | `engines/ddg.py` | DuckDuckGo HTML 引擎 + Challenge 处理 |
@@ -39,13 +46,14 @@
 
 ### ToolRegistry
 
-Function Calling 工具注册表，统一管理所有可用工具。`get_search_manager()` 初始化时注册三个工具（均绑定 `features.function_calling.web_search.enabled` 开关）：
+Function Calling 工具注册表，统一管理所有可用工具。`get_search_manager()` 初始化时注册以下工具（均绑定 `features.function_calling.web_search.enabled` 开关）：
 
 - `web_search`：搜索互联网，返回标题/摘要/URL（默认 10 条）
 - `open_page`：抓取指定 URL 正文（标题 + 全文，复用全局共享的 `DeepReader`，`max_chars` 限制 500–20000）
 - `find_in_page`：在指定页面内定位关键词，返回匹配前后上下文（内部按最多 20 万字符搜索，`context_chars` 50–2000、`max_matches` 1–20）
+- `read_page_sections`：结构化读取页面——正文分块、证据引用与质量过滤（仅 `page_reading.strategy=structured` 时注入；策略热切换到 legacy 时自动下线）
 
-其中 `open_page` / `find_in_page` 模拟 Codex 的 `search → open_page → find_in_page` agentic 检索模式，由模型自行决定深入阅读哪些页面。
+其中 `open_page` / `find_in_page` 模拟 Codex 的 `search → open_page → find_in_page` agentic 检索模式，由模型自行决定深入阅读哪些页面；`read_page_sections` 属 structured 读页路径，与 `fetch/` 的缓存、限流、熔断与浏览器回退协同。
 
 ### Deep Read
 
@@ -77,13 +85,27 @@ Function Calling 工具注册表，统一管理所有可用工具。`get_search_
 | --- | --- | --- | --- |
 | `enabled` | bool | false | 全局开关 |
 | `primary_engine` | str | tavily | 主搜索引擎（未注册时自动降级） |
+| `strategy` | str | "legacy" | 搜索路径：`legacy`（主引擎直查）/ `aggregate`（查询规划 + 多引擎并行 + 聚合排序） |
 | `max_results` | int | 10 | 返回结果数上限（1-20） |
-| `timeout_seconds` | int | 10 | 单次搜索超时 |
+| `timeout_seconds` | int | 10 | 单次搜索超时（legacy 路径） |
+| `overall_timeout_seconds` | float | 12.0 | aggregate 路径整体超时（秒） |
+| `per_engine_timeout_seconds` | float | 8.0 | aggregate 路径单引擎超时（秒） |
+| `max_parallel_queries` | int | 4 | aggregate 路径并行查询数上限（1-8） |
+| `domain_result_cap` | int | 3 | aggregate 路径单域名结果数上限 |
+| `engines.duckduckgo.enabled` | bool | true | DDG 引擎开关 |
+| `engines.searxng.enabled` / `engines.searxng.base_url` | bool / str | true / "" | SearXNG 引擎开关与实例地址 |
 | `engines.tavily.enabled` | bool | true | 是否启用 Tavily 引擎 |
 | `engines.tavily.api_key` | str | "" | Tavily API Key（设置页掩码展示，保存时保留原值） |
 | `deep_read_pages` | int | 0 | 自动 Deep Read 前 N 条（0=禁用，由 open_page 按需读取） |
 | `deep_read_max_chars` | int | 10000 | 每页最大抓取字符数 |
 | `query_rewriting.enabled` | bool | true | 是否启用 LLM 查询重写 |
+| `ranking.mode` | str | "rrf" | 聚合排序：`rrf`（Reciprocal Rank Fusion）/ `legacy`（来源类型加权） |
+| `page_reading.strategy` | str | "legacy" | 读页路径：`legacy`（DeepReader 单页抓取）/ `structured`（结构化抽取 + 缓存 + 证据分块，注入 `read_page_sections` 工具） |
+| `page_reading.cache_enabled` / `cache_dir` / `cache_ttl_seconds` / `max_cache_entry_mb` | bool / str / int / int | true / "data/web_cache/" / 3600 / 5 | 结构化读页缓存 |
+| `page_reading.max_response_mb` / `extractor_version` / `quality_threshold` | int / str / float | 10 / "html-v1" / 0.35 | 响应体上限、抽取器版本与内容质量阈值 |
+| `page_reading.browser.*` | — | enabled=false | 可选浏览器回退（pool_size / page_timeout_seconds / max_pages_per_request / stable_window_ms）；Playwright 不可用时自动回落 HTTP 抓取 |
+
+页面读取还有重试/限流/熔断等细化参数（`max_redirects` / `max_retries` / `backoff_base_seconds` / `per_domain_concurrency` / `circuit_*`），完整清单见 `config.example.json`。
 
 两级开关（`function_calling.web_search.enabled` + `writing_chat.web_search_enabled`）需同时开启才会在聊天中注入搜索工具。
 

@@ -19,7 +19,7 @@ git_manage 不复制 git 执行层，直接复用 `backend/modules/git_diff/serv
 ## 初始化语义
 
 - **已初始化判定以"项目根自带 `.git`"为准**（`.git` 目录或文件，兼容 worktree/submodule），而非 git 的父级仓库发现语义——项目落在某个父级仓库内（如部署目录本身是 git 仓库）不视为已初始化。
-- **全自动 init（多用户）**：两条上传路径（整包 zip / 分片会话）落位成功后调用 `schedule_auto_init(user_id, project_id)`，经 `asyncio.create_task` 后台执行 `git init` + 写 `.gitignore` + `git add -A` + 初始提交（best-effort，失败仅记日志，不影响上传事务；功能开关关闭或无事件循环时跳过）。项目自带 `.git` 时原样保留。
+- **全自动 init（多用户）**：项目创建路径（整包 zip 上传 / 分片上传会话 / 模板库「从模板创建项目」）落位成功后调用 `schedule_auto_init(user_id, project_id)`，在独立 daemon 工作线程的事件循环中后台执行 `git init` + 写 `.gitignore` + `git add -A` + 初始提交（best-effort，失败仅记日志，不影响上传事务；脱离请求事件循环是为避免宿主循环取消收尾恰好命中子进程 spawn 窗口；功能开关关闭或调用方无事件循环时跳过）。项目自带 `.git` 时原样保留。
 - **手动兜底**：版本管理页对未初始化项目提供「初始化版本控制」按钮（单用户模式无上传流，主要靠此入口）。
 - **`.gitignore` 模板**：LaTeX 编译产物规则（`*.aux`/`*.log`/`*.synctex.gz` 等，不含 `*.pdf`——图表 PDF 常需入库）**及应用内部元数据目录 `.latexcellence/`**（手动主文件标记等）。项目已有 `.gitignore` 时不覆盖（此场景的 `.latexcellence/` 排除由 project_manager 写主文件标记时主动兜底补写），原子写入（临时文件 + replace）。
 - **变更列表隐藏应用元数据**：`_list_changes` 对 `.latexcellence/` 前缀的条目一律不展示、不计脏标记——与文件树/大纲扫描的隐藏目录口径一致，兜底项目自带 `.gitignore` 未排除或标记文件已被跟踪的仓库。
@@ -109,8 +109,8 @@ restore:     路径校验 → 单路径 porcelain 守卫（无变更 400 / ?? 40
 | `get_file_diff(workspace_id, path, commit)` | 单文件源码级 diff（结构化 hunks + raw；降级标记） |
 | `get_commit_files(workspace_id, commit)` | 单个提交变更文件清单（抽屉两级导航第一级） |
 | `restore_changes(workspace_id, request)` | 整文件 / 按 hunk 恢复（fail-closed，过期切片 409） |
-| `schedule_auto_init(user_id, project_id)` | 上传落位后调度后台自动初始化（best-effort） |
-| `wait_auto_init_tasks()` | 等待全部自动初始化任务结束（测试用） |
+| `schedule_auto_init(user_id, project_id)` | 项目创建路径落位后调度后台自动初始化（daemon 线程 + 线程内事件循环，best-effort） |
+| `wait_auto_init_tasks()` | 等待全部自动初始化线程结束（测试用） |
 
 ## API 路由
 

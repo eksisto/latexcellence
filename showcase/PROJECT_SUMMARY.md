@@ -5,7 +5,7 @@
 ## 是什么
 
 - `showcase/` 是 `latexcellence` 仓库内的**独立单页产品展示页**，用于对外演示 LaTeXcellence 的功能与设计。
-- **零依赖**：纯静态 HTML/CSS/JS + Node.js 内置 `http` 静态服务器，无构建步骤、无 npm 运行时依赖（Node.js 20+）。
+- **零依赖**：纯静态 HTML/CSS/JS + Node.js 内置 `http` 静态服务器，无构建步骤、无 npm 运行时依赖（Node.js 18+）。
 - 采用**滚动叙述式（Scrollytelling）**设计：全屏固定场景 + Parallax 视差，整页隐喻为一份“自己写自己”的 `intro.tex`。
 
 ## 快速开始
