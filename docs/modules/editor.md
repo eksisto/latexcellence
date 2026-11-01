@@ -21,7 +21,7 @@
 网页编辑器提供工作台之外的第二内容入口：全宽三栏布局的 `/editor` 页，
 支持项目内文本文件的**多缓冲区（多标签页）**编辑与 MD5 乐观锁保存、LaTeX
 命令快速输入（中文 / 拼音全拼 / 首字母 / 英文四路模糊查找）、编译联动与
-编辑器侧 AI 助手；文件树点击 PDF
+编辑器侧 AI 助手。文件树点击 PDF
 以只读覆盖层内嵌预览。后端由
 `backend/modules/editor/`（整文件读写服务）与 `writing_chat` 包内的
 编辑器助手端点两部分组成。
@@ -63,9 +63,9 @@ AI 建议**不经后端落盘**：建议以结构化形式随 SSE 返回并随�
 `.latexcellence/main_file`（原子写），`open()` 时优先读取、缺失/非法/
 指向文件不存在时安全回落自动识别（优先 main.tex）——否则页面刷新
 直达恢复等重开项目的场景会把用户选择静默重置回 main.tex，删除保护
-随之再次拦截；标记内容经 path_guard 白名单校验（仅 .tex、拒绝穿越与
-符号链接），上传压缩包夹带的恶意标记无风险。主文件本身或其祖先目录被
-拖拽移动时，该记录由 move-file 按「旧路径前缀 → 新路径前缀」跟随改写
+随之再次拦截。标记内容经 path_guard 白名单校验（仅 .tex、拒绝穿越与
+符号链接），上传压缩包夹带的恶意标记无风险。拖拽移动主文件本身或其祖先目录时，该记录由 move-file 按
+「旧路径前缀 → 新路径前缀」跟随改写
 （决策 Q3，见 move-file 行）。隐藏目录不进文件树，
 也不参与大纲/符号扫描；也不污染版本管理页——写入标记后主动确保项目
 `.gitignore` 排除 `.latexcellence/`（已有等价条目则跳过，否则追加；
@@ -85,7 +85,7 @@ AI 建议**不经后端落盘**：建议以结构化形式随 SSE 返回并随�
 
 两个端点均受功能开关把关（决策 Q26）：`features.editor.enabled=false`
 或 `assistant_enabled=false` 时服务端直接拒绝（403，错误码
-`editor_disabled` / `assistant_disabled`），控制 LLM 开销是明确动机。
+`editor_disabled` / `assistant_disabled`），明确动机是控制 LLM 开销。
 
 #### 上下文注入策略（§7.3 / 决策 Q24）
 
@@ -187,7 +187,7 @@ TTL 120s），零新增端点与配置项。
   `_request_tool_confirmation` 组合两阶段，Writing Chat 原行为不变。
 - **流内等待**：SSE 生成器挂起于等待处（与 Writing Chat pending 同
   构），confirm/cancel 端点决议后续流，确认后同一流内继续执行与
-  后续模型轮次；确认参数可被前端修改（`modified_args`）。
+  后续模型轮次；前端可修改确认参数（`modified_args`）。
 - **取消语义**：用户拒绝或 TTL 过期统一注入取消语义 tool result
   （tool_call 配对完整、模型明确知晓用户拒绝了本次检索且不得原样
   重试），模型可基于已有信息继续回答或换策略。
@@ -505,7 +505,7 @@ Ctrl+B/I/U/K/L、Ctrl+/ 与 CM6 内置查找面板 Ctrl/Cmd+F）。点击后调�
 ### KaTeX 公式悬停预览（editor-productivity-design §5.3，阶段六 / 决策 Q9）
 
 悬停浮层形态（Q9）：指针在公式区域停留约 500ms（CM6 `hoverTooltip` 的
-`hoverTime`）后弹出 KaTeX 渲染预览；右栏固定预览卡留二期。开关为
+`hoverTime`）后弹出 KaTeX 渲染预览。右栏固定预览卡留二期。开关为
 `formulaHover` 偏好（默认开，Q18），经 isEnabled ref 注入（同
 `autoCloseEnv` 模式，切换偏好不重配置扩展），设置弹窗 + 三语 i18n。
 
@@ -544,9 +544,9 @@ Ctrl+B/I/U/K/L、Ctrl+/ 与 CM6 内置查找面板 Ctrl/Cmd+F）。点击后调�
 
 编译失败时右栏在既有解释 / 建议摘要之下展示可点击错误列表（不做行内
 波浪线，Q10）：条目为「文件相对路径 · l.N 行号 + 消息摘要」，原始日志
-行做 title detail；点击条目联动跳转——目标文件 tab 已存在则激活、未
+行做 title detail。点击条目联动跳转——目标文件 tab 已存在则激活、未
 打开则打开，随后滚动定位到该行行首并高亮（复用阶段三 jumpToLine 的
-selection anchor + scrollIntoView 方案）；跨 tab 跳转经待决标记延迟到
+selection anchor + scrollIntoView 方案）。跨 tab 跳转经待决标记延迟到
 activeTabPath 换档（EditorState 交换）完成后执行，打开失败时清除待决
 标记防迟到误定位。
 
@@ -581,7 +581,7 @@ activeTabPath 换档（EditorState 交换）完成后执行，打开失败时清
 
 **修改行色条**（借鉴 Notepad++ 8.4.6 的 Change History margin）：编辑区
 行左侧以内阴影色条标记修改行——**琥珀色** = 相对保存基线有未保存修改的
-行，**翠绿色** = 本会话改过且已保存的行，橙色优先于绿色；行号集合随
+行，**翠绿色** = 本会话改过且已保存的行，橙色优先于绿色。行号集合随
 事务重算，`Ctrl+Z` 撤回到保存点时橙标精确清零（与脏标记语义一致）。
 渲染用 `Decoration.line` 零 gutter 列实现，不挤压代码区。
 
@@ -600,7 +600,7 @@ activeTabPath 换档（EditorState 交换）完成后执行，打开失败时清
   `setOpenedTextEffect` 由 LaTeXEditor 随 tab 激活（换档/重建）与保存
   回写同步注入。性能取舍：橙色集每次键入全量重算（剪除后开销可忽略）；
   绿色集为「保存时冻结」模型——冻结集仅在基线效果触发时重建，展示集 =
-  冻结集 − 橙色集派生，已保存行被再编辑转橙后撤回可恢复绿标。已知近似：
+  冻结集 − 橙色集派生，已保存行再编辑转橙，撤回后可恢复绿标。已知近似：
   键入期间冻结绿集行号不随上方插入/删除漂移（越界行过滤），下次保存 /
   换档时精确重建；无保存基线时（v1 载荷恢复降级）不显示色条。
 
@@ -615,7 +615,7 @@ activeTabPath 换档（EditorState 交换）完成后执行，打开失败时清
 **选中即高亮全部匹配**（借鉴 Notepad++ 智能高亮）：新增
 `selectionMatches` 偏好（默认开），按偏好挂载 `@codemirror/search` 的
 `highlightSelectionMatches`（minSelectionLength 2 / maxMatches 100），
-选中文字后高亮全文相同片段，便于核对 `\label` 与 `\ref` 对应；偏好经
+选中文字后高亮全文相同片段，便于核对 `\label` 与 `\ref` 对应。偏好经
 换档失配检测重建存档 EditorState 生效到各 tab。
 
 **会话持久化升级 localStorage**（借鉴 Notepad++ snapshot：未保存内容不
@@ -829,7 +829,7 @@ checkout 直接构建可重复）。P0 子集范围：行注释（`\%` 豁免、
 Verbatim / Verbatim* / lstlisting / minted，与 `outlineScan` 同口径）与
 `\verb` 任意定界符参数整体原样吞掉。`\verb` 定界符「两侧同字符」无法用
 CFG 表达，由 `verbTokens.js` 外部分词器实现（以 `{ fallback: true }`
-声明——主 token 表已产出 token 时外部分词器默认不再被询问），行界与
+声明——主 token 表已产出 token 时默认不再询问外部分词器），行界与
 非法定界符口径对齐 `outlineScan.stripVerbSpans`。明确不追求 catcode 级
 正确与 `$` 配对零误判，依赖 Lezer 错误恢复（error-insensitive）保证
 畸形输入可解析、不崩溃。高亮着色采用「叶子包裹」模式（只对恰好覆盖
@@ -886,7 +886,7 @@ SyncTeX 正反向查询；编译页 / git_diff 等调用方默认 false 零变�
 刷新恢复既有产物：编译状态与 PDF blob URL 本就不跨刷新持久，页面加载
 后 `useEditorCompile` 主动按编译目标（主文件，缺省回落激活 `.tex`）请求
 既有 `/compile/pdf` 产物，命中即直接载入预览（面板提示「正在预览已有的
-编译产物」），从未编译（404）静默回落空态；主文件切换时按需重取。
+编译产物」），从未编译（404）静默回落空态。主文件切换时按需重取。
 用户发起过编译后恢复逻辑退出，PDF 生命周期完全归编译流程管理（在途
 竞态经 compiledRef 守卫，迟到响应自回收 blob URL）。既有产物无
 `.synctex.gz` 时正向同步查询失败，按既有 Q6 口径静默不打断写作。
@@ -941,8 +941,8 @@ predev/prebuild/pretest 钩子从 `pdfjs-dist/cmaps` 拷贝到
 ### 实时语法诊断（editor v3 阶段三 / 决策 Q9）
 
 编辑停顿约 500ms 后对激活缓冲区做轻量语法检查，以内联波浪线 + 悬停提示
-呈现——不进编译错误列表、不阻断编译（chktex 镜像集成为可选增强不排期，
-触发条件为纯模块方案实测误报率不可接受时再评估）。
+呈现——不进编译错误列表、不阻断编译（chktex 镜像集成为可选增强、不排期，
+纯模块方案实测误报率不可接受时再评估）。
 
 - **诊断纯模块** `lib/editor/diagnostics.js`（node --test 直接单测）：
   `computeDiagnostics(docText, formatMessage?)` 单趟 O(n) 状态机扫描
@@ -1116,7 +1116,7 @@ AI 面板。四处配置同步规范照 AGENTS.md 执行；`/api/config/status` 
   verbatim·转义·URL 字面量豁免、200 条截断标注、消息格式化注入）/
   editorFormatApply（格式化应用决策、
   快捷键判定与 CM6 history 单步撤销）/ editorSynctexMath（SyncTeX 点→像素
-  换算与左上原点翻转，含双击取点闭环）/ editorLatexGrammar（自研 Lezer
+  换算与左上原点翻转，含双击取点完整流程）/ editorLatexGrammar（自研 Lezer
   语法解析树断言：注释 / 命令 / 数学区 / 环境 / verbatim 与 \verb 吞掉 /
   分节 heading / 畸形输入错误恢复，含 classHighlighter 高亮断言与
   stex 回归对照清单头注、2MB 全量解析耗时数据点）/

@@ -46,13 +46,13 @@
 
 ## 项目概述
 
-LaTeXcellence 是一个由 LLM 驱动的智能体论文写作助手。后端 FastAPI + 前端 React/Vite，智能体通过 Function Calling 真正操作本地 LaTeX 项目（浏览文件、修改段落、生成工程、编译验证），而不是只停留在对话。
+LaTeXcellence 是一个由 LLM 驱动的智能体论文写作助手。后端 FastAPI + 前端 React/Vite。智能体通过 Function Calling 操作本地 LaTeX 项目（浏览文件、修改段落、生成工程、编译验证），而不是只停留在对话。
 
 基本流程：
 
 1. 打开一个本地 LaTeX 项目目录
 2. 选择 `.tex` 文件，系统解析段落并剥离 LaTeX 结构为纯文本
-3. LLM 在纯文本上执行校对/优化（LaTeX 结构被替换为不可见的 marker，LLM 不能修改它们）
+3. LLM 校对/优化纯文本（LaTeX 结构已替换为不可见的 marker，LLM 不能修改它们）
 4. 用户审核 diff 结果，逐项确认
 5. 确认后，系统将 marker 还原为 LaTeX 并原子性写回源文件
 
@@ -89,7 +89,7 @@ latexcellence/
 
 > 带逐文件注释的完整目录树见 [PROJECT_SUMMARY.md](../PROJECT_SUMMARY.md)。
 
-> 依赖说明：后端使用 `requirements.txt`，无 `pyproject.toml`；前端包管理文件为 `frontend/package.json`，根目录无 `package.json`。
+> 依赖说明：后端使用 `requirements.txt`，无 `pyproject.toml`。前端包管理文件为 `frontend/package.json`，根目录无 `package.json`。
 
 ## tools/ 维护者工具
 
@@ -140,7 +140,7 @@ latexcellence/
 - `compare.py` 双 tag 模式自动执行对照组回归判定与硬编码门禁，非零退出即打回。
 
 事故复盘与改进机制详见
-[templategen-optimization-lessons.md](./templategen-optimization-lessons.md)；
+[templategen-optimization-lessons.md](./templategen-optimization-lessons.md)。
 plot_gen 的闭环复盘见 [plotgen-optimization-lessons.md](./plotgen-optimization-lessons.md)。
 
 ---
@@ -153,7 +153,7 @@ plot_gen 的闭环复盘见 [plotgen-optimization-lessons.md](./plotgen-optimiza
 2. 通过 `setup_logging()` 初始化日志系统
 3. 创建 FastAPI 应用，注册所有路由模块
 4. 添加 CORS 白名单 + 访问令牌中间件（`backend/core/security_middleware.py`）
-5. 在 `lifespan` 中执行启动/关闭日志
+5. 在 `lifespan` 中记录启动/关闭日志
 6. 生产模式挂载 `static/`，开发模式由 Vite dev server 独立运行
 
 内联路由：`/api/health`、`/api/config/status`、`/api/config`
@@ -197,7 +197,7 @@ npm start        # 或 node server.js
 
 这些环境变量也可以统一写进项目根目录的 `.env` 文件（模板见 `.env.example`）：配置解析时（`backend/core/config.py`）经 `backend/core/env.py` 自动加载，优先级为真实环境变量 > `.env` 文件 > config.json。
 
-参考完整示例见 `config.example.json`（可提交 Git，不含真实密钥）。
+完整示例见 `config.example.json`（可提交 Git，不含真实密钥）。
 
 ---
 
@@ -207,7 +207,7 @@ npm start        # 或 node server.js
 
 - 全部 `/api/*`（公开端点除外）强制会话 Cookie 认证，变更类请求需携带 `X-Latexcellence-CSRF` 请求头且其值与会话下发的 CSRF Cookie（`latexcellence_csrf`）一致（双提交防 CSRF）；共享访问令牌逻辑与任意路径打开/磁盘浏览被关闭；
 - 首次启动且用户表为空时，从环境变量 `LATEXCELLENCE_ADMIN_USERNAME` / `LATEXCELLENCE_ADMIN_PASSWORD` 引导首个管理员；未设置时使用 CLI 创建；
-- 认证依赖 argon2id 密码哈希（登录校验为恒定时长，防时序枚举用户名），会话令牌仅存哈希到 SQLite（WAL 模式）。
+- 认证依赖 argon2id 密码哈希（登录校验为恒定时长，防时序枚举用户名），会话令牌仅以哈希形式存入 SQLite（WAL 模式）。
 
 **认证/管理 API**（多用户模式下生效，单用户模式返回 404）：
 
@@ -269,7 +269,7 @@ python -m backend.manage set-status <username> pending|active|disabled
 - 协作者必须是 `active` 用户，不能是 owner 自身；未知用户 404 `user_not_found`，非 active 400 `invalid_user`；非 owner 管理操作一律 403 `no_permission`。
 - 权限实时查库：添加 / 改角色 / 移除后下一次请求立即生效（被移除者立即失去访问）。
 - 转交前校验接收方项目空间配额（超限 413 `quota_exceeded`，目录与归属不变）；转交时项目目录迁移到新 owner 空间（`data/users/<new_owner_id>/projects/<project_id>/`），新 owner 同名项目自动生成 `xx (2)`，已打开该项目的 workspace 绑定与文件树同步更新。
-- viewer 写保护（P2 已落地）：viewer 写操作 403。共享项目撤销已由 v2 P3 反向补丁解禁（按 actor 归属，转交后各用户只能撤销自己的修改）。
+- viewer 写保护（P2 已实现）：viewer 写操作 403。共享项目撤销已由 v2 P3 反向补丁解禁（按 actor 归属，转交后各用户只能撤销自己的修改）。
 
 **P6 迁移与存量隔离**（§7.2 / §13）：
 
@@ -278,7 +278,7 @@ python -m backend.manage set-status <username> pending|active|disabled
 
 基础设施、认证与项目实现的详细说明见 [docs/backend-core.md](backend-core.md)，完整设计见 [docs/multi-user.md](multi-user.md)，服务器部署指南（HTTPS、风险声明、备份与运维）见 [docs/deployment.md](deployment.md)。
 
-> 运维提示：登录限流按"用户名 + 客户端 IP"计数；若部署在反向代理（nginx 等）之后，`request.client.host` 恒为代理 IP，"每 IP"维度会退化，需按部署接入受信代理 / 真实 IP 传递后才会生效。
+> 运维提示：登录限流按"用户名 + 客户端 IP"计数。若部署在反向代理（nginx 等）之后，`request.client.host` 恒为代理 IP，"每 IP"维度会退化，需按部署接入受信代理 / 真实 IP 传递后才会生效。
 
 ---
 
@@ -296,7 +296,7 @@ python -m backend.manage set-status <username> pending|active|disabled
 3. 运行 `python main.py config.json`。
 4. 访问 http://localhost:8000。
 
-> 注意：`main.py` 仅在 `dev_mode == false` 时挂载 `static/`；若未切换就直接访问 8000 端口，将只能看到 API 接口而非前端页面。
+> 注意：`main.py` 仅在 `dev_mode == false` 时挂载 `static/`。若未切换就直接访问 8000 端口，将只能看到 API 接口而非前端页面。
 
 > SPA 回退：前端使用 BrowserRouter（history 路由），生产模式下刷新 / 直达 `/formula-ocr` 等客户端路由时物理文件不存在。`SPAStaticFiles` 对期望 HTML 的页面导航回退返回 `index.html`；脚本 / 样式等资源缺失与 `/api/*` 未命中仍保持 404。详见 [backend-core.md](backend-core.md)。
 
@@ -304,7 +304,7 @@ python -m backend.manage set-status <username> pending|active|disabled
 
 前端可独立部署为静态站点（如 `https://latexcellence.example.com`），用户浏览器直接访问网站、自行下载并本地运行后端。此模式下：
 
-- 前端 API 地址运行时可配置（设置页 → localStorage → `VITE_API_BASE_URL` → 默认 `http://localhost:8000/api`）；前后端分离部署时在设置页填写完整后端地址（如 `http://localhost:8000/api`）。
+- 前端 API 地址运行时可配置（设置页 → localStorage → `VITE_API_BASE_URL` → 默认 `http://localhost:8000/api`）。前后端分离部署时在设置页填写完整后端地址（如 `http://localhost:8000/api`）。
 - 维护者可在 `frontend/.env`（模板见 `.env.example`）中设置 `VITE_API_BASE_URL` 为自己的后端地址并重新构建，用户打开前端即默认连接该地址，无需逐个在设置页填写。
 - 后端返回的相对 URL（如 git-diff 的 `pdf_url`）由前端统一补全为完整后端地址并追加令牌参数。
 - `server.allowed_origins` 必须包含前端域名；`security.access_token` 建议设置随机长字符串，前端在设置页填写同名令牌。
@@ -338,7 +338,7 @@ core/ + utils/ (基础设施：配置、LLM 客户端、项目管理、文件 IO
 
 ### 单例模式
 
-无状态的基础设施通过模块级工厂函数实现单例：`get_config()`、`get_llm_client()`、`get_workspace_manager()`、`get_backup_manager()`。持有请求级状态的服务（typo_check / expression_opt / code_review / terminology_check / paragraph_translate 的 `get_service()`）每次请求创建独立实例，避免并发请求互相覆盖 marker 映射等状态；跨请求共享的 `operation_id` 上下文存放在进程级共享存储中。
+无状态的基础设施通过模块级工厂函数实现单例：`get_config()`、`get_llm_client()`、`get_workspace_manager()`、`get_backup_manager()`。持有请求级状态的服务（typo_check / expression_opt / code_review / terminology_check / paragraph_translate 的 `get_service()`）每次请求创建独立实例，避免并发请求互相覆盖 marker 映射等状态。跨请求共享的 `operation_id` 上下文存放在进程级共享存储中。
 
 ### 配置热重载
 
@@ -360,7 +360,7 @@ core/ + utils/ (基础设施：配置、LLM 客户端、项目管理、文件 IO
 - Agent 规则用一致的 XML 分区：workflow / quality gate / tool protocol / failure budget 各占一个成对闭合标签；每个阶段块用 `<stage_contract>` 记录 entry（进入条件）、input（输入）、output（输出）、done（完成条件）、fallback（失败回退）
 - 每个 Agent 模块设体积预算（template_gen ≤ 22000、plot_gen ≤ 15000、style_modify ≤ 5000 字符），由 `tools/generality_gate.py size` 门禁
 
-**评测约束**：修改提示词必须通过 prompt_comprehension_eval 回归验证；Agent 提示词瘦身必须维持或改善 generality_gate check 结果。
+**评测约束**：修改提示词必须通过 prompt_comprehension_eval 回归验证。Agent 提示词瘦身必须维持或改善 generality_gate check 结果。
 
 
 ---
@@ -393,7 +393,7 @@ core/ + utils/ (基础设施：配置、LLM 客户端、项目管理、文件 IO
 
 ## 约束机器化
 
-AGENTS.md 的编码约束已尽量落地为机器检查，机器检查是准绳、文字只是解释。各层职责：
+AGENTS.md 的编码约束已尽量实现为机器检查，机器检查是准绳、文字只是解释。各层职责：
 
 | 层 | 载体 | 覆盖内容 |
 | --- | --- | --- |
@@ -439,7 +439,7 @@ CI job 不重写任何检查命令：检查逻辑只存在于 `scripts/check_*.s
 
 | 场景 | 处理策略 |
 | --- | --- |
-| `\include`/ `\input` | 递归解析，记录依赖图 |
+| `\include`/ `\input` | 多文件展开，记录依赖图 |
 | verbatim 等环境 | 整体替换为 marker，LLM 不可修改 |
 | 控制符号（`\?`/`\'`/`\7`/`\~{n}`、`\`+换行、未配对 `\[`/`\(`） | 整体替换为 marker，不残留反斜杠/花括号 |
 | 行内数学 `$...$` | 非贪婪匹配；`\$`（如 `\$500`）由转义字符规则处理，不进入数学匹配 |

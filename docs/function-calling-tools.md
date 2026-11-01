@@ -34,7 +34,7 @@
 | 属性 | 值 |
 |------|-----|
 | **名称** | `read_file_content` |
-| **描述** | 读取指定文件内容（可指定行范围），行号从 1 开始。省略 `end_line` 时单次最多读取 200 行，截断时末尾给出下一段 `start_line`；单行超过 500 字符截断并附注说明 |
+| **描述** | 读取指定文件内容（可指定行范围），行号从 1 开始。省略 `end_line` 时单次最多读取 200 行，截断时末尾给出下一段 `start_line`。单行超过 500 字符截断并附注说明 |
 | **参数** | `file_path` (string, 必填), `start_line` (integer, 可选), `end_line` (integer, 可选) |
 | **定义位置** | `backend/utils/project_tools/manager.py:143` |
 | **执行函数** | `_read_file_content_executor()` (同文件:293) |
@@ -120,7 +120,7 @@
 | 属性 | 值 |
 |------|-----|
 | **名称** | `find_related_works` |
-| **描述** | 基于种子论文检索相关文献：参考文献（references）、施引文献（cited_by）、相似论文（similar），利用多数据源引文图。结果被截断时末尾标注 `truncated` 状态并提示继续检索 |
+| **描述** | 基于种子论文检索相关文献：参考文献（references）、施引文献（cited_by）、相似论文（similar），利用多数据源引文图。结果截断时末尾标注 `truncated` 状态并提示继续检索 |
 | **参数** | `work_id` (string, 必填), `relation_type` (enum: `references`/`cited_by`/`similar`, 必填), `max_results` (integer, 默认 20), `sort_by` (enum, 默认 `citation_count`) |
 | **定义位置** | `backend/utils/scholarly_research/manager.py:399` |
 | **执行函数** | `_scholarly_research_executor()` (同文件:489) |
@@ -143,7 +143,7 @@
 | 属性 | 值 |
 |------|-----|
 | **名称** | `search_research_data_resources` |
-| **描述** | 检索与研究主题相关的数据集与研究数据，跨多数据源搜索。结果被截断时末尾标注 `truncated` 状态并提示细化查询 |
+| **描述** | 跨多数据源检索与研究主题相关的数据集与研究数据。结果截断时末尾标注 `truncated` 状态并提示细化查询 |
 | **参数** | `query` (string, 必填), `resource_type` (enum: `dataset`, 默认 `dataset`), `max_results` (integer, 默认 10) |
 | **定义位置** | `backend/utils/scholarly_research/manager.py:462` |
 | **执行函数** | `_scholarly_research_executor()` (同文件:489) |
@@ -155,9 +155,9 @@
 
 ### Agent 文件工具共享层
 
-`backend/utils/agent_file_tools.py` 提供私有 Agent 文件工具的共享 schema 和执行模板。template_gen 与 plot_gen 使用标准名称 `write_file` / `read_file` / `list_files`；style_modify 使用名称映射保留 `stage_replace` / `read_project_file` / `list_project_files`，因此外部工具名与既有 trace 不变。
+`backend/utils/agent_file_tools.py` 提供私有 Agent 文件工具的共享 schema 和执行模板。template_gen 与 plot_gen 使用标准名称 `write_file` / `read_file` / `list_files`。style_modify 使用名称映射保留 `stage_replace` / `read_project_file` / `list_project_files`，因此外部工具名与既有 trace 不变。
 
-共享层统一参数校验、事件结构、列表格式、UTF-8 文本读取、输出截断和同步 I/O 的 `asyncio.to_thread()` 调度。模块执行器只实现路径/后缀策略、内容校验和实际存储。局部读取参数统一为 `line_range: [start, end]`，表示 1-based、首尾均包含的行区间；template_gen 和 style_modify 支持该参数，plot_gen 保持整文件读取。
+共享层统一参数校验、事件结构、列表格式、UTF-8 文本读取、输出截断和同步 I/O 的 `asyncio.to_thread()` 调度。模块执行器只实现路径/后缀策略、内容校验和实际存储。局部读取参数统一为 `line_range: [start, end]`，表示 1-based、首尾均包含的行区间。template_gen 和 style_modify 支持该参数，plot_gen 保持整文件读取。
 
 ### 模板生成 Agent
 
@@ -205,7 +205,7 @@
 | 6 | `compile_staged_project` | 在 shadow 项目编译候选版本 | 无（可选 `main_file`） | 始终 |
 | 7 | `finish` | 生成 proposal 并结束当前 run | `summary` | 始终 |
 
-`stage_replace` 写 overlay 前使用 `latex_json_guard.py` 内容校验；`.bib` 使用 `bibtex=True`。Agent 不提供创建、删除、重命名文件工具，也不允许执行任意 shell 命令。
+`stage_replace` 写 overlay 前用 `latex_json_guard.py` 校验内容。`.bib` 文件使用 `bibtex=True`。Agent 不提供创建、删除、重命名文件工具，也不允许执行任意 shell 命令。
 
 ### 写作助手专属工具
 
@@ -224,9 +224,9 @@
 
 ## 工具组成方式
 
-**写作助手 (writing_chat)**: `_get_enabled_tools()` 无条件注入 `request_clarification` 工具（始终可用），再按配置依次追加联网搜索 + 项目浏览 + 段落编辑 + 学术检索四类工具的 schema，注入 LLM `tools` 参数。其中段落编辑工具（`edit_paragraph` / `undo_last_edit`）默认需经前端确认弹窗（`edit_tools.require_confirmation=true`）后才执行，用户可修改参数或拒绝。
+**写作助手 (writing_chat)**: `_get_enabled_tools()` 无条件注入 `request_clarification` 工具（始终可用），再按配置依次追加联网搜索 + 项目浏览 + 段落编辑 + 学术检索四类工具的 schema，传入 LLM `tools` 参数。其中段落编辑工具（`edit_paragraph` / `undo_last_edit`）默认需经前端确认弹窗（`edit_tools.require_confirmation=true`）后才执行，用户可修改参数或拒绝。
 
-**编辑器助手 (writing_chat/editor)**: 复用同一 ToolRegistry，`_get_editor_tools()`（`editor_chat.py`）按白名单 `_EDITOR_TOOL_NAMES` 过滤三源 schema——项目浏览 + 联网搜索 + 学术检索（与写作助手注册表对齐，白名单扩自阶段五a），**不含**段落编辑工具（编辑器写入一律走缓冲区协议）。联网源受 `web_search.enabled` AND `writing_chat.web_search_enabled` 双开关、学术源受 `scholarly_research.enabled` AND `providers.openalex.enabled` 双开关把关（schema 收集层把关 + 工具循环执行前按同口径复核）；工具循环另有执行前白名单硬校验，模型幻觉调用越权工具名（含 `edit_paragraph`）或开关已关的联网/学术工具会被拒绝执行并注入失败 tool result。联网/学术九工具在编辑器侧**逐次确认执行**（阶段五b 确认流）：每次调用产生 pending 交互、经前端确认卡放行后执行，拒绝或 TTL 120s 过期注入取消语义 tool result；pending 先登记后下发事件，confirm/cancel 复用本模块 `confirm-tool` / `cancel-tool` 端点（多用户表驱动跨副本、单用户 Event）。项目只读三件套直通执行；DDG 验证挑战是确认之外唯一的人机交互。
+**编辑器助手 (writing_chat/editor)**: 复用同一 ToolRegistry。`_get_editor_tools()`（`editor_chat.py`）按白名单 `_EDITOR_TOOL_NAMES` 过滤三源 schema——项目浏览 + 联网搜索 + 学术检索（与写作助手注册表对齐，白名单扩自阶段五a），**不含**段落编辑工具（编辑器写入一律走缓冲区协议）。联网源受 `web_search.enabled` AND `writing_chat.web_search_enabled` 双开关、学术源受 `scholarly_research.enabled` AND `providers.openalex.enabled` 双开关控制（schema 收集层把关，工具循环执行前按同口径复核）。工具循环另有执行前白名单硬校验：模型幻觉调用越权工具名（含 `edit_paragraph`）或开关已关的联网/学术工具时，拒绝执行并注入失败 tool result。联网/学术九工具在编辑器侧**逐次确认执行**（阶段五b 确认流）：每次调用产生 pending 交互，经前端确认卡放行后执行，拒绝或 TTL 120s 过期时注入取消语义 tool result。pending 先登记后下发事件，confirm/cancel 复用本模块 `confirm-tool` / `cancel-tool` 端点（多用户表驱动跨副本、单用户 Event）。项目只读三件套直通执行。DDG（DuckDuckGo）验证挑战是确认之外唯一的人机交互。
 
 **模板生成 (template_gen)**: `_build_tools_schema()` 私有构建工具列表，通过 `chat_with_tools()` 直接传入，工具数量随 `agent_compile_enabled` 配置变化。
 

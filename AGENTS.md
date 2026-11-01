@@ -8,6 +8,7 @@ LaTeXcellence 是一个 AI 驱动的 LaTeX 文档助手。后端 FastAPI + 前�
 - **项目结构变更**（新增/删除模块、核心文件路径变更），必须同步更新 PROJECT_SUMMARY.md。
 - **特性专属约束按需加载**：配置同步、逐段检查、错误消息翻译等场景约束已下沉为 `.agents/skills/` 下的项目 skill，碰到对应场景必须先读对应 SKILL.md 再动手。
 - **提交代码**（写 commit message）前，必须先读 `.agents/skills/latexcellence-commit-message/SKILL.md`，按其规范书写提交说明。
+- **写文档**（README、docs/ 文档、设计文档、操作手册、runbook、更新日志等文档）前，必须先读 `.agents/skills/tech-writing/SKILL.md`，先定 strict / STE-flavored 模式再动笔。
 
 ## 技术栈速查
 

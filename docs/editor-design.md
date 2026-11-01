@@ -1,7 +1,7 @@
 # 网页编辑器功能设计（editor v1）
 
 > **状态：已实施。** 本文记录「网页编辑器 + LaTeX 命令快速输入 + 编辑器侧 AI 助手」的
-> 设计与决策依据，供维护与查询；当前完整实现形态见
+> 设计与决策依据，供维护与查询。当前完整实现形态见
 > [docs/modules/editor.md](modules/editor.md)，后续演进见
 > [editor-productivity-design.md](editor-productivity-design.md)（v2，已实施）与
 > [editor-experience-design.md](editor-experience-design.md)（v3，已实施）。
@@ -47,10 +47,10 @@
 
 **许可红线（长期有效）**：社区另有基于 Overleaf Lezer 语法的 `codemirror-lang-latex`
 （高亮 + 环境缩进 + 折叠更完整），但为 **AGPL-3.0**。本项目以 Web 服务形式提供多人使用，
-引入 AGPL 前端依赖将产生开放源码义务，故采用 MIT 方案；若将来决定以 AGPL 兼容方式开源，
+引入 AGPL 前端依赖将产生开放源码义务，故采用 MIT 方案。若将来决定以 AGPL 兼容方式开源，
 可通过语言包抽象层整体替换，不影响其他代码。
 
-现有 `CodeEditorInput`（textarea 高亮叠加方案）继续服务于各功能模块的小段输入框，与新编辑器并存互不影响。新增前端依赖需同步 `THIRD_PARTY_NOTICES.md`。
+现有 `CodeEditorInput`（textarea 高亮叠加方案）继续用于各功能模块的小段输入框，与新编辑器并存互不影响。新增前端依赖需同步 `THIRD_PARTY_NOTICES.md`。
 
 ## 4. 总体架构
 
@@ -82,7 +82,7 @@
 
 关键约束：
 
-- 写路径走**统一记账**：多用户模式记入反向补丁快照，手动编辑可被 undo/redo 回退，与 AI 改动共享同一套历史；
+- 写路径走**统一记账**：多用户模式记入反向补丁快照，手动编辑可用 undo/redo 回退，与 AI 改动共享同一套历史；
 - 服务端对内容做 `latex_json_guard` 的 `relaxed=True` 校验，仅拦截控制字符损坏、`[object Object]` 占位垃圾等**损坏特征**；不做括号/$ 配平检查（编辑中间态合法）。
 
 ### 5.2 编辑器助手端点（writing_chat 包内，前缀 `/api/writing-chat/editor`）
@@ -92,7 +92,7 @@
 | `POST /api/writing-chat/editor/send` | SSE 流式对话；请求额外携带编辑器上下文 `{file_path, buffer, cursor_line, selection}`（§7.3） |
 | `POST /api/writing-chat/editor/apply-suggestion` | 记录建议应用结果（消息级标记），供会话历史展示 |
 
-AI 修改**不经后端落盘**：建议以结构化形式随 SSE 返回，由前端应用到 CM6 缓冲区，最终由用户保存时经 save-file 统一路径落盘。
+AI 修改**不经后端落盘**：建议以结构化形式随 SSE 返回，由前端应用到 CM6 缓冲区，用户保存时才经 save-file 统一路径落盘。
 
 ### 5.3 配置
 
@@ -117,9 +117,9 @@ AI 修改**不经后端落盘**：建议以结构化形式随 SSE 返回，由�
 
 ### 6.2 模糊匹配（统一匹配器 `lib/editor/matcher.js`）
 
-基于 `pinyin-pro` 四路匹配：中文子串（`阿尔法`）、全拼（`aerfa`）、首字母（`ae`）、英文前缀/子串（`alpha` / `al`）；拼音序列预计算缓存，行内补全与命令面板共用同一匹配器保证行为一致。
+基于 `pinyin-pro` 四路匹配：中文子串（`阿尔法`）、全拼（`aerfa`）、首字母（`ae`）、英文前缀/子串（`alpha` / `al`）。拼音序列预计算缓存，行内补全与命令面板共用同一匹配器，保证行为一致。
 
-多音字修正：pinyin-pro 默认词典对数学专名会取错读音（「伽」默认 jiā，伽马/欧米伽应读 gā），以词级映射表（`PINYIN_WORD_FIXES`）经 `customPinyin()` 在索引构建前注册一次：只影响包含该词的条目、不污染同字其他读音，注册词可作用于包含它的更长条目。
+多音字修正：pinyin-pro 默认词典对数学专名会取错读音（「伽」默认 jiā，伽马/欧米伽应读 gā）。以词级映射表（`PINYIN_WORD_FIXES`）经 `customPinyin()` 在索引构建前注册一次，只影响包含该词的条目、不污染同字其他读音。注册词可作用于包含它的更长条目。
 
 ### 6.3 双入口
 
@@ -128,11 +128,11 @@ AI 修改**不经后端落盘**：建议以结构化形式随 SSE 返回，由�
 
 ### 6.4 表格/矩阵网格选择器
 
-面板中带 `grid` 配置的条目（tabular / matrix / pmatrix / bmatrix / vmatrix / cases 等）展开 m×n 拖选网格（Popover + CSS Grid），选定后按行列生成骨架再插入，占位符落在各单元格。
+面板中带 `grid` 配置的条目（tabular / matrix / pmatrix / bmatrix / vmatrix / cases 等）展开 m×n 拖选网格（Popover + CSS Grid）。选定后按行列生成骨架再插入，占位符落在各单元格。
 
 ### 6.5 宏包缺失联动
 
-前端内置极小「命令 → 必需宏包」映射表（如 matrix 系 / align → `amsmath`，三线表 → `booktabs`）。插入含 `pkg` 的条目时扫描当前缓冲区导言区（`preambleScan.js`），缺失则 toast 提示并提供"自动添加 `\usepackage{...}`"按钮（插入到已有 usepackage 声明之后或 `\documentclass` 之后）。
+前端内置最小「命令 → 必需宏包」映射表（如 matrix 系 / align → `amsmath`，三线表 → `booktabs`）。插入含 `pkg` 的条目时扫描当前缓冲区导言区（`preambleScan.js`）。缺失则 toast 提示并提供"自动添加 `\usepackage{...}`"按钮（插入到已有 usepackage 声明之后或 `\documentclass` 之后）。
 
 ## 7. AI 助手侧栏
 
@@ -209,7 +209,7 @@ Zustand 切片：`editorPreferences`（persist 持久化偏好）与 `editorSess
 | `Tab` | 占位符间循环跳转 |
 | `Ctrl/Cmd+Z` / `Shift+Ctrl/Cmd+Z` | 缓冲区内撤销/重做（CM6 history，未保存层） |
 
-v2 追加快捷键（包裹 `Ctrl/Cmd+B/I/U/K`、包裹浮层 `Ctrl+L`、一键格式化 `Ctrl/Cmd+Shift+F`）见 [editor-productivity-design.md](editor-productivity-design.md)；v3 新增交互（SyncTeX 正反向同步、实时语法诊断、跨文件大纲与公式预览卡、自定义片段管理）见 [editor-experience-design.md](editor-experience-design.md) 与 modules/editor.md。
+v2 追加快捷键（包裹 `Ctrl/Cmd+B/I/U/K`、包裹浮层 `Ctrl+L`、一键格式化 `Ctrl/Cmd+Shift+F`）见 [editor-productivity-design.md](editor-productivity-design.md)。v3 新增交互（SyncTeX 正反向同步、实时语法诊断、跨文件大纲与公式预览卡、自定义片段管理）见 [editor-experience-design.md](editor-experience-design.md) 与 modules/editor.md。
 
 ## 11. 偏好导入/导出
 

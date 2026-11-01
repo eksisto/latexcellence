@@ -6,7 +6,7 @@
 
 ### service 包拆分
 
-`WritingChatService` 对外仍从 `backend/modules/writing_chat/service` 导入；内部按职责拆为多个 mixin 子模块，避免单文件超过 1000 行：
+`WritingChatService` 对外仍从 `backend/modules/writing_chat/service` 导入。内部按职责拆为多个 mixin 子模块，避免单文件超过 1000 行：
 
 | 文件 | 职责 |
 | --- | --- |
@@ -29,7 +29,7 @@
 ### 双轮协议 + Function Calling
 
 - **RS1**：用户发送消息 → SSE 流式 `chat_stream_with_tools` → 实时输出文本 + 检测工具调用。RS1 中 LLM 可发起 Function Calling 调用联网搜索、学术研究、项目文件浏览、段落编辑和请求澄清工具，工具结果回传 LLM 后继续流式输出最终回复
-- **RS2**：用户在 RS1 回复上点击"生成编辑建议" → LLM 按分隔符协议（`<<<LATEX>>>...<<<END>>>`）输出修改后的完整 LaTeX 段落，可附带 `<<<REASON>>>...<<<END>>>` 说明 → 后端提取、校验并附挂 `EditOp`。LaTeX 不经过 JSON 字符串传输，反斜杠原样保留，从根上避免 JSON 转义静默损坏；`original` 由后端从段落原文填充，不再要求 LLM 回显
+- **RS2**：用户在 RS1 回复上点击"生成编辑建议" → LLM 按分隔符协议（`<<<LATEX>>>...<<<END>>>`）输出修改后的完整 LaTeX 段落，可附带 `<<<REASON>>>...<<<END>>>` 说明 → 后端提取、校验并附挂 `EditOp`。LaTeX 不经过 JSON 字符串传输，反斜杠原样保留，从根上避免 JSON 转义静默损坏。`original` 由后端从段落原文填充，不再要求 LLM 回显
 
 RS2 不直接写回 `.tex`，用户再点"应用到 .tex"才调用 `project_manager.apply_change`。
 
@@ -50,17 +50,17 @@ RS2 不直接写回 `.tex`，用户再点"应用到 .tex"才调用 `project_mana
 
 **磁盘持久化**：按项目路径 SHA256 前 16 位隔离存储，`session_id` 格式 `{scope}:{uuid}`。
 
-**会话标题**：`list_sessions()` 在会话未手动重命名时，从第一条 user 消息提取前 40 个字符作为标题；空会话返回空字符串，由前端按当前用户语言显示“无标题”类兜底文案，后端不硬编码语言占位符。
+**会话标题**：`list_sessions()` 在会话未手动重命名时，从第一条 user 消息提取前 40 个字符作为标题。空会话返回空字符串，由前端按当前用户语言显示“无标题”类兜底文案，后端不硬编码语言占位符。
 
-**Token 压缩**：发送消息前检查累计 token 是否超过触发值，超限时先把旧历史压缩，**再追加本轮 user 消息**，保证新指令始终以真实 user 角色进入 LLM。触发值默认按模型上下文窗口动态推导（`window - max_tokens - headroom - keep_recent - summary_budget`），`compression_threshold_tokens` 非 0 时作为固定覆盖。
+**Token 压缩**：发送消息前检查累计 token 是否超过触发值，超限时先压缩旧历史，**再追加本轮 user 消息**，保证新指令始终以真实 user 角色进入 LLM。触发值默认按模型上下文窗口动态推导（`window - max_tokens - headroom - keep_recent - summary_budget`），`compression_threshold_tokens` 非 0 时作为固定覆盖。
 
-压缩只作用于真正需要“遗忘”的旧历史：`split_for_compression()` 从尾部向前保留最近若干轮（`compression_keep_recent_turns` 与 `compression_keep_recent_tokens` 取先满足者），切分点不会落在 assistant+tool_calls 与其 tool 结果对之间；被压缩的旧消息替换为一条 summary 消息并保存到 `snapshot` 字段（嵌套快照：删除外层 summary 可逐层还原），最近轮次原样保留。
+压缩只作用于旧历史：`split_for_compression()` 从尾部向前保留最近若干轮（`compression_keep_recent_turns` 与 `compression_keep_recent_tokens` 取先满足者），切分点不会落在 assistant+tool_calls 与其 tool 结果对之间。被压缩的旧消息替换为一条 summary 消息并保存到 `snapshot` 字段（嵌套快照：删除外层 summary 可逐层还原），最近轮次原样保留。
 
-摘要请求输入剔除 tool 原始结果与 assistant+tool_calls 对，只保留对话文本；摘要 token 数优先取真实 `usage.completion_tokens`，无 usage 时按字符降级估算。摘要 LLM 失败/超时/空摘要时回退为确定性裁剪（保留最近 N 轮 + 丢弃旧工具对 + 插入简短说明），不阻塞对话。
+摘要请求输入剔除 tool 原始结果与 assistant+tool_calls 对，只保留对话文本。摘要 token 数优先取真实 `usage.completion_tokens`，无 usage 时按字符降级估算。摘要 LLM 失败/超时/空摘要时回退为确定性裁剪（保留最近 N 轮 + 丢弃旧工具对 + 插入简短说明），不阻塞对话。
 
-工具循环中单轮请求若触发上下文超限，会按序恢复：先裁剪旧工具对，仍超限则持久化已完成的历史工具轮次并压缩（不动当前正在执行的轮次），再重试同一轮；恢复失败时推送 SSE `error` 并保留用户消息（不静默删除）。
+工具循环中单轮请求若触发上下文超限，会按序恢复：先裁剪旧工具对，仍超限则持久化已完成的历史工具轮次并压缩（不动当前正在执行的轮次），再重试同一轮。恢复失败时推送 SSE `error` 并保留用户消息（不静默删除）。
 
-**上下文窗口探测**：`LLMClient.get_context_window()` 按“显式配置 `llm.context_window_tokens` → API `/models` 探测（`context_length` / `inputTokenLimit` / `outputTokenLimit` / `max_model_len` / `context_window` / `max_context_length`）→ 超限错误信息学习 → 内置模型表 → 默认 200000”的优先级获取窗口，结果按 `(profile_id, base_url, model)` 缓存（按模型档案隔离，防跨档案串味），`reset()`（配置热重载清池）时失效。`llm.models_probe_url` 可指定直连 vLLM / OpenAI 兼容 `/models` 地址，绕过不透传 `/models` 的网关；仅当探测地址与主服务同源时才携带 API key，跨域探测不发送密钥。
+**上下文窗口探测**：`LLMClient.get_context_window()` 按“显式配置 `llm.context_window_tokens` → API `/models` 探测（`context_length` / `inputTokenLimit` / `outputTokenLimit` / `max_model_len` / `context_window` / `max_context_length`）→ 超限错误信息学习 → 内置模型表 → 默认 200000”的优先级获取窗口，结果按 `(profile_id, base_url, model)` 缓存（按模型档案隔离，防跨档案串味），`reset()`（配置热重载清池）时失效。`llm.models_probe_url` 可指定直连 vLLM / OpenAI 兼容 `/models` 地址，绕过不透传 `/models` 的网关。仅当探测地址与主服务同源时才携带 API key，跨域探测不发送密钥。
 
 **手动压缩**：`POST /api/writing-chat/sessions/{id}/compact` 复用自动压缩逻辑（不追加 user 消息），前端会话页提供“压缩会话”按钮（streaming 或草稿会话中禁用；压缩成功后才重新拉取会话，消息过少/压缩失败时不发起二次请求）。
 
@@ -70,13 +70,13 @@ RS2 不直接写回 `.tex`，用户再点"应用到 .tex"才调用 `project_mana
 
 **工具消息持久化**：`append_tool_messages()` 将 Function Calling 工具调用循环产生的 assistant（含 tool_calls）和 tool 角色消息持久化到上下文，确保工具调用历史在会话间可追溯。tool 角色消息是内部上下文（仅用于回传 LLM），前端聊天区不直接展示（`isVisibleChatMessage` 过滤），工具活动由 `ToolStatusBar` 指示器呈现。
 
-**多轮工具调用与内容一致性**：工具调用循环中，`round_idx > 0` 的每一轮在流开始前推送 `round_start`，前端收到后重置流式消息的累积文本；无工具调用的一轮内容即最终落盘回复，不再重复生成。工具调用循环上限为 6 轮（`_MAX_TOOL_ROUNDS`），支持"搜索 → 读页 → 再搜索"的 agentic 检索；仅当轮数用尽、最后一轮仍请求工具调用时，才在额外生成的最终回复流前再推送一次 `round_start`。工具证据按 `_MAX_TOOL_CONTEXT_CHARS`（60000 字符）滚动预算裁剪：只裁剪已收齐结果的旧"assistant tool_calls + tool 结果"对，始终保留当前轮（正在执行或刚完成的轮次），避免多轮搜索撑爆上下文或拆散同一轮的多工具调用。`parseThinking` 同时会剥离正文中残留的完整 thinking 块。web_search 结果（`search_results` / `search_query` / `deep_read_pages` / `rewritten_queries`）随 assistant 消息一并落盘，刷新后搜索卡片与实时展示一致。
+**多轮工具调用与内容一致性**：工具调用循环中，`round_idx > 0` 的每一轮在流开始前推送 `round_start`，前端收到后重置流式消息的累积文本。无工具调用的一轮内容即最终落盘回复，不再重复生成。工具调用循环上限为 6 轮（`_MAX_TOOL_ROUNDS`），支持"搜索 → 读页 → 再搜索"的 agentic 检索。仅当轮数用尽、最后一轮仍请求工具调用时，才在额外生成的最终回复流前再推送一次 `round_start`。工具证据按 `_MAX_TOOL_CONTEXT_CHARS`（60000 字符）滚动预算裁剪：只裁剪已收齐结果的旧"assistant tool_calls + tool 结果"对，始终保留当前轮（正在执行或刚完成的轮次），避免多轮搜索撑爆上下文或拆散同一轮的多工具调用。`parseThinking` 同时会剥离正文中残留的完整 thinking 块。web_search 结果（`search_results` / `search_query` / `deep_read_pages` / `rewritten_queries`）随 assistant 消息一并落盘，刷新后搜索卡片与实时展示一致。
 
-**EvidenceBundle、引用校验与 untrusted 防护**：结构化 `open_page`、`read_page_sections` 和 `find_in_page` 返回的证据片段会按 `features.writing_chat.evidence_*` 预算去重、裁剪，并以稳定 `evidence_id` 组成 `EvidenceBundle`。System Prompt 要求 URL 使用工具返回的原值，并在事实句后附 `[EVIDENCE document_id#chunk_id]`；回复落盘前同时校验 Markdown URL 和 evidence ID，结果写入 assistant 消息并通过 `citation_note` SSE 事件提示。压缩摘要会保留证据附录和页面大纲。搜索结果与页面正文经 `format_for_llm()` 统一以 `UNTRUSTED DATA` 包装头注入，提示模型网页内容是数据而非指令。
+**EvidenceBundle、引用校验与 untrusted 防护**：结构化 `open_page`、`read_page_sections` 和 `find_in_page` 返回的证据片段会按 `features.writing_chat.evidence_*` 预算去重、裁剪，并以稳定 `evidence_id` 组成 `EvidenceBundle`。System Prompt 要求 URL 使用工具返回的原值，并在事实句后附 `[EVIDENCE document_id#chunk_id]`。回复落盘前同时校验 Markdown URL 和 evidence ID，结果写入 assistant 消息并通过 `citation_note` SSE 事件提示。压缩摘要会保留证据附录和页面大纲。搜索结果与页面正文经 `format_for_llm()` 统一以 `UNTRUSTED DATA` 包装头注入，提示模型网页内容是数据而非指令。
 
-**网络访问 v2 实施状态**：阶段 0-5 的契约、搜索/抽取/浏览器/学术能力与端到端证据链已经接入。`web_search.strategy` 独立控制搜索聚合，`web_search.page_reading.strategy` 控制读页链路：默认 `legacy` 使用兼容路径；`aggregate` / `structured` 分别启用 v2 搜索与结构化读取。浏览器回退默认关闭。学术全文结果会区分实际获得、缺失章节和抽取置信度，不会把摘要冒充全文。完整架构说明见 [网络访问架构](../writing-chat-web-access-architecture.md)，灰度和回滚步骤见 [运维说明](../web-access-operations.md)。
+**网络访问 v2 实施状态**：阶段 0-5 的契约、搜索/抽取/浏览器/学术能力与端到端证据链已经接入。`web_search.strategy` 独立控制搜索聚合，`web_search.page_reading.strategy` 控制读页链路：默认 `legacy` 使用兼容路径。`aggregate` / `structured` 分别启用 v2 搜索与结构化读取。浏览器回退默认关闭。学术全文结果会区分实际获得、缺失章节和抽取置信度，不会把摘要冒充全文。完整架构说明见 [网络访问架构](../writing-chat-web-access-architecture.md)，灰度和回滚步骤见 [运维说明](../web-access-operations.md)。
 
-**消息转换**：`to_openai_messages()` 已扩展以支持 tool 角色和 assistant+tool_calls 格式，将 `ChatMessage` 正确地转换为 OpenAI messages API 格式。
+**消息转换**：`to_openai_messages()` 支持 tool 角色和 assistant+tool_calls 格式，将 `ChatMessage` 转换为 OpenAI messages API 格式。
 
 ## Service 核心方法
 
@@ -135,7 +135,7 @@ LLM 最终回复
 | `question` | string | 是 | 向用户提出的问题，需清晰具体 |
 | `options` | string[] | 否 | 候选项列表，提供时用户可选择或自由输入 |
 
-**敏感操作保护**：`edit_paragraph` 和 `undo_last_edit` 被视为敏感操作。当 `features.function_calling.edit_tools.require_confirmation = true` 时，执行前推送 `tool_pending` SSE 事件，等待前端弹窗确认（超时 120 秒）。用户确认或取消后，结果回传 LLM 继续对话。
+**敏感操作保护**：`edit_paragraph` 和 `undo_last_edit` 是敏感操作。当 `features.function_calling.edit_tools.require_confirmation = true` 时，执行前推送 `tool_pending` SSE 事件，等待前端弹窗确认（超时 120 秒）。用户确认或取消后，结果回传 LLM 继续对话。
 
 **工具消息持久化**：工具调用循环结束后，所有 tool/assistant 消息通过 `append_tool_messages()` 持久化到会话上下文，确保工具调用历史在后续轮次中可追溯。
 
@@ -234,7 +234,7 @@ writing_chat 是 `chat_stream_with_tools` 方法的主要消费者。该方法�
 **工具确认流程**：
 
 - `pendingTool` state 存储待确认的工具调用
-- `confirmPendingTool(modifiedArgs)` 调用 `/confirm-tool` 接口，可选修改工具参数后确认；受 `canWrite` 守卫（viewer 只读，与 `applyEdit` 同权，后端 403 兜底）
+- `confirmPendingTool(modifiedArgs)` 调用 `/confirm-tool` 接口，可选修改工具参数后确认。受 `canWrite` 守卫（viewer 只读，与 `applyEdit` 同权，后端 403 兜底）
 - `cancelPendingTool()` 调用 `/cancel-tool` 接口取消
 
 **澄清请求流程**：
@@ -243,7 +243,7 @@ writing_chat 是 `chat_stream_with_tools` 方法的主要消费者。该方法�
 - `submitClarification(answer)` 调用 `/clarify` 接口提交用户回答
 - `cancelClarification()` 调用 `/cancel-clarify` 接口取消
 
-SSE 事件处理器处理 `tool_pending`、`tool_cancelled`、`clarification_request`、`web_stage`，并把 `scholarly_results`、证据片段和页面读取摘要存入 assistant 消息。`MessageBubble` 使用折叠卡展示学术记录、页面 outline、错误分类、证据片段和 evidence ID；可将未读章节生成下一条读取请求。
+SSE 事件处理器处理 `tool_pending`、`tool_cancelled`、`clarification_request`、`web_stage`，并把 `scholarly_results`、证据片段和页面读取摘要存入 assistant 消息。`MessageBubble` 使用折叠卡展示学术记录、页面 outline、错误分类、证据片段和 evidence ID。可将未读章节生成下一条读取请求。
 
 **会话重载一致性**：页面刷新水合后，`useWritingChat` 清空持久化的 `writingChatMessages` 并以后端会话 JSON 为准重新拉取当前会话（草稿会话除外），避免 localStorage 中的陈旧消息与磁盘 JSON 不一致；删除消息后的重载同样经过 `processLoadedMessages` 解析 thinking。
 

@@ -9,10 +9,10 @@
 | 模块 | 文档 | 说明 |
 | --- | --- | --- |
 | 错字查找 | [typo_check.md](modules/typo_check.md) | LaTeX 源码的错字检查与修正 |
-| 表达优化 | [expression_opt.md](modules/expression_opt.md) | 学术语言表达润色 |
+| 表达优化 | [expression_opt.md](modules/expression_opt.md) | 学术语言表达优化 |
 | 术语一致性检查 | [terminology_check.md](modules/terminology_check.md) | 术语一致性检查 |
 | 逐段翻译 | [paragraph_translate.md](modules/paragraph_translate.md) | 按段落翻译为目标语言，保留 LaTeX 结构 |
-| LaTeX 代码审查 | [code_review.md](modules/code_review.md) | 工具格式化 + LLM 智能审查 |
+| LaTeX 代码审查 | [code_review.md](modules/code_review.md) | 工具格式化 + LLM 审查 |
 | LaTeX 样式修改 | [style_modify.md](modules/style_modify.md) | 粘贴代码修改样式，或项目 Agent 定位样式并生成可审核、可撤销的候选修改 |
 | 写作助手 | [writing_chat.md](modules/writing_chat.md) | 多轮对话式写作辅助 |
 

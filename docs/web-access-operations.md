@@ -19,7 +19,7 @@
 
 ## 观测
 
-发布观察应至少汇总：成功率、p50/p95 延迟、v2 失败率、缓存命中率、浏览器升级率、低质量抽取率和未验证引用率。URL、query hash 和 session ID 不应作为 metrics label；需要排障时只在受控日志中使用匿名 hash 关联事件。
+发布观察应至少汇总：成功率、p50/p95 延迟、v2 失败率、缓存命中率、浏览器升级率、低质量抽取率和未验证引用率。URL、query hash 和 session ID 不应作为 metrics label。需要排障时只在受控日志中使用匿名 hash 关联事件。
 
 ## 离线评测与容量检查
 
@@ -30,7 +30,7 @@ python tools/web_access_eval/run_eval.py validate
 python tools/web_access_eval/run_eval.py replay --dataset <dataset.json> --predictions <predictions.json>
 ```
 
-本地结构化抽取容量冒烟测试会报告成功数、总耗时、p50/p95 和 Python 峰值内存。阈值必须来自部署环境预算；下面的值仅示例如何让超预算时返回非零退出码：
+本地结构化抽取容量冒烟测试会报告成功数、总耗时、p50/p95 和 Python 峰值内存。阈值必须来自部署环境预算。下面的值仅作示例，演示如何在超预算时返回非零退出码：
 
 ```shell
 python tools/web_access_eval/stage6.py capacity --iterations 100 --concurrency 8 --max-p95-ms 500 --max-peak-memory-mb 256
@@ -66,7 +66,7 @@ Bash 环境运行 `./clean-cache.sh`。清理会删除网页缓存以及项目�
 python tools/web_access_eval/stage6.py rollback-check
 ```
 
-演练时依次把搜索和网页读取切回 `legacy`，关闭浏览器、学术全文与 EvidenceBundle，并把学术排序切回 `legacy`。发送一个需要联网与一个需要学术检索的问题，确认兼容工具契约、SSE、旧会话恢复和 URL 引用校验仍工作。回滚期间保留缓存但停止结构化读取即可；不要在稳定期结束前删除 legacy 代码或迁移开关。
+演练时依次把搜索和网页读取切回 `legacy`，关闭浏览器、学术全文与 EvidenceBundle，并把学术排序切回 `legacy`。发送一个需要联网与一个需要学术检索的问题，确认兼容工具契约、SSE、旧会话恢复和 URL 引用校验仍工作。回滚期间保留缓存但停止结构化读取即可。不要在稳定期结束前删除 legacy 代码或迁移开关。
 
 ## 发布记录
 

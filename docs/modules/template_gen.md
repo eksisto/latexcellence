@@ -1,6 +1,6 @@
 # 模板生成模块 `template_gen/`
 
-根据用户的自然语言描述，通过**自主 Agent**（`TemplateAgentService`）基于 Function Calling 自主迭代生成完整可编译的多文件 LaTeX 工程。
+根据用户的自然语言描述，**自主 Agent**（`TemplateAgentService`）基于 Function Calling 自主迭代生成完整可编译的多文件 LaTeX 项目。
 
 ## 模块分层
 
@@ -26,14 +26,14 @@ Agent 自主规划文件结构 → 逐个 `write_file` → 调用 `compile_latex
 
 ## 工具体系（session 级私有）
 
-工具 schema 由 `TemplateAgentService._build_tools_schema()` 动态构建，随 `chat_with_tools(tools=...)` 注入。**不注册到全局 `ToolRegistry`** —— 因为这些工具绑定到一次性沙箱目录，注册成全局能力会污染其他模块（如 `writing_chat`）的工具集。`write_file` / `read_file` / `list_files` 的 schema、参数处理和执行模板来自 `backend/utils/agent_file_tools.py`，`_ToolExecutor` 只提供模板沙箱的校验与存储策略。
+工具 schema 由 `TemplateAgentService._build_tools_schema()` 动态构建，随 `chat_with_tools(tools=...)` 注入。**不注册到全局 `ToolRegistry`** —— 这些工具绑定到一次性沙箱目录，注册成全局能力会污染其他模块（如 `writing_chat`）的工具集。`write_file` / `read_file` / `list_files` 的 schema、参数处理和执行模板来自 `backend/utils/agent_file_tools.py`，`_ToolExecutor` 只提供模板沙箱的校验与存储策略。
 
 | 工具 | 功能 | 备注 |
 | --- | --- | --- |
-| `write_file` | 创建/覆盖沙箱内文件，完整内容写入 | 路径校验 + **不同文件数**/大小上限 + LaTeX 内容校验（写盘前拦截 JSON 转义损坏，失败回传 LLM 自纠）；重写已有文件不消耗文件预算，防止修复迭代中被预算卡死 |
-| `read_file` | 读取沙箱内文件 | 除已写源文件外，允许读取编译生成文件（`.log/.aux/.toc/.out/.blg/.fls` 等）；`line_range: [start, end]` 按 1-based 闭区间读取局部源码 |
+| `write_file` | 创建/覆盖沙箱内文件，完整内容写入 | 路径校验 + **不同文件数**/大小上限 + LaTeX 内容校验（写盘前拦截 JSON 转义损坏，失败回传 LLM 自纠）。重写已有文件不消耗文件预算，防止修复迭代中被预算卡死 |
+| `read_file` | 读取沙箱内文件 | 除已写源文件外，允许读取编译生成文件（`.log/.aux/.toc/.out/.blg/.fls` 等）。`line_range: [start, end]` 按 1-based 闭区间读取局部源码 |
 | `list_files` | 列出沙箱内全部文件 | 验证项目结构 |
-| `compile_latex` | `latexmk -xelatex` 在沙箱目录编译 | 受 `agent_compile_enabled` 开关控制，失败时截取错误行附近日志回传 LLM；latexmk 输出无 `!` 行时自动从 `<main>.log` 兜底提取结构化错误 |
+| `compile_latex` | `latexmk -xelatex` 在沙箱目录编译 | 受 `agent_compile_enabled` 开关控制，失败时截取错误行附近日志回传 LLM。latexmk 输出无 `!` 行时自动从 `<main>.log` 兜底提取结构化错误 |
 | `finish` | 信号项目完成，附带总结与主文件路径 | 调用后立即终止循环 |
 
 ## 沙箱与路径安全
@@ -84,7 +84,7 @@ Agent 自主规划文件结构 → 逐个 `write_file` → 调用 `compile_latex
    防止超大 tool_call 参数把上下文撑爆
 2. 调用 `chat_stream_with_tools` 流式消费：思维链 chunk 增量转为 `reasoning` 事件
    （用户在长时间思考阶段可实时看到推理进度，不会误以为卡住），content 累计，
-   tool_calls 在流末尾一次性返回；消费经共享辅助 `chat_stream_with_tools_retry()`
+   tool_calls 在流末尾一次性返回。消费经共享辅助 `chat_stream_with_tools_retry()`
    （`backend/core/llm_client.py`），流式调用无内置重试，仅对"未吐出任何 chunk
    的瞬时失败"（连接/超时/限流/5xx）补一次重试，永久性错误直接抛出。若 LLM 无
    `tool_calls`，先按"规划瘫痪防护"引导
@@ -101,24 +101,24 @@ Agent 自主规划文件结构 → 逐个 `write_file` → 调用 `compile_latex
 - `.tex` 正文拒绝 `\newcommand`/`\renewcommand`/`\setlength` 等样式定义
 - beamer 主文件含实际中文内容、未加载 ctex/xeCJK 且本地依赖也未加载 ctex/xeCJK 时拒绝
 - `.cls/.sty` 的 `\ProvidesClass`/`\ProvidesPackage` 可选日期必须 `YYYY/MM/DD`
-- `.cls/.sty` 内部允许 `@` 私有名；正文 `.tex` 禁止定义或调用 `@` 命令
+- `.cls/.sty` 内部允许 `@` 私有名。正文 `.tex` 禁止定义或调用 `@` 命令
 - `.cls` 的 `\DeclareOption`/`\ExecuteOptions` 必须在 `\ProcessOptions` 之前
 - setter 的 accessor 必须已有 `\newcommand` 默认值
 - 正文文件禁止使用 `\@...` 私有控制序列
 
 `compile_latex` 的质量门禁只读取最后一次主 `.log`，避免把早期 pass 的
-undefined citation/reference 误判为失败；未解析引用/缺字仍会阻断成功。
-5. 达到 `agent_max_rounds` 仍未 finish → 自动结束并推送提示；若此时编译仍失败，同样推送 `warning`。
+undefined citation/reference 误判为失败。未解析引用/缺字仍会阻断成功。
+5. 达到 `agent_max_rounds` 仍未 finish → 自动结束并推送提示。若此时编译仍失败，同样推送 `warning`。
 
 ## 规划瘫痪防护（no-tool-call nudge）
 
 LLM 面对复杂需求时可能出现"规划瘫痪"：首轮输出长篇思考文本却不调用任何工具，
-旧逻辑会把它当作主动结束，导致未生成任何文件就 `done`。现循环对"无 tool_call 的
+旧逻辑会把这种回复当作主动结束，导致未生成任何文件就 `done`。现循环对"无 tool_call 的
 回复"做如下处理：
 
-- 累计最多 2 次无工具回复时，注入一条用户消息引导其立即调用
+- 累计最多 2 次无工具回复时，注入一条用户消息引导 LLM 立即调用
   `write_file / read_file / list_files / compile_latex / finish`，
-  并写入 trace（`type: "nudge"`）供分析；
+  并写入 trace（`type: "nudge"`）供分析。
 - 超过 2 次仍无工具调用才视为异常结束。
 
 引导文案仅注入 LLM 历史并记录到 trace，**不推送 `plan` 事件到前端**——
@@ -137,7 +137,7 @@ Agent 循环对三类"看似在工作、实际在空转"的行为注入 `[SYSTEM
    的指令（`write_without_compile`）。
 2. **成功源码重复编译**：`compile_latex` 检测到源码与上次成功编译完全
    一致时直接跳过并提示"项目已验证，应 finish 或先改源码"
-   （`already_verified`）；连续 2 次触发后注入 `success_recompile_loop`。
+   （`already_verified`）。连续 2 次触发后注入 `success_recompile_loop`。
 3. **成功编译后无限打磨**：连续 4 次成功编译（源码有变化）仍不 finish 时，
    注入"非致命质量警告可交付，除非有具体新缺陷否则应 finish"
    （`finish_after_successes`），防止模型追 overfull box 等警告烧光轮次。
@@ -163,18 +163,18 @@ latexmk 的 stdout/stderr 有时不含 `!` 错误行（错误只写进了 `<main
 旧逻辑会让 Agent 面对一段没有错误标记的日志盲目重试。现在：
 
 1. `compile_latex` 失败且未从输出中解析出 `!` 行时，自动读取沙箱内
-   `<main>.log` 兜底调用 `_extract_errors()`；若仍无 `!` 行，则把 `.log`
+   `<main>.log` 兜底调用 `_extract_errors()`。若仍无 `!` 行，则把 `.log`
    尾部追加到回传文本，并提示 Agent 用 `read_file main.log` 查看全文。
 2. `_format_error_analysis()` 会按已知的**通用失败签名**追加 `HINTS` 区块：
    - `\spacefactor in vertical mode` → 元数据陷阱：正文文件不得使用
      `\@...` 内部宏，类中需提供公开访问命令（如 `\thesistitlevalue`）或
-     `\maketitlepage`；
+     `\maketitlepage`。
     - 字体缺失 / fontspec 错误 → 提示沙箱只有白名单内字体（Windows/Office
       字体不可用），删除显式 `\setCJKmainfont` 等命令交给 ctex 自动平台
-      字体集；拉丁字体回退白名单字体 / Latin Modern / 类默认（见下文
-      「字体白名单」）；
+      字体集。拉丁字体回退白名单字体 / Latin Modern / 类默认（见下文
+      「字体白名单」）。
    - `Command ... already defined` → 改用 `\renewcommand` 或新命令名。
-   - `macro parameter character #` → 文本中的字面 `#` 写 `\#`；HTML 颜色
+   - `macro parameter character #` → 文本中的字面 `#` 写 `\#`。HTML 颜色
      用 `\definecolor{...}{HTML}{1F4E79}` 且不带 `#` 前缀。
    - `Missing \endcsname` → key-value 上下文里的命令未定义/畸形（如
      `\wuhao` 不是命令，应用 `\zihao{5}` 或 `font=small`）。
@@ -182,9 +182,9 @@ latexmk 的 stdout/stderr 有时不含 `!` 错误行（错误只写进了 `<main
      行尾需 `\tabularnewline` 或用 `>{\centering\arraybackslash}p{...}`。
    - `Environment xxx undefined` → 加载对应宏包（如 `algorithm`）。
    - `Undefined color 'X'` → 自定义颜色须先用 `\definecolor` 定义再使用，
-     检查拼写与大小写；主题不会凭空提供未定义的颜色。
+     检查拼写与大小写。主题不会凭空提供未定义的颜色。
    - `Bibliography not compatible with author-year citations` → natbib
-     模式与 `.bst` 不一致；`latexmk -gg` 会自动重新生成 `.bbl`，无需删除，
+     模式与 `.bst` 不一致。`latexmk -gg` 会自动重新生成 `.bbl`，无需删除，
      只需把 natbib 选项与 `\bibliographystyle` 统一为同一种风格。
    - 参考文献失败（无 `.bbl`）→ 自动追加 `main.blg` 尾部并提示检查
      `.bst` 名称与 `.bib` 条目字段。
@@ -253,17 +253,17 @@ latexmk 的 stdout/stderr 有时不含 `!` 错误行（错误只写进了 `<main
 
 编译沙箱只提供清单内的字体，Agent 的规划提示词（`planning_system` 的
 `{font_whitelist}` 占位符）按配置渲染 `FONT WHITELIST` 清单，并硬性约束
-`\setmainfont` / `\setCJKmainfont` 只能使用名单内字体名、用户点名名单外字体时
-选择最接近的替代并在 README 注明。
+`\setmainfont` / `\setCJKmainfont` 只能使用名单内字体名。用户点名名单外字体时，
+Agent 选择最接近的替代并在 README 注明。
 
 - **数据结构**：`FontWhitelistEntry`（`name`：LaTeX 中使用的字体名；
   `aliases`：可替代的常见用户叫法，如 Times New Roman；`note`：用途备注）
 - **默认值**：与 `docker/tex` 镜像内置字体保持一致（Latin Modern / TeX Gyre
   系列 / Fandol / Noto CJK），由 `backend/core/config.py` 的
-  `default_font_whitelist()` 提供；**镜像与默认清单须同步维护**
+  `default_font_whitelist()` 提供。**镜像与默认清单须同步维护**
 - **私有化部署**：团队环境装有其他字体时，直接覆盖
   `features.template_gen.font_whitelist`（`config.json` 或设置界面 → 功能 →
-  模板生成 → 字体白名单，每行一条 `字体名 | 别名1, 别名2`）；置空列表则
+  模板生成 → 字体白名单，每行一条 `字体名 | 别名1, 别名2`）。置空列表则
   回退内置默认清单
 - 商业字体（Times New Roman、SimSun 等）因授权原因不可打进镜像，替代关系
   由 Agent 写入模板 README
@@ -311,21 +311,21 @@ Prefix: `/api/template-gen`, Tag: `template_gen`
 
 - **需求→实现 1:1 映射清单**：边距→`geometry`、字体→`fontspec`/`ctex`、
   主题色→`\definecolor`+`\colorlet`、三线表→`booktabs`、参考文献→
-  `natbib`/`biblatex`+`.bib`、中文→`ctex`/`xeCJK`（XeLaTeX）等；
-- **格式与内容分离**：样式封装 `.cls`/`.sty`，正文只用语义命令；
+  `natbib`/`biblatex`+`.bib`、中文→`ctex`/`xeCJK`（XeLaTeX）等。
+- **格式与内容分离**：样式封装 `.cls`/`.sty`，正文只用语义命令。
 - **分类玩法**：学位论文（front/main/back matter、元数据命令勿裸排
   `\@title`）、演示文稿（典型结构与字体机制、中文内容必须配 CJK 字体）、
   简历（语义命令、紧凑排版、页数服从用户要求）、会议论文（引用风格一致、
-  双栏实现方式）；所有 playbook 以用户明确需求优先，未指定时才采用通用
-  默认并在 README 记录，禁止写入学校/模板专属结构或数值；
+  双栏实现方式。所有 playbook 以用户明确需求优先，未指定时才采用通用
+  默认并在 README 记录，禁止写入学校/模板专属结构或数值。
 - **字体安全**：只假设各 TeX 发行版默认提供的字体（Latin Modern 与
-  ctex/xeCJK 默认 fontset）；用户指定字体一律用 `\IfFontExistsTF`
-  兜底便携回退；
+  ctex/xeCJK 默认 fontset）。用户指定字体一律用 `\IfFontExistsTF`
+  兜底便携回退。
 - **图片占位**：Agent 无法创建二进制文件，禁止引用不存在的 PNG，改用 TikZ 或
-  `\fcolorbox`/`\rule`；
-- **finish 前质量门禁**：对照需求清单复核文件；按文档类型校验结构
+  `\fcolorbox`/`\rule`。
+- **finish 前质量门禁**：对照需求清单复核文件。按文档类型校验结构
   完整性（标签/引用可解析、引用条目存在、标题层级连贯、已用构造使用正确），
-  禁止为满足门禁加入用户未要求的公式/图表/引用/目录；README 说明编译引擎，
+  禁止为满足门禁加入用户未要求的公式/图表/引用/目录。README 说明编译引擎，
   日志无未定义引用。
 
 ## 离线评测工具链（templategen_opt/）
@@ -340,7 +340,7 @@ Prefix: `/api/template-gen`, Tag: `template_gen`
 | `compare.py <tagA> <tagB>` | 对比两个 tag 的启发式与视觉评分 |
 | `descriptions.py` | 用户口吻的场景描述（学位论文/演示文稿/简历/需求遵守）与硬性要求检查表 |
 
-场景说明：每个场景的 `summary.json` 记录 `req.detail` 逐条需求遵守结果、
+场景说明：每个场景的 `summary.json` 记录 `req.detail` 逐条需求遵守结果，
 `visual_review` 记录视觉评分与问题清单，用于诊断 Agent 质量缺失环节。
 
 ## 闭环优化加固（templategen_opt 迭代产出）
@@ -349,14 +349,14 @@ Prefix: `/api/template-gen`, Tag: `template_gen`
 学校/模板/环境）。针对闭环评测暴露的共性问题做了以下加固：
 
 - **缺失资源协议**：不假设环境里有哪些字体/宏包（用户环境可能不同、可能
-  自行安装），也不允许 `test_fonts.tex` 之类的环境探测旁路；遇到
+  自行安装），也不允许 `test_fonts.tex` 之类的环境探测旁路。遇到
   `fontspec Error` / `File 'xxx.sty' not found` 时，用
-  `\IfFontExistsTF` 便携回退或标准等价宏包一次性修复、README 记录用户
-  期望字体、最多 1–2 轮处理同一缺失资源，并在 `finish` 摘要中说明替代。
+  `\IfFontExistsTF` 便携回退或标准等价宏包一次性修复，并在 README 记录
+  用户期望字体。同一缺失资源最多处理 1–2 轮，并在 `finish` 摘要中说明替代。
 - **Walking Skeleton 工作流**：先写最小可编译骨架并编译通过，再逐层丰富
   内容，禁止一次性写完整套复杂宏再编译。
 - **输出 token 上限放宽**：全局默认 `llm.max_tokens` 由 4096 提至 8192
-  （`backend/core/config.py` / `config.example.json` / 设置分区组件同步）；
+  （`backend/core/config.py` / `config.example.json` / 设置分区组件同步）。
   template_gen 仍保留 `max(cfg.llm.max_tokens, 8192)` 下限，即使用户把全局
   `max_tokens` 调得很小，`.cls` 等大文件在工具参数尾部也不会被截断导致
   花括号不配平。
@@ -368,7 +368,7 @@ Prefix: `/api/template-gen`, Tag: `template_gen`
   （`config.json` / `config.example.json` / 设置分区组件上限同步）。
 
 评测数据（`tools/templategen_opt/results/`）显示：加固后简单场景
-（如 `requirements`）可在 30 轮内编译通过并获视觉 8.5/10；tjuthesis 复刻
+（如 `requirements`）可在 30 轮内编译通过并获视觉 8.5/10。tjuthesis 复刻
 场景（`tju`）需求关键词检查全过（13/13），但当前模型在 50 轮内仍未能收敛
-到编译通过，说明该场景对模型的规划/调试能力要求高于其余场景，是后续
+到编译通过。该场景对模型的规划/调试能力要求高于其余场景，是后续
 模型升级或评测场景调优方向的主要验收基准。

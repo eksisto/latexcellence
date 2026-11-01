@@ -18,7 +18,7 @@
 
 ### System Prompt 核心约束
 
-LLM 在 system prompt 中强制约束：marker（`__CMD_0000__`）代表 LaTeX 命令，**绝对禁止修改、删除、拆分或重排**任何 marker。只允许修改纯文本部分的错字。每个 marker 在修正文本中必须与原文完全一致。
+system prompt 强制约束 LLM：marker（`__CMD_0000__`）代表 LaTeX 命令，**绝对禁止修改、删除、拆分或重排**任何 marker。只允许修改纯文本部分的错字。每个 marker 在修正文本中必须与原文完全一致。
 
 ## Pydantic 输出模型
 
@@ -61,4 +61,4 @@ Prefix: `/api/typo-check`, Tag: `typo_check`
 
 ## 人工评估
 
-`tests/fixtures/typo_check/` 是错字查找的人工评估语料（每条一个 LaTeX 段落片段 + `manifest.json`，按难度分层，含干净的对照段落用于误报检测），配套维护者工具位于 `tools/typo_check_eval/`：`run_eval.py` 在语料目录上打开工作区，逐条调用本模块 `TypoCheckService.check_typos()`，并把修正文本中的 marker 还原后生成原文/修正后对照 HTML 报告。该流程依赖真实 LLM 调用与人工判断，不属于 `pytest tests/` 自动测试范围，详见 `tools/typo_check_eval/README.md`。
+`tests/fixtures/typo_check/` 是错字查找的人工评估语料（每条一个 LaTeX 段落片段 + `manifest.json`，按难度分层，含干净的对照段落用于误报检测），配套维护者工具位于 `tools/typo_check_eval/`：`run_eval.py` 在语料目录上打开工作区，逐条调用本模块 `TypoCheckService.check_typos()`，先把修正文本中的 marker 还原，再生成原文/修正后对照 HTML 报告。该流程依赖真实 LLM 调用与人工判断，不属于 `pytest tests/` 自动测试范围，详见 `tools/typo_check_eval/README.md`。

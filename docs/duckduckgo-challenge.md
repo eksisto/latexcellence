@@ -14,7 +14,7 @@
 
 ## 2. Challenge 响应（HTTP 202）
 
-当触发时，DDG 返回 **HTTP 202**，body 是一个包含两个表单的 HTML 页面：
+触发时，DDG 返回 **HTTP 202**，body 是包含两个表单的 HTML 页面：
 
 ### 表单 1: `img-form`（图片加载追踪）
 

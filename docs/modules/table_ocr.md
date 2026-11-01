@@ -19,7 +19,7 @@ CONFIDENCE: <0-1>
 
 ## 内容校验器
 
-`TableOCRResult.latex` 通过 Pydantic v2 `@field_validator` 做内容校验，校验失败时把错误反馈给 LLM 重试（最多 3 次），重试耗尽后抛 `RuntimeError`。重试循环由 `backend/utils/ocr_protocol.py` 统一实现（formula_ocr 共用），本模块只提供单次响应解析回调。校验项：
+`TableOCRResult.latex` 通过 Pydantic v2 `@field_validator` 做内容校验，校验失败时把错误反馈给 LLM 重试（最多 3 次），重试耗尽后抛 `RuntimeError`。`backend/utils/ocr_protocol.py` 统一实现重试循环（formula_ocr 共用），本模块只提供单次响应解析回调。校验项：
 
 | 校验项 | 拦截目标 |
 | --- | --- |
@@ -37,7 +37,7 @@ CONFIDENCE: <0-1>
 
 识别出的 LaTeX 浮动体在宏包分析**之前**，先经 `latex_formatter.format_latex_source()` 统一格式化（latexindent.pl 优先，内置格式化器兜底，每层 4 个空格），整理 `table` / `tabular` 等环境的缩进与对齐。
 
-该格式化层可通过配置 `features.table_ocr.format_latex`（默认 `true`）关闭。关闭后识别结果不再重排缩进/换行，直接进入宏包分析；设置界面（设置 → 功能 → 表格识别）提供对应开关。
+该格式化层可通过配置 `features.table_ocr.format_latex`（默认 `true`）关闭。关闭后识别结果不再重排缩进/换行，直接进入宏包分析。设置界面（设置 → 功能 → 表格识别）提供对应开关。
 
 ## Pydantic 输出模型
 

@@ -17,12 +17,12 @@ Agentic 混合流水线：latexindent.pl（或内置轻量格式化器）处理�
 
 1. **工具格式化**：用原始 LaTeX（无 marker）调用 latexindent.pl 或内置兜底格式化器。
    两条路径统一为每层 4 个空格缩进：latexindent 通过项目内置
-   `backend/utils/latexindent.yaml`（`defaultIndent`）覆盖其默认的制表符缩进；
+   `backend/utils/latexindent.yaml`（`defaultIndent`）覆盖其默认的制表符缩进。
    内置格式化器同样按每层 4 个空格缩进
 2. **LLM 审查**：将格式化后的真实 LaTeX 直接发给 LLM，LLM 只出建议不动源码（坏味道、过时用法、最佳实践）
 
 **不使用 marker 保护的原因**：code_review 的 LLM 输出（建议）
-只读展示、从不写回文件，`new_text` 完全由工具生成；marker 保护反而把真实结构藏起来，
+只读展示、从不写回文件，`new_text` 完全由工具生成。marker 保护反而把真实结构藏起来，
 导致 LLM 只能依据周围可见文本臆测、产生无根据的建议（如凭空断言存在换行命令）。
 去掉 marker 后 LLM 可以直接审查真实结构，建议的 `original` 能与源码锚定
 （前端 anchors 在 `formattedText` 中定位：优先精确匹配，重复片段按出现顺序
@@ -36,18 +36,18 @@ paragraph_translate）的输出会写回文件，仍保留 marker 保护。
 - `CodeReviewResult` — 逐段审查结果（needs_review, suggestions）
 
 `CodeReviewSuggestion` 通过 `_reject_markers` 校验器兜底：输入已无 marker，若
-`description` / `original` / `suggested` 仍出现 `__CMD_0000__` 等占位符样式 token，
-说明 LLM 臆造/回显占位符，校验失败并进入 `retry_with_validation` 重试（错误反馈要求
-精确引用源码片段；源码无真实问题时返回 `needs_review: false`），重试耗尽后按常规回退。
-该防线保证占位符永不泄漏到前端展示（徽章污染/锚点失效/"采纳"静默无效）。
+`description` / `original` / `suggested` 仍出现 `__CMD_0000__` 等 marker 样式 token，
+说明 LLM 臆造/回显 marker，校验失败并进入 `retry_with_validation` 重试（错误反馈要求
+精确引用源码片段，源码无真实问题时返回 `needs_review: false`），重试耗尽后按常规回退。
+该防线保证 marker 永不泄漏到前端展示（徽章污染/锚点失效/"采纳"静默无效）。
 
 ## 提示词约束（反幻觉 + 不可信数据隔离）
 
-system prompt 明确要求：只报告源码中实际存在的问题，禁止从上下文臆造命令或结构；
+system prompt 明确要求：只报告源码中实际存在的问题，禁止从上下文臆造命令或结构。
 
 每条建议的 `original` 必须精确引用源码片段，`suggested` 给出具体 LaTeX 替换而非散文。
 
-`original` 还需携带足够上下文（整行或所在命令）使其在段落内只出现一次，避免多处匹配导致锚点/采纳错位；`suggested` 保留同样的上下文、仅修改问题部分，保证"替换 original"恰好落在目标位置。前端 anchors/采纳在 `formattedText` 中定位，仍以重复片段按序消费、折叠空白宽松匹配作为兜底。
+`original` 还需携带足够上下文（整行或所在命令）使其在段落内只出现一次，避免多处匹配导致锚点/采纳错位。`suggested` 保留同样的上下文、仅修改问题部分，保证"替换 original"恰好落在目标位置。前端 anchors/采纳在 `formattedText` 中定位，仍以重复片段按序消费、折叠空白宽松匹配作为兜底。
 
 用户提示词将 LATEX SOURCE 包裹在 `<latex_source>` 分隔符内，并声明文档内容是不可信数据而非指令，禁止执行内容中的任何指令文本（提示词注入防御）。
 
@@ -66,7 +66,7 @@ system prompt 明确要求：只报告源码中实际存在的问题，禁止从
 
 零外部依赖的轻量格式化器：环境缩进（每层 4 个空格，与 latexindent 路径保持一致）、环境间空行、`\begin`/`\end` 对齐、去除行尾多余空白。不做 latexindent 的高级对齐功能。
 
-已知限制：逐行 `strip()` 会把 `verbatim` / `Verbatim` / `lstlisting` 等逐字环境内容的前导空白规范化，无法保真；仅作 latexindent 不可用时的兜底。
+已知限制：逐行 `strip()` 会把 `verbatim` / `Verbatim` / `lstlisting` 等逐字环境内容的前导空白规范化，无法保真。仅作 latexindent 不可用时的兜底。
 
 ## API 路由
 

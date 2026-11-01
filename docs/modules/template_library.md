@@ -19,12 +19,12 @@
 
 与项目/配额体系一致的双模式语义，由路由层 `_current_actor` 依赖注入决定：
 
-- **多用户模式**：强制登录（未登录 401）。用户库根目录为 `<users_root>/<user_id>/template_library/<template_id>/`，目录归属由路径天然保证——只能访问内置模板与自己的模板，他人模板一律 404（不泄露存在性）。会话类资源（`from-template-gen`）的输出根经 `userspace.user_resource_root("templates", ...)` 按用户隔离。
+- **多用户模式**：强制登录（未登录 401）。用户库根目录为 `<users_root>/<user_id>/template_library/<template_id>/`，目录归属由路径保证——只能访问内置模板与自己的模板，他人模板一律 404（不泄露存在性）。会话类资源（`from-template-gen`）的输出根经 `userspace.user_resource_root("templates", ...)` 按用户隔离。
 - **单用户模式**：`actor=None`，走全局库目录 `features.template_library.user_library_dir`（默认 `data/template_library/`），保持存量单用户行为。
 
-模板 `kind`（builtin/user）由存放位置判定，不写入 manifest；API 视图模型（`TemplateSummary`）始终携带。
+模板 `kind`（builtin/user）由存放位置判定，不写入 manifest。API 视图模型（`TemplateSummary`）始终携带 `kind`。
 
-内置模板发现**不做启动期缓存**：每次请求实时读盘扫描 manifest，与配置热重载/模板热更新语义一致；损坏或缺失 manifest 的目录跳过并告警，不中断发现。
+内置模板发现**不做启动期缓存**：每次请求实时读盘扫描 manifest，与配置热重载/模板热更新语义一致。损坏或缺失 manifest 的目录跳过并告警，不中断发现。
 
 ## manifest schema
 
@@ -48,7 +48,7 @@
 
 ## API 路由
 
-Prefix: `/api/templates`, Tag: `template_library`。`features.template_library.enabled=false` 时端点整体关闭（404，不泄露存在性）；多用户模式走既有会话认证，单用户放行。
+Prefix: `/api/templates`, Tag: `template_library`。`features.template_library.enabled=false` 时端点整体关闭（404，不泄露存在性）。多用户模式走既有会话认证，单用户放行。
 
 | 方法 | 路径 | 功能 |
 | --- | --- | --- |
@@ -66,12 +66,12 @@ Prefix: `/api/templates`, Tag: `template_library`。`features.template_library.e
 
 ### 从模板创建项目（create-project）
 
-纯复制模板文件树为新项目，无变量替换；项目名由用户输入。复制前按清洗规则剔除库元数据与编译产物。
+纯复制模板文件树为新项目，无变量替换。项目名由用户输入。复制前按清洗规则剔除库元数据与编译产物。
 
 - **多用户**：配额预检（项目空间，超限 413，项目不落位）→ `move_into_user_space` 落位（失败清理残留）→ `create_project_row` 建行 → `schedule_auto_init` 异步初始化 Git——与上传创建完全同一条链路，同名自动去重。响应 `{project: {project_id, name}}`。
-- **单用户**：`{name, target_dir}`，创建 `<target_dir>/<项目名>/`；目标已存在且非空报 409。响应 `{project: {name, path}}`。
+- **单用户**：`{name, target_dir}`，创建 `<target_dir>/<项目名>/`。目标已存在且非空报 409。响应 `{project: {name, path}}`。
 
-前端创建成功后跳转 `/workspace`：多用户对齐项目工作台的打开模式（清空项目态 → 置项目身份 → 由工作台恢复链路完成打开，含主文档段落拉取与角色同步）；单用户以新 `project_path` 触发既有恢复链路。
+前端创建成功后跳转 `/workspace`：多用户对齐项目工作台的打开模式（清空项目态 → 置项目身份 → 由工作台恢复链路完成打开，含主文档段落拉取与角色同步）。单用户以新 `project_path` 触发既有恢复链路。
 
 ### 入库通道（upload / from-project / from-template-gen）
 
@@ -85,12 +85,12 @@ Prefix: `/api/templates`, Tag: `template_library`。`features.template_library.e
 
 ## 安全边界
 
-- **上传解压**：复用 `backend/core/multiuser/upload.py` 的 `extract_archive` 安全链（zip 炸弹/路径穿越/嵌套深度防护），解压预算取当前用户「模板」类别剩余衍生配额（单用户退化为上传大小上限），超限即时拒绝；上传包流式写盘并实时校验 `max_upload_mb`。仅接受 `.zip`。
+- **上传解压**：复用 `backend/core/multiuser/upload.py` 的 `extract_archive` 安全链（zip 炸弹/路径穿越/嵌套深度防护），解压预算取当前用户「模板」类别剩余衍生配额（单用户退化为上传大小上限），超限即时拒绝。上传包流式写盘并实时校验 `max_upload_mb`。仅接受 `.zip`。
 - **扩展名白名单**：上传模板包内出现 `allowed_extensions`（LaTeX 相关收窄，含图形/字体素材）之外的文件类型直接拒绝。无扩展名文件（`Path.suffix` 为空串，如 `.gitignore`/`Makefile`/`LICENSE`）豁免校验，但视为上传包冗余：解压后由 `_remove_extensionless_files()` 统一清理（连同清空后的子目录），不入库。
-- **路径安全唯一入口**：模板内文件读取统一经 `builtin_store.resolve_template_file()` → `path_guard.resolve_project_path()`（拒绝绝对路径 / `..` / 符号链接 / 越界逃逸 / 白名单外扩展名）；模板 id 经 `SAFE_ID_RE`（字母/数字/下划线/连字符）校验，杜绝路径穿越。
-- **源码查看白名单**：`file` 端点是纯文本通道，仅放行 `.tex/.sty/.cls/.bib/...` 等文本扩展名；二进制素材走 `thumbnail`/`preview` 专用端点。
+- **路径安全唯一入口**：模板内文件读取统一经 `builtin_store.resolve_template_file()` → `path_guard.resolve_project_path()`（拒绝绝对路径 / `..` / 符号链接 / 越界逃逸 / 白名单外扩展名）。模板 id 经 `SAFE_ID_RE`（字母/数字/下划线/连字符）校验，杜绝路径穿越。
+- **源码查看白名单**：`file` 端点是纯文本通道，仅放行 `.tex/.sty/.cls/.bib/...` 等文本扩展名。二进制素材走 `thumbnail`/`preview` 专用端点。
 - **路径脱敏**：API 响应与错误消息只携带模板内相对路径，服务器绝对路径只进服务端日志（对齐 AGENTS.md 多用户路径脱敏约束）。
-- **权限不泄露**：他人模板/不存在的模板统一 404；内置模板改名/删除返回 `builtin_readonly`。
+- **权限不泄露**：他人模板/不存在的模板统一 404。内置模板改名/删除返回 `builtin_readonly`。
 
 ## 配额
 
@@ -133,11 +133,11 @@ Prefix: `/api/templates`, Tag: `template_library`。`features.template_library.e
 | `resume-en` | 英文简历（现代风） | resume | 自绘样式的英文单页简历，无第三方模板依赖 |
 | `poster-a0` | A0 学术海报 | poster | A0 竖版三栏学术海报，色块分节标题 |
 
-每个模板均带预编译元资源（`assets/thumbnail.png` 卡片缩略图 + `assets/preview.pdf` 详情页 PDF 预览）；用户模板仅文件树 + 源码查看。详情对话框中的 PDF 预览支持全屏（左下角悬浮「全屏查看」进入、覆盖层按钮或 Escape 退出，与 git-diff 页全屏预览同款设计；覆盖层经 portal 挂到 body，避免对话框动画 transform 影响 fixed 定位）。
+每个模板均带预编译元资源（`assets/thumbnail.png` 卡片缩略图 + `assets/preview.pdf` 详情页 PDF 预览）。用户模板仅文件树 + 源码查看。详情对话框中的 PDF 预览支持全屏：左下角悬浮「全屏查看」进入，覆盖层按钮或 Escape 退出，与 git-diff 页全屏预览同款设计。覆盖层经 portal 挂到 body，避免对话框动画 transform 影响 fixed 定位。
 
 ## 维护者脚本
 
-`tools/builtin_templates/verify_templates.py`（不进入运行时，需本机 TeX Live；生成缩略图额外依赖 pdftoppm）：
+`tools/builtin_templates/verify_templates.py`（不进入运行时，需本机 TeX Live，生成缩略图额外依赖 pdftoppm）：
 
 ```bash
 python tools/builtin_templates/verify_templates.py                 # 验证全部模板可编译
@@ -145,18 +145,18 @@ python tools/builtin_templates/verify_templates.py --gen-assets    # 验证并�
 python tools/builtin_templates/verify_templates.py --only thesis-cn # 只验证指定模板
 ```
 
-脚本把模板复制到临时目录（剔除 `assets/` 与 `manifest.json`）后按 manifest 声明的引擎用 latexmk 编译，模拟「从模板创建项目」的干净文件树；全部成功退出码 0，可接入 CI。新增/修改内置模板后必须运行验证并重新生成元资源。
+脚本把模板复制到临时目录（剔除 `assets/` 与 `manifest.json`）后按 manifest 声明的引擎用 latexmk 编译，模拟「从模板创建项目」的干净文件树。全部成功退出码 0，可接入 CI。新增/修改内置模板后必须运行验证并重新生成元资源。
 
 ## 前端
 
-- 页面：`pages/TemplateCenterPage.jsx`（`/templates` 模板中心：搜索 + 分类 chip + 「内置模板/我的模板」tab + 卡片网格；功能关闭时空态兜底）。
+- 页面：`pages/TemplateCenterPage.jsx`（`/templates` 模板中心：搜索 + 分类 chip + 「内置模板/我的模板」tab + 卡片网格，功能关闭时空态兜底）。
 - 组件：`components/template-center/`（TemplateCard、TemplateDetailDialog、TemplateUploadDialog、TemplateEditDialog、CreateProjectDialog、SaveAsTemplateDialog、SaveTemplateGenDialog、TemplateThumbnail）。
 - 入口（`template_library` 开关关闭时全部隐藏）：欢迎页功能目录、项目工作台「从模板新建」、单用户工作区空态「从模板创建」、工作区菜单与编辑器工具栏「另存为模板」、模板生成页「存入模板库」。
-- API 封装：`api/index.js` 的 `templateLibrary` 接口组；错误码在 `errorMessages.js` 的 `EXACT_MAP` 收录并进三语 `errors` 命名空间。
+- API 封装：`api/index.js` 的 `templateLibrary` 接口组。错误码在 `errorMessages.js` 的 `EXACT_MAP` 收录并进三语 `errors` 命名空间。
 
 ## 与 template_gen 的关系
 
-`template_gen`（自主 Agent 生成模板）产出会话沙箱；本模块的 `POST /from-template-gen` 把会话产物清洗入库为「我的模板」（剔除 `trace.jsonl` 与 PDF 编译输出）。前端 `TemplateGenPage` 在生成完成后提供「存入模板库」按钮（弹窗确认模板名与分类，成功后 toast 提供跳转模板中心入口），会话归属的单用户/多用户差异由后端经 `userspace.user_resource_root` 处理，前端只传 `session_id`。
+`template_gen`（自主 Agent 生成模板）产出会话沙箱。本模块的 `POST /from-template-gen` 把会话产物清洗入库为「我的模板」（剔除 `trace.jsonl` 与 PDF 编译输出）。前端 `TemplateGenPage` 在生成完成后提供「存入模板库」按钮（弹窗确认模板名与分类，成功后 toast 提供跳转模板中心入口）。会话归属的单用户/多用户差异由后端经 `userspace.user_resource_root` 处理，前端只传 `session_id`。
 
 ## 测试位置
 

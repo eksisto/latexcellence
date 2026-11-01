@@ -2,23 +2,23 @@
 
 运行方式：`pytest tests/ -v`
 
-代码门禁（`scripts/check_backend.sh`，本地 `check.sh` 与 CI 的 python-check 同源）以 pytest-xdist 并行执行：`-n auto --dist loadfile --maxprocesses=8`，按文件分发、保持文件内用例顺序。手工逐文件排查时直接 `pytest tests/ -v` 仍为串行；并行会话下 `.pytest_tmp` 会话目录的旧目录清理由 xdist 主进程统一执行（worker 跳过，避免并发误删）。
+代码门禁（`scripts/check_backend.sh`，本地 `check.sh` 与 CI 的 python-check 同源）以 pytest-xdist 并行执行：`-n auto --dist loadfile --maxprocesses=8`，按文件分发、保持文件内用例顺序。手工逐文件排查时直接 `pytest tests/ -v` 仍为串行。并行会话下 `.pytest_tmp` 会话目录的旧目录清理由 xdist 主进程统一执行（worker 跳过，避免并发误删）。
 
 ## docker marker 用例与 CI
 
-`tests/test_docker/` 下的真容器冒烟带 `pytest.mark.docker`，无 Docker daemon 或缺少镜像时自动 skip；CI 的代码门禁 job（`python-check`）没有 daemon，因此显式以 `-m "not docker"` 排除（见 `scripts/check_backend.sh --skip-docker`）。
+`tests/test_docker/` 下的真容器冒烟带 `pytest.mark.docker`，无 Docker daemon 或缺少镜像时自动 skip。CI 的代码门禁 job（`python-check`）没有 daemon，因此显式以 `-m "not docker"` 排除（见 `scripts/check_backend.sh --skip-docker`）。
 
-即使本机有 daemon，只要它运行在私有 mount namespace（如 systemd `PrivateTmp=yes`）里，宿主机 `/tmp` 路径在容器内不可见，warm pool 用例会以 `bind source path does not exist: /tmp/lx_warm_pool_*` 失败——这是环境问题而非代码问题，本地可加 `--skip-docker`；真容器冒烟应在 daemon 与工作目录共享挂载的专用机器 / runner 上跑。
+即使本机有 daemon，只要它运行在私有 mount namespace（如 systemd `PrivateTmp=yes`）里，宿主机 `/tmp` 路径在容器内不可见。warm pool 用例会以 `bind source path does not exist: /tmp/lx_warm_pool_*` 失败。这是环境问题而非代码问题，本地可加 `--skip-docker`。真容器冒烟应在 daemon 与工作目录共享挂载的专用机器 / runner 上跑。
 
 ## 测试基线配置与 CI 干净检出
 
-`config.json` 含密钥不入库：存在时测试套件直接使用，干净检出（CI / 新 clone）自动回退加载入库的 `config.example.json`（见 `tests/conftest.py` 的 `_ensure_config`）。随后 fixture 在内存中统一钉住环境敏感基线——清空 access_token、关闭 multi_user、dummy api_key、沙箱 local 模式、打开联网/学术检索全局开关——保证测试结果不随开发者本机配置漂移；需要相反行为的用例自行 monkeypatch。
+`config.json` 含密钥不入库：存在时测试套件直接使用，干净检出（CI / 新 clone）自动回退加载入库的 `config.example.json`（见 `tests/conftest.py` 的 `_ensure_config`）。随后 fixture 在内存中统一钉住环境敏感基线——清空 access_token、关闭 multi_user、dummy api_key、沙箱 local 模式、打开联网/学术检索全局开关——保证测试结果不随开发者本机配置漂移。需要相反行为的用例自行 monkeypatch。
 
 新增依赖环境配置的测试时优先沿用该基线，不要隐式依赖本机 `config.json` 的某个开关取值：否则 CI 干净检出上会出现本地无法复现的失败甚至挂起。
 
 ## 前端单测的栈预算
 
-`npm test` 以 `node --stack-size=4000 --test` 运行：2MB 大文档的 Lezer 全量解析在树物化（`@lezer/common` 的 `takeNode`）中最深递归约 2500 层（`CutOff.Depth` 保护上限），单帧较大、总耗栈 ≈1MB，恰好贴着 V8 默认 984KB 栈的边缘——本机侥幸通过、共享 CI runner 上以 `RangeError: Maximum call stack size exceeded` 告终。显式 4MB 栈（约为需求 4 倍，仍在 Linux 默认 8MB rlimit 之内）消除该环境不确定性；`--test` 的子进程会继承该标志。
+`npm test` 以 `node --stack-size=4000 --test` 运行：2MB 大文档的 Lezer 全量解析在树物化（`@lezer/common` 的 `takeNode`）中最深递归约 2500 层（`CutOff.Depth` 保护上限）。单帧较大、总耗栈 ≈1MB，恰好贴着 V8 默认 984KB 栈的边缘。本机侥幸通过，共享 CI runner 上以 `RangeError: Maximum call stack size exceeded` 告终。显式 4MB 栈（约为需求 4 倍，仍在 Linux 默认 8MB rlimit 之内）消除该环境不确定性。`--test` 的子进程会继承该标志。
 
 ## 运行环境注意：TestClient 与受限沙箱
 
@@ -64,8 +64,8 @@ Windows 上 Codex 沙箱以专用用户执行命令，pytest 的临时目录若�
 | `tools/web_access_eval/spike.py` | 离线比较 BeautifulSoup/trafilatura、Playwright 本地页面和 `pdftotext`，不属于生产运行时 |
 | `test_utils/test_bib_manager_format_rules.py` | 参考文献格式确定性规则语料（格式识别命中与预期） |
 | `test_utils/test_latex_package_analyzer.py` / `test_latex_package_rules.py` / `test_latex_package_corpus.py` / `test_latex_package_compile_verification.py` | 宏包规则表：分析器、规则数据完整性、语料查准/查全基线、离线编译验证 |
-| `test_api/test_typo_check.py` | 模型校验、LLM mock、marker 保护、写回 |
-| `test_api/test_expression_opt.py` | 模型校验、LLM mock、marker 保护、prompt CRUD |
+| `test_api/test_typo_check.py` | 模型校验、LLM mock、Marker 保护、写回 |
+| `test_api/test_expression_opt.py` | 模型校验、LLM mock、Marker 保护、prompt CRUD |
 | `test_api/test_terminology_check.py` | 模型校验、LLM mock、聚类逻辑、写回 |
 | `test_api/test_template_gen.py` | Agent 循环、沙箱路径校验、写盘前 LaTeX 内容校验、编译错误解析、失败警告、运行追踪（trace.jsonl 读写与 get_session_trace） |
 | `test_api/test_formula_ocr.py` | 分隔符协议、内容校验重试、图片校验、预处理、LLM mock |
@@ -79,7 +79,7 @@ Windows 上 Codex 沙箱以专用用户执行命令，pytest 的临时目录若�
 | `test_api/test_style_modify_agent.py` | 项目 Agent：LatexProject 批量事务、session overlay、proposal、应用冲突、撤销、workspace 隔离、路径穿越防御 |
 | `test_api/test_writing_chat.py` | 模型、会话管理、发送/编辑/应用、RS2 分隔符协议提取/校验失败重试/CRLF 原文、助手提示词、搜索与学术研究工具事件 |
 | `test_api/test_bib_manager.py` | 格式分析、元数据提取、BibTeX 生成、.bib 操作（含撤销/重做覆盖）、路径穿越防御、DOI 查询、多数据源 Provider 降级 |
-| `test_api/test_paragraph_translate.py` | 模型校验、LLM mock、marker 保护、翻译写回 |
+| `test_api/test_paragraph_translate.py` | 模型校验、LLM mock、Marker 保护、翻译写回 |
 | `test_api/test_plot_gen.py` | 数据上传、Agent 生成/微调 SSE、沙箱校验、会话文件与 trace |
 | `test_api/test_project_browse.py` | 项目目录浏览与路径解析 |
 | `test_api/test_project_undo.py` | 项目撤销/重做操作与状态检查 |
@@ -100,7 +100,7 @@ Windows 上 Codex 沙箱以专用用户执行命令，pytest 的临时目录若�
 - undo 只恢复仍等于 applied MD5 的文件，不覆盖应用后的其他编辑
 - 不同 workspace 不能读取同一 session
 
-Agent 的 LLM 循环测试应 mock `chat_with_tools()`，不发起真实网络请求；shadow 编译测试应 mock 或复用 `run_tex_compile()` 的确定性路径。
+Agent 的 LLM 循环测试应 mock `chat_with_tools()`，不发起真实网络请求。shadow 编译测试应 mock 或复用 `run_tex_compile()` 的确定性路径。
 
 ## 人工评估工具（非 pytest）
 
@@ -140,7 +140,7 @@ Agent 的 LLM 循环测试应 mock `chat_with_tools()`，不发起真实网络�
 
 `tools/prompt_comprehension_eval/` 是提示词理解评测工具：对
 `backend/core/prompts.py` 中每个 LLM 提示词构造最简探测任务，调用真实
-LLM 并自动核验 JSON 格式、marker 保护、分隔符协议、JSON 转义、语言注入
+LLM 并自动核验 JSON 格式、Marker 保护、分隔符协议、JSON 转义、语言注入
 等关键契约，输出 `logs/prompt_comprehension_eval/results.json` 供人工复核。
 该流程依赖真实 LLM 调用，不属于 `pytest tests/` 自动测试范围。使用说明见
 `tools/prompt_comprehension_eval/README.md`。
@@ -153,7 +153,7 @@ LLM 并自动核验 JSON 格式、marker 保护、分隔符协议、JSON 转义�
 
 - **纯字节手工构造**（`tools/rar_fixtures/make_fixtures.py` 生成，store 模式
   RAR4）：布局、GBK 文件名、加密/分卷标志、服务块/子块数据区回归等结构性
-  用例，不依赖构建环境装包；
+  用例，不依赖构建环境装包。
 - **真实 rar CLI 生成**（`compressed_rar4.rar` / `compressed_rar5.rar` /
   `encrypted_rar5.rar` / `volume4.part1.rar` / `volume4.part2.rar`，rarlab
   rar 6.24 产物，总体积 KB 级）：压缩流无法伪造，用于「真实压缩 RAR4/RAR5
@@ -162,7 +162,7 @@ LLM 并自动核验 JSON 格式、marker 保护、分隔符协议、JSON 转义�
 
 `tools/rar_fixtures/verify_fixtures.py` 对**全部**入库样本做结构对账
 （版本头、压缩方法与实际压缩比、加密/分卷标志、成员名清单、单样本体积
-上限），并与生产管线 RAR4 预扫行为互验（预期放行/拒绝逐一对账）；环境
+上限），并与生产管线 RAR4 预扫行为互验（预期放行/拒绝逐一对账）。环境
 存在 unar/bsdtar 时额外做真实解压对账（压缩样本解出内容 sha256 与源
 指纹一致、真实加密包必须被解压器拒绝）。任何环境都可运行：
 

@@ -19,7 +19,7 @@ CONFIDENCE: <0-1>
 
 Vision 模型对"裁切出来的独立公式图"的 inline/display 判定系统性失效（实测对含求和/积分/极限的行内公式也几乎恒输出 display），因此**模型不再输出 INLINE 判定**。最终结论只由以下来源产生（按优先级）：
 
-1. **结构信号**（LaTeX 文本，确定性）：编号环境 / `\tag` / display-only 环境 / 多行对齐环境（含 `\\`）/ `\displaystyle` → display；`\textstyle` → inline
+1. **结构信号**（LaTeX 文本，确定性）：编号环境 / `\tag` / display-only 环境 / 多行对齐环境（含 `\\`）/ `\displaystyle` → display。`\textstyle` → inline
 2. **视觉判定**（`visual_inline.py`）：已决定时以其为准
 3. **默认值**：`False`（display），来源记为 `"default"`
 
@@ -28,26 +28,20 @@ Vision 模型对"裁切出来的独立公式图"的 inline/display 判定系统�
 - 公式编号（未带 `*` 的 `equation`/`align`/`gather`/`multline`/`eqnarray` 环境、显式 `\tag`）→ display
 - 只能用于 display mode 的环境（`equation*`/`align*`/`gather*`/`multline*` 等）→ display
 - 多行对齐内层环境（`aligned`/`gathered`/`split` 等且含 `\\` 换行）→ display
-- 显式 `\displaystyle` → display；显式 `\textstyle` → inline
+- 显式 `\displaystyle` → display。显式 `\textstyle` → inline
 - 无结构信号时：视觉判定已决定则以其为准，否则默认 display
 
-`\limits` / `\nolimits` 只决定大型算子上下标的绘制位置（正上下方 / 右侧），**不决定公式是行内还是行间**——行内公式同样可以写成 `$\sum\limits_{i=1}^n x_i$` 或 `$\int\limits_a^b f(x)\,dx$`。因此它们不作为矫正依据，避免把这类常见行内公式误判为 display；显式样式命令（`\displaystyle` / `\textstyle`）才是唯一可由源码判定的样式信号。
+`\limits` / `\nolimits` 只决定大型算子上下标的绘制位置（正上下方 / 右侧），**不决定公式是行内还是行间**——行内公式同样可以写成 `$\sum\limits_{i=1}^n x_i$` 或 `$\int\limits_a^b f(x)\,dx$`。因此它们不作为矫正依据，避免把这类常见行内公式误判为 display。显式样式命令（`\displaystyle` / `\textstyle`）才是唯一可由源码判定的样式信号。
 
 矫正扫描前先用 `latex_literals` 屏蔽逐字内容（`\verb` / `\lstinline` / verbatim 环境 / URL）与文本模式包裹（`\text` / `\mbox` 等），避免字面字符串中的 `\displaystyle`、`\begin{equation}` 触发误判。
 
-判定发生在数学包裹剥离**之前**（基于 `<<<LATEX>>>` 原始块），因此模型误加的 `\begin{equation}` 等编号环境也能正确判为 display；包裹剥离后再按判定结果做确定性 `$...$` / `\[...\]` 包裹。
+判定发生在数学包裹剥离**之前**（基于 `<<<LATEX>>>` 原始块），因此模型误加的 `\begin{equation}` 等编号环境也能正确判为 display。包裹剥离后再按判定结果做确定性 `$...$` / `\[...\]` 包裹。
 
-前端对 `inline_source === "default"`（无结构信号且视觉中立）的结果提供行内/行间切换：
-默认展示行间公式，用户可切换为行内；切换时同步更新 `inline` 标志与按同一包裹规则
-重写的 `latex`（剥 `$...$` / `\[...\]` / 空壳显示环境后重包，独立显示环境原样保留，
-宏包注释前缀 `% \usepackage{...}` 原样保留），`<pre>` 展示与复制内容保持一致。
-重写逻辑位于 `frontend/src/utils/formulaWrap.js`（与后端 `_wrap_latex_for_paste` /
-`_strip_math_wrappers` 语义一致，`frontend/` 下 `npm test` 覆盖回归用例）。
-`structure` / `visual` 已判定的结果只读展示标签。
+前端对 `inline_source === "default"`（无结构信号且视觉中立）的结果提供行内/行间切换：默认展示行间公式，用户可切换为行内。切换时同步更新 `inline` 标志，并按同一包裹规则重写 `latex`：剥 `$...$` / `\[...\]` / 空壳显示环境后重包，独立显示环境原样保留，宏包注释前缀 `% \usepackage{...}` 原样保留。`<pre>` 展示与复制内容保持一致。重写逻辑位于 `frontend/src/utils/formulaWrap.js`（与后端 `_wrap_latex_for_paste` / `_strip_math_wrappers` 语义一致，`frontend/` 下 `npm test` 覆盖回归用例）。`structure` / `visual` 已判定的结果展示为只读标签。
 
 ## 输入图片的确定性视觉判定（`visual_inline.py`）
 
-Vision 模型对"裁切出来的独立公式图"存在系统性倾向：即使上下标明显在算子右侧（行内样式），也常判为 `INLINE: false`（行间）。这类信息（上下标位置、积分字形）只存在于图片中，LaTeX 文本无法表达，因此后端增加一个**不依赖 LLM 的确定性视觉分析**（`analyze_formula_image`），对预处理后的同一张图做连通分量几何分析：
+Vision 模型对"裁切出来的独立公式图"存在系统性倾向：即使上下标明显在算子右侧（行内样式），也常判为 `INLINE: false`（行间）。这类信息（上下标位置、积分字形）只存在于图片中，LaTeX 文本无法表达，因此后端增加**不依赖 LLM 的确定性视觉分析**（`analyze_formula_image`），对预处理后的同一张图做连通分量几何分析：
 
 | 信号 | 判定 |
 | --- | --- |
@@ -60,7 +54,7 @@ Vision 模型对"裁切出来的独立公式图"存在系统性倾向：即使�
 判定原则：
 
 - 只对证据明确的情况投票：无大型算子、积分字形为显示样式（宽高比约 2.5）等不确定情形一律返回 `None`，退回默认 display，**绝不强行翻转**（在多组行内/行间渲染语料验证中 0 误翻转）。
-- 所有阈值均为相对量（图宽/图高的比例、宽高比），与 DPI 无关；分析前超过 1200px 的图等比缩小，只影响速度。
+- 所有阈值均为相对量（图宽/图高的比例、宽高比），与 DPI 无关。分析前超过 1200px 的图等比缩小，只影响速度。
 - 优先级：结构信号（编号环境 / `\displaystyle` 等）> 视觉判定 > 默认 display，由 `_inline_decision` 统一合并，并返回来源（`inline_source`：`structure` / `visual` / `default`）供接口排查。
 
 视觉分析异常时静默降级（不影响 OCR 主流程）。
@@ -75,13 +69,13 @@ LLM 自身加显示包裹极不可靠（测试时，输出有带 `$$`、有裸�
 | 展示公式（`inline=false`） | `\[...\]` |
 | 已是完整显示环境（`align*` / `gather*` / `multline*` 等） | 原样保留，不再额外包裹 |
 
-这样用户复制结果即贴即显；粘贴到已有 `align`/`equation` 中时也可自行去掉包裹。
+用户复制结果即贴即显。粘贴到已有 `align`/`equation` 中时也可自行去掉包裹。
 
 ## 统一格式化层
 
-识别出的 LaTeX 在确定性包裹与宏包分析**之前**，先经 `latex_formatter.format_latex_source()` 统一格式化（latexindent.pl 优先，内置格式化器兜底，每层 4 个空格），整理多行公式/环境的缩进与对齐；单行公式不受影响。
+识别出的 LaTeX 在确定性包裹与宏包分析**之前**，先经 `latex_formatter.format_latex_source()` 统一格式化（latexindent.pl 优先，内置格式化器兜底，每层 4 个空格），整理多行公式/环境的缩进与对齐。单行公式不受影响。
 
-该格式化层可通过配置 `features.formula_ocr.format_latex`（默认 `true`）关闭。关闭后识别结果不再重排缩进/换行，直接进入确定性包裹与宏包分析；设置界面（设置 → 功能 → 公式识别）提供对应开关。
+该格式化层可通过配置 `features.formula_ocr.format_latex`（默认 `true`）关闭。关闭后识别结果不再重排缩进/换行，直接进入确定性包裹与宏包分析。设置界面（设置 → 功能 → 公式识别）提供对应开关。
 
 ## 内容校验器
 
@@ -109,7 +103,7 @@ LLM 自身加显示包裹极不可靠（测试时，输出有带 `$$`、有裸�
 | `_strip_math_wrappers` | 剥离 `$$` / `\[ \]` / `\( \)` / `$` 数学包裹 |
 | `_parse_confidence` | 解析 `CONFIDENCE` 元数据（缺省 `0.0`） |
 | `_inline_decision` | 合并结构 / 视觉两层判定，返回 (inline, source)（优先级：结构 > 视觉 > 默认 display） |
-| `_reconcile_inline` | 按 LaTeX 结构 + 视觉判定合并 inline/display（编号 / 多行对齐 / 显式样式命令，先屏蔽逐字与文本内容）；无信号时默认 display |
+| `_reconcile_inline` | 按 LaTeX 结构 + 视觉判定合并 inline/display（编号 / 多行对齐 / 显式样式命令，先屏蔽逐字与文本内容）。无信号时默认 display |
 | `_wrap_latex_for_paste` | 按 `inline` 标志确定性添加 `$...$` / `\[...\]` 包裹（完整显示环境除外） |
 | `_preprocess` | 检查文件大小，超 2000px 等比缩放（LANCZOS 重采样） |
 | `_to_base64` | PIL Image → JPEG base64 |

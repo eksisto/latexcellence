@@ -6,7 +6,7 @@
 
 - 输出 PDF/SVG 矢量图、PNG 预览和 TikZ/PGFPlots 源文件
 - 默认使用色盲友好色板和简洁学术风格
-- 不自动虚构统计结果；显著性检验必须返回方法、统计量、p 值、假设与校正信息
+- 不自动虚构统计结果。显著性检验必须返回方法、统计量、p 值、假设与校正信息
 - 数据文件只在上传阶段进入 session 沙箱，绘图脚本不直接访问工作区
 
 ## 模块结构
@@ -47,14 +47,14 @@ backend/modules/plot_gen/
 - 上传数据写入 `data/plots/<session_id>/data/`
 - Agent 脚本写入 `data/plots/<session_id>/scripts/`
 - 产物写入 `data/plots/<session_id>/artifacts/`
-- 多用户模式（P6）：输出根目录按当前用户隔离到 `<users_root>/<user_id>/plots/`（经 `userspace.user_resource_root` 解析；单用户模式仍为 `data/plots/`，行为不变）
+- 多用户模式（P6）：输出根目录按当前用户隔离到 `<users_root>/<user_id>/plots/`，经 `userspace.user_resource_root` 解析。单用户模式仍为 `data/plots/`，行为不变
 - Python 子进程使用 `-I -B`（隐含 `-E`/`-s`，忽略 `PYTHON*` 环境变量与 user site），设置 `MPLBACKEND=Agg`
 - 每次执行前在 `scripts/_run_plot.py` 头部注入 `sandbox_guard.render_guard_bootstrap()` 的防护引导代码：先在安装审计钩子之前预加载 stdlib `ctypes`（避免 Python 3.13 `PyDLL(None)` 初始化事件误伤 numpy/pandas），再安装审计钩子，然后执行风格注入与用户脚本
 - 临时目录（`TMPDIR`/`TEMP`/`TMP`）重定向到 `tmp/`、matplotlib 缓存（`MPLCONFIGDIR`）重定向到 `.cache/matplotlib/`，均在沙箱内部
 - 超时、stdout 长度、文件大小和文件数量均有配置上限
 - 所有相对路径经 `resolve_project_path()` 校验
 - `write_file` 禁止覆写 `data/` 目录及 `meta.json`/`trace.jsonl` 控制文件
-- `write_file` 对 `.py` 内容做 `ast.parse` 语法校验（`_check_python_syntax()`）：语法错误在写入阶段直接拒绝并回传行/列号，不落盘、不发子进程，避免白跑一轮 `python_sandbox`
+- `write_file` 用 `ast.parse` 校验 `.py` 内容（`_check_python_syntax()`）：语法错误在写入阶段直接拒绝并回传行/列号，不落盘、不发子进程，避免白跑一轮 `python_sandbox`
 - 超时后按进程组终止子进程及其子孙（Windows 使用 `taskkill /T`），避免孤儿进程泄漏
 
 ## python_sandbox 安全监听器（审计钩子防护）
@@ -67,19 +67,19 @@ backend/modules/plot_gen/
 | 执行系统命令、开子进程 | `subprocess.Popen`、`os.system`、`os.exec*`、`os.spawn*`、`os.fork*`、`posix.exec*` 一律拦截 |
 | 访问网络 | `socket.*`、`urllib.Request`、`http.client`、`ftplib` 等一律拦截 |
 | 删除/修改系统文件 | `os.remove`/`unlink`/`rename`/`rmdir`/`mkdir`/`chmod`/`truncate`/`utime`/`symlink` 等仅允许沙箱内路径 |
-| ctypes 底层调用 | 拦截进程句柄加载（`CDLL(None)`/`pythonapi`）、按路径加载库、解析危险符号（`system`/`socket`/`open`/`WinExec`/`CreateProcess` 等黑名单）；系统库裸名加载（numpy/scipy/matplotlib 正常需要）放行 |
+| ctypes 底层调用 | 拦截进程句柄加载（`CDLL(None)`/`pythonapi`）、按路径加载库、解析危险符号（`system`/`socket`/`open`/`WinExec`/`CreateProcess` 等黑名单）。系统库裸名加载（numpy/scipy/matplotlib 正常需要）放行 |
 | 其它 | `os.chdir`、`os.kill`/`os.killpg`、`os.setuid` 等权限/特权操作一律拦截 |
 
-同时把临时目录与 matplotlib 缓存重定向进沙箱，避免正常绘图流程被误拦；`sys.removeaudithook` 在引导代码中被置空，防止沙箱代码卸载钩子。
+同时把临时目录与 matplotlib 缓存重定向进沙箱，避免正常绘图流程被误拦。引导代码把 `sys.removeaudithook` 置空，防止沙箱代码卸载钩子。
 
 ## 安全边界（重要）
 
 **`python_sandbox` 执行的是宿主机上以当前用户权限运行的任意 Python 代码**，`-I` 只做环境隔离。上述审计钩子属于 **Python 层纵深防御**，不提供操作系统级沙箱（无容器、无文件系统/网络强制隔离、不限制 CPU/内存）。
 
-- 绘图代码由 LLM 生成，而上传的数据文件会进入 LLM 上下文——恶意数据存在 **prompt 注入** 风险，可能诱导 LLM 写出读取敏感文件、外传数据等代码并以当前用户权限执行
+- 绘图代码由 LLM 生成，上传的数据文件会进入 LLM 上下文。恶意数据存在 **prompt 注入** 风险，可能诱导 LLM 写出读取敏感文件、外传数据等代码并以当前用户权限执行
 - 缓解措施：路径经 `resolve_project_path()` 校验、`write_file` 无法覆写 `data/` 与控制文件、审计钩子拦截越界读写/子进程/网络/ctypes 危险用法、子进程超时/大小限制兜底
-- 已知局限：审计钩子只覆盖 CPython 已接入审计机制的调用（如 `os.stat`/`os.lstat` 不触发审计事件，无法拦截纯元数据探测）；ctypes 允许加载系统库，通过系统库函数绕过钩子仍属理论可行；第三方库中未经过审计的系统调用无法阻止
-- 建议：将 `features.plot_gen.python_interpreter` 指向权限受限的专用解释器/虚拟环境；如需更强隔离应在系统层用容器或专用账号运行该服务
+- 已知局限：审计钩子只覆盖 CPython 已接入审计机制的调用（如 `os.stat`/`os.lstat` 不触发审计事件，无法拦截纯元数据探测）。ctypes 允许加载系统库，通过系统库函数绕过钩子仍属理论可行。第三方库中未经过审计的系统调用无法阻止
+- 建议：将 `features.plot_gen.python_interpreter` 指向权限受限的专用解释器/虚拟环境。如需更强隔离，应在系统层用容器或专用账号运行该服务
 - 使用本模块即视为接受上述信任边界
 
 ## TikZ 编译
@@ -87,89 +87,89 @@ backend/modules/plot_gen/
 `executor.py::_compile_tikz` 通过 `run_tex_compile()` 调用 latexmk 校验 `artifacts/` 内的 TikZ 源文件：
 
 - 统一在 `artifacts/` 目录下以 `tikz_main.tex` 为主文件编译，产物输出为 `artifacts/tikz_main.pdf`，避免与 matplotlib 生成的 `figure.pdf` 冲突
-- 自动识别目标 `.tex` 类型：含 `\documentclass` 的完整 standalone 文档直接作为主文件；纯 `tikzpicture` 片段则包装进 `\documentclass{standalone}` 主文件并 `\input` 引用
+- 自动识别目标 `.tex` 类型：含 `\documentclass` 的完整 standalone 文档直接作为主文件。纯 `tikzpicture` 片段则包装进 `\documentclass{standalone}` 主文件并 `\input` 引用
 - 编译引擎（pdflatex/xelatex/lualatex）基于目标图内容检测（而非包装文件），避免中文标签被误判为 pdflatex
 - 目标文件不在 `artifacts/` 下时先复制进去，保证 `\input` 相对编译目录可解析
-- **质量信号提取**：`_extract_tikz_issues()` 从日志中提取 error/warning（`! LaTeX Error`、`Undefined control sequence`、`Missing character`、`LaTeX Warning` 等）。即使 latexmk 退出码为 0，日志含真实错误时 `success` 降级为 `False`；`Missing character` 等渲染警告会以 `TIKZ ISSUES DETECTED` 段落回传 LLM 并在事件中携带 `warnings`/`issues` 字段，让 Agent 察觉图中存在未渲染文本。错误模式覆盖 `! Dimension too large`、`! Extra \endcsname`、`! Missing control sequence`、`! Text line contains an invalid character` 等常见 PGFPlots 错误；`Missing character` 中提及 `nullfont` 的条目（来自 latexmk 版本字符串）被视为无害噪音过滤，避免 Agent 因误报做无效修复
+- **质量信号提取**：`_extract_tikz_issues()` 从日志中提取 error/warning（`! LaTeX Error`、`Undefined control sequence`、`Missing character`、`LaTeX Warning` 等）。即使 latexmk 退出码为 0，日志含真实错误时 `success` 降级为 `False`。`Missing character` 等渲染警告会以 `TIKZ ISSUES DETECTED` 段落回传 LLM 并在事件中携带 `warnings`/`issues` 字段，让 Agent 察觉图中存在未渲染文本。错误模式覆盖 `! Dimension too large`、`! Extra \endcsname`、`! Missing control sequence`、`! Text line contains an invalid character` 等常见 PGFPlots 错误。`Missing character` 中提及 `nullfont` 的条目（来自 latexmk 版本字符串）当作无害噪音过滤，避免 Agent 因误报做无效修复
 - **编译前预检**：`_precheck_tikz()` 在启动 latexmk 前对 TikZ 源做纯文本扫描（不调用 LLM），针对 matplot2tikz 0.5.4 的高频故障：
-  - 内联 `y error=`（非法 key，合法形式是 `y error plus`/`y error minus`）与 `+-` 误差增量含 `nan`/`inf` 时判定为**必然失败**，跳过编译直接回传修正建议；
-  - 线性轴上 |坐标| > 1e4（如 Excel 日期序号 44927）判定为**必然失败**（`Dimension too large`），对数轴（`xmode=log`/`ymode=log`）上的大数值坐标放行；
+  - 内联 `y error=`（非法 key，合法形式是 `y error plus`/`y error minus`）与 `+-` 误差增量含 `nan`/`inf` 时判定为**必然失败**，跳过编译直接回传修正建议。
+  - 线性轴上 |坐标| > 1e4（如 Excel 日期序号 44927）判定为**必然失败**（`Dimension too large`），对数轴（`xmode=log`/`ymode=log`）上的大数值坐标放行。
   - 非 ASCII 字符仅给**警告**不拦截（xelatex 可正常渲染中文，避免误伤合法流程）。
   - 预检结果以 `TIKZ PRECHECK` 段落附加到 `compile_tikz` 回传文本，事件新增 `precheck`（命中规则列表）与 `precheck_blocked`（是否跳过编译）字段
-- **编译环境缺包止损**：`_detect_missing_tex_file()` 在编译失败时从日志识别缺失的 `.cls`/`.sty`（如旧版 tex 镜像缺 `standalone.cls`/`pgfplots.sty`）。这类报错属环境问题、无法通过修改 TikZ 源修复，回传文本明确指示 Agent 不再重试 `compile_tikz`、直接带警告 `finish`；执行器同时记录缺失项，本会话后续 `compile_tikz` 调用直接短路。事件携带 `environment_error: true` 与 `missing_tex_file` 字段；恢复方式为按 `docker/README.md` 缺宏包排查指南把对应包加入清单并重建 tex 镜像
+- **编译环境缺包止损**：`_detect_missing_tex_file()` 在编译失败时从日志识别缺失的 `.cls`/`.sty`（如旧版 tex 镜像缺 `standalone.cls`/`pgfplots.sty`）。这类报错属环境问题，无法通过修改 TikZ 源修复，回传文本明确指示 Agent 不再重试 `compile_tikz`，直接带警告 `finish`。执行器同时记录缺失项，本会话后续 `compile_tikz` 调用直接短路。事件携带 `environment_error: true` 与 `missing_tex_file` 字段。恢复方式为按 `docker/README.md` 缺宏包排查指南把对应包加入清单并重建 tex 镜像
 
 ## Agent 循环保护
 
-`agent.py` 主循环内置"连续相同失败"检测：同一工具调用产生完全一致的失败结果达到 3 次时，向 LLM 注入系统提示要求停止盲目重试（改为换思路诊断或带警告调用 `finish`），并向前端发出 warning 事件。
+`agent.py` 主循环内置"连续相同失败"检测：同一工具调用产生完全一致的失败结果达到 3 次时，向 LLM 注入系统提示要求停止盲目重试（换思路诊断，或带警告调用 `finish`），并向前端发出 warning 事件。
 
-除逐字相同的失败检测外，还按工具族（`python_sandbox` / `compile_tikz`）维护**失败预算**：同一工具族连续失败 3 次即注入强约束提示——`python_sandbox` 连续失败时要求简化图表（去掉误差棒/3D/花哨标注）并核对列名；`compile_tikz` 连续失败时要求先修正 `tikz_spec.json`/数据 CSV（后端自动重新渲染 figure.tex），必要时改用手写 PGFPlots。该机制可拦截"错误信息文字不同但根因相同"的隐性死循环。
+除逐字相同的失败检测外，还按工具族（`python_sandbox` / `compile_tikz`）维护**失败预算**：同一工具族连续失败 3 次即注入强约束提示。`python_sandbox` 连续失败时要求简化图表（去掉误差棒/3D/花哨标注）并核对列名。`compile_tikz` 连续失败时要求先修正 `tikz_spec.json`/数据 CSV（后端自动重新渲染 figure.tex），必要时改用手写 PGFPlots。该机制可拦截"错误信息文字不同但根因相同"的隐性死循环。
 
 Agent 还维护一个**产物验证状态机**（`verified`，对应最后一次成功编译是否匹配当前源码）：
 
-- **成功后验证循环拦截**：`compile_tikz` 成功且此后没有修改任何影响产物的文件（`scripts/`、`artifacts/tikz_spec.json`、`artifacts/figure.tex`、`artifacts/data_*.csv`）时，`read_file` / `list_files` / `python_sandbox` / `compile_tikz` 会在执行前被拦截并注入 `VERIFIED-LOOP BLOCK` 提示，要求直接 `finish`——把提示词里的"无验证循环"从软约束变成确定性机制。
-- **stale finish 拦截**：最后一次成功编译后修改了影响产物的文件或重跑过脚本，再直接调用 `finish` 时，第一次会在执行前被拦截并注入 `STALE FINISH BLOCKED` 提示（要求重跑 `python_sandbox` + `compile_tikz`）；再次坚持调用则允许交付但发出 stale 警告，避免 Agent 被困在无法收尾的死循环。
+- **成功后验证循环拦截**：`compile_tikz` 成功且此后没有修改任何影响产物的文件（`scripts/`、`artifacts/tikz_spec.json`、`artifacts/figure.tex`、`artifacts/data_*.csv`）时，guard 会在执行前拦截 `read_file` / `list_files` / `python_sandbox` / `compile_tikz` 并注入 `VERIFIED-LOOP BLOCK` 提示，要求直接 `finish`。这把提示词里的"无验证循环"从软约束变成确定性机制。
+- **stale finish 拦截**：最后一次成功编译后修改了影响产物的文件或重跑过脚本，再直接调用 `finish` 时，guard 会在执行前拦截第一次调用并注入 `STALE FINISH BLOCKED` 提示（要求重跑 `python_sandbox` + `compile_tikz`）。再次坚持调用则允许交付但发出 stale 警告，避免 Agent 被困在无法收尾的死循环。
 - **拦截不污染状态**：被 guard 拦截的调用不会更新 `execution_state` / `tikz_state`，也不会计入相同失败检测与失败预算，避免"拦截即失败"的误导性强约束与误报。
 - **影响产物文件判定**：覆盖 `scripts/` 前缀与 `artifacts/` 下 `.tex` / `.csv` / `.json` 后缀（手写回退允许任意 `artifacts/*.csv` / `*.tex`），路径先做 POSIX 归一化（处理 `./`、重复斜杠等），`.png` / `.log` 等不影响产物。
 
 System prompt 还包含以下约束，防止 Agent 在成功路径上产出低质量结果：
 
-- **统计真实性**：只有用户明确要求时才运行统计检验，且必须调用 `stats_test` 工具并原样引用其返回值；禁止在脚本内联计算统计量作为替代，禁止在 summary 中编造/改写任何 p 值或统计量（图中标注与 summary 数值必须一致）
+- **统计真实性**：只有用户明确要求时才运行统计检验，且必须调用 `stats_test` 工具并原样引用其返回值。禁止在脚本内联计算统计量作为替代，禁止在 summary 中编造/改写任何 p 值或统计量（图中标注与 summary 数值必须一致）
 
-`stats_test` 参数校验（`executor.py::_validate_stats_inputs`）：按测试类型强制必填参数并在缺失/类型不符时给出明确消息——t-test/wilcoxon/anova/kruskal 要求 `group` + 数值列 `y`；pearson/spearman 要求数值列 `x` + `y`；chi2 要求分类列 `x` + `y`（高基数数值列会被拒绝）。错误消息包含缺失参数名与数据文件可用列，避免原先 `df.loc[df[group]==g, None]` 抛晦涩 KeyError。
+`stats_test` 参数校验（`executor.py::_validate_stats_inputs`）：按测试类型强制必填参数并在缺失/类型不符时给出明确消息。t-test/wilcoxon/anova/kruskal 要求 `group` + 数值列 `y`。pearson/spearman 要求数值列 `x` + `y`。chi2 要求分类列 `x` + `y`（高基数数值列会被拒绝）。错误消息包含缺失参数名与数据文件可用列，避免原先 `df.loc[df[group]==g, None]` 抛晦涩 KeyError。
 
 - **风格约束**：禁止覆盖预置 rcParams，见"风格注入"一节
 - **图内文字语言**：默认使用纯英文 ASCII（单位采用 `ug/mL`、`uM`、`degC`、`x`
-  等 ASCII 转写），保证任意环境可编译；用户明确要求中文等非 ASCII 图注时
+  等 ASCII 转写），保证任意环境可编译。用户明确要求中文等非 ASCII 图注时
   允许使用（后端自动切 xelatex、风格字体链含 CJK 字体），若编译报缺失字形/
   字体则回退 ASCII 并在 summary 说明替代
-- **日期/坐标指导**：datetime 列先转成日序号（day index）再绘图或写 TikZ，避免大绝对值坐标（如 44927）触发 PGFPlots "Dimension too large"；对数坐标需求显式使用 `xmode=log` 并过滤非正剂量
+- **日期/坐标指导**：datetime 列先转成日序号（day index）再绘图或写 TikZ，避免大绝对值坐标（如 44927）触发 PGFPlots "Dimension too large"。需要对数坐标时显式使用 `xmode=log` 并过滤非正剂量
 - **无验证循环**：`compile_tikz` 成功后不得重复 `read_file`/`list_files`/`python_sandbox`/`compile_tikz` 做无意义验证，直接调用 `finish`
 - **首轮必须调用工具**：`generate` 的第一个响应若只输出文字、不调用任何工具，会注入强约束 system 消息要求重试（trace 记 warning），避免 LLM 随机性导致零产物的空会话收尾
-- **布局规则**：每图一种主编码（箱线图已编码分布，不要再叠加误差棒/均值线）；图例放在不遮挡数据的空角或直接去掉；`xmin`/`xmax`/`ymin`/`ymax` 紧贴数据范围，对数轴不要留整 decade 空白
-- **省轮次**：数据画像已含列类型/样例/分位数/预览，优先依据画像写代码，避免 `read_file` 整份数据；修复刚写入的脚本时直接 `write_file` 覆盖，无需回读
+- **布局规则**：每图一种主编码（箱线图已编码分布，不要再叠加误差棒/均值线）。图例放在不遮挡数据的空角或直接去掉。`xmin`/`xmax`/`ymin`/`ymax` 紧贴数据范围，对数轴不要留整 decade 空白
+- **省轮次**：数据画像已含列类型/样例/分位数/预览，优先依据画像写代码，避免 `read_file` 整份数据。修复刚写入的脚本时直接 `write_file` 覆盖，无需回读
 
 ## TikZ 生成与回退协议
 
 提示词内置受控生成 + 手写回退两层策略：
 
-1. **首选受控确定性生成（`tikzgen.py`）**：脚本只负责计算数据，把每个系列/分组写入 `artifacts/data_*.csv`（ASCII 列名、`to_csv(index=False)`），并写一份声明式 `artifacts/tikz_spec.json`（chart_type / 轴标签 / xmode / series 列映射 / box/bar/heatmap 子对象）。`python_sandbox` 成功后由后端 `generate_figure_tex()` 用 Pydantic v2 校验 spec 并确定性渲染 `artifacts/figure.tex`，不调用 LLM、不依赖 matplot2tikz；spec 校验失败或引用 CSV 缺失时，错误消息直接回传 Agent 修正。
+1. **首选受控确定性生成（`tikzgen.py`）**：脚本只负责计算数据，把每个系列/分组写入 `artifacts/data_*.csv`（ASCII 列名、`to_csv(index=False)`），并写一份声明式 `artifacts/tikz_spec.json`（chart_type / 轴标签 / xmode / series 列映射 / box/bar/heatmap 子对象）。`python_sandbox` 成功后由后端 `generate_figure_tex()` 用 Pydantic v2 校验 spec 并确定性渲染 `artifacts/figure.tex`，不调用 LLM、不依赖 matplot2tikz。spec 校验失败或引用 CSV 缺失时，错误消息直接回传 Agent 修正。
 2. **手写 PGFPlots 回退**：仅当 spec 生成对同一根因失败 2 次（或需要生成器不支持的图形特性）时，才改为脚本内手写简单 PGFPlots 源文件：
-   - 标签默认保持 ASCII（非 ASCII 标签需 xelatex + CJK 字体，缺失时回退）；
-   - 数据写入 `artifacts/data_*.csv`，按列名引用（`table[x=..., y=..., y error plus=..., y error minus=...]`），避免超大内联坐标；
-   - 使用小/相对 x 值（日序号或 0..n）；
-   - 误差棒通过显式 `y error plus/minus` 列实现，否则省略；
+   - 标签默认保持 ASCII（非 ASCII 标签需 xelatex + CJK 字体，缺失时回退）。
+   - 数据写入 `artifacts/data_*.csv`，按列名引用（`table[x=..., y=..., y error plus=..., y error minus=...]`），避免超大内联坐标。
+   - 使用小/相对 x 值（日序号或 0..n）。
+   - 误差棒通过显式 `y error plus/minus` 列实现，否则省略。
    - 文件以裸 `\end{tikzpicture}` 结尾（不含 `\documentclass`）。
    - **必须写 `col sep=comma`**：pandas `to_csv` 输出逗号分隔，而 PGFPlots 默认按空格/制表符解析，漏写会导致"找不到列"错误（这是手写路径最常见的隐性失败根因）。
-3. **参考模板注入**：`prompts.py::render_pgfplots_reference(chart_type)` 按 `chart_plan.chart_type` 向 agent system 注入已验证的最小 PGFPlots 模板（箱线图/折线图/柱状图/热力图各一）。模板在 backend 的 standalone 包装下经 latexmk 编译验证；箱线图模板包含 `\usepgfplotslibrary{statistics}`，热力图模板使用 `matrix plot` + `mesh/cols`，柱状图模板使用整数索引列 `x_index` + `xticklabels` 类别展示。
+3. **参考模板注入**：`prompts.py::render_pgfplots_reference(chart_type)` 按 `chart_plan.chart_type` 向 agent system 注入已验证的最小 PGFPlots 模板（箱线图/折线图/柱状图/热力图各一）。模板在 backend 的 standalone 包装下经 latexmk 编译验证。箱线图模板包含 `\usepgfplotslibrary{statistics}`，热力图模板使用 `matrix plot` + `mesh/cols`，柱状图模板使用整数索引列 `x_index` + `xticklabels` 类别展示。
 
-`tikzgen.py` 支持的声明类型：`line` / `scatter` / `bar` / `box` / `heatmap` / `histogram` / `kde`（violin 回退为 boxplot 渲染）；热力图支持 `RdBu_r`/`RdBu` 内建色标与 `colormap_stops` 自定义色标，单元格显著性标注通过 `cell_text` 声明为 `\node` 叠加。`python_sandbox` 事件新增 `tikz` 字段（`generated`/`error`/`warnings`），spec 缺失时回传文本明确提示 Agent 补写 spec 或手写 figure.tex。
+`tikzgen.py` 支持的声明类型：`line` / `scatter` / `bar` / `box` / `heatmap` / `histogram` / `kde`（violin 回退为 boxplot 渲染）。热力图支持 `RdBu_r`/`RdBu` 内建色标与 `colormap_stops` 自定义色标，单元格显著性标注通过 `cell_text` 声明为 `\node` 叠加。`python_sandbox` 事件新增 `tikz` 字段（`generated`/`error`/`warnings`），spec 缺失时回传文本明确提示 Agent 补写 spec 或手写 figure.tex。
 
 `tikzgen.py` 的渲染前 CSV 校验（`_validate_csvs`，把本应在 latexmk 阶段才暴露、或被 PGFPlots 静默吞掉的问题提前到生成期阻断，给出精确修法）：
 
-- **数值列校验**：系列 `x`/`y` 列存在且可转数值；`box`/`violin` 只校验 `y`。
+- **数值列校验**：系列 `x`/`y` 列存在且可转数值。`box`/`violin` 只校验 `y`。
 - **误差棒空值拦截**：`y_plus`/`y_minus` 列含空单元格（单重复组 groupby `sem`/`sd` 为 NaN 的常见产物）时直接报错并指引 `agg['sem'] = agg['sem'].fillna(0)` 或删行——否则 PGFPlots 静默丢弃该点误差棒，图是错的但编译成功。列非数值同样报错。
 - **对数轴非正坐标**：`xmode`/`ymode=log` 轴对应 `x`/`y` 列含 0/负值时报错并指引脚本里先 `df = df[df[col] > 0]`，否则 PGFPlots 静默丢点。
 - **柱状图结构校验**（`_validate_bar_series`）：
-  - 每个系列 CSV 必须为每个类别索引 `0..n-1` 恰好提供一行——缺行渲染为缺柱（指明缺失索引与名称），重复索引会一槽双柱；
-  - `y` 空值渲染为缺柱，要求显式写 0；
-  - 系列 CSV 含 `category` 文本列时逐行核对 `category` 与 `bar.xticklabels[x]` 是否一致——顺序错位会导致标签与柱体错位（此前 s4 的反复问题），直接报错并指明错位行；
+  - 每个系列 CSV 必须为每个类别索引 `0..n-1` 恰好提供一行。缺行渲染为缺柱（指明缺失索引与名称），重复索引会一槽双柱。
+  - `y` 空值渲染为缺柱，要求显式写 0。
+  - 系列 CSV 含 `category` 文本列时逐行核对 `category` 与 `bar.xticklabels[x]` 是否一致。顺序错位会导致标签与柱体错位（此前 s4 的反复问题），此时直接报错并指明错位行。
   - `bar.xticklabels` 缺失而系列 CSV 带 `category` 列时（`_derive_bar_labels`），按 `x` 索引推导回填 spec 并发警告，减少一类常见的手填标签遗漏。
 - **柱状图标签自动旋转**：类别 ≥5 且最长标签 ≥6 字符，或任一标签 ≥10 字符时，确定性注入 `xticklabel style={rotate=45,anchor=east}`（热力图同款规则），避免长标签水平重叠。
-- **柱状图负值轴范围**：数据含负值时（用户未显式指定 `ymin`），生成期自动注入 `ymin = min_y * 1.1`，避免 PGFPlots `ybar` 把负值柱裁掉；提示词同时要求脚本不得丢弃/替换负值。
-- **热力图整数索引与 n×n 维度校验**：`x`/`y` 必须为整数索引 `0..n-1` 且恰有 `n×n` 行；`x_labels`/`y_labels` 长度须等于 `cols`。
+- **柱状图负值轴范围**：数据含负值时（用户未显式指定 `ymin`），生成期自动注入 `ymin = min_y * 1.1`，避免 PGFPlots `ybar` 把负值柱裁掉。提示词同时要求脚本不得丢弃/替换负值。
+- **热力图整数索引与 n×n 维度校验**：`x`/`y` 必须为整数索引 `0..n-1` 且恰有 `n×n` 行。`x_labels`/`y_labels` 长度须等于 `cols`。
 - **单边数据发散色图回退**：`RdBu_r`/`RdBu` 用于全正或全负数据时只剩一半色阶，生成期确定性回退到 `viridis` 并发警告，避免热力图视觉上"一片红/一片蓝"难以区分强度。
 - **热力图标注可读性**：单元格显著性标注使用 `\scriptsize`（此前 `\tiny` 过小），刻度标签使用 `\scriptsize` 并旋转 45°，降低 12×12 热力图标签/星号不可读的概率。
 - **非 ASCII 标签警告**：`xlabel`/`ylabel`/图例/`xticklabels`/热力图标签含
-  非 ASCII 字符时仅警告不阻断（xelatex + CJK 字体可渲染；未要求非 ASCII 时
+  非 ASCII 字符时仅警告不阻断（xelatex + CJK 字体可渲染。未要求非 ASCII 时
   建议替换，缺失字形/字体时回退 ASCII）。
 
-**误差棒渲染**：PGFPlots 默认不绘制误差棒——table 选项里的 `y error plus`/`y error minus` 只声明列，必须在 `\addplot+[...]` 里同时启用 `error bars/.cd, y dir=both, y explicit` 才会真正画出（`tikzgen.py` 由 `_error_bar_enable()` 注入）。漏掉启用声明是此前 TikZ 图误差棒静默缺失的根因。
+**误差棒渲染**：PGFPlots 默认不绘制误差棒。table 选项里的 `y error plus`/`y error minus` 只声明列，必须在 `\addplot+[...]` 里同时启用 `error bars/.cd, y dir=both, y explicit` 才会真正画出（`tikzgen.py` 由 `_error_bar_enable()` 注入）。漏掉启用声明是此前 TikZ 图误差棒静默缺失的根因。
 
 输出约定：每次成功运行必须产出 `figure.pdf`、`figure.svg`、`figure.png`（前端预览）和 TikZ 源文件。
 
 ## 数据画像与图表推荐
 
-- `data_parser._infer_type` 将中等基数的字符串列判为 `categorical`（基数列数阈值放宽到 `unique <= max(2, min(n*0.5, 30))`），避免 `Treatment` 这类分组列被误判为 `unknown` 而丢失分组信息；`id` 判定要求行数较多（`n >= 10`）且全唯一，避免小样本分类列被误判为 id
+- `data_parser._infer_type` 将中等基数的字符串列判为 `categorical`（基数列数阈值放宽到 `unique <= max(2, min(n*0.5, 30))`），避免 `Treatment` 这类分组列被误判为 `unknown` 而丢失分组信息。`id` 判定要求行数较多（`n >= 10`）且全唯一，避免小样本分类列被误判为 id
 - `build_profile_context()` 生成给 LLM 的完整画像上下文（原始摘要 + 列明细含 `top_values`/`quantiles`/`sample` + 前 5 行预览），供图表推荐和 Agent system prompt 共用，帮助 LLM 理解列语义、减少读取原始数据的需要
 - `redundancy_hint_pairs()` 识别"每单元格只有一行"的列组合（`unique(x) × unique(cat) ≈ rows`），在画像上下文中输出 `Redundancy hints`，提示 LLM 与确定性规则：此类组合不要做 mean/sd 聚合或加误差棒（单值聚合无意义且会让 TikZ 输出脆弱）
 - `recommender` 在用户关注分布形态（分布/偏态/异常值/离群等中英文关键词）且存在分类列 + 数值列时，优先推荐带叠加散点的箱线图，并优先选择描述中提及的列
@@ -189,7 +189,7 @@ System prompt 还包含以下约束，防止 Agent 在成功路径上产出低�
 
 `styles.py` 提供 frozen dataclass 风格预设。后端在每次 `python_sandbox` 执行前把 `render_setup_code(style_key)` 注入脚本开头，LLM 不需要重复编写 `rcParams`。
 
-System prompt 中的 `STYLE NOTE` 约束 LLM：风格已由后端预置，**禁止**在脚本中调用 `matplotlib.rcParams` / `plt.rcParams` 或 `list_styles` / `apply_style`（除非用户明确要求换风格）；需要微调轴样式时使用注入的 `apply_plot_style(ax)` 辅助函数，避免 LLM 手写样式覆盖预置风格。
+System prompt 中的 `STYLE NOTE` 约束 LLM：风格已由后端预置，**禁止**在脚本中调用 `matplotlib.rcParams` / `plt.rcParams` 或 `list_styles` / `apply_style`（除非用户明确要求换风格）。需要微调轴样式时使用注入的 `apply_plot_style(ax)` 辅助函数，避免 LLM 手写样式覆盖预置风格。
 
 ## 运行追踪（分析/改进用）
 
@@ -209,12 +209,12 @@ System prompt 中的 `STYLE NOTE` 约束 LLM：风格已由后端预置，**禁�
 
 `agent.py` 主循环用 `chat_stream_with_tools` 流式消费 LLM 输出：思维链 chunk
 （智谱 / DeepSeek 等 `delta.reasoning_content`）逐段转为 `{"type": "reasoning",
-"text": ...}` SSE 事件实时推送，前端在时间线顶部展示可折叠思考面板；content
+"text": ...}` SSE 事件实时推送，前端在时间线顶部展示可折叠思考面板。content
 累计后仍按 `plan` 事件推送，tool_calls 在流末尾一次性返回。思维链只读展示、
 不进对话历史（`assistant_message_from_stream()` 只组装 content + tool_calls）。
 消费经共享辅助 `chat_stream_with_tools_retry()`（`backend/core/llm_client.py`）：
 流式调用无内置重试，仅对"未吐出任何 chunk 的瞬时失败"（连接/超时/限流/5xx）
-补一次重试，永久性错误直接抛出；已有增量输出后的失败无法安全重放，按原样抛出。
+补一次重试，永久性错误直接抛出。已有增量输出后的失败无法安全重放，按原样抛出。
 
 ## API
 

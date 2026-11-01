@@ -35,11 +35,11 @@ LaTeX 不放在 JSON 字符串中传输，采用与 OCR 模块一致的分隔符
   -> operation 支持安全撤销
 ```
 
-真实项目在用户确认前不会被修改。Agent 的私有工具不注册到全局 `ToolRegistry`，每个工具只绑定当前 workspace、项目根目录和 session。文件工具复用 `backend/utils/agent_file_tools.py`；共享层通过名称映射保留现有的 `stage_replace` / `read_project_file` / `list_project_files` 名称，模块仍负责 overlay 和路径/内容校验。
+真实项目在用户确认前不会被修改。Agent 的私有工具不注册到全局 `ToolRegistry`，每个工具只绑定当前 workspace、项目根目录和 session。文件工具复用 `backend/utils/agent_file_tools.py`。共享层通过名称映射保留现有的 `stage_replace` / `read_project_file` / `list_project_files` 名称，模块仍负责 overlay 和路径/内容校验。
 
 ### 会话目录
 
-会话目录位于应用缓存目录，不放入用户项目。单用户模式默认根目录为 `data/style_modify_sessions/`；多用户模式（P6）按当前用户隔离到 `<users_root>/<user_id>/style_modify_sessions/`（经 `userspace.user_resource_root` 解析，单用户行为不变）。
+会话目录位于应用缓存目录，不放入用户项目。单用户模式默认根目录为 `data/style_modify_sessions/`。多用户模式（P6）按当前用户隔离到 `<users_root>/<user_id>/style_modify_sessions/`（经 `userspace.user_resource_root` 解析，单用户行为不变）。
 
 ```text
 data/style_modify_sessions/<session_id>/
@@ -70,17 +70,17 @@ data/style_modify_sessions/<session_id>/
 
 所有项目相对路径必须通过 `resolve_project_path()` 解析。默认允许后缀为 `.tex`、`.sty`、`.cls`、`.bib`，禁止符号链接、路径穿越、绝对路径、二进制文件和不可按 UTF-8 解码的文件。
 
-候选内容进入 overlay 前调用 `validate_latex_field(relaxed=True)`；`.bib` 使用 `bibtex=True`。Function Calling JSON 参数中的 LaTeX 反斜杠要求按 JSON 规则双写，后端校验失败时把错误返回 Agent 修正。
+候选内容进入 overlay 前调用 `validate_latex_field(relaxed=True)`，`.bib` 使用 `bibtex=True`。Function Calling JSON 参数中的 LaTeX 反斜杠必须按 JSON 规则双写。后端校验失败时把错误返回 Agent 修正。
 
 ### Shadow 编译
 
-`compile_staged_project` 从当前项目创建受限 shadow 副本，跳过缓存、版本控制元数据、构建产物和会话目录，用当前 overlay 覆盖对应文件，然后在 shadow 内调用 `run_tex_compile()`。编译状态区分 `passed`、`failed`、`not_run`，界面不得把未执行编译伪装为成功。
+`compile_staged_project` 从当前项目创建受限 shadow 副本。副本跳过缓存、版本控制元数据、构建产物和会话目录，用当前 overlay 覆盖对应文件，然后在 shadow 内调用 `run_tex_compile()`。编译状态区分 `passed`、`failed`、`not_run`，界面不得把未执行编译伪装为成功。
 
-`finish` 前会校验 overlay 与最后一次编译（成功或失败）时的快照是否一致：只要最后一次编译后又发生 `stage_replace` / `discard_file_changes`，Agent 就拒绝 finish 并要求重新编译，避免交付与编译结果不一致的候选方案。快照按 staged 文件 MD5 计算，成功编译后持久化到会话 meta（`last_verified_md5s`），因此跨 refine 轮次同样生效；工具链缺失（`not_run`）时不以此快照拦截 finish。
+`finish` 前会校验 overlay 与最后一次编译（成功或失败）时的快照是否一致：只要最后一次编译后又发生 `stage_replace` / `discard_file_changes`，Agent 就拒绝 finish 并要求重新编译，避免交付与编译结果不一致的候选方案。快照按 staged 文件 MD5 计算，成功编译后持久化到会话 meta（`last_verified_md5s`），因此跨 refine 轮次同样生效。工具链缺失（`not_run`）时不以此快照拦截 finish。
 
 ### Proposal 与事务写回
 
-`finish` 生成不可变 proposal revision，包含需求、变更说明、逐文件 baseline MD5、candidate MD5、unified diff、编译摘要和可应用状态。finish 前还会拒绝摘要中承认未完成样式需求、声称可稍后添加，或以默认值替代显式设置的交付；Agent 必须继续修改并重新编译。前端 refinement 只能基于当前 revision 发起；应用前检查 workspace、项目指纹、最新 revision、路径、真实文件 MD5 和 LaTeX 内容。
+`finish` 生成不可变 proposal revision，包含需求、变更说明、逐文件 baseline MD5、candidate MD5、unified diff、编译摘要和可应用状态。finish 前还会拒绝摘要中承认未完成样式需求、声称可稍后添加，或以默认值替代显式设置的交付。Agent 必须继续修改并重新编译。前端 refinement 只能基于当前 revision 发起。应用前检查 workspace、项目指纹、最新 revision、路径、真实文件 MD5 和 LaTeX 内容。
 
 写回通过 `LatexProject.apply_whole_files()` 完成：
 
@@ -108,7 +108,7 @@ Prefix: `/api/style-modify`, Tag: `style_modify`
 | POST | `/agent/operations/{operation_id}/undo` | 安全撤销已应用操作 |
 | DELETE | `/agent/sessions/{session_id}` | 删除未运行中的 session 和临时文件 |
 
-SSE 事件类型包括 `session`、`plan`、`reasoning`、`tool_call`、`tool_result`、`file_staged`、`compile`、`proposal`、`warning`、`done`、`error`。SSE 不发送完整文件内容或未截断编译日志。`reasoning` 为思维链增量文本（`text` 字段逐段推送）：`agent.py` 用 `chat_stream_with_tools` 流式消费，思维链只读展示、不进对话历史；消费经共享辅助 `chat_stream_with_tools_retry()`（`backend/core/llm_client.py`），流式调用无内置重试，仅对"未吐出任何 chunk 的瞬时失败"（连接/超时/限流/5xx）补一次重试，永久性错误直接抛出。前端在 Agent 步骤面板顶部展示可折叠思考面板。
+SSE 事件类型包括 `session`、`plan`、`reasoning`、`tool_call`、`tool_result`、`file_staged`、`compile`、`proposal`、`warning`、`done`、`error`。SSE 不发送完整文件内容或未截断编译日志。`reasoning` 为思维链增量文本（`text` 字段逐段推送）。`agent.py` 用 `chat_stream_with_tools` 流式消费，思维链只读展示、不进对话历史。消费经共享辅助 `chat_stream_with_tools_retry()`（`backend/core/llm_client.py`）。流式调用无内置重试，仅对"未吐出任何 chunk 的瞬时失败"（连接/超时/限流/5xx）补一次重试，永久性错误直接抛出。前端在 Agent 步骤面板顶部展示可折叠思考面板。
 
 ## 配置
 
@@ -144,7 +144,7 @@ SSE 事件类型包括 `session`、`plan`、`reasoning`、`tool_call`、`tool_re
 
 ## 维护者工具
 
-`tools/stylemodify_opt/` 提供 style_modify 项目 Agent 的离线优化闭环：构造 5 个
+`tools/stylemodify_opt/` 提供 style_modify 项目 Agent 的离线优化流程：构造 5 个
 可复现的样式修改场景，驱动 Agent 生成 proposal 并采集需求遵守、内容保留、
 编译状态、事务应用/撤销与轮次/时长指标，支持 trace 分析与多版本对比。详见
 `tools/stylemodify_opt/README.md` 与 `tools/stylemodify_opt/report/optimization_report.md`。

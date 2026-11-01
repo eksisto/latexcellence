@@ -6,19 +6,19 @@
 
 ### service 包拆分
 
-`git_diff` 的对外入口仍是 `backend/modules/git_diff/service`；内部按职责拆为子模块：
+`git_diff` 的对外入口仍是 `backend/modules/git_diff/service`。内部按职责拆为子模块：
 
 | 文件 | 职责 |
 | --- | --- |
 | `models.py` | Pydantic 结果模型与内部 dataclass |
 | `constants.py` | 常量、正则与差异 preamble 模板 |
-| `process.py` | git / latexdiff / latexmk 子进程执行（只读 git 子命令豁免每用户沙箱租约，判定见 `_is_readonly_git_args`；cwd 外落盘路径经 `mounts` 显式挂载进沙箱容器） |
+| `process.py` | git / latexdiff / latexmk 子进程执行（只读 git 子命令豁免每用户沙箱租约，判定见 `_is_readonly_git_args`，cwd 外落盘路径经 `mounts` 显式挂载进沙箱容器） |
 | `revisions.py` | Git revision 列表与校验 |
 | `flatten.py` | LaTeX 依赖递归展开 |
 | `diff.py` | difflib / latexdiff 差异文档生成 |
 | `render.py` | 编译目录准备、PDF 渲染与产物管理 |
 
-当 PDF 编译失败时，会调用 `compile_error_translator.translate_compile_errors()` 将错误日志翻译为中文解释和修复建议（复用 compile 模块的 LLM 错误翻译能力）。
+PDF 编译失败时，调用 `compile_error_translator.translate_compile_errors()` 将错误日志翻译为中文解释和修复建议（复用 compile 模块的 LLM 错误翻译能力）。
 
 | 维度 | 差异高亮 | 其他模块 |
 | --- | --- | --- |
@@ -28,7 +28,7 @@
 ## Pydantic 输出模型
 
 - `GitRevision`（value, label, kind, short_hash, subject）
-- `GitRefsResult`（git_root, current_branch, is_dirty, revisions；`git_root` 为 Git 仓库绝对路径，多用户模式置 `None` 不向用户暴露）
+- `GitRefsResult`（git_root, current_branch, is_dirty, revisions。`git_root` 为 Git 仓库绝对路径，多用户模式置 `None` 不向用户暴露）
 - `DiffHighlightResult`（success, job_id, pdf_url, main_file, base_ref, target_ref, added_lines, deleted_lines, included_files）
 
 ## Service 核心方法
@@ -48,16 +48,16 @@
 > git 子进程统一注入 `LC_ALL=C` / `LANG=C`，保证 stderr 文案可被机器解析
 > （例如空仓库 “does not have any commits yet” 判定不受用户 locale 影响）。
 
-1. 展开 base_ref 主文件（递归解析 `\input`/ `\include`/ `\subfile` 依赖）
-   - include 路径只允许项目内相对路径：拒绝绝对路径和 `..` 目录穿越；
+1. 展开 base_ref 主文件（递归展开 `\input`/ `\include`/ `\subfile` 依赖）
+   - include 路径只允许项目内相对路径：拒绝绝对路径和 `..` 目录穿越。
      工作区模式读取统一走 `path_guard.resolve_project_path()`
-2. 展开 target_ref 主文件（工作区直接读文件；commit/branch/tag 通过 `git show <ref>:<path>`）
+2. 展开 target_ref 主文件（工作区直接读文件，commit/branch/tag 通过 `git show <ref>:<path>`）
 3. 根据选择的差异引擎生成差异：
     - **difflib 引擎（内置）**：
         1. 两份文档以 `\begin{document}` 为界拆分为 preamble + body + end
         2. body 部分逐行 `difflib.SequenceMatcher` 比对：equal 原样保留、delete 行包裹 `LXDiffDeleted`（红色底纹）、insert 行包裹 `LXDiffAdded`（绿色底纹）、replace 行先删后插
         3. 组装差异文档：target 的 preamble + `xcolor`/`framed` 宏包定义 + 差异 body + target 的 end
-        - **浮动体处理**：`table`/`figure`/`algorithm` 等浮动体环境不能放在 `framed` 颜色框内（会报 "Not in outer par mode"）。生成差异时会把浮动体整体拆到高亮包裹之外，并在其前后补空行使其处于独立段落（避免紧贴颜色框导致 "Float(s) lost"），只高亮周围的普通文本。
+        - **浮动体处理**：`table`/`figure`/`algorithm` 等浮动体环境不能放在 `framed` 颜色框内（会报 "Not in outer par mode"）。生成差异时把浮动体整体拆到高亮包裹之外，并在其前后补空行使其处于独立段落（避免紧贴颜色框导致 "Float(s) lost"），只高亮周围的普通文本。
     - **latexdiff 引擎（外部）**：
         1. 调用 `latexdiff` 命令行工具生成差异 `.tex` 文件
         2. 支持配置标记样式（markup type）和数学公式标记粒度（math markup）
@@ -82,15 +82,9 @@
 - 路径解析优先相对于当前文件所在目录，其次相对于项目根目录
 - 路径安全校验：拒绝绝对路径和 `..` 目录穿越
 
-**PDF 存储**：系统临时目录 `latexcellence_git_diff/{job_id}/`，由 OS 重启时清理。
+**PDF 存储**：系统临时目录 `latexcellence_git_diff/{job_id}/`，OS 重启时清理。
 
-**沙箱挂载约束**：git / latexdiff / latexmk 统一经 `SandboxRunner` 执行，docker
-后端的容器根文件系统只读、`/tmp` 是独立 tmpfs，只 bind mount `ExecSpec.cwd` 与
-显式 `mounts`（同绝对路径契约）。因此命令若需写入 cwd 之外的路径，必须经
-`run_git(..., mounts=[SandboxMount(...)])` 把目标目录显式挂载进容器——commit
-模式 `git archive --output` 的落盘目录 `job_dir` 即按此挂载；漏挂时容器内 git
-会报 `could not open ... for writing: No such file or directory`。local 后端
-不感知 mounts，行为与历史一致。
+**沙箱挂载约束**：git / latexdiff / latexmk 统一经 `SandboxRunner` 执行，docker 后端的容器根文件系统只读、`/tmp` 是独立 tmpfs，只 bind mount `ExecSpec.cwd` 与显式 `mounts`（同绝对路径契约）。因此命令若需写入 cwd 之外的路径，必须经 `run_git(..., mounts=[SandboxMount(...)])` 把目标目录显式挂载进容器——commit 模式 `git archive --output` 的落盘目录 `job_dir` 即按此挂载。漏挂时容器内 git 会报 `could not open ... for writing: No such file or directory`。local 后端不感知 mounts，行为与历史一致。
 
 **临时目录清理**：每次渲染都会复制整个项目，`_prune_old_job_dirs` 在每次渲染后
 按生成时间只保留最新若干份 job 目录，防止临时盘持续膨胀。
@@ -102,8 +96,7 @@
 终止整个子进程树（Windows 用 `taskkill /T`，POSIX 用 `killpg`），避免
 xelatex / bibtex 子进程残留占用文件锁。
 
-**默认值配置**：`/options` 返回 `features.git_diff` 的默认引擎、标记类型、
-数学标记粒度和颜色；前端页面初始化时读取这些值，设置页的修改才会生效。
+**默认值配置**：`/options` 返回 `features.git_diff` 的默认引擎、标记类型、数学标记粒度和颜色。前端页面初始化时读取这些值，设置页的修改才会生效。
 服务端在请求未传这些字段时也会按配置兜底。
 
 ## API 路由

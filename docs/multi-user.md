@@ -47,7 +47,7 @@ data/
     ├── templates/  └── plots/        # 四类衍生数据，按用户隔离
 ```
 
-`<owner_id>/.edit_logs/` 存反向补丁快照（§8），不进项目目录与下载包。所有按用户/项目拼接路径经统一解析入口（`path_guard` 封装），符号链接默认拒绝。单用户存量全局路径保留原样供单用户模式使用（`userspace.user_resource_root()` 双模式解析）。
+`<owner_id>/.edit_logs/` 存反向补丁快照（§8），不进项目目录与下载包。所有按用户/项目拼接路径经统一解析入口（`path_guard` 封装），默认拒绝符号链接。单用户存量全局路径保留原样供单用户模式使用（`userspace.user_resource_root()` 双模式解析）。
 
 ### 3.2 项目空间配额
 
@@ -210,4 +210,4 @@ data/
 - 沙箱 TeX 镜像按构建清单装宏包，缺宏包需改清单重建（排查步骤见 docker/README）；
 - 多副本下 warm pool 各副本独立建池，空闲容器总量上浮为已知代价；
 - `.edit_logs` 快照计入用户空间但不占配额，备份口径见 deployment.md；
-- SQLite 写吞吐为单机两副本规模设计，busy_timeout 冲突日志频率出现劣化信号时再评估升级。
+- SQLite 写吞吐按单机两副本规模设计，busy_timeout 冲突日志频率出现劣化信号时，再评估升级。

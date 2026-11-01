@@ -82,7 +82,7 @@ curl -s http://127.0.0.1:8000/api/health        # {"status":"ok",...}
 curl -s http://127.0.0.1:8000/api/config/status # multi_user 应为 true
 ```
 
-生产环境请继续完成两件事：用 systemd 把进程托管起来（见「使用 systemd 托管服务」），并在前面架一层 HTTPS 反向代理（见「HTTPS 与反向代理」——多用户的会话 Cookie 在公网/局域网必须走 TLS）。
+生产环境请继续完成两件事：用 systemd 把进程托管起来（见「使用 systemd 托管服务」），并在前面架一层 HTTPS 反向代理（见「HTTPS 与反向代理」）。多用户的会话 Cookie 在公网/局域网必须走 TLS。
 
 ---
 
@@ -129,7 +129,7 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-依赖清单已包含多用户模式所需的全部 Python 包（argon2 密码哈希、7z 解压、SMTP 异步发送、Docker SDK 等）。联网搜索的可选浏览器回退池基于 Playwright：Python 包已随依赖安装，但浏览器内核需要另行执行 `playwright install chromium`（或 `firefox`）安装。该能力默认关闭（`features.function_calling.web_search.enabled=false` 且其 `page_reading.browser.enabled=false`）；启用方法、资源上限与灰度建议见 [writing-chat-web-access-architecture.md](writing-chat-web-access-architecture.md) 与 [web-access-operations.md](web-access-operations.md)。
+依赖清单已包含多用户模式所需的全部 Python 包（argon2 密码哈希、7z 解压、SMTP 异步发送、Docker SDK 等）。联网搜索的可选浏览器回退池基于 Playwright：Python 包已随依赖安装，但浏览器内核需要另行执行 `playwright install chromium`（或 `firefox`）安装。该能力默认关闭（`features.function_calling.web_search.enabled=false` 且其 `page_reading.browser.enabled=false`）。启用方法、资源上限与灰度建议见 [writing-chat-web-access-architecture.md](writing-chat-web-access-architecture.md) 与 [web-access-operations.md](web-access-operations.md)。
 
 ### 前端构建
 
@@ -139,9 +139,9 @@ npm install
 npm run build
 ```
 
-构建产物输出到仓库根的 `static/`。生产模式（`server.dev_mode=false`）下 FastAPI 会把它作为静态站点挂载，与 API 同源提供服务。挂载使用带 SPA 回退的 `SPAStaticFiles`（见 `backend/utils/spa_static_files.py`）：刷新 / 直达 `/formula-ocr` 这类 history 路由时回退 `index.html` 交给前端路由接管，而静态资源缺失与 `/api/*` 未命中仍保持原样 404。
+构建产物输出到仓库根的 `static/`。生产模式（`server.dev_mode=false`）下 FastAPI 会把它作为静态站点挂载，与 API 同源提供服务。挂载使用带 SPA 回退的 `SPAStaticFiles`（见 `backend/utils/spa_static_files.py`）：刷新 / 直达 `/formula-ocr` 这类 history 路由时回退 `index.html` 交给前端路由接管。静态资源缺失与 `/api/*` 未命中仍保持原样 404。
 
-> 构建机与运行机分离时，在构建机上完成 `npm run build` 后，把整个仓库（含 `static/`）同步到服务器即可；服务器自身不需要装 Node。
+> 构建机与运行机分离时，在构建机上完成 `npm run build` 后，把整个仓库（含 `static/`）同步到服务器即可。服务器自身不需要装 Node。
 
 ---
 
@@ -206,11 +206,11 @@ cp config.example.json config.json
 
 - `server.host` 保持 `127.0.0.1`，由反向代理对外提供 HTTPS（见下文）；直接暴露 uvicorn 到公网强烈不建议；
 - `dev_mode` 必须为 `false`，否则不会挂载前端静态文件；
-- `llm.api_key` 也可不改配置、改用环境变量 `LX_LLM_KEY` 注入（优先级更高，且永不写盘，见「环境变量参考」）；多用户模式的 `smtp.password` 同理，用 `LATEXCELLENCE_SMTP_PASSWORD` 注入；联网搜索（Tavily）与学术数据源（OpenAlex / Semantic Scholar / CORE / Unpaywall / PubMed）的 API Key 亦同，用 `LATEXCELLENCE_TAVILY_API_KEY`、`LATEXCELLENCE_OPENALEX_API_KEY` 等注入；
-- `multi_user.enabled=true` 开启多用户模式。**需重启服务生效**：启动时初始化 SQLite（WAL）数据库、创建用户空间根目录并引导首个管理员；其余 `multi_user` 配置项均支持配置热重载，改完保存即生效；
-- **多用户模式下前端必须与 API 同源部署**（会话 Cookie 为 `SameSite=Lax`，跨域携带会被浏览器拦截）：即由后端托管 `static/` 静态页面，经同一个域名反代对外，不要把前端单独发到另一个域名再跨域调 API（这是与单用户分离部署的关键差异）；
+- `llm.api_key` 也可不改配置、改用环境变量 `LX_LLM_KEY` 注入（优先级更高，且永不写盘，见「环境变量参考」）。多用户模式的 `smtp.password` 同理，用 `LATEXCELLENCE_SMTP_PASSWORD` 注入。联网搜索（Tavily）与学术数据源（OpenAlex / Semantic Scholar / CORE / Unpaywall / PubMed）的 API Key 亦同，用 `LATEXCELLENCE_TAVILY_API_KEY`、`LATEXCELLENCE_OPENALEX_API_KEY` 等注入；
+- `multi_user.enabled=true` 开启多用户模式。**需重启服务生效**：启动时初始化 SQLite（WAL）数据库、创建用户空间根目录并引导首个管理员。其余 `multi_user` 配置项均支持配置热重载，改完保存即生效；
+- **多用户模式下前端必须与 API 同源部署**（会话 Cookie 为 `SameSite=Lax`，跨域携带会被浏览器拦截）：由后端托管 `static/` 静态页面，经同一个域名反代对外。不要把前端单独发到另一个域名再跨域调 API（这是与单用户分离部署的关键差异）；
 - `multi_user`、`sandbox`、`smtp` 三个配置段实行严格校验（未知键直接报错），防止拼写错误导致安全阈值静默回退到默认值；
-- 单进程前提：裸机形态以单 worker 运行（`python main.py config.json` 即是）。需要多 worker / 多实例时**不要**直接起多个进程，改走下文 Compose 形态：跨请求状态已外置共享 SQLite，多实例开箱即用，但裸机手工多进程缺少共享卷与统一编排，不在支持范围；
+- 单进程前提：裸机形态以单 worker 运行（`python main.py config.json` 即是）。需要多 worker / 多实例时**不要**直接起多个进程，改走下文 Compose 形态：跨请求状态已外置共享 SQLite，多实例开箱即用；裸机手工多进程缺少共享卷与统一编排，不在支持范围；
 - 工作目录必须是仓库根：`static/`、`data/`、`logs/` 及各类默认路径均为相对路径，从其他目录启动会导致静态页与数据落点错乱。
 
 启动：
@@ -319,7 +319,7 @@ python main.py config.json
    python -m backend.manage create-admin admin --password "<强密码>"
    ```
 
-创建管理员后即可打开站点完成登录；普通用户经注册页提交后进入 `pending` 状态，需管理员在管理面板批准后方可登录。关闭开放注册可设 `multi_user.registration_enabled=false`（仅管理员可建号）。
+创建管理员后即可打开站点完成登录。普通用户经注册页提交后进入 `pending` 状态，需管理员在管理面板批准后方可登录。关闭开放注册可设 `multi_user.registration_enabled=false`（仅管理员可建号）。
 
 ### 使用 systemd 托管服务
 
@@ -362,7 +362,7 @@ journalctl -u latexcellence -f        # 跟踪启动日志
 注意：
 
 - `WorkingDirectory` 必须是仓库根（原因见「安装与启动」要点）；
-- 运行账号需要对仓库下的 `data/` 与 `logs/` 有写权限；若启用沙箱，该账号还需能访问 `/var/run/docker.sock`（通常加入 `docker` 组——该组成员等同 root 级权限，见「安全风险声明」）。
+- 运行账号需要对仓库下的 `data/` 与 `logs/` 有写权限。若启用沙箱，该账号还需能访问 `/var/run/docker.sock`（通常加入 `docker` 组——该组成员等同 root 级权限，见「安全风险声明」）。
 
 ### 存量数据迁移（单用户升级为多用户）
 
@@ -374,7 +374,7 @@ python -m backend.manage migrate-legacy [--dry-run]
 
 - 幂等可重复执行：目标已存在的文件全部跳过，不覆盖迁移后新产生的数据；
 - 覆盖存量 `data/writing_chat_sessions/`、`data/style_modify_sessions/`、`data/templates/`、`data/plots/`、`data/formats/`、`data/prompts/` 等全局目录；
-- 复制完成后逐文件校验并输出报告；源目录默认保留，确认无误后人工清理；
+- 复制完成后逐文件校验并输出报告。源目录默认保留，确认无误后人工清理；
 - 旧 LaTeX 项目不在自动迁移范围（config 中无工作区记录），由各用户在工作台重新上传。
 
 ### 部署验收清单
@@ -392,7 +392,7 @@ curl -s http://127.0.0.1:8000/api/config/status  # multi_user=true、has_api_key
 
 ## 多实例部署（Docker Compose）
 
-多进程 / 多副本部署是一等公民：跨请求共享状态（工作区绑定、逐段检查上下文、写作助手工具确认与澄清、DDG 验证码、登录/LLM 限流、沙箱与 LLM 并发租约、邮件队列）全部外置到共享 SQLite（WAL），任意副本可服务任意请求，**无需粘性会话**。SSE 长连接天然粘在所属连接的副本上，应用层无需处理。
+多进程 / 多副本部署是一等公民：跨请求共享状态（工作区绑定、逐段检查上下文、写作助手工具确认与澄清、DDG 验证码、登录/LLM 限流、沙箱与 LLM 并发租约、邮件队列）全部外置到共享 SQLite（WAL）。任意副本可服务任意请求，**无需粘性会话**。SSE 长连接天然粘在所属连接的副本上，应用层无需处理。
 
 ### 运行形态
 
@@ -432,7 +432,7 @@ docker compose --profile proxy up -d --scale app=2   # 附带 Caddy，对外端�
 - 单副本本地试跑可复制 `docker-compose.override.example.yml` 为 `docker-compose.override.yml` 发布 `127.0.0.1:8000` 端口直连；
 - 配置修改：编辑宿主 `config.json` 即可，**全部副本经热重载自动生效**。例外：`multi_user.enabled` 决定认证中间件与数据库初始化等启动期形态，变更仍需重启（热重载会保持启动值并告警）。
 
-compose 编排支持的环境变量旋钮（均有默认值，可不设）：
+compose 编排支持的环境变量（均有默认值，可不设）：
 
 | 变量 | 默认 | 说明 |
 | --- | --- | --- |
@@ -466,7 +466,7 @@ docker run -d --name latexcellence \
 
 多副本下反代必须满足两点：
 
-1. **服务名每请求重解析**：Caddy 的 `reverse_proxy app:8000` 天然如此（Docker 内嵌 DNS 返回全部健康副本，扩缩容零改动）；nginx 必须用 upstream 变量 + `resolver 127.0.0.11`（直接写死 `upstream server app:8000` 会在启动时解析一次并缓存单个 IP，扩容副本永远不被调度）。
+1. **服务名每请求重解析**：Caddy 的 `reverse_proxy app:8000` 天然如此（Docker 内嵌 DNS 返回全部健康副本，扩缩容零改动）。nginx 必须用 upstream 变量 + `resolver 127.0.0.11`（直接写死 `upstream server app:8000` 会在启动时解析一次并缓存单个 IP，扩容副本永远不被调度）。
 2. **SSE 关闭缓冲**：`flush_interval -1`（Caddy）/ `proxy_buffering off`（nginx），否则逐段检查、Agent 与写作助手的流式事件被攒批延迟。
 
 两种反代的完整可用样例见 [docker/Caddyfile.example](../docker/Caddyfile.example) 与 [docker/nginx.conf.example](../docker/nginx.conf.example)（含上传体积上限对齐、健康探测、HTTPS 生产化说明）。通用注意事项见下文「HTTPS 与反向代理」。
@@ -497,7 +497,7 @@ docker run -d --name latexcellence \
 
 注意事项：
 
-- **联网搜索的浏览器回退池（Playwright，可选功能）**：arm64 Linux 上 Chromium/Firefox 可用，WebKit 的 arm64 支持随版本变动；该能力初始化失败仅降级并记 warning，不影响主流程。部署后建议跑一次写作助手联网搜索冒烟，确认实际可用性；
+- **联网搜索的浏览器回退池（Playwright，可选功能）**：arm64 Linux 上 Chromium/Firefox 可用，WebKit 的 arm64 支持随版本变动。该能力初始化失败仅降级并记 warning，不影响主流程。部署后建议跑一次写作助手联网搜索冒烟，确认实际可用性；
 - **发布冒烟**：若构建/发布环境与生产架构不同，建议在目标架构上完成一次最小冒烟（启动 → 登录 → 上传 → 编译）再对外提供服务；
 - Docker 沙箱镜像同样支持在 arm64 上原生构建（TeX Live `aarch64-linux` 二进制集与 pandoc 官方 arm64 发布物），多架构 buildx 构建见 [docker/README.md](../docker/README.md)。
 
@@ -506,7 +506,7 @@ docker run -d --name latexcellence \
 ## Alpine 系发行版实测记录（postmarketOS 等）
 
 > 来自一台 postmarketOS 设备（aarch64、systemd），版本 v26.06（Alpine 3.24，Python 3.14）的全程踩坑实录。
-> Debian/Ubuntu 用户无需阅读；目标是 Alpine 系或任何 **musl libc** 环境时，以下差异须逐条核对。
+> Debian/Ubuntu 用户无需阅读。目标是 Alpine 系或任何 **musl libc** 环境时，以下差异须逐条核对。
 
 ### 包管理器与包名对照
 
@@ -522,9 +522,9 @@ docker run -d --name latexcellence \
 
 ### Python 依赖差异（musl libc，aarch64 实测）
 
-- `py7zr`（**Python ≥ 3.14，即 v26.06 起必需**）：依赖 PEP 784 标准库 `compression.zstd`，而 Alpine 把 `_zstd` 扩展拆为独立包 `python3-zstd` 且 **v3.24 稳定源中没有**——需从 edge/main 单包安装（版本须与系统 Python 同为 3.14.x）。缺失时 py7zr import 即失败，7z 压缩包上传解压不可用；
+- `py7zr`（**Python ≥ 3.14，即 v26.06 起必需**）：依赖 PEP 784 标准库 `compression.zstd`，而 Alpine 把 `_zstd` 扩展拆为独立包 `python3-zstd` 且 **v3.24 稳定源中没有**，需从 edge/main 单包安装（版本须与系统 Python 同为 3.14.x）。缺失时 py7zr import 即失败，7z 压缩包上传解压不可用；
 - `playwright`：PyPI 无 musl-aarch64 wheel，**会导致整批 pip install 失败**。处理：剔除该行后安装其余依赖。影响仅限联网搜索的浏览器回退池（默认关闭），主流程无损；
-- `matplotlib`：任何版本均无 musl-aarch64 wheel，源码编译需完整 C/C++ 工具链与若干 `-dev` 包。推荐改用发行版包（`apk add py3-matplotlib`），虚拟环境以 `python3 -m venv --system-site-packages .venv` 创建，pip 清单中剔除 matplotlib 行——系统版本满足约束时 pip 自动跳过；
+- `matplotlib`：任何版本均无 musl-aarch64 wheel，源码编译需完整 C/C++ 工具链与若干 `-dev` 包。推荐改用发行版包（`apk add py3-matplotlib`），虚拟环境以 `python3 -m venv --system-site-packages .venv` 创建，pip 清单中剔除 matplotlib 行，系统版本满足约束时 pip 自动跳过；
 - 其余二进制依赖（numpy / scipy / pandas / Pillow / lxml / uvloop 等）均有 musllinux aarch64 wheel，无需编译环境。
 
 ### 后台任务与会话清理陷阱
@@ -540,13 +540,13 @@ docker run -d --name latexcellence \
   systemctl is-active <名称>    # 轮询直至 inactive
   ```
 
-- 脚本轮询进程存活时注意 pgrep/pkill `-f` 自匹配：模式会命中携带同一字符串的外层 shell 自身造成死循环或误杀，用 `[x]` 方括号转义规避。
+- 脚本轮询进程存活时注意 pgrep/pkill `-f` 自匹配：模式会命中携带同一字符串的外层 shell 自身，造成死循环或误杀。用 `[x]` 方括号转义规避。
 
 ---
 
 ## Docker 沙箱
 
-多用户部署强烈建议启用：全部外部命令执行（latexmk/texfot 编译、git/latexdiff、pandoc、Python 绘图、latexindent）统一经 SandboxRunner，可进一次性 Docker 容器隔离执行。由顶层 `sandbox` 配置节控制：
+多用户部署强烈建议启用：全部外部命令（latexmk/texfot 编译、git/latexdiff、pandoc、Python 绘图、latexindent）统一经 SandboxRunner，可进一次性 Docker 容器隔离执行。由顶层 `sandbox` 配置节控制：
 
 | 配置项 | 默认值 | 说明 |
 | --- | --- | --- |
@@ -559,7 +559,7 @@ docker run -d --name latexcellence \
 
 ### warm pool 运维说明（部署收口阶段三）
 
-池容器是"已创建未启动"的一次性容器，统一带 label `latexcellence.warm_pool=1` 与副本标识（环境变量 `LATEXCELLENCE_SANDBOX_REPLICA_ID` 可显式指定，缺省按 hostname:随机后缀进程唯一生成），只在执行某类命令后按该命令的容器形状补满（池深 = `max_concurrent_global`），不会为从未执行过的类别常驻容器。孤儿清理为每副本职责：副本启动期与运行期周期对账，按 label + 自身副本标识清退本副本遗留；副本异常退出后的残留容器由任一存活副本在超龄（默认 900s）后清退，也可手工 `docker container prune --filter "label=latexcellence.warm_pool=1"` 清理。多副本部署（`--scale app=N`）下各副本独立建池，空闲容器总量相应上浮（每副本每类别至多 `max_concurrent_global` 个 created 态容器，不占运行资源），为已知代价；冷启动收益可用 `.venv/bin/python tools/warm_pool_bench.py` 实测。
+池容器是"已创建未启动"的一次性容器，统一带 label `latexcellence.warm_pool=1` 与副本标识（环境变量 `LATEXCELLENCE_SANDBOX_REPLICA_ID` 可显式指定，缺省按 hostname:随机后缀进程唯一生成）。只在执行某类命令后按该命令的容器形状补满（池深 = `max_concurrent_global`），不会为从未执行过的类别常驻容器。孤儿清理为每副本职责：副本启动期与运行期周期对账，按 label + 自身副本标识清退本副本遗留。副本异常退出后的残留容器由任一存活副本在超龄（默认 900s）后清退，也可手工 `docker container prune --filter "label=latexcellence.warm_pool=1"` 清理。多副本部署（`--scale app=N`）下各副本独立建池，空闲容器总量相应上浮（每副本每类别至多 `max_concurrent_global` 个 created 态容器，不占运行资源），为已知代价。冷启动收益可用 `.venv/bin/python tools/warm_pool_bench.py` 实测。
 
 ### 镜像构建
 
@@ -570,7 +570,7 @@ cd docker/
 BUILDX_MULTI_ARCH=1 ./build.sh --load tex   # buildx 双架构（amd64+arm64）
 ```
 
-镜像体系、离线导入导出（`docker save/load`）、升级流程与缺 TeX 宏包排查指南见 [docker/README.md](../docker/README.md)。TeX 宏包清单在 `docker/tex/Dockerfile` 的 `EXTRA_TL_PACKAGES` 构建参数中维护——运行期不装包（沙箱无网络原则），缺宏包时改清单重建镜像。
+镜像体系、离线导入导出（`docker save/load`）、升级流程与缺 TeX 宏包排查指南见 [docker/README.md](../docker/README.md)。TeX 宏包清单在 `docker/tex/Dockerfile` 的 `EXTRA_TL_PACKAGES` 构建参数中维护。运行期不装包（沙箱无网络原则），缺宏包时改清单重建镜像。
 
 ### 容器安全基线（后端强制注入）
 
@@ -651,20 +651,20 @@ latex.example.com {
 
 ### 反向代理注意事项
 
-- **配置 `multi_user.trusted_proxies` 传递真实客户端 IP**：登录限流按「用户名 + 客户端 IP」与「用户名全局」双维度计数，注册限流、注册 IP 记录与自动审批策略同样依赖真实客户端 IP。反代之后 `request.client.host` 恒为代理地址，必须在配置中把代理地址（如 nginx 本机反代填 `127.0.0.1`，Caddy 容器部署填对应容器网段）列入 `multi_user.trusted_proxies`，后端才会信任其追加的 `X-Forwarded-For` 并解析出访客真实 IP；保持为空时后端恒用 TCP 对端地址（直连部署的安全默认，伪造头无法绕过）。上述白名单外的代理链会被忽略，多级代理需把每一跳都列入；
+- **配置 `multi_user.trusted_proxies` 传递真实客户端 IP**：登录限流按「用户名 + 客户端 IP」与「用户名全局」双维度计数，注册限流、注册 IP 记录与自动审批策略同样依赖真实客户端 IP。反代之后 `request.client.host` 恒为代理地址，必须在配置中把代理地址（如 nginx 本机反代填 `127.0.0.1`，Caddy 容器部署填对应容器网段）列入 `multi_user.trusted_proxies`，后端才会信任其追加的 `X-Forwarded-For` 并解析出访客真实 IP。保持为空时后端恒用 TCP 对端地址（直连部署的安全默认，伪造头无法绕过）。上述白名单外的代理链会被忽略，多级代理需把每一跳都列入；
 - **SSE 流式端点必须关闭缓冲**（`proxy_buffering off` 或 Caddy `flush_interval -1`），否则逐段检查、Agent 运行、写作助手的进度事件会被代理攒批延迟；
 - **请求体上限**需 ≥ `multi_user.max_upload_archive_mb`（默认 500 MB），否则大压缩包上传会在代理层被截断（413）；
 - WebSocket 不涉及（实时推送全部走 SSE）。
 
 ### 注册自动审批（IP 策略）部署
 
-开启 `multi_user.auto_approve_enabled` 后，注册请求按 IP 策略判定「无恶意」即自动通过审批，否则转人工待审批（不会直接拒绝）。判定规则与全部配置项见 [backend-core.md](backend-core.md) 「注册自动审批要点」；部署侧需要准备：
+开启 `multi_user.auto_approve_enabled` 后，注册请求按 IP 策略判定「无恶意」即自动通过审批，否则转人工待审批（不会直接拒绝）。判定规则与全部配置项见 [backend-core.md](backend-core.md) 「注册自动审批要点」。部署侧需要准备：
 
-- **真实 IP 链路**：先完成上文 `trusted_proxies` 配置——策略读到的若是代理 IP，白名单与地理规则全部失真；
-- **ip2region 离线库**（推荐，国内精度高）：从 [ip2region](https://github.com/lionsoul2014/ip2region) 下载 xdb 文件，放到服务器可读路径后填入配置。**每个配置键只能指向一份 xdb 文件**：`multi_user.auto_approve_ip2region_db_path` 填 IPv4 库（`ip2region_v4.xdb`），`auto_approve_ip2region_db_path_v6` 填 IPv6 库（`ip2region_v6.xdb`，可选）；查询按注册 IP 的地址族自动路由到对应库（地址族由文件头自动识别，两键填反不影响正确性），**某地址族未配置库时该族注册回落 GeoLite2**（如只配 v4 库，IPv6 注册走 GeoLite2 判定）。两键任一配置后 ip2region 即优先生效：中国 IP 归属直接采用其结果（省/市级精度显著优于 GeoLite2，教育网等国内网段可定位到城市），非/未知中国才回落 GeoLite2；Python 读取器已随仓内嵌（官方 binding vendored），无需额外依赖；
-- **GeoLite2 离线库**（国际城市数据更细）：在 [MaxMind](https://dev.maxmind.com/geoip/docs/databases/city-and-country/) 免费注册并下载 GeoLite2 City 的 `.mmdb` 文件，放到服务器可读路径（如 `data/GeoLite2-City.mmdb`），把路径填入 `multi_user.auto_approve_geo_db_path`。作为 ip2region 的回落源（非/未知中国时使用）；只配此库不配 ip2region 时行为与历史版本一致。两库文件均可定期重新下载覆盖，后端按文件 mtime 自动重载；
-- **白名单口径**：固定机构场景优先用 CIDR 白名单（如校园网出口网段），无外部数据依赖且最可靠；城市/国家白名单适合成员分布较散的场景。共享出口 IP（校园/宿舍 NAT）请调大 `auto_approve_max_accounts_per_ip` 或改用网段白名单；
-- **局域网部署**：内网地址在两个地理库中均无记录，会转人工——请用 CIDR 白名单表达可信内网网段。
+- **真实 IP 链路**：先完成上文 `trusted_proxies` 配置。策略读到的若是代理 IP，白名单与地理规则全部失真；
+- **ip2region 离线库**（推荐，国内精度高）：从 [ip2region](https://github.com/lionsoul2014/ip2region) 下载 xdb 文件，放到服务器可读路径后填入配置。**每个配置键只能指向一份 xdb 文件**：`multi_user.auto_approve_ip2region_db_path` 填 IPv4 库（`ip2region_v4.xdb`），`auto_approve_ip2region_db_path_v6` 填 IPv6 库（`ip2region_v6.xdb`，可选）。查询按注册 IP 的地址族自动路由到对应库（地址族由文件头自动识别，两键填反不影响正确性），**某地址族未配置库时该族注册回落 GeoLite2**（如只配 v4 库，IPv6 注册走 GeoLite2 判定）。两键任一配置后 ip2region 即优先生效：中国 IP 归属直接采用其结果（省/市级精度显著优于 GeoLite2，教育网等国内网段可定位到城市），非/未知中国才回落 GeoLite2。Python 读取器已随仓内嵌（官方 binding vendored），无需额外依赖；
+- **GeoLite2 离线库**（国际城市数据更细）：在 [MaxMind](https://dev.maxmind.com/geoip/docs/databases/city-and-country/) 免费注册并下载 GeoLite2 City 的 `.mmdb` 文件，放到服务器可读路径（如 `data/GeoLite2-City.mmdb`），把路径填入 `multi_user.auto_approve_geo_db_path`。作为 ip2region 的回落源（非/未知中国时使用）。只配此库不配 ip2region 时行为与历史版本一致。两库文件均可定期重新下载覆盖，后端按文件 mtime 自动重载；
+- **白名单口径**：固定机构场景优先用 CIDR 白名单（如校园网出口网段），无外部数据依赖且最可靠。城市/国家白名单适合成员分布较散的场景。共享出口 IP（校园/宿舍 NAT）请调大 `auto_approve_max_accounts_per_ip` 或改用网段白名单；
+- **局域网部署**：内网地址在两个地理库中均无记录，会转人工。请用 CIDR 白名单表达可信内网网段。
 
 ### 公开端点
 
@@ -696,7 +696,7 @@ latex.example.com {
 | 源码格式化 | latexindent.pl | Perl 执行环境 |
 | rar 上传解压 | unar 或 bsdtar（convert 镜像内置） | 解析攻击者完全可控的压缩包字节流，转换器漏洞风险与 pandoc 同级 |
 
-rar 解压已与其余外部命令同一收口：解压命令经 SandboxRunner 在 convert 镜像容器内执行（无网络、只读根文件系统、资源限额），压缩包以只读方式挂载、解压目录以可写方式挂载，解压产物落位用户空间前仍经全量安全复核；宿主侧监视任务超配额 / 超时即硬中断（杀容器 / 击杀进程组）。`local` 模式（含 auto 回落）下解压仍为宿主子进程，风险口径见上方总则。
+rar 解压已与其余外部命令同一收口：解压命令经 SandboxRunner 在 convert 镜像容器内执行（无网络、只读根文件系统、资源限额），压缩包以只读方式挂载、解压目录以可写方式挂载，解压产物落位用户空间前仍经全量安全复核。宿主侧监视任务超配额 / 超时即硬中断（杀容器 / 击杀进程组）。`local` 模式（含 auto 回落）下解压仍为宿主子进程，风险口径见上方总则。
 
 除沙箱外，多用户模式通过以下措施收敛攻击面（**不能替代沙箱**）：
 
@@ -707,11 +707,11 @@ rar 解压已与其余外部命令同一收口：解压命令经 SandboxRunner �
 - 上传安全管线（路径穿越 / 符号链接 / 加密包 / 分卷包 / 压缩炸弹 / 大小写冲突拦截，大小、文件数、解压总量、时长受限）；
 - 项目 / 衍生数据双配额，写回超限硬失败。
 
-**部署要求**：`sandbox.mode=local`（或 auto 回落生效）时，仅向可信成员开放（团队 / 课题组内部），配合 HTTPS 与账号审批使用；不要面向公网匿名用户提供服务。启用 Docker 沙箱（auto 命中 / docker 模式）后，外部命令已在容器内隔离，但仍建议保持账号审批与 HTTPS——沙箱隔离的是"命令执行"，不改变认证、配额与数据隔离的必要性。
+**部署要求**：`sandbox.mode=local`（或 auto 回落生效）时，仅向可信成员开放（团队 / 课题组内部），配合 HTTPS 与账号审批使用。不要面向公网匿名用户提供服务。启用 Docker 沙箱（auto 命中 / docker 模式）后，外部命令已在容器内隔离，但仍建议保持账号审批与 HTTPS——沙箱隔离的是"命令执行"，不改变认证、配额与数据隔离的必要性。
 
 **Docker socket 风险（启用沙箱时必读）**：后端驱动沙箱容器需要访问 `/var/run/docker.sock`，该权限等价于授予 root 级能力（可创建任意容器挂载宿主文件系统）。缓解措施：镜像最小化且不含凭证、socket 以只读方式挂载、宿主 Docker daemon 保持最新安全补丁。rootless Docker / Podman 作为后续演进方向（当前版本不承诺）。沙箱不可用时的降级路径见上文 `mode=local` 的风险口径。
 
-另请注意：LLM API Key 存于服务器 `config.json`（或经 `LX_LLM_KEY` 环境变量注入），所有用户的 LLM 调用共用该 Key 出口，请自行评估用量与成本归属。
+LLM API Key 存于服务器 `config.json`（或经 `LX_LLM_KEY` 环境变量注入），所有用户的 LLM 调用共用该 Key 出口，请自行评估用量与成本归属。
 
 ---
 
@@ -734,9 +734,9 @@ rar 解压已与其余外部命令同一收口：解压命令经 SandboxRunner �
 
 **运维要点**：
 
-- 投递失败重试 `retry_attempts` 次后留档 failed（`email_outbox.last_error`），排查 SQL：`SELECT recipient, subject, last_error, attempts FROM email_outbox WHERE status='failed'`；sent/failed 留档保留 7 天自动清理。
+- 投递失败重试 `retry_attempts` 次后留档 failed（`email_outbox.last_error`），排查 SQL：`SELECT recipient, subject, last_error, attempts FROM email_outbox WHERE status='failed'`。sent/failed 留档保留 7 天自动清理。
 - 邮件发送依赖后端进程出站网络可达 SMTP 服务器；容器部署需放行对应出站端口（465/587）。
-- `password` 也可不改配置、改用环境变量 `LATEXCELLENCE_SMTP_PASSWORD` 注入（优先级更高，且永不写盘）；Compose 形态 config.json 为只读挂载，推荐此方式注入密码。
+- `password` 也可不改配置、改用环境变量 `LATEXCELLENCE_SMTP_PASSWORD` 注入（优先级更高，且永不写盘）。Compose 形态 config.json 为只读挂载，推荐此方式注入密码。
 - `site_base_url` 必须是用户浏览器可达的地址（经反向代理时填对外域名），否则找回邮件中的链接无法直接使用。
 - 未启用 SMTP 不影响任何主流程：注册/审批/登录/上传照常，找回入口自动隐藏，忘记密码的用户由管理员经管理面板重置。
 
@@ -756,10 +756,10 @@ rar 解压已与其余外部命令同一收口：解压命令经 SandboxRunner �
 
 备份建议：
 
-- SQLite 处于 WAL 模式，**不要**直接复制 `.db` 文件了事；停机备份最简单，在线备份用 `sqlite3 data/latexcellence.db ".backup 'backup.db'"`；
+- SQLite 处于 WAL 模式，**不要**直接复制 `.db` 文件了事。停机备份最简单，在线备份用 `sqlite3 data/latexcellence.db ".backup 'backup.db'"`；
 - `data/users/` 可与数据库快照同窗口整体打包（tar/rsync）；
 - 恢复时保持目录结构不变即可，项目目录名即 `project_id`，与库中记录一致；
-- **多实例部署的停机窗口**：数据库快照与 `data/users/` 打包必须落在同一时间点，而多副本会持续写入——备份窗口内先缩容到单副本（`docker compose up -d --scale app=1`，秒级完成、不丢状态），完成快照后再扩回去；直接对活跃多副本做在线备份可能得到项目文件与 op 记录不一致的快照；
+- **多实例部署的停机窗口**：数据库快照与 `data/users/` 打包必须落在同一时间点，而多副本会持续写入。备份窗口内先缩容到单副本（`docker compose up -d --scale app=1`，秒级完成、不丢状态），完成快照后再扩回去。直接对活跃多副本做在线备份，可能得到项目文件与 op 记录不一致的快照；
 - Compose 形态下 `logs/` 不存在（stdout 日志），日志留存交给 `docker logs` 的日志驱动（如 `local`/`json-file` 的 max-size/max-file 配置）。
 
 ---
@@ -784,7 +784,7 @@ rar 解压已与其余外部命令同一收口：解压命令经 SandboxRunner �
 | `LATEXCELLENCE_PROXY_PORT` | Compose | Caddy 对外端口（默认 `8080`） |
 | `LATEXCELLENCE_CADDYFILE` | Compose | Caddy 挂载的 Caddyfile（默认 `./docker/Caddyfile.example`） |
 
-注意：在设置页清空某个已由环境变量注入的敏感项（提交空值）按用户输入生效——内存值与磁盘字段会被清空，但**不会移除环境变量本身**；进程重启或 config.json 变更触发热重载后，环境变量值会重新注入并恢复生效。因此若想彻底停用某个 Key，应同时撤销对应的环境变量（如从 compose / systemd 配置中删除），而不是只在界面里清空。
+注意：在设置页清空某个已由环境变量注入的敏感项（提交空值）按用户输入生效——内存值与磁盘字段会被清空，但**不会移除环境变量本身**。进程重启或 config.json 变更触发热重载后，环境变量值会重新注入并恢复生效。因此若想彻底停用某个 Key，应同时撤销对应的环境变量（如从 compose / systemd 配置中删除），而不是只在界面里清空。
 
 ---
 
@@ -817,7 +817,7 @@ curl -s http://127.0.0.1:8000/api/health
 
 要点：
 
-- **数据库迁移全自动**：启动流程幂等应用全部 schema 迁移，无需手工执行脚本；`db-status` 可查看当前 schema 版本与最新版本是否一致；
+- **数据库迁移全自动**：启动流程幂等应用全部 schema 迁移，无需手工执行脚本。`db-status` 可查看当前 schema 版本与最新版本是否一致；
 - 沙箱镜像与应用同仓库演进：TeX 宏包清单或工具链更新时需重新构建对应沙箱镜像（`./docker/build.sh`），否则沿用旧镜像继续服务；
 - Compose 形态下 `config.json` 挂载自宿主且支持热重载，改配置不需要重建镜像。
 
@@ -833,7 +833,7 @@ curl -s http://127.0.0.1:8000/api/health
 
 ### CLI 管理工具
 
-所有命令支持 `--config <路径>` 指定配置文件（默认 `config.json`）；`--password` 省略时依次回退：管理员密码环境变量（`multi_user.admin_password_env`）→ 交互式输入。
+所有命令支持 `--config <路径>` 指定配置文件（默认 `config.json`）。`--password` 省略时依次回退：管理员密码环境变量（`multi_user.admin_password_env`）→ 交互式输入。
 
 ```bash
 python -m backend.manage create-admin <username> [--password xxx]   # 创建/提升管理员
@@ -848,8 +848,8 @@ python -m backend.manage db-status                                  # 查看 sch
 
 ### 日志
 
-- 裸机：`logs/`（按天轮转，保留最近 30 天，`logging.dir` 可改）；容器 / 多实例：设置 `LATEXCELLENCE_LOG_STDOUT=1` 只输出 stdout/stderr，交 `docker logs` 收集（多进程共写轮转文件不安全，compose 编排已默认开启）；
-- 排查登录问题关注 `multiuser.auth` 的限流与认证告警；上传失败关注 `invalid_archive` / `quota_exceeded` 相关记录。
+- 裸机：`logs/`（按天轮转，保留最近 30 天，`logging.dir` 可改）。容器 / 多实例：设置 `LATEXCELLENCE_LOG_STDOUT=1` 只输出 stdout/stderr，交 `docker logs` 收集（多进程共写轮转文件不安全，compose 编排已默认开启）；
+- 排查登录问题关注 `multiuser.auth` 的限流与认证告警。上传失败关注 `invalid_archive` / `quota_exceeded` 相关记录。
 
 ### 监控建议（多实例部署）
 
@@ -861,9 +861,9 @@ python -m backend.manage db-status                                  # 查看 sch
 | 维护选主状态 | `SELECT holder, expires_at FROM maintenance_lease`：确认只有一个活跃持有者且 `expires_at` 在滚动续期；长期无持有者说明全部副本的维护循环异常（查日志 `Multi-user maintenance cycle failed`） |
 | 待定交互堆积 | `pending_interactions` 行数应在个位数量级；持续增长说明 SSE 等待侧异常退出未消费（过期清理兜底，但仍应排查） |
 
-后台维护循环每小时执行一次：项目大小对账、衍生用量对账与配额预警检查、回收站过期清理、暂存区清理、删除用户归档清理、沙箱与 LLM 并发租约过期清理、限流事件保留期清理、自助找回令牌与邮件留档清理、逐段检查上下文与待定交互 TTL 清理、崩溃副本残留 sending 邮件行回收。多实例部署下经 `maintenance_lease` 表选主：持租约的副本执行循环体，其余副本跳过本轮；租约到期自动易主，持有人崩溃后最迟一个租约 TTL 内接管。各模块自身的 cleanup_loop（模板/绘图/样式会话 TTL 清理）保持每副本独立运行（幂等无害）。
+后台维护循环每小时执行一次：项目大小对账、衍生用量对账与配额预警检查、回收站过期清理、暂存区清理、删除用户归档清理、沙箱与 LLM 并发租约过期清理、限流事件保留期清理、自助找回令牌与邮件留档清理、逐段检查上下文与待定交互 TTL 清理、崩溃副本残留 sending 邮件行回收。多实例部署下经 `maintenance_lease` 表选主：持租约的副本执行循环体，其余副本跳过本轮。租约到期自动易主，持有人崩溃后最迟一个租约 TTL 内接管。各模块自身的 cleanup_loop（模板/绘图/样式会话 TTL 清理）保持每副本独立运行（幂等无害）。
 
-LLM 每用户治理：多用户模式下每次 LLM 调用前在单事务内完成"滑动窗口限流校验 + 事件落账 + 并发租约获取"，请求级用户上下文由安全中间件会话验证成功后全局注入，覆盖全部 `/api` 端点；被拒绝的调用不落行、不消耗配额。429 响应附 `Retry-After` 头与秒数明细，前端三语言文案展示等待时间。单用户模式完全跳过治理（零数据库依赖）。
+LLM 每用户治理：多用户模式下每次 LLM 调用前在单事务内完成"滑动窗口限流校验 + 事件落账 + 并发租约获取"，请求级用户上下文由安全中间件会话验证成功后全局注入，覆盖全部 `/api` 端点。被拒绝的调用不落行、不消耗配额。429 响应附 `Retry-After` 头与秒数明细，前端三语言文案展示等待时间。单用户模式完全跳过治理（零数据库依赖）。
 
 ### 常见问题
 

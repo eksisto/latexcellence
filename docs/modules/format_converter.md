@@ -1,6 +1,6 @@
 # 文档格式转换模块 `format_converter/`
 
-通过 `subprocess` 调用 Pandoc 实现 Markdown/DOCX/HTML 与 LaTeX 的互转，支持文本输入和文件上传两种模式。目标格式为 LaTeX 时，通过确定性宏包规则表自动分析所需宏包（LLM 仅兜底）。
+通过 `subprocess` 调用 Pandoc，在 Markdown/DOCX/HTML 与 LaTeX 之间互转，支持文本输入和文件上传两种模式。目标格式为 LaTeX 时，通过确定性宏包规则表自动分析所需宏包（LLM 仅兜底）。
 
 ## Markdown 公式定界符识别
 
@@ -30,7 +30,7 @@ markdown reader 侧启用 `tex_math_single_backslash` 扩展（`-f markdown+tex_
 | DOCX | LaTeX, Markdown, HTML |
 | LaTeX | Markdown, HTML, DOCX |
 
-> 注意：LaTeX → 其他格式的逆向转换会丢失复杂 LaTeX 命令，由 Pandoc 尽力处理。
+> 注意：LaTeX → 其他格式的逆向转换会丢失复杂 LaTeX 命令，Pandoc 尽力处理。
 
 ## Service 核心方法
 

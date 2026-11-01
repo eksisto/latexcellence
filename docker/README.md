@@ -1,6 +1,6 @@
 # LaTeXcellence Docker 沙箱镜像体系
 
-本目录提供多用户模式 v2 的 Docker 沙箱镜像交付物：后端把全部外部命令执行（LaTeX 编译、pandoc 转换、Python 绘图、git/latexdiff、latexindent）迁入容器，按用途拆分镜像、仓库内锁定版本、构建参数化。沙箱执行模型与安全约束见 `docs/multi-user.md` §6 与 `DESIGN.md` §12。
+本目录提供多用户模式 v2 的 Docker 沙箱镜像交付物：后端把全部外部命令执行（LaTeX 编译、pandoc 转换、Python 绘图、git/latexdiff、latexindent）迁入容器。镜像按用途拆分，版本在仓库内锁定，构建参数可配置。沙箱执行模型与安全约束见 `docs/multi-user.md` §6 与 `DESIGN.md` §12。
 
 ## 镜像用途对照表
 
@@ -11,14 +11,14 @@
 | `convert/` | `latexcellence-convert` | 格式转换（format_converter 模块）+ rar 上传解压（upload_rar 沙箱管线） | pandoc 官方发布物（版本锁定）+ unar / libarchive-tools（bsdtar，rar 解压双工具） |
 | `plot/` | `latexcellence-plot` | 科研绘图 Python 沙箱（plot_gen 模块） | numpy / pandas / scipy / matplotlib / seaborn / colorcet / openpyxl / xlrd + Noto CJK 字体 |
 
-镜像名通过 `config.json` 的 `sandbox.image_*` 配置项引用；`backend` 镜像本身由部署形态（compose 等）引用，不占用 `sandbox.image_*`。
+镜像名通过 `config.json` 的 `sandbox.image_*` 配置项引用。`backend` 镜像本身由部署形态（compose 等）引用，不占用 `sandbox.image_*`。
 
 ## 部署硬性前提：同路径挂载视图（重要）
 
 沙箱采用"同绝对路径 bind mount"契约（宿主路径即容器内路径），要求**后端进程与 Docker daemon 看到同一文件系统视图**：
 
 - ✅ 支持：Linux 原生部署（后端直接跑在宿主上）。
-- ❌ 不支持：后端自身容器化且把数据卷挂在非宿主同名路径（如 compose 的 `/app/data`）——daemon 视角不存在该路径，容器创建必然失败。运行期会在启动预检（bind-mount 实测）中发现并视同不可达：`sandbox.mode=auto` 回落本地执行并告警，`mode=docker` 快速失败（503）。此形态下请改用 `mode=local`，或让后端容器以 host 路径前缀一致的方式挂载数据卷。
+- ❌ 不支持：后端自身容器化且把数据卷挂在非宿主同名路径（如 compose 的 `/app/data`）。daemon 视角不存在该路径，容器创建必然失败。启动预检（bind-mount 实测）会发现该情况并视同不可达：`sandbox.mode=auto` 回落本地执行并告警，`mode=docker` 快速失败（503）。此形态下请改用 `mode=local`，或让后端容器以 host 路径前缀一致的方式挂载数据卷。
 
 ## 构建方法
 
@@ -59,11 +59,11 @@ docker build \
   -t latexcellence-tex:2025 docker/tex
 ```
 
-tag 规则：每个目标同时打 `latexcellence-<target>:YYYY.MM` 与 `latexcellence-<target>:latest` 双标签（`YYYY.MM` 取构建当日）。生产建议引用 `YYYY.MM` 标签，`latest` 仅作本地开发便利。
+tag 规则：每个目标同时打 `latexcellence-<target>:YYYY.MM` 与 `latexcellence-<target>:latest` 双标签（`YYYY.MM` 取构建当日）。生产环境建议引用 `YYYY.MM` 标签，`latest` 仅用于本地开发。
 
 ### 多架构构建（buildx）
 
-所有 Dockerfile 不写死基础镜像架构，Linux amd64/arm64 均可原生构建；跨架构产物用 buildx 产出 manifest list：
+所有 Dockerfile 不写死基础镜像架构，Linux amd64/arm64 均可原生构建。跨架构产物用 buildx 产出 manifest list：
 
 ```bash
 # 双架构构建并推送（需已 docker login 目标仓库）
@@ -78,8 +78,8 @@ BUILDX_MULTI_ARCH=1 BUILDX_PLATFORMS=linux/arm64 ./docker/build.sh --load
 
 说明：
 
-- `BUILDX_MULTI_ARCH=1` 未带 `--push/--load` 时仅产出构建缓存，不会加载到本地 daemon；
-- tex 镜像的 install-tl 在 arm64 上自动选择 `aarch64-linux` 二进制集；convert 镜像按 `TARGETARCH` 自动选择 pandoc 的 `linux-amd64` / `linux-arm64` 发布物；
+- `BUILDX_MULTI_ARCH=1` 未带 `--push/--load` 时仅产出构建缓存，不会加载到本地 daemon。
+- tex 镜像的 install-tl 在 arm64 上自动选择 `aarch64-linux` 二进制集。convert 镜像按 `TARGETARCH` 自动选择 pandoc 的 `linux-amd64` / `linux-arm64` 发布物。
 - 无 buildx 插件或未启用该变量时，脚本回落普通 `docker build`（当前宿主架构）。
 
 ## 离线导入导出（air-gapped 部署）
@@ -106,9 +106,9 @@ docker load -i latexcellence-sandbox-images.tar
 
 以升级 pandoc 为例（其余同理）：
 
-1. **改版本参数**：编辑对应 Dockerfile 顶部的 `ARG` 默认值（如 convert 的 `PANDOC_VERSION`、tex 的 `TEXLIVE_VERSION` / `CTAN_MIRROR` / `EXTRA_TL_PACKAGES`）；pip 类依赖同步修改 `requirements.txt`（backend）或 plot 镜像内的包清单。
+1. **改版本参数**：编辑对应 Dockerfile 顶部的 `ARG` 默认值（如 convert 的 `PANDOC_VERSION`、tex 的 `TEXLIVE_VERSION` / `CTAN_MIRROR` / `EXTRA_TL_PACKAGES`）。pip 类依赖同步修改 `requirements.txt`（backend）或 plot 镜像内的包清单。
 2. **重建镜像**：`./docker/build.sh convert`（或全部重建）。tex / convert 镜像构建末尾内置自检，缺工具或缺 `.sty` 会直接让构建失败。
-3. **更新配置**：修改 `config.json` 的 `sandbox.image_*` 指向新 tag（如 `latexcellence-convert:2026.03`）；保持镜像名不变、只滚动标签亦可。
+3. **更新配置**：修改 `config.json` 的 `sandbox.image_*` 指向新 tag（如 `latexcellence-convert:2026.03`）。保持镜像名不变、只滚动标签也可以。
 4. **重启生效**：重启后端进程/容器使新配置加载（配置热重载覆盖运行参数，但镜像引用变更建议随重启完成）。旧镜像保留一段时间以便回滚，确认稳定后再 `docker rmi` 清理。
 
 ## 缺 TeX 宏包排查指南
@@ -139,7 +139,7 @@ docker load -i latexcellence-sandbox-images.tar
    | `algorithm.sty` / `algorithmic.sty` | `algorithms` |
    | `gb7714-2015.bbx/.cbx` | `biblatex-gb7714-2015` |
 3. **加入宏包清单**。编辑 `docker/tex/Dockerfile`，将包名追加到 `EXTRA_TL_PACKAGES`（可追加到语义匹配的分组 `ARG`，或直接覆盖整个 `EXTRA_TL_PACKAGES`）。
-4. **重建 tex 镜像**：`./docker/build.sh tex`。构建末尾的 `kpsewhich` 自检会验证清单内关键样式文件确实就位；随后按上文升级流程滚动 tag 并重启。
+4. **重建 tex 镜像**：`./docker/build.sh tex`。构建末尾的 `kpsewhich` 自检会验证清单内关键样式文件确实就位。随后按上文升级流程滚动 tag 并重启。
 5. **验证**：重新触发一次此前失败的编译任务确认恢复。
 
 > 反向提醒：若某宏包不再需要，可从清单移除以缩小镜像体积；但移除前请确认没有项目依赖它。
@@ -160,38 +160,38 @@ tex 镜像内置固定的字体白名单，template_gen 的规划提示词按配
 | 黑体 | Noto Sans CJK SC（`fonts-noto-cjk`） |
 
 **私有化部署**：环境装有其他字体时，覆盖 `features.template_gen.font_whitelist`
-（`config.json` 或设置界面）即可让 Agent 按实际环境选字体；置空列表回退默认清单。
+（`config.json` 或设置界面）即可让 Agent 按实际环境选字体。置空列表则回退默认清单。
 商业字体（Times New Roman、SimSun 等）因授权原因不可打进镜像。
 
 关键机制：TeX Live 自带字体（Latin Modern / TeX Gyre / Fandol）的 OTF 位于
-`texmf-dist/fonts` 下，默认不在 fontconfig 扫描路径内，`fontspec` 的
+`texmf-dist/fonts` 下，默认不在 fontconfig 扫描路径内。`fontspec` 的
 `\setmainfont` 按字体名查找会报 `The font "X" cannot be found`。镜像通过
 `/etc/fonts/local.conf` 把 texmf 字体目录纳入 fontconfig，并在构建期自检
 （`fc-match "TeX Gyre Termes"`、`fc-list` 验证 Noto CJK、
-`kpsewhich texgyretermes-regular.otf`），XeLaTeX/LuaLaTeX 因此可按名加载
+`kpsewhich texgyretermes-regular.otf`）。XeLaTeX/LuaLaTeX 因此可按名加载
 白名单字体。
 
 ## 安全说明
 
-- **运行期无网络**：沙箱容器由后端 runner 强制以 `--network none` 启动；镜像本身也不预置联网凭据或代理配置。TeX 编译无法访问 `\write18` 网络资源（shell-escape 白名单由后端编译参数控制），minted 所需的 pygmentize 已随镜像内置，无需联网。
-- **只读根文件系统**：runner 以 `--read-only` 启动沙箱，可写空间仅限注入的 tmpfs（`/tmp` 等，容量由 `tmpfs_mb` 控制）与挂载的项目目录；tex/plot 镜像因此把 `HOME` 指向 `/tmp`。
-- **能力裁剪**：runner 注入 drop capabilities 与 `no-new-privileges`，镜像不以特权模式运行为前提。
-- **非 root 运行**：沙箱容器以后端传入的 `--user <uid>:<gid>` 运行（与宿主后端账号一致，保证产物属主正确）；backend 镜像内置 `latexcellence` 用户（UID/GID 可用 build-arg 对齐）。
-- **无内置凭证**：`config.json`（含 API Key、令牌等）与 `data/` 一律运行时挂载，不打进任何镜像；请勿在镜像构建参数中传入敏感信息。
+- **运行期无网络**：沙箱容器由后端 runner 强制以 `--network none` 启动。镜像本身也不预置联网凭据或代理配置。TeX 编译无法访问 `\write18` 网络资源（shell-escape 白名单由后端编译参数控制）。minted 所需的 pygmentize 已随镜像内置，无需联网。
+- **只读根文件系统**：runner 以 `--read-only` 启动沙箱，可写空间仅限注入的 tmpfs（`/tmp` 等，容量由 `tmpfs_mb` 控制）与挂载的项目目录。tex/plot 镜像因此把 `HOME` 指向 `/tmp`。
+- **能力裁剪**：runner 注入 drop capabilities 与 `no-new-privileges`。镜像不依赖特权模式运行。
+- **非 root 运行**：沙箱容器以后端传入的 `--user <uid>:<gid>` 运行（与宿主后端账号一致，保证产物属主正确）。backend 镜像内置 `latexcellence` 用户（UID/GID 可用 build-arg 对齐）。
+- **无内置凭证**：`config.json`（含 API Key、令牌等）与 `data/` 一律运行时挂载，不打进任何镜像。请勿在镜像构建参数中传入敏感信息。
 
 ## 支持矩阵
 
 | 平台 | 支持状态 | 说明 |
 | --- | --- | --- |
 | Linux 原生（amd64） | ✅ 一等支持 | 推荐 Debian 12+ / Ubuntu 22.04+ 宿主机 |
-| Linux 原生（arm64） | ✅ 一等支持 | install-tl 自动选 aarch64 二进制集；pandoc 有官方 arm64 发布物；两种架构均应通过编译/绘图冒烟验收 |
-| Windows | ⚠️ 建议 WSL2 | 在 WSL2 内按 Linux 原生方式部署；不建议直接在 Windows 容器模式运行 |
-| macOS（Docker Desktop） | ❌ 沙箱不支持，回落 local 模式 | Docker Desktop 的路径翻译导致无法同绝对路径 bind mount（template_gen 解析日志路径依赖容器内外路径一致）；macOS 开发环境下 `sandbox.mode` 回落 local 执行，功能不受影响 |
+| Linux 原生（arm64） | ✅ 一等支持 | install-tl 自动选 aarch64 二进制集。pandoc 有官方 arm64 发布物。两种架构均应通过编译/绘图冒烟验收 |
+| Windows | ⚠️ 建议 WSL2 | 在 WSL2 内按 Linux 原生方式部署。不建议直接在 Windows 容器模式运行 |
+| macOS（Docker Desktop） | ❌ 沙箱不支持，回落 local 模式 | Docker Desktop 的路径翻译导致无法同绝对路径 bind mount（template_gen 解析日志路径依赖容器内外路径一致）。macOS 开发环境下 `sandbox.mode` 回落 local 执行，功能不受影响 |
 
 ## 其他注意事项
 
-- backend 镜像只安装 Playwright 的 Python 包、不含浏览器内核：web_search 的浏览器回退池在容器内不可用，抓取自动走 HTTP 路径；确有需要可在部署文档基础上自行扩展镜像安装内核。
+- backend 镜像只安装 Playwright 的 Python 包、不含浏览器内核：web_search 的浏览器回退池在容器内不可用，抓取自动走 HTTP 路径。确有需要时，可在部署文档基础上自行扩展镜像安装内核。
 - plot 镜像 pip 包是仓库 `requirements.txt` 的对齐子集（数值计算与绘图部分），两侧版本下限需同步维护。
-- convert 镜像不设 ENTRYPOINT：后端 SandboxRunner 以完整 argv 驱动容器。手工调试时命令完整给出即可：`docker run --rm -v "$PWD:/w" -w /w latexcellence-convert:<tag> pandoc -f md -t html in.md`。
-- convert 镜像同时承载 rar 上传解压：multiuser 上传管线把 unar / bsdtar 解压命令经 SandboxRunner 派发到本镜像执行（压缩包只读挂载、解压目录可写挂载），镜像内两工具须同时齐备，构建期 `command -v` 自检兜底。
-- tex 镜像体积主要来自 scheme-medium + 中文字体/宏包，属预期；不要为缩小体积改用 scheme-basic，中文支持会整体缺失。
+- convert 镜像不设 ENTRYPOINT：后端 SandboxRunner 以完整 argv 驱动容器。手工调试时给出完整命令即可：`docker run --rm -v "$PWD:/w" -w /w latexcellence-convert:<tag> pandoc -f md -t html in.md`。
+- convert 镜像同时承载 rar 上传解压：multiuser 上传管线把 unar / bsdtar 解压命令经 SandboxRunner 派发到本镜像执行（压缩包只读挂载、解压目录可写挂载）。镜像内两工具须同时齐备，构建期 `command -v` 自检兜底。
+- tex 镜像体积主要来自 scheme-medium + 中文字体/宏包，属预期。不要为缩小体积改用 scheme-basic，中文支持会整体缺失。

@@ -35,9 +35,9 @@ LaTeXcellence 是一个 AI 驱动的 LaTeX 文档助手，其中：
 
 ### 1.2 任务目标
 
-目标：`template_gen` 最终能够复刻 <https://github.com/HaimingZ/tjuthesis>（天津大学学位论文模板），并达到该模板的水平。
+目标：`template_gen` 最终复刻 <https://github.com/HaimingZ/tjuthesis>（天津大学学位论文模板），并达到该模板的水平。
 
-调用 `tools/templategen_opt/` 闭环评测工具开始测试与优化。
+测试与优化从调用 `tools/templategen_opt/` 闭环评测工具开始。
 
 ### 1.3 闭环评测工具
 
@@ -447,7 +447,7 @@ thesis/requirements 因编译失败无 PDF 可审。
    "编译后大量写文件却不验证"。
 2. **natbib 与 `.bbl` 风格不匹配**：thesis 中途切换引用风格后报
    "Bibliography not compatible with author-year citations"，Agent 想
-   删除 `.bbl` 但工具没有删除能力，也没有针对该签名的修复指引；
+   删除 `.bbl` 但工具没有删除能力，也没有针对该签名的修复指引。
    实际上 latexmk `-gg` 会重新生成 `.bbl`，根因是 natbib 模式与 `.bst`
    不一致。
 3. **成功编译后的空转**：requirements（opt7）对同一份已成功源码连续
@@ -540,7 +540,7 @@ holdout `tju18`（Windows）50 轮内未编译成功，需求 12/13，启发式 
 1. **陈旧 `.bbl` 使正确的 `.bst` 修复无法生效**：thesis 多次把手写
    `.bst` 从双反斜杠改成单反斜杠，但每次 `compile_latex` 仍复用上一轮
    生成的 `.bbl`，最终 Agent 在最后一次源码修改后直接 `finish` 而未再
-   编译；`latexmk -gg` 在已存在 `.bbl` 时并不总能可靠重建。
+   编译。`latexmk -gg` 在已存在 `.bbl` 时并不总能可靠重建。
 2. **finish 放行“源码已改动但未验证”**：Agent 在最后一次编译后又改写
    `.bst` 并直接 finish，产物与磁盘源码不一致；现有干预只覆盖“连续多次
    写而不编”，不覆盖“最后一次写入后未编译就结束”。
@@ -603,8 +603,8 @@ holdout `tju10`：15 轮编译成功，需求 **13/13**，启发式 **100**，
 #### 背景
 
 本轮针对提示词重构后的当前代码从零重测非 holdout 场景（`base11`），并按
-trace 诊断后进行最小机制修复。基线平均启发式分为 **76.5**：thesis 编译
-成功，beamer/requirements 未编译成功；失败 trace 暴露出模型把 LaTeX 结构
+trace 诊断后做最小机制修复。基线平均启发式分为 **76.5**：thesis 编译
+成功，beamer/requirements 未编译成功。失败 trace 暴露出模型把 LaTeX 结构
 花括号校验错误误解为 JSON 转义问题，并在 counter/字体相关错误上反复猜测。
 
 #### 基线/诊断出的机制缺口
@@ -653,8 +653,8 @@ opt13 视觉评审中有 PDF 的场景平均 **6.5/10**（requirements 6.0、res
 - 条件化错误 HINT 比常驻 prompt 规则更稳定。本轮曾试验把花括号说明加入
   `agent_system`，但对照轮出现 resume 显著回退，随后撤回；最终只保留工具
   错误消息和编译失败签名 HINT。
-- 单轮视觉和启发式分仍有采样噪声；本轮应以对照容差、编译成功率和 holdout
-  一起判断，不把 beamer 的单场景失败解释为机制已完全失效，也不宣称视觉
+- 单轮视觉和启发式分仍有采样噪声；本轮应结合对照容差、编译成功率和 holdout
+  判断，不把 beamer 的单场景失败解释为机制已完全失效，也不宣称视觉
   质量已经解决。
 
 #### 链接

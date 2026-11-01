@@ -73,7 +73,7 @@ latexcellence/
 | 多模型路由 | 模型档案 + 角色槽位，`get_client_for(role)` 两级解析，热重载清池 | [multi-model.md](docs/multi-model.md) |
 | CheckOperationContext | 每次检查生成 operation_id + marker 映射 + MD5 快照，apply 精确还原 | [DESIGN.md §1.4](DESIGN.md) |
 | 乐观锁 | 读取返回文件 MD5，写回校验，不一致抛 409 | [DESIGN.md §4.2](DESIGN.md) |
-| SSE 流式 | 段落检查 / Agent / 写作聊天统一 progress / result / error / done 事件 | [modules.md](docs/modules.md) |
+| SSE 流式 | 段落检查 / Agent / Writing Chat 统一 progress / result / error / done 事件 | [modules.md](docs/modules.md) |
 | Function Calling 工具体系 | ToolRegistry 全局注册 + Agent 会话私有工具；结果带 shown/total/next_step | [function-calling-tools.md](docs/function-calling-tools.md) |
 | Docker 沙箱 | 外部命令统一走 SandboxRunner（docker/local 双后端，auto 探测回落） | [backend-core.md](docs/backend-core.md)、[deployment.md](docs/deployment.md) |
 | 多用户双模式 | `multi_user.enabled` 开关；服务器路径不向用户暴露 | [multi-user.md](docs/multi-user.md) |

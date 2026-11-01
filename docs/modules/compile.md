@@ -24,43 +24,22 @@
 
 ### 编译前产物清理（clean_first）
 
-- 动机：latexmk 依赖项目内持久化的 `.fdb_latexmk` / `.log` 记录上次运行
-  状态，源文件未变化时短路为 "Nothing to do"，但因上次失败的错误状态仍
-  会以 exit 12 失败；其关键线索行（"gave an error in previous
-  invocation"）又不命中 texfot 的 stdout 过滤模式，用户只能看到无信息量
-  的 `-f` 提示。
-- `CompileRequest.clean` / `compile_latex(clean_first=...)`：为 true 时
-  编译前调用 `clean_project_artifacts(root)` 清理项目内可再生产物后再
-  执行 latexmk，保证引擎必跑、失败日志始终来自本次运行。编辑器编译链路
-  恒传 true；编译页 / git_diff 等既有调用方默认 false 零变化。
-- `clean_project_artifacts(root)` 遍历项目根目录（含 `\input` 子目录），
-  按扩展名白名单删除（latexmk 默认清理集 + 常见宏包/工具产物，含
-  `.synctex.gz` / `.run.xml` 等复合后缀）；跳过 `.git` 目录、符号链接与
-  非普通文件；`.pdf` 与 `.tex/.bib/.sty` 等源文件不在白名单，永不删除。
+- 动机：latexmk 依赖项目内持久化的 `.fdb_latexmk` / `.log` 记录上次运行状态。源文件未变化时短路为 "Nothing to do"，但因上次失败的错误状态仍会以 exit 12 失败。其关键线索行（"gave an error in previous invocation"）又不命中 texfot 的 stdout 过滤模式，用户只能看到无信息量的 `-f` 提示。
+- `CompileRequest.clean` / `compile_latex(clean_first=...)`：为 true 时编译前调用 `clean_project_artifacts(root)` 清理项目内可再生产物后再执行 latexmk，保证引擎必跑、失败日志始终来自本次运行。编辑器编译链路恒传 true。编译页 / git_diff 等既有调用方默认 false，行为零变化。
+- `clean_project_artifacts(root)` 遍历项目根目录（含 `\input` 子目录），按扩展名白名单删除（latexmk 默认清理集 + 常见宏包/工具产物，含 `.synctex.gz` / `.run.xml` 等复合后缀）。跳过 `.git` 目录、符号链接与非普通文件。`.pdf` 与 `.tex/.bib/.sty` 等源文件不在白名单，永不删除。
   同步阻塞 I/O，调用方经 `asyncio.to_thread` 调度。
 
 ### SyncTeX 数据与正/反向查询（editor v3 阶段一）
 
-- `CompileRequest` / `CompileResult` 携带可选 `synctex` 字段（默认
-  false，编译页 / git_diff 等既有调用方零影响）：请求为 true 且未与
-  PDF/A 组合时，`run_tex_compile()` 在 latexmk 基础参数追加
-  `-synctex=1`（与 extra_args 同级）；PDF/A 在临时目录编译后仅回拷
-  PDF，`.synctex.gz` 不同步回项目目录，故组合时忽略并在响应如实回传
-  `synctex=false`。
-- `POST /api/compile/synctex/forward` / `POST /api/compile/synctex/backward`
-  为**零写盘只读查询**：`synctex view` / `synctex edit`（TeX Live 自带）
-  经 SandboxRunner（`ExecSpec(image_kind="tex", cwd=项目根)`）执行；
-  `file_path` 经 `resolve_project_path()` 白名单校验（`.tex/.bib/.sty/.cls`，
-  与编辑器可编辑白名单同口径）；synctex 输出中的绝对路径在多用户模式下
-  经 `sanitize_output_paths()` 脱敏，响应只含项目内相对路径，定位到项目
-  外文件（texmf 系统文件等）按未命中处理。
+- `CompileRequest` / `CompileResult` 携带可选 `synctex` 字段（默认 false，编译页 / git_diff 等既有调用方零影响）：请求为 true 且未与 PDF/A 组合时，`run_tex_compile()` 在 latexmk 基础参数追加 `-synctex=1`（与 extra_args 同级）。PDF/A 在临时目录编译后仅回拷 PDF，`.synctex.gz` 不同步回项目目录，故组合时忽略并在响应如实回传 `synctex=false`。
+- `POST /api/compile/synctex/forward` / `POST /api/compile/synctex/backward` 为**零写盘只读查询**：`synctex view` / `synctex edit`（TeX Live 自带）经 SandboxRunner（`ExecSpec(image_kind="tex", cwd=项目根)`）执行。`file_path` 经 `resolve_project_path()` 白名单校验（`.tex/.bib/.sty/.cls`，与编辑器可编辑白名单同口径）。synctex 输出中的绝对路径在多用户模式下经 `sanitize_output_paths()` 脱敏，响应只含项目内相对路径，定位到项目外文件（texmf 系统文件等）按未命中处理。
 
 ## Pydantic 输出模型
 
 - `CompileResult`（success, stdout, stderr, explanation, fixes, error_code, synctex）
 - `ErrorTranslation`（explanation, fixes）
 - `SynctexForwardResponse`（records: page/x/y/w/h，72dpi 点单位、页面左上原点）
-- `SynctexBackwardResponse`（found, file_path, line, col；未命中 found=false 属合法空结果）
+- `SynctexBackwardResponse`（found, file_path, line, col。未命中 found=false 属合法空结果）
 
 ## Service 核心方法
 
@@ -82,7 +61,7 @@ Prefix: `/api/compile`, Tag: `compile`
 | POST | `/run` | 编译 LaTeX 项目（支持 engine/pdfa/synctex/clean 参数） |
 | GET | `/pdf` | 返回最近一次编译产出的 PDF（内联预览） |
 | POST | `/synctex/forward` | 正向同步：源码位置 → PDF 页面矩形（只读零写盘） |
-| POST | `/synctex/backward` | 反向同步：PDF 点位 → 源码位置（相对路径；未命中 found=false） |
+| POST | `/synctex/backward` | 反向同步：PDF 点位 → 源码位置（相对路径，未命中 found=false） |
 
 ## 配置项
 

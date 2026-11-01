@@ -14,7 +14,7 @@
 
 ### `backend/core/config.py` — 配置管理
 
-定义完整的 Pydantic v2 配置模型树，每个 JSON 配置段对应一个 `BaseModel` 子类：
+定义 Pydantic v2 配置模型树，每个 JSON 配置段对应一个 `BaseModel` 子类：
 
 - `ServerConfig` — 服务配置（host, port, dev_mode, vite_dev_url, allowed_origins）
 - `SecurityConfig` — 跨域访问安全配置（access_token）
@@ -49,7 +49,7 @@
 
 ### `backend/core/env.py` — .env 环境变量文件加载
 
-基于 python-dotenv 的统一 `.env` 加载入口。在 `backend/core/config.py` 的 `_parse_config_file()` 开头统一调用 `load_env_file()`（`load_config()` 与配置热重载都经由该路径，入口点与离线评测工具无需单独调用），把项目根 `.env` 文件（模板 `.env.example`，文件本身已被 `.gitignore` 忽略）注入 `os.environ`，后续 `SECRET_ENV_PATHS`、`admin_*_env` 等环境变量消费点自动读到。tools 专属变量（如 `TEXLIVE_BIN`，经 `tools/tex_path.py` 消费、不经配置解析）的消费点可自行调用（幂等）。
+基于 python-dotenv 的统一 `.env` 加载入口。在 `backend/core/config.py` 的 `_parse_config_file()` 开头统一调用 `load_env_file()`（`load_config()` 与配置热重载都经由该路径，入口点与离线评测工具无需单独调用），把项目根 `.env` 文件（模板 `.env.example`，文件本身已被 `.gitignore` 忽略）注入 `os.environ`。后续 `SECRET_ENV_PATHS`、`admin_*_env` 等环境变量消费点自动读到。tools 专属变量（如 `TEXLIVE_BIN`，经 `tools/tex_path.py` 消费、不经配置解析）的消费点可自行调用（幂等）。
 
 - **优先级**：真实环境变量 > `.env` 文件 > config.json——`load_dotenv(override=False)` 只补缺，不覆盖 shell / systemd / compose 中已显式注入的值；
 - **幂等**：默认路径（项目根 `.env`）只加载一次，重复调用直接跳过；显式传 `path`（测试用）始终允许加载，但同样不覆盖已存在的变量；
@@ -93,7 +93,7 @@
 | `chat_stream()` | 流式对话：返回 `AsyncIterator[str]`，按 token 产出，用于 SSE 推送 |
 | `chat_stream_with_usage()` | 流式对话 + 末尾携带 UsageInfo：返回 `AsyncIterator[StreamChunk]`，`StreamChunk.content` 为文本片段、`StreamChunk.usage` 为末次 LLM token 用量（用 `stream_options={"include_usage": True}` 透传，第三方不支持时降级为 `None`） |
 | `chat_stream_with_tools()` | 流式对话 + Function Calling：与 `chat_stream_with_usage` 类似，但额外接受 `tools` 参数。流中同时 yield content（文本 token 实时推送）和 tool_calls（末次 yield 完整 `ChatCompletionMessageToolCall` 列表） |
-| `get_context_window()` | 获取模型上下文窗口（token）：显式配置 → `/models` 探测 → 超限错误学习 → 内置模型表 → 默认 200000；结果按 `(profile_id, base_url, model)` 缓存（按档案隔离，防跨档案串味），`reset()` 时失效，探测失败绝不抛出；探测地址与主服务不同源时不携带 API key |
+| `get_context_window()` | 获取模型上下文窗口（token）：显式配置 → `/models` 探测 → 超限错误学习 → 内置模型表 → 默认 200000；结果按 `(profile_id, base_url, model)` 缓存（按档案隔离，防跨档案串用），`reset()` 时失效，探测失败绝不抛出；探测地址与主服务不同源时不携带 API key |
 | `_rate_limit()` | 内部限流器：确保两次请求间隔 ≥ `config.llm.request_interval` |
 
 **数据类**：
@@ -118,7 +118,7 @@
 
 **extra_body 透传**：`llm.extra_body`（`dict[str, Any]`，默认 `{}`）会作为 openai SDK 的 `extra_body` 参数附加到全部 `chat.completions.create` 调用（非流式 / 流式 / Function Calling），用于厂商私有请求体参数，例如思维链模型降档 `{"reasoning_effort": "low"}`、通义 `{"enable_thinking": false}`、智谱 `{"thinking": {"reasoning_budget": "low"}}`。**为空时不发送任何额外参数**——非思考模型 / 不支持这些字段的 provider 不会因此报错，属于按需显式开启的配置；若对不支持的模型显式配置了字段，provider 返回 400 会走常规重试后抛出，需自行确认目标模型的参数兼容性。前端在设置对话框 LLM 分区以 JSON 文本框编辑（非法 JSON 只提示、不保存）。
 
-**多实例与池化**：`LLMClient` 不再是全局单例——每个模型档案对应一个池化实例（见下方「模型路由器与客户端池」）。`get_llm_client()` 保留为 `get_client_for("default")` 的薄别名，服务存量导入路径与 default 槽辅助调用。`client` 属性首次访问时按当前配置创建 `AsyncOpenAI` 并缓存；配置热重载经 `reset_client_pool()` 清空整个客户端池（逐实例 `reset()`），使下一次访问按新配置重建，从而支持运行时热重载 `api_key` / `base_url`。
+**多实例与池化**：`LLMClient` 不再是全局单例——每个模型档案对应一个池化实例（见下方「模型路由器与客户端池」）。`get_llm_client()` 保留为 `get_client_for("default")` 的薄别名，服务存量导入路径与 default 槽辅助调用。`client` 属性首次访问时按当前配置创建 `AsyncOpenAI` 并缓存；配置热重载经 `reset_client_pool()` 清空整个客户端池（逐实例 `reset()`），使下一次访问按新配置重建，支持运行时热重载 `api_key` / `base_url`。
 
 **推理模型兼容封装层**（service 无感知）：
 
@@ -126,7 +126,7 @@
 - **响应侧清洗**：JSON 路径（`chat` / `chat_with_usage`）解析前剥离 `content` 中的 `<think>...</think>` 思维链片段；`reasoning_content` 字段天然不参与解析；流式路径思维链照常经 `StreamChunk(reasoning=...)` 产出（仅展示用途），SSE 协议不变；
 - 不依赖 `retry_with_validation()` 的 JSON 重试来兜底模型格式问题（重试仍只服务其原有职责）。
 
-**每用户治理门（多用户 v2 P1b）**：全部公共入口（`chat_with_usage` / `chat_stream` / `chat_with_tools` / `chat_stream_with_usage` / `chat_stream_with_tools`）在最外层套 `core/multiuser/llm_governance.py` 的 `admission_gate()`：多用户模式下读取请求级当前用户上下文（由 `AccessSecurityMiddleware` 会话验证成功后全局注入，覆盖全部 `/api` 端点），在单事务内完成"滑动窗口限流校验 + 事件落账 + 并发租约获取"，超限抛 429 语义 RuntimeError（`gov_code` = `llm_rate_limited` / `llm_concurrency_limited`，携带 `retry_after`），由 main.py 注册的全局异常处理器（`register_governance_handler`）翻译为 HTTP 429 + Retry-After + 既有 `detail` 包装的结构化错误体；调用结束 finally 释放租约（流式提前断开同样覆盖）。单用户模式或无用户上下文（后台任务）直通且零数据库依赖。实现细节见下方"多用户模式基础设施"一节的 `llm_governance.py` 行。
+**每用户治理门（多用户 v2 P1b）**：全部公共入口（`chat_with_usage` / `chat_stream` / `chat_with_tools` / `chat_stream_with_usage` / `chat_stream_with_tools`）在最外层套 `core/multiuser/llm_governance.py` 的 `admission_gate()`：多用户模式下读取请求级当前用户上下文（由 `AccessSecurityMiddleware` 会话验证成功后全局注入，覆盖全部 `/api` 端点），在单事务内完成"滑动窗口限流校验 + 事件落账 + 并发租约获取"。超限抛 429 语义 RuntimeError（`gov_code` = `llm_rate_limited` / `llm_concurrency_limited`，携带 `retry_after`），由 main.py 注册的全局异常处理器（`register_governance_handler`）翻译为 HTTP 429 + Retry-After + 既有 `detail` 包装的结构化错误体；调用结束 finally 释放租约（流式提前断开同样覆盖）。单用户模式或无用户上下文（后台任务）直通且零数据库依赖。实现细节见下方"多用户模式基础设施"一节的 `llm_governance.py` 行。
 
 ### `backend/core/model_router.py` — 模型路由器与客户端池（多模型支持）
 
@@ -429,7 +429,7 @@ next_step: ...
 
 `web_search.strategy` 决定搜索运行时：`legacy` 保留主引擎失败后串行降级的既有行为；`aggregate` 将已启用引擎与结构化查询计划的变体组成 lane，在总截止时间内并发执行。每个 lane 返回 `EngineStatus`，单个引擎超时、限流或失败只把响应标为 `partial`，不会丢弃其他引擎的成功结果。连续失败会短时打开进程内熔断器；配置热重载重建 `SearchManager` 时熔断状态随之清空。
 
-聚合候选先通过 `url_utils.py` 仅保留公开 HTTP(S) URL，移除 fragment、默认端口和常见跟踪参数，并拒绝凭据、私网地址及非标准私网 IP 写法。`ranking.py` 合并规范 URL和近重复文本，记录各 lane 原始名次与来源，再按 RRF、跨引擎共识、来源类型权重排序，并应用单域名结果上限。`ranking.mode=legacy` 可保留聚合 lane 的稳定旧版顺序；显式传入 `engine_name` 始终绕过聚合，提供单引擎兼容路径。
+聚合候选先通过 `url_utils.py` 仅保留公开 HTTP(S) URL，移除 fragment、默认端口和常见跟踪参数，并拒绝凭据、私网地址及非标准私网 IP 写法。`ranking.py` 合并规范 URL 和近重复文本，记录各 lane 原始名次与来源，再按 RRF、跨引擎共识、来源类型权重排序，并应用单域名结果上限。`ranking.mode=legacy` 可保留聚合 lane 的稳定旧版顺序；显式传入 `engine_name` 始终绕过聚合，提供单引擎兼容路径。
 
 查询重写由 `SearchQueryPlanner` 生成 `SearchQueryPlan`，LLM JSON 必须经过 `retry_with_validation()` 和 Pydantic 严格校验。重试耗尽或 LLM 不可用时使用只保留原查询的规则计划，搜索本身仍可继续。
 
@@ -537,7 +537,7 @@ ExtractorRegistry 先处理已知公开端点（当前代码托管页面使用 G
 - 权限**实时查库**：添加 / 改角色 / 移除后，下一次请求立即生效（对端体验可即时验证，如被移除的协作者下一次读请求即 403）。
 - 转交端点 `POST /api/projects/{id}/transfer`（body：`username` + `keep_access`）：owner 将项目转给其他 `active` 用户；`keep_access=True` 时原 owner 转后保留为 viewer，否则直接退出协作。
 - 转交实现要点：转交前校验**接收方项目空间配额**（超限 413 `quota_exceeded`，与上传/恢复同口径）；项目目录沿 `data/users/<owner_id>/projects/<project_id>/` 规范**迁移到新 owner 空间**（保证 `root_path` 派生、配额记账与对账一致）；新 owner 有同名活动项目时自动生成 `xx (2)`（复用 `next_available_name`）；新 owner 原为协作者则转正并移除其协作者行；已打开该项目的 workspace 绑定同步更新 `owner_id` / `root_path` 并重新打开文件树。
-- viewer 写保护（P2 已落地）：viewer 的 `apply-change` / `set-main-file` / `undo` / `redo` 返回 403。共享项目撤销禁令（v1）已在 v2 P3 由反向补丁解禁：转交后 ops 按 actor 归属不变，各用户只能撤销自己的修改。
+- viewer 写保护（P2 已实现）：viewer 的 `apply-change` / `set-main-file` / `undo` / `redo` 返回 403。共享项目撤销禁令（v1）已在 v2 P3 由反向补丁解禁：转交后 ops 按 actor 归属不变，各用户只能撤销自己的修改。
 
 **分片上传要点（v2 P5）**：
 
@@ -693,7 +693,7 @@ raise ValueError("Validation failed after N attempts")        # ❌ 耗尽
 
 ### `llm_cache.py` — LLM 响应缓存（降低 API 使用成本）
 
-**定位**：对「纯函数式」LLM 调用（给定 模型 + 消息 + 采样参数，期望相同结果）做结果复用。典型场景：逐段检查整篇复查时未修改段落直接命中、同一错误反复编译不重复翻译、同一图片重复 OCR 不再产生 API 调用（识别与宏包兜底均命中缓存，本地格式化仍会重跑）、同一条目重复解析免费。
+**定位**：对「纯函数式」LLM 调用（给定模型 + 消息 + 采样参数，期望相同结果）做结果复用。典型场景：逐段检查整篇复查时未修改段落直接命中、同一错误反复编译不重复翻译、同一图片重复 OCR 不再产生 API 调用（识别与宏包兜底均命中缓存，本地格式化仍会重跑）、同一条目重复解析免费。
 
 **缓存键**：`sha256(客户端身份 + 完整 messages + 采样参数)`。客户端身份取 `LLMClient.cache_identity`（档案 id + base_url + 模型 + extra_body，api_key 不参与），同模型名但不同端点 / 档案的客户端不会串用结果；无身份属性的测试替身按 `resolved_model` 退化，连模型名都没有时用对象标识隔离。段落文本、语言、自定义指令、提示词模板、temperature / max_tokens 任一变化都会改变 key，因此无需 TTL；模型 / 档案切换经 `model_router.reset_client_pool()`（配置热重载接线点）整体清空。messages / 采样参数必须 JSON 可序列化，不可序列化直接抛 `TypeError`（不再 `default=str` 静默折叠）。命中在 debug 级记录 12 位 key 前缀（`LLM cache hit | key=…`），逐段检查量级下不进 INFO 日志。
 
@@ -785,7 +785,7 @@ raise ValueError("Validation failed after N attempts")        # ❌ 耗尽
 
 ### `tex_compile.py` — 统一 TeX 编译执行模块
 
-**设计理念**：将 LaTeX 编译执行（latexmk 调用）和日志过滤（texfot）统一封装，供 `compile`（自动编译）、`git_diff`（差异高亮）、`template_gen`（模板生成）等模块复用。texfot 是 TeX Live 自带的 Perl 工具，能从海量编译日志中自动提取错误、警告等关键信息，比自写正则更可靠。当 texfot 不可用时，静默降级为原始 latexmk 输出 + 正则 fallback。
+**设计理念**：将 LaTeX 编译执行（latexmk 调用）和日志过滤（texfot）统一封装，供 `compile`（自动编译）、`git_diff`（差异高亮）、`template_gen`（模板生成）等模块复用。texfot 是 TeX Live 自带的 Perl 工具，能从编译日志中自动提取错误、警告等关键信息，比自写正则更可靠。当 texfot 不可用时，静默降级为原始 latexmk 输出 + 正则 fallback。
 
 **核心功能**：
 
@@ -892,7 +892,7 @@ backend/utils/sandbox/
 
 ### `latexindent_utils.py` — latexindent.pl 调用封装
 
-供统一格式化工具 `latex_formatter` 使用（`code_review` / `formula_ocr` / `table_ocr` 共用）。负责检测 `latexindent` 是否可用，并将 LaTeX 源码片段写入临时文件后调用 `latexindent` 进行格式化。默认加载项目内置 `backend/utils/latexindent.yaml`（`defaultIndent` 为每层 4 个空格），覆盖 latexindent 默认的制表符缩进；`config_path` 参数可传入自定义配置覆盖。
+供统一格式化工具 `latex_formatter` 使用（`code_review` / `formula_ocr` / `table_ocr` 共用）。负责检测 `latexindent` 是否可用，并将 LaTeX 源码片段写入临时文件后调用 `latexindent` 格式化。默认加载项目内置 `backend/utils/latexindent.yaml`（`defaultIndent` 为每层 4 个空格），覆盖 latexindent 默认的制表符缩进；`config_path` 参数可传入自定义配置覆盖。
 
 调用时通过 `-c` 把备份文件（`*.bak*`）与日志统一写入临时目录，并用 `-g` 指定每次运行独立的日志名；运行结束后整目录清理（Windows 上短暂重试应对句柄延迟释放），避免在项目目录残留文件。v2 P1a 起执行经 SandboxRunner：docker 后端下 latexindent 由 tex 镜像提供（宿主无需安装），配置文件随临时目录挂载进容器。
 

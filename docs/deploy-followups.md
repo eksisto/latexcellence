@@ -46,32 +46,32 @@
 
 ### 4.1 rar 解压器纳入 SandboxRunner
 
-- convert 镜像内置 unar + bsdtar（构建期 `command -v` 自检）；解压命令以 ExecSpec 描述、
+- convert 镜像内置 unar + bsdtar（构建期 `command -v` 自检）。解压命令以 ExecSpec 描述、
   经 `get_sandbox_runner().execute()` 在容器内执行：压缩包路径只读挂载、解压目录 rw 挂载、
   既有 deadline 折算超时；
 - 配额监视从线程改为宿主侧 asyncio 任务：采样 extract_dir 写盘量（bind mount 对宿主
   可见），超配额/超时置位 `cancel_event` 硬中断（docker 杀容器、local 击杀进程组）；
 - 错误码与用户文案不变（`rar_extractor_missing` 仅 local、`archive_unsafe`、
-  `invalid_archive` 等）；mode=docker 硬失败按 `sandbox_unavailable` → 上传 503，
+  `invalid_archive` 等）。mode=docker 硬失败按 `sandbox_unavailable` → 上传 503，
   mode=auto 探测失败自动回落 local 零回归。
 
 ### 4.2 真实压缩 RAR4/RAR5 样本
 
 以 rarlab rar CLI 生成压缩/加密/分卷样本入库（KB 级，自产数据不分发软件本体），
-`tools/rar_fixtures/verify_fixtures.py` 自动对账结构特征与预扫行为；测试双工具参数化
+`tools/rar_fixtures/verify_fixtures.py` 自动对账结构特征与预扫行为。测试双工具参数化
 端到端覆盖。样本清单、生成要点与实测结论见 rar-extractor-fallback.md §六/§八。
 
 ### 4.3 沙箱容器预创建池（warm pool）
 
 - docker 后端按 image_kind 维护"已创建未启动"容器池（每副本本地），池深 =
-  `max_concurrent_global`；租约获取后 pop → start → exec → stop+remove → 异步补充
-  （补充并发 ≤ 2）；池空或"形状"（创建时固化的 kwargs）不一致时即时 create，无退化；
-- 容器参数复用 `_build_container_kwargs`（安全基线逐字段一致）；池容器打 label
-  `latexcellence.warm_pool=1` + 副本标识；**孤儿清理是每副本职责**，有意不进维护循环
+  `max_concurrent_global`。租约获取后 pop → start → exec → stop+remove → 异步补充
+  （补充并发 ≤ 2）。池空或"形状"（创建时固化的 kwargs）不一致时即时 create，无退化；
+- 容器参数复用 `_build_container_kwargs`（安全基线逐字段一致）。池容器打 label
+  `latexcellence.warm_pool=1` + 副本标识。**孤儿清理是每副本职责**，有意不进维护循环
   选主分支（容器是 daemon 全局资源、池是副本本地状态）；
 - 配置 `sandbox.warm_pool_enabled`（默认开，auto 探测命中 docker 才启用）；
 - 实现细节与运维说明见 [backend-core.md](backend-core.md) sandbox 节与
-  [deployment.md](deployment.md)「warm pool 运维说明」；冷启动基准脚本
+  [deployment.md](deployment.md)「warm pool 运维说明」。冷启动基准脚本
   `tools/warm_pool_bench.py`。
 
 ### 4.4 模型连通性测试
@@ -80,9 +80,9 @@
   触发真实计费调用属管理面操作，单用户模式登录即可）：
   - 请求 `{profile_id}` 与 `{role}` 二选一：`role` 经 `get_client_for(role)` 验证
     "实际生效档案"（含 default 回落），`profile_id` 直测该档案本身；
-  - 执行最小补全（`max_tokens=1`、"ping"），超时上限 15s，计测往返延迟；api_key 缺失
+  - 执行最小补全（`max_tokens=1`、"ping"），超时上限 15s，计测往返延迟。api_key 缺失
     返回结构化错误 `api_key_missing`，网络/上游错误脱敏透传（严禁回显密钥）；
-  - 响应 `{ok, latency_ms, model, profile_id, role?, error?}`；多用户 LLM 治理对本端点
+  - 响应 `{ok, latency_ms, model, profile_id, role?, error?}`。多用户 LLM 治理对本端点
     豁免（管理面诊断操作，有意偏离）；
 - **前端**：`ModelManagementSection.jsx` 每张档案卡片"测试连接"按钮（内联展示延迟/
-  失败原因，测试中禁用保存），三语 i18n；错误码经 `translateError()` 翻译链路。
+  失败原因，测试中禁用保存），三语 i18n。错误码经 `translateError()` 翻译链路。

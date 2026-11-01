@@ -23,20 +23,20 @@ whoami
 # 本机示例输出：pc\codexsandboxoffline
 ```
 
-可用写入范围默认限于工作区目录与 `writable_roots`；系统 `%TEMP%`
+可用写入范围默认限于工作区目录与 `writable_roots`。系统 `%TEMP%`
 （如 `C:\Users\<用户>\AppData\Local\Temp`）是否可写取决于沙箱配置与 ACL。
 
 ### 2. Windows ACL 按主体（SID）判定权限
 
 Windows 的目录/文件权限记录在 ACL 中，按创建者/授权主体的 SID 判定。
 用户 A 创建的文件，用户 B 不一定能读取或删除。同一台机器上"真实用户跑
-pytest"与"Codex 沙箱用户跑 pytest"交替执行时，谁创建、谁清理才顺利；
-跨主体清理 = `WinError 5`。
+pytest"与"Codex 沙箱用户跑 pytest"交替执行时，创建和清理必须由同一主体完成。
+跨主体清理会报 `WinError 5`。
 
 ### 3. pytest basetemp 的生命周期（旧方案）
 
 旧方案在 `pytest.ini` 固定 `--basetemp=.pytest_tmp`：pytest 会在会话
-开始时整体重建该目录；若上次会话异常中断（或由另一主体创建）导致目录
+开始时整体重建该目录。若上次会话异常中断（或由另一主体创建）导致目录
 残留且 ACL 损坏，下一次会话的清理就会失败。即使换用"每会话一个目录"，
 残留目录仍需可靠清理机制兜底。
 
@@ -66,7 +66,7 @@ pytest"与"Codex 沙箱用户跑 pytest"交替执行时，谁创建、谁清理�
 .\clean-cache.ps1 -NoPause
 ```
 
-脚本清理 `__pycache__`、`.pytest_cache`、`.pytest_tmp` 等；`.pytest_tmp`
+脚本清理 `__pycache__`、`.pytest_cache`、`.pytest_tmp` 等。`.pytest_tmp`
 删除失败时会自动弹 UAC 提权重试（仅针对该目录）。
 
 ### 2. 手动修复 ACL 后删除
@@ -80,7 +80,7 @@ icacls $pytestTmp /reset /T /C
 Remove-Item -LiteralPath $pytestTmp -Recurse -Force
 ```
 
-先 `cd` 到仓库根目录再执行；若工作区不是 PowerShell 当前目录，请把
+先 `cd` 到仓库根目录再执行。若工作区不是 PowerShell 当前目录，请把
 `$pytestTmp` 换成实际的 `.pytest_tmp` 路径。
 
 ### 3. 本次运行绕过残留目录
@@ -104,7 +104,7 @@ python -m pytest tests/ -q --basetemp=$bt
 
 ## 预防
 
-- 避免在 Codex 沙箱内外交替运行 pytest 后留下跨主体目录；异常中断后及时
+- 避免在 Codex 沙箱内外交替运行 pytest 后留下跨主体目录。异常中断后及时
   清理；
 - 工作区避免放在 OneDrive / 云端同步目录内，并可将工作区加入杀软排除；
 - 修改 `tmp_path_retention_count` 可控制历史会话目录保留数量；

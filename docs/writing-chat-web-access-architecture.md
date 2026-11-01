@@ -4,7 +4,7 @@
 
 ## 1. 目标与范围
 
-本模块改进写作助手 Chat 使用的通用搜索、学术检索和网页阅读链路，目标包括：
+本模块改进 Writing Chat 使用的通用搜索、学术检索和网页阅读链路，目标包括：
 
 - 提高中文、英文及混合语言查询的搜索相关性、权威来源覆盖率和结果多样性。
 - 提高学术检索的召回率、版本合并质量、元数据可信度和全文证据可用性。
@@ -55,7 +55,7 @@ WritingChatService
 - 完整内容进入受限缓存，LLM 上下文只接收当前问题需要的证据。
 - 基础排序采用确定性算法。LLM 重排只作用于小规模候选集，失败时回退。
 - 每个外部结果保留 Provider、原始排名、最终 URL、抓取时间和处理策略。
-- CPU 密集型 HTML/PDF 解析使用 `asyncio.to_thread()`；HTTP 与浏览器客户端由 lifespan 创建并共享。
+- CPU 密集型 HTML/PDF 解析使用 `asyncio.to_thread()`。HTTP 与浏览器客户端由 lifespan 创建并共享。
 
 ### 2.3 代码落点
 
@@ -255,15 +255,15 @@ class EvidenceBundle(BaseModel):
 
 1. 为启用的引擎创建独立 lane，每个 lane 有超时、并发上限和熔断状态。
 2. 用全局截止时间约束整次搜索。截止时间到达时取消未完成任务，返回已确定的部分结果。
-3. 区分 `empty`、`timeout`、`rate_limited`、`blocked` 和 `error`。空结果不触发同错误相同的冷却逻辑。
+3. 区分 `empty`、`timeout`、`rate_limited`、`blocked` 和 `error`。空结果不触发与错误相同的冷却逻辑。
 4. 记录 `EngineStatus`，让日志、评测和前端能看见降级原因。
 5. 单引擎模式继续保留，作为兼容路径和问题诊断工具。
 
 对同一批查询变体设置总预算，不为每个变体无限复制所有引擎请求。调度器优先执行原始查询和最有区分度的变体，剩余变体只在召回不足时补充。
 
-聚合模式下，某个 DDG lane 的 `DDGChallengeError` 不终止其他 lane。响应保存 challenge 描述并返回其他来源的部分结果；只有结果不足或用户主动选择 DDG 时，前端才展示人工验证。单引擎 DDG 模式沿用现有 Challenge 流程。
+聚合模式下，某个 DDG lane 的 `DDGChallengeError` 不终止其他 lane。响应保存 challenge 描述并返回其他来源的部分结果。只有结果不足或用户主动选择 DDG 时，前端才展示人工验证。单引擎 DDG 模式沿用现有 Challenge 流程。
 
-聚合层区分 transport source 和 origin source。SearXNG 是传输来源，其结果中的上游引擎才是共识来源；直接 DDG 与 SearXNG 内的 DDG 不能重复计票。没有上游信息的聚合 API 进入同一个相关性组，排序器只给该组一次共识贡献。
+聚合层区分 transport source 和 origin source。SearXNG 是传输来源，其结果中的上游引擎才是共识来源。直接 DDG 与 SearXNG 内的 DDG 不能重复计票。没有上游信息的聚合 API 进入同一个相关性组，排序器只给该组一次共识贡献。
 
 ### 4.3 URL 归一化、去重与来源分类
 
@@ -284,7 +284,7 @@ class EvidenceBundle(BaseModel):
 - 引擎原始名次和跨引擎共识。
 - 查询词在标题、摘要和 URL 中的匹配度。
 - 查询意图与来源类型的匹配度，例如官方文档查询提升官方域名。
-- 时效查询使用有明确来源的发布日期；无法确定时保持 `unknown`。抓取日期只表示缓存新鲜度，不替代页面发布时间。
+- 时效查询使用有明确来源的发布日期。无法确定时保持 `unknown`。抓取日期只表示缓存新鲜度，不替代页面发布时间。
 - 域名质量规则、重复内容和低信息摘要惩罚。
 - 顶部结果的域名多样性约束。
 
@@ -302,7 +302,7 @@ class EvidenceBundle(BaseModel):
 
 响应增加 `query_plan`、`engine_statuses`、`score_components` 和 `partial`。`format_for_llm()` 默认不输出全部评分细节，只输出来源类型、共识提示和必要的降级说明，避免浪费上下文。
 
-Tavily 等 Provider 返回的 `raw_content` 标记为 `proxied_content`。它可以作为抓取失败时的低置信度预览，但 `open_page` 默认仍读取原始 URL；回答需要精确主张时，只有原站正文或明确标注的公开结构化端点可以进入可引用 EvidenceBundle。若只能获得代理内容，工具结果必须向模型和用户说明来源层级。
+Tavily 等 Provider 返回的 `raw_content` 标记为 `proxied_content`。它可以作为抓取失败时的低置信度预览，但 `open_page` 默认仍读取原始 URL。回答需要精确主张时，只有原站正文或明确标注的公开结构化端点可以进入可引用 EvidenceBundle。若只能获得代理内容，工具结果必须向模型和用户说明来源层级。
 
 ## 5. 学术搜索
 
@@ -317,7 +317,7 @@ Tavily 等 Provider 返回的 `raw_content` 标记为 `proxied_content`。它可
 
 每个 Provider 使用适配器把计划翻译为其支持的字段。Provider 不支持的过滤条件由合并层处理，并在结果中记录，不静默假装服务端已应用。
 
-每个 Provider 声明能力，例如 `search`、`details`、`references`、`citations`、`similar`、`oa_resolve`、`full_text` 和 `dataset_search`。`ResearchManager` 只把具备 `search` 能力的 Provider 放入检索 lane；OA 定位器和元数据补全源在对应阶段调用。能力声明由契约测试验证。
+每个 Provider 声明能力，例如 `search`、`details`、`references`、`citations`、`similar`、`oa_resolve`、`full_text` 和 `dataset_search`。`ResearchManager` 只把具备 `search` 能力的 Provider 放入检索 lane。OA 定位器和元数据补全源在对应阶段调用。能力声明由契约测试验证。
 
 ### 5.2 联邦召回与跨源排序
 
@@ -326,8 +326,8 @@ Provider 并发框架保留，合并层使用：
 - Provider 内原始排名归一化和 RRF，避免把不同 API 的 relevance score 直接相加。
 - 题名、摘要、关键词和主题的词法相关性。
 - 作品类型匹配、年份需求和同行评审状态。
-- 可用时采用时间归一化的引用指标，避免新论文因累计引用少而被系统性压低。
-- 来源一致性加分；来源冲突只降低字段置信度，不直接删除记录。
+- 可用时采用时间归一化的引用指标，避免系统性压低累计引用少的新论文。
+- 来源一致性加分。来源冲突只降低字段置信度，不直接删除记录。
 - 结果列表的主题、年份和作者多样性，减少同一研究组或同一版本占满头部。
 
 引用量只能作为发现信号。Prompt 和排序器都不把高引用量等同于正确性、权威性或适合引用。
@@ -340,7 +340,7 @@ Provider 并发框架保留，合并层使用：
 2. 对缺少标识符的记录，用规范化标题、作者、年份和期刊做保守的模糊匹配。
 3. 把预印本、会议版、期刊版建成 version family，默认展示正式版本，并保留其他版本链接。
 4. 每个合并字段记录来源和冲突状态。题名、年份或 DOI 冲突时不做无依据覆盖。
-5. 对撤回、更正、勘误和预印本状态使用 Provider 明确返回的标记；缺失时显示 `unknown`。
+5. 对撤回、更正、勘误和预印本状态使用 Provider 明确返回的标记。缺失时显示 `unknown`。
 
 `ScholarlyWork` 增加 `identifiers`、`versions`、`field_provenance`、`publication_status`、`retraction_status` 和 `ranking_explanation` 等结构化字段。前端仍可从兼容字段读取 DOI、作者和 OA 状态。
 
@@ -350,7 +350,7 @@ Provider 并发框架保留，合并层使用：
 
 1. 优先获取公开的结构化全文，例如 JATS XML、仓库 API 或 arXiv 源/HTML。
 2. 没有结构化正文时，解析合法可访问的 OA HTML 或 PDF。
-3. 识别摘要、引言、相关工作、方法、实验、结果、讨论、局限、结论和参考文献等章节；保留原始标题，标准章节名只作为标签。
+3. 识别摘要、引言、相关工作、方法、实验、结果、讨论、局限、结论和参考文献等章节。保留原始标题，标准章节名只作为标签。
 4. 表格、图注、公式、脚注和参考文献分别建块，不混入相邻正文。
 5. 返回实际获得的章节、缺失章节和抽取置信度。不使用摘要补写 methods 或 limitations。
 
@@ -372,12 +372,12 @@ query plan
 
 所有抓取路径，包括 HTTP、浏览器、站点专用 Extractor 和 PDF 下载，复用同一策略层：
 
-- 仅允许公网 HTTPS；DNS 解析、每次重定向、浏览器主框架导航和每个子资源请求都重复执行 SSRF 检查。
+- 仅允许公网 HTTPS。DNS 解析、每次重定向、浏览器主框架导航和每个子资源请求都重复执行 SSRF 检查。
 - 限制重定向次数、响应头大小、压缩后字节数、正文大小、下载时间和 MIME 类型。
 - 按域名限制并发和最小请求间隔，解析 `Retry-After`，对可重试错误做指数退避和抖动。
-- 域名连续失败后打开熔断器；探测恢复前不让每个用户请求重复撞墙。
+- 域名连续失败后打开熔断器。探测恢复前不让每个用户请求重复撞墙。
 - URL 中疑似密钥、签名和凭据时拒绝持久化，并对日志做脱敏。
-- `robots.txt` 和站点策略决定是否允许自动抓取；不允许时返回明确错误。
+- `robots.txt` 和站点策略决定是否允许自动抓取。不允许时返回明确错误。
 
 ### 6.2 分级获取链
 
@@ -387,7 +387,7 @@ query plan
 | --- | --- | --- | --- |
 | 缓存/结构化端点 | 有新鲜缓存或已知公开 API | 读取缓存或 API-first Extractor | 文档质量达标 |
 | 普通 HTTP | 默认路径 | 共享 `httpx` 会话、条件请求、压缩传输 | 状态正常且正文质量达标 |
-| 兼容 HTTP 传输 | 明确 TLS/协议兼容问题，配置允许 | 可插拔浏览器 TLS profile；保留真实浏览器身份 | 内容可用或预算耗尽 |
+| 兼容 HTTP 传输 | 明确 TLS/协议兼容问题，配置允许 | 可插拔浏览器 TLS profile，保留真实浏览器身份 | 内容可用或预算耗尽 |
 | 浏览器渲染 | 检测到 JS shell、受支持的 Cookie 挑战或动态正文 | 受限 Playwright context，等待正文稳定后抽取 DOM | 内容可用、挑战出现或超时 |
 | 人工/替代来源 | CAPTCHA、登录、付费墙、拒绝访问 | 返回类型化错误，并建议搜索其他公开来源 | 不再自动升级 |
 
@@ -419,7 +419,7 @@ query plan
 - 阻止下载、弹窗、通知、摄像头、麦克风、地理位置和外部协议。
 - 根据页面类型拦截广告、追踪和大媒体资源，但保留影响正文加载的脚本与样式。
 - 把浏览器并发、内存、单页时间和总渲染次数设为硬上限。
-- 浏览器关闭与 FastAPI lifespan 绑定；启动失败时回退并记录能力不可用。
+- 浏览器关闭与 FastAPI lifespan 绑定。启动失败时回退并记录能力不可用。
 
 ## 7. 正文抽取、清洗与结构保留
 
@@ -459,7 +459,7 @@ query plan
 
 - 删除脚本、样式、导航、页脚、广告、分享控件、Cookie 横幅和重复推荐区。
 - 合并被标签拆开的连续句子，保留段落边界。
-- 规范化 Unicode、换行和空白；按语言处理软连字符与 PDF 断词。
+- 规范化 Unicode、换行和空白。按语言处理软连字符与 PDF 断词。
 - 保留代码块的原始空白、列表层级、表头/单元格、链接目标、引用块和公式文本。
 - 保留图表标题及其与正文的相邻关系，图片本体只记录 URL、alt 和 caption。
 - 不删除可能改变含义的否定词、脚注标记、引用编号或单位。
@@ -490,7 +490,7 @@ Content: ...
 - 目标大小使用 token 估算，中文、日文、韩文单独校准。
 - overlap 复制完整尾部块，不从句子中间切割。
 - 表格、代码和公式超过预算时使用类型专用分片，并保留共同标题路径。
-- 对当前问题先做 BM25 召回，再用 MMR 控制重复；可选 reranker 只处理召回后的少量 chunk。
+- 对当前问题先做 BM25 召回，再用 MMR 控制重复。可选 reranker 只处理召回后的少量 chunk。
 - 每个来源设置软预算，同时保留跨来源证据，避免一个长页面耗尽全部上下文。
 
 长页默认返回：元数据、标题大纲、总字数、质量信息和最相关片段。完整文档保留在缓存中，LLM 可通过章节 ID 继续读取。
@@ -507,10 +507,10 @@ Content: ...
 ### 8.2 实施要求
 
 - 缓存目录、TTL、最大磁盘占用和逐条目大小可配置，并使用 LRU/过期清理。
-- 支持 ETag/Last-Modified 条件请求；页面未变化时复用抽取结果。
+- 支持 ETag/Last-Modified 条件请求。页面未变化时复用抽取结果。
 - 抽取算法升级后通过版本键失效，不复用旧结构。
 - 会话只持久化使用过的证据片段，不复制整份网页。
-- 提供按域名和全部清理入口；缓存清理接入项目现有 `clean-cache` 脚本。
+- 提供按域名和全部清理入口。缓存清理接入项目现有 `clean-cache` 脚本。
 - 日志和缓存去除 Cookie、Authorization、URL token 与表单数据。
 
 ## 9. Writing Chat 工具与上下文集成
@@ -519,9 +519,9 @@ Content: ...
 
 | 工具 | 说明 |
 | --- | --- |
-| `web_search` | 返回排序后的来源、引擎状态、结果类型、共识和 `partial`；保持现有结果字段 |
-| `open_page` | 接受 `query`、`mode=auto/outline/relevant/full`、`render=auto/http/browser` 和 token 预算；返回 `document_id`、outline 与证据块 |
-| `find_in_page` | 接受 URL 或 `document_id`；使用块索引和词法检索，返回 heading breadcrumb 与 evidence ID |
+| `web_search` | 返回排序后的来源、引擎状态、结果类型、共识和 `partial`，保持现有结果字段 |
+| `open_page` | 接受 `query`、`mode=auto/outline/relevant/full`、`render=auto/http/browser` 和 token 预算，返回 `document_id`、outline 与证据块 |
+| `find_in_page` | 接受 URL 或 `document_id`，使用块索引和词法检索，返回 heading breadcrumb 与 evidence ID |
 | `read_page_sections` | 按 `document_id + section_ids` 读取完整章节，避免反复抓取 URL |
 | `search_scholarly_works` | 返回版本族、字段来源、排序解释和 Provider 状态 |
 | `get_full_text_or_sections` | 返回真实抽取章节、缺失章节、OA 来源和证据块 |
@@ -534,7 +534,7 @@ Content: ...
 
 - 把 evidence ID 和 URL 同时加入引用白名单。
 - 在工具上下文裁剪时以完整 EvidenceBundle 为单位，不拆掉来源头或 heading path。
-- 保存最终用于回答的证据片段；搜索候选和未读取全文的结果只保存轻量元数据。
+- 保存最终用于回答的证据片段。搜索候选和未读取全文的结果只保存轻量元数据。
 - 会话压缩摘要保留 URL、DOI、document ID、evidence ID 和结论，不保留大段网页原文。
 - 当前轮证据超过预算时按相关性和来源多样性裁剪，并在工具结果中告知 LLM 哪些内容未注入。
 
@@ -578,11 +578,11 @@ Prompt 要求模型：
 配置约束：
 
 - Service 和 Provider 方法内调用 `get_config()`，不在 `__init__` 缓存热重载字段。
-- 资源池的结构变化由配置 reload hook 安全重建；单次请求使用不可变配置快照，避免执行中途混用新旧预算。
+- 资源池结构变化时，配置 reload hook 安全重建资源池。单次请求使用不可变配置快照，避免执行中途混用新旧预算。
 - 密钥和 `grobid_url` 等敏感/内部字段通过设置接口脱敏。
 - 设置页把常用模式、浏览器开关和缓存上限放在主区域，其余字段放入高级设置，但所有新增配置仍可通过 UI 修改。
 - 修改配置时同步 `AppConfig`、`config.example.json`、设置分区、`SettingsDialog.jsx`、`WelcomePage.jsx` 和 i18n。
-- 新缓存目录使用 `pathlib.Path` 和显式 UTF-8；接入现有清理脚本，不使用 `os.path`。
+- 新缓存目录使用 `pathlib.Path` 和显式 UTF-8。接入现有清理脚本，不使用 `os.path`。
 
 ## 11. 可观测性与错误反馈
 
@@ -651,13 +651,13 @@ LLM judge 只能作为辅助指标。发布门槛以确定性引用检查、gold
 | --- | --- |
 | 单元测试 | URL 规范化、RRF、域名多样性、记录关联、质量评分、切块、错误分类和预算裁剪 |
 | Provider 契约测试 | `httpx.MockTransport` 固定响应，验证超时、限流、空结果、字段缺失和 schema 漂移 |
-| Golden 抽取测试 | HTML/XML/PDF fixture 到 `ExtractedDocument` 的结构差异；允许显式更新 gold |
+| Golden 抽取测试 | HTML/XML/PDF fixture 到 `ExtractedDocument` 的结构差异，允许显式更新 gold |
 | 安全测试 | SSRF、DNS 重绑定、重定向、压缩炸弹、超大响应、恶意 MIME、浏览器导航和凭据脱敏 |
 | 浏览器集成测试 | 本地测试站模拟 SPA、延迟正文、Cookie 挑战和 CAPTCHA，不依赖公网反爬站点 |
 | writing-chat 测试 | Mock LLM 工具调用，验证 SSE、EvidenceBundle、上下文裁剪、引用校验和旧会话兼容 |
 | 离线评测 | 固定数据集比较 legacy/v2，输出可审阅的逐查询和逐页面报告 |
 
-CI 中不运行真实搜索引擎或学术 API。少量 live smoke test 由维护者手动执行，凭据从环境变量读取，结果不能成为单元测试通过条件。
+CI 中不运行真实搜索引擎或学术 API。维护者手动执行少量 live smoke test，凭据从环境变量读取。结果不能成为单元测试通过条件。
 
 ## 14. 风险与控制
 

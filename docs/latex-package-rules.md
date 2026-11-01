@@ -6,7 +6,7 @@
 持续改进的三个目标：
 
 1. 查准率：不误报。内核命令不进表，逐字内容、注释、URL 不触发规则
-2. 查全率：不遗漏。论文写作、OCR、Pandoc 转换常见宏包都能命中
+2. 查全率：不遗漏。论文写作、OCR、Pandoc 转换的常见宏包都能命中
 3. 可维护性：每次改表都有依据、有测试、有验证，不依赖个人记忆
 
 ## 规则表职责边界
@@ -81,7 +81,7 @@ python tools/latex_packages/coverage_report.py
 `float` 由分析器的 `[H]` 浮动识别隐式产出，虽不在映射表中，仍参与领域排除
 （公式领域不推荐 float）。
 
-当前领域排除按包名粗粒度进行（`DOMAIN_EXCLUDED_PACKAGES`）；后续如需更细粒度
+当前领域排除按包名粗粒度（`DOMAIN_EXCLUDED_PACKAGES`）。后续如需更细粒度
 （如 math 领域只排除某个宏包的表格用法），再改为逐条打标签。
 
 ## 明确不做
@@ -96,7 +96,7 @@ python tools/latex_packages/coverage_report.py
 ## 后续扩充路线图
 
 第一批（引用/交叉引用/算法/定理/附录/PDF/中文/表格补充/页面布局/代码/术语/
-数学补充）已完成并落地语料。后续按需扩充的候选（每批仍须带测试片段和
+数学补充）已完成，语料已加入。后续按需扩充的候选（每批仍须带测试片段和
 验证依据，按新增规则模板提交）：
 
 第二批（按需补）：
@@ -122,7 +122,7 @@ python tools/latex_packages/coverage_report.py
 - **LLM 兜底触发率**：规则表未命中而触发 LLM 调用的次数占比，越低越好
 - **单次检测耗时**：规则表路径不调用 LLM，应接近纯正则扫描耗时
 
-前两项与 LLM 兜底触发率由 `test_latex_package_corpus.py` 输出基线；
+前两项与 LLM 兜底触发率由 `test_latex_package_corpus.py` 输出基线。
 单次检测耗时可在装有 TeX 的机器上用 `verify_rules.py` 的编译结果对照。
 
 ## 相关文件

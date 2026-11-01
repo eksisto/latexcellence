@@ -4,7 +4,7 @@
 
 ## 设计思路
 
-与其他逐段检查模块（typo_check / expression_opt 等）共享 `BaseParagraphCheckService` 基类，仅实现 hooks 定制翻译行为。与 typo_check / expression_opt 一致，`_build_success_result` 在 marker 还原前执行 changes 契约的确定性校验（见下方"四层防护"），保证主字段与 changes 列表一致。
+与其他逐段检查模块（typo_check / expression_opt 等）共享 `BaseParagraphCheckService` 基类，仅实现 hooks 以定制翻译行为。与 typo_check / expression_opt 一致，`_build_success_result` 在 marker 还原前执行 changes 契约的确定性校验（见下方"四层防护"），保证主字段与 changes 列表一致。
 
 | 维度 | paragraph_translate | typo_check / expression_opt |
 | --- | --- | --- |
@@ -96,5 +96,5 @@ Prefix: `/api/paragraph-translate`, Tag: `paragraph_translate`
 `tools/paragraph_translate_eval/` 提供逐段翻译人工评估工具，配套语料位于
 `tests/fixtures/paragraph_translate/`（每条一个单段落 LaTeX 片段 + 整段参考译文与
 期望短语）。新增语料或修改翻译 prompt/逻辑后，运行
-`python tools/paragraph_translate_eval/run_eval.py` 生成人工比对报告；
+`python tools/paragraph_translate_eval/run_eval.py` 生成人工比对报告。
 新增语料先跑 `--validate` 校验。详见其 `README.md`。
