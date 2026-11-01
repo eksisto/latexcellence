@@ -28,7 +28,8 @@ TTL；模型 / 档案切换经 reset_client_pool()（配置热重载接线点）
 输入，结果是输入的确定性函数，不泄露任何额外信息。
 
 并发语义：同 key 的并发未命中请求（批检查中的重复段落）经 in-flight
-锁合流为一次真实调用，共享结果；调用失败不缓存，重试路径行为不变。
+合流为一次真实调用，成功结果共享；leader 失败时同批等待者共享该异常
+（不再各自串行重试），本批结束后新请求重新尝试。调用失败不缓存。
 
 值隔离：写入时存深拷贝快照、读取时返回深拷贝副本，缓存内部对象永远不
 交给调用方。调用方拿到结果后普遍会就地加工（OCR 的格式化 / 包裹 / 宏包
@@ -43,8 +44,7 @@ import hashlib
 import json
 import threading
 from collections import OrderedDict
-from collections.abc import AsyncIterator, Awaitable, Callable
-from contextlib import asynccontextmanager
+from collections.abc import Awaitable, Callable
 from typing import Any, Protocol
 
 from pydantic import BaseModel
@@ -59,10 +59,13 @@ _CACHE_MAX_ENTRIES = 1024
 _cache: OrderedDict[str, Any] = OrderedDict()
 _cache_lock = threading.Lock()
 
-# 同 key 并发合流：key → asyncio.Lock。事件循环内创建，跨请求复用；
-# 释放且无等待者时移除，防止字典无界增长。
-_inflight_locks: dict[str, asyncio.Lock] = {}
+# 同 key 并发合流：key → 在途 flight 的 Future。leader 的结果（成功或
+# 失败）共享给排队者，本批结束后移除登记；leader 被取消时等待者收到
+# _RETRY 哨兵后重新竞争，取消不扩散到其他请求。
+_inflight_flights: dict[str, asyncio.Future[Any]] = {}
 _inflight_guard = threading.Lock()
+
+_RETRY = object()
 
 _logger = get_logger("llm_cache")
 
@@ -133,61 +136,87 @@ def cache_put(key: str, value: Any) -> None:
             _cache.popitem(last=False)
 
 
-def clear_llm_cache() -> None:
-    """清空缓存与 in-flight 锁登记（配置热重载 / 测试隔离）。
+def cache_delete(key: str) -> None:
+    """删除单条缓存条目（schema 漂移 / 内容损坏的条目失效用）。"""
+    with _cache_lock:
+        _cache.pop(key, None)
 
-    清锁登记是安全的：在途调用各自持有旧锁继续生效，清空后新的同 key
-    请求可能另起一次真实调用，只退化成功率 / 命中率，不影响正确性。
-    一并清理可避免跨事件循环（pytest 每用例换 loop）遗留锁。
+
+def clear_llm_cache() -> None:
+    """清空缓存与 in-flight 合流登记（配置热重载 / 测试隔离）。
+
+    清登记是安全的：在途 flight 的 Future 仍被等待者持有，结果照常送达；
+    清空后新的同 key 请求另起一批，只影响命中率 / 合流率，不影响正确性。
+    一并清理可避免跨事件循环（pytest 每用例换 loop）遗留 Future。
     """
     with _cache_lock:
         _cache.clear()
     with _inflight_guard:
-        _inflight_locks.clear()
+        _inflight_flights.clear()
 
 
-@asynccontextmanager
-async def _single_flight(key: str) -> AsyncIterator[None]:
-    """同 key 未命中请求的合流锁：进入即独占，退出时释放并清理登记。"""
-    with _inflight_guard:
-        lock = _inflight_locks.get(key)
-        if lock is None:
-            lock = asyncio.Lock()
-            _inflight_locks[key] = lock
-    try:
-        async with lock:
-            yield
-    finally:
-        _release_inflight_lock(key, lock)
+async def _single_flight(key: str, factory: Callable[[], Awaitable[Any]]) -> Any:
+    """同 key 合流：leader 执行 factory，排队者共享其结果或异常。
 
-
-def _release_inflight_lock(key: str, lock: asyncio.Lock) -> None:
-    """锁不再被持有时移除登记，避免字典无界增长。
-
-    竞态（另一协程刚好要取该锁）的后果只是双方各建一把锁、各自调用
-    一次——退化为无合流的普通缓存行为，正确性不受影响。
+    - leader 成功 / 失败：排队者得到同一结果 / 同一异常，失败路径不再
+      退化为 N 次串行重试（延迟从 N 次超时降为 1 次）；
+    - leader 被取消（客户端断连）：排队者收到 _RETRY 哨兵后重新竞争，
+      取消不会扩散到其他请求；
+    - 排队者拿到结果的深拷贝副本，不与 leader / 彼此共享可变对象；
+    - 本批结束后移除登记，后续请求重新成为 leader（失败仍可重试）。
     """
-    if not lock.locked():
+    while True:
         with _inflight_guard:
-            if _inflight_locks.get(key) is lock:
-                del _inflight_locks[key]
+            future = _inflight_flights.get(key)
+            if future is None:
+                future = asyncio.get_running_loop().create_future()
+                _inflight_flights[key] = future
+                leader = True
+            else:
+                leader = False
+
+        if not leader:
+            outcome = await asyncio.shield(future)
+            if outcome is _RETRY:
+                continue
+            # 与缓存读取同口径：等待者拿私有副本，不共享 leader 的可变对象
+            return copy.deepcopy(outcome)
+
+        try:
+            value = await factory()
+        except asyncio.CancelledError:
+            # 只让本批等待者重新竞争，不把取消传播给其他请求
+            future.set_result(_RETRY)
+            raise
+        except BaseException as exc:
+            future.set_exception(exc)
+            future.exception()  # 标记已获取，避免无等待者时的未消费警告
+            raise
+        else:
+            future.set_result(value)
+            return value
+        finally:
+            with _inflight_guard:
+                if _inflight_flights.get(key) is future:
+                    del _inflight_flights[key]
 
 
 async def cached_call(key: str, fetch: Callable[[], Awaitable[Any]]) -> Any:
     """按 key 取结果：先查缓存，未命中则真实调用并缓存，并发合流。
 
-    fetch 抛出异常时不缓存、不合流结果，异常原样上抛（调用方重试 /
-    回退路径行为与无缓存时一致）。
+    fetch 抛出异常时不缓存；同批排队者共享该异常（fail fast），本批结束
+    后新请求重新尝试，重试语义不变。
 
     返回值始终是调用方私有的：命中时是缓存条目的深拷贝副本，未命中时
-    是 fetch 的返回值本身（缓存已另存快照）。调用方可以就地改写。
+    是 fetch 的返回值本身；同批排队者拿到的是它的深拷贝副本。调用方
+    可以就地改写。
     """
     cached = cache_get(key)
     if cached is not None:
         return cached
 
-    async with _single_flight(key):
-        # 双检：排队期间先到者可能已填充缓存
+    async def _load() -> Any:
+        # 双检：排队期间上一批可能已填充缓存
         cached = cache_get(key)
         if cached is not None:
             return cached
@@ -195,15 +224,20 @@ async def cached_call(key: str, fetch: Callable[[], Awaitable[Any]]) -> Any:
         cache_put(key, value)
         return value
 
+    return await _single_flight(key, _load)
+
 
 def _revalidate(
     model_cls: type[BaseModel], cached: Any, key: str, logger_name: str
 ) -> BaseModel | None:
-    """命中后按当前模型重新校验；旧条目 schema 漂移时返回 None 走回源。"""
+    """命中后按当前模型重新校验；schema 漂移的坏条目删除并回源。"""
     try:
         validated = model_cls.model_validate(cached)
     except Exception:
-        _logger.warning("LLM cache entry failed revalidation, refetching")
+        cache_delete(key)
+        _logger.warning(
+            "LLM cache entry failed revalidation, evicted | key=%s…", key[:12]
+        )
         return None
     # 整篇复查一次可达上百次命中，逐条 INFO 会淹没日志，压到 debug
     _logger.debug("LLM cache hit | key=%s… | module=%s", key[:12], logger_name)
@@ -221,13 +255,14 @@ async def cached_llm_validate(
 ) -> BaseModel:
     """retry_with_validation 的缓存版（参数语义完全一致）。
 
-    命中缓存时用 model_cls 重新校验一次（防 schema 漂移，成本可忽略）；
-    未命中时走原 retry_with_validation 全流程，成功后缓存
-    model_dump(mode="json")。校验失败的重试在 retry_with_validation
-    内部进行，只有最终成功的结果进入缓存。
+    命中缓存时用 model_cls 重新校验一次（防 schema 漂移，成本可忽略），
+    校验失败的坏条目直接删除并回源；未命中时走原 retry_with_validation
+    全流程，成功后缓存 model_dump(mode="json")。校验失败的重试在
+    retry_with_validation 内部进行，只有最终成功的结果进入缓存。
 
     缓存键含客户端身份（见 client_cache_identity），同模型名但不同档案 /
-    端点的客户端不会串用结果。
+    端点的客户端不会串用结果；同批并发未命中请求共享唯一一次真实调用，
+    失败时也共享同一个异常（不再各自串行重试）。
     """
     key = build_cache_key(client_cache_identity(llm), messages, **chat_kwargs)
 
@@ -237,9 +272,9 @@ async def cached_llm_validate(
         if validated is not None:
             return validated
 
-    async with _single_flight(key):
-        # 双检：排队期间先到者可能已填充缓存；校验失败（schema 漂移）
-        # 同样按未命中处理，回源并覆盖
+    async def _load() -> BaseModel:
+        # 双检：排队期间上一批可能已填充缓存；校验失败（schema 漂移）
+        # 的条目已被 _revalidate 删除，这里按未命中回源并覆盖
         cached = cache_get(key)
         if cached is not None:
             validated = _revalidate(model_cls, cached, key, logger_name)
@@ -255,3 +290,5 @@ async def cached_llm_validate(
         )
         cache_put(key, validated.model_dump(mode="json"))
         return validated
+
+    return await _single_flight(key, _load)

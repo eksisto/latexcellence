@@ -5,7 +5,7 @@
 ## 目录
 
 - [后端核心模块](#后端核心模块)：config、env、security_middleware、llm_client、model_router、logger、project_manager、base_paragraph_check、prompts、tool_registry、workspace_manager
-- [后端工具模块](#后端工具模块)：scholarly_research、tool_result_protocol、file_ops、path_guard、json_utils、llm_cache、latex_json_guard、sandbox（Docker 沙箱执行）、tex_compile、compile_error_translator、latex_formatter、latex_parser、latex_literals、latex_package_analyzer、input_resolver、spa_static_files 等
+- [后端工具模块](#后端工具模块)：scholarly_research、tool_result_protocol、file_ops、path_guard、json_utils、llm_cache、ocr_protocol、latex_json_guard、sandbox（Docker 沙箱执行）、tex_compile、compile_error_translator、latex_formatter、latex_parser、latex_literals、latex_package_analyzer、input_resolver、spa_static_files 等
 - [项目管理路由 project_router.py](#项目管理路由-project_routerpy)
 
 ---
@@ -702,21 +702,32 @@ raise ValueError("Validation failed after N attempts")        # ❌ 耗尽
 | 函数 | 功能 |
 | --- | --- |
 | `cached_llm_validate(llm, *, messages, model_cls, **chat_kwargs)` | `retry_with_validation` 的缓存版直接替代：命中即用 `model_cls` 重新校验后返回，未命中走原全流程并缓存 `model_dump(mode="json")` |
-| `build_cache_key(client, messages, **params)` / `cache_get` / `cache_put` | 低层三件套，供非 JSON 协议路径（OCR 分隔符协议）自行包裹最终结果；`client` 取 `client_cache_identity(llm)` |
-| `cached_call(key, fetch)` | 按 key 取结果：先查缓存，未命中执行 fetch 并缓存；同 key 并发请求经 in-flight 锁合流为一次真实调用 |
-| `clear_llm_cache()` | 清空缓存与 in-flight 锁登记（热重载接线 + 测试隔离；`tests/conftest.py` 每用例自动调用） |
+| `build_cache_key(client, messages, **params)` / `cache_get` / `cache_put` / `cache_delete` | 低层四件套，供非 JSON 协议路径（OCR 分隔符协议）自行包裹最终结果；`client` 取 `client_cache_identity(llm)` |
+| `cached_call(key, fetch)` | 按 key 取结果：先查缓存，未命中执行 fetch 并缓存；同 key 并发请求经 in-flight 合流为一次真实调用，失败时同批等待者共享该异常 |
+| `clear_llm_cache()` | 清空缓存与 in-flight 合流登记（热重载接线 + 测试隔离；`tests/conftest.py` 每用例自动调用） |
 
 **行为细则**：
 
 - 缓存容量 1024 条 LRU（段落级 JSON，峰值内存数 MB）；
 - 失败不缓存：LLM 异常 / 校验耗尽直接上抛，重试与回退路径行为与无缓存时一致；
-- 命中后重新过一次 Pydantic 校验（防 schema 漂移，成本可忽略），失败按未命中回源；
-- 并发合流只共享成功结果，fetch 抛错时各调用方各自走异常路径；
+- 命中后重新过一次 Pydantic 校验（防 schema 漂移，成本可忽略），校验失败的坏条目直接删除并回源；
+- 并发合流共享成功结果；leader 失败时同批等待者拿到同一异常（不再各自串行重试），leader 被取消时等待者重新竞争，取消不扩散到其他请求；
 - **值隔离**：写入存深拷贝快照、读取返深拷贝副本，缓存内部对象永远不交给调用方。OCR 的格式化 / 包裹 / 宏包注释前置都是就地改写结果 dict，共享同一对象会把后处理过的文本写回缓存，下次命中再加工一次（重复包裹的数学环境、重复的 `% \usepackage` 行）。消费方因此无需逐处防御，但**禁止**依赖「拿到的是同一对象」。
 
 **已挂接调用点**：`base_paragraph_check._check_one_paragraph`（typo / expression / paragraph_translate）、`code_review`、`terminology_check` 抽取与聚类、`compile_error_translator`、`bib_manager` 四处解析、`formula_ocr` / `table_ocr`（分隔符协议整循环）、`latex_package_analyzer`（规则表未命中时的 LLM 兜底，OCR 后处理与格式转换共用）。
 
 **禁止挂接**：多轮对话（writing_chat / editor 助手——上下文含时间与用户意图，缓存会返回过期回复）、Agent 工具循环（template_gen / plot_gen / style_modify——工具副作用使输入看似相同实则语义不同）。
+
+### `ocr_protocol.py` — OCR 分隔符协议的共享重试循环
+
+**定位**：`formula_ocr` / `table_ocr` 的重试骨架完全一致，差异只在协议解析与提示语。本模块把「调用 → 解析校验 → 失败回喂 → 重试耗尽」抽成一份，避免两处各维护一套（此前两处各有一份约 55 行的循环）。
+
+**接口**：`cached_protocol_loop(llm, messages, *, cache_key, logger, label, retry_hint, max_tokens, parse, max_attempts)`。调用方只提供：
+
+- `parse(response_text)`：解析并校验单次响应，协议不符抛 `ValueError`、内容不合格抛 `ValidationError`；
+- `label`（Formula / Table）、`retry_hint`（回喂消息中的输出格式提示）、调用方 `logger`（日志归属与原实现一致）。
+
+**行为**：成功即返回并写入 `llm_cache`；`ValueError` / `ValidationError` 回喂错误重试；其他异常记日志后立即 `RuntimeError` 上抛（不重试）；重试耗尽抛 `RuntimeError`。缓存值是模型原始识别结果，格式化 / 包裹 / 宏包注释等后处理仍由调用方完成。
 
 ### `latex_json_guard.py` — LaTeX×JSON 转义防护校验器
 

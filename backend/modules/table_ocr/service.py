@@ -25,7 +25,6 @@ from PIL import Image
 from pydantic import (
     BaseModel,
     Field,
-    ValidationError,
     field_validator,
     model_validator,
 )
@@ -34,7 +33,6 @@ from backend.core.config import get_config
 from backend.core.logger import get_logger
 from backend.core.model_router import get_client_for, has_api_key_for
 from backend.core.prompts import get_prompt
-from backend.utils.json_utils import format_validation_error
 from backend.utils.latex_formatter import format_latex_source
 from backend.utils.latex_json_guard import validate_latex_field
 from backend.utils.latex_literals import (
@@ -43,11 +41,8 @@ from backend.utils.latex_literals import (
     remove_delimited_block,
 )
 from backend.utils.latex_package_analyzer import prepend_package_comments
-from backend.utils.llm_cache import (
-    build_cache_key,
-    cached_call,
-    client_cache_identity,
-)
+from backend.utils.llm_cache import build_cache_key, client_cache_identity
+from backend.utils.ocr_protocol import cached_protocol_loop
 
 # 分隔符协议：LaTeX 以纯文本形式夹在标记之间，避免 JSON 反斜杠转义损坏
 _CONFIDENCE_RE = re.compile(r"CONFIDENCE\s*:\s*([0-9]*\.?[0-9]+)", re.IGNORECASE)
@@ -191,7 +186,27 @@ class TableOCRService:
 
         max_tokens = max(get_config().llm.max_tokens, 8192)
 
-        # 同一图片重复识别免费：按 (模型, 初始消息, 采样参数) 缓存整个
+        def _parse(response_text: str) -> dict[str, Any]:
+            """解析一次协议响应：协议不符抛 ValueError，内容不合格抛 ValidationError。"""
+            latex = self._extract_latex_block(response_text)
+            if latex is None:
+                raise ValueError(
+                    "Response did not contain a <<<LATEX>>>...<<<END>>> block. "
+                    "Output the LaTeX code strictly between those two markers."
+                )
+            confidence = self._parse_confidence(response_text)
+            validated = TableOCRResult(latex=latex, confidence=confidence)
+            style_error = self._check_three_line_style(validated.latex)
+            if style_error:
+                raise ValueError(style_error)
+            result = validated.model_dump()
+
+            # 置信度阈值处理
+            if validated.confidence < 0.7:
+                result["low_confidence"] = True
+            return result
+
+        # 同一图片重复识别免费：按 (客户端身份, 初始消息, 采样参数) 缓存整个
         # 识别-校验-回喂重试循环的最终结果（llm_cache）；循环内部重试语义不变
         cache_key = build_cache_key(
             client_cache_identity(llm),
@@ -199,67 +214,21 @@ class TableOCRService:
             temperature=0.1,
             max_tokens=max_tokens,
         )
-
-        async def _attempt_loop() -> dict[str, Any]:
-            nonlocal messages
-            last_error: str | None = None
-            for attempt in range(_MAX_OCR_RETRIES):
-                try:
-                    response_text = await llm.chat(
-                        messages,
-                        temperature=0.1,
-                        max_tokens=max_tokens,
-                    )
-                    latex = self._extract_latex_block(response_text)
-                    if latex is None:
-                        raise ValueError(
-                            "Response did not contain a <<<LATEX>>>...<<<END>>> block. "
-                            "Output the LaTeX code strictly between those two markers."
-                        )
-                    confidence = self._parse_confidence(response_text)
-                    validated = TableOCRResult(latex=latex, confidence=confidence)
-                    style_error = self._check_three_line_style(validated.latex)
-                    if style_error:
-                        raise ValueError(style_error)
-                    result = validated.model_dump()
-
-                    # 置信度阈值处理
-                    if validated.confidence < 0.7:
-                        result["low_confidence"] = True
-
-                    return result
-
-                except ValidationError as e:
-                    last_error = format_validation_error(e.errors())
-                except ValueError as e:
-                    last_error = str(e)
-                except Exception as e:
-                    self._logger.error(f"Table OCR error: {e}")
-                    raise RuntimeError(f"Table recognition failed: {e}")
-
-                self._logger.warning(
-                    f"Table OCR protocol/validation failed on attempt "
-                    f"{attempt + 1}/{_MAX_OCR_RETRIES}: {last_error}"
-                )
-                messages = messages + [
-                    {
-                        "role": "user",
-                        "content": (
-                            "Your previous response failed the output protocol. "
-                            f"Error: {last_error}\n\n"
-                            "Please re-read the table image and respond with exactly:\n"
-                            "<<<LATEX>>>\n<LaTeX float code>\n<<<END>>>\n"
-                            "CONFIDENCE: <float between 0 and 1>"
-                        ),
-                    }
-                ]
-
-            raise RuntimeError(
-                f"Table recognition failed after {_MAX_OCR_RETRIES} attempts. "
-                f"Last error: {last_error}"
-            )
-
-        return await cached_call(cache_key, _attempt_loop)
+        return await cached_protocol_loop(
+            llm,
+            messages,
+            cache_key=cache_key,
+            logger=self._logger,
+            label="Table",
+            retry_hint=(
+                "Please re-read the table image and respond with exactly:\n"
+                "<<<LATEX>>>\n<LaTeX float code>\n<<<END>>>\n"
+                "CONFIDENCE: <float between 0 and 1>"
+            ),
+            max_tokens=max_tokens,
+            parse=_parse,
+            max_attempts=_MAX_OCR_RETRIES,
+        )
 
     @staticmethod
     def _extract_latex_block(response_text: str) -> str | None:

@@ -17,6 +17,7 @@ from backend.utils.llm_cache import (
     cached_call,
     cached_llm_validate,
     clear_llm_cache,
+    client_cache_identity,
 )
 
 
@@ -163,6 +164,35 @@ class TestCachedLLMValidate:
         assert result.corrected == "ok"
         assert llm.calls == 2
 
+    async def test_invalid_entry_evicted_and_refetched(self):
+        """schema 漂移的坏条目被删除并回源，不留下“命中即失败”的常驻条目。"""
+        llm = _StubLLM()
+        key = build_cache_key(client_cache_identity(llm), _MESSAGES, temperature=0.3)
+        cache_put(key, {"corrected": 123})  # 类型不符的旧条目
+
+        result = await cached_llm_validate(
+            llm, messages=_MESSAGES, model_cls=_DemoResult, temperature=0.3
+        )
+        assert result.corrected == "ok"
+        assert llm.calls == 1
+        assert cache_get(key) == {"corrected": "ok", "changes": []}
+
+    async def test_invalid_entry_removed_even_if_refetch_fails(self):
+        """回源失败也不能把坏条目留在缓存里。"""
+        llm = _StubLLM(responses=["not-json-at-all{{{"])
+        key = build_cache_key(client_cache_identity(llm), _MESSAGES, temperature=0.3)
+        cache_put(key, {"corrected": 123})
+
+        with pytest.raises(ValueError):
+            await cached_llm_validate(
+                llm,
+                messages=_MESSAGES,
+                model_cls=_DemoResult,
+                max_retries=1,
+                temperature=0.3,
+            )
+        assert cache_get(key) is None
+
     async def test_concurrent_identical_calls_merged(self):
         llm = _StubLLM()
         results = await asyncio.gather(
@@ -203,6 +233,10 @@ class TestCachedCall:
         results = await asyncio.gather(*(cached_call(key, fetch) for _ in range(4)))
         assert calls == 1
         assert all(r == {"value": 42} for r in results)
+        # 排队者拿私有副本：不与 leader / 彼此共享可变对象
+        assert len({id(r) for r in results}) == len(results)
+        results[0]["value"] = 99
+        assert results[1] == {"value": 42}
 
     async def test_fetch_error_propagates_and_not_cached(self):
         calls = 0
@@ -236,6 +270,48 @@ class TestCachedCall:
         assert calls == 1
         assert second == {"latex": "x^2", "changes": ["a"]}
 
+    async def test_concurrent_failures_share_one_attempt(self):
+        """leader 失败时同批等待者共享同一异常，不再各自串行重试。"""
+        calls = 0
+
+        async def fetch():
+            nonlocal calls
+            calls += 1
+            await asyncio.sleep(0.01)
+            raise RuntimeError("boom")
+
+        key = build_cache_key("m", _MESSAGES)
+        results = await asyncio.gather(
+            *(cached_call(key, fetch) for _ in range(4)),
+            return_exceptions=True,
+        )
+        assert calls == 1
+        assert all(isinstance(r, RuntimeError) and str(r) == "boom" for r in results)
+
+    async def test_leader_cancellation_does_not_cancel_waiters(self):
+        """leader 被取消时排队者重新竞争，不被连带取消。"""
+        calls = 0
+        started = asyncio.Event()
+
+        async def fetch():
+            nonlocal calls
+            calls += 1
+            if calls == 1:
+                started.set()
+                await asyncio.sleep(10)
+            return {"value": 42}
+
+        key = build_cache_key("m", _MESSAGES)
+        leader = asyncio.create_task(cached_call(key, fetch))
+        await started.wait()
+        follower = asyncio.create_task(cached_call(key, fetch))
+        await asyncio.sleep(0)
+        leader.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await leader
+        assert await asyncio.wait_for(follower, timeout=2) == {"value": 42}
+        assert calls == 2
+
 
 class TestCacheInternals:
     def test_lru_eviction_bound(self):
@@ -257,14 +333,15 @@ class TestCacheInternals:
 
         assert cache_get("isolated") == {"latex": "x", "changes": ["a"]}
 
-    def test_clear_llm_cache_clears_inflight_locks(self):
-        """clear 同时清 in-flight 锁登记，避免跨用例 / 跨事件循环遗留。"""
+    @pytest.mark.asyncio
+    async def test_clear_llm_cache_clears_inflight_flights(self):
+        """clear 同时清 in-flight 合流登记，避免跨用例 / 跨事件循环遗留。"""
         from backend.utils import llm_cache as mod
 
         with mod._inflight_guard:
-            mod._inflight_locks["stale"] = asyncio.Lock()
+            mod._inflight_flights["stale"] = asyncio.get_running_loop().create_future()
         clear_llm_cache()
-        assert mod._inflight_locks == {}
+        assert mod._inflight_flights == {}
 
     def test_key_requires_json_serializable_params(self):
         """非 JSON 参数直接报错，不静默 str() 折叠成可能碰撞的 key。"""

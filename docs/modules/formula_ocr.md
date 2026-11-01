@@ -85,7 +85,7 @@ LLM 自身加显示包裹极不可靠（测试时，输出有带 `$$`、有裸�
 
 ## 内容校验器
 
-`FormulaOCRResult.latex` 通过 Pydantic v2 `@field_validator` 做内容校验，校验失败时把错误反馈给 LLM 重试（最多 3 次），重试耗尽后抛 `RuntimeError`：
+`FormulaOCRResult.latex` 通过 Pydantic v2 `@field_validator` 做内容校验，校验失败时把错误反馈给 LLM 重试（最多 3 次），重试耗尽后抛 `RuntimeError`。重试循环由 `backend/utils/ocr_protocol.py` 统一实现（table_ocr 共用），本模块只提供单次响应解析回调。校验项：
 
 | 校验项 | 拦截目标 |
 | --- | --- |
@@ -104,7 +104,7 @@ LLM 自身加显示包裹极不可靠（测试时，输出有带 `$$`、有裸�
 | 方法 | 功能 |
 | --- | --- |
 | `recognize(image_data, content_type)` | 主入口：校验格式 → 图片预处理 → 视觉分析 → base64 → LLM Vision（分隔符协议）→ 统一格式化（可配置开关）→ 宏包规则表检测（LLM 兜底）→ 合并结果 |
-| `_recognize_with_llm` | 第一次 LLM 调用：分隔符协议识别 + 内容校验 + 错误回喂重试（最多 3 次） |
+| `_recognize_with_llm` | 第一次 LLM 调用：构造消息与缓存键，交给 ocr_protocol 执行分隔符协议识别 + 内容校验 + 错误回喂重试（最多 3 次） |
 | `_extract_latex_block` | 正则提取 `<<<LATEX>>>...<<<END>>>` 块 |
 | `_strip_math_wrappers` | 剥离 `$$` / `\[ \]` / `\( \)` / `$` 数学包裹 |
 | `_parse_confidence` | 解析 `CONFIDENCE` 元数据（缺省 `0.0`） |
