@@ -26,7 +26,6 @@ from pydantic import BaseModel
 
 from backend.core.logger import get_logger
 from backend.core.prompts import get_prompt
-from backend.utils.json_utils import retry_with_validation
 from backend.utils.latex_literals import find_literal_spans, find_matching_brace
 from backend.utils.latex_package_rules import (
     ALL_KNOWN_PACKAGES,
@@ -39,6 +38,7 @@ from backend.utils.latex_package_rules import (
     WIDTH_FIRST_ENVS,
     X_NATIVE_ENVS,
 )
+from backend.utils.llm_cache import cached_llm_validate
 
 logger = get_logger("latex_package_analyzer")
 
@@ -189,8 +189,10 @@ async def analyze_latex_packages(
     ]
 
     try:
-        validated: LatexPackageAnalysis = await retry_with_validation(
-            chat_fn=llm.chat,
+        # 缓存版校验重试：同一段 LaTeX（OCR 重复识别、格式转换重跑）的宏包
+        # 兜底结论直接复用，不再重复计费（llm_cache）
+        validated: LatexPackageAnalysis = await cached_llm_validate(
+            llm,
             messages=messages,
             model_cls=LatexPackageAnalysis,
             max_retries=2,

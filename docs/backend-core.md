@@ -693,7 +693,7 @@ raise ValueError("Validation failed after N attempts")        # ❌ 耗尽
 
 ### `llm_cache.py` — LLM 响应缓存（降低 API 使用成本）
 
-**定位**：对「纯函数式」LLM 调用（给定 模型 + 消息 + 采样参数，期望相同结果）做结果复用。典型场景：逐段检查整篇复查时未修改段落直接命中、同一错误反复编译不重复翻译、同一图片重复 OCR 免费、同一条目重复解析免费。
+**定位**：对「纯函数式」LLM 调用（给定 模型 + 消息 + 采样参数，期望相同结果）做结果复用。典型场景：逐段检查整篇复查时未修改段落直接命中、同一错误反复编译不重复翻译、同一图片重复 OCR 不再产生 API 调用（识别与宏包兜底均命中缓存，本地格式化仍会重跑）、同一条目重复解析免费。
 
 **缓存键**：`sha256(模型名 + 完整 messages + 采样参数)`。段落文本、语言、自定义指令、提示词模板、temperature / max_tokens 任一变化都会改变 key，因此无需 TTL；模型 / 档案切换经 `model_router.reset_client_pool()`（配置热重载接线点）整体清空。命中日志带 12 位 key 前缀（`LLM cache hit | key=…`）。
 
@@ -714,7 +714,7 @@ raise ValueError("Validation failed after N attempts")        # ❌ 耗尽
 - 并发合流只共享成功结果，fetch 抛错时各调用方各自走异常路径；
 - **值隔离**：写入存深拷贝快照、读取返深拷贝副本，缓存内部对象永远不交给调用方。OCR 的格式化 / 包裹 / 宏包注释前置都是就地改写结果 dict，共享同一对象会把后处理过的文本写回缓存，下次命中再加工一次（重复包裹的数学环境、重复的 `% \usepackage` 行）。消费方因此无需逐处防御，但**禁止**依赖「拿到的是同一对象」。
 
-**已挂接调用点**：`base_paragraph_check._check_one_paragraph`（typo / expression / paragraph_translate）、`code_review`、`terminology_check` 抽取与聚类、`compile_error_translator`、`bib_manager` 四处解析、`formula_ocr` / `table_ocr`（分隔符协议整循环）。
+**已挂接调用点**：`base_paragraph_check._check_one_paragraph`（typo / expression / paragraph_translate）、`code_review`、`terminology_check` 抽取与聚类、`compile_error_translator`、`bib_manager` 四处解析、`formula_ocr` / `table_ocr`（分隔符协议整循环）、`latex_package_analyzer`（规则表未命中时的 LLM 兜底，OCR 后处理与格式转换共用）。
 
 **禁止挂接**：多轮对话（writing_chat / editor 助手——上下文含时间与用户意图，缓存会返回过期回复）、Agent 工具循环（template_gen / plot_gen / style_modify——工具副作用使输入看似相同实则语义不同）。
 

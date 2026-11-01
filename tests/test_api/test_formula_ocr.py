@@ -805,6 +805,36 @@ class TestRecognizeWithPackageAnalysis:
         assert second["latex"].count(r"\[") == 1
         assert mock_llm.chat.call_count == 1
 
+    @pytest.mark.asyncio
+    async def test_repeat_recognize_caches_package_analysis(
+        self, mock_llm, service, monkeypatch
+    ):
+        """宏包兜底同样走缓存：规则表未命中时，第二次识别不再产生任何 LLM 调用。"""
+        mock_llm.chat.side_effect = [
+            ocr_response("x^2 + y^2 = z^2"),
+            {"packages": []},
+        ]
+
+        import backend.core.config as cfg_mod
+
+        cfg = cfg_mod.get_config()
+        monkeypatch.setattr(cfg.features.formula_ocr, "max_image_size_mb", 100)
+
+        from PIL import Image
+
+        img = Image.new("RGB", (100, 50), (255, 255, 255))
+        buf = io.BytesIO()
+        img.save(buf, format="PNG")
+        image = buf.getvalue()
+
+        first = await service.recognize(image, "image/png")
+        second = await service.recognize(image, "image/png")
+
+        assert first == second
+        # x^2 + y^2 = z^2 无命令，规则表未命中：第一次 = 识别 + 宏包兜底；
+        # 第二次识别与宏包兜底均命中缓存，不再调用模型
+        assert mock_llm.chat.call_count == 2
+
 
 class TestVisualHintMerge:
     """视觉判定与结构判定的合并流程。"""
