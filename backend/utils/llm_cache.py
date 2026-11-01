@@ -26,9 +26,16 @@ key 含完整输入哈希，命中意味着另一用户提交了逐字节相同�
 
 并发语义：同 key 的并发未命中请求（批检查中的重复段落）经 in-flight
 锁合流为一次真实调用，共享结果；调用失败不缓存，重试路径行为不变。
+
+值隔离：写入时存深拷贝快照、读取时返回深拷贝副本，缓存内部对象永远不
+交给调用方。调用方拿到结果后普遍会就地加工（OCR 的格式化 / 包裹 / 宏包
+注释前置都是 `result["latex"] = ...`），共享同一对象会把「后处理过的值」
+写回缓存，下次命中再加工一次——表现为重复包裹的数学环境、重复的宏包
+注释。缓存边界负责切断别名，消费方无需逐处防御。
 """
 
 import asyncio
+import copy
 import hashlib
 import json
 import threading
@@ -73,18 +80,27 @@ def build_cache_key(model: str, messages: list[dict], **params: Any) -> str:
 
 
 def cache_get(key: str) -> Any | None:
-    """读取缓存条目（LRU 触碰）；未命中返回 None。"""
+    """读取缓存条目（LRU 触碰）；未命中返回 None。
+
+    返回深拷贝副本：调用方就地改写返回值不会污染缓存条目（见模块
+    「值隔离」说明）。条目为段落级 JSON / 识别结果 dict，复制成本可忽略。
+    """
     with _cache_lock:
         value = _cache.get(key)
-        if value is not None:
-            _cache.move_to_end(key)
-        return value
+        if value is None:
+            return None
+        _cache.move_to_end(key)
+    return copy.deepcopy(value)
 
 
 def cache_put(key: str, value: Any) -> None:
-    """写入缓存条目，超限时淘汰最旧条目。"""
+    """写入缓存条目，超限时淘汰最旧条目。
+
+    存深拷贝快照：调用方随后改写自己持有的对象不会改变缓存内容。
+    """
+    snapshot = copy.deepcopy(value)
     with _cache_lock:
-        _cache[key] = value
+        _cache[key] = snapshot
         _cache.move_to_end(key)
         while len(_cache) > _CACHE_MAX_ENTRIES:
             _cache.popitem(last=False)
@@ -101,6 +117,9 @@ async def cached_call(key: str, fetch: Callable[[], Awaitable[Any]]) -> Any:
 
     fetch 抛出异常时不缓存、不合流结果，异常原样上抛（调用方重试 /
     回退路径行为与无缓存时一致）。
+
+    返回值始终是调用方私有的：命中时是缓存条目的深拷贝副本，未命中时
+    是 fetch 的返回值本身（缓存已另存快照）。调用方可以就地改写。
     """
     cached = cache_get(key)
     if cached is not None:

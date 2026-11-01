@@ -711,7 +711,8 @@ raise ValueError("Validation failed after N attempts")        # ❌ 耗尽
 - 缓存容量 1024 条 LRU（段落级 JSON，峰值内存数 MB）；
 - 失败不缓存：LLM 异常 / 校验耗尽直接上抛，重试与回退路径行为与无缓存时一致；
 - 命中后重新过一次 Pydantic 校验（防 schema 漂移，成本可忽略），失败按未命中回源；
-- 并发合流只共享成功结果，fetch 抛错时各调用方各自走异常路径。
+- 并发合流只共享成功结果，fetch 抛错时各调用方各自走异常路径；
+- **值隔离**：写入存深拷贝快照、读取返深拷贝副本，缓存内部对象永远不交给调用方。OCR 的格式化 / 包裹 / 宏包注释前置都是就地改写结果 dict，共享同一对象会把后处理过的文本写回缓存，下次命中再加工一次（重复包裹的数学环境、重复的 `% \usepackage` 行）。消费方因此无需逐处防御，但**禁止**依赖「拿到的是同一对象」。
 
 **已挂接调用点**：`base_paragraph_check._check_one_paragraph`（typo / expression / paragraph_translate）、`code_review`、`terminology_check` 抽取与聚类、`compile_error_translator`、`bib_manager` 四处解析、`formula_ocr` / `table_ocr`（分隔符协议整循环）。
 

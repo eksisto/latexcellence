@@ -172,25 +172,27 @@ class FormulaOCRService:
 
         # ocr 槽位：硬性依赖视觉模型（multi-model §6，保存期硬校验 vision）
         llm = get_client_for("ocr")
-        result = await self._recognize_with_llm(
+        recognized = await self._recognize_with_llm(
             llm, base64_image, content_type, visual_hint
         )
+        if not recognized.get("latex"):
+            return recognized
 
-        if result.get("latex"):
-            # 统一格式化层（latexindent / 内置兜底）：先整理缩进对齐，再包裹与宏包分析
-            if cfg.features.formula_ocr.format_latex:
-                result["latex"] = await format_latex_source(result["latex"])
-            else:
-                self._logger.debug("Formula OCR formatting layer disabled by config")
-            # 确定性包裹：让复制结果即贴即显（模型自身加包裹不可靠，故由后端统一处理）
-            result["latex"] = self._wrap_latex_for_paste(
-                result["latex"], result.get("inline", False)
-            )
-            # 第二步：分析 LaTeX 代码所需的宏包（math 领域：排除表格/版式类宏包）
-            result["latex"] = await prepend_package_comments(
-                llm, result["latex"], domain="math"
-            )
+        # 识别结果是缓存值（模型原始输出），只读：后处理一律写进新 dict，
+        # 绝不就地改写。就地改会把「已包裹 / 已加注释」的文本变成缓存内容，
+        # 同一图片下次命中缓存时会再包一层、注释再加一遍。
+        result = dict(recognized)
+        latex = result["latex"]
 
+        # 统一格式化层（latexindent / 内置兜底）：先整理缩进对齐，再包裹与宏包分析
+        if cfg.features.formula_ocr.format_latex:
+            latex = await format_latex_source(latex)
+        else:
+            self._logger.debug("Formula OCR formatting layer disabled by config")
+        # 确定性包裹：让复制结果即贴即显（模型自身加包裹不可靠，故由后端统一处理）
+        latex = self._wrap_latex_for_paste(latex, result.get("inline", False))
+        # 第二步：分析 LaTeX 代码所需的宏包（math 领域：排除表格/版式类宏包）
+        result["latex"] = await prepend_package_comments(llm, latex, domain="math")
         return result
 
     async def _recognize_with_llm(
@@ -200,7 +202,11 @@ class FormulaOCRService:
         content_type: str,
         visual_hint: VisualInlineHint | None = None,
     ) -> dict[str, Any]:
-        """按分隔符协议调用 Vision 模型，提取并校验 LaTeX，失败时回喂重试。"""
+        """按分隔符协议调用 Vision 模型，提取并校验 LaTeX，失败时回喂重试。
+
+        返回值是 llm_cache 中的模型原始识别结果，按只读处理：调用方需要
+        后处理时请构造新 dict（recognize 的后处理层即如此）。
+        """
         messages = [
             {"role": "system", "content": get_prompt("formula_ocr", "vision_system")},
             {

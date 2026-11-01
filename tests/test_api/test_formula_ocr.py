@@ -772,6 +772,39 @@ class TestRecognizeWithPackageAnalysis:
         # 关闭格式化后不重排，识别原文仅做确定性包裹（默认 display → \[...\]）
         assert result["latex"] == r"\[x^2 + y^2 = z^2\]"
 
+    @pytest.mark.asyncio
+    async def test_repeat_recognize_same_image_is_stable(
+        self, mock_llm, service, monkeypatch
+    ):
+        """缓存回归：同一图片第二次识别命中缓存，返回值必须与第一次完全一致。
+
+        缓存里存的是模型原始识别结果；若 recognize() 把已包裹 / 已加注释的
+        文本就地写回缓存，第二次会再包一层数学环境、再前置一遍宏包注释
+        （表现为 \\[\\[...\\]\\] 与重复的 % \\usepackage 行）。
+        """
+        mock_llm.chat.side_effect = [ocr_response(r"\mathbb{R}^n")]
+
+        import backend.core.config as cfg_mod
+
+        cfg = cfg_mod.get_config()
+        monkeypatch.setattr(cfg.features.formula_ocr, "max_image_size_mb", 100)
+
+        from PIL import Image
+
+        img = Image.new("RGB", (100, 50), (255, 255, 255))
+        buf = io.BytesIO()
+        img.save(buf, format="PNG")
+        image = buf.getvalue()
+
+        first = await service.recognize(image, "image/png")
+        second = await service.recognize(image, "image/png")
+
+        assert first == second
+        # 宏包走规则表（amssymb），不触发 LLM 兜底；识别模型只调用一次
+        assert second["latex"].count(r"% \usepackage{amssymb}") == 1
+        assert second["latex"].count(r"\[") == 1
+        assert mock_llm.chat.call_count == 1
+
 
 class TestVisualHintMerge:
     """视觉判定与结构判定的合并流程。"""

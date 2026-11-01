@@ -139,25 +139,32 @@ class TableOCRService:
 
         # ocr 槽位：硬性依赖视觉模型（multi-model §6，保存期硬校验 vision）
         llm = get_client_for("ocr")
-        result = await self._recognize_with_llm(llm, base64_image, content_type)
+        recognized = await self._recognize_with_llm(llm, base64_image, content_type)
+        if not recognized.get("latex"):
+            return recognized
 
+        # 识别结果是缓存值（模型原始输出），只读：后处理一律写进新 dict，
+        # 绝不就地改写（否则重复识别命中缓存时会再格式化一次、宏包注释再前置一遍）
+        result = dict(recognized)
+        latex = result["latex"]
+
+        # 统一格式化层（latexindent / 内置兜底）：先整理缩进对齐，再做宏包分析
+        if cfg.features.table_ocr.format_latex:
+            latex = await format_latex_source(latex)
+        else:
+            self._logger.debug("Table OCR formatting layer disabled by config")
         # 第二步：分析 LaTeX 代码所需的宏包（table 领域：排除引用/版式类宏包）
-        if result.get("latex"):
-            # 统一格式化层（latexindent / 内置兜底）：先整理缩进对齐，再做宏包分析
-            if cfg.features.table_ocr.format_latex:
-                result["latex"] = await format_latex_source(result["latex"])
-            else:
-                self._logger.debug("Table OCR formatting layer disabled by config")
-            result["latex"] = await prepend_package_comments(
-                llm, result["latex"], domain="table"
-            )
-
+        result["latex"] = await prepend_package_comments(llm, latex, domain="table")
         return result
 
     async def _recognize_with_llm(
         self, llm, base64_image: str, content_type: str
     ) -> dict[str, Any]:
-        """按分隔符协议调用 Vision 模型，提取并校验 LaTeX，失败时回喂重试。"""
+        """按分隔符协议调用 Vision 模型，提取并校验 LaTeX，失败时回喂重试。
+
+        返回值是 llm_cache 中的模型原始识别结果，按只读处理：调用方需要
+        后处理时请构造新 dict（recognize 的后处理层即如此）。
+        """
         messages = [
             {"role": "system", "content": get_prompt("table_ocr", "system")},
             {

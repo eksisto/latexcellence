@@ -617,3 +617,34 @@ class TestRecognizeWithPackageAnalysis:
 
         # 关闭格式化后返回识别原文（缩进/换行不做重排）
         assert result["latex"] == KERNEL_LATEX
+
+    @pytest.mark.asyncio
+    async def test_repeat_recognize_same_image_is_stable(
+        self, mock_llm, service, monkeypatch
+    ):
+        """缓存回归：同一表格图片第二次识别命中缓存，结果与第一次完全一致。
+
+        缓存存的是模型原始识别结果；就地改写会把已前置的宏包注释写回缓存，
+        第二次识别再前置一遍（重复的 % \\usepackage 行）。
+        """
+        mock_llm.chat.side_effect = [ocr_response(TABLE_LATEX)]
+
+        import backend.core.config as cfg_mod
+
+        cfg = cfg_mod.get_config()
+        monkeypatch.setattr(cfg.features.table_ocr, "max_image_size_mb", 100)
+
+        from PIL import Image
+
+        img = Image.new("RGB", (100, 50), (255, 255, 255))
+        buf = io.BytesIO()
+        img.save(buf, format="PNG")
+        image = buf.getvalue()
+
+        first = await service.recognize(image, "image/png")
+        second = await service.recognize(image, "image/png")
+
+        assert first == second
+        # booktabs 走规则表，不触发 LLM 兜底；识别模型只调用一次
+        assert second["latex"].count(r"% \usepackage{booktabs}") == 1
+        assert mock_llm.chat.call_count == 1

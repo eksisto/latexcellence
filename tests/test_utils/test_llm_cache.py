@@ -178,6 +178,24 @@ class TestCachedCall:
         assert cache_get(key) is None
         assert calls == 1
 
+    async def test_caller_mutation_does_not_leak_into_cache(self):
+        """缓存边界做值隔离：调用方就地改写返回值不得污染缓存条目。"""
+        calls = 0
+
+        async def fetch():
+            nonlocal calls
+            calls += 1
+            return {"latex": "x^2", "changes": ["a"]}
+
+        key = build_cache_key("m", _MESSAGES)
+        first = await cached_call(key, fetch)
+        first["latex"] = "polluted"
+        first["changes"].append("b")
+
+        second = await cached_call(key, fetch)
+        assert calls == 1
+        assert second == {"latex": "x^2", "changes": ["a"]}
+
 
 class TestCacheInternals:
     def test_lru_eviction_bound(self):
@@ -186,6 +204,18 @@ class TestCacheInternals:
             cache_put(f"key-{i}", i)
         assert cache_get("key-0") is None  # 最旧条目被淘汰
         assert cache_get(f"key-{_CACHE_MAX_ENTRIES + 9}") == _CACHE_MAX_ENTRIES + 9
+
+    def test_cache_get_returns_isolated_copy(self):
+        """写入方与读取方改写自己持有的对象都不影响缓存内容。"""
+        clear_llm_cache()
+        payload = {"latex": "x", "changes": ["a"]}
+        cache_put("isolated", payload)
+        payload["latex"] = "polluted"  # 写入方随后改写
+
+        got = cache_get("isolated")
+        got["changes"].append("b")  # 读取方随后改写副本
+
+        assert cache_get("isolated") == {"latex": "x", "changes": ["a"]}
 
     def test_key_sensitive_to_message_content(self):
         a = build_cache_key("m", [{"role": "user", "content": "abc"}])
