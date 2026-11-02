@@ -47,7 +47,7 @@ async def preview_paragraphs(
     当 resolve_input=True 时，递归解析 \\input/\\include 引用。
     """
     try:
-        result = get_service().preview_paragraphs(
+        result = await get_service().preview_paragraphs_async(
             file_path, resolve_input, workspace_id
         )
         return result
@@ -99,7 +99,7 @@ async def apply_changes(
     try:
         changes = [c.model_dump() for c in request.changes]
         inject_expected_md5s(changes, request.file_path, request.expected_md5s)
-        result = get_service().apply_changes(
+        result = await get_service().apply_changes_async(
             request.file_path, changes, workspace_id, request.operation_id
         )
         return result

@@ -378,6 +378,19 @@ class BaseParagraphCheckService:
             "operation_id": operation_id,
         }
 
+    async def preview_paragraphs_async(
+        self, file_path: str, resolve_input: bool = False, workspace_id: str = ""
+    ) -> dict[str, Any]:
+        """preview_paragraphs 的线程池封装。
+
+        段落提取与逐段 marker 剥离是 CPU 密集 LaTeX 解析，大文件可达
+        数百毫秒，路由必须经本方法调用，避免阻塞事件循环。服务实例按
+        请求创建（parser 不跨请求共享），入线程池无实例级竞态。
+        """
+        return await asyncio.to_thread(
+            self.preview_paragraphs, file_path, resolve_input, workspace_id
+        )
+
     def _collect_para_data(
         self, files: list[str], workspace_id: str
     ) -> list[dict[str, Any]]:
@@ -865,6 +878,22 @@ class BaseParagraphCheckService:
             access_control.refresh_workspace_project_usage_sync(workspace_id)
 
         return {"applied": applied, "total": len(changes), "errors": errors}
+
+    async def apply_changes_async(
+        self,
+        file_path: str,
+        changes: list[dict[str, Any]],
+        workspace_id: str = "",
+        operation_id: str | None = None,
+    ) -> dict[str, Any]:
+        """apply_changes 的线程池封装。
+
+        写回路径含整文件重读 + MD5 + 原子写，多用户模式还叠加 edit_log
+        全文快照写盘与 SQLite 写，属阻塞 I/O，路由必须经本方法调用。
+        """
+        return await asyncio.to_thread(
+            self.apply_changes, file_path, changes, workspace_id, operation_id
+        )
 
     # ── Hook 方法（子类必须实现）───────────────────────────────────────────
 
