@@ -419,6 +419,41 @@ def test_result_format_includes_stable_identifiers():
     assert json.dumps(result.model_dump())
 
 
+def test_all_format_for_llm_outputs_carry_untrusted_header():
+    """五类学术工具结果注入 LLM 前统一以 UNTRUSTED DATA 包装头开头。
+
+    标题/作者/摘要等外部元数据是不可信数据（防 prompt 注入），与
+    web_search 侧的 format_for_llm 共用同一包装契约。"""
+    from backend.utils.scholarly_research.models import (
+        FullTextResult,
+        RelatedWorksResult,
+        ResearchDataResource,
+        SearchScholarlyResult,
+        WorkDetailResult,
+    )
+    from backend.utils.tool_result_protocol import UNTRUSTED_DATA_HEADER
+
+    work = _build_work_from_openalex(_openalex_work())
+    outputs = [
+        SearchScholarlyResult(query="q", results=[work]).format_for_llm(),
+        WorkDetailResult(work=work).format_for_llm(),
+        RelatedWorksResult(
+            seed_id="W123", relation_type="references", works=[work]
+        ).format_for_llm(),
+        FullTextResult(work_id="W123", sections={"intro": "text"}).format_for_llm(),
+        ResearchDataResource(name="d", resource_type="dataset").format_for_llm(),
+    ]
+    header = UNTRUSTED_DATA_HEADER.strip()
+    for out in outputs:
+        assert out.startswith(header), out[:80]
+    # 空结果的短文案不含外部数据，无需包装
+    assert (
+        not SearchScholarlyResult(query="q", results=[])
+        .format_for_llm()
+        .startswith(header)
+    )
+
+
 def test_search_result_format_reports_truncated_when_more_remain():
     from backend.utils.scholarly_research.models import SearchScholarlyResult
 

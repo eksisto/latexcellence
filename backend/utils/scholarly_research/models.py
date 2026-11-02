@@ -2,7 +2,10 @@
 
 from pydantic import BaseModel, Field
 
-from backend.utils.tool_result_protocol import format_result_status
+from backend.utils.tool_result_protocol import (
+    UNTRUSTED_DATA_HEADER,
+    format_result_status,
+)
 
 
 class FieldProvenance(BaseModel):
@@ -104,6 +107,8 @@ class SearchScholarlyResult(BaseModel):
         if not items:
             return f'No scholarly works found for "{self.query}".'
         total = self.total_estimated or len(self.results)
+        # 外部文献元数据/摘要统一按不可信数据包装（防 prompt injection）
+        untrusted = UNTRUSTED_DATA_HEADER
         truncated = total > len(items) or len(self.results) > len(items)
         lines = [f'Search "{self.query}" returned approximately ' f"{total} result(s):"]
         for index, work in enumerate(items, 1):
@@ -135,7 +140,7 @@ class SearchScholarlyResult(BaseModel):
                 ),
             )
         )
-        return "\n".join(lines)
+        return untrusted + "\n".join(lines)
 
 
 class WorkDetailResult(BaseModel):
@@ -146,16 +151,19 @@ class WorkDetailResult(BaseModel):
 
     def format_for_llm(self) -> str:
         work = self.work
-        lines = [
-            f"Title: {work.title}",
-            f"Authors: {', '.join(author.name for author in work.authors)}",
-            f"Year: {work.year}",
-            f"Journal: {work.journal}",
-            f"Work Type: {work.work_type}",
-            f"Citations: {work.citation_count}",
-            f"DOI: {work.doi}",
-            f"OpenAlex ID: {work.openalex_id}",
-        ]
+        lines = [UNTRUSTED_DATA_HEADER.rstrip()]
+        lines.extend(
+            [
+                f"Title: {work.title}",
+                f"Authors: {', '.join(author.name for author in work.authors)}",
+                f"Year: {work.year}",
+                f"Journal: {work.journal}",
+                f"Work Type: {work.work_type}",
+                f"Citations: {work.citation_count}",
+                f"DOI: {work.doi}",
+                f"OpenAlex ID: {work.openalex_id}",
+            ]
+        )
         if work.is_oa:
             lines.extend([f"OA Status: {work.oa_status}", f"OA URL: {work.oa_url}"])
         if work.abstract:
@@ -185,6 +193,7 @@ class RelatedWorksResult(BaseModel):
         items = self.works[:max_results]
         if not items:
             return f"No {self.relation_type} works found."
+        untrusted = UNTRUSTED_DATA_HEADER
         labels = {
             "references": "References",
             "cited_by": "Cited by",
@@ -219,7 +228,7 @@ class RelatedWorksResult(BaseModel):
                 ),
             )
         )
-        return "\n".join(lines)
+        return untrusted + "\n".join(lines)
 
 
 class FullTextResult(BaseModel):
@@ -235,7 +244,7 @@ class FullTextResult(BaseModel):
     source_kind: str = "metadata"
 
     def format_for_llm(self) -> str:
-        lines = [f"Work ID: {self.work_id}"]
+        lines = [UNTRUSTED_DATA_HEADER.rstrip(), f"Work ID: {self.work_id}"]
         if self.oa_url:
             lines.append(f"OA URL: {self.oa_url}")
         if self.note:
@@ -255,4 +264,7 @@ class ResearchDataResource(BaseModel):
     related_work_doi: str = ""
 
     def format_for_llm(self) -> str:
-        return f"[{self.resource_type}] {self.name} - {self.description} ({self.url})"
+        return (
+            UNTRUSTED_DATA_HEADER
+            + f"[{self.resource_type}] {self.name} - {self.description} ({self.url})"
+        )
