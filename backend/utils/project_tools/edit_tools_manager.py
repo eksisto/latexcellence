@@ -9,6 +9,7 @@ _workspace_id 由调用方（如 writing_chat/service/）在调用 execute() 前
 不暴露给 LLM。
 """
 
+import asyncio
 from pathlib import Path
 from typing import Any
 
@@ -139,6 +140,17 @@ async def _edit_paragraph_executor(tool_name: str, arguments: dict[str, Any]) ->
             f"Please fix it and retry."
         )
 
+    # 读段落、算 MD5、写盘为同步阻塞 I/O 与段落解析，统一入线程池
+    # （与同包浏览工具的 to_thread 口径一致）
+    return await asyncio.to_thread(
+        _edit_paragraph_sync, pm, file_path, paragraph_index, new_content
+    )
+
+
+def _edit_paragraph_sync(
+    pm: Any, file_path: str, paragraph_index: int, new_content: str
+) -> str:
+    """edit_paragraph 的同步主体（调用方必须经线程池调度）。"""
     # 验证段落索引有效性
     try:
         paragraphs = pm.get_paragraphs(file_path)
@@ -189,8 +201,9 @@ async def _undo_last_edit_executor(tool_name: str, arguments: dict[str, Any]) ->
     if not file_path:
         return "Error: missing file_path parameter."
 
+    # 撤销含 resolve + 备份回滚 + MD5 重算，同步阻塞 I/O 入线程池
     try:
-        ok = pm.undo(file_path)
+        ok = await asyncio.to_thread(pm.undo, file_path)
     except Exception as e:
         return f"Undo failed: {e}"
 
