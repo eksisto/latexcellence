@@ -87,11 +87,14 @@ def _build_work_from_s2(paper: dict[str, Any]) -> ScholarlyWork:
     oa_url = oa_info.get("url") or ""
 
     return ScholarlyWork(
-        openalex_id=_normalize_doi(ext.get("DBLP")) if ext.get("DBLP") else "",
+        # DBLP 键（形如 conf/nips/xxx）不是 OpenAlex ID：写入 openalex_id
+        # 会制造假 ID，LLM 拿它回查详情必被拒绝，去重键也被污染
+        openalex_id="",
         semantic_scholar_id=paper.get("paperId") or "",
         doi=_normalize_doi(ext.get("DOI")),
         pmid=ext.get("PubMed") or "",
         arxiv_id=_clean_arxiv_id(ext.get("ArXiv")),
+        identifiers={"dblp": ext["DBLP"]} if ext.get("DBLP") else {},
         title=paper.get("title") or "Untitled work",
         authors=authors,
         year=int(paper.get("year") or 0),

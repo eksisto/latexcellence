@@ -560,3 +560,21 @@ async def test_arxiv_search_sends_raw_query_without_double_encoding():
     )
     assert result.total_estimated == 1
     assert result.results[0].title == "Attention Is All You Need"
+
+
+def test_s2_work_does_not_put_dblp_key_into_openalex_id():
+    """DBLP 外部 ID（形如 conf/nips/xxx）不是 OpenAlex ID：写入会制造
+    假 ID，LLM 回查详情被拒、去重键被污染；应放入 identifiers.dblp。"""
+    from backend.utils.scholarly_research.providers.semantic import _build_work_from_s2
+
+    work = _build_work_from_s2(
+        {
+            "paperId": "s2-id",
+            "title": "A paper",
+            "externalIds": {"DBLP": "conf/nips/attention", "DOI": "10.1000/test"},
+        }
+    )
+
+    assert work.openalex_id == ""
+    assert work.identifiers.get("dblp") == "conf/nips/attention"
+    assert work.doi == "10.1000/test"
