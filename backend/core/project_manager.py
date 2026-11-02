@@ -880,20 +880,23 @@ class LatexProject:
             主文件的相对路径，未找到则返回 None
         """
 
-        def find_tex(nodes: list[FileNode], depth: int = 0) -> str | None:
+        def find_tex(nodes: list[FileNode], match, depth: int = 0) -> str | None:
             for node in nodes:
                 if not node.is_dir and node.name.endswith(".tex"):
-                    if node.name.lower() == "main.tex":
-                        return node.path
-                    if "main" in node.name.lower():
+                    if match(node.name.lower()):
                         return node.path
                 if node.is_dir and depth < 2:
-                    result = find_tex(node.children, depth + 1)
+                    result = find_tex(node.children, match, depth + 1)
                     if result:
                         return result
             return None
 
-        result = find_tex(file_tree)
+        # 两段式遍历：先全树精确匹配 main.tex，未命中再回退"文件名含 main"。
+        # 单次遍历中子串命中即返回，会让字母序靠前的 main-chapter1.tex
+        # 抢占排在其后的 main.tex，违背声明的优先级顺序
+        result = find_tex(file_tree, lambda name: name == "main.tex")
+        if result is None:
+            result = find_tex(file_tree, lambda name: "main" in name)
         if result is None:
             # 兜底：返回第一个 .tex 文件
             for node in file_tree:
