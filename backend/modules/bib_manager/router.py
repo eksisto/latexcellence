@@ -4,6 +4,7 @@
 提供格式分析、元数据提取、BibTeX 生成和 .bib 文件读写接口。
 """
 
+import asyncio
 import json
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
@@ -162,7 +163,10 @@ async def read_bib_file(
 ):
     """读取项目中的 .bib 文件内容。"""
     try:
-        result = get_service().read_bib_file(request.file_path, workspace_id)
+        # Service 文件族方法为同步阻塞 I/O，统一入线程池
+        result = await asyncio.to_thread(
+            get_service().read_bib_file, request.file_path, workspace_id
+        )
         return result
     except RuntimeError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -180,8 +184,12 @@ async def save_bib_entry(
     if not request.bibtex_code.strip():
         raise HTTPException(status_code=400, detail="Empty BibTeX code")
     try:
-        result = get_service().save_bib_entry(
-            request.file_path, request.bibtex_code, request.cite_key, workspace_id
+        result = await asyncio.to_thread(
+            get_service().save_bib_entry,
+            request.file_path,
+            request.bibtex_code,
+            request.cite_key,
+            workspace_id,
         )
         return result
     except FileConflictError as e:
@@ -210,7 +218,8 @@ async def list_bib_files(
 ):
     """列出当前项目中的所有 .bib 文件。"""
     try:
-        result = get_service().list_bib_files(workspace_id)
+        # rglob 全项目树扫描，必须入线程池
+        result = await asyncio.to_thread(get_service().list_bib_files, workspace_id)
         return result
     except RuntimeError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -230,7 +239,7 @@ class FormatSaveRequest(BaseModel):
 async def list_formats():
     """列出所有已保存的参考文献格式。"""
     try:
-        result = get_service().list_formats()
+        result = await asyncio.to_thread(get_service().list_formats)
         return result
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -240,7 +249,7 @@ async def list_formats():
 async def load_format(name: str):
     """加载指定格式配置。"""
     try:
-        data = get_service().load_format(name)
+        data = await asyncio.to_thread(get_service().load_format, name)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     if data is None:
@@ -254,8 +263,10 @@ async def save_format(request: FormatSaveRequest):
     if not request.name.strip():
         raise HTTPException(status_code=400, detail="Format name required")
     try:
-        result = get_service().save_format(
-            request.name.strip(), request.format_info.model_dump()
+        result = await asyncio.to_thread(
+            get_service().save_format,
+            request.name.strip(),
+            request.format_info.model_dump(),
         )
         return result
     except ValueError as e:
@@ -268,7 +279,7 @@ async def save_format(request: FormatSaveRequest):
 async def delete_format(name: str):
     """删除指定格式配置。"""
     try:
-        deleted = get_service().delete_format(name)
+        deleted = await asyncio.to_thread(get_service().delete_format, name)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     if not deleted:
@@ -291,7 +302,8 @@ async def generate_latex_code(request: GenerateLatexRequest):
     if not request.metadata:
         raise HTTPException(status_code=400, detail="Empty metadata")
     try:
-        result = get_service().generate_latex_code(
+        result = await asyncio.to_thread(
+            get_service().generate_latex_code,
             request.metadata,
             request.format_info,
             request.bib_file_path,
@@ -313,7 +325,9 @@ async def parse_entries(
 ):
     """解析 .bib 文件为结构化条目列表。"""
     try:
-        result = get_service().parse_entries(request.file_path, workspace_id)
+        result = await asyncio.to_thread(
+            get_service().parse_entries, request.file_path, workspace_id
+        )
         return result
     except RuntimeError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -331,7 +345,9 @@ async def detect_duplicates(
 ):
     """检测 .bib 文件中的重复条目。"""
     try:
-        result = get_service().detect_duplicates(request.file_path, workspace_id)
+        result = await asyncio.to_thread(
+            get_service().detect_duplicates, request.file_path, workspace_id
+        )
         return result
     except RuntimeError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -347,8 +363,11 @@ async def delete_entry(
 ):
     """从 .bib 文件中删除指定条目。"""
     try:
-        result = get_service().delete_entry(
-            request.file_path, request.cite_key, workspace_id
+        result = await asyncio.to_thread(
+            get_service().delete_entry,
+            request.file_path,
+            request.cite_key,
+            workspace_id,
         )
         return result
     except FileConflictError as e:
@@ -380,8 +399,12 @@ async def update_entry(
     if not request.bibtex_code.strip():
         raise HTTPException(status_code=400, detail="Empty BibTeX code")
     try:
-        result = get_service().update_entry(
-            request.file_path, request.cite_key, request.bibtex_code, workspace_id
+        result = await asyncio.to_thread(
+            get_service().update_entry,
+            request.file_path,
+            request.cite_key,
+            request.bibtex_code,
+            workspace_id,
         )
         return result
     except FileConflictError as e:
@@ -411,7 +434,9 @@ async def get_entry_stats(
 ):
     """获取 .bib 文件的条目统计信息。"""
     try:
-        result = get_service().get_entry_stats(file_path, workspace_id)
+        result = await asyncio.to_thread(
+            get_service().get_entry_stats, file_path, workspace_id
+        )
         return result
     except RuntimeError as e:
         raise HTTPException(status_code=400, detail=str(e))
