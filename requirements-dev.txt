@@ -10,3 +10,9 @@ ruff==0.16.6
 black==26.5.1
 # pytest 并行执行（check_backend.sh 的 -n auto）：缩短慢速 CI runner 上的墙钟
 pytest-xdist==3.8.0
+
+# ── 测试框架与 fixture（仅测试使用，不进生产镜像）──
+pytest==9.1.1
+pytest-asyncio==1.4.0
+# 本地 mock SMTP server fixture（多用户邮件流程测试）
+aiosmtpd==1.4.6

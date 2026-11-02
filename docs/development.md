@@ -410,7 +410,7 @@ AGENTS.md 的编码约束已尽量实现为机器检查，机器检查是准绳�
 | 统一验证入口 | `scripts/check.sh` | 顺序调用下面两个脚本，**完成代码修改后必须运行并通过**；`--install` 装依赖、`--build` 追加前端构建、`--skip-docker` 跳过真容器冒烟 |
 | 后端校验 | `scripts/check_backend.sh` | ruff + `black --check` + 约束扫描 + `pytest tests/ -q`；CI 的 `python-check` job 直接调用它（`--install --skip-docker`） |
 | 前端校验 | `scripts/check_frontend.sh` | `npm test`（node --test）+ 可选 `npm run build`；CI 的 `web-check` job 调用它（`--install --build`） |
-| 开发工具依赖 | `requirements-dev.txt` | ruff / black 精确锁版本（生产 `requirements.txt` 不含），CI 与本地装同一版本 |
+| 开发工具依赖 | `requirements-dev.txt` | ruff / black / pytest / pytest-asyncio / aiosmtpd 等开发与测试依赖（生产 `requirements.txt` 不含，不进生产镜像），ruff / black 精确锁版本，CI 与本地装同一版本 |
 | 提交时格式化 | `.pre-commit-config.yaml` | black / prettier 在**提交时点**统一格式化。刻意不做编辑期（agent 编辑后）自动格式化：格式化会改动 agent 正在编辑的文件，令其文件状态跟踪失效、触发整文件重读，并与连续编辑产生竞态 |
 | 编辑器文档提醒 | `.zcode/config.json` hooks + `scripts/zcode_post_edit_hook.py` | PostToolUse（Edit/Write）在编辑 `backend/`、`frontend/src/` 或配置文件时经 `additionalContext` 注入文档同步提醒（maintain-latexcellence-docs / latexcellence-config-sync）。hook 只读、不修改任何文件。Windows 侧使用需把 command 改为 process 类型或调整解释器名 |
 
