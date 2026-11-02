@@ -316,7 +316,9 @@ class PlotExecutor(AgentFileToolExecutor):
         if tool_name == "compile_tikz":
             return await self._compile_tikz(args)
         if tool_name == "stats_test":
-            return self._stats_test(args)
+            # pandas 读取数据文件（上限 50MB）+ scipy 假设检验为 CPU 密集
+            # 操作，与 generate_figure_tex 同待遇入线程池
+            return await asyncio.to_thread(self._stats_test, args)
         if tool_name == "list_styles":
             return self._list_styles(args)
         if tool_name == "apply_style":
@@ -665,8 +667,9 @@ class PlotExecutor(AgentFileToolExecutor):
                 encoding="utf-8",
             )
 
-        # 引擎检测基于真实图内容而非包装文件，避免中文标签被误判为 pdflatex
-        engine = detect_engine_from_file(tikz_path)
+        # 引擎检测基于真实图内容而非包装文件，避免中文标签被误判为 pdflatex；
+        # 同步读盘检测入线程池
+        engine = await asyncio.to_thread(detect_engine_from_file, tikz_path)
         try:
             tex_result = await run_tex_compile(
                 "tikz_main.tex",
