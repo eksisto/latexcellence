@@ -1,0 +1,15 @@
+# 后端镜像构建上下文白名单（docker-compose.yml 的 backend 服务以仓库根为 context）。
+# 镜像只需 requirements.txt / main.py / backend / static 与 Dockerfile 本身；
+# 其余一切不进构建上下文，避免真实凭据（config.json、.env）、用户数据
+# （data/、logs/、users/）与无关大目录（frontend、.venv、.git 等）进入
+# 构建缓存或镜像层。
+*
+!requirements.txt
+!main.py
+!backend
+!static
+!docker
+docker/*
+!docker/backend
+docker/backend/*
+!docker/backend/Dockerfile
