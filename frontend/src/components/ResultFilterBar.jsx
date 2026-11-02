@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
+import { toast } from "sonner";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import {
@@ -49,7 +50,11 @@ export default function ResultFilterBar({
     e.preventDefault();
     const idx = parseInt(jumpInput, 10);
     if (Number.isNaN(idx)) return;
-    onJump(idx);
+    // 跳转目标可能不存在（段落号越界、目标文件 tab 未激活被卸载），
+    // 静默失败让用户以为点击无效，必须给出反馈
+    if (!onJump(idx)) {
+      toast.info(t("resultFilterBar.jumpNotFound"));
+    }
   };
 
   return (

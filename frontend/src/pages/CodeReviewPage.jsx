@@ -49,6 +49,10 @@ import StaleCheckBanner from "@/components/editor/StaleCheckBanner";
 import ConfirmDialog from "@/components/ConfirmDialog";
 import ResultFilterBar from "@/components/ResultFilterBar";
 import useResultFilter from "@/hooks/useResultFilter";
+import { resultDomId } from "@/utils/resultDomId";
+
+/** 结果卡 DOM id 前缀：与 useResultFilter 跳转共用同一契约（resultDomId）。 */
+const RESULT_ID_PREFIX = "cr-result";
 import MarkerText from "@/components/MarkerText";
 import CodeBlock, { latexEditorClass } from "@/components/CodeBlock";
 import AnnotatedSource from "@/pages/code-review/AnnotatedSource";
@@ -157,7 +161,11 @@ const CodeReviewResultCard = React.memo(function CodeReviewResultCard({
   return (
     <Card
       key={`${result.file_path}-cr-result-P${result.paragraph_index}`}
-      id={`cr-result-P${result.paragraph_index}`}
+      id={resultDomId(
+        RESULT_ID_PREFIX,
+        result.file_path,
+        result.paragraph_index,
+      )}
       className="[content-visibility:auto] [contain-intrinsic-size:auto_180px]"
     >
       <CardHeader className="pb-2">
@@ -459,7 +467,7 @@ export default function CodeReviewPage() {
     jumpToParagraph,
     reset,
     hasFilters,
-  } = useResultFilter(codeReviewResults, { idPrefix: "cr-result" });
+  } = useResultFilter(codeReviewResults, { idPrefix: RESULT_ID_PREFIX });
 
   const paragraphGroups = useMemo(
     () => groupByFile(codeReviewParagraphs),

@@ -45,6 +45,10 @@ import StaleCheckBanner from "@/components/editor/StaleCheckBanner";
 import ConfirmDialog from "@/components/ConfirmDialog";
 import ResultFilterBar from "@/components/ResultFilterBar";
 import useResultFilter from "@/hooks/useResultFilter";
+import { resultDomId } from "@/utils/resultDomId";
+
+/** 结果卡 DOM id 前缀：与 useResultFilter 跳转共用同一契约（resultDomId）。 */
+const RESULT_ID_PREFIX = "translate-result";
 
 const OTHER_LANGUAGE = "__other__";
 
@@ -70,7 +74,11 @@ const TranslateResultCard = memo(function TranslateResultCard({
   const hasUnlistedChanges = result.unlisted_changes === true;
   return (
     <Card
-      id={`${result.file_path}-P${result.paragraph_index}`}
+      id={resultDomId(
+        RESULT_ID_PREFIX,
+        result.file_path,
+        result.paragraph_index,
+      )}
       className="[content-visibility:auto] [contain-intrinsic-size:auto_180px]"
     >
       <CardHeader className="pb-2">
@@ -279,7 +287,7 @@ export default function ParagraphTranslatePage() {
     jumpToParagraph,
     reset,
     hasFilters,
-  } = useResultFilter(translateResults, { idPrefix: "translate-result" });
+  } = useResultFilter(translateResults, { idPrefix: RESULT_ID_PREFIX });
 
   const paragraphMap = useMemo(
     () => new Map(translateParagraphs.map((p) => [p.index, p])),

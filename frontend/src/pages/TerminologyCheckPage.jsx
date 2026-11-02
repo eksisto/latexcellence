@@ -42,6 +42,10 @@ import StaleCheckBanner from "@/components/editor/StaleCheckBanner";
 import ConfirmDialog from "@/components/ConfirmDialog";
 import ResultFilterBar from "@/components/ResultFilterBar";
 import useResultFilter from "@/hooks/useResultFilter";
+import { resultDomId } from "@/utils/resultDomId";
+
+/** 结果卡 DOM id 前缀：与 useResultFilter 跳转共用同一契约（resultDomId）。 */
+const RESULT_ID_PREFIX = "term-result";
 import useStore from "@/store/useStore";
 import { toast } from "sonner";
 
@@ -104,7 +108,11 @@ const TerminologyResultCard = memo(function TerminologyResultCard({
   );
   return (
     <Card
-      id={`term-result-P${result.paragraph_index}`}
+      id={resultDomId(
+        RESULT_ID_PREFIX,
+        result.file_path,
+        result.paragraph_index,
+      )}
       className="[content-visibility:auto] [contain-intrinsic-size:auto_180px]"
     >
       <CardHeader className="pb-2">
@@ -278,7 +286,7 @@ export default function TerminologyCheckPage() {
     jumpToParagraph,
     reset,
     hasFilters,
-  } = useResultFilter(terminologyResults, { idPrefix: "term-result" });
+  } = useResultFilter(terminologyResults, { idPrefix: RESULT_ID_PREFIX });
 
   const paragraphMap = useMemo(
     () => new Map(terminologyParagraphs.map((p) => [p.index, p])),

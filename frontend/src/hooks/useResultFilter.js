@@ -1,4 +1,5 @@
 import { useState, useMemo, useCallback, useDeferredValue } from "react";
+import { resultDomId } from "@/utils/resultDomId";
 
 /**
  * 段落检查结果搜索/过滤 hook。
@@ -72,14 +73,26 @@ export default function useResultFilter(results, options = {}) {
 
   const jumpToParagraph = useCallback(
     (paragraphIndex) => {
-      const el = document.getElementById(`${idPrefix}-P${paragraphIndex}`);
-      if (el) {
-        el.scrollIntoView({ behavior: "smooth", block: "center" });
-        return true;
+      // id 契约含 file_path（段落号按文件各自从 0 计），而跳转输入只有
+      // 段落号：按结果列表解析该段落号可能归属的文件，逐个候选定位
+      const candidates = new Set(
+        results
+          .filter((r) => r.paragraph_index === paragraphIndex)
+          .map((r) => r.file_path || ""),
+      );
+      if (candidates.size === 0) candidates.add("");
+      for (const fp of candidates) {
+        const el = document.getElementById(
+          resultDomId(idPrefix, fp, paragraphIndex),
+        );
+        if (el) {
+          el.scrollIntoView({ behavior: "smooth", block: "center" });
+          return true;
+        }
       }
       return false;
     },
-    [idPrefix],
+    [idPrefix, results],
   );
 
   const reset = useCallback(() => {

@@ -45,6 +45,10 @@ import StaleCheckBanner from "@/components/editor/StaleCheckBanner";
 import ConfirmDialog from "@/components/ConfirmDialog";
 import ResultFilterBar from "@/components/ResultFilterBar";
 import useResultFilter from "@/hooks/useResultFilter";
+import { resultDomId } from "@/utils/resultDomId";
+
+/** 结果卡 DOM id 前缀：与 useResultFilter 跳转共用同一契约（resultDomId）。 */
+const RESULT_ID_PREFIX = "typo-result";
 
 /**
  * 单条检查结果卡片（rerender-memo，对齐 CodeReviewResultCard 模式）：
@@ -64,7 +68,11 @@ const TypoResultCard = memo(function TypoResultCard({
   const hasUnlistedChanges = result.unlisted_changes === true;
   return (
     <Card
-      id={`${result.file_path}-P${result.paragraph_index}`}
+      id={resultDomId(
+        RESULT_ID_PREFIX,
+        result.file_path,
+        result.paragraph_index,
+      )}
       className="[content-visibility:auto] [contain-intrinsic-size:auto_180px]"
     >
       <CardHeader className="pb-2">
@@ -236,7 +244,7 @@ export default function TypoCheckPage() {
     jumpToParagraph,
     reset,
     hasFilters,
-  } = useResultFilter(typoResults, { idPrefix: "typo-result" });
+  } = useResultFilter(typoResults, { idPrefix: RESULT_ID_PREFIX });
 
   const groupedParagraphs = useMemo(
     () => groupByFile(typoParagraphs),

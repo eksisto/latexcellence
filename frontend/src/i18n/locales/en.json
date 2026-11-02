@@ -1655,7 +1655,8 @@
       "jumpTo": "Jump to paragraph",
       "jump": "Jump",
       "clearFilter": "Clear filter",
-      "clear": "Clear"
+      "clear": "Clear",
+      "jumpNotFound": "Paragraph not found; it may be applied or its file tab is not open"
     },
     "imageOcr": {
       "unsupportedFormat": "Unsupported file format",

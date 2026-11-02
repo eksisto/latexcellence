@@ -51,6 +51,10 @@ import StaleCheckBanner from "@/components/editor/StaleCheckBanner";
 import ConfirmDialog from "@/components/ConfirmDialog";
 import ResultFilterBar from "@/components/ResultFilterBar";
 import useResultFilter from "@/hooks/useResultFilter";
+import { resultDomId } from "@/utils/resultDomId";
+
+/** 结果卡 DOM id 前缀：与 useResultFilter 跳转共用同一契约（resultDomId）。 */
+const RESULT_ID_PREFIX = "expr-result";
 
 export default function ExpressionOptPage() {
   const { t } = useTranslation(["pages", "common"]);
@@ -117,7 +121,7 @@ export default function ExpressionOptPage() {
     jumpToParagraph,
     reset,
     hasFilters,
-  } = useResultFilter(expressionResults, { idPrefix: "expr-result" });
+  } = useResultFilter(expressionResults, { idPrefix: RESULT_ID_PREFIX });
 
   const paragraphMap = useMemo(
     () => new Map(expressionParagraphs.map((p) => [p.index, p])),
@@ -630,7 +634,11 @@ export default function ExpressionOptPage() {
                               return (
                                 <Card
                                   key={`${result.file_path}-expr-result-P${result.paragraph_index}`}
-                                  id={`expr-result-P${result.paragraph_index}`}
+                                  id={resultDomId(
+                                    RESULT_ID_PREFIX,
+                                    result.file_path,
+                                    result.paragraph_index,
+                                  )}
                                   className="[content-visibility:auto] [contain-intrinsic-size:auto_180px]"
                                 >
                                   <CardHeader className="pb-2">
@@ -769,7 +777,11 @@ export default function ExpressionOptPage() {
                     return (
                       <Card
                         key={result.paragraph_index}
-                        id={`expr-result-P${result.paragraph_index}`}
+                        id={resultDomId(
+                          RESULT_ID_PREFIX,
+                          result.file_path,
+                          result.paragraph_index,
+                        )}
                       >
                         <CardHeader className="pb-2">
                           <div className="flex items-center justify-between">

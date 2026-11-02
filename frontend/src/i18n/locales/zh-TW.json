@@ -1655,7 +1655,8 @@
       "jumpTo": "跳至段落",
       "jump": "跳至",
       "clearFilter": "清除篩選",
-      "clear": "清除"
+      "clear": "清除",
+      "jumpNotFound": "找不到該段落，可能已套用或所在檔案未展開"
     },
     "imageOcr": {
       "unsupportedFormat": "不支援的檔案格式",
