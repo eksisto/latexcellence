@@ -176,12 +176,28 @@ def get_operation_context(operation_id: str) -> CheckOperationContext | None:
 
 
 class ApplyChangeItem(BaseModel):
-    """逐段检查共享：用户确认的修改项请求模型。"""
+    """逐段检查共享：用户确认的修改项请求模型。
+
+    序列化口径：路由侧以 ``model_dump()`` 展开为本类实例的字典，
+    未显式携带 file_path / expected_md5 时这两个键仍存在且值为 None，
+    消费方判定"是否携带"必须用真值判断（见 resolve_change_file_path），
+    不能依赖 ``dict.get(key, default)`` 的默认值参数。
+    """
 
     paragraph_index: int
     new_text: str
     file_path: str | None = None
     expected_md5: str | None = None
+
+
+def resolve_change_file_path(change: dict[str, Any], fallback_file: str) -> str:
+    """取 change 的目标文件路径，缺省（None 或未携带）时回退请求级默认值。
+
+    change 通常来自 ``ApplyChangeItem.model_dump()``，未携带 file_path 时
+    该键存在且值为 None，``get(key, default)`` 永远取不到默认值，
+    必须用 ``or`` 回退。
+    """
+    return change.get("file_path") or fallback_file
 
 
 def inject_expected_md5s(
@@ -198,7 +214,7 @@ def inject_expected_md5s(
     """
     if md5s_map:
         for change in changes:
-            target_file = change.get("file_path", fallback_file)
+            target_file = resolve_change_file_path(change, fallback_file)
             if "expected_md5" not in change or change["expected_md5"] is None:
                 change["expected_md5"] = md5s_map.get(target_file)
 
@@ -823,7 +839,7 @@ class BaseParagraphCheckService:
         for change in changes:
             idx = change["paragraph_index"]
             new_text = change["new_text"]
-            target_file = change.get("file_path", file_path)
+            target_file = resolve_change_file_path(change, file_path)
             expected_md5 = change.get("expected_md5")
 
             if self.use_marker_protection:
