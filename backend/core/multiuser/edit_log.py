@@ -718,10 +718,10 @@ def _enforce_recover_quota(owner_id: str, grow_bytes: int) -> None:
 
     op 保持 active/undone 可重试（调用方不得改状态）。
 
-    注意：本函数运行在调用方的 DB 事务内，只做**纯读**预检（SELECT）——
-    绝不调用会隐式 COMMIT 的 db_execute（如 refresh_owner_usage_after_write
-    的 size_bytes 回写）。size_bytes 由各写路径事后刷新，此处允许缓存口径
-    的轻微滞后；恢复落盘后调用方仍会再刷新一次。
+    只做**纯读**预检（SELECT），绝不调用会隐式写库的 db_execute
+    （如 refresh_owner_usage_after_write 的 size_bytes 回写）。
+    size_bytes 由各写路径事后刷新，此处允许缓存口径的轻微滞后；
+    恢复落盘后调用方仍会再刷新一次。
     """
     if grow_bytes <= 0:
         return
@@ -832,45 +832,62 @@ def perform_undo(
     冲突（当前 MD5 != after_md5 / 快照损坏）→ 409 file_conflict；
     文件缺失（防御性）→ 该 op 标记 failed 后抛 409；
     配额超限 → 413 quota_exceeded_recover（op 保持 active 可重试）。
+
+    锁序约束：禁止在持有 DB 全局锁（transaction）时进入
+    project._transaction_lock（apply_whole_files），否则与写路径
+    「事务锁内 record_write → db_execute」构成相反锁序，两线程各持
+    一把无超时锁即死锁。因此文件校验/加载与恢复写回全部在事务外
+    完成，状态翻转用独立短事务收尾；选组与翻转之间的并发写由
+    apply_whole_files 的 expected_md5s 乐观锁兜底（409，不损坏数据）。
     """
+    # 阶段一（短事务）：选出该用户最新的 active 组并取走组员行
+    with transaction() as conn:
+        newest = conn.execute(
+            "SELECT * FROM workspace_edit_ops "
+            "WHERE project_id = ? AND actor_user_id = ? AND status = 'active' "
+            "ORDER BY seq DESC LIMIT 1",
+            (project_id, actor_user_id),
+        ).fetchone()
+        if newest is None:
+            return {"undone": False}
+        newest = dict(newest)
+        if newest["non_undoable"]:
+            raise _http(
+                409,
+                "op_not_undoable",
+                "The latest change is too large to be undone automatically",
+            )
+        ops = _group_members(conn, newest["op_group_id"], STATUS_ACTIVE)
+
+    # 阶段二（事务外）：快照加载、MD5 校验与配额预检
     try:
-        with transaction() as conn:
-            newest = conn.execute(
-                "SELECT * FROM workspace_edit_ops "
-                "WHERE project_id = ? AND actor_user_id = ? AND status = 'active' "
-                "ORDER BY seq DESC LIMIT 1",
-                (project_id, actor_user_id),
-            ).fetchone()
-            if newest is None:
-                return {"undone": False}
-            newest = dict(newest)
-            if newest["non_undoable"]:
-                raise _http(
-                    409,
-                    "op_not_undoable",
-                    "The latest change is too large to be undone automatically",
-                )
-            ops = _group_members(conn, newest["op_group_id"], STATUS_ACTIVE)
-
-            updates, expected, grow = _validate_and_load_undo(ops, root_path)
-
-            _enforce_recover_quota(newest["owner_id"], grow)
-            _restore_via_project(project, updates, expected)
-
-            marked = conn.execute(
-                "UPDATE workspace_edit_ops SET status = 'undone', undone_at = ? "
-                "WHERE op_group_id = ? AND status = 'active'",
-                (utcnow(), newest["op_group_id"]),
-            ).rowcount
+        updates, expected, grow = _validate_and_load_undo(ops, root_path)
     except _EditFileMissing as exc:
         # 文件缺失（理论上无删除入口，防御性处理）：标记 failed 并提示（§8.4）。
-        # 事务已回滚，标记在事务外落库。
         db_execute(
             "UPDATE workspace_edit_ops SET status = 'failed' WHERE op_id = ?",
             (exc.op_id,),
         )
         logger.warning("Edit op marked failed (file missing): op=%s", exc.op_id[:8])
         raise
+    _enforce_recover_quota(newest["owner_id"], grow)
+
+    # 阶段三：恢复写回（仅项目事务锁，不持 DB 全局锁）
+    _restore_via_project(project, updates, expected)
+
+    # 阶段四（短事务）：翻转状态；行数守卫兜底并发撤销的重复翻转
+    with transaction() as conn:
+        marked = conn.execute(
+            "UPDATE workspace_edit_ops SET status = 'undone', undone_at = ? "
+            "WHERE op_group_id = ? AND status = 'active'",
+            (utcnow(), newest["op_group_id"]),
+        ).rowcount
+    if marked == 0:
+        raise _http(
+            409,
+            "file_conflict",
+            "The operation was undone by a concurrent request",
+        )
 
     from .quota import refresh_owner_usage_after_write
 
@@ -893,7 +910,11 @@ def perform_redo(
 
     校验当前 MD5 == before_md5 后重放 after 内容；存在更新的**相关**
     active op（同组或共享文件路径）时重做视为已被取代（返回 redone=False）。
+
+    锁序约束与 perform_undo 相同：选组/取代判定、状态翻转各自用短事务，
+    快照加载与恢复写回在事务外完成，避免「DB 全局锁内取项目事务锁」。
     """
+    # 阶段一（短事务）：选出最近被撤销的组并做取代判定
     with transaction() as conn:
         # 重放"最近一次被撤销"的组：按 undone_at 降序（同一秒内多次撤销时
         # 后撤销的 op seq 更小，故以 seq 升序破平），而非 seq 最大者
@@ -920,16 +941,26 @@ def perform_redo(
             # 相关的新修改已覆盖该操作的产物：不再提供重做（保留 op 供审计）
             return {"redone": False}
 
-        updates, expected, grow = _load_redo_updates(ops, root_path)
+    # 阶段二（事务外）：快照加载、MD5 校验与配额预检
+    updates, expected, grow = _load_redo_updates(ops, root_path)
+    _enforce_recover_quota(newest_undone["owner_id"], grow)
 
-        _enforce_recover_quota(newest_undone["owner_id"], grow)
-        _restore_via_project(project, updates, expected)
+    # 阶段三：恢复写回（仅项目事务锁，不持 DB 全局锁）
+    _restore_via_project(project, updates, expected)
 
+    # 阶段四（短事务）：翻转状态；行数守卫兜底并发重做的重复翻转
+    with transaction() as conn:
         marked = conn.execute(
             "UPDATE workspace_edit_ops SET status = 'active', undone_at = NULL "
             "WHERE op_group_id = ? AND status = 'undone'",
             (newest_undone["op_group_id"],),
         ).rowcount
+    if marked == 0:
+        raise _http(
+            409,
+            "file_conflict",
+            "The operation was redone by a concurrent request",
+        )
 
     from .quota import refresh_owner_usage_after_write
 

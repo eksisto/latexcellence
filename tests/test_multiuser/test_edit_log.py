@@ -694,6 +694,62 @@ class TestUndoRedoSemantics:
         assert path.read_text(encoding="utf-8") == "V2\n"
         assert all(r["status"] == "active" for r in _op_rows(stack_env))
 
+    def test_undo_redo_restores_outside_db_global_lock(self, stack_env, monkeypatch):
+        """回归（死锁）：恢复写回不得在 DB 全局锁（transaction）内进行。
+
+        写路径在 project._transaction_lock 内经 record_write → db_execute
+        获取 DB 全局锁；undo/redo 若在 DB 全局锁内调用 apply_whole_files，
+        两线程以相反顺序获取两把无超时锁即死锁，进程内全部 DB 访问永久
+        阻塞。以「_restore_via_project 调用时的 transaction 嵌套深度 == 0」
+        为锁序不变量断言。
+        """
+        project = _open_project(stack_env, stack_env["owner"]["id"])
+        project.apply_change("main.tex", 0, "Edited.")
+
+        real_transaction = edit_log.transaction
+        depth = {"n": 0}
+
+        class _TrackingTransaction:
+            def __enter__(self):
+                depth["n"] += 1
+                self._inner = real_transaction()
+                return self._inner.__enter__()
+
+            def __exit__(self, exc_type, exc, tb):
+                try:
+                    return self._inner.__exit__(exc_type, exc, tb)
+                finally:
+                    depth["n"] -= 1
+
+        real_restore = edit_log._restore_via_project
+        observed = {"depth": None}
+
+        def spy_restore(project_arg, updates, expected):
+            observed["depth"] = depth["n"]
+            return real_restore(project_arg, updates, expected)
+
+        monkeypatch.setattr(edit_log, "transaction", _TrackingTransaction)
+        monkeypatch.setattr(edit_log, "_restore_via_project", spy_restore)
+
+        result = edit_log.perform_undo(
+            project,
+            project_id=stack_env["project_id"],
+            actor_user_id=stack_env["owner"]["id"],
+            root_path=str(stack_env["root"]),
+        )
+        assert result["undone"] is True
+        assert observed["depth"] == 0
+
+        result = edit_log.perform_redo(
+            project,
+            project_id=stack_env["project_id"],
+            actor_user_id=stack_env["owner"]["id"],
+            root_path=str(stack_env["root"]),
+        )
+        assert result["redone"] is True
+        assert observed["depth"] == 0
+        assert all(r["status"] == "active" for r in _op_rows(stack_env))
+
 
 # ── 生命周期 ──────────────────────────────────────────────────────────────
 class TestLifecycle:
