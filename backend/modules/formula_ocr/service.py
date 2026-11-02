@@ -18,6 +18,7 @@
     改用分隔符协议让反斜杠原样传输，并用内容校验器拦截损坏输出。
 """
 
+import asyncio
 import base64
 import io
 import re
@@ -152,15 +153,7 @@ class FormulaOCRService:
         """
         self._validate_content_type(content_type)
 
-        img = self._preprocess(image_data)
-        base64_image = self._to_base64(img)
-        visual_hint = analyze_formula_image(img)
-        self._logger.info(
-            f"Formula OCR visual inline hint: inline={visual_hint.inline} "
-            f"conf={visual_hint.confidence:.2f} reason={visual_hint.reason}"
-        )
-
-        cfg = get_config()
+        # 未配置 Key 时提前返回，不做白费的图片解码与视觉分析
         if not has_api_key_for("ocr"):
             self._logger.warning("No API key configured, returning empty result")
             return {
@@ -169,6 +162,18 @@ class FormulaOCRService:
                 "confidence": 0.0,
                 "low_confidence": True,
             }
+
+        # 图片解码/缩放、JPEG 重编码与连通分量视觉分析（scipy ndimage）
+        # 均为 CPU 密集操作，大图可达数百毫秒，统一入线程池
+        img = await asyncio.to_thread(self._preprocess, image_data)
+        base64_image = await asyncio.to_thread(self._to_base64, img)
+        visual_hint = await asyncio.to_thread(analyze_formula_image, img)
+        self._logger.info(
+            f"Formula OCR visual inline hint: inline={visual_hint.inline} "
+            f"conf={visual_hint.confidence:.2f} reason={visual_hint.reason}"
+        )
+
+        cfg = get_config()
 
         # ocr 槽位：硬性依赖视觉模型（multi-model §6，保存期硬校验 vision）
         llm = get_client_for("ocr")
