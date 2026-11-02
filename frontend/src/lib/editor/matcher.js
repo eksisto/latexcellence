@@ -273,13 +273,3 @@ export async function getExtendedMatcherIndex(extraCommands) {
   extendedIndexCache.set(extraCommands, rows);
   return rows;
 }
-
-/**
- * 异步便捷入口：等待共享索引后执行 searchCommands。
- * @param {string} query 用户输入
- * @param {{limit?: number}} [options]
- */
-export async function searchCommandsAsync(query, options) {
-  const index = await getCommandMatcherIndex();
-  return searchCommands(index, query, options);
-}

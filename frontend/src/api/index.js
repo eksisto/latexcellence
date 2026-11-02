@@ -31,7 +31,6 @@ export {
   getApiToken,
   resolveUrl,
   setApiConnection,
-  isMultiUser as getMultiUserMode,
 } from "./connection";
 
 /** 401 响应：通知全局（会话过期 → 登出并跳转登录页） */

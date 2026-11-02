@@ -5,7 +5,6 @@ import { EditorState } from "@codemirror/state";
 import { history, isolateHistory, undo, undoDepth } from "@codemirror/commands";
 
 import {
-  FORMAT_SHORTCUT_LABEL,
   applyFormatToState,
   buildFormatChanges,
   isFormatShortcut,
@@ -40,10 +39,6 @@ test("isFormatShortcut：缺修饰键 / 缺 Shift / 非 f 键均不命中", () =
     false,
   );
   assert.equal(isFormatShortcut(null), false);
-});
-
-test("FORMAT_SHORTCUT_LABEL 与快捷键常量存在", () => {
-  assert.equal(FORMAT_SHORTCUT_LABEL, "Ctrl+Shift+F");
 });
 
 /* ── resolveFormatTargetPath：目标 tab 归一化（回归：工具栏点击事件

@@ -17,11 +17,8 @@
  *
  * 快捷键：Ctrl/Cmd+Shift+F（避开既有键位——阶段二占用 Ctrl+B/I/U/K/L、
  * Ctrl+/；CM6 内置查找面板为 Ctrl/Cmd+F，Shift 变体未被占用，浏览器
- * 亦无保留冲突）。本模块提供 isFormatShortcut 判定纯函数与常量。
+ * 亦无保留冲突）。本模块提供 isFormatShortcut 判定纯函数。
  */
-
-/** 格式化快捷键（窗口级监听；Mod = macOS Cmd / 其余 Ctrl） */
-export const FORMAT_SHORTCUT_LABEL = "Ctrl+Shift+F";
 
 /**
  * 归一化格式化目标 tab 路径：仅接受非空字符串 filePath，其余（含
