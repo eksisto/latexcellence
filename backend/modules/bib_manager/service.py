@@ -979,7 +979,11 @@ class BibManagerService:
 
         content = safe_read(full_path)
         expected_md5 = compute_md5(full_path)
-        new_content = remove_entry_from_content(content, cite_key)
+        try:
+            new_content = remove_entry_from_content(content, cite_key)
+        except ValueError as e:
+            # "条目不存在"按 404 语义上抛，而非落入通用 500
+            raise FileNotFoundError(str(e)) from e
         # 通过整文件事务写回：读取时 MD5 乐观锁 + 推入撤销栈，workspace 撤销/重做可回退
         pm.apply_whole_files(
             {file_path: new_content},

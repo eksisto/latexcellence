@@ -22,7 +22,6 @@ from pydantic import ValidationError
 
 from backend.core.config import get_config
 from backend.modules.bib_manager.bib_parser import (
-    BibParserError,
     normalize_doi,
     normalize_title,
     parse_bib_file,
@@ -1221,7 +1220,7 @@ class TestBibParser:
 
     def test_remove_entry_not_found(self):
         content = "@article{exists, title={Test}}"
-        with pytest.raises(BibParserError, match="not found"):
+        with pytest.raises(ValueError, match="not found"):
             remove_entry_from_content(content, "nonexistent")
 
     def test_normalize_title(self):
@@ -1459,18 +1458,55 @@ class TestServiceEntryStats:
 class TestServiceDeleteEntry:
     """删除条目测试。"""
 
-    def test_delete_success(self, temp_project, service):
+    def _open_project(self, temp_project, ws_id):
         from backend.core.workspace_manager import get_workspace_manager
 
         wm = get_workspace_manager()
-        ws_id = "test_delete_entry"
         pm = wm.get_or_create(ws_id)
         pm.open(str(temp_project))
+        return wm, pm
+
+    def test_delete_success(self, temp_project, service):
+        ws_id = "test_delete_entry"
+        wm, _pm = self._open_project(temp_project, ws_id)
         try:
             result = service.delete_entry("refs.bib", "test2023", ws_id)
             assert result["status"] == "ok"
             content = safe_read(temp_project / "refs.bib")
             assert "test2023" not in content
+        finally:
+            wm.remove(ws_id)
+
+    def test_delete_missing_entry_raises_file_not_found(self, temp_project, service):
+        """cite_key 不存在时按 404 语义抛 FileNotFoundError，
+        而非落入通用 500（复用标准异常，路由已有 FileNotFoundError→404 映射）。"""
+        ws_id = "test_delete_entry_missing"
+        wm, _pm = self._open_project(temp_project, ws_id)
+        try:
+            with pytest.raises(FileNotFoundError, match="not found"):
+                service.delete_entry("refs.bib", "nonexistent", ws_id)
+        finally:
+            wm.remove(ws_id)
+
+    def test_delete_missing_entry_router_returns_404(self, temp_project):
+        """路由层 /delete-entry 对不存在的 cite_key 返回 404。"""
+        from fastapi.testclient import TestClient
+
+        from backend.core.workspace_manager import get_workspace_manager
+        from main import app
+
+        ws_id = "test_delete_entry_router_404"
+        wm = get_workspace_manager()
+        wm.get_or_create(ws_id).open(str(temp_project))
+        try:
+            client = TestClient(app)
+            response = client.post(
+                "/api/bib-manager/delete-entry",
+                params={"workspace_id": ws_id},
+                json={"file_path": "refs.bib", "cite_key": "nonexistent"},
+            )
+            assert response.status_code == 404
+            assert "not found" in response.json()["detail"]
         finally:
             wm.remove(ws_id)
 

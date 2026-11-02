@@ -7,10 +7,6 @@
 import re
 
 
-class BibParserError(ValueError):
-    pass
-
-
 def parse_bib_file(content: str) -> list[dict]:
     """解析 .bib 文件内容，返回条目列表。"""
     entries = []
@@ -238,7 +234,7 @@ def remove_entry_from_content(content: str, cite_key: str) -> str:
                 continue
 
     if not removed:
-        raise BibParserError(f"Entry not found: {cite_key}")
+        raise ValueError(f"Entry not found: {cite_key}")
 
     # 清理条目前后多余空行
     text = "\n".join(result)
