@@ -1637,8 +1637,12 @@ class TestEditorToolConfirmation:
         from backend.modules.writing_chat.service.editor_chat import (
             _CONFIRMABLE_TOOL_NAMES,
             _EDITOR_TOOL_NAMES,
-            _SCHOLARLY_TOOL_NAMES,
-            _WEB_TOOL_NAMES,
+        )
+        from backend.modules.writing_chat.service.tool_gate import (
+            SCHOLARLY_TOOL_NAMES as _SCHOLARLY_TOOL_NAMES,
+        )
+        from backend.modules.writing_chat.service.tool_gate import (
+            WEB_TOOL_NAMES as _WEB_TOOL_NAMES,
         )
 
         assert _CONFIRMABLE_TOOL_NAMES == _WEB_TOOL_NAMES | _SCHOLARLY_TOOL_NAMES

@@ -47,6 +47,12 @@ from backend.utils.tex_compile import sanitize_output_paths
 from backend.utils.web_search import DDGChallengeError, get_search_manager
 
 from . import _deps
+from .tool_gate import (
+    SCHOLARLY_TOOL_NAMES,
+    WEB_TOOL_NAMES,
+    blocked_tool_result_text,
+    tool_source_gate_open,
+)
 
 # ── 上下文注入常量（editor-design §7.3 / 决策 Q24） ────────────────────────────
 
@@ -66,27 +72,14 @@ _SECTION_RE = re.compile(r"^\\(part|chapter|section|subsection|subsubsection)\*?
 _SNIPPET_LANGS = {"latex", "tex"}
 _DIFF_LANGS = {"diff", "patch"}
 
-# 联网搜索 / 学术检索工具名分组（执行期源开关复核的判定依据，见
-# _tool_source_gate_open）；_EDITOR_TOOL_NAMES 由两组派生，保持单一来源。
-_WEB_TOOL_NAMES = frozenset(
-    {"web_search", "open_page", "read_page_sections", "find_in_page"}
-)
-_SCHOLARLY_TOOL_NAMES = frozenset(
-    {
-        "search_scholarly_works",
-        "get_work_details",
-        "find_related_works",
-        "get_full_text_or_sections",
-        "search_research_data_resources",
-    }
-)
-
 # 确认流分组（阶段五b，editor-experience-design §4.5 / §5"经确认执行"）：编辑器
 # 侧对联网/学术工具逐次确认——每次调用产生一个 pending 交互，用户确认
 # 后才执行、拒绝/超时后模型收到取消语义。这是比 Writing Chat 主对话
 # （这些工具直通、零 pending）更严格的新策略，属编辑器侧计划本意；
 # 项目只读三件套维持直通，不产生 pending。
-_CONFIRMABLE_TOOL_NAMES = _WEB_TOOL_NAMES | _SCHOLARLY_TOOL_NAMES
+# 联网/学术工具名分组与执行期源开关复核（tool_source_gate_open）下沉在
+# tool_gate.py，与 Writing Chat 主对话流共用单一来源。
+_CONFIRMABLE_TOOL_NAMES = WEB_TOOL_NAMES | SCHOLARLY_TOOL_NAMES
 
 # 取消语义 tool result 注入文本（模型侧消息，不面向用户、无需 i18n）：
 # 明确告知用户拒绝了本次检索且不得原样重试，模型可基于已有信息继续
@@ -109,34 +102,10 @@ _EDITOR_TOOL_NAMES = (
     "search_across_files",
     # 联网搜索（function-calling-tools.md「联网搜索」；read_page_sections
     # 仅 structured 策略下进入 schema，白名单无条件列入、过滤天然生效）
-    *_WEB_TOOL_NAMES,
+    *WEB_TOOL_NAMES,
     # 学术检索（function-calling-tools.md「学术检索与引文追踪工具」）
-    *_SCHOLARLY_TOOL_NAMES,
+    *SCHOLARLY_TOOL_NAMES,
 )
-
-
-def _tool_source_gate_open(tool_name: str) -> bool:
-    """执行期复核联网/学术工具的源开关（阶段五a 审查加固）。
-
-    白名单只约束工具名集合，源开关约束"该工具此刻是否允许出网/出库"：
-    ToolRegistry.execute 只查运行时 enabled 标志、不复查 config_path，
-    若只在 schema 收集层把关，开关关闭后模型幻觉调用仍可直达执行器
-    产生真实网络请求。故执行前按与 _get_editor_tools 相同口径复核：
-    web 源为全局开关 AND Writing Chat 灰度总闸，学术源为
-    scholarly_research.enabled AND providers.openalex.enabled（与
-    conversation.py 同款双重把关）。项目工具源只读且注入 schema 时已过
-    workspace 门，维持阶段四现状不在此复核。
-    """
-    cfg = get_config()
-    if tool_name in _WEB_TOOL_NAMES:
-        return bool(
-            cfg.features.function_calling.web_search.enabled
-            and cfg.features.writing_chat.web_search_enabled
-        )
-    if tool_name in _SCHOLARLY_TOOL_NAMES:
-        research_cfg = cfg.features.function_calling.scholarly_research
-        return bool(research_cfg.enabled and research_cfg.providers.openalex.enabled)
-    return True
 
 
 def tool_failure_text(
@@ -361,7 +330,7 @@ class EditorChatMixin:
             - 项目工具：project_tools.enabled 且项目已打开（现状不变）。
 
         功能开关在 schema 收集层把关，工具循环执行前另按同口径复核
-        （_tool_source_gate_open）：ToolRegistry.execute 不复查
+        （tool_source_gate_open）：ToolRegistry.execute 不复查
         config_path，仅靠 schema 不注入挡不住模型幻觉调用。返回前按
         _EDITOR_TOOL_NAMES 过滤（read_page_sections 仅 structured 策略
         下由 web 源产出）。
@@ -558,13 +527,13 @@ class EditorChatMixin:
                     # ToolRegistry 全局存有 edit_paragraph 等写工具且
                     # execute 不复查工具来源，模型幻觉调用将绕过编辑器
                     # "只读 + 缓冲区协议"边界直达写盘。不在白名单、或属
-                    # 联网/学术分组但源开关已关（_tool_source_gate_open，
+                    # 联网/学术分组但源开关已关（tool_source_gate_open，
                     # 防 schema 关闭后幻觉调用仍产生真实网络请求）的一律
                     # 不执行、不推送 tool_status（无真实执行可指示），
                     # 注入模型可自纠的失败 tool result 并记日志。
                     if (
                         tool_name not in _EDITOR_TOOL_NAMES
-                        or not _tool_source_gate_open(tool_name)
+                        or not tool_source_gate_open(tool_name)
                     ):
                         self._logger.warning(
                             "Editor assistant blocked non-whitelisted "
@@ -573,10 +542,8 @@ class EditorChatMixin:
                         tool_msg = {
                             "role": "tool",
                             "tool_call_id": tc.id,
-                            "content": (
-                                f'Tool "{tool_name}" is not available to the '
-                                "editor assistant. Use only the tools provided "
-                                "in this conversation."
+                            "content": blocked_tool_result_text(
+                                tool_name, "editor assistant"
                             ),
                         }
                         tool_messages.append(tool_msg)

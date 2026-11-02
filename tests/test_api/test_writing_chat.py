@@ -2316,3 +2316,256 @@ class TestScholarlyResearchToolEvent:
         )
         assert assistant.scholarly_results[0].id == "W123"
         assert assistant.scholarly_total == 37
+
+
+# ── 主对话流执行前工具门禁（tool_gate.py） ─────────────────────────────────
+
+
+def _make_named_tool_call(
+    name: str, call_id: str = "call_gate", args: dict | None = None
+):
+    """构造任意工具名的 openai tool_call 对象（含本轮 schema 外的工具名）。"""
+    import json
+
+    from openai.types.chat.chat_completion_message_tool_call import (
+        ChatCompletionMessageToolCall,
+        Function,
+    )
+
+    return ChatCompletionMessageToolCall(
+        id=call_id,
+        function=Function(name=name, arguments=json.dumps(args or {})),
+        type="function",
+    )
+
+
+class TestMainFlowToolGate:
+    """主对话流执行前门禁：ToolRegistry.execute 不复查工具来源，
+    不在本轮 schema 的工具名、或联网/学术源开关已关的幻觉调用必须被
+    拦截——不执行、不推送 tool_status、注入可自纠的失败 tool result。"""
+
+    async def _run_with_blocked_call(
+        self,
+        monkeypatch,
+        temp_session_dir,
+        open_project,
+        service,
+        tool_name,
+        tool_args,
+    ):
+        """跑一轮「第 1 轮幻觉工具调用 + 第 2 轮纯文本」的完整对话流。
+
+        返回 (events, mock_registry, captured_messages)，captured_messages
+        按调用次序记录每轮发给 LLM 的完整消息列表。
+        """
+        monkeypatch.setattr(get_config().llm, "api_key", "test-key")
+        round1_chunks = [
+            StreamChunk(
+                content=None,
+                usage=None,
+                tool_calls=[_make_named_tool_call(tool_name, args=tool_args)],
+            ),
+            StreamChunk(
+                content=None,
+                usage=UsageInfo(prompt_tokens=10, completion_tokens=3, total_tokens=13),
+            ),
+        ]
+        round2_chunks = [
+            StreamChunk(content="好的，基于已有信息回答。", usage=None),
+            StreamChunk(
+                content=None,
+                usage=UsageInfo(prompt_tokens=20, completion_tokens=8, total_tokens=28),
+            ),
+        ]
+
+        mock_registry = MagicMock()
+        mock_registry.execute = AsyncMock(return_value="should-not-execute")
+        captured_messages: list[list[dict]] = []
+
+        def fake_chat_stream_with_tools(messages, tools=None, **kwargs):
+            captured_messages.append(list(messages))
+            if len(captured_messages) == 1:
+                return _stream(round1_chunks)
+            return _stream(round2_chunks)
+
+        with patch(_LLM_CLIENT_PATH) as m_llm, patch(
+            _TOOL_REGISTRY_PATH, return_value=mock_registry
+        ):
+            client = MagicMock()
+            client.chat_stream_with_tools = MagicMock(
+                side_effect=fake_chat_stream_with_tools
+            )
+            client.chat_stream_with_usage = MagicMock()
+            m_llm.return_value = client
+
+            req = ChatSendRequest(
+                file_path="main.tex",
+                user_message="测试工具门禁",
+                web_search_enabled=True,
+            )
+            events = [e async for e in service.send(req)]
+        return events, mock_registry, captured_messages
+
+    @pytest.mark.asyncio
+    async def test_non_schema_tool_call_blocked(
+        self, temp_session_dir, open_project, service, monkeypatch
+    ):
+        """全局注册表外的幻觉工具名不在本轮 schema，必须整条拒绝。"""
+        events, registry, messages = await self._run_with_blocked_call(
+            monkeypatch,
+            temp_session_dir,
+            open_project,
+            service,
+            "run_shell_command",
+            {"command": "rm -rf /"},
+        )
+        types = [e["type"] for e in events]
+        assert "tool_status" not in types
+        registry.execute.assert_not_called()
+        assert types[-1] == "done"
+        # 第 2 轮消息包含可自纠的失败 tool result（引导模型改用既有工具）
+        tool_msgs = [m for m in messages[1] if m.get("role") == "tool"]
+        assert any(
+            "run_shell_command" in m["content"]
+            and "not available to the writing assistant" in m["content"]
+            for m in tool_msgs
+        )
+
+    @pytest.mark.asyncio
+    async def test_web_tool_blocked_when_source_switch_off(
+        self, temp_session_dir, open_project, service, monkeypatch
+    ):
+        """Writing Chat 灰度总闸关时 web_search 不入 schema 且源开关关，
+        幻觉调用不得产生真实网络请求。"""
+        monkeypatch.setattr(
+            get_config().features.writing_chat, "web_search_enabled", False
+        )
+        events, registry, messages = await self._run_with_blocked_call(
+            monkeypatch,
+            temp_session_dir,
+            open_project,
+            service,
+            "web_search",
+            {"query": "latex tutorial"},
+        )
+        types = [e["type"] for e in events]
+        assert "tool_status" not in types
+        assert "web_stage" not in types
+        registry.execute.assert_not_called()
+        assert types[-1] == "done"
+        tool_msgs = [m for m in messages[1] if m.get("role") == "tool"]
+        assert any(
+            "web_search" in m["content"]
+            and "not available to the writing assistant" in m["content"]
+            for m in tool_msgs
+        )
+
+    @pytest.mark.asyncio
+    async def test_whitelisted_tool_still_executes(
+        self, temp_session_dir, open_project, service, monkeypatch
+    ):
+        """门禁只拦幻觉调用：本轮 schema 内的工具照常执行与推送状态。"""
+        monkeypatch.setattr(get_config().llm, "api_key", "test-key")
+        search_resp = _make_search_response("latex 公式写法")
+        round1_chunks = [
+            StreamChunk(
+                content=None,
+                usage=None,
+                tool_calls=[_make_tool_call(query="latex 公式写法")],
+            ),
+            StreamChunk(
+                content=None,
+                usage=UsageInfo(prompt_tokens=10, completion_tokens=3, total_tokens=13),
+            ),
+        ]
+        round2_chunks = [
+            StreamChunk(content="检索完成。", usage=None),
+            StreamChunk(
+                content=None,
+                usage=UsageInfo(prompt_tokens=20, completion_tokens=8, total_tokens=28),
+            ),
+        ]
+        mock_registry = MagicMock()
+        mock_registry.execute = AsyncMock(return_value=search_resp)
+
+        with patch(_LLM_CLIENT_PATH) as m_llm, patch(
+            _TOOL_REGISTRY_PATH, return_value=mock_registry
+        ):
+            client = MagicMock()
+            client.chat_stream_with_tools = MagicMock(
+                side_effect=[_stream(round1_chunks), _stream(round2_chunks)]
+            )
+            client.chat_stream_with_usage = MagicMock()
+            m_llm.return_value = client
+
+            req = ChatSendRequest(
+                file_path="main.tex",
+                user_message="帮我查资料",
+                web_search_enabled=True,
+            )
+            events = [e async for e in service.send(req)]
+
+        types = [e["type"] for e in events]
+        assert "tool_status" in types
+        assert mock_registry.execute.await_count == 1
+        assert types[-1] == "done"
+
+
+class TestToolSourceGate:
+    """tool_source_gate_open 源开关复核口径单测。"""
+
+    def test_web_open_requires_both_switches(self, monkeypatch):
+        from backend.modules.writing_chat.service.tool_gate import (
+            tool_source_gate_open,
+        )
+
+        monkeypatch.setattr(
+            get_config().features.function_calling.web_search, "enabled", True
+        )
+        monkeypatch.setattr(
+            get_config().features.writing_chat, "web_search_enabled", True
+        )
+        assert tool_source_gate_open("web_search") is True
+
+        monkeypatch.setattr(
+            get_config().features.writing_chat, "web_search_enabled", False
+        )
+        assert tool_source_gate_open("web_search") is False
+
+        monkeypatch.setattr(
+            get_config().features.function_calling.web_search, "enabled", False
+        )
+        monkeypatch.setattr(
+            get_config().features.writing_chat, "web_search_enabled", True
+        )
+        assert tool_source_gate_open("web_search") is False
+
+    def test_scholarly_requires_provider_switch(self, monkeypatch):
+        from backend.modules.writing_chat.service.tool_gate import (
+            tool_source_gate_open,
+        )
+
+        monkeypatch.setattr(
+            get_config().features.function_calling.scholarly_research, "enabled", True
+        )
+        monkeypatch.setattr(
+            get_config().features.function_calling.scholarly_research.providers.openalex,
+            "enabled",
+            False,
+        )
+        assert tool_source_gate_open("search_scholarly_works") is False
+
+        monkeypatch.setattr(
+            get_config().features.function_calling.scholarly_research.providers.openalex,
+            "enabled",
+            True,
+        )
+        assert tool_source_gate_open("search_scholarly_works") is True
+
+    def test_non_network_tool_passes_by_default(self, monkeypatch):
+        from backend.modules.writing_chat.service.tool_gate import (
+            tool_source_gate_open,
+        )
+
+        assert tool_source_gate_open("list_files") is True
+        assert tool_source_gate_open("request_clarification") is True

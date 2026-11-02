@@ -35,6 +35,7 @@ from backend.utils.web_search import (
 
 from . import _deps
 from .editor_chat import tool_failure_text
+from .tool_gate import blocked_tool_result_text, tool_source_gate_open
 
 
 class ConversationMixin:
@@ -601,6 +602,8 @@ class ConversationMixin:
         ] + ctx.to_llm_messages()
         # 获取可用的 Function Calling 工具（搜索 + 项目浏览）
         tools = self._get_enabled_tools(workspace_id, req.web_search_enabled)
+        # 执行前门禁白名单：本轮实际注入 LLM 的 schema 工具名集合
+        schema_tool_names = {t["function"]["name"] for t in tools}
         persisted_scholarly_results: list[dict[str, Any]] = []
         persisted_scholarly_query = ""
         persisted_scholarly_total = 0
@@ -744,6 +747,32 @@ class ConversationMixin:
                         tool_args = json.loads(tc.function.arguments)
                     except Exception:
                         tool_args = {}
+
+                    # 执行前白名单硬校验（与编辑器助手同款门禁，见
+                    # tool_gate.py）：ToolRegistry.execute 只查运行时
+                    # enabled 标志、不复查工具来源，模型幻觉调用会绕过
+                    # schema 收集层的功能开关直达执行器（真实网络请求，
+                    # 或确认流关闭时直接写盘）。不在本轮 schema、或联网/
+                    # 学术源开关已关（tool_source_gate_open）的一律不执行、
+                    # 不推送 tool_status（无真实执行可指示），注入模型可
+                    # 自纠的失败 tool result 并记日志。
+                    if tool_name not in schema_tool_names or not tool_source_gate_open(
+                        tool_name
+                    ):
+                        self._logger.warning(
+                            f"Writing chat blocked non-whitelisted tool call: {tool_name}"
+                        )
+                        tool_msg = {
+                            "role": "tool",
+                            "tool_call_id": tc.id,
+                            "content": blocked_tool_result_text(
+                                tool_name, "writing assistant"
+                            ),
+                        }
+                        tool_messages.append(tool_msg)
+                        persisted_tool_msg_refs.append(tool_msg)
+                        tool_messages = self._trim_tool_messages(tool_messages)
+                        continue
 
                     # 推送工具状态事件（前端用于显示工具调用指示器 + 搜索词）
                     yield {
