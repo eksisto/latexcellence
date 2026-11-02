@@ -1,5 +1,6 @@
 """difflib / latexdiff 差异文档生成。"""
 
+import asyncio
 import difflib
 import tempfile
 from pathlib import Path
@@ -77,8 +78,9 @@ async def _build_latexdiff_document(
         tmp = Path(tmp_dir)
         old_file = tmp / "old.tex"
         new_file = tmp / "new.tex"
-        old_file.write_text(base_content, encoding="utf-8")
-        new_file.write_text(target_content, encoding="utf-8")
+        # 全量差异文档写盘可达 MB 级，入线程池
+        await asyncio.to_thread(old_file.write_text, base_content, encoding="utf-8")
+        await asyncio.to_thread(new_file.write_text, target_content, encoding="utf-8")
 
         try:
             result = await _run_latexdiff(

@@ -79,7 +79,9 @@ async def render_diff_pdf(
             )
         )
     else:
-        diff_doc = diff_mod._build_diff_document(
+        # difflib SequenceMatcher 最坏 O(n²)，大文档 CPU 密集，入线程池
+        diff_doc = await asyncio.to_thread(
+            diff_mod._build_diff_document,
             base_flattened.content,
             target_flattened.content,
             color_add=color_add,
@@ -95,7 +97,8 @@ async def render_diff_pdf(
     diff_rel = _diff_main_path(main_rel, job_id)
     diff_path = project_dir / Path(diff_rel)
     diff_path.parent.mkdir(parents=True, exist_ok=True)
-    diff_path.write_text(diff_content, encoding="utf-8")
+    # 全量差异文档可达 MB 级，写盘入线程池
+    await asyncio.to_thread(diff_path.write_text, diff_content, encoding="utf-8")
 
     logger.info(
         f"Rendering Git diff PDF: {base_ref}..{target_ref} main={main_rel} job={job_id} "
@@ -133,7 +136,7 @@ async def render_diff_pdf(
         )
 
     public_pdf = job_dir / "diff-highlight.pdf"
-    shutil.copy2(pdf_source, public_pdf)
+    await asyncio.to_thread(shutil.copy2, pdf_source, public_pdf)
 
     return DiffHighlightResult(
         success=True,
@@ -189,7 +192,10 @@ async def _prepare_target_project(
     job_dir.mkdir(parents=True, exist_ok=True)
     if target_ref == constants.WORKTREE_REF:
         project_dir = job_dir / "project"
-        shutil.copytree(context.root, project_dir, ignore=_ignore_copy_names)
+        # 整项目复制，大项目可达数百 MB，入线程池
+        await asyncio.to_thread(
+            shutil.copytree, context.root, project_dir, ignore=_ignore_copy_names
+        )
         return project_dir
 
     archive_path = job_dir / "target.zip"
@@ -213,8 +219,13 @@ async def _prepare_target_project(
     )
 
     extract_dir = job_dir / "archive"
-    with zipfile.ZipFile(archive_path) as archive:
-        archive.extractall(extract_dir)
+
+    def _extract_archive() -> None:
+        with zipfile.ZipFile(archive_path) as archive:
+            archive.extractall(extract_dir)
+
+    # 整包解压入线程池
+    await asyncio.to_thread(_extract_archive)
 
     project_dir = extract_dir / Path(prefix) if prefix else extract_dir
     if not project_dir.exists():

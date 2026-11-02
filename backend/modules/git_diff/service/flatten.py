@@ -1,5 +1,6 @@
 """LaTeX 依赖递归展开（git 与 worktree 模式）。"""
 
+import asyncio
 from pathlib import PurePosixPath, PureWindowsPath
 
 from backend.utils.path_guard import resolve_project_path
@@ -133,7 +134,8 @@ async def _read_revision_file(
             if required:
                 raise FileNotFoundError(f"File not found: {project_rel}")
             return None
-        return path.read_text(encoding="utf-8")
+        # worktree 分支逐文件同步读盘，入线程池避免阻塞事件循环
+        return await asyncio.to_thread(path.read_text, encoding="utf-8")
 
     repo_rel = _repo_path(project, project_rel)
     result = await process.run_git(
