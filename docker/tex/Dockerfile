@@ -31,7 +31,8 @@
 # 缺宏包时禁止运行时 tlmgr 安装，应由部署者修改 EXTRA_TL_PACKAGES 后重建本镜像
 # （排查步骤见 docker/README.md）。
 # ─────────────────────────────────────────────────────────────
-FROM debian:bookworm-slim
+# 基础镜像按 digest 固定（与 convert 镜像同一快照，tag: debian:bookworm-slim）
+FROM debian:bookworm-slim@sha256:99c0b25c46d0214d5a2091092e7908907dcaecd6a962cde0ac700acee222b6f3
 
 # ── 版本锁定参数（均可被 --build-arg 覆盖）────────────────────
 # TEXLIVE_VERSION 默认跟随 tlnet 当前年度（见头部"版本锁定说明"）：

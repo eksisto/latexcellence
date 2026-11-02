@@ -14,7 +14,9 @@
 #              -v ./data:/app/data \
 #              -p 8000:8000 latexcellence-backend:latest
 # ─────────────────────────────────────────────────────────────
-FROM python:3.12-slim
+# 基础镜像按 digest 固定（2026-11-02 快照，tag: python:3.12-slim）；
+# 升级需人工换 digest，避免上游漂移导致构建不可复现
+FROM python:3.12-slim@sha256:aa943ce411423c7582288f18707ff66eddcbaeb510502d747a72aeb34f30d159
 
 # 非 root 运行身份，UID/GID 可通过 build-arg 与宿主后端账号对齐（默认 1000）
 ARG UID=1000

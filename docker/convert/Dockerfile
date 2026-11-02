@@ -9,7 +9,8 @@
 #                --build-arg PANDOC_SHA256=<64位十六进制> \
 #                -t latexcellence-convert:latest docker/convert
 # ─────────────────────────────────────────────────────────────
-FROM debian:bookworm-slim
+# 基础镜像按 digest 固定（2026-11-02 快照，tag: debian:bookworm-slim）
+FROM debian:bookworm-slim@sha256:99c0b25c46d0214d5a2091092e7908907dcaecd6a962cde0ac700acee222b6f3
 
 # 版本锁定；升级时确认官方 release 存在对应架构发布物即可覆盖
 ARG PANDOC_VERSION=3.6.4

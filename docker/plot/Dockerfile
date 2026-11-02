@@ -11,7 +11,8 @@
 #   docker build --build-arg DEBIAN_MIRROR=https://mirrors.ustc.edu.cn/debian \
 #                -t latexcellence-plot:latest docker/plot
 # ─────────────────────────────────────────────────────────────
-FROM python:3.12-slim
+# 基础镜像按 digest 固定（与 backend 镜像同一快照，tag: python:3.12-slim）
+FROM python:3.12-slim@sha256:aa943ce411423c7582288f18707ff66eddcbaeb510502d747a72aeb34f30d159
 
 ARG PIP_INDEX_URL=""
 ARG DEBIAN_MIRROR=""

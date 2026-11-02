@@ -63,7 +63,8 @@ services:
   # 可选 Caddy 反代：服务名 DNS 自动重解析到全部健康副本（--scale 扩容零改动），
   # SSE 已关闭缓冲。生产 HTTPS 配置样例见 docker/Caddyfile.example。
   caddy:
-    image: caddy:2
+    # digest 固定（2026-11-02 快照，tag: caddy:2），升级需人工换 digest
+    image: caddy@sha256:36c24ad91a7ff7bc4c87fe22bfa8df3c4b18da0773d73fc12ee2c52b98c0bb7e
     profiles: ["proxy"]
     restart: unless-stopped
     ports:
