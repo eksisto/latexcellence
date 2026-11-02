@@ -443,7 +443,9 @@ async def upload_template(
             await asyncio.to_thread(_check_allowed_extensions, root)
         except ArchiveError as e:
             raise _map_archive_error(e)
-        manifest = _manifest_from_source(
+        # manifest 构造含 rglob 全树扫描与逐文件读取探测主文件，入线程池
+        manifest = await asyncio.to_thread(
+            _manifest_from_source,
             root,
             source="upload",
             name=name,
@@ -796,7 +798,9 @@ async def _ingest_from_directory(
         await asyncio.to_thread(
             shutil.copytree, source_root, stage_root, ignore=ignore, symlinks=False
         )
-        manifest = _manifest_from_source(
+        # manifest 构造含 rglob 全树扫描与逐文件读取探测主文件，入线程池
+        manifest = await asyncio.to_thread(
+            _manifest_from_source,
             stage_root,
             source=source,
             name=name,
