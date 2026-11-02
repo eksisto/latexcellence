@@ -456,6 +456,21 @@ class LatexProject:
         )
         return op_id
 
+    def get_cached_md5(self, file_path: str) -> str | None:
+        """返回文件当前的缓存 MD5（由 apply_change 等写路径在写盘后维护）。
+
+        供批量写回链路在批内传递最新版本号（同一文件第二条 change 不能
+        再用调用方的旧基线校验）；文件从未读取/写入过时返回 None。
+        """
+        if self._project_info is None:
+            return None
+        full_path = resolve_project_path(
+            Path(self._project_info.root_path),
+            file_path,
+        )
+        with self._file_md5_lock:
+            return self._file_md5.get(str(full_path))
+
     def apply_whole_files(
         self,
         updates: dict[str, str],

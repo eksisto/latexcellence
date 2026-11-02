@@ -236,13 +236,6 @@ export default function useParagraphCheck({
       );
       setParagraphs(data.paragraphs || []);
       operationIdRef.current = data.operation_id || null;
-      // 存储文件 MD5，用于乐观锁
-      if (data.file_md5) {
-        fileMd5sRef.current = {
-          ...fileMd5sRef.current,
-          [activeFile]: data.file_md5,
-        };
-      }
       setMessage(
         i18n.t("hooks:paragraphCheck.loadedParagraphs", { count: data.total }),
       );
@@ -546,6 +539,11 @@ export default function useParagraphCheck({
         }
         setMessage(messages.applySuccess(idx));
         toast.success(messages.applySuccess(idx));
+        // 写回成功即同步该文件最新 MD5（apply 响应携带），同文件连续
+        // 应用不必先吃一次冲突再刷新
+        if (result.file_md5s) {
+          fileMd5sRef.current = { ...fileMd5sRef.current, ...result.file_md5s };
+        }
         // 从结果中移除已应用的段落，保留其余结果
         setResults((prev) =>
           prev.filter(
@@ -642,6 +640,11 @@ export default function useParagraphCheck({
           if (result.errors.some((e) => e.reason === "file_conflict")) {
             await refreshConflictMd5s(result.errors);
           }
+        }
+        // 写成功的文件同步最新 MD5（apply 响应携带），部分失败重试时
+        // 不再携带过期基线
+        if (result.file_md5s) {
+          fileMd5sRef.current = { ...fileMd5sRef.current, ...result.file_md5s };
         }
 
         const appliedKeys = new Set(

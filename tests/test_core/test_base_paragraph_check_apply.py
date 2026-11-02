@@ -1,9 +1,12 @@
-"""逐段检查 apply 链路 file_path 缺省回退回归。
+"""逐段检查 apply 链路回归。
 
-路由侧以 ``model_dump()`` 展开 ApplyChangeItem，change 未显式携带
-file_path 时该键存在且值为 None，``dict.get(key, default)`` 的默认值
-参数永不生效；目标文件必须真值回退到请求级 file_path，
-否则写回链路以 None 为目标文件查 marker 映射 / 定位源文件。
+覆盖：
+    - file_path 缺省回退：路由侧以 ``model_dump()`` 展开 ApplyChangeItem，
+      change 未显式携带 file_path 时该键存在且值为 None，
+      ``dict.get(key, default)`` 的默认值参数永不生效，目标文件必须
+      真值回退到请求级 file_path
+    - 批内乐观锁：同一文件多条 change 基于同一基线生成，逐条写回时
+      后续 change 必须以批内最新版本校验，否则误报 file_conflict
 """
 
 from unittest.mock import MagicMock, patch
@@ -14,6 +17,8 @@ from backend.core.base_paragraph_check import (
     inject_expected_md5s,
     resolve_change_file_path,
 )
+from backend.core.project_manager import LatexProject
+from backend.utils.file_ops import compute_md5
 
 
 class _NoMarkerService(BaseParagraphCheckService):
@@ -78,3 +83,69 @@ class TestApplyChangesFallbackFile:
         assert call_args.args[0] == "main.tex"
         assert call_args.args[1] == 3
         assert call_args.args[2] == "新文本"
+
+
+class TestApplyChangesBatchSameFile:
+    def test_same_file_batch_shares_baseline(self, tmp_path):
+        """同文件同基线的两条 change 逐条写回：首条成功后文件 MD5 已变，
+        第二条必须以批内新版本校验而非调用方旧基线（旧行为必报
+        file_conflict，「全部应用」每文件只能写入第一段）。"""
+        target = tmp_path / "main.tex"
+        target.write_text("Para one.\n\nPara two.\n\nPara three.\n", encoding="utf-8")
+        pm = LatexProject()
+        pm.open(str(tmp_path))
+        paras = pm.get_paragraphs("main.tex")
+        assert len(paras) >= 2
+        baseline = compute_md5(target)
+
+        svc = _NoMarkerService()
+        with patch(
+            "backend.core.base_paragraph_check.get_project_manager_for_workspace",
+            return_value=pm,
+        ):
+            result = svc.apply_changes(
+                "main.tex",
+                [
+                    {
+                        "paragraph_index": paras[0].index,
+                        "new_text": "Para one edited.",
+                        "expected_md5": baseline,
+                    },
+                    {
+                        "paragraph_index": paras[1].index,
+                        "new_text": "Para two edited.",
+                        "expected_md5": baseline,
+                    },
+                ],
+                workspace_id="ws",
+            )
+
+        assert result["applied"] == 2
+        assert result["errors"] == []
+        # 响应携带写后最新 MD5，前端同步本地乐观锁缓存
+        assert result["file_md5s"]["main.tex"]
+        assert result["file_md5s"]["main.tex"] != baseline
+        content = target.read_text(encoding="utf-8")
+        assert "Para one edited." in content
+        assert "Para two edited." in content
+
+    def test_single_apply_response_updates_md5(self, tmp_path):
+        """单段应用响应同样携带写后 MD5，供连续应用免冲突。"""
+        target = tmp_path / "main.tex"
+        target.write_text("Only paragraph.\n", encoding="utf-8")
+        pm = LatexProject()
+        pm.open(str(tmp_path))
+
+        svc = _NoMarkerService()
+        with patch(
+            "backend.core.base_paragraph_check.get_project_manager_for_workspace",
+            return_value=pm,
+        ):
+            result = svc.apply_changes(
+                "main.tex",
+                [{"paragraph_index": 0, "new_text": "Only paragraph edited."}],
+                workspace_id="ws",
+            )
+
+        assert result["applied"] == 1
+        assert result["file_md5s"]["main.tex"] == compute_md5(target)

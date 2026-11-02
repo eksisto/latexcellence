@@ -821,11 +821,17 @@ class BaseParagraphCheckService:
             operation_id: 检查操作 ID，用于查找对应的 marker 映射
 
         返回：
-            { applied: N, total: M, errors: [...] }
+            { applied: N, total: M, errors: [...], file_md5s: {file: md5} }
         """
         pm = get_project_manager_for_workspace(workspace_id)
         applied = 0
         errors: list[dict[str, Any]] = []
+        # 批内乐观锁传递：同批次的多条 change 基于同一基线版本生成，逐条
+        # 写回同一文件时第一条成功后文件 MD5 即变，后续 change 携带的仍是
+        # 调用方的旧基线，按原值校验必然误报 file_conflict。首条按调用方
+        # expected_md5（为空回退实例缓存）校验，写盘成功后记录该文件新
+        # MD5，同文件后续 change 改用新值；外部并发写仍会被正常检出
+        batch_file_md5s: dict[str, str] = {}
 
         context = None
         if operation_id:
@@ -840,7 +846,9 @@ class BaseParagraphCheckService:
             idx = change["paragraph_index"]
             new_text = change["new_text"]
             target_file = resolve_change_file_path(change, file_path)
-            expected_md5 = change.get("expected_md5")
+            expected_md5 = batch_file_md5s.get(target_file) or change.get(
+                "expected_md5"
+            )
 
             if self.use_marker_protection:
                 if context is not None:
@@ -869,6 +877,11 @@ class BaseParagraphCheckService:
             try:
                 pm.apply_change(target_file, idx, restored, expected_md5=expected_md5)
                 applied += 1
+                # 记录写后 MD5：供同文件批内后续 change 校验，也随响应
+                # 返回给前端同步本地乐观锁缓存
+                new_md5 = pm.get_cached_md5(target_file)
+                if new_md5:
+                    batch_file_md5s[target_file] = new_md5
                 self._logger.info(
                     f"Applied change to paragraph {idx} in {target_file}"
                     f" [op={operation_id or 'legacy'}]"
@@ -893,7 +906,14 @@ class BaseParagraphCheckService:
             # 本方法为同步执行，使用同步版刷新避免再起线程
             access_control.refresh_workspace_project_usage_sync(workspace_id)
 
-        return {"applied": applied, "total": len(changes), "errors": errors}
+        return {
+            "applied": applied,
+            "total": len(changes),
+            "errors": errors,
+            # 写后各文件最新 MD5：前端同步本地乐观锁缓存，同文件连续应用
+            # 不必再经一次冲突-刷新往返
+            "file_md5s": batch_file_md5s,
+        }
 
     async def apply_changes_async(
         self,
