@@ -2081,6 +2081,7 @@
     "emptyReferenceExample": "Empty reference example",
     "emptyMetadata": "Empty metadata",
     "emptyBibtexCode": "Empty BibTeX code",
+    "emptyCiteKey": "Empty cite key",
     "emptyDoi": "DOI cannot be empty",
     "doiRequired": "DOI is required",
     "emptyImageFiles": "Image files are empty. Please re-upload",

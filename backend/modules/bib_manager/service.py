@@ -85,6 +85,18 @@ _LATEX_COMMENT_TEMPLATES = {
 }
 
 
+def _collect_cite_keys(content: str) -> set[str]:
+    """收集 .bib 内容中的全部条目键（解析级精确匹配判定用）。"""
+    keys: set[str] = set()
+    for line in content.split("\n"):
+        stripped = line.strip()
+        if stripped.startswith("@"):
+            key = extract_cite_key(stripped)
+            if key:
+                keys.add(key)
+    return keys
+
+
 def _latex_comment_language(language: str) -> str:
     """根据 UI 语言选择 LaTeX 注释语言（zh / en）。"""
     normalized = (language or "").strip().lower()
@@ -495,7 +507,11 @@ class BibManagerService:
         content = safe_read(full_path)
         expected_md5 = compute_md5(full_path)
 
-        if cite_key in content:
+        # 解析级精确匹配判定：子串包含会把前缀键（smith2010 是 smith2010a
+        # 的前缀）与出现在 title/URL 文本中的键误判为"已存在"，更新路径
+        # 找不到精确条目时原样写回，新条目被静默丢弃
+        existing_keys = _collect_cite_keys(content)
+        if cite_key in existing_keys:
             new_content = self._replace_bib_entry(content, cite_key, bibtex_code)
             action = "updated"
         else:

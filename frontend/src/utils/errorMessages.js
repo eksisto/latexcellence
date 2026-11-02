@@ -191,6 +191,7 @@ const EXACT_MAP = {
   "Empty reference example": "emptyReferenceExample",
   "Empty metadata": "emptyMetadata",
   "Empty BibTeX code": "emptyBibtexCode",
+  "Empty cite key": "emptyCiteKey",
   "Empty DOI": "emptyDoi",
   "DOI is required": "doiRequired",
   "Empty image files": "emptyImageFiles",

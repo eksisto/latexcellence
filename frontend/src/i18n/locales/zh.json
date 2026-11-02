@@ -2081,6 +2081,7 @@
     "emptyReferenceExample": "参考文献示例不能为空",
     "emptyMetadata": "元数据不能为空",
     "emptyBibtexCode": "BibTeX 代码不能为空",
+    "emptyCiteKey": "引用键不能为空",
     "emptyDoi": "DOI 不能为空",
     "doiRequired": "请提供 DOI",
     "emptyImageFiles": "图片内容为空，请重新上传",

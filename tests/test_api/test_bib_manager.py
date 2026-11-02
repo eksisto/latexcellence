@@ -1636,3 +1636,74 @@ class TestServiceParseEntries:
             assert result["entries"][0]["cite_key"] == "test2023"
         finally:
             wm.remove(ws_id)
+
+
+class TestSaveEntryKeyMatching:
+    """save_bib_entry 的键存在性判定必须解析级精确匹配。"""
+
+    def _open_project(self, temp_project, ws_id):
+        from backend.core.workspace_manager import get_workspace_manager
+
+        wm = get_workspace_manager()
+        pm = wm.get_or_create(ws_id)
+        pm.open(str(temp_project))
+        return wm, pm
+
+    def test_prefix_key_appends_instead_of_silent_update(self, temp_project, service):
+        """新键是既有键的前缀（test2023 与 test2023a）时必须走追加：
+        子串判定会误判为"已存在"，更新路径找不到精确条目原样写回，
+        新条目被静默丢弃且响应仍报 updated。"""
+        ws_id = "test_save_prefix_key"
+        wm, _pm = self._open_project(temp_project, ws_id)
+        try:
+            result = service.save_bib_entry(
+                "refs.bib",
+                "@article{test2023a,\n  title = {Prefix Key Entry},\n}",
+                "test2023a",
+                ws_id,
+            )
+            content = safe_read(temp_project / "refs.bib")
+            assert result["action"] == "appended"
+            assert "@article{test2023a" in content
+            assert "@article{test2023," in content
+        finally:
+            wm.remove(ws_id)
+
+    def test_exact_key_still_updates(self, temp_project, service):
+        ws_id = "test_save_exact_key"
+        wm, _pm = self._open_project(temp_project, ws_id)
+        try:
+            result = service.save_bib_entry(
+                "refs.bib",
+                "@article{test2023,\n  title = {Replaced Title},\n}",
+                "test2023",
+                ws_id,
+            )
+            content = safe_read(temp_project / "refs.bib")
+            assert result["action"] == "updated"
+            assert "Replaced Title" in content
+            assert content.count("@article{test2023,") == 1
+        finally:
+            wm.remove(ws_id)
+
+
+class TestSaveEntryEmptyKeyRejected:
+    """空 cite_key 必须被路由拒绝（空串子串判定恒真会拼出损坏条目）。"""
+
+    def test_save_rejects_empty_cite_key(self):
+        from fastapi.testclient import TestClient
+
+        from main import app
+
+        client = TestClient(app)
+        response = client.post(
+            "/api/bib-manager/save",
+            params={"workspace_id": "ws"},
+            json={
+                "file_path": "refs.bib",
+                "bibtex_code": "@article{x,}",
+                "cite_key": "  ",
+            },
+        )
+        assert response.status_code == 400
+        assert response.json()["detail"] == "Empty cite key"

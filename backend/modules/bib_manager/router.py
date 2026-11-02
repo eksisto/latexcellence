@@ -183,6 +183,9 @@ async def save_bib_entry(
     """将 BibTeX 条目写入或更新到 .bib 文件。"""
     if not request.bibtex_code.strip():
         raise HTTPException(status_code=400, detail="Empty BibTeX code")
+    if not request.cite_key.strip():
+        # 空键走追加分支会拼出损坏条目头，且此前子串判定对空串恒真
+        raise HTTPException(status_code=400, detail="Empty cite key")
     try:
         result = await asyncio.to_thread(
             get_service().save_bib_entry,
