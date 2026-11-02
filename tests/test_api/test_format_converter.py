@@ -223,6 +223,24 @@ class TestConvertFile:
         assert result["output_filename"] == "page.tex"
 
     @pytest.mark.asyncio
+    async def test_tex_file_upload_accepted(self, service):
+        """回归（B3）：.tex 上传此前被 allowed_extensions 与扩展名映射同时
+        拒绝，与模块文档的转换方向表和前端入口矛盾。"""
+        tex_content = r"\documentclass{article}"
+        pandoc_patches = self._patch_pandoc("# Hello")
+        with pandoc_patches[0], pandoc_patches[1]:
+            result = await service.convert_file(
+                tex_content.encode("utf-8"), "main.tex", "latex", "markdown"
+            )
+
+        assert result["output_filename"] == "main.md"
+
+    @pytest.mark.asyncio
+    async def test_tex_extension_mismatch_raises(self, service):
+        with pytest.raises(ValueError, match="does not match"):
+            await service.convert_file(b"data", "main.tex", "markdown", "html")
+
+    @pytest.mark.asyncio
     async def test_output_filename_derivation(self, service):
         pandoc_patches = self._patch_pandoc("output")
         with pandoc_patches[0], pandoc_patches[1]:

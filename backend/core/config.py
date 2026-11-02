@@ -533,6 +533,7 @@ class FormatConverterConfig(BaseModel):
         ".html",
         ".htm",
         ".docx",
+        ".tex",
     ]  # 允许上传的文件扩展名
     max_file_size_mb: int = 20  # 上传文件最大尺寸（MB）
 

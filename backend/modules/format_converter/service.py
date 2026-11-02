@@ -195,6 +195,7 @@ class FormatConverterService:
             ".html": "html",
             ".htm": "html",
             ".docx": "docx",
+            ".tex": "latex",
         }
         expected = ext_to_format.get(ext)
         if expected and expected != source_format:

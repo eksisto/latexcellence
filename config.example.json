@@ -225,7 +225,14 @@
     },
     "format_converter": {
       "enabled": true,
-      "allowed_extensions": [".md", ".markdown", ".html", ".htm", ".docx"],
+      "allowed_extensions": [
+        ".md",
+        ".markdown",
+        ".html",
+        ".htm",
+        ".docx",
+        ".tex"
+      ],
       "max_file_size_mb": 20
     },
     "style_modify": {

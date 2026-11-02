@@ -90,5 +90,5 @@ Prefix: `/api/format-converter`, Tag: `format_converter`
 | 字段 | 默认值 | 说明 |
 | --- | --- | --- |
 | `enabled` | `true` | 是否启用 |
-| `allowed_extensions` | `[".md", ".markdown", ".html", ".htm", ".docx"]` | 允许上传的文件扩展名 |
+| `allowed_extensions` | `[".md", ".markdown", ".html", ".htm", ".docx", ".tex"]` | 允许上传的文件扩展名 |
 | `max_file_size_mb` | `20` | 上传文件最大尺寸（MB） |
