@@ -13,6 +13,7 @@ from pydantic import BaseModel
 
 from backend.core.logger import get_logger
 from backend.core.model_router import get_client_for
+from backend.core.multiuser import llm_governance
 from backend.modules.terminology_check.models import TermClusterResult
 from backend.utils.llm_cache import cached_llm_validate
 
@@ -157,6 +158,10 @@ class TermExtractor:
             )
             return []
         except Exception as e:
+            # LLM 每用户治理超限（429 语义）原样重抛：静默降级为"无术语"
+            # 会让用户看到"检查完成、无不一致"的假结果（对齐基类口径）
+            if llm_governance.governance_code_of(e) is not None:
+                raise
             self._logger.error(
                 f"{batch_label}P{paragraph_index}: LLM call failed — {e}"
             )
@@ -213,6 +218,9 @@ class TermExtractor:
             self._logger.warning(f"Term clustering validation failed — {e}")
             return []
         except Exception as e:
+            # 同提取：治理超限原样重抛，不得静默降级为"无聚类"
+            if llm_governance.governance_code_of(e) is not None:
+                raise
             self._logger.error(f"Term clustering LLM call failed — {e}")
             return []
 

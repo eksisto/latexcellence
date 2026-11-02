@@ -739,3 +739,41 @@ class TestParagraphIndicesSelection:
         )
 
         assert len(result["results"]) > 1
+
+
+class TestGovernanceErrorRethrow:
+    """LLM 每用户治理超限（429 语义）必须重抛，不得静默降级为"无术语"。"""
+
+    @pytest.mark.asyncio
+    async def test_extract_terms_reraises_governance_error(self, monkeypatch):
+        from backend.core.multiuser import llm_governance
+        from backend.modules.terminology_check import extractor as extractor_mod
+
+        gov_err = llm_governance.make_governance_error(
+            llm_governance.LLM_RATE_LIMITED, "quota exceeded", 30
+        )
+
+        async def raise_gov(*args, **kwargs):
+            raise gov_err
+
+        monkeypatch.setattr(extractor_mod, "cached_llm_validate", raise_gov)
+        ex = TermExtractor(logger_name="test")
+        with pytest.raises(RuntimeError, match="quota exceeded"):
+            await ex.extract_terms(0, "some paragraph text")
+
+    @pytest.mark.asyncio
+    async def test_cluster_terms_reraises_governance_error(self, monkeypatch):
+        from backend.core.multiuser import llm_governance
+        from backend.modules.terminology_check import extractor as extractor_mod
+
+        gov_err = llm_governance.make_governance_error(
+            llm_governance.LLM_RATE_LIMITED, "quota exceeded", 30
+        )
+
+        async def raise_gov(*args, **kwargs):
+            raise gov_err
+
+        monkeypatch.setattr(extractor_mod, "cached_llm_validate", raise_gov)
+        ex = TermExtractor(logger_name="test")
+        with pytest.raises(RuntimeError, match="quota exceeded"):
+            await ex.cluster_terms(["term a", "term b"])

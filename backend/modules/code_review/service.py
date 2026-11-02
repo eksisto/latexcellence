@@ -23,6 +23,7 @@ from pydantic import BaseModel, model_validator
 from backend.core import access_control
 from backend.core.base_paragraph_check import BaseParagraphCheckService
 from backend.core.config import get_config
+from backend.core.multiuser import llm_governance
 from backend.core.prompts import get_prompt
 from backend.core.workspace_manager import get_project_manager_for_workspace
 from backend.utils.latex_formatter import format_latex_source
@@ -199,6 +200,10 @@ class CodeReviewService(BaseParagraphCheckService):
             )
             return self._make_fallback(idx, formatted, original_text, file_path)
         except Exception as e:
+            # 覆写基类钩子时不得丢失治理异常重抛：429 配额超限被吞成
+            # "无建议"的空审查结果会让用户误以为代码无问题（对齐基类口径）
+            if llm_governance.governance_code_of(e) is not None:
+                raise
             self._logger.error(f"Paragraph {idx} in {file_path}: LLM call failed — {e}")
             return self._make_fallback(idx, formatted, original_text, file_path)
 

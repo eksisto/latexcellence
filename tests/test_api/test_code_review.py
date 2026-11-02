@@ -567,3 +567,37 @@ class TestEmptyResult:
         assert result["original"] == "   "
         assert result["new_text"] == "   "
         assert result["suggestions"] == []
+
+
+class TestGovernanceErrorRethrow:
+    """覆写 _check_one_paragraph 不得丢失基类的治理异常重抛分支。"""
+
+    @pytest.mark.asyncio
+    async def test_check_one_paragraph_reraises_governance_error(self, monkeypatch):
+        from backend.core.multiuser import llm_governance
+        from backend.modules.code_review import service as cr_mod
+        from backend.modules.code_review.service import CodeReviewService
+
+        gov_err = llm_governance.make_governance_error(
+            llm_governance.LLM_RATE_LIMITED, "quota exceeded", 30
+        )
+
+        async def raise_gov(*args, **kwargs):
+            raise gov_err
+
+        async def passthrough_format(source, *args, **kwargs):
+            return source
+
+        monkeypatch.setattr(cr_mod, "cached_llm_validate", raise_gov)
+        svc = CodeReviewService()
+        monkeypatch.setattr(svc, "_format_source", passthrough_format)
+
+        with pytest.raises(RuntimeError, match="quota exceeded"):
+            await svc._check_one_paragraph(
+                llm=None,
+                slot=0,
+                idx=0,
+                text="text",
+                original_text="text",
+                file_path="main.tex",
+            )
