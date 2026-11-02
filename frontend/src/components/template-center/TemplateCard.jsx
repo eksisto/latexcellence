@@ -33,11 +33,11 @@ const TemplateCard = memo(function TemplateCard({
       <div
         role="button"
         tabIndex={0}
-        onClick={onOpen}
+        onClick={() => onOpen(template)}
         onKeyDown={(e) => {
           if (e.key === "Enter" || e.key === " ") {
             e.preventDefault();
-            onOpen();
+            onOpen(template);
           }
         }}
         className="flex h-full flex-col focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60"
@@ -81,7 +81,7 @@ const TemplateCard = memo(function TemplateCard({
               className="size-7"
               onClick={(e) => {
                 e.stopPropagation();
-                onEdit();
+                onEdit(template);
               }}
             >
               <Pencil className="size-3.5" />
@@ -95,7 +95,7 @@ const TemplateCard = memo(function TemplateCard({
               className="size-7 text-destructive hover:text-destructive"
               onClick={(e) => {
                 e.stopPropagation();
-                onDelete();
+                onDelete(template);
               }}
             >
               <Trash2 className="size-3.5" />
