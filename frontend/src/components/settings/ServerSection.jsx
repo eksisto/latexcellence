@@ -44,7 +44,7 @@ function ServerSection({ server, onChange }) {
       <div className="space-y-1.5">
         <Label className="text-xs">{t("settings.allowedOrigins")}</Label>
         <Input
-          placeholder="https://latexcellence.example.com"
+          placeholder="https://your-domain.example.com"
           value={(server.allowed_origins || []).join(", ")}
           onChange={(e) =>
             onChange(

@@ -49,8 +49,7 @@ class ServerConfig(BaseModel):
     allowed_origins: list[str] = [
         "http://localhost:5173",
         "http://127.0.0.1:5173",
-        "https://latexcellence.example.com",
-    ]  # CORS 白名单（前端部署域名 + 本地开发地址）
+    ]  # CORS 白名单（默认仅本地开发地址；前后端分离部署时在此追加前端部署域名）
 
 
 class SecurityConfig(BaseModel):

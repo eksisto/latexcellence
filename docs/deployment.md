@@ -225,7 +225,7 @@ python main.py config.json
 
 | 配置段 | 部署关注点 |
 | --- | --- |
-| `server.allowed_origins` | CORS 白名单，用于单用户前后端分离等跨域场景；多用户同源部署下浏览器不触发跨域，一般无需改动 |
+| `server.allowed_origins` | CORS 白名单，默认仅含本地开发地址（Vite dev server）；单用户前后端分离等跨域部署需追加前端部署域名，多用户同源部署下浏览器不触发跨域，一般无需改动 |
 | `security.access_token` | 单用户模式的共享访问令牌；多用户模式下不参与认证（由会话 Cookie + CSRF 取代），留空即可 |
 | `logging.level` | 示例配置默认 `DEBUG` 便于排障，长期运行的生产环境建议改为 `INFO` 减少日志量 |
 | `logging.dir` | 日志目录（默认 `logs/`，按天轮转保留一个月） |

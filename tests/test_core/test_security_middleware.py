@@ -44,7 +44,7 @@ def _load_test_config(tmp_path, token="", origins=None):
             "allowed_origins": (
                 list(origins)
                 if origins is not None
-                else ["http://localhost:5173", "https://latexcellence.example.com"]
+                else ["http://localhost:5173", "https://latex.example.com"]
             ),
         },
         "security": {"access_token": token},
@@ -61,13 +61,10 @@ class TestCorsAllowlist:
         client = TestClient(_build_app())
         res = client.get(
             "/api/ping",
-            headers={"Origin": "https://latexcellence.example.com"},
+            headers={"Origin": "https://latex.example.com"},
         )
         assert res.status_code == 200
-        assert (
-            res.headers["access-control-allow-origin"]
-            == "https://latexcellence.example.com"
-        )
+        assert res.headers["access-control-allow-origin"] == "https://latex.example.com"
 
     def test_disallowed_origin_rejected(self, tmp_path):
         _load_test_config(tmp_path)
@@ -81,7 +78,7 @@ class TestCorsAllowlist:
         res = client.options(
             "/api/ping",
             headers={
-                "Origin": "https://latexcellence.example.com",
+                "Origin": "https://latex.example.com",
                 "Access-Control-Request-Method": "GET",
                 "Access-Control-Request-Headers": "x-latexcellence-token",
             },
