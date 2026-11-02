@@ -31,6 +31,7 @@ import EmptyState from "@/components/EmptyState";
 import UndoRedoButtons from "@/components/UndoRedoButtons";
 import ProofDiff from "@/components/ProofDiff";
 import useParagraphCheck, { groupByFile } from "@/hooks/useParagraphCheck";
+import { buildParagraphMap } from "@/utils/paragraphKey";
 import useIsOpened from "@/hooks/useIsOpened";
 import { emptyStateCta } from "@/utils/projectAccess";
 import { isMultiUser } from "@/api/connection";
@@ -168,6 +169,7 @@ const TypoResultCard = memo(function TypoResultCard({
           )}
           <ParagraphContext
             currentIndex={result.paragraph_index}
+            filePath={result.file_path}
             paragraphs={paragraphs}
             paragraphMap={paragraphMap}
             currentText={result.plain_text || result.original}
@@ -251,7 +253,7 @@ export default function TypoCheckPage() {
     [typoParagraphs],
   );
   const paragraphMap = useMemo(
-    () => new Map(typoParagraphs.map((p) => [p.index, p])),
+    () => buildParagraphMap(typoParagraphs),
     [typoParagraphs],
   );
   const groupedResults = useMemo(

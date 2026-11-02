@@ -32,6 +32,7 @@ import UndoRedoButtons from "@/components/UndoRedoButtons";
 import ProofDiff from "@/components/ProofDiff";
 import { api } from "@/api/index";
 import useParagraphCheck, { groupByFile } from "@/hooks/useParagraphCheck";
+import { buildParagraphMap } from "@/utils/paragraphKey";
 import useIsOpened from "@/hooks/useIsOpened";
 import { emptyStateCta } from "@/utils/projectAccess";
 import { isMultiUser } from "@/api/connection";
@@ -207,6 +208,7 @@ const TerminologyResultCard = memo(function TerminologyResultCard({
           )}
           <ParagraphContext
             currentIndex={result.paragraph_index}
+            filePath={result.file_path}
             paragraphs={paragraphs}
             paragraphMap={paragraphMap}
             currentText={result.plain_text || result.original}
@@ -289,7 +291,7 @@ export default function TerminologyCheckPage() {
   } = useResultFilter(terminologyResults, { idPrefix: RESULT_ID_PREFIX });
 
   const paragraphMap = useMemo(
-    () => new Map(terminologyParagraphs.map((p) => [p.index, p])),
+    () => buildParagraphMap(terminologyParagraphs),
     [terminologyParagraphs],
   );
 

@@ -40,6 +40,7 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { api } from "@/api/index";
 import useParagraphCheck, { groupByFile } from "@/hooks/useParagraphCheck";
+import { buildParagraphMap } from "@/utils/paragraphKey";
 import useIsOpened from "@/hooks/useIsOpened";
 import { emptyStateCta } from "@/utils/projectAccess";
 import { isMultiUser } from "@/api/connection";
@@ -381,6 +382,7 @@ const CodeReviewResultCard = React.memo(function CodeReviewResultCard({
           </div>
           <ParagraphContext
             currentIndex={result.paragraph_index}
+            filePath={result.file_path}
             paragraphs={paragraphs}
             paragraphMap={paragraphMap}
             currentText={result.text || result.original}
@@ -478,7 +480,7 @@ export default function CodeReviewPage() {
     [filteredResults],
   );
   const paragraphMap = useMemo(
-    () => new Map(codeReviewParagraphs.map((p) => [p.index, p])),
+    () => buildParagraphMap(codeReviewParagraphs),
     [codeReviewParagraphs],
   );
 

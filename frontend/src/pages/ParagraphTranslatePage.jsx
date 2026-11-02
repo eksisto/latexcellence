@@ -31,6 +31,7 @@ import EmptyState from "@/components/EmptyState";
 import UndoRedoButtons from "@/components/UndoRedoButtons";
 import { api } from "@/api/index";
 import useParagraphCheck, { groupByFile } from "@/hooks/useParagraphCheck";
+import { buildParagraphMap } from "@/utils/paragraphKey";
 import useIsOpened from "@/hooks/useIsOpened";
 import { emptyStateCta } from "@/utils/projectAccess";
 import { isMultiUser } from "@/api/connection";
@@ -169,6 +170,7 @@ const TranslateResultCard = memo(function TranslateResultCard({
           )}
           <ParagraphContext
             currentIndex={result.paragraph_index}
+            filePath={result.file_path}
             paragraphs={paragraphs}
             paragraphMap={paragraphMap}
             currentText={result.plain_text || result.original}
@@ -290,7 +292,7 @@ export default function ParagraphTranslatePage() {
   } = useResultFilter(translateResults, { idPrefix: RESULT_ID_PREFIX });
 
   const paragraphMap = useMemo(
-    () => new Map(translateParagraphs.map((p) => [p.index, p])),
+    () => buildParagraphMap(translateParagraphs),
     [translateParagraphs],
   );
 

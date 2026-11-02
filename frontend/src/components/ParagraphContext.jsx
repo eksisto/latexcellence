@@ -1,9 +1,11 @@
 import React, { useState, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import MarkerText from "./MarkerText";
+import { paragraphKey } from "@/utils/paragraphKey";
 
 export default function ParagraphContext({
   currentIndex,
+  filePath,
   paragraphs,
   currentText,
   paragraphMap,
@@ -11,11 +13,14 @@ export default function ParagraphContext({
   const { t } = useTranslation(["components", "common"]);
   const [open, setOpen] = useState(false);
   const toggle = useCallback(() => setOpen((v) => !v), []);
-  // 传入预构建的 Map 时 O(1) 查询，避免每张结果卡都对段落数组线性查找
+  // 传入预构建的 Map 时 O(1) 查询，避免每张结果卡都对段落数组线性查找；
+  // 键含 file_path（复合键契约见 paragraphKey），同号跨文件不串扰
   const getParagraph = (index) =>
     paragraphMap
-      ? paragraphMap.get(index)
-      : paragraphs.find((p) => p.index === index);
+      ? paragraphMap.get(paragraphKey(filePath, index))
+      : paragraphs.find(
+          (p) => p.index === index && (p.file_path || "") === (filePath || ""),
+        );
   const prevPara = getParagraph(currentIndex - 1);
   const currentPara = getParagraph(currentIndex);
   const nextPara = getParagraph(currentIndex + 1);

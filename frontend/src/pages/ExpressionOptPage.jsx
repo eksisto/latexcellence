@@ -37,6 +37,7 @@ import EmptyState from "@/components/EmptyState";
 import UndoRedoButtons from "@/components/UndoRedoButtons";
 import ProofDiff from "@/components/ProofDiff";
 import useParagraphCheck, { groupByFile } from "@/hooks/useParagraphCheck";
+import { buildParagraphMap } from "@/utils/paragraphKey";
 import useIsOpened from "@/hooks/useIsOpened";
 import { emptyStateCta } from "@/utils/projectAccess";
 import { isMultiUser } from "@/api/connection";
@@ -124,7 +125,7 @@ export default function ExpressionOptPage() {
   } = useResultFilter(expressionResults, { idPrefix: RESULT_ID_PREFIX });
 
   const paragraphMap = useMemo(
-    () => new Map(expressionParagraphs.map((p) => [p.index, p])),
+    () => buildParagraphMap(expressionParagraphs),
     [expressionParagraphs],
   );
 
@@ -754,6 +755,7 @@ export default function ExpressionOptPage() {
                                       )}
                                       <ParagraphContext
                                         currentIndex={result.paragraph_index}
+                                        filePath={result.file_path}
                                         paragraphs={expressionParagraphs}
                                         paragraphMap={paragraphMap}
                                         currentText={
@@ -860,6 +862,7 @@ export default function ExpressionOptPage() {
                             )}
                             <ParagraphContext
                               currentIndex={result.paragraph_index}
+                              filePath={result.file_path}
                               paragraphs={expressionParagraphs}
                               paragraphMap={paragraphMap}
                               currentText={result.plain_text || result.original}
