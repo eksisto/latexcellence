@@ -20,12 +20,27 @@
 """
 
 import asyncio
+import re
 from typing import Any, ClassVar
 
 from backend.core.base_paragraph_check import BaseParagraphCheckService
 from backend.core.config import get_config
 from backend.core.model_router import has_api_key_for
 from backend.modules.terminology_check.extractor import TermExtractor
+from backend.utils.latex_parser import MARKER_PATTERN
+
+
+def _bounded_replace(text: str, variant: str, recommended: str) -> tuple[str, int]:
+    """带词边界的变体替换，返回（替换后文本, 替换次数）。
+
+    前后向断言排除字母 / 数字 / 下划线邻接：防止短变体命中其它单词的
+    子串（如变体 "ML" 命中 "HTML"），也排除 marker 字符 ``_`` 邻接，
+    防止变体（如 "CMD"）命中 ``__CMD_0000__`` 内部后损坏 marker。
+    """
+    pattern = re.compile(
+        r"(?<![A-Za-z0-9_])" + re.escape(variant) + r"(?![A-Za-z0-9_])"
+    )
+    return pattern.subn(recommended, text)
 
 
 def _deduplicate_terms(all_terms: list[dict[str, Any]]) -> list[str]:
@@ -95,6 +110,9 @@ class TerminologyCheckService(BaseParagraphCheckService):
         self._marker_maps = {}
 
         all_para_data = self._collect_para_data(files, workspace_id)
+        # 请求可指定只检查部分段落：过滤后驱动提取与结果构建。
+        # marker 映射与上下文仍按全部段落收集，apply 路径不受过滤影响。
+        para_data = self._filter_targets(all_para_data, file_path, paragraph_indices)
 
         operation_id = self._generate_operation_id()
         file_md5s = self._capture_file_md5s(files, workspace_id)
@@ -104,7 +122,7 @@ class TerminologyCheckService(BaseParagraphCheckService):
 
         if not has_api_key:
             self._logger.warning("No API key — using fallback term extraction")
-            return self._check_no_llm(file_path, all_para_data, operation_id)
+            return self._check_no_llm(file_path, para_data, operation_id)
 
         sem = asyncio.Semaphore(cfg.llm.max_concurrency)
 
@@ -115,8 +133,8 @@ class TerminologyCheckService(BaseParagraphCheckService):
         all_terms: list[dict[str, Any]] = []
         batch_size = cfg.features.terminology_check.batch_size
 
-        for batch_start in range(0, len(all_para_data), batch_size):
-            batch = all_para_data[batch_start : batch_start + batch_size]
+        for batch_start in range(0, len(para_data), batch_size):
+            batch = para_data[batch_start : batch_start + batch_size]
             tasks = []
             for data in batch:
                 plain = data["plain_text"]
@@ -156,7 +174,7 @@ class TerminologyCheckService(BaseParagraphCheckService):
         clusters = await self._extractor.cluster_terms(unique_terms)
 
         # 程序解析聚类结果，为每个段落生成修正文本
-        results = self._build_results(all_para_data, all_terms, clusters)
+        results = self._build_results(para_data, all_terms, clusters)
 
         total_issues = sum(1 for r in results for c in r["changes"])
         self._logger.info(
@@ -360,15 +378,31 @@ class TerminologyCheckService(BaseParagraphCheckService):
                     }
                     changes.append(change)
 
-            # 按变体长度降序替换，避免短变体匹配长变体子串
+            # 按变体长度降序替换，避免短变体匹配长变体子串；带词边界匹配
             sorted_changes = sorted(
                 changes, key=lambda c: len(c["original"]), reverse=True
             )
+            original_markers = MARKER_PATTERN.findall(data["plain_text"])
+            applied_changes: list[dict[str, Any]] = []
             for change in sorted_changes:
-                if change["original"] in corrected:
-                    corrected = corrected.replace(
-                        change["original"], change["corrected"]
-                    )
+                corrected, replaced = _bounded_replace(
+                    corrected, change["original"], change["corrected"]
+                )
+                # 仅保留实际发生替换的 change，避免展示与主字段不一致
+                if replaced:
+                    applied_changes.append(change)
+
+            # marker 完整性复查：程序替换绝不允许改变 marker 序列，
+            # 不一致则整体回退原文（与 LLM 输出层的计数 + 顺序校验同防线）
+            if MARKER_PATTERN.findall(corrected) != original_markers:
+                self._logger.warning(
+                    f"Terminology replacement corrupted markers in {f} P{idx}; "
+                    "falling back to original plain text"
+                )
+                corrected = data["plain_text"]
+                applied_changes = []
+
+            changes = applied_changes
 
             mark_corrected = corrected if changes else data["plain_text"]
 

@@ -347,11 +347,101 @@ class TestBuildResults:
             {"recommended": "standard", "variants": ["missing_term", "standard"]},
         ]
         results = service._build_results(para_data, all_terms, clusters)
-        # change 被创建（基于提取的术语），但 corrected 中无实际替换发生
+        # 未发生实际替换时不保留 change，展示与主字段一致
         assert len(results) == 1
-        assert len(results[0]["changes"]) == 1
-        # corrected 应等于 original（因为 original 中没有 "missing_term"）
+        assert results[0]["changes"] == []
         assert results[0]["corrected"] == "some text"
+
+    def test_build_results_word_boundary_prevents_substring_corruption(self, service):
+        """短变体 "ML" 不得命中 "HTML" 等单词的子串。"""
+        para_data = [
+            {
+                "para_index": 0,
+                "plain_text": "render HTML output with ML",
+                "text": "tex0",
+                "marker_map": {},
+                "file_path": "main.tex",
+            },
+        ]
+        all_terms = [
+            {
+                "term": "ML",
+                "term_type": "abbreviation",
+                "paragraph_index": 0,
+                "file_path": "main.tex",
+                "context": "",
+            },
+        ]
+        clusters = [
+            {
+                "recommended": "Machine Learning",
+                "variants": ["ML", "Machine Learning"],
+            },
+        ]
+        results = service._build_results(para_data, all_terms, clusters)
+
+        r0 = results[0]
+        assert len(r0["changes"]) == 1
+        assert r0["corrected"] == "render HTML output with Machine Learning"
+
+    def test_build_results_does_not_corrupt_marker_internals(self, service):
+        """变体与 marker 内部子串重合时（"CMD" 在 __CMD_0000__ 内），
+        只替换独立出现的变体，marker 保持原样。"""
+        para_data = [
+            {
+                "para_index": 0,
+                "plain_text": "the __CMD_0000__ block with CMD",
+                "text": "tex0",
+                "marker_map": {},
+                "file_path": "main.tex",
+            },
+        ]
+        all_terms = [
+            {
+                "term": "CMD",
+                "term_type": "abbreviation",
+                "paragraph_index": 0,
+                "file_path": "main.tex",
+                "context": "",
+            },
+        ]
+        clusters = [
+            {"recommended": "command", "variants": ["CMD", "command"]},
+        ]
+        results = service._build_results(para_data, all_terms, clusters)
+
+        r0 = results[0]
+        assert len(r0["changes"]) == 1
+        assert r0["corrected"] == "the __CMD_0000__ block with command"
+
+    def test_build_results_falls_back_when_replacement_creates_marker(self, service):
+        """替换会产生新 marker 串时整体回退原文，marker 序列不得改变。"""
+        para_data = [
+            {
+                "para_index": 0,
+                "plain_text": "use MATH here",
+                "text": "tex0",
+                "marker_map": {},
+                "file_path": "main.tex",
+            },
+        ]
+        all_terms = [
+            {
+                "term": "MATH",
+                "term_type": "abbreviation",
+                "paragraph_index": 0,
+                "file_path": "main.tex",
+                "context": "",
+            },
+        ]
+        clusters = [
+            {"recommended": "__MATH_0001__", "variants": ["MATH"]},
+        ]
+        results = service._build_results(para_data, all_terms, clusters)
+
+        r0 = results[0]
+        assert r0["changes"] == []
+        assert r0["corrected"] == "use MATH here"
 
 
 class TestPreviewParagraphs:
@@ -611,3 +701,41 @@ class TestEmptyResult:
         assert result["corrected"] == ""
         assert result["changes"] == []
         assert result["terms"] == []
+
+
+class TestParagraphIndicesSelection:
+    """check_terminology 的段落选择参数必须落地，不得接受但忽略。"""
+
+    @pytest.mark.asyncio
+    async def test_check_terminology_respects_paragraph_indices(
+        self, temp_project, service, monkeypatch
+    ):
+        from backend.core.workspace_manager import get_project_manager_for_workspace
+        from backend.modules.terminology_check import service as svc_mod
+
+        monkeypatch.setattr(svc_mod, "has_api_key_for", lambda role: False)
+
+        pm = get_project_manager_for_workspace("ws-term-idx")
+        pm.open(str(temp_project))
+        result = await service.check_terminology(
+            "main.tex", paragraph_indices=[1], workspace_id="ws-term-idx"
+        )
+
+        assert [r["paragraph_index"] for r in result["results"]] == [1]
+
+    @pytest.mark.asyncio
+    async def test_check_terminology_without_indices_checks_all(
+        self, temp_project, service, monkeypatch
+    ):
+        from backend.core.workspace_manager import get_project_manager_for_workspace
+        from backend.modules.terminology_check import service as svc_mod
+
+        monkeypatch.setattr(svc_mod, "has_api_key_for", lambda role: False)
+
+        pm = get_project_manager_for_workspace("ws-term-all")
+        pm.open(str(temp_project))
+        result = await service.check_terminology(
+            "main.tex", paragraph_indices=None, workspace_id="ws-term-all"
+        )
+
+        assert len(result["results"]) > 1
