@@ -18,7 +18,7 @@
 /** 中段总行数上限：超过直接整段标记（跳过 Myers） */
 const DIFF_MIDDLE_LINE_CAP = 6000;
 
-/** Myers 内层步数预算：超支回退整段标记 */
+/** Myers 步数预算：snake 匹配与 frontier 扩张均计入，超支回退整段标记 */
 const DIFF_MAX_WORK = 200000;
 
 /**
@@ -26,7 +26,7 @@ const DIFF_MAX_WORK = 200000;
  * @param {string[]} b 中段新行
  * @returns {Set<number>|null} b 侧变更行（0 基局部索引）；null = 预算超支
  */
-function myersChangedBIndices(a, b) {
+export function myersChangedBIndices(a, b) {
   const n = a.length;
   const m = b.length;
   if (n === 0) {
@@ -63,6 +63,9 @@ function myersChangedBIndices(a, b) {
   for (let d = 0; d <= maxD; d++) {
     trace.push(v.slice());
     for (let k = -d; k <= d; k += 2) {
+      // frontier 扩张同样计入预算：全异内容零 snake 步，只数 snake 会让
+      // 护栏对「整文档重写」场景永不触发，O(D²) 全量跑满主线程
+      if (++work > DIFF_MAX_WORK) return null;
       let x;
       if (k === -d || (k !== d && v[offset + k - 1] < v[offset + k + 1])) {
         x = v[offset + k + 1]; // 下移（b 侧插入）
