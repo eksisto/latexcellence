@@ -1206,3 +1206,63 @@ class TestPlotGenTraceRouter:
         with patch.object(PlotGenService, "get_session_trace", return_value=data):
             response = client.get("/api/plot-gen/sessions/abc123/trace/download")
         assert response.status_code == 404
+
+
+class TestPlotGenErrorFallbacks:
+    """上传 500 兜底与 SSE error 事件不回传异常原文。"""
+
+    @pytest.fixture
+    def client(self):
+        from fastapi.testclient import TestClient
+
+        from main import app
+
+        return TestClient(app)
+
+    def test_upload_maps_unexpected_exception_to_internal_error(self, client):
+        async def boom(
+            self, file_bytes, filename, description="", style="", language="zh"
+        ):
+            raise OSError(
+                "mkdir failed: /tmp/latexcellence-hidden/users/alice/plots/abc"
+            )
+
+        with patch.object(PlotGenService, "create_session_from_upload", boom):
+            response = client.post(
+                "/api/plot-gen/upload",
+                files={"file": ("data.csv", b"a,b\n1,2\n", "text/csv")},
+            )
+
+        assert response.status_code == 500
+        assert response.json()["detail"] == "internal_error"
+        assert "latexcellence-hidden" not in response.text
+
+    def test_generate_sse_conceals_unexpected_exception(self, client):
+        async def boom(*args, **kwargs):
+            raise RuntimeError("sandbox missing at /tmp/latexcellence-hidden/plots")
+            yield  # pragma: no cover — 仅为使其成为异步生成器
+
+        with patch.object(PlotGenService, "generate", boom):
+            response = client.post(
+                "/api/plot-gen/agent/generate",
+                json={"session_id": "abc123", "description": "折线图"},
+            )
+
+        assert response.status_code == 200
+        assert "internal_error" in response.text
+        assert "latexcellence-hidden" not in response.text
+
+    def test_refine_sse_conceals_unexpected_exception(self, client):
+        async def boom(*args, **kwargs):
+            raise RuntimeError("meta unreadable at /tmp/latexcellence-hidden/plots")
+            yield  # pragma: no cover
+
+        with patch.object(PlotGenService, "refine", boom):
+            response = client.post(
+                "/api/plot-gen/sessions/abc123/refine",
+                json={"message": "改成红色"},
+            )
+
+        assert response.status_code == 200
+        assert "internal_error" in response.text
+        assert "latexcellence-hidden" not in response.text

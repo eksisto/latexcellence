@@ -8,6 +8,7 @@ from fastapi.responses import FileResponse, StreamingResponse
 from starlette.background import BackgroundTask
 
 from backend.core.config import get_config
+from backend.core.logger import get_logger
 from backend.core.multiuser.dependencies import current_user_context
 from backend.modules.plot_gen.agent import get_plot_output_dir, load_plot_sandbox
 from backend.modules.plot_gen.models import GeneratePlotRequest, RefinePlotRequest
@@ -21,6 +22,7 @@ router = APIRouter(
     tags=["plot_gen"],
     dependencies=[Depends(current_user_context)],
 )
+logger = get_logger(__name__)
 
 _service = None
 
@@ -54,8 +56,10 @@ async def upload_data(
         raise
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Scientific plotting failed: {e}")
+    except Exception:
+        # 未预期异常原文（OSError 等携带服务器用户空间绝对路径）不回传客户端
+        logger.exception("plot_gen upload failed unexpectedly")
+        raise HTTPException(status_code=500, detail="internal_error")
 
 
 @router.post("/agent/generate")
@@ -71,8 +75,17 @@ async def agent_generate(request: GeneratePlotRequest):
                 request.language,
             ):
                 yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
-        except Exception as e:
-            yield f"data: {json.dumps({'type': 'error', 'message': f'Scientific plotting failed: {e}'}, ensure_ascii=False)}\n\n"
+        except Exception:
+            # 未预期异常原文不下发 SSE：固定 internal_error，原文进服务端日志
+            logger.exception("Unhandled error while streaming plot-gen generate SSE")
+            payload = {
+                "type": "error",
+                "message": {
+                    "error": "internal_error",
+                    "message": "An unexpected server error occurred",
+                },
+            }
+            yield f"data: {json.dumps(payload, ensure_ascii=False)}\n\n"
 
     return StreamingResponse(
         event_stream(),
@@ -95,8 +108,17 @@ async def refine_session(session_id: str, request: RefinePlotRequest):
                 session_id, request.message, request.language
             ):
                 yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
-        except Exception as e:
-            yield f"data: {json.dumps({'type': 'error', 'message': f'Scientific plotting failed: {e}'}, ensure_ascii=False)}\n\n"
+        except Exception:
+            # 未预期异常原文不下发 SSE：固定 internal_error，原文进服务端日志
+            logger.exception("Unhandled error while streaming plot-gen refine SSE")
+            payload = {
+                "type": "error",
+                "message": {
+                    "error": "internal_error",
+                    "message": "An unexpected server error occurred",
+                },
+            }
+            yield f"data: {json.dumps(payload, ensure_ascii=False)}\n\n"
 
     return StreamingResponse(
         event_stream(),
