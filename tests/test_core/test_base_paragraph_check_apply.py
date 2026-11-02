@@ -61,6 +61,24 @@ class TestInjectExpectedMd5s:
         inject_expected_md5s(changes, "main.tex", md5s)
         assert changes[0]["expected_md5"] == "md5-ch1"
 
+    def test_already_set_not_overwritten(self):
+        """调用方已显式携带 expected_md5 时不得覆盖（跨工作区校验值优先）。"""
+        md5s = {"main.tex": "md5-latest"}
+        changes = [
+            ApplyChangeItem(
+                paragraph_index=0, new_text="x", expected_md5="md5-mine"
+            ).model_dump()
+        ]
+        inject_expected_md5s(changes, "main.tex", md5s)
+        assert changes[0]["expected_md5"] == "md5-mine"
+
+    def test_missing_file_in_map_not_injected(self):
+        """map 缺该文件时不注入（保持 None，写回落到实例缓存回退而非错值）。"""
+        md5s = {"other.tex": "md5-other"}
+        changes = [ApplyChangeItem(paragraph_index=0, new_text="x").model_dump()]
+        inject_expected_md5s(changes, "main.tex", md5s)
+        assert changes[0]["expected_md5"] is None
+
 
 class TestApplyChangesFallbackFile:
     def test_model_dump_change_targets_fallback_file(self):
@@ -149,3 +167,49 @@ class TestApplyChangesBatchSameFile:
 
         assert result["applied"] == 1
         assert result["file_md5s"]["main.tex"] == compute_md5(target)
+
+
+class TestApplyChangesFileConflict:
+    def test_stale_md5_reports_conflict_and_keeps_file(self, tmp_path):
+        """读后被外部修改（MD5 漂移）时 apply_changes 返回
+        errors[].reason=file_conflict（含双 MD5），且文件不被写入。
+        这是前端 StaleCheckBanner「保鲜」链路的后端根基。"""
+        target = tmp_path / "main.tex"
+        original = "Stale check paragraph.\n"
+        target.write_text(original, encoding="utf-8")
+        pm = LatexProject()
+        pm.open(str(tmp_path))
+        stale_md5 = compute_md5(target)
+
+        # 检查后文件被另一工作区/编辑器改动
+        target.write_text(
+            "Stale check paragraph modified externally.\n", encoding="utf-8"
+        )
+
+        svc = _NoMarkerService()
+        with patch(
+            "backend.core.base_paragraph_check.get_project_manager_for_workspace",
+            return_value=pm,
+        ):
+            result = svc.apply_changes(
+                "main.tex",
+                [
+                    {
+                        "paragraph_index": 0,
+                        "new_text": "Should not be written.",
+                        "expected_md5": stale_md5,
+                    }
+                ],
+                workspace_id="ws",
+            )
+
+        assert result["applied"] == 0
+        assert len(result["errors"]) == 1
+        err = result["errors"][0]
+        assert err["reason"] == "file_conflict"
+        assert err["expected_md5"] == stale_md5
+        assert err["current_md5"] == compute_md5(target)
+        # 文件保持外部修改后的内容，建议未写入
+        assert target.read_text(encoding="utf-8") == (
+            "Stale check paragraph modified externally.\n"
+        )
