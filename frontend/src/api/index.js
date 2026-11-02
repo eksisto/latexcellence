@@ -1262,13 +1262,13 @@ export const api = {
       request(`/writing-chat/sessions/${encodeURIComponent(id)}/compact`, {
         method: "POST",
       }),
-    clarify: (clarifyId, answer) =>
-      request("/writing-chat/clarify", {
+    clarify: (clarifyId, answer, workspaceId) =>
+      request(appendWs("/writing-chat/clarify", workspaceId), {
         method: "POST",
         body: JSON.stringify({ clarify_id: clarifyId, answer }),
       }),
-    cancelClarify: (clarifyId) =>
-      request("/writing-chat/cancel-clarify", {
+    cancelClarify: (clarifyId, workspaceId) =>
+      request(appendWs("/writing-chat/cancel-clarify", workspaceId), {
         method: "POST",
         body: JSON.stringify({ clarify_id: clarifyId }),
       }),
@@ -1299,16 +1299,17 @@ export const api = {
           selected_hashes: selectedHashes,
         }),
       }),
-    confirmTool: (pendingId, modifiedArgs) =>
-      request("/writing-chat/confirm-tool", {
+    // 确认/取消端点要求工作区权限，且须与登记待定项的会话工作区一致
+    confirmTool: (pendingId, modifiedArgs, workspaceId) =>
+      request(appendWs("/writing-chat/confirm-tool", workspaceId), {
         method: "POST",
         body: JSON.stringify({
           pending_id: pendingId,
           modified_args: modifiedArgs || null,
         }),
       }),
-    cancelTool: (pendingId) =>
-      request("/writing-chat/cancel-tool", {
+    cancelTool: (pendingId, workspaceId) =>
+      request(appendWs("/writing-chat/cancel-tool", workspaceId), {
         method: "POST",
         body: JSON.stringify({
           pending_id: pendingId,

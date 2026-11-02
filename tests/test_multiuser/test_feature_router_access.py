@@ -283,6 +283,21 @@ class TestFeatureRoutersWriteProtection:
         assert r.status_code == 403
         assert r.json()["detail"]["error"] == "no_permission"
 
+    def test_viewer_cannot_authorize_via_writing_chat_confirm_tool(self, env):
+        """工具确认端点要求工作区写权限：确认等价于授权写项目文件。
+
+        viewer 不能凭 tool_pending 事件里的 pending_id 授权
+        edit_paragraph / undo_last_edit 等敏感工具的执行。"""
+        _, viewer_client = self.setup_bindings(env)
+        r = viewer_client.post(
+            "/api/writing-chat/confirm-tool",
+            params={"workspace_id": "ws-viewer"},
+            json={"pending_id": "f" * 12},
+            headers=csrf(viewer_client),
+        )
+        assert r.status_code == 403
+        assert r.json()["detail"]["error"] == "no_permission"
+
     @pytest.mark.parametrize(
         "path",
         [
@@ -383,6 +398,34 @@ class TestFeatureRoutersReadProtection:
         )
         assert r.status_code == 403
         assert r.json()["detail"]["error"] == "no_permission"
+
+    def test_outsider_cannot_respond_writing_chat_pending_interactions(self, env):
+        """工具确认/取消/澄清/取消澄清要求声明工作区与来源工作区一致。
+
+        待定交互仅凭 id 决议：无项目权限的用户持有 id 不得授权写入、
+        取消执行或向他人会话注入澄清回复。"""
+        owner_client = _client(env)
+        _open(owner_client, env, "ws-owner", "owner")
+
+        outsider_client = _client(env)
+        _login(outsider_client, "outsider")
+        for path, body in (
+            ("/api/writing-chat/confirm-tool", {"pending_id": "f" * 12}),
+            ("/api/writing-chat/cancel-tool", {"pending_id": "f" * 12}),
+            (
+                "/api/writing-chat/clarify",
+                {"clarify_id": "e" * 12, "answer": "evil"},
+            ),
+            ("/api/writing-chat/cancel-clarify", {"clarify_id": "e" * 12}),
+        ):
+            r = outsider_client.post(
+                path,
+                params={"workspace_id": "ws-owner"},
+                json=body,
+                headers=csrf(outsider_client),
+            )
+            assert r.status_code == 403, (path, r.status_code)
+            assert r.json()["detail"]["error"] == "no_permission"
 
     def test_outsider_cannot_read_git_manage_status_and_log(self, env):
         owner_client = _client(env)

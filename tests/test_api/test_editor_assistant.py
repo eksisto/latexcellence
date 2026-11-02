@@ -791,9 +791,9 @@ def _drive_editor_send(service, req, workspace_id, *, resolve=None, modified_arg
         registered = asyncio.Event()
         real_register = service._register_tool_confirmation
 
-        async def spy_register(pid, tool_name, tool_args):
+        async def spy_register(pid, tool_name, tool_args, workspace_id=""):
             ordering.append(("register", pid))
-            result = await real_register(pid, tool_name, tool_args)
+            result = await real_register(pid, tool_name, tool_args, workspace_id)
             pending_ids.append(pid)
             registered.set()
             return result

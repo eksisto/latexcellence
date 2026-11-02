@@ -58,6 +58,7 @@ class StateMixin:
         pending_id: str,
         tool_name: str,
         tool_args: dict,
+        workspace_id: str = "",
     ) -> dict | None:
         """
         发出工具确认请求，等待前端用户确认。
@@ -66,7 +67,9 @@ class StateMixin:
             - None: 超时或被拒绝
             - dict: 确认后的参数（可能已被前端修改）
         """
-        await self._register_tool_confirmation(pending_id, tool_name, tool_args)
+        await self._register_tool_confirmation(
+            pending_id, tool_name, tool_args, workspace_id
+        )
         return await self._await_tool_confirmation(pending_id, tool_name, tool_args)
 
     async def _register_tool_confirmation(
@@ -74,6 +77,7 @@ class StateMixin:
         pending_id: str,
         tool_name: str,
         tool_args: dict,
+        workspace_id: str = "",
     ) -> None:
         """登记待确认交互（不等待决议）。
 
@@ -83,13 +87,20 @@ class StateMixin:
         confirm 端点将查无此 pending 而误报 404。拆为登记 / 等待两阶段
         后，调用方可先登记、再推事件、后等待；Writing Chat 的
         ``_request_tool_confirmation`` 组合两者，行为与历史版本一致。
+
+        workspace_id 记录发起会话的工作区：确认端点用它做权限校验，
+        防止对来源项目无写权限的用户凭 pending_id 授权写入。
         """
         if self._db_pending_available():
             await asyncio.to_thread(
                 pending_interactions.create,
                 pending_id,
                 pending_interactions.KIND_CONFIRM,
-                {"tool_name": tool_name, "tool_args": dict(tool_args)},
+                {
+                    "tool_name": tool_name,
+                    "tool_args": dict(tool_args),
+                    "workspace_id": workspace_id,
+                },
                 self._TOOL_CONFIRM_TTL_SECONDS,
             )
             return
@@ -99,8 +110,26 @@ class StateMixin:
             "confirmed": None,
             "tool_name": tool_name,
             "tool_args": dict(tool_args),
+            "workspace_id": workspace_id,
             "created_at": time.time(),
         }
+
+    async def get_pending_tool_workspace(self, pending_id: str) -> str | None:
+        """读取待确认交互登记时的工作区；不存在返回 None。
+
+        供确认/取消端点校验调用方声明的工作区与来源工作区一致。
+        """
+        if self._db_pending_available():
+            payload = await asyncio.to_thread(
+                pending_interactions.get, pending_id, pending_interactions.KIND_CONFIRM
+            )
+        else:
+            entry = self._pending_confirms.get(pending_id)
+            payload = entry if entry is not None else None
+        if not isinstance(payload, dict):
+            return None
+        ws = payload.get("workspace_id")
+        return ws if isinstance(ws, str) else None
 
     async def _await_tool_confirmation(
         self,
@@ -190,9 +219,12 @@ class StateMixin:
     async def _request_clarification(
         self,
         clarify_id: str,
+        workspace_id: str = "",
     ) -> str:
         """
         发出澄清请求，等待前端用户回复。
+
+        workspace_id 记录发起会话的工作区，供澄清端点做权限校验。
 
         返回：
             - str: 用户的回复内容。超时或取消时返回提示文本。
@@ -201,7 +233,7 @@ class StateMixin:
             resolved = await self._wait_db_pending(
                 pending_interactions.KIND_CLARIFY,
                 clarify_id,
-                {},
+                {"workspace_id": workspace_id},
                 timeout=120,
             )
             if resolved is not None and resolved.get("status") == "answered":
@@ -215,6 +247,7 @@ class StateMixin:
             "event": event,
             "answered": False,
             "answer": "",
+            "workspace_id": workspace_id,
             "created_at": time.time(),
         }
         try:
@@ -227,6 +260,23 @@ class StateMixin:
         if not pending.get("answered"):
             return "（用户已取消此澄清请求，请根据已有信息自行判断并继续）"
         return pending.get("answer", "")
+
+    async def get_clarification_workspace(self, clarify_id: str) -> str | None:
+        """读取澄清请求登记时的工作区；不存在返回 None。
+
+        供澄清/取消澄清端点校验调用方声明的工作区与来源工作区一致。
+        """
+        if self._db_pending_available():
+            payload = await asyncio.to_thread(
+                pending_interactions.get, clarify_id, pending_interactions.KIND_CLARIFY
+            )
+        else:
+            entry = self._pending_clarifications.get(clarify_id)
+            payload = entry if entry is not None else None
+        if not isinstance(payload, dict):
+            return None
+        ws = payload.get("workspace_id")
+        return ws if isinstance(ws, str) else None
 
     def submit_clarification(self, clarify_id: str, answer: str) -> bool:
         """提交澄清请求的回复。"""

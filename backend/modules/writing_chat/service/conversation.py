@@ -774,7 +774,9 @@ class ConversationMixin:
                         self._logger.info(
                             f"Clarification requested [clarify_id={clarify_id}]"
                         )
-                        answer = await self._request_clarification(clarify_id)
+                        answer = await self._request_clarification(
+                            clarify_id, workspace_id
+                        )
                         self._logger.info(
                             f"Clarification answered [clarify_id={clarify_id}]"
                         )
@@ -804,6 +806,7 @@ class ConversationMixin:
                             pending_id,
                             tool_name,
                             tool_args,
+                            workspace_id,
                         )
                         if confirmed_args is None:
                             self._logger.info(

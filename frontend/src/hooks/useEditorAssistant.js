@@ -308,30 +308,34 @@ export default function useEditorAssistant({ getEditorContext }) {
    * useWritingChat 同口径；决议后同一 SSE 流内续流（后端流内等待），
    * 无需重新发起请求。
    */
-  const confirmAssistantTool = useCallback(async (modifiedArgs) => {
-    const tool = useEditorStore.getState().assistantPendingTool;
-    if (!tool?.pending_id) return;
-    try {
-      await api.writingChat.confirmTool(
-        tool.pending_id,
-        modifiedArgs ?? undefined,
-      );
-    } catch {
-      // silent：过期/已决议的 pending（404）不向用户报错
-    }
-    useEditorStore.getState().setAssistantPendingTool(null);
-  }, []);
+  const confirmAssistantTool = useCallback(
+    async (modifiedArgs) => {
+      const tool = useEditorStore.getState().assistantPendingTool;
+      if (!tool?.pending_id) return;
+      try {
+        await api.writingChat.confirmTool(
+          tool.pending_id,
+          modifiedArgs ?? undefined,
+          workspaceId,
+        );
+      } catch {
+        // silent：过期/已决议的 pending（404）不向用户报错
+      }
+      useEditorStore.getState().setAssistantPendingTool(null);
+    },
+    [workspaceId],
+  );
 
   const cancelAssistantTool = useCallback(async () => {
     const tool = useEditorStore.getState().assistantPendingTool;
     if (!tool?.pending_id) return;
     try {
-      await api.writingChat.cancelTool(tool.pending_id);
+      await api.writingChat.cancelTool(tool.pending_id, workspaceId);
     } catch {
       // silent：同上
     }
     useEditorStore.getState().setAssistantPendingTool(null);
-  }, []);
+  }, [workspaceId]);
 
   const clearConversation = useCallback(() => {
     useEditorStore.getState().clearAssistantConversation();

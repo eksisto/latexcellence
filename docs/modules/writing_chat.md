@@ -149,10 +149,10 @@ Prefix: `/api/writing-chat`, Tag: `writing_chat`
 | POST | `/send` | SSE 流式发送消息（含 Function Calling 工具调用循环） |
 | POST | `/generate-edit` | 生成 RS2 编辑建议 |
 | POST | `/apply-edit` | 编辑写回 .tex |
-| POST | `/confirm-tool` | 确认待定工具调用（可选修改参数） |
-| POST | `/cancel-tool` | 取消待定工具调用 |
-| POST | `/clarify` | 提交对 LLM 澄清请求的回复 |
-| POST | `/cancel-clarify` | 取消待定的澄清请求 |
+| POST | `/confirm-tool` | 确认待定工具调用（可选修改参数；要求工作区写权限，且须与登记待定项的会话工作区一致） |
+| POST | `/cancel-tool` | 取消待定工具调用（要求工作区读权限，且须与来源工作区一致） |
+| POST | `/clarify` | 提交对 LLM 澄清请求的回复（要求工作区读权限，且须与来源工作区一致） |
+| POST | `/cancel-clarify` | 取消待定的澄清请求（要求工作区读权限，且须与来源工作区一致） |
 | POST | `/message/delete` | 删除消息（summary 消息还原其快照） |
 | PATCH | `/sessions/{id}/rename` | 重命名会话 |
 | POST | `/sessions/{id}/compact` | 手动压缩会话 |

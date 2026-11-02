@@ -594,7 +594,7 @@ class EditorChatMixin:
                     if tool_name in _CONFIRMABLE_TOOL_NAMES:
                         pending_id = uuid.uuid4().hex[:12]
                         await self._register_tool_confirmation(
-                            pending_id, tool_name, tool_args
+                            pending_id, tool_name, tool_args, workspace_id
                         )
                         yield {
                             "type": "tool_pending",

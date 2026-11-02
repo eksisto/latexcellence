@@ -259,9 +259,24 @@ async def apply_edit(
 
 
 @router.post("/confirm-tool")
-async def confirm_tool(request: ConfirmToolRequest):
-    """确认一个待定的工具调用（如 edit_paragraph），允许 LLM 继续执行。"""
+async def confirm_tool(
+    request: ConfirmToolRequest,
+    workspace_id: str = Query(..., description="工作区唯一标识符"),
+    _: dict = Depends(access_control.require_workspace_write),
+):
+    """确认一个待定的工具调用（如 edit_paragraph），允许 LLM 继续执行。
+
+    确认等价于授权对项目文件的写入：除工作区写权限外，还要求声明的
+    workspace 与登记该待定项的会话工作区一致，防止对来源项目无写权限的
+    用户凭 pending_id 授权写入。
+    """
     service = get_writing_chat_service()
+    origin_ws = await service.get_pending_tool_workspace(request.pending_id)
+    if origin_ws is not None and origin_ws != workspace_id:
+        raise HTTPException(
+            status_code=403,
+            detail={"error": "no_permission"},
+        )
     ok = service.confirm_pending_tool(request.pending_id, request.modified_args)
     if not ok:
         raise HTTPException(
@@ -271,9 +286,19 @@ async def confirm_tool(request: ConfirmToolRequest):
 
 
 @router.post("/cancel-tool")
-async def cancel_tool(request: CancelToolRequest):
+async def cancel_tool(
+    request: CancelToolRequest,
+    workspace_id: str = Query(..., description="工作区唯一标识符"),
+    _: dict = Depends(access_control.require_workspace_read),
+):
     """取消一个待定的工具调用（如 edit_paragraph），阻止 LLM 执行。"""
     service = get_writing_chat_service()
+    origin_ws = await service.get_pending_tool_workspace(request.pending_id)
+    if origin_ws is not None and origin_ws != workspace_id:
+        raise HTTPException(
+            status_code=403,
+            detail={"error": "no_permission"},
+        )
     ok = service.cancel_pending_tool(request.pending_id)
     if not ok:
         raise HTTPException(
@@ -286,9 +311,22 @@ async def cancel_tool(request: CancelToolRequest):
 
 
 @router.post("/clarify")
-async def submit_clarification(request: ClarifyRequest):
-    """提交对 LLM 澄清请求的回复。"""
+async def submit_clarification(
+    request: ClarifyRequest,
+    workspace_id: str = Query(..., description="工作区唯一标识符"),
+    _: dict = Depends(access_control.require_workspace_read),
+):
+    """提交对 LLM 澄清请求的回复。
+
+    要求声明的工作区与发起会话的工作区一致，防止凭 id 干扰他人会话。
+    """
     service = get_writing_chat_service()
+    origin_ws = await service.get_clarification_workspace(request.clarify_id)
+    if origin_ws is not None and origin_ws != workspace_id:
+        raise HTTPException(
+            status_code=403,
+            detail={"error": "no_permission"},
+        )
     ok = service.submit_clarification(request.clarify_id, request.answer)
     if not ok:
         raise HTTPException(
@@ -299,9 +337,19 @@ async def submit_clarification(request: ClarifyRequest):
 
 
 @router.post("/cancel-clarify")
-async def cancel_clarification(request: CancelClarifyRequest):
+async def cancel_clarification(
+    request: CancelClarifyRequest,
+    workspace_id: str = Query(..., description="工作区唯一标识符"),
+    _: dict = Depends(access_control.require_workspace_read),
+):
     """取消一个待定的澄清请求。"""
     service = get_writing_chat_service()
+    origin_ws = await service.get_clarification_workspace(request.clarify_id)
+    if origin_ws is not None and origin_ws != workspace_id:
+        raise HTTPException(
+            status_code=403,
+            detail={"error": "no_permission"},
+        )
     ok = service.cancel_clarification(request.clarify_id)
     if not ok:
         raise HTTPException(

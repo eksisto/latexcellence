@@ -102,25 +102,26 @@ export default function useWritingChat() {
         await api.writingChat.confirmTool(
           tool.pending_id,
           modifiedArgs ?? undefined,
+          workspaceId,
         );
       } catch (e) {
         // silent
       }
       _setPendingTool(null);
     },
-    [canWrite],
+    [canWrite, workspaceId],
   );
 
   const cancelPendingTool = useCallback(async () => {
     const tool = pendingToolRef.current;
     if (!tool || !tool.pending_id) return;
     try {
-      await api.writingChat.cancelTool(tool.pending_id);
+      await api.writingChat.cancelTool(tool.pending_id, workspaceId);
     } catch (e) {
       // silent
     }
     _setPendingTool(null);
-  }, []);
+  }, [workspaceId]);
 
   // 待用户回复的澄清请求（request_clarification）
   const [pendingClarification, _setPendingClarification] = useState(null);
@@ -133,28 +134,31 @@ export default function useWritingChat() {
     pendingClarificationRef.current = pendingClarification;
   }, [pendingClarification]);
 
-  const submitClarification = useCallback(async (answer) => {
-    const c = pendingClarificationRef.current;
-    if (!c || !c.clarify_id) return;
-    try {
-      await api.writingChat.clarify(c.clarify_id, answer);
-    } catch (e) {
-      // silent
-    }
-    _setPendingClarification(null);
-  }, []);
+  const submitClarification = useCallback(
+    async (answer) => {
+      const c = pendingClarificationRef.current;
+      if (!c || !c.clarify_id) return;
+      try {
+        await api.writingChat.clarify(c.clarify_id, answer, workspaceId);
+      } catch (e) {
+        // silent
+      }
+      _setPendingClarification(null);
+    },
+    [workspaceId],
+  );
 
   const cancelClarification = useCallback(async () => {
     const c = pendingClarificationRef.current;
     if (c && c.clarify_id) {
       try {
-        await api.writingChat.cancelClarify(c.clarify_id);
+        await api.writingChat.cancelClarify(c.clarify_id, workspaceId);
       } catch (e) {
         // silent
       }
     }
     _setPendingClarification(null);
-  }, []);
+  }, [workspaceId]);
 
   const restoringRef = useRef(false);
 
