@@ -444,6 +444,9 @@ export default function useParagraphCheck({
     };
 
     es.onerror = () => {
+      // 与 done / handleStop 同口径：先排空缓冲再收尾。后台标签页 rAF
+      // 暂停时缓冲持续累积，直接 finalize 会把已接收未上屏的结果静默丢弃
+      drainBuffer();
       finalizeCheck(es, true);
       setError(i18n.t("hooks:paragraphCheck.connectionLost"));
       toast.error(i18n.t("hooks:paragraphCheck.connectionLost"));

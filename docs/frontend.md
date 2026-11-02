@@ -180,7 +180,7 @@ highlight.js 的按需注册与统一入口：
 
 | Hook | 功能 |
 | --- | --- |
-| `useParagraphCheck.js` | 封装逐段 LLM 检查公共逻辑（预览、检查/优化、排序、暂停/继续/停止、应用、refresh 持久化）。支持 `resolveInput` 多文件模式。内置乐观锁：结果就绪后按文件补齐 MD5 基线（backfill），应用修改时传回，apply 响应携带的写后 MD5 即时同步本地缓存（同文件连续/批量应用不再误报冲突），冲突后自动刷新 MD5 并提示重试。SSE 结果通过 rAF 微批次合并；`done` 事件到达时先排空待 flush 缓冲再收尾，避免一次性推送全部结果的模块（如术语一致性检查）在流结束时丢失结果。 |
+| `useParagraphCheck.js` | 封装逐段 LLM 检查公共逻辑（预览、检查/优化、排序、暂停/继续/停止、应用、refresh 持久化）。支持 `resolveInput` 多文件模式。内置乐观锁：结果就绪后按文件补齐 MD5 基线（backfill），应用修改时传回，apply 响应携带的写后 MD5 即时同步本地缓存（同文件连续/批量应用不再误报冲突），冲突后自动刷新 MD5 并提示重试。SSE 结果通过 rAF 微批次合并；`done` 事件与连接错误到达时均先排空待 flush 缓冲再收尾，避免一次性推送全部结果的模块（如术语一致性检查）在流结束、或后台标签页 rAF 暂停时连接断开丢失已接收结果。 |
 | `useEnabledFeatures.js` | 从后端加载功能开关到 Zustand store，幂等。 |
 | `useIsOpened.js` | 模式感知「项目已打开」判定（`utils/projectAccess.js` 的 `isProjectOpened`）：单用户看 `projectPath`，多用户看 `projectId`（多用户下 projectPath 恒为 null）。模块页空态守卫与检查启动守卫统一引用，避免各页复制同形条件漏改。 |
 | `useCanWrite.js` | 多用户写权限单一事实源：白名单 owner / editor 可写，viewer 及角色未知一律只读；单用户恒可写。内部复用 `utils/projectAccess.js` 的 `hasWriteRole`。 |
