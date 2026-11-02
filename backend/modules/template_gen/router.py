@@ -55,10 +55,18 @@ async def generate(request: GenerateRequest):
                 else {"type": "error", "message": str(detail)}
             )
             yield f"data: {json.dumps(payload, ensure_ascii=False)}\n\n"
-        except Exception as e:
-            yield (
-                f"data: {json.dumps({'type': 'error', 'message': str(e)}, ensure_ascii=False)}\n\n"
-            )
+        except Exception:
+            # 未预期异常原文（OSError 等携带服务器用户空间绝对路径）不下发 SSE：
+            # 固定 internal_error，原文进服务端日志
+            logger.exception("Unhandled error while streaming template-gen SSE")
+            payload = {
+                "type": "error",
+                "message": {
+                    "error": "internal_error",
+                    "message": "An unexpected server error occurred",
+                },
+            }
+            yield f"data: {json.dumps(payload, ensure_ascii=False)}\n\n"
 
     return StreamingResponse(
         event_stream(),

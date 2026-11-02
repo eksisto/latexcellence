@@ -2075,3 +2075,30 @@ class TestPreviewFile:
 
         with pytest.raises(ValueError, match="Session not found"):
             TemplateGenService().resolve_preview_file("ffff00001111", "main.pdf")
+
+
+class TestGenerateRouterErrorFallback:
+    """/generate SSE 兜底：未预期异常原文不回传客户端。"""
+
+    def test_generate_sse_conceals_unexpected_exception(self):
+        from unittest.mock import patch
+
+        from fastapi.testclient import TestClient
+
+        from backend.modules.template_gen.service import TemplateGenService
+        from main import app
+
+        async def boom(self, description, language="zh", *, llm=None):
+            raise OSError("sandbox mkdir failed: /tmp/latexcellence-hidden/templates")
+            yield  # pragma: no cover — 仅为使其成为异步生成器
+
+        with patch.object(TemplateGenService, "generate", boom):
+            client = TestClient(app)
+            response = client.post(
+                "/api/template-gen/generate",
+                json={"description": "a simple article", "language": "zh"},
+            )
+
+        assert response.status_code == 200
+        assert "internal_error" in response.text
+        assert "latexcellence-hidden" not in response.text
