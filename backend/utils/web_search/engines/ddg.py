@@ -1,5 +1,6 @@
 """DuckDuckGo HTML 搜索引擎实现。"""
 
+import asyncio
 import base64
 import re
 import time
@@ -269,7 +270,10 @@ class DuckDuckGoHtmlEngine(BaseSearchEngine):
             self._logger.warning(f"DDG non-200: {resp.status_code}")
             return SearchResponse(query=query, engine=self.name)
 
-        return self._parse_results(resp.text, query, max_results)
+        # lxml 全文解析 CPU 密集，入线程池避免阻塞事件循环
+        return await asyncio.to_thread(
+            self._parse_results, resp.text, query, max_results
+        )
 
     # ── 结果解析 ──────────────────────────────────────────────────────
 
@@ -312,7 +316,8 @@ class DuckDuckGoHtmlEngine(BaseSearchEngine):
         self, html: str, query: str, client: httpx.AsyncClient
     ) -> DDGChallengeError:
         """解析 DDG challenge 页面，下载图片，返回 DDGChallengeError。"""
-        soup = BeautifulSoup(html, "lxml")
+        # lxml 全文解析 CPU 密集，入线程池避免阻塞事件循环
+        soup = await asyncio.to_thread(BeautifulSoup, html, "lxml")
 
         # 提取 challenge-form
         form = soup.select_one("form#challenge-form")
@@ -502,8 +507,16 @@ class DuckDuckGoHtmlEngine(BaseSearchEngine):
                 "attempts_left": 0,
             }
 
-        # 成功：解析搜索结果
+        # 成功：解析搜索结果（lxml 全文解析入线程池）
         remove_challenge(challenge_id)
+        results = await asyncio.to_thread(
+            DuckDuckGoHtmlEngine._extract_submit_results, text
+        )
+        return {"success": True, "results": results}
+
+    @staticmethod
+    def _extract_submit_results(text: str) -> list[dict[str, str]]:
+        """从 challenge 提交成功的 HTML 中提取搜索结果（同步，入线程池调用）。"""
         soup = BeautifulSoup(text, "lxml")
         results: list[dict[str, str]] = []
         for div in soup.select("#links .web-result"):
@@ -521,8 +534,7 @@ class DuckDuckGoHtmlEngine(BaseSearchEngine):
                     "snippet": snippet_el.get_text(strip=True) if snippet_el else "",
                 }
             )
-
-        return {"success": True, "results": results}
+        return results
 
 
 # ── 验证码提交模型 ──────────────────────────────────────────────────────────

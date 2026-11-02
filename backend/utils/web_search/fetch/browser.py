@@ -173,18 +173,18 @@ class BrowserPool:
             if len(body) > max_bytes:
                 return self._failure("response_too_large", started, category="resource")
             status = response.status if response is not None else 200
-            detection = detect_blockage(
-                status,
-                (
-                    {
-                        key.casefold(): value
-                        for key, value in (await response.all_headers()).items()
-                    }
-                    if response is not None
-                    else {}
-                ),
-                body,
-                "text/html",
+            headers = (
+                {
+                    key.casefold(): value
+                    for key, value in (await response.all_headers()).items()
+                }
+                if response is not None
+                else {}
+            )
+            # 拦截判定对全文跑 BS4 解析，CPU 密集，入线程池（与 coordinator
+            # 同一函数的既有 to_thread 口径一致）
+            detection = await asyncio.to_thread(
+                detect_blockage, status, headers, body, "text/html"
             )
             if detection and detection.code != "javascript_required":
                 return self._failure(

@@ -97,7 +97,8 @@ class DeepReader:
                 )
                 return "", ""
 
-            title, text = self._extract_page(resp.text)
+            # trafilatura 全文抽取 CPU 密集，入线程池避免阻塞事件循环
+            title, text = await asyncio.to_thread(self._extract_page, resp.text)
             # 缓存完整正文，按每次调用的 max_chars 截断，避免大页面被永久截短
             fetched_at = time.monotonic()
             self._cache[current] = (fetched_at, title, text)

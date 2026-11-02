@@ -173,14 +173,21 @@ class StructuredPageReader:
             }
             selected = [block for block in document.blocks if block.block_id in wanted]
             content = "\n\n".join(block.text for block in selected)[:max_chars]
-            evidence = collect_evidence(document, block_ids=wanted, max_chars=max_chars)
+            # 证据选择含全文分词与 BM25/MMR 评分，CPU 密集，入线程池
+            evidence = await asyncio.to_thread(
+                collect_evidence, document, block_ids=wanted, max_chars=max_chars
+            )
             return document, evidence, content, failure, cache_hit
         if mode == "full":
             content = "\n\n".join(block.text for block in document.blocks)[:max_chars]
-            evidence = collect_evidence(document, max_chars=max_chars)
+            evidence = await asyncio.to_thread(
+                collect_evidence, document, max_chars=max_chars
+            )
             return document, evidence, content, failure, cache_hit
         evidence = (
-            select_evidence(document, query, limit=5) if mode == "relevant" else []
+            await asyncio.to_thread(select_evidence, document, query, limit=5)
+            if mode == "relevant"
+            else []
         )
         content = "\n\n".join(item.text for item in evidence)[:max_chars]
         return document, evidence, content, failure, cache_hit
