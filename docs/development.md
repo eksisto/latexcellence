@@ -191,7 +191,7 @@ npm start        # 或 node server.js
 | `http` | user_agent | 外部 HTTP 请求的全局 User-Agent（web_search 引擎与 bib_manager Provider 共用） |
 | `features` | 各模块的 `enabled` + 特有配置（batch_size, output_dir, timeout 等） | 功能开关与模块级参数 |
 | `features.function_calling` | `web_search.*`、`scholarly_research.*`、`project_tools.*`、`edit_tools.*` | 全局 LLM Function Calling 工具集；`web_search.strategy` 控制 legacy/aggregate 搜索，`web_search.page_reading.strategy` 独立控制 legacy/structured 读页。结构化路径的缓存目录、TTL、大小限制、抽取器版本与质量阈值见 `config.example.json`，设置页可热重载；默认均保留 legacy 回滚路径。Tavily 未配置 Key 时使用 keyless 公共接口 |
-| `features.writing_chat` | compression_threshold_tokens（0=动态）、compression_headroom_tokens、compression_keep_recent_tokens/turns、summary_token_budget、summary_model 等 | 写作助手上下文压缩触发与摘要预算；摘要旧配置 `summary_max_tokens` 自动迁移并告警 |
+| `features.writing_chat` | compression_threshold_tokens（0=动态）、compression_headroom_tokens、compression_keep_recent_tokens/turns、summary_token_budget、summary_model 等 | 写作助手上下文压缩触发与摘要预算 |
 | `features.editor` | enabled, assistant_enabled | 网页编辑器开关与编辑器 AI 助手独立子开关（关闭时服务端拒绝助手端点以控制 LLM 开销），见 [modules/editor.md](modules/editor.md) |
 | `features.style_modify.agent` | 项目 Agent 的会话目录、轮次、工具/编译上限、大小限制、shadow 编译和清理配置 | style_modify 项目 Agent 模式 |
 | `features.template_library` | enabled, user_library_dir, max_upload_mb, allowed_extensions | 模板库开关（关闭时 `/api/templates` 整体关闭、前端隐藏入口）、单用户库目录、上传 zip 上限与扩展名白名单，见 [modules/template_library.md](modules/template_library.md) |

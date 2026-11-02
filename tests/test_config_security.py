@@ -47,7 +47,7 @@ SAMPLE_CONFIG = {
             "sessions_dir": "sessions/",
             "custom_prompts_dir": "data/prompts/writing_chat/",
             "summary_temperature": 0.2,
-            "summary_max_tokens": 50000,
+            "summary_token_budget": 50000,
         },
         "bib_manager": {
             "enabled": True,

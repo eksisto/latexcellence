@@ -608,10 +608,8 @@ class WritingChatConfig(BaseModel):
     sessions_dir: str = "data/writing_chat_sessions/"  # 会话持久化目录
     custom_prompts_dir: str = "data/prompts/writing_chat/"  # 助手提示词存放目录
     summary_temperature: float = 0.2  # 生成压缩摘要时的温度
-    # 压缩摘要最大生成 token 数（新字段；旧配置读取 summary_max_tokens 迁移）
+    # 压缩摘要最大生成 token 数
     summary_token_budget: int = 6000
-    # 已废弃，仅兼容旧配置；存在且 summary_token_budget 未显式给出时迁移为预算值
-    summary_max_tokens: int = 50000
     # 可选的独立摘要模型；为空时跟随主模型
     summary_model: str = ""
     # 是否在聊天中启用联网搜索（受全局 web_search.enabled 约束）
@@ -622,22 +620,6 @@ class WritingChatConfig(BaseModel):
     evidence_max_chars: int = Field(24000, ge=2000, le=100000)
     # 单轮持久化的证据片段数量上限
     evidence_max_items: int = Field(12, ge=1, le=50)
-
-    @model_validator(mode="before")
-    @classmethod
-    def _migrate_summary_max_tokens(cls, data):
-        """旧配置只含 summary_max_tokens 时迁移到 summary_token_budget 并告警。"""
-        if isinstance(data, dict) and "summary_token_budget" not in data:
-            if "summary_max_tokens" in data:
-                from backend.core.logger import get_logger
-
-                get_logger("config").warning(
-                    "writing_chat.summary_max_tokens is deprecated; "
-                    "using it as summary_token_budget"
-                )
-                data = dict(data)
-                data["summary_token_budget"] = data["summary_max_tokens"]
-        return data
 
 
 class DuckDuckGoConfig(BaseModel):

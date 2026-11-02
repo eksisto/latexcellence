@@ -209,7 +209,7 @@ writing_chat 是 `chat_stream_with_tools` 方法的主要消费者。该方法�
 | sessions_dir | data/writing_chat_sessions/ | 会话持久化目录（多用户模式 P6 按当前用户隔离到 `<users_root>/<user_id>/writing_chat_sessions/`，单用户行为不变） |
 | custom_prompts_dir | data/prompts/writing_chat/ | 助手提示词目录 |
 | summary_temperature | 0.2 | 摘要 LLM 温度 |
-| summary_token_budget | 6000 | 摘要最大 token 数（旧配置 `summary_max_tokens` 自动迁移并告警） |
+| summary_token_budget | 6000 | 摘要最大 token 数 |
 | summary_model | 空 | 独立摘要模型；为空时跟随主模型 |
 | evidence_bundle_enabled | true | 是否持久化结构化网页证据并校验证据 ID |
 | evidence_max_chars | 24000 | 单轮证据字符预算 |
