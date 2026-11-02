@@ -298,6 +298,20 @@ class TestDeleteUser:
         # 受害账号产生一个会话
         auth_core.create_session(victim["id"])
 
+        # 绑定行：other 作为协作者持有指向 victim 空间的绑定（转交后须刷新），
+        # victim 本人名下的绑定（删除后须随账号移除）
+        old_root = str(userspace.project_dir(victim["id"], pid))
+        db_module.db_execute(
+            "INSERT INTO workspace_bindings (workspace_id, user_id, project_id, "
+            "owner_id, root_path, last_active_at) VALUES (?, ?, ?, ?, ?, ?)",
+            ("ws-collab", other["id"], pid, victim["id"], old_root, now),
+        )
+        db_module.db_execute(
+            "INSERT INTO workspace_bindings (workspace_id, user_id, project_id, "
+            "owner_id, root_path, last_active_at) VALUES (?, ?, ?, ?, ?, ?)",
+            ("ws-owner", victim["id"], pid, victim["id"], old_root, now),
+        )
+
         result = auth_core.delete_user(victim["id"], admin["id"])
         assert result["status"] == "ok"
 
@@ -325,6 +339,23 @@ class TestDeleteUser:
         assert any(archive.glob(f"{victim['id']}_*"))
         # 项目目录迁移到管理员空间
         assert userspace.project_dir(admin["id"], pid).is_dir()
+        # 协作者的绑定行已刷新为管理员空间的新路径与属主
+        collab_binding = db_module.db_query_one(
+            "SELECT * FROM workspace_bindings WHERE workspace_id = ?", ("ws-collab",)
+        )
+        assert collab_binding is not None
+        assert collab_binding["owner_id"] == admin["id"]
+        assert collab_binding["root_path"] == str(
+            userspace.project_dir(admin["id"], pid)
+        )
+        # 被删用户本人的绑定行已随账号移除
+        assert (
+            db_module.db_count(
+                "SELECT COUNT(*) FROM workspace_bindings WHERE user_id = ?",
+                (victim["id"],),
+            )
+            == 0
+        )
 
     def test_api_delete_requires_admin_and_handles_unknown(self, mu_client):
         auth_core.create_user(ADMIN_U, ADMIN_P, role="admin", status="active")

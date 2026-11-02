@@ -456,9 +456,12 @@ def delete_user(user_id: str, acting_admin_id: str) -> dict:
     if admin is None or admin["role"] != "admin":
         raise ValueError("Only an admin can delete users")
 
+    from backend.core.workspace_manager import get_workspace_manager
+
     from .quota import next_available_name
 
     now = utcnow()
+    wm = get_workspace_manager()
     # 项目转交管理员（活动 + 回收站项目；回收站项目保留原删除状态）
     for row in db_query_all(
         "SELECT id, name, status FROM projects WHERE owner_id = ?", (user_id,)
@@ -474,7 +477,18 @@ def delete_user(user_id: str, acting_admin_id: str) -> dict:
             "UPDATE projects SET owner_id = ?, name = ?, updated_at = ? WHERE id = ?",
             (acting_admin_id, new_name, now, row["id"]),
         )
+        # workspace_bindings 行是全副本共享的权威：目录已迁到管理员空间，
+        # 绑定行的 owner_id/root_path 必须同步刷新，否则协作者与其他副本
+        # 的 workspace 会按已归档的旧路径打开项目且无自愈（与 projects
+        # 服务转交流程同口径）
+        wm.refresh_project_bindings(
+            row["id"],
+            owner_id=acting_admin_id,
+            root_path=str(userspace.project_dir(acting_admin_id, row["id"])),
+        )
     db_execute("DELETE FROM project_collaborators WHERE user_id = ?", (user_id,))
+    # 被删用户本人的绑定行无外键约束、无 TTL 清理，随账号删除一并移除
+    db_execute("DELETE FROM workspace_bindings WHERE user_id = ?", (user_id,))
     revoke_user_sessions(user_id)
 
     # 归档剩余用户空间（衍生数据；projects 已迁走）
