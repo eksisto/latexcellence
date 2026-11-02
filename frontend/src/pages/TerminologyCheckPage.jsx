@@ -409,7 +409,8 @@ export default function TerminologyCheckPage() {
       <div className="max-w-6xl mx-auto">
         <PageHeader
           title={t("pages:terminologyCheck.title")}
-          groupKey="textReview"
+
+          showWorkspace
         >
           <ModelBadge role="terminology_check" />
         </PageHeader>

@@ -315,7 +315,6 @@ export default function TemplateGenPage() {
         <PageHeader
           title={t("pages:templateGen.title")}
           description={t("pages:templateGen.agentHint")}
-          groupKey="contentGeneration"
         >
           <ModelBadge role="agent" />
         </PageHeader>

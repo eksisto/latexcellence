@@ -51,6 +51,7 @@ function projectStateReset() {
     projectPath: null,
     rootPath: null,
     projectId: null,
+    projectName: null,
     projectRole: null,
     fileTree: [],
     activeFile: null,
@@ -108,11 +109,13 @@ const useStore = create(
        * 权限实时查库可能变化，进入工作区时按需重新同步 projectRole。
        */
       projectId: null,
+      projectName: null, // 多用户项目显示名（页头「当前工作区」小字；单用户由路径推导）
       projectRole: null, // owner | editor | viewer
       setProjectId: (id) => set({ projectId: id }),
+      setProjectName: (name) => set({ projectName: name || null }),
       setProjectRole: (role) => set({ projectRole: role }),
-      setOpenedProject: ({ projectId, projectRole }) =>
-        set({ projectId, projectRole }),
+      setOpenedProject: ({ projectId, projectRole, projectName }) =>
+        set({ projectId, projectRole, projectName: projectName || null }),
       /** 会话失效 / 未登录：清空认证状态，并按登出同口径清空项目与检查结果态。
        * 此前只清项目身份字段，persist 的检查结果/写作会话跨 401 残留，
        * 同浏览器换账号登录会看到前一账号的数据（审查 Required#6）。 */
@@ -346,12 +349,14 @@ const useStore = create(
     {
       name: "latexcellence-project",
       // localStorage 结构版本（client-localstorage-schema）：结构变更时 +1 并补 migrate
-      version: 1,
+      version: 2,
       // v0 → v1：多用户模式新增 projectId/projectRole 持久化字段
+      // v1 → v2：新增 projectName（页头展示当前工作区）
       migrate: (persistedState) => ({
         ...persistedState,
         projectId: persistedState?.projectId ?? null,
         projectRole: persistedState?.projectRole ?? null,
+        projectName: persistedState?.projectName ?? null,
       }),
       onRehydrateStorage: () => (state, error) => {
         if (error) return;
@@ -366,6 +371,7 @@ const useStore = create(
         projectPath: state.projectPath,
         rootPath: state.rootPath,
         projectId: state.projectId,
+        projectName: state.projectName,
         projectRole: state.projectRole,
         activeFile: state.activeFile,
         mainFile: state.mainFile,

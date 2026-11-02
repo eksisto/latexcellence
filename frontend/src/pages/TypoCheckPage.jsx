@@ -264,7 +264,11 @@ export default function TypoCheckPage() {
   return (
     <div className="min-h-screen p-8 animate-tab-enter">
       <div className="max-w-6xl mx-auto">
-        <PageHeader title={t("pages:typoCheck.title")} groupKey="textReview">
+        <PageHeader
+          title={t("pages:typoCheck.title")}
+
+          showWorkspace
+        >
           <ModelBadge role="typo_check" />
         </PageHeader>
       </div>

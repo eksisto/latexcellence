@@ -507,7 +507,11 @@ export default function CodeReviewPage() {
   return (
     <div className="min-h-screen p-8 animate-tab-enter">
       <div className="max-w-6xl mx-auto">
-        <PageHeader title={t("pages:code_review.title")} groupKey="code_review">
+        <PageHeader
+          title={t("pages:code_review.title")}
+
+          showWorkspace
+        >
           <ModelBadge role="code_review" />
         </PageHeader>
       </div>

@@ -325,7 +325,8 @@ export default function GitDiffPage() {
         <div className="max-w-3xl mx-auto">
           <PageHeader
             title={t("pages:gitDiff.title")}
-            groupKey="versionControl"
+
+            showWorkspace
           />
           <EmptyState
             icon={GitBranch}
@@ -352,7 +353,8 @@ export default function GitDiffPage() {
         <PageHeader
           title={t("pages:gitDiff.title")}
           description={t("pages:gitDiff.description")}
-          groupKey="versionControl"
+
+          showWorkspace
         />
       </div>
 

@@ -68,6 +68,11 @@ test("参数化插值条目的组件传参变量与三语占位符一致", () =>
       // 供正则匹配 t() 调用的 key 片段（ns: 前缀之后的部分）
       key: "editorSettings.customCount",
     },
+    {
+      file: "components/WorkspaceBadge.jsx",
+      dictPath: "common.workspaceLabel",
+      key: "workspaceLabel",
+    },
   ];
   const placeholderNames = (template) =>
     [...template.matchAll(/\{\{(\w+)\}\}/g)].map((m) => m[1]).sort();
@@ -77,8 +82,17 @@ test("参数化插值条目的组件传参变量与三语占位符一致", () =>
       `${key.replace(/\./g, "\\.")}",\\s*\\{([^}]+)\\}`,
     ).exec(readSrc(file));
     assert.ok(m, `${file} 中应存在 ${key} 的 t() 调用（带选项对象）`);
-    const passed = [...m[1].matchAll(/([A-Za-z_]\w*)\s*:/g)]
-      .map((x) => x[1])
+    // 兼容显式 `name: value` 与简写 `name` 两种传参形式
+    const passed = m[1]
+      .split(",")
+      .map((part) => part.trim())
+      .map((part) => {
+        const named = /^([A-Za-z_]\w*)\s*:/.exec(part);
+        if (named) return named[1];
+        const shorthand = /^([A-Za-z_]\w*)$/.exec(part);
+        return shorthand ? shorthand[1] : null;
+      })
+      .filter(Boolean)
       .sort();
 
     for (const loc of localeFiles) {

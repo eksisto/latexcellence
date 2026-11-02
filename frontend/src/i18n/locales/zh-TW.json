@@ -16,6 +16,7 @@
     "noMatchResult": "目前篩選條件下沒有符合的結果",
     "noFileResult": "該檔案沒有檢查結果",
     "openWorkspace": "開啟工作區",
+    "workspaceLabel": "工作區 · {{name}}",
     "selectTexFile": "選擇 .tex 檔案",
     "includeSubfiles": "包含子檔案（展開 \\input）",
     "loadAndPreview": "載入並預覽",

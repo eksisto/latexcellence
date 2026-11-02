@@ -61,7 +61,7 @@ WelcomePage 采用「标题页 + 点线目录」构图：字标、slogan、「�
 
 使用 Zustand 5 + `persist` 中间件，持久化键 `"latexcellence-project"`。setter 支持 function updater 模式。持久化水合完成后设置 `hydrated: true`。
 
-状态切片：水合状态、功能开关、系统状态（主题色、workspaceId）、项目状态（路径、文件树、主文件）、style_modify Agent 恢复标识（session_id / revision / operation_id / mode）、写作助手（会话列表、消息）、各检查模块段落/结果、编译结果/进度、加载状态。`partialize` 持久化项目身份（含多用户 `projectId` / `projectRole`）、主题、style_modify Agent 恢复标识、各检查模块段落与结果（刷新后保鲜恢复）以及写作会话（列表、当前会话、消息、压缩标记）；不持久化完整源码、diff 和 trace。
+状态切片：水合状态、功能开关、系统状态（主题色、workspaceId）、项目状态（路径、文件树、主文件、多用户项目名）、style_modify Agent 恢复标识（session_id / revision / operation_id / mode）、写作助手（会话列表、消息）、各检查模块段落/结果、编译结果/进度、加载状态。`partialize` 持久化项目身份（含多用户 `projectId` / `projectName` / `projectRole`）、主题、style_modify Agent 恢复标识、各检查模块段落与结果（刷新后保鲜恢复）以及写作会话（列表、当前会话、消息、压缩标记）；不持久化完整源码、diff 和 trace。
 
 ### 程序化 UI 状态 `store/uiStore.js`
 
@@ -156,7 +156,8 @@ highlight.js 的按需注册与统一入口：
 | `ConfirmDialog.jsx` | 通用确认对话框（destructive 样式 + 禁止遮罩关闭） |
 | `ImageOCRPage.jsx` | 通用图片 OCR 页面组件（拖拽/粘贴/识别/复制；`renderResultMeta` 可接收 `(result, setResult)` 第二参数更新结果，FormulaOCR 未判定切换控件依赖此透传） |
 | `Wordmark.jsx` | STIX Two Text 排 "LaTeXcellence" |
-| `PageHeader.jsx` | 全站共享页头：返回链接 + `groupKey` 自动生成 "§N · 分组" kicker + 页面标题 + 右侧操作位（所有页面共用） |
+| `PageHeader.jsx` | 全站共享页头：返回链接 + 页面标题 + 可选描述 + 右侧操作位（所有页面共用）；`showWorkspace` 开启标题旁「当前工作区」小字 |
+| `WorkspaceBadge.jsx` | 页头「当前工作区」小字：多用户取 `store.projectName`，单用户取 `projectPath` / `rootPath` 的最后一段（Windows 分隔符兼容）；未打开项目或名称为空时不渲染，完整本地路径作为 title 提示 |
 | `EmptyState.jsx` | 共享空状态：细环图标 + 标题 + 描述 + 可选 CTA（无项目 / 恢复中 / 空结果） |
 | `ProofDiff.jsx` | 原文→修改后对照行：原文衬线删除线、改后加粗（`modified` 可传字符串或 ReactNode，术语检查传自定义 Input）；`code` prop（默认开启）将两侧切换为等宽字体 |
 | `ResultFilterBar.jsx` | 结果过滤工具栏（搜索框 + 类型下拉 + 段落跳转 + 重置） |
@@ -296,7 +297,7 @@ highlight.js 的按需注册与统一入口：
 ### 状态（useStore.js auth 切片）
 
 - `authStatus`（loading/single/authenticated/pending/unauthenticated）、`authUser`、`quota`、`usage`（来自 `/api/auth/me`）；
-- `projectId` / `projectRole`（owner/editor/viewer）持久化，刷新后按 `project_id` 恢复项目；
+- `projectId` / `projectName` / `projectRole`（owner/editor/viewer）持久化，刷新后按 `project_id` 恢复项目（项目名供页头「当前工作区」小字展示）；
 - `clearAuth` / `handleUnauthorized` / `logoutUser`（吊销会话 + 清空项目）。
 
 ### 路由守卫（App.jsx）

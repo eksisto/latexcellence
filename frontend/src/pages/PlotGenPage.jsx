@@ -146,7 +146,6 @@ export default function PlotGenPage() {
         <PageHeader
           title={t("pages:plotGen.title")}
           description={t("pages:plotGen.subtitle")}
-          groupKey="contentGeneration"
         >
           <ModelBadge role="agent" />
         </PageHeader>

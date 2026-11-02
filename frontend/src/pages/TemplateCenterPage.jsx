@@ -108,6 +108,7 @@ export default function TemplateCenterPage() {
           projectId: project.project_id,
           // 角色未知先置 null，工作台打开时经项目列表同步
           projectRole: null,
+          projectName: project.name || null,
         });
         toast.success(
           t("pages:templateCenter.create.successToast", {

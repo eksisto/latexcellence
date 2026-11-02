@@ -361,7 +361,8 @@ export default function VersionManagePage() {
         <div className="max-w-3xl mx-auto">
           <PageHeader
             title={t("pages:versionManage.title")}
-            groupKey="versionControl"
+
+            showWorkspace
           />
           <EmptyState
             icon={History}
@@ -405,7 +406,8 @@ export default function VersionManagePage() {
         <PageHeader
           title={t("pages:versionManage.title")}
           description={t("pages:versionManage.description")}
-          groupKey="versionControl"
+
+          showWorkspace
         />
 
         {!status ? (

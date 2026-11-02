@@ -6,7 +6,7 @@
  * 2. 相互独立的请求并行发出，消除打开关键路径的串行瀑布：
  *    · 项目列表（仅取当前项目 role —— 权限实时查库可能已变化，打开时刷新）
  *    · 主文档段落（可选，工作台需要；模块页恢复不需要）
- * 3. 统一写入 store（rootPath / fileTree / mainFile / activeFile / projectId / projectRole）。
+ * 3. 统一写入 store（rootPath / fileTree / mainFile / activeFile / projectId / projectName / projectRole）。
  *
  * 角色回退语义：
  * - 项目列表拉取成功但查无此项目 → "viewer"（只读兜底，访问可能已失效）；
@@ -41,13 +41,16 @@ export async function openMultiUserProject(
   }
   const [listResult, paragraphsResult] = await Promise.allSettled(tasks);
 
-  // 权限实时查库可能变化，打开后从项目列表同步最新角色
+  // 权限实时查库可能变化，打开后从项目列表同步最新角色与项目名。
+  // 列表拉取失败时保留已持久化的项目名（避免刷新后页头小字闪没）。
   let role = null;
+  let projectName = store.projectName || null;
   if (listResult.status === "fulfilled") {
     const p = (listResult.value.projects || []).find(
       (x) => x.project_id === projectId,
     );
     role = p?.role || "viewer";
+    projectName = p?.name || null;
   }
 
   store.setRootPath(data.root_path);
@@ -57,7 +60,7 @@ export async function openMultiUserProject(
   if (!preserveActiveFile || !store.activeFile) {
     store.setActiveFile(data.main_file);
   }
-  store.setOpenedProject({ projectId, projectRole: role });
+  store.setOpenedProject({ projectId, projectRole: role, projectName });
 
   const paragraphs =
     withParagraphs && paragraphsResult.status === "fulfilled"

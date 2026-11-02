@@ -144,7 +144,7 @@ export default function ImageOCRPage({
   return (
     <div className="min-h-screen p-8 animate-tab-enter">
       <div className="max-w-6xl mx-auto">
-        <PageHeader title={title} groupKey="contentImport">
+        <PageHeader title={title}>
           {/* OCR 槽位当前生效模型（formula_ocr / table_ocr 共用） */}
           <ModelBadge role="ocr" />
         </PageHeader>

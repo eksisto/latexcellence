@@ -206,6 +206,8 @@ export default function ProjectWorkbenchPage() {
   const usage = useStore((s) => s.usage);
   const setAuthMe = useStore((s) => s.setAuthMe);
   const setOpenedProject = useStore((s) => s.setOpenedProject);
+  const currentProjectId = useStore((s) => s.projectId);
+  const setProjectName = useStore((s) => s.setProjectName);
   const clearProject = useStore((s) => s.clearProject);
 
   const [tab, setTab] = useState("mine");
@@ -269,7 +271,12 @@ export default function ProjectWorkbenchPage() {
     if (!renameProject || !renameValue.trim()) return;
     setBusyAction(true);
     try {
-      await api.projects.rename(renameProject.project_id, renameValue.trim());
+      const nextName = renameValue.trim();
+      await api.projects.rename(renameProject.project_id, nextName);
+      // 当前已打开项目的名称同步到页头「当前工作区」小字，避免重命名后展示旧名
+      if (renameProject.project_id === currentProjectId) {
+        setProjectName(nextName);
+      }
       toast.success(t("pages:workbench.renamed"));
       setRenameProject(null);
       await loadAll();
@@ -280,7 +287,14 @@ export default function ProjectWorkbenchPage() {
     } finally {
       setBusyAction(false);
     }
-  }, [renameProject, renameValue, t, loadAll]);
+  }, [
+    renameProject,
+    renameValue,
+    currentProjectId,
+    setProjectName,
+    t,
+    loadAll,
+  ]);
 
   const handleDelete = useCallback(async () => {
     if (!deleteProject) return;
@@ -377,6 +391,7 @@ export default function ProjectWorkbenchPage() {
       setOpenedProject({
         projectId: project.project_id,
         projectRole: project.role,
+        projectName: project.name,
       });
       navigate("/workspace");
     },

@@ -199,7 +199,6 @@ export default function FormatConvertPage() {
         <PageHeader
           title={t("pages:formatConvert.title")}
           description={t("pages:formatConvert.subtitle")}
-          groupKey="contentImport"
         />
       </div>
 

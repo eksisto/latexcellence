@@ -145,7 +145,11 @@ export default function WritingChatPage() {
   return (
     <div className="min-h-screen p-4 md:p-8 animate-tab-enter">
       <div className="max-w-7xl mx-auto">
-        <PageHeader title={t("pages:writingChat.title")} groupKey="aiAssist">
+        <PageHeader
+          title={t("pages:writingChat.title")}
+
+          showWorkspace
+        >
           <ModelBadge role="writing_chat" />
         </PageHeader>
       </div>

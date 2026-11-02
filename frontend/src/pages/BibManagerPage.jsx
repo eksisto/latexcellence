@@ -438,7 +438,8 @@ export default function BibManagerPage() {
       <div className="max-w-6xl mx-auto">
         <PageHeader
           title={t("pages:bibManager.title")}
-          groupKey="contentGeneration"
+
+          showWorkspace
         />
       </div>
 

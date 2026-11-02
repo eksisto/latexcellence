@@ -842,8 +842,9 @@ export default function EditorPage() {
         <div className="max-w-6xl mx-auto space-y-4">
           <PageHeader
             title={t("pages:editor.title")}
-            groupKey="aiAssist"
+
             className="mb-0"
+            showWorkspace
           />
           <EmptyState
             icon={FileCode}
@@ -874,8 +875,9 @@ export default function EditorPage() {
         <div className="max-w-6xl mx-auto space-y-4">
           <PageHeader
             title={t("pages:editor.title")}
-            groupKey="aiAssist"
+
             className="mb-0"
+            showWorkspace
           />
           <EmptyState
             icon={FileCode}
@@ -904,8 +906,9 @@ export default function EditorPage() {
           左内边距 8px）左缘恰好重合 48px */}
       <PageHeader
         title={t("pages:editor.title")}
-        groupKey="aiAssist"
+
         className="mb-1 ml-6 shrink-0"
+        showWorkspace
       />
 
       <EditorToolbar

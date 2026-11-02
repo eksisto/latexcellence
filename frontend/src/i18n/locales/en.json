@@ -16,6 +16,7 @@
     "noMatchResult": "No results match the current filters",
     "noFileResult": "No results for this file",
     "openWorkspace": "Open Workspace",
+    "workspaceLabel": "Workspace · {{name}}",
     "selectTexFile": "Select .tex file",
     "includeSubfiles": "Include subfiles (expand \\input)",
     "loadAndPreview": "Load & Preview",

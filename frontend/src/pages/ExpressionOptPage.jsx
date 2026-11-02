@@ -411,7 +411,8 @@ export default function ExpressionOptPage() {
       <div className="max-w-6xl mx-auto">
         <PageHeader
           title={t("pages:expressionOpt.title")}
-          groupKey="textReview"
+
+          showWorkspace
         >
           <ModelBadge role="expression_opt" />
         </PageHeader>

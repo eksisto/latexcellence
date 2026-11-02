@@ -314,7 +314,8 @@ export default function ParagraphTranslatePage() {
       <div className="max-w-6xl mx-auto">
         <PageHeader
           title={t("pages:paragraphTranslate.title")}
-          groupKey="textReview"
+
+          showWorkspace
         >
           <ModelBadge role="paragraph_translate" />
         </PageHeader>
