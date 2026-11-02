@@ -2,6 +2,8 @@
 
 import json
 
+import pytest
+
 from backend.core.config import get_config
 from tests.test_template_library.conftest import (
     make_manifest,
@@ -355,6 +357,34 @@ class TestFromProject:
             json={"workspace_id": "ws-none", "name": "x"},
         )
         assert r.status_code == 400
+
+    def test_save_project_skips_symlinks(self, su_client, su_env, tmp_path):
+        """入库复制跳过符号链接：symlinks=False 会把链接目标内容内联复制，
+        项目内指向外部（含其他用户空间）的链接不得借入库把任意文件带进
+        模板库或新建项目。"""
+        from backend.core.workspace_manager import get_project_manager_for_workspace
+
+        secret = tmp_path / "outside.secret"
+        secret.write_text("top secret", encoding="utf-8")
+
+        project_dir = su_env / "proj-link"
+        project_dir.mkdir(parents=True)
+        (project_dir / "main.tex").write_text("x", encoding="utf-8")
+        try:
+            (project_dir / "leak.tex").symlink_to(secret)
+        except OSError:
+            pytest.skip("symlink not supported on this filesystem")
+        get_project_manager_for_workspace("ws-link").open(str(project_dir))
+        r = su_client.post(
+            "/api/templates/from-project",
+            json={"workspace_id": "ws-link", "name": "链接模板"},
+        )
+        assert r.status_code == 201, r.text
+        tpl = r.json()["template"]
+        detail = su_client.get(f"/api/templates/{tpl['id']}").json()
+        paths = [f["path"] for f in detail["files"]]
+        assert "main.tex" in paths
+        assert "leak.tex" not in paths
 
 
 class TestFeatureDisabled:

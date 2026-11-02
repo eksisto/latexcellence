@@ -158,6 +158,9 @@ def _make_clean_ignore(
     """构造 shutil.copytree 的 ignore 回调（清洗规则唯一实现）。
 
     - 排除 .git/ 与编译产物扩展名（任意层级）
+    - 符号链接一律剔除：copytree 的 symlinks=False 会把链接目标内容
+      内联复制，项目内指向用户空间外的链接可借此把任意文件带进模板库
+      或新建项目（同模块文件枚举/打包路径均已跳过符号链接）
     - exclude_builtin_meta：另排除内置模板的 manifest.json 与 assets/
     - extra_names / extra_suffixes：来源特定排除（如 template_gen 的
       trace.jsonl 与 PDF 编译输出）
@@ -166,6 +169,9 @@ def _make_clean_ignore(
     def _ignore(_directory: str, names: list[str]) -> set[str]:
         ignored: set[str] = set()
         for name in names:
+            if (Path(_directory) / name).is_symlink():
+                ignored.add(name)
+                continue
             if name in _CLEAN_EXCLUDE_NAMES or name in extra_names:
                 ignored.add(name)
                 continue

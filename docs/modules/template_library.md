@@ -66,7 +66,7 @@ Prefix: `/api/templates`, Tag: `template_library`。`features.template_library.e
 
 ### 从模板创建项目（create-project）
 
-纯复制模板文件树为新项目，无变量替换。项目名由用户输入。复制前按清洗规则剔除库元数据与编译产物。
+纯复制模板文件树为新项目，无变量替换。项目名由用户输入。复制前按清洗规则剔除库元数据与编译产物，符号链接条目一律跳过（防链接目标内容被内联复制带出用户空间）。
 
 - **多用户**：配额预检（项目空间，超限 413，项目不落位）→ `move_into_user_space` 落位（失败清理残留）→ `create_project_row` 建行 → `schedule_auto_init` 异步初始化 Git——与上传创建完全同一条链路，同名自动去重。响应 `{project: {project_id, name}}`。
 - **单用户**：`{name, target_dir}`，创建 `<target_dir>/<项目名>/`。目标已存在且非空报 409。响应 `{project: {name, path}}`。
@@ -75,7 +75,7 @@ Prefix: `/api/templates`, Tag: `template_library`。`features.template_library.e
 
 ### 入库通道（upload / from-project / from-template-gen）
 
-三者共用 `_ingest_from_directory()`：清洗复制源目录到暂存区 → 构造 manifest → 衍生配额校验（多用户，超限 413）→ 复制入库 → 刷新用量缓存。差异仅在源与额外排除：
+三者共用 `_ingest_from_directory()`：清洗复制源目录到暂存区（符号链接条目剔除，与文件枚举/打包路径的跳过策略一致）→ 构造 manifest → 衍生配额校验（多用户，超限 413）→ 复制入库 → 刷新用量缓存。差异仅在源与额外排除：
 
 | 通道 | 源 | 额外排除 |
 | --- | --- | --- |
