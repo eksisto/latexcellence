@@ -20,12 +20,10 @@ from typing import Any, ClassVar, Literal
 
 from pydantic import BaseModel, model_validator
 
-from backend.core import access_control
 from backend.core.base_paragraph_check import BaseParagraphCheckService
 from backend.core.config import get_config
 from backend.core.multiuser import llm_governance
 from backend.core.prompts import get_prompt
-from backend.core.workspace_manager import get_project_manager_for_workspace
 from backend.utils.latex_formatter import format_latex_source
 from backend.utils.latex_json_guard import LatexText
 from backend.utils.latex_parser import MARKER_PATTERN
@@ -261,61 +259,11 @@ class CodeReviewService(BaseParagraphCheckService):
             **extra,
         }
 
-    # ── 覆写：直接写回格式化后的原始 LaTeX（无需 marker 还原）─────────────
-
-    def apply_changes(
-        self,
-        file_path: str,
-        changes: list[dict[str, Any]],
-        workspace_id: str = "",
-        operation_id: str | None = None,
-    ) -> dict[str, Any]:
-        """
-        将 latexindent 格式化结果写回源文件。
-
-        new_text 已是原始 LaTeX（无 marker），直接写回。
-        LLM 建议仅在前端展示，不自动写回源码。
-        """
-        from backend.core.project_manager import FileConflictError
-
-        pm = get_project_manager_for_workspace(workspace_id)
-        applied = 0
-        errors: list[dict[str, Any]] = []
-
-        for change in changes:
-            idx = change["paragraph_index"]
-            new_text = change["new_text"]
-            target_file = change.get("file_path", file_path)
-            expected_md5 = change.get("expected_md5")
-
-            try:
-                pm.apply_change(target_file, idx, new_text, expected_md5=expected_md5)
-                applied += 1
-                self._logger.info(
-                    f"Applied code review change to paragraph {idx} in {target_file}"
-                    f" [op={operation_id or 'legacy'}]"
-                )
-            except FileConflictError as e:
-                self._logger.warning(
-                    f"File conflict for paragraph {idx} in {target_file}: {e}"
-                )
-                errors.append(
-                    {
-                        "paragraph_index": idx,
-                        "file_path": target_file,
-                        "reason": "file_conflict",
-                        "detail": str(e),
-                        "expected_md5": e.expected_md5,
-                        "current_md5": e.current_md5,
-                    }
-                )
-
-        if applied:
-            # 多用户模式：写盘后刷新项目用量记账（单用户无绑定，静默跳过）。
-            # 本方法为同步执行，使用同步版刷新避免再起线程
-            access_control.refresh_workspace_project_usage_sync(workspace_id)
-
-        return {"applied": applied, "total": len(changes), "errors": errors}
+    # ── 写回 ────────────────────────────────────────────────────────────────
+    # apply_changes 直接继承基类：本模块 use_marker_protection=False，
+    # 基类对该分支原生跳过 marker 还原、直接写回 new_text，行为与
+    # 曾有的覆写完全一致（含 FileConflictError 结构与用量记账刷新），
+    # 避免复制基类实现产生漂移。
 
     # ── Hook 实现 ───────────────────────────────────────────────────────────
 
