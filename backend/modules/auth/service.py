@@ -58,6 +58,11 @@ async def register(username: str, password: str, email: str, ip: str = "") -> di
     perr = auth_core.validate_password(password)
     if perr:
         raise _http(400, "invalid_password", perr)
+    eerr = auth_core.validate_email(email)
+    if eerr:
+        # 邮箱非法须按 400 invalid_email 返回，不能落进下方重名分支
+        # 被误报为 409 username_taken
+        raise _http(400, "invalid_email", eerr)
     clean_ip = (ip or "").strip()
     # 每 IP 注册限流：被拒绝的请求不落行、不创建用户（同登录限流口径）
     if await asyncio.to_thread(

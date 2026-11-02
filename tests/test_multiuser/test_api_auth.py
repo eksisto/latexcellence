@@ -260,6 +260,19 @@ class TestRegisterApproveLoginFlow:
         assert r.status_code == 400
         assert r.json()["detail"]["error"] == "invalid_password"
 
+    def test_register_invalid_email(self, mu_client):
+        """邮箱格式非法返回 400 invalid_email，不得误报 409 username_taken。"""
+        r = mu_client.post(
+            "/api/auth/register",
+            json={
+                "username": "alice",
+                "password": "password-123",
+                "email": "not-an-email",
+            },
+        )
+        assert r.status_code == 400
+        assert r.json()["detail"]["error"] == "invalid_email"
+
     def test_register_duplicate_username(self, mu_client):
         auth_core.create_user("alice", "password-123")
         r = mu_client.post(
