@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useMemo } from "react";
+import { useState, useCallback, useEffect, useMemo, memo } from "react";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
 import { useTranslation } from "react-i18next";
@@ -56,6 +56,137 @@ import { resultDomId } from "@/utils/resultDomId";
 
 /** 结果卡 DOM id 前缀：与 useResultFilter 跳转共用同一契约（resultDomId）。 */
 const RESULT_ID_PREFIX = "expr-result";
+
+/**
+ * 单条优化建议卡片（rerender-memo，对齐 TypoResultCard 模式）：
+ * 单/双文件分支共用一份实现。单文件分支此前缺 unlisted_changes 处理，
+ * 该类结果落入「无建议」文案——修改后的全文不可见、无应用/忽略入口。
+ */
+const ExpressionResultCard = memo(function ExpressionResultCard({
+  result,
+  paragraphs,
+  paragraphMap,
+  onApply,
+  onIgnore,
+  canWrite,
+}) {
+  const { t } = useTranslation(["pages", "common"]);
+  const hasChanges = result.changes && result.changes.length > 0;
+  const hasUnlistedChanges = result.unlisted_changes === true;
+  return (
+    <Card
+      id={resultDomId(
+        RESULT_ID_PREFIX,
+        result.file_path,
+        result.paragraph_index,
+      )}
+      className="[content-visibility:auto] [contain-intrinsic-size:auto_180px]"
+    >
+      <CardHeader className="pb-2">
+        <div className="flex items-center justify-between">
+          <CardTitle className="text-sm">
+            {t("pages:expressionOpt.paragraphLabel", {
+              index: result.paragraph_index,
+            })}
+          </CardTitle>
+          {hasChanges && (
+            <span className="rounded bg-destructive/10 text-destructive px-1.5 py-0.5 text-xs font-medium">
+              {result.changes.length} {t("pages:expressionOpt.suggestions")}
+            </span>
+          )}
+          {hasUnlistedChanges && (
+            <UnlistedChangesBadge
+              label={t("pages:expressionOpt.unlistedChangesBadge")}
+            />
+          )}
+        </div>
+      </CardHeader>
+      <CardContent>
+        <div className="space-y-3">
+          {hasChanges ? (
+            <>
+              <ul className="space-y-2">
+                {result.changes.map((change, i) => (
+                  <li
+                    key={i}
+                    className="rounded border border-border bg-background p-2 text-sm"
+                  >
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="rounded bg-green-500/10 text-green-600 dark:text-green-400 px-1 py-0.5 text-xs font-medium">
+                        {change.type}
+                      </span>
+                      {change.reason && (
+                        <span className="text-muted-foreground text-xs">
+                          {change.reason}
+                        </span>
+                      )}
+                    </div>
+                    <ProofDiff
+                      original={change.original}
+                      modified={change.optimized}
+                    />
+                  </li>
+                ))}
+              </ul>
+              <div className="flex items-center gap-2">
+                <Button
+                  size="sm"
+                  onClick={() =>
+                    onApply(
+                      result.paragraph_index,
+                      result.optimized,
+                      result.file_path,
+                    )
+                  }
+                  disabled={!canWrite}
+                >
+                  {t("pages:expressionOpt.applyOptimization")}
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() =>
+                    onIgnore(result.paragraph_index, result.file_path)
+                  }
+                >
+                  {t("common:ignore")}
+                </Button>
+              </div>
+            </>
+          ) : hasUnlistedChanges ? (
+            <UnlistedChangesBody
+              text={result.optimized}
+              message={t("pages:expressionOpt.unlistedChanges")}
+              applyLabel={t("pages:expressionOpt.applyOptimization")}
+              applyDisabled={!canWrite}
+              onApply={() =>
+                onApply(
+                  result.paragraph_index,
+                  result.optimized,
+                  result.file_path,
+                )
+              }
+              onIgnore={() =>
+                onIgnore(result.paragraph_index, result.file_path)
+              }
+            />
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              {t("pages:expressionOpt.noSuggestions")}
+            </p>
+          )}
+          <ParagraphContext
+            currentIndex={result.paragraph_index}
+            filePath={result.file_path}
+            paragraphs={paragraphs}
+            paragraphMap={paragraphMap}
+            currentText={result.plain_text || result.original}
+          />
+        </div>
+      </CardContent>
+    </Card>
+  );
+});
 
 export default function ExpressionOptPage() {
   const { t } = useTranslation(["pages", "common"]);
@@ -577,8 +708,12 @@ export default function ExpressionOptPage() {
 
             {expressionResults.length > 0 && (
               <div className="space-y-4">
+                {/* 可见性与 hook 的 hasResultIssue 同口径：unlisted 结果
+                    也是待应用项，unlisted-only 结果集下按钮不得隐藏 */}
                 {expressionResults.some(
-                  (r) => r.changes && r.changes.length > 0,
+                  (r) =>
+                    (r.changes && r.changes.length > 0) ||
+                    r.unlisted_changes === true,
                 ) && (
                   <div className="flex justify-end">
                     <Button
@@ -627,251 +762,34 @@ export default function ExpressionOptPage() {
                               {t("pages:expressionOpt.noFileResult")}
                             </p>
                           ) : (
-                            (resultsByFile[f] || []).map((result) => {
-                              const hasChanges =
-                                result.changes && result.changes.length > 0;
-                              const hasUnlistedChanges =
-                                result.unlisted_changes === true;
-                              return (
-                                <Card
-                                  key={`${result.file_path}-expr-result-P${result.paragraph_index}`}
-                                  id={resultDomId(
-                                    RESULT_ID_PREFIX,
-                                    result.file_path,
-                                    result.paragraph_index,
-                                  )}
-                                  className="[content-visibility:auto] [contain-intrinsic-size:auto_180px]"
-                                >
-                                  <CardHeader className="pb-2">
-                                    <div className="flex items-center justify-between">
-                                      <CardTitle className="text-sm">
-                                        {t(
-                                          "pages:expressionOpt.paragraphLabel",
-                                          { index: result.paragraph_index },
-                                        )}
-                                      </CardTitle>
-                                      {hasChanges && (
-                                        <span className="rounded bg-destructive/10 text-destructive px-1.5 py-0.5 text-xs font-medium">
-                                          {result.changes.length}{" "}
-                                          {t("pages:expressionOpt.suggestions")}
-                                        </span>
-                                      )}
-                                      {hasUnlistedChanges && (
-                                        <UnlistedChangesBadge
-                                          label={t(
-                                            "pages:expressionOpt.unlistedChangesBadge",
-                                          )}
-                                        />
-                                      )}
-                                    </div>
-                                  </CardHeader>
-                                  <CardContent>
-                                    <div className="space-y-3">
-                                      {hasChanges ? (
-                                        <>
-                                          <ul className="space-y-2">
-                                            {result.changes.map((change, i) => (
-                                              <li
-                                                key={i}
-                                                className="rounded border border-border bg-background p-2 text-sm"
-                                              >
-                                                <div className="flex items-center gap-2 mb-1">
-                                                  <span className="rounded bg-green-500/10 text-green-600 dark:text-green-400 px-1 py-0.5 text-xs font-medium">
-                                                    {change.type}
-                                                  </span>
-                                                  {change.reason && (
-                                                    <span className="text-muted-foreground text-xs">
-                                                      {change.reason}
-                                                    </span>
-                                                  )}
-                                                </div>
-                                                <ProofDiff
-                                                  original={change.original}
-                                                  modified={change.optimized}
-                                                />
-                                              </li>
-                                            ))}
-                                          </ul>
-                                          <div className="flex items-center gap-2">
-                                            <Button
-                                              size="sm"
-                                              onClick={() =>
-                                                handleApplyChange(
-                                                  result.paragraph_index,
-                                                  result.optimized,
-                                                  result.file_path,
-                                                )
-                                              }
-                                              disabled={!canWrite}
-                                            >
-                                              {t(
-                                                "pages:expressionOpt.applyOptimization",
-                                              )}
-                                            </Button>
-                                            <Button
-                                              size="sm"
-                                              variant="outline"
-                                              onClick={() =>
-                                                handleIgnoreChange(
-                                                  result.paragraph_index,
-                                                  result.file_path,
-                                                )
-                                              }
-                                            >
-                                              {t("common:ignore")}
-                                            </Button>
-                                          </div>
-                                        </>
-                                      ) : hasUnlistedChanges ? (
-                                        <UnlistedChangesBody
-                                          text={result.optimized}
-                                          message={t(
-                                            "pages:expressionOpt.unlistedChanges",
-                                          )}
-                                          applyLabel={t(
-                                            "pages:expressionOpt.applyOptimization",
-                                          )}
-                                          applyDisabled={!canWrite}
-                                          onApply={() =>
-                                            handleApplyChange(
-                                              result.paragraph_index,
-                                              result.optimized,
-                                              result.file_path,
-                                            )
-                                          }
-                                          onIgnore={() =>
-                                            handleIgnoreChange(
-                                              result.paragraph_index,
-                                              result.file_path,
-                                            )
-                                          }
-                                        />
-                                      ) : (
-                                        <p className="text-sm text-muted-foreground">
-                                          {t(
-                                            "pages:expressionOpt.noSuggestions",
-                                          )}
-                                        </p>
-                                      )}
-                                      <ParagraphContext
-                                        currentIndex={result.paragraph_index}
-                                        filePath={result.file_path}
-                                        paragraphs={expressionParagraphs}
-                                        paragraphMap={paragraphMap}
-                                        currentText={
-                                          result.plain_text || result.original
-                                        }
-                                      />
-                                    </div>
-                                  </CardContent>
-                                </Card>
-                              );
-                            })
+                            (resultsByFile[f] || []).map((result) => (
+                              <ExpressionResultCard
+                                key={`${result.file_path}:${result.paragraph_index}`}
+                                result={result}
+                                paragraphs={expressionParagraphs}
+                                paragraphMap={paragraphMap}
+                                onApply={handleApplyChange}
+                                onIgnore={handleIgnoreChange}
+                                canWrite={canWrite}
+                              />
+                            ))
                           )}
                         </div>
                       </TabsContent>
                     ))}
                   </Tabs>
                 ) : (
-                  filteredResults.map((result) => {
-                    const hasChanges =
-                      result.changes && result.changes.length > 0;
-                    return (
-                      <Card
-                        key={result.paragraph_index}
-                        id={resultDomId(
-                          RESULT_ID_PREFIX,
-                          result.file_path,
-                          result.paragraph_index,
-                        )}
-                      >
-                        <CardHeader className="pb-2">
-                          <div className="flex items-center justify-between">
-                            <CardTitle className="text-sm">
-                              {t("pages:expressionOpt.paragraphLabel", {
-                                index: result.paragraph_index,
-                              })}
-                            </CardTitle>
-                            {hasChanges && (
-                              <span className="rounded bg-destructive/10 text-destructive px-1.5 py-0.5 text-xs font-medium">
-                                {result.changes.length}{" "}
-                                {t("pages:expressionOpt.suggestions")}
-                              </span>
-                            )}
-                          </div>
-                        </CardHeader>
-                        <CardContent>
-                          <div className="space-y-3">
-                            {hasChanges ? (
-                              <>
-                                <ul className="space-y-2">
-                                  {result.changes.map((change, i) => (
-                                    <li
-                                      key={i}
-                                      className="rounded border border-border bg-background p-2 text-sm"
-                                    >
-                                      <div className="flex items-center gap-2 mb-1">
-                                        <span className="rounded bg-green-500/10 text-green-600 dark:text-green-400 px-1 py-0.5 text-xs font-medium">
-                                          {change.type}
-                                        </span>
-                                        {change.reason && (
-                                          <span className="text-muted-foreground text-xs">
-                                            {change.reason}
-                                          </span>
-                                        )}
-                                      </div>
-                                      <ProofDiff
-                                        original={change.original}
-                                        modified={change.optimized}
-                                      />
-                                    </li>
-                                  ))}
-                                </ul>
-                                <div className="flex items-center gap-2">
-                                  <Button
-                                    size="sm"
-                                    onClick={() =>
-                                      handleApplyChange(
-                                        result.paragraph_index,
-                                        result.optimized,
-                                        result.file_path,
-                                      )
-                                    }
-                                    disabled={!canWrite}
-                                  >
-                                    {t("pages:expressionOpt.applyOptimization")}
-                                  </Button>
-                                  <Button
-                                    size="sm"
-                                    variant="outline"
-                                    onClick={() =>
-                                      handleIgnoreChange(
-                                        result.paragraph_index,
-                                        result.file_path,
-                                      )
-                                    }
-                                  >
-                                    {t("common:ignore")}
-                                  </Button>
-                                </div>
-                              </>
-                            ) : (
-                              <p className="text-sm text-muted-foreground">
-                                {t("pages:expressionOpt.noSuggestions")}
-                              </p>
-                            )}
-                            <ParagraphContext
-                              currentIndex={result.paragraph_index}
-                              filePath={result.file_path}
-                              paragraphs={expressionParagraphs}
-                              paragraphMap={paragraphMap}
-                              currentText={result.plain_text || result.original}
-                            />
-                          </div>
-                        </CardContent>
-                      </Card>
-                    );
-                  })
+                  filteredResults.map((result) => (
+                    <ExpressionResultCard
+                      key={`${result.file_path}:${result.paragraph_index}`}
+                      result={result}
+                      paragraphs={expressionParagraphs}
+                      paragraphMap={paragraphMap}
+                      onApply={handleApplyChange}
+                      onIgnore={handleIgnoreChange}
+                      canWrite={canWrite}
+                    />
+                  ))
                 )}
               </div>
             )}
