@@ -101,8 +101,10 @@ class TavilyEngine(BaseSearchEngine):
                 self._api_url, json=payload, headers=headers, timeout=timeout
             )
         except httpx.ConnectError as e:
+            # 连接失败必须作为错误向上抛出：返回空结果会被上层当作
+            # "搜索无结果"，主引擎断网时不触发降级、熔断计数也不累计
             self._logger.error(f"Tavily connection failed: {e}")
-            return SearchResponse(query=query, engine=self.name, results=[])
+            raise RuntimeError(f"Tavily search connection failed: {e}") from e
 
         if resp.status_code == 429 and not api_key:
             self._logger.warning(

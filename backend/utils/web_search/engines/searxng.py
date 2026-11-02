@@ -90,8 +90,10 @@ class SearXNGEngine(BaseSearchEngine):
                 url, params=params, headers=headers, timeout=timeout
             )
         except httpx.ConnectError as e:
+            # 连接失败必须作为错误向上抛出：返回空结果会被上层当作
+            # "搜索无结果"，主引擎断网时不触发降级、熔断计数也不累计
             self._logger.error(f"SearXNG connection failed: {e}")
-            return SearchResponse(query=query, engine=self.name, results=[])
+            raise RuntimeError(f"SearXNG search connection failed: {e}") from e
 
         if resp.status_code != 200:
             self._logger.warning(

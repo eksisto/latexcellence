@@ -271,3 +271,20 @@ async def test_manager_skips_tavily_when_disabled(monkeypatch):
         assert manager._primary.name == "duckduckgo"
     finally:
         reset_search_manager()
+
+
+@pytest.mark.asyncio
+async def test_tavily_connect_error_raises_instead_of_empty():
+    """连接失败必须作为错误抛出：返回空结果会被上层当作"搜索无结果"，
+    主引擎断网时不触发降级、熔断计数也不累计。"""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        raise httpx.ConnectError("connection refused")
+
+    client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+    engine = TavilyEngine()
+    try:
+        with pytest.raises(RuntimeError, match="connection failed"):
+            await engine._do_search(client, "latex", 5, "tvly-test")
+    finally:
+        await client.aclose()
