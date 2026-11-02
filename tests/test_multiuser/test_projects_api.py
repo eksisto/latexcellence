@@ -339,6 +339,24 @@ class TestDownload:
         r = client.get(f"/api/projects/{pid}/download")
         assert r.status_code == 403
 
+    def test_download_failure_hides_absolute_paths(
+        self, env, alice_client, monkeypatch
+    ):
+        """打包失败只回固定错误文案，OSError 携带的服务器路径仅进日志。"""
+        from backend.modules.projects import service as projects_service
+
+        pid = _make_project(env, env["alice"]["id"], "P", {"main.tex": "hello"})
+        leak = "/tmp/latexcellence-hidden/abcdef/main.tex"
+
+        def boom(source_dir, zip_path):
+            raise OSError(f"[Errno 13] Permission denied: '{leak}'")
+
+        monkeypatch.setattr(projects_service, "_build_zip", boom)
+        r = alice_client.get(f"/api/projects/{pid}/download")
+        assert r.status_code == 400
+        assert r.json()["detail"]["error"] == "download_failed"
+        assert "latexcellence-hidden" not in r.text
+
 
 # ── 写回超限 ─────────────────────────────────────────────────────
 class TestWriteQuota:

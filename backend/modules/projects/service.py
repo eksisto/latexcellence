@@ -155,7 +155,8 @@ async def upload_create_project(
             raise sandbox_http
         logger.exception("Unexpected extraction failure for upload %s", upload_id)
         _cleanup_staging(staging_dir)
-        raise _http(400, "invalid_archive", f"Failed to extract archive: {e}")
+        # 解压异常原文可能携带 staging 绝对路径，仅进服务端日志
+        raise _http(400, "invalid_archive", "Failed to extract archive")
 
     # 配额最终复核（解压后总量 + 现有用量不得超过有效配额）
     project_id = uuid.uuid4().hex
@@ -535,10 +536,12 @@ async def download_project(user_id: str, project_id: str) -> tuple[str, str, Pat
     zip_path = temp_root / f"{sanitize_project_name(row['name'])}.zip"
     try:
         await asyncio.to_thread(_build_zip, str(root), str(zip_path))
-    except Exception as e:
+    except Exception:
+        # 打包异常原文（OSError 等）携带用户空间绝对路径，仅进服务端日志；
+        # 客户端按 download_failed 错误码取固定文案
         shutil.rmtree(temp_root, ignore_errors=True)
         logger.exception("Failed to build download zip for project %s", project_id)
-        raise _http(400, "download_failed", f"Failed to package project: {e}")
+        raise _http(400, "download_failed", "Failed to package project")
     download_name = f"{sanitize_project_name(row['name'])}.zip"
     return str(zip_path), download_name, temp_root
 
