@@ -11,6 +11,7 @@ import re
 import shutil
 import uuid
 from collections.abc import AsyncIterator
+from pathlib import Path
 from typing import Any
 
 from backend.core.config import get_config
@@ -21,7 +22,7 @@ from backend.core.llm_client import (
 from backend.core.logger import get_logger
 from backend.core.model_router import get_client_for
 from backend.core.prompts import get_prompt
-from backend.modules.style_modify.models import CompileSummary
+from backend.modules.style_modify.models import CompileSummary, SessionMeta
 from backend.modules.style_modify.session import get_session_store
 from backend.modules.style_modify.trace import append_trace, now_iso
 from backend.utils.agent_file_tools import (
@@ -34,12 +35,38 @@ from backend.utils.agent_file_tools import (
     build_agent_file_tools_schema,
     normalize_line_range,
 )
+from backend.utils.tex_compile import sanitize_output_paths
 
 STYLE_FILE_TOOL_NAMES = AgentFileToolNames(
     write="stage_replace",
     read="read_project_file",
     list="list_project_files",
 )
+
+
+def _tool_failure_text(exc: BaseException, meta: SessionMeta) -> str:
+    """工具异常文本入 LLM 消息 / SSE / trace 前的统一构造口。
+
+    失败详情帮助模型自纠（路径非法、文件不存在等），但异常原文可能携带
+    服务器绝对路径。多用户模式下按项目根与会话目录前缀改写为相对形式；
+    两个根目录均不可解析时降级为无详情稳定文案；单用户模式保留原文。
+    完整原文已由调用方记入服务端日志。
+    """
+    if not get_config().multi_user.enabled:
+        return f"Tool execution failed: {exc}"
+    bases: list[Path] = []
+    if meta.project_root:
+        bases.append(Path(meta.project_root))
+    try:
+        bases.append(get_session_store().session_dir(meta.session_id))
+    except Exception:
+        pass
+    if not bases:
+        return "Tool execution failed."
+    text = f"{type(exc).__name__}: {exc}"
+    for base in bases:
+        text = sanitize_output_paths(text, base)
+    return f"Tool execution failed: {text}"
 
 
 class StyleModifyAgent:
@@ -199,17 +226,12 @@ class StyleModifyAgent:
         max_rounds = fcfg.max_rounds
         max_tool_calls = fcfg.max_tool_calls
         max_compile_runs = fcfg.max_compile_runs
+        # 会话元数据供 stale 锚点与工具异常脱敏共用，入口加载一次
+        # （run/refine 入口已做过归属校验，此处失败与其同样快速失败）。
+        meta = self._store.load_meta(session_id)
         # 只有工具链可用时才以上次成功编译的快照作为本轮 stale 锚点；
         # 工具链缺失时该快照无法刷新，继续使用只会让 finish 被无限拒绝。
-        verified_snapshot = None
-        if tex_available:
-            try:
-                verified_snapshot = self._store.load_meta(session_id).last_verified_md5s
-            except (ValueError, OSError) as e:
-                self._logger.warning(
-                    "style_modify failed to load verified overlay snapshot: %s",
-                    e,
-                )
+        verified_snapshot = meta.last_verified_md5s if tex_available else None
         compile_state: dict[str, Any] = {
             "called": False,
             "success": None,
@@ -282,7 +304,9 @@ class StyleModifyAgent:
                         "data": {"message": str(e)},
                     },
                 )
-                yield {"type": "error", "message": str(e)}
+                # LLM 流异常原文（provider URL、请求详情等）不下发前端，
+                # 收敛为稳定错误码；完整原文在服务端日志与 trace 中。
+                yield {"type": "error", "message": "internal_error"}
                 return
 
             content = "".join(content_parts)
@@ -487,7 +511,7 @@ class StyleModifyAgent:
                     )
                 except Exception as e:
                     self._logger.warning("style_modify tool exception: %s", e)
-                    result_text = f"Tool execution failed: {e}"
+                    result_text = _tool_failure_text(e, meta)
                     result_event = {
                         "tool": tool_name,
                         "ok": False,

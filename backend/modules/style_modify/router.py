@@ -120,8 +120,10 @@ async def modify_latex(request: ModifyRequest):
         raise HTTPException(status_code=400, detail=str(e))
     except RuntimeError as e:
         raise HTTPException(status_code=500, detail=str(e))
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    except Exception:
+        # 未预期异常原文（可能携带服务器路径等内部信息）不回传客户端
+        logger.exception("style_modify /modify failed unexpectedly")
+        raise HTTPException(status_code=500, detail="internal_error")
 
 
 @router.post("/agent/run")
@@ -148,8 +150,17 @@ async def agent_run(
                 else {"type": "error", "message": str(detail)}
             )
             yield f"data: {json.dumps(payload, ensure_ascii=False)}\n\n"
-        except Exception as e:
-            yield f"data: {json.dumps({'type': 'error', 'message': str(e)}, ensure_ascii=False)}\n\n"
+        except Exception:
+            # 未预期异常原文不下发 SSE：固定 internal_error，原文进服务端日志
+            logger.exception("Unhandled error while streaming style-modify run SSE")
+            payload = {
+                "type": "error",
+                "message": {
+                    "error": "internal_error",
+                    "message": "An unexpected server error occurred",
+                },
+            }
+            yield f"data: {json.dumps(payload, ensure_ascii=False)}\n\n"
 
     return StreamingResponse(
         event_stream(),
@@ -187,8 +198,17 @@ async def agent_refine(
                 else {"type": "error", "message": str(detail)}
             )
             yield f"data: {json.dumps(payload, ensure_ascii=False)}\n\n"
-        except Exception as e:
-            yield f"data: {json.dumps({'type': 'error', 'message': str(e)}, ensure_ascii=False)}\n\n"
+        except Exception:
+            # 未预期异常原文不下发 SSE：固定 internal_error，原文进服务端日志
+            logger.exception("Unhandled error while streaming style-modify refine SSE")
+            payload = {
+                "type": "error",
+                "message": {
+                    "error": "internal_error",
+                    "message": "An unexpected server error occurred",
+                },
+            }
+            yield f"data: {json.dumps(payload, ensure_ascii=False)}\n\n"
 
     return StreamingResponse(
         event_stream(),
@@ -275,8 +295,11 @@ async def apply_agent_proposal(
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
-    except RuntimeError as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    except RuntimeError:
+        # 事务应用失败的异常原文可能携带项目/会话目录绝对路径，
+        # 收敛为固定错误码，完整原文进服务端日志
+        logger.exception("style_modify apply failed unexpectedly")
+        raise HTTPException(status_code=500, detail="internal_error")
 
 
 @router.post("/agent/operations/{operation_id}/undo")
@@ -293,8 +316,10 @@ async def undo_agent_operation(
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
-    except RuntimeError as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    except RuntimeError:
+        # 同 apply：异常原文不回传客户端，完整原文进服务端日志
+        logger.exception("style_modify undo failed unexpectedly")
+        raise HTTPException(status_code=500, detail="internal_error")
 
 
 @router.delete("/agent/sessions/{session_id}")

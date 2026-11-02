@@ -5,13 +5,18 @@ import shutil
 import tempfile
 from pathlib import Path
 from types import SimpleNamespace
+from unittest.mock import patch
 
 import pytest
 
 from backend.core.config import get_config
 from backend.core.project_manager import FileConflictError, LatexProject
-from backend.modules.style_modify.agent import StyleModifyAgent, get_style_modify_agent
-from backend.modules.style_modify.models import CompileSummary
+from backend.modules.style_modify.agent import (
+    StyleModifyAgent,
+    _tool_failure_text,
+    get_style_modify_agent,
+)
+from backend.modules.style_modify.models import CompileSummary, SessionMeta
 from backend.modules.style_modify.service import StyleModifyService
 from backend.modules.style_modify.session import (
     StyleModifySessionStore,
@@ -1053,3 +1058,239 @@ def test_finish_summary_rejects_unimplemented_style_requirement():
         assert store.load_meta(session_id).last_verified_md5s == {
             staged[0].path: staged[0].candidate_md5
         }
+
+
+class TestToolFailureTextSanitization:
+    """工具异常文本脱敏：多用户收敛为相对路径，单用户保留原文。"""
+
+    @staticmethod
+    def _make_meta(project_root: str) -> SessionMeta:
+        return SessionMeta(
+            session_id="deadbeefcafe",
+            workspace_id="ws-1",
+            project_root=project_root,
+            project_fingerprint="fp",
+            status="ready",
+            created_at="2026-01-01T00:00:00",
+            updated_at="2026-01-01T00:00:00",
+        )
+
+    @pytest.fixture
+    def multi_user_enabled(self):
+        cfg = get_config()
+        old = cfg.multi_user.enabled
+        cfg.multi_user.enabled = True
+        yield
+        cfg.multi_user.enabled = old
+
+    def test_single_user_keeps_raw_exception(self, latex_project):
+        exc = FileNotFoundError(
+            2,
+            f"No such file or directory: '{latex_project / 'main.tex'}'",
+        )
+        text = _tool_failure_text(exc, self._make_meta(str(latex_project)))
+        assert text == f"Tool execution failed: {exc}"
+
+    def test_multi_user_rewrites_project_root_prefix(
+        self,
+        latex_project,
+        multi_user_enabled,
+    ):
+        leak_path = latex_project / "sub" / "main.tex"
+        exc = FileNotFoundError(2, f"No such file or directory: '{leak_path}'")
+        text = _tool_failure_text(exc, self._make_meta(str(latex_project)))
+
+        assert "Tool execution failed" in text
+        assert "./sub/main.tex" in text
+        assert str(latex_project) not in text
+
+    def test_multi_user_degrades_without_resolvable_roots(self, multi_user_enabled):
+        # project_root 为空且 session id 不存在（session_dir 解析失败）：
+        # 两个脱敏锚点都不可用时降级为无详情稳定文案
+        exc = RuntimeError(f"boom at {Path(tempfile.gettempdir()) / 'secret'}")
+        text = _tool_failure_text(exc, self._make_meta(""))
+
+        assert text == "Tool execution failed."
+
+
+class TestStyleModifyAgentErrorPaths:
+    """Agent 循环与路由兜底的异常收敛回归（不泄漏异常原文）。"""
+
+    @pytest.mark.asyncio
+    async def test_llm_stream_error_message_is_stable(
+        self,
+        isolated_sessions,
+        open_project,
+        monkeypatch,
+    ):
+        workspace_id, project = open_project
+        store = get_session_store()
+        session_id = store.create_session(workspace_id, project.root_path, "test")
+
+        from backend.modules.style_modify import agent as agent_mod
+
+        async def noop_trace(session_dir, event):
+            pass
+
+        monkeypatch.setattr(agent_mod, "append_trace", noop_trace)
+
+        class BoomLLM:
+            def chat_stream_with_tools(self, **kwargs):
+                raise RuntimeError("provider url http://internal.example/v1 boom")
+
+        events = [
+            ev
+            async for ev in get_style_modify_agent().run(
+                session_id,
+                workspace_id,
+                "test",
+                "zh",
+                llm=BoomLLM(),
+            )
+        ]
+        errors = [ev for ev in events if ev["type"] == "error"]
+        assert errors
+        assert all(ev["message"] == "internal_error" for ev in errors)
+
+    @pytest.mark.asyncio
+    async def test_tool_exception_becomes_failure_tool_result(
+        self,
+        isolated_sessions,
+        open_project,
+        monkeypatch,
+    ):
+        """工具执行抛异常时不中断整轮：转为 ok=False 的 tool_result 事件。"""
+        workspace_id, project = open_project
+        store = get_session_store()
+        session_id = store.create_session(workspace_id, project.root_path, "test")
+
+        from backend.modules.style_modify import agent as agent_mod
+
+        async def noop_trace(session_dir, event):
+            pass
+
+        monkeypatch.setattr(agent_mod, "append_trace", noop_trace)
+
+        async def raise_oserror(self, tool_name, tool_args):
+            raise OSError(
+                f"[Errno 2] No such file or directory: '{project.root_path}/main.tex'"
+            )
+
+        monkeypatch.setattr(agent_mod._ToolExecutor, "execute", raise_oserror)
+
+        class ToolLLM:
+            def chat_stream_with_tools(self, **kwargs):
+                return _FakeResponse(
+                    [
+                        _FakeToolCall(
+                            "read_project_file",
+                            '{"file_path": "main.tex"}',
+                        )
+                    ]
+                )
+
+        events = [
+            ev
+            async for ev in get_style_modify_agent().run(
+                session_id,
+                workspace_id,
+                "test",
+                "zh",
+                llm=ToolLLM(),
+            )
+        ]
+        failures = [
+            ev for ev in events if ev["type"] == "tool_result" and ev.get("ok") is False
+        ]
+        assert failures
+        assert "Tool execution failed" in failures[0]["summary"]
+
+
+class TestStyleModifyRouterErrorFallbacks:
+    """路由 SSE 与 500 兜底：异常原文不回传客户端。"""
+
+    @pytest.fixture
+    def client(self):
+        from fastapi.testclient import TestClient
+
+        from main import app
+
+        return TestClient(app)
+
+    def test_agent_run_sse_conceals_unexpected_exception(self, client):
+        async def boom(self, workspace_id, description, language="zh", *, llm=None):
+            raise RuntimeError("secret /tmp/latexcellence-hidden/main.tex failed")
+            yield  # pragma: no cover — 仅为使其成为异步生成器
+
+        with patch.object(StyleModifyService, "agent_run", new=boom):
+            response = client.post(
+                "/api/style-modify/agent/run",
+                json={"description": "make headings blue", "workspace_id": "ws-1"},
+            )
+
+        assert response.status_code == 200
+        assert "internal_error" in response.text
+        assert "latexcellence-hidden" not in response.text
+
+    def test_agent_refine_sse_conceals_unexpected_exception(self, client):
+        async def boom(
+            self, session_id, workspace_id, message, language="zh", *, llm=None
+        ):
+            raise RuntimeError("secret /tmp/latexcellence-hidden/main.tex failed")
+            yield  # pragma: no cover
+
+        with patch.object(StyleModifyService, "agent_refine", new=boom):
+            response = client.post(
+                "/api/style-modify/agent/sessions/sess123456/refine",
+                json={"workspace_id": "ws-1", "message": "more"},
+            )
+
+        assert response.status_code == 200
+        assert "internal_error" in response.text
+        assert "latexcellence-hidden" not in response.text
+
+    def test_modify_maps_unexpected_exception_to_internal_error(self, client):
+        class ExplodingError(Exception):
+            pass
+
+        async def boom(self, latex, description):
+            raise ExplodingError("secret /tmp/latexcellence-hidden/main.tex")
+
+        with patch.object(StyleModifyService, "modify", new=boom):
+            response = client.post(
+                "/api/style-modify/modify",
+                json={"latex": "\\documentclass{article}", "description": "x"},
+            )
+
+        assert response.status_code == 500
+        assert response.json()["detail"] == "internal_error"
+
+    def test_apply_maps_runtime_error_to_internal_error(self, client):
+        async def boom(self, session_id, workspace_id, revision):
+            raise RuntimeError(
+                "write failed at /tmp/latexcellence-hidden/overlay/main.tex"
+            )
+
+        with patch.object(StyleModifyService, "apply_agent_proposal", new=boom):
+            response = client.post(
+                "/api/style-modify/agent/sessions/sess123456/apply",
+                json={"revision": 1, "workspace_id": "ws-1"},
+            )
+
+        assert response.status_code == 500
+        assert response.json()["detail"] == "internal_error"
+
+    def test_undo_maps_runtime_error_to_internal_error(self, client):
+        async def boom(self, operation_id, workspace_id):
+            raise RuntimeError(
+                "restore failed at /tmp/latexcellence-hidden/before/main.tex"
+            )
+
+        with patch.object(StyleModifyService, "undo_agent_operation", new=boom):
+            response = client.post(
+                "/api/style-modify/agent/operations/op123456/undo",
+                json={"workspace_id": "ws-1"},
+            )
+
+        assert response.status_code == 500
+        assert response.json()["detail"] == "internal_error"
