@@ -75,6 +75,13 @@ export default function useParagraphCheck({
   correctedTextField = "corrected",
   /** 自定义"是否有问题"判断函数，覆盖默认的 changes/suggestions 检查 */
   hasResultIssue: customHasResultIssue,
+  /**
+   * 自定义"全部应用"的单条写回文本构造，默认取结果对象的
+   * correctedTextField 字段。需要基于用户逐条覆盖重建写回文本的模块
+   * （如术语一致性检查的自定义替换）传入，以复用 handleApplyAll 的
+   * 乐观锁、错误处理与批量状态管理；禁止页面绕过 hook 自行实现批量应用。
+   */
+  buildChangeText,
   storeSlice = {
     paragraphsKey: "typoParagraphs",
     setParagraphsKey: "setTypoParagraphs",
@@ -617,9 +624,11 @@ export default function useParagraphCheck({
         },
       );
       try {
+        const makeChangeText =
+          buildChangeText || ((r) => r[correctedTextField]);
         const changes = pending.map((r) => ({
           paragraph_index: r.paragraph_index,
-          new_text: r[correctedTextField],
+          new_text: makeChangeText(r),
           file_path: r.file_path || activeFile,
           expected_md5: fileMd5sRef.current[r.file_path || activeFile] || null,
         }));
@@ -699,6 +708,7 @@ export default function useParagraphCheck({
       workspaceId,
       apiModule,
       correctedTextField,
+      buildChangeText,
       setResults,
       messages,
       hasResultIssue,

@@ -48,7 +48,6 @@ import { resultDomId } from "@/utils/resultDomId";
 /** 结果卡 DOM id 前缀：与 useResultFilter 跳转共用同一契约（resultDomId）。 */
 const RESULT_ID_PREFIX = "term-result";
 import useStore from "@/store/useStore";
-import { toast } from "sonner";
 
 /**
  * 单条变更行（rerender-memo-with-default-value）：ProofDiff 的 modified
@@ -225,6 +224,34 @@ export default function TerminologyCheckPage() {
   const cta = emptyStateCta(isMultiUser());
   const [confirmApplyAllOpen, setConfirmApplyAllOpen] = useState(false);
   const [customReplacements, setCustomReplacements] = useState({});
+  const storeActiveFile = useStore((s) => s.activeFile);
+  // 写回文本必须以 marker 保护的 plain_text 为基础重建（含用户逐条覆盖）：
+  // corrected 中的 marker（如 __MATH_0000__）在写回时由后端还原为
+  // 原始 LaTeX，若从 result.original（原始 LaTeX）重建，术语替换会
+  // 误伤数学公式 / 命令内部的同名片段
+  const buildCorrectedText = useCallback(
+    (result, overrides) => {
+      let corrected = result.plain_text || result.corrected || result.original;
+      const sorted = [...(result.changes || [])].sort(
+        (a, b) => b.original.length - a.original.length,
+      );
+      for (const change of sorted) {
+        const key = `${result.file_path || storeActiveFile}:${result.paragraph_index}:${change.original}`;
+        const replacement = overrides?.[key] ?? change.corrected;
+        if (replacement && change.original !== replacement) {
+          corrected = corrected.split(change.original).join(replacement);
+        }
+      }
+      return corrected;
+    },
+    [storeActiveFile],
+  );
+  // 批量应用经 buildChangeText 注入 hook 的 handleApplyAll，复用其
+  // 乐观锁、errors 处理与 applyingAll 状态；禁止页面重复实现批量流程
+  const buildChangeText = useCallback(
+    (result) => buildCorrectedText(result, customReplacements),
+    [buildCorrectedText, customReplacements],
+  );
   const paragraphCheckMessages = useMemo(
     () => ({
       checkLoading: t("pages:terminologyCheck.checkLoading"),
@@ -268,6 +295,7 @@ export default function TerminologyCheckPage() {
     apiModule: api.terminologyCheck,
     checkMethodName: "check",
     correctedTextField: "corrected",
+    buildChangeText,
     storeSlice: {
       paragraphsKey: "terminologyParagraphs",
       setParagraphsKey: "setTerminologyParagraphs",
@@ -302,25 +330,6 @@ export default function TerminologyCheckPage() {
     [filteredResults],
   );
 
-  const buildCorrectedText = useCallback((result, overrides) => {
-    // 必须以 marker 保护的 plain_text 为基础重建修正文本：
-    // corrected 中的 marker（如 __MATH_0000__）在写回时由后端还原为
-    // 原始 LaTeX，若从 result.original（原始 LaTeX）重建，术语替换会
-    // 误伤数学公式 / 命令内部的同名片段。
-    let corrected = result.plain_text || result.corrected || result.original;
-    const sorted = [...(result.changes || [])].sort(
-      (a, b) => b.original.length - a.original.length,
-    );
-    for (const change of sorted) {
-      const key = `${result.file_path || activeFile}:${result.paragraph_index}:${change.original}`;
-      const replacement = overrides?.[key] ?? change.corrected;
-      if (replacement && change.original !== replacement) {
-        corrected = corrected.split(change.original).join(replacement);
-      }
-    }
-    return corrected;
-  }, []);
-
   const handleApplyWithCustom = useCallback(
     (result) => {
       const corrected = buildCorrectedText(result, customReplacements);
@@ -328,65 +337,6 @@ export default function TerminologyCheckPage() {
     },
     [customReplacements, buildCorrectedText, handleApplyChange],
   );
-
-  const handleApplyAllWithCustom = useCallback(async () => {
-    const pending = terminologyResults.filter(
-      (r) => r.changes && r.changes.length > 0,
-    );
-    if (pending.length === 0) {
-      toast.info(t("pages:terminologyCheck.applyAllEmpty"));
-      return;
-    }
-    const toastId = toast.loading(t("pages:terminologyCheck.applying"), {
-      description: t("pages:terminologyCheck.applyingDescription", {
-        count: pending.length,
-      }),
-    });
-    try {
-      const changes = pending.map((r) => ({
-        paragraph_index: r.paragraph_index,
-        new_text: buildCorrectedText(r, customReplacements),
-        file_path: r.file_path || activeFile,
-      }));
-      await api.terminologyCheck.apply(
-        {
-          file_path: activeFile,
-          changes,
-          operation_id: operationId?.current || null,
-        },
-        workspaceId,
-      );
-      const appliedKeys = new Set(
-        pending.map((r) => `${r.file_path || activeFile}:${r.paragraph_index}`),
-      );
-      useStore.setState((state) => ({
-        terminologyResults: state.terminologyResults.filter(
-          (r) =>
-            !appliedKeys.has(
-              `${r.file_path || activeFile}:${r.paragraph_index}`,
-            ),
-        ),
-      }));
-      toast.success(
-        t("pages:terminologyCheck.applyAllSuccess", { count: pending.length }),
-        {
-          id: toastId,
-        },
-      );
-    } catch (e) {
-      toast.error(t("pages:terminologyCheck.applyAllFailed"), {
-        id: toastId,
-        description: e.message,
-      });
-    }
-  }, [
-    terminologyResults,
-    customReplacements,
-    buildCorrectedText,
-    activeFile,
-    operationId,
-    t,
-  ]);
 
   const groupedTerminologyParagraphs = useMemo(
     () => groupByFile(terminologyParagraphs),
@@ -689,7 +639,7 @@ export default function TerminologyCheckPage() {
         confirmText={t("common:applyAll")}
         onConfirm={async () => {
           setConfirmApplyAllOpen(false);
-          await handleApplyAllWithCustom();
+          await handleApplyAll();
         }}
       />
     </div>
