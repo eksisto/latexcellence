@@ -21,6 +21,7 @@ from backend.utils.tex_compile import (
     TexCompileResult,
     _check_texfot_available,
     _filter_with_regex,
+    _prepare_pdfa_workspace,
     _strip_tex_comments,
     detect_engine_from_file,
     inject_pdfx_for_pdfa,
@@ -941,3 +942,39 @@ class TestRunTexCompileWithEngineAndPdfa:
 
         cmd = mock_exec.call_args[0]
         assert "-xelatex" in cmd
+
+
+class TestPreparePdfaWorkspace:
+    """PDF/A 工作区准备：复制面黑名单与注入失败回退。"""
+
+    def test_copies_sources_but_skips_git_and_build_artifacts(self, tmp_path):
+        import shutil
+
+        (tmp_path / "main.tex").write_text(r"\documentclass{article}", encoding="utf-8")
+        (tmp_path / ".git").mkdir()
+        (tmp_path / ".git" / "config").write_text("x", encoding="utf-8")
+        (tmp_path / "main.aux").write_text("stale", encoding="utf-8")
+        (tmp_path / "main.synctex.gz").write_bytes(b"x")
+        (tmp_path / "img").mkdir()
+        (tmp_path / "img" / "fig.png").write_bytes(b"x")
+
+        temp_dir, work_cwd, actual_main = _prepare_pdfa_workspace(tmp_path, "main.tex")
+        try:
+            assert work_cwd == temp_dir
+            assert actual_main == "main_pdfa.tex"
+            assert (temp_dir / "main_pdfa.tex").exists()
+            assert (temp_dir / "img" / "fig.png").exists()
+            assert not (temp_dir / ".git").exists()
+            assert not (temp_dir / "main.aux").exists()
+            assert not (temp_dir / "main.synctex.gz").exists()
+        finally:
+            shutil.rmtree(temp_dir, ignore_errors=True)
+
+    def test_injection_failure_falls_back_to_normal_compile(self, tmp_path):
+        (tmp_path / "doc.txt").write_text("no documentclass here", encoding="utf-8")
+
+        temp_dir, work_cwd, actual_main = _prepare_pdfa_workspace(tmp_path, "doc.txt")
+
+        assert temp_dir is None
+        assert work_cwd == tmp_path
+        assert actual_main == "doc.txt"

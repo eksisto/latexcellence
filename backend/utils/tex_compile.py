@@ -16,6 +16,7 @@ template_gen 模块（模板生成）、style_modify（shadow 编译）、
 plot_gen（TikZ 编译）复用。
 """
 
+import asyncio
 import re
 import shutil
 import tempfile
@@ -370,6 +371,63 @@ def inject_pdfx_for_pdfa(tex_path: Path, output_path: Path) -> bool:
     return True
 
 
+# PDF/A 工作区复制面黑名单：版本目录与 latexmk 每次编译必然重建的
+# 中间产物（不复制可显著缩小无上界的复制面；.bbl 依赖 .bib 是否存在，
+# 不进黑名单以免破坏无 .bib 的最终稿）
+_PDFA_COPY_IGNORE = shutil.ignore_patterns(
+    ".git",
+    "__pycache__",
+    "*.aux",
+    "*.out",
+    "*.toc",
+    "*.lof",
+    "*.lot",
+    "*.fls",
+    "*.fdb_latexmk",
+    "*.log",
+    "*.synctex.gz",
+    "*.run.xml",
+    "*.xdv",
+)
+
+
+def _prepare_pdfa_workspace(
+    cwd_path: Path, main_file: str
+) -> tuple[Path | None, Path, str]:
+    """PDF/A 模式工作区准备（同步函数，调用方必须经线程池调度）。
+
+    复制项目到临时目录并注入 pdfx 包。返回：
+        (temp_dir, work_cwd, actual_main_file)
+    注入失败时清理临时目录并回退普通编译：temp_dir=None，其余两项
+    保持原值。
+    """
+    temp_dir = Path(tempfile.mkdtemp(prefix="latexcellence_pdfa_"))
+    for item in cwd_path.iterdir():
+        # ignore_patterns 只作用于 copytree 内部条目，根级条目需单独过滤
+        if _PDFA_COPY_IGNORE(cwd_path, [item.name]):
+            continue
+        if item.is_file():
+            shutil.copy2(item, temp_dir / item.name)
+        elif item.is_dir():
+            shutil.copytree(
+                item,
+                temp_dir / item.name,
+                ignore=_PDFA_COPY_IGNORE,
+                dirs_exist_ok=True,
+            )
+
+    temp_tex_path = temp_dir / main_file
+    pdfa_tex_path = temp_dir / f"{cwd_path.joinpath(main_file).stem}_pdfa.tex"
+
+    if inject_pdfx_for_pdfa(temp_tex_path, pdfa_tex_path):
+        return temp_dir, temp_dir, pdfa_tex_path.name
+
+    # 注入失败，清理临时目录并继续正常编译
+    shutil.rmtree(temp_dir, ignore_errors=True)
+    logger.warning("PDF/A injection failed, continuing with normal compilation")
+    return None, cwd_path, main_file
+
+
 async def run_tex_compile(
     main_file: str,
     cwd: str | Path,
@@ -402,7 +460,10 @@ async def run_tex_compile(
 
     # 处理引擎选择
     if engine == "auto":
-        resolved_engine = detect_engine_from_file(main_tex_path)
+        # 引擎检测同步读取主文件与 \input 链（最多 128 个文件），入线程池
+        resolved_engine = await asyncio.to_thread(
+            detect_engine_from_file, main_tex_path
+        )
     else:
         resolved_engine = engine
 
@@ -420,29 +481,12 @@ async def run_tex_compile(
     actual_main_file = main_file
 
     if pdfa:
-        temp_dir = Path(tempfile.mkdtemp(prefix="latexcellence_pdfa_"))
-        # 复制项目文件到临时目录
-        import shutil as shutil_copy
-
-        for item in cwd_path.iterdir():
-            if item.is_file():
-                shutil_copy.copy2(item, temp_dir / item.name)
-            elif item.is_dir() and item.name != "__pycache__":
-                shutil_copy.copytree(item, temp_dir / item.name, dirs_exist_ok=True)
-
-        # 注入 pdfx 包
-        temp_tex_path = temp_dir / main_file
-        pdfa_tex_path = temp_dir / f"{main_tex_path.stem}_pdfa.tex"
-
-        if inject_pdfx_for_pdfa(temp_tex_path, pdfa_tex_path):
-            actual_main_file = pdfa_tex_path.name
-            work_cwd = temp_dir
+        # 整目录复制面无上界（含 .git、图片、历史构建产物），入线程池执行
+        temp_dir, work_cwd, actual_main_file = await asyncio.to_thread(
+            _prepare_pdfa_workspace, cwd_path, main_file
+        )
+        if temp_dir is not None:
             logger.info(f"PDF/A mode: working in temp dir {temp_dir}")
-        else:
-            # 注入失败，清理临时目录并继续正常编译
-            shutil.rmtree(temp_dir, ignore_errors=True)
-            temp_dir = None
-            logger.warning("PDF/A injection failed, continuing with normal compilation")
 
     cwd_str = str(work_cwd)
     latexmk_base = ["latexmk", engine_arg, "-interaction=nonstopmode"]
@@ -514,7 +558,9 @@ async def run_tex_compile(
                 original_pdf_path = main_tex_path.with_suffix(".pdf")
 
                 if pdfa_pdf_path.exists():
-                    shutil.copy2(pdfa_pdf_path, original_pdf_path)
+                    await asyncio.to_thread(
+                        shutil.copy2, pdfa_pdf_path, original_pdf_path
+                    )
                     logger.info(f"Copied PDF/A output to {original_pdf_path}")
                 else:
                     logger.warning(f"PDF/A output not found: {pdfa_pdf_path}")
