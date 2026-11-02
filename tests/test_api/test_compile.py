@@ -555,6 +555,22 @@ class TestCompileRouter:
 
         assert response.status_code == 404
 
+    def test_run_path_traversal_returns_400(self, client):
+        """main_file 路径穿越（path_guard ValueError）返回 400 而非 500。"""
+        with patch(
+            "backend.modules.compile.router.compile_latex", new_callable=AsyncMock
+        ) as mock_compile:
+            mock_compile.side_effect = ValueError(
+                "file_path must not contain '..' segments"
+            )
+            response = client.post(
+                "/api/compile/run?workspace_id=test",
+                json={"main_file": "../../escape.tex"},
+            )
+
+        assert response.status_code == 400
+        assert "must not contain '..'" in response.json()["detail"]
+
     def test_run_compile_failure(self, client):
         """编译失败但 HTTP 仍返回 200（编译完成但有错误）。"""
         mock_result = CompileResult(

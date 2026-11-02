@@ -90,6 +90,9 @@ async def run_compile(
         if sandbox_http is not None:
             raise sandbox_http from e
         raise HTTPException(status_code=400, detail=str(e))
+    except ValueError as e:
+        # main_file 路径穿越 / 非法后缀 / 符号链接（path_guard 拒绝）按 400 语义返回
+        raise HTTPException(status_code=400, detail=str(e))
     except FileNotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
 
