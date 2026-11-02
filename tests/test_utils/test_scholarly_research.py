@@ -15,11 +15,24 @@ from backend.utils.scholarly_research.manager import (
     reset_research_manager,
 )
 from backend.utils.scholarly_research.models import ScholarlyWork
+from backend.utils.scholarly_research.providers.arxiv import ArxivProvider
 from backend.utils.scholarly_research.providers.openalex import (
     OpenAlexProvider,
     _build_work_from_openalex,
     _reconstruct_abstract,
 )
+
+_ARXIV_ATOM = """<?xml version="1.0" encoding="UTF-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+  <entry>
+    <id>http://arxiv.org/abs/1706.03762v7</id>
+    <title>Attention Is All You Need</title>
+    <summary>We propose a new simple architecture.</summary>
+    <published>2017-06-12T17:57:34Z</published>
+    <author><name>Vaswani</name></author>
+  </entry>
+</feed>
+"""
 
 
 def _openalex_work(
@@ -520,3 +533,30 @@ async def test_shared_http_client_lifecycle():
     await manager_module.close_research_http_client()
     assert client.is_closed
     assert manager_module._research_http_client is None
+
+
+@pytest.mark.asyncio
+async def test_arxiv_search_sends_raw_query_without_double_encoding():
+    """查询值不得 URL 预编码：httpx params 只做一次标准编码，
+    预编码会让空格变成 %2520，服务端解码后得到字面 %20 导致检索失效。"""
+    captured_request: httpx.Request | None = None
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal captured_request
+        captured_request = request
+        return httpx.Response(200, text=_ARXIV_ATOM)
+
+    client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+    try:
+        result = await ArxivProvider(client).search_works(
+            query="attention is all you need"
+        )
+    finally:
+        await client.aclose()
+
+    assert captured_request is not None
+    assert captured_request.url.params["search_query"] == (
+        "all:attention is all you need"
+    )
+    assert result.total_estimated == 1
+    assert result.results[0].title == "Attention Is All You Need"

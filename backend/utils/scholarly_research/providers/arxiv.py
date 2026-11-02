@@ -2,7 +2,6 @@
 
 import time
 from typing import Any
-from urllib.parse import quote
 
 import httpx
 
@@ -139,13 +138,16 @@ class ArxivProvider(BaseResearchProvider):
         if not query.strip():
             raise ValueError("query must not be empty")
         limit = _limit_results(max_results, 20)
+        # 查询值不做 URL 预编码：httpx params 负责标准编码，预编码会让
+        # 空格 / 非 ASCII 被二次转义（%20 → %2520），服务端解码后得到
+        # 字面 %20，检索全部失效
         params: dict[str, Any] = {
-            "search_query": f"all:{quote(query.strip())}",
+            "search_query": f"all:{query.strip()}",
             "max_results": min(limit, 100),
         }
         if authors:
             author_query = "+AND+".join(
-                f"au:{quote(author.strip())}" for author in authors if author.strip()
+                f"au:{author.strip()}" for author in authors if author.strip()
             )
             if author_query:
                 params["search_query"] += f"+AND+({author_query})"
