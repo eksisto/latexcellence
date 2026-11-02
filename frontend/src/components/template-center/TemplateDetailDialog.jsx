@@ -236,7 +236,9 @@ export default function TemplateDetailDialog({
           )}
         </DialogHeader>
 
-        <div className="min-h-0 flex-1 overflow-y-auto pr-1 -mr-1">
+        {/* 四周各留 4px 并负外边距回补：预览 Card 用 ring 描边（绘制在盒外），
+            容器若与其边缘齐平会把四周边框裁掉，只剩圆角弧线 */}
+        <div className="min-h-0 flex-1 overflow-y-auto p-1 -m-1">
           {loading ? (
             <div className="flex items-center justify-center gap-2 py-12 text-sm text-muted-foreground">
               <Loader2 className="size-4 animate-spin" />
@@ -291,7 +293,7 @@ export default function TemplateDetailDialog({
 
               {/* 右列（或用户模板单列）：元信息 + 文件树 + 源码查看 */}
               <div className="flex min-h-0 flex-col gap-3">
-                <div className="space-y-1.5 rounded-lg border border-border bg-muted/30 p-3">
+                <div className="space-y-1.5 rounded-xl bg-muted/30 p-3 ring-1 ring-foreground/10 dark:ring-foreground/20">
                   <InfoRow
                     label={t("pages:templateCenter.descriptionLabel")}
                     value={detail?.description}
