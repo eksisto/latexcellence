@@ -45,6 +45,7 @@ import { isMultiUser } from "@/api/connection";
 import { translateError } from "@/utils/errorMessages";
 import { openMultiUserProject } from "@/utils/multiUserProject";
 import useCanWrite from "@/hooks/useCanWrite";
+import useIsOpened from "@/hooks/useIsOpened";
 import useStore from "@/store/useStore";
 import useEnabledFeatures from "@/hooks/useEnabledFeatures";
 import UndoRedoButtons from "@/components/UndoRedoButtons";
@@ -215,7 +216,8 @@ export default function WorkspacePage() {
     [t, workspaceId],
   );
 
-  const isOpened = multiUser ? !!projectId : !!projectPath;
+  // 模式感知「项目已打开」统一走 useIsOpened，禁止内联复写判定条件
+  const isOpened = useIsOpened();
 
   // 启动时：从 Zustand persist 恢复项目（等水合完成后再恢复）
   useEffect(() => {
