@@ -4,6 +4,7 @@
 薄路由层：仅做参数校验与状态码映射，业务逻辑在 service.py，Agent 主循环在 agent/。
 """
 
+import asyncio
 import io
 import json
 
@@ -83,7 +84,10 @@ async def generate(request: GenerateRequest):
 async def list_files(session_id: str = Query(..., description="Agent 会话 ID")):
     """列出某次 Agent 生成产出的文件树。"""
     try:
-        return get_template_gen_service().list_session_files(session_id)
+        # 沙箱浏览为同步阻塞 I/O（rglob 扫描），统一入线程池
+        return await asyncio.to_thread(
+            get_template_gen_service().list_session_files, session_id
+        )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -95,7 +99,9 @@ async def read_file(
 ):
     """读取沙箱内单个文件内容。"""
     try:
-        return get_template_gen_service().read_session_file(session_id, path)
+        return await asyncio.to_thread(
+            get_template_gen_service().read_session_file, session_id, path
+        )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -107,8 +113,8 @@ async def preview_file(
 ):
     """内联预览产物文件（当前仅支持 PDF），供前端 PDFPreview 渲染。"""
     try:
-        resolved, media_type = get_template_gen_service().resolve_preview_file(
-            session_id, path
+        resolved, media_type = await asyncio.to_thread(
+            get_template_gen_service().resolve_preview_file, session_id, path
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -124,7 +130,10 @@ async def preview_file(
 async def download_zip(session_id: str = Query(..., description="Agent 会话 ID")):
     """将沙箱内所有文件打包为 ZIP 下载。"""
     try:
-        data, filename = get_template_gen_service().zip_session(session_id)
+        # ZIP 打包在事件循环上读全部文件并 deflate，入线程池
+        data, filename = await asyncio.to_thread(
+            get_template_gen_service().zip_session, session_id
+        )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     return Response(
@@ -138,7 +147,10 @@ async def download_zip(session_id: str = Query(..., description="Agent 会话 ID
 async def get_session_trace(session_id: str = Query(..., description="Agent 会话 ID")):
     """读取 Agent 运行追踪日志。"""
     try:
-        return get_template_gen_service().get_session_trace(session_id)
+        # trace 一次性读入整份 jsonl（可达数十 MB），入线程池
+        return await asyncio.to_thread(
+            get_template_gen_service().get_session_trace, session_id
+        )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -149,7 +161,9 @@ async def download_session_trace(
 ):
     """导出 Agent 运行追踪日志（JSON）。"""
     try:
-        data = get_template_gen_service().get_session_trace(session_id)
+        data = await asyncio.to_thread(
+            get_template_gen_service().get_session_trace, session_id
+        )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     if not data["events"]:

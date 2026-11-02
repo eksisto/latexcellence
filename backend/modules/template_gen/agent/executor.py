@@ -79,7 +79,9 @@ class _ToolExecutor(AgentFileToolExecutor):
         if tool_name == "compile_latex":
             return await self._compile_latex(args)
         if tool_name == "finish":
-            return self._finish(args)
+            # finish 内同步读取并哈希全部源文件，入线程池（与 _compile_latex
+            # 的 _source_hash 调度口径一致）
+            return await asyncio.to_thread(self._finish, args)
         raise ValueError(f"Unknown tool: {tool_name}")
 
     # ── write_file ────────────────────────────────────────────────────
@@ -541,7 +543,9 @@ class _ToolExecutor(AgentFileToolExecutor):
                         trimmed = (
                             trimmed + f"\n\n--- {blg_file.name} (tail) ---\n" + blg_tail
                         )
-            errors = _attach_source_context(
+            # 同步读取最多 8 个源文件注入上下文，入线程池
+            errors = await asyncio.to_thread(
+                _attach_source_context,
                 errors,
                 self._sandbox,
                 fallback_file=Path(main_file).as_posix(),

@@ -1,5 +1,6 @@
 """科研绘图 Agent API 路由。"""
 
+import asyncio
 import io
 import json
 
@@ -134,7 +135,8 @@ async def refine_session(session_id: str, request: RefinePlotRequest):
 @router.get("/sessions/{session_id}/files")
 async def list_session_files(session_id: str):
     try:
-        files = get_service().list_session_files(session_id)
+        # 沙箱浏览为同步阻塞 I/O，统一入线程池
+        files = await asyncio.to_thread(get_service().list_session_files, session_id)
         return {"session_id": session_id, "files": files}
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -144,7 +146,10 @@ async def list_session_files(session_id: str):
 async def read_session_file(
     session_id: str, path: str = Query(..., description="沙箱内相对路径")
 ):
-    content, err = get_service().read_session_file(session_id, path)
+    # 沙箱文件读取为同步阻塞 I/O，入线程池
+    content, err = await asyncio.to_thread(
+        get_service().read_session_file, session_id, path
+    )
     if err is not None:
         raise HTTPException(status_code=400, detail=err)
     return {"session_id": session_id, "path": path, "content": content}
@@ -154,7 +159,8 @@ async def read_session_file(
 async def get_session_trace(session_id: str):
     """读取 Agent 运行追踪日志。"""
     try:
-        return get_service().get_session_trace(session_id)
+        # trace 一次性读入整份 jsonl，入线程池
+        return await asyncio.to_thread(get_service().get_session_trace, session_id)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -163,7 +169,7 @@ async def get_session_trace(session_id: str):
 async def download_session_trace(session_id: str):
     """导出 Agent 运行追踪日志（JSON）。"""
     try:
-        data = get_service().get_session_trace(session_id)
+        data = await asyncio.to_thread(get_service().get_session_trace, session_id)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     if not data["events"]:
@@ -191,7 +197,8 @@ async def download_session_trace(session_id: str):
 @router.get("/sessions/{session_id}/download")
 async def download_session(session_id: str):
     try:
-        data, files = get_service().zip_session(session_id)
+        # ZIP 打包含全沙箱文件 deflate，入线程池
+        data, files = await asyncio.to_thread(get_service().zip_session, session_id)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     if not files:

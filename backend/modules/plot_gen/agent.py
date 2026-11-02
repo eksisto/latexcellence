@@ -1,5 +1,6 @@
 """科研绘图自主 Agent。"""
 
+import asyncio
 import json
 import posixpath
 import re
@@ -656,8 +657,15 @@ class PlotGenAgent:
                     finish_this_round = True
                     break
 
-            self._persist_messages(
-                sandbox, messages, execution_state, tikz_state, executor
+            # 每轮同步读写整份 meta.json（含全量对话历史）+ 沙箱扫描，
+            # 入线程池避免阻塞事件循环
+            await asyncio.to_thread(
+                self._persist_messages,
+                sandbox,
+                messages,
+                execution_state,
+                tikz_state,
+                executor,
             )
             if finish_this_round:
                 break
@@ -704,8 +712,8 @@ class PlotGenAgent:
             },
         )
 
-        files = executor.list_files()
-        artifacts = executor.scan_artifacts()
+        files = await asyncio.to_thread(executor.list_files)
+        artifacts = await asyncio.to_thread(executor.scan_artifacts)
         # sandbox 绝对路径不向用户暴露，前端仅消费 session_id/files/artifacts
         yield {
             "type": "done",
