@@ -11,6 +11,8 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Upload
 from pydantic import BaseModel
 
 from backend.core import access_control
+from backend.core.access_control import require_feature_enabled
+from backend.core.config import get_config
 from backend.core.project_manager import FileConflictError
 from backend.modules.bib_manager.models import (
     DeleteEntryRequest,
@@ -28,7 +30,17 @@ from backend.modules.bib_manager.models import (
 from backend.modules.bib_manager.service import BibManagerService
 from backend.modules.bib_manager.style_registry import list_all_styles
 
-router = APIRouter(prefix="/api/bib-manager", tags=["bib_manager"])
+
+def _feature_gate() -> bool:
+    """多用户模式下功能开关关闭时端点整体 404（实时读取，热重载生效）。"""
+    return get_config().features.bib_manager.enabled
+
+
+router = APIRouter(
+    prefix="/api/bib-manager",
+    tags=["bib_manager"],
+    dependencies=[Depends(require_feature_enabled(_feature_gate))],
+)
 
 _service: BibManagerService | None = None
 

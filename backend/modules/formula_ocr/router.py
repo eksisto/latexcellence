@@ -4,11 +4,23 @@
 提供图片上传和 LaTeX 公式识别接口。
 """
 
-from fastapi import APIRouter, File, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 
+from backend.core.access_control import require_feature_enabled
+from backend.core.config import get_config
 from backend.modules.formula_ocr.service import FormulaOCRService
 
-router = APIRouter(prefix="/api/formula-ocr", tags=["formula_ocr"])
+
+def _feature_gate() -> bool:
+    """多用户模式下功能开关关闭时端点整体 404（实时读取，热重载生效）。"""
+    return get_config().features.formula_ocr.enabled
+
+
+router = APIRouter(
+    prefix="/api/formula-ocr",
+    tags=["formula_ocr"],
+    dependencies=[Depends(require_feature_enabled(_feature_gate))],
+)
 
 _service: "FormulaOCRService | None" = None
 

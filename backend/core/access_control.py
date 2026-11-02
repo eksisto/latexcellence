@@ -15,6 +15,7 @@
 """
 
 import asyncio
+from collections.abc import Callable
 
 from fastapi import Depends, HTTPException, Request
 
@@ -208,6 +209,22 @@ def _build_project_view(row: dict, role: str) -> dict:
 
 def is_multiuser() -> bool:
     return bool(get_config().multi_user.enabled)
+
+
+def require_feature_enabled(feature_enabled: Callable[[], bool]):
+    """功能开关服务端强制依赖工厂（仅多用户模式生效）。
+
+    多用户模式下 `features.<x>.enabled=False` 时端点整体 404（不泄露
+    存在性，口径同模板库 `_require_feature_enabled`）；单用户模式不设
+    门，保持既有行为（开关关闭仅由前端 useEnabledFeatures 隐藏入口）。
+    配置热重载语义与路由一致：每次请求实时读取。
+    """
+
+    async def _dependency() -> None:
+        if is_multiuser() and not feature_enabled():
+            raise HTTPException(status_code=404, detail="Not found")
+
+    return _dependency
 
 
 # ── 基于 workspace 绑定的请求级访问依赖 ────────────────────────────────────

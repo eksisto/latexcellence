@@ -4,16 +4,34 @@
 提供文本和文件两种输入方式的格式转换接口。
 """
 
-from fastapi import APIRouter, File, HTTPException, Query, UploadFile
+from fastapi import (
+    APIRouter,
+    Depends,
+    File,
+    HTTPException,
+    Query,
+    UploadFile,
+)
 from pydantic import BaseModel
 
+from backend.core.access_control import require_feature_enabled
 from backend.core.config import get_config
 from backend.modules.format_converter.service import (
     FormatConverterService,
 )
 from backend.utils.sandbox import to_http_exception
 
-router = APIRouter(prefix="/api/format-converter", tags=["format_converter"])
+
+def _feature_gate() -> bool:
+    """多用户模式下功能开关关闭时端点整体 404（实时读取，热重载生效）。"""
+    return get_config().features.format_converter.enabled
+
+
+router = APIRouter(
+    prefix="/api/format-converter",
+    tags=["format_converter"],
+    dependencies=[Depends(require_feature_enabled(_feature_gate))],
+)
 
 _service: FormatConverterService | None = None
 

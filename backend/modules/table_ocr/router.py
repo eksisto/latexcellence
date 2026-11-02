@@ -4,11 +4,23 @@
 提供图片上传和 LaTeX 表格识别接口。
 """
 
-from fastapi import APIRouter, File, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 
+from backend.core.access_control import require_feature_enabled
+from backend.core.config import get_config
 from backend.modules.table_ocr.service import TableOCRService
 
-router = APIRouter(prefix="/api/table-ocr", tags=["table_ocr"])
+
+def _feature_gate() -> bool:
+    """多用户模式下功能开关关闭时端点整体 404（实时读取，热重载生效）。"""
+    return get_config().features.table_ocr.enabled
+
+
+router = APIRouter(
+    prefix="/api/table-ocr",
+    tags=["table_ocr"],
+    dependencies=[Depends(require_feature_enabled(_feature_gate))],
+)
 
 _service: "TableOCRService | None" = None
 
