@@ -1481,7 +1481,9 @@ class TestDownloadPdfEndpoint:
             "backend.modules.git_diff.router.get_pdf_path",
             return_value=pdf_path,
         ):
-            response = client.get(f"/api/git-diff/pdf/{job_id}")
+            response = client.get(
+                f"/api/git-diff/pdf/{job_id}", params={"workspace_id": "ws-default"}
+            )
 
         assert response.status_code == 200
         assert response.headers["content-type"] == "application/pdf"
@@ -1496,7 +1498,10 @@ class TestDownloadPdfEndpoint:
             "backend.modules.git_diff.router.get_pdf_path",
             side_effect=ValueError("invalid job id"),
         ):
-            response = client.get("/api/git-diff/pdf/not-a-hex-id")
+            response = client.get(
+                "/api/git-diff/pdf/not-a-hex-id",
+                params={"workspace_id": "ws-default"},
+            )
 
         assert response.status_code == 400
 
@@ -1506,6 +1511,9 @@ class TestDownloadPdfEndpoint:
             "backend.modules.git_diff.router.get_pdf_path",
             side_effect=FileNotFoundError("missing"),
         ):
-            response = client.get(f"/api/git-diff/pdf/{'a' * 32}")
+            response = client.get(
+                f"/api/git-diff/pdf/{'a' * 32}",
+                params={"workspace_id": "ws-default"},
+            )
 
         assert response.status_code == 404

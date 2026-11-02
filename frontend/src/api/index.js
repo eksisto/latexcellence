@@ -888,6 +888,8 @@ export const api = {
         }),
       }),
     getOptions: () => request(appendWs("/git-diff/options")),
+    // 差异 PDF 下载端点要求工作区读权限，取回的 pdf_url 需补 workspace_id
+    pdfUrl: (path, workspaceId) => appendWs(path, workspaceId),
   },
 
   /* ---- Git 版本管理（状态 / 初始化 / 提交 / 历史 / 源码 diff / 恢复） ---- */

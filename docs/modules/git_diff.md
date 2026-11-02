@@ -108,7 +108,7 @@ Prefix: `/api/git-diff`, Tag: `git-diff`
 | GET | `/refs` | 获取 Git revision 列表 |
 | GET | `/options` | 获取差异引擎支持的选项与配置默认值（标记类型、数学标记粒度、默认引擎/颜色） |
 | POST | `/render-pdf` | 生成差异高亮 PDF |
-| GET | `/pdf/{job_id}` | 下载/预览 PDF |
+| GET | `/pdf/{job_id}` | 下载/预览 PDF（要求工作区读权限，请求需携带 `workspace_id`） |
 
 ## 配置项
 

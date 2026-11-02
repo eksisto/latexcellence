@@ -295,7 +295,9 @@ export default function GitDiffPage() {
       );
       setResult(data);
       if (data.success && data.pdf_url) {
-        const url = await fetchBlobUrl(resolveUrl(data.pdf_url));
+        const url = await fetchBlobUrl(
+          resolveUrl(api.gitDiff.pdfUrl(data.pdf_url, workspaceId)),
+        );
         setPdfUrl(url);
       }
     } catch (err) {
@@ -792,7 +794,9 @@ export default function GitDiffPage() {
                     size="sm"
                     onClick={() =>
                       downloadBlob(
-                        resolveUrl(result.pdf_url),
+                        resolveUrl(
+                          api.gitDiff.pdfUrl(result.pdf_url, workspaceId),
+                        ),
                         "diff-highlight.pdf",
                       ).catch((e) => setError(translateError(e.message)))
                     }

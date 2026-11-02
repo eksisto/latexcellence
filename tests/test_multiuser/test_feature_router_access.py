@@ -367,6 +367,23 @@ class TestFeatureRoutersReadProtection:
         )
         assert r.status_code == 403
 
+    def test_outsider_cannot_read_git_diff_pdf(self, env):
+        """差异 PDF 下载与 /refs、/render-pdf 同权：无关用户持 job_id 也拒绝。
+
+        job_id 为 32 位十六进制不可枚举，但仅靠不可枚举不构成授权；
+        渲染产物对无项目权限的登录用户必须 403。"""
+        owner_client = _client(env)
+        _open(owner_client, env, "ws-owner", "owner")
+
+        outsider_client = _client(env)
+        _login(outsider_client, "outsider")
+        r = outsider_client.get(
+            "/api/git-diff/pdf/" + "a" * 32,
+            params={"workspace_id": "ws-owner"},
+        )
+        assert r.status_code == 403
+        assert r.json()["detail"]["error"] == "no_permission"
+
     def test_outsider_cannot_read_git_manage_status_and_log(self, env):
         owner_client = _client(env)
         _open(owner_client, env, "ws-owner", "owner")

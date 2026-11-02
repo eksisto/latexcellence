@@ -118,13 +118,18 @@ async def render_pdf(
 
 
 @router.get("/pdf/{job_id}")
-async def download_pdf(job_id: str):
+async def download_pdf(
+    job_id: str,
+    workspace_id: str = Query(..., description="工作区唯一标识符"),
+    _: dict = Depends(access_control.require_workspace_read),
+):
     """
-    返回已生成的差异 PDF。
+    返回当前工作区已生成的差异 PDF。
 
-    使用 ``Content-Disposition: inline`` 以便浏览器在 iframe 中内联预览，
-    而不是触发自动下载。用户如需下载，前端“下载 PDF”按钮通过 ``<a download>``
-    强制下载。
+    与 /refs、/render-pdf 一致要求工作区读权限：job_id 虽不可枚举，
+    但持有 id 的任意登录用户不应能下载他人项目的差异 PDF。
+    响应以 ``Content-Disposition: inline`` 返回，便于浏览器在 iframe
+    中内联预览；前端“下载 PDF”按钮通过 ``<a download>`` 强制下载。
     """
 
     try:
