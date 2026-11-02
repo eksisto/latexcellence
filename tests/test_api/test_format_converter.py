@@ -12,10 +12,12 @@ format_converter 模块服务层 + 路由测试。
 """
 
 import shutil
+from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from backend.core.config import get_config
 from backend.modules.format_converter.service import (
     FormatConverterService,
 )
@@ -366,6 +368,43 @@ class TestPandocErrors:
                 result = await service.convert_text("**bold**", "markdown", "latex")
 
         assert result["result"] == r"\textbf{bold}"
+
+
+class TestPandocStderrSanitization:
+    """Pandoc 失败文案脱敏：多用户改写临时目录前缀，单用户保留原文。"""
+
+    @staticmethod
+    def _result(stderr: str) -> ExecResult:
+        return ExecResult(returncode=1, stdout="", stderr=stderr, backend="local")
+
+    def test_single_user_keeps_raw_stderr(self):
+        service = FormatConverterService()
+        cwd = Path("/tmp/latexcellence_pandoc_demo")
+        stderr = f"pandoc: openFile: does not exist ({cwd / 'in.md'})"
+
+        with pytest.raises(RuntimeError, match="Pandoc conversion failed") as excinfo:
+            service._raise_on_pandoc_failure(self._result(stderr), cwd)
+
+        assert f"{cwd}/in.md" in str(excinfo.value)
+
+    def test_multi_user_rewrites_tmp_dir_prefix(self):
+        cfg = get_config()
+        old = cfg.multi_user.enabled
+        cfg.multi_user.enabled = True
+        try:
+            service = FormatConverterService()
+            cwd = Path("/tmp/latexcellence_pandoc_demo")
+            stderr = f"pandoc: openFile: does not exist ({cwd / 'in.md'})"
+
+            with pytest.raises(
+                RuntimeError, match="Pandoc conversion failed"
+            ) as excinfo:
+                service._raise_on_pandoc_failure(self._result(stderr), cwd)
+
+            assert "./in.md" in str(excinfo.value)
+            assert "latexcellence_pandoc_demo" not in str(excinfo.value)
+        finally:
+            cfg.multi_user.enabled = old
 
 
 # ── Markdown 数学定界符 reader 扩展（tex_math_single_backslash）──────────

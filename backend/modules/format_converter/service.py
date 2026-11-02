@@ -29,6 +29,7 @@ from backend.utils.sandbox import (
     current_sandbox_user_id,
     get_sandbox_runner,
 )
+from backend.utils.tex_compile import sanitize_output_paths
 
 SUPPORTED_FORMATS = {"markdown", "html", "docx", "latex"}
 
@@ -222,11 +223,19 @@ class FormatConverterService:
 
     BINARY_FORMATS = {"docx"}
 
-    def _raise_on_pandoc_failure(self, result: ExecResult) -> None:
-        """非零退出时抛出与历史文案一致的 RuntimeError。"""
+    def _raise_on_pandoc_failure(self, result: ExecResult, cwd: Path) -> None:
+        """非零退出时抛出 RuntimeError；多用户模式下 stderr 先行脱敏。
+
+        Pandoc 报错会原样回显输入文件的绝对路径（TemporaryDirectory 临时
+        目录），多用户模式下按该目录前缀改写为相对形式；完整 stderr 已由
+        调用方记入服务端日志。单用户本地模式保留原文（维持现状）。
+        """
         if result.returncode != 0:
             self._logger.error(f"Pandoc error: {result.stderr}")
-            raise RuntimeError(f"Pandoc conversion failed: {result.stderr.strip()}")
+            stderr = result.stderr.strip()
+            if get_config().multi_user.enabled:
+                stderr = sanitize_output_paths(stderr, cwd)
+            raise RuntimeError(f"Pandoc conversion failed: {stderr}")
 
     async def _run_pandoc_text(
         self, text: str, source_format: str, target_format: str
@@ -290,13 +299,13 @@ class FormatConverterService:
             result = await get_sandbox_runner().execute(
                 spec, user_id=current_sandbox_user_id()
             )
-            return self._collect_pandoc_output(result, out_path)
+            return self._collect_pandoc_output(result, out_path, cwd=Path(tmp_dir))
 
     def _collect_pandoc_output(
-        self, result: ExecResult, out_path: Path | None
+        self, result: ExecResult, out_path: Path | None, *, cwd: Path
     ) -> str | bytes:
         """校验执行结果并收集输出：二进制读文件转 base64，文本取 stdout。"""
-        self._raise_on_pandoc_failure(result)
+        self._raise_on_pandoc_failure(result, cwd)
         if out_path is not None:
             raw = out_path.read_bytes()
             if not raw:
