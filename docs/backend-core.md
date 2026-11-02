@@ -38,7 +38,7 @@
 | `load_config(path)` | 加载 JSON + 敏感项环境变量覆盖（`SECRET_ENV_PATHS` 注册表：`LX_LLM_KEY` → `llm.api_key`、`LATEXCELLENCE_SMTP_PASSWORD` → `smtp.password`、`LATEXCELLENCE_TAVILY_API_KEY` → Tavily Key、`LATEXCELLENCE_<PROVIDER>_API_KEY` → 学术数据源 Key）+ Pydantic 校验；记录文件指纹并锚定 `multi_user.enabled` 启动值 |
 | `get_config()` | 获取缓存的 `AppConfig` 单例；**禁止在 `__init__` 中缓存**。v2 P7 起探测 config.json `(mtime_ns, size)` 指纹，变化即从磁盘热重载（多副本配置收敛）；`multi_user.enabled` 锚定启动值不随热重载漂移（变更需重启，保持旧值并告警）；重载失败（JSON 损坏 / 校验不过）保持旧配置继续服务 |
 | `save_config()` | 将当前配置 `model_dump()` 写回磁盘；环境变量注入的敏感项（LLM Key / SMTP 密码 / 搜索与学术数据源 API Key）会自动清空，不会落盘；写后刷新指纹避免触发自身重载 |
-| `update_config_from_dict(updates)` | 用字典部分更新配置（前端 SettingsDialog 使用）；用户手动输入真实敏感值时更新内存并解除环境变量标记、允许持久化 |
+| `update_config_from_dict(updates)` | 用字典部分更新配置（前端 SettingsDialog 使用）；用户手动输入真实敏感值时更新内存并解除环境变量标记、允许持久化；`multi_user.enabled` 与热重载同语义锚定启动值（翻转请求不生效并告警，需重启） |
 
 **安全策略**：
 

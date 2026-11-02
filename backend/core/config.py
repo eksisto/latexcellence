@@ -1416,6 +1416,23 @@ def update_config_from_dict(updates: dict) -> AppConfig:
                 profile_updates["api_key"] = original.get("api_key", "")
 
     merged = _deep_merge(current, updates)
+    # multi_user.enabled 启动锚定（与热重载路径同一语义）：认证模式只能
+    # 经重启切换，保存路径的翻转请求不得即时生效，固定回启动值
+    boot_enabled = _boot_multi_user_enabled
+    mu_merged = merged.get("multi_user")
+    if (
+        boot_enabled is not None
+        and isinstance(mu_merged, dict)
+        and mu_merged.get("enabled") != boot_enabled
+    ):
+        mu_merged["enabled"] = boot_enabled
+        from backend.core.logger import get_logger
+
+        get_logger("config").warning(
+            "multi_user.enabled change via config save requires a restart; "
+            "keeping boot-time value (%s)",
+            boot_enabled,
+        )
     _config = AppConfig(**merged)
     save_config()
 

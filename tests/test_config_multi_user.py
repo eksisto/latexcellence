@@ -121,7 +121,10 @@ class TestMultiUserValidation:
             MultiUserConfig(no_such_option=True)
 
     def test_quota_override_via_update(self, tmp_path):
-        """update_config_from_dict 支持部分更新 multi_user。"""
+        """update_config_from_dict 支持部分更新 multi_user（enabled 除外）。
+
+        enabled 受启动锚定：认证模式只能经重启切换，保存路径的翻转
+        请求固定回启动值（与热重载路径同一语义）。"""
         path = _write_config(tmp_path, multi_user={"enabled": False})
         with mock.patch.dict(os.environ, {}, clear=True):
             cfg_module.load_config(path)
@@ -129,7 +132,7 @@ class TestMultiUserValidation:
             {"multi_user": {"enabled": True, "default_project_quota_mb": 250}}
         )
         cfg = cfg_module.get_config()
-        assert cfg.multi_user.enabled is True
+        assert cfg.multi_user.enabled is False  # 启动锚定：翻转被拒绝
         assert cfg.multi_user.default_project_quota_mb == 250
         # 其余字段不受部分更新影响
         assert cfg.multi_user.default_derived_quota_mb == 100
