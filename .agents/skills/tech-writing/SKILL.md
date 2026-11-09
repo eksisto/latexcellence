@@ -11,12 +11,6 @@ description: 撰写、优化或审校项目文档时使用：README、docs/ 文�
 
 本 skill 只管语言层：句子、用词、术语、语气、模式。不负责章节划分和文档结构，除非用户明确要求。
 
-与其他 skill 的分工：
-
-- 项目文档的新建与更新流程见 `maintain-latexcellence-docs`。
-- commit message 的格式（type/scope）见 `latexcellence-commit-message`。其中描述文字按本 skill 书写。
-- 后端英文错误消息按 strict 模式书写。短句、主动语态、常用词，能让 `latexcellence-i18n-errors` 链路的三语翻译更准。
-
 ## 第一步：定模式
 
 | 文本类型 | 模式 |

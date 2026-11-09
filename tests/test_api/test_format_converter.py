@@ -226,7 +226,7 @@ class TestConvertFile:
 
     @pytest.mark.asyncio
     async def test_tex_file_upload_accepted(self, service):
-        """回归（B3）：.tex 上传此前被 allowed_extensions 与扩展名映射同时
+        """回归：.tex 上传此前被 allowed_extensions 与扩展名映射同时
         拒绝，与模块文档的转换方向表和前端入口矛盾。"""
         tex_content = r"\documentclass{article}"
         pandoc_patches = self._patch_pandoc("# Hello")

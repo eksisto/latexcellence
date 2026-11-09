@@ -145,7 +145,7 @@ Invoke-CleanPattern -Description "__pycache__" -NamePattern "__pycache__" -Searc
 Write-Host "[2/6] 清理 *.pyc ..."
 Invoke-CleanPattern -Description "*.pyc" -NamePattern "*.pyc" -SearchRoot $Root
 
-Write-Host "[3/6] 清理 node_modules/.cache ..."
+Write-Host "[3/10] 清理 node_modules/.cache ..."
 $cache = Join-Path $Root "frontend\node_modules\.cache"
 if (Test-Path -LiteralPath $cache) {
     Remove-CacheItem -Item $cache
@@ -154,10 +154,10 @@ else {
     Write-Host "  --     node_modules/.cache (不存在，跳过)"
 }
 
-Write-Host "[4/6] 清理 .pytest_cache ..."
+Write-Host "[4/10] 清理 .pytest_cache ..."
 Invoke-CleanPattern -Description ".pytest_cache" -NamePattern ".pytest_cache" -SearchRoot $Root
 
-Write-Host "[5/6] 清理网页抓取缓存 ..."
+Write-Host "[5/10] 清理网页抓取缓存 ..."
 $webCache = Join-Path $Root "data\web_cache"
 if (Test-Path -LiteralPath $webCache) {
     Remove-CacheItem -Item $webCache
@@ -166,8 +166,38 @@ else {
     Write-Host "  --     data/web_cache (不存在，跳过)"
 }
 
-Write-Host "[6/6] 清理 .pytest_tmp（pytest 会话级临时目录）..."
+Write-Host "[6/10] 清理 .pytest_tmp（pytest 会话级临时目录）..."
 Remove-PytestTmp -Target (Join-Path $Root ".pytest_tmp")
+
+Write-Host "[7/10] 清理 .ruff_cache（ruff 静态检查缓存）..."
+Invoke-CleanPattern -Description ".ruff_cache" -NamePattern ".ruff_cache" -SearchRoot $Root
+
+Write-Host "[8/10] 清理 Vite 依赖预构建缓存 ..."
+$viteCache = Join-Path $Root "frontend\node_modules\.vite"
+if (Test-Path -LiteralPath $viteCache) {
+    Remove-CacheItem -Item $viteCache
+}
+else {
+    Write-Host "  --     frontend/node_modules/.vite (不存在，跳过)"
+}
+
+Write-Host "[9/10] 清理 compose 冒烟脚本临时目录 ..."
+$smokeTmp = Join-Path $Root ".compose-smoke-tmp"
+if (Test-Path -LiteralPath $smokeTmp) {
+    Remove-CacheItem -Item $smokeTmp
+}
+else {
+    Write-Host "  --     .compose-smoke-tmp (不存在，跳过)"
+}
+
+Write-Host "[10/10] 清理 compose 部署测试临时目录 ..."
+$composeTestTmp = Join-Path $Root ".tmp-compose-test"
+if (Test-Path -LiteralPath $composeTestTmp) {
+    Remove-CacheItem -Item $composeTestTmp
+}
+else {
+    Write-Host "  --     .tmp-compose-test (不存在，跳过)"
+}
 
 Write-Host ""
 Write-Host "========================================"
